@@ -704,6 +704,60 @@ def test_mandate_stage_is_on_by_default():
     assert UPI_LOCAL_MANDATE_ENABLED is True
 
 
+def _resolved_rt(upi_cfg):
+    from sms_tool.upi_link import pipeline
+
+    return pipeline._resolve_upi_runtime(
+        None,  # access_token
+        None,  # proxy
+        None,  # checkout_proxy
+        None,  # provider_proxy
+        None,  # approve_proxy
+        None,  # target_country
+        None,  # checkout_country
+        None,  # payment_country
+        None,  # require_zero
+        {"upi": dict(upi_cfg)},
+        None,  # device_id
+        None,  # session_token
+    )
+
+
+def test_mandate_stage_defaults_on_from_the_constant():
+    assert _resolved_rt({}).local_mandate_enabled is True
+
+
+def test_mandate_stage_can_be_disabled_by_config():
+    """The switch must be per-run: this stage degrades the whole lane when it fails."""
+    assert _resolved_rt({"local_mandate_enabled": False}).local_mandate_enabled is False
+    assert _resolved_rt({"local_mandate_enabled": True}).local_mandate_enabled is True
+
+
+def test_mandate_stage_config_beats_env(monkeypatch):
+    monkeypatch.setenv("UPI_LOCAL_MANDATE_ENABLED", "1")
+    assert _resolved_rt({"local_mandate_enabled": False}).local_mandate_enabled is False
+
+
+def test_mandate_stage_env_is_the_fallback(monkeypatch):
+    monkeypatch.setenv("UPI_LOCAL_MANDATE_ENABLED", "0")
+    assert _resolved_rt({}).local_mandate_enabled is False
+
+
+def test_mandate_guard_reads_the_resolved_flag():
+    """Pin that the closure consumes the resolved flag, not the module constant."""
+    from pathlib import Path
+
+    source = Path(pipeline_source()).read_text(encoding="utf-8")
+    assert "if mandate_ok or not local_mandate_enabled:" in source
+    assert "if mandate_ok or not UPI_LOCAL_MANDATE_ENABLED:" not in source
+
+
+def pipeline_source():
+    from sms_tool.upi_link import pipeline
+
+    return pipeline.__file__
+
+
 def test_pipeline_imports_the_mandate_stage():
     from sms_tool.upi_link import pipeline
 

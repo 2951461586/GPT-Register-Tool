@@ -17,11 +17,25 @@ from typing import Any, Callable, Mapping
 from ..config import ConfigError, current_config_data, resolve_runtime_config, validate_config
 from ..paths import project_path, runtime_file
 from ..payment_contracts import PaymentRequest, PaymentResult, payment_history_metadata
-from ..payment_catalog import PAYMENT_METHODS as CATALOG_METHODS, normalize_payment_method as normalize_catalog_payment_method, validate_catalog_consistency
+from ..payment_catalog import (
+    PAYMENT_METHODS as CATALOG_METHODS,
+    normalize_payment_method as normalize_catalog_payment_method,
+    validate_catalog_consistency,
+)
 from ..payment_adapters import FunctionPaymentAdapter, PaymentAdapterRegistry
 from ..payment_executor import PaymentExecutionRequest, PaymentFlowExecutor
-from ..payment_operation import PaymentOperationConflict, PaymentOperationStore, conflict_result as payment_operation_conflict_result
-from ..payment_routing import PaymentRoutePlan, PaymentRoutePlanner, coerce_approve_country as canonical_coerce_approve_country, parse_proxy_pool, payment_proxy_pools as canonical_payment_proxy_pools
+from ..payment_operation import (
+    PaymentOperationConflict,
+    PaymentOperationStore,
+    conflict_result as payment_operation_conflict_result,
+)
+from ..payment_routing import (
+    PaymentRoutePlan,
+    PaymentRoutePlanner,
+    coerce_approve_country as canonical_coerce_approve_country,
+    parse_proxy_pool,
+    payment_proxy_pools as canonical_payment_proxy_pools,
+)
 from ..sanitizer import sanitize as _canonical_sanitize, sanitize_text as _canonical_sanitize_text
 from .. import payment_egress
 
@@ -53,10 +67,8 @@ def _persist_run(result: dict[str, Any]) -> None:
             handle.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
 
 
-
 def _safe_persist_run(result: dict[str, Any]) -> None:
     try:
         _persist_run(result)
     except (OSError, TypeError, ValueError) as exc:
         result["persistence_warning"] = f"payment run state was not persisted: {type(exc).__name__}"
-

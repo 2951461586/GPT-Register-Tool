@@ -58,6 +58,34 @@ from .base import (
 )
 
 
+def _assert_function_adapter_egress(
+    method: str,
+    options: Mapping[str, Any],
+    runtime_config: Mapping[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Run the shared payment egress gate for an in-process adapter runner.
+
+    The **subprocess** adapters gate themselves in
+    ``adapters._prepare_extractor``, and ``native_upi`` gates after its own region
+    retarget (``upi_link.pipeline._upi_assert_egress_contract``).  Every other
+    function adapter went straight from route plan to a real Checkout/Stripe
+    request with whatever exit the pool handed it -- the same hole the UPI fix
+    closed, for the PayPal, wallet, GCash and regional-wallet lanes.
+
+    Deliberately *not* applied to ``native_upi``: gating here would probe the
+    pre-retarget credential, and the retarget is exactly what makes a
+    region-tagged pool correct.  UPI's gate runs inside the pipeline instead.
+
+    Returns the canonical failure result when a stage egresses from the wrong
+    country (or its probe fails), ``None`` when the gate passes or is disabled.
+    """
+    try:
+        payment_egress.assert_egress_countries(options, runtime_config)
+    except payment_egress.EgressCheckError as exc:
+        return exc.to_result(method)
+    return None
+
+
 def build_default_payment_registry() -> PaymentAdapterRegistry:
     """Build and validate the complete adapter composition for the catalog."""
     registry = PaymentAdapterRegistry()
@@ -66,10 +94,15 @@ def build_default_payment_registry() -> PaymentAdapterRegistry:
         return tuple(key for key, definition in CATALOG_METHODS.items() if definition.adapter == adapter_key)
 
     def paypal_runner(
-        *, access_token: str, proxy: Any = None, auth_context: Mapping[str, Any] | None = None, **kwargs: Any
+        *, access_token: str, proxy: Any = None, auth_context: dict[str, Any] | None = None, **kwargs: Any
     ) -> dict[str, Any]:
         from ..gen_pp_link import generate_pp_link
 
+        failure = _assert_function_adapter_egress(
+            str(kwargs.get("payment_method") or "paypal"), kwargs, kwargs.get("runtime_config")
+        )
+        if failure is not None:
+            return failure
         runtime_config = kwargs.pop("runtime_config", None)
         kwargs.pop("payment_method", None)
         return generate_pp_link(
@@ -100,7 +133,7 @@ def build_default_payment_registry() -> PaymentAdapterRegistry:
         )
 
     def upi_runner(
-        *, access_token: str, proxy: Any = None, auth_context: Mapping[str, Any] | None = None, **kwargs: Any
+        *, access_token: str, proxy: Any = None, auth_context: dict[str, Any] | None = None, **kwargs: Any
     ) -> dict[str, Any]:
         from ..upi_link import UPI_CALL_OPTIONS, generate_upi_qr_link, upi_invocation
 
@@ -117,10 +150,14 @@ def build_default_payment_registry() -> PaymentAdapterRegistry:
         )
 
     def wallet_runner(
-        *, access_token: str, proxy: Any = None, auth_context: Mapping[str, Any] | None = None, **kwargs: Any
+        *, access_token: str, proxy: Any = None, auth_context: dict[str, Any] | None = None, **kwargs: Any
     ) -> dict[str, Any]:
+        method = str(kwargs.pop("payment_method"))
+        failure = _assert_function_adapter_egress(method, kwargs, kwargs.get("runtime_config"))
+        if failure is not None:
+            return failure
         return _run_wallet_adapter(
-            PAYMENT_METHODS[str(kwargs.pop("payment_method"))],
+            PAYMENT_METHODS[method],
             access_token,
             proxy=proxy,
             auth_context=auth_context,
@@ -128,33 +165,40 @@ def build_default_payment_registry() -> PaymentAdapterRegistry:
         )
 
     def gcash_runner(
-        *, access_token: str, proxy: Any = None, auth_context: Mapping[str, Any] | None = None, **kwargs: Any
+        *, access_token: str, proxy: Any = None, auth_context: dict[str, Any] | None = None, **kwargs: Any
     ) -> dict[str, Any]:
+        method = str(kwargs.get("payment_method") or "gcash")
+        failure = _assert_function_adapter_egress(method, kwargs, kwargs.get("runtime_config"))
+        if failure is not None:
+            return failure
         kwargs.pop("payment_method", None)
         return _run_gcash_adapter(
             PAYMENT_METHODS["gcash"], access_token, proxy=proxy, auth_context=auth_context, **kwargs
         )
 
     def script_runner(
-        *, access_token: str, proxy: Any = None, auth_context: Mapping[str, Any] | None = None, **kwargs: Any
+        *, access_token: str, proxy: Any = None, auth_context: dict[str, Any] | None = None, **kwargs: Any
     ) -> dict[str, Any]:
         spec = PAYMENT_METHODS[str(kwargs.pop("payment_method"))]
         return _run_protocol_script(spec, access_token, proxy=proxy, **kwargs)
 
     def direct_runner(
-        *, access_token: str, proxy: Any = None, auth_context: Mapping[str, Any] | None = None, **kwargs: Any
+        *, access_token: str, proxy: Any = None, auth_context: dict[str, Any] | None = None, **kwargs: Any
     ) -> dict[str, Any]:
         return _run_direct_card(PAYMENT_METHODS["direct_card"], access_token, proxy=proxy, **kwargs)
 
     def momo_runner(
-        *, access_token: str, proxy: Any = None, auth_context: Mapping[str, Any] | None = None, **kwargs: Any
+        *, access_token: str, proxy: Any = None, auth_context: dict[str, Any] | None = None, **kwargs: Any
     ) -> dict[str, Any]:
         return _run_momo(PAYMENT_METHODS["momo"], access_token, proxy=proxy, **kwargs)
 
     def regional_wallet_runner(
-        *, access_token: str, proxy: Any = None, auth_context: Mapping[str, Any] | None = None, **kwargs: Any
+        *, access_token: str, proxy: Any = None, auth_context: dict[str, Any] | None = None, **kwargs: Any
     ) -> dict[str, Any]:
         method = str(kwargs.pop("payment_method"))
+        failure = _assert_function_adapter_egress(method, kwargs, kwargs.get("runtime_config"))
+        if failure is not None:
+            return failure
         return _run_regional_wallet_adapter(
             PAYMENT_METHODS[method],
             access_token,

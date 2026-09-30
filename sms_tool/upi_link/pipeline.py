@@ -16,6 +16,13 @@ try:  # pragma: no cover - direct script execution
     from ..pp_link_helpers import CHATGPT_TIMEOUT, DEFAULT_STRIPE_PK, DEFAULT_TIMEOUT, STRIPE_VERSION
 except ImportError:
     from pp_link_helpers import CHATGPT_TIMEOUT, DEFAULT_STRIPE_PK, DEFAULT_TIMEOUT, STRIPE_VERSION  # type: ignore
+try:  # pragma: no cover - direct script execution
+    from .. import payment_egress
+except ImportError:
+    # Direct-script execution imports this module as a bare sibling, so the
+    # shared gate is unavailable there.  Explicit ``None`` rather than a silent
+    # skip: the package path (CLI and ``native_upi``) always has it.
+    payment_egress = None  # type: ignore[assignment]
 from typing import Any
 from collections.abc import Mapping
 from types import SimpleNamespace
@@ -204,6 +211,13 @@ def _resolve_upi_runtime(
     # 这里做成可调：默认 1.5s，测试里置 0 即可让 60 次重试瞬间跑完。
     approve_backoff_cap = _float_env("UPI_APPROVAL_BACKOFF", 1.5)
     approve_backoff_cap = max(0.0, approve_backoff_cap)
+    # 本地 mandate 阶段的开关：常量只是默认值。这一阶段要么补交成功拿到 upi://，
+    # 要么整轮退化成 hosted instructions 页，所以必须能按次 A/B 或回滚。
+    local_mandate_enabled = (
+        bool(upi_cfg.get("local_mandate_enabled"))
+        if "local_mandate_enabled" in upi_cfg
+        else _env_bool("UPI_LOCAL_MANDATE_ENABLED", UPI_LOCAL_MANDATE_ENABLED)
+    )
 
     # 一套自洽的浏览器身份贯穿全流程（旧实现每个 session 各随机一个 UA ⇒ 指纹自相矛盾）
     # locale/timezone 从契约层按 payment_country 取，不在这里硬编码。
@@ -248,6 +262,7 @@ def _resolve_upi_runtime(
         max_approve_attempts=max_approve_attempts,
         poll_max_attempts=poll_max_attempts,
         approve_backoff_cap=approve_backoff_cap,
+        local_mandate_enabled=local_mandate_enabled,
         browser_rail=browser_rail,
         fingerprint_index=fingerprint_index,
         fingerprint=fingerprint,
@@ -305,6 +320,52 @@ def upi_invocation(
         "paid_timeout": paid_timeout,
         "require_server_upi_mandate": require_server_upi_mandate,
     }
+
+
+def _upi_assert_egress_contract(rt: Any) -> dict[str, Any] | None:
+    """Run the shared payment egress gate for the three UPI stage proxies.
+
+    ``native_upi`` is an **in-process** adapter, so unlike the subprocess
+    extractors it never reached
+    ``pay_link.adapters._prepare_extractor``'s
+    ``payment_egress.assert_egress_countries`` call -- the UPI lane created a
+    real Checkout session with whatever exit the pool handed it, and the only
+    guard was a hand-run probe documented in ``PROXY_GUIDE.md``.
+    ``_resolve_upi_runtime`` has just retargeted all three proxies to
+    ``checkout_country``, so this is the first point at which the credential
+    that will actually be dialed is known.  Gating any earlier would probe the
+    pre-retarget proxy and wrongly reject a region-tagged pool that the
+    retarget is about to make correct.
+
+    Returns the canonical failure result when a stage egresses from the wrong
+    country (or its probe fails), ``None`` when the gate passes or is disabled.
+    Mirrors ``_prepare_extractor``: reject **before** the first side effect.
+    """
+    expected = str(rt.checkout_country or "").strip().upper()
+    if not expected or payment_egress is None:
+        return None
+    options = {
+        "checkout_proxy": rt.checkout_proxy,
+        "stripe_init_proxy": rt.provider_proxy,
+        "approve_proxy": rt.approve_proxy,
+        # All three were retargeted to ``checkout_country`` above; the UPI lane
+        # has no separate per-stage country (``payment_country`` only covers the
+        # currency/billing profile).
+        "stage_proxy_countries": {
+            "checkout": expected,
+            "stripe_init": expected,
+            "approve": expected,
+        },
+    }
+    try:
+        payment_egress.assert_egress_countries(
+            options,
+            rt.cfg,
+            stages=("checkout", "stripe_init", "approve"),
+        )
+    except payment_egress.EgressCheckError as exc:
+        return exc.to_result("upi")
+    return None
 
 
 def generate_upi_qr_link(
@@ -386,6 +447,7 @@ def generate_upi_qr_link(
     max_approve_attempts = _rc.max_approve_attempts
     poll_max_attempts = _rc.poll_max_attempts
     approve_backoff_cap = _rc.approve_backoff_cap
+    local_mandate_enabled = _rc.local_mandate_enabled
     browser_rail = _rc.browser_rail
     fingerprint_index = _rc.fingerprint_index
     fingerprint = _rc.fingerprint
@@ -394,6 +456,14 @@ def generate_upi_qr_link(
     session_token = str(_rc.session_token or "")
 
     emit = _emit
+
+    # First point at which the retargeted stage proxies are known, and before
+    # Stage 1 creates a Checkout session -- the last moment a mis-routed exit
+    # can be rejected for the price of one probe instead of a disposable
+    # session.
+    _egress_failure = _upi_assert_egress_contract(_rc)
+    if _egress_failure is not None:
+        return _egress_failure
 
     try:
         # ── Stage 1: ChatGPT checkout ────────────────────────────────────
@@ -1075,16 +1145,18 @@ def generate_upi_qr_link(
         # 时序很关键：批准之前 ``checkout.session.setup_intent`` 是 **null**
         # （2026-09-30 实测），SetupIntent 只在批准之后才出现。所以除了 approve
         # 之后在这里试一次，还要作为 rescue 回调交给 Stage 7 的轮询再补一次。
-        mandate_state: dict[str, bool] = {"attempted": False, "ok": False}
+        # 成功一次即封口。**失败的尝试刻意允许重试**——不能拿「已尝试」当闸门，
+        # 否则 Stage 7 的 rescue 会被上一步的失败永久挡掉。
+        mandate_ok = False
 
         def _absorb_mandate(*sources: Any) -> bool:
             """在 sources 里找 ``seti_`` SetupIntent 并直连补交 mandate。
 
             幂等：成功一次即封口；找不到 SetupIntent 时不动。返回 True 表示确实
-            发起了补交（调用方据此判断是否值得再轮询一轮）。
+            发起了补交（调用方据此判断是否值得再轮询一轮），**不代表补交成功**。
             """
-            nonlocal approval_data
-            if mandate_state["ok"] or not UPI_LOCAL_MANDATE_ENABLED:
+            nonlocal approval_data, mandate_ok
+            if mandate_ok or not local_mandate_enabled:
                 return False
             setup_intent: Any = {}
             for source in sources:
@@ -1094,7 +1166,6 @@ def generate_upi_qr_link(
                     break
             if not setup_intent:
                 return False
-            mandate_state["attempted"] = True
             mandate = _upi_confirm_local_mandate(
                 stripe,
                 setup_intent=setup_intent,
@@ -1113,7 +1184,7 @@ def generate_upi_qr_link(
                     str(mandate.get("error") or "no error")[:160],
                 ),
             )
-            mandate_state["ok"] = bool(mandate["ok"])
+            mandate_ok = bool(mandate["ok"])
             if mandate.get("payload"):
                 # 让 Stage 7 的 _absorb 吃下 mandate 响应里的 upi:// / 跳转。
                 approval_data = {**(approval_data or {}), "local_mandate": mandate["payload"]}

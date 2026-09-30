@@ -228,11 +228,13 @@ def _fetch_protocol_auth_session(cookie_header, timeout=300, proxy=None, detail=
                 if _session_token(body, "accessToken", "access_token"):
                     print("[*] Protocol auth session refreshed.")
                     if detail is not None:
-                        detail.update({
-                            "last_status": last_status,
-                            "http_statuses": statuses[-8:],
-                            "retry_after": retry_after,
-                        })
+                        detail.update(
+                            {
+                                "last_status": last_status,
+                                "http_statuses": statuses[-8:],
+                                "retry_after": retry_after,
+                            }
+                        )
                     return body
             elif response.status_code in {403, 429}:
                 # The edge answers a blocked/rate-limited exit with Retry-After.
@@ -258,18 +260,13 @@ def _fetch_protocol_auth_session(cookie_header, timeout=300, proxy=None, detail=
             wait = max(wait, retry_after)
         time.sleep(min(wait, remaining))
     if detail is not None:
-        detail.update({
-            "last_status": last_status,
-            "http_statuses": statuses[-8:],
-            "retry_after": retry_after,
-        })
-    return {}
-    if detail is not None:
-        detail.update({
-            "last_status": last_status,
-            "http_statuses": statuses[-8:],
-            "retry_after": retry_after,
-        })
+        detail.update(
+            {
+                "last_status": last_status,
+                "http_statuses": statuses[-8:],
+                "retry_after": retry_after,
+            }
+        )
     return {}
 
 
@@ -278,8 +275,7 @@ def _ensure_session_cookie(cookie_header, data):
         return cookie_header
     auth_session = data.get("auth_session") if isinstance(data.get("auth_session"), dict) else {}
     session_token = (
-        _session_token(auth_session, "sessionToken", "session_token")
-        or str(data.get("session_token") or "").strip()
+        _session_token(auth_session, "sessionToken", "session_token") or str(data.get("session_token") or "").strip()
     )
     if not session_token:
         return cookie_header
@@ -290,8 +286,7 @@ def _ensure_session_cookie(cookie_header, data):
 
 def _has_session_cookie(cookie_header):
     return any(
-        item.strip().startswith("__Secure-next-auth.session-token=")
-        for item in str(cookie_header or "").split(";")
+        item.strip().startswith("__Secure-next-auth.session-token=") for item in str(cookie_header or "").split(";")
     )
 
 

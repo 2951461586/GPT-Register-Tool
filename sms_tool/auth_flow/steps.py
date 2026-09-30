@@ -7,6 +7,7 @@ import it. Callers reach it module-qualified (``from . import steps`` then
 direct ``from .steps import _response_next_url`` would bind at import time and
 make the patch silently ineffective.
 """
+
 from __future__ import annotations
 
 import json
@@ -17,11 +18,10 @@ from . import deps
 
 logger = logging.getLogger(__name__)
 
-logger = logging.getLogger(__name__)
-
 _PASSKEY_CLIENT_CAPABILITIES = "11111"
 
 _CC_CAPS = "login_methods"
+
 
 def _is_existing_login_redirect(url):
     parsed = urlparse(url or "")
@@ -35,11 +35,13 @@ def _is_existing_login_redirect(url):
     path = path.rstrip("/")
     return path in {"/log-in", "/login"} or path.startswith("/log-in/") or path.startswith("/login/")
 
+
 def _is_chatgpt_auth_login_landing(url):
     parsed = urlparse(url or "")
     host = (parsed.netloc or "").lower()
     path = (parsed.path or "").rstrip("/").lower()
     return host.endswith("chatgpt.com") and path in {"/auth/login", "/auth/log-in"}
+
 
 def _is_signup_password_step(url):
     parsed = urlparse(url or "")
@@ -49,6 +51,7 @@ def _is_signup_password_step(url):
         return False
     return path.endswith("/create-account/password") or path.endswith("/create-account")
 
+
 def _is_email_verification_step(url):
     parsed = urlparse(url or "")
     host = (parsed.netloc or "").lower()
@@ -56,6 +59,7 @@ def _is_email_verification_step(url):
     if not host.endswith("auth.openai.com"):
         return False
     return path.endswith("/email-verification") or "email-otp" in path
+
 
 def _existing_login_continue_enabled():
     """Whether the login lane may POST ``authorize/continue`` from the OTP page.
@@ -99,6 +103,7 @@ def _existing_login_continue_enabled():
     value = cfg.get("existing_login_continue_on_verified_page", True)
     return value not in (False, 0, "0", "false", "False", "no", "No", "off")
 
+
 def _is_about_you_step(url, payload=None):
     """True when the auth transaction routed into the *signup* profile step.
 
@@ -120,6 +125,7 @@ def _is_about_you_step(url, payload=None):
     page_type = str((page if isinstance(page, dict) else {}).get("type") or "").strip().lower()
     return page_type in {"about_you", "about-you"}
 
+
 def _response_next_url(response, base_url):
     body = deps._json_or_raw(response, limit=1000)
     if isinstance(body, dict):
@@ -131,11 +137,13 @@ def _response_next_url(response, base_url):
         return deps._absolute_url(base_url, location)
     return str(getattr(response, "url", "") or "")
 
+
 def _with_query_param(url, key, value):
     if not value or f"{key}=" in (url or ""):
         return url
     sep = "&" if "?" in url else "?"
     return f"{url}{sep}{key}={quote(str(value), safe='')}"
+
 
 def _ensure_authorize_context(url, did, session_logging_id, login_hint, *, screen_hint="", prompt=""):
     parsed = urlparse(str(url or ""))
@@ -159,6 +167,7 @@ def _ensure_authorize_context(url, did, session_logging_id, login_hint, *, scree
             values[key] = [str(value)]
     return parsed._replace(query=urlencode(values, doseq=True)).geturl()
 
+
 def _openai_signin_url(chat_base, did, session_logging_id, login_hint, *, screen_hint="", prompt=""):
     params = {
         "ext-oai-did": did,
@@ -174,7 +183,10 @@ def _openai_signin_url(chat_base, did, session_logging_id, login_hint, *, screen
         params["prompt"] = prompt
     return f"{chat_base}/api/auth/signin/openai?{urlencode(params)}"
 
-def _protocol_diagnostic(*, response=None, final_url="", session=None, sentinel_source="", sentinel_flow="", proxy="", **extra):
+
+def _protocol_diagnostic(
+    *, response=None, final_url="", session=None, sentinel_source="", sentinel_flow="", proxy="", **extra
+):
     status = int(getattr(response, "status_code", 0) or 0) if response is not None else 0
     raw_url = str(final_url or getattr(response, "url", "") or "")
     parsed_url = urlparse(raw_url)
@@ -192,6 +204,7 @@ def _protocol_diagnostic(*, response=None, final_url="", session=None, sentinel_
         "proxy": deps.redact_proxy_url(proxy),
         **extra,
     }
+
 
 def _print_protocol_diagnostic(stage, diagnostic):
     """Surface the cookie/URL/protocol snapshot for one auth stage.
@@ -217,12 +230,14 @@ def _print_protocol_diagnostic(stage, diagnostic):
         return
     print(line)
 
+
 def _signup_signin_attempts():
     return (
         {"name": "signup_screen_hint", "screen_hint": "signup", "prompt": ""},
         {"name": "signup_prompt_signup", "screen_hint": "signup", "prompt": "signup"},
         {"name": "signup_legacy_prompt_login", "screen_hint": "signup", "prompt": "login"},
     )
+
 
 def _passwordless_signin_attempts():
     return (
@@ -234,6 +249,7 @@ def _passwordless_signin_attempts():
         {"name": "signup_screen_hint", "screen_hint": "signup", "prompt": ""},
     )
 
+
 def _invalid_state_auth_response(data):
     if not isinstance(data, dict):
         return False
@@ -242,9 +258,13 @@ def _invalid_state_auth_response(data):
     message = str(error.get("message") or "").strip().lower()
     return code == "invalid_state" or "session is no longer valid" in message
 
+
 LOGIN_EMAIL_OTP_SUBJECT_KEYWORD = "login code"
 
-def _auth_request_headers(base_headers, did="", referer="", origin="", sentinel_token="", sentinel_so_token="", extra=None):
+
+def _auth_request_headers(
+    base_headers, did="", referer="", origin="", sentinel_token="", sentinel_so_token="", extra=None
+):
     return {
         **(base_headers or {}),
         **deps.openai_auth_headers(

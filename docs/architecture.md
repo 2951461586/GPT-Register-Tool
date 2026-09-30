@@ -57,23 +57,33 @@ pool moves persistence off its event loop.
 
 ### Known function-level lazy cycles
 
-Four module pairs import each other **inside function bodies only**. They are
-not import-time cycles, but they are real coupling. They are listed here so a
-future reader neither re-discovers them as a surprise nor "fixes" them by
-lifting the import to module scope (which would create a genuine cycle).
+Four module pairs import each other **inside function bodies only**, and one
+five-module cycle is closed by a single lazy edge. They are not import-time
+cycles, but they are real coupling. They are listed here so a future reader
+neither re-discovers them as a surprise nor "fixes" them by lifting the import
+to module scope (which would create a genuine cycle).
 `scripts/delayed_import_ratchet.py` counts every delayed import in the package
-and fails on growth; this table is the *reason* behind the four that form pairs.
+and fails on growth; this table is the *reason* behind the ones that form
+cycles.
 
-| Pair | Edge(s) | Why it stays lazy |
+The authoritative form of this list is an exact import graph (every real
+`import` statement, resolved against the package layout, including
+function-body ones), not the review graph: that graph resolves ~82% of edges by
+bare name and reports one 483-edge cycle spanning 14 subpackages, while the
+exact graph has six cycles over 16 of 278 modules. Recompute the exact form
+before adding a row here.
+
+| Pair / cycle | Edge(s) | Why it stays lazy |
 | --- | --- | --- |
 | `checkout_contract` ↔ `payment_catalog` | `checkout_contract` reads `payment_catalog.PAYMENT_METHODS`; `payment_catalog.validate_catalog_consistency()` reads `checkout_contract.PAYMENT_METHOD_PROFILES` | The catalog is the method vocabulary; the profile comparison is an on-demand assertion. Lifting it would make the catalog import the contract it validates. |
 | `payment_catalog` ↔ `payment_flow` | `payment_flow` reads `payment_catalog.PAYMENT_METHODS`; `payment_catalog.validate_catalog_consistency()` reads `payment_flow.FLOW_PROFILES` | Same reason as above, for the flow vocabulary. |
 | `payment_routing` ↔ `paypal_proxy` | `payment_routing` reads `paypal_proxy.{redact_proxy_url, proxy_state_from_config, select_proxy_from_pool, rotate_proxy_session}`; `paypal_proxy` reads `payment_routing.method_payment_config` | `paypal_proxy` is the legacy stage-proxy owner and `payment_routing` the newer planner. The proxy helpers are consumed only while building route options, so both edges are function-local. |
 | `sentinel_tokens` ↔ `sentinel.client` | `sentinel_tokens` reads `sentinel.client.issue_sentinel_bundle`; `sentinel.client` reads `sentinel_tokens._extract_sentinel` for its legacy fallback | `sentinel_tokens` deliberately imports the **submodule**, not the `sentinel` package entry, because the package `__init__` re-exports from `client` and would close the cycle through the package. |
+| `proxy_routing` → `accounts.account_identity`, closing a five-module cycle: `account_identity` → `fingerprint_pool` → `paypal_proxy` → `payment_routing` → `proxy_routing` | `proxy_routing._saved_registration_proxy` reads `accounts.account_identity.resolve_account_proxy` | The lookup is the opt-in `account_health.use_registration_affinity` path, so it stays function-local alongside the other three lazy edges in the cycle (`fingerprint_pool` → `paypal_proxy`, `paypal_proxy` → `payment_routing`); the remaining two (`account_identity` → `fingerprint_pool`, `payment_routing` → `proxy_routing`) are top-level. Lifting this edge would close the cycle at import time. |
 
-A fifth pair must be added here with the same evidence, or refactored so the
-lazy edge disappears. `tests/test_delayed_import_ratchet.py` keeps the count
-from growing while that decision is pending.
+Any further lazy edge that closes a cycle must be added here with the same
+evidence, or refactored so the edge disappears. `tests/test_delayed_import_ratchet.py`
+keeps the count from growing while that decision is pending.
 
 ## Registration Modules
 

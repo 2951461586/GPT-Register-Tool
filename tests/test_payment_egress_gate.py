@@ -141,7 +141,9 @@ class EgressGateTests(unittest.TestCase):
         )
 
     def test_protocol_script_adapter_blocks_on_mismatch_without_spawning(self):
-        from sms_tool.payment_catalog import PAYMENT_METHODS
+        # ``_run_protocol_script`` consumes ``PaymentMethodSpec``, owned by
+        # ``pay_link.base`` -- not the catalog's ``PaymentMethodDefinition``.
+        from sms_tool.pay_link.base import PAYMENT_METHODS
 
         def probe(proxy, expected, stage, timeout):
             return _ProbeResult(ok=False, country_code="VN", error="country_mismatch:VN")
@@ -162,6 +164,77 @@ class EgressGateTests(unittest.TestCase):
         self.assertTrue(result["retryable"])
         self.assertEqual(result["error_stage"], "preparing_proxy")
         self.assertEqual(result["payment_method"], "ideal")
+
+
+class FunctionAdapterEgressTests(unittest.TestCase):
+    """In-process adapters assert the same contract the extractors always did.
+
+    ``native_upi`` is the deliberate exception: its gate runs inside the pipeline
+    *after* the region retarget, because gating at the runner would probe the
+    pre-retarget credential and wrongly reject a region-tagged pool.
+    """
+
+    def setUp(self):
+        payment_egress.clear_cache()
+
+    @staticmethod
+    def _options():
+        return {
+            "checkout_proxy": "http://u:p@exit.example:8080",
+            "stage_proxy_countries": {"checkout": "TH"},
+        }
+
+    def test_helper_returns_canonical_failure_on_mismatch(self):
+        from sms_tool.pay_link.registry import _assert_function_adapter_egress
+
+        def probe(proxy, expected, stage, timeout):
+            return _ProbeResult(ok=False, country_code="VN", error="country_mismatch:VN")
+
+        with patch.object(payment_egress, "_default_probe", probe):
+            result = _assert_function_adapter_egress("gopay", self._options(), _cfg())
+
+        assert result is not None
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error_code"], "egress_country_mismatch")
+        self.assertEqual(result["payment_method"], "gopay")
+        self.assertEqual(result["error_stage"], "preparing_proxy")
+
+    def test_helper_passes_when_the_exit_matches(self):
+        from sms_tool.pay_link.registry import _assert_function_adapter_egress
+
+        def probe(proxy, expected, stage, timeout):
+            return _ProbeResult(ok=True, country_code=expected)
+
+        with patch.object(payment_egress, "_default_probe", probe):
+            self.assertIsNone(_assert_function_adapter_egress("gopay", self._options(), _cfg()))
+
+    def test_helper_is_a_no_op_when_the_gate_is_disabled(self):
+        from sms_tool.pay_link.registry import _assert_function_adapter_egress
+
+        def probe(*args, **kwargs):  # pragma: no cover - must not run
+            raise AssertionError("probe must not run when the gate is disabled")
+
+        with patch.object(payment_egress, "_default_probe", probe):
+            self.assertIsNone(_assert_function_adapter_egress("gopay", self._options(), _cfg(enabled=False)))
+
+    def test_every_in_process_runner_is_gated_except_upi(self):
+        import pathlib
+
+        from sms_tool.pay_link import registry
+
+        source = pathlib.Path(registry.__file__).read_text(encoding="utf-8")
+        for runner in ("paypal_runner", "wallet_runner", "gcash_runner", "regional_wallet_runner"):
+            body = source.split(f"def {runner}(")[1].split("\n    def ")[0]
+            self.assertIn("_assert_function_adapter_egress", body, f"{runner} is not egress-gated")
+
+        # Subprocess adapters gate in ``_prepare_extractor``; UPI gates post-retarget
+        # inside the pipeline.  Neither may be double-gated at the runner.
+        for runner in ("upi_runner", "script_runner", "direct_runner", "momo_runner"):
+            body = source.split(f"def {runner}(")[1].split("\n    def ")[0]
+            self.assertNotIn("_assert_function_adapter_egress", body, f"{runner} is double-gated")
+
+        pipeline = pathlib.Path(registry.__file__).parent.parent / "upi_link" / "pipeline.py"
+        self.assertIn("_upi_assert_egress_contract", pipeline.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":
