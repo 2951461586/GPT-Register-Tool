@@ -1037,30 +1037,34 @@ def generate_upi_qr_link(
                 checkout_sentinel=checkout_sentinel_headers,
                 approve_shape=approve_shape,
             )
-            # Try confirm endpoint first
-            try:
-                confirm_chatgpt = approve_session.post(
-                    UPI_CHECKOUT_CONFIRM_URL,
-                    json={"checkout_session_id": cs_id, "selected_payment_method_type": "upi"},
-                    timeout=CHATGPT_TIMEOUT,
-                )
-                confirm_json = confirm_chatgpt.json() or {} if confirm_chatgpt.status_code < 400 else {}
-                _upi_dump_http(
-                    confirm_chatgpt,
-                    "chatgpt_approve_confirm",
-                    {"checkout_session_id": cs_id, "selected_payment_method_type": "upi"},
-                    "POST",
-                    UPI_CHECKOUT_CONFIRM_URL,
-                    force=confirm_chatgpt.status_code >= 400,
-                )
-                if str(confirm_json.get("result", "")).lower() == "approved":
-                    emit("approve", "approved via confirm endpoint")
-                    approval_data = confirm_json
-                    approval_ok = True
-                else:
-                    approval_data = confirm_json
-            except Exception as exc:
-                emit("approve", f"confirm endpoint error (non-fatal): {type(exc).__name__}: {exc}")
+            # The reference rail never calls /checkout/confirm (it answers 400
+            # "This endpoint is only for internal checkout sessions"); skip it in
+            # reference shape so the approve session is not primed by a 4xx.
+            if approve_shape != "reference":
+                # Try confirm endpoint first
+                try:
+                    confirm_chatgpt = approve_session.post(
+                        UPI_CHECKOUT_CONFIRM_URL,
+                        json={"checkout_session_id": cs_id, "selected_payment_method_type": "upi"},
+                        timeout=CHATGPT_TIMEOUT,
+                    )
+                    confirm_json = confirm_chatgpt.json() or {} if confirm_chatgpt.status_code < 400 else {}
+                    _upi_dump_http(
+                        confirm_chatgpt,
+                        "chatgpt_approve_confirm",
+                        {"checkout_session_id": cs_id, "selected_payment_method_type": "upi"},
+                        "POST",
+                        UPI_CHECKOUT_CONFIRM_URL,
+                        force=confirm_chatgpt.status_code >= 400,
+                    )
+                    if str(confirm_json.get("result", "")).lower() == "approved":
+                        emit("approve", "approved via confirm endpoint")
+                        approval_data = confirm_json
+                        approval_ok = True
+                    else:
+                        approval_data = confirm_json
+                except Exception as exc:
+                    emit("approve", f"confirm endpoint error (non-fatal): {type(exc).__name__}: {exc}")
 
             # If confirm didn't approve, try approve endpoint with retries
             if not approval_ok:

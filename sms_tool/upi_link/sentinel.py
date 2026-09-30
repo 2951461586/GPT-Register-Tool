@@ -28,7 +28,6 @@ from .session import (
     _upi_apply_fingerprint,
     _upi_attestation_deploy_id,
     _upi_env_attestation,
-    _upi_fingerprint,
     _upi_scrape_page_identity,
     _upi_session_is_live,
     _upi_warmup_session,
@@ -122,25 +121,32 @@ class _UpiRiskContext:
         total = round(elapsed + secrets.randbelow(9), 1)
         return f"[1,{elapsed},{min(self._seq, 60)},{self._counter_b},{self._counter_c},2,0,{total}]"
 
-    def headers(self, *, account_id: str = "") -> dict[str, str]:
+    def headers(self, *, account_id: str = "", reference_shape: bool = False) -> dict[str, str]:
         headers = {
             "oai-client-version": self.client_version,
             "oai-client-build-number": self.client_build,
-            "oai-telemetry": self.telemetry(),
-            "x-openai-web-frontend": "core_web",
-            "x-openai-codex-window-type": "not_applicable",
-            "x-oai-is-pending-updates": '{"v":3,"updates":[]}',
         }
-        # The reference upi-zero-link rail sends **no** observation header; only a
-        # real browser capture may forward one. A synthetic ``v1.r.p.`` value is
-        # more likely to be rejected as an invalid signature than to help, so
-        # omit it entirely when the browser rail did not issue it.
+        # ``reference_shape`` mirrors upi-zero-link's approve request exactly: it
+        # sends base identity + ``oai-client-version/build`` + the Sentinel pair,
+        # and **none** of the frontend-only markers below. Measured 2026-09-30:
+        # the extra markers are the only approve-header difference from the
+        # reference, and the reference's own rail is what the field reports as
+        # ``approved``; so they are dropped in reference shape.
+        if not reference_shape:
+            headers.update(
+                {
+                    "oai-telemetry": self.telemetry(),
+                    "x-openai-web-frontend": "core_web",
+                    "x-openai-codex-window-type": "not_applicable",
+                    "x-oai-is-pending-updates": '{"v":3,"updates":[]}',
+                }
+            )
+            if account_id:
+                headers["Chatgpt-Account-Id"] = account_id
         if self.browser_observation and self.observation:
             headers["x-oai-is-client-observation"] = self.observation
         if self.attestation:
             headers["oai-web-deployment-attestation"] = self.attestation
-        if account_id:
-            headers["Chatgpt-Account-Id"] = account_id
         return headers
 
 
@@ -575,7 +581,12 @@ def _upi_apply_approve_risk(
     if session is None:
         return
     try:
-        session.headers.update(risk.headers(account_id=_upi_account_id_from_token(access_token)))
+        session.headers.update(
+            risk.headers(
+                account_id=_upi_account_id_from_token(access_token),
+                reference_shape=(approve_shape == "reference"),
+            )
+        )
     except Exception:
         pass
     sentinel_headers: dict[str, str] = {}
@@ -599,8 +610,16 @@ def _upi_apply_approve_risk(
             sentinel_headers = {}
     if sentinel_headers:
         session.headers.update(sentinel_headers)
-    if payment_country:
+    if payment_country and isinstance(fingerprint, Mapping):
+        # Re-apply the *same* fingerprint the session was built with. Calling
+        # ``_upi_fingerprint(country=...)`` here minted a **new random template**
+        # (``index=None`` -> ``secrets.randbelow``), so the approve request
+        # carried a different ``User-Agent``/``sec-ch-ua`` than the Checkout and
+        # Stripe stages -- a free session/device contradiction the risk engine
+        # answered with ``blocked``. The reference rail keeps one ``fp`` for
+        # every stage; ``fingerprint`` (already country-profiled by the caller)
+        # is that single value here.
         try:
-            _upi_apply_fingerprint(session, _upi_fingerprint(country=payment_country))
+            _upi_apply_fingerprint(session, fingerprint)
         except Exception:
             pass
