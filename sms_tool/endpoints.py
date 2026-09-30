@@ -43,6 +43,11 @@ CHATGPT_ORIGIN = CHATGPT_BASE + "/"
 CHATGPT_BACKEND_API = f"{CHATGPT_BASE}/backend-api"
 CHATGPT_BACKEND_ANON = f"{CHATGPT_BASE}/backend-anon"
 
+#: Read-only trial/discovery signal. The checkout *create* gate may refuse a
+#: probe, but this GET still reports ``one_click_trial_eligible`` and the
+#: offered method types, so an eligibility check has an independent source.
+CHATGPT_PAYMENT_METHODS = f"{CHATGPT_BACKEND_API}/payments/payment_methods"
+
 # Auth pages that serve as the flow-binding target for Sentinel issuance and as
 # the landing page a step settles on.
 AUTH_EMAIL_VERIFICATION = f"{AUTH_BASE}/email-verification"
@@ -59,4 +64,5 @@ __all__ = [
     "CHATGPT_BACKEND_API",
     "CHATGPT_BASE",
     "CHATGPT_ORIGIN",
+    "CHATGPT_PAYMENT_METHODS",
 ]

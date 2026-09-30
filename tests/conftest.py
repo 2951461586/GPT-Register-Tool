@@ -131,6 +131,33 @@ def _no_real_proxy_probe(request, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _no_real_checkout_sentinel(request, monkeypatch):
+    """Block real Sentinel minting on the Checkout create lane.
+
+    ``paypal_extract._checkout_post`` attaches the ``chatgpt_checkout`` token
+    pair to every Checkout *create*. Minting would dial
+    ``sentinel.openai.com`` and spawn Node for a test that only means to assert
+    payload/header plumbing. Tests that exercise the mint opt out with
+    ``@pytest.mark.allow_checkout_sentinel`` and patch the mint explicitly.
+    """
+    from sms_tool import sentinel as sentinel_pkg
+
+    sentinel_pkg.client._CHECKOUT_MINT_CACHE.clear()
+    if "allow_checkout_sentinel" in request.keywords:
+        yield
+        sentinel_pkg.client._CHECKOUT_MINT_CACHE.clear()
+        return
+
+    monkeypatch.setattr(sentinel_pkg, "checkout_sentinel_headers", lambda **kwargs: {})
+    monkeypatch.setattr(
+        sentinel_pkg,
+        "issue_checkout_sentinel",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("real checkout Sentinel mint reached in tests")),
+    )
+    yield
+    sentinel_pkg.client._CHECKOUT_MINT_CACHE.clear()
+
+@pytest.fixture(autouse=True)
 def _no_real_promotion_preflight(request, monkeypatch):
     """Block the promotion batch's real egress preflight.
 

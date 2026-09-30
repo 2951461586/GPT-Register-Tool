@@ -149,7 +149,9 @@ class PayPalHttpError(Exception):
                         self.provider_error_code = str(nested).strip()[:120]
                         break
         raw = payload if payload is not None else str(getattr(response, "text", "") or "")
-        self.response_summary = _compact_diagnostic(json.dumps(raw, ensure_ascii=False) if not isinstance(raw, str) else raw)
+        self.response_summary = _compact_diagnostic(
+            json.dumps(raw, ensure_ascii=False) if not isinstance(raw, str) else raw
+        )
         self.retryable = bool(retryable)
         super().__init__(self._message())
 
@@ -219,9 +221,21 @@ class PaymentOutcomeUnknownError(Exception):
 _PROVIDER_STAGES = ("provider", "stripe_init", "payment_method", "confirm")
 
 CURRENCY_MAP = {
-    "US": "USD", "GB": "GBP", "DE": "EUR", "FR": "EUR", "JP": "JPY",
-    "AU": "AUD", "CA": "CAD", "SG": "SGD", "NZ": "NZD", "IE": "EUR",
-    "TH": "THB", "ID": "IDR", "IN": "INR", "BR": "BRL", "KR": "KRW",
+    "US": "USD",
+    "GB": "GBP",
+    "DE": "EUR",
+    "FR": "EUR",
+    "JP": "JPY",
+    "AU": "AUD",
+    "CA": "CAD",
+    "SG": "SGD",
+    "NZ": "NZD",
+    "IE": "EUR",
+    "TH": "THB",
+    "ID": "IDR",
+    "IN": "INR",
+    "BR": "BRL",
+    "KR": "KRW",
     "TR": "TRY",
 }
 
@@ -233,9 +247,11 @@ def _new_session(proxy: str = ""):
     The checkout stage uses ``_checkout_post`` instead to avoid Cloudflare
     session-cookie conflicts."""
     s = requests.Session()
-    s.headers.update({
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
-    })
+    s.headers.update(
+        {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36",
+        }
+    )
     if proxy:
         s.proxies = {"http": proxy, "https": proxy}
     return s
@@ -260,6 +276,60 @@ def _checkout_headers(access_token, cookie_header="", extra_headers=None):
     return headers
 
 
+#: The Checkout *create* path. Only this route needs the ``chatgpt_checkout``
+#: Sentinel pair; update/taxes/approve/confirm carry their own gates.
+_CHECKOUT_CREATE_PATH = "/backend-api/payments/checkout"
+
+
+def _checkout_device_id(cookie_header, extra_headers):
+    """Resolve the device id the checkout request will present.
+
+    Prefer an explicit ``OAI-Device-Id`` header (the capability/gcash/wallet
+    transports set one) and fall back to the account's ``oai-did`` cookie. The
+    Sentinel token is device-bound, so a mismatch would invalidate the pair.
+    """
+    for key, value in (extra_headers or {}).items():
+        if str(key).strip().lower() in {"oai-device-id", "oai-device_id"}:
+            candidate = str(value or "").strip()
+            if candidate:
+                return candidate
+    for part in str(cookie_header or "").split(";"):
+        name, _, value = part.partition("=")
+        if name.strip().lower() == "oai-did":
+            candidate = value.strip().strip('"')
+            if candidate:
+                return candidate
+    return ""
+
+
+def _is_checkout_create_url(url):
+    return str(url or "").split("?", 1)[0].rstrip("/").endswith(_CHECKOUT_CREATE_PATH)
+
+
+def _checkout_sentinel_headers(cookie_header, extra_headers, proxy):
+    """Advisory ``chatgpt_checkout`` token pair for a Checkout create POST.
+
+    Without both ``openai-sentinel-token`` and ``openai-sentinel-so-token`` the
+    create endpoint answers ``400 unusual activity``. Never fatal: a missing
+    local runner degrades to no headers so the caller keeps its own retry /
+    classification path.
+    """
+    device_id = _checkout_device_id(cookie_header, extra_headers)
+    if not device_id:
+        return {}
+    try:
+        from .sentinel import checkout_sentinel_headers
+
+        return checkout_sentinel_headers(
+            device_id=device_id,
+            proxy=proxy or "",
+            cookie_header=str(cookie_header or ""),
+            timeout_seconds=CHATGPT_TIMEOUT,
+        )
+    except Exception:
+        return {}
+
+
 def _checkout_post(url, json_body, access_token, cookie_header="", proxy="", timeout=30, extra_headers=None):
     """Execute a ChatGPT checkout POST using the functional curl_cffi API.
 
@@ -272,12 +342,19 @@ def _checkout_post(url, json_body, access_token, cookie_header="", proxy="", tim
     and /checkout/taxes, plus a per-session Referer.
     """
     headers = _checkout_headers(access_token, cookie_header, extra_headers)
+    if _is_checkout_create_url(url):
+        for name, value in _checkout_sentinel_headers(cookie_header, extra_headers, proxy).items():
+            headers.setdefault(name, value)
     headers["Content-Type"] = "application/json"
     proxies = {"http": proxy, "https": proxy} if proxy else None
     if curl_requests is None:
         raise RuntimeError("curl_cffi is required for Checkout browser impersonation")
     return curl_requests.post(
-        url, json=json_body, headers=headers, proxies=proxies, timeout=timeout,
+        url,
+        json=json_body,
+        headers=headers,
+        proxies=proxies,
+        timeout=timeout,
         impersonate=_CHECKOUT_FINGERPRINT["impersonate"],
     )
 
@@ -289,10 +366,12 @@ def _checkout_get(url, access_token, cookie_header="", proxy="", timeout=30, ext
     headers = _checkout_headers(access_token, cookie_header, extra_headers)
     proxies = {"http": proxy, "https": proxy} if proxy else None
     return curl_requests.get(
-        url, headers=headers, proxies=proxies, timeout=timeout,
+        url,
+        headers=headers,
+        proxies=proxies,
+        timeout=timeout,
         impersonate=_CHECKOUT_FINGERPRINT["impersonate"],
     )
-
 
 
 # ─── 代理工具 ──────────────────────────────────────────────────────────────────
@@ -384,8 +463,12 @@ class PPLinkExtractor:
             "checkout": str(countries.get("checkout") or self.checkout_country).upper(),
             "promotion": str(countries.get("promotion") or "").upper(),
             "provider": str(countries.get("provider") or self.target_country).upper(),
-            "stripe_init": str(countries.get("stripe_init") or countries.get("provider") or self.target_country).upper(),
-            "payment_method": str(countries.get("payment_method") or countries.get("provider") or self.target_country).upper(),
+            "stripe_init": str(
+                countries.get("stripe_init") or countries.get("provider") or self.target_country
+            ).upper(),
+            "payment_method": str(
+                countries.get("payment_method") or countries.get("provider") or self.target_country
+            ).upper(),
             "confirm": str(countries.get("confirm") or countries.get("provider") or self.target_country).upper(),
             "approve": str(countries.get("approve") or self.target_country).upper(),
         }
@@ -415,13 +498,15 @@ class PPLinkExtractor:
             self._chatgpt_session = session
         elif hasattr(session, "proxies"):
             session.proxies = {"http": self.approve_proxy, "https": self.approve_proxy} if self.approve_proxy else {}
-        session.headers.update({
-            "Authorization": f"Bearer {self.access_token}",
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-            "Origin": "https://chatgpt.com",
-            "oai-device-id": self.device_id,
-        })
+        session.headers.update(
+            {
+                "Authorization": f"Bearer {self.access_token}",
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "Origin": "https://chatgpt.com",
+                "oai-device-id": self.device_id,
+            }
+        )
         if self.cookie_header:
             session.headers["Cookie"] = self.cookie_header
         return session
@@ -485,7 +570,9 @@ class PPLinkExtractor:
         return prepared
 
     def _record_stage_result(self, stage: str, proxy: str, success: bool, reason: str = "") -> None:
-        country = str((self.proxy_exits.get(stage) or {}).get("country_code") or self.stage_proxy_countries.get(stage) or "")
+        country = str(
+            (self.proxy_exits.get(stage) or {}).get("country_code") or self.stage_proxy_countries.get(stage) or ""
+        )
         self.proxy_state.record_result(stage, proxy, success, reason, country)
 
     # ─── Stage 1: Checkout (JP/TH 代理) ───────────────────────────────────
@@ -508,15 +595,26 @@ class PPLinkExtractor:
 
     def _create_checkout(self) -> dict:
         base_proxy = self.checkout_proxy
-        self._log("checkout", f"Stage 1: proxy={redact_proxy_url(base_proxy)} billing={self.checkout_country}/{self.checkout_currency} target={self.target_country}")
+        self._log(
+            "checkout",
+            f"Stage 1: proxy={redact_proxy_url(base_proxy)} billing={self.checkout_country}/{self.checkout_currency} target={self.target_country}",
+        )
         body = self._checkout_contract().checkout_payload()
         for attempt in range(1, self.max_stage_retries + 1):
             attempt_proxy = base_proxy
             try:
                 attempt_proxy = self._prepare_stage_proxy("checkout", base_proxy, attempt)
+                # The device id must match the ``chatgpt_checkout`` Sentinel pair
+                # minted for this create request, so present it explicitly rather
+                # than relying on the account cookie carrying ``oai-did``.
                 r = _checkout_post(
                     "https://chatgpt.com/backend-api/payments/checkout",
-                    body, self.access_token, self.cookie_header, attempt_proxy, CHATGPT_TIMEOUT,
+                    body,
+                    self.access_token,
+                    self.cookie_header,
+                    attempt_proxy,
+                    CHATGPT_TIMEOUT,
+                    extra_headers={"OAI-Device-Id": self.device_id} if self.device_id else None,
                 )
                 if r.status_code >= 400:
                     raise PayPalHttpError(
@@ -537,7 +635,10 @@ class PPLinkExtractor:
                 if pk.startswith("pk_"):
                     self.stripe_pk = pk
                 else:
-                    self._log("checkout", "checkout 未返回 publishable_key，回退到默认 PK（若失效请设置 PP_STRIPE_PUBLISHABLE_KEY）")
+                    self._log(
+                        "checkout",
+                        "checkout 未返回 publishable_key，回退到默认 PK（若失效请设置 PP_STRIPE_PUBLISHABLE_KEY）",
+                    )
                 self.checkout_proxy = attempt_proxy
                 self._record_stage_result("checkout", attempt_proxy, True)
                 self._log("checkout", f"checkout 成功: cs_id={cs_id}")
@@ -570,7 +671,9 @@ class PPLinkExtractor:
         Returns True on success. Non-fatal on failure: logs and returns False so
         the downstream ``require_zero`` gate in _stripe_init decides the outcome.
         """
-        self._log("promotion", f"Stage 1.5: proxy={redact_proxy_url(self.promotion_proxy)} promo={self.promo_campaign_id}")
+        self._log(
+            "promotion", f"Stage 1.5: proxy={redact_proxy_url(self.promotion_proxy)} promo={self.promo_campaign_id}"
+        )
         body = {
             "checkout_session_id": cs_id,
             "processor_entity": processor_entity,
@@ -591,7 +694,11 @@ class PPLinkExtractor:
             self.promotion_proxy = self._prepare_stage_proxy("promotion", self.promotion_proxy)
             r = _checkout_post(
                 "https://chatgpt.com/backend-api/payments/checkout/update",
-                body, self.access_token, self.cookie_header, self.promotion_proxy, CHATGPT_TIMEOUT,
+                body,
+                self.access_token,
+                self.cookie_header,
+                self.promotion_proxy,
+                CHATGPT_TIMEOUT,
                 extra_headers=extra_headers,
             )
         except Exception as e:
@@ -646,7 +753,11 @@ class PPLinkExtractor:
         try:
             r = _checkout_post(
                 "https://chatgpt.com/backend-api/payments/checkout/taxes",
-                body, self.access_token, self.cookie_header, taxes_proxy, CHATGPT_TIMEOUT,
+                body,
+                self.access_token,
+                self.cookie_header,
+                taxes_proxy,
+                CHATGPT_TIMEOUT,
                 extra_headers=extra_headers,
             )
         except Exception as e:
@@ -680,7 +791,9 @@ class PPLinkExtractor:
         init = r.json()
         amount_info = stripe_amount_details(init)
         amount = amount_info.get("amount")
-        self._log("stripe_init", f"amount={amount} currency={amount_info.get('currency')} source={amount_info.get('source')}")
+        self._log(
+            "stripe_init", f"amount={amount} currency={amount_info.get('currency')} source={amount_info.get('source')}"
+        )
         self.proxy_state.record_zero_result(self.checkout_proxy, self.checkout_country, amount)
         # amount is None = Stripe 响应里没取到金额证据，属于协议模糊。
         # 不能用 `None != 0 == True` 误判成非零、误杀可能可用的 0 元 checkout；
@@ -691,7 +804,9 @@ class PPLinkExtractor:
         if enforce_zero and self.require_zero and amount is not None and amount != 0:
             raise CheckoutNotZeroDueError(amount, amount_info.get("currency", ""))
         if enforce_zero and self.require_zero and amount is None:
-            self._log("stripe_init", "amount not present in stripe init response; treating as inconclusive zero-due check")
+            self._log(
+                "stripe_init", "amount not present in stripe init response; treating as inconclusive zero-due check"
+            )
             raise CheckoutNotZeroDueError(None, amount_info.get("currency", ""))
         # 检查 PayPal 是否可用
         pm_types = init.get("payment_method_types") or []
@@ -814,9 +929,11 @@ class PPLinkExtractor:
         self._active_stage = "approve"
         self._log("approve", f"Stage 3: proxy={redact_proxy_url(self.approve_proxy)} ChatGPT approve")
         cs = self._approve_session()
-        cs.headers.update({
-            "Referer": f"https://chatgpt.com/checkout/{processor_entity}/{cs_id}",
-        })
+        cs.headers.update(
+            {
+                "Referer": f"https://chatgpt.com/checkout/{processor_entity}/{cs_id}",
+            }
+        )
         sentinel_headers = self._fresh_approval_sentinel(cs)
         # sentinel ping
         try:
@@ -863,7 +980,10 @@ class PPLinkExtractor:
                 payload = r.json() or {}
             except Exception:
                 pass
-            if str(payload.get("result") or "").strip().lower() == "blocked" or "blocked" in str(getattr(r, "text", "") or "").lower():
+            if (
+                str(payload.get("result") or "").strip().lower() == "blocked"
+                or "blocked" in str(getattr(r, "text", "") or "").lower()
+            ):
                 raise CheckoutApprovalBlockedError(endpoint, r)
         if r.status_code >= 400:
             raise PayPalHttpError(
@@ -1201,8 +1321,7 @@ class PPLinkExtractor:
                 }
                 self._log(
                     "approve",
-                    f"checkout approval blocked; rebuilding OpenAI Checkout "
-                    f"({attempt}/{self.max_checkout_retries})",
+                    f"checkout approval blocked; rebuilding OpenAI Checkout ({attempt}/{self.max_checkout_retries})",
                     **self.last_retry_error,
                 )
                 if attempt >= self.max_checkout_retries:

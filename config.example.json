@@ -191,7 +191,7 @@
     "otp_poll_interval": 2,
     "sentinel_version": "20260219f9f6",
     "sentinel_backend": "node_runner",
-    "sentinel_legacy_fallback": true,
+    "sentinel_legacy_fallback": false,
     "sentinel_max_concurrency": 2,
     "sentinel_prewarm_window": 0,
     "sentinel_circuit_failures": 3,

@@ -576,3 +576,80 @@ def test_fabricated_navigator_is_family_consistent(tmp_path):
     assert ios["hasDeviceMemory"] is False
     assert ios["hasChrome"] is False
     assert ios["maxTouchPoints"] == 5
+
+
+# ---------------------------------------------------------------------------
+# Checkout Sentinel authority + legacy-fallback default (2026-09-30)
+# ---------------------------------------------------------------------------
+def test_legacy_fallback_defaults_to_disabled():
+    """A dead runner must fail loudly, not silently degrade to pure Python.
+
+    The pure-Python issuer passes the surface endpoints but the OTP service
+    validates the real SDK JS server-side; the silent default-True fallback on
+    2026-09-17 turned a corrupt bundle into 126/126 ``create_account`` failures.
+    """
+    assert client._legacy_fallback_enabled({}) is False
+    assert client._legacy_fallback_enabled({"email_registration": {}}) is False
+
+
+def test_node_runner_failure_without_configured_fallback_propagates():
+    with patch(
+        "sms_tool.sentinel.client.issue_sentinel_token",
+        side_effect=RuntimeError("runner failed"),
+    ):
+        with pytest.raises(RuntimeError, match="runner failed"):
+            client.issue_sentinel_flow(
+                flow="authorize_continue",
+                device_id=DEVICE_ID,
+                config={},
+            )
+
+
+def test_chatgpt_checkout_flow_is_registered():
+    assert client.CHECKOUT_SENTINEL_FLOW == "chatgpt_checkout"
+    assert client.FLOW_PAGE_URLS[client.CHECKOUT_SENTINEL_FLOW]
+
+
+def test_checkout_sentinel_never_uses_the_legacy_issuer():
+    """The legacy issuer cannot mint ``chatgpt_checkout``; it must raise instead."""
+    with (
+        patch(
+            "sms_tool.sentinel.client.issue_sentinel_token",
+            side_effect=RuntimeError("runner failed"),
+        ),
+        patch("sms_tool.sentinel_tokens._extract_sentinel", return_value={}) as legacy,
+    ):
+        with pytest.raises(client.SentinelIssueError, match="sentinel_fallback_incomplete:chatgpt_checkout"):
+            client.issue_sentinel_flow(
+                flow=client.CHECKOUT_SENTINEL_FLOW,
+                device_id=DEVICE_ID,
+                config={"email_registration": {"sentinel_legacy_fallback": True}},
+            )
+
+    assert legacy.call_count == 1
+
+
+def test_checkout_sentinel_mint_reuses_a_successful_result():
+    client._CHECKOUT_MINT_CACHE.clear()
+    calls: list[dict] = []
+
+    def fake_flow(**kwargs):
+        calls.append(kwargs)
+        return client.SentinelToken(
+            flow=client.CHECKOUT_SENTINEL_FLOW,
+            device_id=kwargs["device_id"],
+            token="token-fixture",
+            so_token="so-fixture",
+        )
+
+    with patch("sms_tool.sentinel.client.issue_sentinel_flow", side_effect=fake_flow):
+        first = client.issue_checkout_sentinel(device_id=DEVICE_ID, proxy="http://exit.test:80")
+        second = client.issue_checkout_sentinel(device_id=DEVICE_ID, proxy="http://exit.test:80")
+
+    assert first.token == second.token == "token-fixture"
+    assert len(calls) == 1
+    headers = client.checkout_sentinel_headers(device_id=DEVICE_ID, proxy="http://exit.test:80")
+    assert headers["OpenAI-Sentinel-Token"] == "token-fixture"
+    assert headers["OpenAI-Sentinel-SO-Token"] == "so-fixture"
+    assert len(calls) == 1
+    client._CHECKOUT_MINT_CACHE.clear()

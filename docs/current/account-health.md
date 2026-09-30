@@ -84,11 +84,42 @@ Ruled out by experiment, each measured on a fresh account: the promo campaign id
 `oai-language`, `oai-session-id`, `oai-client-version`,
 `oai-client-build-number`, `sec-fetch-*`, `sec-ch-ua`, `Accept-Language`, an
 `oai-did` cookie), the `x-openai-target-*` headers, `checkout_ui_mode: "hosted"`
-with `price_interval`/`seat_quantity`/`cancel_url`, a signed Sentinel token, and
-the egress itself (residential Reliance Jio IN, residential Focus Broadband US,
-and a datacenter US exit all answer the same 400). `direct_card` / `paypal` /
-`upi` produce byte-identical `checkout_payload()` output, so the carrier method
-never reaches the create request.
+with `price_interval`/`seat_quantity`/`cancel_url`, a single signed Sentinel
+token, and the egress itself (residential Reliance Jio IN, residential Focus
+Broadband US, and a datacenter US exit all answer the same 400). `direct_card` /
+`paypal` / `upi` produce byte-identical `checkout_payload()` output, so the
+carrier method never reaches the create request.
+
+The single-token result above does **not** generalise to the token *pair*. The
+reference project reverse-engineered the create gate and the UPI lane
+independently confirmed it: the endpoint requires **both**
+`openai-sentinel-token` and `openai-sentinel-so-token`, minted under flow
+`chatgpt_checkout`; a lone main token (what the registration runner emits) is
+rejected. `paypal_extract._checkout_post` now attaches the pair to every
+Checkout create through the public
+`sentinel.checkout_sentinel_headers` authority (`payment_capability`,
+`paypal_extract._create_checkout`, `wallet_transport` and `gcash_transport` all
+reach the wire through it). The mint is advisory: a missing local runner
+degrades to no headers, so the existing classification path is unchanged.
+
+An independent read-only signal is read alongside the probe:
+`GET /backend-api/payments/payment_methods` returns `one_click_trial_eligible`
+and the offered method types. It is attached as `payment_methods_signal` and
+**survives a refused create**, so a risk-blocked Checkout is not left with no
+signal at all. It is additive evidence only — it never changes the
+`eligible` / `ineligible` / `unknown` classification (or a Canary's stop
+condition), because a trial-eligibility flag is not a method-availability
+verdict.
+
+When the create is `checkout_risk_blocked` (or a retryable transport failure),
+`payment_method_capability_probe` can retry once through a pluggable
+`fallback_transport`. `sms_tool/capability_browser.py` implements a real-browser
+create — it performs the `payments/checkout` POST inside the page context so the
+request carries the browser's own TLS, cookies and Cloudflare clearance — and
+delegates Stripe init / custom-checkout read / elements back to the protocol
+transport. Build it with `browser_fallback_transport()`, which returns `None`
+when Playwright is unavailable; the result's `fallback_used` records whether it
+ran.
 
 The probe classifies only known, non-sensitive response signals: HTTP 400
 `checkout_risk_blocked`, HTTP 429 `checkout_creation_rate_limited`, or a generic
