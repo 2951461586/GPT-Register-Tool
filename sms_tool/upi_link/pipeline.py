@@ -76,6 +76,8 @@ from .stripe import (
     _upi_passive_captcha_fields,
     _upi_poll_payment_page,
     _upi_post_with_degrade,
+    _upi_rebuild_ctx,
+    _upi_register_stripe_fingerprint,
     _upi_should_retry_second_confirm,
     _upi_stripe_init,
 )
@@ -500,6 +502,10 @@ def generate_upi_qr_link(
         stripe = _new_session(provider_proxy)
         _upi_apply_fingerprint(stripe, fingerprint)
         stripe_js_id = uuid.uuid4().hex
+        if _env_bool("UPI_STRIPE_FINGERPRINT", True):
+            # Stripe.js 在任何业务请求之前先向 m.stripe.com/6 登记设备指纹；
+            # 「从未登记过」是 Radar 能直接看出来的异常（文档 §7.1）。
+            _upi_register_stripe_fingerprint(stripe, stripe_js_id, fingerprint)
         if is_oaics:
             customer_session_secret = str(
                 checkout_data.get("customer_session_client_secret")
@@ -705,7 +711,7 @@ def generate_upi_qr_link(
                     refreshed = tax_resp.json() or {}
                     if isinstance(refreshed, dict) and refreshed:
                         init = refreshed
-                        ctx = _upi_build_ctx(init, fingerprint, stripe_js_id)
+                        ctx = _upi_rebuild_ctx(ctx, init, fingerprint, stripe_js_id)
 
         if update_customer_data:
             emit("customer_data", "Stage 4: submitting IN customer_data")
@@ -811,6 +817,62 @@ def generate_upi_qr_link(
         emit("stripe_confirm", "confirm success")
         # SetupIntent 失败判读（旧实现完全没有这一步）
         _upi_raise_if_setup_intent_blocked(confirm_data, "stripe confirm", current_pm_id=pm_id)
+
+        def _resubmit_with_fresh_pm(_payload: Mapping[str, Any]) -> str:
+            """``generic_decline`` 后换一个全新 ``pm_`` 再 confirm 同一个 cs_id。
+
+            Stripe 口径下拒的是**这一次支付方式**，不是这个 Checkout Session：
+            ``generic_decline`` 属可重试错误（"换卡几乎总能过"），而且"拒卡不需要
+            重建整个 Checkout Session，只需要换卡重建 token"。见 blog.caowo.de
+            《Stripe protocol payment automation deep dive 2026》§9.1 / §3.5。
+
+            返回新 ``pm_id``（成功）或空串（换 PM / confirm 失败，调用方按原逻辑
+            判终态）。固定走「引用已创建 PM」形态：只有这样才能真正**替换**被拒的
+            支付方式 —— inline 形态每次提交的都是同一份 ``payment_method_data``。
+            """
+            nonlocal pm_id, confirm_data
+            try:
+                fresh_pm = _upi_create_upi_pm(stripe, cs_id, stripe_pk, billing)
+            except Exception as exc:
+                emit("decline_retry", f"fresh payment method failed: {type(exc).__name__}: {exc}")
+                return ""
+            retry_body = _upi_build_confirm_body(
+                cs_id=cs_id,
+                stripe_pk=stripe_pk,
+                ctx=ctx,
+                processor_entity=processor_entity,
+                init_payload=init,
+                billing=billing,
+                fingerprint=fingerprint,
+                pm_id=fresh_pm,
+                inline_pm=False,
+                return_url=return_url,
+                payment_method_selection_flow=payment_method_selection_flow,
+                reference_shape=approve_shape == "reference",
+            )
+            retry_resp = stripe.post(
+                STRIPE_PAYMENT_PAGE_CONFIRM_URL_T.format(cs_id=cs_id),
+                data=retry_body,
+                timeout=DEFAULT_TIMEOUT,
+            )
+            _upi_dump_http(
+                retry_resp,
+                "stripe_decline_retry_confirm",
+                retry_body,
+                "POST",
+                STRIPE_PAYMENT_PAGE_CONFIRM_URL_T.format(cs_id=cs_id),
+                force=retry_resp.status_code >= 400,
+            )
+            if retry_resp.status_code >= 400:
+                emit(
+                    "decline_retry",
+                    f"fresh pm confirm failed: {retry_resp.status_code} {retry_resp.text[:200]}",
+                )
+                return ""
+            pm_id = fresh_pm
+            confirm_data = retry_resp.json() or {}
+            emit("decline_retry", f"swapped in {fresh_pm} and re-confirmed the same session")
+            return fresh_pm
 
         # ── Stage 6: ChatGPT approve ─────────────────────────────────────
         # 门禁严格对齐参考实现的三分支（参见参考 idx_extract 的三段 if/elif）：
@@ -1110,6 +1172,7 @@ def generate_upi_qr_link(
                         ctx,
                         current_pm_id=pm_id,
                         rescue=_rescue_mandate,
+                        recover_decline=_resubmit_with_fresh_pm,
                     )
                 except Exception as exc:
                     if _upi_should_retry_second_confirm(exc):
@@ -1140,7 +1203,7 @@ def generate_upi_qr_link(
                 refreshed_init = None
             if refreshed_init:
                 init = refreshed_init
-                ctx = _upi_build_ctx(init, fingerprint, stripe_js_id)
+                ctx = _upi_rebuild_ctx(ctx, init, fingerprint, stripe_js_id)
                 _absorb(init)
                 if not redirect_url and not qr_data.get("upi_uri"):
                     try:

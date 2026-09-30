@@ -18,6 +18,14 @@ STRIPE_PAYMENT_PAGE_CONFIRM_URL_T = "https://api.stripe.com/v1/payment_pages/{cs
 STRIPE_PAYMENT_PAGE_GET_URL_T = "https://api.stripe.com/v1/payment_pages/{cs_id}"
 STRIPE_PAYMENT_METHODS_URL = "https://api.stripe.com/v1/payment_methods"
 STRIPE_INTENT_URL_T = "https://api.stripe.com/v1/{intent_path}/{intent_id}"
+#: Stripe.js 在发出任何业务请求之前先向这里注册设备指纹（HAR 实测 4 次 POST，
+#: ``tag`` 依次为 stripejs-init-started / stripejs-init-complete /
+#: adyen-component-loaded / payment-element-mounted）。不发也能支付成功，但「长期
+#: 使用同一个 guid/muid 而从未注册过指纹」是 Stripe Radar 能直接看出来的异常。
+#: 来源：blog.caowo.de《Stripe protocol payment automation deep dive 2026》§7.1。
+UPI_STRIPE_FINGERPRINT_URL = "https://m.stripe.com/6"
+#: 只登记我们**确实在做**的两个生命周期事件，不伪造 adyen / payment-element 挂载。
+UPI_STRIPE_FINGERPRINT_TAGS: tuple[str, ...] = ("stripejs-init-started", "stripejs-init-complete")
 # Stripe API version string the reference upi-zero-link rail sends (captured
 # from the browser's confirm body). The ``custom_checkout_beta`` variant is the
 # one the manual-approval custom-checkout flow accepts.
@@ -78,6 +86,17 @@ UPI_LOCAL_MANDATE_DESCRIPTION = "Subscription payment"
 #: stop instead of spending 11 more round trips. A marker list, not an equality
 #: test, so adjacent Stripe wording still trips it.
 UPI_LOCAL_MANDATE_FATAL_MARKERS: tuple[str, ...] = ("created by checkout",)
+#: ``generic_decline`` 重试预算（换一个**全新**支付方式，同一个 cs_id）。
+#:
+#: Stripe 把 ``generic_decline`` 归为可重试：它拒的是这一次支付方式，不是这个
+#: Checkout Session —— "通常是最常见的风控拒绝，换一张卡几乎总能过"，而且
+#: "拒卡不需要重建整个 Checkout Session，只需要换卡重建 token"。
+#: 来源：blog.caowo.de《Stripe protocol payment automation deep dive 2026》
+#: §9.1 Decline 错误分类 / §3.5 PI 拒卡重试。
+#:
+#: 旧口径把它当终态直接放弃（``upi_provider_declined``），等于丢掉 Stripe 本来
+#: 允许重试的 session。可用 ``UPI_DECLINE_PM_RETRIES`` 按次覆盖。
+UPI_DECLINE_PM_RETRIES = 1
 UPI_CHATGPT_CLIENT_VERSION = "prod-db390ebea64862bf1899c420a4c736e0cf639747"
 UPI_CHATGPT_CLIENT_BUILD_NUMBER = "7904904"
 UPI_QR_POLL_INTERVAL = 1.0

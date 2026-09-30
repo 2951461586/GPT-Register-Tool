@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 from collections.abc import Mapping
 import json
+import secrets
 from urllib.parse import parse_qsl
 import time
 from urllib.parse import unquote
@@ -401,5 +402,11 @@ def _upi_browser_approve(
         result["error"] = f"{type(exc).__name__}: {str(exc)[:180]}"
     return result
 def _upi_browser_id() -> str:
-    """Stripe 的 guid / muid / sid 形态: uuid4 十六进制截 16 位。"""
-    return uuid.uuid4().hex[:16]
+    """Stripe 的 guid / muid / sid 形态: ``randomUUID()`` 拼 6 位 hex = 42 字符。
+
+    HAR 实测（blog.caowo.de《Stripe protocol payment automation deep dive 2026》
+    §3.1 / §7）浏览器发的是 42 字符；旧实现只取 ``uuid4().hex[:16]``（16 字符），
+    比「32 位纯 hex 也能用」的兼容下限还短一截，属于 Stripe Radar 能直接看出来的
+    指纹偏差。
+    """
+    return f"{uuid.uuid4()}{secrets.token_hex(3)}"

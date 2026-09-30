@@ -85,8 +85,11 @@ def test_reference_confirm_body_matches_upi_zero_link_shape():
         payment_method_selection_flow="merchant_specified",
         reference_shape=True,
     )
-    # Exact reference field set: no guid/muid/sid, consent, line-item details,
-    # elements-session params or passive captcha.
+    # Exact reference field set: no guid/muid/sid, consent, line-item details or
+    # elements-session params. The passive hCaptcha pair is deliberately excluded
+    # from that trade-off: it is added whenever a token was solved (a solved
+    # token MUST reach Stripe, see tests/test_upi_local_mandate.py). ``ctx``
+    # carries none here, so it is absent.
     assert body["payment_method"] == "pm_x"
     assert body["_stripe_version"].startswith("2020-08-27;custom_checkout_beta=v1")
     assert body["version"] == "a34694b057"
