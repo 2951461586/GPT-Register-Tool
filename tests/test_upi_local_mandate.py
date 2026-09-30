@@ -16,6 +16,7 @@ import json
 import pytest
 
 from sms_tool.upi_link import stripe as S
+from sms_tool.upi_link.browser import _upi_browser_id
 from sms_tool.upi_link.constants import (
     UPI_LOCAL_MANDATE_DEFAULT_AMOUNT,
     UPI_LOCAL_MANDATE_ENABLED,
@@ -273,10 +274,13 @@ def _payment_page(
     submission_state: str = "failed",
     last_error: str = "",
     redirect: str = "",
+    pm: str = "",
 ) -> dict:
     setup_intent: dict = {"id": "seti_123", "object": "setup_intent", "status": setup_status}
     if last_error:
         setup_intent["last_setup_error"] = {"code": last_error}
+        if pm:
+            setup_intent["last_setup_error"]["payment_method"] = pm
     payload: dict = {
         "object": "checkout.session",
         "id": "ppage_1",
@@ -402,6 +406,292 @@ def test_non_fatal_errors_still_walk_the_whole_ladder(monkeypatch, tmp_path):
 
     assert result["fatal"] is False
     assert len(result["variants"]) == 12
+
+
+# --------------------------------------------------------------------------
+# generic_decline is a payment-method failure, not a dead session
+# --------------------------------------------------------------------------
+
+
+def test_generic_decline_swaps_in_a_fresh_payment_method(monkeypatch, tmp_path):
+    """Stripe classes ``generic_decline`` as retryable; the session stays usable.
+
+    The swap happens **after** the grace window, so the page that reports the
+    decline is polled once more before the fresh payment method goes in.
+    """
+    monkeypatch.setenv("UPI_DUMP_DIR", str(tmp_path))
+    monkeypatch.setenv("UPI_FAILED_STATE_GRACE_POLL", "1")
+    pages = [
+        _payment_page(last_error="generic_decline"),
+        _payment_page(last_error="generic_decline"),
+        _payment_page(setup_status="succeeded", submission_state="succeeded", redirect=INSTRUCTIONS),
+    ]
+    fake = _FakePageStripe(pages)
+    seen: list = []
+
+    redirect, _qr = S._upi_poll_payment_page(
+        fake,
+        "cs_live_x",
+        "pk",
+        {},
+        current_pm_id="pm_old",
+        recover_decline=lambda payload: seen.append(payload) or "pm_fresh",
+    )
+
+    assert redirect == INSTRUCTIONS
+    assert len(seen) == 1
+    assert fake.calls == 3
+
+
+def test_failed_recovery_still_declines(monkeypatch, tmp_path):
+    monkeypatch.setenv("UPI_DUMP_DIR", str(tmp_path))
+    monkeypatch.setenv("UPI_FAILED_STATE_GRACE_POLL", "1")
+    fake = _FakePageStripe([_payment_page(last_error="generic_decline")] * 6)
+    calls: list = []
+
+    with pytest.raises(RuntimeError) as err:
+        S._upi_poll_payment_page(
+            fake,
+            "cs_live_x",
+            "pk",
+            {},
+            current_pm_id="pm_old",
+            recover_decline=lambda payload: calls.append(payload) or "",
+        )
+
+    assert "generic_decline" in str(err.value)
+    assert len(calls) == 1
+
+
+def test_decline_retry_budget_is_configurable(monkeypatch, tmp_path):
+    monkeypatch.setenv("UPI_DUMP_DIR", str(tmp_path))
+    monkeypatch.setenv("UPI_FAILED_STATE_GRACE_POLL", "1")
+    monkeypatch.setenv("UPI_DECLINE_PM_RETRIES", "2")
+    fake = _FakePageStripe([_payment_page(last_error="generic_decline")] * 12)
+    calls: list = []
+
+    with pytest.raises(RuntimeError):
+        S._upi_poll_payment_page(
+            fake,
+            "cs_live_x",
+            "pk",
+            {},
+            current_pm_id="pm_old",
+            recover_decline=lambda payload: calls.append(payload) or "pm_fresh",
+        )
+
+    assert len(calls) == 2
+
+
+def test_decline_retry_can_be_disabled(monkeypatch, tmp_path):
+    monkeypatch.setenv("UPI_DUMP_DIR", str(tmp_path))
+    monkeypatch.setenv("UPI_FAILED_STATE_GRACE_POLL", "1")
+    monkeypatch.setenv("UPI_DECLINE_PM_RETRIES", "0")
+    fake = _FakePageStripe([_payment_page(last_error="generic_decline")] * 6)
+    calls: list = []
+
+    with pytest.raises(RuntimeError):
+        S._upi_poll_payment_page(
+            fake,
+            "cs_live_x",
+            "pk",
+            {},
+            current_pm_id="pm_old",
+            recover_decline=lambda payload: calls.append(payload) or "pm_fresh",
+        )
+
+    assert calls == []
+
+
+def test_recovery_updates_current_pm_so_the_new_error_is_not_filtered(monkeypatch, tmp_path):
+    """``_upi_setup_intent_last_error`` ignores errors from *other* payment
+    methods; if the swap did not update ``current_pm_id`` the fresh decline would
+    be filtered out and the run would report a generic failure instead of a
+    decline (different ``error_code`` upstream, ``retryable`` flips too)."""
+    monkeypatch.setenv("UPI_DUMP_DIR", str(tmp_path))
+    monkeypatch.setenv("UPI_FAILED_STATE_GRACE_POLL", "1")
+    monkeypatch.setenv("UPI_DECLINE_PM_RETRIES", "1")
+    pages = [
+        _payment_page(last_error="generic_decline", pm="pm_old"),
+        _payment_page(last_error="generic_decline", pm="pm_old"),
+        _payment_page(last_error="generic_decline", pm="pm_fresh"),
+        _payment_page(last_error="generic_decline", pm="pm_fresh"),
+    ]
+    fake = _FakePageStripe(pages)
+
+    with pytest.raises(RuntimeError) as err:
+        S._upi_poll_payment_page(
+            fake,
+            "cs_live_x",
+            "pk",
+            {},
+            current_pm_id="pm_old",
+            recover_decline=lambda payload: "pm_fresh",
+        )
+
+    assert "generic_decline" in str(err.value)
+    assert "submission failed" not in str(err.value)
+
+
+# --------------------------------------------------------------------------
+# the solved passive hCaptcha must reach the confirm body
+# --------------------------------------------------------------------------
+
+
+def _confirm_body(ctx: dict, *, reference_shape: bool) -> dict:
+    return S._upi_build_confirm_body(
+        cs_id="cs_live_x",
+        stripe_pk="pk_x",
+        ctx=ctx,
+        processor_entity="openai_llc",
+        init_payload={},
+        billing={},
+        fingerprint={},
+        pm_id="pm_1",
+        inline_pm=False,
+        reference_shape=reference_shape,
+    )
+
+
+@pytest.mark.parametrize("reference_shape", [True, False])
+@pytest.mark.parametrize("inline_pm", [True, False])
+def test_solved_passive_captcha_reaches_the_confirm_body(reference_shape, inline_pm):
+    """Regression: the ``reference_shape`` branch used to return before the
+    passive-captcha block, so a 4071-char token that cost a 120 s solve was
+    dropped -- and Stripe answered the payment-setup stage with
+    ``generic_decline`` (see pipeline.py's own comment)."""
+    token = "P0_" + "x" * 60
+    body = S._upi_build_confirm_body(
+        cs_id="cs_live_x",
+        stripe_pk="pk_x",
+        ctx={"passive_captcha": {"passive_captcha_token": token, "passive_captcha_ekey": "ek_1"}},
+        processor_entity="openai_llc",
+        init_payload={},
+        billing={},
+        fingerprint={},
+        pm_id="pm_1",
+        inline_pm=inline_pm,
+        reference_shape=reference_shape,
+    )
+    assert body["passive_captcha_token"] == token
+    assert body["passive_captcha_ekey"] == "ek_1"
+
+
+def test_passive_captcha_ekey_is_always_present_when_configured():
+    """The reference unconditionally sends the (possibly empty) ekey key."""
+    body = _confirm_body(
+        {"passive_captcha": {"passive_captcha_token": "P0_x", "passive_captcha_ekey": ""}},
+        reference_shape=True,
+    )
+    assert body["passive_captcha_token"] == "P0_x"
+    assert body["passive_captcha_ekey"] == ""
+
+
+@pytest.mark.parametrize("reference_shape", [True, False])
+def test_no_captcha_context_adds_no_captcha_keys(reference_shape):
+    body = _confirm_body({}, reference_shape=reference_shape)
+    assert "passive_captcha_token" not in body
+    assert "passive_captcha_ekey" not in body
+
+
+# --------------------------------------------------------------------------
+# Stripe.js fingerprint: id shape + m.stripe.com/6 registration
+# --------------------------------------------------------------------------
+
+
+def test_browser_id_matches_the_har_verified_shape():
+    """HAR-verified ``guid``/``muid``/``sid`` are 42 chars: ``randomUUID()`` + 6 hex
+    (article §3.1 / §7). The old ``uuid4().hex[:16]`` was 16 chars -- below even
+    the 32-hex compatibility floor, i.e. a fingerprint Radar can spot."""
+    for _ in range(5):
+        value = _upi_browser_id()
+        assert len(value) == 42
+        assert [value[index] for index in (8, 13, 18, 23)] == ["-"] * 4
+
+
+def test_confirm_body_uses_the_42_char_identity_triple():
+    body = S._upi_build_confirm_body(
+        cs_id="cs_live_x",
+        stripe_pk="pk_x",
+        ctx={},
+        processor_entity="openai_llc",
+        init_payload={},
+        billing={},
+        fingerprint={},
+        pm_id="pm_1",
+        inline_pm=False,
+        reference_shape=False,
+    )
+    for key in ("guid", "muid", "sid"):
+        assert len(body[key]) == 42
+    assert len({body["guid"], body["muid"], body["sid"]}) == 3
+
+
+def test_fingerprint_registration_posts_both_lifecycle_tags():
+    fake = _FakeStripe([_resp(200, {}), _resp(200, {})])
+    statuses = S._upi_register_stripe_fingerprint(
+        fake, "jsid_1", {"user_agent": "UA", "locale": "en-IN", "timezone": "Asia/Kolkata"}
+    )
+
+    assert statuses == [200, 200]
+    assert [call["data"]["tag"] for call in fake.calls] == ["stripejs-init-started", "stripejs-init-complete"]
+    assert all(call["url"] == "https://m.stripe.com/6" for call in fake.calls)
+    assert all(call["data"]["id"] == "jsid_1" for call in fake.calls)
+    assert all(call["data"]["v2"] == "1" and call["data"]["src"] == "js" for call in fake.calls)
+    analytics = json.loads(fake.calls[0]["data"]["a"])
+    assert analytics["locale"] == "en-IN"
+    assert analytics["timezone"] == "Asia/Kolkata"
+
+
+def test_fingerprint_registration_is_best_effort():
+    """The registration must never break the payment flow."""
+
+    class _Boom:
+        def post(self, *args, **kwargs):
+            raise OSError("no route to host")
+
+    assert S._upi_register_stripe_fingerprint(_Boom(), "jsid", {}) == [-1, -1]
+
+
+def test_ctx_rebuild_preserves_the_solved_captcha_and_identity():
+    """Stage 4's tax update rebuilds ``ctx`` from the refreshed init; dropping the
+    solved token there is exactly why the live confirm body had no
+    ``passive_captcha_token`` despite the solver reporting one."""
+    previous = {
+        "passive_captcha": {"passive_captcha_token": "P0_x", "passive_captcha_ekey": ""},
+        "guid": "g" * 42,
+        "muid": "m" * 42,
+        "sid": "s" * 42,
+    }
+    ctx = S._upi_rebuild_ctx(previous, {}, {}, "jsid")
+
+    assert ctx["passive_captcha"] == {"passive_captcha_token": "P0_x", "passive_captcha_ekey": ""}
+    assert (ctx["guid"], ctx["muid"], ctx["sid"]) == ("g" * 42, "m" * 42, "s" * 42)
+    assert ctx["stripe_js_id"] == "jsid"
+
+
+def test_ctx_rebuild_without_previous_generates_a_fresh_identity():
+    ctx = S._upi_rebuild_ctx({}, {}, {}, "jsid")
+    assert len(ctx["guid"]) == 42
+    assert "passive_captcha" not in ctx
+
+
+def test_captcha_survives_a_rebuild_into_the_confirm_body():
+    """End-to-end of the bug: solve -> tax rebuild -> confirm must still carry it."""
+    ctx = S._upi_rebuild_ctx({"passive_captcha": {"passive_captcha_token": "P0_x"}}, {}, {}, "jsid")
+    body = S._upi_build_confirm_body(
+        cs_id="cs_live_x",
+        stripe_pk="pk_x",
+        ctx=ctx,
+        processor_entity="openai_llc",
+        init_payload={},
+        billing={},
+        fingerprint={},
+        pm_id="pm_1",
+        inline_pm=False,
+        reference_shape=True,
+    )
+    assert body["passive_captcha_token"] == "P0_x"
 
 
 # --------------------------------------------------------------------------

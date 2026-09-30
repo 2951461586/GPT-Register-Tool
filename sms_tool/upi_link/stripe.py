@@ -36,6 +36,7 @@ from .constants import (
     STRIPE_PAYMENT_METHODS_URL,
     STRIPE_PAYMENT_PAGE_GET_URL_T,
     STRIPE_PAYMENT_PAGE_INIT_URL_T,
+    UPI_DECLINE_PM_RETRIES,
     UPI_FINGERPRINT_TEMPLATES,
     UPI_LOCAL_MANDATE_DEFAULT_AMOUNT,
     UPI_LOCAL_MANDATE_DESCRIPTION,
@@ -45,6 +46,8 @@ from .constants import (
     UPI_REFERENCE_STRIPE_RUNTIME_VERSION,
     UPI_REFERENCE_STRIPE_VERSION,
     UPI_SECOND_CONFIRM_MARKERS,
+    UPI_STRIPE_FINGERPRINT_TAGS,
+    UPI_STRIPE_FINGERPRINT_URL,
 )
 from .env import _emit, _env_bool, _env_int, _env_str
 from .dump import _upi_dump_http
@@ -166,6 +169,73 @@ def _upi_passive_captcha_fields(
     return out
 
 
+def _upi_register_stripe_fingerprint(
+    stripe: Any,
+    stripe_js_id: str,
+    fingerprint: Mapping[str, str],
+    tags: Sequence[str] = UPI_STRIPE_FINGERPRINT_TAGS,
+) -> list[int]:
+    """向 ``m.stripe.com/6`` 登记设备指纹（Stripe.js 的业务请求前置调用）。
+
+    真实浏览器在任何业务请求之前先发这几次 POST；文档明确说**不发也能支付成功**，
+    但「长期使用同一个 guid/muid 而从未注册过指纹」是 Stripe Radar 能直接看出来的
+    异常。只登记我们**确实在做**的两个生命周期事件，不伪造 adyen /
+    payment-element 挂载（我们没有挂载 Elements）。
+
+    纯 best-effort：任何异常都吞掉，只把 HTTP 状态码回给调用方做诊断。
+    """
+    analytics = json.dumps(
+        {
+            "ua": str(fingerprint.get("user_agent") or ""),
+            "locale": str(fingerprint.get("locale") or ""),
+            "timezone": str(fingerprint.get("timezone") or ""),
+            "platform": str(fingerprint.get("sec_ch_ua_platform") or ""),
+            "accept_language": str(fingerprint.get("accept_language") or ""),
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    statuses: list[int] = []
+    for tag in tags:
+        try:
+            resp = stripe.post(
+                UPI_STRIPE_FINGERPRINT_URL,
+                data={"v2": "1", "id": stripe_js_id, "tag": tag, "src": "js", "a": analytics},
+                timeout=DEFAULT_TIMEOUT,
+            )
+        except Exception as exc:  # noqa: BLE001 - 指纹登记不能阻断主流程
+            _emit("fingerprint", f"m.stripe.com/6 {tag} transport error: {type(exc).__name__}: {str(exc)[:120]}")
+            statuses.append(-1)
+            continue
+        status, _ = _upi_int_value(getattr(resp, "status_code", 0))
+        statuses.append(status)
+    _emit("fingerprint", f"m.stripe.com/6 registered: {statuses}")
+    return statuses
+
+
+def _upi_apply_passive_captcha(body: dict[str, str], ctx: Mapping[str, Any]) -> None:
+    """把已求解的被动 hCaptcha 字段并入 confirm 载荷。
+
+    ``reference_shape`` 分支原本在 ``passive`` 之前就 ``return``，于是**求解成功
+    的 token 被直接丢掉**：2026-09-30 实测 solver 已解出 4071 字符 token
+    （``[captcha] solved token_len=4071``），但 confirm 体里既没有
+    ``passive_captcha_token`` 也没有 ``passive_captcha_ekey``，Stripe 随即在
+    「建立支付方式」阶段回 ``generic_decline``（``setup_intent.last_setup_error``
+    = ``The latest attempt to set up the payment method has failed.``）——
+    正是本仓 ``pipeline.py`` 里那句注释预言的结果：白花一轮 120s 求解，再把结果扔了。
+
+    参考实现不带这两个字段，只是因为它的 HAR 抓包那次 confirm 没触发被动验证；
+    「参考没发」不等于「这两个字段不该发」，所以它不属于「参考字段集」的取舍范围。
+    """
+    passive = ctx.get("passive_captcha")
+    if not isinstance(passive, Mapping):
+        return
+    if passive.get("passive_captcha_token"):
+        body["passive_captcha_token"] = str(passive["passive_captcha_token"])
+    # 参考实现无条件带该键（即使为空），Stripe 也接受空值。
+    body["passive_captcha_ekey"] = str(passive.get("passive_captcha_ekey") or "")
+
+
 def _upi_build_confirm_body(
     *,
     cs_id: str,
@@ -204,8 +274,11 @@ def _upi_build_confirm_body(
         # Exact field set of the reference upi-zero-link confirm body: a
         # separately-created PM referenced by id, the custom_checkout beta API
         # version, and none of the extra custom-mode fields (consent /
-        # last_displayed_line_item_group_details / guid-muid-sid / passive
-        # captcha / elements session params) this project historically added.
+        # last_displayed_line_item_group_details / guid-muid-sid / elements
+        # session params) this project historically added. The passive hCaptcha
+        # pair is **not** part of that trade-off: the reference omitted it only
+        # because its capture did not trigger the challenge, and dropping a
+        # solved token is exactly what makes Stripe answer ``generic_decline``.
         body: dict[str, str] = {
             "eid": "NA",
             "payment_method": pm_id,
@@ -229,6 +302,7 @@ def _upi_build_confirm_body(
         init_checksum = str(init_payload.get("init_checksum") or ctx.get("init_checksum") or "")
         if init_checksum:
             body["init_checksum"] = init_checksum
+        _upi_apply_passive_captcha(body, ctx)
         return body
     body: dict[str, str] = {
         "eid": "NA",
@@ -312,12 +386,7 @@ def _upi_build_confirm_body(
     else:
         body["payment_method"] = pm_id
 
-    passive = ctx.get("passive_captcha")
-    if isinstance(passive, Mapping):
-        if passive.get("passive_captcha_token"):
-            body["passive_captcha_token"] = str(passive["passive_captcha_token"])
-        # 参考实现无条件带该键（即使为空），Stripe 也接受空值。
-        body["passive_captcha_ekey"] = str(passive.get("passive_captcha_ekey") or "")
+    _upi_apply_passive_captcha(body, ctx)
 
     # ``browser_locale`` / ``browser_timezone`` are valid only on the init and
     # tax/customer update requests; Stripe's confirm rejects them with
@@ -345,6 +414,31 @@ def _upi_build_ctx(init_payload: Any, fingerprint: Mapping[str, str], stripe_js_
         "runtime_version": _upi_runtime_version(),
         "stripe_version": STRIPE_VERSION,
     }
+
+
+#: ``_upi_build_ctx`` 每次返回全新 dict，而税区更新 / re-init 都要在拿到新 init 后
+#: 重建一次 ctx。这几个键是**已经付过代价**才拿到的，重建时必须带过去：
+#:
+#: * ``passive_captcha`` 丢掉 ⇒ Stage 5 的 confirm 缺 ``passive_captcha_token``，
+#:   Stripe 回 ``generic_decline``（一轮 120s 求解白花 —— 2026-09-30 实测：solver
+#:   报 token 就绪 len=4136，但 confirm 体里两个字段都没有）。
+#: * ``guid`` / ``muid`` / ``sid`` 丢掉 ⇒ 同一个 session 里换了一套 Stripe.js
+#:   身份三元组，指纹自相矛盾。
+_UPI_CTX_CARRY_KEYS: tuple[str, ...] = ("passive_captcha", "guid", "muid", "sid")
+
+
+def _upi_rebuild_ctx(
+    previous: Mapping[str, Any],
+    init_payload: Any,
+    fingerprint: Mapping[str, str],
+    stripe_js_id: str,
+) -> dict[str, Any]:
+    """重建 ctx，但不丢「已经付过代价拿到」的键（见 :data:`_UPI_CTX_CARRY_KEYS`）。"""
+    ctx = _upi_build_ctx(init_payload, fingerprint, stripe_js_id)
+    for key in _UPI_CTX_CARRY_KEYS:
+        if previous.get(key):
+            ctx[key] = previous[key]
+    return ctx
 
 
 def _upi_degraded_template() -> dict[str, str]:
@@ -798,6 +892,7 @@ def _upi_poll_payment_page(
     ctx: Mapping[str, Any],
     current_pm_id: str = "",
     rescue: Callable[[Mapping[str, Any]], bool] | None = None,
+    recover_decline: Callable[[Mapping[str, Any]], str] | None = None,
 ) -> tuple[str, list[str]]:
     """参考实现 ``poll_payment_page``: 轮询到「真跳转 / QR」或终态。
 
@@ -812,6 +907,12 @@ def _upi_poll_payment_page(
     ``need_setup_recover`` + ``confirm_local_setup_intent``，见
     :func:`_upi_needs_setup_recover`）。只在第一轮命中时调一次；返回 ``True``
     表示确实补交了，值得再轮询一轮。策略留在调用方，这里只管循环控制。
+
+    ``recover_decline`` 是 ``generic_decline`` 的重试回调：它返回**新的**
+    ``pm_`` id 表示已经换支付方式并重新提交，循环拿新 id 继续轮询（``current_pm_id``
+    同步更新，否则 :func:`_upi_setup_intent_last_error` 的残留错误过滤会失配）；
+    返回空串则按原来的终态处理。``generic_decline`` 在 Stripe 口径下是可重试的
+    支付方式级失败，不是 session 死亡，详见 :data:`UPI_DECLINE_PM_RETRIES`。
     """
     deadline = time.time() + _env_int("UPI_POLL_TIMEOUT", 45)
     params = {
@@ -825,6 +926,9 @@ def _upi_poll_payment_page(
     grace_deadline = 0.0
     grace_seconds = _env_int("UPI_FAILED_STATE_GRACE_POLL", 5, minimum=1)
     attempted_rescue = False
+    # ``generic_decline`` 是支付方式级可重试失败（见 UPI_DECLINE_PM_RETRIES）。
+    decline_retry_limit = _env_int("UPI_DECLINE_PM_RETRIES", UPI_DECLINE_PM_RETRIES, minimum=0)
+    decline_retries = 0
 
     while time.time() < deadline:
         try:
@@ -886,6 +990,22 @@ def _upi_poll_payment_page(
                     last_error = "failed generic_decline grace polling"
                     time.sleep(1)
                     continue
+                # 换一个全新 pm_ 再 confirm 同一个 cs_id —— Stripe 口径下拒的是
+                # 这一次支付方式，而不是这个 session；直接判死会丢掉可重试的机会。
+                if decline_retries < decline_retry_limit and recover_decline is not None:
+                    decline_retries += 1
+                    _emit(
+                        "poll",
+                        f"generic_decline is payment-method level; "
+                        f"swapping in a fresh one ({decline_retries}/{decline_retry_limit})",
+                    )
+                    replacement = str(recover_decline(payload) or "")
+                    if replacement:
+                        current_pm_id = replacement
+                        grace_deadline = 0.0
+                        last_error = f"fresh payment method {replacement} submitted"
+                        time.sleep(1)
+                        continue
                 raise RuntimeError(_upi_provider_decline_message("stripe payment_pages"))
             raise RuntimeError(f"Stripe submission failed: {submission}")
 
