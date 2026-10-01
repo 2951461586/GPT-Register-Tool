@@ -31,6 +31,7 @@ from .registration_cancel import RegistrationCancelled, ensure_not_cancelled
 from .registration_outcome import needs_manual_session_recovery
 from .registration_result import build_registration_result
 from .registration_operations import RegistrationOperations
+from .registration_stage_runner import RegistrationAbort, RegistrationStageRunner
 from .registration_persistence import RegistrationPersistence, StorageRegistrationPersistence
 from .registration_retry_guard import DEAD_END_SIGNUP_ROUTED_TO_LOGIN, RegistrationRetryGuard
 from .registration_runtime import RegistrationRuntimeState
@@ -41,7 +42,6 @@ from . import registration_checkpoint
 from . import registration_finalize as _registration_finalize
 from .registration_state import (
     RegistrationContext,
-    RegistrationStage,
     RegistrationStageOverrun,
     RegistrationState,
     RegistrationStateMachine,
@@ -186,41 +186,6 @@ def _apply_protocol_fingerprint(ops: Any, config: Any, proxy: str) -> str:
         country = str(infer_proxy_country(proxy) or "")
         ops.set_fingerprint_geo(country)
         return country
-
-
-class RegistrationStageRunner:
-    """Run one production stage against a shared runtime and state machine.
-
-    ``context`` is whatever the caller wants handlers to see; the email
-    workflow passes its ``RegistrationRuntimeState`` (not a
-    ``RegistrationContext``) and handlers mutate that same runtime. ``run_stage``
-    is the only execution seam.
-    """
-
-    def __init__(
-        self,
-        context: Any,
-        machine: RegistrationStateMachine,
-    ) -> None:
-        self.context = context
-        self.machine = machine
-
-    def run_stage(
-        self,
-        state: RegistrationState,
-        handler: Callable[[], Any],
-        *,
-        timeout_seconds: float | None = None,
-    ) -> Any:
-        return RegistrationStage(
-            state,
-            lambda _context: handler(),
-            timeout_seconds=timeout_seconds,
-        ).run(self.context, self.machine)
-
-
-class RegistrationAbort(RuntimeError):
-    """Expected workflow failure that is converted to a sanitized result."""
 
 
 class RegistrationEmailWorkflow:
