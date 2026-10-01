@@ -7,7 +7,6 @@ import logging
 import time
 import uuid
 from typing import Any, Callable, Mapping
-from urllib.parse import urlsplit
 
 from curl_cffi import requests as curl_requests
 
@@ -31,6 +30,14 @@ from .registration_cancel import RegistrationCancelled, ensure_not_cancelled
 from .registration_outcome import needs_manual_session_recovery
 from .registration_result import build_registration_result
 from .registration_operations import RegistrationOperations
+from .registration_protocol_helpers import (
+    _create_account_response_line,
+    _is_existing_login_dead_end_error,
+    _login_probe_password,
+    _new_registration_session,
+    _safe_float,
+    _safe_int,
+)
 from .registration_stage_runner import RegistrationAbort, RegistrationStageRunner
 from .registration_persistence import RegistrationPersistence, StorageRegistrationPersistence
 from .registration_retry_guard import DEAD_END_SIGNUP_ROUTED_TO_LOGIN, RegistrationRetryGuard
@@ -41,114 +48,11 @@ from . import endpoints
 from . import registration_checkpoint
 from . import registration_finalize as _registration_finalize
 from .registration_state import (
-    RegistrationContext,
     RegistrationStageOverrun,
     RegistrationState,
     RegistrationStateMachine,
     prepare_registration_context,
 )
-
-
-#: Existing-login lane failures that mean this address can never produce a
-#: session for us, so the retry guard should skip it instead of spending an
-#: email code to rediscover the same verdict.
-#:
-#: ``no_password_step`` is the probe's definitive answer -- the transaction
-#: served a login form with no password input, so the account is passwordless.
-#: ``password_step_unknown`` is the signup lane's refusal to guess: the address
-#: is known-registered and the probe could not answer, and the email lane is a
-#: measured dead end for that address.  ``password_required`` is deliberately
-#: absent: that state is "the account has a password we do not hold", which a
-#: later run supplying ``--password`` could still resolve, so blacklisting it
-#: would skip an address we can actually log into.
-EXISTING_LOGIN_DEAD_END_ERRORS = (
-    "existing_login_no_password_step",
-    "existing_login_password_step_unknown",
-)
-
-
-def _is_existing_login_dead_end_error(error: Any) -> bool:
-    text = str(error or "")
-    return any(text.startswith(marker) for marker in EXISTING_LOGIN_DEAD_END_ERRORS)
-
-
-def _login_probe_password(state: Any) -> str:
-    """The password the existing-login probe is allowed to submit, or ``""``.
-
-    The probe can only *offer* the password step -- a login still needs a
-    password to hand it, so every caller of
-    ``_login_existing_account_with_email_otp`` has to answer "is the password we
-    hold this account's own password?".  Answering it in three places invites
-    three different answers, so it is answered once, here.
-
-    ``password_unknown`` is the wrong gate on its own: ``create_account`` sets
-    it for *every* ``user_already_exists`` answer, including the ones where the
-    caller passed ``--password`` and we therefore do own the account's password
-    (that case is recorded in ``existing_account_password_known``).  For a fresh
-    registration the password is the one we just set, so it is submittable
-    unless this run resumed an email verification without owning one.
-    """
-    password = str(getattr(state, "password", "") or "")
-    if getattr(state, "existing_account", False):
-        return password if getattr(state, "existing_account_password_known", False) else ""
-    return "" if getattr(state, "password_unknown", False) else password
-
-
-def _create_account_response_line(status: int, data: Any, sanitize: Callable[[Any], str]) -> str:
-    """One line saying what the server *decided*, not everything it said.
-
-    The 600-character budget exists for the failure case: ``user_already_exists``
-    carries its ``userAlreadyExistsRecovery`` object past the 300-char mark, and
-    that object is the only place the server states the recovery action
-    (measured 2026-09-14).  A non-200 therefore still prints the raw body.
-
-    A 200 does not.  There the budget goes to a URL the body repeats twice: the
-    top-level ``continue_url`` in full, then ``page.payload.url`` with the same
-    value cut off mid-query at character 182 (7/7 dumps measured 2026-09-14).
-    That is unusable for a human *and* unparseable for a script, and the query
-    string is a single-use OAuth code rather than a signal -- so a success prints
-    the two fields the caller branches on, with the URL reduced to host + path.
-    """
-    try:
-        rendered = json.dumps(data, ensure_ascii=False, default=str)
-    except (TypeError, ValueError):
-        rendered = str(data)
-    if status != 200 or not isinstance(data, dict):
-        return sanitize(rendered[:600])
-    page = data.get("page") if isinstance(data.get("page"), dict) else {}
-    page_type = str(page.get("type") or data.get("page_type") or "")
-    target = str(data.get("continue_url") or "")
-    if not page_type and not target:
-        # An unrecognised 200 shape: keep the raw body rather than print a line
-        # that says nothing about why the caller got here.
-        return sanitize(rendered[:600])
-    parts = [f"page.type={page_type or '?'}"]
-    if target:
-        parsed = urlsplit(target)
-        parts.append(f"continue_url={parsed.scheme}://{parsed.netloc}{parsed.path}")
-    error = data.get("error")
-    if error:
-        parts.append(f"error={json.dumps(error, ensure_ascii=False, default=str)[:200]}")
-    return sanitize(" ".join(parts))
-
-
-def _new_registration_session(proxy: str = "") -> Any:
-    """Build the protocol session for one registration.
-
-    P1-8: curl_cffi honours ``trust_env`` by default, so a machine-wide
-    ``HTTP(S)_PROXY`` in the process environment silently *overrides* the
-    per-account proxy set here -- every account would then exit through one
-    shared IP, which defeats the whole proxy pool.  The preflight already pins
-    this (``registration_preflight``), as do the other transports
-    (``paypal_protocol``, ``gcash_transport``, ``phone_proxy``).  With no proxy
-    configured we leave the default alone so an env-provided proxy still
-    applies.
-    """
-    session = curl_requests.Session()
-    if proxy:
-        session.proxies = {"http": proxy, "https": proxy}
-        session.trust_env = False
-    return session
 
 
 def _apply_protocol_fingerprint(ops: Any, config: Any, proxy: str) -> str:
@@ -430,11 +334,11 @@ class RegistrationEmailWorkflow:
         stage that can legitimately block for minutes hands the smaller of the
         two limits to the poll that actually blocks.
         """
-        timeout = int(self.runtime.otp.email_cfg.get("otp_timeout", 300) or 300)
+        timeout = _safe_int(self.runtime.otp.email_cfg.get("otp_timeout", 300) or 300, 300)
         budget = self._stage_timeout(RegistrationState.EMAIL_OTP_WAIT)
         if budget is None:
             return timeout
-        return max(1, min(timeout, int(budget)))
+        return max(1, min(timeout, _safe_int(budget, timeout)))
 
     def _abort(self, error: str) -> None:
         raise RegistrationAbort(error)
@@ -670,7 +574,7 @@ class RegistrationEmailWorkflow:
         )
         if str(s.base_headers.get("oai-device-id") or "") != s.device_id:
             self._abort("sentinel_extract_failed: auth header device id mismatch")
-        s.auth_flow_started = int(time.time())
+        s.auth_flow_started = _safe_int(time.time())
 
     def _issue_sentinel(self, flow: str) -> Any:
         from .sentinel import issue_sentinel_flow, sentinel_backend
@@ -704,7 +608,7 @@ class RegistrationEmailWorkflow:
     def auth_flow(self) -> None:
         r = self.r
         s = self.runtime
-        s.auth_flow_started = int(time.time())
+        s.auth_flow_started = _safe_int(time.time())
         if s.registration_mode == "passwordless":
             r.request_with_retry(
                 s.session,
@@ -777,10 +681,10 @@ class RegistrationEmailWorkflow:
         s.signup_lane = signup_lane_verdict(s.signup_dump)
         if s.signup_lane == "login":
             print("  Signup lane hint: login (transaction says this address already has a login magic link)")
-        if int(s.signup_state.get("status") or 0) == 429:
+        if _safe_int(s.signup_state.get("status") or 0) == 429:
             from .registration_concurrency import mark_registration_rate_limited
 
-            retry_after = float(s.signup_state.get("retry_after_seconds") or 300)
+            retry_after = _safe_float(s.signup_state.get("retry_after_seconds") or 300, 300.0)
             mark_registration_rate_limited(retry_after)
             self._abort(f"registration_rate_limited:retry_after={retry_after:.0f}s")
         if not s.signup_state.get("ok"):
@@ -1245,7 +1149,7 @@ class RegistrationEmailWorkflow:
         # ``user_register`` (the passwordless lane) and the ``existing_account``
         # branch twenty lines below.
         if s.create_ok and not s.existing_account:
-            s.session_recovery_started_at = int(time.time())
+            s.session_recovery_started_at = _safe_int(time.time())
             self._persist_checkpoint(registration_checkpoint.SESSION_PENDING_STATE)
         if not s.create_ok and s.existing_account:
             # The server has stated this address is already registered.  Keep
