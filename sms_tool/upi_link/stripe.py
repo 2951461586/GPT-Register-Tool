@@ -893,6 +893,7 @@ def _upi_poll_payment_page(
     current_pm_id: str = "",
     rescue: Callable[[Mapping[str, Any]], bool] | None = None,
     recover_decline: Callable[[Mapping[str, Any]], str] | None = None,
+    max_attempts: int | None = None,
 ) -> tuple[str, list[str]]:
     """参考实现 ``poll_payment_page``: 轮询到「真跳转 / QR」或终态。
 
@@ -913,6 +914,11 @@ def _upi_poll_payment_page(
     同步更新，否则 :func:`_upi_setup_intent_last_error` 的残留错误过滤会失配）；
     返回空串则按原来的终态处理。``generic_decline`` 在 Stripe 口径下是可重试的
     支付方式级失败，不是 session 死亡，详见 :data:`UPI_DECLINE_PM_RETRIES`。
+
+    ``max_attempts`` bounds the number of rounds; ``None`` keeps the pure
+    wall-clock behavior (``UPI_POLL_TIMEOUT``). This is the single owner of the
+    poll budget, so the caller passes ``poll_max_attempts`` here instead of
+    wrapping this function in an outer loop.
     """
     deadline = time.time() + _env_int("UPI_POLL_TIMEOUT", 45)
     params = {
@@ -929,8 +935,10 @@ def _upi_poll_payment_page(
     # ``generic_decline`` 是支付方式级可重试失败（见 UPI_DECLINE_PM_RETRIES）。
     decline_retry_limit = _env_int("UPI_DECLINE_PM_RETRIES", UPI_DECLINE_PM_RETRIES, minimum=0)
     decline_retries = 0
+    attempts = 0
 
-    while time.time() < deadline:
+    while time.time() < deadline and (max_attempts is None or attempts < max_attempts):
+        attempts += 1
         try:
             resp = stripe.get(url, params=params, timeout=DEFAULT_TIMEOUT)
         except Exception as exc:

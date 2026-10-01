@@ -1234,26 +1234,33 @@ def generate_upi_qr_link(
             """
             return _absorb_mandate(payload, confirm_data, approval_data)
 
-        # Poll Stripe payment page until a real redirect / QR / upi:// appears
+        # Poll Stripe payment page until a real redirect / QR / upi:// appears.
+        #
+        # ``_upi_poll_payment_page`` owns its own round/deadline loop (it sleeps
+        # between attempts and decides terminal states), so wrapping it in an
+        # outer ``for range(poll_max_attempts)`` loop was dead: the old body
+        # unconditionally ``break``-ed after the first call, which made
+        # ``poll_max_attempts`` a no-op and misattributed the real budget to a
+        # parameter nothing read. ``poll_max_attempts`` is now passed *into* the
+        # poller, where it bounds the rounds; ``UPI_POLL_TIMEOUT`` remains the
+        # wall-clock ceiling for the same loop.
         if not redirect_url and not qr_data.get("upi_uri"):
-            for _attempt in range(1, max(1, poll_max_attempts) + 1):
-                if redirect_url or qr_data.get("upi_uri"):
-                    break
-                try:
-                    poll_redirect, poll_qr = _upi_poll_payment_page(
-                        stripe,
-                        cs_id,
-                        stripe_pk,
-                        ctx,
-                        current_pm_id=pm_id,
-                        rescue=_rescue_mandate,
-                        recover_decline=_resubmit_with_fresh_pm,
-                    )
-                except Exception as exc:
-                    if _upi_should_retry_second_confirm(exc):
-                        emit("poll", f"extraction needs a second confirm: {str(exc)[:160]}")
-                        break
+            try:
+                poll_redirect, poll_qr = _upi_poll_payment_page(
+                    stripe,
+                    cs_id,
+                    stripe_pk,
+                    ctx,
+                    current_pm_id=pm_id,
+                    rescue=_rescue_mandate,
+                    recover_decline=_resubmit_with_fresh_pm,
+                    max_attempts=poll_max_attempts,
+                )
+            except Exception as exc:
+                if not _upi_should_retry_second_confirm(exc):
                     raise
+                emit("poll", f"extraction needs a second confirm: {str(exc)[:160]}")
+            else:
                 if poll_redirect:
                     redirect_url = poll_redirect
                 for url in poll_qr:
@@ -1262,7 +1269,6 @@ def generate_upi_qr_link(
                         qr_data.setdefault("qr_image_url_svg", url)
                     elif kind in ("png", "jpg"):
                         qr_data.setdefault("qr_image_url_png", url)
-                break
 
         # 补交 mandate 的响应是轮询中途才到的，这里再吸收一次。
         if approval_data.get("local_mandate"):
