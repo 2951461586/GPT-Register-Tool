@@ -24,6 +24,7 @@ export remain separate workflows.
 | `sms_tool/commands/` | CLI argument adaptation | Provider implementation |
 | `registration.py` | Stable entry points and compatibility exports | Stage implementations |
 | `registration_handlers.py` | Protocol workflow and stage ordering | Payment or recovery orchestration |
+| `registration_persistence.py`, `registration_stage_runner.py`, `registration_protocol_helpers.py`, `registration_otp_stages.py` | Persistence seam, stage executor + abort signal, pure transport/format helpers, and the email-OTP stages; re-exported by `registration_handlers.py` | Stage ordering |
 | `registration_drivers/browser_flow/` | Browser page state and form workflow | Mailbox provider transport |
 | `registration_drivers/external_sessions/` | Session creation, managed lifecycle, profile config and egress probe | Registration stages |
 | `mailbox_service.py`, `mailbox_strategies.py`, `providers/` | Mailbox routing, capability resolution, polling policy and provider transport | Registration success |

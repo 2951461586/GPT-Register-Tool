@@ -6,7 +6,7 @@ import json
 import logging
 import time
 import uuid
-from typing import Any, Callable, Mapping, Protocol
+from typing import Any, Callable, Mapping
 from urllib.parse import urlsplit
 
 from curl_cffi import requests as curl_requests
@@ -21,6 +21,7 @@ from .failure_registry import (
     PASSWORDLESS_SIGNUP_CODE,
     is_passwordless_signup_mismatch,
 )
+
 # 纯谓词（只看配置 + 渠道名）⇒ 顶层 import，不走 ``r.`` 门面：门面是给**有状态
 # 操作**做注入用的，把纯函数也塞进去只会让测试里的 ``Mock()`` 变成一个永真值。
 from .otp_strategy import otp_resend_eligible
@@ -30,6 +31,7 @@ from .registration_cancel import RegistrationCancelled, ensure_not_cancelled
 from .registration_outcome import needs_manual_session_recovery
 from .registration_result import build_registration_result
 from .registration_operations import RegistrationOperations
+from .registration_persistence import RegistrationPersistence, StorageRegistrationPersistence
 from .registration_retry_guard import DEAD_END_SIGNUP_ROUTED_TO_LOGIN, RegistrationRetryGuard
 from .registration_runtime import RegistrationRuntimeState
 from .mailbox_errors import MailboxEndpointUnavailableError
@@ -163,6 +165,7 @@ def _apply_protocol_fingerprint(ops: Any, config: Any, proxy: str) -> str:
     profile = None
     try:
         from .fingerprint_pool import shared_fingerprint_pool
+
         pool = shared_fingerprint_pool(config)
         if pool.size > 0:
             profile = pool.next(proxy)
@@ -179,43 +182,10 @@ def _apply_protocol_fingerprint(ops: Any, config: Any, proxy: str) -> str:
         return str(profile.country or "")
     else:
         from .paypal_proxy import infer_proxy_country
+
         country = str(infer_proxy_country(proxy) or "")
         ops.set_fingerprint_geo(country)
         return country
-
-
-class RegistrationPersistence(Protocol):
-    """Persistence seam for registration checkpoints and device identity."""
-
-    def save_checkpoint(self, email: str, state: str, payload: Mapping[str, Any], *, runtime_config: Mapping[str, Any] | None) -> Any: ...
-    def upsert_account(self, payload: Mapping[str, Any], *, runtime_config: Mapping[str, Any] | None) -> Any: ...
-    def get_checkpoint(self, email: str, *, runtime_config: Mapping[str, Any] | None) -> Mapping[str, Any]: ...
-    def get_device_context(self, email: str) -> Mapping[str, Any]: ...
-    def clear_checkpoint(self, email: str, *, runtime_config: Mapping[str, Any] | None) -> Any: ...
-
-
-class StorageRegistrationPersistence:
-    """Default adapter kept at the application seam, not inside stage logic."""
-
-    def save_checkpoint(self, email, state, payload, *, runtime_config=None):
-        from .storage import save_registration_checkpoint
-        return save_registration_checkpoint(email, state, payload, runtime_config=runtime_config)
-
-    def upsert_account(self, payload, *, runtime_config=None):
-        from .storage import upsert_account
-        return upsert_account(payload, runtime_config=runtime_config)
-
-    def get_checkpoint(self, email, *, runtime_config=None):
-        from .storage import get_registration_checkpoint
-        return get_registration_checkpoint(email, runtime_config=runtime_config)
-
-    def get_device_context(self, email):
-        from .storage import get_device_context
-        return get_device_context(email)
-
-    def clear_checkpoint(self, email, *, runtime_config=None):
-        from .storage import clear_registration_checkpoint
-        return clear_registration_checkpoint(email, runtime_config=runtime_config)
 
 
 class RegistrationStageRunner:
@@ -400,6 +370,7 @@ class RegistrationEmailWorkflow:
             access_token=self.runtime.access_token,
         )
         from .registration_result import attach_fingerprint_geo_audit, safe_proxy_audit
+
         result["proxy_audit"] = safe_proxy_audit(getattr(self, "proxy_metadata", {}))
         attach_fingerprint_geo_audit(result, self._fingerprint_geo_metadata())
         if cancelled:
@@ -459,9 +430,7 @@ class RegistrationEmailWorkflow:
             # demotion fixed in error_classification. Keep this tuple in sync
             # with error_classification.INTERNAL_ERROR_MARKERS, which matches
             # the `{state}_internal:<Type>:` label text.
-            raise RegistrationAbort(
-                f"{state.value}_internal:{type(exc).__name__}:{exc}"
-            ) from exc
+            raise RegistrationAbort(f"{state.value}_internal:{type(exc).__name__}:{exc}") from exc
         except Exception as exc:
             # Transport/protocol failures keep their message so
             # classify_error's marker vocabulary decides retryability.
@@ -519,7 +488,11 @@ class RegistrationEmailWorkflow:
             return
         try:
             registration_checkpoint.persist_checkpoint(
-                self.persistence, self.config, s, self._checkpoint_payload(), state,
+                self.persistence,
+                self.config,
+                s,
+                self._checkpoint_payload(),
+                state,
             )
         except Exception as exc:
             print(f"  [Checkpoint] persist warning: {self.r._sanitize_text(exc)}")
@@ -545,14 +518,17 @@ class RegistrationEmailWorkflow:
             s = self.runtime
             s.session = _new_registration_session(s.proxy)
             registration_checkpoint.restore_session_cookies(s.session, payload)
-            s.base_headers = dict(payload["auth_headers"]) if isinstance(payload.get("auth_headers"), dict) else (
-                self.r.openai_auth_headers(s.device_id, accept="application/json", include_trace=True)
+            s.base_headers = (
+                dict(payload["auth_headers"])
+                if isinstance(payload.get("auth_headers"), dict)
+                else (self.r.openai_auth_headers(s.device_id, accept="application/json", include_trace=True))
             )
             s.session_recovery_attempts += 1
             self._persist_checkpoint(registration_checkpoint.SESSION_PENDING_STATE)
             logging.getLogger(__name__).info(
                 "Resuming created-account session attempt=%s; signup and OTP remain disabled",
-                s.session_recovery_attempts, extra={"event": "auth_session_recovery"},
+                s.session_recovery_attempts,
+                extra={"event": "auth_session_recovery"},
             )
             self._run_stage(RegistrationState.AUTH_SESSION, "8-Resume auth session", self.fetch_auth_session)
         self._run_stage(RegistrationState.ACCESS_TOKEN_PROBE, "8d-Resume AT probe", self.probe_access_token)
@@ -564,9 +540,7 @@ class RegistrationEmailWorkflow:
         if self.input_mailbox is None:
             return False
         return (
-            registration_checkpoint.load_resumable_checkpoint(
-                self.persistence, self.runtime.username, self.config
-            )
+            registration_checkpoint.load_resumable_checkpoint(self.persistence, self.runtime.username, self.config)
             is not None
         )
 
@@ -584,17 +558,19 @@ class RegistrationEmailWorkflow:
         if not s.mailbox or not s.mailbox.email:
             self._abort("mailbox_required")
         s.username = str(getattr(s.mailbox, "email", "") or "").strip()
-        s.resume_checkpoint = registration_checkpoint.load_resumable_checkpoint(
-            self.persistence, s.username, self.config
-        ) or {}
+        s.resume_checkpoint = (
+            registration_checkpoint.load_resumable_checkpoint(self.persistence, s.username, self.config) or {}
+        )
         if not s.resume_checkpoint:
             self._persist_checkpoint("mailbox_ready")
         from .mailbox_service import MailboxService
+
         s.mailbox_service = MailboxService.create(self.config)
         chatgpt_cfg = self.config.get("chatgpt", {})
         s.auth_base = chatgpt_cfg.get("auth_base_url", endpoints.AUTH_BASE)
         s.chat_base = chatgpt_cfg.get("chat_base_url", endpoints.CHATGPT_BASE)
         from .paypal_proxy import infer_proxy_country
+
         r.set_fingerprint_geo(infer_proxy_country(s.proxy))
         self.machine.transition(RegistrationState.MAILBOX_READY)
         if s.resume_checkpoint:
@@ -756,9 +732,7 @@ class RegistrationEmailWorkflow:
             data["sentinel_so_token"] = issued.so_token
             s.sentinel_so_token = issued.so_token
         data["oai_did"] = issued.device_id
-        data["sentinel_source"] = str(
-            data.get("sentinel_source") or sentinel_backend(self.config)
-        )
+        data["sentinel_source"] = str(data.get("sentinel_source") or sentinel_backend(self.config))
         s.sentinel_data = data
         return issued
 
@@ -768,20 +742,39 @@ class RegistrationEmailWorkflow:
         s.auth_flow_started = int(time.time())
         if s.registration_mode == "passwordless":
             r.request_with_retry(
-                s.session, "get", f"{s.chat_base}/", label="ChatGPT prime",
-                headers={**r.chatgpt_headers(s.device_id, session_id=s.session_logging_id, flow_invocation_id=s.flow_invocation_id, accept="text/html,application/xhtml+xml", referer=f"{s.chat_base}/")},
+                s.session,
+                "get",
+                f"{s.chat_base}/",
+                label="ChatGPT prime",
+                headers={
+                    **r.chatgpt_headers(
+                        s.device_id,
+                        session_id=s.session_logging_id,
+                        flow_invocation_id=s.flow_invocation_id,
+                        accept="text/html,application/xhtml+xml",
+                        referer=f"{s.chat_base}/",
+                    )
+                },
                 impersonate=r.auth_impersonate(),
                 attempts=1,
             )
         else:
             r.request_with_retry(
-                s.session, "get", f"{s.auth_base}/create-account", label="Auth prime",
+                s.session,
+                "get",
+                f"{s.auth_base}/create-account",
+                label="Auth prime",
                 headers={**s.base_headers, "Accept": "text/html,application/xhtml+xml"},
                 impersonate=r.auth_impersonate(),
             )
         csrf_resp = r.request_with_retry(
-            s.session, "get", f"{s.chat_base}/api/auth/csrf", label="Auth csrf",
-            headers=r.nextauth_headers(s.device_id, session_id=s.session_logging_id, referer=f"{s.chat_base}/", origin=s.chat_base),
+            s.session,
+            "get",
+            f"{s.chat_base}/api/auth/csrf",
+            label="Auth csrf",
+            headers=r.nextauth_headers(
+                s.device_id, session_id=s.session_logging_id, referer=f"{s.chat_base}/", origin=s.chat_base
+            ),
             impersonate=r.auth_impersonate(),
         )
         s.csrf_token = (r._json_or_raw(csrf_resp).get("csrfToken") or "").strip()
@@ -799,7 +792,9 @@ class RegistrationEmailWorkflow:
             sentinel_so_token=s.sentinel_so_token,
             proxy=s.proxy,
             passwordless_web=s.registration_mode == "passwordless",
-            attempts=r._passwordless_signin_attempts() if s.registration_mode == "passwordless" else r._signup_signin_attempts(),
+            attempts=r._passwordless_signin_attempts()
+            if s.registration_mode == "passwordless"
+            else r._signup_signin_attempts(),
         )
         # P0-1 判据 A 的**取证埋点**（先扩样本，暂不硬止损）。
         #
@@ -812,9 +807,7 @@ class RegistrationEmailWorkflow:
         #
         # 不要用日志里的 ``client_auth_session_dump`` 行做这件事：那些行按 stage
         # 做进程级降噪，跨 run 共享（见 ``auth_state._LAST_DUMP_TEXT``）。
-        signup_dump = r._fetch_client_auth_session_dump(
-            s.session, s.auth_base, s.base_headers, "after_signup_state"
-        )
+        signup_dump = r._fetch_client_auth_session_dump(s.session, s.auth_base, s.base_headers, "after_signup_state")
         s.signup_dump = signup_dump if isinstance(signup_dump, dict) else {}
         s.signup_lane = signup_lane_verdict(s.signup_dump)
         if s.signup_lane == "login":
@@ -1021,7 +1014,10 @@ class RegistrationEmailWorkflow:
         s = self.runtime
         username_sentinel = self._issue_sentinel("username_password_create")
         s.reg_response = r.request_with_retry(
-            s.session, "post", f"{s.auth_base}/api/accounts/user/register", label="User register",
+            s.session,
+            "post",
+            f"{s.auth_base}/api/accounts/user/register",
+            label="User register",
             json={"password": s.password, "username": s.username},
             headers=r._auth_request_headers(
                 s.base_headers,
@@ -1214,7 +1210,10 @@ class RegistrationEmailWorkflow:
         s = self.runtime
         create_sentinel = self._issue_sentinel("oauth_create_account")
         response = r.request_with_retry(
-            s.session, "post", f"{s.auth_base}/api/accounts/create_account", label="Create account",
+            s.session,
+            "post",
+            f"{s.auth_base}/api/accounts/create_account",
+            label="Create account",
             json={"name": s.full_name, "birthdate": s.birthdate},
             headers=r._auth_request_headers(
                 s.base_headers,
@@ -1310,9 +1309,7 @@ class RegistrationEmailWorkflow:
             )
             s.create_ok = True
             s.password_unknown = True
-            s.existing_account_password_known = bool(
-                c is not None and (c.explicit_password or c.password_from_storage)
-            )
+            s.existing_account_password_known = bool(c is not None and (c.explicit_password or c.password_from_storage))
         try:
             r._follow_continue_url(
                 s.session,
@@ -1340,11 +1337,18 @@ class RegistrationEmailWorkflow:
             "Server reports existing account; registration_status=partial_registered",
             extra={"event": "registration_status_changed", "account_ref": account_reference(s.username)},
         )
-        emit_event({
-            "domain": "registration", "operation": "registration", "stage": "registration_status_changed",
-            "status": "running", "detail": "半注册", "registration_status": "partial_registered",
-            "account_ref": account_reference(s.username), "run_id": current_run_id.get(),
-        })
+        emit_event(
+            {
+                "domain": "registration",
+                "operation": "registration",
+                "stage": "registration_status_changed",
+                "status": "running",
+                "detail": "半注册",
+                "registration_status": "partial_registered",
+                "account_ref": account_reference(s.username),
+                "run_id": current_run_id.get(),
+            }
+        )
 
     def fetch_auth_session(self) -> None:
         r = self.r
@@ -1357,7 +1361,9 @@ class RegistrationEmailWorkflow:
         )
         if not s.existing_account or s.access_token:
             return
-        print("  Existing account has no ChatGPT session yet; probing the login method before spending an email code...")
+        print(
+            "  Existing account has no ChatGPT session yet; probing the login method before spending an email code..."
+        )
         s.login_session = curl_requests.Session()
         if s.proxy:
             s.login_session.proxies = {"http": s.proxy, "https": s.proxy}
