@@ -7,7 +7,7 @@ instead of depending on the entire workflow's mutable state.
 from __future__ import annotations
 
 from dataclasses import dataclass, field, fields
-from typing import Any, Mapping
+from typing import TYPE_CHECKING, Any, Mapping
 
 from .registration_state import RegistrationContext
 
@@ -136,6 +136,70 @@ _FIELD_GROUPS = {item.name: group for group, cls in _GROUPS.items() for item in 
 
 class RegistrationRuntimeState:
     """Grouped storage; legacy flat properties address the same single value."""
+
+    if TYPE_CHECKING:
+        # Flat compatibility view. The real attributes are attached at import time by
+        # the ``_compat_property`` loop below (a one-way migration seam for legacy flat
+        # callers). Declared here, per group, so static analysis can see the same fields
+        # the handlers and tests address as ``runtime.<field>``.
+        # resources
+        proxy: str
+        mailbox: Any
+        mailbox_service: Any
+        context: RegistrationContext | None
+        session: Any
+        login_session: Any
+        auth_base: str
+        chat_base: str
+        base_headers: dict[str, Any]
+        resume_checkpoint: dict[str, Any]
+        username: str
+        password: str
+        password_unknown: bool
+        full_name: str
+        birthdate: str
+        registration_mode: str
+        device_id: str
+        session_logging_id: str
+        flow_invocation_id: str
+        sentinel_data: Mapping[str, Any]
+        sentinel_token: str
+        sentinel_authorize_token: str
+        sentinel_so_token: str
+        auth_flow_started: int
+        csrf_token: str
+        signup_state: dict[str, Any]
+        reg_response: Any
+        reg_data: dict[str, Any]
+        signup_dump: dict[str, Any]
+        signup_lane: str
+        otp_issued_after: int
+        email_cfg: dict[str, Any]
+        email_code: str
+        otp_data: dict[str, Any]
+        otp_send_dump: dict[str, Any]
+        create_data: dict[str, Any]
+        create_ok: bool
+        existing_account: bool
+        existing_login_error: str
+        existing_account_password_known: bool
+        auth_session: dict[str, Any]
+        auth_body: dict[str, Any]
+        access_token: str
+        oauth_result: dict[str, Any]
+        oauth_tokens: dict[str, Any]
+        phone_result: dict[str, Any]
+        oauth_refresh_token: str
+        id_token: str
+        at_probe: dict[str, Any]
+        session_recovery_attempts: int
+        session_recovery_started_at: int
+        success: bool
+        error: str
+        registration_warning: str
+        post_registration_ready: bool
+        totp_secret: str
+        twofa_result: dict[str, Any]
 
     def __init__(self, **values: Any) -> None:
         unknown = values.keys() - _FIELD_GROUPS.keys()
