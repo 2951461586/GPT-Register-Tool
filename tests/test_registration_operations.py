@@ -7,7 +7,9 @@ import pytest
 
 from sms_tool import registration
 from sms_tool.registration_operations import (
-    OPERATION_GROUPS, RegistrationOperations, RegistrationOtpPollingOperations,
+    OPERATION_GROUPS,
+    RegistrationOperations,
+    RegistrationOtpPollingOperations,
 )
 from sms_tool.registration_handlers import StorageRegistrationPersistence
 
@@ -23,7 +25,7 @@ def test_operation_binding_respects_callers_patch_scope_and_is_immutable():
 
 
 def test_interface_covers_only_dependencies_the_workflow_uses():
-    """The protocol workflow now spans two modules, so scan both.
+    """The protocol workflow spans several modules, so scan all of them.
 
     2026-09-22: ``finalize`` / ``obtain_oauth_refresh_token`` / ``enroll_totp``
     were extracted into ``sms_tool/registration_finalize.py`` (a2349d7), and
@@ -32,16 +34,30 @@ def test_interface_covers_only_dependencies_the_workflow_uses():
     ``_retain_registration_checkpoint`` as unused interface members -- they are
     used, just from the new module.  The invariant is unchanged ("the interface
     declares exactly what the workflow reaches"); the workflow is what moved.
+
+    2026-10-01: the email-OTP stages moved to
+    ``sms_tool/registration_otp_stages.py``, which reached ``r.SyntheticResponse``
+    / ``r._email_otp_send_url`` / ``r._validate_email_otp`` /
+    ``r._is_wrong_email_otp_code`` -- the same shape, so that module is scanned
+    too.  Add any future workflow-stage module here.
     """
     root = Path(__file__).resolve().parents[1] / "sms_tool"
     names: set[str] = set()
-    for module in ("registration_handlers.py", "registration_finalize.py"):
+    for module in (
+        "registration_handlers.py",
+        "registration_finalize.py",
+        "registration_otp_stages.py",
+    ):
         tree = ast.parse((root / module).read_text(encoding="utf-8"))
         names |= {
-            node.attr for node in ast.walk(tree)
-            if isinstance(node, ast.Attribute) and (
-                isinstance(node.value, ast.Name) and node.value.id == "r"
-                or isinstance(node.value, ast.Attribute) and node.value.attr == "r"
+            node.attr
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Attribute)
+            and (
+                isinstance(node.value, ast.Name)
+                and node.value.id == "r"
+                or isinstance(node.value, ast.Attribute)
+                and node.value.attr == "r"
             )
         }
     assert names == {item.name for item in fields(RegistrationOperations)}
@@ -95,9 +111,11 @@ def test_email_workflow_wiring_reads_globals_at_call_time():
 
 def test_otp_polling_group_binds_facade_patches_once_and_is_immutable():
     fake_poll, fake_resend = Mock(), Mock()
-    with patch.object(registration, "_poll_registration_email_otp", fake_poll), \
-         patch.object(registration, "_send_registration_email_otp", fake_resend), \
-         patch.object(registration, "REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORDS", "test otp"):
+    with (
+        patch.object(registration, "_poll_registration_email_otp", fake_poll),
+        patch.object(registration, "_send_registration_email_otp", fake_resend),
+        patch.object(registration, "REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORDS", "test otp"),
+    ):
         operations = registration._email_registration_operations()
     assert isinstance(operations.otp_poll, RegistrationOtpPollingOperations)
     assert operations.otp_poll.poll is fake_poll
@@ -120,20 +138,21 @@ def test_email_workflow_wiring_is_explicit_not_a_globals_sweep():
     # AST, not a substring search: the helper docstring legitimately mentions
     # ``bind(globals())`` while explaining why it is gone.
     sweep = [
-        node for node in ast.walk(tree)
+        node
+        for node in ast.walk(tree)
         if isinstance(node, ast.Call)
         and isinstance(node.func, ast.Attribute)
         and node.func.attr == "bind"
-        and any(
-            isinstance(arg, ast.Call) and getattr(arg.func, "id", None) == "globals"
-            for arg in node.args
-        )
+        and any(isinstance(arg, ast.Call) and getattr(arg.func, "id", None) == "globals" for arg in node.args)
     ]
     assert not sweep, "protocol workflow went back to a globals sweep"
 
     helper = next(
-        (node for node in tree.body
-         if isinstance(node, ast.FunctionDef) and node.name == "_email_registration_operations"),
+        (
+            node
+            for node in tree.body
+            if isinstance(node, ast.FunctionDef) and node.name == "_email_registration_operations"
+        ),
         None,
     )
     assert helper is not None, "explicit wiring helper disappeared"
@@ -145,18 +164,19 @@ def test_email_workflow_wiring_is_explicit_not_a_globals_sweep():
 
     declared = {item.name for item in fields(RegistrationOperations)}
     assert declared == keys, (
-        f"wiring drifted from the dataclass: missing={sorted(declared - keys)} "
-        f"extra={sorted(keys - declared)}"
+        f"wiring drifted from the dataclass: missing={sorted(declared - keys)} extra={sorted(keys - declared)}"
     )
 
 
 def test_storage_registration_persistence_is_a_replaceable_adapter():
     adapter = StorageRegistrationPersistence()
-    with patch("sms_tool.storage.save_registration_checkpoint", return_value=True) as save, \
-         patch("sms_tool.storage.upsert_account", return_value=True) as upsert, \
-         patch("sms_tool.storage.get_registration_checkpoint", return_value={"state": "x"}) as get, \
-         patch("sms_tool.storage.get_device_context", return_value={"device_id": "d"}) as device, \
-         patch("sms_tool.storage.clear_registration_checkpoint", return_value=True) as clear:
+    with (
+        patch("sms_tool.storage.save_registration_checkpoint", return_value=True) as save,
+        patch("sms_tool.storage.upsert_account", return_value=True) as upsert,
+        patch("sms_tool.storage.get_registration_checkpoint", return_value={"state": "x"}) as get,
+        patch("sms_tool.storage.get_device_context", return_value={"device_id": "d"}) as device,
+        patch("sms_tool.storage.clear_registration_checkpoint", return_value=True) as clear,
+    ):
         assert adapter.save_checkpoint("a@example.com", "x", {"email": "a@example.com"}, runtime_config={})
         assert adapter.upsert_account({"email": "a@example.com"}, runtime_config={})
         assert adapter.get_checkpoint("a@example.com", runtime_config={}) == {"state": "x"}
