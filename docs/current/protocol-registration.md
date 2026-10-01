@@ -14,6 +14,7 @@ rate; see [Validation limits](#validation-limits).
 | --- | --- |
 | Protocol step functions (signin, authorize, continue, OTP, TOTP) | `sms_tool/auth_flow/` (`steps`, `signup`, `login`, `otp`, `totp`) |
 | Stage order, runtime state, persistence, create account | `sms_tool/registration_handlers.py` |
+| Persistence seam, stage executor, pure helpers, email-OTP stages | `sms_tool/registration_persistence.py`, `registration_stage_runner.py`, `registration_protocol_helpers.py`, `registration_otp_stages.py` |
 | Account creation and OTP validate wire calls | `sms_tool/accounts/account_creation.py` |
 | Sentinel token issuance | `sms_tool/sentinel/` (facade `sms_tool/sentinel_tokens.py`) |
 | AT probe, result contract, funnel | `sms_tool/registration_outcome.py`, `registration_result.py`, `registration_funnel.py` |
