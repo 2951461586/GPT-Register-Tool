@@ -100,8 +100,46 @@ from .extract import _upi_hydrate_qr_data, _upi_resolve_external_redirect
 from .flows import _upi_run_cpmt_flow, _upi_run_oaics_flow
 from .verify import (
     INCONCLUSIVE as UPI_VERIFY_INCONCLUSIVE,
-    verify_instructions_url as _upi_verify_instructions_url,
+    verify_instructions_verdict as _upi_verify_instructions_verdict,
 )
+
+
+def _upi_link_unverified_contract(verification_code: str, verification: str) -> dict[str, Any]:
+    """Failure fields for a link the verify gate refused to deliver.
+
+    The gate can refuse for three different reasons and they must not collapse
+    into one code:
+
+    * ``mandate_not_signed`` -- SetupIntent stayed at ``requires_payment_method``,
+      i.e. the UPI AutoPay mandate was never signed. On the ``cs_`` rail this is
+      the measured norm (Stripe refuses third-party confirmation of a SetupIntent
+      Checkout created; see ``constants.UPI_LOCAL_MANDATE_ENABLED``), so a rebuilt
+      Checkout may land on the CPMT / OAICS rail -- mark it retryable and never
+      call it a fake link.
+    * ``payment_chain`` -- the intent passed but its URI addresses the ₹1999
+      payment chain. That really is the wrong artifact.
+    * anything else (``canceled`` / unknown / ``already_authorized``) -- terminal.
+    """
+    if verification_code == "mandate_not_signed":
+        return {
+            "error": f"UPI AutoPay 委托未签署（{verification}）；不是废链，是 mandate 未成立",
+            "error_code": "mandate_not_signed",
+            "error_stage": "mandate",
+            "retryable": True,
+        }
+    if verification_code == "payment_chain":
+        return {
+            "error": f"UPI link 指向 ₹1999 付款链而非 ₹0 委托（{verification}）",
+            "error_code": "payment_chain_link",
+            "error_stage": "artifact",
+            "retryable": False,
+        }
+    return {
+        "error": f"UPI link 未通过核验（{verification}）",
+        "error_code": "link_unverified",
+        "error_stage": "artifact",
+        "retryable": False,
+    }
 
 
 def _resolve_upi_runtime(
@@ -1379,10 +1417,11 @@ def generate_upi_qr_link(
             verify_target = redirect_url
         link_verified = False
         verification_inconclusive = False
+        verification_code = ""
         if verify_target:
-            verified, label = _upi_verify_instructions_url(verify_target, proxy=provider_proxy)
+            verified, label, verification_code = _upi_verify_instructions_verdict(verify_target, proxy=provider_proxy)
             link_verified = bool(verified)
-            verification_inconclusive = (not verified) and label in UPI_VERIFY_INCONCLUSIVE
+            verification_inconclusive = (not verified) and verification_code in UPI_VERIFY_INCONCLUSIVE
             verification = label if (verified or not verification_inconclusive) else f"inconclusive:{label}"
             emit("verify", f"UPI link {'verified' if verified else 'NOT verified'} ({verification})")
         else:
@@ -1421,15 +1460,14 @@ def generate_upi_qr_link(
             "provider_proxy": provider_proxy,
             "approve_proxy": approve_proxy,
             "verification": verification,
+            "verification_code": verification_code,
             "link_verified": link_verified,
         }
         if verify_target and not link_verified and not verification_inconclusive:
-            # 明确判定为废链 —— 不交付。
+            # 明确判定为不可交付 —— 但原因分三种，不能一律叫「废链」；
+            # 映射与理由归 ``_upi_link_unverified_contract``。
             link_result["ok"] = False
-            link_result["error"] = f"UPI link 未通过核验（{verification}）"
-            link_result["error_code"] = "link_unverified"
-            link_result["error_stage"] = "artifact"
-            link_result["retryable"] = False
+            link_result.update(_upi_link_unverified_contract(verification_code, verification))
         return link_result
     except Exception as e:
         # 把失败原因压成可判读的 error_code。历史实现一律返回

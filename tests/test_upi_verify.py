@@ -37,6 +37,7 @@ def _page(payload: dict, *, attr_order: str = "id_first") -> str:
 # decode
 # --------------------------------------------------------------------------
 
+
 def test_decodes_meta_payload_both_attribute_orders():
     payload = {"intent_state": "requires_action", "mobile_auth_url": "upi://mandate?fam=1.00"}
     assert V.decode_instructions_payload(_page(payload)) == payload
@@ -52,6 +53,7 @@ def test_missing_or_broken_meta_is_none():
 # --------------------------------------------------------------------------
 # judge
 # --------------------------------------------------------------------------
+
 
 def test_signed_mandate_passes():
     ok, label = V.judge_instructions_payload(
@@ -99,6 +101,7 @@ def test_processing_state_with_uri_passes():
 # verify_instructions_url
 # --------------------------------------------------------------------------
 
+
 class _Resp:
     def __init__(self, status: int, text: str = ""):
         self.status_code = status
@@ -107,6 +110,7 @@ class _Resp:
 
 def _session_factory_factory(make):
     """Build a ``session_factory(proxy)`` whose ``.get`` returns ``make()``."""
+
     class _Session:
         def get(self, url, **kwargs):
             return make()
@@ -119,13 +123,17 @@ def test_verify_url_empty_is_a_definite_no():
 
 
 def test_verify_url_good_page_passes():
-    session_factory = _session_factory_factory(lambda: _Resp(200, _page({"intent_state": "requires_action", "mobile_auth_url": "upi://x?fam=1.00"})))
+    session_factory = _session_factory_factory(
+        lambda: _Resp(200, _page({"intent_state": "requires_action", "mobile_auth_url": "upi://x?fam=1.00"}))
+    )
     ok, label = V.verify_instructions_url(INSTRUCTIONS_URL, session_factory=session_factory, attempts=1)
     assert ok is True and "requires_action" in label
 
 
 def test_verify_url_declined_page_is_a_definite_no():
-    session_factory = _session_factory_factory(lambda: _Resp(200, _page({"intent_state": "requires_payment_method", "mobile_auth_url": "upi://x?fam=1999.00"})))
+    session_factory = _session_factory_factory(
+        lambda: _Resp(200, _page({"intent_state": "requires_payment_method", "mobile_auth_url": "upi://x?fam=1999.00"}))
+    )
     ok, label = V.verify_instructions_url(INSTRUCTIONS_URL, session_factory=session_factory, attempts=1)
     assert ok is False and "requires_payment_method" in label
 
@@ -153,9 +161,7 @@ def test_verify_url_unreachable_is_inconclusive():
             calls["n"] += 1
             return boom()
 
-    ok, label = V.verify_instructions_url(
-        INSTRUCTIONS_URL, session_factory=lambda proxy: _Session(), attempts=2
-    )
+    ok, label = V.verify_instructions_url(INSTRUCTIONS_URL, session_factory=lambda proxy: _Session(), attempts=2)
     assert ok is False and label == "unreachable"
     assert label in V.INCONCLUSIVE
     assert calls["n"] >= 2, "an unreachable page is retried (idempotent read)"
@@ -168,8 +174,73 @@ def test_verify_url_no_payload_is_inconclusive_not_fake():
 
 
 # --------------------------------------------------------------------------
+# verdict subdivision: mandate_not_signed != wrong link
+# --------------------------------------------------------------------------
+
+
+def test_classify_separates_mandate_not_signed_from_wrong_chain():
+    """``requires_payment_method`` (no mandate) and ``fam=1999`` (wrong link) differ.
+
+    On the ``cs_`` rail the mandate cannot be signed third-party (Stripe refuses
+    it), so the two must not collapse into one "link_unverified" verdict.
+    """
+    mandate_ok, mandate_label, mandate_verdict = V.classify_instructions_payload(
+        {"intent_state": "requires_payment_method", "mobile_auth_url": "upi://mandate?fam=1999.00"}
+    )
+    assert mandate_ok is False
+    assert mandate_verdict == V.VERDICT_MANDATE_NOT_SIGNED
+    assert "requires_payment_method" in mandate_label
+
+    chain_ok, _, chain_verdict = V.classify_instructions_payload(
+        {"intent_state": "requires_action", "mobile_auth_url": "upi://mandate?fam=1999.00"}
+    )
+    assert chain_ok is False and chain_verdict == V.VERDICT_PAYMENT_CHAIN
+
+    ok, _, ok_verdict = V.classify_instructions_payload(
+        {"intent_state": "processing", "mobile_auth_url": "upi://mandate?fam=1.00"}
+    )
+    assert ok is True and ok_verdict == V.VERDICT_OK
+
+
+def test_verify_verdict_returns_the_reason_code():
+    page = _page({"intent_state": "requires_payment_method", "mobile_auth_url": "upi://x?fam=1999.00"})
+    session_factory = _session_factory_factory(lambda: _Resp(200, page))
+    ok, label, verdict = V.verify_instructions_verdict(INSTRUCTIONS_URL, session_factory=session_factory, attempts=1)
+    assert ok is False and verdict == V.VERDICT_MANDATE_NOT_SIGNED and "requires_payment_method" in label
+
+
+def test_verify_5xx_is_inconclusive_not_a_fake_link():
+    """A 5xx read failure is not evidence of a bad link, so it must stay inconclusive."""
+    session_factory = _session_factory_factory(lambda: _Resp(503, ""))
+    ok, label, verdict = V.verify_instructions_verdict(INSTRUCTIONS_URL, session_factory=session_factory, attempts=1)
+    assert ok is False
+    assert verdict == "http_5xx" and verdict in V.INCONCLUSIVE
+    assert V.verify_instructions_url(INSTRUCTIONS_URL, session_factory=session_factory, attempts=1) == (
+        False,
+        "http_5xx",
+    )
+
+
+def test_unverified_contract_maps_three_distinct_reasons():
+    from sms_tool.upi_link.pipeline import _upi_link_unverified_contract
+
+    mandate = _upi_link_unverified_contract("mandate_not_signed", "state=requires_payment_method fam=1999.00")
+    assert mandate["error_code"] == "mandate_not_signed"
+    assert mandate["error_stage"] == "mandate"
+    assert mandate["retryable"] is True
+    assert "不是废链" in mandate["error"]
+
+    chain = _upi_link_unverified_contract("payment_chain", "state=requires_action fam=1999.00")
+    assert chain["error_code"] == "payment_chain_link" and chain["retryable"] is False
+
+    other = _upi_link_unverified_contract("not_authorized", "state=canceled fam=?")
+    assert other["error_code"] == "link_unverified" and other["retryable"] is False
+
+
+# --------------------------------------------------------------------------
 # item 1: browser rail default
 # --------------------------------------------------------------------------
+
 
 def test_browser_rail_is_off_by_default():
     """The headless rail is CF-blocked + CSP-blocked; it must default OFF."""
