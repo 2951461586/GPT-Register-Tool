@@ -382,6 +382,30 @@ def test_poll_without_a_rescue_callback_keeps_legacy_behaviour(monkeypatch, tmp_
     assert "generic_decline" in str(err.value)
 
 
+def test_poll_max_attempts_is_the_round_budget(monkeypatch, tmp_path):
+    """``max_attempts`` bounds the rounds — it replaced a dead outer loop in the pipeline.
+
+    The caller used to wrap this function in ``for range(poll_max_attempts)`` and
+    ``break`` immediately, so the parameter was a no-op. It is now the poller's
+    own round cap, verifiable by count without waiting out the wall-clock budget.
+    """
+    monkeypatch.setenv("UPI_DUMP_DIR", str(tmp_path))
+    monkeypatch.setenv("UPI_POLL_TIMEOUT", "60")  # long enough that only the count can stop the loop
+
+    class _AlwaysWaiting:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def get(self, url, params=None, timeout=None):
+            self.calls += 1
+            return _resp(200, _payment_page(submission_state="processing"))
+
+    fake = _AlwaysWaiting()
+    with pytest.raises(RuntimeError):
+        S._upi_poll_payment_page(fake, "cs_live_x", "pk", {}, max_attempts=3)
+    assert fake.calls == 3
+
+
 def test_checkout_created_setup_intent_stops_the_ladder_immediately(monkeypatch, tmp_path):
     """Structural refusal, measured live 2026-09-30: every variant and every
     ``Stripe-Version`` candidate answers the same sentence, so the ladder must
