@@ -26,12 +26,12 @@
     "sms_tool/mailbox.py": 7,
     "sms_tool/nodriver_paypal.py": 1,
     "sms_tool/omakse_client.py": 1,
-    "sms_tool/pay_link/adapters.py": 30,
-    "sms_tool/pay_link/base.py": 27,
-    "sms_tool/pay_link/core.py": 28,
-    "sms_tool/pay_link/normalize.py": 39,
-    "sms_tool/pay_link/persistence.py": 39,
-    "sms_tool/pay_link/registry.py": 31,
+    "sms_tool/pay_link/adapters.py": 12,
+    "sms_tool/pay_link/base.py": 10,
+    "sms_tool/pay_link/core.py": 1,
+    "sms_tool/pay_link/normalize.py": 12,
+    "sms_tool/pay_link/persistence.py": 12,
+    "sms_tool/pay_link/registry.py": 7,
     "sms_tool/payment_batch.py": 1,
     "sms_tool/payment_link_manager.py": 42,
     "sms_tool/paypal/orchestrator.py": 2,
@@ -77,11 +77,11 @@
     "tests/test_paypal_proxy.py": 1,
     "tests/test_phone_reuse_atomic_write.py": 2,
     "tests/test_protocol_payment_contract.py": 1,
-    "tests/test_proxy_pool.py": 2,
+    "tests/test_proxy_pool.py": 1,
     "tests/test_proxy_selection.py": 1,
     "tests/test_registration_drivers.py": 2,
     "tests/test_smailr_provider.py": 1,
     "tests/test_wallet_transport.py": 1
   },
-  "total": 426
+  "total": 285
 }
