@@ -225,7 +225,7 @@ def test_is_paypal_ba_approve_url_tolerates_a_trailing_slash():
 def test_is_paypal_ba_approve_url_returns_false_instead_of_raising_on_junk():
     """The whole body is wrapped in try/except, so garbage degrades to 'no'."""
     assert is_paypal_ba_approve_url("not a url") is False
-    assert is_paypal_ba_approve_url(None) is False
+    assert is_paypal_ba_approve_url(None) is False  # type: ignore[arg-type]
 
 
 def test_is_paypal_ba_approve_url_is_idempotent():
@@ -260,7 +260,7 @@ def test_extract_ba_token_returns_empty_for_a_blank_token_value():
 def test_extract_ba_token_raises_on_none_instead_of_returning_empty():
     """AUDIT POINT: unlike every sibling helper, this one has no None guard."""
     with pytest.raises(AttributeError):
-        extract_ba_token(None)
+        extract_ba_token(None)  # type: ignore[arg-type]
 
 
 def test_extract_ba_token_is_idempotent():
@@ -281,8 +281,10 @@ def test_find_url_in_value_recurses_into_dicts_and_lists():
 
 def test_find_url_in_value_prefers_the_named_url_keys():
     """Named keys are checked before the generic value walk."""
-    payload = {"note": "https://www.paypal.com/agreements/approve?ba_token=FIRST",
-               "url": "https://www.paypal.com/agreements/approve?ba_token=SECOND"}
+    payload = {
+        "note": "https://www.paypal.com/agreements/approve?ba_token=FIRST",
+        "url": "https://www.paypal.com/agreements/approve?ba_token=SECOND",
+    }
     assert "SECOND" in find_url_in_value(payload, [PAYPAL_BA_RE])
 
 
@@ -307,8 +309,10 @@ def test_find_url_in_value_handles_deeply_nested_structures_without_recursing_fo
 
 def test_extract_redirect_url_reads_next_action_first():
     url = "https://pm-redirects.stripe.com/authorize/abc"
-    payload = {"next_action": {"type": "redirect_to_url", "redirect_to_url": {"url": url}},
-               "note": "https://www.paypal.com/agreements/approve?ba_token=IGNORED"}
+    payload = {
+        "next_action": {"type": "redirect_to_url", "redirect_to_url": {"url": url}},
+        "note": "https://www.paypal.com/agreements/approve?ba_token=IGNORED",
+    }
     assert extract_redirect_url(payload) == url
 
 
@@ -341,10 +345,12 @@ def test_resolve_external_redirect_returns_immediately_for_a_paypal_url():
 
 
 def test_resolve_external_redirect_follows_a_relative_location():
-    session = FakeSession({
-        "https://start.example/x": FakeResponse(302, {"Location": "/next"}),
-        "https://start.example/next": FakeResponse(302, {"Location": PAYPAL_BA}),
-    })
+    session = FakeSession(
+        {
+            "https://start.example/x": FakeResponse(302, {"Location": "/next"}),
+            "https://start.example/next": FakeResponse(302, {"Location": PAYPAL_BA}),
+        }
+    )
     assert resolve_external_redirect(session, "https://start.example/x") == PAYPAL_BA
 
 
@@ -404,22 +410,31 @@ def test_billing_for_country_email_domain_tracks_the_country():
     assert billing_for_country("DE")["email"].endswith("@example.de")
 
 
-def test_billing_for_country_falls_back_to_german_data_for_unknown_countries():
-    """AUDIT POINT: country stays 'ZZ' while the identity is German.
+def test_billing_for_country_generates_a_template_that_keeps_the_country():
+    """AUDIT POINT (resolved 2026-10-01): unknown countries no longer bill from Germany.
 
-    The caller gets a self-contradicting billing profile (country=ZZ, city=Berlin)
-    rather than an error, so an unsupported locale silently bills from Germany.
+    Before this, the caller got a self-contradicting profile (country=ZZ,
+    city=Berlin), so an unsupported locale silently billed from Germany.  The
+    generated template now keeps the requested country.
     """
     data = billing_for_country("ZZ")
     assert data["country"] == "ZZ"
-    assert data["city"] == BILLING_DATA["DE"]["city"]
+    assert data["city"] == "ZZ"
+    assert data["postal"] == "00000"
+    assert data["city"] != BILLING_DATA["DE"]["city"]
+
+
+def test_billing_for_country_covers_the_added_markets():
+    for code in ("VN", "ID", "MX", "NG", "UA", "TW", "AE"):
+        data = billing_for_country(code)
+        assert data["country"] == code
+        assert data["city"] != BILLING_DATA["DE"]["city"]
 
 
 @pytest.mark.parametrize("country", ["", None])
 def test_billing_for_country_defaults_to_germany_for_blank_input(country):
     blank, german = billing_for_country(country), billing_for_country("DE")
-    assert {k: v for k, v in blank.items() if k != "email"} == \
-           {k: v for k, v in german.items() if k != "email"}
+    assert {k: v for k, v in blank.items() if k != "email"} == {k: v for k, v in german.items() if k != "email"}
     assert blank["email"].endswith("@example.de")
 
 
@@ -525,8 +540,7 @@ class FakeHttpResponse:
 
 def test_stripe_confirm_error_diagnostics_always_reports_the_core_five_fields():
     out = stripe_confirm_error_diagnostics(FakeHttpResponse(), "cs_1", "pm_1", {})
-    for field in ("stripe_confirm_failed:http=402", "cs_id=cs_1", "pm_id=pm_1",
-                  "amount=None", "init_checksum=missing"):
+    for field in ("stripe_confirm_failed:http=402", "cs_id=cs_1", "pm_id=pm_1", "amount=None", "init_checksum=missing"):
         assert field in out
 
 
@@ -537,8 +551,14 @@ def test_stripe_confirm_error_diagnostics_truncates_long_identifiers():
 
 
 def test_stripe_confirm_error_diagnostics_surfaces_the_error_fields():
-    payload = {"error": {"type": "card_error", "code": "card_declined",
-                         "param": "number", "message": "Your card was declined."}}
+    payload = {
+        "error": {
+            "type": "card_error",
+            "code": "card_declined",
+            "param": "number",
+            "message": "Your card was declined.",
+        }
+    }
     out = stripe_confirm_error_diagnostics(FakeHttpResponse(payload=payload), "cs", "pm", {})
     assert "error_type=card_error" in out
     assert "error_code=card_declined" in out
@@ -559,8 +579,7 @@ def test_stripe_confirm_error_diagnostics_caps_a_message_at_180_chars():
 
 
 def test_stripe_confirm_error_diagnostics_falls_back_to_the_raw_body():
-    out = stripe_confirm_error_diagnostics(
-        FakeHttpResponse(text="  gateway\n error  "), "cs", "pm", {})
+    out = stripe_confirm_error_diagnostics(FakeHttpResponse(text="  gateway\n error  "), "cs", "pm", {})
     assert "body=gateway error" in out
 
 

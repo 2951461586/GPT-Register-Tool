@@ -55,8 +55,7 @@ except ImportError:
 # ─── 常量 ────────────────────────────────────────────────────────────────────
 
 DEFAULT_STRIPE_PK = (os.environ.get("PP_STRIPE_PUBLISHABLE_KEY", "") or "").strip() or (
-    "pk_live_51HOrSwC6h1nxGoI3lTAgRjYVrz4dU3fVOabyCcKR3pbEJguCVAlqCxdxCUvoRh1XWwRac"
-    "ViovU3kLKvpkjh7IqkW00iXQsjo3n"
+    "pk_live_51HOrSwC6h1nxGoI3lTAgRjYVrz4dU3fVOabyCcKR3pbEJguCVAlqCxdxCUvoRh1XWwRacViovU3kLKvpkjh7IqkW00iXQsjo3n"
 )
 STRIPE_VERSION = "2025-03-31.basil; checkout_server_update_beta=v1; checkout_manual_approval_preview=v1"
 from .timeouts import CHATGPT_TIMEOUT, DEFAULT_TIMEOUT
@@ -69,21 +68,296 @@ PM_REDIRECT_RE = re.compile(r"https://pm-redirects\.stripe\.com/authorize/[^\s\"
 PAYPAL_BA_RE = re.compile(r"https://www\.paypal\.com/agreements/approve\?[^\s\"']+", re.I)
 
 BILLING_DATA = {
-    "DE": {"name": ("Lukas", "Schneider"), "street": "Friedrichstrasse 123", "city": "Berlin", "state": "BE", "postal": "10117"},
-    "GB": {"name": ("James", "Smith"), "street": "10 Downing Street", "city": "London", "state": "London", "postal": "SW1A 2AA"},
-    "US": {"name": ("James", "Smith"), "street": "3110 Sunset Boulevard", "city": "Los Angeles", "state": "CA", "postal": "90026"},
-    "AU": {"name": ("Oliver", "Smith"), "street": "123 George Street", "city": "Sydney", "state": "NSW", "postal": "2000"},
-    "JP": {"name": ("Taro", "Yamada"), "street": "1-1-2 Oshiage", "city": "Sumida-ku", "state": "Tokyo", "postal": "131-0045"},
-    "FR": {"name": ("Pierre", "Dupont"), "street": "10 Rue de Rivoli", "city": "Paris", "state": "Ile-de-France", "postal": "75001"},
-    "CA": {"name": ("James", "Smith"), "street": "100 King Street W", "city": "Toronto", "state": "ON", "postal": "M5X 1C6"},
-    "SG": {"name": ("Wei", "Tan"), "street": "1 Raffles Place", "city": "Singapore", "state": "Singapore", "postal": "048616"},
-    "NZ": {"name": ("James", "Smith"), "street": "1 Queen Street", "city": "Auckland", "state": "Auckland", "postal": "1010"},
-    "IE": {"name": ("James", "Smith"), "street": "1 O'Connell Street", "city": "Dublin", "state": "Dublin", "postal": "D01 F5P2"},
-    "TH": {"name": ("Somchai", "Prasert"), "street": "123 Sukhumvit Road", "city": "Bangkok", "state": "Bangkok", "postal": "10110"},
-    "TR": {"name": ("Mehmet", "Yilmaz"), "street": "Istiklal Caddesi 123", "city": "Istanbul", "state": "Istanbul", "postal": "34421"},
-    "IN": {"name": ("Rahul", "Sharma"), "street": "Flat 302, Sai Residency", "city": "Mumbai", "state": "Maharashtra", "postal": "400069"},
-    "BR": {"name": ("Joao", "Silva"), "street": "Avenida Paulista 1000", "city": "Sao Paulo", "state": "SP", "postal": "01310-100"},
+    "DE": {
+        "name": ("Lukas", "Schneider"),
+        "street": "Friedrichstrasse 123",
+        "city": "Berlin",
+        "state": "BE",
+        "postal": "10117",
+    },
+    "GB": {
+        "name": ("James", "Smith"),
+        "street": "10 Downing Street",
+        "city": "London",
+        "state": "London",
+        "postal": "SW1A 2AA",
+    },
+    "US": {
+        "name": ("James", "Smith"),
+        "street": "3110 Sunset Boulevard",
+        "city": "Los Angeles",
+        "state": "CA",
+        "postal": "90026",
+    },
+    "AU": {
+        "name": ("Oliver", "Smith"),
+        "street": "123 George Street",
+        "city": "Sydney",
+        "state": "NSW",
+        "postal": "2000",
+    },
+    "JP": {
+        "name": ("Taro", "Yamada"),
+        "street": "1-1-2 Oshiage",
+        "city": "Sumida-ku",
+        "state": "Tokyo",
+        "postal": "131-0045",
+    },
+    "FR": {
+        "name": ("Pierre", "Dupont"),
+        "street": "10 Rue de Rivoli",
+        "city": "Paris",
+        "state": "Ile-de-France",
+        "postal": "75001",
+    },
+    "CA": {
+        "name": ("James", "Smith"),
+        "street": "100 King Street W",
+        "city": "Toronto",
+        "state": "ON",
+        "postal": "M5X 1C6",
+    },
+    "SG": {
+        "name": ("Wei", "Tan"),
+        "street": "1 Raffles Place",
+        "city": "Singapore",
+        "state": "Singapore",
+        "postal": "048616",
+    },
+    "NZ": {
+        "name": ("James", "Smith"),
+        "street": "1 Queen Street",
+        "city": "Auckland",
+        "state": "Auckland",
+        "postal": "1010",
+    },
+    "IE": {
+        "name": ("James", "Smith"),
+        "street": "1 O'Connell Street",
+        "city": "Dublin",
+        "state": "Dublin",
+        "postal": "D01 F5P2",
+    },
+    "TH": {
+        "name": ("Somchai", "Prasert"),
+        "street": "123 Sukhumvit Road",
+        "city": "Bangkok",
+        "state": "Bangkok",
+        "postal": "10110",
+    },
+    "TR": {
+        "name": ("Mehmet", "Yilmaz"),
+        "street": "Istiklal Caddesi 123",
+        "city": "Istanbul",
+        "state": "Istanbul",
+        "postal": "34421",
+    },
+    "IN": {
+        "name": ("Rahul", "Sharma"),
+        "street": "Flat 302, Sai Residency",
+        "city": "Mumbai",
+        "state": "Maharashtra",
+        "postal": "400069",
+    },
+    "BR": {
+        "name": ("Joao", "Silva"),
+        "street": "Avenida Paulista 1000",
+        "city": "Sao Paulo",
+        "state": "SP",
+        "postal": "01310-100",
+    },
     "KR": {"name": ("Minjun", "Kim"), "street": "123 Teheran-ro", "city": "Seoul", "state": "Seoul", "postal": "06134"},
+    "NL": {"name": ("Daan", "de Vries"), "street": "Damrak 1", "city": "Amsterdam", "state": "NH", "postal": "1012 JS"},
+    "ES": {"name": ("Hugo", "Garcia"), "street": "Calle Mayor 1", "city": "Madrid", "state": "MD", "postal": "28013"},
+    "IT": {
+        "name": ("Alessandro", "Rossi"),
+        "street": "Via del Corso 1",
+        "city": "Rome",
+        "state": "RM",
+        "postal": "00186",
+    },
+    "PL": {"name": ("Jan", "Kowalski"), "street": "Nowy Swiat 1", "city": "Warsaw", "state": "MZ", "postal": "00-001"},
+    "SE": {
+        "name": ("Erik", "Andersson"),
+        "street": "Drottninggatan 1",
+        "city": "Stockholm",
+        "state": "AB",
+        "postal": "111 51",
+    },
+    "NO": {
+        "name": ("Lars", "Hansen"),
+        "street": "Karl Johans gate 1",
+        "city": "Oslo",
+        "state": "Oslo",
+        "postal": "0154",
+    },
+    "DK": {
+        "name": ("Magnus", "Nielsen"),
+        "street": "Stroget 1",
+        "city": "Copenhagen",
+        "state": "Hovedstaden",
+        "postal": "1050",
+    },
+    "FI": {
+        "name": ("Matti", "Korhonen"),
+        "street": "Aleksanterinkatu 1",
+        "city": "Helsinki",
+        "state": "Uusimaa",
+        "postal": "00100",
+    },
+    "CH": {"name": ("Luis", "Keller"), "street": "Bahnhofstrasse 1", "city": "Zurich", "state": "ZH", "postal": "8001"},
+    "AT": {
+        "name": ("Paul", "Hofer"),
+        "street": "Karntner Strasse 1",
+        "city": "Vienna",
+        "state": "Wien",
+        "postal": "1010",
+    },
+    "BE": {"name": ("Lucas", "Peeters"), "street": "Rue Neuve 1", "city": "Brussels", "state": "BRU", "postal": "1000"},
+    "PT": {
+        "name": ("Joao", "Silva"),
+        "street": "Rua Augusta 1",
+        "city": "Lisbon",
+        "state": "Lisboa",
+        "postal": "1100-053",
+    },
+    "CZ": {
+        "name": ("Jakub", "Novak"),
+        "street": "Vaclavske namesti 1",
+        "city": "Prague",
+        "state": "PR",
+        "postal": "110 00",
+    },
+    "GR": {
+        "name": ("Georgios", "Papadopoulos"),
+        "street": "Ermou 1",
+        "city": "Athens",
+        "state": "ATT",
+        "postal": "105 63",
+    },
+    "HU": {"name": ("Laszlo", "Nagy"), "street": "Vaci utca 1", "city": "Budapest", "state": "BU", "postal": "1052"},
+    "RO": {
+        "name": ("Andrei", "Popescu"),
+        "street": "Calea Victoriei 1",
+        "city": "Bucharest",
+        "state": "B",
+        "postal": "010061",
+    },
+    "AE": {
+        "name": ("Ahmed", "Al Mansoori"),
+        "street": "Sheikh Zayed Road 1",
+        "city": "Dubai",
+        "state": "DU",
+        "postal": "00000",
+    },
+    "SA": {
+        "name": ("Abdullah", "Al Saud"),
+        "street": "King Fahd Road 1",
+        "city": "Riyadh",
+        "state": "RD",
+        "postal": "11564",
+    },
+    "IL": {
+        "name": ("David", "Cohen"),
+        "street": "Dizengoff Street 1",
+        "city": "Tel Aviv",
+        "state": "TA",
+        "postal": "6433201",
+    },
+    "ZA": {
+        "name": ("Thabo", "Mokoena"),
+        "street": "Long Street 1",
+        "city": "Cape Town",
+        "state": "WC",
+        "postal": "8001",
+    },
+    "EG": {"name": ("Omar", "Hassan"), "street": "Tahrir Square 1", "city": "Cairo", "state": "C", "postal": "11511"},
+    "MX": {
+        "name": ("Diego", "Garcia"),
+        "street": "Avenida Reforma 1",
+        "city": "Mexico City",
+        "state": "CMX",
+        "postal": "06600",
+    },
+    "AR": {
+        "name": ("Mateo", "Gonzalez"),
+        "street": "Avenida de Mayo 1",
+        "city": "Buenos Aires",
+        "state": "C",
+        "postal": "C1084",
+    },
+    "CL": {
+        "name": ("Benjamin", "Lopez"),
+        "street": "Avenida Libertador 1",
+        "city": "Santiago",
+        "state": "RM",
+        "postal": "8320000",
+    },
+    "CO": {
+        "name": ("Santiago", "Ramirez"),
+        "street": "Carrera 7 1",
+        "city": "Bogota",
+        "state": "DC",
+        "postal": "110111",
+    },
+    "PE": {
+        "name": ("Diego", "Fernandez"),
+        "street": "Avenida Larco 1",
+        "city": "Lima",
+        "state": "LIM",
+        "postal": "15074",
+    },
+    "MY": {
+        "name": ("Ahmad", "Rahman"),
+        "street": "Jalan Bukit Bintang 1",
+        "city": "Kuala Lumpur",
+        "state": "KUL",
+        "postal": "55100",
+    },
+    "ID": {
+        "name": ("Budi", "Santoso"),
+        "street": "Jalan Thamrin 1",
+        "city": "Jakarta",
+        "state": "JK",
+        "postal": "10310",
+    },
+    "VN": {
+        "name": ("Minh", "Nguyen"),
+        "street": "Dong Khoi 1",
+        "city": "Ho Chi Minh City",
+        "state": "SG",
+        "postal": "700000",
+    },
+    "PH": {"name": ("Juan", "Santos"), "street": "Ayala Avenue 1", "city": "Makati", "state": "NCR", "postal": "1226"},
+    "HK": {
+        "name": ("Ka", "Chan"),
+        "street": "Queens Road Central 1",
+        "city": "Hong Kong",
+        "state": "HK",
+        "postal": "000000",
+    },
+    "TW": {"name": ("Wei", "Chen"), "street": "Xinyi Road 1", "city": "Taipei", "state": "TPE", "postal": "110"},
+    "UA": {
+        "name": ("Oleksandr", "Shevchenko"),
+        "street": "Khreshchatyk 1",
+        "city": "Kyiv",
+        "state": "KV",
+        "postal": "01001",
+    },
+    "NG": {
+        "name": ("Chinedu", "Okafor"),
+        "street": "Broad Street 1",
+        "city": "Lagos",
+        "state": "LA",
+        "postal": "100001",
+    },
+    "KE": {
+        "name": ("James", "Mwangi"),
+        "street": "Kenyatta Avenue 1",
+        "city": "Nairobi",
+        "state": "NRB",
+        "postal": "00100",
+    },
 }
 
 
@@ -210,12 +484,7 @@ def extract_paypal_approve_url(text: str) -> str:
     a ``ba_token`` is present); ``paypal_protocol`` and the reconciliation
     path consume this instead of re-parsing.
     """
-    body = (
-        str(text or "")
-        .replace("\\u0026", "&")
-        .replace("\\/", "/")
-        .replace("&amp;", "&")
-    )
+    body = str(text or "").replace("\\u0026", "&").replace("\\/", "/").replace("&amp;", "&")
     match = re.search(r"https?://(?:www\.)?paypal\.com/agreements/approve\?[^\s<>\"']+", body)
     if match:
         return match.group(0)
@@ -300,13 +569,30 @@ def resolve_external_redirect(
 # ─── Stripe / 金额 ─────────────────────────────────────────────────────────────
 
 
-def billing_for_country(country: str) -> dict:
-    country = str(country or "DE").upper()
-    data = BILLING_DATA.get(country) or BILLING_DATA["DE"]
+def _generated_billing(country: str) -> dict:
+    """Placeholder template for a country with no curated entry.
+
+    It deliberately keeps the **requested** country instead of reusing Germany.
+    A German billing address on a non-German Checkout is a country/currency
+    mismatch, and that silent default was applied to every uncovered market.
+    """
+    code = str(country or "").strip().upper() or "DE"
     return {
-        "country": country,
+        "name": ("John", "Doe"),
+        "street": f"1 {code} Main Street",
+        "city": code,
+        "state": code,
+        "postal": "00000",
+    }
+
+
+def billing_for_country(country: str) -> dict:
+    code = str(country or "DE").upper()
+    data = BILLING_DATA.get(code) or _generated_billing(code)
+    return {
+        "country": code,
         "name": data["name"],
-        "email": f"buyer{uuid.uuid4().int % 9000 + 1000}@example.{country.lower()}",
+        "email": f"buyer{uuid.uuid4().int % 9000 + 1000}@example.{code.lower()}",
         "street": data["street"],
         "city": data["city"],
         "state": data["state"],
@@ -320,10 +606,18 @@ def stripe_amount_details(init_payload: dict) -> dict:
     currency = str(init_payload.get("currency") or "").lower()
     total_summary = init_payload.get("total_summary") or {}
     if isinstance(total_summary, dict) and total_summary.get("due") is not None:
-        return {"amount": int(total_summary["due"]), "currency": str(total_summary.get("currency") or currency).lower(), "source": "total_summary.due"}
+        return {
+            "amount": int(total_summary["due"]),
+            "currency": str(total_summary.get("currency") or currency).lower(),
+            "source": "total_summary.due",
+        }
     invoice = init_payload.get("invoice") or {}
     if isinstance(invoice, dict) and invoice.get("amount_due") is not None:
-        return {"amount": int(invoice["amount_due"]), "currency": str(invoice.get("currency") or currency).lower(), "source": "invoice.amount_due"}
+        return {
+            "amount": int(invoice["amount_due"]),
+            "currency": str(invoice.get("currency") or currency).lower(),
+            "source": "invoice.amount_due",
+        }
     return {"amount": None, "currency": currency, "source": "unknown"}
 
 
@@ -370,10 +664,14 @@ def stripe_confirm_error_diagnostics(
         f"init_checksum={'present' if init_payload.get('init_checksum') else 'missing'}",
     ]
     for label, value in (
-        ("error_type", error.get("type")), ("error_code", error.get("code")),
-        ("error_param", error.get("param")), ("error_message", error.get("message")),
-        ("submission_state", submission.get("state")), ("submission_reason", submission.get("reason")),
-        ("submission_code", submission.get("code")), ("submission_message", submission.get("message")),
+        ("error_type", error.get("type")),
+        ("error_code", error.get("code")),
+        ("error_param", error.get("param")),
+        ("error_message", error.get("message")),
+        ("submission_state", submission.get("state")),
+        ("submission_reason", submission.get("reason")),
+        ("submission_code", submission.get("code")),
+        ("submission_message", submission.get("message")),
     ):
         if value not in (None, ""):
             compact = re.sub(r"\s+", " ", str(value)).strip()
