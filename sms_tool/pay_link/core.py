@@ -1,29 +1,13 @@
 """core submodule of the former payment_link_manager.py (mechanical split, bodies unchanged)."""
 
 from __future__ import annotations
-import json
-import logging
-import os
-import re
-import subprocess
-import sys
-import tempfile
-import threading
-import time
 import uuid
-from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Callable, Mapping
-from ..config import ConfigError, current_config_data, resolve_runtime_config, validate_config
-from ..paths import project_path, runtime_file
-from ..payment_contracts import PaymentRequest, PaymentResult, payment_history_metadata
-from ..payment_catalog import PAYMENT_METHODS as CATALOG_METHODS, normalize_payment_method as normalize_catalog_payment_method, validate_catalog_consistency
-from ..payment_adapters import FunctionPaymentAdapter, PaymentAdapterRegistry
+from ..config import ConfigError, current_config_data, validate_config
+from ..payment_contracts import PaymentRequest
 from ..payment_executor import PaymentExecutionRequest, PaymentFlowExecutor
 from ..payment_operation import PaymentOperationConflict, PaymentOperationStore, conflict_result as payment_operation_conflict_result
-from ..payment_routing import PaymentRoutePlan, PaymentRoutePlanner, coerce_approve_country as canonical_coerce_approve_country, parse_proxy_pool, payment_proxy_pools as canonical_payment_proxy_pools
-from ..sanitizer import sanitize as _canonical_sanitize, sanitize_text as _canonical_sanitize_text
-from .. import payment_egress
+from ..payment_routing import PaymentRoutePlan, PaymentRoutePlanner
 
 from .adapters import _run_regional_wallet_adapter, _run_wallet_adapter
 from .base import PAYMENT_METHODS, _LOGGER, _config_data, _redact_sensitive_text
