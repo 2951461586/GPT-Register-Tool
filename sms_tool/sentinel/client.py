@@ -232,8 +232,9 @@ def _cookie_header(session: Any, device_id: str) -> str:
     pairs: list[str] = []
     cookies = getattr(session, "cookies", None)
     try:
-        if hasattr(cookies, "get_dict"):
-            pairs.extend(f"{name}={value}" for name, value in cookies.get_dict().items() if name and value)
+        get_dict = getattr(cookies, "get_dict", None)
+        if callable(get_dict):
+            pairs.extend(f"{name}={value}" for name, value in get_dict().items() if name and value)
     except Exception:
         pass
     if not any(item.lower().startswith("oai-did=") for item in pairs):
@@ -248,8 +249,12 @@ def _challenge(
     device_id: str,
     profile: Mapping[str, Any],
     timeout_seconds: int,
+    requirements_proof: str = "",
 ) -> dict[str, Any]:
-    proof = _requirements_token(device_id, profile)
+    # ``requirements_proof`` lets a caller reuse one proof across several flows,
+    # which is what a real browser does on the password page.  Empty (the
+    # default for a single flow) generates a fresh proof as before.
+    proof = str(requirements_proof or "") or _requirements_token(device_id, profile)
     response = request_with_retry(
         session,
         "post",
@@ -288,6 +293,7 @@ def issue_sentinel_token(
     page_url: str = "",
     cookie_header: str = "",
     timeout_seconds: int = 60,
+    requirements_proof: str = "",
 ) -> SentinelToken:
     """Issue one flow-bound token using the same session and fingerprint.
 
@@ -302,7 +308,7 @@ def issue_sentinel_token(
         raise SentinelIssueError(f"sentinel_flow_unsupported:{flow}")
     owned_session = session is None
     active_session = session or curl_requests.Session()
-    normalized_proxy = normalize_proxy_url(proxy)
+    normalized_proxy = normalize_proxy_url(proxy or "")
     if normalized_proxy and owned_session:
         active_session.proxies = {"http": normalized_proxy, "https": normalized_proxy}
     try:
@@ -318,6 +324,7 @@ def issue_sentinel_token(
             device_id=device_id,
             profile=active_profile,
             timeout_seconds=timeout_seconds,
+            requirements_proof=requirements_proof,
         )
         token = run_sentinel_sdk(
             challenge,
@@ -338,7 +345,12 @@ def issue_sentinel_token(
                 active_session.close()
             except Exception:
                 pass
-    parsed = json.loads(token)
+    try:
+        parsed = json.loads(token)
+    except (TypeError, ValueError) as exc:
+        # The runner returned something that is not a JSON token object.  Name it
+        # as a Sentinel failure instead of leaking a bare JSONDecodeError.
+        raise SentinelIssueError(f"sentinel_sdk_returned_invalid_json:{flow}") from exc
     so_value = str(parsed.get("so") or "")
     so_token = ""
     if so_value:
@@ -549,11 +561,17 @@ def issue_sentinel_bundle(
     profile: Mapping[str, Any] | None = None,
     timeout_seconds: int = 60,
 ) -> dict[str, Any]:
-    """Compatibility adapter returning the historical Sentinel bundle shape."""
+    """Compatibility adapter returning the historical Sentinel bundle shape.
+
+    All flows share **one** requirements proof (and the same fingerprint
+    ``session_id``), reproducing the password-page iframe, which sends the same
+    ``p`` for each flow instead of re-randomising it per flow.  The per-flow
+    server challenge still differs, so each token stays flow-bound.
+    """
     did = str(device_id or "").strip() or str(uuid.uuid4())
     owned_session = session is None
     active_session = session or curl_requests.Session()
-    normalized_proxy = normalize_proxy_url(proxy)
+    normalized_proxy = normalize_proxy_url(proxy or "")
     if normalized_proxy and owned_session:
         active_session.proxies = {"http": normalized_proxy, "https": normalized_proxy}
     active_profile = dict(profile or sentinel_fingerprint())
@@ -561,6 +579,7 @@ def issue_sentinel_bundle(
     issued: dict[str, SentinelToken] = {}
     cookie_str = ""
     try:
+        shared_proof = _requirements_token(did, active_profile)
         for flow in flows:
             issued[flow] = issue_sentinel_token(
                 flow=flow,
@@ -568,6 +587,7 @@ def issue_sentinel_bundle(
                 session=active_session,
                 profile=active_profile,
                 timeout_seconds=timeout_seconds,
+                requirements_proof=shared_proof,
             )
         cookie_str = _cookie_header(active_session, did)
     finally:

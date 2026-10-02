@@ -584,7 +584,61 @@ class RegistrationEmailWorkflow:
         )
         if str(s.base_headers.get("oai-device-id") or "") != s.device_id:
             self._abort("sentinel_extract_failed: auth header device id mismatch")
+        self._prime_password_sentinel_bundle()
         s.auth_flow_started = _safe_int(time.time())
+
+    def _password_sentinel_bundle_enabled(self) -> bool:
+        """``registration.sentinel_password_bundle`` (default off).
+
+        Off by default because it changes the Sentinel payload shape -- the
+        password page is then primed with one shared requirements proof, the
+        way a browser iframe does it -- and that still owes a controlled live
+        comparison.  See ``docs/current/protocol-registration.md``.
+        """
+        registration = (self.config or {}).get("registration")
+        registration = registration if isinstance(registration, Mapping) else {}
+        value = registration.get("sentinel_password_bundle", False)
+        return value not in (False, 0, "0", "false", "False", "no", "No", "off", "")
+
+    def _prime_password_sentinel_bundle(self) -> None:
+        """Pre-mint the password page's Sentinel flows from one shared proof.
+
+        Only the password lane gets this: it is the page a browser primes a
+        bundle for.  A failure is non-fatal -- the per-flow issuance in
+        ``_issue_sentinel`` is still there and is the untouched default path.
+        """
+        s = self.runtime
+        if s.registration_mode == "passwordless" or not self._password_sentinel_bundle_enabled():
+            return
+        from .sentinel import issue_sentinel_bundle, sentinel_backend
+
+        if sentinel_backend(self.config) != "node_runner":
+            return
+        try:
+            bundle = issue_sentinel_bundle(
+                flows=("authorize_continue", "username_password_create"),
+                device_id=s.device_id,
+                session=s.session,
+                proxy=s.proxy,
+            )
+        except Exception as exc:
+            logging.getLogger(__name__).warning(
+                "Sentinel password bundle unavailable; falling back to per-flow issuance: %s",
+                self.r._sanitize_text(exc),
+            )
+            return
+        merged = dict(s.sentinel_data)
+        for key, value in bundle.items():
+            if key in {"cookie_str", "oai_did", "sentinel_source"} or not str(value or "").strip():
+                continue
+            merged[key] = value
+        s.sentinel_data = merged
+        s.sentinel_token = str(s.sentinel_data.get("sentinel_token") or s.sentinel_token)
+        s.sentinel_authorize_token = str(
+            s.sentinel_data.get("sentinel_authorize_continue_token") or s.sentinel_authorize_token
+        )
+        s.sentinel_so_token = str(s.sentinel_data.get("sentinel_so_token") or s.sentinel_so_token)
+        logging.getLogger(__name__).info("Sentinel password flow bundle primed (shared requirements proof)")
 
     def _issue_sentinel(self, flow: str) -> Any:
         from .sentinel import issue_sentinel_flow, sentinel_backend
