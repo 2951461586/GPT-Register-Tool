@@ -1050,7 +1050,8 @@ def run_upi_qr_link_once(
                             pm_id=pm_id,
                             inline_pm=inline_pm,
                             return_url=(
-                                ops._normalize_hosted_checkout_url(str(init.get("stripe_hosted_url") or "")) or return_url
+                                ops._normalize_hosted_checkout_url(str(init.get("stripe_hosted_url") or ""))
+                                or return_url
                             ),
                             payment_method_selection_flow=payment_method_selection_flow,
                             reference_shape=approve_shape == "reference",
@@ -1132,7 +1133,9 @@ def run_upi_qr_link_once(
         verification_inconclusive = False
         verification_code = ""
         if verify_target:
-            verified, label, verification_code = ops._upi_verify_instructions_verdict(verify_target, proxy=provider_proxy)
+            verified, label, verification_code = ops._upi_verify_instructions_verdict(
+                verify_target, proxy=provider_proxy
+            )
             link_verified = bool(verified)
             verification_inconclusive = (not verified) and verification_code in UPI_VERIFY_INCONCLUSIVE
             verification = label if (verified or not verification_inconclusive) else f"inconclusive:{label}"
