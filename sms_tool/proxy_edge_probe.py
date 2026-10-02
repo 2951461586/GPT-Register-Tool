@@ -54,6 +54,10 @@ STATUSES = (CLEAN, BLOCKED, DEGRADED, DEAD)
 #: reach it is a plausible registration exit; a CF block shows up as 403/challenge
 #: here rather than only at account creation.
 CHATGPT_LOGIN_PATH = "/login"
+#: Checkout admission path an anonymous probe can hit without a session.  A real
+#: frontend reaches it during the payment flow; a non-CF <500 reply means the
+#: exit can enter that flow.
+CHATGPT_CHECKOUT_PATH = "/backend-api/payments/checkout"
 DEFAULT_CHAT_BASE = "https://chatgpt.com"
 DEFAULT_TIMEOUT = 15.0
 PROBE_IMPERSONATE = "chrome146"
@@ -171,14 +175,19 @@ def probe_openai_edge(
     chat_base: str = DEFAULT_CHAT_BASE,
     timeout: float = DEFAULT_TIMEOUT,
     impersonate: str = PROBE_IMPERSONATE,
+    path: str = CHATGPT_LOGIN_PATH,
 ) -> EdgeVerdict:
-    """Send one anonymous GET to the ChatGPT login edge through ``proxy``.
+    """Send one anonymous GET to a ChatGPT/OpenAI edge path through ``proxy``.
+
+    ``path`` defaults to the login page; callers probing *checkout admission*
+    pass ``/backend-api/payments/checkout`` so the verdict answers "can this
+    exit enter the payment flow" rather than only "is the login edge up".
 
     Never raises; a transport failure becomes :data:`DEAD`.  ``proxy=""`` probes
     the direct egress.  The returned verdict carries a redacted URL.
     """
     value = normalize_proxy_url(proxy)
-    target = str(chat_base or DEFAULT_CHAT_BASE).rstrip("/") + CHATGPT_LOGIN_PATH
+    target = str(chat_base or DEFAULT_CHAT_BASE).rstrip("/") + (str(path or "").strip() or CHATGPT_LOGIN_PATH)
     redacted = redact_proxy_url(value) if value else "DIRECT"
     started = time.monotonic()
 

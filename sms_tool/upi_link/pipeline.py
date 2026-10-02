@@ -23,6 +23,18 @@ except ImportError:
     # shared gate is unavailable there.  Explicit ``None`` rather than a silent
     # skip: the package path (CLI and ``native_upi``) always has it.
     payment_egress = None  # type: ignore[assignment]
+try:  # pragma: no cover - direct script execution
+    from ..geo.resolver import resolve_proxy_geo
+except ImportError:
+    from geo.resolver import resolve_proxy_geo  # type: ignore
+try:  # pragma: no cover - direct script execution
+    from ..proxy_edge_probe import CHATGPT_CHECKOUT_PATH, probe_openai_edge
+except ImportError:
+    from proxy_edge_probe import CHATGPT_CHECKOUT_PATH, probe_openai_edge  # type: ignore
+try:  # pragma: no cover - direct script execution
+    from ..proxy_entry import rotate_session
+except ImportError:
+    from proxy_entry import rotate_session  # type: ignore
 from typing import Any
 from collections.abc import Mapping
 from types import SimpleNamespace
@@ -406,7 +418,189 @@ def _upi_assert_egress_contract(rt: Any) -> dict[str, Any] | None:
     return None
 
 
-def generate_upi_qr_link(
+# ── Increment 1 (2026-10-01): India exit grading + checkout admission ──────
+# Ported from the reference ``upi_core_local`` (``_is_india_exit`` /
+# ``pick_india_proxy`` / ``select_checkout_capable_ip`` / ``probe_checkout_reachable``).
+# It measured that an "IN" residential session can leak a non-IN exit and that a
+# wrong/blocked exit is rejected at Checkout -- both cost a disposable session.
+# Off by default because it adds one geo probe plus one edge probe per candidate;
+# the shared ``payment_egress`` gate still asserts the final exit.
+
+#: Anonymous paths a real frontend reaches during the payment flow.  A non-CF
+#: reply below 500 means the exit can enter checkout.
+_UPI_ADMISSION_PATHS: tuple[str, ...] = (CHATGPT_CHECKOUT_PATH, "/")
+
+
+def _upi_india_exit_probe_enabled(upi_cfg: Any) -> bool:
+    if isinstance(upi_cfg, Mapping) and "india_exit_probe" in upi_cfg:
+        return bool(upi_cfg.get("india_exit_probe"))
+    return _env_bool("UPI_INDIA_EXIT_PROBE", False)
+
+
+def _upi_india_exit_attempts(upi_cfg: Any) -> int:
+    raw = upi_cfg.get("india_exit_attempts") if isinstance(upi_cfg, Mapping) else None
+    if raw is not None:
+        try:
+            return max(1, int(raw))
+        except (TypeError, ValueError):
+            return 2
+    return max(1, _env_int("UPI_INDIA_EXIT_ATTEMPTS", 2, 1))
+
+
+def _upi_india_exit_timeout(upi_cfg: Any) -> float:
+    raw = upi_cfg.get("india_exit_timeout") if isinstance(upi_cfg, Mapping) else None
+    if raw is not None:
+        try:
+            return max(3.0, min(float(raw), 20.0))
+        except (TypeError, ValueError):
+            pass
+    return max(3.0, min(_float_env("UPI_INDIA_EXIT_TIMEOUT", 8.0), 20.0))
+
+
+def _upi_exit_country(proxy: str, timeout: float) -> str:
+    try:
+        geo = resolve_proxy_geo(proxy, hint="IN", timeout=timeout)
+    except Exception:
+        return ""
+    return str(getattr(geo, "country", "") or "").strip().upper()
+
+
+def _upi_exit_admits_checkout(proxy: str, timeout: float) -> bool:
+    """True when a non-CF, sub-500 reply comes back from an admission path.
+
+    A transport failure is *no evidence*, not a refusal: the reference lets a
+    geo-unknown exit through rather than blocking on a failed lookup, and a
+    single residential flap must not kill an otherwise usable exit.
+    """
+    saw_response = False
+    for path in _UPI_ADMISSION_PATHS:
+        verdict = probe_openai_edge(proxy, path=path, timeout=timeout)
+        code = int(getattr(verdict, "http_status", 0) or 0)
+        if code <= 0:
+            continue
+        saw_response = True
+        if not bool(getattr(verdict, "blocked_by_cloudflare", False)) and code < 500:
+            return True
+    return not saw_response
+
+
+def _upi_rotate_region_session(proxy: str, country: str) -> str:
+    try:
+        return str(rotate_session(proxy, country) or proxy)
+    except Exception:
+        return proxy
+
+
+def _upi_select_india_exit(
+    proxy: Any,
+    *,
+    country: str,
+    attempts: int,
+    timeout: float,
+    emit: Any = None,
+) -> str:
+    """Pick an IN exit that can actually enter checkout, rotating the session.
+
+    Rotation stays inside the **same** proxy credential (new sticky session),
+    never across a different proxy: the caller's pool ownership is untouched.
+    On exhaustion the last candidate is returned so the shared egress gate --
+    not this selector -- owns the final verdict.
+    """
+    text = str(proxy or "").strip()
+    expected = str(country or "").strip().upper()
+    if not text or expected != "IN":
+        return text
+    log = emit if callable(emit) else (lambda *_a, **_k: None)
+    candidate = text
+    total = max(1, int(attempts))
+    for index in range(1, total + 1):
+        observed = _upi_exit_country(candidate, timeout)
+        if observed and observed != expected:
+            log("india_exit", f"[{index}/{total}] exit is {observed}, not {expected}; rotating session")
+        elif _upi_exit_admits_checkout(candidate, timeout):
+            log("india_exit", f"[{index}/{total}] exit {observed or 'IN'} admits checkout")
+            return candidate
+        else:
+            log("india_exit", f"[{index}/{total}] exit cannot enter checkout; rotating session")
+        if index >= total:
+            break
+        rotated = _upi_rotate_region_session(candidate, expected)
+        if not rotated or rotated == candidate:
+            break
+        candidate = rotated
+    return candidate
+
+
+# ── Increment 2 (2026-10-01): re-init + re-tax before confirm ─────────────
+def _upi_repeat_tax_region(upi_cfg: Any) -> bool:
+    """``upi.repeat_tax_region`` / ``UPI_REPEAT_TAX_REGION`` (default on).
+
+    The reference measured (2026-09-21) that the ``init -> tax -> init -> tax``
+    order before confirm is what makes approve pass reliably; the second pass is
+    what this switch adds.
+    """
+    if isinstance(upi_cfg, Mapping) and "repeat_tax_region" in upi_cfg:
+        return bool(upi_cfg.get("repeat_tax_region"))
+    return _env_bool("UPI_REPEAT_TAX_REGION", True)
+
+
+# ── Increment 3 (2026-10-01): reopen the Checkout on a fresh exit ─────────
+#: Failures that happen **before** the Stripe confirm side effect.  Only these
+#: may be retried on a fresh exit: after confirm the account's zero-eligibility
+#: has been consumed and the approve action is one-shot, so
+#: ``mandate_not_signed`` / ``payment_chain_link`` / ``link_unverified`` /
+#: ``upi_provider_declined`` must never re-open a Checkout here.
+_UPI_PRECONFIRM_RETRY_CODES: frozenset[str] = frozenset(
+    {
+        "no_free_trial",
+        "upi_not_available",
+        "checkout_failed",
+        "checkout_bad_response",
+        "upi_checkout_not_active",
+        "oaics_prerequisites_missing",
+        "oaics_elements_failed",
+    }
+)
+
+
+def _upi_rounds(runtime_config: Any) -> int:
+    cfg = dict(runtime_config) if isinstance(runtime_config, Mapping) else _load_json(DEFAULT_CONFIG_PATH)
+    upi_cfg = _method_cfg(cfg, "upi")
+    raw = upi_cfg.get("rounds") if isinstance(upi_cfg, Mapping) else None
+    if raw is None:
+        return max(1, _env_int("UPI_ROUNDS", 1, 1))
+    try:
+        return max(1, int(raw))
+    except (TypeError, ValueError):
+        return 1
+
+
+def _upi_round_retryable(result: Any) -> bool:
+    if not isinstance(result, Mapping) or result.get("ok"):
+        return False
+    return str(result.get("error_code") or "") in _UPI_PRECONFIRM_RETRY_CODES
+
+
+def _upi_rotate_proxy_set(values: tuple[Any, ...], country: str) -> tuple[Any, ...]:
+    """Rotate each distinct non-empty proxy **once**, preserving identity.
+
+    When the three stage proxies are the same string they must stay the same
+    exit -- rotating each independently would split one exit into three.
+    """
+    mapping: dict[str, str] = {}
+    out: list[Any] = []
+    for value in values:
+        text = str(value or "")
+        if not text:
+            out.append(value)
+            continue
+        if text not in mapping:
+            mapping[text] = _upi_rotate_region_session(text, country)
+        out.append(mapping[text])
+    return tuple(out)
+
+
+def _generate_upi_qr_link_once(
     access_token: str,
     proxy: Any = None,
     auth_context: dict[str, Any] | None = None,
@@ -494,6 +688,25 @@ def generate_upi_qr_link(
     session_token = str(_rc.session_token or "")
 
     emit = _emit
+
+    # ── Increment 1: India exit selection + checkout admission ──────────
+    # Runs before the shared egress gate so the gate validates the exit this
+    # selector actually chose (a rotated session), not the pre-rotation one.
+    if _upi_india_exit_probe_enabled(upi_cfg):
+        _exit_attempts = _upi_india_exit_attempts(upi_cfg)
+        _exit_timeout = _upi_india_exit_timeout(upi_cfg)
+        _rc.checkout_proxy = _upi_select_india_exit(
+            _rc.checkout_proxy, country=checkout_country, attempts=_exit_attempts, timeout=_exit_timeout, emit=emit
+        )
+        _rc.provider_proxy = _upi_select_india_exit(
+            _rc.provider_proxy, country=checkout_country, attempts=_exit_attempts, timeout=_exit_timeout, emit=emit
+        )
+        _rc.approve_proxy = _upi_select_india_exit(
+            _rc.approve_proxy, country=checkout_country, attempts=_exit_attempts, timeout=_exit_timeout, emit=emit
+        )
+        checkout_proxy = str(_rc.checkout_proxy or "")
+        provider_proxy = str(_rc.provider_proxy or "")
+        approve_proxy = str(_rc.approve_proxy or "")
 
     # First point at which the retargeted stage proxies are known, and before
     # Stage 1 creates a Checkout session -- the last moment a mis-routed exit
@@ -777,9 +990,10 @@ def generate_upi_qr_link(
             )
 
         # ── Stage 4: Tax region + customer data sync ─────────────────────
+        tax_body: dict[str, str] = {}
         if update_tax_region:
             emit("tax_region", "Stage 4: updating tax region to IN")
-            tax_body: dict[str, str] = {
+            tax_body = {
                 "tax_region[country]": str(billing.get("country") or "IN"),
                 "tax_region[postal_code]": str(billing.get("postal_code") or ""),
                 "tax_region[state]": str(billing.get("state") or ""),
@@ -820,6 +1034,47 @@ def generate_upi_qr_link(
                     if isinstance(refreshed, dict) and refreshed:
                         init = refreshed
                         ctx = _upi_rebuild_ctx(ctx, init, fingerprint, stripe_js_id)
+
+        # ── Stage 4.5 (Increment 2): re-init + re-tax before confirm ──────
+        # The reference's ``init -> tax -> init -> tax`` order.  A second init
+        # re-reads Stripe's price after the region change (the first tax
+        # response can still carry the pre-update amount) and is measured to
+        # make the approve step pass.  Both calls are non-fatal: a failed
+        # re-read must not abort a run whose first tax already succeeded.
+        if update_tax_region and _upi_repeat_tax_region(upi_cfg):
+            emit("tax_region", "Stage 4.5: re-init + re-tax before confirm")
+            try:
+                refreshed_init = _upi_stripe_init(stripe, cs_id, stripe_pk, fingerprint, stripe_js_id)
+            except Exception as exc:
+                refreshed_init = None
+                emit("tax_region", f"Stage 4.5 re-init skipped (non-fatal): {type(exc).__name__}: {exc}")
+            if isinstance(refreshed_init, dict) and refreshed_init:
+                init = refreshed_init
+                ctx = _upi_rebuild_ctx(ctx, init, fingerprint, stripe_js_id)
+                try:
+                    retax_resp = stripe.post(
+                        STRIPE_PAYMENT_PAGE_GET_URL_T.format(cs_id=cs_id),
+                        data=tax_body,
+                        timeout=DEFAULT_TIMEOUT,
+                    )
+                    _upi_dump_http(
+                        retax_resp,
+                        "stripe_tax_region_2",
+                        tax_body,
+                        "POST",
+                        STRIPE_PAYMENT_PAGE_GET_URL_T.format(cs_id=cs_id),
+                        force=retax_resp.status_code >= 400,
+                    )
+                    if retax_resp.status_code < 400:
+                        refreshed = retax_resp.json() or {}
+                        if isinstance(refreshed, dict) and refreshed:
+                            init = refreshed
+                            ctx = _upi_rebuild_ctx(ctx, init, fingerprint, stripe_js_id)
+                        emit("tax_region", "Stage 4.5: re-init + re-tax ok")
+                    else:
+                        emit("tax_region", f"Stage 4.5 re-tax failed (non-fatal): {retax_resp.status_code}")
+                except Exception as exc:
+                    emit("tax_region", f"Stage 4.5 re-tax error (non-fatal): {type(exc).__name__}: {exc}")
 
         if update_customer_data:
             emit("customer_data", "Stage 4: submitting IN customer_data")
@@ -1483,3 +1738,87 @@ def generate_upi_qr_link(
             "url": "",
             "qr_path": "",
         }
+
+
+def generate_upi_qr_link(
+    access_token: str,
+    proxy: Any = None,
+    auth_context: dict[str, Any] | None = None,
+    checkout_proxy: str | None = None,
+    provider_proxy: str | None = None,
+    approve_proxy: str | None = None,
+    target_country: str | None = None,
+    checkout_country: str | None = None,
+    payment_country: str | None = None,
+    require_zero: bool | None = None,
+    qr_path: str | None = None,
+    runtime_config: Mapping[str, Any] | None = None,
+    proxy_state: Any = None,
+    device_id: str | None = None,
+    session_token: str | None = None,
+    wait_paid: bool = False,
+    paid_timeout: float = 900.0,
+    require_server_upi_mandate: bool = False,
+) -> dict[str, Any]:
+    """Generate a UPI payment link (public entrypoint).
+
+    Increment 3 (2026-10-01): the single-attempt body moved to
+    :func:`_generate_upi_qr_link_once`; this wrapper reopens the **whole**
+    Checkout on a fresh exit when an attempt failed *before* any Stripe confirm
+    side effect (``no_free_trial`` / ``upi_not_available`` / checkout-create /
+    transport).  The reference measured that a different exit can turn a
+    ``nonzero_due`` round into a linked one, and that retrying is only safe
+    while the account's zero-eligibility has not been consumed.
+
+    ``rounds`` comes from ``upi.rounds`` / ``UPI_ROUNDS`` (default 1 = previous
+    behaviour).  Post-confirm verdicts (``mandate_not_signed`` /
+    ``payment_chain_link`` / ``link_unverified`` / ``upi_provider_declined``)
+    are never retried here -- the account's approval is one-shot.
+
+    The public signature, ``__module__`` and ``UPI_CALL_OPTIONS`` parity are
+    pinned by ``tests/test_upi_link_entrypoint_unique.py``.
+    """
+    total_rounds = _upi_rounds(runtime_config)
+    country = str(checkout_country or target_country or "").strip().upper()
+    current = (proxy, checkout_proxy, provider_proxy, approve_proxy)
+    result: dict[str, Any] | None = None
+    attempt = 0
+    while attempt < total_rounds:
+        attempt += 1
+        if attempt > 1:
+            current = _upi_rotate_proxy_set(current, country)
+            _emit(
+                "round",
+                f"round {attempt}/{total_rounds}: fresh exit "
+                f"{redact_proxy_text(current[1] or current[0] or 'DIRECT', current[1] or current[0])}",
+            )
+        result = _generate_upi_qr_link_once(
+            access_token=access_token,
+            proxy=current[0],
+            auth_context=auth_context,
+            checkout_proxy=current[1],
+            provider_proxy=current[2],
+            approve_proxy=current[3],
+            target_country=target_country,
+            checkout_country=checkout_country,
+            payment_country=payment_country,
+            require_zero=require_zero,
+            qr_path=qr_path,
+            runtime_config=runtime_config,
+            proxy_state=proxy_state,
+            device_id=device_id,
+            session_token=session_token,
+            wait_paid=wait_paid,
+            paid_timeout=paid_timeout,
+            require_server_upi_mandate=require_server_upi_mandate,
+        )
+        if result.get("ok") or not _upi_round_retryable(result):
+            break
+        if attempt >= total_rounds:
+            break
+        _emit(
+            "round",
+            f"round {attempt}/{total_rounds} failed pre-confirm "
+            f"({result.get('error_code') or 'unknown'}); reopening on a fresh exit",
+        )
+    return result if result is not None else {"ok": False, "error_code": "upi_qr_failed"}
