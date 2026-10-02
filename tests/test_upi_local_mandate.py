@@ -772,8 +772,8 @@ def test_mandate_guard_reads_the_resolved_flag():
     from pathlib import Path
 
     source = Path(pipeline_source()).read_text(encoding="utf-8")
-    assert "if mandate_ok or not local_mandate_enabled:" in source
-    assert "if mandate_ok or not UPI_LOCAL_MANDATE_ENABLED:" not in source
+    assert "if state.mandate_ok or not state.local_mandate_enabled:" in source
+    assert "not UPI_LOCAL_MANDATE_ENABLED" not in source
 
 
 def pipeline_source():
