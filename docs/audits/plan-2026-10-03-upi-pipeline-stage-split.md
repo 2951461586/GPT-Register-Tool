@@ -3,7 +3,7 @@
 > 状态：**设计稿已落地（模块拆分部分，2026-10-03）**。落地记录见 §10。目标是把
 > `sms_tool/upi_link/pipeline.py`（原 1824 行，`_generate_upi_qr_link_once` 单函数 1138 行）
 > 拆成「门面 + 依赖束 + 纯 helper + stage 模块」，**不改行为、不改测试 patch 目标**。
-> 实际落地采用**逐字搬迁 + 调用时依赖束**；§5 的 stage 函数分解未做（理由见 §10）。
+> 实际分两阶段落地：**(A) 逐字搬迁 + 调用时依赖束**、**(B) §5 的 stage 函数分解**。落地记录见 §10 / §11。
 >
 > 本文所有行号是写作时的快照（`pipeline.py` 1824 行）；`docs/audits/` 不在
 > `docs_consistency_scan.py` 的 `DOCS` 规范清单内，故不经行号门禁，落地时须人工刷新。
@@ -392,5 +392,54 @@ stage B 读」的局部不在 ctx 里即报错。这能把 123 局部的迁移�
 **验证**：`ruff check` 全绿 · 注解 `get_type_hints` 全成员 0 错误 · 9 项仓库门禁全绿 ·
 全量 `pytest` **5706 passed / 7 skipped（1097 subtests）**。
 
-**未做（保留）**：§5 的 stage 级函数分解（S4–S7）。理由同上（覆盖率）；`UpiStageContext` 字段设计
-仍在 §4.1，待有 stage 级集成回放（`tests/payment_replay.py` 式）后再动。
+**第二阶段（stage 函数分解）**：见 §11。
+
+---
+
+## 11. stage 函数分解落地（2026-10-03，第二阶段）
+
+§5 的 `_stage_*(ops, state)` 拆分已落地。
+
+| 文件 | 行数 | 内容 |
+| --- | --- | --- |
+| `sms_tool/upi_link/stages.py` | 1198 → **1298** | 13 个 `_stage_*(ops, state)` + 模块级编排 `run_upi_qr_link_once` + 提升的 `_absorb_mandate`；闭包 `_resubmit_with_fresh_pm` / `_absorb` / `_rescue_mandate` 留在 `_stage_redirect` |
+| `sms_tool/upi_link/context.py` | **95** | `UPI_STAGE_FIELDS`（72）+ `UpiStageContext`（`__slots__`；未赋值读取抛 `AttributeError`，对齐原 `UnboundLocalError`） |
+
+**阶段表（新函数名）**：`_stage_pre_exit` · `_stage_checkout` · `_stage_stripe_init` · `_stage_free_trial` ·
+`_stage_cpmt` · `_stage_oaics` · `_stage_tax_customer` · `_stage_repeat_tax` · `_stage_confirm` ·
+`_stage_approve` · `_stage_mandate` · `_stage_redirect` · `_stage_verify`。编排：`state` 初始化 →
+`_stage_pre_exit`（try 之外）→ `try: for _stage in _STAGES: …`（早退按 `is not None` 传播）→ 原 `except` 体。
+
+**做法：作用域感知的 AST 位置级改写**
+
+- 把所有跨阶段/外层名字改成 `state.<名>`，但**跳过嵌套闭包/推导式内局部绑定的同名**：
+  `_absorb(source)` 的参数 `source` 与 ctx 字段 `source` 同名，不得改写；`_absorb` 内
+  `candidate = …` 是局部，不得改写。
+- `nonlocal` 声明整行删除；其目标已在 ctx 中，故随之变成 `state.<名>`。
+- 闭包按使用面处理：`_absorb_mandate`（def stage6b、用于 stage6b+stage7）**提升为模块级**
+  `(ops, state, *sources)`；`_resubmit_with_fresh_pm`（def stage5、仅作为 stage7 的
+  `recover_decline` 回调）**移入 `_stage_redirect` 保持嵌套**；`_absorb` / `_rescue_mandate`
+  本就只在 stage7 内。
+- 位置用 **AST 字节偏移**（`col_offset` 是 UTF-8 字节数）—— 因为 Python 3.11 的 `tokenize`
+  会把整条 f-string 当单个 STRING token（这正是 (A) 阶段 `redact_proxy_text` 漏改的原因），
+  而 3.11 的 ast 会给 f-string 内部 Name 正确位置（已实测验证）。
+
+**等价性机器验证**：15 个区域（head / pre_exit / stage1–8 / except）各自把新代码逆向归一化
+（`state.X`→`X`、删 `nonlocal`、`AnnAssign.simple` 还原）后，与原文**逐语句 AST 完全相同**
+（脚本输出 `region equivalence: OK`）。
+
+**本阶段新抓到的真实坑**
+
+- **`nonlocal` 变量必须强制进 ctx**：`mandate_ok` 只在 stage6b 内读写，被“同区域”判据排除；
+  但它是 `_absorb_mandate` 与宿主的共享名，提升后必须 `state.mandate_ok`。`ruff` 的 `F821`
+  抓出了这个遗漏（`if mandate_ok or not …` 里的未定义名）。已改为把所有 `nonlocal` 名并入 ctx。
+
+**测试改动：1 处**（仍是 §6.2 的源码文本锚点类别）：`tests/test_upi_local_mandate.py`
+的 `if mandate_ok or not local_mandate_enabled:` 改为 `if state.mandate_ok or not state.local_mandate_enabled:`。
+其余 patch/访问面 **0 改动**。
+
+**验证**：`ruff check` 全绿 · 注解 `get_type_hints` 0 错误 · 9 项仓库门禁全绿 ·
+全量 `pytest` **5706 passed / 7 skipped（1097 subtests）**。
+
+**保留**：stage 级集成回放（`tests/payment_replay.py` 式）。stage 边界与 `UpiStageContext`
+已就位，回放可把 body 的 55% 覆盖率抬上去，让后续改动有测试网。
