@@ -50,13 +50,15 @@ def test_cli_main_uses_registration_proxy_for_direct_registration():
         captured.append(kwargs["proxy"])
         return {"success": True, "email": "account@example.com"}
 
-    with patch.object(cli, "CFG", config), \
-         patch.object(sys, "argv", ["sms_tool", "--email", "account@example.com", "--registration-at-only"]), \
-         patch.object(cli, "_load_mailbox_pool", return_value=[SimpleNamespace(email="account@example.com")]), \
-         patch.object(cli, "_preflight_registration_before_mailbox", return_value={"ok": True}), \
-         patch.object(cli, "_registration_phone_pool", return_value=None), \
-         patch.object(cli, "run_email", side_effect=run_email), \
-         patch.object(cli, "_save_registration_results", return_value={}):
+    with (
+        patch.object(cli, "CFG", config),
+        patch.object(sys, "argv", ["sms_tool", "--email", "account@example.com", "--registration-at-only"]),
+        patch.object(cli, "_load_mailbox_pool", return_value=[SimpleNamespace(email="account@example.com")]),
+        patch.object(cli, "_preflight_registration_before_mailbox", return_value={"ok": True}),
+        patch.object(cli, "_registration_phone_pool", return_value=None),
+        patch.object(cli, "run_email", side_effect=run_email),
+        patch.object(cli, "_save_registration_results", return_value={}),
+    ):
         cli.main()
 
     assert captured == ["http://registration.example:8080"]
@@ -71,14 +73,18 @@ def test_cli_registration_emits_standard_desktop_result():
         "batch_id": "batch",
     }
     config = {"proxy": {}, "storage": {}, "email_registration": {}}
-    with patch.object(cli, "CFG", config), \
-         patch.object(sys, "argv", ["sms_tool", "--email", "account@example.com", "--registration-at-only", "--desktop-ipc"]), \
-         patch.object(cli, "_load_mailbox_pool", return_value=[SimpleNamespace(email="account@example.com")]), \
-         patch.object(cli, "_preflight_registration_before_mailbox", return_value={"ok": True}), \
-         patch.object(cli, "_registration_phone_pool", return_value=None), \
-         patch.object(cli, "run_batch", return_value=[{"success": True, "email": "account@example.com"}]), \
-         patch.object(cli, "_save_registration_results", return_value=report), \
-         patch.object(cli, "emit_result") as emit:
+    with (
+        patch.object(cli, "CFG", config),
+        patch.object(
+            sys, "argv", ["sms_tool", "--email", "account@example.com", "--registration-at-only", "--desktop-ipc"]
+        ),
+        patch.object(cli, "_load_mailbox_pool", return_value=[SimpleNamespace(email="account@example.com")]),
+        patch.object(cli, "_preflight_registration_before_mailbox", return_value={"ok": True}),
+        patch.object(cli, "_registration_phone_pool", return_value=None),
+        patch.object(cli, "run_batch", return_value=[{"success": True, "email": "account@example.com"}]),
+        patch.object(cli, "_save_registration_results", return_value=report),
+        patch.object(cli, "emit_result") as emit,
+    ):
         cli.main()
 
     emit.assert_called_once_with(report, enabled=True)
@@ -86,10 +92,12 @@ def test_cli_registration_emits_standard_desktop_result():
 
 def test_cli_registration_preflight_failure_emits_standard_desktop_result():
     config = {"proxy": {}, "storage": {}, "email_registration": {}}
-    with patch.object(cli, "CFG", config), \
-         patch.object(sys, "argv", ["sms_tool", "--email", "account@example.com", "--desktop-ipc"]), \
-         patch.object(cli, "_preflight_registration_before_mailbox", side_effect=RuntimeError("route_failed")), \
-         patch.object(cli, "emit_result") as emit:
+    with (
+        patch.object(cli, "CFG", config),
+        patch.object(sys, "argv", ["sms_tool", "--email", "account@example.com", "--desktop-ipc"]),
+        patch.object(cli, "_preflight_registration_before_mailbox", side_effect=RuntimeError("route_failed")),
+        patch.object(cli, "emit_result") as emit,
+    ):
         try:
             cli.main()
         except SystemExit as exc:
@@ -118,11 +126,14 @@ def test_cli_preflights_before_claiming_mailbox_and_promotes_healthy_proxy():
             raise RuntimeError("tls_failed")
         return {"ok": True, "proxy": proxy}
 
-    with patch.object(
-        cli,
-        "_proxy_pool_values",
-        return_value=["http://first.example:8080", "http://second.example:8080"],
-    ), patch("sms_tool.registration.registration_network_preflight", side_effect=preflight):
+    with (
+        patch.object(
+            cli,
+            "_proxy_pool_values",
+            return_value=["http://first.example:8080", "http://second.example:8080"],
+        ),
+        patch("sms_tool.registration.registration_network_preflight", side_effect=preflight),
+    ):
         result = cli._preflight_registration_before_mailbox(args)
 
     assert result["ok"] is True
@@ -142,9 +153,10 @@ def test_cli_rejects_missing_browser_driver_credentials_before_network_preflight
         "registration": {"driver": "roxy", "drivers": {"roxy": {}}},
         "proxy": {"registration": "http://registration.example:8080"},
     }
-    with patch.object(cli, "CFG", config), patch(
-        "sms_tool.registration.registration_network_preflight"
-    ) as network_preflight:
+    with (
+        patch.object(cli, "CFG", config),
+        patch("sms_tool.registration.registration_network_preflight") as network_preflight,
+    ):
         try:
             cli._preflight_registration_before_mailbox(args)
         except ConfigError as exc:
@@ -159,12 +171,14 @@ def test_registration_normalizes_provider_proxy_before_sentinel_extraction():
 
     assert registration._resolve_proxy_scheme(proxy) == "http://user-region-JP:pass@sg.cliproxy.io:443"
 
-    with patch.object(sentinel_tokens, "_get_cached_sentinel", return_value=None), \
-         patch.object(
-             sentinel_tokens,
-             "_extract_sentinel_uncached",
-             return_value={"sentinel_token": "token"},
-         ) as extract:
+    with (
+        patch.object(sentinel_tokens, "_get_cached_sentinel", return_value=None),
+        patch.object(
+            sentinel_tokens,
+            "_extract_sentinel_uncached",
+            return_value={"sentinel_token": "token"},
+        ) as extract,
+    ):
         sentinel_tokens._extract_sentinel(proxy)
 
     assert extract.call_args.args[0] == "http://user-region-JP:pass@sg.cliproxy.io:443"
@@ -182,19 +196,26 @@ def test_registration_preflight_checks_chatgpt_auth_and_sentinel_before_mailbox(
             urls.append(url)
             return SimpleNamespace(status_code=200)
 
-    with patch.object(registration_preflight.curl_requests, "Session", Session), \
-         patch.object(registration_preflight, "auth_fingerprint_capabilities", return_value={
-             "configured": ["chrome146"], "available": ["chrome146"], "missing": [],
-         }), \
-         patch.object(registration_preflight, "_sentinel_frame_version", return_value="sv-test"), \
-         patch.object(registration_preflight, "auth_impersonate", return_value="chrome146"), \
-         patch.object(registration_preflight, "current_auth_fingerprint", return_value={"impersonate": "chrome146"}):
+    with (
+        patch.object(registration_preflight.curl_requests, "Session", Session),
+        patch.object(
+            registration_preflight,
+            "auth_fingerprint_capabilities",
+            return_value={
+                "configured": ["chrome146"],
+                "available": ["chrome146"],
+                "missing": [],
+            },
+        ),
+        patch.object(registration_preflight, "_sentinel_frame_version", return_value="sv-test"),
+        patch.object(registration_preflight, "auth_impersonate", return_value="chrome146"),
+        patch.object(registration_preflight, "current_auth_fingerprint", return_value={"impersonate": "chrome146"}),
+    ):
         result = registration.registration_network_preflight("http://proxy.example:8080")
 
     assert result == {"ok": True, "profile": "chrome146"}
     assert urls == [
-        "https://chatgpt.com/login",
-        "https://auth.openai.com/log-in",
+        "https://chatgpt.com/auth/login?next=%2F",
         "https://sentinel.openai.com/backend-api/sentinel/frame.html?sv=sv-test",
         "https://chatgpt.com/backend-api/wham/usage",
     ]
@@ -209,13 +230,21 @@ def test_registration_preflight_accepts_unauthorized_backend_probe_response():
             status = 401 if url.endswith("/backend-api/wham/usage") else 200
             return SimpleNamespace(status_code=status)
 
-    with patch.object(registration_preflight.curl_requests, "Session", Session), \
-         patch.object(registration_preflight, "auth_fingerprint_capabilities", return_value={
-             "configured": ["chrome146"], "available": ["chrome146"], "missing": [],
-         }), \
-         patch.object(registration_preflight, "_sentinel_frame_version", return_value="sv-test"), \
-         patch.object(registration_preflight, "auth_impersonate", return_value="chrome146"), \
-         patch.object(registration_preflight, "current_auth_fingerprint", return_value={"impersonate": "chrome146"}):
+    with (
+        patch.object(registration_preflight.curl_requests, "Session", Session),
+        patch.object(
+            registration_preflight,
+            "auth_fingerprint_capabilities",
+            return_value={
+                "configured": ["chrome146"],
+                "available": ["chrome146"],
+                "missing": [],
+            },
+        ),
+        patch.object(registration_preflight, "_sentinel_frame_version", return_value="sv-test"),
+        patch.object(registration_preflight, "auth_impersonate", return_value="chrome146"),
+        patch.object(registration_preflight, "current_auth_fingerprint", return_value={"impersonate": "chrome146"}),
+    ):
         result = registration.registration_network_preflight("http://proxy.example:8080")
 
     assert result["ok"] is True
@@ -236,20 +265,29 @@ def test_registration_preflight_uses_one_http_attempt_per_route_probe():
         calls.append(kwargs)
         return SimpleNamespace(status_code=200)
 
-    with patch.object(registration_preflight.curl_requests, "Session", Session), \
-         patch.object(registration_preflight, "request_with_retry", side_effect=request), \
-         patch.object(registration_preflight, "auth_fingerprint_capabilities", return_value={
-             "configured": ["chrome146"], "available": ["chrome146"], "missing": [],
-         }), \
-         patch.object(registration_preflight, "_sentinel_frame_version", return_value="sv-test"), \
-         patch.object(registration_preflight, "auth_impersonate", return_value="chrome146"), \
-         patch.object(registration_preflight, "current_auth_fingerprint", return_value={"impersonate": "chrome146"}):
+    with (
+        patch.object(registration_preflight.curl_requests, "Session", Session),
+        patch.object(registration_preflight, "request_with_retry", side_effect=request),
+        patch.object(
+            registration_preflight,
+            "auth_fingerprint_capabilities",
+            return_value={
+                "configured": ["chrome146"],
+                "available": ["chrome146"],
+                "missing": [],
+            },
+        ),
+        patch.object(registration_preflight, "_sentinel_frame_version", return_value="sv-test"),
+        patch.object(registration_preflight, "auth_impersonate", return_value="chrome146"),
+        patch.object(registration_preflight, "current_auth_fingerprint", return_value={"impersonate": "chrome146"}),
+    ):
         result = registration.registration_network_preflight(
-            "http://proxy.example:8080", proxy_attempts=1,
+            "http://proxy.example:8080",
+            proxy_attempts=1,
         )
 
     assert result["ok"] is True
-    assert len(calls) == 4
+    assert len(calls) == 3
     assert all(call["attempts"] == 1 for call in calls)
 
 
