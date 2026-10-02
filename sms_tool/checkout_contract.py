@@ -13,10 +13,7 @@ from .payment_catalog import PAYMENT_METHODS as CATALOG_PAYMENT_METHODS
 CHECKOUT_PATH = "/backend-api/payments/checkout"
 CHECKOUT_URL = f"https://chatgpt.com{CHECKOUT_PATH}"
 STRIPE_INIT_URL = "https://api.stripe.com/v1/payment_pages/{checkout_session_id}/init"
-DEFAULT_STRIPE_VERSION = (
-    "2025-03-31.basil; checkout_server_update_beta=v1; "
-    "checkout_manual_approval_preview=v1"
-)
+DEFAULT_STRIPE_VERSION = "2025-03-31.basil; checkout_server_update_beta=v1; checkout_manual_approval_preview=v1"
 
 
 class CheckoutContractError(ValueError):
@@ -258,6 +255,8 @@ class StripeCapabilityEvidence:
     ordered_payment_method_types: tuple[str, ...]
     custom_payment_methods: tuple[str, ...]
     offer_state: str
+    discount_breakdown: tuple[int | None, int | None, int | None] = (None, None, None)
+    amount_observations: tuple[tuple[str, int], ...] = ()
 
     @classmethod
     def from_payload(cls, payload: Any, *, fallback_currency: str = "") -> "StripeCapabilityEvidence":
@@ -268,10 +267,12 @@ class StripeCapabilityEvidence:
                 error_stage="stripe_init",
                 retryable=True,
             )
-        standard = _dedupe((
-            *_collect_method_group(payload, "payment_method_types"),
-            *_collect_method_group(payload, "payment_method_specs"),
-        ))
+        standard = _dedupe(
+            (
+                *_collect_method_group(payload, "payment_method_types"),
+                *_collect_method_group(payload, "payment_method_specs"),
+            )
+        )
         ordered = _collect_method_group(payload, "ordered_payment_method_types")
         custom = _collect_method_group(payload, "custom_payment_methods")
         custom = _dedupe((*custom, *_collect_method_group(payload, "customPaymentMethods")))
@@ -279,8 +280,27 @@ class StripeCapabilityEvidence:
         amount = _extract_amount_minor(payload)
         raw_currency = _extract_currency(payload)
         currency = raw_currency or str(fallback_currency or "").upper()
-        offer_state = "zero_due" if amount == 0 else "nonzero_due" if amount is not None else "unknown_amount"
-        return cls(amount, currency, bool(raw_currency), methods, tuple(ordered), tuple(custom), offer_state)
+        subtotal, discount, _total = discount_breakdown(payload)
+        discounted = bool(subtotal and subtotal > 0 and discount and discount > 0)
+        if amount == 0 and discounted:
+            offer_state = "discounted_zero_due"
+        elif amount == 0:
+            offer_state = "zero_due"
+        elif amount is not None:
+            offer_state = "nonzero_due"
+        else:
+            offer_state = "unknown_amount"
+        return cls(
+            amount,
+            currency,
+            bool(raw_currency),
+            methods,
+            tuple(ordered),
+            tuple(custom),
+            offer_state,
+            (subtotal, discount, _total),
+            tuple(amount_observations(payload)),
+        )
 
     def classification_for(self, stripe_payment_method: str) -> tuple[str, bool | None]:
         expected = normalize_payment_method_token(stripe_payment_method)
@@ -339,24 +359,123 @@ def _values_for_key(value: Any, target: str, *, depth: int = 0) -> Iterable[Any]
 
 
 def _extract_amount_minor(payload: dict[str, Any]) -> int | None:
-    paths = (
-        ("total_summary", "due"),
-        ("invoice", "amount_due"),
-        ("elements_options", "amount"),
-        ("payment_intent", "amount"),
-        ("amount_due",),
-    )
-    for path in paths:
-        value: Any = payload
-        for key in path:
-            if not isinstance(value, dict) or key not in value:
-                value = None
-                break
-            value = value[key]
-        parsed = _minor_units(value)
-        if parsed is not None:
-            return parsed
+    observed = payable_amount(payload)
+    return observed[1] if observed is not None else None
+
+
+#: Wrapper keys a Stripe/Checkout payload nests its state under (outer first).
+_WRAPPER_KEYS = (
+    "checkout_session",
+    "checkoutSession",
+    "session",
+    "checkout",
+    "data",
+    "result",
+    "payload",
+    "response",
+    "checkout_state",
+    "checkoutState",
+    "checkout_snapshot",
+    "checkoutSnapshot",
+)
+
+#: "How much is actually due" fields, most authoritative first.  Deliberately
+#: excludes ``total.taxInclusive``: it is a tax component, not the payable total,
+#: and treating it as authoritative reports a discounted checkout as 0.
+PAYABLE_AMOUNT_PATHS: tuple[tuple[str, ...], ...] = (
+    ("total_summary", "due"),
+    ("invoice", "amount_due"),
+    ("elements_options", "amount"),
+    ("payment_intent", "amount"),
+    ("amount_due",),
+    ("checkout_amount_minor",),
+    ("amount_total",),
+    ("total", "due"),
+    ("total", "total"),
+)
+
+#: Every field that *looks like* an amount, for a consistency observation only.
+AMOUNT_OBSERVATION_PATHS: tuple[tuple[str, ...], ...] = (
+    ("total_summary", "due"),
+    ("invoice", "amount_due"),
+    ("amount_due",),
+    ("amount_total",),
+    ("total", "due"),
+    ("total", "total"),
+    ("total", "taxInclusive"),
+)
+
+
+def _walk_wrapped_dicts(payload: Any) -> list[dict[str, Any]]:
+    """Expand the wrapper keys into every candidate state dict (outer first)."""
+    out: list[dict[str, Any]] = []
+    visited: set[int] = set()
+
+    def visit(value: Any) -> None:
+        if not isinstance(value, dict) or id(value) in visited:
+            return
+        visited.add(id(value))
+        out.append(value)
+        for key in _WRAPPER_KEYS:
+            nested = value.get(key)
+            if isinstance(nested, dict):
+                visit(nested)
+
+    visit(payload)
+    return out
+
+
+def _nested_amount(payload: dict[str, Any], path: tuple[str, ...]) -> int | None:
+    value: Any = payload
+    for key in path:
+        if not isinstance(value, dict) or key not in value:
+            return None
+        value = value[key]
+    return _minor_units(value)
+
+
+def payable_amount(payload: Any) -> tuple[str, int] | None:
+    """First authoritative ``(path, minor_amount)`` pair found, or ``None``."""
+    for node in _walk_wrapped_dicts(payload):
+        for path in PAYABLE_AMOUNT_PATHS:
+            amount = _nested_amount(node, path)
+            if amount is not None:
+                return ".".join(path), amount
     return None
+
+
+def discount_breakdown(payload: Any) -> tuple[int | None, int | None, int | None]:
+    """``(subtotal, discount, total)`` from the first ``total`` block carrying any.
+
+    Separates a genuinely discounted zero-due checkout from a checkout whose
+    amount simply could not be read.
+    """
+    subtotal = discount = total = None
+    for node in _walk_wrapped_dicts(payload):
+        block = node.get("total")
+        if not isinstance(block, dict):
+            continue
+        if subtotal is None:
+            subtotal = _minor_units(block.get("subtotal"))
+        if discount is None:
+            discount = _minor_units(block.get("discount"))
+        if total is None:
+            total = _minor_units(block.get("total"))
+    return subtotal, discount, total
+
+
+def amount_observations(payload: Any) -> list[tuple[str, int]]:
+    """Every amount-shaped field as ``(path, minor_amount)``, de-duplicated.
+
+    Diagnostic only: the authoritative value comes from :func:`payable_amount`.
+    """
+    observations: list[tuple[str, int]] = []
+    for node in _walk_wrapped_dicts(payload):
+        for path in AMOUNT_OBSERVATION_PATHS:
+            amount = _nested_amount(node, path)
+            if amount is not None:
+                observations.append((".".join(path), amount))
+    return list(dict.fromkeys(observations))
 
 
 def _minor_units(value: Any) -> int | None:
