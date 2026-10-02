@@ -777,9 +777,15 @@ def test_mandate_guard_reads_the_resolved_flag():
 
 
 def pipeline_source():
-    from sms_tool.upi_link import pipeline
+    """File that owns the mandate stage body.
 
-    return pipeline.__file__
+    The guard lives in the closure ``_absorb_mandate``, which moved verbatim to
+    ``stages.py`` on 2026-10-03 (the body no longer sits in ``pipeline.py``);
+    this helper reads the owning module so the text pin keeps following the code.
+    """
+    from sms_tool.upi_link import stages
+
+    return stages.__file__
 
 
 def test_pipeline_imports_the_mandate_stage():

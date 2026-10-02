@@ -1,8 +1,9 @@
 # UPI `pipeline.py` 阶段拆分方案（依赖注入 seam + 测试迁移清单）
 
-> 状态：**设计稿，未动代码**。目标是把 `sms_tool/upi_link/pipeline.py`（1824 行，
-> 其中 `_generate_upi_qr_link_once` 单函数 1138 行）按 `registration_handlers.py`
-> 同款拆成「门面 + 依赖束 + 纯 helper + stage 模块」，**不改行为、不改测试 patch 目标**。
+> 状态：**设计稿已落地（模块拆分部分，2026-10-03）**。落地记录见 §10。目标是把
+> `sms_tool/upi_link/pipeline.py`（原 1824 行，`_generate_upi_qr_link_once` 单函数 1138 行）
+> 拆成「门面 + 依赖束 + 纯 helper + stage 模块」，**不改行为、不改测试 patch 目标**。
+> 实际落地采用**逐字搬迁 + 调用时依赖束**；§5 的 stage 函数分解未做（理由见 §10）。
 >
 > 本文所有行号是写作时的快照（`pipeline.py` 1824 行）；`docs/audits/` 不在
 > `docs_consistency_scan.py` 的 `DOCS` 规范清单内，故不经行号门禁，落地时须人工刷新。
@@ -354,3 +355,42 @@ stage B 读」的局部不在 ctx 里即报错。这能把 123 局部的迁移�
 - 不合并兄弟模块间的重复 helper（那是 `plan-2026-09-17` 的议题）。
 - 不动 Stage 内部逻辑与网络时序（纯移动）。
 - 不做全仓 `ruff format`（`plan-2026-09-30` 已判定需独立提交）。
+
+---
+
+## 10. 落地记录（2026-10-03）
+
+**已落地：模块拆分**，采用**逐字搬迁 + 调用时依赖束**，而非 §5 的 stage 函数分解。
+
+| 文件 | 行数 | 内容 |
+| --- | --- | --- |
+| `sms_tool/upi_link/pipeline.py` | 1824 → **585** | 门面：`generate_upi_qr_link`（单一定义）、`_generate_upi_qr_link_once`（薄 seam）、`upi_invocation`、`_resolve_upi_runtime`、`_upi_assert_egress_contract`、`_exit_ops` / `_build_upi_operations` + 兼容 re-export |
+| `sms_tool/upi_link/stages.py` | **1198** | 原 1138 行 body 逐字搬迁；模块级依赖改走 `ops.<原名>` |
+| `sms_tool/upi_link/operations.py` | **100** | `UPI_OPERATION_NAMES`（61）+ `UpiOperations`（`__slots__`，缺名即 `TypeError`）+ `build_upi_operations(namespace)` |
+| `sms_tool/upi_link/stage_config.py` | **101** | 纯配置读取：`_upi_link_unverified_contract` / `_upi_repeat_tax_region` / `_upi_rounds` / `_upi_round_retryable` / `_UPI_PRECONFIRM_RETRY_CODES` |
+| `sms_tool/upi_link/india_exit.py` | **155** | `ExitOps` + 出口分级：`_UPI_ADMISSION_PATHS` / `_upi_india_exit_*` / `_upi_exit_*` / `_upi_select_india_exit` / `_upi_rotate_proxy_set` |
+
+**为什么是逐字搬迁而不是 §5 的 stage 函数分解**：对 `_generate_upi_qr_link_once` 实测语句覆盖率
+（`pytest -k "upi or pay_link or payment"`）—— **411 语句覆盖 224（55%），stage6 仅 13/71**。
+把未覆盖的 45% 重排进 13 个 ctx 传递函数，等于在没有测试网的地方改逻辑。逐字搬迁可**机器证明**等价：
+逆向剥掉 `ops.` 后与 HEAD 原文 **1138 行 0 处 diff**；`stage_config` / `india_exit` 的搬运体同样逐字核对通过。
+
+**过程中的两个真实坑（都已修）**：
+
+1. **Python 3.11 的 `tokenize` 把整条 f-string 当单个 STRING token** ⇒ f-string 内的
+   `redact_proxy_text` 未被 `ops.` 化，`ruff check`（选择项含 `F82`）以 `F821` 抓出 3 处。
+   这正是 `plan-2026-09-30` 记录的同名失败点（第二次修剪把 `PaymentRoutePlan` 删成 `F821`），
+   说明 `F82` 必须留在门禁里。已按 `{ops.redact_proxy_text(...)}` 修正。
+2. **棘轮随文件边界移动**：`endpoints_literal` 的 `pipeline.py: 6` 必须原样搬到 `stages.py: 6`
+   （仓库总数 235 不变）；`unused_import` 里 `pipeline.py` 0 → 72 —— 这些导入是 seam 的读取面
+   （与 `payment_link_manager.py: 42`、`registration.py: 26` 两个兼容门面同性质），已显式上调基线。
+
+**测试改动：1 处**（§6.2 预告的类别）：`tests/test_upi_local_mandate.py::pipeline_source()` 原读
+`pipeline.__file__` 去找 body 内的 guard 文本，现改读 `stages.__file__`。其余 patch/访问面 **0 改动**，
+验证了 §4.2 的调用时组装设计生效。
+
+**验证**：`ruff check` 全绿 · 注解 `get_type_hints` 全成员 0 错误 · 9 项仓库门禁全绿 ·
+全量 `pytest` **5706 passed / 7 skipped（1097 subtests）**。
+
+**未做（保留）**：§5 的 stage 级函数分解（S4–S7）。理由同上（覆盖率）；`UpiStageContext` 字段设计
+仍在 §4.1，待有 stage 级集成回放（`tests/payment_replay.py` 式）后再动。
