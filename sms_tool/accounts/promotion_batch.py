@@ -173,6 +173,7 @@ def refresh_promotion_statuses(
                             proxy=candidate,
                             timeout=timeout,
                             browser_fetch=browser_fetch,
+                            coupon_probe=True,
                         )
                         used_proxy = candidate
                         if probe.get("ok"):
@@ -192,6 +193,7 @@ def refresh_promotion_statuses(
                                     proxy=candidate,
                                     timeout=timeout,
                                     browser_fetch=browser_fetch,
+                                    coupon_probe=True,
                                 )
                                 break
                             continue
