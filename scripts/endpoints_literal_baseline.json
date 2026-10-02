@@ -34,9 +34,9 @@
     "sms_tool/upi_link/browser.py": 8,
     "sms_tool/upi_link/constants.py": 15,
     "sms_tool/upi_link/flows.py": 4,
-    "sms_tool/upi_link/pipeline.py": 6,
     "sms_tool/upi_link/sentinel.py": 3,
     "sms_tool/upi_link/session.py": 4,
+    "sms_tool/upi_link/stages.py": 6,
     "sms_tool/upi_link/stripe.py": 5,
     "sms_tool/wallet_provider.py": 6,
     "sms_tool/wallet_transport.py": 9
