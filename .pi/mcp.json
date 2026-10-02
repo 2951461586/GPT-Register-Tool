@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "pi-lens": {
+      "command": "node",
+      "args": [
+        "~/.pi/agent/npm/node_modules/pi-lens/dist/mcp/server.js"
+      ],
+      "exposure": "direct",
+      "description": "pi-lens: LSP diagnostics, review graph, analyze (warm|fresh), latency and session lifecycle over MCP. Requires the host-provided peers (@earendil-works/pi-tui, pi-coding-agent, pi-ai, typebox) to be resolvable from ~/.pi/agent/npm/node_modules."
+    }
+  }
+}
