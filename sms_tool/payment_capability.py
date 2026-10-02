@@ -322,6 +322,8 @@ def build_capability_probe_result(
             "currency": evidence.currency or contract.currency,
             "amount": evidence.amount_minor,
             "offer_state": evidence.offer_state,
+            "discount_breakdown": list(evidence.discount_breakdown),
+            "amount_observations": [list(item) for item in evidence.amount_observations],
             "payment_method_types": list(evidence.payment_method_types),
             "ordered_payment_method_types": list(evidence.ordered_payment_method_types),
             "custom_payment_methods": list(evidence.custom_payment_methods),
