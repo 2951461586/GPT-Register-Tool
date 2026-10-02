@@ -25,6 +25,7 @@ from ..batch_runner import ensure_batch_sentinel_readiness, filter_registered_ma
 from ..config import validate_registration_driver_config
 from ..payment_operation import PaymentOperationConflict, PaymentOperationStore
 from ..proxy_entry import parse_proxy
+from ..registration_preflight import CLOUDFLARE_CHALLENGE_MARKER
 from ..registration_funnel import combine_registration_funnels, summarize_registration_funnel
 from ..sanitizer import mask_account, sanitize_log_text
 from ..diagnostics import safe_print
@@ -197,10 +198,17 @@ def preflight_registration_before_mailbox(args: Any, ctx: RegistrationCommandCon
                     result = future.result()
                 except Exception as exc:
                     last_error = exc
-                    batch_failures[label] = batch_failures.get(label, 0) + 1
+                    challenge = CLOUDFLARE_CHALLENGE_MARKER in str(exc)
+                    # A Cloudflare refusal is a property of the exit, not a
+                    # transient blip.  Count it as the host's whole allowance so
+                    # the remaining candidates from that host are skipped rather
+                    # than each paying a probe to rediscover the same block.
+                    weight = per_host_limit if challenge else 1
+                    batch_failures[label] = batch_failures.get(label, 0) + weight
                     safe_print(
-                        f"[!] 注册预检 {index}/{total} {label} 失败 "
-                        f"({elapsed:.1f}s)：{sanitize_log_text(exc)[:160]}"
+                        f"[!] 注册预检 {index}/{total} {label} "
+                        + ("被 Cloudflare 挑战" if challenge else "失败")
+                        + f" ({elapsed:.1f}s)：{sanitize_log_text(exc)[:160]}"
                     )
                     continue
                 batch_ok_hosts.add(label)

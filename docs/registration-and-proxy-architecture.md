@@ -222,8 +222,8 @@ Sentinel 不是纯 Python PoW，而是调用**真实 Node SDK**：
 
 注册真正开始前，先跑网络边界预检（在认领邮箱之前）：
 
-- `registration_network_preflight()`（`registration_preflight.py:105`）探测 chatgpt / auth / sentinel 边界，使用 `impersonate` 模拟。
-- `_resolve_proxy_scheme()`（`registration_preflight.py:75`）纠正被标错的 socks5↔http；并可用 `proxy_scheme_fallback=off` **钉死** scheme，避免运行时被自动回退到错误协议。
+- `registration_network_preflight()`（`registration_preflight.py:139`）探测 chatgpt / auth / sentinel 边界，使用 `impersonate` 模拟。
+- `_resolve_proxy_scheme()`（`registration_preflight.py:105`）纠正被标错的 socks5↔http；并可用 `proxy_scheme_fallback=off` **钉死** scheme，避免运行时被自动回退到错误协议。
 
 ---
 
@@ -264,8 +264,8 @@ WPF 桌面端（`SmsWorkbench/`）通过 `PythonBackendClient` 启动 `python -m
 | `retarget_region` | `proxy_entry.py:405` | 地区重定 |
 | `rotate_session` | `proxy_entry.py:444` | 会话轮换 |
 | `load_proxy_pool` / `choose_proxy_entry` | `proxy_entry.py:535` / `:601` | 选池 |
-| `registration_network_preflight` | `registration_preflight.py:105` | 边界探活 |
-| `_resolve_proxy_scheme` | `registration_preflight.py:75` | socks5↔http 纠错 |
+| `registration_network_preflight` | `registration_preflight.py:139` | 边界探活 |
+| `_resolve_proxy_scheme` | `registration_preflight.py:105` | socks5↔http 纠错 |
 | `shared_fingerprint_pool` | `fingerprint_pool.py:345` | 协议路径指纹池单例 |
 | `FingerprintPool` / `ProtocolEnvironmentProfile` | `fingerprint_pool.py:122` / `:38` | 协议路径 TLS/UA 档案 |
 | `shared_browser_profile_pool` | `browser_fingerprint_pool.py:246` | 浏览器路径内置指纹池单例 |
