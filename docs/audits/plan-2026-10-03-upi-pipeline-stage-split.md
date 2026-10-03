@@ -3,7 +3,7 @@
 > 状态：**设计稿已落地（模块拆分部分，2026-10-03）**。落地记录见 §10。目标是把
 > `sms_tool/upi_link/pipeline.py`（原 1824 行，`_generate_upi_qr_link_once` 单函数 1138 行）
 > 拆成「门面 + 依赖束 + 纯 helper + stage 模块」，**不改行为、不改测试 patch 目标**。
-> 实际分两阶段落地：**(A) 逐字搬迁 + 调用时依赖束**、**(B) §5 的 stage 函数分解**。落地记录见 §10 / §11。
+> 实际分三阶段落地：**(A) 逐字搬迁 + 调用时依赖束**、**(B) §5 的 stage 函数分解**、**(C) stage 级回放测试网**。落地记录见 §10 / §11 / §12。
 >
 > 本文所有行号是写作时的快照（`pipeline.py` 1824 行）；`docs/audits/` 不在
 > `docs_consistency_scan.py` 的 `DOCS` 规范清单内，故不经行号门禁，落地时须人工刷新。
@@ -441,5 +441,47 @@ stage B 读」的局部不在 ctx 里即报错。这能把 123 局部的迁移�
 **验证**：`ruff check` 全绿 · 注解 `get_type_hints` 0 错误 · 9 项仓库门禁全绿 ·
 全量 `pytest` **5706 passed / 7 skipped（1097 subtests）**。
 
-**保留**：stage 级集成回放（`tests/payment_replay.py` 式）。stage 边界与 `UpiStageContext`
-已就位，回放可把 body 的 55% 覆盖率抬上去，让后续改动有测试网。
+**第三阶段（stage 级回放测试网）**：见 §12。
+
+---
+
+## 12. UPI 回放测试网落地（2026-10-03，第三阶段）
+
+§11 的 stage 边界就位后补上 stage 级测试网：`tests/upi_replay.py` +
+`tests/test_upi_replay.py`，形态沿用 `tests/payment_replay.py`（服务
+`services/protocol-payment` 的那一层），**复用**其 `ReplayCursor` / `ReplaySession` /
+`RecordingSession` / `freeze_determinism`，不另造 transport。
+
+| 文件 | 内容 |
+| --- | --- |
+| `tests/upi_replay.py` | 只装 UPI 的 **seam**：两个会话工厂（`pipeline._new_session`、`pipeline._upi_new_chatgpt_session`）+ 环境边缘（geo / edge probe / rotate_session / egress gate）+ 两条非 HTTP 旁路（`m.stripe.com` 指纹登记、Playwright hCaptcha）经 `UPI_STUB_ENV` 关闭；另提供 `build_state` / `run_stage` / `synthetic_exchange` / `install_upi_recording` |
+| `tests/test_upi_replay.py` | 11 用例：harness 自证（mismatch / exhaustion 必须 fail、同跑零 diff、body 变更必须变指纹）+ 4 个真实 stage 切片（`pre_exit` / `stripe_init` / `free_trial` / `verify`）+ record→replay 往返 + 运营录制钩子（无 fixture 则 skip） |
+
+**关键设计**：`pipeline._build_upi_operations()` 在**调用时**读 `pipeline` 全局，所以
+**在补齐两个工厂之后再 build bundle**，stage body 就会走回放而不是真网络。harness
+**从不改写** `_upi_*` helper——stage 调 `ops._upi_stripe_init` 仍执行真函数，只有它的
+transport 由录制提供；这才让切片测试是对 stage 的证据，而非对 mock 的证据。
+
+**切片证据**：`_stage_stripe_init` 的非 oaics 路径在 `UPI_STRIPE_FINGERPRINT=0` +
+`UPI_HCAPTCHA_DISABLE=1` 下恰好一次 Stripe init POST——
+`test_stripe_init_slice_replays_one_init_post` 断言 `state.init` / `state.ctx` 与
+`cursor.served == [POST <init url>]`；`test_harness_is_sensitive_to_a_request_change`
+用 `stripe_pk` 变更证明指纹不吞真实差异。
+
+**覆盖率说明（诚实）**：同一 `-k upi` 集合 A/B——含 harness 187 miss / 不含 188 miss，
+**仅 +1 语句**。原因是既有集成测试本就在驱动这些 stage body（拆分前 pipeline body 已有
+~55% 覆盖）。所以这层的价值不是覆盖率数字，而是**确定性的 per-stage 请求流断言**与严格
+回放（mismatch / exhaustion 即 fail），这是既有测试没有的；harness 单跑覆盖
+`_stage_stripe_init` 16/27、`_stage_free_trial` 10/11、`_stage_verify` 11/19。
+
+**未做**：全流程合成录制（要手工构造 13 个 stage 的完整 exchange 序列，且既有集成测试已
+覆盖大半）；等运营用 `UPI_REPLAY_DIR` 提供一份真实录制后，
+`test_optional_full_flow_recording` 会接上并成为整链路差分门（与
+`test_real_recording_selfcheck` 同形）。
+
+**过程坑（已修）**：`UpiStageContext` 用 `__slots__ = UPI_STAGE_FIELDS`（变量元组）时，
+pyright 看不到任何字段 ⇒ 测试文件里 `state.cs_id` 全报 unknown。已给类补上
+**静态可见的字段注解**（运行时仍是 slots），pyright 0 findings。
+
+**验证**：全量 `pytest` **5717 passed / 8 skipped（1097 subtests）**（+11 新用例）·
+`ruff check` 全绿 · 9 项仓库门禁全绿 · 新鲜 LSP 诊断 0 findings。
