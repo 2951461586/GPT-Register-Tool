@@ -76,6 +76,11 @@ class ProviderProfile:
     billing_default: Mapping[str, str]
     billing_fixed_env: str
     billing_env_map: Mapping[str, str]
+    #: Redirect host the provider is reached through (bare domain; both the
+    #: exact host and any subdomain of it count as redirect-like).
+    redirect_domain: str
+    #: Lowercase token that marks a redirect URL as belonging to this provider.
+    redirect_marker: str
     email_domains: tuple[str, ...] = EMAIL_DOMAINS
     country_currency: Mapping[str, str] = field(default_factory=lambda: COUNTRY_CURRENCY)
 
@@ -130,6 +135,8 @@ IDEAL_PROFILE = ProviderProfile(
         "postal_code": "IDEAL_POSTAL_CODE",
         "state": "IDEAL_STATE",
     },
+    redirect_domain="ideal.nl",
+    redirect_marker="ideal",
 )
 
 TWINT_PROFILE = ProviderProfile(
@@ -175,6 +182,8 @@ TWINT_PROFILE = ProviderProfile(
         "postal_code": "TWINT_POSTAL_CODE",
         "state": "TWINT_STATE",
     },
+    redirect_domain="twint.ch",
+    redirect_marker="twint",
     country_currency=TWINT_COUNTRY_CURRENCY,
 )
 

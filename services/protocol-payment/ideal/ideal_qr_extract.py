@@ -89,6 +89,17 @@ from common.provider_profile import (
     payment_browser_timezone as shared_payment_browser_timezone,
     payment_elements_locale as shared_payment_elements_locale,
 )
+from common.payment_predicates import (
+    checkout_response_has_promo as shared_checkout_response_has_promo,
+    checkout_response_has_trial as shared_checkout_response_has_trial,
+    extract_qr_candidates as shared_extract_qr_candidates,
+    is_approve_failure_error as shared_is_approve_failure_error,
+    is_checkout_not_active_error as shared_is_checkout_not_active_error,
+    is_qr_candidate as shared_is_qr_candidate,
+    is_redirect_like_url as shared_is_redirect_like_url,
+    is_resource_url as shared_is_resource_url,
+    should_retry_second_confirm_after_approve as shared_should_retry_second_confirm_after_approve,
+)
 from common.protocol_core import (
     ProtocolResultReporter,
     amount_from_payload as common_amount_from_payload,
@@ -282,7 +293,8 @@ def env_int(name: str, default: int, minimum: int = 1) -> int:
 
 
 def is_checkout_not_active_error(value: Any) -> bool:
-    return "checkout_not_active_session" in str(value)
+    """Delegate to ``common/payment_predicates.py``."""
+    return shared_is_checkout_not_active_error(value)
 
 
 def is_ideal_unavailable_error(value: Any) -> bool:
@@ -945,35 +957,13 @@ def build_chatgpt_session(access_token: str, device_id: str, proxy: str, session
 
 
 def checkout_response_has_promo(payload: Any) -> bool:
-    if not isinstance(payload, dict):
-        return False
-    for key in (
-        "scheduled_discount_preview",
-        "immediate_discount_settings",
-        "promo_campaign",
-        "promo_credit_grant",
-    ):
-        value = payload.get(key)
-        if value not in (None, "", [], {}):
-            return True
-    return False
+    """Delegate to ``common/payment_predicates.py``."""
+    return shared_checkout_response_has_promo(payload)
 
 
 def checkout_response_has_trial(payload: Any) -> bool:
-    if not isinstance(payload, dict):
-        return False
-    # pi-lens-ignore: no-identity-operator-on-literals
-    if payload.get("one_click_trial_eligible") is True:
-        return True
-    subscription_data = payload.get("subscription_data")
-    # pi-lens-ignore: unchecked-throwing-call-python
-    if isinstance(subscription_data, dict) and int(subscription_data.get("trial_period_days") or 0) > 0:
-        return True
-    for key in ("trial_period_days", "trial_end"):
-        value = payload.get(key)
-        if value not in (None, "", 0, "0", False):
-            return True
-    return False
+    """Delegate to ``common/payment_predicates.py``."""
+    return shared_checkout_response_has_trial(payload)
 
 
 def create_checkout(chatgpt: requests.Session, country: str) -> dict[str, str]:
@@ -1559,29 +1549,8 @@ def collect_urls(payload: Any, urls: list[str] | None = None) -> list[str]:
 
 
 def is_resource_url(url: str) -> bool:
-    parsed = urlparse(url)
-    host = (parsed.netloc or "").lower()
-    path = (parsed.path or "").lower()
-    if is_known_static_host(url):
-        return True
-    return path.endswith(
-        (
-            ".js",
-            ".css",
-            ".map",
-            ".woff",
-            ".woff2",
-            ".ttf",
-            ".otf",
-            ".ico",
-            ".png",
-            ".jpg",
-            ".jpeg",
-            ".gif",
-            ".svg",
-            ".webp",
-        )
-    )
+    """Delegate to ``common/payment_predicates.py``."""
+    return shared_is_resource_url(url)
 
 
 def is_known_static_host(url: str) -> bool:
@@ -1590,43 +1559,18 @@ def is_known_static_host(url: str) -> bool:
 
 
 def is_redirect_like_url(url: str, from_action_field: bool = False) -> bool:
-    if not isinstance(url, str):
-        return False
-    url = url.strip()
-    if not url.startswith(("http://", "https://")):
-        return False
-    if is_resource_url(url):
-        return False
-    if from_action_field:
-        return True
-
-    parsed = urlparse(url)
-    host = (parsed.netloc or "").lower()
-    path = (parsed.path or "").lower()
-    query = (parsed.query or "").lower()
-    text = f"{host}{path}?{query}"
-    if host in {"hooks.stripe.com", "payments.stripe.com"}:
-        return True
-    if host.endswith(".ideal.nl") or host == "ideal.nl":
-        return True
-    return any(part in text for part in ("ideal", "/redirect/", "redirect_to_url", "authenticate"))
+    """Delegate to ``common/payment_predicates.py`` with this provider's profile."""
+    return shared_is_redirect_like_url(_PROVIDER_PROFILE, url, from_action_field)
 
 
 def is_qr_candidate(url: str) -> bool:
-    lower = url.lower()
-    return lower.startswith("data:image/") or "qr" in lower or "qrcode" in lower or "qr-code" in lower
+    """Delegate to ``common/payment_predicates.py``."""
+    return shared_is_qr_candidate(url)
 
 
 def extract_qr_candidates(payload: Any) -> list[str]:
-    seen: set[str] = set()
-    result: list[str] = []
-    for url in collect_urls(payload):
-        if url in seen:
-            continue
-        seen.add(url)
-        if is_qr_candidate(url) and not is_known_static_host(url):
-            result.append(url)
-    return result
+    """Delegate to ``common/payment_predicates.py``."""
+    return shared_extract_qr_candidates(payload)
 
 
 def find_submission_attempt(payload: Any) -> dict[str, Any]:
@@ -1686,12 +1630,8 @@ def raise_if_setup_intent_blocked(payload: Any, context: str, current_pm_id: str
 
 
 def should_retry_second_confirm_after_approve(error: Any) -> bool:
-    text = str(error or "").lower()
-    return (
-        "checkout_upcoming_invoice_mismatch" in text
-        or "redirect url resolution timeout" in text
-        or "missing_redirect" in text
-    )
+    """Delegate to ``common/payment_predicates.py``."""
+    return shared_should_retry_second_confirm_after_approve(error)
 
 
 def stripe_intent_redirect_url(
@@ -1884,8 +1824,8 @@ def log_approve_failure(error: str) -> bool:
 
 
 def is_approve_failure_error(error: str) -> bool:
-    text = str(error or "").lower()
-    return "approve" in text or "chatgpt approve" in text
+    """Delegate to ``common/payment_predicates.py``."""
+    return shared_is_approve_failure_error(error)
 
 
 def approve_with_retry(
