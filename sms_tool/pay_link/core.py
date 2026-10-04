@@ -6,6 +6,7 @@ from typing import Any, Callable, Mapping
 from ..config import ConfigError, current_config_data, validate_config
 from ..payment_contracts import PaymentRequest
 from ..payment_executor import PaymentExecutionRequest, PaymentFlowExecutor
+from ..payment_errors import annotate_error, error_stage_of
 from ..payment_operation import (
     PaymentOperationConflict,
     PaymentOperationStore,
@@ -56,11 +57,11 @@ def generate_payment_link(
                 default_proxy=proxy,
             )
     except (ConfigError, ValueError, TypeError, OSError, RuntimeError) as exc:
-        if not getattr(exc, "error_stage", ""):
-            try:
-                exc.error_stage = "validation" if isinstance(exc, (ValueError, ConfigError)) else "proxy_setup"
-            except (AttributeError, TypeError):
-                _LOGGER.debug("could not annotate payment planning error", exc_info=True)
+        if not error_stage_of(exc):
+            annotate_error(
+                exc,
+                error_stage=("validation" if isinstance(exc, (ValueError, ConfigError)) else "proxy_setup"),
+            )
         planning_error = exc
         plan = PaymentRoutePlan.empty(method_name)
 

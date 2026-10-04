@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Callable, Mapping
 from ..config import current_config_data
 from ..paths import runtime_file
+from ..payment_errors import annotate_error
 from ..payment_catalog import (
     PAYMENT_METHODS as CATALOG_METHODS,
     normalize_payment_method as normalize_catalog_payment_method,
@@ -491,11 +492,12 @@ def _run_regional_wallet_adapter(
             timeout=max(5, safe_int(kwargs.get("timeout_seconds") or 45)),
         )
     if transport is None:
-        error = RuntimeError("regional payment adapter requires an injected transport")
-        error.error_code = "regional_transport_unconfigured"
-        error.error_stage = "adapter_setup"
-        error.retryable = False
-        raise error
+        raise annotate_error(
+            RuntimeError("regional payment adapter requires an injected transport"),
+            error_code="regional_transport_unconfigured",
+            error_stage="adapter_setup",
+            retryable=False,
+        )
     adapter = RegionalPaymentAdapter(regional_profile(spec.key), transport)
     return adapter.run(
         access_token=access_token,

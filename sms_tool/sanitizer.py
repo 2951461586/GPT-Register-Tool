@@ -92,6 +92,24 @@ def sanitize_log_text(value: Any) -> str:
     )
 
 
+def describe_exception(exc: BaseException, *, limit: int = 300) -> str:
+    """Render an exception for an operator-facing log or console line.
+
+    Returns ``"<TypeName>: <redacted message>"``.  The type name is kept so the
+    line stays diagnosable even when the message redacts to nothing, and the
+    message always crosses :func:`sanitize_text` — an exception that embeds a
+    token, cookie, password or API key therefore cannot leak through a logging
+    call that passes a raw ``str(exc)``.
+
+    Prefer this over ``sanitize_text(exc)`` at log sites: keeping the type name
+    makes the origin of the failure identifiable without widening what is
+    printed.
+    """
+    detail = sanitize_text(str(exc)).strip()
+    head = type(exc).__name__
+    return (f"{head}: {detail}" if detail else head)[:limit]
+
+
 def mask_otp(value: Any, *, keep_tail: int = 2) -> str:
     """Partially mask a one-time code before it reaches a log/console line.
 

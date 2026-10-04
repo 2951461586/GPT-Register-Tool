@@ -18,6 +18,7 @@ from typing import Any
 
 from . import registration_checkpoint
 from .auth_headers import current_auth_fingerprint
+from .sanitizer import describe_exception
 from .codex_oauth import collect_codex_oauth_tokens
 from .registration_outcome import needs_manual_session_recovery
 from .registration_result import build_registration_result
@@ -186,7 +187,7 @@ def enroll_totp(self) -> None:
         print("  [2FA] pyotp not installed")
     except Exception as exc:
         s.twofa_result = {"ok": False, "error": str(exc)}
-        print(f"  [2FA] Setup failed: {r._sanitize_text(exc)}")
+        print(f"  [2FA] Setup failed: {describe_exception(exc)}")
 
 
 def finalize(self) -> dict[str, Any]:
