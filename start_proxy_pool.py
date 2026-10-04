@@ -210,8 +210,12 @@ def main() -> None:
             loop.add_signal_handler(signal.SIGINT, server.request_shutdown)
             loop.add_signal_handler(signal.SIGTERM, server.request_shutdown)
         except NotImplementedError:
-            # Windows: only SIGINT works, KeyboardInterrupt handled below
-            pass
+            # Windows: asyncio cannot install these handlers at all.  CTRL+C still
+            # arrives as KeyboardInterrupt, which asyncio.run() turns into the
+            # `except KeyboardInterrupt` below, so shutdown is not lost -- only the
+            # signal-driven variant is.  Say so once rather than swallowing it
+            # silently.
+            logger.debug("asyncio signal handlers unavailable on this platform; relying on KeyboardInterrupt")
         await server.run()
 
     try:

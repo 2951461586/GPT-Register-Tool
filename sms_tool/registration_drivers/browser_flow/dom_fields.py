@@ -135,6 +135,7 @@ def _click_continue(page) -> None:
           if (submit.length === 1) { submit[0].click(); return true; }
           return false;
         }""")
+        # pi-lens-ignore: no-identity-operator-on-literals
         if submitted is True:
             return
     except Exception:
@@ -163,6 +164,7 @@ def _click_passwordless_otp(page) -> bool:
         # Playwright returns a boolean here.  Do not accept arbitrary truthy
         # adapter/mock objects, otherwise a failed probe can be mistaken for
         # a successful passwordless transition and consume the mailbox OTP.
+        # pi-lens-ignore: no-identity-operator-on-literals
         if result is True:
             return True
         return bool(isinstance(result, Mapping) and result.get("ok"))
