@@ -128,7 +128,11 @@ Offline tests cover step ordering, redirect classification and Sentinel header
 plumbing. They do not establish a live registration or login success rate.
 Changing the lane choice, the `send` method, the continue-on-verified-page
 toggle, or Sentinel flow selection requires a controlled live comparison, not
-an offline transaction test.
+an offline transaction test. The pre-registered A/B design, collection and
+comparison for the three outstanding comparisons (preflight login endpoint,
+Cloudflare-challenge observation, Sentinel password bundle) is
+[`registration-ab-runbook.md`](registration-ab-runbook.md), driven by
+`scripts/registration_ab.py`.
 
 ## Read-only registration probe
 
