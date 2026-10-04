@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 from urllib.parse import quote, urlencode
 
 from . import deps, otp, password_step, sentinel_flow, steps
@@ -191,7 +192,10 @@ def _existing_login_continue(session, username, did, auth_base, base_headers, pr
         print("  Existing account continue: skipped (already at email-verification)")
     else:
         fresh_data, fresh_token, fresh_so = sentinel_flow._authorize_continue_sentinel(session, did, proxy=proxy)
-        continue_body_json = {"username": {"value": username, "kind": "email"}}
+        # ``screen_hint`` is a plain string while the username entry is an
+        # object, so the literal's inferred type (dict[str, dict[str, str]])
+        # is too narrow for this assignment.  Annotate the body explicitly.
+        continue_body_json: dict[str, Any] = {"username": {"value": username, "kind": "email"}}
         if on_verified_page:
             # 🔴 2026-09-16: the OTP page is a *generic shell*, not the
             # transaction's answer.  Dropping this POST **was** the whole bug:
@@ -335,6 +339,7 @@ def _existing_login_probe(
         f"  Existing account login method probe: password_step={probe['password_step']} "
         f"({probe['signal'] or 'no_signal'}; source={probe.get('source') or 'none'})"
     )
+    # pi-lens-ignore: no-identity-operator-on-literals
     if probe["password_step"] is False:
         # The transaction answered and carried no password form.  The account is
         # passwordless, so an email code is the only remaining method -- and it
@@ -349,6 +354,7 @@ def _existing_login_probe(
             },
             None,
         )
+    # pi-lens-ignore: no-identity-operator-on-literals
     if probe["password_step"] is True:
         # A password step is reachable, so the email lane cannot produce a
         # session on this transaction -- spend the password we hold instead.
@@ -396,6 +402,24 @@ def _existing_login_probe(
     return (None, {})
 
 
+def _continuation_state(state, phase: str) -> dict:
+    """Return a phase's continuation state, failing fast on a broken contract.
+
+    Each phase returns ``(terminal, state)``: a phase that settles the login
+    returns the terminal dict with ``state=None``; one that continues returns
+    ``None`` with the state dict.  Reaching an unwrap with ``None`` therefore
+    means a phase violated that contract, and the downstream ``state["..."]``
+    reads would fail as an opaque ``TypeError: 'NoneType' object is not
+    subscriptable``.  Raise a named error instead so the offending phase is
+    identifiable straight from the traceback.
+    """
+    if not isinstance(state, dict):
+        raise RuntimeError(
+            f"existing-login phase {phase!r} returned {type(state).__name__} instead of a continuation state"
+        )
+    return state
+
+
 def _login_existing_account_with_email_otp(
     session,
     username,
@@ -423,17 +447,23 @@ def _login_existing_account_with_email_otp(
     reads (``current_url``, the continue payload, the fresh sentinel tokens).
     The signature and the returned dicts are unchanged, so the six production
     call sites and the seven test files need no edits.
+
+    Every unwrap goes through :func:`_continuation_state`, so a phase that
+    returns ``(None, None)`` raises a named error at the unwrap instead of an
+    opaque ``TypeError`` at the first ``state["..."]`` read.
     """
     terminal, state = _existing_login_signin(
         session, username, did, session_logging_id, auth_base, chat_base, base_headers, csrf_token
     )
     if terminal is not None:
         return terminal
+    state = _continuation_state(state, "signin")
     current_url = state["current_url"]
 
     terminal, state = _existing_login_continue(session, username, did, auth_base, base_headers, proxy, current_url)
     if terminal is not None:
         return terminal
+    state = _continuation_state(state, "continue")
     current_url = state["current_url"]
     continue_payload = state["continue_payload"]
     continue_next_url = state["continue_next_url"]

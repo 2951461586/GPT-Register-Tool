@@ -11,6 +11,7 @@ from enum import Enum
 from typing import Any
 
 from .payment_contracts import PaymentResult
+from .payment_errors import error_code_of, error_stage_of, retryable_flag
 from .payment_flow import PaymentStage
 from .payment_routing import PaymentRoutePlan
 
@@ -113,22 +114,23 @@ class PaymentFlowExecutor:
                 "ok": False,
                 "status": status,
                 "error": self.error_sanitizer(str(exc)) or type(exc).__name__,
-                "error_code": str(
-                    getattr(exc, "error_code", "")
-                    or (classified[1] if classified else "payment_link_extraction_failed")
-                ),
-                "error_stage": str(
-                    getattr(exc, "error_stage", "")
-                    or getattr(exc, "stage", "")
-                    or (history[-1]["stage"] if history else "executor")
-                ),
-                "retryable": bool(getattr(exc, "retryable", classified[2] if classified else False)),
+                "error_code": error_code_of(exc) or (classified[1] if classified else "payment_link_extraction_failed"),
+                "error_stage": error_stage_of(exc)
+                or str(getattr(exc, "stage", "") or "")
+                or (history[-1]["stage"] if history else "executor"),
+                "retryable": retryable_flag(exc, classified[2] if classified else False),
             }
             if status == "unknown":
                 normalized["requires_reconciliation"] = True
 
         contract = PaymentResult.from_mapping(normalized, payment_method=request.payment_method)
-        result = contract.to_dict()
+        # The runner layers its own envelope fields on top of the typed contract
+        # payload (run id, manager state, state history, flow profile, route plan)
+        # and then writes dynamic per-coercion keys such as ``<field>_original``.
+        # The accumulator is therefore an open dict, not the contract itself;
+        # typing it as PaymentResultDict forced every envelope and coercion key
+        # to be declared there and broke the declared ``dict[str, Any]`` return.
+        result: dict[str, Any] = dict(contract.to_dict())
         terminal = contract.outcome.status
         if terminal not in _TERMINAL:
             terminal = "completed" if contract.ok else "failed"

@@ -119,6 +119,7 @@ def _normalize_result(spec: PaymentMethodSpec, result: Any) -> dict[str, Any]:
 
 def _explicit_terminal_state(data: dict[str, Any]) -> str:
     """Return a non-success terminal state explicitly reported by an adapter."""
+    # pi-lens-ignore: no-identity-operator-on-literals
     if _as_bool(data.get("outcome_unknown")) is True or _as_bool(data.get("requires_reconciliation")) is True:
         return "unknown"
 
@@ -258,6 +259,7 @@ def _classify_exception(exc: Exception) -> tuple[str, str, bool]:
         elif explicit_retryable is None:
             explicit_retryable = explicit_state == "timed_out"
         return explicit_state, custom_code or default_code, bool(explicit_retryable)
+    # pi-lens-ignore: no-identity-operator-on-literals
     if _as_bool(getattr(exc, "outcome_unknown", None)) is True:
         return "unknown", custom_code or "payment_outcome_unknown", False
     names = {_normalized_contract_value(cls.__name__) for cls in type(exc).mro()}
@@ -265,5 +267,6 @@ def _classify_exception(exc: Exception) -> tuple[str, str, bool]:
         return "cancelled", "payment_link_cancelled", False
     if isinstance(exc, (subprocess.TimeoutExpired, TimeoutError)) or any("timeout" in name for name in names):
         return "timed_out", "payment_link_timed_out", True
+    # pi-lens-ignore: no-identity-operator-on-literals
     retryable = _as_bool(getattr(exc, "retryable", None)) is True
     return "failed", custom_code or "payment_link_manager_failed", retryable

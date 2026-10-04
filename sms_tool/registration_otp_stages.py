@@ -20,6 +20,7 @@ import time
 from typing import Any
 
 from .auth_state import otp_dispatch_verdict
+from .sanitizer import describe_exception
 from .failure_registry import (
     OTP_MAILBOX_SIDE_MARKER,
     OTP_NO_RESEND_MARKER,
@@ -200,7 +201,7 @@ def validate_email_otp(self: Any) -> None:
             label="Email OTP continue",
         )
     except Exception as exc:
-        print(f"  Email OTP continue transport warning: {r._sanitize_text(exc)}")
+        print(f"  Email OTP continue transport warning: {describe_exception(exc)}")
 
 
 __all__ = [

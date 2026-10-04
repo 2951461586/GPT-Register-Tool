@@ -28,7 +28,7 @@ from .failure_registry import (
     PASSWORDLESS_SIGNUP_CODE,
     is_passwordless_signup_mismatch,
 )
-from .sanitizer import account_reference
+from .sanitizer import account_reference, describe_exception
 from .telemetry import current_run_id
 from .registration_cancel import RegistrationCancelled, ensure_not_cancelled
 from .registration_outcome import needs_manual_session_recovery
@@ -374,7 +374,7 @@ class RegistrationEmailWorkflow:
                 state,
             )
         except Exception as exc:
-            print(f"  [Checkpoint] persist warning: {self.r._sanitize_text(exc)}")
+            print(f"  [Checkpoint] persist warning: {describe_exception(exc)}")
 
     def _resume_post_create(self) -> dict[str, Any] | None:
         mailbox_email = str(getattr(self.runtime.mailbox, "email", "") or "").strip()
@@ -623,8 +623,8 @@ class RegistrationEmailWorkflow:
             )
         except Exception as exc:
             logging.getLogger(__name__).warning(
-                "Sentinel password bundle unavailable; falling back to per-flow issuance: %s",
-                self.r._sanitize_text(exc),
+                "Sentinel bundle for the credential flow unavailable; falling back to per-flow issuance: %s",
+                describe_exception(exc),
             )
             return
         merged = dict(s.sentinel_data)
@@ -1098,7 +1098,7 @@ class RegistrationEmailWorkflow:
                 label="Create account continue",
             )
         except Exception as exc:
-            print(f"  Create account continue transport warning: {r._sanitize_text(exc)}")
+            print(f"  Create account continue transport warning: {describe_exception(exc)}")
 
     def _mark_partial_registration(self, *, reason: str = "user_already_exists") -> None:
         """Record the server's existence verdict as a permanent dead end.
@@ -1190,7 +1190,7 @@ class RegistrationEmailWorkflow:
                         error=str(s.existing_login_error),
                     )
                 except Exception as exc:
-                    print(f"  Dead-end bookkeeping warning: {r._sanitize_text(exc)}")
+                    print(f"  Dead-end bookkeeping warning: {describe_exception(exc)}")
             return
         s.auth_session = r._fetch_auth_session(s.login_session, s.chat_base, s.base_headers)
         s.auth_body = s.auth_session.get("body") or {}

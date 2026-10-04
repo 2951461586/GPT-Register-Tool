@@ -6,6 +6,7 @@ import re
 from typing import Any, Mapping, Protocol
 
 from . import endpoints
+from .payment_errors import error_code_of, error_stage_of, retryable_flag
 from .checkout_contract import (
     CHECKOUT_PATH,
     CHECKOUT_URL,
@@ -753,9 +754,9 @@ def _paypal_probe_failure(exc: BaseException) -> dict[str, Any]:
     Extracted from the ``except`` handler so the handler itself stays free of
     boolean operators (``no-boolean-in-except`` scans the whole clause body).
     """
-    error_code = str(getattr(exc, "error_code", "") or "paypal_capability_probe_failed")
-    error_stage = str(getattr(exc, "error_stage", "") or "capability_probe")
-    retryable = bool(getattr(exc, "retryable", False))
+    error_code = error_code_of(exc, "paypal_capability_probe_failed")
+    error_stage = error_stage_of(exc, "capability_probe")
+    retryable = retryable_flag(exc, False)
     return {
         "ok": False,
         "operation": "payment_method_capability_probe",

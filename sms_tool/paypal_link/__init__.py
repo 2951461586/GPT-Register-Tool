@@ -1,12 +1,13 @@
 """Re-exports of the former sms_tool/paypal_reconciliation.py and sms_tool/gen_pp_link.py (mechanical split)."""
 
+from typing import Optional
+
 from .reconciliation import (
     Any,
     Enum,
     HTMLParser,
     Mapping,
     NormalizedReturnState,
-    Optional,
     PayPalReconciliationResult,
     PaymentOutcome,
     Protocol,

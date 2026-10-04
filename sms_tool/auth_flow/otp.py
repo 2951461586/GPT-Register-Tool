@@ -1,12 +1,11 @@
 """Email-OTP dispatch, challenge detection and the login OTP phase."""
-
 from __future__ import annotations
 
 import json
 import time
 
 from . import deps, steps, totp
-
+from ..registration_protocol_helpers import _safe_int
 
 def _otp_challenge_established(body):
     """Return True when an email-OTP send response carries a real challenge.
@@ -46,10 +45,7 @@ def _otp_challenge_established(body):
             return True
     return False
 
-
-def _send_existing_login_otp(
-    session, auth_base, base_headers, current_url, did, sentinel_token="", sentinel_so_token=""
-):
+def _send_existing_login_otp(session, auth_base, base_headers, current_url, did, sentinel_token="", sentinel_so_token=""):
     headers = steps._auth_request_headers(
         base_headers,
         did=did,
@@ -178,22 +174,7 @@ def _send_existing_login_otp(
         return False, last_response
     return False, None
 
-
-def _existing_login_otp(
-    session,
-    mailbox,
-    did,
-    auth_base,
-    base_headers,
-    proxy,
-    sentinel_token,
-    sentinel_so_token,
-    totp_secret,
-    otp_timeout,
-    current_url,
-    fresh_token,
-    fresh_so,
-):
+def _existing_login_otp(session, mailbox, did, auth_base, base_headers, proxy, sentinel_token, sentinel_so_token, totp_secret, otp_timeout, current_url, fresh_token, fresh_so):
     otp_send_started = int(time.time())
     ok, otp_send_response = _send_existing_login_otp(
         session,
@@ -230,7 +211,7 @@ def _existing_login_otp(
         return ({"ok": False, "error": f"existing_login_otp_send_failed:{status}"}, None)
 
     email_cfg = deps.current_config_data().get("email_registration", {})
-    poll_timeout = int(otp_timeout or email_cfg.get("otp_timeout", 300))
+    poll_timeout = _safe_int(otp_timeout or email_cfg.get("otp_timeout", 300), 300)
     code = deps._poll_email_otp(
         mailbox,
         subject_keyword=steps.LOGIN_EMAIL_OTP_SUBJECT_KEYWORD,
@@ -283,10 +264,7 @@ def _existing_login_otp(
         # ``existing_login_otp_validate:`` prefix across every process log.
         # ``registration_handlers.create_account`` owns that branch; see the
         # comment there and ``failure_registry.PASSWORDLESS_SIGNUP_CODE``.
-        return (
-            {"ok": False, "error": f"existing_login_otp_validate:{json.dumps(otp_data, ensure_ascii=False)[:200]}"},
-            None,
-        )
+        return ({"ok": False, "error": f"existing_login_otp_validate:{json.dumps(otp_data, ensure_ascii=False)[:200]}"}, None)
     mfa_result = totp._complete_existing_login_totp(
         session,
         auth_base,
@@ -299,7 +277,16 @@ def _existing_login_otp(
     )
     if not mfa_result.get("ok"):
         return (mfa_result, None)
-    otp_data = mfa_result.get("data") if isinstance(mfa_result.get("data"), dict) else otp_data
+    mfa_data = mfa_result.get("data")
+    otp_data = mfa_data if isinstance(mfa_data, dict) else otp_data
+    if not isinstance(otp_data, dict):
+        # ``http_utils._validate_email_otp`` documents ``(ok, body: dict)``, but
+        # the body is whatever the server sent: a 200 whose JSON decodes to
+        # ``null`` (or to a scalar) reaches here as None/str and used to fail on
+        # the next line as an opaque ``AttributeError: 'NoneType' object has no
+        # attribute 'get'``.  Name the broken contract instead, and settle the
+        # attempt the same way every other validate failure does.
+        return ({"ok": False, "error": "existing_login_otp_validate_non_dict_body"}, None)
     final_url = str(otp_data.get("continue_url") or "")
     if steps._is_about_you_step(final_url, otp_data):
         # The OTP verified, but the server routed this login into the *signup*
@@ -311,12 +298,9 @@ def _existing_login_otp(
         # stops instead of polling a known-dead state.
         print(f"  Existing account OTP continue: profile step, not a login landing ({final_url[:80]})")
         return (
-            {
-                "ok": False,
-                "error": f"existing_login_landed_on_profile_step:{final_url[:120]}",
-            },
-            None,
-        )
+    {        "ok": False,
+            "error": f"existing_login_landed_on_profile_step:{final_url[:120]}",
+        }        , None)
     try:
         deps._follow_continue_url(
             session,
