@@ -806,6 +806,69 @@ class PaymentLinkManagerTests(unittest.TestCase):
         self.assertEqual(result["manager_state"], "completed")
         self.assertIn("OSError", result["persistence_warning"])
 
+    def _run_with_journal_finish(self, finish_error: BaseException) -> list[tuple[str, str]]:
+        """Drive one gopay run whose journal ``finish`` raises ``finish_error``."""
+        calls: list[tuple[str, str]] = []
+
+        class _FakeOperation:
+            operation_id = "op-fixture"
+            idempotency_key_hash = "hash-fixture"
+
+            def checkpoint(self, *_args, **_kwargs):
+                pass
+
+            def finish(self, _result):
+                raise finish_error
+
+            def fail_unknown(self, stage, error_code):
+                calls.append((stage, error_code))
+
+        class _FakeStore:
+            @classmethod
+            def from_config(cls, _source):
+                return cls()
+
+            def begin(self, **_kwargs):
+                return _FakeOperation()
+
+        adapter_result = {
+            "ok": True,
+            "status": "completed",
+            "operation": "extract_link",
+            "url": "https://app.midtrans.com/snap/v4/redirection/fixture",
+            "link_type": "gopay_protocol",
+        }
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch("sms_tool.pay_link.core.PaymentOperationStore", _FakeStore),
+            patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"),
+            patch("sms_tool.wallet_provider.run_wallet_provider", return_value=adapter_result),
+        ):
+            try:
+                manager.generate_payment_link(
+                    "token",
+                    payment_method="gopay",
+                    runtime_config={"chatgpt": {}, "protocol_payments": {}},
+                )
+            except finish_error.__class__:
+                pass
+        return calls
+
+    def test_journal_failure_marks_the_durable_operation_unknown(self):
+        """An ``Exception`` from the journal write is recorded as unknown."""
+        calls = self._run_with_journal_finish(OSError("journal write failed"))
+        self.assertEqual(calls, [("executor", "payment_executor_aborted")])
+
+    def test_system_exit_is_not_converted_into_a_journal_failure(self):
+        """``SystemExit`` must propagate untouched (the narrowing is deliberate).
+
+        Catching ``BaseException`` here would run ``fail_unknown`` and then
+        re-raise, so the narrowing is pinned: a tear-down signal is not a
+        payment failure.
+        """
+        calls = self._run_with_journal_finish(SystemExit(3))
+        self.assertEqual(calls, [])
+
 
 class AdapterV1ContractTests(unittest.TestCase):
     """The three subprocess adapters must carry the same v1 pair on success.

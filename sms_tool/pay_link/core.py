@@ -165,7 +165,17 @@ def generate_payment_link(
             )
         )
         payment_operation.finish(result)
-    except BaseException:
+    except Exception:
+        # A plain ``Exception`` here means the executor or the journal write
+        # failed after the operation began.  Mark it unknown so the durable
+        # record is not replayed (``payment_operation._replay_allowed``).
+        # ``BaseException`` is deliberately *not* caught: the executor already
+        # turns ``KeyboardInterrupt``/``CancelledError`` into a ``cancelled``
+        # result, and a ``SystemExit``/``GeneratorExit`` means the process is
+        # being torn down -- conversion would swallow the caller's exit signal.
+        # The replay guard is not weakened by this: ``transactional_progress``
+        # checkpoints ``side_effect_started=True`` before the adapter runs, so a
+        # record still at ``running`` here has had no side effect.
         payment_operation.fail_unknown("executor", "payment_executor_aborted")
         raise
     _safe_persist_run(result)
