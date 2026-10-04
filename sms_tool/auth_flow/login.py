@@ -1,9 +1,11 @@
 """Existing-login lane: signin -> continue -> password probe -> OTP -> TOTP."""
+
 from __future__ import annotations
 
 from urllib.parse import quote, urlencode
 
 from . import deps, otp, password_step, sentinel_flow, steps
+
 
 def _fetch_session_csrf_token(session, chat_base, base_headers, did, session_logging_id):
     """Mint a NextAuth CSRF token on ``session`` itself.
@@ -62,6 +64,7 @@ def _fetch_session_csrf_token(session, chat_base, base_headers, did, session_log
         print(f"  Existing account csrf transport warning: {exc}")
         return ""
 
+
 def _existing_login_signin(session, username, did, session_logging_id, auth_base, chat_base, base_headers, csrf_token):
     print("  Existing account login: probing the login method before spending an email code")
     # The caller may hand us a token minted on a *different* session: one of
@@ -70,9 +73,7 @@ def _existing_login_signin(session, username, did, session_logging_id, auth_base
     # the session we are about to post with, and only fall back to the caller's
     # value when that fails -- so this can never be worse than the old
     # behaviour, only more consistent.
-    session_csrf_token = _fetch_session_csrf_token(
-        session, chat_base, base_headers, did, session_logging_id
-    )
+    session_csrf_token = _fetch_session_csrf_token(session, chat_base, base_headers, did, session_logging_id)
     if session_csrf_token:
         csrf_token = session_csrf_token
     signin_url = (
@@ -93,7 +94,12 @@ def _existing_login_signin(session, username, did, session_logging_id, auth_base
         signin_url,
         label="Existing account signin",
         data=urlencode(signin_payload),
-        headers={**base_headers, "Content-Type": "application/x-www-form-urlencoded", "Origin": chat_base, "Referer": f"{chat_base}/"},
+        headers={
+            **base_headers,
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Origin": chat_base,
+            "Referer": f"{chat_base}/",
+        },
         impersonate=deps.auth_impersonate(),
     )
     signin_body = deps._json_or_raw(signin_resp, limit=1000)
@@ -117,14 +123,21 @@ def _existing_login_signin(session, username, did, session_logging_id, auth_base
         "get",
         auth_session_url,
         label="Existing account authorize",
-        headers={**base_headers, "Accept": "text/html,application/xhtml+xml", "Origin": auth_base, "Referer": f"{chat_base}/"},
+        headers={
+            **base_headers,
+            "Accept": "text/html,application/xhtml+xml",
+            "Origin": auth_base,
+            "Referer": f"{chat_base}/",
+        },
         impersonate=deps.auth_impersonate(),
     )
     current_url = str(authorize_resp.url or "")
     print(f"  Existing account authorize: {authorize_resp.status_code} {current_url}")
 
     current_lower = current_url.lower()
-    if "chatgpt.com" in current_lower and ("/api/auth/callback/openai" in current_lower or current_lower.rstrip("/") == chat_base.lower().rstrip("/")):
+    if "chatgpt.com" in current_lower and (
+        "/api/auth/callback/openai" in current_lower or current_lower.rstrip("/") == chat_base.lower().rstrip("/")
+    ):
         return ({"ok": True}, None)
 
     if steps._is_chatgpt_auth_login_landing(current_url):
@@ -142,9 +155,12 @@ def _existing_login_signin(session, username, did, session_logging_id, auth_base
         # classified as the retryable ``auth_state`` class, exactly like the
         # failure it pre-empts, instead of degrading to ``unknown`` (terminal).
         return (
-    {        "ok": False,
-            "error": f"existing_login_signin_not_established:invalid_state:{current_url[:120]}",
-        }        , None)
+            {
+                "ok": False,
+                "error": f"existing_login_signin_not_established:invalid_state:{current_url[:120]}",
+            },
+            None,
+        )
 
     # The signup lane documents the opposite rule for this exact landing:
     # ``_prepare_signup_auth_state`` returns early when the authorize redirect
@@ -161,7 +177,8 @@ def _existing_login_signin(session, username, did, session_logging_id, auth_base
     # The transaction's own answer is the cheapest signal available, so keep the
     # payload and the continue target -- not just the status code.  The password
     # probe below reads them before any email code is spent.
-    return (None, {'csrf_token': csrf_token, 'current_url': current_url})
+    return (None, {"csrf_token": csrf_token, "current_url": current_url})
+
 
 def _existing_login_continue(session, username, did, auth_base, base_headers, proxy, current_url):
     continue_payload = {}
@@ -278,9 +295,34 @@ def _existing_login_continue(session, username, did, auth_base, base_headers, pr
     # ``/about-you``, 0 NextAuth sessions) and costs a ~59s mailbox poll plus a
     # code to rediscover.  abai's protocol client reaches the same verdict from
     # the same signal and refuses to fall back to email OTP at all.
-    return (None, {'current_url': current_url, 'continue_payload': continue_payload, 'continue_next_url': continue_next_url, 'fresh_token': fresh_token, 'fresh_so': fresh_so})
+    return (
+        None,
+        {
+            "current_url": current_url,
+            "continue_payload": continue_payload,
+            "continue_next_url": continue_next_url,
+            "fresh_token": fresh_token,
+            "fresh_so": fresh_so,
+        },
+    )
 
-def _existing_login_probe(session, did, auth_base, base_headers, sentinel_token, sentinel_so_token, totp_secret, password, allow_passwordless, current_url, continue_payload, continue_next_url, fresh_token, fresh_so):
+
+def _existing_login_probe(
+    session,
+    did,
+    auth_base,
+    base_headers,
+    sentinel_token,
+    sentinel_so_token,
+    totp_secret,
+    password,
+    allow_passwordless,
+    current_url,
+    continue_payload,
+    continue_next_url,
+    fresh_token,
+    fresh_so,
+):
     probe = password_step._probe_login_password_step(
         session,
         auth_base,
@@ -342,13 +384,17 @@ def _existing_login_probe(session, did, auth_base, base_headers, sentinel_token,
     # exact cost this probe exists to avoid.
     if not allow_passwordless:
         return (
-    {        "ok": False,
-            "error": "existing_login_password_step_unknown",
-            "login_method": "probe",
-            "password_probe": probe,
-        }        , None)
+            {
+                "ok": False,
+                "error": "existing_login_password_step_unknown",
+                "login_method": "probe",
+                "password_probe": probe,
+            },
+            None,
+        )
 
     return (None, {})
+
 
 def _login_existing_account_with_email_otp(
     session,
@@ -385,9 +431,7 @@ def _login_existing_account_with_email_otp(
         return terminal
     current_url = state["current_url"]
 
-    terminal, state = _existing_login_continue(
-        session, username, did, auth_base, base_headers, proxy, current_url
-    )
+    terminal, state = _existing_login_continue(session, username, did, auth_base, base_headers, proxy, current_url)
     if terminal is not None:
         return terminal
     current_url = state["current_url"]
@@ -397,15 +441,37 @@ def _login_existing_account_with_email_otp(
     fresh_so = state["fresh_so"]
 
     terminal, _ = _existing_login_probe(
-        session, did, auth_base, base_headers, sentinel_token, sentinel_so_token,
-        totp_secret, password, allow_passwordless,
-        current_url, continue_payload, continue_next_url, fresh_token, fresh_so,
+        session,
+        did,
+        auth_base,
+        base_headers,
+        sentinel_token,
+        sentinel_so_token,
+        totp_secret,
+        password,
+        allow_passwordless,
+        current_url,
+        continue_payload,
+        continue_next_url,
+        fresh_token,
+        fresh_so,
     )
     if terminal is not None:
         return terminal
 
     terminal, _ = otp._existing_login_otp(
-        session, mailbox, did, auth_base, base_headers, proxy, sentinel_token,
-        sentinel_so_token, totp_secret, otp_timeout, current_url, fresh_token, fresh_so,
+        session,
+        mailbox,
+        did,
+        auth_base,
+        base_headers,
+        proxy,
+        sentinel_token,
+        sentinel_so_token,
+        totp_secret,
+        otp_timeout,
+        current_url,
+        fresh_token,
+        fresh_so,
     )
     return terminal

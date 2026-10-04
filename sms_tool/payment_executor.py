@@ -106,10 +106,7 @@ class PaymentFlowExecutor:
             }
         except Exception as exc:
             classified = self.exception_classifier(exc) if self.exception_classifier else None
-            status = str(
-                getattr(exc, "status", "")
-                or (classified[0] if classified else "failed")
-            ).strip().lower()
+            status = str(getattr(exc, "status", "") or (classified[0] if classified else "failed")).strip().lower()
             if status not in {"failed", "cancelled", "unknown", "timed_out"}:
                 status = "failed"
             normalized = {
@@ -125,9 +122,7 @@ class PaymentFlowExecutor:
                     or getattr(exc, "stage", "")
                     or (history[-1]["stage"] if history else "executor")
                 ),
-                "retryable": bool(
-                    getattr(exc, "retryable", classified[2] if classified else False)
-                ),
+                "retryable": bool(getattr(exc, "retryable", classified[2] if classified else False)),
             }
             if status == "unknown":
                 normalized["requires_reconciliation"] = True
@@ -140,15 +135,17 @@ class PaymentFlowExecutor:
             if not result.get("status"):
                 result["status"] = terminal
         move(terminal, str(result.get("error_stage") or PaymentStage.ARTIFACT.value), "payment run finished")
-        result.update({
-            "run_id": run_id,
-            "operation_id": operation_id,
-            "idempotency_key_hash": request.idempotency_key_hash,
-            "manager_state": terminal,
-            "state_history": history,
-            "flow_profile": request.route_plan.flow_profile,
-            "route_plan": request.route_plan.public_dict(),
-        })
+        result.update(
+            {
+                "run_id": run_id,
+                "operation_id": operation_id,
+                "idempotency_key_hash": request.idempotency_key_hash,
+                "manager_state": terminal,
+                "state_history": history,
+                "flow_profile": request.route_plan.flow_profile,
+                "route_plan": request.route_plan.public_dict(),
+            }
+        )
         for record in request.route_plan.coercions:
             field = str(record.get("field") or "").strip()
             if field:

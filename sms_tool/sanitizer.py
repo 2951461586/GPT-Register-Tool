@@ -23,7 +23,9 @@ def load_sensitive_policy(path: str | Path | None = None) -> Mapping[str, Any]:
     source = Path(path).resolve() if path else Path(__file__).resolve().parent.parent / "sensitive_policy.json"
     value = json.loads(source.read_text(encoding="utf-8-sig"))
     if not isinstance(value, dict) or value.get("schema") != POLICY_SCHEMA:
-        raise ValueError(f"unsupported sensitive policy schema: {value.get('schema') if isinstance(value, dict) else ''}")
+        raise ValueError(
+            f"unsupported sensitive policy schema: {value.get('schema') if isinstance(value, dict) else ''}"
+        )
     if not isinstance(value.get("sensitive_keys"), list) or not isinstance(value.get("text_patterns"), list):
         raise ValueError("sensitive policy keys and text_patterns must be arrays")
     return value
@@ -56,9 +58,7 @@ _TEXT_PATTERNS = tuple(
     (re.compile(str(item["pattern"])), _python_replacement(str(item.get("replacement") or REDACTED_VALUE)))
     for item in SENSITIVE_POLICY["text_patterns"]
 )
-_EMAIL_PATTERN = re.compile(
-    r"(?i)(?<![A-Z0-9._%+\-])([A-Z0-9._%+\-]{1,64})@([A-Z0-9.\-]+\.[A-Z]{2,})"
-)
+_EMAIL_PATTERN = re.compile(r"(?i)(?<![A-Z0-9._%+\-])([A-Z0-9._%+\-]{1,64})@([A-Z0-9.\-]+\.[A-Z]{2,})")
 # Extra rules applied ONLY on the way out to an operator (stdout / log files),
 # never to persisted data. ``text_patterns`` redacts credentials and is applied
 # everywhere; these mask personally identifying values that are perfectly legal
@@ -138,20 +138,11 @@ def sanitize(value: Any, *, key: str = "", path: str = "") -> Any:
     path_is_exempt = bool(
         _SAFE_KEY_PATHS
         and current_path
-        and any(
-            current_path == entry or current_path.endswith(f".{entry}")
-            for entry in _SAFE_KEY_PATHS
-        )
+        and any(current_path == entry or current_path.endswith(f".{entry}") for entry in _SAFE_KEY_PATHS)
     )
-    key_is_sensitive = (
-        not path_is_exempt
-        and (
-            lowered in _SENSITIVE_KEYS_LOWER
-            or (
-                not lowered.endswith(_SAFE_KEY_SUFFIXES)
-                and any(part in lowered for part in _SENSITIVE_KEY_FRAGMENTS)
-            )
-        )
+    key_is_sensitive = not path_is_exempt and (
+        lowered in _SENSITIVE_KEYS_LOWER
+        or (not lowered.endswith(_SAFE_KEY_SUFFIXES) and any(part in lowered for part in _SENSITIVE_KEY_FRAGMENTS))
     )
     if key_is_sensitive:
         return REDACTED_VALUE if value not in (None, "") else value
@@ -177,12 +168,8 @@ def drop_sensitive_fields(value: Any, *, max_string_length: int = 1000) -> Any:
         result = {}
         for key, item in value.items():
             lowered = str(key or "").lower()
-            if (
-                lowered in _SENSITIVE_KEYS_LOWER
-                or (
-                    not lowered.endswith(_SAFE_KEY_SUFFIXES)
-                    and any(part in lowered for part in _SENSITIVE_KEY_FRAGMENTS)
-                )
+            if lowered in _SENSITIVE_KEYS_LOWER or (
+                not lowered.endswith(_SAFE_KEY_SUFFIXES) and any(part in lowered for part in _SENSITIVE_KEY_FRAGMENTS)
             ):
                 continue
             result[str(key)] = drop_sensitive_fields(
@@ -191,14 +178,10 @@ def drop_sensitive_fields(value: Any, *, max_string_length: int = 1000) -> Any:
             )
         return result
     if isinstance(value, (list, tuple)):
-        return [
-            drop_sensitive_fields(item, max_string_length=max_string_length)
-            for item in value
-        ]
+        return [drop_sensitive_fields(item, max_string_length=max_string_length) for item in value]
     if isinstance(value, str):
-        return value[:max(0, int(max_string_length))]
+        return value[: max(0, int(max_string_length))]
     return value
-
 
 
 def sanitize_command_args(args: Any) -> list[str]:

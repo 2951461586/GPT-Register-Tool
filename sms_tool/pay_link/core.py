@@ -6,7 +6,11 @@ from typing import Any, Callable, Mapping
 from ..config import ConfigError, current_config_data, validate_config
 from ..payment_contracts import PaymentRequest
 from ..payment_executor import PaymentExecutionRequest, PaymentFlowExecutor
-from ..payment_operation import PaymentOperationConflict, PaymentOperationStore, conflict_result as payment_operation_conflict_result
+from ..payment_operation import (
+    PaymentOperationConflict,
+    PaymentOperationStore,
+    conflict_result as payment_operation_conflict_result,
+)
 from ..payment_routing import PaymentRoutePlan, PaymentRoutePlanner
 
 from .adapters import _run_regional_wallet_adapter, _run_wallet_adapter
@@ -42,13 +46,9 @@ def generate_payment_link(
         if not method:
             raise ValueError(f"unsupported payment method: {payment_method}")
         if method not in _enabled_methods(source):
-            raise ValueError(
-                f"payment method disabled by protocol_payments.enabled_methods: {method}"
-            )
+            raise ValueError(f"payment method disabled by protocol_payments.enabled_methods: {method}")
         if plan is not None and plan.payment_method != method:
-            raise ValueError(
-                f"payment route plan method mismatch: {plan.payment_method} != {method}"
-            )
+            raise ValueError(f"payment route plan method mismatch: {plan.payment_method} != {method}")
         if plan is None:
             plan = PaymentRoutePlanner(source).plan(
                 method,
@@ -81,11 +81,13 @@ def generate_payment_link(
         )
     except PaymentOperationConflict as exc:
         result = payment_operation_conflict_result(exc)
-        result.update({
-            "payment_method": method_name,
-            "operation": operation_name,
-            "manager_state": result["status"],
-        })
+        result.update(
+            {
+                "payment_method": method_name,
+                "operation": operation_name,
+                "manager_state": result["status"],
+            }
+        )
         _safe_persist_run(result)
         return result
 
@@ -148,24 +150,25 @@ def generate_payment_link(
         progress=transactional_progress,
     )
     try:
-        result = executor.run(PaymentExecutionRequest(
-            payment_method=method_name,
-            access_token=str(access_token or ""),
-            route_plan=plan,
-            auth_context=dict(auth_context or {}),
-            runtime_config=source,
-            options=routed_options,
-            operation=operation_name,
-            operation_id=payment_operation.operation_id,
-            idempotency_key_hash=payment_operation.idempotency_key_hash,
-        ))
+        result = executor.run(
+            PaymentExecutionRequest(
+                payment_method=method_name,
+                access_token=str(access_token or ""),
+                route_plan=plan,
+                auth_context=dict(auth_context or {}),
+                runtime_config=source,
+                options=routed_options,
+                operation=operation_name,
+                operation_id=payment_operation.operation_id,
+                idempotency_key_hash=payment_operation.idempotency_key_hash,
+            )
+        )
         payment_operation.finish(result)
     except BaseException:
         payment_operation.fail_unknown("executor", "payment_executor_aborted")
         raise
     _safe_persist_run(result)
     return result
-
 
 
 def probe_payment_method(
@@ -196,9 +199,7 @@ def probe_payment_method(
             default_proxy=proxy,
         )
     elif plan.payment_method != method:
-        raise ValueError(
-            f"payment route plan method mismatch: {plan.payment_method} != {method}"
-        )
+        raise ValueError(f"payment route plan method mismatch: {plan.payment_method} != {method}")
     options.update(plan.to_adapter_options())
     options.pop("probe_only", None)
 
@@ -235,4 +236,3 @@ def probe_payment_method(
         proxy=plan.checkout_proxy,
         **options,
     )
-

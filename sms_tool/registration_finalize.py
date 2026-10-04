@@ -71,17 +71,20 @@ def obtain_oauth_refresh_token(self) -> None:
         return
 
     try:
-        s.oauth_result = collect_codex_oauth_tokens(
-            data={
-                "email": s.username,
-                "cookie_header": s.auth_session.get("cookie_header", ""),
-                "access_token": s.access_token,
-                "device_id": s.device_id,
-            },
-            session=s.session,
-            proxy=s.proxy or None,
-            force_email_otp_login=False,
-        ) or {}
+        s.oauth_result = (
+            collect_codex_oauth_tokens(
+                data={
+                    "email": s.username,
+                    "cookie_header": s.auth_session.get("cookie_header", ""),
+                    "access_token": s.access_token,
+                    "device_id": s.device_id,
+                },
+                session=s.session,
+                proxy=s.proxy or None,
+                force_email_otp_login=False,
+            )
+            or {}
+        )
     except Exception as exc:
         s.oauth_result = {
             "ok": False,
@@ -95,9 +98,7 @@ def obtain_oauth_refresh_token(self) -> None:
         # scoped to the Codex client, so it is *not* a substitute for this
         # run's ChatGPT web AT -- the one just probed, and the one the
         # persisted ``access_token`` has to stay.
-        s.oauth_refresh_token = str(
-            tokens.get("refresh_token") or s.oauth_refresh_token or ""
-        ).strip()
+        s.oauth_refresh_token = str(tokens.get("refresh_token") or s.oauth_refresh_token or "").strip()
     print(
         f"  OAuth refresh token: {r._oauth_result_summary(s.oauth_result)} "
         f"refresh_token_status={'oauth_present' if s.oauth_refresh_token else 'no_rt'}"
@@ -116,6 +117,7 @@ def enroll_totp(self) -> None:
     if not self.enroll_2fa:
         print("  [2FA] Enrollment disabled (--no-2fa)")
         return
+
     def poll_reauth_otp(email: str, issued_after_unix: int = 0, timeout: int = 120, **kwargs: Any) -> str:
         return s.mailbox_service.poll_otp(
             s.mailbox,
@@ -197,6 +199,7 @@ def finalize(self) -> dict[str, Any]:
     fingerprint = current_auth_fingerprint()
     token_telemetry = access_token_telemetry(s.access_token)
     from .accounts.account_identity import create_registration_identity, complete_registration_identity
+
     identity_context = complete_registration_identity(
         create_registration_identity(
             s.proxy,
@@ -212,9 +215,12 @@ def finalize(self) -> dict[str, Any]:
     result = build_registration_result(
         success=s.success,
         registration_mode=s.registration_mode,
-        registration_state="active" if s.success else (
-            "partial_registered" if s.existing_account else
-            ("terminal" if "account_deactivated" in s.error else "failed")
+        registration_state="active"
+        if s.success
+        else (
+            "partial_registered"
+            if s.existing_account
+            else ("terminal" if "account_deactivated" in s.error else "failed")
         ),
         email=s.username,
         error=s.error,
@@ -257,7 +263,9 @@ def finalize(self) -> dict[str, Any]:
                 "status": s.at_probe.get("quota_status", ""),
                 "updated_at": int(time.time()),
                 "last_result": s.at_probe,
-            } if s.at_probe else {},
+            }
+            if s.at_probe
+            else {},
             "totp_enrolled": bool(s.totp_secret) or bool(s.twofa_result.get("already_enrolled")),
             "twofa_enrolled_at": int(time.time()) if (s.totp_secret or s.twofa_result.get("already_enrolled")) else 0,
             "access_token_telemetry": token_telemetry,
