@@ -29,13 +29,11 @@ class ReconciliationClassification(str, Enum):
     FAILED = "failed"
 
 
-
 class PaymentOutcome(str, Enum):
     SUCCEEDED = "succeeded"
     FAILED = "failed"
     CANCELLED = "cancelled"
     UNKNOWN = "unknown"
-
 
 
 class ReturnStage(str, Enum):
@@ -45,14 +43,12 @@ class ReturnStage(str, Enum):
     CHATGPT_LANDING = "chatgpt_landing"
 
 
-
 class RemoteStatus(str, Enum):
     SUCCEEDED = "succeeded"
     FAILED = "failed"
     CANCELLED = "cancelled"
     PENDING = "pending"
     UNKNOWN = "unknown"
-
 
 
 class ReconciliationTransport(Protocol):
@@ -64,9 +60,7 @@ class ReconciliationTransport(Protocol):
         *,
         timeout: float,
         allow_redirects: bool,
-    ) -> Any:
-        ...
-
+    ) -> Any: ...
 
 
 class ReturnURLValidationError(ValueError):
@@ -75,7 +69,6 @@ class ReturnURLValidationError(ValueError):
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
         self.code = code
-
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,11 +93,8 @@ class NormalizedReturnState:
             "has_setup_intent": self.has_setup_intent,
             "has_client_secret": self.has_client_secret,
             "has_success_return_url": self.has_success_return_url,
-            "success_return_stage": (
-                self.success_return_stage.value if self.success_return_stage else None
-            ),
+            "success_return_stage": (self.success_return_stage.value if self.success_return_stage else None),
         }
-
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,7 +117,6 @@ class ReconciliationHop:
             "response_state": self.response_state.value,
             "next_stage": self.next_stage.value if self.next_stage else None,
         }
-
 
 
 @dataclass(frozen=True, slots=True)
@@ -178,7 +167,6 @@ class PayPalReconciliationResult:
         }
 
 
-
 class _CandidateHTMLParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
@@ -209,7 +197,6 @@ class _CandidateHTMLParser(HTMLParser):
             self.text_parts.append(data)
 
 
-
 @dataclass(slots=True)
 class _Evidence:
     redirect_status: RemoteStatus = RemoteStatus.UNKNOWN
@@ -223,14 +210,10 @@ class _Evidence:
 
     def observe_url(self, state: NormalizedReturnState) -> None:
         self.redirect_status = _merge_status(self.redirect_status, state.redirect_status)
-        self.stripe_return_status = _merge_status(
-            self.stripe_return_status, state.stripe_return_status
-        )
+        self.stripe_return_status = _merge_status(self.stripe_return_status, state.stripe_return_status)
         self.observed_setup_intent = self.observed_setup_intent or state.has_setup_intent
         self.observed_client_secret = self.observed_client_secret or state.has_client_secret
-        self.observed_success_return_url = (
-            self.observed_success_return_url or state.has_success_return_url
-        )
+        self.observed_success_return_url = self.observed_success_return_url or state.has_success_return_url
         self.reached_verify = self.reached_verify or state.stage is ReturnStage.CHECKOUT_VERIFY
 
     def observe_response(self, status: RemoteStatus) -> None:
@@ -249,11 +232,7 @@ class _Evidence:
         return None
 
     def has_success_evidence(self) -> bool:
-        return (
-            self.response_status is RemoteStatus.SUCCEEDED
-            or self.redirect_status is RemoteStatus.SUCCEEDED
-        )
-
+        return self.response_status is RemoteStatus.SUCCEEDED or self.redirect_status is RemoteStatus.SUCCEEDED
 
 
 def normalize_return_state(url: str) -> NormalizedReturnState:
@@ -289,13 +268,10 @@ def normalize_return_state(url: str) -> NormalizedReturnState:
         redirect_status=redirect_status,
         stripe_return_status=stripe_return_status,
         has_setup_intent=bool(_first(query, "setup_intent", "setup_intent_id")),
-        has_client_secret=bool(
-            _first(query, "setup_intent_client_secret", "client_secret")
-        ),
+        has_client_secret=bool(_first(query, "setup_intent_client_secret", "client_secret")),
         has_success_return_url=bool(success_return_url),
         success_return_stage=success_return_stage,
     )
-
 
 
 def reconcile_paypal_return(
@@ -351,9 +327,7 @@ def reconcile_paypal_return(
                 retryable=False,
                 error_stage="merchant_return",
                 error_code=(
-                    "remote_payment_cancelled"
-                    if terminal is PaymentOutcome.CANCELLED
-                    else "remote_payment_failed"
+                    "remote_payment_cancelled" if terminal is PaymentOutcome.CANCELLED else "remote_payment_failed"
                 ),
                 reason="merchant return reported a terminal payment state",
                 evidence=evidence,
@@ -619,10 +593,7 @@ def reconcile_paypal_return(
 
         if next_url:
             evidence.observe_url(next_state)
-            if (
-                current_state.stage is ReturnStage.CHECKOUT_VERIFY
-                and next_state.stage is ReturnStage.CHATGPT_LANDING
-            ):
+            if current_state.stage is ReturnStage.CHECKOUT_VERIFY and next_state.stage is ReturnStage.CHATGPT_LANDING:
                 evidence.left_verify = True
             hops.append(
                 ReconciliationHop(
@@ -676,17 +647,11 @@ def reconcile_paypal_return(
                 response_state=response_state,
             )
         )
-        if (
-            current_state.stage is ReturnStage.CHECKOUT_VERIFY
-            and response_state is RemoteStatus.SUCCEEDED
-        ):
+        if current_state.stage is ReturnStage.CHECKOUT_VERIFY and response_state is RemoteStatus.SUCCEEDED:
             return _success_result(current_state.stage, hops, evidence)
         if response_state is RemoteStatus.PENDING or (
             current_state.stage in {ReturnStage.OPENAI_PAY, ReturnStage.CHECKOUT_VERIFY}
-            and (
-                evidence.redirect_status is RemoteStatus.PENDING
-                or response_state is RemoteStatus.UNKNOWN
-            )
+            and (evidence.redirect_status is RemoteStatus.PENDING or response_state is RemoteStatus.UNKNOWN)
         ):
             return _make_result(
                 ReconciliationClassification.UNKNOWN,
@@ -724,7 +689,6 @@ def reconcile_paypal_return(
     )
 
 
-
 def _validate_return_url(url: str) -> tuple[Any, ReturnStage]:
     value = str(url or "").strip()
     if not value:
@@ -752,31 +716,20 @@ def _validate_return_url(url: str) -> tuple[Any, ReturnStage]:
         raise ReturnURLValidationError("invalid_path", "merchant return URL path is malformed")
 
     if host == "pm-redirects.stripe.com":
-        if not (
-            path in {"/return", "/authorize"}
-            or path.startswith("/return/")
-            or path.startswith("/authorize/")
-        ):
-            raise ReturnURLValidationError(
-                "path_not_allowed", "Stripe return URL path is not allowed"
-            )
+        if not (path in {"/return", "/authorize"} or path.startswith("/return/") or path.startswith("/authorize/")):
+            raise ReturnURLValidationError("path_not_allowed", "Stripe return URL path is not allowed")
         return parsed, ReturnStage.STRIPE_RETURN
     if host == "pay.openai.com":
         pay_id = path.removeprefix("/c/pay/") if path.startswith("/c/pay/") else ""
         if not pay_id or "/" in pay_id or pay_id in {".", ".."}:
-            raise ReturnURLValidationError(
-                "path_not_allowed", "OpenAI Pay return URL path is not allowed"
-            )
+            raise ReturnURLValidationError("path_not_allowed", "OpenAI Pay return URL path is not allowed")
         return parsed, ReturnStage.OPENAI_PAY
     normalized_path = path.rstrip("/") or "/"
     if normalized_path == "/checkout/verify":
         return parsed, ReturnStage.CHECKOUT_VERIFY
     if normalized_path == "/":
         return parsed, ReturnStage.CHATGPT_LANDING
-    raise ReturnURLValidationError(
-        "path_not_allowed", "ChatGPT return URL path is not allowed"
-    )
-
+    raise ReturnURLValidationError("path_not_allowed", "ChatGPT return URL path is not allowed")
 
 
 def _validate_transition(current: ReturnStage, target: ReturnStage) -> None:
@@ -803,15 +756,11 @@ def _validate_transition(current: ReturnStage, target: ReturnStage) -> None:
         )
 
 
-
 def _query(raw_query: str) -> dict[str, list[str]]:
     try:
         return parse_qs(raw_query, keep_blank_values=True, max_num_fields=100)
     except ValueError:
-        raise ReturnURLValidationError(
-            "invalid_query", "merchant return URL query is malformed"
-        ) from None
-
+        raise ReturnURLValidationError("invalid_query", "merchant return URL query is malformed") from None
 
 
 def _first(query: Mapping[str, Sequence[str]], *keys: str) -> str:
@@ -820,7 +769,6 @@ def _first(query: Mapping[str, Sequence[str]], *keys: str) -> str:
         if values:
             return str(values[0] or "").strip()
     return ""
-
 
 
 def _normalize_remote_status(value: Any) -> RemoteStatus:
@@ -836,7 +784,6 @@ def _normalize_remote_status(value: Any) -> RemoteStatus:
     return RemoteStatus.UNKNOWN
 
 
-
 def _merge_status(current: RemoteStatus, observed: RemoteStatus) -> RemoteStatus:
     if observed in {RemoteStatus.FAILED, RemoteStatus.CANCELLED}:
         return observed
@@ -849,7 +796,6 @@ def _merge_status(current: RemoteStatus, observed: RemoteStatus) -> RemoteStatus
     if observed is RemoteStatus.PENDING:
         return observed
     return current
-
 
 
 def _known_mappings(source: Mapping[str, Any]) -> list[Mapping[str, Any]]:
@@ -872,7 +818,6 @@ def _known_mappings(source: Mapping[str, Any]) -> list[Mapping[str, Any]]:
     return output
 
 
-
 def _url_value(value: Any) -> str:
     if isinstance(value, str):
         return value.strip()
@@ -882,7 +827,6 @@ def _url_value(value: Any) -> str:
             if isinstance(nested, str) and nested.strip():
                 return nested.strip()
     return ""
-
 
 
 def _extract_start_url(source: str | Mapping[str, Any]) -> str:
@@ -897,7 +841,6 @@ def _extract_start_url(source: str | Mapping[str, Any]) -> str:
             if value:
                 return value
     return ""
-
 
 
 def _observe_mapping(source: str | Mapping[str, Any], evidence: _Evidence) -> None:
@@ -918,9 +861,8 @@ def _observe_mapping(source: str | Mapping[str, Any], evidence: _Evidence) -> No
         evidence.observed_client_secret = evidence.observed_client_secret or bool(
             current.get("setup_intent_client_secret") or current.get("client_secret")
         )
-        evidence.observed_success_return_url = (
-            evidence.observed_success_return_url
-            or bool(current.get("success_return_url") or current.get("verification_url"))
+        evidence.observed_success_return_url = evidence.observed_success_return_url or bool(
+            current.get("success_return_url") or current.get("verification_url")
         )
         for key in _INPUT_URL_KEYS:
             candidate = _url_value(current.get(key))
@@ -932,14 +874,12 @@ def _observe_mapping(source: str | Mapping[str, Any], evidence: _Evidence) -> No
                 continue
 
 
-
 def _status_code(response: Any) -> Optional[int]:
     try:
         value = int(getattr(response, "status_code"))
     except (AttributeError, TypeError, ValueError):
         return None
     return value if 100 <= value <= 599 else None
-
 
 
 def _response_text(response: Any) -> str:
@@ -950,7 +890,6 @@ def _response_text(response: Any) -> str:
     return value[:_MAX_BODY_LENGTH]
 
 
-
 def _header(response: Any, name: str) -> str:
     headers = getattr(response, "headers", None)
     if not isinstance(headers, Mapping):
@@ -959,7 +898,6 @@ def _header(response: Any, name: str) -> str:
         if str(key).lower() == name.lower():
             return str(value or "").strip()
     return ""
-
 
 
 def _status_from_body(body: str) -> RemoteStatus:
@@ -999,7 +937,6 @@ def _status_from_body(body: str) -> RemoteStatus:
     return RemoteStatus.UNKNOWN
 
 
-
 def _collect_json_statuses(value: Any, output: list[RemoteStatus], *, depth: int) -> None:
     if depth > 8 or len(output) > 100:
         return
@@ -1012,7 +949,6 @@ def _collect_json_statuses(value: Any, output: list[RemoteStatus], *, depth: int
     elif isinstance(value, list):
         for nested in value[:100]:
             _collect_json_statuses(nested, output, depth=depth + 1)
-
 
 
 def _body_candidates(body: str) -> list[str]:
@@ -1034,7 +970,6 @@ def _body_candidates(body: str) -> list[str]:
     return candidates
 
 
-
 def _collect_json_urls(value: Any, output: list[str], *, depth: int) -> None:
     if depth > 8 or len(output) > 100:
         return
@@ -1049,7 +984,6 @@ def _collect_json_urls(value: Any, output: list[str], *, depth: int) -> None:
             _collect_json_urls(nested, output, depth=depth + 1)
 
 
-
 def _nested_success_return_url(url: str) -> str:
     try:
         parsed, _ = _validate_return_url(url)
@@ -1059,13 +993,11 @@ def _nested_success_return_url(url: str) -> str:
     return value
 
 
-
 def _clean_candidate(value: Any) -> str:
     candidate = html.unescape(str(value or "")).strip().strip("'\"")
     if candidate.lower().startswith(("https%3a%2f%2f", "http%3a%2f%2f")):
         candidate = unquote(candidate)
     return candidate.replace("\\/", "/")
-
 
 
 def _pick_body_or_nested_hop(
@@ -1102,17 +1034,14 @@ def _pick_body_or_nested_hop(
     return candidate, state
 
 
-
 def _url_fingerprint(url: str) -> bytes:
     return hashlib.sha256(str(url or "").encode("utf-8", errors="replace")).digest()
-
 
 
 def _safe_exception_name(exc: Exception) -> str:
     name = type(exc).__name__
     safe = re.sub(r"[^A-Za-z0-9_]", "", name)[:80]
     return safe or "Exception"
-
 
 
 def _terminal_remote_result(
@@ -1135,7 +1064,6 @@ def _terminal_remote_result(
     )
 
 
-
 def _success_result(
     stage: ReturnStage,
     hops: Sequence[ReconciliationHop],
@@ -1152,7 +1080,6 @@ def _success_result(
         hops=hops,
         evidence=evidence,
     )
-
 
 
 def _make_result(
@@ -1185,7 +1112,6 @@ def _make_result(
     )
 
 
-
 _ALLOWED_HOSTS = frozenset(
     {
         "pm-redirects.stripe.com",
@@ -1195,21 +1121,16 @@ _ALLOWED_HOSTS = frozenset(
 )
 
 
-
 _REDIRECT_CODES = frozenset({301, 302, 303, 307, 308})
-
 
 
 _RETRYABLE_HTTP_CODES = frozenset({408, 425, 429})
 
 
-
 _MAX_URL_LENGTH = 16_384
 
 
-
 _MAX_BODY_LENGTH = 262_144
-
 
 
 _SUCCESS_MARKERS = (
@@ -1222,7 +1143,6 @@ _SUCCESS_MARKERS = (
 )
 
 
-
 _FAILURE_MARKERS = (
     "payment failed",
     "payment was not successful",
@@ -1230,7 +1150,6 @@ _FAILURE_MARKERS = (
     "setup intent failed",
     "setup_intent_failed",
 )
-
 
 
 _CANCEL_MARKERS = (
@@ -1241,14 +1160,12 @@ _CANCEL_MARKERS = (
 )
 
 
-
 _PROCESSING_MARKERS = (
     "processing payment",
     "processing your payment",
     "payment is being processed",
     "please wait while we process",
 )
-
 
 
 _URL_VALUE_KEYS = frozenset(
@@ -1264,7 +1181,6 @@ _URL_VALUE_KEYS = frozenset(
 )
 
 
-
 _CONTAINER_KEYS = (
     "result",
     "data",
@@ -1276,7 +1192,6 @@ _CONTAINER_KEYS = (
 )
 
 
-
 _INPUT_URL_KEYS = (
     "return_url",
     "returnURL",
@@ -1286,7 +1201,6 @@ _INPUT_URL_KEYS = (
     "success_return_url",
     "verification_url",
 )
-
 
 
 __all__ = [
@@ -1302,4 +1216,3 @@ __all__ = [
     "normalize_return_state",
     "reconcile_paypal_return",
 ]
-

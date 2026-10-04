@@ -1,10 +1,12 @@
 """Email-OTP dispatch, challenge detection and the login OTP phase."""
+
 from __future__ import annotations
 
 import json
 import time
 
 from . import deps, steps, totp
+
 
 def _otp_challenge_established(body):
     """Return True when an email-OTP send response carries a real challenge.
@@ -44,7 +46,10 @@ def _otp_challenge_established(body):
             return True
     return False
 
-def _send_existing_login_otp(session, auth_base, base_headers, current_url, did, sentinel_token="", sentinel_so_token=""):
+
+def _send_existing_login_otp(
+    session, auth_base, base_headers, current_url, did, sentinel_token="", sentinel_so_token=""
+):
     headers = steps._auth_request_headers(
         base_headers,
         did=did,
@@ -173,7 +178,22 @@ def _send_existing_login_otp(session, auth_base, base_headers, current_url, did,
         return False, last_response
     return False, None
 
-def _existing_login_otp(session, mailbox, did, auth_base, base_headers, proxy, sentinel_token, sentinel_so_token, totp_secret, otp_timeout, current_url, fresh_token, fresh_so):
+
+def _existing_login_otp(
+    session,
+    mailbox,
+    did,
+    auth_base,
+    base_headers,
+    proxy,
+    sentinel_token,
+    sentinel_so_token,
+    totp_secret,
+    otp_timeout,
+    current_url,
+    fresh_token,
+    fresh_so,
+):
     otp_send_started = int(time.time())
     ok, otp_send_response = _send_existing_login_otp(
         session,
@@ -263,7 +283,10 @@ def _existing_login_otp(session, mailbox, did, auth_base, base_headers, proxy, s
         # ``existing_login_otp_validate:`` prefix across every process log.
         # ``registration_handlers.create_account`` owns that branch; see the
         # comment there and ``failure_registry.PASSWORDLESS_SIGNUP_CODE``.
-        return ({"ok": False, "error": f"existing_login_otp_validate:{json.dumps(otp_data, ensure_ascii=False)[:200]}"}, None)
+        return (
+            {"ok": False, "error": f"existing_login_otp_validate:{json.dumps(otp_data, ensure_ascii=False)[:200]}"},
+            None,
+        )
     mfa_result = totp._complete_existing_login_totp(
         session,
         auth_base,
@@ -288,9 +311,12 @@ def _existing_login_otp(session, mailbox, did, auth_base, base_headers, proxy, s
         # stops instead of polling a known-dead state.
         print(f"  Existing account OTP continue: profile step, not a login landing ({final_url[:80]})")
         return (
-    {        "ok": False,
-            "error": f"existing_login_landed_on_profile_step:{final_url[:120]}",
-        }        , None)
+            {
+                "ok": False,
+                "error": f"existing_login_landed_on_profile_step:{final_url[:120]}",
+            },
+            None,
+        )
     try:
         deps._follow_continue_url(
             session,
