@@ -9,6 +9,7 @@ below so existing links do not break:
 - [`registration-recovery.md`](registration-recovery.md) - 注册恢复与协作取消的当前行为说明
 - [`registration-architecture.md`](registration-architecture.md) - 注册依赖、状态、生命周期与重试
 - [`protocol-registration.md`](protocol-registration.md) - 协议注册的端点、步骤、Sentinel 与落地页词汇契约
+- [`registration-ab-runbook.md`](registration-ab-runbook.md) - P0-1/P0-2/P1-3 线上受控对照的操作与判定 runbook
 - [`configuration.md`](configuration.md) - 配置分片优先级与迁移约定
 - [`telemetry-and-runtime.md`](telemetry-and-runtime.md) - 日志关联、测试隔离与只读清理清单
 - [`account-health.md`](account-health.md) - 测活、恢复、优惠检查的副作用与代理契约
