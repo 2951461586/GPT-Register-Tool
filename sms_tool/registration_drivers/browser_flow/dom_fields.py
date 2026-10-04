@@ -9,12 +9,14 @@ from typing import Any
 from urllib.parse import urlsplit
 
 EMAIL_SELECTORS = (
-    "input[type='email']", "input[name='email']", "input[name='username']",
-    "input#email-input", "input[autocomplete='email']",
+    "input[type='email']",
+    "input[name='email']",
+    "input[name='username']",
+    "input#email-input",
+    "input[autocomplete='email']",
 )
 EDITABLE_EMAIL_SELECTOR = ", ".join(
-    selector + ":visible:not(:disabled):not([readonly]):not([aria-disabled='true'])"
-    for selector in EMAIL_SELECTORS
+    selector + ":visible:not(:disabled):not([readonly]):not([aria-disabled='true'])" for selector in EMAIL_SELECTORS
 )
 
 
@@ -38,8 +40,11 @@ def _hard_proxy_block(page) -> bool:
     """Detect a terminal proxy/VPN block before waiting for signup controls."""
     text = _body_text(page)
     markers = (
-        "unable to load site", "if you are using a vpn", "try turning it off",
-        "access denied", "sorry, you have been blocked",
+        "unable to load site",
+        "if you are using a vpn",
+        "try turning it off",
+        "access denied",
+        "sorry, you have been blocked",
         "this website is using a security service",
     )
     return any(marker in text for marker in markers)
@@ -49,8 +54,7 @@ def _is_openai_auth_url(url: str) -> bool:
     parsed = urlsplit(str(url or ""))
     host = str(parsed.hostname or "").lower()
     return (
-        host == "chatgpt.com" or host.endswith(".chatgpt.com")
-        or host == "openai.com" or host.endswith(".openai.com")
+        host == "chatgpt.com" or host.endswith(".chatgpt.com") or host == "openai.com" or host.endswith(".openai.com")
     )
 
 
@@ -100,9 +104,13 @@ def _click_continue(page) -> None:
                 return
         except Exception:
             continue
-    button = _first_visible(page, (
-        "input[type='submit'][value='Continue']", "input[type='submit'][value='继续']",
-    ))
+    button = _first_visible(
+        page,
+        (
+            "input[type='submit'][value='Continue']",
+            "input[type='submit'][value='继续']",
+        ),
+    )
     if button is not None:
         button.click(no_wait_after=True)
         return
@@ -174,13 +182,18 @@ def _click_passwordless_otp(page) -> bool:
 
 def _click_resend(page) -> bool:
     # Stable intent/value attributes take precedence over localized text.
-    button = _first_visible(page, (
-        "button[name='intent'][value='resend']",
-        "input[name='intent'][value='resend']",
-        "button[data-testid*='resend' i]",
-        "button:has-text('Resend')", "button:has-text('Send again')",
-        "button:has-text('重新发送')", "a:has-text('Resend')",
-    ))
+    button = _first_visible(
+        page,
+        (
+            "button[name='intent'][value='resend']",
+            "input[name='intent'][value='resend']",
+            "button[data-testid*='resend' i]",
+            "button:has-text('Resend')",
+            "button:has-text('Send again')",
+            "button:has-text('重新发送')",
+            "a:has-text('Resend')",
+        ),
+    )
     if button is None:
         return False
     button.click(no_wait_after=True)
@@ -211,7 +224,8 @@ def _otp_fields(page):
 def _otp_page_state(page) -> dict[str, Any]:
     """Capture OTP DOM state without exposing the code itself."""
     try:
-        return page.evaluate("""() => ({
+        return (
+            page.evaluate("""() => ({
           url: location.href,
           inputs: [...document.querySelectorAll('input')].map(el => ({
             type: el.getAttribute('type') || '', name: el.getAttribute('name') || '',
@@ -224,7 +238,9 @@ def _otp_page_state(page) -> dict[str, Any]:
           })),
           errors: [...document.querySelectorAll('[aria-invalid=true],[role=alert],[class*=error i]')]
             .map(el => (el.innerText || el.textContent || '').trim()).filter(Boolean).slice(0, 10)
-        })""") or {}
+        })""")
+            or {}
+        )
     except Exception:
         return {}
 
@@ -235,10 +251,7 @@ def _session_error_marker(body: Mapping[str, Any]) -> str:
     for key in ("error", "code", "name", "message", "type"):
         value = body.get(key)
         if isinstance(value, Mapping):
-            values.extend(
-                str(value.get(item) or "")
-                for item in ("error", "code", "name", "message", "type")
-            )
+            values.extend(str(value.get(item) or "") for item in ("error", "code", "name", "message", "type"))
         elif isinstance(value, (str, int)):
             values.append(str(value))
     return " ".join(item.strip().lower() for item in values if item and item.strip())[:200]
@@ -246,18 +259,21 @@ def _session_error_marker(body: Mapping[str, Any]) -> str:
 
 def _session_context_closed(value: str) -> bool:
     text = str(value or "").lower()
-    return any(marker in text for marker in (
-        "target page, context or browser has been closed",
-        "target closed",
-        "context closed",
-        "browser has been closed",
-        "no such window",
-        "invalid session id",
-        "session deleted because of page crash",
-        "nosuchwindowexception",
-        "invalidsessionidexception",
-        "targetclosederror",
-    ))
+    return any(
+        marker in text
+        for marker in (
+            "target page, context or browser has been closed",
+            "target closed",
+            "context closed",
+            "browser has been closed",
+            "no such window",
+            "invalid session id",
+            "session deleted because of page crash",
+            "nosuchwindowexception",
+            "invalidsessionidexception",
+            "targetclosederror",
+        )
+    )
 
 
 def _terminal_session_error(status: int, error_marker: str) -> str:
