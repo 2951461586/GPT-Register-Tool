@@ -7,6 +7,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Mapping
@@ -239,6 +240,54 @@ def _log_extractor_terminal(
     )
 
 
+def _sentinel_env(proxy: str, *, timeout: int = 60) -> dict[str, str]:
+    """Mint the Checkout-create Sentinel pair for the extractor subprocess.
+
+    The Checkout create gate answers ``400 unusual activity`` without this pair
+    and ``200`` with it, holding account, exit and body constant -- measured
+    2026-10-06, see ``docs/current/protocol-registration.md``. The extractors
+    were shipped without it, so they could not create a Checkout at all.
+
+    🔴 The adapter owns the device id. A Sentinel token binds to the ``oai-did``
+    that requested the challenge, so the id has to be chosen here, minted for, and
+    handed to the extractor instead of letting the extractor roll its own. When
+    the mint yields nothing the device id is *not* exported either, which leaves
+    the extractor byte-for-byte as it behaved before this existed.
+
+    Best-effort by design: the extractor still runs, reports its own terminal
+    contract, and fails exactly as before if the same-site gate refuses it.
+    """
+    device_id = str(uuid.uuid4())
+    try:
+        from ..sentinel import checkout_sentinel_headers
+
+        headers = checkout_sentinel_headers(
+            device_id=device_id,
+            proxy=proxy or None,
+            cookie_header=f"oai-did={device_id}",
+            timeout_seconds=timeout,
+        )
+    except Exception as exc:
+        _LOGGER.info(
+            "extractor sentinel: mint unavailable (%s); running without the pair",
+            type(exc).__name__,
+        )
+        return {}
+    token = str(headers.get("OpenAI-Sentinel-Token") or "").strip()
+    if not token:
+        _LOGGER.info("extractor sentinel: mint returned no token; running without the pair")
+        return {}
+    env = {"OPENAI_SENTINEL_DEVICE_ID": device_id, "OPENAI_SENTINEL_TOKEN": token}
+    so_token = str(headers.get("OpenAI-Sentinel-SO-Token") or "").strip()
+    if so_token:
+        env["OPENAI_SENTINEL_SO_TOKEN"] = so_token
+    _LOGGER.info(
+        "extractor sentinel: pair ready (token=yes so=%s) for method dispatch",
+        "yes" if so_token else "no",
+    )
+    return env
+
+
 def _extractor_output_missing(proc: subprocess.CompletedProcess[str], output: str) -> dict[str, Any]:
     """The shared "extractor printed no structured result" failure."""
     return {
@@ -386,6 +435,8 @@ def _run_protocol_script(
             Path(proxy_file).unlink(missing_ok=True)
             return {"ok": False, "error": f"unsupported protocol payment method: {spec.key}"}
         env.update(builder(access_token, seed_proxy, proxy_file, script, kwargs))
+
+    env.update(_sentinel_env(seed_proxy))
 
     proc, output, parsed, timeout_err = _finish_extractor(
         spec,

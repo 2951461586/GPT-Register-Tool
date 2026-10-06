@@ -431,6 +431,56 @@ def env_int(name: str, default: int, minimum: int = 1, maximum: int | None = Non
     return value
 
 
+# ── Checkout-create Sentinel pair, injected by the sms_tool adapter ──────────
+#
+# Rule 10: this process must not import ``sms_tool``, so the pair arrives through
+# the environment. ``sms_tool.pay_link.adapters`` mints it with the account's own
+# Sentinel issuer and sets all three variables together.
+#
+# 🔴 The device id is part of the contract, not a convenience. A Sentinel token
+# binds to the ``oai-did`` that requested the challenge, and the Checkout create
+# gate rejects one minted for a different id. So the adapter picks the device id
+# *first*, mints for it, and hands it down: an extractor that kept generating its
+# own ``uuid4`` would present a token bound to nothing it sends.
+#
+# Measured 2026-10-06 on the create endpoint, same account / same verified-BR
+# exit / same body, varying only these headers:
+#     absent  -> 400 {"detail":"Our systems have detected unusual activity..."}
+#     present -> 200 (custom_checkout_session)
+# A partial pair was sufficient in that measurement; do not assume the SO is
+# required, and do not assume it is not -- see docs/current/protocol-registration.md.
+SENTINEL_TOKEN_ENV = "OPENAI_SENTINEL_TOKEN"
+SENTINEL_SO_TOKEN_ENV = "OPENAI_SENTINEL_SO_TOKEN"
+SENTINEL_DEVICE_ID_ENV = "OPENAI_SENTINEL_DEVICE_ID"
+
+
+def sentinel_device_id(default: str = "") -> str:
+    """The device id the injected Sentinel pair was minted for.
+
+    Falls back to ``default`` when the adapter supplied none, which is the
+    pre-Sentinel behaviour (the caller generates its own random id).
+    """
+    return str(os.environ.get(SENTINEL_DEVICE_ID_ENV) or default).strip()
+
+
+def openai_sentinel_headers() -> dict[str, str]:
+    """The ``openai-sentinel-*`` pair for a Checkout create, or ``{}``.
+
+    Empty is a legitimate outcome and must not be fatal: the adapter mints
+    best-effort, and the endpoint answers exactly as it did before when the pair
+    is absent. An extractor must therefore never branch on this being non-empty
+    in a way that changes anything other than the headers it sends.
+    """
+    token = str(os.environ.get(SENTINEL_TOKEN_ENV) or "").strip()
+    so_token = str(os.environ.get(SENTINEL_SO_TOKEN_ENV) or "").strip()
+    headers: dict[str, str] = {}
+    if token:
+        headers["OpenAI-Sentinel-Token"] = token
+    if so_token:
+        headers["OpenAI-Sentinel-SO-Token"] = so_token
+    return headers
+
+
 def collect_strings(payload: Any, result: list[str] | None = None) -> list[str]:
     values = result if result is not None else []
     if isinstance(payload, str):
