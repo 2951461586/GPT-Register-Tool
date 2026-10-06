@@ -107,6 +107,50 @@ requests. The signup lane uses `oauth_create_account` for account creation
 the pinned runner bundle before a batch starts; see
 [registration architecture](registration-architecture.md).
 
+### Checkout lanes share this vocabulary but do not share the create flow
+
+`FLOW_PAGE_URLS` in `sms_tool/sentinel/client.py` is the **single** flow-to-page
+map shared by the registration and payment lanes; `issue_sentinel_flow` resolves
+through it at call time. Registered there are both checkout flows, and they are
+**not** interchangeable:
+
+- **Checkout create** mints `chatgpt_checkout` — `CHECKOUT_SENTINEL_FLOW` at
+  `sms_tool/sentinel/client.py:30`, issued by `issue_checkout_sentinel` at
+  `sms_tool/sentinel/client.py:485`.
+- **Checkout approve** mints `checkout_session_approval` — its own constant
+  `UPI_SENTINEL_APPROVAL_FLOW` at `sms_tool/upi_link/constants.py:42`. Two rails
+  request it explicitly: the UPI approve stage at
+  `sms_tool/upi_link/stages.py:712`, and the PayPal approval sentinel at
+  `sms_tool/paypal_extract.py:520` (defined at
+  `sms_tool/paypal_extract.py:514`).
+
+`CHECKOUT_SENTINEL_FLOW` is the **create** gate only. Do not collapse the approve
+flow onto it: the create token and the approve token are minted under different
+flows and the server reads them differently.
+
+**Token and SO need not come from the same flow.** The approve gate reads a main
+token minted under `checkout_session_approval`, but the SO it accepts carries an
+internal `flow: chatgpt_checkout` — the checkout-phase SO is *reused*, not
+re-minted. `sms_tool/upi_link/sentinel.py:443` records this as HAR #228 and
+re-consults the checkout mint for the SO even when the approval mint returned
+one. A flat one-flow-per-endpoint table is therefore *less* accurate than this
+code, not more.
+
+The seven subprocess extractors under `services/protocol-payment/` attach **no**
+Sentinel pair at all: `sms_tool/pay_link/adapters.py` passes no `SENTINEL*` value
+into their environment. Their approve is gated by the deployment attestation plus
+the `x-openai-target-path` / `x-openai-target-route` frontend markers instead.
+That is a different gate, not a missing one; do not add a Sentinel header there
+without a controlled live comparison.
+
+**Closeout (2026-10-05).** A cross-project review of `pxygit/SunnyRegister`
+(its `payment_proof_contracts.py` `ENDPOINT_FLOW` table) proposed mapping
+`checkout/confirm` and `checkout/approve` to a distinct
+`checkout_session_approval` flow. This repository already does exactly that, and
+the UPI rail additionally models the token/SO split above. **No change
+required.** Recorded here so the proposal is not re-litigated, and so nobody
+"simplifies" `CHECKOUT_SENTINEL_FLOW` into the approve flow.
+
 ## Landing-page vocabulary
 
 Each predicate has exactly one owner in `auth_flow/steps.py`; do not re-derive a
