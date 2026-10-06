@@ -406,8 +406,22 @@ def proxy_key(proxy: str) -> str:
     return shared_proxy_key(proxy, normalize_proxy_url)
 
 
+#: Rewritable country selector inside a proxy's username/password.
+#:
+#: ``geo`` is included because the configured payment egress provider (9http)
+#: spells it ``<user>-geo-US-sid-...``. Without it the rewriter matched nothing,
+#: ``proxy_for_country`` raised "代理未包含可改写的 country/region 选择器", and
+#: every method that derives a country exit failed before its first HTTP call
+#: (measured 2026-10-06). This constant is byte-identical in blik / ideal / kakao
+#: / twint -- keep it that way, or ``sunk_copy_parity`` and the next reader will
+#: both be right to complain.
+#:
+#: ⚠️ A provider that does not serve the requested country can answer with a
+#: *different* one rather than failing: ``geo-PL`` resolved to ``MX``, not ``PL``.
+#: Rewriting therefore does not prove the exit came out where you asked; the
+#: egress gate or ``resolve_proxy_geo`` has to confirm it.
 _PROXY_COUNTRY_SELECTOR_RE = re.compile(
-    r"(?i)(?P<name>country|region)(?P<separator>[-_=])(?P<value>[a-z]{2}(?:,[a-z]{2})*)"
+    r"(?i)(?P<name>country|region|geo)(?P<separator>[-_=])(?P<value>[a-z]{2}(?:,[a-z]{2})*)"
 )
 
 
