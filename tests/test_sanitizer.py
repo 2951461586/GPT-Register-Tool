@@ -180,3 +180,43 @@ def test_non_credential_keys_stay_readable():
         "license_type": "team",
     }
     assert sanitize(payload) == payload
+
+
+def test_handoff_storage_state_is_redacted_as_a_whole_subtree():
+    """The protocol -> browser handoff payload carries live session cookies.
+
+    Decided 2026-10-05 (see ``docs/audits/plan-2026-10-05-inflow-challenge-handoff.md``
+    §3.4/§7): the handoff may be written under ``runtime/``, and its storage
+    state must be covered by ``sensitive_policy.json``.
+
+    Before this, the cookie values were protected only *by accident*: the inner
+    key happened to be spelled ``cookies``, which matched the ``cookie``
+    fragment, so ``sanitize`` replaced the list with ``[REDACTED]``. That left
+    the enclosing field name and its siblings visible and made the protection
+    depend on an inner spelling -- a ``jar`` / ``cookie_list`` variant would have
+    leaked the values in the clear. The exact key plus the ``storage_state``
+    fragment close both halves: the whole subtree collapses to one string, and a
+    renamed variant is covered too.
+    """
+    payload = {
+        "handoff_storage_state": {
+            "cookies": [{"name": "oai-did", "value": _FAKE, "secure": True}],
+            "origins": [],
+        },
+        "handoff_resume_url": "https://auth.openai.com/create-account/password",
+        "handoff_flow": "authorize_continue",
+        "handoff_attempt": 1,
+    }
+    redacted = sanitize(payload)
+    # Whole subtree, not a partially-redacted mapping: nothing about the cookie
+    # jar's shape survives, so no downstream consumer can be tempted to use it.
+    assert redacted["handoff_storage_state"] == "[REDACTED]"
+    assert _FAKE not in str(redacted)
+    # The non-credential diagnostic siblings must stay readable -- a guard that
+    # redacts everything is a guard someone turns off.
+    assert redacted["handoff_flow"] == "authorize_continue"
+    assert redacted["handoff_attempt"] == 1
+    assert redacted["handoff_resume_url"].startswith("https://auth.openai.com/")
+    # Renamed variants are the actual risk: the value is still a cookie jar.
+    for key in ("storage_state", "storage_state_json", "protocol_storage_state"):
+        assert sanitize({key: {"jar": [{"value": _FAKE}]}})[key] == "[REDACTED]", key
