@@ -114,15 +114,22 @@ map shared by the registration and payment lanes; `issue_sentinel_flow` resolves
 through it at call time. Registered there are both checkout flows, and they are
 **not** interchangeable:
 
-- **Checkout create** mints `chatgpt_checkout` — `CHECKOUT_SENTINEL_FLOW` at
-  `sms_tool/sentinel/client.py:30`, issued by `issue_checkout_sentinel` at
-  `sms_tool/sentinel/client.py:485`.
-- **Checkout approve** mints `checkout_session_approval` — its own constant
-  `UPI_SENTINEL_APPROVAL_FLOW` at `sms_tool/upi_link/constants.py:42`. Two rails
-  request it explicitly: the UPI approve stage at
-  `sms_tool/upi_link/stages.py:712`, and the PayPal approval sentinel at
-  `sms_tool/paypal_extract.py:520` (defined at
-  `sms_tool/paypal_extract.py:514`).
+- **Checkout create** mints `chatgpt_checkout` — `CHECKOUT_SENTINEL_FLOW` at `sms_tool/sentinel/client.py:30`, issued by `issue_checkout_sentinel` at `sms_tool/sentinel/client.py:485`.
+- **Checkout approve** mints `checkout_session_approval` — its own constant `UPI_SENTINEL_APPROVAL_FLOW` at `sms_tool/upi_link/constants.py:42`. Two rails request it explicitly: the UPI approve stage passes `sentinel_flow=UPI_SENTINEL_APPROVAL_FLOW` at `sms_tool/upi_link/stages.py:712`, and `PPLinkExtractor._fresh_approval_sentinel` mints it at `sms_tool/paypal_extract.py:523`.
+
+  🔴 **How to write a guardable pointer here** — two rules, both learned the hard
+  way by watching this pair drift by 13 lines when an unrelated `paypal_extract.py`
+  edit landed in the same series, with neither gate reporting it:
+
+  1. **The symbol name and the line number must sit on the *same* line.**
+     `scripts/docs_consistency_scan.py` is the weak tier for prose (any in-range
+     number passes), and `scripts/refresh_doc_symbol_lines.py` is the fixer -- but
+     `_rewrite` runs `_prose_edits` **per line**, so a pointer whose symbol is on the
+     previous line is unattributable and silently unguarded. That is why the
+     bullets above are single long lines instead of wrapped.
+  2. **A class method must be spelled dotted** (`Class.method`).
+     `_symbol_lines` records module-level names plus direct methods keyed as
+     `Class.method`, so an undotted `_fresh_approval_sentinel` maps to nothing.
 
 `CHECKOUT_SENTINEL_FLOW` is the **create** gate only. Do not collapse the approve
 flow onto it: the create token and the approve token are minted under different
@@ -137,11 +144,49 @@ one. A flat one-flow-per-endpoint table is therefore *less* accurate than this
 code, not more.
 
 The seven subprocess extractors under `services/protocol-payment/` attach **no**
-Sentinel pair at all: `sms_tool/pay_link/adapters.py` passes no `SENTINEL*` value
-into their environment. Their approve is gated by the deployment attestation plus
-the `x-openai-target-path` / `x-openai-target-route` frontend markers instead.
-That is a different gate, not a missing one; do not add a Sentinel header there
-without a controlled live comparison.
+Sentinel pair anywhere. `sms_tool/pay_link/adapters.py` passes no `SENTINEL*`
+value into their environment, and none of them sets `openai-sentinel-token` by
+hand. Their approve is authenticated by the account's own cookie jar
+(`oai-did` + `__Secure-next-auth.session-token`, built in e.g.
+`services/protocol-payment/blik/blik_qr_extract.py`) plus the
+`x-openai-target-path` / `x-openai-target-route` frontend markers and a
+per-endpoint `Referer`. Four of them (blik / ideal / twint / pix) also POST
+`backend-api/sentinel/ping` before approve — but that request carries **no token
+either**; it is a connectivity/state warm-up, and the in-process counterpart
+`sms_tool/upi_link/sentinel.py` `_upi_sentinel_ping` sends the identical
+token-less header set and documents itself as "best-effort Sentinel
+connectivity ping (failure is never fatal)". So the ping is consistent across
+both rails; the asymmetry is only in the approve call itself.
+
+🔴 **This is an untested asymmetry, not a settled "different gate".** An earlier
+revision of this section claimed "that is a different gate, not a missing one".
+A 2026-10-05 re-review could not support that claim, and every available
+evidence source is exhausted:
+
+| Source | Result |
+| --- | --- |
+| Source code | Conclusive for the **fact**: 6 of 7 call approve with no Sentinel (`direct_card` never calls approve). UPI and PayPal do mint `checkout_session_approval` (`sms_tool/upi_link/stages.py`, `sms_tool/paypal_extract.py:537`) |
+| 391 retained `runtime/logs/processes/*/backend_stdout.jsonl` | The extractor approve **failure path never fired**: `approve 未通过`, `approve_http_`, `approve 失败`, `approve_result_blocked` = **0 occurrences**. Says nothing about whether a token would have been needed, because success is not logged |
+| Same logs, in-process side | The mint is exercised and healthy: **65** `checkout_session_approval Sentinel ready (bridge …)` lines and **0** `Sentinel unavailable` — but all 125 `Sentinel ready` lines are UPI's bridge form, so this is **UPI-only** evidence; PayPal's `_fresh_approval_sentinel` success line appears **0** times, so that rail did not reach approve in the window |
+| Extractor `dumps/` (`ideal/dumps`, `twint/dumps`) | **Empty** — the `approve` dump is written with `force=True`, so it existed, but it was purged |
+| `protocol_payment.v1` terminal lines in logs | Not retained: `_finish_extractor` keeps stdout for parsing and only surfaces `_tail(output)` on the **failure** path, by design |
+
+**Why the gap cannot be closed from the current data**: extractor success is
+silent. A run whose approve quietly succeeded is byte-identical in the logs to
+one that never reached approve. So neither "the cookie jar is sufficient" nor
+"a token is required" is supported, and the compensating mechanism is
+suspicious: the extractors answer `blocked` by **rotating the proxy up to 10
+times** (`IDEAL_APPROVE_RETRY_MAX`, default 10, with a comment about
+`approve 返回 blocked`). Rotating an exit is the wrong lever if `blocked`
+actually means "no Sentinel token", exactly as the `blocked_count` retries were
+previously measured as wasted time.
+
+⇒ **Recommended next step is observability, not a header.** The adapter should
+log the terminal contract's `payment_method` / `ok` / `error_code` (redacted —
+never `error` text or `url`) at INFO for every extractor run, so the asymmetry
+becomes measurable before anyone changes a header. Do **not** add a Sentinel
+header to the subprocess extractors on the strength of the in-process rails,
+and do not conclude they don't need one either.
 
 **Closeout (2026-10-05).** A cross-project review of `pxygit/SunnyRegister`
 (its `payment_proof_contracts.py` `ENDPOINT_FLOW` table) proposed mapping
