@@ -143,25 +143,40 @@ re-consults the checkout mint for the SO even when the approval mint returned
 one. A flat one-flow-per-endpoint table is therefore *less* accurate than this
 code, not more.
 
-The seven subprocess extractors under `services/protocol-payment/` attach **no**
-Sentinel pair anywhere. `sms_tool/pay_link/adapters.py` passes no `SENTINEL*`
-value into their environment, and none of them sets `openai-sentinel-token` by
-hand. Their approve is authenticated by the account's own cookie jar
-(`oai-did` + `__Secure-next-auth.session-token`, built in e.g.
-`services/protocol-payment/blik/blik_qr_extract.py`) plus the
-`x-openai-target-path` / `x-openai-target-route` frontend markers and a
-per-endpoint `Referer`. Four of them (blik / ideal / twint / pix) also POST
-`backend-api/sentinel/ping` before approve — but that request carries **no token
-either**; it is a connectivity/state warm-up, and the in-process counterpart
-`sms_tool/upi_link/sentinel.py` `_upi_sentinel_ping` sends the identical
-token-less header set and documents itself as "best-effort Sentinel
-connectivity ping (failure is never fatal)". So the ping is consistent across
-both rails; the asymmetry is only in the approve call itself.
+### The subprocess extractors now receive the Sentinel pair
 
-🔴 **This is an untested asymmetry, not a settled "different gate".** An earlier
-revision of this section claimed "that is a different gate, not a missing one".
-A 2026-10-05 re-review could not support that claim, and every available
-evidence source is exhausted:
+Until 2026-10-06 the seven extractors under `services/protocol-payment/` sent
+**no** Sentinel pair anywhere. `sms_tool/pay_link/adapters.py` passed no
+`SENTINEL*` value into their environment, none of them set the header by hand,
+and their approve was authenticated only by the account's own cookie jar
+(`oai-did` + `__Secure-next-auth.session-token`) plus the
+`x-openai-target-path` / `x-openai-target-route` markers and a per-endpoint
+`Referer`. Four of them (blik / ideal / twint / pix) also POST
+`backend-api/sentinel/ping` before approve — with **no token either**; that is a
+connectivity warm-up, and the in-process counterpart `_upi_sentinel_ping` sends
+the identical token-less header set.
+
+That silence was a **real gap, not a different gate**. A controlled A/B on the
+create endpoint — same account, same country-verified exit, same body, varying
+only the headers — settled it:
+
+| Headers sent | Result |
+| --- | --- |
+| none | `400` "Our systems have detected unusual activity" |
+| `openai-sentinel-token` alone | `200` `custom_checkout_session` |
+
+The pair now travels by **environment**, because Rule 10 forbids `services/` from
+importing `sms_tool`: `services/protocol-payment/common/protocol_core.py` owns the
+contract (`OPENAI_SENTINEL_TOKEN` / `_SO_TOKEN` / `_DEVICE_ID`,
+`sentinel_device_id()`, `openai_sentinel_headers()`) and
+`sms_tool/pay_link/adapters.py` (`_sentinel_env`) mints and injects it. The
+adapter chooses the device id **first** and hands it down, because a token binds
+to the `oai-did` that requested the challenge.
+
+🔴 **How the earlier review was boxed in (kept for the method, not the
+verdict).** An earlier revision of this section claimed "that is a different
+gate, not a missing one". A 2026-10-05 re-review could not support *or* refute
+that from the retained data, and the reason is worth keeping:
 
 | Source | Result |
 | --- | --- |
@@ -171,15 +186,14 @@ evidence source is exhausted:
 | Extractor `dumps/` (`ideal/dumps`, `twint/dumps`) | **Empty** — the `approve` dump is written with `force=True`, so it existed, but it was purged |
 | `protocol_payment.v1` terminal lines in logs | Not retained: `_finish_extractor` keeps stdout for parsing and only surfaces `_tail(output)` on the **failure** path, by design |
 
-**Why the gap cannot be closed from the current data**: extractor success is
-silent. A run whose approve quietly succeeded is byte-identical in the logs to
-one that never reached approve. So neither "the cookie jar is sufficient" nor
-"a token is required" is supported, and the compensating mechanism is
-suspicious: the extractors answer `blocked` by **rotating the proxy up to 10
-times** (`IDEAL_APPROVE_RETRY_MAX`, default 10, with a comment about
-`approve 返回 blocked`). Rotating an exit is the wrong lever if `blocked`
-actually means "no Sentinel token", exactly as the `blocked_count` retries were
-previously measured as wasted time.
+**Why the logs could not answer it**: extractor success was silent. A run whose
+approve quietly succeeded was byte-identical in the logs to one that never
+reached approve, so neither hypothesis was supported — and the compensating
+mechanism was suspicious in a way the A/B later vindicated: the extractors answer
+`blocked` by **rotating the proxy up to 10 times** (`IDEAL_APPROVE_RETRY_MAX`,
+default 10, with a comment about `approve 返回 blocked`). Rotating an exit is the
+wrong lever when the real cause is a missing gate token, exactly as the
+`blocked_count` retries had previously been measured as wasted time.
 
 ⇒ **Observability, not a header — landed 2026-10-05.** `_log_extractor_terminal` in
 `sms_tool/pay_link/adapters.py` emits exactly one INFO line per subprocess-extractor
@@ -196,11 +210,40 @@ a genuinely silent extractor). A mismatch between the contract's own
 `payment_method` and the method that was dispatched stays visible rather than
 being masked.
 
-What to do next: collect this line across a batch, then compare
-`error_code`/`ok` for the six Sentinel-free extractors against the UPI/PayPal
-rails that do mint. **Do not** add a Sentinel header on the strength of the
-in-process rails, and do not conclude the subprocess ones don't need one either
-— the point of the line is to make that question answerable, not to answer it.
+⇒ **What to do next — and why five extractors are deliberately left unwired.**
+Two extractors are wired: **pix** and **direct_card**. The other five
+(blik / ideal / twint / kakao / momo) are not, because injecting the pair there
+cannot help:
+
+🔴 **Six of the seven cannot work on this endpoint any more.** The create call no
+longer issues `cs_*` sessions at all. Measured 2026-10-06 across every
+`checkout_ui_mode` the server accepts:
+
+| `checkout_ui_mode` | Result |
+| --- | --- |
+| `hosted` / `custom` / omitted | `200`, always `tag=custom_checkout_session`, always an `oaics_*` id |
+| `deferred` / `stripe_hosted` / `elements` | `422` |
+
+and Stripe answers an `oaics_*` id with `404 resource_missing: No such
+payment_page`. blik / ideal / twint / pix / kakao / momo drive Stripe
+`payment_pages` + `payment_methods` throughout, so **no prefix or header change
+can revive them**: they need the custom Checkout flow
+(`custom_payment_method/start` → `payment_intents/{pi}/confirm` →
+`checkout/confirm` → `checkout/approve`), or retirement in favour of the
+in-process machinery that already implements it (UPI, direct_card, gopay,
+gcash). That fork is open and deliberately undecided here.
+
+`direct_card` is the exception because it accepts `oaics_*` and never touches
+`payment_pages`. With a country-correct exit and the injected pair it produces a
+real link end to end:
+
+```text
+extractor terminal: payment_method=direct_card ok=ok error_code=- exit_code=0
+url: https://chatgpt.com/checkout/openai_llc/oaics_<id>
+```
+
+See [account-health.md](account-health.md) for the session-family split this
+rests on, and for the create-gate token question.
 
 **Closeout (2026-10-05).** A cross-project review of `pxygit/SunnyRegister`
 (its `payment_proof_contracts.py` `ENDPOINT_FLOW` table) proposed mapping

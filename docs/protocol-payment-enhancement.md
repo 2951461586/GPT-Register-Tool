@@ -7,6 +7,14 @@
 > 范围边界：仅做**架构级 / 通用工程**移植（代理解析、代理桥、响应结果归一化、上下文校验）。
 > 不移植、不增强外部项目中任何"协议逆向 / 绕过风控"的具体实现（如 DataDome 绕过、身份提升
 > guest→member 的具体反风控交互）。凡涉及此类逻辑，文档只做标注，不提供实现。
+>
+> **状态（2026-10-06 整理）：本方案的三项能力均已落地并通过测试。**
+> `sms_tool/proxy_entry.py`（686 行）、`sms_tool/proxy_bridge.py`（548 行）、
+> `sms_tool/paypal_authorization.py`（317 行）均在仓库中，§5 承诺的
+> `tests/test_proxy_entry.py` / `tests/test_proxy_bridge.py` /
+> `tests/test_paypal_authorization.py` 三份测试也均存在。
+> ⚠️ 因此下文 §0 的「现状」列与 §1 的 recon 是**改动前**的记录，
+> 不是当前状态；当前契约为文末的 *Shared Flow Executor And Routing* 一节。
 
 ---
 
@@ -15,7 +23,7 @@
 当前项目（`F:\epsoft\GPT-Register-Tool`）在协议支付链路上已经具备相当完整的代理与结果契约基础设施，
 但与外部项目相比仍有三处可补强，且均为**通用工程能力**：
 
-| # | 外部项目能力 | 当前项目现状 | 补强结论 |
+| # | 外部项目能力 | 改动前现状（三项均已落地） | 补强结论（均已落地） |
 |---|-------------|-------------|----------|
 | 1 | `paypal/proxy.py` 代理解析器（`ProxyEntry.parse` / `load_proxy_pool` / `choose_proxy_entry`） | 已有 `phone_proxy.normalize_proxy_url` 与 `proxy_pool.UpstreamProxy.from_url`，但**逻辑重复、覆盖不全**（IPv6 裸格式、socks5/socks5h scheme 传播、端口默认值、无认证格式、池随机/轮询选择未统一） | **新增**统一 `ProxyEntry` 解析器 + 池加载/选择（`proxy_entry.py`） |
 | 2 | `session.py` / `flow.py` 把单条认证代理桥到本地会话 | 已有 `proxy_pool.Socks5Server`（多上游手动池），但需外部配置文件启动 | **新增**进程内单条认证代理 → 本地 `socks5://127.0.0.1:<port>` 桥（供 nodriver / 手动浏览器路径使用） |
@@ -225,7 +233,10 @@ def to_payment_result(ctx, *, payment_method="paypal") -> dict  # 映射到 Paym
    - `tests/test_paypal_authorization.py`：纯解析——mock 的 GraphQL/JSON 响应 → `PayPalAuthorizationContext` → `classify_authorization_outcome` → `to_payment_result` 与 `PaymentResult.from_mapping` 对齐。
 2. 既有测试回归：`tests/test_phone_proxy.py`、`tests/test_proxy_pool.py`、`tests/test_paypal_proxy.py`、`tests/test_paypal_protocol.py`、`tests/test_payment_*` 需保持通过。
 3. 语法/导入检查：`python -c "import sms_tool.proxy_entry, sms_tool.proxy_bridge, sms_tool.paypal_authorization"`。
-# Shared Flow Executor And Routing
+
+---
+
+## 6. Shared Flow Executor And Routing
 
 Protocol-payment extraction now uses three common modules:
 
