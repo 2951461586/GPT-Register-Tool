@@ -19,12 +19,12 @@ except Exception:  # pragma: no cover
 CHATGPT_BASE_URL = "https://chatgpt.com"
 
 DEFAULT_USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/146.0.0.0 Safari/537.36"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
 )
 
-DEFAULT_STRIPE_PK = "pk_live_51HOrSwC6h1nxGoI3lTAgRjYVrz4dU3fVOabyCcKR3pbEJguCVAlqCxdxCUvoRh1XWwRacViovU3kLKvpkjh7IqkW00iXQsjo3n"
+DEFAULT_STRIPE_PK = (
+    "pk_live_51HOrSwC6h1nxGoI3lTAgRjYVrz4dU3fVOabyCcKR3pbEJguCVAlqCxdxCUvoRh1XWwRacViovU3kLKvpkjh7IqkW00iXQsjo3n"
+)
 
 STRIPE_VERSION_FULL = "2025-03-31.basil; checkout_server_update_beta=v1; checkout_manual_approval_preview=v1"
 
@@ -33,56 +33,353 @@ DEFAULT_STRIPE_RUNTIME_VERSION = "6f8494a281"
 PAY_LONG_LINK_TIMEOUT = 30
 
 COUNTRY_CURRENCY = {
-    "AT": "EUR", "AU": "AUD", "BE": "EUR", "BR": "BRL", "CA": "CAD", "CH": "CHF", "CZ": "CZK",
-    "DE": "EUR", "DK": "DKK", "ES": "EUR", "FI": "EUR", "FR": "EUR", "GB": "GBP", "HK": "HKD",
-    "ID": "IDR", "IE": "EUR", "IN": "INR", "IT": "EUR", "JP": "JPY", "KR": "KRW", "MX": "MXN",
-    "MY": "MYR", "NL": "EUR", "NO": "NOK", "NZ": "NZD", "PH": "PHP", "PL": "PLN", "PT": "EUR",
-    "SE": "SEK", "SG": "SGD", "TH": "THB", "TW": "TWD", "US": "USD", "VN": "VND",
+    "AT": "EUR",
+    "AU": "AUD",
+    "BE": "EUR",
+    "BR": "BRL",
+    "CA": "CAD",
+    "CH": "CHF",
+    "CZ": "CZK",
+    "DE": "EUR",
+    "DK": "DKK",
+    "ES": "EUR",
+    "FI": "EUR",
+    "FR": "EUR",
+    "GB": "GBP",
+    "HK": "HKD",
+    "ID": "IDR",
+    "IE": "EUR",
+    "IN": "INR",
+    "IT": "EUR",
+    "JP": "JPY",
+    "KR": "KRW",
+    "MX": "MXN",
+    "MY": "MYR",
+    "NL": "EUR",
+    "NO": "NOK",
+    "NZ": "NZD",
+    "PH": "PHP",
+    "PL": "PLN",
+    "PT": "EUR",
+    "SE": "SEK",
+    "SG": "SGD",
+    "TH": "THB",
+    "TW": "TWD",
+    "US": "USD",
+    "VN": "VND",
 }
 
 OPENAI_SUPPORTED_COUNTRY_CODES = {
-    "AX", "AL", "DZ", "AS", "AD", "AO", "AI", "AQ", "AG", "AR",
-    "AM", "AW", "AU", "AT", "AZ", "BS", "BH", "BD", "BB", "BE",
-    "BZ", "BJ", "BM", "BT", "BO", "BQ", "BA", "BW", "BV", "BR",
-    "IO", "BN", "BG", "BF", "BI", "CV", "KH", "CM", "CA", "KY",
-    "CF", "TD", "CL", "CX", "CC", "CO", "KM", "CG", "CK", "CR",
-    "CI", "HR", "CW", "CY", "CZ", "DK", "DJ", "DM", "DO", "EC",
-    "SV", "GQ", "ER", "EE", "SZ", "FK", "FO", "FJ", "FI", "FR",
-    "GF", "PF", "TF", "GA", "GM", "GE", "DE", "GH", "GI", "GR",
-    "GL", "GD", "GP", "GU", "GT", "GG", "GN", "GW", "GY", "HT",
-    "HM", "VA", "HN", "HU", "IS", "IN", "ID", "IQ", "IE", "IM",
-    "IL", "IT", "JM", "JP", "JE", "JO", "KZ", "KE", "KI", "KW",
-    "KG", "LA", "LV", "LB", "LS", "LR", "LI", "LT", "LU", "MG",
-    "MW", "MY", "MV", "ML", "MT", "MH", "MQ", "MR", "MU", "YT",
-    "MX", "FM", "MD", "MC", "MN", "ME", "MS", "MA", "MZ", "MM",
-    "NA", "NR", "NP", "NL", "NC", "NZ", "NI", "NE", "NG", "NU",
-    "NF", "MK", "MP", "NO", "OM", "PK", "PW", "PS", "PA", "PG",
-    "PE", "PH", "PN", "PL", "PT", "PR", "QA", "RE", "RO", "RW",
-    "BL", "SH", "KN", "LC", "MF", "PM", "VC", "WS", "SM", "ST",
-    "SN", "RS", "SC", "SL", "SG", "SX", "SK", "SI", "SB", "SO",
-    "ZA", "GS", "KR", "SS", "ES", "LK", "SR", "SJ", "SE", "CH",
-    "TW", "TZ", "TH", "TL", "TG", "TK", "TO", "TT", "TN", "TR",
-    "TM", "TC", "TV", "UG", "UA", "AE", "GB", "UM", "US", "UY",
-    "UZ", "VU", "WF", "EH", "ZM",
+    "AX",
+    "AL",
+    "DZ",
+    "AS",
+    "AD",
+    "AO",
+    "AI",
+    "AQ",
+    "AG",
+    "AR",
+    "AM",
+    "AW",
+    "AU",
+    "AT",
+    "AZ",
+    "BS",
+    "BH",
+    "BD",
+    "BB",
+    "BE",
+    "BZ",
+    "BJ",
+    "BM",
+    "BT",
+    "BO",
+    "BQ",
+    "BA",
+    "BW",
+    "BV",
+    "BR",
+    "IO",
+    "BN",
+    "BG",
+    "BF",
+    "BI",
+    "CV",
+    "KH",
+    "CM",
+    "CA",
+    "KY",
+    "CF",
+    "TD",
+    "CL",
+    "CX",
+    "CC",
+    "CO",
+    "KM",
+    "CG",
+    "CK",
+    "CR",
+    "CI",
+    "HR",
+    "CW",
+    "CY",
+    "CZ",
+    "DK",
+    "DJ",
+    "DM",
+    "DO",
+    "EC",
+    "SV",
+    "GQ",
+    "ER",
+    "EE",
+    "SZ",
+    "FK",
+    "FO",
+    "FJ",
+    "FI",
+    "FR",
+    "GF",
+    "PF",
+    "TF",
+    "GA",
+    "GM",
+    "GE",
+    "DE",
+    "GH",
+    "GI",
+    "GR",
+    "GL",
+    "GD",
+    "GP",
+    "GU",
+    "GT",
+    "GG",
+    "GN",
+    "GW",
+    "GY",
+    "HT",
+    "HM",
+    "VA",
+    "HN",
+    "HU",
+    "IS",
+    "IN",
+    "ID",
+    "IQ",
+    "IE",
+    "IM",
+    "IL",
+    "IT",
+    "JM",
+    "JP",
+    "JE",
+    "JO",
+    "KZ",
+    "KE",
+    "KI",
+    "KW",
+    "KG",
+    "LA",
+    "LV",
+    "LB",
+    "LS",
+    "LR",
+    "LI",
+    "LT",
+    "LU",
+    "MG",
+    "MW",
+    "MY",
+    "MV",
+    "ML",
+    "MT",
+    "MH",
+    "MQ",
+    "MR",
+    "MU",
+    "YT",
+    "MX",
+    "FM",
+    "MD",
+    "MC",
+    "MN",
+    "ME",
+    "MS",
+    "MA",
+    "MZ",
+    "MM",
+    "NA",
+    "NR",
+    "NP",
+    "NL",
+    "NC",
+    "NZ",
+    "NI",
+    "NE",
+    "NG",
+    "NU",
+    "NF",
+    "MK",
+    "MP",
+    "NO",
+    "OM",
+    "PK",
+    "PW",
+    "PS",
+    "PA",
+    "PG",
+    "PE",
+    "PH",
+    "PN",
+    "PL",
+    "PT",
+    "PR",
+    "QA",
+    "RE",
+    "RO",
+    "RW",
+    "BL",
+    "SH",
+    "KN",
+    "LC",
+    "MF",
+    "PM",
+    "VC",
+    "WS",
+    "SM",
+    "ST",
+    "SN",
+    "RS",
+    "SC",
+    "SL",
+    "SG",
+    "SX",
+    "SK",
+    "SI",
+    "SB",
+    "SO",
+    "ZA",
+    "GS",
+    "KR",
+    "SS",
+    "ES",
+    "LK",
+    "SR",
+    "SJ",
+    "SE",
+    "CH",
+    "TW",
+    "TZ",
+    "TH",
+    "TL",
+    "TG",
+    "TK",
+    "TO",
+    "TT",
+    "TN",
+    "TR",
+    "TM",
+    "TC",
+    "TV",
+    "UG",
+    "UA",
+    "AE",
+    "GB",
+    "UM",
+    "US",
+    "UY",
+    "UZ",
+    "VU",
+    "WF",
+    "EH",
+    "ZM",
 }
 
 COUNTRY_PHONE_PREFIX = {
-    "AU": "+61", "CA": "+1", "DE": "+49", "GB": "+44", "IE": "+353", "JP": "+81",
-    "NZ": "+64", "SG": "+65", "TH": "+66", "US": "+1",
-    "AD": "+376", "AE": "+971", "AL": "+355", "AR": "+54", "AT": "+43", "BE": "+32",
-    "BG": "+359", "BH": "+973", "BM": "+1", "BO": "+591", "BR": "+55", "CH": "+41",
-    "CL": "+56", "CO": "+57", "CR": "+506", "CY": "+357", "CZ": "+420", "DK": "+45",
-    "EE": "+372", "ES": "+34", "FI": "+358", "FR": "+33", "GI": "+350", "GR": "+30",
-    "HK": "+852", "HU": "+36", "ID": "+62", "IL": "+972", "IN": "+91", "IS": "+354",
-    "IT": "+39", "KR": "+82", "KZ": "+7", "LI": "+423", "LT": "+370", "LU": "+352",
-    "LV": "+371", "MC": "+377", "MD": "+373", "ME": "+382", "MK": "+389", "MT": "+356",
-    "MX": "+52", "MY": "+60", "NL": "+31", "NO": "+47", "PH": "+63", "PL": "+48",
-    "PT": "+351", "QA": "+974", "RO": "+40", "RS": "+381", "SA": "+966", "SE": "+46",
-    "SI": "+386", "SK": "+421", "SM": "+378", "TR": "+90", "TW": "+886", "UA": "+380",
-    "UY": "+598", "ZA": "+27",
+    "AU": "+61",
+    "CA": "+1",
+    "DE": "+49",
+    "GB": "+44",
+    "IE": "+353",
+    "JP": "+81",
+    "NZ": "+64",
+    "SG": "+65",
+    "TH": "+66",
+    "US": "+1",
+    "AD": "+376",
+    "AE": "+971",
+    "AL": "+355",
+    "AR": "+54",
+    "AT": "+43",
+    "BE": "+32",
+    "BG": "+359",
+    "BH": "+973",
+    "BM": "+1",
+    "BO": "+591",
+    "BR": "+55",
+    "CH": "+41",
+    "CL": "+56",
+    "CO": "+57",
+    "CR": "+506",
+    "CY": "+357",
+    "CZ": "+420",
+    "DK": "+45",
+    "EE": "+372",
+    "ES": "+34",
+    "FI": "+358",
+    "FR": "+33",
+    "GI": "+350",
+    "GR": "+30",
+    "HK": "+852",
+    "HU": "+36",
+    "ID": "+62",
+    "IL": "+972",
+    "IN": "+91",
+    "IS": "+354",
+    "IT": "+39",
+    "KR": "+82",
+    "KZ": "+7",
+    "LI": "+423",
+    "LT": "+370",
+    "LU": "+352",
+    "LV": "+371",
+    "MC": "+377",
+    "MD": "+373",
+    "ME": "+382",
+    "MK": "+389",
+    "MT": "+356",
+    "MX": "+52",
+    "MY": "+60",
+    "NL": "+31",
+    "NO": "+47",
+    "PH": "+63",
+    "PL": "+48",
+    "PT": "+351",
+    "QA": "+974",
+    "RO": "+40",
+    "RS": "+381",
+    "SA": "+966",
+    "SE": "+46",
+    "SI": "+386",
+    "SK": "+421",
+    "SM": "+378",
+    "TR": "+90",
+    "TW": "+886",
+    "UA": "+380",
+    "UY": "+598",
+    "ZA": "+27",
 }
 
-US_BILLING_NAMES = [("James", "Smith"), ("John", "Brown"), ("Michael", "Johnson"), ("Robert", "Miller"), ("David", "Davis"), ("William", "Wilson")]
+US_BILLING_NAMES = [
+    ("James", "Smith"),
+    ("John", "Brown"),
+    ("Michael", "Johnson"),
+    ("Robert", "Miller"),
+    ("David", "Davis"),
+    ("William", "Wilson"),
+]
 
 US_BILLING_STREETS = [
     ("3110 Sunset Boulevard", "Los Angeles", "CA", "90026"),
@@ -92,7 +389,20 @@ US_BILLING_STREETS = [
     ("1200 Peachtree St", "Atlanta", "GA", "30309"),
 ]
 
-DE_BILLING_NAMES = [("Lukas", "Schneider"), ("Felix", "Muller"), ("Jonas", "Weber"), ("Leon", "Fischer"), ("Marie", "Wagner"), ("Laura", "Becker"), ("Maximilian", "Hoffmann"), ("Paul", "Schulz"), ("Emma", "Koch"), ("Hannah", "Bauer"), ("Sophie", "Richter"), ("Noah", "Klein")]
+DE_BILLING_NAMES = [
+    ("Lukas", "Schneider"),
+    ("Felix", "Muller"),
+    ("Jonas", "Weber"),
+    ("Leon", "Fischer"),
+    ("Marie", "Wagner"),
+    ("Laura", "Becker"),
+    ("Maximilian", "Hoffmann"),
+    ("Paul", "Schulz"),
+    ("Emma", "Koch"),
+    ("Hannah", "Bauer"),
+    ("Sophie", "Richter"),
+    ("Noah", "Klein"),
+]
 
 DE_BILLING_STREETS = [
     ("Friedrichstrasse 123", "Berlin", "BE", "10117"),
@@ -109,7 +419,20 @@ DE_BILLING_STREETS = [
     ("Breite Strasse 18", "Bonn", "NW", "53111"),
 ]
 
-GB_BILLING_NAMES = [("Oliver", "Smith"), ("George", "Taylor"), ("Harry", "Brown"), ("Noah", "Wilson"), ("Jack", "Davies"), ("Arthur", "Evans"), ("Olivia", "Johnson"), ("Amelia", "Roberts"), ("Isla", "Walker"), ("Ava", "Thompson"), ("Mia", "White"), ("Grace", "Hughes")]
+GB_BILLING_NAMES = [
+    ("Oliver", "Smith"),
+    ("George", "Taylor"),
+    ("Harry", "Brown"),
+    ("Noah", "Wilson"),
+    ("Jack", "Davies"),
+    ("Arthur", "Evans"),
+    ("Olivia", "Johnson"),
+    ("Amelia", "Roberts"),
+    ("Isla", "Walker"),
+    ("Ava", "Thompson"),
+    ("Mia", "White"),
+    ("Grace", "Hughes"),
+]
 
 GB_BILLING_STREETS = [
     ("221B Baker Street", "London", "England", "NW1 6XE"),
@@ -124,7 +447,14 @@ GB_BILLING_STREETS = [
     ("6 Royal Avenue", "Belfast", "Northern Ireland", "BT1 1DA"),
 ]
 
-AU_BILLING_NAMES = [("Jack", "Wilson"), ("Oliver", "Taylor"), ("Noah", "Brown"), ("Charlotte", "Smith"), ("Amelia", "Jones"), ("Isla", "Williams")]
+AU_BILLING_NAMES = [
+    ("Jack", "Wilson"),
+    ("Oliver", "Taylor"),
+    ("Noah", "Brown"),
+    ("Charlotte", "Smith"),
+    ("Amelia", "Jones"),
+    ("Isla", "Williams"),
+]
 
 AU_BILLING_STREETS = [
     ("120 Collins Street", "Melbourne", "Victoria", "3000"),
@@ -135,15 +465,46 @@ AU_BILLING_STREETS = [
     ("18 Elizabeth Street", "Hobart", "Tasmania", "7000"),
 ]
 
-EXTRA_BILLING_NAMES = [("Alex", "Tan"), ("Daniel", "Lee"), ("Emma", "Wong"), ("Mia", "Chen"), ("Noah", "Martin"), ("Olivia", "Nguyen")]
+EXTRA_BILLING_NAMES = [
+    ("Alex", "Tan"),
+    ("Daniel", "Lee"),
+    ("Emma", "Wong"),
+    ("Mia", "Chen"),
+    ("Noah", "Martin"),
+    ("Olivia", "Nguyen"),
+]
 
 EXTRA_BILLING_STREETS = {
-    "TH": [("999 Rama I Road", "Bangkok", "Bangkok", "10330"), ("88 Sukhumvit Road", "Bangkok", "Bangkok", "10110"), ("45 Nimman Road", "Chiang Mai", "Chiang Mai", "50200")],
-    "JP": [("1-1 Marunouchi", "Chiyoda-ku", "Tokyo", "100-0005"), ("2-2-1 Yaesu", "Chuo-ku", "Tokyo", "104-0028"), ("3-1 Umeda", "Osaka", "Osaka", "530-0001")],
-    "SG": [("10 Anson Road", "Singapore", "Singapore", "079903"), ("1 Raffles Place", "Singapore", "Singapore", "048616"), ("80 Robinson Road", "Singapore", "Singapore", "068898")],
-    "NZ": [("22 Queen Street", "Auckland", "Auckland", "1010"), ("50 Lambton Quay", "Wellington", "Wellington", "6011"), ("120 Hereford Street", "Christchurch", "Canterbury", "8011")],
-    "CA": [("100 King Street West", "Toronto", "ON", "M5X 1A9"), ("555 West Hastings Street", "Vancouver", "BC", "V6B 4N6"), ("1250 Rene-Levesque Blvd", "Montreal", "QC", "H3B 4W8")],
-    "IE": [("1 Grand Canal Square", "Dublin", "Dublin", "D02 P820"), ("10 South Mall", "Cork", "Cork", "T12 RD43"), ("5 Eyre Square", "Galway", "Galway", "H91 FPK2")],
+    "TH": [
+        ("999 Rama I Road", "Bangkok", "Bangkok", "10330"),
+        ("88 Sukhumvit Road", "Bangkok", "Bangkok", "10110"),
+        ("45 Nimman Road", "Chiang Mai", "Chiang Mai", "50200"),
+    ],
+    "JP": [
+        ("1-1 Marunouchi", "Chiyoda-ku", "Tokyo", "100-0005"),
+        ("2-2-1 Yaesu", "Chuo-ku", "Tokyo", "104-0028"),
+        ("3-1 Umeda", "Osaka", "Osaka", "530-0001"),
+    ],
+    "SG": [
+        ("10 Anson Road", "Singapore", "Singapore", "079903"),
+        ("1 Raffles Place", "Singapore", "Singapore", "048616"),
+        ("80 Robinson Road", "Singapore", "Singapore", "068898"),
+    ],
+    "NZ": [
+        ("22 Queen Street", "Auckland", "Auckland", "1010"),
+        ("50 Lambton Quay", "Wellington", "Wellington", "6011"),
+        ("120 Hereford Street", "Christchurch", "Canterbury", "8011"),
+    ],
+    "CA": [
+        ("100 King Street West", "Toronto", "ON", "M5X 1A9"),
+        ("555 West Hastings Street", "Vancouver", "BC", "V6B 4N6"),
+        ("1250 Rene-Levesque Blvd", "Montreal", "QC", "H3B 4W8"),
+    ],
+    "IE": [
+        ("1 Grand Canal Square", "Dublin", "Dublin", "D02 P820"),
+        ("10 South Mall", "Cork", "Cork", "T12 RD43"),
+        ("5 Eyre Square", "Galway", "Galway", "H91 FPK2"),
+    ],
     "BR": [
         ("Av. Paulista 1578", "Sao Paulo", "SP", "01310-200"),
         ("Rua da Consolacao 2302", "Sao Paulo", "SP", "01301-100"),
@@ -155,21 +516,59 @@ EXTRA_BILLING_STREETS = {
 }
 
 BILLING_PROFILE_CITY_BY_COUNTRY = {
-    "AT": ["Vienna", "Graz", "Linz"], "BE": ["Brussels", "Antwerp", "Ghent"], "BR": ["Sao Paulo", "Rio de Janeiro", "Brasilia"],
-    "CH": ["Zurich", "Geneva", "Basel"], "DK": ["Copenhagen", "Aarhus", "Odense"], "ES": ["Madrid", "Barcelona", "Valencia"],
-    "FI": ["Helsinki", "Espoo", "Tampere"], "FR": ["Paris", "Lyon", "Marseille"], "ID": ["Jakarta", "Surabaya", "Bandung"],
-    "IT": ["Rome", "Milan", "Turin"], "KR": ["Seoul", "Busan", "Incheon"], "MX": ["Mexico City", "Guadalajara", "Monterrey"],
-    "NL": ["Amsterdam", "Rotterdam", "Utrecht"], "NO": ["Oslo", "Bergen", "Trondheim"], "PL": ["Warsaw", "Krakow", "Gdansk"],
-    "PT": ["Lisbon", "Porto", "Coimbra"], "SE": ["Stockholm", "Gothenburg", "Malmo"], "TW": ["Taipei", "Taichung", "Kaohsiung"],
+    "AT": ["Vienna", "Graz", "Linz"],
+    "BE": ["Brussels", "Antwerp", "Ghent"],
+    "BR": ["Sao Paulo", "Rio de Janeiro", "Brasilia"],
+    "CH": ["Zurich", "Geneva", "Basel"],
+    "DK": ["Copenhagen", "Aarhus", "Odense"],
+    "ES": ["Madrid", "Barcelona", "Valencia"],
+    "FI": ["Helsinki", "Espoo", "Tampere"],
+    "FR": ["Paris", "Lyon", "Marseille"],
+    "ID": ["Jakarta", "Surabaya", "Bandung"],
+    "IT": ["Rome", "Milan", "Turin"],
+    "KR": ["Seoul", "Busan", "Incheon"],
+    "MX": ["Mexico City", "Guadalajara", "Monterrey"],
+    "NL": ["Amsterdam", "Rotterdam", "Utrecht"],
+    "NO": ["Oslo", "Bergen", "Trondheim"],
+    "PL": ["Warsaw", "Krakow", "Gdansk"],
+    "PT": ["Lisbon", "Porto", "Coimbra"],
+    "SE": ["Stockholm", "Gothenburg", "Malmo"],
+    "TW": ["Taipei", "Taichung", "Kaohsiung"],
 }
 
 POSTAL_PATTERN_BY_COUNTRY = {
-    "AD": "AD###", "AR": "C####", "AU": "####", "AT": "####", "BE": "####", "BR": "#####-###",
-    "CA": "A#A #A#", "CH": "####", "CL": "#######", "CZ": "### ##", "DE": "#####", "DK": "####",
-    "ES": "#####", "FI": "#####", "FR": "#####", "GB": "AA# #AA", "IE": "A## A###", "ID": "#####",
-    "IN": "######", "IT": "#####", "JP": "###-####", "KR": "#####", "MX": "#####", "NL": "#### AA",
-    "NO": "####", "NZ": "####", "PL": "##-###", "PT": "####-###", "SE": "### ##", "SG": "######",
-    "TH": "#####", "US": "#####",
+    "AD": "AD###",
+    "AR": "C####",
+    "AU": "####",
+    "AT": "####",
+    "BE": "####",
+    "BR": "#####-###",
+    "CA": "A#A #A#",
+    "CH": "####",
+    "CL": "#######",
+    "CZ": "### ##",
+    "DE": "#####",
+    "DK": "####",
+    "ES": "#####",
+    "FI": "#####",
+    "FR": "#####",
+    "GB": "AA# #AA",
+    "IE": "A## A###",
+    "ID": "#####",
+    "IN": "######",
+    "IT": "#####",
+    "JP": "###-####",
+    "KR": "#####",
+    "MX": "#####",
+    "NL": "#### AA",
+    "NO": "####",
+    "NZ": "####",
+    "PL": "##-###",
+    "PT": "####-###",
+    "SE": "### ##",
+    "SG": "######",
+    "TH": "#####",
+    "US": "#####",
 }
 
 BILLING_STREET_POOL = ["Market Street", "Central Avenue", "Station Road", "Main Street", "High Street", "King Street"]
@@ -186,14 +585,25 @@ BILLING_PROFILE_BY_COUNTRY = {
 }
 
 LOCALE_MAP = {
-    "de": ("de-DE", "de"), "en": ("en-US", "en"), "en-US": ("en-US", "en"), "es": ("es-ES", "es"),
-    "fr": ("fr-FR", "fr"), "id": ("id-ID", "id"), "it": ("it-IT", "it"), "ja": ("ja-JP", "ja"),
-    "ko": ("ko-KR", "ko"), "pt-BR": ("pt-BR", "pt-BR"), "zh-CN": ("zh-CN", "zh-CN"), "zh-TW": ("zh-TW", "zh-TW"),
+    "de": ("de-DE", "de"),
+    "en": ("en-US", "en"),
+    "en-US": ("en-US", "en"),
+    "es": ("es-ES", "es"),
+    "fr": ("fr-FR", "fr"),
+    "id": ("id-ID", "id"),
+    "it": ("it-IT", "it"),
+    "ja": ("ja-JP", "ja"),
+    "ko": ("ko-KR", "ko"),
+    "pt-BR": ("pt-BR", "pt-BR"),
+    "zh-CN": ("zh-CN", "zh-CN"),
+    "zh-TW": ("zh-TW", "zh-TW"),
 }
+
 
 def random_proxy_sid(length: int = 10) -> str:
     alphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
     return "".join(random.choice(alphabet) for _ in range(length))
+
 
 def randomize_proxy_sid(proxy_url: str) -> str:
     text = str(proxy_url or "").strip()
@@ -216,6 +626,7 @@ def randomize_proxy_sid(proxy_url: str) -> str:
     new_text = re.sub(r"(?i)(sid[-_=])([^-:@;&/?]+)", lambda m: f"{m.group(1)}{sid}", text, count=1)
     return new_text
 
+
 def find_access_token(value) -> str:
     if isinstance(value, dict):
         for key in ("accessToken", "access_token", "token"):
@@ -233,6 +644,7 @@ def find_access_token(value) -> str:
                 return token
     return ""
 
+
 def extract_access_token_from_session_text(text: str) -> str:
     raw = str(text or "").strip()
     if not raw:
@@ -248,12 +660,15 @@ def extract_access_token_from_session_text(text: str) -> str:
         return match.group(1).strip()
     return raw if raw.count(".") >= 2 and len(raw) > 80 else ""
 
+
 def normalize_opll_country(country: str) -> str:
     country = str(country or "").strip().upper()
     return country if country in OPENAI_SUPPORTED_COUNTRY_CODES else "US"
 
+
 def locale_parts(locale: str = "en") -> tuple[str, str]:
     return LOCALE_MAP.get(str(locale or "").strip(), LOCALE_MAP["en"])
+
 
 def opll_extract_processor_entity(data) -> str:
     if not isinstance(data, dict):
@@ -268,6 +683,7 @@ def opll_extract_processor_entity(data) -> str:
             if found:
                 return found
     return ""
+
 
 def opll_extract_stripe_publishable_key(data) -> str:
     if isinstance(data, str):
@@ -289,26 +705,30 @@ def opll_extract_stripe_publishable_key(data) -> str:
                 return found
     return ""
 
+
 def opll_processor_entity_for_country(country: str, processor_entity: str = "") -> str:
     entity = str(processor_entity or "").strip()
     if entity:
         return entity
     return "openai_llc" if str(country or "").upper() == "US" else "openai_ie"
 
+
 def opll_chatgpt_success_return_url(cs_id: str, country: str, processor_entity: str = "") -> str:
     entity = opll_processor_entity_for_country(country, processor_entity)
     return f"https://chatgpt.com/checkout/verify?stripe_session_id={cs_id}&processor_entity={entity}&plan_type=plus"
+
 
 def opll_to_openai_pay_url(stripe_hosted_url: str) -> str:
     url = str(stripe_hosted_url or "").strip()
     if not url:
         return ""
     if url.startswith("https://checkout.stripe.com"):
-        return "https://pay.openai.com" + url[len("https://checkout.stripe.com"):]
+        return "https://pay.openai.com" + url[len("https://checkout.stripe.com") :]
     parsed = urlsplit(url)
     if parsed.netloc.lower() == "checkout.stripe.com":
         return urlunsplit((parsed.scheme or "https", "pay.openai.com", parsed.path, parsed.query, parsed.fragment))
     return url
+
 
 def opll_stripe_checkout_long_url(cs_id: str, country: str, processor_entity: str = "") -> str:
     return (
@@ -316,6 +736,7 @@ def opll_stripe_checkout_long_url(cs_id: str, country: str, processor_entity: st
         f"?returned_from_redirect=true&ui_mode=custom&return_url="
         f"{quote(opll_chatgpt_success_return_url(cs_id, country, processor_entity), safe='')}"
     )
+
 
 def opll_stripe_confirm_return_url(cs_id: str, checkout: dict, stripe_hosted_url: str) -> str:
     hosted_url = opll_to_openai_pay_url(stripe_hosted_url) or opll_stripe_checkout_long_url(
@@ -337,6 +758,7 @@ def opll_stripe_confirm_return_url(cs_id: str, checkout: dict, stripe_hosted_url
         return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, urlencode(query), parsed.fragment))
     return hosted_url
 
+
 def opll_new_http_session() -> requests.Session:
     if CurlCffiSession is not None:
         session = CurlCffiSession(impersonate="chrome136")  # type: ignore[assignment]
@@ -346,6 +768,7 @@ def opll_new_http_session() -> requests.Session:
         session.trust_env = False
     return session
 
+
 def opll_build_chatgpt_session(access_token: str, proxy_url: str = "", device_id: str = "") -> requests.Session:
     token = extract_access_token_from_session_text(access_token) or str(access_token or "").strip()
     if not token:
@@ -354,27 +777,30 @@ def opll_build_chatgpt_session(access_token: str, proxy_url: str = "", device_id
     # for; a token bound to a different oai-did is rejected by the create gate.
     device_id = str(device_id or "").strip() or str(uuid.uuid4())
     session = opll_new_http_session()
-    session.headers.update({
-        "User-Agent": DEFAULT_USER_AGENT,
-        "Accept": "*/*",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Authorization": f"Bearer {token}",
-        "Origin": "https://chatgpt.com",
-        "Referer": "https://chatgpt.com/",
-        "Content-Type": "application/json",
-        "oai-device-id": device_id,
-        "oai-language": "en-US",
-        "sec-ch-ua": '"Google Chrome";v="147", "Not.A/Brand";v="8", "Chromium";v="147"',
-        "sec-ch-ua-mobile": "?0",
-        "sec-ch-ua-platform": '"Windows"',
-        "sec-fetch-dest": "empty",
-        "sec-fetch-mode": "cors",
-        "sec-fetch-site": "same-origin",
-        "Cookie": f"oai-did={device_id}",
-    })
+    session.headers.update(
+        {
+            "User-Agent": DEFAULT_USER_AGENT,
+            "Accept": "*/*",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Authorization": f"Bearer {token}",
+            "Origin": "https://chatgpt.com",
+            "Referer": "https://chatgpt.com/",
+            "Content-Type": "application/json",
+            "oai-device-id": device_id,
+            "oai-language": "en-US",
+            "sec-ch-ua": '"Google Chrome";v="147", "Not.A/Brand";v="8", "Chromium";v="147"',
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": '"Windows"',
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "same-origin",
+            "Cookie": f"oai-did={device_id}",
+        }
+    )
     if proxy_url:
         session.proxies.update({"http": proxy_url, "https": proxy_url})
     return session
+
 
 OPLL_CHECKOUT_TRANSIENT_STATUSES = {403, 408, 425, 429, 500, 502, 503, 504}
 
@@ -382,11 +808,14 @@ OPLL_CHECKOUT_TRANSIENT_RETRY_MAX = 4
 
 OPLL_CHECKOUT_TRANSIENT_RETRY_DELAY = 2.0
 
+
 def opll_update_checkout_promotion(access_token: str, checkout: dict, proxy_url: str = "") -> dict:
     cs_id = str((checkout or {}).get("cs_id") or "").strip()
     if not cs_id:
         raise RuntimeError("checkout/update missing cs_id")
-    processor_entity = str((checkout or {}).get("processor_entity") or "").strip() or opll_processor_entity_for_country(str((checkout or {}).get("billing_country") or "GB"))
+    processor_entity = str((checkout or {}).get("processor_entity") or "").strip() or opll_processor_entity_for_country(
+        str((checkout or {}).get("billing_country") or "GB")
+    )
     json_body = {
         "checkout_session_id": cs_id,
         "processor_entity": processor_entity,
@@ -430,8 +859,10 @@ def opll_update_checkout_promotion(access_token: str, checkout: dict, proxy_url:
         raise RuntimeError(f"checkout/update rejected: {str(payload)[:500]}")
     return payload if isinstance(payload, dict) else {"response": payload}
 
+
 def opll_stripe_key_for_checkout(checkout: dict | None = None) -> str:
     return str((checkout or {}).get("stripe_publishable_key") or "").strip() or DEFAULT_STRIPE_PK
+
 
 def opll_build_stripe_session(proxy_url: str = "") -> requests.Session:
     session = opll_new_http_session()
@@ -440,13 +871,16 @@ def opll_build_stripe_session(proxy_url: str = "") -> requests.Session:
         session.proxies.update({"http": proxy_url, "https": proxy_url})
     return session
 
+
 def opll_stripe_context(init_payload: dict, payment_locale: str = "en", ctx: dict | None = None) -> dict:
     _browser_locale, elements_locale = locale_parts(payment_locale)
     base = ctx or {}
     return {
         "stripe_js_id": str(base.get("stripe_js_id") or uuid.uuid4()),
         "elements_session_id": str(base.get("elements_session_id") or f"elements_session_{uuid.uuid4().hex[:11]}"),
-        "elements_session_config_id": str(init_payload.get("config_id") or base.get("elements_session_config_id") or uuid.uuid4()),
+        "elements_session_config_id": str(
+            init_payload.get("config_id") or base.get("elements_session_config_id") or uuid.uuid4()
+        ),
         "config_id": str(init_payload.get("config_id") or ""),
         "init_checksum": str(init_payload.get("init_checksum") or ""),
         "checkout_amount": str(opll_expected_amount(init_payload)),
@@ -455,8 +889,10 @@ def opll_stripe_context(init_payload: dict, payment_locale: str = "en", ctx: dic
         "runtime_version": str(base.get("runtime_version") or DEFAULT_STRIPE_RUNTIME_VERSION),
     }
 
+
 def opll_expected_amount(init_payload: dict) -> str:
     return opll_stripe_amount_info(init_payload)[0]
+
 
 def opll_stripe_amount_info(init_payload) -> tuple[str, str]:
     if not isinstance(init_payload, dict):
@@ -482,6 +918,7 @@ def opll_stripe_amount_info(init_payload) -> tuple[str, str]:
             return str(total), "line_items.amount"
     return "0", "fallback_zero"
 
+
 def opll_amount_to_int(value) -> int | None:
     if value is None:
         return None
@@ -493,6 +930,7 @@ def opll_amount_to_int(value) -> int | None:
     except Exception:
         return None
 
+
 def opll_random_postal_code(pattern: str) -> str:
     result = []
     for char in str(pattern or "#####"):
@@ -503,6 +941,7 @@ def opll_random_postal_code(pattern: str) -> str:
         else:
             result.append(char)
     return "".join(result)
+
 
 def opll_billing_for_country(country: str) -> dict:
     country = normalize_opll_country(country)
@@ -531,7 +970,9 @@ def opll_billing_for_country(country: str) -> dict:
     else:
         raise RuntimeError(f"不支持的账单资料地区: {country}")
     suffix = random.randint(1000, 9999)
-    phone_prefix = str(BILLING_PROFILE_BY_COUNTRY.get(country, {}).get("phone_prefix") or COUNTRY_PHONE_PREFIX.get(country, "+1"))
+    phone_prefix = str(
+        BILLING_PROFILE_BY_COUNTRY.get(country, {}).get("phone_prefix") or COUNTRY_PHONE_PREFIX.get(country, "+1")
+    )
     return {
         "name": f"{first} {last}",
         "email": f"{first.lower()}.{last.lower()}{suffix}@example.com",
@@ -543,9 +984,11 @@ def opll_billing_for_country(country: str) -> dict:
         "postal_code": postal,
     }
 
+
 def opll_short_error(detail: str, limit: int = 260) -> str:
     text = re.sub(r"\s+", " ", str(detail or "")).strip()
     return text if len(text) <= limit else text[: limit - 3] + "..."
+
 
 def opll_stripe_error_summary(prefix: str, response) -> str:
     try:
@@ -573,6 +1016,7 @@ def opll_stripe_error_summary(prefix: str, response) -> str:
         return f"{prefix}: " + ", ".join(parts)
     return f"{prefix}: {opll_short_error(response.text, 500)}"
 
+
 def opll_is_external_url(value: str) -> bool:
     try:
         parsed = urlsplit(value)
@@ -580,9 +1024,16 @@ def opll_is_external_url(value: str) -> bool:
         return False
     return parsed.scheme in ("http", "https") and bool(parsed.netloc)
 
+
 def opll_is_paypal_url(value: str) -> bool:
     host = (urlsplit(value).netloc or "").lower()
-    return host == "paypal.com" or host.endswith(".paypal.com") or host == "paypalobjects.com" or host.endswith(".paypalobjects.com")
+    return (
+        host == "paypal.com"
+        or host.endswith(".paypal.com")
+        or host == "paypalobjects.com"
+        or host.endswith(".paypalobjects.com")
+    )
+
 
 def opll_is_paypal_ba_approve_url(value: str) -> bool:
     try:
@@ -596,6 +1047,7 @@ def opll_is_paypal_ba_approve_url(value: str) -> bool:
     query = dict(parse_qsl(parsed.query, keep_blank_values=True))
     return path == "/agreements/approve" and bool(str(query.get("ba_token") or "").strip())
 
+
 def opll_is_ignored_resource_url(value: str) -> bool:
     try:
         parsed = urlsplit(value)
@@ -603,11 +1055,18 @@ def opll_is_ignored_resource_url(value: str) -> bool:
         return False
     host = (parsed.netloc or "").lower()
     path = (parsed.path or "").lower()
-    ignored_hosts = {"stripe-camo.global.ssl.fastly.net", "files.stripe.com", "q.stripe.com", "js.stripe.com", "m.stripe.network"}
+    ignored_hosts = {
+        "stripe-camo.global.ssl.fastly.net",
+        "files.stripe.com",
+        "q.stripe.com",
+        "js.stripe.com",
+        "m.stripe.network",
+    }
     ignored_suffixes = (".png", ".jpg", ".jpeg", ".svg", ".webp", ".gif", ".ico", ".css", ".js", ".woff", ".woff2")
     if host in ignored_hosts or any(host.endswith(f".{item}") for item in ignored_hosts):
         return True
     return path.endswith(ignored_suffixes)
+
 
 def opll_collect_urls(payload, urls: list[str] | None = None) -> list[str]:
     found = urls if urls is not None else []
@@ -616,7 +1075,11 @@ def opll_collect_urls(payload, urls: list[str] | None = None) -> list[str]:
             found.append(match.rstrip("),.;]"))
     elif isinstance(payload, dict):
         for key, value in payload.items():
-            if key in ("url", "return_url", "redirect_url", "redirect_to_url") and isinstance(value, str) and opll_is_external_url(value):
+            if (
+                key in ("url", "return_url", "redirect_url", "redirect_to_url")
+                and isinstance(value, str)
+                and opll_is_external_url(value)
+            ):
                 found.append(value)
             else:
                 opll_collect_urls(value, found)
@@ -624,6 +1087,7 @@ def opll_collect_urls(payload, urls: list[str] | None = None) -> list[str]:
         for item in payload:
             opll_collect_urls(item, found)
     return found
+
 
 def opll_extract_redirect_to_url(payload) -> str:
     if not isinstance(payload, dict):
@@ -651,12 +1115,14 @@ def opll_extract_redirect_to_url(payload) -> str:
         next((item for item in urls if opll_is_paypal_url(item) and not opll_is_ignored_resource_url(item)), ""),
     )
 
+
 def opll_first_non_empty(values: dict[str, str], *keys: str) -> str:
     for key in keys:
         value = str(values.get(key) or "").strip()
         if value:
             return value
     return ""
+
 
 def opll_submission_attempt_failure_fields(submission) -> dict[str, str]:
     wanted = {"error", "code", "message", "reason", "failure_reason", "decline_code", "failure_code", "failure_message"}
@@ -670,7 +1136,9 @@ def opll_submission_attempt_failure_fields(submission) -> dict[str, str]:
                     if isinstance(item, (str, int, float, bool)):
                         text = str(item).strip()
                     elif isinstance(item, dict):
-                        text = str(item.get("message") or item.get("code") or item.get("reason") or item.get("type") or "").strip()
+                        text = str(
+                            item.get("message") or item.get("code") or item.get("reason") or item.get("type") or ""
+                        ).strip()
                     else:
                         text = ""
                     if text:
@@ -683,6 +1151,7 @@ def opll_submission_attempt_failure_fields(submission) -> dict[str, str]:
     if isinstance(submission, dict):
         walk(submission)
     return found
+
 
 def opll_find_submission_attempt(payload) -> dict:
     if isinstance(payload, dict):
@@ -700,6 +1169,7 @@ def opll_find_submission_attempt(payload) -> dict:
                 return found
     return {}
 
+
 def opll_stripe_payload_diagnostics(payload, ctx: dict) -> str:
     if not isinstance(payload, dict):
         return f"payload_type={type(payload).__name__}"
@@ -711,7 +1181,9 @@ def opll_stripe_payload_diagnostics(payload, ctx: dict) -> str:
     submission = opll_find_submission_attempt(payload)
     submission_state = str(submission.get("state") or "") if isinstance(submission, dict) else ""
     submission_fields = opll_submission_attempt_failure_fields(submission)
-    submission_reason = opll_first_non_empty(submission_fields, "reason", "failure_reason", "decline_code", "failure_code", "code")
+    submission_reason = opll_first_non_empty(
+        submission_fields, "reason", "failure_reason", "decline_code", "failure_code", "code"
+    )
     submission_code = opll_first_non_empty(submission_fields, "code", "decline_code", "failure_code")
     submission_message = opll_first_non_empty(submission_fields, "message", "failure_message", "error")
     return (
@@ -722,11 +1194,14 @@ def opll_stripe_payload_diagnostics(payload, ctx: dict) -> str:
         f"ctx_session={ctx.get('elements_session_id') or ''}"
     )
 
+
 class OpllStripeRequiresApproval(Exception):
     pass
 
+
 class OpllChatgptApproveBlocked(Exception):
     pass
+
 
 OPLL_APPROVE_BURST_RESULTS = {"blocked", "exception"}
 
@@ -735,6 +1210,7 @@ OPLL_APPROVE_BLOCKED_RETRY_MAX = 5
 OPLL_APPROVE_BLOCKED_RETRY_BASE_DELAY = 2.5
 
 OPLL_APPROVE_BLOCKED_ERROR_BACKOFF = 5.0
+
 
 def opll_chatgpt_approve(chatgpt: requests.Session, cs_id: str, checkout: dict) -> None:
     entity = opll_processor_entity_for_country(checkout["billing_country"], checkout.get("processor_entity", ""))
@@ -754,7 +1230,11 @@ def opll_chatgpt_approve(chatgpt: requests.Session, cs_id: str, checkout: dict) 
     response = chatgpt.post(
         "https://chatgpt.com/backend-api/payments/checkout/approve",
         json={"checkout_session_id": cs_id, "processor_entity": entity},
-        headers={"Referer": f"https://chatgpt.com/checkout/{entity}/{cs_id}", "x-openai-target-path": "/backend-api/payments/checkout/approve", "x-openai-target-route": "/backend-api/payments/checkout/approve"},
+        headers={
+            "Referer": f"https://chatgpt.com/checkout/{entity}/{cs_id}",
+            "x-openai-target-path": "/backend-api/payments/checkout/approve",
+            "x-openai-target-route": "/backend-api/payments/checkout/approve",
+        },
         timeout=PAY_LONG_LINK_TIMEOUT,
     )
     if response.status_code >= 400:
@@ -766,11 +1246,16 @@ def opll_chatgpt_approve(chatgpt: requests.Session, cs_id: str, checkout: dict) 
     normalized_result = str(result or "").strip().lower()
     if normalized_result in OPLL_APPROVE_BURST_RESULTS:
         body = opll_short_error(str(response.text or ""), 300)
-        raise OpllChatgptApproveBlocked(f"chatgpt approve result={normalized_result!r} http={response.status_code} body={body}")
+        raise OpllChatgptApproveBlocked(
+            f"chatgpt approve result={normalized_result!r} http={response.status_code} body={body}"
+        )
     if result != "approved":
         raise RuntimeError(f"chatgpt approve unexpected result: {result!r}")
 
-def opll_chatgpt_approve_with_retry(access_token: str, cs_id: str, checkout: dict, proxy_url: str = "") -> requests.Session:
+
+def opll_chatgpt_approve_with_retry(
+    access_token: str, cs_id: str, checkout: dict, proxy_url: str = ""
+) -> requests.Session:
     last_error = ""
     last_was_blocked = False
     for _attempt in range(OPLL_APPROVE_BLOCKED_RETRY_MAX):
@@ -788,10 +1273,25 @@ def opll_chatgpt_approve_with_retry(access_token: str, cs_id: str, checkout: dic
             last_was_blocked = False
             # 403/网络异常多为速率拦截：退避更久，避免猛敲继续触发 403
             time.sleep(OPLL_APPROVE_BLOCKED_ERROR_BACKOFF + random.random())
-    hint = "（概率性风控 blocked；可调大 OPLL_APPROVE_BLOCKED_RETRY_MAX，或换干净住宅代理提高基础通过率）" if last_was_blocked else ""
+    hint = (
+        "（概率性风控 blocked；可调大 OPLL_APPROVE_BLOCKED_RETRY_MAX，或换干净住宅代理提高基础通过率）"
+        if last_was_blocked
+        else ""
+    )
     raise RuntimeError(f"ChatGPT approve 连续 {OPLL_APPROVE_BLOCKED_RETRY_MAX} 次未通过{hint}: {last_error}")
 
-def opll_stripe_confirm(stripe: requests.Session, cs_id: str, pm_id: str, stripe_pk: str, init_payload: dict, ctx: dict, checkout: dict, stripe_hosted_url: str, pm_type: str = "paypal") -> dict:
+
+def opll_stripe_confirm(
+    stripe: requests.Session,
+    cs_id: str,
+    pm_id: str,
+    stripe_pk: str,
+    init_payload: dict,
+    ctx: dict,
+    checkout: dict,
+    stripe_hosted_url: str,
+    pm_type: str = "paypal",
+) -> dict:
     return_url = opll_stripe_confirm_return_url(cs_id, checkout, stripe_hosted_url)
     runtime_version = str(ctx.get("runtime_version") or DEFAULT_STRIPE_RUNTIME_VERSION)
     response = stripe.post(
@@ -837,5 +1337,6 @@ def opll_stripe_confirm(stripe: requests.Session, cs_id: str, pm_id: str, stripe
     if response.status_code >= 400:
         raise RuntimeError(opll_stripe_error_summary("stripe confirm failed", response))
     return response.json() or {}
+
 
 OPLL_FREE_TRIAL_MAX_MINOR_UNITS = 50
