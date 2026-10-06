@@ -181,12 +181,26 @@ times** (`IDEAL_APPROVE_RETRY_MAX`, default 10, with a comment about
 actually means "no Sentinel token", exactly as the `blocked_count` retries were
 previously measured as wasted time.
 
-⇒ **Recommended next step is observability, not a header.** The adapter should
-log the terminal contract's `payment_method` / `ok` / `error_code` (redacted —
-never `error` text or `url`) at INFO for every extractor run, so the asymmetry
-becomes measurable before anyone changes a header. Do **not** add a Sentinel
-header to the subprocess extractors on the strength of the in-process rails,
-and do not conclude they don't need one either.
+⇒ **Observability, not a header — landed 2026-10-05.** `_log_extractor_terminal` in
+`sms_tool/pay_link/adapters.py` emits exactly one INFO line per subprocess-extractor
+run recording `payment_method` / `ok` / `error_code` plus `contract=` and
+`exit_code=`, and **never** the contract's `error` text, `url` or `artifacts`.
+It is called from the single funnel every extractor passes through
+(`_finish_extractor`), including the timeout branch, so a new extractor cannot
+skip it.
+
+The line distinguishes four states that used to look identical: `ok=ok`,
+`ok=failed`, `ok=timeout`, and `ok=no_terminal_contract` (with `contract=absent`
+covering both a non-contract dict — e.g. direct_card's cancellation print — and
+a genuinely silent extractor). A mismatch between the contract's own
+`payment_method` and the method that was dispatched stays visible rather than
+being masked.
+
+What to do next: collect this line across a batch, then compare
+`error_code`/`ok` for the six Sentinel-free extractors against the UPI/PayPal
+rails that do mint. **Do not** add a Sentinel header on the strength of the
+in-process rails, and do not conclude the subprocess ones don't need one either
+— the point of the line is to make that question answerable, not to answer it.
 
 **Closeout (2026-10-05).** A cross-project review of `pxygit/SunnyRegister`
 (its `payment_proof_contracts.py` `ENDPOINT_FLOW` table) proposed mapping

@@ -47,6 +47,12 @@ from .base import (
 )
 from .base import is_false, is_true, safe_float, safe_int
 
+#: The one terminal schema every subprocess extractor is expected to print.
+#: Named once because two places now compare against it (the adapter's dispatch
+#: below, and the observability line in :func:`_log_extractor_terminal`); two
+#: literals drifting apart would make the log disagree with the dispatch.
+_PROTOCOL_RESULT_SCHEMA = "protocol_payment.v1"
+
 
 def _run_extractor_subprocess(
     spec: PaymentMethodSpec,
@@ -168,9 +174,69 @@ def _finish_extractor(
         cleanup_paths=cleanup_paths,
     )
     if timeout_err is not None:
+        _log_extractor_terminal(spec, None, {}, timeout_err)
         return None, "", {}, timeout_err
     assert proc is not None  # non-timeout return always carries a process
-    return proc, output, _last_json_object(proc.stdout or ""), None
+    parsed = _last_json_object(proc.stdout or "")
+    _log_extractor_terminal(spec, proc, parsed, None)
+    return proc, output, parsed, None
+
+
+def _log_extractor_terminal(
+    spec: PaymentMethodSpec,
+    proc: subprocess.CompletedProcess[str] | None,
+    parsed: Mapping[str, Any],
+    timeout_err: Mapping[str, Any] | None,
+) -> None:
+    """Emit exactly one INFO line per subprocess-extractor run.
+
+    Why this exists
+    ---------------
+    ``_finish_extractor`` keeps each extractor's stdout only long enough to parse
+    it, and surfaces ``_tail(output)`` *only* on the failure path. A run whose
+    gated stage quietly succeeded is therefore byte-identical in the logs to a run
+    that never reached it. That is what left the 2026-10-05 Sentinel re-review
+    unable to answer whether the subprocess extractors' ``approve`` needs a token
+    at all -- see ``docs/current/protocol-registration.md`` ("Recommended next
+    step is observability, not a header"). This line is that observability.
+
+    Why it logs so little
+    ---------------------
+    Deliberately **only** ``payment_method`` / ``ok`` / ``error_code``, plus the
+    exit code and whether a terminal contract was present at all. The terminal
+    object also carries ``error`` (provider prose that can embed a URL), ``url``
+    (the artifact itself) and flat ``artifacts``; none is diagnostic enough to
+    justify a credential-bearing log line, and a log a reviewer has to distrust is
+    worse than no log.
+
+    ``contract=absent`` is reported rather than omitted: a non-contract dict (e.g.
+    ``direct_card``'s cancellation print, which carries ``ok`` but no ``schema``)
+    and an extractor that printed nothing at all are different failures, and both
+    differ from a healthily reported one. ``error_code`` is sanitized even though
+    the subprocess already redacted its payload -- it is provider-authored text and
+    the call is free.
+    """
+    if timeout_err is not None:
+        _LOGGER.info(
+            "extractor terminal: payment_method=%s ok=timeout error_code=%s contract=absent exit_code=-",
+            spec.key,
+            _redact_sensitive_text(str(timeout_err.get("error_code") or "")) or "-",
+        )
+        return
+    if is_true(parsed.get("ok")):
+        outcome = "ok"
+    elif is_false(parsed.get("ok")):
+        outcome = "failed"
+    else:
+        outcome = "no_terminal_contract"
+    _LOGGER.info(
+        "extractor terminal: payment_method=%s ok=%s error_code=%s contract=%s exit_code=%s",
+        str(parsed.get("payment_method") or spec.key),
+        outcome,
+        _redact_sensitive_text(str(parsed.get("error_code") or "")) or "-",
+        "protocol_payment.v1" if str(parsed.get("schema") or "") == _PROTOCOL_RESULT_SCHEMA else "absent",
+        getattr(proc, "returncode", "-"),
+    )
 
 
 def _extractor_output_missing(proc: subprocess.CompletedProcess[str], output: str) -> dict[str, Any]:
@@ -332,7 +398,7 @@ def _run_protocol_script(
     if timeout_err is not None:
         return timeout_err
     assert proc is not None
-    if str(parsed.get("schema") or "") == "protocol_payment.v1" and (
+    if str(parsed.get("schema") or "") == _PROTOCOL_RESULT_SCHEMA and (
         proc.returncode == 0 or is_false(parsed.get("ok"))
     ):
         # Every protocol extractor emits exactly one terminal contract. The
