@@ -47,6 +47,7 @@ try:
         extract_redirect_url,
         resolve_external_redirect,
         billing_for_country,
+        reserve_billing_variant,
         stripe_amount_details,
     )
 except ImportError:  # pragma: no cover - direct script execution
@@ -64,6 +65,7 @@ except ImportError:  # pragma: no cover - direct script execution
         extract_redirect_url,
         resolve_external_redirect,
         billing_for_country,
+        reserve_billing_variant,
         stripe_amount_details,
     )
 
@@ -414,6 +416,7 @@ class PPLinkExtractor:
         proxy_state: PayPalProxyState | None = None,
         stage_proxy_countries: dict[str, str] | None = None,
         device_id: str = "",
+        billing_variant: int | None = None,
     ):
         self.access_token = access_token
         self.checkout_proxy = normalize_proxy_url(checkout_proxy)
@@ -433,6 +436,12 @@ class PPLinkExtractor:
         self.promotion_taxes = bool(promotion_taxes)
         self.promo_campaign_id = str(promo_campaign_id or PLUS_TRIAL_CAMPAIGN_ID)
         self.target_country = target_country.upper()
+        # Billing identity variant. ``None`` means "reserve one on first use":
+        # ``_sync_tax_region`` and ``_create_payment_method`` are two stages of
+        # the *same* checkout and must agree, so the reservation is cached on
+        # this instance rather than made per call. Resolved lazily so an
+        # extractor that never reaches Stripe never touches the cursor file.
+        self._billing_variant = billing_variant
         self.checkout_country = (checkout_country or target_country).upper()
         self.currency = CURRENCY_MAP.get(self.target_country, "EUR")
         self.checkout_currency = CURRENCY_MAP.get(self.checkout_country, "USD")
@@ -721,6 +730,19 @@ class PPLinkExtractor:
         self._log("promotion", "checkout/update 成功: 促销已应用到当前 checkout")
         return True
 
+    def _billing_identity(self) -> dict:
+        """Billing identity for this run, with the variant resolved once.
+
+        ``_checkout_update_taxes`` and ``_create_payment_method`` are two stages
+        of the *same* Checkout, so they must bill from the same address: a
+        rotating default in ``billing_for_country`` would let the tax sync and
+        the payment method disagree. The variant is therefore reserved on first
+        use and cached on the instance. The email stays per-call, as before.
+        """
+        if self._billing_variant is None:
+            self._billing_variant = reserve_billing_variant(self.target_country)
+        return billing_for_country(self.target_country, variant=self._billing_variant)
+
     def _checkout_update_taxes(self, cs_id: str, processor_entity: str) -> bool:
         """Optionally sync billing/tax region via /checkout/taxes (provider 代理)."""
         try:
@@ -729,7 +751,7 @@ class PPLinkExtractor:
             self._record_stage_result("provider", self.provider_proxy, False, str(e))
             self._log("promotion", f"checkout/taxes provider proxy failed (ignored): {e}")
             return False
-        billing = billing_for_country(self.target_country)
+        billing = self._billing_identity()
         body = {
             "checkout_session_id": cs_id,
             "checkout_email": billing["email"],
@@ -818,7 +840,7 @@ class PPLinkExtractor:
         self._active_stage = "payment_method"
         self._log("payment_method", f"创建 PayPal payment_method")
         stripe = self._set_stripe_proxy(self.payment_method_proxy)
-        billing = billing_for_country(self.target_country)
+        billing = self._billing_identity()
         body = {
             "type": "paypal",
             "billing_details[name]": f"{billing['name'][0]} {billing['name'][1]}",
