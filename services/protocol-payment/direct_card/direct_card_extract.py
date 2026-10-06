@@ -66,9 +66,11 @@ from common.protocol_core import (
     ProtocolResultReporter,
     is_false,
     is_true,
+    openai_sentinel_headers,
     run_extractor_entrypoint,
     safe_float,
     safe_int,
+    sentinel_device_id,
 )
 from common.proxy_url import (
     normalize_provider_form as shared_normalize_provider_form,
@@ -721,7 +723,16 @@ class CheckoutExtractor:
         self.session_factory = session_factory
         self.sleep = sleeper
         self.log = logger or (lambda message: print(message, file=sys.stderr, flush=True))
-        self.device_id = cookie_header_value(credentials.session_cookie, "oai-did") or str(uuid.uuid4())
+        # The adapter injects the Checkout-create Sentinel pair and, with it, the
+        # oai-did that pair was minted for -- a token bound to a different id is
+        # rejected by the create gate. Prefer it; fall back to the account's own
+        # cookie-derived id (standalone runs with a session file) and only then to
+        # a fresh one.
+        self.device_id = (
+            sentinel_device_id()
+            or cookie_header_value(credentials.session_cookie, "oai-did")
+            or str(uuid.uuid4())
+        )
         self.chatgpt_session_id = str(uuid.uuid4())
 
     def _new_identity_session(self, proxy: str) -> Any:
@@ -826,6 +837,9 @@ class CheckoutExtractor:
                 "Referer": "https://chatgpt.com/",
                 "x-openai-target-path": "/backend-api/payments/checkout",
                 "x-openai-target-route": "/backend-api/payments/checkout",
+                # Injected by the sms_tool adapter; absent -> the gate answers
+                # 400 "unusual activity" (measured 2026-10-06).
+                **openai_sentinel_headers(),
             },
             timeout=self.config.timeout,
         )

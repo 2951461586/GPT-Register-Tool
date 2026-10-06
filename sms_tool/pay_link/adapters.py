@@ -719,6 +719,10 @@ def _run_direct_card(spec: PaymentMethodSpec, access_token: str, proxy: Any = No
     # than argv, where they would be visible in the process list.
     env["DIRECT_CARD_CHECKOUT_PROXY"] = checkout_proxy
     env["DIRECT_CARD_UPDATE_PROXY"] = update_proxy
+    # The Checkout-create Sentinel pair, minted for a device id the extractor is
+    # told to use. Without it the create gate answers 400 "unusual activity"
+    # (measured 2026-10-06) and this extractor cannot produce a link at all.
+    env.update(_sentinel_env(checkout_proxy))
     token_file = _write_token_file(access_token)
     command = [
         sys.executable,
