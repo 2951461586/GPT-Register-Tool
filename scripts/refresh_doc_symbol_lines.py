@@ -14,8 +14,25 @@ module-level definition leaves two kinds of rot behind:
 This generator is the other half. It re-reads the symbol a pointer names, asks
 ``ast`` where that symbol actually lives today, and rewrites the number::
 
-    python scripts/refresh_doc_symbol_lines.py --check   # report drift, exit 1
+    python scripts/refresh_doc_symbol_lines.py           # report drift, exit 1
     python scripts/refresh_doc_symbol_lines.py --apply   # rewrite in place
+
+(Running it bare *is* the check; there is no ``--check`` flag. This docstring
+used to advertise one, so the obvious invocation failed with a usage error and
+the tool looked broken.)
+
+Two shape rules decide whether a pointer is guardable at all, and neither is
+obvious from reading a rendered document:
+
+* **The symbol and the line number must be on the same line.** ``_rewrite`` walks
+the text line by line, so ``_prose_edits`` only ever sees one line's worth of
+events. A pointer whose symbol sits on the previous line is unattributable and
+silently unguarded -- the ``docs_consistency_scan`` weak tier still accepts any
+in-range number, so nothing reports it. Wrapping these bullets for width is
+what silently lost the guard on 2026-10-05.
+* **A class method must be spelled dotted** (``Class.method``). ``_symbol_lines``
+records module-level names plus direct methods keyed as ``Class.method``, so a
+bare ``_method`` resolves to nothing.
 
 A pointer is rewritten only when **all** of these hold:
 
@@ -101,7 +118,10 @@ def _prose_edits(text: str, cache: Cache) -> list[tuple[int, int, str, str]]:
         if kind != "ref" or index == 0 or events[index - 1][1] != "name":
             continue  # no name immediately in front -> pointer is not attributable
         match, source, num, ext = payload  # type: ignore[misc]
-        symbol = events[index - 1][2]
+        # ``events`` mixes name/ref payloads, so its element type is ``object``;
+        # a name payload is always ``NAME``'s group(1), i.e. a str. Coerce so the
+        # declared ``_resolve(..., symbol: str, ...)`` is honest.
+        symbol = str(events[index - 1][2])
         actual = _resolve(source, ext, symbol, cache)
         if actual is None or actual == num:
             continue
@@ -158,7 +178,9 @@ def _scan(apply: bool) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    # ``__doc__`` is ``str | None``; indexing it directly would raise at startup
+    # on a module whose docstring was ever removed.
+    parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     parser.add_argument(
         "--apply",
         action="store_true",
