@@ -19,7 +19,13 @@ def test_sanitizer_removes_complete_token_secret_and_card_values():
 
 
 def test_sanitizer_recurses_for_ipc_and_reports_without_prefixes():
-    safe = sanitize({"access_token": "at-visible-prefix", "nested": {"totp_secret": "totp-visible-prefix", "error": "Bearer bearer-value"}, "cardNumber": "4111111111111111"})
+    safe = sanitize(
+        {
+            "access_token": "at-visible-prefix",
+            "nested": {"totp_secret": "totp-visible-prefix", "error": "Bearer bearer-value"},
+            "cardNumber": "4111111111111111",
+        }
+    )
     assert safe["access_token"] == "[REDACTED]"
     assert safe["nested"]["totp_secret"] == "[REDACTED]"
     assert safe["nested"]["error"] == "Bearer [REDACTED]"
@@ -44,9 +50,14 @@ def test_sanitizer_redacts_named_stripe_session_and_intent_fields_without_corrup
 
 def test_command_arguments_use_shared_sensitive_option_policy():
     assert sanitize_command_args(["--proxy", "http://user:pass@example:80", "--count", "2"]) == [
-        "--proxy", "[REDACTED]", "--count", "2",
+        "--proxy",
+        "[REDACTED]",
+        "--count",
+        "2",
     ]
-    assert sanitize_command_args(["--access-token=secret", "--email=user@example.com"])[0] == "--access-token=[REDACTED]"
+    assert (
+        sanitize_command_args(["--access-token=secret", "--email=user@example.com"])[0] == "--access-token=[REDACTED]"
+    )
 
 
 def test_safe_print_sanitizes_operator_output(capsys):
@@ -58,13 +69,9 @@ def test_safe_print_sanitizes_operator_output(capsys):
 
 def test_account_labels_are_masked_and_persisted_refs_are_stable():
     assert mask_account("User.Name@example.com") == "Us***@example.com"
-    assert account_reference("User.Name@example.com") == account_reference(
-        " user.name@EXAMPLE.COM "
-    )
+    assert account_reference("User.Name@example.com") == account_reference(" user.name@EXAMPLE.COM ")
     assert "user.name" not in account_reference("User.Name@example.com")
-    assert "user.name@example.com" not in sanitize_log_text(
-        "failed user.name@example.com"
-    )
+    assert "user.name@example.com" not in sanitize_log_text("failed user.name@example.com")
 
 
 def test_sanitizing_stdio_enforces_policy_for_legacy_prints():
@@ -135,9 +142,7 @@ def test_path_exemption_is_surgical_not_global():
         "identity_context": {"proxy_affinity": {"session_id": "NEW5678"}}
     }
     # A look-alike path must NOT inherit the exemption.
-    assert sanitize({"other_affinity": {"session_id": _FAKE}}) == {
-        "other_affinity": {"session_id": "[REDACTED]"}
-    }
+    assert sanitize({"other_affinity": {"session_id": _FAKE}}) == {"other_affinity": {"session_id": "[REDACTED]"}}
     # The credentials sitting next to the routing ID are still redacted.
     assert "proxy-secret" not in sanitize({"proxy": proxy})["proxy"]
 
@@ -148,9 +153,7 @@ def test_exempted_affinity_still_rebuilds_a_usable_proxy():
     from sms_tool.accounts.account_identity import create_registration_identity, resolve_account_proxy
 
     proxy = "http://user-region-US-sid-NEW5678-t-5:proxy-secret@proxy.example:443"
-    identity = create_registration_identity(
-        proxy, pool_index=0, fingerprint_key="chrome146", device_id="device-123"
-    )
+    identity = create_registration_identity(proxy, pool_index=0, fingerprint_key="chrome146", device_id="device-123")
     cleaned = sanitize({"identity_context": identity})["identity_context"]
     rebuilt = resolve_account_proxy(
         {"identity_context": cleaned},
@@ -158,8 +161,7 @@ def test_exempted_affinity_still_rebuilds_a_usable_proxy():
         config={"proxy": {"pool": [proxy]}},
     )
     assert rebuilt == proxy, (
-        "sanitize() corrupted the proxy affinity session id, so the saved exit "
-        f"IP can no longer be reused: {rebuilt!r}"
+        f"sanitize() corrupted the proxy affinity session id, so the saved exit IP can no longer be reused: {rebuilt!r}"
     )
 
 
