@@ -90,17 +90,43 @@ Broadband US, and a datacenter US exit all answer the same 400). `direct_card` /
 `paypal` / `upi` produce byte-identical `checkout_payload()` output, so the
 carrier method never reaches the create request.
 
-The single-token result above does **not** generalise to the token *pair*. The
-reference project reverse-engineered the create gate and the UPI lane
-independently confirmed it: the endpoint requires **both**
+The single-token result above does **not** generalise to the token *pair*, and
+neither does its converse. The reference project reverse-engineered the create
+gate and the UPI lane independently reported it: the endpoint requires **both**
 `openai-sentinel-token` and `openai-sentinel-so-token`, minted under flow
-`chatgpt_checkout`; a lone main token (what the registration runner emits) is
-rejected. `paypal_extract._checkout_post` now attaches the pair to every
-Checkout create through the public
-`sentinel.checkout_sentinel_headers` authority (`payment_capability`,
+`chatgpt_checkout`.
+
+🔴 **A controlled A/B on 2026-10-06 could not reproduce the "both" half.** On the
+create endpoint, holding account, verified-BR exit and request body constant and
+varying only the headers: no pair → `400 unusual activity`; **`openai-sentinel-token`
+alone, no SO → `200`.** The mint could not even produce an SO for this flow —
+`sms_tool/sentinel/client.py` only forwards one when the challenge response
+carries an `so`, and `chatgpt_checkout` did not. So on this flow a lone main
+token was sufficient, which is the opposite of "a lone main token is rejected".
+
+The contradiction with the eligibility-probe observation above is **left open on
+purpose**: that probe varied identity, egress and payload together, so it cannot
+show which of them the single token failed to compensate for. Two readings survive
+and this document must not pick between them — the gate differs by flow, or it
+changed between the two observations. Treat the main token as
+sufficient-not-necessary and the SO as unproven either way.
+
+`paypal_extract._checkout_post` attaches the pair to every Checkout create through
+the public `sentinel.checkout_sentinel_headers` authority (`payment_capability`,
 `paypal_extract._create_checkout`, `wallet_transport` and `gcash_transport` all
-reach the wire through it). The mint is advisory: a missing local runner
-degrades to no headers, so the existing classification path is unchanged.
+reach the wire through it), and since 2026-10-06 the subprocess extractors receive
+it too — see [protocol-registration.md](protocol-registration.md). The mint stays
+advisory: a missing local runner degrades to no headers, so the existing
+classification path is unchanged.
+
+**A dead create gate was not the only thing hiding behind this.** Once the pair
+was injected, the six extractors built on Stripe `payment_pages`
+(blik / ideal / twint / pix / kakao / momo) still could not proceed: the create
+endpoint no longer issues `cs_*` sessions at all, and Stripe answers an `oaics_*`
+id with `404 resource_missing`. `direct_card`, which accepts `oaics_*` and never
+touches `payment_pages`, now completes. The split described under
+[Payment eligibility suffix](#payment-eligibility-suffix) is therefore load-bearing
+for link extraction too, not only for probing.
 
 An independent read-only signal is read alongside the probe:
 `GET /backend-api/payments/payment_methods` returns `one_click_trial_eligible`
