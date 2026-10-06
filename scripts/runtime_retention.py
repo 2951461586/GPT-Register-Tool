@@ -181,10 +181,7 @@ RULES: tuple[Rule, ...] = (
     Rule(
         name="one-off scan snapshots",
         min_age_days=14,
-        note=(
-            "promotion_scan.json / liveness_scan.json / "
-            "mailbox_pool_liveness_*.json -- point-in-time snapshots."
-        ),
+        note=("promotion_scan.json / liveness_scan.json / mailbox_pool_liveness_*.json -- point-in-time snapshots."),
         match_name="*scan*.json",
     ),
     Rule(
@@ -211,10 +208,7 @@ class PlanItem:
     rule: str
 
     def as_row(self) -> str:
-        return (
-            f"{self.age_days:>7.1f}d  {self.size_bytes:>12,}  "
-            f"{self.relpath}  [{self.rule}]"
-        )
+        return f"{self.age_days:>7.1f}d  {self.size_bytes:>12,}  {self.relpath}  [{self.rule}]"
 
 
 def is_protected(relpath: str) -> bool:

@@ -40,13 +40,9 @@ def test_error_classification_tuples_are_registry_views():
 
 
 def test_batch_and_policy_and_pulse_derive_from_the_registry():
-    assert RETRYABLE_CLASSES == {
-        cls.code for cls in FAILURE_CLASSES if cls.attempt_retryable
-    }
+    assert RETRYABLE_CLASSES == {cls.code for cls in FAILURE_CLASSES if cls.attempt_retryable}
     assert RETRYABLE_CLASSES == {"network", "auth_state"}
-    assert FUTURE_BATCH_CLASSES == {
-        cls.code for cls in FAILURE_CLASSES if cls.retain_for_future_batch
-    }
+    assert FUTURE_BATCH_CLASSES == {cls.code for cls in FAILURE_CLASSES if cls.retain_for_future_batch}
     # ``upi_payment`` 加入 2026-09-17：被拒的是**这一轮 checkout**
     # （generic_decline 是 Stripe 风控对本次交易的裁决；提链超时是瞬时的），
     # 邮箱地址本身没有被消耗 ⇒ 后续批次应当重新考虑，所以进
@@ -54,9 +50,7 @@ def test_batch_and_policy_and_pulse_derive_from_the_registry():
     #
     # 但它**不进** ``attempt_retryable``：同账号立即重跑同一条已经失败的
     # 提链只会再烧一个 checkout 会话，不会改变风控裁决。
-    assert FUTURE_BATCH_CLASSES == {
-        "network", "mailbox", "auth_state", "rate_limit", "upi_payment"
-    }
+    assert FUTURE_BATCH_CLASSES == {"network", "mailbox", "auth_state", "rate_limit", "upi_payment"}
     assert BATCH_RETRY_CLASSES == FUTURE_BATCH_CLASSES
     assert BATCH_DROPPED_CLASSES == {"account"}
     assert _OTP_BAN_MARKERS == failure_registry.OTP_BAN_MARKERS
@@ -126,12 +120,7 @@ def test_transport_curl_codes_cover_the_ones_seen_in_the_wild():
         assert f"curl: {code}" not in GENERIC_TRANSPORT_MARKERS, code
 
     # 反向：没有 curl 码的 internal 文本必须保持 internal（不得被泛网络词降级）。
-    assert (
-        classify_error(
-            "registration_internal_error:NameError: name 'connection_pool' is not defined"
-        )
-        == "internal"
-    )
+    assert classify_error("registration_internal_error:NameError: name 'connection_pool' is not defined") == "internal"
     # 反向：登记 curl 码不能把「裸 proxy 词」的语义一起抬高成 decisive。
     assert classify_error("proxy") == "network"
 
@@ -231,17 +220,14 @@ def test_bare_transport_words_still_classify_as_network():
     assert classify_error("connection") == "network"
     assert (
         classify_error(
-            "ReadTimeout: HTTPSConnectionPool(host='auth.openai.com', port=443): "
-            "Read timed out. (read timeout=10)"
+            "ReadTimeout: HTTPSConnectionPool(host='auth.openai.com', port=443): Read timed out. (read timeout=10)"
         )
         == "network"
     )
 
 
 def test_generic_transport_markers_are_derived_from_the_network_class():
-    assert GENERIC_TRANSPORT_MARKERS == tuple(
-        m for m in NETWORK_ERROR_MARKERS if m.isalpha()
-    )
+    assert GENERIC_TRANSPORT_MARKERS == tuple(m for m in NETWORK_ERROR_MARKERS if m.isalpha())
     assert GENERIC_TRANSPORT_MARKERS
     # A specific condition must never be treated as generic vocabulary, or it
     # would stop being decisive on its own.
@@ -270,9 +256,7 @@ def test_egress_rotation_is_declared_on_the_registry():
     从那个字面量反推 —— 正是本模块 docstring 说的「新增一种失败要改 3-5 个文件」
     的同一处境。现在它是一份可派生的数据，由下面两条用例钉住。
     """
-    assert failure_registry.EGRESS_ROTATION_CLASSES == {
-        cls.code for cls in FAILURE_CLASSES if cls.rotate_egress
-    }
+    assert failure_registry.EGRESS_ROTATION_CLASSES == {cls.code for cls in FAILURE_CLASSES if cls.rotate_egress}
     # ``mailbox`` 拥有 OTP 派发标记（``email_otp_send_stuck`` / ``email_otp_timeout``），
     # 而 ``otp_send_stuck`` 是**派发侧**证据 ⇒ 它必须声明可换出口。
     # ``network`` 与 ``rate_limit`` 同理（传输失败与 429 都是按出口计的），

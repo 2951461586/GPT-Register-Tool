@@ -35,7 +35,7 @@ from .registration_cancel import cancellable_sleep
 
 # Failure signatures that indicate OTP delivery was blocked, most likely
 # by an IP-level ban rather than per-account issues. 词汇在 failure_registry
-#（单一注册表）。
+# （单一注册表）。
 
 
 class PulseConfig:
@@ -268,9 +268,9 @@ def run_pulse_batch(
         # a full wave spends more mailboxes, so its single dispatch-side
         # failure is sufficient. Normal waves retain the threshold+unanimity
         # requirement.
-        dispatch_blocked = (
-            len(wave_results) == 1 and _is_otp_ban_signal(wave_results[0])
-        ) or _detect_ip_ban(wave_results, pulse_config.ban_threshold)
+        dispatch_blocked = (len(wave_results) == 1 and _is_otp_ban_signal(wave_results[0])) or _detect_ip_ban(
+            wave_results, pulse_config.ban_threshold
+        )
         if dispatch_blocked:
             ban_count = sum(1 for r in wave_results if _is_otp_ban_signal(r))
             print(
