@@ -27,6 +27,7 @@ from typing import Any
 from .config import CFG
 from .failure_registry import (
     OTP_BAN_MARKERS as _OTP_BAN_MARKERS,
+    OTP_DISPATCH_VERDICT_EXCLUDED_CLASSES as _OTP_DISPATCH_VERDICT_EXCLUDED_CLASSES,
     OTP_MAILBOX_SIDE_MARKER as _OTP_MAILBOX_SIDE_MARKER,
     OTP_UNDISPATCHED_MARKER as _OTP_UNDISPATCHED_MARKER,
 )
@@ -121,12 +122,19 @@ def _is_otp_ban_signal(result: dict[str, Any]) -> bool:
     ⚠ 本函数只回答「这条失败是不是**派发侧**的」。够不够格叫「IP 封禁」还要看
     ``_detect_ip_ban`` 的整轮一致性 —— 单账号的派发侧失败在钉定了各自出口的
     池子里不是出口证据。
+
+    ⚠ 类别的排除集来自 ``failure_registry``，**不是**「不换出口」的补集：
+    ``rate_limit`` 会换出口却不是派发封禁，``account`` 两者都不是。
+
+    ⚠ 换出口这件事本身由 ``FailureClass.rotate_egress`` 声明
+    （``failure_registry.EGRESS_ROTATION_CLASSES``），实际重排由调用方经
+    ``on_dispatch_block`` 落到 ``batch_runner._rotate_proxy_pool_cursor``。
     """
     if result.get("success"):
         return False
     error = str(result.get("error") or "").lower()
     failure_class = str(result.get("failure_class") or "").lower()
-    if failure_class in {"rate_limit", "account"}:
+    if failure_class in _OTP_DISPATCH_VERDICT_EXCLUDED_CLASSES:
         return False
     if _OTP_MAILBOX_SIDE_MARKER in error:
         return False

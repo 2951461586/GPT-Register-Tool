@@ -15,7 +15,11 @@
 * ``OTP_NO_RESEND_MARKER``：**能力**后缀，标出「该渠道没有重发能力」，与上面
   第二个后缀**组合**出现（不是第三个根因）；
 * ``BATCH_RETRY_CLASSES`` / ``BATCH_DROPPED_CLASSES``：批处理对类别的
-  重试/掉号语义。
+  重试/掉号语义；
+* ``EGRESS_ROTATION_CLASSES``：其中「换出口是合理补救」的集合，由
+  ``FailureClass.rotate_egress`` 派生（``registration_pulse`` 据此决定是否重排
+  池游标）；``OTP_DISPATCH_VERDICT_EXCLUDED_CLASSES`` 是**另一根轴** ——
+  「OTP 派发被封」判据必须无视的类，两者不可合并，理由见该常量处。
 
 依赖无关：``error_classification``（被 http_client 引用）必须保持轻导入。
 历史拼写与子串格式是**线上数据**（session/progress 里已存在的文本），逐字
@@ -39,6 +43,14 @@ class FailureClass:
     retain_for_future_batch: bool = False
     # batch_runner: a failure of this class marks the account dropped.
     batch_dropped: bool = False
+    #: An egress change is a plausible remedy: the failure is plausibly
+    #: *per-exit* rather than per-account, so the scheduler may re-pin future
+    #: accounts to another configured pool slot (``registration_pulse`` calls
+    #: ``batch_runner._rotate_proxy_pool_cursor``). 🔴 This is **not** the same
+    #: question as "is this an OTP dispatch block?" -- see
+    #: ``OTP_DISPATCH_VERDICT_EXCLUDED_CLASSES`` for why the two must stay
+    #: separate.
+    rotate_egress: bool = False
 
     @property
     def retryable(self) -> bool:
@@ -129,14 +141,14 @@ FAILURE_CLASSES: tuple[FailureClass, ...] = (
         "mailbox_transport_unavailable",
         "relogin_mailbox_transport_failed",
         "remail poll transport",
-    ), retain_for_future_batch=True),
+    ), retain_for_future_batch=True, rotate_egress=True),
     FailureClass("rate_limit", (
         "rate_limit_exceeded",
         "registration_rate_limited",
         "registration_rate_limit_circuit_open",
         "too many requests",
         "http_429",
-    ), retain_for_future_batch=True),
+    ), retain_for_future_batch=True, rotate_egress=True),
     FailureClass("network", (
         "tls",
         "ssl",
@@ -209,7 +221,7 @@ FAILURE_CLASSES: tuple[FailureClass, ...] = (
         "sentinel_fallback_incomplete",
         "cloudflare",
         "just a moment",
-    ), attempt_retryable=True, retain_for_future_batch=True),
+    ), attempt_retryable=True, retain_for_future_batch=True, rotate_egress=True),
     FailureClass("auth_state", (
         "browser_email_field_not_editable",
         "invalid_auth_step",
@@ -461,6 +473,28 @@ FUTURE_BATCH_CLASSES = frozenset(
 BATCH_RETRY_CLASSES = FUTURE_BATCH_CLASSES
 BATCH_DROPPED_CLASSES = frozenset(cls.code for cls in FAILURE_CLASSES if cls.batch_dropped)
 
+#: Classes whose failures make an **egress** change a plausible remedy.
+#: ``batch_runner`` acts on this through ``on_dispatch_block``.
+EGRESS_ROTATION_CLASSES = frozenset(cls.code for cls in FAILURE_CLASSES if cls.rotate_egress)
+
+#: Classes the OTP-dispatch-block verdict must never fire on, even when an OTP
+#: marker is present in the error text (``registration_pulse._is_otp_ban_signal``).
+#:
+#: 🔴 This is **not** the complement of :data:`EGRESS_ROTATION_CLASSES`. The two
+#: answer different questions and only happen to overlap:
+#:
+#: * ``rate_limit`` **does** rotate egress -- a 429 is per-exit -- but must never
+#:   be read as an OTP dispatch block. The batch circuit breaker owns 429;
+#:   letting the pulse also act on it stacked the 60s OTP cooldown and the
+#:   canary downgrade on top of the breaker's own handling.
+#: * ``account`` neither rotates egress nor is an OTP dispatch block: the address
+#:   is already consumed, so no exit helps and no amount of retrying frees it.
+#:
+#: Keeping both constants is the point. Collapsing them into one would force
+#: ``rate_limit`` to be either a dispatch block or non-rotating, and both are
+#: wrong.
+OTP_DISPATCH_VERDICT_EXCLUDED_CLASSES = frozenset({"rate_limit", "account"})
+
 
 __all__ = [
     "FailureClass",
@@ -479,4 +513,6 @@ __all__ = [
     "FUTURE_BATCH_CLASSES",
     "BATCH_RETRY_CLASSES",
     "BATCH_DROPPED_CLASSES",
+    "EGRESS_ROTATION_CLASSES",
+    "OTP_DISPATCH_VERDICT_EXCLUDED_CLASSES",
 ]

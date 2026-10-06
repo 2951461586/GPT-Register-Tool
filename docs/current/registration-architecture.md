@@ -141,7 +141,13 @@ Pulse scheduling starts with a one-account canary when
 `registration.pulse.canary_enabled` is true. A blocked canary or unanimously
 blocked full wave advances the proxy-pool cursor for accounts not yet started,
 cools down, and keeps the next wave as a canary. With only one pool slot the log
-reports cooldown only. Protocol and browser results both carry the same
+reports cooldown only. `FailureClass.rotate_egress` is the registry's single
+declaration of which failure classes make an egress change a plausible remedy,
+and the blocked-dispatch verdict consults it. It is deliberately **not** the same
+axis as the classes that verdict must ignore: `rate_limit` rotates egress yet
+must never be read as an OTP dispatch block, because the batch circuit breaker
+already owns 429, while `account` is neither — its address is consumed, so no
+exit helps. Protocol and browser results both carry the same
 allow-listed `proxy_audit` fields: pool index, countries, scheme, and rotation
 generation. No proxy URL, host, credential, or session ID is included.
 Sentinel prewarm for a future account is reused only if its prepared base

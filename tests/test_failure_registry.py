@@ -23,7 +23,7 @@ from sms_tool.failure_registry import (
     FUTURE_BATCH_CLASSES,
 )
 from sms_tool.registration_policy import RETRYABLE_CLASSES
-from sms_tool.registration_pulse import _OTP_BAN_MARKERS
+from sms_tool.registration_pulse import _OTP_BAN_MARKERS, _is_otp_ban_signal
 
 
 def test_error_classification_tuples_are_registry_views():
@@ -260,3 +260,59 @@ def test_browser_lane_and_shared_classifier_agree_on_these_codes():
         "browser_email_value_mismatch",
     ):
         assert _browser_failure_class(code) == classify_error(code) == "auth_state", code
+
+
+def test_egress_rotation_is_declared_on_the_registry():
+    """``rotate_egress`` 是「换出口是不是合理补救」的**单一声明点**。
+
+    2026-10-05：这个问题此前没有名字。pulse �的 ``_is_otp_ban_signal`` 里写着
+    一个裸字面量 ``{"rate_limit", "account"}``，而「哪些失败换了出口会好」只能
+    从那个字面量反推 —— 正是本模块 docstring 说的「新增一种失败要改 3-5 个文件」
+    的同一处境。现在它是一份可派生的数据，由下面两条用例钉住。
+    """
+    assert failure_registry.EGRESS_ROTATION_CLASSES == {
+        cls.code for cls in FAILURE_CLASSES if cls.rotate_egress
+    }
+    # ``mailbox`` 拥有 OTP 派发标记（``email_otp_send_stuck`` / ``email_otp_timeout``），
+    # 而 ``otp_send_stuck`` 是**派发侧**证据 ⇒ 它必须声明可换出口。
+    # ``network`` 与 ``rate_limit`` 同理（传输失败与 429 都是按出口计的），
+    # ``account`` 则相反：地址已被消耗，换任何出口都救不回来。
+    assert failure_registry.EGRESS_ROTATION_CLASSES == {"mailbox", "network", "rate_limit"}
+    assert failure_registry.failure_class("mailbox").rotate_egress is True
+    assert failure_registry.failure_class("account").rotate_egress is False
+
+
+def test_otp_dispatch_exclusion_is_a_different_axis_than_egress_rotation():
+    """两个集合**不是**补集关系；它们的重叠方式本身是承重信息。
+
+    ``rate_limit`` 同时出现在两边：它会换出口（429 是按出口计的），但**绝不能**
+    被读成「OTP 派发被封」—— 429 归批处理熔断器管，让 pulse 也跟着动作会把
+    冷却 60s 与 canary 降级叠到熔断器自己的处置上。``account`` 两边都不在。
+
+    ⇒ 合并成一个常量必然要把 ``rate_limit`` 判成「要么是派发封禁、要么不换出口」，
+    而两者都是错的。这条用例就是防止下一次「顺手合并」。
+    """
+    rotation = failure_registry.EGRESS_ROTATION_CLASSES
+    excluded = failure_registry.OTP_DISPATCH_VERDICT_EXCLUDED_CLASSES
+    assert excluded == {"rate_limit", "account"}
+    assert excluded != frozenset(cls.code for cls in FAILURE_CLASSES) - rotation
+    assert rotation & excluded == {"rate_limit"}
+    assert "account" not in rotation
+    assert "account" in excluded
+
+    # 行为与两轴的定义一致（用真实错误串，不是构造的 failure_class）。
+    assert _is_otp_ban_signal({"error": "otp_poll_timeout", "failure_class": "rate_limit"}) is False
+    assert _is_otp_ban_signal({"error": "otp_poll_timeout", "failure_class": "account"}) is False
+    assert _is_otp_ban_signal({"error": "otp_poll_timeout", "failure_class": "mailbox"}) is True
+    # 拿不到类别证据时仍回落到标记匹配（宁多停 60s，不少停）。
+    assert _is_otp_ban_signal({"error": "otp_poll_timeout"}) is True
+    # 邮箱侧后缀在标记之前短路，与类别无关。
+    assert (
+        _is_otp_ban_signal(
+            {
+                "error": "email_otp_poll_timeout:mailbox_side_no_code",
+                "failure_class": "mailbox",
+            }
+        )
+        is False
+    )
