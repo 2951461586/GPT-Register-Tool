@@ -354,6 +354,46 @@ class ProtocolResultReporter:
         )
 
 
+def run_extractor_entrypoint(
+    reporter: ProtocolResultReporter,
+    main: Callable[[], int],
+    *,
+    error_code: str = "extractor_entrypoint_exception",
+) -> int:
+    """Run an extractor ``main`` so exactly one terminal result is emitted.
+
+    :class:`ProtocolResultReporter` enforces "at most one" terminal object; this
+    supplies the other half of the contract, "at least one".  The seven
+    extractors used to spell their ``__main__`` guard by hand and drifted into
+    three shapes: blik / ideal / twint called ``ensure_terminal`` after a normal
+    return, momo wrapped ``main`` in its own ``except Exception``, and pix /
+    kakao / direct_card did neither.  An extractor that raised printed a
+    traceback and exited with no ``protocol_payment.v1`` line at all, so the
+    manager parsed nothing and fell back to its generic
+    ``extractor_output_missing`` -- discarding the error code, stage, retryable
+    flag and artifacts the extractor could have carried.  A normal return that
+    never reached ``success`` / ``failure`` lost the same fields; that half was
+    already covered where ``ensure_terminal`` was called.
+
+    ``SystemExit`` is deliberately *not* caught -- an extractor that raises it
+    has already chosen its exit code, and swallowing it would hide that.
+    ``KeyboardInterrupt`` / ``GeneratorExit`` are not ``Exception`` subclasses,
+    so both propagate untouched: a cancelled run is the parent's signal to act
+    on, not a provider verdict to report.
+    """
+    try:
+        exit_code = int(main() or 0)
+    except Exception as exc:
+        reporter.failure(
+            f"{type(exc).__name__}: {exc}",
+            error_code=error_code,
+            error_stage="entrypoint",
+        )
+        return 1
+    reporter.ensure_terminal(exit_code)
+    return exit_code
+
+
 def env_bool(name: str, default: bool = False) -> bool:
     raw = os.environ.get(name)
     if raw is None:

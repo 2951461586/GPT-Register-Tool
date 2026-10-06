@@ -29,7 +29,7 @@ if str(_PROTOCOL_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROTOCOL_ROOT))
 
 import momo_qr_extract as momo
-from common.protocol_core import ProtocolResultReporter
+from common.protocol_core import ProtocolResultReporter, run_extractor_entrypoint
 
 _RESULT_REPORTER = ProtocolResultReporter("momo", "momo_protocol_qr")
 
@@ -185,10 +185,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    try:
-        raise SystemExit(main())
-    except SystemExit:
-        raise
-    except Exception as exc:
-        _RESULT_REPORTER.failure(f"{type(exc).__name__}: {exc}", error_code="momo_runner_exception")
-        raise SystemExit(1)
+    raise SystemExit(run_extractor_entrypoint(_RESULT_REPORTER, main, error_code="momo_runner_exception"))

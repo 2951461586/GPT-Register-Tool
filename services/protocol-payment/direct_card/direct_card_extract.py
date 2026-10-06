@@ -62,7 +62,14 @@ PROTOCOL_ROOT = Path(__file__).resolve().parent.parent
 if str(PROTOCOL_ROOT) not in sys.path:
     sys.path.insert(0, str(PROTOCOL_ROOT))
 
-from common.protocol_core import ProtocolResultReporter, is_false, is_true, safe_float, safe_int
+from common.protocol_core import (
+    ProtocolResultReporter,
+    is_false,
+    is_true,
+    run_extractor_entrypoint,
+    safe_float,
+    safe_int,
+)
 from common.proxy_url import (
     normalize_provider_form as shared_normalize_provider_form,
 )
@@ -1172,4 +1179,4 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(run_extractor_entrypoint(_RESULT_REPORTER, main, error_code="direct_card_extractor_exception"))

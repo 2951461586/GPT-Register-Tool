@@ -102,6 +102,7 @@ from common.payment_predicates import (
 )
 from common.protocol_core import (
     ProtocolResultReporter,
+    run_extractor_entrypoint,
     amount_from_payload as common_amount_from_payload,
     collect_strings as common_collect_strings,
     collect_urls as common_collect_urls,
@@ -2837,6 +2838,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    _exit_code = main()
-    _result_reporter.ensure_terminal(_exit_code)
-    sys.exit(_exit_code)
+    sys.exit(run_extractor_entrypoint(_result_reporter, main, error_code="ideal_runner_exception"))

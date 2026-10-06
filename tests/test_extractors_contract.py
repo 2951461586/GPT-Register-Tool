@@ -7,6 +7,7 @@ manager keys off, plus the success-result contract. Every protocol extractor
 touched -- only pure helpers and the shared reporter are exercised.
 """
 
+import ast
 import importlib
 import io
 import json
@@ -23,7 +24,19 @@ PROTOCOL_ROOT = ROOT / "services" / "protocol-payment"
 if str(PROTOCOL_ROOT) not in sys.path:
     sys.path.insert(0, str(PROTOCOL_ROOT))
 
-from common.protocol_core import ProtocolResultReporter  # type: ignore[import-not-found]  # noqa: E402
+from common.protocol_core import ProtocolResultReporter, run_extractor_entrypoint  # type: ignore[import-not-found]  # noqa: E402
+
+#: Every protocol extractor that the manager launches as a subprocess, by the
+#: short name used in the parity ratchet and the file that owns its ``__main__``.
+_EXTRACTOR_ENTRYPOINTS = {
+    "blik": "blik/blik_qr_extract.py",
+    "ideal": "ideal/ideal_qr_extract.py",
+    "twint": "twint/twint_extract.py",
+    "pix": "pix/run_pix.py",
+    "momo": "momo/run_momo.py",
+    "kakao": "kakao/kakao_extract.py",
+    "direct_card": "direct_card/direct_card_extract.py",
+}
 
 
 def _import_extractor(name, module_file):
@@ -244,6 +257,90 @@ class DirectCardExtractorContractTests(unittest.TestCase):
         self.assertFalse(payload["ok"])
         self.assertIn("[REDACTED]", payload["error"])
         self.assertNotIn("at_plain_secret", buffer.getvalue())
+
+
+class EntrypointTerminalContractTests(unittest.TestCase):
+    """Every protocol extractor must emit exactly one terminal result.
+
+    :class:`ProtocolResultReporter` enforces "at most one";
+    :func:`run_extractor_entrypoint` owns "at least one".  The first three tests
+    exercise the guard directly; the last pins every extractor's ``__main__`` to
+    the guard so the drift that once let pix / kakao / direct_card exit with no
+    ``protocol_payment.v1`` line (and made the manager degrade every failure to
+    a generic ``extractor_output_missing``) cannot come back.
+    """
+
+    @staticmethod
+    def _guard(main, error_code="test_entrypoint_exception"):
+        captured = []
+        reporter = ProtocolResultReporter("test", writer=captured.append)
+        exit_code = run_extractor_entrypoint(reporter, main, error_code=error_code)
+        return exit_code, captured
+
+    def test_normal_return_without_a_result_emits_a_missing_output_failure(self):
+        exit_code, captured = self._guard(lambda: 5)
+        self.assertEqual(exit_code, 5)
+        self.assertEqual(len(captured), 1)
+        payload = json.loads(captured[0])
+        self.assertEqual(payload["schema"], "protocol_payment.v1")
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["error_code"], "extractor_output_missing")
+
+    def test_a_raised_exception_emits_one_terminal_failure(self):
+        def boom():
+            raise ValueError("kaboom")
+
+        exit_code, captured = self._guard(boom, error_code="pix_runner_exception")
+        self.assertEqual(exit_code, 1)
+        self.assertEqual(len(captured), 1)
+        payload = json.loads(captured[0])
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["error_code"], "pix_runner_exception")
+        self.assertEqual(payload["error_stage"], "entrypoint")
+        self.assertIn("ValueError: kaboom", payload["error"])
+
+    def test_an_already_emitted_result_is_never_replaced(self):
+        captured = []
+        reporter = ProtocolResultReporter("test", writer=captured.append)
+
+        def main():
+            reporter.success("https://pay.example/ok")
+            return 0
+
+        self.assertEqual(run_extractor_entrypoint(reporter, main), 0)
+        self.assertEqual(len(captured), 1)
+        self.assertTrue(json.loads(captured[0])["ok"])
+
+    def test_system_exit_and_keyboard_interrupt_propagate_without_a_verdict(self):
+        def raise_system_exit():
+            raise SystemExit(7)
+
+        def raise_keyboard_interrupt():
+            raise KeyboardInterrupt()
+
+        for expected, main in ((SystemExit, raise_system_exit), (KeyboardInterrupt, raise_keyboard_interrupt)):
+            with self.subTest(signal=expected.__name__):
+                captured = []
+                reporter = ProtocolResultReporter("test", writer=captured.append)
+                with self.assertRaises(expected):
+                    run_extractor_entrypoint(reporter, main)
+                self.assertEqual(captured, [])
+
+    def test_every_extractor_main_block_routes_through_the_guard(self):
+        for name, relative in _EXTRACTOR_ENTRYPOINTS.items():
+            with self.subTest(extractor=name):
+                tree = ast.parse((PROTOCOL_ROOT / relative).read_text(encoding="utf-8"))
+                guarded = False
+                for node in tree.body:
+                    if not isinstance(node, ast.If) or "__name__" not in ast.dump(node.test):
+                        continue
+                    guarded = any(
+                        isinstance(child, ast.Call)
+                        and isinstance(child.func, ast.Name)
+                        and child.func.id == "run_extractor_entrypoint"
+                        for child in ast.walk(node)
+                    )
+                self.assertTrue(guarded, f"{relative} __main__ does not use run_extractor_entrypoint")
 
 
 if __name__ == "__main__":
