@@ -80,6 +80,13 @@ NEVER_DELETE: frozenset[str] = frozenset(
         "mailbox_pool_repair.json",
         "phone_proxy_probe_cache.json",
         "sensitive_policy.json",
+        # Billing-identity cursor (pp_link_helpers.reserve_billing_variant). No
+        # rule matches it today, so this entry is redundant -- deliberately, in
+        # the same spirit as ``accounts.sqlite3`` above: it documents intent and
+        # survives a future rule that widens to ``*.json``. Losing the cursor
+        # silently re-pins every country to the default address, which is the
+        # pattern the pool exists to break.
+        "billing_address_cursor.json",
     }
 )
 
@@ -111,7 +118,11 @@ class Rule:
                 return False
             if self.match_name is None:
                 return True
-            return Path(relpath).name and Path(parts[-1]).match(self.match_name)
+            # ``bool(...)`` is load-bearing: ``Path("").name`` is ``""``, so a
+            # bare ``and`` would make this declared ``-> bool`` return a string
+            # for the empty/dot relpaths. Callers happen to test truthiness, so
+            # the defect was silent.
+            return bool(Path(relpath).name) and Path(parts[-1]).match(self.match_name)
         if self.match_name is None:
             return False
         if self.recursive:
@@ -333,7 +344,9 @@ def purge_relocated(root: Path) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    # ``__doc__`` is ``str | None``; indexing it directly would raise at startup
+    # on a module whose docstring was ever removed.
+    parser = argparse.ArgumentParser(description=(__doc__ or "").split("\n")[0])
     parser.add_argument("--root", type=Path, default=DEFAULT_ROOT)
     parser.add_argument(
         "--min-age",

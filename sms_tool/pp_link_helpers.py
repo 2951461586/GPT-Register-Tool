@@ -15,6 +15,7 @@ import json
 import os
 import re
 import uuid
+from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qsl, quote, urljoin, urlsplit
 
@@ -22,9 +23,13 @@ import requests
 
 try:
     from .checkout_contract import CheckoutRequestContract, CheckoutSessionContract
+    from .cross_process_gate import cross_process_write_lock
+    from .paths import runtime_file
     from .phone_proxy import match_proxy_region, normalize_proxy_url
 except ImportError:  # pragma: no cover - direct script execution
     from checkout_contract import CheckoutRequestContract, CheckoutSessionContract  # type: ignore
+    from cross_process_gate import cross_process_write_lock  # type: ignore
+    from paths import runtime_file  # type: ignore
     from phone_proxy import match_proxy_region, normalize_proxy_url  # type: ignore
 
 try:
@@ -360,6 +365,174 @@ BILLING_DATA = {
     },
 }
 
+#: Extra per-country billing identities beyond ``BILLING_DATA[code]``.
+#:
+#: ``BILLING_DATA`` holds exactly one identity per country, so every Checkout
+#: for that country billed from the *same* street address. A single invariant
+#: address across N checkouts is itself an observable pattern; each curated
+#: market therefore gets a small pool of equally plausible alternatives.
+#:
+#: 🔴 ``BILLING_DATA[code]`` is always ``billing_address_pool(code)[0]``, so
+#: ``billing_for_country(code)`` stays byte-identical to its previous output for
+#: the default call. That matters: the two billing lookups inside one PayPal run
+#: (``_sync_tax_region`` and ``_create_payment_method``) are two stages of the
+#: *same* checkout and must not disagree on the billing identity.
+#:
+#: Addresses are hand-authored, not geocoded -- this path deliberately carries
+#: no external geocoding dependency and no per-call network traffic.
+BILLING_ADDRESS_POOLS: dict[str, tuple[dict, ...]] = {
+    "DE": (
+        {"name": ("Jonas", "Weber"), "street": "Leopoldstrasse 42", "city": "Munich", "state": "BY", "postal": "80802"},
+        {"name": ("Felix", "Hoffmann"), "street": "Monckebergstrasse 7", "city": "Hamburg", "state": "HH", "postal": "20095"},
+        {"name": ("Marie", "Koch"), "street": "Hohe Strasse 68", "city": "Cologne", "state": "NW", "postal": "50667"},
+    ),
+    "GB": (
+        {"name": ("Harry", "Bennett"), "street": "12 Deansgate", "city": "Manchester", "state": "England", "postal": "M3 2BW"},
+        {"name": ("Ella", "Fraser"), "street": "45 Princes Street", "city": "Edinburgh", "state": "Scotland", "postal": "EH2 2BY"},
+        {"name": ("Owen", "Rees"), "street": "8 Queen Street", "city": "Cardiff", "state": "Wales", "postal": "CF10 2BY"},
+    ),
+    "US": (
+        {"name": ("Michael", "Torres"), "street": "350 5th Avenue", "city": "New York", "state": "NY", "postal": "10118"},
+        {"name": ("Sarah", "Whitfield"), "street": "233 S Wacker Drive", "city": "Chicago", "state": "IL", "postal": "60606"},
+        {"name": ("Daniel", "Pierce"), "street": "1420 5th Avenue", "city": "Seattle", "state": "WA", "postal": "98101"},
+    ),
+    "FR": (
+        {"name": ("Camille", "Leroy"), "street": "25 Rue de la Republique", "city": "Lyon", "state": "Auvergne-Rhone-Alpes", "postal": "69002"},
+        {"name": ("Mathieu", "Moreau"), "street": "9 La Canebiere", "city": "Marseille", "state": "Provence-Alpes-Cote d'Azur", "postal": "13001"},
+        {"name": ("Chloe", "Girard"), "street": "14 Rue d'Alsace-Lorraine", "city": "Toulouse", "state": "Occitanie", "postal": "31000"},
+    ),
+    "JP": (
+        {"name": ("Kenji", "Sato"), "street": "3-1-1 Umeda", "city": "Osaka", "state": "Osaka", "postal": "530-0001"},
+        {"name": ("Yuki", "Tanaka"), "street": "1-1-4 Meieki", "city": "Nagoya", "state": "Aichi", "postal": "450-0002"},
+        {"name": ("Aoi", "Suzuki"), "street": "2-1-1 Kita-ichijo", "city": "Sapporo", "state": "Hokkaido", "postal": "060-0001"},
+    ),
+    "NL": (
+        {"name": ("Sem", "Bakker"), "street": "Coolsingel 40", "city": "Rotterdam", "state": "ZH", "postal": "3011 AD"},
+        {"name": ("Lotte", "Visser"), "street": "Spui 68", "city": "The Hague", "state": "ZH", "postal": "2511 BT"},
+        {"name": ("Bram", "Smit"), "street": "Oudegracht 114", "city": "Utrecht", "state": "UT", "postal": "3511 AW"},
+    ),
+    "BR": (
+        {"name": ("Rafael", "Costa"), "street": "Avenida Rio Branco 156", "city": "Rio de Janeiro", "state": "RJ", "postal": "20040-901"},
+        {"name": ("Beatriz", "Almeida"), "street": "Avenida Afonso Pena 1212", "city": "Belo Horizonte", "state": "MG", "postal": "30130-003"},
+        {"name": ("Lucas", "Ribeiro"), "street": "Rua XV de Novembro 300", "city": "Curitiba", "state": "PR", "postal": "80020-310"},
+    ),
+    "KR": (
+        {"name": ("Jihoon", "Park"), "street": "100 Jungang-daero", "city": "Busan", "state": "Busan", "postal": "48939"},
+        {"name": ("Seoyeon", "Choi"), "street": "25 Inha-ro", "city": "Incheon", "state": "Incheon", "postal": "22212"},
+        {"name": ("Hyunwoo", "Jung"), "street": "88 Dongseong-ro", "city": "Daegu", "state": "Daegu", "postal": "41911"},
+    ),
+    "PL": (
+        {"name": ("Piotr", "Nowak"), "street": "Rynek Glowny 12", "city": "Krakow", "state": "MA", "postal": "31-042"},
+        {"name": ("Anna", "Wisniewska"), "street": "Dlugi Targ 24", "city": "Gdansk", "state": "PM", "postal": "80-828"},
+        {"name": ("Tomasz", "Lewandowski"), "street": "Rynek 15", "city": "Wroclaw", "state": "DS", "postal": "50-101"},
+    ),
+    "CH": (
+        {"name": ("Nicolas", "Rochat"), "street": "Rue du Rhone 62", "city": "Geneva", "state": "GE", "postal": "1204"},
+        {"name": ("Sandra", "Brunner"), "street": "Freie Strasse 40", "city": "Basel", "state": "BS", "postal": "4001"},
+        {"name": ("Martin", "Gerber"), "street": "Spitalgasse 30", "city": "Bern", "state": "BE", "postal": "3011"},
+    ),
+    "VN": (
+        {"name": ("Trung", "Tran"), "street": "32 Hang Bai", "city": "Hanoi", "state": "HN", "postal": "100000"},
+        {"name": ("Linh", "Pham"), "street": "88 Bach Dang", "city": "Da Nang", "state": "DN", "postal": "550000"},
+        {"name": ("Hoa", "Le"), "street": "12 Tran Phu", "city": "Nha Trang", "state": "KH", "postal": "650000"},
+    ),
+    "PH": (
+        {"name": ("Ramon", "Dela Cruz"), "street": "1000 Roxas Boulevard", "city": "Manila", "state": "NCR", "postal": "1000"},
+        {"name": ("Grace", "Reyes"), "street": "1100 Quezon Avenue", "city": "Quezon City", "state": "NCR", "postal": "1100"},
+        {"name": ("Paolo", "Bautista"), "street": "6000 Osmena Boulevard", "city": "Cebu City", "state": "Region VII", "postal": "6000"},
+    ),
+    "ID": (
+        {"name": ("Andi", "Pratama"), "street": "Jalan Tunjungan 45", "city": "Surabaya", "state": "JI", "postal": "60275"},
+        {"name": ("Dewi", "Lestari"), "street": "Jalan Asia Afrika 133", "city": "Bandung", "state": "JB", "postal": "40112"},
+        {"name": ("Rizky", "Hidayat"), "street": "Jalan Gatot Subroto 88", "city": "Medan", "state": "SU", "postal": "20112"},
+    ),
+    "IN": (
+        {"name": ("Arjun", "Mehta"), "street": "12 Connaught Place", "city": "New Delhi", "state": "Delhi", "postal": "110001"},
+        {"name": ("Priya", "Nair"), "street": "45 MG Road", "city": "Bengaluru", "state": "Karnataka", "postal": "560001"},
+        {"name": ("Vikram", "Desai"), "street": "7 FC Road", "city": "Pune", "state": "Maharashtra", "postal": "411004"},
+    ),
+    "ES": (
+        {"name": ("Sergio", "Martin"), "street": "Passeig de Gracia 43", "city": "Barcelona", "state": "CT", "postal": "08007"},
+        {"name": ("Lucia", "Fernandez"), "street": "Plaza del Ayuntamiento 1", "city": "Valencia", "state": "VC", "postal": "46002"},
+        {"name": ("Javier", "Romero"), "street": "Avenida de la Constitucion 20", "city": "Seville", "state": "AN", "postal": "41004"},
+    ),
+}
+
+#: Runtime cursor filename for :func:`reserve_billing_variant`.
+BILLING_VARIANT_STATE_FILENAME = "billing_address_cursor.json"
+
+
+def billing_address_pool(country: str) -> tuple[dict, ...]:
+    """Every curated billing identity for ``country``, the default one first.
+
+    ``billing_address_pool(code)[0]`` is exactly ``BILLING_DATA[code]`` (or the
+    generated template for an uncovered market), so index 0 is the pre-existing
+    behaviour.
+    """
+    code = str(country or "DE").strip().upper() or "DE"
+    base = BILLING_DATA.get(code) or _generated_billing(code)
+    return (base, *BILLING_ADDRESS_POOLS.get(code, ()))
+
+
+def _billing_variant_state_path() -> Path:
+    """Resolve the cursor through ``paths`` so the test sandbox re-roots it.
+
+    Binding the resolved path at import time would freeze it to the real
+    ``runtime/`` and defeat the ``isolated_runtime`` fixture.
+    """
+    return runtime_file({}, BILLING_VARIANT_STATE_FILENAME)
+
+
+def reserve_billing_variant(country: str, *, state_path: Any = None) -> int:
+    """Advance ``country``'s cursor and return the next billing variant index.
+
+    Best-effort by design. This only decorrelates one run from the previous one,
+    so a missing or unwritable runtime directory must degrade to the default
+    identity rather than fail a Checkout: **every** failure path returns ``0``.
+
+    The read-modify-write is serialised by the shared cross-process file lock so
+    two concurrent runs (CLI + workbench) cannot reserve the same variant. The
+    cursor is advanced before the caller uses the index, so a run that later
+    fails still consumes its slot -- a skipped address is the cheap direction to
+    be wrong in, whereas a repeated one is the pattern this exists to break.
+
+    Returns ``0`` for a single-entry pool (nothing to rotate).
+    """
+    code = str(country or "DE").strip().upper() or "DE"
+    pool = billing_address_pool(code)
+    if len(pool) <= 1:
+        return 0
+    path = Path(state_path) if state_path is not None else _billing_variant_state_path()
+    try:
+        with cross_process_write_lock(path.parent / f"{path.name}.lock"):
+            state: dict[str, Any] = {}
+            try:
+                loaded = json.loads(path.read_text(encoding="utf-8"))
+                if isinstance(loaded, dict):
+                    state = loaded
+            except (OSError, ValueError):
+                state = {}
+            try:
+                previous = int(state.get(code, -1))
+            except (TypeError, ValueError):
+                previous = -1
+            index = (previous + 1) % len(pool)
+            state[code] = index
+            temporary = path.parent / f"{path.name}.{uuid.uuid4().hex}.tmp"
+            try:
+                temporary.write_text(json.dumps(state, indent=2, sort_keys=True), encoding="utf-8")
+                os.replace(temporary, path)
+            finally:
+                try:
+                    temporary.unlink(missing_ok=True)
+                except OSError:
+                    pass
+        return index
+    except Exception:
+        # GateTimeoutError (another process holds the lock), OSError (read-only
+        # runtime), JSON garbage, or anything else: the identity is advisory.
+        return 0
+
 
 # ─── 代理工具 ──────────────────────────────────────────────────────────────────
 
@@ -586,9 +759,19 @@ def _generated_billing(country: str) -> dict:
     }
 
 
-def billing_for_country(country: str) -> dict:
+def billing_for_country(country: str, *, variant: int | None = None) -> dict:
+    """The billing identity for ``country``.
+
+    ``variant=None`` returns the country's default identity, which is what every
+    non-reserving caller wants: the two billing lookups inside one PayPal run are
+    separate stages of one checkout, so a rotating default here would let
+    ``_sync_tax_region`` and ``_create_payment_method`` bill from different
+    streets. Pass the index from :func:`reserve_billing_variant` to decorrelate
+    that run from the previous one while keeping the run internally consistent.
+    """
     code = str(country or "DE").upper()
-    data = BILLING_DATA.get(code) or _generated_billing(code)
+    pool = billing_address_pool(code)
+    data = pool[0] if variant is None else pool[int(variant) % len(pool)]
     return {
         "country": code,
         "name": data["name"],

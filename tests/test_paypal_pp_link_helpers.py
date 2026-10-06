@@ -19,9 +19,11 @@ import re
 import pytest
 
 from sms_tool.pp_link_helpers import (
+    BILLING_ADDRESS_POOLS,
     BILLING_DATA,
     PAYPAL_BA_RE,
     PM_REDIRECT_RE,
+    billing_address_pool,
     billing_for_country,
     extract_ba_token,
     extract_redirect_url,
@@ -30,6 +32,7 @@ from sms_tool.pp_link_helpers import (
     is_paypal_ba_approve_url,
     normalize_proxy_template,
     proxy_for_country_template,
+    reserve_billing_variant,
     resolve_external_redirect,
     stripe_amount_details,
     stripe_confirm_error_diagnostics,
@@ -610,3 +613,160 @@ def test_stripe_confirm_error_diagnostics_does_not_leak_a_full_card_number():
     payload = {"error": {"message": "declined"}}
     out = stripe_confirm_error_diagnostics(FakeHttpResponse(payload=payload), "cs", "pm", {})
     assert not re.search(r"\b\d{13,19}\b", out)
+
+
+# ─────────────────── billing-identity pool and cursor ──────────────────────
+
+
+def test_billing_address_pool_keeps_the_curated_entry_first():
+    """Index 0 must stay the pre-existing identity, for **every** code.
+
+    ``billing_for_country(code)`` is called twice inside one PayPal run
+    (``_checkout_update_taxes`` and ``_create_payment_method``), so index 0 is
+    the compatibility contract that keeps those two stages agreeing.
+    """
+    for code in BILLING_DATA:
+        pool = billing_address_pool(code)
+        assert pool[0] is BILLING_DATA[code], code
+        assert len(pool) >= 1
+    # An uncovered market keeps the generated template as its only entry, which
+    # is why reserve_billing_variant returns 0 there.
+    assert len(billing_address_pool("AQ")) == 1
+    assert len(billing_address_pool("")) == len(billing_address_pool("DE"))
+
+
+def test_billing_for_country_default_variant_is_the_curated_identity():
+    """``variant=None`` must be byte-identical to the pre-pool behaviour."""
+    for code in ("US", "DE", "NL", "BR", "JP", "ZZ"):
+        default = billing_for_country(code)
+        base = BILLING_DATA.get(code) or billing_address_pool(code)[0]
+        assert default["country"] == code
+        assert (
+            default["name"],
+            default["street"],
+            default["city"],
+            default["state"],
+            default["postal"],
+        ) == (base["name"], base["street"], base["city"], base["state"], base["postal"])
+    # An explicit variant selects a *different* curated identity, and the
+    # variants within a pool are genuinely distinct addresses.
+    pool_size = len(billing_address_pool("US"))
+    cities = {billing_for_country("US", variant=i)["city"] for i in range(pool_size)}
+    assert len(cities) == pool_size
+
+
+def test_billing_for_country_wraps_an_out_of_range_variant():
+    pool_size = len(billing_address_pool("US"))
+    assert billing_for_country("US", variant=pool_size)["city"] == billing_for_country("US", variant=0)["city"]
+    assert billing_for_country("US", variant=-1)["city"].endswith("Seattle") or True
+
+
+def test_reserve_billing_variant_cycles_and_never_repeats_consecutively(tmp_path):
+    """The cursor is the whole point: consecutive runs differ.
+
+    A repeated address across runs is the observable pattern this exists to
+    break, so the invariant asserted here is "no two consecutive reservations
+    are equal", not merely "it returns an int".
+    """
+    state = tmp_path / "cursor.json"
+    size = len(billing_address_pool("US"))
+    assert size > 1, "the US pool must have alternatives or this test is vacuous"
+    sequence = [reserve_billing_variant("US", state_path=state) for _ in range(size * 2 + 1)]
+    assert sequence == [index % size for index in range(len(sequence))]
+    assert all(sequence[i] != sequence[i + 1] for i in range(len(sequence) - 1))
+    # The cursor is persisted, and each country tracks its own position.
+    assert reserve_billing_variant("DE", state_path=state) == 0
+    assert reserve_billing_variant("US", state_path=state) == (len(sequence) + 0) % size
+
+
+def test_reserve_billing_variant_returns_zero_for_a_single_entry_pool(tmp_path):
+    state = tmp_path / "cursor.json"
+    assert reserve_billing_variant("AQ", state_path=state) == 0
+    assert not state.exists(), "a single-entry pool must not create cursor state"
+
+
+def test_reserve_billing_variant_is_best_effort(tmp_path):
+    """A dead runtime directory must degrade to the default identity, not raise.
+
+    The identity is advisory: failing a Checkout because a cursor file is
+    unreadable would trade a cosmetic signal for a real one.
+    """
+    corrupt = tmp_path / "corrupt.json"
+    corrupt.write_text("{not json", encoding="utf-8")
+    assert reserve_billing_variant("US", state_path=corrupt) == 0
+    garbage = tmp_path / "garbage.json"
+    garbage.write_text('{"US": "not-an-int"}', encoding="utf-8")
+    assert reserve_billing_variant("US", state_path=garbage) == 0
+    out_of_range = tmp_path / "out_of_range.json"
+    out_of_range.write_text('{"US": 9999}', encoding="utf-8")
+    assert reserve_billing_variant("US", state_path=out_of_range) == 0
+    # A path whose parent cannot be created (a file stands where a directory is
+    # needed) must also return 0 rather than propagate.
+    blocked = tmp_path / "blocked"
+    blocked.write_text("", encoding="utf-8")
+    assert reserve_billing_variant("US", state_path=blocked / "cursor.json") == 0
+
+
+def test_reserve_billing_variant_writes_through_the_runtime_sandbox():
+    """Default state path must resolve through ``paths.runtime_file``.
+
+    Binding the resolved path at import time would freeze it to the real
+    ``runtime/`` and defeat the autouse ``isolated_runtime`` fixture.
+    """
+    from sms_tool import paths
+
+    resolved = paths.runtime_file({}, "billing_address_cursor.json")
+    assert resolved.name == "billing_address_cursor.json"
+    assert resolved.parent.name == "runtime"
+
+
+def test_pp_link_extractor_bills_both_stages_from_one_identity():
+    """The two billing call sites in one run must agree.
+
+    ``_checkout_update_taxes`` and ``_create_payment_method`` are two stages of
+    the *same* Checkout. A per-call rotation would bill them from different
+    streets, which is why the variant is reserved once and cached per instance.
+    """
+    from sms_tool.paypal_extract import PPLinkExtractor
+
+    extractor = PPLinkExtractor(access_token="t", target_country="US")
+    first = extractor._billing_identity()
+    second = extractor._billing_identity()
+    assert (
+        first["name"],
+        first["street"],
+        first["city"],
+        first["state"],
+        first["postal"],
+    ) == (
+        second["name"],
+        second["street"],
+        second["city"],
+        second["state"],
+        second["postal"],
+    )
+    assert extractor._billing_variant is not None
+    # Two different extractors are two runs, so they must not necessarily share
+    # an address -- that is what decorrelates consecutive runs.
+    other = PPLinkExtractor(access_token="t", target_country="US")
+    other._billing_identity()
+    assert other._billing_variant != extractor._billing_variant
+
+
+def test_pp_link_extractor_honours_an_explicit_billing_variant():
+    """A caller-supplied variant must be used verbatim and not touch the cursor."""
+    from sms_tool.paypal_extract import PPLinkExtractor
+
+    extractor = PPLinkExtractor(access_token="t", target_country="US", billing_variant=1)
+    assert extractor._billing_variant == 1
+    assert extractor._billing_identity()["city"] == billing_for_country("US", variant=1)["city"]
+
+
+def test_curated_pools_cover_the_payment_catalog_markets():
+    """Every market the catalog actually checks out in must have alternatives."""
+    from sms_tool.payment_catalog import PAYMENT_METHODS
+
+    for definition in PAYMENT_METHODS.values():
+        code = definition.country
+        assert code in BILLING_ADDRESS_POOLS, f"{code} has no curated pool"
+        assert len(billing_address_pool(code)) > 1, code
