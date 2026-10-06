@@ -1,0 +1,20 @@
+# Tool constraints — exact version pins for CI/developer tooling that is
+# deliberately NOT a runtime dependency.
+#
+# Usage (CI / local install):
+#     python -m pip install ruff -c constraints-tools.txt
+#
+# Why this is separate from constraints.txt
+# -----------------------------------------
+# `constraints.txt` only narrows the versions of the packages declared in
+# `requirements.txt`, and `tests/test_dependency_guard.py` enforces that parity
+# in both directions ("a constraint without a requirement is dead weight"). A
+# linter is not a runtime dependency: `ci.yml` installs ruff on its own line and
+# the dependency guard documents that split, so pinning ruff in
+# `constraints.txt` would fail the guard. Keeping the pin here makes the tool
+# version reproducible without declaring it as something the application
+# imports.
+#
+# Bump deliberately, then re-run the gate the pin protects:
+#     python -m ruff check sms_tool services scripts
+ruff==0.16.6

@@ -61,6 +61,7 @@ from common.proxy_url import (
 )
 from common.protocol_core import (
     ProtocolResultReporter,
+    run_extractor_entrypoint,
     env_bool as common_env_bool,
     env_int as common_env_int,
     is_false,
@@ -1563,4 +1564,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(run_extractor_entrypoint(_KAKAO_RESULT_REPORTER, main, error_code="kakao_extractor_exception"))

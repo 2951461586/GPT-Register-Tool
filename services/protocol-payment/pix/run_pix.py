@@ -18,7 +18,7 @@ if str(_PROTOCOL_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROTOCOL_ROOT))
 
 from pix_extract import generate_opll_pix_long_link, proxy_for_region
-from common.protocol_core import ProtocolResultReporter
+from common.protocol_core import ProtocolResultReporter, run_extractor_entrypoint
 
 _RESULT_REPORTER = ProtocolResultReporter("pix", "pix_protocol")
 
@@ -97,8 +97,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    try:
-        raise SystemExit(main())
-    except Exception as exc:
-        print(f"ERROR: {exc}", file=sys.stderr)
-        raise
+    raise SystemExit(run_extractor_entrypoint(_RESULT_REPORTER, main, error_code="pix_runner_exception"))

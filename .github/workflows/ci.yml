@@ -12,7 +12,8 @@ concurrency:
 jobs:
   test:
     runs-on: windows-latest
-    # Hard ceiling so a stuck step fails fast instead of burning the 6h GitHub limit.
+    # Hard ceiling so a stuck step fails fast instead of burning the 6h GitHub
+    # limit.
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
@@ -26,14 +27,14 @@ jobs:
           # is none. This repo's only lock file lives at
           # scripts/installer/packages.lock.json, and pointing
           # cache-dependency-path at it would key the whole build cache off the
-          # installer project alone — SmsWorkbench could change dependencies and
-          # still get a stale cache.
+          # installer project alone — SmsWorkbench could change dependencies
+          # and still get a stale cache.
           #
-          # Enabling a root lock file is not a small change either: `dotnet test`
-          # restores without a RID while the publish script restores with
-          # -r win-x64, and those two want opposite lock contents (that was the
-          # NU1004 break). Restore here costs ~18s, so caching is not worth
-          # reintroducing that class of failure.
+          # Enabling a root lock file is not a small change either:
+          # `dotnet test` restores without a RID while the publish script
+          # restores with -r win-x64, and those two want opposite lock contents
+          # (that was the NU1004 break). Restore here costs ~18s, so caching is
+          # not worth reintroducing that class of failure.
           cache: false
       - uses: actions/setup-python@v6
         with:
@@ -48,23 +49,32 @@ jobs:
       # Narrow lint gate: syntax errors + ambiguous names + undefined names.
       # Installed separately from requirements.txt: it is a tool, not a
       # runtime dependency, and test_dependency_guard enforces that split.
+      # Its version is pinned in constraints-tools.txt so the gate cannot drift
+      # when a new ruff release drops.
       # Wider rule sets (F401 unused imports etc.) would flag the documented
       # facade re-exports (ADR-0009) and are deliberately not enabled yet.
-      - run: python -m pip install -q ruff
+      - run: python -m pip install -q ruff -c constraints-tools.txt
       - run: python -m ruff check sms_tool services scripts
       - run: python -m pytest --collect-only -q
-      - run: python -m pytest -q --cov=sms_tool --cov=services --cov-report=term-missing
+      - run: >-
+          python -m pytest -q --cov=sms_tool --cov=services
+          --cov-report=term-missing
       - run: dotnet test GPTRegisterTool.slnx -c Release
       - run: python -c "import sms_tool.cli"
-      - run: python -m pytest -q tests/test_protocol_payment_common.py tests/test_wallet_provider.py tests/test_wallet_manager_integration.py
-      # Secret gates — precommit_guard is the hard gate (non-zero on tracked-file violation);
-      # the other two are informational scanners that print findings.
+      - run: >-
+          python -m pytest -q tests/test_protocol_payment_common.py
+          tests/test_wallet_provider.py tests/test_wallet_manager_integration.py
+      # Secret gates — precommit_guard is the hard gate (non-zero on
+      # tracked-file violation); the other two are informational scanners
+      # that print findings.
       - name: Secret scan — tracked files (gate)
         run: python scripts/precommit_guard.py --all
       - name: Secret scan — hardcoded credentials in source
         run: python scripts/scan_hardcoded_secrets.py
       - name: Secret scan — git history
-        run: python scripts/scan_sensitive_history.py config.json proxy.json runtime.json payment.json mailbox_tokens.txt kyl_state.json
+        run: >-
+          python scripts/scan_sensitive_history.py config.json proxy.json
+          runtime.json payment.json mailbox_tokens.txt kyl_state.json
       - run: python scripts/sensitive_field_scan.py
       - run: python scripts/architecture_scan.py
       - run: python scripts/extractor_parity_report.py
@@ -73,4 +83,6 @@ jobs:
       - run: python scripts/docs_consistency_scan.py
       - run: python scripts/module_coverage_check.py
       - shell: powershell
-        run: powershell -ExecutionPolicy Bypass -File .\SmsWorkbench\build_dotnet.ps1
+        run: >-
+          powershell -ExecutionPolicy Bypass -File
+          .\SmsWorkbench\build_dotnet.ps1
