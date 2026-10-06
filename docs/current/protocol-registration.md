@@ -114,7 +114,7 @@ map shared by the registration and payment lanes; `issue_sentinel_flow` resolves
 through it at call time. Registered there are both checkout flows, and they are
 **not** interchangeable:
 
-- **Checkout create** mints `chatgpt_checkout` — `CHECKOUT_SENTINEL_FLOW` at `sms_tool/sentinel/client.py:30`, issued by `issue_checkout_sentinel` at `sms_tool/sentinel/client.py:485`.
+- **Checkout create** mints `chatgpt_checkout` — `CHECKOUT_SENTINEL_FLOW` at `sms_tool/sentinel/client.py:44`, issued by `issue_checkout_sentinel` at `sms_tool/sentinel/client.py:499`.
 - **Checkout approve** mints `checkout_session_approval` — its own constant `UPI_SENTINEL_APPROVAL_FLOW` at `sms_tool/upi_link/constants.py:42`. Two rails request it explicitly: the UPI approve stage passes `sentinel_flow=UPI_SENTINEL_APPROVAL_FLOW` at `sms_tool/upi_link/stages.py:712`, and `PPLinkExtractor._fresh_approval_sentinel` mints it at `sms_tool/paypal_extract.py:523`.
 
   🔴 **How to write a guardable pointer here** — two rules, both learned the hard

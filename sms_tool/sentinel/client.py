@@ -23,10 +23,24 @@ from .runner import SentinelRunnerError, run_sentinel_sdk
 SENTINEL_REQ_URL = "https://sentinel.openai.com/backend-api/sentinel/req"
 #: Sentinel flow the ChatGPT ``payments/checkout`` create gate reads. The
 #: reference project reverse-engineered this from the web bundle
-#: (``requireSentinelCheckout``) and proved live that the create call returns
-#: HTTP 200 only when *both* ``openai-sentinel-token`` and
-#: ``openai-sentinel-so-token`` are attached under this flow. A missing SO is
-#: the difference between 200 and ``400 unusual activity``.
+#: (``requireSentinelCheckout``) and reported that the create call returns HTTP
+#: 200 only when *both* ``openai-sentinel-token`` and ``openai-sentinel-so-token``
+#: are attached under this flow, with a missing SO being the difference between
+#: 200 and ``400 unusual activity``.
+#:
+#: 🔴 **The "both tokens" half was not reproduced on 2026-10-06.** A/B on the
+#: create endpoint, holding account, verified-BR exit and request body constant:
+#:
+#:     no headers                        -> 400 unusual activity
+#:     openai-sentinel-token only (no SO) -> 200 custom_checkout_session
+#:
+#: The main token was sufficient; ``issue_sentinel_token`` returned no SO at all
+#: for this flow (the challenge response carries no ``so`` for it), so the pair
+#: the reference describes could not even be assembled here. Two readings survive
+#: this evidence and the comment must not pick between them: the gate tightened or
+#: loosened since that report, or the reference's observation was about a
+#: different flow (``checkout_session_approval``). Until one is ruled out, treat
+#: the main token as sufficient-not-necessary and the SO as unproven either way.
 CHECKOUT_SENTINEL_FLOW = "chatgpt_checkout"
 FLOW_PAGE_URLS = {
     "username_password_create": endpoints.AUTH_CREATE_ACCOUNT_PASSWORD,
