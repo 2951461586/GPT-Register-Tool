@@ -1,5 +1,5 @@
 """
-	BLIK 接口提交 / iDEAL 支付页 URL 提取脚本。
+        BLIK 接口提交 / iDEAL 支付页 URL 提取脚本。
 
 说明：
 - BLIK 模式通过 Stripe 接口提交 6 位 BLIK Code 和波兰账单资料，不打开支付页面。
@@ -132,15 +132,11 @@ LOG_DIR = SCRIPT_DIR / "logs"
 DUMP_DIR = SCRIPT_DIR / "dumps"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
-STRIPE_VERSION_FULL = (
-    "2025-03-31.basil; checkout_server_update_beta=v1; "
-    "checkout_manual_approval_preview=v1"
-)
+STRIPE_VERSION_FULL = "2025-03-31.basil; checkout_server_update_beta=v1; checkout_manual_approval_preview=v1"
 DEFAULT_STRIPE_RUNTIME_VERSION = "6f8494a281"
 DEFAULT_STRIPE_PK = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
 DEFAULT_USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
 )
 
 COUNTRY_CURRENCY = {
@@ -437,9 +433,7 @@ def normalize_proxy_url(proxy: str) -> str:
     preserved here rather than silently unified -- see the module docstring of
     ``common/proxy_url.py``.  ``runtime/tmp/p0_proxy_diff.py`` pins it.
     """
-    return shared_normalize_proxy_url(
-        proxy, default_scheme=default_proxy_scheme(), four_part=USER_FIRST
-    )
+    return shared_normalize_proxy_url(proxy, default_scheme=default_proxy_scheme(), four_part=USER_FIRST)
 
 
 def register_proxy_for_redaction(proxy: str) -> None:
@@ -454,6 +448,7 @@ def register_proxy_for_redaction(proxy: str) -> None:
         registry=_proxy_redaction_registry,
         normalize=normalize_proxy_url,
     )
+
 
 def default_proxy_scheme() -> str:
     """Delegate to the shared resolver in ``common/proxy_url.py``.
@@ -532,6 +527,7 @@ def proxy_for_country(proxy: str, country: str) -> str:
         label=proxy_label,
         register=register_proxy_for_redaction,
     )
+
 
 def blik_proxy_chain(proxy_seed: str) -> tuple[str, str]:
     """Use one sticky seed for all BLIK stages, with a PL country selector."""
@@ -690,7 +686,9 @@ def parse_geo_country(source: str, payload: dict[str, Any]) -> tuple[str, str]:
 
 def lookup_proxy_country(group: str, proxy: str, timeout: int | None = None) -> tuple[str, str, str]:
     return shared_geo.lookup_proxy_country(
-        group, proxy, timeout,
+        group,
+        proxy,
+        timeout,
         record=proxy_record(group, proxy),
         save_state=save_proxy_state,
         new_session=new_session,
@@ -715,7 +713,9 @@ def target_response_error(resp: Any) -> str:
 
 def lookup_proxy_targets(group: str, proxy: str, timeout: int | None = None) -> tuple[bool, str]:
     return shared_geo.lookup_proxy_targets(
-        group, proxy, timeout,
+        group,
+        proxy,
+        timeout,
         record=proxy_record(group, proxy),
         save_state=save_proxy_state,
         new_session=new_session,
@@ -751,7 +751,8 @@ def format_expected_countries(countries: set[str]) -> str:
 
 def ensure_proxy_country(group: str, proxy: str) -> None:
     return shared_geo.ensure_proxy_country(
-        group, proxy,
+        group,
+        proxy,
         lookup_country=lookup_proxy_country,
         expected_countries=expected_proxy_countries,
         env_bool=env_bool,
@@ -764,7 +765,8 @@ def ensure_proxy_country(group: str, proxy: str) -> None:
 
 def ensure_proxy_targets(group: str, proxy: str) -> None:
     return shared_geo.ensure_proxy_targets(
-        group, proxy,
+        group,
+        proxy,
         lookup_targets=lookup_proxy_targets,
         env_bool=env_bool,
         log=log,
@@ -775,7 +777,8 @@ def ensure_proxy_targets(group: str, proxy: str) -> None:
 
 def precheck_proxy_group(group: str, proxies: list[str]) -> list[str]:
     return shared_geo.precheck_proxy_group(
-        group, proxies,
+        group,
+        proxies,
         lookup_country=lookup_proxy_country,
         lookup_targets=lookup_proxy_targets,
         expected_countries=expected_proxy_countries,
@@ -1100,10 +1103,7 @@ def load_proxy_file(path: Path) -> list[str]:
 
 
 def proxy_seed_file() -> Path:
-    raw = (
-        os.environ.get("IDEAL_PROXY_SEED_FILE", "").strip()
-        or os.environ.get("PP_PROXY_SEED_FILE", "").strip()
-    )
+    raw = os.environ.get("IDEAL_PROXY_SEED_FILE", "").strip() or os.environ.get("PP_PROXY_SEED_FILE", "").strip()
     return Path(raw).expanduser() if raw else SCRIPT_DIR / "proxy_seeds.txt"
 
 
@@ -1233,8 +1233,7 @@ def remove_failed_proxies(group: str, failures: list[tuple[str, str]]) -> int:
     if not str(path) or not path.exists():
         return 0
     seed_mode = group == "seed" or bool(
-        os.environ.get("IDEAL_PROXY_SEED_FILE", "").strip()
-        or os.environ.get("PP_PROXY_SEED_FILE", "").strip()
+        os.environ.get("IDEAL_PROXY_SEED_FILE", "").strip() or os.environ.get("PP_PROXY_SEED_FILE", "").strip()
     )
     key_for_proxy = proxy_chain_key if seed_mode else normalize_proxy_url
     reasons = {key_for_proxy(proxy): reason for proxy, reason in failures if key_for_proxy(proxy)}
@@ -1659,14 +1658,20 @@ def amount_from_payload(payload: Any) -> int:
 
 
 def build_ctx(init_payload: dict[str, Any], checkout: dict[str, str]) -> dict[str, Any]:
-    client_context = init_payload.get("_client_context") if isinstance(init_payload.get("_client_context"), dict) else {}
+    client_context = (
+        init_payload.get("_client_context") if isinstance(init_payload.get("_client_context"), dict) else {}
+    )
     return {
-        "stripe_js_id": str(client_context.get("stripe_js_id") or init_payload.get("client_stripe_js_id") or uuid.uuid4()),
+        "stripe_js_id": str(
+            client_context.get("stripe_js_id") or init_payload.get("client_stripe_js_id") or uuid.uuid4()
+        ),
         "client_session_id": str(uuid.uuid4()),
         "guid": stripe_browser_id(),
         "muid": stripe_browser_id(),
         "sid": stripe_browser_id(),
-        "elements_session_id": str(init_payload.get("client_elements_session_id") or f"elements_session_{uuid.uuid4().hex[:11]}"),
+        "elements_session_id": str(
+            init_payload.get("client_elements_session_id") or f"elements_session_{uuid.uuid4().hex[:11]}"
+        ),
         "elements_session_config_id": str(init_payload.get("config_id") or uuid.uuid4()),
         "config_id": init_payload.get("config_id") or "",
         "init_checksum": init_payload.get("init_checksum") or "",
@@ -1762,9 +1767,7 @@ def stripe_update_customer_data(
         resp = stripe.post(url, data=body, timeout=DEFAULT_TIMEOUT)
         dump_http(resp, "customer_data_update_nl", body, "POST", url, force=resp.status_code >= 400)
         if resp.status_code < 400:
-            log(
-                f"荷兰 customer_data 已提交: {billing['name']} / {billing['city']} / {billing['postal_code']}"
-            )
+            log(f"荷兰 customer_data 已提交: {billing['name']} / {billing['city']} / {billing['postal_code']}")
             return True
         if is_checkout_not_active_error(resp.text):
             raise RuntimeError("checkout_not_active_session")
@@ -1826,7 +1829,9 @@ def stripe_update_tax_region(
 
 def checkout_snapshot(chatgpt: requests.Session, checkout: dict[str, str], billing: dict[str, str]) -> None:
     cs_id = checkout["cs_id"]
-    processor = processor_entity_for_country(checkout.get("billing_country", "NL"), checkout.get("processor_entity") or "")
+    processor = processor_entity_for_country(
+        checkout.get("billing_country", "NL"), checkout.get("processor_entity") or ""
+    )
     checkout_page_url = endpoints.chatgpt_checkout_page(processor, cs_id)
     body = {
         "snapshot": {
@@ -1853,7 +1858,14 @@ def checkout_snapshot(chatgpt: requests.Session, checkout: dict[str, str], billi
             },
             timeout=CHATGPT_TIMEOUT,
         )
-        dump_http(resp, "checkout_snapshot", body, "POST", endpoints.CHATGPT_CHECKOUT_SNAPSHOT, force=env_bool("IDEAL_DUMP_WARMUP", False) or resp.status_code >= 400)
+        dump_http(
+            resp,
+            "checkout_snapshot",
+            body,
+            "POST",
+            endpoints.CHATGPT_CHECKOUT_SNAPSHOT,
+            force=env_bool("IDEAL_DUMP_WARMUP", False) or resp.status_code >= 400,
+        )
         if resp.status_code >= 400:
             if is_checkout_not_active_error(resp.text):
                 raise RuntimeError("checkout_not_active_session")
@@ -1866,7 +1878,9 @@ def checkout_snapshot(chatgpt: requests.Session, checkout: dict[str, str], billi
         log(f"checkout snapshot 异常: {exc}", "[WARN] ")
 
 
-def stripe_create_ideal_pm(stripe: requests.Session, cs_id: str, stripe_pk: str, billing: dict[str, str], ctx: dict[str, Any]) -> str:
+def stripe_create_ideal_pm(
+    stripe: requests.Session, cs_id: str, stripe_pk: str, billing: dict[str, str], ctx: dict[str, Any]
+) -> str:
     body: dict[str, Any] = {
         "billing_details[name]": billing.get("name") or "Jan de Vries",
         "billing_details[email]": billing.get("email") or "redacted@example.invalid",
@@ -1894,7 +1908,9 @@ def stripe_create_ideal_pm(stripe: requests.Session, cs_id: str, stripe_pk: str,
     return pm_id
 
 
-def add_inline_ideal_payment_method_data(body: dict[str, Any], cs_id: str, billing: dict[str, str], ctx: dict[str, Any]) -> None:
+def add_inline_ideal_payment_method_data(
+    body: dict[str, Any], cs_id: str, billing: dict[str, str], ctx: dict[str, Any]
+) -> None:
     body.update(
         {
             "payment_method_data[type]": "ideal",
@@ -1912,7 +1928,9 @@ def add_inline_ideal_payment_method_data(body: dict[str, Any], cs_id: str, billi
             "payment_method_data[client_attribution_metadata][client_session_id]": ctx["stripe_js_id"],
             "payment_method_data[client_attribution_metadata][checkout_config_id]": ctx.get("config_id") or "",
             "payment_method_data[client_attribution_metadata][elements_session_id]": ctx["elements_session_id"],
-            "payment_method_data[client_attribution_metadata][elements_session_config_id]": ctx["elements_session_config_id"],
+            "payment_method_data[client_attribution_metadata][elements_session_config_id]": ctx[
+                "elements_session_config_id"
+            ],
             "payment_method_data[client_attribution_metadata][merchant_integration_source]": "elements",
             "payment_method_data[client_attribution_metadata][merchant_integration_subtype]": "payment-element",
             "payment_method_data[client_attribution_metadata][merchant_integration_version]": "2021",
@@ -1930,7 +1948,9 @@ def add_inline_ideal_payment_method_data(body: dict[str, Any], cs_id: str, billi
         body["payment_method_data[ideal][bank]"] = bank
 
 
-def add_inline_blik_payment_method_data(body: dict[str, Any], cs_id: str, billing: dict[str, str], ctx: dict[str, Any]) -> None:
+def add_inline_blik_payment_method_data(
+    body: dict[str, Any], cs_id: str, billing: dict[str, str], ctx: dict[str, Any]
+) -> None:
     body.update(
         {
             "payment_method_data[type]": "blik",
@@ -1952,7 +1972,9 @@ def add_inline_blik_payment_method_data(body: dict[str, Any], cs_id: str, billin
             "payment_method_data[client_attribution_metadata][client_session_id]": ctx["client_session_id"],
             "payment_method_data[client_attribution_metadata][checkout_config_id]": ctx.get("config_id") or "",
             "payment_method_data[client_attribution_metadata][elements_session_id]": ctx["elements_session_id"],
-            "payment_method_data[client_attribution_metadata][elements_session_config_id]": ctx["elements_session_config_id"],
+            "payment_method_data[client_attribution_metadata][elements_session_config_id]": ctx[
+                "elements_session_config_id"
+            ],
             "payment_method_data[client_attribution_metadata][merchant_integration_source]": "elements",
             "payment_method_data[client_attribution_metadata][merchant_integration_subtype]": "payment-element",
             "payment_method_data[client_attribution_metadata][merchant_integration_version]": "2021",
@@ -1966,11 +1988,15 @@ def add_inline_blik_payment_method_data(body: dict[str, Any], cs_id: str, billin
 
 
 def processor_entity_for_country(country: str, processor_entity: str = "") -> str:
-    return shared_stripe_flow.processor_entity_for_country(country, processor_entity, normalize_country=normalize_country)
+    return shared_stripe_flow.processor_entity_for_country(
+        country, processor_entity, normalize_country=normalize_country
+    )
 
 
 def stripe_checkout_long_url(cs_id: str, country: str, processor_entity: str) -> str:
-    return shared_stripe_flow.stripe_checkout_long_url(cs_id, country, processor_entity, normalize_country=normalize_country)
+    return shared_stripe_flow.stripe_checkout_long_url(
+        cs_id, country, processor_entity, normalize_country=normalize_country
+    )
 
 
 def to_openai_pay_url(stripe_hosted_url: str) -> str:
@@ -1997,7 +2023,8 @@ def stripe_confirm_ideal(
     runtime_version = str(ctx.get("runtime_version") or DEFAULT_STRIPE_RUNTIME_VERSION)
     body = {
         "eid": "NA",
-        "expected_amount": os.environ.get("PP_EXPECTED_AMOUNT", "").strip() or str(ctx.get("checkout_amount") or amount_from_payload(init_payload)),
+        "expected_amount": os.environ.get("PP_EXPECTED_AMOUNT", "").strip()
+        or str(ctx.get("checkout_amount") or amount_from_payload(init_payload)),
         "expected_payment_method_type": "ideal",
         "return_url": stripe_confirm_return_url(cs_id, checkout, stripe_hosted_url),
         "_stripe_version": str(ctx.get("stripe_version") or STRIPE_VERSION_FULL),
@@ -2195,7 +2222,9 @@ def raise_if_setup_intent_blocked(payload: Any, context: str) -> None:
     if not last_error:
         return
     if "generic_decline" in last_error.lower():
-        raise RuntimeError(f"Stripe 风控拒绝（generic_decline）：{context} SetupIntent 创建失败；last_setup_error={last_error}")
+        raise RuntimeError(
+            f"Stripe 风控拒绝（generic_decline）：{context} SetupIntent 创建失败；last_setup_error={last_error}"
+        )
     raise RuntimeError(f"{context}: setup_intent.last_setup_error: {last_error}")
 
 
@@ -2263,14 +2292,23 @@ def warmup_approve_context(chatgpt: requests.Session, checkout_page_url: str) ->
             },
             timeout=CHATGPT_TIMEOUT,
         )
-        dump_http(resp, "sentinel_ping", {}, "POST", endpoints.CHATGPT_SENTINEL_PING, force=env_bool("IDEAL_DUMP_WARMUP", False))
+        dump_http(
+            resp,
+            "sentinel_ping",
+            {},
+            "POST",
+            endpoints.CHATGPT_SENTINEL_PING,
+            force=env_bool("IDEAL_DUMP_WARMUP", False),
+        )
     except Exception as exc:
         log(f"approve sentinel 请求异常: {exc}", "[WARN] ")
 
 
 def chatgpt_approve(chatgpt: requests.Session, checkout: dict[str, str]) -> None:
     cs_id = checkout["cs_id"]
-    processor = processor_entity_for_country(checkout.get("billing_country", "NL"), checkout.get("processor_entity", ""))
+    processor = processor_entity_for_country(
+        checkout.get("billing_country", "NL"), checkout.get("processor_entity", "")
+    )
     checkout_page_url = endpoints.chatgpt_checkout_page(processor, cs_id)
     if env_bool("IDEAL_APPROVE_WARMUP", True):
         warmup_approve_context(chatgpt, checkout_page_url)
@@ -2411,7 +2449,9 @@ def approve_with_retry(
     raise RuntimeError(f"approve 重试失败: {last_error}")
 
 
-def poll_payment_page(stripe: requests.Session, checkout: dict[str, str], stripe_pk: str, ctx: dict[str, Any]) -> tuple[str, list[str]]:
+def poll_payment_page(
+    stripe: requests.Session, checkout: dict[str, str], stripe_pk: str, ctx: dict[str, Any]
+) -> tuple[str, list[str]]:
     cs_id = checkout["cs_id"]
     deadline = time.time() + env_int("IDEAL_POLL_TIMEOUT", 45)
     params = {
@@ -2584,7 +2624,9 @@ def resolve_external_redirect(stripe: requests.Session, start_url: str) -> str:
 
 
 def approve_proxy_candidates(checkout_proxy: str, provider_proxy: str, approve_pool: list[str]) -> list[str]:
-    approve_preferences = successful_approve_preferences(checkout_proxy, provider_proxy, [checkout_proxy] + approve_pool)
+    approve_preferences = successful_approve_preferences(
+        checkout_proxy, provider_proxy, [checkout_proxy] + approve_pool
+    )
     if approve_preferences:
         log(f"命中成功 approve 代理优先: {proxy_label(approve_preferences[0])}")
     return list(dict.fromkeys(approve_preferences + [checkout_proxy]))
@@ -2710,7 +2752,9 @@ def run_provider_flow(
         checkout_snapshot(snapshot_chatgpt, checkout, billing)
 
     log("Stripe confirm (expected=IDEAL)...")
-    confirm_payload = stripe_confirm_ideal(stripe, checkout["cs_id"], pm_id, stripe_pk, init_payload, ctx, checkout, hosted_url, billing)
+    confirm_payload = stripe_confirm_ideal(
+        stripe, checkout["cs_id"], pm_id, stripe_pk, init_payload, ctx, checkout, hosted_url, billing
+    )
     log("Stripe confirm 成功, 解析跳转...")
     log_payment_page_summary("confirm", confirm_payload)
     redirect_url = extract_redirect_url(confirm_payload)
@@ -2726,12 +2770,16 @@ def run_provider_flow(
 
     if not redirect_url and submission.get("state") == "requires_approval":
         log("需要 ChatGPT approve...")
-        approve_preferences = successful_approve_preferences(checkout_proxy, provider_proxy, [checkout_proxy] + approve_pool)
+        approve_preferences = successful_approve_preferences(
+            checkout_proxy, provider_proxy, [checkout_proxy] + approve_pool
+        )
         if approve_preferences:
             log(f"命中成功 approve 代理优先: {proxy_label(approve_preferences[0])}")
         approve_proxies = list(dict.fromkeys(approve_preferences + [checkout_proxy]))
         log("需要 approve：iDEAL 0 元场景，approve 复用当前 checkout 代理，失败后切下一次尝试。")
-        approve_proxy = approve_with_retry(access_token, device_id, checkout, approve_proxies, session_token, "checkout")
+        approve_proxy = approve_with_retry(
+            access_token, device_id, checkout, approve_proxies, session_token, "checkout"
+        )
         log("跟随跳转提取最终链...")
         redirect_url, poll_qr = poll_payment_page(stripe, checkout, stripe_pk, ctx)
         qr_urls.extend(poll_qr)
@@ -2905,7 +2953,9 @@ def successful_pair_preferences(checkout_proxies: list[str], provider_proxies: l
     return preferences
 
 
-def build_attempt_batches(checkout_proxies: list[str], provider_proxies: list[str], max_attempts: int) -> list[tuple[str, list[str]]]:
+def build_attempt_batches(
+    checkout_proxies: list[str], provider_proxies: list[str], max_attempts: int
+) -> list[tuple[str, list[str]]]:
     per_checkout = env_int("IDEAL_PROVIDER_PER_CHECKOUT", 30)
     provider_pool = provider_proxies[:]
     preferred_pairs = successful_pair_preferences(checkout_proxies, provider_proxies)
@@ -2979,6 +3029,7 @@ def pick_random_proxies(proxies: list[str], limit: int, group: str = "") -> list
         is_preferred=is_preferred_proxy,
     )
 
+
 def run_single_link_attempt(
     access_token: str,
     session_token: str,
@@ -3023,10 +3074,14 @@ def run_single_link_attempt(
                 return attempt, "", "任务已停止，跳过本轮", False
             _log_context.prefix = f"[{expected_label} {attempt}/{ideal_retry}][PM={pm_country}] "
             try:
-                log(f"Checkout {checkout_index}/{len(checkout_candidates)}: {checkout_country}/{checkout_currency}, proxy={proxy_label(checkout_proxy)}")
+                log(
+                    f"Checkout {checkout_index}/{len(checkout_candidates)}: {checkout_country}/{checkout_currency}, proxy={proxy_label(checkout_proxy)}"
+                )
                 ensure_proxy_country("checkout", checkout_proxy)
                 ensure_proxy_targets("checkout", checkout_proxy)
-                zero_status, zero_amount, _zero_checked_at = checkout_zero_cache_status(checkout_proxy, checkout_country)
+                zero_status, zero_amount, _zero_checked_at = checkout_zero_cache_status(
+                    checkout_proxy, checkout_country
+                )
                 if zero_status == "ok":
                     log(f"checkout 0元资格缓存命中: amount={zero_amount}")
                 elif zero_status == "bad":
@@ -3051,7 +3106,9 @@ def run_single_link_attempt(
             log(f"第 {attempt}/{ideal_retry} 次提链 checkout 阶段失败", "[WARN] ")
             return attempt, "", last_error or "checkout_failed", False
 
-        preferred_providers = successful_pair_preferences([checkout_proxy_used], provider_proxies).get(checkout_proxy_used, [])
+        preferred_providers = successful_pair_preferences([checkout_proxy_used], provider_proxies).get(
+            checkout_proxy_used, []
+        )
         if preferred_providers:
             provider_candidates = list(dict.fromkeys(preferred_providers + provider_candidates))[:provider_retry]
             log(f"命中成功 checkout/provider 组合优先: provider={len(preferred_providers)}")
@@ -3111,7 +3168,9 @@ def run_single_link_attempt(
         _log_context.prefix = previous_log_context
 
 
-def run_single_link_parallel_mode(access_token: str, session_token: str, checkout_proxies: list[str], provider_proxies: list[str]) -> int:
+def run_single_link_parallel_mode(
+    access_token: str, session_token: str, checkout_proxies: list[str], provider_proxies: list[str]
+) -> int:
     checkout_retry = env_int("IDEAL_CHECKOUT_RETRY_MAX", 5)
     provider_retry = env_int("IDEAL_PROVIDER_RETRY_MAX", 3)
     ideal_retry = env_int("IDEAL_MAX_RETRY", 5)
@@ -3196,7 +3255,9 @@ def run_single_link_parallel_mode(access_token: str, session_token: str, checkou
     return 1
 
 
-def run_single_link_mode(access_token: str, session_token: str, checkout_proxies: list[str], provider_proxies: list[str]) -> int:
+def run_single_link_mode(
+    access_token: str, session_token: str, checkout_proxies: list[str], provider_proxies: list[str]
+) -> int:
     ideal_workers = env_int("IDEAL_WORKERS", 1)
     if ideal_workers > 1:
         return run_single_link_parallel_mode(access_token, session_token, checkout_proxies, provider_proxies)
@@ -3242,10 +3303,14 @@ def run_single_link_mode(access_token: str, session_token: str, checkout_proxies
             previous_log_context = getattr(_log_context, "prefix", "")
             _log_context.prefix = f"  [PM={pm_country}] "
             try:
-                log(f"Checkout {checkout_index}/{len(checkout_candidates)}: {checkout_country}/{checkout_currency}, proxy={proxy_label(checkout_proxy)}")
+                log(
+                    f"Checkout {checkout_index}/{len(checkout_candidates)}: {checkout_country}/{checkout_currency}, proxy={proxy_label(checkout_proxy)}"
+                )
                 ensure_proxy_country("checkout", checkout_proxy)
                 ensure_proxy_targets("checkout", checkout_proxy)
-                zero_status, zero_amount, _zero_checked_at = checkout_zero_cache_status(checkout_proxy, checkout_country)
+                zero_status, zero_amount, _zero_checked_at = checkout_zero_cache_status(
+                    checkout_proxy, checkout_country
+                )
                 if zero_status == "ok":
                     log(f"checkout 0元资格缓存命中: amount={zero_amount}")
                 elif zero_status == "bad":
@@ -3271,7 +3336,9 @@ def run_single_link_mode(access_token: str, session_token: str, checkout_proxies
             log(f"第 {attempt}/{ideal_retry} 次提链 checkout 阶段失败，换下一次提链", "[WARN] ")
             continue
 
-        preferred_providers = successful_pair_preferences([checkout_proxy_used], provider_proxies).get(checkout_proxy_used, [])
+        preferred_providers = successful_pair_preferences([checkout_proxy_used], provider_proxies).get(
+            checkout_proxy_used, []
+        )
         if preferred_providers:
             provider_candidates = list(dict.fromkeys(preferred_providers + provider_candidates))[:provider_retry]
             log(f"命中成功 checkout/provider 组合优先: provider={len(preferred_providers)}")
@@ -3353,9 +3420,7 @@ def run_single_seed_mode(access_token: str, session_token: str, proxy_seeds: lis
     )
     for attempt in range(1, max_retry + 1):
         available_seeds = [
-            proxy_seed
-            for proxy_seed in proxy_seeds
-            if proxy_chain_key(proxy_seed) not in attempted_seed_keys
+            proxy_seed for proxy_seed in proxy_seeds if proxy_chain_key(proxy_seed) not in attempted_seed_keys
         ]
         seed_candidates = pick_random_proxies(available_seeds, checkout_retry, "seed")
         if not seed_candidates:
@@ -3374,9 +3439,7 @@ def run_single_seed_mode(access_token: str, session_token: str, proxy_seeds: lis
             try:
                 checkout_proxy, provider_proxy = blik_proxy_chain(proxy_seed)
                 log_blik_proxy_chain(proxy_seed, checkout_proxy, provider_proxy)
-                log(
-                    f"Seed {seed_index}/{len(seed_candidates)}: 本次已尝试 Seed={len(attempted_seed_keys)}"
-                )
+                log(f"Seed {seed_index}/{len(seed_candidates)}: 本次已尝试 Seed={len(attempted_seed_keys)}")
                 completion, _qr_urls = run_once(
                     access_token,
                     session_token,
@@ -3424,7 +3487,6 @@ def run_single_seed_mode(access_token: str, session_token: str, proxy_seeds: lis
     log(f"全部失败: {last_error}", "[ERROR] ")
     print_failure_result(last_error or "all attempts failed")
     return 1
-
 
 
 def main() -> int:
