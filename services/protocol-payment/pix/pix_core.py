@@ -346,11 +346,13 @@ def opll_new_http_session() -> requests.Session:
         session.trust_env = False
     return session
 
-def opll_build_chatgpt_session(access_token: str, proxy_url: str = "") -> requests.Session:
+def opll_build_chatgpt_session(access_token: str, proxy_url: str = "", device_id: str = "") -> requests.Session:
     token = extract_access_token_from_session_text(access_token) or str(access_token or "").strip()
     if not token:
         raise RuntimeError("当前账号没有 Access Token，请先注册并获取 Session 信息")
-    device_id = str(uuid.uuid4())
+    # The caller may hand us the id the injected Checkout Sentinel pair was minted
+    # for; a token bound to a different oai-did is rejected by the create gate.
+    device_id = str(device_id or "").strip() or str(uuid.uuid4())
     session = opll_new_http_session()
     session.headers.update({
         "User-Agent": DEFAULT_USER_AGENT,

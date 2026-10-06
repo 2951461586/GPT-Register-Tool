@@ -183,7 +183,15 @@ def test_summary_facts_are_pinned():
     """Pin the decomposition so a silent metric change is caught.
 
     470 raw directory-level edges decompose into 288 module-scope edges (frozen
-    here) plus 182 delayed imports (frozen by ``delayed_import_ratchet.py``).
+    here) plus 183 delayed imports (frozen by ``delayed_import_ratchet.py``).
+
+    183 (was 182) on 2026-10-06: ``pay_link/adapters.py`` gained one delayed
+    ``from ..sentinel import checkout_sentinel_headers`` so the subprocess
+    extractors can be handed the Checkout-create Sentinel pair. It stays delayed
+    because minting drags in the Node-runner machinery and only the subprocess
+    path needs it, while ``pay_link.adapters`` is imported for every payment
+    method -- including the native ones that never launch an extractor. Two
+    baselines plus this literal all had to move, which is the point of the pin.
     """
     totals = ilr.analyze(ROOT).totals()
     assert totals == {
@@ -191,7 +199,7 @@ def test_summary_facts_are_pinned():
         "ordered_pairs": 31,
         "mutual_pairs": 11,
         "minority_edges": 60,
-        "delayed_cross_dir_edges": 182,
+        "delayed_cross_dir_edges": 183,
     }
 
 

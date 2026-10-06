@@ -19,7 +19,14 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
 
+# ``common/`` is the sibling of this directory, exactly as ``run_pix.py`` sets up.
+# Bootstrapped here too so a direct import (tests, a REPL) resolves it.
+_PROTOCOL_ROOT = _SCRIPT_DIR.parent
+if str(_PROTOCOL_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROTOCOL_ROOT))
+
 import pix_core as core
+from common.protocol_core import openai_sentinel_headers, sentinel_device_id
 
 LogCb = Callable[[str], None] | None
 
@@ -296,10 +303,14 @@ def create_pix_checkout(access_token: str, proxy_url: str = "", with_promo: bool
         "Referer": "https://chatgpt.com/",
         "x-openai-target-path": "/backend-api/payments/checkout",
         "x-openai-target-route": "/backend-api/payments/checkout",
+        # Injected by the sms_tool adapter. Without this pair the create gate
+        # answers 400 "unusual activity"; measured 2026-10-06 -- see
+        # docs/current/protocol-registration.md. Empty is the old behaviour.
+        **openai_sentinel_headers(),
     }
     response = None
     for attempt in range(core.OPLL_CHECKOUT_TRANSIENT_RETRY_MAX):
-        session = core.opll_build_chatgpt_session(access_token, proxy_url)
+        session = core.opll_build_chatgpt_session(access_token, proxy_url, device_id=sentinel_device_id())
         response = session.post(
             "https://chatgpt.com/backend-api/payments/checkout",
             json=json_body,

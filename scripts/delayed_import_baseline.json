@@ -49,7 +49,7 @@
     "sms_tool/nodriver_paypal.py": 4,
     "sms_tool/omakse_client.py": 4,
     "sms_tool/otp_strategy.py": 1,
-    "sms_tool/pay_link/adapters.py": 6,
+    "sms_tool/pay_link/adapters.py": 7,
     "sms_tool/pay_link/core.py": 1,
     "sms_tool/pay_link/registry.py": 2,
     "sms_tool/payment_auth.py": 2,
@@ -110,5 +110,5 @@
     "sms_tool/upi_link/stripe.py": 1,
     "sms_tool/wallet_transport.py": 5
   },
-  "total": 417
+  "total": 418
 }
