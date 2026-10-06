@@ -46,6 +46,7 @@ A pointer is rewritten only when **all** of these hold:
 3. **The target is a ``.py`` file.** ``config.json`` is gitignored and
    user-edited; its line numbers are not ours to police.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -105,12 +106,8 @@ def _table_edits(text: str, cache: Cache) -> list[tuple[int, int, str, str]]:
 
 def _prose_edits(text: str, cache: Cache) -> list[tuple[int, int, str, str]]:
     """Edits for pointers embedded in a sentence, e.g. `` `Widget()`（`w.py:1`） ``."""
-    events: list[tuple[int, str, object]] = [
-        (m.start(), "name", m.group(1)) for m in NAME.finditer(text)
-    ]
-    events += [
-        (m.start(), "ref", (m, s, n, e)) for m, s, n, e in scan._iter_ref_matches(text)
-    ]
+    events: list[tuple[int, str, object]] = [(m.start(), "name", m.group(1)) for m in NAME.finditer(text)]
+    events += [(m.start(), "ref", (m, s, n, e)) for m, s, n, e in scan._iter_ref_matches(text)]
     events.sort(key=lambda item: item[0])
 
     edits = []
@@ -139,7 +136,7 @@ def _rewrite(text: str, cache: Cache) -> tuple[str, list[tuple[str, str, str]]]:
         edits = _table_edits(body, cache) if scan.TABLE_ROW.match(body) else _prose_edits(body, cache)
         if not edits:
             continue
-        newline = line[len(body):]
+        newline = line[len(body) :]
         for start, end, actual, symbol in sorted(edits, reverse=True):
             changes.append((f"{lineno}", f"{symbol}:{body[start:end]}", actual))
             body = body[:start] + actual + body[end:]
