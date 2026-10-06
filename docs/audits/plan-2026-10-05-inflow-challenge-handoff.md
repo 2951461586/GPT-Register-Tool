@@ -209,6 +209,50 @@ auth_flow 的 authorize / continue / otp 步骤
 
 这一条是本项**最需要单独拍板**的部分：它引入了一条新的凭据传递路径。
 
+#### 3.4.1 已拍板（2026-10-05）：允许落 `runtime/`，且已包进 `sensitive_policy.json`
+
+两项决定已记录，**且第 2 项已提前落地**（策略先于实现，避免实现时忘记）：
+
+**① 允许落 `runtime/`。** 与既有纪律一致，无需新增豁免：
+`scripts/sensitive_field_scan.py:124-126` 明确写着「默认只扫 `logs/`。`runtime/`
+**刻意不在默认范围内**：它是 .gitignore 的……密钥写进
+`runtime/analysis/2fa_enroll_report_*.jsonl` 并注明那是 the only……」。
+⇒ 本项不需要改任何扫描器；`--artifacts runtime` 仍是审计本地活状态的显式动作。
+
+**② 已包进 `sensitive_policy.json`。** 实际加了两处（补的是一个**真实漏洞**，
+不只是补一条策略）：
+
+| 位置 | 新增 | 作用 |
+|---|---|---|
+| `sensitive_keys` | `handoff_storage_state` | 整个子树折叠成**一个** `[REDACTED]` 字符串 |
+| `sensitive_key_fragments` | `storage_state` | 覆盖重命名变体（`storage_state_json` / `protocol_storage_state` …） |
+
+🔴 **为什么这是个真漏洞而不是"保险起见"**：加策略**之前**，cookie 值确实**已经**被
+脱敏了 —— 但纯属巧合：内层键恰好拼作 `cookies`，命中 `cookie` 片段，于是 `sanitize`
+把那整个列表替换成 `[REDACTED]`。两个后果：
+
+1. 保护**依赖内层键的拼写**。一个叫 `jar` / `cookie_list` / 任何不含 `cookie` 的
+   容器名就会让 cookie 值**明文出库**。
+2. 脱敏是**有损但不彻底**的：`handoff_storage_state` 自身与 `origins` 等兄弟字段
+   仍然可见，留下一个"半个凭据容器"的形状。
+
+加策略后，整个子树折叠成单串、且不再依赖任何内层命名。**测试已钉住**：
+`tests/test_sanitizer.py` 的 `test_handoff_storage_state_is_redacted_as_a_whole_subtree`
+（1 条主用例 + 3 个重命名变体 + 防止"全部脱敏"的反向断言，保留
+`handoff_flow` / `handoff_attempt` / `handoff_resume_url` 可读）。
+
+**③ 不需要改 C# 侧。** `SmsWorkbench.Contracts/SensitiveDataSanitizer.cs` 只读
+`text_patterns` / `log_text_patterns` / `sensitive_options`（见 `:103-107`），
+**不读** `sensitive_keys` / `sensitive_key_fragments`：C# 侧压根没有按键脱敏这条路径，
+所以新增键不改变桌面端行为（已核对 `tests/SmsWorkbench.Tests/` 无相关断言）。
+两个 Python 侧脱敏器（`sms_tool/sanitizer.py` 与
+`services/protocol-payment/common/protocol_core.py` 的 `_key_rules`）都**通用地**读这两个
+字段，所以新增键对两侧同时生效。
+
+**仍未拍的剩下一半**：进程间传递的真实形状 —— 是走文件（`runtime/`）还是走
+stdin/env？落文件的话生命周期与清理归谁（建议纳入 `runtime_retention.py` 的
+`NEVER_DELETE` 之外，即**允许**清理，因为它是一次性交棒状态）。见 §7 问题 1b。
+
 ### 3.5 与 `session_circuit_open` 的关系（谁赢）
 
 这是本设计最容易出错的地方，必须写死：
@@ -291,8 +335,14 @@ auth_flow 的 authorize / continue / otp 步骤
 
 ## 7. 未决问题（拍板前必须回答）
 
-1. **交棒的凭据路径**（§3.4）走哪条审计？是否允许落 `runtime/`？如果允许，
-   包不包在 `sensitive_policy.json` 的脱敏范围内（包了就没法交棒，不包就是新裸露面）。
+1. ~~**交棒的凭据路径**（§3.4）走哪条审计？是否允许落 `runtime/`？如果允许，
+   包不包在 `sensitive_policy.json` 的脱敏范围内（包了就没法交棒，不包就是新裸露面）。~~
+   ✅ **已拍板 2026-10-05**，见 **§3.4.1**：允许落 `runtime/`；已包进
+   `sensitive_policy.json`（`sensitive_keys` + `storage_state` 片段），策略与测试已落地。
+   🔴 措辞纠正：拍板前提写成"包了就没法交棒"是**错的** —— 脱敏只作用于
+   **落日志/历史/release 的那条路径**，交棒本体在内存与 `runtime/` 专用写入器里传递，
+   两者不冲突。
+1b. **进程间传递的形状**（§3.4.1 末）：文件 vs stdin/env？落文件的话生命周期与清理归谁？
 2. **交棒归谁执行**：复用 `registration_drivers/` 的哪个 driver（`browser_flow` 还是
    `camoufox`/`cloak`）？协议泳道当前 `driver=protocol`，交棒需要一个**显式的第二 driver 绑定**，
    否则会与 `normalize_registration_driver` 的既有语义打架。
