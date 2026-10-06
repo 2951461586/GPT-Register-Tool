@@ -48,6 +48,16 @@ build_log.txt
 *.bak_before_*
 *.bak_*
 *.bak-*
+# 池 / 数据库清理脚本写出的凭据备份。三个工具各用一种后缀：
+#   cleanup_invalid_accounts.py -> <file>.pre_cleanup_<stamp>
+#   mailbox_pool_liveness.py    -> <file>.pre_liveness_<stamp>
+#   mailbox_pool_orphans.py     -> <file>.pre_orphan_prune_<stamp>
+# `mailbox_tokens.txt`（第 20 行）与 `*_tokens.txt`（第 22 行）都挡不住**带后缀**的形式
+# —— `.txt` 后面还有内容就不再匹配。2026-10-06 实测：`mailbox_tokens.txt.pre_cleanup_*`
+# 以未跟踪状态躺在仓库根目录，内含整池凭据，只差一次 `git add -A`。
+*.pre_cleanup_*
+*.pre_liveness_*
+*.pre_orphan_prune_*
 runtime/*.log
 runtime/**/*.log
 
