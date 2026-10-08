@@ -107,12 +107,44 @@ def check_ignored(payload: Path, rel_paths: list[str]) -> list[str]:
     ]
 
 
-def check_names(rel_path: str) -> list[str]:
+def check_names(rel_path: str, exempt: frozenset[str] | set[str] = frozenset()) -> list[str]:
+    """Flag payload paths whose *name* marks them as local scratch/incident files.
+
+    ``exempt`` carries the paths ``.gitignore`` deliberately re-includes with a
+    leading ``!`` (``_gitignore_exceptions``).  Without it the scratch pattern
+    fires on ``sms_tool/upi_link/_extract.py`` — a tracked module the ignore file
+    explicitly un-ignores because ``upi_link/__init__.py`` imports it — and the
+    gate would refuse a release that contains no scratch file at all.
+    """
+    if rel_path in exempt:
+        return []
     out = []
     for pattern, reason in BAD_NAME_PATTERNS:
         if pattern.search(rel_path):
             out.append(f"{rel_path} matches a known-bad name pattern: {reason}")
     return out
+
+
+def _gitignore_exceptions() -> set[str]:
+    """Repo-relative paths ``.gitignore`` re-includes with a leading ``!``.
+
+    That list is the repository's own declaration of "this underscore-prefixed
+    file is a real module, not scratch": ``.gitignore`` says so next to the
+    pattern it excepts, so the gate reads the same source instead of keeping a
+    second hand-maintained allowlist that would drift.
+    """
+    ignore_file = ROOT / ".gitignore"
+    try:
+        lines = ignore_file.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return set()
+    excepts: set[str] = set()
+    for line in lines:
+        stripped = line.strip()
+        if not stripped.startswith("!") or not stripped.endswith(".py"):
+            continue
+        excepts.add(stripped[1:].lstrip("/"))
+    return excepts
 
 
 def check_artifact_regexes(payload: Path) -> list[str]:
@@ -154,7 +186,7 @@ def check_artifact_regexes(payload: Path) -> list[str]:
 def main(argv: list[str]) -> int:
     targets = [a for a in argv if not a.startswith("-")]
     if not targets:
-        print(__doc__.strip().split("Usage")[-1], file=sys.stderr)
+        print((__doc__ or "").strip().split("Usage")[-1], file=sys.stderr)
         return 2
 
     failures: list[str] = []
@@ -167,6 +199,7 @@ def main(argv: list[str]) -> int:
             continue
 
         rel_paths: list[str] = []
+        ignore_exceptions = _gitignore_exceptions()
         for path in payload.rglob("*"):
             if not path.is_file():
                 continue
@@ -176,7 +209,7 @@ def main(argv: list[str]) -> int:
             if path.suffix.lower() in BUILD_OUTPUT_SUFFIXES:
                 continue
             rel_paths.append(rel)
-            failures.extend(check_names(rel))
+            failures.extend(check_names(rel, ignore_exceptions))
 
         print(f"[{payload.name}] {len(rel_paths)} files to verify against .gitignore")
         failures.extend(check_ignored(payload, rel_paths))
