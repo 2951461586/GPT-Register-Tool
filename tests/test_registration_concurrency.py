@@ -39,7 +39,9 @@ from sms_tool.registration import (
 
 class RegistrationConcurrencyTests(unittest.TestCase):
     def test_protocol_diagnostic_redacts_query_parameters(self):
-        diagnostic = _protocol_diagnostic(final_url="https://auth.openai.com/email-verification?state=secret&code=secret")
+        diagnostic = _protocol_diagnostic(
+            final_url="https://auth.openai.com/email-verification?state=secret&code=secret"
+        )
         self.assertEqual(diagnostic["final_url"], "https://auth.openai.com/email-verification")
         self.assertNotIn("secret", str(diagnostic))
 
@@ -51,13 +53,23 @@ class RegistrationConcurrencyTests(unittest.TestCase):
         # The wrapper resolves cfg via ``registration.current_config_data()``,
         # not ``registration.CFG`` -- patch the function actually read.
         stages = []
-        with patch.object(registration, "current_config_data", return_value={"registration": {
-                 "at_stability_probe_count": 2,
-                 "at_stability_probe_delay_seconds": 10,
-             }}), \
-             patch("sms_tool.accounts.account_liveness.probe_account_liveness", return_value={"status_code": 200}) as probe, \
-             patch.object(registration, "registration_stage", side_effect=stages.append), \
-             patch.object(registration.time, "sleep") as sleep:
+        with (
+            patch.object(
+                registration,
+                "current_config_data",
+                return_value={
+                    "registration": {
+                        "at_stability_probe_count": 2,
+                        "at_stability_probe_delay_seconds": 10,
+                    }
+                },
+            ),
+            patch(
+                "sms_tool.accounts.account_liveness.probe_account_liveness", return_value={"status_code": 200}
+            ) as probe,
+            patch.object(registration, "registration_stage", side_effect=stages.append),
+            patch.object(registration.time, "sleep") as sleep,
+        ):
             result = _probe_registration_access_token("at", {}, proxy="http://proxy.example:8080")
 
         self.assertEqual(result["stability_status_codes"], [200, 200])
@@ -70,12 +82,22 @@ class RegistrationConcurrencyTests(unittest.TestCase):
         """count=1 (the production default since 2026-09-19) never sleeps and
         never re-emits the probe stage -- one 200 settles the token."""
         stages = []
-        with patch.object(registration, "current_config_data", return_value={"registration": {
-                 "at_stability_probe_count": 1,
-             }}), \
-             patch("sms_tool.accounts.account_liveness.probe_account_liveness", return_value={"status_code": 200}) as probe, \
-             patch.object(registration, "registration_stage", side_effect=stages.append), \
-             patch.object(registration.time, "sleep") as sleep:
+        with (
+            patch.object(
+                registration,
+                "current_config_data",
+                return_value={
+                    "registration": {
+                        "at_stability_probe_count": 1,
+                    }
+                },
+            ),
+            patch(
+                "sms_tool.accounts.account_liveness.probe_account_liveness", return_value={"status_code": 200}
+            ) as probe,
+            patch.object(registration, "registration_stage", side_effect=stages.append),
+            patch.object(registration.time, "sleep") as sleep,
+        ):
             result = _probe_registration_access_token("at", {}, proxy="http://proxy.example:8080")
 
         self.assertEqual(result["stability_status_codes"], [200])
@@ -117,15 +139,15 @@ class RegistrationConcurrencyTests(unittest.TestCase):
         self.assertIs(registration._send_registration_email_otp, otp_strategy.send_registration_email_otp)
 
     def test_prompt_login_query_is_not_existing_login_redirect(self):
-        self.assertFalse(_is_existing_login_redirect(
-            "https://chatgpt.com/api/auth/signin/openai?prompt=login&screen_hint=signup"
-        ))
-        self.assertFalse(_is_existing_login_redirect(
-            "/api/accounts/authorize?prompt=login&screen_hint=signup"
-        ))
+        self.assertFalse(
+            _is_existing_login_redirect("https://chatgpt.com/api/auth/signin/openai?prompt=login&screen_hint=signup")
+        )
+        self.assertFalse(_is_existing_login_redirect("/api/accounts/authorize?prompt=login&screen_hint=signup"))
         self.assertTrue(_is_existing_login_redirect("https://auth.openai.com/log-in"))
         self.assertFalse(_is_existing_login_redirect("https://example.com/login"))
-        self.assertTrue(_is_chatgpt_auth_login_landing("https://chatgpt.com/auth/login?callbackUrl=https%3A%2F%2Fchatgpt.com%2F"))
+        self.assertTrue(
+            _is_chatgpt_auth_login_landing("https://chatgpt.com/auth/login?callbackUrl=https%3A%2F%2Fchatgpt.com%2F")
+        )
         self.assertTrue(_is_signup_password_step("https://auth.openai.com/create-account/password"))
         self.assertFalse(_is_signup_password_step("https://chatgpt.com/auth/login"))
         self.assertTrue(_is_email_verification_step("https://auth.openai.com/email-verification"))
@@ -199,7 +221,9 @@ class RegistrationConcurrencyTests(unittest.TestCase):
     def test_authorize_url_preserves_current_browser_context_parameters(self):
         url = _ensure_authorize_context(
             "https://auth.openai.com/api/accounts/authorize?state=state-1",
-            "did-1", "logging-1", "user@example.com",
+            "did-1",
+            "logging-1",
+            "user@example.com",
             screen_hint="login_or_signup",
         )
         self.assertIn("ext-passkey-client-capabilities=11111", url)
@@ -219,14 +243,87 @@ class RegistrationConcurrencyTests(unittest.TestCase):
         session.get.return_value = authorize_response
 
         state = auth_flow._prepare_signup_auth_state(
-            session, "user@example.com", "did-1", "logging-1",
-            "https://auth.openai.com", "https://chatgpt.com", {}, "csrf",
+            session,
+            "user@example.com",
+            "did-1",
+            "logging-1",
+            "https://auth.openai.com",
+            "https://chatgpt.com",
+            {},
+            "csrf",
             passwordless_web=True,
             attempts=({"name": "login_or_signup", "screen_hint": "login_or_signup", "prompt": ""},),
         )
 
         self.assertTrue(state["ok"])
         session.post.assert_called_once()
+
+    def test_an_authorize_error_response_is_never_read_as_an_established_transaction(self):
+        """Some adapters retain redirect URLs on 4xx/5xx responses.
+
+        Reproduced offline: authorize answered HTTP 500 with ``response.url``
+        still ``/email-verification``, and the lane returned ``ok=True`` —
+        walking into the synthetic "OTP already sent" branch and mis-attributing
+        the later failure to the OTP stage. A landing URL without a 2xx/3xx
+        response is not proof the server established the transaction.
+        """
+        signin_response = Mock(status_code=200, url="https://chatgpt.com/api/auth/signin/openai")
+        signin_response.json.return_value = {"url": "https://auth.openai.com/api/accounts/authorize?state=state-1"}
+        signin_response.headers = {}
+        authorize_response = Mock(status_code=500, url="https://auth.openai.com/email-verification")
+        authorize_response.headers = {}
+        session = Mock()
+        session.post.return_value = signin_response
+        session.get.return_value = authorize_response
+
+        state = auth_flow._prepare_signup_auth_state(
+            session,
+            "user@example.com",
+            "did-1",
+            "logging-1",
+            "https://auth.openai.com",
+            "https://chatgpt.com",
+            {},
+            "csrf",
+            passwordless_web=True,
+            attempts=({"name": "login_or_signup", "screen_hint": "login_or_signup", "prompt": ""},),
+        )
+
+        self.assertFalse(state["ok"])
+        self.assertEqual(state["error"], "authorize_http_500")
+
+    def test_an_unrecognized_passwordless_landing_is_not_treated_as_success(self):
+        """Only known auth steps prove the passwordless transaction advanced.
+
+        Reproduced offline: a 200 landing on ``/unexpected-step`` returned
+        ``ok=True`` from the passwordless Web branch, so the run proceeded to
+        the synthetic pre-sent OTP branch from a state the server never
+        confirmed.
+        """
+        signin_response = Mock(status_code=200, url="https://chatgpt.com/api/auth/signin/openai")
+        signin_response.json.return_value = {"url": "https://auth.openai.com/api/accounts/authorize?state=state-1"}
+        signin_response.headers = {}
+        authorize_response = Mock(status_code=200, url="https://auth.openai.com/unexpected-step")
+        authorize_response.headers = {}
+        session = Mock()
+        session.post.return_value = signin_response
+        session.get.return_value = authorize_response
+
+        state = auth_flow._prepare_signup_auth_state(
+            session,
+            "user@example.com",
+            "did-1",
+            "logging-1",
+            "https://auth.openai.com",
+            "https://chatgpt.com",
+            {},
+            "csrf",
+            passwordless_web=True,
+            attempts=({"name": "login_or_signup", "screen_hint": "login_or_signup", "prompt": ""},),
+        )
+
+        self.assertFalse(state["ok"])
+        self.assertEqual(state["error"], "authorize_unrecognized_landing")
 
     def test_passwordless_login_page_uses_guarded_password_fallback(self):
         signin_response = Mock(status_code=200, url="https://chatgpt.com/api/auth/signin/openai")
@@ -241,8 +338,14 @@ class RegistrationConcurrencyTests(unittest.TestCase):
 
         with patch.object(auth_flow.signup, "_continue_signup_username", return_value=advanced) as continue_signup:
             state = auth_flow._prepare_signup_auth_state(
-                session, "user@example.com", "did-1", "logging-1",
-                "https://auth.openai.com", "https://chatgpt.com", {}, "csrf",
+                session,
+                "user@example.com",
+                "did-1",
+                "logging-1",
+                "https://auth.openai.com",
+                "https://chatgpt.com",
+                {},
+                "csrf",
                 passwordless_web=True,
                 attempts=({"name": "login_or_signup", "screen_hint": "login_or_signup", "prompt": ""},),
             )
@@ -293,27 +396,36 @@ class RegistrationConcurrencyTests(unittest.TestCase):
 
     def test_create_account_uses_oauth_create_sentinel_when_available(self):
         self.assertEqual(
-            _create_account_sentinel_token({
-                "sentinel_token": "username-password-token",
-                "sentinel_oauth_token": "oauth-create-token",
-            }),
+            _create_account_sentinel_token(
+                {
+                    "sentinel_token": "username-password-token",
+                    "sentinel_oauth_token": "oauth-create-token",
+                }
+            ),
             "oauth-create-token",
         )
 
     def test_create_account_requires_oauth_sentinel_token(self):
         with self.assertRaisesRegex(RuntimeError, "sentinel_extract_failed"):
-            _create_account_sentinel_token({
-                "sentinel_token": '{"id":"did-1","flow":"username_password_create"}',
-                "oai_did": "did-1",
-            }, proxy="http://proxy.example:8080")
+            _create_account_sentinel_token(
+                {
+                    "sentinel_token": '{"id":"did-1","flow":"username_password_create"}',
+                    "oai_did": "did-1",
+                },
+                proxy="http://proxy.example:8080",
+            )
 
     def test_invalid_state_auth_response_detection(self):
-        self.assertTrue(_invalid_state_auth_response({
-            "error": {
-                "code": "invalid_state",
-                "message": "Your sign-in session is no longer valid. Please start over to continue.",
-            }
-        }))
+        self.assertTrue(
+            _invalid_state_auth_response(
+                {
+                    "error": {
+                        "code": "invalid_state",
+                        "message": "Your sign-in session is no longer valid. Please start over to continue.",
+                    }
+                }
+            )
+        )
         self.assertFalse(_invalid_state_auth_response({"error": {"code": "user_already_exists"}}))
 
     def test_email_otp_send_url_only_ever_reads_the_response_body(self):
@@ -339,8 +451,10 @@ class RegistrationConcurrencyTests(unittest.TestCase):
             calls.append(url)
             return resend if url.endswith("/resend") else send
 
-        with patch("sms_tool.otp_strategy.CFG", {"email_registration": {"otp_fallback_send_on_resend_failure": True}}), \
-             patch("sms_tool.otp_strategy.request_with_retry", side_effect=fake_request):
+        with (
+            patch("sms_tool.otp_strategy.CFG", {"email_registration": {"otp_fallback_send_on_resend_failure": True}}),
+            patch("sms_tool.otp_strategy.request_with_retry", side_effect=fake_request),
+        ):
             result = _send_registration_email_otp(
                 Mock(),
                 "https://auth.openai.com",
@@ -401,8 +515,10 @@ class RegistrationConcurrencyTests(unittest.TestCase):
     def test_remail_otp_poll_resends_once_and_preserves_original_time_window(self):
         mailbox = Mock(provider="remail")
         resend_response = Mock(status_code=200)
-        with patch.object(registration, "CFG", {"email_registration": {}}), \
-             patch("sms_tool.otp_strategy._poll_email_otp", side_effect=[None, "654321"]) as poll:
+        with (
+            patch.object(registration, "CFG", {"email_registration": {}}),
+            patch("sms_tool.otp_strategy._poll_email_otp", side_effect=[None, "654321"]) as poll,
+        ):
             code = _poll_registration_email_otp(
                 mailbox,
                 subject_keyword="verification code|login code",
@@ -447,8 +563,7 @@ class RegistrationConcurrencyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "selected_mailboxes.txt"
             path.write_text(
-                "cfworker://oai-test@edu.liziai.cloud\n"
-                "a+oai01@hotmail.com----pw----client----refresh-a\n",
+                "cfworker://oai-test@edu.liziai.cloud\na+oai01@hotmail.com----pw----client----refresh-a\n",
                 encoding="utf-8",
             )
 
@@ -500,8 +615,7 @@ class RegistrationConcurrencyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "mailboxes.txt"
             path.write_text(
-                "a+oai01@hotmail.com----pw----client----refresh-a\n"
-                "b+oai01@hotmail.com----pw----client----refresh-b\n",
+                "a+oai01@hotmail.com----pw----client----refresh-a\nb+oai01@hotmail.com----pw----client----refresh-b\n",
                 encoding="utf-8",
             )
             mailboxes = _parse_chatai_mailbox_file(path)
@@ -531,18 +645,26 @@ class RegistrationConcurrencyTests(unittest.TestCase):
             mailboxes = _parse_chatai_mailbox_file(path)
 
             seen_sentinels = []
+
             def fake_run_email(**kwargs):
                 seen_sentinels.append(kwargs["sentinel_data"])
                 return {"success": True, "email": kwargs["mailbox"].email}
 
-            with patch("sms_tool.registration.run_email", side_effect=fake_run_email), \
-                 patch("sms_tool.batch_runner.CFG", {"email_registration": {}}):
+            with (
+                patch("sms_tool.registration.run_email", side_effect=fake_run_email),
+                patch("sms_tool.batch_runner.CFG", {"email_registration": {}}),
+            ):
                 results = run_batch(count=3, proxy="socks5h://127.0.0.1:7897", mailboxes=mailboxes, workers=2)
 
             self.assertEqual(seen_sentinels, [None, None, None])
-            self.assertEqual([r["email"] for r in results], [
-                "a+oai01@hotmail.com", "b+oai01@hotmail.com", "c+oai01@hotmail.com",
-            ])
+            self.assertEqual(
+                [r["email"] for r in results],
+                [
+                    "a+oai01@hotmail.com",
+                    "b+oai01@hotmail.com",
+                    "c+oai01@hotmail.com",
+                ],
+            )
 
     def test_opt_in_sentinel_prewarm_is_one_to_one(self):
         mailboxes = [Mock(email=f"account-{index}@example.com") for index in range(3)]
@@ -557,13 +679,24 @@ class RegistrationConcurrencyTests(unittest.TestCase):
             seen.append(kwargs.get("sentinel_data"))
             return {"success": True, "email": kwargs["mailbox"].email}
 
-        with patch.object(batch_runner, "CFG", {"email_registration": {
-                 "sentinel_backend": "legacy",
-                 "sentinel_prewarm_window": 2,
-             }}), \
-             patch("sms_tool.sentinel_tokens._extract_sentinel", side_effect=extract):
+        with (
+            patch.object(
+                batch_runner,
+                "CFG",
+                {
+                    "email_registration": {
+                        "sentinel_backend": "legacy",
+                        "sentinel_prewarm_window": 2,
+                    }
+                },
+            ),
+            patch("sms_tool.sentinel_tokens._extract_sentinel", side_effect=extract),
+        ):
             results = batch_runner.run_batch_impl(
-                count=3, mailboxes=mailboxes, workers=3, run_email_func=run_email_func,
+                count=3,
+                mailboxes=mailboxes,
+                workers=3,
+                run_email_func=run_email_func,
             )
         warmed = [item for item in seen if item]
         self.assertEqual(len(results), 3)
@@ -593,20 +726,27 @@ class RegistrationConcurrencyTests(unittest.TestCase):
         self.assertNotIn("paypal_generation_type", parameters)
 
     def test_stored_registration_password_reuses_non_terminal_failed_password(self):
-        with patch("sms_tool.storage.get_account_record", return_value={
-            "password": "FirstPassword!A1",
-            "error": "email_otp_validate: wrong_email_otp_code",
-            "raw_json": "{}",
-        }):
+        with patch(
+            "sms_tool.storage.get_account_record",
+            return_value={
+                "password": "FirstPassword!A1",
+                "error": "email_otp_validate: wrong_email_otp_code",
+                "raw_json": "{}",
+            },
+        ):
             self.assertEqual(_stored_registration_password("a+oai01@hotmail.com"), "FirstPassword!A1")
 
     def test_stored_registration_password_ignores_password_verify_failures(self):
-        with patch("sms_tool.storage.get_account_record", return_value={
-            "password": "WrongPassword!A1",
-            "error": "password_verify_failed:401",
-            "raw_json": "{}",
-        }):
+        with patch(
+            "sms_tool.storage.get_account_record",
+            return_value={
+                "password": "WrongPassword!A1",
+                "error": "password_verify_failed:401",
+                "raw_json": "{}",
+            },
+        ):
             self.assertEqual(_stored_registration_password("a+oai01@hotmail.com"), "")
+
     def test_stored_registration_totp_returns_the_saved_secret(self):
         """A password login is followed by the account's own MFA challenge.
 
@@ -614,17 +754,23 @@ class RegistrationConcurrencyTests(unittest.TestCase):
         ``existing_login_totp_secret_missing``, which makes the probe's positive
         verdict useless.
         """
-        with patch("sms_tool.storage.get_account_record", return_value={
-            "totp_secret": "BASE32SECRET",
-            "raw_json": "{}",
-        }):
+        with patch(
+            "sms_tool.storage.get_account_record",
+            return_value={
+                "totp_secret": "BASE32SECRET",
+                "raw_json": "{}",
+            },
+        ):
             self.assertEqual(_stored_registration_totp("a+oai01@hotmail.com"), "BASE32SECRET")
 
     def test_stored_registration_totp_falls_back_to_raw_json(self):
-        with patch("sms_tool.storage.get_account_record", return_value={
-            "totp_secret": "",
-            "raw_json": '{"totp_secret": "FROMRAW"}',
-        }):
+        with patch(
+            "sms_tool.storage.get_account_record",
+            return_value={
+                "totp_secret": "",
+                "raw_json": '{"totp_secret": "FROMRAW"}',
+            },
+        ):
             self.assertEqual(_stored_registration_totp("a+oai01@hotmail.com"), "FROMRAW")
 
     def test_stored_registration_totp_is_empty_without_a_record(self):

@@ -28,6 +28,7 @@ that caused the ``payment_link_manager`` flake):
   non-200 (401, 429, 500) stops the chain immediately and is returned as the
   failure -- the alternatives are never tried.
 """
+
 from __future__ import annotations
 
 import unittest
@@ -42,8 +43,7 @@ from sms_tool import http_utils
 class _FakeResponse:
     """Minimal stand-in for a curl_cffi / requests response."""
 
-    def __init__(self, status_code=200, payload=None, text="",
-                 url="https://auth.test/echo", json_error=None):
+    def __init__(self, status_code=200, payload=None, text="", url="https://auth.test/echo", json_error=None):
         self.status_code = status_code
         self._payload = payload
         self.text = text
@@ -67,15 +67,16 @@ class _RequestRecorder:
         self._responses = list(responses)
         self.calls: list[dict] = []
 
-    def __call__(self, session, method, url, *, label="",
-                 attempts=None, retry_delay=None, **kwargs):
-        self.calls.append({
-            "session": session,
-            "method": method,
-            "url": url,
-            "label": label,
-            **kwargs,
-        })
+    def __call__(self, session, method, url, *, label="", attempts=None, retry_delay=None, **kwargs):
+        self.calls.append(
+            {
+                "session": session,
+                "method": method,
+                "url": url,
+                "label": label,
+                **kwargs,
+            }
+        )
         item = self._responses.pop(0) if self._responses else _FakeResponse(200, {})
         if isinstance(item, BaseException):
             raise item
@@ -114,10 +115,8 @@ class JsonOrRawTests(unittest.TestCase):
         self.assertEqual(http_utils._json_or_raw(_FakeResponse(200, {"a": 1})), {"a": 1})
 
     def test_falls_back_to_truncated_raw_text(self):
-        response = _FakeResponse(200, text="x" * 1000,
-                                 json_error=ValueError("not json"))
-        self.assertEqual(http_utils._json_or_raw(response, limit=500),
-                         {"_raw": "x" * 500})
+        response = _FakeResponse(200, text="x" * 1000, json_error=ValueError("not json"))
+        self.assertEqual(http_utils._json_or_raw(response, limit=500), {"_raw": "x" * 500})
 
     def test_limit_is_configurable(self):
         response = _FakeResponse(200, text="abcdef", json_error=ValueError("no"))
@@ -149,7 +148,7 @@ class AbsoluteUrlTests(unittest.TestCase):
     def test_empty_and_falsy_urls_stay_empty(self):
         for url in ("", None):
             with self.subTest(url=url):
-                self.assertEqual(http_utils._absolute_url("https://b.test", url), "")
+                self.assertEqual(http_utils._absolute_url("https://b.test", url), "")  # type: ignore[arg-type]
 
     def test_absolute_urls_are_returned_unchanged(self):
         for url in ("http://x.test/a", "https://x.test/a?b=1"):
@@ -191,15 +190,13 @@ class AbsoluteUrlTests(unittest.TestCase):
 class MinimalCookieHeaderTests(unittest.TestCase):
     def test_keeps_only_the_three_essential_cookies(self):
         raw = f"tracker=1; {CSRF}=abc; {CALLBACK}=def; {SESSION}=ghi; other=z"
-        self.assertEqual(http_utils._minimal_chatgpt_cookie_header(raw),
-                         f"{CSRF}=abc; {CALLBACK}=def; {SESSION}=ghi")
+        self.assertEqual(http_utils._minimal_chatgpt_cookie_header(raw), f"{CSRF}=abc; {CALLBACK}=def; {SESSION}=ghi")
 
     def test_empty_value_cookies_are_dropped(self):
         self.assertEqual(http_utils._minimal_chatgpt_cookie_header(f"{CSRF}="), "")
 
     def test_fragments_without_equals_are_skipped(self):
-        self.assertEqual(http_utils._minimal_chatgpt_cookie_header(f"garbage; {CSRF}=x"),
-                         f"{CSRF}=x")
+        self.assertEqual(http_utils._minimal_chatgpt_cookie_header(f"garbage; {CSRF}=x"), f"{CSRF}=x")
 
     def test_equals_inside_the_value_is_preserved(self):
         raw = f"{CSRF}=ab==cd"
@@ -220,8 +217,24 @@ class MinimalCookieHeaderTests(unittest.TestCase):
     def test_duplicate_cookies_are_not_deduplicated(self):
         """⚠️ Pinned: the same name appearing twice is emitted twice, last not first."""
         raw = f"{CSRF}=first; {CSRF}=second"
-        self.assertEqual(http_utils._minimal_chatgpt_cookie_header(raw),
-                         f"{CSRF}=first; {CSRF}=second")
+        self.assertEqual(http_utils._minimal_chatgpt_cookie_header(raw), f"{CSRF}=first; {CSRF}=second")
+
+    def test_chunked_session_token_chunks_survive(self):
+        """next-auth chunks cookies >4KB as ``.0``/``.1`` — keep every chunk.
+
+        ``_cookie_presence`` already recognises the chunked names; dropping
+        them here made the exported ``cookie_header`` unusable for later
+        cookie-based session recovery even though the live jar worked.
+        """
+        raw = "; ".join([f"{SESSION}.0=aaa", f"{SESSION}.1=bbb", f"{CSRF}.0=cc", f"tracker=z"])
+        self.assertEqual(
+            http_utils._minimal_chatgpt_cookie_header(raw),
+            f"{SESSION}.0=aaa; {SESSION}.1=bbb; {CSRF}.0=cc",
+        )
+
+    def test_unrelated_dotted_names_are_still_dropped(self):
+        raw = f"{SESSION}.0=aaa; unrelated.0=zzz"
+        self.assertEqual(http_utils._minimal_chatgpt_cookie_header(raw), f"{SESSION}.0=aaa")
 
 
 class CookieHeaderTests(unittest.TestCase):
@@ -240,8 +253,7 @@ class CookieHeaderTests(unittest.TestCase):
 
     def test_all_three_essentials_survive_the_round_trip(self):
         jar = _DictCookieJar({CSRF: "a", CALLBACK: "b", SESSION: "c"})
-        self.assertEqual(http_utils._cookie_header(_FakeSession(jar)),
-                         f"{CSRF}=a; {CALLBACK}=b; {SESSION}=c")
+        self.assertEqual(http_utils._cookie_header(_FakeSession(jar)), f"{CSRF}=a; {CALLBACK}=b; {SESSION}=c")
 
     def test_session_without_a_cookies_attribute_gives_an_empty_header(self):
         self.assertEqual(http_utils._cookie_header(object()), "")
@@ -258,12 +270,17 @@ class _FakeSession:
 class FollowContinueUrlTests(unittest.TestCase):
     def _run(self, url, *, referer="", label="continue"):
         recorder = _RequestRecorder(_FakeResponse(200, {}, url="https://auth.test/landed"))
-        with patch("sms_tool.http_utils.CFG",
-                   {"chatgpt": {"auth_base_url": "https://auth.test"}}), \
-             patch("sms_tool.http_utils.auth_impersonate", lambda: "IMPERSONATE"), \
-             patch("sms_tool.http_utils.request_with_retry", recorder):
+        with (
+            patch("sms_tool.http_utils.CFG", {"chatgpt": {"auth_base_url": "https://auth.test"}}),
+            patch("sms_tool.http_utils.auth_impersonate", lambda: "IMPERSONATE"),
+            patch("sms_tool.http_utils.request_with_retry", recorder),
+        ):
             response = http_utils._follow_continue_url(
-                _FakeSession({}), url, {"X-Base": "1"}, referer=referer, label=label,
+                _FakeSession({}),
+                url,
+                {"X-Base": "1"},
+                referer=referer,
+                label=label,
             )
         return response, recorder
 
@@ -282,8 +299,7 @@ class FollowContinueUrlTests(unittest.TestCase):
 
     def test_accept_header_is_always_added(self):
         _response, recorder = self._run("/go")
-        self.assertEqual(recorder.calls[0]["headers"]["Accept"],
-                         "text/html,application/xhtml+xml")
+        self.assertEqual(recorder.calls[0]["headers"]["Accept"], "text/html,application/xhtml+xml")
 
     def test_base_headers_are_preserved(self):
         _response, recorder = self._run("/go")
@@ -317,14 +333,17 @@ class FollowContinueUrlTests(unittest.TestCase):
 
     def test_uses_the_default_auth_base_when_config_has_none(self):
         recorder = _RequestRecorder(_FakeResponse(200, {}))
-        with patch("sms_tool.http_utils.CFG", {"chatgpt": {}}), \
-             patch("sms_tool.http_utils.auth_impersonate", lambda: "IMPERSONATE"), \
-             patch("sms_tool.http_utils.request_with_retry", recorder):
+        with (
+            patch("sms_tool.http_utils.CFG", {"chatgpt": {}}),
+            patch("sms_tool.http_utils.auth_impersonate", lambda: "IMPERSONATE"),
+            patch("sms_tool.http_utils.request_with_retry", recorder),
+        ):
             http_utils._follow_continue_url(_FakeSession({}), "/go", {})
         self.assertEqual(recorder.urls, ["https://auth.openai.com/go"])
 
     def test_returns_the_response_object(self):
         response, _recorder = self._run("/go")
+        assert response is not None
         self.assertEqual(response.url, "https://auth.test/landed")
 
 
@@ -341,8 +360,10 @@ ALL_ENDPOINTS = [PRIMARY, FALLBACK_1, FALLBACK_2, FALLBACK_3]
 class ValidateEmailOtpTests(unittest.TestCase):
     def _run(self, *responses, code="123456", **kwargs):
         recorder = _RequestRecorder(*responses)
-        with patch("sms_tool.http_utils.auth_impersonate", lambda: "IMPERSONATE"), \
-             patch("sms_tool.http_utils.request_with_retry", recorder):
+        with (
+            patch("sms_tool.http_utils.auth_impersonate", lambda: "IMPERSONATE"),
+            patch("sms_tool.http_utils.request_with_retry", recorder),
+        ):
             ok, body = http_utils._validate_email_otp(
                 _FakeSession({}), "https://auth.test", {"X-Base": "1"}, code, **kwargs
             )
@@ -356,14 +377,16 @@ class ValidateEmailOtpTests(unittest.TestCase):
 
     def test_404_falls_through_to_the_next_endpoint(self):
         ok, _body, recorder = self._run(
-            _FakeResponse(404, {}), _FakeResponse(200, {"ok": True}),
+            _FakeResponse(404, {}),
+            _FakeResponse(200, {"ok": True}),
         )
         self.assertTrue(ok)
         self.assertEqual(recorder.urls, [PRIMARY, FALLBACK_1])
 
     def test_405_also_falls_through(self):
         ok, _body, recorder = self._run(
-            _FakeResponse(405, {}), _FakeResponse(200, {"ok": True}),
+            _FakeResponse(405, {}),
+            _FakeResponse(200, {"ok": True}),
         )
         self.assertTrue(ok)
         self.assertEqual(recorder.urls, [PRIMARY, FALLBACK_1])
@@ -385,8 +408,7 @@ class ValidateEmailOtpTests(unittest.TestCase):
                     _FakeResponse(200, {"ok": True}),
                 )
                 self.assertFalse(ok)
-                self.assertEqual(recorder.urls, [PRIMARY],
-                                 "a hard failure must not keep probing alternatives")
+                self.assertEqual(recorder.urls, [PRIMARY], "a hard failure must not keep probing alternatives")
                 self.assertEqual(body["status"], status)
 
     def test_code_is_posted_as_json(self):
@@ -415,8 +437,7 @@ class ValidateEmailOtpTests(unittest.TestCase):
 
     def test_label_names_the_endpoint_being_tried(self):
         _ok, _body, recorder = self._run(_FakeResponse(200, {}))
-        self.assertEqual(recorder.calls[0]["label"],
-                         "Email OTP validate /api/accounts/email-otp/validate")
+        self.assertEqual(recorder.calls[0]["label"], "Email OTP validate /api/accounts/email-otp/validate")
 
 
 if __name__ == "__main__":

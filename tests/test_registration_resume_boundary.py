@@ -37,11 +37,14 @@ def workflow(monkeypatch, payload=None):
     w.persistence = MemoryPersistence(payload)
     w.machine = RegistrationStateMachine(lambda *args: None)
     w._operations = SimpleNamespace(
-        validate_config=Mock(), _resolve_proxy_scheme=Mock(return_value=""),
+        validate_config=Mock(),
+        _resolve_proxy_scheme=Mock(return_value=""),
         registration_network_preflight=Mock(return_value={"proxy": ""}),
         _ensure_mailbox_account=Mock(return_value=w.input_mailbox),
-        _mailbox_snapshot=Mock(return_value={}), set_fingerprint_geo=Mock(),
-        _snapshot_mailbox_message=Mock(), _sanitize_text=str,
+        _mailbox_snapshot=Mock(return_value={}),
+        set_fingerprint_geo=Mock(),
+        _snapshot_mailbox_message=Mock(),
+        _sanitize_text=str,
     )
     w._run_stage = Mock()
     monkeypatch.setattr(MailboxService, "create", Mock())
@@ -62,8 +65,11 @@ def test_bootstrap_preserves_token_checkpoint_and_skips_mailbox(monkeypatch):
 @pytest.mark.parametrize("status", [404, 410])
 def test_terminal_snapshot_stops_before_auth_or_otp(monkeypatch, status):
     w = workflow(monkeypatch)
-    monkeypatch.setattr(mailbox.mailbox_icloud_url, "snapshot_icloud_url_messages",
-                        Mock(side_effect=MailboxEndpointUnavailableError(status)))
+    monkeypatch.setattr(
+        mailbox.mailbox_icloud_url,
+        "snapshot_icloud_url_messages",
+        Mock(side_effect=MailboxEndpointUnavailableError(status)),
+    )
     w.r._snapshot_mailbox_message = mailbox._snapshot_mailbox_message
     with pytest.raises(MailboxEndpointUnavailableError):
         w._bootstrap()
@@ -72,8 +78,9 @@ def test_terminal_snapshot_stops_before_auth_or_otp(monkeypatch, status):
 
 def test_transient_snapshot_remains_distinct_from_missing_mailbox(monkeypatch):
     w = workflow(monkeypatch)
-    monkeypatch.setattr(mailbox.mailbox_icloud_url, "snapshot_icloud_url_messages",
-                        Mock(side_effect=RuntimeError("HTTP 503")))
+    monkeypatch.setattr(
+        mailbox.mailbox_icloud_url, "snapshot_icloud_url_messages", Mock(side_effect=RuntimeError("HTTP 503"))
+    )
     assert mailbox._snapshot_mailbox_message(w.input_mailbox) == ""
 
 
@@ -93,19 +100,26 @@ def test_created_account_without_at_is_resumable():
 
 def session_payload(**overrides):
     return {
-        "registration_state": "auth_session_pending", "create_ok": True,
-        "session_recovery_started_at": int(time.time()), "session_recovery_attempts": 0,
-        "session_cookies": [{"name": "fixture", "value": "synthetic", "domain": "auth.example.test",
-                             "path": "/", "secure": True}], **overrides,
+        "registration_state": "auth_session_pending",
+        "create_ok": True,
+        "session_recovery_started_at": int(time.time()),
+        "session_recovery_attempts": 0,
+        "session_cookies": [
+            {"name": "fixture", "value": "synthetic", "domain": "auth.example.test", "path": "/", "secure": True}
+        ],
+        **overrides,
     }
 
 
-@pytest.mark.parametrize("overrides,expected", [
-    ({"session_recovery_attempts": 2}, "auth_session_recovery_exhausted"),
-    ({"session_recovery_started_at": 1}, "auth_session_recovery_expired"),
-    ({"session_cookies": []}, "auth_session_recovery_context_missing"),
-    ({"session_recovery_attempts": "invalid"}, "auth_session_recovery_context_missing"),
-])
+@pytest.mark.parametrize(
+    "overrides,expected",
+    [
+        ({"session_recovery_attempts": 2}, "auth_session_recovery_exhausted"),
+        ({"session_recovery_started_at": 1}, "auth_session_recovery_expired"),
+        ({"session_cookies": []}, "auth_session_recovery_context_missing"),
+        ({"session_recovery_attempts": "invalid"}, "auth_session_recovery_context_missing"),
+    ],
+)
 def test_unusable_session_checkpoint_stops_without_new_signup(monkeypatch, overrides, expected):
     from sms_tool.registration_handlers import RegistrationAbort
     from sms_tool.registration_policy import registration_retry_decision
@@ -120,18 +134,26 @@ def test_unusable_session_checkpoint_stops_without_new_signup(monkeypatch, overr
 
 
 def test_session_recovery_only_fetches_session_then_probes_and_finalizes(monkeypatch):
-    from sms_tool import registration_handlers
+    # ``_new_registration_session`` is bound in the module that *uses* it: the
+    # resume body moved to ``registration_resume`` on 2026-10-08, so a patch
+    # aimed at ``registration_handlers`` no longer reaches this path (the same
+    # "patch the defining module" rule the other split-out stages follow).
+    from sms_tool import registration_resume
 
     w = workflow(monkeypatch, session_payload())
     w._bootstrap()
     session = SimpleNamespace(cookies=SimpleNamespace(jar=CookieJar()))
-    monkeypatch.setattr(registration_handlers, "_new_registration_session", Mock(return_value=session))
+    monkeypatch.setattr(registration_resume, "_new_registration_session", Mock(return_value=session))
     w.r.openai_auth_headers = Mock(return_value={})
     w._set_outcome = Mock()
     w.obtain_oauth_refresh_token = Mock()
     w._run_stage = Mock(side_effect=lambda state, label, handler: None)
     w._resume_post_create()
-    assert [call.args[0].value for call in w._run_stage.call_args_list] == ["auth_session", "access_token_probe", "finalize"]
+    assert [call.args[0].value for call in w._run_stage.call_args_list] == [
+        "auth_session",
+        "access_token_probe",
+        "finalize",
+    ]
     assert w.persistence.row["payload"]["session_recovery_attempts"] == 1
     assert list(session.cookies.jar)[0].secure is True
     assert list(session.cookies.jar)[0].domain == "auth.example.test"
@@ -147,8 +169,12 @@ def test_session_recovery_does_not_restore_expired_cookie():
 
 
 def test_checkpoint_roundtrip_keeps_session_identity_and_headers():
-    state = RegistrationRuntimeState(username="resume@example.test", session_logging_id="original-session",
-                                     device_id="original-device", base_headers={"user-agent": "original-agent"})
+    state = RegistrationRuntimeState(
+        username="resume@example.test",
+        session_logging_id="original-session",
+        device_id="original-device",
+        base_headers={"user-agent": "original-agent"},
+    )
     payload = registration_checkpoint.build_checkpoint_payload(state, lambda: {})
     restored = RegistrationRuntimeState()
     registration_checkpoint.apply_resume_payload(restored, payload)

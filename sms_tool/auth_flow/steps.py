@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+from typing import Mapping
 from urllib.parse import parse_qs, quote, urlencode, urlparse
 
 from . import deps
@@ -41,6 +42,14 @@ def _is_chatgpt_auth_login_landing(url):
     host = (parsed.netloc or "").lower()
     path = (parsed.path or "").rstrip("/").lower()
     return host.endswith("chatgpt.com") and path in {"/auth/login", "/auth/log-in"}
+
+
+def _is_signup_password_page(url):
+    """Return True only for the concrete signup password page."""
+    parsed = urlparse(url or "")
+    host = (parsed.netloc or "").lower()
+    path = (parsed.path or "").rstrip("/").lower()
+    return host.endswith("auth.openai.com") and path.endswith("/create-account/password")
 
 
 def _is_signup_password_step(url):
@@ -98,10 +107,325 @@ def _existing_login_continue_enabled():
         cfg = deps.current_config_data().get("registration", {})
     except Exception:
         return True
-    if not isinstance(cfg, dict):
+    # 🔴 ``Mapping``, not ``dict``: the sharded production config freezes every
+    # section into a ``mappingproxy`` (``_freeze`` in ``sms_tool/config.py``),
+    # which is NOT a ``dict`` instance -- a ``dict`` check here made this
+    # predicate fail **closed** (default-on semantics) for every production
+    # read while tests, which pass plain dicts, stayed green.
+    if not isinstance(cfg, Mapping):
         return True
     value = cfg.get("existing_login_continue_on_verified_page", True)
     return value not in (False, 0, "0", "false", "False", "no", "No", "off")
+
+
+def _signup_continue_screen_hint_enabled():
+    """Whether the signup lane's ``authorize/continue`` body declares ``screen_hint: "signup"``.
+
+    ``registration.signup_continue_screen_hint`` (default **False**).
+
+    **Why this exists.**  ``_continue_signup_username`` posts a body of only
+    ``{"username": {...}}`` -- which this repo's own docstring (see
+    ``_existing_login_continue_enabled``) reads as "what a *signup* continue
+    sends".  But the two reference protocol clients that can complete a
+    password registration both declare the screen explicitly:
+
+    * SunnyRegister ``_authorize_email`` sends ``"screen_hint": "login" if
+      existing_account else "signup"`` -- always one of the two, never absent.
+    * The login lane here (``_existing_login_continue``) gained
+      ``screen_hint: "login"`` behind ``existing_login_continue_on_verified_page``
+      after the 09-14/09-16 measurements pinned the missing field as the
+      difference between a signup-shaped session and a login-shaped one.
+
+    The signup lane's own symptom ("发码 200 且落点正确，但派发未发生",
+    2026-10-06, ~11 attempts / 3 configurations, byte-identical) is recorded on
+    ``_prime_create_account_password_page_enabled``.  Declaring ``screen_hint``
+    is the *other* wire difference between this client and the working
+    reference, so it earns its own toggle instead of being bundled with the
+    password-page prime -- one variable per comparison.
+
+    Off by default: the signup continue currently *works* on some exits
+    (addresses land on ``/email-verification`` and codes dispatch), and this
+    adds a field to that working request.  It earns a default only after a
+    controlled A/B (``p1-5-signup-continue-screen-hint``) shows the failure
+    shape moving without the success rate dropping.
+
+    ⚠ **Reachability.**  This toggle only fires when the continue POST itself
+    fires.  When ``authorize`` lands on ``/email-verification`` (the measured
+    2026-10-06/07 failure shape) ``_prepare_signup_auth_state`` returns early,
+    so the flag is never read -- an arm with it on is indistinguishable from
+    the default.  ``scripts/registration_ab.py`` flags that arm
+    ``manipulation_failed`` instead of comparing rates.  To test the declared
+    screen *on that landing*, use
+    ``_signup_email_verification_continue_hint_enabled``.
+    """
+    try:
+        cfg = deps.current_config_data().get("registration", {})
+    except Exception:
+        return False
+    # See ``_existing_login_continue_enabled``: production config sections are
+    # ``mappingproxy``, not ``dict``. A ``dict`` check silently disabled the
+    # toggle in every production run.
+    if not isinstance(cfg, Mapping):
+        return False
+    value = cfg.get("signup_continue_screen_hint", False)
+    return value in (True, 1, "1", "true", "True", "yes", "Yes", "on")
+
+
+def _signup_email_verification_continue_hint_enabled():
+    """Whether the signup lane re-posts ``authorize/continue`` from ``/email-verification``.
+
+    ``registration.signup_email_verification_continue_hint`` (default **False**).
+
+    **Why this exists -- and why the sibling toggle could not answer it.**
+    ``signup_continue_screen_hint`` (above) declares the screen on the continue
+    the lane *already* posts.  Its only read point is ``_continue_signup_username``
+    (``signup.py``), and that function is reached only when ``authorize`` lands
+    *off* the password and email-verification steps.  On the measured failure
+    shape the authorize redirect lands exactly on ``/email-verification``, so
+    ``_prepare_signup_auth_state`` returns early and the sibling toggle never
+    executes -- a manipulation that never ran, not a hypothesis that failed
+    (``run_p15_hint.log``, 2026-10-07: 0/5, zero ``Signup username continue``
+    lines; see ``docs/audits/scan-2026-10-07-protocol-registration.md`` P0-A).
+    ``scripts/registration_ab.py`` now refuses to judge an arm whose mechanism
+    line is absent, so that gap can no longer masquerade as a null result.
+
+    **What this toggle does instead.**  When ``authorize`` lands on
+    ``/email-verification`` on the **password** lane, it issues one extra
+    ``authorize/continue`` carrying ``screen_hint: "signup"`` (the body shape
+    ``signup_continue_screen_hint`` describes), in the hope that declaring the
+    screen after the fact moves the server's transaction arm from
+    ``passwordless_login``/``passwordless_signup`` back to the signup arm.  The
+    measured signal to watch is ``client_auth_session.email_verification_mode``,
+    not the landing URL: the 2026-10-06/07 runs already landed correctly while
+    the arm stayed passwordless.
+
+    Password lane only: the passwordless Web lane deliberately sends no
+    ``authorize/continue`` from that landing (the browser sends the OTP from
+    that state), so enabling this there would change a different flow.  Off by
+    default -- an extra state-changing POST to a working lane earns a default
+    only after its own controlled A/B
+    (``p1-8-email-verification-continue-hint``).
+    """
+    try:
+        cfg = deps.current_config_data().get("registration", {})
+    except Exception:
+        return False
+    # See ``_existing_login_continue_enabled``: production config sections are
+    # ``mappingproxy``, not ``dict``. A ``dict`` check silently disabled the
+    # toggle in every production run.
+    if not isinstance(cfg, Mapping):
+        return False
+    value = cfg.get("signup_email_verification_continue_hint", False)
+    return value in (True, 1, "1", "true", "True", "yes", "Yes", "on")
+
+
+def _prime_create_account_password_page_enabled():
+    """Whether the password lane GETs ``/create-account/password`` before ``user/register``.
+
+    ``registration.prime_create_account_password`` (default **False**).
+
+    **Why this exists.**  ``_post_user_register`` already sends
+    ``Referer: {auth_base}/create-account/password`` and mints a
+    ``username_password_create`` Sentinel -- i.e. it *claims* to be on the
+    password page -- but nothing ever navigates there.  Measured 2026-10-06 on a
+    fresh ReMail ``icloud.com`` address: the signup lane lands on
+    ``/email-verification`` and POSTs ``user/register`` from that state.  The
+    POST answers **200** with ``{"continue_url": ".../email-otp/send",
+    "method": "GET", "page": {"type": "email_otp_send"}}``, the GET that
+    follows answers **200** and lands on ``/email-verification`` -- and the
+    server still never dispatches the code.
+
+    The dispatch never happening is not an inference: a direct
+    ``GET /v1/pickup`` on all five mailboxes returned **zero** messages, and
+    ``client_auth_session_dump[after_otp_send]`` kept its ``_pending`` marker.
+    The outcome was byte-identical on the passwordless lane, on the password
+    lane, and on an IN *and* a US exit family (~11 attempts, 3 configurations),
+    which excludes lane, ordering, send method, ``continue_url`` handling, exit
+    and mailbox health.
+
+    turb's protocol client takes the other route and says why: its
+    ``navigate_create_account_password`` -- "进入注册密码页，确保协议注册不再走无密码
+    OTP 分支" -- runs *unconditionally* between ``follow_authorize`` and
+    ``register_user``, and ``main.py`` labels that block "强制走邮箱+密码注册，
+    不使用 passwordless OTP-only 分支".  A session whose auth-step state is
+    ``/email-verification`` may arm the OTP transaction on the passwordless arm
+    even though the POST carried a password.
+
+    Off by default: this adds a request to a lane that currently fails one step
+    later, so it earns a default only after a controlled comparison shows the
+    dispatch happening.
+
+    **Live result (2026-10-06 22:39, directed rerun, single arm).**  With the
+    toggle ON, the prime GET executed on **5/5** attempts and answered 200 with
+    the correct ``/create-account/password`` landing every time -- the page
+    state was established exactly as designed.  The server *still* armed the
+    transaction on the passwordless branch: every ``after_otp_send`` dump kept
+    ``passwordless_email_otp_send_pending``, and all 5 runs ended
+    ``email_otp_send_stuck`` -- byte-identical to the same mailboxes' afternoon
+    runs with the toggle OFF (9 stuck / 11 attempts, prime never executed).
+    Verdict: the password-page state is **not** the discriminator the server
+    uses to pick the transaction branch.  turb's unconditional navigation works
+    for turb for some other reason (its signin shape differs: it sends
+    ``login_hint + screen_hint=login_or_signup`` and no ``authorize/continue``
+    POST).  The next wire candidate is P1-5 (declared screen hint), then the
+    signin/continue shape itself.  The toggle stays off; do not re-test this
+    variable in isolation again.
+    """
+    try:
+        cfg = deps.current_config_data().get("registration", {})
+    except Exception:
+        return False
+    if not isinstance(cfg, Mapping):
+        return False
+    value = cfg.get("prime_create_account_password", False)
+    return value in (True, 1, "1", "true", "True", "yes", "Yes", "on")
+
+
+def _prime_navigation_headers_enabled():
+    """Whether the password-page prime GET carries real navigation headers.
+
+    ``registration.prime_navigation_headers`` (default **False**).
+
+    **Why this exists (2026-10-07 scan P1-A).**  ``_prime_create_account_password_page``
+    follows the password URL through ``http_utils._follow_continue_url``, which
+    sends only ``Accept`` + ``Referer``.  A real top-level navigation sends
+    ``Sec-Fetch-Site: same-origin`` and ``Sec-Fetch-User: ?1``; turb's
+    ``navigate_create_account_password`` sends both and treats a wrong landing
+    as fatal.  So P1-4's conclusion ("the prime ran 5/5 with the correct
+    landing, yet the transaction stayed passwordless") rests on "landing", not
+    on "a navigation the server recognised as top-level" -- the header gap is
+    an unexcluded explanation, not a settled one.
+
+    This is a **separate** toggle from ``prime_create_account_password`` on
+    purpose: turning it on changes what the *prime* request looks like, so the
+    P1-4 arm stays reproducible and the comparison stays single-variable
+    (``prime`` on in both arms, headers the only delta).  Off by default; it
+    earns a default only after a controlled A/B
+    (``p1-9-prime-navigation-headers``).
+    """
+    try:
+        cfg = deps.current_config_data().get("registration", {})
+    except Exception:
+        return False
+    # See ``_existing_login_continue_enabled``: production sections are frozen
+    # ``mappingproxy``, so the guard must be ``Mapping``, not ``dict``.
+    if not isinstance(cfg, Mapping):
+        return False
+    value = cfg.get("prime_navigation_headers", False)
+    return value in (True, 1, "1", "true", "True", "yes", "Yes", "on")
+
+
+def _signin_screen_hint_login_or_signup_enabled():
+    """Whether the password lane's signin declares ``screen_hint=login_or_signup``.
+
+    ``registration.signin_screen_hint_login_or_signup`` (default **False**).
+
+    **Why this exists (2026-10-07 scan §5 step 6).**  The password lane's first
+    signin attempt declares ``screen_hint=signup`` (``_signup_signin_attempts``),
+    and on the measured failure shape ``authorize`` lands on
+    ``/email-verification`` with the transaction armed on
+    ``email_verification_mode=passwordless_signup`` /
+    ``passwordless_signup_from_default_redirect=true``.  Two live runs on
+    2026-10-07/08 (hint arm on the lajiao pool, default arm on the fireside
+    pool, different mailboxes) produced the **same** arm and the same
+    ``email_otp_send_stuck``, so exit, mailbox and the declared continue screen
+    are all excluded -- what is left is the signin shape itself.
+
+    turb's ``signin_openai`` sends ``screen_hint=login_or_signup`` (with
+    ``prompt=login`` and ``login_hint``) and never posts
+    ``authorize/continue``.  This toggle changes **only** the ``screen_hint``
+    value of the first signin attempt, so the A/B is single-variable: the lane,
+    the exit pool and the ``authorize/continue`` behaviour all stay constant.
+    The later fallback attempts keep ``signup`` -- they are only reached when
+    the first attempt does not land on a recognised step.
+
+    Off by default: it changes the request that currently produces a correct
+    landing, so it earns a default only after a controlled comparison
+    (``p1-10-signin-screen-hint``) moves ``email_verification_mode`` off
+    ``passwordless_*`` without dropping the success rate.
+    """
+    try:
+        cfg = deps.current_config_data().get("registration", {})
+    except Exception:
+        return False
+    # See ``_existing_login_continue_enabled``: production sections are frozen
+    # ``mappingproxy``, so the guard must be ``Mapping``, not ``dict``.
+    if not isinstance(cfg, Mapping):
+        return False
+    value = cfg.get("signin_screen_hint_login_or_signup", False)
+    return value in (True, 1, "1", "true", "True", "yes", "Yes", "on")
+
+
+def _signin_prompt_login_enabled():
+    """Whether the password lane's signin declares ``prompt=login``.
+
+    ``registration.signin_prompt_login`` (default **False**).
+
+    **Why this exists.**  turb's ``signin_openai`` sends ``prompt=login`` *and*
+    ``screen_hint=login_or_signup``.  Four 2026-10-07/08 live runs (lajiao /
+    fireside pools, burned / brand-new mailboxes, ``signup`` /
+    ``login_or_signup`` / a re-declared continue) all landed on
+    ``email_verification_mode=passwordless_signup`` with
+    ``passwordless_signup_from_default_redirect=true`` and a non-dispatching
+    OTP, so the declared *screen* is recorded by the server
+    (``original_screen_hint`` follows it) but does not pick the transaction arm.
+    ``prompt`` is the next untested field of turb's signin shape.
+
+    Single variable: it changes **only** the first attempt's ``prompt`` (``""``
+    -> ``"login"``).  The ``p1-11`` comparison holds
+    ``signin_screen_hint_login_or_signup=true`` in **both** arms, so the pair is
+    ``login_or_signup`` vs ``login_or_signup + prompt=login`` -- exactly turb's
+    shape as the treatment.
+
+    Off by default; it earns a default only after a controlled comparison
+    (``p1-11-signin-prompt-login``) moves ``email_verification_mode`` off
+    ``passwordless_*`` without dropping the success rate.
+    """
+    try:
+        cfg = deps.current_config_data().get("registration", {})
+    except Exception:
+        return False
+    # See ``_existing_login_continue_enabled``: production sections are frozen
+    # ``mappingproxy``, so the guard must be ``Mapping``, not ``dict``.
+    if not isinstance(cfg, Mapping):
+        return False
+    value = cfg.get("signin_prompt_login", False)
+    return value in (True, 1, "1", "true", "True", "yes", "Yes", "on")
+
+
+def _signin_locale_ja_jp_enabled():
+    """Whether the password lane's signin declares ``locale=ja-JP``.
+
+    ``registration.signin_locale_ja_jp`` (default **False**).
+
+    **Why this exists.**  SunnyRegister's ``_start_next_auth`` puts
+    ``locale: "ja-JP"`` in the ``/api/auth/signin/openai`` query (alongside
+    ``prompt=login`` and ``screen_hint``); this repo's ``_openai_signin_url``
+    declares no locale at all.  Four 2026-10-07/08 live runs showed the declared
+    screen (and ``prompt=login``) reach the server -- ``original_screen_hint``
+    follows the declaration, and ``prompt=login`` even moved the arm to
+    ``passwordless_login`` -- but every arm still failed (``passwordless_signup``
+    + non-dispatching OTP, or ``passwordless_login`` + ``invalid_auth_step``).
+    ``locale`` is the last field of SunnyRegister's signin shape.
+
+    Single variable: it adds only the ``locale`` query parameter, on the
+    password lane, uniformly across the attempts.  It is declared as a **boolean**
+    (not a locale string) so the A/B harness's mechanism gate can tell which arm
+    the marker belongs to -- a string arm value would set ``mechanism_ok=null``.
+
+    Off by default; it earns a default only after a controlled comparison
+    (``p1-12-signin-locale``).
+    """
+    try:
+        cfg = deps.current_config_data().get("registration", {})
+    except Exception:
+        return False
+    # See ``_existing_login_continue_enabled``: production sections are frozen
+    # ``mappingproxy``, so the guard must be ``Mapping``, not ``dict``.
+    if not isinstance(cfg, Mapping):
+        return False
+    value = cfg.get("signin_locale_ja_jp", False)
+    return value in (True, 1, "1", "true", "True", "yes", "Yes", "on")
 
 
 def _is_about_you_step(url, payload=None):
@@ -145,7 +469,7 @@ def _with_query_param(url, key, value):
     return f"{url}{sep}{key}={quote(str(value), safe='')}"
 
 
-def _ensure_authorize_context(url, did, session_logging_id, login_hint, *, screen_hint="", prompt=""):
+def _ensure_authorize_context(url, did, session_logging_id, login_hint, *, screen_hint="", prompt="", locale=""):
     parsed = urlparse(str(url or ""))
     if not parsed.netloc.endswith("auth.openai.com"):
         return str(url or "")
@@ -162,13 +486,15 @@ def _ensure_authorize_context(url, did, session_logging_id, login_hint, *, scree
         required["screen_hint"] = screen_hint
     if prompt:
         required["prompt"] = prompt
+    if locale:
+        required["locale"] = locale
     for key, value in required.items():
         if value and not values.get(key):
             values[key] = [str(value)]
     return parsed._replace(query=urlencode(values, doseq=True)).geturl()
 
 
-def _openai_signin_url(chat_base, did, session_logging_id, login_hint, *, screen_hint="", prompt=""):
+def _openai_signin_url(chat_base, did, session_logging_id, login_hint, *, screen_hint="", prompt="", locale=""):
     params = {
         "ext-oai-did": did,
         "device_id": did,
@@ -181,6 +507,8 @@ def _openai_signin_url(chat_base, did, session_logging_id, login_hint, *, screen
         params["screen_hint"] = screen_hint
     if prompt:
         params["prompt"] = prompt
+    if locale:
+        params["locale"] = locale
     return f"{chat_base}/api/auth/signin/openai?{urlencode(params)}"
 
 
@@ -232,10 +560,29 @@ def _print_protocol_diagnostic(stage, diagnostic):
 
 
 def _signup_signin_attempts():
+    """The password lane's signin attempts, in order.
+
+    The first attempt carries both variables the signin-shape toggles own:
+    ``screen_hint`` (``signup`` or turb's ``login_or_signup``, from
+    ``_signin_screen_hint_login_or_signup_enabled``) and ``prompt`` (``""`` or
+    ``login``, from ``_signin_prompt_login_enabled``).  The fallbacks keep
+    ``signup`` -- they exist for exits where the first shape does not reach a
+    recognised step, and changing them would add variables to the comparisons.
+    """
+    login_or_signup = _signin_screen_hint_login_or_signup_enabled()
+    prompt_login = _signin_prompt_login_enabled()
+    locale = "ja-JP" if _signin_locale_ja_jp_enabled() else ""
+    screen_label = "login_or_signup" if login_or_signup else "signup"
+    first = {
+        "name": f"{screen_label}_prompt_login" if prompt_login else f"{screen_label}_screen_hint",
+        "screen_hint": screen_label,
+        "prompt": "login" if prompt_login else "",
+        "locale": locale,
+    }
     return (
-        {"name": "signup_screen_hint", "screen_hint": "signup", "prompt": ""},
-        {"name": "signup_prompt_signup", "screen_hint": "signup", "prompt": "signup"},
-        {"name": "signup_legacy_prompt_login", "screen_hint": "signup", "prompt": "login"},
+        first,
+        {"name": "signup_prompt_signup", "screen_hint": "signup", "prompt": "signup", "locale": locale},
+        {"name": "signup_legacy_prompt_login", "screen_hint": "signup", "prompt": "login", "locale": locale},
     )
 
 
@@ -253,9 +600,13 @@ def _passwordless_signin_attempts():
 def _invalid_state_auth_response(data):
     if not isinstance(data, dict):
         return False
-    error = data.get("error") if isinstance(data.get("error"), dict) else {}
+    raw_error = data.get("error")
+    error = raw_error if isinstance(raw_error, dict) else {}
     code = str(error.get("code") or "").strip().lower()
     message = str(error.get("message") or "").strip().lower()
+    # The rule matches the " is " inside the quoted sentence below, not an
+    # identity operator.
+    # pi-lens-ignore: no-identity-operator-on-literals
     return code == "invalid_state" or "session is no longer valid" in message
 
 

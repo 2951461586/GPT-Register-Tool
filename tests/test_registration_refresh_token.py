@@ -38,7 +38,7 @@ import inspect
 import unittest
 from unittest.mock import Mock, patch
 
-from sms_tool import registration, registration_finalize, registration_handlers
+from sms_tool import registration, registration_finalize, registration_handlers, registration_resume
 from sms_tool.accounts.account_models import AccountSessionModel
 from sms_tool.registration_handlers import RegistrationEmailWorkflow
 from sms_tool.registration_state import RegistrationStateMachine
@@ -101,9 +101,7 @@ class RefreshTokenIsOptInTests(unittest.TestCase):
 
 class RefreshTokenExchangeTests(unittest.TestCase):
     def _enabled(self, **kwargs):
-        return _workflow(
-            config={"registration": {"obtain_refresh_token": True}}, **kwargs
-        )
+        return _workflow(config={"registration": {"obtain_refresh_token": True}}, **kwargs)
 
     def test_a_successful_exchange_stores_the_refresh_token(self):
         workflow = self._enabled()
@@ -131,17 +129,13 @@ class RefreshTokenExchangeTests(unittest.TestCase):
         self.assertIs(kwargs["force_email_otp_login"], False)
         self.assertEqual(kwargs["proxy"], "http://proxy:8080")
         self.assertEqual(kwargs["data"]["email"], "user@example.com")
-        self.assertEqual(
-            kwargs["data"]["cookie_header"], "__Secure-next-auth.session-token=jwe"
-        )
+        self.assertEqual(kwargs["data"]["cookie_header"], "__Secure-next-auth.session-token=jwe")
 
     def test_only_the_refresh_token_is_taken(self):
         """The Codex access token is scoped to the Codex client -- it is not a
         substitute for this run's ChatGPT web AT, which was just probed."""
         workflow = self._enabled()
-        with patch(
-            "sms_tool.registration_finalize.collect_codex_oauth_tokens", return_value=dict(_OAUTH_OK)
-        ):
+        with patch("sms_tool.registration_finalize.collect_codex_oauth_tokens", return_value=dict(_OAUTH_OK)):
             workflow.obtain_oauth_refresh_token()
 
         self.assertEqual(workflow.runtime.access_token, "web_at")
@@ -151,9 +145,7 @@ class RefreshTokenExchangeTests(unittest.TestCase):
         """``finalize`` writes ``_oauth_result_summary(s.oauth_result)`` into the
         persisted ``codex_oauth`` field, so that is the real consumer."""
         workflow = self._enabled()
-        with patch(
-            "sms_tool.registration_finalize.collect_codex_oauth_tokens", return_value=dict(_OAUTH_OK)
-        ):
+        with patch("sms_tool.registration_finalize.collect_codex_oauth_tokens", return_value=dict(_OAUTH_OK)):
             workflow.obtain_oauth_refresh_token()
 
         summary = registration._oauth_result_summary(workflow.runtime.oauth_result)
@@ -165,9 +157,7 @@ class RefreshTokenNeverChangesTheOutcomeTests(unittest.TestCase):
     """It runs *after* ``_set_outcome``; it must not be able to alter the verdict."""
 
     def _enabled(self, **kwargs):
-        return _workflow(
-            config={"registration": {"obtain_refresh_token": True}}, **kwargs
-        )
+        return _workflow(config={"registration": {"obtain_refresh_token": True}}, **kwargs)
 
     def test_a_failed_exchange_leaves_success_and_error_untouched(self):
         workflow = self._enabled()
@@ -217,7 +207,12 @@ class BothOrchestrationsAreWiredTests(unittest.TestCase):
     """
 
     def test_every_set_outcome_is_followed_by_the_exchange(self):
-        source = inspect.getsource(registration_handlers)
+        # The two orchestrations live in two modules since the 2026-10-08 split:
+        # the fresh path stays in ``registration_handlers``, the resumed path
+        # moved to ``registration_resume``.  Scanning only one would leave the
+        # other unchecked -- exactly the "wired into one path only" failure this
+        # class exists to catch.
+        source = inspect.getsource(registration_handlers) + inspect.getsource(registration_resume)
         settled = source.count("self._set_outcome()")
         exchanged = source.count("self.obtain_oauth_refresh_token()")
 
@@ -225,8 +220,7 @@ class BothOrchestrationsAreWiredTests(unittest.TestCase):
         self.assertEqual(
             exchanged,
             settled,
-            "every orchestration that settles the outcome must also offer the "
-            "opt-in refresh-token exchange",
+            "every orchestration that settles the outcome must also offer the opt-in refresh-token exchange",
         )
 
 
@@ -290,12 +284,13 @@ class TheExchangeIsImportedAtModuleScopeTests(unittest.TestCase):
         uncalled while the real one is called exactly once.
         """
         workflow = _workflow(config={"registration": {"obtain_refresh_token": True}})
-        with patch(
-            "sms_tool.registration_handlers.collect_codex_oauth_tokens"
-        ) as decoy, patch(
-            "sms_tool.registration_finalize.collect_codex_oauth_tokens",
-            return_value=dict(_OAUTH_OK),
-        ) as real:
+        with (
+            patch("sms_tool.registration_handlers.collect_codex_oauth_tokens") as decoy,
+            patch(
+                "sms_tool.registration_finalize.collect_codex_oauth_tokens",
+                return_value=dict(_OAUTH_OK),
+            ) as real,
+        ):
             workflow.obtain_oauth_refresh_token()
 
         decoy.assert_not_called()

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Mapping as MappingABC
 from typing import Any
 
 from .auth_state import otp_dispatch_verdict
@@ -74,7 +75,10 @@ def wait_email_otp(self: Any) -> None:
     r = self.r
     s = self.runtime
     email_cfg = self.config.get("email_registration", {})
-    s.email_cfg = email_cfg if isinstance(email_cfg, dict) else {}
+    # RuntimeConfig freezes nested sections as MappingProxyType. Keep the
+    # operator's OTP timeout/resend settings instead of silently replacing the
+    # whole section with defaults.
+    s.email_cfg = dict(email_cfg) if isinstance(email_cfg, MappingABC) else {}
     # P0-1 判据 B：事务里还挂着 ``passwordless_email_otp_send_pending``
     # ⇒ 服务端**没有完成**派发 ⇒ 这一轮**不可能**拿到码。实测 6/6 超时的
     # run 都停在这个形状上（15 个拿到码的一个都没有），所以直接止损，

@@ -135,6 +135,7 @@ def run_sentinel_sdk(
     page_url: str,
     timeout_seconds: int = 60,
     verify_bundle_hash: bool = True,
+    challenge_proof: str = "",
 ) -> str:
     """Run the SDK against one server challenge and return its JSON token."""
     flow = str(flow or "").strip()
@@ -145,6 +146,10 @@ def run_sentinel_sdk(
         raise SentinelRunnerError("sentinel_runner_missing_device_id")
     if not isinstance(challenge, Mapping) or not str(challenge.get("token") or "").strip():
         raise SentinelRunnerError("sentinel_runner_invalid_challenge")
+    # 🔴 turnstile.dx 与取 challenge 的那份 requirements p 绑定（见 runner.js
+    # ``handleIframeMessage`` 注释）。不带这份 proof 时，VM 内 SDK 会拿它
+    # 重新采样的另一份 p 去 dx 解码 —— 与服务器加密用的密钥不一致。
+    challenge_proof = str(challenge_proof or "").strip()
 
     sdk_path, runner_path = validate_runtime_bundle(verify_hash=verify_bundle_hash)
     screen = str(profile.get("screen") or "1920x1080")
@@ -217,6 +222,8 @@ def run_sentinel_sdk(
             "--challenge-file",
             str(challenge_path),
         ]
+        if challenge_proof:
+            command.extend(["--challenge-proof", challenge_proof])
         env = dict(os.environ)
         for key in (
             "SENTINEL_COOKIE",

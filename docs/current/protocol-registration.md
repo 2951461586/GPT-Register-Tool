@@ -14,7 +14,7 @@ rate; see [Validation limits](#validation-limits).
 | --- | --- |
 | Protocol step functions (signin, authorize, continue, OTP, TOTP) | `sms_tool/auth_flow/` (`steps`, `signup`, `login`, `otp`, `totp`) |
 | Stage order, runtime state, persistence, create account | `sms_tool/registration_handlers.py` |
-| Persistence seam, stage executor, pure helpers, email-OTP stages | `sms_tool/registration_persistence.py`, `registration_stage_runner.py`, `registration_protocol_helpers.py`, `registration_otp_stages.py` |
+| Persistence seam, stage executor, pure helpers, email-OTP stages, edge-challenge hook, resume stage, Sentinel stages | `sms_tool/registration_persistence.py`, `registration_stage_runner.py`, `registration_protocol_helpers.py`, `registration_otp_stages.py`, `registration_edge_challenge.py`, `registration_resume.py`, `registration_sentinel_stages.py` |
 | Account creation and OTP validate wire calls | `sms_tool/accounts/account_creation.py` |
 | Sentinel token issuance | `sms_tool/sentinel/` (facade `sms_tool/sentinel_tokens.py`) |
 | AT probe, result contract, funnel | `sms_tool/registration_outcome.py`, `registration_result.py`, `registration_funnel.py` |
@@ -114,7 +114,7 @@ map shared by the registration and payment lanes; `issue_sentinel_flow` resolves
 through it at call time. Registered there are both checkout flows, and they are
 **not** interchangeable:
 
-- **Checkout create** mints `chatgpt_checkout` — `CHECKOUT_SENTINEL_FLOW` at `sms_tool/sentinel/client.py:44`, issued by `issue_checkout_sentinel` at `sms_tool/sentinel/client.py:499`.
+- **Checkout create** mints `chatgpt_checkout` — `CHECKOUT_SENTINEL_FLOW` at `sms_tool/sentinel/client.py:44`, issued by `issue_checkout_sentinel` at `sms_tool/sentinel/client.py:510`.
 - **Checkout approve** mints `checkout_session_approval` — its own constant `UPI_SENTINEL_APPROVAL_FLOW` at `sms_tool/upi_link/constants.py:42`. Two rails request it explicitly: the UPI approve stage passes `sentinel_flow=UPI_SENTINEL_APPROVAL_FLOW` at `sms_tool/upi_link/stages.py:712`, and `PPLinkExtractor._fresh_approval_sentinel` mints it at `sms_tool/paypal_extract.py:523`.
 
   🔴 **How to write a guardable pointer here** — two rules, both learned the hard
@@ -268,17 +268,125 @@ path test inline.
 | `_is_login_password_step` | `/log-in/password` (via `_login_password_page_type`) |
 | `_invalid_state_auth_response` | `invalid_state` / "session is no longer valid" — retryable `auth_state` class |
 
+## In-flow edge-challenge judgement (P0-B, S0 + S1)
+
+Until 2026-10-07 the protocol lane had **no** exit-level challenge judgement after
+preflight: every in-flow `403`/`429` collapsed into `session_circuit_open`
+(`sms_tool/http_client.py`), with no way to tell "this exit was challenged" from
+"the request was refused". The gap is expensive because it opens *after* a
+mailbox and its OTP were already spent, so a missed challenge loses a mailbox
+slot permanently while a false positive costs one extra request.
+
+`sms_tool/proxy_edge_probe.edge_challenge_verdict(response)` is that judgement.
+It is **pure and total** and answers one of three values:
+
+| Value | Meaning |
+| --- | --- |
+| `challenge` | an exit-level Cloudflare challenge — the reply classifies `BLOCKED` in the probe's own vocabulary, i.e. reachable but useless for registration |
+| `not_challenge` | the `403`/`429` is not about the exit: an already-deactivated account (excluded first, per `accounts/account_terminal.py`), or a plain `429` the origin answered |
+| `unknown` | any status other than `403`/`429` — never guess, because a successful OTP reply legitimately contains the word "challenge" (`auth_flow/otp.py`'s `login_challenge` transaction arm) |
+
+Three rules are load-bearing: only `403`/`429` get a yes/no answer; the
+judgement **reuses** `classify_edge_response` instead of a second set of
+host/header matchers; and a deactivated account is excluded before the challenge
+read, because rotating the egress cannot change that answer.
+
+**What it does today — nothing but a name.**
+`registration.edge_challenge_discrimination` (default **true**) appends a
+trailing `:edge_challenge` to `SessionCircuitOpen`'s message:
+
+```text
+session_circuit_open:http_403:retry_after=900s:edge_challenge
+```
+
+The leading `session_circuit_open` token never moves, so `failure_registry`
+classifies it exactly as before. Rotation and browser handoff are separate
+switches that stay **off**; the judgement is observation only, which is why the
+suffix can ship on by default (the A/B in
+`plan-2026-10-05-inflow-challenge-handoff.md` §4 has no other data source for
+"did a challenge happen at all").
+
+🔴 **Where it lives, and why not in `auth_state.py`.**
+`plan-2026-10-05` suggested `auth_state.py`; that is a cycle, because
+`auth_state` already imports `http_client`, and `http_client` is the owner of the
+`session_circuit_open` name the suffix rides on. The judgement therefore sits
+next to `classify_edge_response`, and `auth_state` will re-export it when the
+first consumer needs it (S2) rather than carrying an unused import.
+
+### The three invariants (§3.5)
+
+| # | Invariant | Pinned by |
+| --- | --- | --- |
+| 1 | the circuit is written only *after* the challenge path has failed, never before it — a challenge-labelled `403` still opens the breaker | `tests/test_edge_challenge_verdict.py::CircuitInvariantTests::test_a_challenge_labelled_403_still_opens_the_circuit` |
+| 2 | after rotating the exit the circuit must be cleared, **including the challenge label** (`clear_session_circuit`), or the next exit inherits a challenge that never happened there | `...::test_clear_session_circuit_resets_the_challenge_label` |
+| 3 | the challenge path adds no new failure **class** — the suffix must not re-classify or change terminality | `...::test_the_suffix_does_not_change_the_failure_class` |
+
+One deliberate deviation from the plan's stage table: S0's judgement reaches the
+error string through `http_client`'s circuit rather than through the `auth_flow`
+steps, because that is where the `session_circuit_open` name is produced. The
+`auth_flow`-side consumer arrives with S2's `rotate_exit`, through `deps`'s
+existing `from ..auth_state import (...)` statement (which costs no new
+cross-directory edge).
+
+### Rotating the exit once (S2)
+
+`registration.edge_challenge_rotate_exit` (default **false**) turns the
+judgement into one action: on a challenge, move the run to a new exit **in the
+same pool** and retry the one request, exactly once.
+
+| Piece | Owner | Why there |
+| --- | --- | --- |
+| the retry, and the once-per-request cap | `http_client.request_with_retry` | it owns the response and the attempt budget |
+| the decision + the exit move | the registration handler, through the session's `_openai_edge_challenge_hook` | it owns `s.proxy`, the pool cursor, the audit counters and `clear_session_circuit` |
+| the counters | `proxy_audit` (`edge_challenge_hits` / `edge_challenge_unknown` / `edge_challenge_rotations` / `edge_challenge_rotate_failed`) → the batch funnel's `edge_challenge` block | they are **counts, not identities**: the before/after exit is a sticky-session credential and is never audited |
+
+Two consequences worth stating plainly:
+
+* **A single-slot exit short-circuits and says so.** A provider with no sticky
+  session id leaves the URL unchanged; that is counted as a *failed* rotation,
+  not as a successful one, or the A/B's `rotate` arm would be an `observe` arm
+  wearing a label.
+* **`unknown` rotates too, under its own key** (§7-5). The asymmetry says spend
+  the uncertainty on the cheap side, but merging it into `edge_challenge_hits`
+  would dilute the number the manipulation check reads. From
+  `request_with_retry` the `unknown` branch is currently unreachable (the policy
+  only runs on `403`/`429`, and the verdict answers `unknown` only off those
+  statuses); it is written and tested so the contract is complete for the next
+  caller.
+
+**Not landed: the browser handoff (S4).** The sign-off chose "reuse
+`browser_flow`, default to returning to the protocol lane", and that needs a
+browser-driver mode which does not exist yet — `run_browser_registration` runs a
+*complete* registration and accepts no cookie jar. Landing
+`registration.edge_challenge_browser_handoff` before that mode exists would be a
+switch that nothing executes, which is the fake-comparison failure the mechanism
+gate above exists to prevent. See `plan-2026-10-05` §3.4.2.
+
 ## Validation limits
 
 Offline tests cover step ordering, redirect classification and Sentinel header
 plumbing. They do not establish a live registration or login success rate.
 Changing the lane choice, the `send` method, the continue-on-verified-page
-toggle, or Sentinel flow selection requires a controlled live comparison, not
-an offline transaction test. The pre-registered A/B design, collection and
-comparison for the three outstanding comparisons (preflight login endpoint,
-Cloudflare-challenge observation, Sentinel password bundle) is
-[`registration-ab-runbook.md`](registration-ab-runbook.md), driven by
-`scripts/registration_ab.py`.
+toggle, the password-page prime, the signup continue's declared screen (on the
+lane's own continue or on the extra one issued from `/email-verification`), or
+Sentinel flow selection requires a controlled live comparison, not an offline
+transaction test. The pre-registered A/B design, collection and comparison for
+the outstanding comparisons (preflight login endpoint, Cloudflare-challenge
+observation, Sentinel password bundle, password-page prime, signup-continue
+screen hint, about-you page prime, create-account disallowed backoff,
+email-verification continue hint) is
+[`registration-ab-runbook.md`](registration-ab-runbook.md),
+driven by `scripts/registration_ab.py`.
+
+🔴 **A comparison needs two manipulation checks, not one.** Verifying that the
+config carried the toggle is not enough: on 2026-10-07 the
+`signup_continue_screen_hint` arm ran with the toggle on while the code path was
+unreachable, so the arm measured nothing and its 5/5 failure was almost read as
+"the hypothesis is false". `collect` therefore also records whether the arm's
+**log** shows the toggle's own line (`mechanism_ok`), and `compare` returns
+`manipulation_failed` -- ahead of `underpowered` -- when it does not. New
+toggles must register a stdout mechanism line in `scripts/registration_ab.py`;
+see the runbook's mechanism table.
 
 ## Read-only registration probe
 

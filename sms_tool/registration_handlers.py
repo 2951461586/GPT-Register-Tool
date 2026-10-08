@@ -8,6 +8,9 @@ re-exported here so every historical import path keeps working:
 * ``registration_stage_runner`` -- ``RegistrationAbort`` and the stage executor
 * ``registration_protocol_helpers`` -- pure predicates/formatters + safe int/float
 * ``registration_otp_stages`` -- the send/wait/validate email-OTP trio
+* ``registration_edge_challenge`` -- the in-flow edge-challenge hook and exit move
+* ``registration_resume`` -- checkpoint persistence and the post-create resume stage
+* ``registration_sentinel_stages`` -- Sentinel switch, password-page bundle and per-flow issuance
 """
 
 from __future__ import annotations
@@ -21,20 +24,27 @@ from typing import Any, Callable, Mapping
 from curl_cffi import requests as curl_requests
 
 from .codex_oauth import collect_codex_oauth_tokens
-from .auth_headers import current_auth_fingerprint, set_auth_fingerprint
+from .auth_headers import set_auth_fingerprint
 from .auth_state import signup_lane_verdict
 from .desktop_ipc import emit_event
 from .failure_registry import (
     PASSWORDLESS_SIGNUP_CODE,
     is_passwordless_signup_mismatch,
 )
+
+#: Print budget for the ``user/register`` response line (see
+#: ``_post_user_register``). Named so the observability contract is greppable.
+_USER_REGISTER_PRINT_BUDGET = 1200
 from .sanitizer import account_reference, describe_exception
 from .telemetry import current_run_id
-from .registration_cancel import RegistrationCancelled, ensure_not_cancelled
+from .registration_cancel import RegistrationCancelled, cancellable_sleep, ensure_not_cancelled
 from .registration_outcome import needs_manual_session_recovery
 from .registration_result import build_registration_result
 from .registration_operations import RegistrationOperations
+from . import registration_edge_challenge as _edge_challenge
 from . import registration_otp_stages as _otp_stages
+from . import registration_resume as _resume
+from . import registration_sentinel_stages as _sentinel_stages
 from .registration_protocol_helpers import (
     _create_account_response_line,
     _is_existing_login_dead_end_error,
@@ -95,6 +105,9 @@ def _apply_protocol_fingerprint(ops: Any, config: Any, proxy: str) -> str:
         country = str(infer_proxy_country(proxy) or "")
         ops.set_fingerprint_geo(country)
         return country
+
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class RegistrationEmailWorkflow:
@@ -194,7 +207,7 @@ class RegistrationEmailWorkflow:
         config_scope.__enter__()
         try:
             ensure_not_cancelled()
-            self._bootstrap()
+            self._run_bootstrap()
             resumed = self._resume_post_create()
             if resumed is not None:
                 return resumed
@@ -268,6 +281,18 @@ class RegistrationEmailWorkflow:
             result["existing_login_error"] = self.runtime.existing_login_error
         result["registration_machine"] = self.machine.snapshot()
         return result
+
+    def _edge_challenge_rotate_exit_enabled(self) -> bool:
+        return _edge_challenge.edge_challenge_rotate_exit_enabled(self)
+
+    def _install_edge_challenge_hook(self, session: Any) -> None:
+        return _edge_challenge.install_edge_challenge_hook(self, session)
+
+    def _on_edge_challenge(self, session: Any, verdict: str, allow_rotate: bool) -> bool:
+        return _edge_challenge.on_edge_challenge(self, session, verdict, allow_rotate)
+
+    def _count_edge_challenge_rotate_failure(self, reason: str) -> None:
+        return _edge_challenge.count_edge_challenge_rotate_failure(self, reason)
 
     def _run_stage(self, state: RegistrationState, label: str, handler: Callable[[], Any]) -> Any:
         r = self.r
@@ -354,74 +379,64 @@ class RegistrationEmailWorkflow:
         raise RegistrationAbort(error)
 
     def _checkpoint_payload(self) -> dict[str, Any]:
-        # 数据契约归 registration_checkpoint（候选1拆解）；编排仍在此处。
-        payload = registration_checkpoint.build_checkpoint_payload(
-            self.runtime, lambda: self.r._mailbox_snapshot(self.runtime.mailbox)
-        )
-        payload["auth_fingerprint_profile"] = str(current_auth_fingerprint().get("impersonate") or "")
-        return payload
+        return _resume.checkpoint_payload(self)
 
     def _persist_checkpoint(self, state: str) -> None:
-        s = self.runtime
-        if not s.username:
-            return
-        try:
-            registration_checkpoint.persist_checkpoint(
-                self.persistence,
-                self.config,
-                s,
-                self._checkpoint_payload(),
-                state,
-            )
-        except Exception as exc:
-            print(f"  [Checkpoint] persist warning: {describe_exception(exc)}")
+        return _resume.persist_checkpoint(self, state)
 
     def _resume_post_create(self) -> dict[str, Any] | None:
-        mailbox_email = str(getattr(self.runtime.mailbox, "email", "") or "").strip()
-        if not mailbox_email or self.input_mailbox is None:
-            return None
-        payload = self.runtime.resume_checkpoint or registration_checkpoint.load_resumable_checkpoint(
-            self.persistence, mailbox_email, self.config
-        )
-        if payload is None:
-            return None
-        if not payload.get("access_token"):
-            error = registration_checkpoint.session_recovery_error(payload)
-            if error:
-                self._abort(error)
-        registration_checkpoint.apply_resume_payload(self.runtime, payload)
-        self.runtime.username = mailbox_email
-        set_auth_fingerprint(str(payload.get("auth_fingerprint_profile") or ""))
-        print(f"[*] Resuming saved registration checkpoint for {mailbox_email}")
-        if not self.runtime.access_token:
-            s = self.runtime
-            s.session = _new_registration_session(s.proxy)
-            registration_checkpoint.restore_session_cookies(s.session, payload)
-            s.base_headers = (
-                dict(payload["auth_headers"])
-                if isinstance(payload.get("auth_headers"), dict)
-                else (self.r.openai_auth_headers(s.device_id, accept="application/json", include_trace=True))
-            )
-            s.session_recovery_attempts += 1
-            self._persist_checkpoint(registration_checkpoint.SESSION_PENDING_STATE)
-            logging.getLogger(__name__).info(
-                "Resuming created-account session attempt=%s; signup and OTP remain disabled",
-                s.session_recovery_attempts,
-                extra={"event": "auth_session_recovery"},
-            )
-            self._run_stage(RegistrationState.AUTH_SESSION, "8-Resume auth session", self.fetch_auth_session)
-        self._run_stage(RegistrationState.ACCESS_TOKEN_PROBE, "8d-Resume AT probe", self.probe_access_token)
-        self._set_outcome()
-        self.obtain_oauth_refresh_token()
-        return self._run_stage(RegistrationState.FINALIZE, "10-Finalize resumed registration", self.finalize)
+        return _resume.resume_post_create(self)
 
     def _has_resume_checkpoint(self) -> bool:
-        if self.input_mailbox is None:
-            return False
-        return (
-            registration_checkpoint.load_resumable_checkpoint(self.persistence, self.runtime.username, self.config)
-            is not None
-        )
+        return _resume.has_resume_checkpoint(self)
+
+    def _run_bootstrap(self) -> None:
+        """Wrap ``_bootstrap`` in the stage failure taxonomy.
+
+        ``_bootstrap`` runs before the first ``RegistrationState`` stage, but
+        its body makes the same kind of transport calls the wrapped stages do
+        (proxy preflight, mailbox claim, mailbox snapshot). A transport
+        failure there used to escape to ``run()``'s catch-all and be reported
+        as ``registration_internal_error:RuntimeError:...`` — a name that
+        means "code defect" for a class of failure that is a pure network
+        event. Measured 2026-10-06 (runs 25e5aa9c / 91f8fc69 / 525df910):
+        three such 30s silent deaths, all curl transport errors, all only
+        recovered because the batch layer's ``network`` class happened to
+        catch them. The failure goes through the same classification as every
+        stage's transport arm instead.
+        """
+        r = self.r
+        r._tick("0-Bootstrap")
+        self._timing_open = True
+        try:
+            self._bootstrap()
+        except (RegistrationAbort, RegistrationCancelled):
+            raise
+        except (
+            NameError,
+            AttributeError,
+            ImportError,
+            KeyError,
+            TypeError,
+            IndexError,
+            UnboundLocalError,
+            NotImplementedError,
+            RecursionError,
+        ) as exc:
+            # Same tuple as ``_run_stage``: programming/contract errors keep
+            # the internal label (see the comment there for why IndexError
+            # must not fall into the transport arm).
+            raise RegistrationAbort(f"bootstrap_internal:{type(exc).__name__}:{exc}") from exc
+        except (MailboxEndpointUnavailableError, MailboxAuthInvalidError):
+            # ``run()`` owns these two as a dedicated arm (their messages are
+            # operator-facing); re-raise unchanged so that arm keeps them.
+            raise
+        except Exception as exc:
+            raise RegistrationAbort(f"bootstrap_transport:{exc}") from exc
+        finally:
+            if self._timing_open:
+                r._safe_tock()
+                self._timing_open = False
 
     def _bootstrap(self) -> None:
         r = self.r
@@ -566,6 +581,7 @@ class RegistrationEmailWorkflow:
         print(f"[*] Username: {s.username}  Password: [stored]  Name: {s.full_name}  Birth: {s.birthdate}")
         self._persist_checkpoint("identity_ready")
         s.session = _new_registration_session(s.proxy)
+        self._install_edge_challenge_hook(s.session)
         if s.registration_mode == "passwordless":
             # Keep the Web/NextAuth flow isolated from the Sentinel extraction
             # prime session. Importing its auth.openai.com login cookies creates
@@ -588,86 +604,13 @@ class RegistrationEmailWorkflow:
         s.auth_flow_started = _safe_int(time.time())
 
     def _password_sentinel_bundle_enabled(self) -> bool:
-        """``registration.sentinel_password_bundle`` (default off).
-
-        Off by default because it changes the Sentinel payload shape -- the
-        password page is then primed with one shared requirements proof, the
-        way a browser iframe does it -- and that still owes a controlled live
-        comparison.  See ``docs/current/protocol-registration.md``.
-        """
-        registration = (self.config or {}).get("registration")
-        registration = registration if isinstance(registration, Mapping) else {}
-        value = registration.get("sentinel_password_bundle", False)
-        return value not in (False, 0, "0", "false", "False", "no", "No", "off", "")
+        return _sentinel_stages.password_sentinel_bundle_enabled(self)
 
     def _prime_password_sentinel_bundle(self) -> None:
-        """Pre-mint the password page's Sentinel flows from one shared proof.
+        return _sentinel_stages.prime_password_sentinel_bundle(self)
 
-        Only the password lane gets this: it is the page a browser primes a
-        bundle for.  A failure is non-fatal -- the per-flow issuance in
-        ``_issue_sentinel`` is still there and is the untouched default path.
-        """
-        s = self.runtime
-        if s.registration_mode == "passwordless" or not self._password_sentinel_bundle_enabled():
-            return
-        from .sentinel import issue_sentinel_bundle, sentinel_backend
-
-        if sentinel_backend(self.config) != "node_runner":
-            return
-        try:
-            bundle = issue_sentinel_bundle(
-                flows=("authorize_continue", "username_password_create"),
-                device_id=s.device_id,
-                session=s.session,
-                proxy=s.proxy,
-            )
-        except Exception as exc:
-            logging.getLogger(__name__).warning(
-                "Sentinel bundle for the credential flow unavailable; falling back to per-flow issuance: %s",
-                describe_exception(exc),
-            )
-            return
-        merged = dict(s.sentinel_data)
-        for key, value in bundle.items():
-            if key in {"cookie_str", "oai_did", "sentinel_source"} or not str(value or "").strip():
-                continue
-            merged[key] = value
-        s.sentinel_data = merged
-        s.sentinel_token = str(s.sentinel_data.get("sentinel_token") or s.sentinel_token)
-        s.sentinel_authorize_token = str(
-            s.sentinel_data.get("sentinel_authorize_continue_token") or s.sentinel_authorize_token
-        )
-        s.sentinel_so_token = str(s.sentinel_data.get("sentinel_so_token") or s.sentinel_so_token)
-        logging.getLogger(__name__).info("Sentinel password flow bundle primed (shared requirements proof)")
-
-    def _issue_sentinel(self, flow: str) -> Any:
-        from .sentinel import issue_sentinel_flow, sentinel_backend
-
-        s = self.runtime
-        issued = issue_sentinel_flow(
-            flow=flow,
-            device_id=s.device_id,
-            session=s.session,
-            proxy=s.proxy,
-            supplied_data=s.sentinel_data,
-            config=self.config,
-        )
-        data = dict(s.sentinel_data)
-        if flow == "username_password_create":
-            data["sentinel_token"] = issued.token
-            s.sentinel_token = issued.token
-        elif flow == "authorize_continue":
-            data["sentinel_authorize_continue_token"] = issued.token
-            data["sentinel_authorize_continue_so_token"] = issued.so_token
-            s.sentinel_authorize_token = issued.token
-        elif flow == "oauth_create_account":
-            data["sentinel_oauth_token"] = issued.token
-            data["sentinel_so_token"] = issued.so_token
-            s.sentinel_so_token = issued.so_token
-        data["oai_did"] = issued.device_id
-        data["sentinel_source"] = str(data.get("sentinel_source") or sentinel_backend(self.config))
-        s.sentinel_data = data
-        return issued
+    def _issue_sentinel(self, flow: str, *, force_fresh: bool = False) -> Any:
+        return _sentinel_stages.issue_sentinel(self, flow, force_fresh=force_fresh)
 
     def auth_flow(self) -> None:
         r = self.r
@@ -829,6 +772,17 @@ class RegistrationEmailWorkflow:
             s.password_unknown = True
             print("  Registration mode: passwordless_signup (HAR login_or_signup)")
             return
+        # Navigation-first: establish the password page *before* the POST that
+        # claims it.  Gated because it adds a request to a lane whose current
+        # failure is one step later; see the switch's docstring for the
+        # measurement and for what it is meant to separate.
+        if self.r._prime_create_account_password_page_enabled():
+            self.r._prime_create_account_password_page(
+                s.session,
+                s.auth_base,
+                s.base_headers,
+                str(s.signup_state.get("url") or ""),
+            )
         self._post_user_register()
         if s.reg_response.status_code != 200:
             err_code = s.reg_data.get("error", {}).get("code", "")
@@ -964,9 +918,21 @@ class RegistrationEmailWorkflow:
         try:
             s.reg_data = s.reg_response.json()
         except (ValueError, TypeError):
-            s.reg_data = {"_raw": s.reg_response.text[:300]}
+            s.reg_data = {"_raw": s.reg_response.text[:_USER_REGISTER_PRINT_BUDGET]}
         print(f"  Status: {s.reg_response.status_code}")
-        print(f"  Response: {r._sanitize_text(json.dumps(s.reg_data, ensure_ascii=False)[:300])}")
+        # 1200, not 300: the 200 body's ``oai-client-auth-session`` carries
+        # ``email_verification_mode`` in cleartext, and the server switches it
+        # between the signup-state value (passwordless_signup) and a third,
+        # still-unnamed 10-char enum right at the send step (measured 2026-10-07,
+        # batch p1_5_hint_arm_5addr: the enhanced dump shows
+        # "[REDACTED](len=10)" at after_otp_send). The 300 budget cut the wire
+        # body at exactly the country_code_hint key, before the mode key -- so
+        # the one value that would name the transaction arm never reached the
+        # log. The sanitizer still redacts secrets inside this line; only the
+        # print budget changes.
+        print(
+            f"  Response: {r._sanitize_text(json.dumps(s.reg_data, ensure_ascii=False)[:_USER_REGISTER_PRINT_BUDGET])}"
+        )
         return s.reg_response
 
     def send_email_otp(self) -> None:
@@ -984,26 +950,132 @@ class RegistrationEmailWorkflow:
     def validate_email_otp(self) -> None:
         return _otp_stages.validate_email_otp(self)
 
+    def _prime_about_you_page_enabled(self) -> bool:
+        """``registration.prime_about_you_page`` (default **False**).
+
+        **Why this exists.**  ``create_account`` POSTs with
+        ``Referer: {auth_base}/about-you`` -- the request *claims* the profile
+        page state, but nothing ever navigates there.  This is the same shape
+        of gap the password page had (``_prime_create_account_password_page``):
+        a Referer asserting a page state that no GET established.  turb's
+        protocol client navigates to about-you first and says why
+        (``navigate_about_you``: "先真实导航到 about-you，让 auth session/page
+        state 与 create_account 一致"), and SunnyRegister issues a
+        ``client_auth_session_dump`` GET for the same purpose.
+
+        Off by default: create_account currently answers 200 on healthy runs;
+        adding a request to a working stage needs its own A/B
+        (``p1-6-prime-about-you-page``) first.  Non-fatal by contract: an
+        unexpected landing is reported, never raised, so this cannot turn a
+        healthy stage into a new failure mode.
+        """
+        registration = (self.config or {}).get("registration")
+        registration = registration if isinstance(registration, Mapping) else {}
+        value = registration.get("prime_about_you_page", False)
+        return value in (True, 1, "1", "true", "True", "yes", "Yes", "on")
+
+    def _prime_about_you_page(self) -> None:
+        """GET ``/about-you`` so the profile-page state exists before the POST.
+
+        Only the navigation gap turb closes with ``navigate_about_you``; the
+        OTP continue step may already have landed here, in which case the GET
+        is idempotent navigation, not a new state.  Deliberately **non-fatal**:
+        the POST's own verdict is the contract, and a failed prime must not
+        abort a stage that works without it.
+        """
+        s = self.runtime
+        try:
+            response = self.r._follow_continue_url(
+                s.session,
+                f"{s.auth_base}/about-you",
+                s.base_headers,
+                referer=f"{s.auth_base}/email-verification",
+                label="About you page prime",
+            )
+            final_url = str(getattr(response, "url", "") or "")
+            if "/about-you" not in final_url:
+                print(f"  About you page prime landed off the profile step: {final_url[:120]}")
+        except Exception as exc:
+            print(f"  About you page prime warning: {describe_exception(exc)}")
+
+    def _create_account_disallowed_backoff_delays(self) -> tuple[int, ...]:
+        """Bounded retry delays for ``registration_disallowed`` on create_account.
+
+        ``registration.create_account_disallowed_backoff`` (default **False**).
+
+        **Why this exists.**  SunnyRegister ``_create_account`` measures that
+        OpenAI can temporarily reject a fresh registration right after the OTP
+        is accepted while its IP/Sentinel risk window settles, and Remail
+        addresses are especially sensitive to that window; its protocol client
+        retries with a bounded long backoff (``[8, 20, 45]`` seconds, refreshing
+        the Sentinel proof each round) and only for that mailbox family.
+        This repo classifies ``registration_disallowed`` as the terminal
+        ``account`` class (``failure_registry``), so one transient rejection
+        permanently dead-ends the address.
+
+        Off by default: the classification as ``account`` is the current
+        contract and every retry spends a Sentinel proof; whether the risk
+        window is real on this repo's exits needs its own A/B
+        (``p1-7-create-disallowed-backoff``).  When enabled, the retry keeps
+        the same ``account``-class terminal verdict if the final attempt also
+        fails -- the toggle changes *when* the verdict is reached, never *what*
+        it eventually says.
+        """
+        registration = (self.config or {}).get("registration")
+        registration = registration if isinstance(registration, Mapping) else {}
+        value = registration.get("create_account_disallowed_backoff", False)
+        if value not in (True, 1, "1", "true", "True", "yes", "Yes", "on"):
+            return ()
+        return (8, 20, 45)
+
     def create_account(self) -> None:
         r = self.r
         s = self.runtime
-        create_sentinel = self._issue_sentinel("oauth_create_account")
-        response = r.request_with_retry(
-            s.session,
-            "post",
-            f"{s.auth_base}/api/accounts/create_account",
-            label="Create account",
-            json={"name": s.full_name, "birthdate": s.birthdate},
-            headers=r._auth_request_headers(
-                s.base_headers,
-                did=s.device_id,
-                referer=f"{s.auth_base}/about-you",
-                origin=s.auth_base,
-                sentinel_token=create_sentinel.token,
-                sentinel_so_token=create_sentinel.so_token,
-            ),
-            impersonate=r.auth_impersonate(),
-        )
+        if self._prime_about_you_page_enabled():
+            self._prime_about_you_page()
+        backoff_delays = self._create_account_disallowed_backoff_delays()
+        response = None
+        create_sentinel = None
+        for attempt in range(len(backoff_delays) + 1):
+            # Round 0 may consume a pre-minted bundle token; every retry round
+            # must mint a genuinely fresh proof (see ``_issue_sentinel``).
+            create_sentinel = self._issue_sentinel("oauth_create_account", force_fresh=attempt > 0)
+            response = r.request_with_retry(
+                s.session,
+                "post",
+                f"{s.auth_base}/api/accounts/create_account",
+                label="Create account",
+                json={"name": s.full_name, "birthdate": s.birthdate},
+                headers=r._auth_request_headers(
+                    s.base_headers,
+                    did=s.device_id,
+                    referer=f"{s.auth_base}/about-you",
+                    origin=s.auth_base,
+                    sentinel_token=create_sentinel.token,
+                    sentinel_so_token=create_sentinel.so_token,
+                ),
+                impersonate=r.auth_impersonate(),
+            )
+            if response.status_code == 200 or attempt >= len(backoff_delays):
+                break
+            body = ""
+            try:
+                body = json.dumps(r._json_or_raw(response, limit=600), ensure_ascii=False)
+            except Exception:
+                body = str(getattr(response, "text", "") or "")[:600]
+            if "registration_disallowed" not in body:
+                break
+            delay = backoff_delays[attempt]
+            print(
+                f"  Create account temporarily disallowed; retrying in {delay}s "
+                f"with a fresh Sentinel proof ({attempt + 1}/{len(backoff_delays)})"
+            )
+            if cancellable_sleep(delay):
+                raise RegistrationCancelled()
+        # The loop always runs at least once, so the type-checker can't infer
+        # that ``response`` is bound here; name the invariant instead of
+        # sprinkling Optional guards through the parsing block below.
+        assert response is not None and create_sentinel is not None
         try:
             s.create_data = response.json()
         except (ValueError, TypeError):
@@ -1146,6 +1218,7 @@ class RegistrationEmailWorkflow:
         s.login_session = curl_requests.Session()
         if s.proxy:
             s.login_session.proxies = {"http": s.proxy, "https": s.proxy}
+        self._install_edge_challenge_hook(s.login_session)
         r._set_oai_did_cookie(s.login_session, s.device_id)
         try:
             existing_login = r._login_existing_account_with_email_otp(

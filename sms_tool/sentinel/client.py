@@ -248,7 +248,14 @@ def _cookie_header(session: Any, device_id: str) -> str:
     try:
         get_dict = getattr(cookies, "get_dict", None)
         if callable(get_dict):
-            pairs.extend(f"{name}={value}" for name, value in get_dict().items() if name and value)
+            # ``callable()`` does not narrow the attribute type for a type
+            # checker, so ``get_dict().items()`` reads as an access on ``object``.
+            # Bind the result and check it instead -- same behaviour (a non-dict
+            # return used to raise ``AttributeError``, which this block's
+            # ``except Exception`` already swallowed), and the narrow is visible.
+            cookie_map = get_dict()
+            if isinstance(cookie_map, dict):
+                pairs.extend(f"{name}={value}" for name, value in cookie_map.items() if name and value)
     except Exception:
         pass
     if not any(item.lower().startswith("oai-did=") for item in pairs):
@@ -264,7 +271,7 @@ def _challenge(
     profile: Mapping[str, Any],
     timeout_seconds: int,
     requirements_proof: str = "",
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], str]:
     # ``requirements_proof`` lets a caller reuse one proof across several flows,
     # which is what a real browser does on the password page.  Empty (the
     # default for a single flow) generates a fresh proof as before.
@@ -294,7 +301,10 @@ def _challenge(
         raise SentinelIssueError("sentinel_challenge_invalid_json") from exc
     if not isinstance(payload, dict) or not str(payload.get("token") or "").strip():
         raise SentinelIssueError("sentinel_challenge_incomplete")
-    return payload
+    # The proof travels with the challenge: the server binds ``turnstile.dx``
+    # to the ``p`` that fetched it, and the SDK must decode with the same one
+    # (see ``run_sentinel_sdk(challenge_proof=...)``).
+    return payload, proof
 
 
 def issue_sentinel_token(
@@ -332,7 +342,7 @@ def issue_sentinel_token(
     active_profile = dict(profile or sentinel_fingerprint())
     active_profile.setdefault("session_id", str(uuid.uuid4()))
     try:
-        challenge = _challenge(
+        challenge, challenge_proof = _challenge(
             active_session,
             flow=flow,
             device_id=device_id,
@@ -348,6 +358,7 @@ def issue_sentinel_token(
             cookie=_cookie_value(active_session, device_id, cookie_header),
             page_url=str(page_url or FLOW_PAGE_URLS[flow]),
             timeout_seconds=timeout_seconds,
+            challenge_proof=challenge_proof,
         )
     except (SentinelRunnerError, SentinelIssueError):
         raise

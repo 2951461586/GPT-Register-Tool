@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+from collections.abc import Mapping
 from pathlib import Path
 
 
@@ -13,7 +14,7 @@ RUNNER_PATH = RUNTIME_DIR / "sentinel-runner.js"
 # Digests are computed over newline-normalised bytes (see ``_digest``), so the
 # pinned values below are stable regardless of the working tree's line endings.
 SDK_SHA256 = "de9ae60f5bcd3b8f57f5f86628630e28022f72b47056a87f37d4d8a0b5b88537"
-RUNNER_SHA256 = "a90362ebd198b2baf3056da8d315aa4cb7c2f354e86dcf98bab9d3259e2563e7"
+RUNNER_SHA256 = "594a9b83b5e46f3cd877c26c7ed8800fedf4146c954ee0ac99fd36ee0b51b93e"
 DEFAULT_SENTINEL_VERSION = "20260219f9f6"
 
 
@@ -57,7 +58,12 @@ def sentinel_version() -> str:
 
             config = current_config_data()
             email = config.get("email_registration")
-            email = email if isinstance(email, dict) else {}
+            # ``Mapping``, not ``dict``: ``current_config_data()`` freezes every
+            # section into a ``mappingproxy`` (``config._freeze``), so a
+            # ``dict`` check discarded ``email_registration.sentinel_version``
+            # in production while plain-dict tests kept it green (2026-10-07
+            # P1-D class).
+            email = email if isinstance(email, Mapping) else {}
             configured = str(email.get("sentinel_version") or config.get("sentinel_version") or "").strip()
         except Exception:
             configured = ""

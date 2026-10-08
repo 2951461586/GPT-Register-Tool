@@ -216,6 +216,117 @@ def test_runner_keeps_cookie_out_of_process_arguments():
     assert all("secret-value" not in str(part) for part in command)
 
 
+def test_runner_forwards_the_challenge_proof_when_given():
+    """``challenge_proof`` 贯通到 ``--challenge-proof``；空串则不出现在命令里。
+
+    🔴 turnstile.dx 与**取 challenge 的那份 p** 绑定。真实浏览器里两个是同一
+    份（SDK 采样 p → 用它取题 → dx 就是这份 p 加密的）。本 runner 的 challenge
+    文件由 Python 用自己的 proof 取回，若不带 ``--challenge-proof``，VM 内
+    SDK 拿它重新采样的另一份 p 当 cachedProof，dx 解码密钥与服务器加密密钥
+    不一致 —— turb 在同构 runner 上实测过这一坑（其 ``--challenge-proof``
+    传的就是取题 proof，本参数名与语义对齐）。
+    """
+
+    class _Completed:
+        returncode = 0
+        stderr = ""
+        stdout = json.dumps(
+            {"p": "proof", "t": "turnstile", "c": "challenge", "id": DEVICE_ID, "flow": "authorize_continue"}
+        )
+
+    with patch("sms_tool.sentinel.runner.subprocess.run", return_value=_Completed()) as invoked:
+        run_sentinel_sdk(
+            _Response.json(),
+            flow="authorize_continue",
+            device_id=DEVICE_ID,
+            profile=PROFILE,
+            cookie=f"oai-did={DEVICE_ID}",
+            page_url="https://auth.openai.com/email-verification",
+            challenge_proof="gAAAAACthe-fetching-proof",
+        )
+    command = invoked.call_args.args[0]
+    index = command.index("--challenge-proof")
+    assert command[index + 1] == "gAAAAACthe-fetching-proof"
+
+    # Without one, the flag must stay absent: the runner then falls back to the
+    # SDK's own sampling, which is the exact behaviour the offline test above
+    # (challenge-url / no-proof mode) exercises.
+    with patch("sms_tool.sentinel.runner.subprocess.run", return_value=_Completed()) as invoked_no_proof:
+        run_sentinel_sdk(
+            _Response.json(),
+            flow="authorize_continue",
+            device_id=DEVICE_ID,
+            profile=PROFILE,
+            cookie=f"oai-did={DEVICE_ID}",
+            page_url="https://auth.openai.com/email-verification",
+        )
+    assert "--challenge-proof" not in invoked_no_proof.call_args.args[0]
+
+
+def test_client_passes_the_fetching_proof_to_the_runner():
+    """client 取 challenge 用的那份 p 必须原样传给 runner。
+
+    钉的是贯通：challenge 的 dx 用 Python proof 加密，runner 的 cachedProof
+    就必须是同一个 Python proof —— 任何一处换成 SDK 重采样的 proof 都会让
+    dx 解码拿到密钥不一致的数据。
+    """
+    session = _Session()
+    emitted = json.dumps(
+        {"p": "proof", "t": "turnstile", "c": "challenge-test", "id": DEVICE_ID, "flow": "authorize_continue"}
+    )
+    with (
+        patch("sms_tool.sentinel.client.run_sentinel_sdk", return_value=emitted) as runner,
+        patch(
+            "sms_tool.sentinel.client._requirements_token",
+            return_value="gAAAAACthe-fetching-proof",
+        ),
+    ):
+        client.issue_sentinel_token(
+            flow="authorize_continue",
+            device_id=DEVICE_ID,
+            session=session,
+            profile=PROFILE,
+        )
+
+    # The fetching request carried the proof...
+    request = json.loads(session.calls[0][1]["data"])
+    assert request["p"] == "gAAAAACthe-fetching-proof"
+    # ...and the very same proof reached the runner.
+    assert runner.call_args.kwargs["challenge_proof"] == "gAAAAACthe-fetching-proof"
+
+
+def test_client_reuses_one_proof_across_bundle_flows():
+    """bundle 的多 flow 共享同一份 proof：取题用它，runner 也用它。
+
+    密码页 iframe 三个 flow 发同一份 p（bundle 的既有契约）；贯通之后，
+    每个 flow 的 dx 也都绑定到这同一份 —— proof 分叉在此处最隐蔽。
+    """
+    session = _Session()
+    emitted = json.dumps(
+        {"p": "proof", "t": "turnstile", "c": "challenge-test", "id": DEVICE_ID, "flow": "authorize_continue"}
+    )
+    with (
+        patch("sms_tool.sentinel.client.run_sentinel_sdk", return_value=emitted) as runner,
+        patch(
+            "sms_tool.sentinel.client._requirements_token",
+            return_value="gAAAAACshared-proof",
+        ) as proof_token,
+    ):
+        client.issue_sentinel_bundle(
+            flows=("authorize_continue", "username_password_create"),
+            device_id=DEVICE_ID,
+            session=session,
+            profile=PROFILE,
+        )
+
+    assert proof_token.call_count == 1
+    proofs = [json.loads(calls[1]["data"])["p"] for calls in session.calls]
+    assert proofs == ["gAAAAACshared-proof", "gAAAAACshared-proof"]
+    assert all(
+        kwargs["challenge_proof"] == "gAAAAACshared-proof" for kwargs in (call.kwargs for call in runner.call_args_list)
+    )
+
+
 def test_flow_uses_node_runner_and_honors_disabled_legacy_fallback():
     with patch(
         "sms_tool.sentinel.client.issue_sentinel_token",

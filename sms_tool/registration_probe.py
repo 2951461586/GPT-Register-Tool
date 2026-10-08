@@ -31,6 +31,8 @@ from __future__ import annotations
 
 import time
 import uuid
+from collections.abc import Mapping
+from typing import Any
 from urllib.parse import urlencode, urlparse
 
 from . import config as config_module
@@ -84,7 +86,7 @@ def classify_registration_landing(
     return STATUS_UNKNOWN, "unclassified_landing"
 
 
-def _seed_device_cookie(session: object, device_id: str) -> None:
+def _seed_device_cookie(session: Any, device_id: str) -> None:
     """Bind ``oai-did`` on the probe session (both ChatGPT and OpenAI domains)."""
     if not device_id:
         return
@@ -160,8 +162,9 @@ def _run_read_only_handshake(
     attempt = attempts[0]
     screen_hint = str(attempt.get("screen_hint") or "")
     prompt = str(attempt.get("prompt") or "")
+    locale = str(attempt.get("locale") or "")
     signin_url = steps._openai_signin_url(
-        chat_base, device_id, session_logging_id, email, screen_hint=screen_hint, prompt=prompt
+        chat_base, device_id, session_logging_id, email, screen_hint=screen_hint, prompt=prompt, locale=locale
     )
     signin_response = deps.request_with_retry(
         session,
@@ -185,7 +188,7 @@ def _run_read_only_handshake(
         or ""
     )
     auth_url = steps._ensure_authorize_context(
-        auth_url, device_id, session_logging_id, email, screen_hint=screen_hint, prompt=prompt
+        auth_url, device_id, session_logging_id, email, screen_hint=screen_hint, prompt=prompt, locale=locale
     )
     if not auth_url:
         return {"error": "auth_session_url_missing"}
@@ -215,7 +218,7 @@ def probe_registration(
     email: str,
     *,
     proxy: str = "",
-    session: object | None = None,
+    session: Any | None = None,
     device_id: str = "",
     config: object | None = None,
 ) -> dict:
@@ -229,9 +232,14 @@ def probe_registration(
     if not address:
         return _result("", STATUS_UNKNOWN, error="empty_email")
 
-    merged = config if isinstance(config, dict) else config_module.current_config_data()
-    chatgpt_cfg = merged.get("chatgpt") if isinstance(merged, dict) else {}
-    chatgpt_cfg = chatgpt_cfg if isinstance(chatgpt_cfg, dict) else {}
+    # ``Mapping``, not ``dict``: the default branch returns
+    # ``current_config_data()``, whose tree is frozen into ``mappingproxy``
+    # (``config._freeze``) -- a ``dict`` check silently dropped the configured
+    # ``chatgpt.auth_base_url`` / ``chat_base_url`` and used the hard-coded
+    # endpoints instead (2026-10-07 P1-D class).
+    merged = config if isinstance(config, Mapping) else config_module.current_config_data()
+    chatgpt_cfg = merged.get("chatgpt") if isinstance(merged, Mapping) else {}
+    chatgpt_cfg = chatgpt_cfg if isinstance(chatgpt_cfg, Mapping) else {}
     chat_base = str(chatgpt_cfg.get("chat_base_url") or endpoints.CHATGPT_BASE).rstrip("/")
     auth_base = str(chatgpt_cfg.get("auth_base_url") or endpoints.AUTH_BASE).rstrip("/")
 

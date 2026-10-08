@@ -121,6 +121,8 @@ from .auth_flow import (
     _passwordless_signin_attempts,
     _prepare_signup_auth_state,
     _prime_email_verification_page,
+    _prime_create_account_password_page,
+    _prime_create_account_password_page_enabled,
     _response_next_url,
     _response_next_url_from_data,
     _send_existing_login_otp,
@@ -261,6 +263,8 @@ def _email_registration_operations() -> RegistrationOperations:
             "_is_chatgpt_auth_login_landing": _is_chatgpt_auth_login_landing,
             "_is_existing_login_redirect": _is_existing_login_redirect,
             "_is_signup_password_step": _is_signup_password_step,
+            "_prime_create_account_password_page": _prime_create_account_password_page,
+            "_prime_create_account_password_page_enabled": _prime_create_account_password_page_enabled,
             "_is_user_already_exists": _is_user_already_exists,
             "_login_existing_account_with_email_otp": _login_existing_account_with_email_otp,
             "_passwordless_signin_attempts": _passwordless_signin_attempts,
@@ -323,10 +327,15 @@ def run_email(
     validate_registration_driver_config(config.data, selected_driver, proxy=proxy)
     if selected_driver != "protocol":
         from .registration_drivers.playwright import run_browser_registration
+
         result = run_browser_registration(
             driver_name=selected_driver,
-            proxy=proxy, password=password, mailbox=mailbox, config=config.data,
-            browser_headless=browser_headless, enroll_2fa=enroll_2fa,
+            proxy=proxy,
+            password=password,
+            mailbox=mailbox,
+            config=config.data,
+            browser_headless=browser_headless,
+            enroll_2fa=enroll_2fa,
             proxy_metadata=proxy_metadata,
             # Every browser registration validates the first AT inside the
             # same browser context.  Crossing to the protocol/health proxy at
@@ -451,6 +460,7 @@ def run_batch(
         cancel_event=cancel_event,
         run_email_func=run_email,
     )
+
 
 # 保持向后兼容（cli.py 等通过 `_build_session_file` 引用）
 _build_session_file = build_session_file

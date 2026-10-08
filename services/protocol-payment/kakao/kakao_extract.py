@@ -982,13 +982,21 @@ def update_kakao_checkout_taxes(
 
 
 def expected_amount(payload: dict[str, Any]) -> str:
-    options = payload.get("elements_options") if isinstance(payload.get("elements_options"), dict) else {}
+    # Each ``.get`` is read into a local before the ``isinstance`` narrows it.
+    # Calling ``payload.get(k)`` twice (once to test, once to use) reads as if the
+    # two calls could return different objects, so the value keeps its full
+    # ``Any``/``None`` type and every later access is reported as
+    # ``reportOptionalMemberAccess``.  One read, one narrowing, same behaviour.
+    raw_options = payload.get("elements_options")
+    options = raw_options if isinstance(raw_options, dict) else {}
     if options.get("amount") is not None:
         return str(safe_int(options["amount"]))
-    total_summary = payload.get("total_summary") if isinstance(payload.get("total_summary"), dict) else {}
+    raw_summary = payload.get("total_summary")
+    total_summary = raw_summary if isinstance(raw_summary, dict) else {}
     if total_summary.get("due") is not None:
         return str(safe_int(total_summary["due"]))
-    invoice = payload.get("invoice") if isinstance(payload.get("invoice"), dict) else {}
+    raw_invoice = payload.get("invoice")
+    invoice = raw_invoice if isinstance(raw_invoice, dict) else {}
     for name in ("amount_due", "total"):
         if invoice.get(name) is not None:
             return str(safe_int(invoice[name]))
@@ -1304,9 +1312,8 @@ def kakao_link(
         raise RuntimeError(f"confirm failed {confirm_response.status_code}: {response_error(confirm_response, 1000)}")
     confirm_payload = confirm_response.json() or {}
     redirect = extract_redirect(confirm_payload)
-    submission = (
-        confirm_payload.get("submission_attempt") if isinstance(confirm_payload.get("submission_attempt"), dict) else {}
-    )
+    raw_submission = confirm_payload.get("submission_attempt")
+    submission = raw_submission if isinstance(raw_submission, dict) else {}
 
     if not redirect and (submission.get("state") == "requires_approval" or checkout.get("requires_manual_approval")):
         log(f"{PROVIDER_COUNTRY} OpenAI approve（最多 {APPROVE_RETRY_MAX} 次）")

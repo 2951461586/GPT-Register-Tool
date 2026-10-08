@@ -12,9 +12,43 @@ from .http_client import request_with_retry
 from .http_utils import _json_or_raw
 
 
+#: Transaction-enum values the server writes into ``client_auth_session`` whose
+#: *value* (not just presence) is the discriminator between the transaction
+#: arms. Measured 2026-10-06 batches ed33aaf3/b8937a58/aef68999: every
+#: ``email_otp_send_stuck`` run kept ``passwordless_email_otp_send_pending`` in
+#: its 18-key shape, but the summary only printed
+#: ``email_verification_mode: [REDACTED](len=10/19)`` — the length was
+#: indistinguishable between arms, so the runs were attributable to neither
+#: the passwordless nor the login arm. These are low-cardinality wire enums
+#: (no credential material) and pass the sanitizer unchanged, so printing them
+#: is what makes a stuck run's arm observable.
+#:
+#: ⚠️ Keep this allow-list exact-match. A prefix/pattern here would start
+#: echoing arbitrary server strings into logs.
+TRANSACTION_ENUM_VALUES: frozenset[str] = frozenset(
+    {
+        # client_auth_session.email_verification_mode
+        "login_challenge",
+        "passwordless_login",
+        "passwordless_signup",
+        # client_auth_session.signup_mode / signup_source / original_screen_hint
+        "signup",
+        "login",
+        "login_or_signup",
+        # client_auth_session.passwordless_disabled / destination_app_name
+        "true",
+        "false",
+        "chat",
+        "codex",
+    }
+)
+
+
 def _redact_auth_dump_value(value):
     if isinstance(value, str):
         text = value.strip()
+        if text in TRANSACTION_ENUM_VALUES:
+            return text
         return f"[REDACTED](len={len(text)})" if text else ""
     if isinstance(value, (int, float, bool)) or value is None:
         return value
@@ -55,7 +89,9 @@ def auth_dump_summary(data):
     client_auth_session = data.get("client_auth_session") or data.get("clientAuthSession") or {}
     return {
         "top_keys": sorted(str(k) for k in list(data.keys())[:20]),
-        "client_auth_session_keys": sorted(str(k) for k in list(client_auth_session.keys())[:20]) if isinstance(client_auth_session, dict) else [],
+        "client_auth_session_keys": sorted(str(k) for k in list(client_auth_session.keys())[:20])
+        if isinstance(client_auth_session, dict)
+        else [],
         "signals": _find_auth_dump_keys(
             data,
             {
@@ -70,6 +106,18 @@ def auth_dump_summary(data):
                 "login_verifier",
                 "verifier",
                 "email_verification_mode",
+                # Transaction-arm discriminators: the *value* of these (not just
+                # presence) tells which arm the server armed. See the stuck-run
+                # measurement on TRANSACTION_ENUM_VALUES.
+                "signup_mode",
+                "signup_source",
+                "original_screen_hint",
+                "app_name_enum",
+                "destination_app_name",
+                "country_code_hint",
+                "passwordless_disabled",
+                "passwordless_otp_from_password_redirect",
+                "passwordless_signup_from_default_redirect",
             },
         ),
     }
@@ -175,7 +223,14 @@ def compact_auth_dump_text(stage, summary) -> str:
         return json.dumps(summary, ensure_ascii=False)
     if previous == snapshot:
         return f"{_dump_key_count(summary)} keys unchanged"
-    diff = _dump_key_diff(json.loads(previous), summary)
+    try:
+        previous_summary = json.loads(previous)
+    except ValueError:
+        # ``previous`` is this module's own json.dumps snapshot from the line
+        # above, so this is unreachable in practice; a full reprint is the
+        # honest fallback if the process state were ever corrupted.
+        return json.dumps(summary, ensure_ascii=False)
+    diff = _dump_key_diff(previous_summary, summary)
     if not diff:
         # Reached by a reordered key list: ``changed: {}`` reads as a change with
         # nothing in it, so it has to collapse like any other repeat.
@@ -295,15 +350,15 @@ def fetch_client_auth_session_dump(session, auth_base, base_headers, stage=""):
         return {}
     body = _json_or_raw(response, limit=1200)
     if getattr(response, "status_code", 0) != 200:
-        print(
-            f"  client_auth_session_dump[{stage or 'default'}]: {response.status_code}"
-            f"{auth_dump_failure_text(body)}"
-        )
+        print(f"  client_auth_session_dump[{stage or 'default'}]: {response.status_code}{auth_dump_failure_text(body)}")
         return {"status": getattr(response, "status_code", 0), "body": body}
     summary = auth_dump_summary(body)
     stage_key = stage or "default"
-    # 1200, not 800: the observed maximum summary is 795 characters, so the old
-    # cap was five bytes from silently cutting the ``signals`` tail off a line
-    # whose whole point is that tail.
-    print(f"  client_auth_session_dump[{stage_key}]: {compact_auth_dump_text(stage_key, summary)[:1200]}")
+    # 1600, not 1200: the 2026-10-06 observability change added the
+    # transaction-arm discriminator signals (signup_mode / original_screen_hint
+    # / app_name_enum / passwordless_disabled / …), which grows the realistic
+    # maximum full summary from 795 to ~1290 characters. The old cap would cut
+    # exactly the tail this change exists to surface. The measured-only tail is
+    # protected by the truncation probe test.
+    print(f"  client_auth_session_dump[{stage_key}]: {compact_auth_dump_text(stage_key, summary)[:1600]}")
     return summary

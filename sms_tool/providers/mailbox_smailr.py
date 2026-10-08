@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 import os
 import secrets
+from collections.abc import Mapping
 from typing import Any
 
 from ..config import current_config_data
@@ -37,13 +38,25 @@ SMAILR_LV1_DOMAINS = (
 )
 
 
-def _email_cfg() -> dict:
+def _email_cfg() -> Mapping[str, Any]:
     return current_config_data().get("email_registration") or {}
 
 
-def _smailr_cfg() -> dict:
+def _smailr_cfg() -> Mapping[str, Any]:
+    """The ``email_registration.smailr`` section, or ``{}``.
+
+    🔴 ``Mapping``, not ``dict``: ``current_config_data()`` freezes every
+    section into a ``mappingproxy`` (``config._freeze``), which is a
+    ``Mapping`` but **not** a ``dict``. A ``dict`` check here made the whole
+    smailr section read as missing in production -- ``api_key``, ``base_url``,
+    ``default_domain`` and ``domain_ids`` were all silently replaced by
+    env-or-defaults, while ``tests/test_smailr_provider.py`` stayed green
+    because it patches this function with a plain dict. ``_remail_cfg`` is the
+    correct sibling shape (``Mapping``); this is the same 2026-10-07 P1-D
+    class that ``auth_flow/steps.py`` already fixed for three toggles.
+    """
     cfg = _email_cfg().get("smailr")
-    return cfg if isinstance(cfg, dict) else {}
+    return cfg if isinstance(cfg, Mapping) else {}
 
 
 def _smailr_api_key() -> str:
@@ -52,6 +65,7 @@ def _smailr_api_key() -> str:
 
 def _smailr_base_url() -> str:
     from .smailr_client import _normalize_base_url
+
     return _normalize_base_url(str(_smailr_cfg().get("base_url") or "https://smailr.com"))
 
 
@@ -65,15 +79,13 @@ def _smailr_timeout() -> int:
 def _smailr_default_domain() -> str:
     domain = str(_smailr_cfg().get("default_domain") or "smailr.com").strip().lstrip("@").lower()
     if domain not in SMAILR_LV1_DOMAINS:
-        raise ValueError(
-            "smailr.default_domain must be one of: " + ", ".join(SMAILR_LV1_DOMAINS)
-        )
+        raise ValueError("smailr.default_domain must be one of: " + ", ".join(SMAILR_LV1_DOMAINS))
     return domain
 
 
 def _smailr_domain_id(domain: str) -> str:
     configured = _smailr_cfg().get("domain_ids") or {}
-    if isinstance(configured, dict):
+    if isinstance(configured, Mapping):
         domain_id = str(configured.get(domain) or "").strip()
         if domain_id:
             return domain_id
@@ -83,9 +95,7 @@ def _smailr_domain_id(domain: str) -> str:
     # default domain when omitted.
     if domain == _smailr_default_domain():
         return ""
-    raise RuntimeError(
-        f"smailr domain @{domain} requires email_registration.smailr.domain_ids.{domain}"
-    )
+    raise RuntimeError(f"smailr domain @{domain} requires email_registration.smailr.domain_ids.{domain}")
 
 
 def _smailr_proxy() -> str:
@@ -141,6 +151,7 @@ def _take_reusable_smailr_mailbox(client: Any, domain: str, reserved: set[str]) 
 
 def _smailr_client(proxy: str | None = None):
     from .smailr_client import SmailrClient
+
     merged_proxy = proxy or _smailr_proxy() or None
     return SmailrClient(
         api_key=_smailr_api_key(),
@@ -148,7 +159,6 @@ def _smailr_client(proxy: str | None = None):
         timeout=_smailr_timeout(),
         proxy=merged_proxy,
     )
-
 
 
 def _smailr_extract_id_and_email(response: Any) -> tuple[str, str]:
@@ -164,17 +174,16 @@ def _smailr_extract_id_and_email(response: Any) -> tuple[str, str]:
             if mb_id or email:
                 return mb_id, email
     mb_id = str(response.get("id") or response.get("mailbox_id") or "").strip()
-    email = (
-        response.get("email")
-        or response.get("address")
-        or response.get("address_full")
-        or ""
-    )
+    email = response.get("email") or response.get("address") or response.get("address_full") or ""
     if not isinstance(email, str):
         email = ""
     if not email and response.get("local_part"):
         local = str(response["local_part"]).strip().lower()
-        domain = str(response.get("domain") or response.get("domain_name") or _smailr_default_domain() or "").lower().lstrip("@")
+        domain = (
+            str(response.get("domain") or response.get("domain_name") or _smailr_default_domain() or "")
+            .lower()
+            .lstrip("@")
+        )
         if local and domain:
             email = f"{local}@{domain}"
     return mb_id, email.strip().lower()
@@ -185,6 +194,7 @@ def _random_local_part(length: int = 10) -> str:
 
 
 # ── Public API ─────────────────────────────────────────────────────────────
+
 
 def create_smailr_mailboxes(
     count: int = 1,
@@ -206,7 +216,9 @@ def create_smailr_mailboxes(
     if not api_key:
         api_key = _smailr_api_key()
     if not api_key:
-        raise RuntimeError("smailr.api_key is required (config: email_registration.smailr.api_key or env SMAILR_API_KEY)")
+        raise RuntimeError(
+            "smailr.api_key is required (config: email_registration.smailr.api_key or env SMAILR_API_KEY)"
+        )
     if not base_url:
         base_url = _smailr_base_url()
     cfg_domain = _smailr_default_domain()
@@ -215,6 +227,7 @@ def create_smailr_mailboxes(
         raise ValueError("smailr domain must be one of: " + ", ".join(SMAILR_LV1_DOMAINS))
 
     from .smailr_client import SmailrClient
+
     client = SmailrClient(
         api_key=api_key,
         base_url=base_url,
@@ -266,12 +279,14 @@ def create_smailr_mailboxes(
 
         reserved_emails.add(email)
 
-        accounts.append(MailboxAccount(
-            email=email,
-            token=mb_id,
-            source=json.dumps(resp, ensure_ascii=False, default=str),
-            provider="smailr",
-        ))
+        accounts.append(
+            MailboxAccount(
+                email=email,
+                token=mb_id,
+                source=json.dumps(resp, ensure_ascii=False, default=str),
+                provider="smailr",
+            )
+        )
     return accounts
 
 
@@ -284,6 +299,7 @@ def _fetch_smailr_messages(
 ) -> list[dict]:
     """Retrieve up to *limit* shaped mails for a Smailr mailbox."""
     from .smailr_client import fetch_messages
+
     mb_id = mailbox.token or ""
     if not mb_id:
         raise ValueError("smailr mailbox.token (id) is empty — cannot fetch messages")
@@ -293,7 +309,6 @@ def _fetch_smailr_messages(
         mailbox.email or "",
         limit=limit,
     )
-
 
 
 def _poll_smailr_otp(
@@ -307,6 +322,7 @@ def _poll_smailr_otp(
     **kwargs: Any,
 ) -> str | None:
     from .smailr_client import poll_otp
+
     mb_id = mailbox.token or ""
     if not mb_id:
         raise ValueError("smailr mailbox.token (id) is empty — cannot poll for OTP")

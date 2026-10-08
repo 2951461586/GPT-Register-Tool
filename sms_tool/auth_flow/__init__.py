@@ -5,6 +5,7 @@ Every submodule is reached module-qualified (``from . import steps`` then
 seen by all callers; this package re-exports the same names for external
 consumers (``registration.py`` and friends) that import from ``.auth_flow``.
 """
+
 from __future__ import annotations
 
 from .steps import (
@@ -14,11 +15,14 @@ from .steps import (
     _auth_request_headers,
     _ensure_authorize_context,
     _existing_login_continue_enabled,
+    _prime_create_account_password_page_enabled,
+    _signup_continue_screen_hint_enabled,
     _invalid_state_auth_response,
     _is_about_you_step,
     _is_chatgpt_auth_login_landing,
     _is_email_verification_step,
     _is_existing_login_redirect,
+    _is_signup_password_page,
     _is_signup_password_step,
     _openai_signin_url,
     _passwordless_signin_attempts,
@@ -47,6 +51,7 @@ from .signup import (
     _continue_signup_username,
     _prepare_signup_auth_state,
     _prime_email_verification_page,
+    _prime_create_account_password_page,
 )
 from .login import (
     _existing_login_continue,
@@ -114,6 +119,8 @@ __all__ = [
     "_ensure_authorize_context",
     "_existing_login_continue",
     "_existing_login_continue_enabled",
+    "_prime_create_account_password_page_enabled",
+    "_signup_continue_screen_hint_enabled",
     "_existing_login_otp",
     "_existing_login_probe",
     "_existing_login_signin",
@@ -126,6 +133,7 @@ __all__ = [
     "_is_existing_login_redirect",
     "_is_login_password_step",
     "_is_mfa_challenge_payload",
+    "_is_signup_password_page",
     "_is_signup_password_step",
     "_json_or_raw",
     "_login_existing_account_with_email_otp",
@@ -136,6 +144,7 @@ __all__ = [
     "_passwordless_signin_attempts",
     "_prepare_signup_auth_state",
     "_prime_email_verification_page",
+    "_prime_create_account_password_page",
     "_print_protocol_diagnostic",
     "_probe_login_password_step",
     "_protocol_diagnostic",

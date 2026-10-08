@@ -169,6 +169,98 @@ def classify_edge_response(
     return DEGRADED
 
 
+#: In-flow (post-preflight) challenge judgement vocabulary.  Deliberately
+#: three-valued, per ``plan-2026-10-05-inflow-challenge-handoff.md`` §3.2: the
+#: cost asymmetry this exists for -- a false negative burns a mailbox slot and
+#: its OTP forever, a false positive costs one extra request -- is only
+#: expressible if "we could not tell" stays a value instead of collapsing into
+#: a guess.
+EDGE_CHALLENGE = "challenge"
+EDGE_NOT_CHALLENGE = "not_challenge"
+EDGE_UNKNOWN = "unknown"
+EDGE_CHALLENGE_VERDICTS = (EDGE_CHALLENGE, EDGE_NOT_CHALLENGE, EDGE_UNKNOWN)
+
+
+def _response_status_code(response: Any) -> int:
+    try:
+        return _as_int(getattr(response, "status_code", 0))
+    except Exception:
+        return 0
+
+
+def _response_body_text(response: Any, limit: int) -> str:
+    """Bounded body text; never raises and never consumes a stream twice.
+
+    ``content`` (bytes) is preferred over ``text`` so a large HTML interstitial
+    is truncated *before* it is decoded, not after.  A response object that
+    carries neither (a mock, or an adapter that already dropped the body) reads
+    as empty rather than raising -- the verdict must stay total.
+    """
+    content = getattr(response, "content", None)
+    if isinstance(content, (bytes, bytearray)):
+        return bytes(content[:limit]).decode("utf-8", "replace")
+    text = getattr(response, "text", None)
+    if isinstance(text, str):
+        return text[:limit]
+    return ""
+
+
+def _response_headers(response: Any):
+    headers = getattr(response, "headers", None)
+    return headers if isinstance(headers, (Mapping, list, tuple)) else None
+
+
+def edge_challenge_verdict(response: Any, *, body_limit: int = 4096) -> str:
+    """Decide whether an in-flow ``403``/``429`` is an exit-level CF challenge.
+
+    Returns one of :data:`EDGE_CHALLENGE` / :data:`EDGE_NOT_CHALLENGE` /
+    :data:`EDGE_UNKNOWN`.  Pure and total: it reads the response, never raises,
+    and never touches session or circuit state.
+
+    Three rules, all from ``plan-2026-10-05-inflow-challenge-handoff.md`` §3.2:
+
+    1. **Only 403/429 get a yes/no answer.**  Any other status is
+       :data:`EDGE_UNKNOWN`: the body of a successful OTP reply legitimately
+       contains the word "challenge" (``auth_flow/otp.py``'s
+       ``login_challenge`` transaction arm), so a text match on a 2xx would
+       manufacture an exit-level verdict out of an unrelated OTP concept.
+    2. **The judgement is** :func:`classify_edge_response`'s, not a second set
+       of host/header matchers.  A reply the probe calls :data:`BLOCKED` -- "the
+       edge refused this exit, reachable but useless for registration" -- is
+       exactly the rotate-the-exit trigger.  Note the probe's own contract
+       reads *any* 403 at this edge as :data:`BLOCKED`; the two ways a 403
+       reads :data:`EDGE_NOT_CHALLENGE` here are an account-deactivated body
+       (rule 3) and nothing else, which is honest about what a bare 403 can
+       tell us.
+    3. **An already-dead account is not a challenge.**  Rotating the egress
+       cannot change an ``account_deactivated`` answer, so that vocabulary is
+       excluded first -- the same order SunnyRegister's
+       ``_is_challenge_response`` uses (``protocol_auth.py:609``).
+
+    ``429`` needs no special case: a plain rate-limit reply classifies
+    :data:`CLEAN` (the origin answered), so it reads :data:`EDGE_NOT_CHALLENGE`
+    and stays with the ``rate_limit`` handler; a 429 that *does* carry CF
+    challenge markers reads :data:`EDGE_CHALLENGE`, which is observation only --
+    §3.5 forbids the control flow from rotating on a ``rate_limit`` class.
+    """
+    status = _response_status_code(response)
+    if status not in (403, 429):
+        return EDGE_UNKNOWN
+    body = _response_body_text(response, max(0, int(body_limit or 0)))
+    # ``accounts/account_terminal`` is the single owner of the deactivation
+    # vocabulary.  A module-level import would add a ``sms_tool ->
+    # sms_tool/accounts`` edge that ``scripts/import_layer_ratchet.py`` freezes
+    # (9 pairs); that ratchet's own failure text names a function-local import
+    # as the remedy, which is also how ``payment_auth`` reaches the package.
+    from .accounts.account_terminal import text_has_account_deactivated
+
+    if text_has_account_deactivated(body):
+        return EDGE_NOT_CHALLENGE
+    if classify_edge_response(status, body, _response_headers(response)) == BLOCKED:
+        return EDGE_CHALLENGE
+    return EDGE_NOT_CHALLENGE
+
+
 def probe_openai_edge(
     proxy: str,
     *,

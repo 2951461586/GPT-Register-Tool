@@ -285,8 +285,11 @@ def _ensure_session_cookie(cookie_header, data):
 
 
 def _has_session_cookie(cookie_header):
+    prefix = "__Secure-next-auth.session-token"
     return any(
-        item.strip().startswith("__Secure-next-auth.session-token=") for item in str(cookie_header or "").split(";")
+        ((name := item.strip().split("=", 1)[0].strip()) == prefix or name.startswith(prefix + "."))
+        for item in str(cookie_header or "").split(";")
+        if "=" in item
     )
 
 
@@ -309,19 +312,26 @@ def _request_auth_session(ctx):
     return {}
 
 
+def _dict_section(source: object, key: str) -> dict:
+    """``source[key]`` when it is a dict, else ``{}`` — no Optional leaking."""
+    if isinstance(source, dict):
+        value = source.get(key)
+        if isinstance(value, dict):
+            return value
+    return {}
+
+
 def _auth_session_email(data):
     if not isinstance(data, dict):
         return ""
-    user = data.get("user") if isinstance(data.get("user"), dict) else {}
-    account = data.get("account") if isinstance(data.get("account"), dict) else {}
-    session = data.get("session") if isinstance(data.get("session"), dict) else {}
-    session_user = session.get("user") if isinstance(session.get("user"), dict) else {}
-    for value in (
-        user.get("email"),
-        account.get("email"),
-        session_user.get("email"),
-        data.get("email"),
+    session = _dict_section(data, "session")
+    for source in (
+        _dict_section(data, "user"),
+        _dict_section(data, "account"),
+        _dict_section(session, "user"),
+        data,
     ):
+        value = source.get("email")
         email = str(value or "").strip().lower()
         if email:
             return email

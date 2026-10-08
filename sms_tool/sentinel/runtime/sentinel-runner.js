@@ -1319,6 +1319,12 @@ async function main(argv = process.argv.slice(2), writeOutput = true) {
   let cachedChallenge = null;
   const options = {
     flow,
+    challengeProof: pick(
+      args["challenge-proof"],
+      cfg("challengeProof", "challenge_proof"),
+      process.env.SENTINEL_CHALLENGE_PROOF,
+      ""
+    ),
     sentinelSid: pick(args["sentinel-sid"], cfg("sentinelSid", "sentinel_sid"), process.env.SENTINEL_SID, ""),
     pageUrl: pick(args["page-url"], cfg("pageUrl", "page_url"), process.env.SENTINEL_PAGE_URL, "https://chatgpt.com/checkout/openai_llc/cs_ctf"),
     scriptSrc:
@@ -1393,7 +1399,16 @@ async function main(argv = process.argv.slice(2), writeOutput = true) {
       if (message.type !== "token" && message.type !== "init") {
         throw new Error(`未知 iframe 消息类型：${message.type}`);
       }
-      const proof = message.p;
+      // 🔴 turnstile.dx 与**取 challenge 用的那份 requirements p** 绑定。真实
+      // 浏览器里两个是同一份：SDK 采样 p → 用它 POST sentinel/req → dx 就是
+      // 用这份 p 异或加密的 → cachedProof 回交同一份 p。本 runner 的
+      // challenge 文件由 Python 用**它自己的** proof 取回，而这里的
+      // ``message.p`` 是 VM 内 SDK 重新采样的另一份 —— 若把 SDK 那份作为
+      // cachedProof 交回，SDK 解 dx / 组装最终 token 用的密钥就和服务器加密
+      // 用的密钥不一致。``options.challengeProof``（--challenge-proof）把取
+      // challenge 的那份 p 带进来，与 turb 的同名机制一致。仅在显式传入时
+      // 覆盖；challenge-url 模式下两个 proof 是同一份（本地取题），保持原样。
+      const proof = options.challengeProof || message.p;
       if (challengeFile) {
         cachedChallenge ||= readChallengeFile(challengeFile);
       } else {
