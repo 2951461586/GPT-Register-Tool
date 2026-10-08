@@ -293,6 +293,22 @@ def validate_registration_driver_config(
 
 
 def _freeze(value: Any) -> Any:
+    """Deep-freeze a config tree: ``dict`` -> ``MappingProxyType``, ``list`` -> ``tuple``.
+
+    🔴 **Consumers must test a config section with ``isinstance(x, Mapping)``,
+    never ``isinstance(x, dict)``.** Every mapping produced here is a
+    ``MappingProxyType`` -- a ``Mapping`` that is **not** a ``dict``. A ``dict``
+    guard therefore reads as "section missing" in production while plain-``dict``
+    test fixtures keep it green (the 2026-10-07 P1-D class: three registration
+    toggles silently disabled, and the smailr section silently empty).
+
+    Scope of the rule: the **frozen surfaces** -- ``current_config_data()``,
+    ``resolve_runtime_config(...).data`` and ``RuntimeConfig.data``.
+    ``CFG`` (``LegacyConfigView``) is the exception: its ``__getitem__``/``get``
+    call ``_thaw`` and hand back plain dicts, so ``CFG.get(...)`` *may* be
+    dict-tested (that is why ``scripts/batch_enable_2fa.py``'s
+    ``isinstance(CFG.get("chatgpt"), dict)`` is safe, not a P1-D bug).
+    """
     if isinstance(value, dict):
         return MappingProxyType({str(key): _freeze(item) for key, item in value.items()})
     if isinstance(value, list):
@@ -628,6 +644,22 @@ def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -
         )
         if "browser_headless" in registration and not isinstance(registration.get("browser_headless"), bool):
             errors.append("registration.browser_headless must be a boolean")
+        for key in (
+            "edge_challenge_discrimination",
+            "edge_challenge_rotate_exit",
+            "prime_about_you_page",
+            "prime_create_account_password",
+            "prime_navigation_headers",
+            "signup_continue_screen_hint",
+            "signin_screen_hint_login_or_signup",
+            "signin_prompt_login",
+            "signin_locale_ja_jp",
+            "signup_email_verification_continue_hint",
+            "create_account_disallowed_backoff",
+            "existing_login_continue_on_verified_page",
+        ):
+            if key in registration and not isinstance(registration.get(key), bool):
+                errors.append(f"registration.{key} must be a boolean")
         for key in ("browser_locale", "browser_timezone"):
             if key in registration and not str(registration.get(key) or "").strip():
                 errors.append(f"registration.{key} must not be blank")

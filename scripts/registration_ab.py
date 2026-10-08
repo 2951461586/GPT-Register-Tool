@@ -1,7 +1,8 @@
-"""Registration A/B harness for the three live comparisons that are still owed.
+"""Registration A/B harness for the live comparisons that are still owed.
 
 ``docs/current/protocol-registration.md`` ("Validation limits") requires a
-controlled live comparison before trusting three landed-but-unvalidated changes:
+controlled live comparison before trusting a landed-but-unvalidated change.
+``plan`` prints the full pre-registered set; the current arms are:
 
 * **P0-1** — preflight login entry: ``browser`` (``chatgpt.com/auth/login``)
   vs ``legacy`` (``auth.openai.com/log-in``).
@@ -9,6 +10,12 @@ controlled live comparison before trusting three landed-but-unvalidated changes:
   No toggle: the classification is always on, so this arm is *observe-only*.
 * **P1-3** — Sentinel password-page bundle: ``sentinel_password_bundle`` off
   (default) vs on.
+* **P1-4** — password-page prime before ``user/register``.
+* **P1-5** — ``screen_hint`` on the signup lane's existing ``authorize/continue``.
+* **P1-6** — ``/about-you`` prime before ``create_account``.
+* **P1-7** — bounded backoff on ``registration_disallowed``.
+* **P1-8** — extra declared-screen ``authorize/continue`` from
+  ``/email-verification`` (the landing P1-5 cannot reach).
 
 This script **never performs live traffic**. Only the operator runs the real
 batch, because it needs paid mailboxes, a live exit pool, and a controlled
@@ -19,12 +26,17 @@ harness does three things:
              held-constant variables, metrics and decision rule.
 ``collect``  normalise one operator-run arm's artifacts (run log + batch report
              + config snapshot) into a single record under
-             ``runtime/registration_ab/``. The config snapshot is the
-             *manipulation check*: without it the arm is recorded unverified.
+             ``runtime/registration_ab/``. Two manipulation checks are recorded:
+             the config snapshot must match the arm's toggle value
+             (``toggle_verified``), and the arm's **log** must show the code path
+             the toggle owns actually ran (``mechanism_ok``). Without the first
+             the arm is ``unverified``; without the second it is a fake
+             comparison and ``compare`` says ``manipulation_failed`` rather than
+             reporting a rate.
 ``compare``  join the arm records, compute the per-metric deltas and apply the
              pre-registered decision rule. It refuses a verdict for an arm whose
-             toggle was not verified, and it never reports a success *rate* as
-             established by this offline tooling.
+             toggle was not verified or whose mechanism never ran, and it never
+             reports a success *rate* as established by this offline tooling.
 
 Parsing and comparison are pure functions so they can be unit-tested without
 running anything (``tests/test_registration_ab.py``).
@@ -120,6 +132,410 @@ EXPERIMENTS: dict[str, dict[str, Any]] = {
             "regression of any size is a reason to keep the default off."
         ),
     },
+    "p1-4-prime-password-page": {
+        "hypothesis": (
+            "GETting /create-account/password before POSTing user/register "
+            "establishes the password-step transaction state, so the server "
+            "dispatches the email OTP instead of arming the passwordless arm "
+            "-- the measured failure shape is user/register 200 + email-otp/send "
+            "200 + a landing on /email-verification with zero messages across "
+            "every mailbox (2026-10-06, ~11 attempts, 3 configurations, "
+            "byte-identical). Both reference protocol clients (turb "
+            "navigate_create_account_password, SunnyRegister _submit_password) "
+            "navigate there unconditionally."
+        ),
+        "toggle": "registration.prime_create_account_password",
+        "arms": {"default": False, "prime": True},
+        "hold_constant": (
+            "same mailbox batch and provider",
+            "same exit pool (same proxy_seeds / lanes)",
+            "same registration driver, concurrency and stage timeouts",
+            "password lane only (email_registration.registration_mode != passwordless)",
+            "same time-of-day window (Cloudflare load is diurnal)",
+        ),
+        "metrics": (
+            "funnel.registered_per_attempted",
+            "funnel.registration_failures_by_class (mailbox = the OTP-delivery family: "
+            "email_otp_send_stuck / email_otp_poll_timeout)",
+            "funnel.registration_failures_by_stage (email_otp_wait / user_register)",
+        ),
+        "mechanism": "Create account password page",
+        "decision": (
+            "favor_prime when the prime arm's success rate exceeds the default "
+            f"arm's by more than {RATE_DELTA:.2f}; keep_default_off when it is "
+            "worse by more than the same delta; otherwise inconclusive. The "
+            "mailbox-class failure counts are the mechanism read: a working "
+            "prime should shrink email_otp_send_stuck / email_otp_poll_timeout, "
+            "and a prime arm whose mailbox-class failures GROW is a red flag "
+            "regardless of the rate verdict."
+        ),
+    },
+    "p1-5-signup-continue-screen-hint": {
+        "hypothesis": (
+            "Declaring screen_hint=signup in the signup lane's "
+            "authorize/continue body does not reduce registration success and "
+            "may fix the no-dispatch shape: both working reference clients "
+            "declare the screen on every continue (SunnyRegister _authorize_email "
+            "sends login-if-existing-else-signup; the login lane here added "
+            "screen_hint=login after the 09-14/09-16 measurements), while this "
+            "lane's body carries only username."
+        ),
+        "toggle": "registration.signup_continue_screen_hint",
+        "arms": {"default": False, "hint": True},
+        "hold_constant": (
+            "same mailbox batch and provider",
+            "same exit pool (same proxy_seeds / lanes)",
+            "same registration driver, concurrency and stage timeouts",
+            "same time-of-day window (Cloudflare load is diurnal)",
+            "registration.signup_email_verification_continue_hint false in BOTH arms "
+            "(its forced POST reuses the same body-building branch, so leaving it on "
+            "would let P1-8's path emit P1-5's marker)",
+        ),
+        "metrics": (
+            "funnel.registered_per_attempted",
+            "funnel.registration_failures_by_class (mailbox = the OTP-delivery family)",
+            "funnel.registration_failures_by_class (auth_state = invalid_auth_step family)",
+        ),
+        "mechanism": "Signup continue declares screen_hint=signup",
+        "decision": (
+            "favor_hint when the hint arm's success rate exceeds the default "
+            f"arm's by more than {RATE_DELTA:.2f}; keep_default_off when it is "
+            "worse by more than the same delta; otherwise inconclusive. An "
+            "auth_state-class growth in the hint arm means the declared screen "
+            "conflicts with the server's transaction reading -- that alone is a "
+            "reason to keep the default off."
+        ),
+    },
+    "p1-6-prime-about-you-page": {
+        "hypothesis": (
+            "GETting /about-you before POSTing create_account aligns the auth "
+            "session's page state with the Referer the POST already claims, and "
+            "does not reduce registration success. turb navigates there first "
+            "(navigate_about_you); this repo currently POSTs from a state it "
+            "never established -- the same gap the password page had."
+        ),
+        "toggle": "registration.prime_about_you_page",
+        "arms": {"default": False, "prime": True},
+        "hold_constant": (
+            "same mailbox batch and provider",
+            "same exit pool (same proxy_seeds / lanes)",
+            "same registration driver, concurrency and stage timeouts",
+            "same lane (password or passwordless) across both arms",
+            "same time-of-day window (Cloudflare load is diurnal)",
+        ),
+        "metrics": (
+            "funnel.registered_per_attempted",
+            "funnel.registration_failures_by_stage (create_account)",
+            "funnel.registration_failures_by_class (account = user_already_exists / registration_disallowed family)",
+        ),
+        "mechanism": "About you page prime",
+        "decision": (
+            "favor_prime when the prime arm's success rate exceeds the default "
+            f"arm's by more than {RATE_DELTA:.2f}; keep_default_off when it is "
+            "worse by more than the same delta; otherwise inconclusive. An "
+            "account-class growth in the prime arm means the navigation "
+            "disturbed the transaction -- a red flag regardless of the rate."
+        ),
+    },
+    "p1-7-create-disallowed-backoff": {
+        "hypothesis": (
+            "Retrying create_account with a bounded backoff ([8, 20, 45]s, a "
+            "fresh Sentinel proof each round) on registration_disallowed "
+            "recovers addresses the server rejected transiently while its "
+            "IP/Sentinel risk window settles (SunnyRegister's measured reason "
+            "for exactly this retry, sensitive on Remail), instead of "
+            "permanently dead-ending them under the terminal account class."
+        ),
+        "toggle": "registration.create_account_disallowed_backoff",
+        "arms": {"default": False, "backoff": True},
+        "hold_constant": (
+            "same mailbox batch and provider (Remail-heavy if the operator wants the measured population)",
+            "same exit pool (same proxy_seeds / lanes)",
+            "same registration driver, concurrency and stage timeouts",
+            "same time-of-day window",
+        ),
+        "metrics": (
+            "funnel.registered_per_attempted",
+            "funnel.registration_failures_by_class (account, specifically "
+            "create_account_failed:registration_disallowed occurrences)",
+            "stage duration (create_account retries spend up to ~73s of sleeps plus a Sentinel proof per round)",
+        ),
+        "mechanism": "Create account temporarily disallowed",
+        "decision": (
+            "favor_backoff when the backoff arm's success rate exceeds the "
+            f"default arm's by more than {RATE_DELTA:.2f}; keep_default_off "
+            "when it is worse by more than the same delta; otherwise "
+            "inconclusive. An account-class failure count that fails to shrink "
+            "means the rejections were permanent, not risk-window transience -- "
+            "the retries only added latency and spent Sentinel proofs."
+        ),
+    },
+    "p1-8-email-verification-continue-hint": {
+        "hypothesis": (
+            "On the password lane, when authorize lands on /email-verification, "
+            "issuing one extra authorize/continue that declares "
+            "screen_hint=signup moves the server's transaction arm off "
+            "passwordless_login/passwordless_signup and back onto the signup "
+            "arm, so email-otp/send dispatches a code instead of leaving "
+            "passwordless_email_otp_send_pending set. The measured failure shape "
+            "(2026-10-06/07, ~16 attempts) is a correct landing plus a 200 send "
+            "with zero dispatched messages, and the client_auth_session dump "
+            "reads original_screen_hint=signup while "
+            "email_verification_mode stays passwordless. The sibling toggle "
+            "p1-5-signup-continue-screen-hint cannot test this: its read point "
+            "is skipped by the same early return that produces the landing, so "
+            "its hint arm never posts (run_p15_hint.log: 0/5, no continue line)."
+        ),
+        "toggle": "registration.signup_email_verification_continue_hint",
+        "arms": {"default": False, "hint": True},
+        "hold_constant": (
+            "same mailbox batch and provider",
+            "same exit pool (same proxy_seeds / lanes)",
+            "same registration driver, concurrency and stage timeouts",
+            "password lane only (email_registration.registration_mode != passwordless)",
+            "registration.signup_continue_screen_hint false in BOTH arms (the extra "
+            "POST carries the declaration; the sibling toggle must not also be on)",
+            "same time-of-day window (Cloudflare load is diurnal)",
+        ),
+        "metrics": (
+            "funnel.registered_per_attempted",
+            "funnel.registration_failures_by_class (mailbox = the OTP-delivery family)",
+            "funnel.registration_failures_by_class (auth_state = invalid_auth_step family)",
+            "client_auth_session.email_verification_mode (primary mechanism read: does it leave passwordless_*)",
+        ),
+        "mechanism": "Email verification continue hint",
+        "decision": (
+            "favor_hint when the hint arm's success rate exceeds the default "
+            f"arm's by more than {RATE_DELTA:.2f}; keep_default_off when it is "
+            "worse by more than the same delta; otherwise inconclusive. An "
+            "auth_state-class growth in the hint arm means the extra POST "
+            "conflicts with the server's transaction reading -- that alone is a "
+            "reason to keep the default off. A rate that does not move while "
+            "email_verification_mode also does not move means the declaration "
+            "after the fact cannot re-arm the transaction, which closes the "
+            "screen_hint family and points the next experiment at the signin "
+            "shape (login_or_signup) instead."
+        ),
+    },
+    "p1-9-prime-navigation-headers": {
+        "hypothesis": (
+            "The password-page prime's navigation headers were incomplete (no "
+            "sec-fetch-site / sec-fetch-user), so the GET did not carry real "
+            "top-level navigation semantics -- the unexcluded explanation for "
+            "P1-4's 'prime landed correctly but the transaction stayed "
+            "passwordless'. Sending the two headers turb sends should make the "
+            "prime establish the password-page state the server actually "
+            "reads, so email-otp/send dispatches a code. Independent single "
+            "variable: prime_create_account_password is ON in both arms."
+        ),
+        "toggle": "registration.prime_navigation_headers",
+        "arms": {"default": False, "headers": True},
+        "hold_constant": (
+            "same mailbox batch and provider",
+            "same exit pool (same proxy_seeds / lanes)",
+            "same registration driver, concurrency and stage timeouts",
+            "registration.prime_create_account_password true in BOTH arms "
+            "(the headers are a delta on the prime, not a substitute for it)",
+            "same time-of-day window (Cloudflare load is diurnal)",
+        ),
+        "metrics": (
+            "funnel.registered_per_attempted",
+            "funnel.registration_failures_by_class (mailbox = the OTP-delivery family)",
+            "funnel.registration_failures_by_class (auth_state = invalid_auth_step family)",
+            "client_auth_session.email_verification_mode (primary mechanism read: does it leave passwordless_*)",
+        ),
+        "mechanism": "Password page navigation headers",
+        "decision": (
+            "favor_headers when the headers arm's success rate exceeds the "
+            f"default arm's by more than {RATE_DELTA:.2f}; keep_default_off when "
+            "it is worse by more than the same delta; otherwise inconclusive. "
+            "An auth_state-class growth in the headers arm means the navigation "
+            "disturbed the transaction -- that alone keeps the default off. A "
+            "rate that does not move while email_verification_mode also does not "
+            "move closes the prime family entirely and points the next "
+            "experiment at the signin shape (login_or_signup)."
+        ),
+    },
+    "p1-10-signin-screen-hint": {
+        "hypothesis": (
+            "The password lane's first signin declares screen_hint=signup, and the "
+            "server arms the transaction on email_verification_mode="
+            "passwordless_signup / passwordless_signup_from_default_redirect=true, "
+            "so email-otp/send never dispatches. Two 2026-10-07/08 live runs "
+            "(hint arm on lajiao, default arm on fireside, different mailboxes) "
+            "produced the same arm and the same email_otp_send_stuck, excluding "
+            "exit, mailbox and the declared continue screen. turb's signin sends "
+            "screen_hint=login_or_signup; declaring that instead should move the "
+            "transaction arm off passwordless_* so the code dispatches."
+        ),
+        "toggle": "registration.signin_screen_hint_login_or_signup",
+        "arms": {"default": False, "login_or_signup": True},
+        "hold_constant": (
+            "same mailbox batch and provider",
+            "same exit pool (same proxy_seeds / lanes)",
+            "same registration driver, concurrency and stage timeouts",
+            "password lane only (email_registration.registration_mode != passwordless)",
+            "authorize/continue behaviour unchanged in BOTH arms (the declared "
+            "continue screen toggles stay off; only the signin screen_hint moves)",
+            "same time-of-day window (Cloudflare load is diurnal)",
+        ),
+        "metrics": (
+            "funnel.registered_per_attempted",
+            "funnel.registration_failures_by_class (mailbox = the OTP-delivery family)",
+            "funnel.registration_failures_by_class (auth_state = invalid_auth_step family)",
+            "client_auth_session.email_verification_mode (primary mechanism read: does it leave passwordless_*)",
+        ),
+        "mechanism": "Signin screen_hint=login_or_signup",
+        "decision": (
+            "favor_login_or_signup when that arm's success rate exceeds the "
+            f"default arm's by more than {RATE_DELTA:.2f}; keep_default_off when "
+            "it is worse by more than the same delta; otherwise inconclusive. "
+            "An auth_state-class growth in that arm means the declared screen "
+            "conflicts with the server's reading -- that alone keeps the default "
+            "off. A rate that does not move while email_verification_mode also "
+            "does not move closes the client-side screen_hint family entirely "
+            "and points at the server's own routing (passwordless_signup_from_"
+            "default_redirect) rather than another wire field."
+        ),
+    },
+    "p1-11-signin-prompt-login": {
+        "hypothesis": (
+            "turb's signin sends prompt=login *and* screen_hint=login_or_signup. "
+            "Four 2026-10-07/08 live runs (lajiao/fireside pools, burned/brand-new "
+            "mailboxes, signup/login_or_signup/a re-declared continue) all landed "
+            "on email_verification_mode=passwordless_signup with "
+            "passwordless_signup_from_default_redirect=true and a non-dispatching "
+            "OTP -- the declared screen is recorded (original_screen_hint follows "
+            "it) but does not pick the arm. Declaring prompt=login as well should "
+            "move the transaction arm off passwordless_* so the code dispatches."
+        ),
+        "toggle": "registration.signin_prompt_login",
+        "arms": {"default": False, "prompt_login": True},
+        "hold_constant": (
+            "same mailbox batch and provider",
+            "same exit pool (same proxy_seeds / lanes)",
+            "same registration driver, concurrency and stage timeouts",
+            "password lane only (email_registration.registration_mode != passwordless)",
+            "registration.signin_screen_hint_login_or_signup true in BOTH arms "
+            "(turb pairs prompt=login with login_or_signup; the pair must vary only prompt)",
+            "authorize/continue behaviour unchanged in BOTH arms",
+            "same time-of-day window (Cloudflare load is diurnal)",
+        ),
+        "metrics": (
+            "funnel.registered_per_attempted",
+            "funnel.registration_failures_by_class (mailbox = the OTP-delivery family)",
+            "funnel.registration_failures_by_class (auth_state = invalid_auth_step family)",
+            "client_auth_session.email_verification_mode (primary mechanism read: does it leave passwordless_*)",
+        ),
+        "mechanism": "Signin prompt=login",
+        "decision": (
+            "favor_prompt_login when that arm's success rate exceeds the "
+            f"default arm's by more than {RATE_DELTA:.2f}; keep_default_off when "
+            "it is worse by more than the same delta; otherwise inconclusive. "
+            "An auth_state-class growth in that arm means the declared prompt "
+            "conflicts with the server's reading -- that alone keeps the default "
+            "off. A rate that does not move while email_verification_mode also "
+            "does not move closes turb's signin shape (screen_hint + prompt) and "
+            "points at the remaining deltas: not posting authorize/continue, and "
+            "locale."
+        ),
+    },
+    "p1-12-signin-locale": {
+        "hypothesis": (
+            "SunnyRegister's signin shape is prompt=login + screen_hint=signup + "
+            "locale=ja-JP (protocol_auth.py _start_next_auth), and it is the only "
+            "reference that declares a locale. Four 2026-10-07/08 live runs showed "
+            "the declared screen reach the server (original_screen_hint follows "
+            "it) without picking the transaction arm, and prompt=login alone moved "
+            "it to passwordless_login + invalid_auth_step. Adding locale=ja-JP on "
+            "top of SunnyRegister's shape should arm the signup (password) "
+            "transaction so email-otp/send dispatches."
+        ),
+        "toggle": "registration.signin_locale_ja_jp",
+        "arms": {"default": False, "locale": True},
+        "hold_constant": (
+            "same mailbox batch and provider",
+            "same exit pool (same proxy_seeds / lanes)",
+            "same registration driver, concurrency and stage timeouts",
+            "password lane only (email_registration.registration_mode != passwordless)",
+            "registration.signin_prompt_login true in BOTH arms (SunnyRegister pairs locale with prompt=login)",
+            "registration.signin_screen_hint_login_or_signup false in BOTH arms "
+            "(SunnyRegister sends screen_hint=signup, not login_or_signup)",
+            "authorize/continue behaviour unchanged in BOTH arms",
+            "same time-of-day window (Cloudflare load is diurnal)",
+        ),
+        "metrics": (
+            "funnel.registered_per_attempted",
+            "funnel.registration_failures_by_class (mailbox = the OTP-delivery family)",
+            "funnel.registration_failures_by_class (auth_state = invalid_auth_step family)",
+            "client_auth_session.email_verification_mode (primary mechanism read: does it leave passwordless_*)",
+        ),
+        "mechanism": "Signin locale=ja-JP",
+        "decision": (
+            "favor_locale when that arm's success rate exceeds the default arm's "
+            f"by more than {RATE_DELTA:.2f}; keep_default_off when it is worse by "
+            "more than the same delta; otherwise inconclusive. An auth_state-class "
+            "growth in that arm means the declared locale conflicts with the "
+            "server's reading -- that alone keeps the default off. A rate that "
+            "does not move while email_verification_mode also does not move closes "
+            "the whole client-side signin-shape family (screen_hint + prompt + "
+            "locale) and points at the server's own routing "
+            "(passwordless_signup_from_default_redirect) or at the fingerprint / "
+            "device layer instead of another wire field."
+        ),
+    },
+    "p0-2b-inflow-challenge-handoff": {
+        "hypothesis": (
+            "H1: a challenge that arrives after preflight can be recovered by "
+            "rotating to a new exit in the same pool and retrying the one "
+            "request, so the rotate arm's registered_per_attempted is higher "
+            "(and its mailboxes_consumed_per_registered lower) than observe's. "
+            "H2: when rotation still does not get through, handing the protocol "
+            "session to a browser driver lets the account finish. Both are from "
+            "plan-2026-10-05-inflow-challenge-handoff.md; the cost asymmetry is "
+            "that a missed challenge burns a mailbox and its OTP, while a false "
+            "positive costs one request."
+        ),
+        "toggle": "registration.edge_challenge_rotate_exit",
+        # The harness verifies ONE toggle per arm.  ``rotate_exit`` is the axis
+        # this experiment is named for, and ``handoff`` is its superset (all-on),
+        # so the three arms stay ordered on that one key.  The handoff switch
+        # itself does not exist yet (S4) -- see the decision text.
+        "arms": {"observe": False, "rotate": True, "handoff": True},
+        "hold_constant": (
+            "same mailbox batch and provider",
+            "same exit pool (same proxy_seeds / lanes)",
+            "same registration driver, concurrency and stage timeouts",
+            "same registration_mode across all three arms",
+            "same time-of-day window (Cloudflare load is diurnal)",
+        ),
+        "metrics": (
+            "preflight.cloudflare_rate (operational check: the three arms must not differ, or the pool changed)",
+            "funnel.edge_challenge.hits (per-arm challenge count -- the manipulation read)",
+            "funnel.edge_challenge.rotations / rotate_failed (did the exit really move?)",
+            "funnel.registered_per_attempted",
+            "funnel.registration_failures_by_class (a NEW class must be zero)",
+            "mailboxes_consumed_per_registered = attempted / registered (derived; this is the real benefit metric)",
+        ),
+        # No ``mechanism`` marker on purpose: this experiment's manipulation
+        # check is CONDITIONAL (a rotation line can only appear if a challenge
+        # happened), so it lives in the decision rule as ``not_judgeable``
+        # rather than in the always-on mechanism gate, which would call a
+        # challenge-free window ``manipulation_failed``.
+        "decision": (
+            "not_judgeable when no arm observed a challenge (an empty window "
+            "measured nothing -- that is not 'no effect'), when the rotate arm "
+            "observed challenges but rotated zero times (a single-slot pool "
+            "makes it an observe arm), or when the counters are absent from the "
+            "funnel. stop_all_arms when any new failure class appears or the "
+            "handoff arm writes a registrable address into the dead-end "
+            "ledger. favor_rotate when rotate's registered_per_attempted beats "
+            f"observe's by more than {RATE_DELTA:.2f} with no new class; "
+            "keep_default_off when it is worse by the same margin; otherwise "
+            "inconclusive. H2 (handoff) is judged separately and never merged "
+            "into the rotate verdict."
+        ),
+    },
 }
 
 # Preflight progress lines emitted by ``commands/registration`` (verbatim
@@ -194,7 +610,14 @@ def load_funnel(path: Path | None) -> dict[str, Any] | None:
     """
     if path is None:
         return None
-    payload = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        # An unreadable or malformed batch report is "no usable funnel", not a
+        # crash: the run itself may still be comparable on preflight counters,
+        # and an operator typo in ``--funnel`` must not take down the tool
+        # before it can say ``underpowered``.
+        return None
     if not isinstance(payload, Mapping):
         return None
     funnel = payload.get("funnel")
@@ -209,7 +632,12 @@ def read_toggles(config_path: Path | None) -> dict[str, Any]:
     """Read the A/B toggles from a config snapshot (the manipulation check)."""
     if config_path is None:
         return {}
-    payload = json.loads(config_path.read_text(encoding="utf-8"))
+    try:
+        payload = json.loads(config_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        # Fail closed: without a snapshot the manipulation check cannot pass, so
+        # ``compare`` refuses the verdict as ``unverified`` rather than crashing.
+        return {}
     registration = payload.get("registration") if isinstance(payload, Mapping) else None
     registration = registration if isinstance(registration, Mapping) else {}
     out: dict[str, Any] = {}
@@ -217,6 +645,22 @@ def read_toggles(config_path: Path | None) -> dict[str, Any]:
         out["registration.preflight_login_page"] = registration["preflight_login_page"]
     if "sentinel_password_bundle" in registration:
         out["registration.sentinel_password_bundle"] = registration["sentinel_password_bundle"]
+    if "prime_create_account_password" in registration:
+        out["registration.prime_create_account_password"] = registration["prime_create_account_password"]
+    if "signup_continue_screen_hint" in registration:
+        out["registration.signup_continue_screen_hint"] = registration["signup_continue_screen_hint"]
+    if "signup_email_verification_continue_hint" in registration:
+        out["registration.signup_email_verification_continue_hint"] = registration[
+            "signup_email_verification_continue_hint"
+        ]
+    if "prime_about_you_page" in registration:
+        out["registration.prime_about_you_page"] = registration["prime_about_you_page"]
+    if "create_account_disallowed_backoff" in registration:
+        out["registration.create_account_disallowed_backoff"] = registration["create_account_disallowed_backoff"]
+    if "edge_challenge_discrimination" in registration:
+        out["registration.edge_challenge_discrimination"] = registration["edge_challenge_discrimination"]
+    if "edge_challenge_rotate_exit" in registration:
+        out["registration.edge_challenge_rotate_exit"] = registration["edge_challenge_rotate_exit"]
     return out
 
 
@@ -229,7 +673,19 @@ def build_record(
     toggles: Mapping[str, Any],
     log_path: Path | None = None,
 ) -> dict[str, Any]:
-    """Assemble one arm's normalised record."""
+    """Assemble one arm's normalised record.
+
+    Two manipulation checks ride along:
+
+    * ``toggle_verified`` -- the config snapshot this arm was run under matches
+      the arm's declared toggle value.
+    * ``mechanism_*`` -- the arm's **log** shows the code path the toggle owns
+      actually ran (or, for the control arm, that it did not).  ``mechanism_ok``
+      is ``None`` when the experiment registers no marker, or when the arm's
+      expected value is not a boolean (``p0-1``'s arms are endpoint names).
+      A marker must be a stdout line (``print``/``emit``) so it survives either
+      log channel the operator may hand to ``collect``.
+    """
     design = EXPERIMENTS.get(experiment)
     if design is None:
         raise ValueError(f"unknown experiment: {experiment}")
@@ -239,6 +695,16 @@ def build_record(
     actual = toggles.get(toggle_name) if toggle_name else None
     # ``None`` expected means the arm does not own a toggle (observe-only).
     verified = bool(toggle_name) and str(actual) == str(expected)
+    marker = str(design.get("mechanism") or "")
+    # Only a boolean arm value says which direction the marker should go; a
+    # string arm (p0-1's ``browser``/``legacy``) is truthy either way, so
+    # enforcing it there would demand the marker in both arms.
+    marker_expected = expected if isinstance(expected, bool) else None
+    marker_seen = bool(marker) and marker in str(log_text or "")
+    if marker and marker_expected is not None:
+        mechanism_ok = marker_seen if marker_expected else not marker_seen
+    else:
+        mechanism_ok = None
     return {
         "experiment": experiment,
         "arm": arm,
@@ -247,6 +713,10 @@ def build_record(
         "toggle_expected": expected,
         "toggle_actual": actual,
         "toggle_verified": verified,
+        "mechanism_marker": marker,
+        "mechanism_expected": marker_expected,
+        "mechanism_seen": marker_seen,
+        "mechanism_ok": mechanism_ok,
         "preflight": parse_preflight_log(log_text),
         "funnel": dict(funnel) if isinstance(funnel, Mapping) else None,
         "log_path": str(log_path) if log_path else "",
@@ -262,6 +732,45 @@ def _rate(funnel: Mapping[str, Any] | None, key: str) -> float | None:
         return float(value) if value is not None else None
     except (TypeError, ValueError):
         return None
+
+
+def _per_registered(attempted: Any, registered: Any) -> float | None:
+    """``attempted / registered``: mailbox slots spent per account won.  Pure."""
+    try:
+        won = int(registered or 0)
+        if won <= 0:
+            return None
+        return round(int(attempted or 0) / won, 4)
+    except (TypeError, ValueError):
+        return None
+
+
+def _new_failure_class_keys(default: Mapping[str, Any] | None, candidate: Mapping[str, Any] | None) -> dict[str, int]:
+    """Failure classes that appear in the candidate arm but not the control.  Pure.
+
+    §4's stop rule is about *new terminal categories*, not about counts moving:
+    a class the control never produced means the treatment opened a new way to
+    fail, which no success-rate delta can justify.
+    """
+    before = default if isinstance(default, Mapping) else {}
+    after = candidate if isinstance(candidate, Mapping) else {}
+    return {
+        str(key): _class_count(after, str(key))
+        for key in sorted(after)
+        if _class_count(after, str(key)) > 0 and str(key) not in before
+    }
+
+
+def _mechanism_failed(row: Mapping[str, Any]) -> bool:
+    """True only for a real boolean ``False`` mechanism verdict.
+
+    ``mechanism_ok`` is ``None`` when the experiment registers no marker (or the
+    arm's expected value is not a boolean), and ``None`` means "not checked",
+    never "failed".  An ``isinstance`` test states that three-state contract
+    without an identity comparison against a literal.
+    """
+    ok = row.get("mechanism_ok")
+    return isinstance(ok, bool) and not ok
 
 
 def compare_records(records: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
@@ -299,14 +808,45 @@ def compare_records(records: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
             "powered": False,
         }
 
+    # Second manipulation check, and it must run *before* the power test: a
+    # toggle whose code path never executed is a fake comparison, not a
+    # low-sample one.  ``run_p15_hint.log`` is the motivating case -- its 5/5
+    # ``email_otp_send_stuck`` was reported as ``underpowered`` when the hint
+    # arm had in fact never posted a continue at all.
+    manipulation_failed = [str(row.get("arm")) for row in rows if _mechanism_failed(row)]
+    if manipulation_failed:
+        return {
+            "experiment": experiment,
+            "arms": [row.get("arm") for row in rows],
+            "verdict": "manipulation_failed",
+            "reason": (
+                "the toggle's mechanism never ran (or ran in the control) for: "
+                + ", ".join(manipulation_failed)
+                + f" -- its log lacks the expected marker {design.get('mechanism')!r}; "
+                "re-collect with the arm's real run log before comparing rates"
+            ),
+            "powered": False,
+        }
+
     metrics = {}
     for row in rows:
         arm = str(row.get("arm"))
         preflight = row.get("preflight") or {}
         funnel = row.get("funnel")
+        funnel_map = funnel if isinstance(funnel, Mapping) else {}
+        edge = funnel_map.get("edge_challenge")
+        edge = edge if isinstance(edge, Mapping) else None
+        attempted = funnel_map.get("attempted") if isinstance(funnel, Mapping) else None
+        registered = funnel_map.get("registered") if isinstance(funnel, Mapping) else None
         metrics[arm] = {
-            "attempted": funnel.get("attempted") if isinstance(funnel, Mapping) else None,
+            "attempted": attempted,
+            "registered": registered,
             "registered_per_attempted": _rate(funnel, "registered_per_attempted"),
+            # Derived, not a second measurement: one attempt spends one fresh
+            # mailbox slot, so ``attempted / registered`` is what the plan calls
+            # ``mailboxes_consumed_per_registered`` -- the benefit metric, since
+            # a recovered challenge is a mailbox that was not burned.
+            "mailboxes_consumed_per_registered": _per_registered(attempted, registered),
             "probes": preflight.get("probes"),
             "probes_ok": preflight.get("probes_ok"),
             "probes_cloudflare": preflight.get("probes_cloudflare"),
@@ -315,6 +855,14 @@ def compare_records(records: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
             "failure_classes": (funnel or {}).get("registration_failures_by_class")
             if isinstance(funnel, Mapping)
             else None,
+            # ``None`` = the funnel carried no such block, which is *not* zero:
+            # it means this run could not answer the question at all.
+            "edge_challenge_hits": _class_count(edge, "hits") if edge is not None else None,
+            "edge_challenge_rotations": _class_count(edge, "rotations") if edge is not None else None,
+            "edge_challenge_rotate_failed": _class_count(edge, "rotate_failed") if edge is not None else None,
+            "mechanism_marker": row.get("mechanism_marker"),
+            "mechanism_seen": row.get("mechanism_seen"),
+            "mechanism_ok": row.get("mechanism_ok"),
         }
 
     powered = all(
@@ -331,6 +879,75 @@ def compare_records(records: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
         "verdict": verdict,
         "reason": reason,
     }
+
+
+def _rule_inflow_challenge_handoff(metrics: Mapping[str, Mapping[str, Any]]) -> tuple[str, str]:
+    """§4's three-arm rule, with §4.1's invalid-result criteria applied first.
+
+    Split out because it is the only rule with a *conditional* manipulation
+    check: "the exit really moved" can only be asked of a window in which a
+    challenge actually happened, so a challenge-free run is ``not_judgeable``
+    rather than a fake ``manipulation_failed``.
+    """
+    observe = metrics.get("observe") or {}
+    rotate = metrics.get("rotate") or {}
+    handoff = metrics.get("handoff") or {}
+    h2_note = "H2 (handoff) is not judged: its switch does not exist yet (S4)"
+
+    if any(item.get("edge_challenge_hits") is None for item in (observe, rotate, handoff)):
+        return "inconclusive", "the batch funnel carries no edge_challenge block; re-collect from a run that emits it"
+    total_hits = sum(int(item.get("edge_challenge_hits") or 0) for item in (observe, rotate, handoff))
+    if total_hits == 0:
+        # §4.1: an empty window measured nothing -- it is not "no effect".
+        return (
+            "not_judgeable",
+            "no edge challenge occurred in any arm; the window measured nothing (change window/exit pool and re-run), "
+            + h2_note,
+        )
+
+    observe_rate, rotate_rate = observe.get("registered_per_attempted"), rotate.get("registered_per_attempted")
+    if observe_rate is None or rotate_rate is None:
+        return "inconclusive", "registered_per_attempted unavailable (no batch funnel provided)"
+
+    # §4 manipulation check: an arm that observed challenges but never moved the
+    # exit is an ``observe`` arm wearing a label, and its rate proves nothing.
+    if int(rotate.get("edge_challenge_rotations") or 0) == 0:
+        return (
+            "not_judgeable",
+            "the rotate arm observed challenges but rotated 0 times "
+            f"(failed={rotate.get('edge_challenge_rotate_failed')}): a single-slot pool or the switch did not take effect, "
+            "so this arm is a copy of observe, " + h2_note,
+        )
+
+    new_classes = _new_failure_class_keys(observe.get("failure_classes"), rotate.get("failure_classes"))
+    if new_classes:
+        return (
+            "stop_all_arms",
+            f"the rotate arm produced failure classes the control never did ({new_classes}); stop all three arms and return to observe, "
+            + h2_note,
+        )
+
+    observe_slots, rotate_slots = (
+        observe.get("mailboxes_consumed_per_registered"),
+        rotate.get("mailboxes_consumed_per_registered"),
+    )
+    if rotate_rate > observe_rate + RATE_DELTA:
+        if rotate_slots is not None and observe_slots is not None and rotate_slots > observe_slots:
+            # Monotone in the rate, so this is a bookkeeping contradiction, not
+            # a close call -- surface it instead of declaring a win.
+            return (
+                "inconclusive",
+                f"rotate rate {rotate_rate} > observe {observe_rate} + {RATE_DELTA} but mailbox cost rose "
+                f"({rotate_slots} > {observe_slots}); the derived metric disagrees with the rate, " + h2_note,
+            )
+        return (
+            "favor_rotate",
+            f"rotate {rotate_rate} > observe {observe_rate} + {RATE_DELTA} with no new failure class "
+            f"(mailboxes per registration {observe_slots} -> {rotate_slots}); " + h2_note,
+        )
+    if observe_rate > rotate_rate + RATE_DELTA:
+        return "keep_default_off", f"rotate {rotate_rate} < observe {observe_rate} - {RATE_DELTA}; " + h2_note
+    return "inconclusive", f"success rates within {RATE_DELTA}: observe={observe_rate} rotate={rotate_rate}; " + h2_note
 
 
 def _rule(experiment: str, metrics: Mapping[str, Mapping[str, Any]], powered: bool) -> tuple[str, str]:
@@ -364,6 +981,155 @@ def _rule(experiment: str, metrics: Mapping[str, Mapping[str, Any]], powered: bo
             return "keep_default_off", f"bundle {b_rate} < default {d_rate} - {RATE_DELTA}"
         return "inconclusive", f"success rates within {RATE_DELTA}: default={d_rate} bundle={b_rate}"
 
+    if experiment == "p1-4-prime-password-page":
+        default = metrics.get("default") or {}
+        prime = metrics.get("prime") or {}
+        d_rate, p_rate = default.get("registered_per_attempted"), prime.get("registered_per_attempted")
+        if d_rate is None or p_rate is None:
+            return "inconclusive", "registered_per_attempted unavailable (no batch funnel provided)"
+        mailbox_growth = _failure_class_growth(default.get("failure_classes"), prime.get("failure_classes"), "mailbox")
+        if p_rate > d_rate + RATE_DELTA:
+            if mailbox_growth:
+                return (
+                    "favor_prime_with_red_flag",
+                    f"prime {p_rate} > default {d_rate} + {RATE_DELTA}, but mailbox-class failures grew: {mailbox_growth}",
+                )
+            return "favor_prime", f"prime {p_rate} > default {d_rate} + {RATE_DELTA}"
+        if d_rate > p_rate + RATE_DELTA:
+            return "keep_default_off", f"prime {p_rate} < default {d_rate} - {RATE_DELTA}"
+        return "inconclusive", f"success rates within {RATE_DELTA}: default={d_rate} prime={p_rate}"
+
+    if experiment in {"p1-5-signup-continue-screen-hint", "p1-8-email-verification-continue-hint"}:
+        default = metrics.get("default") or {}
+        hint = metrics.get("hint") or {}
+        d_rate, h_rate = default.get("registered_per_attempted"), hint.get("registered_per_attempted")
+        if d_rate is None or h_rate is None:
+            return "inconclusive", "registered_per_attempted unavailable (no batch funnel provided)"
+        auth_growth = _failure_class_growth(default.get("failure_classes"), hint.get("failure_classes"), "auth_state")
+        if auth_growth:
+            return (
+                "keep_default_off",
+                f"declared screen conflicts with the server's transaction reading; auth_state failures grew: {auth_growth}",
+            )
+        if h_rate > d_rate + RATE_DELTA:
+            return "favor_hint", f"hint {h_rate} > default {d_rate} + {RATE_DELTA}"
+        if d_rate > h_rate + RATE_DELTA:
+            return "keep_default_off", f"hint {h_rate} < default {d_rate} - {RATE_DELTA}"
+        return "inconclusive", f"success rates within {RATE_DELTA}: default={d_rate} hint={h_rate}"
+
+    if experiment == "p1-9-prime-navigation-headers":
+        default = metrics.get("default") or {}
+        headers = metrics.get("headers") or {}
+        d_rate, h_rate = default.get("registered_per_attempted"), headers.get("registered_per_attempted")
+        if d_rate is None or h_rate is None:
+            return "inconclusive", "registered_per_attempted unavailable (no batch funnel provided)"
+        auth_growth = _failure_class_growth(
+            default.get("failure_classes"), headers.get("failure_classes"), "auth_state"
+        )
+        if auth_growth:
+            return (
+                "keep_default_off",
+                f"the navigation headers disturbed the transaction; auth_state failures grew: {auth_growth}",
+            )
+        if h_rate > d_rate + RATE_DELTA:
+            return "favor_headers", f"headers {h_rate} > default {d_rate} + {RATE_DELTA}"
+        if d_rate > h_rate + RATE_DELTA:
+            return "keep_default_off", f"headers {h_rate} < default {d_rate} - {RATE_DELTA}"
+        return "inconclusive", f"success rates within {RATE_DELTA}: default={d_rate} headers={h_rate}"
+
+    if experiment == "p1-10-signin-screen-hint":
+        default = metrics.get("default") or {}
+        candidate = metrics.get("login_or_signup") or {}
+        d_rate, c_rate = default.get("registered_per_attempted"), candidate.get("registered_per_attempted")
+        if d_rate is None or c_rate is None:
+            return "inconclusive", "registered_per_attempted unavailable (no batch funnel provided)"
+        auth_growth = _failure_class_growth(
+            default.get("failure_classes"), candidate.get("failure_classes"), "auth_state"
+        )
+        if auth_growth:
+            return (
+                "keep_default_off",
+                f"the declared signin screen conflicts with the server's transaction reading; auth_state failures grew: {auth_growth}",
+            )
+        if c_rate > d_rate + RATE_DELTA:
+            return "favor_login_or_signup", f"login_or_signup {c_rate} > default {d_rate} + {RATE_DELTA}"
+        if d_rate > c_rate + RATE_DELTA:
+            return "keep_default_off", f"login_or_signup {c_rate} < default {d_rate} - {RATE_DELTA}"
+        return "inconclusive", f"success rates within {RATE_DELTA}: default={d_rate} login_or_signup={c_rate}"
+
+    if experiment == "p1-11-signin-prompt-login":
+        default = metrics.get("default") or {}
+        candidate = metrics.get("prompt_login") or {}
+        d_rate, c_rate = default.get("registered_per_attempted"), candidate.get("registered_per_attempted")
+        if d_rate is None or c_rate is None:
+            return "inconclusive", "registered_per_attempted unavailable (no batch funnel provided)"
+        auth_growth = _failure_class_growth(
+            default.get("failure_classes"), candidate.get("failure_classes"), "auth_state"
+        )
+        if auth_growth:
+            return (
+                "keep_default_off",
+                f"the declared prompt conflicts with the server's transaction reading; auth_state failures grew: {auth_growth}",
+            )
+        if c_rate > d_rate + RATE_DELTA:
+            return "favor_prompt_login", f"prompt_login {c_rate} > default {d_rate} + {RATE_DELTA}"
+        if d_rate > c_rate + RATE_DELTA:
+            return "keep_default_off", f"prompt_login {c_rate} < default {d_rate} - {RATE_DELTA}"
+        return "inconclusive", f"success rates within {RATE_DELTA}: default={d_rate} prompt_login={c_rate}"
+
+    if experiment == "p1-12-signin-locale":
+        default = metrics.get("default") or {}
+        candidate = metrics.get("locale") or {}
+        d_rate, c_rate = default.get("registered_per_attempted"), candidate.get("registered_per_attempted")
+        if d_rate is None or c_rate is None:
+            return "inconclusive", "registered_per_attempted unavailable (no batch funnel provided)"
+        auth_growth = _failure_class_growth(
+            default.get("failure_classes"), candidate.get("failure_classes"), "auth_state"
+        )
+        if auth_growth:
+            return (
+                "keep_default_off",
+                f"the declared locale conflicts with the server's transaction reading; auth_state failures grew: {auth_growth}",
+            )
+        if c_rate > d_rate + RATE_DELTA:
+            return "favor_locale", f"locale {c_rate} > default {d_rate} + {RATE_DELTA}"
+        if d_rate > c_rate + RATE_DELTA:
+            return "keep_default_off", f"locale {c_rate} < default {d_rate} - {RATE_DELTA}"
+        return "inconclusive", f"success rates within {RATE_DELTA}: default={d_rate} locale={c_rate}"
+
+    if experiment == "p1-6-prime-about-you-page":
+        default = metrics.get("default") or {}
+        prime = metrics.get("prime") or {}
+        d_rate, p_rate = default.get("registered_per_attempted"), prime.get("registered_per_attempted")
+        if d_rate is None or p_rate is None:
+            return "inconclusive", "registered_per_attempted unavailable (no batch funnel provided)"
+        account_growth = _failure_class_growth(default.get("failure_classes"), prime.get("failure_classes"), "account")
+        if account_growth:
+            return (
+                "keep_default_off",
+                f"the navigation disturbed the transaction; account-class failures grew: {account_growth}",
+            )
+        if p_rate > d_rate + RATE_DELTA:
+            return "favor_prime", f"prime {p_rate} > default {d_rate} + {RATE_DELTA}"
+        if d_rate > p_rate + RATE_DELTA:
+            return "keep_default_off", f"prime {p_rate} < default {d_rate} - {RATE_DELTA}"
+        return "inconclusive", f"success rates within {RATE_DELTA}: default={d_rate} prime={p_rate}"
+
+    if experiment == "p1-7-create-disallowed-backoff":
+        default = metrics.get("default") or {}
+        backoff = metrics.get("backoff") or {}
+        d_rate, b_rate = default.get("registered_per_attempted"), backoff.get("registered_per_attempted")
+        if d_rate is None or b_rate is None:
+            return "inconclusive", "registered_per_attempted unavailable (no batch funnel provided)"
+        if b_rate > d_rate + RATE_DELTA:
+            return "favor_backoff", f"backoff {b_rate} > default {d_rate} + {RATE_DELTA}"
+        if d_rate > b_rate + RATE_DELTA:
+            return "keep_default_off", f"backoff {b_rate} < default {d_rate} - {RATE_DELTA}"
+        return "inconclusive", f"success rates within {RATE_DELTA}: default={d_rate} backoff={b_rate}"
+
+    if experiment == "p0-2b-inflow-challenge-handoff":
+        return _rule_inflow_challenge_handoff(metrics)
+
     if experiment == "p0-2-cloudflare-observation":
         observe = metrics.get("observe") or {}
         return (
@@ -373,6 +1139,35 @@ def _rule(experiment: str, metrics: Mapping[str, Mapping[str, Any]], powered: bo
         )
 
     return "inconclusive", "no decision rule registered for this experiment"
+
+
+def _class_count(mapping: Mapping[str, Any] | None, key: str) -> int:
+    """Coerce one funnel failure-class count; absent or non-numeric JSON is 0.
+
+    Funnel maps come from ``registration_funnel`` (always ints), but an arm
+    record is a JSON file an operator can hand-edit; one bad key must not kill
+    the whole comparison with a ValueError deep inside ``compare_records``.
+    """
+    value = mapping.get(key) if isinstance(mapping, Mapping) else None
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _failure_class_growth(
+    default: Mapping[str, Any] | None, candidate: Mapping[str, Any] | None, class_name: str
+) -> dict[str, tuple[int, int]]:
+    """Counts of one failure *class* whose count grew in the candidate arm. Pure.
+
+    Funnel failure maps are keyed by class code (``mailbox``, ``auth_state``,
+    ...), so "did the OTP-delivery family grow?" is a lookup of the one key --
+    unlike ``_sentinel_failure_growth``, which scans every key whose name
+    contains ``sentinel`` inside the class map.
+    """
+    before = _class_count(default, class_name)
+    after = _class_count(candidate, class_name)
+    return {class_name: (before, after)} if after > before else {}
 
 
 def _sentinel_failure_growth(
@@ -424,6 +1219,13 @@ def _cmd_collect(args: argparse.Namespace) -> int:
             "pass --config pointing at the config used for this run",
             file=sys.stderr,
         )
+    if _mechanism_failed(record):
+        print(
+            "WARNING: the toggle's mechanism never ran in this log "
+            f"(expected marker {record['mechanism_marker']!r}, seen={record['mechanism_seen']}); "
+            "the arm is a fake comparison -- pass --log pointing at this arm's real run log",
+            file=sys.stderr,
+        )
     return 0
 
 
@@ -433,7 +1235,13 @@ def _cmd_compare(args: argparse.Namespace) -> int:
         if "=" not in spec:
             raise SystemExit(f"--arm must be NAME=FILE, got {spec!r}")
         _name, path = spec.split("=", 1)
-        records.append(json.loads(Path(path).read_text(encoding="utf-8")))
+        record_path = Path(path)
+        try:
+            records.append(json.loads(record_path.read_text(encoding="utf-8")))
+        except FileNotFoundError as exc:
+            raise SystemExit(f"arm record not found: {record_path}") from exc
+        except (ValueError, OSError) as exc:
+            raise SystemExit(f"arm record unreadable as JSON ({record_path}): {exc}") from exc
     report = compare_records(records)
     print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
     print(
@@ -442,7 +1250,7 @@ def _cmd_compare(args: argparse.Namespace) -> int:
         "rate (see docs/current/protocol-registration.md, Validation limits).",
         file=sys.stderr,
     )
-    return 0 if report["verdict"] not in {"unverified", "mixed_experiments", "no_data"} else 1
+    return 0 if report["verdict"] not in {"unverified", "manipulation_failed", "mixed_experiments", "no_data"} else 1
 
 
 def build_parser() -> argparse.ArgumentParser:

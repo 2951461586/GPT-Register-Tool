@@ -52,15 +52,17 @@ def _follow_continue_url(session, url, base_headers, referer="", label="continue
     """GET a continue URL (resolved against auth_base) with impersonation."""
     if not url:
         return None
-    full_url = _absolute_url(
-        CFG["chatgpt"].get("auth_base_url", "https://auth.openai.com"), url
-    )
+    full_url = _absolute_url(CFG["chatgpt"].get("auth_base_url", "https://auth.openai.com"), url)
     headers = {**base_headers, "Accept": "text/html,application/xhtml+xml"}
     if referer:
         headers["Referer"] = referer
     response = request_with_retry(
-        session, "get", full_url, label=label,
-        headers=headers, impersonate=auth_impersonate(),
+        session,
+        "get",
+        full_url,
+        label=label,
+        headers=headers,
+        impersonate=auth_impersonate(),
     )
     print(f"  {label}: {response.status_code} {response.url}")
     return response
@@ -76,6 +78,11 @@ def _minimal_chatgpt_cookie_header(cookie_header) -> str:
         "__Secure-next-auth.callback-url",
         "__Secure-next-auth.session-token",
     }
+    chunked_prefixes = (
+        "__Host-next-auth.csrf-token.",
+        "__Secure-next-auth.callback-url.",
+        "__Secure-next-auth.session-token.",
+    )
     output = []
     for item in str(cookie_header or "").split(";"):
         item = item.strip()
@@ -84,7 +91,7 @@ def _minimal_chatgpt_cookie_header(cookie_header) -> str:
         name, value = item.split("=", 1)
         name = name.strip()
         value = value.strip()
-        if name in keep and value:
+        if (name in keep or name.startswith(chunked_prefixes)) and value:
             output.append(f"{name}={value}")
     return "; ".join(output)
 
@@ -98,9 +105,7 @@ def _cookie_header(session) -> str:
         items = cookies.get_dict().items()
     else:
         items = [(cookie.name, cookie.value) for cookie in cookies]
-    return _minimal_chatgpt_cookie_header(
-        "; ".join(f"{name}={value}" for name, value in items)
-    )
+    return _minimal_chatgpt_cookie_header("; ".join(f"{name}={value}" for name, value in items))
 
 
 def _cookie_presence(session):
@@ -123,10 +128,7 @@ def _cookie_presence(session):
     """
     names = set()
     try:
-        names = {
-            str(getattr(cookie, "name", cookie) or "")
-            for cookie in session.cookies
-        }
+        names = {str(getattr(cookie, "name", cookie) or "") for cookie in session.cookies}
     except Exception:
         try:
             names = set(session.cookies.get_dict())
@@ -177,8 +179,13 @@ def _validate_email_otp(
     for endpoint in endpoints:
         url = _absolute_url(auth_base, endpoint)
         r = request_with_retry(
-            session, "post", url, label=f"Email OTP validate {endpoint}",
-            json=payload, headers=validate_headers, impersonate=auth_impersonate(),
+            session,
+            "post",
+            url,
+            label=f"Email OTP validate {endpoint}",
+            json=payload,
+            headers=validate_headers,
+            impersonate=auth_impersonate(),
         )
         body = _json_or_raw(r)
         if r.status_code == 200:

@@ -71,9 +71,7 @@ class TestTwoFactorUsesTheTransportRetry(unittest.TestCase):
                 access_token="at",
                 did="did",
                 base_headers={"user-agent": "test"},
-                poll_otp_fn=lambda *a, **k: (_ for _ in ()).throw(
-                    AssertionError("the OTP fallback must not run")
-                ),
+                poll_otp_fn=lambda *a, **k: (_ for _ in ()).throw(AssertionError("the OTP fallback must not run")),
             )
 
         self.assertTrue(result.get("ok"), result.get("error"))
@@ -89,9 +87,7 @@ class TestTwoFactorUsesTheTransportRetry(unittest.TestCase):
             access_token="at",
             did="did",
             base_headers={"user-agent": "test"},
-            poll_otp_fn=lambda *a, **k: (_ for _ in ()).throw(
-                AssertionError("the OTP fallback must not run")
-            ),
+            poll_otp_fn=lambda *a, **k: (_ for _ in ()).throw(AssertionError("the OTP fallback must not run")),
         )
 
         self.assertFalse(result.get("ok"))
@@ -148,7 +144,7 @@ class TestSentinelChallengeUsesTheTransportRetry(unittest.TestCase):
     def test_transport_error_is_retried(self):
         with _zero_retry_delay():
             session = _FlakySentinelSession()
-            payload = sentinel_client._challenge(
+            payload, proof = sentinel_client._challenge(
                 session,
                 flow="username_password_create",
                 device_id="device",
@@ -157,6 +153,10 @@ class TestSentinelChallengeUsesTheTransportRetry(unittest.TestCase):
             )
 
         self.assertEqual(payload["token"], "sentinel-token")
+        # The proof travels with the challenge (turnstile.dx binding): the
+        # generated requirements token is returned alongside the payload so
+        # the runner can decode dx with the key the server encrypted it with.
+        self.assertTrue(proof.startswith("gAAAAAC"))
         self.assertEqual(session.attempts, 2)
 
 
@@ -248,16 +248,11 @@ class TestNoRawSessionVerbInTheRegistrationLane(unittest.TestCase):
     def test_guarded_modules_route_every_verb_through_retry(self):
         for relative in GUARDED_MODULES:
             source = (REPO_ROOT / relative).read_text(encoding="utf-8")
-            self.assertEqual(
-                _raw_session_calls(source), [], f"raw session verb in {relative}"
-            )
+            self.assertEqual(_raw_session_calls(source), [], f"raw session verb in {relative}")
 
     def test_scanner_flags_a_raw_verb(self):
         """Negative test: the gate above must not be a no-op."""
-        sample = (
-            "def step(session):\n"
-            "    return session.get('https://chatgpt.com', timeout=15)\n"
-        )
+        sample = "def step(session):\n    return session.get('https://chatgpt.com', timeout=15)\n"
         self.assertEqual(_raw_session_calls(sample), [(2, "session", "get")])
 
     def test_scanner_ignores_a_plain_variable(self):

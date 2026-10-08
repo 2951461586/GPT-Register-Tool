@@ -13,6 +13,7 @@
     "sms_tool/accounts/recovery_batch.py": 5,
     "sms_tool/agent_identity.py": 6,
     "sms_tool/auth_flow/sentinel_flow.py": 1,
+    "sms_tool/auth_flow/signup.py": 1,
     "sms_tool/auth_flow/totp.py": 1,
     "sms_tool/auth_headers.py": 7,
     "sms_tool/batch_runner.py": 12,
@@ -73,7 +74,7 @@
     "sms_tool/providers/mailbox_smailr.py": 6,
     "sms_tool/providers/smailr_client.py": 2,
     "sms_tool/proxy_bridge.py": 4,
-    "sms_tool/proxy_edge_probe.py": 1,
+    "sms_tool/proxy_edge_probe.py": 2,
     "sms_tool/proxy_pool.py": 1,
     "sms_tool/proxy_registry.py": 2,
     "sms_tool/proxy_routing.py": 1,
@@ -110,5 +111,5 @@
     "sms_tool/upi_link/stripe.py": 1,
     "sms_tool/wallet_transport.py": 5
   },
-  "total": 418
+  "total": 420
 }

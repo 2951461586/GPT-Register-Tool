@@ -33,42 +33,53 @@ logger = logging.getLogger(__name__)
 
 # 两条路径共有的核心键。契约测试（tests/test_registration_result_contract.py）
 # 断言两条路径产出的 result 都覆盖这一集合；新增共有键时先改这里再改两条路径。
-COMMON_RESULT_KEYS = frozenset({
-    "access_token",
-    "auth_fingerprint_profile",
-    "auth_session",
-    "birthdate",
-    "cookie_header",
-    "device_id",
-    "email",
-    "error",
-    "identity_context",
-    "mailbox",
-    "name",
-    "password",
-    "plan_type",
-    "proxy_audit",
-    "fingerprint_geo_audit",
-    "post_registration_ready",
-    "quota_status",
-    "register_method",
-    "registration_country",
-    "registration_mode",
-    "registration_state",
-    "registration_success_basis",
-    "registration_warning",
-    "response",
-    "session_type",
-    "source",
-    "success",
-    "totp_secret",
-    "twofa_enrollment",
-    "id_token",
-})
+COMMON_RESULT_KEYS = frozenset(
+    {
+        "access_token",
+        "auth_fingerprint_profile",
+        "auth_session",
+        "birthdate",
+        "cookie_header",
+        "device_id",
+        "email",
+        "error",
+        "identity_context",
+        "mailbox",
+        "name",
+        "password",
+        "plan_type",
+        "proxy_audit",
+        "fingerprint_geo_audit",
+        "post_registration_ready",
+        "quota_status",
+        "register_method",
+        "registration_country",
+        "registration_mode",
+        "registration_state",
+        "registration_success_basis",
+        "registration_warning",
+        "response",
+        "session_type",
+        "source",
+        "success",
+        "totp_secret",
+        "twofa_enrollment",
+        "id_token",
+    }
+)
 
 
 def safe_proxy_audit(metadata: Mapping[str, Any] | None) -> dict[str, Any]:
-    """Allow-list non-sensitive registration egress facts."""
+    """Allow-list non-sensitive registration egress facts.
+
+    ``edge_challenge_*`` are the in-flow Cloudflare-challenge counters from
+    ``plan-2026-10-05-inflow-challenge-handoff.md`` §4.  They are **counts, not
+    identities**: the before/after exit is a sticky-session credential and must
+    never be audited, so "the exit actually moved" is expressed as
+    ``edge_challenge_rotations`` (and its failure counterpart) instead.  The
+    A/B's manipulation check reads exactly those two fields to decide whether a
+    ``rotate`` arm really rotated or is an ``observe`` arm wearing a label.
+    """
     value = metadata if isinstance(metadata, Mapping) else {}
     try:
         pool_index = int(value.get("pool_index", -1))
@@ -78,12 +89,23 @@ def safe_proxy_audit(metadata: Mapping[str, Any] | None) -> dict[str, Any]:
         rotation_generation = max(0, int(value.get("rotation_generation", 0)))
     except (TypeError, ValueError):
         rotation_generation = 0
+
+    def _count(key: str) -> int:
+        try:
+            return max(0, int(value.get(key, 0) or 0))
+        except (TypeError, ValueError):
+            return 0
+
     return {
         "pool_index": pool_index if pool_index >= 0 else -1,
         "expected_country": str(value.get("expected_country") or "").strip().upper(),
         "actual_country": str(value.get("actual_country") or "").strip().upper(),
         "scheme": str(value.get("scheme") or "").strip().lower(),
         "rotation_generation": rotation_generation,
+        "edge_challenge_hits": _count("edge_challenge_hits"),
+        "edge_challenge_unknown": _count("edge_challenge_unknown"),
+        "edge_challenge_rotations": _count("edge_challenge_rotations"),
+        "edge_challenge_rotate_failed": _count("edge_challenge_rotate_failed"),
     }
 
 
@@ -107,16 +129,16 @@ def safe_fingerprint_geo_audit(metadata: Mapping[str, Any] | None = None, **fiel
     if isinstance(allowed, (list, tuple, set, frozenset)) and allowed:
         countries = {country(item) for item in allowed} - {""}
         allowed_status = (
-            "matched" if fingerprint in countries else "mismatch"
-        ) if fingerprint and countries else "unknown"
+            ("matched" if fingerprint in countries else "mismatch") if fingerprint and countries else "unknown"
+        )
     else:
         allowed_status = str(value.get("allowed_status") or "not_configured")
         if allowed_status not in {"matched", "mismatch", "not_configured", "unknown"}:
             allowed_status = "unknown"
     return {
-        "status": (
-            "matched" if fingerprint == exit_country else "mismatch"
-        ) if fingerprint and exit_country else "unknown",
+        "status": ("matched" if fingerprint == exit_country else "mismatch")
+        if fingerprint and exit_country
+        else "unknown",
         "fingerprint_country": fingerprint,
         "exit_country": exit_country,
         "source": source,
@@ -136,7 +158,10 @@ def attach_fingerprint_geo_audit(result: dict[str, Any], metadata: Mapping[str, 
     if warnings:
         logger.warning(
             "registration fingerprint country warning: %s (fingerprint=%s exit=%s source=%s)",
-            ",".join(warnings), geo["fingerprint_country"], geo["exit_country"], geo["source"],
+            ",".join(warnings),
+            geo["fingerprint_country"],
+            geo["exit_country"],
+            geo["source"],
         )
         current_warning = sanitize_text(result.get("registration_warning"))
         result["registration_warning"] = "; ".join(

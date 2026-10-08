@@ -66,7 +66,9 @@ class RegistrationProgressTests(unittest.TestCase):
             self.assertEqual(result["registration_progress"]["last_stage"], "completed")
             stored = json.loads(path.read_text(encoding="utf-8").strip())
             self.assertTrue(stored["success"])
-            self.assertEqual([item["stage"] for item in stored["events"]][-3:], ["auth_flow", "access_token_probe", "completed"])
+            self.assertEqual(
+                [item["stage"] for item in stored["events"]][-3:], ["auth_flow", "access_token_probe", "completed"]
+            )
 
     def test_invalid_driver_still_persists_a_failed_row(self):
         """Driver/config resolution failures must not vanish before tracking starts."""
@@ -110,9 +112,7 @@ class RegistrationProgressTests(unittest.TestCase):
                 progress.persist({"success": True})
 
             stored = json.loads(path.read_text(encoding="utf-8").strip())
-            completed = [
-                item for item in stored["events"] if item["stage"] == "completed"
-            ]
+            completed = [item for item in stored["events"] if item["stage"] == "completed"]
             self.assertEqual(1, len(completed))
             self.assertEqual("success", completed[0]["status"])
 
@@ -121,26 +121,30 @@ class RegistrationProgressTests(unittest.TestCase):
             path = Path(temp_dir) / "progress.jsonl"
             progress = registration_progress.RegistrationProgress("user@example.com")
             with patch.object(registration_progress, "runtime_file", return_value=path):
-                progress.persist({
-                    "success": False,
-                    "error": "browser_registration_state_unknown",
-                    "batch_id": "batch-1",
-                    "registration_attempts": 2,
-                    "failure_class": "auth_state",
-                    "retryable": True,
-                    "registration_state": "retry_pending",
-                    "proxy_audit": {
-                        "pool_index": 0,
-                        "scheme": "http",
-                        "rotation_generation": 2,
-                    },
-                    "fingerprint_geo_audit": {
-                        "fingerprint_country": "US", "exit_country": "DE",
-                        "source": "preflight", "proxy": "http://user:secret@proxy.invalid",
-                    },
-                    "future_batch_eligible": True,
-                    "retry_disposition": "cooldown",
-                })
+                progress.persist(
+                    {
+                        "success": False,
+                        "error": "browser_registration_state_unknown",
+                        "batch_id": "batch-1",
+                        "registration_attempts": 2,
+                        "failure_class": "auth_state",
+                        "retryable": True,
+                        "registration_state": "retry_pending",
+                        "proxy_audit": {
+                            "pool_index": 0,
+                            "scheme": "http",
+                            "rotation_generation": 2,
+                        },
+                        "fingerprint_geo_audit": {
+                            "fingerprint_country": "US",
+                            "exit_country": "DE",
+                            "source": "preflight",
+                            "proxy": "http://user:secret@proxy.invalid",
+                        },
+                        "future_batch_eligible": True,
+                        "retry_disposition": "cooldown",
+                    }
+                )
             stored = json.loads(path.read_text(encoding="utf-8").strip())
             self.assertEqual(stored["batch_id"], "batch-1")
             self.assertEqual(stored["attempt"], 2)
@@ -155,6 +159,10 @@ class RegistrationProgressTests(unittest.TestCase):
                     "actual_country": "",
                     "scheme": "http",
                     "rotation_generation": 2,
+                    "edge_challenge_hits": 0,
+                    "edge_challenge_unknown": 0,
+                    "edge_challenge_rotations": 0,
+                    "edge_challenge_rotate_failed": 0,
                 },
             )
             self.assertTrue(stored["future_batch_eligible"])
@@ -165,11 +173,11 @@ class RegistrationProgressTests(unittest.TestCase):
     def test_constructor_preserves_batch_and_attempt_when_result_omits_them(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "progress.jsonl"
-            progress = registration_progress.RegistrationProgress(
-                "user@example.com", batch_id="batch-2", attempt=2
-            )
+            progress = registration_progress.RegistrationProgress("user@example.com", batch_id="batch-2", attempt=2)
             with patch.object(registration_progress, "runtime_file", return_value=path):
-                progress.persist({"success": False, "error": "registration_cancelled", "registration_state": "cancelled"})
+                progress.persist(
+                    {"success": False, "error": "registration_cancelled", "registration_state": "cancelled"}
+                )
             stored = json.loads(path.read_text(encoding="utf-8").strip())
             self.assertEqual(stored["batch_id"], "batch-2")
             self.assertEqual(stored["attempt"], 2)
@@ -178,12 +186,8 @@ class RegistrationProgressTests(unittest.TestCase):
     def test_progress_row_uses_account_reference_and_rotates(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "progress.jsonl"
-            registration_progress._append_progress_row(
-                path, {"account_ref": "first"}, max_bytes=30, backups=2
-            )
-            registration_progress._append_progress_row(
-                path, {"account_ref": "second"}, max_bytes=30, backups=2
-            )
+            registration_progress._append_progress_row(path, {"account_ref": "first"}, max_bytes=30, backups=2)
+            registration_progress._append_progress_row(path, {"account_ref": "second"}, max_bytes=30, backups=2)
 
             self.assertTrue(path.with_name("progress.jsonl.1").is_file())
             self.assertIn("second", path.read_text(encoding="utf-8"))
@@ -193,15 +197,17 @@ class RegistrationProgressTests(unittest.TestCase):
             path = Path(temp_dir) / "progress.jsonl"
             progress = registration_progress.RegistrationProgress("user@example.com")
             with patch.object(registration_progress, "runtime_file", return_value=path):
-                progress.persist({
-                    "success": False,
-                    "error": "browser_email_verification_stuck",
-                    "browser_diagnostics": {
-                        "driver": "camoufox",
-                        "url_path": "/u/email-verification",
-                        "verification_inputs": 1,
-                    },
-                })
+                progress.persist(
+                    {
+                        "success": False,
+                        "error": "browser_email_verification_stuck",
+                        "browser_diagnostics": {
+                            "driver": "camoufox",
+                            "url_path": "/u/email-verification",
+                            "verification_inputs": 1,
+                        },
+                    }
+                )
             stored = json.loads(path.read_text(encoding="utf-8").strip())
             self.assertEqual(stored["browser_diagnostics"]["url_path"], "/u/email-verification")
             self.assertEqual(stored["browser_diagnostics"]["driver"], "camoufox")
@@ -211,16 +217,17 @@ class RegistrationProgressTests(unittest.TestCase):
             path = Path(temp_dir) / "progress.jsonl"
             progress = registration_progress.RegistrationProgress("user@example.com")
             with patch.object(registration_progress, "runtime_file", return_value=path):
-                progress.persist({
-                    "success": True,
-                    "browser_diagnostics": {"driver": "camoufox", "url_path": "/"},
-                })
+                progress.persist(
+                    {
+                        "success": True,
+                        "browser_diagnostics": {"driver": "camoufox", "url_path": "/"},
+                    }
+                )
                 progress_no_diag = registration_progress.RegistrationProgress("second@example.com")
                 progress_no_diag.persist({"success": False, "error": "browser_email_otp_timeout"})
             rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
             self.assertNotIn("browser_diagnostics", rows[0])
             self.assertNotIn("browser_diagnostics", rows[1])
-
 
     def test_stage_event_carries_failure_class(self):
         """The event must be aggregatable by failure class while the run is live.
@@ -230,9 +237,7 @@ class RegistrationProgressTests(unittest.TestCase):
         could not be triaged until it was over.
         """
         progress = registration_progress.RegistrationProgress("user@example.com")
-        progress.stage(
-            "email_otp_wait", "failed", "email_otp_poll_timeout", failure_class="mailbox"
-        )
+        progress.stage("email_otp_wait", "failed", "email_otp_poll_timeout", failure_class="mailbox")
         event = progress.events[-1]
         self.assertEqual(event["stage"], "email_otp_wait")
         self.assertEqual(event["failure_class"], "mailbox")

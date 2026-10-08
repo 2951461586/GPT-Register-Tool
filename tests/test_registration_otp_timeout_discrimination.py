@@ -53,36 +53,67 @@ from sms_tool.registration_state import RegistrationStateMachine
 
 
 def _summary(keys):
-    return {"top_keys": ["checksum", "client_auth_session", "session_id"],
-            "client_auth_session_keys": list(keys), "signals": {}}
+    return {
+        "top_keys": ["checksum", "client_auth_session", "session_id"],
+        "client_auth_session_keys": list(keys),
+        "signals": {},
+    }
 
 
 # 线上真实形状（批次 25288）：注册泳道拿到码 = 17 键，无挂起标记；
 # 6 个超时的 run = 18 键，多一个 ``passwordless_email_otp_send_pending``。
-_DISPATCHED = _summary([
-    "app_name_enum", "auth_session_logging_id", "country_code_hint",
-    "destination_app_name", "email", "email_verification_mode",
-    "openai_client_id", "original_screen_hint", "passwordless_disabled",
-    "passwordless_otp_from_password_redirect", "passwordless_signup_from_default_redirect",
-    "promo", "requested_oauth_scopes", "session_id", "signup_mode",
-    "signup_source", "username",
-])
-_STUCK = _summary(list(_DISPATCHED["client_auth_session_keys"]) + [
-    "passwordless_email_otp_send_pending",
-])
+_DISPATCHED = _summary(
+    [
+        "app_name_enum",
+        "auth_session_logging_id",
+        "country_code_hint",
+        "destination_app_name",
+        "email",
+        "email_verification_mode",
+        "openai_client_id",
+        "original_screen_hint",
+        "passwordless_disabled",
+        "passwordless_otp_from_password_redirect",
+        "passwordless_signup_from_default_redirect",
+        "promo",
+        "requested_oauth_scopes",
+        "session_id",
+        "signup_mode",
+        "signup_source",
+        "username",
+    ]
+)
+_STUCK = _summary(
+    list(_DISPATCHED["client_auth_session_keys"])
+    + [
+        "passwordless_email_otp_send_pending",
+    ]
+)
 # 登录泳道形状（13 键）：服务端按登录处理，且**码照常到达**
 # （实测 da7df644 20:39:04 取码 → validate 200）。
-_LOGIN_LANE = _summary([
-    "app_name_enum", "auth_session_logging_id", "country_code_hint",
-    "destination_app_name", "email", "openai_client_id", "original_screen_hint",
-    "passwordless_login_magic_link_sent", "promo", "requested_oauth_scopes",
-    "session_id", "signup_mode", "signup_source",
-])
+_LOGIN_LANE = _summary(
+    [
+        "app_name_enum",
+        "auth_session_logging_id",
+        "country_code_hint",
+        "destination_app_name",
+        "email",
+        "openai_client_id",
+        "original_screen_hint",
+        "passwordless_login_magic_link_sent",
+        "promo",
+        "requested_oauth_scopes",
+        "session_id",
+        "signup_mode",
+        "signup_source",
+    ]
+)
 
 
 # --------------------------------------------------------------------------
 # 1) 判定器
 # --------------------------------------------------------------------------
+
 
 def test_verdict_reports_stuck_when_the_transaction_key_is_still_pending():
     assert otp_dispatch_verdict(_STUCK) == "stuck"
@@ -101,13 +132,16 @@ def test_verdict_reports_dispatched_when_no_pending_key_remains():
     assert otp_dispatch_verdict(_DISPATCHED) == "dispatched"
 
 
-@pytest.mark.parametrize("dump", [
-    None,
-    {},
-    "not a summary",
-    {"status": 404, "body": {}},          # 非 200 的 dump 没有键列表
-    {"client_auth_session_keys": []},      # body 里压根没有 client_auth_session
-])
+@pytest.mark.parametrize(
+    "dump",
+    [
+        None,
+        {},
+        "not a summary",
+        {"status": 404, "body": {}},  # 非 200 的 dump 没有键列表
+        {"client_auth_session_keys": []},  # body 里压根没有 client_auth_session
+    ],
+)
 def test_verdict_refuses_to_guess_on_unusable_dumps(dump):
     """空键列表**不能**当 ``dispatched`` —— 那是「读不到」，不是「派发完成」。"""
     assert otp_dispatch_verdict(dump) == "unknown"
@@ -116,6 +150,7 @@ def test_verdict_refuses_to_guess_on_unusable_dumps(dump):
 # --------------------------------------------------------------------------
 # 1b) 泳道判定（P0-1 判据 A：取码前止损的取证埋点）
 # --------------------------------------------------------------------------
+
 
 def test_login_lane_verdict_only_fires_on_the_magic_link_key():
     assert signup_lane_verdict(_LOGIN_LANE) == "login"
@@ -132,8 +167,7 @@ def test_signup_lane_does_not_mean_unregistered():
     assert signup_lane_verdict(_DISPATCHED) == "signup"  # 但它可能是已注册地址
 
 
-@pytest.mark.parametrize("dump", [None, {}, {"status": 500, "body": {}},
-                                  {"client_auth_session_keys": []}])
+@pytest.mark.parametrize("dump", [None, {}, {"status": 500, "body": {}}, {"client_auth_session_keys": []}])
 def test_lane_verdict_refuses_to_guess_on_unusable_dumps(dump):
     assert signup_lane_verdict(dump) == "unknown"
 
@@ -142,12 +176,60 @@ def test_lane_verdict_refuses_to_guess_on_unusable_dumps(dump):
 # 2) 处理器：判据 B 在轮询之前止损
 # --------------------------------------------------------------------------
 
-def _workflow() -> RegistrationEmailWorkflow:
+
+def test_wait_email_otp_honors_a_frozen_email_registration_section():
+    """RuntimeConfig freezes nested sections into ``mappingproxy``.
+
+    A ``dict`` check here discarded the whole ``email_registration`` section
+    (mappingproxy is NOT a dict), silently reverting the operator's OTP
+    resend window and poll timeout to the defaults. Tests that pass plain
+    dicts stayed green while every production read lost the settings.
+    """
+    from types import MappingProxyType
+
+    ops = _ops_stub()
+    poll_mock = ops.otp_poll.poll
+    workflow = _workflow(ops)
+    workflow.config = {
+        "email_registration": MappingProxyType({"remail_otp_resend_after_seconds": 75, "otp_timeout": 120})
+    }
+    workflow.runtime.otp_send_dump = _DISPATCHED
+    workflow.runtime.mailbox = type("Mailbox", (), {"provider": "remail"})()
+    poll_mock.return_value = "654321"
+
+    workflow.wait_email_otp()
+
+    assert poll_mock.call_args.kwargs["resend_after_seconds"] == 75
+
+
+def _ops_stub(**overrides):
+    """``RegistrationOperations`` mock held in a **local** variable.
+
+    The interface declares these names as functions, so reading them back off
+    ``workflow.r`` makes the static checker see ``FunctionType`` — the same
+    trap ``test_user_register_response_contract.py`` documents in its
+    docstring. Tests assert on the local (or a handle captured from it),
+    never through the typed attribute.
+    """
     ops = Mock()
     ops.otp_poll.poll = Mock(return_value="")
     ops._sanitize_text = Mock(side_effect=lambda value: str(value))
+    for name, value in overrides.items():
+        setattr(ops, name, value)
+    return ops
+
+
+def _inject_ops(workflow, **overrides):
+    object.__setattr__(workflow, "_operations", _ops_stub(**overrides))
+
+
+def _workflow(ops=None) -> RegistrationEmailWorkflow:
+    if ops is None:
+        ops = _ops_stub()
     workflow = RegistrationEmailWorkflow(
-        RegistrationStateMachine(lambda *_: None), operations=ops, config={},
+        RegistrationStateMachine(lambda *_: None),
+        operations=ops,
+        config={},
     )
     workflow.runtime.resources.mailbox_service = Mock()
     return workflow
@@ -172,11 +254,13 @@ def test_a_stuck_send_aborts_before_polling_the_mailbox():
 
 def test_a_stuck_send_never_calls_the_poller():
     """止损必须发生在轮询**之前** —— 否则它只是换了个错误名。"""
-    workflow = _workflow()
+    ops = _ops_stub()
+    poll_mock = ops.otp_poll.poll
+    workflow = _workflow(ops)
     workflow.runtime.otp_send_dump = _STUCK
     with pytest.raises(RegistrationAbort):
         workflow.wait_email_otp()
-    workflow.r.otp_poll.poll.assert_not_called()
+    poll_mock.assert_not_called()
 
 
 def test_a_stuck_send_is_classified_and_counted_as_a_dispatch_side_signal():
@@ -188,9 +272,7 @@ def test_a_stuck_send_is_classified_and_counted_as_a_dispatch_side_signal():
     assert "mailbox" in BATCH_RETRY_CLASSES
     assert registration_retry_decision("email_otp_send_stuck").failure_class == "mailbox"
     # 且脉冲把它算作**派发侧**候选信号（名字里含 ``otp_send_stuck``）。
-    assert _is_otp_ban_signal(
-        {"success": False, "error": "email_otp_send_stuck", "failure_class": "mailbox"}
-    ) is True
+    assert _is_otp_ban_signal({"success": False, "error": "email_otp_send_stuck", "failure_class": "mailbox"}) is True
 
 
 def test_the_poll_is_still_reached_when_the_dump_is_unusable():
@@ -200,20 +282,23 @@ def test_the_poll_is_still_reached_when_the_dump_is_unusable():
     assert str(excinfo.value) == "email_otp_poll_timeout"
 
 
-@pytest.mark.parametrize("dump, provider, expected", [
-    # 渠道在重发名单里 ⇒ 只有邮箱侧后缀（这一轮**有**第二次发码机会）。
-    (_DISPATCHED, "remail", f"email_otp_poll_timeout:{OTP_MAILBOX_SIDE_MARKER}"),
-    (_DISPATCHED, "icloud_url", f"email_otp_poll_timeout:{OTP_MAILBOX_SIDE_MARKER}"),
-    # 渠道不在名单里 ⇒ 追加**能力**后缀（不是第三个根因）。
-    (_DISPATCHED, "gmail", f"email_otp_poll_timeout:{OTP_MAILBOX_SIDE_MARKER}:{OTP_NO_RESEND_MARKER}"),
-    (_LOGIN_LANE, "imap", f"email_otp_poll_timeout:{OTP_MAILBOX_SIDE_MARKER}:{OTP_NO_RESEND_MARKER}"),
-    # 拿不到渠道名（运行态里没有 mailbox）⇒ 空串不在名单里 ⇒ 也标「无重发」。
-    (_DISPATCHED, None, f"email_otp_poll_timeout:{OTP_MAILBOX_SIDE_MARKER}:{OTP_NO_RESEND_MARKER}"),
-    # dump 不可用 ⇒ 没有证据 ⇒ 裸名，**不许**加任何后缀（连能力后缀也不加：
-    # 那会让人以为「根因已判定」）。
-    ({"status": 500, "body": {}}, "gmail", "email_otp_poll_timeout"),
-    ({}, "remail", "email_otp_poll_timeout"),
-])
+@pytest.mark.parametrize(
+    "dump, provider, expected",
+    [
+        # 渠道在重发名单里 ⇒ 只有邮箱侧后缀（这一轮**有**第二次发码机会）。
+        (_DISPATCHED, "remail", f"email_otp_poll_timeout:{OTP_MAILBOX_SIDE_MARKER}"),
+        (_DISPATCHED, "icloud_url", f"email_otp_poll_timeout:{OTP_MAILBOX_SIDE_MARKER}"),
+        # 渠道不在名单里 ⇒ 追加**能力**后缀（不是第三个根因）。
+        (_DISPATCHED, "gmail", f"email_otp_poll_timeout:{OTP_MAILBOX_SIDE_MARKER}:{OTP_NO_RESEND_MARKER}"),
+        (_LOGIN_LANE, "imap", f"email_otp_poll_timeout:{OTP_MAILBOX_SIDE_MARKER}:{OTP_NO_RESEND_MARKER}"),
+        # 拿不到渠道名（运行态里没有 mailbox）⇒ 空串不在名单里 ⇒ 也标「无重发」。
+        (_DISPATCHED, None, f"email_otp_poll_timeout:{OTP_MAILBOX_SIDE_MARKER}:{OTP_NO_RESEND_MARKER}"),
+        # dump 不可用 ⇒ 没有证据 ⇒ 裸名，**不许**加任何后缀（连能力后缀也不加：
+        # 那会让人以为「根因已判定」）。
+        ({"status": 500, "body": {}}, "gmail", "email_otp_poll_timeout"),
+        ({}, "remail", "email_otp_poll_timeout"),
+    ],
+)
 def test_wait_email_otp_suffixes_its_timeout_with_the_dump_verdict(dump, provider, expected):
     with pytest.raises(RegistrationAbort) as excinfo:
         _wait(dump, provider)
@@ -236,17 +321,18 @@ def test_the_no_resend_suffix_is_channel_capability_not_a_third_root_cause():
 
 def test_send_email_otp_keeps_the_dump_instead_of_discarding_it():
     """``send_email_otp`` 以前只打印 dump、把返回值丢掉 —— 判据就没了输入。"""
-    workflow = _workflow()
+    ops = _ops_stub(
+        _email_otp_send_url=Mock(return_value="https://auth.openai.com/x"),
+        _follow_continue_url=Mock(),
+        _is_signup_password_step=Mock(return_value=False),
+        _fetch_client_auth_session_dump=Mock(return_value=_STUCK),
+        SyntheticResponse=Mock(return_value=Mock(status_code=204)),
+        _json_or_raw=Mock(return_value={"assumed_pre_sent": True}),
+    )
+    workflow = _workflow(ops)
     workflow.runtime.reg_data = {}
     workflow.runtime.registration_mode = "passwordless"
     workflow.runtime.signup_state = {"url": "https://auth.openai.com/email-verification"}
-    workflow.r.send_email_otp_stub = None
-    workflow.r._email_otp_send_url = Mock(return_value="https://auth.openai.com/x")
-    workflow.r._follow_continue_url = Mock()
-    workflow.r._is_signup_password_step = Mock(return_value=False)
-    workflow.r._fetch_client_auth_session_dump = Mock(return_value=_STUCK)
-    workflow.r.SyntheticResponse = Mock(return_value=Mock(status_code=204))
-    workflow.r._json_or_raw = Mock(return_value={"assumed_pre_sent": True})
 
     workflow.send_email_otp()
 
@@ -254,21 +340,29 @@ def test_send_email_otp_keeps_the_dump_instead_of_discarding_it():
 
 
 def _stub_auth_flow(workflow, dump):
-    """把 ``auth_flow`` 的请求面全部桩掉，只留 P0-1 埋点那条路径真实执行。"""
-    r = workflow.r
-    r.request_with_retry = Mock(return_value=Mock(status_code=200))
-    r._json_or_raw = Mock(return_value={"csrfToken": "csrf-abc"})
-    r.chatgpt_headers = Mock(return_value={})
-    r.nextauth_headers = Mock(return_value={})
-    r.auth_impersonate = Mock(return_value=None)
-    r._passwordless_signin_attempts = Mock(return_value=1)
-    r._prepare_signup_auth_state = Mock(
-        return_value={"status": 200, "ok": True, "url": "https://auth.openai.com/email-verification"}
+    """把 ``auth_flow`` 的请求面全部桩掉，只留 P0-1 埋点那条路径真实执行。
+
+    Returns the ``request_with_retry`` mock so tests can assert on the local
+    handle (reading it back off ``workflow.r`` types as ``FunctionType``).
+    """
+    request_mock = Mock(return_value=Mock(status_code=200))
+    _inject_ops(
+        workflow,
+        request_with_retry=request_mock,
+        _json_or_raw=Mock(return_value={"csrfToken": "csrf-abc"}),
+        chatgpt_headers=Mock(return_value={}),
+        nextauth_headers=Mock(return_value={}),
+        auth_impersonate=Mock(return_value=None),
+        _passwordless_signin_attempts=Mock(return_value=1),
+        _prepare_signup_auth_state=Mock(
+            return_value={"status": 200, "ok": True, "url": "https://auth.openai.com/email-verification"}
+        ),
+        _is_chatgpt_auth_login_landing=Mock(return_value=False),
+        _fetch_client_auth_session_dump=Mock(return_value=dump),
     )
-    r._is_chatgpt_auth_login_landing = Mock(return_value=False)
-    r._fetch_client_auth_session_dump = Mock(return_value=dump)
     workflow.runtime.registration_mode = "passwordless"
     workflow.runtime.username = ""  # 让 _persist_checkpoint 早退，不碰真实存储
+    return request_mock
 
 
 def test_auth_flow_records_the_signup_lane_hint_before_spending_a_code():
@@ -278,13 +372,13 @@ def test_auth_flow_records_the_signup_lane_hint_before_spending_a_code():
     只有 3/11，样本还不足以承担误判代价（误判会把一个可注册地址永久拉黑）。
     """
     workflow = _workflow()
-    _stub_auth_flow(workflow, _LOGIN_LANE)
+    request_mock = _stub_auth_flow(workflow, _LOGIN_LANE)
 
     workflow.auth_flow()
 
     assert workflow.runtime.signup_dump == _LOGIN_LANE
     assert workflow.runtime.signup_lane == "login"
-    assert workflow.r.request_with_retry.call_args_list[0].kwargs["attempts"] == 1
+    assert request_mock.call_args_list[0].kwargs["attempts"] == 1
 
 
 def test_auth_flow_leaves_the_lane_unknown_when_the_dump_is_unusable():
@@ -298,16 +392,18 @@ def test_auth_flow_leaves_the_lane_unknown_when_the_dump_is_unusable():
 
 
 def test_send_email_otp_stores_an_empty_dump_when_the_probe_returns_junk():
-    workflow = _workflow()
+    ops = _ops_stub(
+        _email_otp_send_url=Mock(return_value="https://auth.openai.com/x"),
+        _follow_continue_url=Mock(),
+        _is_signup_password_step=Mock(return_value=False),
+        _fetch_client_auth_session_dump=Mock(return_value=None),
+        SyntheticResponse=Mock(return_value=Mock(status_code=204)),
+        _json_or_raw=Mock(return_value={"assumed_pre_sent": True}),
+    )
+    workflow = _workflow(ops)
     workflow.runtime.reg_data = {}
     workflow.runtime.registration_mode = "passwordless"
     workflow.runtime.signup_state = {"url": "https://auth.openai.com/email-verification"}
-    workflow.r._email_otp_send_url = Mock(return_value="https://auth.openai.com/x")
-    workflow.r._follow_continue_url = Mock()
-    workflow.r._is_signup_password_step = Mock(return_value=False)
-    workflow.r._fetch_client_auth_session_dump = Mock(return_value=None)
-    workflow.r.SyntheticResponse = Mock(return_value=Mock(status_code=204))
-    workflow.r._json_or_raw = Mock(return_value={"assumed_pre_sent": True})
 
     workflow.send_email_otp()
 
@@ -318,22 +414,19 @@ def test_send_email_otp_stores_an_empty_dump_when_the_probe_returns_junk():
 # 3) 脉冲按后缀分辨
 # --------------------------------------------------------------------------
 
+
 def _fail(error, failure_class="mailbox"):
     return {"success": False, "error": error, "failure_class": failure_class}
 
 
 def test_mailbox_side_timeout_is_not_a_ban_signal():
     """旧判据在这条上答 True（子串 ``otp_poll_timeout`` 命中），这是 P0-2 的修复点。"""
-    assert _is_otp_ban_signal(
-        _fail(f"email_otp_poll_timeout:{OTP_MAILBOX_SIDE_MARKER}")
-    ) is False
+    assert _is_otp_ban_signal(_fail(f"email_otp_poll_timeout:{OTP_MAILBOX_SIDE_MARKER}")) is False
 
 
 def test_stuck_send_is_a_dispatch_side_signal():
     """``otp_send_stuck`` 是**派发侧**候选信号 —— 够不够格叫封禁另由整轮一致性判。"""
-    assert _is_otp_ban_signal(
-        _fail(f"email_otp_poll_timeout:{OTP_UNDISPATCHED_MARKER}")
-    ) is True
+    assert _is_otp_ban_signal(_fail(f"email_otp_poll_timeout:{OTP_UNDISPATCHED_MARKER}")) is True
 
 
 def test_bare_timeout_falls_back_to_the_legacy_substring_rule():
@@ -360,6 +453,7 @@ def test_the_combined_no_resend_suffix_is_still_not_a_ban_signal():
 # --------------------------------------------------------------------------
 # 3b) 整轮一致性：混合结局证伪出口封禁
 # --------------------------------------------------------------------------
+
 
 def test_a_mixed_wave_is_never_an_ip_ban():
     """每个账号钉在池里各自的出口上（``account_proxy_index = i % len(pool)``）。
@@ -402,15 +496,20 @@ def test_the_suffix_decision_is_load_bearing_in_a_real_wave(no_sleep):
             run_one_fn=run_one,
             workers=4,
             pulse_config=PulseConfig(
-                enabled=True, wave_size=wave_size, wave_delay_seconds=3,
-                ban_threshold=2, ban_pause_seconds=30, canary_enabled=False,
+                enabled=True,
+                wave_size=wave_size,
+                wave_delay_seconds=3,
+                ban_threshold=2,
+                ban_pause_seconds=30,
+                canary_enabled=False,
             ),
         )
 
     # (a) 邮箱侧超时：不是派发侧失败 ⇒ 只有 wave gap 3s。
     run_wave(
         lambda idx: (idx, _fail(f"email_otp_poll_timeout:{OTP_MAILBOX_SIDE_MARKER}")),
-        count=4, wave_size=2,
+        count=4,
+        wave_size=2,
     )
     assert abs(sum(no_sleep) - 3) < 0.01
 
@@ -418,7 +517,8 @@ def test_the_suffix_decision_is_load_bearing_in_a_real_wave(no_sleep):
     no_sleep.clear()
     run_wave(
         lambda idx: (idx, _fail(f"email_otp_poll_timeout:{OTP_UNDISPATCHED_MARKER}")),
-        count=4, wave_size=2,
+        count=4,
+        wave_size=2,
     )
     assert abs(sum(no_sleep) - 66) < 0.01
 
@@ -428,9 +528,12 @@ def test_the_suffix_decision_is_load_bearing_in_a_real_wave(no_sleep):
     #     发生 —— 那样这条断言在变异下照样通过，等于没测。
     no_sleep.clear()
     run_wave(
-        lambda idx: (idx, _fail(f"email_otp_poll_timeout:{OTP_UNDISPATCHED_MARKER}")
-                     if idx % 2 == 0 else {"success": True}),
-        count=8, wave_size=4,
+        lambda idx: (
+            idx,
+            _fail(f"email_otp_poll_timeout:{OTP_UNDISPATCHED_MARKER}") if idx % 2 == 0 else {"success": True},
+        ),
+        count=8,
+        wave_size=4,
     )
     assert abs(sum(no_sleep) - 3) < 0.01
 

@@ -183,15 +183,25 @@ def test_summary_facts_are_pinned():
     """Pin the decomposition so a silent metric change is caught.
 
     470 raw directory-level edges decompose into 288 module-scope edges (frozen
-    here) plus 183 delayed imports (frozen by ``delayed_import_ratchet.py``).
+    here) plus 185 delayed imports (frozen by ``delayed_import_ratchet.py``).
 
-    183 (was 182) on 2026-10-06: ``pay_link/adapters.py`` gained one delayed
-    ``from ..sentinel import checkout_sentinel_headers`` so the subprocess
-    extractors can be handed the Checkout-create Sentinel pair. It stays delayed
-    because minting drags in the Node-runner machinery and only the subprocess
-    path needs it, while ``pay_link.adapters`` is imported for every payment
-    method -- including the native ones that never launch an extractor. Two
-    baselines plus this literal all had to move, which is the point of the pin.
+    185 (was 184) on 2026-10-07: ``proxy_edge_probe.edge_challenge_verdict``
+    gained one delayed ``from .accounts.account_terminal import
+    text_has_account_deactivated``.  ``account_terminal`` is the single owner of
+    the deactivation vocabulary (rule 3 of the P0-B S0 judgement: an
+    ``account_deactivated`` 403 is not an exit challenge), and a module-level
+    import would have grown the ``sms_tool -> sms_tool/accounts`` pair that the
+    ratchet freezes -- the same remedy its own failure text names, and the same
+    shape ``payment_auth``/``payment_batch`` already use for that package.
+
+    184 (was 183) on 2026-10-06: ``auth_flow/signup.py`` gained one delayed
+    ``from ..operator_output import emit`` for the password-page prime's
+    operator-facing warnings -- the import-layer ratchet names a function-local
+    import as the sanctioned seam for an ``auth_flow -> sms_tool`` edge, and it
+    stays delayed because only that one reporting path needs it. Earlier the
+    same day, ``pay_link/adapters.py`` added one for the Checkout-create
+    Sentinel pair (183 was 182). Two baselines plus this literal all have to
+    move together, which is the point of the pin.
     """
     totals = ilr.analyze(ROOT).totals()
     assert totals == {
@@ -199,7 +209,7 @@ def test_summary_facts_are_pinned():
         "ordered_pairs": 31,
         "mutual_pairs": 11,
         "minority_edges": 60,
-        "delayed_cross_dir_edges": 183,
+        "delayed_cross_dir_edges": 185,
     }
 
 

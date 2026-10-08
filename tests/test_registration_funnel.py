@@ -12,14 +12,17 @@ def test_funnel_separates_registration_and_successful_promotion_probes():
             "error": "auth_flow_transport:Bearer secret",
             "failure_class": "network",
             "registration_machine": {
-                "history": [{"state": "auth_flow", "detail": "Bearer secret"},
-                            {"state": "failed", "detail": "Bearer secret"}],
+                "history": [
+                    {"state": "auth_flow", "detail": "Bearer secret"},
+                    {"state": "failed", "detail": "Bearer secret"},
+                ],
             },
         },
         {"success": False, "error": "user_already_exists", "failure_class": "account"},
     ]
     report = summarize_registration_funnel(
-        results, attempted=4,
+        results,
+        attempted=4,
         promotion={"total": 1, "success": 1, "trial_eligible": 0, "unauthorized": 0},
     )
     assert report["registered"] == 1
@@ -37,7 +40,8 @@ def test_unchecked_and_failed_probes_never_count_as_no_offer():
     registered = [{"success": True}]
     unchecked = summarize_registration_funnel(registered, attempted=1)
     failed = summarize_registration_funnel(
-        registered, attempted=1,
+        registered,
+        attempted=1,
         promotion={"total": 1, "success": 0, "failed": 1, "unauthorized": 1},
     )
     assert unchecked["promotion"]["checked"] is False
@@ -51,8 +55,14 @@ def test_unchecked_and_failed_probes_never_count_as_no_offer():
 
 def test_failure_stage_is_allowlisted_even_when_machine_has_unknown_state():
     report = summarize_registration_funnel(
-        [{"success": False, "error": "Authorization secret", "failure_class": "secret",
-          "registration_machine": {"history": [{"state": "Authorization secret", "detail": "token"}]}}],
+        [
+            {
+                "success": False,
+                "error": "Authorization secret",
+                "failure_class": "secret",
+                "registration_machine": {"history": [{"state": "Authorization secret", "detail": "token"}]},
+            }
+        ],
         attempted=1,
     )
     assert report["registration_failures_by_stage"] == {"unknown": 1}
@@ -62,15 +72,25 @@ def test_failure_stage_is_allowlisted_even_when_machine_has_unknown_state():
 
 def test_identity_and_egress_diagnostics_report_only_allowlisted_verdicts():
     report = summarize_registration_funnel(
-        [{"success": True, "device_id": "private-device", "auth_fingerprint_profile": "firefox144",
-          "identity_context": {"device_id": "private-device", "fingerprint_key": "chrome146"},
-          "proxy_audit": {"expected_country": "IN", "actual_country": "US",
-                          "proxy": "http://secret@example.test"}}],
+        [
+            {
+                "success": True,
+                "device_id": "private-device",
+                "auth_fingerprint_profile": "firefox144",
+                "identity_context": {"device_id": "private-device", "fingerprint_key": "chrome146"},
+                "proxy_audit": {
+                    "expected_country": "IN",
+                    "actual_country": "US",
+                    "proxy": "http://secret@example.test",
+                },
+            }
+        ],
         attempted=1,
         promotion={
-            "total": 1, "success": 1, "trial_eligible": 0,
-            "results": [{"probe": {"proxy_source": "operation_pool",
-                                   "error": "Bearer private-access-token"}}],
+            "total": 1,
+            "success": 1,
+            "trial_eligible": 0,
+            "results": [{"probe": {"proxy_source": "operation_pool", "error": "Bearer private-access-token"}}],
         },
     )
     assert report["fingerprint_consistency"] == {"mismatch": 1}
@@ -84,7 +104,8 @@ def test_identity_and_egress_diagnostics_report_only_allowlisted_verdicts():
 def test_rounds_combine_counters_without_reusing_raw_account_rows():
     first = summarize_registration_funnel(
         [{"success": True}, {"success": False, "failure_class": "network"}],
-        attempted=2, promotion={"total": 1, "success": 1, "trial_eligible": 1},
+        attempted=2,
+        promotion={"total": 1, "success": 1, "trial_eligible": 1},
     )
     second = summarize_registration_funnel([{"success": True}], attempted=1)
     aggregate = combine_registration_funnels([first, second])
@@ -94,3 +115,28 @@ def test_rounds_combine_counters_without_reusing_raw_account_rows():
     assert aggregate["promotion"]["total"] == 1
     assert aggregate["promotion"]["successful_per_registered"] == 0.5
     assert aggregate["promotion"]["eligible_per_successful_probe"] == 1
+
+
+def test_edge_challenge_counters_are_aggregated_from_proxy_audit():
+    """P0-B S2: the funnel is the A/B's only view of "did a challenge happen"."""
+    results = [
+        {"success": True, "proxy_audit": {"edge_challenge_hits": 1, "edge_challenge_rotations": 1}},
+        {"success": False, "proxy_audit": {"edge_challenge_hits": 2, "edge_challenge_rotate_failed": 1}},
+        {"success": True},
+    ]
+    report = summarize_registration_funnel(results, attempted=3)
+    assert report["edge_challenge"] == {"hits": 3, "unknown": 0, "rotations": 1, "rotate_failed": 1}
+    combined = combine_registration_funnels([report, report])
+    assert combined["edge_challenge"] == {"hits": 6, "unknown": 0, "rotations": 2, "rotate_failed": 2}
+
+
+def test_edge_challenge_counters_never_break_on_a_hostile_row():
+    """A hand-edited or older row must read as 0, not raise."""
+    report = summarize_registration_funnel(
+        [
+            {"success": True, "proxy_audit": "not-a-mapping"},
+            {"success": True, "proxy_audit": {"edge_challenge_hits": "oops", "edge_challenge_rotations": -4}},
+        ],
+        attempted=2,
+    )
+    assert report["edge_challenge"] == {"hits": 0, "unknown": 0, "rotations": 0, "rotate_failed": 0}

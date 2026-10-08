@@ -253,6 +253,77 @@ auth_flow 的 authorize / continue / otp 步骤
 stdin/env？落文件的话生命周期与清理归谁（建议纳入 `runtime_retention.py` 的
 `NEVER_DELETE` 之外，即**允许**清理，因为它是一次性交棒状态）。见 §7 问题 1b。
 
+#### 3.4.2 凭据流图与待拍板项（2026-10-07，S0/S1/S2 落地后补）
+
+**进度**：S0 + S1 已落地（`landing-2026-10-07-p0b-s0s1-challenge-verdict.md`），
+S2（`rotate_exit`）已落地（`landing-2026-10-07-p0b-s2-s3-rotate-ab.md`），S3 已在
+`scripts/registration_ab.py` 预注册 `p0-2b-inflow-challenge-handoff`（三臂 `observe` /
+`rotate` / `handoff`，判定规则与 §4.1 的无效结果判据均已实现）。**S4 未落地**：
+§6 要求它“需单独拍板；先出凭据流图再写代码”，下面是那张图与待答项。
+
+**凭据流图（`handoff_storage_state` 的完整生命周期）**
+
+```text
+① 协议泳道（内存）
+   session.cookies（curl_cffi CookieJar，含 __Secure-next-auth.session-token 等）
+        │  导出：把 cookie 拍平成 name/value/path/secure/domain
+        ▼
+② handoff_storage_state（内存 dict，六字段契约之一）
+        │
+        ├─▶ ③ 传递到浏览器驱动（【待拍板 1b】内存直传 / runtime/ 文件 / stdin-env）
+        │        │
+        │        └─▶ ④ 浏览器驱动（camoufox / cloak / browser_flow）闯关
+        │                 │  闯关成功后导出新 cookie jar
+        │                 ▼
+        │           ⑤ 回程（【待拍板 3】交浏览器跑完 / 回协议泳道）
+        │
+        ├─▶ ⑥ 落盘（仅 runtime/；【待拍板 1b】生命周期与清理归属）
+        │        └─ 允许：runtime/ 是 .gitignore 的本地活状态目录（§3.4.1 ①）
+        │
+        └─▶ ⑦ 日志 / 文档 / release payload
+                 └─ 禁止。已由 `sensitive_policy.json` 双重拦住：
+                    `sensitive_keys` 含 `handoff_storage_state`（整个子树折成一个
+                    `[REDACTED]`），`sensitive_key_fragments` 含 `storage_state`
+                    （盖住 `storage_state_json` 等重命名变体）。
+                    已由 `tests/test_sanitizer.py::test_handoff_storage_state_is_redacted_as_a_whole_subtree` 钉住。
+```
+
+三条红线（写代码时必须同时成立）：
+
+1. **⑦ 必须永不发生**：新代码不得把 `handoff_storage_state` 或其任何子值交给
+   `print` / `emit` / `logging` / `build_registration_result` / `desktop_ipc`。
+   可审计的只有 presence 与计数（与 §3.4 的“只留 presence”同级）。
+2. **⑥ 只允许 `runtime/`**，且必须走专用写入器（不能顺手用会写 `docs/` 或 release 的路径）。
+3. **③/⑤ 的传输不得经过任何会序列化到 ⑦ 的中间层**。这是最容易破的一条：
+   一个把整个 runtime 快照 dump 进日志的调试语句就能让 ⑦ 破防。
+
+**已拍板（2026-10-07）**：下表四项均已拍定，选择写在各行的「拍定」列。
+**仍未落地的不是决策，而是能力**：见本节末的 S4b 阻塞项。
+
+| # | 问题 | 建议 | 拍定（2026-10-07） |
+|---|---|---|---|
+| 1b | ③ 的进程间形状：内存直传 / `runtime/` 文件 / stdin-env？落文件的清理归谁？ | 若浏览器驱动与协议泳道**同进程**（`driver=browser_flow` 现状），用内存直传，不落盘，⑦ 的面最小；只有跨进程才落 `runtime/`，并纳入可清理集（一次性状态） | ✅ **同进程内存直传，不落盘** |
+| 2 | ⑤ 归谁执行：`browser_flow` 还是 `camoufox`/`cloak`？如何绑定第二个 driver 而不与 `normalize_registration_driver` 打架？ | 复用 `browser_flow`（已有 `_browser_failure_class` 与代理注入），并用**显式开关**而不是隐式切换 driver | ✅ **复用 `browser_flow` + 显式开关** |
+| 3 | 回程语义：交浏览器跑完，还是浏览器只闯关后回协议？ | `handoff_resume=true`（只闯关回协议）：失败词汇仍归协议泳道，不会在同一个 run 里混出 `browser_*` 前缀 | ✅ **两个都实现，默认回协议**（`edge_challenge_handoff_resume` 默认 `true`） |
+| 4 | 交棒失败是否计入死路账本？ | **不计**：按 §3.2 已排除账号已废，地址未被消耗；但需要一个显式判据，避免重演 `auth_session_recovery_expired` 那类“每批重烧一个邮箱槽” | ⏸ 随 S4b 一起定（无执行路径前不需要） |
+| 5 | `edge_challenge_verdict == "unknown"` 时的行为 | **偏向尝试换出口一次**（代价不对称），但 `unknown` 的换出口必须与 `challenge` 的分开计数 | ✅ **偏向换出口，单独计数** —— 已落地（`edge_challenge_unknown`，与 `edge_challenge_hits` 分开） |
+
+**S4b 阻塞项（真实的能力缺口，不是决策）**
+
+拍定的默认语义是“浏览器只闯关、然后回协议”，而现有浏览器驱动**没有这个模式**：
+
+- `registration_drivers/browser_flow/orchestrator.run_browser_registration` 接受
+  `driver_name` / `proxy` / `password` / `mailbox` / `config` / …，**不接受 cookie jar 或
+  storage state**，也不提供“导航→闯关→导出 cookie→停”的入口 —— 它是**一次完整注册**。
+- ⇒ `handoff_resume=false`（交浏览器跑完）现在就能用；但拍定的**默认**是
+  `handoff_resume=true`，它需要 `browser_flow` 新增一个能力：
+  `adopt(storage_state) → navigate(resume_url) → wait-for-challenge-cleared → export(cookies) → stop`。
+
+因此本轮**不落地** `registration.edge_challenge_browser_handoff` 开关。理由不是保守，
+而是纪律：一个打开了也无人执行的开关就是**假开关**，与 P0-A 刚建的那道机制门禁
+（“开关空转不得伪装成对照”）是同一类缺陷。待 S4b 具备可执行路径、并在
+`p0-2b-inflow-challenge-handoff` 的 `handoff` 臂上跑过受控对照后，再连同开关一起落地。
+
 ### 3.5 与 `session_circuit_open` 的关系（谁赢）
 
 这是本设计最容易出错的地方，必须写死：

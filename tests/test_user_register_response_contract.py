@@ -131,8 +131,15 @@ def _state(**over):
 
 
 def _workflow(
-    state, *, follow=None, user_register=None, dump=None, password_step=None,
+    state,
+    *,
+    follow=None,
+    user_register=None,
+    dump=None,
+    password_step=None,
     existing_login_redirect=None,
+    prime=False,
+    prime_page=None,
 ):
     w = object.__new__(RegistrationEmailWorkflow)
     w.config = {}
@@ -143,15 +150,15 @@ def _workflow(
         # out of the response body, so faking it here would test nothing.
         _email_otp_send_url=_email_otp_send_url,
         SyntheticResponse=lambda status, body, url="": SimpleNamespace(
-            status_code=status, json=lambda: body, url=url,
+            status_code=status,
+            json=lambda: body,
+            url=url,
         ),
         _follow_continue_url=follow if follow is not None else _follow(),
         _fetch_client_auth_session_dump=Mock(return_value={} if dump is None else dump),
         _json_or_raw=lambda resp: resp.json(),
         request_with_retry=Mock(
-            return_value=user_register
-            if user_register is not None
-            else _response({"continue_url": _CONTINUE_URL})
+            return_value=user_register if user_register is not None else _response({"continue_url": _CONTINUE_URL})
         ),
         _auth_request_headers=Mock(return_value={}),
         auth_impersonate=Mock(return_value=""),
@@ -159,9 +166,7 @@ def _workflow(
         # ``_password_lane_active`` calls this, so tests about the lane gate pass
         # the **real** ``auth_flow._is_signup_password_step``; the default Mock
         # keeps the URL-tracking tests independent of it.
-        _is_signup_password_step=password_step
-        if password_step is not None
-        else Mock(return_value=False),
+        _is_signup_password_step=password_step if password_step is not None else Mock(return_value=False),
         # Same reasoning for the login-page landing: the P1 contract *is* the
         # landing predicate, so its default is the real pure function.  It only
         # answers True for ``/log-in*``, which no other case in this file uses
@@ -169,6 +174,13 @@ def _workflow(
         _is_existing_login_redirect=existing_login_redirect
         if existing_login_redirect is not None
         else auth_flow._is_existing_login_redirect,
+        # 2026-10-06 navigation-first: the password lane asks this gate before
+        # ``user/register``.  Default **off** so every pre-existing case in this
+        # file keeps its current request shape; the priming tests override it.
+        _prime_create_account_password_page_enabled=Mock(return_value=prime),
+        _prime_create_account_password_page=prime_page
+        if prime_page is not None
+        else Mock(return_value={"ok": True, "status": 200, "url": "https://auth.openai.com/create-account/password"}),
     )
     return w
 
@@ -176,6 +188,7 @@ def _workflow(
 # ---------------------------------------------------------------------------
 # 1) 密码泳道：200 必须被跟，且 URL 来自响应体
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize("url", [_CONTINUE_URL, _OTHER_URL])
 def test_the_followed_url_tracks_the_response_body(url):
@@ -235,9 +248,7 @@ def test_a_200_without_a_continue_url_aborts_instead_of_guessing(monkeypatch):
         sent.append({"method": method, "url": url, "label": label})
         return _response()
 
-    monkeypatch.setattr(
-        http_utils, "CFG", {"chatgpt": {"auth_base_url": "https://auth.openai.com"}}
-    )
+    monkeypatch.setattr(http_utils, "CFG", {"chatgpt": {"auth_base_url": "https://auth.openai.com"}})
     monkeypatch.setattr(http_utils, "auth_impersonate", lambda: "")
     monkeypatch.setattr(http_utils, "request_with_retry", recorder)
 
@@ -279,6 +290,7 @@ def test_a_rejected_follow_surfaces_the_status_code():
 # ---------------------------------------------------------------------------
 # 2) passwordless 泳道：不得 POST，不得跟
 # ---------------------------------------------------------------------------
+
 
 def test_passwordless_lane_never_posts_user_register():
     """「别把探针加回来」的守卫。
@@ -336,6 +348,7 @@ def test_passwordless_lane_has_no_continue_url_to_follow_even_by_accident():
 # 3) 服务端强制密码路由：必须推回密码泳道
 # ---------------------------------------------------------------------------
 
+
 def test_a_server_forced_password_route_still_posts_and_follows():
     """``password_fallback`` = 服务端把 passwordless 路由到 ``/log-in/password``。
 
@@ -389,6 +402,7 @@ def test_a_non_password_url_does_not_hijack_the_passwordless_lane():
 # ---------------------------------------------------------------------------
 # 4) 密码步未被服务端确认 ⇒ 发码之前 abort（2026-09-16 拍板）
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize("mode,url,fallback,expected", _PASSWORD_LANE_CASES)
 def test_the_password_lane_has_two_independent_ways_in(mode, url, fallback, expected):
@@ -756,3 +770,196 @@ def test_the_email_verification_stop_is_untouched_by_the_login_page_branch():
     assert str(exc.value) == "password_step_unconfirmed:invalid_auth_step"
     assert state.existing_account is False
 
+
+# ---------------------------------------------------------------------------
+# 5) 导航先行（2026-10-06）：密码泳道在 ``user/register`` 之前建立密码页状态
+# ---------------------------------------------------------------------------
+
+
+def test_the_password_lane_does_not_prime_by_default():
+    """默认**关闭** ⇒ 请求形状与今天完全一致。
+
+    这条是回归底线：开关加上去之后，既有密码泳道用例的行为不许变（多一次 GET
+    就会改变事务时序，而本仓已经证明过「忽略 POST 响应」会 85/85 409）。
+    """
+    state = _state(signup_state={"url": _EMAIL_VERIFICATION_URL, "attempt": "a1", "status": 200})
+    w = _workflow(state, password_step=auth_flow._is_signup_password_step)
+
+    calls: list[str] = []
+    w._operations._prime_create_account_password_page = Mock(
+        side_effect=lambda *a, **kw: (calls.append("prime"), {"ok": True, "status": 200, "url": ""})[1]
+    )
+    w._operations.request_with_retry = Mock(
+        side_effect=lambda *a, **kw: (calls.append("post"), _response({"continue_url": _CONTINUE_URL}))[1]
+    )
+
+    w.user_register()
+
+    # 只断言普通 list，不去读 Mock 的属性 —— 那份夹具用 SimpleNamespace 冒充
+    # RegistrationOperations，类型检查器会把字段解析成 FunctionType。
+    assert calls == ["post"]
+
+
+def test_the_primed_password_lane_gets_the_password_page_before_the_post():
+    """开关打开 ⇒ 密码页 GET 必须排在 ``user/register`` POST **之前**。
+
+    顺序就是这整个改动的全部内容（turb 的步骤 5 在 ``register_user`` 之前，
+    且其 docstring 明写「进入注册密码页，确保协议注册不再走无密码 OTP 分支」）。
+    用同一份调用记录断言先后，而不是只断言两者都发生过。
+    """
+    order: list[str] = []
+    prime_page = Mock(
+        side_effect=lambda session, auth_base, base_headers, current_url: (
+            order.append("prime"),
+            {"ok": True, "status": 200, "url": f"{auth_base}/create-account/password"},
+        )[1]
+    )
+    state = _state(signup_state={"url": _EMAIL_VERIFICATION_URL, "attempt": "a1", "status": 200})
+    w = _workflow(state, prime=True, prime_page=prime_page, password_step=auth_flow._is_signup_password_step)
+    w._operations.request_with_retry = Mock(
+        side_effect=lambda *a, **kw: (order.append("post"), _response({"continue_url": _CONTINUE_URL}))[1]
+    )
+
+    w.user_register()
+
+    assert order == ["prime", "post"]
+    # 传给导航函数的是**当前落点**，好让它能算出正确的 Referer。
+    assert prime_page.call_args.args[3] == _EMAIL_VERIFICATION_URL
+    assert prime_page.call_args.args[1] == "https://auth.openai.com"
+    assert prime_page.call_args.args[2] == state.base_headers
+    assert prime_page.call_args.args[0] is state.session
+
+
+def test_the_password_page_prime_is_skipped_when_already_on_the_step(monkeypatch):
+    """已经在 ``/create-account/password`` ⇒ 不重复导航（turb 同一个短路）。"""
+    from sms_tool.auth_flow import deps as auth_deps
+
+    followed: list[str] = []
+
+    def _fake_follow(session, url, headers, **kw):
+        followed.append(url)
+        return _response()
+
+    monkeypatch.setattr(auth_deps, "_follow_continue_url", _fake_follow)
+    result = auth_flow._prime_create_account_password_page(
+        object(),
+        "https://auth.openai.com",
+        {"Accept": "text/html"},
+        "https://auth.openai.com/create-account/password",
+    )
+
+    assert result["ok"] is True
+    assert result.get("skipped") is True
+    assert followed == []
+
+
+def test_the_password_page_prime_reports_a_good_landing(monkeypatch):
+    """导航后**落在密码步** ⇒ ``ok=True``，且不带 ``skipped``（真导航了一次）。"""
+    from sms_tool.auth_flow import deps as auth_deps
+
+    seen: dict[str, object] = {}
+
+    def _fake_follow(session, url, headers, **kw):
+        seen["url"] = url
+        seen["base"] = headers
+        seen["referer"] = kw.get("referer")
+        return _response(status=200, url="https://auth.openai.com/create-account/password")
+
+    monkeypatch.setattr(auth_deps, "_follow_continue_url", _fake_follow)
+    session = object()
+    result = auth_flow._prime_create_account_password_page(
+        session,
+        "https://auth.openai.com",
+        {"X-Base": "1"},
+        "https://auth.openai.com/email-verification",
+    )
+
+    assert result["ok"] is True
+    assert "skipped" not in result
+    assert seen["url"] == "https://auth.openai.com/create-account/password"
+    # Referer 必须跟着当前落点，否则服务端看到的是一个凭空出现的密码页请求。
+    assert seen["referer"] == "https://auth.openai.com/email-verification"
+
+
+def test_the_password_page_prime_reports_an_off_step_landing(monkeypatch):
+    """导航了但没落在密码步 ⇒ ``ok=False`` 且**不抛**（A/B 需要看得见服务端行为）。
+
+    这里刻意**不** abort：一旦抛异常，开关这一臂就会以**另一种原因**失败，
+    会把「priming 有没有让派发成功」这个对照问题掩盖掉。
+    """
+    from sms_tool.auth_flow import deps as auth_deps
+
+    monkeypatch.setattr(
+        auth_deps,
+        "_follow_continue_url",
+        lambda session, url, headers, **kw: _response(status=200, url="https://auth.openai.com/email-verification"),
+    )
+    result = auth_flow._prime_create_account_password_page(
+        object(),
+        "https://auth.openai.com",
+        {},
+        "https://auth.openai.com/email-verification",
+    )
+
+    assert result["ok"] is False
+    assert result["url"] == "https://auth.openai.com/email-verification"
+
+
+def test_the_password_page_prime_survives_a_transport_failure(monkeypatch):
+    """导航本身炸了 ⇒ 报告出来，不让注册流程跟着死。"""
+    from sms_tool.auth_flow import deps as auth_deps
+
+    def _boom(*a, **kw):
+        raise RuntimeError("curl: (28) Operation timed out")
+
+    monkeypatch.setattr(auth_deps, "_follow_continue_url", _boom)
+    result = auth_flow._prime_create_account_password_page(
+        object(),
+        "https://auth.openai.com",
+        {},
+        "https://auth.openai.com/email-verification",
+    )
+
+    assert result["ok"] is False
+    assert "timed out" in result["error"]
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        (True, True),
+        (1, True),
+        ("1", True),
+        ("true", True),
+        ("True", True),
+        ("yes", True),
+        ("Yes", True),
+        ("on", True),
+        (False, False),
+        (0, False),
+        ("0", False),
+        ("false", False),
+        ("False", False),
+        ("no", False),
+        ("No", False),
+        ("off", False),
+        (None, False),
+        ("", False),
+        ("maybe", False),
+        ([], False),
+    ],
+)
+def test_the_prime_switch_accepts_only_truthy_values(monkeypatch, value, expected):
+    """未知值一律**关**，与 ``_existing_login_continue_enabled`` 的宽容解析同形。"""
+    monkeypatch.setattr(
+        auth_flow.deps,
+        "current_config_data",
+        lambda *a, **kw: {"registration": {"prime_create_account_password": value}},
+    )
+    assert auth_flow._prime_create_account_password_page_enabled() is expected
+
+
+def test_the_prime_switch_is_off_when_the_section_is_absent(monkeypatch):
+    """配置里没有 ``registration`` 段 ⇒ 关（新开关绝不能默认打开）。"""
+    monkeypatch.setattr(auth_flow.deps, "current_config_data", lambda *a, **kw: {})
+    assert auth_flow._prime_create_account_password_page_enabled() is False

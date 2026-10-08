@@ -62,6 +62,8 @@ OPERATION_GROUPS: dict[str, tuple[str, ...]] = {
         "_login_existing_account_with_email_otp",
         "_passwordless_signin_attempts",
         "_signup_signin_attempts",
+        "_prime_create_account_password_page",
+        "_prime_create_account_password_page_enabled",
     ),
     "generated_identity": (
         "_generate_password",
@@ -149,6 +151,8 @@ class RegistrationOperations:
     _login_existing_account_with_email_otp: Callable[..., Any]
     _passwordless_signin_attempts: Callable[..., Any]
     _signup_signin_attempts: Callable[..., Any]
+    _prime_create_account_password_page: Callable[..., Any]
+    _prime_create_account_password_page_enabled: Callable[..., Any]
 
     # --- generated identity ------------------------------------------------
     _generate_password: Callable[..., Any]

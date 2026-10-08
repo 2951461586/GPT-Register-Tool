@@ -30,11 +30,13 @@ def test_internal_failure_does_not_write_proxy_health():
             "retryable": False,
         }
 
-    with patch("sms_tool.batch_runner.CFG", {"email_registration": {}, "registration": {}}), \
-         patch("sms_tool.batch_runner.ProxyHealthTracker") as tracker, \
-         patch("sms_tool.batch_runner.RegistrationRetryGuard", _NoopGuard), \
-         patch("sms_tool.batch_runner.get_account_records", return_value={}), \
-         patch("sms_tool.batch_runner.get_registration_checkpoints", return_value={}):
+    with (
+        patch("sms_tool.batch_runner.CFG", {"email_registration": {}, "registration": {}}),
+        patch("sms_tool.batch_runner.ProxyHealthTracker") as tracker,
+        patch("sms_tool.batch_runner.RegistrationRetryGuard", _NoopGuard),
+        patch("sms_tool.batch_runner.get_account_records", return_value={}),
+        patch("sms_tool.batch_runner.get_registration_checkpoints", return_value={}),
+    ):
         results = run_batch_impl(
             count=1,
             proxy="http://proxy.invalid:8080",
@@ -62,21 +64,30 @@ def test_protocol_result_carries_safe_proxy_audit():
             "failure_class": "mailbox",
         }
 
-    with patch(
-        "sms_tool.batch_runner.CFG",
-        {"email_registration": {}, "registration": {"driver": "protocol"}},
-    ), patch(
-        "sms_tool.batch_runner.select_registration_proxy_pool",
-        return_value=RegistrationProxyPool(
-            ["http://user:secret@proxy.invalid:8080"],
-            actual_countries={"http://user:secret@proxy.invalid:8080": "IN"},
+    with (
+        patch(
+            "sms_tool.batch_runner.CFG",
+            {"email_registration": {}, "registration": {"driver": "protocol"}},
         ),
-    ), patch(
-        "sms_tool.batch_runner.RegistrationRetryGuard", _NoopGuard,
-    ), patch(
-        "sms_tool.batch_runner.get_account_records", return_value={},
-    ), patch(
-        "sms_tool.batch_runner.get_registration_checkpoints", return_value={},
+        patch(
+            "sms_tool.batch_runner.select_registration_proxy_pool",
+            return_value=RegistrationProxyPool(
+                ["http://user:secret@proxy.invalid:8080"],
+                actual_countries={"http://user:secret@proxy.invalid:8080": "IN"},
+            ),
+        ),
+        patch(
+            "sms_tool.batch_runner.RegistrationRetryGuard",
+            _NoopGuard,
+        ),
+        patch(
+            "sms_tool.batch_runner.get_account_records",
+            return_value={},
+        ),
+        patch(
+            "sms_tool.batch_runner.get_registration_checkpoints",
+            return_value={},
+        ),
     ):
         results = run_batch_impl(
             count=1,
@@ -95,15 +106,16 @@ def test_protocol_result_carries_safe_proxy_audit():
         "actual_country": "IN",
         "scheme": "http",
         "rotation_generation": 0,
+        "edge_challenge_hits": 0,
+        "edge_challenge_unknown": 0,
+        "edge_challenge_rotations": 0,
+        "edge_challenge_rotate_failed": 0,
     }
     assert "secret" not in repr(results[0]["proxy_audit"])
 
 
 def test_blocked_canary_rotates_the_pool_cursor_for_future_accounts():
-    mailboxes = [
-        SimpleNamespace(email=f"protocol{index}@example.com")
-        for index in range(3)
-    ]
+    mailboxes = [SimpleNamespace(email=f"protocol{index}@example.com") for index in range(3)]
     audits = []
 
     def run_email(**kwargs):
@@ -130,15 +142,24 @@ def test_blocked_canary_rotates_the_pool_cursor_for_future_accounts():
             },
         },
     }
-    with patch("sms_tool.batch_runner.CFG", config), patch(
-        "sms_tool.batch_runner.select_registration_proxy_pool",
-        side_effect=lambda pool, _fallback: pool,
-    ), patch(
-        "sms_tool.batch_runner.RegistrationRetryGuard", _NoopGuard,
-    ), patch(
-        "sms_tool.batch_runner.get_account_records", return_value={},
-    ), patch(
-        "sms_tool.batch_runner.get_registration_checkpoints", return_value={},
+    with (
+        patch("sms_tool.batch_runner.CFG", config),
+        patch(
+            "sms_tool.batch_runner.select_registration_proxy_pool",
+            side_effect=lambda pool, _fallback: pool,
+        ),
+        patch(
+            "sms_tool.batch_runner.RegistrationRetryGuard",
+            _NoopGuard,
+        ),
+        patch(
+            "sms_tool.batch_runner.get_account_records",
+            return_value={},
+        ),
+        patch(
+            "sms_tool.batch_runner.get_registration_checkpoints",
+            return_value={},
+        ),
     ):
         results = run_batch_impl(
             count=3,
@@ -172,35 +193,47 @@ def test_prewarmed_future_account_uses_rotated_proxy_after_blocked_canary():
         seen.append(kwargs)
         email = kwargs["mailbox"].email
         if email == mailboxes[0].email:
-            return {"success": False, "email": email,
-                    "error": "email_otp_send_stuck", "failure_class": "mailbox"}
+            return {"success": False, "email": email, "error": "email_otp_send_stuck", "failure_class": "mailbox"}
         if email == mailboxes[1].email and kwargs["registration_attempt"] == 1:
-            return {"success": False, "email": email,
-                    "error": "connection reset", "failure_class": "network"}
+            return {"success": False, "email": email, "error": "connection reset", "failure_class": "network"}
         return {"success": True, "email": email}
 
     config = {
         "email_registration": {"sentinel_backend": "legacy", "sentinel_prewarm_window": 2},
-        "registration": {"driver": "protocol", "pulse": {
-            "enabled": True, "wave_size": 2, "wave_delay_seconds": 0,
-            "ban_pause_seconds": 0, "canary_enabled": True,
-        }},
+        "registration": {
+            "driver": "protocol",
+            "pulse": {
+                "enabled": True,
+                "wave_size": 2,
+                "wave_delay_seconds": 0,
+                "ban_pause_seconds": 0,
+                "canary_enabled": True,
+            },
+        },
     }
-    pool = ["http://proxy-a.invalid:8080", "http://proxy-b.invalid:8080",
-            "http://proxy-c.invalid:8080"]
-    with patch("sms_tool.batch_runner.CFG", config), \
-         patch("sms_tool.batch_runner.select_registration_proxy_pool", side_effect=lambda values, _: values), \
-         patch("sms_tool.batch_runner.refresh_proxy_sid", side_effect=refresh), \
-         patch("sms_tool.sentinel_tokens._extract_sentinel",
-               side_effect=lambda **kwargs: {"prewarmed_for": kwargs["proxy"]}), \
-         patch("sms_tool.batch_runner.ProxyHealthTracker"), \
-         patch("sms_tool.batch_runner.RegistrationRetryGuard", _NoopGuard), \
-         patch("sms_tool.batch_runner.get_account_records", return_value={}), \
-         patch("sms_tool.batch_runner.get_registration_checkpoints", return_value={}):
+    pool = ["http://proxy-a.invalid:8080", "http://proxy-b.invalid:8080", "http://proxy-c.invalid:8080"]
+    with (
+        patch("sms_tool.batch_runner.CFG", config),
+        patch("sms_tool.batch_runner.select_registration_proxy_pool", side_effect=lambda values, _: values),
+        patch("sms_tool.batch_runner.refresh_proxy_sid", side_effect=refresh),
+        patch(
+            "sms_tool.sentinel_tokens._extract_sentinel",
+            side_effect=lambda **kwargs: {"prewarmed_for": kwargs["proxy"]},
+        ),
+        patch("sms_tool.batch_runner.ProxyHealthTracker"),
+        patch("sms_tool.batch_runner.RegistrationRetryGuard", _NoopGuard),
+        patch("sms_tool.batch_runner.get_account_records", return_value={}),
+        patch("sms_tool.batch_runner.get_registration_checkpoints", return_value={}),
+    ):
         results = run_batch_impl(
-            count=3, proxy_pool=pool, mailboxes=mailboxes, workers=3,
-            max_attempts=2, retry_delay_seconds=0,
-            run_email_func=run_email, registration_driver="protocol",
+            count=3,
+            proxy_pool=pool,
+            mailboxes=mailboxes,
+            workers=3,
+            max_attempts=2,
+            retry_delay_seconds=0,
+            run_email_func=run_email,
+            registration_driver="protocol",
         )
 
     account = [row for row in seen if row["mailbox"].email == mailboxes[1].email]

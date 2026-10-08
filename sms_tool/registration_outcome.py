@@ -13,6 +13,7 @@
 
 import time
 from collections.abc import Mapping
+from typing import Any
 
 from .accounts.account_liveness import probe_account_liveness
 from .config import CFG
@@ -64,7 +65,8 @@ def _existing_account_error(create_data):
     """
     if not isinstance(create_data, dict):
         return ""
-    error = create_data.get("error") if isinstance(create_data.get("error"), dict) else {}
+    raw_error = create_data.get("error")
+    error = raw_error if isinstance(raw_error, dict) else {}
     if str(error.get("code") or "").strip() != "user_already_exists":
         return ""
     recovery = error.get("userAlreadyExistsRecovery")
@@ -135,6 +137,16 @@ def _retain_registration_checkpoint(success, access_token, at_probe):
     The account and token already exist at this point.  Clearing the checkpoint
     forces the batch retry to submit the signup flow a second time, which turns
     a transient proxy failure into ``invalid_state`` or a duplicate signup.
+
+    🔴 **An edge ``403`` is not a verdict about the account** (2026-10-07 scan
+    P1-B).  ``probe_account_liveness`` maps a Cloudflare edge rejection to
+    ``status="unknown"`` / ``status_code=403``; the token itself may be fine and
+    only the egress was blocked.  The old ``status_code == 0`` test dropped the
+    checkpoint there, so a run whose account *was* created re-submitted the whole
+    signup and hit ``user_already_exists``.  Only a probe that actually judged
+    the token (``status="token_invalid"``, from a ``401``) is a reason to drop
+    it.  SunnyRegister's ``access_token_probe`` draws the same ``blocked`` vs
+    ``invalid`` line.
     """
     if success or not str(access_token or "").strip():
         return False
@@ -143,7 +155,14 @@ def _retain_registration_checkpoint(success, access_token, at_probe):
         status_code = int(probe.get("status_code") or 0)
     except (TypeError, ValueError):
         status_code = 0
-    return status_code == 0
+    if status_code == 0:
+        return True
+    return status_code == 403 and _probe_status(probe) != "token_invalid"
+
+
+def _probe_status(probe: Mapping[str, Any]) -> str:
+    """The liveness probe's own verdict (``active`` / ``token_invalid`` / ``unknown``)."""
+    return str(probe.get("status") or "").strip()
 
 
 def _registration_requires_refresh_token(runtime_cfg=None):
@@ -211,11 +230,7 @@ def _browser_mailbox_snapshot(mailbox):
         "purchase_total_cost",
         "balance_after",
     )
-    return {
-        key: value
-        for key in fields
-        if (value := getattr(mailbox, key, "")) not in (None, "")
-    }
+    return {key: value for key in fields if (value := getattr(mailbox, key, "")) not in (None, "")}
 
 
 def needs_manual_session_recovery(
@@ -342,7 +357,12 @@ def _registration_outcome(create_ok, create_data, access_token, at_probe, existi
         cause = create_error or existing_account_error or str(existing_login_error or "").strip()
         return False, cause or "missing_auth_session_access_token", ""
     if status_code:
-        return False, f"access_token_probe_http_{status_code}", create_error
+        # An edge-blocked 403 is an egress verdict, not an account verdict; name
+        # it so the funnel and the operator can tell it from a real 4xx reply
+        # (2026-10-07 scan P1-B).  The leading token is unchanged, so
+        # ``failure_registry`` classifies it exactly as before.
+        suffix = ":edge_blocked" if status_code == 403 and _probe_status(probe) != "token_invalid" else ""
+        return False, f"access_token_probe_http_{status_code}{suffix}", create_error
     probe_error = str(probe.get("error") or probe.get("status") or "unknown").strip()
     return False, f"access_token_probe_failed:{probe_error}", create_error
 

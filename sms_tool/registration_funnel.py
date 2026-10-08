@@ -19,6 +19,32 @@ def _rate(numerator: int, denominator: int) -> float | None:
     return round(numerator / denominator, 4) if denominator else None
 
 
+def _count(value: Any) -> int:
+    """Coerce one audit counter; a hand-edited row must not break the funnel."""
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _edge_challenge_totals(rows: Iterable[Mapping[str, Any]]) -> dict[str, int]:
+    """Sum the per-run in-flow challenge counters from ``proxy_audit``.
+
+    These are the A/B's only view of "did an exit challenge actually happen, and
+    did the run move off that exit": the counters are counts, never exit
+    identities (see ``registration_result.safe_proxy_audit``).
+    """
+    hits = rotations = failed = unknown = 0
+    for row in rows:
+        audit = row.get("proxy_audit")
+        audit = audit if isinstance(audit, Mapping) else {}
+        hits += _count(audit.get("edge_challenge_hits"))
+        unknown += _count(audit.get("edge_challenge_unknown"))
+        rotations += _count(audit.get("edge_challenge_rotations"))
+        failed += _count(audit.get("edge_challenge_rotate_failed"))
+    return {"hits": hits, "unknown": unknown, "rotations": rotations, "rotate_failed": failed}
+
+
 def _failure_stage(result: Mapping[str, Any]) -> str:
     machine = result.get("registration_machine")
     history = machine.get("history") if isinstance(machine, Mapping) else None
@@ -38,11 +64,11 @@ def _identity_checks(row: Mapping[str, Any]) -> tuple[str, str]:
     device = str(row.get("device_id") or "").strip()
     saved_device = str(identity.get("device_id") or "").strip()
     fingerprint_match = (
-        "matched" if fingerprint == saved_fingerprint else "mismatch"
-    ) if fingerprint and saved_fingerprint else "unknown"
-    device_match = (
-        "matched" if device == saved_device else "mismatch"
-    ) if device and saved_device else "unknown"
+        ("matched" if fingerprint == saved_fingerprint else "mismatch")
+        if fingerprint and saved_fingerprint
+        else "unknown"
+    )
+    device_match = ("matched" if device == saved_device else "mismatch") if device and saved_device else "unknown"
     return fingerprint_match, device_match
 
 
@@ -118,6 +144,7 @@ def summarize_registration_funnel(
         "egress_country_consistency": dict(sorted(egress_checks.items())),
         "fingerprint_consistency": dict(sorted(fingerprint_checks.items())),
         "device_consistency": dict(sorted(device_checks.items())),
+        "edge_challenge": _edge_challenge_totals(rows),
         "promotion": {
             "checked": checked,
             "total": probe_total,
@@ -153,6 +180,13 @@ def combine_registration_funnels(funnels: Iterable[Mapping[str, Any]]) -> dict[s
     sources: Counter[str] = Counter()
     for row in checked:
         sources.update(row.get("probe_proxy_sources") or {})
+    edge_hits = edge_rotations = edge_rotate_failed = edge_unknown = 0
+    for row in rows:
+        edge = row.get("edge_challenge") if isinstance(row.get("edge_challenge"), Mapping) else {}
+        edge_hits += _count(edge.get("hits"))
+        edge_unknown += _count(edge.get("unknown"))
+        edge_rotations += _count(edge.get("rotations"))
+        edge_rotate_failed += _count(edge.get("rotate_failed"))
     probe_total = sum(int(row.get("total") or 0) for row in checked) if checked else None
     probe_ok = sum(int(row.get("successful") or 0) for row in checked) if checked else None
     eligible = sum(int(row.get("trial_eligible") or 0) for row in checked) if checked else None
@@ -166,6 +200,12 @@ def combine_registration_funnels(funnels: Iterable[Mapping[str, Any]]) -> dict[s
         "egress_country_consistency": dict(sorted(egress.items())),
         "fingerprint_consistency": dict(sorted(fingerprint.items())),
         "device_consistency": dict(sorted(devices.items())),
+        "edge_challenge": {
+            "hits": edge_hits,
+            "unknown": edge_unknown,
+            "rotations": edge_rotations,
+            "rotate_failed": edge_rotate_failed,
+        },
         "promotion": {
             "checked": bool(checked),
             "total": probe_total,

@@ -158,9 +158,7 @@ class CompactAuthDumpTextTests(unittest.TestCase):
         account cost 795 characters per flip.
         """
         auth_state.compact_auth_dump_text("after_otp_send", _summary())
-        magic_link = _summary(
-            keys=["passwordless_login_magic_link_sent", "signup_mode", "username"]
-        )
+        magic_link = _summary(keys=["passwordless_login_magic_link_sent", "signup_mode", "username"])
 
         text = auth_state.compact_auth_dump_text("after_otp_send", magic_link)
 
@@ -200,8 +198,10 @@ class CompactAuthDumpTextTests(unittest.TestCase):
         self.assertIn("passwordless_login_magic_link_sent", out)
 
         # Round trips keep the marker *and* the names, so the log stays walkable.
-        for text, key in ((back, "passwordless_login_magic_link_sent"),
-                          (out_again, "passwordless_login_magic_link_sent")):
+        for text, key in (
+            (back, "passwordless_login_magic_link_sent"),
+            (out_again, "passwordless_login_magic_link_sent"),
+        ):
             self.assertIn("(seen before)", text)
             self.assertIn(key, text)
         self.assertIn('"added"', back)
@@ -220,9 +220,7 @@ class CompactAuthDumpTextTests(unittest.TestCase):
         self.assertIn("passwordless_login_magic_link_sent", back)
         self.assertLess(len(back), 400, back)
         # The full summary it replaced is an order of magnitude longer.
-        self.assertGreater(
-            len(json.dumps(_summary(keys=_SIGNUP_KEYS), ensure_ascii=False)), 700
-        )
+        self.assertGreater(len(json.dumps(_summary(keys=_SIGNUP_KEYS), ensure_ascii=False)), 700)
 
     def test_a_shape_never_seen_before_still_prints_its_diff(self):
         """The seen-before shortcut must not swallow a genuinely new shape."""
@@ -236,9 +234,7 @@ class CompactAuthDumpTextTests(unittest.TestCase):
     def test_a_changed_signal_length_counts_as_a_change(self):
         """Values are redacted to a length, so the length *is* the observation."""
         auth_state.compact_auth_dump_text("s", _summary())
-        shifted = _summary(
-            signals={"client_auth_session.session_id": "[REDACTED](len=34)"}
-        )
+        shifted = _summary(signals={"client_auth_session.session_id": "[REDACTED](len=34)"})
 
         text = auth_state.compact_auth_dump_text("s", shifted)
 
@@ -296,14 +292,10 @@ class DumpKeyDiffTests(unittest.TestCase):
             {"signals": {}},
         )
 
-        self.assertEqual(
-            {"signals": {"client_auth_session.email_verification_mode": None}}, diff
-        )
+        self.assertEqual({"signals": {"client_auth_session.email_verification_mode": None}}, diff)
 
     def test_nested_dicts_diff_in_place(self):
-        diff = auth_state._dump_key_diff(
-            {"signals": {"x": 1, "y": 2}}, {"signals": {"x": 1, "y": 3}}
-        )
+        diff = auth_state._dump_key_diff({"signals": {"x": 1, "y": 2}}, {"signals": {"x": 1, "y": 3}})
 
         self.assertEqual({"signals": {"y": 3}}, diff)
 
@@ -334,9 +326,7 @@ class DumpPrintWiringTests(unittest.TestCase):
         response.json.return_value = body
         with patch.object(auth_state, "request_with_retry", return_value=response):
             with redirect_stdout(io.StringIO()) as captured:
-                summary = auth_state.fetch_client_auth_session_dump(
-                    Mock(), "https://auth.openai.com", {}, stage
-                )
+                summary = auth_state.fetch_client_auth_session_dump(Mock(), "https://auth.openai.com", {}, stage)
         return summary, captured.getvalue()
 
     def _body(self, extra_signals=0):
@@ -358,17 +348,17 @@ class DumpPrintWiringTests(unittest.TestCase):
         self.assertNotIn("signup_mode", second)
 
     def test_the_printed_line_is_never_silently_truncated(self):
-        """The observed maximum is 795 characters, so the old 800 cap was 5 bytes away.
+        """The observed max grew to ~1290 chars with the 2026-10-06 discriminator
 
-        Asserting "not truncated" only means something if the summary is long
-        enough to have been cut at 800 -- so that is asserted first.  Without it
-        this test passes for the wrong reason (a 744-character summary fits under
-        either cap, which is exactly how the first version of it missed).
+        signals, so the 1200 cap would have cut the new tail; the 1600 cap must
+        keep the realistic worst case whole. Asserting "not truncated" only
+        means something if the summary sits in the discriminating region
+        (above the old 1200 cap, below the new 1600 one).
         """
-        body = self._body(extra_signals=4)
+        body = self._body(extra_signals=2)
         full = json.dumps(auth_state.auth_dump_summary(body), ensure_ascii=False)
-        self.assertGreater(len(full), 800, "probe is outside the discriminating region")
-        self.assertLess(len(full), 1200, "probe would be cut by the new cap too")
+        self.assertGreater(len(full), 1200, "probe is outside the discriminating region")
+        self.assertLess(len(full), 1600, "probe would be cut by the new cap too")
 
         _, printed = self._dump(body)
 
@@ -434,9 +424,7 @@ class DumpFailureDiagnosticsTests(unittest.TestCase):
 
     def test_the_failure_body_does_not_leak_into_the_200_path(self):
         """Negative control: the success path keeps its exact contract."""
-        _, printed = self._dump_response(
-            200, body={"checksum": "c", "session_id": "s", "client_auth_session": {}}
-        )
+        _, printed = self._dump_response(200, body={"checksum": "c", "session_id": "s", "client_auth_session": {}})
 
         self.assertNotIn("body=", printed)
         self.assertNotIn("body_keys=", printed)
