@@ -54,8 +54,19 @@ _SCRATCH_SCRIPT = re.compile(r"(^|[\\/])_(?!_)[^\\/]*\.py$")
 # came back clean). A security gate must fail closed: anything not recognised
 # as build output gets asked about.
 BUILD_OUTPUT_SUFFIXES = {
-    ".dll", ".exe", ".pdb", ".so", ".dylib", ".pyd", ".pyc",
-    ".lib", ".exp", ".obj", ".ilk", ".nupkg", ".snupkg",
+    ".dll",
+    ".exe",
+    ".pdb",
+    ".so",
+    ".dylib",
+    ".pyd",
+    ".pyc",
+    ".lib",
+    ".exp",
+    ".obj",
+    ".ilk",
+    ".nupkg",
+    ".snupkg",
 }
 
 # Directories whose contents are build output, not source. They are git-ignored by
@@ -100,11 +111,7 @@ def check_ignored(payload: Path, rel_paths: list[str]) -> list[str]:
     if proc.returncode not in (0, 1):
         return [f"git check-ignore failed (rc={proc.returncode}): {proc.stderr.strip()}"]
     ignored = [p for p in proc.stdout.split("\0") if p]
-    return [
-        f"{p} is git-ignored but present in the payload "
-        f"(ignored files must never ship)"
-        for p in ignored
-    ]
+    return [f"{p} is git-ignored but present in the payload (ignored files must never ship)" for p in ignored]
 
 
 def check_names(rel_path: str, exempt: frozenset[str] | set[str] = frozenset()) -> list[str]:
@@ -168,7 +175,10 @@ def check_artifact_regexes(payload: Path) -> list[str]:
     )
     for path in payload.rglob("*"):
         if not path.is_file() or path.suffix.lower() not in {
-            ".json", ".jsonl", ".log", ".txt",
+            ".json",
+            ".jsonl",
+            ".log",
+            ".txt",
         }:
             continue
         try:
