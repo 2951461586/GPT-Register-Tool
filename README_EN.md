@@ -110,7 +110,7 @@ The Chinese README contains the complete feature, configuration, architecture, C
 - [Architecture](./docs/architecture.md)
 - [Troubleshooting](./docs/TROUBLESHOOTING.md) (Chinese; numbered checklists, one per failure mode, each pointing at the owning `file.py:line`)
 - [One-click SMS contract](./docs/current/one-click-sms.md) (Chinese; provider families and persistence outcomes)
-- [v2026.09.23 release notes](./docs/releases/release-v2026.09.23.md)
+- [v2026.10.08 release notes](./docs/releases/release-v2026.10.08.md)
 - [Documentation index](./docs/README.md) (Chinese; release notes and audits archived under `docs/releases/` and `docs/audits/`)
 - [Directory map](./docs/directory-map.md)
 - [Proxy guide](./PROXY_GUIDE.md)

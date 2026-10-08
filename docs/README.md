@@ -43,6 +43,9 @@ Directory layout (since 2026-09-06):
 
 ## Release notes（docs/releases/，一个发布标签一份，不回写）
 
+- [v2026.10.08 发布说明](releases/release-v2026.10.08.md) - 自 v2026.09.23 以来的收口：
+  协议注册硬化与 signin 形状实验系列、支付提取器的 Sentinel 门禁与 `protocol_payment.v1`
+  结果契约、代理/指纹单一权威接线，以及把大文件拆成有边界模块的结构性重构。
 - [v2026.09.23 发布说明](releases/release-v2026.09.23.md) - 自 v2026.09.14 以来的收口：
   第二接码协议族 NexSMS、带 TTL 的环境账本、供应商中立化、一键接码接通在线目录及一批缺陷修复。
 - [v2026.09.14 发布说明](releases/release-v2026.09.14.md) - 协议注册日志四个输出
