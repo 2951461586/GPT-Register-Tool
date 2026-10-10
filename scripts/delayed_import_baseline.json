@@ -30,7 +30,7 @@
     "sms_tool/commands/omakse.py": 2,
     "sms_tool/commands/one_click.py": 7,
     "sms_tool/commands/payment.py": 18,
-    "sms_tool/commands/payment_links.py": 9,
+    "sms_tool/commands/payment_links.py": 10,
     "sms_tool/commands/registration.py": 9,
     "sms_tool/config.py": 5,
     "sms_tool/desktop_read.py": 3,
@@ -59,8 +59,9 @@
     "sms_tool/payment_catalog.py": 2,
     "sms_tool/payment_egress.py": 2,
     "sms_tool/payment_routing.py": 4,
+    "sms_tool/payment_wire.py": 1,
     "sms_tool/paypal/orchestrator.py": 11,
-    "sms_tool/paypal_extract.py": 2,
+    "sms_tool/paypal_extract.py": 1,
     "sms_tool/paypal_link/gen_link.py": 3,
     "sms_tool/paypal_protocol.py": 1,
     "sms_tool/paypal_proxy.py": 6,
@@ -111,5 +112,5 @@
     "sms_tool/upi_link/stripe.py": 1,
     "sms_tool/wallet_transport.py": 5
   },
-  "total": 420
+  "total": 421
 }

@@ -29,9 +29,9 @@ from typing import Any
 from ._extract import _upi_decode_base64url_json, _upi_is_instructions_url
 
 try:  # pragma: no cover - direct script execution
-    from ..paypal_extract import _new_session
+    from ..payment_wire import _new_session
 except ImportError:  # pragma: no cover - direct script execution
-    from paypal_extract import _new_session  # type: ignore
+    from payment_wire import _new_session  # type: ignore
 
 #: ``<meta id="payload" data-message="<base64url>">`` —— 两个属性顺序都可能。
 PAYLOAD_META_RE = re.compile(r'<meta\b[^>]*\bid=["\']payload["\'][^>]*\bdata-message=["\']([^"\']+)', re.I)

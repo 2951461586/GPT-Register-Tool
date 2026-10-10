@@ -7,6 +7,7 @@ direct ``from ..http_client import request_with_retry`` in a submodule would
 bind the function at import time and make the patch silently ineffective (the
 same defect ``docs/CONTEXT.md`` records for the payment-capability seam).
 """
+
 from __future__ import annotations
 
 from ..accounts.account_creation import _validate_email_otp

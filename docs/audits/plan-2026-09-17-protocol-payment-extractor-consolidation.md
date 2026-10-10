@@ -386,6 +386,34 @@ services/protocol-payment/
 - **仍未抽出**：`load_proxy_seeds`（provider 国家常量编排，只组合共享原语）；
   阶段 2 的成对 `stripe_*` / `run_*`（35 个非等价差异，需真实链路回放）。
 
+**✅ 已落地（2026-10-10，batch 6 — 补上 blik 的谓词/分类器）**：
+
+阶段 1 的谓词批次（`common/payment_predicates.py`）与 batch 5 的
+`common/extractor_helpers.py` 只接了 ideal / twint，**blik 被漏掉**。
+
+- blik 本地留着的 8 个**逐字副本**（86 行）全部变为薄封装（24 行）：
+  `is_checkout_not_active_error` / `checkout_response_has_promo` /
+  `checkout_response_has_trial` / `is_qr_candidate` / `extract_qr_candidates` /
+  `is_approve_failure_error`（← `common.payment_predicates`），
+  `is_direct_remove_proxy_error` / `is_proxy_health_failure`
+  （← `common.extractor_helpers`）。调用点不变，净删 50 行。
+- **差分验证**（`runtime/tmp/_blik_predicates_diff_verify.py`）：HEAD 版本 vs 新实现，
+  **194 项检查**（31 个 payload × 3 个谓词、8 个 URL、32 个 reason × 3 个分类器、
+  6 个 error），逐项比对 return 值与类型，**零分歧**。
+- **为什么之前没被发现**：`extractor_parity_report.py` 只比**两两提取器**的重复度，
+  不比「提取器 vs `common/`」，所以这 8 个副本不进任何基线；
+  `provider_decoupling_ratchet.py` 到本次才把它们计为 `identical`（39→47 delegating、
+  8→0 identical，基线随之下调）。
+- **不在 §6「现在就动 blik」的否决范围内**：该否决针对 blik 独有的 **proxy/geo 选址簇**
+  （§2.5 的 32 个函数）；这 8 个是纯谓词/错误分类器，与代理选址无关，
+  且 `common/extractor_helpers.py:37,59` 的 docstring 本就写明「跨 ideal / twint / blik 一致」。
+- 测试：`tests/test_provider_decoupling_ratchet.py` 的
+  `test_the_migrated_extractors_have_no_verbatim_copies_left`（新增）与
+  `test_blik_carries_the_documented_divergent_bulk`（改写）钉住新分布；
+  extractor 相关 89 例全过。
+- **仍未抽出（有意）**：blik 的 32 个 divergent 对（geo/proxy 选址 + `build_email`
+  的 Rule-19 分叉），以及 `load_proxy_seeds` / 阶段 2 的成对 `stripe_*` / `run_*`。
+
 ---
 
 ## 8. 工作量与顺序建议

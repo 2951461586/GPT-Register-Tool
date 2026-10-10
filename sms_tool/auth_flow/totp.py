@@ -1,7 +1,9 @@
 """TOTP challenge completion after email-OTP verification."""
+
 from __future__ import annotations
 
 from . import deps, steps
+
 
 def _complete_existing_login_totp(
     session,
@@ -65,6 +67,7 @@ def _complete_existing_login_totp(
         return {"ok": False, "error": f"existing_login_totp_verify_failed:{verify.status_code}"}
     return {"ok": True, "data": verify_data}
 
+
 def _is_mfa_challenge_payload(payload):
     if not isinstance(payload, dict):
         return False
@@ -72,6 +75,7 @@ def _is_mfa_challenge_payload(payload):
     if str(page.get("type") or "").strip().lower() == "mfa_challenge":
         return True
     return "/mfa-challenge/" in str(_response_next_url_from_data(payload, "") or "").lower()
+
 
 def _totp_factor_id(payload):
     auth_session = payload.get("oai-client-auth-session") if isinstance(payload, dict) else {}
@@ -88,6 +92,7 @@ def _totp_factor_id(payload):
             if factor_id:
                 return factor_id
     return ""
+
 
 def _response_next_url_from_data(payload, auth_base):
     if not isinstance(payload, dict):

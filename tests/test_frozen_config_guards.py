@@ -107,3 +107,83 @@ def test_probe_reads_frozen_chatgpt_base_urls():
     assert handshake.call_args.kwargs["auth_base"] == "https://auth.example.test"
     assert handshake.call_args.kwargs["chat_base"] == "https://chat.example.test"
     assert result["status"] == registration_probe.STATUS_REGISTERED
+
+
+# ---------------------------------------------------------------------------
+# The shared registration-toggle parser
+# ---------------------------------------------------------------------------
+#
+# The eight ``registration.*`` toggles used to carry their own copy of the
+# frozen-section guard, which is how the P1-D defect reached three of them at
+# once (2026-10-07).  They now share ``steps._registration_flag``.  These tests
+# pin the semantics that consolidation had to preserve exactly -- in particular
+# that the toggles are deliberately **two-sided** about an unrecognised value.
+
+# ``(toggle, key, default)`` for every switch the shared parser serves.
+_REGISTRATION_TOGGLES = (
+    ("_existing_login_continue_enabled", "existing_login_continue_on_verified_page", True),
+    ("_signup_continue_screen_hint_enabled", "signup_continue_screen_hint", False),
+    ("_signup_email_verification_continue_hint_enabled", "signup_email_verification_continue_hint", False),
+    ("_prime_create_account_password_page_enabled", "prime_create_account_password", False),
+    ("_prime_navigation_headers_enabled", "prime_navigation_headers", False),
+    ("_signin_screen_hint_login_or_signup_enabled", "signin_screen_hint_login_or_signup", False),
+    ("_signin_prompt_login_enabled", "signin_prompt_login", False),
+    ("_signin_locale_ja_jp_enabled", "signin_locale_ja_jp", False),
+)
+
+
+def _read_toggle(name: str, section: object) -> bool:
+    from sms_tool.auth_flow import deps, steps
+
+    config = MappingProxyType({"registration": section})
+    with patch.object(deps, "current_config_data", return_value=config):
+        return getattr(steps, name)()
+
+
+def test_registration_toggles_honour_a_frozen_section():
+    """The P1-D class, now through the single shared guard."""
+    for name, key, _default in _REGISTRATION_TOGGLES:
+        assert _read_toggle(name, MappingProxyType({key: True})) is True, name
+        assert _read_toggle(name, MappingProxyType({key: False})) is False, name
+        # string forms a JSON/hand-edited config actually produces
+        assert _read_toggle(name, MappingProxyType({key: "true"})) is True, name
+        assert _read_toggle(name, MappingProxyType({key: "off"})) is False, name
+
+
+def test_registration_toggles_fall_back_to_their_own_default():
+    """A missing key, a non-mapping section and an exploding config all use ``default``.
+
+    The default is not uniform: ``existing_login_continue_on_verified_page`` is
+    default-**on**, every later toggle is default-**off**.  That is why the
+    shared parser takes ``default`` rather than hard-coding one polarity.
+    """
+    from sms_tool.auth_flow import deps, steps
+
+    for name, _key, default in _REGISTRATION_TOGGLES:
+        assert _read_toggle(name, MappingProxyType({})) is default, name
+        assert _read_toggle(name, None) is default, name
+        assert _read_toggle(name, "not-a-mapping") is default, name
+
+    def boom(*_args, **_kwargs):
+        raise RuntimeError("config exploded")
+
+    with patch.object(deps, "current_config_data", side_effect=boom):
+        for name, _key, default in _REGISTRATION_TOGGLES:
+            assert getattr(steps, name)() is default, name
+
+
+def test_an_unrecognised_value_is_two_sided_on_purpose():
+    """Unknown -> the toggle's own default, which differs by polarity.
+
+    This is the exact behaviour the eight hand-written bodies had before the
+    2026-10-10 consolidation (2488 differential checks, zero divergences).  A
+    naive ``bool(value)`` rewrite would flip it: ``"maybe"`` would become truthy
+    for the seven default-off toggles.
+    """
+    for name, key, default in _REGISTRATION_TOGGLES:
+        section = MappingProxyType({key: "maybe"})
+        assert _read_toggle(name, section) is default, name
+
+    # and the two polarities really are different for the same input
+    assert _read_toggle("_existing_login_continue_enabled", MappingProxyType({"x": "maybe"})) is True
+    assert _read_toggle("_signin_prompt_login_enabled", MappingProxyType({"x": "maybe"})) is False

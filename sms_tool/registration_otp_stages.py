@@ -20,9 +20,10 @@ import time
 from collections.abc import Mapping as MappingABC
 from typing import Any
 
-from .auth_state import otp_dispatch_verdict
+from .auth_state import otp_dispatch_verdict, passwordless_arm_armed
 from .sanitizer import describe_exception
 from .failure_registry import (
+    OTP_ARM_MISMATCH_MARKER,
     OTP_MAILBOX_SIDE_MARKER,
     OTP_NO_RESEND_MARKER,
 )
@@ -87,8 +88,16 @@ def wait_email_otp(self: Any) -> None:
     # 单独一个错误名而不是给 ``email_otp_poll_timeout`` 加后缀：这条路径
     # **根本没轮询**，说「poll timeout」会让日志撒谎。
     if otp_dispatch_verdict(s.otp_send_dump) == "stuck":
-        print("  Email OTP send is still pending on the server; skipping the mailbox poll")
-        self._abort("email_otp_send_stuck")
+        # 事务臂判据（F3，2026-10-08）：本 run 走密码泳道、而 dump 显示服务端把这次
+        # 注册架在了 passwordless 验证臂上。这是**事务臂**证据，不是出口证据 ——
+        # 换出口改不了服务端选臂，所以错误串带 ``arm_mismatch`` 后缀，
+        # ``registration_pulse._is_otp_ban_signal`` 据此不把它算作派发侧封禁。
+        arm_mismatch = self._password_lane_active() and passwordless_arm_armed(s.otp_send_dump)
+        reason = (
+            "the server armed a passwordless arm on the password lane" if arm_mismatch else "skipping the mailbox poll"
+        )
+        print(f"  Email OTP send is still pending on the server; {reason}")
+        self._abort(f"email_otp_send_stuck:{OTP_ARM_MISMATCH_MARKER}" if arm_mismatch else "email_otp_send_stuck")
     s.email_code = r.otp_poll.poll(
         s.mailbox,
         subject_keyword=r.otp_poll.subject_keywords,

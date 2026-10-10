@@ -301,7 +301,10 @@ EXPERIMENTS: dict[str, dict[str, Any]] = {
             "funnel.registered_per_attempted",
             "funnel.registration_failures_by_class (mailbox = the OTP-delivery family)",
             "funnel.registration_failures_by_class (auth_state = invalid_auth_step family)",
-            "client_auth_session.email_verification_mode (primary mechanism read: does it leave passwordless_*)",
+            "client_auth_session_dump[after_otp_send]: passwordless_email_otp_send_pending ABSENT "
+            "(primary mechanism read -- the only value that separated success from failure across the "
+            "2026-10-08 signin runs; the code cannot dispatch while the key is present)",
+            "client_auth_session.email_verification_mode (secondary: which arm the server picked)",
         ),
         "mechanism": "Email verification continue hint",
         "decision": (
@@ -311,7 +314,7 @@ EXPERIMENTS: dict[str, dict[str, Any]] = {
             "auth_state-class growth in the hint arm means the extra POST "
             "conflicts with the server's transaction reading -- that alone is a "
             "reason to keep the default off. A rate that does not move while "
-            "email_verification_mode also does not move means the declaration "
+            "the pending key also fails to clear means the declaration "
             "after the fact cannot re-arm the transaction, which closes the "
             "screen_hint family and points the next experiment at the signin "
             "shape (login_or_signup) instead."
@@ -342,7 +345,10 @@ EXPERIMENTS: dict[str, dict[str, Any]] = {
             "funnel.registered_per_attempted",
             "funnel.registration_failures_by_class (mailbox = the OTP-delivery family)",
             "funnel.registration_failures_by_class (auth_state = invalid_auth_step family)",
-            "client_auth_session.email_verification_mode (primary mechanism read: does it leave passwordless_*)",
+            "client_auth_session_dump[after_otp_send]: passwordless_email_otp_send_pending ABSENT "
+            "(primary mechanism read -- the only value that separated success from failure across the "
+            "2026-10-08 signin runs; the code cannot dispatch while the key is present)",
+            "client_auth_session.email_verification_mode (secondary: which arm the server picked)",
         ),
         "mechanism": "Password page navigation headers",
         "decision": (
@@ -351,8 +357,8 @@ EXPERIMENTS: dict[str, dict[str, Any]] = {
             "it is worse by more than the same delta; otherwise inconclusive. "
             "An auth_state-class growth in the headers arm means the navigation "
             "disturbed the transaction -- that alone keeps the default off. A "
-            "rate that does not move while email_verification_mode also does not "
-            "move closes the prime family entirely and points the next "
+            "rate that does not move while the pending key also fails to "
+            "clear closes the prime family entirely and points the next "
             "experiment at the signin shape (login_or_signup)."
         ),
     },
@@ -383,7 +389,10 @@ EXPERIMENTS: dict[str, dict[str, Any]] = {
             "funnel.registered_per_attempted",
             "funnel.registration_failures_by_class (mailbox = the OTP-delivery family)",
             "funnel.registration_failures_by_class (auth_state = invalid_auth_step family)",
-            "client_auth_session.email_verification_mode (primary mechanism read: does it leave passwordless_*)",
+            "client_auth_session_dump[after_otp_send]: passwordless_email_otp_send_pending ABSENT "
+            "(primary mechanism read -- the only value that separated success from failure across the "
+            "2026-10-08 signin runs; the code cannot dispatch while the key is present)",
+            "client_auth_session.email_verification_mode (secondary: which arm the server picked)",
         ),
         "mechanism": "Signin screen_hint=login_or_signup",
         "decision": (
@@ -392,8 +401,8 @@ EXPERIMENTS: dict[str, dict[str, Any]] = {
             "it is worse by more than the same delta; otherwise inconclusive. "
             "An auth_state-class growth in that arm means the declared screen "
             "conflicts with the server's reading -- that alone keeps the default "
-            "off. A rate that does not move while email_verification_mode also "
-            "does not move closes the client-side screen_hint family entirely "
+            "off. A rate that does not move while the pending key also "
+            "fails to clear closes the client-side screen_hint family entirely "
             "and points at the server's own routing (passwordless_signup_from_"
             "default_redirect) rather than another wire field."
         ),
@@ -425,7 +434,10 @@ EXPERIMENTS: dict[str, dict[str, Any]] = {
             "funnel.registered_per_attempted",
             "funnel.registration_failures_by_class (mailbox = the OTP-delivery family)",
             "funnel.registration_failures_by_class (auth_state = invalid_auth_step family)",
-            "client_auth_session.email_verification_mode (primary mechanism read: does it leave passwordless_*)",
+            "client_auth_session_dump[after_otp_send]: passwordless_email_otp_send_pending ABSENT "
+            "(primary mechanism read -- the only value that separated success from failure across the "
+            "2026-10-08 signin runs; the code cannot dispatch while the key is present)",
+            "client_auth_session.email_verification_mode (secondary: which arm the server picked)",
         ),
         "mechanism": "Signin prompt=login",
         "decision": (
@@ -434,8 +446,8 @@ EXPERIMENTS: dict[str, dict[str, Any]] = {
             "it is worse by more than the same delta; otherwise inconclusive. "
             "An auth_state-class growth in that arm means the declared prompt "
             "conflicts with the server's reading -- that alone keeps the default "
-            "off. A rate that does not move while email_verification_mode also "
-            "does not move closes turb's signin shape (screen_hint + prompt) and "
+            "off. A rate that does not move while the pending key also "
+            "fails to clear closes turb's signin shape (screen_hint + prompt) and "
             "points at the remaining deltas: not posting authorize/continue, and "
             "locale."
         ),
@@ -468,7 +480,10 @@ EXPERIMENTS: dict[str, dict[str, Any]] = {
             "funnel.registered_per_attempted",
             "funnel.registration_failures_by_class (mailbox = the OTP-delivery family)",
             "funnel.registration_failures_by_class (auth_state = invalid_auth_step family)",
-            "client_auth_session.email_verification_mode (primary mechanism read: does it leave passwordless_*)",
+            "client_auth_session_dump[after_otp_send]: passwordless_email_otp_send_pending ABSENT "
+            "(primary mechanism read -- the only value that separated success from failure across the "
+            "2026-10-08 signin runs; the code cannot dispatch while the key is present)",
+            "client_auth_session.email_verification_mode (secondary: which arm the server picked)",
         ),
         "mechanism": "Signin locale=ja-JP",
         "decision": (
@@ -477,7 +492,7 @@ EXPERIMENTS: dict[str, dict[str, Any]] = {
             "more than the same delta; otherwise inconclusive. An auth_state-class "
             "growth in that arm means the declared locale conflicts with the "
             "server's reading -- that alone keeps the default off. A rate that "
-            "does not move while email_verification_mode also does not move closes "
+            "does not move while the pending key also fails to clear closes "
             "the whole client-side signin-shape family (screen_hint + prompt + "
             "locale) and points at the server's own routing "
             "(passwordless_signup_from_default_redirect) or at the fingerprint / "

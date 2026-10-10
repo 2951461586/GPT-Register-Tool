@@ -31,7 +31,7 @@ from typing import Any, Mapping
 from .. import payment_capability
 from .. import payment_egress
 from ..checkout_contract import browser_profile_for_country
-from ..paypal_extract import CURRENCY_MAP
+from ..payment_wire import CURRENCY_MAP
 from ..payment_routing import parse_proxy_pool, payment_proxy_pools
 from ..proxy_entry import retarget_region
 from ..config import CFG
@@ -60,7 +60,7 @@ DEFAULT_BILLING_COUNTRY = "US"
 # use it without importing the payment catalog.
 MAX_LABEL_TOKENS = MAX_ELIGIBILITY_LABEL_TOKENS
 
-# ``paypal_extract.CURRENCY_MAP`` is the canonical country->currency map, but it
+# ``payment_wire.CURRENCY_MAP`` is the canonical country->currency map, but it
 # predates the PH/VN/PL/CH/ES/NL entries in ``payment_methods.json``.  The
 # extras live here instead of mutating the PayPal lane's map, because that map
 # feeds ``self.currency = CURRENCY_MAP.get(target_country, "EUR")`` and adding

@@ -294,6 +294,36 @@ def otp_dispatch_verdict(summary) -> str:
     return "dispatched"
 
 
+def passwordless_arm_armed(summary) -> bool:
+    """True when the dump shows the server armed a **passwordless** OTP arm.
+
+    🔴 2026-10-08 (F3): the 10-07/10-08 signin series measured that the stuck
+    shape is a **transaction-arm** mismatch, not an egress block: the client
+    posts the password lane while the server arms ``email_verification_mode``
+    ``passwordless_login`` / ``passwordless_signup`` (with ``original_screen_hint``
+    following whatever the client declared).  Rotating the exit cannot change
+    which arm the server picked, so ``registration_pulse`` must be able to tell
+    this shape apart from an egress-level dispatch block.
+
+    Reads the *value* of ``email_verification_mode`` out of the summary's
+    ``signals``.  Only the low-cardinality wire enums in
+    :data:`TRANSACTION_ENUM_VALUES` survive redaction; anything else was
+    replaced by a length and therefore answers ``False`` -- unknown, not
+    "not passwordless".
+
+    Deliberately **not** a verdict on its own: the caller ANDs it with "this run
+    is on the password lane", because on the passwordless lane a
+    ``passwordless_*`` arm is what was asked for, not a mismatch.
+    """
+    signals = summary.get("signals") if isinstance(summary, dict) else None
+    if not isinstance(signals, dict):
+        return False
+    for key, value in signals.items():
+        if str(key).lower().endswith("email_verification_mode"):
+            return str(value or "").strip().lower().startswith("passwordless")
+    return False
+
+
 def signup_lane_verdict(summary) -> str:
     """判定服务端把这次 authorize 当**注册**还是**登录** —— 取码之前的止损判据。
 

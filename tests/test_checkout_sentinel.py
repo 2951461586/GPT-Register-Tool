@@ -40,7 +40,7 @@ class _Resp:
 
 
 # ---------------------------------------------------------------------------
-# Shared transport seam: paypal_extract._checkout_post
+# Shared transport seam: payment_wire._checkout_post (re-exported by paypal_extract)
 # ---------------------------------------------------------------------------
 def test_checkout_create_attaches_sentinel_pair():
     seen = {}
@@ -141,7 +141,7 @@ def test_capability_transport_attaches_sentinel_pair_to_create():
             timeout=20,
         )
 
-    # The capability transport reaches the shared `paypal_extract._checkout_post`
+    # The capability transport reaches the shared `payment_wire._checkout_post`
     # seam (via the `gen_pp_link` re-export), so the pair is attached there.
     assert seen["headers"]["OpenAI-Sentinel-Token"] == "sentinel-token-fixture"
     assert seen["headers"]["OpenAI-Sentinel-SO-Token"] == "sentinel-so-fixture"

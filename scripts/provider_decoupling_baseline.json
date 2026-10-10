@@ -1,11 +1,11 @@
 {
-  "delegating": 182,
-  "divergent": 48,
+  "delegating": 192,
+  "divergent": 46,
   "files": {
     "blik/blik_qr_extract.py": {
-      "delegating": 39,
+      "delegating": 47,
       "divergent": 32,
-      "identical": 8
+      "identical": 0
     },
     "direct_card/direct_card_extract.py": {
       "delegating": 1,
@@ -28,8 +28,8 @@
       "identical": 0
     },
     "momo/momo_qr_extract.py": {
-      "delegating": 0,
-      "divergent": 4,
+      "delegating": 2,
+      "divergent": 2,
       "identical": 0
     },
     "momo/run_momo.py": {
@@ -59,6 +59,6 @@
     }
   },
   "files_with_frozen_pairs": 7,
-  "identical": 8,
+  "identical": 0,
   "same_named_total": 238
 }

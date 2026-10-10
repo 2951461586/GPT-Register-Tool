@@ -155,9 +155,7 @@ class RegistrationRetryGuard:
         self.otp_pending_quarantine_threshold = max(
             2,
             int(
-                configured_quarantine
-                if otp_pending_quarantine_threshold is None
-                else otp_pending_quarantine_threshold
+                configured_quarantine if otp_pending_quarantine_threshold is None else otp_pending_quarantine_threshold
             ),
         )
         # 🔴 2026-09-18 拍板：OTP-pending 隔离**有期限**，不再是永久。
@@ -181,9 +179,7 @@ class RegistrationRetryGuard:
         self.otp_pending_quarantine_seconds = max(
             60,
             int(
-                configured_quarantine_ttl
-                if otp_pending_quarantine_seconds is None
-                else otp_pending_quarantine_seconds
+                configured_quarantine_ttl if otp_pending_quarantine_seconds is None else otp_pending_quarantine_seconds
             ),
         )
 
@@ -295,12 +291,10 @@ class RegistrationRetryGuard:
                         # **只在 TTL 窗口内**（判据见 ``_quarantine_active``）——
                         # 服务端可能只是在一个灰度窗口里拒绝派发，窗口关闭后
                         # 这个地址必须能自己回来，不需要人工介入。
-                        "cooldown_until": int(now + self.cooldown_seconds)
-                        if not quarantined else 0,
+                        "cooldown_until": int(now + self.cooldown_seconds) if not quarantined else 0,
                         "quarantined": quarantined,
                         "quarantine_reason": "email_otp_send_stuck" if quarantined else "",
-                        "quarantine_until": int(now + self.otp_pending_quarantine_seconds)
-                        if quarantined else 0,
+                        "quarantine_until": int(now + self.otp_pending_quarantine_seconds) if quarantined else 0,
                     }
                 elif decision.guard_action == "cooldown":
                     same_class = str(previous.get("failure_class") or "") == str(failure_class or "")
@@ -310,8 +304,7 @@ class RegistrationRetryGuard:
                         "failure_class": str(failure_class or "")[:40],
                         "last_error": sanitize_text(error)[:160],
                         "last_attempt_at": now,
-                        "cooldown_until": int(now + self.cooldown_seconds)
-                        if consecutive >= self.threshold else 0,
+                        "cooldown_until": int(now + self.cooldown_seconds) if consecutive >= self.threshold else 0,
                     }
                 elif decision.guard_action == "dead_end":
                     reason = _dead_end_reason(error)
@@ -342,9 +335,7 @@ class RegistrationRetryGuard:
         with self._locked():
             data = self._read()
         return {
-            str(key).strip().casefold()
-            for key, row in data.items()
-            if isinstance(row, Mapping) and row.get("dead_end")
+            str(key).strip().casefold() for key, row in data.items() if isinstance(row, Mapping) and row.get("dead_end")
         }
 
     def quarantined_emails(self) -> set[str]:
@@ -355,11 +346,7 @@ class RegistrationRetryGuard:
         now = time.time()
         with self._locked():
             data = self._read()
-        return {
-            str(key).strip().casefold()
-            for key, row in data.items()
-            if self._quarantine_active(row, now)
-        }
+        return {str(key).strip().casefold() for key, row in data.items() if self._quarantine_active(row, now)}
 
     def blocked_email_states(self) -> dict[str, str]:
         """Read all cross-batch blocks once for candidate-pool filtering."""

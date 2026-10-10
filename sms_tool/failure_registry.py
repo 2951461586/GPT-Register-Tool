@@ -64,217 +64,251 @@ class FailureClass:
 
 
 FAILURE_CLASSES: tuple[FailureClass, ...] = (
-    FailureClass("cancelled", (
-        "registration_cancelled",
-        "cancelled_by_user",
-    )),
-    FailureClass("internal", (
-        "registration_internal_error",
-        "nameerror",
-        "attributeerror",
-        "typeerror",
-        "keyerror",
-        "importerror",
-        "indexerror",
-        "unboundlocalerror",
-        "notimplementederror",
-        "recursionerror",
-        " is not defined",
-    )),
-    FailureClass("configuration", (
-        "unsupported_registration_driver",
-        "missing_dependency",
-        "invalid_configuration",
-        "configuration_error",
-    )),
-    FailureClass("account", (
-        "account_deactivated",
-        "account deactivated",
-        "account has been deactivated",
-        "deleted or deactivated",
-        "registration_disallowed",
-        "invalid_grant",
-        "authenticationfailed",
-        "invalid credentials",
-        "wrong_email_otp_code",
-        "password_verify_failed",
-        "phone_recently_used",
-        "unsupported_phone_number",
-        "fraud_guard",
-        "token_invalidated",
-        # Added 2026-09-14: ``create_account`` answers this when the mailbox is
-        # already a registered address.  It only reached the classifier after
-        # ``registration_outcome`` stopped hiding it behind the re-login
-        # fallback's OTP symptom -- before that every occurrence was reported as
-        # ``existing_login_otp_send_failed:429``, which classifies ``unknown``.
-        "user_already_exists",
-        # Added 2026-09-16 17:3x（P1）: the **earliest** shape of the same verdict.
-        # ``login_or_signup`` lands on ``/log-in/password`` and ``user/register``
-        # answers 400 ``invalid_auth_step``.  It belongs in ``account`` for the
-        # same reason ``user_already_exists`` does: the address is used, no
-        # amount of retrying frees it, and every retry re-walks the whole
-        # handshake to rediscover the same fact.
-        #
-        # 🔴 Do **not** merge it with ``password_step_unconfirmed``: that one is
-        # ``auth_state`` (retryable) precisely because nothing was consumed.
-        # This one means the address **is** consumed, so ``batch_dropped`` is the
-        # correct response and blacklisting is not a false positive.
-        "signup_routed_to_login",
-    ), batch_dropped=True),
-    FailureClass("mailbox", (
-        "mailbox_auth_invalid",
-        "mailbox_endpoint_unavailable",
-        "remail_api_auth_invalid",
-        "outlook otp timeout",
-        "email_otp_poll_timeout",
-        # Added 2026-09-16（P0-1 判据 B）: the auth transaction still carried
-        # ``passwordless_email_otp_send_pending`` after the send step, so the
-        # server never completed the dispatch and **no code can arrive**.  The
-        # run aborts before the mailbox poll instead of burning its full budget.
-        # It sits in ``mailbox`` because that class *is* the OTP-delivery family.
-        # Immediate retry and future-batch retention are separate decisions;
-        # the exact marker escalates through the retry guard. The
-        # egress-vs-mailbox distinction is carried by
-        # ``OTP_UNDISPATCHED_MARKER``, which ``registration_pulse`` reads.
-        "email_otp_send_stuck",
-        "mailbox otp timeout",
-        "mailbox_transport_unavailable",
-        "relogin_mailbox_transport_failed",
-        "remail poll transport",
-    ), retain_for_future_batch=True, rotate_egress=True),
-    FailureClass("rate_limit", (
-        "rate_limit_exceeded",
-        "registration_rate_limited",
-        "registration_rate_limit_circuit_open",
-        "too many requests",
-        "http_429",
-    ), retain_for_future_batch=True, rotate_egress=True),
-    FailureClass("network", (
-        "tls",
-        "ssl",
-        "sslerror",
-        "eof occurred",
-        "connection",
-        "connect error",
-        "timeout",
-        "timed out",
-        "proxy",
-        "socks",
-        "dns",
-        "name resolution",
-        "winerror 10060",
-        "curl: (35)",
-        "curl: (28)",
-        "curl: (6)",
-        "curl: (7)",
-        # Added 2026-09-18（最新一轮协议注册诊断）：补齐 transport curl 码。
-        #
-        # 🔴 ``CURL_TRANSPORT_MARKERS`` 是从本清单**派生**的
-        # （``error_classification.py``：``m.startswith("curl:")``），而
-        # ``internal`` 的降级判据是 ``internal_match and not curl_match`` ——
-        # 所以**漏登记一个码 = 该码永远无法**把
-        # ``registration_internal_error:<Type>:…`` 从 ``internal``（终态）
-        # 降级成 ``network``（可重试）。
-        #
-        # 实测批次 29896（2026-09-18 20:40）：
-        # ``registration_internal_error:RuntimeError:…curl: (56) Proxy CONNECT aborted``
-        # 被判成 ``internal`` ⇒ **不重试、不进重试守卫、不触发 pulse 熔断**，
-        # 两个 run 被静默吞掉（日志里查得到、守卫里查不到记录）。
-        # 同批 ``curl: (35)`` 正常归 ``network``，证明缺的就是登记项本身。
-        # → ``docs/audits/scan-2026-09-18-latest-protocol-batch-diagnosis.md``
-        #
-        # (52) Empty reply from server / (18) Partial file 与既有四项同属
-        # 传输中途失败，一并登记，避免下次再从同一个洞里漏。
-        "curl: (52)",
-        "curl: (56)",
-        "curl: (18)",
-        "remote disconnected",
-        "connection reset",
-        "connection aborted",
-        "session_circuit_open",
-        "max retries exceeded",
-        "/sentinel/req",
-        "sentinel quickjs",
-        "sentinel_extract_failed",
-        # Added 2026-09-18（P1-b）: Sentinel 发放路径报"给不出 token"的三种说法。
-        # 三个串此前**都没进注册表** ⇒ 全判 ``unknown`` ⇒ 而 ``unknown`` 在重试
-        # 守卫眼里等同**终态** ⇒ 09-17 那批 42 个账号
-        # （``sentinel_legacy_incomplete:oauth_create_account``）**从未被重试**，
-        # 在"被误报成渠道故障"之上又叠了一层"直接丢号"。
-        # → ``docs/audits/scan-2026-09-18-sentinel-runner-hash-mismatch.md``
-        #
-        # 🔴 为什么是 ``network`` 而不是 ``account``：**地址没有被消耗**。
-        # token 根本没发出来，``create_account`` 从未带着可用载荷被发出，什么都没创建。
-        # ``account`` 带 ``batch_dropped=True``，会把一个完全可注册的地址拉黑 ——
-        # 与 ``user_already_exists`` / ``password_step_unconfirmed`` 分开的同一个理由。
-        #
-        # 🔴 为什么不是终态：底层条件可重试。runner 可以瞬时失败；而目前已知的
-        # 唯一本地成因（随包资产损坏）修好资产重跑即可 ——
-        # ``retain_for_future_batch`` 正是那 42 个地址当时**需要却没拿到**的处置。
-        #
-        # ``sentinel_issue_failed`` 与 ``sentinel_fallback_incomplete`` 会由
-        # ``_root_reason`` 追加**根因**（形如
-        # ``sentinel_fallback_incomplete:<flow>:SentinelBundleError(<原因>)``），
-        # 所以标记取**前缀**，后缀只作诊断。
-        "sentinel_legacy_incomplete",
-        "sentinel_issue_failed",
-        "sentinel_fallback_incomplete",
-        "cloudflare",
-        "just a moment",
-    ), attempt_retryable=True, retain_for_future_batch=True, rotate_egress=True),
-    FailureClass("auth_state", (
-        "browser_email_field_not_editable",
-        "invalid_auth_step",
-        "invalid_state",
-        "sign-in session is no longer valid",
-        "signup_auth_state",
-        "browser_registration_state_unknown",
-        "browser_email_verification_stuck",
-        "browser_auth_state",
-        # Added 2026-09-13 from the live failure log: these four were answered
-        # as ``unknown`` (or, for the last one, ``network``) and therefore read
-        # as *terminal*, so the retry guard never accumulated a cooldown for
-        # them. Measured over 09-08..09-13: ``unknown`` covered 18 of 179
-        # failures, all of them ``missing_auth_session_access_token``.
-        #
-        # ``missing_auth_session_access_token`` is the collapsed outcome when
-        # an already-registered address cannot be logged back in;
-        # ``registration_outcome._registration_outcome`` already documents that
-        # it hides a retryable ``invalid_state`` behind a name that suggests a
-        # code defect. ``browser_passwordless_otp_state_unknown`` and
-        # ``browser_email_value_mismatch`` are raised by
-        # ``browser_flow/form_steps.py`` when the page is in an unexpected
-        # state. ``browser_profile_submit_timeout`` was already classified
-        # ``auth_state`` by the browser lane (``session._browser_failure_class``
-        # matches ``profile_``) and is listed here so the shared classifier
-        # agrees instead of being stolen by the bare ``timeout`` marker.
-        "missing_auth_session_access_token",
-        "auth_session_recovery_",
-        "browser_passwordless_otp_state_unknown",
-        "browser_email_value_mismatch",
-        "browser_profile_submit_timeout",
-        # Added 2026-09-16 (拍板：密码优先模式**失败即 abort**，不回落 passwordless).
-        # ``user/register`` answered ``invalid_auth_step`` -- the transaction was
-        # not at the password step, so the server never accepted our password.
-        # Continuing would reach ``create_account`` and produce an account with
-        # **no password**, which is precisely what password-first registration
-        # exists to prevent.  The run stops before spending an email OTP.
-        #
-        # ``auth_state`` because the address is *not* consumed: nothing was
-        # created, so the current account may retry and a later batch may also
-        # reconsider it. It must not land in ``account``,
-        # whose ``batch_dropped`` would blacklist a perfectly registrable
-        # address.
-        #
-        # 🔴 Note the marker is the **prefix**, not the whole error string.  The
-        # error is emitted as ``password_step_unconfirmed:<reason>`` and today the
-        # only reason is ``invalid_auth_step`` -- which is *itself* a marker two
-        # lines up, so this entry changes nothing for that one string.  It is here
-        # so the whole family stays ``auth_state`` when the suffix varies; the
-        # suffix is diagnostic, the prefix is the contract.  Pinned by
-        # ``tests/test_user_register_response_contract.py``.
-        "password_step_unconfirmed",
-    ), attempt_retryable=True, retain_for_future_batch=True),
+    FailureClass(
+        "cancelled",
+        (
+            "registration_cancelled",
+            "cancelled_by_user",
+        ),
+    ),
+    FailureClass(
+        "internal",
+        (
+            "registration_internal_error",
+            "nameerror",
+            "attributeerror",
+            "typeerror",
+            "keyerror",
+            "importerror",
+            "indexerror",
+            "unboundlocalerror",
+            "notimplementederror",
+            "recursionerror",
+            " is not defined",
+        ),
+    ),
+    FailureClass(
+        "configuration",
+        (
+            "unsupported_registration_driver",
+            "missing_dependency",
+            "invalid_configuration",
+            "configuration_error",
+        ),
+    ),
+    FailureClass(
+        "account",
+        (
+            "account_deactivated",
+            "account deactivated",
+            "account has been deactivated",
+            "deleted or deactivated",
+            "registration_disallowed",
+            "invalid_grant",
+            "authenticationfailed",
+            "invalid credentials",
+            "wrong_email_otp_code",
+            "password_verify_failed",
+            "phone_recently_used",
+            "unsupported_phone_number",
+            "fraud_guard",
+            "token_invalidated",
+            # Added 2026-09-14: ``create_account`` answers this when the mailbox is
+            # already a registered address.  It only reached the classifier after
+            # ``registration_outcome`` stopped hiding it behind the re-login
+            # fallback's OTP symptom -- before that every occurrence was reported as
+            # ``existing_login_otp_send_failed:429``, which classifies ``unknown``.
+            "user_already_exists",
+            # Added 2026-09-16 17:3x（P1）: the **earliest** shape of the same verdict.
+            # ``login_or_signup`` lands on ``/log-in/password`` and ``user/register``
+            # answers 400 ``invalid_auth_step``.  It belongs in ``account`` for the
+            # same reason ``user_already_exists`` does: the address is used, no
+            # amount of retrying frees it, and every retry re-walks the whole
+            # handshake to rediscover the same fact.
+            #
+            # 🔴 Do **not** merge it with ``password_step_unconfirmed``: that one is
+            # ``auth_state`` (retryable) precisely because nothing was consumed.
+            # This one means the address **is** consumed, so ``batch_dropped`` is the
+            # correct response and blacklisting is not a false positive.
+            "signup_routed_to_login",
+        ),
+        batch_dropped=True,
+    ),
+    FailureClass(
+        "mailbox",
+        (
+            "mailbox_auth_invalid",
+            "mailbox_endpoint_unavailable",
+            "remail_api_auth_invalid",
+            "outlook otp timeout",
+            "email_otp_poll_timeout",
+            # Added 2026-09-16（P0-1 判据 B）: the auth transaction still carried
+            # ``passwordless_email_otp_send_pending`` after the send step, so the
+            # server never completed the dispatch and **no code can arrive**.  The
+            # run aborts before the mailbox poll instead of burning its full budget.
+            # It sits in ``mailbox`` because that class *is* the OTP-delivery family.
+            # Immediate retry and future-batch retention are separate decisions;
+            # the exact marker escalates through the retry guard. The
+            # egress-vs-mailbox distinction is carried by
+            # ``OTP_UNDISPATCHED_MARKER``, which ``registration_pulse`` reads.
+            "email_otp_send_stuck",
+            "mailbox otp timeout",
+            "mailbox_transport_unavailable",
+            "relogin_mailbox_transport_failed",
+            "remail poll transport",
+        ),
+        retain_for_future_batch=True,
+        rotate_egress=True,
+    ),
+    FailureClass(
+        "rate_limit",
+        (
+            "rate_limit_exceeded",
+            "registration_rate_limited",
+            "registration_rate_limit_circuit_open",
+            "too many requests",
+            "http_429",
+        ),
+        retain_for_future_batch=True,
+        rotate_egress=True,
+    ),
+    FailureClass(
+        "network",
+        (
+            "tls",
+            "ssl",
+            "sslerror",
+            "eof occurred",
+            "connection",
+            "connect error",
+            "timeout",
+            "timed out",
+            "proxy",
+            "socks",
+            "dns",
+            "name resolution",
+            "winerror 10060",
+            "curl: (35)",
+            "curl: (28)",
+            "curl: (6)",
+            "curl: (7)",
+            # Added 2026-09-18（最新一轮协议注册诊断）：补齐 transport curl 码。
+            #
+            # 🔴 ``CURL_TRANSPORT_MARKERS`` 是从本清单**派生**的
+            # （``error_classification.py``：``m.startswith("curl:")``），而
+            # ``internal`` 的降级判据是 ``internal_match and not curl_match`` ——
+            # 所以**漏登记一个码 = 该码永远无法**把
+            # ``registration_internal_error:<Type>:…`` 从 ``internal``（终态）
+            # 降级成 ``network``（可重试）。
+            #
+            # 实测批次 29896（2026-09-18 20:40）：
+            # ``registration_internal_error:RuntimeError:…curl: (56) Proxy CONNECT aborted``
+            # 被判成 ``internal`` ⇒ **不重试、不进重试守卫、不触发 pulse 熔断**，
+            # 两个 run 被静默吞掉（日志里查得到、守卫里查不到记录）。
+            # 同批 ``curl: (35)`` 正常归 ``network``，证明缺的就是登记项本身。
+            # → ``docs/audits/scan-2026-09-18-latest-protocol-batch-diagnosis.md``
+            #
+            # (52) Empty reply from server / (18) Partial file 与既有四项同属
+            # 传输中途失败，一并登记，避免下次再从同一个洞里漏。
+            "curl: (52)",
+            "curl: (56)",
+            "curl: (18)",
+            "remote disconnected",
+            "connection reset",
+            "connection aborted",
+            "session_circuit_open",
+            "max retries exceeded",
+            "/sentinel/req",
+            "sentinel quickjs",
+            "sentinel_extract_failed",
+            # Added 2026-09-18（P1-b）: Sentinel 发放路径报"给不出 token"的三种说法。
+            # 三个串此前**都没进注册表** ⇒ 全判 ``unknown`` ⇒ 而 ``unknown`` 在重试
+            # 守卫眼里等同**终态** ⇒ 09-17 那批 42 个账号
+            # （``sentinel_legacy_incomplete:oauth_create_account``）**从未被重试**，
+            # 在"被误报成渠道故障"之上又叠了一层"直接丢号"。
+            # → ``docs/audits/scan-2026-09-18-sentinel-runner-hash-mismatch.md``
+            #
+            # 🔴 为什么是 ``network`` 而不是 ``account``：**地址没有被消耗**。
+            # token 根本没发出来，``create_account`` 从未带着可用载荷被发出，什么都没创建。
+            # ``account`` 带 ``batch_dropped=True``，会把一个完全可注册的地址拉黑 ——
+            # 与 ``user_already_exists`` / ``password_step_unconfirmed`` 分开的同一个理由。
+            #
+            # 🔴 为什么不是终态：底层条件可重试。runner 可以瞬时失败；而目前已知的
+            # 唯一本地成因（随包资产损坏）修好资产重跑即可 ——
+            # ``retain_for_future_batch`` 正是那 42 个地址当时**需要却没拿到**的处置。
+            #
+            # ``sentinel_issue_failed`` 与 ``sentinel_fallback_incomplete`` 会由
+            # ``_root_reason`` 追加**根因**（形如
+            # ``sentinel_fallback_incomplete:<flow>:SentinelBundleError(<原因>)``），
+            # 所以标记取**前缀**，后缀只作诊断。
+            "sentinel_legacy_incomplete",
+            "sentinel_issue_failed",
+            "sentinel_fallback_incomplete",
+            "cloudflare",
+            "just a moment",
+        ),
+        attempt_retryable=True,
+        retain_for_future_batch=True,
+        rotate_egress=True,
+    ),
+    FailureClass(
+        "auth_state",
+        (
+            "browser_email_field_not_editable",
+            "invalid_auth_step",
+            "invalid_state",
+            "sign-in session is no longer valid",
+            "signup_auth_state",
+            "browser_registration_state_unknown",
+            "browser_email_verification_stuck",
+            "browser_auth_state",
+            # Added 2026-09-13 from the live failure log: these four were answered
+            # as ``unknown`` (or, for the last one, ``network``) and therefore read
+            # as *terminal*, so the retry guard never accumulated a cooldown for
+            # them. Measured over 09-08..09-13: ``unknown`` covered 18 of 179
+            # failures, all of them ``missing_auth_session_access_token``.
+            #
+            # ``missing_auth_session_access_token`` is the collapsed outcome when
+            # an already-registered address cannot be logged back in;
+            # ``registration_outcome._registration_outcome`` already documents that
+            # it hides a retryable ``invalid_state`` behind a name that suggests a
+            # code defect. ``browser_passwordless_otp_state_unknown`` and
+            # ``browser_email_value_mismatch`` are raised by
+            # ``browser_flow/form_steps.py`` when the page is in an unexpected
+            # state. ``browser_profile_submit_timeout`` was already classified
+            # ``auth_state`` by the browser lane (``session._browser_failure_class``
+            # matches ``profile_``) and is listed here so the shared classifier
+            # agrees instead of being stolen by the bare ``timeout`` marker.
+            "missing_auth_session_access_token",
+            "auth_session_recovery_",
+            "browser_passwordless_otp_state_unknown",
+            "browser_email_value_mismatch",
+            "browser_profile_submit_timeout",
+            # Added 2026-09-16 (拍板：密码优先模式**失败即 abort**，不回落 passwordless).
+            # ``user/register`` answered ``invalid_auth_step`` -- the transaction was
+            # not at the password step, so the server never accepted our password.
+            # Continuing would reach ``create_account`` and produce an account with
+            # **no password**, which is precisely what password-first registration
+            # exists to prevent.  The run stops before spending an email OTP.
+            #
+            # ``auth_state`` because the address is *not* consumed: nothing was
+            # created, so the current account may retry and a later batch may also
+            # reconsider it. It must not land in ``account``,
+            # whose ``batch_dropped`` would blacklist a perfectly registrable
+            # address.
+            #
+            # 🔴 Note the marker is the **prefix**, not the whole error string.  The
+            # error is emitted as ``password_step_unconfirmed:<reason>`` and today the
+            # only reason is ``invalid_auth_step`` -- which is *itself* a marker two
+            # lines up, so this entry changes nothing for that one string.  It is here
+            # so the whole family stays ``auth_state`` when the suffix varies; the
+            # suffix is diagnostic, the prefix is the contract.  Pinned by
+            # ``tests/test_user_register_response_contract.py``.
+            "password_step_unconfirmed",
+        ),
+        attempt_retryable=True,
+        retain_for_future_batch=True,
+    ),
     # Added 2026-09-17 (UPI 提链改造 P3-3): UPI 提链专有的失败说法原先**一个都没
     # 进注册表**，于是 ``classify_error`` 把它们全判成 ``unknown``。实测确认：
     #   generic_decline / approve blocked / checkout_not_active_session /
@@ -296,28 +330,32 @@ FAILURE_CLASSES: tuple[FailureClass, ...] = (
     #     但 ``upi_redirect_timeout`` 的完整串比 network 的裸 "timeout"
     #     更specific，靠 classify_error 的「先匹配到就算」顺序解决）。
     #   - ``checkout_not_active_session`` 说明 checkout 已失效 ⇒ 需重开。
-    FailureClass("upi_payment", (
-        "generic_decline",
-        "approve blocked",
-        "attempts blocked",
-        "upi_provider_declined",
-        "checkout_not_active_session",
-        "upi_checkout_not_active",
-        "submission_attempt_failed",
-        "stripe submission failed",
-        "checkout_approval_payment_failure",
-        "stripe 风控拒绝",
-        # 🔴 ``upi_redirect_timeout`` 必须在这里显式登记。它自己只含裸词
-        # "timeout"，会被 ``network`` 的 GENERIC_TRANSPORT_MARKERS 机制
-        # 降级成「弱证据」；若不登记，最终会落到 ``network``，把
-        # 「checkout 提链超时」误报成「网络故障」。
-        "upi_redirect_timeout",
-        # ``upi_qr_failed`` 是 ``_upi_classify_failure`` 的兜底 code，语义是
-        # 「提链跑完了但没拿到可用物」。它**不是** unknown：unknown 在重试
-        # 守卫眼里等同终态，而这个明显还可重试。
-        "upi_qr_failed",
-        "upi_checkout_unauthorized",
-    ), retain_for_future_batch=True),
+    FailureClass(
+        "upi_payment",
+        (
+            "generic_decline",
+            "approve blocked",
+            "attempts blocked",
+            "upi_provider_declined",
+            "checkout_not_active_session",
+            "upi_checkout_not_active",
+            "submission_attempt_failed",
+            "stripe submission failed",
+            "checkout_approval_payment_failure",
+            "stripe 风控拒绝",
+            # 🔴 ``upi_redirect_timeout`` 必须在这里显式登记。它自己只含裸词
+            # "timeout"，会被 ``network`` 的 GENERIC_TRANSPORT_MARKERS 机制
+            # 降级成「弱证据」；若不登记，最终会落到 ``network``，把
+            # 「checkout 提链超时」误报成「网络故障」。
+            "upi_redirect_timeout",
+            # ``upi_qr_failed`` 是 ``_upi_classify_failure`` 的兜底 code，语义是
+            # 「提链跑完了但没拿到可用物」。它**不是** unknown：unknown 在重试
+            # 守卫眼里等同终态，而这个明显还可重试。
+            "upi_qr_failed",
+            "upi_checkout_unauthorized",
+        ),
+        retain_for_future_batch=True,
+    ),
 )
 
 # classify_error 找不到任何标记时的类别。
@@ -407,6 +445,17 @@ OTP_BAN_MARKERS: tuple[str, ...] = (
 # 各自的出口上，所以一轮里有账号拿到码就证明出口是通的。
 OTP_UNDISPATCHED_MARKER = "otp_send_stuck"
 OTP_MAILBOX_SIDE_MARKER = "mailbox_side_no_code"
+#: ``email_otp_send_stuck`` 的**事务臂**后缀（F3，2026-10-08）。
+#:
+#: 与 ``OTP_UNDISPATCHED_MARKER`` 组合出现（``email_otp_send_stuck:arm_mismatch``）：
+#: 服务端没完成派发，**而且** dump 显示它把这次注册架在了 passwordless 邮箱验证臂上
+#: （``email_verification_mode=passwordless_*``），而本 run 走的是密码泳道。
+#:
+#: 这是**事务臂**证据，不是出口证据：换出口改不了服务端选臂。因此
+#: ``registration_pulse._is_otp_ban_signal`` 在 ``OTP_UNDISPATCHED_MARKER``
+#: **之前**对它短路 —— 组合串里仍含 ``otp_send_stuck`` 子串，顺序反了就会把它
+#: 重新读成派发侧封禁信号。后缀不改变失败类别（仍含 ``email_otp_send_stuck``）。
+OTP_ARM_MISMATCH_MARKER = "arm_mismatch"
 #: ``email_otp_poll_timeout`` 的**能力**后缀：这次超时的渠道没有重发能力。
 #: ⚠️ 与 ``OTP_MAILBOX_SIDE_MARKER`` 组合出现 ⇒ ``registration_pulse``
 #: ``_is_otp_ban_signal`` 仍然先在 ``OTP_MAILBOX_SIDE_MARKER`` 上短路，
@@ -467,9 +516,7 @@ def failure_class(code: str) -> FailureClass:
 
 # Future-batch eligibility is not same-account immediate retry. Keep the old
 # exported set as a compatibility view while new code uses the precise name.
-FUTURE_BATCH_CLASSES = frozenset(
-    cls.code for cls in FAILURE_CLASSES if cls.retain_for_future_batch
-)
+FUTURE_BATCH_CLASSES = frozenset(cls.code for cls in FAILURE_CLASSES if cls.retain_for_future_batch)
 BATCH_RETRY_CLASSES = FUTURE_BATCH_CLASSES
 BATCH_DROPPED_CLASSES = frozenset(cls.code for cls in FAILURE_CLASSES if cls.batch_dropped)
 
@@ -506,6 +553,7 @@ __all__ = [
     "OTP_UNDISPATCHED_MARKER",
     "OTP_MAILBOX_SIDE_MARKER",
     "OTP_NO_RESEND_MARKER",
+    "OTP_ARM_MISMATCH_MARKER",
     "PASSWORDLESS_SIGNUP_CODE",
     "PASSWORDLESS_SIGNUP_MESSAGE_MARKER",
     "is_passwordless_signup_mismatch",

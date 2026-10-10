@@ -14,7 +14,6 @@ from ..accounts.account_seed import extract_access_token as _extract_access_toke
 from ..accounts.account_seed import load_account_seed as _load_seed
 from ..config import CFG
 from ..paypal_fingerprints import PAYPAL_USER_AGENT as _USER_AGENT
-from ..paypal_reverse import try_reverse_pay
 from ..utils import _generate_password, _random_name
 from .config_picker import (
     _generate_alias_email,
@@ -25,6 +24,7 @@ from .errors import _PayPalStepError
 from .flow_steps import _run_browser_steps
 from .session import _inject_navigator_overrides, _screenshot
 
+
 def auto_pay(
     email: str = "",
     session_file: str = "",
@@ -34,11 +34,19 @@ def auto_pay(
     timeout: int = 180,
     reverse_only: bool = False,
     link_factory: Callable[[str], dict[str, Any]] | None = None,
+    reverse_pay: Callable[..., dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Automatically complete PayPal payment for a ChatGPT account.
 
     Args:
         reverse_only: If True, only use reverse protocol (no browser fallback).
+        reverse_pay: The reverse-protocol adapter, injected by the command
+            adapter (Boundary Rule 21). This module must not import
+            ``paypal_reverse``: a module-level import made the browser lane
+            depend on the protocol lane, and a function-local one would only
+            hide that edge from a dependency scan. Required whenever the
+            reverse strategy is enabled -- ``_try_reverse_pay`` raises when it
+            is missing rather than silently skipping the strategy.
     """
     cfg = CFG.get("paypal_auto") or {}
     if not cfg:
@@ -71,7 +79,11 @@ def auto_pay(
         print("[*] No PayPal URL found, generating via injected link factory...")
         paypal = link_factory(access_token)
         if not paypal.get("ok") or not paypal.get("url"):
-            return {"ok": False, "email": target_email, "error": f"paypal_link_generation_failed: {paypal.get('error', '')}"}
+            return {
+                "ok": False,
+                "email": target_email,
+                "error": f"paypal_link_generation_failed: {paypal.get('error', '')}",
+            }
         paypal_url = paypal["url"]
         data["paypal"] = paypal
 
@@ -112,6 +124,7 @@ def auto_pay(
             proxy=proxy,
             cookie_header=data.get("cookie_header", ""),
             timeout=int(cfg.get("reverse_timeout", 60)),
+            reverse_pay=reverse_pay,
         )
 
     # 5. Browser fallback (unless reverse_only or reverse succeeded)
@@ -172,6 +185,7 @@ def auto_pay(
 
     return result
 
+
 def _try_reverse_pay(
     paypal_url: str,
     card: dict,
@@ -186,8 +200,21 @@ def _try_reverse_pay(
     proxy: str | None = None,
     cookie_header: str = "",
     timeout: int = 60,
+    reverse_pay: Callable[..., dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """Attempt PayPal payment via reverse-engineered HTTP protocol."""
+    """Attempt PayPal payment via reverse-engineered HTTP protocol.
+
+    ``reverse_pay`` is the protocol adapter, supplied by the caller (Boundary
+    Rule 21). Omitting it is a wiring bug, so it raises instead of returning a
+    failure dict: a failure dict would read as "the reverse protocol failed"
+    and fall through to the browser engines, which is exactly the ambiguity this
+    seam exists to remove.
+    """
+    if reverse_pay is None:
+        raise RuntimeError(
+            "reverse_pay_not_injected: _try_reverse_pay needs the paypal_reverse "
+            "adapter; the command adapter injects try_reverse_pay (Boundary Rule 21)"
+        )
     # The reverse protocol talks HTTP directly - there is no browser window, so
     # there is never a human in front of the page who could solve a CAPTCHA.
     # `_run_browser_pay` derives this from its `headless` argument; here the
@@ -206,7 +233,7 @@ def _try_reverse_pay(
     }
 
     print("[*] Attempting reverse protocol...")
-    result = try_reverse_pay(
+    result = reverse_pay(
         redirect_url=paypal_url,
         card=card,
         address=address,
@@ -231,6 +258,7 @@ def _try_reverse_pay(
         print(f"[!] Reverse protocol failed: {result.get('error', '')}")
 
     return result
+
 
 def _try_nodriver_pay(
     paypal_url: str,
@@ -297,6 +325,7 @@ def _try_nodriver_pay(
 
     return result
 
+
 def _try_browser_pay(
     paypal_url: str,
     card: dict,
@@ -351,18 +380,41 @@ def _try_browser_pay(
     try:
         if not use_camoufox:
             return _try_browser_pay_cloakbrowser(
-                paypal_url, card, address, first_name, last_name,
-                alias_email, password, sms_cfg, debug_dir, debug_enabled,
-                use_headless, browser_proxy, cookie_header, cfg,
+                paypal_url,
+                card,
+                address,
+                first_name,
+                last_name,
+                alias_email,
+                password,
+                sms_cfg,
+                debug_dir,
+                debug_enabled,
+                use_headless,
+                browser_proxy,
+                cookie_header,
+                cfg,
             )
 
         return _try_browser_pay_camoufox(
-            paypal_url, card, address, first_name, last_name,
-            alias_email, password, sms_cfg, debug_dir, debug_enabled,
-            use_headless, browser_proxy, cookie_header, cfg,
+            paypal_url,
+            card,
+            address,
+            first_name,
+            last_name,
+            alias_email,
+            password,
+            sms_cfg,
+            debug_dir,
+            debug_enabled,
+            use_headless,
+            browser_proxy,
+            cookie_header,
+            cfg,
         )
     finally:
         close_bridge()
+
 
 def _try_browser_pay_camoufox(
     paypal_url: str,
@@ -393,6 +445,7 @@ def _try_browser_pay_camoufox(
     cf_proxy = None
     if browser_proxy:
         from urllib.parse import urlparse as _urlparse
+
         pp = _urlparse(browser_proxy)
         cf_proxy = {
             "server": f"{pp.scheme}://{pp.hostname}:{pp.port}",
@@ -425,9 +478,20 @@ def _try_browser_pay_camoufox(
 
             page = ctx.pages[0] if ctx.pages else ctx.new_page()
             result = _run_browser_steps(
-                page, ctx, paypal_url, card, address, first_name, last_name,
-                alias_email, password, sms_cfg, debug_dir, debug_enabled,
-                cookie_header, step,
+                page,
+                ctx,
+                paypal_url,
+                card,
+                address,
+                first_name,
+                last_name,
+                alias_email,
+                password,
+                sms_cfg,
+                debug_dir,
+                debug_enabled,
+                cookie_header,
+                step,
             )
     except _PayPalStepError as e:
         result = {"ok": False, "error": f"step_{e.step}: {e.detail}", "failed_step": e.step}
@@ -437,11 +501,13 @@ def _try_browser_pay_camoufox(
         # Cleanup temp profile
         try:
             import shutil
+
             shutil.rmtree(tmp_profile, ignore_errors=True)
         except Exception:
             pass
 
     return result
+
 
 def _try_browser_pay_cloakbrowser(
     paypal_url: str,
@@ -485,9 +551,20 @@ def _try_browser_pay_cloakbrowser(
 
     try:
         result = _run_browser_steps(
-            page, ctx, paypal_url, card, address, first_name, last_name,
-            alias_email, password, sms_cfg, debug_dir, debug_enabled,
-            cookie_header, step,
+            page,
+            ctx,
+            paypal_url,
+            card,
+            address,
+            first_name,
+            last_name,
+            alias_email,
+            password,
+            sms_cfg,
+            debug_dir,
+            debug_enabled,
+            cookie_header,
+            step,
         )
     except _PayPalStepError as e:
         _screenshot(page, debug_dir, f"error_{e.step}", debug_enabled)

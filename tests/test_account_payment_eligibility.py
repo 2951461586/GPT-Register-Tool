@@ -94,7 +94,7 @@ def test_billing_currency_covers_the_catalog_countries():
     assert billing_currency_for("US") == "USD"
     assert billing_currency_for("IN") == "INR"
     assert billing_currency_for("KR") == "KRW"
-    # These live in the local extras because paypal_extract.CURRENCY_MAP
+    # These live in the local extras because payment_wire.CURRENCY_MAP
     # predates the PH/VN/PL/CH/ES/NL catalog entries; adding them there would
     # have silently changed that lane's EUR fallback.
     assert billing_currency_for("VN") == "VND"

@@ -1,23 +1,25 @@
-"""Re-exports of the former sms_tool/paypal_reconciliation.py and sms_tool/gen_pp_link.py (mechanical split)."""
+"""Re-exports of the former sms_tool/paypal_reconciliation.py and sms_tool/gen_pp_link.py (mechanical split).
 
-from typing import Optional
+The surface is the two modules' *public* names plus the private helpers their
+sibling consumers actually reach for.  It deliberately excludes the stdlib and
+``typing`` names (``json``, ``re``, ``Any``, ...) and the internal compiled
+regexes (``PAYPAL_BA_RE``, ``PM_REDIRECT_RE``) that the mechanical split had
+dragged into ``__all__`` from the pre-split module globals: re-exporting ``json``
+from a payment package makes ``from sms_tool.paypal_link import *`` shadow the
+caller's own ``json``, and nothing imports those names from here (checked by AST
+import scan, attribute access and string literals, 2026-10-10).
+"""
 
 from .reconciliation import (
-    Any,
-    Enum,
-    HTMLParser,
-    Mapping,
     NormalizedReturnState,
     PayPalReconciliationResult,
     PaymentOutcome,
-    Protocol,
     ReconciliationClassification,
     ReconciliationHop,
     ReconciliationTransport,
     RemoteStatus,
     ReturnStage,
     ReturnURLValidationError,
-    Sequence,
     _ALLOWED_HOSTS,
     _CANCEL_MARKERS,
     _CONTAINER_KEYS,
@@ -57,21 +59,10 @@ from .reconciliation import (
     _url_value,
     _validate_return_url,
     _validate_transition,
-    annotations,
-    dataclass,
-    hashlib,
-    html,
-    json,
     normalize_return_state,
-    parse_qs,
-    re,
     reconcile_paypal_return,
-    unquote,
-    urljoin,
-    urlsplit,
 )
 from .gen_link import (
-    Any,
     BILLING_DATA,
     CHATGPT_TIMEOUT,
     CURRENCY_MAP,
@@ -83,12 +74,8 @@ from .gen_link import (
     DEFAULT_STRIPE_PK,
     DEFAULT_TARGET_COUNTRIES,
     DEFAULT_TIMEOUT,
-    Mapping,
-    PAYPAL_BA_RE,
-    PM_REDIRECT_RE,
     PPLinkExtractor,
     PROJECT_ROOT,
-    Path,
     PayPalProxyState,
     PaymentOutcomeUnknownError,
     RETRY_ATTEMPTS,
@@ -119,7 +106,6 @@ from .gen_link import (
     _rank_stage_proxy,
     _resolve_stage_proxy,
     _stage_proxy_is_configured,
-    annotations,
     billing_for_country,
     extract_ba_token,
     extract_redirect_url,
@@ -131,11 +117,9 @@ from .gen_link import (
     infer_proxy_country,
     is_paypal_ba_approve_url,
     is_retryable_network_error,
-    json,
     main,
     normalize_proxy_template,
     normalize_proxy_url,
-    os,
     parse_token,
     probe_proxy,
     proxy_for_country_template,
@@ -147,12 +131,13 @@ from .gen_link import (
     sanitize_text,
     stripe_amount_details,
     stripe_confirm_error_diagnostics,
-    sys,
 )
+
+# 定义在 ``payment_wire``，此处经 ``paypal_extract`` 再导出取得；理由同
+# ``gen_link`` 顶部的说明（跨目录边由 import_layer_ratchet 冻结）。
 from ..paypal_extract import _checkout_get
 
 __all__ = [
-    "Any",
     "BILLING_DATA",
     "CHATGPT_TIMEOUT",
     "CURRENCY_MAP",
@@ -164,21 +149,13 @@ __all__ = [
     "DEFAULT_STRIPE_PK",
     "DEFAULT_TARGET_COUNTRIES",
     "DEFAULT_TIMEOUT",
-    "Enum",
-    "HTMLParser",
-    "Mapping",
     "NormalizedReturnState",
-    "Optional",
-    "PAYPAL_BA_RE",
-    "PM_REDIRECT_RE",
     "PPLinkExtractor",
     "PROJECT_ROOT",
-    "Path",
     "PayPalProxyState",
     "PayPalReconciliationResult",
     "PaymentOutcome",
     "PaymentOutcomeUnknownError",
-    "Protocol",
     "RETRY_ATTEMPTS",
     "ReconciliationClassification",
     "ReconciliationHop",
@@ -188,7 +165,6 @@ __all__ = [
     "ReturnURLValidationError",
     "SCRIPT_DIR",
     "STRIPE_VERSION",
-    "Sequence",
     "_ALLOWED_HOSTS",
     "_CANCEL_MARKERS",
     "_CONTAINER_KEYS",
@@ -254,9 +230,7 @@ __all__ = [
     "_url_value",
     "_validate_return_url",
     "_validate_transition",
-    "annotations",
     "billing_for_country",
-    "dataclass",
     "extract_ba_token",
     "extract_redirect_url",
     "find_submission_attempt",
@@ -264,22 +238,16 @@ __all__ = [
     "generate_chatgpt_checkout_link",
     "generate_hosted_long_url",
     "generate_pp_link",
-    "hashlib",
-    "html",
     "infer_proxy_country",
     "is_paypal_ba_approve_url",
     "is_retryable_network_error",
-    "json",
     "main",
     "normalize_proxy_template",
     "normalize_proxy_url",
     "normalize_return_state",
-    "os",
-    "parse_qs",
     "parse_token",
     "probe_proxy",
     "proxy_for_country_template",
-    "re",
     "reconcile_paypal_return",
     "redact_proxy_url",
     "resolve_external_redirect",
@@ -289,8 +257,4 @@ __all__ = [
     "sanitize_text",
     "stripe_amount_details",
     "stripe_confirm_error_diagnostics",
-    "sys",
-    "unquote",
-    "urljoin",
-    "urlsplit",
 ]

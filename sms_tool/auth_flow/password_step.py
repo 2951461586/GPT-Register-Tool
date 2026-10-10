@@ -1,4 +1,5 @@
 """Password-step detection and the password probe for the login lane."""
+
 from __future__ import annotations
 
 import re
@@ -16,6 +17,7 @@ _FORM_TAG_RE = re.compile(r"<form\b", re.IGNORECASE)
 
 _PASSWORD_INPUT_RE = re.compile(r"(?:type=[\"']password[\"']|name=[\"']password[\"'])", re.IGNORECASE)
 
+
 def _login_password_page_type(payload):
     """``page.type`` (or the flat ``page_type``) of an authorize response."""
     if not isinstance(payload, dict):
@@ -23,6 +25,7 @@ def _login_password_page_type(payload):
     page = payload.get("page")
     page = page if isinstance(page, dict) else {}
     return str(page.get("type") or payload.get("page_type") or "").strip().lower()
+
 
 def _is_login_password_step(url, payload=None):
     """True when ``url`` / ``payload`` positively expose the password login step."""
@@ -34,6 +37,7 @@ def _is_login_password_step(url, payload=None):
     ):
         return True
     return _login_password_page_type(payload) in LOGIN_PASSWORD_STEP_TYPES
+
 
 def _has_password_form(response):
     """True when ``response`` is an HTML page carrying a password input.
@@ -47,6 +51,7 @@ def _has_password_form(response):
     if not _FORM_TAG_RE.search(text):
         return False
     return bool(_PASSWORD_INPUT_RE.search(text))
+
 
 def _probe_login_password_step(
     session,
@@ -97,9 +102,7 @@ def _probe_login_password_step(
         result["password_step"] = True
         result["source"] = SOURCE_TRANSACTION_STEP
         result["signal"] = (
-            f"transaction_page_type={page_type}"
-            if page_type
-            else f"transaction_url={str(continue_url)[:80]}"
+            f"transaction_page_type={page_type}" if page_type else f"transaction_url={str(continue_url)[:80]}"
         )
         return result
     if not str(continue_url or "").strip() and not page_type:
@@ -151,6 +154,7 @@ def _probe_login_password_step(
     result["source"] = SOURCE_SIBLING_FORM
     result["signal"] = "password_form_present" if result["password_step"] else "password_form_absent"
     return result
+
 
 def _password_login_existing_account(
     session,

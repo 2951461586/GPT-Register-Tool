@@ -55,6 +55,11 @@ jobs:
       # facade re-exports (ADR-0009) and are deliberately not enabled yet.
       - run: python -m pip install -q ruff -c constraints-tools.txt
       - run: python -m ruff check sms_tool services scripts
+      # The protocol-registration lane additionally has to stay `ruff format`
+      # clean. `ruff check` cannot see layout, so a syntactically valid but
+      # mangled expression (auth_flow/otp.py, 2026-10-08) passed every gate.
+      # Scope is the lane, not the whole package -- see scripts/format_guard.py.
+      - run: python scripts/format_guard.py
       - run: python -m pytest --collect-only -q
       - run: >-
           python -m pytest -q --cov=sms_tool --cov=services
@@ -77,6 +82,19 @@ jobs:
           runtime.json payment.json mailbox_tokens.txt kyl_state.json
       - run: python scripts/sensitive_field_scan.py
       - run: python scripts/architecture_scan.py
+      # Asset-integrity gate. It used to run **only** in the local pre-commit
+      # hook, which is bypassable (`git commit --no-verify`) and absent from a
+      # checkout that never ran `scripts/install_git_hooks.py` -- so a drifted
+      # vendored Sentinel asset could land with every CI check green. That is
+      # not hypothetical: `sentinel-runner.js` was rewritten uniformly
+      # CRLF->LF, the raw digest moved, every Sentinel issue call raised,
+      # issuance silently degraded to the legacy issuer, and 126/126 accounts
+      # failed
+      # (docs/audits/scan-2026-09-18-sentinel-runner-hash-mismatch.md).
+      # `tests/test_gate_list_consistency.py` pins which hook gates have no CI
+      # or test coverage; this step removes `sentinel_asset_guard` from that
+      # list, so the two must move together.
+      - run: python scripts/sentinel_asset_guard.py
       - run: python scripts/extractor_parity_report.py
       - run: python scripts/config_schema_check.py
       - run: python scripts/ipc_schema_check.py

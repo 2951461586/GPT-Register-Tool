@@ -1,5 +1,7 @@
 """Same-flow Sentinel issuance for ``authorize/continue``."""
+
 from __future__ import annotations
+
 
 def _authorize_continue_sentinel(
     session,

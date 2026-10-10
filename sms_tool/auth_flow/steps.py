@@ -70,6 +70,51 @@ def _is_email_verification_step(url):
     return path.endswith("/email-verification") or "email-otp" in path
 
 
+# ─── registration toggles ─────────────────────────────────────────────────────
+#
+# The eight ``registration.*`` switches below are A/B levers.  Each keeps its own
+# long docstring -- that is where the measurement that earned it is recorded --
+# and shares only the four lines that read a boolean out of the frozen config.
+#
+# The parser is deliberately two-sided.  ``_existing_login_continue_enabled``
+# predates this helper and is default-**on**, so an unrecognised value has to
+# stay truthy for it; every later toggle is default-**off** and treats an
+# unrecognised value as falsy.  Returning ``default`` for an unknown value
+# reproduces both exactly, and keeps "an unreadable config fails to the toggle's
+# own default" in one place instead of eight.
+_FALSY_FLAG_VALUES = (False, 0, "0", "false", "False", "no", "No", "off")
+_TRUTHY_FLAG_VALUES = (True, 1, "1", "true", "True", "yes", "Yes", "on")
+
+
+def _registration_flag(key: str, default: bool) -> bool:
+    """Read one ``registration.<key>`` boolean toggle from the frozen config.
+
+    ``default`` answers both a missing key and an unrecognised value, which is
+    what the eight hand-written bodies did before they were converged here.
+
+    The ``Mapping`` guard is load bearing, and it is the reason this helper
+    exists rather than eight copies of itself: the sharded production config
+    freezes every section into a ``mappingproxy`` (``_freeze`` in
+    ``sms_tool/config.py``), which is **not** a ``dict``.  A ``dict`` check made
+    these toggles read their default in every production run while the tests,
+    which pass plain dicts, stayed green (2026-10-07; see
+    ``docs/audits/scan-2026-10-07-protocol-registration.md`` P1-D).  One copy of
+    the guard cannot drift from itself.
+    """
+    try:
+        cfg = deps.current_config_data().get("registration", {})
+    except Exception:
+        return default
+    if not isinstance(cfg, Mapping):
+        return default
+    value = cfg.get(key, default)
+    if value in _FALSY_FLAG_VALUES:
+        return False
+    if value in _TRUTHY_FLAG_VALUES:
+        return True
+    return default
+
+
 def _existing_login_continue_enabled():
     """Whether the login lane may POST ``authorize/continue`` from the OTP page.
 
@@ -103,19 +148,7 @@ def _existing_login_continue_enabled():
 
     Set it to ``false`` to restore the 09-14 skip behaviour exactly.
     """
-    try:
-        cfg = deps.current_config_data().get("registration", {})
-    except Exception:
-        return True
-    # 🔴 ``Mapping``, not ``dict``: the sharded production config freezes every
-    # section into a ``mappingproxy`` (``_freeze`` in ``sms_tool/config.py``),
-    # which is NOT a ``dict`` instance -- a ``dict`` check here made this
-    # predicate fail **closed** (default-on semantics) for every production
-    # read while tests, which pass plain dicts, stayed green.
-    if not isinstance(cfg, Mapping):
-        return True
-    value = cfg.get("existing_login_continue_on_verified_page", True)
-    return value not in (False, 0, "0", "false", "False", "no", "No", "off")
+    return _registration_flag("existing_login_continue_on_verified_page", True)
 
 
 def _signup_continue_screen_hint_enabled():
@@ -158,17 +191,7 @@ def _signup_continue_screen_hint_enabled():
     screen *on that landing*, use
     ``_signup_email_verification_continue_hint_enabled``.
     """
-    try:
-        cfg = deps.current_config_data().get("registration", {})
-    except Exception:
-        return False
-    # See ``_existing_login_continue_enabled``: production config sections are
-    # ``mappingproxy``, not ``dict``. A ``dict`` check silently disabled the
-    # toggle in every production run.
-    if not isinstance(cfg, Mapping):
-        return False
-    value = cfg.get("signup_continue_screen_hint", False)
-    return value in (True, 1, "1", "true", "True", "yes", "Yes", "on")
+    return _registration_flag("signup_continue_screen_hint", False)
 
 
 def _signup_email_verification_continue_hint_enabled():
@@ -206,17 +229,7 @@ def _signup_email_verification_continue_hint_enabled():
     only after its own controlled A/B
     (``p1-8-email-verification-continue-hint``).
     """
-    try:
-        cfg = deps.current_config_data().get("registration", {})
-    except Exception:
-        return False
-    # See ``_existing_login_continue_enabled``: production config sections are
-    # ``mappingproxy``, not ``dict``. A ``dict`` check silently disabled the
-    # toggle in every production run.
-    if not isinstance(cfg, Mapping):
-        return False
-    value = cfg.get("signup_email_verification_continue_hint", False)
-    return value in (True, 1, "1", "true", "True", "yes", "Yes", "on")
+    return _registration_flag("signup_email_verification_continue_hint", False)
 
 
 def _prime_create_account_password_page_enabled():
@@ -271,14 +284,7 @@ def _prime_create_account_password_page_enabled():
     signin/continue shape itself.  The toggle stays off; do not re-test this
     variable in isolation again.
     """
-    try:
-        cfg = deps.current_config_data().get("registration", {})
-    except Exception:
-        return False
-    if not isinstance(cfg, Mapping):
-        return False
-    value = cfg.get("prime_create_account_password", False)
-    return value in (True, 1, "1", "true", "True", "yes", "Yes", "on")
+    return _registration_flag("prime_create_account_password", False)
 
 
 def _prime_navigation_headers_enabled():
@@ -303,16 +309,7 @@ def _prime_navigation_headers_enabled():
     earns a default only after a controlled A/B
     (``p1-9-prime-navigation-headers``).
     """
-    try:
-        cfg = deps.current_config_data().get("registration", {})
-    except Exception:
-        return False
-    # See ``_existing_login_continue_enabled``: production sections are frozen
-    # ``mappingproxy``, so the guard must be ``Mapping``, not ``dict``.
-    if not isinstance(cfg, Mapping):
-        return False
-    value = cfg.get("prime_navigation_headers", False)
-    return value in (True, 1, "1", "true", "True", "yes", "Yes", "on")
+    return _registration_flag("prime_navigation_headers", False)
 
 
 def _signin_screen_hint_login_or_signup_enabled():
@@ -344,16 +341,7 @@ def _signin_screen_hint_login_or_signup_enabled():
     (``p1-10-signin-screen-hint``) moves ``email_verification_mode`` off
     ``passwordless_*`` without dropping the success rate.
     """
-    try:
-        cfg = deps.current_config_data().get("registration", {})
-    except Exception:
-        return False
-    # See ``_existing_login_continue_enabled``: production sections are frozen
-    # ``mappingproxy``, so the guard must be ``Mapping``, not ``dict``.
-    if not isinstance(cfg, Mapping):
-        return False
-    value = cfg.get("signin_screen_hint_login_or_signup", False)
-    return value in (True, 1, "1", "true", "True", "yes", "Yes", "on")
+    return _registration_flag("signin_screen_hint_login_or_signup", False)
 
 
 def _signin_prompt_login_enabled():
@@ -381,16 +369,7 @@ def _signin_prompt_login_enabled():
     (``p1-11-signin-prompt-login``) moves ``email_verification_mode`` off
     ``passwordless_*`` without dropping the success rate.
     """
-    try:
-        cfg = deps.current_config_data().get("registration", {})
-    except Exception:
-        return False
-    # See ``_existing_login_continue_enabled``: production sections are frozen
-    # ``mappingproxy``, so the guard must be ``Mapping``, not ``dict``.
-    if not isinstance(cfg, Mapping):
-        return False
-    value = cfg.get("signin_prompt_login", False)
-    return value in (True, 1, "1", "true", "True", "yes", "Yes", "on")
+    return _registration_flag("signin_prompt_login", False)
 
 
 def _signin_locale_ja_jp_enabled():
@@ -416,16 +395,7 @@ def _signin_locale_ja_jp_enabled():
     Off by default; it earns a default only after a controlled comparison
     (``p1-12-signin-locale``).
     """
-    try:
-        cfg = deps.current_config_data().get("registration", {})
-    except Exception:
-        return False
-    # See ``_existing_login_continue_enabled``: production sections are frozen
-    # ``mappingproxy``, so the guard must be ``Mapping``, not ``dict``.
-    if not isinstance(cfg, Mapping):
-        return False
-    value = cfg.get("signin_locale_ja_jp", False)
-    return value in (True, 1, "1", "true", "True", "yes", "Yes", "on")
+    return _registration_flag("signin_locale_ja_jp", False)
 
 
 def _is_about_you_step(url, payload=None):
@@ -611,6 +581,53 @@ def _invalid_state_auth_response(data):
 
 
 LOGIN_EMAIL_OTP_SUBJECT_KEYWORD = "login code"
+
+#: The Sentinel flow the existing-login lane mints its tokens under.  The SO is
+#: flow-bound (``sentinel/client.issue_sentinel_token`` writes ``flow`` into it),
+#: so a lane may only replay an SO that was minted for its own flow.
+AUTHORIZE_CONTINUE_FLOW = "authorize_continue"
+
+
+def so_token_flow(token):
+    """The flow an SO token declares, or ``""`` when it declares none.
+
+    Both producers write a JSON object carrying ``flow``: the Node runner
+    (``sentinel/client.issue_sentinel_token``) and the legacy issuer
+    (``sentinel_tokens._extract_sentinel``).  A token that does not parse, is not
+    an object, or carries no ``flow`` is reported as *unknown* -- never guessed,
+    because the only safe action on an unknown flow is to leave the token alone
+    (see :func:`same_flow_so_token`).
+    """
+    try:
+        payload = json.loads(str(token or ""))
+    except (TypeError, ValueError):
+        return ""
+    if not isinstance(payload, dict):
+        return ""
+    return str(payload.get("flow") or "").strip()
+
+
+def same_flow_so_token(token, expected_flow):
+    """Drop *token* when it declares a flow other than *expected_flow*.
+
+    🔴 The cross-flow fallback this closes (2026-10-08 scan F2): ``create_account``
+    mints the ``oauth_create_account`` pair and the workflow writes its SO into
+    ``runtime.sentinel_so_token``; the existing-login lane then falls back to
+    that value on ``email-otp/send`` whenever its own ``authorize_continue`` mint
+    returns no SO.  An SO is bound to the flow that minted it, so replaying the
+    create-account SO on the OTP endpoint is a cross-flow reuse rather than a
+    fallback -- the request would carry a token and an SO from two different
+    flows.
+
+    A token that declares **no** flow is kept: the guard exists to stop a
+    *declared* mismatch, and dropping an undeclared legacy token would change
+    behaviour on evidence we do not have (the same "no evidence, do not act"
+    rule ``otp_dispatch_verdict`` follows).
+    """
+    declared = so_token_flow(token)
+    if declared and declared != str(expected_flow or "").strip():
+        return ""
+    return token
 
 
 def _auth_request_headers(

@@ -111,7 +111,7 @@ and this document must not pick between them — the gate differs by flow, or it
 changed between the two observations. Treat the main token as
 sufficient-not-necessary and the SO as unproven either way.
 
-`paypal_extract._checkout_post` attaches the pair to every Checkout create through
+`payment_wire._checkout_post` attaches the pair to every Checkout create through
 the public `sentinel.checkout_sentinel_headers` authority (`payment_capability`,
 `paypal_extract._create_checkout`, `wallet_transport` and `gcash_transport` all
 reach the wire through it), and since 2026-10-06 the subprocess extractors receive

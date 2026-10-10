@@ -34,9 +34,7 @@ class RegistrationState(str, Enum):
 
 _STATE_ORDER = {
     state: index
-    for index, state in enumerate(
-        state for state in RegistrationState if state is not RegistrationState.FAILED
-    )
+    for index, state in enumerate(state for state in RegistrationState if state is not RegistrationState.FAILED)
 }
 
 
@@ -89,10 +87,7 @@ class RegistrationStateMachine:
     def snapshot(self) -> dict[str, Any]:
         return {
             "state": self.state.value,
-            "history": [
-                {"state": transition.state.value, "detail": transition.detail}
-                for transition in self.history
-            ],
+            "history": [{"state": transition.state.value, "detail": transition.detail} for transition in self.history],
         }
 
 
@@ -108,8 +103,7 @@ class RegistrationStageOverrun(TimeoutError):
         self.elapsed_seconds = elapsed_seconds
         self.budget_seconds = budget_seconds
         super().__init__(
-            f"registration stage exceeded its budget: {state.value} "
-            f"({elapsed_seconds:.1f}s > {budget_seconds:.1f}s)"
+            f"registration stage exceeded its budget: {state.value} ({elapsed_seconds:.1f}s > {budget_seconds:.1f}s)"
         )
 
 
@@ -141,6 +135,7 @@ class RegistrationStage:
             machine.fail(f"{self.state.value}_stage_budget_exceeded")
             raise RegistrationStageOverrun(self.state, elapsed, budget)
         return value
+
 
 @dataclass(frozen=True)
 class RegistrationContext:
@@ -212,9 +207,7 @@ def prepare_registration_context(
         registration_mode=normalize_mode(registration_mode),
         device_id=device_id,
         session_logging_id=logging_id,
-        reused_device_context=bool(
-            device_context.get("device_id") or device_context.get("auth_session_logging_id")
-        ),
+        reused_device_context=bool(device_context.get("device_id") or device_context.get("auth_session_logging_id")),
         browser_headless=browser_headless,
     )
 
@@ -224,7 +217,12 @@ def _normalize_registration_mode(value=None):
     if not raw:
         value = current_config_data().get("email_registration")
         cfg = value if isinstance(value, Mapping) else {}
-        raw = str(cfg.get("registration_mode") or cfg.get("signup_mode") or "passwordless").strip().lower().replace("-", "_")
+        raw = (
+            str(cfg.get("registration_mode") or cfg.get("signup_mode") or "passwordless")
+            .strip()
+            .lower()
+            .replace("-", "_")
+        )
     if raw in {"password", "password_signup", "user_register", "legacy"}:
         return "password"
     if raw in {"passwordless", "passwordless_signup", "login_or_signup", "har"}:

@@ -218,7 +218,14 @@ STRIPE_VERSION_FULL = "2025-03-31.basil; checkout_server_update_beta=v1; checkou
 DEFAULT_STRIPE_RUNTIME_VERSION = "6f8494a281"
 CHATGPT_CLIENT_VERSION = "prod-db390ebea64862bf1899c420a4c736e0cf639747"
 CHATGPT_CLIENT_BUILD_NUMBER = "7904904"
-DEFAULT_STRIPE_PK = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
+# ``PP_STRIPE_PUBLISHABLE_KEY`` is the documented override (README,
+# docs/TROUBLESHOOTING.md, sms_tool/pp_link_helpers.py).  The legacy
+# ``STRIPE_PUBLISHABLE_KEY`` stays as a fallback: nothing sets it and nothing
+# documents it, but this module read it historically, so dropping it would be a
+# silent behaviour change for anyone who did.
+DEFAULT_STRIPE_PK = (
+    os.environ.get("PP_STRIPE_PUBLISHABLE_KEY", "") or os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
+).strip()
 DEFAULT_USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6_1) "
     "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15"

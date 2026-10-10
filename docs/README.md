@@ -135,10 +135,11 @@ Directory layout (since 2026-09-06):
     （dom_fields → page_state → form_steps → flow_steps → orchestrator + session），
     驱动接入在 `sms_tool/registration_drivers/`（`base.py` 注册表 +
     `external_sessions/` 子包）；`playwright.py` 只是公共 API 薄壳。
-  - 协议（HTTP 直连）注册流程改动落在 `registration_handlers.py`、
-    `registration_state.py`、`otp_strategy.py`、`account_creation.py`、
-    `auth_flow.py`、`auth_headers.py` 等 focused modules；`registration.py` 是
-    兼容门面，只加 re-export，不加实现。
+  - 协议（HTTP 直连）注册流程改动落在 `sms_tool/registration_handlers.py`、
+    `sms_tool/registration_state.py`、`sms_tool/otp_strategy.py`、
+    `sms_tool/accounts/account_creation.py`、`sms_tool/auth_flow/`（自 2026-09 起
+    是包，不是 `auth_flow.py`）、`sms_tool/auth_headers.py` 等 focused modules；
+    `sms_tool/registration.py` 是兼容门面，只加 re-export，不加实现。
   - 注册批次、并发与取消落在 `batch_runner.py`、`registration_pulse.py`、
     `registration_concurrency.py`、`registration_cancel.py`；结果装配统一走
     `registration_result.build_registration_result`。

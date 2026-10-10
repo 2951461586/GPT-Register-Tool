@@ -46,7 +46,9 @@ Imports point inward only; a lower layer never imports a higher one. Shared
 contracts never import a concrete provider: `checkout_contract` stays
 provider-free. The seams fixed in place are `account_seed` (seed lookup),
 `account_liveness` (liveness probe), `proxy_entry` (proxy string authority),
-`store` (persistence) and `desktop_ipc` (v2 IPC envelope). See
+`payment_wire` (cross-lane payment kernel), `store` (persistence),
+`desktop_ipc` (v2 IPC envelope) and the injected `reverse_pay` adapter (the
+PayPal browser lane's one dependency on the protocol lane). See
 [Boundary Rule Checks](#boundary-rule-checks) for the enforceable form.
 
 Operation proxy precedence is explicit input, optional saved registration
@@ -85,6 +87,98 @@ before adding a row here.
 Any further lazy edge that closes a cycle must be added here with the same
 evidence, or refactored so the edge disappears. `tests/test_delayed_import_ratchet.py`
 keeps the count from growing while that decision is pending.
+
+### Review-graph scope (`pi-lens`)
+
+`pi-lens`'s review graph is a second, independent view of the same coupling. Its
+scope is **declared** in `.pi-lens.json` rather than inherited, because neither
+thing it would otherwise inherit from is a statement about this repository:
+
+- `pi-lens` ships a built-in excluded-directory list (`node_modules`, `dist`,
+  `build`, `.venv`, `.ruff_cache`, `.pytest_cache`, `__pycache__`, `.agents`,
+  `.claude`, `.codex`, `vendor`, …). That list changes between `pi-lens`
+  versions, and it does **not** include `runtime/`, `sessions/`, `.dotnet/`, the
+  `.workbuddy*` agent state, `browser_extensions/`, `outlook_results/`, or the
+  .NET `bin/`/`obj/` trees.
+- Everything else is left to `.gitignore`, which is a statement about **git**,
+  not about code review. `pi-lens` also rescues a *tracked* file that matches
+  `.gitignore` (git's own "a tracked file is never ignored" semantic), so a
+  generated tree that is ever committed stops being excluded. A project
+  `ignore` entry is the stronger layer: it is never tracked-rescued.
+
+This matters because `runtime/` alone holds 340 Python files (operator state,
+logs and dumps, plus the reference-repo clones the audits make under
+`runtime/tmp/refrepos/`), and it grows without bound.
+
+| In scope (the product) | Excluded (tooling, generated, state, vendored) |
+| --- | --- |
+| `sms_tool/`, `services/protocol-payment/`, `SmsWorkbench/`, `SmsWorkbench.Contracts/` | `scripts/`, `dist/`, `runtime/`, `sessions/`, `.dotnet/`, `.workbuddy*/`, `browser_extensions/`, `outlook_results/`, .NET `bin/`+`obj/`, `sms_tool/upi_link/_vendor/` |
+
+`scripts/` is excluded **on purpose**, and the trade-off is stated so it is not
+re-litigated. The review graph is an architecture view of the *product*, and the
+gate/ratchet scripts are tooling that consumes the product rather than part of
+it. While they were in scope, `DEAD WEIGHT` reported ten `scripts/*.py` files as
+unreachable on every build -- all false positives, because CI, the git hooks and
+`tests/test_*_ratchet.py` invoke them by filename rather than importing them
+(`docs/audits/scan-2026-10-04-import-cycle-decomposition.md` §7 measured 8 of 10
+as false positives and deleted the 4 that were genuinely dead). Excluding the
+tree makes that section actionable again.
+
+The cost is that `pi-lens`'s LSP diagnostics and symbol search no longer cover
+`scripts/`. That is acceptable because the scripts keep their own coverage:
+`ruff check scripts` runs in CI, and every ratchet has a `tests/test_*_ratchet.py`
+that exercises it. If a script ever needs diagnostics, this is a one-line revert.
+
+`tests/` is deliberately **not** in the ignore list. `pi-lens` already keeps test
+files out of the review graph by file role (upstream #260), so ignoring the tree
+would buy the graph nothing while removing LSP diagnostics and symbol search from
+340 test files the operator navigates daily.
+
+**Auto-formatting is off** (`"format": {"enabled": false}`). `pi-lens` runs a
+deferred formatter over every file it edits, but this repository enforces
+formatting on the **protocol-registration lane only** -- `scripts/format_guard.py`
+checks `sms_tool/auth_flow/` and `sms_tool/registration_*.py`, and its own
+docstring states why the scope is the lane and not the package:
+
+> widening it to ``sms_tool/`` would reformat ~100 unrelated files in one commit
+> and bury the real edit.
+
+The auto-formatter did exactly that on 2026-10-10: four files *outside* the lane
+(`accounts/account_payment_eligibility.py`, `pay_link/__init__.py`,
+`services/protocol-payment/momo/ac_paylink_core.py`,
+`tests/test_account_payment_eligibility.py`) were reformatted to fix pre-existing
+drift the project had decided not to touch -- 431 insertions / 180 deletions,
+against edits of one to three lines each. `format.enabled` is one of the
+project-scoped *mutation controls* `pi-lens` honours (the others are
+`autofix.enabled` and `actionableWarnings.autoFix.enabled`), so this is the
+supported way to stop it, not a local preference.
+
+Nothing is lost: the lane's formatting is enforced by the gate, which runs in
+both the pre-commit hook and CI, and `scripts/format_guard.py --fix` is the
+developer convenience. The two decisions are pinned together by
+`tests/test_pilens_scope_config.py`, so turning auto-format back on without also
+widening the gate -- or removing the gate while auto-format stays off -- fails.
+
+**Suppressing a finding uses the analyser's own marker, not `pi-lens`'s.**  A
+Pyright finding needs the tool-native, *same-line* form
+(``x = f(y)  # pyright: ignore[reportArgumentType]``); an ``# pi-lens-ignore:
+<rule>`` comment on the line above does **not** suppress it.  ``# pi-lens-ignore``
+is what works for the ``ast-grep`` rules, and it is what the existing markers in
+``services/protocol-payment/`` use.  Measured 2026-10-10 on ``payment_wire.py``
+and ``momo/ac_paylink_core.py``: the same-line ``# pyright: ignore[...]`` cleared
+both Pyright findings on the first try, while the preceding-line
+``# pi-lens-ignore`` and a stored ``false-positive`` disposition left them
+reported.  Prefer the source-level marker over a stored disposition for Pyright:
+the disposition anchor hashes the diagnostic *message*, and at least one message
+here (``dict[str, str]`` vs ``form=``) changes text between runs, so the anchor
+can silently stop matching.
+
+This is a *scope* declaration, not a measurement. It does not change the graph's
+edge count, and it is not the architecture authority: the frozen measure of
+cross-directory coupling remains `scripts/import_layer_ratchet.py` (287
+module-level edges over 31 directory pairs), and the authoritative cycle list is
+the exact import graph described above. `tests/test_pilens_scope_config.py` pins
+the scope and the formatting decision so neither can silently rot.
 
 ## Registration Modules
 
@@ -150,6 +244,8 @@ recovered.
 | 17 | A text file must not mix CRLF and LF internally. `.gitattributes` pins what git stores (LF); this rule covers what arrives from an editor or a generator, which git cannot normalise retroactively. A single mixed file makes `git diff` report a whole-file change, destroys `git blame` attribution, and breaks the byte-exact reconciliation this repo relies on to attribute a change to a baseline (`git show HEAD:path` + SHA256). Either ending is acceptable **per file**; only mixing is forbidden. **`MIXED_EXEMPT` is now empty**: the whole working tree was measured byte-by-byte on 2026-09-17 and every mixed file was normalised, so any mixed file at all now fails. Scope is decided by **evidence, not declaration**: the suffix whitelist is only a fast path, and an extensionless file is still classified (by a UTF-8/NUL content sniff) — a `LICENSE` holding 21 CRLF + 11 lone LF sat undetected precisely because `Path("LICENSE").suffix == ""` never matched the whitelist and `inspect` never read the file. The guard self-tests its classifier first: a weakened predicate fails loudly instead of silently reporting a clean tree. | `python scripts/line_ending_guard.py --all` exits 0; `pytest tests/test_line_ending_guard.py` (41 cases) | Repository Hygiene |
 | 18 | A watched-hub ratchet must resolve the hub from the **import statement**, never from the importing file or a bare name match. `_load_mailbox_pool` is imported from `.mailbox` by `sms_tool/cli.py`, so the consumer is `cli` and the hub is `mailbox`; conversely `mailbox_service.py` imports `_email_cfg` *from* `.mailbox`, so it is a consumer of `mailbox`, not a hub. Resolution is therefore on the last dotted segment of the `ImportFrom` **plus** a package check: `from sms_tool.providers.mailbox import ...` is accepted for a hub that may live in `providers/`, while `from third_party.utils import ...` is rejected — `utils` and `mail_otp` are generic enough that a vendor module could share the name. A hub is never counted as a consumer of its own surface. | `pytest tests/test_mailbox_private_import_ratchet.py` (25 cases), including `test_same_named_module_outside_the_package_is_rejected` and `test_a_watched_module_is_not_its_own_consumer` | Ownership Matrix; Dependency Direction |
 | 19 | **A same-named function in two modules is not a duplicate until its AST proves it.** Six names had multiple definitions on 2026-09-17 (`parse_proxy_pool`, `payment_proxy_pools`, `redact_proxy_url`, `rotate_proxy_session`, `normalize_proxy_url`, `payment_method_label`); normalising provider tokens away, **all 25 definition sites were mutually distinct**. Two groups are already converged (one canonical body plus thin `return canonical_*(...)` shims): `payment_proxy_pools` → `payment_routing`, `redact_proxy_url` → `phone_proxy`. The rest are **deliberately divergent**: `redact_proxy_url`'s shims pass different `empty_placeholder` defaults (`""` vs `"DIRECT"`), `normalize_proxy_url` has one canonical body per **layer** (`sms_tool` applies a `parse_proxy` fallback; `services/protocol-payment` keeps a `udealproxy.com → socks5h://` rule), `rotate_proxy_session` exists in both 1-arg and 2-arg forms and the `services/` copy cannot reach `sms_tool.proxy_entry` (Rule 10), and `payment_method_label` exists in no-arg, delegated and registry-lookup forms. Merging any of these changes production behaviour, so convergence is forbidden without fresh evidence and an explicit decision — the same conclusion P0 reached for `normalize_proxy_url`. **Renamed 2026-09-18** so the divergence is legible at the call site (bodies untouched): `proxy_routing.parse_lane_proxy_pool` (registration/account-health lanes) vs `payment_routing.parse_proxy_pool` (payment domain); `pp_link_helpers.rotate_proxy_session_id` (1-arg, session id only) and `direct_card_extract.rotate_direct_card_proxy_session` (the Rule-10-bound `services/` copy) vs `paypal_proxy.rotate_proxy_session`; `blik_qr_extract.current_payment_method_label` (no-arg, current method) and `commands/helpers.cli_payment_method_label` (adds an `or "PayPal"` fallback) vs `pay_link/registry.payment_method_label` (registry lookup). | `python scripts/extractor_parity_report.py` exits 0 (append-only ratchet on extractor duplication); the same-name audit is `runtime/tmp/p2_shim_vs_canonical.py` and its output `runtime/tmp/p2_compare.txt`; `pytest tests/test_same_name_disambiguation.py` (31 cases) pins the rename and fails on both a re-introduced old name and a converged body | Ownership Matrix; Dependency Direction |
+| 20 | **A cross-lane payment primitive has one home.** `sms_tool/payment_wire.py` owns the Checkout primitives (`_checkout_headers`, `_checkout_device_id`, `_is_checkout_create_url`, `_checkout_sentinel_headers`, `_checkout_post`, `_checkout_get`), the non-Checkout session factory `_new_session`, `CURRENCY_MAP`, `_PROVIDER_STAGES`, `_compact_diagnostic` and the five failure-vocabulary classes (`CheckoutNotZeroDueError`, `PayPalHttpError`, `CheckoutApprovalBlockedError`, `PayPalCapabilityError`, `PaymentOutcomeUnknownError`). A module named after one lane must not be the **definition** site for a primitive another lane needs — that is what turned `paypal_extract` into a de-facto shared payment library with the dependency direction inverted. `paypal_extract` keeps `PPLinkExtractor` and re-exports the kernel; it must not redefine it. The kernel is a leaf: inside the package it may import only `auth_headers` and `timeouts`, and `CHATGPT_TIMEOUT` comes from `timeouts` (the constant source) rather than being relayed through `pp_link_helpers`. | `grep -rn "from \.\(paypal_extract\|pp_link_helpers\|checkout_contract\|paypal_proxy\)" sms_tool/payment_wire.py` returns nothing; `grep -rn "^def _checkout_post\|^def _new_session\|^CURRENCY_MAP" sms_tool/` resolves only to `payment_wire.py` | Ownership Matrix; Dependency Direction |
+| 21 | **The PayPal browser lane must not depend on the protocol lane.** `sms_tool/paypal/orchestrator.py` must not reference `paypal_reverse` — neither at module level (the original defect) nor in a function body, which would only hide the edge from a dependency scan while leaving the coupling real. The reverse-pay adapter arrives as the injected `reverse_pay` parameter, exactly as `link_factory` does for link generation (Rule 6). Omitting it raises `reverse_pay_not_injected` instead of returning a failure dict: a failure dict reads as “the reverse protocol failed” and silently falls through to the browser engines, which is the ambiguity this seam exists to remove. | `grep -rn "paypal_reverse" sms_tool/paypal/orchestrator.py` returns nothing; `grep -rn "reverse_pay=" sms_tool/commands/payment_links.py` shows the three injections | PayPal Payment Layer; Dependency Direction |
 
 ### Current Violations
 
@@ -177,7 +273,7 @@ recovered.
   rules; any new persistence site in `sms_tool/paypal/` needs a rule change
   first.
 
-Rules 2–5, 7–13 and 15–19 currently hold.
+Rules 2–5, 7–13 and 15–21 currently hold.
 
 ## Email Change Flow
 

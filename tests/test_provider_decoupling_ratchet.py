@@ -16,7 +16,7 @@ Layers, in increasing order of "does it actually protect anything":
    the one *documented* divergence (blik's ``build_email``) is asserted to stay
    divergent rather than silently converge.
 
-The regression this gate exists for: the ``common/`` migration is ~76% done and
+The regression this gate exists for: the ``common/`` migration is ~80% done and
 was unmeasured, so a new private fork of an already-shared helper looked like a
 new helper.
 """
@@ -172,34 +172,68 @@ def test_ratchet_holds_for_the_current_tree():
 
 
 def test_summary_facts_are_pinned():
-    """238 same-named defs: 182 already migrated, 8 verbatim copies, 48 forks."""
+    """238 same-named defs: 192 already migrated, 0 verbatim copies, 46 forks."""
     assert pdr.analyze(ROOT).summary() == {
         "same_named_total": 238,
-        pdr.DELEGATING: 182,
-        pdr.IDENTICAL: 8,
-        pdr.DIVERGENT: 48,
+        pdr.DELEGATING: 192,
+        pdr.IDENTICAL: 0,
+        pdr.DIVERGENT: 46,
         "files_with_frozen_pairs": 7,
     }
 
 
-def test_the_migration_is_mostly_done_for_ideal_and_twint():
-    """Pin the two already-migrated extractors so an inlining regression fails."""
+def test_the_migrated_extractors_have_no_verbatim_copies_left():
+    """Pin the three migrated extractors so an inlining regression fails."""
     analysis = pdr.analyze(ROOT)
-    for provider_file in (
-        "ideal/ideal_qr_extract.py",
-        "twint/twint_extract.py",
-    ):
+    expected_delegating = {
+        "ideal/ideal_qr_extract.py": 67,
+        "twint/twint_extract.py": 67,
+        "blik/blik_qr_extract.py": 47,
+    }
+    expected_divergent = {
+        "ideal/ideal_qr_extract.py": 2,
+        "twint/twint_extract.py": 2,
+        "blik/blik_qr_extract.py": 32,
+    }
+    for provider_file, delegating in expected_delegating.items():
         counts = analysis.counts_for(provider_file)
-        assert counts[pdr.DELEGATING] == 67
-        assert counts[pdr.IDENTICAL] == 0
-        assert counts[pdr.DIVERGENT] == 2
+        assert counts[pdr.IDENTICAL] == 0, f"{provider_file} re-inlined a shared helper"
+        assert counts[pdr.DELEGATING] == delegating
+        assert counts[pdr.DIVERGENT] == expected_divergent[provider_file]
 
 
-def test_blik_is_the_remaining_bulk_and_is_split_as_measured():
+def test_blik_carries_the_documented_divergent_bulk():
+    """blik's remaining 32 pairs are real forks, not un-migrated copies.
+
+    ``blik`` was the last extractor still carrying verbatim copies -- eight of
+    them (the payload/redirect predicates and the two proxy-error classifiers).
+    They were converged onto ``common/payment_predicates.py`` and
+    ``common/extractor_helpers.py`` on 2026-10-10, which moved this file from
+    39 delegating / 8 identical to 47 delegating / 0 identical.  What is left is
+    divergent on purpose (the geo/proxy-selection cluster and the ``build_email``
+    Rule-19 case), so it is pinned as 0 identical / 32 divergent rather than
+    assumed to be unfinished migration.
+    """
     analysis = pdr.analyze(ROOT)
     counts = analysis.counts_for("blik/blik_qr_extract.py")
-    assert counts == {pdr.DELEGATING: 39, pdr.IDENTICAL: 8, pdr.DIVERGENT: 32}
-    assert counts[pdr.IDENTICAL] + counts[pdr.DIVERGENT] == 40
+    assert counts == {pdr.DELEGATING: 47, pdr.IDENTICAL: 0, pdr.DIVERGENT: 32}
+
+
+def test_momo_shares_the_pure_primitives_and_keeps_its_two_forks():
+    """momo's private ``_strict_true`` / ``_strict_false`` became delegating on
+    2026-10-10; ``is_user_already_paid_error`` and ``normalize_proxy_url`` stay
+    divergent -- different signature and semantics, which Rule 19 forbids
+    converging without fresh evidence.
+    """
+    analysis = pdr.analyze(ROOT)
+    counts = analysis.counts_for("momo/momo_qr_extract.py")
+    assert counts[pdr.IDENTICAL] == 0
+    assert counts[pdr.DELEGATING] == 2
+    assert counts[pdr.DIVERGENT] == 2
+    forked = {
+        p.name for p in analysis.pairs if p.provider_file == "momo/momo_qr_extract.py" and p.kind == pdr.DIVERGENT
+    }
+    assert forked == {"is_user_already_paid_error", "normalize_proxy_url"}
 
 
 def test_blik_build_email_stays_divergent():

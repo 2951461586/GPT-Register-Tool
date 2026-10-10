@@ -28,7 +28,20 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
 
+# ``common/`` is the sibling of this directory, exactly as ``run_momo.py`` sets
+# up. Bootstrapped here too so a direct import (tests, a REPL) resolves it.
+_PROTOCOL_ROOT = _SCRIPT_DIR.parent
+if str(_PROTOCOL_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROTOCOL_ROOT))
+
 import ac_paylink_core as paylink
+from common.protocol_core import (
+    is_false as shared_is_false,
+    is_true as shared_is_true,
+    safe_float as shared_safe_float,
+    safe_int as shared_safe_int,
+    safe_load_json as shared_safe_load_json,
+)
 
 
 def _as_int(value: Any, default: int = 0) -> int:
@@ -37,27 +50,26 @@ def _as_int(value: Any, default: int = 0) -> int:
     Callers replacing ``int(x or FALLBACK)`` must pass the same fallback *both*
     ways -- ``_as_int(x or FALLBACK, FALLBACK)`` -- because ``int`` maps any
     falsy ``x`` (including ``0``) to the fallback, not just ``None``.
+
+    Delegate to ``common/protocol_core.py`` (``safe_int``).
     """
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default
+    return shared_safe_int(value, default)
 
 
 def _as_float(value: Any, default: float = 0.0) -> float:
-    """``float(value)`` that never raises."""
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return default
+    """``float(value)`` that never raises.
+
+    Delegate to ``common/protocol_core.py`` (``safe_float``).
+    """
+    return shared_safe_float(value, default)
 
 
 def _safe_json_loads(text: Any, default: Any = None) -> Any:
-    """``json.loads`` that never raises (malformed body/overrides -> ``default``)."""
-    try:
-        return json.loads(text)
-    except (TypeError, ValueError):
-        return default
+    """``json.loads`` that never raises (malformed body/overrides -> ``default``).
+
+    Delegate to ``common/protocol_core.py`` (``safe_load_json``).
+    """
+    return shared_safe_load_json(text, default)
 
 
 def _strict_true(value: Any) -> bool:
@@ -66,13 +78,18 @@ def _strict_true(value: Any) -> bool:
     Provider payloads carry ``true``/``"true"``/``1`` for the same flag; the flow
     gates must not treat a truthy string as the boolean. Matches the
     ``ProxyStateStore`` helper of the same name.
+
+    Delegate to ``common/protocol_core.py`` (``is_true``).
     """
-    return isinstance(value, bool) and value
+    return shared_is_true(value)
 
 
 def _strict_false(value: Any) -> bool:
-    """True only for the bool ``False``."""
-    return isinstance(value, bool) and not value
+    """True only for the bool ``False``.
+
+    Delegate to ``common/protocol_core.py`` (``is_false``).
+    """
+    return shared_is_false(value)
 
 
 ROOT = Path(__file__).resolve().parent

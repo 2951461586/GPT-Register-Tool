@@ -137,6 +137,19 @@ and the second (configurable threshold) enters OTP-pending quarantine. This
 quarantine is not `partial_registered`; it makes no claim that an account exists.
 A success clears either state.
 
+OTP timeouts and stuck sends carry a **root-cause suffix** so the pulse scheduler
+can tell an egress block from a mailbox-side miss. `email_otp_poll_timeout`
+appends `mailbox_side_no_code` when the `after_otp_send` dump is readable and
+carries no pending key (the server finished its dispatch; the code never reached
+us), optionally followed by `no_resend_for_channel` when the provider has no
+resend capability. `email_otp_send_stuck` appends `arm_mismatch` when the run is
+on the password lane and the same dump shows `email_verification_mode` armed on a
+`passwordless_*` value: the server picked a different transaction arm, which no
+egress change can affect, so `registration_pulse._is_otp_ban_signal`
+short-circuits on that suffix before the `otp_send_stuck` substring it contains.
+The suffix never changes the failure class — the marker it rides on is still
+`email_otp_send_stuck`.
+
 Pulse scheduling starts with a one-account canary when
 `registration.pulse.canary_enabled` is true. A blocked canary or unanimously
 blocked full wave advances the proxy-pool cursor for accounts not yet started,

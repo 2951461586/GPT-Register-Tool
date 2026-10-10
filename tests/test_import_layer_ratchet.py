@@ -182,8 +182,19 @@ def test_ratchet_holds_for_the_current_tree():
 def test_summary_facts_are_pinned():
     """Pin the decomposition so a silent metric change is caught.
 
-    470 raw directory-level edges decompose into 288 module-scope edges (frozen
-    here) plus 185 delayed imports (frozen by ``delayed_import_ratchet.py``).
+    470 raw directory-level edges decompose into 287 module-scope edges (frozen
+    here) plus 186 delayed imports (frozen by ``delayed_import_ratchet.py``).
+
+    186 (was 185) / 287 (was 288) on 2026-10-08: the PayPal browser lane stopped
+    importing the protocol lane. ``paypal/orchestrator.py`` held a module-level
+    ``from ..paypal_reverse import try_reverse_pay``; it now takes the adapter as
+    the injected ``reverse_pay`` parameter (Boundary Rule 21), and the command
+    adapter resolves it inside one named helper. A module-level import there
+    would have grown the frozen ``sms_tool/commands -> sms_tool`` pair, so the
+    helper is function-local -- the remedy this ratchet's own failure text names.
+    Net: one module-scope edge left the graph (288 -> 287) and one delayed
+    cross-directory edge joined it (185 -> 186). The ``sms_tool/paypal ->
+    sms_tool`` pair drops 9 -> 8.
 
     185 (was 184) on 2026-10-07: ``proxy_edge_probe.edge_challenge_verdict``
     gained one delayed ``from .accounts.account_terminal import
@@ -205,11 +216,11 @@ def test_summary_facts_are_pinned():
     """
     totals = ilr.analyze(ROOT).totals()
     assert totals == {
-        "total_module_edges": 288,
+        "total_module_edges": 287,
         "ordered_pairs": 31,
         "mutual_pairs": 11,
         "minority_edges": 60,
-        "delayed_cross_dir_edges": 185,
+        "delayed_cross_dir_edges": 186,
     }
 
 

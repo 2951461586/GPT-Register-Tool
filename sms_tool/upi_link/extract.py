@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 try:  # pragma: no cover - direct script execution
-    from ..paypal_extract import _new_session
+    from ..payment_wire import _new_session
 except ImportError:
-    from paypal_extract import _new_session  # type: ignore
+    from payment_wire import _new_session  # type: ignore
 try:  # pragma: no cover - direct script execution
     from ..pp_link_helpers import DEFAULT_TIMEOUT
 except ImportError:
@@ -60,6 +60,8 @@ def _upi_hydrate_qr_data(
     except Exception as exc:
         _emit("hydrate", f"hydrate failed (non-fatal): {type(exc).__name__}: {exc}")
     return result
+
+
 def _upi_resolve_external_redirect(session: Any, start_url: str, max_hops: int = 5) -> str:
     """参考实现 ``resolve_external_redirect``: 跟随跳转直到 instructions 页。
 

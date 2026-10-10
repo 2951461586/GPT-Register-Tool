@@ -29,10 +29,17 @@ def build_checkpoint_payload(runtime: Any, mailbox_snapshot: Callable[[], dict])
     if s.session is not None:
         jar = getattr(getattr(s.session, "cookies", None), "jar", ())
         cookies = [
-            {"name": cookie.name, "value": cookie.value, "domain": cookie.domain,
-             "path": cookie.path, "expires": cookie.expires, "secure": cookie.secure,
-             "domain_specified": cookie.domain_specified, "domain_initial_dot": cookie.domain_initial_dot,
-             "path_specified": cookie.path_specified}
+            {
+                "name": cookie.name,
+                "value": cookie.value,
+                "domain": cookie.domain,
+                "path": cookie.path,
+                "expires": cookie.expires,
+                "secure": cookie.secure,
+                "domain_specified": cookie.domain_specified,
+                "domain_initial_dot": cookie.domain_initial_dot,
+                "path_specified": cookie.path_specified,
+            }
             for cookie in jar
         ]
     return {
@@ -140,9 +147,16 @@ def session_recovery_error(payload: Mapping[str, Any]) -> str:
     if started <= 0 or time.time() - started > SESSION_RECOVERY_TTL_SECONDS:
         return "auth_session_recovery_expired"
     cookies = payload.get("session_cookies")
-    if not isinstance(cookies, list) or not cookies or any(
-        not isinstance(row, dict) or not row.get("name") or not row.get("domain")
-        or not isinstance(row.get("value"), str) for row in cookies
+    if (
+        not isinstance(cookies, list)
+        or not cookies
+        or any(
+            not isinstance(row, dict)
+            or not row.get("name")
+            or not row.get("domain")
+            or not isinstance(row.get("value"), str)
+            for row in cookies
+        )
     ):
         return "auth_session_recovery_context_missing"
     return ""
@@ -155,11 +169,7 @@ def candidate_checkpoint_error(checkpoint: Mapping[str, Any] | None) -> str:
     if not isinstance(payload, Mapping):
         return ""
     state = str(payload.get("registration_state") or value.get("state") or "")
-    if (
-        state != SESSION_PENDING_STATE
-        or not payload.get("create_ok")
-        or payload.get("access_token")
-    ):
+    if state != SESSION_PENDING_STATE or not payload.get("create_ok") or payload.get("access_token"):
         return ""
     return session_recovery_error(payload)
 
@@ -171,10 +181,23 @@ def restore_session_cookies(session: Any, payload: Mapping[str, Any]) -> None:
         if expires is not None and int(expires) <= time.time():
             continue
         domain = row["domain"]
-        session.cookies.jar.set_cookie(Cookie(
-            version=0, name=row["name"], value=row["value"], port=None, port_specified=False,
-            domain=domain, domain_specified=bool(row.get("domain_specified", domain.startswith("."))),
-            domain_initial_dot=bool(row.get("domain_initial_dot", domain.startswith("."))),
-            path=row.get("path") or "/", path_specified=bool(row.get("path_specified", True)), secure=bool(row.get("secure")),
-            expires=expires, discard=expires is None, comment=None, comment_url=None, rest={},
-        ))
+        session.cookies.jar.set_cookie(
+            Cookie(
+                version=0,
+                name=row["name"],
+                value=row["value"],
+                port=None,
+                port_specified=False,
+                domain=domain,
+                domain_specified=bool(row.get("domain_specified", domain.startswith("."))),
+                domain_initial_dot=bool(row.get("domain_initial_dot", domain.startswith("."))),
+                path=row.get("path") or "/",
+                path_specified=bool(row.get("path_specified", True)),
+                secure=bool(row.get("secure")),
+                expires=expires,
+                discard=expires is None,
+                comment=None,
+                comment_url=None,
+                rest={},
+            )
+        )

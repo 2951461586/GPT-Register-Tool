@@ -48,6 +48,7 @@ from .registry import (
     register_payment_adapter,
     allowed_approve_countries,
     coerce_approve_country,
+    parse_proxy_pool,
     _resolve_proxy_pool_routes,
     _enabled_methods,
 )
@@ -74,7 +75,7 @@ __all__ = [
     '_run_regional_wallet_adapter', '_run_gcash_adapter', '_run_direct_card', '_run_momo', '_normalize_result', '_explicit_terminal_state',
     '_canonical_terminal_state', '_normalized_contract_value', '_normalize_error_contract', '_is_retryable_failure', '_result_terminal_state', '_classify_exception',
     '_persist_run', '_safe_persist_run', 'build_default_payment_registry', 'normalize_payment_method', 'payment_proxy_pools', 'payment_method_label',
-    'supported_payment_methods', 'register_payment_adapter', 'allowed_approve_countries', 'coerce_approve_country', '_resolve_proxy_pool_routes', '_enabled_methods',
+    'supported_payment_methods', 'register_payment_adapter', 'allowed_approve_countries', 'coerce_approve_country', 'parse_proxy_pool', '_resolve_proxy_pool_routes', '_enabled_methods',
     'generate_payment_link', 'probe_payment_method', 'GOPAY_DEFAULT_APPROVE_COUNTRIES', 'PAYMENT_ADAPTERS', 'PAYMENT_METHODS',
     '_BLIK_RESULT_RE', '_DIRECT_CARD_CURRENCY', '_LOGGER', '_STATE_LOCK',
 ]

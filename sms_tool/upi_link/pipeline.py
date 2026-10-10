@@ -5,9 +5,9 @@ try:  # pragma: no cover - direct script execution
 except ImportError:
     from checkout_contract import PLUS_TRIAL_CAMPAIGN_ID  # type: ignore
 try:  # pragma: no cover - direct script execution
-    from ..paypal_extract import CURRENCY_MAP, _new_session
+    from ..payment_wire import CURRENCY_MAP, _new_session
 except ImportError:
-    from paypal_extract import CURRENCY_MAP, _new_session  # type: ignore
+    from payment_wire import CURRENCY_MAP, _new_session  # type: ignore
 try:  # pragma: no cover - direct script execution
     from ..phone_proxy import redact_proxy_text
 except ImportError:
@@ -132,6 +132,7 @@ from .stage_config import (
     _upi_round_retryable,
     _upi_rounds,
 )
+
 try:  # pragma: no cover - direct script execution
     from . import stages as _stages
 except ImportError:  # pragma: no cover
