@@ -13,7 +13,7 @@
   </p>
 </div>
 
-## 中文简介
+## 简介
 
 GPT-Register-Tool 采用 **WPF 桌面端 + Python 业务核心**，提供邮箱 OTP 注册、账号与 Session 管理、代理配置、协议支付链接提取和账号导出能力。运行数据默认保存在本机，不写入 Git。
 
@@ -32,8 +32,7 @@ GPT-Register-Tool 采用 **WPF 桌面端 + Python 业务核心**，提供邮箱 
 适用于注册代理、独立网络环境及自动化任务等场景，帮助开发者根据项目需求配置合适的网络出口。<br>
 包含动态静态IP资源，支持免费测试。[IPWO测试入口](https://www.ipwo.net/?ref=githubGPT)
 
-
-## 项目功能亮点
+## 功能亮点
 
 ### 一键注册
 
@@ -156,3 +155,144 @@ OTP 解析支持主题匹配、发件人过滤、收件人精确匹配、服务�
 - 支持 Codex OAuth 手机验证和账号刷新流程。
 - 批量操作保持邮箱与手机号结果映射，便于排查单账号失败。
 - 一键接码的配置、失败结果与持久化说明见 [当前接码契约](docs/current/one-click-sms.md)。
+
+### 架构总览（精简）
+
+```text
+SmsWorkbench/            WPF 桌面端：Generic Host/DI → MVVM 页面、设置页、任务入口、状态展示
+        │  IBackendClient（ArgumentList + 取消/超时/进程树终止，@@SMSWORKBENCH_V2@@ 版本化结果信封）
+        ▼
+sms_tool/cli.py          CLI 与任务编排：参数解析、批量任务、进程退出状态
+        │
+        ├─ registration_handlers.py  协议注册阶段顺序（auth_flow → user/register → OTP → create_account → session → AT 探测）
+        │     ├─ auth_flow/          步骤函数：signin / authorize / continue / OTP / TOTP
+        │     ├─ sentinel/           Sentinel Token 签发（Node sdk.js runner）
+        │     └─ accounts/           账号创建、存活探测与恢复
+        ├─ mailbox.py                邮箱统一路由：ReMail / CFWorker / Graph / Gmail / iCloud 链接
+        ├─ payment_*                 协议支付：Checkout 契约、能力探测、钱包/GCash、批量与 JIT AT
+        └─ storage.py                SQLite + Session JSON 持久化
+services/                可选本地协议服务：邮件诊断、协议支付提取器（子进程边界）
+```
+
+更详细的边界说明见 [架构说明](docs/architecture.md)，目录职责见 [目录职责](docs/directory-map.md)。
+
+## 部署方式
+
+### 环境要求
+
+- Windows 10/11 x64。
+- Python 3.10 或更高版本。
+- `curl_cffi==0.16.0`。注册预检会校验安装版本和 `chrome146` profile；旧版本不会进入邮箱采购或注册阶段。
+- .NET 10 Desktop Runtime；从源码编译时需要 .NET 10 SDK。
+- **Node.js 18+**（`node` 需在 PATH）：Sentinel Token 的 quickjs 提取器用 `node` 运行 OpenAI 真实 `sdk.js`，缺失会导致注册阶段 OTP 静默丢失。
+- **Playwright Chromium**：MoMo/直卡等协议支付的 Stripe init 走 Chromium 网络栈完成 TLS，需执行 `python -m playwright install chromium`。
+- 可正常访问目标邮箱、ChatGPT 和支付服务的网络环境。
+- 注册代理、邮箱收件代理和协议支付代理彼此独立；邮箱收件默认使用本地 `http://127.0.0.1:7897`。
+
+安装依赖后，可运行环境预检确认 Node.js、Playwright Chromium 和关键 Python 包就绪：
+
+```powershell
+python scripts/preflight_env.py
+```
+
+### 方式一：安装包
+
+从 GitHub Releases 下载最新的：
+
+```text
+GPT-Register-Tool-Setup-vYYYY.MM.DD.exe
+```
+
+运行安装器并选择安装目录。首次启动前仍需安装 Python 依赖，并创建本地配置：
+
+```powershell
+python -m pip install -r requirements.txt -c constraints.txt
+copy config.example.json config.json
+```
+
+### 方式二：便携压缩包
+
+下载并解压：
+
+```text
+GPT-Register-Tool-win-x64-vYYYY.MM.DD.zip
+```
+
+在解压目录执行：
+
+```powershell
+python -m pip install -r requirements.txt -c constraints.txt
+copy config.example.json config.json
+.\dist\net10\SmsWorkbench.exe
+```
+
+### 方式三：从源码运行
+
+```powershell
+git clone https://github.com/2951461586/GPT-Register-Tool.git
+cd GPT-Register-Tool
+python -m pip install -r requirements.txt -c constraints.txt
+copy config.example.json config.json
+powershell -ExecutionPolicy Bypass -File .\SmsWorkbench\build_dotnet.ps1
+.\dist\net10\SmsWorkbench.exe
+```
+
+桌面程序只能通过 `SmsWorkbench/build_dotnet.ps1` 编译。不要直接运行 `dotnet build`，因为它只产生中间文件，不会更新标准工作区 `dist/net10`。
+
+### 首次配置
+
+打开桌面端的 **设置** 页面，至少完成以下配置：
+
+1. 在 **网络与支付** 中配置注册代理池和邮箱收件代理；协议支付的 Checkout / Approve 两个代理池在“批量协议支付”窗口中按支付方式保存。
+2. 在 **邮箱与收信** 中配置 ReMail、CFWorker 或其他邮箱源。
+3. 按需配置 SMSBower、CPA、SUB2API 和各协议支付参数。
+4. 保存后重新打开对应功能即可使用新配置。
+
+注册驱动在 **设置 -> 注册与接码 -> 注册驱动** 中选择，默认仍为 `protocol`。选择浏览器驱动后，注册会复用同一套邮箱 OTP、Session 提取、AT HTTP 200 探活和本地持久化边界：
+
+- `playwright`：本机 Chromium，通过 Playwright 启动。
+- `roxy`：连接本机 RoxyBrowser API 创建/打开 Profile，再通过 CDP 接管。
+- `cloak`：调用已安装的 CloakBrowser Python SDK。
+- `camoufox`：调用已安装的 Camoufox 反检测浏览器（**当前默认浏览器驱动**）。
+
+RoxyBrowser 的 API/会话配置位于同一设置页的独立分区；CloakBrowser 的 License Key、持久化目录和指纹参数也在那里配置。未配置所选驱动的必需字段时，任务会返回脱敏的配置错误，不会回退到协议注册。浏览器驱动不绕过 CAPTCHA；遇到人工挑战会以 `manual_challenge_required` 结束，保留现有账号状态。
+
+浏览器注册默认启用 **脉冲调度**（`registration.pulse`，波次间隔 + OTP-ban 暂停）与 **浏览器进程池**（`registration.browser_process_pool`，按进程复用浏览器上下文、按健康度回收）。二者与「账号 ↔ 代理槽绑定」协同：每个账号在整个生命周期内固定走同一个注册出口，重试时只刷新会话 sid，不切换代理成员——避免出口轮换被注册方判定为代理抖动而封禁。进程池哈希键按 `(driver, headless, timeout)` 缓存，使同一出口、同一头部配置的账号复用同一浏览器进程，降低冷启动开销。
+
+ReMail API Key 也可以通过环境变量提供：
+
+```powershell
+$env:REMAIL_API_KEY = "rk-your-key"
+```
+
+环境变量优先于 `config.json`。桌面设置页保存的 API Key 仅写入本地且被 Git 忽略的 `config.json`。
+
+## 许可证与使用责任
+
+本项目以 **MIT License** 发布，全文见 [LICENSE](LICENSE)：
+
+```text
+MIT License
+
+Copyright (c) 2026 GPT-Register-Tool contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+请仅在获得授权并符合相关服务条款、地区法规及组织政策的场景中使用本项目。使用者需要自行承担第三方邮箱、代理、接码与支付服务的费用、账号安全和数据合规责任；示例配置不包含任何真实凭据。
