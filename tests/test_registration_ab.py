@@ -476,6 +476,37 @@ class IoHelperTests(unittest.TestCase):
                 },
             )
 
+    def test_read_toggles_covers_every_declared_experiment_toggle(self):
+        """``EXPERIMENTS`` 的每个 toggle 都必须能被 ``read_toggles`` 读到。
+
+        2026-10-10 扫描：``read_toggles`` 是手写 if 链，P1-9..P1-12 加进设计表时
+        漏加，``compare`` 对它们恒返回 ``unverified``（``--config`` 也救不回），
+        而 ``unverified`` 先于机制门禁返回 ⇒ 刚补的假对照门禁对这四个实验失效。
+        这个测试遍历设计表而不是写死键名，所以下一个新实验不能再静默漏掉。
+        """
+        declared = {str(design["toggle"]) for design in ab.EXPERIMENTS.values() if design.get("toggle")}
+        self.assertTrue(declared, "EXPERIMENTS 必须至少声明一个 toggle")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "config.json"
+            path.write_text(
+                json.dumps({"registration": {name.split(".", 1)[1]: True for name in declared}}),
+                encoding="utf-8",
+            )
+            toggles = ab.read_toggles(path)
+        self.assertEqual(sorted(toggles), sorted(declared))
+        # 布尔 arm 的实验必须因此通过第一道操纵检查（字符串 arm 的 p0-1 不适用）。
+        for experiment, design in ab.EXPERIMENTS.items():
+            truthy_arms = [name for name, value in design["arms"].items() if value is True]
+            if not truthy_arms:
+                continue
+            record = ab.build_record(
+                experiment=experiment, arm=truthy_arms[0], log_text="", funnel=None, toggles=toggles
+            )
+            self.assertTrue(
+                record["toggle_verified"],
+                f"{experiment}/{truthy_arms[0]} 的 toggle 未被 read_toggles 覆盖 ⇒ compare 恒 unverified",
+            )
+
     def test_unreadable_artifacts_degrade_instead_of_raising(self):
         """缺失/损坏的输入不得让工具在能报 ``unverified`` 之前崩掉。"""
         with tempfile.TemporaryDirectory() as tmp:

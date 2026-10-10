@@ -17,6 +17,11 @@
 | P1-10 | 密码泳道首个 signin 的 `screen_hint` 从 `signup` 改为 `login_or_signup`（turb 的形状）能把事务臂从 `passwordless_signup` 扳回 signup 臂，让 `email-otp/send` 真正派发 | `registration.signin_screen_hint_login_or_signup`（默认 `false`）；**只改首个尝试的 `screen_hint`**，`authorize/continue` 行为两臂恒定 | 2026-10-07/08 两轮线上（hint@lajiao / default@fireside，不同邮箱）形状完全相同 ⇒ 出口/邮箱/continue 声明均被排除；turb `signin_openai`（`screen_hint=login_or_signup` + `prompt=login`，不发 continue） |
 | P1-11 | 在 P1-10（`login_or_signup`）之上再声明 `prompt=login`（turb 的完整 signin 形状）能把事务臂从 `passwordless_signup` 扳回 signup 臂，让 `email-otp/send` 真正派发 | `registration.signin_prompt_login`（默认 `false`）；**只改首个尝试的 `prompt`**，两臂都开 `signin_screen_hint_login_or_signup` | 2026-10-07/08 线上：P1-10 治疗臂 n=2（烧过 + 全新邮箱）均为 `passwordless_signup` 且 `original_screen_hint` 跟着声明变 ⇒ 声明的 screen 被记录但不选臂；turb `signin_openai` |
 | P1-12 | 在 SunnyRegister 的 signin 形状（`prompt=login` + `screen_hint=signup`）上再声明 `locale=ja-JP` 能把事务臂从 `passwordless_*` 扳回 signup 臂，让 `email-otp/send` 真正派发 | `registration.signin_locale_ja_jp`（默认 `false`）；**只加 `locale` 查询参数**，两臂都开 `signin_prompt_login`、都关 `signin_screen_hint_login_or_signup` | SunnyRegister `_start_next_auth`（唯一声明 locale 的参考）；P1-11 实测 `prompt=login` 会把臂推到 `passwordless_login` + `invalid_auth_step` |
+| P1-13 | turb 的 signin/authorize 上下文（signin 不带 `device_id`/passkey capabilities/`ccaps`；authorize 去掉 `ext-passkey-client-capabilities`、`ccaps="login_methods chatgpt_login_finalizer_v1"`、加 `auth_return_target_category=chatgpt_home` 与 `ui_locales`）能选中 signup 臂，让 `email-otp/send` 真正派发 | `registration.turb_signin_authorize_context`（默认 `false`）；**一整束上下文**（turb 是同一份 HAR 上一起改的，故为一个开关） | `myfanhua/turb-gpt-free-register@ffcda12` `core/chatgpt_auth.py:17,33`（2026-09-14 成功样本注释）；`docs/audits/scan-2026-10-10-protocol-registration.md` §D1 |
+| P1-14 | turb 把密码页落点做成**致命**（不在 `/create-account/password` 就 `raise`）能区分「状态没建立」与「状态已建立但服务端仍不派发」 | `registration.prime_password_page_fatal`（默认 `false`）；两臂都开 `prime_create_account_password` + `prime_navigation_headers` | turb `navigate_create_account_password`（落点错即 raise）；本仓 prime 刻意非致命（只报告） |
+| P1-15 | turb 在 `email-otp/send` 导航上带 `sec-fetch-site: same-origin` + `sec-fetch-user: ?1`，本仓只带 `Accept` + `Referer` | `registration.otp_navigation_headers`（默认 `false`）；只改 send 的两个头 | turb `navigate_email_otp_send`；本仓 P1-9 对密码页已测过同一课 |
+| P1-16 | turb 给 `email-otp/validate` 带新铸的 `authorize_continue` Sentinel + SO，本仓 `use_sentinel=False` | `registration.otp_validate_sentinel`（默认 `false`）；只决定 validate 是否带头 | turb `openai_auth.py` + `config/openai_protocol.py::SEND_SENTINEL_ON_EMAIL_OTP_VALIDATE=True`（注释：2026-09-14 成功样本同时带 Sentinel 与 SO）。**潜在差异，非当前失败成因**（现在根本收不到码） |
+| P1-17 | OTP 验证后若 `page.type=external_url` 或 `continue_url` 已是回调，跳过 `create_account` 能避开 `invalid_auth_step` | `registration.otp_external_url_branch`（默认 `false`）；只加这一条分支 | turb `main.py::run_registration`（`direct_oauth_after_otp`）；本仓原本无此分支 |
 
 工具：`scripts/registration_ab.py`（`plan` / `collect` / `compare`）。
 
@@ -128,6 +133,11 @@ python scripts/registration_ab.py collect `
 > | P1-10 | `Signin screen_hint=login_or_signup` |
 > | P1-11 | `Signin prompt=login` |
 > | P1-12 | `Signin locale=ja-JP` |
+> | P1-13 | `Turb signin/authorize context` |
+> | P1-14 | `Password page landing is fatal` |
+> | P1-15 | `OTP navigation headers` |
+> | P1-16 | `OTP validate sentinel` |
+> | P1-17 | `OTP external_url branch` |
 >
 > 🔴 **机制行必须落在开关自己的分支内。** P1-5 原先登记的是 `Signup username continue`，
 > 那是 `_continue_signup_username` 的**基线** print：开关开或关都会打，P1-8 的强制路径也会打。
@@ -179,6 +189,11 @@ python scripts/registration_ab.py compare `
 | P1-10 | `login_or_signup` 成功率高出 0.05 以上且 `auth_state` 类失败不增长 → `favor_login_or_signup`；`auth_state` 类增长（声明的 signin screen 与服务端事务解读冲突）→ 一律 `keep_default_off`；低 0.05 以上 → `keep_default_off`；否则 `inconclusive`。主机制读数同上 |
 | P1-11 | `prompt_login` 成功率高出 0.05 以上且 `auth_state` 类失败不增长 → `favor_prompt_login`；`auth_state` 类增长 → 一律 `keep_default_off`；低 0.05 以上 → `keep_default_off`；否则 `inconclusive`。主机制读数同上 |
 | P1-12 | `locale` 成功率高出 0.05 以上且 `auth_state` 类失败不增长 → `favor_locale`；`auth_state` 类增长 → 一律 `keep_default_off`；低 0.05 以上 → `keep_default_off`；否则 `inconclusive`。主机制读数同上；两者都不动即关闭整个客户端 signin 形状家族 |
+| P1-13 | `turb` 成功率高出 0.05 以上且 `auth_state` 类失败不增长 → `favor_turb`；`auth_state` 类增长 → 一律 `keep_default_off`；低 0.05 以上 → `keep_default_off`；否则 `inconclusive`。主机制读数同上；不动即说明 signin/authorize 上下文也不是杠杆，下一候选是指纹/设备层 |
+| P1-14 | `fatal` 成功率高出 0.05 以上且 `auth_state` 类失败不增长 → `favor_fatal`；低 0.05 以上 → `keep_default_off`；否则 `inconclusive`。**有 `password_page_not_reached` 中止但速率不动不是假设失败**，而是「落点本来就没到达」的测量结果，下一个变量是 prime 本身（P1-9） |
+| P1-15 | `headers` 成功率高出 0.05 以上且 `mailbox` 类失败不增长 → `favor_headers`；低 0.05 以上 → `keep_default_off`；否则 `inconclusive`。主机制读数同上 |
+| P1-16 | `sentinel` 成功率高出 0.05 以上且 `sentinel` 类失败不增长 → `favor_sentinel`；低 0.05 以上或 `sentinel` 类失败增长 → `keep_default_off`；否则 `inconclusive`。**两臂都没收到码 ⇒ 不可判定**（validate 根本没被走到） |
+| P1-17 | `branch` 成功率高出 0.05 以上且 `auth_state` 类失败不增长 → `favor_branch`；低 0.05 以上 → `keep_default_off`；否则 `inconclusive`。**分支从未触发（没有一臂走到已验证的 OTP）⇒ `not_judgeable`**，不得读成「无效果」 |
 | P0-2b | 先跑 §4.1 的**无效结果判据**：任一 arm 的 `edge_challenge` 计数缺失 ⇒ `inconclusive`；三臂 `hits` 全为 0 ⇒ `not_judgeable`（窗口没测到东西，**不是**“无效果”）；`rotate` 臂命中了挑战但 `rotations == 0`（单槽池/开关未生效）⇒ `not_judgeable`（该臂是 `observe` 的副本）。有效时：`rotate` 臂出现控制臂从未有过的失败类别 ⇒ `stop_all_arms`（立即回到 `observe`）；`registered_per_attempted` 高出 0.05 以上且无新类别 ⇒ `favor_rotate`；低 0.05 以上 ⇒ `keep_default_off`；否则 `inconclusive`。**H2（handoff）单独判定，永不与 rotate 合并拍板** —— 且本轮 `handoff` 臂不可判定（`browser_handoff` 未落地，见 §6） |
 
 ---
@@ -193,6 +208,10 @@ python scripts/registration_ab.py compare `
 - 🔴 P1-5 与 P1-8 是**同一个假设的两个作用点**：P1-5 改的是泳道本来就发的 continue，P1-8 补的是落 `/email-verification` 时的那一次（P1-5 在那个形状上不可达）。同一批只跑一个；P1-8 的两个 arm 都必须保持 `signup_continue_screen_hint=false`，因为 P1-8 的机制行自带 `screen_hint` 声明。
 - 🔴 P1-10 与 P1-11 都作用在 **signin 形状**上（`screen_hint` / `prompt`），是同一假设的连续两个字段：顺序必须是先 P1-10 定案，再在 P1-10 开着的前提下跑 P1-11（`hold_constant` 已钉两臂都开 P1-10）。同一批只跑一个；两臂都不得同时打开 continue 的两个开关。
 - 🔴 P1-12 接在 P1-11 之后，但按 **SunnyRegister 的形状**（`prompt=login` + `screen_hint=signup` + `locale=ja-JP`）：两臂都开 `signin_prompt_login`、都关 `signin_screen_hint_login_or_signup`，只变 `signin_locale_ja_jp`。P1-12 若也不动（速率与挂起键都不动），则客户端 signin 形状家族（screen_hint + prompt + locale）整体关闭，下一步应转向指纹/设备层或服务端路由。
+- 🔴 P1-13 是 P1-10/11/12 之后**同一假设的最后一束**：它换的是 signin/authorize 上下文的其余五个参数（`device_id` / passkey capabilities / `ccaps` / `auth_return_target_category` / `ui_locales`），turb 在同一份 HAR 上一起改的，所以是一个开关。两臂都保持 P1-10/11/12 为默认值。P1-13 若也不动，客户端 signin/authorize 上下文整体关闭，下一候选是**指纹/设备层**（`oai-did` / TLS / 出口 IP 声誉）。
+- 🔴 P1-14 与 P1-9 **机制上耦合**：P1-9 给 prime 补导航头，P1-14 决定落点错是否致命。顺序必须先 P1-9 定案再跑 P1-14（两臂都开 P1-9），否则分不清「头不齐导致落点错」还是「落点本来就对」。
+- 🔴 P1-15 / P1-16 / P1-17 都作用在 OTP 阶段，是三个独立单变量：send 的头、validate 的 Sentinel、validate 之后的分支。同一批只跑一个；两臂都必须保持另两个为默认值。
+- 🔴 P1-16 / P1-17 在**当前失败形状上不可判定**：现在三个地址全部停在 `email_otp_send_stuck`（码从未派发），validate 从未被走到，所以两臂的分支/带头差异不会显现。先跑 P1-13..P1-15；P1-16/P1-17 等有码到达之后再跑，判定时按 `not_judgeable` 处理。
 - 🔴 P0-2b 的 `handoff` 臂**现在不要跑**：`registration.edge_challenge_browser_handoff` 未落地（`browser_flow` 缺“接入 cookie jar → 闯关 → 导出 → 停”的模式，见 `plan-2026-10-05` §3.4.2 的 S4b）。只跑 `observe` / `rotate` 两臂即可定 H1；`handoff` 臂会被判 `not_judgeable`。
 - 🔴 P0-2b 的停止规则比速率优先：任一臂出现**新的终态失败类别**、或 `handoff` 臂把可注册地址写进死路账本（`registration_retry_guard`）⇒ **立即停全部三臂**并回到 `observe`。
 - 🔴 P1-6 与 P1-7 都作用在 `create_account` 阶段：P1-6 改**请求前**（多发一次 GET），P1-7 改**失败后**（重试同一 POST）。同一批只跑其中一个；若都要定案，顺序不限，但两批的 arm 必须都保持另一开关为默认值。

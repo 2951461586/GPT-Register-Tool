@@ -499,6 +499,190 @@ EXPERIMENTS: dict[str, dict[str, Any]] = {
             "device layer instead of another wire field."
         ),
     },
+    "p1-13-turb-signin-authorize-context": {
+        "hypothesis": (
+            "turb's signin/authorize context differs from ours in five parameters, "
+            "and its own comment dates the change to a successful 2026-09-14 "
+            "sample: the signin query carries no device_id / passkey capabilities / "
+            "ccaps, and the authorize URL drops ext-passkey-client-capabilities, "
+            "sets ccaps='login_methods chatgpt_login_finalizer_v1', and adds "
+            "auth_return_target_category=chatgpt_home plus ui_locales. The signin "
+            "series (p1-10..p1-12) tested screen_hint/prompt/locale one field at a "
+            "time; this is the rest of the context, as one coherent manipulation. "
+            "Switching to turb's shape should arm the signup (password) transaction "
+            "so email-otp/send dispatches."
+        ),
+        "toggle": "registration.turb_signin_authorize_context",
+        "arms": {"default": False, "turb": True},
+        "hold_constant": (
+            "same mailbox batch and provider",
+            "same exit pool (same proxy_seeds / lanes)",
+            "same registration driver, concurrency and stage timeouts",
+            "password lane only (email_registration.registration_mode != passwordless)",
+            "registration.signin_screen_hint_login_or_signup / signin_prompt_login / "
+            "signin_locale_ja_jp unchanged in BOTH arms",
+            "authorize/continue behaviour unchanged in BOTH arms",
+            "same time-of-day window (Cloudflare load is diurnal)",
+        ),
+        "metrics": (
+            "funnel.registered_per_attempted",
+            "funnel.registration_failures_by_class (mailbox = the OTP-delivery family)",
+            "funnel.registration_failures_by_class (auth_state = invalid_auth_step family)",
+            "client_auth_session_dump[after_otp_send]: passwordless_email_otp_send_pending ABSENT "
+            "(primary mechanism read)",
+            "client_auth_session.email_verification_mode (secondary: which arm the server picked)",
+        ),
+        "mechanism": "Turb signin/authorize context",
+        "decision": (
+            "favor_turb when that arm's success rate exceeds the default arm's by "
+            f"more than {RATE_DELTA:.2f}; keep_default_off when it is worse by more "
+            "than the same delta; otherwise inconclusive. An auth_state-class "
+            "growth in the turb arm means the context conflicts with the server's "
+            "reading -- that alone keeps the default off. A rate that does not move "
+            "while the pending key also fails to clear means the signin/authorize "
+            "context is not the lever either, and the next candidate is the "
+            "fingerprint / device layer."
+        ),
+    },
+    "p1-14-prime-password-page-fatal": {
+        "hypothesis": (
+            "turb makes the password-page navigation fatal: if the final URL is not "
+            "/create-account/password it raises, because the navigation exists to "
+            "establish the page state before user/register claims it. Ours reports "
+            "a wrong landing and continues. Making the landing fatal should either "
+            "separate 'the state was never established' from 'the state was "
+            "established and the server still did not dispatch', or show that the "
+            "landing is always correct and the prime is not the lever."
+        ),
+        "toggle": "registration.prime_password_page_fatal",
+        "arms": {"default": False, "fatal": True},
+        "hold_constant": (
+            "same mailbox batch and provider",
+            "same exit pool (same proxy_seeds / lanes)",
+            "same registration driver, concurrency and stage timeouts",
+            "password lane only (email_registration.registration_mode != passwordless)",
+            "registration.prime_create_account_password true in BOTH arms (there is no prime to make fatal otherwise)",
+            "registration.prime_navigation_headers true in BOTH arms",
+            "same time-of-day window (Cloudflare load is diurnal)",
+        ),
+        "metrics": (
+            "funnel.registered_per_attempted",
+            "funnel.registration_failures_by_class (auth_state = the abort family)",
+            "funnel.registration_failures_by_class (mailbox = the OTP-delivery family)",
+            "client_auth_session_dump[after_otp_send]: passwordless_email_otp_send_pending ABSENT "
+            "(primary mechanism read)",
+            "count of password_page_not_reached aborts (the manipulation's own effect)",
+        ),
+        "mechanism": "Password page landing is fatal",
+        "decision": (
+            "favor_fatal when that arm's success rate exceeds the default arm's by "
+            f"more than {RATE_DELTA:.2f}; keep_default_off when it is worse by more "
+            "than the same delta; otherwise inconclusive. A nonzero abort count "
+            "with no rate change is not a failure of the hypothesis -- it is the "
+            "measurement that the landing was not being reached, and the next "
+            "variable is the prime itself (p1-9) rather than its fatality."
+        ),
+    },
+    "p1-15-otp-navigation-headers": {
+        "hypothesis": (
+            "turb sends sec-fetch-site: same-origin + sec-fetch-user: ?1 on the "
+            "email-otp/send navigation; ours sends only Accept + Referer. Those "
+            "two headers are how a real top-level navigation declares itself, and "
+            "the repo already measured that lesson for the password page (p1-9). "
+            "Sending them on the OTP send should let the server treat it as the "
+            "page's own dispatch and actually send the code."
+        ),
+        "toggle": "registration.otp_navigation_headers",
+        "arms": {"default": False, "headers": True},
+        "hold_constant": (
+            "same mailbox batch and provider",
+            "same exit pool (same proxy_seeds / lanes)",
+            "same registration driver, concurrency and stage timeouts",
+            "password lane only (email_registration.registration_mode != passwordless)",
+            "registration.prime_create_account_password / prime_password_page_fatal unchanged in BOTH arms",
+            "same time-of-day window (Cloudflare load is diurnal)",
+        ),
+        "metrics": (
+            "funnel.registered_per_attempted",
+            "funnel.registration_failures_by_class (mailbox = the OTP-delivery family)",
+            "client_auth_session_dump[after_otp_send]: passwordless_email_otp_send_pending ABSENT "
+            "(primary mechanism read)",
+        ),
+        "mechanism": "OTP navigation headers",
+        "decision": (
+            "favor_headers when that arm's success rate exceeds the default arm's "
+            f"by more than {RATE_DELTA:.2f}; keep_default_off when it is worse by "
+            "more than the same delta; otherwise inconclusive. A rate that does "
+            "not move while the pending key also fails to clear means the send "
+            "navigation's own headers are not the lever."
+        ),
+    },
+    "p1-16-otp-validate-sentinel": {
+        "hypothesis": (
+            "turb attaches a freshly minted authorize_continue Sentinel (plus its "
+            "SO) to email-otp/validate; ours passes use_sentinel=False. The "
+            "current failure is one step earlier (the code never dispatches), so "
+            "this is a latent wire difference rather than a candidate cause -- it "
+            "is pre-registered so that the day a code does arrive, the validate "
+            "request shape is already controlled."
+        ),
+        "toggle": "registration.otp_validate_sentinel",
+        "arms": {"default": False, "sentinel": True},
+        "hold_constant": (
+            "same mailbox batch and provider",
+            "same exit pool (same proxy_seeds / lanes)",
+            "same registration driver, concurrency and stage timeouts",
+            "registration.otp_navigation_headers unchanged in BOTH arms",
+            "same time-of-day window (Cloudflare load is diurnal)",
+        ),
+        "metrics": (
+            "funnel.registered_per_attempted",
+            "funnel.registration_failures_by_class (sentinel = mint/validation family)",
+            "funnel.registration_failures_by_class (auth_state)",
+            "client_auth_session_dump[after_otp_send]: passwordless_email_otp_send_pending ABSENT",
+        ),
+        "mechanism": "OTP validate sentinel",
+        "decision": (
+            "favor_sentinel when that arm's success rate exceeds the default arm's "
+            f"by more than {RATE_DELTA:.2f}; keep_default_off when it is worse by "
+            "more than the same delta, or when a sentinel-class failure grows; "
+            "otherwise inconclusive. Not judgeable while no arm receives a code "
+            "at all (the validate step is never reached)."
+        ),
+    },
+    "p1-17-otp-external-url-branch": {
+        "hypothesis": (
+            "After a successful email-otp/validate the server's own answer decides "
+            "whether create_account should run. turb reads page.type and the "
+            "continue_url and, when the transaction already finished on an "
+            "external/callback URL, skips create_account -- POSTing it anyway is "
+            "what answers invalid_auth_step. Ours always runs create_account. "
+            "Adding the branch should stop those transactions failing a step they "
+            "had already finished."
+        ),
+        "toggle": "registration.otp_external_url_branch",
+        "arms": {"default": False, "branch": True},
+        "hold_constant": (
+            "same mailbox batch and provider",
+            "same exit pool (same proxy_seeds / lanes)",
+            "same registration driver, concurrency and stage timeouts",
+            "registration.otp_navigation_headers / otp_validate_sentinel unchanged in BOTH arms",
+            "same time-of-day window (Cloudflare load is diurnal)",
+        ),
+        "metrics": (
+            "funnel.registered_per_attempted",
+            "funnel.registration_failures_by_class (auth_state = invalid_auth_step family)",
+            "count of create_account steps skipped by the branch (the manipulation's own effect)",
+        ),
+        "mechanism": "OTP external_url branch",
+        "decision": (
+            "favor_branch when that arm's success rate exceeds the default arm's by "
+            f"more than {RATE_DELTA:.2f}; keep_default_off when it is worse by more "
+            "than the same delta; otherwise inconclusive. Not judgeable while the "
+            "branch never fires (no arm reaches a validated OTP), which the "
+            "decision rule reports as not_judgeable rather than as no-effect."
+        ),
+    },
     "p0-2b-inflow-challenge-handoff": {
         "hypothesis": (
             "H1: a challenge that arrives after preflight can be recovered by "
@@ -643,6 +827,32 @@ def load_funnel(path: Path | None) -> dict[str, Any] | None:
     return None
 
 
+#: Registration keys the manipulation check records although no experiment
+#: declares them as its toggle -- observation-only designs such as ``p0-2``.
+_TOGGLE_KEYS_WITHOUT_AN_EXPERIMENT = ("edge_challenge_discrimination",)
+
+
+def _registration_toggle_keys() -> tuple[str, ...]:
+    """Every ``registration.*`` key a config snapshot must expose to ``compare``.
+
+    Derived from ``EXPERIMENTS`` instead of hand-listed, because the hand-listed
+    version drifted the moment it mattered: the four signin-shape toggles
+    (P1-9..P1-12) were added to the design table but not to the reader, so
+    ``collect`` recorded ``toggle_actual=None`` for them and ``compare``
+    answered ``unverified`` no matter what ``--config`` held.  The arm could not
+    be judged at all, and the mechanism gate added for the 2026-10-07 fake
+    comparison was never even reached (``unverified`` returns first).  A derived
+    reader cannot drift from the design table it derives from.
+    """
+    keys = {
+        str(design["toggle"]).split(".", 1)[1]
+        for design in EXPERIMENTS.values()
+        if design.get("toggle") and str(design["toggle"]).startswith("registration.")
+    }
+    keys.update(_TOGGLE_KEYS_WITHOUT_AN_EXPERIMENT)
+    return tuple(sorted(keys))
+
+
 def read_toggles(config_path: Path | None) -> dict[str, Any]:
     """Read the A/B toggles from a config snapshot (the manipulation check)."""
     if config_path is None:
@@ -655,28 +865,7 @@ def read_toggles(config_path: Path | None) -> dict[str, Any]:
         return {}
     registration = payload.get("registration") if isinstance(payload, Mapping) else None
     registration = registration if isinstance(registration, Mapping) else {}
-    out: dict[str, Any] = {}
-    if "preflight_login_page" in registration:
-        out["registration.preflight_login_page"] = registration["preflight_login_page"]
-    if "sentinel_password_bundle" in registration:
-        out["registration.sentinel_password_bundle"] = registration["sentinel_password_bundle"]
-    if "prime_create_account_password" in registration:
-        out["registration.prime_create_account_password"] = registration["prime_create_account_password"]
-    if "signup_continue_screen_hint" in registration:
-        out["registration.signup_continue_screen_hint"] = registration["signup_continue_screen_hint"]
-    if "signup_email_verification_continue_hint" in registration:
-        out["registration.signup_email_verification_continue_hint"] = registration[
-            "signup_email_verification_continue_hint"
-        ]
-    if "prime_about_you_page" in registration:
-        out["registration.prime_about_you_page"] = registration["prime_about_you_page"]
-    if "create_account_disallowed_backoff" in registration:
-        out["registration.create_account_disallowed_backoff"] = registration["create_account_disallowed_backoff"]
-    if "edge_challenge_discrimination" in registration:
-        out["registration.edge_challenge_discrimination"] = registration["edge_challenge_discrimination"]
-    if "edge_challenge_rotate_exit" in registration:
-        out["registration.edge_challenge_rotate_exit"] = registration["edge_challenge_rotate_exit"]
-    return out
+    return {f"registration.{key}": registration[key] for key in _registration_toggle_keys() if key in registration}
 
 
 def build_record(

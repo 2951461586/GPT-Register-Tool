@@ -777,12 +777,18 @@ class RegistrationEmailWorkflow:
         # failure is one step later; see the switch's docstring for the
         # measurement and for what it is meant to separate.
         if self.r._prime_create_account_password_page_enabled():
-            self.r._prime_create_account_password_page(
+            prime = self.r._prime_create_account_password_page(
                 s.session,
                 s.auth_base,
                 s.base_headers,
                 str(s.signup_state.get("url") or ""),
             )
+            # ``registration.prime_password_page_fatal`` (turb's contract): the
+            # prime reports a wrong landing as ``fatal`` so this caller can stop
+            # before the POST that claims a page state which was never
+            # established.  Off by default -> the report-only behaviour stands.
+            if isinstance(prime, Mapping) and prime.get("fatal"):
+                self._abort(f"password_page_not_reached:{str(prime.get('url') or '')[:120]}")
         self._post_user_register()
         if s.reg_response.status_code != 200:
             err_code = s.reg_data.get("error", {}).get("code", "")
@@ -1031,6 +1037,26 @@ class RegistrationEmailWorkflow:
     def create_account(self) -> None:
         r = self.r
         s = self.runtime
+        # ``RegistrationRuntimeState`` attaches its flat fields from the group
+        # dataclasses at import time (see ``registration_runtime``), so read this
+        # one through ``getattr`` with an explicit ``str`` guard: a state double
+        # that models only the fields it touches stays valid, and the access does
+        # not depend on the ``TYPE_CHECKING`` mirror or on a ``Mock`` attribute
+        # (which would be truthy).
+        external_url = getattr(s, "otp_external_url", "")
+        if isinstance(external_url, str) and external_url:
+            # ``registration.otp_external_url_branch``: the validated OTP
+            # transaction already finished on a callback/external URL (the
+            # ``Email OTP continue`` step followed it), so POSTing
+            # ``create_account`` next is what turb guards against -- it answers
+            # ``invalid_auth_step`` for a transaction the server considers done.
+            # Mark the create step acknowledged and let ``fetch_auth_session``
+            # read the NextAuth session the callback established.
+            print("  Create account: skipped, the OTP transaction already finished on an external URL")
+            s.create_ok = True
+            s.create_data = {"_external_url": external_url}
+            r.think_stage("post_create_account")
+            return
         if self._prime_about_you_page_enabled():
             self._prime_about_you_page()
         backoff_delays = self._create_account_disallowed_backoff_delays()
