@@ -25,8 +25,9 @@ import cycle back into ``registration_handlers``.
 from __future__ import annotations
 
 import logging
-from typing import Any, Mapping
+from typing import Any
 
+from .registration_flags import registration_flag
 from .sanitizer import describe_exception
 
 _LOGGER = logging.getLogger(__name__)
@@ -40,10 +41,10 @@ def password_sentinel_bundle_enabled(self: Any) -> bool:
     way a browser iframe does it -- and that still owes a controlled live
     comparison.  See ``docs/current/protocol-registration.md``.
     """
-    registration = (self.config or {}).get("registration")
-    registration = registration if isinstance(registration, Mapping) else {}
-    value = registration.get("sentinel_password_bundle", False)
-    return value not in (False, 0, "0", "false", "False", "no", "No", "off", "")
+    # ``registration_flag`` is the shared, Mapping-safe, two-sided parser.  The
+    # old hand-rolled body failed **open** (an unrecognised value turned this
+    # default-off switch on) -- fixed by the 2026-10-10 P1-C′ consolidation.
+    return registration_flag(self.config, "sentinel_password_bundle", False)
 
 
 def prime_password_sentinel_bundle(self: Any) -> None:

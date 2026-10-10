@@ -15,6 +15,7 @@ rate; see [Validation limits](#validation-limits).
 | Protocol step functions (signin, authorize, continue, OTP, TOTP) | `sms_tool/auth_flow/` (`steps`, `signup`, `login`, `otp`, `totp`) |
 | Stage order, runtime state, persistence, create account | `sms_tool/registration_handlers.py` |
 | Persistence seam, stage executor, pure helpers, email-OTP stages, edge-challenge hook, resume stage, Sentinel stages | `sms_tool/registration_persistence.py`, `registration_stage_runner.py`, `registration_protocol_helpers.py`, `registration_otp_stages.py`, `registration_edge_challenge.py`, `registration_resume.py`, `registration_sentinel_stages.py` |
+| `registration.*` boolean toggle parsing (one `Mapping`-safe, two-sided owner) | `sms_tool/registration_flags.py` — `auth_flow.steps._registration_flag` keeps a deliberate copy, because importing the leaf module from `auth_flow` would grow the import-layer ratchet |
 | Account creation and OTP validate wire calls | `sms_tool/accounts/account_creation.py` |
 | Sentinel token issuance | `sms_tool/sentinel/` (facade `sms_tool/sentinel_tokens.py`) |
 | AT probe, result contract, funnel | `sms_tool/registration_outcome.py`, `registration_result.py`, `registration_funnel.py` |
@@ -386,8 +387,12 @@ unreachable, so the arm measured nothing and its 5/5 failure was almost read as
 "the hypothesis is false". `collect` therefore also records whether the arm's
 **log** shows the toggle's own line (`mechanism_ok`), and `compare` returns
 `manipulation_failed` -- ahead of `underpowered` -- when it does not. New
-toggles must register a stdout mechanism line in `scripts/registration_ab.py`;
-see the runbook's mechanism table.
+toggles must register a mechanism line emitted through
+`sms_tool.operator_output.emit` in `scripts/registration_ab.py` (a bare `print`
+reaches only the stdout mirror, so a `collect --log .../sms_tool.log` run cannot
+see it, and a marker whose trigger is conditional must declare
+`"conditional": true` so its absence is `not_judgeable`, not
+`manipulation_failed`); see the runbook's mechanism table.
 
 ## Read-only registration probe
 

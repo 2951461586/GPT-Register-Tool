@@ -26,7 +26,7 @@ harness does three things:
              held-constant variables, metrics and decision rule.
 ``collect``  normalise one operator-run arm's artifacts (run log + batch report
              + config snapshot) into a single record under
-             ``runtime/registration_ab/``. Two manipulation checks are recorded:
+             ``runtime/ab/``. Two manipulation checks are recorded:
              the config snapshot must match the arm's toggle value
              (``toggle_verified``), and the arm's **log** must show the code path
              the toggle owns actually ran (``mechanism_ok``). Without the first
@@ -54,7 +54,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_OUT_DIR = ROOT / "runtime" / "registration_ab"
+DEFAULT_OUT_DIR = ROOT / "runtime" / "ab"
 
 #: Minimum attempted registrations (and preflight probes) per arm before a
 #: comparison is allowed to return anything but ``underpowered``. Pre-registered
@@ -261,8 +261,19 @@ EXPERIMENTS: dict[str, dict[str, Any]] = {
             "stage duration (create_account retries spend up to ~73s of sleeps plus a Sentinel proof per round)",
         ),
         "mechanism": "Create account temporarily disallowed",
+        # 🔴 The mechanism line only exists when a ``registration_disallowed``
+        # response actually arrived, so a window with none of them measured
+        # nothing.  ``conditional`` moves that check out of the always-on
+        # mechanism gate and into ``compare`` as ``not_judgeable`` -- the same
+        # treatment P0-2b's challenge counters get in its decision rule.
+        # Without it a rejection-free window is misread as
+        # ``manipulation_failed`` (2026-10-10 scan P1-B′).
+        "conditional": True,
         "decision": (
-            "favor_backoff when the backoff arm's success rate exceeds the "
+            "not_judgeable when no arm's log carries the mechanism line (no "
+            "``registration_disallowed`` occurred in the window, so the retry "
+            "never ran and nothing was measured). favor_backoff when the "
+            "backoff arm's success rate exceeds the "
             f"default arm's by more than {RATE_DELTA:.2f}; keep_default_off "
             "when it is worse by more than the same delta; otherwise "
             "inconclusive. An account-class failure count that fails to shrink "
@@ -885,10 +896,18 @@ def build_record(
       the arm's declared toggle value.
     * ``mechanism_*`` -- the arm's **log** shows the code path the toggle owns
       actually ran (or, for the control arm, that it did not).  ``mechanism_ok``
-      is ``None`` when the experiment registers no marker, or when the arm's
-      expected value is not a boolean (``p0-1``'s arms are endpoint names).
-      A marker must be a stdout line (``print``/``emit``) so it survives either
-      log channel the operator may hand to ``collect``.
+      is ``None`` when the experiment registers no marker, when the arm's
+      expected value is not a boolean (``p0-1``'s arms are endpoint names), or
+      when a ``"conditional": true`` marker is absent from a treatment arm
+      (its trigger never occurred -- ``compare`` then answers
+      ``not_judgeable``).
+
+      🔴 A marker must be emitted through ``operator_output.emit``, which feeds
+      **both** channels from one call.  A bare ``print`` reaches only the
+      stdout mirror (``backend_stdout.jsonl``), so an operator following the
+      runbook and passing ``--log .../sms_tool.log`` to ``collect`` would never
+      see it -- the 2026-10-10 scan P1-A′ defect, which made P1-6/P1-7
+      structurally unjudgeable.
     """
     design = EXPERIMENTS.get(experiment)
     if design is None:
@@ -905,8 +924,19 @@ def build_record(
     # enforcing it there would demand the marker in both arms.
     marker_expected = expected if isinstance(expected, bool) else None
     marker_seen = bool(marker) and marker in str(log_text or "")
+    # A conditional marker can only appear in a window where its trigger
+    # occurred, so its *absence* in the treatment arm is "not observed", not
+    # "the path failed to run".  ``None`` states that three-state contract and
+    # ``compare_records`` turns it into ``not_judgeable`` for the comparison.
+    # A control arm that never sees the marker still passes (``not seen``).
+    conditional = bool(design.get("conditional"))
     if marker and marker_expected is not None:
-        mechanism_ok = marker_seen if marker_expected else not marker_seen
+        if marker_seen:
+            mechanism_ok = marker_expected
+        elif conditional and marker_expected:
+            mechanism_ok = None
+        else:
+            mechanism_ok = not marker_expected
     else:
         mechanism_ok = None
     return {
@@ -921,6 +951,7 @@ def build_record(
         "mechanism_expected": marker_expected,
         "mechanism_seen": marker_seen,
         "mechanism_ok": mechanism_ok,
+        "mechanism_conditional": conditional,
         "preflight": parse_preflight_log(log_text),
         "funnel": dict(funnel) if isinstance(funnel, Mapping) else None,
         "log_path": str(log_path) if log_path else "",
@@ -1017,6 +1048,24 @@ def compare_records(records: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
     # low-sample one.  ``run_p15_hint.log`` is the motivating case -- its 5/5
     # ``email_otp_send_stuck`` was reported as ``underpowered`` when the hint
     # arm had in fact never posted a continue at all.
+    # A conditional mechanism (``"conditional": true``) can only appear in a
+    # window where its trigger occurred.  When no arm saw it, the comparison
+    # measured nothing -- ``not_judgeable``, not ``manipulation_failed``.  This
+    # is the same disposition P0-2b gives its challenge counters in its decision
+    # rule; P1-7 is the other conditional marker (2026-10-10 scan P1-B′).
+    if design.get("conditional") and not any(row.get("mechanism_seen") for row in rows):
+        return {
+            "experiment": experiment,
+            "arms": [row.get("arm") for row in rows],
+            "verdict": "not_judgeable",
+            "reason": (
+                "the conditional mechanism never occurred in any arm (no "
+                f"{design.get('mechanism')!r} in any arm's log); the window measured "
+                "nothing -- re-collect from a window in which it fires"
+            ),
+            "powered": False,
+        }
+
     manipulation_failed = [str(row.get("arm")) for row in rows if _mechanism_failed(row)]
     if manipulation_failed:
         return {
@@ -1067,6 +1116,7 @@ def compare_records(records: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
             "mechanism_marker": row.get("mechanism_marker"),
             "mechanism_seen": row.get("mechanism_seen"),
             "mechanism_ok": row.get("mechanism_ok"),
+            "mechanism_conditional": row.get("mechanism_conditional"),
         }
 
     powered = all(

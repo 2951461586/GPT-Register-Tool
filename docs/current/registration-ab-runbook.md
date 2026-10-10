@@ -110,7 +110,7 @@ python scripts/registration_ab.py collect `
   --config config.json
 ```
 
-记录落在 `runtime/registration_ab/<experiment>__<arm>.json`。
+记录落在 `runtime/ab/<experiment>__<arm>.json`。
 
 > `collect` 会校验 `config.json` 与该 arm 期望的开关值一致；不一致时打印 WARNING 且记录
 > `toggle_verified=false`，`compare` 将直接拒绝判定 —— 这是防止"以为改了、其实没改"的操纵检查。
@@ -119,8 +119,10 @@ python scripts/registration_ab.py collect `
 > （见下表）。开了开关但日志里没有那行 ⇒ 记 `mechanism_ok=false`，`compare` 一律返回
 > `manipulation_failed`（**优先于** `underpowered`），**不进速率判定**。这正是 P1-5 那一轮的
 > 教训：`signup_continue_screen_hint` 开着但早返回让它根本没执行，5/5 的失败被误读成
-> "开关无效"。机制行必须是 `print`/`emit` 的 stdout 行，才能同时活在 `sms_tool.log` 与
-> `backend_stdout.jsonl` 两种日志里。
+> "开关无效"。🔴 **机制行必须走 `sms_tool.operator_output.emit`**：它一次调用同时喂
+> `sms_tool.log`（logging）与 `backend_stdout.jsonl`（stdout 镜像）两条通道。裸 `print`
+> **只**进 `backend_stdout.jsonl`，而本节的 `collect` 示例传的是 `sms_tool.log` —— 那样
+> 登记机制行的实验在结构上不可判定（2026-10-10 扫描 P1-A′；P1-6 / P1-7 已改为 `emit`）。
 >
 > | 实验 | 机制行（日志里必须出现/必须不出现） |
 > | --- | --- |
@@ -154,6 +156,12 @@ python scripts/registration_ab.py collect `
 > （`[Edge] Cloudflare challenge on this exit; rotated`）只有在**确实发生了挑战**时才会出现。
 > 用常开的机制门禁会把「这个时间窗没发生挑战」误判成 `manipulation_failed`。
 > 所以它的机制检查写在判定规则里，返回 `not_judgeable`（见下表），而不是交给机制门禁。
+>
+> 🔴 **P1-7 同样是有条件的机制行**，但它的机制行有用（是「重试真的发生了」的证据），所以
+> 保留登记，另加 `"conditional": true`：机制行缺失时 `build_record` 记 `mechanism_ok=null`
+> 而不是 `false`，`compare` 在两臂都没看到该行时返回 `not_judgeable`（「这个窗口没撞到
+> `registration_disallowed`，什么都没测到」），而不是 `manipulation_failed`。P0-2b 走的是
+> 另一条路（不登记机制行、把检查写进判定规则），两者语义一致。
 
 ---
 
@@ -161,8 +169,8 @@ python scripts/registration_ab.py collect `
 
 ```powershell
 python scripts/registration_ab.py compare `
-  --arm browser=runtime/registration_ab/p0-1-preflight-endpoint__browser.json `
-  --arm legacy=runtime/registration_ab/p0-1-preflight-endpoint__legacy.json
+  --arm browser=runtime/ab/p0-1-preflight-endpoint__browser.json `
+  --arm legacy=runtime/ab/p0-1-preflight-endpoint__legacy.json
 ```
 
 输出含各 arm 的 `attempted` / `registered_per_attempted` / 预检探测数 / `cloudflare_rate` /
@@ -221,7 +229,7 @@ python scripts/registration_ab.py compare `
 
 ## 7. 证据与复现
 
-- 记录文件：`runtime/registration_ab/<experiment>__<arm>.json`（含 `collected_at`、
+- 记录文件：`runtime/ab/<experiment>__<arm>.json`（含 `collected_at`、
   `log_sha256`、配置快照值、原始计数）。
 - 结论回流：对照完成后，把结论写回 `docs/audits/` 的 `landing-*` 或更新
   [`protocol-registration.md`](protocol-registration.md)，并说明 arm、手数、判定。

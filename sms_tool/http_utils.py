@@ -15,11 +15,15 @@ account_creation, account_2fa, codex_oauth, session_refresh, and auth_state:
 from __future__ import annotations
 
 import json
+import logging
 from urllib.parse import urlparse
 
 from .config import CFG
 from .auth_headers import auth_impersonate
 from .http_client import request_with_retry
+from .operator_output import emit
+
+_LOGGER = logging.getLogger(__name__)
 
 
 # ── response parsing ──────────────────────────────────────────────────────────
@@ -64,7 +68,11 @@ def _follow_continue_url(session, url, base_headers, referer="", label="continue
         headers=headers,
         impersonate=auth_impersonate(),
     )
-    print(f"  {label}: {response.status_code} {response.url}")
+    # ``emit``, not ``print``: this line is a registered A/B mechanism marker
+    # (P1-6 ``About you page prime``), and a bare ``print`` only reaches the
+    # stdout mirror (``backend_stdout.jsonl``) while the runbook's ``collect``
+    # reads ``sms_tool.log``.  ``emit`` feeds both channels from one call.
+    emit(_LOGGER, "  %s: %s %s", label, response.status_code, response.url)
     return response
 
 
