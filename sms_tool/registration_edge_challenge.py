@@ -23,12 +23,13 @@ import cycle back into ``registration_handlers``.
 from __future__ import annotations
 
 import logging
-from typing import Any, Mapping
+from typing import Any
 
 from .http_client import EDGE_CHALLENGE_HOOK_ATTR, clear_session_circuit
 from .operator_output import emit as _emit
 from .proxy_edge_probe import EDGE_UNKNOWN
 from .proxy_entry import rotate_session
+from .registration_flags import registration_flag
 from .sanitizer import describe_exception
 
 _LOGGER = logging.getLogger(__name__)
@@ -49,10 +50,7 @@ def edge_challenge_rotate_exit_enabled(self: Any) -> bool:
     labels the failure *name* (observation, default on); this one moves
     traffic.  They are orthogonal -- a run may label without rotating.
     """
-    registration = (self.config or {}).get("registration")
-    registration = registration if isinstance(registration, Mapping) else {}
-    value = registration.get("edge_challenge_rotate_exit", False)
-    return value in (True, 1, "1", "true", "True", "yes", "Yes", "on")
+    return registration_flag(self.config, "edge_challenge_rotate_exit", False)
 
 
 def install_edge_challenge_hook(self: Any, session: Any) -> None:

@@ -68,9 +68,10 @@ def _record(
     ``build_record`` now also demands the arm's *mechanism* line when the arm's
     toggle value is truthy (and its absence in the control).  A caller that
     passes no log would otherwise get every powered comparison refused as
-    ``manipulation_failed``, so the marker is synthesised here; tests that care
-    about the check itself pass ``mechanism=False`` to omit it, or a literal
-    marker line in ``log`` to place it deliberately.
+    ``manipulation_failed``, so the marker is synthesised here.  Tests that need
+    the marker absent build the record with ``ab.build_record`` directly (see
+    ``ConditionalMechanismTests``), or mutate ``mechanism_seen`` /
+    ``mechanism_ok`` afterwards.
     """
     toggle_name = ab.EXPERIMENTS[experiment]["toggle"]
     toggles = {toggle_name: toggle_value} if toggle_name else {}
@@ -274,6 +275,76 @@ class CreateDisallowedBackoffExperimentTests(unittest.TestCase):
         rows[1]["toggle_verified"] = False
         report = ab.compare_records(rows)
         self.assertEqual(report["verdict"], "unverified")
+
+
+class ConditionalMechanismTests(unittest.TestCase):
+    """P1-B′: a conditional mechanism's absence is ``not_judgeable``, not a failure.
+
+    ``Create account temporarily disallowed`` can only appear when a
+    ``registration_disallowed`` response actually arrived, so a rejection-free
+    window is not a fake comparison -- it is an empty one.  The always-on
+    mechanism gate would call it ``manipulation_failed``; ``conditional: true``
+    moves it into ``compare`` as ``not_judgeable`` (the P0-2b disposition).
+    """
+
+    def test_p1_7_is_declared_conditional(self):
+        self.assertTrue(ab.EXPERIMENTS["p1-7-create-disallowed-backoff"]["conditional"])
+
+    def test_a_missing_conditional_marker_is_not_a_mechanism_failure(self):
+        record = ab.build_record(
+            experiment="p1-7-create-disallowed-backoff",
+            arm="backoff",
+            log_text="no marker in this window",
+            funnel=_funnel(30, 12),
+            toggles={"registration.create_account_disallowed_backoff": True},
+        )
+        self.assertTrue(record["mechanism_conditional"])
+        self.assertFalse(record["mechanism_seen"])
+        self.assertIsNone(record["mechanism_ok"])
+        self.assertFalse(ab._mechanism_failed(record))
+
+    def test_no_arm_seeing_the_conditional_marker_is_not_judgeable(self):
+        default = ab.build_record(
+            experiment="p1-7-create-disallowed-backoff",
+            arm="default",
+            log_text="",
+            funnel=_funnel(30, 10),
+            toggles={"registration.create_account_disallowed_backoff": False},
+        )
+        backoff = ab.build_record(
+            experiment="p1-7-create-disallowed-backoff",
+            arm="backoff",
+            log_text="",
+            funnel=_funnel(30, 12),
+            toggles={"registration.create_account_disallowed_backoff": True},
+        )
+        report = ab.compare_records([default, backoff])
+        self.assertEqual(report["verdict"], "not_judgeable")
+        self.assertIn("conditional mechanism never occurred", report["reason"])
+
+    def test_the_conditional_marker_seen_in_the_treatment_arm_still_judges(self):
+        default = _record("p1-7-create-disallowed-backoff", "default", False, attempted=30, registered=4)
+        backoff = _record("p1-7-create-disallowed-backoff", "backoff", True, attempted=30, registered=12)
+        report = ab.compare_records([default, backoff])
+        self.assertEqual(report["verdict"], "favor_backoff")
+
+    def test_the_escape_hatch_does_not_leak_to_a_non_conditional_experiment(self):
+        """Only a declared-conditional marker may skip the gate."""
+        default = _record("p1-5-signup-continue-screen-hint", "default", False, attempted=30, registered=10)
+        hint = ab.build_record(
+            experiment="p1-5-signup-continue-screen-hint",
+            arm="hint",
+            log_text="",
+            funnel=_funnel(30, 12),
+            toggles={"registration.signup_continue_screen_hint": True},
+        )
+        report = ab.compare_records([default, hint])
+        self.assertEqual(report["verdict"], "manipulation_failed")
+
+    def test_the_default_record_dir_matches_the_records_on_disk(self):
+        """P2-2: the runbook, the default and the only existing records agree."""
+        self.assertEqual(ab.DEFAULT_OUT_DIR.name, "ab")
+        self.assertEqual(ab.DEFAULT_OUT_DIR.parent.name, "runtime")
 
 
 class InflowChallengeHandoffExperimentTests(unittest.TestCase):

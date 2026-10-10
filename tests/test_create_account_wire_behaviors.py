@@ -174,6 +174,19 @@ class PrimeAboutYouPageTests(unittest.TestCase):
         self.assertEqual(ops.request_with_retry.call_count, 1)
         self.assertTrue(state.create_ok)
 
+    def test_the_off_page_landing_report_reaches_the_log_channel(self):
+        """P1-A′: the prime's report line goes through ``emit``, not ``print``."""
+        state = _state()
+        w, ops, mint = _workflow(
+            state, responses=[_response(200)], config={"registration": {"prime_about_you_page": True}}
+        )
+        ops._follow_continue_url = Mock(return_value=Mock(url="https://auth.openai.com/log-in/password"))
+
+        with self.assertLogs("sms_tool.registration_handlers", level="INFO") as captured:
+            w.create_account()
+
+        self.assertIn("About you page prime landed off the profile step", "\n".join(captured.output))
+
 
 # ---------------------------------------------------------------------------
 # P1-7: registration_disallowed 有界退避
@@ -330,6 +343,24 @@ class CreateAccountDisallowedBackoffTests(unittest.TestCase):
             with pytest.raises(RegistrationCancelled):
                 w.create_account()
 
+    def test_the_retry_line_reaches_the_log_channel(self):
+        """P1-A′: P1-7's registered mechanism marker must be greppable in ``sms_tool.log``."""
+        state = _state()
+        w, ops, mint = _workflow(
+            state,
+            responses=[
+                _response(400, {"error": {"code": "registration_disallowed"}}),
+                _response(200),
+            ],
+            config={"registration": {"create_account_disallowed_backoff": True}},
+        )
+
+        with patch.object(rh, "cancellable_sleep", return_value=False):
+            with self.assertLogs("sms_tool.registration_handlers", level="INFO") as captured:
+                w.create_account()
+
+        self.assertIn("Create account temporarily disallowed", "\n".join(captured.output))
+
 
 # ---------------------------------------------------------------------------
 # 开关门禁
@@ -371,6 +402,21 @@ class ToggleGateTests(unittest.TestCase):
                 "_create_account_disallowed_backoff_delays",
             ),
             (8, 20, 45),
+        )
+
+    def test_the_gates_answer_their_default_for_an_unrecognised_value(self):
+        """P1-C′: the two workflow toggles share the two-sided ``registration_flag``.
+
+        Before the consolidation each hand-rolled its own truthy whitelist, so a
+        typo in the config was silently treated as one of three different things.
+        """
+        self.assertFalse(self._gate({"registration": {"prime_about_you_page": "maybe"}}, "_prime_about_you_page_enabled"))
+        self.assertEqual(
+            self._gate(
+                {"registration": {"create_account_disallowed_backoff": "maybe"}},
+                "_create_account_disallowed_backoff_delays",
+            ),
+            (),
         )
 
 

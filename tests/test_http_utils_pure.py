@@ -346,6 +346,26 @@ class FollowContinueUrlTests(unittest.TestCase):
         assert response is not None
         self.assertEqual(response.url, "https://auth.test/landed")
 
+    def test_the_label_line_reaches_the_log_channel_not_only_stdout(self):
+        """P1-A′: the label line is a registered A/B mechanism marker.
+
+        ``collect`` reads ``sms_tool.log`` (a logging channel); a bare ``print``
+        only reaches the stdout mirror, so P1-6's marker was invisible to it and
+        the arm was judged ``manipulation_failed``.  ``emit`` feeds both channels
+        from one call -- this pins the logging half.
+        """
+        recorder = _RequestRecorder(_FakeResponse(200, {}, url="https://auth.test/landed"))
+        with (
+            patch("sms_tool.http_utils.CFG", {"chatgpt": {"auth_base_url": "https://auth.test"}}),
+            patch("sms_tool.http_utils.auth_impersonate", lambda: "IMPERSONATE"),
+            patch("sms_tool.http_utils.request_with_retry", recorder),
+            self.assertLogs("sms_tool.http_utils", level="INFO") as captured,
+        ):
+            http_utils._follow_continue_url(_FakeSession({}), "/go", {}, label="About you page prime")
+        joined = "\n".join(captured.output)
+        self.assertIn("About you page prime", joined)
+        self.assertIn("200", joined)
+
 
 # --------------------------------------------------------------------------- _validate_email_otp
 

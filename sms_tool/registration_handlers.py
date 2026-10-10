@@ -38,6 +38,7 @@ _USER_REGISTER_PRINT_BUDGET = 1200
 from .sanitizer import account_reference, describe_exception
 from .telemetry import current_run_id
 from .registration_cancel import RegistrationCancelled, cancellable_sleep, ensure_not_cancelled
+from .registration_flags import registration_flag
 from .registration_outcome import needs_manual_session_recovery
 from .registration_result import build_registration_result
 from .registration_operations import RegistrationOperations
@@ -58,6 +59,7 @@ from .registration_persistence import RegistrationPersistence, StorageRegistrati
 from .registration_retry_guard import DEAD_END_SIGNUP_ROUTED_TO_LOGIN, RegistrationRetryGuard
 from .registration_runtime import RegistrationRuntimeState
 from .mailbox_errors import MailboxEndpointUnavailableError
+from .operator_output import emit as _emit
 from .providers.mailbox_graph import MailboxAuthInvalidError
 from . import endpoints
 from . import registration_checkpoint
@@ -975,10 +977,7 @@ class RegistrationEmailWorkflow:
         unexpected landing is reported, never raised, so this cannot turn a
         healthy stage into a new failure mode.
         """
-        registration = (self.config or {}).get("registration")
-        registration = registration if isinstance(registration, Mapping) else {}
-        value = registration.get("prime_about_you_page", False)
-        return value in (True, 1, "1", "true", "True", "yes", "Yes", "on")
+        return registration_flag(self.config, "prime_about_you_page", False)
 
     def _prime_about_you_page(self) -> None:
         """GET ``/about-you`` so the profile-page state exists before the POST.
@@ -1000,9 +999,9 @@ class RegistrationEmailWorkflow:
             )
             final_url = str(getattr(response, "url", "") or "")
             if "/about-you" not in final_url:
-                print(f"  About you page prime landed off the profile step: {final_url[:120]}")
+                _emit(_LOGGER, "  About you page prime landed off the profile step: %s", final_url[:120])
         except Exception as exc:
-            print(f"  About you page prime warning: {describe_exception(exc)}")
+            _emit(_LOGGER, "  About you page prime warning: %s", describe_exception(exc))
 
     def _create_account_disallowed_backoff_delays(self) -> tuple[int, ...]:
         """Bounded retry delays for ``registration_disallowed`` on create_account.
@@ -1027,10 +1026,7 @@ class RegistrationEmailWorkflow:
         fails -- the toggle changes *when* the verdict is reached, never *what*
         it eventually says.
         """
-        registration = (self.config or {}).get("registration")
-        registration = registration if isinstance(registration, Mapping) else {}
-        value = registration.get("create_account_disallowed_backoff", False)
-        if value not in (True, 1, "1", "true", "True", "yes", "Yes", "on"):
+        if not registration_flag(self.config, "create_account_disallowed_backoff", False):
             return ()
         return (8, 20, 45)
 
@@ -1092,9 +1088,16 @@ class RegistrationEmailWorkflow:
             if "registration_disallowed" not in body:
                 break
             delay = backoff_delays[attempt]
-            print(
-                f"  Create account temporarily disallowed; retrying in {delay}s "
-                f"with a fresh Sentinel proof ({attempt + 1}/{len(backoff_delays)})"
+            # ``emit``, not ``print``: this is P1-7's registered mechanism
+            # marker, and a bare ``print`` only reaches the stdout mirror
+            # (``backend_stdout.jsonl``) while the runbook's ``collect`` reads
+            # ``sms_tool.log``.  ``emit`` feeds both channels from one call.
+            _emit(
+                _LOGGER,
+                "  Create account temporarily disallowed; retrying in %ss with a fresh Sentinel proof (%s/%s)",
+                delay,
+                attempt + 1,
+                len(backoff_delays),
             )
             if cancellable_sleep(delay):
                 raise RegistrationCancelled()
