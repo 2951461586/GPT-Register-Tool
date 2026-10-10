@@ -166,3 +166,37 @@ P1-16 / P1-17 等有码到达
 - `docs/current/registration-ab-runbook.md` — P1-13..P1-17 行、机制表、判定规则、停止规则
 - `docs/current/protocol-registration.md` — Validation limits（改为指向 runbook）
 - 参考仓：`runtime/tmp/refrepos/myfanhua`（浅克隆，`.gitignore` 已排除，不入库）
+
+---
+
+## 7. 线上 pilot（2026-10-10 18:22 / 18:28）：**p1-13 不动**
+
+**供给阻塞**：ReMail iCloud 库存为空 —— 4 次购买尝试（`private_first` ×2、`public_only` ×2）
+全部 `422 Insufficient inventory.`（4 条 `failed` 订单已记录，未扣费）；8 月那 8 个未注册
+订单的详情接口**无 serviceToken**（ReMail 自己会拒用）。按操作者指定，改用 10 月那 14 个
+Remail iCloud。
+
+**臂规模不是 7/7**：smoke3 的 3 个地址仍在 24h `otp_pending_quarantine` 窗口内
+（`retry_policy.otp_pending_quarantine_seconds=86400`），被 runner 跳过 ⇒ 实际
+**default 5 / turb 6**。
+
+| 臂 | 实跑 | 机制行 | `email_verification_mode` | `original_screen_hint` | `passwordless_email_otp_send_pending` | 结果 |
+| --- | --- | --- | --- | --- | --- | --- |
+| default（开关关） | 5 | **0** | `passwordless_signup` | `signup` | `true` | 0/5 `email_otp_send_stuck` |
+| turb（开关开） | 6 | **6** | `passwordless_signup` | `signup` | `true` | 0/6 `email_otp_send_stuck` |
+
+**两臂形状逐字段相同** ⇒ turb 的 signin/authorize 上下文（`device_id` / passkey
+capabilities / `ccaps` / `auth_return_target_category` / `ui_locales`）**不改变事务臂，也不
+改变挂起键**。与 10-08 的结论一致：客户端 wire 形状不控制
+`passwordless_email_otp_send_pending`。
+
+**harness 证据**（`runtime/ab/p1-13-turb-signin-authorize-context__{default,turb}.json`）：
+两臂 `toggle_verified=true`、`mechanism_ok=true`（default 无标记 / turb 6 次标记）、
+预检 10/10。`compare` 返回 **`underpowered`**（5 vs 6 < 30/臂）—— **不得据此下速率结论**；
+本 pilot 可读的是**机制与形状**，不是成功率。
+
+**代价**：14 个地址全部进入 24h 隔离（约至 2026-10-11 18:22），当天不可重跑。
+
+**按 §5.4 执行**：p1-13 不动 ⇒ 客户端 signin/authorize 上下文（P1-10/11/12 + P1-13 的五个
+参数）**整体关闭**，下一步应**离开 wire 字段**，转向**指纹/设备层**（`oai-did` / TLS 指纹 /
+出口 IP 声誉）。p1-15 同样受邮箱供给阻塞；p1-14 仅诊断时开；p1-16/17 等有码。
