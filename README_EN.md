@@ -15,6 +15,7 @@
 ## Introduction
 
 GPT-Register-Tool combines a **WPF desktop client with a Python core** for email OTP registration, account and Session management, proxy configuration, payment-link extraction, and account export. Runtime data is stored locally by default and is not committed to Git.
+
 Current release notes: [v2026.10.08](./docs/releases/release-v2026.10.08.md).
 
 
@@ -29,34 +30,48 @@ Dynamic and static IP resources are available with free testing through the [IPW
 
 ## Highlights
 
-- Register accounts from mailbox pools, ReMail, or CFWorker sources.
-- Poll OTP messages from Microsoft, Gmail, iCloud relay links, ReMail, and CFWorker.
-- Manage local accounts, Sessions, quota status, and payment links from a Windows desktop client.
-- Route registration, mailbox, Checkout, and Approve traffic through independently configured proxies.
-- Extract supported payment links and export account data for Codex, CPA, and SUB2API workflows.
-- Start fresh payment batches by default, or explicitly resume a matching persisted checkpoint with account-level stage progress.
-- Probe PayPal capability and zero-due eligibility before the full flow; rebuild Checkout after an explicit blocked approval instead of re-approving the same submission.
-- Promotion checks are plan-only by default. Explicitly select accounts and use `--check-payment-eligibility --email <address>` (or `--email-file <path>`) to observe Checkout methods without confirming a payment; this can trigger rate limits.
+| Area | Capability |
+| --- | --- |
+| **Registration** | Mailbox pools / ReMail long-lived mailboxes / CFWorker domains / iCloud relay links plus multi-vendor SMS; single and concurrent batches; each account mints its own Sentinel token and `oai-did`; success means the AT probe answered HTTP 200; registration only stores the AT/Session and never builds payment links |
+| **Protocol consistency and recovery** | Preflight of the ChatGPT / Auth / Sentinel hops before a mailbox is spent; one proxy session per account, rotated only on failure; NextAuth / Auth / ChatGPT share a stable `oai-did`, UA and client hints with GeoIP-derived locale and timezone; 403/429 opens a circuit with no plain-HTTP PoW fallback; the checkpoint is persisted before the AT probe so a resume never re-spends an OTP |
+| **Mailbox and OTP** | One mailbox seam: ReMail, Smailr, CFWorker, Microsoft Graph/OAuth, Outlook/Hotmail IMAP, Gmail, iCloud relay links and legacy pool formats; OTP parsing filters by subject, sender, exact recipient and server timestamp, then ranks candidates; ReMail adds adaptive polling, detail-body fetch and a 30s resend |
+| **Protocol payment links** | 15 methods: PayPal, GoPay, GCash, GrabPay, UPI, iDEAL, PIX, Kakao Pay, BLIK, TWINT, direct card Checkout, MoMo, QRIS, Bizum, Naver Pay (the last three are CLI canaries); Checkout and Approve use separate exit pools and rewrite country and Session per method; Checkout / Promotion / PM / Confirm / Poll / Provider Redirect stay distinct stages; five terminal states with `retryable` and `error_stage`, and `unknown` must be reconciled first |
+| **Batch payment** | JIT AT gate, layered HTTP 401 recovery (RT -> Cookie -> isolated browser mailbox OTP -> Codex OAuth), eligibility matrix, Canary pause, per-method concurrency, atomic checkpoints and explicit resume; the report separates AT 200, eligibility, visible payment methods, approve and final link/QR artifacts |
+| **Agent Identity and SUB2API** | The registration flow has no Agent Identity stage and its failure cannot change the AT 200 verdict; creation/rebuild only happens through the explicit SUB2API import; the Ed25519 PKCS#8 key is stored separately and never logged; import supports `auto` / `oauth` / `agent_identity` |
+| **Accounts and data** | Session JSON plus SQLite dual index; liveness probe and 401 recovery; promotion and payment-eligibility badges (plan/trial only by default, an explicit entry point creates a one-shot Checkout to read payment-method evidence); Codex / CPA / SUB2API import-export; local data lives in `sessions/` and `runtime/`, both Git-ignored |
+| **Desktop operations** | Selected accounts drive the "batch protocol payment" window (concurrency, retries, Canary, two exit pools, checkpoint resume); each `Saved session:` debounces an account-pool refresh; multi-select delete is one backend batch command |
+| **SMS** | SMSBower, HeroSMS, Grizzly and NexSMS provider selection with online catalog lookup (availability depends on each vendor), plus send retry, timeout and poll-interval settings; see the [one-click SMS contract](docs/current/one-click-sms.md) |
 
-### Architecture (condensed)
 
-```text
-SmsWorkbench/            WPF desktop: Generic Host/DI -> MVVM pages, settings, task entry, state
-        |  IBackendClient (ArgumentList + cancel/timeout/process-tree kill, @@SMSWORKBENCH_V2@@ envelope)
-        v
-sms_tool/cli.py          CLI and task orchestration: argument parsing, batches, exit status
-        |
-        +- registration_handlers.py  protocol stage order (auth_flow -> user/register -> OTP -> create_account -> session -> AT probe)
-        |    +- auth_flow/           step functions: signin / authorize / continue / OTP / TOTP
-        |    +- sentinel/            Sentinel token issuance (Node sdk.js runner)
-        |    +- accounts/            account creation, liveness probe, recovery
-        +- mailbox.py                mailbox routing: ReMail / CFWorker / Graph / Gmail / iCloud relay
-        +- payment_*                 protocol payment: Checkout contract, capability probe, wallets/GCash, batch and JIT AT
-        +- storage.py                SQLite + Session JSON persistence
-services/                optional local protocol services: mail diagnosis, payment extractors (subprocess boundary)
+### Architecture
+
+```mermaid
+flowchart TB
+    W["SmsWorkbench/ -- WPF desktop<br/>Generic Host / DI · MVVM pages · settings · task entry · state"]
+    B["IBackendClient<br/>ArgumentList + cancel / timeout / process-tree kill<br/>@@SMSWORKBENCH_V2@@ versioned envelope"]
+    CLI["sms_tool/cli.py<br/>CLI and task orchestration · parsing · batches · exit status"]
+    REG["registration_handlers.py<br/>protocol stage order"]
+    AF["auth_flow/<br/>steps: signin / authorize / continue / OTP / TOTP"]
+    SEN["sentinel/<br/>Sentinel token issuance (Node sdk.js runner)"]
+    ACC["accounts/<br/>creation · liveness probe · recovery"]
+    MB["mailbox.py<br/>mailbox routing"]
+    PAY["payment_*<br/>Checkout contract · capability probe · wallets / GCash · batch and JIT AT"]
+    STO["storage.py<br/>SQLite + Session JSON"]
+    SVC["services/<br/>optional local protocol services (subprocess boundary)"]
+
+    W --> B --> CLI
+    CLI --> REG
+    REG --> AF
+    REG --> SEN
+    REG --> ACC
+    CLI --> MB
+    CLI --> PAY
+    CLI --> STO
+    CLI -.-> SVC
 ```
 
 See [architecture](docs/architecture.md) for boundaries and [directory map](docs/directory-map.md) for ownership.
+
 
 ## Installation
 
