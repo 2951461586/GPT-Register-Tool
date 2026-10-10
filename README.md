@@ -44,28 +44,65 @@ GPT-Register-Tool 采用 **WPF 桌面端 + Python 业务核心**，提供邮箱 
 
 ### 架构总览
 
+项目按 **① UI → ② CLI / 命令适配 → ③ 应用工作流 → ④ 领域契约 → ⑤ Provider / 持久化适配** 五层组织，导入只指向内层，下层从不反向依赖上层。配置与运行数据落在仓库外（Git 忽略）。注册泳道分协议（内置默认）与浏览器驱动两条，二者共用同一套邮箱 OTP、Session 提取与 AT 探活边界。
+
 ```mermaid
 flowchart TB
-    W["SmsWorkbench/ — WPF 桌面端<br/>Generic Host / DI · MVVM 页面 · 设置页 · 任务入口 · 状态展示"]
-    B["IBackendClient<br/>ArgumentList + 取消 / 超时 / 进程树终止<br/>@@SMSWORKBENCH_V2@@ 版本化结果信封"]
-    CLI["sms_tool/cli.py<br/>CLI 与任务编排 · 参数解析 · 批量任务 · 退出状态"]
-    REG["registration_handlers.py<br/>协议注册阶段顺序"]
-    AF["auth_flow/<br/>步骤函数 signin / authorize / continue / OTP / TOTP"]
-    SEN["sentinel/<br/>Sentinel Token 签发（Node sdk.js runner）"]
-    ACC["accounts/<br/>账号创建 · 存活探测 · 恢复"]
-    MB["mailbox.py<br/>邮箱统一路由"]
-    PAY["payment_*<br/>Checkout 契约 · 能力探测 · 钱包 / GCash · 批量与 JIT AT"]
-    STO["storage.py<br/>SQLite + Session JSON"]
-    SVC["services/<br/>可选本地协议服务（子进程边界）"]
+    subgraph L1["① 桌面端 UI · SmsWorkbench/（WPF · .NET 10）"]
+        direction LR
+        PANEL["Generic Host / DI · MVVM 页面<br/>设置页 · 批量协议支付窗口 · 账号池"]
+        IPC["IBackendClient<br/>ArgumentList + 取消 / 超时 / 进程树终止<br/>@@SMSWORKBENCH_V2@@ 版本化信封"]
+    end
 
-    W --> B --> CLI
+    subgraph L2["② CLI / 命令适配"]
+        direction LR
+        CLI["cli.py · commands/ · cli_parsers/<br/>参数解析 · 任务编排 · 批量任务 · 退出码"]
+    end
+
+    subgraph L3["③ 应用工作流"]
+        direction LR
+        REG["registration.py（门面）<br/>registration_handlers.py（协议泳道 · 阶段顺序）"]
+        DRV["registration_drivers/<br/>浏览器驱动：playwright · camoufox · roxy · cloak<br/>browser_flow/ · external_sessions/"]
+        BATCH["batch_runner · registration_pulse<br/>并发 · 脉冲调度 · JIT AT 门禁 · 断点续跑"]
+        REC["accounts/account_recovery · codex_oauth<br/>存量账号恢复"]
+    end
+
+    subgraph L4["④ 领域契约（不可变接缝）"]
+        direction LR
+        SEAM["registration_result · registration_flags<br/>checkout_contract · payment_wire · desktop_ipc<br/>RegistrationOperations（每次调用绑定一次）"]
+    end
+
+    subgraph L5["⑤ Provider / 持久化适配"]
+        direction LR
+        AF["auth_flow/<br/>步骤函数 signin / authorize / continue / OTP / TOTP"]
+        SEN["sentinel/<br/>Sentinel Token 签发（Node sdk.js runner）"]
+        MB["mailbox_service · mailbox_strategies<br/>providers/（ReMail · Graph · IMAP · …）"]
+        PAY["pay_link/ · paypal/ · paypal_link/ · upi_link/<br/>Checkout 契约 · 能力探测 · 钱包 / GCash"]
+        STO["store/<br/>SQLite + Session JSON"]
+        GEO["geo/ · proxy_routing · fingerprint_pool<br/>出口 GeoIP · 指纹绑定"]
+    end
+
+    SVC["services/<br/>可选本地协议服务（子进程边界）<br/>mail-otp-web · protocol-payment"]
+    LOCAL[("本地配置与运行数据<br/>proxy.json · runtime.json · payment.json<br/>sessions/ · runtime/ —— Git 忽略")]
+
+    PANEL --> IPC --> CLI
     CLI --> REG
+    CLI --> BATCH
+    CLI --> REC
     REG --> AF
     REG --> SEN
-    REG --> ACC
-    CLI --> MB
-    CLI --> PAY
-    CLI --> STO
+    REG --> MB
+    REG --> GEO
+    REG --> STO
+    REG -. 驱动注册表 .-> DRV
+    DRV --> SEN
+    BATCH --> PAY
+    BATCH --> STO
+    REG --> SEAM
+    BATCH --> SEAM
+    AF --> SEAM
+    PAY --> SEAM
+    STO --> LOCAL
     CLI -.-> SVC
 ```
 

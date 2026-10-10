@@ -45,28 +45,65 @@ Dynamic and static IP resources are available with free testing through the [IPW
 
 ### Architecture
 
+Five layers — **① UI → ② CLI / command adapters → ③ application workflows → ④ domain contracts → ⑤ provider / persistence adapters**. Imports point inward only; a lower layer never imports a higher one. Configuration and runtime data live outside the repository (Git-ignored). Registration has two lanes — protocol (the built-in default) and browser drivers — sharing one mailbox-OTP, session-extraction and AT-probe boundary.
+
 ```mermaid
 flowchart TB
-    W["SmsWorkbench/ -- WPF desktop<br/>Generic Host / DI · MVVM pages · settings · task entry · state"]
-    B["IBackendClient<br/>ArgumentList + cancel / timeout / process-tree kill<br/>@@SMSWORKBENCH_V2@@ versioned envelope"]
-    CLI["sms_tool/cli.py<br/>CLI and task orchestration · parsing · batches · exit status"]
-    REG["registration_handlers.py<br/>protocol stage order"]
-    AF["auth_flow/<br/>steps: signin / authorize / continue / OTP / TOTP"]
-    SEN["sentinel/<br/>Sentinel token issuance (Node sdk.js runner)"]
-    ACC["accounts/<br/>creation · liveness probe · recovery"]
-    MB["mailbox.py<br/>mailbox routing"]
-    PAY["payment_*<br/>Checkout contract · capability probe · wallets / GCash · batch and JIT AT"]
-    STO["storage.py<br/>SQLite + Session JSON"]
-    SVC["services/<br/>optional local protocol services (subprocess boundary)"]
+    subgraph L1["① Desktop UI · SmsWorkbench/ (WPF · .NET 10)"]
+        direction LR
+        PANEL["Generic Host / DI · MVVM pages<br/>settings · batch-payment window · account pool"]
+        IPC["IBackendClient<br/>ArgumentList + cancel / timeout / process-tree kill<br/>@@SMSWORKBENCH_V2@@ versioned envelope"]
+    end
 
-    W --> B --> CLI
+    subgraph L2["② CLI / command adapters"]
+        direction LR
+        CLI["cli.py · commands/ · cli_parsers/<br/>parsing · task orchestration · batches · exit status"]
+    end
+
+    subgraph L3["③ Application workflows"]
+        direction LR
+        REG["registration.py (facade)<br/>registration_handlers.py (protocol lane · stage order)"]
+        DRV["registration_drivers/<br/>browser drivers: playwright · camoufox · roxy · cloak<br/>browser_flow/ · external_sessions/"]
+        BATCH["batch_runner · registration_pulse<br/>concurrency · pulse · JIT AT gate · checkpoint resume"]
+        REC["accounts/account_recovery · codex_oauth<br/>existing-account recovery"]
+    end
+
+    subgraph L4["④ Domain contracts (immutable seams)"]
+        direction LR
+        SEAM["registration_result · registration_flags<br/>checkout_contract · payment_wire · desktop_ipc<br/>RegistrationOperations (bound once per invocation)"]
+    end
+
+    subgraph L5["⑤ Provider / persistence adapters"]
+        direction LR
+        AF["auth_flow/<br/>steps: signin / authorize / continue / OTP / TOTP"]
+        SEN["sentinel/<br/>Sentinel token issuance (Node sdk.js runner)"]
+        MB["mailbox_service · mailbox_strategies<br/>providers/ (ReMail · Graph · IMAP · …)"]
+        PAY["pay_link/ · paypal/ · paypal_link/ · upi_link/<br/>Checkout contract · capability probe · wallets / GCash"]
+        STO["store/<br/>SQLite + Session JSON"]
+        GEO["geo/ · proxy_routing · fingerprint_pool<br/>exit GeoIP · fingerprint binding"]
+    end
+
+    SVC["services/<br/>optional local protocol services (subprocess boundary)<br/>mail-otp-web · protocol-payment"]
+    LOCAL[("Local config and runtime data<br/>proxy.json · runtime.json · payment.json<br/>sessions/ · runtime/ -- Git-ignored")]
+
+    PANEL --> IPC --> CLI
     CLI --> REG
+    CLI --> BATCH
+    CLI --> REC
     REG --> AF
     REG --> SEN
-    REG --> ACC
-    CLI --> MB
-    CLI --> PAY
-    CLI --> STO
+    REG --> MB
+    REG --> GEO
+    REG --> STO
+    REG -. driver registry .-> DRV
+    DRV --> SEN
+    BATCH --> PAY
+    BATCH --> STO
+    REG --> SEAM
+    BATCH --> SEAM
+    AF --> SEAM
+    PAY --> SEAM
+    STO --> LOCAL
     CLI -.-> SVC
 ```
 
