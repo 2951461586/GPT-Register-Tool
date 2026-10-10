@@ -165,14 +165,24 @@ def test_a_lease_past_its_ttl_frees_the_exit(tmp_path):
     """
     config = _config(tmp_path)
     key_a, _ = _keys()
-    first = acquire_environment_lease(exit_key=key_a, account_ref="a@x.test", ttl_seconds=1, runtime_config=config)
+    # 60s, not 1s.  The ledger stamps **whole seconds** (``expires_at = now + ttl``
+    # with ``now = int(time.time())``) and calls a lease live only while
+    # ``expires_at > now``, so a 1s lease is already past its TTL for any caller
+    # that crosses a second boundary.  That is exactly how this test failed in
+    # CI (``assert True is False`` on the *refusal* below): the two acquires
+    # landed in different seconds, so the first lease read as expired.  It was
+    # the test's sub-second assumption, not a lease bug.
+    first = acquire_environment_lease(
+        exit_key=key_a, account_ref="a@x.test", ttl_seconds=60, runtime_config=config
+    )
     assert first["ok"] is True
 
     # Still inside the window: refused.
     assert acquire_environment_lease(exit_key=key_a, account_ref="b@x.test", runtime_config=config)["ok"] is False
 
-    time.sleep(1.2)
-    swept = sweep_expired_environment_leases(runtime_config=config)
+    # Move the ledger's own clock past the TTL instead of sleeping: same
+    # ``expires_at <= now`` predicate, and it cannot race the wall clock.
+    swept = sweep_expired_environment_leases(now=int(first["expires_at"]) + 1, runtime_config=config)
     assert swept == 1
 
     second = acquire_environment_lease(exit_key=key_a, account_ref="b@x.test", runtime_config=config)
