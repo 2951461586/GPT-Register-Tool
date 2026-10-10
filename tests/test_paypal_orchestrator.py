@@ -48,6 +48,7 @@ class Recorder:
             if error:
                 raise error
             return result
+
         return _fn
 
 
@@ -55,11 +56,18 @@ class Recorder:
 def rec(monkeypatch):
     """Patch every external boundary of auto_pay with recording stubs."""
     r = Recorder()
-    monkeypatch.setattr(orchestrator, "_load_seed",
-                        lambda **k: ({"email": "buyer@example.com",
-                                      "paypal": {"url": "https://paypal.example/approve"},
-                                      "access_token": "token-fixture"},
-                                     "sessions/fixture.json"))
+    monkeypatch.setattr(
+        orchestrator,
+        "_load_seed",
+        lambda **k: (
+            {
+                "email": "buyer@example.com",
+                "paypal": {"url": "https://paypal.example/approve"},
+                "access_token": "token-fixture",
+            },
+            "sessions/fixture.json",
+        ),
+    )
     monkeypatch.setattr(orchestrator, "_extract_access_token", lambda data: data.get("access_token"))
     monkeypatch.setattr(orchestrator, "_pick_card_and_address", r("card", ({"number": "4242"}, {})))
     monkeypatch.setattr(orchestrator, "_random_name", r("name", ("Ada", "Lovelace")))
@@ -73,21 +81,22 @@ def rec(monkeypatch):
     return r
 
 
-PAY_CFG = {"reverse_engineering": True, "sms_poll_interval": 5,
-           "sms_timeout": 120, "human_verification_timeout": 300}
+PAY_CFG = {"reverse_engineering": True, "sms_poll_interval": 5, "sms_timeout": 120, "human_verification_timeout": 300}
 
 
 @pytest.fixture
 def configured(monkeypatch):
     """CFG.get("paypal_auto") returns a minimal paypal_auto block."""
-    monkeypatch.setattr(orchestrator.CFG, "get",
-                        lambda key, default=None: dict(PAY_CFG) if key == "paypal_auto" else default)
+    monkeypatch.setattr(
+        orchestrator.CFG, "get", lambda key, default=None: dict(PAY_CFG) if key == "paypal_auto" else default
+    )
 
 
 def with_pay_cfg(monkeypatch, **overrides):
     block = {**PAY_CFG, **overrides}
-    monkeypatch.setattr(orchestrator.CFG, "get",
-                        lambda key, default=None: dict(block) if key == "paypal_auto" else default)
+    monkeypatch.setattr(
+        orchestrator.CFG, "get", lambda key, default=None: dict(block) if key == "paypal_auto" else default
+    )
 
 
 def names(rec):
@@ -103,8 +112,7 @@ def args_of(rec, name):
 
 def test_auto_pay_refuses_to_run_without_a_paypal_auto_config(monkeypatch):
     monkeypatch.setattr(orchestrator.CFG, "get", lambda key, default=None: None)
-    assert orchestrator.auto_pay() == {
-        "ok": False, "error": "paypal_auto not configured in config.json"}
+    assert orchestrator.auto_pay() == {"ok": False, "error": "paypal_auto not configured in config.json"}
 
 
 def test_auto_pay_does_not_launch_anything_when_unconfigured(monkeypatch, rec):
@@ -170,8 +178,9 @@ def test_auto_pay_reuses_an_existing_paypal_url(rec, configured):
 def test_auto_pay_generates_a_url_when_the_seed_has_none(rec, configured, monkeypatch):
     # Rule 6: the execution layer never imports gen_pp_link; the adapter
     # injects the factory so generation stays lazy and adapter-owned.
-    monkeypatch.setattr(orchestrator, "_load_seed",
-                        lambda **k: ({"email": "b@example.com", "access_token": "t"}, "p.json"))
+    monkeypatch.setattr(
+        orchestrator, "_load_seed", lambda **k: ({"email": "b@example.com", "access_token": "t"}, "p.json")
+    )
     factory = rec("gen_link", {"ok": True, "url": "https://paypal.example/generated"})
     orchestrator.auto_pay(link_factory=factory)
     assert "gen_link" in names(rec)
@@ -180,8 +189,9 @@ def test_auto_pay_generates_a_url_when_the_seed_has_none(rec, configured, monkey
 
 
 def test_auto_pay_refuses_missing_link_without_a_factory(rec, configured, monkeypatch):
-    monkeypatch.setattr(orchestrator, "_load_seed",
-                        lambda **k: ({"email": "b@example.com", "access_token": "t"}, "p.json"))
+    monkeypatch.setattr(
+        orchestrator, "_load_seed", lambda **k: ({"email": "b@example.com", "access_token": "t"}, "p.json")
+    )
     result = orchestrator.auto_pay()
     assert result["ok"] is False
     assert result["error"].startswith("paypal_link_missing")
@@ -189,18 +199,17 @@ def test_auto_pay_refuses_missing_link_without_a_factory(rec, configured, monkey
 
 
 def test_auto_pay_aborts_when_the_link_cannot_be_generated(rec, configured, monkeypatch):
-    monkeypatch.setattr(orchestrator, "_load_seed",
-                        lambda **k: ({"email": "b@example.com", "access_token": "t"}, "p.json"))
-    result = orchestrator.auto_pay(
-        link_factory=rec("gen_link", {"ok": False, "error": "boom"}))
+    monkeypatch.setattr(
+        orchestrator, "_load_seed", lambda **k: ({"email": "b@example.com", "access_token": "t"}, "p.json")
+    )
+    result = orchestrator.auto_pay(link_factory=rec("gen_link", {"ok": False, "error": "boom"}))
     assert result["ok"] is False
     assert "paypal_link_generation_failed" in result["error"]
     assert "reverse" not in names(rec)
 
 
 def test_auto_pay_aborts_when_the_seed_has_no_access_token(rec, configured, monkeypatch):
-    monkeypatch.setattr(orchestrator, "_load_seed",
-                        lambda **k: ({"email": "b@example.com"}, "p.json"))
+    monkeypatch.setattr(orchestrator, "_load_seed", lambda **k: ({"email": "b@example.com"}, "p.json"))
     result = orchestrator.auto_pay()
     assert result == {"ok": False, "email": "b@example.com", "error": "missing_access_token"}
 
@@ -213,8 +222,7 @@ def test_auto_pay_tries_nodriver_then_browser_when_reverse_fails(rec, configured
     monkeypatch.setattr(orchestrator, "_try_nodriver_pay", rec("nodriver", {"ok": False}))
     monkeypatch.setattr(orchestrator, "_try_browser_pay", rec("browser", {"ok": True}))
     assert orchestrator.auto_pay()["ok"] is True
-    assert names(rec) == ["card", "name", "password", "alias",
-                          "reverse", "nodriver", "browser", "save"]
+    assert names(rec) == ["card", "name", "password", "alias", "reverse", "nodriver", "browser", "save"]
 
 
 def test_auto_pay_stops_after_nodriver_succeeds(rec, configured, monkeypatch):
@@ -243,8 +251,7 @@ def test_auto_pay_skips_reverse_entirely_when_disabled(rec, configured, monkeypa
 
 def test_auto_pay_survives_a_reverse_strategy_that_raises(rec, configured, monkeypatch):
     """AUDIT POINT: an exception from a strategy is NOT contained."""
-    monkeypatch.setattr(orchestrator, "_try_reverse_pay",
-                        rec("reverse", error=RuntimeError("reverse exploded")))
+    monkeypatch.setattr(orchestrator, "_try_reverse_pay", rec("reverse", error=RuntimeError("reverse exploded")))
     with pytest.raises(RuntimeError):
         orchestrator.auto_pay()
     assert "save" not in names(rec)  # nothing persisted after the crash
@@ -254,8 +261,9 @@ def test_auto_pay_survives_a_reverse_strategy_that_raises(rec, configured, monke
 
 
 def test_auto_pay_derives_paypal_status_from_the_error_prefix(rec, configured, monkeypatch):
-    monkeypatch.setattr(orchestrator, "_try_reverse_pay",
-                        rec("reverse", {"ok": False, "error": "step_card: selector missing"}))
+    monkeypatch.setattr(
+        orchestrator, "_try_reverse_pay", rec("reverse", {"ok": False, "error": "step_card: selector missing"})
+    )
     saved = []
     orchestrator._save_paypal_result = lambda data, path: saved.append(dict(data)) or "p.json"
     result = orchestrator.auto_pay(reverse_only=True)
@@ -271,8 +279,9 @@ def test_auto_pay_uses_the_whole_error_when_it_has_no_colon(rec, configured, mon
     The account record then carries an arbitrary free-text status instead of a
     stable token, so downstream filtering on paypal_status breaks.
     """
-    monkeypatch.setattr(orchestrator, "_try_reverse_pay",
-                        rec("reverse", {"ok": False, "error": "card_declined_by_issuer"}))
+    monkeypatch.setattr(
+        orchestrator, "_try_reverse_pay", rec("reverse", {"ok": False, "error": "card_declined_by_issuer"})
+    )
     saved = []
     orchestrator._save_paypal_result = lambda data, path: saved.append(dict(data)) or "p.json"
     orchestrator.auto_pay(reverse_only=True)
@@ -313,23 +322,32 @@ def test_auto_pay_defaults_the_success_fields_when_the_strategy_omits_them(rec, 
 # regression guards so the strategy cannot silently die again.
 
 
-def test_try_reverse_pay_builds_the_sms_config_from_the_config_block(monkeypatch):
+def test_try_reverse_pay_builds_the_sms_config_from_the_config_block():
     seen = {}
-    monkeypatch.setattr(orchestrator, "try_reverse_pay",
-                        lambda **kwargs: seen.update(kwargs) or {"ok": True})
     orchestrator._try_reverse_pay(
-        paypal_url="u", card={"number": "4242"}, address={}, first_name="A",
-        last_name="B", alias_email="a@b.c", password="p", phone="555",
+        paypal_url="u",
+        card={"number": "4242"},
+        address={},
+        first_name="A",
+        last_name="B",
+        alias_email="a@b.c",
+        password="p",
+        phone="555",
         sms_api_url="https://sms.example",
-        cfg={"sms_poll_interval": 7, "sms_timeout": 42, "human_verification_timeout": 9})
+        cfg={"sms_poll_interval": 7, "sms_timeout": 42, "human_verification_timeout": 9},
+        reverse_pay=lambda **kwargs: seen.update(kwargs) or {"ok": True},
+    )
     assert seen["sms_cfg"] == {
-        "api_url": "https://sms.example", "phone": "555", "poll_interval": 7,
-        "timeout": 42, "manual_human_verification": False,
+        "api_url": "https://sms.example",
+        "phone": "555",
+        "poll_interval": 7,
+        "timeout": 42,
+        "manual_human_verification": False,
         "human_verification_timeout": 9,
     }
 
 
-def test_try_reverse_pay_does_not_raise_name_error(monkeypatch):
+def test_try_reverse_pay_does_not_raise_name_error():
     """REGRESSION GUARD for a fixed bug (2026-09-02).
 
     Line 180 read ``use_headless``, which was never in scope in this function -
@@ -339,58 +357,96 @@ def test_try_reverse_pay_does_not_raise_name_error(monkeypatch):
     so the *preferred* payment strategy was 100% dead and the NameError
     propagated instead of falling back to nodriver or the browser engines.
     """
-    monkeypatch.setattr(orchestrator, "try_reverse_pay", lambda **k: {"ok": True})
     result = orchestrator._try_reverse_pay(
-        paypal_url="u", card={"number": "4242"}, address={}, first_name="A",
-        last_name="B", alias_email="a@b.c", password="p", phone="555",
-        sms_api_url="https://sms.example", cfg={})
+        paypal_url="u",
+        card={"number": "4242"},
+        address={},
+        first_name="A",
+        last_name="B",
+        alias_email="a@b.c",
+        password="p",
+        phone="555",
+        sms_api_url="https://sms.example",
+        cfg={},
+        reverse_pay=lambda **k: {"ok": True},
+    )
     assert result["ok"] is True
     # A successful reverse run fills in the session defaults.
     assert result["paypal_status"] == "completed"
     assert result["card_last4"] == "4242"
 
 
-def test_try_reverse_pay_honours_an_explicit_manual_verification_flag(monkeypatch):
+def test_try_reverse_pay_honours_an_explicit_manual_verification_flag():
     """An explicit config value must win over the headless-derived default."""
     seen = {}
-    monkeypatch.setattr(orchestrator, "try_reverse_pay",
-                        lambda **kwargs: seen.update(kwargs) or {"ok": True})
     orchestrator._try_reverse_pay(
-        paypal_url="u", card={"number": "4242424242424242"}, address={}, first_name="", last_name="",
-        alias_email="", password="", phone="", sms_api_url="https://sms.example",
-        cfg={"manual_human_verification": True})
+        paypal_url="u",
+        card={"number": "4242424242424242"},
+        address={},
+        first_name="",
+        last_name="",
+        alias_email="",
+        password="",
+        phone="",
+        sms_api_url="https://sms.example",
+        cfg={"manual_human_verification": True},
+        reverse_pay=lambda **kwargs: seen.update(kwargs) or {"ok": True},
+    )
     assert seen["sms_cfg"]["manual_human_verification"] is True
 
 
-def test_try_reverse_pay_reaches_the_protocol_client(monkeypatch):
+def test_try_reverse_pay_reaches_the_protocol_client():
     """The preferred strategy must actually be attempted, not die on line 1."""
     called = []
-    monkeypatch.setattr(orchestrator, "try_reverse_pay",
-                        lambda **k: called.append(k) or {"ok": True})
     orchestrator._try_reverse_pay(
-        paypal_url="u", card={"number": "4242424242424242"}, address={}, first_name="", last_name="",
-        alias_email="", password="", phone="", sms_api_url="", cfg={})
-    assert len(called) == 1, (
-        "try_reverse_pay was never invoked - the reverse strategy is dead again"
+        paypal_url="u",
+        card={"number": "4242424242424242"},
+        address={},
+        first_name="",
+        last_name="",
+        alias_email="",
+        password="",
+        phone="",
+        sms_api_url="",
+        cfg={},
+        reverse_pay=lambda **k: called.append(k) or {"ok": True},
     )
+    assert len(called) == 1, "try_reverse_pay was never invoked - the reverse strategy is dead again"
 
 
-def test_try_reverse_pay_defaults_to_a_300_second_verification_window(monkeypatch):
+def test_try_reverse_pay_defaults_to_a_300_second_verification_window():
     seen = {}
-    monkeypatch.setattr(orchestrator, "try_reverse_pay",
-                        lambda **kwargs: seen.update(kwargs) or {"ok": True})
     orchestrator._try_reverse_pay(
-        paypal_url="u", card={"number": "4242424242424242"}, address={}, first_name="", last_name="",
-        alias_email="", password="", phone="", sms_api_url="", cfg={})
+        paypal_url="u",
+        card={"number": "4242424242424242"},
+        address={},
+        first_name="",
+        last_name="",
+        alias_email="",
+        password="",
+        phone="",
+        sms_api_url="",
+        cfg={},
+        reverse_pay=lambda **kwargs: seen.update(kwargs) or {"ok": True},
+    )
     assert seen["sms_cfg"]["human_verification_timeout"] == 300
     assert seen["sms_cfg"]["manual_human_verification"] is False
 
 
-def test_try_reverse_pay_sets_the_success_defaults(monkeypatch):
-    monkeypatch.setattr(orchestrator, "try_reverse_pay", lambda **k: {"ok": True})
+def test_try_reverse_pay_sets_the_success_defaults():
     out = orchestrator._try_reverse_pay(
-        paypal_url="u", card={"number": "4242424242424242"}, address={}, first_name="",
-        last_name="", alias_email="a@b.c", password="p", phone="", sms_api_url="", cfg={})
+        paypal_url="u",
+        card={"number": "4242424242424242"},
+        address={},
+        first_name="",
+        last_name="",
+        alias_email="a@b.c",
+        password="p",
+        phone="",
+        sms_api_url="",
+        cfg={},
+        reverse_pay=lambda **k: {"ok": True},
+    )
     assert out["paypal_status"] == "completed"
     assert out["alias_email"] == "a@b.c"
     assert out["card_last4"] == "4242"
@@ -406,11 +462,9 @@ def test_try_reverse_pay_is_the_first_strategy_the_orchestrator_reaches(rec, con
     was persisted - no record that a payment was ever attempted.)
     """
     monkeypatch.setattr(orchestrator, "_try_reverse_pay", _REAL_TRY_REVERSE_PAY)
-    monkeypatch.setattr(orchestrator, "try_reverse_pay", lambda **k: {"ok": True})
-    result = orchestrator.auto_pay()
+    result = orchestrator.auto_pay(reverse_pay=lambda **k: {"ok": True})
     assert result["ok"] is True, (
-        "the preferred reverse strategy failed - check `_try_reverse_pay` still "
-        "reaches the protocol client"
+        "the preferred reverse strategy failed - check `_try_reverse_pay` still reaches the protocol client"
     )
     assert "nodriver" not in names(rec)
     assert "browser" not in names(rec)
@@ -431,15 +485,25 @@ def test_try_nodriver_pay_closes_the_proxy_bridge_even_on_success(monkeypatch):
     # fails for a reason that has nothing to do with what it is testing.
     # Patch the name the import statement actually resolves.
     fake_mod = types.SimpleNamespace(
-        proxy_for_browser=lambda proxy: ("socks5://127.0.0.1:1", lambda: closed.append(True)))
+        proxy_for_browser=lambda proxy: ("socks5://127.0.0.1:1", lambda: closed.append(True))
+    )
     monkeypatch.setitem(sys.modules, "sms_tool.proxy_bridge", fake_mod)
 
     nodriver = types.SimpleNamespace(run_nodriver_pay=lambda **k: {"ok": True})
     monkeypatch.setitem(sys.modules, "sms_tool.nodriver_paypal", nodriver)
 
     out = orchestrator._try_nodriver_pay(
-        paypal_url="u", card={"number": "4242"}, address={}, first_name="", last_name="",
-        alias_email="", password="", phone="", sms_api_url="", cfg={})
+        paypal_url="u",
+        card={"number": "4242"},
+        address={},
+        first_name="",
+        last_name="",
+        alias_email="",
+        password="",
+        phone="",
+        sms_api_url="",
+        cfg={},
+    )
     assert out["ok"] is True
     assert closed == [True]
 
@@ -449,19 +513,28 @@ def test_try_nodriver_pay_closes_the_proxy_bridge_even_when_the_run_raises(monke
     import types
 
     fake_mod = types.SimpleNamespace(
-        proxy_for_browser=lambda proxy: ("socks5://127.0.0.1:1", lambda: closed.append(True)))
+        proxy_for_browser=lambda proxy: ("socks5://127.0.0.1:1", lambda: closed.append(True))
+    )
     monkeypatch.setitem(sys.modules, "sms_tool.proxy_bridge", fake_mod)
 
     def _boom(**k):
         raise RuntimeError("nodriver exploded")
 
-    monkeypatch.setitem(sys.modules, "sms_tool.nodriver_paypal",
-                        types.SimpleNamespace(run_nodriver_pay=_boom))
+    monkeypatch.setitem(sys.modules, "sms_tool.nodriver_paypal", types.SimpleNamespace(run_nodriver_pay=_boom))
 
     with pytest.raises(RuntimeError):
         orchestrator._try_nodriver_pay(
-            paypal_url="u", card={}, address={}, first_name="", last_name="",
-            alias_email="", password="", phone="", sms_api_url="", cfg={})
+            paypal_url="u",
+            card={},
+            address={},
+            first_name="",
+            last_name="",
+            alias_email="",
+            password="",
+            phone="",
+            sms_api_url="",
+            cfg={},
+        )
     assert closed == [True]
 
 
@@ -477,10 +550,21 @@ def test_try_browser_pay_cloakbrowser_reports_a_clear_error_when_not_installed(m
 
     monkeypatch.setattr(builtins, "__import__", _no_cloakbrowser)
     out = orchestrator._try_browser_pay_cloakbrowser(
-        paypal_url="u", card={"number": "4242"}, address={}, first_name="",
-        last_name="", alias_email="", password="", sms_cfg={}, debug_dir="",
-        debug_enabled=False, use_headless=False, browser_proxy=None,
-        cookie_header="", cfg={})
+        paypal_url="u",
+        card={"number": "4242"},
+        address={},
+        first_name="",
+        last_name="",
+        alias_email="",
+        password="",
+        sms_cfg={},
+        debug_dir="",
+        debug_enabled=False,
+        use_headless=False,
+        browser_proxy=None,
+        cookie_header="",
+        cfg={},
+    )
     assert out["ok"] is False
     assert "browser_not_installed" in out["error"]
 
@@ -491,31 +575,48 @@ def _capture_sms_cfg(monkeypatch, cfg_block, headless):
 
     captured = {}
 
-    def _capture(paypal_url, card, address, first_name, last_name, alias_email,
-                 password, sms_cfg, *rest):
+    def _capture(paypal_url, card, address, first_name, last_name, alias_email, password, sms_cfg, *rest):
         captured["sms_cfg"] = dict(sms_cfg)
         return {"ok": False, "error": "x"}
 
     monkeypatch.setattr(orchestrator, "_try_browser_pay_cloakbrowser", _capture)
-    monkeypatch.setitem(__import__("sys").modules, "sms_tool.paypal.proxy_bridge",
-                        types.SimpleNamespace(proxy_for_browser=lambda p: (None, lambda: None)))
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "sms_tool.paypal.proxy_bridge",
+        types.SimpleNamespace(proxy_for_browser=lambda p: (None, lambda: None)),
+    )
 
     # _try_browser_pay reads everything from its `cfg` argument (not CFG).
     # Pin browser_engine to cloakbrowser: the Camoufox default would launch a
     # real browser process, which these tests must never do.
     orchestrator._try_browser_pay(
-        paypal_url="u", card={}, address={}, first_name="", last_name="",
-        alias_email="", password="", phone="", sms_api_url="",
-        cfg={**cfg_block, "browser_engine": "cloakbrowser"}, headless=headless)
+        paypal_url="u",
+        card={},
+        address={},
+        first_name="",
+        last_name="",
+        alias_email="",
+        password="",
+        phone="",
+        sms_api_url="",
+        cfg={**cfg_block, "browser_engine": "cloakbrowser"},
+        headless=headless,
+    )
     return captured["sms_cfg"]
 
 
 def test_try_browser_pay_sms_config_picks_up_the_configured_flags(monkeypatch):
     sms_cfg = _capture_sms_cfg(
         monkeypatch,
-        {"sms_poll_interval": 5, "sms_timeout": 120, "debug_dir": "d",
-         "debug_screenshots": False, "human_verification_timeout": 77},
-        headless=True)
+        {
+            "sms_poll_interval": 5,
+            "sms_timeout": 120,
+            "debug_dir": "d",
+            "debug_screenshots": False,
+            "human_verification_timeout": 77,
+        },
+        headless=True,
+    )
     assert sms_cfg["poll_interval"] == 5
     assert sms_cfg["timeout"] == 120
     assert sms_cfg["human_verification_timeout"] == 77
@@ -523,15 +624,13 @@ def test_try_browser_pay_sms_config_picks_up_the_configured_flags(monkeypatch):
 
 def test_try_browser_pay_disallows_manual_verification_when_headless(monkeypatch):
     """A headless run cannot wait on a human, so the gate must be off."""
-    sms_cfg = _capture_sms_cfg(monkeypatch, {"sms_poll_interval": 5, "sms_timeout": 120},
-                               headless=True)
+    sms_cfg = _capture_sms_cfg(monkeypatch, {"sms_poll_interval": 5, "sms_timeout": 120}, headless=True)
     assert sms_cfg["manual_human_verification"] is False
 
 
 def test_try_browser_pay_allows_manual_verification_when_headed(monkeypatch):
     """The inverse: a headed run defaults to allowing manual intervention."""
-    sms_cfg = _capture_sms_cfg(monkeypatch, {"sms_poll_interval": 5, "sms_timeout": 120},
-                               headless=False)
+    sms_cfg = _capture_sms_cfg(monkeypatch, {"sms_poll_interval": 5, "sms_timeout": 120}, headless=False)
     assert sms_cfg["manual_human_verification"] is True
     assert sms_cfg["human_verification_timeout"] == 300
 

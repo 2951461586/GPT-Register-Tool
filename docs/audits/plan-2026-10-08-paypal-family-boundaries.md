@@ -40,7 +40,7 @@
 | --- | --- | --- |
 | `gen_link.py` | 1402 | 链接生成（`gen_pp_link.py` 机械拆分，body 未改） |
 | `reconciliation.py` | 1305 | 对账（`paypal_reconciliation.py` 机械拆分，body 未改） |
-| `__init__.py` | 296 | 再导出 |
+| `__init__.py` | 296 | 再导出（2026-10-10 降至 260，见 §9） |
 
 ### 1.4 兼容壳
 
@@ -182,3 +182,40 @@ sms_tool/
 - `docs/architecture.md` — Boundary Rule 13（代理唯一权威）与依赖方向
 - `plan-2026-09-17-protocol-payment-extractor-consolidation.md` — `services/protocol-payment/` 的
   提取器合并立项（**不同议题**：那是子进程提取器，本文是 `sms_tool/` 内的 PayPal 家族）
+
+---
+
+## 9. 2026-10-10 扫描后的两处落地（不在 S0–S4 授权范围内）
+
+本节记录一次独立扫描发现、与本文 S0–S4 **无关**的两处修复。
+
+### 9.1 `payment_link_manager` 的公共面是“碰巧”的（P0-2）
+
+该 shell 以 `from .pay_link import *` 再导出，**同时**保留一组拆分前的显式 import。
+`unused_import_ratchet.py` 把后者报为可删债务（42 个 F401），但其中
+**`parse_proxy_pool` 是承重的**：它被 `payment_batch.py` / `payment_batch_setup.py` 消费，
+却不在 `pay_link.__all__` 里（`pay_link.parse_proxy_pool` 根本不存在），
+完全靠 `payment_link_manager.py:42` 那条被标为 unused 的 import 存活。
+⇒ 任何一次按基线清理 F401 都会静默打断支付批次。
+
+**修复**：把 `parse_proxy_pool` 加进 `pay_link/__init__.py` 的 `__all__`（现 51 个名字）。
+**守卫**：`tests/test_payment_link_manager.py::FacadeSurfaceTests` 断言“凡是经该 shell 被
+import 的名字都必须在 `__all__` 里”，并附一条 `parse_proxy_pool` 的回归钉。
+
+### 9.2 `paypal_link.__all__` 的 stdlib 泄漏（P1-2）
+
+机械拆分把拆分前模块的**全局命名空间**（含它自己的 import）写进了 `__all__`，
+于是 `paypal_link` / `gen_pp_link` / `paypal_reconciliation` 三个 shell 的公共面里
+各含 20 个 stdlib/typing 名字（`json` / `re` / `os` / `sys` / `html` / `hashlib` /
+`Any` / `Optional` / `Protocol` / `Sequence` / `Mapping` / `Enum` / `HTMLParser` /
+`Path` / `dataclass` / `annotations` / `parse_qs` / `unquote` / `urljoin` / `urlsplit`），
+另有两个内部编译正则（`PAYPAL_BA_RE` / `PM_REDIRECT_RE`）。
+`from sms_tool.paypal_link import *` 会遮蔽调用方自己的 `json`。
+
+核对：AST import 扫描 + 属性访问 + 字符串字面量三路均**零消费方**，故删除。
+`paypal_link/__init__.py` 296 → 260 行，`__all__` 141 → 119。
+**守卫**：`tests/test_all_export_hygiene.py`（全包不变式：`__all__` 不得导出
+stdlib/typing 的**模块、类、函数**或 `typing`/`__future__` 构造；
+stdlib 类的**实例**常量如 `_LOGGER` / `EMAIL_RE` / `ENV_PATH` 不算泄漏）。
+
+两处都**没有**触及 S0–S4 的迁移面，也不改 `PPLinkExtractor` 的公开契约。

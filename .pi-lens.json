@@ -1,6 +1,24 @@
 {
   "$schema": "https://raw.githubusercontent.com/apmantza/pi-lens/master/docs/schema/pi-lens-config-v1.json",
+  "format": {
+    "enabled": false
+  },
   "ignore": [
-    "sms_tool/upi_link/_vendor/**"
+    "sms_tool/upi_link/_vendor/**",
+    "scripts/**",
+    "dist/**",
+    "runtime/**",
+    "sessions/**",
+    ".dotnet/**",
+    ".workbuddy/**",
+    ".workbuddy-ai/**",
+    "browser_extensions/**",
+    "outlook_results/**",
+    "SmsWorkbench/bin/**",
+    "SmsWorkbench/obj/**",
+    "SmsWorkbench.Contracts/bin/**",
+    "SmsWorkbench.Contracts/obj/**",
+    "tests/**/bin/**",
+    "tests/**/obj/**"
   ]
 }

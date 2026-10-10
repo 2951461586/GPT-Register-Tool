@@ -95,9 +95,7 @@ class RegistrationProgress:
         failure_class = _sanitize_text(failure_class)[:80].strip().lower()
         now_mono = time.monotonic()
         previous_stage = self.last_stage
-        previous_duration_ms = int(
-            max(0.0, now_mono - self._stage_started_monotonic) * 1000
-        )
+        previous_duration_ms = int(max(0.0, now_mono - self._stage_started_monotonic) * 1000)
         if self.events:
             self.events[-1]["duration_ms"] = previous_duration_ms
             self.events[-1]["finished_at"] = int(time.time())
@@ -151,12 +149,14 @@ class RegistrationProgress:
         try:
             from .desktop_ipc import emit_event
 
-            emit_event({
-                "domain": "registration",
-                "run_id": self.run_id,
-                "account_ref": self.account_ref,
-                **event,
-            })
+            emit_event(
+                {
+                    "domain": "registration",
+                    "run_id": self.run_id,
+                    "account_ref": self.account_ref,
+                    **event,
+                }
+            )
         except (OSError, ValueError, TypeError, RuntimeError):
             # A desktop observer must never affect registration behavior.
             return
@@ -174,9 +174,10 @@ class RegistrationProgress:
 
     def persist(self, result: dict[str, Any] | None, error: str = "") -> None:
         success = bool((result or {}).get("success"))
-        cancelled = str((result or {}).get("registration_state") or "").lower() == "cancelled" or str(
-            (result or {}).get("error") or ""
-        ).lower() == "registration_cancelled"
+        cancelled = (
+            str((result or {}).get("registration_state") or "").lower() == "cancelled"
+            or str((result or {}).get("error") or "").lower() == "registration_cancelled"
+        )
         final_error = _sanitize_text(error or (result or {}).get("error") or "")[:300]
         failure_class = str(
             (result or {}).get("failure_class")
@@ -195,9 +196,7 @@ class RegistrationProgress:
             last_event["failure_class"] = _sanitize_text(failure_class)[:80].strip().lower()
         if self.events:
             now_mono = time.monotonic()
-            self.events[-1]["duration_ms"] = int(
-                max(0.0, now_mono - self._stage_started_monotonic) * 1000
-            )
+            self.events[-1]["duration_ms"] = int(max(0.0, now_mono - self._stage_started_monotonic) * 1000)
             self.events[-1]["finished_at"] = int(time.time())
         from .registration_result import safe_fingerprint_geo_audit, safe_proxy_audit
 
@@ -208,39 +207,41 @@ class RegistrationProgress:
             pool_index = int(proxy_audit.get("pool_index"))
         except (TypeError, ValueError):
             pool_index = -1
-        row = _sanitize({
-            **correlation_fields(),
-            "progress_schema_version": _PROGRESS_SCHEMA_VERSION,
-            "run_id": self.run_id,
-            "account_ref": account_reference(
-                self.email or str((result or {}).get("email") or "")
-            ),
-            "batch_id": str((result or {}).get("batch_id") or self.batch_id),
-            "attempt": int((result or {}).get("registration_attempts") or self.attempt),
-            "success": success,
-            "error": final_error,
-            "failure_class": failure_class,
-            "retryable": bool((result or {}).get("retryable", not success and registration_retry_decision(final_error).retryable)),
-            "future_batch_eligible": bool(
-                (result or {}).get(
-                    "future_batch_eligible",
-                    not success and registration_retry_decision(final_error).future_batch_eligible,
-                )
-            ),
-            "retry_disposition": str(
-                (result or {}).get("retry_disposition")
-                or ("" if success else registration_retry_decision(final_error).guard_action)
-            )[:40],
-            "registration_state": str((result or {}).get("registration_state") or "")[:40],
-            "registration_driver": str((result or {}).get("registration_driver") or self.driver or "unknown")[:32],
-            "proxy_pool_index": pool_index,
-            "proxy_audit": proxy_audit,
-            "fingerprint_geo_audit": fingerprint_geo_audit,
-            "started_at": self.started_at,
-            "finished_at": int(time.time()),
-            "last_stage": self.last_stage,
-            "events": self.events,
-        })
+        row = _sanitize(
+            {
+                **correlation_fields(),
+                "progress_schema_version": _PROGRESS_SCHEMA_VERSION,
+                "run_id": self.run_id,
+                "account_ref": account_reference(self.email or str((result or {}).get("email") or "")),
+                "batch_id": str((result or {}).get("batch_id") or self.batch_id),
+                "attempt": int((result or {}).get("registration_attempts") or self.attempt),
+                "success": success,
+                "error": final_error,
+                "failure_class": failure_class,
+                "retryable": bool(
+                    (result or {}).get("retryable", not success and registration_retry_decision(final_error).retryable)
+                ),
+                "future_batch_eligible": bool(
+                    (result or {}).get(
+                        "future_batch_eligible",
+                        not success and registration_retry_decision(final_error).future_batch_eligible,
+                    )
+                ),
+                "retry_disposition": str(
+                    (result or {}).get("retry_disposition")
+                    or ("" if success else registration_retry_decision(final_error).guard_action)
+                )[:40],
+                "registration_state": str((result or {}).get("registration_state") or "")[:40],
+                "registration_driver": str((result or {}).get("registration_driver") or self.driver or "unknown")[:32],
+                "proxy_pool_index": pool_index,
+                "proxy_audit": proxy_audit,
+                "fingerprint_geo_audit": fingerprint_geo_audit,
+                "started_at": self.started_at,
+                "finished_at": int(time.time()),
+                "last_stage": self.last_stage,
+                "events": self.events,
+            }
+        )
         # Failure rows carry the token-free browser diagnostics (URL shape +
         # DOM landmark counts) so post-OTP page states are debuggable from the
         # progress log alone instead of only an error code.
@@ -267,15 +268,9 @@ def _append_progress_row(
     path.parent.mkdir(parents=True, exist_ok=True)
     line = json.dumps(row, ensure_ascii=True, separators=(",", ":")) + "\n"
     encoded_size = len(line.encode("utf-8"))
-    if (
-        max_bytes > 0
-        and path.is_file()
-        and path.stat().st_size + encoded_size > max_bytes
-    ):
+    if max_bytes > 0 and path.is_file() and path.stat().st_size + encoded_size > max_bytes:
         for index in range(max(0, backups), 0, -1):
-            source = path.with_name(
-                path.name if index == 1 else f"{path.name}.{index - 1}"
-            )
+            source = path.with_name(path.name if index == 1 else f"{path.name}.{index - 1}")
             target = path.with_name(f"{path.name}.{index}")
             if not source.exists():
                 continue
@@ -319,10 +314,9 @@ def registration_quality_metrics(records: list[dict[str, Any]] | None = None, *,
         target = path or runtime_file(CFG, "registration_progress.jsonl")
         records = []
         try:
-            candidates = [
-                target.with_name(f"{target.name}.{index}")
-                for index in range(_PROGRESS_BACKUPS, 0, -1)
-            ] + [target]
+            candidates = [target.with_name(f"{target.name}.{index}") for index in range(_PROGRESS_BACKUPS, 0, -1)] + [
+                target
+            ]
             lines: list[str] = []
             for candidate in candidates:
                 if candidate.is_file():
@@ -350,12 +344,18 @@ def registration_quality_metrics(records: list[dict[str, Any]] | None = None, *,
                     durations.append(duration)
             if "retry" in stage:
                 retry_count += 1
+
     def stats(values: list[float]) -> dict[str, float]:
         if not values:
             return {"count": 0, "average_ms": 0.0, "p95_ms": 0.0}
         ordered = sorted(values)
         index = min(len(ordered) - 1, max(0, int(round(len(ordered) * 0.95)) - 1))
-        return {"count": len(values), "average_ms": round(sum(values) / len(values), 1), "p95_ms": round(ordered[index], 1)}
+        return {
+            "count": len(values),
+            "average_ms": round(sum(values) / len(values), 1),
+            "p95_ms": round(ordered[index], 1),
+        }
+
     return {
         "runs": len(rows),
         "success_rate": round((sum(1 for row in rows if row.get("success")) / len(rows)), 4) if rows else 0.0,

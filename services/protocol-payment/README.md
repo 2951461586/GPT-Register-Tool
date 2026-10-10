@@ -15,6 +15,19 @@ This directory vendors the protocol-only extractors used by
   confirm → ChatGPT approve → follow redirect → `payment.momo.vn` QR flow;
   `run_momo.py` is the thin runner the manager drives (single normalized JSON,
   decodes the `data:image` QR to a PNG under `--qr-out-dir`).
+- `common/`: **not an extractor** -- the shared helper layer the seven vendored
+  extractors import. `protocol_core.py` owns the exactly-once redacted
+  `protocol_payment.v1` terminal reporter and its `run_extractor_entrypoint`
+  guard (used by all seven), the safe-coercion primitives (`safe_int` /
+  `safe_float` / `safe_load_json` / `is_true` / `is_false`), the policy-driven
+  redaction, and the Sentinel/URL helpers; alongside it sit `payment_predicates`
+  (pure payload/redirect predicates shared by iDEAL/TWINT/BLIK), `stripe_flow`,
+  `proxy_state` / `proxy_seed_file` / `proxy_bookkeeping` / `proxy_selection` /
+  `proxy_url`, `provider_profile`, `geo`, `file_loading`, `http_dump`,
+  `endpoints`, `extractor_helpers`, `logging_setup`, `redaction` and `timeouts`.
+  `common/` must not import `sms_tool` (Boundary Rule 10); each extractor keeps
+  same-named thin wrappers so its own call sites and `patch(...)` targets are
+  unchanged.
 
 GoPay, GCash, and GrabPay are not vendored subprocess extractors. GoPay and
 GrabPay share `sms_tool/wallet_provider.py` and `sms_tool/wallet_transport.py`;

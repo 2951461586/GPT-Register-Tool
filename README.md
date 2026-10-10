@@ -515,7 +515,8 @@ HTTP 401 的支付账号按 OAuth Refresh Token、现有 Cookie `/api/auth/sessi
 
 当 OpenAI 轮换 Stripe publishable key 或 Sentinel SDK 版本、导致支付提链或注册 OTP 失败时，可用环境变量临时覆盖，无需改代码：
 
-- `PP_STRIPE_PUBLISHABLE_KEY`：统一覆盖协议支付回退用的 Stripe publishable key（`sms_tool/gen_pp_link.py` 与 `services/protocol-payment/momo/ac_paylink_core.py` 两处共用）。checkout 响应通常自带该 key，仅在响应缺失时用到回退值；回退时会打印 WARN 日志。
+- `PP_STRIPE_PUBLISHABLE_KEY`：统一覆盖协议支付回退用的 Stripe publishable key。checkout 响应通常自带该 key，仅在响应缺失时用到回退值；回退时会打印 WARN 日志。覆盖范围：`sms_tool/pp_link_helpers.py`、`sms_tool/pay_link/adapters.py`，以及 `services/protocol-payment/` 下的 `momo/ac_paylink_core.py`（含硬编码回退）、`pix/pix_core.py`（含硬编码回退）、`blik` / `ideal` / `twint`（无硬编码回退，缺失时为空串）。后三个仍兼容旧名 `STRIPE_PUBLISHABLE_KEY` 作为回退——该名无任何文档与设置方，仅为历史兼容保留。
+- `PP_CHECKOUT_RETRIES`：`services/protocol-payment/momo/ac_paylink_core.py` 创建 Checkout 时的重试次数（默认 `3`，下限 `1`）。非数字值不会抛 `ValueError` 中断整次提链，而是回退到默认值。
 - `OPENAI_SENTINEL_VERSION`：覆盖 Sentinel SDK 版本（默认值内置于 `sms_tool/sentinel/bundle.py` 的 `DEFAULT_SENTINEL_VERSION`）。SDK 下载返回 403/404 通常表示当前版本已被轮换失效，更新此变量或 config 的 `sentinel_version` 即可。
 - `OPENAI_SENTINEL_DISABLE_QUICKJS`：设任意值可显式禁用真实 SDK 路径；生产注册默认不建议设置，
   因为纯 HTTP PoW 无法通过 Sentinel 深层校验。

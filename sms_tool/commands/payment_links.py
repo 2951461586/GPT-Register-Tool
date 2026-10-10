@@ -34,6 +34,22 @@ def _clamped_int(value: Any) -> int:
         return 0
 
 
+def _reverse_pay_adapter() -> Callable[..., dict[str, Any]]:
+    """Resolve the reverse-pay adapter lazily, at call time.
+
+    Two rules meet here. Rule 15 keeps optional command dependencies out of
+    ``import sms_tool.cli``, so this import cannot be module-level. Boundary
+    Rule 21 keeps the PayPal browser lane from importing the protocol lane, so
+    ``paypal/orchestrator.py`` never reaches ``paypal_reverse`` and this adapter
+    is injected into it instead. A module-level import would also add a
+    ``sms_tool/commands -> sms_tool`` edge that ``import_layer_ratchet`` freezes;
+    the function-local form is the remedy that ratchet names.
+    """
+    from ..paypal_reverse import try_reverse_pay
+
+    return try_reverse_pay
+
+
 def generate_ba_link(args: Any, ctx: PaymentLinkCommandContext) -> None:
     """Generate PayPal BA link from Access Token."""
 
@@ -197,6 +213,9 @@ def auto_pay(args: Any) -> None:
         timeout=args.auto_pay_timeout,
         reverse_only=reverse_only,
         link_factory=generate_pp_link,
+        # Boundary Rule 21: the browser lane must not import the protocol lane,
+        # so the adapter injects the reverse-pay strategy here.
+        reverse_pay=_reverse_pay_adapter(),
     )
 
     if result.get("ok"):
@@ -252,6 +271,7 @@ def batch_auto_pay(args: Any) -> None:
             headless=args.auto_pay_headless,
             timeout=args.auto_pay_timeout,
             link_factory=generate_pp_link,
+            reverse_pay=_reverse_pay_adapter(),
         )
         results.append(result)
 
@@ -307,6 +327,7 @@ def process_paypal_ba_queue(args: Any) -> None:
             headless=bool(getattr(args, "auto_pay_headless", False)),
             timeout=_clamped_int(getattr(args, "auto_pay_timeout", 180)) or 180,
             reverse_only=bool(getattr(args, "auto_pay_reverse_only", False)),
+            reverse_pay=_reverse_pay_adapter(),
         )
 
     def _progress(event: dict[str, Any]) -> None:

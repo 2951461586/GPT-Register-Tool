@@ -1,8 +1,17 @@
 #!/usr/bin/env python3
 """
-临时独立模块：用 ChatGPT accessToken 创建 pay.openai.com Plus promo checkout 长链。
+MoMo 链接核心：用 ChatGPT accessToken 构造 ``pay.openai.com`` Plus promo checkout 长链。
 
-目标：只抽核心逻辑，方便临时复用/查看；不依赖 ChatStart 包，也不访问 pay.openai.com。
+本模块是 ``momo`` 提取器的**常驻依赖**，不是一次性脚本：``momo_qr_extract.py``
+以 ``paylink`` 别名导入它，``run_momo.py`` 直接驱动它，它也有自己的 CLI
+（``python ac_paylink_core.py``）。共享原语（``normalize_proxy_url`` 等）来自同级的
+``common/``。
+
+它自己的出站流量只有两处：``chatgpt.com/backend-api/payments/checkout``
+（``CHECKOUT_ENDPOINT``）与 Stripe ``api.stripe.com/v1/payment_pages/{cs}/init``。
+它**不向** ``pay.openai.com`` 发请求 —— 那个 host 只作为 URL 重写的结果出现
+（``checkout.stripe.com`` -> ``pay.openai.com``）。
+
 注意：不要把 access token / session token 打印到日志或提交到仓库。
 """
 
@@ -147,6 +156,7 @@ class CheckoutResult:
 def read_text(path: str | None) -> str:
     if not path or path == "-":
         return sys.stdin.read()
+    # pi-lens-ignore: unchecked-throwing-call-python
     with open(path, "r", encoding="utf-8") as file:
         return file.read()
 
@@ -406,13 +416,13 @@ def extract_amount_due_cents(init_payload: dict[str, Any]) -> int | None:
     total_summary = init_payload.get("total_summary")
     if isinstance(total_summary, dict) and total_summary.get("due") is not None:
         try:
-            return int(total_summary.get("due"))
+            return int(total_summary.get("due"))  # pyright: ignore[reportArgumentType]
         except (TypeError, ValueError):
             pass
     invoice = init_payload.get("invoice")
     if isinstance(invoice, dict) and invoice.get("amount_due") is not None:
         try:
-            return int(invoice.get("amount_due"))
+            return int(invoice.get("amount_due"))  # pyright: ignore[reportArgumentType]
         except (TypeError, ValueError):
             pass
     return None
@@ -523,7 +533,7 @@ def stripe_init_payment_page(
                     context = browser.new_context()
                     response = context.request.post(
                         url,
-                        form=form,
+                        form=form,  # pyright: ignore[reportArgumentType]
                         headers=headers,
                         timeout=int(max(5.0, timeout) * 1000),
                     )
@@ -607,7 +617,15 @@ def create_checkout_from_access_token(
 ) -> CheckoutResult:
     proxy_url = normalize_proxy_url(proxy)
     body = json.dumps(payload or build_checkout_payload(), separators=(",", ":"))
-    attempt_limit = max(1, int(retries if retries is not None else os.environ.get("PP_CHECKOUT_RETRIES", "3") or "3"))
+    # ``PP_CHECKOUT_RETRIES`` is operator-supplied, so a typo must not abort a
+    # payment run: fall back to the documented default instead of raising
+    # ValueError.  The valid-input path is unchanged.
+    try:
+        attempt_limit = max(
+            1, int(retries if retries is not None else os.environ.get("PP_CHECKOUT_RETRIES", "3") or "3")
+        )
+    except (TypeError, ValueError):
+        attempt_limit = 3
     last_error: Exception | None = None
     raw: dict[str, Any] | None = None
     for attempt in range(1, attempt_limit + 1):
@@ -701,8 +719,8 @@ def finalize_checkout_result(
     promo_campaign_id = extract_promo_campaign_id(raw)
     trial_eligible = bool(raw.get("one_click_trial_eligible"))
     billing = raw.get("billing_details") if isinstance(raw.get("billing_details"), dict) else {}
-    country = str(billing.get("country") or raw.get("country") or "")
-    currency = str(billing.get("currency") or raw.get("currency") or "")
+    country = str(billing.get("country") or raw.get("country") or "")  # pyright: ignore[reportOptionalMemberAccess]
+    currency = str(billing.get("currency") or raw.get("currency") or "")  # pyright: ignore[reportOptionalMemberAccess]
 
     pay_url = ""
     amount_due_cents: int | None = None

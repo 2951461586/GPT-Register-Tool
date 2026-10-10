@@ -1,3 +1,4 @@
+import ast
 import subprocess
 import tempfile
 import unittest
@@ -906,6 +907,54 @@ class AdapterV1ContractTests(unittest.TestCase):
 
         out = adapters._v1_result({"ok": True}, self._spec("direct_card"))
         self.assertEqual(out["link_type"], "direct_card_protocol")
+
+
+class FacadeSurfaceTests(unittest.TestCase):
+    """The compatibility shell's public surface must be declared, not accidental.
+
+    ``payment_link_manager.py`` re-exports ``pay_link`` with ``import *`` and
+    then keeps a block of explicit pre-split imports.  A name consumed through
+    the shell but absent from ``__all__`` is exported only by accident -- and
+    the unused-import ratchet reports that explicit import as removable debt, so
+    a routine F401 cleanup would silently break the consumer.
+    ``parse_proxy_pool`` was exactly that case until 2026-10-10: it was the one
+    name imported from the facade by ``payment_batch`` / ``payment_batch_setup``
+    that ``pay_link.__all__`` omitted, so it survived only on the explicit
+    import that F401 flagged as unused.
+    """
+
+    def test_every_consumed_facade_name_is_declared_in_all(self):
+        root = Path(__file__).resolve().parents[1]
+        declared = set(manager.__all__)
+        consumed: dict[str, set[str]] = {}
+        for path in (root / "sms_tool").rglob("*.py"):
+            if "__pycache__" in str(path):
+                continue
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.ImportFrom) or not node.module:
+                    continue
+                if "payment_link_manager" not in node.module:
+                    continue
+                for alias in node.names:
+                    if alias.name != "*":
+                        consumed.setdefault(alias.name, set()).add(str(path.relative_to(root)))
+        undeclared = {name: sorted(srcs) for name, srcs in consumed.items() if name not in declared}
+        self.assertEqual(
+            undeclared,
+            {},
+            "name(s) consumed through the payment_link_manager facade but missing from its __all__; "
+            "declare them in sms_tool/pay_link/__init__.py or migrate the consumer: "
+            f"{undeclared}",
+        )
+
+    def test_parse_proxy_pool_is_declared_and_reachable(self):
+        """Regression pin for the 2026-10-10 accidental-export fix."""
+        from sms_tool import pay_link
+
+        self.assertIn("parse_proxy_pool", pay_link.__all__)
+        self.assertIn("parse_proxy_pool", manager.__all__)
+        self.assertTrue(callable(manager.parse_proxy_pool))
 
 
 if __name__ == "__main__":

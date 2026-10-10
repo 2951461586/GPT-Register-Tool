@@ -36,7 +36,7 @@ if [ -z "$PYTHON_BIN" ]; then
     exit 1
 fi
 
-# Four gates, all must pass:
+# Five gates, all must pass:
 #   1. precommit_guard   -- credentials / runtime state dumps (content-based)
 #   2. line_ending_guard -- a file that mixes CRLF and LF internally.
 #      Added 2026-09-17: 18 of 499 .py files were mixed, which made `git diff`
@@ -56,8 +56,15 @@ fi
 #      raw digest moved, every Sentinel issue call raised, issuance silently
 #      degraded to the legacy issuer, and 126/126 accounts failed.
 #      See docs/audits/scan-2026-09-18-sentinel-runner-hash-mismatch.md
+#   5. format_guard -- the protocol-registration lane must stay
+#      `ruff format`-clean. Added 2026-10-08 after a mangled tuple survived in
+#      auth_flow/otp.py: it was syntactically valid, so ruff check (E9/F63/F7/
+#      F82), compileall and the whole pytest suite were all blind to it. Scope
+#      is the lane (auth_flow/ + registration_*.py), not the whole package, so
+#      the diff stays reviewable. Requires ruff (pinned in constraints-tools.txt).
 "$PYTHON_BIN" scripts/precommit_guard.py || exit 1
 "$PYTHON_BIN" scripts/line_ending_guard.py || exit 1
 "$PYTHON_BIN" scripts/mailbox_private_import_ratchet.py || exit 1
 "$PYTHON_BIN" scripts/sentinel_asset_guard.py || exit 1
+"$PYTHON_BIN" scripts/format_guard.py || exit 1
 exit 0

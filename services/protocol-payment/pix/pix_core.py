@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import random
 import re
 import secrets
@@ -22,7 +23,11 @@ DEFAULT_USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
 )
 
-DEFAULT_STRIPE_PK = (
+# ``PP_STRIPE_PUBLISHABLE_KEY`` is the documented override for the whole
+# protocol-payment family (README, docs/TROUBLESHOOTING.md,
+# sms_tool/pp_link_helpers.py).  This module previously hard-coded the fallback
+# with no override at all, so an OpenAI key rotation could not reach it.
+DEFAULT_STRIPE_PK = (os.environ.get("PP_STRIPE_PUBLISHABLE_KEY", "") or "").strip() or (
     "pk_live_51HOrSwC6h1nxGoI3lTAgRjYVrz4dU3fVOabyCcKR3pbEJguCVAlqCxdxCUvoRh1XWwRacViovU3kLKvpkjh7IqkW00iXQsjo3n"
 )
 

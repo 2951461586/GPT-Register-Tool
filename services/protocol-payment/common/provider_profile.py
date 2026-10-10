@@ -39,10 +39,22 @@ __all__ = [
     "payment_elements_locale",
 ]
 
-#: Shared across the payment providers (byte-identical in ideal / twint / blik).
-#: NOTE: ideal's table deliberately has no ``CH`` entry (``normalize_country``
-#: falls back to ``NL``), while twint adds ``CH -> CHF``.  The maps are therefore
-#: per-profile, not one shared constant.
+#: Shared **base** for the payment providers -- not the only table.
+#:
+#: * ``IDEAL_PROFILE.country_currency`` is this map unchanged.
+#: * ``TWINT_PROFILE.country_currency`` adds ``CH -> CHF``.  ``ideal`` deliberately
+#:   has no ``CH`` entry: ``normalize_country`` falls back to ``NL`` there.
+#: * ``blik`` and ``pix`` keep their own literal instead of importing this module,
+#:   and that is per-provider *coverage*, not accidental duplication: ``blik``
+#:   carries ``PL -> PLN`` and no ``VN``, while ``pix`` carries 34 entries (a
+#:   superset of this map).
+#:
+#: Measured 2026-10-10: **every key shared between any two of these tables maps to
+#: the same currency**, so there is no value conflict to resolve.  They are still
+#: kept apart, because merging them would change which countries *resolve* rather
+#: than fall back to the provider's default -- a behaviour change, not a cleanup.
+#: A reviewer who sees four ``COUNTRY_CURRENCY`` definitions should read this
+#: before "deduplicating" them.
 COUNTRY_CURRENCY: dict[str, str] = {
     "NL": "EUR",
     "BE": "EUR",

@@ -51,11 +51,19 @@
 - **密码泳道**：`--registration-mode password`（生产 `runtime.json` 未声明 `registration_mode`，
   默认是 `passwordless`，而这几个开关在 passwordless 泳道上是 no-op —— 机制门禁会直接判
   `manipulation_failed`）。
-- **关掉 pulse**：`registration.pulse.enabled = false`。生产默认为 `true`，而
-  `email_otp_send_stuck` 会被 pulse 当成**出口级**封禁信号 ⇒ 单账号 wave 立即换池 + 60s 冷却，
-  破坏「同一出口池」前提（2026-10-07 扫描 §5.3）。要么关 pulse，要么先修该判据。
-- **主读数**：`client_auth_session.email_verification_mode` 是否离开 `passwordless_*`
-  （不是落点 URL —— 10-06/07 的 run 已经落点正确而事务臂仍是 passwordless）。
+- **关掉 pulse**：`registration.pulse.enabled = false`。生产默认为 `true`。
+  2026-10-08 起，事务臂形状（密码泳道 + dump 里 `email_verification_mode=passwordless_*`）
+  已带 `arm_mismatch` 后缀，`registration_pulse._is_otp_ban_signal` 对它短路，不再换池；
+  但**裸** `email_otp_send_stuck`（dump 不可读 / 臂读不出来）仍算派发侧候选信号 ⇒ 对照期
+  仍应关 pulse，否则单账号 wave 会换池 + 60s 冷却，破坏「同一出口池」前提
+  （2026-10-07 扫描 §5.3）。
+- **主读数**：`client_auth_session_dump[after_otp_send]` 里 **`passwordless_email_otp_send_pending`
+  是否消失**。不是落点 URL，也**不是** `email_verification_mode` —— 10-06/07 的 run 已经落点正确、
+  事务臂也记录正确，而 10-08 的 signin 系列实测**唯一与成败完全相关**的读数就是这条挂起键
+  （见 `docs/releases/release-v2026.10.08.md` 与 `docs/audits/landing-2026-10-08-signin-*.md`）。
+  `email_verification_mode` 降为**次要**读数（只回答「服务端选了哪条臂」）。
+- **样本**：每臂 **≥ 30** 个 attempted（`scripts/registration_ab.py` 的 `MIN_ARM_ATTEMPTED`；
+  `compare` 在不足时判 `underpowered`，不得拿小样本下结论）。
 - **P1-11 两臂都开 P1-10**：turb 把 `prompt=login` 与 `screen_hint=login_or_signup` 配对，
   所以 `p1-11` 的对照是 `login_or_signup` vs `login_or_signup + prompt=login`；只开
   `signin_prompt_login` 而 `signin_screen_hint_login_or_signup=false` 测的是另一个组合，不算本实验。
@@ -166,7 +174,7 @@ python scripts/registration_ab.py compare `
 | P1-5 | hint 成功率高出 0.05 以上且 `auth_state` 类失败不增长 → `favor_hint`；`auth_state` 类增长（声明的 screen 与服务端事务解读冲突）→ 无论速率一律 `keep_default_off`；低 0.05 以上 → `keep_default_off`；否则 `inconclusive` |
 | P1-6 | prime 成功率高出 0.05 以上且 `account` 类失败不增长 → `favor_prime`；`account` 类增长（导航扰动事务）→ 一律 `keep_default_off`；低 0.05 以上 → `keep_default_off`；否则 `inconclusive` |
 | P1-7 | backoff 成功率高出 0.05 以上 → `favor_backoff`；低 0.05 以上（拒绝是永久性的，重试只添延迟）→ `keep_default_off`；否则 `inconclusive` |
-| P1-8 | hint 成功率高出 0.05 以上且 `auth_state` 类失败不增长 → `favor_hint`；`auth_state` 类增长（补发的 POST 与服务端事务解读冲突）→ 一律 `keep_default_off`；低 0.05 以上 → `keep_default_off`；否则 `inconclusive`。主机制读数看 `client_auth_session.email_verification_mode` 是否离开 `passwordless_*` |
+| P1-8 | hint 成功率高出 0.05 以上且 `auth_state` 类失败不增长 → `favor_hint`；`auth_state` 类增长（补发的 POST 与服务端事务解读冲突）→ 一律 `keep_default_off`；低 0.05 以上 → `keep_default_off`；否则 `inconclusive`。主机制读数看 `passwordless_email_otp_send_pending` 是否从 `after_otp_send` 消失（`email_verification_mode` 只作次要读数） |
 | P1-9 | `headers` 成功率高出 0.05 以上且 `auth_state` 类失败不增长 → `favor_headers`；`auth_state` 类增长 → 一律 `keep_default_off`；低 0.05 以上 → `keep_default_off`；否则 `inconclusive`。主机制读数同上 |
 | P1-10 | `login_or_signup` 成功率高出 0.05 以上且 `auth_state` 类失败不增长 → `favor_login_or_signup`；`auth_state` 类增长（声明的 signin screen 与服务端事务解读冲突）→ 一律 `keep_default_off`；低 0.05 以上 → `keep_default_off`；否则 `inconclusive`。主机制读数同上 |
 | P1-11 | `prompt_login` 成功率高出 0.05 以上且 `auth_state` 类失败不增长 → `favor_prompt_login`；`auth_state` 类增长 → 一律 `keep_default_off`；低 0.05 以上 → `keep_default_off`；否则 `inconclusive`。主机制读数同上 |
@@ -184,7 +192,7 @@ python scripts/registration_ab.py compare `
 - 🔴 P1-4 与 P1-5 **机制上耦合**（两者都针对「发码 200 但不派发」），因此顺序必须是：先跑 P1-4（密码页 prime，作用点在 `user_register` 之前）；若 P1-4 定案且开关落地，再跑 P1-5（作用点更早，在 `authorize/continue`）。两开关同时打开跑一轮**不是**对照，是混淆变量。
 - 🔴 P1-5 与 P1-8 是**同一个假设的两个作用点**：P1-5 改的是泳道本来就发的 continue，P1-8 补的是落 `/email-verification` 时的那一次（P1-5 在那个形状上不可达）。同一批只跑一个；P1-8 的两个 arm 都必须保持 `signup_continue_screen_hint=false`，因为 P1-8 的机制行自带 `screen_hint` 声明。
 - 🔴 P1-10 与 P1-11 都作用在 **signin 形状**上（`screen_hint` / `prompt`），是同一假设的连续两个字段：顺序必须是先 P1-10 定案，再在 P1-10 开着的前提下跑 P1-11（`hold_constant` 已钉两臂都开 P1-10）。同一批只跑一个；两臂都不得同时打开 continue 的两个开关。
-- 🔴 P1-12 接在 P1-11 之后，但按 **SunnyRegister 的形状**（`prompt=login` + `screen_hint=signup` + `locale=ja-JP`）：两臂都开 `signin_prompt_login`、都关 `signin_screen_hint_login_or_signup`，只变 `signin_locale_ja_jp`。P1-12 若也不动（速率与 `email_verification_mode` 都不动），则客户端 signin 形状家族（screen_hint + prompt + locale）整体关闭，下一步应转向指纹/设备层或服务端路由。
+- 🔴 P1-12 接在 P1-11 之后，但按 **SunnyRegister 的形状**（`prompt=login` + `screen_hint=signup` + `locale=ja-JP`）：两臂都开 `signin_prompt_login`、都关 `signin_screen_hint_login_or_signup`，只变 `signin_locale_ja_jp`。P1-12 若也不动（速率与挂起键都不动），则客户端 signin 形状家族（screen_hint + prompt + locale）整体关闭，下一步应转向指纹/设备层或服务端路由。
 - 🔴 P0-2b 的 `handoff` 臂**现在不要跑**：`registration.edge_challenge_browser_handoff` 未落地（`browser_flow` 缺“接入 cookie jar → 闯关 → 导出 → 停”的模式，见 `plan-2026-10-05` §3.4.2 的 S4b）。只跑 `observe` / `rotate` 两臂即可定 H1；`handoff` 臂会被判 `not_judgeable`。
 - 🔴 P0-2b 的停止规则比速率优先：任一臂出现**新的终态失败类别**、或 `handoff` 臂把可注册地址写进死路账本（`registration_retry_guard`）⇒ **立即停全部三臂**并回到 `observe`。
 - 🔴 P1-6 与 P1-7 都作用在 `create_account` 阶段：P1-6 改**请求前**（多发一次 GET），P1-7 改**失败后**（重试同一 POST）。同一批只跑其中一个；若都要定案，顺序不限，但两批的 arm 必须都保持另一开关为默认值。

@@ -135,7 +135,7 @@ def _no_real_proxy_probe(request, monkeypatch):
 def _no_real_checkout_sentinel(request, monkeypatch):
     """Block real Sentinel minting on the Checkout create lane.
 
-    ``paypal_extract._checkout_post`` attaches the ``chatgpt_checkout`` token
+    ``payment_wire._checkout_post`` attaches the ``chatgpt_checkout`` token
     pair to every Checkout *create*. Minting would dial
     ``sentinel.openai.com`` and spawn Node for a test that only means to assert
     payload/header plumbing. Tests that exercise the mint opt out with

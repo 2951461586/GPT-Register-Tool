@@ -24,7 +24,7 @@
     "sms_tool/cli_parsers -> sms_tool/registration_drivers": 1,
     "sms_tool/commands -> sms_tool": 14,
     "sms_tool/pay_link -> sms_tool": 34,
-    "sms_tool/paypal -> sms_tool": 9,
+    "sms_tool/paypal -> sms_tool": 8,
     "sms_tool/paypal -> sms_tool/accounts": 2,
     "sms_tool/paypal_link -> sms_tool": 7,
     "sms_tool/providers -> sms_tool": 19,
@@ -36,5 +36,5 @@
     "sms_tool/upi_link -> sms_tool": 23,
     "sms_tool/upi_link -> sms_tool/geo": 1
   },
-  "total_module_edges": 288
+  "total_module_edges": 287
 }

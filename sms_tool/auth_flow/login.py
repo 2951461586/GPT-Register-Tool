@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 from urllib.parse import quote, urlencode
 
 from . import deps, otp, password_step, sentinel_flow, steps
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def _fetch_session_csrf_token(session, chat_base, base_headers, did, session_logging_id):
@@ -452,6 +455,20 @@ def _login_existing_account_with_email_otp(
     returns ``(None, None)`` raises a named error at the unwrap instead of an
     opaque ``TypeError`` at the first ``state["..."]`` read.
     """
+    # The SO is flow-bound.  The caller may hand us the ``oauth_create_account``
+    # SO that ``create_account`` wrote into the runtime; drop it rather than
+    # replaying it on this lane's ``authorize_continue`` / OTP requests, which
+    # mint under their own flow.  ``same_flow_so_token`` keeps an undeclared
+    # legacy token, so this can only remove a *declared* mismatch.
+    filtered_so = steps.same_flow_so_token(sentinel_so_token, steps.AUTHORIZE_CONTINUE_FLOW)
+    if filtered_so != sentinel_so_token:
+        _LOGGER.info(
+            "Dropping a cross-flow Sentinel SO on the existing-login lane (declared flow %r)",
+            steps.so_token_flow(sentinel_so_token),
+            extra={"event": "sentinel_so_flow_mismatch"},
+        )
+    sentinel_so_token = filtered_so
+
     terminal, state = _existing_login_signin(
         session, username, did, session_logging_id, auth_base, chat_base, base_headers, csrf_token
     )

@@ -17,9 +17,7 @@ from .failure_registry import FAILURE_CLASSES as _REGISTRY_CLASSES
 
 # 类别→可重试的判定来自注册表（retryable=True 的类）。新增类别在
 # failure_registry 改一处，这里与 classify_error 自动跟随。
-RETRYABLE_CLASSES = frozenset(
-    cls.code for cls in _REGISTRY_CLASSES if cls.attempt_retryable
-)
+RETRYABLE_CLASSES = frozenset(cls.code for cls in _REGISTRY_CLASSES if cls.attempt_retryable)
 
 
 @dataclass(frozen=True)

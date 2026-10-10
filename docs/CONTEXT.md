@@ -10,6 +10,10 @@
 - **Command ID / Run ID**: a backend-process correlation ID and its per-registration attempt ID.
 - **Proxy lane**: an isolated egress purpose such as registration, mailbox/OTP, liveness, or payment.
 - **Desktop read**: the read-only sanitized account/mailbox contract consumed by WPF.
+- **Payment wire**: the cross-lane payment kernel — the non-Checkout session
+  factory, the Checkout primitives, the country→currency map, the provider-stage
+  order and the shared failure vocabulary. Owned by `sms_tool/payment_wire.py`;
+  `paypal_extract` re-exports it rather than redefining it.
 - **Payment batch**: a resumable cohort execution with per-account terminal results.
 - **Payment capability probe**: a side-effect-limited Checkout and Stripe-init
   observation that lists offered methods without creating or confirming one.

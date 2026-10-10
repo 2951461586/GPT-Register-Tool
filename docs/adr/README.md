@@ -10,3 +10,4 @@
 - [ADR-0008: 注册结果契约统一到 registration_result](0008-registration-result-contract.md)
 - [ADR-0009: 注册显式依赖与分层错误策略](0009-registration-hardening.md)
 - [ADR-0010: 预检与预热请求的 attempts=1](0010-preflight-and-prime-request-attempts.md)
+- [ADR-0011: 代理脱敏 helper 的归属，与 paypal_proxy 包装链的取舍](0011-proxy-redaction-helper-ownership.md)

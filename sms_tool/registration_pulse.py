@@ -26,6 +26,7 @@ from typing import Any
 
 from .config import CFG
 from .failure_registry import (
+    OTP_ARM_MISMATCH_MARKER as _OTP_ARM_MISMATCH_MARKER,
     OTP_BAN_MARKERS as _OTP_BAN_MARKERS,
     OTP_DISPATCH_VERDICT_EXCLUDED_CLASSES as _OTP_DISPATCH_VERDICT_EXCLUDED_CLASSES,
     OTP_MAILBOX_SIDE_MARKER as _OTP_MAILBOX_SIDE_MARKER,
@@ -119,6 +120,12 @@ def _is_otp_ban_signal(result: dict[str, Any]) -> bool:
     封禁信号。🔴 短路必须排在 ``_OTP_BAN_MARKERS`` **之前** —— 组合串里仍然
     含 ``otp_poll_timeout`` 子串，顺序反了就会把它重新读成封禁。
 
+    ⚠ ``OTP_ARM_MISMATCH_MARKER``（``arm_mismatch``）是**事务臂**证据，同样不是
+    出口证据：本 run 走密码泳道，而 dump 显示服务端把事务架在了 passwordless
+    验证臂上。换出口改不了服务端选臂，所以它在 ``_OTP_UNDISPATCHED_MARKER``
+    **之前**短路 —— 组合串里仍含 ``otp_send_stuck`` 子串，顺序反了就会重新读成
+    派发侧封禁（F3，2026-10-08）。
+
     ⚠ 本函数只回答「这条失败是不是**派发侧**的」。够不够格叫「IP 封禁」还要看
     ``_detect_ip_ban`` 的整轮一致性 —— 单账号的派发侧失败在钉定了各自出口的
     池子里不是出口证据。
@@ -137,6 +144,12 @@ def _is_otp_ban_signal(result: dict[str, Any]) -> bool:
     if failure_class in _OTP_DISPATCH_VERDICT_EXCLUDED_CLASSES:
         return False
     if _OTP_MAILBOX_SIDE_MARKER in error:
+        return False
+    # 🔴 事务臂不匹配（F3）必须排在 ``_OTP_UNDISPATCHED_MARKER`` **之前**：组合串
+    # ``email_otp_send_stuck:arm_mismatch`` 里仍含 ``otp_send_stuck`` 子串，顺序
+    # 反了就会把「服务端选错臂」重新读成「出口被封」。换出口改不了服务端选臂，
+    # 所以它只该换池之外的另一条路（见 ``docs/audits/scan-2026-10-07`` P2-2）。
+    if _OTP_ARM_MISMATCH_MARKER in error:
         return False
     if _OTP_UNDISPATCHED_MARKER in error:
         return True

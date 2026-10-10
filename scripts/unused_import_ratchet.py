@@ -30,13 +30,22 @@ suite exposed three more (``33 failed / 64 errors``), then more again
    the name only as a side effect of an import it makes for its own reasons.
    Measured 2026-09-30: ``payment_link_manager.py`` exposed ``parse_proxy_pool``
    solely because of its own ``from .payment_routing import parse_proxy_pool``;
-   the name is **not** in ``pay_link.__all__``, and removing that line broke
+   the name was **not** in ``pay_link.__all__``, and removing that line broke
    ``payment_batch.py`` and ``payment_batch_setup.py`` at collection time
    (``ImportError: cannot import name 'parse_proxy_pool'``).  A channel-modelled
    checker that only looks for dotted strings / ``patch.object`` / the name's own
    use misses this.  Detection: resolve every ``from X import n`` repo-wide to an
    absolute module path (honouring the relative level) and keep ``n`` when it
    appears in ``consumed[X]``.
+   **Resolved 2026-10-10**: the name was added to ``pay_link.__all__`` (see
+   ``tests/test_payment_link_manager.py::FacadeSurfaceTests``, which now fails if
+   any name consumed through the shell is absent from it).  The baseline count for
+   this file did **not** move, and that is correct: this ratchet freezes today's
+   debt and only fails on growth, so a now-redundant explicit import stays counted
+   until someone deliberately deletes it.  Deleting the block is still not
+   endorsed -- see the over-deletion history below, and note that
+   ``current_config_data`` in the same block is an intentionally *inert* seam
+   documented by ``tests/test_config_patch_seams.py``.
 
 Those are not enumerable by inspection, and every miss costs a full revert of a
 456-site change.  So the gate here is a **ratchet, not a clean-up**.

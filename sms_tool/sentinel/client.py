@@ -483,7 +483,7 @@ def _cookie_value(session: Any, device_id: str, override: str) -> str:
 # every stage that can open a Checkout session.  The four call sites
 # (``payment_capability``, ``paypal_extract._create_checkout``,
 # ``wallet_transport`` and ``gcash_transport``) all reach the wire through
-# ``paypal_extract._checkout_post``, so that one place attaches the pair.  This
+# ``payment_wire._checkout_post``, so that one place attaches the pair.  This
 # public helper is the authority they share; it mints through the same Node
 # runner as registration and *never* degrades to the pure-Python legacy issuer
 # (that issuer cannot produce ``chatgpt_checkout`` and is default-off anyway).

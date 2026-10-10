@@ -54,16 +54,42 @@ ROOT = Path(__file__).resolve().parents[1]
 # Only extensions git treats as text in this repo.  Deliberately explicit
 # rather than "anything not binary": a new binary format must not be able to
 # trip this gate by accident.
-TEXT_SUFFIXES = frozenset({
-    ".py", ".pyi", ".md", ".txt", ".json", ".jsonl", ".yml", ".yaml",
-    ".toml", ".ini", ".cfg", ".sh", ".cs", ".xaml", ".csproj", ".props",
-    ".slnx", ".manifest", ".js", ".example", ".ps1", ".bat", ".cmd",
-})
+TEXT_SUFFIXES = frozenset(
+    {
+        ".py",
+        ".pyi",
+        ".md",
+        ".txt",
+        ".json",
+        ".jsonl",
+        ".yml",
+        ".yaml",
+        ".toml",
+        ".ini",
+        ".cfg",
+        ".sh",
+        ".cs",
+        ".xaml",
+        ".csproj",
+        ".props",
+        ".slnx",
+        ".manifest",
+        ".js",
+        ".example",
+        ".ps1",
+        ".bat",
+        ".cmd",
+    }
+)
 
-EXEMPT_NAMES = frozenset({
-    # No suffix, so they never reach the extension test; listed for clarity.
-    ".gitignore", ".gitattributes", ".editorconfig",
-})
+EXEMPT_NAMES = frozenset(
+    {
+        # No suffix, so they never reach the extension test; listed for clarity.
+        ".gitignore",
+        ".gitattributes",
+        ".editorconfig",
+    }
+)
 
 # Extensionless files that ARE text and must be scanned.  Before 2026-09-17
 # the suffix whitelist was the only entry point, so every extensionless file
@@ -71,15 +97,36 @@ EXEMPT_NAMES = frozenset({
 # 21 CRLF + 11 lone LF and the guard reported a clean tree.  That is the exact
 # "decorative gate" failure the classifier fixtures exist to prevent, so the
 # blind spot is closed twice over: by this list AND by the content sniff below.
-EXTENSIONLESS_TEXT_NAMES = frozenset({
-    "LICENSE", "LICENCE", "NOTICE", "COPYING", "AUTHORS", "CONTRIBUTORS",
-    "CHANGELOG", "CHANGES", "INSTALL", "README", "TODO", "VERSION",
-    "Makefile", "makefile", "GNUmakefile", "Dockerfile", "Containerfile",
-    "Gemfile", "Rakefile", "Procfile", "Brewfile",
-    # Directory-qualified, because the basename alone is not enough to know it
-    # is text (a hook script is, but so is a binary with a bare name).
-    ".githooks/pre-commit", ".githooks/commit-msg", ".githooks/post-checkout",
-})
+EXTENSIONLESS_TEXT_NAMES = frozenset(
+    {
+        "LICENSE",
+        "LICENCE",
+        "NOTICE",
+        "COPYING",
+        "AUTHORS",
+        "CONTRIBUTORS",
+        "CHANGELOG",
+        "CHANGES",
+        "INSTALL",
+        "README",
+        "TODO",
+        "VERSION",
+        "Makefile",
+        "makefile",
+        "GNUmakefile",
+        "Dockerfile",
+        "Containerfile",
+        "Gemfile",
+        "Rakefile",
+        "Procfile",
+        "Brewfile",
+        # Directory-qualified, because the basename alone is not enough to know it
+        # is text (a hook script is, but so is a binary with a bare name).
+        ".githooks/pre-commit",
+        ".githooks/commit-msg",
+        ".githooks/post-checkout",
+    }
+)
 
 # How much of a file to sniff before deciding "this is text".  Small enough to
 # stay fast over ~800 files, large enough to clear any binary magic number.

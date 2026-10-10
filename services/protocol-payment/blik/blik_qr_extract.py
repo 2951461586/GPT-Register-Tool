@@ -83,7 +83,19 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 PROTOCOL_ROOT = SCRIPT_DIR.parent
 if str(PROTOCOL_ROOT) not in sys.path:
     sys.path.insert(0, str(PROTOCOL_ROOT))
-from common.extractor_helpers import is_user_already_paid_error
+from common.extractor_helpers import (
+    is_direct_remove_proxy_error as shared_is_direct_remove_proxy_error,
+    is_proxy_health_failure as shared_is_proxy_health_failure,
+    is_user_already_paid_error,
+)
+from common.payment_predicates import (
+    checkout_response_has_promo as shared_checkout_response_has_promo,
+    checkout_response_has_trial as shared_checkout_response_has_trial,
+    extract_qr_candidates as shared_extract_qr_candidates,
+    is_approve_failure_error as shared_is_approve_failure_error,
+    is_checkout_not_active_error as shared_is_checkout_not_active_error,
+    is_qr_candidate as shared_is_qr_candidate,
+)
 from common.protocol_core import (
     ProtocolResultReporter,
     run_extractor_entrypoint,
@@ -134,7 +146,14 @@ LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 STRIPE_VERSION_FULL = "2025-03-31.basil; checkout_server_update_beta=v1; checkout_manual_approval_preview=v1"
 DEFAULT_STRIPE_RUNTIME_VERSION = "6f8494a281"
-DEFAULT_STRIPE_PK = os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
+# ``PP_STRIPE_PUBLISHABLE_KEY`` is the documented override (README,
+# docs/TROUBLESHOOTING.md, sms_tool/pp_link_helpers.py).  The legacy
+# ``STRIPE_PUBLISHABLE_KEY`` stays as a fallback: nothing sets it and nothing
+# documents it, but this module read it historically, so dropping it would be a
+# silent behaviour change for anyone who did.
+DEFAULT_STRIPE_PK = (
+    os.environ.get("PP_STRIPE_PUBLISHABLE_KEY", "") or os.environ.get("STRIPE_PUBLISHABLE_KEY", "")
+).strip()
 DEFAULT_USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
 )
@@ -268,7 +287,8 @@ def env_int(name: str, default: int, minimum: int = 1) -> int:
 
 
 def is_checkout_not_active_error(value: Any) -> bool:
-    return "checkout_not_active_session" in str(value)
+    """Delegate to ``common/payment_predicates.py``."""
+    return shared_is_checkout_not_active_error(value)
 
 
 def random_user_agent() -> str:
@@ -1181,49 +1201,13 @@ def proxy_file_for_group(group: str) -> Path:
 
 
 def is_direct_remove_proxy_error(reason: str) -> bool:
-    text = str(reason or "").lower()
-    return any(
-        marker in text
-        for marker in (
-            "proxy authentication",
-            "proxy auth",
-            "resolve proxy",
-            "could not resolve proxy",
-            "invalid proxy",
-            "malformed proxy",
-            "unsupported proxy",
-            "http 407",
-            "status 407",
-        )
-    )
+    """Delegate to ``common/extractor_helpers.py`` (batch 5)."""
+    return shared_is_direct_remove_proxy_error(reason)
 
 
 def is_proxy_health_failure(reason: str) -> bool:
-    text = str(reason or "").lower()
-    return any(
-        marker in text
-        for marker in (
-            "目标站不可达",
-            "proxy-server",
-            "connection reset",
-            "recv failure",
-            "timed out",
-            "timeout",
-            "connect tunnel failed",
-            "proxy connect aborted",
-            "proxy tunneling",
-            "proxy handshake",
-            "connection refused",
-            "ssl connect",
-            "tls connect",
-            "curl: (28)",
-            "curl: (35)",
-            "curl: (56)",
-            "http_502",
-            "http_503",
-            "http_504",
-        )
-    )
+    """Delegate to ``common/extractor_helpers.py`` (batch 5)."""
+    return shared_is_proxy_health_failure(reason)
 
 
 def remove_failed_proxies(group: str, failures: list[tuple[str, str]]) -> int:
@@ -1489,33 +1473,13 @@ def build_chatgpt_session(access_token: str, device_id: str, proxy: str, session
 
 
 def checkout_response_has_promo(payload: Any) -> bool:
-    if not isinstance(payload, dict):
-        return False
-    for key in (
-        "scheduled_discount_preview",
-        "immediate_discount_settings",
-        "promo_campaign",
-        "promo_credit_grant",
-    ):
-        value = payload.get(key)
-        if value not in (None, "", [], {}):
-            return True
-    return False
+    """Delegate to ``common/payment_predicates.py``."""
+    return shared_checkout_response_has_promo(payload)
 
 
 def checkout_response_has_trial(payload: Any) -> bool:
-    if not isinstance(payload, dict):
-        return False
-    if payload.get("one_click_trial_eligible") is True:
-        return True
-    subscription_data = payload.get("subscription_data")
-    if isinstance(subscription_data, dict) and int(subscription_data.get("trial_period_days") or 0) > 0:
-        return True
-    for key in ("trial_period_days", "trial_end"):
-        value = payload.get(key)
-        if value not in (None, "", 0, "0", False):
-            return True
-    return False
+    """Delegate to ``common/payment_predicates.py``."""
+    return shared_checkout_response_has_trial(payload)
 
 
 def create_checkout(chatgpt: requests.Session, country: str) -> dict[str, str]:
@@ -2164,20 +2128,13 @@ def is_redirect_like_url(url: str, from_action_field: bool = False) -> bool:
 
 
 def is_qr_candidate(url: str) -> bool:
-    lower = url.lower()
-    return lower.startswith("data:image/") or "qr" in lower or "qrcode" in lower or "qr-code" in lower
+    """Delegate to ``common/payment_predicates.py``."""
+    return shared_is_qr_candidate(url)
 
 
 def extract_qr_candidates(payload: Any) -> list[str]:
-    seen: set[str] = set()
-    result: list[str] = []
-    for url in collect_urls(payload):
-        if url in seen:
-            continue
-        seen.add(url)
-        if is_qr_candidate(url) and not is_known_static_host(url):
-            result.append(url)
-    return result
+    """Delegate to ``common/payment_predicates.py``."""
+    return shared_extract_qr_candidates(payload)
 
 
 def find_submission_attempt(payload: Any) -> dict[str, Any]:
@@ -2361,8 +2318,8 @@ def log_approve_failure(error: str) -> bool:
 
 
 def is_approve_failure_error(error: str) -> bool:
-    text = str(error or "").lower()
-    return "approve" in text or "chatgpt approve" in text
+    """Delegate to ``common/payment_predicates.py``."""
+    return shared_is_approve_failure_error(error)
 
 
 def approve_with_retry(
