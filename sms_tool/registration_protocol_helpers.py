@@ -14,10 +14,44 @@ keep resolving.
 from __future__ import annotations
 
 import json
-from typing import Any, Callable
+from typing import Any, Callable, Mapping
 from urllib.parse import urlsplit
 
 from curl_cffi import requests as curl_requests
+
+#: Values that mean False / True when a config leaf arrives as a string.  Shared
+#: by the registration flag readers so a YAML/JSON string never changes meaning
+#: per call site.
+_FALSY_FLAG_VALUES = (False, 0, "0", "false", "False", "no", "No", "off")
+_TRUTHY_FLAG_VALUES = (True, 1, "1", "true", "True", "yes", "Yes", "on")
+
+
+def registration_flag(config: Any, key: str, default: bool) -> bool:
+    """Read one ``registration.<key>`` boolean toggle from a frozen config.
+
+    Pure, and ``Mapping``-safe: the sharded production config freezes every
+    section into a ``mappingproxy`` (``_freeze`` in ``sms_tool/config.py``),
+    which is **not** a ``dict``.  A ``dict`` check made three of these toggles
+    read their default in every production run while the tests, which pass plain
+    dicts, stayed green (2026-10-07 scan P1-D).
+
+    ``default`` answers both a missing key and an unrecognised value, which is
+    the two-sided contract ``auth_flow.steps._registration_flag`` states: a
+    default-**on** toggle stays truthy for an unreadable value, a
+    default-**off** toggle stays falsy.  This copy exists because
+    ``registration_otp_stages`` cannot import ``auth_flow.steps`` without adding
+    a cross-directory module-level import edge; the body is deliberately
+    identical to that one (see the 2026-10-10 scan P1-C').
+    """
+    section = config.get("registration") if isinstance(config, Mapping) else None
+    if not isinstance(section, Mapping):
+        return default
+    value = section.get(key, default)
+    if value in _FALSY_FLAG_VALUES:
+        return False
+    if value in _TRUTHY_FLAG_VALUES:
+        return True
+    return default
 
 
 #: Existing-login lane failures that mean this address can never produce a
@@ -155,4 +189,5 @@ __all__ = [
     "_new_registration_session",
     "_safe_int",
     "_safe_float",
+    "registration_flag",
 ]

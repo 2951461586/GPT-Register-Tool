@@ -367,16 +367,17 @@ gate above exists to prevent. See `plan-2026-10-05` §3.4.2.
 Offline tests cover step ordering, redirect classification and Sentinel header
 plumbing. They do not establish a live registration or login success rate.
 Changing the lane choice, the `send` method, the continue-on-verified-page
-toggle, the password-page prime, the signup continue's declared screen (on the
-lane's own continue or on the extra one issued from `/email-verification`), or
-Sentinel flow selection requires a controlled live comparison, not an offline
-transaction test. The pre-registered A/B design, collection and comparison for
-the outstanding comparisons (preflight login endpoint, Cloudflare-challenge
-observation, Sentinel password bundle, password-page prime, signup-continue
-screen hint, about-you page prime, create-account disallowed backoff,
-email-verification continue hint) is
-[`registration-ab-runbook.md`](registration-ab-runbook.md),
-driven by `scripts/registration_ab.py`.
+toggle, the password-page prime (including whether a wrong landing is fatal),
+the signup continue's declared screen (on the lane's own continue or on the
+extra one issued from `/email-verification`), the signin/authorize context,
+Sentinel flow selection, or anything in the OTP stage (the send navigation's
+headers, whether `validate` carries a Sentinel pair, and whether a finished
+transaction skips `create_account`) requires a controlled live comparison, not
+an offline transaction test. The pre-registered A/B design, collection and
+comparison for **every** outstanding comparison is
+[`registration-ab-runbook.md`](registration-ab-runbook.md) — its table is the
+single list, so this paragraph does not enumerate them and cannot drift from it
+— driven by `scripts/registration_ab.py`.
 
 🔴 **A comparison needs two manipulation checks, not one.** Verifying that the
 config carried the toggle is not enough: on 2026-10-07 the

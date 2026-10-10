@@ -229,6 +229,13 @@ def _prime_create_account_password_page(session, auth_base, base_headers, curren
     """
     if steps._is_signup_password_page(current_url):
         return {"ok": True, "url": current_url, "skipped": True}
+    if steps._prime_password_page_fatal_enabled():
+        # Mechanism line for ``p1-14-prime-password-page-fatal``: unconditional
+        # inside the toggle's branch.  Emitting only on a wrong landing would
+        # repeat P1-7's conditional-marker defect -- a batch that always lands
+        # correctly would be judged ``manipulation_failed`` instead of
+        # ``not_judgeable``.
+        _emit_operator_line(_LOGGER, "  Password page landing is fatal")
     url = f"{auth_base}/create-account/password"
     referer = current_url if str(current_url or "").startswith(auth_base) else f"{auth_base}/"
     navigation_headers = dict(base_headers)
@@ -250,13 +257,19 @@ def _prime_create_account_password_page(session, auth_base, base_headers, curren
         )
     except Exception as exc:
         _emit_operator_line(_LOGGER, "  Create account password page warning: %s", exc)
-        return {"ok": False, "error": str(exc), "url": current_url}
+        return {"ok": False, "error": str(exc), "url": current_url, "fatal": _fatal_landing()}
     if response is None:
-        return {"ok": False, "error": "password_page_not_followed", "url": current_url}
+        return {"ok": False, "error": "password_page_not_followed", "url": current_url, "fatal": _fatal_landing()}
     final_url = str(getattr(response, "url", "") or url)
     status = int(getattr(response, "status_code", 0) or 0)
     if status < 200 or status >= 400:
-        return {"ok": False, "status": status, "url": final_url, "error": "password_page_http_error"}
+        return {
+            "ok": False,
+            "status": status,
+            "url": final_url,
+            "error": "password_page_http_error",
+            "fatal": _fatal_landing(),
+        }
     if steps._is_signup_password_page(final_url):
         return {"ok": True, "status": status, "url": final_url}
     # 🔴 判据是**落点**，不是状态码。  2xx 只说明请求没被拒；如果最终不在密码步，
@@ -265,7 +278,18 @@ def _prime_create_account_password_page(session, auth_base, base_headers, curren
     # 正确，但派发未发生」）。  turb 对此直接抛异常，这里改为报告 —— 不抛才能看清
     # 服务端在状态未建立时到底做什么。
     _emit_operator_line(_LOGGER, "  Create account password page landed off the password step: %s", final_url)
-    return {"ok": False, "status": status, "url": final_url}
+    return {"ok": False, "status": status, "url": final_url, "fatal": _fatal_landing()}
+
+
+def _fatal_landing():
+    """Whether the caller must abort when the password page was not reached.
+
+    The prime itself stays non-fatal (it reports instead of raising) so an arm
+    can observe what the server does when the page state is absent; the caller
+    obeys this flag.  One reader for one toggle, so the handler and the mechanism
+    line cannot disagree (2026-10-10 scan P1-C').
+    """
+    return steps._prime_password_page_fatal_enabled()
 
 
 def _prepare_signup_auth_state(
@@ -309,6 +333,14 @@ def _prepare_signup_auth_state(
         # toggle's own branch, and only on the password lane.
         _emit_operator_line(_LOGGER, "  Signin locale=ja-JP")
 
+    if not passwordless_web and steps._turb_signin_authorize_context_enabled():
+        # Mechanism line for ``p1-13-turb-signin-authorize-context``: emitted
+        # inside the toggle's own branch, and only on the password lane.  It is
+        # unconditional within the branch (not only when a request differs) so
+        # the A/B mechanism gate can see the arm even when every request would
+        # have been identical by accident.
+        _emit_operator_line(_LOGGER, "  Turb signin/authorize context")
+
     for attempt in attempts or steps._signup_signin_attempts():
         name = attempt["name"]
         signin_url = steps._openai_signin_url(
@@ -344,6 +376,7 @@ def _prepare_signup_auth_state(
             screen_hint=attempt.get("screen_hint", ""),
             prompt=attempt.get("prompt", ""),
             locale=attempt.get("locale", ""),
+            ui_locales=steps._ui_locales_from_headers(base_headers),
         )
         if not auth_session_url:
             last_state = {"ok": False, "attempt": name, "error": "missing_auth_session_url", "body": signin_body}

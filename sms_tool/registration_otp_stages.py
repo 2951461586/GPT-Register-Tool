@@ -16,19 +16,61 @@ this module cannot form an import cycle.
 from __future__ import annotations
 
 import json
+import logging
 import time
 from collections.abc import Mapping as MappingABC
 from typing import Any
 
 from .auth_state import otp_dispatch_verdict, passwordless_arm_armed
+from .operator_output import emit as _emit
 from .sanitizer import describe_exception
 from .failure_registry import (
     OTP_ARM_MISMATCH_MARKER,
     OTP_MAILBOX_SIDE_MARKER,
     OTP_NO_RESEND_MARKER,
 )
-from .registration_protocol_helpers import _safe_int
+from .registration_protocol_helpers import _safe_int, registration_flag
 from .otp_strategy import otp_resend_eligible
+
+_LOGGER = logging.getLogger(__name__)
+
+
+def _otp_navigation_headers_enabled(self: Any) -> bool:
+    """``registration.otp_navigation_headers`` (default **False**).
+
+    turb sends ``sec-fetch-site: same-origin`` + ``sec-fetch-user: ?1`` on the
+    ``email-otp/send`` navigation; this repo sends only ``Accept`` + ``Referer``
+    (``http_utils._follow_continue_url``).  Those two headers are how a real
+    top-level navigation declares itself, and the repo already learned that
+    lesson for the password page (2026-10-07 scan P1-A), so the OTP send gets
+    the same treatment as its own single-variable switch.
+    """
+    return registration_flag(self.config, "otp_navigation_headers", False)
+
+
+def _otp_validate_sentinel_enabled(self: Any) -> bool:
+    """``registration.otp_validate_sentinel`` (default **False**).
+
+    turb mints a fresh ``authorize_continue`` Sentinel and attaches it (plus its
+    SO) to ``email-otp/validate`` -- its config comments the measurement
+    ("2026-09-14 Roxy 成功样本中 email-otp/validate 同时携带 Sentinel 与 SO").
+    This repo passes ``use_sentinel=False`` there.  Single variable: it only
+    decides whether the validate request carries the pair.
+    """
+    return registration_flag(self.config, "otp_validate_sentinel", False)
+
+
+def _otp_external_url_branch_enabled(self: Any) -> bool:
+    """``registration.otp_external_url_branch`` (default **False**).
+
+    After a successful ``email-otp/validate`` the server's own answer decides
+    whether ``create_account`` should run at all.  turb reads ``page.type`` and
+    the ``continue_url`` and, when the transaction already finished on an
+    external/callback URL, skips ``create_account`` with the stated reason that
+    POSTing it anyway "会触发 invalid_auth_step".  This repo has no such branch
+    (the stage list always runs ``create_account``), so this toggle adds it.
+    """
+    return registration_flag(self.config, "otp_external_url_branch", False)
 
 
 def send_email_otp(self: Any) -> None:
@@ -51,10 +93,17 @@ def send_email_otp(self: Any) -> None:
             url=s.signup_state.get("url", ""),
         )
     else:
+        otp_send_headers = s.base_headers
+        if _otp_navigation_headers_enabled(self):
+            # Mechanism line for ``p1-15-otp-navigation-headers``: unconditional
+            # inside the toggle's branch (the send only runs on the password
+            # lane), so the A/B mechanism gate can see the arm.
+            _emit(_LOGGER, "  OTP navigation headers")
+            otp_send_headers = {**s.base_headers, "sec-fetch-site": "same-origin", "sec-fetch-user": "?1"}
         response = r._follow_continue_url(
             s.session,
             continue_url,
-            s.base_headers,
+            otp_send_headers,
             referer=f"{s.auth_base}/create-account/password",
             label="Email OTP send",
         )
@@ -166,16 +215,61 @@ def _otp_timeout_error(self: Any) -> str:
     return "email_otp_poll_timeout"
 
 
+def _external_url_after_otp(otp_data: Any) -> str:
+    """The callback/external URL the validated transaction wants followed, or "".
+
+    turb's rule (``main.py::run_registration``): the server's own answer decides
+    whether ``create_account`` runs at all.  ``page.type == "external_url"``, or
+    a ``continue_url`` that is a ChatGPT OAuth callback / an authorize continue
+    and is **not** the profile step, means the transaction already finished --
+    POSTing ``create_account`` next is what answers ``invalid_auth_step``.
+    Pure and total: a malformed payload answers ``""`` (the default path).
+    """
+    if not isinstance(otp_data, MappingABC):
+        return ""
+    page = otp_data.get("page")
+    page = page if isinstance(page, MappingABC) else {}
+    page_type = str(page.get("type") or otp_data.get("page_type") or "").strip().lower()
+    target = str(
+        otp_data.get("continue_url")
+        or otp_data.get("external_url")
+        or page.get("continue_url")
+        or page.get("external_url")
+        or ""
+    ).strip()
+    if page_type == "external_url":
+        return target
+    if not target or "about-you" in target:
+        return ""
+    if "chatgpt.com/api/auth/callback" in target or "auth.openai.com/authorize/continue" in target:
+        return target
+    return ""
+
+
 def validate_email_otp(self: Any) -> None:
     r = self.r
     s = self.runtime
+    use_sentinel = False
+    sentinel_data = s.sentinel_data
+    if _otp_validate_sentinel_enabled(self):
+        # Mechanism line for ``p1-16-otp-validate-sentinel``: unconditional
+        # inside the toggle's branch.
+        _emit(_LOGGER, "  OTP validate sentinel")
+        try:
+            issued = self._issue_sentinel("authorize_continue", force_fresh=True)
+            sentinel_data = {"sentinel_token": issued.token, "sentinel_so_token": issued.so_token}
+            use_sentinel = True
+        except Exception as exc:
+            # Non-fatal by contract: the toggle adds a header to a request that
+            # already works without it, so a mint failure must not fail the run.
+            _emit(_LOGGER, "  OTP validate sentinel unavailable: %s", describe_exception(exc))
     otp_ok, s.otp_data = r._validate_email_otp(
         s.session,
         s.auth_base,
         s.base_headers,
         s.email_code,
-        sentinel_data=s.sentinel_data,
-        use_sentinel=False,
+        sentinel_data=sentinel_data,
+        use_sentinel=use_sentinel,
     )
     if not otp_ok and r._is_wrong_email_otp_code(s.otp_data):
         print("  Email OTP was rejected; retrying latest mailbox code once...")
@@ -194,8 +288,8 @@ def validate_email_otp(self: Any) -> None:
                 s.auth_base,
                 s.base_headers,
                 s.email_code,
-                sentinel_data=s.sentinel_data,
-                use_sentinel=False,
+                sentinel_data=sentinel_data,
+                use_sentinel=use_sentinel,
             )
     if not otp_ok:
         r._fetch_client_auth_session_dump(
@@ -205,6 +299,17 @@ def validate_email_otp(self: Any) -> None:
             "after_otp_validate_failed",
         )
         self._abort(f"email_otp_validate:{json.dumps(s.otp_data, ensure_ascii=False)[:300]}")
+    if _otp_external_url_branch_enabled(self):
+        # Mechanism line for ``p1-17-otp-external-url-branch``: unconditional
+        # inside the toggle's branch (the branch itself only fires on the shape).
+        _emit(_LOGGER, "  OTP external_url branch")
+        external_url = _external_url_after_otp(s.otp_data)
+        if external_url:
+            s.otp_external_url = external_url
+            _emit(
+                _LOGGER,
+                "  OTP external_url branch: the transaction already finished; skipping create_account",
+            )
     try:
         r._follow_continue_url(
             s.session,

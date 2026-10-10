@@ -81,6 +81,13 @@ class RegistrationOtp:
     # 侧证据）还是**已派发、邮箱没收到**（邮箱侧）。判据在
     # ``auth_state.otp_dispatch_verdict``，消费在 ``registration_pulse``。
     otp_send_dump: dict[str, Any] = field(default_factory=dict)
+    # ``registration.otp_external_url_branch`` (default off): the validated
+    # transaction's own answer was ``page.type=external_url`` or a callback
+    # continue_url, so the OAuth callback was already followed and POSTing
+    # ``create_account`` next is what turb guards against -- it answers
+    # ``invalid_auth_step`` for a transaction the server considers finished.
+    # Empty means "not that shape", so the default path is unchanged.
+    otp_external_url: str = ""
 
 
 @dataclass(repr=False)
@@ -178,6 +185,7 @@ class RegistrationRuntimeState:
         email_code: str
         otp_data: dict[str, Any]
         otp_send_dump: dict[str, Any]
+        otp_external_url: str
         create_data: dict[str, Any]
         create_ok: bool
         existing_account: bool

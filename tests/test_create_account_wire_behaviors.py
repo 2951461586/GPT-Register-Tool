@@ -77,6 +77,10 @@ def _state():
         # existing-account verdict never touches its fields, so ``None`` is a
         # faithful stand-in for the identity context.
         context=None,
+        # ``registration.otp_external_url_branch`` (2026-10-10): the handler
+        # skips the POST when this is set.  Empty is the default shape, so the
+        # tests here exercise the unchanged path.
+        otp_external_url="",
         # The 200 path persists the SESSION_PENDING checkpoint on the way out.
         username="user@example.com",
     )

@@ -23,6 +23,14 @@ _PASSKEY_CLIENT_CAPABILITIES = "11111"
 
 _CC_CAPS = "login_methods"
 
+#: turb's authorize context (`core/chatgpt_auth.py::_ensure_authorize_context`),
+#: measured on a 2026-09-14 successful sample: it *removes*
+#: ``ext-passkey-client-capabilities`` and declares the two-token capability
+#: list plus an explicit OAuth return target.  Kept as constants so the
+#: toggle's mechanism line and the request builder cannot drift.
+_TURB_CC_CAPS = "login_methods chatgpt_login_finalizer_v1"
+_TURB_AUTH_RETURN_TARGET = "chatgpt_home"
+
 
 def _is_existing_login_redirect(url):
     parsed = urlparse(url or "")
@@ -398,6 +406,85 @@ def _signin_locale_ja_jp_enabled():
     return _registration_flag("signin_locale_ja_jp", False)
 
 
+def _turb_signin_authorize_context_enabled():
+    """Whether the signin/authorize context uses turb's shape.
+
+    ``registration.turb_signin_authorize_context`` (default **False**).
+
+    The builder (``_openai_signin_url`` / ``_ensure_authorize_context``) is shared
+    by both lanes, so the toggle changes whichever lane runs; the A/B is
+    pre-registered on the password lane only, and the mechanism line is emitted
+    there.
+
+    **Why this exists.**  The 2026-10-07/08 signin series tested ``screen_hint``,
+    ``prompt`` and ``locale`` -- one field each -- and none of them moved the
+    server off ``passwordless_*``.  A 2026-10-10 function-by-function diff
+    against ``myfanhua/turb-gpt-free-register@ffcda12`` found the *rest* of the
+    context this repo sends differs, and turb's own comment dates the change to
+    a successful 2026-09-14 sample (``core/chatgpt_auth.py:17``): "signin 不再主动
+    携带 passkey capabilities；authorize 使用两个 ccaps，并明确返回 ChatGPT 首页".
+
+    The bundle, exactly as turb builds it:
+
+    * **signin URL** carries only ``ext-oai-did`` / ``auth_session_logging_id`` /
+      ``login_hint`` (+ the shape fields); this repo additionally sends
+      ``device_id``, ``ext-passkey-client-capabilities=11111`` and
+      ``ccaps=login_methods``.
+    * **authorize URL** drops ``ext-passkey-client-capabilities``, sets
+      ``ccaps=login_methods chatgpt_login_finalizer_v1``, and adds
+      ``auth_return_target_category=chatgpt_home`` plus ``ui_locales``.
+
+    These five parameters are one coherent manipulation (turb changed them
+    together against the same HAR), so they ship as one toggle rather than five
+    -- the A/B compares "this repo's context" vs "turb's context".  The
+    mechanism line is ``Turb signin/authorize context`` and is emitted only on
+    the password lane inside the toggle's branch.
+
+    Off by default: it changes the request that currently produces a correct
+    landing, so it earns a default only after a controlled comparison
+    (``p1-13-turb-signin-authorize-context``).
+    """
+    return _registration_flag("turb_signin_authorize_context", False)
+
+
+def _prime_password_page_fatal_enabled():
+    """Whether a failed password-page prime aborts the run (turb's contract).
+
+    ``registration.prime_password_page_fatal`` (default **False**).
+
+    **Why this exists.**  ``prime_create_account_password_page`` is deliberately
+    non-fatal (it reports ``ok=False`` and lets the POST run, so an arm can show
+    what the server does when the page state is *absent*).  turb's
+    ``navigate_create_account_password`` takes the opposite contract: if the
+    final URL is not ``/create-account/password`` it raises, because the whole
+    point of the navigation is that the page state exists before the POST.
+
+    This toggle makes the repo's prime fatal, so the two contracts can be
+    compared: with it on, a prime that does not reach the password step ends the
+    attempt as ``password_page_not_reached:<url>`` instead of continuing to
+    ``user/register``.  It only has an effect when
+    ``prime_create_account_password`` is also on (there is no prime otherwise).
+
+    Off by default; it earns a default only after a controlled comparison
+    (``p1-14-prime-password-page-fatal``).
+    """
+    return _registration_flag("prime_password_page_fatal", False)
+
+
+def _ui_locales_from_headers(headers):
+    """First language tag of ``Accept-Language`` (turb's ``ui_locales`` source).
+
+    turb reads ``session.navigator_language()`` and falls back to ``en-US``; the
+    protocol lane carries the same value in the ``Accept-Language`` request
+    header (``auth_headers`` builds it from the fingerprint's ``lang_full``), so
+    the first tag is the faithful equivalent.  Pure, and never raises.
+    """
+    raw = str((headers or {}).get("Accept-Language") or "").strip()
+    if not raw:
+        return ""
+    return raw.split(",", 1)[0].split(";", 1)[0].strip()
+
+
 def _is_about_you_step(url, payload=None):
     """True when the auth transaction routed into the *signup* profile step.
 
@@ -439,19 +526,37 @@ def _with_query_param(url, key, value):
     return f"{url}{sep}{key}={quote(str(value), safe='')}"
 
 
-def _ensure_authorize_context(url, did, session_logging_id, login_hint, *, screen_hint="", prompt="", locale=""):
+def _ensure_authorize_context(
+    url, did, session_logging_id, login_hint, *, screen_hint="", prompt="", locale="", ui_locales=""
+):
     parsed = urlparse(str(url or ""))
     if not parsed.netloc.endswith("auth.openai.com"):
         return str(url or "")
     values = parse_qs(parsed.query, keep_blank_values=True)
-    required = {
-        "device_id": did,
-        "ext-oai-did": did,
-        "auth_session_logging_id": session_logging_id,
-        "ext-passkey-client-capabilities": _PASSKEY_CLIENT_CAPABILITIES,
-        "ccaps": _CC_CAPS,
-        "login_hint": login_hint,
-    }
+    if _turb_signin_authorize_context_enabled():
+        # turb's authorize context (see ``_turb_signin_authorize_context_enabled``):
+        # the passkey capabilities the signin URL carried are removed here, and
+        # the capability list becomes the two-token form with an explicit return
+        # target.  ``ui_locales`` is turb's ``navigator_language`` equivalent.
+        values.pop("ext-passkey-client-capabilities", None)
+        required = {
+            "ext-oai-did": did,
+            "auth_session_logging_id": session_logging_id,
+            "ccaps": _TURB_CC_CAPS,
+            "auth_return_target_category": _TURB_AUTH_RETURN_TARGET,
+            "login_hint": login_hint,
+        }
+        if ui_locales:
+            required["ui_locales"] = ui_locales
+    else:
+        required = {
+            "device_id": did,
+            "ext-oai-did": did,
+            "auth_session_logging_id": session_logging_id,
+            "ext-passkey-client-capabilities": _PASSKEY_CLIENT_CAPABILITIES,
+            "ccaps": _CC_CAPS,
+            "login_hint": login_hint,
+        }
     if screen_hint:
         required["screen_hint"] = screen_hint
     if prompt:
@@ -465,14 +570,24 @@ def _ensure_authorize_context(url, did, session_logging_id, login_hint, *, scree
 
 
 def _openai_signin_url(chat_base, did, session_logging_id, login_hint, *, screen_hint="", prompt="", locale=""):
-    params = {
-        "ext-oai-did": did,
-        "device_id": did,
-        "auth_session_logging_id": session_logging_id,
-        "ext-passkey-client-capabilities": _PASSKEY_CLIENT_CAPABILITIES,
-        "ccaps": _CC_CAPS,
-        "login_hint": login_hint,
-    }
+    if _turb_signin_authorize_context_enabled():
+        # turb's signin query carries only these three identity parameters plus
+        # the shape fields -- no ``device_id``, no passkey capabilities, no
+        # ``ccaps`` (its ``ccaps`` is added on the authorize URL instead).
+        params = {
+            "ext-oai-did": did,
+            "auth_session_logging_id": session_logging_id,
+            "login_hint": login_hint,
+        }
+    else:
+        params = {
+            "ext-oai-did": did,
+            "device_id": did,
+            "auth_session_logging_id": session_logging_id,
+            "ext-passkey-client-capabilities": _PASSKEY_CLIENT_CAPABILITIES,
+            "ccaps": _CC_CAPS,
+            "login_hint": login_hint,
+        }
     if screen_hint:
         params["screen_hint"] = screen_hint
     if prompt:

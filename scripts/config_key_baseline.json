@@ -20,6 +20,9 @@
     "existing_login_continue_on_verified_page",
     "fingerprint_pool",
     "humanize",
+    "otp_external_url_branch",
+    "otp_navigation_headers",
+    "otp_validate_sentinel",
     "password_charset",
     "password_random_length",
     "password_suffix",
@@ -27,6 +30,7 @@
     "prime_about_you_page",
     "prime_create_account_password",
     "prime_navigation_headers",
+    "prime_password_page_fatal",
     "pulse",
     "reject_cloud_proxy",
     "retry_attempts",
@@ -40,7 +44,8 @@
     "skip_registered_mailboxes",
     "stage_concurrency",
     "stage_timeouts",
-    "think_time_ms"
+    "think_time_ms",
+    "turb_signin_authorize_context"
   ],
   "email_registration": [
     "access_token",
