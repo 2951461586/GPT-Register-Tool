@@ -376,7 +376,13 @@ def issue_sentinel_token(
         # The runner returned something that is not a JSON token object.  Name it
         # as a Sentinel failure instead of leaking a bare JSONDecodeError.
         raise SentinelIssueError(f"sentinel_sdk_returned_invalid_json:{flow}") from exc
-    so_value = str(parsed.get("so") or "")
+    # The 20260810913b SDK no longer folds the session-observer output into
+    # ``token()``; the runner calls ``sessionObserverToken`` separately and hands
+    # it over as ``_so``.  It is process-to-process plumbing, not a header field,
+    # so it is removed from the main token before that is sent.
+    so_raw = parsed.pop("_so", None) or parsed.pop("so", None) or ""
+    so_value = so_raw if isinstance(so_raw, str) else json.dumps(so_raw, separators=(",", ":"), ensure_ascii=False)
+    token = json.dumps(parsed, separators=(",", ":"), ensure_ascii=False)
     so_token = ""
     if so_value:
         so_token = json.dumps(

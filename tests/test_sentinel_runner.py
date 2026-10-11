@@ -193,6 +193,36 @@ def test_client_fetches_challenge_and_passes_same_identity_to_runner():
     assert f"oai-did={DEVICE_ID}" in runner.call_args.kwargs["cookie"]
 
 
+def test_client_splits_runner_so_out_of_main_token():
+    """runner 的 ``_so`` 必须从主 token 中剥离，并改包成 SO-Token 头的 JSON。"""
+    session = _Session()
+    emitted = json.dumps(
+        {
+            "p": "proof",
+            "t": "turnstile",
+            "c": "challenge-test",
+            "id": DEVICE_ID,
+            "flow": "authorize_continue",
+            "_so": "observer-blob",
+        }
+    )
+    with patch("sms_tool.sentinel.client.run_sentinel_sdk", return_value=emitted):
+        result = client.issue_sentinel_token(
+            flow="authorize_continue", device_id=DEVICE_ID, session=session, profile=PROFILE
+        )
+    main = json.loads(result.token)
+    assert "_so" not in main and "so" not in main
+    so = json.loads(result.so_token)
+    assert so == {"so": "observer-blob", "c": "challenge-test", "id": DEVICE_ID, "flow": "authorize_continue"}
+
+    without_so = json.dumps({"p": "proof", "t": "t", "c": "challenge-test", "id": DEVICE_ID, "flow": "authorize_continue"})
+    with patch("sms_tool.sentinel.client.run_sentinel_sdk", return_value=without_so):
+        empty = client.issue_sentinel_token(
+            flow="authorize_continue", device_id=DEVICE_ID, session=_Session(), profile=PROFILE
+        )
+    assert empty.so_token == ""
+
+
 def test_runner_keeps_cookie_out_of_process_arguments():
     class _Completed:
         returncode = 0

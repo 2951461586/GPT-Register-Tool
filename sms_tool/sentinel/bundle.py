@@ -13,9 +13,13 @@ SDK_PATH = RUNTIME_DIR / "sdk.js"
 RUNNER_PATH = RUNTIME_DIR / "sentinel-runner.js"
 # Digests are computed over newline-normalised bytes (see ``_digest``), so the
 # pinned values below are stable regardless of the working tree's line endings.
-SDK_SHA256 = "de9ae60f5bcd3b8f57f5f86628630e28022f72b47056a87f37d4d8a0b5b88537"
-RUNNER_SHA256 = "594a9b83b5e46f3cd877c26c7ed8800fedf4146c954ee0ac99fd36ee0b51b93e"
-DEFAULT_SENTINEL_VERSION = "20260219f9f6"
+SDK_SHA256 = "49d0284bf3eea8a59ebcad0e6b5dd8a53edd4c72606f15bbf51ebe5610a88efd"
+RUNNER_SHA256 = "afb15ecfd0c40490fd8e26913a8e61b27e615464235954afdddf087264e7e31f"
+# Must name the build ``runtime/sdk.js`` was copied from: the version feeds the
+# frame URL, the ``Referer`` and ``p[5]``, and the browser derives all three from
+# the same script.  2026-10-12: bumped from 20260219f9f6 to the build the user's
+# HAR and the reference project both show (20260810913b); both are still served.
+DEFAULT_SENTINEL_VERSION = "20260810913b"
 
 
 class SentinelBundleError(RuntimeError):
