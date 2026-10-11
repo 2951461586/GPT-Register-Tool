@@ -718,6 +718,11 @@ def _browser_style_send_headers(did, sentinel_token):
         },
     )
     attach_sentinel(headers, {"sentinel_token": sentinel_token})
+    # libcurl labels a body-less POST ``application/x-www-form-urlencoded`` and the
+    # server answers 400 ``unsupported_content_type``; the browser sends none.
+    # ``None`` is what makes curl_cffi drop the header.
+    headers.pop("content-type", None)
+    headers["Content-Type"] = None
     return headers
 
 

@@ -149,7 +149,9 @@ def test_toggle_posts_send_otp_like_the_browser_page():
     assert headers["x-access-flow-invocation-id"] == "flow-1"
     assert headers["x-openai-document-navigation-id"]
     assert headers["Sec-Fetch-Mode"] == "cors"
-    assert "Content-Type" not in headers
+    # Absent is not enough: libcurl then labels the empty POST form-urlencoded
+    # and the server answers 400 unsupported_content_type (live, 2026-10-11).
+    assert "Content-Type" in headers and headers["Content-Type"] is None
     assert stage.issued == [("authorize_continue", True)]
     stage.r._follow_continue_url.assert_not_called()
     assert "  Passwordless explicit send-otp" in lines

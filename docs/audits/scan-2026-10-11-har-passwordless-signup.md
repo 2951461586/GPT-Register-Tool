@@ -50,3 +50,21 @@
 - `codex_oauth.password_first_relogin`：强制 email-OTP 重登时，已有密码则先走密码路径，失败才花邮箱码。
 - 密码路径新增 **TOTP 步**（`password/verify` 回 `mfa_challenge` 且有 `totp_secret` 时完成挑战；此前这条路径只会失败）。
 - 重登发码成功行现在带 `pending=… mode=…`（观测，恒开）。
+
+## 7. 实测（2026-10-11 17:3x–18:2x，出口 IN，Smailr `nodeloc.cc` 新邮箱，pulse/S1 关，交替臂）
+
+第一轮（作废）：explicit 臂 3/3 为 `400 unsupported_content_type`。**我方实现缺陷，不是协议证据**：libcurl 给无 body 的 POST 自动加 `Content-Type: application/x-www-form-urlencoded`，浏览器则完全不发该头（HAR `content-length: 0`，无 content-type）。修法：头值设为 `None`（本地回环实测：`None` 才能让 curl_cffi 去掉该头，空串会发空头）。registration 与 relogin 两处都已修，并新增 `Passwordless send-otp rejected: error_code=…` 观测行（仅枚举白名单字符）。
+
+第二轮（有效，n=10，各 5，**0/10 成功**）：
+
+| 臂 | 结果 |
+| --- | --- |
+| default（5） | 4× 授权后服务端 `pending=true`，`email_otp_send_stuck`（跳过轮询）；1× 未 pending，轮询 5 分钟 `mailbox_side_no_code` |
+| explicit（5） | 4× `send-otp 200 pending=false mode=passwordless_signup`（与 HAR 健康派发一致），轮询 5 分钟 `mailbox_side_no_code`；1× 落到 `/create-account/password` 泳道，`user/register` → `account_creation_failed` |
+
+可以说的：
+- 显式 `send-otp` 把「授权后 `pending=true`」翻成了 `pending=false`（4/4 对 default 的 1/5）。这是服务端状态的变化，**不是**收到验证码。
+- 4 个 explicit 派发成功的样本在 5 分钟内都没有邮件到 Smailr 邮箱。24 个 Smailr 邮箱的 `mail_count` 全部为 0。**没有任何证据证明 Smailr 能收到 OpenAI 的邮件**，所以无法区分「OpenAI 不向该域发码」「Smailr 入站有问题」「验证码更晚到」。
+- 0/10 不能用来判 P3-1 优劣（`favor_explicit` 与 `keep_default_off` 都不成立，按预注册规则为 `inconclusive`）。
+
+未知 / 下一步：用一个已知能收 OpenAI 邮件的邮箱源（Gmail 别名或解除隔离后的 Remail iCloud）重跑同一对照；或先单独验证 Smailr 入站。

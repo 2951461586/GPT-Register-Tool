@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 import uuid
 from collections.abc import Mapping as MappingABC
@@ -118,6 +119,12 @@ def _explicit_passwordless_send(self: Any) -> Any:
         "Sec-Fetch-Mode": "cors",
         "Sec-Fetch-Site": "same-origin",
     }
+    # libcurl labels a body-less POST ``application/x-www-form-urlencoded`` and the
+    # server answers 400 ``unsupported_content_type``; the browser sends none.
+    # ``None`` is what makes curl_cffi drop the header.
+    for key in [k for k in headers if str(k).lower() == "content-type"]:
+        del headers[key]
+    headers["Content-Type"] = None
     response = r.request_with_retry(
         s.session,
         "post",
@@ -140,10 +147,19 @@ def _explicit_passwordless_send(self: Any) -> Any:
         str(pending).lower() if isinstance(pending, bool) else "unknown",
         mode if mode in _SEND_MODE_ENUM else ("unknown" if not mode else "other"),
     )
+    if getattr(response, "status_code", 0) != 200:
+        error = body.get("error")
+        code = str(error.get("code") if isinstance(error, MappingABC) else error or "")
+        _emit(
+            _LOGGER,
+            "  Passwordless send-otp rejected: error_code=%s",
+            code if _SEND_ERROR_CODE_RE.fullmatch(code) else ("none" if not code else "other"),
+        )
     return response
 
 
 _SEND_MODE_ENUM = frozenset({"passwordless_signup", "passwordless_login", "login_challenge"})
+_SEND_ERROR_CODE_RE = re.compile(r"[a-z0-9_.\-]{1,64}")
 
 
 def send_email_otp(self: Any) -> None:

@@ -69,7 +69,9 @@ def test_browser_style_send_mints_a_fresh_flow_token_and_posts_an_empty_body(cap
     assert "openai-sentinel-so-token" not in headers
     assert headers["referer"] == "https://auth.openai.com/email-verification"
     assert headers["x-openai-document-navigation-id"] and headers["x-access-flow-invocation-id"]
-    assert "content-type" not in headers
+    # None (not absence) is what makes curl_cffi drop libcurl's default
+    # form-urlencoded label, which the server rejects as unsupported_content_type.
+    assert "content-type" in headers and headers["content-type"] is None
     out = capsys.readouterr().out
     assert "Passwordless browser-style send-otp" in out
     assert "pending=false mode=passwordless_signup" in out
