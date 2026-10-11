@@ -57,3 +57,13 @@
   只留下 `at_probe_pending` 快照(无最终 upsert,因此也无 `password` / `totp_secret`),CLI 正式批次(如 13947)的行是完整的。
   **launcher 产物,不是生产缺陷**;回填 `session_token` 仍无害,但不是修复手段。
 - P1 的 TOTP 注册在日志里显示成功,但 launcher 路径没把密钥存库(同上)。实验账号本身已死,不影响结论。
+## 6. 复用已购 iCloud 的全链路复测(10-12,协议注册 → 查优惠)
+
+- 样本:此前买过、DB 里**没有账号行**的 17 个 Remail iCloud 地址(pickup 全部可用,死号登记表 0 命中)。
+  临时 retry-guard 副本去掉这些目标,不写生产 guard;出口为新的 rola.vip(IN)池;`--registration-mode passwordless`、生产默认(2FA 开、预热关)、`--check-promotion-after-registration`。
+- 注册:**16/17 成功**,1 个 `missing_auth_session_access_token`。CLI 路径的行是完整的(2FA 已入库、`session_token` 已入库、状态 `registered`),印证 §5:此前为空是 launcher 产物。
+- 存活曲线(分母为有结论的探测,传输错误 `0` 不计):1 分钟 12/12,5 分钟 15/16,15 分钟 2/12,30 分钟 0/13,60 分钟 0/9。**换成 rola.vip 出口后曲线形状与辣椒网关一致**(5–15 分钟内撤销)。
+- 查优惠:批次结束后统一探 16 个,**4/16 有结论**(全是 Free、无优惠,`trial_eligible=0`),**12 个 `AT失效`**。这 12 个不是"没有优惠",是**没能判定**。
+- 推断(未单独验证):批次末统一查优惠与 AT 约 5–15 分钟的寿命冲突。17 个账号串行注册约 50 分钟,先注册的早已过期;仅最后几个还活着。
+  需要的是**每个账号注册完立刻查**(1 分钟内 12/12 为活)。
+- 新增排除项:换出口供应商(lajiao → rola)、换进 CLI 完整落库路径,都**没有**改变撤销曲线 ⇒ 出口供应商本身不是主因(同为 IN 出口,仍未测 US)。
