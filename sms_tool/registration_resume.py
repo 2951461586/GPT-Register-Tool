@@ -110,6 +110,7 @@ def resume_post_create(self: Any) -> dict[str, Any] | None:
         self._run_stage(RegistrationState.AUTH_SESSION, "8-Resume auth session", self.fetch_auth_session)
     self._run_stage(RegistrationState.ACCESS_TOKEN_PROBE, "8d-Resume AT probe", self.probe_access_token)
     self._set_outcome()
+    self.post_signup_warmup()
     self.obtain_oauth_refresh_token()
     return self._run_stage(RegistrationState.FINALIZE, "10-Finalize resumed registration", self.finalize)
 

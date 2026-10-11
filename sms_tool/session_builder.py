@@ -17,6 +17,30 @@ def _extract_nested(data, *keys):
     return current if isinstance(current, str) else ""
 
 
+_SESSION_COOKIE_PREFIXES = ("__Secure-next-auth.session-token", "next-auth.session-token")
+
+
+def _session_token_from_cookie_header(cookie_header):
+    """Rebuild the NextAuth session token from a ``Cookie`` header.
+
+    The server splits a long session token into ``<name>.0``, ``<name>.1`` ...
+    chunks.  A protocol registration keeps them only inside ``cookie_header``
+    (the ``/api/auth/session`` body does not always echo ``sessionToken``), so
+    without this the stored ``session_token`` column was empty for every
+    chunked cookie.
+    """
+    chunks = {}
+    for part in str(cookie_header or "").split(";"):
+        name, sep, value = part.strip().partition("=")
+        if not sep or not value:
+            continue
+        for prefix in _SESSION_COOKIE_PREFIXES:
+            if name == prefix:
+                return value
+            if name.startswith(prefix + ".") and name[len(prefix) + 1 :].isdigit():
+                chunks[int(name[len(prefix) + 1 :])] = value
+    return "".join(chunks[index] for index in sorted(chunks))
+
 def build_session_file(data):
     """Build the canonical session-file dict from a registration result.
 
@@ -38,6 +62,7 @@ def build_session_file(data):
         or _extract_nested(response, "session", "session_token")
         or auth_session.get("sessionToken")
         or auth_session.get("session_token")
+        or _session_token_from_cookie_header(data.get("cookie_header") or response.get("cookie_header"))
     )
     access_token = (
         data.get("access_token")

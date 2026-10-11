@@ -316,9 +316,43 @@ def isolated_runtime(request, runtime_sandbox, monkeypatch):
         yield None
         return
 
-    from sms_tool import paths
+    from sms_tool import paths, storage
+    from sms_tool.store import connection as store_connection
 
     monkeypatch.setattr(paths, "runtime_dir", lambda cfg=None: runtime_sandbox)
+
+    # 🔴 Re-rooting ``runtime_dir`` is not enough: the operator's real
+    # ``runtime.json`` carries ``storage.sqlite_path = runtime/accounts.sqlite3``
+    # and ``database_path`` returns that *before* it ever asks ``runtime_dir``.
+    # Every test that read the real config therefore wrote into the production
+    # account database -- hundreds of fake ``environment_ledger`` rows a day
+    # (``proxy.invalid`` / ``127.0.0.1:7897`` exits) since 2026-10-05.  Redirect
+    # only the path that *is* the real database, so tests that configure their
+    # own ``sqlite_path`` still get exactly what they asked for.
+    real_db = Path(__file__).resolve().parents[1] / "runtime" / "accounts.sqlite3"
+    sandbox_db = runtime_sandbox / "accounts.sqlite3"
+    original_database_path = storage.database_path
+
+    def _guarded_database_path(*args, **kwargs):
+        path = Path(original_database_path(*args, **kwargs))
+        try:
+            if path.resolve() == real_db.resolve():
+                sandbox_db.parent.mkdir(parents=True, exist_ok=True)
+                if not sandbox_db.exists():
+                    # A test may have deleted the sandbox file; the schema memo
+                    # would still say "initialized" and later readers would hit
+                    # "no such table".  The real file never vanished, so this
+                    # case did not exist before the redirect.
+                    store_connection._INITIALIZED.discard(
+                        os.path.normcase(str(sandbox_db.resolve()))
+                    )
+                return sandbox_db
+        except OSError:
+            pass
+        return path
+
+    monkeypatch.setattr(storage, "database_path", _guarded_database_path)
+    monkeypatch.setattr(store_connection, "database_path", _guarded_database_path)
     yield runtime_sandbox
 
 

@@ -45,6 +45,7 @@ from .registration_operations import RegistrationOperations
 from . import registration_edge_challenge as _edge_challenge
 from . import registration_otp_stages as _otp_stages
 from . import registration_resume as _resume
+from . import registration_warmup as _warmup
 from . import registration_sentinel_stages as _sentinel_stages
 from .registration_protocol_helpers import (
     _create_account_response_line,
@@ -225,6 +226,10 @@ class RegistrationEmailWorkflow:
             self._run_stage(RegistrationState.AUTH_SESSION, "8-Fetch auth session", self.fetch_auth_session)
             self._run_stage(RegistrationState.ACCESS_TOKEN_PROBE, "8d-Validate access token", self.probe_access_token)
             self._set_outcome()
+            # Opt-in (``registration.chatgpt_bootstrap.enabled``) and, like the
+            # refresh token below, strictly after the verdict: decoration, never
+            # a gate.
+            self.post_signup_warmup()
             # Opt-in, and deliberately *after* ``_set_outcome``: it must never be
             # able to change the registration verdict (see the method docstring).
             self.obtain_oauth_refresh_token()
@@ -1372,6 +1377,9 @@ class RegistrationEmailWorkflow:
         # default-off opt-in **on** (2026-10-11 scan P1-B).  A ``None`` config
         # (the bare-handler path some tests build) reads as the default, off.
         return registration_flag(self.config, "obtain_refresh_token", False)
+
+    def post_signup_warmup(self) -> None:
+        self.warmup_result = _warmup.run_post_signup_warmup(self)
 
     def obtain_oauth_refresh_token(self) -> None:
         return _registration_finalize.obtain_oauth_refresh_token(self)
