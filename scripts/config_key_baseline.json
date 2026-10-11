@@ -40,6 +40,7 @@
     "prime_password_page_fatal",
     "proxy_scheme_fallback",
     "pulse",
+    "reference_lane",
     "reject_cloud_proxy",
     "retry_attempts",
     "retry_delay_seconds",

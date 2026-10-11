@@ -62,6 +62,7 @@
     "otp_external_url_branch": false,
     "device_identity_seeded_by_email": false,
     "passwordless_explicit_send_otp": true,
+    "reference_lane": false,
     "browser_headless": true,
     "browser_timeout_seconds": 90,
     "browser_worker_limit": 0,

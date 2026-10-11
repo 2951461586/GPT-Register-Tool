@@ -404,6 +404,84 @@ def issue_sentinel_token(
     )
 
 
+#: Flows the password page's iframe probes, in the browser's order, with one
+#: shared ``p``.  Only ``username_password_create`` is consumed by the
+#: ``user/register`` call; the other two exist so the server sees the same
+#: capability initialisation the page produces (reference ``myfanhua``
+#: ``request_password_sentinel_bundle``).
+PASSWORD_PAGE_BUNDLE_FLOWS = ("email_otp_validate", "username_password_create", "authorize_continue")
+
+
+def issue_password_page_bundle(
+    *,
+    device_id: str,
+    session: Any,
+    proxy: str | None = None,
+    profile: Mapping[str, Any] | None = None,
+    timeout_seconds: int = 60,
+) -> SentinelToken:
+    """Replay the password page's Sentinel iframe load and return its password-flow token.
+
+    ``frame.html`` is fetched as an iframe navigation first, then the three flows
+    of :data:`PASSWORD_PAGE_BUNDLE_FLOWS` request a challenge with **one**
+    requirements proof.  The probes are best-effort (a failed probe is skipped);
+    the ``username_password_create`` token is the return value and is issued
+    through the normal runner path so it stays bound to the same proof.
+    """
+    did = str(device_id or "").strip()
+    active_profile = dict(profile or sentinel_fingerprint())
+    active_profile.setdefault("session_id", str(uuid.uuid4()))
+    user_agent = str(active_profile.get("user_agent") or auth_user_agent())
+    version = sentinel_version()
+    request_with_retry(
+        session,
+        "get",
+        f"https://sentinel.openai.com/backend-api/sentinel/frame.html?sv={version}",
+        label="sentinel frame",
+        headers={
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Referer": f"{endpoints.AUTH_BASE}/",
+            "Sec-Fetch-Site": "same-site",
+            "Sec-Fetch-Mode": "navigate",
+            "Sec-Fetch-Dest": "iframe",
+            "Sec-Fetch-User": "?1",
+            "Upgrade-Insecure-Requests": "1",
+            "User-Agent": user_agent,
+        },
+        timeout=max(10, min(int(timeout_seconds or 60), 120)),
+        impersonate=auth_impersonate(),
+        allow_redirects=True,
+    )
+    shared_proof = _requirements_token(did, active_profile)
+    password_token: SentinelToken | None = None
+    for flow in PASSWORD_PAGE_BUNDLE_FLOWS:
+        if flow == "username_password_create":
+            password_token = issue_sentinel_token(
+                flow=flow,
+                device_id=did,
+                session=session,
+                proxy=proxy,
+                profile=active_profile,
+                timeout_seconds=timeout_seconds,
+                requirements_proof=shared_proof,
+            )
+            continue
+        try:
+            _challenge(
+                session,
+                flow=flow,
+                device_id=did,
+                profile=active_profile,
+                timeout_seconds=timeout_seconds,
+                requirements_proof=shared_proof,
+            )
+        except SentinelIssueError:
+            continue
+    if password_token is None:
+        raise SentinelIssueError("sentinel_password_bundle_incomplete")
+    return password_token
+
+
 def issue_sentinel_flow(
     *,
     flow: str,
@@ -650,6 +728,7 @@ __all__ = [
     "SentinelToken",
     "checkout_sentinel_headers",
     "issue_checkout_sentinel",
+    "issue_password_page_bundle",
     "issue_sentinel_bundle",
     "issue_sentinel_flow",
     "issue_sentinel_token",

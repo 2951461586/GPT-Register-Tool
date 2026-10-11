@@ -308,12 +308,16 @@ def _prepare_signup_auth_state(
     proxy="",
     passwordless_web=False,
     attempts=None,
+    reference_navigation=False,
 ):
+    # ``reference_navigation`` (``registration.reference_lane``): the reference
+    # project posts signin from the login page with a relative ``callbackUrl``.
     signin_payload = {
         "csrfToken": csrf_token,
-        "callbackUrl": f"{chat_base}/",
+        "callbackUrl": "/" if reference_navigation else f"{chat_base}/",
         "json": "true",
     }
+    signin_referer = f"{chat_base}/auth/login" if reference_navigation else f"{chat_base}/"
     last_state = {"ok": False, "error": "signup_auth_not_started"}
 
     if not passwordless_web and steps._signin_screen_hint_login_or_signup_enabled():
@@ -363,7 +367,7 @@ def _prepare_signup_auth_state(
                 **base_headers,
                 "Content-Type": "application/x-www-form-urlencoded",
                 "Origin": chat_base,
-                "Referer": f"{chat_base}/",
+                "Referer": signin_referer,
             },
             impersonate=deps.auth_impersonate(),
         )

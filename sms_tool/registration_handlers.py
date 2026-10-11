@@ -44,6 +44,7 @@ from .registration_result import build_registration_result
 from .registration_operations import RegistrationOperations
 from . import registration_edge_challenge as _edge_challenge
 from . import registration_otp_stages as _otp_stages
+from . import registration_reference_lane as _reference_lane
 from . import registration_resume as _resume
 from . import registration_warmup as _warmup
 from . import registration_sentinel_stages as _sentinel_stages
@@ -112,6 +113,10 @@ def _apply_protocol_fingerprint(ops: Any, config: Any, proxy: str) -> str:
 
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _str_or_empty(value: Any) -> str:
+    return value if isinstance(value, str) else ""
 
 
 class RegistrationEmailWorkflow:
@@ -209,6 +214,7 @@ class RegistrationEmailWorkflow:
         r = self.r
         r._tl().clear()
         r.select_auth_fingerprint(rotate=True)
+        self._apply_reference_lane()
         config_scope = r.runtime_config_scope(self.config, workflow="registration")
         config_scope.__enter__()
         try:
@@ -249,6 +255,16 @@ class RegistrationEmailWorkflow:
         finally:
             self._close_sessions()
             config_scope.__exit__(None, None, None)
+
+    def _apply_reference_lane(self) -> None:
+        """Overlay the ``registration.reference_lane`` preset before the config scope is entered."""
+        base = self.config if self.config is not None else self.r.current_config_data()
+        effective = _reference_lane.apply_reference_lane(base)
+        if effective is base:
+            return
+        self.config = effective
+        self.input_registration_mode = "password"
+        print("[*] Reference lane: password registration in the reference project's stage order")
 
     def _abort_result(self, error: str, *, cancelled: bool = False) -> dict[str, Any]:
         """Single failure-result constructor for every run() exit path.
@@ -655,6 +671,9 @@ class RegistrationEmailWorkflow:
         self._prime_password_sentinel_bundle()
         s.auth_flow_started = _safe_int(time.time())
 
+    def _reference_lane_active(self) -> bool:
+        return _reference_lane.reference_lane_enabled(self.config)
+
     def _password_sentinel_bundle_enabled(self) -> bool:
         return _sentinel_stages.password_sentinel_bundle_enabled(self)
 
@@ -686,6 +705,8 @@ class RegistrationEmailWorkflow:
                 impersonate=r.auth_impersonate(),
                 attempts=1,
             )
+        elif self._reference_lane_active():
+            _reference_lane.pre_signin(self)
         else:
             r.request_with_retry(
                 s.session,
@@ -701,7 +722,10 @@ class RegistrationEmailWorkflow:
             f"{s.chat_base}/api/auth/csrf",
             label="Auth csrf",
             headers=r.nextauth_headers(
-                s.device_id, session_id=s.session_logging_id, referer=f"{s.chat_base}/", origin=s.chat_base
+                s.device_id,
+                session_id=s.session_logging_id,
+                referer=_reference_lane.LOGIN_PAGE_REFERER if self._reference_lane_active() else f"{s.chat_base}/",
+                origin=s.chat_base,
             ),
             impersonate=r.auth_impersonate(),
         )
@@ -723,6 +747,7 @@ class RegistrationEmailWorkflow:
             attempts=r._passwordless_signin_attempts()
             if s.registration_mode == "passwordless"
             else r._signup_signin_attempts(),
+            **({"reference_navigation": True} if self._reference_lane_active() else {}),
         )
         # P0-1 判据 A 的**取证埋点**（先扩样本，暂不硬止损）。
         #
@@ -841,6 +866,8 @@ class RegistrationEmailWorkflow:
             # established.  Off by default -> the report-only behaviour stands.
             if isinstance(prime, Mapping) and prime.get("fatal"):
                 self._abort(f"password_page_not_reached:{str(prime.get('url') or '')[:120]}")
+        if _reference_lane.reference_lane_enabled(self.config):
+            _reference_lane.prime_password_bundle(self)
         self._post_user_register()
         if s.reg_response.status_code != 200:
             err_code = s.reg_data.get("error", {}).get("code", "")
@@ -970,6 +997,7 @@ class RegistrationEmailWorkflow:
                 referer=f"{s.auth_base}/create-account/password",
                 origin=s.auth_base,
                 sentinel_token=username_sentinel.token,
+                sentinel_so_token=_str_or_empty(getattr(username_sentinel, "so_token", "")),
             ),
             impersonate=r.auth_impersonate(),
         )

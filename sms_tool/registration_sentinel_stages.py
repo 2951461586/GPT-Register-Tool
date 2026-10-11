@@ -47,7 +47,7 @@ def password_sentinel_bundle_enabled(self: Any) -> bool:
     return registration_flag(self.config, "sentinel_password_bundle", False)
 
 
-def prime_password_sentinel_bundle(self: Any) -> None:
+def prime_password_sentinel_bundle(self: Any, *, reference_page: bool = False) -> None:
     """Pre-mint the password page's Sentinel flows from one shared proof.
 
     Only the password lane gets this: it is the page a browser primes a
@@ -55,11 +55,28 @@ def prime_password_sentinel_bundle(self: Any) -> None:
     ``issue_sentinel`` is still there and is the untouched default path.
     """
     s = self.runtime
-    if s.registration_mode == "passwordless" or not password_sentinel_bundle_enabled(self):
+    lane = registration_flag(self.config, "reference_lane", False)
+    if s.registration_mode == "passwordless" or not (lane or password_sentinel_bundle_enabled(self)):
         return
-    from .sentinel import issue_sentinel_bundle, sentinel_backend
+    # `reference_lane` mints this bundle right before `user/register` (see
+    # `registration_reference_lane`), not at identity time like the legacy switch.
+    if lane != reference_page:
+        return
+    from .sentinel import issue_password_page_bundle, issue_sentinel_bundle, sentinel_backend
 
     if sentinel_backend(self.config) != "node_runner":
+        return
+    if lane:
+        try:
+            issued = issue_password_page_bundle(device_id=s.device_id, session=s.session, proxy=s.proxy)
+        except Exception as exc:
+            _LOGGER.warning(
+                "Password page Sentinel bundle unavailable; per-flow issuance applies: %s", describe_exception(exc)
+            )
+            return
+        s.sentinel_data = {**dict(s.sentinel_data), "sentinel_token": issued.token}
+        s.sentinel_token = issued.token
+        _LOGGER.info("Reference lane: password page Sentinel bundle primed")
         return
     try:
         bundle = issue_sentinel_bundle(

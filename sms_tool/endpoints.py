@@ -38,6 +38,9 @@ API_BASE = "https://api.openai.com"
 #: ``https://chatgpt.com/`` — the trailing-slash form used for ``Referer`` /
 #: ``Origin`` headers and NextAuth ``callbackUrl`` values.
 CHATGPT_ORIGIN = CHATGPT_BASE + "/"
+CHATGPT_LOGIN_PAGE = f"{CHATGPT_BASE}/auth/login"
+CHATGPT_AUTH_PROVIDERS = f"{CHATGPT_BASE}/api/auth/providers"
+CHATGPT_CES_SETTINGS = f"{CHATGPT_BASE}/ces/v1/projects/oai/settings"
 
 # ChatGPT API prefixes (the paths differ from :data:`API_BASE`'s host).
 CHATGPT_BACKEND_API = f"{CHATGPT_BASE}/backend-api"
@@ -60,9 +63,12 @@ __all__ = [
     "AUTH_BASE",
     "AUTH_CREATE_ACCOUNT_PASSWORD",
     "AUTH_EMAIL_VERIFICATION",
+    "CHATGPT_AUTH_PROVIDERS",
     "CHATGPT_BACKEND_ANON",
     "CHATGPT_BACKEND_API",
     "CHATGPT_BASE",
+    "CHATGPT_CES_SETTINGS",
+    "CHATGPT_LOGIN_PAGE",
     "CHATGPT_ORIGIN",
     "CHATGPT_PAYMENT_METHODS",
 ]

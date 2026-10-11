@@ -56,6 +56,12 @@ WARMUP_PATHS = (
 #: through are listed, anything else reports UTC rather than a guessed zone.
 _TZ_OFFSET_MIN = {"IN": 330, "VN": 420, "JP": 540, "KR": 540, "GB": 0, "DE": 60}
 
+
+def tz_offset_minutes(country: Any) -> int:
+    """``-Date.getTimezoneOffset()`` for an exit country; unknown reports UTC."""
+    return _TZ_OFFSET_MIN.get(str(country or "").upper(), 0)
+
+
 _MAX_CONSECUTIVE_FAILURES = 3
 _PACE_SECONDS = (0.4, 1.6)
 _MAX_DWELL_SECONDS = 300.0
@@ -155,4 +161,4 @@ def run_post_signup_warmup(
     return result
 
 
-__all__ = ["WARMUP_PATHS", "dwell_range", "run_post_signup_warmup", "warmup_enabled"]
+__all__ = ["WARMUP_PATHS", "dwell_range", "run_post_signup_warmup", "tz_offset_minutes", "warmup_enabled"]

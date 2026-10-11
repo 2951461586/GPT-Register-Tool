@@ -18,6 +18,11 @@ from .geo.profiles import MARKET_PROFILES
 AUTH_IMPERSONATE = "firefox144"
 DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0"
 DEFAULT_SEC_CH_UA = ""
+#: The web build the `chatgpt`-family requests claim (`data-seq` / `data-build` of
+#: `chatgpt.com/auth/login`, read live 2026-10-12).  The previous pair
+#: (8370486 / prod-fb4a8a2a...) was months stale; the reference project tracks the page the same way.
+CHATGPT_CLIENT_BUILD_NUMBER = "12072619"
+CHATGPT_CLIENT_VERSION = "prod-197b1679dd37497ea6d03e0b6944e5ab66561ed8"
 
 # Firefox (first) is the primary impersonation. At ChatGPT's edge, Cloudflare
 # challenges Chrome TLS/HTTP2 with HTTP 403 while Firefox passes, so the protocol
@@ -791,8 +796,8 @@ def openai_auth_headers(
             headers.pop(key, None)
     elif str(family or "").strip().lower() == "chatgpt":
         headers.update({
-            "oai-client-build-number": "8370486",
-            "oai-client-version": "prod-fb4a8a2a751dfec391053cfd7b01c52699ccf78c",
+            "oai-client-build-number": CHATGPT_CLIENT_BUILD_NUMBER,
+            "oai-client-version": CHATGPT_CLIENT_VERSION,
         })
     return headers
 

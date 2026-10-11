@@ -4,6 +4,8 @@ from unittest.mock import patch
 from sms_tool import auth_headers
 from sms_tool.auth_headers import (
     AUTH_IMPERSONATE,
+    CHATGPT_CLIENT_BUILD_NUMBER,
+    CHATGPT_CLIENT_VERSION,
     DEFAULT_SEC_CH_UA,
     DEFAULT_USER_AGENT,
     hardware_profile_for_family,
@@ -56,7 +58,8 @@ class AuthHeadersAndClassificationTests(unittest.TestCase):
         chat = chatgpt_headers("did", session_id="sid")
         self.assertNotIn("traceparent", nextauth)
         self.assertNotIn("oai-client-build-number", nextauth)
-        self.assertEqual(chat["oai-client-build-number"], "8370486")
+        self.assertEqual(chat["oai-client-build-number"], CHATGPT_CLIENT_BUILD_NUMBER)
+        self.assertEqual(chat["oai-client-version"], CHATGPT_CLIENT_VERSION)
         self.assertEqual(chat["oai-session-id"], "sid")
 
     def test_auth_browser_fingerprint_versions_are_consistent(self):
