@@ -30,23 +30,27 @@ def test_lane_is_off_by_default_and_leaves_the_config_object_alone():
     assert lane.apply_reference_lane(None) is None
 
 
-def test_preset_fills_only_unset_keys_and_forces_password_mode():
+def test_preset_forces_the_lane_toggles_even_over_explicit_false_and_keeps_the_rest():
+    # Shipped configs list every toggle as an explicit false; the preset must still win.
     config = {
-        "registration": {"reference_lane": True, "signin_prompt_login": False, "chatgpt_bootstrap": {"enabled": False}},
+        "registration": {
+            "reference_lane": True,
+            "signin_prompt_login": False,
+            "chatgpt_bootstrap": {"enabled": False, "anonymous": True},
+            "humanize": {"enabled": False, "factor": 0.5},
+        },
         "email_registration": {"registration_mode": "passwordless", "otp_timeout": 120},
     }
     effective = lane.apply_reference_lane(config)
 
     registration = effective["registration"]
     for key in lane.LANE_FLAGS:
-        assert key in registration
-    assert registration["signin_prompt_login"] is False  # the operator's explicit value wins
-    assert registration["turb_signin_authorize_context"] is True
-    assert registration["chatgpt_bootstrap"] == {"enabled": False, "authenticated": True}
-    assert registration["humanize"]["enabled"] is True
+        assert registration[key] is True
+    assert registration["chatgpt_bootstrap"] == {"enabled": True, "anonymous": True, "authenticated": True}
+    assert registration["humanize"] == {"enabled": True, "factor": 0.5}
     assert effective["email_registration"] == {"registration_mode": "password", "otp_timeout": 120}
     # The input must not be mutated.
-    assert config["registration"]["chatgpt_bootstrap"] == {"enabled": False}
+    assert config["registration"]["chatgpt_bootstrap"] == {"enabled": False, "anonymous": True}
     assert config["email_registration"]["registration_mode"] == "passwordless"
 
 

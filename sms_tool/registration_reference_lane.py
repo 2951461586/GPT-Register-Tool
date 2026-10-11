@@ -15,9 +15,8 @@ toggles (measured one at a time between 2026-10-07 and 2026-10-11).  This module
 is the one switch that runs them **together**, in that order, on the password
 lane.  It owns three things:
 
-* :func:`apply_reference_lane` -- the preset: the operator's explicit
-  ``registration.*`` values always win; only keys they left unset are filled in,
-  and ``email_registration.registration_mode`` is forced to ``password``.
+* :func:`apply_reference_lane` -- the preset: the lane's toggles are forced on and
+  ``email_registration.registration_mode`` is forced to ``password``.
 * :func:`pre_signin` -- the two stages the toggles could not express, an anonymous
   ChatGPT bootstrap and the ``providers`` read, run before ``csrf``.
 * :func:`prime_password_bundle` -- the password page's Sentinel iframe load
@@ -46,7 +45,7 @@ _LOGGER = logging.getLogger(__name__)
 
 LANE_KEY = "reference_lane"
 
-#: ``registration.<key>`` toggles the lane turns on unless the operator set them.
+#: ``registration.<key>`` toggles the lane forces on.
 #: Each one is documented where it is read (``auth_flow.steps`` and the
 #: ``registration_*_stages`` modules); together they are the reference's request shapes.
 LANE_FLAGS = (
@@ -78,22 +77,23 @@ def apply_reference_lane(config: Any) -> Any:
     """Return ``config`` with the lane preset applied, or ``config`` itself when off.
 
     The returned mapping is a plain-``dict`` copy (callers re-freeze it through
-    ``runtime_config_scope``); the input is never mutated.  An explicit operator
-    value -- including ``False`` -- is kept, so a lane run can still switch one
-    toggle off to bisect it.
+    ``runtime_config_scope``); the input is never mutated.  The preset is
+    authoritative: shipped configs list every toggle as an explicit ``false`` (see
+    ``config.example.json``), so a ``setdefault`` preset would silently do nothing.
+    Values outside the lane (``humanize.factor``, ...) are kept.
     """
     if not isinstance(config, Mapping) or not reference_lane_enabled(config):
         return config
     root = dict(config)
     registration = dict(config.get("registration") or {})
     for key in LANE_FLAGS:
-        registration.setdefault(key, True)
+        registration[key] = True
     bootstrap = dict(registration.get("chatgpt_bootstrap") or {})
-    bootstrap.setdefault("enabled", True)
-    bootstrap.setdefault("authenticated", True)
+    bootstrap["enabled"] = True
+    bootstrap["authenticated"] = True
     registration["chatgpt_bootstrap"] = bootstrap
     humanize = dict(registration.get("humanize") or {})
-    humanize.setdefault("enabled", True)
+    humanize["enabled"] = True
     registration["humanize"] = humanize
     root["registration"] = registration
     email = dict(config.get("email_registration") or {})

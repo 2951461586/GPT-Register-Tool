@@ -92,3 +92,14 @@
 - 查优惠:**5/5 有结论**(全部 `Free · 无优惠`,`trial_eligible=0`)。对比此前批末统一查:4/16 有结论、12 个 `AT失效`。**即时查把"没能判定"变成了"有结论"**。
 - 累计有结论的账号(上批 4 + 本批 5)共 9 个,试用资格为 0:**9/9 均为 Free、无优惠**(推断:iCloud 隐私转发新号目前没有 Plus 试用/折扣资格,样本小,未与其他邮箱源对照)。
 - AT 存活曲线(本批 5 个):1 分钟 5/5,5 分钟 4/5,15 分钟 0/5,30 分钟 0/5;REUSE 标签累计(含上批)1 分钟 17/17、5 分钟 19/21、15 分钟 2/17、30 分钟 0/18。**曲线形状不变**,即时查只是赶在撤销之前拿到结论,没有延长 AT 寿命。
+## 10. 参考项目协议对齐 + SDK 同步(10-12)
+
+- 对照:参考项目 `SENTINEL_SV=20260810913b`(sdk.js 33820 B),本仓此前 `20260219f9f6`。两个版本线上都还在服务。
+- **实测发现(线上,rola IN)**:服务端 challenge 对 `authorize_continue` / `oauth_create_account` 报 `so.required=true`,旧 runner 的 `so` 长度为 0,即**旧栈从未发送 `openai-sentinel-so-token`**。新 runner 调 `sessionObserverToken`,`authorize_continue` SO 约 3272 字符、`oauth_create_account` 约 3162 字符;`username_password_create` 的 challenge 不要求 SO。推断(未验证):缺 SO 是否与 AT 撤销有关,需要新建号对照。
+- 落地(提交 `2b5a937`、`343f541`):
+  - Sentinel 同步到 `20260810913b`,runner 取参考版并保留本仓 Firefox 画像分支;`_so` 由 `issue_sentinel_token` 剥离后包成 SO 头。
+  - 新增 `registration.reference_lane`(默认关):按参考 `main.py` 顺序跑密码泳道,强制打开所需的既有开关(覆盖配置里显式的 `false`),并补上此前没有的两段——登录页匿名预热(accounts/check、CES、me、定价)+ `providers`,以及密码页 Sentinel iframe 包(`frame.html` + 三个 flow 共用一个 `p`)。`user/register` 现在也会带 SO(challenge 要求时)。
+  - `chatgpt` 族请求的 `oai-client-build-number/version` 从数月前的值更新为线上页面当前值。
+  - 全量 pytest 通过(含各类棘轮)。
+- 复跑(上轮 5 个 iCloud 别名,`skip_registered_mailboxes=false`,password 模式 + lane):**没有产生新注册**。这 5 个地址在上一轮已全部注册成功(DB id 14040–14052,`registered`),所以没有变量可测。第 1 个账号走完 lane 全部前置阶段(匿名预热 4×200、providers 200、signin 带 `login_or_signup`+`prompt=login`、`/create-account/password` 落点 200),`user/register` 返回 400 `invalid_auth_step`,`redirect_uri=.../auth/login_with`,即服务端把已存在账号送去登录。第 2 个账号在邮箱快照阶段挂住 8 分钟,已手动终止。
+- 结论:lane 的**请求序列在线上可达密码页**;"新建号后 AT 是否更长命"**仍未验证**,需要 5 个未注册的新别名(Remail iCloud 现货 443,单价 60)。

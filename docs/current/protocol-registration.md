@@ -447,6 +447,31 @@ The password lane ignores the toggle. Evidence and unknowns:
 `docs/audits/scan-2026-10-11-har-passwordless-signup.md`; design:
 `registration-ab-runbook.md` (P3-1).
 
+`registration.reference_lane` (default `false`, `sms_tool/registration_reference_lane.py`)
+runs the reference project's `main.py` password stage order as one lane:
+preflight → anonymous ChatGPT bootstrap (`accounts/check`, CES settings, `me`,
+regional pricing) → `providers` → `csrf` → signin from `/auth/login`
+(`login_or_signup` + `prompt=login`, relative `callbackUrl`, turb
+signin/authorize context) → authorize → `GET /create-account/password` (fatal
+landing, navigation headers) → password-page Sentinel bundle (`frame.html`, then
+`email_otp_validate` / `username_password_create` / `authorize_continue` sharing
+one `p`) → `user/register` → `GET email-otp/send` → code → validate with a fresh
+`authorize_continue` Sentinel (+SO) → `external_url` branch or about-you →
+`oauth_create_account` Sentinel (+SO) → `create_account` → callback + session →
+authenticated warm-up. The switch forces `email_registration.registration_mode=password`
+and turns on the existing toggles it needs (`registration_reference_lane.LANE_FLAGS`,
+`chatgpt_bootstrap`, `humanize`) **over** explicit `false` values, because shipped
+configs list every toggle explicitly. Markers: `Reference lane: pre-signin bootstrap`,
+`Anonymous bootstrap: statuses=...`, `Auth providers: status=...`.
+
+Sentinel is on SDK `20260810913b`. That SDK no longer folds the session-observer
+output into `token()`; the runner calls `sessionObserverToken(flow)` and emits it as
+`_so`, which `issue_sentinel_token` strips from the main token and wraps for
+`OpenAI-Sentinel-SO-Token`. The previous stack never sent an SO header although the
+challenge reported `so.required=true` for `authorize_continue` / `oauth_create_account`.
+`chatgpt`-family requests now claim the live web build (`CHATGPT_CLIENT_*` in
+`auth_headers.py`).
+
 `registration.chatgpt_bootstrap.enabled` (default `false`) now also drives a
 protocol-lane warm-up (`sms_tool/registration_warmup.py`): right after the
 access token is confirmed, 14 read-only bearer GETs (consent, `me`,
