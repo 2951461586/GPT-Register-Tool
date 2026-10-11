@@ -77,3 +77,15 @@
 | explicit（5） | 5/5 `send-otp 200`（3× `pending=false`，2× `pending=unknown`，`mode=passwordless_signup`），轮询 5.5 分钟均 `mailbox_side_no_code` |
 
 换域名没有改变形态：default 全卡在 `pending=true`；explicit 全部 200，但 Smailr 一封信都没收到（能查到的 7 个邮箱 `mail_count=0`，另 3 个在 list 里没返回）。nodeloc.cc 域名不是原因。仍然不能区分「OpenAI 不向 Smailr 域发码」与「Smailr 入站」。两轮合计 explicit 8/8 发送被接受、0 封入信；default 9/10 卡 `pending=true`。
+第四轮（Remail iCloud，n=5，出口 IN，交替 default / explicit / default / explicit / default，即 3 对 2）：
+
+| 臂 | 结果 |
+| --- | --- |
+| default（3） | 3/3 授权后 `pending=true`，`email_otp_send_stuck`（跳过轮询） |
+| explicit（2） | 2/2 `send-otp 200 pending=false mode=passwordless_signup` → 邮箱收到码 → `email-otp/validate 200` → `about-you` → 创建账号 → AT 探测 HTTP 200，`state=active`，已入 `accounts.sqlite3` |
+
+这是 10 月以来第一次注册成功。可以说的：同一出口、同一时段、不同地址下，显式 `send-otp` 臂把「没收到码」变成了「收到码并走通」，且 `pending=false` 与 HAR 的健康派发一致，Smailr 的 0 入信因此更像是 Smailr 入站/域名问题，而不是协议问题。**不能说的**：n=5 远低于预注册的每臂 30（`MIN_ARM_ATTEMPTED`），按规则只能记 `underpowered`，不得据此打开默认值。
+
+两个必须记下的前提：
+- **这 5 个邮箱不是新买的**。`_create_remail_mailboxes` 的批量幂等键由「模式 + 供货策略 + payload」确定，同参数再次下单会原样返回 10-06 那一批订单（钱包余额 33143.00、订单数 3914 前后不变，没有新扣费）。因此它们是**已被用过的地址**（10-06 下单；10-11 上午的 14 个里也可能含这批），与「全新地址」不可比，是地址复用混淆。要真买新的，必须换幂等键（例如换 `quantity` 或 `supply`）。
+- 订单详情的 `lastMailReceivedAt` 在接码窗口过期后不再更新（本轮成功的码并没有让它变新），所以**不能**用它判断 default 臂当时到底有没有收到码。
