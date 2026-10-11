@@ -256,6 +256,7 @@ def finalize(self) -> dict[str, Any]:
         mailbox_snapshot=r._mailbox_snapshot(s.mailbox),
         proxy_audit=self.proxy_metadata,
         fingerprint_geo_audit=self._fingerprint_geo_metadata(),
+        device_identity=getattr(self, "device_identity", {}),
         extra={
             "phone": s.phone_result.get("phone", "") if s.phone_result.get("ok") else "",
             "oauth_refresh_token": s.oauth_refresh_token,

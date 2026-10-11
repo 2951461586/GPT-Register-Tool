@@ -198,7 +198,7 @@ class RegistrationProgress:
             now_mono = time.monotonic()
             self.events[-1]["duration_ms"] = int(max(0.0, now_mono - self._stage_started_monotonic) * 1000)
             self.events[-1]["finished_at"] = int(time.time())
-        from .registration_result import safe_fingerprint_geo_audit, safe_proxy_audit
+        from .registration_result import safe_device_identity, safe_fingerprint_geo_audit, safe_proxy_audit
 
         proxy_audit = safe_proxy_audit((result or {}).get("proxy_audit"))
         fingerprint_geo_audit = safe_fingerprint_geo_audit((result or {}).get("fingerprint_geo_audit"))
@@ -236,6 +236,7 @@ class RegistrationProgress:
                 "proxy_pool_index": pool_index,
                 "proxy_audit": proxy_audit,
                 "fingerprint_geo_audit": fingerprint_geo_audit,
+                "device_identity": safe_device_identity((result or {}).get("device_identity")),
                 "started_at": self.started_at,
                 "finished_at": int(time.time()),
                 "last_stage": self.last_stage,

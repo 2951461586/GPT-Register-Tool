@@ -375,6 +375,32 @@ browser-driver mode which does not exist yet — `run_browser_registration` runs
 switch that nothing executes, which is the fake-comparison failure the mechanism
 gate above exists to prevent. See `plan-2026-10-05` §3.4.2.
 
+## Device identity observation (S0)
+
+Every protocol registration attempt records where its `oai-did` came from, with
+no behaviour change (`plan-2026-10-10-fingerprint-device-layer.md` §3 S0). After
+`prepare_identity` the handler emits, through `operator_output.emit`:
+
+```text
+  Device identity: oai-did=<first 8 chars> reused=<true|false> seeded=<none|email>
+```
+
+`reused` is true only when `get_device_context` returned a stored id, which today
+means the address already has a row in `accounts`. An address that never
+registered therefore reads `reused=false` on **every** run: the current baseline
+is a fresh random `oai-did` per attempt. `seeded` is always `none` until S1
+exists. The same facts ride on every result and progress row as
+`device_identity` (`registration_result.safe_device_identity`), and
+`registration_funnel` aggregates them over **all** attempts, not only successes:
+
+```text
+device_identity: {reused, fresh, unknown, seeded_by_email}
+```
+
+`unknown` means "not recorded" (for example a browser-driver row), never "fresh".
+`oai-did` is a credential-level identifier: only its first 8 characters are ever
+written, in the log line, the result and the progress row.
+
 ## Validation limits
 
 Offline tests cover step ordering, redirect classification and Sentinel header

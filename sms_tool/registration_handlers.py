@@ -176,6 +176,7 @@ class RegistrationEmailWorkflow:
         self.config = config
         self.proxy_metadata = dict(proxy_metadata or {})
         self.fingerprint_country = ""
+        self.device_identity: dict[str, Any] = {}
         self._operations = operations
         self.persistence = persistence or StorageRegistrationPersistence()
         self.post_process_result = post_process_result
@@ -263,9 +264,10 @@ class RegistrationEmailWorkflow:
             existing_account_password_known=self.runtime.existing_account_password_known,
             access_token=self.runtime.access_token,
         )
-        from .registration_result import attach_fingerprint_geo_audit, safe_proxy_audit
+        from .registration_result import attach_fingerprint_geo_audit, safe_device_identity, safe_proxy_audit
 
         result["proxy_audit"] = safe_proxy_audit(getattr(self, "proxy_metadata", {}))
+        result["device_identity"] = safe_device_identity(getattr(self, "device_identity", {}))
         attach_fingerprint_geo_audit(result, self._fingerprint_geo_metadata())
         if cancelled:
             result["registration_state"] = "cancelled"
@@ -580,6 +582,17 @@ class RegistrationEmailWorkflow:
             self._abort(str(exc))
         if c.reused_device_context:
             print("  [Device] Reusing persisted device context")
+        self.device_identity = {"oai_did": s.device_id, "reused": bool(c.reused_device_context), "seeded": "none"}
+        # ``emit``, not ``print``: the device-layer A/B (plan-2026-10-10) reads this
+        # line from ``sms_tool.log``.  Only the first 8 characters of ``oai-did`` are
+        # ever written; it is a credential-level identifier.
+        _emit(
+            _LOGGER,
+            "  Device identity: oai-did=%s reused=%s seeded=%s",
+            s.device_id[:8],
+            str(bool(c.reused_device_context)).lower(),
+            "none",
+        )
         print(f"[*] Username: {s.username}  Password: [stored]  Name: {s.full_name}  Birth: {s.birthdate}")
         self._persist_checkpoint("identity_ready")
         s.session = _new_registration_session(s.proxy)

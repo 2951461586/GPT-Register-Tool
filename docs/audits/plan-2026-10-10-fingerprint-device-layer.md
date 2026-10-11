@@ -169,7 +169,10 @@ Sentinel SID / iframe SID / react key / datadog trace+parent / 指纹池索引**
 
 1. **S0（零行为变更，可立即做）**：加 `Device identity` 机制行 + `registration_funnel`
    的 `device_identity` 块；离线测试钉住「同邮箱两轮 → `reused=false`（当前行为）」，
-   把现状固化成基线。
+   把现状固化成基线。**✅ 2026-10-11 已落地**（`tests/test_device_identity_observation.py`；
+   `seeded` 恒为 `none`，funnel 块为 `{reused, fresh, unknown, seeded_by_email}` 且统计**全部**
+   尝试；§10 问 3 的 `exit_ip` 哈希**未做**，仍待拍板）。口径见
+   `docs/current/protocol-registration.md` 「Device identity observation (S0)」。
 2. **S1（单变量）**：`device_identity_seeded_by_email` + 预注册 `p2-1`；先在**有邮箱供给**
    时跑（当前被 ReMail 无货阻塞，见 §9）。
 3. **S2（在 S1 定案后）**：`device_fingerprint_seed_by_email` + `p2-2`。

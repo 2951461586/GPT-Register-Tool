@@ -82,6 +82,30 @@ def _egress_check(row: Mapping[str, Any]) -> str:
     return "unknown"
 
 
+def _device_identity_totals(rows: Iterable[Mapping[str, Any]]) -> dict[str, int]:
+    """Count where each attempt's ``oai-did`` came from, over *every* attempt.
+
+    Failures are the point (the device-layer plan asks whether an address that
+    never registered keeps a stable identity), so unlike the success-only
+    consistency checks this walks all rows.  ``unknown`` means "not recorded",
+    never "fresh".
+    """
+    reused = fresh = unknown = seeded = 0
+    for row in rows:
+        identity = row.get("device_identity")
+        identity = identity if isinstance(identity, Mapping) else {}
+        flag = identity.get("reused")
+        if flag is True:
+            reused += 1
+        elif flag is False:
+            fresh += 1
+        else:
+            unknown += 1
+        if str(identity.get("seeded") or "").strip().lower() == "email":
+            seeded += 1
+    return {"reused": reused, "fresh": fresh, "unknown": unknown, "seeded_by_email": seeded}
+
+
 def _promotion_sources(promotion: Mapping[str, Any]) -> dict[str, int]:
     rows = promotion.get("results")
     if not isinstance(rows, list):
@@ -145,6 +169,7 @@ def summarize_registration_funnel(
         "fingerprint_consistency": dict(sorted(fingerprint_checks.items())),
         "device_consistency": dict(sorted(device_checks.items())),
         "edge_challenge": _edge_challenge_totals(rows),
+        "device_identity": _device_identity_totals(rows),
         "promotion": {
             "checked": checked,
             "total": probe_total,
@@ -187,6 +212,11 @@ def combine_registration_funnels(funnels: Iterable[Mapping[str, Any]]) -> dict[s
         edge_unknown += _count(edge.get("unknown"))
         edge_rotations += _count(edge.get("rotations"))
         edge_rotate_failed += _count(edge.get("rotate_failed"))
+    device_totals = {"reused": 0, "fresh": 0, "unknown": 0, "seeded_by_email": 0}
+    for row in rows:
+        device = row.get("device_identity") if isinstance(row.get("device_identity"), Mapping) else {}
+        for key in device_totals:
+            device_totals[key] += _count(device.get(key))
     probe_total = sum(int(row.get("total") or 0) for row in checked) if checked else None
     probe_ok = sum(int(row.get("successful") or 0) for row in checked) if checked else None
     eligible = sum(int(row.get("trial_eligible") or 0) for row in checked) if checked else None
@@ -206,6 +236,7 @@ def combine_registration_funnels(funnels: Iterable[Mapping[str, Any]]) -> dict[s
             "rotations": edge_rotations,
             "rotate_failed": edge_rotate_failed,
         },
+        "device_identity": device_totals,
         "promotion": {
             "checked": bool(checked),
             "total": probe_total,

@@ -141,11 +141,13 @@ class RegistrationProgressTests(unittest.TestCase):
                             "source": "preflight",
                             "proxy": "http://user:secret@proxy.invalid",
                         },
+                        "device_identity": {"oai_did": "0123456789abcdef-tail", "reused": False, "seeded": "none"},
                         "future_batch_eligible": True,
                         "retry_disposition": "cooldown",
                     }
                 )
             stored = json.loads(path.read_text(encoding="utf-8").strip())
+            self.assertEqual(stored["device_identity"], {"oai_did": "01234567", "reused": False, "seeded": "none"})
             self.assertEqual(stored["batch_id"], "batch-1")
             self.assertEqual(stored["attempt"], 2)
             self.assertEqual(stored["failure_class"], "auth_state")

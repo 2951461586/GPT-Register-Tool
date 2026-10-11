@@ -109,6 +109,30 @@ def safe_proxy_audit(metadata: Mapping[str, Any] | None) -> dict[str, Any]:
     }
 
 
+DEVICE_IDENTITY_SEEDS = frozenset({"none", "email"})
+
+
+def safe_device_identity(metadata: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Token-free record of where this attempt's ``oai-did`` came from.
+
+    ``oai-did`` is a credential-level identifier, so only its first 8 characters
+    survive.  ``reused`` is ``None`` (not ``False``) when nothing was recorded:
+    the funnel must be able to tell "a fresh id was minted" from "not measured".
+    ``seeded`` names the derivation (``none`` = random per run, ``email`` = a pure
+    function of the address); anything else reads as ``unknown`` rather than
+    being echoed back into a report.
+    """
+    value = metadata if isinstance(metadata, Mapping) else {}
+    reused = value.get("reused")
+    seeded = str(value.get("seeded") or "").strip().lower()
+    did = str(value.get("oai_did") or value.get("device_id") or "").strip()
+    return {
+        "oai_did": did[:8],
+        "reused": reused if isinstance(reused, bool) else None,
+        "seeded": seeded if seeded in DEVICE_IDENTITY_SEEDS else "unknown",
+    }
+
+
 def safe_fingerprint_geo_audit(metadata: Mapping[str, Any] | None = None, **fields: Any) -> dict[str, str]:
     """Compare a selected locale with an independently observed exit, without proxy data."""
     value = dict(metadata) if isinstance(metadata, Mapping) else {}
@@ -200,6 +224,7 @@ def build_registration_result(
     mailbox_snapshot: Mapping[str, Any] | None = None,
     proxy_audit: Mapping[str, Any] | None = None,
     fingerprint_geo_audit: Mapping[str, Any] | None = None,
+    device_identity: Mapping[str, Any] | None = None,
     extra: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Assemble one registration result dict from already-computed values.
@@ -239,6 +264,7 @@ def build_registration_result(
         "mailbox": mailbox_snapshot or {},
         "proxy_audit": safe_proxy_audit(proxy_audit),
         "fingerprint_geo_audit": safe_fingerprint_geo_audit(fingerprint_geo_audit),
+        "device_identity": safe_device_identity(device_identity),
     }
     if extra:
         result.update(extra)
@@ -294,6 +320,7 @@ __all__ = [
     "build_registration_result",
     "build_registration_failure_result",
     "safe_proxy_audit",
+    "safe_device_identity",
     "safe_fingerprint_geo_audit",
     "attach_fingerprint_geo_audit",
 ]
