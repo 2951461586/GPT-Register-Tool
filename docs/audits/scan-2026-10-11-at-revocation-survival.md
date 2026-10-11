@@ -75,3 +75,13 @@
 - 对照参考仓 `myfanhua/turb-gpt-free-register`:它也是落库后立刻入队查询(`AUTO_PLAN_CHECK_AFTER_REGISTER`)。**未移植**它对「Free 且无试用资格」账号 2 秒后复查一次:本仓每次探测都会落库,复查失败会盖掉首次成功结果;也没有数据表明资格会在注册后滞后出现。
 - 测试:`tests/test_registration_immediate_promotion.py`(顺序、无开关不探、批末不重探、仅补查缺失、探测抛错回落、延迟 AT 不即时探、合并);`tests/test_account_promotion.py` 的一条断言从整体相等改为核心计数相等。
 - **未做**:新代码尚无线上实测(iCloud 库存为 0)。预期:每账号注册后约 1 分钟内探测,AT 此时应为活。
+## 8. 重登 AT 失效的 iCloud 账号(10-12,生产路径 auto 模式)
+
+- 范围:id>=13950 的 37 个 iCloud 账号(P1 launcher 14 个 + 13950–13964 + 复用批 16 个),`refresh_local_quota_statuses(relogin_on_401=True, relogin_mode="auto", workers=2)`,出口为 rola.vip(IN)。
+- 结果:**0/37 恢复**(中止前逐一复测:36 个 401,1 个传输错误)。批次约 30 分钟后手动中止:邮件 OTP 失败后回落到浏览器通道(下载 camoufox/GeoLite2),整体过慢。
+- 观察到的失败形态(实测):
+  1. Codex PKCE 通道:首个 `GET oauth/authorize` 即 403 边缘挑战(单账号复测 14037 同样,`session_circuit_open ... retry_after=899s`)。
+  2. 邮件 OTP 通道:`send-otp` 200、验证码到达,`email-otp/validate` → **401 `login_failed`**(泛化错误,不是 13962 那种明确的 403 停用);随后 resend 返回 200,但邮箱里**没有再来新邮件**。
+  3. 部分账号(如 13950、13956、13960)在重登窗口内邮箱没有任何新邮件,说明根本没走到发码。
+- 推断(未验证):这些账号的**登录本身被服务端拒绝**(与 AT 被撤、账号受限同源),不是重登实现的问题;13962 的 403 `deleted or deactivated` 是同一现象的明示版本。若要确认,需要对一个**刚注册 1–2 分钟内**的账号做重登,看 AT 撤销之前登录是否被允许。
+- 已购且无账号行的 iCloud 地址只剩 1 个,服务端判定已注册,被注册前置过滤跳过;**可复用的未注册库存已耗尽**。Remail iCloud 现货 443,单价 60。
