@@ -657,6 +657,8 @@ def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -
             "signup_email_verification_continue_hint",
             "create_account_disallowed_backoff",
             "existing_login_continue_on_verified_page",
+            "sentinel_password_bundle",
+            "obtain_refresh_token",
             "turb_signin_authorize_context",
             "prime_password_page_fatal",
             "otp_navigation_headers",

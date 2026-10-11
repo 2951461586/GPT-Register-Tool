@@ -98,6 +98,23 @@ class RefreshTokenIsOptInTests(unittest.TestCase):
 
         collect.assert_not_called()
 
+    def test_a_string_false_does_not_turn_the_opt_in_on(self):
+        """2026-10-11 scan P1-B: ``bool(cfg.get(...))`` made ``"false"`` truthy."""
+        workflow = _workflow(config={"registration": {"obtain_refresh_token": "false"}})
+        with patch("sms_tool.registration_finalize.collect_codex_oauth_tokens") as collect:
+            workflow.obtain_oauth_refresh_token()
+
+        collect.assert_not_called()
+
+    def test_a_string_true_is_honoured(self):
+        workflow = _workflow(config={"registration": {"obtain_refresh_token": "true"}})
+        with patch(
+            "sms_tool.registration_finalize.collect_codex_oauth_tokens", return_value=dict(_OAUTH_OK)
+        ) as collect:
+            workflow.obtain_oauth_refresh_token()
+
+        self.assertEqual(collect.call_count, 1)
+
 
 class RefreshTokenExchangeTests(unittest.TestCase):
     def _enabled(self, **kwargs):

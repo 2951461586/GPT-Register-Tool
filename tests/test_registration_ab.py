@@ -578,6 +578,30 @@ class IoHelperTests(unittest.TestCase):
                 f"{experiment}/{truthy_arms[0]} 的 toggle 未被 read_toggles 覆盖 ⇒ compare 恒 unverified",
             )
 
+    def test_the_shipped_example_config_carries_every_declared_toggle(self):
+        """``config.example.json`` 必须带齐 ``EXPERIMENTS`` 的每个 toggle。
+
+        2026-10-11 扫描 P0-A″：``read_toggles`` 修好之后，仍有三个开关
+        （``preflight_login_page`` / ``sentinel_password_bundle`` /
+        ``create_account_disallowed_backoff``）**不在出厂样例里**。照 runbook 用
+        样例派生的 config 跑，``read_toggles`` 读不到键，``compare`` 恒返回
+        ``unverified`` 并**早于**机制门禁返回 —— P0-1 / P1-3 / P1-7 结构性不可判定。
+
+        上一个测试遍历设计表但**自造** config，所以「reader 覆盖设计表」有门禁，
+        「出厂 config 覆盖设计表」零门禁。这个测试读的是仓库里的**出厂文件**。
+        """
+        example = json.loads((ROOT / "config.example.json").read_text(encoding="utf-8"))
+        registration = example.get("registration") or {}
+        declared = {
+            str(design["toggle"]).split(".", 1)[1] for design in ab.EXPERIMENTS.values() if design.get("toggle")
+        }
+        missing = sorted(key for key in declared if key not in registration)
+        self.assertEqual(
+            missing,
+            [],
+            "config.example.json 缺少 A/B 开关，照 runbook 采集会恒 unverified（P0-A″）",
+        )
+
     def test_unreadable_artifacts_degrade_instead_of_raising(self):
         """缺失/损坏的输入不得让工具在能报 ``unverified`` 之前崩掉。"""
         with tempfile.TemporaryDirectory() as tmp:

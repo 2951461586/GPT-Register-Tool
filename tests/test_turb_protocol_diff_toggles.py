@@ -175,6 +175,25 @@ class PrimePasswordPageFatalTests(unittest.TestCase):
         result, _emit = self._prime(fatal=True, landing="https://auth.openai.com/create-account/password")
         self.assertTrue(result["ok"])
 
+    def test_the_marker_is_unconditional_even_when_the_prime_is_skipped(self):
+        """2026-10-11 scan P2-B: the marker must not sit behind the early return.
+
+        A window that already lands on the password page skips the prime; if the
+        marker were emitted after that return, the treatment arm would record
+        ``mechanism_ok=false`` and ``compare`` would judge ``manipulation_failed``
+        instead of ``not_judgeable``.
+        """
+        with (
+            patch.object(auth_flow.steps, "_prime_password_page_fatal_enabled", lambda: True),
+            patch.object(auth_flow.signup, "_emit_operator_line") as emit,
+        ):
+            result = auth_flow.signup._prime_create_account_password_page(
+                Mock(), "https://auth.openai.com", {}, "https://auth.openai.com/create-account/password"
+            )
+        self.assertTrue(result["ok"])
+        labels = [call.args[1] for call in emit.call_args_list]
+        self.assertIn("  Password page landing is fatal", labels)
+
     def test_user_register_aborts_only_when_the_prime_flagged_fatal(self):
         def _fake():
             return _FakeWorkflow(

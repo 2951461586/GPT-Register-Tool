@@ -207,6 +207,7 @@ _CONVERGED_FLAG_SITES = (
     ("edge_challenge_rotate_exit", registration_edge_challenge.edge_challenge_rotate_exit_enabled),
     ("prime_about_you_page", RegistrationEmailWorkflow._prime_about_you_page_enabled),
     ("create_account_disallowed_backoff", RegistrationEmailWorkflow._create_account_disallowed_backoff_delays),
+    ("obtain_refresh_token", RegistrationEmailWorkflow._obtain_refresh_token_enabled),
 )
 
 

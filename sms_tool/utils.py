@@ -2,9 +2,11 @@ import random
 import secrets
 import threading
 import time
+from collections.abc import Mapping
 from pathlib import Path
 
 from .config import CFG
+from .humanize import humanize_config
 
 _tls = threading.local()
 
@@ -96,7 +98,7 @@ _THINK_STAGE_RANGES_MS = {
 }
 
 
-def think_stage(stage_label: str = "", cfg: dict | None = None):
+def think_stage(stage_label: str = "", cfg: Mapping | None = None):
     """Insert a randomized human-like dwell between registration stages.
 
     A fixed dwell is itself a detectable cadence, so the delay is jittered:
@@ -106,23 +108,30 @@ def think_stage(stage_label: str = "", cfg: dict | None = None):
     - ``registration.think_time_ms`` (legacy fixed value) — still honored, but now
       sampled in a ±35% band around it instead of a constant.
     - Otherwise the built-in per-stage ranges apply only when
-      ``registration.humanize`` is enabled; disabled by default for parity.
+      ``registration.humanize.enabled`` is true; disabled by default for parity.
 
-    ``registration.humanize_factor`` scales all dwell times (e.g. 0.5 for faster
+    ``registration.humanize.factor`` scales all dwell times (e.g. 0.5 for faster
     batches). This defeats OpenAI's bot-timing detection that flags accounts
     completing multi-stage OAuth flows in near-constant time.
+
+    🔴 ``registration.humanize`` is the object ``{"enabled": bool, "factor":
+    float}`` documented in ``config.example.json`` and read by
+    ``sms_tool.humanize``.  It used to be read here as a bare truthiness test,
+    and a non-empty object is **always truthy** -- so the documented
+    ``"enabled": false`` could not turn the built-in ranges off, and
+    ``humanize.factor`` was ignored in favour of an undocumented flat
+    ``humanize_factor`` (2026-10-11 scan P1-A).  Both readers now share
+    ``humanize_config`` so one shape has one meaning.
     """
     cfg = cfg or CFG
-    registration_cfg = cfg.get("registration", {}) if isinstance(cfg, dict) else {}
+    registration_cfg = cfg.get("registration", {}) if isinstance(cfg, Mapping) else {}
     if not stage_label:
         return
-    try:
-        factor = float(registration_cfg.get("humanize_factor", 1.0) or 1.0)
-    except (TypeError, ValueError):
-        factor = 1.0
+    humanize = humanize_config(cfg)
+    factor = humanize["factor"]
 
     configured = registration_cfg.get("humanize_delays")
-    configured = configured if isinstance(configured, dict) else {}
+    configured = configured if isinstance(configured, Mapping) else {}
     rng = configured.get(stage_label) or configured.get("default")
 
     seconds = 0.0
@@ -139,7 +148,7 @@ def think_stage(stage_label: str = "", cfg: dict | None = None):
             ms = 0
         if ms > 0:
             seconds = random.uniform(ms * 0.65, ms * 1.35) / 1000.0
-        elif registration_cfg.get("humanize"):
+        elif humanize["enabled"]:
             lo, hi = _THINK_STAGE_RANGES_MS.get(stage_label, _THINK_STAGE_RANGES_MS["default"])
             if hi > 0:
                 seconds = random.uniform(lo, hi) / 1000.0

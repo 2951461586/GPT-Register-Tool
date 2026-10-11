@@ -227,15 +227,16 @@ def _prime_create_account_password_page(session, auth_base, base_headers, curren
     the server does when the page state is present: aborting here would fail the
     run for a different reason and mask the comparison.
     """
+    if steps._prime_password_page_fatal_enabled():
+        # Mechanism line for ``p1-14-prime-password-page-fatal``.  Emitted
+        # **before** the already-on-the-password-page early return below, so it
+        # is unconditional inside the toggle's branch: a window in which the
+        # prime is skipped would otherwise record ``mechanism_ok=false`` and be
+        # judged ``manipulation_failed`` instead of ``not_judgeable``
+        # (2026-10-11 scan P2-B).
+        _emit_operator_line(_LOGGER, "  Password page landing is fatal")
     if steps._is_signup_password_page(current_url):
         return {"ok": True, "url": current_url, "skipped": True}
-    if steps._prime_password_page_fatal_enabled():
-        # Mechanism line for ``p1-14-prime-password-page-fatal``: unconditional
-        # inside the toggle's branch.  Emitting only on a wrong landing would
-        # repeat P1-7's conditional-marker defect -- a batch that always lands
-        # correctly would be judged ``manipulation_failed`` instead of
-        # ``not_judgeable``.
-        _emit_operator_line(_LOGGER, "  Password page landing is fatal")
     url = f"{auth_base}/create-account/password"
     referer = current_url if str(current_url or "").startswith(auth_base) else f"{auth_base}/"
     navigation_headers = dict(base_headers)

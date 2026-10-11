@@ -38,10 +38,16 @@
   "registration": {
     "driver": "protocol",
     "skip_registered_mailboxes": true,
+    "preflight_login_page": "browser",
+    "proxy_scheme_fallback": "auto",
+    "deprioritize_base_conflicts": true,
     "edge_challenge_discrimination": true,
     "edge_challenge_rotate_exit": false,
     "existing_login_continue_on_verified_page": true,
     "prime_about_you_page": false,
+    "sentinel_password_bundle": false,
+    "create_account_disallowed_backoff": false,
+    "obtain_refresh_token": false,
     "prime_create_account_password": false,
     "prime_navigation_headers": false,
     "signup_continue_screen_hint": false,
@@ -69,6 +75,8 @@
       "enabled": false,
       "factor": 1.0
     },
+    "humanize_delays": {},
+    "think_time_ms": 0,
     "reject_cloud_proxy": false,
     "fingerprint_pool": {
       "mode": "random",

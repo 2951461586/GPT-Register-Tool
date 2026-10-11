@@ -48,7 +48,17 @@ DEFAULT_HUMANIZE_CONFIG: dict[str, Any] = {
 
 
 def humanize_config(config: Mapping[str, Any] | None) -> dict[str, Any]:
-    """Read ``registration.humanize``; defaults keep the historical timing."""
+    """Read ``registration.humanize``; defaults keep the historical timing.
+
+    ``registration.humanize`` is the object ``{"enabled": bool, "factor":
+    float}`` documented in ``config.example.json``.  The legacy scalar form
+    (``"humanize": true``) is still honoured as ``enabled`` -- a bare truthy
+    value predates the object shape and would otherwise silently read as
+    disabled.  This is the **single** reader of the shape; ``utils.think_stage``
+    delegates here instead of testing the raw value's truthiness (2026-10-11
+    scan P1-A: a non-empty object is always truthy, so the documented
+    ``"enabled": false`` could not turn the built-in dwell ranges off).
+    """
     merged = dict(DEFAULT_HUMANIZE_CONFIG)
     section = (config or {}).get("registration")
     if isinstance(section, Mapping):
@@ -57,6 +67,8 @@ def humanize_config(config: Mapping[str, Any] | None) -> dict[str, Any]:
             for key in DEFAULT_HUMANIZE_CONFIG:
                 if key in raw:
                     merged[key] = raw[key]
+        elif isinstance(raw, bool):
+            merged["enabled"] = raw
     merged["enabled"] = bool(merged["enabled"])
     try:
         factor = float(merged["factor"])

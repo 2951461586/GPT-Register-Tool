@@ -1321,12 +1321,12 @@ class RegistrationEmailWorkflow:
         )
 
     def _obtain_refresh_token_enabled(self) -> bool:
-        # ``self.config`` is None on the bare-handler path some tests build, and
-        # the opt-in check must fail *closed* there rather than raise.
-        cfg = (self.config or {}).get("registration", {})
-        if not isinstance(cfg, Mapping):
-            return False
-        return bool(cfg.get("obtain_refresh_token", False))
+        # ``registration.obtain_refresh_token`` (default **False**).  Read
+        # through the shared two-sided parser: ``bool(cfg.get(...))`` made the
+        # string ``"false"`` truthy, so a hand-edited config could turn this
+        # default-off opt-in **on** (2026-10-11 scan P1-B).  A ``None`` config
+        # (the bare-handler path some tests build) reads as the default, off.
+        return registration_flag(self.config, "obtain_refresh_token", False)
 
     def obtain_oauth_refresh_token(self) -> None:
         return _registration_finalize.obtain_oauth_refresh_token(self)
