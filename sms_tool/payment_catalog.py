@@ -188,6 +188,27 @@ def normalize_payment_method(value: Any, *, default_for_blank: bool = True) -> s
     return PAYMENT_CATALOG.normalize(value, default_for_blank=default_for_blank)
 
 
+OFFLINE_ERROR_CODE = "payment_method_offline"
+
+
+def offline_method_error(method: str, *, probe_only: bool = False) -> ValueError | None:
+    """Return the refusal for executing a ``release_tier == "offline"`` method.
+
+    Execution is refused before any Checkout create: an offline method's
+    extractor cannot finish, so creating a session for it only spends the
+    account's create budget.  The read-only capability probe stays allowed
+    because it never runs the extractor.
+    """
+    definition = PAYMENT_METHODS.get(method)
+    if definition is None or definition.release_tier != "offline" or probe_only:
+        return None
+    error = ValueError(f"payment method is offline: {method}")
+    error.error_code = OFFLINE_ERROR_CODE  # type: ignore[attr-defined]
+    error.error_stage = "validation"  # type: ignore[attr-defined]
+    error.retryable = False  # type: ignore[attr-defined]
+    return error
+
+
 def validate_catalog_consistency(*, adapter_methods: set[str] | None = None) -> None:
     """Fail fast when the canonical catalog drifts from executable contracts."""
     from .checkout_contract import PAYMENT_METHOD_PROFILES

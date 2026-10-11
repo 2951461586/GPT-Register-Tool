@@ -226,6 +226,45 @@ def _no_real_egress_probe(request, monkeypatch):
     payment_egress.clear_cache()
 
 
+@pytest.fixture(autouse=True)
+def _offline_payment_methods_online(request, monkeypatch):
+    """Run the subprocess-extractor plumbing tests as if the methods were online.
+
+    The catalog marks ideal / pix / kakao / blik / twint / momo ``offline`` and the
+    router refuses to execute them, because the Checkout create no longer issues
+    the ``cs_*`` sessions their extractors need.  The adapter, contract and batch
+    machinery those tests cover is still live code and still needs a concrete
+    method to drive, so each test sees the pre-offline definition by default.
+
+    A test that means to exercise the refusal opts in with
+    ``@pytest.mark.enforce_offline_methods``.
+    """
+    if "enforce_offline_methods" in request.keywords:
+        yield
+        return
+
+    import dataclasses
+
+    from sms_tool import payment_batch, payment_catalog
+
+    restored = {
+        key: (
+            dataclasses.replace(
+                definition,
+                release_tier="production",
+                batch_enabled=key != "blik",
+                registration_enabled=True,
+            )
+            if definition.release_tier == "offline"
+            else definition
+        )
+        for key, definition in payment_catalog.PAYMENT_METHODS.items()
+    }
+    monkeypatch.setattr(payment_catalog, "PAYMENT_METHODS", restored)
+    monkeypatch.setattr(payment_batch, "PAYMENT_METHODS", restored)
+    yield
+
+
 @pytest.fixture(scope="session")
 def runtime_sandbox(tmp_path_factory):
     """One runtime sandbox for the whole session -- see ``isolated_runtime``.

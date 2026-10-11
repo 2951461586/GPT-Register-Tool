@@ -79,7 +79,9 @@ namespace SmsWorkbench
             PaymentMethodOptions = PaymentMethods.BatchOptions;
             WorkerOptions = Enumerable.Range(1, 10).ToArray();
             RetryOptions = new[] { 0, 1, 2, 3, 4, 5 };
-            selectedMethod = PaymentMethodOptions.First(option => option.Id == "momo");
+            string defaultMethodId = PaymentMethods.Normalize(null);
+            selectedMethod = PaymentMethodOptions.FirstOrDefault(option => option.Id == defaultMethodId)
+                ?? PaymentMethodOptions[0];
             _automaticBatchId = CreateBatchId(selectedMethod.Id);
             batchId = _automaticBatchId;
             ReloadCountryOptions();

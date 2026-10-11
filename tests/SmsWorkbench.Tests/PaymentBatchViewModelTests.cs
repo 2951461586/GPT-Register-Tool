@@ -32,7 +32,7 @@ public sealed class PaymentBatchViewModelTests
         Assert.True(service.LastRequest.ProbeOnly);
         Assert.Equal(2, service.LastRequest.Accounts.Count);
         Assert.Equal(1, service.LastRequest.Canary);
-        Assert.StartsWith("momo_", service.LastRequest.BatchId);
+        Assert.StartsWith("paypal_", service.LastRequest.BatchId);
         Assert.NotEqual("probe_id", service.LastRequest.BatchId);
         Assert.Equal("正在执行 Checkout 与 Stripe init 支付能力探测...", statusDuringRun);
         Assert.True(viewModel.HasRun);
@@ -47,11 +47,11 @@ public sealed class PaymentBatchViewModelTests
             new StubFileLauncher(),
             new[] { new PaymentBatchAccount("user@example.com", true) });
 
+        Assert.True(viewModel.IsPayPalSelected);
+        viewModel.SelectedMethod = viewModel.PaymentMethodOptions.First(option => option.Id == "gopay");
         Assert.False(viewModel.IsPayPalSelected);
         viewModel.SelectedMethod = viewModel.PaymentMethodOptions.First(option => option.Id == "paypal");
         Assert.True(viewModel.IsPayPalSelected);
-        viewModel.SelectedMethod = viewModel.PaymentMethodOptions.First(option => option.Id == "momo");
-        Assert.False(viewModel.IsPayPalSelected);
     }
 
     [Fact]
@@ -222,12 +222,12 @@ public sealed class PaymentBatchViewModelTests
             new StubFileLauncher(),
             new[] { new PaymentBatchAccount("user@example.com", true) });
 
-        Assert.Equal("momo", viewModel.SelectedMethod.Id);
+        Assert.Equal("paypal", viewModel.SelectedMethod.Id);
         Assert.Equal(new PaymentProxyCountryOption("", "自动（跟随账单区）"), viewModel.CheckoutCountryOptions[0]);
         Assert.Equal(
-            PaymentMethods.CheckoutCountryOptions("momo"),
+            PaymentMethods.CheckoutCountryOptions("paypal"),
             viewModel.CheckoutCountryOptions.Skip(1).ToArray());
-        Assert.Equal(PaymentMethods.ApproveCountryOptions("momo"), viewModel.ApproveCountryOptions);
+        Assert.Equal(PaymentMethods.ApproveCountryOptions("paypal"), viewModel.ApproveCountryOptions);
     }
 
     private static readonly PaymentProxyCountryOption[] StubCheckoutDefaults = { new("US", "美国 US") };

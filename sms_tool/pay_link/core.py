@@ -15,7 +15,7 @@ from ..payment_operation import (
 from ..payment_routing import PaymentRoutePlan, PaymentRoutePlanner
 
 from .adapters import _run_regional_wallet_adapter, _run_wallet_adapter
-from .base import PAYMENT_METHODS, _LOGGER, _config_data, _redact_sensitive_text
+from .base import PAYMENT_METHODS, _LOGGER, _config_data, _offline_refusal, _redact_sensitive_text
 from .normalize import _classify_exception, _normalize_result
 from .persistence import _safe_persist_run
 from .registry import PAYMENT_ADAPTERS, _enabled_methods, normalize_payment_method
@@ -48,6 +48,9 @@ def generate_payment_link(
             raise ValueError(f"unsupported payment method: {payment_method}")
         if method not in _enabled_methods(source):
             raise ValueError(f"payment method disabled by protocol_payments.enabled_methods: {method}")
+        offline_error = _offline_refusal(method, probe_only=bool(options.get("probe_only")))
+        if offline_error is not None:
+            raise offline_error
         if plan is not None and plan.payment_method != method:
             raise ValueError(f"payment route plan method mismatch: {plan.payment_method} != {method}")
         if plan is None:

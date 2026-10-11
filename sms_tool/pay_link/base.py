@@ -13,6 +13,7 @@ from ..paths import project_path, runtime_file
 from ..payment_catalog import (
     PAYMENT_METHODS as CATALOG_METHODS,
     normalize_payment_method as normalize_catalog_payment_method,
+    offline_method_error,
     validate_catalog_consistency,
 )
 from ..payment_operation import (
@@ -28,6 +29,10 @@ from ..payment_routing import (
     payment_proxy_pools as canonical_payment_proxy_pools,
 )
 from ..sanitizer import sanitize as _canonical_sanitize, sanitize_text as _canonical_sanitize_text
+
+
+def _offline_refusal(method: str, *, probe_only: bool = False) -> ValueError | None:
+    return offline_method_error(method, probe_only=probe_only)
 
 
 def _config_data(runtime_config: Mapping[str, Any] | None = None) -> Mapping[str, Any]:

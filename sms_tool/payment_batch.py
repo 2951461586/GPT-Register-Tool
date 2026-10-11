@@ -28,7 +28,7 @@ from .payment_link_manager import (
 )
 from .payment_routing import PaymentRoutePlanner
 from .payment_contracts import PaymentResult, payment_history_metadata, payment_retry_allowed
-from .payment_catalog import PAYMENT_METHODS
+from .payment_catalog import PAYMENT_METHODS, offline_method_error
 from .payment_batch_setup import apply_configured_stage_pools
 
 # Minimum spacing between "running" checkpoint rewrites of the batch report
@@ -105,6 +105,9 @@ def run_payment_batch(
     if not method:
         raise ValueError(f"unsupported payment method: {payment_method}")
     definition = PAYMENT_METHODS[method]
+    offline_error = offline_method_error(method, probe_only=probe_only)
+    if offline_error is not None:
+        raise offline_error
     if not probe_only and not definition.batch_enabled:
         raise ValueError(f"payment method is not enabled for batch execution: {method}")
     if definition.release_tier == "canary" and not probe_only and not canary:

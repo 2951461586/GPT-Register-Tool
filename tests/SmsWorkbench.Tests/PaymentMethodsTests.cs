@@ -5,6 +5,7 @@ namespace SmsWorkbench.Tests;
 public sealed class PaymentMethodsTests
 {
     private static readonly string[] WalletIds = ["gopay", "gcash", "grabpay"];
+    private static readonly string[] OfflineIds = ["ideal", "pix", "kakao", "blik", "twint", "momo"];
 
     [Theory]
     [InlineData("kakao pay", "kakao")]
@@ -26,6 +27,13 @@ public sealed class PaymentMethodsTests
         Assert.Contains(PaymentMethods.All, method => method.Id == "blik" && !method.BatchEnabled);
         Assert.Contains(PaymentMethods.All, method => method.Id == "direct_card");
         Assert.DoesNotContain(PaymentMethods.BatchOptions, method => method.Id == "blik");
+        Assert.All(OfflineIds, id =>
+        {
+            Assert.Contains(PaymentMethods.All, method => method.Id == id && !method.BatchEnabled && !method.RegistrationEnabled);
+            Assert.DoesNotContain(PaymentMethods.BatchOptions, method => method.Id == id);
+            Assert.DoesNotContain(PaymentMethods.RegistrationOptions, method => method.Id == id);
+        });
+        Assert.Contains(PaymentMethods.RegistrationOptions, method => method.Id == "direct_card");
         Assert.All(new[] { "qris", "bizum", "naver_pay" }, id =>
         {
             Assert.Contains(PaymentMethods.All, method => method.Id == id && method.BatchEnabled && !method.RegistrationEnabled);
