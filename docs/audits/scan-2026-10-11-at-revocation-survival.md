@@ -103,3 +103,17 @@
   - 全量 pytest 通过(含各类棘轮)。
 - 复跑(上轮 5 个 iCloud 别名,`skip_registered_mailboxes=false`,password 模式 + lane):**没有产生新注册**。这 5 个地址在上一轮已全部注册成功(DB id 14040–14052,`registered`),所以没有变量可测。第 1 个账号走完 lane 全部前置阶段(匿名预热 4×200、providers 200、signin 带 `login_or_signup`+`prompt=login`、`/create-account/password` 落点 200),`user/register` 返回 400 `invalid_auth_step`,`redirect_uri=.../auth/login_with`,即服务端把已存在账号送去登录。第 2 个账号在邮箱快照阶段挂住 8 分钟,已手动终止。
 - 结论:lane 的**请求序列在线上可达密码页**;"新建号后 AT 是否更长命"**仍未验证**,需要 5 个未注册的新别名(Remail iCloud 现货 443,单价 60)。
+## 11. reference lane 线上全链路 + AT 存活(10-12,新买 5 个 iCloud)
+
+- 样本:新买 5 个 Remail iCloud(300,唯一幂等键,与 DB 零重叠),出口 rola.vip(IN),`--registration-mode password` + `registration.reference_lane`(仅内存开启)、生产默认 2FA、`--check-promotion-after-registration`。
+- 注册结果(**实测**):**1/5 成功**(DB id 14055)。
+  - 账号 1:第一次启动的进程在 `[4-Trigger email OTP]` 前后被我自己的 shell 回收杀掉(`user/register` 已 200),重启后同地址 `invalid_auth_step`(服务端已把它当已存在账号送去登录)。这是**操作失误,不是 lane 缺陷**,不计入 lane 成功率分母时为 1/4。
+  - 账号 3/4/5:`user/register` 200 → `Email OTP send` 200,但 `client_auth_session` 仍挂着 `passwordless_email_otp_send_pending=true`、`email_verification_mode=passwordless_signup`,判 `email_otp_send_stuck`(未进入邮箱轮询)。对这三个地址重试(`lane_icloud_20261012_retry.txt`)全部 `invalid_auth_step`,**地址已被首次尝试消耗**。
+  - 账号 2:`after_signup_state` 时 pending 标记已清除,走完 OTP 校验 → create_account → 落库。
+- lane 前置阶段(匿名预热 4×200、providers 200、`login_or_signup`+`prompt=login`、`/create-account/password` 200、`user/register` 200 带 SO)在新地址上全部走通;此前"password 页后 400"只是复用地址造成的。
+- 对比:passwordless 泳道同一批货源此前 5/5 注册成功。**lane 的注册成功率明显更低(1/4),但样本极小。**
+- 推断(未验证):`login_or_signup` 的 authorize 本身会让服务端先挂一个 passwordless 派发;派发是否在 `user/register` 之前落完决定了 OTP 是否可达。账号 2 的 pending 在 `after_signup_state` 已清除,3/4/5 没有。可能是时序竞争(参考项目是否在此处等待/轮询未核),需要单变量实验确认。
+- 即时查优惠:1/1 有结论,`Free · 无优惠`(`trial_eligible=0`);累计有结论 10/10 均为 Free、无优惠。
+- **AT 存活(实测,n=1)**:账号 14055 在 1 / 5 / 15 / 30 / 60 分钟探测均 `active`(HTTP 200)。旧栈同口径:5 分钟 4/5,15 分钟 0/5,30 分钟 0/N(passwordless,无 SO,旧 SDK)。
+- 解读:**单个账号 60 分钟仍活是首次出现的反例,与旧曲线(5–15 分钟撤销)方向相反**,但 n=1,不能下结论。可能的原因(均未隔离):新 SDK、`user/register` 与 authorize_continue/create_account 的 SO token、lane 的匿名预热与 password 页 Sentinel bundle、password 臂本身(而非 passwordless 臂)。需要在能稳定注册的前提下积累样本再对照。
+- 下一步:(1)先解决 lane 下 OTP 派发 pending 的竞争(例如在 `user/register` 后/OTP send 前等待并重读 dump),把 lane 成功率拉到可用;(2)再用 ≥5 个新地址重复存活测量;(3)若存活优势成立,拆分变量(SDK/SO vs 预热 vs password 臂)。
