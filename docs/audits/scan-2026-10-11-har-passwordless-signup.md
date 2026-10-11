@@ -89,3 +89,13 @@
 两个必须记下的前提：
 - **这 5 个邮箱不是新买的**。`_create_remail_mailboxes` 的批量幂等键由「模式 + 供货策略 + payload」确定，同参数再次下单会原样返回 10-06 那一批订单（钱包余额 33143.00、订单数 3914 前后不变，没有新扣费）。因此它们是**已被用过的地址**（10-06 下单；10-11 上午的 14 个里也可能含这批），与「全新地址」不可比，是地址复用混淆。要真买新的，必须换幂等键（例如换 `quantity` 或 `supply`）。
 - 订单详情的 `lastMailReceivedAt` 在接码窗口过期后不再更新（本轮成功的码并没有让它变新），所以**不能**用它判断 default 臂当时到底有没有收到码。
+第五轮（Remail iCloud **10 个全新地址**，n=10，各 5，出口 IN，交替，pulse/S1 关；唯一幂等键下单，余额 33143 → 32543，确认新扣 600 且与此前地址无重叠）：
+
+| 臂 | 结果 |
+| --- | --- |
+| default（5） | 1/5 成功，4× `email_otp_send_stuck`（授权后 `pending=true`，跳过轮询）。唯一的成功那次服务端把页面路由到了 **`/create-account/password`**（走 `user/register` 的密码页），不是 `/email-verification` |
+| explicit（5） | **5/5 成功**（4× `pending=false`，1× `pending=unknown`，都是 `mode=passwordless_signup`；收码 → `validate 200` → 创建账号，`state=active`），5 个账号均已入库并保留 |
+
+合并第四轮（地址有复用，仅作旁证）：explicit 7/7，default 1/8。在 `/email-verification` 页上的 default 样本是 **0/7**。结论边界不变：n 远低于预注册每臂 30（`MIN_ARM_ATTEMPTED`），harness 只能判 `underpowered`；但方向与效应量（100% 对 0%，且机制行 `pending` 翻转可见）足以支持把开关在运营配置里先打开、继续累积样本。已按用户要求在本机 `runtime.json`（git 忽略）打开 `registration.passwordless_explicit_send_otp=true`；仓库默认值仍为 `false`。
+
+仍然未知：为什么授权后会出现 `pending=true`（是否与出口、指纹或节奏有关）；`/create-account/password` 路由的触发条件；explicit 在更大样本与不同出口下是否保持。
