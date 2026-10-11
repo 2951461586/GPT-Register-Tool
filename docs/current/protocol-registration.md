@@ -447,6 +447,17 @@ The password lane ignores the toggle. Evidence and unknowns:
 `docs/audits/scan-2026-10-11-har-passwordless-signup.md`; design:
 `registration-ab-runbook.md` (P3-1).
 
+`registration.chatgpt_bootstrap.enabled` (default `false`) now also drives a
+protocol-lane warm-up (`sms_tool/registration_warmup.py`): right after the
+access token is confirmed, 14 read-only bearer GETs (consent, `me`,
+`accounts/check`, models, conversations, ...) plus a dwell taken from
+`registration.post_registration_dwell_seconds_range`, logged as
+`Post-signup warm-up: ok=<n>/<m> dwell=<s>s`. It never raises. Measured
+2026-10-11 (n<=7 per arm): it does **not** stop the access token from being
+revoked within 5-15 minutes, nor does 2FA; see
+`docs/audits/scan-2026-10-11-at-revocation-survival.md`.
+`scripts/at_survival_watch.py` records the liveness curve for any account ids.
+
 Relogin has two matching switches under `codex_oauth`:
 `browser_style_send_otp` (default `true` since 2026-10-11; same send shape, fresh
 Sentinel bound to this device; `false` restores the cached-Sentinel `json={}`
