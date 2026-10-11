@@ -665,7 +665,12 @@ _SEND_OTP_MODE_ENUM = frozenset({"passwordless_signup", "passwordless_login", "l
 
 
 def _browser_style_send_otp_enabled():
-    """``codex_oauth.browser_style_send_otp`` (default **False**).
+    """``codex_oauth.browser_style_send_otp`` (default **True** since 2026-10-11).
+
+    ``false`` restores the legacy cached-Sentinel ``json={}`` send.  The
+    registration-side twin showed 5/5 versus 1/5 live; relogin itself has not been
+    measured yet, so its own mechanism line (``Passwordless OTP send accepted:
+    ... pending=``) is the thing to read after the first batch.
 
     The relogin send used the cached Sentinel (minted for another flow and
     device) with ``json={}`` and no flow/navigation ids, and treated any 200 as a
@@ -674,7 +679,7 @@ def _browser_style_send_otp_enabled():
     ``authorize_continue`` Sentinel bound to this device, and
     ``x-access-flow-invocation-id`` / ``x-openai-document-navigation-id``.
     """
-    return _codex_oauth_cfg().get("browser_style_send_otp") is True
+    return _codex_oauth_cfg().get("browser_style_send_otp") is not False
 
 
 def _password_first_relogin_enabled():

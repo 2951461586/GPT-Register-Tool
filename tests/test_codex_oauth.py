@@ -7,6 +7,19 @@ from sms_tool.error_classification import classify_error
 from sms_tool.failure_registry import BATCH_DROPPED_CLASSES
 from sms_tool.registration_outcome import _oauth_result_summary
 
+# These tests drive the legacy cached-Sentinel send (``json={}``). The send is
+# browser-style by default now; that path has its own file
+# (tests/test_codex_relogin_browser_style.py), so pin the legacy one here.
+_LEGACY_SEND = patch.object(codex_oauth, "_browser_style_send_otp_enabled", return_value=False)
+
+
+def setUpModule():
+    _LEGACY_SEND.start()
+
+
+def tearDownModule():
+    _LEGACY_SEND.stop()
+
 
 class CodexOauthTests(unittest.TestCase):
     def test_refresh_skips_terminal_account_without_network(self):

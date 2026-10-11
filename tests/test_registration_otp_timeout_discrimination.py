@@ -330,6 +330,9 @@ def test_send_email_otp_keeps_the_dump_instead_of_discarding_it():
         _json_or_raw=Mock(return_value={"assumed_pre_sent": True}),
     )
     workflow = _workflow(ops)
+    # This test is about the legacy assumed-pre-sent send; the explicit send is
+    # the default now and has its own tests (test_passwordless_explicit_send_otp).
+    workflow.config = {"registration": {"passwordless_explicit_send_otp": False}}
     workflow.runtime.reg_data = {}
     workflow.runtime.registration_mode = "passwordless"
     workflow.runtime.signup_state = {"url": "https://auth.openai.com/email-verification"}
@@ -401,6 +404,7 @@ def test_send_email_otp_stores_an_empty_dump_when_the_probe_returns_junk():
         _json_or_raw=Mock(return_value={"assumed_pre_sent": True}),
     )
     workflow = _workflow(ops)
+    workflow.config = {"registration": {"passwordless_explicit_send_otp": False}}
     workflow.runtime.reg_data = {}
     workflow.runtime.registration_mode = "passwordless"
     workflow.runtime.signup_state = {"url": "https://auth.openai.com/email-verification"}

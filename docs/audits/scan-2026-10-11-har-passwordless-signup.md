@@ -99,3 +99,4 @@
 合并第四轮（地址有复用，仅作旁证）：explicit 7/7，default 1/8。在 `/email-verification` 页上的 default 样本是 **0/7**。结论边界不变：n 远低于预注册每臂 30（`MIN_ARM_ATTEMPTED`），harness 只能判 `underpowered`；但方向与效应量（100% 对 0%，且机制行 `pending` 翻转可见）足以支持把开关在运营配置里先打开、继续累积样本。已按用户要求在本机 `runtime.json`（git 忽略）打开 `registration.passwordless_explicit_send_otp=true`；仓库默认值仍为 `false`。
 
 仍然未知：为什么授权后会出现 `pending=true`（是否与出口、指纹或节奏有关）；`/create-account/password` 路由的触发条件；explicit 在更大样本与不同出口下是否保持。
+默认值变更（2026-10-11）：用户决定协议注册与 401 重登默认走显式 send-otp（`registration.passwordless_explicit_send_otp`、`codex_oauth.browser_style_send_otp` 默认 `true`）。依据是上面的 5/5 对 1/5，样本仍低于预注册每臂 30，所以这是运营决定、不是 A/B 定案；`false` 是基线臂。重登一侧尚未单独实测。本机 `runtime.json` 已显式写 `true`。

@@ -427,9 +427,15 @@ it: `false` is `dispatched`, `true` is `stuck`, and an unreadable value keeps th
 old presence reading. Samples recorded as `email_otp_send_stuck` before this
 change may include healthy dispatches whose mailbox poll was skipped.
 
-## Passwordless explicit send-otp (P3-1, default off)
+## Passwordless explicit send-otp (P3-1, default on since 2026-10-11)
 
-`registration.passwordless_explicit_send_otp` (default `false`) makes the
+The default flipped to on after a live comparison (same exit IN, fresh
+addresses): 5/5 explicit registrations versus 1/5 legacy, all four legacy
+failures stuck on `pending=true`. That is below the pre-registered 30 per arm, so
+the harness still reads `underpowered`; the flip is an operating decision, not a
+finished A/B. `false` restores the legacy assumed pre-send and is the baseline arm.
+
+`registration.passwordless_explicit_send_otp` (default `true`) makes the
 passwordless lane POST `/api/accounts/passwordless/send-otp` the way the
 verification page does in the browser HAR: empty body, no `Content-Type`, a fresh
 `authorize_continue` Sentinel (token only), `x-access-flow-invocation-id`,
@@ -441,9 +447,11 @@ The password lane ignores the toggle. Evidence and unknowns:
 `docs/audits/scan-2026-10-11-har-passwordless-signup.md`; design:
 `registration-ab-runbook.md` (P3-1).
 
-Relogin has two matching switches under `codex_oauth` (both default `false`):
-`browser_style_send_otp` (same send shape, fresh Sentinel bound to this device)
-and `password_first_relogin` (a forced email-OTP relogin first tries the saved
+Relogin has two matching switches under `codex_oauth`:
+`browser_style_send_otp` (default `true` since 2026-10-11; same send shape, fresh
+Sentinel bound to this device; `false` restores the cached-Sentinel `json={}`
+send; not yet measured on relogin itself) and `password_first_relogin` (default
+`false`; a forced email-OTP relogin first tries the saved
 password and spends a code only if that fails). The password path now also
 completes a saved TOTP challenge. The relogin send always logs
 `pending=… mode=…` when it answers 200.

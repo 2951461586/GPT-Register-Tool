@@ -76,9 +76,14 @@ def _otp_external_url_branch_enabled(self: Any) -> bool:
 
 
 def _passwordless_explicit_send_otp_enabled(self: Any) -> bool:
-    """``registration.passwordless_explicit_send_otp`` (default **False**).
+    """``registration.passwordless_explicit_send_otp`` (default **True** since 2026-10-11).
 
-    The passwordless lane assumes ``authorize`` with ``login_hint`` already sent
+    Live, same exit (IN), fresh addresses: 5/5 explicit registrations versus 1/5
+    legacy, the legacy four all stuck on ``pending=true`` (n is far below the
+    pre-registered 30 per arm; see the audit scan section 7).  ``false`` restores
+    the legacy ``assumed_pre_sent`` path and is the A/B baseline arm.
+
+    The passwordless lane assumed ``authorize`` with ``login_hint`` already sent
     the first code and only polls.  The 2026-10-11 browser HAR shows the page
     itself POSTing ``/api/accounts/passwordless/send-otp`` ten seconds after
     ``/email-verification`` loads -- empty body, a fresh ``authorize_continue``
@@ -86,7 +91,7 @@ def _passwordless_explicit_send_otp_enabled(self: Any) -> bool:
     -- and nothing else on ``/api/accounts`` in between.  Single variable: only
     whether that POST is made.
     """
-    return registration_flag(self.config, "passwordless_explicit_send_otp", False)
+    return registration_flag(self.config, "passwordless_explicit_send_otp", True)
 
 
 def _explicit_passwordless_send(self: Any) -> Any:

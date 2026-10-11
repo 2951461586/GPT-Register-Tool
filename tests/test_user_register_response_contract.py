@@ -319,6 +319,8 @@ def test_passwordless_lane_never_follows_a_continue_url():
     )
     follow = _follow()
     w = _workflow(state, follow=follow)
+    # Legacy assumed-pre-sent branch; the explicit send is the default now.
+    w.config = {"registration": {"passwordless_explicit_send_otp": False}}
 
     w.send_email_otp()
 

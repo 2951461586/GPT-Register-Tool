@@ -54,7 +54,7 @@ def test_key_absent_is_dispatched_and_unreadable_dump_is_unknown():
 
 class _Stage:
     def __init__(self, *, enabled, password_lane=False, sentinel_error=None, response=None):
-        self.config = {"registration": {"passwordless_explicit_send_otp": enabled}}
+        self.config = {"registration": {} if enabled is None else {"passwordless_explicit_send_otp": enabled}}
         self.runtime = SimpleNamespace(
             reg_data={},
             session=Mock(),
@@ -126,7 +126,14 @@ def _send(stage):
     return [call.args[1] % call.args[2:] if len(call.args) > 2 else call.args[1] for call in emit.call_args_list]
 
 
-def test_default_passwordless_lane_still_assumes_the_pre_sent_code():
+def test_unset_toggle_sends_explicitly_since_the_2026_10_11_default_flip():
+    stage = _Stage(enabled=None)
+    lines = _send(stage)
+    stage.r.request_with_retry.assert_called_once()
+    assert any("Passwordless explicit send-otp" in line for line in lines)
+
+
+def test_toggle_false_keeps_the_legacy_pre_sent_assumption_as_the_ab_baseline():
     stage = _Stage(enabled=False)
     lines = _send(stage)
     stage.r.request_with_retry.assert_not_called()

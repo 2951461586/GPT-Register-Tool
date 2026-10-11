@@ -32,10 +32,19 @@ def _cfg(**flags):
     return patch.object(codex_oauth, "CFG", {"codex_oauth": flags})
 
 
-def test_default_send_keeps_the_cached_sentinel_and_json_body_but_logs_the_answer(capsys):
+def test_browser_style_send_is_the_default_when_unset():
+    with _cfg():
+        assert codex_oauth._browser_style_send_otp_enabled() is True
+    with _cfg(browser_style_send_otp=False):
+        assert codex_oauth._browser_style_send_otp_enabled() is False
+
+
+def test_legacy_send_keeps_the_cached_sentinel_and_json_body_but_logs_the_answer(capsys):
     session = Mock()
     session.post.return_value = _ok_response(pending=True, mode="weird-mode-string")
-    with _cfg(), patch.object(codex_oauth, "load_cached_sentinel", return_value={"sentinel_token": "cached"}):
+    with _cfg(browser_style_send_otp=False), patch.object(
+        codex_oauth, "load_cached_sentinel", return_value={"sentinel_token": "cached"}
+    ):
         result = codex_oauth._send_passwordless_otp(session, "did-1", "https://auth.openai.com/log-in")
     assert result["ok"]
     kwargs = session.post.call_args.kwargs
