@@ -68,3 +68,12 @@
 - 0/10 不能用来判 P3-1 优劣（`favor_explicit` 与 `keep_default_off` 都不成立，按预注册规则为 `inconclusive`）。
 
 未知 / 下一步：用一个已知能收 OpenAI 邮件的邮箱源（Gmail 别名或解除隔离后的 Remail iCloud）重跑同一对照；或先单独验证 Smailr 入站。
+
+第三轮（有效，n=10，各 5，**0/10**）：改用 `@smailr.com` 新邮箱（`runtime.json` 的 `smailr.default_domain` 是 `nodeloc.cc`，上一轮因此全落在 nodeloc.cc；本轮由启动器显式传 `domain="smailr.com"`，未改配置），其余条件不变。
+
+| 臂 | 结果 |
+| --- | --- |
+| default（5） | 5/5 授权后 `pending=true`，`email_otp_send_stuck` |
+| explicit（5） | 5/5 `send-otp 200`（3× `pending=false`，2× `pending=unknown`，`mode=passwordless_signup`），轮询 5.5 分钟均 `mailbox_side_no_code` |
+
+换域名没有改变形态：default 全卡在 `pending=true`；explicit 全部 200，但 Smailr 一封信都没收到（能查到的 7 个邮箱 `mail_count=0`，另 3 个在 list 里没返回）。nodeloc.cc 域名不是原因。仍然不能区分「OpenAI 不向 Smailr 域发码」与「Smailr 入站」。两轮合计 explicit 8/8 发送被接受、0 封入信；default 9/10 卡 `pending=true`。
