@@ -22,7 +22,7 @@
     "sms_tool/captcha_solver.py": 3,
     "sms_tool/cli.py": 17,
     "sms_tool/codex_export.py": 1,
-    "sms_tool/codex_oauth.py": 3,
+    "sms_tool/codex_oauth.py": 4,
     "sms_tool/codex_phone.py": 2,
     "sms_tool/commands/accounts.py": 15,
     "sms_tool/commands/helpers.py": 3,
@@ -91,12 +91,13 @@
     "sms_tool/registration_drivers/external_sessions/managed.py": 9,
     "sms_tool/registration_drivers/stealth.py": 2,
     "sms_tool/registration_finalize.py": 6,
-    "sms_tool/registration_handlers.py": 10,
+    "sms_tool/registration_handlers.py": 8,
     "sms_tool/registration_persistence.py": 5,
     "sms_tool/registration_preflight.py": 1,
     "sms_tool/registration_probe.py": 1,
     "sms_tool/registration_progress.py": 4,
     "sms_tool/registration_pulse.py": 1,
+    "sms_tool/registration_sentinel_stages.py": 2,
     "sms_tool/registration_state.py": 1,
     "sms_tool/sentinel/bundle.py": 1,
     "sms_tool/sentinel/client.py": 4,
@@ -112,5 +113,5 @@
     "sms_tool/upi_link/stripe.py": 1,
     "sms_tool/wallet_transport.py": 5
   },
-  "total": 421
+  "total": 422
 }

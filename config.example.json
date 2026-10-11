@@ -61,6 +61,7 @@
     "otp_validate_sentinel": false,
     "otp_external_url_branch": false,
     "device_identity_seeded_by_email": false,
+    "passwordless_explicit_send_otp": false,
     "browser_headless": true,
     "browser_timeout_seconds": 90,
     "browser_worker_limit": 0,
@@ -586,6 +587,8 @@
   },
   "codex_oauth": {
     "allow_passwordless_takeover": false,
+    "browser_style_send_otp": false,
+    "password_first_relogin": false,
     "auto_phone_verification": false,
     "require_registration_refresh_token": true,
     "require_registration_phone_verification": true

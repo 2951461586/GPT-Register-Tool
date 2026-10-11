@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+import uuid
 from collections.abc import Mapping as MappingABC
 from typing import Any
 
@@ -73,6 +74,78 @@ def _otp_external_url_branch_enabled(self: Any) -> bool:
     return registration_flag(self.config, "otp_external_url_branch", False)
 
 
+def _passwordless_explicit_send_otp_enabled(self: Any) -> bool:
+    """``registration.passwordless_explicit_send_otp`` (default **False**).
+
+    The passwordless lane assumes ``authorize`` with ``login_hint`` already sent
+    the first code and only polls.  The 2026-10-11 browser HAR shows the page
+    itself POSTing ``/api/accounts/passwordless/send-otp`` ten seconds after
+    ``/email-verification`` loads -- empty body, a fresh ``authorize_continue``
+    Sentinel, ``x-access-flow-invocation-id`` and ``x-openai-document-navigation-id``
+    -- and nothing else on ``/api/accounts`` in between.  Single variable: only
+    whether that POST is made.
+    """
+    return registration_flag(self.config, "passwordless_explicit_send_otp", False)
+
+
+def _explicit_passwordless_send(self: Any) -> Any:
+    """POST ``passwordless/send-otp`` the way the browser's verification page does."""
+    r = self.r
+    s = self.runtime
+    # Mechanism line for ``p3-1-passwordless-explicit-send-otp``: unconditional
+    # inside the toggle's branch so the A/B gate can see the arm.
+    _emit(_LOGGER, "  Passwordless explicit send-otp")
+    try:
+        issued = self._issue_sentinel("authorize_continue", force_fresh=True)
+    except Exception as exc:
+        # Falling back to the assumed pre-send would silently turn this arm into
+        # the default one, so the arm fails instead.
+        self._abort(f"email_otp_send_failed:sentinel_unavailable:{describe_exception(exc)}")
+    referer = f"{s.auth_base}/email-verification"
+    headers = {
+        **s.base_headers,
+        **r.openai_auth_headers(
+            s.device_id,
+            referer=referer,
+            origin=s.auth_base,
+            accept="*/*",
+            sentinel_token=issued.token,
+            session_id=s.session_logging_id,
+            flow_invocation_id=s.flow_invocation_id,
+            extra={"x-openai-document-navigation-id": str(uuid.uuid4())},
+        ),
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-origin",
+    }
+    response = r.request_with_retry(
+        s.session,
+        "post",
+        f"{s.auth_base}/api/accounts/passwordless/send-otp",
+        label="Passwordless send-otp",
+        headers=headers,
+        impersonate=r.auth_impersonate(),
+        attempts=1,
+    )
+    body = r._json_or_raw(response)
+    body = body if isinstance(body, MappingABC) else {}
+    session_state = body.get("oai-client-auth-session")
+    session_state = session_state if isinstance(session_state, MappingABC) else {}
+    pending = session_state.get("passwordless_email_otp_send_pending")
+    mode = str(session_state.get("email_verification_mode") or "")
+    _emit(
+        _LOGGER,
+        "  Passwordless send-otp: status=%s pending=%s mode=%s",
+        getattr(response, "status_code", 0),
+        str(pending).lower() if isinstance(pending, bool) else "unknown",
+        mode if mode in _SEND_MODE_ENUM else ("unknown" if not mode else "other"),
+    )
+    return response
+
+
+_SEND_MODE_ENUM = frozenset({"passwordless_signup", "passwordless_login", "login_challenge"})
+
+
 def send_email_otp(self: Any) -> None:
     r = self.r
     s = self.runtime
@@ -83,7 +156,9 @@ def send_email_otp(self: Any) -> None:
     # hiding it from ``_latest_email_otp_candidate``.
     continue_url = r._email_otp_send_url(s.reg_data)
     otp_send_started = _safe_int(time.time())
-    if not self._password_lane_active():
+    if not self._password_lane_active() and _passwordless_explicit_send_otp_enabled(self):
+        response = _explicit_passwordless_send(self)
+    elif not self._password_lane_active():
         # authorize with login_hint sends the first OTP itself. Do not
         # immediately POST resend: that endpoint is rate-limited for this
         # flow and the reference browser path only polls the pre-sent code.

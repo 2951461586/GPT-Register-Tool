@@ -743,6 +743,50 @@ EXPERIMENTS: dict[str, dict[str, Any]] = {
             "until this one is decided."
         ),
     },
+    "p3-1-passwordless-explicit-send-otp": {
+        "hypothesis": (
+            "The passwordless lane assumes authorize+login_hint already dispatched "
+            "the first code and only polls the mailbox. The 2026-10-11 browser HAR "
+            "(a successful passwordless_signup) shows the verification page POSTing "
+            "/api/accounts/passwordless/send-otp itself -- empty body, a fresh "
+            "authorize_continue Sentinel, x-access-flow-invocation-id and "
+            "x-openai-document-navigation-id -- with nothing else on /api/accounts "
+            "between the page load and that POST, and the response carries "
+            "passwordless_email_otp_send_pending=false. If the server stopped "
+            "pre-sending around 09-17..09-24 (when email_otp_send_stuck first "
+            "appears), making that POST should put the code in the mailbox."
+        ),
+        "toggle": "registration.passwordless_explicit_send_otp",
+        "arms": {"default": False, "explicit": True},
+        "hold_constant": (
+            "passwordless lane in BOTH arms (email_registration.registration_mode == passwordless)",
+            "DIFFERENT addresses in the two arms, same mailbox provider and address family",
+            "same exit pool and the SAME exit country in both arms (the 10-06..10-11 failures "
+            "all exited in IN while the HAR exited in US -- that is a separate variable)",
+            "registration.device_identity_seeded_by_email false in BOTH arms",
+            "registration.pulse.enabled false in BOTH arms",
+            "every p1-* wire toggle at its default in BOTH arms",
+            "arms interleaved or adjacent in time",
+        ),
+        "metrics": (
+            "'Passwordless send-otp: status= pending= mode=' line (primary: pending=false and "
+            "mode=passwordless_signup match the HAR)",
+            "funnel.registered_per_attempted",
+            "funnel.registration_failures_by_class "
+            "(email_otp_poll_timeout:mailbox_side_no_code now means dispatched but not received)",
+            "funnel.device_identity",
+        ),
+        "mechanism": "Passwordless explicit send-otp",
+        "decision": (
+            "favor_explicit when that arm's success rate exceeds the default arm's by "
+            f"more than {RATE_DELTA:.2f}; keep_default_off when it is worse by more "
+            "than the same delta; otherwise inconclusive. The harness only gates on "
+            "the mechanism line; the operator reads the send-otp line: an explicit "
+            "arm whose send-otp answers pending=true or a non-200 is evidence about "
+            "the hypothesis even at 0% success, while mailbox_side_no_code with "
+            "pending=false points at the mailbox provider, not the protocol."
+        ),
+    },
     "p0-2b-inflow-challenge-handoff": {
         "hypothesis": (
             "H1: a challenge that arrives after preflight can be recovered by "

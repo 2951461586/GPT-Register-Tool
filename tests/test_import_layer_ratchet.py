@@ -183,7 +183,13 @@ def test_summary_facts_are_pinned():
     """Pin the decomposition so a silent metric change is caught.
 
     470 raw directory-level edges decompose into 287 module-scope edges (frozen
-    here) plus 186 delayed imports (frozen by ``delayed_import_ratchet.py``).
+    here) plus 187 delayed imports (frozen by ``delayed_import_ratchet.py``).
+
+    187 (was 186) on 2026-10-11: ``codex_oauth._password_login_and_exchange``
+    completes a saved TOTP challenge through ``auth_flow.totp`` (the single owner
+    of that exchange) via one function-local import. A module-level import grew
+    the frozen ``sms_tool -> sms_tool/auth_flow`` pair 4 -> 5, so it stays
+    delayed -- the remedy this ratchet's own failure text names.
 
     186 (was 185) / 287 (was 288) on 2026-10-08: the PayPal browser lane stopped
     importing the protocol lane. ``paypal/orchestrator.py`` held a module-level
@@ -220,7 +226,7 @@ def test_summary_facts_are_pinned():
         "ordered_pairs": 31,
         "mutual_pairs": 11,
         "minority_edges": 60,
-        "delayed_cross_dir_edges": 186,
+        "delayed_cross_dir_edges": 187,
     }
 
 

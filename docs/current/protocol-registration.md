@@ -417,6 +417,37 @@ Because the same address yields the same ids on every run, an A/B must use
 `registration-ab-runbook.md`). The harness only gates on the mechanism line; the
 operator reads the funnel's `seeded_by_email` count and the ceiling check.
 
+## Dispatch verdict reads the value (2026-10-11)
+
+`auth_state.otp_dispatch_verdict` used to treat the *presence* of
+`passwordless_email_otp_send_pending` as "stuck". A browser HAR shows the key
+present with `false` after a healthy dispatch, so presence cannot separate the
+two. The dump summary now carries the boolean (`signals`), and the verdict reads
+it: `false` is `dispatched`, `true` is `stuck`, and an unreadable value keeps the
+old presence reading. Samples recorded as `email_otp_send_stuck` before this
+change may include healthy dispatches whose mailbox poll was skipped.
+
+## Passwordless explicit send-otp (P3-1, default off)
+
+`registration.passwordless_explicit_send_otp` (default `false`) makes the
+passwordless lane POST `/api/accounts/passwordless/send-otp` the way the
+verification page does in the browser HAR: empty body, no `Content-Type`, a fresh
+`authorize_continue` Sentinel (token only), `x-access-flow-invocation-id`,
+`x-openai-document-navigation-id` and `Sec-Fetch-*` of an XHR. It emits
+`Passwordless explicit send-otp` and then
+`Passwordless send-otp: status=<n> pending=<true|false|unknown> mode=<enum>`.
+A Sentinel failure fails the arm rather than degrading to the assumed pre-send.
+The password lane ignores the toggle. Evidence and unknowns:
+`docs/audits/scan-2026-10-11-har-passwordless-signup.md`; design:
+`registration-ab-runbook.md` (P3-1).
+
+Relogin has two matching switches under `codex_oauth` (both default `false`):
+`browser_style_send_otp` (same send shape, fresh Sentinel bound to this device)
+and `password_first_relogin` (a forced email-OTP relogin first tries the saved
+password and spends a code only if that fails). The password path now also
+completes a saved TOTP challenge. The relogin send always logs
+`pending=… mode=…` when it answers 200.
+
 ## Validation limits
 
 Offline tests cover step ordering, redirect classification and Sentinel header

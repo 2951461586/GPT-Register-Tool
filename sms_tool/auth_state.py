@@ -118,6 +118,10 @@ def auth_dump_summary(data):
                 "passwordless_disabled",
                 "passwordless_otp_from_password_redirect",
                 "passwordless_signup_from_default_redirect",
+                # The *value* matters: the 2026-10-11 browser HAR shows the key
+                # present with ``false`` right after a successful dispatch, so
+                # key presence alone no longer separates dispatched from stuck.
+                "passwordless_email_otp_send_pending",
             },
         ),
     }
@@ -290,8 +294,25 @@ def otp_dispatch_verdict(summary) -> str:
     if keys is None:
         return "unknown"
     if any(pending in key for key in keys for pending in DISPATCH_PENDING_KEYS):
+        # 2026-10-11: a browser HAR carries ``passwordless_email_otp_send_pending:
+        # false`` on a healthy dispatch, so a key that is present but explicitly
+        # false is a finished dispatch.  Only an unreadable value keeps the old
+        # presence-means-pending reading (dumps older than this signal).
+        if send_pending_value(summary) is False:
+            return "dispatched"
         return "stuck"
     return "dispatched"
+
+
+def send_pending_value(summary) -> bool | None:
+    """The ``passwordless_email_otp_send_pending`` boolean, or ``None`` when unreadable."""
+    signals = summary.get("signals") if isinstance(summary, dict) else None
+    if not isinstance(signals, dict):
+        return None
+    for key, value in signals.items():
+        if str(key).lower().endswith("passwordless_email_otp_send_pending"):
+            return value if isinstance(value, bool) else None
+    return None
 
 
 def passwordless_arm_armed(summary) -> bool:

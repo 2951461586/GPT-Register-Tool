@@ -3,14 +3,18 @@ import argparse
 from functools import lru_cache
 import hashlib
 import json
+import logging
 import secrets
 import time
 import urllib.parse
+import uuid
 from datetime import timezone, datetime
 
 from curl_cffi import requests as curl_requests
 
 from .config import CFG
+from .endpoints import AUTH_BASE
+from .operator_output import emit as _emit
 from .codex_phone import complete_phone_verification
 from .codex_sentinel import attach_sentinel, import_cached_auth_cookies, import_cookie_header, load_cached_sentinel, with_sentinel
 from .auth_headers import auth_impersonate, openai_auth_headers_lower, select_auth_fingerprint
@@ -31,6 +35,8 @@ from .sentinel.client import issue_sentinel_flow
 from .utils import atomic_write_text
 from .utils import _random_birthdate, _random_name
 
+
+_LOGGER = logging.getLogger(__name__)
 
 AUTH_URL = "https://auth.openai.com/oauth/authorize"
 TOKEN_URL = "https://auth.openai.com/oauth/token"
@@ -261,6 +267,32 @@ def _run_protocol_login_stages(
             final.setdefault("protocol_stage", stage)
         return final
 
+    if (
+        force_email_otp_login
+        and stage == "password"
+        and _password_first_relogin_enabled()
+        and str(data.get("password") or "").strip()
+    ):
+        # Mechanism line for the password-first relogin comparison: unconditional
+        # inside the toggle's own branch.
+        _emit(_LOGGER, "[*] Relogin password-first: trying the saved password before spending an email code")
+        first_try = _password_login_and_exchange(
+            session=session,
+            oauth=oauth,
+            data=data,
+            did=did,
+            current_url=current_url,
+            proxy=proxy,
+            timeout=timeout,
+            phone_pool=phone_pool,
+            phone_probe_only=phone_probe_only,
+            browser_headless=browser_headless,
+        )
+        if first_try.get("ok"):
+            first_try.setdefault("protocol_stage", "password")
+            return first_try
+        _emit(_LOGGER, "[*] Relogin password-first failed (%s); falling back to email OTP", first_try.get("error") or "unknown")
+
     if force_email_otp_login and stage not in {"email_otp", "callback", "consent", "add_phone"}:
         print(f"[*] force_email_otp_login: overriding stage '{stage}' -> 'email_otp'")
         stage = "email_otp"
@@ -386,7 +418,7 @@ def _passwordless_login_and_exchange(
         }
 
     issued_after = int(time.time())
-    send_result = _send_passwordless_otp(session, did, current_url)
+    send_result = _send_passwordless_otp(session, did, current_url, proxy=proxy)
     if send_result.get("hard_error"):
         return {
             "ok": False,
@@ -577,7 +609,33 @@ def _password_login_and_exchange(session, oauth, data, did, current_url, proxy=N
             "body": response.text[:300],
         }
 
-    _, current_url = _follow_redirects(session, _next_url(response), proxy=proxy)
+    from .auth_flow import totp as _auth_totp
+
+    next_url = _next_url(response)
+    try:
+        verify_body = response.json()
+    except Exception:
+        verify_body = {}
+    if _auth_totp._is_mfa_challenge_payload(verify_body):
+        mfa = _auth_totp._complete_existing_login_totp(
+            session,
+            AUTH_BASE,
+            {},
+            verify_body,
+            did=did,
+            sentinel_token=str(load_cached_sentinel().get("sentinel_token") or ""),
+            totp_secret=str(data.get("totp_secret") or ""),
+        )
+        if not mfa.get("ok"):
+            return {
+                "ok": False,
+                "mode": "codex_oauth_pkce",
+                "error": f"password_login_mfa_failed:{mfa.get('error') or 'unknown'}",
+                "last_url": _safe_url(current_url),
+            }
+        _emit(_LOGGER, "[*] Password login: TOTP challenge completed")
+        next_url = _auth_totp._response_next_url_from_data(mfa.get("data"), AUTH_BASE) or next_url
+    _, current_url = _follow_redirects(session, next_url, proxy=proxy)
     if _has_callback_code(current_url):
         return {
             "ok": True,
@@ -603,25 +661,105 @@ def _password_login_and_exchange(session, oauth, data, did, current_url, proxy=N
     return final
 
 
-def _send_passwordless_otp(session, did, current_url):
+_SEND_OTP_MODE_ENUM = frozenset({"passwordless_signup", "passwordless_login", "login_challenge"})
+
+
+def _browser_style_send_otp_enabled():
+    """``codex_oauth.browser_style_send_otp`` (default **False**).
+
+    The relogin send used the cached Sentinel (minted for another flow and
+    device) with ``json={}`` and no flow/navigation ids, and treated any 200 as a
+    dispatched code.  The 2026-10-11 browser HAR shows the verification page
+    POSTing ``passwordless/send-otp`` with an empty body, a fresh
+    ``authorize_continue`` Sentinel bound to this device, and
+    ``x-access-flow-invocation-id`` / ``x-openai-document-navigation-id``.
+    """
+    return _codex_oauth_cfg().get("browser_style_send_otp") is True
+
+
+def _password_first_relogin_enabled():
+    """``codex_oauth.password_first_relogin`` (default **False**).
+
+    A forced email-OTP relogin discards a saved password that would have worked
+    (and, for a TOTP account, a saved secret).  Single variable: try the
+    password path first and only then spend an email code.
+    """
+    return _codex_oauth_cfg().get("password_first_relogin") is True
+
+
+def _describe_send_otp_answer(response):
+    """One log line about what the send answered; never echoes server strings."""
+    try:
+        body = response.json()
+    except Exception:
+        body = {}
+    state = body.get("oai-client-auth-session") if isinstance(body, dict) else None
+    state = state if isinstance(state, dict) else {}
+    pending = state.get("passwordless_email_otp_send_pending")
+    mode = str(state.get("email_verification_mode") or "")
+    return "pending=%s mode=%s" % (
+        str(pending).lower() if isinstance(pending, bool) else "unknown",
+        mode if mode in _SEND_OTP_MODE_ENUM else ("unknown" if not mode else "other"),
+    )
+
+
+def _browser_style_send_headers(did, sentinel_token):
+    headers = _oai_headers(
+        did,
+        {
+            "Referer": f"{AUTH_BASE}/email-verification",
+            "Origin": AUTH_BASE,
+            "Accept": "*/*",
+            "Sec-Fetch-Dest": "empty",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Site": "same-origin",
+            "x-access-flow-invocation-id": str(uuid.uuid4()),
+            "x-openai-document-navigation-id": str(uuid.uuid4()),
+        },
+    )
+    attach_sentinel(headers, {"sentinel_token": sentinel_token})
+    return headers
+
+
+def _send_passwordless_otp(session, did, current_url, proxy=None):
+    browser_style = _browser_style_send_otp_enabled()
     sentinel = load_cached_sentinel()
+    if browser_style:
+        _emit(_LOGGER, "[*] Passwordless browser-style send-otp")
+        try:
+            issued = issue_sentinel_flow(flow="authorize_continue", device_id=did, session=session, proxy=proxy)
+        except Exception as exc:
+            # Degrading to the cached token would silently turn this arm into the default.
+            return {"ok": False, "hard_error": True, "error": f"passwordless_send_sentinel_failed:{exc}"}
+        browser_headers = _browser_style_send_headers(did, issued.token)
     for endpoint in (
         "https://auth.openai.com/api/accounts/passwordless/send-otp",
         "https://auth.openai.com/api/accounts/email-otp/send",
     ):
         try:
-            response = session.post(
-                endpoint,
-                headers=with_sentinel(
-                    _oai_headers(did, {"Referer": current_url, "content-type": "application/json"}),
-                    sentinel,
-                ),
-                json={},
-                timeout=30,
-                impersonate=auth_impersonate(),
-            )
+            if browser_style:
+                response = session.post(
+                    endpoint,
+                    headers=browser_headers,
+                    timeout=30,
+                    impersonate=auth_impersonate(),
+                )
+            else:
+                response = session.post(
+                    endpoint,
+                    headers=with_sentinel(
+                        _oai_headers(did, {"Referer": current_url, "content-type": "application/json"}),
+                        sentinel,
+                    ),
+                    json={},
+                    timeout=30,
+                    impersonate=auth_impersonate(),
+                )
             if response.status_code == 200:
-                print(f"[*] Passwordless OTP send accepted: {endpoint.rsplit('/', 1)[-1]}")
+                print(
+                    f"[*] Passwordless OTP send accepted: {endpoint.rsplit('/', 1)[-1]} "
+                    f"{_describe_send_otp_answer(response)}"
+                )
                 return {"ok": True, "endpoint": endpoint}
             print(f"[*] Passwordless OTP send skipped: {endpoint.rsplit('/', 1)[-1]} {response.status_code}")
             if response.status_code == 409:

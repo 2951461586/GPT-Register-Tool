@@ -31,6 +31,7 @@
     "password_charset",
     "password_random_length",
     "password_suffix",
+    "passwordless_explicit_send_otp",
     "post_registration_dwell_seconds_range",
     "preflight_login_page",
     "prime_about_you_page",

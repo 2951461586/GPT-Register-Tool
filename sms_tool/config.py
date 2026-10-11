@@ -665,6 +665,7 @@ def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -
             "otp_validate_sentinel",
             "otp_external_url_branch",
             "device_identity_seeded_by_email",
+            "passwordless_explicit_send_otp",
         ):
             if key in registration and not isinstance(registration.get(key), bool):
                 errors.append(f"registration.{key} must be a boolean")
@@ -850,6 +851,9 @@ def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -
         # runtime shards; stage-specific budgets remain authoritative when set.
         # Empty-string values in legacy shards mean "unset".
         _ = codex_oauth.get("registration_timeout")
+        for key in ("browser_style_send_otp", "password_first_relogin"):
+            if key in codex_oauth and not isinstance(codex_oauth.get(key), bool):
+                errors.append(f"codex_oauth.{key} must be a boolean")
 
     payments = config.get("protocol_payments", {})
     if payments is not None and not isinstance(payments, Mapping):
