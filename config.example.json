@@ -60,6 +60,7 @@
     "otp_navigation_headers": false,
     "otp_validate_sentinel": false,
     "otp_external_url_branch": false,
+    "device_identity_seeded_by_email": false,
     "browser_headless": true,
     "browser_timeout_seconds": 90,
     "browser_worker_limit": 0,

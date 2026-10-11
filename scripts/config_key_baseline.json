@@ -15,6 +15,7 @@
     "chatgpt_bootstrap",
     "create_account_disallowed_backoff",
     "deprioritize_base_conflicts",
+    "device_identity_seeded_by_email",
     "driver",
     "drivers",
     "edge_challenge_discrimination",

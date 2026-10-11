@@ -69,6 +69,7 @@ from .registration_state import (
     RegistrationState,
     RegistrationStateMachine,
     prepare_registration_context,
+    seeded_device_identity,
 )
 
 
@@ -177,6 +178,7 @@ class RegistrationEmailWorkflow:
         self.proxy_metadata = dict(proxy_metadata or {})
         self.fingerprint_country = ""
         self.device_identity: dict[str, Any] = {}
+        self._device_seeded = False
         self._operations = operations
         self.persistence = persistence or StorageRegistrationPersistence()
         self.post_process_result = post_process_result
@@ -494,6 +496,28 @@ class RegistrationEmailWorkflow:
         self._run_stage(RegistrationState.SENTINEL, "0-Extract sentinel token", self.extract_sentinel)
         self._run_stage(RegistrationState.IDENTITY_READY, "1-Prepare registration identity", self.prepare_identity)
 
+    def _device_identity_seeded_by_email_enabled(self) -> bool:
+        """``registration.device_identity_seeded_by_email`` (default **False**), S1 / ``p2-1``."""
+        return registration_flag(self.config, "device_identity_seeded_by_email", False)
+
+    def _device_context(self, email: Any) -> dict[str, Any]:
+        """The persisted device context, or the address-derived one when S1 is on.
+
+        A stored id always wins: an address that already registered keeps the id
+        its account row holds, so S1 only changes addresses that have *never*
+        succeeded -- which is every current failure sample.
+        """
+        stored = dict(self.persistence.get_device_context(email) or {})
+        if stored.get("device_id") or stored.get("auth_session_logging_id"):
+            return stored
+        if not self._device_identity_seeded_by_email_enabled():
+            return stored
+        seeded = seeded_device_identity(str(email or ""))
+        if not seeded:
+            return stored
+        self._device_seeded = True
+        return {**stored, **seeded}
+
     def extract_sentinel(self) -> None:
         r = self.r
         s = self.runtime
@@ -510,7 +534,7 @@ class RegistrationEmailWorkflow:
                 browser_headless=self.browser_headless,
             )
         else:
-            device_context = dict(self.persistence.get_device_context(s.username) or {})
+            device_context = self._device_context(s.username)
             s.sentinel_data = {
                 "oai_did": str(device_context.get("device_id") or uuid.uuid4()),
                 "sentinel_source": "node_sdk_runner",
@@ -522,7 +546,7 @@ class RegistrationEmailWorkflow:
     def prepare_identity(self) -> None:
         r = self.r
         s = self.runtime
-        device_context = dict(self.persistence.get_device_context(getattr(s.mailbox, "email", "")) or {})
+        device_context = self._device_context(getattr(s.mailbox, "email", ""))
         stored_device_id = str(device_context.get("device_id") or "").strip()
         sentinel_device_id = str(r._sentinel_device_id(s.sentinel_data) or "").strip()
         if stored_device_id and stored_device_id != sentinel_device_id:
@@ -558,7 +582,7 @@ class RegistrationEmailWorkflow:
             random_name=r._random_name,
             random_birthdate=r._random_birthdate,
             normalize_mode=r._normalize_registration_mode,
-            get_device_context=self.persistence.get_device_context,
+            get_device_context=self._device_context,
             sentinel_device_id=r._sentinel_device_id,
             new_uuid=lambda: str(uuid.uuid4()),
             browser_headless=self.browser_headless,
@@ -580,18 +604,26 @@ class RegistrationEmailWorkflow:
             r.assert_sentinel_device_id(s.sentinel_data, s.device_id)
         except ValueError as exc:
             self._abort(str(exc))
-        if c.reused_device_context:
+        # A seeded id arrives through the same context as a stored one, but it is
+        # not a *reuse*: nothing was persisted for this address.
+        reused = bool(c.reused_device_context) and not self._device_seeded
+        seeded = "email" if self._device_seeded else "none"
+        if reused:
             print("  [Device] Reusing persisted device context")
-        self.device_identity = {"oai_did": s.device_id, "reused": bool(c.reused_device_context), "seeded": "none"}
-        # ``emit``, not ``print``: the device-layer A/B (plan-2026-10-10) reads this
-        # line from ``sms_tool.log``.  Only the first 8 characters of ``oai-did`` are
+        self.device_identity = {"oai_did": s.device_id, "reused": reused, "seeded": seeded}
+        # ``emit``, not ``print``: the device-layer A/B (plan-2026-10-10) reads these
+        # lines from ``sms_tool.log``.  Only the first 8 characters of ``oai-did`` are
         # ever written; it is a credential-level identifier.
+        if self._device_identity_seeded_by_email_enabled():
+            # Unconditional inside the toggle branch (the P1-7 lesson): the marker
+            # says the arm was *armed*, even for an address whose stored id won.
+            _emit(_LOGGER, "  Device identity seeded by email")
         _emit(
             _LOGGER,
             "  Device identity: oai-did=%s reused=%s seeded=%s",
             s.device_id[:8],
-            str(bool(c.reused_device_context)).lower(),
-            "none",
+            str(reused).lower(),
+            seeded,
         )
         print(f"[*] Username: {s.username}  Password: [stored]  Name: {s.full_name}  Birth: {s.birthdate}")
         self._persist_checkpoint("identity_ready")

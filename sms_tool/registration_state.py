@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import time
+import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Mapping
@@ -160,6 +161,31 @@ class RegistrationContext:
     @property
     def full_name(self) -> str:
         return f"{self.first_name} {self.last_name}"
+
+
+# Private salt on purpose (plan-2026-10-10-fingerprint-device-layer §10 q1): the
+# hypothesis under test is "a stable per-address ``oai-did``", not "turb's exact
+# function".  With turb's public literal anyone could derive a victim address's
+# ``oai-did`` from the email alone; with this one only this repository can.
+_DEVICE_SEED_SALT = "gpt-register-tool:registration:"
+
+
+def seeded_device_identity(email: str) -> dict[str, str]:
+    """``oai-did`` and ``auth_session_logging_id`` as a pure function of the address.
+
+    S1 of the device-layer plan.  Same shape as the random ids they replace
+    (UUID string for ``device_id``, 32 hex characters for the logging id), so
+    nothing downstream can tell the source from the value.  Empty for a blank
+    address: there is nothing to derive from.
+    """
+    key = str(email or "").strip().casefold()
+    if not key:
+        return {}
+    base = f"{_DEVICE_SEED_SALT}{key}"
+    return {
+        "device_id": str(uuid.uuid5(uuid.NAMESPACE_URL, f"device_id:{base}")),
+        "auth_session_logging_id": uuid.uuid5(uuid.NAMESPACE_URL, f"auth_session_logging_id:{base}").hex,
+    }
 
 
 def prepare_registration_context(

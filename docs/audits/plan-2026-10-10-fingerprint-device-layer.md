@@ -174,7 +174,11 @@ Sentinel SID / iframe SID / react key / datadog trace+parent / 指纹池索引**
    尝试；§10 问 3 的 `exit_ip` 哈希**未做**，仍待拍板）。口径见
    `docs/current/protocol-registration.md` 「Device identity observation (S0)」。
 2. **S1（单变量）**：`device_identity_seeded_by_email` + 预注册 `p2-1`；先在**有邮箱供给**
-   时跑（当前被 ReMail 无货阻塞，见 §9）。
+   时跑（当前被 ReMail 无货阻塞，见 §9）。**✅ 2026-10-11 开关与预注册已落地（默认关，
+   未在线上跑过）**：seed 用本仓**私有 salt**（§10 问 1 取「不用 turb 字面量」），库里已存
+   的 id 永远优先；`p2-1` 两臂必须用**不同地址**、每臂 ≥30，harness 只自动门控机制行
+   `Device identity seeded by email`，ceiling / `seeded_by_email==0` 由操作者读 funnel。
+   口径见 `docs/current/protocol-registration.md`「Device identity observation (S0)」末段。
 3. **S2（在 S1 定案后）**：`device_fingerprint_seed_by_email` + `p2-2`。
 4. **S3（独立批）**：`rotate_exit_on_otp_pending` + `p2-3`，并复用 `plan-2026-10-05` §3.5
    的三条不变式测试。

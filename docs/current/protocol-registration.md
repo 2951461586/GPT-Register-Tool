@@ -388,8 +388,8 @@ no behaviour change (`plan-2026-10-10-fingerprint-device-layer.md` §3 S0). Afte
 `reused` is true only when `get_device_context` returned a stored id, which today
 means the address already has a row in `accounts`. An address that never
 registered therefore reads `reused=false` on **every** run: the current baseline
-is a fresh random `oai-did` per attempt. `seeded` is always `none` until S1
-exists. The same facts ride on every result and progress row as
+is a fresh random `oai-did` per attempt. `seeded` is `none` unless the S1 toggle
+below is on. The same facts ride on every result and progress row as
 `device_identity` (`registration_result.safe_device_identity`), and
 `registration_funnel` aggregates them over **all** attempts, not only successes:
 
@@ -400,6 +400,22 @@ device_identity: {reused, fresh, unknown, seeded_by_email}
 `unknown` means "not recorded" (for example a browser-driver row), never "fresh".
 `oai-did` is a credential-level identifier: only its first 8 characters are ever
 written, in the log line, the result and the progress row.
+
+### Seeding by email (S1, default off)
+
+`registration.device_identity_seeded_by_email` (default `false`) changes only the
+**source** of `oai-did` and `auth_session_logging_id`: when on, and the address has
+no stored id, both become a pure function of the casefolded email
+(`registration_state.seeded_device_identity`, a uuid5 under this repo's private
+salt, deliberately not turb's literal). A stored id in `accounts` always wins, so
+already-registered addresses behave as before. Sentinel SID, datadog ids and the
+fingerprint profile are untouched. When on, the handler emits
+`Device identity seeded by email` and the S0 line reads `seeded=email reused=false`.
+
+Because the same address yields the same ids on every run, an A/B must use
+**different addresses per arm** (`p2-1-device-identity-seeded` in
+`registration-ab-runbook.md`). The harness only gates on the mechanism line; the
+operator reads the funnel's `seeded_by_email` count and the ceiling check.
 
 ## Validation limits
 

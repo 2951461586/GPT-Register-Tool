@@ -694,6 +694,55 @@ EXPERIMENTS: dict[str, dict[str, Any]] = {
             "decision rule reports as not_judgeable rather than as no-effect."
         ),
     },
+    "p2-1-device-identity-seeded": {
+        "hypothesis": (
+            "H1 of plan-2026-10-10-fingerprint-device-layer: the wire-shape family "
+            "(p1-8..p1-13) is closed -- the server picks the pending arm under a "
+            "byte-identical request shape -- so the remaining candidate on the "
+            "client side is device identity. We mint a fresh random oai-did for "
+            "every attempt of an address that never registered; turb derives it "
+            "from the address from the very first attempt. Deriving oai-did and "
+            "auth_session_logging_id from the address should stop the server "
+            "marking the transaction passwordless_email_otp_send_pending."
+        ),
+        "toggle": "registration.device_identity_seeded_by_email",
+        "arms": {"default": False, "seeded": True},
+        "hold_constant": (
+            "DIFFERENT addresses in the two arms (a seeded address re-run gets the same "
+            "identity again, so one address in both arms would cross-contaminate them)",
+            "same mailbox provider and a comparable address family in both arms",
+            "same exit pool (same proxy_seeds / lanes)",
+            "same registration driver, concurrency and stage timeouts",
+            "password lane only (email_registration.registration_mode != passwordless)",
+            "registration.pulse.enabled false in BOTH arms",
+            "every p1-* wire toggle at its default in BOTH arms (the family is closed)",
+            "arms interleaved or adjacent in time (same-exit results differ across minutes)",
+        ),
+        "metrics": (
+            "client_auth_session_dump[after_otp_send]: passwordless_email_otp_send_pending ABSENT "
+            "(primary mechanism read -- the only value that separated success from failure)",
+            "client_auth_session.email_verification_mode (secondary: which arm the server picked)",
+            "funnel.registered_per_attempted",
+            "funnel.device_identity (reused / fresh / seeded_by_email -- the manipulation's own effect)",
+            "funnel.registration_failures_by_class (a NEW class such as sentinel_* or "
+            "account_deactivated stops every arm)",
+        ),
+        "mechanism": "Device identity seeded by email",
+        "decision": (
+            "favor_seeded when that arm's success rate exceeds the default arm's by "
+            f"more than {RATE_DELTA:.2f}; keep_default_off when it is worse by more "
+            "than the same delta; otherwise inconclusive. Both arms at 0% pending "
+            "is a ceiling, and a seeded arm whose funnel.device_identity."
+            "seeded_by_email is 0 never changed an identity (the operator reads "
+            "both from the funnel; the harness only gates on the mechanism line); "
+            "neither is evidence about the hypothesis. A new "
+            "terminal failure class in the seeded arm stops all arms at once: the "
+            "derived identity may itself trip risk control. A rate that does not "
+            "move while the pending key also fails to clear closes H1 and leaves "
+            "H2 (full fingerprint seed) and H3 (exit reputation) -- S2 may not run "
+            "until this one is decided."
+        ),
+    },
     "p0-2b-inflow-challenge-handoff": {
         "hypothesis": (
             "H1: a challenge that arrives after preflight can be recovered by "

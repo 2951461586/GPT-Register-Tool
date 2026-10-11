@@ -22,6 +22,7 @@
 | P1-15 | turb 在 `email-otp/send` 导航上带 `sec-fetch-site: same-origin` + `sec-fetch-user: ?1`，本仓只带 `Accept` + `Referer` | `registration.otp_navigation_headers`（默认 `false`）；只改 send 的两个头 | turb `navigate_email_otp_send`；本仓 P1-9 对密码页已测过同一课 |
 | P1-16 | turb 给 `email-otp/validate` 带新铸的 `authorize_continue` Sentinel + SO，本仓 `use_sentinel=False` | `registration.otp_validate_sentinel`（默认 `false`）；只决定 validate 是否带头 | turb `openai_auth.py` + `config/openai_protocol.py::SEND_SENTINEL_ON_EMAIL_OTP_VALIDATE=True`（注释：2026-09-14 成功样本同时带 Sentinel 与 SO）。**潜在差异，非当前失败成因**（现在根本收不到码） |
 | P1-17 | OTP 验证后若 `page.type=external_url` 或 `continue_url` 已是回调，跳过 `create_account` 能避开 `invalid_auth_step` | `registration.otp_external_url_branch`（默认 `false`）；只加这一条分支 | turb `main.py::run_registration`（`direct_oauth_after_otp`）；本仓原本无此分支 |
+| P2-1 | 把 `oai-did` + `auth_session_logging_id` 做成**邮箱的纯函数**（而不是每次尝试随机），能让服务端不再给事务挂 `passwordless_email_otp_send_pending`（设备层 H1） | `registration.device_identity_seeded_by_email`（默认 `false`）；只改这两个 id 的**来源**，Sentinel SID / datadog / 指纹档案不变；已注册地址仍用库里存的 id | `plan-2026-10-10-fingerprint-device-layer.md` §3 S1；turb `core/session.py:53-74`（盐为本仓私有，**不**用 turb 字面量） |
 
 工具：`scripts/registration_ab.py`（`plan` / `collect` / `compare`）。
 
@@ -140,6 +141,7 @@ python scripts/registration_ab.py collect `
 > | P1-15 | `OTP navigation headers` |
 > | P1-16 | `OTP validate sentinel` |
 > | P1-17 | `OTP external_url branch` |
+> | P2-1 | `Device identity seeded by email` |
 >
 > 🔴 **机制行必须落在开关自己的分支内。** P1-5 原先登记的是 `Signup username continue`，
 > 那是 `_continue_signup_username` 的**基线** print：开关开或关都会打，P1-8 的强制路径也会打。
@@ -202,6 +204,7 @@ python scripts/registration_ab.py compare `
 | P1-15 | `headers` 成功率高出 0.05 以上且 `mailbox` 类失败不增长 → `favor_headers`；低 0.05 以上 → `keep_default_off`；否则 `inconclusive`。主机制读数同上 |
 | P1-16 | `sentinel` 成功率高出 0.05 以上且 `sentinel` 类失败不增长 → `favor_sentinel`；低 0.05 以上或 `sentinel` 类失败增长 → `keep_default_off`；否则 `inconclusive`。**两臂都没收到码 ⇒ 不可判定**（validate 根本没被走到） |
 | P1-17 | `branch` 成功率高出 0.05 以上且 `auth_state` 类失败不增长 → `favor_branch`；低 0.05 以上 → `keep_default_off`；否则 `inconclusive`。**分支从未触发（没有一臂走到已验证的 OTP）⇒ `not_judgeable`**，不得读成「无效果」 |
+| P2-1 | `seeded` 成功率高出 0.05 以上且无新终态失败类别 → `favor_seeded`；低 0.05 以上 → `keep_default_off`；否则 `inconclusive`。`collect` 的机制行门禁（`Device identity seeded by email`）缺失 ⇒ `manipulation_failed`（harness 自动）。以下两条 **harness 不判，由操作者读 funnel**：两臂挂起键出现率都为 0% ⇒ 记作 `ceiling`；`seeded` 臂 `funnel.device_identity.seeded_by_email == 0`（标记在但 id 没换，例如全是已注册地址）⇒ 记作开关未生效；二者都**不是**对假设的证据。`seeded` 臂出现新终态类别（`sentinel_*` / `account_deactivated`）⇒ 停全部臂。不动即关闭 H1，剩 H2（全指纹 seed）与 H3（出口声誉） |
 | P0-2b | 先跑 §4.1 的**无效结果判据**：任一 arm 的 `edge_challenge` 计数缺失 ⇒ `inconclusive`；三臂 `hits` 全为 0 ⇒ `not_judgeable`（窗口没测到东西，**不是**“无效果”）；`rotate` 臂命中了挑战但 `rotations == 0`（单槽池/开关未生效）⇒ `not_judgeable`（该臂是 `observe` 的副本）。有效时：`rotate` 臂出现控制臂从未有过的失败类别 ⇒ `stop_all_arms`（立即回到 `observe`）；`registered_per_attempted` 高出 0.05 以上且无新类别 ⇒ `favor_rotate`；低 0.05 以上 ⇒ `keep_default_off`；否则 `inconclusive`。**H2（handoff）单独判定，永不与 rotate 合并拍板** —— 且本轮 `handoff` 臂不可判定（`browser_handoff` 未落地，见 §6） |
 
 ---
@@ -220,6 +223,7 @@ python scripts/registration_ab.py compare `
 - 🔴 P1-14 与 P1-9 **机制上耦合**：P1-9 给 prime 补导航头，P1-14 决定落点错是否致命。顺序必须先 P1-9 定案再跑 P1-14（两臂都开 P1-9），否则分不清「头不齐导致落点错」还是「落点本来就对」。
 - 🔴 P1-15 / P1-16 / P1-17 都作用在 OTP 阶段，是三个独立单变量：send 的头、validate 的 Sentinel、validate 之后的分支。同一批只跑一个；两臂都必须保持另两个为默认值。
 - 🔴 P1-16 / P1-17 在**当前失败形状上不可判定**：现在三个地址全部停在 `email_otp_send_stuck`（码从未派发），validate 从未被走到，所以两臂的分支/带头差异不会显现。先跑 P1-13..P1-15；P1-16/P1-17 等有码到达之后再跑，判定时按 `not_judgeable` 处理。
+- 🔴 P2-1 的两臂必须用**不同地址**：开关开启后同一地址重跑会得到**同一个** `oai-did`（这正是被测内容），同一地址进两臂会串味。两臂都钉 `pulse.enabled=false`、密码泳道、P1-* 全默认；两臂相邻或交叉进行并记录时间。P2-2（全指纹 seed）必须等 P2-1 定案后再做，`hold_constant` 钉两臂都开 P2-1。`oai-did` 是凭据级标识：日志/报告只记前 8 位与 `reused` / `seeded`。
 - 🔴 P0-2b 的 `handoff` 臂**现在不要跑**：`registration.edge_challenge_browser_handoff` 未落地（`browser_flow` 缺“接入 cookie jar → 闯关 → 导出 → 停”的模式，见 `plan-2026-10-05` §3.4.2 的 S4b）。只跑 `observe` / `rotate` 两臂即可定 H1；`handoff` 臂会被判 `not_judgeable`。
 - 🔴 P0-2b 的停止规则比速率优先：任一臂出现**新的终态失败类别**、或 `handoff` 臂把可注册地址写进死路账本（`registration_retry_guard`）⇒ **立即停全部三臂**并回到 `observe`。
 - 🔴 P1-6 与 P1-7 都作用在 `create_account` 阶段：P1-6 改**请求前**（多发一次 GET），P1-7 改**失败后**（重试同一 POST）。同一批只跑其中一个；若都要定案，顺序不限，但两批的 arm 必须都保持另一开关为默认值。

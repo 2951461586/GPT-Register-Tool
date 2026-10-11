@@ -664,6 +664,7 @@ def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -
             "otp_navigation_headers",
             "otp_validate_sentinel",
             "otp_external_url_branch",
+            "device_identity_seeded_by_email",
         ):
             if key in registration and not isinstance(registration.get(key), bool):
                 errors.append(f"registration.{key} must be a boolean")
