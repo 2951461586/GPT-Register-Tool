@@ -458,6 +458,17 @@ revoked within 5-15 minutes, nor does 2FA; see
 `docs/audits/scan-2026-10-11-at-revocation-survival.md`.
 `scripts/at_survival_watch.py` records the liveness curve for any account ids.
 
+`--check-promotion-after-registration` probes each account's promotion **right
+after that account is saved** (inside `persist_registration_result`, before the
+next registration), because the access token only lives minutes. The batch end
+merges the per-account reports (`merge_promotion_reports`) and probes only the
+leftovers (deferred AT probe, replayed persistence); it no longer re-probes an
+account that already has a result, which used to overwrite it with `AT失效`.
+Not ported from the reference repo (`turb-gpt-free-register`,
+`AUTO_PLAN_CHECK_AFTER_REGISTER`): its 2 s re-check for a Free account without
+trial eligibility, because here each probe persists, so a failed re-check could
+replace a good first result; no measurement shows eligibility lags signup.
+
 Relogin has two matching switches under `codex_oauth`:
 `browser_style_send_otp` (default `true` since 2026-10-11; same send shape, fresh
 Sentinel bound to this device; `false` restores the cached-Sentinel `json={}`

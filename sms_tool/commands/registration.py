@@ -353,6 +353,62 @@ def check_registered_promotions(emails, workers=4, proxy=None, timeout=20, proxy
     return report
 
 
+_PROMOTION_SUM_KEYS = (
+    "total",
+    "success",
+    "failed",
+    "unauthorized",
+    "transport_failed",
+    "persist_failed",
+    "trial_eligible",
+    "payment_eligibility_ok",
+    "payment_eligibility_failed",
+)
+
+
+def merge_promotion_reports(reports):
+    """Fold per-account promotion reports into one batch-shaped report.
+
+    ``None`` means nothing was measured, which downstream reads as "not
+    checked" rather than "zero eligible".
+    """
+    rows = [item for item in reports if isinstance(item, Mapping)]
+    if not rows:
+        return None
+    merged: dict[str, Any] = {key: sum(int(item.get(key) or 0) for item in rows) for key in _PROMOTION_SUM_KEYS}
+    merged["ok"] = all(bool(item.get("ok")) for item in rows)
+    merged["circuit_breaker_tripped"] = any(bool(item.get("circuit_breaker_tripped")) for item in rows)
+    merged["payment_methods_seen"] = sorted(
+        {str(token) for item in rows for token in (item.get("payment_methods_seen") or [])}
+    )
+    merged["results"] = [
+        result for item in rows for result in (item.get("results") or []) if isinstance(result, dict)
+    ]
+    return merged
+
+
+def probe_promotion_now(args, ctx: RegistrationCommandContext, email: str):
+    """Probe one account's promotion right after it was saved.
+
+    A fresh access token only lives for minutes (measured 2026-10-11: 12/12
+    alive at 1 min, 2/12 at 15 min, 0/13 at 30 min), so a batch-end probe
+    reports the early accounts as ``AT失效`` instead of their real status.
+    Returns the per-account report, or ``None`` when the probe itself raised.
+    """
+    try:
+        return ctx.check_registered_promotions(
+            [email],
+            workers=1,
+            # Account-health lane: never reuse the signup exit (see the batch-end call).
+            proxy=None,
+            timeout=max(5, int(getattr(args, "refresh_timeout", 20) or 20)),
+            payment_eligibility=bool(getattr(args, "payment_eligibility", True)),
+        )
+    except Exception as exc:
+        logger.warning("immediate promotion check failed: %s", type(exc).__name__)
+        return None
+
+
 _PERSISTENCE_KEY = "_registration_persistence"
 
 
@@ -660,6 +716,18 @@ def _persist_registration_result_core(
                     "[!] Post-registration health queue warning: "
                     f"{type(exc).__name__}"
                 )
+        if (
+            marker.get("db_saved")
+            and not deferred_probe
+            and getattr(args, "check_promotion_after_registration", False)
+            and not marker.get("promotion_checked")
+        ):
+            # Before the audit write and the session-saved line: the access
+            # token is only minutes old, so this is the time-critical step.
+            marker["promotion_checked"] = True
+            marker["promotion_report"] = probe_promotion_now(
+                args, ctx, str(session_data.get("email") or "")
+            )
         if not marker.get("active_audited"):
             record_registration_audit(
                 data,
@@ -709,6 +777,7 @@ def save_registration_results(
     db_saved_count = 0
     import_emails = []
     health_job_ids: list[str] = []
+    inline_promotion: dict[str, Any] = {}
     for data in filter(None, results):
         outcome = persist_registration_result(
             args,
@@ -721,6 +790,8 @@ def save_registration_results(
         db_saved_count += int(outcome.get("db_saved") or 0)
         if outcome.get("import_email"):
             import_emails.append(outcome["import_email"])
+            if isinstance(outcome.get("promotion_report"), Mapping):
+                inline_promotion[str(outcome["import_email"]).strip().lower()] = outcome["promotion_report"]
         health_job_ids.extend(
             str(item)
             for item in (outcome.get("account_health_jobs") or [])
@@ -741,16 +812,29 @@ def save_registration_results(
 
     promotion_report = None
     if getattr(args, "check_promotion_after_registration", False) and import_emails:
-        promotion_report = ctx.check_registered_promotions(
-            import_emails,
-            workers=max(1, int(getattr(args, "workers", 4) or 4)),
-            # Post-registration promotion checks use the account-health lane.
-            # Passing the signup proxy here defeats that isolation and can
-            # immediately re-use a contaminated registration exit.
-            proxy=None,
-            timeout=max(5, int(getattr(args, "refresh_timeout", 20) or 20)),
-            payment_eligibility=bool(getattr(args, "payment_eligibility", True)),
-        )
+        # Accounts already probed right after their own save keep that result:
+        # re-probing at batch end would overwrite it with ``AT失效``.  Only the
+        # leftovers (deferred AT probe, replayed persistence) are probed here.
+        leftover = [email for email in import_emails if str(email).strip().lower() not in inline_promotion]
+        leftover_report = None
+        if leftover:
+            leftover_report = ctx.check_registered_promotions(
+                leftover,
+                workers=max(1, int(getattr(args, "workers", 4) or 4)),
+                # Post-registration promotion checks use the account-health lane.
+                # Passing the signup proxy here defeats that isolation and can
+                # immediately re-use a contaminated registration exit.
+                proxy=None,
+                timeout=max(5, int(getattr(args, "refresh_timeout", 20) or 20)),
+                payment_eligibility=bool(getattr(args, "payment_eligibility", True)),
+            )
+        promotion_report = merge_promotion_reports([*inline_promotion.values(), leftover_report])
+        if inline_promotion and promotion_report is not None:
+            safe_print(
+                "[*] Promotion check (immediate, per account): "
+                f"success={promotion_report['success']}/{promotion_report['total']} "
+                f"trial_eligible={promotion_report['trial_eligible']}"
+            )
 
     if getattr(args, "import_cpa", False):
         ctx.import_registered_accounts(args, import_emails)

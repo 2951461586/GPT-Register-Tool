@@ -67,3 +67,11 @@
 - 推断(未单独验证):批次末统一查优惠与 AT 约 5–15 分钟的寿命冲突。17 个账号串行注册约 50 分钟,先注册的早已过期;仅最后几个还活着。
   需要的是**每个账号注册完立刻查**(1 分钟内 12/12 为活)。
 - 新增排除项:换出口供应商(lajiao → rola)、换进 CLI 完整落库路径,都**没有**改变撤销曲线 ⇒ 出口供应商本身不是主因(同为 IN 出口,仍未测 US)。
+## 7. 落地:查优惠改为每个账号落库后立即查(10-12)
+
+- `sms_tool/commands/registration.py`:`--check-promotion-after-registration` 现在在 `_persist_registration_result_core` 里、该账号 DB 落库后、下一个账号开始注册前立即探测(`probe_promotion_now`,走账号健康通道、`proxy=None`、单账号)。
+  结果存进持久化标记(`promotion_report`);探测抛错不影响落库,回落到批末补查。
+- 批末 `save_registration_results` 用 `merge_promotion_reports` 合并逐账号报告,**只补查没有即时结果的账号**(延迟 AT 探测、重放落库)。此前批末统一重探会把早先账号覆盖成 `AT失效`。
+- 对照参考仓 `myfanhua/turb-gpt-free-register`:它也是落库后立刻入队查询(`AUTO_PLAN_CHECK_AFTER_REGISTER`)。**未移植**它对「Free 且无试用资格」账号 2 秒后复查一次:本仓每次探测都会落库,复查失败会盖掉首次成功结果;也没有数据表明资格会在注册后滞后出现。
+- 测试:`tests/test_registration_immediate_promotion.py`(顺序、无开关不探、批末不重探、仅补查缺失、探测抛错回落、延迟 AT 不即时探、合并);`tests/test_account_promotion.py` 的一条断言从整体相等改为核心计数相等。
+- **未做**:新代码尚无线上实测(iCloud 库存为 0)。预期:每账号注册后约 1 分钟内探测,AT 此时应为活。

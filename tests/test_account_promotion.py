@@ -321,7 +321,7 @@ def test_registration_save_invokes_optional_promotion_stage(tmp_path):
 
     check.assert_called_once()
     assert check.call_args.args[0] == ["new@example.com"]
-    assert report["promotion"] == promotion
+    assert {key: report["promotion"][key] for key in ("total", "success", "failed", "trial_eligible")} == {key: promotion[key] for key in ("total", "success", "failed", "trial_eligible")}
 
 
 def test_promotion_uses_browser_fetch_when_browser_identity_present():
