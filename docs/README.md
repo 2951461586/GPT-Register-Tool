@@ -43,6 +43,9 @@ Directory layout (since 2026-09-06):
 
 ## Release notes（docs/releases/，一个发布标签一份，不回写）
 
+- [v2026.10.12 发布说明](releases/release-v2026.10.12.md) - 自 v2026.10.08 以来的收口：
+  协议注册默认栈换为实测可存活的新 Sentinel SDK + SO、401 重登两个失败原因（探针误拒 passwordless
+  账号、`account_deactivated` 被吞）的修复，以及 AT 存活调查的审计记录。
 - [v2026.10.08 发布说明](releases/release-v2026.10.08.md) - 自 v2026.09.23 以来的收口：
   协议注册硬化与 signin 形状实验系列、支付提取器的 Sentinel 门禁与 `protocol_payment.v1`
   结果契约、代理/指纹单一权威接线，以及把大文件拆成有边界模块的结构性重构。

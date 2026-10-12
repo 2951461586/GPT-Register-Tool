@@ -527,6 +527,20 @@ password and spends a code only if that fails). The password path now also
 completes a saved TOTP challenge. The relogin send always logs
 `pending=… mode=…` when it answers 200.
 
+Relogin of a passwordless-registered account (audit §13, 2026-10-12): such an
+account holds no password, and the password-step probe answers
+`password_form_present` for every address, so the probe's "password step but no
+password" refusal (`existing_login_password_required`) is now applied only when the
+caller passes `allow_passwordless=False` (the two registration-lane callers do).
+The recovery path continues to the email code, which on a live account completes
+(`email-otp/validate` 200, `mfa/verify` 200, session 200). `mfa/verify` is also the
+only step that reveals a deactivated account (403 `account_deactivated`, after
+`validate` and `issue_challenge` both answered 200); that verdict is kept in the
+error (`existing_login_totp_verify_failed:403:account_deactivated`), so the recovery
+chain records the account as terminal. A 401 access token on such an account is
+therefore usually a deactivated account, not a refreshable session: 0 of 43 recent
+401 iCloud accounts could be relogged in, 28 were confirmed deactivated.
+
 ## Validation limits
 
 Offline tests cover step ordering, redirect classification and Sentinel header
