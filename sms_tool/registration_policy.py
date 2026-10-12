@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from .error_classification import classify_error, error_text, is_terminal_registration_error
 from .failure_registry import ADVICE as _ADVICE
 from .failure_registry import FAILURE_CLASSES as _REGISTRY_CLASSES
+from .failure_registry import PASSWORD_CLAIMED_MARKER
 
 # 类别→可重试的判定来自注册表（retryable=True 的类）。新增类别在
 # failure_registry 改一处，这里与 classify_error 自动跟随。
@@ -40,13 +41,19 @@ def registration_retry_decision(error, *, failure_class: str = "") -> RetryDecis
     category = failure_class or classify_error(error)
     terminal = is_terminal_registration_error(error)
     advice = next((value for code, value in _ADVICE.items() if code in text), "")
-    attempt_retryable = category in RETRYABLE_CLASSES and not terminal
+    password_claimed = PASSWORD_CLAIMED_MARKER in text
+    attempt_retryable = category in RETRYABLE_CLASSES and not terminal and not password_claimed
 
     # These three decisions used to be collapsed into ``retryable``:
     # whether to retry the same account now, whether a later batch may try it,
     # and what durable guard state to retain. Keep the policy pure while the
     # retry guard continues to own mutable cross-batch state (ADR-0009).
-    if "email_otp_send_stuck" in text:
+    if password_claimed:
+        # The password was accepted, so every new session is routed to login
+        # (``invalid_auth_step``): neither this batch nor a later one can finish it.
+        future_batch_eligible = False
+        guard_action = "dead_end"
+    elif "email_otp_send_stuck" in text:
         future_batch_eligible = True
         guard_action = "otp_pending"
     elif any(

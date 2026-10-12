@@ -28,6 +28,7 @@ from .auth_headers import set_auth_fingerprint
 from .auth_state import signup_lane_verdict
 from .desktop_ipc import emit_event
 from .failure_registry import (
+    PASSWORD_CLAIMED_MARKER,
     PASSWORDLESS_SIGNUP_CODE,
     is_passwordless_signup_mismatch,
 )
@@ -278,6 +279,8 @@ class RegistrationEmailWorkflow:
                 self.machine.fail("registration_cancelled")
         elif self.machine.state is not RegistrationState.FAILED:
             self.machine.fail(error)
+        if not cancelled:
+            error = self._with_password_claim(error)
         result = r._failure_result(
             error,
             email=self.runtime.username,
@@ -308,6 +311,30 @@ class RegistrationEmailWorkflow:
             result["existing_login_error"] = self.runtime.existing_login_error
         result["registration_machine"] = self.machine.snapshot()
         return result
+
+    def _with_password_claim(self, error: str) -> str:
+        """Tag a failure that happened after ``user/register`` accepted the password.
+
+        The stage after ``USER_REGISTER`` is only entered once that POST returned 200,
+        and only the password lane POSTs it. From then on the address answers
+        ``invalid_auth_step`` to every new session, so the batch must not retry it
+        (``registration_policy``). Runs that already hold a token or an existing
+        account are left to their own recovery path, and ``email_otp_send_stuck`` keeps
+        its own guard/pulse semantics (quarantine TTL, arm-mismatch accounting).
+        """
+        s = self.runtime
+        if PASSWORD_CLAIMED_MARKER in error or "email_otp_send_stuck" in error:
+            return error
+        if s.access_token or s.existing_account:
+            return error
+        history = getattr(self.machine, "history", None)
+        if not isinstance(history, (list, tuple)):
+            return error
+        if not any(t.state is RegistrationState.EMAIL_OTP_SEND for t in history):
+            return error
+        if not self._password_lane_active():
+            return error
+        return f"{error}|{PASSWORD_CLAIMED_MARKER}"
 
     def _edge_challenge_rotate_exit_enabled(self) -> bool:
         return _edge_challenge.edge_challenge_rotate_exit_enabled(self)

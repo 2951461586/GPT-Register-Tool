@@ -456,6 +456,11 @@ OTP_MAILBOX_SIDE_MARKER = "mailbox_side_no_code"
 #: **之前**对它短路 —— 组合串里仍含 ``otp_send_stuck`` 子串，顺序反了就会把它
 #: 重新读成派发侧封禁信号。后缀不改变失败类别（仍含 ``email_otp_send_stuck``）。
 OTP_ARM_MISMATCH_MARKER = "arm_mismatch"
+#: 密码泳道里 ``user/register`` 已 200（密码已被服务端接受）之后才失败的运行后缀。
+#: 实测 2026-10-12：此后同地址任何换代理/换会话的重试都是 ``invalid_auth_step``
+#: （服务端把它当已存在账号送去登录，lane5 4/4、lane6 1/1），所以不再同账号重试，
+#: 也不留给后续批次（dead end）。不改变失败类别。
+PASSWORD_CLAIMED_MARKER = "password_claimed_unfinished"
 #: ``email_otp_poll_timeout`` 的**能力**后缀：这次超时的渠道没有重发能力。
 #: ⚠️ 与 ``OTP_MAILBOX_SIDE_MARKER`` 组合出现 ⇒ ``registration_pulse``
 #: ``_is_otp_ban_signal`` 仍然先在 ``OTP_MAILBOX_SIDE_MARKER`` 上短路，
@@ -554,6 +559,7 @@ __all__ = [
     "OTP_MAILBOX_SIDE_MARKER",
     "OTP_NO_RESEND_MARKER",
     "OTP_ARM_MISMATCH_MARKER",
+    "PASSWORD_CLAIMED_MARKER",
     "PASSWORDLESS_SIGNUP_CODE",
     "PASSWORDLESS_SIGNUP_MESSAGE_MARKER",
     "is_passwordless_signup_mismatch",

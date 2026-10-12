@@ -9,6 +9,7 @@ from collections.abc import Mapping
 from contextlib import contextmanager
 from pathlib import Path
 
+from .failure_registry import PASSWORD_CLAIMED_MARKER
 from .paths import runtime_file
 from .cross_process_gate import cross_process_write_lock
 from .registration_policy import RETRYABLE_CLASSES, registration_retry_decision
@@ -105,6 +106,10 @@ DEAD_END_MARKERS = (
     "auth_session_recovery_expired",
     "auth_session_recovery_exhausted",
     "auth_session_recovery_context_missing",
+    # ``user/register`` accepted the password and the run failed afterwards; the
+    # address now answers ``invalid_auth_step`` to every new session
+    # (2026-10-12).  Last, so a ``user_already_exists`` text keeps its own name.
+    PASSWORD_CLAIMED_MARKER,
 )
 
 

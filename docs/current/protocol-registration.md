@@ -496,6 +496,17 @@ neither the password arm nor the warm-up is what matters. The SDK cannot be used
 without SO (`create_account` -> `registration_disallowed`, 0/5). n is small and the
 exit/mailbox supplier are single; treat it as a strong lead, not a proven fix.
 
+The shipped default is that measured stack: passwordless `login_or_signup`, SDK
+`20260810913b` with the SO header, `reference_lane` off, warm-up off
+(`tests/test_default_registration_stack.py` pins it). No switch is needed to get it.
+
+Retry rule: when the password lane already got `user/register` 200, any later failure
+is tagged `|password_claimed_unfinished` (`failure_registry.PASSWORD_CLAIMED_MARKER`).
+The batch does not retry that account with a fresh proxy session and the retry guard
+records a permanent dead end, because every new session for that address answers
+`invalid_auth_step`. Failures before the POST, passwordless runs (no POST),
+`email_otp_send_stuck`, and runs that already hold a token keep the old rules.
+
 `--check-promotion-after-registration` probes each account's promotion **right
 after that account is saved** (inside `persist_registration_result`, before the
 next registration), because the access token only lives minutes. The batch end
