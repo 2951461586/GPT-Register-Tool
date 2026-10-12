@@ -27,6 +27,12 @@ Current release notes: [v2026.10.08](./docs/releases/release-v2026.10.08.md).
 It is suitable for registration proxies, isolated network environments, and automation tasks that require project-specific network exits.<br>
 Dynamic and static IP resources are available with free testing through the [IPWO trial portal](https://www.ipwo.net/?ref=githubGPT).
 
+<img width="5728" height="672" alt="ProxyLane residential proxy" src="./docs/sponsors/proxylane.png" />
+
+[ProxyLane](https://proxylane.dev/?utm_source=gpt-register-tool&utm_medium=partnership&utm_campaign=gpt-register-tool_sponsor_202610&utm_content=github_readme) residential proxies cover 195 countries, with 95%+ of IPs rated low-risk by Scamalytics, and targeting by city, ISP, and ASN.<br>
+Built for account ↔ proxy-slot binding: append a session name and city to the username to keep the same residential IP for up to 72 hours, and stay in the same city even when the IP rotates.<br>
+Chinese interface, USDT payments supported, and 30% off your first purchase with code GPTREG30.
+
 
 ## Highlights
 

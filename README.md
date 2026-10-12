@@ -27,6 +27,12 @@ GPT-Register-Tool 采用 **WPF 桌面端 + Python 业务核心**，提供邮箱 
 适用于注册代理、独立网络环境及自动化任务等场景，帮助开发者根据项目需求配置合适的网络出口。<br>
 包含动态静态IP资源，支持免费测试。[IPWO测试入口](https://www.ipwo.net/?ref=githubGPT)
 
+<img width="5728" height="672" alt="ProxyLane 住宅代理" src="./docs/sponsors/proxylane.png" />
+
+[ProxyLane](https://proxylane.dev/?utm_source=gpt-register-tool&utm_medium=partnership&utm_campaign=gpt-register-tool_sponsor_202610&utm_content=github_readme) 住宅代理覆盖 195 个国家，95%+ IP 获 Scamalytics 低风险评级，可按城市、ISP、ASN 定向。<br>
+适合「账号 ↔ 代理槽绑定」：用户名后加会话名和城市，最长 72 小时同一个住宅 IP，换 IP 也留在同一城市。<br>
+中文界面，支持 USDT 付款，首次购买使用优惠码 GPTREG30 享 7 折。
+
 ## 功能亮点
 
 | 模块 | 能力要点 |
