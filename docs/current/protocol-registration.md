@@ -464,6 +464,12 @@ and turns on the existing toggles it needs (`registration_reference_lane.LANE_FL
 configs list every toggle explicitly. Markers: `Reference lane: pre-signin bootstrap`,
 `Anonymous bootstrap: statuses=...`, `Auth providers: status=...`.
 
+On this lane a `passwordless_email_otp_send_pending` flag left in the post-send
+`client_auth_session` dump does **not** abort the run (`email_otp_send_stuck` is kept
+for the other lanes): the reference never reads it, and in the 2026-10-12 lane5 run
+all three runs stopped by it had a verification mail in the mailbox. Marker:
+`Email OTP send still shows pending; reference lane polls the mailbox anyway`.
+
 Sentinel is on SDK `20260810913b`. That SDK no longer folds the session-observer
 output into `token()`; the runner calls `sessionObserverToken(flow)` and emits it as
 `_so`, which `issue_sentinel_token` strips from the main token and wraps for

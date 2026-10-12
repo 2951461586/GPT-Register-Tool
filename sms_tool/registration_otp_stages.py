@@ -217,6 +217,11 @@ def send_email_otp(self: Any) -> None:
         s.otp_issued_after = max(0, s.auth_flow_started - 5)
 
 
+def _reference_lane_polls_anyway(self: Any) -> bool:
+    probe = getattr(self, "_reference_lane_active", None)
+    return bool(callable(probe) and probe() is True)
+
+
 def wait_email_otp(self: Any) -> None:
     r = self.r
     s = self.runtime
@@ -232,7 +237,13 @@ def wait_email_otp(self: Any) -> None:
     #
     # 单独一个错误名而不是给 ``email_otp_poll_timeout`` 加后缀：这条路径
     # **根本没轮询**，说「poll timeout」会让日志撒谎。
-    if otp_dispatch_verdict(s.otp_send_dump) == "stuck":
+    if otp_dispatch_verdict(s.otp_send_dump) == "stuck" and _reference_lane_polls_anyway(self):
+        # 2026-10-12 lane5：三个被本判据止损的地址，邮箱里**都**收到了验证码邮件
+        # （04:41–04:42），而此时 ``user/register`` 已 200、地址已被消耗。参考项目
+        # 从不读这个标记，发完 OTP 直接轮询邮箱。lane 下 pending 因此不是「码不会来」
+        # 的证据，照常轮询；标记仍留在 dump 里供超时归因。
+        _emit(_LOGGER, "  Email OTP send still shows pending; reference lane polls the mailbox anyway")
+    elif otp_dispatch_verdict(s.otp_send_dump) == "stuck":
         # 事务臂判据（F3，2026-10-08）：本 run 走密码泳道、而 dump 显示服务端把这次
         # 注册架在了 passwordless 验证臂上。这是**事务臂**证据，不是出口证据 ——
         # 换出口改不了服务端选臂，所以错误串带 ``arm_mismatch`` 后缀，

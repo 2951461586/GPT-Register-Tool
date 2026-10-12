@@ -259,3 +259,48 @@ def test_every_preset_flag_is_a_registered_boolean_toggle(key):
     from sms_tool.config import validate_config
 
     validate_config({"chatgpt": {}, "registration": {key: True}})
+
+
+# --------------------------------------------------------------------------
+# OTP dispatch ``pending`` is not a stop signal on the reference lane
+# --------------------------------------------------------------------------
+
+_PENDING_DUMP = {
+    "client_auth_session_keys": ["email", "email_verification_mode", "passwordless_email_otp_send_pending"],
+    "signals": {
+        "client_auth_session.email_verification_mode": "passwordless_signup",
+        "client_auth_session.passwordless_email_otp_send_pending": True,
+    },
+}
+
+
+def _otp_workflow(config):
+    workflow = RegistrationEmailWorkflow(
+        RegistrationStateMachine(lambda *_: None),
+        operations=Mock(),
+        config=config,
+    )
+    workflow.runtime.resources.mailbox_service = Mock()
+    workflow.runtime.registration_mode = "password"
+    workflow.runtime.otp_send_dump = _PENDING_DUMP
+    workflow.runtime.otp_issued_after = 0
+    return workflow
+
+
+def test_reference_lane_polls_the_mailbox_even_when_dispatch_still_shows_pending():
+    workflow = _otp_workflow({"registration": {"reference_lane": True}})
+    workflow.r.otp_poll.poll = Mock(return_value="123456")
+    workflow.wait_email_otp()
+    assert workflow.runtime.email_code == "123456"
+    workflow.r.otp_poll.poll.assert_called_once()
+
+
+def test_without_the_lane_a_pending_dispatch_still_stops_before_polling():
+    from sms_tool.registration_handlers import RegistrationAbort
+
+    workflow = _otp_workflow({"registration": {}})
+    workflow.r.otp_poll.poll = Mock(return_value="123456")
+    workflow.r._is_signup_password_step = Mock(return_value=True)
+    with pytest.raises(RegistrationAbort):
+        workflow.wait_email_otp()
+    workflow.r.otp_poll.poll.assert_not_called()
