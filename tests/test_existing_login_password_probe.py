@@ -377,12 +377,21 @@ class LaneProbePolicyTests(unittest.TestCase):
     def test_a_password_step_without_a_password_stops(self):
         """Submitting a generated password would be a guess, so refuse instead."""
         send = Mock()
-        result, _ = _lane(probe=_PRESENT, password="", _send_existing_login_otp=send)
+        result, _ = _lane(probe=_PRESENT, password="", allow_passwordless=False, _send_existing_login_otp=send)
 
         self.assertFalse(result["ok"])
         self.assertEqual(result["error"], "existing_login_password_required")
         self.assertEqual(result["login_method"], "probe")
         send.assert_not_called()
+
+    def test_a_password_step_without_a_password_keeps_the_email_lane_when_passwordless_is_allowed(self):
+        """Passwordless-registered accounts hold no password and the probe still says "form present"."""
+        send = Mock(return_value=(False, Mock(status_code=400)))
+        result, _ = _lane(probe=_PRESENT, password="", allow_passwordless=True, _send_existing_login_otp=send)
+
+        self.assertFalse(result["ok"])
+        self.assertNotEqual(result["error"], "existing_login_password_required")
+        send.assert_called_once()
 
     def test_a_definitive_no_password_step_stops_before_the_email_lane(self):
         send = Mock()
@@ -594,7 +603,9 @@ class VerifiedPageContinueTests(unittest.TestCase):
 
     def test_off_the_verified_page_the_post_carries_no_screen_hint(self):
         """The signup continue body is the contract there; leave it alone."""
-        _, seams = _lane(probe=_PRESENT, _existing_login_continue_enabled=Mock(return_value=True))
+        _, seams = _lane(
+            probe=_PRESENT, allow_passwordless=False, _existing_login_continue_enabled=Mock(return_value=True)
+        )
         body = seams["request_with_retry"].call_args_list[2].kwargs["json"]
         self.assertNotIn("screen_hint", body)
 
@@ -602,6 +613,7 @@ class VerifiedPageContinueTests(unittest.TestCase):
         """The pre-existing failure mode must survive untouched."""
         result, _ = _lane(
             probe=_PRESENT,
+            allow_passwordless=False,
             transport=[
                 Mock(status_code=200, url=self._SIGNIN_URL, headers={}),
                 Mock(status_code=200, url=self._LOGIN_URL, headers={}),

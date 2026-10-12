@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from . import deps, steps
 
 
@@ -64,7 +66,17 @@ def _complete_existing_login_totp(
     )
     verify_data = deps._json_or_raw(verify, limit=1000)
     if verify.status_code != 200:
-        return {"ok": False, "error": f"existing_login_totp_verify_failed:{verify.status_code}"}
+        error = f"existing_login_totp_verify_failed:{verify.status_code}"
+        # Measured 2026-10-11: ``email-otp/validate`` and ``mfa/issue_challenge``
+        # both answer 200 for a deactivated account, and only ``mfa/verify``
+        # reveals it (403 ``account_deactivated``).  Keep the verdict in the
+        # error so the recovery chain records the account as terminal instead of
+        # reading a bare 403 as a transient failure.
+        # The server code itself is matched (not the shared free-text marker
+        # list) so this layer needs no import from ``accounts``.
+        if "account_deactivated" in json.dumps(verify_data, ensure_ascii=False, default=str).lower():
+            error = f"{error}:account_deactivated"
+        return {"ok": False, "error": error}
     return {"ok": True, "data": verify_data}
 
 

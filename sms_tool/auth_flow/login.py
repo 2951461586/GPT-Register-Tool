@@ -362,6 +362,17 @@ def _existing_login_probe(
         # A password step is reachable, so the email lane cannot produce a
         # session on this transaction -- spend the password we hold instead.
         if not str(password or "").strip():
+            if allow_passwordless:
+                # Measured 2026-10-11: passwordless-registered accounts hold no
+                # password, yet this probe answers ``password_form_present``
+                # (the sibling ``/log-in/password`` shell carries a form for
+                # every address).  On a live account of that kind the email
+                # lane completed (``email-otp/validate`` 200, ``mfa/verify``
+                # 200, session 200), so refusing here turned a working login
+                # into a guaranteed failure.  Without a password nothing else
+                # can be tried; spend the code.  Callers that already know the
+                # address is registered still refuse (``allow_passwordless=False``).
+                return (None, {})
             return (
                 {
                     "ok": False,

@@ -148,3 +148,42 @@
 ### 12.4 成本与副作用
 - 本节购买:LANE6 5 个(300)、ARMD 4 个(240,库存不足只买到 4)、ARME 5 个(300),合计 840;可用注册:LANE6 4 + ARMD 4。LANE5 的 3 个 pending 地址与 ARME 的 5 个地址已被消耗,不可再用。
 - 已知缺口:`user/register` 200 之后任何失败(OTP 误止损、`create_account` 超时)都会让同地址变成 `invalid_auth_step`,**换代理重试在该阶段无意义**。重试策略应区分 `user/register` 之前/之后(未改)。
+
+## 13. 401 重登:参考项目策略、本项目失败原因、实测(10-12)
+
+### 13.1 参考项目(`core/account_liveness.py` / `account_export.py`)
+- 本地有 AT 且**无 TOTP**:用旧 AT 做 `authenticated_bootstrap` 预热 → `signin/openai?connection=password&reauth=password&max_age=0&login_hint=…`
+  → `GET authorize` → 服务端自动发邮箱 OTP → `email-otp/validate`(无 Sentinel)→ 跟随 `continue_url` → `/api/auth/session`。
+- 有 TOTP 或无 AT:完整 web 流(预热 → providers → csrf → signin → authorize → `password/verify`(Sentinel+SO)→ `mfa/issue_challenge` + `mfa/verify`(无 Sentinel)→ callback → session)。
+- 参考项目的账号全是**密码注册**,所以 reauth/password 两条路都成立。网络失败回落到干净 session 的完整流程。
+
+### 13.2 本项目的重登路径与两个独立问题
+- `auto` 链:refresh_token → web_session cookie 重放 → `chatgpt_email_otp` → codex PKCE → browser。passwordless 注册的账号没有密码也没有 RT,实际只剩 `chatgpt_email_otp`。
+- **问题 A(本项目缺陷,已修)**:`_existing_login_probe` 在无密码时遇到 `password_step=True` 就直接 `existing_login_password_required`,**不发 OTP**。
+  该探针对 passwordless 账号恒为 True(`/log-in/password` 兄弟页面对任何地址都带表单)。
+  对照(**实测**):存活账号 14073 绕开探针后 OTP send 200 → validate 200 → `mfa/issue_challenge` 200 → `mfa/verify` 200 → session 200 → 新 AT 可用。
+  即探针把一条可用链路在第一步就挡掉。修复:无密码且 `allow_passwordless=True` 时不拒绝,继续走邮箱 OTP;注册 lane 的两个调用方仍传 `allow_passwordless=False`,保持原拒绝。
+- **问题 B(账号状态,不是代码缺陷)**:AT 401 的账号绕开探针后,OTP validate 与 `issue_challenge` 都是 200,**只有 `mfa/verify` 返回 403 `account_deactivated`**
+  ("You do not have an account because it has been deleted or deactivated")。此前这个 403 的响应体被丢弃,只剩 `existing_login_totp_verify_failed:403`,
+  所以看起来像"重登一直失败",其实是账号已被服务端停用。修复:把 `account_deactivated` 保留进错误串,恢复链据此落终态(不再重复尝试)。
+
+### 13.3 对近期 AT-401 iCloud 账号的重登测试(**实测**)
+- 目标:DEADSCAN 中 43 个 401 账号(id 13947–14052),使用新 SDK + SO,`chatgpt_email_otp`,默认探针(修复后)。
+- 结果:**0/43 恢复**。
+  - 28 个 `account_deactivated`(含单账号实验 14052/14049/14046/14043/14040/14013;其余在批处理中由 `mfa/verify` 或更早步骤返回 deactivated)。
+  - 12 个 `existing_login_totp_secret_missing`(13966–13990 偶数号,launcher 写入的行没有 `totp_secret`,走到了 MFA 挑战但无法完成;**无法判定是否已停用**)。
+  - 2 个 `auth_session_missing_access_token`(13947、13972,登录完成但 session 无 AT)。
+  - 1 个 `existing_login_password_verify_failed:403`(13954,有密码)。
+- 对照:存活账号 14073 重登成功(见上)。
+
+### 13.4 对 §6/§9/§12 的修正
+- 旧栈"AT 5–15 分钟被撤销"的解释应改为:**账号被服务端停用**(deactivated),AT 随之 401;不是单纯的 token 撤销,所以重登/刷新必然失败,
+  之前 0/37 的重登失败同理(当时探针与响应体丢弃都让原因不可见)。
+- 新栈账号 60 分钟/12 小时仍存活,与"新栈账号没有被停用"一致。
+- **推断(未验证)**:停用发生在旧栈缺 SO/旧 SDK 的会话被风控之后;DEADSCAN 的停用时间点无法从现有数据还原。样本:单一出口、单一邮箱源。
+
+### 13.5 变更与测试
+- `sms_tool/auth_flow/login.py`:无密码 + `allow_passwordless=True` 时跳过 `existing_login_password_required`。
+- `sms_tool/auth_flow/totp.py`:`mfa/verify` 非 200 且响应含 `account_deactivated` 时错误串追加 `:account_deactivated`。
+- 测试:`tests/test_existing_login_totp_deactivated.py`(4)、`tests/test_existing_login_password_probe.py`(+1、3 处显式 `allow_passwordless=False`)。全量 6403 passed。
+- 副作用:批处理经恢复链把可判定的账号写成 `account_deactivated`(产品既有行为)。
