@@ -489,6 +489,13 @@ revoked within 5-15 minutes, nor does 2FA; see
 `docs/audits/scan-2026-10-11-at-revocation-survival.md`.
 `scripts/at_survival_watch.py` records the liveness curve for any account ids.
 
+Update 2026-10-12 (audit §12): that measurement was on the SDK that sent no SO
+header. On `20260810913b` with the SO header, 9/9 accounts (4 lane/password, 4
+passwordless without warm-up, 1 earlier lane) stayed alive through 60 minutes, so
+neither the password arm nor the warm-up is what matters. The SDK cannot be used
+without SO (`create_account` -> `registration_disallowed`, 0/5). n is small and the
+exit/mailbox supplier are single; treat it as a strong lead, not a proven fix.
+
 `--check-promotion-after-registration` probes each account's promotion **right
 after that account is saved** (inside `persist_registration_result`, before the
 next registration), because the access token only lives minutes. The batch end

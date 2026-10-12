@@ -117,3 +117,34 @@
 - **AT 存活(实测,n=1)**:账号 14055 在 1 / 5 / 15 / 30 / 60 分钟探测均 `active`(HTTP 200)。旧栈同口径:5 分钟 4/5,15 分钟 0/5,30 分钟 0/N(passwordless,无 SO,旧 SDK)。
 - 解读:**单个账号 60 分钟仍活是首次出现的反例,与旧曲线(5–15 分钟撤销)方向相反**,但 n=1,不能下结论。可能的原因(均未隔离):新 SDK、`user/register` 与 authorize_continue/create_account 的 SO token、lane 的匿名预热与 password 页 Sentinel bundle、password 臂本身(而非 passwordless 臂)。需要在能稳定注册的前提下积累样本再对照。
 - 下一步:(1)先解决 lane 下 OTP 派发 pending 的竞争(例如在 `user/register` 后/OTP send 前等待并重读 dump),把 lane 成功率拉到可用;(2)再用 ≥5 个新地址重复存活测量;(3)若存活优势成立,拆分变量(SDK/SO vs 预热 vs password 臂)。
+
+## 12. 修复 lane 的 OTP pending 误报 + 存活对照(10-12,新 SDK/SO)
+
+### 12.1 pending 不是「码不会来」(实测)
+- §11 里 3 个被 `email_otp_send_stuck` 止损的地址(me/pi/el),**邮箱里都收到了 ChatGPT 验证码邮件**(04:41–04:42,与各自尝试时间吻合)。止损时 `user/register` 已 200,地址因此被白白消耗。
+- 参考项目 `main.py` 发完 `email-otp/send` 后**不读该标记**,直接轮询邮箱。该止损判据是在 passwordless 泳道上标定的(2026-09-16:6/6 超时都带 pending),不适用于 lane。
+- 修复(`b6b8408`):`reference_lane` 下 pending 只打 `Email OTP send still shows pending; reference lane polls the mailbox anyway`,照常轮询;其它泳道行为不变。没有加「等待并重读 dump」:证据显示码已经发出,等待既无必要,也会拉长已 `user/register` 的窗口。
+- 线上验证(lane6,5 个新地址):出现该标记的账号 **全部**拿到码并注册完成(4/4);注册 **4/5**,失败 1 个是 `create_account` 三次 `curl 28`(出口超时 20 s)后换代理重试,地址已被消耗,重试必然 `invalid_auth_step`。这是**出口超时**,不是 lane 逻辑。
+
+### 12.2 存活曲线(实测,探测按创建时刻起算)
+| 臂 | 栈 | 注册 | 1m | 5m | 15m | 30m | 60m |
+|---|---|---|---|---|---|---|---|
+| 旧栈(§6/§9) | passwordless,旧 SDK,无 SO | 21/22 | 17/17 | 19/21 | 2/17 | 0/18 | 0/9 |
+| LANE5(§11) | lane(password)+新 SDK/SO | 1/5(pending 误止损) | 1/1 | 1/1 | 1/1 | 1/1 | 1/1 |
+| LANE6 | lane(password)+新 SDK/SO+预热 | 4/5 | 3/3 | 4/4 | 4/4 | 4/4 | 4/4 |
+| ARMD | **passwordless**+新 SDK/SO,无预热 | 4/4 | 4/4 | 4/4 | 3/3 | 4/4 | 4/4 |
+
+- 晚探测(创建后 61–121 分钟,另有 14055 在 720 分钟):除 14058 一次传输错误(`unknown`,非 401)外 **8/8 仍 200**。
+- 对比旧栈同口径:15 分钟 2/17、30 分钟 0/18、60 分钟 0/9。新栈 9 个账号在 60 分钟全部存活(含 14055 在 12 小时仍存活)。**曲线形状变了,不再是 5–15 分钟撤销。**
+- 即时查优惠:新栈 9 个有结论账号全部 `Free · 无优惠`,与旧栈一致(累计 18/18),**优惠资格未因此改变**。
+
+### 12.3 变量拆分(尚未完全隔离)
+- **password 臂不是原因**:ARMD(passwordless)与 LANE6(password)都存活。
+- **预热/匿名 bootstrap/password 页 bundle 不是必要条件**:ARMD 没有这些(`reference_lane=false`,预热关)仍存活。
+- **ARME = passwordless + 新 SDK 但在内存里去掉 SO 头**:`create_account` 5/5 `registration_disallowed`(10 个 SO token 被剥掉)。也就是说**新 SDK 下 SO 是必需的**,这条臂没法产出可测账号;5 个别名(300)被消耗,**无存活数据**。
+- 因此「SDK」与「SO」目前只能作为**一对**与旧栈比较:旧栈(旧 SDK,从不发 SO)15 分钟内被撤销,新栈(新 SDK + SO)60 分钟不撤销。单独归因需要「旧 SDK + SO」的臂,而旧 runner 不产出 SO,需要先实现才能测。
+- 推断(未验证):旧栈缺 SO 使会话被风控标记,AT 在 5–15 分钟被撤销;补上 SO 后风控信号恢复正常。也可能是新 SDK 的其它指纹字段。n=9,单一出口供应商(rola IN),单一邮箱源(iCloud 隐私转发),**不排除**出口/时间窗口的混杂,需要日后同批复测。
+
+### 12.4 成本与副作用
+- 本节购买:LANE6 5 个(300)、ARMD 4 个(240,库存不足只买到 4)、ARME 5 个(300),合计 840;可用注册:LANE6 4 + ARMD 4。LANE5 的 3 个 pending 地址与 ARME 的 5 个地址已被消耗,不可再用。
+- 已知缺口:`user/register` 200 之后任何失败(OTP 误止损、`create_account` 超时)都会让同地址变成 `invalid_auth_step`,**换代理重试在该阶段无意义**。重试策略应区分 `user/register` 之前/之后(未改)。
