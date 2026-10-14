@@ -197,7 +197,7 @@ namespace SmsWorkbench
             {
                 logger?.Information("启动后端任务 task={TaskName} command_id={CommandId} args={Args}", taskName, commandId, safeArgs);
                 Log(BackendLogPresenter.TaskStartLine(taskName));
-                StatusText = taskName + " 运行中";
+                StatusBar.Text = taskName + " 运行中";
                 BackendCommandResult result = await backendTasks.RunAsync(
                     BackendCommand.Create(
                         taskName,
@@ -232,7 +232,7 @@ namespace SmsWorkbench
                     task.Info = batchSummary;
                 task.Cost = ((int)(DateTime.Now - started).TotalSeconds).ToString(CultureInfo.InvariantCulture);
                 task.DoneAt = SafeTime(DateTime.Now);
-                StatusText = taskName + " 已结束";
+                StatusBar.Text = taskName + " 已结束";
                 RefreshPools();
                 ScrollTaskGridToBottom();
                 if (BackendResultInterpreter.HasAccountResults(resultKind))
@@ -249,13 +249,13 @@ namespace SmsWorkbench
             {
                 task.Status = "已取消";
                 task.DoneAt = SafeTime(DateTime.Now);
-                StatusText = taskName + " 已取消";
+                StatusBar.Text = taskName + " 已取消";
             }
             catch (BackendTaskAlreadyRunningException)
             {
                 task.Status = "未启动";
                 task.DoneAt = SafeTime(DateTime.Now);
-                StatusText = taskName + " 未启动";
+                StatusBar.Text = taskName + " 未启动";
                 MessageBox.Show("已有批次正在运行，请先取消或等待完成。", "运行中", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)

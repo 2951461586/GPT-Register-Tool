@@ -865,7 +865,7 @@ Loaded="TaskGrid_Loaded">
           </Grid>
 
           <Border Grid.Row="5" Background="{DynamicResource StatusBg}" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0">
-            <TextBlock Margin="8,3" Text="{Binding StatusText}" Foreground="{DynamicResource TextSub}"/>
+            <TextBlock Margin="8,3" Text="{Binding StatusBar.Text}" Foreground="{DynamicResource TextSub}"/>
           </Border>
         </Grid>
       </Grid>

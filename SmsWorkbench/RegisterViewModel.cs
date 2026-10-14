@@ -21,6 +21,15 @@ namespace SmsWorkbench
             set => SetProperty(ref countText, value ?? "1");
         }
 
+        private string chataiMailboxFilePath = "";
+
+        /// <summary>Mailbox file chosen by the last import; the pool reload reads it back.</summary>
+        public string ChataiMailboxFilePath
+        {
+            get => chataiMailboxFilePath;
+            set => SetProperty(ref chataiMailboxFilePath, value ?? "");
+        }
+
         public int CountValue()
         {
             return int.TryParse(CountText, out int value) && value > 0 ? value : 1;

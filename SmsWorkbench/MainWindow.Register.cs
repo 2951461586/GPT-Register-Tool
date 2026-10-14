@@ -38,7 +38,7 @@ namespace SmsWorkbench
 
             string targetFile = GetMailboxTokenFile();
             (int imported, int skipped) = MailboxPoolFileStore.ImportSupportedLines(targetFile, lines);
-            ChataiMailboxFilePath = targetFile;
+            Register.ChataiMailboxFilePath = targetFile;
             RefreshPools();
             NotifySuccess($"导入完成：成功 {imported} 条，跳过 {skipped} 条。");
         }

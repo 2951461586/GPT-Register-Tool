@@ -226,6 +226,10 @@ Reusable transport/browser/helper logic, the dependency-free promotion-state voc
 | `MainWindow.Theme.cs`, `WindowThemeService.cs` | Apply application resource colors and propagate the selected theme to open windows. |
 | `MainWindow.Sidebar.cs` | Sidebar collapsed state, icon state and the bounded width animation only. |
 | `MainWindow.WindowChrome.cs` | Custom title-bar drag, minimize, maximize and close commands only. |
+| `PoolViewModel.cs` | Account grid state: all rows, search/scope filter, sort, paging, selected row, overview counters and the pager/clear/select-all commands. `PoolRow` stays the row model. |
+| `TaskListViewModel.cs`, `LogViewModel.cs`, `StatusBarViewModel.cs` | Batch task rows and the "批次 N" counter, the capped log buffer, and the status-bar line. |
+| `ExportViewModel.cs`, `RegisterViewModel.cs` | Window-independent rules behind export/import and registration: row-selection fallbacks, format labels, probe summary, batch count and worker defaults, which rows still need registering. Dialogs and backend calls stay in `MainWindow.Export.cs` / `MainWindow.Register.cs`. |
+| `MainWindow.Commands.cs`, `MainWindow.Navigation.cs` | Commands bound from `MainWindow.xaml` and the sidebar action table; each routes to an action method in another partial. |
 
 ## Window-independent desktop contracts and interpreters
 

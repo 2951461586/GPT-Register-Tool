@@ -80,7 +80,7 @@ namespace SmsWorkbench
                 Pool.CurrentPage = restorePage;
                 Pool.UpdateOverview();
                 Pool.RefreshPagedRows();
-                StatusText = Pool.SummaryText;
+                StatusBar.Text = Pool.SummaryText;
                 Log("邮箱池和 session 状态已刷新。");
             }
             finally
@@ -234,8 +234,8 @@ namespace SmsWorkbench
 
         private string GetChataiMailboxFilePath()
         {
-            if (!string.IsNullOrWhiteSpace(chataiMailboxFilePath) && File.Exists(chataiMailboxFilePath))
-                return chataiMailboxFilePath;
+            if (!string.IsNullOrWhiteSpace(Register.ChataiMailboxFilePath) && File.Exists(Register.ChataiMailboxFilePath))
+                return Register.ChataiMailboxFilePath;
 
             string[] candidates = { "hotmail.txt", "chatai_mailbox.txt", "chatai.txt" };
             string[] searchDirectories = { configDir, rootDir };

@@ -27,7 +27,6 @@ namespace SmsWorkbench
         private readonly string configDir;
         private readonly CancellationTokenSource _lifetimeCts = new();
         public LogViewModel LogPanel { get; } = new LogViewModel();
-        private string statusText = "就绪";
         private bool sidebarCollapsed;
         private string sidebarToggleGlyph = "‹";
         private Geometry sidebarToggleGeometry = Geometry.Parse("M5 4H19A1 1 0 0 1 20 5V19A1 1 0 0 1 19 20H5A1 1 0 0 1 4 19V5A1 1 0 0 1 5 4Z M10 4V20");
@@ -51,7 +50,6 @@ namespace SmsWorkbench
         // Moon icon (dark mode): crescent
         private static readonly Geometry MoonIcon = Geometry.Parse(
             "M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z");
-        private string chataiMailboxFilePath = "";
 
         public bool SidebarCollapsed
         {
@@ -110,20 +108,10 @@ namespace SmsWorkbench
 
         public RegisterViewModel Register { get; } = new RegisterViewModel();
 
+        public StatusBarViewModel StatusBar { get; } = new StatusBarViewModel();
+
         // SelectedTabIndex removed (2026-09-02, round 6): no binding and no
         // code reads it. Tab selection is driven by the sidebar NavCommand.
-
-        public string ChataiMailboxFilePath
-        {
-            get => chataiMailboxFilePath;
-            set { chataiMailboxFilePath = value ?? ""; OnPropertyChanged(nameof(ChataiMailboxFilePath)); }
-        }
-
-        public string StatusText
-        {
-            get => statusText;
-            set { statusText = value ?? ""; OnPropertyChanged(nameof(StatusText)); }
-        }
 
         public MainWindow(
             IApplicationPaths paths,
@@ -166,7 +154,7 @@ namespace SmsWorkbench
             Pool.PropertyChanged += OnPoolPropertyChanged;
             Pool.SelectionCleared += OnPoolSelectionCleared;
             LogPanel.Cleared += (_, _) => LogTextBox?.Clear();
-            Pool.PageRefreshed += (_, _) => StatusText = Pool.SummaryText;
+            Pool.PageRefreshed += (_, _) => StatusBar.Text = Pool.SummaryText;
             RefreshPools();
             ApplySidebarCompact(false);
             Closing += OnWindowClosing;

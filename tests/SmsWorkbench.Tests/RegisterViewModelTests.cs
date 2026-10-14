@@ -88,6 +88,19 @@ namespace SmsWorkbench.Tests
         }
 
         [Fact]
+        public void ChataiMailboxFilePath_DefaultsToEmptyAndNullBecomesEmpty()
+        {
+            var vm = new RegisterViewModel();
+            Assert.Equal("", vm.ChataiMailboxFilePath);
+
+            vm.ChataiMailboxFilePath = "hotmail.txt";
+            Assert.Equal("hotmail.txt", vm.ChataiMailboxFilePath);
+
+            vm.ChataiMailboxFilePath = null!;
+            Assert.Equal("", vm.ChataiMailboxFilePath);
+        }
+
+        [Fact]
         public void MailboxArgument_UsesTheLegacyParserForMixedBatches()
         {
             Assert.Equal("--only", RegisterViewModel.MailboxArgument(new HashSet<string> { "--only" }));
