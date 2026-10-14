@@ -28,14 +28,14 @@ Directory layout (since 2026-09-06):
   注册恢复、邮箱验证卡死重试与协作取消的当前行为。
 - [Protocol Registration](current/protocol-registration.md) - 协议注册的端点、
   两条泳道、Sentinel 与落地页词汇契约。
-- [Registration & Proxy Architecture](registration-and-proxy-architecture.md) -
+- [Registration & Proxy Architecture](current/registration-and-proxy-architecture.md) -
   注册与代理链路的设计与风险控制说明。
 - [Mailbox Architecture](current/mailbox.md) - provider 能力解析、配置与
   OTP 轮询错误契约。
 - [One-click SMS](current/one-click-sms.md) - 供应商协议族、租号与失败结果持久化。
-- [PayPal Zero-Due Link](paypal-zero-due-link.md) - promotion-update stage
+- [PayPal Zero-Due Link](current/paypal-zero-due-link.md) - promotion-update stage
   protocol, config keys, and region matrix search.
-- [Protocol Payment Enhancement](protocol-payment-enhancement.md) - 协议支付
+- [Protocol Payment Enhancement](current/protocol-payment-enhancement.md) - 协议支付
   提取器与终端报告契约。
 - [Troubleshooting](TROUBLESHOOTING.md) - 故障 → 编号检查清单（先跑
   `python -m sms_tool --doctor`）。每条清单按顺序可执行，并指向负责该行为的

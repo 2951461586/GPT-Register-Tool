@@ -1402,7 +1402,7 @@ DEFAULT_CHECKOUT_COUNTRIES = ("JP", "TH")
 
 
 if __name__ == "__main__":
-    # docs/paypal-zero-due-link.md documents `python -m sms_tool.gen_pp_link`
+    # docs/current/paypal-zero-due-link.md documents `python -m sms_tool.gen_pp_link`
     # as the operator entry; that shim re-exports this main(). Without this
     # guard the documented command imported the module and exited silently.
     main()

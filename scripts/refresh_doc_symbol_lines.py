@@ -3,7 +3,7 @@
 ``scripts/docs_consistency_scan.py`` is only half of the contract: it can *detect*
 that ``| `Widget` | `widget.py:1` |`` drifted, but it cannot fix it, and its strong
 tier only looks at **table rows**. The prose pointers that dominate
-``docs/registration-and-proxy-architecture.md``
+``docs/current/registration-and-proxy-architecture.md``
 (`` `retarget_region()`（`proxy_entry.py:405`） ``) are policed by the weak tier
 alone, which accepts any in-range line number. So every refactor that moves a
 module-level definition leaves two kinds of rot behind:

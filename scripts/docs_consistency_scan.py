@@ -37,9 +37,9 @@ DOCS = (
     "docs/CONTEXT.md",
     "docs/architecture.md",
     "docs/directory-map.md",
-    "docs/registration-and-proxy-architecture.md",
-    "docs/paypal-zero-due-link.md",
-    "docs/protocol-payment-enhancement.md",
+    "docs/current/registration-and-proxy-architecture.md",
+    "docs/current/paypal-zero-due-link.md",
+    "docs/current/protocol-payment-enhancement.md",
     # Current-state and ADR documents are canonical too; excluding them lets
     # stale symbol/line references survive CI even though maintainers read
     # these files as active contracts. Historical audits intentionally remain

@@ -334,8 +334,8 @@ This hardening work does not delete or archive existing runtime files.
 
 ## Detailed And Historical References
 
-- [Payment protocol architecture](protocol-payment-enhancement.md)
-- [PayPal zero-due link contract](paypal-zero-due-link.md)
+- [Payment protocol architecture](current/protocol-payment-enhancement.md)
+- [PayPal zero-due link contract](current/paypal-zero-due-link.md)
 - [Recovery and cancellation](current/registration-recovery.md)
 - [Accepted decisions](adr/README.md)
 - [Pre-hardening detailed snapshot](audits/architecture-before-registration-hardening-2026-09-06.md)

@@ -40,7 +40,7 @@ from sms_tool.store.constants import SCHEMA_VERSION
 # account.  An earlier revision hard-coded a real one here, which put a
 # working credential into a public repository.  Only the host + sid pair is
 # load-bearing (`proxy_egress_key` drops the credentials), and the host is
-# already named in docs/registration-and-proxy-architecture.md.
+# already named in docs/current/registration-and-proxy-architecture.md.
 POOL_ACCOUNT = "testacct1"
 POOL_PASSWORD = "testpw12"
 POOL_A = f"http://{POOL_ACCOUNT}-region-VN-sid-AAAAAAAA-t-5:{POOL_PASSWORD}@us.lajiaohttp.net:2000"
