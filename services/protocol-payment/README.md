@@ -24,8 +24,8 @@ This directory vendors the protocol-only extractors used by
   (pure payload/redirect predicates shared by iDEAL/TWINT/BLIK), `stripe_flow`,
   `proxy_state` / `proxy_seed_file` / `proxy_bookkeeping` / `proxy_selection` /
   `proxy_url`, `provider_profile`, `geo`, `file_loading`, `http_dump`,
-  `endpoints`, `extractor_helpers`, `payload_helpers` (the six pure payload
-  helpers iDEAL/TWINT/BLIK used to copy), `logging_setup`, `redaction` and `timeouts`.
+  `endpoints`, `extractor_helpers`, `payload_helpers` (pure payload
+  helpers the extractors used to copy: six for iDEAL/TWINT/BLIK, three more for iDEAL/TWINT), `logging_setup`, `redaction` and `timeouts`.
   `common/` must not import `sms_tool` (Boundary Rule 10); each extractor keeps
   same-named thin wrappers so its own call sites and `patch(...)` targets are
   unchanged.

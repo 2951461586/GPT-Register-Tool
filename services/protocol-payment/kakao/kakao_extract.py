@@ -69,6 +69,7 @@ from common.protocol_core import (
     safe_int,
 )
 from common.logging_setup import make_file_logger
+from common.payload_helpers import configured_country
 
 
 # ── Access-token liveness probe ──────────────────────────────────────────
@@ -117,13 +118,6 @@ STRIPE_PAYMENT_UA = f"stripe.js/{STRIPE_RUNTIME}; stripe-js-v3/{STRIPE_RUNTIME};
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36"
 )
-
-
-def configured_country(name: str, default: str) -> str:
-    value = str(os.environ.get(name, default) or default).strip().upper()
-    if not re.fullmatch(r"[A-Z]{2}", value):
-        raise RuntimeError(f"{name} 必须是两位国家代码")
-    return value
 
 
 CHECKOUT_COUNTRY = configured_country("KAKAO_BOOTSTRAP_COUNTRY", "KR")

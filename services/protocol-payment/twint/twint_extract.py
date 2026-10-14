@@ -73,10 +73,12 @@ PROTOCOL_ROOT = SCRIPT_DIR.parent
 if str(PROTOCOL_ROOT) not in sys.path:
     sys.path.insert(0, str(PROTOCOL_ROOT))
 from common.payload_helpers import (
+    configured_country,
     format_payment_summary,
     infer_processor_entity,
     normalize_access_token as normalize_token,
     payment_page_summary,
+    raise_on_blocked_setup_intent as raise_if_setup_intent_blocked,
     stripe_browser_id,
 )
 from common.extractor_helpers import (
@@ -236,13 +238,6 @@ DEFAULT_USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6_1) "
     "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15"
 )
-
-
-def configured_country(name: str, default: str) -> str:
-    value = str(os.environ.get(name, default) or default).strip().upper()
-    if not re.fullmatch(r"[A-Z]{2}", value):
-        raise RuntimeError(f"{name} 必须是两位国家代码")
-    return value
 
 
 TWINT_BOOTSTRAP_COUNTRY = configured_country("TWINT_BOOTSTRAP_COUNTRY", os.environ.get("TWINT_CHECKOUT_COUNTRY", "CH"))
@@ -1548,50 +1543,6 @@ def extract_redirect_url(payload: Any, path: tuple[str, ...] = ()) -> str:
 
 def first_value_by_key(payload: Any, key: str) -> Any:
     return common_first_value_by_key(payload, key)
-
-
-def setup_intent_last_error(payload: Any, current_pm_id: str = "") -> str:
-    if isinstance(payload, dict):
-        payload_id = str(payload.get("id") or "").strip()
-        is_setup_intent = payload.get("object") == "setup_intent" or payload_id.startswith("seti_")
-        last_error = payload.get("last_setup_error") if is_setup_intent else None
-        setup_intent = payload.get("setup_intent")
-        if not last_error and isinstance(setup_intent, dict):
-            last_error = setup_intent.get("last_setup_error")
-        if last_error:
-            if current_pm_id and isinstance(last_error, dict):
-                error_pm = last_error.get("payment_method")
-                error_pm_id = ""
-                if isinstance(error_pm, dict):
-                    error_pm_id = str(error_pm.get("id") or "").strip()
-                elif isinstance(error_pm, str):
-                    error_pm_id = error_pm.strip()
-                if error_pm_id and error_pm_id != current_pm_id:
-                    last_error = None
-            if last_error:
-                try:
-                    return json.dumps(last_error, ensure_ascii=False)[:700]
-                except Exception:
-                    return str(last_error)[:700]
-        for value in payload.values():
-            found = setup_intent_last_error(value, current_pm_id=current_pm_id)
-            if found:
-                return found
-    elif isinstance(payload, list):
-        for value in payload:
-            found = setup_intent_last_error(value, current_pm_id=current_pm_id)
-            if found:
-                return found
-    return ""
-
-
-def raise_if_setup_intent_blocked(payload: Any, context: str, current_pm_id: str = "") -> None:
-    last_error = setup_intent_last_error(payload, current_pm_id=current_pm_id)
-    if not last_error:
-        return
-    if "generic_decline" in last_error.lower():
-        raise RuntimeError(f"Stripe 风控拒绝（generic_decline）：{context} SetupIntent 创建失败，未生成 redirect_url")
-    raise RuntimeError(f"{context}: setup_intent.last_setup_error: {last_error}")
 
 
 def should_retry_second_confirm_after_approve(error: Any) -> bool:
