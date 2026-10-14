@@ -4,7 +4,7 @@
 此脚本找回凭据，配合 --mailbox-file 复用既有邮箱重跑注册，避免重复购买。
 
 用法:
-  python -m scripts.oneoff.recover_remail_tokens <email1> <email2> ... [--out <file>]
+  python -m scripts.manual.recover_remail_tokens <email1> <email2> ... [--out <file>]
 """
 from __future__ import annotations
 

@@ -18,10 +18,10 @@ JP / TR checkout -> 0-due free-trial promo. This probe lets us confirm that
 empirically across the mailbox-pool accounts.
 
 Usage (from project root):
-  python -m scripts.oneoff.probe_paypal_regions                 # all pool accounts, default regions
-  python -m scripts.oneoff.probe_paypal_regions --emails a@x,b@y
-  python -m scripts.oneoff.probe_paypal_regions --regions US,JP,TR
-  python -m scripts.oneoff.probe_paypal_regions --json out.json
+  python -m scripts.manual.probe_paypal_regions                 # all pool accounts, default regions
+  python -m scripts.manual.probe_paypal_regions --emails a@x,b@y
+  python -m scripts.manual.probe_paypal_regions --regions US,JP,TR
+  python -m scripts.manual.probe_paypal_regions --json out.json
 """
 
 from __future__ import annotations
