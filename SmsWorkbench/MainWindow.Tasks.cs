@@ -101,14 +101,6 @@ namespace SmsWorkbench
             }
         }
 
-        private void AccountDetail_Click(object sender, RoutedEventArgs e)
-        {
-            if (sender is FrameworkElement element && element.DataContext is PoolRow row)
-            {
-                ShowAccountDetail(row);
-            }
-        }
-
         private void RunBackend(string taskName, List<string> args)
             => RunUiTask(() => RunBackendAsync(taskName, args, ct: _lifetimeCts.Token));
 
@@ -410,7 +402,7 @@ namespace SmsWorkbench
             }), DispatcherPriority.Background);
         }
 
-        private void DeleteSelected_Click(object sender, RoutedEventArgs e)
+        private void DeleteSelected()
             => RunUiTask(() => DeleteSelectedAsync());
 
         private async Task DeleteSelectedAsync(CancellationToken ct = default)
@@ -488,7 +480,7 @@ namespace SmsWorkbench
             }
         }
 
-        private void CancelBatch_Click(object sender, RoutedEventArgs e)
+        private void CancelBatch()
         {
             if (!backendTasks.IsRunning)
             {
@@ -505,9 +497,5 @@ namespace SmsWorkbench
                 Log("取消失败：" + ex.Message);
             }
         }
-
-        private void Refresh_Click(object sender, RoutedEventArgs e) => RefreshPools();
-
-        private void Settings_Click(object sender, RoutedEventArgs e) => ShowConfigDialog();
     }
 }

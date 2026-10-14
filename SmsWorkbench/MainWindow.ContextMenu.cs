@@ -8,16 +8,10 @@ namespace SmsWorkbench
     {
         // ── Search clear button ──
 
-        private void SearchClear_Click(object sender, RoutedEventArgs e)
-        {
-            Pool.SearchText = "";
-            UpdateSearchClearVisibility();
-        }
-
         /// <summary>
         /// Toggle the visibility of the search clear (×) button based on
-        /// whether the search text is non-empty. Called from the SearchText
-        /// setter and from the clear button click handler.
+        /// whether the search text is non-empty. Called when the pool
+        /// view model's SearchText changes.
         /// </summary>
         private void UpdateSearchClearVisibility()
         {
@@ -31,19 +25,19 @@ namespace SmsWorkbench
 
         // ── DataGrid context menu handlers ──
 
-        private void CtxViewDetail_Click(object sender, RoutedEventArgs e)
+        private void CtxViewDetail()
         {
             if (AccountGrid?.SelectedItem is PoolRow row)
                 ShowAccountDetail(row);
         }
 
-        private void CtxViewInbox_Click(object sender, RoutedEventArgs e)
+        private void CtxViewInbox()
         {
             if (AccountGrid?.SelectedItem is PoolRow row)
                 ShowInboxDialog(row);
         }
 
-        private void CtxCopyEmail_Click(object sender, RoutedEventArgs e)
+        private void CtxCopyEmail()
         {
             if (AccountGrid?.SelectedItem is PoolRow row && !string.IsNullOrWhiteSpace(row.Identifier))
             {
@@ -59,7 +53,7 @@ namespace SmsWorkbench
             }
         }
 
-        private void CtxCopyAccessToken_Click(object sender, RoutedEventArgs e)
+        private void CtxCopyAccessToken()
             => RunUiTask(() => CtxCopyAccessTokenAsync());
 
         private async Task CtxCopyAccessTokenAsync(CancellationToken ct = default)
@@ -86,7 +80,7 @@ namespace SmsWorkbench
             }
         }
 
-        private void CtxCopyPayPal_Click(object sender, RoutedEventArgs e)
+        private void CtxCopyPayPal()
         {
             if (AccountGrid?.SelectedItem is PoolRow row && !string.IsNullOrWhiteSpace(row.PayPalUrl))
             {
@@ -98,7 +92,7 @@ namespace SmsWorkbench
             }
         }
 
-        private void CtxOpenPayPal_Click(object sender, RoutedEventArgs e)
+        private void CtxOpenPayPal()
         {
             if (AccountGrid?.SelectedItem is PoolRow row && !string.IsNullOrWhiteSpace(row.PayPalUrl))
             {
@@ -110,13 +104,13 @@ namespace SmsWorkbench
             }
         }
 
-        private void CtxOpenSource_Click(object sender, RoutedEventArgs e)
+        private void CtxOpenSource()
         {
             if (AccountGrid?.SelectedItem is PoolRow row)
                 OpenAccountJson(row);
         }
 
-        private void CtxCheckAccountAlive_Click(object sender, RoutedEventArgs e)
+        private void CtxCheckAccountAlive()
             => RunUiTask(() => CtxCheckAccountAliveAsync());
 
         private async Task CtxCheckAccountAliveAsync(CancellationToken ct = default)
@@ -129,15 +123,10 @@ namespace SmsWorkbench
             await CheckAccountAliveAsync(row);
         }
 
-        private void CtxBatchProtocolPayment_Click(object sender, RoutedEventArgs e)
-        {
-            BatchProtocolPayment_Click(sender, e);
-        }
-
-        private void CtxChangeEmail_Click(object sender, RoutedEventArgs e)
+        private void CtxChangeEmail()
             => RunUiTask(() => CtxChangeEmailAsync());
 
-        private void ChangeEmail_Click(object sender, RoutedEventArgs e)
+        private void ChangeEmail()
             => RunUiTask(() => CtxChangeEmailAsync());
 
         private async Task CtxChangeEmailAsync(CancellationToken ct = default)

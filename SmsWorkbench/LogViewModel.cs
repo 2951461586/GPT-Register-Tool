@@ -22,6 +22,13 @@ namespace SmsWorkbench
 
         private readonly StringBuilder buffer = new();
 
+        public LogViewModel()
+        {
+            ClearCommand = new RelayCommand(Clear);
+        }
+
+        public RelayCommand ClearCommand { get; }
+
         public string Text
         {
             get => buffer.ToString();
@@ -47,7 +54,14 @@ namespace SmsWorkbench
             return true;
         }
 
-        public void Clear() => Text = "";
+        /// <summary>Raised after <see cref="Clear"/> so the view can empty the TextBox it also appends to directly.</summary>
+        public event EventHandler? Cleared;
+
+        public void Clear()
+        {
+            Text = "";
+            Cleared?.Invoke(this, EventArgs.Empty);
+        }
 
         public static string FormatLine(DateTime now, string safeText)
             => "[" + now.ToString("HH:mm:ss") + "] " + safeText + Environment.NewLine;

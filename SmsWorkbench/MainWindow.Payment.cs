@@ -16,7 +16,7 @@ namespace SmsWorkbench
         // subscriber -- the menu items they served are gone, only the handlers
         // were left behind. OpenPath() itself is still used below.
 
-        private void OpenPayPalLink_Click(object sender, RoutedEventArgs e)
+        private void OpenPayPalLink()
         {
             PoolRow? row = SelectedEmailRowOrNotify("打开支付链接");
             if (row == null) return;

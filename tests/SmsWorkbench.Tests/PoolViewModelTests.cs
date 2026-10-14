@@ -138,6 +138,35 @@ namespace SmsWorkbench.Tests
         }
 
         [Fact]
+        public void ClearSearchCommand_RestoresTheFullList()
+        {
+            var pool = WithRows(5);
+            pool.SearchText = "user003";
+            Assert.Equal(1, pool.FilteredCount);
+
+            pool.ClearSearchCommand.Execute(null);
+
+            Assert.Equal("", pool.SearchText);
+            Assert.Equal(5, pool.FilteredCount);
+        }
+
+        [Fact]
+        public void ClearSelectionCommand_UnchecksRowsDropsTheSelectionAndSignalsTheView()
+        {
+            var pool = WithRows(3);
+            pool.SelectAllFilteredCommand.Execute(null);
+            pool.SelectedRow = pool.AllRows[0];
+            int cleared = 0;
+            pool.SelectionCleared += (_, _) => cleared++;
+
+            pool.ClearSelectionCommand.Execute(null);
+
+            Assert.Empty(pool.CheckedRows());
+            Assert.Null(pool.SelectedRow);
+            Assert.Equal(1, cleared);
+        }
+
+        [Fact]
         public void PageRefreshed_FiresOnEveryRebuild()
         {
             var pool = WithRows(3);

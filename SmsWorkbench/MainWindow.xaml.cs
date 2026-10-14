@@ -194,6 +194,8 @@ namespace SmsWorkbench
             ThemeIconGeometry = _currentTheme == Wpf.Ui.Appearance.ApplicationTheme.Dark ? MoonIcon : SunIcon;
 
             Pool.PropertyChanged += OnPoolPropertyChanged;
+            Pool.SelectionCleared += OnPoolSelectionCleared;
+            LogPanel.Cleared += (_, _) => LogTextBox?.Clear();
             Pool.PageRefreshed += (_, _) => StatusText = Pool.SummaryText;
             RefreshPools();
             ApplySidebarCompact(false);

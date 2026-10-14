@@ -12,7 +12,7 @@ namespace SmsWorkbench
         // backend JSON business interpretation is delegated to
         // BackendResultInterpreter.
 
-        private void ImportPaidCpa_Click(object sender, RoutedEventArgs e)
+        private void ImportPaidCpa()
         {
             string target = ShowImportTargetDialog("一键导入");
             if (target.Length == 0) return;
@@ -43,7 +43,7 @@ namespace SmsWorkbench
             RunBackend(plan.TaskName, plan.Arguments.ToList());
         }
 
-        private async void ExportAccounts_Click(object sender, RoutedEventArgs e)
+        private async void ExportAccounts()
         {
             string format = ShowExportFormatDialog();
             if (format.Length == 0) return;

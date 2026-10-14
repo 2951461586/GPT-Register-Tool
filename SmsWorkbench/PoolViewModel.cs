@@ -29,6 +29,9 @@ namespace SmsWorkbench
             PreviousPageCommand = new RelayCommand(() => GoToPage(CurrentPage - 1));
             NextPageCommand = new RelayCommand(() => GoToPage(CurrentPage + 1));
             LastPageCommand = new RelayCommand(GoToLastPage);
+            ClearSearchCommand = new RelayCommand(() => SearchText = "");
+            SelectAllFilteredCommand = new RelayCommand(CheckAllFiltered);
+            ClearSelectionCommand = new RelayCommand(ClearSelection);
         }
 
         public ObservableCollection<PoolRow> AllRows { get; } = new ObservableCollection<PoolRow>();
@@ -39,6 +42,9 @@ namespace SmsWorkbench
         public RelayCommand PreviousPageCommand { get; }
         public RelayCommand NextPageCommand { get; }
         public RelayCommand LastPageCommand { get; }
+        public RelayCommand ClearSearchCommand { get; }
+        public RelayCommand SelectAllFilteredCommand { get; }
+        public RelayCommand ClearSelectionCommand { get; }
 
         public int CurrentPage { get; set; } = 1;
 
@@ -47,6 +53,9 @@ namespace SmsWorkbench
 
         /// <summary>Raised after <see cref="PagedRows"/> was rebuilt.</summary>
         public event EventHandler? PageRefreshed;
+
+        /// <summary>Raised after <see cref="ClearSelectionCommand"/> so the view can reset its grid widget.</summary>
+        public event EventHandler? SelectionCleared;
 
         public string SearchText
         {
@@ -113,6 +122,13 @@ namespace SmsWorkbench
         public void UncheckAll()
         {
             foreach (PoolRow row in AllRows) row.IsChecked = false;
+        }
+
+        public void ClearSelection()
+        {
+            UncheckAll();
+            SelectedRow = null;
+            SelectionCleared?.Invoke(this, EventArgs.Empty);
         }
 
         public void SortBy(string member, ListSortDirection direction)

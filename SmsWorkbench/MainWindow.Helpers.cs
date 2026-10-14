@@ -387,12 +387,6 @@ namespace SmsWorkbench
                 && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
         }
 
-        private void ClearLog_Click(object sender, RoutedEventArgs e)
-        {
-            LogPanel.Clear();
-            LogTextBox?.Clear();
-        }
-
         private void Log(string text)
         {
             LogPresanitized(SensitiveDataSanitizer.Redact(text));

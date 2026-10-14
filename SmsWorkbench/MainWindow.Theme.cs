@@ -7,7 +7,7 @@ namespace SmsWorkbench
     public partial class MainWindow
     {
         // Theme, window chrome and sidebar animation
-        private void ToggleTheme_Click(object sender, RoutedEventArgs e)
+        private void ToggleTheme()
         {
             _currentTheme = _currentTheme == Wpf.Ui.Appearance.ApplicationTheme.Dark
                 ? Wpf.Ui.Appearance.ApplicationTheme.Light

@@ -15,7 +15,7 @@ namespace SmsWorkbench
         // handler, no XAML subscriber. BackendCommandPlanner.CreatePoolRegistration
         // stays -- it is unit-tested on the Contracts side.
 
-        private void ImportChataiMailbox_Click(object sender, RoutedEventArgs e)
+        private void ImportChataiMailbox()
         {
             var dialog = new Microsoft.Win32.OpenFileDialog
             {
@@ -43,7 +43,7 @@ namespace SmsWorkbench
             NotifySuccess($"导入完成：成功 {imported} 条，跳过 {skipped} 条。");
         }
 
-        private async void ViewInbox_Click(object sender, RoutedEventArgs e)
+        private async void ViewInbox()
         {
             PoolRow? row = SelectedEmailRowOrNotify("查看收件箱");
             if (row == null) return;
@@ -56,7 +56,7 @@ namespace SmsWorkbench
             ShowInboxDialog(row);
         }
 
-        private async void OneClickRegister_Click(object sender, RoutedEventArgs e)
+        private async void OneClickRegister()
         {
             PendingMailboxSelection pending =
                 await TryCreateSelectedUnregisteredMailboxFileAsync().ConfigureAwait(true);
@@ -189,7 +189,7 @@ namespace SmsWorkbench
             args.Add("--no-phone-reuse");
         }
 
-        private void OneClickSms_Click(object sender, RoutedEventArgs e)
+        private void OneClickSms()
             => RunUiTask(() => OneClickSmsAsync());
 
         private async Task OneClickSmsAsync(CancellationToken ct = default)
@@ -221,7 +221,7 @@ namespace SmsWorkbench
             RunBackend(plan.TaskName, plan.Arguments.ToList());
         }
 
-        private void OneClickScan_Click(object sender, RoutedEventArgs e)
+        private void OneClickScan()
         {
             var rows = SelectedRowsOrCurrent()
                 .Where(r => !string.IsNullOrWhiteSpace(r.Identifier))
@@ -255,7 +255,7 @@ namespace SmsWorkbench
             RunAccountBatchBackend(plan, "account_scan", rows.Count);
         }
 
-        private void CheckPromotion_Click(object sender, RoutedEventArgs e)
+        private void CheckPromotion()
         {
             var rows = SelectedRowsOrCurrent()
                 .Where(r => r != null && !string.IsNullOrWhiteSpace(r.Identifier))
@@ -275,7 +275,7 @@ namespace SmsWorkbench
             RunAccountBatchBackend(plan, "account_promotion", rows.Count);
         }
 
-        private void CheckPaymentEligibility_Click(object sender, RoutedEventArgs e)
+        private void CheckPaymentEligibility()
         {
             var rows = SelectedRowsOrCurrent()
                 .Where(r => r != null && !string.IsNullOrWhiteSpace(r.Identifier))

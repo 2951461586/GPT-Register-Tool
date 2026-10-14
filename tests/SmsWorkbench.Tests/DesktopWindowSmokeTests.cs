@@ -311,6 +311,10 @@ public sealed class DesktopWindowSmokeTests
             Assert.NotNull(contextMenu.Template.FindName("MenuChrome", contextMenu));
             MenuItem[] menuItems = contextMenu.Items.OfType<MenuItem>().ToArray();
             Assert.True(menuItems.Length >= 8);
+            // Commands reach the window through the menu's PlacementTarget; a
+            // wrong binding path leaves Command null and the item silently inert.
+            Assert.All(menuItems, item => Assert.NotNull(item.Command));
+            Assert.NotNull(Assert.IsType<Button>(main.FindName("SearchClearButton")).Command);
             var headerLeftEdges = new List<double>();
             foreach (MenuItem menuItem in menuItems)
             {

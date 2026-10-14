@@ -49,6 +49,20 @@ namespace SmsWorkbench.Tests
         }
 
         [Fact]
+        public void ClearCommand_EmptiesTheBufferAndRaisesCleared()
+        {
+            var log = new LogViewModel();
+            log.Append("line\n");
+            int cleared = 0;
+            log.Cleared += (_, _) => cleared++;
+
+            log.ClearCommand.Execute(null);
+
+            Assert.Equal("", log.Text);
+            Assert.Equal(1, cleared);
+        }
+
+        [Fact]
         public void FormatLine_PrefixesTheClockTimeAndEndsWithANewline()
         {
             string line = LogViewModel.FormatLine(new DateTime(2026, 10, 14, 9, 5, 7), "hello");

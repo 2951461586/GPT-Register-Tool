@@ -581,7 +581,7 @@
                         IsHitTestVisible="False"/>
                   <Button x:Name="SearchClearButton" Width="22" Height="22" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,2,0"
                           Padding="0" Background="Transparent" BorderThickness="0" ToolTip="清除搜索"
-                          Click="SearchClear_Click" Visibility="Collapsed">
+                          Command="{Binding Pool.ClearSearchCommand}" Visibility="Collapsed">
                     <Button.Template>
                       <ControlTemplate TargetType="Button">
                         <Border x:Name="ClearBg" Background="Transparent" CornerRadius="4">
@@ -617,7 +617,7 @@
                   <Path Style="{StaticResource ToolbarIconPath}"
                         Data="M15 18l-6-6 6-6"/>
                 </Button>
-                <Button Style="{StaticResource IconButton}" Margin="2,0" Click="ClearSelection_Click" ToolTip="清空选择">
+                <Button Style="{StaticResource IconButton}" Margin="2,0" Command="{Binding Pool.ClearSelectionCommand}" ToolTip="清空选择">
                   <StackPanel Orientation="Horizontal">
                     <Path Style="{StaticResource ToolbarIconPath}"
                           Data="M9 11l3 3l8-8 M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
@@ -632,7 +632,7 @@
                   <Path Style="{StaticResource ToolbarIconPath}"
                         Data="M13 5l7 7-7 7 M5 5l7 7-7 7"/>
                 </Button>
-                <Button Style="{StaticResource IconButton}" Margin="6,0,2,0" Click="SelectAllFiltered_Click" ToolTip="选中当前筛选结果">
+                <Button Style="{StaticResource IconButton}" Margin="6,0,2,0" Command="{Binding Pool.SelectAllFilteredCommand}" ToolTip="选中当前筛选结果">
                   <StackPanel Orientation="Horizontal">
                     <Path Style="{StaticResource ToolbarIconPath}"
                           Data="M9 11l3 3l8-8 M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
@@ -665,63 +665,63 @@
                       SelectionChanged="AccountGrid_SelectionChanged">
               <DataGrid.ContextMenu>
                 <ContextMenu Style="{StaticResource AccountContextMenuStyle}">
-                  <MenuItem Header="查看账号详情" Click="CtxViewDetail_Click" Style="{StaticResource AccountContextMenuItemStyle}">
+                  <MenuItem Header="查看账号详情" Command="{Binding PlacementTarget.DataContext.CtxViewDetailCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Style="{StaticResource AccountContextMenuItemStyle}">
                     <MenuItem.Icon>
                       <Path Style="{StaticResource MenuIconPath}"
                             Data="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/>
                     </MenuItem.Icon>
                   </MenuItem>
-                  <MenuItem Header="查看邮箱收件箱" Click="CtxViewInbox_Click" Style="{StaticResource AccountContextMenuItemStyle}">
+                  <MenuItem Header="查看邮箱收件箱" Command="{Binding PlacementTarget.DataContext.CtxViewInboxCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Style="{StaticResource AccountContextMenuItemStyle}">
                     <MenuItem.Icon>
                       <Path Style="{StaticResource MenuIconPath}"
                             Data="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z M22 6l-10 7L2 6"/>
                     </MenuItem.Icon>
                   </MenuItem>
                   <Separator/>
-                  <MenuItem Header="复制邮箱地址" Click="CtxCopyEmail_Click" Style="{StaticResource AccountContextMenuItemStyle}">
+                  <MenuItem Header="复制邮箱地址" Command="{Binding PlacementTarget.DataContext.CtxCopyEmailCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Style="{StaticResource AccountContextMenuItemStyle}">
                     <MenuItem.Icon>
                       <Path Style="{StaticResource MenuIconPath}"
                             Data="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71 M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
                     </MenuItem.Icon>
                   </MenuItem>
-                  <MenuItem Header="复制 AT" Click="CtxCopyAccessToken_Click" Style="{StaticResource AccountContextMenuItemStyle}">
+                  <MenuItem Header="复制 AT" Command="{Binding PlacementTarget.DataContext.CtxCopyAccessTokenCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Style="{StaticResource AccountContextMenuItemStyle}">
                     <MenuItem.Icon>
                       <Path Style="{StaticResource MenuIconPath}"
                             Data="M15 7a5 5 0 1 0-4.9 6H13l2 2 2-2 2 2 3-3-4-4h-3z"/>
                     </MenuItem.Icon>
                   </MenuItem>
-                  <MenuItem Header="复制支付链接" Click="CtxCopyPayPal_Click" Style="{StaticResource AccountContextMenuItemStyle}">
+                  <MenuItem Header="复制支付链接" Command="{Binding PlacementTarget.DataContext.CtxCopyPayPalCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Style="{StaticResource AccountContextMenuItemStyle}">
                     <MenuItem.Icon>
                       <Path Style="{StaticResource MenuIconPath}"
                             Data="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71 M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
                     </MenuItem.Icon>
                   </MenuItem>
-                  <MenuItem Header="打开支付链接" Click="CtxOpenPayPal_Click" Style="{StaticResource AccountContextMenuItemStyle}">
+                  <MenuItem Header="打开支付链接" Command="{Binding PlacementTarget.DataContext.CtxOpenPayPalCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Style="{StaticResource AccountContextMenuItemStyle}">
                     <MenuItem.Icon>
                       <Path Style="{StaticResource MenuIconPath}"
                             Data="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6 M15 3h6v6 M10 14L21 3"/>
                     </MenuItem.Icon>
                   </MenuItem>
-                  <MenuItem Header="批量协议支付" Click="CtxBatchProtocolPayment_Click" Style="{StaticResource AccountContextMenuItemStyle}">
+                  <MenuItem Header="批量协议支付" Command="{Binding PlacementTarget.DataContext.CtxBatchProtocolPaymentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Style="{StaticResource AccountContextMenuItemStyle}">
                     <MenuItem.Icon>
                       <Path Style="{StaticResource MenuIconPath}"
                             Data="M4 5h16 M4 12h16 M4 19h16 M8 3v4 M8 10v4 M8 17v4"/>
                     </MenuItem.Icon>
                   </MenuItem>
-                  <MenuItem Header="批量邮箱换绑" Click="CtxChangeEmail_Click" Style="{StaticResource AccountContextMenuItemStyle}">
+                  <MenuItem Header="批量邮箱换绑" Command="{Binding PlacementTarget.DataContext.CtxChangeEmailCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Style="{StaticResource AccountContextMenuItemStyle}">
                     <MenuItem.Icon>
                       <Path Width="14" Height="14" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" Fill="Transparent" Data="M4 7h11m0 0-3-3m3 3-3 3M20 17H9m0 0 3-3m-3 3 3 3"/>
                     </MenuItem.Icon>
                   </MenuItem>
                   <Separator/>
-                  <MenuItem Header="测活当前账号" Click="CtxCheckAccountAlive_Click" Style="{StaticResource AccountContextMenuItemStyle}">
+                  <MenuItem Header="测活当前账号" Command="{Binding PlacementTarget.DataContext.CtxCheckAccountAliveCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Style="{StaticResource AccountContextMenuItemStyle}">
                     <MenuItem.Icon>
                       <Path Style="{StaticResource MenuIconPath}"
                             Data="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8 M21 3v5h-5"/>
                     </MenuItem.Icon>
                   </MenuItem>
                   <Separator/>
-                  <MenuItem Header="打开 Session 源文件" Click="CtxOpenSource_Click" Style="{StaticResource AccountContextMenuItemStyle}">
+                  <MenuItem Header="打开 Session 源文件" Command="{Binding PlacementTarget.DataContext.CtxOpenSourceCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Style="{StaticResource AccountContextMenuItemStyle}">
                     <MenuItem.Icon>
                       <Path Style="{StaticResource MenuIconPath}"
                             Data="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
@@ -785,7 +785,7 @@
                 <DataGridTemplateColumn Header="详情" Width="80">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate>
-                      <Button Height="24" Padding="6,0" Click="AccountDetail_Click" ToolTip="查看详情">
+                      <Button Height="24" Padding="6,0" Command="{Binding DataContext.AccountDetailCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}" CommandParameter="{Binding}" ToolTip="查看详情">
                         <StackPanel Orientation="Horizontal">
                           <Path Width="12" Height="12" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
                                 Data="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/>
@@ -848,7 +848,7 @@ Loaded="TaskGrid_Loaded">
                   <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
                 <Button Grid.Row="0" Width="74" Height="26" HorizontalAlignment="Right" VerticalAlignment="Top"
-                        Margin="0,4,8,2" Padding="8,0" Click="ClearLog_Click">
+                        Margin="0,4,8,2" Padding="8,0" Command="{Binding LogPanel.ClearCommand}">
                   <StackPanel Orientation="Horizontal">
                     <Path Style="{StaticResource IconPath}" Width="13" Height="13" StrokeThickness="1.7"
                           Data="M3.5 5H12.5 M6 5V3.5H10V5 M5 6.5V13H11V6.5 M7 8V11.5 M9 8V11.5"/>

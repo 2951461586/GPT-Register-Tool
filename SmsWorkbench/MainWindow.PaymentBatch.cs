@@ -6,7 +6,7 @@ namespace SmsWorkbench
 {
     public partial class MainWindow
     {
-        private void BatchProtocolPayment_Click(object sender, RoutedEventArgs e)
+        private void BatchProtocolPayment()
         {
             var rows = SelectedRowsOrCurrent()
                 .Where(row => row != null && !string.IsNullOrWhiteSpace(row.Identifier))

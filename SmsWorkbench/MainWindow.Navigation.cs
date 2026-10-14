@@ -6,33 +6,37 @@ namespace SmsWorkbench
 {
     public partial class MainWindow
     {
-        // Sidebar navigation: single command routes 16 CommandParameters to the
-        // existing Click handlers (kept as-is in their partial files).
+        // Sidebar navigation: single command routes the CommandParameter keys to
+        // the action methods in the other MainWindow partials.
         // Assigned in the constructor (property initializers cannot capture instance methods).
         public RelayCommand<string> NavCommand { get; } = null!;
 
+        private Dictionary<string, Action>? navActions;
+
+        private Dictionary<string, Action> NavActions => navActions ??= new Dictionary<string, Action>
+        {
+            ["register"] = OneClickRegister,
+            ["sms"] = OneClickSms,
+            ["scan"] = OneClickScan,
+            ["promotion"] = CheckPromotion,
+            ["payment_eligibility"] = CheckPaymentEligibility,
+            ["paylink"] = OpenPayPalLink,
+            ["batchpay"] = BatchProtocolPayment,
+            ["importmail"] = ImportChataiMailbox,
+            ["inbox"] = ViewInbox,
+            ["changeemail"] = ChangeEmail,
+            ["importcpa"] = ImportPaidCpa,
+            ["export"] = ExportAccounts,
+            ["delete"] = DeleteSelected,
+            ["refresh"] = RefreshPools,
+            ["settings"] = ShowConfigDialog,
+            ["theme"] = ToggleTheme,
+            ["cancelbatch"] = CancelBatch,
+        };
+
         private void OnNavigate(string? key)
         {
-            switch (key)
-            {
-                case "register": OneClickRegister_Click(this, new RoutedEventArgs()); break;
-                case "sms": OneClickSms_Click(this, new RoutedEventArgs()); break;
-                case "scan": OneClickScan_Click(this, new RoutedEventArgs()); break;
-                case "promotion": CheckPromotion_Click(this, new RoutedEventArgs()); break;
-                case "payment_eligibility": CheckPaymentEligibility_Click(this, new RoutedEventArgs()); break;
-                case "paylink": OpenPayPalLink_Click(this, new RoutedEventArgs()); break;
-                case "batchpay": BatchProtocolPayment_Click(this, new RoutedEventArgs()); break;
-                case "importmail": ImportChataiMailbox_Click(this, new RoutedEventArgs()); break;
-                case "inbox": ViewInbox_Click(this, new RoutedEventArgs()); break;
-                case "changeemail": ChangeEmail_Click(this, new RoutedEventArgs()); break;
-                case "importcpa": ImportPaidCpa_Click(this, new RoutedEventArgs()); break;
-                case "export": ExportAccounts_Click(this, new RoutedEventArgs()); break;
-                case "delete": DeleteSelected_Click(this, new RoutedEventArgs()); break;
-                case "refresh": Refresh_Click(this, new RoutedEventArgs()); break;
-                case "settings": Settings_Click(this, new RoutedEventArgs()); break;
-                case "theme": ToggleTheme_Click(this, new RoutedEventArgs()); break;
-                case "cancelbatch": CancelBatch_Click(this, new RoutedEventArgs()); break;
-            }
+            if (key != null && NavActions.TryGetValue(key, out Action? action)) action();
         }
 
         // NOTE (2026-09-02): a "refresh session for one account" handler used to
@@ -120,21 +124,14 @@ namespace SmsWorkbench
             Pool.SortBy(member, next);
         }
 
-        private void ClearSelection_Click(object sender, RoutedEventArgs e)
+        private void OnPoolSelectionCleared(object? sender, EventArgs e)
         {
-            Pool.UncheckAll();
-            Pool.SelectedRow = null;
             if (AccountGrid != null)
             {
                 AccountGrid.SelectedItem = null;
                 AccountGrid.SelectedIndex = -1;
                 AccountGrid.UnselectAll();
             }
-        }
-
-        private void SelectAllFiltered_Click(object sender, RoutedEventArgs e)
-        {
-            Pool.CheckAllFiltered();
         }
     }
 }
