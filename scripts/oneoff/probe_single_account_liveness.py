@@ -1,9 +1,9 @@
 """单账号测活：判定注册账号是否掉号（token 失效 / 账号停用）。
 
 用法:
-  python scripts/probe_single_account_liveness.py --latest
-  python scripts/probe_single_account_liveness.py --session sessions/session_<email>_<ts>.json
-  python scripts/probe_single_account_liveness.py --latest --proxy http://127.0.0.1:7890
+  python -m scripts.oneoff.probe_single_account_liveness --latest
+  python -m scripts.oneoff.probe_single_account_liveness --session sessions/session_<email>_<ts>.json
+  python -m scripts.oneoff.probe_single_account_liveness --latest --proxy http://127.0.0.1:7890
 
 判定规则（基于 sms_tool.account_liveness.probe_account_liveness 返回）:
   status == "active"                -> 账号存活（ok=True, 2xx）

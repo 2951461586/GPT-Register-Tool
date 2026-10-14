@@ -14,7 +14,7 @@ import stat
 
 PROJECT = r"F:\epsoft\GPT-Register-Tool"
 TARGET = r"F:\tmp\purge-browser-profiles-20260909"
-OUT = os.path.join(PROJECT, "scripts", "purge_browser_profiles.bat")
+OUT = os.path.join(PROJECT, "scripts", "oneoff", "purge_browser_profiles.bat")
 
 BODY = f"""@echo off
 REM ============================================================
@@ -27,7 +27,7 @@ REM
 REM  为什么是单线程：实测 4 / 10 并发会把杀软实时扫描队列压爆，
 REM  结果 errors=done（一个都没删掉）；单线程顺序删 100% 成功。
 REM
-REM  生成脚本：scripts/gen_purge_bat.py  （不要手改本文件）
+REM  生成脚本：scripts/oneoff/gen_purge_bat.py  （不要手改本文件）
 REM ============================================================
 
 cd /d {PROJECT}
