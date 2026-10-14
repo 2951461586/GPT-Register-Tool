@@ -234,3 +234,38 @@ def test_no_tracked_file_contains_credentials() -> None:
         + (result.stdout or "")
         + (result.stderr or "")
     )
+
+
+# ------------------------------------------------------------ alias mailbox gate
+
+# Addresses are assembled at runtime: this very file is scanned by the gate, so a
+# literal non-placeholder address here would fail it.
+_APPLE = "@" + "icloud.com"
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "sample-1a2b3c+oai01" + _APPLE,
+        "user" + _APPLE + "----https://mail.example/inbox/private-token",
+        "target%40" + "icloud.com",
+        "plain Markdown with no mailbox at all",
+    ],
+)
+def test_alias_gate_accepts_placeholders(line: str) -> None:
+    assert precommit_guard.scan_alias_mailboxes("docs/x.md", line) == []
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "got zz-fake-alias-99" + _APPLE + " today",
+        "05.fake.sample+oai01" + _APPLE,
+        "email=zz-fake-alias-99%40" + "icloud.com&auth_code=x",
+    ],
+)
+def test_alias_gate_flags_real_looking_aliases_in_docs_and_tests(line: str) -> None:
+    # The content gate skips docs/ and tests/; the alias gate must not.
+    findings = precommit_guard.scan_alias_mailboxes("docs/audits/x.md", line)
+    assert [f[2] for f in findings] == ["alias-mailbox"]
+    assert all(f[4] == "" for f in findings), "the address must never be echoed"

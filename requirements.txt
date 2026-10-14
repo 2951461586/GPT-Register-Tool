@@ -31,8 +31,3 @@ qrcode[pil]>=7.4.2
 # Was previously undeclared while being imported at both sites, so the whole
 # fallback silently degraded to "not installed" on every fresh install.
 nodriver>=0.45
-
-# Test runner used by CI and the documented validation command
-pytest>=8.0
-pytest-cov>=5.0
-

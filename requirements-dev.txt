@@ -1,0 +1,7 @@
+# Development and CI-only tooling. Runtime installs use requirements.txt alone.
+# Install with: python -m pip install -r requirements-dev.txt -c constraints.txt
+-r requirements.txt
+
+# Test runner used by CI and the documented validation command
+pytest>=8.0
+pytest-cov>=5.0

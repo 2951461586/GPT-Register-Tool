@@ -92,6 +92,7 @@ SmsWorkbench.Contracts/obj/
 .vscode/
 .workbuddy-ai/
 .workbuddy/
+.pi/
 /.zcode/
 /gates/
 TestResults/

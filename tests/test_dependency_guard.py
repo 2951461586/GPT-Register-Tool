@@ -53,6 +53,9 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 REQUIREMENTS = ROOT / "requirements.txt"
+# Test tooling (pytest, pytest-cov) is declared here so runtime installs stay lean;
+# both files share the single constraints.txt pin set.
+REQUIREMENTS_DEV = ROOT / "requirements-dev.txt"
 CONSTRAINTS = ROOT / "constraints.txt"
 
 SCAN_ROOTS = ("sms_tool", "services")
@@ -256,7 +259,10 @@ def _imported_third_party() -> tuple[dict[str, list[str]], dict[str, list[str]]]
     return resolved, unresolvable
 
 
-REQUIREMENTS_MAP = _parse_requirement_lines(REQUIREMENTS)
+REQUIREMENTS_MAP = {
+    **_parse_requirement_lines(REQUIREMENTS),
+    **_parse_requirement_lines(REQUIREMENTS_DEV),
+}
 CONSTRAINTS_MAP = _parse_requirement_lines(CONSTRAINTS)
 IMPORTED, UNRESOLVABLE = _imported_third_party()
 

@@ -131,6 +131,41 @@ VENDOR_PREFIX = re.compile(
 MIN_LEN = 16
 MIN_ENTROPY = 3.0
 
+# ------------------------------------------------------------ alias mailbox gate
+
+# Apple "Hide My Email" style aliases (`<word>-<word>-<n>+oai01` on icloud.com) identify
+# real registered accounts. The content gate above skips docs/ and tests/ on
+# purpose (fake credentials are expected there), which is exactly where 40+ real
+# aliases ended up in audit reports. This gate therefore runs on EVERY text file.
+ALIAS_MAILBOX = re.compile(
+    r"(?<![A-Za-z0-9._%+-])([A-Za-z0-9._-]{3,64})(?:\+[A-Za-z0-9._-]+)?(?:@|%40)(?:icloud|me|mac)\.com",
+    re.I,
+)
+# Placeholder local-parts that are fixtures by construction. Anything else on an
+# Apple domain is treated as a real alias; use ``sample-<n>`` in new fixtures.
+SYNTHETIC_MAILBOX_LOCALS = frozenset(
+    {
+        "user", "target", "ok", "dead", "also", "test", "plain", "first", "second",
+        "who", "someone", "name", "alpha.one", "beta.two", "foo", "alias", "sample",
+        "example", "noreply_at_tm_openai_com",
+    }
+)
+
+
+def scan_alias_mailboxes(rel: str, text: str) -> list[tuple[str, int, str, int, str]]:
+    """Return findings for non-placeholder Apple-domain mailbox addresses.
+
+    The address itself is never echoed: only its length is reported.
+    """
+    findings: list[tuple[str, int, str, int, str]] = []
+    for number, line in enumerate(text.splitlines(), 1):
+        for match in ALIAS_MAILBOX.finditer(line):
+            local = match.group(1).lower()
+            if local in SYNTHETIC_MAILBOX_LOCALS or local.startswith("sample-"):
+                continue
+            findings.append((rel, number, "alias-mailbox", len(local), ""))
+    return findings
+
 # Directories where a credential-looking string is an example by definition.
 DOC_OR_TEST = re.compile(r"(?i)(^|/)(docs?|tests?)/|(\.(md|html|rst))$")
 
@@ -337,8 +372,19 @@ def main(argv: list[str]) -> int:
         except RuntimeError as exc:
             failures.append(str(exc))
             continue
-        for rel_path, lineno, var, length, prefix in scan_file(path, sensitive_keys, text=content):
-            shown = f"{prefix}... (len={length})" if prefix else "(value omitted)"
+        findings = scan_file(path, sensitive_keys, text=content)
+        if path.suffix.lower() in TEXT_SUFFIXES:
+            alias_text = content
+            if alias_text is None:
+                try:
+                    if path.stat().st_size <= MAX_FILE_BYTES:
+                        alias_text = path.read_text(encoding="utf-8", errors="replace")
+                except OSError:
+                    alias_text = None
+            if alias_text:
+                findings += scan_alias_mailboxes(rel, alias_text)
+        for rel_path, lineno, var, length, prefix in findings:
+            shown = f"{prefix}... (len={length})" if prefix else f"(value omitted, len={length})"
             failures.append(f"{rel_path}:{lineno}: hardcoded secret in '{var}' -> {shown}")
 
     # de-duplicate, keep order

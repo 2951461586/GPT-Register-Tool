@@ -3,6 +3,7 @@
 The test suite is offline by default. Run it with:
 
 ```powershell
+python -m pip install -r requirements-dev.txt -c constraints.txt
 python -m pytest -q
 python -m compileall -q sms_tool services/protocol-payment
 dotnet test GPTRegisterTool.slnx -c Release --nologo
