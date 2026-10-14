@@ -26,13 +26,8 @@ namespace SmsWorkbench
         private readonly string rootDir;
         private readonly string configDir;
         private readonly CancellationTokenSource _lifetimeCts = new();
-        private string countText = "1";
         public LogViewModel LogPanel { get; } = new LogViewModel();
         private string statusText = "就绪";
-        private string totalCountText = "0";
-        private string trialCountText = "0";
-        private string registeredCountText = "0";
-        private string attentionCountText = "0";
         private bool sidebarCollapsed;
         private string sidebarToggleGlyph = "‹";
         private Geometry sidebarToggleGeometry = Geometry.Parse("M5 4H19A1 1 0 0 1 20 5V19A1 1 0 0 1 19 20H5A1 1 0 0 1 4 19V5A1 1 0 0 1 5 4Z M10 4V20");
@@ -111,14 +106,12 @@ namespace SmsWorkbench
 
         public PoolViewModel Pool { get; } = new PoolViewModel();
 
+        public ExportViewModel Export { get; }
+
+        public RegisterViewModel Register { get; } = new RegisterViewModel();
+
         // SelectedTabIndex removed (2026-09-02, round 6): no binding and no
         // code reads it. Tab selection is driven by the sidebar NavCommand.
-
-        public string CountText
-        {
-            get => countText;
-            set { countText = value ?? "1"; OnPropertyChanged(nameof(CountText)); }
-        }
 
         public string ChataiMailboxFilePath
         {
@@ -130,30 +123,6 @@ namespace SmsWorkbench
         {
             get => statusText;
             set { statusText = value ?? ""; OnPropertyChanged(nameof(StatusText)); }
-        }
-
-        public string TotalCountText
-        {
-            get => totalCountText;
-            set { totalCountText = value ?? "0"; OnPropertyChanged(nameof(TotalCountText)); }
-        }
-
-        public string TrialCountText
-        {
-            get => trialCountText;
-            set { trialCountText = value ?? "0"; OnPropertyChanged(nameof(TrialCountText)); }
-        }
-
-        public string RegisteredCountText
-        {
-            get => registeredCountText;
-            set { registeredCountText = value ?? "0"; OnPropertyChanged(nameof(RegisteredCountText)); }
-        }
-
-        public string AttentionCountText
-        {
-            get => attentionCountText;
-            set { attentionCountText = value ?? "0"; OnPropertyChanged(nameof(AttentionCountText)); }
         }
 
         public MainWindow(
@@ -183,6 +152,7 @@ namespace SmsWorkbench
             this.fileLauncher = fileLauncher;
             rootDir = paths.RootDirectory;
             configDir = paths.ConfigDirectory;
+            Export = new ExportViewModel(Pool);
             InitializeComponent();
             snackbarService.SetSnackbarPresenter(SnackbarPresenter);
             DataContext = this;

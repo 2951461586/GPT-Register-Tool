@@ -140,7 +140,7 @@ namespace SmsWorkbench
             var options = ChangeEmailDialogService.Show(
                 this,
                 rows.Count,
-                DefaultWorkerCount(),
+                Register.DefaultWorkerCount(),
                 GetConfiguredSmailrDomain(),
                 GetConfiguredCfWorkerDomain());
             if (options is null) return;

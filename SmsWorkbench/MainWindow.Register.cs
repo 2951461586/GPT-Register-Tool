@@ -270,7 +270,7 @@ namespace SmsWorkbench
 
             var plan = BackendCommandPlanner.CreatePromotionCheck(
                 rows.Select(r => r.Identifier.Trim()).ToList(),
-                DefaultWorkerCount(),
+                Register.DefaultWorkerCount(),
                 GetLivenessProxyPool());
             RunAccountBatchBackend(plan, "account_promotion", rows.Count);
         }
@@ -368,7 +368,7 @@ namespace SmsWorkbench
             {
                 selected = new ScanOptions
                 {
-                    Workers = ParsePositiveInt(workerBox.Text, 1, 8, Math.Min(8, Math.Max(1, accountCount))),
+                    Workers = RegisterViewModel.ParsePositiveInt(workerBox.Text, 1, 8, Math.Min(8, Math.Max(1, accountCount))),
                     AutoRelogin = autoReloginBox.IsChecked == true
                 };
                 dialog.DialogResult = true;
@@ -436,7 +436,7 @@ namespace SmsWorkbench
             root.Children.Add(hint);
 
             var workerLabel = new TextBlock { Text = "并发", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 10), Foreground = (System.Windows.Media.Brush)FindResource("TextSub") };
-            var workerBox = new TextBox { Text = DefaultWorkerCount().ToString(), Margin = new Thickness(0, 0, 0, 10) };
+            var workerBox = new TextBox { Text = Register.DefaultWorkerCount().ToString(), Margin = new Thickness(0, 0, 0, 10) };
             Grid.SetRow(workerLabel, 1);
             Grid.SetColumn(workerLabel, 0);
             Grid.SetRow(workerBox, 1);
@@ -481,7 +481,7 @@ namespace SmsWorkbench
                 {
                     Source = "pool",
                     Count = Math.Max(1, selectedCount),
-                    Workers = ParsePositiveInt(workerBox.Text, 1, 20, DefaultWorkerCount()),
+                    Workers = RegisterViewModel.ParsePositiveInt(workerBox.Text, 1, 20, Register.DefaultWorkerCount()),
                     Disable2fa = no2faBox.IsChecked == true,
                     CheckPromotion = promotionBox.IsChecked == true
                 };
@@ -542,7 +542,7 @@ namespace SmsWorkbench
             root.Children.Add(sourceBox);
 
             var countLabel = new TextBlock { Text = "数量", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 10), Foreground = (System.Windows.Media.Brush)FindResource("TextSub") };
-            var countBox = new TextBox { Text = CountValue().ToString(), Margin = new Thickness(0, 0, 0, 10) };
+            var countBox = new TextBox { Text = Register.CountValue().ToString(), Margin = new Thickness(0, 0, 0, 10) };
             Grid.SetRow(countLabel, 1);
             Grid.SetColumn(countLabel, 0);
             Grid.SetRow(countBox, 1);
@@ -551,7 +551,7 @@ namespace SmsWorkbench
             root.Children.Add(countBox);
 
             var workerLabel = new TextBlock { Text = "并发", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 10), Foreground = (System.Windows.Media.Brush)FindResource("TextSub") };
-            var workerBox = new TextBox { Text = DefaultWorkerCount().ToString(), Margin = new Thickness(0, 0, 0, 10) };
+            var workerBox = new TextBox { Text = Register.DefaultWorkerCount().ToString(), Margin = new Thickness(0, 0, 0, 10) };
             Grid.SetRow(workerLabel, 2);
             Grid.SetColumn(workerLabel, 0);
             Grid.SetRow(workerBox, 2);
@@ -600,8 +600,8 @@ namespace SmsWorkbench
 
             ok.Click += (_, __) =>
             {
-                int count = ParsePositiveInt(countBox.Text, 1, 200, 1);
-                int workers = ParsePositiveInt(workerBox.Text, 1, 20, DefaultWorkerCount());
+                int count = RegisterViewModel.ParsePositiveInt(countBox.Text, 1, 200, 1);
+                int workers = RegisterViewModel.ParsePositiveInt(workerBox.Text, 1, 20, Register.DefaultWorkerCount());
                 string selectedSource = ((sourceBox.SelectedItem as ComboBoxItem)?.Tag as string) ?? "pool";
                 var selected = new RegisterOptions
                 {
@@ -612,24 +612,13 @@ namespace SmsWorkbench
                     CheckPromotion = promotionBox.IsChecked == true
                 };
                 accept(selected);
-                CountText = count.ToString();
+                Register.CountText = count.ToString();
                 dialog.DialogResult = true;
                 dialog.Close();
             };
             cancel.Click += (_, __) => { dialog.DialogResult = false; dialog.Close(); };
             dialog.Content = root;
             return dialog;
-        }
-
-        private int ParsePositiveInt(string text, int min, int max, int fallback)
-        {
-            if (!int.TryParse((text ?? "").Trim(), out int value)) return fallback;
-            return Math.Max(min, Math.Min(max, value));
-        }
-
-        private int DefaultWorkerCount()
-        {
-            return Math.Max(1, Math.Min(8, CountValue()));
         }
 
         private Task<MailboxFileSelection?> TryCreateSelectedMailboxFileAsync(CancellationToken ct = default)
@@ -662,7 +651,7 @@ namespace SmsWorkbench
             if (lines.Count == 0) return null;
 
             // The legacy parser is the compatibility superset for mixed provider selections.
-            string mailboxArg = mailboxArgs.Count == 1 ? mailboxArgs.First() : "--chatai-mailbox-file";
+            string mailboxArg = RegisterViewModel.MailboxArgument(mailboxArgs);
             string mailboxFile = Path.Combine(Path.GetTempPath(), "selected_mailbox_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt");
             File.WriteAllLines(mailboxFile, lines, new UTF8Encoding(false));
             return new MailboxFileSelection(mailboxArg, mailboxFile, lines.Count);
@@ -691,27 +680,12 @@ namespace SmsWorkbench
 
         private async Task<bool> IsUnregisteredMailboxRowAsync(PoolRow row, CancellationToken ct = default)
         {
-            if (row == null) return false;
-            if (RegistrationStatusPresentation.IsPartial(row.RegistrationStatus)
-                || RegistrationStatusPresentation.IsPartial(row.Status)) return false;
-            if (HasRegisteredAccountState(row)) return false;
-            if (IsCfWorkerRow(row)) return true;
-            if (!string.IsNullOrWhiteSpace(row.MailboxLine)) return true;
-            if (!string.IsNullOrWhiteSpace(row.RawRefreshToken)) return true;
-            if (!string.IsNullOrWhiteSpace(row.RawLine) && BackendCommandPlanner.MailboxArgumentForLine(row.RawLine).Length > 0) return true;
+            bool? local = RegisterViewModel.LocalUnregisteredVerdict(row, IsCfWorkerRow(row));
+            if (local.HasValue) return local.Value;
             // Only reached when every local field is empty, so the backend
             // round-trip is the last resort rather than the common path.
             string line = await FindMailboxLineForRowAsync(row, ct).ConfigureAwait(true);
             return !string.IsNullOrWhiteSpace(line);
-        }
-
-        private bool HasRegisteredAccountState(PoolRow row)
-        {
-            string status = row.Status ?? "";
-            return status.Contains("已注册")
-                || status.Contains("PayPal")
-                || status.Contains("支付完成")
-                || status.Contains("已导入");
         }
 
         // MailboxArgForLine used to live here as a private copy of

@@ -17,19 +17,7 @@ namespace SmsWorkbench
             string target = ShowImportTargetDialog("一键导入");
             if (target.Length == 0) return;
 
-            var selected = SelectedRowsOrCurrent()
-                .Where(IsImportableAccountRow)
-                .Where(r => !string.IsNullOrWhiteSpace(r.Identifier))
-                .GroupBy(r => r.Identifier.Trim().ToLowerInvariant())
-                .Select(g => g.First())
-                .ToList();
-            var rows = selected.Count > 0
-                ? selected
-                : Pool.AllRows.Where(IsImportableAccountRow)
-                    .Where(r => !string.IsNullOrWhiteSpace(r.Identifier))
-                    .GroupBy(r => r.Identifier.Trim().ToLowerInvariant())
-                    .Select(g => g.First())
-                    .ToList();
+            var rows = Export.ImportableRows(SelectedRowsOrCurrent());
 
             if (rows.Count == 0)
             {
@@ -48,7 +36,7 @@ namespace SmsWorkbench
             string format = ShowExportFormatDialog();
             if (format.Length == 0) return;
 
-            var rows = ExportCandidateRows();
+            var rows = Export.CandidateRows(SelectedRowsOrCurrent());
             if (format.Equals("txt", StringComparison.OrdinalIgnoreCase))
             {
                 await ExportAccountsTxtAsync(rows).ConfigureAwait(true);
@@ -60,20 +48,6 @@ namespace SmsWorkbench
                 return;
             }
             ExportAccountsConvertedJson(rows, format);
-        }
-
-        private List<PoolRow> ExportCandidateRows()
-        {
-            var rows = SelectedRowsOrCurrent();
-            if (rows.Count == 0)
-            {
-                rows = Pool.AllRows.Where(Pool.Matches).ToList();
-            }
-            if (rows.Count == 0)
-            {
-                rows = Pool.AllRows.ToList();
-            }
-            return rows;
         }
 
         private async Task ExportAccountsTxtAsync(List<PoolRow> rows)
@@ -203,7 +177,7 @@ namespace SmsWorkbench
             }
 
             Log("One-click converted export wrote " + items.Count + " account(s), skipped " + skipped + ", format=" + normalized + ": " + outputPath);
-            ShowExportCompleteDialog(outputPath, items.Count, skipped, ExportFormatLabel(normalized), ExportFormatDescription(normalized));
+            ShowExportCompleteDialog(outputPath, items.Count, skipped, ExportViewModel.FormatLabel(normalized), ExportViewModel.FormatDescription(normalized));
         }
 
         private string ShowExportFormatDialog()
@@ -290,32 +264,6 @@ namespace SmsWorkbench
             dialog.Content = root;
             dialog.ShowDialog();
             return selected;
-        }
-
-        private string ExportFormatLabel(string format)
-        {
-            string value = (format ?? "").Trim().ToLowerInvariant();
-            if (value == "sub2api") return "SUB2API JSON";
-            if (value == "cockpit") return "Cockpit JSON";
-            if (value == "9router") return "9router JSON";
-            if (value == "codex") return "Codex auth.json";
-            if (value == "axonhub") return "AxonHub JSON";
-            if (value == "codexmanager") return "Codex-Manager JSON";
-            if (value == "json") return "原始 JSON";
-            if (value == "txt") return "TXT";
-            return "CPA JSON";
-        }
-
-        private string ExportFormatDescription(string format)
-        {
-            string value = (format ?? "").Trim().ToLowerInvariant();
-            if (value == "sub2api") return "由 session_converter.py 生成的 Sub2API accounts 文档";
-            if (value == "cockpit") return "由 session_converter.py 生成的 Cockpit/Codex 导入结构";
-            if (value == "9router") return "由 session_converter.py 生成的 9router provider 结构";
-            if (value == "codex") return "由 session_converter.py 生成的 Codex auth.json 结构";
-            if (value == "axonhub") return "由 session_converter.py 生成的 AxonHub 结构；缺少 RT 时会写入占位提示";
-            if (value == "codexmanager") return "由 session_converter.py 生成的 Codex-Manager 结构";
-            return "由 session_converter.py 生成的 CPA JSON；缺少 id_token 时会合成兼容字段";
         }
 
         private void ShowExportCompleteDialog(string outputPath, int exportedCount, int skippedCount, string formatLabel, string formatDescription)
@@ -482,7 +430,7 @@ namespace SmsWorkbench
                         + "    未知：" + BackendJson.GetString(summary, "failed")
                         + "    保存失败：" + BackendJson.GetString(summary, "persist_failed")
                     : directProbe
-                    ? FormatDirectProbeSummary(results, summary)
+                    ? ExportViewModel.FormatDirectProbeSummary(results, summary)
                     : "总数：" + BackendJson.GetString(summary, "total")
                         + "    正常：" + BackendJson.GetString(summary, "alive")
                         + "    掉号：" + BackendJson.GetString(summary, "account_deactivated")
@@ -539,35 +487,6 @@ namespace SmsWorkbench
 
             dialog.Content = root;
             dialog.ShowDialog();
-        }
-
-        private string FormatDirectProbeSummary(
-            List<Dictionary<string, object>> results,
-            Dictionary<string, object> summary)
-        {
-            results ??= new List<Dictionary<string, object>>();
-            summary ??= new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
-            int directDeactivated = results.Count(BackendResultInterpreter.IsProbeDeactivated);
-            int directOk = results.Count(row =>
-                !BackendResultInterpreter.IsProbeDeactivated(row)
-                && BackendResultInterpreter.IsProbeSucceeded(row));
-            int direct401 = results.Count(row =>
-                !BackendResultInterpreter.IsProbeDeactivated(row)
-                && BackendResultInterpreter.IsProbeReturned401(row));
-            int directFailed = Math.Max(0, results.Count - directOk - direct401 - directDeactivated);
-            int.TryParse(BackendJson.GetString(summary, "relogin_attempted"), out int reloginAttempted);
-            string directSummary = "总数：" + results.Count
-                + "    AT有效：" + directOk
-                + "    AT失效：" + direct401
-                + "    账号停用：" + directDeactivated
-                + "    其他失败：" + directFailed;
-            if (reloginAttempted > 0)
-            {
-                directSummary += "    重登成功：" + BackendJson.GetString(summary, "relogin_success")
-                    + "    重登失败：" + BackendJson.GetString(summary, "relogin_failed")
-                    + "    确认停用：" + BackendJson.GetString(summary, "relogin_account_deactivated");
-            }
-            return directSummary;
         }
 
         private void AddScanResultSection(StackPanel parent, string title, List<Dictionary<string, object>> rows)

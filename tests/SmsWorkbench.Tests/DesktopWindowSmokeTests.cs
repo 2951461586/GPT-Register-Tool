@@ -278,7 +278,7 @@ public sealed class DesktopWindowSmokeTests
                 backendClient.Commands,
                 command => command.Arguments.Contains("--doctor", StringComparer.Ordinal));
             stage("verify account grid");
-            VerifyAccountScanSummary(main);
+            VerifyAccountScanSummary();
 
             var accountGrid = Assert.IsType<DataGrid>(main.FindName("AccountGrid"));
             Assert.DoesNotContain(
@@ -421,13 +421,8 @@ public sealed class DesktopWindowSmokeTests
         }
     }
 
-    private static void VerifyAccountScanSummary(MainWindow main)
+    private static void VerifyAccountScanSummary()
     {
-        var formatter = typeof(MainWindow).GetMethod(
-            "FormatDirectProbeSummary",
-            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-        Assert.NotNull(formatter);
-
         var results = new List<Dictionary<string, object>>
         {
             new()
@@ -475,7 +470,7 @@ public sealed class DesktopWindowSmokeTests
             ["relogin_account_deactivated"] = 1
         };
 
-        string formatted = Assert.IsType<string>(formatter.Invoke(main, new object[] { results, summary }));
+        string formatted = ExportViewModel.FormatDirectProbeSummary(results, summary);
         Assert.Contains("总数：5", formatted);
         Assert.Contains("AT有效：1", formatted);
         Assert.Contains("AT失效：1", formatted);

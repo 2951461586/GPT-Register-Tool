@@ -134,11 +134,6 @@ namespace SmsWorkbench
                 box.Items.Add(new ComboBoxItem { Content = method.DisplayName, Tag = method.Id });
         }
 
-        private int CountValue()
-        {
-            return int.TryParse(CountText, out int value) && value > 0 ? value : 1;
-        }
-
         private string GetSessionsDir()
         {
             return Path.Combine(rootDir, "sessions");

@@ -530,7 +530,7 @@
               <StackPanel Orientation="Horizontal">
                 <StackPanel>
                   <TextBlock Text="总记录" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextMuted}" Margin="0,0,0,4"/>
-                  <TextBlock Text="{Binding TotalCountText}" FontSize="28" FontWeight="Bold"/>
+                  <TextBlock Text="{Binding Pool.TotalCountText}" FontSize="28" FontWeight="Bold"/>
                 </StackPanel>
               </StackPanel>
             </Border>
@@ -538,7 +538,7 @@
               <StackPanel Orientation="Horizontal">
                 <StackPanel>
                   <TextBlock Text="有试用" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextMuted}" Margin="0,0,0,4"/>
-                  <TextBlock Text="{Binding TrialCountText}" FontSize="28" FontWeight="Bold"/>
+                  <TextBlock Text="{Binding Pool.TrialCountText}" FontSize="28" FontWeight="Bold"/>
                 </StackPanel>
               </StackPanel>
             </Border>
@@ -546,7 +546,7 @@
               <StackPanel Orientation="Horizontal">
                 <StackPanel>
                   <TextBlock Text="已注册" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextMuted}" Margin="0,0,0,4"/>
-                  <TextBlock Text="{Binding RegisteredCountText}" FontSize="28" FontWeight="Bold"/>
+                  <TextBlock Text="{Binding Pool.RegisteredCountText}" FontSize="28" FontWeight="Bold"/>
                 </StackPanel>
               </StackPanel>
             </Border>
@@ -554,7 +554,7 @@
               <StackPanel Orientation="Horizontal">
                 <StackPanel>
                   <TextBlock Text="异常/待处理" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource TextMuted}" Margin="0,0,0,4"/>
-                  <TextBlock Text="{Binding AttentionCountText}" FontSize="28" FontWeight="Bold"/>
+                  <TextBlock Text="{Binding Pool.AttentionCountText}" FontSize="28" FontWeight="Bold"/>
                 </StackPanel>
               </StackPanel>
             </Border>

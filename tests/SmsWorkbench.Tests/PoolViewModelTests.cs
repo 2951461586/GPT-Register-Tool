@@ -167,6 +167,24 @@ namespace SmsWorkbench.Tests
         }
 
         [Fact]
+        public void UpdateOverview_CountsTotalTrialRegisteredAndAttention()
+        {
+            var pool = new PoolViewModel();
+            pool.AllRows.Add(new PoolRow { Identifier = "a", Status = "已注册" });
+            pool.AllRows.Add(new PoolRow { Identifier = "b", Status = "待支付", PromotionState = "trial_eligible" });
+            pool.AllRows.Add(new PoolRow { Identifier = "c", Status = "邮箱可用" });
+            var changed = new System.Collections.Generic.List<string?>();
+            pool.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+
+            pool.UpdateOverview();
+
+            Assert.Equal("3", pool.TotalCountText);
+            Assert.Equal("1", pool.RegisteredCountText);
+            Assert.Equal("1", pool.AttentionCountText);
+            Assert.Contains("TotalCountText", changed);
+        }
+
+        [Fact]
         public void PageRefreshed_FiresOnEveryRebuild()
         {
             var pool = WithRows(3);

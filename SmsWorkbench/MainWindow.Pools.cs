@@ -78,7 +78,7 @@ namespace SmsWorkbench
                 // RefreshPagedRows already clamps an out-of-range page, so a
                 // restored page stays valid even when the row count shrinks.
                 Pool.CurrentPage = restorePage;
-                UpdateOverview();
+                Pool.UpdateOverview();
                 Pool.RefreshPagedRows();
                 StatusText = Pool.SummaryText;
                 Log("邮箱池和 session 状态已刷新。");
@@ -87,42 +87,6 @@ namespace SmsWorkbench
             {
                 poolsRefreshRunning = false;
             }
-        }
-
-        private void UpdateOverview()
-        {
-            int trialEligible = Pool.AllRows.Count(r => PromotionStatusPresentation.IsTrialEligible(r.PromotionStatus, r.PromotionState));
-            int registered = Pool.AllRows.Count(IsRegisteredRow);
-            int attention = Pool.AllRows.Count(RegistrationStatusPresentation.NeedsAttention);
-            TotalCountText = Pool.AllRows.Count.ToString();
-            TrialCountText = trialEligible.ToString();
-            RegisteredCountText = registered.ToString();
-            AttentionCountText = attention.ToString();
-        }
-
-        private bool IsRegisteredRow(PoolRow row)
-        {
-            if (RegistrationStatusPresentation.IsPartial(row.RegistrationStatus)
-                || RegistrationStatusPresentation.IsPartial(row.Status)) return false;
-            return row.AccountType.Contains("Session")
-                || row.SourcePath.EndsWith(".sqlite3", StringComparison.OrdinalIgnoreCase)
-                || row.Status.Contains("已注册")
-                || row.Status.Contains("PayPal");
-        }
-
-        private bool IsImportableAccountRow(PoolRow row)
-        {
-            if (row == null) return false;
-            if (string.IsNullOrWhiteSpace(row.Identifier)) return false;
-            if (row.HasAccessToken) return true;
-            string status = (row.Status + " " + row.PayPalStatus).Trim();
-            return status.Contains("已注册")
-                || status.Contains("待支付")
-                || status.Contains("支付完成")
-                || status.Contains("PM已创建")
-                || status.Contains("已导入")
-                || status.Contains("Registered")
-                || status.Contains("Payment completed");
         }
 
         private void DeduplicateRows()

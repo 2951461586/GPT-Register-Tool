@@ -19,6 +19,10 @@ namespace SmsWorkbench
         private string pageSizeText = DefaultPageSize.ToString(CultureInfo.InvariantCulture);
         private object scopeFilter = "全部";
         private string pageStatusText = "第 0/0 页";
+        private string totalCountText = "0";
+        private string trialCountText = "0";
+        private string registeredCountText = "0";
+        private string attentionCountText = "0";
         private PoolRow? selectedRow;
         private string sortMember = "";
         private ListSortDirection? sortDirection;
@@ -87,6 +91,51 @@ namespace SmsWorkbench
         {
             get => selectedRow;
             set => SetProperty(ref selectedRow, value);
+        }
+
+        public string TotalCountText
+        {
+            get => totalCountText;
+            private set => SetProperty(ref totalCountText, value);
+        }
+
+        public string TrialCountText
+        {
+            get => trialCountText;
+            private set => SetProperty(ref trialCountText, value);
+        }
+
+        public string RegisteredCountText
+        {
+            get => registeredCountText;
+            private set => SetProperty(ref registeredCountText, value);
+        }
+
+        public string AttentionCountText
+        {
+            get => attentionCountText;
+            private set => SetProperty(ref attentionCountText, value);
+        }
+
+        /// <summary>Recomputes the overview counters shown above the grid.</summary>
+        public void UpdateOverview()
+        {
+            TotalCountText = AllRows.Count.ToString(CultureInfo.InvariantCulture);
+            TrialCountText = AllRows
+                .Count(r => PromotionStatusPresentation.IsTrialEligible(r.PromotionStatus, r.PromotionState))
+                .ToString(CultureInfo.InvariantCulture);
+            RegisteredCountText = AllRows.Count(IsRegistered).ToString(CultureInfo.InvariantCulture);
+            AttentionCountText = AllRows.Count(RegistrationStatusPresentation.NeedsAttention).ToString(CultureInfo.InvariantCulture);
+        }
+
+        public static bool IsRegistered(PoolRow row)
+        {
+            if (RegistrationStatusPresentation.IsPartial(row.RegistrationStatus)
+                || RegistrationStatusPresentation.IsPartial(row.Status)) return false;
+            return row.AccountType.Contains("Session")
+                || row.SourcePath.EndsWith(".sqlite3", StringComparison.OrdinalIgnoreCase)
+                || row.Status.Contains("已注册")
+                || row.Status.Contains("PayPal");
         }
 
         public string SummaryText => $"共 {AllRows.Count} 条；当前筛选 {FilteredCount} 条";
