@@ -400,7 +400,7 @@ namespace SmsWorkbench
 
         private void ClearLog_Click(object sender, RoutedEventArgs e)
         {
-            LogText = "";
+            LogPanel.Clear();
             LogTextBox?.Clear();
         }
 
@@ -416,7 +416,7 @@ namespace SmsWorkbench
         /// </summary>
         private void LogPresanitized(string safeText, bool debug = false)
         {
-            string line = "[" + DateTime.Now.ToString("HH:mm:ss") + "] " + safeText + Environment.NewLine;
+            string line = LogViewModel.FormatLine(DateTime.Now, safeText);
             if (debug)
                 logger?.Debug("[backend] {Line}", safeText);
             else
@@ -426,15 +426,13 @@ namespace SmsWorkbench
                 // Append into the control directly: whole-string reassignment of
                 // LogText re-rendered the entire buffer on every line (O(n²)).
                 LogTextBox.AppendText(line);
-                // Keep the bound property consistent without re-rendering. This
-                // used to be `logText += line`, which copied the whole buffer on
-                // every line and never truncated; AppendLogLine is amortised
-                // O(1) and caps retained history at MaxLogBufferChars.
-                if (AppendLogLine(line))
-                    LogTextBox.Text = _logBuffer.ToString();
+                // Keep the bound property consistent without re-rendering;
+                // Append caps retained history (see LogViewModel).
+                if (LogPanel.Append(line))
+                    LogTextBox.Text = LogPanel.Text;
                 return;
             }
-            AppendLogLine(line);
+            LogPanel.Append(line);
         }
 
         private void UiLog(string text)

@@ -309,7 +309,7 @@ namespace SmsWorkbench
         /// lines, then the 69-line remainder). 2000 keeps ~3.5x headroom over
         /// the measured 569 while still bounding a runaway emitter
         /// (2000 x ~80 chars ~ 160 KB, against a panel that already caps
-        /// retained history at MaxLogBufferChars).</summary>
+        /// retained history at LogViewModel.MaxBufferChars).</summary>
         private const int MaxBlockLines = 2000;
         private readonly List<string> block = new();
 

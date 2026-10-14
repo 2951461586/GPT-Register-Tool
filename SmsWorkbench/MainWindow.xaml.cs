@@ -30,15 +30,7 @@ namespace SmsWorkbench
         private string countText = "1";
         private string pageSizeText = "100";
         private object scopeFilter = "全部";
-        // Log accumulation used to be `logText += line` on every backend line,
-        // which is a full-string copy per line -- O(n^2) over a run -- and it was
-        // never truncated. A StringBuilder gives amortised O(1) appends and
-        // MaxLogBufferChars caps the retained history.
-        // Not thread-safe by design: every caller reaches this from the UI
-        // thread (Progress<T> callbacks marshal back to the Dispatcher context);
-        // the old string concatenation had exactly the same contract.
-        private readonly System.Text.StringBuilder _logBuffer = new();
-        internal const int MaxLogBufferChars = 1_000_000;
+        public LogViewModel LogPanel { get; } = new LogViewModel();
         private string statusText = "就绪";
         private string pageStatusText = "第 0/0 页";
         private string totalCountText = "0";
@@ -152,34 +144,6 @@ namespace SmsWorkbench
         {
             get => chataiMailboxFilePath;
             set { chataiMailboxFilePath = value ?? ""; OnPropertyChanged(nameof(ChataiMailboxFilePath)); }
-        }
-
-        public string LogText
-        {
-            get => _logBuffer.ToString();
-            set
-            {
-                _logBuffer.Clear();
-                if (!string.IsNullOrEmpty(value)) _logBuffer.Append(value);
-                OnPropertyChanged(nameof(LogText));
-            }
-        }
-
-        /// <summary>
-        /// Appends one already-formatted log line and keeps the retained history
-        /// bounded. Callers still push into the TextBox directly via
-        /// LogPresanitized, so appending here triggers no re-render.
-        /// </summary>
-        internal bool AppendLogLine(string line)
-        {
-            _logBuffer.Append(line);
-            bool trimmed = false;
-            if (_logBuffer.Length > MaxLogBufferChars)
-            {
-                _logBuffer.Remove(0, _logBuffer.Length - MaxLogBufferChars);
-                trimmed = true;
-            }
-            return trimmed;
         }
 
         public string StatusText
