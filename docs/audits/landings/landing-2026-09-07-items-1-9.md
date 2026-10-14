@@ -1,6 +1,6 @@
 # 落地记录：scan-2026-09-07 审计清单 1→9
 
-- 来源：`docs/audits/scan-2026-09-07-module-optimization-review.md` §6
+- 来源：`docs/audits/scans/scan-2026-09-07-module-optimization-review.md` §6
 - 日期：2026-09-07
 - 回归：**pytest 2937 passed / 6 skipped / 547 subtests，RC=0**（基线 2891，+46 为本轮新增用例）
 - 架构门禁：`scripts/architecture_scan.py` 通过；延迟 import 棘轮 402 → 402（+0）

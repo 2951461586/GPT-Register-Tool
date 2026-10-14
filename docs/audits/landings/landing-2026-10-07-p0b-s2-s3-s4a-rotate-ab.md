@@ -1,6 +1,6 @@
 # 落地记录：P0-B S2（换出口）+ S3（预注册 A/B）+ S4a（unknown 偏向换出口）（2026-10-07）
 
-> 落地来源：`docs/audits/plan-2026-10-05-inflow-challenge-handoff.md` §6 的 **S2 + S3**，
+> 落地来源：`docs/audits/plans/plan-2026-10-05-inflow-challenge-handoff.md` §6 的 **S2 + S3**，
 > 以及 §7 拍板后的 **§7-5**（`unknown` 偏向换出口）。
 > 前置：S0 + S1 见 `landing-2026-10-07-p0b-s0s1-challenge-verdict.md`。
 >
@@ -119,7 +119,7 @@ hook 签名因此从 `(session, rotate_allowed)` 变成 `(session, verdict, rota
 
 ## 7. 相关
 
-- `docs/audits/plan-2026-10-05-inflow-challenge-handoff.md` — 契约、开关、A/B、§3.4.2 凭据流图与 S4b
+- `docs/audits/plans/plan-2026-10-05-inflow-challenge-handoff.md` — 契约、开关、A/B、§3.4.2 凭据流图与 S4b
 - `docs/current/protocol-registration.md` — "In-flow edge-challenge judgement" + "Rotating the exit once"
 - `docs/current/registration-ab-runbook.md` — P0-2b 行、机制表例外、判定与停止规则
 - `sms_tool/http_client.py` — `_apply_edge_challenge_policy` / `EDGE_CHALLENGE_HOOK_ATTR`

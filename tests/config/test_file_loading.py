@@ -1,7 +1,7 @@
 """Behaviour tests for ``services/protocol-payment/common/file_loading.py``.
 
 Batch 3 of the extractor consolidation (see
-``docs/audits/plan-2026-09-17-protocol-payment-extractor-consolidation.md``).
+``docs/audits/plans/plan-2026-09-17-protocol-payment-extractor-consolidation.md``).
 
 Why these tests exist on top of the AST-equivalence proof
 ---------------------------------------------------------

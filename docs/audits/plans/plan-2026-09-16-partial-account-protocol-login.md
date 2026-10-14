@@ -1,5 +1,7 @@
 # 方案：半注册账号能否用协议登录拿到 session？— 2026-09-16
 
+> **状态（2026-10-14 复核）**：方案/结论文档，不改生产行为。「持有密码的半注册账号可协议登录」的结论对应现有代码 `_password_login_existing_account`；其余方案项（A/B/C）未按本文原样落地，后续进展见 `scan-2026-09-16-partial-registered-chain-break.md` 与 `docs/current/protocol-registration.md`。
+
 > **性质**：方案文档（含参考项目对照）。**不改任何生产行为**。
 > 证据来源：`runtime/accounts.sqlite3`（只读）、`runtime/registration_retry_guard.json`、
 > `runtime/logs/processes/*/backend_stdout.jsonl`（已过滤 IPC 载荷）、

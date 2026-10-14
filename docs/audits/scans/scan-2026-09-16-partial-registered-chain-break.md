@@ -189,7 +189,7 @@ return password if existing_account_password_known else ""
 | `False`（无密码步） | email lane 是已测死路（5/5 落 `/about-you`，0 session） | `existing_login_no_password_step:*` ❌ |
 
 **并且这个「无密码半注册不能协议登录」的结论，已被
-`docs/audits/plan-2026-09-16-partial-account-protocol-login.md` 独立证过**
+`docs/audits/plans/plan-2026-09-16-partial-account-protocol-login.md` 独立证过**
 （服务端闭环 23/23，方案 C 已判 H2 证伪结案）。本轮数据与之一致。
 
 ### 那这 19 个地址到底怎么来的

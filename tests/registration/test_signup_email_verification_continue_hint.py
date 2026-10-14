@@ -1,6 +1,6 @@
 """The extra declared-screen ``authorize/continue`` from ``/email-verification``.
 
-The 2026-10-07 scan (``docs/audits/scan-2026-10-07-protocol-registration.md``
+The 2026-10-07 scan (``docs/audits/scans/scan-2026-10-07-protocol-registration.md``
 P0-A) found the sibling toggle ``registration.signup_continue_screen_hint``
 **unreachable on the failure shape it was meant to test**: its only read point
 is ``_continue_signup_username``, which ``_prepare_signup_auth_state`` skips

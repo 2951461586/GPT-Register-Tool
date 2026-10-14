@@ -880,7 +880,7 @@ class RegistrationEmailWorkflow:
         #     the *same* ``_post_user_register`` payload: follow the response
         #     -> 0 of 12 validations 409 (and all 12 finalized); ignore it ->
         #     85 of 85.  Fisher one-sided p = 1.4e-15.  See
-        #     ``docs/audits/plan-2026-09-16-password-first-registration.md``
+        #     ``docs/audits/plans/plan-2026-09-16-password-first-registration.md``
         #     §2.0.  The password lane below already follows the response:
         #     ``send_email_otp`` -> ``_email_otp_send_url`` ->
         #     ``_follow_continue_url``, which is a GET and therefore matches

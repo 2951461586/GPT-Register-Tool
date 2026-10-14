@@ -106,7 +106,7 @@ def _registration_flag(key: str, default: bool) -> bool:
     ``sms_tool/config.py``), which is **not** a ``dict``.  A ``dict`` check made
     these toggles read their default in every production run while the tests,
     which pass plain dicts, stayed green (2026-10-07; see
-    ``docs/audits/scan-2026-10-07-protocol-registration.md`` P1-D).  One copy of
+    ``docs/audits/scans/scan-2026-10-07-protocol-registration.md`` P1-D).  One copy of
     the guard cannot drift from itself.
     """
     try:
@@ -216,7 +216,7 @@ def _signup_email_verification_continue_hint_enabled():
     ``_prepare_signup_auth_state`` returns early and the sibling toggle never
     executes -- a manipulation that never ran, not a hypothesis that failed
     (``run_p15_hint.log``, 2026-10-07: 0/5, zero ``Signup username continue``
-    lines; see ``docs/audits/scan-2026-10-07-protocol-registration.md`` P0-A).
+    lines; see ``docs/audits/scans/scan-2026-10-07-protocol-registration.md`` P0-A).
     ``scripts/registration_ab.py`` now refuses to judge an arm whose mechanism
     line is absent, so that gap can no longer masquerade as a null result.
 

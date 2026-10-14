@@ -2,7 +2,7 @@
 
 A function-by-function read of ``myfanhua/turb-gpt-free-register@ffcda12``
 against this repo's protocol lane found four wire/flow differences that were
-never controlled variables (``docs/audits/scan-2026-10-10-protocol-registration.md``
+never controlled variables (``docs/audits/scans/scan-2026-10-10-protocol-registration.md``
 §D1-D4).  Each now has one default-**off** toggle and one pre-registered A/B:
 
 * D1 ``registration.turb_signin_authorize_context`` -- turb's signin/authorize

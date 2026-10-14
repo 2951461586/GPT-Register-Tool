@@ -18,7 +18,7 @@
 4. 加 TTL **之前**写下的记录（没有 ``quarantine_until``）也要能到期，否则需要
    一次手工清理。
 
-→ ``docs/audits/scan-2026-09-18-latest-protocol-batch-diagnosis.md``
+→ ``docs/audits/scans/scan-2026-09-18-latest-protocol-batch-diagnosis.md``
 """
 from __future__ import annotations
 

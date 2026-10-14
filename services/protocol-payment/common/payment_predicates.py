@@ -1,7 +1,7 @@
 """Pure payment-payload and redirect-URL predicates shared by the extractors.
 
 Stage-1 batch of
-``docs/audits/plan-2026-09-17-protocol-payment-extractor-consolidation.md``:
+``docs/audits/plans/plan-2026-09-17-protocol-payment-extractor-consolidation.md``:
 eight of these were byte-identical copies in ``ideal_qr_extract.py`` and
 ``twint_extract.py``; ``is_redirect_like_url`` differed only in provider data
 (the redirect host suffix and the URL marker), so it takes the

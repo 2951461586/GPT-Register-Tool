@@ -1,5 +1,7 @@
 # 协议注册 / 支付链接提取 / 代理池·指纹库 —— 修复与优化方案
 
+> **状态（2026-10-14 复核）**：**§2 已落地并已提交**（原文「工作区改动，未提交」已过期，以 git 历史为准）；§3 仍待拍板；§4 为明确不做项。
+
 - **日期**：2026-09-30
 - **状态**：**§2 已落地**（工作区改动，未提交）；**§3 待拍板**（未动代码）；§4 为明确不做项
 - **范围**：协议注册（`auth_flow/`、`registration_handlers.py`）、支付链接提取（`pay_link/`、`upi_link/`、`paypal_link/`、`payment_egress.py`）、代理池与指纹库（`proxy_*.py`、`*fingerprint*.py`、`geo/`），以及三处全仓门禁（`sensitive_field_scan` / `delayed_import_ratchet` / `ruff format`）

@@ -420,7 +420,7 @@ namespace SmsWorkbench
             // drop more (冷却中 / OTP 派发隔离 / 死路地址) before the first
             // account is even attempted.  Surfacing both numbers here kills the
             // "I checked N but the report says N-k" confusion measured on
-            // 2026-09-19 (docs/audits/scan-2026-09-19-selected-22-vs-reported-3of6.md).
+            // 2026-09-19 (docs/audits/scans/scan-2026-09-19-selected-22-vs-reported-3of6.md).
             string hintText = checkedCount > usable
                 ? $"已选择 {usable} 个可注册邮箱（勾选 {checkedCount} 个，本地排除 {checkedCount - usable} 个已注册/半注册/记录不完整；后端还会剔除冷却/隔离/死路地址）"
                 : "已选择 " + usable.ToString() + " 个邮箱";

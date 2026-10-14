@@ -1,6 +1,6 @@
 # 落地记录：turb 协议差异 D1–D4 离线落地（2026-10-10）
 
-> 落地来源：`docs/audits/scan-2026-10-10-protocol-registration.md` §D1–D4，来自对
+> 落地来源：`docs/audits/scans/scan-2026-10-10-protocol-registration.md` §D1–D4，来自对
 > `myfanhua/turb-gpt-free-register@ffcda12`（2026-09-29，无新提交）协议泳道的逐函数对比。
 >
 > **全部新开关默认 `false`，本次不改变任何生产行为。**
@@ -162,7 +162,7 @@ P1-16 / P1-17 等有码到达
 
 ## 6. 相关
 
-- `docs/audits/scan-2026-10-10-protocol-registration.md` §D1–D4、P0-A′、P1-A′、P1-B′、P1-C′
+- `docs/audits/scans/scan-2026-10-10-protocol-registration.md` §D1–D4、P0-A′、P1-A′、P1-B′、P1-C′
 - `docs/current/registration-ab-runbook.md` — P1-13..P1-17 行、机制表、判定规则、停止规则
 - `docs/current/protocol-registration.md` — Validation limits（改为指向 runbook）
 - 参考仓：`runtime/tmp/refrepos/myfanhua`（浅克隆，`.gitignore` 已排除，不入库）

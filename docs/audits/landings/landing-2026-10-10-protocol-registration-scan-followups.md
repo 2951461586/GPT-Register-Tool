@@ -1,6 +1,6 @@
 # 落地记录：协议注册扫描 P1-A′ / P1-B′ / P1-C′ / P2-2（2026-10-10）
 
-> 落地来源：`docs/audits/scan-2026-10-10-protocol-registration.md` §8 的四项未落地项
+> 落地来源：`docs/audits/scans/scan-2026-10-10-protocol-registration.md` §8 的四项未落地项
 > （该扫描 HEAD `e94688b`；本轮基线 HEAD `762ca58`）。
 >
 > 四项均为**对照工具与开关守卫**的修复，**不改变任何生产默认行为**：全部开关的默认值、

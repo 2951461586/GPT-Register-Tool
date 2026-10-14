@@ -1,5 +1,7 @@
 # 流程内 Cloudflare 挑战判据与协议 → 浏览器交棒（立项，2026-10-05）
 
+> **状态（2026-10-14 复核）**：**S0–S3 与 S4a 已落地，S4b（协议→浏览器交棒）未落地**。落地记录见 `landing-2026-10-07-p0b-s0s1-challenge-verdict.md` 与 `landing-2026-10-07-p0b-s2-s3-s4a-rotate-ab.md`；S4b 缺的是无人执行的能力而非开关，理由见后者 §4。
+
 > 状态：**立项 / 待拍板**。本文件只定义契约、开关、判据与 A/B，**不含实现**。
 > 落地前不得改变生产默认行为。
 >
@@ -78,7 +80,7 @@ if status_code in {403, 429}:
 
 ⇒ 本项新增的任何 CF 判据都必须用**独立命名**（建议 `edge_challenge_*`），
 不要复用 `challenge` 这个词。这个仓已经因为"同一个词指两件事"付过学费
-（见 `docs/audits/scan-2026-09-16-protocol-registration-optimization.md` 坑 #3、
+（见 `docs/audits/scans/scan-2026-09-16-protocol-registration-optimization.md` 坑 #3、
 以及 `pp_link_helpers` 里 `code_not_delivered` 改名 `mailbox_side_no_code` 的先例）。
 
 ### 1.4 缺口的确切形状
@@ -159,7 +161,7 @@ def edge_challenge_verdict(response, *, body_limit: int = 4096) -> str:
    不做"body 里有 captcha 字样就算"的猜测——`auth_flow/otp.py` 的挑战载荷就含 `challenge`
    字样（见 §1.3）。
 2. **复用 `proxy_edge_probe.classify_edge_response` 的判据**，不新写一套 host/header 匹配。
-   本仓已经为"同一个判据两份实现"付过代价（`docs/audits/scan-2026-09-22-*` 的 geo 三份实现）。
+   本仓已经为"同一个判据两份实现"付过代价（`docs/audits/scans/scan-2026-09-22-*` 的 geo 三份实现）。
 3. **先排除账号已废**（对齐 Sunny `:609` 的顺序，也与本仓
    `accounts/account_terminal.py` 的终态词汇一致）：一个 `403 account_deactivated`
    不是挑战，换出口也不会变。

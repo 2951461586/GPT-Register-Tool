@@ -322,7 +322,7 @@ Rule 19 说「同名不构成重复，直到 AST 证明」；本轮补了一句 
 
 ### 7.1 真死：4 项，已删
 
-`docs/audits/audit-2026-08-31-cleanup-backlog.md:284-289` 早已立项：
+`docs/audits/rounds/audit-2026-08-31-cleanup-backlog.md:284-289` 早已立项：
 
 > 7 个 filter-repo 事故脚本（`cmp_index_wt.py`、`extract_history_secrets.py`、
 > `filter_replacements.py`、`fix_hardcoded_token.py`、`pick_final_replacements.py`、
@@ -490,5 +490,5 @@ reportOptionalMemberAccess: "splitlines" is not a known attribute of "None"
 | 收紧 | `scripts/unused_import_baseline.json`（357 → 355，`total` + 2 条 `per_file`） |
 | 删除 | `scripts/cmp_index_wt.py`、`scripts/extract_history_secrets.py`、`scripts/filter_replacements.py`、`scripts/fix_hardcoded_token.py` |
 | 修复 | `scripts/registration_ab.py:449`（`__doc__` 可能为 `None`） |
-| 本报告 | `docs/audits/scan-2026-10-04-import-cycle-decomposition.md` |
+| 本报告 | `docs/audits/scans/scan-2026-10-04-import-cycle-decomposition.md` |
 | 索引 | `docs/audits/README.md`（计数 48 → 49） |

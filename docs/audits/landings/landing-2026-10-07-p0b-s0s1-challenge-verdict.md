@@ -1,6 +1,6 @@
 # 落地记录：P0-B S0 + S1（流程内挑战判据，只读）（2026-10-07）
 
-> 落地来源：`docs/audits/plan-2026-10-05-inflow-challenge-handoff.md` §6 的 **S0 + S1**。
+> 落地来源：`docs/audits/plans/plan-2026-10-05-inflow-challenge-handoff.md` §6 的 **S0 + S1**。
 > 两者按计划都是**零控制流变更**：只给 403/429 的**失败名**加一个后缀，再加三条不变式的单测。
 >
 > **S2（换出口）/ S3（线上 A/B）/ S4（浏览器交棒）未动**，`rotate_exit` / `handoff` /
@@ -113,7 +113,7 @@ S2 的接线点是 `auth_flow/deps.py` **既有的** `from ..auth_state import (
 
 ## 5. 相关
 
-- `docs/audits/plan-2026-10-05-inflow-challenge-handoff.md` — 契约、开关、A/B 设计、落地顺序
+- `docs/audits/plans/plan-2026-10-05-inflow-challenge-handoff.md` — 契约、开关、A/B 设计、落地顺序
 - `docs/current/protocol-registration.md` — "In-flow edge-challenge judgement" 一节（判据/后缀/不变式）
 - `sms_tool/proxy_edge_probe.py` — `edge_challenge_verdict`
 - `sms_tool/http_client.py` — `edge_challenge_discrimination_enabled` / `SessionCircuitOpen`

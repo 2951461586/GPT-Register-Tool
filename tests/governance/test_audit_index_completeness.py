@@ -37,10 +37,10 @@ _BARE_FILENAME = re.compile(r"`([A-Za-z0-9_.\-]+\.(?:md|txt))`")
 
 
 def audit_files_on_disk() -> set[str]:
-    """Every indexable file currently sitting in ``docs/audits/``."""
+    """Every indexable file under ``docs/audits/`` (including its kind subdirectories)."""
     return {
         p.name
-        for p in _AUDITS.iterdir()
+        for p in _AUDITS.rglob("*")
         if p.is_file() and p.suffix in {".md", ".txt"}
     } - _EXEMPT_FILES
 
@@ -124,6 +124,23 @@ class AuditIndexCompleteness(unittest.TestCase):
             15,
             "index does not look like a table -- expected one row per audit file",
         )
+
+    def test_every_report_lives_in_the_directory_for_its_kind(self):
+        """The subdirectory is derived from the filename prefix; keep them in sync."""
+        kinds = {
+            "audit-": "rounds",
+            "scan": "scans",
+            "plan-": "plans",
+            "landing-": "landings",
+        }
+        misplaced = []
+        for path in _AUDITS.rglob("*"):
+            if not path.is_file() or path.name in _EXEMPT_FILES:
+                continue
+            expected = next((d for prefix, d in kinds.items() if path.name.startswith(prefix)), "records")
+            if path.parent.name != expected:
+                misplaced.append(f"{path.relative_to(_AUDITS)} (expected {expected}/)")
+        self.assertEqual([], misplaced, f"audit files in the wrong kind directory: {misplaced}")
 
 
 if __name__ == "__main__":

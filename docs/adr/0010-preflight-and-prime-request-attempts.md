@@ -58,7 +58,7 @@
 
 ## 相关
 
-- `docs/audits/scan-2026-09-18-latest-protocol-batch-diagnosis.md` §3「已确认为有意变更」
+- `docs/audits/scans/scan-2026-09-18-latest-protocol-batch-diagnosis.md` §3「已确认为有意变更」
   与 §5④
 - `sms_tool/http_client.py:65-114`（`TRANSIENT_MARKERS` / `is_transient_transport_error`）
 - `sms_tool/backoff.py:12-17`（`transport_backoff`）

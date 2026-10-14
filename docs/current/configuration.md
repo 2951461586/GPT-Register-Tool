@@ -127,7 +127,7 @@ It is **deliberately left as-is** because phone-line success is acceptable.
 Do not "fix" it by flipping `proxy_match_phone_country` without measuring —
 that flag changes the egress used by *every* phone verification, not just
 mismatched ones. The three options considered are recorded in
-`docs/audits/scan-2026-09-12-localflow-register-reference.md` (finding P4).
+`docs/audits/scans/scan-2026-09-12-localflow-register-reference.md` (finding P4).
 
 ## Unified proxy lanes and the optional `proxy.lanes` declaration (2026-09-28)
 

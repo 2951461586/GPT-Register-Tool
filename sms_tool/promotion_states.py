@@ -68,7 +68,7 @@ MAX_ELIGIBILITY_LABEL_TOKENS = 8
 # here is a platform-side block (HTTP 400 "unusual activity" on
 # ``/backend-api/payments/checkout``), so reading it as an account attribute is
 # a wrong conclusion rather than a missing one.  See
-# ``docs/audits/scan-2026-09-21-payment-eligibility-in-promotion-column.md`` §9.6.
+# ``docs/audits/scans/scan-2026-09-21-payment-eligibility-in-promotion-column.md`` §9.6.
 PAYMENT_ELIGIBILITY_UNKNOWN_LABEL = "支付资格未知"
 
 

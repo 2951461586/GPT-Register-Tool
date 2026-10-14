@@ -23,7 +23,7 @@ from .phone_proxy import normalize_proxy_url as _normalize_proxy_url, ...
 会很自然地推断这是**冗余中转**：既然 `docs/architecture.md` 的 Boundary Rule 13
 写「`phone_proxy` 和 `paypal_proxy` 是 `proxy_entry` 的 thin wrapper」，那么
 `paypal_proxy → phone_proxy → proxy_entry` 就该能压成 `paypal_proxy → proxy_entry`。
-`docs/audits/plan-2026-10-08-paypal-family-boundaries.md` 的 P2 正是这样写的。
+`docs/audits/plans/plan-2026-10-08-paypal-family-boundaries.md` 的 P2 正是这样写的。
 
 **这个推断不成立**，理由如下（2026-10-08 逐调用点核对）。
 
@@ -100,6 +100,6 @@ Rule 19 已把 `redact_proxy_url` 记为**有意分叉**：
 
 - `docs/architecture.md` Boundary Rule 13（代理字符串单一权威）、Rule 19（同名函数非重复）
 - `docs/directory-map.md` 的「Proxy authority, lanes, health and bridge」行
-- `docs/audits/plan-2026-10-08-paypal-family-boundaries.md` P2（本 ADR 驳回其结论）
+- `docs/audits/plans/plan-2026-10-08-paypal-family-boundaries.md` P2（本 ADR 驳回其结论）
 - `sms_tool/phone_proxy.py:103,130,154`（定义）· `sms_tool/paypal_proxy.py:17,59,63,69`（包装）
 - `sms_tool/accounts/account_liveness.py:41`（另一条泳道的 1 元壳）

@@ -10,7 +10,9 @@ Directory layout (since 2026-09-06):
 - `docs/releases/` — one release note per published tag；**格式规范见
   [`releases/README.md`](releases/README.md)**（只列新增功能与修复问题，覆盖上一版以来的
   全部提交）。历史说明不回写。
-- `docs/audits/` — historical audit rounds, scans, and assessments.
+- `docs/audits/` — historical audit rounds, scans, and assessments, grouped into
+  `rounds/`, `scans/`, `plans/`, `landings/` and `records/` (index in
+  `docs/audits/README.md`; every plan opens with a status line).
 - `docs/adr/` — accepted architecture decisions.
 - `docs/current/` — current-state entry points.
 

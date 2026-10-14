@@ -26,9 +26,9 @@ COUNT_RE = re.compile(r"^(\d+) files\.", re.MULTILINE)
 
 
 def _reports() -> list[Path]:
-    """Every indexed artefact in the directory (the README indexes itself too)."""
+    """Every indexed artefact under docs/audits/ (the README indexes itself too)."""
     return sorted(
-        p for p in AUDITS.iterdir() if p.is_file() and p.suffix in {".md", ".txt"}
+        p for p in AUDITS.rglob("*") if p.is_file() and p.suffix in {".md", ".txt"}
     )
 
 

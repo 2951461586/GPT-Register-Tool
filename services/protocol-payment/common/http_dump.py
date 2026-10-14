@@ -1,7 +1,7 @@
 """HTTP response/request dumping shared by the protocol-payment extractors.
 
 Batch 4 of
-`docs/audits/plan-2026-09-17-protocol-payment-extractor-consolidation.md`.
+`docs/audits/plans/plan-2026-09-17-protocol-payment-extractor-consolidation.md`.
 
 Scope: ideal and twint ONLY
 ---------------------------

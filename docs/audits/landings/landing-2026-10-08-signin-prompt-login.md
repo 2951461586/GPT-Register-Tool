@@ -1,6 +1,6 @@
 # 落地记录：P1-11 signin `prompt=login` 开关 + 预注册实验（2026-10-08）
 
-> 落地来源：`docs/audits/scan-2026-10-07-protocol-registration.md` §5 步骤 6 的后续字段，
+> 落地来源：`docs/audits/scans/scan-2026-10-07-protocol-registration.md` §5 步骤 6 的后续字段，
 > 由 P1-10 的线上结果（声明被记录但不选臂）逼出。
 >
 > 新开关默认 **关**。
@@ -74,6 +74,6 @@ passwordless_signup_from_default_redirect = true
 
 ## 5. 相关
 
-- `docs/audits/landing-2026-10-08-signin-screen-hint.md` — P1-10 与它的两轮线上取证
+- `docs/audits/landings/landing-2026-10-08-signin-screen-hint.md` — P1-10 与它的两轮线上取证
 - `docs/current/registration-ab-runbook.md` — P1-11 行、机制表、前置条件、停止规则
 - `sms_tool/auth_flow/steps.py` — `_signin_prompt_login_enabled` / `_signup_signin_attempts`

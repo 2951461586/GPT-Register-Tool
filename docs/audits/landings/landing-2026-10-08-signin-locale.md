@@ -1,6 +1,6 @@
 # 落地记录：P1-12 signin `locale=ja-JP` 开关 + 预注册实验（2026-10-08）
 
-> 落地来源：`docs/audits/scan-2026-10-07-protocol-registration.md` §5 步骤 6 的最后一个字段
+> 落地来源：`docs/audits/scans/scan-2026-10-07-protocol-registration.md` §5 步骤 6 的最后一个字段
 > （SunnyRegister 的 signin 形状），由 P1-11 的线上结果逼出。
 >
 > 新开关默认 **关**。
@@ -132,7 +132,7 @@ arms `default` / `locale`。`hold_constant` 按 **SunnyRegister 的形状**钉�
 
 ## 6. 相关
 
-- `docs/audits/landing-2026-10-08-signin-screen-hint.md`（P1-10）、
-  `docs/audits/landing-2026-10-08-signin-prompt-login.md`（P1-11）— 前两个字段的落地与线上取证
+- `docs/audits/landings/landing-2026-10-08-signin-screen-hint.md`（P1-10）、
+  `docs/audits/landings/landing-2026-10-08-signin-prompt-login.md`（P1-11）— 前两个字段的落地与线上取证
 - `docs/current/registration-ab-runbook.md` — P1-12 行、机制表、前置条件、停止规则
 - `sms_tool/auth_flow/steps.py` — `_signin_locale_ja_jp_enabled` / `_openai_signin_url` / `_signup_signin_attempts`

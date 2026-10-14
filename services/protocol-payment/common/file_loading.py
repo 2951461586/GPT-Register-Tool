@@ -2,7 +2,7 @@
 
 Why this module exists
 ----------------------
-Phase 1 of `docs/audits/plan-2026-09-17-protocol-payment-extractor-consolidation.md`
+Phase 1 of `docs/audits/plans/plan-2026-09-17-protocol-payment-extractor-consolidation.md`
 extracts the provably provider-free helpers the extractors grew by copy-paste.
 This file is batch 3 (file loading).  Batch 1 is ``proxy_bookkeeping.py``.
 

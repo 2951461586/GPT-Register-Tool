@@ -444,7 +444,7 @@ verification page does in the browser HAR: empty body, no `Content-Type`, a fres
 `Passwordless send-otp: status=<n> pending=<true|false|unknown> mode=<enum>`.
 A Sentinel failure fails the arm rather than degrading to the assumed pre-send.
 The password lane ignores the toggle. Evidence and unknowns:
-`docs/audits/scan-2026-10-11-har-passwordless-signup.md`; design:
+`docs/audits/scans/scan-2026-10-11-har-passwordless-signup.md`; design:
 `registration-ab-runbook.md` (P3-1).
 
 `registration.reference_lane` (default `false`, `sms_tool/registration_reference_lane.py`)
@@ -486,7 +486,7 @@ access token is confirmed, 14 read-only bearer GETs (consent, `me`,
 `Post-signup warm-up: ok=<n>/<m> dwell=<s>s`. It never raises. Measured
 2026-10-11 (n<=7 per arm): it does **not** stop the access token from being
 revoked within 5-15 minutes, nor does 2FA; see
-`docs/audits/scan-2026-10-11-at-revocation-survival.md`.
+`docs/audits/scans/scan-2026-10-11-at-revocation-survival.md`.
 `scripts/at_survival_watch.py` records the liveness curve for any account ids.
 
 Update 2026-10-12 (audit §12): that measurement was on the SDK that sent no SO

@@ -4,7 +4,7 @@
 **代码架构 / 模块功能 / 文档规范 / 目录结构**四个维度扫描。
 
 > 定位：本次为**只读扫描 + 建议**，未修改任何生产代码。
-> 与既有文档的关系：`docs/audits/architecture-before-registration-hardening-2026-09-06.md`
+> 与既有文档的关系：`docs/audits/records/architecture-before-registration-hardening-2026-09-06.md`
 > 是 09-06 硬化前的快照，`docs/adr/0009-registration-hardening.md` 是硬化决策。
 > 本报告是硬化**之后**的状态复查，并覆盖 ADR-0009 未涉及的支付/测活/邮箱方向。
 
@@ -384,7 +384,7 @@ IPC 通道），但**日志化改造远未完成**。可观测性最弱的正是
 - `docs/audits/` 归档所有历史快照，`docs/releases/` 一个 tag 一份不可变发布说明。
 
 **唯一提示**：`docs/architecture.md` 只有 **5.6 KB**，而
-`docs/audits/architecture-before-registration-hardening-2026-09-06.md` 有 **113 KB**。
+`docs/audits/records/architecture-before-registration-hardening-2026-09-06.md` 有 **113 KB**。
 活的架构文档比快照薄两个数量级——**快照里有大量结论没有回流到活文档**。
 建议把 09-06 快照中的"Boundary Rules / Ownership Matrix / Dependency Direction"
 三节提炼回 `docs/architecture.md`，否则新读者只能读到 113 KB 的历史快照。

@@ -1,7 +1,7 @@
 """Exit-geo and target-reachability selection for protocol-payment extractors.
 
 Origin: blik's proxy-geo cluster, generalised for the consolidation plan
-(`docs/audits/plan-2026-09-17-protocol-payment-extractor-consolidation.md`,
+(`docs/audits/plans/plan-2026-09-17-protocol-payment-extractor-consolidation.md`,
 Q1 decision, 2026-09-19).
 
 Why this exists

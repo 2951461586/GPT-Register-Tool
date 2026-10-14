@@ -1,6 +1,6 @@
 # 落地记录：P1-10 signin `screen_hint` 开关 + 预注册实验（2026-10-08）
 
-> 落地来源：`docs/audits/scan-2026-10-07-protocol-registration.md` §5 步骤 6
+> 落地来源：`docs/audits/scans/scan-2026-10-07-protocol-registration.md` §5 步骤 6
 > （signin 形状实验，扫描列的"最高优先级"下一步），由 2026-10-07/08 两轮线上执行取证。
 >
 > 新开关默认 **关**；本轮除两次**操作者授权的线上单账号执行**外无其他流量。
@@ -86,7 +86,7 @@ passwordless 臂。剩下的客户端变量只有 **signin 形状**本身。
 
 ## 5. 相关
 
-- `docs/audits/scan-2026-10-07-protocol-registration.md` — §4 P0-A / §5 步骤 6
+- `docs/audits/scans/scan-2026-10-07-protocol-registration.md` — §4 P0-A / §5 步骤 6
 - `docs/current/registration-ab-runbook.md` — P1-10 行、机制表、前置条件
 - `docs/current/protocol-registration.md` — Validation limits（两道操纵检查的契约）
 - `sms_tool/auth_flow/steps.py` — `_signin_screen_hint_login_or_signup_enabled` / `_signup_signin_attempts`

@@ -206,7 +206,7 @@ FAILURE_CLASSES: tuple[FailureClass, ...] = (
             # 被判成 ``internal`` ⇒ **不重试、不进重试守卫、不触发 pulse 熔断**，
             # 两个 run 被静默吞掉（日志里查得到、守卫里查不到记录）。
             # 同批 ``curl: (35)`` 正常归 ``network``，证明缺的就是登记项本身。
-            # → ``docs/audits/scan-2026-09-18-latest-protocol-batch-diagnosis.md``
+            # → ``docs/audits/scans/scan-2026-09-18-latest-protocol-batch-diagnosis.md``
             #
             # (52) Empty reply from server / (18) Partial file 与既有四项同属
             # 传输中途失败，一并登记，避免下次再从同一个洞里漏。
@@ -226,7 +226,7 @@ FAILURE_CLASSES: tuple[FailureClass, ...] = (
             # 守卫眼里等同**终态** ⇒ 09-17 那批 42 个账号
             # （``sentinel_legacy_incomplete:oauth_create_account``）**从未被重试**，
             # 在"被误报成渠道故障"之上又叠了一层"直接丢号"。
-            # → ``docs/audits/scan-2026-09-18-sentinel-runner-hash-mismatch.md``
+            # → ``docs/audits/scans/scan-2026-09-18-sentinel-runner-hash-mismatch.md``
             #
             # 🔴 为什么是 ``network`` 而不是 ``account``：**地址没有被消耗**。
             # token 根本没发出来，``create_account`` 从未带着可用载荷被发出，什么都没创建。

@@ -1,6 +1,6 @@
 # 落地记录：P0-A 机制判据 + P1-8 补发 continue（2026-10-07）
 
-> 落地来源：`docs/audits/scan-2026-10-07-protocol-registration.md` §5 验证计划 **步骤 1**。
+> 落地来源：`docs/audits/scans/scan-2026-10-07-protocol-registration.md` §5 验证计划 **步骤 1**。
 > 本文只记录**已落地**的部分与验证证据；`scan-2026-10-07` 的 P0-B / P1-A / P1-B / signin
 > 形状实验**未动**（扫描明确要求分批，且 P0-A 是它们的前置）。
 >
@@ -158,7 +158,7 @@ hold-constant 里明确要求两个 arm 都保持 `signup_continue_screen_hint=f
 
 ## 6. 相关
 
-- `docs/audits/scan-2026-10-07-protocol-registration.md` — 发现与 §5 计划
+- `docs/audits/scans/scan-2026-10-07-protocol-registration.md` — 发现与 §5 计划
 - `docs/current/registration-ab-runbook.md` — 预注册设计、机制表、判定与停止规则
 - `docs/current/protocol-registration.md` — Validation limits（两道操纵检查的契约）
 - `scripts/registration_ab.py` — `mechanism` 判据与 `p1-8` 实验

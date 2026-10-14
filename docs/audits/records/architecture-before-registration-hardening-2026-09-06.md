@@ -407,7 +407,7 @@ errors / dom_fields / session  ->  form_steps  ->  flow_steps  ->  orchestrator
    不是这些文本。
 3. `dom_fields.py` 的静默失败沿用了单体时期的行为：选择器失配统一返回 `False`，
    PayPal 前端改版后上层会看到"填表成功"而实际未填（见
-   `docs/audits/audit-2026-09-02-round5-summary.md`）。拆分没有改变这一点。
+   `docs/audits/rounds/audit-2026-09-02-round5-summary.md`）。拆分没有改变这一点。
 
 ### sms_tool/paypal_link/
 
@@ -732,7 +732,7 @@ Python CLI 参数，不感知这些脚本。
    `kakao` → `KAKAO_TOKEN` + `KAKAO_PROXY_SEED_FILE` + 3 个 `*_COUNTRY`；
    `twint` → `PP_TOKEN` + `TWINT_PROXY_SEED_FILE` + `TWINT_FLOW_MODE`。
    脚本侧各自 `os.environ.get` 读取，两边没有共享的 schema 或默认值表。加一种支付方式要在
-   两边同时对齐。**建议的收敛方向见 `docs/audits/audit-2026-09-02-round5-decoupling.md` §4.4 的
+   两边同时对齐。**建议的收敛方向见 `docs/audits/rounds/audit-2026-09-02-round5-decoupling.md` §4.4 的
    `ProtocolScriptAdapter`。**
 3. ⚠️ **BLIK 复用 `IDEAL_` 前缀的 env 变量。** `adapters.py:156` 给 `blik` 注入的是
    `IDEAL_PROXY_SEED_FILE` / `IDEAL_FLOW_MODE`（外加 `IDEAL_BLIK_CODE`），并没有 `BLIK_` 前缀

@@ -1,6 +1,6 @@
 # 落地记录：冻结配置残留 + P1-A / P1-B（2026-10-07）
 
-> 落地来源：`docs/audits/scan-2026-10-07-protocol-registration.md` §4 的 **P1-A** / **P1-B**，
+> 落地来源：`docs/audits/scans/scan-2026-10-07-protocol-registration.md` §4 的 **P1-A** / **P1-B**，
 > 以及同日第二轮扫描（round 2）发现的 **P1-D 残留**与 **P1-5 机制行判据错位**。
 >
 > 全部新增开关**默认关**；本轮**零线上流量**。线上受控对照（P1-8 / P1-9 / P0-2b）
@@ -104,7 +104,7 @@ P0-A 的机制判据是 `mechanism_ok = marker_seen if expected else not marker_
 
 ## 7. 相关
 
-* `docs/audits/scan-2026-10-07-protocol-registration.md` — 发现与 §5 计划
+* `docs/audits/scans/scan-2026-10-07-protocol-registration.md` — 发现与 §5 计划
 * `docs/current/registration-ab-runbook.md` — P1-9 行、机制表、判定与停止规则
 * `docs/current/protocol-registration.md` — Validation limits（两道操纵检查的契约）
 * `sms_tool/config.py` — `_freeze` docstring（`Mapping` vs `dict` 的适用范围）

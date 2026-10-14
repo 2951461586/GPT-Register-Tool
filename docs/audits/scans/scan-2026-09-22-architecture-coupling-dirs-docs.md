@@ -212,7 +212,7 @@ SCC 1/2/3/6/7 有一个模块级方向 + 一个懒加载反边 ⇒ 同样在 imp
 ### 4.2 🔴 A4：`upi_link.py` 不在任何拆分/合并计划内
 
 - `sms_tool/upi_link.py` **2914 行**，是 `sms_tool/` 内最大模块，含第 2 长函数（572 行）。
-- `docs/audits/plan-2026-09-17-protocol-payment-extractor-consolidation.md`
+- `docs/audits/plans/plan-2026-09-17-protocol-payment-extractor-consolidation.md`
   全文检索 `upi` **命中 0 次** —— 该计划的覆盖面是 `services/protocol-payment/`
   的 blik / ideal / twint / kakao / momo / pix。
 - 该计划的实测结论是 ideal/twint **81% 顶层函数 AST 同构**，但**明确否决**「合并为单一参数化引擎」，

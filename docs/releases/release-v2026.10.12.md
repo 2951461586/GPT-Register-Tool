@@ -36,7 +36,7 @@
 
 ## 文档与工具
 
-- `docs/audits/scan-2026-10-11-at-revocation-survival.md`：AT 存活调查（§1–13），含参考项目 401 重登策略对照与 43 账号重登实测。
+- `docs/audits/scans/scan-2026-10-11-at-revocation-survival.md`：AT 存活调查（§1–13），含参考项目 401 重登策略对照与 43 账号重登实测。
 - `docs/current/protocol-registration.md`：默认栈、重试规则、重登行为。
 - 本轮清理：`runtime/tmp` 临时脚本与实验记录、已被替代的配置/代理备份、一次性诊断脚本与缓存均已删除（均为未跟踪、可再生数据）。
 

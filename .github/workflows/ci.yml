@@ -90,7 +90,7 @@ jobs:
       # CRLF->LF, the raw digest moved, every Sentinel issue call raised,
       # issuance silently degraded to the legacy issuer, and 126/126 accounts
       # failed
-      # (docs/audits/scan-2026-09-18-sentinel-runner-hash-mismatch.md).
+      # (docs/audits/scans/scan-2026-09-18-sentinel-runner-hash-mismatch.md).
       # `tests/governance/test_gate_list_consistency.py` pins which hook gates have no CI
       # or test coverage; this step removes `sentinel_asset_guard` from that
       # list, so the two must move together.

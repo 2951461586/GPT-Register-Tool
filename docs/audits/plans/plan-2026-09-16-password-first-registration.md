@@ -1,5 +1,7 @@
 # 立项：密码优先注册（password-first）— 2026-09-16
 
+> **状态（2026-10-14 复核）**：**未按 S0–S3 灰度原样落地**。相关能力以其他形态存在：`registration.reference_lane`（参考项目顺序的密码注册）与 relogin 路径的 `password_first_relogin` 开关（默认 `false`），以 `docs/current/protocol-registration.md` 为准。本文保留为历史立项快照。
+
 > **性质**：立项/方案文档，**未落地任何生产默认行为改动**。
 > 本文只定义「要验证的唯一假设」「实验设计」「落地边界与回滚」。
 > 背景与证据来源见 `scan-2026-09-16-protocol-registration-optimization.md` §P1-1 / §六。

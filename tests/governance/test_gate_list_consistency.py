@@ -46,7 +46,7 @@ _BACKTICKED_PY = re.compile(r"`([A-Za-z0-9_./-]+\.py)`")
 #: was added -- and it exists because ``sentinel-runner.js`` was rewritten
 #: uniformly CRLF->LF, the raw digest moved, every Sentinel issue call raised,
 #: issuance silently degraded to the legacy issuer, and 126/126 accounts failed
-#: (``docs/audits/scan-2026-09-18-sentinel-runner-hash-mismatch.md``). A gate
+#: (``docs/audits/scans/scan-2026-09-18-sentinel-runner-hash-mismatch.md``). A gate
 #: that only guards the accident that motivated it, in the one place a
 #: contributor can skip, is not guarding it. ``ci.yml`` now runs it.
 #:

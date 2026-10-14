@@ -44,7 +44,7 @@ They are complementary, not redundant:
 * ``sentinel_asset_guard`` -- "a pinned asset must match its pin".
 
 A file can satisfy the first and still break the second (uniform CRLF -> LF is
-exactly that case).  See ``docs/audits/scan-2026-09-18-sentinel-runner-hash-mismatch.md``.
+exactly that case).  See ``docs/audits/scans/scan-2026-09-18-sentinel-runner-hash-mismatch.md``.
 
 Standard library only: the hook may be run by any interpreter on PATH.
 

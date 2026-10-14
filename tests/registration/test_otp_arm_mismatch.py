@@ -4,8 +4,8 @@ The 2026-10-07/10-08 signin series measured that the stuck shape is the server
 arming a **passwordless** OTP arm while the client posts the password lane.  The
 pulse scheduler used to read every ``email_otp_send_stuck`` as an egress-level
 block and rotate the proxy pool -- the wrong lever, because no exit changes which
-arm the server picks (``docs/audits/scan-2026-10-07-protocol-registration.md``
-P2-2, ``docs/audits/landing-2026-10-08-signin-*.md``).
+arm the server picks (``docs/audits/scans/scan-2026-10-07-protocol-registration.md``
+P2-2, ``docs/audits/landings/landing-2026-10-08-signin-*.md``).
 
 Three pieces must line up or the change is inert:
 

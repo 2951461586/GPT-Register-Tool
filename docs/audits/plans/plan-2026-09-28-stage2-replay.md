@@ -1,5 +1,7 @@
 # 阶段 2 真实链路回放方案评估
 
+> **状态（2026-10-14 复核）**：**部分落地**。已有：`provider_profile.py`（数据半边）、`tests/payment_replay.py` / `tests/upi_replay.py` 回放基建与 `tests/governance/test_stage2_replay_selfcheck.py`。全链路回放门禁因本机没有录制而被跳过；在拿到录制并做 HEAD vs 参数化差分之前，剩余的 ideal/twint 非等价函数不应合并。
+
 - **日期**：2026-09-28
 - **状态**：**评估稿（未拍板、未动代码）**
 - **范围**：`services/protocol-payment/{ideal,twint}` 的 23 个非等价函数（阶段 1 已落地后）

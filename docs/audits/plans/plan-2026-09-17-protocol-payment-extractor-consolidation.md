@@ -1,5 +1,7 @@
 # 立项：协议支付提取器公共骨架抽取（ideal / twint / blik）
 
+> **状态（2026-10-14 复核）**：**阶段 1 已落地，阶段 3 未做**。已落地：重复度 ratchet（`scripts/extractor_parity_report.py`、`scripts/provider_decoupling_ratchet.py`）与 `services/protocol-payment/common/` 纯工具层（`proxy_url` / `payload_helpers` / `payment_predicates` / `provider_profile` 等）。ideal:twint 重复度 ratchet 的当前基线是 38 个函数；剩余函数依赖各模块自己的 `log` / `dump_http` / `requests` / profile，成对参数化仍需单独拍板与回放证据（见 `plan-2026-09-28-stage2-replay.md`）。
+
 - **日期**：2026-09-17
 - **状态**：**提案，未拍板**（本文档不含任何已落地的改动）
 - **范围**：`services/protocol-payment/{ideal,twint,blik}/`

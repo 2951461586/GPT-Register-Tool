@@ -1,7 +1,7 @@
 """Stage-2 self-check harness: HEAD vs parameterised, driven through replay.
 
 This is the S1 deliverable of
-``docs/audits/plan-2026-09-28-stage2-replay.md``: it proves the replay transport
+``docs/audits/plans/plan-2026-09-28-stage2-replay.md``: it proves the replay transport
 reports **zero difference when the code is identical**, and that it is
 **sensitive to a request-body change**.  Once S2-S5 land, the same driver runs
 the pre-change snapshot against the parameterised module.

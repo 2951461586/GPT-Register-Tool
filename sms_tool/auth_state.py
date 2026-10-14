@@ -208,7 +208,7 @@ def compact_auth_dump_text(stage, summary) -> str:
     「服务端回到已经见过的形状」这一步变成了不可回溯的一行 —— 任何基于日志的
     离线判据都会在那里系统性漏数据。实测代价：本扫描第一版关联脚本因此把
     19 个 dump 信号只识别出 3 个（见
-    ``docs/audits/scan-2026-09-16-protocol-registration-optimization.md`` P2-1）。
+    ``docs/audits/scans/scan-2026-09-16-protocol-registration-optimization.md`` P2-1）。
 
     这不是把降噪撤掉：``unchanged`` 分支（最常见的那种，实测占 41 行 dump 的 20 行）
     仍然塌成一行计数，省下的大头不动；``seen before`` 只从约 40 字符涨到与

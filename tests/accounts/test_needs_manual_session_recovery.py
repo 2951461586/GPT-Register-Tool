@@ -1,6 +1,6 @@
 """方案 B：把「已创建但无 session 且无密码」的账号从普通失败里分出来。
 
-出处：``docs/audits/plan-2026-09-16-partial-account-protocol-login.md`` §五 方案 B。
+出处：``docs/audits/plans/plan-2026-09-16-partial-account-protocol-login.md`` §五 方案 B。
 
 为什么值得单独一个字段
 ----------------------

@@ -187,7 +187,7 @@ def test_non_credential_keys_stay_readable():
 def test_handoff_storage_state_is_redacted_as_a_whole_subtree():
     """The protocol -> browser handoff payload carries live session cookies.
 
-    Decided 2026-10-05 (see ``docs/audits/plan-2026-10-05-inflow-challenge-handoff.md``
+    Decided 2026-10-05 (see ``docs/audits/plans/plan-2026-10-05-inflow-challenge-handoff.md``
     §3.4/§7): the handoff may be written under ``runtime/``, and its storage
     state must be covered by ``sensitive_policy.json``.
 

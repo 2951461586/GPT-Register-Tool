@@ -24,7 +24,7 @@
 - **signin 形状系列**（全部默认关，逐个单变量）—— `signin_screen_hint_login_or_signup`、
   `signin_prompt_login`、`signin_locale_ja_jp`；`prime_navigation_headers`（补齐
   `sec-fetch-site` / `sec-fetch-user`）。
-- **线上实测记录**（`docs/audits/landing-2026-10-08-signin-*.md`）：`locale=ja-JP` 的单轮成功
+- **线上实测记录**（`docs/audits/landings/landing-2026-10-08-signin-*.md`）：`locale=ja-JP` 的单轮成功
   **未复现**（1/5 vs 0/4）；成功与失败**唯一完美相关**的读数是
   `passwordless_email_otp_send_pending` 在 `after_otp_send` 里**不存在**，而不是
   `email_verification_mode`。
@@ -90,7 +90,7 @@
 - **`upi_link` 按依赖 DAG 拆为分层包**（`pipeline` 1824 → 585 行；`stages` 承载阶段函数）。
 - **`pay_link` 删 138 处死导入**；适配器共用 `_prepare` / `_finish_extractor`。
 - **身份收敛 / `phone_reuse` 拆分**（config / pool / lifecycle），身份只分配一次。
-- `docs/audits/plan-2026-10-08-paypal-family-boundaries.md` 记录 PayPal 家族的边界设计
+- `docs/audits/plans/plan-2026-10-08-paypal-family-boundaries.md` 记录 PayPal 家族的边界设计
   （P0：`paypal_extract.py` 已成 UPI 也依赖的事实共享库）。**仅设计，未实现。**
 
 ## 门禁与工具

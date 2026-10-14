@@ -52,7 +52,7 @@ It is **not** a correctness oracle and **not** a licence to merge code. Two
 functions being AST-identical proves they are redundant, not that collapsing
 them is safe -- the caller's context (which proxy file it reads, which country
 table it consults) may differ in ways the function body cannot show. Phase 1 of
-`docs/audits/plan-2026-09-17-protocol-payment-extractor-consolidation.md`
+`docs/audits/plans/plan-2026-09-17-protocol-payment-extractor-consolidation.md`
 requires differential testing before any extraction, and this tool supplies the
 *input list* for that work, nothing more.
 

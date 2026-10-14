@@ -120,7 +120,7 @@ gate/ratchet scripts are tooling that consumes the product rather than part of
 it. While they were in scope, `DEAD WEIGHT` reported ten `scripts/*.py` files as
 unreachable on every build -- all false positives, because CI, the git hooks and
 `tests/governance/test_*_ratchet.py` invoke them by filename rather than importing them
-(`docs/audits/scan-2026-10-04-import-cycle-decomposition.md` §7 measured 8 of 10
+(`docs/audits/scans/scan-2026-10-04-import-cycle-decomposition.md` §7 measured 8 of 10
 as false positives and deleted the 4 that were genuinely dead). Excluding the
 tree makes that section actionable again.
 
@@ -219,7 +219,7 @@ This is the authoritative, executable form of the boundary rules. Every row
 names the forbidden dependency and the grep that proves or disproves it; run
 them from the repository root. All rows are lifted from the pre-hardening
 snapshot
-`docs/audits/architecture-before-registration-hardening-2026-09-06.md` — the
+`docs/audits/records/architecture-before-registration-hardening-2026-09-06.md` — the
 source section is named in the last column so the original wording can be
 recovered.
 

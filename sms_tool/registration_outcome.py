@@ -242,7 +242,7 @@ def needs_manual_session_recovery(
 ) -> bool:
     """True when the address exists server-side but we hold neither a session nor its password.
 
-    This is 方案 B of ``docs/audits/plan-2026-09-16-partial-account-protocol-login.md``
+    This is 方案 B of ``docs/audits/plans/plan-2026-09-16-partial-account-protocol-login.md``
     §五: the bucket of accounts that are **not failures** -- they exist -- but that
     no code path of ours can turn into a session, so the only move left is a human
     logging in once.  The point of naming it separately is that a panel can then

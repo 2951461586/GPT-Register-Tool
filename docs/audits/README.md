@@ -34,6 +34,16 @@ rules live in `docs/architecture.md`, `docs/directory-map.md`, and
 > 2026-09-09 the convention follows the files. The single underscore file is
 > explicitly grandfathered above.
 
+Files live in one subdirectory per kind, derived from the filename prefix
+(`tests/governance/test_audit_index_completeness.py` enforces it):
+`rounds/` (`audit-*`), `scans/` (`scan*`), `plans/` (`plan-*`), `landings/`
+(`landing-*`) and `records/` (everything else: assessments, rotation runbooks,
+snapshots, module audits). Index rows below use bare file names; names are unique
+across the tree.
+
+Every `plan-*` file opens with a **状态（2026-10-14 复核）** line that says what has
+actually landed; read it before trusting the plan body.
+
 Release notes were archived to `docs/releases/` on 2026-09-06 and are indexed
 from `docs/README.md`.
 
@@ -41,7 +51,7 @@ from `docs/README.md`.
 
 64 files. Grouped by kind; newest first within each group.
 
-> Recount: `ls docs/audits/*.md docs/audits/*.txt | wc -l` — this number is
+> Recount: `find docs/audits -type f ( -name "*.md" -o -name "*.txt" ) | wc -l` (the README itself is counted) — this number is
 > pinned by `tests/test_audits_readme_index.py`, which fails when it and the
 > directory disagree. It read "31 files" while the directory held 39 for weeks,
 > and no gate could see it: `docs_consistency_scan.py` checks line-number
@@ -100,7 +110,7 @@ from `docs/README.md`.
 | `scan-2026-09-21-icloud-2fa-backfill-run.md` | 09-21 | iCloud 1167 账号 2FA 回填执行记录：`scripts/batch_enable_2fa.py` 端到端跑批的产出、失败分类与导出对账 |
 | `scan-2026-09-21-payment-eligibility-in-promotion-column.md` | 09-21 | 查优惠阶段支付资格检测扫描（**已落地**）：结论 = **能力早已存在（`payment_capability.payment_method_capability_probe`，走到 Checkout + Stripe init 即停，零副作用）但三条链路互不相通** —— 链路 A 查优惠只打 `GET accounts/check`（结构上拿不到 `payment_method_types`）· 链路 B 只藏在「协议支付」对话框的 `--payment-probe-only` · 链路 C 批量支付只落脱敏报告、不回写 `raw_json`。逐方式：card/upi/momo 已有 catalog 条目；**link / apple_pay 全仓 0 命中**，需实测确认 Stripe token 名。落地 = 新增 `accounts/account_payment_eligibility.py`（薄封装，避免 `account_promotion` 直依 5 个 provider）+ 查优惠阶段接线 + 徽章并入「优惠状态」列（新字段 `promotion_display`）。**用户拍板否决了原报告的三条倾向**：并入拼接（非新增列）/ 全量探测 / **默认开**（`--no-payment-eligibility` 作逃生阀）。附 6 条坑：`safe_snapshot()` 是**唯一**键级关卡（勘误：`desktop_read._PUBLIC_COLUMNS` 是数据库列白名单，不约束 `raw_json` 键）· **出口地区错配 = 静默错误**（US 出口探 IN 的 UPI 会拿到 US 方式表，判 ineligible 看着像「不支持」）· `promotion_marker_is_stale` 过期语义必须同步清空徽章 · 徽章组合单一 owner 放在无依赖的 `promotion_states.py`（否则 `desktop_read` 被迫导入支付目录）· `billing_currency` 不能改 `paypal_extract.CURRENCY_MAP`（会静默改其 EUR 回落）· 调 `payment_capability` 必须用**模块限定访问**（`from .. import payment_capability`），用 `from X import f` 会让 `patch("sms_tool.payment_capability.f")` 失效且顶层导入不涨 delayed-import ratchet |
 
-### Plans（立项 / 方案，**待拍板**，未落地生产默认行为）
+### Plans（立项 / 方案；落地程度以各文件开头的状态行为准）
 
 | File | Date | Subject |
 |---|---|---|

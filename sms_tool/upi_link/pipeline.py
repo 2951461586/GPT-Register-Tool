@@ -407,7 +407,7 @@ def _upi_assert_egress_contract(rt: Any) -> dict[str, Any] | None:
 # The stage body lives in `stages.py`; everything it resolves is read from THIS
 # module's namespace at call time, so `monkeypatch.setattr(pipeline, "<name>")`
 # and `patch("sms_tool.upi_link.pipeline.<name>")` keep working.  Design and the
-# per-test migration list: docs/audits/plan-2026-10-03-upi-pipeline-stage-split.md
+# per-test migration list: docs/audits/plans/plan-2026-10-03-upi-pipeline-stage-split.md
 
 
 def _exit_ops() -> ExitOps:

@@ -4,7 +4,7 @@ Why this exists
 ---------------
 ``sms_tool/upi_link/stages.py`` is now 13 ``_stage_*(ops, state)`` functions split
 out of the 1138-line ``run_upi_qr_link_once`` (see
-``docs/audits/plan-2026-10-03-upi-pipeline-stage-split.md`` §11).  The split was
+``docs/audits/plans/plan-2026-10-03-upi-pipeline-stage-split.md`` §11).  The split was
 proven equivalent by AST comparison, but *nothing* executed a single stage body:
 the flow was only ever patched out wholesale, so the body carried ~55% statement
 coverage and zero stage-level test net.

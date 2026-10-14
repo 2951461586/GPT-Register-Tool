@@ -1,6 +1,6 @@
 """Provider data profile for the protocol-payment extractors (stage 2, S2).
 
-The 2026-09-28 audit (``docs/audits/plan-2026-09-28-stage2-replay.md``) showed
+The 2026-09-28 audit (``docs/audits/plans/plan-2026-09-28-stage2-replay.md``) showed
 that most of the 23 functions where ``ideal`` and ``twint`` "differ" differ only
 in **provider data** or **log wording**, not in control flow.  This module owns
 the data half: the country/currency table, locale defaults, unavailable-error

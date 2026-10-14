@@ -405,7 +405,7 @@ public sealed class DesktopWindowSmokeTests
             Assert.Equal(0, selectedComboBoxCount);
             Assert.Equal(2, selectedCheckBoxCount);
             // checkedCount(3) > usable(1) must surface the local-exclusion count
-            // (added 2026-09-19; see docs/audits/scan-2026-09-19-selected-22-vs-reported-3of6.md).
+            // (added 2026-09-19; see docs/audits/scans/scan-2026-09-19-selected-22-vs-reported-3of6.md).
             Assert.Contains(selectedDialogTexts, text => text.Contains("本地排除 2 个", StringComparison.Ordinal));
             stage("verify mailbox selection routing");
             VerifyMailboxSelectionFileRouting(main);

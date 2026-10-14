@@ -1,7 +1,7 @@
 """Stripe confirm / redirect helpers shared by the protocol-payment extractors.
 
 Stage 2 (the parameterized stripe_* pairs) of
-`docs/audits/plan-2026-09-17-protocol-payment-extractor-consolidation.md`.
+`docs/audits/plans/plan-2026-09-17-protocol-payment-extractor-consolidation.md`.
 
 What is shared, and why it is safe
 ----------------------------------

@@ -148,7 +148,7 @@ def _is_otp_ban_signal(result: dict[str, Any]) -> bool:
     # 🔴 事务臂不匹配（F3）必须排在 ``_OTP_UNDISPATCHED_MARKER`` **之前**：组合串
     # ``email_otp_send_stuck:arm_mismatch`` 里仍含 ``otp_send_stuck`` 子串，顺序
     # 反了就会把「服务端选错臂」重新读成「出口被封」。换出口改不了服务端选臂，
-    # 所以它只该换池之外的另一条路（见 ``docs/audits/scan-2026-10-07`` P2-2）。
+    # 所以它只该换池之外的另一条路（见 ``docs/audits/scans/scan-2026-10-07`` P2-2）。
     if _OTP_ARM_MISMATCH_MARKER in error:
         return False
     if _OTP_UNDISPATCHED_MARKER in error:

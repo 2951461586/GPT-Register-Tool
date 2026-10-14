@@ -3,7 +3,7 @@
 Why this exists
 ---------------
 Stage 2 parameterises the 23 functions where ``ideal`` and ``twint`` genuinely
-differ.  The 2026-09-28 audit (``docs/audits/plan-2026-09-28-stage2-replay.md``)
+differ.  The 2026-09-28 audit (``docs/audits/plans/plan-2026-09-28-stage2-replay.md``)
 found most of those differences are provider *data* or *log wording*; only three
 change an HTTP request body.  The gate for any such change is therefore "same
 request stream, same final result", proven against recorded real traffic.

@@ -1,9 +1,11 @@
 # 指纹/设备层立项（2026-10-10）
 
+> **状态（2026-10-14 复核）**：**S0、S1 已落地，其后未做**。S0：观测 `oai-did` 来源（`7f92b84`）；S1：`device_identity_seeded_by_email` 开关与 p2-1 预注册实验（`be7ccf0`）。实验结论回流到 `landing-*` 或 `docs/current/protocol-registration.md` 之前，不改变生产默认行为。
+
 > **未落地。** 本文只给假设、可对照变量、预注册设计与明确否决项；不含实现。
 > 拍板并落地后，结论回流到 `landing-*` 或 `docs/current/protocol-registration.md`。
 >
-> 触发：`docs/audits/landing-2026-10-10-turb-protocol-diff.md` §7 —— p1-13 线上 pilot
+> 触发：`docs/audits/landings/landing-2026-10-10-turb-protocol-diff.md` §7 —— p1-13 线上 pilot
 > 证明**客户端 signin/authorize 上下文不控制**服务端那条挂起键。至此 wire 字段家族
 > （`screen_hint` / `prompt` / `locale` / `device_id` / passkey capabilities / `ccaps` /
 > `auth_return_target_category` / `ui_locales`）**整体关闭**，按预定顺序转向设备层。
@@ -217,9 +219,9 @@ S0 与 S1 **不需要** 60 个邮箱即可开工（S0 纯离线；S1 的开关�
 
 ## 11. 相关
 
-- `docs/audits/landing-2026-10-10-turb-protocol-diff.md` §7 —— p1-13 pilot，wire 家族关闭
-- `docs/audits/landing-2026-10-08-signin-locale.md` §4.3 —— 挂起键是唯一完美相关判据
-- `docs/audits/scan-2026-10-07-protocol-registration.md` P1-C —— Sentinel `p` 绑定
-- `docs/audits/plan-2026-10-05-inflow-challenge-handoff.md` §3.5 —— 熔断三条不变式
+- `docs/audits/landings/landing-2026-10-10-turb-protocol-diff.md` §7 —— p1-13 pilot，wire 家族关闭
+- `docs/audits/landings/landing-2026-10-08-signin-locale.md` §4.3 —— 挂起键是唯一完美相关判据
+- `docs/audits/scans/scan-2026-10-07-protocol-registration.md` P1-C —— Sentinel `p` 绑定
+- `docs/audits/plans/plan-2026-10-05-inflow-challenge-handoff.md` §3.5 —— 熔断三条不变式
 - `docs/current/registration-ab-runbook.md` —— 前置条件、机制表、判定规则
 - 参考仓：`runtime/tmp/refrepos/myfanhua/core/session.py:53-74`、`main.py:83`
