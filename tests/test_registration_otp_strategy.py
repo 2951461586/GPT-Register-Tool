@@ -3,7 +3,7 @@ import unittest
 from unittest.mock import patch
 
 from sms_tool import otp_strategy, registration
-from sms_tool.auth_headers import AUTH_IMPERSONATE
+from sms_tool.auth_headers import AUTH_IMPERSONATE, set_auth_fingerprint
 
 
 class FakeResponse:
@@ -59,6 +59,10 @@ class RegistrationOtpStrategyTests(unittest.TestCase):
             seen.update(kwargs)
             return FakeResponse(200)
 
+        # The shared profile is thread-local and otherwise falls back to the
+        # configured pool, so pin it: this test is about the OTP stage reading
+        # the shared profile, not about which profile the config selects.
+        set_auth_fingerprint(AUTH_IMPERSONATE)
         with patch.object(otp_strategy, "request_with_retry", side_effect=fake_request):
             otp_strategy.send_registration_email_otp(
                 session=object(),
