@@ -26,13 +26,9 @@ namespace SmsWorkbench
         private readonly string rootDir;
         private readonly string configDir;
         private readonly CancellationTokenSource _lifetimeCts = new();
-        private string searchText = "";
         private string countText = "1";
-        private string pageSizeText = "100";
-        private object scopeFilter = "全部";
         public LogViewModel LogPanel { get; } = new LogViewModel();
         private string statusText = "就绪";
-        private string pageStatusText = "第 0/0 页";
         private string totalCountText = "0";
         private string trialCountText = "0";
         private string registeredCountText = "0";
@@ -113,31 +109,15 @@ namespace SmsWorkbench
 
         public TaskListViewModel TaskList { get; } = new TaskListViewModel();
 
+        public PoolViewModel Pool { get; } = new PoolViewModel();
+
         // SelectedTabIndex removed (2026-09-02, round 6): no binding and no
         // code reads it. Tab selection is driven by the sidebar NavCommand.
-
-        public string SearchText
-        {
-            get => searchText;
-            set { searchText = value ?? ""; OnPropertyChanged(nameof(SearchText)); currentPage = 1; RefreshPagedRows(); UpdateSearchClearVisibility(); }
-        }
 
         public string CountText
         {
             get => countText;
             set { countText = value ?? "1"; OnPropertyChanged(nameof(CountText)); }
-        }
-
-        public string PageSizeText
-        {
-            get => pageSizeText;
-            set { pageSizeText = value ?? "100"; OnPropertyChanged(nameof(PageSizeText)); currentPage = 1; RefreshPagedRows(); }
-        }
-
-        public object ScopeFilter
-        {
-            get => scopeFilter;
-            set { scopeFilter = value; OnPropertyChanged(nameof(ScopeFilter)); currentPage = 1; RefreshPagedRows(); }
         }
 
         public string ChataiMailboxFilePath
@@ -150,12 +130,6 @@ namespace SmsWorkbench
         {
             get => statusText;
             set { statusText = value ?? ""; OnPropertyChanged(nameof(StatusText)); }
-        }
-
-        public string PageStatusText
-        {
-            get => pageStatusText;
-            set { pageStatusText = value ?? ""; OnPropertyChanged(nameof(PageStatusText)); }
         }
 
         public string TotalCountText
@@ -219,10 +193,16 @@ namespace SmsWorkbench
             ApplyCustomThemeColors(_currentTheme);
             ThemeIconGeometry = _currentTheme == Wpf.Ui.Appearance.ApplicationTheme.Dark ? MoonIcon : SunIcon;
 
-            ScopeFilter = "全部";
+            Pool.PropertyChanged += OnPoolPropertyChanged;
+            Pool.PageRefreshed += (_, _) => StatusText = Pool.SummaryText;
             RefreshPools();
             ApplySidebarCompact(false);
             Closing += OnWindowClosing;
+        }
+
+        private void OnPoolPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(PoolViewModel.SearchText)) UpdateSearchClearVisibility();
         }
 
         private void OnWindowClosing(object? sender, System.ComponentModel.CancelEventArgs e)

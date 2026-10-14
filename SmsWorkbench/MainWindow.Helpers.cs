@@ -139,11 +139,6 @@ namespace SmsWorkbench
             return int.TryParse(CountText, out int value) && value > 0 ? value : 1;
         }
 
-        private int PageSizeValue()
-        {
-            return int.TryParse(PageSizeText, out int value) && value > 0 ? Math.Min(value, 500) : 100;
-        }
-
         private string GetSessionsDir()
         {
             return Path.Combine(rootDir, "sessions");
@@ -212,12 +207,6 @@ namespace SmsWorkbench
         {
             string digits = new string((raw ?? "").Where(char.IsDigit).ToArray());
             return digits.Length == 0 ? "0" : digits;
-        }
-
-        private string DisplayText(object value)
-        {
-            if (value is ComboBoxItem item) return Convert.ToString(item.Content) ?? "";
-            return Convert.ToString(value) ?? "";
         }
 
         private string Mask(string value)

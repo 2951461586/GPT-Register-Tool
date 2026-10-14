@@ -574,7 +574,7 @@
                   <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
                 <Grid Grid.Column="0">
-                  <TextBox Style="{StaticResource SearchTextBox}" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" ToolTip="搜索邮箱、session、token、备注"/>
+                  <TextBox Style="{StaticResource SearchTextBox}" Text="{Binding Pool.SearchText, UpdateSourceTrigger=PropertyChanged}" ToolTip="搜索邮箱、session、token、备注"/>
                   <Path Width="14" Height="14" Stretch="Uniform" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="8,0,0,0"
                         Data="M11 3a8 8 0 1 0 0 16 8 8 0 0 0 0-16z M21 21l-4.35-4.35"
                         Stroke="{DynamicResource TextMuted}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
@@ -599,21 +599,21 @@
                   </Button>
                 </Grid>
                 <ComboBox Grid.Column="1" Margin="8,0,0,0"
-                          SelectedItem="{Binding ScopeFilter, Mode=TwoWay}"
+                          SelectedItem="{Binding Pool.ScopeFilter, Mode=TwoWay}"
                           ToolTip="筛选范围">
                   <sys:String>全部</sys:String>
                   <sys:String>有试用</sys:String>
                   <sys:String>待处理</sys:String>
                 </ComboBox>
-                <TextBox Grid.Column="2" Margin="8,0,0,0" Text="{Binding PageSizeText, UpdateSourceTrigger=PropertyChanged}" ToolTip="每页条数"/>
-                <TextBlock Grid.Column="3" Margin="12,0,0,0" Text="{Binding PageStatusText}" VerticalAlignment="Center" Foreground="{DynamicResource TextSub}"/>
+                <TextBox Grid.Column="2" Margin="8,0,0,0" Text="{Binding Pool.PageSizeText, UpdateSourceTrigger=PropertyChanged}" ToolTip="每页条数"/>
+                <TextBlock Grid.Column="3" Margin="12,0,0,0" Text="{Binding Pool.PageStatusText}" VerticalAlignment="Center" Foreground="{DynamicResource TextSub}"/>
               </Grid>
               <WrapPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
-                <Button Style="{StaticResource IconButton}" Margin="2,0" Click="FirstPage_Click" ToolTip="首页">
+                <Button Style="{StaticResource IconButton}" Margin="2,0" Command="{Binding Pool.FirstPageCommand}" ToolTip="首页">
                   <Path Style="{StaticResource ToolbarIconPath}"
                         Data="M11 19l-7-7 7-7 M19 19l-7-7 7-7"/>
                 </Button>
-                <Button Style="{StaticResource IconButton}" Margin="2,0" Click="PrevPage_Click" ToolTip="上一页">
+                <Button Style="{StaticResource IconButton}" Margin="2,0" Command="{Binding Pool.PreviousPageCommand}" ToolTip="上一页">
                   <Path Style="{StaticResource ToolbarIconPath}"
                         Data="M15 18l-6-6 6-6"/>
                 </Button>
@@ -624,11 +624,11 @@
                     <TextBlock Text="清空" Margin="4,0,0,0" VerticalAlignment="Center" FontSize="12"/>
                   </StackPanel>
                 </Button>
-                <Button Style="{StaticResource IconButton}" Margin="2,0" Click="NextPage_Click" ToolTip="下一页">
+                <Button Style="{StaticResource IconButton}" Margin="2,0" Command="{Binding Pool.NextPageCommand}" ToolTip="下一页">
                   <Path Style="{StaticResource ToolbarIconPath}"
                         Data="M9 18l6-6-6-6"/>
                 </Button>
-                <Button Style="{StaticResource IconButton}" Margin="2,0" Click="LastPage_Click" ToolTip="末页">
+                <Button Style="{StaticResource IconButton}" Margin="2,0" Command="{Binding Pool.LastPageCommand}" ToolTip="末页">
                   <Path Style="{StaticResource ToolbarIconPath}"
                         Data="M13 5l7 7-7 7 M5 5l7 7-7 7"/>
                 </Button>
@@ -645,8 +645,8 @@
 
           <Border Grid.Row="2" Margin="0,0,0,8" Padding="0" CornerRadius="4" Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource Line}" BorderThickness="1">
             <DataGrid x:Name="AccountGrid"
-                      ItemsSource="{Binding PagedRows}"
-                      SelectedItem="{Binding SelectedRow}"
+                      ItemsSource="{Binding Pool.PagedRows}"
+                      SelectedItem="{Binding Pool.SelectedRow}"
                       AutoGenerateColumns="False"
                       CanUserAddRows="False"
                       HeadersVisibility="Column"

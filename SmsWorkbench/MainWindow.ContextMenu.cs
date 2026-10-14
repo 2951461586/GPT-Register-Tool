@@ -10,7 +10,7 @@ namespace SmsWorkbench
 
         private void SearchClear_Click(object sender, RoutedEventArgs e)
         {
-            SearchText = "";
+            Pool.SearchText = "";
             UpdateSearchClearVisibility();
         }
 
@@ -23,7 +23,7 @@ namespace SmsWorkbench
         {
             if (SearchClearButton != null)
             {
-                SearchClearButton.Visibility = string.IsNullOrEmpty(SearchText)
+                SearchClearButton.Visibility = string.IsNullOrEmpty(Pool.SearchText)
                     ? Visibility.Collapsed
                     : Visibility.Visible;
             }

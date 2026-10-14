@@ -7,25 +7,6 @@ namespace SmsWorkbench
     public partial class MainWindow
     {
         // Pool/session loading, filtering, overview
-        private bool FilterRow(object item)
-        {
-            return item is PoolRow row && FilterRow(row);
-        }
-
-        private bool FilterRow(PoolRow row)
-        {
-            if (row == null) return false;
-            string scope = DisplayText(ScopeFilter);
-            string term = (SearchText ?? "").Trim().ToLowerInvariant();
-
-            if (scope == "有试用" && !PromotionStatusPresentation.IsTrialEligible(row.PromotionStatus, row.PromotionState)) return false;
-            if (scope == "待处理" && !RegistrationStatusPresentation.NeedsAttention(row)) return false;
-            if (term.Length == 0) return true;
-
-            string text = (row.Identifier + " " + row.AccountType + " " + row.Status + " " + row.Notes).ToLowerInvariant();
-            return text.Contains(term);
-        }
-
         private bool IsMailboxPoolLikeRow(PoolRow row)
         {
             if (row == null) return false;
@@ -43,7 +24,7 @@ namespace SmsWorkbench
 
         /// <summary>
         /// Refresh that keeps the operator's place in the grid. Used by the
-        /// mid-batch hot refresh: rebuilding <c>allRows</c> from scratch drops
+        /// mid-batch hot refresh: rebuilding <c>Pool.AllRows</c> from scratch drops
         /// both the checkbox state and the current page, and a 25-account
         /// liveness batch would otherwise yank the view back to page one and
         /// clear the selection two dozen times.
@@ -61,15 +42,15 @@ namespace SmsWorkbench
             // Snapshot before the clear: rows are rebuilt from scratch below,
             // so identity has to be carried across by email.
             HashSet<string>? checkedIds = preserveView
-                ? allRows.Where(r => r.IsChecked)
+                ? Pool.AllRows.Where(r => r.IsChecked)
                          .Select(r => (r.Identifier ?? "").Trim().ToLowerInvariant())
                          .Where(id => id.Length > 0)
                          .ToHashSet(StringComparer.OrdinalIgnoreCase)
                 : null;
-            int restorePage = preserveView ? currentPage : 1;
+            int restorePage = preserveView ? Pool.CurrentPage : 1;
             try
             {
-                allRows.Clear();
+                Pool.AllRows.Clear();
                 try
                 {
                     // One merged request (accounts + mailbox pool) through the
@@ -87,7 +68,7 @@ namespace SmsWorkbench
                 DeduplicateRows();
                 if (checkedIds != null)
                 {
-                    foreach (PoolRow row in allRows)
+                    foreach (PoolRow row in Pool.AllRows)
                     {
                         string id = (row.Identifier ?? "").Trim();
                         if (id.Length > 0 && checkedIds.Contains(id))
@@ -96,10 +77,10 @@ namespace SmsWorkbench
                 }
                 // RefreshPagedRows already clamps an out-of-range page, so a
                 // restored page stays valid even when the row count shrinks.
-                currentPage = restorePage;
+                Pool.CurrentPage = restorePage;
                 UpdateOverview();
-                RefreshPagedRows();
-                StatusText = $"共 {allRows.Count} 条；当前筛选 {filteredCount} 条";
+                Pool.RefreshPagedRows();
+                StatusText = Pool.SummaryText;
                 Log("邮箱池和 session 状态已刷新。");
             }
             finally
@@ -108,37 +89,12 @@ namespace SmsWorkbench
             }
         }
 
-        private void RefreshPagedRows()
-        {
-            if (PagedRows == null) return;
-            var filtered = AccountGridOrdering.Apply(
-                allRows.Where(FilterRow),
-                accountSortMember,
-                accountSortDirection).ToList();
-            filteredCount = filtered.Count;
-            int pageSize = PageSizeValue();
-            int pageCount = Math.Max(1, (int)Math.Ceiling(filteredCount / (double)pageSize));
-            if (currentPage < 1) currentPage = 1;
-            if (currentPage > pageCount) currentPage = pageCount;
-
-            PagedRows.Clear();
-            foreach (PoolRow row in filtered.Skip((currentPage - 1) * pageSize).Take(pageSize))
-            {
-                PagedRows.Add(row);
-            }
-
-            int start = filteredCount == 0 ? 0 : (currentPage - 1) * pageSize + 1;
-            int end = filteredCount == 0 ? 0 : Math.Min(filteredCount, currentPage * pageSize);
-            PageStatusText = $"第 {currentPage}/{pageCount} 页，显示 {start}-{end} / {filteredCount}";
-            StatusText = $"共 {allRows.Count} 条；当前筛选 {filteredCount} 条";
-        }
-
         private void UpdateOverview()
         {
-            int trialEligible = allRows.Count(r => PromotionStatusPresentation.IsTrialEligible(r.PromotionStatus, r.PromotionState));
-            int registered = allRows.Count(IsRegisteredRow);
-            int attention = allRows.Count(RegistrationStatusPresentation.NeedsAttention);
-            TotalCountText = allRows.Count.ToString();
+            int trialEligible = Pool.AllRows.Count(r => PromotionStatusPresentation.IsTrialEligible(r.PromotionStatus, r.PromotionState));
+            int registered = Pool.AllRows.Count(IsRegisteredRow);
+            int attention = Pool.AllRows.Count(RegistrationStatusPresentation.NeedsAttention);
+            TotalCountText = Pool.AllRows.Count.ToString();
             TrialCountText = trialEligible.ToString();
             RegisteredCountText = registered.ToString();
             AttentionCountText = attention.ToString();
@@ -172,7 +128,7 @@ namespace SmsWorkbench
         private void DeduplicateRows()
         {
             var best = new Dictionary<string, PoolRow>(StringComparer.OrdinalIgnoreCase);
-            foreach (PoolRow row in allRows.ToList())
+            foreach (PoolRow row in Pool.AllRows.ToList())
             {
                 string key = NormalizeEmailKey(row.Identifier);
                 if (key.Length == 0) continue;
@@ -183,14 +139,14 @@ namespace SmsWorkbench
             }
 
             if (best.Count == 0) return;
-            var deduped = allRows.Where(row =>
+            var deduped = Pool.AllRows.Where(row =>
             {
                 string key = NormalizeEmailKey(row.Identifier);
                 return key.Length == 0 || ReferenceEquals(best[key], row);
             }).ToList();
-            if (deduped.Count == allRows.Count) return;
-            allRows.Clear();
-            foreach (PoolRow row in deduped) allRows.Add(row);
+            if (deduped.Count == Pool.AllRows.Count) return;
+            Pool.AllRows.Clear();
+            foreach (PoolRow row in deduped) Pool.AllRows.Add(row);
         }
 
         private int RowPriority(PoolRow row)
@@ -259,7 +215,7 @@ namespace SmsWorkbench
                 : rawLine;
             string refreshToken = JsonString(line, "refresh_token");
             string token = JsonString(line, "token");
-            allRows.Add(new PoolRow
+            Pool.AllRows.Add(new PoolRow
             {
                 Id = "M" + (index + 1),
                 CreatedAt = fileTime,
@@ -456,7 +412,7 @@ namespace SmsWorkbench
                 RawLine = GetString(data, "id"),
                 MailboxProvider = provider
             };
-            allRows.Add(row);
+            Pool.AllRows.Add(row);
         }
 
         internal static string MailboxTypeDisplay(string provider, string email = "")

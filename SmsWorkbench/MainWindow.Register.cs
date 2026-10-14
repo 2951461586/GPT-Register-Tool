@@ -228,8 +228,8 @@ namespace SmsWorkbench
                 .ToList();
             if (rows.Count == 0)
             {
-                rows = allRows
-                    .Where(FilterRow)
+                rows = Pool.AllRows
+                    .Where(Pool.Matches)
                     .Where(r => !string.IsNullOrWhiteSpace(r.Identifier))
                     .ToList();
             }

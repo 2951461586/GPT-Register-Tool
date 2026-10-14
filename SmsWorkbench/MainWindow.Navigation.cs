@@ -64,7 +64,7 @@ namespace SmsWorkbench
 
         private PoolRow? SelectedEmailRowOrNotify(string action)
         {
-            PoolRow? row = SelectedRow ?? (AccountGrid.SelectedItem as PoolRow);
+            PoolRow? row = Pool.SelectedRow ?? (AccountGrid.SelectedItem as PoolRow);
             if (row == null)
             {
                 ShowEmailSelectionRequired(action);
@@ -94,10 +94,10 @@ namespace SmsWorkbench
 
         private List<PoolRow> SelectedRowsOrCurrent()
         {
-            var rows = allRows.Where(r => r.IsChecked).ToList();
+            var rows = Pool.CheckedRows();
             if (rows.Count == 0)
             {
-                PoolRow? row = SelectedRow ?? (AccountGrid.SelectedItem as PoolRow);
+                PoolRow? row = Pool.SelectedRow ?? (AccountGrid.SelectedItem as PoolRow);
                 if (row != null) rows.Add(row);
             }
             return rows;
@@ -117,43 +117,13 @@ namespace SmsWorkbench
                 column.SortDirection = null;
             }
             e.Column.SortDirection = next;
-            accountSortMember = member;
-            accountSortDirection = next;
-            currentPage = 1;
-            RefreshPagedRows();
-        }
-
-        private void FirstPage_Click(object sender, RoutedEventArgs e)
-        {
-            currentPage = 1;
-            RefreshPagedRows();
-        }
-
-        private void PrevPage_Click(object sender, RoutedEventArgs e)
-        {
-            currentPage--;
-            RefreshPagedRows();
-        }
-
-        private void NextPage_Click(object sender, RoutedEventArgs e)
-        {
-            currentPage++;
-            RefreshPagedRows();
-        }
-
-        private void LastPage_Click(object sender, RoutedEventArgs e)
-        {
-            int pageSize = PageSizeValue();
-            int count = allRows.Count(FilterRow);
-            currentPage = Math.Max(1, (int)Math.Ceiling(count / (double)pageSize));
-            RefreshPagedRows();
+            Pool.SortBy(member, next);
         }
 
         private void ClearSelection_Click(object sender, RoutedEventArgs e)
         {
-            foreach (PoolRow row in allRows) row.IsChecked = false;
-            SelectedRow = null;
-            OnPropertyChanged(nameof(SelectedRow));
+            Pool.UncheckAll();
+            Pool.SelectedRow = null;
             if (AccountGrid != null)
             {
                 AccountGrid.SelectedItem = null;
@@ -164,10 +134,7 @@ namespace SmsWorkbench
 
         private void SelectAllFiltered_Click(object sender, RoutedEventArgs e)
         {
-            foreach (PoolRow row in allRows.Where(FilterRow))
-            {
-                row.IsChecked = true;
-            }
+            Pool.CheckAllFiltered();
         }
     }
 }

@@ -25,7 +25,7 @@ namespace SmsWorkbench
                 .ToList();
             var rows = selected.Count > 0
                 ? selected
-                : allRows.Where(IsImportableAccountRow)
+                : Pool.AllRows.Where(IsImportableAccountRow)
                     .Where(r => !string.IsNullOrWhiteSpace(r.Identifier))
                     .GroupBy(r => r.Identifier.Trim().ToLowerInvariant())
                     .Select(g => g.First())
@@ -67,11 +67,11 @@ namespace SmsWorkbench
             var rows = SelectedRowsOrCurrent();
             if (rows.Count == 0)
             {
-                rows = allRows.Where(FilterRow).ToList();
+                rows = Pool.AllRows.Where(Pool.Matches).ToList();
             }
             if (rows.Count == 0)
             {
-                rows = allRows.ToList();
+                rows = Pool.AllRows.ToList();
             }
             return rows;
         }
