@@ -142,7 +142,7 @@ namespace SmsWorkbench
                 Dictionary<string, object>? item = await BuildAccountExportJsonAsync(row);
                 if (item != null)
                 {
-                    string key = JsonExportDedupKey(item, row);
+                    string key = AccountExportJson.DedupKey(item, row.Identifier);
                     if (seen.Add(key))
                     {
                         items.Add(item);
@@ -656,13 +656,13 @@ namespace SmsWorkbench
                 source = authSession;
             }
 
-            if (CloneExportJsonValue(source) is not Dictionary<string, object> clean || clean.Count == 0)
+            if (AccountExportJson.Clone(source) is not Dictionary<string, object> clean || clean.Count == 0)
             {
                 return null;
             }
 
-            EnsureJsonExportEmail(clean, row);
-            EnsureJsonExportRefreshToken(clean, data);
+            AccountExportJson.EnsureEmail(clean, row.Identifier);
+            AccountExportJson.EnsureRefreshToken(clean, data);
 
             return clean;
         }
@@ -688,79 +688,6 @@ namespace SmsWorkbench
                 Log("读取账号导出 backend 失败：" + SensitiveDataSanitizer.Redact(row.Identifier) + " " + SensitiveDataSanitizer.Redact(ex.Message));
                 return false;
             }
-        }
-
-        private object CloneExportJsonValue(object value)
-        {
-            if (value is Dictionary<string, object> map)
-            {
-                var clean = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
-                foreach (var pair in map)
-                {
-                    clean[pair.Key] = CloneExportJsonValue(pair.Value);
-                }
-                return clean;
-            }
-            if (value is List<object> list)
-            {
-                return list.Select(CloneExportJsonValue).ToList();
-            }
-            return value;
-        }
-
-        private void EnsureJsonExportEmail(Dictionary<string, object> item, PoolRow row)
-        {
-            string email = (row?.Identifier ?? "").Trim();
-            if (email.Length == 0) return;
-            if (!BackendJson.TryGetMap(item, "user", out var user))
-            {
-                user = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
-                item["user"] = user;
-            }
-            if (BackendJson.GetString(user, "email").Length == 0)
-            {
-                user["email"] = email;
-            }
-        }
-
-        private void EnsureJsonExportRefreshToken(Dictionary<string, object> item, Dictionary<string, object> sourceData)
-        {
-            string rt = FirstJsonString(
-                BackendJson.GetString(sourceData, "oauth_refresh_token"),
-                BackendJson.GetString(sourceData, "refresh_token"),
-                BackendJson.NestedString(sourceData, "codex_session", "refresh_token"),
-                BackendJson.NestedString(sourceData, "token", "refresh_token"),
-                BackendJson.NestedString(sourceData, "credentials", "refresh_token")
-            );
-            item["refresh_token"] = rt;
-            if (BackendJson.GetString(item, "oauth_refresh_token").Length == 0 && rt.Length > 0)
-            {
-                item["oauth_refresh_token"] = rt;
-            }
-        }
-
-        private string FirstJsonString(params string[] values)
-        {
-            foreach (string value in values)
-            {
-                string text = (value ?? "").Trim();
-                if (text.Length > 0) return text;
-            }
-            return "";
-        }
-
-        private string JsonExportDedupKey(Dictionary<string, object> item, PoolRow row)
-        {
-            if (BackendJson.TryGetMap(item, "user", out var user))
-            {
-                string userEmail = BackendJson.GetString(user, "email").Trim();
-                if (userEmail.Length > 0) return userEmail.ToLowerInvariant();
-            }
-            string email = BackendJson.GetString(item, "email").Trim();
-            if (email.Length > 0) return email.ToLowerInvariant();
-            email = (row?.Identifier ?? "").Trim();
-            if (email.Length > 0) return email.ToLowerInvariant();
-            return JsonSerializer.Serialize(item);
         }
 
         /// Returns the export line, or null when the row cannot be exported.
