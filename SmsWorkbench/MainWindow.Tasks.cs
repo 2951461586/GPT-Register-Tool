@@ -126,8 +126,7 @@ namespace SmsWorkbench
             }
 
             string safeArgs = FormatBackendArgsForDisplay(args);
-            var task = new TaskRow { Name = "批次 " + taskSeq++, Task = taskName, Status = "运行中", Info = safeArgs };
-            Tasks.Add(task);
+            TaskRow task = TaskList.StartBatch(taskName, safeArgs);
             ScrollTaskGridToBottom();
             DateTime started = DateTime.Now;
             AccountBatchProgressTracker? accountProgress = string.IsNullOrWhiteSpace(progressDomain)
@@ -401,10 +400,11 @@ namespace SmsWorkbench
 
         private void ScrollTaskGridToBottom()
         {
-            if (TaskGrid == null || Tasks.Count == 0) return;
+            if (TaskGrid == null || TaskList.Last == null) return;
             Dispatcher.BeginInvoke(new Action(() =>
             {
-                object last = Tasks[Tasks.Count - 1];
+                object? last = TaskList.Last;
+                if (last == null) return;
                 TaskGrid.SelectedItem = last;
                 TaskGrid.ScrollIntoView(last);
             }), DispatcherPriority.Background);

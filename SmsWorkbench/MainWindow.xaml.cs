@@ -26,7 +26,6 @@ namespace SmsWorkbench
         private readonly string rootDir;
         private readonly string configDir;
         private readonly CancellationTokenSource _lifetimeCts = new();
-        private int taskSeq = 1;
         private string searchText = "";
         private string countText = "1";
         private string pageSizeText = "100";
@@ -120,7 +119,7 @@ namespace SmsWorkbench
         // contract, so the field is nullable rather than force-initialised.
         public event PropertyChangedEventHandler? PropertyChanged;
 
-        public ObservableCollection<TaskRow> Tasks { get; } = new ObservableCollection<TaskRow>();
+        public TaskListViewModel TaskList { get; } = new TaskListViewModel();
 
         // SelectedTabIndex removed (2026-09-02, round 6): no binding and no
         // code reads it. Tab selection is driven by the sidebar NavCommand.
@@ -372,23 +371,6 @@ namespace SmsWorkbench
     {
         public int Workers { get; set; } = 4;
         public bool AutoRelogin { get; set; }
-    }
-
-    public sealed partial class TaskRow : ObservableObject
-    {
-        [ObservableProperty] private string status = "";
-        [ObservableProperty] private string cost = "";
-        [ObservableProperty] private string doneAt = "";
-        // Info IS mutated while the task runs (MainWindow.Tasks.cs) and is bound
-        // by MainWindow.xaml, so unlike Name/Task/Retry below it must raise
-        // PropertyChanged — an auto-property here silently froze the column.
-        [ObservableProperty] private string info = "";
-        // Name/Task/Retry are assigned once before the row enters the
-        // ObservableCollection and never mutated afterwards, so they need no
-        // notification. Do not "fix" them without checking for runtime writers.
-        public string Name { get; set; } = "";
-        public string Task { get; set; } = "";
-        public string Retry { get; set; } = "0";
     }
 
     /// <summary>

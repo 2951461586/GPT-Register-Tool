@@ -809,7 +809,7 @@
             </Grid.RowDefinitions>
             <Border Grid.Row="0" Padding="0" CornerRadius="4" Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource Line}" BorderThickness="1">
               <DataGrid x:Name="TaskGrid"
-                        ItemsSource="{Binding Tasks}"
+                        ItemsSource="{Binding TaskList.Tasks}"
                         AutoGenerateColumns="False"
                         CanUserAddRows="False"
                         HeadersVisibility="Column"
