@@ -172,10 +172,10 @@ def test_ratchet_holds_for_the_current_tree():
 
 
 def test_summary_facts_are_pinned():
-    """238 same-named defs: 192 already migrated, 0 verbatim copies, 46 forks."""
+    """235 same-named defs: 189 already migrated, 0 verbatim copies, 46 forks."""
     assert pdr.analyze(ROOT).summary() == {
-        "same_named_total": 238,
-        pdr.DELEGATING: 192,
+        "same_named_total": 235,
+        pdr.DELEGATING: 189,
         pdr.IDENTICAL: 0,
         pdr.DIVERGENT: 46,
         "files_with_frozen_pairs": 7,
@@ -186,9 +186,9 @@ def test_the_migrated_extractors_have_no_verbatim_copies_left():
     """Pin the three migrated extractors so an inlining regression fails."""
     analysis = pdr.analyze(ROOT)
     expected_delegating = {
-        "ideal/ideal_qr_extract.py": 67,
-        "twint/twint_extract.py": 67,
-        "blik/blik_qr_extract.py": 47,
+        "ideal/ideal_qr_extract.py": 66,
+        "twint/twint_extract.py": 66,
+        "blik/blik_qr_extract.py": 46,
     }
     expected_divergent = {
         "ideal/ideal_qr_extract.py": 2,
@@ -216,7 +216,7 @@ def test_blik_carries_the_documented_divergent_bulk():
     """
     analysis = pdr.analyze(ROOT)
     counts = analysis.counts_for("blik/blik_qr_extract.py")
-    assert counts == {pdr.DELEGATING: 47, pdr.IDENTICAL: 0, pdr.DIVERGENT: 32}
+    assert counts == {pdr.DELEGATING: 46, pdr.IDENTICAL: 0, pdr.DIVERGENT: 32}
 
 
 def test_momo_shares_the_pure_primitives_and_keeps_its_two_forks():

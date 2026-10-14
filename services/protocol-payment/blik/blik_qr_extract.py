@@ -83,6 +83,13 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 PROTOCOL_ROOT = SCRIPT_DIR.parent
 if str(PROTOCOL_ROOT) not in sys.path:
     sys.path.insert(0, str(PROTOCOL_ROOT))
+from common.payload_helpers import (
+    format_payment_summary,
+    infer_processor_entity,
+    normalize_access_token as normalize_token,
+    payment_page_summary,
+    stripe_browser_id,
+)
 from common.extractor_helpers import (
     is_direct_remove_proxy_error as shared_is_direct_remove_proxy_error,
     is_proxy_health_failure as shared_is_proxy_health_failure,
@@ -118,7 +125,6 @@ from common.redaction import (
     register_proxy_for_redaction as shared_register_proxy_for_redaction,
 )
 from common.proxy_bookkeeping import (
-    find_named_token as shared_find_named_token,
     is_known_static_host as shared_is_known_static_host,
     proxy_key as shared_proxy_key,
     proxy_label as shared_proxy_label,
@@ -301,10 +307,6 @@ def random_user_agent() -> str:
 
 def random_runtime_version() -> str:
     return os.environ.get("PP_RUNTIME_VERSION", "").strip() or DEFAULT_STRIPE_RUNTIME_VERSION
-
-
-def stripe_browser_id() -> str:
-    return f"{uuid.uuid4()}{uuid.uuid4().hex[:8]}"
 
 
 def build_email(first_name: str, last_name: str) -> str:
@@ -1374,57 +1376,8 @@ def token_key_name(value: Any) -> str:
     return shared_token_key_name(value)
 
 
-def find_named_token(payload: Any, aliases: tuple[str, ...]) -> str:
-    """Delegate to ``common/proxy_bookkeeping.py``."""
-    return shared_find_named_token(payload, aliases)
-
-
 def collect_strings(payload: Any, result: list[str] | None = None) -> list[str]:
     return common_collect_strings(payload, result)
-
-
-def find_session_cookie(payload: Any) -> str:
-    for value in collect_strings(payload):
-        match = re.search(r"(?:^|[;\s])__Secure-next-auth\.session-token=([^;\s]+)", value)
-        if match:
-            return unquote(match.group(1))
-    return ""
-
-
-def normalize_token(raw: str) -> tuple[str, str]:
-    text = str(raw or "").strip()
-    if not text:
-        return "", ""
-    session_token = ""
-    if text.startswith("{") or text.startswith("["):
-        try:
-            data = json.loads(text)
-            access_token = find_named_token(
-                data,
-                (
-                    "accessToken",
-                    "access_token",
-                    "token",
-                    "bearerToken",
-                    "bearer_token",
-                    "jwt",
-                ),
-            )
-            session_token = find_named_token(
-                data,
-                (
-                    "sessionToken",
-                    "session_token",
-                    "nextAuthSessionToken",
-                    "next_auth_session_token",
-                    "__Secure-next-auth.session-token",
-                    "secureNextAuthSessionToken",
-                ),
-            ) or find_session_cookie(data)
-            text = access_token
-        except json.JSONDecodeError:
-            pass
-    return text, session_token
 
 
 def load_token() -> tuple[str, str]:
@@ -2185,56 +2138,12 @@ def raise_if_setup_intent_blocked(payload: Any, context: str) -> None:
     raise RuntimeError(f"{context}: setup_intent.last_setup_error: {last_error}")
 
 
-def infer_processor_entity(payload: Any) -> str:
-    for value in collect_strings(payload):
-        match = re.search(r"[?&]processor_entity=([A-Za-z0-9_]+)", value)
-        if match:
-            return match.group(1)
-    return ""
-
-
-def payment_page_summary(payload: Any) -> dict[str, Any]:
-    if not isinstance(payload, dict):
-        return {}
-    elements_options = payload.get("elements_options") if isinstance(payload.get("elements_options"), dict) else {}
-    submission = find_submission_attempt(payload)
-    next_action = first_value_by_key(payload, "next_action")
-    payment_intent = first_value_by_key(payload, "payment_intent")
-    setup_intent = first_value_by_key(payload, "setup_intent")
-    summary: dict[str, Any] = {
-        "object": payload.get("object"),
-        "id": payload.get("id"),
-        "status": payload.get("status"),
-        "payment_status": payload.get("payment_status"),
-        "amount": elements_options.get("amount") if elements_options else first_value_by_key(payload, "amount"),
-        "currency": payload.get("currency") or (elements_options.get("currency") if elements_options else None),
-        "mode": elements_options.get("mode") if elements_options else payload.get("mode"),
-        "payment_method_types": elements_options.get("payment_method_types") if elements_options else None,
-        "submission_state": submission.get("state") if submission else None,
-        "submission_status": submission.get("status") if submission else None,
-        "has_next_action": isinstance(next_action, dict) and bool(next_action),
-    }
-    if isinstance(payment_intent, dict):
-        summary["payment_intent_status"] = payment_intent.get("status")
-    elif isinstance(payment_intent, str):
-        summary["payment_intent"] = payment_intent
-    if isinstance(setup_intent, dict):
-        summary["setup_intent_status"] = setup_intent.get("status")
-    elif isinstance(setup_intent, str):
-        summary["setup_intent"] = setup_intent
-    return {key: value for key, value in summary.items() if value not in (None, "", [], {})}
-
-
 def log_payment_page_summary(stage: str, payload: Any) -> None:
     summary = payment_page_summary(payload)
     if not summary:
         return
     compact = format_payment_summary(summary)
     log(f"{stage} 返回摘要: {compact}")
-
-
-def format_payment_summary(summary: dict[str, Any]) -> str:
-    return ", ".join(f"{key}={value}" for key, value in summary.items())
 
 
 def warmup_approve_context(chatgpt: requests.Session, checkout_page_url: str) -> None:
