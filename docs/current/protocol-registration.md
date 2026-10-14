@@ -330,7 +330,7 @@ first consumer needs it (S2) rather than carrying an unused import.
 
 | # | Invariant | Pinned by |
 | --- | --- | --- |
-| 1 | the circuit is written only *after* the challenge path has failed, never before it — a challenge-labelled `403` still opens the breaker | `tests/test_edge_challenge_verdict.py::CircuitInvariantTests::test_a_challenge_labelled_403_still_opens_the_circuit` |
+| 1 | the circuit is written only *after* the challenge path has failed, never before it — a challenge-labelled `403` still opens the breaker | `tests/registration/test_edge_challenge_verdict.py::CircuitInvariantTests::test_a_challenge_labelled_403_still_opens_the_circuit` |
 | 2 | after rotating the exit the circuit must be cleared, **including the challenge label** (`clear_session_circuit`), or the next exit inherits a challenge that never happened there | `...::test_clear_session_circuit_resets_the_challenge_label` |
 | 3 | the challenge path adds no new failure **class** — the suffix must not re-classify or change terminality | `...::test_the_suffix_does_not_change_the_failure_class` |
 
@@ -498,7 +498,7 @@ exit/mailbox supplier are single; treat it as a strong lead, not a proven fix.
 
 The shipped default is that measured stack: passwordless `login_or_signup`, SDK
 `20260810913b` with the SO header, `reference_lane` off, warm-up off
-(`tests/test_default_registration_stack.py` pins it). No switch is needed to get it.
+(`tests/registration/test_default_registration_stack.py` pins it). No switch is needed to get it.
 
 Retry rule: when the password lane already got `user/register` 200, any later failure
 is tagged `|password_claimed_unfinished` (`failure_registry.PASSWORD_CLAIMED_MARKER`).

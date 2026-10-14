@@ -58,7 +58,7 @@ except ImportError:
 # ``curl_requests`` / ``AUTH_FINGERPRINT_PROFILES`` / ``CHATGPT_TIMEOUT``.  Those
 # are this module's own imports, not symbols it owns; declaring them would repeat
 # the mechanical-split leak that put ``json`` and ``re`` into
-# ``paypal_link.__all__`` (see ``tests/test_all_export_hygiene.py``).  They stay
+# ``paypal_link.__all__`` (see ``tests/governance/test_all_export_hygiene.py``).  They stay
 # reachable as attributes, which is all a ``patch.object(payment_wire, ...)``
 # target needs.
 #

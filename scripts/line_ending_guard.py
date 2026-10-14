@@ -6,7 +6,7 @@ The repo had no ``.gitattributes`` until 2026-09-17, so line endings were
 decided implicitly by ``core.autocrlf=true``: index LF, worktree CRLF.  Any
 tool or hand-edit that writes a bare ``\\n`` into a CRLF file produces a
 file that is **mixed internally**.  Measured on 2026-09-17: 18 of 499 ``.py``
-files were mixed; ``tests/test_remail_mailbox.py`` had 136 lone LFs among 716
+files were mixed; ``tests/registration/test_remail_mailbox.py`` had 136 lone LFs among 716
 lines.
 
 Mixed files are not merely untidy:
@@ -133,7 +133,7 @@ EXTENSIONLESS_TEXT_NAMES = frozenset(
 SNIFF_BYTES = 8192
 
 # Files that are knowingly still mixed.  Each entry is a debt with a reason,
-# not a permission: `tests/test_line_ending_guard.py` asserts every name here is
+# not a permission: `tests/governance/test_line_ending_guard.py` asserts every name here is
 # *still* mixed, so fixing one forces the entry to be dropped.
 #
 # **Empty as of 2026-09-17.**  The five entries that lived here carried

@@ -80,7 +80,7 @@
    改错文件是最常见的原因。
 2. 一旦存在分片，`config.json` 就是**死文件** —— 往里写什么都无效。
 3. 键名是否在棘轮白名单里。新增键需要同时更新校验器与 `scripts/config_key_baseline.json`，
-   否则 `tests/test_config_key_ratchet.py` 会红。
+   否则 `tests/governance/test_config_key_ratchet.py` 会红。
 4. 环境变量覆盖优先于配置文件（`README.md` 的「应急环境变量覆盖」一节）。
 5. 桌面端下拉框的**选项列表**与后端不是同一份数据 —— 见第 10 节。
 
@@ -160,7 +160,7 @@
 3. 🔴 **桌面端是手写的第二份**：`SmsWorkbench/SettingsCatalog.cs:56` 单独列了驱动枚举。
    Python 加了驱动而这里没加 ⇒ 下拉框里选不到；C# 留了已删的驱动 ⇒ 能选中但后端
    抛 `unsupported_registration_driver`。
-4. 两侧一致性由 `tests/test_settings_catalog_driver_parity.py` 钉住。它变红就是上面第 3 条。
+4. 两侧一致性由 `tests/workbench/test_settings_catalog_driver_parity.py` 钉住。它变红就是上面第 3 条。
 
 ---
 
@@ -300,7 +300,7 @@
 
 ## 13. 桌面端点过「开始接码」之后，本地 `test_config_usage` 变红
 
-**症状**：`tests/test_config_usage.py::test_detector_produces_the_pinned_set` 报
+**症状**：`tests/config/test_config_usage.py::test_detector_produces_the_pinned_set` 报
 `phone_reuse.<供应商>.service_name` 或 `phone_reuse.<供应商>.country_name_zh`
 出现在 unread 集合里，但不在 `EXPECTED_UNREAD` 中（`<供应商>` 通常不是 `smsbower`）。
 CI 上**看不见**这个问题。
@@ -320,7 +320,7 @@ CI 上**看不见**这个问题。
 `smsbower` 之所以不炸，只是因为 `EXPECTED_UNREAD` 里**恰好只钉了 `phone_reuse.smsbower.*`
 这两条路径**。
 
-**为什么不能顺手修**：`tests/test_config_usage.py::test_write_only_keys_are_still_reported`
+**为什么不能顺手修**：`tests/config/test_config_usage.py::test_write_only_keys_are_still_reported`
 里有一行
 
 ```python
@@ -395,7 +395,7 @@ Python 后端，协议细节全在 `sms_tool/`（`nexsms.py`）里 ⇒ 命令行
 （见 §15）。回退分支**不回写** —— 两个选择项本来就是从配置读出来的，回写只会把它们重新格式化，
 顺便把 `service_name` / `country_name_zh` 两个只写不读的叶子塞进该 section，反而会踩 §13。
 
-**回归守卫**（`tests/test_settings_catalog_provider_parity.py`）：
+**回归守卫**（`tests/workbench/test_settings_catalog_provider_parity.py`）：
 
 - `test_the_protocols_match_python` —— 每行的协议族与 `sms_providers.PROVIDERS[k].protocol` 逐项相等；
 - `test_the_protocol_constants_match_python` —— 常量值也钉住（表里用标识符、比较逻辑用常量，两处都要钉）；
@@ -555,7 +555,7 @@ Python 后端，协议细节全在 `sms_tool/`（`nexsms.py`）里 ⇒ 命令行
   后它以 `Expected: "hero-key" Actual: "bower-key"` 变红，正是事故本身的签名。
   同文件 `ProviderSelectorFieldIsAnOptionsFieldOnPhoneReuseSource` 钉住订阅所依赖的字段键
   与 `{provider}` 令牌，防止改名后订阅静默失效。
-- `tests/test_doctor.py`：撞车告警、不撞车不告警、未配置不算撞车、撞车不掩盖缺 key。
+- `tests/config/test_doctor.py`：撞车告警、不撞车不告警、未配置不算撞车、撞车不掩盖缺 key。
 
 ## 17. 配置分片：三片 mtime 一起变 / 清空设置后旧值复活 / 中文被转义
 
@@ -610,7 +610,7 @@ Python 后端，协议细节全在 `sms_tool/`（`nexsms.py`）里 ⇒ 命令行
 
 **回归守卫**：
 
-- `tests/test_config_sharded_atomic_write.py`：裁剪、返回值、`.bak` 归属、尾随换行、
+- `tests/config/test_config_sharded_atomic_write.py`：裁剪、返回值、`.bak` 归属、尾随换行、
   `default_config_dir()` 不被 legacy 回落带偏。
 - `tests/SmsWorkbench.Tests/ConfigStoreTests.cs`：空片写 `{}`、
   `ClearingEverySettingDoesNotHandTheAppBackToTheLegacyFile`（清空设置 + 磁盘上放一份

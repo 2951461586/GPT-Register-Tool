@@ -81,7 +81,7 @@ Sentinel 不是纯 Python PoW，而是调用**真实 Node SDK**：
 - 后端选择：环境变量 `OPENAI_SENTINEL_BACKEND`（在 `sms_tool/sentinel/client.py:59` 读取，默认 `node_runner`），对应 `config.example.json` 的 `sentinel_backend: "node_runner"`。`node_runner` 执行 vendored 在 `sms_tool/sentinel/` 下的 SDK（`sentinel/client.py:315`）。
 - **线程安全缓存**：`_get_cached_sentinel()`（`sentinel_tokens.py:79`）/ `_save_sentinel_cache()`（`sentinel_tokens.py:97`）带锁，调用方保留 single-flight 填充语义。
 - **DID 一致性**：`_sentinel_device_id()`（`sentinel_tokens.py:136`）+ `assert_sentinel_device_id()`（`sentinel_tokens.py:148`）保证同一账号的 Sentinel DID 恒定；跨账号绝不共享。
-- **并发边界**：每个账号独立 Sentinel 事务与 `oai-did`，batch worker 不把 token 回写共享池；`sentinel_max_concurrency` 默认 2（上限 4）。`tests/test_sentinel_runner.py:71/135` 已验证 node_runner 可**离线**执行 vendored SDK。
+- **并发边界**：每个账号独立 Sentinel 事务与 `oai-did`，batch worker 不把 token 回写共享池；`sentinel_max_concurrency` 默认 2（上限 4）。`tests/registration/test_sentinel_runner.py:71/135` 已验证 node_runner 可**离线**执行 vendored SDK。
 
 ---
 
@@ -155,7 +155,7 @@ Sentinel 不是纯 Python PoW，而是调用**真实 Node SDK**：
   `Asia/Ho_Chi_Minh` 与 `Asia/Bangkok` —— 后者是 VN IP 常见的**实测**时区
   （10 条里 5 条落到曼谷），两者 CLDR 名同为 `Indochina Time`，
   补键后输出字节不变。**IN 档案（`en-IN` / `Asia/Kolkata`）保留**，
-  供历史配置使用，守卫位于 `tests/test_registration_protocol_geo.py`。
+  供历史配置使用，守卫位于 `tests/registration/test_registration_protocol_geo.py`。
 
   批次启动前会对候选路由逐条执行 OpenAI 边界预检，只把成功路由传给 batch。
   批次内的 IP/国家探测不再被当作 OpenAI 可达性的替代判据。

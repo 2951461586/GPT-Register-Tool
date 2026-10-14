@@ -80,7 +80,7 @@ What this means in practice:
 * `paypal_browser.country` has **no Python-side consumer today**. The PayPal
   orchestrator reads `paypal_auto` (see `sms_tool/paypal/orchestrator.py`), not
   `paypal_browser`; the latter only appears in the shard-ownership manifest,
-  `ConfigStore.cs` and the unread-key allowlist in `tests/test_config_usage.py`.
+  `ConfigStore.cs` and the unread-key allowlist in `tests/config/test_config_usage.py`.
   Editing it is a no-op for the runtime.
 * `paypal_auto` itself is **not in `config.py`'s shard map** (only
   `paypal_browser`, `paypal` and `paypal_nocard` are), so `CFG.get("paypal_auto")`
@@ -114,7 +114,7 @@ The failure is deliberately asymmetric: `flow_steps` and `paypal_reverse` detect
 the gate on the page before deciding, so they raise; `nodriver_paypal` clicks
 "Send Code" blind and cannot tell "no gate" from "gate I cannot satisfy", so it
 warns and continues instead of failing every payment. Both behaviours are pinned
-in `tests/test_paypal_sms_lane_removed.py`.
+in `tests/payment/test_paypal_sms_lane_removed.py`.
 
 ### Known self-inconsistency on the phone line (accepted, not a regression)
 

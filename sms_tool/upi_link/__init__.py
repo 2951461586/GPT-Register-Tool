@@ -4,7 +4,7 @@ Implementation is split by dependency layer; this package re-exports every
 name so ``sms_tool.upi_link.<name>`` keeps resolving exactly as it did when
 the whole pipeline lived in ``__init__.py``. ``generate_upi_qr_link`` is
 defined in :mod:`sms_tool.upi_link.pipeline` (single definition, guarded by
-``tests/test_upi_link_entrypoint_unique.py``).
+``tests/payment/test_upi_link_entrypoint_unique.py``).
 """
 
 from __future__ import annotations

@@ -210,7 +210,7 @@ def iter_scannable_lines(text, suffix):
     🔴 ``scripts/precommit_guard.py`` 里有一份等价实现（同一个坑，两个闸门各踩一次）。
     ``scripts/`` 不是包、也没有 ``common``，仓内脚本互不导入（只把仓库根加进
     ``sys.path`` 后导入 ``sms_tool``），所以这里刻意重复而不是跨脚本 import。
-    代价是两份可能漂移 —— 由 ``tests/test_scan_hardcoded_secrets.py`` 的平价测试
+    代价是两份可能漂移 —— 由 ``tests/governance/test_scan_hardcoded_secrets.py`` 的平价测试
     钉住：改动任一份而不同步另一份，CI 会红。
     """
     in_docstring = False

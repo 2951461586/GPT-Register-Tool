@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 # They are a contract in the weakest possible form -- a bare substring, no
 # version, no schema -- and the host silently stops reacting if one changes.
 # Keep each value byte-identical to `BackendTextMarkers` in
-# SmsWorkbench.Contracts; tests/test_backend_text_markers.py asserts that.
+# SmsWorkbench.Contracts; tests/workbench/test_backend_text_markers.py asserts that.
 SAVED_SESSION_MARKER = "Saved session:"
 
 

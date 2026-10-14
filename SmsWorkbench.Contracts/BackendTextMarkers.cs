@@ -14,7 +14,7 @@ namespace SmsWorkbench
     /// protocol and have not been migrated yet.
     ///
     /// Every constant here MUST stay byte-identical to its Python counterpart.
-    /// <c>tests/test_backend_text_markers.py</c> parses both sides and asserts
+    /// <c>tests/workbench/test_backend_text_markers.py</c> parses both sides and asserts
     /// equality, so a one-sided edit fails the suite instead of failing silently.
     /// </summary>
     public static class BackendTextMarkers

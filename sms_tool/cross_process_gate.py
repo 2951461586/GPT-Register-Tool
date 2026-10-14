@@ -131,7 +131,7 @@ class CrossProcessSemaphore:
         process still holds the old inode lets a newcomer create a *fresh* slot
         file and lock it, so two processes end up holding the same slot.  That
         is why the call sites are enumerated by
-        ``tests/test_cross_process_gate.py`` instead of being left to habit.
+        ``tests/config/test_cross_process_gate.py`` instead of being left to habit.
 
         Removal is best-effort on purpose: if any process still holds an open
         handle on a slot file the OS refuses the unlink (Windows) or unlinks

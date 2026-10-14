@@ -221,7 +221,7 @@ def check_csharp_file_refs(failures: list[str]) -> None:
       both characters, so a glob-shaped reference is never matched in the first
       place and the guard below is **unreachable today**. It is kept because it
       becomes load-bearing the moment the regex is widened --
-      ``tests/test_docs_consistency.py`` pins the property with a mutation that
+      ``tests/governance/test_docs_consistency.py`` pins the property with a mutation that
       does exactly that;
     * a bare name passes if **any** root has it, even when the doc's prose sits
       next to a different project's table -- a filename is not a path claim;

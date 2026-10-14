@@ -182,7 +182,7 @@ def upsert_account(
     # (see _COALESCE_IF_BLANK).  The coalesce lives in the write statement
     # itself, so it is atomic with the insert: no extra read, no read-then-write
     # window, and the implicit transaction that `_resolve_account_email`'s
-    # rename UPDATE opens still covers everything (tests/test_store_transaction.py).
+    # rename UPDATE opens still covers everything (tests/accounts/test_store_transaction.py).
     updates = ", ".join(
         (
             f"{column}=CASE WHEN {_COALESCE_IF_BLANK[column]} "

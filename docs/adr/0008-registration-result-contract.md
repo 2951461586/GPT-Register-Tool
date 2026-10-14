@@ -21,7 +21,7 @@
   `sanitizer.sanitize_text`；
 - 装配器对缺失核心键直接抛错（`COMMON_RESULT_KEYS` 集合校验）。
 
-`tests/test_registration_result_contract.py` 同时做单元断言与 AST 守卫：
+`tests/registration/test_registration_result_contract.py` 同时做单元断言与 AST 守卫：
 两个生产文件各恰好一次 builder 调用，且不允许重新出现赋值给 `result` 的
 手写装配字面量。
 

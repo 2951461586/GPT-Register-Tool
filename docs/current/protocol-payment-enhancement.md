@@ -11,8 +11,8 @@
 > **状态（2026-10-06 整理）：本方案的三项能力均已落地并通过测试。**
 > `sms_tool/proxy_entry.py`（686 行）、`sms_tool/proxy_bridge.py`（548 行）、
 > `sms_tool/paypal_authorization.py`（317 行）均在仓库中，§5 承诺的
-> `tests/test_proxy_entry.py` / `tests/test_proxy_bridge.py` /
-> `tests/test_paypal_authorization.py` 三份测试也均存在。
+> `tests/proxy/test_proxy_entry.py` / `tests/proxy/test_proxy_bridge.py` /
+> `tests/payment/test_paypal_authorization.py` 三份测试也均存在。
 > ⚠️ 因此下文 §0 的「现状」列与 §1 的 recon 是**改动前**的记录，
 > 不是当前状态；当前契约为文末的 *Shared Flow Executor And Routing* 一节。
 
@@ -228,10 +228,10 @@ def to_payment_result(ctx, *, payment_method="paypal") -> dict  # 映射到 Paym
 ## 5. 验证计划
 
 1. 单元测试（新文件，离线）：
-   - `tests/test_proxy_entry.py`：全格式解析（URL / 裸 4 段 / IPv6 / 无认证 / socks5 默认端口）、`proxy_to_url`、`load_proxy_pool`（env+config）、`choose_proxy_entry`（随机/索引）。
-   - `tests/test_proxy_bridge.py`：本地桥启动/停止、`local_url`、上下文管理器（不连外网，仅验证端口与生命周期）。
-   - `tests/test_paypal_authorization.py`：纯解析——mock 的 GraphQL/JSON 响应 → `PayPalAuthorizationContext` → `classify_authorization_outcome` → `to_payment_result` 与 `PaymentResult.from_mapping` 对齐。
-2. 既有测试回归：`tests/test_phone_proxy.py`、`tests/test_proxy_pool.py`、`tests/test_paypal_proxy.py`、`tests/test_paypal_protocol.py`、`tests/test_payment_*` 需保持通过。
+   - `tests/proxy/test_proxy_entry.py`：全格式解析（URL / 裸 4 段 / IPv6 / 无认证 / socks5 默认端口）、`proxy_to_url`、`load_proxy_pool`（env+config）、`choose_proxy_entry`（随机/索引）。
+   - `tests/proxy/test_proxy_bridge.py`：本地桥启动/停止、`local_url`、上下文管理器（不连外网，仅验证端口与生命周期）。
+   - `tests/payment/test_paypal_authorization.py`：纯解析——mock 的 GraphQL/JSON 响应 → `PayPalAuthorizationContext` → `classify_authorization_outcome` → `to_payment_result` 与 `PaymentResult.from_mapping` 对齐。
+2. 既有测试回归：`tests/registration/test_phone_proxy.py`、`tests/proxy/test_proxy_pool.py`、`tests/payment/test_paypal_proxy.py`、`tests/payment/test_paypal_protocol.py`、`tests/payment/test_payment_*` 需保持通过。
 3. 语法/导入检查：`python -c "import sms_tool.proxy_entry, sms_tool.proxy_bridge, sms_tool.paypal_authorization"`。
 
 ---

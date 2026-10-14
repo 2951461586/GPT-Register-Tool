@@ -311,17 +311,17 @@ def _status(data, paypal, access_token, has_refresh_token=False):
 # backend text, so these lists are a cross-language contract: adding or
 # renaming one here and not in `BackendTextMarkers` (SmsWorkbench.Contracts)
 # makes the two sides disagree silently.
-# tests/test_backend_text_markers.py parses both and asserts they match.
+# tests/workbench/test_backend_text_markers.py parses both and asserts they match.
 #
 # "account_deatived" is a misspelling that was written by an older release and
 # therefore still occurs in session files already on disk. Keep it until those
 # rows are known to be gone -- it looks like a typo but it is live data.
 #
-# This tuple stays a source literal because tests/test_backend_text_markers.py
+# This tuple stays a source literal because tests/workbench/test_backend_text_markers.py
 # AST-parses it against the C# BackendTextMarkers copy (an imported name would
 # be invisible to that parser). It must stay identical to
 # ACCOUNT_DEACTIVATED_MARKERS in sms_tool/account_terminal.py -- the canonical
-# terminal-state vocabulary; tests/test_account_terminal.py enforces that.
+# terminal-state vocabulary; tests/accounts/test_account_terminal.py enforces that.
 ACCOUNT_DEACTIVATED_MARKERS = (
     "account_deactivated",
     "account_deatived",

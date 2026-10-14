@@ -45,7 +45,7 @@ def obtain_oauth_refresh_token(self) -> None:
     of doing it here: ``collect_codex_oauth_tokens`` follows the OAuth
     authorize URL first and, when the redirect already carries a callback
     ``code``, exchanges it immediately -- no login stage, no email code
-    (pinned by ``tests/test_codex_oauth.py::LiveSessionShortCircuitTests``;
+    (pinned by ``tests/registration/test_codex_oauth.py::LiveSessionShortCircuitTests``;
     before that test existed this was only a code read, and the one
     codex_oauth run in the logs took the ``email_otp`` path because it ran
     on an already-dead session).  A dead session is the expensive case, and

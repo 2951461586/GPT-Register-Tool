@@ -7,7 +7,7 @@
 🔴 引擎对策略层的引用**必须留在函数体内**。这**不是**为了断环：
 ``account_recovery`` 自 2026-09-22 起已不再反指本模块（PEP 562 兼容再导出
 ``__getattr__`` 已删，SCC 消失），所以模块级导入在运行期是安全的。
-留函数内的理由是**保住 patch 面**：``tests/test_account_recovery.py:1308``
+留函数内的理由是**保住 patch 面**：``tests/accounts/test_account_recovery.py:1308``
 等用例 patch 的是 ``sms_tool.accounts.account_recovery.CFG``，只有调用期才去
 解析 ``account_recovery`` 的模块属性，才读得到被 patch 的值。提升到模块级会让
 这些 patch **静默失效**（转而使用真实配置，不报错、不失败）。

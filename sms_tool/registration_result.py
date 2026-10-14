@@ -31,7 +31,7 @@ from .registration_policy import registration_retry_decision
 logger = logging.getLogger(__name__)
 
 
-# 两条路径共有的核心键。契约测试（tests/test_registration_result_contract.py）
+# 两条路径共有的核心键。契约测试（tests/registration/test_registration_result_contract.py）
 # 断言两条路径产出的 result 都覆盖这一集合；新增共有键时先改这里再改两条路径。
 COMMON_RESULT_KEYS = frozenset(
     {

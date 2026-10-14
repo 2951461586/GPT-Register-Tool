@@ -124,7 +124,7 @@ class RegistrationEmailWorkflow:
     """Ordered email-registration pipeline. Owns stage ordering; not payment/recovery.
 
     Stage-boundary contract (kept executable by the tests in
-    ``tests/test_registration_*`` and by ``docs/architecture.md``):
+    ``tests/registration/test_registration_*`` and by ``docs/architecture.md``):
 
     - ``run()`` is the ONLY place stages are sequenced; stages never call each
       other directly. Shared state flows through ``self.runtime``
@@ -132,7 +132,7 @@ class RegistrationEmailWorkflow:
       (``RegistrationOperations``, injected — a Mock in tests stays honest).
     - Each ``*_stage`` / stage-named method is independently addressable and
       independently testable. ``probe_access_token`` had zero direct tests until
-      ``tests/test_registration_at_probe.py``; when you change a stage, add or
+      ``tests/registration/test_registration_at_probe.py``; when you change a stage, add or
       extend its own contract test rather than relying on full-run integration.
     - Stage methods communicate *verdicts* via ``self.runtime`` fields and the
       checkpoint payload, never via return values (they all return ``None`` or
@@ -1008,7 +1008,7 @@ class RegistrationEmailWorkflow:
             #
             # ``err_code or err_msg``：code 缺失（服务端只给 message）时仍保留
             # 服务端原文，不丢诊断信息。Pinned by
-            # ``tests/test_user_register_response_contract.py``.
+            # ``tests/registration/test_user_register_response_contract.py``.
             self._abort(f"user_register:{err_code or err_msg}")
 
     def _post_user_register(self) -> Any:

@@ -62,7 +62,7 @@ namespace SmsWorkbench
         /// the config values, so a write could only reformat them -- and it would
         /// add `service_name` / `country_name_zh`, two write-only leaves whose
         /// appearance in a non-`smsbower` section turns
-        /// `tests/test_config_usage.py` red (see `docs/TROUBLESHOOTING.md` §13).
+        /// `tests/config/test_config_usage.py` red (see `docs/TROUBLESHOOTING.md` §13).
         /// </para>
         /// </summary>
         private async Task<bool> ShowSmsProviderOneClickDialogAsync(CancellationToken ct = default)
@@ -353,7 +353,7 @@ namespace SmsWorkbench
                 // open would lose it. Skipping the write also keeps
                 // `service_name` / `country_name_zh` -- two write-only leaves --
                 // out of a section that did not already have them, which is what
-                // keeps `tests/test_config_usage.py`'s counter-example honest
+                // keeps `tests/config/test_config_usage.py`'s counter-example honest
                 // after this dialog runs.
                 return true;
             }

@@ -12,7 +12,7 @@ namespace SmsWorkbench
         /// <summary>
         /// Default SMS provider key. Mirrors `sms_providers.DEFAULT_PROVIDER`
         /// on the Python side; the two are pinned together by
-        /// tests/test_settings_catalog_provider_parity.py.
+        /// tests/workbench/test_settings_catalog_provider_parity.py.
         /// </summary>
         public const string DefaultPhoneProvider = "smsbower";
 

@@ -14,7 +14,7 @@ from dataclasses import dataclass, fields
 from typing import Any, Callable, Mapping
 
 # Machine-readable grouping. Held to an exact partition of the dataclass fields by
-# tests/test_registration_operations.py::test_operation_groups_partition_fields,
+# tests/registration/test_registration_operations.py::test_operation_groups_partition_fields,
 # so adding a field without filing it into a group fails the suite.
 OPERATION_GROUPS: dict[str, tuple[str, ...]] = {
     "config": (

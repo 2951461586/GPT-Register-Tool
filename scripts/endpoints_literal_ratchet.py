@@ -12,7 +12,7 @@ previously hard-coded https://chatgpt.com (and friends) in 30+ places ... A host
 change meant editing every one."* That is only true once the callers actually
 **use** the authority. A one-sided host change on a caller that still inlines the
 literal is invisible: the module keeps working and quietly points at the old
-origin. ``tests/test_protocol_payment_endpoints.py`` only asserts the *shape* of
+origin. ``tests/payment/test_protocol_payment_endpoints.py`` only asserts the *shape* of
 the services authority module -- it never checks a caller -- so nothing caught
 the ~56 inline literals ideal / twint / blik carried until 2026-09-28.
 

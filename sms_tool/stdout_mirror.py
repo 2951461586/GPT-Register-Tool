@@ -16,7 +16,7 @@ Two deliberate constraints:
 
 - **Passive only.** stdout is the WPF IPC channel (the ``@@SMSWORKBENCH_V2@@``
   envelope) and the host matches line *prefixes*
-  (``tests/test_backend_log_noise_contract.py``), so the mirror observes the
+  (``tests/workbench/test_backend_log_noise_contract.py``), so the mirror observes the
   stream and never reroutes, decorates, or reorders it. Converting ``print`` to
   ``logger`` would break that contract; mirroring does not.
 - **Sanitized input only.** ``SanitizingTextIO`` feeds the mirror the text *after*

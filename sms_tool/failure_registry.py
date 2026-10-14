@@ -303,7 +303,7 @@ FAILURE_CLASSES: tuple[FailureClass, ...] = (
             # lines up, so this entry changes nothing for that one string.  It is here
             # so the whole family stays ``auth_state`` when the suffix varies; the
             # suffix is diagnostic, the prefix is the contract.  Pinned by
-            # ``tests/test_user_register_response_contract.py``.
+            # ``tests/registration/test_user_register_response_contract.py``.
             "password_step_unconfirmed",
         ),
         attempt_retryable=True,

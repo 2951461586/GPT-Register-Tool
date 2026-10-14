@@ -477,7 +477,7 @@ def _generate_upi_qr_link_once(
 
     Stays in this module (single owner, unchanged signature) so the historical
     ``patch("sms_tool.upi_link.pipeline._generate_upi_qr_link_once")`` targets in
-    ``tests/test_upi_rounds.py`` / ``test_upi_tax_repeat.py`` still intercept.
+    ``tests/payment/test_upi_rounds.py`` / ``test_upi_tax_repeat.py`` still intercept.
     """
     return _stages.run_upi_qr_link_once(
         _build_upi_operations(),
@@ -538,7 +538,7 @@ def generate_upi_qr_link(
     are never retried here -- the account's approval is one-shot.
 
     The public signature, ``__module__`` and ``UPI_CALL_OPTIONS`` parity are
-    pinned by ``tests/test_upi_link_entrypoint_unique.py``.
+    pinned by ``tests/payment/test_upi_link_entrypoint_unique.py``.
     """
     total_rounds = _upi_rounds(runtime_config)
     country = str(checkout_country or target_country or "").strip().upper()

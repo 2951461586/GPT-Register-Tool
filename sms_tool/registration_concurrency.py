@@ -18,7 +18,7 @@ of a ``ThreadPoolExecutor`` are reused and ``submit()`` does not copy the
 context, so a context-local "which gate do I own" marker leaks into the next
 task on the same worker; that task then believes it already holds the group and
 skips acquisition, silently disabling the cap. See
-``tests/test_registration_stage_concurrency.py`` for the regression guard.
+``tests/registration/test_registration_stage_concurrency.py`` for the regression guard.
 """
 
 from __future__ import annotations

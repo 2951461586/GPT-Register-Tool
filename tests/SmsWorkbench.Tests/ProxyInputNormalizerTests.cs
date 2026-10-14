@@ -24,7 +24,7 @@ public sealed class ProxyInputNormalizerTests
     [Fact]
     public void SharedFixtureNormalization_MatchesTheCrossLanguageContract()
     {
-        // 与 tests/test_proxy_entry.py 消费同一份夹具：C# 归一器的输出会被
+        // 与 tests/proxy/test_proxy_entry.py 消费同一份夹具：C# 归一器的输出会被
         // Python proxy_entry.parse_proxy（代理唯一权威）再解析，任何一侧
         // 漂移都会让两侧测试同时失败。
         var cases = LoadFixtureCases();

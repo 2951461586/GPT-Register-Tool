@@ -6,7 +6,7 @@ using Xunit;
 namespace SmsWorkbench.Tests
 {
     /// <summary>
-    /// 跨语言优惠状态契约：与 tests/test_account_promotion.py 共用
+    /// 跨语言优惠状态契约：与 tests/accounts/test_account_promotion.py 共用
     /// tests/fixtures/promotion_status_cases.json。桌面过滤/排序消费机器状态
     /// （promotion_state），展示文案只是 UI 文本 —— 任一侧漂移即失败。
     /// </summary>

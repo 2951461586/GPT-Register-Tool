@@ -12,7 +12,7 @@ would go stale the moment somebody wires one up, so the check is a module:
   always "as of right now" rather than "as of the last audit".
 * ``--doctor`` reports them, so a config value that silently does nothing is
   visible instead of assumed working.
-* ``tests/test_config_usage.py`` pins the known list, so wiring a key up (or
+* ``tests/config/test_config_usage.py`` pins the known list, so wiring a key up (or
   adding a new dead one) fails loudly instead of drifting.
 
 How a key is judged
@@ -42,7 +42,7 @@ measured one rather than an oversight:
 * What C# *does* read is handled explicitly instead, by
   :data:`CSHARP_CONSUMED_KEYS`: a cited, test-verified exception list. A key
   belongs there only if a named C# file reads it, and
-  ``tests/test_config_usage.py`` fails when a citation stops resolving or stops
+  ``tests/config/test_config_usage.py`` fails when a citation stops resolving or stops
   containing the key -- so the list cannot rot into an excuse.
 
 ⇒ Read the report as "no **Python** code path reads this". For the desktop
@@ -76,7 +76,7 @@ SKIP_DIRS = frozenset({"__pycache__", ".venv", "dist", "runtime", ".git", "logs"
 #: Two rules keep this from becoming a dumping ground:
 #:
 #: * the cited file must exist and must contain the key as a literal --
-#:   ``tests/test_config_usage.py::CSharpConsumerTests`` fails otherwise, so a
+#:   ``tests/config/test_config_usage.py::CSharpConsumerTests`` fails otherwise, so a
 #:   citation that stops being true turns the suite red instead of silently
 #:   suppressing a real finding;
 #: * the key must be **read** there, not written. A write is not a consumer --

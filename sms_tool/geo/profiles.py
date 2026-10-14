@@ -19,7 +19,7 @@
    ``COUNTRY_LOCALE_PROFILE_MAP`` 与 ``TIMEZONE_NAME_BY_IANA``。
    漏前者 ⇒ ``locale_profile_key_from_geo`` 静默回退 ``'us'``（美国指纹配别国
    出口）；漏后者 ⇒ ``timezone_name`` 变空串。
-   ``tests/test_geo_profile_parity.py`` 的 4 条用例会把两处漏项都判红。
+   ``tests/proxy/test_geo_profile_parity.py`` 的 4 条用例会把两处漏项都判红。
 
 时区偏移与 Windows 时区名不进本表：偏移在运行时按 IANA 名重算（DST 安全，见
 browser_fingerprint_pool P1-4 注释），Windows 名在 ``TIMEZONE_NAME_BY_IANA`` 里。

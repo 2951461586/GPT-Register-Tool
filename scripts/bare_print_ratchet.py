@@ -78,7 +78,7 @@ def main() -> int:
         # its LF index entry while ``git diff`` still reported it clean (both
         # sides get normalised before comparison).  That is exactly how this
         # baseline drifted out of sync on 2026-09-21; see
-        # ``tests/test_line_ending_guard.py``.
+        # ``tests/governance/test_line_ending_guard.py``.
         BASELINE.write_text(
             json.dumps(current, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",

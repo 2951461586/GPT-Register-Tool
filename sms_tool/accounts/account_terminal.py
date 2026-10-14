@@ -10,7 +10,7 @@ display copy. This module is the Python reference for both vocabularies:
   recheck (architecture.md "Terminal Account Cleanup").
 * ``ACCOUNT_DEACTIVATED_MARKERS`` -- free-text markers proving deactivation.
   ``store/normalize.py`` re-exports the same tuple and is pinned to the C#
-  copy by tests/test_backend_text_markers.py; a drift test below keeps this
+  copy by tests/workbench/test_backend_text_markers.py; a drift test below keeps this
   module and ``normalize`` from diverging.
 
 Dependency-free by design so every layer may import it.

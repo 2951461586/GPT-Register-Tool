@@ -39,7 +39,7 @@ harness does three things:
              reports a success *rate* as established by this offline tooling.
 
 Parsing and comparison are pure functions so they can be unit-tested without
-running anything (``tests/test_registration_ab.py``).
+running anything (``tests/registration/test_registration_ab.py``).
 """
 
 from __future__ import annotations

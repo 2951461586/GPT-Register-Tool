@@ -11,7 +11,7 @@ CLI adapters and ``scripts/`` all reach straight into those private names
 That is a real coupling surface with no guard on it. ``directory-map.md``
 describes the top-level ``mailbox_*`` files as "compatibility facades only" and
 places the real implementations under ``sms_tool/providers/`` -- and
-``tests/test_docs_consistency.py`` does lock the six provider facades
+``tests/governance/test_docs_consistency.py`` does lock the six provider facades
 (``mailbox_cfworker`` / ``_gmail`` / ``_graph`` / ``_icloud_url`` / ``_remail`` /
 ``_smailr``). But ``mailbox.py`` itself is not one of those facades: it is the
 implementation *and* the private interface hub, and nothing counted its
@@ -167,7 +167,7 @@ def _pairs_in_source(source: str, rel: str) -> set[tuple[str, str, str]]:
 
     Extracted so the predicate can be exercised on synthetic sources in both
     directions -- a gate that can only say "FAIL" is not a gate.  See
-    ``tests/test_mailbox_private_import_ratchet.py``.
+    ``tests/governance/test_mailbox_private_import_ratchet.py``.
     """
     found: set[tuple[str, str, str]] = set()
     for node in ast.walk(ast.parse(source)):

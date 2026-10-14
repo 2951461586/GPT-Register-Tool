@@ -1,0 +1,207 @@
+"""Registration result contract tests.
+
+The protocol path (registration_handlers.finalize) and the browser path
+(browser_flow/orchestrator.run_browser_registration) must assemble their
+result dicts through the shared builder, so the common key set cannot drift
+between the two registration modes.
+"""
+
+import ast
+import unittest
+from pathlib import Path
+
+from sms_tool.registration_result import (
+    COMMON_RESULT_KEYS,
+    build_registration_failure_result,
+    build_registration_result,
+    safe_fingerprint_geo_audit,
+)
+
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+HANDLERS = REPO_ROOT / "sms_tool" / "registration_handlers.py"
+FINALIZE = REPO_ROOT / "sms_tool" / "registration_finalize.py"
+ORCHESTRATOR = REPO_ROOT / "sms_tool" / "registration_drivers" / "browser_flow" / "orchestrator.py"
+
+# The protocol path's result assembly moved from HANDLERS to FINALIZE in a2349d7
+# ("extract result-assembly stages into registration_finalize"), which left
+# HANDLERS with a delegating wrapper.  Both files are scanned, and the shared
+# builder must be called exactly once across the pair -- that keeps the guard
+# meaningful wherever the assembly lives next.
+PROTOCOL_PATH = (HANDLERS, FINALIZE)
+
+
+class BuildRegistrationFailureResultTests(unittest.TestCase):
+    def test_failure_result_contains_every_common_key(self):
+        result = build_registration_failure_result(
+            error="browser_mailbox_setup_failed",
+            failure_class="mailbox",
+        )
+        self.assertTrue(COMMON_RESULT_KEYS <= result.keys())
+        self.assertFalse(result["success"])
+        self.assertEqual(result["failure_class"], "mailbox")
+        # ADR-0008: failures carry the retry decision too.
+        self.assertIn("retryable", result)
+        self.assertIn("error_advice", result)
+
+    def test_explicit_failure_class_wins_over_the_derived_one(self):
+        result = build_registration_failure_result(
+            error="connection reset",
+            failure_class="mailbox",
+        )
+        self.assertEqual(result["failure_class"], "mailbox")
+
+    def test_derived_failure_class_when_none_given(self):
+        result = build_registration_failure_result(error="unsupported_registration_driver:x")
+        self.assertEqual(result["failure_class"], "configuration")
+
+    def test_extra_keys_merge_last(self):
+        result = build_registration_failure_result(
+            error="registration_cancelled",
+            registration_state="cancelled",
+            extra={"registration_driver": "camoufox", "browser_diagnostics": {"dom": []}},
+        )
+        self.assertEqual(result["registration_driver"], "camoufox")
+        self.assertEqual(result["browser_diagnostics"], {"dom": []})
+        self.assertEqual(result["registration_state"], "cancelled")
+
+
+class BuildRegistrationResultTests(unittest.TestCase):
+    def test_fingerprint_geo_audit_has_one_safe_shape_for_both_paths(self):
+        audit = safe_fingerprint_geo_audit(
+            fingerprint_country="us", exit_country="DE", source="browser_probe",
+            allowed_countries=["VN"],
+        )
+        self.assertEqual(audit, {
+            "status": "mismatch", "fingerprint_country": "US",
+            "exit_country": "DE", "source": "browser_probe",
+            "allowed_status": "mismatch",
+        })
+        self.assertEqual(safe_fingerprint_geo_audit(
+            fingerprint_country="US", exit_country="", source="unknown"
+        )["status"], "unknown")
+        self.assertEqual(safe_fingerprint_geo_audit(
+            fingerprint_country="https://user:pass@proxy.invalid", exit_country="US",
+            source="https://user:pass@proxy.invalid",
+        )["fingerprint_country"], "")
+        self.assertEqual(safe_fingerprint_geo_audit(
+            fingerprint_country="US", exit_country="US", source="probe"
+        )["status"], "matched")
+
+    def test_geo_mismatch_warns_without_changing_success_or_failure(self):
+        for success in (True, False):
+            with self.subTest(success=success):
+                result = build_registration_result(
+                    success=success, registration_mode="protocol", registration_state="active",
+                    fingerprint_geo_audit={
+                        "fingerprint_country": "US", "exit_country": "DE",
+                        "source": "preflight", "allowed_countries": ["VN"],
+                    },
+                    registration_warning="existing warning",
+                )
+                self.assertIs(result["success"], success)
+                self.assertEqual(result["fingerprint_geo_audit"]["status"], "mismatch")
+                self.assertIn("fingerprint_geo_mismatch", result["registration_warning"])
+                self.assertIn("fingerprint_allowed_country_mismatch", result["registration_warning"])
+                self.assertIn("existing warning", result["registration_warning"])
+
+    def test_result_contains_every_common_key(self):
+        result = build_registration_result(
+            success=True,
+            registration_mode="browser",
+            registration_state="active",
+            email="user@example.com",
+        )
+        self.assertTrue(COMMON_RESULT_KEYS <= result.keys())
+
+    def test_extra_keys_are_merged_after_the_common_core(self):
+        result = build_registration_result(
+            success=False,
+            registration_mode="browser",
+            registration_state="failed",
+            extra={"registration_driver": "camoufox"},
+        )
+        self.assertEqual(result["registration_driver"], "camoufox")
+        self.assertFalse(result["success"])
+
+    def test_free_text_fields_are_sanitized(self):
+        result = build_registration_result(
+            success=False,
+            registration_mode="protocol",
+            registration_state="failed",
+            error="boom https://user:pass@proxy.example",
+            registration_warning="warn sk_live_abc123def456ghi789",
+        )
+        self.assertNotIn("pass@", result["error"])
+        self.assertNotIn("sk_live_abc123def456ghi789", result["registration_warning"])
+
+    def test_twofa_enrollment_defaults_to_skipped(self):
+        result = build_registration_result(
+            success=True,
+            registration_mode="protocol",
+            registration_state="active",
+        )
+        self.assertEqual(result["twofa_enrollment"], {"ok": False, "reason": "skipped"})
+
+
+class SharedAssemblyGuardTests(unittest.TestCase):
+    """Both paths must assemble results through the shared builder."""
+
+    def test_both_paths_call_the_shared_builder(self):
+        for label, paths in (("protocol", PROTOCOL_PATH), ("browser", (ORCHESTRATOR,))):
+            with self.subTest(path=label):
+                calls = [
+                    path.name
+                    for path in paths
+                    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+                    if isinstance(node, ast.Call)
+                    and (
+                        (isinstance(node.func, ast.Name) and node.func.id == "build_registration_result")
+                        or (
+                            isinstance(node.func, ast.Attribute)
+                            and node.func.attr == "build_registration_result"
+                        )
+                    )
+                ]
+                self.assertEqual(
+                    len(calls),
+                    1,
+                    f"{label} path must assemble its result through the shared "
+                    f"builder exactly once, found it in {calls}",
+                )
+
+    def test_no_raw_result_literal_with_contract_keys_remains(self):
+        # Failure-path dicts and the resume checkpoint legitimately carry a
+        # few common keys, so the guard only targets the exact hand-rolled
+        # assembly shape: a dict literal assigned to a variable named
+        # ``result`` that sets assembly-only keys.
+        sentinel_keys = {"register_method", "session_type", "plan_type", "registration_success_basis"}
+        for path in PROTOCOL_PATH + (ORCHESTRATOR,):
+            with self.subTest(file=path.name):
+                tree = ast.parse(path.read_text(encoding="utf-8"))
+                for node in ast.walk(tree):
+                    if not isinstance(node, ast.Assign):
+                        continue
+                    if not any(
+                        isinstance(target, ast.Name) and target.id == "result"
+                        for target in node.targets
+                    ):
+                        continue
+                    value = node.value
+                    if not isinstance(value, ast.Dict):
+                        continue
+                    keys = {
+                        key.value
+                        for key in value.keys
+                        if isinstance(key, ast.Constant) and isinstance(key.value, str)
+                    }
+                    overlap = keys & sentinel_keys
+                    self.assertEqual(
+                        set(),
+                        overlap,
+                        f"{path.name}: hand-rolled result assembly reintroduced "
+                        f"with contract keys {sorted(overlap)}",
+                    )
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,5 +1,5 @@
 {
-  "_comment": "共享优惠状态契约夹具：Python (tests/test_account_promotion.py) 与 C# (tests/SmsWorkbench.Tests/PromotionStatusContractTests.cs) 消费同一份用例。result 是 accounts/check 的解析产物；label 是 Python promotion_status_label 的展示文案；state 是 promotion_status_code 的机器状态；legacy_fallback 是无机器状态时对展示文案的子串判定；sort_rank 是桌面排序权重（0=试用号优先）。",
+  "_comment": "共享优惠状态契约夹具：Python (tests/accounts/test_account_promotion.py) 与 C# (tests/SmsWorkbench.Tests/PromotionStatusContractTests.cs) 消费同一份用例。result 是 accounts/check 的解析产物；label 是 Python promotion_status_label 的展示文案；state 是 promotion_status_code 的机器状态；legacy_fallback 是无机器状态时对展示文案的子串判定；sort_rank 是桌面排序权重（0=试用号优先）。",
   "contract": {
     "trial_eligible": "trial_eligible",
     "subscribed": "subscribed",

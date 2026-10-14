@@ -10,7 +10,7 @@ from ``pay_link`` (see ``sms_tool/pay_link/__init__.py``), and every name a
 consumer imports through this shell must appear there.  A name that only
 survives on one of the explicit pre-split imports below is exported by accident
 and is reported as removable debt by ``scripts/unused_import_ratchet.py``.
-``tests/test_payment_link_manager.py::FacadeSurfaceTests`` pins the invariant.
+``tests/payment/test_payment_link_manager.py::FacadeSurfaceTests`` pins the invariant.
 """
 
 from __future__ import annotations

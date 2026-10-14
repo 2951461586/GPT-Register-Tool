@@ -101,7 +101,7 @@ DEAD_END_MARKERS = (
     #
     # ⚠️ ``mark_dead_end`` silently falls back to ``user_already_exists`` for an
     # unrecognised reason, so this entry is what keeps the ledger honest.
-    # Pinned by ``tests/test_user_register_response_contract.py``.
+    # Pinned by ``tests/registration/test_user_register_response_contract.py``.
     DEAD_END_SIGNUP_ROUTED_TO_LOGIN,
     "auth_session_recovery_expired",
     "auth_session_recovery_exhausted",

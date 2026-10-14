@@ -67,8 +67,8 @@ jobs:
       - run: dotnet test GPTRegisterTool.slnx -c Release
       - run: python -c "import sms_tool.cli"
       - run: >-
-          python -m pytest -q tests/test_protocol_payment_common.py
-          tests/test_wallet_provider.py tests/test_wallet_manager_integration.py
+          python -m pytest -q tests/payment/test_protocol_payment_common.py
+          tests/payment/test_wallet_provider.py tests/payment/test_wallet_manager_integration.py
       # Secret gates — precommit_guard is the hard gate (non-zero on
       # tracked-file violation); the other two are informational scanners
       # that print findings.
@@ -91,7 +91,7 @@ jobs:
       # issuance silently degraded to the legacy issuer, and 126/126 accounts
       # failed
       # (docs/audits/scan-2026-09-18-sentinel-runner-hash-mismatch.md).
-      # `tests/test_gate_list_consistency.py` pins which hook gates have no CI
+      # `tests/governance/test_gate_list_consistency.py` pins which hook gates have no CI
       # or test coverage; this step removes `sentinel_asset_guard` from that
       # list, so the two must move together.
       - run: python scripts/sentinel_asset_guard.py

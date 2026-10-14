@@ -13,7 +13,7 @@ namespace SmsWorkbench
     /// <para>
     /// This is a hand-mirror of `sms_tool/sms_providers.py`, which is the single
     /// source of truth. Mirrors drift, so the two are pinned together by
-    /// `tests/test_settings_catalog_provider_parity.py`: it extracts the table
+    /// `tests/workbench/test_settings_catalog_provider_parity.py`: it extracts the table
     /// below from this file and fails on any difference in provider keys, the
     /// default endpoint, the API-key environment variable name **or the
     /// protocol family**. Add a provider on one side without the other and that
@@ -41,7 +41,7 @@ namespace SmsWorkbench
     /// REST paths under its own `/api/` and a `{code, message, data}` envelope,
     /// and answers every `?action=` call with `403 Forbidden`. `CatalogIsSmsActivate`
     /// is what the dialog dispatches on, and
-    /// `tests/test_settings_catalog_provider_parity.py` pins every row's
+    /// `tests/workbench/test_settings_catalog_provider_parity.py` pins every row's
     /// `Protocol` against `sms_tool/sms_providers.py` -- the same
     /// no-compiler-between-the-two-languages argument as the endpoint and
     /// API-key-env columns.

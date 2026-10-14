@@ -192,7 +192,7 @@ def main() -> int:
     # translates "\n" to os.linesep -- on Windows that silently turns the whole
     # manifest CRLF.  These files are consumed by an external tool, and the
     # project convention (see .gitattributes) is LF.  Same defect class as the
-    # ratchet baselines; guarded repo-wide by tests/test_line_ending_guard.py.
+    # ratchet baselines; guarded repo-wide by tests/governance/test_line_ending_guard.py.
     txt_path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
     audit_path = out_dir / f"icloud_no_trial_email_url_2fa{suffix}_{stamp}.audit.json"
     audit_path.write_text(json.dumps(audit, ensure_ascii=False, indent=2),

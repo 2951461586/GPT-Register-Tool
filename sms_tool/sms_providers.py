@@ -13,8 +13,8 @@ had no compiler connection between them:
 
 Adding a provider meant editing all of them, and the C# half had no mechanical
 link to the Python half at all. They now derive from :data:`PROVIDERS` below.
-``tests/test_sms_provider_registry.py`` pins this module, and
-``tests/test_settings_catalog_provider_parity.py`` pins the C# mirror
+``tests/registration/test_sms_provider_registry.py`` pins this module, and
+``tests/workbench/test_settings_catalog_provider_parity.py`` pins the C# mirror
 (``SmsWorkbench/SmsProviderCatalog.cs``) against it.
 
 Protocol families
@@ -60,7 +60,7 @@ PROTOCOL_UNVERIFIED = "unverified"
 
 #: Protocols this repository ships a client for. A spec may only claim
 #: ``client_available`` when its ``protocol`` is in here; that is what
-#: ``tests/test_sms_provider_registry.py`` pins, so "we offer it" can never drift
+#: ``tests/registration/test_sms_provider_registry.py`` pins, so "we offer it" can never drift
 #: away from "we can actually talk to it".
 IMPLEMENTED_PROTOCOLS: frozenset[str] = frozenset({PROTOCOL_SMS_ACTIVATE, PROTOCOL_NEXSMS})
 

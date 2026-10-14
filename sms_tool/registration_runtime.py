@@ -60,7 +60,7 @@ class RegistrationAuth:
     # address the OTP round trip lands on ``/about-you`` with no NextAuth
     # session (measured 2026-09-14, 5/5).  ``RegistrationRuntimeState`` rejects
     # unknown keyword arguments, so reintroducing it needs a deliberate change
-    # here, and ``tests/test_user_register_response_contract.py`` pins that.
+    # here, and ``tests/registration/test_user_register_response_contract.py`` pins that.
     # ``client_auth_session_dump[after_signup_state]`` 的 summary 与它给出的泳道
     # 判定（``auth_state.signup_lane_verdict``：``login`` / ``signup`` / ``unknown``）。
     # P0-1 判据 A 的取证埋点 —— 目前只记录，不据此写死路账本（实测精确率 3/3

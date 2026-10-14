@@ -4,7 +4,7 @@ using Xunit;
 namespace SmsWorkbench.Tests
 {
     /// <summary>
-    /// 跨语言 OAuth client id 契约：与 tests/test_mailbox_graph_pure.py 共用
+    /// 跨语言 OAuth client id 契约：与 tests/mailbox/test_mailbox_graph_pure.py 共用
     /// tests/fixtures/oauth_client_id.json。桌面回落值与 Python 默认值必须是
     /// 同一个 Microsoft Graph OAuth 应用 —— 任一侧单改，另一侧就会静默注册到
     /// 不同的应用上。

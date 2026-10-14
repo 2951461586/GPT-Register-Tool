@@ -50,7 +50,7 @@ def _smailr_cfg() -> Mapping[str, Any]:
     ``Mapping`` but **not** a ``dict``. A ``dict`` check here made the whole
     smailr section read as missing in production -- ``api_key``, ``base_url``,
     ``default_domain`` and ``domain_ids`` were all silently replaced by
-    env-or-defaults, while ``tests/test_smailr_provider.py`` stayed green
+    env-or-defaults, while ``tests/mailbox/test_smailr_provider.py`` stayed green
     because it patches this function with a plain dict. ``_remail_cfg`` is the
     correct sibling shape (``Mapping``); this is the same 2026-10-07 P1-D
     class that ``auth_flow/steps.py`` already fixed for three toggles.
