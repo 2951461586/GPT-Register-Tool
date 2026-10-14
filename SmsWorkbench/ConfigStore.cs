@@ -78,7 +78,7 @@ namespace SmsWorkbench
         /// used by the cache signature (shards first, then the legacy file).</summary>
         public static IReadOnlyList<string> AllConfigFiles(IApplicationPaths paths)
         {
-            string root = paths.RootDirectory;
+            string root = paths.ConfigDirectory;
             return new[]
             {
                 Path.Combine(root, ProxyShard),
@@ -97,7 +97,7 @@ namespace SmsWorkbench
         /// </summary>
         public static bool AnyShardExists(IApplicationPaths paths)
         {
-            string root = paths.RootDirectory;
+            string root = paths.ConfigDirectory;
             foreach (string file in ShardFiles)
             {
                 if (File.Exists(Path.Combine(root, file)))
@@ -114,7 +114,7 @@ namespace SmsWorkbench
         /// </summary>
         public static JsonObject? ReadMerged(IApplicationPaths paths)
         {
-            string root = paths.RootDirectory;
+            string root = paths.ConfigDirectory;
             JsonObject? merged = null;
             if (AnyShardExists(paths))
             {
@@ -248,12 +248,13 @@ namespace SmsWorkbench
         /// </summary>
         private static bool WriteAtomic(IApplicationPaths paths, string fileName, JsonObject content)
         {
-            string path = Path.Combine(paths.RootDirectory, fileName);
+            string path = Path.Combine(paths.ConfigDirectory, fileName);
             // Trailing newline to match Python's `json.dumps(...) + "\n"`. The two
             // writers must agree byte-for-byte, otherwise each side's change
             // detection sees the other side's file as modified.
             string payload = content.ToJsonString(IndentedJson) + "\n";
             if (ReadTextOrNull(path) == payload) return false;
+            Directory.CreateDirectory(paths.ConfigDirectory);
 
             string temporary = path + ".tmp." + Guid.NewGuid().ToString("N");
             try

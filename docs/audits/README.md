@@ -39,7 +39,7 @@ from `docs/README.md`.
 
 ## Contents
 
-65 files. Grouped by kind; newest first within each group.
+64 files. Grouped by kind; newest first within each group.
 
 > Recount: `ls docs/audits/*.md docs/audits/*.txt | wc -l` — this number is
 > pinned by `tests/test_audits_readme_index.py`, which fails when it and the
@@ -140,7 +140,6 @@ from `docs/README.md`.
 | `landing-2026-09-07-items-1-9.md` | 09-07 | 09-07 审计清单 1→9 的落地记录（纯函数下沉，而非把 import 挪进函数） |
 | `architecture-before-registration-hardening-2026-09-06.md` | 09-06 | 文档拆分时保留的架构快照；其中的行号与文件尺寸**不是**当前实现的声明 |
 | `sentinel-account-health-migration.md` | — | Sentinel / account-health 迁移记录：注册 / 恢复 / 手机注册 / 结账审批改为发 flow-bound token |
-| `browser_profiles_manifest_20260909.txt` | 09-09 | 一次性证据：`runtime/browser_profiles/camoufox` 清除前的 profile 清单（目录名 / 文件数 / 字节数 / mtime） |
 
 ### Not in this directory
 

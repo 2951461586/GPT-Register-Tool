@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
 from typing import Any, Mapping, Iterable
 
-from ..config import ConfigInput, resolve_runtime_config
+from ..config import ConfigInput, resolve_config_file, resolve_runtime_config
 from ..storage import database_path
 
 
@@ -166,11 +166,18 @@ class AccountLifecycle:
         for value in email_cfg.get("pool_files", ()) if isinstance(email_cfg.get("pool_files"), (list, tuple)) else ():
             if str(value).strip():
                 candidates.append(str(value).strip())
-        root = self.config.source.parent if self.config.source.name != "<injected>" else Path.cwd()
+        source = self.config.source
+        use_config_dir = source.name != "<injected>" and source.is_dir()
+        root = source.parent if source.name != "<injected>" else Path.cwd()
         resolved: list[str] = []
         for value in candidates:
             path = Path(value).expanduser()
-            resolved.append(str(path if path.is_absolute() else root / path))
+            if path.is_absolute():
+                resolved.append(str(path))
+            elif use_config_dir:
+                resolved.append(str(resolve_config_file(value)))
+            else:
+                resolved.append(str(root / path))
         return tuple(dict.fromkeys(resolved))
 
     @staticmethod

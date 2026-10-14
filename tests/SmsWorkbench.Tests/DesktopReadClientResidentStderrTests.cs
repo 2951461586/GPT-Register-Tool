@@ -23,10 +23,13 @@ public sealed class DesktopReadClientResidentStderrTests
         public StubPaths(string root, string script)
         {
             RootDirectory = root;
+            ConfigDirectory = root;
             BackendScriptPath = script;
         }
 
         public string RootDirectory { get; }
+
+        public string ConfigDirectory { get; }
 
         public string BackendScriptPath { get; }
     }

@@ -14,7 +14,7 @@ from typing import Any
 
 from .config import ConfigInput, RuntimeConfig, resolve_runtime_config
 from .mailbox_parsers import parse_mailbox_pool_line
-from .paths import PROJECT_ROOT
+from .paths import PROJECT_ROOT, config_dir, resolve_config_file
 from .promotion_states import (
     payment_eligibility_label,
     promotion_marker_is_stale,
@@ -334,7 +334,7 @@ def read_mailbox_pool(
     root = Path(root_dir) if root_dir is not None else PROJECT_ROOT
     partial = RegistrationRetryGuard(config.data).dead_end_emails()
     files = []
-    for path in _known_mailbox_pool_files(config, extra_files, root):
+    for path in _known_mailbox_pool_files(config, extra_files, root, include_config_dir=root_dir is None):
         files.append({
             "path": str(path),
             "name": path.name,
@@ -353,7 +353,12 @@ def read_mailbox_pool(
     return {"files": files}
 
 
-def _known_mailbox_pool_files(config: RuntimeConfig, extra_files, root: Path) -> list[Path]:
+def _known_mailbox_pool_files(
+    config: RuntimeConfig,
+    extra_files,
+    root: Path,
+    include_config_dir: bool = True,
+) -> list[Path]:
     paths: list[Path] = []
     seen: set[str] = set()
 
@@ -375,11 +380,18 @@ def _known_mailbox_pool_files(config: RuntimeConfig, extra_files, root: Path) ->
         add(candidate)
     token_file = str((config.data.get("email_registration") or {}).get("token_file") or "").strip()
     add(token_file or "mailbox_tokens.txt")
-    for name in _MAILBOX_POOL_CANDIDATE_NAMES:
-        add(root / name)
-    if root.is_dir():
-        for path in sorted(root.glob(_MAILBOX_POOL_GLOB)):
-            add(path)
+    scan_roots = [root]
+    if include_config_dir:
+        add(resolve_config_file(token_file))
+        user_config = config_dir()
+        if user_config.resolve() != root.resolve():
+            scan_roots.append(user_config)
+    for scan_root in scan_roots:
+        for name in _MAILBOX_POOL_CANDIDATE_NAMES:
+            add(scan_root / name)
+        if scan_root.is_dir():
+            for path in sorted(scan_root.glob(_MAILBOX_POOL_GLOB)):
+                add(path)
     return paths
 
 

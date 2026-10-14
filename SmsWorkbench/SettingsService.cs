@@ -36,9 +36,10 @@ namespace SmsWorkbench
         {
             _paths = paths;
             // Configuration now lives in the proxy/runtime/payment shard files
-            // under the application root; expose the directory so "Open config"
+            // under the per-user config directory; expose it so "Open config"
             // reveals the full sharded layout.
-            ConfigPath = paths.RootDirectory;
+            Directory.CreateDirectory(paths.ConfigDirectory);
+            ConfigPath = paths.ConfigDirectory;
         }
 
         public string ConfigPath { get; }

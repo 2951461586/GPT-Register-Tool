@@ -29,11 +29,11 @@ import logging
 import os
 import re
 from collections.abc import Mapping
-from pathlib import Path
 
 from curl_cffi import requests as curl_requests
 
 from .config import ConfigInput, current_config_data, resolve_runtime_config
+from .paths import resolve_config_file
 from .providers import outlook_imap_client
 from .providers import mailbox_gmail
 from .mail_otp import (
@@ -491,7 +491,13 @@ def _create_smailr_mailboxes(args=None):
 
 
 def _default_nb_register_token_file():
-    return str(Path.cwd() / "mailbox_tokens.txt")
+    return str(resolve_config_file(None))
+
+
+def _configured_token_file(value):
+    """Resolve ``email_registration.token_file`` (relative means: config directory)."""
+    text = str(value or "").strip()
+    return str(resolve_config_file(text)) if text else ""
 
 
 def _gmail_mailbox_from_token_files(email):
@@ -499,7 +505,7 @@ def _gmail_mailbox_from_token_files(email):
     if not target_email or "@" not in target_email:
         return None
     paths = []
-    configured = str(_email_cfg().get("token_file") or "").strip()
+    configured = _configured_token_file(_email_cfg().get("token_file"))
     if configured:
         paths.append(configured)
     paths.append(_default_nb_register_token_file())
@@ -645,7 +651,7 @@ def _load_mailbox_pool(args=None):
         if direct:
             pool = [direct]
         else:
-            configured = _email_cfg().get("token_file")
+            configured = _configured_token_file(_email_cfg().get("token_file"))
             pool = _parse_mailbox_token_file(configured or _default_nb_register_token_file())
     pool = mailbox_remail.filter_dead_remail_mailboxes(pool)
     prune_quarantine_against_pool(pool)

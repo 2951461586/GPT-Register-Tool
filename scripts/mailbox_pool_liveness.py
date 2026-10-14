@@ -24,6 +24,7 @@ if str(ROOT) not in sys.path:
 from sms_tool.config import CFG
 from sms_tool.mailbox import _fetch_mailbox_messages
 from sms_tool.mailbox_parsers import parse_mailbox_pool_line
+from sms_tool.paths import resolve_config_file
 
 
 def _fingerprint(raw: str) -> str:
@@ -73,7 +74,7 @@ def _probe(item: tuple[int, str, object]) -> dict[str, object]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--pool-file", type=Path, default=ROOT / "mailbox_tokens.txt")
+    parser.add_argument("--pool-file", type=Path, default=resolve_config_file(None))
     parser.add_argument("--workers", type=int, default=12)
     parser.add_argument("--apply", action="store_true", help="remove only definitive dead entries after the scan")
     parser.add_argument("--quarantine", type=Path, default=None, help="quarantine state for second confirmation")

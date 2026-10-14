@@ -6,6 +6,28 @@ The runtime uses `proxy.json`, `runtime.json` and `payment.json`. Keep
 `config.json` support for existing installations and first-load migration.
 Do not delete a local legacy file automatically.
 
+## Where the files live
+
+Config shards and the default mailbox pool (`mailbox_tokens.txt`) live in a
+per-user directory **outside the repository**:
+`%LOCALAPPDATA%\GPTRegisterTool\config` (`$XDG_CONFIG_HOME/GPTRegisterTool/config`
+off Windows). `GPT_REGISTER_CONFIG_DIR` overrides it; the WPF shell exports the
+same value to every Python process it starts, so both sides always agree.
+
+* Resolution: `sms_tool/paths.py:config_dir()` and C# `ApplicationPaths.ConfigDirectory`.
+* Migration: when the directory is the implicit default, files left in the repo
+  root (`config.json`, `proxy.json`, `runtime.json`, `payment.json`,
+  `mailbox_tokens.txt` and their `.bak`) are **moved** once, never overwriting an
+  existing target. An explicit `GPT_REGISTER_CONFIG_DIR` never pulls files out of
+  the checkout. Both languages implement the same rule, so whichever starts
+  first leaves nothing for the other.
+* A relative `email_registration.token_file` is relative to this directory
+  (`resolve_config_file`); a legacy repo-root file is still honoured until moved.
+* The test suite sets `GPT_REGISTER_CONFIG_DIR` to a temporary directory seeded
+  from `config.example.json`, so it never sees operator credentials.
+* `sessions/` and `runtime/` stay in the project root (they are gitignored
+  runtime output, not configuration).
+
 Default load order:
 
 1. If **any** shard exists, merge existing shards in order:

@@ -472,6 +472,7 @@ namespace SmsWorkbench
                     StandardOutputEncoding = Encoding.UTF8,
                     StandardErrorEncoding = Encoding.UTF8,
                 };
+                startInfo.Environment[ApplicationPaths.ConfigDirectoryEnvironmentVariable] = paths.ConfigDirectory;
                 startInfo.ArgumentList.Add(paths.BackendScriptPath);
                 startInfo.ArgumentList.Add("--desktop-serve");
                 Process process = Process.Start(startInfo)

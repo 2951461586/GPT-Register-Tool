@@ -30,6 +30,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from sms_tool.paths import resolve_config_file
+
 
 def _pool_email(line: str) -> str:
     """Extract the lowercased email from one mailbox-pool line.
@@ -116,7 +118,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--database", type=Path, default=PROJECT_ROOT / "runtime" / "accounts.sqlite3")
     parser.add_argument("--sessions-dir", type=Path, default=PROJECT_ROOT / "sessions")
-    parser.add_argument("--pool-file", type=Path, default=PROJECT_ROOT / "mailbox_tokens.txt")
+    parser.add_argument("--pool-file", type=Path, default=resolve_config_file(None))
     parser.add_argument("--domain", default="", help="restrict to one email domain, e.g. icloud.com")
     parser.add_argument("--apply", action="store_true", help="remove no-session orphans; default is a dry-run report")
     parser.add_argument("--report", type=Path, default=None)

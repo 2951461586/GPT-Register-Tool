@@ -161,7 +161,12 @@ namespace SmsWorkbench
         {
             string configured = settingsService.GetString("email_registration.token_file");
             string expanded = configured.Length > 0 ? Environment.ExpandEnvironmentVariables(configured) : "mailbox_tokens.txt";
-            return Path.IsPathRooted(expanded) ? expanded : Path.Combine(rootDir, expanded);
+            if (Path.IsPathRooted(expanded)) return expanded;
+            string inConfigDir = Path.Combine(configDir, expanded);
+            // A pool that predates the config directory stays usable until the
+            // startup migration has moved it.
+            string legacy = Path.Combine(rootDir, expanded);
+            return !File.Exists(inConfigDir) && File.Exists(legacy) ? legacy : inConfigDir;
         }
 
         // ── Thin delegates to the shared JSON plumbing (BackendJson) ─────

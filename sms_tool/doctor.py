@@ -20,6 +20,8 @@ import sys
 from collections.abc import Callable, Mapping
 from typing import Any
 
+from .paths import resolve_config_file
+
 
 def _check(name: str, status: str, detail: str = "", hint: str = "") -> dict[str, str]:
     return {"name": name, "status": status, "detail": detail, "hint": hint}
@@ -268,8 +270,10 @@ def _probe_config(config: Mapping[str, Any], config_source: str) -> list[dict[st
     email_cfg = config.get("email_registration") if isinstance(config.get("email_registration"), Mapping) else {}
     token_file = str(email_cfg.get("token_file") or "").strip()
     mailbox_sources: list[str] = []
-    if token_file and os.path.isfile(token_file):
-        mailbox_sources.append(f"token_file:{token_file}")
+    if token_file:
+        resolved_token_file = resolve_config_file(token_file)
+        if resolved_token_file.is_file():
+            mailbox_sources.append(f"token_file:{resolved_token_file}")
     for provider in ("remail", "smailr"):
         provider_cfg = email_cfg.get(provider) if isinstance(email_cfg.get(provider), Mapping) else {}
         if provider_cfg.get("enabled") and str(provider_cfg.get("api_key") or "").strip():

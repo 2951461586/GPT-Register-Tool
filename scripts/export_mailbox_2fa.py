@@ -34,7 +34,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 DB = ROOT / "runtime" / "accounts.sqlite3"
-POOL_FILE = ROOT / "mailbox_tokens.txt"
+from sms_tool.paths import resolve_config_file  # noqa: E402
+
+POOL_FILE = resolve_config_file(None)
 OUT_DIR = ROOT / "runtime" / "analysis"
 PROMO_FREE = "Free·无优惠"
 

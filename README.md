@@ -89,7 +89,7 @@ flowchart TB
     end
 
     SVC["services/<br/>可选本地协议服务（子进程边界）<br/>mail-otp-web · protocol-payment"]
-    LOCAL[("本地配置与运行数据<br/>proxy.json · runtime.json · payment.json<br/>sessions/ · runtime/ —— Git 忽略")]
+    LOCAL[("本地配置与运行数据<br/>%LOCALAPPDATA%\GPTRegisterTool\config 下的 proxy/runtime/payment 分片<br/>sessions/ · runtime/ —— Git 忽略")]
 
     PANEL --> IPC --> CLI
     CLI --> REG
@@ -146,7 +146,8 @@ GPT-Register-Tool-Setup-vYYYY.MM.DD.exe
 
 ```powershell
 python -m pip install -r requirements.txt -c constraints.txt
-copy config.example.json config.json
+New-Item -ItemType Directory -Force "$env:LOCALAPPDATA\GPTRegisterTool\config" | Out-Null
+copy config.example.json "$env:LOCALAPPDATA\GPTRegisterTool\config\config.json"
 ```
 
 ### 方式二：便携压缩包
@@ -161,7 +162,8 @@ GPT-Register-Tool-win-x64-vYYYY.MM.DD.zip
 
 ```powershell
 python -m pip install -r requirements.txt -c constraints.txt
-copy config.example.json config.json
+New-Item -ItemType Directory -Force "$env:LOCALAPPDATA\GPTRegisterTool\config" | Out-Null
+copy config.example.json "$env:LOCALAPPDATA\GPTRegisterTool\config\config.json"
 .\dist\net10\SmsWorkbench.exe
 ```
 
@@ -171,12 +173,23 @@ copy config.example.json config.json
 git clone https://github.com/2951461586/GPT-Register-Tool.git
 cd GPT-Register-Tool
 python -m pip install -r requirements.txt -c constraints.txt
-copy config.example.json config.json
+New-Item -ItemType Directory -Force "$env:LOCALAPPDATA\GPTRegisterTool\config" | Out-Null
+copy config.example.json "$env:LOCALAPPDATA\GPTRegisterTool\config\config.json"
 powershell -ExecutionPolicy Bypass -File .\SmsWorkbench\build_dotnet.ps1
 .\dist\net10\SmsWorkbench.exe
 ```
 
 桌面程序只能通过 `SmsWorkbench/build_dotnet.ps1` 编译。不要直接运行 `dotnet build`，因为它只产生中间文件，不会更新标准工作区 `dist/net10`。
+
+### 配置与凭证位置
+
+配置分片（`proxy.json` / `runtime.json` / `payment.json`）和默认邮箱池 `mailbox_tokens.txt` 存放在**仓库之外**的用户目录：
+
+```text
+%LOCALAPPDATA%\GPTRegisterTool\config
+```
+
+设置环境变量 `GPT_REGISTER_CONFIG_DIR` 可改用其他目录（桌面端启动 Python 后端时会自动传递同一个值）。从旧版本升级时，仓库根目录里遗留的这些文件会在首次启动时**移动**（而不是复制）到新目录；目标目录已有同名文件时不会覆盖。`token_file` 配置为相对路径时，相对的是这个目录。
 
 ### 首次配置
 
@@ -204,7 +217,7 @@ ReMail API Key 也可以通过环境变量提供：
 $env:REMAIL_API_KEY = "rk-your-key"
 ```
 
-环境变量优先于 `config.json`。桌面设置页保存的 API Key 仅写入本地且被 Git 忽略的 `config.json`。
+环境变量优先于配置文件。桌面设置页保存的 API Key 仅写入上述用户配置目录，不在仓库内。
 
 ## 许可证与使用责任
 

@@ -20,6 +20,9 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from .driver_env import driver_config
+from .paths import config_dir as _resolve_config_dir
+from .paths import migrate_legacy_root_files_if_default
+from .paths import resolve_config_file as resolve_config_file  # re-export: config is the layer subpackages already depend on
 
 
 class ConfigError(ValueError):
@@ -101,7 +104,8 @@ SHARD_OWNERSHIP: dict[str, str] = {
     "cpa_mode": "payment",
     "sub2api": "payment",
 }
-_CONFIG_DIR = Path(__file__).resolve().parent.parent  # project root
+# Credential-bearing shards live outside the git checkout (see sms_tool/paths.py).
+_CONFIG_DIR = _resolve_config_dir()
 
 
 def _deep_merge(target: dict, source: Mapping) -> None:
@@ -209,6 +213,8 @@ def load_merged_config() -> dict[str, Any]:
     Honors a legacy single config.json by migrating it into shards on first
     load. Returns {} when no configuration exists.
     """
+    if _CONFIG_DIR == _resolve_config_dir():
+        migrate_legacy_root_files_if_default()
     shard_paths = [(name, _CONFIG_DIR / filename) for name, filename in SHARD_FILES.items()]
     if any(path.exists() for _, path in shard_paths):
         merged: dict[str, Any] = {}
@@ -446,7 +452,7 @@ def default_config_path() -> Path:
     derived from it points at the wrong directory.
     """
     package_dir = Path(__file__).resolve().parent
-    project_file = package_dir.parent / "config.json"
+    project_file = _CONFIG_DIR / "config.json"
     package_file = package_dir / "config.json"
     return project_file if project_file.is_file() else package_file
 

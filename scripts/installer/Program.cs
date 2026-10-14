@@ -142,6 +142,19 @@ internal static class Program
         }
     }
 
+    // Same location SmsWorkbench and the Python backend resolve; credentials stay
+    // outside the install tree so an upgrade or uninstall never touches them.
+    private static string ConfigDirectory()
+    {
+        string? configured = Environment.GetEnvironmentVariable("GPT_REGISTER_CONFIG_DIR");
+        if (!string.IsNullOrWhiteSpace(configured))
+            return Path.GetFullPath(Environment.ExpandEnvironmentVariables(configured.Trim()));
+        return Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "GPTRegisterTool",
+            "config");
+    }
+
     private static InstallResult Install(InstallOptions options, IProgress<string>? progress)
     {
         string installDir = Environment.ExpandEnvironmentVariables(options.InstallDir.Trim('"'));
@@ -155,9 +168,10 @@ internal static class Program
 
         progress?.Report("Preparing local configuration...");
         string exampleConfig = Path.Combine(installDir, "config.example.json");
-        string config = Path.Combine(installDir, "config.json");
+        string config = Path.Combine(ConfigDirectory(), "config.json");
         if (!File.Exists(config) && File.Exists(exampleConfig))
         {
+            Directory.CreateDirectory(Path.GetDirectoryName(config)!);
             File.Copy(exampleConfig, config);
         }
 
@@ -480,7 +494,7 @@ internal static class Program
 
                 statusLabel.Text = "Checking environment...";
                 EnvironmentCheck check = await Task.Run(() => RunDoctor(result.InstallDir));
-                string configPath = Path.Combine(result.InstallDir, "config.json");
+                string configPath = Path.Combine(ConfigDirectory(), "config.json");
                 string configNote = File.Exists(configPath)
                     ? $"配置文件已就绪: {configPath}\n首次使用前请填入代理/邮箱/SMS 等本地设置(桌面端“设置”窗口也可编辑)。"
                     : "未找到 config.json:请从 config.example.json 复制一份并填写。";

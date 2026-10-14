@@ -58,6 +58,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable, NamedTuple
 
+from .paths import config_dir
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 #: Config shards that make up the runtime configuration.
@@ -135,7 +137,7 @@ def iter_leaf_paths(obj: Any, prefix: str = "") -> Iterable[tuple[str, Any]]:
 
 def shard_leaf_paths(root: Path | str | None = None) -> dict[str, list[str]]:
     """Map every config leaf path to the shards that define it."""
-    root = Path(root) if root else PROJECT_ROOT
+    root = Path(root) if root else config_dir()
     found: dict[str, list[str]] = {}
     for name in SHARD_NAMES:
         path = root / name
@@ -203,10 +205,11 @@ def unread_config_keys(root: Path | str | None = None) -> list[UnreadKey]:
     population: the scan sees Python only, and those keys have a cited C#
     reader, so reporting them would be a false positive.
     """
+    shard_root = Path(root) if root else None
     root = Path(root) if root else PROJECT_ROOT
     literals = source_string_literals(str(root))
     example = example_leaf_paths(root)
-    shard_paths = shard_leaf_paths(root)
+    shard_paths = shard_leaf_paths(shard_root)
 
     def is_read(path: str) -> bool:
         return path.rsplit(".", 1)[-1] in literals or path in literals

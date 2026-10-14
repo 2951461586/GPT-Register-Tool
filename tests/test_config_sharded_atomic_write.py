@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
-from sms_tool import config
+from sms_tool import config, paths
 
 
 def test_write_shards_creates_all_three_shards(tmp_path):
@@ -130,12 +130,14 @@ def test_load_merged_config_after_atomic_write_reads_back(tmp_path):
         assert merged["paypal"]["mode"] == "hosted"
 
 
-def test_default_config_dir_is_the_project_root():
+def test_default_config_dir_is_the_resolved_credential_directory():
     package_dir = Path(config.__file__).resolve().parent
     root = config.default_config_dir()
     assert root == config._CONFIG_DIR
-    assert root == package_dir.parent
+    assert root == paths.config_dir()
+    # Credentials must never default to a location inside the git checkout.
     assert root != package_dir
+    assert root != package_dir.parent
 
 
 def test_default_config_path_parent_degenerates_once_the_legacy_file_is_gone(tmp_path, monkeypatch):
@@ -149,6 +151,7 @@ def test_default_config_path_parent_degenerates_once_the_legacy_file_is_gone(tmp
     package = tmp_path / "sms_tool"
     package.mkdir()
     monkeypatch.setattr(config, "__file__", str(package / "config.py"))
+    monkeypatch.setattr(config, "_CONFIG_DIR", tmp_path / "empty_config_dir")
 
     resolved_package = Path(config.__file__).resolve().parent
     assert config.default_config_path() == resolved_package / "config.json"

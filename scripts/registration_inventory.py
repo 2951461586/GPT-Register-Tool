@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from collections import Counter
 from pathlib import Path
 
@@ -60,9 +61,16 @@ def cleanup_inventory(runtime: Path) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
+    parser.add_argument("--pool-file", type=Path, default=None, help="default: the mailbox pool in the config directory")
     args = parser.parse_args()
+    pool_file = args.pool_file
+    if pool_file is None:
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+        from sms_tool.paths import resolve_config_file
+
+        pool_file = resolve_config_file(None)
     print(json.dumps({
-        "candidates": candidate_counts(args.root / "mailbox_tokens.txt"),
+        "candidates": candidate_counts(pool_file),
         "cleanup": cleanup_inventory(args.root / "runtime"),
     }, ensure_ascii=True, indent=2))
 

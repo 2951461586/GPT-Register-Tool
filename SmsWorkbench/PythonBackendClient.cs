@@ -152,6 +152,7 @@ namespace SmsWorkbench
             startInfo.ArgumentList.Add(_paths.BackendScriptPath);
             foreach (string argument in command.Arguments)
                 startInfo.ArgumentList.Add(argument ?? "");
+            startInfo.Environment[ApplicationPaths.ConfigDirectoryEnvironmentVariable] = _paths.ConfigDirectory;
             foreach (KeyValuePair<string, string> variable in command.EnvironmentVariables)
                 startInfo.Environment[variable.Key] = variable.Value ?? "";
             return startInfo;

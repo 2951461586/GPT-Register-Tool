@@ -24,6 +24,7 @@ namespace SmsWorkbench
         private readonly IPaymentBatchService paymentBatchService;
         private readonly IFileLauncher fileLauncher;
         private readonly string rootDir;
+        private readonly string configDir;
         private readonly CancellationTokenSource _lifetimeCts = new();
         private int taskSeq = 1;
         private string searchText = "";
@@ -244,6 +245,7 @@ namespace SmsWorkbench
             this.logger = logger;
             this.fileLauncher = fileLauncher;
             rootDir = paths.RootDirectory;
+            configDir = paths.ConfigDirectory;
             InitializeComponent();
             snackbarService.SetSnackbarPresenter(SnackbarPresenter);
             DataContext = this;

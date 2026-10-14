@@ -20,6 +20,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from sms_tool.accounts.account_cleanup import select_removable_accounts
+from sms_tool.paths import config_dir
 
 
 def _repo_root() -> Path:
@@ -109,7 +110,11 @@ def main() -> int:
     parser.add_argument("--apply", action="store_true", help="apply removal; default is dry-run")
     parser.add_argument("--report", type=Path, default=None)
     args = parser.parse_args()
-    pools = args.pool_file or [root / name for name in ("hotmail.txt", "hotmail.expired.txt", "hotmail.refreshed.txt", "mailbox_tokens.txt")]
+    pool_names = ("hotmail.txt", "hotmail.expired.txt", "hotmail.refreshed.txt", "mailbox_tokens.txt")
+    pools = args.pool_file or [
+        *(root / name for name in pool_names),
+        *(config_dir() / name for name in pool_names),
+    ]
     result = cleanup(args.database, args.sessions_dir, pools, apply=args.apply)
     output = json.dumps(result, ensure_ascii=False, indent=2)
     print(output)

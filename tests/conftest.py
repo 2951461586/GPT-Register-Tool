@@ -18,10 +18,23 @@ So: opt-in fixtures for DB work, autouse only for cheap global state.
 from __future__ import annotations
 
 import os
+import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+
+# Must run before any `sms_tool` import: `sms_tool.config` resolves its config
+# directory at import time. Without this, the suite would read (and, through the
+# legacy-root migration, move) the operator's real credential files.
+if not os.environ.get("GPT_REGISTER_CONFIG_DIR"):
+    _TEST_CONFIG_DIR = Path(tempfile.mkdtemp(prefix="gpt_register_test_config_"))
+    # Seed from the public example so config-dependent code paths see a valid,
+    # credential-free configuration instead of the operator's real one.
+    _example = Path(__file__).resolve().parent.parent / "config.example.json"
+    if _example.is_file():
+        (_TEST_CONFIG_DIR / "config.json").write_bytes(_example.read_bytes())
+    os.environ["GPT_REGISTER_CONFIG_DIR"] = str(_TEST_CONFIG_DIR)
 
 from sms_tool import logging_setup
 from sms_tool.store import reset_database_init_cache

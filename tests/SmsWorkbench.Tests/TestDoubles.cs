@@ -19,10 +19,13 @@ internal sealed class TestApplicationPaths : IApplicationPaths
     public TestApplicationPaths(string rootDirectory)
     {
         RootDirectory = rootDirectory;
+        ConfigDirectory = rootDirectory;
         BackendScriptPath = Path.Combine(rootDirectory, "chatgpt_phone_reg.py");
     }
 
     public string RootDirectory { get; }
+
+    public string ConfigDirectory { get; }
 
     public string BackendScriptPath { get; }
 }

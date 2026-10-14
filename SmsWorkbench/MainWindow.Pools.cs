@@ -318,15 +318,23 @@ namespace SmsWorkbench
                 return chataiMailboxFilePath;
 
             string[] candidates = { "hotmail.txt", "chatai_mailbox.txt", "chatai.txt" };
-            foreach (string name in candidates)
+            string[] searchDirectories = { configDir, rootDir };
+            foreach (string directory in searchDirectories)
             {
-                string path = Path.Combine(rootDir, name);
-                if (File.Exists(path)) return path;
+                foreach (string name in candidates)
+                {
+                    string path = Path.Combine(directory, name);
+                    if (File.Exists(path)) return path;
+                }
             }
 
-            foreach (string path in Directory.GetFiles(rootDir, "*chatai*.txt", SearchOption.TopDirectoryOnly))
+            foreach (string directory in searchDirectories)
             {
-                return path;
+                if (!Directory.Exists(directory)) continue;
+                foreach (string path in Directory.GetFiles(directory, "*chatai*.txt", SearchOption.TopDirectoryOnly))
+                {
+                    return path;
+                }
             }
 
             return "";
