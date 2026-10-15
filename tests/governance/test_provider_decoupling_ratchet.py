@@ -172,12 +172,12 @@ def test_ratchet_holds_for_the_current_tree():
 
 
 def test_summary_facts_are_pinned():
-    """235 same-named defs: 189 already migrated, 0 verbatim copies, 46 forks."""
+    """235 same-named defs: 209 already migrated, 0 verbatim copies, 26 forks."""
     assert pdr.analyze(ROOT).summary() == {
         "same_named_total": 235,
-        pdr.DELEGATING: 189,
+        pdr.DELEGATING: 209,
         pdr.IDENTICAL: 0,
-        pdr.DIVERGENT: 46,
+        pdr.DIVERGENT: 26,
         "files_with_frozen_pairs": 7,
     }
 
@@ -188,12 +188,12 @@ def test_the_migrated_extractors_have_no_verbatim_copies_left():
     expected_delegating = {
         "ideal/ideal_qr_extract.py": 66,
         "twint/twint_extract.py": 66,
-        "blik/blik_qr_extract.py": 46,
+        "blik/blik_qr_extract.py": 66,
     }
     expected_divergent = {
         "ideal/ideal_qr_extract.py": 2,
         "twint/twint_extract.py": 2,
-        "blik/blik_qr_extract.py": 32,
+        "blik/blik_qr_extract.py": 12,
     }
     for provider_file, delegating in expected_delegating.items():
         counts = analysis.counts_for(provider_file)
@@ -203,20 +203,19 @@ def test_the_migrated_extractors_have_no_verbatim_copies_left():
 
 
 def test_blik_carries_the_documented_divergent_bulk():
-    """blik's remaining 32 pairs are real forks, not un-migrated copies.
+    """blik's remaining 12 pairs are real forks, not un-migrated copies.
 
     ``blik`` was the last extractor still carrying verbatim copies -- eight of
     them (the payload/redirect predicates and the two proxy-error classifiers).
     They were converged onto ``common/payment_predicates.py`` and
-    ``common/extractor_helpers.py`` on 2026-10-10, which moved this file from
-    39 delegating / 8 identical to 47 delegating / 0 identical.  What is left is
-    divergent on purpose (the geo/proxy-selection cluster and the ``build_email``
-    Rule-19 case), so it is pinned as 0 identical / 32 divergent rather than
-    assumed to be unfinished migration.
+    ``common/extractor_helpers.py`` on 2026-10-10, and the 20 proxy-state,
+    seed-file, and resource-URL helpers were delegated to ``common/`` on
+    2026-10-15, bringing ``blik`` to 66 delegating / 0 identical / 12 divergent
+    (matching ``ideal`` and ``twint`` on all 66 delegating helpers).
     """
     analysis = pdr.analyze(ROOT)
     counts = analysis.counts_for("blik/blik_qr_extract.py")
-    assert counts == {pdr.DELEGATING: 46, pdr.IDENTICAL: 0, pdr.DIVERGENT: 32}
+    assert counts == {pdr.DELEGATING: 66, pdr.IDENTICAL: 0, pdr.DIVERGENT: 12}
 
 
 def test_momo_shares_the_pure_primitives_and_keeps_its_two_forks():

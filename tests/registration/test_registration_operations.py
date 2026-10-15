@@ -45,6 +45,7 @@ def test_interface_covers_only_dependencies_the_workflow_uses():
     names: set[str] = set()
     for module in (
         "registration_handlers.py",
+        "registration_account_stages.py",
         "registration_finalize.py",
         "registration_otp_stages.py",
     ):

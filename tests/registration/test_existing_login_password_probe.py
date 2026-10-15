@@ -738,7 +738,11 @@ class ProbePositionGuardTests(unittest.TestCase):
         # ``registration_finalize.py`` (the P1 finalize/totp split), so the two
         # call sites now live in two files.  The invariant -- *both* lanes pass
         # the flag -- is what matters, not which file each lives in.
-        src = _source("sms_tool/registration_handlers.py") + _source("sms_tool/registration_finalize.py")
+        src = (
+            _source("sms_tool/registration_handlers.py")
+            + _source("sms_tool/registration_account_stages.py")
+            + _source("sms_tool/registration_finalize.py")
+        )
 
         self.assertEqual(src.count("allow_passwordless=not s.existing_account"), 2)
 

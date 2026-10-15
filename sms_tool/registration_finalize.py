@@ -13,17 +13,23 @@ guard against import cycles), so behaviour is unchanged.
 
 from __future__ import annotations
 
+import logging
 import time
 from typing import Any
 
+from . import paypal_proxy as _paypal_proxy
 from . import registration_checkpoint
+from . import token_telemetry as _token_telemetry
 from .auth_headers import current_auth_fingerprint
-from .sanitizer import describe_exception
 from .codex_oauth import collect_codex_oauth_tokens
+from .operator_output import emit as _emit
 from .registration_outcome import needs_manual_session_recovery
 from .registration_result import build_registration_result
 from .registration_retry_guard import RegistrationRetryGuard
 from .registration_state import RegistrationState
+from .sanitizer import describe_exception
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def obtain_oauth_refresh_token(self) -> None:
@@ -100,9 +106,11 @@ def obtain_oauth_refresh_token(self) -> None:
         # run's ChatGPT web AT -- the one just probed, and the one the
         # persisted ``access_token`` has to stay.
         s.oauth_refresh_token = str(tokens.get("refresh_token") or s.oauth_refresh_token or "").strip()
-    print(
-        f"  OAuth refresh token: {r._oauth_result_summary(s.oauth_result)} "
-        f"refresh_token_status={'oauth_present' if s.oauth_refresh_token else 'no_rt'}"
+    _emit(
+        _LOGGER,
+        "  OAuth refresh token: %s refresh_token_status=%s",
+        r._oauth_result_summary(s.oauth_result),
+        "oauth_present" if s.oauth_refresh_token else "no_rt",
     )
 
 
@@ -116,7 +124,7 @@ def enroll_totp(self) -> None:
     if not (s.success and s.access_token and s.mailbox):
         return
     if not self.enroll_2fa:
-        print("  [2FA] Enrollment disabled (--no-2fa)")
+        _emit(_LOGGER, "  [2FA] Enrollment disabled (--no-2fa)")
         return
 
     def poll_reauth_otp(email: str, issued_after_unix: int = 0, timeout: int = 120, **kwargs: Any) -> str:
@@ -179,26 +187,28 @@ def enroll_totp(self) -> None:
         if s.twofa_result.get("ok"):
             s.totp_secret = s.twofa_result.get("totp_secret", "")
             s.access_token = s.twofa_result.get("access_token") or s.access_token
-            print("  [2FA] TOTP enrolled")
+            _emit(_LOGGER, "  [2FA] TOTP enrolled")
         else:
-            print(f"  [2FA] Enrollment skipped: {r._sanitize_text(s.twofa_result.get('error', 'unknown'))}")
+            _emit(
+                _LOGGER,
+                "  [2FA] Enrollment skipped: %s",
+                r._sanitize_text(s.twofa_result.get("error", "unknown")),
+            )
     except ImportError as exc:
         s.twofa_result = {"ok": False, "error": f"pyotp_missing:{exc}"}
-        print("  [2FA] pyotp not installed")
+        _emit(_LOGGER, "  [2FA] pyotp not installed")
     except Exception as exc:
         s.twofa_result = {"ok": False, "error": str(exc)}
-        print(f"  [2FA] Setup failed: {describe_exception(exc)}")
+        _emit(_LOGGER, "  [2FA] Setup failed: %s", describe_exception(exc))
 
 
 def finalize(self) -> dict[str, Any]:
     r = self.r
     s = self.runtime
-    from .token_telemetry import access_token_telemetry
-    from .paypal_proxy import infer_proxy_country
     from .sentinel.bundle import sentinel_version
 
     fingerprint = current_auth_fingerprint()
-    token_telemetry = access_token_telemetry(s.access_token)
+    token_telemetry = _token_telemetry.access_token_telemetry(s.access_token)
     from .accounts.account_identity import create_registration_identity, complete_registration_identity
 
     identity_context = complete_registration_identity(
@@ -250,7 +260,7 @@ def finalize(self) -> dict[str, Any]:
         totp_secret=s.totp_secret or "",
         twofa_enrollment=s.twofa_result or {"ok": False, "reason": "skipped"},
         registration_success_basis="at_http_200" if s.success else "",
-        registration_country=infer_proxy_country(s.proxy),
+        registration_country=_paypal_proxy.infer_proxy_country(s.proxy),
         registration_warning=s.registration_warning,
         post_registration_ready=s.post_registration_ready,
         mailbox_snapshot=r._mailbox_snapshot(s.mailbox),
@@ -295,9 +305,9 @@ def finalize(self) -> dict[str, Any]:
     self.machine.transition(RegistrationState.COMPLETED)
     if s.create_ok and not s.existing_account and not s.access_token:
         self._persist_checkpoint(registration_checkpoint.SESSION_PENDING_STATE)
-        print("  [Checkpoint] Retaining created-account session; retry will not repeat signup or OTP")
+        _emit(_LOGGER, "  [Checkpoint] Retaining created-account session; retry will not repeat signup or OTP")
     elif r._retain_registration_checkpoint(s.success, s.access_token, s.at_probe):
-        print("  [Checkpoint] Retaining post-create state for AT probe retry")
+        _emit(_LOGGER, "  [Checkpoint] Retaining post-create state for AT probe retry")
     else:
         try:
             self.persistence.clear_checkpoint(s.username, runtime_config=self.config)

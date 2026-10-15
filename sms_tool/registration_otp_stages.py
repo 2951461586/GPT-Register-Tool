@@ -252,7 +252,7 @@ def wait_email_otp(self: Any) -> None:
         reason = (
             "the server armed a passwordless arm on the password lane" if arm_mismatch else "skipping the mailbox poll"
         )
-        print(f"  Email OTP send is still pending on the server; {reason}")
+        _emit(_LOGGER, "  Email OTP send is still pending on the server; %s", reason)
         self._abort(f"email_otp_send_stuck:{OTP_ARM_MISMATCH_MARKER}" if arm_mismatch else "email_otp_send_stuck")
     s.email_code = r.otp_poll.poll(
         s.mailbox,
@@ -379,7 +379,7 @@ def validate_email_otp(self: Any) -> None:
         use_sentinel=use_sentinel,
     )
     if not otp_ok and r._is_wrong_email_otp_code(s.otp_data):
-        print("  Email OTP was rejected; retrying latest mailbox code once...")
+        _emit(_LOGGER, "  Email OTP was rejected; retrying latest mailbox code once...")
         retry_code = s.mailbox_service.poll_otp(
             s.mailbox,
             subject_keyword=r.otp_poll.subject_keywords,
@@ -426,7 +426,7 @@ def validate_email_otp(self: Any) -> None:
             label="Email OTP continue",
         )
     except Exception as exc:
-        print(f"  Email OTP continue transport warning: {describe_exception(exc)}")
+        _emit(_LOGGER, "  Email OTP continue transport warning: %s", describe_exception(exc))
 
 
 __all__ = [

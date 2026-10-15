@@ -8,6 +8,7 @@ re-exported here so every historical import path keeps working:
 * ``registration_stage_runner`` -- ``RegistrationAbort`` and the stage executor
 * ``registration_protocol_helpers`` -- pure predicates/formatters + safe int/float
 * ``registration_otp_stages`` -- the send/wait/validate email-OTP trio
+* ``registration_account_stages`` -- create_account, session fetch, and AT probe stages
 * ``registration_edge_challenge`` -- the in-flow edge-challenge hook and exit move
 * ``registration_resume`` -- checkpoint persistence and the post-create resume stage
 * ``registration_sentinel_stages`` -- Sentinel switch, password-page bundle and per-flow issuance
@@ -21,34 +22,30 @@ import time
 import uuid
 from typing import Any, Callable, Mapping
 
-from curl_cffi import requests as curl_requests
-
-from .codex_oauth import collect_codex_oauth_tokens
-from .auth_headers import set_auth_fingerprint
-from .auth_state import signup_lane_verdict
-from .desktop_ipc import emit_event
-from .failure_registry import (
-    PASSWORD_CLAIMED_MARKER,
-    PASSWORDLESS_SIGNUP_CODE,
-    is_passwordless_signup_mismatch,
-)
-
-#: Print budget for the ``user/register`` response line (see
-#: ``_post_user_register``). Named so the observability contract is greppable.
-_USER_REGISTER_PRINT_BUDGET = 1200
-from .sanitizer import account_reference, describe_exception
-from .telemetry import current_run_id
-from .registration_cancel import RegistrationCancelled, cancellable_sleep, ensure_not_cancelled
-from .registration_flags import registration_flag
-from .registration_outcome import needs_manual_session_recovery
-from .registration_result import build_registration_result
-from .registration_operations import RegistrationOperations
+from . import endpoints, registration_checkpoint
+from . import fingerprint_pool as _fingerprint_pool
+from . import mailbox_service as _mailbox_service
+from . import paypal_proxy as _paypal_proxy
+from . import registration_account_stages as _account_stages
+from . import registration_concurrency as _registration_concurrency
 from . import registration_edge_challenge as _edge_challenge
+from . import registration_finalize as _registration_finalize
 from . import registration_otp_stages as _otp_stages
 from . import registration_reference_lane as _reference_lane
 from . import registration_resume as _resume
-from . import registration_warmup as _warmup
 from . import registration_sentinel_stages as _sentinel_stages
+from . import registration_warmup as _warmup
+from .auth_headers import set_auth_fingerprint
+from .auth_state import signup_lane_verdict
+from .codex_oauth import collect_codex_oauth_tokens
+from .failure_registry import PASSWORD_CLAIMED_MARKER
+from .mailbox_errors import MailboxEndpointUnavailableError
+from .operator_output import emit as _emit
+from .providers.mailbox_graph import MailboxAuthInvalidError
+from .registration_cancel import RegistrationCancelled, cancellable_sleep, ensure_not_cancelled
+from .registration_flags import registration_flag
+from .registration_operations import RegistrationOperations
+from .registration_persistence import RegistrationPersistence, StorageRegistrationPersistence
 from .registration_protocol_helpers import (
     _create_account_response_line,
     _is_existing_login_dead_end_error,
@@ -57,16 +54,10 @@ from .registration_protocol_helpers import (
     _safe_float,
     _safe_int,
 )
-from .registration_stage_runner import RegistrationAbort, RegistrationStageRunner
-from .registration_persistence import RegistrationPersistence, StorageRegistrationPersistence
+from .registration_result import attach_fingerprint_geo_audit, safe_device_identity, safe_proxy_audit
 from .registration_retry_guard import DEAD_END_SIGNUP_ROUTED_TO_LOGIN, RegistrationRetryGuard
 from .registration_runtime import RegistrationRuntimeState
-from .mailbox_errors import MailboxEndpointUnavailableError
-from .operator_output import emit as _emit
-from .providers.mailbox_graph import MailboxAuthInvalidError
-from . import endpoints
-from . import registration_checkpoint
-from . import registration_finalize as _registration_finalize
+from .registration_stage_runner import RegistrationAbort, RegistrationStageRunner
 from .registration_state import (
     RegistrationStageOverrun,
     RegistrationState,
@@ -74,6 +65,26 @@ from .registration_state import (
     prepare_registration_context,
     seeded_device_identity,
 )
+
+#: Print budget for the ``user/register`` response line (see
+#: ``_post_user_register``). Named so the observability contract is greppable.
+_USER_REGISTER_PRINT_BUDGET = 1200
+
+__all__ = [
+    "RegistrationAbort",
+    "RegistrationEmailWorkflow",
+    "RegistrationPersistence",
+    "RegistrationStageRunner",
+    "StorageRegistrationPersistence",
+    "_apply_protocol_fingerprint",
+    "_create_account_response_line",
+    "_is_existing_login_dead_end_error",
+    "_login_probe_password",
+    "_new_registration_session",
+    "_safe_float",
+    "_safe_int",
+    "collect_codex_oauth_tokens",
+]
 
 
 def _apply_protocol_fingerprint(ops: Any, config: Any, proxy: str) -> str:
@@ -89,9 +100,7 @@ def _apply_protocol_fingerprint(ops: Any, config: Any, proxy: str) -> str:
     """
     profile = None
     try:
-        from .fingerprint_pool import shared_fingerprint_pool
-
-        pool = shared_fingerprint_pool(config)
+        pool = _fingerprint_pool.shared_fingerprint_pool(config)
         if pool.size > 0:
             profile = pool.next(proxy)
     except Exception:
@@ -106,9 +115,7 @@ def _apply_protocol_fingerprint(ops: Any, config: Any, proxy: str) -> str:
         set_auth_fingerprint(profile.name)
         return str(profile.country or "")
     else:
-        from .paypal_proxy import infer_proxy_country
-
-        country = str(infer_proxy_country(proxy) or "")
+        country = str(_paypal_proxy.infer_proxy_country(proxy) or "")
         ops.set_fingerprint_geo(country)
         return country
 
@@ -265,7 +272,7 @@ class RegistrationEmailWorkflow:
             return
         self.config = effective
         self.input_registration_mode = "password"
-        print("[*] Reference lane: password registration in the reference project's stage order")
+        _emit(_LOGGER, "[*] Reference lane: password registration in the reference project's stage order")
 
     def _abort_result(self, error: str, *, cancelled: bool = False) -> dict[str, Any]:
         """Single failure-result constructor for every run() exit path.
@@ -290,8 +297,6 @@ class RegistrationEmailWorkflow:
             existing_account_password_known=self.runtime.existing_account_password_known,
             access_token=self.runtime.access_token,
         )
-        from .registration_result import attach_fingerprint_geo_audit, safe_device_identity, safe_proxy_audit
-
         result["proxy_audit"] = safe_proxy_audit(getattr(self, "proxy_metadata", {}))
         result["device_identity"] = safe_device_identity(getattr(self, "device_identity", {}))
         attach_fingerprint_geo_audit(result, self._fingerprint_geo_metadata())
@@ -511,18 +516,14 @@ class RegistrationEmailWorkflow:
         )
         if not s.resume_checkpoint:
             self._persist_checkpoint("mailbox_ready")
-        from .mailbox_service import MailboxService
-
-        s.mailbox_service = MailboxService.create(self.config)
+        s.mailbox_service = _mailbox_service.MailboxService.create(self.config)
         chatgpt_cfg = self.config.get("chatgpt", {})
         s.auth_base = chatgpt_cfg.get("auth_base_url", endpoints.AUTH_BASE)
         s.chat_base = chatgpt_cfg.get("chat_base_url", endpoints.CHATGPT_BASE)
-        from .paypal_proxy import infer_proxy_country
-
-        r.set_fingerprint_geo(infer_proxy_country(s.proxy))
+        r.set_fingerprint_geo(_paypal_proxy.infer_proxy_country(s.proxy))
         self.machine.transition(RegistrationState.MAILBOX_READY)
         if s.resume_checkpoint:
-            print("[*] Resumable post-create checkpoint found; skipping mailbox/OTP stages")
+            _emit(_LOGGER, "[*] Resumable post-create checkpoint found; skipping mailbox/OTP stages")
             return
         # Snapshot the mailbox here, at the earliest point the mailbox is known
         # and before any OTP can be issued.
@@ -538,9 +539,9 @@ class RegistrationEmailWorkflow:
         # Taking the snapshot up front makes it a true "what was already in the
         # inbox before this attempt" marker, matching the reference design
         # where ``before_ids`` is captured during identity resolution.
-        print("[*] Snapshotting mailbox (pre-OTP baseline)")
+        _emit(_LOGGER, "[*] Snapshotting mailbox (pre-OTP baseline)")
         r._snapshot_mailbox_message(s.mailbox, proxy=s.proxy)
-        print("[*] ChatGPT Email Registration Started")
+        _emit(_LOGGER, "[*] ChatGPT Email Registration Started")
         self._run_stage(RegistrationState.SENTINEL, "0-Extract sentinel token", self.extract_sentinel)
         self._run_stage(RegistrationState.IDENTITY_READY, "1-Prepare registration identity", self.prepare_identity)
 
@@ -572,7 +573,7 @@ class RegistrationEmailWorkflow:
         from .sentinel import sentinel_backend
 
         if self.input_sentinel:
-            print("[*] Using provided sentinel tokens")
+            _emit(_LOGGER, "[*] Using provided sentinel tokens")
             s.sentinel_data = self.input_sentinel
         elif sentinel_backend(self.config) == "legacy":
             s.sentinel_data = r._extract_sentinel(
@@ -601,7 +602,7 @@ class RegistrationEmailWorkflow:
             from .sentinel import sentinel_backend
 
             if sentinel_backend(self.config) == "legacy" or self.input_sentinel:
-                print("  [Device] Regenerating Sentinel tokens for persisted device context")
+                _emit(_LOGGER, "  [Device] Regenerating Sentinel tokens for persisted device context")
                 s.sentinel_data = r._extract_sentinel(
                     proxy=s.proxy,
                     force_fresh=True,
@@ -657,7 +658,7 @@ class RegistrationEmailWorkflow:
         reused = bool(c.reused_device_context) and not self._device_seeded
         seeded = "email" if self._device_seeded else "none"
         if reused:
-            print("  [Device] Reusing persisted device context")
+            _emit(_LOGGER, "  [Device] Reusing persisted device context")
         self.device_identity = {"oai_did": s.device_id, "reused": reused, "seeded": seeded}
         # ``emit``, not ``print``: the device-layer A/B (plan-2026-10-10) reads these
         # lines from ``sms_tool.log``.  Only the first 8 characters of ``oai-did`` are
@@ -673,7 +674,9 @@ class RegistrationEmailWorkflow:
             str(reused).lower(),
             seeded,
         )
-        print(f"[*] Username: {s.username}  Password: [stored]  Name: {s.full_name}  Birth: {s.birthdate}")
+        _emit(
+            _LOGGER, "[*] Username: %s  Password: [stored]  Name: %s  Birth: %s", s.username, s.full_name, s.birthdate
+        )
         self._persist_checkpoint("identity_ready")
         s.session = _new_registration_session(s.proxy)
         self._install_edge_challenge_hook(s.session)
@@ -791,12 +794,10 @@ class RegistrationEmailWorkflow:
         s.signup_dump = signup_dump if isinstance(signup_dump, dict) else {}
         s.signup_lane = signup_lane_verdict(s.signup_dump)
         if s.signup_lane == "login":
-            print("  Signup lane hint: login (transaction says this address already has a login magic link)")
+            _emit(_LOGGER, "  Signup lane hint: login (transaction says this address already has a login magic link)")
         if _safe_int(s.signup_state.get("status") or 0) == 429:
-            from .registration_concurrency import mark_registration_rate_limited
-
             retry_after = _safe_float(s.signup_state.get("retry_after_seconds") or 300, 300.0)
-            mark_registration_rate_limited(retry_after)
+            _registration_concurrency.mark_registration_rate_limited(retry_after)
             self._abort(f"registration_rate_limited:retry_after={retry_after:.0f}s")
         if not s.signup_state.get("ok"):
             self._abort(f"signup_auth_state:{json.dumps(s.signup_state, ensure_ascii=False)[:300]}")
@@ -902,7 +903,7 @@ class RegistrationEmailWorkflow:
             },
         }
         s.password_unknown = True
-        print("  Registration mode: passwordless_signup (HAR login_or_signup)")
+        _emit(_LOGGER, "  Registration mode: passwordless_signup (HAR login_or_signup)")
 
     def _abort_user_register_failure(self) -> None:
         """Classify a non-200 ``user/register`` answer and abort with the matching error."""
@@ -1042,7 +1043,7 @@ class RegistrationEmailWorkflow:
             s.reg_data = s.reg_response.json()
         except (ValueError, TypeError):
             s.reg_data = {"_raw": s.reg_response.text[:_USER_REGISTER_PRINT_BUDGET]}
-        print(f"  Status: {s.reg_response.status_code}")
+        _emit(_LOGGER, "  Status: %s", s.reg_response.status_code)
         # 1200, not 300: the 200 body's ``oai-client-auth-session`` carries
         # ``email_verification_mode`` in cleartext, and the server switches it
         # between the signup-state value (passwordless_signup) and a third,
@@ -1053,8 +1054,10 @@ class RegistrationEmailWorkflow:
         # the one value that would name the transaction arm never reached the
         # log. The sanitizer still redacts secrets inside this line; only the
         # print budget changes.
-        print(
-            f"  Response: {r._sanitize_text(json.dumps(s.reg_data, ensure_ascii=False)[:_USER_REGISTER_PRINT_BUDGET])}"
+        _emit(
+            _LOGGER,
+            "  Response: %s",
+            r._sanitize_text(json.dumps(s.reg_data, ensure_ascii=False)[:_USER_REGISTER_PRINT_BUDGET]),
         )
         return s.reg_response
 
@@ -1074,379 +1077,35 @@ class RegistrationEmailWorkflow:
         return _otp_stages.validate_email_otp(self)
 
     def _prime_about_you_page_enabled(self) -> bool:
-        """``registration.prime_about_you_page`` (default **False**).
-
-        **Why this exists.**  ``create_account`` POSTs with
-        ``Referer: {auth_base}/about-you`` -- the request *claims* the profile
-        page state, but nothing ever navigates there.  This is the same shape
-        of gap the password page had (``_prime_create_account_password_page``):
-        a Referer asserting a page state that no GET established.  turb's
-        protocol client navigates to about-you first and says why
-        (``navigate_about_you``: "先真实导航到 about-you，让 auth session/page
-        state 与 create_account 一致"), and SunnyRegister issues a
-        ``client_auth_session_dump`` GET for the same purpose.
-
-        Off by default: create_account currently answers 200 on healthy runs;
-        adding a request to a working stage needs its own A/B
-        (``p1-6-prime-about-you-page``) first.  Non-fatal by contract: an
-        unexpected landing is reported, never raised, so this cannot turn a
-        healthy stage into a new failure mode.
-        """
-        return registration_flag(self.config, "prime_about_you_page", False)
+        return _account_stages.prime_about_you_page_enabled(self)
 
     def _prime_about_you_page(self) -> None:
-        """GET ``/about-you`` so the profile-page state exists before the POST.
-
-        Only the navigation gap turb closes with ``navigate_about_you``; the
-        OTP continue step may already have landed here, in which case the GET
-        is idempotent navigation, not a new state.  Deliberately **non-fatal**:
-        the POST's own verdict is the contract, and a failed prime must not
-        abort a stage that works without it.
-        """
-        s = self.runtime
-        try:
-            response = self.r._follow_continue_url(
-                s.session,
-                f"{s.auth_base}/about-you",
-                s.base_headers,
-                referer=f"{s.auth_base}/email-verification",
-                label="About you page prime",
-            )
-            final_url = str(getattr(response, "url", "") or "")
-            if "/about-you" not in final_url:
-                _emit(_LOGGER, "  About you page prime landed off the profile step: %s", final_url[:120])
-        except Exception as exc:
-            _emit(_LOGGER, "  About you page prime warning: %s", describe_exception(exc))
+        return _account_stages.prime_about_you_page(self)
 
     def _create_account_disallowed_backoff_delays(self) -> tuple[int, ...]:
-        """Bounded retry delays for ``registration_disallowed`` on create_account.
-
-        ``registration.create_account_disallowed_backoff`` (default **False**).
-
-        **Why this exists.**  SunnyRegister ``_create_account`` measures that
-        OpenAI can temporarily reject a fresh registration right after the OTP
-        is accepted while its IP/Sentinel risk window settles, and Remail
-        addresses are especially sensitive to that window; its protocol client
-        retries with a bounded long backoff (``[8, 20, 45]`` seconds, refreshing
-        the Sentinel proof each round) and only for that mailbox family.
-        This repo classifies ``registration_disallowed`` as the terminal
-        ``account`` class (``failure_registry``), so one transient rejection
-        permanently dead-ends the address.
-
-        Off by default: the classification as ``account`` is the current
-        contract and every retry spends a Sentinel proof; whether the risk
-        window is real on this repo's exits needs its own A/B
-        (``p1-7-create-disallowed-backoff``).  When enabled, the retry keeps
-        the same ``account``-class terminal verdict if the final attempt also
-        fails -- the toggle changes *when* the verdict is reached, never *what*
-        it eventually says.
-        """
-        if not registration_flag(self.config, "create_account_disallowed_backoff", False):
-            return ()
-        return (8, 20, 45)
+        return _account_stages.create_account_disallowed_backoff_delays(self)
 
     def create_account(self) -> None:
-        r = self.r
-        s = self.runtime
-        # ``RegistrationRuntimeState`` attaches its flat fields from the group
-        # dataclasses at import time (see ``registration_runtime``), so read this
-        # one through ``getattr`` with an explicit ``str`` guard: a state double
-        # that models only the fields it touches stays valid, and the access does
-        # not depend on the ``TYPE_CHECKING`` mirror or on a ``Mock`` attribute
-        # (which would be truthy).
-        external_url = getattr(s, "otp_external_url", "")
-        if isinstance(external_url, str) and external_url:
-            # ``registration.otp_external_url_branch``: the validated OTP
-            # transaction already finished on a callback/external URL (the
-            # ``Email OTP continue`` step followed it), so POSTing
-            # ``create_account`` next is what turb guards against -- it answers
-            # ``invalid_auth_step`` for a transaction the server considers done.
-            # Mark the create step acknowledged and let ``fetch_auth_session``
-            # read the NextAuth session the callback established.
-            print("  Create account: skipped, the OTP transaction already finished on an external URL")
-            s.create_ok = True
-            s.create_data = {"_external_url": external_url}
-            r.think_stage("post_create_account")
-            return
-        if self._prime_about_you_page_enabled():
-            self._prime_about_you_page()
-        response = self._post_create_account_with_backoff()
-        self._record_create_account_response(response)
-        try:
-            r._follow_continue_url(
-                s.session,
-                r._create_account_continue_url(s.create_data),
-                s.base_headers,
-                referer=f"{s.auth_base}/about-you",
-                label="Create account continue",
-            )
-        except Exception as exc:
-            print(f"  Create account continue transport warning: {describe_exception(exc)}")
+        return _account_stages.create_account(self)
 
     def _post_create_account_with_backoff(self) -> Any:
-        """POST ``create_account``, retrying ``registration_disallowed`` per the backoff flag."""
-        r = self.r
-        s = self.runtime
-        backoff_delays = self._create_account_disallowed_backoff_delays()
-        response = None
-        create_sentinel = None
-        for attempt in range(len(backoff_delays) + 1):
-            # Round 0 may consume a pre-minted bundle token; every retry round
-            # must mint a genuinely fresh proof (see ``_issue_sentinel``).
-            create_sentinel = self._issue_sentinel("oauth_create_account", force_fresh=attempt > 0)
-            response = r.request_with_retry(
-                s.session,
-                "post",
-                f"{s.auth_base}/api/accounts/create_account",
-                label="Create account",
-                json={"name": s.full_name, "birthdate": s.birthdate},
-                headers=r._auth_request_headers(
-                    s.base_headers,
-                    did=s.device_id,
-                    referer=f"{s.auth_base}/about-you",
-                    origin=s.auth_base,
-                    sentinel_token=create_sentinel.token,
-                    sentinel_so_token=create_sentinel.so_token,
-                ),
-                impersonate=r.auth_impersonate(),
-            )
-            if response.status_code == 200 or attempt >= len(backoff_delays):
-                break
-            body = ""
-            try:
-                body = json.dumps(r._json_or_raw(response, limit=600), ensure_ascii=False)
-            except Exception:
-                body = str(getattr(response, "text", "") or "")[:600]
-            if "registration_disallowed" not in body:
-                break
-            delay = backoff_delays[attempt]
-            # ``emit``, not ``print``: this is P1-7's registered mechanism
-            # marker, and a bare ``print`` only reaches the stdout mirror
-            # (``backend_stdout.jsonl``) while the runbook's ``collect`` reads
-            # ``sms_tool.log``.  ``emit`` feeds both channels from one call.
-            _emit(
-                _LOGGER,
-                "  Create account temporarily disallowed; retrying in %ss with a fresh Sentinel proof (%s/%s)",
-                delay,
-                attempt + 1,
-                len(backoff_delays),
-            )
-            if cancellable_sleep(delay):
-                raise RegistrationCancelled()
-        # The loop always runs at least once, so the type-checker can't infer
-        # that ``response`` is bound here; name the invariant instead of
-        # sprinkling Optional guards through the parsing block below.
-        assert response is not None and create_sentinel is not None
-        return response
+        return _account_stages.post_create_account_with_backoff(self, sleep_fn=cancellable_sleep)
 
     def _record_create_account_response(self, response: Any) -> None:
-        """Fold the ``create_account`` answer into the runtime state and dead-end ledger."""
-        r = self.r
-        s = self.runtime
-        try:
-            s.create_data = response.json()
-        except (ValueError, TypeError):
-            s.create_data = {"_raw": response.text[:300]}
-        print(f"  Status: {response.status_code}")
-        # 600, not 300: ``user_already_exists`` carries a structured
-        # ``userAlreadyExistsRecovery`` object past the 300-char cut, and that
-        # object is the only place the server states the recovery action.
-        # Measured 2026-09-14 -- the truncated line read
-        # ``"action": "continue_to_`` with no way to see the rest.
-        # A 200 keeps the same budget but spends it differently; see
-        # ``_create_account_response_line``.
-        print(f"  Response: {_create_account_response_line(response.status_code, s.create_data, r._sanitize_text)}")
-        s.create_ok = response.status_code == 200
-        r.think_stage("post_create_account")
-        s.existing_account = r._is_user_already_exists(s.create_data)
-        if s.existing_account:
-            self._mark_partial_registration()
-        elif is_passwordless_signup_mismatch(s.create_data):
-            # 🔴 The **second** code the server uses for "this address is already
-            # registered", measured 2026-09-15 07:33:37 (run ``b93f598d``):
-            # ``create_account`` answered 400 ``identity_provider_mismatch`` for
-            # an address whose signup record used a non-password method.
-            #
-            # ``_is_user_already_exists`` only knows ``user_already_exists``, so
-            # without this branch the address got **none** of the three
-            # protections: no ``partial_registered`` state, no dead-end ledger
-            # row, and the reported cause was classified ``unknown`` (advice
-            # empty) -- so the next batch re-drove it and burned a fresh email
-            # OTP to rediscover the same fact.
-            #
-            # 🔴 Deliberately **not** setting ``s.existing_account = True`` here.
-            # That flag flips ``create_ok`` to ``True`` twenty lines below and
-            # ``_create_account_error`` then returns ``""``, so the run would
-            # blame whatever the re-login fallback last hit -- exactly the
-            # mis-attribution ``registration_outcome._existing_account_error``
-            # documents (three 09-06 addresses reported as
-            # ``existing_login_otp_send_failed:429`` while the signup lane had
-            # already answered).  Keeping the flag ``False`` preserves
-            # ``create_account_failed:identity_provider_mismatch: …`` as the
-            # reported cause while still taking the two protections we want.
-            #
-            # Zero risk of killing a fresh address: this code can only come back
-            # from ``create_account`` on an address the server already has a
-            # signup record for.
-            self._mark_partial_registration(reason=PASSWORDLESS_SIGNUP_CODE)
-        c = s.context
-        # 🔴 ``password_unknown`` used to be re-derived here from
-        # ``resume_email_verification``.  Once that flag was deleted the whole
-        # statement reduced to ``s.password_unknown = s.password_unknown`` -- a
-        # no-op -- so it was removed rather than left behind as a decoy that
-        # looks like it protects something.  The real writers are
-        # ``user_register`` (the passwordless lane) and the ``existing_account``
-        # branch twenty lines below.
-        if s.create_ok and not s.existing_account:
-            s.session_recovery_started_at = _safe_int(time.time())
-            self._persist_checkpoint(registration_checkpoint.SESSION_PENDING_STATE)
-        if not s.create_ok and s.existing_account:
-            # The server has stated this address is already registered.  Keep
-            # ``create_ok`` true so the outcome wording stays
-            # ``existing_account_user_already_exists:continue_to_login``.
-            #
-            # The passwordless email lane cannot turn this state into a session
-            # -- it re-verifies an OTP and lands on ``/about-you``, which is a
-            # *signup* step the server never follows with a NextAuth session
-            # (measured 2026-09-14: 5/5 landings, 0 sessions) -- so
-            # ``fetch_auth_session`` forbids it for this address and asks the
-            # login-method probe instead.  Record whether a password login is
-            # even possible: the probe can only *offer* the password step, the
-            # caller still needs a password to submit.
-            # 🔴 2026-09-16: this used to read "...clearing stored password.",
-            # which was **false** -- nothing is cleared here (no
-            # ``accounts.password`` write, no ``s.password`` reset).  Only the
-            # three flags below are set.  The wording sent operators looking
-            # for a credential wipe that never happened, so it now says what
-            # the code does: the *generated* password is not evidence about
-            # this account, and ``existing_account_password_known`` records
-            # whether we hold one that is.
-            print(
-                "  Account already exists; the generated password is not evidence "
-                "about this account (no stored credential is modified)."
-            )
-            s.create_ok = True
-            s.password_unknown = True
-            s.existing_account_password_known = bool(c is not None and (c.explicit_password or c.password_from_storage))
+        return _account_stages.record_create_account_response(self, response)
 
     def _mark_partial_registration(self, *, reason: str = "user_already_exists") -> None:
-        """Record the server's existence verdict as a permanent dead end.
-
-        ``reason`` is the raw verdict and must be a member of
-        ``DEAD_END_MARKERS`` for the ledger's ``dead_end_reason`` to name it
-        accurately -- ``RegistrationRetryGuard.mark_dead_end`` silently falls
-        back to ``"user_already_exists"`` for anything it does not recognise,
-        which is how a second spelling of the same verdict would have been
-        recorded under the first spelling's name.
-        """
-        s = self.runtime
-        RegistrationRetryGuard(self.config).mark_dead_end(s.username, reason=reason)
-        logging.getLogger(__name__).info(
-            "Server reports existing account; registration_status=partial_registered",
-            extra={"event": "registration_status_changed", "account_ref": account_reference(s.username)},
-        )
-        emit_event(
-            {
-                "domain": "registration",
-                "operation": "registration",
-                "stage": "registration_status_changed",
-                "status": "running",
-                "detail": "半注册",
-                "registration_status": "partial_registered",
-                "account_ref": account_reference(s.username),
-                "run_id": current_run_id.get(),
-            }
+        return _account_stages.mark_partial_registration(
+            self,
+            reason=reason,
+            retry_guard_cls=RegistrationRetryGuard,
         )
 
     def fetch_auth_session(self) -> None:
-        r = self.r
-        s = self.runtime
-        s.auth_session = r._fetch_auth_session(s.session, s.chat_base, s.base_headers)
-        s.auth_body = s.auth_session.get("body") or {}
-        s.access_token = r._auth_session_access_token(s.auth_body)
-        self._persist_checkpoint(
-            "at_probe_pending" if s.access_token else registration_checkpoint.SESSION_PENDING_STATE
-        )
-        if not s.existing_account or s.access_token:
-            return
-        print(
-            "  Existing account has no ChatGPT session yet; probing the login method before spending an email code..."
-        )
-        s.login_session = curl_requests.Session()
-        if s.proxy:
-            s.login_session.proxies = {"http": s.proxy, "https": s.proxy}
-        self._install_edge_challenge_hook(s.login_session)
-        r._set_oai_did_cookie(s.login_session, s.device_id)
-        try:
-            existing_login = r._login_existing_account_with_email_otp(
-                session=s.login_session,
-                username=s.username,
-                mailbox=s.mailbox,
-                did=s.device_id,
-                session_logging_id=s.session_logging_id,
-                auth_base=s.auth_base,
-                chat_base=s.chat_base,
-                base_headers=s.base_headers,
-                csrf_token=s.csrf_token,
-                proxy=s.proxy,
-                sentinel_token=s.sentinel_token,
-                sentinel_so_token=s.sentinel_so_token,
-                # The probe can only *offer* the password step; a login still
-                # needs a password to submit.  ``_login_probe_password`` owns
-                # the "is it this account's own password?" decision.
-                password=_login_probe_password(s),
-                # A password login is followed by the account's *own* MFA
-                # challenge, so the secret has to come along or the lane can
-                # only answer ``existing_login_totp_secret_missing``.  Nothing
-                # has been enrolled in this run yet, so read it from storage.
-                totp_secret=r._stored_registration_totp(s.username),
-                # ``existing_account`` is only ever set by the
-                # ``user_already_exists`` answer, and for that address the
-                # passwordless lane is a measured dead end (5/5 landings on the
-                # signup profile step, 0 sessions).  So an inconclusive probe
-                # must not fall back to it either.
-                allow_passwordless=not s.existing_account,
-            )
-        except Exception as exc:
-            existing_login = {"ok": False, "error": f"existing_login_transport:{exc}"}
-        if not existing_login.get("ok"):
-            s.existing_login_error = r._sanitize_text(existing_login.get("error") or "unknown")
-            print(f"  Existing account login failed: {s.existing_login_error}")
-            if _is_existing_login_dead_end_error(existing_login.get("error")):
-                try:
-                    RegistrationRetryGuard(self.config).mark_dead_end(
-                        s.username,
-                        reason="user_already_exists",
-                        error=str(s.existing_login_error),
-                    )
-                except Exception as exc:
-                    print(f"  Dead-end bookkeeping warning: {describe_exception(exc)}")
-            return
-        s.auth_session = r._fetch_auth_session(s.login_session, s.chat_base, s.base_headers)
-        s.auth_body = s.auth_session.get("body") or {}
-        s.access_token = r._auth_session_access_token(s.auth_body)
-        self._persist_checkpoint("at_probe_pending")
-        if s.access_token:
-            old_session = s.session
-            s.session = s.login_session
-            s.login_session = old_session
+        return _account_stages.fetch_auth_session(self, retry_guard_cls=RegistrationRetryGuard)
 
     def probe_access_token(self) -> None:
-        r = self.r
-        s = self.runtime
-        if not s.access_token:
-            return
-        r.think_stage("pre_at_probe")
-        s.at_probe = r._probe_registration_access_token(
-            s.access_token,
-            s.auth_body,
-            proxy=s.proxy,
-            cfg=self.config,
-        )
-        print(f"  Access token probe: HTTP {s.at_probe.get('status_code') or 'unknown'}")
-        self._persist_checkpoint(
-            "at_probe_complete" if s.at_probe.get("status_code") == 200 else "at_probe_transport_unknown"
-        )
+        return _account_stages.probe_access_token(self)
 
     def _obtain_refresh_token_enabled(self) -> bool:
         # ``registration.obtain_refresh_token`` (default **False**).  Read

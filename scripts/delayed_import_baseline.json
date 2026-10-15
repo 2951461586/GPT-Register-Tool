@@ -90,8 +90,8 @@
     "sms_tool/registration_drivers/browser_session.py": 2,
     "sms_tool/registration_drivers/external_sessions/managed.py": 9,
     "sms_tool/registration_drivers/stealth.py": 2,
-    "sms_tool/registration_finalize.py": 6,
-    "sms_tool/registration_handlers.py": 8,
+    "sms_tool/registration_finalize.py": 4,
+    "sms_tool/registration_handlers.py": 2,
     "sms_tool/registration_persistence.py": 5,
     "sms_tool/registration_preflight.py": 1,
     "sms_tool/registration_probe.py": 1,
@@ -113,5 +113,5 @@
     "sms_tool/upi_link/stripe.py": 1,
     "sms_tool/wallet_transport.py": 5
   },
-  "total": 422
+  "total": 414
 }
