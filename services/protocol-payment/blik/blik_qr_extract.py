@@ -67,7 +67,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from threading import Event, RLock, local
 from typing import Any
-from urllib.parse import parse_qsl, quote, urlencode, unquote, urljoin, urlparse, urlsplit, urlunsplit
+from urllib.parse import unquote, urljoin, urlparse
 
 import requests
 
@@ -102,6 +102,34 @@ from common.payment_predicates import (
     is_approve_failure_error as shared_is_approve_failure_error,
     is_checkout_not_active_error as shared_is_checkout_not_active_error,
     is_qr_candidate as shared_is_qr_candidate,
+    is_resource_url as shared_is_resource_url,
+)
+from common.proxy_state import (
+    ProxyStateStore,
+    checkout_zero_cache_status as shared_checkout_zero_cache_status,
+    checkout_zero_cache_ttl as shared_checkout_zero_cache_ttl,
+    is_reused_proxy_record as shared_is_reused_proxy_record,
+    load_proxy_state as shared_load_proxy_state,
+    order_proxy_group as shared_order_proxy_group,
+    prune_proxy_seed_state as shared_prune_proxy_seed_state,
+    proxy_pair_key as shared_proxy_pair_key,
+    proxy_record as shared_proxy_record,
+    proxy_remove_after_fails as shared_proxy_remove_after_fails,
+    proxy_state_key as shared_proxy_state_key,
+    proxy_state_path as shared_proxy_state_path,
+    record_checkout_zero_result as shared_record_checkout_zero_result,
+    record_proxy_health_failure as shared_record_proxy_health_failure,
+    record_proxy_pair_approve_success as shared_record_proxy_pair_approve_success,
+    record_proxy_pair_result as shared_record_proxy_pair_result,
+    record_proxy_result as shared_record_proxy_result,
+    save_proxy_state as shared_save_proxy_state,
+    successful_approve_preferences as shared_successful_approve_preferences,
+    successful_pair_preferences as shared_successful_pair_preferences,
+)
+from common.proxy_seed_file import (
+    ProxySeedFile,
+    proxy_seed_file as shared_proxy_seed_file,
+    unique_proxy_seeds as shared_unique_proxy_seeds,
 )
 from common.protocol_core import (
     ProtocolResultReporter,
@@ -137,7 +165,7 @@ from common.proxy_selection import (
 )
 from common.proxy_url import (
     USER_FIRST,
-    default_scheme_from_env,
+    default_scheme_from_env as shared_default_scheme_from_env,
     normalize_proxy_url as shared_normalize_proxy_url,
 )
 from common.logging_setup import make_file_logger
@@ -146,8 +174,8 @@ from common.timeouts import CHATGPT_TIMEOUT, DEFAULT_TIMEOUT
 from common import stripe_flow as shared_stripe_flow
 from common import endpoints
 
-LOG_DIR = SCRIPT_DIR / "logs"
-DUMP_DIR = SCRIPT_DIR / "dumps"
+LOG_DIR = Path(os.environ.get("IDEAL_LOG_DIR", "").strip() or (SCRIPT_DIR / "logs"))
+DUMP_DIR = Path(os.environ.get("IDEAL_DUMP_DIR", "").strip() or (SCRIPT_DIR / "dumps"))
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 STRIPE_VERSION_FULL = "2025-03-31.basil; checkout_server_update_beta=v1; checkout_manual_approval_preview=v1"
@@ -247,7 +275,8 @@ _log_file = LOG_DIR / f"blik_{time.strftime('%Y%m%d-%H%M%S')}.log"
 # rotation-resilient mirror. It writes to files only, never stdout.
 _durable_logger = make_file_logger("blik", LOG_DIR, redact=lambda text: redact_log_text(text))
 _dump_counter = 0
-_proxy_state: dict[str, Any] | None = None
+#: Owned by ``_proxy_state_store`` below; the lock is still shared with the
+#: ``common.geo`` cache writers so country/target updates serialize cleanly.
 _proxy_state_lock = RLock()
 _log_lock = RLock()
 _dump_lock = RLock()
@@ -478,7 +507,7 @@ def default_proxy_scheme() -> str:
     ``allow_https`` defaults to true here, so ``IDEAL_PROXY_DEFAULT_SCHEME=https``
     survives -- unlike kakao, which collapses it to ``http``.
     """
-    return default_scheme_from_env("IDEAL_PROXY_DEFAULT_SCHEME")
+    return shared_default_scheme_from_env("IDEAL_PROXY_DEFAULT_SCHEME")
 
 
 def proxy_short(proxy: str) -> str:
@@ -579,44 +608,49 @@ def normalize_pre_proxy_url(proxy: str) -> str:
     return normalize_proxy_url(proxy)
 
 
+_proxy_state_store = ProxyStateStore(
+    env_prefix="IDEAL",
+    base_dir=SCRIPT_DIR,
+    proxy_key=proxy_key,
+    proxy_chain_key=proxy_chain_key,
+    env_bool=env_bool,
+    env_int=env_int,
+    normalize_country=normalize_country,
+    lock=_proxy_state_lock,
+    log=log,
+)
+
+_proxy_seed_file = ProxySeedFile(
+    env_prefix="IDEAL",
+    base_dir=SCRIPT_DIR,
+    proxy_chain_key=proxy_chain_key,
+    label=proxy_label,
+    redact=redact_log_text,
+    register=register_proxy_for_redaction,
+    env_bool=env_bool,
+    log=log,
+    file_lock=_proxy_file_lock,
+)
+
+
 def proxy_state_path() -> Path:
-    raw = os.environ.get("IDEAL_PROXY_STATE_FILE", "").strip()
-    return Path(raw) if raw else SCRIPT_DIR / "proxy_state.json"
+    """Delegate to ``common/proxy_state.py``."""
+    return shared_proxy_state_path(_proxy_state_store)
 
 
 def load_proxy_state() -> dict[str, Any]:
-    global _proxy_state
-    with _proxy_state_lock:
-        if _proxy_state is not None:
-            return _proxy_state
-        path = proxy_state_path()
-        if not path.exists():
-            _proxy_state = {"seed": {}, "checkout": {}, "provider": {}, "pair": {}}
-            return _proxy_state
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except Exception:
-            data = {}
-        if not isinstance(data, dict):
-            data = {}
-        data.setdefault("seed", {})
-        data.setdefault("checkout", {})
-        data.setdefault("provider", {})
-        data.setdefault("pair", {})
-        _proxy_state = data
-        return _proxy_state
+    """Delegate to ``common/proxy_state.py``."""
+    return shared_load_proxy_state(_proxy_state_store)
 
 
 def save_proxy_state() -> None:
-    with _proxy_state_lock:
-        if _proxy_state is None:
-            return
-        path = proxy_state_path()
-        path.write_text(json.dumps(_proxy_state, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
+    """Delegate to ``common/proxy_state.py``."""
+    return shared_save_proxy_state(_proxy_state_store)
 
 
 def proxy_state_key(group: str, proxy: str) -> str:
-    return proxy_chain_key(proxy) if group == "seed" else proxy_key(proxy)
+    """Delegate to ``common/proxy_state.py``."""
+    return shared_proxy_state_key(_proxy_state_store, group, proxy)
 
 
 def prune_proxy_state(checkout_proxies: list[str], provider_proxies: list[str]) -> None:
@@ -658,36 +692,18 @@ def prune_proxy_state(checkout_proxies: list[str], provider_proxies: list[str]) 
 
 
 def prune_proxy_seed_state(proxy_seeds: list[str]) -> None:
-    with _proxy_state_lock:
-        state = load_proxy_state()
-        seed_state = state.setdefault("seed", {})
-        active_keys = {proxy_chain_key(proxy) for proxy in proxy_seeds if proxy_chain_key(proxy)}
-        stale_keys = [key for key in seed_state if key not in active_keys]
-        for key in stale_keys:
-            del seed_state[key]
-        if stale_keys:
-            save_proxy_state()
-    if stale_keys:
-        log(f"Seed 代理状态清理完成: {len(stale_keys)}")
+    """Delegate to ``common/proxy_state.py``."""
+    return shared_prune_proxy_seed_state(_proxy_state_store, proxy_seeds)
 
 
 def proxy_record(group: str, proxy: str) -> dict[str, Any]:
-    with _proxy_state_lock:
-        state = load_proxy_state()
-        group_state = state.setdefault(group, {})
-        key = proxy_state_key(group, proxy)
-        if not key:
-            return {}
-        record = group_state.setdefault(key, {})
-        record.setdefault("success", 0)
-        record.setdefault("fail", 0)
-        return record
+    """Delegate to ``common/proxy_state.py``."""
+    return shared_proxy_record(_proxy_state_store, group, proxy)
 
 
 def proxy_pair_key(checkout_proxy: str, provider_proxy: str) -> str:
-    checkout_key = proxy_key(checkout_proxy)
-    provider_key = proxy_key(provider_proxy)
-    return f"{checkout_key}:{provider_key}" if checkout_key and provider_key else ""
+    """Delegate to ``common/proxy_state.py``."""
+    return shared_proxy_pair_key(_proxy_state_store, checkout_proxy, provider_proxy)
 
 
 def clean_country_code(value: str) -> str:
@@ -814,150 +830,73 @@ def precheck_proxy_group(group: str, proxies: list[str]) -> list[str]:
 
 
 def record_proxy_result(group: str, proxy: str, success: bool, reason: str = "") -> dict[str, Any]:
-    if not proxy or not env_bool("IDEAL_PROXY_SCORE", True):
-        return {}
-    record = proxy_record(group, proxy)
-    if not record:
-        return {}
-    now = int(time.time())
-    if success:
-        record["success"] = int(record.get("success") or 0) + 1
-        record["fail"] = 0
-        record["last_success"] = now
-        record["last_reason"] = "success"
-    else:
-        record["fail"] = int(record.get("fail") or 0) + 1
-        record["last_fail"] = now
-        record["last_reason"] = redact_log_text(str(reason or "failed"))[:160]
-    save_proxy_state()
-    return record
+    """Delegate to ``common/proxy_state.py``."""
+    return shared_record_proxy_result(_proxy_state_store, group, proxy, success, reason, redact=redact_log_text)
 
 
 def proxy_remove_after_fails() -> int:
-    return env_int("IDEAL_PROXY_REMOVE_AFTER_FAILS", 3)
+    """Delegate to ``common/proxy_state.py``."""
+    return shared_proxy_remove_after_fails(_proxy_state_store)
 
 
 def is_reused_proxy_record(group: str, record: dict[str, Any]) -> bool:
-    if int(record.get("success") or 0) > 0:
-        return True
-    return group in {"checkout", "seed"} and record.get("zero_ok") is True
+    """Delegate to ``common/proxy_state.py``."""
+    return shared_is_reused_proxy_record(group, record)
 
 
 def record_proxy_health_failure(group: str, proxy: str, reason: str) -> None:
-    record = record_proxy_result(group, proxy, False, reason)
-    fail_count = int(record.get("fail") or 0)
-    remove_after = proxy_remove_after_fails() if is_reused_proxy_record(group, record) else 1
-    if fail_count >= remove_after:
-        remove_failed_proxy(group, proxy, reason)
+    """Delegate to ``common/proxy_state.py``."""
+    return shared_record_proxy_health_failure(
+        _proxy_state_store,
+        group,
+        proxy,
+        reason,
+        remove_failed_proxy=remove_failed_proxy,
+        redact=redact_log_text,
+    )
 
 
 def checkout_zero_cache_ttl() -> int:
-    return env_int("IDEAL_ZERO_CACHE_TTL", 86400, minimum=0)
+    """Delegate to ``common/proxy_state.py``."""
+    return shared_checkout_zero_cache_ttl(_proxy_state_store)
 
 
 def checkout_zero_cache_status(proxy: str, country: str) -> tuple[str, int, int]:
-    if not proxy or not env_bool("IDEAL_ZERO_CACHE", True):
-        return "", 0, 0
-    record = proxy_record("seed", proxy)
-    if not record:
-        return "", 0, 0
-    checked_at = int(record.get("zero_checked_at") or 0)
-    if not checked_at:
-        return "", 0, 0
-    ttl = checkout_zero_cache_ttl()
-    if ttl > 0 and int(time.time()) - checked_at > ttl:
-        return "", 0, checked_at
-    if normalize_country(str(record.get("zero_country") or country)) != normalize_country(country):
-        return "", 0, checked_at
-    amount = int(record.get("zero_amount") or 0)
-    if record.get("zero_ok") is True:
-        return "ok", amount, checked_at
-    if record.get("zero_ok") is False:
-        return "bad", amount, checked_at
-    return "", amount, checked_at
+    """Delegate to ``common/proxy_state.py``."""
+    return shared_checkout_zero_cache_status(_proxy_state_store, proxy, country)
 
 
 def record_checkout_zero_result(proxy: str, country: str, amount: int) -> None:
-    if not proxy or not env_bool("IDEAL_ZERO_CACHE", True):
-        return
-    record = proxy_record("seed", proxy)
-    if not record:
-        return
-    amount = int(amount or 0)
-    record["zero_ok"] = amount == 0
-    record["zero_amount"] = amount
-    record["zero_country"] = normalize_country(country)
-    record["zero_checked_at"] = int(time.time())
-    if amount == 0:
-        record["zero_success"] = int(record.get("zero_success") or 0) + 1
-    save_proxy_state()
+    """Delegate to ``common/proxy_state.py``."""
+    return shared_record_checkout_zero_result(_proxy_state_store, proxy, country, amount)
 
 
 def record_proxy_pair_result(checkout_proxy: str, provider_proxy: str, success: bool, reason: str = "") -> None:
-    record_proxy_result("checkout", checkout_proxy, success, reason)
-    record_proxy_result("provider", provider_proxy, success, reason)
-    if not checkout_proxy or not provider_proxy or not env_bool("IDEAL_PROXY_SCORE", True):
-        return
-    key = proxy_pair_key(checkout_proxy, provider_proxy)
-    if not key:
-        return
-    with _proxy_state_lock:
-        state = load_proxy_state()
-        pair_state = state.setdefault("pair", {})
-        record = pair_state.setdefault(
-            key,
-            {"checkout": proxy_key(checkout_proxy), "provider": proxy_key(provider_proxy)},
-        )
-        now = int(time.time())
-        if success:
-            record["success"] = int(record.get("success") or 0) + 1
-            record["last_success"] = now
-            record["last_reason"] = "success"
-        else:
-            record["fail"] = int(record.get("fail") or 0) + 1
-            record["last_fail"] = now
-            record["last_reason"] = redact_log_text(str(reason or "failed"))[:160]
-        save_proxy_state()
+    """Delegate to ``common/proxy_state.py``."""
+    return shared_record_proxy_pair_result(
+        _proxy_state_store,
+        checkout_proxy,
+        provider_proxy,
+        success,
+        reason,
+        redact=redact_log_text,
+    )
 
 
 def record_proxy_pair_approve_success(checkout_proxy: str, provider_proxy: str, approve_proxy: str) -> None:
-    if not checkout_proxy or not provider_proxy or not approve_proxy or not env_bool("IDEAL_PROXY_SCORE", True):
-        return
-    key = proxy_pair_key(checkout_proxy, provider_proxy)
-    approve_key = proxy_key(approve_proxy)
-    if not key or not approve_key:
-        return
-    record_proxy_result("checkout", approve_proxy, True, "approve_success")
-    with _proxy_state_lock:
-        state = load_proxy_state()
-        pair_state = state.setdefault("pair", {})
-        record = pair_state.setdefault(
-            key,
-            {"checkout": proxy_key(checkout_proxy), "provider": proxy_key(provider_proxy)},
-        )
-        now = int(time.time())
-        record["approve"] = approve_key
-        record["approve_success"] = int(record.get("approve_success") or 0) + 1
-        record["approve_last_success"] = now
-        record["approve_last_reason"] = "success"
-        save_proxy_state()
+    """Delegate to ``common/proxy_state.py``."""
+    return shared_record_proxy_pair_approve_success(
+        _proxy_state_store,
+        checkout_proxy,
+        provider_proxy,
+        approve_proxy,
+        redact=redact_log_text,
+    )
 
 
 def successful_approve_preferences(checkout_proxy: str, provider_proxy: str, approve_pool: list[str]) -> list[str]:
-    if not env_bool("IDEAL_PROXY_SCORE", True):
-        return []
-    pair_state = load_proxy_state().get("pair", {})
-    if not isinstance(pair_state, dict):
-        return []
-    record = pair_state.get(proxy_pair_key(checkout_proxy, provider_proxy))
-    if not isinstance(record, dict):
-        return []
-    approve_key = str(record.get("approve") or "")
-    if not approve_key:
-        return []
-    approve_by_key = {proxy_key(proxy): proxy for proxy in approve_pool}
-    approve_proxy = approve_by_key.get(approve_key)
-    return [approve_proxy] if approve_proxy else []
+    """Delegate to ``common/proxy_state.py``."""
+    return shared_successful_approve_preferences(_proxy_state_store, checkout_proxy, provider_proxy, approve_pool)
 
 
 def record_failure_by_stage(reason: str, checkout_proxy: str, provider_proxy: str) -> None:
@@ -1025,68 +964,8 @@ def record_seed_failure(proxy_seed: str, reason: str) -> None:
 
 
 def order_proxy_group(group: str, proxies: list[str]) -> list[str]:
-    if not env_bool("IDEAL_PROXY_SCORE", True):
-        return proxies
-    state = load_proxy_state().get(group, {})
-    skip_failed = env_bool("IDEAL_PROXY_SKIP_FAILED", True)
-    fail_threshold = env_int("IDEAL_PROXY_FAIL_SKIP_AFTER", 1)
-    fail_cooldown = env_int("IDEAL_PROXY_FAIL_COOLDOWN", 180, minimum=0)
-    zero_ttl = checkout_zero_cache_ttl()
-    now = int(time.time())
-    kept: list[str] = []
-    cooldown_skipped = 0
-    zero_skipped = 0
-    zero_seen = 0
-    success_seen = 0
-    for proxy in proxies:
-        record = state.get(proxy_state_key(group, proxy), {}) if isinstance(state, dict) else {}
-        success_count = int(record.get("success") or 0)
-        fail_count = int(record.get("fail") or 0)
-        last_fail = int(record.get("last_fail") or 0)
-        if success_count > 0:
-            success_seen += 1
-        zero_checked_at = int(record.get("zero_checked_at") or 0)
-        zero_cache_valid = zero_checked_at and (zero_ttl <= 0 or now - zero_checked_at <= zero_ttl)
-        if group in {"checkout", "seed"} and zero_cache_valid and record.get("zero_ok") is True:
-            zero_seen += 1
-        if (
-            group in {"checkout", "seed"}
-            and env_bool("IDEAL_ZERO_CACHE_SKIP_BAD", True)
-            and zero_cache_valid
-            and record.get("zero_ok") is False
-        ):
-            zero_skipped += 1
-            continue
-        if skip_failed and fail_count >= fail_threshold:
-            in_cooldown = fail_cooldown <= 0 or not last_fail or now - last_fail <= fail_cooldown
-            if in_cooldown:
-                cooldown_skipped += 1
-                continue
-        kept.append(proxy)
-
-    if not kept and proxies:
-        log(f"{group} 代理状态过滤后为空，已全部跳过", "[WARN] ")
-
-    def rank(proxy: str) -> tuple[int, int, int, int, int]:
-        record = state.get(proxy_state_key(group, proxy), {}) if isinstance(state, dict) else {}
-        zero_checked_at = int(record.get("zero_checked_at") or 0)
-        zero_cache_valid = zero_checked_at and (zero_ttl <= 0 or now - zero_checked_at <= zero_ttl)
-        zero_rank = 1 if group in {"checkout", "seed"} and zero_cache_valid and record.get("zero_ok") is True else 0
-        return (
-            zero_rank,
-            int(record.get("success") or 0),
-            int(record.get("last_success") or 0),
-            -int(record.get("fail") or 0),
-            -int(record.get("last_fail") or 0),
-        )
-
-    ordered = sorted(kept, key=rank, reverse=True)
-    if cooldown_skipped or success_seen or zero_seen or zero_skipped:
-        log(
-            f"{group} 代理状态: 成功优先={success_seen}，0元命中={zero_seen}，"
-            f"冷却跳过={cooldown_skipped}，0元失败跳过={zero_skipped}"
-        )
-    return ordered
+    """Delegate to ``common/proxy_state.py``."""
+    return shared_order_proxy_group(_proxy_state_store, group, proxies)
 
 
 def set_proxy(session: Any, proxy: str) -> None:
@@ -1125,24 +1004,13 @@ def load_proxy_file(path: Path) -> list[str]:
 
 
 def proxy_seed_file() -> Path:
-    raw = os.environ.get("IDEAL_PROXY_SEED_FILE", "").strip() or os.environ.get("PP_PROXY_SEED_FILE", "").strip()
-    return Path(raw).expanduser() if raw else SCRIPT_DIR / "proxy_seeds.txt"
+    """Delegate to ``common/proxy_seed_file.py``."""
+    return shared_proxy_seed_file(_proxy_seed_file)
 
 
 def unique_proxy_seeds(proxy_seeds: list[str]) -> list[str]:
-    seen: set[str] = set()
-    unique: list[str] = []
-    duplicates = 0
-    for proxy_seed in proxy_seeds:
-        chain_key = proxy_chain_key(proxy_seed)
-        if not chain_key or chain_key in seen:
-            duplicates += 1
-            continue
-        seen.add(chain_key)
-        unique.append(proxy_seed)
-    if duplicates:
-        log(f"代理 Seed 去重: 忽略相同 sticky session {duplicates} 条", "[WARN] ")
-    return unique
+    """Delegate to ``common/proxy_seed_file.py``."""
+    return shared_unique_proxy_seeds(_proxy_seed_file, proxy_seeds)
 
 
 def load_proxy_seeds() -> list[str]:
@@ -2027,29 +1895,8 @@ def collect_urls(payload: Any, urls: list[str] | None = None) -> list[str]:
 
 
 def is_resource_url(url: str) -> bool:
-    parsed = urlparse(url)
-    host = (parsed.netloc or "").lower()
-    path = (parsed.path or "").lower()
-    if is_known_static_host(url):
-        return True
-    return path.endswith(
-        (
-            ".js",
-            ".css",
-            ".map",
-            ".woff",
-            ".woff2",
-            ".ttf",
-            ".otf",
-            ".ico",
-            ".png",
-            ".jpg",
-            ".jpeg",
-            ".gif",
-            ".svg",
-            ".webp",
-        )
-    )
+    """Delegate to ``common/payment_predicates.py``."""
+    return shared_is_resource_url(url)
 
 
 def is_known_static_host(url: str) -> bool:
@@ -2790,33 +2637,8 @@ def run_attempt(
 
 
 def successful_pair_preferences(checkout_proxies: list[str], provider_proxies: list[str]) -> dict[str, list[str]]:
-    if not env_bool("IDEAL_PROXY_SCORE", True):
-        return {}
-    checkout_by_key = {proxy_key(proxy): proxy for proxy in checkout_proxies}
-    provider_by_key = {proxy_key(proxy): proxy for proxy in provider_proxies}
-    pair_state = load_proxy_state().get("pair", {})
-    if not isinstance(pair_state, dict):
-        return {}
-
-    candidates: list[tuple[int, int, str, str]] = []
-    for record in pair_state.values():
-        if not isinstance(record, dict):
-            continue
-        success_count = int(record.get("success") or 0)
-        if success_count <= 0:
-            continue
-        checkout_proxy = checkout_by_key.get(str(record.get("checkout") or ""))
-        provider_proxy = provider_by_key.get(str(record.get("provider") or ""))
-        if checkout_proxy and provider_proxy:
-            candidates.append((success_count, int(record.get("last_success") or 0), checkout_proxy, provider_proxy))
-
-    candidates.sort(reverse=True)
-    preferences: dict[str, list[str]] = {}
-    for _success_count, _last_success, checkout_proxy, provider_proxy in candidates:
-        providers = preferences.setdefault(checkout_proxy, [])
-        if provider_proxy not in providers:
-            providers.append(provider_proxy)
-    return preferences
+    """Delegate to ``common/proxy_state.py``."""
+    return shared_successful_pair_preferences(_proxy_state_store, checkout_proxies, provider_proxies)
 
 
 def build_attempt_batches(

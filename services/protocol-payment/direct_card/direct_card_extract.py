@@ -10,7 +10,7 @@ Default flow:
 * promotion update proxy country: TR
 * payment locale: English
 * proxy provider: kookeey password-template routing (``<base>-<CC>[-<session>[-<ttl>]]``)
-* output: https://chatgpt.com/checkout/<processor_entity>/<oaics_id>
+* output: chatgpt.com/checkout/<processor_entity>/<oaics_id>
 
 The script creates the checkout without a promotion, applies the promotion to
 the same checkout through ``checkout/update``, and verifies the payable amount.
@@ -62,6 +62,7 @@ PROTOCOL_ROOT = Path(__file__).resolve().parent.parent
 if str(PROTOCOL_ROOT) not in sys.path:
     sys.path.insert(0, str(PROTOCOL_ROOT))
 
+from common import endpoints
 from common.protocol_core import (
     ProtocolResultReporter,
     is_false,
@@ -81,7 +82,7 @@ _RESULT_REPORTER = ProtocolResultReporter("direct_card", "direct_card_protocol")
 
 
 VERSION = "1.0.0"
-CHECKOUT_URL = "https://chatgpt.com/backend-api/payments/checkout"
+CHECKOUT_URL = endpoints.CHATGPT_CHECKOUT_API
 UPDATE_PATH = "/backend-api/payments/checkout/update"
 TRACE_URL = "https://www.cloudflare.com/cdn-cgi/trace"
 DEFAULT_USER_AGENT = (
@@ -654,7 +655,7 @@ def processor_entity_for_country(country: str, processor_entity: str = "") -> st
 
 def checkout_short_url(cs_id: str, country: str, processor_entity: str = "") -> str:
     entity = processor_entity_for_country(country, processor_entity)
-    return f"https://chatgpt.com/checkout/{entity}/{cs_id}"
+    return endpoints.chatgpt_checkout_page(entity, cs_id)
 
 
 def is_retryable_network_error(exc: Exception) -> bool:
@@ -745,8 +746,8 @@ class CheckoutExtractor:
                 "Accept": "*/*",
                 "Accept-Language": "en-US,en;q=0.9",
                 "Authorization": f"Bearer {self.credentials.access_token}",
-                "Origin": "https://chatgpt.com",
-                "Referer": "https://chatgpt.com/",
+                "Origin": endpoints.CHATGPT_BASE,
+                "Referer": f"{endpoints.CHATGPT_BASE}/",
                 "Content-Type": "application/json",
                 "oai-device-id": self.device_id,
                 "oai-language": "en-US",
@@ -834,7 +835,7 @@ class CheckoutExtractor:
             CHECKOUT_URL,
             json=body,
             headers={
-                "Referer": "https://chatgpt.com/",
+                "Referer": f"{endpoints.CHATGPT_BASE}/",
                 "x-openai-target-path": "/backend-api/payments/checkout",
                 "x-openai-target-route": "/backend-api/payments/checkout",
                 # Injected by the sms_tool adapter; absent -> the gate answers
@@ -940,7 +941,7 @@ class CheckoutExtractor:
                 try:
                     refresh_cookie_header(session)
                     response = session.post(
-                        f"https://chatgpt.com{UPDATE_PATH}",
+                        f"{endpoints.CHATGPT_BASE}{UPDATE_PATH}",
                         json=body,
                         headers=headers,
                         timeout=self.config.timeout,
@@ -1002,7 +1003,7 @@ class CheckoutExtractor:
                 checkout["billing_country"],
                 checkout.get("processor_entity", ""),
             ),
-            headers={"Referer": "https://chatgpt.com/"},
+            headers={"Referer": f"{endpoints.CHATGPT_BASE}/"},
             timeout=self.config.timeout,
         )
         if safe_int(getattr(response, "status_code", 0) or 0) >= 400:

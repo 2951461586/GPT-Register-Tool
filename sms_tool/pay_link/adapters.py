@@ -332,24 +332,44 @@ def _build_pix_env(
     return env
 
 
+def _runtime_temp_dir() -> Path:
+    temp_dir = runtime_file(None, "tmp")
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    return temp_dir
+
+
+def _protocol_runtime_env(method: str, prefix: str) -> dict[str, str]:
+    base_dir = runtime_file(None, "protocol_payment") / method
+    return {
+        f"{prefix}_LOG_DIR": str(base_dir / "logs"),
+        f"{prefix}_DUMP_DIR": str(base_dir / "dumps"),
+        f"{prefix}_PROXY_STATE_FILE": str(base_dir / "proxy_state.json"),
+    }
+
+
 def _build_ideal_env(
     access_token: str, seed_proxy: str, proxy_file: str, script: Path, kwargs: Mapping[str, Any]
 ) -> dict[str, str]:
-    return {"PP_TOKEN": access_token, "IDEAL_PROXY_SEED_FILE": proxy_file, "IDEAL_FLOW_MODE": "single"}
+    env = _protocol_runtime_env("ideal", "IDEAL")
+    env.update({"PP_TOKEN": access_token, "IDEAL_PROXY_SEED_FILE": proxy_file, "IDEAL_FLOW_MODE": "single"})
+    return env
 
 
 def _build_kakao_env(
     access_token: str, seed_proxy: str, proxy_file: str, script: Path, kwargs: Mapping[str, Any]
 ) -> dict[str, str]:
-    # Prefer Kakao's dedicated multi-seed file for redundancy + failover; fall
-    # back to the single stage proxy when it is missing or empty.
+    # Prefer caller-supplied proxy_file when present; fall back to Kakao's
+    # dedicated multi-seed file only when no proxy_file was provided.
     kakao_seed_pool = script.parent / "proxy_seeds.txt"
     kakao_seed_file = (
-        str(kakao_seed_pool)
+        proxy_file
+        if proxy_file
+        else str(kakao_seed_pool)
         if kakao_seed_pool.is_file() and kakao_seed_pool.read_text(encoding="utf-8", errors="ignore").strip()
-        else proxy_file
+        else ""
     )
-    env: dict[str, str] = {"KAKAO_TOKEN": access_token, "KAKAO_PROXY_SEED_FILE": kakao_seed_file}
+    env: dict[str, str] = _protocol_runtime_env("kakao", "KAKAO")
+    env.update({"KAKAO_TOKEN": access_token, "KAKAO_PROXY_SEED_FILE": kakao_seed_file})
     countries = kwargs.get("stage_proxy_countries") if isinstance(kwargs.get("stage_proxy_countries"), dict) else {}
     checkout_country = str(countries.get("checkout") or kwargs.get("checkout_country") or "KR").strip().upper()
     promotion_country = str(countries.get("promotion") or "VN").strip().upper()
@@ -368,18 +388,24 @@ def _build_blik_env(
     access_token: str, seed_proxy: str, proxy_file: str, script: Path, kwargs: Mapping[str, Any]
 ) -> dict[str, str]:
     blik_code = str(kwargs.get("blik_code") or "").strip()
-    return {
-        "PP_TOKEN": access_token,
-        "IDEAL_PROXY_SEED_FILE": proxy_file,
-        "IDEAL_FLOW_MODE": "single",
-        "IDEAL_BLIK_CODE": blik_code,
-    }
+    env = _protocol_runtime_env("blik", "IDEAL")
+    env.update(
+        {
+            "PP_TOKEN": access_token,
+            "IDEAL_PROXY_SEED_FILE": proxy_file,
+            "IDEAL_FLOW_MODE": "single",
+            "IDEAL_BLIK_CODE": blik_code,
+        }
+    )
+    return env
 
 
 def _build_twint_env(
     access_token: str, seed_proxy: str, proxy_file: str, script: Path, kwargs: Mapping[str, Any]
 ) -> dict[str, str]:
-    return {"PP_TOKEN": access_token, "TWINT_PROXY_SEED_FILE": proxy_file, "TWINT_FLOW_MODE": "single"}
+    env = _protocol_runtime_env("twint", "TWINT")
+    env.update({"PP_TOKEN": access_token, "TWINT_PROXY_SEED_FILE": proxy_file, "TWINT_FLOW_MODE": "single"})
+    return env
 
 
 # Protocol-payment methods whose env is built from a proxy file written by the
@@ -426,10 +452,21 @@ def _run_protocol_script(
         env.update(_build_pix_env(access_token, seed_proxy, proxy_file, script, kwargs))
         command.append("--quiet")
     else:
-        handle = tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".txt", delete=False)
+        handle = tempfile.NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            prefix="pp_proxy_",
+            suffix=".txt",
+            dir=str(_runtime_temp_dir()),
+            delete=False,
+        )
         with handle:
             handle.write(seed_proxy + "\n")
         proxy_file = handle.name
+        try:
+            os.chmod(proxy_file, 0o600)
+        except OSError:
+            pass
         builder = _PROTOCOL_BUILD_ENV.get(spec.key)
         if builder is None:
             Path(proxy_file).unlink(missing_ok=True)
@@ -486,9 +523,20 @@ def _run_protocol_script(
 
 
 def _write_token_file(access_token: str) -> str:
-    handle = tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".txt", delete=False)
+    handle = tempfile.NamedTemporaryFile(
+        "w",
+        encoding="utf-8",
+        prefix="pp_token_",
+        suffix=".txt",
+        dir=str(_runtime_temp_dir()),
+        delete=False,
+    )
     with handle:
         handle.write(str(access_token or "").strip() + "\n")
+    try:
+        os.chmod(handle.name, 0o600)
+    except OSError:
+        pass
     return handle.name
 
 

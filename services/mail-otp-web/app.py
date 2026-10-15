@@ -10,6 +10,7 @@ not used for Microsoft Graph refresh-token authentication.
 """
 from __future__ import annotations
 
+import hmac
 import html
 import json
 import os
@@ -60,6 +61,35 @@ def load_config() -> dict[str, Any]:
 
 
 CFG = load_config()
+
+
+def configured_api_key() -> str:
+    return str(os.environ.get("MAIL_OTP_API_KEY") or CFG.get("api_key") or "").strip()
+
+
+def should_expose_refresh_token() -> bool:
+    env_flag = str(os.environ.get("MAIL_OTP_EXPOSE_REFRESH_TOKEN") or "").strip().lower()
+    if env_flag in {"1", "true", "yes", "on"}:
+        return True
+    if env_flag in {"0", "false", "no", "off"}:
+        return False
+    return bool(CFG.get("expose_refresh_token", False))
+
+
+def is_request_authorized(headers: Any, payload: dict[str, Any] | None = None) -> bool:
+    expected = configured_api_key()
+    if not expected:
+        return True
+    candidate = ""
+    if headers is not None:
+        candidate = str(headers.get("X-API-Key") or headers.get("x-api-key") or "").strip()
+        if not candidate:
+            auth_header = str(headers.get("Authorization") or headers.get("authorization") or "").strip()
+            if auth_header.lower().startswith("bearer "):
+                candidate = auth_header[7:].strip()
+    if not candidate and isinstance(payload, dict):
+        candidate = str(payload.get("api_key") or "").strip()
+    return bool(candidate) and hmac.compare_digest(candidate, expected)
 
 
 def json_response(handler: BaseHTTPRequestHandler, status: int, payload: dict[str, Any]) -> None:
@@ -348,13 +378,16 @@ def extract_flow(payload: dict[str, Any]) -> dict[str, Any]:
     subject_keyword = account.get("subject_keyword") or ""
     otp = extract_otp(values, subject_keyword)
     messages = [_message_summary(msg, subject_keyword) for msg in values]
+    rotated_rt = str(token.get("refresh_token") or "")
+    rt_changed = bool(rotated_rt and rotated_rt != account["refresh_token"])
     return {
         "ok": True,
         "email": email,
         "message_count": len(values),
         "messages": messages,
         "otp": otp,
-        "new_refresh_token": token.get("refresh_token") if token.get("refresh_token") != account["refresh_token"] else "",
+        "refresh_token_rotated": rt_changed,
+        "new_refresh_token": rotated_rt if (rt_changed and should_expose_refresh_token()) else "",
         "checked_at": int(time.time()),
     }
 
@@ -456,6 +489,9 @@ class Handler(BaseHTTPRequestHandler):
         path = urllib.parse.urlparse(self.path).path
         if path == "/api/extract":
             payload = read_json(self)
+            if not is_request_authorized(self.headers, payload):
+                json_response(self, 401, {"ok": False, "error": "unauthorized"})
+                return
             result = extract_flow(payload)
             json_response(self, 200 if result.get("ok") else 400, result)
             return

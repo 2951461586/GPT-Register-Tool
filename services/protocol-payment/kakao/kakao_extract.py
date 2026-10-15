@@ -56,7 +56,7 @@ from common.proxy_bookkeeping import (
 )
 from common.proxy_url import (
     HOST_FIRST,
-    default_scheme_from_env,
+    default_scheme_from_env as shared_default_scheme_from_env,
     normalize_proxy_url as shared_normalize_proxy_url,
 )
 from common.protocol_core import (
@@ -70,6 +70,7 @@ from common.protocol_core import (
 )
 from common.logging_setup import make_file_logger
 from common.payload_helpers import configured_country
+from common import endpoints
 
 
 # ── Access-token liveness probe ──────────────────────────────────────────
@@ -102,7 +103,7 @@ def _default_access_token_probe(token: str, proxy: str) -> dict[str, Any]:
     return probe_account_liveness({"access_token": token}, proxy=proxy, timeout=TIMEOUT)
 
 
-LOG_DIR = SCRIPT_DIR / "logs"
+LOG_DIR = Path(os.environ.get("KAKAO_LOG_DIR", "").strip() or (SCRIPT_DIR / "logs"))
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 # Durable rotated copy alongside the legacy append-only kakao_extract.log. The
 # legacy file keeps its exact naming/content; this adds a size-capped,
@@ -268,7 +269,7 @@ def default_proxy_scheme() -> str:
     blik/ideal/twint, now stated as a parameter instead of hiding in a fifth
     copy of the resolver.
     """
-    return default_scheme_from_env("KAKAO_PROXY_DEFAULT_SCHEME", allow_https=False)
+    return shared_default_scheme_from_env("KAKAO_PROXY_DEFAULT_SCHEME", allow_https=False)
 
 
 def normalize_proxy_url(raw: str) -> str:
@@ -820,14 +821,14 @@ def response_error(response: Any, limit: int = 800) -> str:
 
 
 def stripe_headers(publishable_key: str, referer: str) -> dict[str, str]:
-    origin = "https://checkout.stripe.com" if "checkout.stripe.com" in referer else "https://pay.openai.com"
+    origin = endpoints.STRIPE_CHECKOUT_BASE if "checkout.stripe.com" in referer else endpoints.OPENAI_PAY_BASE
     return {
         "Authorization": f"Bearer {publishable_key}",
         "Origin": origin,
         "Referer": referer,
         "Accept": "application/json",
         "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8",
-        "Sec-Fetch-Site": "same-site" if origin == "https://checkout.stripe.com" else "cross-site",
+        "Sec-Fetch-Site": "same-site" if origin == endpoints.STRIPE_CHECKOUT_BASE else "cross-site",
         "Sec-Fetch-Mode": "cors",
         "Sec-Fetch-Dest": "empty",
         "Content-Type": "application/x-www-form-urlencoded",
@@ -856,7 +857,7 @@ def create_checkout(session: Any, token: str) -> tuple[str, str, dict[str, Any]]
     payload: dict[str, Any] = {
         "plan_name": "chatgptplusplan",
         "billing_details": {"country": CHECKOUT_COUNTRY, "currency": "KRW"},
-        "cancel_url": "https://chatgpt.com/#pricing",
+        "cancel_url": f"{endpoints.CHATGPT_BASE}/#pricing",
         "checkout_ui_mode": "custom",
     }
     promo_mode = os.environ.get("KAKAO_PROMO_MODE", "campaign").strip().lower()
@@ -867,7 +868,7 @@ def create_checkout(session: Any, token: str) -> tuple[str, str, dict[str, Any]]
             "is_coupon_from_query_param": False,
         }
     response = session.post(
-        "https://chatgpt.com/backend-api/payments/checkout",
+        endpoints.CHATGPT_CHECKOUT_API,
         headers={
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
@@ -892,7 +893,7 @@ def checkout_processor_entity(checkout: dict[str, Any]) -> str:
 
 
 def checkout_page_url(checkout_id: str, checkout: dict[str, Any]) -> str:
-    return f"https://chatgpt.com/checkout/{checkout_processor_entity(checkout)}/{checkout_id}"
+    return endpoints.chatgpt_checkout_page(checkout_processor_entity(checkout), checkout_id)
 
 
 def checkout_api_headers(token: str, referer: str, target_path: str) -> dict[str, str]:
@@ -924,7 +925,7 @@ def update_checkout_promotion(session: Any, token: str, checkout_id: str, checko
         }
     target_path = "/backend-api/payments/checkout/update"
     response = session.post(
-        f"https://chatgpt.com{target_path}",
+        f"{endpoints.CHATGPT_BASE}{target_path}",
         headers=checkout_api_headers(token, checkout_page_url(checkout_id, checkout), target_path),
         json=body,
         timeout=TIMEOUT,
@@ -965,7 +966,7 @@ def update_kakao_checkout_taxes(
         },
     }
     response = session.post(
-        f"https://chatgpt.com{target_path}",
+        f"{endpoints.CHATGPT_BASE}{target_path}",
         headers=checkout_api_headers(token, checkout_page_url(checkout_id, checkout), target_path),
         json=body,
         timeout=TIMEOUT,
@@ -1005,15 +1006,15 @@ def expected_amount(payload: dict[str, Any]) -> str:
 
 
 def activate_stripe_checkout(session: Any, checkout_id: str) -> str:
-    checkout_page = f"https://checkout.stripe.com/c/pay/{checkout_id}"
-    for url in (f"https://pay.openai.com/c/pay/{checkout_id}", checkout_page):
+    checkout_page = f"{endpoints.STRIPE_CHECKOUT_BASE}/c/pay/{checkout_id}"
+    for url in (f"{endpoints.OPENAI_PAY_BASE}/c/pay/{checkout_id}", checkout_page):
         session.get(
             url,
             headers={
                 "User-Agent": USER_AGENT,
                 "Accept": "text/html,*/*",
                 "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8",
-                "Referer": "https://chatgpt.com/",
+                "Referer": f"{endpoints.CHATGPT_BASE}/",
             },
             timeout=TIMEOUT,
         )
@@ -1037,7 +1038,7 @@ def stripe_init(
         **elements_params(stripe_js_id),
     }
     response = session.post(
-        f"https://api.stripe.com/v1/payment_pages/{checkout_id}/init",
+        endpoints.stripe_payment_page(checkout_id, "init"),
         data=init_body,
         headers=stripe_headers(publishable_key, checkout_page),
         timeout=TIMEOUT,
@@ -1088,7 +1089,7 @@ def stripe_update_kakao_tax_region(
         "tax_region[state]": billing["state"],
     }
     response = session.post(
-        f"https://api.stripe.com/v1/payment_pages/{checkout_id}",
+        f"{endpoints.STRIPE_PAYMENT_PAGES}/{checkout_id}",
         data=body,
         headers=stripe_headers(publishable_key, checkout_page),
         timeout=TIMEOUT,
@@ -1203,7 +1204,7 @@ def kakao_link(
     ensure_running(stop_event)
     log(f"{PROVIDER_COUNTRY} Stripe pre_confirm Kakao")
     pre_confirm = provider_session.post(
-        f"https://api.stripe.com/v1/payment_pages/{checkout_id}/pre_confirm",
+        endpoints.stripe_payment_page(checkout_id, "pre_confirm"),
         data={
             "eid": str(uuid.uuid4()),
             "payment_method_type": "kakao_pay",
@@ -1248,7 +1249,7 @@ def kakao_link(
     if config_id:
         payment_method_body["client_attribution_metadata[checkout_config_id]"] = config_id
     payment_method_response = provider_session.post(
-        "https://api.stripe.com/v1/payment_methods",
+        endpoints.STRIPE_PAYMENT_METHODS,
         data=payment_method_body,
         headers=stripe_headers(publishable_key, checkout_page),
         timeout=TIMEOUT,
@@ -1265,11 +1266,11 @@ def kakao_link(
     log(f"{PROVIDER_COUNTRY} Stripe confirm")
     processor_entity = str(checkout.get("processor_entity") or "openai_llc")
     success_url = (
-        f"https://chatgpt.com/backend-api/payments/checkout/{processor_entity}/{checkout_id}/success?"
+        f"{endpoints.CHATGPT_CHECKOUT_API}/{processor_entity}/{checkout_id}/success?"
         f"billing_country={PROVIDER_COUNTRY}"
     )
     return_url = (
-        f"https://checkout.stripe.com/c/pay/{checkout_id}?returned_from_redirect=true&ui_mode=custom&"
+        f"{endpoints.STRIPE_CHECKOUT_BASE}/c/pay/{checkout_id}?returned_from_redirect=true&ui_mode=custom&"
         f"return_url={quote(success_url, safe='')}"
     )
     confirm_body = {
@@ -1297,7 +1298,7 @@ def kakao_link(
     if config_id:
         confirm_body["client_attribution_metadata[checkout_config_id]"] = config_id
     confirm_response = provider_session.post(
-        f"https://api.stripe.com/v1/payment_pages/{checkout_id}/confirm",
+        endpoints.stripe_payment_page(checkout_id, "confirm"),
         data=confirm_body,
         headers=stripe_headers(publishable_key, checkout_page),
         timeout=TIMEOUT,
@@ -1315,13 +1316,13 @@ def kakao_link(
         for index in range(1, APPROVE_RETRY_MAX + 1):
             ensure_running(stop_event)
             approval_response = provider_session.post(
-                "https://chatgpt.com/backend-api/payments/checkout/approve",
+                endpoints.CHATGPT_CHECKOUT_APPROVE,
                 headers={
                     "Authorization": f"Bearer {token}",
                     "Content-Type": "application/json",
                     "oai-language": "ko-KR",
                     "User-Agent": USER_AGENT,
-                    "Referer": f"https://chatgpt.com/checkout/{processor_entity}/{checkout_id}",
+                    "Referer": endpoints.chatgpt_checkout_page(processor_entity, checkout_id),
                 },
                 json={"checkout_session_id": checkout_id, "processor_entity": processor_entity},
                 timeout=TIMEOUT,
@@ -1346,7 +1347,7 @@ def kakao_link(
     while not redirect and time.time() < deadline:
         ensure_running(stop_event)
         poll_response = provider_session.get(
-            f"https://api.stripe.com/v1/payment_pages/{checkout_id}",
+            f"{endpoints.STRIPE_PAYMENT_PAGES}/{checkout_id}",
             params=poll_params,
             headers=stripe_headers(publishable_key, checkout_page),
             timeout=8,

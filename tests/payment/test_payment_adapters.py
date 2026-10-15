@@ -146,3 +146,23 @@ def test_finish_extractor_emits_the_terminal_line(monkeypatch, caplog):
     )
     adapters._finish_extractor(spec, _reference_root() / spec.script, ["python", "x"], env={}, timeout=5)
     assert len(seen) == 2
+
+
+def test_build_kakao_env_prefers_explicit_proxy_file_and_routes_runtime_dirs(tmp_path):
+    from sms_tool.pay_link import adapters
+
+    script_dir = tmp_path / "kakao"
+    script_dir.mkdir(parents=True)
+    seed_pool = script_dir / "proxy_seeds.txt"
+    seed_pool.write_text("http://fallback:8080\n", encoding="utf-8")
+    script = script_dir / "kakao_extract.py"
+    script.write_text("", encoding="utf-8")
+
+    explicit_env = adapters._build_kakao_env("tok", "http://explicit:8080", "/tmp/explicit_seed.txt", script, {})
+    assert explicit_env["KAKAO_PROXY_SEED_FILE"] == "/tmp/explicit_seed.txt"
+    assert explicit_env["KAKAO_LOG_DIR"].endswith("logs")
+    assert explicit_env["KAKAO_PROXY_STATE_FILE"].endswith("proxy_state.json")
+
+    fallback_env = adapters._build_kakao_env("tok", "", "", script, {})
+    assert fallback_env["KAKAO_PROXY_SEED_FILE"] == str(seed_pool)
+

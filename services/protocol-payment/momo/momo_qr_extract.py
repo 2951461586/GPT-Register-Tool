@@ -35,6 +35,7 @@ if str(_PROTOCOL_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROTOCOL_ROOT))
 
 import ac_paylink_core as paylink
+from common import endpoints
 from common.protocol_core import (
     is_false as shared_is_false,
     is_true as shared_is_true,
@@ -98,7 +99,7 @@ ROOT = Path(__file__).resolve().parent
 # default only matters for standalone CLI runs; a missing file no longer points
 # at a stale vendored `upi/` path and load_proxies() raises an actionable error.
 DEFAULT_PROXY_FILE = ROOT / "proxy_seeds_vn.txt"
-CHECKOUT_URL = "https://chatgpt.com/backend-api/payments/checkout"
+CHECKOUT_URL = endpoints.CHATGPT_CHECKOUT_API
 DEFAULT_STRIPE_PK = paylink.DEFAULT_STRIPE_PK
 COUNTRY_CURRENCY = dict(paylink.COUNTRY_CURRENCY)
 COUNTRY_CURRENCY.setdefault("VN", "VND")
@@ -121,7 +122,7 @@ DECISION_TEXT = {
     "unexpected_mode": "Stripe Session 不是 subscription 模式",
     "credential_ready": "凭证格式有效，尚未联网检测",
 }
-CHECKOUT_UPDATE_URL = "https://chatgpt.com/backend-api/payments/checkout/update"
+CHECKOUT_UPDATE_URL = endpoints.CHATGPT_CHECKOUT_UPDATE
 DEFAULT_PROMO_ID = "plus-1-month-free"
 
 MOMO_BILLING = {
@@ -500,7 +501,7 @@ def checkout_body(trial_days: int, strategy: str = "hosted_promo") -> dict[str, 
         "price_interval": "month",
         "seat_quantity": 1,
         "billing_details": {"country": "VN", "currency": "VND"},
-        "cancel_url": "https://chatgpt.com/",
+        "cancel_url": f"{endpoints.CHATGPT_BASE}/",
     }
     if strategy in {"hosted_promo", "hosted", "promo"}:
         base["checkout_ui_mode"] = "hosted"
@@ -599,7 +600,7 @@ def post_chatgpt_checkout(
     )
     headers.update(
         {
-            "Referer": "https://chatgpt.com/",
+            "Referer": f"{endpoints.CHATGPT_BASE}/",
             "x-openai-target-path": "/backend-api/payments/checkout",
             "x-openai-target-route": "/backend-api/payments/checkout",
         }
@@ -759,7 +760,7 @@ def apply_promo_update(
     path = "/backend-api/payments/checkout/update"
     headers.update(
         {
-            "Referer": f"https://chatgpt.com/checkout/{entity}/{checkout_id}",
+            "Referer": endpoints.chatgpt_checkout_page(entity, checkout_id),
             "x-openai-target-path": path,
             "x-openai-target-route": path,
         }
@@ -1108,7 +1109,7 @@ def create_momo_payment_method(
         "key": stripe_key or DEFAULT_STRIPE_PK,
     }
     resp = _stripe_form_post(
-        "https://api.stripe.com/v1/payment_methods",
+        endpoints.STRIPE_PAYMENT_METHODS,
         form,
         proxy=proxy,
         timeout=timeout,
@@ -1143,7 +1144,7 @@ def confirm_momo_payment_page(
     expected = amount_due(init_payload)
     expected_amount = "0" if expected is None else str(_as_int(expected))
     init_checksum = str(init_payload.get("init_checksum") or "")
-    return_url = f"https://chatgpt.com/?cs={checkout_id}"
+    return_url = f"{endpoints.CHATGPT_BASE}/?cs={checkout_id}"
     config_id = str(init_payload.get("config_id") or "")
     # runtime version from live PP confirm evidence (not stale fed52f3bc6)
     runtime_version = (
@@ -1210,7 +1211,7 @@ def confirm_momo_payment_page(
     _ = billing  # kept for API compat
     try:
         resp = _stripe_form_post(
-            f"https://api.stripe.com/v1/payment_pages/{checkout_id}/confirm",
+            endpoints.stripe_payment_page(checkout_id, "confirm"),
             form,
             proxy=proxy,
             timeout=timeout,
@@ -1266,8 +1267,8 @@ def chatgpt_approve_checkout(
     )
     headers.update(
         {
-            "Referer": f"https://chatgpt.com/checkout/{entity}/{checkout_id}",
-            "Origin": "https://chatgpt.com",
+            "Referer": endpoints.chatgpt_checkout_page(entity, checkout_id),
+            "Origin": endpoints.CHATGPT_BASE,
             "x-openai-target-path": "/backend-api/payments/checkout/approve",
             "x-openai-target-route": "/backend-api/payments/checkout/approve",
         }
@@ -1276,7 +1277,7 @@ def chatgpt_approve_checkout(
     try:
         resp = _request_json(
             "POST",
-            "https://chatgpt.com/backend-api/payments/checkout/approve",
+            endpoints.CHATGPT_CHECKOUT_APPROVE,
             headers=headers,
             proxy=proxy,
             json_body=body,

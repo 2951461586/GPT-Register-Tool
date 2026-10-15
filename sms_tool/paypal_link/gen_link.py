@@ -43,6 +43,7 @@ try:
         CHATGPT_TIMEOUT,
         RETRY_ATTEMPTS,
         _SIDE_EFFECT_STAGES,
+        endpoints,
         normalize_proxy_template,
         proxy_for_country_template,
         rotate_proxy_session_id,
@@ -888,7 +889,7 @@ def _normalize_hosted_checkout_url(url: str) -> str:
 
 def _canonical_checkout_long_url(cs_id: str) -> str:
     cs_id = str(cs_id or "").strip()
-    return f"https://pay.openai.com/c/pay/{cs_id}" if cs_id else ""
+    return f"{endpoints.OPENAI_PAY_BASE}/c/pay/{cs_id}" if cs_id else ""
 
 
 def _normalized_generation_type(paypal_cfg: dict[str, Any], override: str | None = None) -> str:
@@ -964,7 +965,7 @@ def _is_chatgpt_checkout_link_generation_type(value: str) -> bool:
 def _chatgpt_checkout_url(processor_entity: str, cs_id: str) -> str:
     processor_entity = str(processor_entity or "").strip()
     cs_id = str(cs_id or "").strip()
-    return f"https://chatgpt.com/checkout/{processor_entity}/{cs_id}" if processor_entity and cs_id else ""
+    return endpoints.chatgpt_checkout_page(processor_entity, cs_id) if processor_entity and cs_id else ""
 
 
 def _checkout_country_from_cfg(
@@ -1099,7 +1100,7 @@ def generate_chatgpt_checkout_link(
         )
         checkout_body = contract.checkout_payload()
         r = _plm._checkout_post(
-            "https://chatgpt.com/backend-api/payments/checkout",
+            endpoints.CHATGPT_CHECKOUT_API,
             checkout_body,
             access_token,
             _cookie,
@@ -1243,7 +1244,7 @@ def generate_hosted_long_url(
         )
         checkout_body = contract.checkout_payload()
         r = _plm._checkout_post(
-            "https://chatgpt.com/backend-api/payments/checkout",
+            endpoints.CHATGPT_CHECKOUT_API,
             checkout_body,
             access_token,
             _cookie,
@@ -1293,7 +1294,7 @@ def generate_hosted_long_url(
         stripe = _plm._new_session(stripe_init_proxy)
         init_body = contract.stripe_init_payload(stripe_pk, stripe_version=STRIPE_VERSION)
         init_resp = stripe.post(
-            f"https://api.stripe.com/v1/payment_pages/{cs_id}/init", data=init_body, timeout=DEFAULT_TIMEOUT
+            endpoints.stripe_payment_page(cs_id, "init"), data=init_body, timeout=DEFAULT_TIMEOUT
         )
         if init_resp.status_code >= 400:
             return {

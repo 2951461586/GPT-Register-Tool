@@ -57,7 +57,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from threading import Event, RLock, local
 from typing import Any
-from urllib.parse import parse_qsl, quote, urlencode, unquote, urljoin, urlparse, urlsplit, urlunsplit
+from urllib.parse import unquote, urljoin, urlparse
 
 import requests
 
@@ -180,7 +180,7 @@ from common.proxy_seed_file import (
 )
 from common.proxy_url import (
     NO_FOUR_PART,
-    default_scheme_from_env,
+    default_scheme_from_env as shared_default_scheme_from_env,
     normalize_proxy_url as shared_normalize_proxy_url,
 )
 from common.logging_setup import make_file_logger
@@ -189,8 +189,8 @@ from common import stripe_flow as shared_stripe_flow
 from common import geo as shared_geo
 from common import endpoints
 
-LOG_DIR = SCRIPT_DIR / "logs"
-DUMP_DIR = SCRIPT_DIR / "dumps"
+LOG_DIR = Path(os.environ.get("IDEAL_LOG_DIR", "").strip() or (SCRIPT_DIR / "logs"))
+DUMP_DIR = Path(os.environ.get("IDEAL_DUMP_DIR", "").strip() or (SCRIPT_DIR / "dumps"))
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 DUMP_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -387,7 +387,7 @@ def register_proxy_for_redaction(proxy: str) -> None:
 
 def default_proxy_scheme() -> str:
     """Delegate to the shared resolver in ``common/proxy_url.py``."""
-    return default_scheme_from_env("IDEAL_PROXY_DEFAULT_SCHEME")
+    return shared_default_scheme_from_env("IDEAL_PROXY_DEFAULT_SCHEME")
 
 
 def proxy_short(proxy: str) -> str:

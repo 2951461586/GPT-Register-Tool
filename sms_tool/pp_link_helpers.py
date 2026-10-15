@@ -63,7 +63,10 @@ DEFAULT_STRIPE_PK = (os.environ.get("PP_STRIPE_PUBLISHABLE_KEY", "") or "").stri
     "pk_live_51HOrSwC6h1nxGoI3lTAgRjYVrz4dU3fVOabyCcKR3pbEJguCVAlqCxdxCUvoRh1XWwRacViovU3kLKvpkjh7IqkW00iXQsjo3n"
 )
 STRIPE_VERSION = "2025-03-31.basil; checkout_server_update_beta=v1; checkout_manual_approval_preview=v1"
+from . import endpoints
 from .timeouts import CHATGPT_TIMEOUT, DEFAULT_TIMEOUT
+
+_CHATGPT_ORIGIN_HOST = endpoints.CHATGPT_BASE
 
 RETRY_ATTEMPTS = 3
 

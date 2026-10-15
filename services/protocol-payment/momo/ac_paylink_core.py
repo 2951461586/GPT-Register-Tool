@@ -39,17 +39,18 @@ PROTOCOL_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROTOCOL_ROOT not in sys.path:
     sys.path.insert(0, PROTOCOL_ROOT)
 
+from common import endpoints
 from common.proxy_url import (
     normalize_provider_form as shared_normalize_provider_form,
 )
 
-CHECKOUT_ENDPOINT = "https://chatgpt.com/backend-api/payments/checkout"
+CHECKOUT_ENDPOINT = endpoints.CHATGPT_CHECKOUT_API
 DEFAULT_PLAN_NAME = "chatgptplusplan"
 DEFAULT_PROMO_CAMPAIGN_ID = "plus-1-month-free"
 DEFAULT_COUNTRY = "US"
 DEFAULT_CURRENCY = "USD"
 DEFAULT_LANGUAGE = "en-US"
-DEFAULT_CANCEL_URL = "https://chatgpt.com/"
+DEFAULT_CANCEL_URL = f"{endpoints.CHATGPT_BASE}/"
 COUNTRY_ALIASES = {
     "UK": "GB",
     "GBR": "GB",
@@ -80,8 +81,8 @@ DEFAULT_USER_AGENT = (
     "Chrome/136.0.0.0 Safari/537.36"
 )
 JWT_RE = re.compile(r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+")
-OPENAI_PAY_PREFIX = "https://pay.openai.com/c/pay/"
-STRIPE_PAY_PREFIX = "https://checkout.stripe.com/c/pay/"
+OPENAI_PAY_PREFIX = f"{endpoints.OPENAI_PAY_BASE}/c/pay/"
+STRIPE_PAY_PREFIX = f"{endpoints.STRIPE_CHECKOUT_BASE}/c/pay/"
 # PK 由 OpenAI 下发，checkout 响应通常带 publishable_key；下面的硬编码仅为兜底。
 # 用环境变量 PP_STRIPE_PUBLISHABLE_KEY 统一覆盖两处副本（本文件与
 # sms_tool/gen_pp_link.py），避免 OpenAI 轮换 PK 时改代码。
@@ -318,8 +319,8 @@ def build_headers(access_token: str, *, session_token: str = "", cookies: str = 
         "Accept": "application/json",
         "Content-Type": "application/json",
         "Authorization": f"Bearer {token}",
-        "Origin": "https://chatgpt.com",
-        "Referer": "https://chatgpt.com/",
+        "Origin": endpoints.CHATGPT_BASE,
+        "Referer": f"{endpoints.CHATGPT_BASE}/",
         "oai-device-id": str(uuid.uuid4()),
         "oai-language": str(language or DEFAULT_LANGUAGE),
     }
@@ -493,7 +494,7 @@ def stripe_init_payment_page(
     }
     for index, beta in enumerate(stripe_client_betas()):
         form[f"elements_session_client[client_betas][{index}]"] = beta
-    url = f"https://api.stripe.com/v1/payment_pages/{cs}/init"
+    url = endpoints.stripe_payment_page(cs, "init")
     headers = {
         "Content-Type": "application/x-www-form-urlencoded",
         "Accept": "application/json",

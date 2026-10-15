@@ -26,6 +26,7 @@ if str(_PROTOCOL_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROTOCOL_ROOT))
 
 import pix_core as core
+from common import endpoints
 from common.protocol_core import openai_sentinel_headers, sentinel_device_id
 
 LogCb = Callable[[str], None] | None
@@ -275,7 +276,7 @@ def stripe_init_pix(stripe: requests.Session, cs_id: str, stripe_pk: str) -> dic
         "_stripe_version": core.STRIPE_VERSION_FULL,
     }
     response = stripe.post(
-        f"https://api.stripe.com/v1/payment_pages/{cs_id}/init",
+        endpoints.stripe_payment_page(cs_id, "init"),
         data=body,
         timeout=core.PAY_LONG_LINK_TIMEOUT,
     )
@@ -300,7 +301,7 @@ def create_pix_checkout(access_token: str, proxy_url: str = "", with_promo: bool
             "is_coupon_from_query_param": False,
         }
     headers = {
-        "Referer": "https://chatgpt.com/",
+        "Referer": f"{endpoints.CHATGPT_BASE}/",
         "x-openai-target-path": "/backend-api/payments/checkout",
         "x-openai-target-route": "/backend-api/payments/checkout",
         # Injected by the sms_tool adapter. Without this pair the create gate
@@ -312,7 +313,7 @@ def create_pix_checkout(access_token: str, proxy_url: str = "", with_promo: bool
     for attempt in range(core.OPLL_CHECKOUT_TRANSIENT_RETRY_MAX):
         session = core.opll_build_chatgpt_session(access_token, proxy_url, device_id=sentinel_device_id())
         response = session.post(
-            "https://chatgpt.com/backend-api/payments/checkout",
+            endpoints.CHATGPT_CHECKOUT_API,
             json=json_body,
             headers=headers,
             timeout=core.PAY_LONG_LINK_TIMEOUT,
@@ -378,7 +379,7 @@ def stripe_create_pix_method(
         "billing_details[tax_id]": tax_id,
         "type": "pix",
         "payment_user_agent": f"stripe.js/{runtime_version}; stripe-js-v3/{runtime_version}; payment-element; deferred-intent",
-        "referrer": "https://chatgpt.com",
+        "referrer": endpoints.CHATGPT_BASE,
         "time_on_page": str(random.randint(25000, 55000)),
         "client_attribution_metadata[checkout_session_id]": cs_id,
         "client_attribution_metadata[client_session_id]": ctx["stripe_js_id"],
@@ -395,7 +396,7 @@ def stripe_create_pix_method(
         "key": stripe_pk or core.DEFAULT_STRIPE_PK,
         "_stripe_version": core.STRIPE_VERSION_FULL,
     }
-    response = stripe.post("https://api.stripe.com/v1/payment_methods", data=body, timeout=core.PAY_LONG_LINK_TIMEOUT)
+    response = stripe.post(endpoints.STRIPE_PAYMENT_METHODS, data=body, timeout=core.PAY_LONG_LINK_TIMEOUT)
     if response.status_code >= 400:
         raise RuntimeError(core.opll_stripe_error_summary("stripe payment_methods(pix) failed", response))
     pm_id = str((response.json() or {}).get("id") or "")
@@ -430,7 +431,7 @@ def update_pix_checkout_taxes(
     if billing.get("state"):
         body["billing_address"]["state"] = billing["state"]
     headers = {
-        "Referer": f"https://chatgpt.com/checkout/{processor}/{cs_id}",
+        "Referer": endpoints.chatgpt_checkout_page(processor, cs_id),
         "x-openai-target-path": "/backend-api/payments/checkout/taxes",
         "x-openai-target-route": "/backend-api/payments/checkout/taxes",
     }
@@ -438,7 +439,7 @@ def update_pix_checkout_taxes(
     for attempt in range(core.OPLL_CHECKOUT_TRANSIENT_RETRY_MAX):
         session = core.opll_build_chatgpt_session(access_token, proxy_url)
         response = session.post(
-            "https://chatgpt.com/backend-api/payments/checkout/taxes",
+            endpoints.CHATGPT_CHECKOUT_TAXES,
             json=body,
             headers=headers,
             timeout=core.PAY_LONG_LINK_TIMEOUT,
@@ -473,7 +474,7 @@ def stripe_update_tax_region(
     if billing.get("state"):
         body["tax_region[state]"] = billing["state"]
     response = stripe.post(
-        f"https://api.stripe.com/v1/payment_pages/{cs_id}", data=body, timeout=core.PAY_LONG_LINK_TIMEOUT
+        f"{endpoints.STRIPE_PAYMENT_PAGES}/{cs_id}", data=body, timeout=core.PAY_LONG_LINK_TIMEOUT
     )
     if response.status_code >= 400:
         raise RuntimeError(f"stripe tax_region failed: HTTP {response.status_code} {response.text[:300]}")
@@ -531,7 +532,7 @@ def poll_pix_payment_page(
     last_err = ""
     while time.time() < deadline:
         response = stripe.get(
-            f"https://api.stripe.com/v1/payment_pages/{cs_id}",
+            f"{endpoints.STRIPE_PAYMENT_PAGES}/{cs_id}",
             params=params,
             timeout=core.PAY_LONG_LINK_TIMEOUT,
         )

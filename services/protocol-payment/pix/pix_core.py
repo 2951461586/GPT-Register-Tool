@@ -4,10 +4,11 @@ import json
 import os
 import random
 import re
-import secrets
+import sys
 import time
 import uuid
-from urllib.parse import parse_qs, parse_qsl, quote, urlencode, unquote, urljoin, urlparse, urlsplit, urlunsplit
+from pathlib import Path
+from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 
 import requests
 
@@ -16,8 +17,13 @@ try:
 except Exception:  # pragma: no cover
     CurlCffiSession = None
 
+_PROTOCOL_ROOT = Path(__file__).resolve().parents[1]
+if str(_PROTOCOL_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROTOCOL_ROOT))
 
-CHATGPT_BASE_URL = "https://chatgpt.com"
+from common import endpoints
+
+CHATGPT_BASE_URL = endpoints.CHATGPT_BASE
 
 DEFAULT_USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
@@ -720,15 +726,15 @@ def opll_processor_entity_for_country(country: str, processor_entity: str = "") 
 
 def opll_chatgpt_success_return_url(cs_id: str, country: str, processor_entity: str = "") -> str:
     entity = opll_processor_entity_for_country(country, processor_entity)
-    return f"https://chatgpt.com/checkout/verify?stripe_session_id={cs_id}&processor_entity={entity}&plan_type=plus"
+    return endpoints.chatgpt_checkout_verify(cs_id, entity)
 
 
 def opll_to_openai_pay_url(stripe_hosted_url: str) -> str:
     url = str(stripe_hosted_url or "").strip()
     if not url:
         return ""
-    if url.startswith("https://checkout.stripe.com"):
-        return "https://pay.openai.com" + url[len("https://checkout.stripe.com") :]
+    if url.startswith(endpoints.STRIPE_CHECKOUT_BASE):
+        return endpoints.OPENAI_PAY_BASE + url[len(endpoints.STRIPE_CHECKOUT_BASE) :]
     parsed = urlsplit(url)
     if parsed.netloc.lower() == "checkout.stripe.com":
         return urlunsplit((parsed.scheme or "https", "pay.openai.com", parsed.path, parsed.query, parsed.fragment))
@@ -737,7 +743,7 @@ def opll_to_openai_pay_url(stripe_hosted_url: str) -> str:
 
 def opll_stripe_checkout_long_url(cs_id: str, country: str, processor_entity: str = "") -> str:
     return (
-        f"https://checkout.stripe.com/c/pay/{cs_id}"
+        f"{endpoints.STRIPE_CHECKOUT_BASE}/c/pay/{cs_id}"
         f"?returned_from_redirect=true&ui_mode=custom&return_url="
         f"{quote(opll_chatgpt_success_return_url(cs_id, country, processor_entity), safe='')}"
     )
@@ -788,8 +794,8 @@ def opll_build_chatgpt_session(access_token: str, proxy_url: str = "", device_id
             "Accept": "*/*",
             "Accept-Language": "en-US,en;q=0.9",
             "Authorization": f"Bearer {token}",
-            "Origin": "https://chatgpt.com",
-            "Referer": "https://chatgpt.com/",
+            "Origin": endpoints.CHATGPT_BASE,
+            "Referer": f"{endpoints.CHATGPT_BASE}/",
             "Content-Type": "application/json",
             "oai-device-id": device_id,
             "oai-language": "en-US",
@@ -832,7 +838,7 @@ def opll_update_checkout_promotion(access_token: str, checkout: dict, proxy_url:
             "is_coupon_from_query_param": False,
         },
     }
-    referer = f"https://chatgpt.com/checkout/{processor_entity}/{cs_id}"
+    referer = endpoints.chatgpt_checkout_page(processor_entity, cs_id)
     headers = {
         "Referer": referer,
         "x-openai-target-path": "/backend-api/payments/checkout/update",
@@ -843,7 +849,7 @@ def opll_update_checkout_promotion(access_token: str, checkout: dict, proxy_url:
         session = opll_build_chatgpt_session(access_token, proxy_url)
         try:
             response = session.post(
-                "https://chatgpt.com/backend-api/payments/checkout/update",
+                endpoints.CHATGPT_CHECKOUT_UPDATE,
                 json=json_body,
                 headers=headers,
                 timeout=PAY_LONG_LINK_TIMEOUT,
@@ -1221,10 +1227,10 @@ def opll_chatgpt_approve(chatgpt: requests.Session, cs_id: str, checkout: dict) 
     entity = opll_processor_entity_for_country(checkout["billing_country"], checkout.get("processor_entity", ""))
     try:
         chatgpt.post(
-            "https://chatgpt.com/backend-api/sentinel/ping",
+            endpoints.CHATGPT_SENTINEL_PING,
             json={},
             headers={
-                "Referer": "https://chatgpt.com/",
+                "Referer": f"{endpoints.CHATGPT_BASE}/",
                 "x-openai-target-path": "/backend-api/sentinel/ping",
                 "x-openai-target-route": "/backend-api/sentinel/ping",
             },
@@ -1233,10 +1239,10 @@ def opll_chatgpt_approve(chatgpt: requests.Session, cs_id: str, checkout: dict) 
     except Exception:
         pass
     response = chatgpt.post(
-        "https://chatgpt.com/backend-api/payments/checkout/approve",
+        endpoints.CHATGPT_CHECKOUT_APPROVE,
         json={"checkout_session_id": cs_id, "processor_entity": entity},
         headers={
-            "Referer": f"https://chatgpt.com/checkout/{entity}/{cs_id}",
+            "Referer": endpoints.chatgpt_checkout_page(entity, cs_id),
             "x-openai-target-path": "/backend-api/payments/checkout/approve",
             "x-openai-target-route": "/backend-api/payments/checkout/approve",
         },
@@ -1300,7 +1306,7 @@ def opll_stripe_confirm(
     return_url = opll_stripe_confirm_return_url(cs_id, checkout, stripe_hosted_url)
     runtime_version = str(ctx.get("runtime_version") or DEFAULT_STRIPE_RUNTIME_VERSION)
     response = stripe.post(
-        f"https://api.stripe.com/v1/payment_pages/{cs_id}/confirm",
+        endpoints.stripe_payment_page(cs_id, "confirm"),
         data={
             "guid": uuid.uuid4().hex,
             "muid": uuid.uuid4().hex,

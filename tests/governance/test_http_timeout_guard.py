@@ -27,6 +27,7 @@ be in the dict) so a newly added one gets a human look instead of slipping by.
 from __future__ import annotations
 
 import ast
+import os
 from pathlib import Path
 
 import pytest
@@ -58,10 +59,12 @@ MAX_SPLATTED_SITES = 6
 
 
 def _python_files():
-    for path in ROOT.rglob("*.py"):
-        if any(part in SKIP_DIRS for part in path.parts):
-            continue
-        yield path
+    for dirpath, dirnames, filenames in os.walk(ROOT):
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+        base = Path(dirpath)
+        for name in filenames:
+            if name.endswith(".py"):
+                yield base / name
 
 
 def _family_map(tree: ast.AST):

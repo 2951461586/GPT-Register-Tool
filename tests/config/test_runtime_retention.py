@@ -132,6 +132,9 @@ class RuleMatching(unittest.TestCase):
             "one-off scan snapshots": "promotion_scan.json",
             "operator logs and scratch files": "app_20260908.log",
             "mailbox imports": "mailbox_imports/report.json",
+            "transient credential scratch files": "tmp/pp_token_1234.txt",
+            "upi diagnostic dumps": "upi_dumps/dump_001.json",
+            "protocol payment logs": "protocol_payment/ideal/logs/run_001.log",
         }
         for rule in RULES:
             with self.subTest(rule=rule.name):

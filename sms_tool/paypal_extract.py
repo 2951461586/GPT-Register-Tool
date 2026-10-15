@@ -95,6 +95,11 @@ except ImportError:  # pragma: no cover - direct script execution
         rotate_proxy_session as rotate_stage_proxy_session,
     )
 
+try:
+    from . import endpoints
+except ImportError:  # pragma: no cover - direct script execution
+    import endpoints  # type: ignore
+
 # ─── 常量 ────────────────────────────────────────────────────────────────────
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -285,7 +290,7 @@ class PPLinkExtractor:
                 "Authorization": f"Bearer {self.access_token}",
                 "Accept": "application/json",
                 "Content-Type": "application/json",
-                "Origin": "https://chatgpt.com",
+                "Origin": endpoints.CHATGPT_BASE,
                 "oai-device-id": self.device_id,
             }
         )
@@ -390,7 +395,7 @@ class PPLinkExtractor:
                 # minted for this create request, so present it explicitly rather
                 # than relying on the account cookie carrying ``oai-did``.
                 r = _checkout_post(
-                    "https://chatgpt.com/backend-api/payments/checkout",
+                    endpoints.CHATGPT_CHECKOUT_API,
                     body,
                     self.access_token,
                     self.cookie_header,
@@ -401,7 +406,7 @@ class PPLinkExtractor:
                 if r.status_code >= 400:
                     raise PayPalHttpError(
                         "checkout",
-                        "https://chatgpt.com/backend-api/payments/checkout",
+                        endpoints.CHATGPT_CHECKOUT_API,
                         r,
                         retryable=r.status_code in {408, 425, 429} or r.status_code >= 500,
                     )
@@ -444,7 +449,7 @@ class PPLinkExtractor:
 
     def _checkout_page_url(self, cs_id: str, processor_entity: str) -> str:
         entity = processor_entity or ("openai_llc" if self.checkout_country == "US" else "openai_ie")
-        return f"https://chatgpt.com/checkout/{entity}/{cs_id}"
+        return endpoints.chatgpt_checkout_page(entity, cs_id)
 
     def checkout_update_promotion(self, cs_id: str, processor_entity: str) -> bool:
         """Apply the 0-due promo to an existing checkout via /checkout/update.
@@ -475,7 +480,7 @@ class PPLinkExtractor:
         try:
             self.promotion_proxy = self._prepare_stage_proxy("promotion", self.promotion_proxy)
             r = _checkout_post(
-                "https://chatgpt.com/backend-api/payments/checkout/update",
+                endpoints.CHATGPT_CHECKOUT_UPDATE,
                 body,
                 self.access_token,
                 self.cookie_header,
@@ -547,7 +552,7 @@ class PPLinkExtractor:
         }
         try:
             r = _checkout_post(
-                "https://chatgpt.com/backend-api/payments/checkout/taxes",
+                endpoints.CHATGPT_CHECKOUT_TAXES,
                 body,
                 self.access_token,
                 self.cookie_header,
@@ -575,11 +580,12 @@ class PPLinkExtractor:
             stripe_version=STRIPE_VERSION,
             stripe_js_id=self.stripe_js_id,
         )
-        r = stripe.post(f"https://api.stripe.com/v1/payment_pages/{cs_id}/init", data=body, timeout=DEFAULT_TIMEOUT)
+        init_url = endpoints.stripe_payment_page(cs_id, "init")
+        r = stripe.post(init_url, data=body, timeout=DEFAULT_TIMEOUT)
         if r.status_code >= 400:
             raise PayPalHttpError(
                 "stripe_init",
-                f"https://api.stripe.com/v1/payment_pages/{cs_id}/init",
+                init_url,
                 r,
                 retryable=r.status_code in {408, 425, 429} or r.status_code >= 500,
             )
@@ -624,7 +630,7 @@ class PPLinkExtractor:
             "billing_details[address][state]": billing["state"],
             "billing_details[address][postal_code]": billing["postal"],
             "payment_user_agent": f"stripe.js/{self.runtime_version}; stripe-js-v3/{self.runtime_version}; payment-element; deferred-intent",
-            "referrer": "https://chatgpt.com",
+            "referrer": endpoints.CHATGPT_BASE,
             "time_on_page": str(random.randint(25000, 55000)),
             "client_attribution_metadata[client_session_id]": self.stripe_js_id,
             "client_attribution_metadata[checkout_session_id]": cs_id,
@@ -640,11 +646,11 @@ class PPLinkExtractor:
             "key": self.stripe_pk,
             "_stripe_version": STRIPE_VERSION,
         }
-        r = stripe.post("https://api.stripe.com/v1/payment_methods", data=body, timeout=DEFAULT_TIMEOUT)
+        r = stripe.post(endpoints.STRIPE_PAYMENT_METHODS, data=body, timeout=DEFAULT_TIMEOUT)
         if r.status_code != 200:
             raise PayPalHttpError(
                 "payment_method",
-                "https://api.stripe.com/v1/payment_methods",
+                endpoints.STRIPE_PAYMENT_METHODS,
                 r,
                 retryable=r.status_code in {408, 425, 429} or r.status_code >= 500,
             )
@@ -659,12 +665,12 @@ class PPLinkExtractor:
         self._log("confirm", "Stripe confirm")
         stripe = self._set_stripe_proxy(self.confirm_proxy)
         processor_entity = "openai_llc" if self.checkout_country == "US" else "openai_ie"
-        chatgpt_return = f"https://chatgpt.com/checkout/verify?stripe_session_id={cs_id}&processor_entity={processor_entity}&plan_type=plus"
+        chatgpt_return = endpoints.chatgpt_checkout_verify(cs_id, processor_entity)
         hosted_url = str(init.get("stripe_hosted_url") or "")
         if hosted_url:
             hosted_url = hosted_url.replace("checkout.stripe.com", "pay.openai.com")
         else:
-            hosted_url = f"https://pay.openai.com/c/pay/{cs_id}?returned_from_redirect=true&ui_mode=custom&return_url={quote(chatgpt_return, safe='')}"
+            hosted_url = f"{endpoints.OPENAI_PAY_BASE}/c/pay/{cs_id}?returned_from_redirect=true&ui_mode=custom&return_url={quote(chatgpt_return, safe='')}"
         return_url = hosted_url
 
         amount_info = stripe_amount_details(init)
@@ -706,13 +712,14 @@ class PPLinkExtractor:
             "key": self.stripe_pk,
             "_stripe_version": STRIPE_VERSION,
         }
-        r = stripe.post(f"https://api.stripe.com/v1/payment_pages/{cs_id}/confirm", data=body, timeout=DEFAULT_TIMEOUT)
+        confirm_url = endpoints.stripe_payment_page(cs_id, "confirm")
+        r = stripe.post(confirm_url, data=body, timeout=DEFAULT_TIMEOUT)
         if r.status_code >= 400:
             diagnostics = stripe_confirm_error_diagnostics(r, cs_id, pm_id, init)
             self._log("confirm", diagnostics)
             raise PayPalHttpError(
                 "confirm",
-                f"https://api.stripe.com/v1/payment_pages/{cs_id}/confirm",
+                confirm_url,
                 r,
                 retryable=r.status_code in {408, 425, 429} or r.status_code >= 500,
             )
@@ -726,14 +733,14 @@ class PPLinkExtractor:
         cs = self._approve_session()
         cs.headers.update(
             {
-                "Referer": f"https://chatgpt.com/checkout/{processor_entity}/{cs_id}",
+                "Referer": endpoints.chatgpt_checkout_page(processor_entity, cs_id),
             }
         )
         sentinel_headers = self._fresh_approval_sentinel(cs)
         # sentinel ping
         try:
             cs.post(
-                "https://chatgpt.com/backend-api/sentinel/ping",
+                endpoints.CHATGPT_SENTINEL_PING,
                 json={},
                 headers={
                     **sentinel_headers,
@@ -744,7 +751,7 @@ class PPLinkExtractor:
             )
         except Exception:
             pass
-        endpoint = "https://chatgpt.com/backend-api/payments/checkout/approve"
+        endpoint = endpoints.CHATGPT_CHECKOUT_APPROVE
         approval_headers = {
             **sentinel_headers,
             "x-openai-target-path": "/backend-api/payments/checkout/approve",
@@ -816,7 +823,7 @@ class PPLinkExtractor:
         poll_count = 0
         while time.time() < deadline:
             poll_count += 1
-            r = stripe.get(f"https://api.stripe.com/v1/payment_pages/{cs_id}", params=params, timeout=DEFAULT_TIMEOUT)
+            r = stripe.get(f"{endpoints.STRIPE_PAYMENT_PAGES}/{cs_id}", params=params, timeout=DEFAULT_TIMEOUT)
             if r.status_code == 200:
                 payload = r.json() or {}
                 url = extract_redirect_url(payload)

@@ -49,16 +49,25 @@ WIRED = (
     "services/protocol-payment/ideal/ideal_qr_extract.py",
     "services/protocol-payment/twint/twint_extract.py",
     "services/protocol-payment/blik/blik_qr_extract.py",
+    "services/protocol-payment/kakao/kakao_extract.py",
+    "services/protocol-payment/pix/pix_core.py",
+    "services/protocol-payment/pix/pix_extract.py",
+    "services/protocol-payment/momo/momo_qr_extract.py",
+    "services/protocol-payment/momo/ac_paylink_core.py",
+    "services/protocol-payment/direct_card/direct_card_extract.py",
 )
 
-#: sms_tool call sites wired to the sms_tool authority on 2026-09-28.
+#: sms_tool call sites wired to the sms_tool authority.
 WIRED_SMS_TOOL = (
     "sms_tool/registration_handlers.py",
+    "sms_tool/registration_account_stages.py",
     "sms_tool/registration_preflight.py",
     "sms_tool/chatgpt_bootstrap.py",
     "sms_tool/sentinel/client.py",
     "sms_tool/registration_drivers/browser_flow/context.py",
     "sms_tool/registration_drivers/browser_session.py",
+    "sms_tool/paypal_extract.py",
+    "sms_tool/paypal_link/gen_link.py",
 )
 
 
@@ -178,10 +187,23 @@ def test_vendor_tree_is_excluded():
     )
 
 
-def test_both_process_boundaries_are_scanned():
+def test_both_process_boundaries_are_scanned(tmp_path):
+    assert {p.as_posix() for p in eps.SCAN_DIRS} == {"services/protocol-payment", "sms_tool"}
     counts = eps.collect()
-    assert any(path.startswith("services/protocol-payment/") for path in counts)
+    assert not any(path.startswith("services/protocol-payment/") for path in counts), (
+        "services/protocol-payment/ is completely wired to common/endpoints.py and must stay at zero"
+    )
     assert any(path.startswith("sms_tool/") for path in counts)
+    # Prove services/protocol-payment is still actively scanned if a literal is introduced.
+    fake_pp = tmp_path / "services" / "protocol-payment" / "ideal"
+    fake_sms = tmp_path / "sms_tool"
+    fake_pp.mkdir(parents=True)
+    fake_sms.mkdir(parents=True)
+    (fake_pp / "probe.py").write_text('URL = "https://chatgpt.com/a"\n', encoding="utf-8")
+    (fake_sms / "probe.py").write_text('URL = "https://api.stripe.com/v1/a"\n', encoding="utf-8")
+    synthetic_counts = eps.collect(tmp_path)
+    assert synthetic_counts.get("services/protocol-payment/ideal/probe.py") == 1
+    assert synthetic_counts.get("sms_tool/probe.py") == 1
 
 
 def test_wired_extractors_have_zero_inline_literals():

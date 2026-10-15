@@ -197,6 +197,25 @@ RULES: tuple[Rule, ...] = (
         note="mailbox_imports/ -- 71 files, oldest 34.8 days on 2026-09-09.",
         match_dir="mailbox_imports",
     ),
+    Rule(
+        name="transient credential scratch files",
+        min_age_days=1,
+        note="tmp/ -- transient proxy seed and access-token files from protocol payment adapters.",
+        match_dir="tmp",
+    ),
+    Rule(
+        name="upi diagnostic dumps",
+        min_age_days=7,
+        note="upi_dumps/ -- diagnostic HTML/JSON snapshots from UPI checkout runs.",
+        match_dir="upi_dumps",
+    ),
+    Rule(
+        name="protocol payment logs",
+        min_age_days=14,
+        note="protocol_payment/*/logs/*.log -- per-run extractor logs relocated from services/protocol-payment.",
+        match_dir="protocol_payment",
+        match_name="*.log",
+    ),
 )
 
 
@@ -282,6 +301,14 @@ def plan_retention(
     return items
 
 
+def _fs_path(path: Path) -> Path:
+    resolved = path if path.is_absolute() else path.resolve()
+    raw = str(resolved)
+    if os.name == "nt" and len(raw) >= 240 and not raw.startswith("\\\\?\\"):
+        return Path("\\\\?\\" + raw)
+    return path
+
+
 def relocate(root: Path, items: list[PlanItem], stamp: str) -> Path:
     """Move planned files under ``root/_retention/<stamp>/`` preserving layout.
 
@@ -291,12 +318,12 @@ def relocate(root: Path, items: list[PlanItem], stamp: str) -> Path:
     target_root = root / RELOCATE_DIRNAME / stamp
     moved = 0
     for item in items:
-        src = root / item.relpath
+        src = _fs_path(root / item.relpath)
         if not src.exists():
             continue
-        dst = target_root / item.relpath
-        dst.parent.mkdir(parents=True, exist_ok=True)
+        dst = _fs_path(target_root / item.relpath)
         try:
+            dst.parent.mkdir(parents=True, exist_ok=True)
             os.replace(src, dst)
             moved += 1
         except OSError as exc:  # pragma: no cover - operator feedback

@@ -6,5 +6,7 @@
   "graph_messages_url": "https://graph.microsoft.com/v1.0/me/messages",
   "graph_scope": "https://graph.microsoft.com/.default offline_access",
   "request_timeout_seconds": 25,
-  "message_limit": 15
+  "message_limit": 15,
+  "api_key": "",
+  "expose_refresh_token": false
 }

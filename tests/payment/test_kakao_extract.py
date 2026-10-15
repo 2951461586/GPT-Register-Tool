@@ -158,7 +158,6 @@ class CheckoutStageTests(unittest.TestCase):
 
 import os
 import tempfile
-from contextlib import contextmanager
 from unittest import mock
 
 
