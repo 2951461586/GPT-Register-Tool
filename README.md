@@ -17,7 +17,7 @@
 
 GPT-Register-Tool 采用 **WPF 桌面端 + Python 业务核心**，提供邮箱 OTP 注册、账号与 Session 管理、代理配置、协议支付链接提取和账号导出能力。运行数据默认保存在本机，不写入 Git。
 
-当前发布说明：[release-v2026.10.12.md](docs/releases/release-v2026.10.12.md)。
+当前发布说明：[release-v2026.10.15.md](docs/releases/release-v2026.10.15.md)。
 
 
 ## 赞助商

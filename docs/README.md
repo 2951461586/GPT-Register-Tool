@@ -45,6 +45,9 @@ Directory layout (since 2026-09-06):
 
 ## Release notes（docs/releases/，一个发布标签一份，不回写）
 
+- [v2026.10.15 发布说明](releases/release-v2026.10.15.md) - 自 v2026.10.12 以来的收口：
+  配置与凭据自动迁出仓库根目录、ReMail 批量取号幂等键跨批次碰撞修复、支付提取器 94 处 URL 单源化与
+  Kakao 代理池优先级修复、`mail-otp-web` 鉴权门禁，以及 WPF MVVM 拆分与 69 个 C# 警告清零。
 - [v2026.10.12 发布说明](releases/release-v2026.10.12.md) - 自 v2026.10.08 以来的收口：
   协议注册默认栈换为实测可存活的新 Sentinel SDK + SO、401 重登两个失败原因（探针误拒 passwordless
   账号、`account_deactivated` 被吞）的修复，以及 AT 存活调查的审计记录。
