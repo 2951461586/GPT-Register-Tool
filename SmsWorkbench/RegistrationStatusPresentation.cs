@@ -16,5 +16,5 @@ public static class RegistrationStatusPresentation
 
     public static bool NeedsAttention(PoolRow row) =>
         IsPartial(row.RegistrationStatus) || IsPartial(row.Status)
-        || row.Status.Contains("待") || row.Status.Contains("缺") || row.Status.Contains("失败");
+        || row.Status.Contains('待') || row.Status.Contains('缺') || row.Status.Contains("失败", StringComparison.Ordinal);
 }

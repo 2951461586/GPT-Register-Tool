@@ -87,7 +87,7 @@ namespace SmsWorkbench
 
         private async Task ExportAccountsJsonAsync(List<PoolRow> rows, CancellationToken ct = default)
         {
-            var collected = await CollectAccountExportJsonAsync(rows);
+            var collected = await CollectAccountExportJsonAsync(rows, ct);
             if (collected.Items.Count == 0)
             {
                 ShowThemedInfoDialog("一键导出", "没有找到可导出的 JSON 账号记录。需要账号已生成 session/auth_session 或 SQLite 原始记录。");
@@ -99,7 +99,7 @@ namespace SmsWorkbench
             string outputPath = Path.Combine(outputDir, "account-" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".json");
             object payload = collected.Items.Count == 1 ? collected.Items[0] : collected.Items;
             var options = new JsonSerializerOptions { WriteIndented = true };
-            await Task.Run(() => File.WriteAllText(outputPath, JsonSerializer.Serialize(payload, options), new UTF8Encoding(false)));
+            await Task.Run(() => File.WriteAllText(outputPath, JsonSerializer.Serialize(payload, options), new UTF8Encoding(false)), ct);
             Log("One-click JSON export wrote " + collected.Items.Count + " account(s), skipped " + collected.Skipped + ": " + outputPath);
             ShowExportCompleteDialog(outputPath, collected.Items.Count, collected.Skipped, "JSON", "原始账号 session JSON；保留 RT 字段，未获取 RT 的账号默认留空");
         }
@@ -113,7 +113,7 @@ namespace SmsWorkbench
             int skipped = 0;
             foreach (PoolRow row in rows)
             {
-                Dictionary<string, object>? item = await BuildAccountExportJsonAsync(row);
+                Dictionary<string, object>? item = await BuildAccountExportJsonAsync(row, ct);
                 if (item != null)
                 {
                     string key = AccountExportJson.DedupKey(item, row.Identifier);
@@ -135,7 +135,7 @@ namespace SmsWorkbench
 
         private async Task ExportAccountsConvertedJsonAsync(List<PoolRow> rows, string format, CancellationToken ct = default)
         {
-            var collected = await CollectAccountExportJsonAsync(rows);
+            var collected = await CollectAccountExportJsonAsync(rows, ct);
             if (collected.Items.Count == 0)
             {
                 ShowThemedInfoDialog("一键导出", "没有找到可转换的账号 session。需要账号已生成 access_token/session/auth_session 或 SQLite 原始记录。");
@@ -152,12 +152,12 @@ namespace SmsWorkbench
             string outputPath = Path.Combine(outputDir, "account-" + normalized + "-" + stamp + ".json");
             object payload = items.Count == 1 ? items[0] : items;
             var options = new JsonSerializerOptions { WriteIndented = true };
-            await Task.Run(() => File.WriteAllText(sourcePath, JsonSerializer.Serialize(payload, options), new UTF8Encoding(false)));
+            await Task.Run(() => File.WriteAllText(sourcePath, JsonSerializer.Serialize(payload, options), new UTF8Encoding(false)), ct);
 
             try
             {
                 var plan = BackendCommandPlanner.CreateSessionConversion(sourcePath, normalized, outputPath);
-                await RunBackendWithResultAsync(plan.TaskName, plan.Arguments.ToList());
+                await RunBackendWithResultAsync(plan.TaskName, plan.Arguments.ToList(), ct: ct);
             }
             catch (Exception ex)
             {
@@ -564,7 +564,7 @@ namespace SmsWorkbench
         {
             if (row == null) return null;
             var data = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
-            if (!await TryLoadAccountDataForRowAsync(row, data) || data.Count == 0)
+            if (!await TryLoadAccountDataForRowAsync(row, data, ct) || data.Count == 0)
             {
                 return null;
             }
@@ -595,7 +595,7 @@ namespace SmsWorkbench
             try
             {
                 JsonElement account = await desktopRead.ReadAccountExportAsync(
-                    OnlyDigits(row.RawLine), row.Identifier);
+                    OnlyDigits(row.RawLine), row.Identifier, ct);
                 foreach (KeyValuePair<string, object> item in BackendJson.ElementToDictionary(account))
                 {
                     data[item.Key] = item.Value;

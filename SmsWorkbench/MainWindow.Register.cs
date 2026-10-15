@@ -190,14 +190,14 @@ namespace SmsWorkbench
         }
 
         private void OneClickSms()
-            => RunUiTask(() => OneClickSmsAsync());
+            => RunUiTask(() => OneClickSmsAsync(_lifetimeCts.Token));
 
         private async Task OneClickSmsAsync(CancellationToken ct = default)
         {
             var rows = SelectedEmailRowsOrNotify("接码");
             if (rows.Count == 0) return;
 
-            if (!await ShowSmsProviderOneClickDialogAsync())
+            if (!await ShowSmsProviderOneClickDialogAsync(ct))
             {
                 return;
             }

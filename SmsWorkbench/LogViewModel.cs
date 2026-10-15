@@ -64,6 +64,6 @@ namespace SmsWorkbench
         }
 
         public static string FormatLine(DateTime now, string safeText)
-            => "[" + now.ToString("HH:mm:ss") + "] " + safeText + Environment.NewLine;
+            => "[" + now.ToString("HH:mm:ss", CultureInfo.InvariantCulture) + "] " + safeText + Environment.NewLine;
     }
 }

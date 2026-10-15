@@ -151,7 +151,9 @@ namespace SmsWorkbench
                 {
                     if (string.IsNullOrWhiteSpace(request.AccessToken))
                         return new ProtocolPaymentRunResult(new ProtocolPaymentResultPresentation("请输入 Access Token", "", ""));
-                    transientSessionFile = Path.Combine(Path.GetTempPath(), "protocol_payment_at_" + Guid.NewGuid().ToString("N") + ".json");
+                    string runtimeTempDir = Path.Combine(_paths.RootDirectory, "runtime", "tmp");
+                    Directory.CreateDirectory(runtimeTempDir);
+                    transientSessionFile = Path.Combine(runtimeTempDir, "protocol_payment_at_" + Guid.NewGuid().ToString("N") + ".json");
                     File.WriteAllText(
                         transientSessionFile,
                         JsonSerializer.Serialize(new Dictionary<string, string> { ["access_token"] = request.AccessToken.Trim() }),

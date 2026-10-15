@@ -66,7 +66,7 @@ internal static class MailboxCredentialLineParser
         refreshToken = "";
 
         string value = (source ?? "").Trim().TrimStart('\ufeff');
-        if (value.Length == 0 || value.StartsWith("#")) return false;
+        if (value.Length == 0 || value.StartsWith('#')) return false;
         if (value.StartsWith("cfworker://", StringComparison.OrdinalIgnoreCase)
             || value.EndsWith("@edu.liziai.cloud", StringComparison.OrdinalIgnoreCase)
             || value.EndsWith("@liziai.cloud", StringComparison.OrdinalIgnoreCase))
@@ -74,9 +74,9 @@ internal static class MailboxCredentialLineParser
             return false;
         }
 
-        if (value.Contains("----"))
+        if (value.Contains("----", StringComparison.Ordinal))
         {
-            string[] parts = value.Split(new[] { "----" }, StringSplitOptions.None);
+            string[] parts = value.Split("----", StringSplitOptions.None);
             if (parts.Length < 4) return false;
             email = parts[0].Trim();
             password = parts[1].Trim();
@@ -87,9 +87,9 @@ internal static class MailboxCredentialLineParser
             return true;
         }
 
-        if (value.Contains("---"))
+        if (value.Contains("---", StringComparison.Ordinal))
         {
-            string[] parts = value.Split(new[] { "---" }, StringSplitOptions.None);
+            string[] parts = value.Split("---", StringSplitOptions.None);
             if (parts.Length < 3) return false;
             email = parts[0].Trim();
             password = parts[1].Trim();

@@ -6,6 +6,10 @@ namespace SmsWorkbench
 {
     public partial class MainWindow
     {
+        // Row cache, filter, paging, sorting and selection live in PoolViewModel
+        // (MainWindow.Pool); only the refresh-in-flight flag is view-level.
+        private bool poolsRefreshRunning;
+
         // Pool/session loading, filtering, overview
         private bool IsMailboxPoolLikeRow(PoolRow row)
         {
@@ -55,15 +59,15 @@ namespace SmsWorkbench
                 {
                     // One merged request (accounts + mailbox pool) through the
                     // resident channel; falls back to the two separate reads.
-                    JsonElement merged = await desktopRead.ReadPoolsAsync(GetChataiMailboxFilePath());
+                    JsonElement merged = await desktopRead.ReadPoolsAsync(GetChataiMailboxFilePath(), ct);
                     ApplyMailboxPoolPayload(merged);
                     ApplyAccountsPayload(merged);
                 }
                 catch (Exception ex)
                 {
                     Log("合并读取邮箱池/账号失败，改用分开读取：" + SensitiveDataSanitizer.Redact(ex.Message));
-                    await LoadMailboxPoolAsync();
-                    await LoadSessionPoolAsync();
+                    await LoadMailboxPoolAsync(ct);
+                    await LoadSessionPoolAsync(ct);
                 }
                 DeduplicateRows();
                 if (checkedIds != null)
@@ -131,7 +135,7 @@ namespace SmsWorkbench
             if (System.ComponentModel.DesignerProperties.GetIsInDesignMode(this)) return;
             try
             {
-                JsonElement payload = await desktopRead.ReadMailboxPoolAsync(GetChataiMailboxFilePath());
+                JsonElement payload = await desktopRead.ReadMailboxPoolAsync(GetChataiMailboxFilePath(), ct);
                 ApplyMailboxPoolPayload(payload);
             }
             catch (Exception ex)
@@ -265,7 +269,7 @@ namespace SmsWorkbench
             if (System.ComponentModel.DesignerProperties.GetIsInDesignMode(this)) return;
             try
             {
-                JsonElement payload = await desktopRead.ReadAccountsAsync();
+                JsonElement payload = await desktopRead.ReadAccountsAsync(ct);
                 ApplyAccountsPayload(payload);
             }
             catch (Exception ex)

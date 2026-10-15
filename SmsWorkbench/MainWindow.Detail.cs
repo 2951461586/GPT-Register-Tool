@@ -13,10 +13,10 @@ namespace SmsWorkbench
         private async Task ShowAccountDetailAsync(PoolRow row, CancellationToken ct = default)
         {
             if (row == null) return;
-            string detail = await BuildAccountDetailAsync(row);
+            string detail = await BuildAccountDetailAsync(row, ct);
             string paypalUrl = row.PayPalUrl ?? "";
             bool hasPayPal = !string.IsNullOrWhiteSpace(paypalUrl);
-            string accessToken = await ResolveAccountAccessTokenAsync(row);
+            string accessToken = await ResolveAccountAccessTokenAsync(row, ct);
             bool hasAccessToken = !string.IsNullOrWhiteSpace(accessToken);
             var dialog = new Window
             {
@@ -250,7 +250,7 @@ namespace SmsWorkbench
         private async Task<string> ResolveAccountAccessTokenAsync(PoolRow row, CancellationToken ct = default)
         {
             var data = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
-            if (!await TryLoadAccountDataForRowAsync(row, data) || data.Count == 0)
+            if (!await TryLoadAccountDataForRowAsync(row, data, ct) || data.Count == 0)
             {
                 return "";
             }
@@ -269,7 +269,7 @@ namespace SmsWorkbench
 
         private async Task OpenAccountJsonAsync(PoolRow row, CancellationToken ct = default)
         {
-            string path = await ResolveAccountJsonPathAsync(row);
+            string path = await ResolveAccountJsonPathAsync(row, ct);
             if (string.IsNullOrWhiteSpace(path))
             {
                 MessageBox.Show("未找到该账号对应的 JSON 文件。", "打开源文件", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -289,7 +289,7 @@ namespace SmsWorkbench
 
             try
             {
-                JsonElement payload = await desktopRead.ReadAccountAsync(OnlyDigits(row.RawLine), row.Identifier);
+                JsonElement payload = await desktopRead.ReadAccountAsync(OnlyDigits(row.RawLine), row.Identifier, ct);
                 if (!payload.TryGetProperty("account", out JsonElement account)) return "";
                 Dictionary<string, object> data = JsonElementToDictionary(account);
                 string jsonPath = GetString(data, "json_path");
@@ -345,7 +345,7 @@ namespace SmsWorkbench
             {
                 if (row.SourcePath.EndsWith(".sqlite3", StringComparison.OrdinalIgnoreCase))
                 {
-                    JsonElement payload = await desktopRead.ReadAccountAsync(OnlyDigits(row.RawLine), row.Identifier);
+                    JsonElement payload = await desktopRead.ReadAccountAsync(OnlyDigits(row.RawLine), row.Identifier, ct);
                     if (payload.TryGetProperty("account", out JsonElement account))
                     {
                         foreach (KeyValuePair<string, object> item in JsonElementToDictionary(account))

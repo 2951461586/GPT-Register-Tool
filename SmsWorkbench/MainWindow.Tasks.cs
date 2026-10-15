@@ -36,7 +36,7 @@ namespace SmsWorkbench
             try
             {
                 var command = BackendCommand.Create("doctor", new[] { "--doctor", "--json" }, 90 * 1000);
-                BackendCommandResult result = await backendClient.RunAsync(command).ConfigureAwait(true);
+                BackendCommandResult result = await backendClient.RunAsync(command, cancellationToken: ct).ConfigureAwait(true);
                 if (!result.Payload.HasValue)
                 {
                     Log("[doctor] 环境自检未返回结构化结果(退出码 " + result.ExitCode + ")");
@@ -107,9 +107,16 @@ namespace SmsWorkbench
         private void RunAccountBatchBackend(BackendCommandPlan plan, string domain, int total)
             => RunUiTask(() => RunBackendAsync(
                 plan.TaskName, plan.Arguments.ToList(), domain, total, plan.TimeoutMilliseconds,
-                ct: _lifetimeCts.Token, resultKind: plan.ResultKind));
+                resultKind: plan.ResultKind, ct: _lifetimeCts.Token));
 
-        private async Task RunBackendAsync(string taskName, List<string> args, string progressDomain = "", int progressTotal = 0, int? timeoutMs = null, CancellationToken ct = default, BackendAccountResultKind resultKind = BackendAccountResultKind.None)
+        private async Task RunBackendAsync(
+            string taskName,
+            List<string> args,
+            string progressDomain = "",
+            int progressTotal = 0,
+            int? timeoutMs = null,
+            BackendAccountResultKind resultKind = BackendAccountResultKind.None,
+            CancellationToken ct = default)
         {
             if (backendTasks.IsRunning)
             {
@@ -210,7 +217,8 @@ namespace SmsWorkbench
                             ["SMS_TOOL_TASK_NAME"] = taskName,
                             ["SMS_TOOL_EVENT_SOURCE"] = "wpf",
                         }),
-                    progress);
+                    progress,
+                    ct);
 
                 // Use BackendResultInterpreter to normalize the outcome
                 BackendExecutionResult interpreted = BackendResultInterpreter.Interpret(
@@ -403,7 +411,7 @@ namespace SmsWorkbench
         }
 
         private void DeleteSelected()
-            => RunUiTask(() => DeleteSelectedAsync());
+            => RunUiTask(() => DeleteSelectedAsync(_lifetimeCts.Token));
 
         private async Task DeleteSelectedAsync(CancellationToken ct = default)
         {
@@ -417,7 +425,8 @@ namespace SmsWorkbench
                     selected.Select(row => NormalizeEmailKey(row.Identifier)).ToArray(),
                     workers: Math.Min(8, Math.Max(1, selected.Count)));
                 BackendCommandResult backend = await backendTasks.RunAsync(
-                    BackendCommand.Create(plan.TaskName, plan.Arguments.ToList(), plan.TimeoutMilliseconds ?? 120000));
+                    BackendCommand.Create(plan.TaskName, plan.Arguments.ToList(), plan.TimeoutMilliseconds ?? 120000),
+                    cancellationToken: ct);
                 int failed = CountBatchDeleteFailures(backend, selected.Count);
                 if (failed > 0)
                 {
@@ -455,7 +464,7 @@ namespace SmsWorkbench
                 : expected;
         }
 
-        private async Task<bool> ShowDeleteConfirmDialog(int count, CancellationToken ct = default)
+        private async Task<bool> ShowDeleteConfirmDialog(int count)
         {
             return await DialogFactory.ShowConfirmAsync(
                 this,

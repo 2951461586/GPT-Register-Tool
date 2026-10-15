@@ -54,7 +54,7 @@ namespace SmsWorkbench
         }
 
         private void CtxCopyAccessToken()
-            => RunUiTask(() => CtxCopyAccessTokenAsync());
+            => RunUiTask(() => CtxCopyAccessTokenAsync(_lifetimeCts.Token));
 
         private async Task CtxCopyAccessTokenAsync(CancellationToken ct = default)
         {
@@ -63,7 +63,7 @@ namespace SmsWorkbench
                 NotifyWarning("请先选择一个账号。");
                 return;
             }
-            string accessToken = await ResolveAccountAccessTokenAsync(row);
+            string accessToken = await ResolveAccountAccessTokenAsync(row, ct);
             if (string.IsNullOrWhiteSpace(accessToken))
             {
                 NotifyWarning("当前选中账号没有可复制的 AT。");
@@ -111,7 +111,7 @@ namespace SmsWorkbench
         }
 
         private void CtxCheckAccountAlive()
-            => RunUiTask(() => CtxCheckAccountAliveAsync());
+            => RunUiTask(() => CtxCheckAccountAliveAsync(_lifetimeCts.Token));
 
         private async Task CtxCheckAccountAliveAsync(CancellationToken ct = default)
         {
@@ -120,14 +120,14 @@ namespace SmsWorkbench
                 NotifyWarning("请先选择一个账号。");
                 return;
             }
-            await CheckAccountAliveAsync(row);
+            await CheckAccountAliveAsync(row, ct);
         }
 
         private void CtxChangeEmail()
-            => RunUiTask(() => CtxChangeEmailAsync());
+            => RunUiTask(() => CtxChangeEmailAsync(_lifetimeCts.Token));
 
         private void ChangeEmail()
-            => RunUiTask(() => CtxChangeEmailAsync());
+            => RunUiTask(() => CtxChangeEmailAsync(_lifetimeCts.Token));
 
         private async Task CtxChangeEmailAsync(CancellationToken ct = default)
         {
@@ -154,7 +154,7 @@ namespace SmsWorkbench
                 GetRegistrationProxyPool(),
                 rootDir);
             string json;
-            try { json = await RunBackendWithResultAsync(plan.TaskName, plan.Arguments.ToList(), plan.TimeoutMilliseconds ?? 900000); }
+            try { json = await RunBackendWithResultAsync(plan.TaskName, plan.Arguments.ToList(), plan.TimeoutMilliseconds ?? 900000, ct); }
             finally { foreach (string path in plan.TempFiles) TryDeleteFile(path); }
             try
             {

@@ -594,9 +594,11 @@ namespace SmsWorkbench
             return "";
         }
 
+        private static readonly string[] PoolTextSeparators = { "\r\n", "\n", ",", ";" };
+
         private static string[] SplitPoolText(string value)
             => (value ?? "")
-                .Split(new[] { "\r\n", "\n", ",", ";" }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                .Split(PoolTextSeparators, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
         private static void InitializeBuckets(
             string text, Dictionary<string, List<string>> buckets, List<string> order)

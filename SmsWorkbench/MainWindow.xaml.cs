@@ -4,6 +4,10 @@
 
 namespace SmsWorkbench
 {
+    [System.Diagnostics.CodeAnalysis.SuppressMessage(
+        "Design",
+        "CA1001:Types that own disposable fields should be disposable",
+        Justification = "WPF Window lifetime is bound to Closing/Closed events.")]
     public partial class MainWindow : FluentWindow, INotifyPropertyChanged
     {
         private Wpf.Ui.Appearance.ApplicationTheme _currentTheme = Wpf.Ui.Appearance.ApplicationTheme.Light;
@@ -184,7 +188,7 @@ namespace SmsWorkbench
             ISettingsDialogService settingsDialogs,
             ISettingsService settingsService,
             Serilog.ILogger logger,
-            IFileLauncher fileLauncher = null)
+            IFileLauncher? fileLauncher = null)
             : this(
                 paths,
                 backendClient,
@@ -197,7 +201,7 @@ namespace SmsWorkbench
                 settingsDialogs,
                 settingsService,
                 logger,
-                fileLauncher)
+                fileLauncher ?? new FileLauncher())
         {
         }
 
@@ -216,7 +220,6 @@ namespace SmsWorkbench
         // Moved to MainWindow.Inbox.cs: Inbox view and mail detail dialog.
 
         // Moved to MainWindow.Detail.cs: Account detail dialog and detail formatting.
-        // Moved to MainWindow.Config.cs: Settings dialog and config persistence.
 
         // Moved to MainWindow.Helpers.cs: Path/config helpers, status formatting, external open/copy/log helpers.
     }

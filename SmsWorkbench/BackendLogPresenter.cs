@@ -269,13 +269,13 @@ namespace SmsWorkbench
         public static bool LooksLikeJson(string raw)
         {
             string trimmed = (raw ?? "").Trim();
-            if (trimmed.StartsWith("{", StringComparison.Ordinal))
+            if (trimmed.StartsWith('{'))
                 return true;
-            if (trimmed.StartsWith("[", StringComparison.Ordinal))
+            if (trimmed.StartsWith('['))
                 return IsBareArrayOpener(trimmed);
-            return trimmed.StartsWith("\"", StringComparison.Ordinal)
-                || trimmed.StartsWith("}", StringComparison.Ordinal)
-                || trimmed.StartsWith("]", StringComparison.Ordinal);
+            return trimmed.StartsWith('"')
+                || trimmed.StartsWith('}')
+                || trimmed.StartsWith(']');
         }
 
         /// <summary>Whether a `[`-prefixed line opens a JSON array rather than
@@ -412,15 +412,15 @@ namespace SmsWorkbench
                         deactivated++;
                 }
                 var summary = new StringBuilder("[*] 汇总：");
-                summary.Append($"成功 {ok}/{total}");
+                summary.Append(CultureInfo.InvariantCulture, $"成功 {ok}/{total}");
                 if (deactivated > 0)
-                    summary.Append($" · 注销 {deactivated}");
+                    summary.Append(CultureInfo.InvariantCulture, $" · 注销 {deactivated}");
                 if (root.TryGetProperty("trial_eligible", out JsonElement trial)
                     && trial.ValueKind == JsonValueKind.Number
                     && trial.TryGetInt32(out int trialCount)
                     && trialCount > 0)
-                    summary.Append($" · 可试优惠 {trialCount}");
-                summary.Append($"（{failures.Count} 项失败明细已折叠）");
+                    summary.Append(CultureInfo.InvariantCulture, $" · 可试优惠 {trialCount}");
+                summary.Append(CultureInfo.InvariantCulture, $"（{failures.Count} 项失败明细已折叠）");
                 return summary.ToString();
             }
 

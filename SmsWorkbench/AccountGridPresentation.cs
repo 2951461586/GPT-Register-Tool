@@ -51,7 +51,7 @@ namespace SmsWorkbench
         // to the legacy substring rule.
         public const string TrialEligibleState = "trial_eligible";
 
-        public static bool IsTrialEligible(string status, string state = null)
+        public static bool IsTrialEligible(string status, string? state = null)
         {
             string machine = (state ?? "").Trim();
             if (machine.Length > 0) return machine == TrialEligibleState;
@@ -66,7 +66,7 @@ namespace SmsWorkbench
                 && value.Contains("plus", StringComparison.OrdinalIgnoreCase);
         }
 
-        public static int SortRank(string status, string state = null)
+        public static int SortRank(string status, string? state = null)
         {
             if (IsTrialEligible(status, state)) return 0;
             return string.IsNullOrWhiteSpace(status) ? 2 : 1;

@@ -236,8 +236,8 @@ namespace SmsWorkbench
 
         private static string ScopeText(object value)
         {
-            if (value is ComboBoxItem item) return Convert.ToString(item.Content) ?? "";
-            return Convert.ToString(value) ?? "";
+            if (value is ComboBoxItem item) return Convert.ToString(item.Content, CultureInfo.InvariantCulture) ?? "";
+            return Convert.ToString(value, CultureInfo.InvariantCulture) ?? "";
         }
     }
 }

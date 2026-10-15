@@ -89,7 +89,7 @@ namespace SmsWorkbench
                     try
                     {
                         mailItems.Clear();
-                        foreach (MailItem item in await FetchBackendInbox(row, 25))
+                        foreach (MailItem item in await FetchBackendInbox(row, 25, ct))
                         {
                             mailItems.Add(item);
                         }
@@ -107,7 +107,7 @@ namespace SmsWorkbench
                 try
                 {
                     mailItems.Clear();
-                    foreach (MailItem item in await FetchBackendInbox(row, 20))
+                    foreach (MailItem item in await FetchBackendInbox(row, 20, ct))
                     {
                         mailItems.Add(item);
                     }
@@ -120,7 +120,7 @@ namespace SmsWorkbench
                 }
             }
 
-            refreshBtn.Click += (_, __) => RunUiTask(() => LoadEmails());
+            refreshBtn.Click += (_, __) => RunUiTask(() => LoadEmails(ct));
             mailGrid.MouseDoubleClick += (_, __) =>
             {
                 if (mailGrid.SelectedItem is MailItem item)
@@ -131,7 +131,7 @@ namespace SmsWorkbench
 
             dialog.Content = root;
             dialog.Show();
-            await LoadEmails();
+            await LoadEmails(ct);
         }
 
         private async Task<List<MailItem>> FetchBackendInbox(PoolRow row, int limit, CancellationToken ct = default)
@@ -159,7 +159,8 @@ namespace SmsWorkbench
             try
             {
                 BackendCommandResult result = await backendClient.RunAsync(
-                    BackendCommand.Create("查看收件箱", args, 120000, environment));
+                    BackendCommand.Create("查看收件箱", args, 120000, environment),
+                    cancellationToken: ct);
                 if (!result.Payload.HasValue)
                     throw new InvalidOperationException(BackendFailureMessage(result));
                 JsonElement payload = result.Payload.Value;

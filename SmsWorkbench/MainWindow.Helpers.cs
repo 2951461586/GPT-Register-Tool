@@ -270,7 +270,7 @@ namespace SmsWorkbench
                 UseShellExecute = false
             };
             psi.ArgumentList.Add(path);
-            Process.Start(psi);
+            _ = Process.Start(psi);
         }
 
         private void OpenUrl(string url)
@@ -283,7 +283,7 @@ namespace SmsWorkbench
                     Log("无效链接：" + url);
                     return;
                 }
-                Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+                _ = Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
             }
             catch (Exception ex)
             {
@@ -296,7 +296,7 @@ namespace SmsWorkbench
 
         private async Task OpenPayPalUrlAsync(string url, string accountEmail = "", CancellationToken ct = default)
         {
-            url = await ResolveBackendPaymentUrlAsync(url, accountEmail);
+            url = await ResolveBackendPaymentUrlAsync(url, accountEmail, ct);
             if (!IsHttpUrl(url))
             {
                 Log("无效支付链接：" + url);
@@ -319,7 +319,7 @@ namespace SmsWorkbench
                 psi.ArgumentList.Add("--new-window");
                 psi.ArgumentList.Add("--incognito");
                 psi.ArgumentList.Add(url);
-                Process.Start(psi);
+                _ = Process.Start(psi);
                 Log("已用 Chrome 无痕窗口打开支付链接。");
             }
             catch (Exception ex)
@@ -334,7 +334,7 @@ namespace SmsWorkbench
 
         private async Task CopyPayPalUrlAsync(string url, string accountEmail = "", CancellationToken ct = default)
         {
-            url = await ResolveBackendPaymentUrlAsync(url, accountEmail);
+            url = await ResolveBackendPaymentUrlAsync(url, accountEmail, ct);
             if (!IsHttpUrl(url))
             {
                 Log("无效支付链接，无法复制。");
@@ -356,7 +356,7 @@ namespace SmsWorkbench
             if (!string.Equals(url, "backend://payment-url", StringComparison.OrdinalIgnoreCase)) return url;
             try
             {
-                return (await desktopRead.ReadPaymentUrlAsync("", accountEmail)).Trim();
+                return (await desktopRead.ReadPaymentUrlAsync("", accountEmail, ct)).Trim();
             }
             catch (Exception ex)
             {
@@ -433,6 +433,18 @@ namespace SmsWorkbench
         private void NotifyInfo(string message)
         {
             snackbarService.Show("提示", message, Wpf.Ui.Controls.ControlAppearance.Info, null, TimeSpan.FromSeconds(4));
+        }
+
+        private void ShowThemedInfoDialog(string title, string message)
+            => RunUiTask(() => DialogFactory.ShowInfoAsync(this, title, message));
+
+        // Settings dialog entry point.  Config reads go through ISettingsService
+        // (GetString/GetStringList) and writes through ISettingsService.UpdateConfig,
+        // which preserves unknown fields and replaces the file atomically.
+        private void ShowConfigDialog()
+        {
+            if (settingsDialogs.ShowDialog(this))
+                Log("配置已保存。");
         }
 
         private void OnPropertyChanged(string name)
