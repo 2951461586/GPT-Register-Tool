@@ -56,3 +56,35 @@ def test_create_remail_batch_reuses_stable_key(monkeypatch):
         "Idempotency-Key must be a stable sha256, not a random uuid4"
     )
     assert k1 == k2, "same order intent must reuse the same Idempotency-Key (was uuid4 before the fix)"
+
+
+def test_create_remail_batch_separates_distinct_batch_ids(monkeypatch):
+    headers_seen = []
+
+    def fake_request(method, path, auth=False, headers=None, params=None, json=None, timeout=None):
+        headers_seen.append(headers or {})
+        return [{"status": "succeeded", "order": {"email": "x@icloud.com"}}]
+
+    monkeypatch.setattr(m, "_remail_request", fake_request)
+    monkeypatch.setattr(m, "_recover_recent_remail_batch", lambda **kw: [])
+    monkeypatch.setattr(m, "filter_dead_remail_mailboxes", lambda xs: xs)
+    monkeypatch.setattr(m, "_mailbox_from_order", lambda order, service_mode=None: order)
+    monkeypatch.setattr(
+        m,
+        "_order_options",
+        lambda args, service_mode=None: (
+            "purchase",
+            "private_first",
+            {"quantity": 5, "emailSuffix": "icloud.com", "projectId": 2},
+        ),
+    )
+
+    args_a = SimpleNamespace(count=5, registration_batch_id="batch_a")
+    args_b = SimpleNamespace(count=5, registration_batch_id="batch_b")
+    m._create_remail_mailboxes(args_a, service_mode="purchase")
+    m._create_remail_mailboxes(args_a, service_mode="purchase")
+    m._create_remail_mailboxes(args_b, service_mode="purchase")
+
+    assert headers_seen[0]["Idempotency-Key"] == headers_seen[1]["Idempotency-Key"]
+    assert headers_seen[0]["Idempotency-Key"] != headers_seen[2]["Idempotency-Key"]
+

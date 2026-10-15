@@ -889,6 +889,7 @@ def run_target_at200(args, base_dir, ctx: RegistrationCommandContext):
         while active < target and purchased < max_purchases and not halted:
             quantity = min(target - active, max_purchases - purchased)
             args.count = quantity
+            args.remail_order_round = len(rounds)
             loaded_mailboxes = ctx.load_mailbox_pool(args)
             # Filter before ``purchased`` is incremented.  Skipped mailboxes must
             # not count towards ``max_purchases`` (nor towards ``spent``), and a

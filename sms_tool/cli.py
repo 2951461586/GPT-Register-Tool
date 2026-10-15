@@ -490,6 +490,8 @@ def _main_registration_pipeline(args, base_dir) -> None:
         _run_target_at200(args, base_dir)
         return
 
+    if not getattr(args, "registration_batch_id", None):
+        args.registration_batch_id = f"registration_{time.strftime('%Y%m%d_%H%M%S')}_{os.urandom(3).hex()}"
     pipeline_started = time.time()
     mailbox_started = time.time()
     mailboxes = _load_mailbox_pool(args)

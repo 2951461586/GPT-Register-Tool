@@ -26,16 +26,29 @@ from ..desktop_ipc import progress_dots_enabled
 logger = logging.getLogger(__name__)
 
 
-def _remail_idempotency_key(mode: str, supply: str, payload: dict) -> str:
+def _remail_idempotency_key(
+    mode: str,
+    supply: str,
+    payload: dict,
+    *,
+    batch_id: str = "",
+) -> str:
     """Stable idempotency key for a ReMail batch order.
 
-    Derived from the order intent (service mode + supply + canonical payload) so a
-    retried batch request reuses the same key and the server de-duplicates it instead
-    of double-charging. A fresh random key per call (the old behaviour) meant zero
-    de-duplication on retry.
+    Derived from the order intent (service mode + supply + canonical payload +
+    optional batch_id) so a retried batch request reuses the same key and the
+    server de-duplicates it instead of double-charging, while separate batch
+    runs with distinct ``batch_id`` values do not replay historical orders.
     """
+    envelope: dict[str, object] = {
+        "serviceMode": mode,
+        "supply": supply,
+        "payload": payload,
+    }
+    if batch_id:
+        envelope["batchId"] = str(batch_id)
     canonical = json.dumps(
-        {"serviceMode": mode, "supply": supply, "payload": payload},
+        envelope,
         sort_keys=True,
         ensure_ascii=False,
         separators=(",", ":"),
@@ -594,13 +607,18 @@ def _create_remail_mailboxes(args=None, service_mode="purchase"):
         return [_create_remail_order(args, service_mode=service_mode)]
     mode, supply, payload = _order_options(args, service_mode=service_mode)
     payload["quantity"] = quantity
+    batch_id = str(getattr(args, "registration_batch_id", None) or "").strip()
+    order_round = int(getattr(args, "remail_order_round", 0) or 0)
+    if batch_id and order_round > 0:
+        batch_id = f"{batch_id}:r{order_round}"
+    idempotency_key = _remail_idempotency_key(mode, supply, payload, batch_id=batch_id)
     started_at = time.time()
     try:
         results = _remail_request(
             "POST",
             "/v1/open/orders/batch",
             auth=True,
-            headers={"Idempotency-Key": _remail_idempotency_key(mode, supply, payload)},
+            headers={"Idempotency-Key": idempotency_key},
             params={"serviceMode": mode, "supply": supply},
             json=payload,
             timeout=max(30, int(_remail_cfg().get("batch_timeout") or quantity * 2)),
