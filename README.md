@@ -21,7 +21,7 @@ GPT-Register-Tool 采用 **WPF 桌面端 + Python 业务核心**，提供邮箱 
 
 
 ## 赞助商
-<img width="5728" height="672" alt="F31720B0BE73735E400C05B8F165FF1C" src="https://github.com/user-attachments/assets/5f3b5b22-5132-4bc4-b8b8-3a0e92b47f37" />
+<img width="5728" height="672" alt="IPWO 住宅代理" src="./docs/sponsors/ipwo.png" />
 
 [IPWO](https://www.ipwo.net)全球住宅代理为 ChatGPT 自动化工具提供全球住宅代理资源，支持多地区 IP 选择及灵活的代理配置。<br>
 适用于注册代理、独立网络环境及自动化任务等场景，帮助开发者根据项目需求配置合适的网络出口。<br>
@@ -42,7 +42,6 @@ GPT-Register-Tool 采用 **WPF 桌面端 + Python 业务核心**，提供邮箱 
 | **邮箱与 OTP** | 统一 mailbox seam：ReMail、Smailr、CFWorker、Microsoft Graph/OAuth、Outlook/Hotmail IMAP、Gmail、iCloud 接码链接与历史邮箱池格式；OTP 按主题、发件人、精确收件人、服务端时间戳过滤并排序；ReMail 支持自适应轮询、详情正文补取与 30s 内重发 |
 | **协议支付提链** | 15 种方式：PayPal、GoPay、GCash、GrabPay、UPI、iDEAL、PIX、Kakao Pay、BLIK、TWINT、直卡 Checkout、MoMo、QRIS、Bizum、Naver Pay（后三者为 CLI canary）；Checkout 与 Approve 使用彼此独立的出口池，按支付方法改写国家与 Session；严格区分 Checkout / Promotion / PM / Confirm / Poll / Provider Redirect 阶段；统一五态终态并附 `retryable` 与 `error_stage`，`unknown` 须先对账 |
 | **批量协议支付** | JIT AT 门禁、HTTP 401 分层恢复（RT → Cookie → 隔离浏览器邮箱 OTP → Codex OAuth）、支付资格矩阵、Canary 暂停、方法级并发、原子断点与显式续跑；报告分开统计 AT 200、资格、支付方式可见性、Approve 与最终链接/二维码产物 |
-| **Agent Identity 与 SUB2API** | 注册主流程不含 Agent Identity，其失败不改变 AT 200 结果；新建/重建只能走显式 SUB2API 导入；Ed25519 PKCS#8 私钥独立存放且不入日志；导入支持 `auto` / `oauth` / `agent_identity` 三种模式 |
 | **账号与数据管理** | Session JSON + SQLite 双层索引；账号测活与 401 恢复；优惠状态与支付资格徽章（默认只查套餐/试用，显式入口才创建一次性 Checkout 并读取支付方式证据）；Codex / CPA / SUB2API 导入导出；本地数据在 `sessions/` 与 `runtime/`，均被 Git 忽略 |
 | **桌面端操作** | 勾选账号后走「批量协议支付」窗口（并发、重试、Canary、两个出口池、断点续跑）；注册批次每输出一次 `Saved session:` 即防抖刷新账号池；多选删除合并为一次后端批量命令 |
 | **手机接码** | SMSBower、HeroSMS、Grizzly、NexSMS 的供应商选择与在线目录查询（可用性依供应商协议），支持发送重试、超时与轮询间隔配置；详见 [当前接码契约](docs/current/one-click-sms.md) |

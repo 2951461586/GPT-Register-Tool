@@ -21,7 +21,7 @@ Current release notes: [v2026.10.15](./docs/releases/release-v2026.10.15.md).
 
 ## Sponsor
 
-<img width="5728" height="672" alt="IPWO residential proxy" src="https://github.com/user-attachments/assets/5f3b5b22-5132-4bc4-b8b8-3a0e92b47f37" />
+<img width="5728" height="672" alt="IPWO residential proxy" src="./docs/sponsors/ipwo.png" />
 
 [IPWO](https://www.ipwo.net) provides global residential proxy resources for ChatGPT automation tools, with multi-region IP selection and flexible proxy configuration.<br>
 It is suitable for registration proxies, isolated network environments, and automation tasks that require project-specific network exits.<br>
@@ -43,7 +43,6 @@ Chinese interface, USDT payments supported, and 30% off your first purchase with
 | **Mailbox and OTP** | One mailbox seam: ReMail, Smailr, CFWorker, Microsoft Graph/OAuth, Outlook/Hotmail IMAP, Gmail, iCloud relay links and legacy pool formats; OTP parsing filters by subject, sender, exact recipient and server timestamp, then ranks candidates; ReMail adds adaptive polling, detail-body fetch and a 30s resend |
 | **Protocol payment links** | 15 methods: PayPal, GoPay, GCash, GrabPay, UPI, iDEAL, PIX, Kakao Pay, BLIK, TWINT, direct card Checkout, MoMo, QRIS, Bizum, Naver Pay (the last three are CLI canaries); Checkout and Approve use separate exit pools and rewrite country and Session per method; Checkout / Promotion / PM / Confirm / Poll / Provider Redirect stay distinct stages; five terminal states with `retryable` and `error_stage`, and `unknown` must be reconciled first |
 | **Batch payment** | JIT AT gate, layered HTTP 401 recovery (RT -> Cookie -> isolated browser mailbox OTP -> Codex OAuth), eligibility matrix, Canary pause, per-method concurrency, atomic checkpoints and explicit resume; the report separates AT 200, eligibility, visible payment methods, approve and final link/QR artifacts |
-| **Agent Identity and SUB2API** | The registration flow has no Agent Identity stage and its failure cannot change the AT 200 verdict; creation/rebuild only happens through the explicit SUB2API import; the Ed25519 PKCS#8 key is stored separately and never logged; import supports `auto` / `oauth` / `agent_identity` |
 | **Accounts and data** | Session JSON plus SQLite dual index; liveness probe and 401 recovery; promotion and payment-eligibility badges (plan/trial only by default, an explicit entry point creates a one-shot Checkout to read payment-method evidence); Codex / CPA / SUB2API import-export; local data lives in `sessions/` and `runtime/`, both Git-ignored |
 | **Desktop operations** | Selected accounts drive the "batch protocol payment" window (concurrency, retries, Canary, two exit pools, checkpoint resume); each `Saved session:` debounces an account-pool refresh; multi-select delete is one backend batch command |
 | **SMS** | SMSBower, HeroSMS, Grizzly and NexSMS provider selection with online catalog lookup (availability depends on each vendor), plus send retry, timeout and poll-interval settings; see the [one-click SMS contract](docs/current/one-click-sms.md) |
