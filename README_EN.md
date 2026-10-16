@@ -54,63 +54,36 @@ Five layers — **① UI → ② CLI / command adapters → ③ application work
 
 ```mermaid
 flowchart TB
-    subgraph L1["① Desktop UI · SmsWorkbench/ (WPF · .NET 10)"]
-        direction LR
-        PANEL["Generic Host / DI · MVVM pages<br/>settings · batch-payment window · account pool"]
-        IPC["IBackendClient<br/>ArgumentList + cancel / timeout / process-tree kill<br/>@@SMSWORKBENCH_V2@@ versioned envelope"]
-    end
+    L1["① Desktop UI · SmsWorkbench/<br/>WPF · .NET 10 · Generic Host / DI · MVVM pages"]
+    L2["② CLI / command adapters<br/>cli.py · commands/ · cli_parsers/"]
+    L3["③ Application workflows<br/>registration · batch_runner · registration_drivers · accounts/"]
+    L4["④ Domain contracts (immutable seams)<br/>registration_result · checkout_contract · payment_wire · desktop_ipc"]
+    L5["⑤ Provider / persistence adapters<br/>auth_flow · sentinel · mailbox_* · pay_link · paypal · store · geo"]
 
-    subgraph L2["② CLI / command adapters"]
-        direction LR
-        CLI["cli.py · commands/ · cli_parsers/<br/>parsing · task orchestration · batches · exit status"]
-    end
-
-    subgraph L3["③ Application workflows"]
-        direction LR
-        REG["registration.py (facade)<br/>registration_handlers.py (protocol lane · stage order)"]
-        DRV["registration_drivers/<br/>browser drivers: playwright · camoufox · roxy · cloak<br/>browser_flow/ · external_sessions/"]
-        BATCH["batch_runner · registration_pulse<br/>concurrency · pulse · JIT AT gate · checkpoint resume"]
-        REC["accounts/account_recovery · codex_oauth<br/>existing-account recovery"]
-    end
-
-    subgraph L4["④ Domain contracts (immutable seams)"]
-        direction LR
-        SEAM["registration_result · registration_flags<br/>checkout_contract · payment_wire · desktop_ipc<br/>RegistrationOperations (bound once per invocation)"]
-    end
-
-    subgraph L5["⑤ Provider / persistence adapters"]
-        direction LR
-        AF["auth_flow/<br/>steps: signin / authorize / continue / OTP / TOTP"]
-        SEN["sentinel/<br/>Sentinel token issuance (Node sdk.js runner)"]
-        MB["mailbox_service · mailbox_strategies<br/>providers/ (ReMail · Graph · IMAP · …)"]
-        PAY["pay_link/ · paypal/ · paypal_link/ · upi_link/<br/>Checkout contract · capability probe · wallets / GCash"]
-        STO["store/<br/>SQLite + Session JSON"]
-        GEO["geo/ · proxy_routing · fingerprint_pool<br/>exit GeoIP · fingerprint binding"]
-    end
-
-    SVC["services/<br/>optional local protocol services (subprocess boundary)<br/>mail-otp-web · protocol-payment"]
-    LOCAL[("Local config and runtime data<br/>proxy.json · runtime.json · payment.json<br/>sessions/ · runtime/ -- Git-ignored")]
-
-    PANEL --> IPC --> CLI
-    CLI --> REG
-    CLI --> BATCH
-    CLI --> REC
-    REG --> AF
-    REG --> SEN
-    REG --> MB
-    REG --> GEO
-    REG --> STO
-    REG -. driver registry .-> DRV
-    DRV --> SEN
-    BATCH --> PAY
-    BATCH --> STO
-    REG --> SEAM
-    BATCH --> SEAM
-    AF --> SEAM
-    PAY --> SEAM
-    STO --> LOCAL
-    CLI -.-> SVC
+    L1 -->|"IBackendClient<br/>versioned envelope"| L2
+    L2 --> L3
+    L3 --> L4
+    L4 --> L5
+    L5 --> DATA[("Local config and runtime data<br/>sessions/ · runtime/ · %LOCALAPPDATA% -- Git-ignored")]
 ```
+
+Module ownership and responsibility per layer:
+
+| Layer | Modules | Responsibility |
+| --- | --- | --- |
+| ① Desktop UI | `SmsWorkbench/` | Generic Host / DI, MVVM pages, settings, batch-payment window, account pool; calls the backend through `IBackendClient` with argument lists plus cancel / timeout / process-tree kill |
+| ② CLI / command adapters | `cli.py`, `commands/`, `cli_parsers/` | Argument parsing, task orchestration, batches, exit status; owns no provider implementation |
+| ③ Application workflows | `registration.py`, `registration_handlers.py` | Registration facade and protocol lane: stage order, Sentinel issuance, OTP, AT probe |
+| ③ Application workflows | `batch_runner.py`, `registration_pulse.py` | Concurrency and pulse scheduling, JIT AT gate, atomic checkpoints and resume |
+| ③ Application workflows | `registration_drivers/` | Browser drivers (playwright · camoufox · roxy · cloak) plus `browser_flow/` and `external_sessions/` |
+| ③ Application workflows | `accounts/`, `codex_oauth.py` | Existing-account recovery and Codex OAuth; never new signup |
+| ④ Domain contracts | `registration_result.py`, `registration_flags.py`, `checkout_contract.py`, `payment_wire.py`, `desktop_ipc.py` | Immutable seams bound once per invocation; `RegistrationOperations` is a fixed interface, not a live module passed into the workflow |
+| ⑤ Provider / persistence adapters | `auth_flow/` | Step functions: signin / authorize / continue / OTP / TOTP |
+| ⑤ Provider / persistence adapters | `sentinel/` | Sentinel token issuance (Node `sdk.js` runner) |
+| ⑤ Provider / persistence adapters | `mailbox_service.py`, `mailbox_strategies.py`, `providers/` | Mailbox routing, capability resolution, polling policy, provider transport |
+| ⑤ Provider / persistence adapters | `pay_link/`, `paypal/`, `paypal_link/`, `upi_link/` | Checkout contract, capability probe, wallets / GCash |
+| ⑤ Provider / persistence adapters | `store/` | SQLite + Session JSON persistence and domain facts |
+| ⑤ Provider / persistence adapters | `geo/`, `proxy_routing.py`, `fingerprint_pool.py` | Exit GeoIP and fingerprint binding |
 
 See [architecture](docs/architecture.md) for boundaries and [directory map](docs/directory-map.md) for ownership.
 

@@ -53,63 +53,36 @@ GPT-Register-Tool 采用 **WPF 桌面端 + Python 业务核心**，提供邮箱 
 
 ```mermaid
 flowchart TB
-    subgraph L1["① 桌面端 UI · SmsWorkbench/（WPF · .NET 10）"]
-        direction LR
-        PANEL["Generic Host / DI · MVVM 页面<br/>设置页 · 批量协议支付窗口 · 账号池"]
-        IPC["IBackendClient<br/>ArgumentList + 取消 / 超时 / 进程树终止<br/>@@SMSWORKBENCH_V2@@ 版本化信封"]
-    end
+    L1["① 桌面端 UI · SmsWorkbench/<br/>WPF · .NET 10 · Generic Host / DI · MVVM 页面"]
+    L2["② CLI / 命令适配<br/>cli.py · commands/ · cli_parsers/"]
+    L3["③ 应用工作流<br/>registration · batch_runner · registration_drivers · accounts/"]
+    L4["④ 领域契约（不可变接缝）<br/>registration_result · checkout_contract · payment_wire · desktop_ipc"]
+    L5["⑤ Provider / 持久化适配<br/>auth_flow · sentinel · mailbox_* · pay_link · paypal · store · geo"]
 
-    subgraph L2["② CLI / 命令适配"]
-        direction LR
-        CLI["cli.py · commands/ · cli_parsers/<br/>参数解析 · 任务编排 · 批量任务 · 退出码"]
-    end
-
-    subgraph L3["③ 应用工作流"]
-        direction LR
-        REG["registration.py（门面）<br/>registration_handlers.py（协议泳道 · 阶段顺序）"]
-        DRV["registration_drivers/<br/>浏览器驱动：playwright · camoufox · roxy · cloak<br/>browser_flow/ · external_sessions/"]
-        BATCH["batch_runner · registration_pulse<br/>并发 · 脉冲调度 · JIT AT 门禁 · 断点续跑"]
-        REC["accounts/account_recovery · codex_oauth<br/>存量账号恢复"]
-    end
-
-    subgraph L4["④ 领域契约（不可变接缝）"]
-        direction LR
-        SEAM["registration_result · registration_flags<br/>checkout_contract · payment_wire · desktop_ipc<br/>RegistrationOperations（每次调用绑定一次）"]
-    end
-
-    subgraph L5["⑤ Provider / 持久化适配"]
-        direction LR
-        AF["auth_flow/<br/>步骤函数 signin / authorize / continue / OTP / TOTP"]
-        SEN["sentinel/<br/>Sentinel Token 签发（Node sdk.js runner）"]
-        MB["mailbox_service · mailbox_strategies<br/>providers/（ReMail · Graph · IMAP · …）"]
-        PAY["pay_link/ · paypal/ · paypal_link/ · upi_link/<br/>Checkout 契约 · 能力探测 · 钱包 / GCash"]
-        STO["store/<br/>SQLite + Session JSON"]
-        GEO["geo/ · proxy_routing · fingerprint_pool<br/>出口 GeoIP · 指纹绑定"]
-    end
-
-    SVC["services/<br/>可选本地协议服务（子进程边界）<br/>mail-otp-web · protocol-payment"]
-    LOCAL[("本地配置与运行数据<br/>%LOCALAPPDATA%\GPTRegisterTool\config 下的 proxy/runtime/payment 分片<br/>sessions/ · runtime/ —— Git 忽略")]
-
-    PANEL --> IPC --> CLI
-    CLI --> REG
-    CLI --> BATCH
-    CLI --> REC
-    REG --> AF
-    REG --> SEN
-    REG --> MB
-    REG --> GEO
-    REG --> STO
-    REG -. 驱动注册表 .-> DRV
-    DRV --> SEN
-    BATCH --> PAY
-    BATCH --> STO
-    REG --> SEAM
-    BATCH --> SEAM
-    AF --> SEAM
-    PAY --> SEAM
-    STO --> LOCAL
-    CLI -.-> SVC
+    L1 -->|"IBackendClient<br/>版本化信封"| L2
+    L2 --> L3
+    L3 --> L4
+    L4 --> L5
+    L5 --> DATA[("本地配置与运行数据<br/>sessions/ · runtime/ · %LOCALAPPDATA% —— Git 忽略")]
 ```
+
+每层的模块归属与职责边界：
+
+| 层 | 模块 | 职责 |
+| --- | --- | --- |
+| ① 桌面端 UI | `SmsWorkbench/` | Generic Host / DI、MVVM 页面、设置页、批量协议支付窗口、账号池；经 `IBackendClient` 以参数列表调用后端，并管理取消 / 超时 / 进程树终止 |
+| ② CLI / 命令适配 | `cli.py`、`commands/`、`cli_parsers/` | 参数解析、任务编排、批量任务、退出码；不承载 provider 实现 |
+| ③ 应用工作流 | `registration.py`、`registration_handlers.py` | 注册门面与协议泳道：阶段顺序、Sentinel 签发、OTP、AT 探活 |
+| ③ 应用工作流 | `batch_runner.py`、`registration_pulse.py` | 并发与脉冲调度、JIT AT 门禁、原子断点与断点续跑 |
+| ③ 应用工作流 | `registration_drivers/` | 浏览器驱动（playwright · camoufox · roxy · cloak）与 `browser_flow/`、`external_sessions/` |
+| ③ 应用工作流 | `accounts/`、`codex_oauth.py` | 存量账号恢复与 Codex OAuth；不负责新注册 |
+| ④ 领域契约 | `registration_result.py`、`registration_flags.py`、`checkout_contract.py`、`payment_wire.py`、`desktop_ipc.py` | 每次调用绑定一次的不可变接缝；`RegistrationOperations` 为固定接口，不作为活模块传入工作流 |
+| ⑤ Provider / 持久化适配 | `auth_flow/` | 步骤函数：signin / authorize / continue / OTP / TOTP |
+| ⑤ Provider / 持久化适配 | `sentinel/` | Sentinel Token 签发（Node `sdk.js` runner） |
+| ⑤ Provider / 持久化适配 | `mailbox_service.py`、`mailbox_strategies.py`、`providers/` | 邮箱路由、能力解析、轮询策略与 provider 传输 |
+| ⑤ Provider / 持久化适配 | `pay_link/`、`paypal/`、`paypal_link/`、`upi_link/` | Checkout 契约、能力探测、钱包 / GCash |
+| ⑤ Provider / 持久化适配 | `store/` | SQLite + Session JSON 持久化与领域事实 |
+| ⑤ Provider / 持久化适配 | `geo/`、`proxy_routing.py`、`fingerprint_pool.py` | 出口 GeoIP 与指纹绑定 |
 
 更详细的边界说明见 [架构说明](docs/architecture.md)，目录职责见 [目录职责](docs/directory-map.md)。
 
