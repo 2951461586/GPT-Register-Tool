@@ -54,13 +54,50 @@ Five layers — **① UI → ② CLI / command adapters → ③ application work
 
 ```mermaid
 flowchart TB
-    L1["① Desktop UI · SmsWorkbench/<br/>WPF · .NET 10 · Generic Host / DI · MVVM pages"]
-    L2["② CLI / command adapters<br/>cli.py · commands/ · cli_parsers/"]
-    L3["③ Application workflows<br/>registration · batch_runner · registration_drivers · accounts/"]
-    L4["④ Domain contracts (immutable seams)<br/>registration_result · checkout_contract · payment_wire · desktop_ipc"]
-    L5["⑤ Provider / persistence adapters<br/>auth_flow · sentinel · mailbox_* · pay_link · paypal · store · geo"]
+    subgraph L1["① Desktop UI · SmsWorkbench/ (WPF · .NET 10)"]
+        direction LR
+        PANEL["Generic Host / DI<br/>MVVM pages · settings"]
+        IPC["IBackendClient<br/>versioned envelope"]
+    end
 
-    L1 -->|"IBackendClient<br/>versioned envelope"| L2
+    subgraph L2["② CLI / command adapters"]
+        direction LR
+        CLI["cli.py"]
+        CMDS["commands/"]
+        PARSERS["cli_parsers/"]
+    end
+
+    subgraph L3["③ Application workflows"]
+        direction LR
+        REG["registration"]
+        BATCH["batch_runner"]
+        DRV["registration_drivers/"]
+        REC["accounts/"]
+    end
+
+    subgraph L4["④ Domain contracts (immutable seams)"]
+        direction LR
+        RESULT["registration_result"]
+        WIRE["payment_wire"]
+        CHECKOUT["checkout_contract"]
+        DIPC["desktop_ipc"]
+    end
+
+    subgraph L5["⑤ Provider / persistence adapters"]
+        direction LR
+        AF["auth_flow/"]
+        SEN["sentinel/"]
+        MB["mailbox_*"]
+        PAY["pay_link/ · paypal/"]
+        STO["store/"]
+        GEO["geo/"]
+    end
+
+    PANEL --> IPC
+    CLI --> CMDS
+    CLI --> PARSERS
+    REG -. driver registry .-> DRV
+    L1 --> L2
     L2 --> L3
     L3 --> L4
     L4 --> L5
@@ -70,7 +107,7 @@ flowchart TB
 Module ownership and responsibility per layer:
 
 | Layer | Modules | Responsibility |
-| --- | --- | --- |
+| ---------------------------------------- | --- | --- |
 | ① Desktop UI | `SmsWorkbench/` | Generic Host / DI, MVVM pages, settings, batch-payment window, account pool; calls the backend through `IBackendClient` with argument lists plus cancel / timeout / process-tree kill |
 | ② CLI / command adapters | `cli.py`, `commands/`, `cli_parsers/` | Argument parsing, task orchestration, batches, exit status; owns no provider implementation |
 | ③ Application workflows | `registration.py`, `registration_handlers.py` | Registration facade and protocol lane: stage order, Sentinel issuance, OTP, AT probe |
@@ -78,12 +115,14 @@ Module ownership and responsibility per layer:
 | ③ Application workflows | `registration_drivers/` | Browser drivers (playwright · camoufox · roxy · cloak) plus `browser_flow/` and `external_sessions/` |
 | ③ Application workflows | `accounts/`, `codex_oauth.py` | Existing-account recovery and Codex OAuth; never new signup |
 | ④ Domain contracts | `registration_result.py`, `registration_flags.py`, `checkout_contract.py`, `payment_wire.py`, `desktop_ipc.py` | Immutable seams bound once per invocation; `RegistrationOperations` is a fixed interface, not a live module passed into the workflow |
-| ⑤ Provider / persistence adapters | `auth_flow/` | Step functions: signin / authorize / continue / OTP / TOTP |
-| ⑤ Provider / persistence adapters | `sentinel/` | Sentinel token issuance (Node `sdk.js` runner) |
-| ⑤ Provider / persistence adapters | `mailbox_service.py`, `mailbox_strategies.py`, `providers/` | Mailbox routing, capability resolution, polling policy, provider transport |
-| ⑤ Provider / persistence adapters | `pay_link/`, `paypal/`, `paypal_link/`, `upi_link/` | Checkout contract, capability probe, wallets / GCash |
-| ⑤ Provider / persistence adapters | `store/` | SQLite + Session JSON persistence and domain facts |
-| ⑤ Provider / persistence adapters | `geo/`, `proxy_routing.py`, `fingerprint_pool.py` | Exit GeoIP and fingerprint binding |
+| ⑤ Provider / persistence adapters&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `auth_flow/` | Step functions: signin / authorize / continue / OTP / TOTP |
+| ⑤ Provider / persistence adapters&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `sentinel/` | Sentinel token issuance (Node `sdk.js` runner) |
+| ⑤ Provider / persistence adapters&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `mailbox_service.py`, `mailbox_strategies.py`, `providers/` | Mailbox routing, capability resolution, polling policy, provider transport |
+| ⑤ Provider / persistence adapters&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `pay_link/`, `paypal/`, `paypal_link/`, `upi_link/` | Checkout contract, capability probe, wallets / GCash |
+| ⑤ Provider / persistence adapters&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `store/` | SQLite + Session JSON persistence and domain facts |
+| ⑤ Provider / persistence adapters&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `geo/`, `proxy_routing.py`, `fingerprint_pool.py` | Exit GeoIP and fingerprint binding |
+
+`services/` holds optional local protocol services behind a subprocess boundary (`mail-otp-web` and `protocol-payment`); it is not one of the five layers.
 
 See [architecture](docs/architecture.md) for boundaries and [directory map](docs/directory-map.md) for ownership.
 
