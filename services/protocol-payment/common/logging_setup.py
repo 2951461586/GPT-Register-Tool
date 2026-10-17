@@ -18,6 +18,8 @@ What this provides
 - :class:`ResilientRotatingFileHandler` — a size-capped rotating handler whose
   failed rotation (Windows: another process holds the file) degrades to
   *appending* instead of silently dropping every subsequent record.
+- :func:`append_log_line` — the single-line file mirror used by extractors that
+  keep their own ``log()``; returns ``False`` instead of raising on ``OSError``.
 - :func:`make_file_logger` — a per-extractor logger writing one normalised,
   redacted line per record to a per-process log file.
 
@@ -50,13 +52,33 @@ _LEVEL_MARKERS = {
 }
 
 
+def append_log_line(path: Path | str, line: str) -> bool:
+    """Append one already-redacted line to ``path``; ``False`` when unwritable.
+
+    This is the file copy behind an extractor's stdout mirror. Losing that copy
+    (read-only volume, another process holding the Windows handle) must never
+    abort a payment run, but the failure is *returned* instead of being hidden
+    in an empty ``except``: the caller decides whether to care, and a reviewer
+    can see the contract at the call site.
+    """
+    try:
+        with open(path, "a", encoding="utf-8") as handle:
+            handle.write(line + "\n")
+        return True
+    except OSError:
+        return False
+
+
 class HumanFormatter(logging.Formatter):
     """``HH:MM:SS [*] [logger] message`` — mirrors the sms_tool operator shape."""
 
     def format(self, record: logging.LogRecord) -> str:
         message = super().format(record)
-        if record.exc_info and not message.endswith(str(record.exc_info[1])):
-            message = f"{message} ({record.exc_info[0].__name__}: {record.exc_info[1]})"
+        exc_info = record.exc_info
+        if exc_info and not message.endswith(str(exc_info[1])):
+            exc_type = exc_info[0]
+            type_name = exc_type.__name__ if exc_type is not None else "Exception"
+            message = f"{message} ({type_name}: {exc_info[1]})"
         marker = _LEVEL_MARKERS.get(record.levelno, "[*]")
         stamp = datetime.fromtimestamp(record.created).strftime("%H:%M:%S")
         name = record.name.rpartition(".")[2] or record.name or "-"

@@ -168,7 +168,7 @@ from common.proxy_url import (
     default_scheme_from_env as shared_default_scheme_from_env,
     normalize_proxy_url as shared_normalize_proxy_url,
 )
-from common.logging_setup import make_file_logger
+from common.logging_setup import append_log_line, make_file_logger
 from common import geo as shared_geo
 from common.timeouts import CHATGPT_TIMEOUT, DEFAULT_TIMEOUT
 from common import stripe_flow as shared_stripe_flow
@@ -305,11 +305,8 @@ def log(message: str, prefix: str = "") -> None:
     line = redact_log_text(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {prefix}{context}{message}")
     with _log_lock:
         print(line, flush=True)
-        try:
-            with open(_log_file, "a", encoding="utf-8") as f:
-                f.write(line + "\n")
-        except OSError:
-            pass
+        # File logging mirrors stdout; an unwritable file must not abort the run.
+        append_log_line(_log_file, line)
         _durable_logger.info("%s%s%s", prefix, context, message)
 
 
@@ -831,7 +828,7 @@ def precheck_proxy_group(group: str, proxies: list[str]) -> list[str]:
 
 def record_proxy_result(group: str, proxy: str, success: bool, reason: str = "") -> dict[str, Any]:
     """Delegate to ``common/proxy_state.py``."""
-    return shared_record_proxy_result(_proxy_state_store, group, proxy, success, reason, redact=redact_log_text)
+    return shared_record_proxy_result(_proxy_state_store, group, proxy, success, reason)
 
 
 def proxy_remove_after_fails() -> int:
@@ -841,7 +838,7 @@ def proxy_remove_after_fails() -> int:
 
 def is_reused_proxy_record(group: str, record: dict[str, Any]) -> bool:
     """Delegate to ``common/proxy_state.py``."""
-    return shared_is_reused_proxy_record(group, record)
+    return shared_is_reused_proxy_record(_proxy_state_store, record)
 
 
 def record_proxy_health_failure(group: str, proxy: str, reason: str) -> None:
@@ -851,8 +848,7 @@ def record_proxy_health_failure(group: str, proxy: str, reason: str) -> None:
         group,
         proxy,
         reason,
-        remove_failed_proxy=remove_failed_proxy,
-        redact=redact_log_text,
+        remove_failed_proxy,
     )
 
 
@@ -879,7 +875,6 @@ def record_proxy_pair_result(checkout_proxy: str, provider_proxy: str, success: 
         provider_proxy,
         success,
         reason,
-        redact=redact_log_text,
     )
 
 
@@ -890,7 +885,6 @@ def record_proxy_pair_approve_success(checkout_proxy: str, provider_proxy: str, 
         checkout_proxy,
         provider_proxy,
         approve_proxy,
-        redact=redact_log_text,
     )
 
 
@@ -1100,22 +1094,27 @@ def remove_failed_proxies(group: str, failures: list[tuple[str, str]]) -> int:
             return 0
         kept = [line for line in lines if key_for_proxy(line) not in reasons]
         quarantine = SCRIPT_DIR / "removed_proxies.jsonl"
-        with open(quarantine, "a", encoding="utf-8") as f:
-            for line in removed:
-                normalized = key_for_proxy(line)
-                f.write(
-                    json.dumps(
-                        {
-                            "time": int(time.time()),
-                            "group": group,
-                            "proxy": proxy_label(line.strip()),
-                            "reason": redact_log_text(str(reasons.get(normalized) or ""))[:300],
-                            "source": path.name,
-                        },
-                        ensure_ascii=False,
+        try:
+            with open(quarantine, "a", encoding="utf-8") as f:
+                for line in removed:
+                    normalized = key_for_proxy(line)
+                    f.write(
+                        json.dumps(
+                            {
+                                "time": int(time.time()),
+                                "group": group,
+                                "proxy": proxy_label(line.strip()),
+                                "reason": redact_log_text(str(reasons.get(normalized) or ""))[:300],
+                                "source": path.name,
+                            },
+                            ensure_ascii=False,
+                        )
+                        + "\n"
                     )
-                    + "\n"
-                )
+        except OSError as exc:
+            # Abort before rewriting the proxy file: removing proxies without the
+            # quarantine audit trail is worse than failing this rotation.
+            raise RuntimeError(f"无法写入代理隔离记录 {quarantine.name}: {exc}") from exc
         temp_path = path.with_name(f".{path.name}.tmp")
         temp_path.write_text("".join(kept), encoding="utf-8")
         os.replace(temp_path, path)
@@ -1443,9 +1442,8 @@ def amount_from_payload(payload: Any) -> int:
 
 
 def build_ctx(init_payload: dict[str, Any], checkout: dict[str, str]) -> dict[str, Any]:
-    client_context = (
-        init_payload.get("_client_context") if isinstance(init_payload.get("_client_context"), dict) else {}
-    )
+    raw_context: object = init_payload.get("_client_context")
+    client_context = raw_context if isinstance(raw_context, dict) else {}
     return {
         "stripe_js_id": str(
             client_context.get("stripe_js_id") or init_payload.get("client_stripe_js_id") or uuid.uuid4()
@@ -2045,8 +2043,10 @@ def chatgpt_approve(chatgpt: requests.Session, checkout: dict[str, str]) -> None
     result = ""
     try:
         result = str((resp.json() or {}).get("result") or "")
-    except Exception:
-        pass
+    except (ValueError, TypeError, AttributeError):
+        # Unparsable body: leave ``result`` empty so the check below fails with
+        # the response text instead of pretending approval.
+        result = ""
     if result != "approved":
         raise RuntimeError(f"ChatGPT approve 未通过: {result or resp.text[:200]}")
 
@@ -2217,10 +2217,13 @@ def poll_payment_page(
         last_error = str(submission or "waiting")
         time.sleep(1)
     if last_payload:
-        dump_response = type("DumpResponse", (), {})()
+        # A real Response (not a dynamic stub) so ``dump_http``'s annotation and
+        # the ``.text`` decoding path are both exercised as they are in prod.
+        dump_response = requests.Response()
         dump_response.status_code = 200
         dump_response.url = url
-        dump_response.text = json.dumps(last_payload, ensure_ascii=False, indent=2)
+        dump_response.encoding = "utf-8"
+        dump_response._content = json.dumps(last_payload, ensure_ascii=False, indent=2).encode("utf-8")
         dump_http(dump_response, "poll_no_redirect", params, "GET", url, force=True)
     log(f"poll 结束，未发现真实 iDEAL redirect/QR: {last_error}", "[WARN] ")
     return "", []

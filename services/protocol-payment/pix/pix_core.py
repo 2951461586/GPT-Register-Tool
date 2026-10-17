@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import random
@@ -657,16 +658,24 @@ def find_access_token(value) -> str:
     return ""
 
 
+#: Sentinel for "the text did not parse as JSON". A valid ``null`` payload must
+#: still go through :func:`find_access_token`, so ``None`` cannot be the marker.
+_UNPARSEABLE = object()
+
+
 def extract_access_token_from_session_text(text: str) -> str:
     raw = str(text or "").strip()
     if not raw:
         return ""
     if raw.startswith("Bearer "):
         return raw.split(None, 1)[1].strip()
+    payload: object = _UNPARSEABLE
     try:
-        return find_access_token(json.loads(raw))
-    except Exception:
-        pass
+        payload = json.loads(raw)
+    except (TypeError, ValueError):
+        payload = _UNPARSEABLE
+    if payload is not _UNPARSEABLE:
+        return find_access_token(payload)
     match = re.search(r'"(?:accessToken|access_token|token)"\s*:\s*"([^"]+)"', raw)
     if match:
         return match.group(1).strip()
@@ -934,8 +943,10 @@ def opll_stripe_amount_info(init_payload) -> tuple[str, str]:
                 try:
                     total += int(item.get("amount") or 0)
                     found = True
-                except Exception:
-                    pass
+                except (TypeError, ValueError):
+                    # A non-numeric line item contributes nothing; keep summing
+                    # the rest instead of failing the whole amount lookup.
+                    continue
         if found:
             return str(total), "line_items.amount"
     return "0", "fallback_zero"
@@ -1237,7 +1248,9 @@ OPLL_APPROVE_BLOCKED_ERROR_BACKOFF = 5.0
 
 def opll_chatgpt_approve(chatgpt: requests.Session, cs_id: str, checkout: dict) -> None:
     entity = opll_processor_entity_for_country(checkout["billing_country"], checkout.get("processor_entity", ""))
-    try:
+    with contextlib.suppress(Exception):
+        # Best-effort Sentinel ping before approve. The approve request below is
+        # the real gate, so a failed ping must not abort the flow.
         chatgpt.post(
             endpoints.CHATGPT_SENTINEL_PING,
             json={},
@@ -1248,8 +1261,6 @@ def opll_chatgpt_approve(chatgpt: requests.Session, cs_id: str, checkout: dict) 
             },
             timeout=PAY_LONG_LINK_TIMEOUT,
         )
-    except Exception:
-        pass
     response = chatgpt.post(
         endpoints.CHATGPT_CHECKOUT_APPROVE,
         json={"checkout_session_id": cs_id, "processor_entity": entity},

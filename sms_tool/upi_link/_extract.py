@@ -8,6 +8,7 @@ redirect parsers can be unit-tested without importing the network pipeline.
 
 from __future__ import annotations
 
+import contextlib
 import base64
 import json
 import re
@@ -504,12 +505,10 @@ def _upi_merge_qr_key(result: dict, key: str, value: Any) -> None:
         "qr_expires_at",
         "expires_at_timestamp",
     ):
-        try:
+        with contextlib.suppress(ValueError, TypeError):
             expires = int(value)
             if expires > 0 and not result.get("expires_at"):
                 result["expires_at"] = expires
-        except (ValueError, TypeError):
-            pass
 
 
 def _upi_extract_next_action(data: Any) -> dict:

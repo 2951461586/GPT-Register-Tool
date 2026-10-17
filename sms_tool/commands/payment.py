@@ -104,7 +104,10 @@ def payment_country(payment_method: str, explicit: str = "") -> str:
         canonical = str(countries.get("checkout") or configured.get("checkout_country") or "").strip().upper()
         if canonical:
             return canonical
-    except Exception:
+    except (ImportError, AttributeError, TypeError, ValueError, KeyError):
+        # Config lookup is advisory: a missing/reshaped ``protocol_payments``
+        # block falls back to the catalog's country below. The exception types are
+        # narrowed so a real bug (e.g. a NameError) is no longer hidden.
         pass
     spec = PAYMENT_METHODS.get(method)
     return spec.country if spec else "US"
@@ -247,12 +250,11 @@ def stage_country_overrides(
     config: Mapping[str, Any] | None = None,
 ) -> dict[str, str]:
     method = str(payment_method or "paypal").strip().lower().replace("-", "_")
-    configured: Mapping[str, Any] = {}
+    raw_stage_countries: object = {}
     if config is not None:
         method_cfg, _ = _method_payment_config(config, method)
-        value = method_cfg.get("stage_proxy_countries")
-        _raw_configured: object = value
-        configured: Mapping = _raw_configured if isinstance(_raw_configured, Mapping) else {}
+        raw_stage_countries = method_cfg.get("stage_proxy_countries")
+    configured: Mapping[str, Any] = raw_stage_countries if isinstance(raw_stage_countries, Mapping) else {}
 
     countries = {
         str(key or "").strip().lower(): str(value or "").strip().upper()
@@ -576,6 +578,10 @@ def test_payment_proxies(args: Any, context: PaymentCommandContext) -> None:
             attempts.append({"attempt": attempt, "ok": result.ok, "error": result.error})
             if result.ok:
                 break
+        if result is None:
+            # ``range(1, 3)`` always runs, but keep the contract explicit so a
+            # future refactor cannot index a missing probe result.
+            raise RuntimeError(f"proxy probe did not run for stage {stage}")
         stages[stage] = {
             **result.to_dict(),
             "proxy": redact_proxy_url(candidate),
@@ -798,8 +804,11 @@ def extract_payment_link(args: Any, context: PaymentCommandContext) -> None:
             result["authorization_queued"] = True
             result["authorization_queue_id"] = queued.get("id", "")
             result["authorization_status"] = queued.get("status", "pending")
-        except ValueError:
-            pass
+        except ValueError as exc:
+            # The link itself is valid; report *why* no authorization was queued
+            # instead of silently omitting the fields the batch view reads.
+            result["authorization_queued"] = False
+            result["authorization_error"] = str(exc)
     print(json.dumps(result, ensure_ascii=False, indent=2))
     if not result.get("ok"):
         raise SystemExit(3)

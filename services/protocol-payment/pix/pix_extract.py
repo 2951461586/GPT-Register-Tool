@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import os
 import random
 import re
@@ -73,10 +74,10 @@ def _log(log_cb: LogCb, message: str) -> None:
     text = str(message or "")
     print(text)
     if log_cb:
-        try:
+        with contextlib.suppress(Exception):
+            # A caller-supplied log sink is advisory: its failure must not abort
+            # the payment run that already printed the line to stdout.
             log_cb(text)
-        except Exception:
-            pass
 
 
 def proxy_for_region(proxy: str, region: str) -> str:

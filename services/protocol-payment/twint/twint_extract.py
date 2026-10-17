@@ -182,7 +182,7 @@ from common.proxy_url import (
     default_scheme_from_env as shared_default_scheme_from_env,
     normalize_proxy_url as shared_normalize_proxy_url,
 )
-from common.logging_setup import make_file_logger
+from common.logging_setup import append_log_line, make_file_logger
 from common.timeouts import CHATGPT_TIMEOUT, DEFAULT_TIMEOUT
 from common import stripe_flow as shared_stripe_flow
 from common import geo as shared_geo
@@ -284,11 +284,8 @@ def log(message: str, prefix: str = "") -> None:
     line = redact_log_text(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {prefix}{context}{message}")
     with _log_lock:
         print(line, flush=True)
-        try:
-            with open(_log_file, "a", encoding="utf-8") as f:
-                f.write(line + "\n")
-        except OSError:
-            pass
+        # File logging mirrors stdout; an unwritable file must not abort the run.
+        append_log_line(_log_file, line)
         _durable_logger.info("%s%s%s", prefix, context, message)
 
 
@@ -1667,8 +1664,10 @@ def chatgpt_approve(chatgpt: requests.Session, checkout: dict[str, str]) -> None
     result = ""
     try:
         result = str((resp.json() or {}).get("result") or "")
-    except Exception:
-        pass
+    except (ValueError, TypeError, AttributeError):
+        # Unparseable body: leave ``result`` empty so the check below fails with
+        # the response text instead of pretending approval.
+        result = ""
     if result != "approved":
         raise RuntimeError(f"ChatGPT approve 未通过: {result or resp.text[:200]}")
 

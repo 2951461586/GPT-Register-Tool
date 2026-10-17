@@ -7,6 +7,7 @@ PayPal-specific business meaning, and no dependency on any sibling module.
 
 from __future__ import annotations
 
+import contextlib
 import random
 import re
 import time
@@ -50,16 +51,12 @@ def _set_field_value(locator, value: str, timeout: int = 8000):
             value,
         )
     if value and not _locator_has_value(locator, value):
-        try:
+        with contextlib.suppress(Exception):
             locator.press("Control+A", timeout=timeout)
             locator.type(value, timeout=timeout, delay=random.randint(20, 60))
-        except Exception:
-            pass
     for event_name in ("input", "change", "blur"):
-        try:
+        with contextlib.suppress(Exception):
             locator.dispatch_event(event_name)
-        except Exception:
-            pass
 
 def _click_with_fallback(page, selectors: list[str], timeout: int = 8000):
     """Try multiple selectors, click the first one found."""
@@ -336,16 +333,12 @@ def _fill_visible_input(page, selectors: list[str], value: str, timeout: int = 8
                     continue
                 el.scroll_into_view_if_needed(timeout=timeout)
                 el.click(timeout=timeout)
-                try:
+                with contextlib.suppress(Exception):
                     el.press("Control+A", timeout=timeout)
-                except Exception:
-                    pass
                 el.type(value, timeout=timeout, delay=random.randint(25, 70))
                 for event_name in ("input", "change", "blur", "focusout"):
-                    try:
+                    with contextlib.suppress(Exception):
                         el.dispatch_event(event_name)
-                    except Exception:
-                        pass
                 if _locator_has_value(el, value):
                     return True
             except Exception:
@@ -362,12 +355,10 @@ def _select_with_fallback(page, selectors: list[str], value: str, labels: list[s
             if not el.is_visible(timeout=3000):
                 continue
             for option in wanted:
-                try:
+                with contextlib.suppress(Exception):
                     el.select_option(value=option, timeout=timeout)
                     el.dispatch_event("change")
                     return True
-                except Exception:
-                    pass
             matched = el.evaluate(
                 """(select, wanted) => {
                     const lower = wanted.map((v) => String(v || "").toLowerCase()).filter(Boolean);

@@ -314,7 +314,7 @@ def precheck_proxy_group(
     env_int: Callable[..., int],
     log: Callable[..., None],
     record_health_failure: Callable[[str, str, str], None],
-    remove_failed_proxies: Callable[[str, list[tuple[str, str]]], None],
+    remove_failed_proxies: Callable[[str, list[tuple[str, str]]], object],
     env_prefix: str,
 ) -> list[str]:
     if not env_bool(f"{env_prefix}_PROXY_PRECHECK", True):

@@ -411,21 +411,27 @@ def extract_promo_campaign_id(raw: dict[str, Any]) -> str:
     return str(raw.get("promo_campaign_id") or "").strip()
 
 
+def _int_or_none(value: Any) -> int | None:
+    """``int(value)`` for payload fields, or ``None`` when it is not numeric."""
+    try:
+        return int(value)  # pyright: ignore[reportArgumentType]
+    except (TypeError, ValueError):
+        return None
+
+
 def extract_amount_due_cents(init_payload: dict[str, Any]) -> int | None:
     if not isinstance(init_payload, dict):
         return None
     total_summary = init_payload.get("total_summary")
-    if isinstance(total_summary, dict) and total_summary.get("due") is not None:
-        try:
-            return int(total_summary.get("due"))  # pyright: ignore[reportArgumentType]
-        except (TypeError, ValueError):
-            pass
+    if isinstance(total_summary, dict):
+        due = _int_or_none(total_summary.get("due"))
+        if due is not None:
+            return due
     invoice = init_payload.get("invoice")
-    if isinstance(invoice, dict) and invoice.get("amount_due") is not None:
-        try:
-            return int(invoice.get("amount_due"))  # pyright: ignore[reportArgumentType]
-        except (TypeError, ValueError):
-            pass
+    if isinstance(invoice, dict):
+        invoice_due = _int_or_none(invoice.get("amount_due"))
+        if invoice_due is not None:
+            return invoice_due
     return None
 
 

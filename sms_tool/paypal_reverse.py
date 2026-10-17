@@ -9,6 +9,7 @@ Uses curl_cffi for Chrome TLS fingerprint impersonation.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import re
 import time
@@ -149,10 +150,8 @@ class PayPalReverseClient:
             return ReversePayResult(ok=False, error=str(e), failed_step="unknown")
         finally:
             if self._session:
-                try:
+                with contextlib.suppress(Exception):
                     self._session.close()
-                except Exception:
-                    pass
 
     def _do_authorize(self) -> ReversePayResult:
         # 1. Parse redirect URL and load initial page
@@ -189,7 +188,9 @@ class PayPalReverseClient:
         else:
             s = _requests.Session()
         if self.proxy:
-            s.proxies = {"http": self.proxy, "https": self.proxy}
+            # curl_cffi's ``ProxySpec`` is an invariant TypedDict; the plain
+            # mapping is what every call site passes and accepts at runtime.
+            s.proxies = {"http": self.proxy, "https": self.proxy}  # pyright: ignore[reportAttributeAccessIssue]
         s.headers.update({
             "User-Agent": _USER_AGENT,
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -466,7 +467,7 @@ class PayPalReverseClient:
 
         while time.time() < deadline:
             attempt += 1
-            try:
+            with contextlib.suppress(Exception):
                 r = _requests.get(api_url, timeout=10)
                 if r.status_code == 200:
                     text = r.text.strip()
@@ -478,8 +479,6 @@ class PayPalReverseClient:
                         code = _extract_sms_code(text)
                         if code and attempt > 2:
                             return code
-            except Exception:
-                pass
             time.sleep(interval)
         return None
 

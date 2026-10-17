@@ -7,6 +7,7 @@ SMS verify → submit → extract auth tokens.
 
 from __future__ import annotations
 
+import contextlib
 import asyncio
 import os
 import re
@@ -21,12 +22,10 @@ _DEBUG_DIR = "runtime/nd_pay_debug"
 
 def _debug_screenshot(page, name: str):
     """Save a debug screenshot."""
-    try:
+    with contextlib.suppress(Exception):
         Path(_DEBUG_DIR).mkdir(parents=True, exist_ok=True)
         path = f"{_DEBUG_DIR}/{name}.png"
         page.save_screenshot(path)
-    except Exception:
-        pass
 
 
 async def _debug_page(page, label: str):
@@ -115,10 +114,8 @@ async def _run(
         )
     finally:
         if browser is not None:
-            try:
+            with contextlib.suppress(Exception):
                 browser.stop()
-            except Exception:
-                pass
         await close_bridge()
 
 
@@ -169,35 +166,29 @@ async def _do_pay(
     # ── Step 3: Click "Create Account" ──
     print("[nd-pay] Looking for Create Account button...")
     create_clicked = False
-    try:
+    with contextlib.suppress(Exception):
         # Try finding by text content
         el = await page.find("创建账户", timeout=5)
         if el:
             await el.click()
             create_clicked = True
             print("[nd-pay] Clicked 创建账户")
-    except Exception:
-        pass
 
     if not create_clicked:
-        try:
+        with contextlib.suppress(Exception):
             el = await page.find("Create Account", timeout=3)
             if el:
                 await el.click()
                 create_clicked = True
                 print("[nd-pay] Clicked Create Account")
-        except Exception:
-            pass
 
     if not create_clicked:
-        try:
+        with contextlib.suppress(Exception):
             el = await page.find("Create an account", timeout=3)
             if el:
                 await el.click()
                 create_clicked = True
                 print("[nd-pay] Clicked Create an account")
-        except Exception:
-            pass
 
     if not create_clicked:
         print("[nd-pay] No Create Account button found, trying direct form fill")
@@ -288,13 +279,11 @@ async def _do_pay(
 
     # ── Step 11: Accept terms ──
     print("[nd-pay] Accepting terms...")
-    try:
+    with contextlib.suppress(Exception):
         checkbox = await page.select("input[type='checkbox']", timeout=3)
         if checkbox:
             await checkbox.click()
             await asyncio.sleep(1)
-    except Exception:
-        pass
 
     # ── Step 12: Handle SMS verification ──
     print(f"[nd-pay] Handling SMS verification (phone: {phone})...")
@@ -443,12 +432,10 @@ async def _handle_sms(page, phone: str, sms_cfg: dict, deadline: float) -> str |
 
     # Take baseline
     baseline_raw = ""
-    try:
+    with contextlib.suppress(Exception):
         r = _requests.get(api_url, timeout=10)
         if r.status_code == 200:
             baseline_raw = r.text.strip()
-    except Exception:
-        pass
 
     # Click "Send Code" button
     await _click_button(page, [
@@ -463,7 +450,7 @@ async def _handle_sms(page, phone: str, sms_cfg: dict, deadline: float) -> str |
 
     print(f"[nd-pay] Polling SMS (timeout={sms_timeout}s)...")
     while time.time() < sms_deadline and time.time() < deadline:
-        try:
+        with contextlib.suppress(Exception):
             r = _requests.get(api_url, timeout=10)
             if r.status_code == 200:
                 current_raw = r.text.strip()
@@ -478,8 +465,6 @@ async def _handle_sms(page, phone: str, sms_cfg: dict, deadline: float) -> str |
                                                      "input[name='phoneCode']"],
                                           clear=True)
                         return code
-        except Exception:
-            pass
         await asyncio.sleep(poll_interval)
 
     return None

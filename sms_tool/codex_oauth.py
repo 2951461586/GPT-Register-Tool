@@ -1,3 +1,4 @@
+import contextlib
 import base64
 import argparse
 from functools import lru_cache
@@ -171,10 +172,8 @@ def _login_and_exchange(
     max_restarts = 2
     for restart_attempt in range(max_restarts + 1):
         did = str(data.get("device_id") or "").strip() or _cookie_value(session, "oai-did") or secrets.token_hex(16)
-        try:
+        with contextlib.suppress(Exception):
             session.cookies.set("oai-did", did, domain="auth.openai.com", path="/")
-        except Exception:
-            pass
         sentinel = load_cached_sentinel()
         headers = _oai_headers(did, {"Referer": current_url or AUTH_URL, "content-type": "application/json"})
         attach_sentinel(headers, sentinel)
@@ -194,10 +193,8 @@ def _login_and_exchange(
                 and restart_attempt < max_restarts
             ):
                 print(f"[*] OAuth state invalid, restarting auth flow (attempt {restart_attempt + 1}/{max_restarts})")
-                try:
+                with contextlib.suppress(Exception):
                     session.cookies.clear(domain="auth.openai.com")
-                except Exception:
-                    pass
                 oauth = _new_oauth_request()
                 _, current_url = _follow_redirects(session, oauth["auth_url"], proxy=proxy)
                 if _has_callback_code(current_url):
@@ -231,10 +228,8 @@ def _login_and_exchange(
         if not result.get("needs_session_restart") or restart_attempt >= max_restarts:
             return result
         print(f"[*] Session state invalid, restarting auth flow (attempt {restart_attempt + 1}/{max_restarts})")
-        try:
+        with contextlib.suppress(Exception):
             session.cookies.clear(domain="auth.openai.com")
-        except Exception:
-            pass
         oauth = _new_oauth_request()
         _, current_url = _follow_redirects(session, oauth["auth_url"], proxy=proxy)
         if _has_callback_code(current_url):
@@ -1029,7 +1024,7 @@ def _complete_email_otp(session, data, did, current_url, proxy=None, timeout=180
     if mailbox is None:
         return {"ok": False, "mode": "codex_oauth_pkce", "error": "email_otp_required_missing_mailbox"}
     issued_after = int(time.time())
-    try:
+    with contextlib.suppress(Exception):
         session.post(
             "https://auth.openai.com/api/accounts/email-otp/send",
             headers=_oai_headers(did, {"Referer": current_url, "content-type": "application/json"}),
@@ -1037,8 +1032,6 @@ def _complete_email_otp(session, data, did, current_url, proxy=None, timeout=180
             timeout=30,
             impersonate=auth_impersonate(),
         )
-    except Exception:
-        pass
     code = _poll_email_otp(
         mailbox,
         subject_keyword=LOGIN_EMAIL_OTP_SUBJECT_KEYWORD,

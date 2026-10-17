@@ -63,6 +63,9 @@ def _no_screenshots(monkeypatch):
 SMS_CFG = {"api_url": "https://sms.example/api", "phone": "5550100134",
            "timeout": 60, "poll_interval": 3}
 
+#: ``_sms_baseline`` returns this shape; ``_poll_sms_code`` reads ``.get("raw")``.
+_BASELINE = {"raw": "baseline", "timestamp": 0}
+
 
 # ─────────────────────── _is_human_verification_page ─────────────────────────
 
@@ -79,8 +82,7 @@ def test_is_human_verification_page_detects_the_visible_challenge_text():
 
 def _body_page(text):
     """A page whose only content is a <body> reporting *text*."""
-    body = FakeElement(visible=False)
-    body.inner_text = lambda timeout=None: text
+    body = FakeElement(visible=False, inner_text=lambda timeout=None: text)
     return FakePage(locators={"body": body})
 
 
@@ -98,8 +100,9 @@ def test_is_human_verification_page_returns_false_for_unrelated_body_text():
 
 
 def test_is_human_verification_page_swallows_a_failing_body_read():
-    body = FakeElement(visible=False)
-    body.inner_text = lambda timeout=None: (_ for _ in ()).throw(RuntimeError("boom"))
+    body = FakeElement(
+        visible=False, inner_text=lambda timeout=None: (_ for _ in ()).throw(RuntimeError("boom"))
+    )
     page = FakePage(locators={"body": body})
     assert flow_steps._is_human_verification_page(page) is False
 
@@ -195,7 +198,7 @@ def test_human_verification_gate_swallows_a_failing_networkidle_wait(monkeypatch
 
 
 def test_handle_sms_verification_returns_none_when_no_code_field_is_present(dead_page, clock):
-    assert flow_steps._handle_sms_verification(dead_page, SMS_CFG, "baseline") is None
+    assert flow_steps._handle_sms_verification(dead_page, SMS_CFG, _BASELINE) is None
 
 
 def test_handle_sms_verification_clicks_send_when_the_code_field_is_not_yet_visible(monkeypatch, dead_page, clock):
@@ -203,7 +206,7 @@ def test_handle_sms_verification_clicks_send_when_the_code_field_is_not_yet_visi
     clicked = []
     monkeypatch.setattr(flow_steps, "_click_with_fallback",
                         lambda page, selectors, timeout=0: clicked.append(selectors[0]) or True)
-    flow_steps._handle_sms_verification(dead_page, SMS_CFG, "baseline")
+    flow_steps._handle_sms_verification(dead_page, SMS_CFG, _BASELINE)
     assert clicked == ['button:has-text("Send Code")']
 
 
@@ -211,7 +214,7 @@ def test_handle_sms_verification_raises_when_the_code_never_arrives(monkeypatch,
     page = FakePage(locators={'input[name="code"]': FakeElement(visible=True)})
     monkeypatch.setattr(flow_steps, "_poll_sms_code", lambda *a, **k: "")
     with pytest.raises(_PayPalStepError) as exc:
-        flow_steps._handle_sms_verification(page, SMS_CFG, "baseline")
+        flow_steps._handle_sms_verification(page, SMS_CFG, _BASELINE)
     assert exc.value.step == "sms_verify"
     assert exc.value.detail == "sms_code_timeout"
 
@@ -224,7 +227,7 @@ def test_handle_sms_verification_fills_the_code_and_confirms(monkeypatch, clock)
     monkeypatch.setattr(flow_steps, "_click_with_fallback",
                         lambda p, selectors, timeout=0: confirmed.update(n=len(selectors)) or True)
 
-    assert flow_steps._handle_sms_verification(page, SMS_CFG, "baseline") == "123456"
+    assert flow_steps._handle_sms_verification(page, SMS_CFG, _BASELINE) == "123456"
     assert el.value == "123456"
     assert confirmed == {"n": 4}
 
@@ -239,8 +242,9 @@ def test_handle_sms_verification_passes_the_poll_settings_through(monkeypatch, c
         return "654321"
 
     monkeypatch.setattr(flow_steps, "_poll_sms_code", _poll)
-    flow_steps._handle_sms_verification(page, SMS_CFG, "BASE")
-    assert seen == {"api_url": SMS_CFG["api_url"], "baseline": "BASE",
+    baseline = {"raw": "BASE", "timestamp": 0}
+    flow_steps._handle_sms_verification(page, SMS_CFG, baseline)
+    assert seen == {"api_url": SMS_CFG["api_url"], "baseline": baseline,
                     "timeout": 60, "poll_interval": 3}
 
 
@@ -249,7 +253,7 @@ def test_handle_sms_verification_stops_filling_after_the_first_visible_code_box(
     page = FakePage(locators={'input[name="code"]': first, '#code': second})
     monkeypatch.setattr(flow_steps, "_poll_sms_code", lambda *a, **k: "111111")
     monkeypatch.setattr(flow_steps, "_click_with_fallback", lambda *a, **k: True)
-    flow_steps._handle_sms_verification(page, SMS_CFG, "b")
+    flow_steps._handle_sms_verification(page, SMS_CFG, _BASELINE)
     assert first.value == "111111"
     assert second.value == ""
 
@@ -258,7 +262,7 @@ def test_handle_sms_verification_swallows_a_failing_fill(monkeypatch, clock):
     page = FakePage(locators={'input[name="code"]': FakeElement(visible=True, fail={"fill"})})
     monkeypatch.setattr(flow_steps, "_poll_sms_code", lambda *a, **k: "123456")
     monkeypatch.setattr(flow_steps, "_click_with_fallback", lambda *a, **k: True)
-    assert flow_steps._handle_sms_verification(page, SMS_CFG, "b") == "123456"
+    assert flow_steps._handle_sms_verification(page, SMS_CFG, _BASELINE) == "123456"
 
 
 # ─────────────────────────────── _submit_payment ─────────────────────────────

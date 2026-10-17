@@ -1,6 +1,7 @@
 """adapters submodule of the former payment_link_manager.py (mechanical split, bodies unchanged)."""
 
 from __future__ import annotations
+import contextlib
 import json
 import os
 import re
@@ -464,10 +465,8 @@ def _run_protocol_script(
         with handle:
             handle.write(seed_proxy + "\n")
         proxy_file = handle.name
-        try:
+        with contextlib.suppress(OSError):
             os.chmod(proxy_file, 0o600)
-        except OSError:
-            pass
         builder = _PROTOCOL_BUILD_ENV.get(spec.key)
         if builder is None:
             Path(proxy_file).unlink(missing_ok=True)
@@ -534,10 +533,8 @@ def _write_token_file(access_token: str) -> str:
     )
     with handle:
         handle.write(str(access_token or "").strip() + "\n")
-    try:
+    with contextlib.suppress(OSError):
         os.chmod(handle.name, 0o600)
-    except OSError:
-        pass
     return handle.name
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -149,7 +150,7 @@ def _publish_probe_geo(value: str, result: "ProxyProbeResult") -> None:
     """
     if not getattr(result, "ok", False) or not getattr(result, "country_code", ""):
         return
-    try:
+    with contextlib.suppress(Exception):
         from .geo import ProxyGeo, remember_proxy_geo
 
         remember_proxy_geo(
@@ -161,8 +162,6 @@ def _publish_probe_geo(value: str, result: "ProxyProbeResult") -> None:
                 source="probe",
             ),
         )
-    except Exception:
-        pass  # geo is advisory; never let cache bookkeeping fail a payment probe
 
 
 def _proxy_scheme_candidates(proxy: str) -> list[str]:
@@ -357,7 +356,7 @@ def proxy_key(proxy: str) -> str:
     value = normalize_proxy_url(proxy)
     if not value:
         return "direct"
-    try:
+    with contextlib.suppress(Exception):
         parsed = urlsplit(value)
         username = unquote(parsed.username or "")
         password = unquote(parsed.password or "")
@@ -369,8 +368,6 @@ def proxy_key(proxy: str) -> str:
             count=1,
         )
         value = _rebuild_proxy_url(parsed, username, password)
-    except Exception:
-        pass
     return hashlib.sha256(value.encode("utf-8", errors="ignore")).hexdigest()[:24]
 
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from typing import Any
 from collections.abc import Mapping
 import json
@@ -134,7 +135,7 @@ def _upi_browser_capture(
                 timezone_id=timezone_id,
                 ignore_https_errors=True,
             )
-            try:
+            with contextlib.suppress(Exception):
                 context.add_cookies(
                     [
                         {"name": name, "value": value, "url": "https://chatgpt.com/"}
@@ -142,8 +143,6 @@ def _upi_browser_capture(
                         if value
                     ]
                 )
-            except Exception:
-                pass
 
             def observe(request: Any) -> None:
                 try:
@@ -197,19 +196,17 @@ def _upi_browser_capture(
             page.route("**/*", route_handler)
             page.goto(target, wait_until="domcontentloaded", timeout=capture_ms)
             page.wait_for_timeout(1200)
-            try:
+            with contextlib.suppress(Exception):
                 page.evaluate(
                     """() => fetch('/backend-api/models?history_and_training_disabled=false',
                        {credentials: 'include', headers: {'accept': 'application/json'}})
                        .then(r => r.text()).catch(() => '')"""
                 )
-            except Exception:
-                pass
             deadline = time.monotonic() + max(5.0, float(timeout_s) - 5.0)
             while time.monotonic() < deadline and not result["attestation"]:
                 page.wait_for_timeout(500)
             if not result["attestation"]:
-                try:
+                with contextlib.suppress(Exception):
                     serialized = page.evaluate(
                         """() => { const values = [document.documentElement.outerHTML];
                            for (const key of ['__remixContext','__NEXT_DATA__','__reactRouterContext']) {
@@ -219,8 +216,6 @@ def _upi_browser_capture(
                     found = _upi_find_attestation(serialized)
                     if found:
                         result["attestation"] = found
-                except Exception:
-                    pass
             for cookie in context.cookies("https://chatgpt.com/"):
                 name = str(cookie.get("name") or "")
                 value = str(cookie.get("value") or "")
@@ -395,14 +390,12 @@ def _upi_browser_approve(
             page.goto(page_url, wait_until="domcontentloaded", timeout=page_ms)
             page.wait_for_timeout(2500)
             if not seen.get("observation"):
-                try:
+                with contextlib.suppress(Exception):
                     page.evaluate(
                         """() => fetch('/backend-api/models?history_and_training_disabled=false',
                            {credentials: 'include'}).then(r => r.text()).catch(() => '')"""
                     )
                     page.wait_for_timeout(1500)
-                except Exception:
-                    pass
             result["observation"] = seen.get("observation", "")
             result["attestation"] = seen.get("attestation", "")
             payload = page.evaluate(

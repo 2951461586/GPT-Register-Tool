@@ -7,6 +7,7 @@ CloakBrowser fallback), and finally persists the outcome to the session file.
 
 from __future__ import annotations
 
+import contextlib
 import time
 from typing import Any, Callable
 
@@ -500,12 +501,10 @@ def _try_browser_pay_camoufox(
         result = {"ok": False, "error": f"step_{step}: {e}", "failed_step": step}
     finally:
         # Cleanup temp profile
-        try:
+        with contextlib.suppress(Exception):
             import shutil
 
             shutil.rmtree(tmp_profile, ignore_errors=True)
-        except Exception:
-            pass
 
     return result
 

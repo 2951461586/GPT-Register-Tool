@@ -74,7 +74,8 @@ def normalize_access_token(raw: str) -> tuple[str, str]:
             ) or find_session_cookie(data)
             text = access_token
         except json.JSONDecodeError:
-            pass
+            # Not JSON after all: keep the raw text and report no session token.
+            return text, ""
     return text, session_token
 
 

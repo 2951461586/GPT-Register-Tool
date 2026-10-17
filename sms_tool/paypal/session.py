@@ -6,6 +6,7 @@ override injection, page-load waits, overlay dismissal and debug screenshots.
 
 from __future__ import annotations
 
+import contextlib
 import time
 from pathlib import Path
 
@@ -27,7 +28,7 @@ def _safe_import_cookie_header(ctx, cookie_header):
             continue
         if name.startswith("__Host-"):
             continue
-        cookie = {
+        cookie: dict[str, str | bool] = {
             "name": name,
             "value": value,
             "domain": ".chatgpt.com",
@@ -74,10 +75,8 @@ def _inject_navigator_overrides(ctx) -> None:
 
 def _wait_for_paypal_load(page, timeout: int = 30000):
     """Wait for PayPal page to finish loading."""
-    try:
+    with contextlib.suppress(Exception):
         page.wait_for_load_state("networkidle", timeout=timeout)
-    except Exception:
-        pass
     time.sleep(2)
 
 def _screenshot(page, debug_dir: str, name: str, enabled: bool = True):
@@ -89,20 +88,16 @@ def _screenshot(page, debug_dir: str, name: str, enabled: bool = True):
     """
     if not enabled:
         return
-    try:
+    with contextlib.suppress(Exception):
         p = Path(debug_dir)
         p.mkdir(parents=True, exist_ok=True)
         write_page_truth(page, p, name)
         page.screenshot(path=str(p / f"{name}.png"), full_page=True)
-    except Exception:
-        pass
 
 def _dismiss_overlays(page):
     """Dismiss autocomplete/cookie overlays that can steal focus from the next field."""
-    try:
+    with contextlib.suppress(Exception):
         page.keyboard.press("Escape")
-    except Exception:
-        pass
     for selector in [
         'button:has-text("Close")',
         'button:has-text("Accept")',

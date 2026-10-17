@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import base64
 import json
 import uuid
@@ -311,13 +312,14 @@ def _new_http_session(proxy: str):
         import requests
 
         session = requests.Session()
-    try:
+    with contextlib.suppress(Exception):
         session.trust_env = False
-    except Exception:
-        pass
     session.headers.update({"User-Agent": _USER_AGENT})
     if normalized:
-        session.proxies = {"http": normalized, "https": normalized}
+        # curl_cffi's ``ProxySpec`` is an invariant TypedDict, so pyright rejects
+        # the plain mapping every call site in this repo passes (and that is
+        # accepted at runtime). Same documented escape as ``paypal_proxy``.
+        session.proxies = {"http": normalized, "https": normalized}  # pyright: ignore[reportAttributeAccessIssue]
     return session
 
 

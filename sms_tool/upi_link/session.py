@@ -16,6 +16,7 @@ try:
     from curl_cffi import requests as _curl_requests
 except ImportError:  # pragma: no cover - curl_cffi is a project dependency
     _curl_requests = None
+import contextlib
 from typing import Any
 from collections.abc import Mapping
 from pathlib import Path
@@ -160,11 +161,8 @@ def _upi_record_zero_result(proxy_state: Any, proxy: str, country: str, amount: 
     """
     if proxy_state is None or not proxy:
         return
-    try:
+    with contextlib.suppress(Exception):
         proxy_state.record_zero_result(proxy, country, amount)
-    except Exception:
-        # 调度优化失败不应该有任何可观测后果，也不该刷日志噪声
-        pass
 
 
 def _upi_accept_language_for(locale: str) -> str:
@@ -199,10 +197,8 @@ def _upi_apply_fingerprint(session: Any, fingerprint: Mapping[str, str]) -> None
         "sec-ch-ua-platform": fingerprint.get("sec_ch_ua_platform", '""'),
     }
     cleaned = {k: v for k, v in headers.items() if v}
-    try:
+    with contextlib.suppress(Exception):
         session.headers.update(cleaned)
-    except Exception:
-        pass
 
 
 def _upi_apply_chatgpt_identity(
@@ -233,10 +229,8 @@ def _upi_apply_chatgpt_identity(
         "sec-fetch-site": "same-origin",
         "Cookie": "oai-did=%s" % device_id,
     }
-    try:
+    with contextlib.suppress(Exception):
         session.headers.update(headers)
-    except Exception:
-        pass
 
 
 def _upi_new_chatgpt_session(
@@ -411,14 +405,12 @@ def _upi_ensure_checkout_flow() -> str:
     become part of that public map. ``issue_sentinel_token`` resolves the flow
     through ``FLOW_PAGE_URLS`` at call time, so this is sufficient.
     """
-    try:
+    with contextlib.suppress(Exception):
         from ..sentinel import client as sentinel_client
 
         flows = getattr(sentinel_client, "FLOW_PAGE_URLS", None)
         if isinstance(flows, dict):
             flows.setdefault(UPI_SENTINEL_CHECKOUT_FLOW, "https://chatgpt.com/")
-    except Exception:
-        pass
     return UPI_SENTINEL_CHECKOUT_FLOW
 
 

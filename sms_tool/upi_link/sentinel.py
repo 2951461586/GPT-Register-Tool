@@ -4,6 +4,7 @@ try:  # pragma: no cover - direct script execution
     from ..pp_link_helpers import CHATGPT_TIMEOUT, DEFAULT_TIMEOUT
 except ImportError:
     from pp_link_helpers import CHATGPT_TIMEOUT, DEFAULT_TIMEOUT  # type: ignore
+import contextlib
 from typing import Any
 from collections.abc import Mapping
 import secrets
@@ -219,7 +220,7 @@ def _upi_sentinel_ping(session: Any, *, proxy: Any, referer: Any) -> None:
     """Best-effort Sentinel connectivity ping (failure is never fatal)."""
     if not _upi_session_is_live(session) or not hasattr(session, "post"):
         return
-    try:
+    with contextlib.suppress(Exception):
         session.post(
             UPI_SENTINEL_PING_URL,
             json={},
@@ -230,8 +231,6 @@ def _upi_sentinel_ping(session: Any, *, proxy: Any, referer: Any) -> None:
             },
             timeout=UPI_WARMUP_TIMEOUT,
         )
-    except Exception:
-        pass
 
 
 def _upi_session_cookie_header(session: Any, device_id: Any) -> str:
@@ -446,7 +445,7 @@ def _upi_sentinel_headers(
         # ``flow: chatgpt_checkout`` — it is the checkout-phase SO reused, not
         # the approval flow's own. Prefer the checkout mint's SO even when the
         # approval mint returned one.
-        try:
+        with contextlib.suppress(Exception):
             checkout = _upi_mint_sentinel_cached(
                 flow=UPI_SENTINEL_CHECKOUT_FLOW,
                 device_id=device_id,
@@ -458,8 +457,6 @@ def _upi_sentinel_headers(
             checkout_so = str(checkout.get("so") or "")
             if checkout_so:
                 so_value = checkout_so
-        except Exception:
-            pass
     if so_value:
         headers["OpenAI-Sentinel-SO-Token"] = so_value
     _emit(
@@ -582,15 +579,13 @@ def _upi_apply_approve_risk(
     """
     if session is None:
         return
-    try:
+    with contextlib.suppress(Exception):
         session.headers.update(
             risk.headers(
                 account_id=_upi_account_id_from_token(access_token),
                 reference_shape=(approve_shape == "reference"),
             )
         )
-    except Exception:
-        pass
     sentinel_headers: dict[str, str] = {}
     if (
         approve_shape == "reference"
@@ -621,7 +616,5 @@ def _upi_apply_approve_risk(
         # answered with ``blocked``. The reference rail keeps one ``fp`` for
         # every stage; ``fingerprint`` (already country-profiled by the caller)
         # is that single value here.
-        try:
+        with contextlib.suppress(Exception):
             _upi_apply_fingerprint(session, fingerprint)
-        except Exception:
-            pass

@@ -4,6 +4,7 @@ try:  # pragma: no cover - direct script execution
     from ..phone_proxy import redact_proxy_text
 except ImportError:
     from phone_proxy import redact_proxy_text  # type: ignore
+import contextlib
 from typing import Any
 from pathlib import Path
 import json
@@ -37,10 +38,8 @@ def _upi_redact_for_dump(text: Any) -> str:
         r"\1***",
         value,
     )
-    try:
+    with contextlib.suppress(Exception):  # pragma: no cover - redactor must never break dumping
         value = redact_proxy_text(value)
-    except Exception:  # pragma: no cover - redactor must never break dumping
-        pass
     return value
 
 

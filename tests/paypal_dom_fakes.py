@@ -8,6 +8,8 @@ bottom without a network or a browser process.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 
 # ───────────────────────── test doubles (fake browser) ────────────────────────
 
@@ -15,9 +17,13 @@ from __future__ import annotations
 class FakeElement:
     """A stand-in for a Playwright Locator that has been narrowed with .first."""
 
-    def __init__(self, visible=True, value="", fail=(), record=None):
+    def __init__(self, visible=True, value="", fail=(), record=None, inner_text=None):
         self.visible = visible
         self.value = value
+        # Simulates ``locator.inner_text()``; a constructor parameter (rather
+        # than an attribute tests bolt on afterwards) keeps the double's shape
+        # statically visible to the type checker.
+        self.inner_text: Callable[..., str] | None = inner_text
         self.fail = set(fail)
         self.record = record if record is not None else []
         self.selected = None

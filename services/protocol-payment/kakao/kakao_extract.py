@@ -68,7 +68,7 @@ from common.protocol_core import (
     is_true,
     safe_int,
 )
-from common.logging_setup import make_file_logger
+from common.logging_setup import append_log_line, make_file_logger
 from common.payload_helpers import configured_country
 from common import endpoints
 
@@ -230,11 +230,8 @@ def redact_log_text(text: str) -> str:
 def log(message: str, prefix: str = "") -> None:
     line = redact_log_text(f"{prefix}{message}")
     print(line, flush=True)
-    try:
-        with (LOG_DIR / "kakao_extract.log").open("a", encoding="utf-8") as handle:
-            handle.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {line}\n")
-    except OSError:
-        pass
+    # File logging mirrors stdout; an unwritable file must not abort the run.
+    append_log_line(LOG_DIR / "kakao_extract.log", f"{time.strftime('%Y-%m-%d %H:%M:%S')} {line}")
     _durable_logger.info("%s%s", prefix, message)
 
 
@@ -1334,14 +1331,18 @@ def kakao_link(
                 json={"checkout_session_id": checkout_id, "processor_entity": processor_entity},
                 timeout=TIMEOUT,
             )
+            approved = False
             if approval_response.status_code == 200:
                 try:
-                    if (approval_response.json() or {}).get("result") == "approved":
-                        log(f"{PROVIDER_COUNTRY} approve 第 {index} 次成功")
-                        last_error = ""
-                        break
+                    approved = (approval_response.json() or {}).get("result") == "approved"
                 except (TypeError, ValueError):
-                    pass
+                    # Unparseable approval body: treat as not approved and fall
+                    # through to the retry/error path below.
+                    approved = False
+            if approved:
+                log(f"{PROVIDER_COUNTRY} approve 第 {index} 次成功")
+                last_error = ""
+                break
             last_error = f"approve failed {approval_response.status_code}: {response_error(approval_response, 500)}"
             if index < APPROVE_RETRY_MAX:
                 time.sleep(1)

@@ -241,7 +241,7 @@ class TestFlowStepsGate:
                             lambda *a, **k: polled.append((a, k)))
         with pytest.raises(_PayPalStepError) as excinfo:
             flow_steps._handle_sms_verification(
-                _FakePage(), {"timeout": 120, "poll_interval": 5}, baseline="")
+                _FakePage(), {"timeout": 120, "poll_interval": 5}, baseline={"raw": "", "timestamp": 0})
         assert excinfo.value.step == "sms_verify"
         assert excinfo.value.detail == NO_NUMBER_SOURCE
         assert polled == [], "an empty api_url must not reach the poll loop"
@@ -259,7 +259,7 @@ class TestFlowStepsGate:
         monkeypatch.setattr(flow_steps.time, "sleep", lambda *a, **k: None)
         code = flow_steps._handle_sms_verification(
             page, {"api_url": "https://sms.example", "timeout": 120,
-                   "poll_interval": 5}, baseline="")
+                   "poll_interval": 5}, baseline={"raw": "", "timestamp": 0})
         assert code == "123456"
         assert polled == ["https://sms.example"]
 

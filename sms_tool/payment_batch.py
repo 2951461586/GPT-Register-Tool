@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import re
@@ -926,11 +927,9 @@ def _replay_events(path: Path, run_signature: str, progress: Callable[[dict[str,
 
 
 def _reset_event_log(path: Path) -> None:
-    try:
+    with contextlib.suppress(OSError):
         if path.is_file():
             path.unlink()
-    except OSError:
-        pass
 
 
 def _load_checkpoint(path: Path, method: str, run_signature: str) -> dict[str, Any]:

@@ -18,6 +18,7 @@ r"""PayPal 协议提取核心 -- 三段式代理提链器。
 
 from __future__ import annotations
 
+import contextlib
 import json
 import random
 import time
@@ -741,7 +742,7 @@ class PPLinkExtractor:
         )
         sentinel_headers = self._fresh_approval_sentinel(cs)
         # sentinel ping
-        try:
+        with contextlib.suppress(Exception):
             cs.post(
                 endpoints.CHATGPT_SENTINEL_PING,
                 json={},
@@ -752,8 +753,6 @@ class PPLinkExtractor:
                 },
                 timeout=CHATGPT_TIMEOUT,
             )
-        except Exception:
-            pass
         endpoint = endpoints.CHATGPT_CHECKOUT_APPROVE
         approval_headers = {
             **sentinel_headers,
@@ -781,10 +780,8 @@ class PPLinkExtractor:
             )
         if r.status_code == 409:
             payload = {}
-            try:
+            with contextlib.suppress(Exception):
                 payload = r.json() or {}
-            except Exception:
-                pass
             if (
                 str(payload.get("result") or "").strip().lower() == "blocked"
                 or "blocked" in str(getattr(r, "text", "") or "").lower()

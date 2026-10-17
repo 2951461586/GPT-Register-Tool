@@ -9,6 +9,7 @@ logic after the move.
 
 from __future__ import annotations
 
+import contextlib
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Callable
@@ -54,10 +55,8 @@ def _upi_india_exit_attempts(upi_cfg: Any) -> int:
 def _upi_india_exit_timeout(upi_cfg: Any) -> float:
     raw = upi_cfg.get("india_exit_timeout") if isinstance(upi_cfg, Mapping) else None
     if raw is not None:
-        try:
+        with contextlib.suppress(TypeError, ValueError):
             return max(3.0, min(float(raw), 20.0))
-        except (TypeError, ValueError):
-            pass
     return max(3.0, min(_float_env("UPI_INDIA_EXIT_TIMEOUT", 8.0), 20.0))
 
 

@@ -7,6 +7,7 @@ address, ...) and delegates the mechanical work to ``dom_fields``.
 
 from __future__ import annotations
 
+import contextlib
 import random
 import re
 import time
@@ -246,7 +247,7 @@ def _fill_card(page, card: dict):
         '#card-number', 'input[data-testid="card-number-input"]',
     ]
     if not (_fill_dom_ids(page, ["cardNumber"], number) or _fill_visible_input(page, card_selectors, number, timeout=10000) or _fill_by_label_fallback(page, ["Card number", "Credit or debit card number"], number, timeout=10000) or _fill_with_fallback(page, card_selectors, number, timeout=10000)):
-        try:
+        with contextlib.suppress(Exception):
             for frame in page.frames:
                 for sel in card_selectors:
                     try:
@@ -258,8 +259,6 @@ def _fill_card(page, card: dict):
                             break
                     except Exception:
                         continue
-        except Exception:
-            pass
     else:
         print("[*] Card number filled: [REDACTED]")
     time.sleep(random.uniform(0.5, 1.0))
@@ -277,20 +276,16 @@ def _fill_card(page, card: dict):
         exp_str = f"{exp_month}/{exp_year[-2:]}"
         _fill_dom_ids(page, ["cardExpiry"], exp_str) or _fill_visible_input(page, exp_selectors, exp_str, timeout=5000) or _fill_by_label_fallback(page, ["Expiration date", "Expiry date", "MM/YY"], exp_str, timeout=5000) or _fill_with_fallback(page, exp_selectors, exp_str, timeout=5000)
     else:
-        try:
+        with contextlib.suppress(Exception):
             page.locator(month_selectors[0]).first.select_option(value=exp_month)
-        except Exception:
-            pass
     time.sleep(random.uniform(0.3, 0.8))
 
     year_selectors = [
         'select[name*="year"]', 'select[id*="year"]',
         'select[autocomplete="cc-exp-year"]', '#expiration-year',
     ]
-    try:
+    with contextlib.suppress(Exception):
         page.locator(year_selectors[0]).first.select_option(value=exp_year)
-    except Exception:
-        pass
     time.sleep(random.uniform(0.3, 0.8))
 
     cvv_selectors = [

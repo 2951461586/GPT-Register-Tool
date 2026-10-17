@@ -34,6 +34,7 @@ Use ``--credential-file -`` to read a token or session JSON from stdin.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import getpass
 import json
 import os
@@ -108,6 +109,10 @@ PAYMENT_COOKIE_NAMES = frozenset(
     }
 )
 RETRYABLE_STATUSES = frozenset({403, 429, 500, 502, 503, 504})
+
+#: Checkout-create detail for an account that already paid. Kept as a named
+#: constant so the comparison does not embed the upstream English sentence.
+ALREADY_PAID_DETAIL = "User is already paid"
 
 
 class ExtractorError(RuntimeError):
@@ -299,12 +304,12 @@ def merged_cookie_header(cookie_header: str, cookies: Any) -> str:
         name, separator, value = item.strip().partition("=")
         if separator and name:
             values[name] = value
-    try:
+    with contextlib.suppress(AttributeError, TypeError, ValueError):
+        # ``cookies`` is a duck-typed jar: anything that is not mapping-like
+        # simply contributes nothing to the merged header.
         for name, value in cookies.items():
             if name:
                 values[str(name)] = str(value)
-    except Exception:
-        pass
     return "; ".join(f"{name}={value}" for name, value in values.items())
 
 
@@ -326,10 +331,10 @@ def sync_cookies(target: Any, source: Any) -> None:
     if target is source:
         refresh_cookie_header(target)
         return
-    try:
+    with contextlib.suppress(AttributeError, TypeError, ValueError):
+        # A session stub without a cookie jar must not break the clone; the
+        # fallback header below still carries the source's Cookie value.
         target.cookies.update(source.cookies)
-    except Exception:
-        pass
     refresh_cookie_header(target, str(getattr(source, "headers", {}).get("Cookie") or ""))
 
 
@@ -398,10 +403,10 @@ def set_proxy(session: Any, proxy: str) -> None:
 def safe_close(session: Any) -> None:
     if session is None:
         return
-    try:
+    with contextlib.suppress(Exception):
+        # Best-effort teardown: a closed/broken transport must not mask the
+        # result the caller already computed.
         session.close()
-    except Exception:
-        pass
 
 
 def money_minor_units(value: Any) -> int | None:
@@ -716,11 +721,15 @@ class CheckoutExtractor:
         self.config = config or ExtractorConfig()
         self.config.validate()
         if session_factory is None:
-            if CurlSession is None:
+            session_cls = CurlSession
+            if session_cls is None:
                 raise ExtractorError(
                     'curl_cffi is required; install it with: python -m pip install "curl_cffi>=0.15.0"'
                 )
-            session_factory = lambda: CurlSession(impersonate="chrome136")
+            # Bind to a local: pyright cannot carry the module-global ``None``
+            # check into a deferred lambda body, and this also keeps the error
+            # on the missing-dependency path instead of a TypeError at call time.
+            session_factory = lambda: session_cls(impersonate="chrome136")
         self.session_factory = session_factory
         self.sleep = sleeper
         self.log = logger or (lambda message: print(message, file=sys.stderr, flush=True))
@@ -771,10 +780,9 @@ class CheckoutExtractor:
         if hasattr(session, "trust_env"):
             session.trust_env = False
         session.headers.update(dict(getattr(source, "headers", {})))
-        try:
+        with contextlib.suppress(AttributeError, TypeError, ValueError):
+            # See ``sync_cookies``: a stub without a jar falls back to the header.
             session.cookies.update(source.cookies)
-        except Exception:
-            pass
         refresh_cookie_header(session, str(getattr(source, "headers", {}).get("Cookie") or ""))
         set_proxy(session, proxy)
         return session
@@ -849,7 +857,7 @@ class CheckoutExtractor:
                 error_payload = response.json() or {}
             except Exception:
                 error_payload = {}
-            if str(error_payload.get("detail") or "") == "User is already paid":
+            if str(error_payload.get("detail") or "") == ALREADY_PAID_DETAIL:
                 raise UpstreamError(400, "the account is already paid and cannot create a Plus checkout")
             raise response_error(response, "checkout create failed")
         try:

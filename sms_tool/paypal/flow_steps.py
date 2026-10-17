@@ -7,6 +7,7 @@ interrupt it, and the OpenAI checkout pre-flight that runs before PayPal.
 
 from __future__ import annotations
 
+import contextlib
 import time
 from typing import Any
 
@@ -85,17 +86,15 @@ def _handle_human_verification_gate(page, sms_cfg: dict, debug_dir: str, debug_e
     while time.time() < deadline:
         if not _is_human_verification_page(page):
             print("[*] PayPal human verification cleared")
-            try:
+            with contextlib.suppress(Exception):
                 page.wait_for_load_state("networkidle", timeout=15000)
-            except Exception:
-                pass
             time.sleep(2)
             return
         time.sleep(2)
 
     raise _PayPalStepError(step, "paypal_human_verification_required")
 
-def _handle_sms_verification(page, sms_cfg: dict, baseline: str) -> str | None:
+def _handle_sms_verification(page, sms_cfg: dict, baseline: dict) -> str | None:
     """Handle SMS verification if prompted."""
     code_selectors = [
         'input[name="code"]', 'input[name="smsCode"]',
@@ -213,10 +212,8 @@ def _prepare_openai_checkout_paypal(
     selected = False
     submitted = False
     while time.time() < deadline:
-        try:
+        with contextlib.suppress(Exception):
             page.wait_for_load_state("domcontentloaded", timeout=5000)
-        except Exception:
-            pass
         if _is_paypal_url(page.url):
             return True
 
@@ -229,10 +226,8 @@ def _prepare_openai_checkout_paypal(
         if selected and _click_openai_checkout_continue(page):
             submitted = True
             _screenshot(page, debug_dir, "02b_openai_checkout_continue", debug_enabled)
-            try:
+            with contextlib.suppress(Exception):
                 page.wait_for_load_state("domcontentloaded", timeout=15000)
-            except Exception:
-                pass
             time.sleep(2)
             if _is_paypal_url(page.url):
                 return True

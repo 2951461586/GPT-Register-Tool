@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 
 import html
@@ -1026,10 +1027,8 @@ def _body_candidates(body: str) -> list[str]:
         _collect_json_urls(data, candidates, depth=0)
 
     parser = _CandidateHTMLParser()
-    try:
+    with contextlib.suppress(Exception):
         parser.feed(text)
-    except Exception:
-        pass
     candidates.extend(parser.urls)
     return candidates
 

@@ -121,31 +121,47 @@ def _python_replacement(value: str) -> str:
     return _re.sub(r"\$(\d+)", r"\\g<\1>", value)
 
 
+def _policy_patterns(policy: Any) -> list[tuple[_re.Pattern[str], str]] | None:
+    """Compile ``text_patterns``; ``None`` means the policy is malformed.
+
+    Returning ``None`` (rather than swallowing the error) is what lets the
+    caller fall back to :data:`LEGACY_TEXT_PATTERNS` explicitly.
+    """
+    try:
+        return [
+            (_re.compile(entry["pattern"]), _python_replacement(str(entry["replacement"])))
+            for entry in policy.get("text_patterns") or []
+        ]
+    except (KeyError, TypeError, ValueError, _re.error):
+        return None
+
+
 def _compiled_patterns() -> list[tuple[_re.Pattern[str], str]]:
     policy = _load_policy()
-    if policy:
-        try:
-            return [
-                (_re.compile(entry["pattern"]), _python_replacement(str(entry["replacement"])))
-                for entry in policy.get("text_patterns") or []
-            ]
-        except Exception:
-            pass
+    patterns = _policy_patterns(policy) if policy else None
+    if patterns is not None:
+        return patterns
     return [(_re.compile(pattern), replacement) for _name, pattern, replacement in LEGACY_TEXT_PATTERNS]
+
+
+def _policy_key_rules(policy: Any) -> tuple[set[str], tuple[str, ...], tuple[str, ...]] | None:
+    """Parse the redaction key rules; ``None`` means the policy is malformed."""
+    try:
+        return (
+            {str(k).lower() for k in policy.get("sensitive_keys") or []},
+            tuple(str(f).lower() for f in policy.get("sensitive_key_fragments") or []),
+            tuple(str(s).lower() for s in policy.get("safe_key_suffixes") or []),
+        )
+    except (TypeError, ValueError, AttributeError):
+        return None
 
 
 def _key_rules() -> tuple[set[str], tuple[str, ...], tuple[str, ...]]:
     """(exact sensitive keys, fragments, safe suffixes) for payload redaction."""
     policy = _load_policy()
-    if policy:
-        try:
-            return (
-                {str(k).lower() for k in policy.get("sensitive_keys") or []},
-                tuple(str(f).lower() for f in policy.get("sensitive_key_fragments") or []),
-                tuple(str(s).lower() for s in policy.get("safe_key_suffixes") or []),
-            )
-        except Exception:
-            pass
+    rules = _policy_key_rules(policy) if policy else None
+    if rules is not None:
+        return rules
     return set(), LEGACY_KEY_FRAGMENTS, LEGACY_SAFE_KEY_SUFFIXES
 
 
@@ -156,18 +172,22 @@ def sanitize_text(value: Any) -> str:
     return text
 
 
+def _apply_log_patterns(text: str, entries: list[Any]) -> str:
+    """Apply operator-facing masking; a malformed entry keeps prior redaction."""
+    try:
+        for entry in entries:
+            text = _re.compile(entry["pattern"]).sub(_python_replacement(str(entry["replacement"])), text)
+    except (KeyError, TypeError, ValueError, _re.error):
+        return text
+    return text
+
+
 def sanitize_log_text(value: Any) -> str:
     """Log-strength redaction: sanitize_text plus log_text_patterns
     (operator-facing email masking) — mirrors C# SensitiveDataSanitizer.Redact."""
     text = sanitize_text(value)
-    policy = _load_policy()
-    entries = (policy or {}).get("log_text_patterns") or []
-    try:
-        for entry in entries:
-            text = _re.compile(entry["pattern"]).sub(_python_replacement(str(entry["replacement"])), text)
-    except Exception:
-        pass
-    return text
+    entries = (_load_policy() or {}).get("log_text_patterns") or []
+    return _apply_log_patterns(text, entries)
 
 
 def _key_is_sensitive(
