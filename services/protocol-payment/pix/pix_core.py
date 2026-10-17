@@ -5,6 +5,7 @@ import json
 import os
 import random
 import re
+import secrets
 import sys
 import time
 import uuid
@@ -614,8 +615,9 @@ LOCALE_MAP = {
 
 
 def random_proxy_sid(length: int = 10) -> str:
+    # Proxy session ids select a sticky egress session; keep them unpredictable.
     alphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
-    return "".join(random.choice(alphabet) for _ in range(length))
+    return "".join(secrets.choice(alphabet) for _ in range(length))
 
 
 def randomize_proxy_sid(proxy_url: str) -> str:

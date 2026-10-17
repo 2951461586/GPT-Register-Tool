@@ -38,8 +38,8 @@ import contextlib
 import getpass
 import json
 import os
-import random
 import re
+import secrets
 import sys
 import time
 import uuid
@@ -356,9 +356,13 @@ def normalize_proxy_url(proxy: str) -> str:
 
 
 def new_proxy_session_id(length: int = 8) -> str:
-    """Random numeric session id preserving the original id length (min 1)."""
+    """Random numeric session id preserving the original id length (min 1).
+
+    ``secrets`` because the id selects a sticky egress session: a predictable
+    value lets another caller force a shared IP.
+    """
     size = max(1, safe_int(length or 8))
-    return "".join(str(random.randint(0, 9)) for _ in range(size))
+    return "".join(str(secrets.randbelow(10)) for _ in range(size))
 
 
 def rotate_direct_card_proxy_session(proxy: str, country: str) -> str:

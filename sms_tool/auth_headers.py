@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import random
 import re
+import secrets
 import threading
 import time
 import uuid
@@ -684,8 +685,11 @@ def sentinel_fingerprint() -> dict[str, object]:
 
 
 def datadog_trace_headers() -> dict[str, str]:
-    trace_id = str(random.getrandbits(64))
-    parent_id = str(random.getrandbits(64))
+    # Trace ids ride in every request as ``traceparent``; a predictable value
+    # lets a third party join or forge this client's traces, so they come from
+    # the CSPRNG rather than the Mersenne Twister.
+    trace_id = str(secrets.randbits(64))
+    parent_id = str(secrets.randbits(64))
     trace_hex = format(int(trace_id), "016x")
     parent_hex = format(int(parent_id), "016x")
     return {

@@ -44,6 +44,8 @@ Directory layout (since 2026-09-06):
   `file.py:line`。排错时**先读这个**，再去读契约文档。
 - [Type Checking](current/typing.md) - pyright 逐文件 ratchet：为什么是 ratchet、
   如何安装与运行、修一条类型错误的首选写法。
+- [Randomness](current/randomness.md) - `random` vs `secrets` 的判据、已复核调用点与
+  新增敏感标识时的约定。
 
 ## Release notes（docs/releases/，一个发布标签一份，不回写）
 

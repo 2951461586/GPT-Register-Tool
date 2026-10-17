@@ -23,6 +23,7 @@ from __future__ import annotations
 import os
 import random
 import re
+import secrets
 import string
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Mapping
@@ -371,10 +372,14 @@ def _random_session_id(length: int, *, digits_only: bool = False, avoid: str = "
     The collision is resolved deterministically by stepping the last symbol
     forward in the alphabet rather than re-rolling, so a caller can rely on
     "rotated" actually meaning rotated.
+
+    ``secrets`` (not ``random``) because the id selects a sticky egress session:
+    a predictable value lets someone else force a shared IP, which is the same
+    class of failure the ``avoid`` rule above exists to prevent.
     """
     alphabet = string.digits if digits_only else (string.ascii_letters + string.digits)
     size = max(1, int(length or 8))
-    value = "".join(random.choice(alphabet) for _ in range(size))
+    value = "".join(secrets.choice(alphabet) for _ in range(size))
     if value != avoid:
         return value
     last = value[-1]
