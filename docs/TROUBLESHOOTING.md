@@ -234,7 +234,7 @@
 7. 🔴 **配置写对了、`--doctor` 也是绿的，但一个号都买不到** ⇒ 先查**价格窗口**。
 
    `phone_reuse` 会把 `max_price` **全局兜底成 `0.06`**（`phone_reuse.py:555` 的 `or "0.06"`），
-   而 `_price_window_refusal()`（`sms_tool/nexsms.py:499`）会拒掉任何高于它的报价。
+   而 `_price_window_refusal()`（`sms_tool/nexsms.py:500`）会拒掉任何高于它的报价。
    **「空值不是边界」** —— 空 `min_price` 确实无下界，但 `max_price` 有默认上界。
 
    ⇒ **换一家供应商时必须重估价格窗口，不能沿用 0.06。** 各家的价差极大，实测 nexsms

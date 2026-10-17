@@ -1,11 +1,11 @@
 {
   "delayed_cross_dir_edges": 188,
-  "minority_edges": 56,
+  "minority_edges": 54,
   "mutual_pairs": 11,
   "ordered_pairs": 29,
   "pairs": {
     "sms_tool -> sms_tool/accounts": 5,
-    "sms_tool -> sms_tool/auth_flow": 4,
+    "sms_tool -> sms_tool/auth_flow": 2,
     "sms_tool -> sms_tool/commands": 9,
     "sms_tool -> sms_tool/geo": 6,
     "sms_tool -> sms_tool/pay_link": 2,
@@ -18,7 +18,7 @@
     "sms_tool -> sms_tool/upi_link": 1,
     "sms_tool/accounts -> sms_tool": 57,
     "sms_tool/accounts -> sms_tool/providers": 1,
-    "sms_tool/auth_flow -> sms_tool": 10,
+    "sms_tool/auth_flow -> sms_tool": 11,
     "sms_tool/cli_parsers -> sms_tool": 2,
     "sms_tool/cli_parsers -> sms_tool/registration_drivers": 1,
     "sms_tool/commands -> sms_tool": 14,
@@ -34,5 +34,5 @@
     "sms_tool/upi_link -> sms_tool": 23,
     "sms_tool/upi_link -> sms_tool/geo": 1
   },
-  "total_module_edges": 277
+  "total_module_edges": 276
 }

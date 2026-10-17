@@ -13,11 +13,28 @@ from __future__ import annotations
 import json
 import logging
 from typing import Mapping
-from urllib.parse import parse_qs, quote, urlencode, urlparse
+from urllib.parse import parse_qs, urlencode, urlparse
 
+# Deliberate re-exports (ADR-0009 facade pattern): ``steps`` stays the public
+# surface for these names while ``auth_wire`` owns the implementation, so F401
+# is suppressed here rather than deleting imports that other modules read.
+from ..auth_wire import (  # noqa: F401
+    LOGIN_EMAIL_OTP_SUBJECT_KEYWORD,
+    _auth_request_headers,
+    _invalid_state_auth_response,
+    _is_existing_login_redirect,
+    _with_query_param,
+)
 from . import deps
 
 logger = logging.getLogger(__name__)
+
+#: The names imported from ``auth_wire`` above are re-exported here on purpose:
+#: ``auth_flow/__init__.py`` and ``sms_tool.auth_flow.steps`` remain the public
+#: surface, so a caller or test that reaches ``steps._with_query_param`` keeps
+#: working. ``auth_wire`` is the inward contract module that removes the
+#: ``sms_tool -> sms_tool/auth_flow`` minority-direction import edge for the
+#: pure helpers (see its docstring).
 
 _PASSKEY_CLIENT_CAPABILITIES = "11111"
 
@@ -30,19 +47,6 @@ _CC_CAPS = "login_methods"
 #: toggle's mechanism line and the request builder cannot drift.
 _TURB_CC_CAPS = "login_methods chatgpt_login_finalizer_v1"
 _TURB_AUTH_RETURN_TARGET = "chatgpt_home"
-
-
-def _is_existing_login_redirect(url):
-    parsed = urlparse(url or "")
-    host = (parsed.netloc or "").lower()
-    if host and host != "auth.openai.com" and not host.endswith(".auth.openai.com"):
-        return False
-    path = (parsed.path or url or "").lower()
-    if not path:
-        return False
-    # Normalize: strip trailing slashes
-    path = path.rstrip("/")
-    return path in {"/log-in", "/login"} or path.startswith("/log-in/") or path.startswith("/login/")
 
 
 def _is_chatgpt_auth_login_landing(url):
@@ -519,13 +523,6 @@ def _response_next_url(response, base_url):
     return str(getattr(response, "url", "") or "")
 
 
-def _with_query_param(url, key, value):
-    if not value or f"{key}=" in (url or ""):
-        return url
-    sep = "&" if "?" in url else "?"
-    return f"{url}{sep}{key}={quote(str(value), safe='')}"
-
-
 def _ensure_authorize_context(
     url, did, session_logging_id, login_hint, *, screen_hint="", prompt="", locale="", ui_locales=""
 ):
@@ -681,22 +678,6 @@ def _passwordless_signin_attempts():
         {"name": "signup_screen_hint", "screen_hint": "signup", "prompt": ""},
     )
 
-
-def _invalid_state_auth_response(data):
-    if not isinstance(data, dict):
-        return False
-    raw_error = data.get("error")
-    _raw_error: object = raw_error
-    error: dict = _raw_error if isinstance(_raw_error, dict) else {}
-    code = str(error.get("code") or "").strip().lower()
-    message = str(error.get("message") or "").strip().lower()
-    # The rule matches the " is " inside the quoted sentence below, not an
-    # identity operator.
-    # pi-lens-ignore: no-identity-operator-on-literals
-    return code == "invalid_state" or "session is no longer valid" in message
-
-
-LOGIN_EMAIL_OTP_SUBJECT_KEYWORD = "login code"
 
 #: The Sentinel flow the existing-login lane mints its tokens under.  The SO is
 #: flow-bound (``sentinel/client.issue_sentinel_token`` writes ``flow`` into it),

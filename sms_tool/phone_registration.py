@@ -8,7 +8,8 @@ from urllib.parse import quote, urlencode
 
 from curl_cffi import requests as curl_requests
 
-from .auth_flow import _auth_request_headers, _is_existing_login_redirect, _json_or_raw, _with_query_param
+from .auth_wire import _auth_request_headers, _is_existing_login_redirect, _with_query_param
+from .http_utils import _json_or_raw
 from .auth_headers import auth_impersonate, openai_auth_headers, select_auth_fingerprint
 from .config import current_config_data
 from .http_client import request_with_retry

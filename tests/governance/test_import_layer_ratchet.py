@@ -182,8 +182,22 @@ def test_ratchet_holds_for_the_current_tree():
 def test_summary_facts_are_pinned():
     """Pin the decomposition so a silent metric change is caught.
 
-    470 raw directory-level edges decompose into 277 module-scope edges (frozen
+    470 raw directory-level edges decompose into 276 module-scope edges (frozen
     here) plus 188 delayed imports (frozen by ``delayed_import_ratchet.py``).
+
+    276 (was 277) / 54 minority (was 56) on 2026-10-17: the pure auth wire
+    helpers (``_is_existing_login_redirect``, ``_with_query_param``,
+    ``_invalid_state_auth_response``, ``_auth_request_headers`` and the OTP
+    subject constant) moved out of ``auth_flow/steps.py`` into the top-level
+    contract module ``sms_tool/auth_wire.py``. ``otp_strategy`` and
+    ``phone_registration`` now import them (and ``http_utils``'s
+    ``_absolute_url`` / ``_json_or_raw``) directly instead of through the
+    ``auth_flow`` package facade, which drops the
+    ``sms_tool -> sms_tool/auth_flow`` pair 4 -> 2. The pair
+    ``sms_tool/auth_flow -> sms_tool`` grows 10 -> 11 because ``steps`` now
+    imports ``auth_wire``; that is the sanctioned remedy for a
+    minority-direction edge (move the shared helper into a leaf both sides may
+    import), and the totals still fall.
 
     277 (was 287) / 29 pairs (was 31) / 56 minority (was 60) / 188 delayed (was
     187) on 2026-10-17: ``accounts/account_creation.py`` and
@@ -234,10 +248,10 @@ def test_summary_facts_are_pinned():
     """
     totals = ilr.analyze(ROOT).totals()
     assert totals == {
-        "total_module_edges": 277,
+        "total_module_edges": 276,
         "ordered_pairs": 29,
         "mutual_pairs": 11,
-        "minority_edges": 56,
+        "minority_edges": 54,
         "delayed_cross_dir_edges": 188,
     }
 
