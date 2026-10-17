@@ -46,7 +46,6 @@
 from __future__ import annotations
 
 import json
-import hashlib
 import os
 import random
 import re
@@ -57,7 +56,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from threading import Event, RLock, local
 from typing import Any
-from urllib.parse import unquote, urljoin, urlparse
+from urllib.parse import urljoin, urlparse
 
 import requests
 
@@ -73,6 +72,11 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 PROTOCOL_ROOT = SCRIPT_DIR.parent
 if str(PROTOCOL_ROOT) not in sys.path:
     sys.path.insert(0, str(PROTOCOL_ROOT))
+from common.extractor_runtime import (
+    PROXY_COUNTRY_SELECTOR_RE as _PROXY_COUNTRY_SELECTOR_RE,
+    normalize_pre_proxy_url,
+    proxy_chain_key,
+)
 from common.payload_helpers import (
     configured_country,
     format_payment_summary,
@@ -421,19 +425,8 @@ def proxy_key(proxy: str) -> str:
 #: *different* one rather than failing: ``geo-PL`` resolved to ``MX``, not ``PL``.
 #: Rewriting therefore does not prove the exit came out where you asked; the
 #: egress gate or ``resolve_proxy_geo`` has to confirm it.
-_PROXY_COUNTRY_SELECTOR_RE = re.compile(
-    r"(?i)(?P<name>country|region|geo)(?P<separator>[-_=])(?P<value>[a-z]{2}(?:,[a-z]{2})*)"
-)
-
-
-def proxy_chain_key(proxy: str) -> str:
-    """Return a redacted identity that stays stable across country rewrites."""
-    proxy = unquote(normalize_proxy_url(proxy))
-    normalized = _PROXY_COUNTRY_SELECTOR_RE.sub(
-        lambda match: f"{match.group('name')}{match.group('separator')}*",
-        proxy,
-    )
-    return hashlib.sha256(normalized.encode()).hexdigest()[:10] if normalized else ""
+#: ``_PROXY_COUNTRY_SELECTOR_RE`` and ``proxy_chain_key`` now live in
+#: ``common/extractor_runtime.py`` (identical in ideal/twint/blik).
 
 
 def proxy_for_country(proxy: str, country: str) -> str:
@@ -554,15 +547,6 @@ def maybe_check_proxy_geo(checkout_proxy: str, provider_proxy: str) -> None:
             label=proxy_label,
             env_prefix="IDEAL",
         )
-
-
-def normalize_pre_proxy_url(proxy: str) -> str:
-    proxy = str(proxy or "").strip()
-    if not proxy:
-        return ""
-    if "://" not in proxy:
-        proxy = f"socks5h://{proxy}"
-    return normalize_proxy_url(proxy)
 
 
 #: One store per extractor.  It owns the previously module-level

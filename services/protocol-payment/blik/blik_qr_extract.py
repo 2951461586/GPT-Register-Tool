@@ -56,7 +56,6 @@
 from __future__ import annotations
 
 import json
-import hashlib
 import os
 import random
 import re
@@ -67,7 +66,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from threading import Event, RLock, local
 from typing import Any
-from urllib.parse import unquote, urljoin, urlparse
+from urllib.parse import urljoin, urlparse
 
 import requests
 
@@ -83,6 +82,11 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 PROTOCOL_ROOT = SCRIPT_DIR.parent
 if str(PROTOCOL_ROOT) not in sys.path:
     sys.path.insert(0, str(PROTOCOL_ROOT))
+from common.extractor_runtime import (
+    PROXY_COUNTRY_SELECTOR_RE as _PROXY_COUNTRY_SELECTOR_RE,
+    normalize_pre_proxy_url,
+    proxy_chain_key,
+)
 from common.payload_helpers import (
     format_payment_summary,
     infer_processor_entity,
@@ -541,19 +545,8 @@ def proxy_key(proxy: str) -> str:
 #: *different* one rather than failing: ``geo-PL`` resolved to ``MX``, not ``PL``.
 #: Rewriting therefore does not prove the exit came out where you asked; the
 #: egress gate or ``resolve_proxy_geo`` has to confirm it.
-_PROXY_COUNTRY_SELECTOR_RE = re.compile(
-    r"(?i)(?P<name>country|region|geo)(?P<separator>[-_=])(?P<value>[a-z]{2}(?:,[a-z]{2})*)"
-)
-
-
-def proxy_chain_key(proxy: str) -> str:
-    """Return one stable identity for every country derived from a sticky seed."""
-    proxy = unquote(normalize_proxy_url(proxy))
-    normalized = _PROXY_COUNTRY_SELECTOR_RE.sub(
-        lambda match: f"{match.group('name')}{match.group('separator')}*",
-        proxy,
-    )
-    return hashlib.sha256(normalized.encode()).hexdigest()[:10] if normalized else ""
+#: ``_PROXY_COUNTRY_SELECTOR_RE`` and ``proxy_chain_key`` now live in
+#: ``common/extractor_runtime.py`` (identical in ideal/twint/blik).
 
 
 def proxy_for_country(proxy: str, country: str) -> str:
@@ -594,15 +587,6 @@ def log_blik_proxy_chain(proxy_seed: str, checkout_proxy: str, provider_proxy: s
         f"PL checkout={proxy_label(checkout_proxy)}; "
         f"PL Stripe/approve={proxy_label(provider_proxy)}"
     )
-
-
-def normalize_pre_proxy_url(proxy: str) -> str:
-    proxy = str(proxy or "").strip()
-    if not proxy:
-        return ""
-    if "://" not in proxy:
-        proxy = f"socks5h://{proxy}"
-    return normalize_proxy_url(proxy)
 
 
 _proxy_state_store = ProxyStateStore(

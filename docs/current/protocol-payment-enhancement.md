@@ -248,3 +248,29 @@ CLI and batch paths compile the route plan before JIT authentication and pass
 the same object through probes, retries, adapters, and transports. Checkout and
 Approve legacy pools are still accepted, but selection and country-session
 rotation are centralized in the planner.
+
+## 7. Extractor Consolidation (services/protocol-payment)
+
+The seven subprocess extractors were grown by copy-paste; two ratchets now bound
+that duplication and a shared layer absorbs the parts proven provider-neutral:
+
+- `scripts/extractor_parity_report.py` freezes, per file pair, the number of
+  top-level functions that stay AST-identical after provider tokens are erased.
+  It may only go down. Current baseline: `ideal:twint=35`, `ideal:blik=19`,
+  `twint:blik=16`, `momo:kakao=0` (momo/kakao is the negative control).
+- `scripts/provider_decoupling_ratchet.py` freezes, per provider file, how many
+  same-named definitions delegate to `common/` versus diverge from it. Current
+  state: 209 delegating, 0 verbatim copies, 27 deliberate forks.
+- `common/extractor_runtime.py` owns the provider-neutral runtime helpers:
+  `normalize_pre_proxy_url`, `proxy_chain_key` and the country-selector regex.
+  iDEAL/TWINT/BLIK import them instead of carrying a copy.
+
+What deliberately stays per-extractor: anything that resolves a
+provider-specific value (`payment_accept_language`, `saved_payment_value`,
+`stripe_*`, `set_proxy` with its own redaction registry). Rule 19 in
+`docs/architecture.md` records the same-name forks, including kakao's
+`proxy_chain_key`, which strips a trailing country code from the sid and must
+not be converged. A full parameterized engine is still gated on the differential
+replay required by
+`docs/audits/plans/plan-2026-09-17-protocol-payment-extractor-consolidation.md`.
+

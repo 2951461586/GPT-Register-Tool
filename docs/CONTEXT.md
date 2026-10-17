@@ -17,6 +17,10 @@
 - **Payment batch**: a resumable cohort execution with per-account terminal results.
 - **Payment capability probe**: a side-effect-limited Checkout and Stripe-init
   observation that lists offered methods without creating or confirming one.
+- **Extractor runtime**: provider-neutral helpers shared by the protocol-payment
+  QR extractors — pre-proxy normalization and the sticky proxy-chain key. Owned
+  by `services/protocol-payment/common/extractor_runtime.py`; anything that reads
+  a provider env var, locale, or constant stays in its extractor (Rule 19).
 
 ## Ownership Rules
 

@@ -172,12 +172,12 @@ def test_ratchet_holds_for_the_current_tree():
 
 
 def test_summary_facts_are_pinned():
-    """235 same-named defs: 209 already migrated, 0 verbatim copies, 26 forks."""
+    """236 same-named defs: 209 already migrated, 0 verbatim copies, 27 forks."""
     assert pdr.analyze(ROOT).summary() == {
-        "same_named_total": 235,
+        "same_named_total": 236,
         pdr.DELEGATING: 209,
         pdr.IDENTICAL: 0,
-        pdr.DIVERGENT: 26,
+        pdr.DIVERGENT: 27,
         "files_with_frozen_pairs": 7,
     }
 
