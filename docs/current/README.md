@@ -12,6 +12,7 @@ below so existing links do not break:
 - [`registration-ab-runbook.md`](registration-ab-runbook.md) - P0-1/P0-2/P1-3 线上受控对照的操作与判定 runbook
 - [`configuration.md`](configuration.md) - 配置分片优先级与迁移约定
 - [`telemetry-and-runtime.md`](telemetry-and-runtime.md) - 日志关联、测试隔离与只读清理清单
+- [`typing.md`](typing.md) - pyright 类型门禁（逐文件 ratchet）的安装、运行与修复约定
 - [`account-health.md`](account-health.md) - 测活、恢复、优惠检查的副作用与代理契约
 - [`mailbox.md`](mailbox.md) - 邮箱 provider 能力、配置注入、轮询和终止错误契约
 - [`one-click-sms.md`](one-click-sms.md) - 一键接码供应商、租号与持久化当前契约

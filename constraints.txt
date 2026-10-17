@@ -40,3 +40,7 @@ qrcode==8.2
 nodriver==0.50.3
 pytest==9.1.1
 pytest-cov==7.1.0
+# Type checker for scripts/pyright_ratchet.py. Declared in requirements-dev.txt
+# (never imported by source), pinned here so the gate cannot drift when a new
+# pyright release changes its diagnostic set.
+pyright==1.1.414

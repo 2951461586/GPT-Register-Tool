@@ -52,6 +52,7 @@ DOCS = (
     "docs/current/protocol-registration.md",
     "docs/current/registration-recovery.md",
     "docs/current/telemetry-and-runtime.md",
+    "docs/current/typing.md",
     "docs/adr/README.md",
     "docs/adr/0001-provider-layout.md",
     "docs/adr/0002-storage-events.md",

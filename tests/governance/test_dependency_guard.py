@@ -79,6 +79,11 @@ DECLARED_NOT_IMPORTED: dict[str, str] = {
     ),
     "pytest": "test runner, invoked as `pytest`, never imported by source.",
     "pytest-cov": "pytest plugin, selected with --cov on the command line.",
+    "pyright": (
+        "type checker invoked as a subprocess by scripts/pyright_ratchet.py "
+        "(`python -m pyright --outputjson`). Never imported by source; declared in "
+        "requirements-dev.txt so the ratchet gate can actually run in CI."
+    ),
     # IANA timezone database. Windows ships none, and Python's ``zoneinfo`` needs
     # it installed to construct *any* IANA key. We never `import tzdata` directly
     # (it is a data package consumed by ``zoneinfo``), so it looks "unused" to a

@@ -42,6 +42,8 @@ Directory layout (since 2026-09-06):
 - [Troubleshooting](TROUBLESHOOTING.md) - 故障 → 编号检查清单（先跑
   `python -m sms_tool --doctor`）。每条清单按顺序可执行，并指向负责该行为的
   `file.py:line`。排错时**先读这个**，再去读契约文档。
+- [Type Checking](current/typing.md) - pyright 逐文件 ratchet：为什么是 ratchet、
+  如何安装与运行、修一条类型错误的首选写法。
 
 ## Release notes（docs/releases/，一个发布标签一份，不回写）
 
