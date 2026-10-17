@@ -99,8 +99,8 @@ def obtain_oauth_refresh_token(self) -> None:
             "error": r._sanitize_text(exc),
         }
     if s.oauth_result.get("ok"):
-        tokens = s.oauth_result.get("tokens")
-        tokens = tokens if isinstance(tokens, dict) else {}
+        _raw_tokens: object = s.oauth_result.get("tokens")
+        tokens = _raw_tokens if isinstance(_raw_tokens, dict) else {}
         # Only the refresh token is taken.  The Codex OAuth access token is
         # scoped to the Codex client, so it is *not* a substitute for this
         # run's ChatGPT web AT -- the one just probed, and the one the

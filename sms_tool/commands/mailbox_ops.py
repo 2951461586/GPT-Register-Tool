@@ -64,7 +64,8 @@ def view_inbox(args: Any, ctx: MailboxCommandContext) -> None:
                 and refreshed_mailbox_token
                 and refreshed_mailbox_token != original_mailbox_token
             ):
-                mailbox_data = data.get("mailbox") if isinstance(data.get("mailbox"), dict) else {}
+                _raw_mailbox_data: object = data.get("mailbox")
+                mailbox_data: dict = _raw_mailbox_data if isinstance(_raw_mailbox_data, dict) else {}
                 mailbox_data.update({
                     "email": mailbox.email,
                     "provider": "remail",

@@ -7,6 +7,7 @@ from .codex_oauth import select_workspace_by_cookie
 from .http_client import is_transient_transport_error
 from .k12_client import _fetch_auth_session_from_cookie
 from .k12_identity import _extract_account_id_from_data, _extract_access_token, _token_account_id
+from typing import Any
 
 
 WORKSPACE_DISABLED_MARKERS = (
@@ -58,7 +59,8 @@ def inspect_workspace(
     """
     if not enabled:
         return {"ok": True, "status": "workspace_check_disabled"}
-    account = data if isinstance(data, dict) else {}
+    _raw_account: object = data
+    account: dict = _raw_account if isinstance(_raw_account, dict) else {}
     now = int(time.time())
     token_workspace_id = _token_account_id(_extract_access_token(account))
     account_type_before = _account_type(account)
@@ -87,7 +89,8 @@ def inspect_workspace(
     result["actual_workspace_id"] = actual
     result["actual_workspace_name"] = str(fetch_result.get("actual_workspace_name") or "")
     result["workspace_name"] = str(fetch_result.get("actual_workspace_name") or "")
-    available_workspaces = fetch_result.get("available_workspaces") if isinstance(fetch_result.get("available_workspaces"), list) else []
+    _raw_available_workspaces: object = fetch_result.get("available_workspaces")
+    available_workspaces: list = _raw_available_workspaces if isinstance(_raw_available_workspaces, list) else []
     if available_workspaces:
         result["available_workspaces"] = available_workspaces
     if fetch_result.get("ok"):
@@ -452,7 +455,7 @@ def _public_workspace_result(result):
     return output
 
 
-def _safe_public(value):
+def _safe_public(value) -> Any:
     if isinstance(value, dict):
         output = {}
         for key, item in value.items():

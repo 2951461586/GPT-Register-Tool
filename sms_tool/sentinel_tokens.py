@@ -148,7 +148,8 @@ def _sentinel_device_id(sentinel_data):
 def assert_sentinel_device_id(sentinel_data, device_id: str) -> str:
     """Validate every Sentinel token and cookie identity before auth requests."""
     expected = str(device_id or "").strip()
-    data = sentinel_data if isinstance(sentinel_data, dict) else {}
+    _raw_data: object = sentinel_data
+    data: dict = _raw_data if isinstance(_raw_data, dict) else {}
     actual = str(data.get("oai_did") or "").strip()
     if expected and actual and expected != actual:
         raise ValueError("sentinel_extract_failed: oai-did does not match Sentinel device id")
@@ -360,7 +361,8 @@ def _extract_sentinel_http(proxy=None, persist=True, device_id=None):
 
 
 def _sentinel_mode():
-    cfg = CFG.get("email_registration") if isinstance(CFG.get("email_registration"), dict) else {}
+    _raw_cfg: object = CFG.get("email_registration")
+    cfg: dict = _raw_cfg if isinstance(_raw_cfg, dict) else {}
     raw = (
         str(cfg.get("sentinel_mode") or cfg.get("sentinel_provider") or CFG.get("sentinel_mode") or "auto")
         .strip()
@@ -382,14 +384,16 @@ def _quickjs_enabled():
 
 
 def _http_fallback_enabled() -> bool:
-    cfg = CFG.get("email_registration") if isinstance(CFG.get("email_registration"), dict) else {}
+    _raw_cfg: object = CFG.get("email_registration")
+    cfg: dict = _raw_cfg if isinstance(_raw_cfg, dict) else {}
     value = cfg.get("sentinel_allow_http_fallback")
     # Strict boolean: a truthy string must not enable the fallback.
     return isinstance(value, bool) and value
 
 
 def _sentinel_max_concurrency():
-    cfg = CFG.get("email_registration") if isinstance(CFG.get("email_registration"), dict) else {}
+    _raw_cfg: object = CFG.get("email_registration")
+    cfg: dict = _raw_cfg if isinstance(_raw_cfg, dict) else {}
     try:
         value = int(cfg.get("sentinel_max_concurrency", 2) or 2)
     except (TypeError, ValueError):
@@ -398,7 +402,8 @@ def _sentinel_max_concurrency():
 
 
 def _sentinel_circuit_config() -> tuple[int, int]:
-    cfg = CFG.get("email_registration") if isinstance(CFG.get("email_registration"), dict) else {}
+    _raw_cfg: object = CFG.get("email_registration")
+    cfg: dict = _raw_cfg if isinstance(_raw_cfg, dict) else {}
     try:
         failures = max(1, min(int(cfg.get("sentinel_circuit_failures") or 3), 20))
     except (TypeError, ValueError):
@@ -545,7 +550,7 @@ def _extract_sentinel_uncached(proxy=None, persist=True, browser_headless: bool 
 def _extract_sentinel(
     proxy=None, force_fresh=False, persist=True, browser_headless: bool | None = None, device_id=None
 ):
-    proxy = normalize_proxy_url(proxy) or None
+    proxy = normalize_proxy_url(proxy or "") or None
     cached = _get_cached_sentinel(force_fresh=force_fresh)
     if cached:
         return cached

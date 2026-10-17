@@ -110,9 +110,10 @@ def enqueue_post_registration_checks(
     email = str(account.get("email") or "").strip().lower()
     if not email or not account.get("success"):
         return []
-    root = config if isinstance(config, Mapping) else {}
-    health = root.get("account_health")
-    health = health if isinstance(health, Mapping) else {}
+    _raw_root: object = config
+    root: Mapping = _raw_root if isinstance(_raw_root, Mapping) else {}
+    _raw_health: object = root.get("account_health")
+    health = _raw_health if isinstance(_raw_health, Mapping) else {}
     enabled = _as_bool(health.get("post_registration_enabled", True))
     if not enabled:
         return []
@@ -341,7 +342,8 @@ def _handle_job(job: dict[str, Any]) -> AccountHealthResult:
             proxy=proxy,
         )
         item = _single_report_item(report, email)
-        probe = item.get("probe") if isinstance(item.get("probe"), Mapping) else {}
+        _raw_probe: object = item.get("probe")
+        probe: Mapping = _raw_probe if isinstance(_raw_probe, Mapping) else {}
         if not probe:
             probe = {
                 "ok": False,
@@ -367,8 +369,10 @@ def _handle_job(job: dict[str, Any]) -> AccountHealthResult:
         account_timeout=budgets["account_timeout"],
     )
     item = _single_report_item(report, email)
-    initial = item.get("probe") if isinstance(item.get("probe"), Mapping) else {}
-    recovery = item.get("relogin") if isinstance(item.get("relogin"), Mapping) else {}
+    _raw_initial: object = item.get("probe")
+    initial: Mapping = _raw_initial if isinstance(_raw_initial, Mapping) else {}
+    _raw_recovery: object = item.get("relogin")
+    recovery: Mapping = _raw_recovery if isinstance(_raw_recovery, Mapping) else {}
     # The batch workflow replaces ``probe`` with the verified post-recovery
     # observation on success. Preserve both meanings in the unified contract.
     final = dict(initial)

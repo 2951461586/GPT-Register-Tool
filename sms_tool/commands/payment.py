@@ -44,7 +44,8 @@ class PaymentCommandContext:
 
 
 def protocol_proxy_pool(config: Mapping[str, Any]) -> list[str]:
-    protocol = config.get("protocol_payments") if isinstance(config.get("protocol_payments"), dict) else {}
+    _raw_protocol: object = config.get("protocol_payments")
+    protocol: dict = _raw_protocol if isinstance(_raw_protocol, dict) else {}
     configured = protocol.get("proxy_pool") or []
     return parse_proxy_pool(configured)
 
@@ -92,14 +93,14 @@ def payment_country(payment_method: str, explicit: str = "") -> str:
     try:
         from ..config import CFG
 
-        protocol = CFG.get("protocol_payments") if isinstance(CFG.get("protocol_payments"), Mapping) else {}
-        methods = protocol.get("methods") if isinstance(protocol.get("methods"), Mapping) else {}
-        configured = methods.get(method) if isinstance(methods.get(method), Mapping) else {}
-        countries = (
-            configured.get("stage_proxy_countries")
-            if isinstance(configured.get("stage_proxy_countries"), Mapping)
-            else {}
-        )
+        _raw_protocol: object = CFG.get("protocol_payments")
+        protocol: Mapping = _raw_protocol if isinstance(_raw_protocol, Mapping) else {}
+        _raw_methods: object = protocol.get("methods")
+        methods: Mapping = _raw_methods if isinstance(_raw_methods, Mapping) else {}
+        _raw_configured: object = methods.get(method)
+        configured: Mapping = _raw_configured if isinstance(_raw_configured, Mapping) else {}
+        _raw_countries: object = configured.get("stage_proxy_countries")
+        countries: Mapping = _raw_countries if isinstance(_raw_countries, Mapping) else {}
         canonical = str(countries.get("checkout") or configured.get("checkout_country") or "").strip().upper()
         if canonical:
             return canonical
@@ -250,7 +251,8 @@ def stage_country_overrides(
     if config is not None:
         method_cfg, _ = _method_payment_config(config, method)
         value = method_cfg.get("stage_proxy_countries")
-        configured = value if isinstance(value, Mapping) else {}
+        _raw_configured: object = value
+        configured: Mapping = _raw_configured if isinstance(_raw_configured, Mapping) else {}
 
     countries = {
         str(key or "").strip().lower(): str(value or "").strip().upper()
@@ -289,8 +291,8 @@ def resolve_payment_route(
     target_country = context.payment_country(payment_method, getattr(args, "target_country", ""))
     checkout_country = str(getattr(args, "checkout_country", "") or target_country).strip().upper()
     promotion_proxy = context.promotion_proxy_arg(args, payment_method)
-    configured_pools = context.payment_proxy_pools(payment_method) if callable(context.payment_proxy_pools) else {}
-    configured_pools = configured_pools if isinstance(configured_pools, Mapping) else {}
+    _raw_configured_pools: object = context.payment_proxy_pools(payment_method) if callable(context.payment_proxy_pools) else {}
+    configured_pools = _raw_configured_pools if isinstance(_raw_configured_pools, Mapping) else {}
     explicit_checkout_route = any(
         str(getattr(args, name, None) or "").strip()
         for name in ("checkout_proxy", "provider_proxy", "stripe_init_proxy", "payment_method_proxy", "confirm_proxy")
@@ -306,7 +308,8 @@ def resolve_payment_route(
     }
 
     source = dict(context.runtime_config or {})
-    protocol = source.get("protocol_payments") if isinstance(source.get("protocol_payments"), Mapping) else {}
+    _raw_protocol: object = source.get("protocol_payments")
+    protocol: Mapping = _raw_protocol if isinstance(_raw_protocol, Mapping) else {}
     source["protocol_payments"] = {**dict(protocol), "proxy_pool": context.protocol_proxy_pool()}
     options: dict[str, Any] = {
         "target_country": target_country,
@@ -509,8 +512,8 @@ def test_payment_proxies(args: Any, context: PaymentCommandContext) -> None:
     countries = {} if getattr(args, "auto_proxy_country", False) else context.stage_country_overrides(args, method)
     default_country = context.payment_country(method, getattr(args, "target_country", ""))
     pool = context.protocol_proxy_pool()
-    configured_pools = context.payment_proxy_pools(method) if callable(context.payment_proxy_pools) else {}
-    configured_pools = configured_pools if isinstance(configured_pools, Mapping) else {}
+    _raw_configured_pools: object = context.payment_proxy_pools(method) if callable(context.payment_proxy_pools) else {}
+    configured_pools = _raw_configured_pools if isinstance(_raw_configured_pools, Mapping) else {}
     stage_pools = {
         "checkout": parse_proxy_pool(getattr(args, "checkout_proxy_pool", None))
         or parse_proxy_pool(configured_pools.get("checkout")),
@@ -649,7 +652,8 @@ def extract_payment_link(args: Any, context: PaymentCommandContext) -> None:
         if token_map_file:
             try:
                 loaded = json.loads(Path(token_map_file).read_text(encoding="utf-8-sig"))
-                token_map = loaded if isinstance(loaded, dict) else {}
+                _raw_token_map: object = loaded
+                token_map: dict = _raw_token_map if isinstance(_raw_token_map, dict) else {}
             except (OSError, ValueError, TypeError):
                 token_map = {}
         route = selected_route()

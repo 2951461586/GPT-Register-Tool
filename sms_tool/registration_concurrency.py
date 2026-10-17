@@ -219,8 +219,10 @@ def registration_stage_group(stage: str) -> str:
 
 
 def _stage_cap(group: str) -> int:
-    registration = CFG.get("registration") if isinstance(CFG.get("registration"), dict) else {}
-    values = registration.get("stage_concurrency") if isinstance(registration.get("stage_concurrency"), dict) else {}
+    _raw_registration: object = CFG.get("registration")
+    registration: dict = _raw_registration if isinstance(_raw_registration, dict) else {}
+    _raw_values: object = registration.get("stage_concurrency")
+    values: dict = _raw_values if isinstance(_raw_values, dict) else {}
     default = _DEFAULT_CAPS.get(group, 4)
     try:
         return max(1, min(int(values.get(group) or default), 20))
@@ -229,8 +231,10 @@ def _stage_cap(group: str) -> int:
 
 
 def _stage_concurrency_cfg() -> dict[str, Any]:
-    registration = CFG.get("registration") if isinstance(CFG.get("registration"), dict) else {}
-    values = registration.get("stage_concurrency") if isinstance(registration.get("stage_concurrency"), dict) else {}
+    _raw_registration: object = CFG.get("registration")
+    registration: dict = _raw_registration if isinstance(_raw_registration, dict) else {}
+    _raw_values: object = registration.get("stage_concurrency")
+    values: dict = _raw_values if isinstance(_raw_values, dict) else {}
     return values if isinstance(values, dict) else {}
 
 

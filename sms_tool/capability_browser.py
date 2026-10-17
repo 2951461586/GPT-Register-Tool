@@ -119,7 +119,8 @@ class BrowserCapabilityTransport:
 
         from .upi_link.browser import _upi_browser_proxy
 
-        context = auth_context if isinstance(auth_context, dict) else {}
+        _raw_context: object = auth_context
+        context: dict = _raw_context if isinstance(_raw_context, dict) else {}
         cookie_header = str(context.get("cookie_header") or "")
         device_id = str(context.get("device_id") or context.get("oai_did") or "").strip()
         fingerprint = self.fingerprint

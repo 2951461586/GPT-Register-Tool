@@ -440,7 +440,8 @@ def _auth_fingerprint_config():
     try:
         from .config import CFG
 
-        email_cfg = CFG.get("email_registration") if isinstance(CFG.get("email_registration"), dict) else {}
+        _raw_email_cfg: object = CFG.get("email_registration")
+        email_cfg: dict = _raw_email_cfg if isinstance(_raw_email_cfg, dict) else {}
         value = email_cfg.get("auth_fingerprint") or CFG.get("auth_fingerprint") or {}
         return value if isinstance(value, dict) else {"profile": value}
     except Exception:

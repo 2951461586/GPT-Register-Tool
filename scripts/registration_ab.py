@@ -967,8 +967,8 @@ def read_toggles(config_path: Path | None) -> dict[str, Any]:
         # Fail closed: without a snapshot the manipulation check cannot pass, so
         # ``compare`` refuses the verdict as ``unverified`` rather than crashing.
         return {}
-    registration = payload.get("registration") if isinstance(payload, Mapping) else None
-    registration = registration if isinstance(registration, Mapping) else {}
+    _raw_registration: object = payload.get("registration") if isinstance(payload, Mapping) else None
+    registration = _raw_registration if isinstance(_raw_registration, Mapping) else {}
     return {f"registration.{key}": registration[key] for key in _registration_toggle_keys() if key in registration}
 
 
@@ -1080,8 +1080,10 @@ def _new_failure_class_keys(default: Mapping[str, Any] | None, candidate: Mappin
     a class the control never produced means the treatment opened a new way to
     fail, which no success-rate delta can justify.
     """
-    before = default if isinstance(default, Mapping) else {}
-    after = candidate if isinstance(candidate, Mapping) else {}
+    _raw_before: object = default
+    before: Mapping = _raw_before if isinstance(_raw_before, Mapping) else {}
+    _raw_after: object = candidate
+    after: Mapping = _raw_after if isinstance(_raw_after, Mapping) else {}
     return {
         str(key): _class_count(after, str(key))
         for key in sorted(after)
@@ -1179,7 +1181,8 @@ def compare_records(records: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
         arm = str(row.get("arm"))
         preflight = row.get("preflight") or {}
         funnel = row.get("funnel")
-        funnel_map = funnel if isinstance(funnel, Mapping) else {}
+        _raw_funnel_map: object = funnel
+        funnel_map: Mapping = _raw_funnel_map if isinstance(_raw_funnel_map, Mapping) else {}
         edge = funnel_map.get("edge_challenge")
         edge = edge if isinstance(edge, Mapping) else None
         attempted = funnel_map.get("attempted") if isinstance(funnel, Mapping) else None
@@ -1521,8 +1524,10 @@ def _sentinel_failure_growth(
     default: Mapping[str, Any] | None, bundle: Mapping[str, Any] | None
 ) -> dict[str, tuple[int, int]]:
     """Failure classes whose count grew in the bundle arm. Pure."""
-    left = default if isinstance(default, Mapping) else {}
-    right = bundle if isinstance(bundle, Mapping) else {}
+    _raw_left: object = default
+    left: Mapping = _raw_left if isinstance(_raw_left, Mapping) else {}
+    _raw_right: object = bundle
+    right: Mapping = _raw_right if isinstance(_raw_right, Mapping) else {}
     grown: dict[str, tuple[int, int]] = {}
     for key in set(left) | set(right):
         if "sentinel" not in str(key).lower():

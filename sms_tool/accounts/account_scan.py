@@ -228,7 +228,8 @@ def _scan_one(
         return result
 
     token_probe = _probe_existing_access_token(data, proxy=proxy, timeout=timeout)
-    auth_session = data.get("auth_session") if isinstance(data.get("auth_session"), dict) else {}
+    _raw_auth_session: object = data.get("auth_session")
+    auth_session: dict = _raw_auth_session if isinstance(_raw_auth_session, dict) else {}
     refresh_token = _openai_refresh_token(data, auth_session)
     had_rt = bool(refresh_token)
     had_phone = _has_verified_phone(data)
@@ -316,7 +317,8 @@ def _scan_one(
         return result
 
     if oauth_result.get("ok"):
-        tokens = oauth_result.get("tokens") if isinstance(oauth_result.get("tokens"), dict) else {}
+        _raw_tokens: object = oauth_result.get("tokens")
+        tokens: dict = _raw_tokens if isinstance(_raw_tokens, dict) else {}
         if tokens:
             data["access_token"] = str(tokens.get("access_token") or data.get("access_token") or "").strip()
             data["id_token"] = str(tokens.get("id_token") or data.get("id_token") or "").strip()
@@ -458,7 +460,8 @@ def _persist_scan(data: dict[str, Any] | None, json_path: str, result: dict[str,
     updated["account_scan_updated_at"] = now
     updated["account_scan"] = _public_scan_result(result)
     updated["account_scan_overview"] = _scan_overview(result)
-    workspace = result.get("workspace") if isinstance(result.get("workspace"), dict) else {}
+    _raw_workspace: object = result.get("workspace")
+    workspace: dict = _raw_workspace if isinstance(_raw_workspace, dict) else {}
     if workspace:
         is_free_workspace = str(workspace.get("account_type_after") or "").strip().lower() == "free"
         updated["workspace_scan"] = workspace
@@ -693,7 +696,8 @@ def _jwt_plan_type(token):
 def _at_status_label(result, refresh_result=None, oauth_result=None):
     refresh_ok = bool((refresh_result or {}).get("ok"))
     oauth_ok = bool((oauth_result or {}).get("ok"))
-    token_probe = (result or {}).get("token_probe") if isinstance((result or {}).get("token_probe"), dict) else {}
+    _raw_token_probe: object = (result or {}).get("token_probe")
+    token_probe: dict = _raw_token_probe if isinstance(_raw_token_probe, dict) else {}
     scan_status = str((result or {}).get("scan_status") or "").strip()
     if scan_status == "account_deactivated":
         return "AT失效"
@@ -708,7 +712,8 @@ def _public_oauth_result(result):
     if not isinstance(result, dict):
         return {}
     output = {key: value for key, value in result.items() if key != "tokens"}
-    tokens = result.get("tokens") if isinstance(result.get("tokens"), dict) else {}
+    _raw_tokens: object = result.get("tokens")
+    tokens: dict = _raw_tokens if isinstance(_raw_tokens, dict) else {}
     if tokens:
         output["has_access_token"] = bool(tokens.get("access_token"))
         output["has_refresh_token"] = bool(tokens.get("refresh_token"))
@@ -829,8 +834,10 @@ def _refresh_quota_after_scan(results, workers=4, timeout=120, proxy=None, relog
 
 def _has_verified_phone(data):
     phone = str((data or {}).get("phone") or (data or {}).get("phone_number") or "").strip()
-    response = (data or {}).get("response") if isinstance((data or {}).get("response"), dict) else {}
-    phone_verification = response.get("phone_verification") if isinstance(response.get("phone_verification"), dict) else {}
+    _raw_response: object = (data or {}).get("response")
+    response: dict = _raw_response if isinstance(_raw_response, dict) else {}
+    _raw_phone_verification: object = response.get("phone_verification")
+    phone_verification: dict = _raw_phone_verification if isinstance(_raw_phone_verification, dict) else {}
     return bool(phone) or bool(phone_verification.get("ok") and phone_verification.get("phone"))
 
 
@@ -839,7 +846,8 @@ def _looks_phone_required(result):
         return False
     if result.get("phone_verification_required"):
         return True
-    phone_attempt = result.get("phone_attempt") if isinstance(result.get("phone_attempt"), dict) else {}
+    _raw_phone_attempt: object = result.get("phone_attempt")
+    phone_attempt: dict = _raw_phone_attempt if isinstance(_raw_phone_attempt, dict) else {}
     text = " ".join(
         str(value or "")
         for value in (
@@ -923,7 +931,8 @@ def _normalize_relogin_mode(value):
 def _oauth_error(result):
     if not isinstance(result, dict):
         return str(result or "unknown")
-    phone_attempt = result.get("phone_attempt") if isinstance(result.get("phone_attempt"), dict) else {}
+    _raw_phone_attempt: object = result.get("phone_attempt")
+    phone_attempt: dict = _raw_phone_attempt if isinstance(_raw_phone_attempt, dict) else {}
     for value in (
         result.get("error"),
         phone_attempt.get("error"),

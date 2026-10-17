@@ -168,8 +168,8 @@ def resolve_payment(config: Mapping[str, Any] | None, *, method: str = "paypal")
     otherwise the legacy ``protocol_payments.proxy_pools`` names are used and
     the method's stage pools are resolved through ``payment_routing``.
     """
-    protocol = config.get("protocol_payments") if isinstance(config, Mapping) else None
-    protocol = protocol if isinstance(protocol, Mapping) else {}
+    _raw_protocol: object = config.get("protocol_payments") if isinstance(config, Mapping) else None
+    protocol = _raw_protocol if isinstance(_raw_protocol, Mapping) else {}
     cfg: Mapping[str, Any] = config if isinstance(config, Mapping) else {}
     regions: dict[str, list[str]] = (
         {

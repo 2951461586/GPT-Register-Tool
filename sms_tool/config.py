@@ -261,12 +261,12 @@ def validate_registration_driver_config(
     if selected == "protocol":
         return selected
 
-    registration = config.get("registration")
-    registration = registration if isinstance(registration, Mapping) else {}
-    drivers = registration.get("drivers")
-    drivers = drivers if isinstance(drivers, Mapping) else {}
-    selected_config = drivers.get(selected)
-    selected_config = selected_config if isinstance(selected_config, Mapping) else {}
+    _raw_registration: object = config.get("registration")
+    registration = _raw_registration if isinstance(_raw_registration, Mapping) else {}
+    _raw_drivers: object = registration.get("drivers")
+    drivers = _raw_drivers if isinstance(_raw_drivers, Mapping) else {}
+    _raw_selected_config: object = drivers.get(selected)
+    selected_config = _raw_selected_config if isinstance(_raw_selected_config, Mapping) else {}
     # Use the same environment-overlay logic as the runtime session factory so
     # preflight does not reject a driver whose credentials live in deployment
     # environment variables.

@@ -139,10 +139,10 @@ def _explicit_passwordless_send(self: Any) -> Any:
         impersonate=r.auth_impersonate(),
         attempts=1,
     )
-    body = r._json_or_raw(response)
-    body = body if isinstance(body, MappingABC) else {}
-    session_state = body.get("oai-client-auth-session")
-    session_state = session_state if isinstance(session_state, MappingABC) else {}
+    _raw_body: object = r._json_or_raw(response)
+    body = _raw_body if isinstance(_raw_body, MappingABC) else {}
+    _raw_session_state: object = body.get("oai-client-auth-session")
+    session_state = _raw_session_state if isinstance(_raw_session_state, MappingABC) else {}
     pending = session_state.get("passwordless_email_otp_send_pending")
     mode = str(session_state.get("email_verification_mode") or "")
     _emit(
@@ -334,8 +334,8 @@ def _external_url_after_otp(otp_data: Any) -> str:
     """
     if not isinstance(otp_data, MappingABC):
         return ""
-    page = otp_data.get("page")
-    page = page if isinstance(page, MappingABC) else {}
+    _raw_page: object = otp_data.get("page")
+    page = _raw_page if isinstance(_raw_page, MappingABC) else {}
     page_type = str(page.get("type") or otp_data.get("page_type") or "").strip().lower()
     target = str(
         otp_data.get("continue_url")

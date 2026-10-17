@@ -323,7 +323,8 @@ def check_registered_promotions(emails, workers=4, proxy=None, timeout=20, proxy
         logger.warning("promotion check failed: %s", report["error"])
         return report
 
-    results = report.get("results") if isinstance(report.get("results"), list) else []
+    _raw_results: object = report.get("results")
+    results: list = _raw_results if isinstance(_raw_results, list) else []
     # refresh_promotion_statuses owns this count now. It used to be recounted
     # here, which left the other CLI entry point with no such key at all.
     trial_eligible = int(report.get("trial_eligible") or 0)
@@ -538,8 +539,8 @@ def _persist_registration_result_core(
             "import_email": "",
         }
 
-    marker = data.get(_PERSISTENCE_KEY)
-    marker = marker if isinstance(marker, dict) else {}
+    _raw_marker: object = data.get(_PERSISTENCE_KEY)
+    marker = _raw_marker if isinstance(_raw_marker, dict) else {}
     if marker.get("status") == "complete":
         return marker
 
@@ -954,8 +955,10 @@ def run_target_at200(args, base_dir, ctx: RegistrationCommandContext):
             ) or {}
             gained = int(saved.get("success") or 0)
             active += gained
-            quality = saved.get("quality") if isinstance(saved.get("quality"), dict) else {}
-            promotion = saved.get("promotion") if isinstance(saved.get("promotion"), dict) else {}
+            _raw_quality: object = saved.get("quality")
+            quality: dict = _raw_quality if isinstance(_raw_quality, dict) else {}
+            _raw_promotion: object = saved.get("promotion")
+            promotion: dict = _raw_promotion if isinstance(_raw_promotion, dict) else {}
             round_funnels.append(
                 summarize_registration_funnel(
                     results,

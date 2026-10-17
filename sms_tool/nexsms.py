@@ -43,7 +43,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Any, Optional
 
 import requests as _requests
 
@@ -227,7 +227,7 @@ class NexSmsClient:
         """
         if not isinstance(payload, dict):
             raise NexSmsError(f"{fallback}: unexpected reply {str(payload)[:160]!r}")
-        code = payload.get("code")
+        code: Any = payload.get("code")
         try:
             ok = int(code) == 0
         except (TypeError, ValueError):
@@ -244,8 +244,8 @@ class NexSmsClient:
     # -- read-only endpoints ----------------------------------------------
 
     def get_balance(self) -> dict:
-        data = self._unwrap(self._get(PATH_BALANCE), "balance lookup failed")
-        data = data if isinstance(data, dict) else {}
+        _raw_data: object = self._unwrap(self._get(PATH_BALANCE), "balance lookup failed")
+        data = _raw_data if isinstance(_raw_data, dict) else {}
         return {
             "user_id": data.get("userId"),
             "username": str(data.get("username") or ""),
@@ -284,7 +284,7 @@ class NexSmsClient:
         of every country when it is not; both shapes are accepted here so a
         caller cannot be broken by which form it happens to get.
         """
-        params = {"serviceCode": normalize_service(service)}
+        params: dict[str, Any] = {"serviceCode": normalize_service(service)}
         country_code = normalize_country(country)
         if country_code:
             params["countryId"] = _as_country_id(country_code)
@@ -358,8 +358,9 @@ class NexSmsClient:
             ),
             "purchase failed",
         )
-        order = order if isinstance(order, dict) else {}
-        phones = order.get("phoneNumbers")
+        _raw_order: object = order
+        order_map: dict = _raw_order if isinstance(_raw_order, dict) else {}
+        phones = order_map.get("phoneNumbers")
         phone = ""
         if isinstance(phones, list) and phones:
             phone = str(phones[0] or "").strip()
@@ -369,7 +370,7 @@ class NexSmsClient:
             phone=normalize_phone(phone),
             service=service_code,
             country=country_code,
-            price=_format_price(order.get("totalAmount") or price),
+            price=_format_price(order_map.get("totalAmount") or price),
         )
 
     def get_status(self, handle: str) -> dict:

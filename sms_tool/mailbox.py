@@ -63,6 +63,7 @@ from .mailbox_quarantine import filter_quarantined_mailboxes, prune_quarantine_a
 from .providers import mailbox_icloud_url
 from .providers import mailbox_smailr
 from . import mailbox_strategies
+from typing import Any
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -239,7 +240,8 @@ def _remail_enabled():
 
 def _gmail_cfg():
     email_cfg = _email_cfg()
-    gmail_cfg = email_cfg.get("gmail") if isinstance(email_cfg.get("gmail"), dict) else {}
+    _raw_gmail_cfg: object = email_cfg.get("gmail")
+    gmail_cfg: dict = _raw_gmail_cfg if isinstance(_raw_gmail_cfg, dict) else {}
     return gmail_cfg
 
 
@@ -297,7 +299,8 @@ def _configured_mailbox_proxy(runtime_config: ConfigInput = None):
     config = _config_data(runtime_config)
     email_cfg = _email_cfg(runtime_config)
     proxy_value = config.get("proxy")
-    proxy_cfg = proxy_value if isinstance(proxy_value, Mapping) else {}
+    _raw_proxy_cfg: object = proxy_value
+    proxy_cfg: Mapping = _raw_proxy_cfg if isinstance(_raw_proxy_cfg, Mapping) else {}
     return _normalize_mailbox_proxy(
         config.get("mailbox_proxy")
         or email_cfg.get("mailbox_proxy")
@@ -319,7 +322,8 @@ def _mailbox_proxy_candidates(proxy=None, runtime_config: ConfigInput = None):
     """
     config = _config_data(runtime_config)
     email_cfg = _email_cfg(runtime_config)
-    proxy_cfg = config.get("proxy") if isinstance(config.get("proxy"), Mapping) else {}
+    _raw_proxy_cfg: object = config.get("proxy")
+    proxy_cfg: Mapping = _raw_proxy_cfg if isinstance(_raw_proxy_cfg, Mapping) else {}
     values = []
     # Optional canonical lane (``proxy.lanes.mailbox``) is authoritative when
     # present; absent, the legacy mailbox keys below are used unchanged.
@@ -336,7 +340,8 @@ def _mailbox_proxy_candidates(proxy=None, runtime_config: ConfigInput = None):
             if operation and operation not in values:
                 values.append(operation)
         return values
-    remail_cfg = email_cfg.get("remail") if isinstance(email_cfg.get("remail"), Mapping) else {}
+    _raw_remail_cfg: object = email_cfg.get("remail")
+    remail_cfg: Mapping = _raw_remail_cfg if isinstance(_raw_remail_cfg, Mapping) else {}
     configured_pool = (
         config.get("mailbox_proxy_pool") or email_cfg.get("mailbox_proxy_pool") or remail_cfg.get("proxy_pool")
     )
@@ -486,7 +491,7 @@ def _create_cfworker_mailboxes(args=None):
 def _create_smailr_mailboxes(args=None):
     args = args or argparse.Namespace()
     count = max(1, _coerce_int(getattr(args, "count", 1)))
-    domain = getattr(args, "smailr_domain", None) or None
+    domain = str(getattr(args, "smailr_domain", None) or "")
     return mailbox_smailr.create_smailr_mailboxes(count, domain=domain)
 
 
@@ -975,7 +980,11 @@ def _fetch_mailbox_messages_local(mailbox, limit=25, proxy=None):
             "Accept": "application/json",
             "Prefer": 'outlook.body-content-type="text"',
         }
-        proxies = {"http": proxy, "https": proxy} if proxy else None
+        # curl_cffi's ``ProxySpec`` is a ``TypedDict``; a plain ``{"http": ..,
+        # "https": ..}`` mapping is accepted at runtime and is what every other
+        # call site in this repo passes (see payment_wire.py). Annotating as
+        # ``Any`` states that instead of pretending the shapes differ.
+        proxies: Any = {"http": proxy, "https": proxy} if proxy else None
         r = curl_requests.get(
             graph_url, params=params, headers=headers, proxies=proxies, impersonate="chrome124", timeout=30
         )
@@ -1013,7 +1022,7 @@ def _fetch_mailbox_messages_local(mailbox, limit=25, proxy=None):
     merged = []
     seen = set()
     for msg in list(graph_messages or []) + list(imap_messages or []):
-        key = _message_id(msg) or str(msg.get("internetMessageId") or "")
+        key = _message_id(msg) or (str(msg.get("internetMessageId") or "") if isinstance(msg, dict) else "")
         if key and key in seen:
             continue
         if key:

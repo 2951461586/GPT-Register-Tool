@@ -20,13 +20,14 @@ import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Any, Iterator, Optional
 
 from . import sms_providers
 from .cross_process_gate import cross_process_write_lock
 from .operator_output import emit
 from .phone_provider_lifecycle import _complete_provider_activation, _reset_provider_slot
 from .smsbower import DEFAULT_ENDPOINT, GHANA_COUNTRY_CODE, OPENAI_SERVICE_CODE, normalize_country, normalize_service
+from contextlib import contextmanager
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -134,7 +135,21 @@ class PhonePool:
     phones: list[PhoneSlot] = field(default_factory=list)
     current_index: int = 0
     state_file: str = ""
-    lock: object = field(default_factory=threading.RLock, repr=False)
+    lock: Any = field(default_factory=threading.RLock, repr=False)
+
+    @contextmanager
+    def locked(self) -> Iterator[None]:
+        """Re-entrant critical section over this pool's in-memory state.
+
+        Exposed as a method rather than making callers do ``with pool.lock:``:
+        ``threading.RLock`` has no public *type* (it is a factory returning a
+        private class), so the field can only be annotated ``Any`` and every
+        ``with`` over it looks like a context manager over ``object`` to a
+        checker. A declared ``@contextmanager`` removes the ambiguity at the
+        call site without changing the locking behaviour.
+        """
+        with self.lock:
+            yield
 
     @property
     def current(self) -> Optional[PhoneSlot]:
@@ -306,7 +321,7 @@ def _saved_state_matches_slot(phone: PhoneSlot, saved: dict) -> bool:
     saved_provider_ids = str(saved.get("provider_ids") or "").strip()
     return (
         (not saved_service or normalize_service(saved_service) == normalize_service(phone.service))
-        and (not saved_country or normalize_country(saved_country) == normalize_country(phone.country))
+        and (not saved_country or normalize_country(saved_country) == normalize_country(str(phone.country or "")))
         and (not saved_min_price or saved_min_price == str(phone.min_price or "").strip())
         and (not saved_max_price or saved_max_price == str(phone.max_price or "").strip())
         and (not saved_provider_ids or saved_provider_ids == str(phone.provider_ids or "").strip())

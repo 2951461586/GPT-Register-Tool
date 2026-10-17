@@ -218,10 +218,14 @@ def record_registration_audit(data, *, batch_id="", state="", runtime_config: Co
     if not isinstance(data, (AccountSessionModel, Mapping)):
         return False
     data = AccountSessionModel.from_value(data).to_storage_mapping()
-    response = data.get("response") if isinstance(data.get("response"), dict) else {}
-    probe = response.get("access_token_probe") if isinstance(response.get("access_token_probe"), dict) else {}
-    telemetry = data.get("access_token_telemetry") if isinstance(data.get("access_token_telemetry"), dict) else {}
-    geo = data.get("fingerprint_geo_audit") if isinstance(data.get("fingerprint_geo_audit"), Mapping) else {}
+    _raw_response: object = data.get("response")
+    response: dict = _raw_response if isinstance(_raw_response, dict) else {}
+    _raw_probe: object = response.get("access_token_probe")
+    probe: dict = _raw_probe if isinstance(_raw_probe, dict) else {}
+    _raw_telemetry: object = data.get("access_token_telemetry")
+    telemetry: dict = _raw_telemetry if isinstance(_raw_telemetry, dict) else {}
+    _raw_geo: object = data.get("fingerprint_geo_audit")
+    geo: Mapping = _raw_geo if isinstance(_raw_geo, Mapping) else {}
     geo_status = str(geo.get("status") or "")
     registration_state = str(state or data.get("registration_state") or ("active" if data.get("success") else "failed"))
     email = _normalize_account_email(data.get("email") or "")
@@ -564,7 +568,8 @@ def list_terminal_remail_accounts(*, runtime_config: ConfigInput = None):
         item = {"email": row["email"], "purchase_id": row["purchase_id"]}
         try:
             raw = json.loads(row["raw_json"] or "{}")
-            mailbox = raw.get("mailbox") if isinstance(raw, dict) and isinstance(raw.get("mailbox"), dict) else {}
+            _mailbox_raw: object = raw.get("mailbox") if isinstance(raw, dict) else None
+            mailbox: dict = _mailbox_raw if isinstance(_mailbox_raw, dict) else {}
             item["order_no"] = str(mailbox.get("order_no") or "")
         except Exception:
             item["order_no"] = ""

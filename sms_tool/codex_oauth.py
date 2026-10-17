@@ -34,6 +34,7 @@ from .account_creation import _create_account_continue_url, _is_user_already_exi
 from .sentinel.client import issue_sentinel_flow
 from .utils import atomic_write_text
 from .utils import _random_birthdate, _random_name
+from typing import Any
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -653,7 +654,8 @@ def _password_login_and_exchange(session, oauth, data, did, current_url, proxy=N
     if final.get("ok"):
         final["login_method"] = "password"
         return final
-    phone_attempt = final.get("phone_attempt") if isinstance(final.get("phone_attempt"), dict) else {}
+    _raw_phone_attempt: object = final.get("phone_attempt")
+    phone_attempt: dict = _raw_phone_attempt if isinstance(_raw_phone_attempt, dict) else {}
     if phone_attempt.get("error"):
         final["error"] = phone_attempt.get("error")
     final.setdefault("mode", "codex_oauth_pkce")
@@ -698,8 +700,8 @@ def _describe_send_otp_answer(response):
         body = response.json()
     except Exception:
         body = {}
-    state = body.get("oai-client-auth-session") if isinstance(body, dict) else None
-    state = state if isinstance(state, dict) else {}
+    _raw_state: object = body.get("oai-client-auth-session") if isinstance(body, dict) else None
+    state = _raw_state if isinstance(_raw_state, dict) else {}
     pending = state.get("passwordless_email_otp_send_pending")
     mode = str(state.get("email_verification_mode") or "")
     return "pending=%s mode=%s" % (
@@ -709,7 +711,8 @@ def _describe_send_otp_answer(response):
 
 
 def _browser_style_send_headers(did, sentinel_token):
-    headers = _oai_headers(
+    # Heterogeneous: a ``None`` value is how curl_cffi is told to drop a header.
+    headers: dict[str, Any] = _oai_headers(
         did,
         {
             "Referer": f"{AUTH_BASE}/email-verification",
@@ -727,6 +730,8 @@ def _browser_style_send_headers(did, sentinel_token):
     # server answers 400 ``unsupported_content_type``; the browser sends none.
     # ``None`` is what makes curl_cffi drop the header.
     headers.pop("content-type", None)
+    # ``None`` is what makes curl_cffi drop the header, so the mapping is
+    # deliberately heterogeneous rather than dict[str, str].
     headers["Content-Type"] = None
     return headers
 
@@ -895,7 +900,8 @@ def _complete_about_you(session, did, current_url, proxy=None):
     # and rewriting the error to ``account_deactivated``, which would brand a
     # perfectly live account as deactivated.
     if _is_user_already_exists(body):
-        error = body.get("error") if isinstance(body.get("error"), dict) else {}
+        _raw_error: object = body.get("error")
+        error: dict = _raw_error if isinstance(_raw_error, dict) else {}
         recovery = error.get("userAlreadyExistsRecovery")
         action = str((recovery or {}).get("action") or "") if isinstance(recovery, dict) else ""
         return {
@@ -1217,11 +1223,14 @@ def _save_oauth_tokens(data, json_path, tokens, email, mode, result=None):
         "mode": mode,
         "updated_at": now,
     }
-    result = result if isinstance(result, dict) else {}
-    phone_attempt = result.get("phone_attempt") if isinstance(result.get("phone_attempt"), dict) else {}
+    _raw_result: object = result
+    result_map: dict = _raw_result if isinstance(_raw_result, dict) else {}
+    _raw_phone_attempt: object = result_map.get("phone_attempt")
+    phone_attempt: dict = _raw_phone_attempt if isinstance(_raw_phone_attempt, dict) else {}
     if phone_attempt:
         refreshed["phone"] = phone_attempt.get("phone", refreshed.get("phone", ""))
-        response = refreshed.get("response") if isinstance(refreshed.get("response"), dict) else {}
+        _raw_response: object = refreshed.get("response")
+        response: dict = _raw_response if isinstance(_raw_response, dict) else {}
         response["phone_verification"] = phone_attempt
         response["codex_oauth"] = {
             "ok": True,
@@ -1262,7 +1271,7 @@ def _write_oauth_account_state(data, json_path, *, upsert):
         account_saved = bool(upsert(data, json_path=json_path))
     except Exception:
         account_saved = False
-    outcome = {
+    outcome: dict[str, Any] = {
         "session_saved": session_saved,
         "account_saved": account_saved,
         "persisted": session_saved and account_saved,
@@ -1286,17 +1295,20 @@ def persist_one_click_sms_failure(data, json_path, email, result, *, upsert=upse
     refreshed["error"] = sanitize_text(result.get("error") or "one_click_sms_failed")[:200]
     refreshed["refresh_token_status"] = str(refreshed.get("refresh_token_status") or "no_rt")
     refreshed["refresh_token_updated_at"] = int(time.time())
-    response = refreshed.get("response") if isinstance(refreshed.get("response"), dict) else {}
+    _raw_response: object = refreshed.get("response")
+    response: dict = _raw_response if isinstance(_raw_response, dict) else {}
     public_result = {
         key: value for key, value in result.items()
         if key in {"ok", "mode", "status", "phone_verification_required"}
     }
     public_result["error"] = refreshed["error"]
-    tokens = result.get("tokens") if isinstance(result.get("tokens"), dict) else {}
+    _raw_tokens: object = result.get("tokens")
+    tokens: dict = _raw_tokens if isinstance(_raw_tokens, dict) else {}
     if tokens:
         public_result["has_access_token"] = bool(tokens.get("access_token"))
         public_result["has_refresh_token"] = bool(tokens.get("refresh_token"))
-    phone_attempt = result.get("phone_attempt") if isinstance(result.get("phone_attempt"), dict) else {}
+    _raw_phone_attempt: object = result.get("phone_attempt")
+    phone_attempt: dict = _raw_phone_attempt if isinstance(_raw_phone_attempt, dict) else {}
     if phone_attempt:
         public_phone = {
             key: value for key, value in phone_attempt.items()
@@ -1341,7 +1353,8 @@ def _follow_redirects(session, start_url, proxy=None, max_redirects=18):
 
 
 def _mailbox_from_data(data):
-    mailbox = data.get("mailbox") if isinstance(data.get("mailbox"), dict) else {}
+    _raw_mailbox: object = data.get("mailbox")
+    mailbox: dict = _raw_mailbox if isinstance(_raw_mailbox, dict) else {}
     email = str(mailbox.get("email") or data.get("email") or "").strip()
     # SQLite account rows flatten sensitive mailbox fields while token-free
     # session snapshots retain only the public mailbox metadata. Rehydrate
@@ -1427,7 +1440,8 @@ def _configured_mailbox_index():
 def _is_terminal_account_data(data):
     if not isinstance(data, dict):
         return False
-    terminal = data.get("terminal_failure") if isinstance(data.get("terminal_failure"), dict) else {}
+    _raw_terminal: object = data.get("terminal_failure")
+    terminal: dict = _raw_terminal if isinstance(_raw_terminal, dict) else {}
     text = " ".join(str(value or "") for value in (
         data.get("status"),
         data.get("error"),
@@ -1493,8 +1507,9 @@ def _codex_oauth_protocol_ready_stage(stage):
     return stage in {"callback", "consent"}
 
 
-def _codex_oauth_cfg():
-    return CFG.get("codex_oauth") if isinstance(CFG.get("codex_oauth"), dict) else {}
+def _codex_oauth_cfg() -> dict[str, Any]:
+    _raw: object = CFG.get("codex_oauth")
+    return _raw if isinstance(_raw, dict) else {}
 
 
 def _allow_passwordless_takeover():

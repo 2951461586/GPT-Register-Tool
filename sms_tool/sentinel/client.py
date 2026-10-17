@@ -78,8 +78,8 @@ def _config_root(config: Mapping[str, Any] | None) -> Mapping[str, Any]:
 
 def sentinel_backend(config: Mapping[str, Any] | None = None) -> str:
     root = _config_root(config)
-    email = root.get("email_registration")
-    email = email if isinstance(email, Mapping) else {}
+    _raw_email: object = root.get("email_registration")
+    email = _raw_email if isinstance(_raw_email, Mapping) else {}
     value = (
         str(
             os.getenv("OPENAI_SENTINEL_BACKEND")
@@ -97,8 +97,8 @@ def sentinel_backend(config: Mapping[str, Any] | None = None) -> str:
 
 def _legacy_fallback_enabled(config: Mapping[str, Any] | None) -> bool:
     root = _config_root(config)
-    email = root.get("email_registration")
-    email = email if isinstance(email, Mapping) else {}
+    _raw_email: object = root.get("email_registration")
+    email = _raw_email if isinstance(_raw_email, Mapping) else {}
     value = os.getenv("OPENAI_SENTINEL_LEGACY_FALLBACK")
     if value is None:
         # Default **off**.  The pure-Python legacy issuer synthesises a PoW that
@@ -157,7 +157,8 @@ def _token_from_bundle(
     flow: str,
     device_id: str,
 ) -> SentinelToken | None:
-    values = data if isinstance(data, Mapping) else {}
+    _raw_values: object = data
+    values: Mapping = _raw_values if isinstance(_raw_values, Mapping) else {}
     token_key = {
         "username_password_create": "sentinel_token",
         "authorize_continue": "sentinel_authorize_continue_token",
@@ -580,7 +581,8 @@ CHECKOUT_SENTINEL_CACHE_TTL_SECONDS = 480.0
 def _checkout_mint_cache_key(
     device_id: str, proxy: str | None, cookie_header: str, profile: Mapping[str, Any] | None
 ) -> tuple[str, ...]:
-    fp = profile if isinstance(profile, Mapping) else {}
+    _raw_fp: object = profile
+    fp: Mapping = _raw_fp if isinstance(_raw_fp, Mapping) else {}
     return (
         str(device_id or ""),
         str(proxy or ""),

@@ -4,6 +4,7 @@ import os
 import re
 import sys
 import time
+from typing import Any
 
 from .config import CFG, initialize_runtime_config
 from .diagnostics import install_safe_stdio, safe_print
@@ -41,11 +42,15 @@ _heavy_deps_loaded = False
 # `import sms_tool.cli` free of curl_cffi (the real values are imported lazily by
 # _load_heavy_deps), while still letting tests `patch.object(cli, "...")` and direct
 # handler calls reference them without a NameError/AttributeError.
-_load_mailbox_pool = None
-_remail_enabled = None
-_build_session_file = None
-_mailbox_snapshot = None
-run_email = None
+# Annotated ``Any`` rather than left bare: the values are real callables after
+# ``_load_heavy_deps()`` runs, but they start as ``None`` so `import sms_tool.cli`
+# stays free of curl_cffi. A bare ``= None`` makes the checker type them ``None``
+# and every call site then reports "object of type None cannot be called".
+_load_mailbox_pool: Any = None
+_remail_enabled: Any = None
+_build_session_file: Any = None
+_mailbox_snapshot: Any = None
+run_email: Any = None
 
 
 def _load_heavy_deps() -> None:
@@ -84,7 +89,8 @@ def _registration_proxy_lane(registration_driver: object = None) -> str:
 
 
 def _configured_registration_proxy(registration_driver: object = None, tracker=None) -> str:
-    proxy_cfg = CFG.get("proxy") if isinstance(CFG.get("proxy"), dict) else {}
+    _raw_proxy_cfg: object = CFG.get("proxy")
+    proxy_cfg: dict = _raw_proxy_cfg if isinstance(_raw_proxy_cfg, dict) else {}
     lane = _registration_proxy_lane(registration_driver)
     lane_keys = (
         ("browser_pool", "browser_registration_pool")
@@ -698,7 +704,8 @@ def _registration_exit_code(report) -> int:
     neither field is left at 0 -- a missing verdict is not evidence of failure,
     and guessing would fail batches that actually succeeded.
     """
-    data = report if isinstance(report, dict) else {}
+    _raw_data: object = report
+    data: dict = _raw_data if isinstance(_raw_data, dict) else {}
     if data.get("ok") is False:
         return 3
     try:

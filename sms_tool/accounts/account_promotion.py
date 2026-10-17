@@ -109,7 +109,8 @@ def parse_coupon_check(body: Any) -> dict[str, Any]:
     Mirrors the reference ``plus_trial_checker``: ``state == "eligible"`` is the
     affirmative answer, and ``redemption.redeemed`` is the negative one.
     """
-    payload = body if isinstance(body, dict) else {}
+    _raw_payload: object = body
+    payload: dict = _raw_payload if isinstance(_raw_payload, dict) else {}
     raw_redemption = payload.get("redemption")
     redemption: dict[str, Any] = raw_redemption if isinstance(raw_redemption, dict) else {}
     state = str(payload.get("state") or payload.get("status") or "").strip().lower()

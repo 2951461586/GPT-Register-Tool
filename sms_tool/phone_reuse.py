@@ -200,7 +200,8 @@ def send_phone_otp(session, did, current_url, phone: str, sentinel=None, proxy=N
     error_message = ""
     try:
         body = response.json()
-        error = body.get("error") if isinstance(body.get("error"), dict) else {}
+        _raw_error: object = body.get("error")
+        error: dict = _raw_error if isinstance(_raw_error, dict) else {}
         error_code = str(error.get("code") or "").strip()
         error_message = str(error.get("message") or "").strip()
     except Exception:

@@ -21,7 +21,8 @@ from .config import CFG
 
 
 def _phone_reuse_cfg():
-    cfg = CFG.get("phone_reuse") if isinstance(CFG.get("phone_reuse"), dict) else {}
+    _raw_cfg: object = CFG.get("phone_reuse")
+    cfg: dict = _raw_cfg if isinstance(_raw_cfg, dict) else {}
     return cfg
 
 

@@ -79,7 +79,8 @@ def complete_registration_identity(
 
 def account_identity(account: Mapping[str, Any] | None) -> dict[str, Any]:
     """Read the canonical context, with compatibility for earlier sessions."""
-    value = account if isinstance(account, Mapping) else {}
+    _raw_value: object = account
+    value: Mapping = _raw_value if isinstance(_raw_value, Mapping) else {}
     stored = value.get("identity_context")
     identity = dict(stored) if isinstance(stored, Mapping) else {}
     identity.setdefault("version", IDENTITY_VERSION)
@@ -333,7 +334,8 @@ def account_chatgpt_id(account: Mapping[str, Any] | None) -> str:
     it is identity extraction, not liveness probing. Explicit fields win over
     token claims so an account that carries both resolves deterministically.
     """
-    value = account if isinstance(account, Mapping) else {}
+    _raw_value: object = account
+    value: Mapping = _raw_value if isinstance(_raw_value, Mapping) else {}
     candidates: list[Any] = [
         value.get("chatgpt_account_id"),
         value.get("account_id"),

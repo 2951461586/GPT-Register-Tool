@@ -111,7 +111,8 @@ def _record_failure(
     path = quarantine_path()
     with _LOCK:
         entries = _read(path)
-        previous = entries.get(fingerprint) if isinstance(entries.get(fingerprint), dict) else {}
+        _raw_previous: object = entries.get(fingerprint)
+        previous: dict = _raw_previous if isinstance(_raw_previous, dict) else {}
         entries[fingerprint] = {
             "provider": str(getattr(mailbox, "provider", "") or "").strip().lower(),
             "email": str(getattr(mailbox, "email", "") or "").strip().lower(),

@@ -229,7 +229,7 @@ def _check_phone_providers(config: Mapping[str, Any]) -> dict[str, str]:
             # would hide it -- the collision is the more surprising finding, not
             # the more urgent one.
             detail = "selected=%s has no key; %s" % (selected["provider"], detail)
-            hint = _missing_key_hint(selected["provider"]) + " " + hint
+            hint = _missing_key_hint(str(selected["provider"] or "")) + " " + hint
         return _check("phone_providers", "warn", detail, hint)
     if selected["configured"]:
         return _check(
@@ -240,7 +240,7 @@ def _check_phone_providers(config: Mapping[str, Any]) -> dict[str, str]:
     return _check(
         "phone_providers", "warn",
         "selected=%s has no key; %s" % (selected["provider"], summary),
-        _missing_key_hint(selected["provider"]),
+        _missing_key_hint(str(selected["provider"] or "")),
     )
 
 
@@ -257,7 +257,8 @@ def _probe_config(config: Mapping[str, Any], config_source: str) -> list[dict[st
         "project-root config.json is missing; create one from config.example.json for full behavior",
     ))
 
-    proxy_cfg = config.get("proxy") if isinstance(config.get("proxy"), Mapping) else {}
+    _raw_proxy_cfg: object = config.get("proxy")
+    proxy_cfg: Mapping = _raw_proxy_cfg if isinstance(_raw_proxy_cfg, Mapping) else {}
     pool = proxy_cfg.get("pool") or []
     if str(proxy_cfg.get("default") or "").strip() or pool:
         checks.append(_check("config_proxy", "ok", "proxy.default or proxy.pool configured"))
@@ -267,7 +268,8 @@ def _probe_config(config: Mapping[str, Any], config_source: str) -> list[dict[st
             "registration/payment flows need proxy.default or proxy.pool",
         ))
 
-    email_cfg = config.get("email_registration") if isinstance(config.get("email_registration"), Mapping) else {}
+    _raw_email_cfg: object = config.get("email_registration")
+    email_cfg: Mapping = _raw_email_cfg if isinstance(_raw_email_cfg, Mapping) else {}
     token_file = str(email_cfg.get("token_file") or "").strip()
     mailbox_sources: list[str] = []
     if token_file:
@@ -275,7 +277,8 @@ def _probe_config(config: Mapping[str, Any], config_source: str) -> list[dict[st
         if resolved_token_file.is_file():
             mailbox_sources.append(f"token_file:{resolved_token_file}")
     for provider in ("remail", "smailr"):
-        provider_cfg = email_cfg.get(provider) if isinstance(email_cfg.get(provider), Mapping) else {}
+        _raw_provider_cfg: object = email_cfg.get(provider)
+        provider_cfg: Mapping = _raw_provider_cfg if isinstance(_raw_provider_cfg, Mapping) else {}
         if provider_cfg.get("enabled") and str(provider_cfg.get("api_key") or "").strip():
             mailbox_sources.append(provider)
     cfworker_url = str(email_cfg.get("cfworker_url") or "").strip()

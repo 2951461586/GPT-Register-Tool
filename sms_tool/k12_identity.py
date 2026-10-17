@@ -49,14 +49,17 @@ def _base64url_json(value):
 
 def _token_account_id(token):
     claims = _jwt_claims(token)
-    auth = claims.get("https://api.openai.com/auth") if isinstance(claims.get("https://api.openai.com/auth"), dict) else {}
+    _raw_auth: object = claims.get("https://api.openai.com/auth")
+    auth: dict = _raw_auth if isinstance(_raw_auth, dict) else {}
     return str(auth.get("chatgpt_account_id") or claims.get("chatgpt_account_id") or "").strip()
 
 
 def _token_user_id(token):
     claims = _jwt_claims(token)
-    profile = claims.get("https://api.openai.com/profile") if isinstance(claims.get("https://api.openai.com/profile"), dict) else {}
-    auth = claims.get("https://api.openai.com/auth") if isinstance(claims.get("https://api.openai.com/auth"), dict) else {}
+    _raw_profile: object = claims.get("https://api.openai.com/profile")
+    profile: dict = _raw_profile if isinstance(_raw_profile, dict) else {}
+    _raw_auth: object = claims.get("https://api.openai.com/auth")
+    auth: dict = _raw_auth if isinstance(_raw_auth, dict) else {}
     return str(
         profile.get("user_id")
         or profile.get("id")

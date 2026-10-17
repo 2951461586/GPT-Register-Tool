@@ -188,11 +188,13 @@ def _session_payload(
         terminal_error = dom_fields._terminal_session_error(last_status, error_marker)
         if terminal_error:
             raise BrowserRegistrationError(terminal_error, f"http_{last_status or 'unknown'}")
-        candidate = body.get("session") if isinstance(body.get("session"), dict) else body
+        _session_raw: object = body.get("session")
+        candidate = _session_raw if isinstance(_session_raw, dict) else body
         access_token = str(
             candidate.get("accessToken") or candidate.get("access_token") or body.get("accessToken") or ""
         ).strip()
-        user = candidate.get("user") if isinstance(candidate.get("user"), dict) else body.get("user")
+        _user_raw: object = candidate.get("user")
+        user = _user_raw if isinstance(_user_raw, dict) else body.get("user")
         user_email = str((user or {}).get("email") or "").strip().lower()
         if access_token:
             if user_email and user_email != email.lower():
@@ -216,9 +218,10 @@ def _session_payload(
     state_fn = getattr(session, "context_state", None)
     if callable(state_fn):
         try:
-            state = state_fn()
-            details += ":host=" + str(state.get("current_host") or "")
-            details += ":session_cookie=" + ("present" if state.get("session_cookie_present") else "absent")
+            state: Any = state_fn()
+            if isinstance(state, dict):
+                details += ":host=" + str(state.get("current_host") or "")
+                details += ":session_cookie=" + ("present" if state.get("session_cookie_present") else "absent")
         except Exception:
             pass
     if "chatgpt_context_unavailable" in last_error_marker:
@@ -271,6 +274,9 @@ def _browser_diagnostics(page: Any, driver: str) -> dict[str, Any]:
             })"""
         )
         if isinstance(state, Mapping):
+            # ``diagnostics`` was seeded with str values, so its inferred type
+            # rejects the int/bool entries below; it is a heterogeneous audit bag.
+            diagnostics: dict[str, Any] = dict(diagnostics)
             diagnostics.update({
                 "ready_state": str(state.get("ready_state") or "")[:20],
                 "email_inputs": int(state.get("email_inputs") or 0),
@@ -288,7 +294,8 @@ def _browser_diagnostics(page: Any, driver: str) -> dict[str, Any]:
 
 def _safe_proxy_audit(metadata: Mapping[str, Any] | None) -> dict[str, Any]:
     """Keep only non-sensitive proxy-pool audit fields in registration output."""
-    value = metadata if isinstance(metadata, Mapping) else {}
+    _raw_value: object = metadata
+    value: Mapping = _raw_value if isinstance(_raw_value, Mapping) else {}
     return {
         "pool_index": int(value.get("pool_index", -1) or -1),
         "expected_country": str(value.get("expected_country") or "").strip().upper(),
@@ -299,8 +306,8 @@ def _safe_proxy_audit(metadata: Mapping[str, Any] | None) -> dict[str, Any]:
 
 def _post_registration_dwell(config: Mapping[str, Any]) -> float:
     """Keep the connected browser alive briefly after the first good AT probe."""
-    registration = config.get("registration") if isinstance(config, Mapping) else {}
-    registration = registration if isinstance(registration, Mapping) else {}
+    _raw_registration: object = config.get("registration") if isinstance(config, Mapping) else {}
+    registration = _raw_registration if isinstance(_raw_registration, Mapping) else {}
     raw = str(registration.get("post_registration_dwell_seconds_range") or "0,0")
     try:
         values = [float(item.strip()) for item in raw.replace(";", ",").split(",") if item.strip()]

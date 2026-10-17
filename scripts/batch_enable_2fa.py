@@ -420,7 +420,8 @@ def run_one(
         return {"email": email, "ok": False, "state": "no_mailbox",
                 "error": "missing_mailbox"}
 
-    chat_cfg = CFG.get("chatgpt") if isinstance(CFG.get("chatgpt"), dict) else {}
+    _raw_chat_cfg: object = CFG.get("chatgpt")
+    chat_cfg: dict = _raw_chat_cfg if isinstance(_raw_chat_cfg, dict) else {}
     auth_base = str(chat_cfg.get("auth_base_url") or "https://auth.openai.com").rstrip("/")
     chat_base = str(chat_cfg.get("chat_base_url") or "https://chatgpt.com").rstrip("/")
 
@@ -499,7 +500,8 @@ def run_one(
                 if not login.get("ok"):
                     raise RuntimeError(str(login.get("error") or "existing_login_failed"))
                 auth_result = _fetch_auth_session(session, chat_base, base_headers)
-                body = auth_result.get("body") if isinstance(auth_result.get("body"), dict) else {}
+                _raw_body: object = auth_result.get("body")
+                body: dict = _raw_body if isinstance(_raw_body, dict) else {}
                 fresh = str(_auth_session_access_token(body) or "").strip()
                 if not fresh:
                     raise RuntimeError("auth_session_missing_access_token")

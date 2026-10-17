@@ -14,6 +14,7 @@ from .paths import runtime_file
 from .cross_process_gate import cross_process_write_lock
 from .registration_policy import RETRYABLE_CLASSES, registration_retry_decision
 from .sanitizer import sanitize_text
+from typing import Any
 
 
 _LOCK = threading.Lock()
@@ -145,10 +146,10 @@ class RegistrationRetryGuard:
         otp_pending_quarantine_threshold: int | None = None,
         otp_pending_quarantine_seconds: int | None = None,
     ) -> None:
-        registration = config.get("registration") if isinstance(config, Mapping) else {}
-        registration = registration if isinstance(registration, Mapping) else {}
-        retry_policy = registration.get("retry_policy")
-        retry_policy = retry_policy if isinstance(retry_policy, Mapping) else {}
+        _raw_registration: object = config.get("registration") if isinstance(config, Mapping) else {}
+        registration = _raw_registration if isinstance(_raw_registration, Mapping) else {}
+        _raw_retry_policy: object = registration.get("retry_policy")
+        retry_policy = _raw_retry_policy if isinstance(_raw_retry_policy, Mapping) else {}
         self.path = path or runtime_file(config or {}, "registration_retry_guard.json")
         self.threshold = max(1, int(threshold or 2))
         configured_cooldown = retry_policy.get("cross_batch_cooldown_seconds", 1800)
@@ -231,7 +232,10 @@ class RegistrationRetryGuard:
         with _LOCK, cross_process_write_lock(self.path.with_suffix(".lock"), timeout=10):
             yield
 
-    def check(self, email: object) -> dict[str, object]:
+    def check(self, email: object) -> dict[str, Any]:
+        # Heterogeneous on purpose (``deferred``/``dead_end`` are bools,
+        # ``consecutive``/``remaining_seconds`` ints, ``reason`` a str); the
+        # old ``object`` value type forced every caller to cast before int().
         key = self._email(email)
         if not key:
             return {"deferred": False, "consecutive": 0, "remaining_seconds": 0}
@@ -266,7 +270,8 @@ class RegistrationRetryGuard:
             return
         with self._locked():
             data = self._read()
-            previous = data.get(key) if isinstance(data.get(key), Mapping) else {}
+            _raw_previous: object = data.get(key)
+            previous: Mapping = _raw_previous if isinstance(_raw_previous, Mapping) else {}
             now = int(time.time())
             if previous.get("quarantined") and not self._quarantine_active(previous, now):
                 # 隔离已过 TTL ⇒ 当作全新开始。**必须整行丢弃 previous**：只把
@@ -386,7 +391,8 @@ class RegistrationRetryGuard:
         marker = _dead_end_reason(reason) or _dead_end_reason(error) or "user_already_exists"
         with self._locked():
             data = self._read()
-            previous = data.get(key) if isinstance(data.get(key), Mapping) else {}
+            _raw_previous: object = data.get(key)
+            previous: Mapping = _raw_previous if isinstance(_raw_previous, Mapping) else {}
             data[key] = {
                 "consecutive": int(previous.get("consecutive") or 0),
                 "failure_class": str(previous.get("failure_class") or "account")[:40],

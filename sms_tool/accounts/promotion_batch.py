@@ -416,7 +416,8 @@ def _promotion_failure_class(item: dict[str, Any]) -> str:
     code = _promotion_status_code(item)
     if code == 401:
         return "unauthorized"
-    probe = item.get("probe") if isinstance(item.get("probe"), dict) else {}
+    _raw_probe: object = item.get("probe")
+    probe: dict = _raw_probe if isinstance(_raw_probe, dict) else {}
     if not code and _retryable_promotion_transport(probe):
         return "transport"
     return "probe"

@@ -397,7 +397,8 @@ def _upi_build_confirm_body(
 
 def _upi_build_ctx(init_payload: Any, fingerprint: Mapping[str, str], stripe_js_id: str) -> dict[str, Any]:
     """参考实现 ``build_ctx``: 汇总 confirm 需要的客户端身份与金额上下文。"""
-    payload = init_payload if isinstance(init_payload, dict) else {}
+    _raw_payload: object = init_payload
+    payload: dict = _raw_payload if isinstance(_raw_payload, dict) else {}
     return {
         "stripe_js_id": str(payload.get("client_stripe_js_id") or stripe_js_id or uuid.uuid4()),
         "client_session_id": str(payload.get("client_stripe_js_id") or stripe_js_id or uuid.uuid4()),
@@ -683,7 +684,8 @@ def _upi_confirm_local_mandate(
     "error"}``；前置条件（``seti_`` + ``client_secret`` + ``pm_``）不满足时
     ``skipped=True``，由调用方决定是否忽略。
     """
-    intent = setup_intent if isinstance(setup_intent, Mapping) else {}
+    _raw_intent: object = setup_intent
+    intent: Mapping = _raw_intent if isinstance(_raw_intent, Mapping) else {}
     setup_id = str(intent.get("id") or "").strip()
     client_secret = str(intent.get("client_secret") or "").strip()
     intent_pm = intent.get("payment_method")
@@ -764,7 +766,8 @@ def _upi_payment_page_summary(payload: Any) -> dict[str, Any]:
     """参考实现 ``payment_page_summary``: 轮询可观测性的结构化摘要。"""
     if not isinstance(payload, dict):
         return {}
-    elements_options = payload.get("elements_options") if isinstance(payload.get("elements_options"), dict) else {}
+    _raw_elements_options: object = payload.get("elements_options")
+    elements_options: dict = _raw_elements_options if isinstance(_raw_elements_options, dict) else {}
     submission = _upi_find_submission_attempt(payload)
     next_action = _upi_first_value_by_key(payload, "next_action")
     payment_intent = _upi_first_value_by_key(payload, "payment_intent")

@@ -839,8 +839,8 @@ def stripe_confirm_error_diagnostics(
         payload = response.json() or {}
     except Exception:
         payload = {}
-    error = payload.get("error") if isinstance(payload, dict) else {}
-    error = error if isinstance(error, dict) else {}
+    _raw_error: object = payload.get("error") if isinstance(payload, dict) else {}
+    error = _raw_error if isinstance(_raw_error, dict) else {}
     submission = find_submission_attempt(payload)
     parts = [
         f"stripe_confirm_failed:http={getattr(response, 'status_code', 0)}",

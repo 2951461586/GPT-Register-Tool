@@ -78,8 +78,10 @@ _CACHE_LOCK = threading.RLock()
 
 
 def phone_proxy_cfg() -> dict:
-    cfg = CFG.get("phone_reuse") if isinstance(CFG.get("phone_reuse"), dict) else {}
-    nested = cfg.get("proxy") if isinstance(cfg.get("proxy"), dict) else {}
+    _raw_cfg: object = CFG.get("phone_reuse")
+    cfg: dict = _raw_cfg if isinstance(_raw_cfg, dict) else {}
+    _raw_nested: object = cfg.get("proxy")
+    nested: dict = _raw_nested if isinstance(_raw_nested, dict) else {}
     merged = dict(nested)
     for key in (
         "proxy",
@@ -133,7 +135,7 @@ def redact_proxy_url(proxy: str | None, empty_placeholder: str = "DIRECT") -> st
     ``empty_placeholder`` lets callers signal a missing proxy (``"DIRECT"`` for
     paypal-proxy paths, ``""`` for phone-registration paths).
     """
-    value = normalize_proxy_url(proxy)
+    value = normalize_proxy_url(proxy or "")
     if not value:
         return empty_placeholder
     try:
@@ -155,7 +157,7 @@ def redact_proxy_text(value: Any, proxy: str | None = None) -> str:
     """Redact proxy-credential substrings from an arbitrary text."""
     text = str(value or "")
     raw = str(proxy or "").strip()
-    normalized = normalize_proxy_url(proxy)
+    normalized = normalize_proxy_url(proxy or "")
     if normalized:
         redacted_canonical = redact_proxy_url(normalized, empty_placeholder="")
         if raw:
@@ -217,12 +219,13 @@ def phone_country_iso(country: Any = "", provider: str = "", cfg: dict | None = 
         return value.upper()
     if value in COUNTRY_ID_TO_ISO:
         return COUNTRY_ID_TO_ISO[value]
-    cfg = cfg if isinstance(cfg, dict) else {}
+    _raw_cfg: object = cfg
+    cfg_map: dict = _raw_cfg if isinstance(_raw_cfg, dict) else {}
     for key in ("country_iso", "iso", "country_code"):
-        raw = str(cfg.get(key) or "").strip()
+        raw = str(cfg_map.get(key) or "").strip()
         if re.fullmatch(r"[A-Za-z]{2}", raw):
             return raw.upper()
-    name = str(cfg.get("country_name") or "").strip().lower()
+    name = str(cfg_map.get("country_name") or "").strip().lower()
     return COUNTRY_NAME_TO_ISO.get(name, "")
 
 
@@ -232,7 +235,8 @@ def _configured_proxy_api_url() -> str:
         value = str(pcfg.get(key) or "").strip()
         if value:
             return value
-    cfg = CFG.get("phone_reuse") if isinstance(CFG.get("phone_reuse"), dict) else {}
+    _raw_cfg: object = CFG.get("phone_reuse")
+    cfg: dict = _raw_cfg if isinstance(_raw_cfg, dict) else {}
     for key in ("proxy_api_url", "white_api_url"):
         value = str(cfg.get(key) or "").strip()
         if value:

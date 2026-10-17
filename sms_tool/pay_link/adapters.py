@@ -370,7 +370,8 @@ def _build_kakao_env(
     )
     env: dict[str, str] = _protocol_runtime_env("kakao", "KAKAO")
     env.update({"KAKAO_TOKEN": access_token, "KAKAO_PROXY_SEED_FILE": kakao_seed_file})
-    countries = kwargs.get("stage_proxy_countries") if isinstance(kwargs.get("stage_proxy_countries"), dict) else {}
+    _raw_countries: object = kwargs.get("stage_proxy_countries")
+    countries: dict = _raw_countries if isinstance(_raw_countries, dict) else {}
     checkout_country = str(countries.get("checkout") or kwargs.get("checkout_country") or "KR").strip().upper()
     promotion_country = str(countries.get("promotion") or "VN").strip().upper()
     provider_country = str(countries.get("provider") or kwargs.get("target_country") or "KR").strip().upper()
@@ -552,8 +553,10 @@ def _run_wallet_adapter(
 
     runtime_config = kwargs.pop("runtime_config", None)
     cfg = _protocol_cfg(runtime_config)
-    methods = cfg.get("methods") if isinstance(cfg.get("methods"), Mapping) else {}
-    method_cfg = methods.get(spec.key) if isinstance(methods.get(spec.key), Mapping) else {}
+    _raw_methods: object = cfg.get("methods")
+    methods: Mapping = _raw_methods if isinstance(_raw_methods, Mapping) else {}
+    _raw_method_cfg: object = methods.get(spec.key)
+    method_cfg: Mapping = _raw_method_cfg if isinstance(_raw_method_cfg, Mapping) else {}
     timeout = max(5, safe_int(kwargs.get("timeout_seconds") or method_cfg.get("timeout_seconds") or 900))
     stage_keys = (
         "checkout_proxy",
@@ -690,8 +693,10 @@ def _run_gcash_adapter(
 
     runtime_config = kwargs.pop("runtime_config", None)
     cfg = _protocol_cfg(runtime_config)
-    methods = cfg.get("methods") if isinstance(cfg.get("methods"), Mapping) else {}
-    method_cfg = methods.get(spec.key) if isinstance(methods.get(spec.key), Mapping) else {}
+    _raw_methods: object = cfg.get("methods")
+    methods: Mapping = _raw_methods if isinstance(_raw_methods, Mapping) else {}
+    _raw_method_cfg: object = methods.get(spec.key)
+    method_cfg: Mapping = _raw_method_cfg if isinstance(_raw_method_cfg, Mapping) else {}
     timeout = max(5, safe_int(kwargs.get("timeout_seconds") or method_cfg.get("timeout_seconds") or 900))
     transport_context: dict[str, Any] = {
         "checkout_proxy": kwargs.get("checkout_proxy") or method_cfg.get("checkout_proxy") or "",
@@ -758,7 +763,8 @@ def _run_direct_card(spec: PaymentMethodSpec, access_token: str, proxy: Any = No
         .strip()
         .upper()
     )
-    countries = kwargs.get("stage_proxy_countries") if isinstance(kwargs.get("stage_proxy_countries"), dict) else {}
+    _raw_countries: object = kwargs.get("stage_proxy_countries")
+    countries: dict = _raw_countries if isinstance(_raw_countries, dict) else {}
 
     env = os.environ.copy()
     env["PYTHONUTF8"] = "1"
@@ -882,7 +888,8 @@ def _run_momo(spec: PaymentMethodSpec, access_token: str, proxy: Any = None, **k
         command.extend(["--strategy", strategy])
     if kwargs.get("probe_only"):
         command.append("--probe-only")
-    stripe_profile = method_cfg.get("stripe_profile") if isinstance(method_cfg.get("stripe_profile"), Mapping) else {}
+    _raw_stripe_profile: object = method_cfg.get("stripe_profile")
+    stripe_profile: Mapping = _raw_stripe_profile if isinstance(_raw_stripe_profile, Mapping) else {}
     for env_key, config_key in {
         "MOMO_STRIPE_RUNTIME_VERSION": "runtime_version",
         "MOMO_STRIPE_API_VERSION": "api_version",

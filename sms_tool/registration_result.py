@@ -80,7 +80,8 @@ def safe_proxy_audit(metadata: Mapping[str, Any] | None) -> dict[str, Any]:
     A/B's manipulation check reads exactly those two fields to decide whether a
     ``rotate`` arm really rotated or is an ``observe`` arm wearing a label.
     """
-    value = metadata if isinstance(metadata, Mapping) else {}
+    _raw_value: object = metadata
+    value: Mapping = _raw_value if isinstance(_raw_value, Mapping) else {}
     try:
         pool_index = int(value.get("pool_index", -1))
     except (TypeError, ValueError):
@@ -122,7 +123,8 @@ def safe_device_identity(metadata: Mapping[str, Any] | None) -> dict[str, Any]:
     function of the address); anything else reads as ``unknown`` rather than
     being echoed back into a report.
     """
-    value = metadata if isinstance(metadata, Mapping) else {}
+    _raw_value: object = metadata
+    value: Mapping = _raw_value if isinstance(_raw_value, Mapping) else {}
     reused = value.get("reused")
     seeded = str(value.get("seeded") or "").strip().lower()
     did = str(value.get("oai_did") or value.get("device_id") or "").strip()

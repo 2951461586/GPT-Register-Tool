@@ -130,8 +130,8 @@ def think_stage(stage_label: str = "", cfg: Mapping | None = None):
     humanize = humanize_config(cfg)
     factor = humanize["factor"]
 
-    configured = registration_cfg.get("humanize_delays")
-    configured = configured if isinstance(configured, Mapping) else {}
+    _raw_configured: object = registration_cfg.get("humanize_delays")
+    configured = _raw_configured if isinstance(_raw_configured, Mapping) else {}
     rng = configured.get(stage_label) or configured.get("default")
 
     seconds = 0.0

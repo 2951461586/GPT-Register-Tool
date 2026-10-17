@@ -348,7 +348,8 @@ def _print_promotion_summary(result):
     printed nothing between the task-start line and the folded result envelope,
     because every per-account detail lived only in the structured payload.
     """
-    results = result.get("results") if isinstance(result.get("results"), list) else []
+    _raw_results: object = result.get("results")
+    results: list = _raw_results if isinstance(_raw_results, list) else []
     rows = [item for item in results if isinstance(item, dict)]
     ok = sum(1 for item in rows if item.get("ok"))
     print(f"[*] 优惠检测完成：共 {len(rows)} 个账号，检测成功 {ok}，失败 {len(rows) - ok}")
@@ -376,7 +377,8 @@ def _print_promotion_summary(result):
         if item.get("ok"):
             continue
         email = str(item.get("email") or "").strip()
-        probe = item.get("probe") if isinstance(item.get("probe"), dict) else {}
+        _raw_probe: object = item.get("probe")
+        probe: dict = _raw_probe if isinstance(_raw_probe, dict) else {}
         raw_reason = str(item.get("promotion_status") or probe.get("error") or item.get("error") or "failed")
         print(f"[!] {email}: {_probe_reason_label(raw_reason)}")
         logger.warning("promotion check failed for %s: %s", email, raw_reason)
@@ -388,7 +390,8 @@ def _print_quota_summary(result):
     The machine-readable result already went out through ``emit_result``;
     stdout only needs the operator story, not the full JSON dump.
     """
-    results = result.get("results") if isinstance(result.get("results"), list) else []
+    _raw_results: object = result.get("results")
+    results: list = _raw_results if isinstance(_raw_results, list) else []
     rows = [item for item in results if isinstance(item, dict)]
     ok = sum(1 for item in rows if item.get("ok"))
     deactivated = sum(
@@ -404,7 +407,8 @@ def _print_quota_summary(result):
     logger.info("liveness check finished: ok=%s/%s deactivated=%s", ok, len(rows), deactivated)
     for item in rows:
         email = str(item.get("email") or "").strip()
-        relogin = item.get("relogin") if isinstance(item.get("relogin"), dict) else {}
+        _raw_relogin: object = item.get("relogin")
+        relogin: dict = _raw_relogin if isinstance(_raw_relogin, dict) else {}
         if item.get("ok"):
             # A silent 401 -> relogin -> 200 recovery is otherwise invisible in
             # the panel; surface it so operators know the token rotated.
@@ -412,7 +416,8 @@ def _print_quota_summary(result):
                 print(f"[+] {email}: 重登成功，令牌已刷新")
                 logger.info("liveness relogin recovered %s", email)
             continue
-        probe = item.get("probe") if isinstance(item.get("probe"), dict) else {}
+        _raw_probe: object = item.get("probe")
+        probe: dict = _raw_probe if isinstance(_raw_probe, dict) else {}
         raw_reason = str(probe.get("status") or probe.get("error") or relogin.get("error") or item.get("error") or "failed")
         reason = _probe_reason_label(raw_reason)
         note = _relogin_panel_note(relogin)

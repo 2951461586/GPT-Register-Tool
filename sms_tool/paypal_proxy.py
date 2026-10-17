@@ -192,7 +192,9 @@ def _probe_http_get_json(url: str, proxy: str, timeout: float) -> tuple[dict[str
     under that stack is caught here rather than mid-checkout. Falls back to
     ``requests`` when curl_cffi is unavailable.
     """
-    proxies = {"http": proxy, "https": proxy}
+    # curl_cffi's ``ProxySpec`` is a ``TypedDict``; this plain mapping is what
+    # every call site in the repo passes and is accepted at runtime.
+    proxies: Any = {"http": proxy, "https": proxy}
     try:
         from curl_cffi import requests as _curl_requests
 
@@ -308,7 +310,7 @@ def select_proxy_from_pool(
     raw_pool = list(dict.fromkeys(str(item or "").strip() for item in (proxy_pool or []) if str(item or "").strip()))
     if not raw_pool and callable(pool_loader):
         try:
-            loaded = pool_loader()
+            loaded: Any = pool_loader()
             raw_pool = list(dict.fromkeys(
                 str(item or "").strip() for item in (loaded or []) if str(item or "").strip()
             ))
@@ -631,7 +633,8 @@ def _stage_proxy_value(stage_proxies: dict, key: str, fallback: str = "") -> str
 
 
 def _proxy_health_cfg(paypal_cfg: dict) -> dict:
-    value = paypal_cfg.get("proxy_health") if isinstance(paypal_cfg.get("proxy_health"), dict) else {}
+    _raw_value: object = paypal_cfg.get("proxy_health")
+    value: dict = _raw_value if isinstance(_raw_value, dict) else {}
     return value or {}
 
 
@@ -681,7 +684,8 @@ def proxy_state_from_config(cfg: Any) -> PayPalProxyState:
 
 
 def _proxy_pool_values(paypal_cfg: dict, key: str) -> list[str]:
-    pools = paypal_cfg.get("stage_proxy_pools") if isinstance(paypal_cfg.get("stage_proxy_pools"), dict) else {}
+    _raw_pools: object = paypal_cfg.get("stage_proxy_pools")
+    pools: dict = _raw_pools if isinstance(_raw_pools, dict) else {}
     raw = pools.get(key)
     if isinstance(raw, str):
         raw = [raw]
@@ -789,7 +793,8 @@ def _proxies_from_config(cfg: dict, checkout_country: str = "", target_country: 
 
 
 def _stage_proxy_is_configured(paypal_cfg: dict, *keys: str) -> bool:
-    stage_proxies = paypal_cfg.get("stage_proxies") if isinstance(paypal_cfg.get("stage_proxies"), dict) else {}
+    _raw_stage_proxies: object = paypal_cfg.get("stage_proxies")
+    stage_proxies: dict = _raw_stage_proxies if isinstance(_raw_stage_proxies, dict) else {}
     return any(str(stage_proxies.get(key) or "").strip() for key in keys)
 
 

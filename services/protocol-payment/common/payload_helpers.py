@@ -89,7 +89,8 @@ def infer_processor_entity(payload: Any) -> str:
 def payment_page_summary(payload: Any) -> dict[str, Any]:
     if not isinstance(payload, dict):
         return {}
-    elements_options = payload.get("elements_options") if isinstance(payload.get("elements_options"), dict) else {}
+    _raw_elements_options: object = payload.get("elements_options")
+    elements_options: dict = _raw_elements_options if isinstance(_raw_elements_options, dict) else {}
     submission = find_submission_attempt(payload)
     next_action = first_value_by_key(payload, "next_action")
     payment_intent = first_value_by_key(payload, "payment_intent")

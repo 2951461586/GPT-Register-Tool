@@ -37,8 +37,10 @@ def prepare_browser_context(config: Mapping[str, Any], driver_name: str, browser
     timeout = int(_config_value(config, "browser_timeout_seconds", 90) or 90)
     locale = str(_config_value(config, "browser_locale", "en-US") or "en-US")
     timezone_id = str(_config_value(config, "browser_timezone", "America/New_York") or "America/New_York")
-    email_cfg = config.get("email_registration") if isinstance(config.get("email_registration"), Mapping) else {}
-    chat_cfg = config.get("chatgpt") if isinstance(config.get("chatgpt"), Mapping) else {}
+    _raw_email_cfg: object = config.get("email_registration")
+    email_cfg: Mapping = _raw_email_cfg if isinstance(_raw_email_cfg, Mapping) else {}
+    _raw_chat_cfg: object = config.get("chatgpt")
+    chat_cfg: Mapping = _raw_chat_cfg if isinstance(_raw_chat_cfg, Mapping) else {}
     chat_base = str(chat_cfg.get("chat_base_url") or endpoints.CHATGPT_BASE).rstrip("/")
     auth_base = str(chat_cfg.get("auth_base_url") or endpoints.AUTH_BASE).rstrip("/")
     return BrowserRegistrationContext(

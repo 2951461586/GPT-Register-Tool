@@ -23,8 +23,10 @@ class OmakseCommandContext:
 
 
 def _paypal_stage_proxies(config: Mapping[str, Any]) -> dict[str, Any]:
-    paypal_cfg = config.get("paypal") if isinstance(config.get("paypal"), dict) else {}
-    stage = paypal_cfg.get("stage_proxies") if isinstance(paypal_cfg.get("stage_proxies"), dict) else {}
+    _raw_paypal_cfg: object = config.get("paypal")
+    paypal_cfg: dict = _raw_paypal_cfg if isinstance(_raw_paypal_cfg, dict) else {}
+    _raw_stage: object = paypal_cfg.get("stage_proxies")
+    stage: dict = _raw_stage if isinstance(_raw_stage, dict) else {}
     return stage
 
 

@@ -791,8 +791,13 @@ def test_the_password_lane_does_not_prime_by_default():
     w._operations._prime_create_account_password_page = Mock(  # type: ignore[attr-defined]
         side_effect=lambda *a, **kw: (calls.append("prime"), {"ok": True, "status": 200, "url": ""})[1]
     )
-    w._operations.request_with_retry = Mock(
-        side_effect=lambda *a, **kw: (calls.append("post"), _response({"continue_url": _CONTINUE_URL}))[1]
+    # ``RegistrationOperations`` is a frozen dataclass; setattr is the documented
+    # way to swap a seam on it (a plain assignment is rejected by the type checker
+    # even though it works at runtime via object.__setattr__).
+    setattr(
+        w._operations,
+        "request_with_retry",
+        Mock(side_effect=lambda *a, **kw: (calls.append("post"), _response({"continue_url": _CONTINUE_URL}))[1]),
     )
 
     w.user_register()
@@ -818,8 +823,10 @@ def test_the_primed_password_lane_gets_the_password_page_before_the_post():
     )
     state = _state(signup_state={"url": _EMAIL_VERIFICATION_URL, "attempt": "a1", "status": 200})
     w = _workflow(state, prime=True, prime_page=prime_page, password_step=auth_flow._is_signup_password_step)
-    w._operations.request_with_retry = Mock(
-        side_effect=lambda *a, **kw: (order.append("post"), _response({"continue_url": _CONTINUE_URL}))[1]
+    setattr(
+        w._operations,
+        "request_with_retry",
+        Mock(side_effect=lambda *a, **kw: (order.append("post"), _response({"continue_url": _CONTINUE_URL}))[1]),
     )
 
     w.user_register()

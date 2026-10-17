@@ -8,6 +8,7 @@ import sys
 import time
 import uuid
 from pathlib import Path
+from typing import Any
 from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 
 import requests
@@ -770,9 +771,16 @@ def opll_stripe_confirm_return_url(cs_id: str, checkout: dict, stripe_hosted_url
     return hosted_url
 
 
-def opll_new_http_session() -> requests.Session:
+def opll_new_http_session() -> Any:
+    """Return an HTTP session with the requests-compatible surface this module uses.
+
+    ``curl_cffi.requests.Session`` (when installed) and ``requests.Session`` have
+    no common base class, but both provide ``.get`` / ``.post`` / ``.headers`` /
+    ``.proxies``. Declaring ``Any`` states that duck-typed contract honestly
+    instead of asserting a subclass relationship the libraries do not have.
+    """
     if CurlCffiSession is not None:
-        session = CurlCffiSession(impersonate="chrome136")  # type: ignore[assignment]
+        session: Any = CurlCffiSession(impersonate="chrome136")
     else:
         session = requests.Session()
     if hasattr(session, "trust_env"):
@@ -865,7 +873,10 @@ def opll_update_checkout_promotion(access_token: str, checkout: dict, proxy_url:
             time.sleep(OPLL_CHECKOUT_TRANSIENT_RETRY_DELAY + random.random())
             continue
         raise RuntimeError(f"checkout/update failed: HTTP {response.status_code} {response.text[:500]}")
-    payload = response.json() or {}
+    if response is None:  # pragma: no cover - the loop above always assigns or raises
+        raise RuntimeError("checkout/update failed: no response")
+    _json_raw: object = response.json()
+    payload: object = _json_raw if _json_raw is not None else {}
     if isinstance(payload, dict) and payload.get("success") is False:
         raise RuntimeError(f"checkout/update rejected: {str(payload)[:500]}")
     return payload if isinstance(payload, dict) else {"response": payload}
@@ -1009,7 +1020,8 @@ def opll_stripe_error_summary(prefix: str, response) -> str:
     error = payload.get("error") if isinstance(payload, dict) else {}
     if not isinstance(error, dict):
         error = {}
-    extra_fields = error.get("extra_fields") if isinstance(error.get("extra_fields"), dict) else {}
+    _raw_extra_fields: object = error.get("extra_fields")
+    extra_fields: dict = _raw_extra_fields if isinstance(_raw_extra_fields, dict) else {}
     parts = []
     for label, value in (
         ("code", error.get("code")),

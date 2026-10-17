@@ -68,9 +68,10 @@ def relogin_web_session_account(account: dict[str, Any], proxy: str | None = Non
             safe = _safe_relogin_result(result)
             safe.update({"ok": False, "mode": "web_session"})
             return safe
+        _data_raw: object = result.get("data")
         return _verify_and_persist_candidate(
             account,
-            result.get("data") if isinstance(result.get("data"), dict) else {},
+            _data_raw if isinstance(_data_raw, dict) else {},
             mode="web_session",
             proxy=proxy,
             timeout=timeout,
@@ -92,7 +93,8 @@ def relogin_refresh_token_account(
         return {"ok": False, "mode": "oauth_refresh_token", "error": "missing_email"}
     from ..codex_export import _openai_refresh_token, _refresh_with_openai_oauth
 
-    auth_session = account.get("auth_session") if isinstance(account.get("auth_session"), dict) else {}
+    _raw_auth_session: object = account.get("auth_session")
+    auth_session: dict = _raw_auth_session if isinstance(_raw_auth_session, dict) else {}
     refresh_token = _openai_refresh_token(account, auth_session)
     if not refresh_token:
         return {"ok": False, "mode": "oauth_refresh_token", "error": "missing_refresh_token", "skipped": True}
@@ -104,7 +106,8 @@ def relogin_refresh_token_account(
             "error": _redact_recovery_error(result.get("error") or "oauth_refresh_failed"),
         }
     candidate = dict(account)
-    candidate.update(result.get("data") if isinstance(result.get("data"), dict) else {})
+    _data_raw: object = result.get("data")
+    candidate.update(_data_raw if isinstance(_data_raw, dict) else {})
     candidate["email"] = email
     candidate["refresh_token_status"] = "oauth_present"
     candidate["refresh_token_updated_at"] = int(time.time())
@@ -149,7 +152,8 @@ def relogin_chatgpt_email_account(
             return {"ok": False, "mode": "chatgpt_email_otp", "error": "missing_mailbox"}
 
         select_auth_fingerprint(rotate=True)
-        chat_cfg = CFG.get("chatgpt") if isinstance(CFG.get("chatgpt"), dict) else {}
+        _chat_raw: object = CFG.get("chatgpt")
+        chat_cfg: dict[str, Any] = _chat_raw if isinstance(_chat_raw, dict) else {}
         auth_base = str(chat_cfg.get("auth_base_url") or "https://auth.openai.com").rstrip("/")
         chat_base = str(chat_cfg.get("chat_base_url") or "https://chatgpt.com").rstrip("/")
         device_id = str(account.get("device_id") or uuid.uuid4())
@@ -208,7 +212,8 @@ def relogin_chatgpt_email_account(
             }
 
         auth_result = _fetch_auth_session(session, chat_base, base_headers)
-        auth_session = auth_result.get("body") if isinstance(auth_result.get("body"), dict) else {}
+        _raw_auth_session: object = auth_result.get("body")
+        auth_session: dict = _raw_auth_session if isinstance(_raw_auth_session, dict) else {}
         access_token = str(_auth_session_access_token(auth_session) or "").strip()
         if not access_token:
             return {"ok": False, "mode": "chatgpt_email_otp", "error": "auth_session_missing_access_token"}
@@ -417,7 +422,8 @@ def relogin_local_codex_account(
             safe["ok"] = False
             return safe
 
-        tokens = result.get("tokens") if isinstance(result.get("tokens"), dict) else {}
+        _tokens_raw: object = result.get("tokens")
+        tokens: dict[str, Any] = _tokens_raw if isinstance(_tokens_raw, dict) else {}
         candidate_at = str(tokens.get("access_token") or "").strip()
         if not candidate_at:
             return {
@@ -488,8 +494,10 @@ def relogin_browser_session_account(
         from ..registration_drivers import browser_flow
         from ..registration_drivers.external_sessions import create_browser_session
 
-        config = CFG.data if hasattr(CFG, "data") else {}
-        chat_cfg = config.get("chatgpt", {}) if isinstance(config.get("chatgpt"), dict) else {}
+        _raw_config: object = getattr(CFG, "data", None)
+        config = _raw_config if isinstance(_raw_config, dict) else {}
+        _chat_raw: object = config.get("chatgpt")
+        chat_cfg: dict[str, Any] = _chat_raw if isinstance(_chat_raw, dict) else {}
         chat_base = str(chat_cfg.get("chat_base_url") or "https://chatgpt.com").rstrip("/")
         auth_base = str(chat_cfg.get("auth_base_url") or "https://auth.openai.com").rstrip("/")
         device_id = str(account.get("device_id") or uuid.uuid4())
@@ -521,6 +529,12 @@ def relogin_browser_session_account(
         with browser_session as browser:
             browser.add_device_cookie(device_id, chat_base, auth_base)
             page = browser.page
+            if page is None:
+                return {
+                    "ok": False,
+                    "mode": "browser_session",
+                    "error": "browser_page_missing",
+                }
             page.goto(chat_base, wait_until="domcontentloaded", timeout=int(timeout) * 1000)
             # Wait for Cloudflare challenge to clear automatically
             browser_flow.page_state._wait_for_challenge_clear(page, max_wait_seconds=30)
@@ -580,7 +594,8 @@ def _verify_and_persist_candidate(
     if mode == "web_session":
         from ..session_refresh import _auth_session_email
 
-        auth_session = verified.get("auth_session") if isinstance(verified.get("auth_session"), dict) else {}
+        _raw_auth_session: object = verified.get("auth_session")
+        auth_session: dict = _raw_auth_session if isinstance(_raw_auth_session, dict) else {}
         authenticated_email = _auth_session_email(auth_session)
         if not authenticated_email:
             return {"ok": False, "mode": mode, "error": "auth_session_missing_email", "persisted": False}
@@ -635,7 +650,8 @@ def _promotion_auth_failure(data: Any) -> bool:
     """
     if not isinstance(data, dict):
         return False
-    promotion = data.get("promotion") if isinstance(data.get("promotion"), dict) else {}
+    _promotion_raw: object = data.get("promotion")
+    promotion: dict[str, Any] = _promotion_raw if isinstance(_promotion_raw, dict) else {}
     state = str(promotion.get("state") or data.get("promotion_state") or "").strip().lower()
     if state:
         return state == PROMOTION_STATE_AUTH_INVALID
@@ -673,15 +689,19 @@ def _mark_successful_relogin(data: dict[str, Any], probe: dict[str, Any], *, now
     if _promotion_auth_failure(data):
         data["promotion_status"] = ""
         data.pop("promotion_state", None)
-        promotion = data.get("promotion") if isinstance(data.get("promotion"), dict) else None
-        if promotion is not None:
-            promotion.pop("state", None)
-            data["promotion"] = promotion
-    promotion = data.get("promotion") if isinstance(data.get("promotion"), dict) else {}
+        # Distinct name: ``promotion`` is declared ``dict`` two lines below, so a
+        # ``None`` assignment here would conflict with that declaration.
+        _promo_raw: object = data.get("promotion")
+        if isinstance(_promo_raw, dict):
+            _promo_raw.pop("state", None)
+            data["promotion"] = _promo_raw
+    _raw_promotion: object = data.get("promotion")
+    promotion: dict = _raw_promotion if isinstance(_raw_promotion, dict) else {}
     if promotion and _promotion_auth_failure({**data, "promotion_status": promotion.get("status")}):
         promotion["status"] = ""
         data["promotion"] = promotion
-    account_scan = data.get("account_scan") if isinstance(data.get("account_scan"), dict) else {}
+    _scan_raw: object = data.get("account_scan")
+    account_scan: dict[str, Any] = _scan_raw if isinstance(_scan_raw, dict) else {}
     account_scan.update({
         "ok": True,
         "scan_status": "alive",
@@ -693,7 +713,8 @@ def _mark_successful_relogin(data: dict[str, Any], probe: dict[str, Any], *, now
     # A verified replacement AT must also clear the quota-side 401 marker.
     # Otherwise JIT payment/account-pool filters continue to reject the account
     # even though the newly persisted token has passed the canonical probe.
-    quota = data.get("quota") if isinstance(data.get("quota"), dict) else {}
+    _quota_raw: object = data.get("quota")
+    quota: dict[str, Any] = _quota_raw if isinstance(_quota_raw, dict) else {}
     quota_status = str(probe.get("quota_status") or "").strip()
     if not quota_status or quota_status in {"401失效", "token_invalid", "HTTP 401"}:
         quota_status = "可用"
@@ -713,12 +734,13 @@ def _select_recovery_proxy(account: dict[str, Any], proxy: str | None) -> tuple[
     country = str(account.get("registration_country") or "").strip().upper()
     if not country:
         return proxy, []
-    proxy_cfg = CFG.get("proxy") if isinstance(CFG.get("proxy"), dict) else {}
+    _proxy_raw: object = CFG.get("proxy")
+    proxy_cfg: dict[str, Any] = _proxy_raw if isinstance(_proxy_raw, dict) else {}
     configured = proxy_cfg.get("pool") or []
     if isinstance(configured, str):
         configured = [configured]
-    candidates = [
-        value
+    candidates: list[str] = [
+        str(value)
         for value in (
             proxy,
             *configured,
@@ -770,7 +792,8 @@ def _recovery_allow_direct() -> bool:
     egress changes where the request comes from, so it stays an explicit
     operator choice (``proxy.recovery_allow_direct``).
     """
-    proxy_cfg = CFG.get("proxy") if isinstance(CFG.get("proxy"), dict) else {}
+    _proxy_raw: object = CFG.get("proxy")
+    proxy_cfg: dict[str, Any] = _proxy_raw if isinstance(_proxy_raw, dict) else {}
     return bool(proxy_cfg.get("recovery_allow_direct"))
 
 
@@ -1020,7 +1043,8 @@ def _relogin_guard_path():
 
 
 def _relogin_cooldown_seconds() -> int:
-    health = CFG.get("account_health") if isinstance(CFG.get("account_health"), dict) else {}
+    _health_raw: object = CFG.get("account_health")
+    health: dict[str, Any] = _health_raw if isinstance(_health_raw, dict) else {}
     try:
         return max(60, int(health.get("relogin_cooldown_seconds") or 1800))
     except (TypeError, ValueError):
@@ -1033,7 +1057,8 @@ def _relogin_cooldown_active(account: dict[str, Any]) -> bool:
         return False
     # Existing pools may only contain a localized/legacy label. OTP is kept as
     # an ASCII marker so known mailbox failures do not immediately loop again.
-    quota = account.get("quota") if isinstance(account.get("quota"), dict) else {}
+    _quota_raw: object = account.get("quota")
+    quota: dict[str, Any] = _quota_raw if isinstance(_quota_raw, dict) else {}
     status = str(account.get("quota_status") or quota.get("status") or "").strip().lower()
     try:
         updated_at = int(account.get("quota_updated_at") or quota.get("updated_at") or 0)
@@ -1087,7 +1112,8 @@ def _relogin_dead_end_permanent() -> bool:
     underlying cause can delete the entry.  Configurable so the escalation can be
     turned back into a plain cooldown without a code change.
     """
-    health = CFG.get("account_health") if isinstance(CFG.get("account_health"), dict) else {}
+    _health_raw: object = CFG.get("account_health")
+    health: dict[str, Any] = _health_raw if isinstance(_health_raw, dict) else {}
     return bool(health.get("relogin_dead_end_permanent", True))
 
 
@@ -1162,7 +1188,8 @@ def _relogin_repeat_cooldown_seconds() -> int:
     window to ``relogin_cooldown_seconds``, so fixing the cause restores fast
     retries without touching this key.
     """
-    health = CFG.get("account_health") if isinstance(CFG.get("account_health"), dict) else {}
+    _health_raw: object = CFG.get("account_health")
+    health: dict[str, Any] = _health_raw if isinstance(_health_raw, dict) else {}
     try:
         return max(60, int(health.get("relogin_repeat_cooldown_seconds") or 21600))
     except (TypeError, ValueError):
@@ -1213,7 +1240,8 @@ def _record_relogin_failure(email: str, relogin: dict[str, Any]) -> None:
     except (OSError, ValueError, TypeError):
         data = {}
     key = _normalize_email(email)
-    previous = data.get(key) if isinstance(data.get(key), dict) else {}
+    _previous_raw: object = data.get(key)
+    previous: dict[str, Any] = _previous_raw if isinstance(_previous_raw, dict) else {}
     shape = _relogin_failure_shape(relogin)
     # An unchanged shape means the last window bought nothing, so waiting the
     # ordinary cooldown again would spend the next OTP on the same answer.

@@ -21,6 +21,8 @@ from .registration_retry_guard import RegistrationRetryGuard, mailbox_registrati
 from .registration_policy import registration_retry_decision
 from .registration_result import safe_proxy_audit
 from .sentinel.runner import SentinelRunnerError, check_node_runner_readiness
+from typing import Any
+
 from .storage import (
     acquire_environment_lease,
     get_account_records,
@@ -122,7 +124,7 @@ def _registration_proxy_metadata(
     pool_index: int,
     expected_country: str = "",
     actual_country: str = "",
-) -> dict:
+) -> dict[str, Any]:
     """Return audit-safe proxy selection metadata without URL credentials."""
     parsed = urlsplit(str(proxy or ""))
     return {
@@ -186,7 +188,8 @@ def _release_environment_lease(lease, result, worker_proxy: str | None) -> None:
     """
     if not isinstance(lease, dict) or not lease.get("lease_id"):
         return
-    payload = result if isinstance(result, dict) else {}
+    _raw_payload: object = result
+    payload: dict = _raw_payload if isinstance(_raw_payload, dict) else {}
     lease_id = int(lease["lease_id"])
     try:
         record_environment_observations(
@@ -285,7 +288,8 @@ def _drop_already_registered(mailboxes):
     items = list(mailboxes or [])
     if not items:
         return items, [], []
-    registration_cfg = CFG.get("registration") if isinstance(CFG.get("registration"), dict) else {}
+    _raw_registration_cfg: object = CFG.get("registration")
+    registration_cfg: dict = _raw_registration_cfg if isinstance(_raw_registration_cfg, dict) else {}
     skip_registered = registration_cfg.get("skip_registered_mailboxes", True) not in (
         False, 0, "0", "false", "False", "no",
     )
@@ -426,8 +430,8 @@ def filter_registered_mailboxes(mailboxes):
 
 def ensure_batch_sentinel_readiness(config, registration_driver: str) -> str:
     """Fail locally before a protocol batch makes network requests."""
-    email_cfg = config.get("email_registration") if isinstance(config, Mapping) else {}
-    email_cfg = email_cfg if isinstance(email_cfg, Mapping) else {}
+    _raw_email_cfg: object = config.get("email_registration") if isinstance(config, Mapping) else {}
+    email_cfg = _raw_email_cfg if isinstance(_raw_email_cfg, Mapping) else {}
     from .sentinel import sentinel_backend
 
     backend = sentinel_backend({"email_registration": email_cfg})
@@ -483,7 +487,8 @@ def run_batch_impl(
     registration_driver = normalize_registration_driver(registration_driver, CFG)
     # Direct callers use the same gate as the CLI preflight. It must precede
     # mailbox/account lookups and this batch's proxy checks.
-    email_cfg = CFG.get("email_registration") if isinstance(CFG.get("email_registration"), dict) else {}
+    _raw_email_cfg: object = CFG.get("email_registration")
+    email_cfg: dict = _raw_email_cfg if isinstance(_raw_email_cfg, dict) else {}
     backend = ensure_batch_sentinel_readiness(CFG, registration_driver)
     mailboxes = _unique_mailboxes(mailboxes)
     mailboxes, skipped_registered, skipped_dead = _drop_already_registered(mailboxes)
@@ -526,7 +531,8 @@ def run_batch_impl(
     progress_lock = threading.Lock()
     completed_count = 0
     retry_guard = RegistrationRetryGuard(CFG)
-    registration_cfg = CFG.get("registration") if isinstance(CFG.get("registration"), dict) else {}
+    _raw_registration_cfg: object = CFG.get("registration")
+    registration_cfg: dict = _raw_registration_cfg if isinstance(_raw_registration_cfg, dict) else {}
     # P2-2: whole-batch stop for environment failures (proxy pool down, signup
     # page changed shape, ...). Neither the per-account retry guard nor the
     # per-proxy health tracker can see this pattern, so a dead environment used
@@ -570,7 +576,7 @@ def run_batch_impl(
         prewarm_window = 0
     prewarm_executor = None
     prewarmed = {}
-    first_attempt_proxies = {}
+    first_attempt_proxies: dict[Any, Any] = {}
     proxy_pool_offset = 0
     proxy_rotation_generation = 0
     if registration_driver != "protocol":
@@ -695,15 +701,17 @@ def run_batch_impl(
             base_proxy = proxy_pool[account_proxy_index] if proxy_pool else proxy
             prewarm = first_attempt_proxies.get(i) if attempt == 1 else None
             use_prewarm = bool(prewarm and prewarm[0] == base_proxy)
+            # ``prewarm`` is Optional and the boolean above does not narrow it for
+            # the checker, so index it behind the same guard.
             worker_proxy = (
                 prewarm[1]
-                if use_prewarm
+                if use_prewarm and prewarm is not None
                 else (refresh_proxy_sid(base_proxy) if base_proxy else base_proxy)
             )
-            expected_country = infer_proxy_country(worker_proxy)
+            expected_country = infer_proxy_country(worker_proxy or "")
             proxy_metadata = _registration_proxy_metadata(
                 worker_proxy,
-                pool_index=pool_indices.get(base_proxy, i % len(proxy_pool) if proxy_pool else -1),
+                pool_index=pool_indices.get(base_proxy or "", i % len(proxy_pool) if proxy_pool else -1),
                 expected_country=expected_country,
                 actual_country=preflight_actual_countries.get(base_proxy, ""),
             )
@@ -718,7 +726,9 @@ def run_batch_impl(
                 worker_proxy, account_ref=mailbox_email, batch_id=batch_id
             )
             try:
-                call_kwargs = dict(
+                # Annotated: the literal infers a narrow value union, and the
+                # metadata dict assigned below does not fit it.
+                call_kwargs: dict[str, Any] = dict(
                     proxy=worker_proxy,
                     mailbox=mailbox,
                     phone_pool=phone_pool,
@@ -791,8 +801,8 @@ def run_batch_impl(
                 result["error_advice"] = decision.advice
                 retry_guard.record(
                     mailbox_email,
-                    failure_class=result.get("failure_class"),
-                    error=result.get("error"),
+                    failure_class=str(result.get("failure_class") or ""),
+                    error=str(result.get("error") or ""),
                     success=False,
                 )
                 # P2-2: only terminal per-account verdicts feed the breaker, so
@@ -940,7 +950,7 @@ def run_batch_impl(
                     prewarm_executor.shutdown(wait=True)
                 _close_browser_pool()
 
-        ordered = [None] * count
+        ordered: list[Any] = [None] * count
         try:
             with ThreadPoolExecutor(max_workers=workers) as executor:
                 futures = [executor.submit(_run_one, i) for i in range(count)]

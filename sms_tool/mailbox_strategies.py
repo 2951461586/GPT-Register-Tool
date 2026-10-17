@@ -16,8 +16,14 @@ from typing import Any, Callable, Mapping, Optional, Protocol, TypeVar
 # ── Type aliases ────────────────────────────────────────────────────────────────
 
 MailboxT = TypeVar("MailboxT")
-MessageFetcher = Callable[[MailboxT], list[Any]]
-OtpPoller = Callable[[MailboxT], Optional[str]]
+# ``...`` rather than ``[MailboxT]``: every registered fetcher/poller takes the
+# mailbox plus provider-specific keyword arguments (``limit``, ``proxy``,
+# ``subject_keyword``, ``email_cfg``, ...). A single-parameter alias described a
+# contract no implementation actually has, so every registration site was a type
+# error. The mailbox type stays a documented convention (``MailboxT``), not a
+# positional constraint the checker cannot enforce across **kwargs anyway.
+MessageFetcher = Callable[..., list[Any]]
+OtpPoller = Callable[..., Optional[str]]
 
 
 class MailboxProviderAdapter(Protocol):
@@ -78,7 +84,12 @@ class FunctionMailboxProviderAdapter:
 
 class MailboxProviderRegistry:
     def __init__(self) -> None:
-        self._adapters: list[MailboxProviderAdapter] = []
+        # Concrete adapters, not the ``MailboxProviderAdapter`` Protocol: only
+        # ``FunctionMailboxProviderAdapter`` is ever registered, and the
+        # registry reads its ``message_fetcher`` / ``otp_poller`` /
+        # ``credential_checker`` / ``fallback`` fields directly. Typing the
+        # list as the Protocol hid those fields from the checker.
+        self._adapters: list[FunctionMailboxProviderAdapter] = []
         self._frozen = False
 
     def register(self, adapter: FunctionMailboxProviderAdapter) -> None:

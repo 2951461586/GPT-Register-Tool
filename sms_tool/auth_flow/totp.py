@@ -83,7 +83,8 @@ def _complete_existing_login_totp(
 def _is_mfa_challenge_payload(payload):
     if not isinstance(payload, dict):
         return False
-    page = payload.get("page") if isinstance(payload.get("page"), dict) else {}
+    _raw_page: object = payload.get("page")
+    page: dict = _raw_page if isinstance(_raw_page, dict) else {}
     if str(page.get("type") or "").strip().lower() == "mfa_challenge":
         return True
     return "/mfa-challenge/" in str(_response_next_url_from_data(payload, "") or "").lower()
@@ -109,7 +110,9 @@ def _totp_factor_id(payload):
 def _response_next_url_from_data(payload, auth_base):
     if not isinstance(payload, dict):
         return ""
-    page = payload.get("page") if isinstance(payload.get("page"), dict) else {}
-    page_payload = page.get("payload") if isinstance(page.get("payload"), dict) else {}
+    _raw_page: object = payload.get("page")
+    page: dict = _raw_page if isinstance(_raw_page, dict) else {}
+    _raw_page_payload: object = page.get("payload")
+    page_payload: dict = _raw_page_payload if isinstance(_raw_page_payload, dict) else {}
     value = str(payload.get("continue_url") or page_payload.get("url") or "").strip()
     return deps._absolute_url(auth_base, value) if value and auth_base else value

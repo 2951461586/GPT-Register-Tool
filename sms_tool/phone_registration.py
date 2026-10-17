@@ -73,7 +73,8 @@ def run_phone_register(
     # Load the selected provider's config before buying a number so the proxy
     # can be matched to the phone country and verified first.
     phone_value = config.get("phone_reuse")
-    phone_reuse_cfg = phone_value if isinstance(phone_value, Mapping) else {}
+    _raw_phone_reuse_cfg: object = phone_value
+    phone_reuse_cfg: Mapping = _raw_phone_reuse_cfg if isinstance(_raw_phone_reuse_cfg, Mapping) else {}
     provider, provider_cfg, api_key, endpoint = _provider_selection(phone_reuse_cfg, smsbower_api_key)
     country = smsbower_country or provider_cfg.get("country", "38")
 
@@ -221,14 +222,16 @@ def run_phone_register(
         # Step 4: Wait for SMS code from SMSBower
         _tick("4-Wait SMS code")
         print(f"[*] Waiting for SMS code on {phone}...")
-        code_result = sms_client.wait_for_code(handle, timeout=180, interval=5)
+        code_result = sms_client.wait_for_code(handle, timeout=180, poll_interval=5)
         _tock()
 
-        if not code_result or not code_result.get("code"):
+        # ``wait_for_code`` returns the code string itself (Optional[str]), not a
+        # mapping; treating it as a dict raised AttributeError and killed the run.
+        if not code_result:
             sms_client.cancel(handle)
             return _failure_result("sms_code_timeout", email=phone)
 
-        sms_code = code_result["code"]
+        sms_code = code_result
         print(f"[*] SMS code received: {sms_code}")
 
         # Step 5: Validate phone OTP
@@ -344,9 +347,14 @@ def run_phone_register(
         try:
             from .codex_oauth import collect_codex_oauth_tokens
             oauth_result = collect_codex_oauth_tokens(
-                access_token, proxy=proxy, device_id=did,
+                data={
+                    "email": phone,
+                    "access_token": access_token,
+                    "device_id": did,
+                },
+                session=session,
+                proxy=proxy or None,
                 phone_pool=None,  # phone already verified
-                sentinel_data=sentinel_data,
             )
             refresh_token = (oauth_result.get("tokens") or {}).get("refresh_token") or ""
             if refresh_token:

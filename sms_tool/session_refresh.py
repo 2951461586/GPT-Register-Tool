@@ -273,7 +273,8 @@ def _fetch_protocol_auth_session(cookie_header, timeout=300, proxy=None, detail=
 def _ensure_session_cookie(cookie_header, data):
     if _has_session_cookie(cookie_header):
         return cookie_header
-    auth_session = data.get("auth_session") if isinstance(data.get("auth_session"), dict) else {}
+    _raw_auth_session: object = data.get("auth_session")
+    auth_session: dict = _raw_auth_session if isinstance(_raw_auth_session, dict) else {}
     session_token = (
         _session_token(auth_session, "sessionToken", "session_token") or str(data.get("session_token") or "").strip()
     )

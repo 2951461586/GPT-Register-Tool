@@ -158,18 +158,21 @@ def _cookie_header(account: Mapping[str, Any]) -> str:
     if value:
         return value
     token = str(account.get("session_token") or "").strip()
-    auth = account.get("auth_session") if isinstance(account.get("auth_session"), dict) else {}
+    _raw_auth: object = account.get("auth_session")
+    auth: dict = _raw_auth if isinstance(_raw_auth, dict) else {}
     token = token or str(auth.get("sessionToken") or auth.get("session_token") or "").strip()
     return f"__Secure-next-auth.session-token={token}" if token else ""
 
 
 def _session_id(account: Mapping[str, Any]) -> str:
-    auth = account.get("auth_session") if isinstance(account.get("auth_session"), dict) else {}
+    _raw_auth: object = account.get("auth_session")
+    auth: dict = _raw_auth if isinstance(_raw_auth, dict) else {}
     return str(account.get("oai_session_id") or account.get("auth_session_logging_id") or auth.get("id") or uuid.uuid4()).strip()
 
 
 def _chat_headers(account: Mapping[str, Any], path: str) -> dict[str, str]:
-    chat_cfg = CFG.get("chatgpt") if isinstance(CFG.get("chatgpt"), dict) else {}
+    _raw_chat_cfg: object = CFG.get("chatgpt")
+    chat_cfg: dict = _raw_chat_cfg if isinstance(_raw_chat_cfg, dict) else {}
     headers = {
         "Accept": "*/*",
         "Content-Type": "application/json",
@@ -219,7 +222,8 @@ def _change_email_request(account: Mapping[str, Any], path: str, payload: dict[s
     if transport is None:
         from curl_cffi import requests as curl_requests
 
-        chat_cfg = CFG.get("chatgpt") if isinstance(CFG.get("chatgpt"), dict) else {}
+        _raw_chat_cfg: object = CFG.get("chatgpt")
+        chat_cfg: dict = _raw_chat_cfg if isinstance(_raw_chat_cfg, dict) else {}
         base = str(chat_cfg.get("chat_base_url") or "https://chatgpt.com").rstrip("/")
         session = curl_requests.Session()
         if proxy:
@@ -248,7 +252,8 @@ def change_one_account(account: Mapping[str, Any], target: MailboxAccount, reque
         old_login = relogin_fn(dict(account), proxy=request.proxy, timeout=request.timeout)
     if not old_login.get("ok"):
         return {"ok": False, "email": old_email, "target_email": target_email, "stage": "old_login", "error": _safe_error(old_login.get("error") or "old_login_failed")}
-    active_account = old_login.get("_verified_data") if isinstance(old_login.get("_verified_data"), dict) else dict(account)
+    _verified_raw: object = old_login.get("_verified_data")
+    active_account: dict[str, Any] = _verified_raw if isinstance(_verified_raw, dict) else dict(account)
     eligibility = check_change_email_eligibility(active_account, timeout=request.timeout, proxy=request.proxy, transport=transport)
     eligibility_type = str(eligibility.get("eligibility_type") or "").strip().lower()
     if not eligibility.get("ok") or eligibility.get("eligible") is False:
@@ -268,7 +273,7 @@ def change_one_account(account: Mapping[str, Any], target: MailboxAccount, reque
     verified = change_email_verify(active_account, target_email, code, timeout=request.timeout, proxy=request.proxy, transport=transport)
     if not verified.get("ok"):
         return {"ok": False, "email": old_email, "target_email": target_email, "stage": "verify", "error": verified.get("error") or "change_email_verify_failed"}
-    candidate = dict(active_account)
+    candidate: dict[str, Any] = dict(active_account)
     candidate.update({"email": target_email, "mailbox": _mailbox_data(target), "mailbox_provider": target.provider, "mailbox_source": target.source, "mailbox_token": target.token})
     try:
         login = relogin_fn(candidate, proxy=request.proxy, timeout=request.timeout, persist=False)
@@ -276,7 +281,8 @@ def change_one_account(account: Mapping[str, Any], target: MailboxAccount, reque
         login = relogin_fn(candidate, proxy=request.proxy, timeout=request.timeout)
     if not login.get("ok"):
         return {"ok": False, "email": old_email, "target_email": target_email, "stage": "relogin", "error": _safe_error(login.get("error") or "relogin_failed")}
-    verified_data = login.get("_verified_data") if isinstance(login.get("_verified_data"), dict) else dict(candidate)
+    _verified_raw2: object = login.get("_verified_data")
+    verified_data: dict[str, Any] = _verified_raw2 if isinstance(_verified_raw2, dict) else dict(candidate)
     probe = liveness or probe_account_liveness
     live = probe(verified_data, proxy=request.proxy, timeout=min(60, max(10, request.timeout)))
     if int(live.get("status_code") or 0) != 200:

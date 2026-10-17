@@ -60,29 +60,32 @@ def cli_payment_method_label(payment_method):
 
 def public_mail_message(msg):
     """Normalize a mailbox message dict for JSON output."""
-    msg = msg if isinstance(msg, dict) else {}
-    from_value = msg.get("from")
+    _raw_msg: object = msg
+    message: dict = _raw_msg if isinstance(_raw_msg, dict) else {}
+    from_value = message.get("from")
     if isinstance(from_value, dict):
         email_address = (from_value.get("emailAddress") or {}) if isinstance(from_value.get("emailAddress"), dict) else {}
         sender_name = str(email_address.get("name") or from_value.get("name") or "").strip()
         sender_address = str(email_address.get("address") or from_value.get("address") or "").strip()
         from_value = formataddr((sender_name, sender_address)) if sender_name and sender_address else (sender_address or sender_name)
-    body = msg.get("body") if isinstance(msg.get("body"), dict) else {}
-    recipients = msg.get("toRecipients") if isinstance(msg.get("toRecipients"), list) else []
+    _raw_body: object = message.get("body")
+    body: dict = _raw_body if isinstance(_raw_body, dict) else {}
+    _raw_recipients: object = message.get("toRecipients")
+    recipients: list = _raw_recipients if isinstance(_raw_recipients, list) else []
     recipient = ""
     if recipients and isinstance(recipients[0], dict):
         email_address = recipients[0].get("emailAddress")
         if isinstance(email_address, dict):
             recipient = str(email_address.get("address") or "").strip()
     return {
-        "id": str(msg.get("id") or msg.get("message_id") or ""),
-        "receivedDateTime": str(msg.get("receivedDateTime") or msg.get("received_at") or msg.get("created_at") or ""),
-        "from": str(from_value or msg.get("from_email") or msg.get("sender") or ""),
-        "recipient": recipient or str(msg.get("recipient") or msg.get("to") or ""),
-        "subject": str(msg.get("subject") or msg.get("title") or ""),
-        "bodyPreview": str(msg.get("bodyPreview") or msg.get("preview") or body.get("content") or msg.get("text") or "")[:2000],
-        "body": str(body.get("content") or msg.get("text") or msg.get("bodyPreview") or ""),
-        "verificationCode": str(msg.get("verificationCode") or ""),
+        "id": str(message.get("id") or message.get("message_id") or ""),
+        "receivedDateTime": str(message.get("receivedDateTime") or message.get("received_at") or message.get("created_at") or ""),
+        "from": str(from_value or message.get("from_email") or message.get("sender") or ""),
+        "recipient": recipient or str(message.get("recipient") or message.get("to") or ""),
+        "subject": str(message.get("subject") or message.get("title") or ""),
+        "bodyPreview": str(message.get("bodyPreview") or message.get("preview") or body.get("content") or message.get("text") or "")[:2000],
+        "body": str(body.get("content") or message.get("text") or message.get("bodyPreview") or ""),
+        "verificationCode": str(message.get("verificationCode") or ""),
     }
 
 

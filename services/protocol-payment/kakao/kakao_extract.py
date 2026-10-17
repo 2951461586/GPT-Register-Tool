@@ -98,7 +98,9 @@ def set_access_token_probe(probe: _AccessTokenProbe) -> None:
 
 def _default_access_token_probe(token: str, proxy: str) -> dict[str, Any]:
     # Local import keeps this module importable without the parent package.
-    from sms_tool.accounts.account_liveness import probe_account_liveness
+    # The extractor is launched with the repo root on sys.path, so this resolves
+    # at runtime; a checker rooted at services/protocol-payment cannot see it.
+    from sms_tool.accounts.account_liveness import probe_account_liveness  # type: ignore[import-not-found]
 
     return probe_account_liveness({"access_token": token}, proxy=proxy, timeout=TIMEOUT)
 
@@ -424,7 +426,8 @@ def load_proxy_state() -> dict[str, Any]:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             payload = {}
-        _proxy_state = payload if isinstance(payload, dict) else {}
+        _narrowed_proxy_state: dict = payload if isinstance(payload, dict) else {}
+        _proxy_state = _narrowed_proxy_state
         _proxy_state.setdefault("seed", {})
         return _proxy_state
 
@@ -983,15 +986,18 @@ def expected_amount(payload: dict[str, Any]) -> str:
     # ``Any``/``None`` type and every later access is reported as
     # ``reportOptionalMemberAccess``.  One read, one narrowing, same behaviour.
     raw_options = payload.get("elements_options")
-    options = raw_options if isinstance(raw_options, dict) else {}
+    _raw_options: object = raw_options
+    options: dict = _raw_options if isinstance(_raw_options, dict) else {}
     if options.get("amount") is not None:
         return str(safe_int(options["amount"]))
     raw_summary = payload.get("total_summary")
-    total_summary = raw_summary if isinstance(raw_summary, dict) else {}
+    _raw_total_summary: object = raw_summary
+    total_summary: dict = _raw_total_summary if isinstance(_raw_total_summary, dict) else {}
     if total_summary.get("due") is not None:
         return str(safe_int(total_summary["due"]))
     raw_invoice = payload.get("invoice")
-    invoice = raw_invoice if isinstance(raw_invoice, dict) else {}
+    _raw_invoice: object = raw_invoice
+    invoice: dict = _raw_invoice if isinstance(_raw_invoice, dict) else {}
     for name in ("amount_due", "total"):
         if invoice.get(name) is not None:
             return str(safe_int(invoice[name]))
@@ -1308,7 +1314,8 @@ def kakao_link(
     confirm_payload = confirm_response.json() or {}
     redirect = extract_redirect(confirm_payload)
     raw_submission = confirm_payload.get("submission_attempt")
-    submission = raw_submission if isinstance(raw_submission, dict) else {}
+    _raw_submission: object = raw_submission
+    submission: dict = _raw_submission if isinstance(_raw_submission, dict) else {}
 
     if not redirect and (submission.get("state") == "requires_approval" or checkout.get("requires_manual_approval")):
         log(f"{PROVIDER_COUNTRY} OpenAI approve（最多 {APPROVE_RETRY_MAX} 次）")

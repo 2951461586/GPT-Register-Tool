@@ -255,7 +255,8 @@ def _upi_session_cookie_header(session: Any, device_id: Any) -> str:
 
 def _upi_bridge_sentinel_kwargs(fingerprint: Any) -> dict[str, Any]:
     """Map a UPI fingerprint dict to the vendored bridge's identity inputs."""
-    fp = fingerprint if isinstance(fingerprint, Mapping) else {}
+    _raw_fp: object = fingerprint
+    fp: Mapping = _raw_fp if isinstance(_raw_fp, Mapping) else {}
     platform_raw = str(fp.get("sec_ch_ua_platform") or '"Windows"').strip('"').lower()
     if "mac" in platform_raw:
         platform, platform_label = "MacIntel", "macOS"
@@ -325,7 +326,8 @@ def _upi_sentinel_flow_candidates(flow: str) -> tuple[str, ...]:
 def _upi_mint_cache_key(
     flow: Any, device_id: Any, proxy: Any, cookie_header: Any, page_url: Any, fingerprint: Any
 ) -> tuple[str, ...]:
-    fp = fingerprint if isinstance(fingerprint, Mapping) else {}
+    _raw_fp: object = fingerprint
+    fp: Mapping = _raw_fp if isinstance(_raw_fp, Mapping) else {}
     return (
         str(flow or ""),
         str(device_id or ""),

@@ -206,8 +206,8 @@ def _record_payload(record: dict[str, Any], *, include_session: bool = True) -> 
 
 def _promotion_presentation(session: dict[str, Any]) -> tuple[str, str]:
     """Return promotion-only desktop fields, stripping legacy method suffixes."""
-    promotion = session.get("promotion")
-    promotion = promotion if isinstance(promotion, dict) else {}
+    _raw_promotion: object = session.get("promotion")
+    promotion = _raw_promotion if isinstance(_raw_promotion, dict) else {}
     status = str(session.get("promotion_status") or promotion.get("status") or "").strip()
     state = str(session.get("promotion_state") or promotion.get("state") or "").strip()
     status = status.split("｜可支付:", 1)[0].strip()
@@ -293,8 +293,10 @@ def _session_file_state(record: dict[str, Any]) -> dict[str, Any]:
     legacy_refresh = str(data.get("refresh_token") or "").strip()
     state["has_refresh_token"] = bool(oauth_refresh and _looks_codex_refresh_token(oauth_refresh)) or _looks_codex_refresh_token(legacy_refresh)
     state["at_probe_status_code"] = _access_token_probe_status_code(data)
-    auth_session = data.get("auth_session") if isinstance(data.get("auth_session"), dict) else {}
-    workspace = data.get("workspace_scan") if isinstance(data.get("workspace_scan"), dict) else {}
+    _raw_auth_session: object = data.get("auth_session")
+    auth_session: dict = _raw_auth_session if isinstance(_raw_auth_session, dict) else {}
+    _raw_workspace: object = data.get("workspace_scan")
+    workspace: dict = _raw_workspace if isinstance(_raw_workspace, dict) else {}
     state["account_type"] = _account_type(data, auth_session, workspace, data.get("access_token"))
     with _SESSION_STATE_LOCK:
         _SESSION_STATE_CACHE[str(path)] = (stat.st_mtime, stat.st_size, state)
@@ -513,7 +515,8 @@ def _full_account_payload(row: dict[str, Any]) -> dict[str, Any]:
         if value not in (None, ""):
             data[key] = value
 
-    mailbox = data.get("mailbox") if isinstance(data.get("mailbox"), dict) else {}
+    _raw_mailbox: object = data.get("mailbox")
+    mailbox: dict = _raw_mailbox if isinstance(_raw_mailbox, dict) else {}
     mailbox = dict(mailbox)
     mailbox_defaults = {
         "email": row.get("email"),
@@ -531,7 +534,8 @@ def _full_account_payload(row: dict[str, Any]) -> dict[str, Any]:
             mailbox[key] = value
     data["mailbox"] = mailbox
 
-    payment = data.get("paypal") if isinstance(data.get("paypal"), dict) else {}
+    _raw_payment: object = data.get("paypal")
+    payment: dict = _raw_payment if isinstance(_raw_payment, dict) else {}
     payment = dict(payment)
     for key, column in (
         ("ok", "paypal_ok"), ("url", "paypal_url"), ("status", "paypal_status"),
@@ -569,7 +573,8 @@ def _smailr_token_from_source(source: Any) -> str:
             parsed = json.loads(source)
         except (TypeError, ValueError):
             return ""
-        candidate = parsed if isinstance(parsed, dict) else {}
+        _raw_candidate: object = parsed
+        candidate: dict = _raw_candidate if isinstance(_raw_candidate, dict) else {}
     else:
         return ""
     nested = candidate.get("data")

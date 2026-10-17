@@ -181,7 +181,8 @@ def _paypal_config(config: Mapping[str, Any] | None) -> dict[str, Any]:
     reintroduce stale stage-country values when a canonical protocol method
     configuration is present.
     """
-    source = config if isinstance(config, Mapping) else {}
+    _raw_source: object = config
+    source: Mapping = _raw_source if isinstance(_raw_source, Mapping) else {}
     try:
         from ..payment_routing import method_payment_config
 
@@ -555,7 +556,8 @@ def generate_pp_link(
     cfg = dict(runtime_config) if isinstance(runtime_config, Mapping) else _plm._load_json(DEFAULT_CONFIG_PATH)
     paypal_cfg = _paypal_config(cfg)
     target_country = str(target_country or paypal_cfg.get("target_country") or "GB").upper()
-    regions = paypal_cfg.get("billing_regions") if isinstance(paypal_cfg.get("billing_regions"), list) else []
+    _raw_regions: object = paypal_cfg.get("billing_regions")
+    regions: list = _raw_regions if isinstance(_raw_regions, list) else []
     checkout_country = (
         str(
             checkout_country
@@ -973,7 +975,8 @@ def _checkout_country_from_cfg(
 ) -> str:
     if explicit_country:
         return str(explicit_country).strip().upper()
-    regions = paypal_cfg.get("billing_regions") if isinstance(paypal_cfg.get("billing_regions"), list) else []
+    _raw_regions: object = paypal_cfg.get("billing_regions")
+    regions: list = _raw_regions if isinstance(_raw_regions, list) else []
     candidates = [
         regions[0] if regions else "",
         paypal_cfg.get("checkout_country"),
@@ -1035,7 +1038,8 @@ def generate_chatgpt_checkout_link(
     """Create a ChatGPT checkout session and return chatgpt.com/checkout/{entity}/{cs_id}."""
     cfg = _plm._load_json(DEFAULT_CONFIG_PATH)
     paypal_cfg = _paypal_config(cfg)
-    regions = paypal_cfg.get("billing_regions") if isinstance(paypal_cfg.get("billing_regions"), list) else []
+    _raw_regions: object = paypal_cfg.get("billing_regions")
+    regions: list = _raw_regions if isinstance(_raw_regions, list) else []
     target_country = (
         str(
             target_country
@@ -1067,7 +1071,8 @@ def generate_chatgpt_checkout_link(
     emit = _emit
 
     try:
-        country_overrides = stage_proxy_countries if isinstance(stage_proxy_countries, dict) else {}
+        _raw_country_overrides: object = stage_proxy_countries
+        country_overrides: dict = _raw_country_overrides if isinstance(_raw_country_overrides, dict) else {}
         expected_country = str(
             country_overrides.get("checkout")
             or (
@@ -1178,7 +1183,8 @@ def generate_hosted_long_url(
     """Generate a ChatGPT/Stripe hosted checkout URL without entering BA/approve flow."""
     cfg = _plm._load_json(DEFAULT_CONFIG_PATH)
     paypal_cfg = _paypal_config(cfg)
-    regions = paypal_cfg.get("billing_regions") if isinstance(paypal_cfg.get("billing_regions"), list) else []
+    _raw_regions: object = paypal_cfg.get("billing_regions")
+    regions: list = _raw_regions if isinstance(_raw_regions, list) else []
     target_country = (
         str(
             target_country

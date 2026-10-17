@@ -17,6 +17,7 @@ from curl_cffi import requests as curl_requests
 
 from .outlook_imap_client import discover_imap_folders, imap_message_to_graph_shape
 from ..mailbox_pool_writer import apply_rotation
+from typing import Any
 
 
 GMAIL_DOMAINS = {"gmail.com", "googlemail.com"}
@@ -70,11 +71,12 @@ def mailbox_has_credentials(mailbox, cfg=None):
 
 
 def refresh_gmail_access_token(mailbox, cfg, proxy=None, scope_override=None):
-    cfg = cfg if isinstance(cfg, dict) else {}
-    client_id = str(getattr(mailbox, "token", "") or cfg.get("client_id") or "").strip()
-    client_secret = str(getattr(mailbox, "client_secret", "") or cfg.get("client_secret") or "").strip()
+    _raw_cfg: object = cfg
+    cfg_map: dict = _raw_cfg if isinstance(_raw_cfg, dict) else {}
+    client_id = str(getattr(mailbox, "token", "") or cfg_map.get("client_id") or "").strip()
+    client_secret = str(getattr(mailbox, "client_secret", "") or cfg_map.get("client_secret") or "").strip()
     refresh_token = str(getattr(mailbox, "refresh_token", "") or "").strip()
-    token_url = str(cfg.get("token_url") or "https://oauth2.googleapis.com/token").strip()
+    token_url = str(cfg_map.get("token_url") or "https://oauth2.googleapis.com/token").strip()
     if not client_id or not client_secret or not refresh_token:
         raise RuntimeError("gmail oauth_refresh requires client_id, client_secret, and refresh_token")
     data = {
@@ -85,8 +87,13 @@ def refresh_gmail_access_token(mailbox, cfg, proxy=None, scope_override=None):
     }
     if scope_override:
         data["scope"] = scope_override
-    proxies = {"http": proxy, "https": proxy} if proxy else None
-    response = curl_requests.post(token_url, data=data, proxies=proxies, impersonate="chrome124", timeout=30)
+    # curl_cffi's ``ProxySpec`` is a ``TypedDict``; a plain mapping is accepted
+    # at runtime. The ignore keeps this independent of how a given checker
+    # models curl_cffi's stub package.
+    proxies: Any = {"http": proxy, "https": proxy} if proxy else None
+    response = curl_requests.post(  # type: ignore[arg-type]
+        token_url, data=data, proxies=proxies, impersonate="chrome124", timeout=30
+    )
     try:
         body = response.json()
     except Exception:
@@ -187,12 +194,13 @@ def send_gmail_message(
     timeout=30,
 ):
     del proxy  # SMTP proxying is not supported in the stdlib transport.
-    cfg = cfg if isinstance(cfg, dict) else {}
+    _raw_cfg: object = cfg
+    cfg_map: dict = _raw_cfg if isinstance(_raw_cfg, dict) else {}
     auth_mode = mailbox_auth_mode(mailbox)
-    host = str(cfg.get("smtp_host") or DEFAULT_SMTP_HOST).strip() or DEFAULT_SMTP_HOST
-    port = int(cfg.get("smtp_port") or DEFAULT_SMTP_PORT)
-    use_ssl = _as_bool(cfg.get("smtp_use_ssl"), True)
-    sender_name = str(getattr(mailbox, "sender_name", "") or cfg.get("sender_name") or "").strip()
+    host = str(cfg_map.get("smtp_host") or DEFAULT_SMTP_HOST).strip() or DEFAULT_SMTP_HOST
+    port = int(cfg_map.get("smtp_port") or DEFAULT_SMTP_PORT)
+    use_ssl = _as_bool(cfg_map.get("smtp_use_ssl"), True)
+    sender_name = str(getattr(mailbox, "sender_name", "") or cfg_map.get("sender_name") or "").strip()
     recipients = _normalize_recipients(to_addresses)
     if not recipients:
         raise RuntimeError("gmail send requires at least one recipient")
@@ -411,9 +419,9 @@ def _socks5_connect_request(host, port, remote_dns=True):
     family, _, _, _, sockaddr = info[0]
     addr = sockaddr[0]
     if family == socket.AF_INET:
-        return b"\x05\x01\x00\x01" + socket.inet_pton(socket.AF_INET, addr) + port_b
+        return b"\x05\x01\x00\x01" + socket.inet_pton(socket.AF_INET, str(addr)) + port_b
     if family == socket.AF_INET6:
-        return b"\x05\x01\x00\x04" + socket.inet_pton(socket.AF_INET6, addr) + port_b
+        return b"\x05\x01\x00\x04" + socket.inet_pton(socket.AF_INET6, str(addr)) + port_b
     raise RuntimeError(f"socks5 unsupported local dns family: {family}")
 
 

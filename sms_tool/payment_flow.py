@@ -237,7 +237,8 @@ _GENERIC_REDIRECT = PaymentFlowProfile(
 
 def payment_flow_profile(payment_method: Any, method_config: Mapping[str, Any] | None = None) -> PaymentFlowProfile:
     method = str(payment_method or "").strip().lower().replace("-", "_")
-    configured = method_config if isinstance(method_config, Mapping) else {}
+    _raw_configured: object = method_config
+    configured: Mapping = _raw_configured if isinstance(_raw_configured, Mapping) else {}
     configured_key = str(configured.get("flow_profile") or "").strip().lower()
     base = FLOW_PROFILES.get(method, _GENERIC_REDIRECT)
     raw_stages = configured.get("stages")

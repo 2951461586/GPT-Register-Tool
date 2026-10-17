@@ -36,8 +36,8 @@ def _edge_challenge_totals(rows: Iterable[Mapping[str, Any]]) -> dict[str, int]:
     """
     hits = rotations = failed = unknown = 0
     for row in rows:
-        audit = row.get("proxy_audit")
-        audit = audit if isinstance(audit, Mapping) else {}
+        _raw_audit: object = row.get("proxy_audit")
+        audit = _raw_audit if isinstance(_raw_audit, Mapping) else {}
         hits += _count(audit.get("edge_challenge_hits"))
         unknown += _count(audit.get("edge_challenge_unknown"))
         rotations += _count(audit.get("edge_challenge_rotations"))
@@ -57,8 +57,8 @@ def _failure_stage(result: Mapping[str, Any]) -> str:
 
 
 def _identity_checks(row: Mapping[str, Any]) -> tuple[str, str]:
-    identity = row.get("identity_context")
-    identity = identity if isinstance(identity, Mapping) else {}
+    _raw_identity: object = row.get("identity_context")
+    identity = _raw_identity if isinstance(_raw_identity, Mapping) else {}
     fingerprint = str(row.get("auth_fingerprint_profile") or "").strip().lower()
     saved_fingerprint = str(identity.get("fingerprint_key") or "").strip().lower()
     device = str(row.get("device_id") or "").strip()
@@ -73,8 +73,8 @@ def _identity_checks(row: Mapping[str, Any]) -> tuple[str, str]:
 
 
 def _egress_check(row: Mapping[str, Any]) -> str:
-    audit = row.get("proxy_audit")
-    audit = audit if isinstance(audit, Mapping) else {}
+    _raw_audit: object = row.get("proxy_audit")
+    audit = _raw_audit if isinstance(_raw_audit, Mapping) else {}
     expected = str(audit.get("expected_country") or "").strip().upper()
     actual = str(audit.get("actual_country") or "").strip().upper()
     if expected and actual:
@@ -92,8 +92,8 @@ def _device_identity_totals(rows: Iterable[Mapping[str, Any]]) -> dict[str, int]
     """
     reused = fresh = unknown = seeded = 0
     for row in rows:
-        identity = row.get("device_identity")
-        identity = identity if isinstance(identity, Mapping) else {}
+        _raw_identity: object = row.get("device_identity")
+        identity = _raw_identity if isinstance(_raw_identity, Mapping) else {}
         flag = identity.get("reused")
         if flag is True:
             reused += 1
@@ -174,12 +174,12 @@ def summarize_registration_funnel(
             "checked": checked,
             "total": probe_total,
             "successful": probe_ok,
-            "failed": max(0, probe_total - probe_ok) if checked else None,
-            "successful_per_registered": _rate(probe_ok, registered) if checked else None,
+            "failed": max(0, (probe_total or 0) - (probe_ok or 0)) if checked else None,
+            "successful_per_registered": _rate(probe_ok or 0, registered) if checked else None,
             "unauthorized": max(0, int(promotion.get("unauthorized") or 0)) if checked else None,
             "transport_failed": max(0, int(promotion.get("transport_failed") or 0)) if checked else None,
             "trial_eligible": eligible,
-            "eligible_per_successful_probe": _rate(eligible, probe_ok) if checked else None,
+            "eligible_per_successful_probe": _rate(eligible or 0, probe_ok or 0) if checked else None,
             "probe_proxy_sources": _promotion_sources(promotion) if checked else {},
         },
     }
@@ -207,14 +207,16 @@ def combine_registration_funnels(funnels: Iterable[Mapping[str, Any]]) -> dict[s
         sources.update(row.get("probe_proxy_sources") or {})
     edge_hits = edge_rotations = edge_rotate_failed = edge_unknown = 0
     for row in rows:
-        edge = row.get("edge_challenge") if isinstance(row.get("edge_challenge"), Mapping) else {}
+        _raw_edge: object = row.get("edge_challenge")
+        edge: Mapping = _raw_edge if isinstance(_raw_edge, Mapping) else {}
         edge_hits += _count(edge.get("hits"))
         edge_unknown += _count(edge.get("unknown"))
         edge_rotations += _count(edge.get("rotations"))
         edge_rotate_failed += _count(edge.get("rotate_failed"))
     device_totals = {"reused": 0, "fresh": 0, "unknown": 0, "seeded_by_email": 0}
     for row in rows:
-        device = row.get("device_identity") if isinstance(row.get("device_identity"), Mapping) else {}
+        _raw_device: object = row.get("device_identity")
+        device: Mapping = _raw_device if isinstance(_raw_device, Mapping) else {}
         for key in device_totals:
             device_totals[key] += _count(device.get(key))
     probe_total = sum(int(row.get("total") or 0) for row in checked) if checked else None
@@ -241,12 +243,12 @@ def combine_registration_funnels(funnels: Iterable[Mapping[str, Any]]) -> dict[s
             "checked": bool(checked),
             "total": probe_total,
             "successful": probe_ok,
-            "failed": max(0, probe_total - probe_ok) if checked else None,
-            "successful_per_registered": _rate(probe_ok, registered) if checked else None,
+            "failed": max(0, (probe_total or 0) - (probe_ok or 0)) if checked else None,
+            "successful_per_registered": _rate(probe_ok or 0, registered) if checked else None,
             "unauthorized": sum(int(row.get("unauthorized") or 0) for row in checked) if checked else None,
             "transport_failed": sum(int(row.get("transport_failed") or 0) for row in checked) if checked else None,
             "trial_eligible": eligible,
-            "eligible_per_successful_probe": _rate(eligible, probe_ok) if checked else None,
+            "eligible_per_successful_probe": _rate(eligible or 0, probe_ok or 0) if checked else None,
             "probe_proxy_sources": dict(sorted(sources.items())),
         },
     }

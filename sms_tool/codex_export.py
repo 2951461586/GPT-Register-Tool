@@ -12,6 +12,7 @@ from .codex_oauth import refresh_codex_oauth_session
 from .paths import output_dir
 from .session_refresh import _load_seed_session, _session_token, refresh_session
 from .storage import _looks_codex_refresh_token, upsert_account
+from typing import Any
 
 
 def export_codex_session(
@@ -115,7 +116,7 @@ def export_codex_sessions(
 ):
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    ordered = [None] * len(emails)
+    ordered: list[Any] = [None] * len(emails)
     max_workers = max(1, min(int(workers or 1), 4, len(emails) or 1))
 
     def _run(index, item_email):
@@ -161,7 +162,8 @@ def _is_terminal_account_deactivated(result):
 
 
 def build_codex_json(data):
-    auth_session = data.get("auth_session") if isinstance(data.get("auth_session"), dict) else {}
+    _raw_auth_session: object = data.get("auth_session")
+    auth_session: dict = _raw_auth_session if isinstance(_raw_auth_session, dict) else {}
     access_token = _first_non_empty(
         data.get("accessToken"),
         data.get("access_token"),
@@ -190,10 +192,14 @@ def build_codex_json(data):
     refresh_token = _openai_refresh_token(data, auth_session)
     access_claims = _jwt_claims(access_token)
     id_claims = _jwt_claims(input_id_token)
-    auth_claims = access_claims.get("https://api.openai.com/auth") if isinstance(access_claims.get("https://api.openai.com/auth"), dict) else {}
-    id_auth_claims = id_claims.get("https://api.openai.com/auth") if isinstance(id_claims.get("https://api.openai.com/auth"), dict) else {}
-    profile_claims = access_claims.get("https://api.openai.com/profile") if isinstance(access_claims.get("https://api.openai.com/profile"), dict) else {}
-    user = auth_session.get("user") if isinstance(auth_session.get("user"), dict) else {}
+    _raw_auth_claims: object = access_claims.get("https://api.openai.com/auth")
+    auth_claims: dict = _raw_auth_claims if isinstance(_raw_auth_claims, dict) else {}
+    _raw_id_auth_claims: object = id_claims.get("https://api.openai.com/auth")
+    id_auth_claims: dict = _raw_id_auth_claims if isinstance(_raw_id_auth_claims, dict) else {}
+    _raw_profile_claims: object = access_claims.get("https://api.openai.com/profile")
+    profile_claims: dict = _raw_profile_claims if isinstance(_raw_profile_claims, dict) else {}
+    _raw_user: object = auth_session.get("user")
+    user: dict = _raw_user if isinstance(_raw_user, dict) else {}
 
     email = _first_non_empty(
         _nested(data, "user", "email"),
@@ -292,7 +298,8 @@ def build_codex_json(data):
 
 
 def _refresh_seed(data, json_path, target_email, proxy=None, timeout=300, require_refresh_token=False, force_email_otp_login=False):
-    auth_session = data.get("auth_session") if isinstance(data.get("auth_session"), dict) else {}
+    _raw_auth_session: object = data.get("auth_session")
+    auth_session: dict = _raw_auth_session if isinstance(_raw_auth_session, dict) else {}
     refresh_token = _openai_refresh_token(data, auth_session)
     if refresh_token:
         refreshed = _refresh_with_openai_oauth(data, refresh_token, proxy=proxy)

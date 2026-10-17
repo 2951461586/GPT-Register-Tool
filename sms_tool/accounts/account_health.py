@@ -138,8 +138,8 @@ def resolve_account_health_budgets(
     account_timeout: Any = None,
 ) -> dict[str, int]:
     """Resolve health workflow budgets once for every entrypoint."""
-    health = config.get("account_health") if isinstance(config, Mapping) else {}
-    health = health if isinstance(health, Mapping) else {}
+    _raw_health: object = config.get("account_health") if isinstance(config, Mapping) else {}
+    health: Mapping[str, Any] = _raw_health if isinstance(_raw_health, Mapping) else {}
 
     def resolve(explicit: Any, key: str, default: int, minimum: int) -> int:
         raw = explicit if explicit is not None else health.get(key)

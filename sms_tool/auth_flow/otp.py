@@ -36,12 +36,12 @@ def _otp_challenge_established(body):
         return False
     if str(body.get("continue_url") or "").strip():
         return True
-    page = body.get("page")
-    page = page if isinstance(page, dict) else {}
+    _raw_page: object = body.get("page")
+    page: dict = _raw_page if isinstance(_raw_page, dict) else {}
     if str(page.get("type") or "").strip() == "email_otp_verification":
         return True
-    payload = page.get("payload")
-    payload = payload if isinstance(payload, dict) else {}
+    _raw_payload: object = page.get("payload")
+    payload: dict = _raw_payload if isinstance(_raw_payload, dict) else {}
     for source in (body, payload):
         if str(source.get("email_verification_mode") or "").strip():
             return True

@@ -61,13 +61,13 @@ def sentinel_version() -> str:
             from ..config import current_config_data
 
             config = current_config_data()
-            email = config.get("email_registration")
             # ``Mapping``, not ``dict``: ``current_config_data()`` freezes every
             # section into a ``mappingproxy`` (``config._freeze``), so a
             # ``dict`` check discarded ``email_registration.sentinel_version``
             # in production while plain-dict tests kept it green (2026-10-07
             # P1-D class).
-            email = email if isinstance(email, Mapping) else {}
+            _raw_email: object = config.get("email_registration")
+            email: Mapping = _raw_email if isinstance(_raw_email, Mapping) else {}
             configured = str(email.get("sentinel_version") or config.get("sentinel_version") or "").strip()
         except Exception:
             configured = ""

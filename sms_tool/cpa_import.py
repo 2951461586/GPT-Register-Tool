@@ -19,6 +19,7 @@ from .config import CFG
 from .paths import output_dir
 from .session_refresh import _load_seed_session
 from .storage import get_account_record, list_paypal_accounts, mark_quota_status, upsert_account
+from typing import Any
 
 
 def import_cpa_session(
@@ -119,7 +120,7 @@ def import_cpa_sessions(
     api_token="",
 ):
     emails = [str(email or "").strip() for email in emails if str(email or "").strip()]
-    ordered = [None] * len(emails)
+    ordered: list[Any] = [None] * len(emails)
     max_workers = max(1, min(int(workers or 1), 4, len(emails) or 1))
 
     def _run(index, item_email):
@@ -274,7 +275,7 @@ def refresh_cpa_quota_statuses(emails=None, workers=4, api_url="", api_token="",
         candidates.append((email, item))
     missing_emails = sorted(wanted - {email for email, _ in candidates}) if wanted else []
     max_workers = max(1, min(int(workers or 1), 8, len(candidates) or 1))
-    ordered = [None] * len(candidates)
+    ordered: list[Any] = [None] * len(candidates)
 
     def _run(index, email, item):
         probe = probe_cpa_codex_quota(item, api_url=api_url, api_token=api_token, timeout=timeout)
@@ -331,7 +332,8 @@ def classify_cpa_auth_file(item):
         str(((item or {}).get("probe") or {}).get("error") if isinstance((item or {}).get("probe"), dict) else ""),
         str(((item or {}).get("probe") or {}).get("raw") if isinstance((item or {}).get("probe"), dict) else ""),
     ]).lower()
-    probe = (item or {}).get("probe") if isinstance((item or {}).get("probe"), dict) else {}
+    _raw_probe: object = (item or {}).get("probe")
+    probe: dict = _raw_probe if isinstance(_raw_probe, dict) else {}
     try:
         probe_status = int(probe.get("status_code") or probe.get("statusCode") or 0)
     except Exception:
@@ -548,8 +550,10 @@ def _cpa_error_text(payload, status_code):
 
 
 def _resolve_cpa_config(api_url="", api_token=""):
-    cpa = CFG.get("cpa") if isinstance(CFG.get("cpa"), dict) else {}
-    cpa_mode = CFG.get("cpa_mode") if isinstance(CFG.get("cpa_mode"), dict) else {}
+    _raw_cpa: object = CFG.get("cpa")
+    cpa: dict = _raw_cpa if isinstance(_raw_cpa, dict) else {}
+    _raw_cpa_mode: object = CFG.get("cpa_mode")
+    cpa_mode: dict = _raw_cpa_mode if isinstance(_raw_cpa_mode, dict) else {}
     resolved_url = (
         str(api_url or "").strip()
         or str(cpa.get("api_url") or "").strip()
@@ -600,7 +604,8 @@ def _load_cpa_source(email="", session_file="", export_dir=""):
 def _has_access_token(data):
     if not isinstance(data, dict):
         return False
-    auth_session = data.get("auth_session") if isinstance(data.get("auth_session"), dict) else {}
+    _raw_auth_session: object = data.get("auth_session")
+    auth_session: dict = _raw_auth_session if isinstance(_raw_auth_session, dict) else {}
     candidates = [
         data.get("accessToken"),
         data.get("access_token"),

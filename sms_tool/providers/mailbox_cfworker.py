@@ -7,7 +7,8 @@ from .cfworker_client import CFWorkerMailboxClient
 
 
 def _cfworker_cfg(email_cfg):
-    nested = email_cfg.get("cfworker") if isinstance(email_cfg.get("cfworker"), dict) else {}
+    _raw_nested: object = email_cfg.get("cfworker")
+    nested: dict = _raw_nested if isinstance(_raw_nested, dict) else {}
     return {
         "worker_url": str(nested.get("worker_url") or email_cfg.get("cfworker_url") or "").strip(),
         "domain": str(nested.get("domain") or email_cfg.get("cfworker_domain") or "liziai.cloud").strip().lstrip("@"),
@@ -18,7 +19,8 @@ def _cfworker_cfg(email_cfg):
 
 def _cfworker_client(email_cfg, proxy=None):
     cfg = _cfworker_cfg(email_cfg)
-    nested = email_cfg.get("cfworker") if isinstance(email_cfg.get("cfworker"), dict) else {}
+    _raw_nested: object = email_cfg.get("cfworker")
+    nested: dict = _raw_nested if isinstance(_raw_nested, dict) else {}
     try:
         timeout = max(5, int(nested.get("timeout") or email_cfg.get("cfworker_timeout_seconds") or 30))
     except (TypeError, ValueError):

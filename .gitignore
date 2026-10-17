@@ -116,3 +116,6 @@ logs/
 # Optional local workspace for operator-only state; keep its guide tracked.
 local/*
 !local/README.md
+
+# pyright ratchet scratch output
+.pyright-work/

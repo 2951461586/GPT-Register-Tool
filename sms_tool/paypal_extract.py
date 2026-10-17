@@ -245,7 +245,8 @@ class PPLinkExtractor:
             Path(PROJECT_ROOT) / "runtime" / "paypal_proxy_state.json",
             enabled=False,
         )
-        countries = stage_proxy_countries if isinstance(stage_proxy_countries, dict) else {}
+        _raw_countries: object = stage_proxy_countries
+        countries: dict = _raw_countries if isinstance(_raw_countries, dict) else {}
         self.stage_proxy_countries = {
             "checkout": str(countries.get("checkout") or self.checkout_country).upper(),
             "promotion": str(countries.get("promotion") or "").upper(),
@@ -444,6 +445,8 @@ class PPLinkExtractor:
                     self._log("checkout", f"retry {attempt + 1}/{self.max_stage_retries} with a new proxy session")
                 else:
                     raise
+        # Only reachable when ``max_stage_retries`` is <= 0: no attempt ran.
+        raise RuntimeError("checkout: max_stage_retries must be at least 1")
 
     # ─── Stage 1.5: Promotion update (促销可用区代理) ──────────────────────
 

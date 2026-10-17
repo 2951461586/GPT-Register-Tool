@@ -114,7 +114,8 @@ def _extract_page_signals(response: object) -> tuple[str, str]:
     page_type = password_step._login_password_page_type(payload)
     page = payload.get("page")
     page_payload = page.get("payload") if isinstance(page, dict) else {}
-    payload_map = page_payload if isinstance(page_payload, dict) else {}
+    _raw_payload_map: object = page_payload
+    payload_map: dict = _raw_payload_map if isinstance(_raw_payload_map, dict) else {}
     mode = str(payload_map.get("email_verification_mode") or "").strip()
     return page_type, mode
 
@@ -238,8 +239,8 @@ def probe_registration(
     # ``chatgpt.auth_base_url`` / ``chat_base_url`` and used the hard-coded
     # endpoints instead (2026-10-07 P1-D class).
     merged = config if isinstance(config, Mapping) else config_module.current_config_data()
-    chatgpt_cfg = merged.get("chatgpt") if isinstance(merged, Mapping) else {}
-    chatgpt_cfg = chatgpt_cfg if isinstance(chatgpt_cfg, Mapping) else {}
+    _raw_chatgpt_cfg: object = merged.get("chatgpt") if isinstance(merged, Mapping) else {}
+    chatgpt_cfg = _raw_chatgpt_cfg if isinstance(_raw_chatgpt_cfg, Mapping) else {}
     chat_base = str(chatgpt_cfg.get("chat_base_url") or endpoints.CHATGPT_BASE).rstrip("/")
     auth_base = str(chatgpt_cfg.get("auth_base_url") or endpoints.AUTH_BASE).rstrip("/")
 

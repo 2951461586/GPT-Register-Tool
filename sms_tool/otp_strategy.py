@@ -52,7 +52,8 @@ class SyntheticResponse:
 
 
 def otp_fallback_send_enabled():
-    cfg = CFG.get("email_registration") if isinstance(CFG.get("email_registration"), dict) else {}
+    _raw_cfg: object = CFG.get("email_registration")
+    cfg: dict = _raw_cfg if isinstance(_raw_cfg, dict) else {}
     value = cfg.get("otp_fallback_send_on_resend_failure", False)
     if isinstance(value, str):
         return value.strip().lower() in {"1", "true", "yes", "on"}
@@ -83,7 +84,8 @@ def otp_resend_providers() -> tuple[str, ...]:
     显式写空（``[]`` / ``""``）也回落默认值 —— 要停用重发请用
     ``remail_otp_resend_after_seconds=0``，那条路径本来就有。
     """
-    cfg = CFG.get("email_registration") if isinstance(CFG.get("email_registration"), dict) else {}
+    _raw_cfg: object = CFG.get("email_registration")
+    cfg: dict = _raw_cfg if isinstance(_raw_cfg, dict) else {}
     value = cfg.get("otp_resend_providers")
     if isinstance(value, str):
         value = value.split(",")
@@ -238,7 +240,8 @@ def _poll_registration_email_otp(
         return finish(poll(total_timeout))
     if resend_after_seconds is None:
         value = current_config_data().get("email_registration")
-        email_cfg = value if isinstance(value, Mapping) else {}
+        _raw_email_cfg: object = value
+        email_cfg: Mapping = _raw_email_cfg if isinstance(_raw_email_cfg, Mapping) else {}
         resend_after_seconds = email_cfg.get("remail_otp_resend_after_seconds", 30)
     try:
         first_window = max(0, int(resend_after_seconds or 0))
@@ -273,6 +276,9 @@ def _poll_registration_email_otp(
     # resend request plus the remaining window.
     ensure_not_cancelled()
     registration_stage("email_otp_resend")
+    # ``reason`` above is empty only when a callback was supplied; the branch
+    # that sets it returns. Assert it so the checker sees the same invariant.
+    assert resend_callback is not None
     try:
         response = resend_callback()
         status = int(getattr(response, "status_code", 0) or 0)

@@ -107,7 +107,8 @@ def main() -> int:
         index = int(row.get("index") or 0)
         fp = _fingerprint(lines[index]) if 0 <= index < len(lines) else ""
         if row.get("definitive_dead") and fp:
-            previous = quarantine.get(fp) if isinstance(quarantine.get(fp), dict) else {}
+            _raw_previous: object = quarantine.get(fp)
+            previous: dict = _raw_previous if isinstance(_raw_previous, dict) else {}
             confirmations = int(previous.get("confirmations") or 0) + 1
             quarantine[fp] = {
                 "email": row.get("email", ""),

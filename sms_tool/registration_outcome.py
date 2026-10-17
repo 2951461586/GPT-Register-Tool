@@ -29,7 +29,8 @@ def _create_account_error(create_ok, create_data):
     """从 create_account 响应中提炼出人类可读的错误码/消息。"""
     if create_ok:
         return ""
-    create_error = create_data.get("error") if isinstance(create_data.get("error"), dict) else {}
+    _raw_create_error: object = create_data.get("error")
+    create_error: dict = _raw_create_error if isinstance(_raw_create_error, dict) else {}
     create_code = str(create_error.get("code") or "").strip()
     create_message = str(create_error.get("message") or "").strip()
     error = "create_account_failed"
@@ -66,7 +67,8 @@ def _existing_account_error(create_data):
     if not isinstance(create_data, dict):
         return ""
     raw_error = create_data.get("error")
-    error = raw_error if isinstance(raw_error, dict) else {}
+    _raw_error: object = raw_error
+    error: dict = _raw_error if isinstance(_raw_error, dict) else {}
     if str(error.get("code") or "").strip() != "user_already_exists":
         return ""
     recovery = error.get("userAlreadyExistsRecovery")
@@ -94,7 +96,8 @@ def _probe_registration_access_token(
     """
     runtime_cfg = cfg if isinstance(cfg, Mapping) else CFG
     registration_value = runtime_cfg.get("registration")
-    registration_cfg = registration_value if isinstance(registration_value, Mapping) else {}
+    _raw_registration_cfg: object = registration_value
+    registration_cfg: Mapping = _raw_registration_cfg if isinstance(_raw_registration_cfg, Mapping) else {}
     probe_fn = probe_fn or probe_account_liveness
     stage_fn = stage_fn or registration_stage
     sleep_fn = sleep_fn or time.sleep
@@ -150,7 +153,8 @@ def _retain_registration_checkpoint(success, access_token, at_probe):
     """
     if success or not str(access_token or "").strip():
         return False
-    probe = at_probe if isinstance(at_probe, Mapping) else {}
+    _raw_probe: object = at_probe
+    probe: Mapping = _raw_probe if isinstance(_raw_probe, Mapping) else {}
     try:
         status_code = int(probe.get("status_code") or 0)
     except (TypeError, ValueError):
@@ -169,7 +173,8 @@ def _registration_requires_refresh_token(runtime_cfg=None):
     """协议注册链路是否要求最终产出的 session 必须包含 refresh_token。"""
     source = runtime_cfg if isinstance(runtime_cfg, Mapping) else CFG
     value = source.get("codex_oauth")
-    cfg = value if isinstance(value, Mapping) else {}
+    _raw_cfg: object = value
+    cfg: Mapping = _raw_cfg if isinstance(_raw_cfg, Mapping) else {}
     return bool(cfg.get("require_registration_refresh_token", True))
 
 
@@ -177,7 +182,8 @@ def _registration_requires_phone_verification(phone_pool=None, runtime_cfg=None)
     """协议注册链路是否要求手机二次校验（默认：有 phone_pool 则开启）。"""
     source = runtime_cfg if isinstance(runtime_cfg, Mapping) else CFG
     value = source.get("codex_oauth")
-    cfg = value if isinstance(value, Mapping) else {}
+    _raw_cfg: object = value
+    cfg: Mapping = _raw_cfg if isinstance(_raw_cfg, Mapping) else {}
     default = bool(phone_pool)
     return bool(cfg.get("require_registration_phone_verification", default))
 
@@ -339,7 +345,8 @@ def _registration_outcome(create_ok, create_data, access_token, at_probe, existi
     179 failures over 09-08..09-13 ended on it -- protocol runs that reached
     ``finalize`` with no access token from the auth session.
     """
-    probe = at_probe if isinstance(at_probe, dict) else {}
+    _raw_probe: object = at_probe
+    probe: dict = _raw_probe if isinstance(_raw_probe, dict) else {}
     try:
         status_code = int(probe.get("status_code") or 0)
     except (TypeError, ValueError):
@@ -371,7 +378,8 @@ def _oauth_result_summary(result):
     if not isinstance(result, dict):
         return {}
     summary = {key: value for key, value in result.items() if key != "tokens"}
-    tokens = result.get("tokens") if isinstance(result.get("tokens"), dict) else {}
+    _raw_tokens: object = result.get("tokens")
+    tokens: dict = _raw_tokens if isinstance(_raw_tokens, dict) else {}
     if tokens:
         summary["has_access_token"] = bool(tokens.get("access_token"))
         summary["has_refresh_token"] = bool(tokens.get("refresh_token"))

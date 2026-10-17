@@ -102,7 +102,7 @@ class SmailrClient:
             raise RuntimeError("smailr.api_key is required")
         self.base_url = _normalize_base_url(base_url)
         self.timeout = max(1, int(timeout or DEFAULT_TIMEOUT))
-        self.proxy = normalize_proxy_url(proxy)
+        self.proxy = normalize_proxy_url(proxy or "")
         self._proxies = {"http": self.proxy, "https": self.proxy} if self.proxy else None
         self.retry_attempts = max(1, int(retry_attempts or DEFAULT_RETRY_ATTEMPTS))
         self.retry_backoff_seconds = max(0.0, float(retry_backoff_seconds))
@@ -129,7 +129,9 @@ class SmailrClient:
             kwargs["json"] = json_body
         for attempt in range(self.retry_attempts):
             try:
-                response = curl_requests.request(method, url, **kwargs)
+                # curl_cffi types ``method`` as a Literal union; the caller passes a
+                # plain upper-cased str, which the library accepts.
+                response = curl_requests.request(method, url, **kwargs)  # type: ignore[arg-type]
                 break
             except Exception as exc:
                 error_code = int(getattr(exc, "code", 0) or 0)
@@ -188,7 +190,8 @@ class SmailrClient:
     def list_mails(self, mailbox_id: str, folder: str = "INBOX", page: int = 1, per_page: int = 25) -> list[dict]:
         params = urllib.parse.urlencode({"folder": folder, "page": int(page), "per_page": int(per_page)})
         data = _unwrap_data(self._request("GET", f"/api/v1/mailboxes/{mailbox_id}/mails?{params}") or [])
-        items = data if isinstance(data, list) else []
+        _raw_items: object = data
+        items: list = _raw_items if isinstance(_raw_items, list) else []
         if isinstance(data, dict):
             for key in ("data", "mails", "items", "value"):
                 sub = data.get(key)

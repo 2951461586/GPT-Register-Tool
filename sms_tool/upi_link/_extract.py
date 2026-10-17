@@ -126,7 +126,8 @@ def _upi_display_amounts(init_data: Any) -> dict[str, str]:
     「服务器算出的金额与客户端屏幕上显示的一致」的, 缺失时 confirm 会被拒
     或直接被要求重新 init。全部以**字符串**提交。
     """
-    init = init_data if isinstance(init_data, dict) else {}
+    _raw_init: object = init_data
+    init: dict = _raw_init if isinstance(_raw_init, dict) else {}
     _invoice = init.get("invoice")
     invoice: dict[str, Any] = _invoice if isinstance(_invoice, dict) else {}
     _total_summary = init.get("total_summary")
@@ -176,7 +177,8 @@ def _upi_confirm_amounts(init_data: Any, fallback_amount: Any = None) -> tuple[s
     返回 ``(expected_amount, expected_amount_on_bca)``, 两者均为字符串,
     第二个为空字符串表示不提交该字段。
     """
-    init = init_data if isinstance(init_data, dict) else {}
+    _raw_init: object = init_data
+    init: dict = _raw_init if isinstance(_raw_init, dict) else {}
     fallback, ok = _upi_int_value(fallback_amount)
     expected = fallback if ok else 0
 

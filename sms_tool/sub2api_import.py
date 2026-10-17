@@ -139,7 +139,7 @@ def import_sub2api_sessions(
     verify_after_import: bool | None = None,
 ) -> dict[str, Any]:
     emails = [str(email or "").strip() for email in emails if str(email or "").strip()]
-    ordered = [None] * len(emails)
+    ordered: list[Any] = [None] * len(emails)
     max_workers = max(1, min(int(workers or 1), 10, len(emails) or 1))
 
     def _run(index: int, item_email: str) -> tuple[int, dict[str, Any]]:
@@ -355,9 +355,11 @@ def upload_to_sub2api(
     groups_result = _resolve_group_ids(origin, token, group_name=group_name, group_ids=group_ids)
     if not groups_result.get("ok"):
         return groups_result
-    resolved_proxy_id = _resolve_proxy_id(origin, token, proxy_name=proxy_name, proxy_id=proxy_id)
-    if isinstance(resolved_proxy_id, dict) and not resolved_proxy_id.get("ok"):
-        return resolved_proxy_id
+    _resolved: object = _resolve_proxy_id(origin, token, proxy_name=proxy_name, proxy_id=proxy_id)
+    if isinstance(_resolved, dict) and not _resolved.get("ok"):
+        return _resolved
+    # Past the guard the resolver returned an id (int) or None, not the error dict.
+    resolved_proxy_id: int | None = _resolved if isinstance(_resolved, int) else None
 
     payload = _build_sub2api_payload(
         token_data,
@@ -430,7 +432,8 @@ def _verify_sub2api_account_config(
             "account_id": account_id,
             "error": response.get("error", "sub2api_account_read_failed"),
         }
-    account = response.get("data") if isinstance(response.get("data"), dict) else {}
+    _raw_account: object = response.get("data")
+    account: dict = _raw_account if isinstance(_raw_account, dict) else {}
     actual_group_ids = _sub2api_account_group_ids(account)
     expected_group_ids = sorted({_as_int(value) for value in (group_ids or []) if _as_int(value) > 0})
     actual_proxy_id = _as_int(account.get("proxy_id") or (account.get("proxy") or {}).get("id"))
@@ -603,7 +606,8 @@ def _build_sub2api_payload(
     priority: int | None = None,
     concurrency: int | None = None,
 ) -> dict[str, Any]:
-    identity = token_data.get("agent_identity") if isinstance(token_data.get("agent_identity"), dict) else {}
+    _raw_identity: object = token_data.get("agent_identity")
+    identity: dict = _raw_identity if isinstance(_raw_identity, dict) else {}
     email = str(token_data.get("email") or identity.get("email") or "").strip()
     payload = {
         "content": json.dumps(token_data, ensure_ascii=False, separators=(",", ":")),
@@ -642,8 +646,10 @@ def _resolve_sub2api_config(
     auth_mode: str = "",
     verify_after_import: bool | None = None,
 ) -> dict[str, Any]:
-    section = CFG.get("sub2api") if isinstance(CFG.get("sub2api"), dict) else {}
-    legacy = CFG.get("sub2api_mode") if isinstance(CFG.get("sub2api_mode"), dict) else {}
+    _raw_section: object = CFG.get("sub2api")
+    section: dict = _raw_section if isinstance(_raw_section, dict) else {}
+    _raw_legacy: object = CFG.get("sub2api_mode")
+    legacy: dict = _raw_legacy if isinstance(_raw_legacy, dict) else {}
     source = {**legacy, **section}
     resolved_group_ids = group_ids if group_ids is not None else source.get("group_ids") or source.get("group_id")
     return {
@@ -708,7 +714,8 @@ def _resolve_sub2api_token(
     )
     if not result.get("ok"):
         return result
-    data = result.get("data") if isinstance(result.get("data"), dict) else {}
+    _raw_data: object = result.get("data")
+    data: dict = _raw_data if isinstance(_raw_data, dict) else {}
     token = str(data.get("access_token") or data.get("accessToken") or "").strip()
     if not token:
         return {"ok": False, "error": "sub2api_login_missing_access_token", "data": data}
@@ -804,7 +811,9 @@ def _request_json(
     if body is not None:
         headers["Content-Type"] = "application/json"
     try:
-        response = curl_requests.request(
+        # curl_cffi types ``method`` as a Literal union; the caller passes an
+        # arbitrary upper-cased str, which the library accepts.
+        response = curl_requests.request(  # type: ignore[arg-type]
             method.upper(),
             url,
             headers=headers,
@@ -843,24 +852,27 @@ def _parse_sub2api_account_page(data: Any) -> tuple[list[dict[str, Any]], int, i
 
 
 def _sub2api_account_to_auth_file(item: Any) -> dict[str, Any]:
-    item = item if isinstance(item, dict) else {}
-    credentials = item.get("credentials") if isinstance(item.get("credentials"), dict) else {}
-    extra = item.get("extra") if isinstance(item.get("extra"), dict) else {}
+    _raw_item: object = item
+    item_map: dict = _raw_item if isinstance(_raw_item, dict) else {}
+    _raw_credentials: object = item_map.get("credentials")
+    credentials: dict = _raw_credentials if isinstance(_raw_credentials, dict) else {}
+    _raw_extra: object = item_map.get("extra")
+    extra: dict = _raw_extra if isinstance(_raw_extra, dict) else {}
     email = _normalize_email(
         credentials.get("email")
         or extra.get("email")
-        or item.get("email")
-        or item.get("name")
-        or item.get("username")
+        or item_map.get("email")
+        or item_map.get("name")
+        or item_map.get("username")
     )
-    error_message = str(item.get("error_message") or item.get("error") or item.get("temp_unschedulable_reason") or "").strip()
+    error_message = str(item_map.get("error_message") or item_map.get("error") or item_map.get("temp_unschedulable_reason") or "").strip()
     probe = {}
     if re.search(r"\b401\b|unauthorized|invalid_grant|refresh_token|token", error_message, re.I):
         probe["status_code"] = 401
     return {
         **item,
         "email": email,
-        "status": item.get("status") or "",
+        "status": item_map.get("status") or "",
         "message": error_message,
         "error": error_message,
         "probe": probe,
@@ -994,6 +1006,7 @@ def _sub2api_import_error(data: Any) -> str:
     if isinstance(data, dict):
         errors = data.get("errors")
         if isinstance(errors, list) and errors:
-            first = errors[0] if isinstance(errors[0], dict) else {}
+            _raw_first: object = errors[0]
+            first: dict = _raw_first if isinstance(_raw_first, dict) else {}
             return str(first.get("message") or first or "sub2api_import_failed")[:500]
     return "sub2api_import_failed"

@@ -22,8 +22,8 @@ def _login_password_page_type(payload):
     """``page.type`` (or the flat ``page_type``) of an authorize response."""
     if not isinstance(payload, dict):
         return ""
-    page = payload.get("page")
-    page = page if isinstance(page, dict) else {}
+    _raw_page: object = payload.get("page")
+    page = _raw_page if isinstance(_raw_page, dict) else {}
     return str(page.get("type") or payload.get("page_type") or "").strip().lower()
 
 

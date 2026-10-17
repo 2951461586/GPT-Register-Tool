@@ -64,7 +64,8 @@ def _upi_billing_profile(cfg: Mapping[str, Any] | None = None) -> dict[str, str]
     参考实现 ``upi_billing_profile()`` 只有「随机池 → 固定 → 环境变量」三级,
     这里多一级「配置段」, 因为本项目配置是 JSON 而非环境变量驱动。
     """
-    section = cfg if isinstance(cfg, Mapping) else {}
+    _raw_section: object = cfg
+    section: Mapping = _raw_section if isinstance(_raw_section, Mapping) else {}
     first_name, last_name = UPI_BILLING_NAMES[secrets.randbelow(len(UPI_BILLING_NAMES))]
     line1, city, postal_code, state = UPI_BILLING_ADDRESSES[secrets.randbelow(len(UPI_BILLING_ADDRESSES))]
     domain = UPI_EMAIL_DOMAINS[secrets.randbelow(len(UPI_EMAIL_DOMAINS))]

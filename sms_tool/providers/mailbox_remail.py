@@ -22,6 +22,7 @@ from ..sanitizer import mask_otp
 from ..phone_proxy import redact_proxy_url
 from ..proxy_health import ProxyHealthTracker
 from ..desktop_ipc import progress_dots_enabled
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -194,8 +195,10 @@ def _remail_dead_history_enabled():
 
 def _remail_identity(value):
     if isinstance(value, dict):
-        mailbox = value.get("mailbox") if isinstance(value.get("mailbox"), dict) else {}
-        purchase = value.get("purchase") if isinstance(value.get("purchase"), dict) else {}
+        _raw_mailbox: object = value.get("mailbox")
+        mailbox: dict = _raw_mailbox if isinstance(_raw_mailbox, dict) else {}
+        _raw_purchase: object = value.get("purchase")
+        purchase: dict = _raw_purchase if isinstance(_raw_purchase, dict) else {}
         email = value.get("email") or mailbox.get("email") or purchase.get("email")
         order_no = value.get("order_no") or mailbox.get("order_no") or purchase.get("order_no")
         purchase_id = value.get("purchase_id") or mailbox.get("purchase_id") or purchase.get("purchase_id")
@@ -332,7 +335,7 @@ def record_remail_batch_quality(batch_id, results, *, requested=0):
     return payload
 
 
-def _redact(value, secrets=()):
+def _redact(value, secrets=()) -> Any:
     safe = deepcopy(value)
     secret_values = [str(item) for item in (_remail_api_key(), *secrets) if str(item or "")]
 
@@ -549,6 +552,8 @@ def _fetch_remail_order_detail(order):
             last_error = exc
             if attempt < 2:
                 time.sleep(2 ** attempt)
+    if last_error is None:
+        raise RuntimeError("ReMail order lookup failed")
     raise last_error
 
 
@@ -834,13 +839,20 @@ def _fetch_remail_messages(mailbox, limit=25, proxy=None, include_body=False):
     items = response.get("items") if isinstance(response, dict) else []
     normalized = []
     for item in list(items or [])[:max(1, int(limit or 25))]:
+        if not isinstance(item, dict):
+            continue
         text = "\n".join(
             str(item.get(key) or "")
             for key in ("subject", "bodyPreview", "verificationCode")
         )
         if (include_body or not _extract_otp_from_text(text)) and item.get("id") is not None:
             try:
-                item = _fetch_remail_message_detail(mailbox, item["id"], proxy=proxy)
+                # Separate name: assigning back to ``item`` widened its inferred
+                # type to the helper's union, so the next ``item[...]`` read was
+                # typed against str/list.
+                detail_item = _fetch_remail_message_detail(mailbox, item.get("id"), proxy=proxy)
+                if isinstance(detail_item, dict):
+                    item = detail_item
             except Exception as exc:
                 print(f"[remail message detail error: {exc}]")
         normalized.append(_normalize_remail_message(item))
@@ -986,7 +998,7 @@ def _poll_remail_otp(
     except Exception:
         tracker = None
     proxy_index = 0
-    active_proxy = candidates[proxy_index] if candidates else proxy
+    active_proxy: Any = candidates[proxy_index] if candidates else proxy
     transport_failures = 0
     # Unnewlined dots glue themselves to the head of the next line another
     # thread flushes, which breaks the host's line-anchored envelope parsing.
@@ -1039,6 +1051,8 @@ def _poll_remail_otp(
             best_code = None
             best_ts = 0
             for item in (items or []):
+                if not isinstance(item, dict):
+                    continue
                 msg_id = str(item.get("id") or "").strip()
                 if seen_message_id and msg_id == seen_message_id:
                     continue

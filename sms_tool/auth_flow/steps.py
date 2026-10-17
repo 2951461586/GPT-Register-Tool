@@ -686,7 +686,8 @@ def _invalid_state_auth_response(data):
     if not isinstance(data, dict):
         return False
     raw_error = data.get("error")
-    error = raw_error if isinstance(raw_error, dict) else {}
+    _raw_error: object = raw_error
+    error: dict = _raw_error if isinstance(_raw_error, dict) else {}
     code = str(error.get("code") or "").strip().lower()
     message = str(error.get("message") or "").strip().lower()
     # The rule matches the " is " inside the quoted sentence below, not an

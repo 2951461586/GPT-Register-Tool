@@ -107,7 +107,8 @@ def _upi_browser_capture(
         return result
     from playwright.sync_api import sync_playwright
 
-    fp = fingerprint if isinstance(fingerprint, Mapping) else {}
+    _raw_fp: object = fingerprint
+    fp: Mapping = _raw_fp if isinstance(_raw_fp, Mapping) else {}
     locale = str(fp.get("locale") or "en-US")
     timezone_id = str(fp.get("timezone") or "UTC")
     user_agent = str(fp.get("user_agent") or "").strip()
@@ -323,7 +324,8 @@ def _upi_browser_approve(
         return result
     from playwright.sync_api import sync_playwright
 
-    fp = fingerprint if isinstance(fingerprint, Mapping) else {}
+    _raw_fp: object = fingerprint
+    fp: Mapping = _raw_fp if isinstance(_raw_fp, Mapping) else {}
     locale = str(fp.get("locale") or "en-US")
     timezone_id = str(fp.get("timezone") or "UTC")
     user_agent = str(fp.get("user_agent") or "").strip()

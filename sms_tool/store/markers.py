@@ -11,6 +11,7 @@ from ..promotion_states import PROMOTION_STATE_AUTH_INVALID
 
 from .connection import _connect, init_database
 from .normalize import _find_existing_account_email, _update_session_json
+from typing import Any
 
 
 def mark_quota_status(email, quota_status="", quota_result=None, *, runtime_config: ConfigInput = None):
@@ -42,7 +43,8 @@ def mark_quota_status(email, quota_status="", quota_result=None, *, runtime_conf
                     data = {**file_data, **data}
             except Exception:
                 pass
-        quota = data.get("quota") if isinstance(data.get("quota"), dict) else {}
+        _raw_quota: object = data.get("quota")
+        quota: dict = _raw_quota if isinstance(_raw_quota, dict) else {}
         quota["status"] = str(quota_status or "")
         quota["updated_at"] = now
         if isinstance(quota_result, dict):
@@ -62,7 +64,8 @@ def mark_quota_status(email, quota_status="", quota_result=None, *, runtime_conf
                 verified_active = False
             if verified_active:
                 data["at_probe_status_code"] = "200"
-                token_probe = data.get("token_probe") if isinstance(data.get("token_probe"), dict) else {}
+                _raw_token_probe: object = data.get("token_probe")
+                token_probe: dict = _raw_token_probe if isinstance(_raw_token_probe, dict) else {}
                 token_probe.update({"ok": True, "status": "active", "status_code": 200, "updated_at": now})
                 data["token_probe"] = token_probe
         raw_json = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
@@ -126,8 +129,10 @@ def mark_account_health_result(
 
         safe_result = drop_sensitive_fields(dict(health_result), max_string_length=1000)
         check = str(safe_result.get("check") or "unknown")
-        health = data.get("account_health") if isinstance(data.get("account_health"), dict) else {}
-        checks = health.get("checks") if isinstance(health.get("checks"), dict) else {}
+        _raw_health: object = data.get("account_health")
+        health: dict = _raw_health if isinstance(_raw_health, dict) else {}
+        _raw_checks: object = health.get("checks")
+        checks: dict = _raw_checks if isinstance(_raw_checks, dict) else {}
         checks[check] = safe_result
         health.update({
             "latest": safe_result,
@@ -186,7 +191,10 @@ def _payment_capability_snapshot(value, *, updated_at: int):
     """
     if not isinstance(value, dict) or not value:
         return None
-    snapshot = {"ok": bool(value.get("ok")), "retryable": bool(value.get("retryable"))}
+    snapshot: dict[str, Any] = {
+        "ok": bool(value.get("ok")),
+        "retryable": bool(value.get("retryable")),
+    }
     for key in _PAYMENT_CAPABILITY_METHODS | {"evidence_sources"}:
         items = value.get(key)
         if isinstance(items, (list, tuple)):
@@ -316,7 +324,8 @@ def mark_promotion_status(
                     data = {**file_data, **data}
             except Exception:
                 pass
-        promotion = data.get("promotion") if isinstance(data.get("promotion"), dict) else {}
+        _raw_promotion: object = data.get("promotion")
+        promotion: dict = _raw_promotion if isinstance(_raw_promotion, dict) else {}
         promotion["status"] = str(promotion_status or "")
         promotion["updated_at"] = now
         if isinstance(promotion_result, dict):

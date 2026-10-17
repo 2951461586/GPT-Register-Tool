@@ -719,7 +719,8 @@ def finalize_checkout_result(
     publishable_key = str(raw.get("publishable_key") or raw.get("stripe_publishable_key") or DEFAULT_STRIPE_PK).strip()
     promo_campaign_id = extract_promo_campaign_id(raw)
     trial_eligible = bool(raw.get("one_click_trial_eligible"))
-    billing = raw.get("billing_details") if isinstance(raw.get("billing_details"), dict) else {}
+    _raw_billing: object = raw.get("billing_details")
+    billing: dict = _raw_billing if isinstance(_raw_billing, dict) else {}
     country = str(billing.get("country") or raw.get("country") or "")  # pyright: ignore[reportOptionalMemberAccess]
     currency = str(billing.get("currency") or raw.get("currency") or "")  # pyright: ignore[reportOptionalMemberAccess]
 

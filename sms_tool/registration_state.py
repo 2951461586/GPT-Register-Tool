@@ -242,7 +242,8 @@ def _normalize_registration_mode(value=None):
     raw = str(value or "").strip().lower().replace("-", "_")
     if not raw:
         value = current_config_data().get("email_registration")
-        cfg = value if isinstance(value, Mapping) else {}
+        _raw_cfg: object = value
+        cfg: Mapping = _raw_cfg if isinstance(_raw_cfg, Mapping) else {}
         raw = (
             str(cfg.get("registration_mode") or cfg.get("signup_mode") or "passwordless")
             .strip()

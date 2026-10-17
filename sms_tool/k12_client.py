@@ -49,7 +49,8 @@ def _fetch_auth_session_from_cookie(account, proxy=None, timeout=30):
     account_id = _extract_account_id_from_data(body)
     if account_id:
         account["account_id"] = account_id
-    raw = account.get("raw") if isinstance(account.get("raw"), dict) else {}
+    _raw_raw: object = account.get("raw")
+    raw: dict = _raw_raw if isinstance(_raw_raw, dict) else {}
     raw["auth_session"] = body
     account["raw"] = raw
     return body

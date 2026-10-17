@@ -50,8 +50,8 @@ def _chat_base() -> str:
 
 def _proxy_scheme_fallback_mode(cfg=None) -> str:
     source = cfg if isinstance(cfg, Mapping) else CFG
-    registration = source.get("registration")
-    registration = registration if isinstance(registration, Mapping) else {}
+    _raw_registration: object = source.get("registration")
+    registration = _raw_registration if isinstance(_raw_registration, Mapping) else {}
     mode = str(registration.get("proxy_scheme_fallback") or "auto").strip().lower()
     return mode if mode in _SCHEME_FALLBACK_MODES else "auto"
 
@@ -66,8 +66,8 @@ def _preflight_login_page(cfg=None) -> str:
     the change still owes (see ``docs/current/protocol-registration.md``).
     """
     source = cfg if isinstance(cfg, Mapping) else CFG
-    registration = source.get("registration")
-    registration = registration if isinstance(registration, Mapping) else {}
+    _raw_registration: object = source.get("registration")
+    registration = _raw_registration if isinstance(_raw_registration, Mapping) else {}
     mode = str(registration.get("preflight_login_page") or "browser").strip().lower()
     return mode if mode in _PREFLIGHT_LOGIN_PAGES else "browser"
 

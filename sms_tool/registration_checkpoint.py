@@ -164,7 +164,8 @@ def session_recovery_error(payload: Mapping[str, Any]) -> str:
 
 def candidate_checkpoint_error(checkpoint: Mapping[str, Any] | None) -> str:
     """Return a permanent recovery verdict before a candidate claims a slot."""
-    value = checkpoint if isinstance(checkpoint, Mapping) else {}
+    _raw_value: object = checkpoint
+    value: Mapping = _raw_value if isinstance(_raw_value, Mapping) else {}
     payload = value.get("payload")
     if not isinstance(payload, Mapping):
         return ""

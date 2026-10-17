@@ -1,0 +1,67 @@
+{
+  "//": [
+    "Pyright configuration for GPT-Register-Tool.",
+    "",
+    "Pyright has no per-directory rule overrides (an `overrides` block is not a",
+    "recognised setting), so the split this repo actually relies on is:",
+    "",
+    "1. `scripts/pyright_ratchet.py` freezes the error count per file and fails",
+    "   on growth. That ratchet -- not this file -- is the gate. Existing debt",
+    "   (mostly `reportOptionalMemberAccess` on dict guards, and the mock/",
+    "   Playwright attribute access that `tests/` cannot avoid) is retired file",
+    "   by file, each with its own tests.",
+    "",
+    "2. This file only sets the checking mode and excludes trees whose code the",
+    "   project does not own (vendored, generated, runtime data, build output).",
+    "   Type-checking `sms_tool/upi_link/_vendor/` or `dist/` would report",
+    "   thousands of errors in third-party code.",
+    "",
+    "`typeCheckingMode: basic` is deliberate. `standard`/`strict` add the",
+    "`reportUnknown*` families, which on a codebase whose primary data shape is",
+    "`Any`-heavy JSON payloads produce noise proportional to payload nesting",
+    "rather than to defect risk.",
+    "",
+    "See docs/current/typing.md for the ratchet workflow."
+  ],
+  "typeCheckingMode": "basic",
+  "pythonVersion": "3.12",
+  "pythonPlatform": "Windows",
+  "venvPath": ".",
+  "venv": ".venv",
+  "include": [
+    "sms_tool",
+    "services",
+    "scripts",
+    "tests"
+  ],
+  "exclude": [
+    "**/__pycache__",
+    "**/node_modules",
+    "sms_tool/upi_link/_vendor",
+    ".venv",
+    ".dotnet",
+    "dist",
+    "runtime",
+    "sessions",
+    "local",
+    ".workbuddy",
+    ".workbuddy-ai",
+    ".agents",
+    ".pi",
+    ".pi-lens.json",
+    "SmsWorkbench",
+    "SmsWorkbench.Contracts",
+    "tests/SmsWorkbench.Tests/bin",
+    "tests/SmsWorkbench.Tests/obj",
+    "services/protocol-payment/*/dumps"
+  ],
+  "executionEnvironments": [
+    {
+      "root": "services/protocol-payment",
+      "extraPaths": [
+        "services/protocol-payment",
+        "."
+      ]
+    }
+  ]
+}

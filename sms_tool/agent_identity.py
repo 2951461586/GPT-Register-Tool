@@ -246,7 +246,8 @@ def rebuild_agent_identity(email="", source_data=None, export_dir="", proxy="", 
 
 def _refresh_agent_identity_codex_rt(data, json_path="", proxy=""):
     source = dict(data or {})
-    auth_session = source.get("auth_session") if isinstance(source.get("auth_session"), dict) else {}
+    _raw_auth_session: object = source.get("auth_session")
+    auth_session: dict = _raw_auth_session if isinstance(_raw_auth_session, dict) else {}
     try:
         from .codex_export import _openai_refresh_token, _refresh_with_openai_oauth
 
@@ -295,7 +296,8 @@ def _persist_agent_identity_source(data, json_path=""):
 
 
 def _has_chatgpt_session(data):
-    auth_session = data.get("auth_session") if isinstance(data.get("auth_session"), dict) else {}
+    _raw_auth_session: object = data.get("auth_session")
+    auth_session: dict = _raw_auth_session if isinstance(_raw_auth_session, dict) else {}
     return bool(
         str(data.get("session_token") or "").strip()
         or str(auth_session.get("sessionToken") or auth_session.get("session_token") or "").strip()
@@ -604,7 +606,8 @@ def _jwt_claims(access_token):
 
 def _chatgpt_user_id(access_token):
     claims = _jwt_claims(access_token)
-    auth = claims.get("https://api.openai.com/auth") if isinstance(claims.get("https://api.openai.com/auth"), dict) else {}
+    _raw_auth: object = claims.get("https://api.openai.com/auth")
+    auth: dict = _raw_auth if isinstance(_raw_auth, dict) else {}
     return str(auth.get("chatgpt_user_id") or auth.get("user_id") or claims.get("sub") or "").strip()
 
 

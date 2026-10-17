@@ -170,7 +170,8 @@ def _resolve_upi_runtime(
     checkout_proxy = str(_checkout or "").strip()
     provider_proxy = str(_provider or "").strip()
     approve_proxy = str(_approve or "").strip()
-    regions = upi_cfg.get("billing_regions") if isinstance(upi_cfg.get("billing_regions"), list) else []
+    _raw_regions: object = upi_cfg.get("billing_regions")
+    regions: list = _raw_regions if isinstance(_raw_regions, list) else []
     checkout_country = str(
         checkout_country
         or upi_cfg.get("checkout_country")

@@ -27,7 +27,8 @@ def _load_json(path: str) -> dict:
         return {}
 def _method_cfg(cfg: dict, payment_method: str) -> dict:
     method = str(payment_method or "").strip().lower().replace("-", "_")
-    section = cfg.get(method) if isinstance(cfg.get(method), dict) else {}
+    _raw_section: object = cfg.get(method)
+    section: dict = _raw_section if isinstance(_raw_section, dict) else {}
     return section if isinstance(section, dict) else {}
 def _payment_stage_proxies_from_config(cfg: dict, payment_method: str) -> dict:
     method = str(payment_method or "").strip().lower().replace("-", "_")
