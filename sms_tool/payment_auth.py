@@ -6,7 +6,7 @@ import os
 import time
 from typing import Any
 
-from .accounts.account_seed import extract_access_token, load_account_seed
+from .account_seed import extract_access_token, load_account_seed
 from .token_telemetry import access_token_telemetry
 
 

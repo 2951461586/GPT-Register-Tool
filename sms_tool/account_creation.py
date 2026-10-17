@@ -2,11 +2,11 @@ import json
 import logging
 import time
 
-from ..codex_sentinel import load_cached_sentinel, with_sentinel
-from ..auth_headers import auth_impersonate, openai_auth_headers
-from ..config import CFG
-from ..http_client import request_with_retry
-from ..http_utils import (
+from .codex_sentinel import load_cached_sentinel, with_sentinel
+from .auth_headers import auth_impersonate, openai_auth_headers
+from .config import CFG
+from .http_client import request_with_retry
+from .http_utils import (
     _absolute_url,
     _cookie_header,
     _cookie_presence,
@@ -52,14 +52,16 @@ def _create_account_continue_url(create_data):
     continue_url = str(create_data.get("continue_url") or "").strip()
     if continue_url:
         return continue_url
-    error = create_data.get("error") if isinstance(create_data.get("error"), dict) else {}
+    _error_raw: object = create_data.get("error")
+    error: dict = _error_raw if isinstance(_error_raw, dict) else {}
     return str(error.get("redirect_uri") or error.get("redirect_url") or "").strip()
 
 
 def _is_user_already_exists(create_data):
     if not isinstance(create_data, dict):
         return False
-    error = create_data.get("error") if isinstance(create_data.get("error"), dict) else {}
+    _error_raw: object = create_data.get("error")
+    error: dict = _error_raw if isinstance(_error_raw, dict) else {}
     return str(error.get("code") or "").strip() == "user_already_exists"
 
 def _validate_email_otp(session, auth_base, base_headers, code, sentinel_data=None, use_sentinel=True):

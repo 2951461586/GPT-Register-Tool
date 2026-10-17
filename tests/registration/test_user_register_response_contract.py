@@ -56,7 +56,7 @@ from unittest.mock import Mock
 import pytest
 
 from sms_tool import auth_flow, http_utils
-from sms_tool.accounts.account_creation import _email_otp_send_url
+from sms_tool.account_creation import _email_otp_send_url
 from sms_tool.error_classification import classify_error
 from sms_tool.failure_registry import BATCH_DROPPED_CLASSES, BATCH_RETRY_CLASSES
 from sms_tool.registration_handlers import RegistrationAbort, RegistrationEmailWorkflow
@@ -145,7 +145,7 @@ def _workflow(
     w.config = {}
     w.runtime = state
     w._issue_sentinel = Mock(return_value=SimpleNamespace(token="T", so_token="S"))
-    w._operations = SimpleNamespace(
+    w._operations = SimpleNamespace(  # type: ignore[attr-defined]
         # The real URL helper: the contract under test is that the URL is read
         # out of the response body, so faking it here would test nothing.
         _email_otp_send_url=_email_otp_send_url,
@@ -203,8 +203,8 @@ def test_the_followed_url_tracks_the_response_body(url):
 
     w.send_email_otp()
 
-    follow.assert_called_once()
-    assert follow.call_args.args[1] == url
+    follow.assert_called_once()  # type: ignore[attr-defined]
+    assert follow.call_args.args[1] == url  # type: ignore[attr-defined]
 
 
 def test_the_follow_keeps_the_log_label_that_the_verdict_was_measured_with():
@@ -218,8 +218,8 @@ def test_the_follow_keeps_the_log_label_that_the_verdict_was_measured_with():
 
     w.send_email_otp()
 
-    assert follow.call_args.kwargs.get("label") == "Email OTP send"
-    assert follow.call_args.kwargs.get("referer") == "https://auth.openai.com/create-account/password"
+    assert follow.call_args.kwargs.get("label") == "Email OTP send"  # type: ignore[attr-defined]
+    assert follow.call_args.kwargs.get("referer") == "https://auth.openai.com/create-account/password"  # type: ignore[attr-defined]
 
 
 def test_the_password_lane_does_not_backdate_the_otp_issue_time():
@@ -306,7 +306,7 @@ def test_passwordless_lane_never_posts_user_register():
 
     w.user_register()
 
-    w._operations.request_with_retry.assert_not_called()
+    w._operations.request_with_retry.assert_not_called()  # type: ignore[attr-defined]
     assert state.reg_data["mode"] == "passwordless_signup"
     assert state.password_unknown is True
 
@@ -324,7 +324,7 @@ def test_passwordless_lane_never_follows_a_continue_url():
 
     w.send_email_otp()
 
-    follow.assert_not_called()
+    follow.assert_not_called()  # type: ignore[attr-defined]
     # 回填到 ``auth_flow_started - 5``：合成分支的可观测指纹。
     assert state.otp_issued_after == _AUTH_FLOW_STARTED - 5
 
@@ -368,8 +368,8 @@ def test_a_server_forced_password_route_still_posts_and_follows():
     w.user_register()
     w.send_email_otp()
 
-    w._operations.request_with_retry.assert_called_once()
-    assert follow.call_args.args[1] == _CONTINUE_URL
+    w._operations.request_with_retry.assert_called_once()  # type: ignore[attr-defined]
+    assert follow.call_args.args[1] == _CONTINUE_URL  # type: ignore[attr-defined]
 
 
 def test_the_password_step_url_alone_is_enough_to_take_the_password_lane():
@@ -380,11 +380,11 @@ def test_the_password_step_url_alone_is_enough_to_take_the_password_lane():
         reg_data={"continue_url": _CONTINUE_URL},
     )
     w = _workflow(state)
-    w._operations._is_signup_password_step = Mock(return_value=True)
+    w._operations._is_signup_password_step = Mock(return_value=True)  # type: ignore[attr-defined]
 
     w.user_register()
 
-    w._operations.request_with_retry.assert_called_once()
+    w._operations.request_with_retry.assert_called_once()  # type: ignore[attr-defined]
 
 
 def test_a_non_password_url_does_not_hijack_the_passwordless_lane():
@@ -394,11 +394,11 @@ def test_a_non_password_url_does_not_hijack_the_passwordless_lane():
         signup_state={"url": "https://auth.openai.com/log-in"},
     )
     w = _workflow(state)
-    w._operations._is_signup_password_step = Mock(return_value=False)
+    w._operations._is_signup_password_step = Mock(return_value=False)  # type: ignore[attr-defined]
 
     w.user_register()
 
-    w._operations.request_with_retry.assert_not_called()
+    w._operations.request_with_retry.assert_not_called()  # type: ignore[attr-defined]
 
 
 # ---------------------------------------------------------------------------
@@ -448,7 +448,7 @@ def test_an_unconfirmed_password_aborts_before_any_otp_is_sent():
         w.user_register()
 
     assert str(exc.value) == "password_step_unconfirmed:invalid_auth_step"
-    follow.assert_not_called()
+    follow.assert_not_called()  # type: ignore[attr-defined]
     assert state.otp_issued_after == 0, "止损必须发生在发码之前"
 
 
@@ -561,7 +561,7 @@ def test_the_unconfirmed_password_abort_is_unreachable_from_the_passwordless_lan
 
     w.user_register()  # 不抛
 
-    w._operations.request_with_retry.assert_not_called()
+    w._operations.request_with_retry.assert_not_called()  # type: ignore[attr-defined]
     assert state.reg_data["mode"] == "passwordless_signup"
 
 
@@ -788,7 +788,7 @@ def test_the_password_lane_does_not_prime_by_default():
     w = _workflow(state, password_step=auth_flow._is_signup_password_step)
 
     calls: list[str] = []
-    w._operations._prime_create_account_password_page = Mock(
+    w._operations._prime_create_account_password_page = Mock(  # type: ignore[attr-defined]
         side_effect=lambda *a, **kw: (calls.append("prime"), {"ok": True, "status": 200, "url": ""})[1]
     )
     w._operations.request_with_retry = Mock(
@@ -826,10 +826,10 @@ def test_the_primed_password_lane_gets_the_password_page_before_the_post():
 
     assert order == ["prime", "post"]
     # 传给导航函数的是**当前落点**，好让它能算出正确的 Referer。
-    assert prime_page.call_args.args[3] == _EMAIL_VERIFICATION_URL
-    assert prime_page.call_args.args[1] == "https://auth.openai.com"
-    assert prime_page.call_args.args[2] == state.base_headers
-    assert prime_page.call_args.args[0] is state.session
+    assert prime_page.call_args.args[3] == _EMAIL_VERIFICATION_URL  # type: ignore[attr-defined]
+    assert prime_page.call_args.args[1] == "https://auth.openai.com"  # type: ignore[attr-defined]
+    assert prime_page.call_args.args[2] == state.base_headers  # type: ignore[attr-defined]
+    assert prime_page.call_args.args[0] is state.session  # type: ignore[attr-defined]
 
 
 def test_the_password_page_prime_is_skipped_when_already_on_the_step(monkeypatch):

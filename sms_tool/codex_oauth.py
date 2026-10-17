@@ -30,7 +30,7 @@ from .storage import upsert_account
 # ``error.redirect_uri``, and ``issue_sentinel_flow`` is the only supported way
 # to mint an ``oauth_create_account`` token (the recovery lane's cached sentinel
 # is bound to a different flow).
-from .accounts.account_creation import _create_account_continue_url, _is_user_already_exists
+from .account_creation import _create_account_continue_url, _is_user_already_exists
 from .sentinel.client import issue_sentinel_flow
 from .utils import atomic_write_text
 from .utils import _random_birthdate, _random_name

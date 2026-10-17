@@ -182,8 +182,20 @@ def test_ratchet_holds_for_the_current_tree():
 def test_summary_facts_are_pinned():
     """Pin the decomposition so a silent metric change is caught.
 
-    470 raw directory-level edges decompose into 287 module-scope edges (frozen
-    here) plus 187 delayed imports (frozen by ``delayed_import_ratchet.py``).
+    470 raw directory-level edges decompose into 277 module-scope edges (frozen
+    here) plus 188 delayed imports (frozen by ``delayed_import_ratchet.py``).
+
+    277 (was 287) / 29 pairs (was 31) / 56 minority (was 60) / 188 delayed (was
+    187) on 2026-10-17: ``accounts/account_creation.py`` and
+    ``accounts/account_seed.py`` moved to the package root. Both had every
+    internal dependency at the top level already (``http_utils``,
+    ``auth_headers``, ``codex_sentinel``, ``config``, ``http_client``,
+    ``storage``) and ``accounts/`` consumed only two ``account_creation``
+    symbols through a delayed import, so the move turned four
+    ``sms_tool -> sms_tool/accounts`` edges into same-directory imports. The
+    two ordered pairs that disappeared (31 -> 29) are exactly the pairs those
+    edges left behind; the delayed count grew by one because
+    ``account_recovery`` keeps its function-local import of the moved module.
 
     187 (was 186) on 2026-10-11: ``codex_oauth._password_login_and_exchange``
     completes a saved TOTP challenge through ``auth_flow.totp`` (the single owner
@@ -222,11 +234,11 @@ def test_summary_facts_are_pinned():
     """
     totals = ilr.analyze(ROOT).totals()
     assert totals == {
-        "total_module_edges": 287,
-        "ordered_pairs": 31,
+        "total_module_edges": 277,
+        "ordered_pairs": 29,
         "mutual_pairs": 11,
-        "minority_edges": 60,
-        "delayed_cross_dir_edges": 187,
+        "minority_edges": 56,
+        "delayed_cross_dir_edges": 188,
     }
 
 

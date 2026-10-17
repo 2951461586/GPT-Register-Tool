@@ -47,7 +47,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from sms_tool import registration, registration_handlers
-from sms_tool.accounts.account_creation import _is_user_already_exists
+from sms_tool.account_creation import _is_user_already_exists
 from sms_tool.error_classification import classify_error
 from sms_tool.registration_handlers import RegistrationEmailWorkflow
 from sms_tool.registration_policy import registration_retry_decision
@@ -129,7 +129,7 @@ class ExistingAccountLoginSurfaceTests(unittest.TestCase):
         operations = Mock()
         operations._fetch_auth_session.return_value = {"body": {}}
         operations._auth_session_access_token.return_value = ""
-        operations._sanitize_text.side_effect = lambda value: str(value)
+        operations._sanitize_text.side_effect = lambda value: str(value)  # type: ignore[attr-defined]
         operations._login_existing_account_with_email_otp.return_value = login_result
         operations._registration_outcome = Mock(
             side_effect=lambda create_ok, create_data, access_token, at_probe,
@@ -156,7 +156,7 @@ class ExistingAccountLoginSurfaceTests(unittest.TestCase):
 
     def test_stored_error_is_sanitized_before_it_is_stored(self):
         workflow = self._workflow({"ok": False, "error": _LOGIN_ERROR})
-        workflow._operations._sanitize_text.side_effect = lambda value: f"[SANITIZED]{value}"
+        workflow._operations._sanitize_text.side_effect = lambda value: f"[SANITIZED]{value}"  # type: ignore[attr-defined]
 
         workflow.fetch_auth_session()
 
@@ -206,7 +206,7 @@ class ExistingLoginProbeTests(unittest.TestCase):
         operations = Mock()
         operations._fetch_auth_session.return_value = {"body": {}}
         operations._auth_session_access_token.return_value = ""
-        operations._sanitize_text.side_effect = lambda value: str(value)
+        operations._sanitize_text.side_effect = lambda value: str(value)  # type: ignore[attr-defined]
         operations._login_existing_account_with_email_otp.return_value = login_result
         operations._stored_registration_totp.return_value = "BASE32SECRET"
         workflow = RegistrationEmailWorkflow(
@@ -231,7 +231,7 @@ class ExistingLoginProbeTests(unittest.TestCase):
 
         workflow.fetch_auth_session()
 
-        kwargs = workflow._operations._login_existing_account_with_email_otp.call_args.kwargs
+        kwargs = workflow._operations._login_existing_account_with_email_otp.call_args.kwargs  # type: ignore[attr-defined]
         self.assertEqual(kwargs["password"], "StoredPass123")
         # ``existing_account`` is only ever set by ``user_already_exists``, and
         # for that address the email lane is a measured dead end.
@@ -243,7 +243,7 @@ class ExistingLoginProbeTests(unittest.TestCase):
 
         workflow.fetch_auth_session()
 
-        kwargs = workflow._operations._login_existing_account_with_email_otp.call_args.kwargs
+        kwargs = workflow._operations._login_existing_account_with_email_otp.call_args.kwargs  # type: ignore[attr-defined]
         self.assertEqual(kwargs["password"], "")
 
     def test_the_stored_totp_travels_with_the_password(self):
@@ -256,7 +256,7 @@ class ExistingLoginProbeTests(unittest.TestCase):
 
         workflow.fetch_auth_session()
 
-        kwargs = workflow._operations._login_existing_account_with_email_otp.call_args.kwargs
+        kwargs = workflow._operations._login_existing_account_with_email_otp.call_args.kwargs  # type: ignore[attr-defined]
         self.assertEqual(kwargs["totp_secret"], "BASE32SECRET")
 
     def test_a_definitive_negative_is_written_to_the_retry_guard(self):
@@ -271,8 +271,8 @@ class ExistingLoginProbeTests(unittest.TestCase):
         with self._guard() as guard_cls:
             workflow.fetch_auth_session()
 
-        guard_cls.return_value.mark_dead_end.assert_called_once()
-        self.assertEqual(guard_cls.return_value.mark_dead_end.call_args.args[0], "dead@example.com")
+        guard_cls.return_value.mark_dead_end.assert_called_once()  # type: ignore[attr-defined]
+        self.assertEqual(guard_cls.return_value.mark_dead_end.call_args.args[0], "dead@example.com")  # type: ignore[attr-defined]
 
     def test_the_inconclusive_verdict_is_also_written_to_the_retry_guard(self):
         """``unknown`` is not a licence to spend a code on a known-registered address."""
@@ -283,7 +283,7 @@ class ExistingLoginProbeTests(unittest.TestCase):
         with self._guard() as guard_cls:
             workflow.fetch_auth_session()
 
-        guard_cls.return_value.mark_dead_end.assert_called_once()
+        guard_cls.return_value.mark_dead_end.assert_called_once()  # type: ignore[attr-defined]
 
     def test_password_required_is_not_blacklisted(self):
         """A later run supplying ``--password`` could still log this account in.
@@ -297,14 +297,14 @@ class ExistingLoginProbeTests(unittest.TestCase):
         with self._guard() as guard_cls:
             workflow.fetch_auth_session()
 
-        guard_cls.return_value.mark_dead_end.assert_not_called()
+        guard_cls.return_value.mark_dead_end.assert_not_called()  # type: ignore[attr-defined]
 
     def test_a_successful_probe_reads_the_new_session(self):
         workflow = self._workflow(login_result={"ok": True})
 
         workflow.fetch_auth_session()
 
-        self.assertEqual(workflow._operations._fetch_auth_session.call_count, 2)
+        self.assertEqual(workflow._operations._fetch_auth_session.call_count, 2)  # type: ignore[attr-defined]
 
     def test_an_unregistered_address_never_enters_the_existing_login_lane(self):
         """The inverse guard: this lane is only for addresses the server called registered.
@@ -318,7 +318,7 @@ class ExistingLoginProbeTests(unittest.TestCase):
 
         workflow.fetch_auth_session()
 
-        workflow._operations._login_existing_account_with_email_otp.assert_not_called()
+        workflow._operations._login_existing_account_with_email_otp.assert_not_called()  # type: ignore[attr-defined]
 
 
 class ExistingLoginDeadEndErrorTests(unittest.TestCase):
@@ -417,7 +417,7 @@ class ReauthHandsTheProbeItsInputsTests(unittest.TestCase):
         operations = Mock()
         operations._fetch_auth_session.return_value = {"body": {}}
         operations._auth_session_access_token.return_value = "fresh-at"
-        operations._sanitize_text.side_effect = lambda value: str(value)
+        operations._sanitize_text.side_effect = lambda value: str(value)  # type: ignore[attr-defined]
         operations._stored_registration_totp.return_value = stored_totp
         operations._login_existing_account_with_email_otp.return_value = {"ok": True}
         workflow = RegistrationEmailWorkflow(
@@ -446,7 +446,7 @@ class ReauthHandsTheProbeItsInputsTests(unittest.TestCase):
             "sms_tool.accounts.account_2fa.setup_totp_2fa", side_effect=fake_setup_totp_2fa
         ):
             workflow.enroll_totp()
-        return workflow._operations._login_existing_account_with_email_otp.call_args.kwargs
+        return workflow._operations._login_existing_account_with_email_otp.call_args.kwargs  # type: ignore[attr-defined]
 
     def test_the_reauth_submits_the_password_and_the_stored_secret(self):
         workflow = self._workflow(existing_account=True, existing_account_password_known=True)
@@ -509,8 +509,8 @@ class CreateAccountPasswordKnownTests(unittest.TestCase):
 
     def _workflow(self, *, status_code, body, explicit_password=False, password_from_storage=False):
         operations = Mock()
-        operations._sanitize_text.side_effect = lambda value: str(value)
-        operations._is_user_already_exists.side_effect = _is_user_already_exists
+        operations._sanitize_text.side_effect = lambda value: str(value)  # type: ignore[attr-defined]
+        operations._is_user_already_exists.side_effect = _is_user_already_exists  # type: ignore[attr-defined]
         operations._auth_request_headers.return_value = {}
         operations.auth_impersonate.return_value = None
         operations._create_account_continue_url.return_value = ""

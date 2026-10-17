@@ -73,7 +73,20 @@ def main() -> int:
     # No forwarding shell is kept at sms_tool/account_*.py on purpose -- a
     # shell would silently absorb the 50+ `patch("sms_tool.accounts.*")`
     # targets without production code ever reading it.
-    stray_accounts = sorted(p.name for p in PY_ROOT.glob("account_*.py"))
+    #
+    # account_creation.py and account_seed.py are exempt: both were relocated
+    # to the package root on 2026-10-17 because every internal dependency
+    # (http_utils, auth_headers, codex_sentinel, config, http_client, storage)
+    # lives at the top level, and accounts/ itself only consumed 2 symbols from
+    # account_creation via a delayed import.  They are top-level auth/seed
+    # helpers that registration and payments reach inward toward, not account
+    # lifecycle workflows.  Relocation cut the sms_tool->accounts minority edge
+    # set 9 -> 5 and the total module edge count 287 -> 277.
+    _ALLOWED_TOP_LEVEL_ACCOUNT_HELPERS = {"account_creation.py", "account_seed.py"}
+    stray_accounts = sorted(
+        p.name for p in PY_ROOT.glob("account_*.py")
+        if p.name not in _ALLOWED_TOP_LEVEL_ACCOUNT_HELPERS
+    )
     if stray_accounts:
         failures.append(
             "account workflow modules must live in sms_tool/accounts/, "

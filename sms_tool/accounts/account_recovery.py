@@ -135,7 +135,7 @@ def relogin_chatgpt_email_account(
 
         from curl_cffi import requests as curl_requests
 
-        from .account_creation import _auth_session_access_token, _fetch_auth_session
+        from ..account_creation import _auth_session_access_token, _fetch_auth_session
         from ..auth_flow import _json_or_raw
         from ..auth_headers import auth_impersonate, openai_auth_headers, select_auth_fingerprint
         from ..codex_oauth import _mailbox_from_data

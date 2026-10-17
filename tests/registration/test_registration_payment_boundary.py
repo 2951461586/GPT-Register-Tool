@@ -9,7 +9,7 @@ REGISTRATION_MODULES = (
     "sms_tool/registration_state.py",
     "sms_tool/registration_progress.py",
     "sms_tool/registration_concurrency.py",
-    "sms_tool/accounts/account_creation.py",
+    "sms_tool/account_creation.py",
 )
 FORBIDDEN_PAYMENT_MODULES = {
     "payment_batch",
@@ -36,5 +36,5 @@ def test_registration_modules_do_not_import_payment_implementations():
             for name in names:
                 leaf = name.rsplit(".", 1)[-1]
                 if leaf in FORBIDDEN_PAYMENT_MODULES:
-                    violations.append(f"{relative}:{node.lineno}:{name}")
+                    violations.append(f"{relative}:{getattr(node, 'lineno', 0)}:{name}")
     assert violations == []

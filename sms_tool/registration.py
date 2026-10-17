@@ -130,7 +130,7 @@ from .auth_flow import (
     _totp_factor_id,
     _with_query_param,
 )
-from .accounts.account_creation import (
+from .account_creation import (
     _auth_session_access_token,
     _cookie_header,
     _create_account_continue_url,

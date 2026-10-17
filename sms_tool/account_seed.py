@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from ..storage import get_account_record
+from .storage import get_account_record
 
 
 def load_account_seed(email: str = "", session_file: str = "") -> tuple[dict[str, Any], str]:
@@ -58,12 +58,14 @@ def extract_access_token(data: dict[str, Any]) -> str:
     token = str(data.get("access_token") or "").strip()
     if token:
         return token
-    auth_session = data.get("auth_session") if isinstance(data.get("auth_session"), dict) else {}
+    auth_session_raw: Any = data.get("auth_session")
+    auth_session: dict[str, Any] = auth_session_raw if isinstance(auth_session_raw, dict) else {}
     for key in ("accessToken", "access_token"):
         value = auth_session.get(key)
         if isinstance(value, str) and value:
             return value
-    session = auth_session.get("session") if isinstance(auth_session.get("session"), dict) else {}
+    session_raw: Any = auth_session.get("session")
+    session: dict[str, Any] = session_raw if isinstance(session_raw, dict) else {}
     for key in ("accessToken", "access_token"):
         value = session.get(key)
         if isinstance(value, str) and value:

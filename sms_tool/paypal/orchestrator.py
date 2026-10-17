@@ -10,8 +10,8 @@ from __future__ import annotations
 import time
 from typing import Any, Callable
 
-from ..accounts.account_seed import extract_access_token as _extract_access_token
-from ..accounts.account_seed import load_account_seed as _load_seed
+from ..account_seed import extract_access_token as _extract_access_token
+from ..account_seed import load_account_seed as _load_seed
 from ..config import CFG
 from ..paypal_fingerprints import PAYPAL_USER_AGENT as _USER_AGENT
 from ..utils import _generate_password, _random_name
@@ -476,7 +476,8 @@ def _try_browser_pay_camoufox(
             # Inject Navigator property overrides for fingerprint consistency
             _inject_navigator_overrides(ctx)
 
-            page = ctx.pages[0] if ctx.pages else ctx.new_page()
+            _pages = getattr(ctx, "pages", None)
+            page = _pages[0] if _pages else ctx.new_page()
             result = _run_browser_steps(
                 page,
                 ctx,

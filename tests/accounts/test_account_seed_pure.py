@@ -37,7 +37,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from sms_tool.accounts import account_seed
+from sms_tool import account_seed
 
 
 def _write(path: Path, payload, encoding: str = "utf-8") -> Path:

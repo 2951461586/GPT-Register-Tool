@@ -43,7 +43,7 @@ import logging
 import unittest
 from unittest import mock
 
-from sms_tool.accounts import account_creation
+from sms_tool import account_creation
 
 # 派生而非硬编码：logging 自己知道哪些属性是标准的，升级 Python 也不会漏。
 _STANDARD_LOG_ATTRS = frozenset(
@@ -219,12 +219,12 @@ class AuthSessionReadinessLogTests(unittest.TestCase):
 
         events = self._events()
         self.assertEqual(len(events), 4)
-        self.assertTrue(all(event.access_token_present is False for event in events))
-        self.assertEqual(events[0].status_code, 200)
-        self.assertEqual(events[0].max_attempts, 4)
-        self.assertEqual(events[0].body_shape, "json keys=['expires', 'user']")
+        self.assertTrue(all(getattr(event, "access_token_present", None) is False for event in events))
+        self.assertEqual(getattr(events[0], "status_code", None), 200)
+        self.assertEqual(getattr(events[0], "max_attempts", None), 4)
+        self.assertEqual(getattr(events[0], "body_shape", None), "json keys=['expires', 'user']")
         raw = "<html>challenge</html>"
-        self.assertEqual(events[2].body_shape, f"non_json raw_len={len(raw)}")
+        self.assertEqual(getattr(events[2], "body_shape", None), f"non_json raw_len={len(raw)}")
 
     def test_jar_readout_reports_the_nextauth_session_cookie(self):
         """决定 `/api/auth/session` 是否认证的是 session token，不是 state cookie。
@@ -239,9 +239,9 @@ class AuthSessionReadinessLogTests(unittest.TestCase):
         )
 
         event = self._events()[0]
-        self.assertIs(event.nextauth_session, True)
-        self.assertEqual(event.cookie_count, 2)
-        self.assertTrue(event.jar_presence["nextauth_session"])
+        self.assertIs(getattr(event, "nextauth_session", None), True)
+        self.assertEqual(getattr(event, "cookie_count", None), 2)
+        self.assertTrue((getattr(event, "jar_presence", None) or {})["nextauth_session"])
 
     def test_jar_readout_is_negative_without_the_session_cookie(self):
         self._fetch(
@@ -251,8 +251,8 @@ class AuthSessionReadinessLogTests(unittest.TestCase):
         )
 
         event = self._events()[0]
-        self.assertIs(event.nextauth_session, False)
-        self.assertEqual(event.cookie_count, 2)
+        self.assertIs(getattr(event, "nextauth_session", None), False)
+        self.assertEqual(getattr(event, "cookie_count", None), 2)
 
     def test_missing_session_cookie_bails_after_round_one(self):
         """P2 (2026-09-19): without ``__Secure-next-auth.session-token`` the
@@ -293,8 +293,8 @@ class AuthSessionReadinessLogTests(unittest.TestCase):
         self.assertEqual(result["status_code"], 200)
         events = self._events()
         self.assertEqual(len(events), 1)
-        self.assertTrue(events[0].access_token_present)
-        self.assertTrue(events[0].token_key_present)
+        self.assertTrue(getattr(events[0], "access_token_present", None))
+        self.assertTrue(getattr(events[0], "token_key_present", None))
 
     def test_extractor_gap_is_visible(self):
         """token 在，但提取器走的路径不对 —— 探针必须把它指出来。"""
@@ -303,9 +303,9 @@ class AuthSessionReadinessLogTests(unittest.TestCase):
 
         events = self._events()
         self.assertEqual(len(events), 1)
-        self.assertFalse(events[0].access_token_present)
+        self.assertFalse(getattr(events[0], "access_token_present", None))
         self.assertTrue(
-            events[0].token_key_present,
+            getattr(events[0], "token_key_present", None),
             "token 明明在响应里，探针却报不存在 —— 提取器 bug 会被漏掉",
         )
 
@@ -371,8 +371,10 @@ class AuthSessionReadinessLogTests(unittest.TestCase):
             self.assertNotIn(
                 "[REDACTED]", line, f"落盘后字段被脱敏吃掉：{line}"
             )
-            self.assertIn(f"access_token_present={record.access_token_present}", line)
-            self.assertIn(f"token_key_present={record.token_key_present}", line)
+            _atp = getattr(record, "access_token_present", None)
+            self.assertIn(f"access_token_present={_atp}", line)
+            _tkp = getattr(record, "token_key_present", None)
+            self.assertIn(f"token_key_present={_tkp}", line)
 
     def test_structured_fields_survive_sanitization(self):
         """`.jsonl` 通道对每个字段跑 `sanitize(value, key=字段名)` —— **自动派生**逐个验。

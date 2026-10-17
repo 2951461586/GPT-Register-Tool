@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 
 from sms_tool import auth_flow, batch_runner, otp_strategy, registration
 
-from sms_tool.accounts import account_creation
+from sms_tool import account_creation
 from sms_tool.auth_flow import _ensure_authorize_context
 from sms_tool.auth_flow import _protocol_diagnostic
 from sms_tool.mailbox import _parse_chatai_mailbox_file
@@ -73,10 +73,10 @@ class RegistrationConcurrencyTests(unittest.TestCase):
             result = _probe_registration_access_token("at", {}, proxy="http://proxy.example:8080")
 
         self.assertEqual(result["stability_status_codes"], [200, 200])
-        self.assertEqual(probe.call_count, 2)
-        self.assertTrue(all(call.kwargs["proxy"] == "http://proxy.example:8080" for call in probe.call_args_list))
+        self.assertEqual(probe.call_count, 2)  # type: ignore[attr-defined]
+        self.assertTrue(all(call.kwargs["proxy"] == "http://proxy.example:8080" for call in probe.call_args_list))  # type: ignore[attr-defined]
         self.assertEqual(stages, ["access_token_stability_wait", "access_token_probe"])
-        sleep.assert_called_once_with(10.0)
+        sleep.assert_called_once_with(10.0)  # type: ignore[attr-defined]
 
     def test_single_probe_default_skips_the_stability_wait(self):
         """count=1 (the production default since 2026-09-19) never sleeps and
@@ -101,9 +101,9 @@ class RegistrationConcurrencyTests(unittest.TestCase):
             result = _probe_registration_access_token("at", {}, proxy="http://proxy.example:8080")
 
         self.assertEqual(result["stability_status_codes"], [200])
-        self.assertEqual(probe.call_count, 1)
+        self.assertEqual(probe.call_count, 1)  # type: ignore[attr-defined]
         self.assertEqual(stages, [])
-        sleep.assert_not_called()
+        sleep.assert_not_called()  # type: ignore[attr-defined]
 
     def test_http_200_access_token_is_registration_success_even_when_create_step_warned(self):
         success, error, warning = _registration_outcome(
@@ -209,7 +209,7 @@ class RegistrationConcurrencyTests(unittest.TestCase):
 
         self.assertTrue(state["ok"])
         self.assertTrue(state["login_redirect_seen"])
-        continue_signup.assert_called_once()
+        continue_signup.assert_called_once()  # type: ignore[attr-defined]
 
     def test_passwordless_signin_primary_attempt_matches_har_login_or_signup(self):
         attempts = _passwordless_signin_attempts()
@@ -256,7 +256,7 @@ class RegistrationConcurrencyTests(unittest.TestCase):
         )
 
         self.assertTrue(state["ok"])
-        session.post.assert_called_once()
+        session.post.assert_called_once()  # type: ignore[attr-defined]
 
     def test_an_authorize_error_response_is_never_read_as_an_established_transaction(self):
         """Some adapters retain redirect URLs on 4xx/5xx responses.
@@ -352,7 +352,7 @@ class RegistrationConcurrencyTests(unittest.TestCase):
 
         self.assertTrue(state["ok"])
         self.assertTrue(state["password_fallback"])
-        continue_signup.assert_called_once()
+        continue_signup.assert_called_once()  # type: ignore[attr-defined]
 
     def test_cookie_presence_handles_curl_cookie_names(self):
         session = Mock()
@@ -498,7 +498,7 @@ class RegistrationConcurrencyTests(unittest.TestCase):
             seen.update(kwargs)
             return response
 
-        with patch("sms_tool.accounts.account_creation.request_with_retry", side_effect=fake_request):
+        with patch("sms_tool.account_creation.request_with_retry", side_effect=fake_request):
             ok, _ = _validate_email_otp(
                 Mock(),
                 "https://auth.openai.com",
@@ -529,11 +529,11 @@ class RegistrationConcurrencyTests(unittest.TestCase):
             )
 
         self.assertEqual(code, "654321")
-        self.assertEqual(poll.call_count, 2)
-        self.assertEqual(poll.call_args_list[0].kwargs["timeout"], 30)
-        self.assertEqual(poll.call_args_list[1].kwargs["timeout"], 270)
-        self.assertEqual(poll.call_args_list[0].kwargs["issued_after_unix"], 1_000)
-        self.assertEqual(poll.call_args_list[1].kwargs["issued_after_unix"], 1_000)
+        self.assertEqual(poll.call_count, 2)  # type: ignore[attr-defined]
+        self.assertEqual(poll.call_args_list[0].kwargs["timeout"], 30)  # type: ignore[attr-defined]
+        self.assertEqual(poll.call_args_list[1].kwargs["timeout"], 270)  # type: ignore[attr-defined]
+        self.assertEqual(poll.call_args_list[0].kwargs["issued_after_unix"], 1_000)  # type: ignore[attr-defined]
+        self.assertEqual(poll.call_args_list[1].kwargs["issued_after_unix"], 1_000)  # type: ignore[attr-defined]
 
     def test_create_account_continue_url_uses_existing_account_redirect(self):
         redirect = "https://chatgpt.com/auth/login_with?callback_path=/"

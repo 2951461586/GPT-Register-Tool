@@ -135,15 +135,41 @@ class RuleMatching(unittest.TestCase):
             "transient credential scratch files": "tmp/pp_token_1234.txt",
             "upi diagnostic dumps": "upi_dumps/dump_001.json",
             "protocol payment logs": "protocol_payment/ideal/logs/run_001.log",
+            "per-process backend logs": "logs/processes/4844/sms_tool.log",
         }
         for rule in RULES:
             with self.subTest(rule=rule.name):
                 sample = samples.get(rule.name)
                 self.assertIsNotNone(sample, f"no sample for rule {rule.name!r}")
+                assert sample is not None  # narrows the Optional for the checker
                 self.assertTrue(
                     rule.matches(sample),
                     f"rule {rule.name!r} does not match its own sample {sample!r}",
                 )
+
+    def test_every_sample_has_a_rule(self):
+        """Mirror of the test above: a sample whose rule was renamed or
+        dropped is silently ignored there -- exactly the failure mode that
+        let the ``per-process backend logs`` sample sit unasserted for one
+        round of edits. Samples are intent; require each to map to a live
+        rule so the pair is checked in both directions.
+        """
+        names = {r.name for r in RULES}
+        for name in (
+            "empty batch gate locks",
+            "empty payment-operation gate locks",
+            "browser profiles",
+            "per-batch payment artifacts",
+            "one-off scan snapshots",
+            "operator logs and scratch files",
+            "mailbox imports",
+            "transient credential scratch files",
+            "upi diagnostic dumps",
+            "protocol payment logs",
+            "per-process backend logs",
+        ):
+            with self.subTest(name=name):
+                self.assertIn(name, names)
 
 
 class PlanRetention(unittest.TestCase):
@@ -213,6 +239,31 @@ class PlanRetention(unittest.TestCase):
 
     def test_missing_root_yields_empty_plan(self):
         self.assertEqual([], plan_retention(self.root / "nope"))
+
+    def test_process_log_directories_are_retired_by_age(self):
+        """``runtime/logs/processes/<pid>/`` grows per backend process and is
+        never pruned by anything else (501 dirs / 117 MiB measured
+        2026-10-17).  The rule must catch every file under a process dir and
+        respect its age floor.
+        """
+        _touch(self.root / "logs" / "processes" / "4844" / "sms_tool.log", age_days=20)
+        _touch(self.root / "logs" / "processes" / "4844" / "backend_stdout.jsonl", age_days=20)
+        _touch(self.root / "logs" / "processes" / "9999" / "sms_tool.jsonl.1", age_days=2)
+        planned = {i.relpath.replace("\\", "/") for i in plan_retention(self.root)}
+        self.assertIn("logs/processes/4844/sms_tool.log", planned)
+        self.assertIn("logs/processes/4844/backend_stdout.jsonl", planned)
+        self.assertNotIn("logs/processes/9999/sms_tool.jsonl.1", planned)
+
+    def test_shared_top_level_logs_are_historical_and_stay(self):
+        """``runtime/logs/backend_stdout.log`` and friends predate the per-process
+        split; docs/current/telemetry-and-runtime.md says they remain
+        historical evidence and are not moved or deleted.
+        """
+        _touch(self.root / "logs" / "backend_stdout.log", age_days=999)
+        _touch(self.root / "logs" / "sms_tool.jsonl.2", age_days=999)
+        planned = {i.relpath.replace("\\", "/") for i in plan_retention(self.root, min_age_days=0)}
+        self.assertNotIn("logs/backend_stdout.log", planned)
+        self.assertNotIn("logs/sms_tool.jsonl.2", planned)
 
     def test_relocation_area_is_skipped(self):
         _touch(self.root / RELOCATE_DIRNAME / "stamp" / "x.json", age_days=999)

@@ -397,7 +397,7 @@ def run_one(
     from curl_cffi import requests as curl_requests
 
     from sms_tool.accounts.account_2fa import _needs_reauth
-    from sms_tool.accounts.account_creation import (
+    from sms_tool.account_creation import (
         _auth_session_access_token, _fetch_auth_session,
     )
     from sms_tool.accounts.account_recovery import _stored_registration_password

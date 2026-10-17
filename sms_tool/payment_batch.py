@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Callable
 
-from .accounts.account_seed import load_account_seed
+from .account_seed import load_account_seed
 from .config import CFG
 from .cross_process_gate import CrossProcessSemaphore, GateTimeoutError
 from .sanitizer import sanitize as _canonical_sanitize, sanitize_text as _canonical_sanitize_text
@@ -40,7 +40,8 @@ def load_payment_matrix(value: Any = None) -> list[dict[str, Any]]:
     """Load matrix cells from a JSON string/path or protocol_payments config."""
     raw = value
     if raw in (None, "", False):
-        protocol = CFG.get("protocol_payments") if isinstance(CFG.get("protocol_payments"), dict) else {}
+        _protocol_raw: Any = CFG.get("protocol_payments")
+        protocol: dict[str, Any] = _protocol_raw if isinstance(_protocol_raw, dict) else {}
         raw = protocol.get("matrix") or []
     if isinstance(raw, (str, Path)):
         explicit_path = isinstance(raw, Path)
@@ -48,6 +49,7 @@ def load_payment_matrix(value: Any = None) -> list[dict[str, Any]]:
         if not text:
             return []
         source = text
+        path: Path | None = None
         if explicit_path or text[:1] not in {"[", "{"}:
             path = Path(text)
             try:
@@ -63,7 +65,7 @@ def load_payment_matrix(value: Any = None) -> list[dict[str, Any]]:
         try:
             raw = json.loads(source)
         except (ValueError, TypeError) as exc:
-            location = f"file {path}" if explicit_path or text[:1] not in {"[", "{"} else "inline JSON"
+            location = f"file {path}" if path is not None else "inline JSON"
             raise ValueError(f"invalid payment matrix JSON in {location}") from exc
     if isinstance(raw, dict):
         raw = raw.get("cells") if isinstance(raw.get("cells"), list) else [raw]
@@ -118,13 +120,16 @@ def run_payment_batch(
     started = time.time()
     batch_id = _safe_batch_id(batch_id) or f"{method}_{time.strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
     cells = load_payment_matrix(matrix)
-    protocol_cfg = CFG.get("protocol_payments") if isinstance(CFG.get("protocol_payments"), dict) else {}
-    batch_cfg = protocol_cfg.get("batch") if isinstance(protocol_cfg.get("batch"), dict) else {}
+    _protocol_cfg_raw: Any = CFG.get("protocol_payments")
+    protocol_cfg: dict[str, Any] = _protocol_cfg_raw if isinstance(_protocol_cfg_raw, dict) else {}
+    _batch_raw: Any = protocol_cfg.get("batch")
+    batch_cfg: dict[str, Any] = _batch_raw if isinstance(_batch_raw, dict) else {}
     if not canary and not probe_only:
         paused = _active_canary_pause(batch_cfg, method)
         if paused:
             raise RuntimeError(f"payment_batch_paused_by_canary:{paused.get('reason') or 'protocol_profile_failed'}")
-    method_caps = batch_cfg.get("method_workers") if isinstance(batch_cfg.get("method_workers"), dict) else {}
+    _method_caps_raw: Any = batch_cfg.get("method_workers")
+    method_caps: dict[str, Any] = _method_caps_raw if isinstance(_method_caps_raw, dict) else {}
     default_cap = 2 if method in {"momo", "kakao"} else 4
     cap = max(1, int(method_caps.get(method) or default_cap))
     max_workers = max(1, min(int(workers or 1), cap, len(selected) or 1))
@@ -342,6 +347,7 @@ def run_payment_batch(
         if probe_only:
             emit(account_ref, "capability_probe")
             capability: dict[str, Any] = {}
+            probe_attempt = 0
             for probe_attempt in range(1, retry_count + 2):
                 capability = probe_payment_method(
                     access_token=str(auth.get("access_token") or ""),
@@ -384,6 +390,7 @@ def run_payment_batch(
         if method == "paypal":
             emit(account_ref, "capability_probe")
             capability: dict[str, Any] = {}
+            probe_attempt = 0
             for probe_attempt in range(1, retry_count + 2):
                 capability = probe_payment_method(
                     access_token=str(auth.get("access_token") or ""),
@@ -433,6 +440,7 @@ def run_payment_batch(
             row["eligible"] = True
             emit(account_ref, "capability_probe", "completed")
         last: dict[str, Any] = {}
+        attempt = 0
         for attempt in range(1, retry_count + 2):
             row["attempted"] = True
             emit(account_ref, "provider", attempt=attempt, max_attempts=retry_count + 1)
@@ -549,7 +557,7 @@ def run_payment_batch(
         # most one interval of progress, which resume re-runs by signature.
         now = time.monotonic()
         if status == "running" and not force and now - last_checkpoint_write[0] < _CHECKPOINT_MIN_INTERVAL_SECONDS:
-            return None
+            return {}
         last_checkpoint_write[0] = now
         results = [_sanitize_report_value(row) for row in ordered if row is not None]
         report = _build_report(
@@ -1033,7 +1041,8 @@ def _active_canary_pause(batch_cfg: dict[str, Any], method: str) -> dict[str, An
 
 
 def _record_canary_state(method: str, report: dict[str, Any]) -> dict[str, Any]:
-    rows = report.get("results") if isinstance(report.get("results"), list) else []
+    _rows_raw: Any = report.get("results")
+    rows: list[Any] = _rows_raw if isinstance(_rows_raw, list) else []
     probe_only = bool(report.get("probe_only"))
     evaluated = [row for row in rows if (row.get("capability_probed") if probe_only else row.get("attempted"))]
     completed = (

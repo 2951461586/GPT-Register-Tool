@@ -118,6 +118,14 @@ class Rule:
                 return False
             if self.match_name is None:
                 return True
+            # A match_name containing "/" is a full-relative-path pattern:
+            # it is matched against the whole relpath (still inside
+            # ``match_dir``), not just the file name. The only current user is
+            # the per-process backend log rule, which needs ``processes/*/*``
+            # so the shared pre-split files directly under ``logs/`` are not
+            # swept up.
+            if "/" in self.match_name:
+                return Path("/".join(parts)).match(self.match_name)
             # ``bool(...)`` is load-bearing: ``Path("").name`` is ``""``, so a
             # bare ``and`` would make this declared ``-> bool`` return a string
             # for the empty/dot relpaths. Callers happen to test truthiness, so
@@ -215,6 +223,23 @@ RULES: tuple[Rule, ...] = (
         note="protocol_payment/*/logs/*.log -- per-run extractor logs relocated from services/protocol-payment.",
         match_dir="protocol_payment",
         match_name="*.log",
+    ),
+    Rule(
+        name="per-process backend logs",
+        min_age_days=14,
+        note=(
+            "logs/processes/<pid>/ -- one directory per backend process "
+            "(sms_tool.log / sms_tool.jsonl / backend_stdout.jsonl, written by "
+            "sms_tool/logging_setup.py and stdout_mirror.py), never pruned by "
+            "anything else: 501 dirs / 117 MiB on 2026-10-17, oldest from "
+            "2026-09-15. A running process's log mtime is fresh, so the age "
+            "floor naturally spares it. The pattern is anchored on the full "
+            "relative path, so the shared pre-split files directly under "
+            "logs/ (historical evidence, docs/current/telemetry-and-runtime.md) "
+            "are deliberately NOT matched."
+        ),
+        match_dir="logs",
+        match_name="processes/*/*",
     ),
 )
 

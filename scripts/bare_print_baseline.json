@@ -1,5 +1,5 @@
 {
-  "sms_tool/accounts/account_creation.py": 5,
+  "sms_tool/account_creation.py": 5,
   "sms_tool/accounts/account_events.py": 1,
   "sms_tool/accounts/account_scan.py": 20,
   "sms_tool/auth_flow/login.py": 10,

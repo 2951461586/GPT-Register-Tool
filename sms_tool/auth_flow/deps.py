@@ -10,7 +10,7 @@ same defect ``docs/CONTEXT.md`` records for the payment-capability seam).
 
 from __future__ import annotations
 
-from ..accounts.account_creation import _validate_email_otp
+from ..account_creation import _validate_email_otp
 from ..auth_headers import auth_impersonate, nextauth_headers, openai_auth_headers
 from ..auth_state import fetch_client_auth_session_dump as _fetch_client_auth_session_dump
 from ..config import current_config_data

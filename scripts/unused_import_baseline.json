@@ -2,7 +2,7 @@
   "per_file": {
     "scripts/batch_enable_2fa.py": 1,
     "scripts/mailbox_pool_liveness.py": 1,
-    "sms_tool/accounts/account_creation.py": 1,
+    "sms_tool/account_creation.py": 1,
     "sms_tool/accounts/account_email_change.py": 1,
     "sms_tool/accounts/account_recovery.py": 9,
     "sms_tool/accounts/account_scan.py": 1,
