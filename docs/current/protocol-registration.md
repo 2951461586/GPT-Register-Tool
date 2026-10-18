@@ -108,6 +108,21 @@ requests. The signup lane uses `oauth_create_account` for account creation
 the pinned runner bundle before a batch starts; see
 [registration architecture](registration-architecture.md).
 
+### Runner transport
+
+The default path spawns the pinned runner once per token. `SMS_SENTINEL_WORKER=1`
+switches to a persistent Node process
+(`sms_tool/sentinel/runtime/sentinel-worker.js`) that loads the runner module
+once and serves one JSON request per stdin line, so a batch no longer pays Node
+startup and module load per token.
+
+The worker changes transport only: it receives the same config/challenge files
+and its output goes through the same token validation. A runner verdict (bad
+challenge, incomplete token) is raised as-is; only a transport failure (dead,
+wedged or timed-out worker) closes the worker and retries once through the
+one-shot path. The switch is off by default because Sentinel is a risk-control
+path: enable it for a controlled live comparison before making it the default.
+
 ### Checkout lanes share this vocabulary but do not share the create flow
 
 `FLOW_PAGE_URLS` in `sms_tool/sentinel/client.py` is the **single** flow-to-page
