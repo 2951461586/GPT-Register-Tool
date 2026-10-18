@@ -652,6 +652,40 @@ public sealed class BackendCommandPlannerTests
     }
 
     [Fact]
+    public void AppendProxy_AddsTrimmedScalar()
+    {
+        var args = new List<string>();
+        BackendCommandPlanner.AppendProxy(args, "  http://proxy:8080  ");
+        Assert.Equal(new[] { "--proxy", "http://proxy:8080" }, args);
+    }
+
+    [Fact]
+    public void AppendProxy_SkipsBlank()
+    {
+        var args = new List<string> { "--existing" };
+        BackendCommandPlanner.AppendProxy(args, "   ");
+        Assert.Single(args);
+    }
+
+    [Fact]
+    public void AppendProxyPool_DropsBlankEntriesBeforeChoosingScalar()
+    {
+        var args = new List<string>();
+        BackendCommandPlanner.AppendProxyPool(args, new[] { "", "  ", "http://p1:8080" });
+        Assert.Equal(new[] { "--proxy", "http://p1:8080" }, args);
+        Assert.DoesNotContain("--proxy-pool", args);
+    }
+
+    [Fact]
+    public void ChataiMailboxFileFlag_IsTheFourPartLineFlag()
+    {
+        Assert.Equal("--chatai-mailbox-file", BackendCommandPlanner.ChataiMailboxFileFlag);
+        Assert.Equal(
+            BackendCommandPlanner.ChataiMailboxFileFlag,
+            BackendCommandPlanner.MailboxArgumentForLine("a@b.com----pw----client----refresh"));
+    }
+
+    [Fact]
     public void AppendSessionFile_AddsWhenNonEmpty()
     {
         var args = new List<string>();

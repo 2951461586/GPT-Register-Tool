@@ -14,11 +14,27 @@ from .paths import runtime_file
 from .cross_process_gate import cross_process_write_lock
 from .registration_policy import RETRYABLE_CLASSES, registration_retry_decision
 from .sanitizer import sanitize_text
-from typing import Any
+from typing import Any, cast
 
 
 _LOCK = threading.Lock()
 PARTIAL_REGISTERED = "partial_registered"
+
+
+def _as_float(value: object) -> float:
+    """``float(value or 0)`` with the object type narrowed for the checker.
+
+    The values come from the retry-guard JSON store, so a missing key and an
+    empty string both mean zero. ``cast`` is used instead of an ``isinstance``
+    guard on purpose: an unexpected type must keep raising exactly as
+    ``float()`` did before annotations existed, rather than silently becoming 0.
+    """
+    return float(cast("float | int | str", value or 0))
+
+
+def _as_int(value: object) -> int:
+    """``int(value or 0)`` with the same object-to-scalar narrowing as ``_as_float``."""
+    return int(cast("float | int | str", value or 0))
 
 
 def mailbox_registration_status(record: Mapping | None, *, known_partial: bool = False) -> str:
@@ -242,7 +258,7 @@ class RegistrationRetryGuard:
         with self._locked():
             row = self._read().get(key) or {}
         now = time.time()
-        until = float(row.get("cooldown_until") or 0) if isinstance(row, Mapping) else 0
+        until = _as_float(row.get("cooldown_until")) if isinstance(row, Mapping) else 0
         remaining = max(0, int(until - now))
         dead_end = bool(row.get("dead_end")) if isinstance(row, Mapping) else False
         # 过期隔离在这里被释放 —— 调用方不需要任何额外的清理步骤。
@@ -258,8 +274,8 @@ class RegistrationRetryGuard:
             "dead_end_reason": str(row.get("dead_end_reason") or "") if isinstance(row, Mapping) else "",
             "quarantined": quarantined,
             "quarantine_reason": str(row.get("quarantine_reason") or "") if isinstance(row, Mapping) else "",
-            "otp_pending_count": int(row.get("otp_pending_count") or 0) if isinstance(row, Mapping) else 0,
-            "consecutive": int(row.get("consecutive") or 0) if isinstance(row, Mapping) else 0,
+            "otp_pending_count": _as_int(row.get("otp_pending_count")) if isinstance(row, Mapping) else 0,
+            "consecutive": _as_int(row.get("consecutive")) if isinstance(row, Mapping) else 0,
             "remaining_seconds": remaining,
             "failure_class": str(row.get("failure_class") or "") if isinstance(row, Mapping) else "",
         }
@@ -289,7 +305,7 @@ class RegistrationRetryGuard:
                     failure_class=str(failure_class or "").strip().lower(),
                 )
                 if decision.guard_action == "otp_pending":
-                    pending_count = int(previous.get("otp_pending_count") or 0) + 1
+                    pending_count = _as_int(previous.get("otp_pending_count")) + 1
                     quarantined = pending_count >= self.otp_pending_quarantine_threshold
                     data[key] = {
                         "consecutive": pending_count,
@@ -308,7 +324,7 @@ class RegistrationRetryGuard:
                     }
                 elif decision.guard_action == "cooldown":
                     same_class = str(previous.get("failure_class") or "") == str(failure_class or "")
-                    consecutive = int(previous.get("consecutive") or 0) + 1 if same_class else 1
+                    consecutive = _as_int(previous.get("consecutive")) + 1 if same_class else 1
                     data[key] = {
                         "consecutive": consecutive,
                         "failure_class": str(failure_class or "")[:40],
@@ -320,7 +336,7 @@ class RegistrationRetryGuard:
                     reason = _dead_end_reason(error)
                     if reason:
                         data[key] = {
-                            "consecutive": int(previous.get("consecutive") or 0),
+                            "consecutive": _as_int(previous.get("consecutive")),
                             "failure_class": str(failure_class or "")[:40],
                             "last_error": sanitize_text(error)[:160],
                             "last_attempt_at": now,
@@ -372,7 +388,7 @@ class RegistrationRetryGuard:
                 result[normalized] = "dead_end"
             elif self._quarantine_active(row, now):
                 result[normalized] = "otp_pending_quarantine"
-            elif float(row.get("cooldown_until") or 0) > now:
+            elif _as_float(row.get("cooldown_until")) > now:
                 result[normalized] = "cooldown"
         return result
 
@@ -394,7 +410,7 @@ class RegistrationRetryGuard:
             _raw_previous: object = data.get(key)
             previous: Mapping = _raw_previous if isinstance(_raw_previous, Mapping) else {}
             data[key] = {
-                "consecutive": int(previous.get("consecutive") or 0),
+                "consecutive": _as_int(previous.get("consecutive")),
                 "failure_class": str(previous.get("failure_class") or "account")[:40],
                 "last_error": detail[:160],
                 "last_attempt_at": int(time.time()),

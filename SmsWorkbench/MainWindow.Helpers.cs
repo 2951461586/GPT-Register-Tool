@@ -46,25 +46,26 @@ namespace SmsWorkbench
         // instead of building CLI arguments inline.
         private void AddRegistrationProxy(List<string> args)
         {
+            BackendCommandPlanner.AppendProxyPool(args, GetRegistrationProxyRoute());
+        }
+
+        /// <summary>
+        /// The registration route in planner shape: the configured pool when one
+        /// exists, otherwise the single configured/fallback proxy. This is the
+        /// same list the old inline <c>--proxy</c> + <c>--proxy-pool</c> pair
+        /// produced, with the flag literals now owned by the planner.
+        /// </summary>
+        private List<string> GetRegistrationProxyRoute()
+        {
             List<string> pool = GetRegistrationProxyPool();
-            AddConfiguredProxy(args, pool.FirstOrDefault() ?? GetRegistrationProxy());
-            if (pool.Count > 1)
-            {
-                args.Add("--proxy-pool");
-                args.Add(string.Join(ProxyInputNormalizer.LineSeparator, pool));
-            }
+            if (pool.Count > 0) return pool;
+            string fallback = GetRegistrationProxy();
+            return fallback.Length > 0 ? new List<string> { fallback } : new List<string>();
         }
 
         private void AddMailboxProxy(List<string> args)
         {
-            AddConfiguredProxy(args, GetMailboxProxy());
-        }
-
-        private static void AddConfiguredProxy(List<string> args, string proxy)
-        {
-            if (string.IsNullOrWhiteSpace(proxy)) return;
-            args.Add("--proxy");
-            args.Add(proxy.Trim());
+            BackendCommandPlanner.AppendProxy(args, GetMailboxProxy());
         }
 
         private string GetRegistrationProxy()

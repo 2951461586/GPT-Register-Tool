@@ -17,6 +17,11 @@
   full Python event stream.
 - `runtime/ui_errors.log`: WPF crash-only compatibility log. It is reserved for
   unhandled dispatcher/domain/task exceptions and is sanitized before writing.
+- `runtime/cache/config_usage.json`: derived cache for the `--doctor` unread-key
+  scan. Keyed by `(path, mtime_ns, size)` over the scanned source and config
+  files, so any edit invalidates it without a TTL; deleting it only makes the
+  next probe rescan (~3 s instead of ~0.1 s). It contains config **key paths**,
+  never values, and is gitignored with the rest of `runtime/`.
 
 The WPF panel is an ephemeral operator view, not an audit store. It folds JSON,
 shows stage summaries, and keeps a bounded in-memory buffer. For post-run

@@ -25,10 +25,8 @@
     "sms_tool/agent_identity.py": 2,
     "sms_tool/browser_fingerprint_pool.py": 2,
     "sms_tool/browser_pool.py": 1,
-    "sms_tool/cli.py": 3,
     "sms_tool/commands/one_click.py": 10,
     "sms_tool/cross_process_gate.py": 5,
-    "sms_tool/desktop_read.py": 1,
     "sms_tool/mailbox_parsers.py": 1,
     "sms_tool/mailbox_poll.py": 2,
     "sms_tool/omakse_client.py": 3,
@@ -50,7 +48,6 @@
     "sms_tool/registration_drivers/external_sessions/probe.py": 1,
     "sms_tool/registration_drivers/stealth.py": 15,
     "sms_tool/registration_progress.py": 2,
-    "sms_tool/registration_retry_guard.py": 16,
     "sms_tool/store/normalize.py": 1,
     "sms_tool/sub2api_import.py": 1,
     "sms_tool/upi_link/stages.py": 101,
@@ -149,7 +146,6 @@
     "tests/registration/test_phone_reuse_smsbower.py": 1,
     "tests/registration/test_registration_cancel.py": 6,
     "tests/registration/test_registration_hardening.py": 1,
-    "tests/registration/test_registration_hot_persistence.py": 37,
     "tests/registration/test_registration_idempotency.py": 6,
     "tests/registration/test_registration_immediate_promotion.py": 6,
     "tests/registration/test_registration_inventory.py": 3,
@@ -168,9 +164,8 @@
     "tests/registration/test_sms_provider_registry.py": 1,
     "tests/registration/test_sms_utils_pure.py": 1,
     "tests/workbench/test_backend_cli_contract.py": 2,
-    "tests/workbench/test_cli_one_click_sms.py": 3,
     "tests/workbench/test_cli_registration_driver.py": 1,
     "tests/workbench/test_operator_output.py": 1
   },
-  "total": 922
+  "total": 862
 }

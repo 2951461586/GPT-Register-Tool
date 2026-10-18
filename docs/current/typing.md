@@ -60,3 +60,32 @@ is behaviour-identical to the `x.get(k) if isinstance(x.get(k), dict) else {}`
 idiom and removes the error, because pyright evaluates the two `x.get(k)` calls
 independently. Use a same-line `# pyright: ignore[ruleName]` only when the
 checker genuinely cannot model the runtime shape (mocks, vendored payloads).
+
+## Batch plan (2026-10-18)
+
+The 920-error baseline is retired **file by file**, largest first, and each
+batch must lower both its own `per_file` row and `total` through
+`python scripts/pyright_ratchet.py --update-baseline`. A batch is not accepted
+if it lowers a large file while any other file's count rises, so run the ratchet
+before and after and compare the printed delta.
+
+Order agreed on 2026-10-18 (counts are the frozen baseline; a batch may start
+only when its file has a test that fails today):
+
+| Batch | File | Errors | Shape of the work |
+| --- | --- | ---: | --- |
+| 1 | `sms_tool/upi_link/stages.py` | 101 | Optional-member access on staged dict guards; needs a read of the stage contract first, so it is its own round. |
+| 2 | `tests/mailbox/test_mailbox_icloud_url.py` | 72 | Test fixtures typing; mechanical once the payload shapes are named. |
+| 3 | `tests/registration/test_remail_mailbox.py` | 59 | Test fixtures typing. |
+| 4 | `tests/proxy/test_proxy_entry.py` | 53 | Test fixtures typing. |
+| 5 | `sms_tool/accounts/account_scan.py` | 32 | Payload narrowing in the scan loop. |
+| 6 | remaining `sms_tool/` files (`registration_retry_guard.py` is already at 0) | — | Narrow values, never silence. |
+
+Already retired (2026-10-18): `sms_tool/cli.py` (3 → 0),
+`sms_tool/registration_retry_guard.py` (16 → 0 — the object-typed JSON reads now
+go through `_as_int` / `_as_float`, which `cast` to `float | int | str` so an
+unexpected type still raises exactly as before), and
+`tests/registration/test_registration_hot_persistence.py` (38 → 0 — the recursive
+`thaw` fixture now annotates its boundary as `dict[str, Any]`), and
+`sms_tool/desktop_read.py` (1 → 0 — the pool-line parser now receives a `str`
+path). Baseline after that round: **862**.

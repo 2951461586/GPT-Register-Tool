@@ -4,6 +4,7 @@ from dataclasses import replace
 from collections.abc import Mapping
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import patch
 
 from sms_tool import storage
@@ -46,21 +47,26 @@ def _context(cfg, upsert):
         import_registered_accounts=lambda *_args, **_kwargs: None,
         registration_phone_pool=lambda _args: None,
         upsert_account=upsert,
-        database_path=lambda: str(cfg["storage"]["sqlite_path"]),
+        database_path=lambda: Path(cfg["storage"]["sqlite_path"]),
         runtime_file=lambda name: Path(cfg["storage"]["sqlite_path"]).parent / name,
         runtime_config=cfg,
     )
 
 
 def _runtime_cfg(db_path):
-    def thaw(value):
+    def thaw(value: Any) -> Any:
         if isinstance(value, Mapping):
             return {key: thaw(item) for key, item in value.items()}
         if isinstance(value, list):
             return [thaw(item) for item in value]
         return value
 
-    cfg = thaw(current_config_data())
+    # Annotated on purpose: `current_config_data()` is a deeply nested frozen
+    # mapping, and the thawed copy is a plain mutable dict with mixed value
+    # shapes. Without the annotation the recursive `thaw` above infers a union
+    # of key types and every `cfg[...] = ...` below reports a false overload
+    # error (37 findings, 2026-10-18).
+    cfg: dict[str, Any] = dict(thaw(current_config_data()))
     cfg["storage"] = dict(cfg.get("storage") or {})
     cfg["storage"]["sqlite_path"] = str(db_path)
     # Isolate the durable operation journal (PaymentOperationStore) under tmp_path so

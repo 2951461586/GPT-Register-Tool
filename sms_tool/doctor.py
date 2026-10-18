@@ -311,9 +311,9 @@ def _probe_unread_config_keys() -> dict[str, str]:
     saying nothing.
     """
     try:
-        from .config_usage import unread_config_keys
+        from .config_usage import cached_unread_config_keys
 
-        unread = unread_config_keys()
+        unread = cached_unread_config_keys()
     except Exception as exc:  # pragma: no cover - advisory only
         return _check("config_unread_keys", "warn", f"could not inspect config usage: {exc}")
     if not unread:
@@ -385,9 +385,9 @@ def run_doctor(
 
 def unread_config_keys_safe() -> list:
     try:
-        from .config_usage import unread_config_keys
+        from .config_usage import cached_unread_config_keys
 
-        return list(unread_config_keys())
+        return list(cached_unread_config_keys())
     except Exception:  # pragma: no cover - advisory only
         return []
 

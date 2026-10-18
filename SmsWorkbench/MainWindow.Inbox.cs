@@ -136,30 +136,31 @@ namespace SmsWorkbench
 
         private async Task<List<MailItem>> FetchBackendInbox(PoolRow row, int limit, CancellationToken ct = default)
         {
-            var args = new List<string> { "--desktop-ipc", "--view-inbox", "--email", row.Identifier, "--inbox-limit", limit.ToString(CultureInfo.InvariantCulture) };
             string remailToken = IsReMailRow(row) ? (row.MailboxToken ?? "").Trim() : "";
             string mailboxLine = await FindMailboxLineForRowAsync(row, ct).ConfigureAwait(true);
             if (mailboxLine.Length == 0 && BackendCommandPlanner.MailboxArgumentForLine(row.RawLine).Length > 0)
             {
                 mailboxLine = row.RawLine;
             }
-            string mailboxArg = BackendCommandPlanner.MailboxArgumentForLine(mailboxLine);
-            string tempMailboxFile = "";
-            if (mailboxArg.Length > 0)
-            {
-                tempMailboxFile = Path.Combine(Path.GetTempPath(), "view_inbox_mailbox_" + DateTime.Now.ToString("yyyyMMdd_HHmmss_fff", CultureInfo.InvariantCulture) + ".txt");
-                File.WriteAllText(tempMailboxFile, mailboxLine.Trim() + Environment.NewLine, new UTF8Encoding(false));
-                args.AddRange(new[] { mailboxArg, tempMailboxFile });
-            }
-            AddSessionFileArg(args, row);
-            AddMailboxProxy(args);
-            var environment = new Dictionary<string, string>();
-            if (remailToken.Length > 0)
-                environment["REMAIL_SERVICE_TOKEN"] = remailToken;
+            // The planner owns the flag vocabulary, the temp mailbox file, the
+            // session file, the proxy route, the ReMail environment and the
+            // timeout; this partial only supplies the resolved values.
+            BackendCommandPlan plan = BackendCommandPlanner.CreateViewInbox(
+                row.Identifier,
+                limit,
+                BackendCommandPlanner.MailboxArgumentForLine(mailboxLine),
+                mailboxLine,
+                SessionFileFor(row),
+                GetMailboxProxy(),
+                remailToken);
             try
             {
                 BackendCommandResult result = await backendClient.RunAsync(
-                    BackendCommand.Create("查看收件箱", args, 120000, environment),
+                    BackendCommand.Create(
+                        plan.TaskName,
+                        plan.Arguments,
+                        plan.TimeoutMilliseconds ?? 120000,
+                        plan.Environment),
                     cancellationToken: ct);
                 if (!result.Payload.HasValue)
                     throw new InvalidOperationException(BackendFailureMessage(result));
@@ -191,8 +192,8 @@ namespace SmsWorkbench
             }
             finally
             {
-                if (tempMailboxFile.Length > 0)
-                    TryDeleteFile(tempMailboxFile);
+                foreach (string tempFile in plan.TempFiles)
+                    TryDeleteFile(tempFile);
             }
         }
 

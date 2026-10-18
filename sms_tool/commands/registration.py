@@ -54,7 +54,7 @@ class RegistrationCommandContext:
     import_registered_accounts: Callable[..., Any]
     registration_phone_pool: Callable[[Any], Any]
     upsert_account: Callable[..., Any]
-    database_path: Callable[[], str]
+    database_path: Callable[..., Path]
     runtime_file: Callable[[str], Path]
     runtime_config: Mapping[str, Any]
 

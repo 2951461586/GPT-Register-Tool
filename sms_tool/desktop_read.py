@@ -308,6 +308,46 @@ def read_accounts(runtime_config: ConfigInput = None, *, include_session: bool =
     return [_record_payload(row, include_session=include_session) for row in list_account_records(runtime_config=config)]
 
 
+def _as_epoch(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def read_accounts_delta(
+    runtime_config: ConfigInput = None,
+    *,
+    since: int | None = None,
+    include_session: bool = False,
+) -> dict[str, Any]:
+    """Accounts changed since ``since`` plus the complete current id set.
+
+    ``accounts.updated_at`` is an epoch integer, so the cursor is simply the
+    largest value in the table and a client can send it back verbatim. ``ids``
+    is **always** the full id set -- that is what lets the desktop drop rows
+    another process deleted without a second round trip, and it stays tiny
+    (~3 KB for 434 accounts) next to the ~623 KB full payload.
+
+    ``full`` tells the caller whether ``accounts`` is the whole table (no
+    ``since``) or only the changed rows. The response is additive to the
+    existing ``accounts`` list shape, so one-shot readers keep working.
+    """
+    config = resolve_runtime_config(runtime_config, workflow="storage")
+    records = list_account_records(runtime_config=config)
+    ids = [str(record.get("id") or "") for record in records]
+    cursor = max((_as_epoch(record.get("updated_at")) for record in records), default=0)
+    changed = records if since is None else [
+        record for record in records if _as_epoch(record.get("updated_at")) > since
+    ]
+    return {
+        "accounts": [_record_payload(record, include_session=include_session) for record in changed],
+        "ids": ids,
+        "cursor": cursor,
+        "full": since is None,
+    }
+
+
 def read_account(account_id: str = "", email: str = "", runtime_config: ConfigInput = None) -> dict[str, Any]:
     config = resolve_runtime_config(runtime_config, workflow="storage")
     row = get_account_record_by_id(account_id, runtime_config=config) if str(account_id or "").strip() else {}
@@ -407,7 +447,7 @@ def _read_pool_lines(path: Path) -> list[dict[str, Any]]:
         line = raw.strip().lstrip("\ufeff")
         if not line or line.startswith("#"):
             continue
-        account = parse_mailbox_pool_line(line, path, line_no)
+        account = parse_mailbox_pool_line(line, str(path), line_no)
         if account is None:
             continue
         lines.append({"line_no": line_no, **_pool_line_payload(account, line)})

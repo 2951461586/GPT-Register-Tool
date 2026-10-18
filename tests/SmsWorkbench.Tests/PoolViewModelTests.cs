@@ -209,5 +209,71 @@ namespace SmsWorkbench.Tests
 
             Assert.Equal(new[] { "SelectedRow", "SelectedRow" }, changed);
         }
+
+        private const string DatabasePath = "C:\\app\\runtime\\accounts.sqlite3";
+
+        private static PoolRow DbRow(string id, string identifier, string status = "已注册")
+            => new PoolRow { RawLine = id, SourcePath = DatabasePath, Identifier = identifier, Status = status };
+
+        [Fact]
+        public void MergeDatabaseRows_DropsDeletedRowsAndKeepsMailboxRows()
+        {
+            var pool = new PoolViewModel();
+            pool.AllRows.Add(DbRow("1", "a@example.test"));
+            pool.AllRows.Add(DbRow("2", "b@example.test"));
+            pool.AllRows.Add(new PoolRow { RawLine = "pool-line", SourcePath = "C:\\app\\mailbox.txt", Identifier = "c@example.test" });
+
+            pool.MergeDatabaseRows(
+                System.Array.Empty<PoolRow>(),
+                new System.Collections.Generic.HashSet<string> { "1" },
+                DatabasePath);
+
+            Assert.Equal(new[] { "1", "pool-line" }, pool.AllRows.Select(r => r.RawLine).ToArray());
+        }
+
+        [Fact]
+        public void MergeDatabaseRows_ReplacesInPlaceAndKeepsTheCheckbox()
+        {
+            var pool = new PoolViewModel();
+            pool.AllRows.Add(DbRow("1", "a@example.test", "old"));
+            pool.AllRows[0].IsChecked = true;
+
+            pool.MergeDatabaseRows(
+                new[] { DbRow("1", "a@example.test", "new") },
+                new System.Collections.Generic.HashSet<string> { "1" },
+                DatabasePath);
+
+            Assert.Single(pool.AllRows);
+            Assert.Equal("new", pool.AllRows[0].Status);
+            Assert.True(pool.AllRows[0].IsChecked);
+        }
+
+        [Fact]
+        public void MergeDatabaseRows_AppendsNewIds()
+        {
+            var pool = new PoolViewModel();
+            pool.AllRows.Add(DbRow("1", "a@example.test"));
+
+            pool.MergeDatabaseRows(
+                new[] { DbRow("2", "b@example.test") },
+                new System.Collections.Generic.HashSet<string> { "1", "2" },
+                DatabasePath);
+
+            Assert.Equal(new[] { "1", "2" }, pool.AllRows.Select(r => r.RawLine).ToArray());
+        }
+
+        [Fact]
+        public void MergeDatabaseRows_IgnoresRowsOwnedByAnotherSource()
+        {
+            var pool = new PoolViewModel();
+            pool.AllRows.Add(new PoolRow { RawLine = "1", SourcePath = "C:\\other\\accounts.sqlite3", Identifier = "x@example.test" });
+
+            pool.MergeDatabaseRows(
+                System.Array.Empty<PoolRow>(),
+                new System.Collections.Generic.HashSet<string>(),
+                DatabasePath);
+
+            Assert.Single(pool.AllRows);
+        }
     }
 }

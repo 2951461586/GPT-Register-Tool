@@ -64,6 +64,14 @@ jobs:
       - run: >-
           python -m pytest -q --cov=sms_tool --cov=services
           --cov-report=term-missing
+      # Order-dependence guard. This shard order reproduced a real defect on
+      # 2026-10-18: `cli._heavy_deps_loaded` was a one-shot latch set while a
+      # test had `_load_mailbox_pool` patched, so `patch.object` restored the
+      # symbol to None but left the latch True and the workbench one-click
+      # command called `None(...)`. The full suite above stays green only
+      # because an earlier test resolves the same symbols outside a patch, so
+      # that ordering can never see this class of defect.
+      - run: python -m pytest -q tests/registration tests/workbench
       - run: dotnet test GPTRegisterTool.slnx -c Release
       - run: python -c "import sms_tool.cli"
       - run: >-

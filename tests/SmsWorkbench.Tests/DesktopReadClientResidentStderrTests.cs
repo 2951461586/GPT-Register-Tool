@@ -89,13 +89,12 @@ public sealed class DesktopReadClientResidentStderrTests
             if req.get("op") == "hello":
                 payload = {"protocol": {{DesktopReadProtocol.Version}}, "ops": ["accounts"]}
             else:
-                payload = {"echo": req.get("op", "accounts")}
+                payload = {"echo": req.get("op", "accounts"), "since": req.get("since")}
             sys.stdout.write(json.dumps({"id": req_id, "ok": True, "payload": payload}) + "\n")
             sys.stdout.flush()
         """;
 
-    [Fact]
-    public async Task ResidentChannelDrainsStderrSoRequestsDoNotBlock()
+    private static async Task WithResidentClientAsync(Func<DesktopReadClient, Task> body)
     {
         string python = Environment.GetEnvironmentVariable("SMSWORKBENCH_TEST_PYTHON") ?? "python";
         if (!PythonAvailable(python))
@@ -112,15 +111,7 @@ public sealed class DesktopReadClientResidentStderrTests
         var client = new DesktopReadClient(new BackendTaskCoordinator(new StubBackendClient()), paths, settings, Logger.None);
         try
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            Task<JsonElement> request = client.ReadAccountsAsync(cts.Token);
-            Task winner = await Task.WhenAny(request, Task.Delay(TimeSpan.FromSeconds(25), cts.Token));
-            if (winner != request)
-                Assert.Fail("resident channel blocked: stderr pipe was not drained (requests would wedge)");
-
-            JsonElement payload = await request;
-            Assert.True(payload.TryGetProperty("echo", out JsonElement echo));
-            Assert.Equal("accounts", echo.GetString());
+            await body(client);
         }
         finally
         {
@@ -134,6 +125,37 @@ public sealed class DesktopReadClientResidentStderrTests
                 // Best-effort cleanup; temp dir may be locked briefly.
             }
         }
+    }
+
+    [Fact]
+    public async Task ResidentChannelDrainsStderrSoRequestsDoNotBlock()
+    {
+        await WithResidentClientAsync(async client =>
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            Task<JsonElement> request = client.ReadAccountsAsync(cts.Token);
+            Task winner = await Task.WhenAny(request, Task.Delay(TimeSpan.FromSeconds(25), cts.Token));
+            if (winner != request)
+                Assert.Fail("resident channel blocked: stderr pipe was not drained (requests would wedge)");
+
+            JsonElement payload = await request;
+            Assert.True(payload.TryGetProperty("echo", out JsonElement echo));
+            Assert.Equal("accounts", echo.GetString());
+        });
+    }
+
+    [Fact]
+    public async Task ResidentAccountsDeltaSendsTheCursor()
+    {
+        await WithResidentClientAsync(async client =>
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+
+            JsonElement payload = await client.ReadAccountsDeltaAsync(12345, cts.Token);
+
+            Assert.Equal("accounts", payload.GetProperty("echo").GetString());
+            Assert.Equal(12345, payload.GetProperty("since").GetInt64());
+        });
     }
 
     private static bool PythonAvailable(string python)

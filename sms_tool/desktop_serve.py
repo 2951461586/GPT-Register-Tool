@@ -50,7 +50,7 @@ from .desktop_read import (
     create_mailbox_file,
     create_payment_url_file,
     read_account,
-    read_accounts,
+    read_accounts_delta,
     read_mailbox_pool,
 )
 
@@ -186,6 +186,17 @@ class _Watchdog:
         _hard_exit(WATCHDOG_EXIT_CODE)
 
 
+def _optional_epoch(value: Any) -> int | None:
+    """An optional epoch cursor from a JSON request; anything else means full.
+
+    ``bool`` is an ``int`` in Python, so it is excluded explicitly -- ``true``
+    must not become a cursor of 1.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return int(value)
+
+
 def _payload_for(op: str, request: dict[str, Any]) -> dict[str, Any]:
     # Cheap ops first: they must not require a resolvable config, or a broken
     # config would make the handshake fail and hide the real diagnosis.
@@ -206,12 +217,14 @@ def _payload_for(op: str, request: dict[str, Any]) -> dict[str, Any]:
     config = load_runtime_config()
 
     if op == "accounts":
-        return {"ok": True, "accounts": read_accounts(config, include_session=False)}
+        since = _optional_epoch(request.get("since"))
+        return {"ok": True, **read_accounts_delta(config, since=since)}
     if op == "mailbox-pool":
         return {"ok": True, **read_mailbox_pool(config, extra_files=tuple(extra_files))}
     if op == "pools":
         pool = read_mailbox_pool(config, extra_files=tuple(extra_files))
-        return {"ok": True, "accounts": read_accounts(config, include_session=False), **pool}
+        accounts = read_accounts_delta(config)
+        return {"ok": True, **accounts, **pool}
     if op == "account":
         return {"ok": True, "account": read_account(account_id, email, config)}
     if op == "account-file":

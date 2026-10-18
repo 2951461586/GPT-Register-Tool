@@ -435,3 +435,29 @@ def test_public_read_drops_legacy_payment_suffix(tmp_path):
 
     assert row["promotion_status"] == "可试用Plus·-100%"
     assert "payment_methods_label" not in row
+
+
+def test_desktop_read_is_reported_as_handled(monkeypatch):
+    """A handled desktop read must stop `main`, not fall through to registration.
+
+    Regression for 2026-10-18: the branch ended with a bare `return`, i.e. None,
+    which is falsy. `main` therefore kept going into `_load_heavy_deps` and the
+    registration pipeline after the result frame was already emitted --
+    `--desktop-read accounts --desktop-ipc` printed extra error frames and
+    exited 2. The docstring has always promised True for a handled command.
+    """
+    from types import SimpleNamespace
+
+    import sms_tool.cli as cli
+
+    args = SimpleNamespace(
+        desktop_read="accounts",
+        desktop_ipc=True,
+        account_id=None,
+        email=None,
+        chatai_mailbox_file=None,
+        json_output=False,
+    )
+    monkeypatch.setattr("sms_tool.desktop_read.read_accounts", lambda *_a, **_k: [])
+
+    assert cli._main_early_commands(args) is True

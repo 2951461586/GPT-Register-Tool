@@ -42,6 +42,14 @@ namespace SmsWorkbench
     {
         private static readonly UTF8Encoding Utf8NoBom = new(false);
 
+        /// <summary>
+        /// CLI flag for the 4-part <c>email----password----client-id----refresh-token</c>
+        /// mailbox line. Owned here, not by the window partials: the flag
+        /// vocabulary belongs to the command-plan layer, and
+        /// <c>MailboxArgumentForLine</c> already derives the same value.
+        /// </summary>
+        public const string ChataiMailboxFileFlag = "--chatai-mailbox-file";
+
         // ── Registration ────────────────────────────────────────────────
 
         public static BackendCommandPlan CreatePoolRegistration(
@@ -586,8 +594,7 @@ namespace SmsWorkbench
             string proxy = (mailboxProxy ?? "").Trim();
             if (proxy.Length > 0)
             {
-                args.Add("--proxy");
-                args.Add(proxy);
+                AppendProxy(args, proxy);
             }
             var environment = new Dictionary<string, string>();
             string token = (remailToken ?? "").Trim();
@@ -636,13 +643,25 @@ namespace SmsWorkbench
                 .Where(item => item.Length > 0)
                 .ToList();
             if (pool.Count == 0) return;
-            args.Add("--proxy");
-            args.Add(pool[0]);
+            AppendProxy(args, pool[0]);
             if (pool.Count > 1)
             {
                 args.Add("--proxy-pool");
                 args.Add(string.Join(Environment.NewLine, pool));
             }
+        }
+
+        /// <summary>
+        /// Appends the scalar <c>--proxy</c> route. The only owner of that flag
+        /// literal on the desktop side; callers with a pool use
+        /// <see cref="AppendProxyPool"/> instead.
+        /// </summary>
+        public static void AppendProxy(List<string> args, string proxy)
+        {
+            string value = (proxy ?? "").Trim();
+            if (value.Length == 0) return;
+            args.Add("--proxy");
+            args.Add(value);
         }
 
         public static void AppendSessionFile(List<string> args, string sessionFile)

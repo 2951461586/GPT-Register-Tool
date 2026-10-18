@@ -188,6 +188,51 @@ namespace SmsWorkbench
         }
 
         /// <summary>
+        /// Applies one incremental accounts refresh to <see cref="AllRows"/>.
+        /// </summary>
+        /// <remarks>
+        /// Only rows owned by <paramref name="databasePath"/> are touched: the
+        /// mailbox-pool rows in the same collection come from a different read
+        /// (the pool file), and the incremental path deliberately does not
+        /// re-read that file. A row absent from <paramref name="currentIds"/> was
+        /// deleted by another process and is dropped; a matching row is replaced
+        /// in place so the operator's checkbox survives; a new id is appended.
+        /// </remarks>
+        public void MergeDatabaseRows(
+            IReadOnlyList<PoolRow> changed,
+            IReadOnlySet<string> currentIds,
+            string databasePath)
+        {
+            bool Owned(PoolRow row) =>
+                string.Equals(row.SourcePath, databasePath, StringComparison.OrdinalIgnoreCase);
+
+            foreach (PoolRow row in AllRows.Where(Owned).Where(row => !currentIds.Contains(row.RawLine)).ToList())
+            {
+                AllRows.Remove(row);
+            }
+
+            foreach (PoolRow fresh in changed)
+            {
+                int index = -1;
+                for (int i = 0; i < AllRows.Count; i++)
+                {
+                    if (Owned(AllRows[i]) && AllRows[i].RawLine == fresh.RawLine)
+                    {
+                        index = i;
+                        break;
+                    }
+                }
+                if (index < 0)
+                {
+                    AllRows.Add(fresh);
+                    continue;
+                }
+                fresh.IsChecked = AllRows[index].IsChecked;
+                AllRows[index] = fresh;
+            }
+        }
+
+        /// <summary>
         /// Rebuilds <see cref="PagedRows"/> from the filter, sort and page window.
         /// An out-of-range <see cref="CurrentPage"/> is clamped, so a page restored
         /// after the row count shrank stays valid.

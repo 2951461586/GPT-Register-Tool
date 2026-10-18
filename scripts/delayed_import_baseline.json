@@ -20,7 +20,7 @@
     "sms_tool/browser_fingerprint_pool.py": 1,
     "sms_tool/capability_browser.py": 2,
     "sms_tool/captcha_solver.py": 3,
-    "sms_tool/cli.py": 17,
+    "sms_tool/cli.py": 24,
     "sms_tool/codex_export.py": 1,
     "sms_tool/codex_oauth.py": 4,
     "sms_tool/codex_phone.py": 2,
@@ -113,5 +113,5 @@
     "sms_tool/upi_link/stripe.py": 1,
     "sms_tool/wallet_transport.py": 5
   },
-  "total": 414
+  "total": 421
 }

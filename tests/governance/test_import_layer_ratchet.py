@@ -245,14 +245,27 @@ def test_summary_facts_are_pinned():
     same day, ``pay_link/adapters.py`` added one for the Checkout-create
     Sentinel pair (183 was 182). Two baselines plus this literal all have to
     move together, which is the point of the pin.
+
+    190 (was 188) / 267 (was 276) / 28 pairs (was 29) / 10 mutual (was 11) / 45
+    minority (was 54) on 2026-10-18: the CLI entrypoint stopped importing every
+    command adapter at module scope. Seven adapters plus ``batch_runner``,
+    ``storage`` and the helper hooks are now resolved by ``_LazyModule`` proxies
+    and per-symbol resolvers, so nine ``sms_tool -> sms_tool/commands`` edges
+    leave the graph and that pair disappears (hence 28 pairs, 10 mutual, 45
+    minority). Two cross-directory dependencies become function-local seams
+    (``commands.email_change`` and ``commands.helpers``), which is the +2 here;
+    ``delayed_import_ratchet`` records the wider 414 -> 421 because seven eager
+    adapter imports are now local. That is the trade Rule 15 prescribes: a 30 ms
+    help screen must not pay for the payment/browser stack, and the import-surface
+    test pins the result.
     """
     totals = ilr.analyze(ROOT).totals()
     assert totals == {
-        "total_module_edges": 276,
-        "ordered_pairs": 29,
-        "mutual_pairs": 11,
-        "minority_edges": 54,
-        "delayed_cross_dir_edges": 188,
+        "total_module_edges": 267,
+        "ordered_pairs": 28,
+        "mutual_pairs": 10,
+        "minority_edges": 45,
+        "delayed_cross_dir_edges": 190,
     }
 
 

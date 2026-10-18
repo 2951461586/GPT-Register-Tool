@@ -186,9 +186,10 @@ namespace SmsWorkbench
             try
             {
                 Log($"正在进行账号测活：{row.Identifier}");
-                var args = new List<string> { "--quota-usage", "--email", row.Identifier, "--refresh-timeout", "45" };
-                AddRegistrationProxy(args);
-                string json = await RunBackendWithResultAsync("账号测活", args, 120000, ct);
+                BackendCommandPlan plan = BackendCommandPlanner.CreateQuotaUsageProbe(
+                    row.Identifier, 45, GetRegistrationProxyRoute());
+                string json = await RunBackendWithResultAsync(
+                    plan.TaskName, plan.Arguments.ToList(), 120000, ct);
 
                 if (string.IsNullOrWhiteSpace(json))
                 {

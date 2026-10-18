@@ -60,16 +60,21 @@ class DesktopServeTests(unittest.TestCase):
             captured["extra_files"] = extra_files
             return {"files": [{"path": "mailbox.txt", "lines": []}]}
 
-        def fake_accounts(config, **kwargs):
-            self.assertFalse(kwargs.get("include_session"))
-            return [{"id": "9"}]
+        def fake_accounts(config, *, since=None):
+            # `pools` is the full-refresh path: no cursor, so the delta helper
+            # must return every row plus the id set and a fresh cursor.
+            self.assertIsNone(since)
+            return {"accounts": [{"id": "9"}], "ids": ["9"], "cursor": 10, "full": True}
 
         with patch.object(desktop_serve, "read_mailbox_pool", fake_pool), \
-                patch.object(desktop_serve, "read_accounts", fake_accounts), \
+                patch.object(desktop_serve, "read_accounts_delta", fake_accounts), \
                 patch.object(desktop_serve, "load_runtime_config", lambda: {}):
             payload = desktop_serve._payload_for("pools", {"extra_files": ["mailbox.txt"]})
         self.assertEqual(captured["extra_files"], ("mailbox.txt",))
         self.assertEqual(payload["accounts"], [{"id": "9"}])
+        self.assertEqual(payload["ids"], ["9"])
+        self.assertEqual(payload["cursor"], 10)
+        self.assertTrue(payload["full"])
         self.assertEqual(payload["files"][0]["path"], "mailbox.txt")
 
 

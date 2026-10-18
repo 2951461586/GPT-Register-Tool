@@ -10,6 +10,13 @@ namespace SmsWorkbench
         // (MainWindow.Pool); only the refresh-in-flight flag is view-level.
         private bool poolsRefreshRunning;
 
+        // Incremental accounts refresh: the cursor is the backend's max
+        // `updated_at`, and every N delta reads forces a full rebuild so a lost
+        // row or a missed deletion cannot stay stale forever.
+        private const int MaxIncrementalAccountRefreshes = 10;
+        private long accountsCursor;
+        private int incrementalAccountRefreshes;
+
         // Pool/session loading, filtering, overview
         private bool IsMailboxPoolLikeRow(PoolRow row)
         {
@@ -54,6 +61,8 @@ namespace SmsWorkbench
             int restorePage = preserveView ? Pool.CurrentPage : 1;
             try
             {
+                if (preserveView && await TryApplyIncrementalAccountsAsync(ct).ConfigureAwait(true))
+                    return;
                 Pool.AllRows.Clear();
                 try
                 {
@@ -285,6 +294,7 @@ namespace SmsWorkbench
                 Log("读取账号 backend 失败：响应缺少 accounts 数组。");
                 return;
             }
+            RememberAccountsCursor(payload);
             // Per-refresh values hoisted out of the row loop; each used to
             // re-read and re-parse config.json once (or twice) per account.
             string databasePath = GetDatabasePath();
@@ -295,11 +305,93 @@ namespace SmsWorkbench
                     && sessionElement.ValueKind == JsonValueKind.Object
                     ? sessionElement.GetRawText()
                     : "{}";
-                AddBackendAccountRow(data, databasePath, rawJson);
+                Pool.AllRows.Add(BuildBackendAccountRow(data, databasePath, rawJson));
             }
         }
 
-        private void AddBackendAccountRow(Dictionary<string, object> data, string databasePath, string rawJson)
+        /// <summary>
+        /// Applies an incremental accounts payload: only changed rows arrive,
+        /// but `ids` is the complete current id set so deletions are visible.
+        /// </summary>
+        private void ApplyAccountsDelta(JsonElement payload)
+        {
+            if (!payload.TryGetProperty("accounts", out JsonElement accounts)
+                || accounts.ValueKind != JsonValueKind.Array
+                || !payload.TryGetProperty("ids", out JsonElement idsElement)
+                || idsElement.ValueKind != JsonValueKind.Array)
+            {
+                // Shape drift: fall back to the full apply so the caller still
+                // ends up coherent (the backend may have answered with the
+                // plain list shape).
+                ApplyAccountsPayload(payload);
+                return;
+            }
+            var currentIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (JsonElement id in idsElement.EnumerateArray())
+            {
+                currentIds.Add(id.ValueKind == JsonValueKind.Number
+                    ? id.GetInt64().ToString(CultureInfo.InvariantCulture)
+                    : (id.GetString() ?? ""));
+            }
+            string databasePath = GetDatabasePath();
+            var changed = new List<PoolRow>();
+            foreach (JsonElement account in accounts.EnumerateArray())
+            {
+                Dictionary<string, object> data = JsonElementToDictionary(account);
+                string rawJson = account.TryGetProperty("session", out JsonElement sessionElement)
+                    && sessionElement.ValueKind == JsonValueKind.Object
+                    ? sessionElement.GetRawText()
+                    : "{}";
+                changed.Add(BuildBackendAccountRow(data, databasePath, rawJson));
+            }
+            Pool.MergeDatabaseRows(changed, currentIds, databasePath);
+            RememberAccountsCursor(payload);
+        }
+
+        private void RememberAccountsCursor(JsonElement payload)
+        {
+            if (payload.TryGetProperty("cursor", out JsonElement cursor)
+                && cursor.ValueKind == JsonValueKind.Number
+                && cursor.TryGetInt64(out long value))
+            {
+                accountsCursor = value;
+                // A full payload is the anti-drift anchor: restart the delta
+                // budget from it.
+                if (payload.TryGetProperty("full", out JsonElement full) && full.ValueKind == JsonValueKind.True)
+                    incrementalAccountRefreshes = 0;
+            }
+        }
+
+        /// <summary>
+        /// One incremental accounts refresh. Returns false when the caller must
+        /// do a full refresh instead (no cursor yet, budget exhausted, or the
+        /// resident channel refused).
+        /// </summary>
+        private async Task<bool> TryApplyIncrementalAccountsAsync(CancellationToken ct)
+        {
+            if (accountsCursor <= 0 || incrementalAccountRefreshes >= MaxIncrementalAccountRefreshes)
+                return false;
+            try
+            {
+                JsonElement delta = await desktopRead
+                    .ReadAccountsDeltaAsync(accountsCursor, ct)
+                    .ConfigureAwait(true);
+                ApplyAccountsDelta(delta);
+            }
+            catch (Exception ex)
+            {
+                Log("增量刷新账号失败，改用全量刷新：" + SensitiveDataSanitizer.Redact(ex.Message));
+                incrementalAccountRefreshes = MaxIncrementalAccountRefreshes;
+                return false;
+            }
+            incrementalAccountRefreshes++;
+            Pool.UpdateOverview();
+            Pool.RefreshPagedRows();
+            StatusBar.Text = Pool.SummaryText;
+            return true;
+        }
+
+        private PoolRow BuildBackendAccountRow(Dictionary<string, object> data, string databasePath, string rawJson)
         {
             string status = GetString(data, "status");
             bool hasAccess = ParseBoolean(FirstNonEmpty(
@@ -380,7 +472,7 @@ namespace SmsWorkbench
                 RawLine = GetString(data, "id"),
                 MailboxProvider = provider
             };
-            Pool.AllRows.Add(row);
+            return row;
         }
 
         internal static string MailboxTypeDisplay(string provider, string email = "")

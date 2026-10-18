@@ -1,4 +1,5 @@
 import argparse
+import importlib
 import json
 import os
 import re
@@ -11,32 +12,46 @@ from .diagnostics import install_safe_stdio, safe_print
 from .desktop_ipc import emit_result
 from .paths import output_dir, runtime_file
 from .registration_drivers.base import driver_choices
-from .batch_runner import filter_registered_mailboxes, run_batch_impl as run_batch
-from .storage import database_path, get_paypal_url, list_paypal_accounts, rebuild_from_session_dir, upsert_account
-from .commands.helpers import (
-    read_email_file as _read_email_file,
-    payment_method as _payment_method,
-    mailbox_from_explicit_args as _mailbox_from_explicit_args,
-    one_click_sms_max_reuse as _one_click_sms_max_reuse,
-)
-from .commands import accounts as account_commands
-from .commands import mailbox_ops as mailbox_commands
-from .commands import one_click as one_click_commands
-from .commands import omakse as omakse_commands
-from .commands import payment as payment_commands
-from .commands import payment_links as payment_link_commands
-from .commands import registration as registration_commands
-from .commands.email_change import run_change_email
-from .proxy_routing import proxy_pool_for
-from .proxy_health import ProxyHealthTracker
 from .sanitizer import sanitize_text
+
+
+class _LazyModule:
+    """Import a command adapter on first attribute access.
+
+    ``import sms_tool.cli`` used to pull every command adapter -- and through
+    them ``requests`` / ``curl_cffi`` / ``gen_pp_link`` / ``upi_link`` -- before
+    argparse even ran: ~890 ms of imports for a help screen. A proxy keeps every
+    ``payment_commands.X`` call site and every ``patch.object(cli, ...)`` seat
+    unchanged while moving the import into the branch that actually needs it.
+    Deliberately no ``__slots__``: ``patch.object`` may need to set an attribute
+    on the proxy.
+    """
+
+    def __init__(self, name: str) -> None:
+        self._name = name
+        self._module: Any = None
+
+    def __getattr__(self, attribute: str) -> Any:
+        module = self._module
+        if module is None:
+            module = importlib.import_module(self._name, __package__)
+            self._module = module
+        return getattr(module, attribute)
+
+
+account_commands = _LazyModule(".commands.accounts")
+mailbox_commands = _LazyModule(".commands.mailbox_ops")
+one_click_commands = _LazyModule(".commands.one_click")
+omakse_commands = _LazyModule(".commands.omakse")
+payment_commands = _LazyModule(".commands.payment")
+payment_link_commands = _LazyModule(".commands.payment_links")
+registration_commands = _LazyModule(".commands.registration")
 
 # `mailbox` and `registration` import `curl_cffi` at module top, so they must NOT
 # be imported eagerly at the top of this file — otherwise `import sms_tool.cli`
 # (and therefore the `--doctor` / `--desktop-read` lightweight commands) would
 # crash whenever curl_cffi is missing. They are loaded on demand, only on the
 # registration / one-click paths that actually need them.
-_heavy_deps_loaded = False
 
 # Module-level placeholders so these names always exist as attributes. This keeps
 # `import sms_tool.cli` free of curl_cffi (the real values are imported lazily by
@@ -52,12 +67,113 @@ _build_session_file: Any = None
 _mailbox_snapshot: Any = None
 run_email: Any = None
 
+# Batch / storage / helper symbols use the same self-healing pattern: a
+# placeholder plus a resolver that fills only the missing slots. Tests patch
+# these names on the module, so they must exist as attributes before first use.
+run_batch: Any = None
+filter_registered_mailboxes: Any = None
+database_path: Any = None
+get_paypal_url: Any = None
+list_paypal_accounts: Any = None
+rebuild_from_session_dir: Any = None
+upsert_account: Any = None
+_read_email_file: Any = None
+_payment_method: Any = None
+_mailbox_from_explicit_args: Any = None
+_one_click_sms_max_reuse: Any = None
+
+
+def _load_batch_deps() -> None:
+    """Resolve the batch runner (imports ``requests`` through its deps)."""
+    global run_batch, filter_registered_mailboxes
+    if run_batch is not None and filter_registered_mailboxes is not None:
+        return
+    from .batch_runner import (
+        filter_registered_mailboxes as _filter,
+        run_batch_impl as _run,
+    )
+    if filter_registered_mailboxes is None:
+        filter_registered_mailboxes = _filter
+    if run_batch is None:
+        run_batch = _run
+
+
+def _load_storage_deps() -> None:
+    """Resolve the SQLite index helpers used by commands outside registration."""
+    global database_path, get_paypal_url, list_paypal_accounts, rebuild_from_session_dir, upsert_account
+    if (
+        database_path is not None
+        and get_paypal_url is not None
+        and list_paypal_accounts is not None
+        and rebuild_from_session_dir is not None
+        and upsert_account is not None
+    ):
+        return
+    from .storage import (
+        database_path as _database_path,
+        get_paypal_url as _get_paypal_url,
+        list_paypal_accounts as _list_paypal_accounts,
+        rebuild_from_session_dir as _rebuild_from_session_dir,
+        upsert_account as _upsert_account,
+    )
+    if database_path is None:
+        database_path = _database_path
+    if get_paypal_url is None:
+        get_paypal_url = _get_paypal_url
+    if list_paypal_accounts is None:
+        list_paypal_accounts = _list_paypal_accounts
+    if rebuild_from_session_dir is None:
+        rebuild_from_session_dir = _rebuild_from_session_dir
+    if upsert_account is None:
+        upsert_account = _upsert_account
+
+
+def _load_helper_deps() -> None:
+    """Resolve the CLI helper hooks that command contexts inject."""
+    global _read_email_file, _payment_method, _mailbox_from_explicit_args, _one_click_sms_max_reuse
+    if (
+        _read_email_file is not None
+        and _payment_method is not None
+        and _mailbox_from_explicit_args is not None
+        and _one_click_sms_max_reuse is not None
+    ):
+        return
+    from .commands.helpers import (
+        mailbox_from_explicit_args as _mailbox_from_explicit_args_impl,
+        one_click_sms_max_reuse as _one_click_sms_max_reuse_impl,
+        payment_method as _payment_method_impl,
+        read_email_file as _read_email_file_impl,
+    )
+    if _read_email_file is None:
+        _read_email_file = _read_email_file_impl
+    if _payment_method is None:
+        _payment_method = _payment_method_impl
+    if _mailbox_from_explicit_args is None:
+        _mailbox_from_explicit_args = _mailbox_from_explicit_args_impl
+    if _one_click_sms_max_reuse is None:
+        _one_click_sms_max_reuse = _one_click_sms_max_reuse_impl
+
 
 def _load_heavy_deps() -> None:
-    global _heavy_deps_loaded
+    """Resolve the lazily imported CLI dependencies for the current process.
+
+    Deliberately **not** guarded by a one-shot latch. ``patch.object`` restores
+    a patched symbol to its pre-patch value, so a latch set while
+    ``_load_mailbox_pool`` was a mock would leave the real symbol permanently
+    ``None`` and a later ``--one-click-sms`` call would invoke ``None(...)``.
+    (Reproduced 2026-10-18 by running the registration tests before the
+    workbench tests; the full-suite order hid it because an earlier test had
+    already resolved the symbols outside a patch.)
+
+    Resolving by symbol presence instead is self-healing and no more expensive:
+    once the modules are imported each ``from .x import ...`` is a
+    ``sys.modules`` hit.  A symbol that is already resolved — including one a
+    test intentionally patched — is never overwritten.
+    """
     global _load_mailbox_pool, _remail_enabled, _build_session_file, _mailbox_snapshot, run_email
-    if _heavy_deps_loaded:
-        return
+    _load_batch_deps()
+    _load_storage_deps()
+    _load_helper_deps()
     if _load_mailbox_pool is None or _remail_enabled is None:
         from .mailbox import (
             _load_mailbox_pool as _lmp,
@@ -79,7 +195,6 @@ def _load_heavy_deps() -> None:
             _mailbox_snapshot = _ms
         if run_email is None:
             run_email = _re2
-    _heavy_deps_loaded = True
 
 
 def _registration_proxy_lane(registration_driver: object = None) -> str:
@@ -89,6 +204,8 @@ def _registration_proxy_lane(registration_driver: object = None) -> str:
 
 
 def _configured_registration_proxy(registration_driver: object = None, tracker=None) -> str:
+    from .proxy_routing import proxy_pool_for
+
     _raw_proxy_cfg: object = CFG.get("proxy")
     proxy_cfg: dict = _raw_proxy_cfg if isinstance(_raw_proxy_cfg, dict) else {}
     lane = _registration_proxy_lane(registration_driver)
@@ -105,6 +222,8 @@ def _configured_registration_proxy(registration_driver: object = None, tracker=N
         # shared ProxyHealthTracker instead of always pinning the first. On a fresh
         # tracker (no health data) rank() preserves input order, so behaviour is
         # unchanged for a single-account run that has never recorded failures.
+        from .proxy_health import ProxyHealthTracker
+
         if len(values) > 1:
             tracker = tracker or ProxyHealthTracker(CFG)
             return tracker.rank(values)[0]
@@ -125,6 +244,8 @@ def _apply_registration_proxy_defaults(args) -> None:
 
 
 def _proxy_pool_values(args) -> list[str]:
+    from .proxy_routing import proxy_pool_for
+
     raw = str(getattr(args, "proxy_pool", "") or "").strip()
     values = [item.strip() for item in re.split(r"[\r\n,;]+", raw) if item.strip()]
     primary = str(getattr(args, "proxy", "") or "").strip()
@@ -255,8 +376,9 @@ def build_parser():
 def main():
     initialize_runtime_config()
     for stream in (sys.stdout, sys.stderr):
-        if hasattr(stream, "reconfigure"):
-            stream.reconfigure(encoding="utf-8", errors="replace")
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="replace")
     install_safe_stdio()
     # Mirror stdout/stderr to `runtime/logs/backend_stdout.log`. Most of the
     # protocol lane reports through print(), which only ever reached the host's
@@ -325,6 +447,8 @@ def main():
         return
     if args.change_email:
         from .accounts.account_email_change import EmailChangeRequest, change_email_batch, load_change_email_accounts
+        from .commands.email_change import run_change_email
+
         run_change_email(
             args,
             load_accounts=load_change_email_accounts,
@@ -334,6 +458,7 @@ def main():
         )
         return
     if args.rebuild_sqlite:
+        _load_storage_deps()
         count = rebuild_from_session_dir(base_dir)
         print(f"[*] SQLite rebuilt: {database_path()} ({count} account record(s))")
         return
@@ -482,7 +607,13 @@ def _main_early_commands(args) -> bool:
         else:
             payload = create_payment_url_file(args.account_id or "", args.email or "", CFG)
         emit_result(payload, enabled=True)
-        return
+        # True, not a bare return: `main` treats the result as "handled" and
+        # would otherwise fall through into `_load_heavy_deps` and the
+        # registration pipeline (observed: `--desktop-read accounts
+        # --desktop-ipc` emitted the result frame, then ran the registration
+        # preflight, printed error frames and exited 2).  The docstring above
+        # already promised this contract.
+        return True
     return False
 
 
@@ -492,6 +623,7 @@ def _main_registration_pipeline(args, base_dir) -> None:
     Extracted from ``main`` unchanged except for the two parameters --
     ``args`` and ``base_dir`` were the only locals it closed over.
     """
+    _load_batch_deps()
     if getattr(args, "target_at200", 0):
         _run_target_at200(args, base_dir)
         return
@@ -771,6 +903,7 @@ def _run_target_at200(args, base_dir):
 
 
 def _account_command_context():
+    _load_storage_deps()
     return account_commands.AccountCommandContext(
         list_paypal_accounts=list_paypal_accounts,
         get_paypal_url=get_paypal_url,
@@ -794,6 +927,7 @@ def _refresh_session(args):
 
 
 def _mailbox_command_context():
+    _load_storage_deps()
     return mailbox_commands.MailboxCommandContext(upsert_account=upsert_account)
 
 
@@ -844,6 +978,7 @@ def _generate_upi_qr(args):
 
 
 def _payment_command_context():
+    _load_helper_deps()
     return payment_commands.PaymentCommandContext(
         read_email_file=_read_email_file,
         payment_method=_payment_method,
@@ -922,6 +1057,7 @@ def _one_click_scan(args):
 def _persist_one_click_sms_failure(data, json_path, email, result):
     from .codex_oauth import persist_one_click_sms_failure
 
+    _load_storage_deps()
     return persist_one_click_sms_failure(data, json_path, email, result, upsert=upsert_account)
 
 

@@ -13,6 +13,7 @@ namespace SmsWorkbench
     {
         Task<JsonElement> ReadPoolsAsync(string selectedFile = "", CancellationToken cancellationToken = default);
         Task<JsonElement> ReadAccountsAsync(CancellationToken cancellationToken = default);
+        Task<JsonElement> ReadAccountsDeltaAsync(long since, CancellationToken cancellationToken = default);
         Task<JsonElement> ReadMailboxPoolAsync(string selectedFile = "", CancellationToken cancellationToken = default);
         Task<JsonElement> ReadAccountAsync(string accountId, string email = "", CancellationToken cancellationToken = default);
         Task<JsonElement> ReadAccountExportAsync(string accountId, string email = "", CancellationToken cancellationToken = default);
@@ -94,6 +95,22 @@ namespace SmsWorkbench
                 return await RunOneShotAsync("Read account index", ReadAccountsArguments, cancellationToken)
                     .ConfigureAwait(false);
             }
+        }
+
+        /// <summary>
+        /// Incremental account read: rows whose <c>updated_at</c> moved past
+        /// <paramref name="since"/>, plus the full id set and the new cursor.
+        /// </summary>
+        /// <remarks>
+        /// Deliberately has **no** one-shot fallback: the one-shot CLI returns
+        /// the full list and carries no cursor, so silently downgrading here
+        /// would hand the caller a payload it cannot merge. Callers treat any
+        /// exception as "do a full refresh instead".
+        /// </remarks>
+        public async Task<JsonElement> ReadAccountsDeltaAsync(long since, CancellationToken cancellationToken = default)
+        {
+            return await ResidentRequestAsync(
+                BuildResidentRequest("accounts", since: since), cancellationToken).ConfigureAwait(false);
         }
 
         public async Task<JsonElement> ReadMailboxPoolAsync(string selectedFile = "", CancellationToken cancellationToken = default)
@@ -188,12 +205,13 @@ namespace SmsWorkbench
         }
 
         private static Dictionary<string, object> BuildResidentRequest(
-            string op, string accountId = "", string email = "", string selectedFile = "")
+            string op, string accountId = "", string email = "", string selectedFile = "", long? since = null)
         {
             var request = new Dictionary<string, object> { ["op"] = op };
             if (!string.IsNullOrWhiteSpace(accountId)) request["account_id"] = accountId;
             if (!string.IsNullOrWhiteSpace(email)) request["email"] = email;
             if (!string.IsNullOrWhiteSpace(selectedFile)) request["extra_files"] = new[] { selectedFile };
+            if (since.HasValue) request["since"] = since.Value;
             return request;
         }
 

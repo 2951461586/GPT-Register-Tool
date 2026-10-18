@@ -50,8 +50,7 @@ namespace SmsWorkbench
             string jsonPath = SessionFileFor(row);
             if (jsonPath.Length > 0)
             {
-                args.Add("--session-file");
-                args.Add(jsonPath);
+                BackendCommandPlanner.AppendSessionFile(args, jsonPath);
             }
         }
 

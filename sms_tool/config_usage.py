@@ -51,6 +51,7 @@ half, :data:`CSHARP_CONSUMED_KEYS` is the complete accounting.
 from __future__ import annotations
 
 import ast
+import hashlib
 import io
 import json
 import os
@@ -58,7 +59,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable, NamedTuple
 
-from .paths import config_dir
+from .config import CFG
+from .paths import config_dir, runtime_file
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -225,6 +227,118 @@ def unread_config_keys(root: Path | str | None = None) -> list[UnreadKey]:
         if not is_read(path)
     ]
     return unread + documented_only
+
+
+CACHE_SCHEMA = "config_usage_cache.v1"
+
+
+def _fingerprint_paths(root: Path, *, explicit_root: bool) -> Iterable[Path]:
+    """Files whose content decides whether the unread-key answer is still valid.
+
+    Mirrors :func:`unread_config_keys`' own scope exactly: production source and
+    ``config.example.json`` under ``root``, plus the config shards -- which live
+    at ``config_dir()`` for the default root but at ``root`` for an explicit one
+    (that is how the test fixtures build their tree).
+    """
+    yield from _iter_source_files(root)
+    yield root / "config.example.json"
+    shard_base = root if explicit_root else config_dir()
+    for name in SHARD_NAMES:
+        yield shard_base / name
+
+
+def _cache_fingerprint(root: Path, *, explicit_root: bool) -> str:
+    digest = hashlib.sha256()
+    for path in _fingerprint_paths(root, explicit_root=explicit_root):
+        try:
+            stat = path.stat()
+        except OSError:
+            digest.update(f"{path}|missing\n".encode("utf-8", "replace"))
+            continue
+        digest.update(f"{path}|{stat.st_mtime_ns}|{stat.st_size}\n".encode("utf-8", "replace"))
+    return digest.hexdigest()
+
+
+def _default_cache_path() -> Path:
+    # The cache is a runtime artifact next to the other generated state, so it
+    # follows the same runtime directory the logs and SQLite index use.
+    return runtime_file(CFG, "cache/config_usage.json")
+
+
+def _read_cache(path: Path, fingerprint: str) -> list[UnreadKey] | None:
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(raw, dict) or raw.get("schema") != CACHE_SCHEMA:
+        return None
+    if raw.get("fingerprint") != fingerprint:
+        return None
+    entries = raw.get("keys")
+    if not isinstance(entries, list):
+        return None
+    keys: list[UnreadKey] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            return None
+        path_value = entry.get("path")
+        shards = entry.get("shards") or []
+        if not isinstance(path_value, str) or not isinstance(shards, list):
+            return None
+        keys.append(UnreadKey(path_value, tuple(str(s) for s in shards), bool(entry.get("in_example"))))
+    return keys
+
+
+def _write_cache(path: Path, fingerprint: str, keys: list[UnreadKey]) -> None:
+    payload = {
+        "schema": CACHE_SCHEMA,
+        "fingerprint": fingerprint,
+        "keys": [
+            {"path": key.path, "shards": list(key.shards), "in_example": key.in_example}
+            for key in keys
+        ],
+    }
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_name(path.name + ".tmp")
+        temporary.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        os.replace(temporary, path)
+    except OSError:
+        # Advisory data: a read-only runtime directory must not turn --doctor
+        # into a failure. The next run simply recomputes.
+        return
+
+
+def cached_unread_config_keys(
+    root: Path | str | None = None,
+    cache_path: Path | str | None = None,
+) -> list[UnreadKey]:
+    """``unread_config_keys`` with a cross-process, mtime-keyed cache.
+
+    The scan parses every production source file (~750 files, ~3 s) and
+    ``--doctor`` runs on the desktop first launch, so recomputing it on every
+    invocation is the difference between a 3.6 s and a sub-second probe. The
+    cache key is a fingerprint of ``(path, mtime_ns, size)`` over exactly the
+    files the answer depends on; any edit, add or delete invalidates it without
+    a TTL.
+
+    Every cache failure (missing, corrupt, unwritable, schema drift) degrades to
+    a fresh scan -- this probe is advisory and must never make ``--doctor``
+    fail.
+    """
+    root_path = Path(root) if root else PROJECT_ROOT
+    explicit_root = root is not None
+    cache_file = Path(cache_path) if cache_path is not None else _default_cache_path()
+    try:
+        fingerprint = _cache_fingerprint(root_path, explicit_root=explicit_root)
+    except OSError:
+        return unread_config_keys(root)
+    cached = _read_cache(cache_file, fingerprint)
+    if cached is not None:
+        return cached
+    keys = unread_config_keys(root)
+    _write_cache(cache_file, fingerprint, keys)
+    return keys
 
 
 def format_unread_report(keys: list[UnreadKey]) -> str:

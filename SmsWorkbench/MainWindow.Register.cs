@@ -171,7 +171,7 @@ namespace SmsWorkbench
             }
             var defaultPlan = BackendCommandPlanner.CreateMailboxFileRegistration(
                 "一键注册",
-                "--chatai-mailbox-file",
+                BackendCommandPlanner.ChataiMailboxFileFlag,
                 mailboxFile,
                 options.Count,
                 options.Workers,
@@ -183,11 +183,8 @@ namespace SmsWorkbench
         }
 
         // AddRegistrationAtOnlyArgs removed (2026-09-02, round 6): no caller.
-
-        private void AddNoPhoneRegistrationArgs(List<string> args)
-        {
-            args.Add("--no-phone-reuse");
-        }
+        // AddNoPhoneRegistrationArgs removed (2026-10-18): no caller; the flag
+        // literal now lives only in BackendCommandPlanner.AppendNoPhoneReuse.
 
         private void OneClickSms()
             => RunUiTask(() => OneClickSmsAsync(_lifetimeCts.Token));
