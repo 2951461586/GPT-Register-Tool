@@ -17,8 +17,8 @@ import requests as http_requests
 from ..config import current_config_data
 from ..mail_otp import _candidate_is_newer, _email_otp_candidate, _extract_otp_from_text, _message_received_ts
 from ..mailbox_types import MailboxAccount
-from ..paths import project_path, runtime_file
-from ..sanitizer import mask_otp
+from ..kernel.paths import project_path, runtime_file
+from ..kernel.sanitizer import mask_otp
 from ..phone_proxy import redact_proxy_url
 from ..proxy_health import ProxyHealthTracker
 from ..desktop_ipc import progress_dots_enabled

@@ -19,7 +19,7 @@ from .account_health import (
     sanitize_health_details,
 )
 from ..config import CFG
-from ..paths import runtime_file
+from ..kernel.paths import runtime_file
 
 
 _LOCK = threading.Lock()

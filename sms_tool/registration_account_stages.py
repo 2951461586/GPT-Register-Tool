@@ -29,7 +29,7 @@ from curl_cffi import requests as curl_requests
 
 from . import registration_checkpoint
 from .desktop_ipc import emit_event
-from .failure_registry import PASSWORDLESS_SIGNUP_CODE, is_passwordless_signup_mismatch
+from .kernel.failure_registry import PASSWORDLESS_SIGNUP_CODE, is_passwordless_signup_mismatch
 from .operator_output import emit as _emit
 from .registration_cancel import RegistrationCancelled, cancellable_sleep
 from .registration_flags import registration_flag
@@ -40,7 +40,7 @@ from .registration_protocol_helpers import (
     _safe_int,
 )
 from .registration_retry_guard import RegistrationRetryGuard
-from .sanitizer import account_reference, describe_exception
+from .kernel.sanitizer import account_reference, describe_exception
 from .telemetry import current_run_id
 
 #: Keep the ``sms_tool.registration_handlers`` logger channel so ``sms_tool.log``

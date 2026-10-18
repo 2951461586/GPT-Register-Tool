@@ -8,8 +8,8 @@ import threading
 from ..config import ConfigInput
 from ..config import current_config_data
 from ..config import resolve_runtime_config
-from ..paths import project_path
-from ..paths import runtime_file
+from ..kernel.paths import project_path
+from ..kernel.paths import runtime_file
 from .constants import EXTRA_COLUMNS, SCHEMA_VERSION
 
 

@@ -13,7 +13,7 @@ from urllib.parse import unquote, urlencode, urljoin, urlsplit
 
 from curl_cffi import requests as curl_requests
 
-from ...driver_env import driver_config as _driver_config
+from ...kernel.driver_env import driver_config as _driver_config
 from ...phone_proxy import normalize_proxy_url
 from ..base import BrowserRegistrationError
 from ..browser_flow.decisions import DEFAULT_VIEWPORT_HEIGHT, DEFAULT_VIEWPORT_WIDTH

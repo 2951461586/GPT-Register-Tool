@@ -2,7 +2,7 @@
 
 **为什么这个 27 行的模块值得单独立一份测试**：它是整个测试隔离层的地基。
 
-20 个模块用的是 ``from .paths import runtime_file`` —— 按名绑定了一份副本，
+20 个模块用的是 ``from .kernel.paths import runtime_file`` —— 按名绑定了一份副本，
 所以 **patch ``paths.runtime_file`` 对它们一个都不生效**（绑定复制陷阱）。
 ``isolated_runtime`` 之所以能靠一句 ``monkeypatch.setattr(paths, "runtime_dir", ...)``
 把整棵 runtime 树挪走，唯一的理由是 ``runtime_file`` 内部**通过模块全局名查找**
@@ -20,12 +20,12 @@ from pathlib import Path
 
 import pytest
 
-from sms_tool import paths
+from sms_tool.kernel import paths
 
 # 故意按名绑定：这就是 20 个生产模块的用法，patch ``paths.runtime_dir`` 之后
 # 这两个副本**不应该**跟着变（绑定复制），但 ``runtime_file`` 内部的调用会跟着变。
-from sms_tool.paths import runtime_dir as bound_runtime_dir
-from sms_tool.paths import runtime_file as bound_runtime_file
+from sms_tool.kernel.paths import runtime_dir as bound_runtime_dir
+from sms_tool.kernel.paths import runtime_file as bound_runtime_file
 
 
 class ProjectRootTest(unittest.TestCase):
@@ -35,8 +35,9 @@ class ProjectRootTest(unittest.TestCase):
         self.addCleanup(self._tmp.cleanup)
 
     def test_it_is_the_repository_root(self):
+        # ``paths`` lives in ``sms_tool/kernel/`` since the kernel split.
         self.assertEqual(paths.PROJECT_ROOT,
-                         Path(paths.__file__).resolve().parent.parent)
+                         Path(paths.__file__).resolve().parents[2])
 
     def test_it_is_absolute_and_free_of_dot_components(self):
         self.assertTrue(paths.PROJECT_ROOT.is_absolute())
@@ -249,7 +250,7 @@ class RuntimeFileTest(unittest.TestCase):
     def test_runtime_file_resolves_its_directory_through_the_module_global(self):
         """🔴 整个测试隔离层的承重墙。
 
-        20 个生产模块写的是 ``from .paths import runtime_file``，所以我 patch
+        20 个生产模块写的是 ``from .kernel.paths import runtime_file``，所以我 patch
         ``paths.runtime_file`` 对它们毫无作用；``isolated_runtime`` 靠 patch
         ``paths.runtime_dir`` 生效，**前提是 ``runtime_file`` 在调用时通过模块
         全局名去找 ``runtime_dir``**，而不是用了某个构造期快照或内联展开。

@@ -1063,7 +1063,7 @@ class FailureClassificationTests(unittest.TestCase):
         全部落 ``unknown``；而 ``unknown`` 在重试守卫眼里等同终态，会让
         「真终态」与「可重试」拿到同样处置。
         """
-        from sms_tool.error_classification import classify_error
+        from sms_tool.kernel.error_classification import classify_error
 
         for code in (
             "upi_checkout_not_active",

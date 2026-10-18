@@ -11,7 +11,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from sms_tool.failure_registry import PASSWORD_CLAIMED_MARKER
+from sms_tool.kernel.failure_registry import PASSWORD_CLAIMED_MARKER
 from sms_tool.registration_handlers import RegistrationEmailWorkflow
 from sms_tool.registration_policy import registration_retry_decision
 from sms_tool.registration_retry_guard import RegistrationRetryGuard

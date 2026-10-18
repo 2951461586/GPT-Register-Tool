@@ -26,8 +26,8 @@ import unittest
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-_CLASSIFICATION = PROJECT_ROOT / "sms_tool" / "error_classification.py"
-_REGISTRY = PROJECT_ROOT / "sms_tool" / "failure_registry.py"
+_CLASSIFICATION = PROJECT_ROOT / "sms_tool" / "kernel" / "error_classification.py"
+_REGISTRY = PROJECT_ROOT / "sms_tool" / "kernel" / "failure_registry.py"
 _SCAN = PROJECT_ROOT / "sms_tool" / "accounts" / "account_scan.py"
 _INTERPRETER = PROJECT_ROOT / "SmsWorkbench" / "BackendResultInterpreter.cs"
 

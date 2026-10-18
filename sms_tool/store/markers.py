@@ -125,7 +125,7 @@ def mark_account_health_result(
                     data = {**file_data, **data}
             except Exception:
                 pass
-        from ..sanitizer import drop_sensitive_fields
+        from ..kernel.sanitizer import drop_sensitive_fields
 
         safe_result = drop_sensitive_fields(dict(health_result), max_string_length=1000)
         check = str(safe_result.get("check") or "unknown")

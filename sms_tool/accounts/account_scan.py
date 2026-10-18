@@ -27,7 +27,7 @@ from ..http_client import is_transient_transport_error
 from ..session_refresh import _load_seed_session
 from ..storage import upsert_account
 from ..workspace_scan import inspect_workspace, parse_workspace_fallback_ids
-from ..error_classification import classify_error
+from ..kernel.error_classification import classify_error
 from ..config import CFG
 from ..utils import atomic_write_text
 

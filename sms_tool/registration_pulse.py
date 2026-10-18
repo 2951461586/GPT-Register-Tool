@@ -25,7 +25,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from .config import CFG
-from .failure_registry import (
+from .kernel.failure_registry import (
     OTP_ARM_MISMATCH_MARKER as _OTP_ARM_MISMATCH_MARKER,
     OTP_BAN_MARKERS as _OTP_BAN_MARKERS,
     OTP_DISPATCH_VERDICT_EXCLUDED_CLASSES as _OTP_DISPATCH_VERDICT_EXCLUDED_CLASSES,

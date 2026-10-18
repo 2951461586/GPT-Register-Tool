@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ...sanitizer import sanitize_text
+from ...kernel.sanitizer import sanitize_text
 from ..base import BrowserRegistrationError
 from collections.abc import Mapping
 from typing import Any

@@ -10,7 +10,7 @@ from enum import Enum
 from typing import Any, Callable, Mapping
 
 from .config import current_config_data
-from .sanitizer import sanitize_text
+from .kernel.sanitizer import sanitize_text
 
 
 class RegistrationState(str, Enum):

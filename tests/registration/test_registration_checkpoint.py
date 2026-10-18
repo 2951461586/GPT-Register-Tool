@@ -4,7 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from sms_tool import storage
-from sms_tool.error_classification import classify_error
+from sms_tool.kernel.error_classification import classify_error
 from sms_tool.registration_outcome import _registration_outcome, _retain_registration_checkpoint
 
 

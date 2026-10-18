@@ -22,7 +22,6 @@
     "sms_tool/accounts/account_scan.py": 32,
     "sms_tool/accounts/recovery_batch.py": 2,
     "sms_tool/accounts/wham_usage.py": 1,
-    "sms_tool/agent_identity.py": 2,
     "sms_tool/browser_fingerprint_pool.py": 2,
     "sms_tool/browser_pool.py": 1,
     "sms_tool/commands/one_click.py": 10,
@@ -167,5 +166,5 @@
     "tests/workbench/test_cli_registration_driver.py": 1,
     "tests/workbench/test_operator_output.py": 1
   },
-  "total": 862
+  "total": 860
 }

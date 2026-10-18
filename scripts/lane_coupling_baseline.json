@@ -130,39 +130,11 @@
     ],
     [
       "sms_tool.cli",
-      "sms_tool.commands.accounts"
-    ],
-    [
-      "sms_tool.cli",
       "sms_tool.commands.email_change"
     ],
     [
       "sms_tool.cli",
       "sms_tool.commands.helpers"
-    ],
-    [
-      "sms_tool.cli",
-      "sms_tool.commands.mailbox_ops"
-    ],
-    [
-      "sms_tool.cli",
-      "sms_tool.commands.omakse"
-    ],
-    [
-      "sms_tool.cli",
-      "sms_tool.commands.one_click"
-    ],
-    [
-      "sms_tool.cli",
-      "sms_tool.commands.payment"
-    ],
-    [
-      "sms_tool.cli",
-      "sms_tool.commands.payment_links"
-    ],
-    [
-      "sms_tool.cli",
-      "sms_tool.commands.registration"
     ]
   ],
   "registration_facade_fanout": [
@@ -175,12 +147,14 @@
     "sms_tool.batch_runner",
     "sms_tool.codex_sentinel",
     "sms_tool.config",
-    "sms_tool.error_classification",
     "sms_tool.http_client",
     "sms_tool.http_utils",
+    "sms_tool.kernel",
+    "sms_tool.kernel.error_classification",
+    "sms_tool.kernel.paths",
+    "sms_tool.kernel.sanitizer",
     "sms_tool.mailbox",
     "sms_tool.otp_strategy",
-    "sms_tool.paths",
     "sms_tool.phone_proxy",
     "sms_tool.phone_registration",
     "sms_tool.registration_cancel",
@@ -193,7 +167,6 @@
     "sms_tool.registration_preflight",
     "sms_tool.registration_progress",
     "sms_tool.registration_state",
-    "sms_tool.sanitizer",
     "sms_tool.sentinel_tokens",
     "sms_tool.session_builder",
     "sms_tool.utils"

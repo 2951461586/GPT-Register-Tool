@@ -60,7 +60,7 @@ from pathlib import Path
 from typing import Any, Iterable, NamedTuple
 
 from .config import CFG
-from .paths import config_dir, runtime_file
+from .kernel.paths import config_dir, runtime_file
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 

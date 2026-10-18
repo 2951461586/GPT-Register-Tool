@@ -38,7 +38,7 @@ from unittest.mock import Mock
 import pytest
 
 from sms_tool.auth_state import otp_dispatch_verdict, signup_lane_verdict
-from sms_tool.failure_registry import (
+from sms_tool.kernel.failure_registry import (
     BATCH_RETRY_CLASSES,
     OTP_MAILBOX_SIDE_MARKER,
     OTP_NO_RESEND_MARKER,
@@ -265,7 +265,7 @@ def test_a_stuck_send_never_calls_the_poller():
 
 def test_a_stuck_send_is_classified_and_counted_as_a_dispatch_side_signal():
     """新错误名必须进注册表，否则分类成 ``unknown``（既不重试也不记账）。"""
-    from sms_tool.error_classification import classify_error
+    from sms_tool.kernel.error_classification import classify_error
     from sms_tool.registration_policy import registration_retry_decision
 
     assert classify_error("email_otp_send_stuck") == "mailbox"
@@ -445,7 +445,7 @@ def test_the_combined_no_resend_suffix_is_still_not_a_ban_signal():
     ``mailbox_side_no_code``；顺序反了，带能力后缀的邮箱侧超时会被重新读成
     「出口被封」，每个 wave 白停 60s（就是 P0-2 要修的那个坑）。
     """
-    from sms_tool.error_classification import classify_error
+    from sms_tool.kernel.error_classification import classify_error
 
     combined = f"email_otp_poll_timeout:{OTP_MAILBOX_SIDE_MARKER}:{OTP_NO_RESEND_MARKER}"
     assert _is_otp_ban_signal(_fail(combined)) is False

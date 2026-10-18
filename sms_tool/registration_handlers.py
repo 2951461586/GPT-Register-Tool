@@ -38,7 +38,7 @@ from . import registration_warmup as _warmup
 from .auth_headers import set_auth_fingerprint
 from .auth_state import signup_lane_verdict
 from .codex_oauth import collect_codex_oauth_tokens
-from .failure_registry import PASSWORD_CLAIMED_MARKER
+from .kernel.failure_registry import PASSWORD_CLAIMED_MARKER
 from .mailbox_errors import MailboxEndpointUnavailableError
 from .operator_output import emit as _emit
 from .providers.mailbox_graph import MailboxAuthInvalidError

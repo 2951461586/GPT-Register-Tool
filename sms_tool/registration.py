@@ -82,7 +82,7 @@ from .auth_headers import (
     set_fingerprint_geo,
     select_auth_fingerprint,
 )
-from .error_classification import classify_error
+from .kernel.error_classification import classify_error
 from .config import (
     CFG,
     current_config_data,
@@ -150,7 +150,7 @@ from .otp_strategy import (
     send_registration_email_otp as _send_registration_email_otp,
 )
 from .mailbox import _ensure_mailbox_account, _poll_email_otp, _snapshot_mailbox_message
-from .paths import runtime_file
+from .kernel.paths import runtime_file
 from .phone_registration import run_phone_register as _run_phone_register_impl
 from .registration_outcome import (
     _create_account_error,
@@ -183,7 +183,7 @@ from .registration_state import (
     _stored_registration_totp,
     prepare_registration_context,
 )
-from .sanitizer import sanitize as _sanitize, sanitize_text as _sanitize_text
+from .kernel.sanitizer import sanitize as _sanitize, sanitize_text as _sanitize_text
 from .session_builder import build_session_file
 from .accounts import account_liveness
 from .utils import (

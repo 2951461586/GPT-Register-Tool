@@ -41,7 +41,7 @@ from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 
 from sms_tool import auth_flow
-from sms_tool.error_classification import classify_error
+from sms_tool.kernel.error_classification import classify_error
 from sms_tool.registration_policy import registration_retry_decision
 
 

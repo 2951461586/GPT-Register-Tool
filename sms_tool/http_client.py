@@ -5,9 +5,9 @@ from typing import Mapping
 
 from .config import CFG
 from .backoff import bounded_cooldown, transport_backoff
-from .error_classification import is_terminal_registration_error
+from .kernel.error_classification import is_terminal_registration_error
 from .proxy_edge_probe import EDGE_CHALLENGE, EDGE_UNKNOWN, edge_challenge_verdict
-from .sanitizer import sanitize_text
+from .kernel.sanitizer import sanitize_text
 
 
 class SessionCircuitOpen(RuntimeError):

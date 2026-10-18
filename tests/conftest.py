@@ -302,7 +302,7 @@ def isolated_runtime(request, runtime_sandbox, monkeypatch):
     ``paths.runtime_file(cfg, name)`` resolves its directory through the module
     global ``paths.runtime_dir(cfg)``, so patching that one function re-roots
     every caller -- including the 15+ modules that bound ``runtime_file`` by
-    name (``from .paths import runtime_file``), which is the same
+    name (``from .kernel.paths import runtime_file``), which is the same
     "patch the binding, not the source" trap that caused the
     ``current_config_data`` flake.
 
@@ -329,7 +329,8 @@ def isolated_runtime(request, runtime_sandbox, monkeypatch):
         yield None
         return
 
-    from sms_tool import paths, storage
+    from sms_tool import storage
+    from sms_tool.kernel import paths
     from sms_tool.store import connection as store_connection
 
     monkeypatch.setattr(paths, "runtime_dir", lambda cfg=None: runtime_sandbox)

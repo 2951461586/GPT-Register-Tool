@@ -25,7 +25,7 @@ from typing import Any
 import logging
 import re
 
-from .sanitizer import sanitize_text
+from .kernel.sanitizer import sanitize_text
 from .registration_policy import registration_retry_decision
 
 logger = logging.getLogger(__name__)

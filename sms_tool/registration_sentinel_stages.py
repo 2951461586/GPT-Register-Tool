@@ -28,7 +28,7 @@ import logging
 from typing import Any
 
 from .registration_flags import registration_flag
-from .sanitizer import describe_exception
+from .kernel.sanitizer import describe_exception
 
 _LOGGER = logging.getLogger(__name__)
 

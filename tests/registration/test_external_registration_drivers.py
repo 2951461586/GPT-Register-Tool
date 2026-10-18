@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 from urllib.parse import parse_qs, quote, urlsplit
 
-from sms_tool import env_loader
+from sms_tool.kernel import env_loader
 from sms_tool.config import ConfigError, validate_config
 from sms_tool.registration_drivers.base import BrowserRegistrationError, normalize_registration_driver
 from sms_tool.registration_drivers.external_sessions import (

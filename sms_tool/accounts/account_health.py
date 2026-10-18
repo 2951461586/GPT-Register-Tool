@@ -7,7 +7,7 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, Mapping
 
-from ..sanitizer import drop_sensitive_fields
+from ..kernel.sanitizer import drop_sensitive_fields
 
 class HealthCheckKind(str, Enum):
     PLAN = "plan"

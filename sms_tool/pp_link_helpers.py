@@ -24,7 +24,7 @@ import requests
 try:
     from .checkout_contract import CheckoutRequestContract, CheckoutSessionContract
     from .cross_process_gate import cross_process_write_lock
-    from .paths import runtime_file
+    from .kernel.paths import runtime_file
     from .phone_proxy import match_proxy_region, normalize_proxy_url
 except ImportError:  # pragma: no cover - direct script execution
     from checkout_contract import CheckoutRequestContract, CheckoutSessionContract  # type: ignore
@@ -64,7 +64,7 @@ DEFAULT_STRIPE_PK = (os.environ.get("PP_STRIPE_PUBLISHABLE_KEY", "") or "").stri
 )
 STRIPE_VERSION = "2025-03-31.basil; checkout_server_update_beta=v1; checkout_manual_approval_preview=v1"
 from . import endpoints
-from .timeouts import CHATGPT_TIMEOUT, DEFAULT_TIMEOUT
+from .kernel.timeouts import CHATGPT_TIMEOUT, DEFAULT_TIMEOUT
 
 _CHATGPT_ORIGIN_HOST = endpoints.CHATGPT_BASE
 

@@ -35,7 +35,7 @@
     "sms_tool/config.py": 5,
     "sms_tool/desktop_read.py": 3,
     "sms_tool/desktop_serve.py": 1,
-    "sms_tool/doctor.py": 9,
+    "sms_tool/doctor.py": 5,
     "sms_tool/fingerprint_pool.py": 4,
     "sms_tool/gcash_transport.py": 4,
     "sms_tool/geo/clock.py": 1,
@@ -113,5 +113,5 @@
     "sms_tool/upi_link/stripe.py": 1,
     "sms_tool/wallet_transport.py": 5
   },
-  "total": 421
+  "total": 417
 }

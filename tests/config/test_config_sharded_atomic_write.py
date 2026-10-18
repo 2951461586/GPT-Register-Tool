@@ -11,7 +11,8 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
-from sms_tool import config, paths
+from sms_tool import config
+from sms_tool.kernel import paths
 
 
 def test_write_shards_creates_all_three_shards(tmp_path):

@@ -42,7 +42,7 @@ from typing import Any
 from curl_cffi import requests as curl_requests
 
 from ..phone_proxy import normalize_proxy_url, redact_proxy_text as _redact_proxy_text
-from ..timeouts import DEFAULT_TIMEOUT
+from ..kernel.timeouts import DEFAULT_TIMEOUT
 
 
 DEFAULT_BASE_URL = "https://smailr.com"

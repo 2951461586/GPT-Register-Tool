@@ -6,7 +6,7 @@ import sys
 import threading
 from typing import Any, TextIO
 
-from .sanitizer import sanitize_command_args, sanitize_log_text
+from .kernel.sanitizer import sanitize_command_args, sanitize_log_text
 
 
 def safe_print(

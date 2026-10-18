@@ -22,7 +22,7 @@ from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 import requests
 
 from .config import CFG
-from .paths import runtime_file
+from .kernel.paths import runtime_file
 
 DEFAULT_PROBE_TTL_SECONDS = 300
 DEFAULT_PROBE_TIMEOUT_SECONDS = 12

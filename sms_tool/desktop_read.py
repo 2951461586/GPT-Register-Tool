@@ -14,14 +14,14 @@ from typing import Any
 
 from .config import ConfigInput, RuntimeConfig, resolve_runtime_config
 from .mailbox_parsers import parse_mailbox_pool_line
-from .paths import PROJECT_ROOT, config_dir, resolve_config_file
+from .kernel.paths import PROJECT_ROOT, config_dir, resolve_config_file
 from .promotion_states import (
     payment_eligibility_label,
     promotion_marker_is_stale,
     promotion_status_with_eligibility,
 )
 from .registration_retry_guard import RegistrationRetryGuard, mailbox_registration_status
-from .sanitizer import sanitize
+from .kernel.sanitizer import sanitize
 from .storage import _account_type, _looks_codex_refresh_token, get_account_record_by_id, get_account_records, list_account_records
 
 

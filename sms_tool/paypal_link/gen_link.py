@@ -153,7 +153,7 @@ except ImportError:  # pragma: no cover - direct script execution
 
 
 try:
-    from ..sanitizer import sanitize_text
+    from ..kernel.sanitizer import sanitize_text
 except ImportError:  # pragma: no cover - direct script execution
     from sanitizer import sanitize_text  # type: ignore
 

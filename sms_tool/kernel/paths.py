@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 # Environment override for the directory that holds credential-bearing local
 # files (config shards, mailbox pool). The WPF shell sets it for every backend

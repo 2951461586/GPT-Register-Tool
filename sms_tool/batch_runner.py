@@ -6,15 +6,15 @@ import threading
 from urllib.parse import urlsplit
 
 from .batch_circuit_breaker import BatchCircuitBreaker
-from .error_classification import classify_error
-from .failure_registry import BATCH_DROPPED_CLASSES, BATCH_RETRY_CLASSES
+from .kernel.error_classification import classify_error
+from .kernel.failure_registry import BATCH_DROPPED_CLASSES, BATCH_RETRY_CLASSES
 from .config import CFG
 from .accounts.account_identity import proxy_egress_key
 from .geo import shared_geo_resolver
 from .paypal_proxy import infer_proxy_country
 from .phone_proxy import normalize_proxy_url, probe_proxy_with_scheme_detection, refresh_proxy_sid
-from .sanitizer import sanitize_text
-from .sanitizer import account_reference, mask_account
+from .kernel.sanitizer import sanitize_text
+from .kernel.sanitizer import account_reference, mask_account
 from .diagnostics import safe_print
 from .proxy_health import ProxyHealthTracker
 from .registration_retry_guard import RegistrationRetryGuard, mailbox_registration_status

@@ -30,7 +30,7 @@ from pathlib import Path
 
 import pytest
 
-from sms_tool.sanitizer import SENSITIVE_POLICY, sanitize
+from sms_tool.kernel.sanitizer import SENSITIVE_POLICY, sanitize
 
 ROOT = Path(__file__).resolve().parents[2]
 

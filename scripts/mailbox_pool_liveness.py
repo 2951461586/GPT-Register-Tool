@@ -24,7 +24,7 @@ if str(ROOT) not in sys.path:
 from sms_tool.config import CFG
 from sms_tool.mailbox import _fetch_mailbox_messages
 from sms_tool.mailbox_parsers import parse_mailbox_pool_line
-from sms_tool.paths import resolve_config_file
+from sms_tool.kernel.paths import resolve_config_file
 
 
 def _fingerprint(raw: str) -> str:

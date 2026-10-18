@@ -38,9 +38,9 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from .cross_process_gate import CrossProcessSemaphore, GateTimeoutError
-from .paths import runtime_file
+from .kernel.paths import runtime_file
 from .payment_contracts import PaymentResult
-from .sanitizer import sanitize_text
+from .kernel.sanitizer import sanitize_text
 
 
 SCHEMA_VERSION = 1

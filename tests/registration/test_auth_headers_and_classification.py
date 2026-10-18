@@ -17,7 +17,7 @@ from sms_tool.auth_headers import (
     sentinel_fingerprint,
 )
 from sms_tool.fingerprint_pool import FingerprintPool
-from sms_tool.error_classification import classify_error
+from sms_tool.kernel.error_classification import classify_error
 from sms_tool.registration_policy import registration_retry_decision
 
 
@@ -233,7 +233,7 @@ class WrappedTransportFailureClassificationTests(unittest.TestCase):
 
     def test_curl_markers_are_derived_not_hardcoded(self):
         """A second, drifting copy of the marker list is how this check rots."""
-        from sms_tool.error_classification import (
+        from sms_tool.kernel.error_classification import (
             CURL_TRANSPORT_MARKERS,
             NETWORK_ERROR_MARKERS,
         )

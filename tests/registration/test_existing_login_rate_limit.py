@@ -39,7 +39,7 @@ from unittest.mock import patch
 import pytest
 
 from sms_tool import auth_flow, registration_concurrency
-from sms_tool.error_classification import classify_error
+from sms_tool.kernel.error_classification import classify_error
 from sms_tool.registration_policy import registration_retry_decision
 
 

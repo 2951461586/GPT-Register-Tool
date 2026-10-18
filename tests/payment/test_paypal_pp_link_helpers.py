@@ -713,7 +713,7 @@ def test_reserve_billing_variant_writes_through_the_runtime_sandbox():
     Binding the resolved path at import time would freeze it to the real
     ``runtime/`` and defeat the autouse ``isolated_runtime`` fixture.
     """
-    from sms_tool import paths
+    from sms_tool.kernel import paths
 
     resolved = paths.runtime_file({}, "billing_address_cursor.json")
     assert resolved.name == "billing_address_cursor.json"

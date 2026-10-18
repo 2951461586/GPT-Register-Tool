@@ -24,7 +24,7 @@ from .account_terminal import text_has_account_deactivated
 from ..config import CFG
 from ..http_client import is_transient_transport_error
 from ..proxy_routing import proxy_pool_for
-from ..paths import runtime_file
+from ..kernel.paths import runtime_file
 from ..registration_state import _stored_registration_password
 from ..storage import (
     clear_stale_promotion_at_marker,

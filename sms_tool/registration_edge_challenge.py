@@ -30,7 +30,7 @@ from .operator_output import emit as _emit
 from .proxy_edge_probe import EDGE_UNKNOWN
 from .proxy_entry import rotate_session
 from .registration_flags import registration_flag
-from .sanitizer import describe_exception
+from .kernel.sanitizer import describe_exception
 
 _LOGGER = logging.getLogger(__name__)
 

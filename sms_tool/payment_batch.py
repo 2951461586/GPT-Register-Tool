@@ -17,8 +17,8 @@ from typing import Any, Callable
 from .account_seed import load_account_seed
 from .config import CFG
 from .cross_process_gate import CrossProcessSemaphore, GateTimeoutError
-from .sanitizer import sanitize as _canonical_sanitize, sanitize_text as _canonical_sanitize_text
-from .paths import runtime_file
+from .kernel.sanitizer import sanitize as _canonical_sanitize, sanitize_text as _canonical_sanitize_text
+from .kernel.paths import runtime_file
 from .payment_auth import ensure_payment_access_token, public_payment_auth_result
 from .payment_link_manager import (
     coerce_approve_country,

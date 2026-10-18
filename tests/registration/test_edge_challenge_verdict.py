@@ -29,8 +29,8 @@ from types import MappingProxyType
 from unittest.mock import Mock, patch
 
 from sms_tool import http_client
-from sms_tool.error_classification import classify_error, is_terminal_registration_error
-from sms_tool.failure_registry import FAILURE_CLASSES
+from sms_tool.kernel.error_classification import classify_error, is_terminal_registration_error
+from sms_tool.kernel.failure_registry import FAILURE_CLASSES
 from sms_tool.proxy_edge_probe import (
     BLOCKED,
     EDGE_CHALLENGE,

@@ -48,7 +48,7 @@ from unittest.mock import Mock, patch
 
 from sms_tool import registration, registration_handlers
 from sms_tool.account_creation import _is_user_already_exists
-from sms_tool.error_classification import classify_error
+from sms_tool.kernel.error_classification import classify_error
 from sms_tool.registration_handlers import RegistrationEmailWorkflow
 from sms_tool.registration_policy import registration_retry_decision
 from sms_tool.registration_runtime import RegistrationRuntimeState

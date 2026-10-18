@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any, Mapping
 
-from ..sanitizer import sanitize
+from ..kernel.sanitizer import sanitize
 
 
 def _mapping(value: Any) -> Mapping[str, Any]:

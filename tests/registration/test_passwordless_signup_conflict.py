@@ -42,7 +42,7 @@ from unittest.mock import Mock
 import pytest
 
 from sms_tool import registration_retry_guard
-from sms_tool.failure_registry import (
+from sms_tool.kernel.failure_registry import (
     PASSWORDLESS_SIGNUP_CODE,
     PASSWORDLESS_SIGNUP_MESSAGE_MARKER,
     is_passwordless_signup_mismatch,

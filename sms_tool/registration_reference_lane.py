@@ -39,7 +39,7 @@ from .operator_output import emit as _emit
 from . import registration_sentinel_stages as _sentinel_stages
 from .registration_flags import registration_flag
 from .registration_warmup import tz_offset_minutes
-from .sanitizer import describe_exception
+from .kernel.sanitizer import describe_exception
 
 _LOGGER = logging.getLogger(__name__)
 

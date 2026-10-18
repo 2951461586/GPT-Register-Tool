@@ -11,7 +11,7 @@ import json
 from . import dom_fields, form_steps, page_state
 
 from ...mailbox_service import MailboxService
-from ...error_classification import is_terminal_registration_error
+from ...kernel.error_classification import is_terminal_registration_error
 from ..base import BrowserRegistrationError
 from collections.abc import Mapping
 from contextlib import contextmanager

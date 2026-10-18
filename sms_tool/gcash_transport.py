@@ -10,7 +10,7 @@ from typing import Any, Mapping
 
 from .gcash_provider import GCashProviderError, GCashTransportRequest
 from .phone_proxy import normalize_proxy_url
-from .sanitizer import sanitize_text
+from .kernel.sanitizer import sanitize_text
 
 
 _BASE = "https://chatgpt.com/backend-api/payments"

@@ -10,7 +10,7 @@ import uuid
 from typing import Any, Callable
 
 from .config import CFG
-from .paths import runtime_file
+from .kernel.paths import runtime_file
 from .registration_concurrency import (
     RegistrationStageLease,
     acquire_registration_stage,
@@ -18,8 +18,8 @@ from .registration_concurrency import (
     registration_stage_metrics,
 )
 from .cross_process_gate import cross_process_write_lock
-from .sanitizer import sanitize as _sanitize, sanitize_text as _sanitize_text
-from .sanitizer import account_reference
+from .kernel.sanitizer import sanitize as _sanitize, sanitize_text as _sanitize_text
+from .kernel.sanitizer import account_reference
 from .registration_policy import registration_retry_decision
 from .telemetry import correlation_fields, current_run_id
 

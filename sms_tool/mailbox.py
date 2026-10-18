@@ -33,7 +33,7 @@ from collections.abc import Mapping
 from curl_cffi import requests as curl_requests
 
 from .config import ConfigInput, current_config_data, resolve_runtime_config
-from .paths import resolve_config_file
+from .kernel.paths import resolve_config_file
 from .providers import outlook_imap_client
 from .providers import mailbox_gmail
 from .mail_otp import (

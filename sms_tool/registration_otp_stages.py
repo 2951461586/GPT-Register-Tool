@@ -25,8 +25,8 @@ from typing import Any
 
 from .auth_state import otp_dispatch_verdict, passwordless_arm_armed
 from .operator_output import emit as _emit
-from .sanitizer import describe_exception
-from .failure_registry import (
+from .kernel.sanitizer import describe_exception
+from .kernel.failure_registry import (
     OTP_ARM_MISMATCH_MARKER,
     OTP_MAILBOX_SIDE_MARKER,
     OTP_NO_RESEND_MARKER,

@@ -58,7 +58,7 @@ class CorrelatedJsonFormatter(logging.Formatter):
     """One JSON envelope; sanitize both message arguments and exception text."""
 
     def format(self, record: logging.LogRecord) -> str:
-        from .sanitizer import sanitize, sanitize_log_text
+        from .kernel.sanitizer import sanitize, sanitize_log_text
         from .telemetry import correlation_fields
 
         payload = {
@@ -182,7 +182,7 @@ class HumanLogFormatter(logging.Formatter):
     """Operator log line: ``HH:MM:SS [*] [模块] 消息``, stage-aware, sanitized."""
 
     def format(self, record: logging.LogRecord) -> str:
-        from .sanitizer import sanitize_log_text
+        from .kernel.sanitizer import sanitize_log_text
 
         message = sanitize_log_text(super().format(record))
         stage_match = _STAGE_LINE.match(message)
@@ -287,11 +287,11 @@ def default_log_dir() -> Path:
     unnoticed for as long as ``configure_logging`` had zero callers.
     Resolve via ``runtime_dir`` so logs land in the git-ignored runtime tree.
     """
-    from .paths import PROJECT_ROOT
+    from .kernel.paths import PROJECT_ROOT
 
     try:
         from .config import current_config_data
-        from .paths import runtime_dir
+        from .kernel.paths import runtime_dir
 
         directory = runtime_dir(current_config_data()) / "logs"
     except Exception:  # pragma: no cover - defensive fallback only

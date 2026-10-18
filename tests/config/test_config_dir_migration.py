@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from sms_tool import paths
+from sms_tool.kernel import paths
 
 
 def _seed_root(root: Path) -> None:

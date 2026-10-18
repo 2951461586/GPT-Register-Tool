@@ -20,7 +20,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from sms_tool.accounts.account_cleanup import select_removable_accounts
-from sms_tool.paths import config_dir
+from sms_tool.kernel.paths import config_dir
 
 
 def _repo_root() -> Path:

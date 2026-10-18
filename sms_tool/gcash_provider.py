@@ -15,7 +15,7 @@ from typing import Any, Mapping, Protocol
 from urllib.parse import urlsplit
 
 from .checkout_contract import CheckoutRequestContract, CheckoutSessionContract, StripeCapabilityEvidence
-from .sanitizer import sanitize_text
+from .kernel.sanitizer import sanitize_text
 
 
 DEFAULT_GCASH_CUSTOM_PAYMENT_METHOD_ID = "cpmt_1TOgstC6h1nxGoI3WUVEY2cJ"

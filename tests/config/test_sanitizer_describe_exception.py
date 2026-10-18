@@ -17,7 +17,7 @@ policy rewording does not silently weaken the guarantee.
 
 from __future__ import annotations
 
-from sms_tool.sanitizer import describe_exception
+from sms_tool.kernel.sanitizer import describe_exception
 
 
 def test_describe_exception_keeps_the_type_name_for_diagnosability():

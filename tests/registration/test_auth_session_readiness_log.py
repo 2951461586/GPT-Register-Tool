@@ -358,7 +358,7 @@ class AuthSessionReadinessLogTests(unittest.TestCase):
         `[REDACTED]`。只断言 `record.getMessage()`（脱敏**前**）的测试照样全绿，
         而运维 grep 到的那一行再也分不出真假 —— 典型的假绿。
         """
-        from sms_tool.sanitizer import sanitize_log_text
+        from sms_tool.kernel.sanitizer import sanitize_log_text
 
         responses = [
             _Response(200, {"user": {}, "expires": "x"}),
@@ -387,7 +387,7 @@ class AuthSessionReadinessLogTests(unittest.TestCase):
         只能守住今天这几个名字，未来新增一个踩雷的字段它看不见 —— 而"未来
         新增字段"正是这类回归最常见的形态。
         """
-        from sms_tool.sanitizer import sanitize
+        from sms_tool.kernel.sanitizer import sanitize
 
         self._fetch([_Response(200, {"user": {}, "expires": "x"})], attempts=1)
         record = self._events()[0]

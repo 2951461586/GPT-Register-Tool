@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 from ..config import current_config_data, resolve_runtime_config
-from ..paths import project_path, runtime_file
+from ..kernel.paths import project_path, runtime_file
 from ..payment_catalog import (
     PAYMENT_METHODS as CATALOG_METHODS,
     normalize_payment_method as normalize_catalog_payment_method,
@@ -28,7 +28,7 @@ from ..payment_routing import (
     parse_proxy_pool,
     payment_proxy_pools as canonical_payment_proxy_pools,
 )
-from ..sanitizer import sanitize as _canonical_sanitize, sanitize_text as _canonical_sanitize_text
+from ..kernel.sanitizer import sanitize as _canonical_sanitize, sanitize_text as _canonical_sanitize_text
 
 
 def _offline_refusal(method: str, *, probe_only: bool = False) -> ValueError | None:

@@ -27,7 +27,7 @@ from ..operation_journal import PaymentOperationConflict, PaymentOperationStore
 from ..proxy_entry import parse_proxy
 from ..registration_preflight import CLOUDFLARE_CHALLENGE_MARKER
 from ..registration_funnel import combine_registration_funnels, summarize_registration_funnel
-from ..sanitizer import mask_account, sanitize_log_text
+from ..kernel.sanitizer import mask_account, sanitize_log_text
 from ..diagnostics import safe_print
 
 logger = logging.getLogger(__name__)
@@ -289,7 +289,7 @@ def check_registered_promotions(emails, workers=4, proxy=None, timeout=20, proxy
     ``accounts/account_payment_eligibility.py``.
     """
     from ..accounts.promotion_batch import refresh_promotion_statuses
-    from ..sanitizer import sanitize
+    from ..kernel.sanitizer import sanitize
 
     targets = unique_emails(emails)
     if not targets:

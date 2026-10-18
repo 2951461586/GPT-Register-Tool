@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Mapping
 from .config import ConfigError, current_config_data, resolve_runtime_config, validate_config
-from .paths import project_path, runtime_file
+from .kernel.paths import project_path, runtime_file
 from .payment_contracts import PaymentRequest, PaymentResult, payment_history_metadata
 from .payment_catalog import (
     PAYMENT_METHODS as CATALOG_METHODS,
@@ -49,7 +49,7 @@ from .payment_routing import (
     parse_proxy_pool,
     payment_proxy_pools as canonical_payment_proxy_pools,
 )
-from .sanitizer import sanitize as _canonical_sanitize, sanitize_text as _canonical_sanitize_text
+from .kernel.sanitizer import sanitize as _canonical_sanitize, sanitize_text as _canonical_sanitize_text
 from . import payment_egress
 
 

@@ -17,11 +17,11 @@ from typing import Any
 
 from .accounts.account_liveness import probe_account_liveness
 from .config import CFG
-from .error_classification import classify_error
+from .kernel.error_classification import classify_error
 from .registration_policy import registration_retry_decision
 from .registration_progress import registration_stage
 from .registration_result import build_registration_failure_result
-from .sanitizer import sanitize as _sanitize, sanitize_text as _sanitize_text
+from .kernel.sanitizer import sanitize as _sanitize, sanitize_text as _sanitize_text
 from .utils import _timing_summary
 
 

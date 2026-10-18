@@ -4,7 +4,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from sms_tool.accounts import account_scan
-from sms_tool.error_classification import classify_error
+from sms_tool.kernel.error_classification import classify_error
 
 
 class AccountScanTests(unittest.TestCase):

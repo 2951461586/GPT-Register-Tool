@@ -23,7 +23,7 @@ from .http_client import request_with_retry
 from .http_utils import _absolute_url
 from .mailbox import MailboxAccount, MailboxTokenExpiredError, _poll_email_otp, mailbox_has_inbox_credentials
 from .providers import mailbox_gmail
-from .sanitizer import sanitize_text
+from .kernel.sanitizer import sanitize_text
 from .storage import upsert_account
 # ``/about-you`` completion reuses the signup lane's own primitives instead of
 # re-deriving them: ``_create_account_continue_url`` already knows that an

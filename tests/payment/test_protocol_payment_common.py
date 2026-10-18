@@ -181,7 +181,7 @@ class ProtocolPaymentCommonTests(unittest.TestCase):
         """双端脱敏一致：protocol_core 的手搓规则集与 sms_tool.sanitizer
         （policy 驱动）对同一批秘密形状都要打码。规则漂移在此显形，而不是
         在某个子进程漏报密时。"""
-        from sms_tool.sanitizer import sanitize_text as sms_sanitize_text
+        from sms_tool.kernel.sanitizer import sanitize_text as sms_sanitize_text
 
         battery = [
             "access_token=eyJhbGciOiJSUzI1NiJ9.payload.signature-value",

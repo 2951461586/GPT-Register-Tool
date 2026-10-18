@@ -12,7 +12,7 @@ from . import endpoints
 from .codex_sentinel import import_cookie_header
 from .auth_headers import auth_impersonate, auth_user_agent
 from .config import CFG
-from .paths import runtime_file
+from .kernel.paths import runtime_file
 from .phone_proxy import (
     normalize_proxy_url,
     redact_proxy_text as _phone_redact_proxy_text,

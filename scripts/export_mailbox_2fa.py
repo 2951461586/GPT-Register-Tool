@@ -34,7 +34,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 DB = ROOT / "runtime" / "accounts.sqlite3"
-from sms_tool.paths import resolve_config_file  # noqa: E402
+from sms_tool.kernel.paths import resolve_config_file  # noqa: E402
 
 POOL_FILE = resolve_config_file(None)
 OUT_DIR = ROOT / "runtime" / "analysis"

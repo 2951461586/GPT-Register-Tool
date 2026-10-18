@@ -13,7 +13,7 @@ from curl_cffi import requests as curl_requests
 
 from .codex_export import build_codex_json
 from .config import CFG
-from .paths import output_dir
+from .kernel.paths import output_dir
 from .phone_proxy import normalize_proxy_url
 
 
@@ -613,6 +613,10 @@ def _chatgpt_user_id(access_token):
 
 def _token_expired(access_token):
     expires_at = _jwt_claims(access_token).get("exp")
+    if not isinstance(expires_at, (int, float, str)):
+        # Missing/None ``exp`` is not expired; the old code reached the same
+        # verdict through ``float(None)`` raising TypeError.
+        return False
     try:
         return float(expires_at) <= time.time()
     except (TypeError, ValueError):

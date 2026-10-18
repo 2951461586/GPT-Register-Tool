@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .helpers import read_email_file, unique_emails
-from ..sanitizer import account_reference, sanitize_text
+from ..kernel.sanitizer import account_reference, sanitize_text
 
 logger = logging.getLogger(__name__)
 

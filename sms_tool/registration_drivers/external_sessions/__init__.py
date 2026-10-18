@@ -2,7 +2,7 @@
 
 from typing import Any, Mapping
 
-from ...driver_env import driver_config as _driver_config
+from ...kernel.driver_env import driver_config as _driver_config
 from ..base import BROWSER_REGISTRATION_DRIVERS, BrowserRegistrationError, normalize_registration_driver
 from ..browser_session import PlaywrightBrowserSession, _playwright_proxy
 from .managed import (

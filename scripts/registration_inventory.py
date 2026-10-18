@@ -66,7 +66,7 @@ def main() -> None:
     pool_file = args.pool_file
     if pool_file is None:
         sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-        from sms_tool.paths import resolve_config_file
+        from sms_tool.kernel.paths import resolve_config_file
 
         pool_file = resolve_config_file(None)
     print(json.dumps({

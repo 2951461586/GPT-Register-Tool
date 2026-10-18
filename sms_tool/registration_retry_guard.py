@@ -9,11 +9,11 @@ from collections.abc import Mapping
 from contextlib import contextmanager
 from pathlib import Path
 
-from .failure_registry import PASSWORD_CLAIMED_MARKER
-from .paths import runtime_file
+from .kernel.failure_registry import PASSWORD_CLAIMED_MARKER
+from .kernel.paths import runtime_file
 from .cross_process_gate import cross_process_write_lock
 from .registration_policy import RETRYABLE_CLASSES, registration_retry_decision
-from .sanitizer import sanitize_text
+from .kernel.sanitizer import sanitize_text
 from typing import Any, cast
 
 

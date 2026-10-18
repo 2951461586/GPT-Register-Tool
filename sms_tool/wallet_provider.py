@@ -26,7 +26,7 @@ from .checkout_contract import (
     StripeCapabilityEvidence,
 )
 from .payment_capability import build_capability_probe_result
-from .sanitizer import sanitize_text as _canonical_sanitize_text
+from .kernel.sanitizer import sanitize_text as _canonical_sanitize_text
 
 
 _RUNTIME_VERSION = "6f8494a281"

@@ -1,5 +1,5 @@
 from sms_tool.diagnostics import SanitizingTextIO, safe_print
-from sms_tool.sanitizer import (
+from sms_tool.kernel.sanitizer import (
     POLICY_SCHEMA,
     SENSITIVE_POLICY,
     account_reference,

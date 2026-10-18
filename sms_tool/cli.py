@@ -10,9 +10,9 @@ from typing import Any
 from .config import CFG, initialize_runtime_config
 from .diagnostics import install_safe_stdio, safe_print
 from .desktop_ipc import emit_result
-from .paths import output_dir, runtime_file
+from .kernel.paths import output_dir, runtime_file
 from .registration_drivers.base import driver_choices
-from .sanitizer import sanitize_text
+from .kernel.sanitizer import sanitize_text
 
 
 class _LazyModule:

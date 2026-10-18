@@ -9,7 +9,7 @@ from curl_cffi import requests as curl_requests
 
 from .config import CFG
 from .codex_oauth import refresh_codex_oauth_session
-from .paths import output_dir
+from .kernel.paths import output_dir
 from .session_refresh import _load_seed_session, _session_token, refresh_session
 from .storage import _looks_codex_refresh_token, upsert_account
 from typing import Any

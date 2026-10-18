@@ -16,7 +16,7 @@ from .accounts.account_liveness import (
 )
 from .codex_export import build_codex_json
 from .config import CFG
-from .paths import output_dir
+from .kernel.paths import output_dir
 from .session_refresh import _load_seed_session
 from .storage import get_account_record, list_paypal_accounts, mark_quota_status, upsert_account
 from typing import Any

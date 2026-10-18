@@ -30,7 +30,7 @@ from typing import Any
 
 from .config import CFG
 from .cross_process_gate import CrossProcessSemaphore, GateTimeoutError
-from .paths import runtime_file
+from .kernel.paths import runtime_file
 
 
 _STAGE_GROUPS = {

@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Any, Mapping
 
-from ...paths import runtime_dir
+from ...kernel.paths import runtime_dir
 
 
 def _browser_profile_dir(driver: str, profile_id: str, config: Mapping[str, Any] | None = None) -> str:

@@ -20,7 +20,7 @@ POLICY_SCHEMA = "sensitive_policy.v1"
 
 @lru_cache(maxsize=1)
 def load_sensitive_policy(path: str | Path | None = None) -> Mapping[str, Any]:
-    source = Path(path).resolve() if path else Path(__file__).resolve().parent.parent / "sensitive_policy.json"
+    source = Path(path).resolve() if path else Path(__file__).resolve().parent.parent.parent / "sensitive_policy.json"
     value = json.loads(source.read_text(encoding="utf-8-sig"))
     if not isinstance(value, dict) or value.get("schema") != POLICY_SCHEMA:
         raise ValueError(

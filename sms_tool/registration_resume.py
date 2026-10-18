@@ -31,7 +31,7 @@ from .auth_headers import current_auth_fingerprint, set_auth_fingerprint
 from .operator_output import emit as _emit
 from .registration_protocol_helpers import _new_registration_session
 from .registration_state import RegistrationState
-from .sanitizer import describe_exception
+from .kernel.sanitizer import describe_exception
 
 _LOGGER = logging.getLogger(__name__)
 

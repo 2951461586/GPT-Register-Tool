@@ -29,7 +29,7 @@ if str(ROOT) not in sys.path:
 from sms_tool import proxy_registry as proxy_registry  # noqa: E402
 from sms_tool.config import load_merged_config  # noqa: E402
 from sms_tool.cross_process_gate import cross_process_write_lock  # noqa: E402
-from sms_tool.paths import runtime_file  # noqa: E402
+from sms_tool.kernel.paths import runtime_file  # noqa: E402
 from sms_tool.proxy_health import ProxyHealthTracker  # noqa: E402
 
 

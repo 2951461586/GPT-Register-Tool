@@ -24,7 +24,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
-from .paths import resolve_config_file
+from .kernel.paths import resolve_config_file
 
 
 def _check(name: str, status: str, detail: str = "", hint: str = "") -> dict[str, str]:

@@ -13,7 +13,7 @@ import re
 from pathlib import Path
 
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 ENV_PATH = PROJECT_ROOT / ".env"
 _PROJECT_ROOT = PROJECT_ROOT
 _ENV_PATH = ENV_PATH

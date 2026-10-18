@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Mapping
 from ..config import current_config_data
-from ..paths import runtime_file
+from ..kernel.paths import runtime_file
 from ..payment_errors import annotate_error
 from ..payment_catalog import (
     PAYMENT_METHODS as CATALOG_METHODS,

@@ -27,7 +27,7 @@ from .registration_outcome import needs_manual_session_recovery
 from .registration_result import build_registration_result
 from .registration_retry_guard import RegistrationRetryGuard
 from .registration_state import RegistrationState
-from .sanitizer import describe_exception
+from .kernel.sanitizer import describe_exception
 
 _LOGGER = logging.getLogger(__name__)
 
