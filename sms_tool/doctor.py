@@ -13,11 +13,15 @@ Statuses: ``ok`` / ``warn`` (optional dependency or non-blocking config gap) /
 
 from __future__ import annotations
 
+import importlib.metadata
+import importlib.util
 import os
 import shutil
 import subprocess
 import sys
 from collections.abc import Callable, Mapping
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from typing import Any
 
 from .paths import resolve_config_file
@@ -55,68 +59,96 @@ def _probe_node() -> dict[str, str]:
 
 
 def _probe_playwright() -> dict[str, str]:
+    """Presence + version, plus the browser cache, without importing the package.
+
+    Importing ``playwright.sync_api`` and starting it just to ask where chromium
+    lives cost ~200 ms on every ``--doctor`` (the desktop first-launch probe
+    included). The installed release is the evidence that matters, and the
+    browser directory is a filesystem fact; the engine still gets a real launch
+    on the first registration run.
+    """
     try:
-        from playwright.sync_api import sync_playwright
-    except Exception:
+        spec = importlib.util.find_spec("playwright")
+    except (ImportError, ValueError):
+        spec = None
+    if spec is None:
         return _check(
             "playwright", "fail", "package not installed",
             "python -m pip install playwright",
         )
+    version = _distribution_version("playwright") or "installed"
+    browsers = Path(os.environ.get("PLAYWRIGHT_BROWSERS_PATH") or _default_browsers_dir())
     try:
-        with sync_playwright() as playwright:
-            path = playwright.chromium.executable_path
-    except Exception as exc:  # noqa: BLE001
-        return _check("playwright", "fail", str(exc)[:160], "python -m playwright install chromium")
-    if path and os.path.isfile(path):
-        return _check("playwright", "ok", path)
+        has_chromium = browsers.is_dir() and any(
+            entry.name.startswith("chromium-") for entry in browsers.iterdir()
+        )
+    except OSError:
+        has_chromium = False
+    if has_chromium:
+        return _check("playwright", "ok", f"{version} ({browsers})")
     return _check(
-        "playwright", "fail", f"chromium executable missing: {path}",
+        "playwright", "fail", f"{version}; chromium not found under {browsers}",
         "python -m playwright install chromium",
     )
 
 
-def _probe_curl_cffi() -> dict[str, str]:
+def _default_browsers_dir() -> Path:
+    if os.name == "nt":
+        base = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
+        return Path(base) / "ms-playwright"
+    return Path.home() / ".cache" / "ms-playwright"
+
+
+def _distribution_version(distribution: str) -> str:
     try:
-        import curl_cffi
-    except Exception:
+        return importlib.metadata.version(distribution)
+    except importlib.metadata.PackageNotFoundError:
+        return ""
+
+
+def _probe_curl_cffi() -> dict[str, str]:
+    """Version gate only: 0.15/0.16 are the releases that carry the profile API.
+
+    The old probe additionally imported ``BrowserType``; that import (~180 ms)
+    proved only what the version already states, so the pin is the evidence.
+    """
+    try:
+        spec = importlib.util.find_spec("curl_cffi")
+    except (ImportError, ValueError):
+        spec = None
+    if spec is None:
         return _check(
             "curl_cffi", "fail", "package not installed",
             "python -m pip install 'curl_cffi>=0.15.0,<0.17'",
         )
-    version = str(getattr(curl_cffi, "__version__", "") or "")
-    ok_version = version.startswith(("0.15.", "0.16."))
-    if not ok_version:
+    version = _distribution_version("curl_cffi")
+    if not version.startswith(("0.15.", "0.16.")):
         return _check(
             "curl_cffi", "fail", f"version {version or 'unknown'}",
             "registration requires curl_cffi 0.15.x or 0.16.x (chrome146 TLS profile)",
         )
-    try:
-        from curl_cffi.requests.impersonate import BrowserType  # type: ignore
-
-        profile_ok = True
-    except Exception:
-        try:
-            from curl_cffi import BrowserType  # type: ignore
-
-            profile_ok = True
-        except Exception:
-            profile_ok = False
-    if not profile_ok:
-        return _check(
-            "curl_cffi", "fail", f"version {version} lacks the impersonation profile API",
-            "reinstall curl_cffi 0.15.x/0.16.x",
-        )
     return _check("curl_cffi", "ok", f"{version} (impersonation profiles available)")
 
 
-def _probe_import(name: str, display: str, purpose: str, *, required: bool) -> dict[str, str]:
+def _probe_import(
+    name: str,
+    display: str,
+    purpose: str,
+    *,
+    required: bool,
+    distribution: str = "",
+) -> dict[str, str]:
+    """Presence probe that does not execute the package's import side effects."""
     try:
-        __import__(name)
-        return _check(display, "ok", "installed")
-    except Exception:
-        status = "fail" if required else "warn"
-        hint = f"python -m pip install {name}" + ("" if required else f"  (only needed for {purpose})")
-        return _check(display, status, "not installed", hint)
+        spec = importlib.util.find_spec(name)
+    except (ImportError, ValueError):
+        spec = None
+    if spec is not None:
+        version = _distribution_version(distribution or name)
+        return _check(display, "ok", f"installed ({version})" if version else "installed")
+    status = "fail" if required else "warn"
+    hint = f"python -m pip install {name}" + ("" if required else f"  (only needed for {purpose})")
+    return _check(display, status, "not installed", hint)
 
 
 def _probe_requests() -> dict[str, str]:
@@ -346,15 +378,26 @@ def run_doctor(
         ("requests", _probe_requests),
         ("pyotp", lambda: _probe_import("pyotp", "pyotp", "TOTP 2FA enrollment", required=False)),
         ("qrcode", lambda: _probe_import("qrcode", "qrcode", "UPI QR rendering", required=False)),
-        ("nacl", lambda: _probe_import("nacl", "pynacl", "Agent Identity signing", required=False)),
+        ("nacl", lambda: _probe_import("nacl", "pynacl", "Agent Identity signing", required=False, distribution="pynacl")),
         # Advisory, and injectable like every other probe: it walks the whole
         # source tree, so tests must be able to stub it out.
         ("config_unread_keys", _probe_unread_config_keys),
     ]
     checks: list[dict[str, str]] = []
-    for name, probe in default_probes:
+
+    def run_probe(item: tuple[str, Callable[[], dict[str, str]]]) -> dict[str, str]:
+        name, probe = item
         override = (probes or {}).get(name)
-        checks.append(override() if override else probe())
+        try:
+            return override() if override else probe()
+        except Exception as exc:  # noqa: BLE001 - one broken probe must not kill the report
+            return _check(name, "warn", f"probe failed: {type(exc).__name__}")
+
+    # Probes are independent and dominated by I/O (subprocess, filesystem,
+    # metadata), so run them concurrently. ``map`` preserves the declaration
+    # order, which the console report and the tests rely on.
+    with ThreadPoolExecutor(max_workers=min(8, len(default_probes))) as pool:
+        checks.extend(pool.map(run_probe, default_probes))
     checks.extend(_probe_config(config or {}, config_source))
     failed = sum(1 for item in checks if item["status"] == "fail")
     warned = sum(1 for item in checks if item["status"] == "warn")
