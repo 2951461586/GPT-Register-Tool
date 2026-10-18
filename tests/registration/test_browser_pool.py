@@ -147,6 +147,9 @@ def test_session_yields_browser_and_keeps_process_alive():
     factory = RecordingFactory()
     pool = _pool(session_factory=factory)
     with pool.session(proxy="http://user:pw@1.2.3.4:8080") as (browser, slot):
+        # The pool's yield type is optional by construction (a resident lookup can
+        # miss); a real session always has one, so assert it here.
+        assert browser is not None
         assert browser is factory.browsers[0]
         assert slot.slot_id == 0
     # Real reuse: the process is NOT closed between accounts; only the
@@ -462,3 +465,75 @@ def test_pool_relaunches_when_browser_identity_changes():
     # Different profile_id -> clean relaunch carrying the new identity.
     assert len(factory.calls) == 2
     assert factory.calls[1]["browser_identity"] == {"driver": "camoufox", "profile_id": "a@b.com#2"}
+
+
+# --------------------------------------------------------------------------
+# Memory watchdog
+# --------------------------------------------------------------------------
+
+def _rss_pool(sampler, *, limit_mb: int = 100, **overrides) -> BrowserProcessPool:
+    config = {
+        "registration": {
+            "browser_process_pool": {
+                "enabled": True,
+                "max_concurrent": 2,
+                "max_total_rss_mb": limit_mb,
+            }
+        }
+    }
+    return BrowserProcessPool(config, rss_sampler=sampler, **overrides)
+
+
+def test_memory_cap_recycles_an_idle_resident():
+    factory = RecordingFactory()
+    pool = _rss_pool(lambda: 150.0, session_factory=factory)
+
+    with pool.session(proxy="http://a:1"):
+        pass
+    with pool.session(proxy="http://b:1"):
+        pass
+
+    assert len(factory.browsers) == 2, "the cap must force a fresh browser generation"
+    assert factory.browsers[0].process_closed is True
+
+
+def test_memory_cap_is_disabled_by_default():
+    factory = RecordingFactory()
+
+    def _never_call():
+        raise AssertionError("the sampler must not run while the cap is off")
+
+    pool = BrowserProcessPool(
+        {"registration": {"browser_process_pool": {"enabled": True, "max_concurrent": 2}}},
+        session_factory=factory,
+        rss_sampler=_never_call,
+    )
+    with pool.session(proxy="http://a:1"):
+        pass
+    assert len(factory.browsers) == 1
+
+
+def test_memory_cap_keeps_a_healthy_pool_untouched():
+    factory = RecordingFactory()
+    pool = _rss_pool(lambda: 50.0, session_factory=factory)
+
+    with pool.session(proxy="http://a:1"):
+        pass
+    with pool.session(proxy="http://a:1"):
+        pass
+
+    assert len(factory.browsers) == 1, "under the cap the resident must be reused"
+    assert factory.browsers[0].process_closed is False
+
+
+def test_stats_reports_the_measurement_only_when_the_cap_is_on():
+    pool = _rss_pool(lambda: 42.5, session_factory=RecordingFactory())
+    assert pool.stats["max_total_rss_mb"] == 100
+    assert pool.stats["rss_mb"] == 42.5
+
+    off = BrowserProcessPool(
+        {"registration": {"browser_process_pool": {"enabled": True}}},
+        session_factory=RecordingFactory(),
+        rss_sampler=lambda: 42.5,
+    )
+    assert off.stats["rss_mb"] is None

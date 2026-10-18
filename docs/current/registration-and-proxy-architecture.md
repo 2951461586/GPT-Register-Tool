@@ -199,7 +199,8 @@ Sentinel 不是纯 Python PoW，而是调用**真实 Node SDK**：
 
 全部 4 个浏览器驱动共享同一个**常驻进程池**（`browser_pool.py`），非每驱动各开各的：
 
-- `PoolConfig`（`browser_pool.py:62`）：`max_concurrent`（默认 4）/ `max_uses_per_process`（默认 10）/ `recycle_on_error`（默认 true）。
+- `PoolConfig`（`browser_pool.py:62`）：`max_concurrent`（默认 4）/ `max_uses_per_process`（默认 10）/ `recycle_on_error`（默认 true）/ `max_total_rss_mb`（默认 0 = 关闭）。
+- 内存看门狗：`max_total_rss_mb > 0` 时，每次取槽位前用 psutil 汇总当前进程所有子进程（浏览器 + renderer）的 RSS；超过上限就回收一个**空闲且最久未使用**的槽位，没有空闲槽位则回收当前槽位。它是回收触发器，不是硬性 kill；采样失败只降级为“本次不测量”。`stats` 在该开关开启时才返回 `rss_mb`。
 - config 键**故意叫 `registration.browser_process_pool`**（`config.json:293`），**不叫 `browser_pool`**——后者是 `proxy_routing` 里的代理别名，二者无关（`browser_pool.py:70` 注释明确）。
 - 进程级回收：达到 `max_uses_per_process`、出错（`recycle_on_error`）或代理变更时，该槽位进程回收重建（`browser_pool.py:156`）。默认 `max_concurrent:4` 与脉冲 `wave_size:4` 对齐。
 

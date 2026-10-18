@@ -64,6 +64,11 @@ class PoolConfig:
     max_concurrent: int = 4
     max_uses_per_process: int = 10
     recycle_on_error: bool = True
+    #: Total RSS ceiling for every browser descendant process, in MB. 0 disables
+    #: the watchdog. A browser generation is recycled when the pool's whole
+    #: process tree crosses it; the slot itself is healthy, so only a memory
+    #: leak (or an unexpectedly heavy page) reaches this.
+    max_total_rss_mb: int = 0
 
     @classmethod
     def from_config(cls, config: Mapping[str, Any]) -> "PoolConfig":
@@ -81,6 +86,7 @@ class PoolConfig:
             max_concurrent=max(1, _coerce_int(pool_cfg.get("max_concurrent"), 4)),
             max_uses_per_process=max(1, _coerce_int(pool_cfg.get("max_uses_per_process"), 10)),
             recycle_on_error=bool(pool_cfg.get("recycle_on_error", True)),
+            max_total_rss_mb=max(0, _coerce_int(pool_cfg.get("max_total_rss_mb"), 0)),
         )
 
 
@@ -91,6 +97,34 @@ def _coerce_int(value: Any, default: int) -> int:
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def _browser_footprint_mb() -> float:
+    """Best-effort RSS of every descendant process (browser + renderers).
+
+    The pool cannot name the browser's PID portably: Playwright and Camoufox
+    expose different handles, and a browser is a tree, not a process. Summing
+    the current process's descendants is the portable approximation, and it is
+    only used as a recycling trigger -- never as a hard kill.
+
+    ``psutil`` is a declared runtime dependency, but a broken install must not
+    turn a memory diagnostic into a registration failure: any failure returns
+    0, which disables the check for that acquire.
+    """
+    try:
+        import psutil
+    except ImportError:  # pragma: no cover - requirements.txt declares it
+        return 0.0
+    try:
+        total = 0
+        for child in psutil.Process().children(recursive=True):
+            try:
+                total += child.memory_info().rss
+            except psutil.Error:
+                continue
+        return total / (1024 * 1024)
+    except Exception:  # noqa: BLE001 - advisory measurement only
+        return 0.0
 
 
 class BrowserProcessPool:
@@ -115,8 +149,10 @@ class BrowserProcessPool:
         locale: str = "en-US",
         timezone_id: str = "America/New_York",
         session_factory: Callable[..., Any] = create_browser_session,
+        rss_sampler: Callable[[], float] | None = None,
     ) -> None:
         self.pool_config = PoolConfig.from_config(config)
+        self.rss_sampler = rss_sampler or _browser_footprint_mb
         self.driver = driver
         self.config = config
         self.proxy = proxy
@@ -177,6 +213,7 @@ class BrowserProcessPool:
 
         requested_proxy = session_overrides.get("proxy", self.proxy)
         slot = self._acquire_slot(requested_proxy)
+        self._enforce_memory_cap(slot)
         requested_identity = session_overrides.get("browser_identity") or None
         try:
             resident = self._residents.get(slot.slot_id)
@@ -227,13 +264,18 @@ class BrowserProcessPool:
                     }
                     renew(**per_account)
                 except Exception:
-                    try:
-                        resident.close()
-                    except Exception as exc:
-                        self._log.warning(
-                            "resident close failed after renew error slot=%s: %s",
-                            slot.slot_id, exc,
-                        )
+                    # A resident can disappear between the lookup and this close
+                    # (a concurrent memory recycle pops it); treat that as the
+                    # relaunch it is about to become.
+                    if resident is not None:
+                        try:
+                            resident.close()
+                        except Exception as exc:
+                            self._log.warning(
+                                "resident close failed after renew error slot=%s: %s",
+                                slot.slot_id,
+                                exc,
+                            )
                     self._residents.pop(slot.slot_id, None)
                     self._resident_proxy.pop(slot.slot_id, None)
                     self._resident_identity.pop(slot.slot_id, None)
@@ -336,6 +378,57 @@ class BrowserProcessPool:
             slot.in_use = True
             return slot
 
+    def _sample_rss_mb(self) -> float:
+        """Current browser-tree RSS, or 0 when the sample cannot be taken.
+
+        A sampler is advisory: a broken ``psutil`` install, a permission error
+        or a test double returning junk must degrade to "no measurement", never
+        to a failed registration or a stats() crash.
+        """
+        try:
+            return float(self.rss_sampler() or 0.0)
+        except Exception as exc:  # noqa: BLE001 - advisory measurement only
+            self._log.debug("browser rss sample failed: %s", exc)
+            return 0.0
+
+    def _enforce_memory_cap(self, slot: BrowserSlot) -> None:
+        """Recycle a resident when the browser process tree grows past the cap.
+
+        The victim is an idle least-recently-used slot when one exists, because
+        the caller's own slot is the one about to be used; otherwise the caller's
+        slot is recycled (its resident is removed, so the normal relaunch path
+        rebuilds it). Removal happens under the pool lock so a concurrent
+        acquire sees "no resident" and relaunches instead of reusing a process
+        we are about to close.
+        """
+        limit = self.pool_config.max_total_rss_mb
+        if limit <= 0:
+            return
+        rss_mb = self._sample_rss_mb()
+        if rss_mb <= limit:
+            return
+        with self._lock:
+            idle = [
+                candidate
+                for candidate in self._slots
+                if not candidate.in_use and candidate.slot_id in self._residents
+            ]
+            victim = min(idle, key=lambda candidate: candidate.last_used) if idle else slot
+            resident = self._residents.pop(victim.slot_id, None)
+            self._resident_proxy.pop(victim.slot_id, None)
+            self._resident_identity.pop(victim.slot_id, None)
+        self._log.warning(
+            "browser pool memory %s MB exceeds cap %s MB; recycling slot=%s",
+            round(rss_mb, 1),
+            limit,
+            victim.slot_id,
+        )
+        if resident is not None:
+            try:
+                resident.close()
+            except Exception as exc:  # noqa: BLE001 - a failed close must not mask the recycle
+                self._log.warning("resident close failed during memory recycle slot=%s: %s", victim.slot_id, exc)
+
     def _release_slot(self, slot: BrowserSlot) -> None:
         with self._lock:
             slot.in_use = False
@@ -354,6 +447,10 @@ class BrowserProcessPool:
                 "enabled": self.pool_config.enabled,
                 "max_concurrent": self.pool_config.max_concurrent,
                 "max_uses_per_process": self.pool_config.max_uses_per_process,
+                "max_total_rss_mb": self.pool_config.max_total_rss_mb,
+                "rss_mb": round(self._sample_rss_mb(), 1)
+                if self.pool_config.max_total_rss_mb > 0
+                else None,
                 "resident_browsers": len(self._residents),
                 "slots": [
                     {

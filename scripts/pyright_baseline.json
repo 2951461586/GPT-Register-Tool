@@ -22,7 +22,6 @@
     "sms_tool/accounts/account_scan.py": 32,
     "sms_tool/accounts/recovery_batch.py": 2,
     "sms_tool/accounts/wham_usage.py": 1,
-    "sms_tool/browser_pool.py": 1,
     "sms_tool/commands/one_click.py": 10,
     "sms_tool/cross_process_gate.py": 5,
     "sms_tool/mailbox_parsers.py": 1,
@@ -128,7 +127,6 @@
     "tests/proxy/test_proxy_routing_config.py": 3,
     "tests/proxy/test_proxy_selection.py": 5,
     "tests/registration/test_auth_headers_and_classification.py": 3,
-    "tests/registration/test_browser_pool.py": 2,
     "tests/registration/test_codex_oauth.py": 5,
     "tests/registration/test_existing_login_csrf_session.py": 1,
     "tests/registration/test_existing_login_password_probe.py": 1,
@@ -165,5 +163,5 @@
     "tests/workbench/test_cli_registration_driver.py": 1,
     "tests/workbench/test_operator_output.py": 1
   },
-  "total": 858
+  "total": 855
 }
