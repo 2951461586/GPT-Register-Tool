@@ -230,8 +230,13 @@ class BothOrchestrationsAreWiredTests(unittest.TestCase):
         # other unchecked -- exactly the "wired into one path only" failure this
         # class exists to catch.
         source = inspect.getsource(registration_handlers) + inspect.getsource(registration_resume)
-        settled = source.count("self._set_outcome()")
-        exchanged = source.count("self.obtain_oauth_refresh_token()")
+        # The resumed path's stage functions take the workflow instance as a
+        # ``workflow`` parameter (2026-10-18 de-self rename); the fresh path is
+        # still a method on the class, so both spellings count.
+        settled = source.count("self._set_outcome()") + source.count("workflow._set_outcome()")
+        exchanged = source.count("self.obtain_oauth_refresh_token()") + source.count(
+            "workflow.obtain_oauth_refresh_token()"
+        )
 
         self.assertEqual(settled, 2)
         self.assertEqual(

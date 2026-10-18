@@ -3,11 +3,13 @@
 Split out of ``registration_handlers`` (2026-10-01, following the
 ``registration_finalize`` precedent): the send / wait / validate trio plus the
 two diagnostics that decide *why* a code never arrived form one cohesive unit.
-They are module-level functions whose first parameter is the workflow instance,
-so the class keeps thin delegates and no caller (or test) changes.
+They are module-level functions that take the workflow instance as their first
+parameter, named ``workflow`` and annotated with ``RegistrationEmailWorkflow``
+under ``TYPE_CHECKING``, so the class keeps thin delegates and no caller (or
+test) changes.
 
 The bodies are moved verbatim. They reach the workflow only through the public
-seam (``self.r`` / ``self.runtime`` / ``self.config`` and the
+seam (``workflow.r`` / ``workflow.runtime`` / ``workflow.config`` and the
 ``_password_lane_active`` / ``_otp_poll_timeout`` / ``_otp_timeout_error`` /
 ``_abort`` collaborators), never by importing ``registration_handlers``, so
 this module cannot form an import cycle.
@@ -21,7 +23,7 @@ import re
 import time
 import uuid
 from collections.abc import Mapping as MappingABC
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .auth_state import otp_dispatch_verdict, passwordless_arm_armed
 from .operator_output import emit as _emit
@@ -34,10 +36,13 @@ from .kernel.failure_registry import (
 from .registration_protocol_helpers import _safe_int, registration_flag
 from .otp_strategy import otp_resend_eligible
 
+if TYPE_CHECKING:  # pragma: no cover - import cycle guard for type checkers only
+    from .registration_handlers import RegistrationEmailWorkflow
+
 _LOGGER = logging.getLogger(__name__)
 
 
-def _otp_navigation_headers_enabled(self: Any) -> bool:
+def _otp_navigation_headers_enabled(workflow: RegistrationEmailWorkflow) -> bool:
     """``registration.otp_navigation_headers`` (default **False**).
 
     turb sends ``sec-fetch-site: same-origin`` + ``sec-fetch-user: ?1`` on the
@@ -47,10 +52,10 @@ def _otp_navigation_headers_enabled(self: Any) -> bool:
     lesson for the password page (2026-10-07 scan P1-A), so the OTP send gets
     the same treatment as its own single-variable switch.
     """
-    return registration_flag(self.config, "otp_navigation_headers", False)
+    return registration_flag(workflow.config, "otp_navigation_headers", False)
 
 
-def _otp_validate_sentinel_enabled(self: Any) -> bool:
+def _otp_validate_sentinel_enabled(workflow: RegistrationEmailWorkflow) -> bool:
     """``registration.otp_validate_sentinel`` (default **False**).
 
     turb mints a fresh ``authorize_continue`` Sentinel and attaches it (plus its
@@ -59,10 +64,10 @@ def _otp_validate_sentinel_enabled(self: Any) -> bool:
     This repo passes ``use_sentinel=False`` there.  Single variable: it only
     decides whether the validate request carries the pair.
     """
-    return registration_flag(self.config, "otp_validate_sentinel", False)
+    return registration_flag(workflow.config, "otp_validate_sentinel", False)
 
 
-def _otp_external_url_branch_enabled(self: Any) -> bool:
+def _otp_external_url_branch_enabled(workflow: RegistrationEmailWorkflow) -> bool:
     """``registration.otp_external_url_branch`` (default **False**).
 
     After a successful ``email-otp/validate`` the server's own answer decides
@@ -72,10 +77,10 @@ def _otp_external_url_branch_enabled(self: Any) -> bool:
     POSTing it anyway "会触发 invalid_auth_step".  This repo has no such branch
     (the stage list always runs ``create_account``), so this toggle adds it.
     """
-    return registration_flag(self.config, "otp_external_url_branch", False)
+    return registration_flag(workflow.config, "otp_external_url_branch", False)
 
 
-def _passwordless_explicit_send_otp_enabled(self: Any) -> bool:
+def _passwordless_explicit_send_otp_enabled(workflow: RegistrationEmailWorkflow) -> bool:
     """``registration.passwordless_explicit_send_otp`` (default **True** since 2026-10-11).
 
     Live, same exit (IN), fresh addresses: 5/5 explicit registrations versus 1/5
@@ -91,22 +96,22 @@ def _passwordless_explicit_send_otp_enabled(self: Any) -> bool:
     -- and nothing else on ``/api/accounts`` in between.  Single variable: only
     whether that POST is made.
     """
-    return registration_flag(self.config, "passwordless_explicit_send_otp", True)
+    return registration_flag(workflow.config, "passwordless_explicit_send_otp", True)
 
 
-def _explicit_passwordless_send(self: Any) -> Any:
+def _explicit_passwordless_send(workflow: RegistrationEmailWorkflow) -> Any:
     """POST ``passwordless/send-otp`` the way the browser's verification page does."""
-    r = self.r
-    s = self.runtime
+    r = workflow.r
+    s = workflow.runtime
     # Mechanism line for ``p3-1-passwordless-explicit-send-otp``: unconditional
     # inside the toggle's branch so the A/B gate can see the arm.
     _emit(_LOGGER, "  Passwordless explicit send-otp")
     try:
-        issued = self._issue_sentinel("authorize_continue", force_fresh=True)
+        issued = workflow._issue_sentinel("authorize_continue", force_fresh=True)
     except Exception as exc:
         # Falling back to the assumed pre-send would silently turn this arm into
         # the default one, so the arm fails instead.
-        self._abort(f"email_otp_send_failed:sentinel_unavailable:{describe_exception(exc)}")
+        workflow._abort(f"email_otp_send_failed:sentinel_unavailable:{describe_exception(exc)}")
     referer = f"{s.auth_base}/email-verification"
     headers = {
         **s.base_headers,
@@ -167,9 +172,9 @@ _SEND_MODE_ENUM = frozenset({"passwordless_signup", "passwordless_login", "login
 _SEND_ERROR_CODE_RE = re.compile(r"[a-z0-9_.\-]{1,64}")
 
 
-def send_email_otp(self: Any) -> None:
-    r = self.r
-    s = self.runtime
+def send_email_otp(workflow: RegistrationEmailWorkflow) -> None:
+    r = workflow.r
+    s = workflow.runtime
     # Do NOT snapshot here.  The pre-OTP baseline is taken once in
     # ``_bootstrap``; re-snapshotting at this point would be a race --
     # passwordless sends the OTP during ``auth_flow``, so the code mail can
@@ -177,9 +182,9 @@ def send_email_otp(self: Any) -> None:
     # hiding it from ``_latest_email_otp_candidate``.
     continue_url = r._email_otp_send_url(s.reg_data)
     otp_send_started = _safe_int(time.time())
-    if not self._password_lane_active() and _passwordless_explicit_send_otp_enabled(self):
-        response = _explicit_passwordless_send(self)
-    elif not self._password_lane_active():
+    if not workflow._password_lane_active() and _passwordless_explicit_send_otp_enabled(workflow):
+        response = _explicit_passwordless_send(workflow)
+    elif not workflow._password_lane_active():
         # authorize with login_hint sends the first OTP itself. Do not
         # immediately POST resend: that endpoint is rate-limited for this
         # flow and the reference browser path only polls the pre-sent code.
@@ -190,7 +195,7 @@ def send_email_otp(self: Any) -> None:
         )
     else:
         otp_send_headers = s.base_headers
-        if _otp_navigation_headers_enabled(self):
+        if _otp_navigation_headers_enabled(workflow):
             # Mechanism line for ``p1-15-otp-navigation-headers``: unconditional
             # inside the toggle's branch (the send only runs on the password
             # lane), so the A/B mechanism gate can see the arm.
@@ -208,24 +213,25 @@ def send_email_otp(self: Any) -> None:
     dump = r._fetch_client_auth_session_dump(s.session, s.auth_base, s.base_headers, "after_otp_send")
     s.otp_send_dump = dump if isinstance(dump, dict) else {}
     if response is None:
-        self._abort("email_otp_send_missing_continue_url")
+        workflow._abort("email_otp_send_missing_continue_url")
     status_code = getattr(response, "status_code", 0)
     if status_code not in (200, 202, 204):
-        self._abort(f"email_otp_send_failed:{status_code}")
+        workflow._abort(f"email_otp_send_failed:{status_code}")
     s.otp_issued_after = otp_send_started
     if s.registration_mode == "passwordless" and r._json_or_raw(response).get("assumed_pre_sent"):
         s.otp_issued_after = max(0, s.auth_flow_started - 5)
 
 
-def _reference_lane_polls_anyway(self: Any) -> bool:
-    probe = getattr(self, "_reference_lane_active", None)
+def _reference_lane_polls_anyway(workflow: RegistrationEmailWorkflow) -> bool:
+    probe = getattr(workflow, "_reference_lane_active", None)
     return bool(callable(probe) and probe() is True)
 
 
-def wait_email_otp(self: Any) -> None:
-    r = self.r
-    s = self.runtime
-    email_cfg = self.config.get("email_registration", {})
+def wait_email_otp(workflow: RegistrationEmailWorkflow) -> None:
+    r = workflow.r
+    s = workflow.runtime
+    config = workflow.config if isinstance(workflow.config, MappingABC) else {}
+    email_cfg = config.get("email_registration", {})
     # RuntimeConfig freezes nested sections as MappingProxyType. Keep the
     # operator's OTP timeout/resend settings instead of silently replacing the
     # whole section with defaults.
@@ -237,7 +243,7 @@ def wait_email_otp(self: Any) -> None:
     #
     # 单独一个错误名而不是给 ``email_otp_poll_timeout`` 加后缀：这条路径
     # **根本没轮询**，说「poll timeout」会让日志撒谎。
-    if otp_dispatch_verdict(s.otp_send_dump) == "stuck" and _reference_lane_polls_anyway(self):
+    if otp_dispatch_verdict(s.otp_send_dump) == "stuck" and _reference_lane_polls_anyway(workflow):
         # 2026-10-12 lane5：三个被本判据止损的地址，邮箱里**都**收到了验证码邮件
         # （04:41–04:42），而此时 ``user/register`` 已 200、地址已被消耗。参考项目
         # 从不读这个标记，发完 OTP 直接轮询邮箱。lane 下 pending 因此不是「码不会来」
@@ -248,16 +254,16 @@ def wait_email_otp(self: Any) -> None:
         # 注册架在了 passwordless 验证臂上。这是**事务臂**证据，不是出口证据 ——
         # 换出口改不了服务端选臂，所以错误串带 ``arm_mismatch`` 后缀，
         # ``registration_pulse._is_otp_ban_signal`` 据此不把它算作派发侧封禁。
-        arm_mismatch = self._password_lane_active() and passwordless_arm_armed(s.otp_send_dump)
+        arm_mismatch = workflow._password_lane_active() and passwordless_arm_armed(s.otp_send_dump)
         reason = (
             "the server armed a passwordless arm on the password lane" if arm_mismatch else "skipping the mailbox poll"
         )
         _emit(_LOGGER, "  Email OTP send is still pending on the server; %s", reason)
-        self._abort(f"email_otp_send_stuck:{OTP_ARM_MISMATCH_MARKER}" if arm_mismatch else "email_otp_send_stuck")
+        workflow._abort(f"email_otp_send_stuck:{OTP_ARM_MISMATCH_MARKER}" if arm_mismatch else "email_otp_send_stuck")
     s.email_code = r.otp_poll.poll(
         s.mailbox,
         subject_keyword=r.otp_poll.subject_keywords,
-        timeout=self._otp_poll_timeout(),
+        timeout=workflow._otp_poll_timeout(),
         issued_after_unix=s.otp_issued_after,
         proxy=s.proxy,
         resend_callback=lambda: r.otp_poll.resend(
@@ -271,16 +277,16 @@ def wait_email_otp(self: Any) -> None:
         poll_otp_fn=s.mailbox_service.poll_otp,
     )
     if not s.email_code:
-        self._abort(self._otp_timeout_error())
+        workflow._abort(workflow._otp_timeout_error())
 
 
-def _otp_provider(self: Any) -> str:
+def _otp_provider(workflow: RegistrationEmailWorkflow) -> str:
     """当前邮箱渠道名；拿不到就是空串（空串不在重发名单里 ⇒ 判「无重发」）。"""
-    mailbox = getattr(self.runtime, "mailbox", None)
+    mailbox = getattr(workflow.runtime, "mailbox", None)
     return str(getattr(mailbox, "provider", "") or "").strip().lower()
 
 
-def _otp_timeout_error(self: Any) -> str:
+def _otp_timeout_error(workflow: RegistrationEmailWorkflow) -> str:
     """``email_otp_poll_timeout`` 加后缀，说明**码为什么没到**。
 
     脉冲调度（``registration_pulse``）把「一轮里 OTP 失败聚集」当成出口被
@@ -314,9 +320,9 @@ def _otp_timeout_error(self: Any) -> str:
     ``registration_pulse._detect_ip_ban`` 的整轮一致性决定（每个账号钉在池里
     各自的出口上，一轮里有账号拿到码就证明出口是通的）。
     """
-    if otp_dispatch_verdict(self.runtime.otp_send_dump) == "dispatched":
+    if otp_dispatch_verdict(workflow.runtime.otp_send_dump) == "dispatched":
         suffix = OTP_MAILBOX_SIDE_MARKER
-        if not otp_resend_eligible(self._otp_provider()):
+        if not otp_resend_eligible(workflow._otp_provider()):
             suffix = f"{suffix}:{OTP_NO_RESEND_MARKER}"
         return f"email_otp_poll_timeout:{suffix}"
     return "email_otp_poll_timeout"
@@ -353,17 +359,17 @@ def _external_url_after_otp(otp_data: Any) -> str:
     return ""
 
 
-def validate_email_otp(self: Any) -> None:
-    r = self.r
-    s = self.runtime
+def validate_email_otp(workflow: RegistrationEmailWorkflow) -> None:
+    r = workflow.r
+    s = workflow.runtime
     use_sentinel = False
     sentinel_data = s.sentinel_data
-    if _otp_validate_sentinel_enabled(self):
+    if _otp_validate_sentinel_enabled(workflow):
         # Mechanism line for ``p1-16-otp-validate-sentinel``: unconditional
         # inside the toggle's branch.
         _emit(_LOGGER, "  OTP validate sentinel")
         try:
-            issued = self._issue_sentinel("authorize_continue", force_fresh=True)
+            issued = workflow._issue_sentinel("authorize_continue", force_fresh=True)
             sentinel_data = {"sentinel_token": issued.token, "sentinel_so_token": issued.so_token}
             use_sentinel = True
         except Exception as exc:
@@ -405,8 +411,8 @@ def validate_email_otp(self: Any) -> None:
             s.base_headers,
             "after_otp_validate_failed",
         )
-        self._abort(f"email_otp_validate:{json.dumps(s.otp_data, ensure_ascii=False)[:300]}")
-    if _otp_external_url_branch_enabled(self):
+        workflow._abort(f"email_otp_validate:{json.dumps(s.otp_data, ensure_ascii=False)[:300]}")
+    if _otp_external_url_branch_enabled(workflow):
         # Mechanism line for ``p1-17-otp-external-url-branch``: unconditional
         # inside the toggle's branch (the branch itself only fires on the shape).
         _emit(_LOGGER, "  OTP external_url branch")

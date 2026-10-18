@@ -13,9 +13,11 @@ creation and session/AT verification stages:
 * ``fetch_auth_session`` -- NextAuth session fetch and existing-account login fallback
 * ``probe_access_token`` -- post-session access token validation probe
 
-Collaborators are reached via the workflow instance ``self`` (its ``runtime``,
-``r`` operations interface, and delegating methods), never by importing
-``registration_handlers``, avoiding any import cycle.
+Collaborators are reached via the workflow instance passed as ``workflow`` (its
+``runtime``, ``r`` operations interface, and delegating methods), never by
+importing ``registration_handlers`` at runtime, avoiding any import cycle. The
+parameter is annotated with ``RegistrationEmailWorkflow`` under ``TYPE_CHECKING``
+so the type checker validates every attribute and delegate the stages touch.
 """
 
 from __future__ import annotations
@@ -23,7 +25,7 @@ from __future__ import annotations
 import json
 import logging
 import time
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from curl_cffi import requests as curl_requests
 
@@ -43,13 +45,16 @@ from .registration_retry_guard import RegistrationRetryGuard
 from .kernel.sanitizer import account_reference, describe_exception
 from .telemetry import current_run_id
 
+if TYPE_CHECKING:  # pragma: no cover - import cycle guard for type checkers only
+    from .registration_handlers import RegistrationEmailWorkflow
+
 #: Keep the ``sms_tool.registration_handlers`` logger channel so ``sms_tool.log``
 #: category tagging (``注册``) and ``assertLogs("sms_tool.registration_handlers")``
 #: contract tests observe the same stream after the module split.
 _LOGGER = logging.getLogger("sms_tool.registration_handlers")
 
 
-def prime_about_you_page_enabled(self: Any) -> bool:
+def prime_about_you_page_enabled(workflow: RegistrationEmailWorkflow) -> bool:
     """``registration.prime_about_you_page`` (default **False**).
 
     **Why this exists.**  ``create_account`` POSTs with
@@ -68,10 +73,10 @@ def prime_about_you_page_enabled(self: Any) -> bool:
     unexpected landing is reported, never raised, so this cannot turn a
     healthy stage into a new failure mode.
     """
-    return registration_flag(self.config, "prime_about_you_page", False)
+    return registration_flag(workflow.config, "prime_about_you_page", False)
 
 
-def prime_about_you_page(self: Any) -> None:
+def prime_about_you_page(workflow: RegistrationEmailWorkflow) -> None:
     """GET ``/about-you`` so the profile-page state exists before the POST.
 
     Only the navigation gap turb closes with ``navigate_about_you``; the
@@ -80,9 +85,9 @@ def prime_about_you_page(self: Any) -> None:
     the POST's own verdict is the contract, and a failed prime must not
     abort a stage that works without it.
     """
-    s = self.runtime
+    s = workflow.runtime
     try:
-        response = self.r._follow_continue_url(
+        response = workflow.r._follow_continue_url(
             s.session,
             f"{s.auth_base}/about-you",
             s.base_headers,
@@ -96,7 +101,7 @@ def prime_about_you_page(self: Any) -> None:
         _emit(_LOGGER, "  About you page prime warning: %s", describe_exception(exc))
 
 
-def create_account_disallowed_backoff_delays(self: Any) -> tuple[int, ...]:
+def create_account_disallowed_backoff_delays(workflow: RegistrationEmailWorkflow) -> tuple[int, ...]:
     """Bounded retry delays for ``registration_disallowed`` on create_account.
 
     ``registration.create_account_disallowed_backoff`` (default **False**).
@@ -119,14 +124,14 @@ def create_account_disallowed_backoff_delays(self: Any) -> tuple[int, ...]:
     fails -- the toggle changes *when* the verdict is reached, never *what*
     it eventually says.
     """
-    if not registration_flag(self.config, "create_account_disallowed_backoff", False):
+    if not registration_flag(workflow.config, "create_account_disallowed_backoff", False):
         return ()
     return (8, 20, 45)
 
 
-def create_account(self: Any) -> None:
-    r = self.r
-    s = self.runtime
+def create_account(workflow: RegistrationEmailWorkflow) -> None:
+    r = workflow.r
+    s = workflow.runtime
     # ``RegistrationRuntimeState`` attaches its flat fields from the group
     # dataclasses at import time (see ``registration_runtime``), so read this
     # one through ``getattr`` with an explicit ``str`` guard: a state double
@@ -147,10 +152,10 @@ def create_account(self: Any) -> None:
         s.create_data = {"_external_url": external_url}
         r.think_stage("post_create_account")
         return
-    if self._prime_about_you_page_enabled():
-        self._prime_about_you_page()
-    response = self._post_create_account_with_backoff()
-    self._record_create_account_response(response)
+    if workflow._prime_about_you_page_enabled():
+        workflow._prime_about_you_page()
+    response = workflow._post_create_account_with_backoff()
+    workflow._record_create_account_response(response)
     try:
         r._follow_continue_url(
             s.session,
@@ -164,20 +169,20 @@ def create_account(self: Any) -> None:
 
 
 def post_create_account_with_backoff(
-    self: Any,
+    workflow: RegistrationEmailWorkflow,
     *,
     sleep_fn: Callable[[float], bool] = cancellable_sleep,
 ) -> Any:
     """POST ``create_account``, retrying ``registration_disallowed`` per the backoff flag."""
-    r = self.r
-    s = self.runtime
-    backoff_delays = self._create_account_disallowed_backoff_delays()
+    r = workflow.r
+    s = workflow.runtime
+    backoff_delays = workflow._create_account_disallowed_backoff_delays()
     response = None
     create_sentinel = None
     for attempt in range(len(backoff_delays) + 1):
         # Round 0 may consume a pre-minted bundle token; every retry round
         # must mint a genuinely fresh proof (see ``_issue_sentinel``).
-        create_sentinel = self._issue_sentinel("oauth_create_account", force_fresh=attempt > 0)
+        create_sentinel = workflow._issue_sentinel("oauth_create_account", force_fresh=attempt > 0)
         response = r.request_with_retry(
             s.session,
             "post",
@@ -224,10 +229,10 @@ def post_create_account_with_backoff(
     return response
 
 
-def record_create_account_response(self: Any, response: Any) -> None:
+def record_create_account_response(workflow: RegistrationEmailWorkflow, response: Any) -> None:
     """Fold the ``create_account`` answer into the runtime state and dead-end ledger."""
-    r = self.r
-    s = self.runtime
+    r = workflow.r
+    s = workflow.runtime
     try:
         s.create_data = response.json()
     except (ValueError, TypeError):
@@ -249,7 +254,7 @@ def record_create_account_response(self: Any, response: Any) -> None:
     r.think_stage("post_create_account")
     s.existing_account = r._is_user_already_exists(s.create_data)
     if s.existing_account:
-        self._mark_partial_registration()
+        workflow._mark_partial_registration()
     elif is_passwordless_signup_mismatch(s.create_data):
         # 🔴 The **second** code the server uses for "this address is already
         # registered", measured 2026-09-15 07:33:37 (run ``b93f598d``):
@@ -277,11 +282,11 @@ def record_create_account_response(self: Any, response: Any) -> None:
         # Zero risk of killing a fresh address: this code can only come back
         # from ``create_account`` on an address the server already has a
         # signup record for.
-        self._mark_partial_registration(reason=PASSWORDLESS_SIGNUP_CODE)
+        workflow._mark_partial_registration(reason=PASSWORDLESS_SIGNUP_CODE)
     c = s.context
     if s.create_ok and not s.existing_account:
         s.session_recovery_started_at = _safe_int(time.time())
-        self._persist_checkpoint(registration_checkpoint.SESSION_PENDING_STATE)
+        workflow._persist_checkpoint(registration_checkpoint.SESSION_PENDING_STATE)
     if not s.create_ok and s.existing_account:
         # The server has stated this address is already registered.  Keep
         # ``create_ok`` true so the outcome wording stays
@@ -297,14 +302,14 @@ def record_create_account_response(self: Any, response: Any) -> None:
 
 
 def mark_partial_registration(
-    self: Any,
+    workflow: RegistrationEmailWorkflow,
     *,
     reason: str = "user_already_exists",
     retry_guard_cls: Any = RegistrationRetryGuard,
 ) -> None:
     """Record the server's existence verdict as a permanent dead end."""
-    s = self.runtime
-    retry_guard_cls(self.config).mark_dead_end(s.username, reason=reason)
+    s = workflow.runtime
+    retry_guard_cls(workflow.config).mark_dead_end(s.username, reason=reason)
     _LOGGER.info(
         "Server reports existing account; registration_status=partial_registered",
         extra={"event": "registration_status_changed", "account_ref": account_reference(s.username)},
@@ -324,16 +329,18 @@ def mark_partial_registration(
 
 
 def fetch_auth_session(
-    self: Any,
+    workflow: RegistrationEmailWorkflow,
     *,
     retry_guard_cls: Any = RegistrationRetryGuard,
 ) -> None:
-    r = self.r
-    s = self.runtime
+    r = workflow.r
+    s = workflow.runtime
     s.auth_session = r._fetch_auth_session(s.session, s.chat_base, s.base_headers)
     s.auth_body = s.auth_session.get("body") or {}
     s.access_token = r._auth_session_access_token(s.auth_body)
-    self._persist_checkpoint("at_probe_pending" if s.access_token else registration_checkpoint.SESSION_PENDING_STATE)
+    workflow._persist_checkpoint(
+        "at_probe_pending" if s.access_token else registration_checkpoint.SESSION_PENDING_STATE
+    )
     if not s.existing_account or s.access_token:
         return
     _emit(
@@ -343,7 +350,7 @@ def fetch_auth_session(
     s.login_session = curl_requests.Session()
     if s.proxy:
         s.login_session.proxies = {"http": s.proxy, "https": s.proxy}
-    self._install_edge_challenge_hook(s.login_session)
+    workflow._install_edge_challenge_hook(s.login_session)
     r._set_oai_did_cookie(s.login_session, s.device_id)
     try:
         existing_login = r._login_existing_account_with_email_otp(
@@ -382,7 +389,7 @@ def fetch_auth_session(
         _emit(_LOGGER, "  Existing account login failed: %s", s.existing_login_error)
         if _is_existing_login_dead_end_error(existing_login.get("error")):
             try:
-                retry_guard_cls(self.config).mark_dead_end(
+                retry_guard_cls(workflow.config).mark_dead_end(
                     s.username,
                     reason="user_already_exists",
                     error=str(s.existing_login_error),
@@ -393,16 +400,16 @@ def fetch_auth_session(
     s.auth_session = r._fetch_auth_session(s.login_session, s.chat_base, s.base_headers)
     s.auth_body = s.auth_session.get("body") or {}
     s.access_token = r._auth_session_access_token(s.auth_body)
-    self._persist_checkpoint("at_probe_pending")
+    workflow._persist_checkpoint("at_probe_pending")
     if s.access_token:
         old_session = s.session
         s.session = s.login_session
         s.login_session = old_session
 
 
-def probe_access_token(self: Any) -> None:
-    r = self.r
-    s = self.runtime
+def probe_access_token(workflow: RegistrationEmailWorkflow) -> None:
+    r = workflow.r
+    s = workflow.runtime
     if not s.access_token:
         return
     r.think_stage("pre_at_probe")
@@ -410,9 +417,9 @@ def probe_access_token(self: Any) -> None:
         s.access_token,
         s.auth_body,
         proxy=s.proxy,
-        cfg=self.config,
+        cfg=workflow.config,
     )
     _emit(_LOGGER, "  Access token probe: HTTP %s", s.at_probe.get("status_code") or "unknown")
-    self._persist_checkpoint(
+    workflow._persist_checkpoint(
         "at_probe_complete" if s.at_probe.get("status_code") == 200 else "at_probe_transport_unknown"
     )

@@ -5,8 +5,10 @@ Extracted from ``registration_handlers.RegistrationEmailWorkflow``
 the state machine, checkpointing, 2FA, result assembly and progress
 printing in one 1700-line class.  The three methods here --
 ``obtain_oauth_refresh_token``, ``enroll_totp`` and ``finalize`` -- are
-moved verbatim as module-level functions whose first parameter is the
-workflow instance; the class keeps thin delegates so no caller changes.
+moved verbatim as module-level functions that take the workflow instance as
+their first parameter, named ``workflow`` and annotated with
+``RegistrationEmailWorkflow`` under ``TYPE_CHECKING``; the class keeps thin
+delegates so no caller changes.
 Delayed imports inside the bodies are kept exactly as they were (they
 guard against import cycles), so behaviour is unchanged.
 """
@@ -15,7 +17,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from . import proxy_entry as _proxy_entry
 from . import registration_checkpoint
@@ -29,10 +31,13 @@ from .registration_retry_guard import RegistrationRetryGuard
 from .registration_state import RegistrationState
 from .kernel.sanitizer import describe_exception
 
+if TYPE_CHECKING:  # pragma: no cover - import cycle guard for type checkers only
+    from .registration_handlers import RegistrationEmailWorkflow
+
 _LOGGER = logging.getLogger(__name__)
 
 
-def obtain_oauth_refresh_token(self) -> None:
+def obtain_oauth_refresh_token(workflow: RegistrationEmailWorkflow) -> None:
     """Exchange an OAuth refresh token while this run's session is still live.
 
     **Opt-in** (``registration.obtain_refresh_token``, default off) because
@@ -70,9 +75,9 @@ def obtain_oauth_refresh_token(self) -> None:
     Never raises and never touches ``s.success``/``s.error`` -- a failure is
     only recorded on ``s.oauth_result``.
     """
-    r = self.r
-    s = self.runtime
-    if not self._obtain_refresh_token_enabled():
+    r = workflow.r
+    s = workflow.runtime
+    if not workflow._obtain_refresh_token_enabled():
         return
     if not (s.success and s.access_token):
         return
@@ -114,16 +119,16 @@ def obtain_oauth_refresh_token(self) -> None:
     )
 
 
-def enroll_totp(self) -> None:
+def enroll_totp(workflow: RegistrationEmailWorkflow) -> None:
     # Delayed import: registration_handlers imports this module, so the
     # helper it still owns has to be fetched here, not at module top.
     from .registration_handlers import _login_probe_password
 
-    r = self.r
-    s = self.runtime
+    r = workflow.r
+    s = workflow.runtime
     if not (s.success and s.access_token and s.mailbox):
         return
-    if not self.enroll_2fa:
+    if not workflow.enroll_2fa:
         _emit(_LOGGER, "  [2FA] Enrollment disabled (--no-2fa)")
         return
 
@@ -202,9 +207,9 @@ def enroll_totp(self) -> None:
         _emit(_LOGGER, "  [2FA] Setup failed: %s", describe_exception(exc))
 
 
-def finalize(self) -> dict[str, Any]:
-    r = self.r
-    s = self.runtime
+def finalize(workflow: RegistrationEmailWorkflow) -> dict[str, Any]:
+    r = workflow.r
+    s = workflow.runtime
     from .sentinel.bundle import sentinel_version
 
     fingerprint = current_auth_fingerprint()
@@ -214,11 +219,11 @@ def finalize(self) -> dict[str, Any]:
     identity_context = complete_registration_identity(
         create_registration_identity(
             s.proxy,
-            pool_index=int(self.proxy_metadata.get("pool_index", -1) or -1),
+            pool_index=int(workflow.proxy_metadata.get("pool_index", -1) or -1),
             fingerprint_key=str(fingerprint.get("impersonate") or ""),
             device_id=s.device_id,
             auth_session_logging_id=s.session_logging_id,
-            config=self.config,
+            config=workflow.config,
         ),
         device_id=s.device_id,
         auth_session_logging_id=s.session_logging_id,
@@ -264,9 +269,9 @@ def finalize(self) -> dict[str, Any]:
         registration_warning=s.registration_warning,
         post_registration_ready=s.post_registration_ready,
         mailbox_snapshot=r._mailbox_snapshot(s.mailbox),
-        proxy_audit=self.proxy_metadata,
-        fingerprint_geo_audit=self._fingerprint_geo_metadata(),
-        device_identity=getattr(self, "device_identity", {}),
+        proxy_audit=workflow.proxy_metadata,
+        fingerprint_geo_audit=workflow._fingerprint_geo_metadata(),
+        device_identity=getattr(workflow, "device_identity", {}),
         extra={
             "phone": s.phone_result.get("phone", "") if s.phone_result.get("ok") else "",
             "oauth_refresh_token": s.oauth_refresh_token,
@@ -298,20 +303,20 @@ def finalize(self) -> dict[str, Any]:
             ),
         },
     )
-    if self.post_process_result is not None:
-        result = self.post_process_result(result)
+    if workflow.post_process_result is not None:
+        result = workflow.post_process_result(result)
     if s.success and s.existing_account:
-        RegistrationRetryGuard(self.config).record(s.username, success=True)
-    self.machine.transition(RegistrationState.COMPLETED)
+        RegistrationRetryGuard(workflow.config).record(s.username, success=True)
+    workflow.machine.transition(RegistrationState.COMPLETED)
     if s.create_ok and not s.existing_account and not s.access_token:
-        self._persist_checkpoint(registration_checkpoint.SESSION_PENDING_STATE)
+        workflow._persist_checkpoint(registration_checkpoint.SESSION_PENDING_STATE)
         _emit(_LOGGER, "  [Checkpoint] Retaining created-account session; retry will not repeat signup or OTP")
     elif r._retain_registration_checkpoint(s.success, s.access_token, s.at_probe):
         _emit(_LOGGER, "  [Checkpoint] Retaining post-create state for AT probe retry")
     else:
         try:
-            self.persistence.clear_checkpoint(s.username, runtime_config=self.config)
+            workflow.persistence.clear_checkpoint(s.username, runtime_config=workflow.config)
         except Exception:
             pass
-    result["registration_machine"] = self.machine.snapshot()
+    result["registration_machine"] = workflow.machine.snapshot()
     return result

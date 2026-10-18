@@ -244,7 +244,7 @@ class _OtpStage:
 
 
 def _send_stage(*, headers_enabled: bool):
-    stage = _OtpStage(
+    stage: Any = _OtpStage(
         {"registration": {"otp_navigation_headers": headers_enabled}},
         reg_data={},
         session=Mock(),
@@ -282,7 +282,7 @@ class OtpNavigationHeadersTests(unittest.TestCase):
 
 
 def _validate_stage(*, sentinel_enabled: bool, branch_enabled: bool, otp_data: dict):
-    stage = _OtpStage(
+    stage: Any = _OtpStage(
         {
             "registration": {
                 "otp_validate_sentinel": sentinel_enabled,
@@ -322,7 +322,7 @@ class OtpValidateSentinelTests(unittest.TestCase):
         self.assertEqual(kwargs["sentinel_data"], {"sentinel_token": "tok-1", "sentinel_so_token": "so-1"})
 
     def test_a_mint_failure_is_non_fatal(self):
-        stage = _OtpStage(
+        stage: Any = _OtpStage(
             {"registration": {"otp_validate_sentinel": True}},
             session=Mock(),
             auth_base="https://auth.openai.com",
@@ -431,7 +431,7 @@ class RegistrationFlagParserTests(unittest.TestCase):
 
 
 class OtpStageGateTests(unittest.TestCase):
-    def _stage(self, config):
+    def _stage(self, config) -> Any:
         return SimpleNamespace(config=config)
 
     def test_otp_gates_read_the_frozen_section(self):

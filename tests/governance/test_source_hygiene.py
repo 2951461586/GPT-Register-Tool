@@ -123,3 +123,53 @@ def test_guard_accepts_a_real_docstring_and_ignores_values():
         '    """too short"""\n'
     )
     assert _misplaced_docstrings(benign) == []
+
+
+def _self_named_free_functions(tree: ast.AST) -> list[tuple[int, str]]:
+    found: list[tuple[int, str]] = []
+    for node in getattr(tree, "body", []):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            args = node.args.posonlyargs + node.args.args
+            if args and args[0].arg == "self":
+                found.append((node.lineno, node.name))
+    return found
+
+
+def test_no_module_level_function_takes_a_self_parameter():
+    """A free function whose first parameter is ``self`` is a de-self leftover.
+
+    The registration stage modules were extracted out of
+    ``RegistrationEmailWorkflow`` as module-level functions but kept the method's
+    ``self`` parameter. That reads as a method of an object the module does not
+    own, and it hides the instance behind ``Any`` in a way the type checker
+    cannot verify. The convention (2026-10-18) is a first parameter named
+    ``workflow``, annotated with the workflow class under ``TYPE_CHECKING``.
+    """
+    offenders: list[str] = []
+    for path in _iter_sources():
+        rel = path.relative_to(ROOT).as_posix()
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8-sig"))
+        except SyntaxError as exc:  # pragma: no cover - defensive
+            offenders.append(f"{rel}:{exc.lineno}: syntax error")
+            continue
+        for lineno, name in _self_named_free_functions(tree):
+            offenders.append(f"{rel}:{lineno}: {name}()")
+    assert not offenders, (
+        "module-level functions must not take a `self` parameter: name the "
+        "workflow instance `workflow` and annotate it under TYPE_CHECKING:\n  "
+        + "\n  ".join(offenders)
+    )
+
+
+def test_self_parameter_guard_detects_a_planted_defect():
+    """Mutation check: the guard must fail on the shape it forbids."""
+    planted = ast.parse(
+        "class Workflow:\n"
+        "    def method(self):\n"
+        "        return 1\n"
+        "\n"
+        "def stage(self: object) -> None:\n"
+        "    return None\n"
+    )
+    assert _self_named_free_functions(planted) == [(5, "stage")]

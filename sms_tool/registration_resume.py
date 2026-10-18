@@ -16,15 +16,16 @@ Boundary with the neighbouring modules:
   (``self._persist_checkpoint(...)`` -- including ``registration_finalize`` and
   the tests that mock it) keeps working unchanged.
 
-They are module-level functions whose first parameter is the workflow instance,
-the same shape ``registration_otp_stages`` uses, so this module cannot form an
-import cycle back into ``registration_handlers``.
+They are module-level functions that take the workflow instance as their first
+parameter, named ``workflow`` and annotated with ``RegistrationEmailWorkflow``
+under ``TYPE_CHECKING``, so the type checker resolves the workflow's attributes
+without a runtime import cycle back into ``registration_handlers``.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from . import registration_checkpoint
 from .auth_headers import current_auth_fingerprint, set_auth_fingerprint
@@ -33,29 +34,32 @@ from .registration_protocol_helpers import _new_registration_session
 from .registration_state import RegistrationState
 from .kernel.sanitizer import describe_exception
 
+if TYPE_CHECKING:  # pragma: no cover - import cycle guard for type checkers only
+    from .registration_handlers import RegistrationEmailWorkflow
+
 _LOGGER = logging.getLogger(__name__)
 
 
-def checkpoint_payload(self: Any) -> dict[str, Any]:
+def checkpoint_payload(workflow: RegistrationEmailWorkflow) -> dict[str, Any]:
     """Build this run's checkpoint payload (data contract lives in ``registration_checkpoint``)."""
     payload = registration_checkpoint.build_checkpoint_payload(
-        self.runtime, lambda: self.r._mailbox_snapshot(self.runtime.mailbox)
+        workflow.runtime, lambda: workflow.r._mailbox_snapshot(workflow.runtime.mailbox)
     )
     payload["auth_fingerprint_profile"] = str(current_auth_fingerprint().get("impersonate") or "")
     return payload
 
 
-def persist_checkpoint(self: Any, state: str) -> None:
+def persist_checkpoint(workflow: RegistrationEmailWorkflow, state: str) -> None:
     """Write the checkpoint at a stage boundary; a failure is a warning, never fatal."""
-    s = self.runtime
+    s = workflow.runtime
     if not s.username:
         return
     try:
         registration_checkpoint.persist_checkpoint(
-            self.persistence,
-            self.config,
+            workflow.persistence,
+            workflow.config,
             s,
-            checkpoint_payload(self),
+            checkpoint_payload(workflow),
             state,
         )
     except Exception as exc:
@@ -66,7 +70,7 @@ def persist_checkpoint(self: Any, state: str) -> None:
         _emit(_LOGGER, "  [Checkpoint] persist warning: %s", describe_exception(exc))
 
 
-def resume_post_create(self: Any) -> dict[str, Any] | None:
+def resume_post_create(workflow: RegistrationEmailWorkflow) -> dict[str, Any] | None:
     """Re-enter the pipeline from a saved post-create checkpoint, or ``None``.
 
     The account and token already exist at this point, so signup and OTP stay
@@ -74,53 +78,55 @@ def resume_post_create(self: Any) -> dict[str, Any] | None:
     finalize only.  A checkpoint whose token is unusable is reported through
     ``_abort`` rather than silently re-registering the address.
     """
-    mailbox_email = str(getattr(self.runtime.mailbox, "email", "") or "").strip()
-    if not mailbox_email or self.input_mailbox is None:
+    mailbox_email = str(getattr(workflow.runtime.mailbox, "email", "") or "").strip()
+    if not mailbox_email or workflow.input_mailbox is None:
         return None
-    payload = self.runtime.resume_checkpoint or registration_checkpoint.load_resumable_checkpoint(
-        self.persistence, mailbox_email, self.config
+    payload = workflow.runtime.resume_checkpoint or registration_checkpoint.load_resumable_checkpoint(
+        workflow.persistence, mailbox_email, workflow.config
     )
     if payload is None:
         return None
     if not payload.get("access_token"):
         error = registration_checkpoint.session_recovery_error(payload)
         if error:
-            self._abort(error)
-    registration_checkpoint.apply_resume_payload(self.runtime, payload)
-    self.runtime.username = mailbox_email
+            workflow._abort(error)
+    registration_checkpoint.apply_resume_payload(workflow.runtime, payload)
+    workflow.runtime.username = mailbox_email
     set_auth_fingerprint(str(payload.get("auth_fingerprint_profile") or ""))
     _emit(_LOGGER, "[*] Resuming saved registration checkpoint for %s", mailbox_email)
-    if not self.runtime.access_token:
-        s = self.runtime
+    if not workflow.runtime.access_token:
+        s = workflow.runtime
         s.session = _new_registration_session(s.proxy)
-        self._install_edge_challenge_hook(s.session)
+        workflow._install_edge_challenge_hook(s.session)
         registration_checkpoint.restore_session_cookies(s.session, payload)
         s.base_headers = (
             dict(payload["auth_headers"])
             if isinstance(payload.get("auth_headers"), dict)
-            else (self.r.openai_auth_headers(s.device_id, accept="application/json", include_trace=True))
+            else (workflow.r.openai_auth_headers(s.device_id, accept="application/json", include_trace=True))
         )
         s.session_recovery_attempts += 1
-        persist_checkpoint(self, registration_checkpoint.SESSION_PENDING_STATE)
+        persist_checkpoint(workflow, registration_checkpoint.SESSION_PENDING_STATE)
         _LOGGER.info(
             "Resuming created-account session attempt=%s; signup and OTP remain disabled",
             s.session_recovery_attempts,
             extra={"event": "auth_session_recovery"},
         )
-        self._run_stage(RegistrationState.AUTH_SESSION, "8-Resume auth session", self.fetch_auth_session)
-    self._run_stage(RegistrationState.ACCESS_TOKEN_PROBE, "8d-Resume AT probe", self.probe_access_token)
-    self._set_outcome()
-    self.post_signup_warmup()
-    self.obtain_oauth_refresh_token()
-    return self._run_stage(RegistrationState.FINALIZE, "10-Finalize resumed registration", self.finalize)
+        workflow._run_stage(RegistrationState.AUTH_SESSION, "8-Resume auth session", workflow.fetch_auth_session)
+    workflow._run_stage(RegistrationState.ACCESS_TOKEN_PROBE, "8d-Resume AT probe", workflow.probe_access_token)
+    workflow._set_outcome()
+    workflow.post_signup_warmup()
+    workflow.obtain_oauth_refresh_token()
+    return workflow._run_stage(RegistrationState.FINALIZE, "10-Finalize resumed registration", workflow.finalize)
 
 
-def has_resume_checkpoint(self: Any) -> bool:
+def has_resume_checkpoint(workflow: RegistrationEmailWorkflow) -> bool:
     """True when this mailbox has a resumable checkpoint and a mailbox was supplied."""
-    if self.input_mailbox is None:
+    if workflow.input_mailbox is None:
         return False
     return (
-        registration_checkpoint.load_resumable_checkpoint(self.persistence, self.runtime.username, self.config)
+        registration_checkpoint.load_resumable_checkpoint(
+            workflow.persistence, workflow.runtime.username, workflow.config
+        )
         is not None
     )
 

@@ -24,11 +24,14 @@ import logging
 import random
 import time
 from collections.abc import Callable, Mapping
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .auth_headers import auth_impersonate, chatgpt_headers
 from .operator_output import emit as _emit
 from .registration_flags import registration_flag
+
+if TYPE_CHECKING:  # pragma: no cover - import cycle guard for type checkers only
+    from .registration_handlers import RegistrationEmailWorkflow
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -97,19 +100,19 @@ def dwell_range(config: Any) -> tuple[float, float]:
 
 
 def run_post_signup_warmup(
-    self: Any,
+    workflow: RegistrationEmailWorkflow,
     *,
     sleep_fn: Callable[[float], None] = time.sleep,
     uniform_fn: Callable[[float, float], float] = random.uniform,
 ) -> dict[str, Any]:
     """Walk :data:`WARMUP_PATHS` with the fresh access token, then dwell. Never raises."""
-    s = self.runtime
-    if not warmup_enabled(self.config):
+    s = workflow.runtime
+    if not warmup_enabled(workflow.config):
         return {"skipped": True, "reason": "disabled"}
     if not (s.success and s.access_token and s.session is not None):
         return {"skipped": True, "reason": "no_session"}
 
-    country = str(getattr(self, "fingerprint_country", "") or "").upper()
+    country = str(getattr(workflow, "fingerprint_country", "") or "").upper()
     tz = _TZ_OFFSET_MIN.get(country, 0)
     base = f"{str(s.chat_base).rstrip('/')}/backend-api"
     headers = chatgpt_headers(s.device_id, accept="application/json")
@@ -137,7 +140,7 @@ def run_post_signup_warmup(
             if failures_in_row >= _MAX_CONSECUTIVE_FAILURES:
                 break
             sleep_fn(uniform_fn(*_PACE_SECONDS))
-        lo, hi = dwell_range(self.config)
+        lo, hi = dwell_range(workflow.config)
         dwell = min(_MAX_DWELL_SECONDS, uniform_fn(lo, hi) if hi > lo else lo)
         if dwell > 0:
             sleep_fn(dwell)

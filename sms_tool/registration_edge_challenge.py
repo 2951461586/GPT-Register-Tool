@@ -15,15 +15,16 @@ The split is by ownership, not by size:
   (``self._install_edge_challenge_hook(...)``) and the tests that drive the
   workflow object keep working unchanged.
 
-They are module-level functions whose first parameter is the workflow instance,
-the same shape ``registration_otp_stages`` uses, so this module cannot form an
-import cycle back into ``registration_handlers``.
+They are module-level functions that take the workflow instance as their first
+parameter, named ``workflow`` and annotated with ``RegistrationEmailWorkflow``
+under ``TYPE_CHECKING``, so the type checker resolves the workflow's attributes
+without a runtime import cycle back into ``registration_handlers``.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .http_client import EDGE_CHALLENGE_HOOK_ATTR, clear_session_circuit
 from .operator_output import emit as _emit
@@ -32,10 +33,13 @@ from .proxy_entry import rotate_session
 from .registration_flags import registration_flag
 from .kernel.sanitizer import describe_exception
 
+if TYPE_CHECKING:  # pragma: no cover - import cycle guard for type checkers only
+    from .registration_handlers import RegistrationEmailWorkflow
+
 _LOGGER = logging.getLogger(__name__)
 
 
-def edge_challenge_rotate_exit_enabled(self: Any) -> bool:
+def edge_challenge_rotate_exit_enabled(workflow: RegistrationEmailWorkflow) -> bool:
     """``registration.edge_challenge_rotate_exit`` (default **False**).
 
     On a Cloudflare challenge the transport asks this handler's hook whether
@@ -50,10 +54,10 @@ def edge_challenge_rotate_exit_enabled(self: Any) -> bool:
     labels the failure *name* (observation, default on); this one moves
     traffic.  They are orthogonal -- a run may label without rotating.
     """
-    return registration_flag(self.config, "edge_challenge_rotate_exit", False)
+    return registration_flag(workflow.config, "edge_challenge_rotate_exit", False)
 
 
-def install_edge_challenge_hook(self: Any, session: Any) -> None:
+def install_edge_challenge_hook(workflow: RegistrationEmailWorkflow, session: Any) -> None:
     """Let ``http_client`` ask this handler before acting on a challenge.
 
     Installed on every session this run makes requests with (the protocol
@@ -65,12 +69,12 @@ def install_edge_challenge_hook(self: Any, session: Any) -> None:
     if session is None:
         return
     try:
-        setattr(session, EDGE_CHALLENGE_HOOK_ATTR, self._on_edge_challenge)
+        setattr(session, EDGE_CHALLENGE_HOOK_ATTR, workflow._on_edge_challenge)
     except Exception:
         return
 
 
-def on_edge_challenge(self: Any, session: Any, verdict: str, allow_rotate: bool) -> bool:
+def on_edge_challenge(workflow: RegistrationEmailWorkflow, session: Any, verdict: str, allow_rotate: bool) -> bool:
     """Hook body: count the reply, then maybe rotate the exit once.
 
     Returns True only when the exit actually moved.  The two ways it does
@@ -85,22 +89,22 @@ def on_edge_challenge(self: Any, session: Any, verdict: str, allow_rotate: bool)
     merging it into ``edge_challenge_hits`` would dilute the exact number
     the A/B's manipulation check rests on.
     """
-    metadata = getattr(self, "proxy_metadata", None)
+    metadata = getattr(workflow, "proxy_metadata", None)
     counter = "edge_challenge_unknown" if verdict == EDGE_UNKNOWN else "edge_challenge_hits"
     if isinstance(metadata, dict):
         metadata[counter] = int(metadata.get(counter) or 0) + 1
-    if not allow_rotate or not self._edge_challenge_rotate_exit_enabled():
+    if not allow_rotate or not workflow._edge_challenge_rotate_exit_enabled():
         return False
-    s = self.runtime
+    s = workflow.runtime
     current = str(getattr(s, "proxy", "") or "")
     rotated = rotate_session(current)
     if not rotated or rotated == current:
-        self._count_edge_challenge_rotate_failure("single_slot")
+        workflow._count_edge_challenge_rotate_failure("single_slot")
         return False
     try:
         session.proxies = {"http": rotated, "https": rotated}
     except Exception as exc:
-        self._count_edge_challenge_rotate_failure("rebind_failed")
+        workflow._count_edge_challenge_rotate_failure("rebind_failed")
         _LOGGER.warning("Edge-challenge exit rotation could not rebind the session: %s", describe_exception(exc))
         return False
     s.proxy = rotated
@@ -108,7 +112,7 @@ def on_edge_challenge(self: Any, session: Any, verdict: str, allow_rotate: bool)
     # earlier request; the new exit must not inherit it, or the retry below
     # would raise before it ever leaves the machine.
     clear_session_circuit(session)
-    metadata = getattr(self, "proxy_metadata", None)
+    metadata = getattr(workflow, "proxy_metadata", None)
     if isinstance(metadata, dict):
         metadata["edge_challenge_rotations"] = int(metadata.get("edge_challenge_rotations") or 0) + 1
     _emit(
@@ -118,9 +122,9 @@ def on_edge_challenge(self: Any, session: Any, verdict: str, allow_rotate: bool)
     return True
 
 
-def count_edge_challenge_rotate_failure(self: Any, reason: str) -> None:
+def count_edge_challenge_rotate_failure(workflow: RegistrationEmailWorkflow, reason: str) -> None:
     """Count one honest rotation failure (single-slot pool, or a rebind error)."""
-    metadata = getattr(self, "proxy_metadata", None)
+    metadata = getattr(workflow, "proxy_metadata", None)
     if isinstance(metadata, dict):
         metadata["edge_challenge_rotate_failed"] = int(metadata.get("edge_challenge_rotate_failed") or 0) + 1
     _emit(_LOGGER, "  [Edge] Cloudflare challenge but the exit cannot rotate (%s); keeping this exit", reason)

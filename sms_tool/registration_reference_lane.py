@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from . import endpoints
 from .auth_headers import auth_impersonate, chatgpt_headers, nextauth_headers
@@ -40,6 +40,9 @@ from . import registration_sentinel_stages as _sentinel_stages
 from .registration_flags import registration_flag
 from .registration_warmup import tz_offset_minutes
 from .kernel.sanitizer import describe_exception
+
+if TYPE_CHECKING:  # pragma: no cover - import cycle guard for type checkers only
+    from .registration_handlers import RegistrationEmailWorkflow
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -102,15 +105,15 @@ def apply_reference_lane(config: Any) -> Any:
     return root
 
 
-def anonymous_bootstrap(self: Any) -> list[int]:
+def anonymous_bootstrap(workflow: RegistrationEmailWorkflow) -> list[int]:
     """The reference's pre-signin anonymous reads of ``chatgpt.com``.
 
     ``accounts/check``, the CES settings, ``me`` and the regional pricing config --
     exactly the set the 2026-09-14 web trace shows on the login page, nothing
     more.  Returns the status codes (``0`` for a transport failure).
     """
-    s = self.runtime
-    country = str(getattr(self, "fingerprint_country", "") or "").upper()
+    s = workflow.runtime
+    country = str(getattr(workflow, "fingerprint_country", "") or "").upper()
     tz = tz_offset_minutes(country)
     urls = [
         f"{_ANON_BASE}/accounts/check/v4-2023-04-27?timezone_offset_min={tz}",
@@ -140,9 +143,9 @@ def anonymous_bootstrap(self: Any) -> list[int]:
     return statuses
 
 
-def read_providers(self: Any) -> int:
+def read_providers(workflow: RegistrationEmailWorkflow) -> int:
     """``GET /api/auth/providers`` -- the reference's step 1, before ``csrf``."""
-    s = self.runtime
+    s = workflow.runtime
     status = 0
     try:
         response = s.session.get(
@@ -159,21 +162,21 @@ def read_providers(self: Any) -> int:
     return status
 
 
-def pre_signin(self: Any) -> None:
+def pre_signin(workflow: RegistrationEmailWorkflow) -> None:
     """Anonymous bootstrap, then ``providers`` -- everything before ``csrf``."""
     _emit(_LOGGER, "  Reference lane: pre-signin bootstrap")
-    anonymous_bootstrap(self)
-    read_providers(self)
+    anonymous_bootstrap(workflow)
+    read_providers(workflow)
 
 
-def prime_password_bundle(self: Any) -> None:
+def prime_password_bundle(workflow: RegistrationEmailWorkflow) -> None:
     """Load the password page's Sentinel iframe and keep its `username_password_create` token.
 
     Runs right before `user/register` (the reference does it after the
     password-page navigation).  The mint itself lives in
     `registration_sentinel_stages` next to the other Sentinel stages.
     """
-    _sentinel_stages.prime_password_sentinel_bundle(self, reference_page=True)
+    _sentinel_stages.prime_password_sentinel_bundle(workflow, reference_page=True)
 
 
 __all__ = [

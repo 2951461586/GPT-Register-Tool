@@ -17,23 +17,27 @@ write-back into ``RegistrationRuntimeState``'s token fields.  The
 codebase's documented way to keep the Node-runner dependency off the import
 graph until a run actually needs it.
 
-They are module-level functions whose first parameter is the workflow instance,
-the same shape ``registration_otp_stages`` uses, so this module cannot form an
-import cycle back into ``registration_handlers``.
+They are module-level functions that take the workflow instance as their first
+parameter, named ``workflow`` and annotated with ``RegistrationEmailWorkflow``
+under ``TYPE_CHECKING``, so the type checker resolves the workflow's attributes
+without a runtime import cycle back into ``registration_handlers``.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .registration_flags import registration_flag
 from .kernel.sanitizer import describe_exception
 
+if TYPE_CHECKING:  # pragma: no cover - import cycle guard for type checkers only
+    from .registration_handlers import RegistrationEmailWorkflow
+
 _LOGGER = logging.getLogger(__name__)
 
 
-def password_sentinel_bundle_enabled(self: Any) -> bool:
+def password_sentinel_bundle_enabled(workflow: RegistrationEmailWorkflow) -> bool:
     """``registration.sentinel_password_bundle`` (default off).
 
     Off by default because it changes the Sentinel payload shape -- the
@@ -44,19 +48,19 @@ def password_sentinel_bundle_enabled(self: Any) -> bool:
     # ``registration_flag`` is the shared, Mapping-safe, two-sided parser.  The
     # old hand-rolled body failed **open** (an unrecognised value turned this
     # default-off switch on) -- fixed by the 2026-10-10 P1-C′ consolidation.
-    return registration_flag(self.config, "sentinel_password_bundle", False)
+    return registration_flag(workflow.config, "sentinel_password_bundle", False)
 
 
-def prime_password_sentinel_bundle(self: Any, *, reference_page: bool = False) -> None:
+def prime_password_sentinel_bundle(workflow: RegistrationEmailWorkflow, *, reference_page: bool = False) -> None:
     """Pre-mint the password page's Sentinel flows from one shared proof.
 
     Only the password lane gets this: it is the page a browser primes a
     bundle for.  A failure is non-fatal -- the per-flow issuance in
     ``issue_sentinel`` is still there and is the untouched default path.
     """
-    s = self.runtime
-    lane = registration_flag(self.config, "reference_lane", False)
-    if s.registration_mode == "passwordless" or not (lane or password_sentinel_bundle_enabled(self)):
+    s = workflow.runtime
+    lane = registration_flag(workflow.config, "reference_lane", False)
+    if s.registration_mode == "passwordless" or not (lane or password_sentinel_bundle_enabled(workflow)):
         return
     # `reference_lane` mints this bundle right before `user/register` (see
     # `registration_reference_lane`), not at identity time like the legacy switch.
@@ -64,7 +68,7 @@ def prime_password_sentinel_bundle(self: Any, *, reference_page: bool = False) -
         return
     from .sentinel import issue_password_page_bundle, issue_sentinel_bundle, sentinel_backend
 
-    if sentinel_backend(self.config) != "node_runner":
+    if sentinel_backend(workflow.config) != "node_runner":
         return
     if lane:
         try:
@@ -105,7 +109,7 @@ def prime_password_sentinel_bundle(self: Any, *, reference_page: bool = False) -
     _LOGGER.info("Sentinel password flow bundle primed (shared requirements proof)")
 
 
-def issue_sentinel(self: Any, flow: str, *, force_fresh: bool = False) -> Any:
+def issue_sentinel(workflow: RegistrationEmailWorkflow, flow: str, *, force_fresh: bool = False) -> Any:
     """Issue one flow-bound Sentinel token for this run.
 
     ``force_fresh`` bypasses the supplied-bundle short-circuit
@@ -118,14 +122,14 @@ def issue_sentinel(self: Any, flow: str, *, force_fresh: bool = False) -> Any:
     """
     from .sentinel import issue_sentinel_flow, sentinel_backend
 
-    s = self.runtime
+    s = workflow.runtime
     issued = issue_sentinel_flow(
         flow=flow,
         device_id=s.device_id,
         session=s.session,
         proxy=s.proxy,
         supplied_data=None if force_fresh else s.sentinel_data,
-        config=self.config,
+        config=workflow.config,
     )
     data = dict(s.sentinel_data)
     if flow == "username_password_create":
@@ -140,7 +144,7 @@ def issue_sentinel(self: Any, flow: str, *, force_fresh: bool = False) -> Any:
         data["sentinel_so_token"] = issued.so_token
         s.sentinel_so_token = issued.so_token
     data["oai_did"] = issued.device_id
-    data["sentinel_source"] = str(data.get("sentinel_source") or sentinel_backend(self.config))
+    data["sentinel_source"] = str(data.get("sentinel_source") or sentinel_backend(workflow.config))
     s.sentinel_data = data
     return issued
 
