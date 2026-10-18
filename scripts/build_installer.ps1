@@ -1,6 +1,7 @@
 ﻿param(
     [string]$Version = "",
     [switch]$SkipPublish,
+    [switch]$SkipBundledPython,
     [switch]$SelfSign,
     [string]$CertificateSubject = "CN=GPT-Register-Tool Internal",
     [string]$CertificateExportName = "GPT-Register-Tool-Internal-CodeSigning.cer"
@@ -224,6 +225,35 @@ New-Item -ItemType Directory -Path (Split-Path -Parent $publishPackageDir) -Forc
 Copy-Item -LiteralPath $publishDir -Destination (Split-Path -Parent $publishPackageDir) -Recurse -Force
 Remove-PackagePath -RelativePath "dist\net10\runtime"
 
+# --- Bundled Python runtime ---------------------------------------------------
+# The package is self-contained: the pinned CPython staged by
+# scripts\stage_python_runtime.ps1 ships as runtime\python and
+# PythonPathResolver prefers it whenever runtime.python_path is left at its
+# default. -SkipBundledPython is the dev escape hatch for a package that relies
+# on a checkout's venv; a release without it must fail loudly instead of
+# silently shipping the old "install Python yourself" package.
+$bundledRuntimeSource = Join-Path $repoRoot "runtime\python"
+$bundledRuntimeDest = Join-Path $packageDir "runtime\python"
+if ($SkipBundledPython) {
+    Write-Host "Skipping bundled Python runtime (-SkipBundledPython)"
+} else {
+    $bundledPython = Join-Path $bundledRuntimeSource "python.exe"
+    $bundledStamp = Join-Path $bundledRuntimeSource "RUNTIME-STAMP.json"
+    if (-not (Test-Path $bundledPython)) {
+        throw "Bundled Python runtime is missing at $bundledPython. Run scripts\stage_python_runtime.ps1 first, or pass -SkipBundledPython for a dev package."
+    }
+    if (-not (Test-Path $bundledStamp)) {
+        throw "Bundled Python runtime has no RUNTIME-STAMP.json; re-run scripts\stage_python_runtime.ps1."
+    }
+    $bundledVersion = (& $bundledPython -c "import sys; print('.'.join(map(str, sys.version_info[:3])))").Trim()
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($bundledVersion)) {
+        throw "Bundled Python runtime failed to run: $bundledPython"
+    }
+    New-Item -ItemType Directory -Path (Split-Path -Parent $bundledRuntimeDest) -Force | Out-Null
+    Copy-Item -LiteralPath $bundledRuntimeSource -Destination (Split-Path -Parent $bundledRuntimeDest) -Recurse -Force
+    Write-Host "Bundled CPython $bundledVersion -> runtime\python"
+}
+
 @"
 GPT-Register-Tool Windows package
 
@@ -231,17 +261,18 @@ Start the desktop UI with:
   dist\net10\SmsWorkbench.exe
 
 First-run setup:
-  1. Install Python 3.10+ (Add to PATH), then run:
-     python -m pip install -r requirements.txt -c constraints.txt
+  1. The package ships a pinned CPython under runtime\python and uses it
+     automatically; Python does not need to be installed system-wide.
+     Node.js 20+ is still required for the Sentinel runner and is reported by
+     the built-in self-check.
   2. config.json is created from config.example.json on install; edit it with
      local mailbox, proxy, SMS, and payment settings (the desktop Settings
      window can edit most of them).
   3. Verify the environment any time with the built-in self-check:
-     python chatgpt_phone_reg.py --doctor          (human-readable)
-     python chatgpt_phone_reg.py --doctor --json   (machine-readable)
-     The desktop app runs the same probe automatically on first launch and
-     points at missing dependencies; the Python interpreter can be configured
-     in Settings when it is not on PATH.
+     runtime\python\python.exe chatgpt_phone_reg.py --doctor --json
+     The desktop app runs the same probe automatically on first launch.
+     To use a different interpreter (a development venv), set
+     runtime.python_path in Settings; an explicit path always wins.
 
 Local runtime data is written under runtime\ and sessions\.
 "@ | Set-Content -Path (Join-Path $packageDir "INSTALL-README.txt") -Encoding UTF8

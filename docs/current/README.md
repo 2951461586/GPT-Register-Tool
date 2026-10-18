@@ -12,6 +12,7 @@ below so existing links do not break:
 - [`registration-ab-runbook.md`](registration-ab-runbook.md) - P0-1/P0-2/P1-3 线上受控对照的操作与判定 runbook
 - [`configuration.md`](configuration.md) - 配置分片优先级与迁移约定
 - [`telemetry-and-runtime.md`](telemetry-and-runtime.md) - 日志关联、测试隔离与只读清理清单
+- [`runtime-packaging.md`](runtime-packaging.md) - 自包含安装包里的 CPython 固定版本、校验与解释器优先级
 - [`typing.md`](typing.md) - pyright 类型门禁（逐文件 ratchet）的安装、运行与修复约定
 - [`randomness.md`](randomness.md) - `random` 与 `secrets` 的人工分类判据与已复核调用点
 - [`account-health.md`](account-health.md) - 测活、恢复、优惠检查的副作用与代理契约

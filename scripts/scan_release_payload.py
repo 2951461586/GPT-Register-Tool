@@ -31,6 +31,7 @@ Exit code 0 = clean, 1 = blocked.
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import sys
@@ -72,6 +73,15 @@ BUILD_OUTPUT_SUFFIXES = {
 # Directories whose contents are build output, not source. They are git-ignored by
 # design and shipping them is the whole point of the payload.
 BUILD_OUTPUT_PREFIXES = ("dist/", "scripts/installer/bin/", "scripts/installer/obj/")
+
+# The self-contained installer ships a pinned CPython (see
+# ``scripts/runtime_manifest.json`` and ``scripts/stage_python_runtime.ps1``).
+# Those files are git-ignored build output, so the .gitignore check above would
+# reject every one of them; scanning thousands of stdlib files for credential
+# regexes would also be noise. They are exempt **only** as one verified
+# artifact: the stamp written at staging time must match the manifest digest.
+PINNED_RUNTIME_PREFIX = "runtime/python/"
+PINNED_RUNTIME_STAMP = "runtime/python/RUNTIME-STAMP.json"
 
 # Past incidents, kept explicit so the failure message names the reason.
 BAD_NAME_PATTERNS = (
@@ -154,6 +164,39 @@ def _gitignore_exceptions() -> set[str]:
     return excepts
 
 
+def check_pinned_runtime(payload: Path) -> list[str]:
+    """Verify the bundled interpreter is the manifest's pinned artifact.
+
+    Exempting ``runtime/python/`` from the .gitignore gate would otherwise be a
+    hole: anything could be dropped there and ship. The stamp is written only
+    after the archive matched its SHA-256, so comparing it with the manifest is
+    the substitute for hashing every file in the runtime.
+    """
+    stamp_path = payload / PINNED_RUNTIME_STAMP
+    manifest_path = ROOT / "scripts" / "runtime_manifest.json"
+    if not stamp_path.is_file():
+        return [f"{PINNED_RUNTIME_STAMP} is missing; the bundled runtime was not staged"]
+    if not manifest_path.is_file():
+        return ["scripts/runtime_manifest.json is missing"]
+    try:
+        stamp = json.loads(stamp_path.read_text(encoding="utf-8"))
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        return [f"cannot read the runtime stamp/manifest: {exc}"]
+    problems = []
+    if stamp.get("sha256") != manifest.get("sha256"):
+        problems.append(
+            f"{PINNED_RUNTIME_STAMP} sha256 {stamp.get('sha256')!r} does not match "
+            f"the manifest {manifest.get('sha256')!r}"
+        )
+    if stamp.get("release") != manifest.get("release"):
+        problems.append(
+            f"{PINNED_RUNTIME_STAMP} release {stamp.get('release')!r} does not match "
+            f"the manifest {manifest.get('release')!r}"
+        )
+    return problems
+
+
 def check_artifact_regexes(payload: Path) -> list[str]:
     """Reuse the credential regexes that CI already trusts.
 
@@ -214,13 +257,15 @@ def main(argv: list[str]) -> int:
             if not path.is_file():
                 continue
             rel = path.relative_to(payload).as_posix()
-            if rel.startswith(BUILD_OUTPUT_PREFIXES):
+            if rel.startswith(BUILD_OUTPUT_PREFIXES) or rel.startswith(PINNED_RUNTIME_PREFIX):
                 continue
             if path.suffix.lower() in BUILD_OUTPUT_SUFFIXES:
                 continue
             rel_paths.append(rel)
             failures.extend(check_names(rel, ignore_exceptions))
 
+        if (payload / PINNED_RUNTIME_PREFIX).is_dir():
+            failures.extend(check_pinned_runtime(payload))
         print(f"[{payload.name}] {len(rel_paths)} files to verify against .gitignore")
         failures.extend(check_ignored(payload, rel_paths))
         failures.extend(check_artifact_regexes(payload))

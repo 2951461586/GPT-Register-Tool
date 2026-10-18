@@ -1,0 +1,13 @@
+{
+  "schema": "python_runtime.v1",
+  "distribution": "astral-sh/python-build-standalone",
+  "release": "20261013",
+  "python_version": "3.12",
+  "python_full_version": "3.12.15",
+  "platform": "win-x64",
+  "asset": "cpython-3.12.15+20261013-x86_64-pc-windows-msvc-install_only.tar.gz",
+  "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261013/cpython-3.12.15%2B20261013-x86_64-pc-windows-msvc-install_only.tar.gz",
+  "sha256": "bbc902d4d187ac4914915bf538196a064b49109a33a104965b5164ced5b80a1e",
+  "runtime_subdir": "runtime/python",
+  "stamp_file": "RUNTIME-STAMP.json"
+}
