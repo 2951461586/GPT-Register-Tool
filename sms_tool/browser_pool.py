@@ -25,6 +25,11 @@ from typing import Any
 from .registration_drivers.base import BrowserRegistrationError
 from .registration_drivers.external_sessions import create_browser_session
 
+try:  # Declared in requirements.txt; the watchdog stays advisory if an install is broken.
+    import psutil as _psutil
+except ImportError:  # pragma: no cover - requirements.txt declares it
+    _psutil = None
+
 logger = logging.getLogger(__name__)
 
 # How long a caller waits for a free slot before giving up.  Registration
@@ -111,16 +116,14 @@ def _browser_footprint_mb() -> float:
     turn a memory diagnostic into a registration failure: any failure returns
     0, which disables the check for that acquire.
     """
-    try:
-        import psutil
-    except ImportError:  # pragma: no cover - requirements.txt declares it
+    if _psutil is None:  # pragma: no cover - a broken install
         return 0.0
     try:
         total = 0
-        for child in psutil.Process().children(recursive=True):
+        for child in _psutil.Process().children(recursive=True):
             try:
                 total += child.memory_info().rss
-            except psutil.Error:
+            except _psutil.Error:
                 continue
         return total / (1024 * 1024)
     except Exception:  # noqa: BLE001 - advisory measurement only
