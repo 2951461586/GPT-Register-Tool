@@ -49,6 +49,8 @@ Directory layout (since 2026-09-06):
 
 ## Release notes（docs/releases/，一个发布标签一份，不回写）
 
+- [v2026.10.19 发布说明](releases/release-v2026.10.19.md) - 自 v2026.10.15 以来的收口：
+  安装包内置 CPython、桌面账号列表增量刷新与 CLI/doctor 提速、进程级缓存上界、浏览器池内存上限，以及可选 Sentinel worker。
 - [v2026.10.15 发布说明](releases/release-v2026.10.15.md) - 自 v2026.10.12 以来的收口：
   配置与凭据自动迁出仓库根目录、ReMail 批量取号幂等键跨批次碰撞修复、支付提取器 94 处 URL 单源化与
   Kakao 代理池优先级修复、`mail-otp-web` 鉴权门禁，以及 WPF MVVM 拆分与 69 个 C# 警告清零。
