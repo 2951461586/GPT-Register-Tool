@@ -537,6 +537,28 @@ def infer_region(proxy: str) -> str:
     return match.group(1).upper() if match else ""
 
 
+def infer_proxy_country(proxy: str) -> str:
+    """Exit-country inference over any supported proxy form.
+
+    ``infer_region`` only reads the credential template, so it needs the
+    ``scheme://user:pass@host:port`` shape.  Provider UIs paste the bare
+    ``host:port:user:pass`` form instead, and reading that with ``urlsplit``
+    finds no username at all -- the guess silently becomes ``""``.  Parse first
+    (the strict parser covers every documented form) and fall back to the raw
+    string so the permissive shapes ``phone_proxy.normalize_proxy_url`` accepts
+    still resolve.
+
+    This is the definition site: ``paypal_proxy.infer_proxy_country`` is a thin
+    wrapper over it (Boundary Rule 13), so the registration lane can learn its
+    exit country without importing a PayPal-named module.
+    """
+    value = str(proxy or "").strip()
+    if not value:
+        return ""
+    entry = parse_proxy(value)
+    return infer_region(entry.url if entry is not None else value)
+
+
 def load_proxy_pool(
     config: Mapping[str, Any] | None = None,
     *,

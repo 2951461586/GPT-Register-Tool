@@ -66,8 +66,8 @@ class RegistrationDriver(str, Enum):
 `sms_tool/auth_headers.py` 是「每个账号看起来像同一台稳定设备」的事实来源。
 
 - **设备档案**：`AUTH_FINGERPRINT_PROFILES`（`auth_headers.py:42`）覆盖 Chrome 124–146 的 UA / 平台 / 渲染器组合。
-- **确定性指纹**：`sentinel_fingerprint()`（`auth_headers.py:637`）按账号 `device_id` **确定性派生** screen / CPU / 内存 / `time_origin`，使得同一账号每次注册拿到一致指纹，不同账号彼此不关联（防关联）。
-- **鉴权头注入**：`openai_auth_headers()`（`auth_headers.py:725`）注入 `oai-device-id`、`oai-session-id`、`sec-ch-ua*`、`sec-ch-ua-platform`、`Datadog` trace 等；`family` 分为 `nextauth` / `auth` / `chatgpt` 三族，三族**共享**同一 DID、稳定的 session logging id、flow invocation id、UA、client hints、GeoIP 派生的 locale/timezone。
+- **确定性指纹**：`sentinel_fingerprint()`（`auth_headers.py:642`）按账号 `device_id` **确定性派生** screen / CPU / 内存 / `time_origin`，使得同一账号每次注册拿到一致指纹，不同账号彼此不关联（防关联）。
+- **鉴权头注入**：`openai_auth_headers()`（`auth_headers.py:730`）注入 `oai-device-id`、`oai-session-id`、`sec-ch-ua*`、`sec-ch-ua-platform`、`Datadog` trace 等；`family` 分为 `nextauth` / `auth` / `chatgpt` 三族，三族**共享**同一 DID、稳定的 session logging id、flow invocation id、UA、client hints、GeoIP 派生的 locale/timezone。
 - **一致性强约束**（见 `architecture.md` 的 *Registration Protocol Consistency*）：Sentinel QuickJS 消费**同一指纹**，为 `username_password_create` / `authorize_continue` / `oauth_create_account` 分别产出 token；token payload id、`oai-did` cookie、auth header **必须匹配**。提取失败**fail closed**——绝不使用纯 HTTP 的 PoW fallback。
 
 > 实战含义：调注册相关代码时，**不要**单独改某一处 `oai-*` 头或指纹，必须走 `auth_headers` 统一出口，否则 DID/Header/Cookie 三者错位会直接被风控。
@@ -131,7 +131,7 @@ Sentinel 不是纯 Python PoW，而是调用**真实 Node SDK**：
   - **IPWO**：`custom_zone_XX`
   - **rola**：username `..._<sid>-country-XX`。地区标签是 `country`，`_REGION_TAG` 必须包含它，否则重定与会话轮换对它**静默 no-op**；`_ROLA_SID_RE` 用 lookbehind 取 `_` 与 `-country-XX` 之间的 sid。国家码**大小写不敏感**（实测 `country-US` 拿到 US 出口），重定后会被规范成大写。
   - **Kookeey**：password `BASE-CC-SESSION-TTL`，TTL 单位 `\d+[smhd]` 超集
-- **选池**：`load_proxy_pool()`（`proxy_entry.py:540`）/ `choose_proxy_entry()`（`proxy_entry.py:606`）。
+- **选池**：`load_proxy_pool()`（`proxy_entry.py:562`）/ `choose_proxy_entry()`（`proxy_entry.py:628`）。
 - **脱敏**：`masked` 去除凭据，日志/报告只显示脱敏串。
 - **池形态约束（以 `proxy.json` 为准）**：
   🔴 **2026-09-22 现状：单地区 VN、lajiao 10 条。** `proxy.registration` /
@@ -182,7 +182,7 @@ Sentinel 不是纯 Python PoW，而是调用**真实 Node SDK**：
 | `protocol` | `FingerprintPool`（`fingerprint_pool.py:121`） | `shared_fingerprint_pool(config)`（`fingerprint_pool.py:328`） | TLS/UA 档案 `ProtocolEnvironmentProfile`（`fingerprint_pool.py:37`） | `next(proxy)`（`fingerprint_pool.py:249`）按 `_GEO_PROFILES`（`auth_headers.py:313`）覆盖 locale/timezone |
 | `browser_*`（4 个） | `BrowserProfilePool`（`browser_fingerprint_pool.py:198`） | `shared_browser_profile_pool(config)`（`browser_fingerprint_pool.py:234`），经 `select_browser_profile(...)`（`browser_fingerprint_pool.py:537`）取档 | 7 个内置桌面硬件档案 `BROWSER_PROFILE_POOL`（`browser_fingerprint_pool.py:148`） | `detect_proxy_exit_geo(proxy)`（`browser_fingerprint_pool.py:317`）经共享 `geo.resolver`（Cloudflare trace 优先）→ `BROWSER_LOCALE_PROFILES`（`browser_fingerprint_pool.py:79`，经 `COUNTRY_LOCALE_PROFILE_MAP` 把 `VN` 映射到 `vn`） |
 
-**核心结论**：浏览器路径的 7 个硬件档案是**进程级单例、被全部 4 个浏览器驱动共享**——playwright / camoufox / cloak / roxy 都走 `run_browser_registration`（`registration_drivers/browser_flow/orchestrator.py:69`）→ `_browser_session_scope`（`registration_drivers/browser_flow/flow_steps.py:155`）→ `select_browser_profile(_browser_geo, seed=device_id, config=config)`（`browser_fingerprint_pool.py:537`）取同一池。协议路径用独立的 `FingerprintPool`，两者**互不复用**。硬件档案只来自内置池；已退休的 `registration.browser_profile_pool` 会在配置校验时报错，不再制造“配置已生效”的假 Interface。
+**核心结论**：浏览器路径的 7 个硬件档案是**进程级单例、被全部 4 个浏览器驱动共享**——playwright / camoufox / cloak / roxy 都走 `run_browser_registration`（`registration_drivers/browser_flow/orchestrator.py:73`）→ `_browser_session_scope`（`registration_drivers/browser_flow/flow_steps.py:155`）→ `select_browser_profile(_browser_geo, seed=device_id, config=config)`（`browser_fingerprint_pool.py:537`）取同一池。协议路径用独立的 `FingerprintPool`，两者**互不复用**。硬件档案只来自内置池；已退休的 `registration.browser_profile_pool` 会在配置校验时报错，不再制造“配置已生效”的假 Interface。
 
 > **地区覆盖（2026-09-11）**：两侧都已收录 `VN`——协议路径 `_GEO_PROFILES["VN"]` = `Asia/Ho_Chi_Minh` / `vi-VN`；浏览器路径 `BROWSER_LOCALE_PROFILES["vn"]` + `COUNTRY_LOCALE_PROFILE_MAP["VN"] = "vn"`，并在 `TIMEZONE_NAME_BY_IANA` 补了 `Asia/Ho_Chi_Minh`。**未收录的国家不会报错，而是静默回退**：协议路径回退到"实测时区 + 档案原语言"，浏览器路径 `locale_profile_key_from_geo` 直接回退 `"us"`。因此**新增出口地区时必须同步补这三张表**，否则会出现"出口在 A 国、语言是 en-US"的隐性矛盾。
 
@@ -251,8 +251,8 @@ WPF 桌面端（`SmsWorkbench/`）通过 `PythonBackendClient` 启动 `python -m
 | `normalize_registration_driver` | `registration_drivers/base.py:94` | 归一化，默认 protocol |
 | `BrowserRegistrationError` | `registration_drivers/base.py:130` | 浏览器层错误封装 |
 | `AUTH_FINGERPRINT_PROFILES` | `auth_headers.py:42` | Chrome 124–146 设备档案 |
-| `sentinel_fingerprint` | `auth_headers.py:637` | 确定性指纹派生 |
-| `openai_auth_headers` | `auth_headers.py:725` | `oai-*` 头注入 |
+| `sentinel_fingerprint` | `auth_headers.py:642` | 确定性指纹派生 |
+| `openai_auth_headers` | `auth_headers.py:730` | `oai-*` 头注入 |
 | `OPENAI_SENTINEL_BACKEND` | `sentinel/client.py:59`（默认 `node_runner`） | Sentinel 后端选择 |
 | `_get_cached_sentinel` / `_save_sentinel_cache` | `sentinel_tokens.py:79` / `:97` | 线程安全缓存 |
 | `_sentinel_device_id` / `assert_sentinel_device_id` | `sentinel_tokens.py:136` / `:148` | DID 一致性 |
@@ -263,7 +263,7 @@ WPF 桌面端（`SmsWorkbench/`）通过 `PythonBackendClient` 启动 `python -m
 | `rebuild_proxy_credentials` | `proxy_entry.py:389` | 凭据重建 |
 | `retarget_region` | `proxy_entry.py:410` | 地区重定 |
 | `rotate_session` | `proxy_entry.py:449` | 会话轮换 |
-| `load_proxy_pool` / `choose_proxy_entry` | `proxy_entry.py:540` / `:606` | 选池 |
+| `load_proxy_pool` / `choose_proxy_entry` | `proxy_entry.py:562` / `:628` | 选池 |
 | `registration_network_preflight` | `registration_preflight.py:139` | 边界探活 |
 | `_resolve_proxy_scheme` | `registration_preflight.py:105` | socks5↔http 纠错 |
 | `shared_fingerprint_pool` | `fingerprint_pool.py:345` | 协议路径指纹池单例 |
@@ -272,7 +272,7 @@ WPF 桌面端（`SmsWorkbench/`）通过 `PythonBackendClient` 启动 `python -m
 | `select_browser_profile` | `browser_fingerprint_pool.py:540` | 取浏览器硬件档案（seed 稳定） |
 | `detect_proxy_exit_geo` | `browser_fingerprint_pool.py:320` | 穿透代理查出口地理 |
 | `BrowserProfilePool` / `BROWSER_PROFILE_POOL` | `browser_fingerprint_pool.py:210` / `:160` | 7 个内置桌面硬件档案（4 个浏览器驱动共享） |
-| `run_browser_registration` | `registration_drivers/browser_flow/orchestrator.py:69` | 5 浏览器驱动统一入口 |
+| `run_browser_registration` | `registration_drivers/browser_flow/orchestrator.py:73` | 5 浏览器驱动统一入口 |
 | `PoolConfig`（进程池） | `browser_pool.py:62` | `registration.browser_process_pool` 解析 |
 
 ---

@@ -23,7 +23,7 @@ from typing import Any
 from .helpers import unique_emails
 from ..batch_runner import ensure_batch_sentinel_readiness, filter_registered_mailboxes
 from ..config import validate_registration_driver_config
-from ..payment_operation import PaymentOperationConflict, PaymentOperationStore
+from ..operation_journal import PaymentOperationConflict, PaymentOperationStore
 from ..proxy_entry import parse_proxy
 from ..registration_preflight import CLOUDFLARE_CHALLENGE_MARKER
 from ..registration_funnel import combine_registration_funnels, summarize_registration_funnel

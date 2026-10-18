@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 from http.cookiejar import CookieJar
 import time
+from typing import Any
 from unittest.mock import Mock
 
 import pytest
@@ -25,11 +26,24 @@ class MemoryPersistence:
     def upsert_account(self, *args, **kwargs):
         pass
 
+    # The two remaining ``RegistrationPersistence`` protocol members.  The fake
+    # used to omit them, which made it structurally incompatible with the
+    # protocol and produced 23 cascading type errors at every call site.
+    def get_device_context(self, *args, **kwargs):
+        return {}
+
+    def clear_checkpoint(self, *args, **kwargs):
+        self.row = {}
+
 
 def workflow(monkeypatch, payload=None):
     from sms_tool.mailbox_service import MailboxService
 
-    w = object.__new__(RegistrationEmailWorkflow)
+    # ``object.__new__`` + attribute assignment deliberately builds a *partial*
+    # workflow: the stage under test needs three collaborators, not the twelve
+    # ``__init__`` requires.  Annotating it ``Any`` states that intent once,
+    # instead of leaving 22 fake-object type errors to a baseline entry.
+    w: Any = object.__new__(RegistrationEmailWorkflow)
     w.config = {}
     w.input_proxy = None
     w.input_mailbox = SimpleNamespace(email="resume@example.test", provider="icloud_url")
@@ -48,7 +62,7 @@ def workflow(monkeypatch, payload=None):
     )
     w._run_stage = Mock()
     monkeypatch.setattr(MailboxService, "create", Mock())
-    monkeypatch.setattr("sms_tool.paypal_proxy.infer_proxy_country", lambda value: "")
+    monkeypatch.setattr("sms_tool.proxy_entry.infer_proxy_country", lambda value: "")
     return w
 
 

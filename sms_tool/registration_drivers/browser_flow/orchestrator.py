@@ -21,7 +21,7 @@ from ... import (
     browser_fingerprint_pool,
     chatgpt_bootstrap,
     mailbox as mailbox_pkg,
-    paypal_proxy,
+    proxy_entry,
     registration_outcome,
     registration_progress,
     registration_result,
@@ -45,7 +45,7 @@ def _goto_with_retry(page: Any, url: str, *, timeout_ms: int, attempts: int = 2)
     has already committed. A retry using ``commit`` lets the state classifier
     inspect that document instead of treating the abort as an account failure.
     """
-    last_error = None
+    last_error: BaseException | None = None
     for attempt in range(1, max(1, int(attempts or 1)) + 1):
         try:
             wait_until = "domcontentloaded" if attempt == 1 else "commit"
@@ -63,6 +63,10 @@ def _goto_with_retry(page: Any, url: str, *, timeout_ms: int, attempts: int = 2)
                 page.wait_for_timeout(min(2_000, max(250, timeout_ms // 20)))
             except Exception:
                 time.sleep(0.5)
+    # The loop above either returns or raises, so this is unreachable; it exists
+    # only to narrow ``last_error`` for the type checker.
+    if last_error is None:  # pragma: no cover
+        raise RuntimeError("goto retry loop exited without a navigation result")
     raise last_error
 
 
@@ -286,7 +290,7 @@ def run_browser_registration(
             if state == "otp":
                 password_used = False
             elif state == "password":
-                password_used = form_steps._fill_password_if_present(page, password, config=config)
+                password_used = form_steps._fill_password_if_present(page, password or "", config=config)
             else:
                 password_used = False
             machine.transition(RegistrationState.EMAIL_OTP_SEND)
@@ -351,7 +355,7 @@ def run_browser_registration(
                                     try:
                                         page, _ = flow_steps._restart_email_otp_flow(
                                             browser, page, start_url=start_url, email=email,
-                                            password=password, timeout_seconds=timeout,
+                                            password=password or "", timeout_seconds=timeout,
                                             config=config,
                                         )
                                         restarted = True
@@ -383,7 +387,7 @@ def run_browser_registration(
                             try:
                                 page, _ = flow_steps._restart_email_otp_flow(
                                     browser, page, start_url=start_url, email=email,
-                                    password=password, timeout_seconds=timeout,
+                                    password=password or "", timeout_seconds=timeout,
                                     config=config,
                                 )
                                 restarted = True
@@ -584,7 +588,7 @@ def run_browser_registration(
                 registration_state=registration_state,
                 email=email,
                 error=dom_fields._safe_text(error),
-                password=password if password_used else "",
+                password=(password or "") if password_used else "",
                 name=full_name,
                 birthdate=birthdate,
                 access_token=access_token,
@@ -599,7 +603,7 @@ def run_browser_registration(
                 totp_secret=totp_secret,
                 twofa_enrollment=twofa_result,
                 registration_success_basis=registration_success_basis,
-                registration_country=paypal_proxy.infer_proxy_country(proxy),
+                registration_country=proxy_entry.infer_proxy_country(proxy or ""),
                 registration_warning=dom_fields._safe_text(warning),
                 post_registration_ready=success,
                 mailbox_snapshot=registration_outcome._mailbox_snapshot(mailbox),

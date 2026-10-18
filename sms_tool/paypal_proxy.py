@@ -91,11 +91,16 @@ def rotate_proxy_session(proxy: str, country: str = "") -> str:
 def infer_proxy_country(proxy: str) -> str:
     """Best-effort exit-country inference from the proxy credential template.
 
-    Thin wrapper over the single-authority ``proxy_entry.infer_region``.
+    Thin wrapper over the single-authority ``proxy_entry.infer_proxy_country``.
+    The definition site moved there on 2026-10-18: exit-country inference is a
+    proxy/geo concern, not a PayPal one, and the registration lane was importing
+    this PayPal-named module for it.  Kept as a delegating shell so existing
+    importers and ``patch("sms_tool.paypal_proxy.infer_proxy_country")`` targets
+    keep working.
     """
-    from .proxy_entry import infer_region
+    from .proxy_entry import infer_proxy_country as _infer_proxy_country
 
-    return infer_region(normalize_proxy_url(proxy))
+    return _infer_proxy_country(proxy)
 
 
 def is_retryable_network_error(error: Any) -> bool:

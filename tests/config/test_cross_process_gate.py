@@ -142,7 +142,7 @@ _SMS_TOOL = _PROJECT_ROOT / "sms_tool"
 # then hold the same slot.  New call sites must be added here deliberately.
 _ALLOWED_DISCARD_SITES = {
     ("sms_tool/payment_batch.py", "process_gate"),
-    ("sms_tool/payment_operation.py", "gate"),
+    ("sms_tool/operation_journal.py", "gate"),
 }
 
 # ``set.discard()`` calls that merely share the method name.

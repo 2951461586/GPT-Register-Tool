@@ -331,11 +331,11 @@ _GEO_PROFILES = {
 
 
 def set_fingerprint_geo(
-    country: str = "",
+    country: str | None = "",
     *,
-    timezone: str = "",
-    lang: str = "",
-    lang_full: str = "",
+    timezone: str | None = "",
+    lang: str | None = "",
+    lang_full: str | None = "",
 ) -> dict[str, str]:
     """Bind the current account fingerprint's locale to the proxy exit region.
 
@@ -346,6 +346,11 @@ def set_fingerprint_geo(
     this whole resolver chain was built to remove.  Callers that already
     resolved the exit (``fingerprint_pool``) pass the measurement through here
     instead of letting it be recomputed and then discarded.
+
+    Every parameter is ``str | None`` because the body already treats ``None`` as
+    "no override" (``value or ""``) and callers pass the pool's optional
+    measurement straight through.  The narrower ``str`` annotation made those
+    calls type errors that the runtime had always accepted.
     """
     code = str(country or "").strip().upper()
     profile = dict(_GEO_PROFILES.get(code) or {"timezone": "UTC", "lang": "en-US", "lang_full": "en-US,en;q=0.9"})

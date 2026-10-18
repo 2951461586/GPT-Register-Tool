@@ -25,7 +25,7 @@ from typing import Any, Callable, Mapping
 from . import endpoints, registration_checkpoint
 from . import fingerprint_pool as _fingerprint_pool
 from . import mailbox_service as _mailbox_service
-from . import paypal_proxy as _paypal_proxy
+from . import proxy_entry as _proxy_entry
 from . import registration_account_stages as _account_stages
 from . import registration_concurrency as _registration_concurrency
 from . import registration_edge_challenge as _edge_challenge
@@ -115,7 +115,7 @@ def _apply_protocol_fingerprint(ops: Any, config: Any, proxy: str) -> str:
         set_auth_fingerprint(profile.name)
         return str(profile.country or "")
     else:
-        country = str(_paypal_proxy.infer_proxy_country(proxy) or "")
+        country = str(_proxy_entry.infer_proxy_country(proxy) or "")
         ops.set_fingerprint_geo(country)
         return country
 
@@ -520,7 +520,7 @@ class RegistrationEmailWorkflow:
         chatgpt_cfg = self.config.get("chatgpt", {})
         s.auth_base = chatgpt_cfg.get("auth_base_url", endpoints.AUTH_BASE)
         s.chat_base = chatgpt_cfg.get("chat_base_url", endpoints.CHATGPT_BASE)
-        r.set_fingerprint_geo(_paypal_proxy.infer_proxy_country(s.proxy))
+        r.set_fingerprint_geo(_proxy_entry.infer_proxy_country(s.proxy))
         self.machine.transition(RegistrationState.MAILBOX_READY)
         if s.resume_checkpoint:
             _emit(_LOGGER, "[*] Resumable post-create checkpoint found; skipping mailbox/OTP stages")

@@ -17,7 +17,7 @@ import logging
 import time
 from typing import Any
 
-from . import paypal_proxy as _paypal_proxy
+from . import proxy_entry as _proxy_entry
 from . import registration_checkpoint
 from . import token_telemetry as _token_telemetry
 from .auth_headers import current_auth_fingerprint
@@ -260,7 +260,7 @@ def finalize(self) -> dict[str, Any]:
         totp_secret=s.totp_secret or "",
         twofa_enrollment=s.twofa_result or {"ok": False, "reason": "skipped"},
         registration_success_basis="at_http_200" if s.success else "",
-        registration_country=_paypal_proxy.infer_proxy_country(s.proxy),
+        registration_country=_proxy_entry.infer_proxy_country(s.proxy),
         registration_warning=s.registration_warning,
         post_registration_ready=s.post_registration_ready,
         mailbox_snapshot=r._mailbox_snapshot(s.mailbox),
