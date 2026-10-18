@@ -31,6 +31,10 @@ _DEFAULT_STAGES = frozenset({"checkout", "approve", "promotion"})
 
 _DEFAULT_TIMEOUT_SECONDS = 12.0
 _DEFAULT_CACHE_TTL_SECONDS = 600.0
+#: Upper bound on cached (proxy, expected-country) outcomes. Expiry was only
+#: applied when the *same* pair was looked up again, so a run that rotates exits
+#: kept one entry per proxy it had ever probed for the life of the process.
+_PROBE_CACHE_LIMIT = 512
 
 _cache_lock = threading.Lock()
 _probe_cache: dict[tuple[str, str], tuple[float, tuple[bool, str, str]]] = {}
@@ -125,8 +129,32 @@ def _cached_probe(
     ok = bool(getattr(result, "ok", False))
     outcome = (ok, observed, error)
     with _cache_lock:
+        if key not in _probe_cache and len(_probe_cache) >= _PROBE_CACHE_LIMIT:
+            _prune_locked(now, ttl, failure_cooldown)
         _probe_cache[key] = (now, outcome)
     return outcome
+
+
+def _prune_locked(now: float, ttl: float, failure_cooldown: float) -> None:
+    """Drop expired outcomes, then the oldest, so the cache stays bounded.
+
+    An outcome's window depends on what it says: a success lives for ``ttl``, a
+    failure for ``failure_cooldown``. Both are checked against the settings of
+    the call that triggered the sweep, which is the best estimate available for
+    entries written under the same gate configuration. Caller holds
+    ``_cache_lock``.
+    """
+    for key in [
+        key
+        for key, (stamp, outcome) in _probe_cache.items()
+        if now - stamp >= (ttl if outcome[0] else failure_cooldown)
+    ]:
+        del _probe_cache[key]
+    overflow = len(_probe_cache) - _PROBE_CACHE_LIMIT + 1
+    if overflow <= 0:
+        return
+    for key in sorted(_probe_cache, key=lambda key: _probe_cache[key][0])[:overflow]:
+        del _probe_cache[key]
 
 
 def clear_cache() -> None:

@@ -332,6 +332,43 @@ class ResolveTests(unittest.TestCase):
         resolver.resolve("http://p:1")
         self.assertEqual(probe.calls, 2)
 
+    def test_cache_stays_bounded_under_proxy_rotation(self):
+        # A rotation-heavy run measures a fresh exit per account. Entries used
+        # to leave only when the *same* proxy was resolved again, so every exit
+        # the process ever saw stayed in memory.
+        probe = _FakeProbe(ProxyGeo(country="JP"))
+        resolver = _resolver(probe=probe, max_entries=3)
+        for index in range(10):
+            resolver.resolve(f"http://p:{index}")
+        self.assertLessEqual(len(resolver._cache), 3)
+        # The most recent answer is still cached: the bound must not behave
+        # like "clear on every write".
+        before = probe.calls
+        resolver.resolve("http://p:9")
+        self.assertEqual(probe.calls, before)
+
+    def test_eviction_prefers_expired_entries_over_live_ones(self):
+        # ``negative_ttl=0`` makes every unknown answer expired on arrival, so
+        # the sweep has something to drop and the live entry must survive it.
+        class _MixedProbe:
+            def __init__(self):
+                self.calls: list[str] = []
+
+            def __call__(self, proxy, *, timeout, endpoints, need_timezone):
+                self.calls.append(proxy)
+                return ProxyGeo(country="JP") if "live" in proxy else ProxyGeo()
+
+        probe = _MixedProbe()
+        resolver = _resolver(probe=probe, max_entries=2, negative_ttl=0.0)
+        resolver.resolve("http://stale:1")
+        resolver.resolve("http://live:1")
+        resolver.resolve("http://new:2")
+        self.assertIn(resolver._cache_key("http://live:1"), resolver._cache)
+        self.assertNotIn(resolver._cache_key("http://stale:1"), resolver._cache)
+        calls = len(probe.calls)
+        resolver.resolve("http://live:1")
+        self.assertEqual(len(probe.calls), calls)
+
 
 class RememberTests(unittest.TestCase):
     """The fix for the discarded preflight measurement."""
@@ -403,6 +440,21 @@ class CrossCallerIntegrationTests(unittest.TestCase):
             out = detect_proxy_exit_geo(proxy)
         self.assertEqual(out["country"], "JP")
         self.assertEqual(out["timezone"], "Asia/Tokyo")
+
+    def test_the_compatibility_geo_mirror_stays_bounded(self):
+        # ``browser_fingerprint_pool._GEO_CACHE`` is a write-only compatibility
+        # mirror, so without a bound it kept one dict per proxy the process had
+        # ever measured.
+        from sms_tool import browser_fingerprint_pool as bfp
+
+        with patch.object(bfp, "_GEO_CACHE_LIMIT", 3):
+            bfp._GEO_CACHE.clear()
+            for index in range(6):
+                proxy = f"http://mirror{index}.example:8080"
+                geo.remember_proxy_geo(proxy, ProxyGeo(country="JP", timezone="Asia/Tokyo"))
+                detect_proxy_exit_geo(proxy)
+            self.assertLessEqual(len(bfp._GEO_CACHE), 3)
+            bfp._GEO_CACHE.clear()
 
     def test_paypal_preflight_publishes_to_shared_cache(self):
         from sms_tool import paypal_proxy

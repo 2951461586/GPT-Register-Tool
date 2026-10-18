@@ -265,8 +265,13 @@ def _empty_session_state() -> dict[str, Any]:
 
 # (mtime, size) keyed cache for parsed session-file states. A several-hundred
 # account pool refresh reparses every session JSON on each call; unchanged
-# files hit the cache, which the resident desktop channel relies on.
+# files hit the cache, which the resident desktop channel relies on. The bound
+# matches the row caches above: the resident channel is long-lived, so a pool
+# that grows (or a sessions directory an operator prunes by hand) must not grow
+# this dict without limit. Clearing wholesale is the same trade the parse and
+# sanitize caches take -- a miss costs one file read.
 _SESSION_STATE_CACHE: dict[str, tuple[float, int, dict[str, Any]]] = {}
+_SESSION_STATE_CACHE_LIMIT = 4096
 _SESSION_STATE_LOCK = threading.Lock()
 
 
@@ -299,6 +304,8 @@ def _session_file_state(record: dict[str, Any]) -> dict[str, Any]:
     workspace: dict = _raw_workspace if isinstance(_raw_workspace, dict) else {}
     state["account_type"] = _account_type(data, auth_session, workspace, data.get("access_token"))
     with _SESSION_STATE_LOCK:
+        if len(_SESSION_STATE_CACHE) >= _SESSION_STATE_CACHE_LIMIT:
+            _SESSION_STATE_CACHE.clear()
         _SESSION_STATE_CACHE[str(path)] = (stat.st_mtime, stat.st_size, state)
     return dict(state)
 

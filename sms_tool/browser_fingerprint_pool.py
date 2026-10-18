@@ -211,7 +211,10 @@ class BrowserProfilePool:
     """Thread-safe rotation over the built-in browser hardware profiles."""
 
     def __init__(self) -> None:
-        self._profiles = list(BROWSER_PROFILE_POOL)
+        # ``Any`` values: the built-in profiles carry numbers, and the selector
+        # adds the label strings into the same dict (``browser_profile_index`` /
+        # ``browser_fingerprint_profile``), so a narrower value type is wrong.
+        self._profiles: list[dict[str, Any]] = list(BROWSER_PROFILE_POOL)
         self._index = 0
         self._lock = threading.Lock()
 
@@ -271,8 +274,10 @@ def shared_browser_profile_pool(config: Mapping[str, Any] | None = None) -> Brow
 #
 # ``_GEO_CACHE`` / ``_GEO_CACHE_LOCK`` are no longer the source of truth but are
 # kept: external callers and tests import them, and removing a module-level
-# name would break the patch seams.
+# name would break the patch seams. Keeping the name must not mean keeping every
+# exit forever, so the mirror is bounded like the resolver's own cache.
 _GEO_CACHE: dict[str, dict[str, Any]] = {}
+_GEO_CACHE_LIMIT = 512
 _GEO_CACHE_LOCK = threading.Lock()
 
 
@@ -344,6 +349,8 @@ def detect_proxy_exit_geo(
         geo = _geo.ProxyGeo()
     data = geo.to_dict() if geo.known else {}
     with _GEO_CACHE_LOCK:
+        if len(_GEO_CACHE) >= _GEO_CACHE_LIMIT:
+            _GEO_CACHE.clear()
         _GEO_CACHE[key] = dict(data)
     return data
 

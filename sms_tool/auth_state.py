@@ -156,6 +156,11 @@ _LAST_DUMP_TEXT: dict[str, str] = {}
 #: were the server walking back to a shape it had already shown** (17 -> 13 ->
 #: 17).  A diff alone still paid 363 characters for each leg of a round trip it
 #: had already described once.
+#:
+#: Bounded because every entry is a full canonical summary (~800 characters).
+#: The set exists to remember shapes, not to keep them forever: past the bound
+#: an arbitrary entry is dropped, which at worst costs one extra diff reprint.
+_MAX_SEEN_SHAPES_PER_STAGE = 64
 _SEEN_DUMP_SHAPES: dict[str, set[str]] = {}
 
 
@@ -222,6 +227,10 @@ def compact_auth_dump_text(stage, summary) -> str:
     _LAST_DUMP_TEXT[stage] = snapshot
     seen = _SEEN_DUMP_SHAPES.setdefault(stage, set())
     already_seen = snapshot in seen
+    if not already_seen and len(seen) >= _MAX_SEEN_SHAPES_PER_STAGE:
+        # A set has no order, so the victim is arbitrary; the alternative
+        # (letting the set grow) is a process-lifetime leak in a long batch.
+        seen.pop()
     seen.add(snapshot)
     if previous is None:
         return json.dumps(summary, ensure_ascii=False)

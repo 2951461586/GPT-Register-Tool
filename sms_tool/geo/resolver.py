@@ -53,6 +53,10 @@ POSITIVE_TTL = 1800.0
 # on every account in a batch. The old code cached failures permanently, which
 # meant one network hiccup disabled geo detection for the rest of the process.
 NEGATIVE_TTL = 60.0
+# Bounded cache size. A rotation-heavy run measures a new exit per account and
+# used to keep every one of them for the life of the process; 512 is far above
+# the working set of a live pool while still capping a long batch.
+MAX_CACHE_ENTRIES = 512
 
 _TRACE_ENDPOINT = "https://cloudflare.com/cdn-cgi/trace"
 
@@ -326,6 +330,12 @@ class GeoResolver:
     # losing the shared cache.  Signature is ``(proxy, *, timeout, endpoints,
     # need_timezone) -> ProxyGeo``.
     probe: Callable[..., "ProxyGeo"] | None = None
+    #: Upper bound on cached exits.  Eviction used to happen only when the
+    #: *same* proxy was resolved again, so a rotation-heavy run kept every exit
+    #: it had ever measured for the life of the process.  The pool sizes in this
+    #: repo are in the hundreds, so this bound is comfortably above a healthy
+    #: working set and still finite.
+    max_entries: int = MAX_CACHE_ENTRIES
     _cache: dict[str, _CacheEntry] = field(default_factory=dict, repr=False)
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
@@ -477,8 +487,28 @@ class GeoResolver:
 
     def _write(self, key: str, geo: ProxyGeo) -> None:
         ttl = self.positive_ttl if geo.known else self.negative_ttl
+        now = time.time()
         with self._lock:
-            self._cache[key] = _CacheEntry(geo=geo, expires=time.time() + ttl)
+            if key not in self._cache and len(self._cache) >= self.max_entries:
+                self._evict(now)
+            self._cache[key] = _CacheEntry(geo=geo, expires=now + ttl)
+
+    def _evict(self, now: float) -> None:
+        """Keep the cache bounded; expired entries go before live ones.
+
+        ``_read`` only drops the key it was asked about, so an exit that is
+        never resolved again (the normal case under proxy rotation) would
+        otherwise stay in memory forever.  ``max_entries`` is small enough that
+        the sort only runs on overflow.
+        """
+        for stale in [key for key, entry in self._cache.items() if entry.expires <= now]:
+            del self._cache[stale]
+        overflow = len(self._cache) - self.max_entries + 1
+        if overflow <= 0:
+            return
+        oldest = sorted(self._cache, key=lambda key: self._cache[key].expires)[:overflow]
+        for key in oldest:
+            del self._cache[key]
 
     def invalidate(self, proxy: str | None = None) -> None:
         with self._lock:

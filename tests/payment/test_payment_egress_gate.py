@@ -239,3 +239,40 @@ class FunctionAdapterEgressTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ProbeCacheBoundTests(unittest.TestCase):
+    """The egress probe cache is process-wide and must not grow per proxy.
+
+    A batch rotates exits, and every new proxy pairs with each expected stage;
+    expiry was only applied when the *same* pair was looked up again, so a long
+    run kept one entry per proxy it had ever probed.
+    """
+
+    def setUp(self):
+        payment_egress.clear_cache()
+
+    def tearDown(self):
+        payment_egress.clear_cache()
+
+    def test_cache_stays_bounded_under_proxy_rotation(self):
+        def probe(proxy, expected, stage, timeout):
+            return _ProbeResult(ok=True, country_code=expected)
+
+        with patch.object(payment_egress, "_PROBE_CACHE_LIMIT", 3):
+            for index in range(10):
+                payment_egress._cached_probe(
+                    probe, f"http://10.0.0.{index}:8080", "US", "checkout", 1.0, 600.0, 180.0
+                )
+        self.assertLessEqual(len(payment_egress._probe_cache), 3)
+
+    def test_prune_drops_expired_entries_before_the_oldest_live_one(self):
+        with patch.object(payment_egress, "_PROBE_CACHE_LIMIT", 2):
+            payment_egress._probe_cache[("stale", "US")] = (100.0, (False, "", "boom"))
+            payment_egress._probe_cache[("live", "US")] = (100.0, (True, "US", ""))
+            # 599s elapsed: the failure (180s cooldown) is expired, the success
+            # (600s TTL) is still inside its window and must survive the sweep.
+            with payment_egress._cache_lock:
+                payment_egress._prune_locked(699.0, ttl=600.0, failure_cooldown=180.0)
+        self.assertNotIn(("stale", "US"), payment_egress._probe_cache)
+        self.assertIn(("live", "US"), payment_egress._probe_cache)

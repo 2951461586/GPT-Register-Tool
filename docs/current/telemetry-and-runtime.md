@@ -103,6 +103,25 @@ Email references in the local progress ledger are still operational identity
 data. Do not publish raw logs or ledgers. The count-only inventory below emits
 neither identities nor credential values.
 
+## In-memory caches
+
+The resident desktop channel and long batch runs keep a few process-lifetime
+caches. Each is bounded; the bound is a safety valve, not a tuning knob.
+
+| Cache | Key | Bound | On overflow |
+| --- | --- | ---: | --- |
+| `geo.resolver.GeoResolver` (`_cache`) | normalized proxy URL | 512 (`max_entries`) | expired entries first, then the oldest expiry |
+| `desktop_read._SESSION_STATE_CACHE` | session-file path | 4096 | cleared; a miss costs one file read |
+| `payment_egress._probe_cache` | (proxy, expected country) | 512 | expired outcomes first, then the oldest probe |
+| `auth_state._SEEN_DUMP_SHAPES` | stage | 64 shapes per stage | one arbitrary shape dropped; worst case is one extra diff line |
+| `browser_fingerprint_pool._GEO_CACHE` | normalized proxy URL | 512 | cleared; it is a compatibility mirror, the resolver holds the answer |
+
+They were unbounded before 2026-10-18: expiry was only applied when the *same*
+key was looked up again, so a proxy-rotating run kept every exit it had ever
+measured, and the desktop channel kept one state dict per session file it had
+ever read. Dropping an entry never changes behaviour -- a geo/egress answer is
+re-measured, a session state is re-read, a dump shape reprints its diff.
+
 ## Read-only inventory
 
 ```powershell

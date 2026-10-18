@@ -109,3 +109,44 @@ class AuthStateTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SeenDumpShapeBoundTests(unittest.TestCase):
+    """``_SEEN_DUMP_SHAPES`` remembers shapes, it is not an unbounded transcript.
+
+    Each entry is a full canonical summary snapshot, so a server that keeps
+    inventing shapes would grow the set for the life of the process. The bound
+    only costs an extra diff reprint when a dropped shape comes back.
+    """
+
+    def setUp(self):
+        from sms_tool import auth_state
+
+        self.auth_state = auth_state
+        auth_state._SEEN_DUMP_SHAPES.clear()
+        auth_state._LAST_DUMP_TEXT.clear()
+
+    def tearDown(self):
+        self.auth_state._SEEN_DUMP_SHAPES.clear()
+        self.auth_state._LAST_DUMP_TEXT.clear()
+
+    def test_seen_shapes_stay_bounded_per_stage(self):
+        from unittest.mock import patch
+
+        with patch.object(self.auth_state, "_MAX_SEEN_SHAPES_PER_STAGE", 3):
+            for index in range(10):
+                compact_auth_dump_text("bound_stage", {"client_auth_session_keys": [f"key_{index}"]})
+        self.assertLessEqual(len(self.auth_state._SEEN_DUMP_SHAPES["bound_stage"]), 3)
+
+    def test_output_stays_usable_after_an_eviction(self):
+        from unittest.mock import patch
+
+        with patch.object(self.auth_state, "_MAX_SEEN_SHAPES_PER_STAGE", 1):
+            first = compact_auth_dump_text("evict_stage", {"client_auth_session_keys": ["a"]})
+            second = compact_auth_dump_text("evict_stage", {"client_auth_session_keys": ["b"]})
+            third = compact_auth_dump_text("evict_stage", {"client_auth_session_keys": ["a"]})
+        self.assertIn("client_auth_session_keys", first)
+        self.assertIn("added", second)
+        # The first shape was evicted, so it now prints as a diff rather than
+        # the "seen before" marker -- still a complete, replayable line.
+        self.assertIn("added", third)

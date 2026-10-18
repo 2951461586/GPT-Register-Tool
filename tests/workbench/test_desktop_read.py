@@ -461,3 +461,28 @@ def test_desktop_read_is_reported_as_handled(monkeypatch):
     monkeypatch.setattr("sms_tool.desktop_read.read_accounts", lambda *_a, **_k: [])
 
     assert cli._main_early_commands(args) is True
+
+
+def test_session_state_cache_stays_bounded(tmp_path, monkeypatch):
+    """The resident desktop channel must not remember every session file forever.
+
+    The cache is keyed by session-file path and was never evicted; a long-lived
+    desktop server over a growing accounts directory therefore held one parsed
+    state dict per session the process had ever read. The bound mirrors the
+    parse/sanitize caches above: on overflow the cache is cleared, and the only
+    cost is one re-read per file.
+    """
+    from sms_tool import desktop_read
+
+    monkeypatch.setattr(desktop_read, "_SESSION_STATE_CACHE_LIMIT", 3)
+    desktop_read._SESSION_STATE_CACHE.clear()
+    for index in range(5):
+        path = tmp_path / f"session_bound_{index}.json"
+        path.write_text(json.dumps({"access_token": f"at-{index}"}), encoding="utf-8")
+        desktop_read._session_file_state({"json_path": str(path)})
+        assert len(desktop_read._SESSION_STATE_CACHE) <= 3
+
+    # A re-read after the clear still answers from the file itself.
+    last = tmp_path / "session_bound_4.json"
+    assert desktop_read._session_file_state({"json_path": str(last)})["has_access_token"] is True
+    desktop_read._SESSION_STATE_CACHE.clear()
