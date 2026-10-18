@@ -115,7 +115,14 @@ $extractRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("gpt-register-runtim
 New-Item -ItemType Directory -Path $extractRoot -Force | Out-Null
 try {
     Write-Host "Extracting to a temporary directory..."
-    & tar -xzf $archivePath -C $extractRoot
+    # Resolve Windows' bsdtar explicitly. When this script runs from a Git Bash
+    # environment, PATH finds /usr/bin/tar (GNU tar) first, which reads the
+    # ``C:\...`` archive path as a remote host spec and fails with
+    # "Cannot connect to C:". The system tar handles both gzip and the long
+    # paths inside the runtime.
+    $tarExe = Join-Path $env:SystemRoot "System32\tar.exe"
+    if (-not (Test-Path $tarExe)) { $tarExe = "tar" }
+    & $tarExe -xzf $archivePath -C $extractRoot
     if ($LASTEXITCODE -ne 0) {
         throw "tar failed with exit code $LASTEXITCODE"
     }
