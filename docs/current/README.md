@@ -14,6 +14,8 @@ below so existing links do not break:
 - [`telemetry-and-runtime.md`](telemetry-and-runtime.md) - 日志关联、测试隔离与只读清理清单
 - [`runtime-packaging.md`](runtime-packaging.md) - 自包含安装包里的 CPython 固定版本、校验与解释器优先级
 - [`typing.md`](typing.md) - pyright 类型门禁（逐文件 ratchet）的安装、运行与修复约定
+- [`cli-reference.md`](cli-reference.md) - 由 argparse 生成的完整 CLI 选项表
+- [`performance-budgets.md`](performance-budgets.md) - 入口延迟/RSS 的回归预算、测量口径与排查方法
 - [`randomness.md`](randomness.md) - `random` 与 `secrets` 的人工分类判据与已复核调用点
 - [`account-health.md`](account-health.md) - 测活、恢复、优惠检查的副作用与代理契约
 - [`mailbox.md`](mailbox.md) - 邮箱 provider 能力、配置注入、轮询和终止错误契约

@@ -12,3 +12,4 @@
 - [ADR-0010: 预检与预热请求的 attempts=1](0010-preflight-and-prime-request-attempts.md)
 - [ADR-0011: 代理脱敏 helper 的归属，与 paypal_proxy 包装链的取舍](0011-proxy-redaction-helper-ownership.md)
 - [ADR-0012: PayPal 双栈边界与 paypal_link.gen_link 的 _PlmProxy](0012-paypal-dual-stack-and-gen-link-proxy.md)
+- [ADR-0013: 运行形态与分发：内置 CPython、只读常驻通道、可选 worker](0013-runtime-shape-and-distribution.md)
