@@ -5,13 +5,12 @@
 using Serilog;
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Text;
 
 namespace SmsWorkbench
 {
     public sealed class PythonBackendClient : IBackendClient
     {
-        private const int MaxCapturedOutputChars = 2_000_000;
+        private const int MaxCapturedOutputChars = BackendOutputCapture.MaxTailChars;
         private readonly IApplicationPaths _paths;
         private readonly ISettingsService _settings;
         private readonly Serilog.ILogger _logger;
@@ -44,8 +43,8 @@ namespace SmsWorkbench
                 ? configuredCommandId.Trim()
                 : Guid.NewGuid().ToString("N");
             process.StartInfo.Environment["SMS_TOOL_COMMAND_ID"] = commandId;
-            var stdout = new StringBuilder();
-            var stderr = new StringBuilder();
+            var stdout = new BackendOutputCapture();
+            var stderr = new BackendOutputCapture();
 
             _logger.Information("Starting backend command {CommandName} via {Python}; command_id={CommandId}", command.Name, PythonExecutable, commandId);
             try
@@ -87,9 +86,9 @@ namespace SmsWorkbench
 
             await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(false);
             int exitCode = process.HasExited ? process.ExitCode : -1;
-            string output = stdout.ToString().Trim();
-            string error = SensitiveDataSanitizer.Redact(stderr.ToString().Trim());
-            JsonElement? payload;
+            string output = stdout.Text;
+            string error = SensitiveDataSanitizer.Redact(stderr.Text);
+            JsonElement? payload = stdout.Payload;
             try
             {
                 payload = BackendJsonProtocol.ExtractPayload(
@@ -160,17 +159,17 @@ namespace SmsWorkbench
 
         private static async Task PumpAsync(
             StreamReader reader,
-            StringBuilder target,
+            BackendOutputCapture capture,
             BackendOutputChannel channel,
             IProgress<BackendOutputLine>? progress)
         {
             while (await reader.ReadLineAsync().ConfigureAwait(false) is string line)
             {
-                if (target.Length < MaxCapturedOutputChars)
-                {
-                    int remaining = MaxCapturedOutputChars - target.Length;
-                    target.AppendLine(line.Length <= remaining ? line : line[..remaining]);
-                }
+                // An IPC envelope is captured structurally the moment its line
+                // arrives; keeping the raw 623 KB line as well is what made the
+                // old capture cost up to 8 MB per command.
+                if (!capture.TryCaptureEnvelope(line))
+                    capture.Append(line);
                 // Parseable desktop events are already sanitized by the Python
                 // IPC boundary. Redacting the serialized envelope again would
                 // replace fields such as payment_method with "[REDACTED]" and
