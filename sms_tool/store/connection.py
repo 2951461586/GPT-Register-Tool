@@ -103,19 +103,30 @@ def _connect(path=None, runtime_config: ConfigInput = None):
     # 5 s is insufficient, and a larger value only converts a loud failure into a
     # longer silent hang. Revisit only with evidence of real lock timeouts.
     #
-    # WAL is likewise deliberately NOT enabled — measured on this 42 MB /
-    # 795-row database with a writer looping init_database()'s three full-table
-    # UPDATEs (each ~32 MB of changes, i.e. far past the 1000-page
-    # autocheckpoint threshold, so every commit rewrites the database):
-    #     delete (current)          : 41 write tx / 6 s,  reader p95   1.68 ms
-    #     WAL                       : 26 write tx / 6 s,  reader p95   4.43 ms
-    #     WAL + wal_autocheckpoint=0: 17 write tx / 6 s,  reader p95 121.36 ms
-    # WAL is ~1.8x SLOWER with today's giant write transactions. It flips to a
-    # clear win once those transactions are small — the same harness with
-    # single-row UPDATEs gave WAL 57 reads vs delete 7, and the delete-mode
-    # reader hit `database is locked` while the WAL reader never did.
-    # => Re-enable `PRAGMA journal_mode=WAL` TOGETHER WITH the init_database()
-    #    fix (audit-2026-09-01-round4 §8 item 6), not before it.
+    # WAL is likewise deliberately NOT enabled. 2026-09-01 measured it as ~1.8x
+    # SLOWER under init_database()'s three full-table UPDATEs and deferred it
+    # until that replay left the hot path - which it since did (the memo above).
+    # The deferred re-test ran 2026-10-20 on a synthetic 795-row / 38.5 MB
+    # database using the production pattern (one connection per operation,
+    # 3 repeats, medians):
+    #     single-row commit     delete 62.6 tx/s    WAL 42.2 tx/s
+    #     upsert-shaped write   delete 56.0 tx/s    WAL 44.4 tx/s   (rewrites raw_json)
+    #     init_database(force)  ~165-176 ms in delete, WAL and WAL+NORMAL
+    #     2 writers + 4 readers ~56-58 tx/s, zero `database is locked` in every mode
+    #     reader p95 under write  delete 42.9 ms    WAL 29.2 ms
+    # The 09-01 prediction ("small transactions flip WAL to a clear win") did NOT
+    # reproduce: at one connection per operation WAL is ~1.3-1.5x slower and
+    # nothing contends. It only wins once connections are reused - the same
+    # harness at one connection per thread measured delete 105-117 tx/s vs WAL
+    # 500-563 tx/s - so connection reuse is the lever here, not the journal mode.
+    # Production volume is far below that crossover too: a batch of ~800 accounts
+    # issues a few thousand transactions spread over hours (well under 1 tx/s),
+    # so neither change is user-visible today. Revisit only with a measured
+    # write-rate or lock-wait problem, and land connection reuse first if it ever
+    # comes to that - enabling WAL alone would make today's pattern slower.
+    # History: the 09-01 run (writer looping init_database's UPDATEs) measured
+    # delete 41 tx / 6 s at reader p95 1.68 ms, WAL 26 tx / 6 s at 4.43 ms, and
+    # WAL+wal_autocheckpoint=0 17 tx / 6 s at 121.36 ms.
     return conn
 
 
