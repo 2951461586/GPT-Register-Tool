@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import json
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
 import pytest
 

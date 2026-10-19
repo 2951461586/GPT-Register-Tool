@@ -265,7 +265,9 @@ def test_summary_facts_are_pinned():
         "ordered_pairs": 28,
         "mutual_pairs": 10,
         "minority_edges": 45,
-        "delayed_cross_dir_edges": 190,
+        # 2026-10-21: 190 -> 188 when store/connection.py stopped importing the
+        # sms_tool.storage shell inside _init_cache_key/_connect (the path seam).
+        "delayed_cross_dir_edges": 188,
     }
 
 

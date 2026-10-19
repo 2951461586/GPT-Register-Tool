@@ -18,7 +18,6 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-from sms_tool import storage
 from sms_tool.store import connection
 from sms_tool.batch_runner import (
     _cached_exit_ip,

@@ -1,7 +1,6 @@
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 from sms_tool import storage
 from sms_tool.store import connection

@@ -37,7 +37,6 @@ if not os.environ.get("GPT_REGISTER_CONFIG_DIR"):
     os.environ["GPT_REGISTER_CONFIG_DIR"] = str(_TEST_CONFIG_DIR)
 
 from sms_tool import logging_setup
-from sms_tool.store import reset_database_init_cache
 
 
 @pytest.fixture(autouse=True)

@@ -187,8 +187,8 @@ above.
 | Module-level cross-directory edges | 267 |
 | Directory pairs | 28 |
 | Mutual pairs / minority-direction edges | 10 / 45 |
-| Delayed cross-directory edges | 190 |
-| Delayed imports in the package | 417 (baseline 417) |
+| Delayed cross-directory edges | 188 |
+| Delayed imports in the package | 415 (baseline 415) |
 | Claimed tracked `sms_tool` modules | 301 of 301 (0 unclaimed, 41 directory-map rows) |
 <!-- ratchet-numbers:end architecture -->
 
