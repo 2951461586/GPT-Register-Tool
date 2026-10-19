@@ -314,7 +314,7 @@ checkpoints; terminal account results are not retried as network errors.
 
 ## Exit Codes
 
-As implemented by `SmsWorkbench/BackendResultInterpreter.cs` (keep this table
+As implemented by `SmsWorkbench/Interop/BackendResultInterpreter.cs` (keep this table
 in sync with that mapping):
 
 | Code | Meaning | Desktop presentation |

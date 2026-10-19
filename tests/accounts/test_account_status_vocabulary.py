@@ -21,7 +21,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _NORMALIZE = PROJECT_ROOT / "sms_tool" / "store" / "normalize.py"
-_INTERPRETER = PROJECT_ROOT / "SmsWorkbench" / "AccountStatusInterpreter.cs"
+_INTERPRETER = PROJECT_ROOT / "SmsWorkbench" / "Views" / "AccountStatusInterpreter.cs"
 
 # Python 会产出、但 C# 不需要显式认得的词 —— 每个都要写清理由。
 _CS_EXEMPT = {

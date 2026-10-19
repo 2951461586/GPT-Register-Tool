@@ -5,7 +5,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_one_click_registration_uses_requested_provider_labels_and_defaults_to_remail():
-    source = (ROOT / "SmsWorkbench" / "MainWindow.Register.cs").read_text(encoding="utf-8-sig")
+    source = (ROOT / "SmsWorkbench" / "Views" / "MainWindow.Register.cs").read_text(encoding="utf-8-sig")
 
     expected = [
         'Content = "ReMail 邮箱", Tag = "remail_target"',
@@ -23,7 +23,7 @@ def test_one_click_registration_uses_requested_provider_labels_and_defaults_to_r
 
 
 def test_long_term_remail_disables_phone_reuse_by_default():
-    register = (ROOT / "SmsWorkbench" / "MainWindow.Register.cs").read_text(encoding="utf-8-sig")
+    register = (ROOT / "SmsWorkbench" / "Views" / "MainWindow.Register.cs").read_text(encoding="utf-8-sig")
     planner = (ROOT / "SmsWorkbench.Contracts" / "BackendCommandPlanner.cs").read_text(encoding="utf-8-sig")
 
     # One-click ReMail long-term routes to the purchase-mode planner factory.
@@ -81,7 +81,7 @@ def test_registered_remail_rows_can_build_one_click_sms_mailbox_files():
     # private copy of it (MailboxArgForLine) that had drifted in form and had no
     # tests; it was removed on 2026-09-02 (round 6) and callers now delegate.
     planner = (ROOT / "SmsWorkbench.Contracts" / "BackendCommandPlanner.cs").read_text(encoding="utf-8-sig")
-    source = (ROOT / "SmsWorkbench" / "MainWindow.Register.cs").read_text(encoding="utf-8-sig")
+    source = (ROOT / "SmsWorkbench" / "Views" / "MainWindow.Register.cs").read_text(encoding="utf-8-sig")
 
     # remail:// lines are still passed to the backend as mailbox files.
     assert 'value.StartsWith("remail://"' in planner
@@ -96,7 +96,7 @@ def test_registered_remail_rows_can_build_one_click_sms_mailbox_files():
 
 
 def test_icloud_registration_and_rerun_use_format_aware_mailbox_arguments():
-    register_source = (ROOT / "SmsWorkbench" / "MainWindow.Register.cs").read_text(encoding="utf-8-sig")
+    register_source = (ROOT / "SmsWorkbench" / "Views" / "MainWindow.Register.cs").read_text(encoding="utf-8-sig")
     planner = (ROOT / "SmsWorkbench.Contracts" / "BackendCommandPlanner.cs").read_text(encoding="utf-8-sig")
 
     # Matched on the method name only, not on `private bool ...`: these helpers

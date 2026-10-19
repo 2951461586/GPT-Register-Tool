@@ -83,7 +83,7 @@ These directories are runtime state and are ignored by Git:
 | Payment SMS helpers | `sms_utils.py` | Provide neutral SMS polling/extraction helpers to PayPal automation and reverse flows without circular imports. | `git ls-files sms_tool/sms_utils.py` |
 | Account data/import/export | `account_seed.py`, `storage.py`, `codex_export.py`, `cpa_import.py`, `sub2api_import.py`, `session_converter.py`, `import_targets.py` | Normalize account/session state, convert between formats, and upload to external import targets (CPA, SUB2API); CPA import does not own local liveness or recovery. | `git ls-files sms_tool/account_seed.py sms_tool/storage.py sms_tool/codex_export.py sms_tool/cpa_import.py sms_tool/sub2api_import.py sms_tool/session_converter.py sms_tool/import_targets.py` |
 | Email change workflow | `accounts/account_email_change.py`, `commands/email_change.py`, `storage.py` | Allocate target mailboxes, perform eligibility/begin/OTP/verify, relogin and liveness verification, then atomically migrate the account/session identity. CLI adapter only maps arguments; storage owns the final migration transaction. | `git ls-files sms_tool/accounts/account_email_change.py sms_tool/commands/email_change.py sms_tool/storage.py` |
-| Desktop read transport | `desktop_read.py`, `desktop_serve.py` and `SmsWorkbench/DesktopReadClient.cs` | Sanitized account/mailbox read contracts, resident request-ID-correlated JSONL transport, one-shot fallback, process restart, and file-metadata caches. No registration or payment mutation. | `git ls-files sms_tool/desktop_read.py sms_tool/desktop_serve.py SmsWorkbench/DesktopReadClient.cs` |
+| Desktop read transport | `desktop_read.py`, `desktop_serve.py` and `SmsWorkbench/Interop/DesktopReadClient.cs` | Sanitized account/mailbox read contracts, resident request-ID-correlated JSONL transport, one-shot fallback, process restart, and file-metadata caches. No registration or payment mutation. | `git ls-files sms_tool/desktop_read.py sms_tool/desktop_serve.py SmsWorkbench/Interop/DesktopReadClient.cs` |
 | Desktop event transport | `desktop_ipc.py` | Normalize stage events and emit framed progress/result JSON over stdout for the desktop host; ordinary log text must not masquerade as protocol frames. | `git ls-files sms_tool/desktop_ipc.py` |
 | Mailbox credential writeback | `mailbox_pool_writer.py` | Persist rotated OAuth refresh tokens back to the mailbox pool with an explicit writeback policy; mailbox polling and provider clients remain in their existing groups. | `git ls-files sms_tool/mailbox_pool_writer.py` |
 | Persistence | `storage.py` (back-compat shell), `store/` (`__init__.py`, `connection.py`, `accounts.py`, `markers.py`, `checkpoints.py`, `normalize.py`, `constants.py`, `environment_ledger.py`) | Owns the SQLite schema/connection, account and session facts, quota/promotion markers, registration checkpoints, and the TTL'd egress/fingerprint environment ledger. Details: [Persistence](#persistence). | `git ls-files sms_tool/storage.py "sms_tool/store/*.py"` |
@@ -247,10 +247,10 @@ them and only apply the returned view state.
 | `SmsWorkbench.Contracts/PaymentMethods.cs` | Canonical desktop payment-method catalog, aliases, countries and single/batch availability; reads the embedded `payment_methods.json`. |
 | `SmsWorkbench.Contracts/ProxyInputNormalizer.cs` | `host:port:user:pass` to proxy-URL normalization and country inference, shared by the command planners. |
 | `SmsWorkbench.Contracts/SensitiveDataSanitizer.cs` | C# consumer of the repository `sensitive_policy.json`; log-strength redaction for operator-visible output. |
-| `SmsWorkbench/BackendResultInterpreter.cs` | Interpret backend execution results and proxy-test JSON into typed outcomes (success/timeout/cancelled). Owns account-result routing (`HasAccountResults` / `AccountResultTitle` / `ScanResultError`); presentation lives in `MainWindow.Export.cs::ShowAccountScanResultDialog`. |
+| `SmsWorkbench/Interop/BackendResultInterpreter.cs` | Interpret backend execution results and proxy-test JSON into typed outcomes (success/timeout/cancelled). Owns account-result routing (`HasAccountResults` / `AccountResultTitle` / `ScanResultError`); presentation lives in `Views/MainWindow.Export.cs::ShowAccountScanResultDialog`. |
 | `SmsWorkbench.Contracts/BackendJson.cs`, `SmsWorkbench.Contracts/BackendJsonProtocol.cs` | Canonical JSON-to-dictionary projection and protocol framing shared by interpreters; keep WPF out of JSON plumbing. |
-| `SmsWorkbench.Contracts/BackendContracts.cs`, `SmsWorkbench/BackendTaskCoordinator.cs` | Backend output-channel contracts and single-flight task coordination. |
-| `SmsWorkbench/AccountStatusInterpreter.cs` | Window-independent account JSON interpretation: plan type, wham quota labels, payment status, deactivation, import state. |
+| `SmsWorkbench.Contracts/BackendContracts.cs`, `SmsWorkbench/Services/BackendTaskCoordinator.cs` | Backend output-channel contracts and single-flight task coordination. |
+| `SmsWorkbench/Views/AccountStatusInterpreter.cs` | Window-independent account JSON interpretation: plan type, wham quota labels, payment status, deactivation, import state. |
 
 ## `services/` module groups
 
@@ -280,6 +280,18 @@ them and only apply the returned view state.
    the themed `未选择邮箱` dialog; do not call `MessageBox.Show` for that state.
 8. Command builders and backend-result parsing must be testable without a WPF
    window. Keep those deterministic parts outside `MainWindow.*` code-behind.
+9. A new Python module must **not** land in the `sms_tool/` package root.
+   `scripts/root_module_ratchet.py` freezes the root set at 155 names; a new file
+   belongs in the domain subpackage that owns it (`registration_drivers/`,
+   `store/`, `providers/`, `commands/`, …). Adding a root name needs a decision
+   recorded in `docs/architecture.md` and a baseline edit.
+10. A new C# file goes into its role folder: `Views/` (windows, `MainWindow.*`
+   partials, presentation), `ViewModels/`, `Services/` (workflow + persistence
+   adapters), `Interop/` (the Python process boundary), `Models/`, or `Dialogs/`.
+   Only the application shell (`App.xaml(.cs)`, `AppHost.cs`, `AssemblyInfo.cs`,
+   `GlobalUsings.cs`) lives at `SmsWorkbench/` root;
+   `tests/workbench/test_sms_workbench_layout.py` pins both the folder set and
+   that root exception list.
 
 ## Cleanup boundary
 

@@ -29,7 +29,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _CLASSIFICATION = PROJECT_ROOT / "sms_tool" / "kernel" / "error_classification.py"
 _REGISTRY = PROJECT_ROOT / "sms_tool" / "kernel" / "failure_registry.py"
 _SCAN = PROJECT_ROOT / "sms_tool" / "accounts" / "account_scan.py"
-_INTERPRETER = PROJECT_ROOT / "SmsWorkbench" / "BackendResultInterpreter.cs"
+_INTERPRETER = PROJECT_ROOT / "SmsWorkbench" / "Interop" / "BackendResultInterpreter.cs"
 
 # 有意不作映射、直接 fallthrough 到 relogin_failed / scan_failed 的分类。
 # 每一条都必须写清理由 —— 白名单是决策记录，不是垃圾桶。

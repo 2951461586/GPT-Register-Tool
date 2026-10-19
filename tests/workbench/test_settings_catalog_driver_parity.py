@@ -1,4 +1,4 @@
-"""``SmsWorkbench/SettingsCatalog.cs`` 的驱动下拉框必须与 Python 注册表一致。
+"""``SmsWorkbench/Services/SettingsCatalog.cs`` 的驱动下拉框必须与 Python 注册表一致。
 
 为什么要有这个文件
 ------------------
@@ -27,7 +27,7 @@ from pathlib import Path
 
 from sms_tool.registration_drivers.base import DRIVERS
 
-CATALOG = Path(__file__).resolve().parents[2] / "SmsWorkbench" / "SettingsCatalog.cs"
+CATALOG = Path(__file__).resolve().parents[2] / "SmsWorkbench" / "Services" / "SettingsCatalog.cs"
 
 #: 驱动下拉框那一行。用 ``Options`` 而不是裸字符串，避免匹配到别处的字面量。
 ANCHOR = 'Options("registration_driver"'

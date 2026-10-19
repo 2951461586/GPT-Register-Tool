@@ -90,7 +90,7 @@ EXPECTED_UNREAD = {
 }
 # 2026-09-23: `runtime.python_path` was dropped from the set. It is NOT wired up
 # on the Python side -- it is read by the desktop
-# (`SmsWorkbench/PythonBackendClient.cs`, `SmsWorkbench/DesktopReadClient.cs`),
+# (`SmsWorkbench/Interop/PythonBackendClient.cs`, `SmsWorkbench/Interop/DesktopReadClient.cs`),
 # which this Python-only scan cannot see. It now lives in
 # `config_usage.CSHARP_CONSUMED_KEYS`, whose citations are pinned by
 # `CSharpConsumerTests` below. The detector still stops reporting it, so the pin
@@ -289,7 +289,7 @@ class CSharpConsumerTests(unittest.TestCase):
     def test_write_only_keys_are_still_reported(self):
         """The counter-example that justifies keeping the scan Python-only.
 
-        ``SmsWorkbench/MainWindow.SmsProvider.cs`` **writes** these two keys and
+        ``SmsWorkbench/Views/MainWindow.SmsProvider.cs`` **writes** these two keys and
         nothing reads them back. If C# were scanned wholesale they would leave
         the dead set -- 1 fixed false positive traded for 2 new false negatives.
         They must stay reported.
@@ -304,7 +304,7 @@ class CSharpConsumerTests(unittest.TestCase):
             "phone_reuse.smsbower.service_name",
             "phone_reuse.smsbower.country_name_zh",
         )
-        writes = csharp_literals("SmsWorkbench/MainWindow.SmsProvider.cs")
+        writes = csharp_literals("SmsWorkbench/Views/MainWindow.SmsProvider.cs")
         for key in keys:
             with self.subTest(key=key):
                 self.assertIn(key.rsplit(".", 1)[-1], writes, "counter-example moved")

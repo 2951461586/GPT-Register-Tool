@@ -340,7 +340,7 @@ def test_cli_explicit_proxy_pool_does_not_inherit_configured_registration_proxy(
 
 
 def test_desktop_registration_proxy_resolver_has_no_payment_fallback():
-    source = (ROOT / "SmsWorkbench" / "MainWindow.Helpers.cs").read_text(encoding="utf-8")
+    source = (ROOT / "SmsWorkbench" / "Views" / "MainWindow.Helpers.cs").read_text(encoding="utf-8")
     method = source.split("private string GetRegistrationProxy()", 1)[1].split(
         "private List<string> GetRegistrationProxyPool()", 1
     )[0]
