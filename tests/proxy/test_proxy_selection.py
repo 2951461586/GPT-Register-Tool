@@ -27,8 +27,8 @@ MODULE_PATH = (
     / "services" / "protocol-payment" / "common" / "proxy_selection.py"
 )
 SPEC = importlib.util.spec_from_file_location("proxy_selection", MODULE_PATH)
+assert SPEC is not None and SPEC.loader is not None
 SELECT = importlib.util.module_from_spec(SPEC)
-assert SPEC.loader is not None
 sys.modules[SPEC.name] = SELECT
 SPEC.loader.exec_module(SELECT)
 
@@ -439,6 +439,7 @@ class ExtractorWiringTests(unittest.TestCase):
     def _shared_call(self, path, name, callee):
         node = self._func(path, name)
         self.assertIsNotNone(node, "%s missing" % name)
+        assert node is not None
         for sub in ast.walk(node):
             if isinstance(sub, ast.Call) and isinstance(sub.func, ast.Name) \
                     and sub.func.id == callee:

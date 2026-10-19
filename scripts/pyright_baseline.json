@@ -125,7 +125,7 @@
     "tests/proxy/test_proxy_bridge.py": 4,
     "tests/proxy/test_proxy_entry.py": 53,
     "tests/proxy/test_proxy_routing_config.py": 3,
-    "tests/proxy/test_proxy_selection.py": 5,
+    "tests/proxy/test_proxy_selection.py": 0,
     "tests/registration/test_auth_headers_and_classification.py": 3,
     "tests/registration/test_codex_oauth.py": 5,
     "tests/registration/test_existing_login_csrf_session.py": 1,
@@ -163,5 +163,5 @@
     "tests/workbench/test_cli_registration_driver.py": 1,
     "tests/workbench/test_operator_output.py": 1
   },
-  "total": 855
+  "total": 850
 }
