@@ -507,7 +507,7 @@ class RegistrationEmailWorkflow:
         s.proxy = r._resolve_proxy_scheme(self.input_proxy, cfg=self.config)
         preflight = r.registration_network_preflight(proxy=s.proxy, proxy_attempts=2)
         s.proxy = str(preflight.get("proxy") or s.proxy or "")
-        s.mailbox = r._ensure_mailbox_account(self.input_mailbox)
+        s.mailbox = r.ensure_mailbox_account(self.input_mailbox)
         if not s.mailbox or not s.mailbox.email:
             self._abort("mailbox_required")
         s.username = str(getattr(s.mailbox, "email", "") or "").strip()
@@ -532,7 +532,7 @@ class RegistrationEmailWorkflow:
         # passwordless mode the OTP is sent by the earlier ``auth_flow``
         # (authorize) step, so by the time ``send_email_otp`` snapshotted, the
         # code mail was already visible on the forwarding page and got written
-        # into ``seen_message_ids`` -- which ``_latest_email_otp_candidate``
+        # into ``seen_message_ids`` -- which ``latest_email_otp_candidate``
         # then skips.  The poll drained its full 300s window while the code sat
         # in plain sight (2026-09-11, batch 5e32aa85: 10 of 12 runs failed).
         #
@@ -540,7 +540,7 @@ class RegistrationEmailWorkflow:
         # inbox before this attempt" marker, matching the reference design
         # where ``before_ids`` is captured during identity resolution.
         _emit(_LOGGER, "[*] Snapshotting mailbox (pre-OTP baseline)")
-        r._snapshot_mailbox_message(s.mailbox, proxy=s.proxy)
+        r.snapshot_mailbox_message(s.mailbox, proxy=s.proxy)
         _emit(_LOGGER, "[*] ChatGPT Email Registration Started")
         self._run_stage(RegistrationState.SENTINEL, "0-Extract sentinel token", self.extract_sentinel)
         self._run_stage(RegistrationState.IDENTITY_READY, "1-Prepare registration identity", self.prepare_identity)

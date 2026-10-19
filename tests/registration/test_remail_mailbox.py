@@ -80,7 +80,7 @@ class RegistrationPhonePoolTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp, \
              patch.object(cli, "_registration_phone_pool", return_value=phone_pool), \
-             patch.object(cli, "_load_mailbox_pool", return_value=[mailbox]), \
+             patch.object(cli, "load_mailbox_pool", return_value=[mailbox]), \
              patch.object(cli, "_proxy_pool_values", return_value=[]), \
              patch.object(cli, "_payment_method", return_value="paypal"), \
              patch.object(cli, "run_batch", return_value=[{"success": True}]) as run_batch, \
@@ -407,14 +407,14 @@ class ReMailPickupTests(unittest.TestCase):
 
     def test_router_uses_remail_polling_and_applies_clock_skew_grace(self):
         issued_after = 1_000
-        with patch.object(mailbox_router, "_email_cfg", return_value={
+        with patch.object(mailbox_router, "mailbox_email_config", return_value={
             "remail_otp_issued_after_grace_seconds": 90,
         }), patch.object(
             mailbox_remail,
             "_poll_remail_otp",
             return_value="654321",
         ) as poll:
-            code = mailbox_router._poll_email_otp(
+            code = mailbox_router.poll_email_otp(
                 self.account,
                 subject_keyword="verification code|login code",
                 timeout=0,
@@ -440,7 +440,7 @@ class ReMailPickupTests(unittest.TestCase):
             "_poll_remail_otp",
             return_value="654321",
         ) as remail_poll:
-            code = mailbox_router._poll_email_otp(account, timeout=0)
+            code = mailbox_router.poll_email_otp(account, timeout=0)
 
         self.assertEqual(code, "654321")
         remail_poll.assert_called_once()
@@ -513,7 +513,7 @@ class ReMailPickupTests(unittest.TestCase):
             },
         }
         with patch.object(mailbox_router, "_config_data", return_value=config):
-            candidates = mailbox_router._mailbox_proxy_candidates(
+            candidates = mailbox_router.mailbox_proxy_candidates(
                 "http://registration.example:8080",
                 config,
             )
@@ -626,7 +626,7 @@ class ReMailPickupTests(unittest.TestCase):
             "verificationCode": "654321",
         }]
         output = io.StringIO()
-        with patch("sms_tool.mailbox._fetch_mailbox_messages", return_value=messages) as fetch, redirect_stdout(output):
+        with patch("sms_tool.mailbox.fetch_mailbox_messages", return_value=messages) as fetch, redirect_stdout(output):
             cli._view_inbox(args)
 
         payload = json.loads(output.getvalue())
@@ -670,7 +670,7 @@ class ReMailPickupTests(unittest.TestCase):
             session_path = Path(tmp) / "session.json"
             session_path.write_text(json.dumps(data), encoding="utf-8")
             with patch("sms_tool.session_refresh._load_seed_session", return_value=(data, str(session_path))), \
-                 patch("sms_tool.mailbox._fetch_mailbox_messages", side_effect=fetch), \
+                 patch("sms_tool.mailbox.fetch_mailbox_messages", side_effect=fetch), \
                  patch.object(cli, "upsert_account", return_value=True) as upsert, \
                  redirect_stdout(io.StringIO()):
                 cli._view_inbox(args)
@@ -685,12 +685,12 @@ class ReMailRouterTests(unittest.TestCase):
         expected = MailboxAccount(email="user@example.com", provider="remail", token="st")
         args = argparse.Namespace(buy_remail_mailbox=True, buy_cfworker_mailbox=False, remail_service_mode=None)
         with patch.object(mailbox_router.mailbox_remail, "_create_remail_mailboxes", return_value=[expected]) as create:
-            self.assertEqual(mailbox_router._load_mailbox_pool(args), [expected])
+            self.assertEqual(mailbox_router.load_mailbox_pool(args), [expected])
             create.assert_called_once_with(args, service_mode="purchase")
 
-        with patch.object(mailbox_router, "_remail_enabled", return_value=True), \
+        with patch.object(mailbox_router, "remail_enabled", return_value=True), \
              patch.object(mailbox_router.mailbox_remail, "_create_remail_order", return_value=expected) as create:
-            self.assertIs(mailbox_router._ensure_mailbox_account(), expected)
+            self.assertIs(mailbox_router.ensure_mailbox_account(), expected)
             create.assert_called_once_with(service_mode="code")
 
     def test_explicit_code_mode_creates_remail_pool_for_desktop_one_click(self):
@@ -701,14 +701,14 @@ class ReMailRouterTests(unittest.TestCase):
             remail_service_mode="code",
         )
         with patch.object(mailbox_router.mailbox_remail, "_create_remail_mailboxes", return_value=[expected]) as create:
-            self.assertEqual(mailbox_router._load_mailbox_pool(args), [expected])
+            self.assertEqual(mailbox_router.load_mailbox_pool(args), [expected])
             create.assert_called_once_with(args, service_mode="code")
 
     def test_direct_service_token_requires_email_and_uses_remail_provider(self):
         cfg = {"service_token": "st-config", "delivery_email": "saved@example.com", "order_no": "R9"}
         with patch.object(mailbox_router.mailbox_remail, "_remail_cfg", return_value=cfg), \
              patch.object(mailbox_router, "_gmail_mailbox_from_config", return_value=None):
-            account = mailbox_router._mailbox_from_config(argparse.Namespace(remail_token=None, email=None))
+            account = mailbox_router.mailbox_from_config(argparse.Namespace(remail_token=None, email=None))
         self.assertEqual(account.provider, "remail")
         self.assertEqual(account.email, "saved@example.com")
         self.assertEqual(account.token, "st-config")
@@ -718,7 +718,7 @@ class ReMailRouterTests(unittest.TestCase):
         with patch.dict("os.environ", {"REMAIL_SERVICE_TOKEN": "st-environment"}), \
              patch.object(mailbox_router.mailbox_remail, "_remail_cfg", return_value={}), \
              patch.object(mailbox_router, "_gmail_mailbox_from_config", return_value=None):
-            account = mailbox_router._mailbox_from_config(args)
+            account = mailbox_router.mailbox_from_config(args)
 
         self.assertEqual(account.provider, "remail")
         self.assertEqual(account.email, "saved@example.com")

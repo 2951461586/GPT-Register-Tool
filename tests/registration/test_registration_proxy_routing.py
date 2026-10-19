@@ -53,7 +53,7 @@ def test_cli_main_uses_registration_proxy_for_direct_registration():
     with (
         patch.object(cli, "CFG", config),
         patch.object(sys, "argv", ["sms_tool", "--email", "account@example.com", "--registration-at-only"]),
-        patch.object(cli, "_load_mailbox_pool", return_value=[SimpleNamespace(email="account@example.com")]),
+        patch.object(cli, "load_mailbox_pool", return_value=[SimpleNamespace(email="account@example.com")]),
         patch.object(cli, "_preflight_registration_before_mailbox", return_value={"ok": True}),
         patch.object(cli, "_registration_phone_pool", return_value=None),
         patch.object(cli, "run_email", side_effect=run_email),
@@ -78,7 +78,7 @@ def test_cli_registration_emits_standard_desktop_result():
         patch.object(
             sys, "argv", ["sms_tool", "--email", "account@example.com", "--registration-at-only", "--desktop-ipc"]
         ),
-        patch.object(cli, "_load_mailbox_pool", return_value=[SimpleNamespace(email="account@example.com")]),
+        patch.object(cli, "load_mailbox_pool", return_value=[SimpleNamespace(email="account@example.com")]),
         patch.object(cli, "_preflight_registration_before_mailbox", return_value={"ok": True}),
         patch.object(cli, "_registration_phone_pool", return_value=None),
         patch.object(cli, "run_batch", return_value=[{"success": True, "email": "account@example.com"}]),

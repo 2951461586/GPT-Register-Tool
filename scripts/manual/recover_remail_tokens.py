@@ -55,7 +55,7 @@ def main() -> int:
     args = parser.parse_args()
 
     initialize_runtime_config()
-    if not mailbox_remail._remail_enabled():
+    if not mailbox_remail.remail_enabled():
         print("[!] Remail 未启用（缺 API Key），无法找回")
         return 2
 

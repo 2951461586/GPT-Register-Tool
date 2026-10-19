@@ -179,7 +179,7 @@ def send_email_otp(workflow: RegistrationEmailWorkflow) -> None:
     # ``_bootstrap``; re-snapshotting at this point would be a race --
     # passwordless sends the OTP during ``auth_flow``, so the code mail can
     # already be visible and would be recorded as "seen", permanently
-    # hiding it from ``_latest_email_otp_candidate``.
+    # hiding it from ``latest_email_otp_candidate``.
     continue_url = r._email_otp_send_url(s.reg_data)
     otp_send_started = _safe_int(time.time())
     if not workflow._password_lane_active() and _passwordless_explicit_send_otp_enabled(workflow):

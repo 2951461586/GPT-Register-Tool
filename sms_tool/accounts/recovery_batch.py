@@ -585,9 +585,9 @@ def _clear_promotion_marker_after_probe(email: str) -> None:
 def _refresh_mailbox_quarantine_state() -> None:
     """Prune records for credentials removed or replaced in the repaired pool."""
     try:
-        from ..mailbox import _load_mailbox_pool
+        from ..mailbox import load_mailbox_pool
 
-        _load_mailbox_pool()
+        load_mailbox_pool()
     except Exception:
         pass
 

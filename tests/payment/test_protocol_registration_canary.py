@@ -76,7 +76,7 @@ def test_protocol_identity_bootstrap_canary_is_offline():
         "proxy": "http://proxy.invalid:8080",
     }
     operations.validate_config.return_value = None
-    operations._ensure_mailbox_account.return_value = mailbox
+    operations.ensure_mailbox_account.return_value = mailbox
     operations.think_stage.return_value = None
     workflow = RegistrationEmailWorkflow(
         RegistrationStateMachine(lambda *_: None),
@@ -168,7 +168,7 @@ def test_a_bootstrap_programming_error_keeps_the_internal_label():
         "ok": True,
         "proxy": "http://proxy.invalid:8080",
     }
-    operations._ensure_mailbox_account.side_effect = TypeError("'NoneType' object is not subscriptable")
+    operations.ensure_mailbox_account.side_effect = TypeError("'NoneType' object is not subscriptable")
     workflow = RegistrationEmailWorkflow(
         RegistrationStateMachine(lambda *_: None),
         config={"email_registration": {}, "chatgpt": {}},
@@ -190,7 +190,7 @@ def test_a_bootstrap_abort_keeps_its_own_name():
         "ok": True,
         "proxy": "http://proxy.invalid:8080",
     }
-    operations._ensure_mailbox_account.return_value = SimpleNamespace(email="")
+    operations.ensure_mailbox_account.return_value = SimpleNamespace(email="")
     workflow = RegistrationEmailWorkflow(
         RegistrationStateMachine(lambda *_: None),
         config={"email_registration": {}, "chatgpt": {}},

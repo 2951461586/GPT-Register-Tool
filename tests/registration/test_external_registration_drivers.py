@@ -1115,9 +1115,9 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
     @patch("sms_tool.registration_drivers.browser_flow.page_state._wait_for_registration_state", return_value="otp")
     @patch("sms_tool.registration_drivers.browser_flow.form_steps._fill_email")
     @patch("sms_tool.registration_drivers.browser_flow.page_state._manual_challenge", return_value=False)
-    @patch("sms_tool.mailbox._snapshot_mailbox_message")
+    @patch("sms_tool.mailbox.snapshot_mailbox_message")
     @patch("sms_tool.storage.get_device_context", return_value={})
-    @patch("sms_tool.mailbox._ensure_mailbox_account")
+    @patch("sms_tool.mailbox.ensure_mailbox_account")
     @patch("sms_tool.registration_drivers.browser_flow.orchestrator.MailboxService.create")
     def test_otp_rejection_resends_and_uses_a_fresh_code(
         self, mailbox_create, ensure_mailbox, _device, _snapshot, _challenge, _fill_email,
@@ -1173,9 +1173,9 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
     @patch("sms_tool.registration_drivers.browser_flow.page_state._wait_for_registration_state", return_value="otp")
     @patch("sms_tool.registration_drivers.browser_flow.form_steps._fill_email")
     @patch("sms_tool.registration_drivers.browser_flow.page_state._manual_challenge", return_value=False)
-    @patch("sms_tool.mailbox._snapshot_mailbox_message")
+    @patch("sms_tool.mailbox.snapshot_mailbox_message")
     @patch("sms_tool.storage.get_device_context", return_value={})
-    @patch("sms_tool.mailbox._ensure_mailbox_account")
+    @patch("sms_tool.mailbox.ensure_mailbox_account")
     @patch("sms_tool.registration_drivers.browser_flow.orchestrator.MailboxService.create")
     def test_accepted_otp_does_not_resend_for_stale_mounted_dom(
         self, mailbox_create, ensure_mailbox, _device, _snapshot, _challenge, _fill_email,
@@ -1254,9 +1254,9 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
     @patch("sms_tool.registration_drivers.browser_flow.page_state._wait_for_registration_state", return_value="otp")
     @patch("sms_tool.registration_drivers.browser_flow.form_steps._fill_email")
     @patch("sms_tool.registration_drivers.browser_flow.page_state._manual_challenge", return_value=False)
-    @patch("sms_tool.mailbox._snapshot_mailbox_message")
+    @patch("sms_tool.mailbox.snapshot_mailbox_message")
     @patch("sms_tool.storage.get_device_context", return_value={})
-    @patch("sms_tool.mailbox._ensure_mailbox_account")
+    @patch("sms_tool.mailbox.ensure_mailbox_account")
     @patch("sms_tool.registration_drivers.browser_flow.orchestrator.MailboxService.create")
     def test_slow_post_otp_route_recovers_after_two_reload_rounds(
         self, mailbox_create, ensure_mailbox, _device, _snapshot, _challenge, _fill_email,
@@ -1282,9 +1282,9 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
     @patch("sms_tool.registration_drivers.browser_flow.page_state._wait_for_registration_state", return_value="otp")
     @patch("sms_tool.registration_drivers.browser_flow.form_steps._fill_email")
     @patch("sms_tool.registration_drivers.browser_flow.page_state._manual_challenge", return_value=False)
-    @patch("sms_tool.mailbox._snapshot_mailbox_message")
+    @patch("sms_tool.mailbox.snapshot_mailbox_message")
     @patch("sms_tool.storage.get_device_context", return_value={})
-    @patch("sms_tool.mailbox._ensure_mailbox_account")
+    @patch("sms_tool.mailbox.ensure_mailbox_account")
     @patch("sms_tool.registration_drivers.browser_flow.orchestrator.MailboxService.create")
     def test_stuck_post_otp_route_fails_after_exactly_two_reload_rounds(
         self, mailbox_create, ensure_mailbox, _device, _snapshot, _challenge, _fill_email,
@@ -1314,9 +1314,9 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
     @patch("sms_tool.registration_drivers.browser_flow.page_state._wait_for_registration_state", return_value="otp")
     @patch("sms_tool.registration_drivers.browser_flow.form_steps._fill_email")
     @patch("sms_tool.registration_drivers.browser_flow.page_state._manual_challenge", return_value=False)
-    @patch("sms_tool.mailbox._snapshot_mailbox_message")
+    @patch("sms_tool.mailbox.snapshot_mailbox_message")
     @patch("sms_tool.storage.get_device_context", return_value={})
-    @patch("sms_tool.mailbox._ensure_mailbox_account")
+    @patch("sms_tool.mailbox.ensure_mailbox_account")
     @patch("sms_tool.registration_drivers.browser_flow.orchestrator.MailboxService.create")
     def test_browser_registration_records_geo_aligned_fingerprint(
         self, mailbox_create, ensure_mailbox, _device, _snapshot, _challenge, _fill_email,
@@ -1361,10 +1361,10 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
             "id_token": "id",
         }
 
-        with patch("sms_tool.mailbox._ensure_mailbox_account", return_value=mailbox), patch(
+        with patch("sms_tool.mailbox.ensure_mailbox_account", return_value=mailbox), patch(
             "sms_tool.registration_drivers.browser_flow.orchestrator.MailboxService.create", return_value=MagicMock()
         ), patch("sms_tool.storage.get_device_context", return_value={}), patch(
-            "sms_tool.mailbox._snapshot_mailbox_message"
+            "sms_tool.mailbox.snapshot_mailbox_message"
         ), patch("sms_tool.registration_drivers.browser_flow.page_state._manual_challenge", return_value=False), patch("sms_tool.registration_drivers.browser_flow.form_steps._maybe_accept_cookies",
             side_effect=lambda *_args: events.append("cookies"),
         ), patch("sms_tool.registration_drivers.browser_flow.form_steps._fill_email",
@@ -1410,10 +1410,10 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
         }
 
         session_factory = MagicMock(return_value=_FlowSession())
-        with patch("sms_tool.mailbox._ensure_mailbox_account", return_value=mailbox), patch(
+        with patch("sms_tool.mailbox.ensure_mailbox_account", return_value=mailbox), patch(
             "sms_tool.registration_drivers.browser_flow.orchestrator.MailboxService.create", return_value=MagicMock()
         ), patch("sms_tool.storage.get_device_context", return_value={"device_id": "device-browser"}), patch(
-            "sms_tool.mailbox._snapshot_mailbox_message"
+            "sms_tool.mailbox.snapshot_mailbox_message"
         ), patch("sms_tool.registration_drivers.browser_flow.page_state._manual_challenge", return_value=False), patch("sms_tool.registration_drivers.browser_flow.form_steps._maybe_accept_cookies"
         ), patch("sms_tool.registration_drivers.browser_flow.form_steps._fill_email"), patch("sms_tool.registration_drivers.browser_flow.page_state._wait_for_registration_state", return_value="authenticated"
         ), patch("sms_tool.registration_drivers.browser_flow.dom_fields._otp_fields", return_value=None), patch("sms_tool.registration_drivers.browser_flow.page_state._quick_auth_state", return_value="authenticated"
@@ -1464,7 +1464,7 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
             client_secret="mail-client-secret",
         )
 
-        with patch("sms_tool.mailbox._ensure_mailbox_account", return_value=mailbox), patch(
+        with patch("sms_tool.mailbox.ensure_mailbox_account", return_value=mailbox), patch(
             "sms_tool.registration_drivers.browser_flow.orchestrator.MailboxService.create", return_value=MagicMock()
         ), patch("sms_tool.storage.get_device_context", return_value={}):
             result = run_browser_registration(
@@ -1494,7 +1494,7 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
 
     def test_mailbox_setup_failure_is_returned_as_sanitized_browser_result(self):
         mailbox = SimpleNamespace(email="user@example.com", token="provider-secret")
-        with patch("sms_tool.mailbox._ensure_mailbox_account",
+        with patch("sms_tool.mailbox.ensure_mailbox_account",
             return_value=mailbox,
         ), patch(
             "sms_tool.registration_drivers.browser_flow.orchestrator.MailboxService.create",

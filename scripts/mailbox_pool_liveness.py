@@ -22,7 +22,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from sms_tool.config import CFG
-from sms_tool.mailbox import _fetch_mailbox_messages
+from sms_tool.mailbox import fetch_mailbox_messages
 from sms_tool.mailbox_parsers import parse_mailbox_pool_line
 from sms_tool.kernel.paths import resolve_config_file
 
@@ -55,7 +55,7 @@ def _probe(item: tuple[int, str, object]) -> dict[str, object]:
     email = str(getattr(mailbox, "email", "") or "").strip().lower()
     provider = str(getattr(mailbox, "provider", "") or "").strip().lower()
     try:
-        messages = _fetch_mailbox_messages(mailbox, limit=1, proxy=None)
+        messages = fetch_mailbox_messages(mailbox, limit=1, proxy=None)
         return {"index": index, "email": email, "provider": provider, "ok": True, "messages": len(messages or [])}
     except Exception as exc:
         error = str(exc)

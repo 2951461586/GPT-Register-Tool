@@ -31,10 +31,10 @@ class ChataiMailboxGraphTests(unittest.TestCase):
         )
 
         with patch.object(mailbox_module, "CFG", {}), \
-             patch.object(mailbox_module, "_email_cfg", return_value={"outlook_imap_enabled": False}), \
+             patch.object(mailbox_module, "mailbox_email_config", return_value={"outlook_imap_enabled": False}), \
              patch.object(mailbox_module.curl_requests, "post", return_value=FakeTokenResponse()) as post, \
              patch.object(mailbox_module.curl_requests, "get", return_value=FakeMessagesResponse()) as get:
-            messages = mailbox_module._fetch_mailbox_messages(
+            messages = mailbox_module.fetch_mailbox_messages(
                 mailbox,
                 limit=5,
                 proxy="socks5h://127.0.0.1:7897",
@@ -63,10 +63,10 @@ class ChataiMailboxGraphTests(unittest.TestCase):
         )
 
         with patch.object(mailbox_module, "CFG", {"mailbox_proxy": "127.0.0.1:7897"}), \
-             patch.object(mailbox_module, "_email_cfg", return_value={"outlook_imap_enabled": False}), \
+             patch.object(mailbox_module, "mailbox_email_config", return_value={"outlook_imap_enabled": False}), \
              patch.object(mailbox_module.curl_requests, "post", return_value=FakeTokenResponse()) as post, \
              patch.object(mailbox_module.curl_requests, "get", return_value=FakeMessagesResponse()) as get:
-            messages = mailbox_module._fetch_mailbox_messages(
+            messages = mailbox_module.fetch_mailbox_messages(
                 mailbox,
                 limit=5,
                 proxy="socks5h://127.0.0.1:1080",

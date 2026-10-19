@@ -61,8 +61,8 @@ registration_commands = _LazyModule(".commands.registration")
 # ``_load_heavy_deps()`` runs, but they start as ``None`` so `import sms_tool.cli`
 # stays free of curl_cffi. A bare ``= None`` makes the checker type them ``None``
 # and every call site then reports "object of type None cannot be called".
-_load_mailbox_pool: Any = None
-_remail_enabled: Any = None
+load_mailbox_pool: Any = None
+remail_enabled: Any = None
 _build_session_file: Any = None
 _mailbox_snapshot: Any = None
 run_email: Any = None
@@ -159,7 +159,7 @@ def _load_heavy_deps() -> None:
 
     Deliberately **not** guarded by a one-shot latch. ``patch.object`` restores
     a patched symbol to its pre-patch value, so a latch set while
-    ``_load_mailbox_pool`` was a mock would leave the real symbol permanently
+    ``load_mailbox_pool`` was a mock would leave the real symbol permanently
     ``None`` and a later ``--one-click-sms`` call would invoke ``None(...)``.
     (Reproduced 2026-10-18 by running the registration tests before the
     workbench tests; the full-suite order hid it because an earlier test had
@@ -170,19 +170,19 @@ def _load_heavy_deps() -> None:
     ``sys.modules`` hit.  A symbol that is already resolved — including one a
     test intentionally patched — is never overwritten.
     """
-    global _load_mailbox_pool, _remail_enabled, _build_session_file, _mailbox_snapshot, run_email
+    global load_mailbox_pool, remail_enabled, _build_session_file, _mailbox_snapshot, run_email
     _load_batch_deps()
     _load_storage_deps()
     _load_helper_deps()
-    if _load_mailbox_pool is None or _remail_enabled is None:
+    if load_mailbox_pool is None or remail_enabled is None:
         from .mailbox import (
-            _load_mailbox_pool as _lmp,
-            _remail_enabled as _re,
+            load_mailbox_pool as _lmp,
+            remail_enabled as _re,
         )
-        if _load_mailbox_pool is None:
-            _load_mailbox_pool = _lmp
-        if _remail_enabled is None:
-            _remail_enabled = _re
+        if load_mailbox_pool is None:
+            load_mailbox_pool = _lmp
+        if remail_enabled is None:
+            remail_enabled = _re
     if _build_session_file is None or _mailbox_snapshot is None or run_email is None:
         from .registration import (
             _build_session_file as _bsf,
@@ -266,7 +266,7 @@ def _registration_command_context():
     _load_heavy_deps()
     return registration_commands.RegistrationCommandContext(
         proxy_pool_values=_proxy_pool_values,
-        load_mailbox_pool=_load_mailbox_pool,
+        load_mailbox_pool=load_mailbox_pool,
         run_batch=run_batch,
         run_email=run_email,
         build_session_file=_build_session_file,
@@ -632,7 +632,7 @@ def _main_registration_pipeline(args, base_dir) -> None:
         args.registration_batch_id = f"registration_{time.strftime('%Y%m%d_%H%M%S')}_{os.urandom(3).hex()}"
     pipeline_started = time.time()
     mailbox_started = time.time()
-    mailboxes = _load_mailbox_pool(args)
+    mailboxes = load_mailbox_pool(args)
     mailbox_seconds = time.time() - mailbox_started
     # Drop already-registered mailboxes before anything counts or bills them.
     # ``run_batch_impl`` filters as well, but by then they are already inside
@@ -669,7 +669,7 @@ def _main_registration_pipeline(args, base_dir) -> None:
             exit_code=2,
         )
         raise SystemExit(2)
-    if not mailboxes and not _remail_enabled():
+    if not mailboxes and not remail_enabled():
         _emit_registration_error(
             args,
             "no mailbox account was found; set email_registration.token_file, "
@@ -1038,7 +1038,7 @@ def _process_paypal_ba_queue(args):
 def _one_click_command_context():
     _load_heavy_deps()
     return one_click_commands.OneClickCommandContext(
-        load_mailbox_pool=_load_mailbox_pool,
+        load_mailbox_pool=load_mailbox_pool,
         max_reuse=_one_click_sms_max_reuse,
         mailbox_snapshot=_mailbox_snapshot,
         persist_failure=_persist_one_click_sms_failure,

@@ -136,9 +136,9 @@ class GmailMailboxTests(unittest.TestCase):
         mailbox = MailboxAccount(email="target@gmail.com", provider="gmail", password="abcd efgh ijkl mnop", auth_mode="app_password")
 
         with patch.object(mailbox_module, "CFG", {"mailbox_proxy": "socks5h://127.0.0.1:7897"}), \
-             patch.object(mailbox_module, "_email_cfg", return_value={"gmail": {"imap_enabled": True}}), \
+             patch.object(mailbox_module, "mailbox_email_config", return_value={"gmail": {"imap_enabled": True}}), \
              patch.object(mailbox_module.mailbox_gmail, "fetch_gmail_imap_messages", return_value=[]) as fetch:
-            messages = mailbox_module._fetch_mailbox_messages(
+            messages = mailbox_module.fetch_mailbox_messages(
                 mailbox,
                 limit=5,
                 proxy="socks5h://127.0.0.1:1080",
@@ -148,7 +148,7 @@ class GmailMailboxTests(unittest.TestCase):
         self.assertEqual(fetch.call_args.kwargs["proxy"], "socks5h://127.0.0.1:7897")
 
     def test_gmail_config_requires_exact_login_email(self):
-        with patch.object(mailbox_module, "_email_cfg", return_value={
+        with patch.object(mailbox_module, "mailbox_email_config", return_value={
             "gmail": {
                 "enabled": True,
                 "email": "samplegmail01@gmail.com",
@@ -169,7 +169,7 @@ class GmailMailboxTests(unittest.TestCase):
                 "gmail://samplemailer236@gmail.com---qrst uvwx yzab vfgv\n",
                 encoding="utf-8",
             )
-            with patch.object(mailbox_module, "_email_cfg", return_value={
+            with patch.object(mailbox_module, "mailbox_email_config", return_value={
                 "token_file": str(token_file),
                 "gmail": {
                     "enabled": True,

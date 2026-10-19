@@ -5,7 +5,7 @@ from sms_tool.mailbox import (
     MailboxAccount,
     _email_otp_candidate,
     _extract_otp_from_text,
-    _provider_otp_issued_after,
+    provider_otp_issued_after,
 )
 from sms_tool.registration import (
     LOGIN_EMAIL_OTP_SUBJECT_KEYWORD,
@@ -58,19 +58,19 @@ class EmailOtpFilteringTests(unittest.TestCase):
 
     def test_cfworker_registration_otp_issued_after_has_small_grace(self):
         mailbox = MailboxAccount(email="target@edu.liziai.cloud", provider="cfworker")
-        adjusted = _provider_otp_issued_after(mailbox, 1779934004)
+        adjusted = provider_otp_issued_after(mailbox, 1779934004)
 
         self.assertEqual(adjusted, 1779933994)
 
     def test_remail_registration_otp_issued_after_covers_observed_clock_skew(self):
         mailbox = MailboxAccount(email="target@outlook.com", provider="remail")
-        adjusted = _provider_otp_issued_after(mailbox, 1779934004)
+        adjusted = provider_otp_issued_after(mailbox, 1779934004)
 
         self.assertEqual(adjusted, 1779933914)
 
     def test_smailr_registration_otp_issued_after_has_small_grace(self):
         mailbox = MailboxAccount(email="target@smailr.com", provider="smailr")
-        adjusted = _provider_otp_issued_after(mailbox, 1779934004)
+        adjusted = provider_otp_issued_after(mailbox, 1779934004)
 
         self.assertEqual(adjusted, 1779933994)
 
@@ -155,9 +155,9 @@ class EmailOtpFilteringTests(unittest.TestCase):
         newer["id"] = "newer"
         newer["bodyPreview"] = "Enter this temporary verification code to continue:\n\n169441"
 
-        with unittest.mock.patch.object(mailbox_module, "_email_cfg", return_value={"otp_settle_seconds": 0.01, "otp_poll_interval": 0.01}):
-            with unittest.mock.patch.object(mailbox_module, "_fetch_mailbox_messages", side_effect=[[first], [newer, first], [newer, first]]):
-                code = mailbox_module._poll_email_otp(
+        with unittest.mock.patch.object(mailbox_module, "mailbox_email_config", return_value={"otp_settle_seconds": 0.01, "otp_poll_interval": 0.01}):
+            with unittest.mock.patch.object(mailbox_module, "fetch_mailbox_messages", side_effect=[[first], [newer, first], [newer, first]]):
+                code = mailbox_module.poll_email_otp(
                     mailbox,
                     subject_keyword=REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORD,
                     timeout=1,

@@ -15,7 +15,7 @@ from .auth_headers import AUTH_IMPERSONATE, auth_impersonate, openai_auth_header
 from .auth_wire import _invalid_state_auth_response
 from .http_utils import _absolute_url, _json_or_raw
 from .http_client import request_with_retry
-from .mailbox import _poll_email_otp
+from .mailbox import poll_email_otp
 from .registration_progress import registration_stage
 
 
@@ -191,7 +191,7 @@ def _poll_registration_email_otp(
     from .registration_cancel import ensure_not_cancelled
 
     ensure_not_cancelled()
-    poll_otp_fn = poll_otp_fn or _poll_email_otp
+    poll_otp_fn = poll_otp_fn or poll_email_otp
     total_timeout = max(0, int(timeout or 0))
     provider = str(getattr(mailbox, "provider", "") or "").strip().lower()
     started = time.monotonic()
@@ -257,7 +257,7 @@ def _poll_registration_email_otp(
             otp_resend_enabled=False,
             otp_resend_reason="window_disabled",
         )
-        # ``poll()``，不是模块级的 ``_poll_email_otp`` —— 这条分支以前绕过
+        # ``poll()``，不是模块级的 ``poll_email_otp`` —— 这条分支以前绕过
         # ``poll_otp_fn`` 直连默认轮询器，于是注册泳道注入的
         # ``MailboxService.poll_otp`` 在「重发窗口被关掉」时被静默跳过。
         # 同一件事两条路径（本项目铁律 5）：三条分支必须都走 ``poll``。

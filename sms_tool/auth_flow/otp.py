@@ -232,7 +232,7 @@ def _existing_login_otp(
 
     email_cfg = deps.current_config_data().get("email_registration", {})
     poll_timeout = _safe_int(otp_timeout or email_cfg.get("otp_timeout", 300), 300)
-    code = deps._poll_email_otp(
+    code = deps.poll_email_otp(
         mailbox,
         subject_keyword=steps.LOGIN_EMAIL_OTP_SUBJECT_KEYWORD,
         timeout=poll_timeout,

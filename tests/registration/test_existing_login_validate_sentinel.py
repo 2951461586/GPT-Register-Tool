@@ -120,7 +120,7 @@ def _drive(*, validate_result, validate_calls, dumps, calls=None, bodies=None,
 
     with patch.object(auth_flow.deps, "request_with_retry", side_effect=handler), patch.object(
         auth_flow.sentinel_flow, "_authorize_continue_sentinel", lambda *a, **k: ({}, "", "")
-    ), patch.object(auth_flow.deps, "_poll_email_otp", lambda *a, **k: "123456"), patch.object(
+    ), patch.object(auth_flow.deps, "poll_email_otp", lambda *a, **k: "123456"), patch.object(
         auth_flow.deps, "_validate_email_otp", side_effect=fake_validate
     ), patch.object(
         auth_flow.deps, "_fetch_client_auth_session_dump", side_effect=fake_dump

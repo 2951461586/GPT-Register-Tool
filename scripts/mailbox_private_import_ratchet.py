@@ -2,11 +2,17 @@
 
 Why this exists
 ---------------
-``sms_tool/mailbox.py`` defines ~40 top-level functions and **every one of them
-is ``_``-prefixed** -- it has no public surface at all. Yet it is the most
+``sms_tool/mailbox.py`` used to define ~40 top-level functions with **every one
+of them ``_``-prefixed** -- no public surface at all -- while being the most
 imported module in the package: registration, auth, recovery, mailbox routing,
-CLI adapters and ``scripts/`` all reach straight into those private names
-(``_poll_email_otp``, ``_load_mailbox_pool``, ``_mailbox_from_config``, ...).
+CLI adapters and ``scripts/`` all reached straight into those private names.
+
+**2026-10-21:** the 16 consumed symbols were renamed to public names
+(``poll_email_otp``, ``load_mailbox_pool``, ``mailbox_email_config``,
+``mailbox_proxy_candidates``, ...), their consumers were migrated in the same
+change, and the ``mailbox`` baseline is now **0**. The module has 16 public / 29
+private functions; a private import from it fails immediately. The other five
+watched hubs still carry their frozen baselines.
 
 That is a real coupling surface with no guard on it. ``directory-map.md``
 describes the top-level ``mailbox_*`` files as "compatibility facades only" and
@@ -23,7 +29,7 @@ that is close to its consumed-symbol count -- i.e. they too are private hubs
 rather than modules with a thin private tail:
 
     module            private defs   distinct consumed symbols
-    mailbox                     43                          20
+    mailbox                     29                           0   (after the 2026-10-21 rename)
     session_refresh             14                          11
     mail_otp                    15                          12
     sentinel_tokens             29                          12
@@ -60,10 +66,10 @@ Known blind spots (deliberate)
 The same-name trap
 ------------------
 Symbols are grouped by their **defining module**, resolved from the import
-statement itself, not by the file that happens to import them. ``_load_mailbox_pool``
+statement itself, not by the file that happens to import them. ``load_mailbox_pool``
 is imported from ``.mailbox`` by ``sms_tool/cli.py`` and would otherwise be
 attributed to ``cli``. Conversely ``sms_tool/mailbox_service.py`` imports
-``_email_cfg`` *from* ``.mailbox``: the consumer is the service file, the watched
+``mailbox_email_config`` *from* ``.mailbox``: the consumer is the service file, the watched
 module is ``mailbox``. Grouping on the last dotted segment of the import -- and
 nothing else -- is what keeps the two apart.
 

@@ -35,7 +35,6 @@
         "sms_tool/providers/mailbox_cfworker.py:mail_otp._message_id",
         "sms_tool/providers/mailbox_icloud_url.py:mail_otp._extract_otp_from_text",
         "sms_tool/providers/mailbox_icloud_url.py:mail_otp._message_received_ts",
-        "sms_tool/providers/mailbox_remail.py:mail_otp._candidate_is_newer",
         "sms_tool/providers/mailbox_remail.py:mail_otp._email_otp_candidate",
         "sms_tool/providers/mailbox_remail.py:mail_otp._extract_otp_from_text",
         "sms_tool/providers/mailbox_remail.py:mail_otp._message_received_ts",
@@ -44,55 +43,15 @@
       "per_file": {
         "sms_tool/providers/mailbox_cfworker.py": 2,
         "sms_tool/providers/mailbox_icloud_url.py": 2,
-        "sms_tool/providers/mailbox_remail.py": 4,
+        "sms_tool/providers/mailbox_remail.py": 3,
         "sms_tool/providers/smailr_client.py": 1
       },
-      "total": 9
+      "total": 8
     },
     "mailbox": {
-      "pairs": [
-        "scripts/mailbox_pool_liveness.py:mailbox._fetch_mailbox_messages",
-        "sms_tool/accounts/account_email_change.py:mailbox._load_mailbox_pool",
-        "sms_tool/accounts/account_email_change.py:mailbox._poll_email_otp",
-        "sms_tool/accounts/recovery_batch.py:mailbox._load_mailbox_pool",
-        "sms_tool/auth_flow/deps.py:mailbox._poll_email_otp",
-        "sms_tool/cli.py:mailbox._load_mailbox_pool",
-        "sms_tool/cli.py:mailbox._remail_enabled",
-        "sms_tool/codex_oauth.py:mailbox._load_mailbox_pool",
-        "sms_tool/codex_oauth.py:mailbox._mailbox_from_config",
-        "sms_tool/codex_oauth.py:mailbox._poll_email_otp",
-        "sms_tool/commands/helpers.py:mailbox._load_mailbox_pool",
-        "sms_tool/commands/mailbox_ops.py:mailbox._fetch_mailbox_messages",
-        "sms_tool/commands/mailbox_ops.py:mailbox._mailbox_from_config",
-        "sms_tool/mailbox_service.py:mailbox._email_cfg",
-        "sms_tool/mailbox_service.py:mailbox._mailbox_proxy_candidates",
-        "sms_tool/mailbox_service.py:mailbox._provider_otp_issued_after",
-        "sms_tool/mailbox_service.py:mailbox._resolve_mailbox_proxy",
-        "sms_tool/mailbox_strategies.py:mailbox._candidate_is_newer",
-        "sms_tool/mailbox_strategies.py:mailbox._email_otp_settle_seconds",
-        "sms_tool/mailbox_strategies.py:mailbox._fetch_mailbox_messages_local",
-        "sms_tool/mailbox_strategies.py:mailbox._latest_email_otp_candidate",
-        "sms_tool/mailbox_strategies.py:mailbox._otp_poll_interval",
-        "sms_tool/otp_strategy.py:mailbox._poll_email_otp",
-        "sms_tool/registration.py:mailbox._ensure_mailbox_account",
-        "sms_tool/registration.py:mailbox._poll_email_otp",
-        "sms_tool/registration.py:mailbox._snapshot_mailbox_message"
-      ],
-      "per_file": {
-        "scripts/mailbox_pool_liveness.py": 1,
-        "sms_tool/accounts/account_email_change.py": 2,
-        "sms_tool/accounts/recovery_batch.py": 1,
-        "sms_tool/auth_flow/deps.py": 1,
-        "sms_tool/cli.py": 2,
-        "sms_tool/codex_oauth.py": 3,
-        "sms_tool/commands/helpers.py": 1,
-        "sms_tool/commands/mailbox_ops.py": 2,
-        "sms_tool/mailbox_service.py": 4,
-        "sms_tool/mailbox_strategies.py": 5,
-        "sms_tool/otp_strategy.py": 1,
-        "sms_tool/registration.py": 3
-      },
-      "total": 26
+      "pairs": [],
+      "per_file": {},
+      "total": 0
     },
     "sentinel_tokens": {
       "pairs": [

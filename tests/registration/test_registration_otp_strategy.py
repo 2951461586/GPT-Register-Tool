@@ -226,7 +226,7 @@ class OtpPollObservabilityTests(unittest.TestCase):
         self.assertEqual(self._poll_events()[0].otp_resend_reason, "no_callback")
 
     def test_the_disabled_resend_window_still_uses_the_injected_poller(self):
-        """窗口被关掉时曾经直连模块级 ``_poll_email_otp``，绕过注入的轮询器。
+        """窗口被关掉时曾经直连模块级 ``poll_email_otp``，绕过注入的轮询器。
 
         注册泳道注入的是 ``MailboxService.poll_otp``；绕过它等于同一件事两条
         路径（本项目铁律 5）。把默认轮询器换成会抛异常的替身来钉住这一点。
@@ -240,7 +240,7 @@ class OtpPollObservabilityTests(unittest.TestCase):
             seen.append(kwargs["timeout"])
             return "111111"
 
-        with patch.object(otp_strategy, "_poll_email_otp", side_effect=AssertionError("bypassed")):
+        with patch.object(otp_strategy, "poll_email_otp", side_effect=AssertionError("bypassed")):
             code = otp_strategy._poll_registration_email_otp(
                 Mailbox(), subject_keyword="k", timeout=300, issued_after_unix=0,
                 resend_callback=lambda: FakeResponse(200),

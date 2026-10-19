@@ -55,10 +55,10 @@ def workflow(monkeypatch, payload=None):
         validate_config=Mock(),
         _resolve_proxy_scheme=Mock(return_value=""),
         registration_network_preflight=Mock(return_value={"proxy": ""}),
-        _ensure_mailbox_account=Mock(return_value=w.input_mailbox),
+        ensure_mailbox_account=Mock(return_value=w.input_mailbox),
         _mailbox_snapshot=Mock(return_value={}),
         set_fingerprint_geo=Mock(),
-        _snapshot_mailbox_message=Mock(),
+        snapshot_mailbox_message=Mock(),
         _sanitize_text=str,
     )
     w._run_stage = Mock()
@@ -73,7 +73,7 @@ def test_bootstrap_preserves_token_checkpoint_and_skips_mailbox(monkeypatch):
     w._bootstrap()
     assert w.persistence.row["payload"] == payload
     assert w._has_resume_checkpoint()
-    w.r._snapshot_mailbox_message.assert_not_called()
+    w.r.snapshot_mailbox_message.assert_not_called()
     w._run_stage.assert_not_called()
 
 
@@ -85,7 +85,7 @@ def test_terminal_snapshot_stops_before_auth_or_otp(monkeypatch, status):
         "snapshot_icloud_url_messages",
         Mock(side_effect=MailboxEndpointUnavailableError(status)),
     )
-    w.r._snapshot_mailbox_message = mailbox._snapshot_mailbox_message
+    w.r.snapshot_mailbox_message = mailbox.snapshot_mailbox_message
     with pytest.raises(MailboxEndpointUnavailableError):
         w._bootstrap()
     w._run_stage.assert_not_called()
@@ -96,7 +96,7 @@ def test_transient_snapshot_remains_distinct_from_missing_mailbox(monkeypatch):
     monkeypatch.setattr(
         mailbox.mailbox_icloud_url, "snapshot_icloud_url_messages", Mock(side_effect=RuntimeError("HTTP 503"))
     )
-    assert mailbox._snapshot_mailbox_message(w.input_mailbox) == ""
+    assert mailbox.snapshot_mailbox_message(w.input_mailbox) == ""
 
 
 def test_storage_rejects_checkpoint_downgrade(tmp_path, monkeypatch):
@@ -143,7 +143,7 @@ def test_unusable_session_checkpoint_stops_without_new_signup(monkeypatch, overr
     w._bootstrap()
     with pytest.raises(RegistrationAbort, match=expected):
         w._resume_post_create()
-    w.r._snapshot_mailbox_message.assert_not_called()
+    w.r.snapshot_mailbox_message.assert_not_called()
     w._run_stage.assert_not_called()
     assert not registration_retry_decision(expected).retryable
 
@@ -172,7 +172,7 @@ def test_session_recovery_only_fetches_session_then_probes_and_finalizes(monkeyp
     assert w.persistence.row["payload"]["session_recovery_attempts"] == 1
     assert list(session.cookies.jar)[0].secure is True
     assert list(session.cookies.jar)[0].domain == "auth.example.test"
-    w.r._snapshot_mailbox_message.assert_not_called()
+    w.r.snapshot_mailbox_message.assert_not_called()
 
 
 def test_session_recovery_does_not_restore_expired_cookie():

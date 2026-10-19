@@ -165,8 +165,15 @@ def test_baseline_file_is_present_and_populated():
     assert "modules" in baseline, "baseline must be keyed per module"
     for name in WATCHED:
         assert name in baseline["modules"], f"{name} missing from baseline"
-        assert baseline["modules"][name]["pairs"], f"{name} baseline records no pairs"
-        assert isinstance(baseline["modules"][name]["per_file"], dict)
+        entry = baseline["modules"][name]
+        if name == "mailbox":
+            # 2026-10-21: the consumed symbols became public API, so the module's
+            # baseline is empty and any private import from it fails immediately.
+            assert entry["pairs"] == [], "mailbox must stay at zero private consumers"
+            assert int(entry["total"]) == 0
+        else:
+            assert entry["pairs"], f"{name} baseline records no pairs"
+        assert isinstance(entry["per_file"], dict)
 
 
 def test_baseline_per_file_matches_its_own_pairs():
