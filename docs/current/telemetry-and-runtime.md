@@ -111,7 +111,9 @@ caches. Each is bounded; the bound is a safety valve, not a tuning knob.
 | Cache | Key | Bound | On overflow |
 | --- | --- | ---: | --- |
 | `geo.resolver.GeoResolver` (`_cache`) | normalized proxy URL | 512 (`max_entries`) | expired entries first, then the oldest expiry |
-| `desktop_read._SESSION_STATE_CACHE` | session-file path | 4096 | cleared; a miss costs one file read |
+| `desktop_read._SESSION_PARSE_CACHE` | 16-byte blake2b digest of `raw_json` | 4096 | oldest entry evicted (LRU); a miss costs one `json.loads` |
+| `desktop_read._SESSION_SANITIZE_CACHE` | same digest | 4096 | oldest entry evicted; a miss costs one `sanitize()` |
+| `desktop_read._SESSION_STATE_CACHE` | session-file path | 4096 | oldest entry evicted; a miss costs one file read |
 | `payment_egress._probe_cache` | (proxy, expected country) | 512 | expired outcomes first, then the oldest probe |
 | `auth_state._SEEN_DUMP_SHAPES` | stage | 64 shapes per stage | one arbitrary shape dropped; worst case is one extra diff line |
 | `browser_fingerprint_pool._GEO_CACHE` | normalized proxy URL | 512 | cleared; it is a compatibility mirror, the resolver holds the answer |
@@ -121,6 +123,15 @@ key was looked up again, so a proxy-rotating run kept every exit it had ever
 measured, and the desktop channel kept one state dict per session file it had
 ever read. Dropping an entry never changes behaviour -- a geo/egress answer is
 re-measured, a session state is re-read, a dump shape reprints its diff.
+
+**2026-10-21 -- the two row caches were the heaviest and were missing here.**
+`_SESSION_PARSE_CACHE` / `_SESSION_SANITIZE_CACHE` were bounded by entry count
+but keyed on the raw `raw_json`, so a full cache pinned a second copy of every
+session string (5-20 KB each) on top of the parsed trees; overflow called
+`clear()`, re-parsing the whole pool on the next refresh. Keys are now digests
+and overflow evicts the oldest entry. The resident path was measured at **37 MB**
+after 795 rows plus ten deltas, and `tests/governance/test_performance_budget.py`
+ceils it at 150 MB.
 
 ## Read-only inventory
 

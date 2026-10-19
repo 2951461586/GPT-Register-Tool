@@ -25,6 +25,12 @@ IMPORT_SECONDS = 3.0
 IMPORT_RSS_MB = 150
 #: `--help` builds the whole argparse surface (~190 options). Measured 0.7-1.1s.
 HELP_SECONDS = 6.0
+#: Resident desktop channel: 795 rows, one full `read_accounts` (every session
+#: parsed and sanitized into the row caches), then ten deltas. Measured 37 MB;
+#: the ceiling catches a cache that stops being bounded, or a resident-only
+#: import pulling the browser/HTTP stack. The entrypoint budgets above never
+#: covered this path -- it is the process the operator leaves running all day.
+RESIDENT_RSS_MB = 150
 
 
 def _measure(args: list[str]) -> tuple[float, str]:
@@ -63,3 +69,18 @@ def test_help_stays_within_its_budget() -> None:
 
     assert "--registration-driver" in stdout
     assert elapsed < HELP_SECONDS, f"--help took {elapsed:.2f}s"
+
+
+def test_resident_desktop_read_stays_within_its_memory_budget(tmp_path) -> None:
+    _, stdout = _measure(
+        [
+            PYTHON,
+            str(ROOT / "tests" / "fixtures" / "resident_rss_probe.py"),
+            str(tmp_path / "resident.sqlite3"),
+        ]
+    )
+    rss_mb = int(stdout.strip().splitlines()[-1])
+    assert rss_mb < RESIDENT_RSS_MB, (
+        f"resident read kept {rss_mb} MB after 795 rows + 10 deltas "
+        f"(budget {RESIDENT_RSS_MB} MB); check the row caches in sms_tool/desktop_read.py"
+    )

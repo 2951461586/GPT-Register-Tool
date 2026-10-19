@@ -16,8 +16,17 @@ Measured on 2026-10-19 (Windows, warm page cache, Python 3.12):
 | `import registration_handlers` | 42 MB RSS | — | documented only |
 | `import commands.payment` | 32 MB RSS | — | documented only |
 | Resident account delta, 434 rows | 3.5 KB | — | `test_desktop_read_delta.py` |
+| Resident desktop read, 795 rows + 10 deltas | 37 MB RSS | 150 MB | `test_performance_budget.py` |
+| Browser pool, 1 / 4 headless Chromium instances | 478 / 1907 MB RSS | — | documented only (measured 2026-10-21; Camoufox is heavier) |
 | Full account payload, 434 rows | 681 KB | — | comparison point |
 | `--doctor --json` (warm) | 1.74 s | — | documented only |
+
+The resident row is measured by `tests/fixtures/resident_rss_probe.py` in a child
+interpreter: it builds a 795-row database, runs one full `read_accounts` (every
+session row parsed and sanitized into the row caches) and ten deltas. That is the
+process an operator leaves running all day and the one path the entrypoint
+budgets above never covered; without a ceiling an unbounded row cache is
+invisible until the desktop host is hundreds of megabytes.
 
 Why some rows have no guard: they depend on the machine (network probes, Node
 startup, antivirus) far more than the code, so a hard ceiling would be noise.
