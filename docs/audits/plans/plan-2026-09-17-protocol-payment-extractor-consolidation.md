@@ -1,6 +1,6 @@
 # 立项：协议支付提取器公共骨架抽取（ideal / twint / blik）
 
-> **状态（2026-10-14 复核）**：**阶段 1 已落地，阶段 3 未做**。已落地：重复度 ratchet（`scripts/extractor_parity_report.py`、`scripts/provider_decoupling_ratchet.py`）与 `services/protocol-payment/common/` 纯工具层（`proxy_url` / `payload_helpers` / `payment_predicates` / `provider_profile` 等）。ideal:twint 重复度 ratchet 的当前基线是 38 个函数；剩余函数依赖各模块自己的 `log` / `dump_http` / `requests` / profile，成对参数化仍需单独拍板与回放证据（见 `plan-2026-09-28-stage2-replay.md`）。
+> **状态（2026-10-20 复核）**：**阶段 1 已落地（含 batch 7），阶段 2/3 未做**。已落地：重复度 ratchet（`scripts/extractor_parity_report.py`、`scripts/provider_decoupling_ratchet.py`）与 `services/protocol-payment/common/` 纯工具层（`proxy_url` / `payload_helpers` / `payment_predicates` / `provider_profile` / `stripe_setup` 等）。ideal:twint 重复度 ratchet 的当前基线是 **30** 个函数（batch 6 后为 38）；剩余函数依赖各模块自己的 `log` / `dump_http` / `requests` / profile，成对参数化仍需单独拍板与回放证据（见 `plan-2026-09-28-stage2-replay.md`）。
 
 - **日期**：2026-09-17
 - **状态**：**提案，未拍板**（本文档不含任何已落地的改动）
@@ -444,3 +444,37 @@ Q2/Q3/Q4 定案
   同理，不要试图并入 `proxy_entry`。
 - **Rule 16/18**：新增的 `common/` 模块会成为新的"私有符号消费面"。
   抽取时应**刻意设计公开接口**，而不是让调用方继续 `from .common.x import _y`。
+
+---
+
+## 10. 阶段 1 补充批（✅ 已落地 2026-10-20，batch 7 — Stripe 建会话簇）
+
+阶段 1 剩下的「已证明完全等价」部分：`ideal` / `twint` 的 5 个函数在归一化后
+AST 相同（`stripe_init` 甚至逐字节相同），`blik` 有 3 个是纯参数差异。
+
+- 新建 `services/protocol-payment/common/stripe_setup.py`：`stripe_init` /
+  `stripe_elements_session_params` / `payment_accept_language` /
+  `saved_payment_value` / `random_runtime_version`。身体逐字照搬；provider 专属
+  的东西全部变成参数（env 前缀、三个 locale callable、`new_session`、
+  `dump_http`、Stripe API 版本）。`endpoints` / `DEFAULT_TIMEOUT` 直接引
+  `common/`（已经是单一权威）。
+- **接线**：`ideal` / `twint` 各 5 个、`blik` 3 个函数变成同名薄封装，调用点不变；
+  依赖按调用时解析，不缓存到默认参数（Rule 23）。
+- **差分验证**（`runtime/tmp/batch7_diff_verify.py`）：HEAD 字节副本 vs 新实现，
+  3 个 provider × （locale 6 组 / env 6 组 / elements params 2 组 / stripe_init
+  3 种响应 × 会话+headers+post+dump）共 **76 项检查，零分歧**；
+  变异验证（把 `enable_save` 改成 `always`）→ 立即报出 4 处差异，还原后回到 0。
+- **ratchet 结果**：parity `ideal:twint 35→30`、`ideal:blik 19→16`、
+  `twint:blik 16→13`；decoupling `209→222 delegating`、`0 identical`、
+  `27→31 divergent`。
+- **为什么 divergent 会涨 4**：`common/` 拥有这些名字之后，原本就存在的 fork
+  才第一次**可见**——blik 的 `stripe_init`（`client_elements_session_id` + 可配
+  `enable_save`）与 `stripe_elements_session_params`（要求全部 ctx 键）、
+  kakao 的 `stripe_init`（不同签名/ko-KR 载荷）、momo 的 `stripe_init`
+  （委托 `paylink.stripe_init_payment_page` 并返回三元组）。按 Rule 19 保留本地，
+  并在 `docs/architecture.md` Rule 19 与本文件记录；基线同 commit 上调。
+- **有意没做**：blik 的 `new_session`（额外读 `IDEAL_USE_LOCAL_PROXY_ONLY`，
+  迁移需要改变行为）不在本批；`create_checkout` / `build_chatgpt_session` /
+  `run_*` 仍属阶段 2。
+- 测试：`tests/payment` 1974 例（含 532 subtests）全过；两个 ratchet 的
+  pinned-facts 测试与 `test_extractor_divergence_contract.py` 已同步更新。

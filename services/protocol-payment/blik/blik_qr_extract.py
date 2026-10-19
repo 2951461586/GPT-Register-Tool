@@ -177,6 +177,7 @@ from common import geo as shared_geo
 from common.timeouts import CHATGPT_TIMEOUT, DEFAULT_TIMEOUT
 from common import stripe_flow as shared_stripe_flow
 from common import endpoints
+from common import stripe_setup as shared_stripe_setup
 
 LOG_DIR = Path(os.environ.get("IDEAL_LOG_DIR", "").strip() or (SCRIPT_DIR / "logs"))
 DUMP_DIR = Path(os.environ.get("IDEAL_DUMP_DIR", "").strip() or (SCRIPT_DIR / "dumps"))
@@ -336,7 +337,8 @@ def random_user_agent() -> str:
 
 
 def random_runtime_version() -> str:
-    return os.environ.get("PP_RUNTIME_VERSION", "").strip() or DEFAULT_STRIPE_RUNTIME_VERSION
+    """Delegate to ``common/stripe_setup.py`` (batch 7)."""
+    return shared_stripe_setup.random_runtime_version(default=DEFAULT_STRIPE_RUNTIME_VERSION)
 
 
 def build_email(first_name: str, last_name: str) -> str:
@@ -375,7 +377,8 @@ def payment_browser_timezone() -> str:
 
 
 def saved_payment_value() -> str:
-    return os.environ.get("IDEAL_SAVED_PAYMENT_VALUE", "never").strip() or "never"
+    """Delegate to ``common/stripe_setup.py`` (batch 7), keeping the fork's env name."""
+    return shared_stripe_setup.saved_payment_value(env_prefix="IDEAL")
 
 
 def payment_method_type() -> str:
@@ -469,10 +472,8 @@ def validate_blik_code_before_start() -> bool:
 
 
 def payment_accept_language() -> str:
-    locale = payment_browser_locale()
-    if locale.lower().startswith("en"):
-        return "en-US,en;q=0.9"
-    return f"{locale},{locale.split('-', 1)[0]};q=0.9,en;q=0.8"
+    """Delegate to ``common/stripe_setup.py`` (batch 7)."""
+    return shared_stripe_setup.payment_accept_language(payment_browser_locale)
 
 
 def normalize_proxy_url(proxy: str) -> str:
