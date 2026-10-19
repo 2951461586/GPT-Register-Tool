@@ -65,9 +65,25 @@ five-module cycle is closed by a single lazy edge. They are not import-time
 cycles, but they are real coupling. They are listed here so a future reader
 neither re-discovers them as a surprise nor "fixes" them by lifting the import
 to module scope (which would create a genuine cycle).
-`scripts/delayed_import_ratchet.py` counts every delayed import in the package
-and fails on growth; this table is the *reason* behind the ones that form
-cycles.
+`scripts/delayed_import_ratchet.py` freezes every delayed import by
+`(importer, target)` and fails on a new edge or a changed reason; this table is
+the *reason* behind the ones that form cycles.
+
+Each frozen edge also carries a reason, derived by rule: `cycle` (one of the
+documented pairs above), `startup` (the CLI/command seam, or a heavy optional
+stack such as `playwright` / `curl_cffi` / `camoufox`), `provider` (a
+provider/browser subsystem), `test-seam` (a path that exists only so tests can
+redirect the store — currently none) and `deferred` (a sibling imported late to
+keep the module graph acyclic or the import light). Current baseline: 415
+delayed statements over 315 distinct edges — 8 `cycle`, 96 `startup`, 34
+`provider`, 177 `deferred`.
+
+A **new `deferred` edge cannot be adopted without a written reason**: it needs an
+entry in `scripts/delayed_import_reasons.json` (`reason` + `why`), and
+`--update-baseline` refuses it otherwise. The same file overrides a derived
+reason when the rules are wrong, so a correction is one data entry instead of a
+rule change. Rule-derived reasons (`cycle` / `startup` / `provider`) are
+self-evident and only need the baseline update, which prints every added edge.
 
 The authoritative form of this list is an exact import graph (every real
 `import` statement, resolved against the package layout, including
