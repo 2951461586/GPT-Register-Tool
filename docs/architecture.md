@@ -175,8 +175,9 @@ can silently stop matching.
 
 This is a *scope* declaration, not a measurement. It does not change the graph's
 edge count, and it is not the architecture authority: the frozen measure of
-cross-directory coupling remains `scripts/import_layer_ratchet.py` (287
-module-level edges over 31 directory pairs), and the authoritative cycle list is
+cross-directory coupling remains `scripts/import_layer_ratchet.py` (its
+committed baseline is 267 module-level edges over 28 directory pairs), and the
+authoritative cycle list is
 the exact import graph described above. `tests/config/test_pilens_scope_config.py` pins
 the scope and the formatting decision so neither can silently rot.
 
@@ -342,7 +343,7 @@ This hardening work does not delete or archive existing runtime files.
 - [PayPal zero-due link contract](current/paypal-zero-due-link.md)
 - [Recovery and cancellation](current/registration-recovery.md)
 - [Accepted decisions](adr/README.md)
-- [Pre-hardening detailed snapshot](audits/architecture-before-registration-hardening-2026-09-06.md)
+- [Pre-hardening detailed snapshot](audits/records/architecture-before-registration-hardening-2026-09-06.md)
 
 The historical snapshot preserves the former long document without presenting
 old file sizes and audit findings as current facts.
