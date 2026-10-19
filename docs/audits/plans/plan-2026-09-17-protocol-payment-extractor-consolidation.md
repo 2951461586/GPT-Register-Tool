@@ -1,6 +1,15 @@
 # 立项：协议支付提取器公共骨架抽取（ideal / twint / blik）
 
 > **状态（2026-10-14 复核）**：**阶段 1 已落地，阶段 3 未做**。已落地：重复度 ratchet（`scripts/extractor_parity_report.py`、`scripts/provider_decoupling_ratchet.py`）与 `services/protocol-payment/common/` 纯工具层（`proxy_url` / `payload_helpers` / `payment_predicates` / `provider_profile` 等）。ideal:twint 重复度 ratchet 的当前基线是 38 个函数；剩余函数依赖各模块自己的 `log` / `dump_http` / `requests` / profile，成对参数化仍需单独拍板与回放证据（见 `plan-2026-09-28-stage2-replay.md`）。
+>
+> **状态（2026-10-19 复核）**：阶段 1 的最后一项 `build_attempt_batches`（批次 1e）已下沉到
+> `common/proxy_selection.py`：ideal / twint / blik 三份 44 行副本改为一个共享实现 + 三个薄封装，
+> `per_checkout`、`successful_pair_preferences`、`log` 全部由调用方注入（共享模块不读环境变量、
+> 不持有 provider 状态）。差分验证 2700 例（随机池 × 3 个 provider × 3 档 per_checkout）零分歧；
+> parity 基线同步收紧为 `ideal:twint=34` / `ideal:blik=18` / `twint:blik=15`（momo:kakao 仍为 0）。
+> 剩余同等函数（`stripe_*` / `run_*` / `new_session` / `pre_proxy_url` / `build_ctx` 等）全部依赖
+> provider 环境变量、locale、redaction 注册表或网络会话，按 §6 与
+> `plan-2026-09-28-stage2-replay.md` 属于阶段 2 的成对参数化，仍需单独拍板 + 回放证据，本轮不动。
 
 - **日期**：2026-09-17
 - **状态**：**提案，未拍板**（本文档不含任何已落地的改动）

@@ -15,6 +15,13 @@ What is shared, and what is deliberately not
 
 ``pick_random_proxies`` ideal / twint / blik -- byte-identical.
 
+``build_attempt_batches`` ideal / twint / blik -- byte-identical once
+                        ``per_checkout`` and the two injected collaborators are
+                        supplied.  The per-extractor env key stays at the call
+                        site (``IDEAL_PROVIDER_PER_CHECKOUT`` /
+                        ``TWINT_PROVIDER_PER_CHECKOUT``), so this module never
+                        reads the environment.
+
 ``is_preferred_proxy``  ideal / twint only.  blik's reads its records through
                         ``proxy_state_key(group, proxy)`` instead of
                         ``proxy_key(proxy)`` and adds a ``zero_ok`` escape
@@ -58,6 +65,7 @@ from typing import Any, Callable
 from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
 __all__ = [
+    "build_attempt_batches",
     "is_preferred_proxy",
     "pick_random_proxies",
     "proxy_for_country",
@@ -141,6 +149,65 @@ def is_preferred_proxy(
     if not isinstance(record, dict):
         return False
     return int(record.get("success") or 0) > 0
+
+
+def build_attempt_batches(
+    checkout_proxies: list[str],
+    provider_proxies: list[str],
+    max_attempts: int,
+    *,
+    per_checkout: int,
+    successful_pair_preferences: Callable[[list[str], list[str]], dict[str, list[str]]],
+    log: Callable[[str], None],
+) -> list[tuple[str, list[str]]]:
+    """Pair each checkout proxy with a batch of provider proxies.
+
+    Preferred (historically successful) pairs are consumed first, then the
+    provider pool fills the rest of each batch.  A provider reserved for a
+    different checkout proxy is skipped in the fill phase, so a known-good pair
+    is never stolen.  ``per_checkout`` and both collaborators are injected:
+    the environment key and the success-record store are per-extractor.
+    """
+    provider_pool = provider_proxies[:]
+    preferred_pairs = successful_pair_preferences(checkout_proxies, provider_proxies)
+    reserved_provider_owner: dict[str, str] = {}
+    for checkout_proxy, preferred_providers in preferred_pairs.items():
+        for provider_proxy in preferred_providers:
+            reserved_provider_owner.setdefault(provider_proxy, checkout_proxy)
+    used_providers: set[str] = set()
+    batches: list[tuple[str, list[str]]] = []
+    provider_index = 0
+    attempt_count = 0
+    preferred_count = 0
+    for checkout_proxy in checkout_proxies:
+        batch: list[str] = []
+        for provider_proxy in preferred_pairs.get(checkout_proxy, []):
+            if len(batch) >= per_checkout or attempt_count >= max_attempts:
+                break
+            if provider_proxy in used_providers:
+                continue
+            batch.append(provider_proxy)
+            used_providers.add(provider_proxy)
+            attempt_count += 1
+            preferred_count += 1
+        while len(batch) < per_checkout and provider_index < len(provider_pool) and attempt_count < max_attempts:
+            provider_proxy = provider_pool[provider_index]
+            provider_index += 1
+            if provider_proxy in used_providers:
+                continue
+            reserved_owner = reserved_provider_owner.get(provider_proxy)
+            if reserved_owner and reserved_owner != checkout_proxy:
+                continue
+            batch.append(provider_proxy)
+            used_providers.add(provider_proxy)
+            attempt_count += 1
+        if batch:
+            batches.append((checkout_proxy, batch))
+        if attempt_count >= max_attempts:
+            break
+    if preferred_count:
+        log(f"调度命中成功组合优先: {preferred_count} 组")
+    return batches
 
 
 def pick_random_proxies(

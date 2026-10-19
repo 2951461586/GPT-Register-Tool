@@ -256,11 +256,11 @@ that duplication and a shared layer absorbs the parts proven provider-neutral:
 
 - `scripts/extractor_parity_report.py` freezes, per file pair, the number of
   top-level functions that stay AST-identical after provider tokens are erased.
-  It may only go down. Current baseline: `ideal:twint=35`, `ideal:blik=19`,
-  `twint:blik=16`, `momo:kakao=0` (momo/kakao is the negative control).
+  It may only go down. Current baseline: `ideal:twint=34`, `ideal:blik=18`,
+  `twint:blik=15`, `momo:kakao=0` (momo/kakao is the negative control).
 - `scripts/provider_decoupling_ratchet.py` freezes, per provider file, how many
   same-named definitions delegate to `common/` versus diverge from it. Current
-  state: 209 delegating, 0 verbatim copies, 27 deliberate forks.
+  state: 212 delegating, 0 verbatim copies, 27 deliberate forks.
 - `common/extractor_runtime.py` owns the provider-neutral runtime helpers:
   `normalize_pre_proxy_url`, `proxy_chain_key` and the country-selector regex.
   iDEAL/TWINT/BLIK import them instead of carrying a copy.

@@ -172,10 +172,10 @@ def test_ratchet_holds_for_the_current_tree():
 
 
 def test_summary_facts_are_pinned():
-    """236 same-named defs: 209 already migrated, 0 verbatim copies, 27 forks."""
+    """239 same-named defs: 212 already migrated, 0 verbatim copies, 27 forks."""
     assert pdr.analyze(ROOT).summary() == {
-        "same_named_total": 236,
-        pdr.DELEGATING: 209,
+        "same_named_total": 239,
+        pdr.DELEGATING: 212,
         pdr.IDENTICAL: 0,
         pdr.DIVERGENT: 27,
         "files_with_frozen_pairs": 7,
@@ -186,9 +186,9 @@ def test_the_migrated_extractors_have_no_verbatim_copies_left():
     """Pin the three migrated extractors so an inlining regression fails."""
     analysis = pdr.analyze(ROOT)
     expected_delegating = {
-        "ideal/ideal_qr_extract.py": 66,
-        "twint/twint_extract.py": 66,
-        "blik/blik_qr_extract.py": 66,
+        "ideal/ideal_qr_extract.py": 67,
+        "twint/twint_extract.py": 67,
+        "blik/blik_qr_extract.py": 67,
     }
     expected_divergent = {
         "ideal/ideal_qr_extract.py": 2,
@@ -212,10 +212,11 @@ def test_blik_carries_the_documented_divergent_bulk():
     seed-file, and resource-URL helpers were delegated to ``common/`` on
     2026-10-15, bringing ``blik`` to 66 delegating / 0 identical / 12 divergent
     (matching ``ideal`` and ``twint`` on all 66 delegating helpers).
+    ``build_attempt_batches`` followed on 2026-10-19, taking all three to 67.
     """
     analysis = pdr.analyze(ROOT)
     counts = analysis.counts_for("blik/blik_qr_extract.py")
-    assert counts == {pdr.DELEGATING: 66, pdr.IDENTICAL: 0, pdr.DIVERGENT: 12}
+    assert counts == {pdr.DELEGATING: 67, pdr.IDENTICAL: 0, pdr.DIVERGENT: 12}
 
 
 def test_momo_shares_the_pure_primitives_and_keeps_its_two_forks():

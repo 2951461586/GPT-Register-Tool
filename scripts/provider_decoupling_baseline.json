@@ -1,9 +1,9 @@
 {
-  "delegating": 209,
+  "delegating": 212,
   "divergent": 27,
   "files": {
     "blik/blik_qr_extract.py": {
-      "delegating": 66,
+      "delegating": 67,
       "divergent": 12,
       "identical": 0
     },
@@ -13,7 +13,7 @@
       "identical": 0
     },
     "ideal/ideal_qr_extract.py": {
-      "delegating": 66,
+      "delegating": 67,
       "divergent": 2,
       "identical": 0
     },
@@ -53,12 +53,12 @@
       "identical": 0
     },
     "twint/twint_extract.py": {
-      "delegating": 66,
+      "delegating": 67,
       "divergent": 2,
       "identical": 0
     }
   },
   "files_with_frozen_pairs": 7,
   "identical": 0,
-  "same_named_total": 236
+  "same_named_total": 239
 }
