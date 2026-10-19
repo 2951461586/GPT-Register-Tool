@@ -8,6 +8,9 @@ Batch 5 of the extractor consolidation.  Scope, per the module docstring:
   pick_random_proxies  ideal / twint / blik.
   is_preferred_proxy   ideal / twint only.  blik's keys records by group and
                        honours ``zero_ok``, so its rule is different.
+  build_attempt_batches
+                       ideal / twint / blik, once ``per_checkout`` and the
+                       success-record lookup are injected.
 """
 
 import ast
@@ -24,8 +27,8 @@ MODULE_PATH = (
     / "services" / "protocol-payment" / "common" / "proxy_selection.py"
 )
 SPEC = importlib.util.spec_from_file_location("proxy_selection", MODULE_PATH)
+assert SPEC is not None and SPEC.loader is not None
 SELECT = importlib.util.module_from_spec(SPEC)
-assert SPEC.loader is not None
 sys.modules[SPEC.name] = SELECT
 SPEC.loader.exec_module(SELECT)
 
@@ -351,11 +354,57 @@ class NoEarlyBoundDefaultTests(unittest.TestCase):
                                   "%s.%s must have no default" % (name, knob))
 
 
+class BuildAttemptBatchesTests(unittest.TestCase):
+    """The planner moved out of ideal/twint/blik on 2026-10-19.
+
+    Pinned here because the three copies were only proven equivalent by an
+    external differential harness; these cases are the committed contract.
+    """
+
+    def _build(self, checkout, provider, attempts, *, per_checkout=30, pairs=None, log=None):
+        return SELECT.build_attempt_batches(
+            checkout,
+            provider,
+            attempts,
+            per_checkout=per_checkout,
+            successful_pair_preferences=lambda a, b: dict(pairs or {}),
+            log=log or (lambda _message: None),
+        )
+
+    def test_preferred_pairs_come_first_and_keep_their_provider(self):
+        pairs = {"c1": ["p2"], "c2": ["p1"]}
+        result = self._build(["c1", "c2"], ["p1", "p2", "p3"], 10, per_checkout=5, pairs=pairs)
+        # p1 stays reserved for c2, so c1's fill phase takes p3 instead.
+        self.assertEqual(result, [("c1", ["p2", "p3"]), ("c2", ["p1"])])
+
+    def test_per_checkout_caps_each_batch(self):
+        result = self._build(["c1", "c2"], ["p1", "p2"], 10, per_checkout=1)
+        self.assertEqual(result, [("c1", ["p1"]), ("c2", ["p2"])])
+
+    def test_max_attempts_is_a_global_cap(self):
+        result = self._build(["c1", "c2"], ["p1", "p2"], 1)
+        self.assertEqual(result, [("c1", ["p1"])])
+
+    def test_a_provider_is_never_used_twice(self):
+        result = self._build(["c1"], ["p1", "p1", "p2"], 10, per_checkout=5)
+        self.assertEqual(result, [("c1", ["p1", "p2"])])
+
+    def test_empty_input_yields_no_batches(self):
+        self.assertEqual(self._build([], ["p1"], 10), [])
+
+    def test_the_shared_pairs_message_is_emitted_only_on_a_hit(self):
+        messages = []
+        self._build(["c1"], ["p1"], 10, pairs={}, log=messages.append)
+        self.assertEqual(messages, [])
+        self._build(["c1"], ["p1"], 10, pairs={"c1": ["p1"]}, log=messages.append)
+        self.assertEqual(messages, ["调度命中成功组合优先: 1 组"])
+
+
 class ModuleContractTests(unittest.TestCase):
     def test_exports(self):
         self.assertEqual(sorted(SELECT.__all__),
-                         ["is_preferred_proxy", "pick_random_proxies",
-                          "proxy_for_country"])
+                         ["build_attempt_batches", "is_preferred_proxy",
+                          "pick_random_proxies", "proxy_for_country"])
 
     def test_stays_free_of_the_host_package(self):
         """architecture.md Rule 10: protocol-payment must not import sms_tool."""
@@ -390,6 +439,7 @@ class ExtractorWiringTests(unittest.TestCase):
     def _shared_call(self, path, name, callee):
         node = self._func(path, name)
         self.assertIsNotNone(node, "%s missing" % name)
+        assert node is not None
         for sub in ast.walk(node):
             if isinstance(sub, ast.Call) and isinstance(sub.func, ast.Name) \
                     and sub.func.id == callee:

@@ -378,7 +378,7 @@ This hardening work does not delete or archive existing runtime files.
 - [PayPal zero-due link contract](current/paypal-zero-due-link.md)
 - [Recovery and cancellation](current/registration-recovery.md)
 - [Accepted decisions](adr/README.md)
-- [Pre-hardening detailed snapshot](audits/architecture-before-registration-hardening-2026-09-06.md)
+- [Pre-hardening detailed snapshot](audits/records/architecture-before-registration-hardening-2026-09-06.md)
 
 The historical snapshot preserves the former long document without presenting
 old file sizes and audit findings as current facts.

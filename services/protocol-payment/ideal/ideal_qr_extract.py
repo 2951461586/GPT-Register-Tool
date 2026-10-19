@@ -147,6 +147,7 @@ from common.proxy_bookkeeping import (
     token_key_name as shared_token_key_name,
 )
 from common.proxy_selection import (
+    build_attempt_batches as shared_build_attempt_batches,
     is_preferred_proxy as shared_is_preferred_proxy,
     pick_random_proxies as shared_pick_random_proxies,
     proxy_for_country as shared_proxy_for_country,
@@ -2227,47 +2228,14 @@ def successful_pair_preferences(checkout_proxies: list[str], provider_proxies: l
 def build_attempt_batches(
     checkout_proxies: list[str], provider_proxies: list[str], max_attempts: int
 ) -> list[tuple[str, list[str]]]:
-    per_checkout = env_int("IDEAL_PROVIDER_PER_CHECKOUT", 30)
-    provider_pool = provider_proxies[:]
-    preferred_pairs = successful_pair_preferences(checkout_proxies, provider_proxies)
-    reserved_provider_owner: dict[str, str] = {}
-    for checkout_proxy, preferred_providers in preferred_pairs.items():
-        for provider_proxy in preferred_providers:
-            reserved_provider_owner.setdefault(provider_proxy, checkout_proxy)
-    used_providers: set[str] = set()
-    batches: list[tuple[str, list[str]]] = []
-    provider_index = 0
-    attempt_count = 0
-    preferred_count = 0
-    for checkout_proxy in checkout_proxies:
-        batch: list[str] = []
-        for provider_proxy in preferred_pairs.get(checkout_proxy, []):
-            if len(batch) >= per_checkout or attempt_count >= max_attempts:
-                break
-            if provider_proxy in used_providers:
-                continue
-            batch.append(provider_proxy)
-            used_providers.add(provider_proxy)
-            attempt_count += 1
-            preferred_count += 1
-        while len(batch) < per_checkout and provider_index < len(provider_pool) and attempt_count < max_attempts:
-            provider_proxy = provider_pool[provider_index]
-            provider_index += 1
-            if provider_proxy in used_providers:
-                continue
-            reserved_owner = reserved_provider_owner.get(provider_proxy)
-            if reserved_owner and reserved_owner != checkout_proxy:
-                continue
-            batch.append(provider_proxy)
-            used_providers.add(provider_proxy)
-            attempt_count += 1
-        if batch:
-            batches.append((checkout_proxy, batch))
-        if attempt_count >= max_attempts:
-            break
-    if preferred_count:
-        log(f"调度命中成功组合优先: {preferred_count} 组")
-    return batches
+    return shared_build_attempt_batches(
+        checkout_proxies,
+        provider_proxies,
+        max_attempts,
+        per_checkout=env_int("IDEAL_PROVIDER_PER_CHECKOUT", 30),
+        successful_pair_preferences=successful_pair_preferences,
+        log=log,
+    )
 
 
 def is_preferred_proxy(group: str, proxy: str) -> bool:

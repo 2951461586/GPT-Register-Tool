@@ -5,7 +5,7 @@ payment.json
 .env
 .env.*
 !.env.example
-.agents/skills/
+.agents/
 .claude/
 .codex/
 sms_tool/config.json
@@ -26,6 +26,9 @@ skills-lock.json
 __pycache__/
 *.py[cod]
 .pytest_cache/
+# Ruff's cache writes its own inner .gitignore; pin it at the repo level so a
+# tool-side cache wipe cannot turn the directory into untracked state.
+.ruff_cache/
 
 # === 一次性诊断/探测脚本（常内联明文凭据，禁止入库）===
 # 忽略**任意目录**下以 _ 开头的 .py，再用 ! 把 __init__.py 放行。
@@ -93,6 +96,8 @@ SmsWorkbench.Contracts/obj/
 .workbuddy-ai/
 .workbuddy/
 .pi/
+# ThinkRail chat context (tool-owned, self-ignored via context/.gitignore).
+.thinkrail/
 /.zcode/
 /gates/
 TestResults/
