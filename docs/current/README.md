@@ -1,5 +1,30 @@
 # Current Documentation
 
+## 注册链路文档分工
+
+五篇注册文档经常被一起打开。先按问题定位，再只读那一篇；**同一事实只有一个归属**，其它地方给链接而不是复述。
+
+| 你想确认… | 读这篇 | 它不负责 |
+| --- | --- | --- |
+| 阶段顺序、`RegistrationOperations` / runtime 状态组、session 归属、错误与重试策略 | [registration-architecture.md](registration-architecture.md) | 端点与请求体、代理选址 |
+| 协议通道的端点、步骤顺序、Sentinel 契约、落地页词汇、edge challenge、device identity | [protocol-registration.md](protocol-registration.md) | 状态机与重试策略、浏览器侧恢复 |
+| 双路径的运行时控制流、指纹与鉴权头、代理三车道与 `ProxyEntry`、驱动→池矩阵、桌面 IPC | [registration-and-proxy-architecture.md](registration-and-proxy-architecture.md) | 失败后的处置与取消、A/B 判定 |
+| 失败之后怎么办：分类、协作取消、并发、可观测性 | [registration-recovery.md](registration-recovery.md) | 正常路径的端点与步骤 |
+| 怎么做受控对照、开哪个开关、看什么指标判定 | [registration-ab-runbook.md](registration-ab-runbook.md) | 系统本身的行为（前四篇） |
+| 账号健康 / 优惠检查 / 恢复的副作用与代理优先级 | [account-health.md](account-health.md) | 注册成功判定 |
+| 邮箱 provider 能力、轮询与终止错误 | [mailbox.md](mailbox.md) | 注册流程 |
+| 一键接码的供应商与租号 | [one-click-sms.md](one-click-sms.md) | 注册流程 |
+
+**事实的唯一归属**（改一处就别改第二处）：
+
+| 事实 | 权威文档 | 权威代码 |
+| --- | --- | --- |
+| 阶段顺序 / 状态组 / 重试与错误分类 | `registration-architecture.md` | `registration_handlers.py`、`registration_policy.py`、`failure_registry.py` |
+| 端点、请求体、Sentinel 契约 | `protocol-registration.md` | `auth_flow/`、`sentinel/` |
+| 代理串解析、车道选择、驱动→池映射 | `registration-and-proxy-architecture.md` | `proxy_entry.py`、`proxy_routing.py` |
+| 取消 / 并发 / 恢复流程 | `registration-recovery.md` | `registration_cancel.py`、`registration_concurrency.py` |
+| A/B 开关与判定口径 | `registration-ab-runbook.md` | `config.example.json` 中对应开关 |
+
 The current architecture and operating entry points remain at the stable paths
 below so existing links do not break:
 

@@ -1,5 +1,10 @@
 # Protocol Registration Contract
 
+> **Scope.** Owns the wire contract: endpoints, step order, Sentinel, landing-page
+> vocabulary. Stage order and retry policy belong to
+> [registration-architecture.md](registration-architecture.md); this file does not
+> restate them.
+
 The current contract for the **email / AT protocol lane** — the non-browser
 flow that registers or logs into a ChatGPT account and ends with an access
 token. The browser lane is documented in
