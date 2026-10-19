@@ -6,6 +6,11 @@
 > 2. **代理池**（三元隔离 + 单一范式解析 + 动态轮换）
 >
 > 行号基于 2026-08-29 的代码快照，随重构可能漂移；以函数/类名检索为准。
+>
+> **Scope.** 本篇只负责运行时控制流与代理/指纹的**组合视角**：阶段顺序见
+> [registration-architecture.md](registration-architecture.md)，端点与请求体见
+> [protocol-registration.md](protocol-registration.md)，失败处置见
+> [registration-recovery.md](registration-recovery.md)。
 
 ---
 
@@ -200,6 +205,7 @@ Sentinel 不是纯 Python PoW，而是调用**真实 Node SDK**：
 全部 4 个浏览器驱动共享同一个**常驻进程池**（`browser_pool.py`），非每驱动各开各的：
 
 - `PoolConfig`（`browser_pool.py:67`）：`max_concurrent`（默认 4）/ `max_uses_per_process`（默认 10）/ `recycle_on_error`（默认 true）/ `max_total_rss_mb`（默认 0 = 关闭）。
+  **推荐值有实测依据（2026-10-21）**：一个 headless Chromium 进程树约 **478 MB**，四个约 **1.9 GB**（各 3 次重复）；Camoufox 是 Gecko、通常更重，因此推荐值按 `max_concurrent × 512 MB` 推导（默认 4 路 = **2048 MB**），写进 `config.example.json`。默认仍是 0（看门狗会回收**存活**的浏览器，对存量配置静默开启可能打断注册，需 canary），但池启动时会在关闭且并发 > 1 的情况下打一条带推荐值的 warning，`stats` 永远同时给出 `recommended_max_total_rss_mb`。
 - 内存看门狗：`max_total_rss_mb > 0` 时，每次取槽位前用 psutil 汇总当前进程所有子进程（浏览器 + renderer）的 RSS；超过上限就回收一个**空闲且最久未使用**的槽位，没有空闲槽位则回收当前槽位。它是回收触发器，不是硬性 kill；采样失败只降级为“本次不测量”。`stats` 在该开关开启时才返回 `rss_mb`。
 - config 键**故意叫 `registration.browser_process_pool`**（`config.json:293`），**不叫 `browser_pool`**——后者是 `proxy_routing` 里的代理别名，二者无关（`browser_pool.py:70` 注释明确）。
 - 进程级回收：达到 `max_uses_per_process`、出错（`recycle_on_error`）或代理变更时，该槽位进程回收重建（`browser_pool.py:156`）。默认 `max_concurrent:4` 与脉冲 `wave_size:4` 对齐。

@@ -174,7 +174,8 @@
       "enabled": true,
       "max_concurrent": 4,
       "max_uses_per_process": 10,
-      "recycle_on_error": true
+      "recycle_on_error": true,
+      "max_total_rss_mb": 2048
     }
   },
   "email_registration": {

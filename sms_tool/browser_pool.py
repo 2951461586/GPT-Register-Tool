@@ -20,7 +20,7 @@ from collections.abc import Callable, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import Any, ClassVar
 
 from .registration_drivers.base import BrowserRegistrationError
 from .registration_drivers.external_sessions import create_browser_session
@@ -73,7 +73,23 @@ class PoolConfig:
     #: the watchdog. A browser generation is recycled when the pool's whole
     #: process tree crosses it; the slot itself is healthy, so only a memory
     #: leak (or an unexpectedly heavy page) reaches this.
+    #:
+    #: The default stays 0 on purpose: the watchdog recycles a *live* browser, so
+    #: turning it on for every existing config is a behaviour change that needs a
+    #: canary. What the measurement buys instead is a concrete recommendation
+    #: (see RECOMMENDED_PER_BROWSER_RSS_MB) surfaced by the pool warning and by
+    #: ``config.example.json``.
     max_total_rss_mb: int = 0
+
+    #: Per-browser RSS budget used for the recommendation. Measured 2026-10-21:
+    #: one headless Chromium process tree settles at ~478 MB, four at ~1.9 GB
+    #: (3 reps each). Camoufox is Gecko and heavier, so the recommendation adds
+    #: headroom instead of using the Chromium number verbatim.
+    RECOMMENDED_PER_BROWSER_RSS_MB: ClassVar[int] = 512
+
+    def recommended_max_total_rss_mb(self) -> int:
+        """The cap this pool would use if the operator turns the watchdog on."""
+        return max(1, self.max_concurrent) * self.RECOMMENDED_PER_BROWSER_RSS_MB
 
     @classmethod
     def from_config(cls, config: Mapping[str, Any]) -> "PoolConfig":
@@ -173,6 +189,17 @@ class BrowserProcessPool:
         ]
         self._lock = threading.Lock()
         self._closed = False
+        if self.pool_config.max_total_rss_mb <= 0 and self.pool_config.max_concurrent > 1:
+            # One line per pool, not per acquire: the operator should learn this
+            # once, from a log they already read, with the number to configure.
+            logger.warning(
+                "browser process pool: max_total_rss_mb is disabled with %d concurrent "
+                "browsers (measured ~478 MB per headless Chromium, ~1.9 GB for four). "
+                "Set registration.browser_process_pool.max_total_rss_mb to %d to bound "
+                "the process tree.",
+                self.pool_config.max_concurrent,
+                self.pool_config.recommended_max_total_rss_mb(),
+            )
         # Resident browser processes, keyed by slot id.  Unlike the old design
         # (which launched + closed a browser on every call), a resident is kept
         # alive across accounts: each account gets a fresh isolated context via
@@ -451,6 +478,7 @@ class BrowserProcessPool:
                 "max_concurrent": self.pool_config.max_concurrent,
                 "max_uses_per_process": self.pool_config.max_uses_per_process,
                 "max_total_rss_mb": self.pool_config.max_total_rss_mb,
+                "recommended_max_total_rss_mb": self.pool_config.recommended_max_total_rss_mb(),
                 "rss_mb": round(self._sample_rss_mb(), 1)
                 if self.pool_config.max_total_rss_mb > 0
                 else None,
