@@ -24,6 +24,9 @@ Directory layout (since 2026-09-06):
   dependencies.
 - [Directory Map](directory-map.md) - physical repository classification and
   where new code should be placed.
+- [Boundary Rules](rules/) - one file per numbered rule (`rule-NN-*.md`): the
+  forbidden dependency, the check that proves it, and its source section. The
+  numbering is referenced from tests and scripts, so it is append-only.
 - [Project Context](CONTEXT.md) - 领域术语与模块归属规则。
 - [Architecture Decisions](adr/README.md) - 已接受的架构决策。
 - [Registration Recovery & Cancellation](current/registration-recovery.md) -
