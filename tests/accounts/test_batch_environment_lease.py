@@ -19,6 +19,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from sms_tool import storage
+from sms_tool.store import connection
 from sms_tool.batch_runner import (
     _cached_exit_ip,
     _hold_environment_lease,
@@ -52,12 +53,12 @@ class _TempDb:
     def __enter__(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.path = Path(self._tmp.name) / "accounts.sqlite3"
-        self._patch = patch.object(storage, "database_path", return_value=self.path)
-        self._patch.start()
+        self._previous = connection.database_path_provider()
+        connection.set_database_path_provider(lambda *args, _p=self.path, **kwargs: _p)
         return self
 
     def __exit__(self, *exc):
-        self._patch.stop()
+        connection.set_database_path_provider(self._previous)
         self._tmp.cleanup()
         return False
 

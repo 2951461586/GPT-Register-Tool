@@ -7,6 +7,7 @@ from unittest.mock import Mock
 import pytest
 
 from sms_tool import mailbox, registration_checkpoint, storage
+from sms_tool.store import connection
 from sms_tool.mailbox_errors import MailboxEndpointUnavailableError
 from sms_tool.registration_handlers import RegistrationEmailWorkflow
 from sms_tool.registration_runtime import RegistrationRuntimeState
@@ -99,7 +100,7 @@ def test_transient_snapshot_remains_distinct_from_missing_mailbox(monkeypatch):
 
 
 def test_storage_rejects_checkpoint_downgrade(tmp_path, monkeypatch):
-    monkeypatch.setattr(storage, "database_path", lambda *args, **kwargs: tmp_path / "accounts.sqlite3")
+    connection.set_database_path_provider(lambda *args, _p=tmp_path / "accounts.sqlite3", **kwargs: _p)
     storage.save_registration_checkpoint("resume@example.test", "at_probe_pending", {"access_token": "synthetic"})
     storage.save_registration_checkpoint("resume@example.test", "mailbox_ready", {"access_token": ""})
     saved = storage.get_registration_checkpoint("resume@example.test")

@@ -1,7 +1,12 @@
 """Re-exports of the former sms_tool.storage module (mechanical split)."""
 
 from .connection import (
+    DatabasePathProvider,
     database_path,
+    database_path_override,
+    database_path_provider,
+    default_database_path,
+    set_database_path_provider,
     _connect,
     init_database,
     reset_database_init_cache,
@@ -78,7 +83,7 @@ from .constants import (
 )
 
 __all__ = [
-    'database_path', '_connect', 'init_database', 'reset_database_init_cache', '_ensure_extra_columns', '_as_bool', '_as_int',
+    'database_path', 'default_database_path', 'set_database_path_provider', 'database_path_provider', 'database_path_override', 'DatabasePathProvider', '_connect', 'init_database', 'reset_database_init_cache', '_ensure_extra_columns', '_as_bool', '_as_int',
     '_as_float', '_get', '_nested', '_nested_field', '_normalize_account_email', '_find_existing_account_email',
     '_resolve_account_email', '_nested_token', '_paypal_status', '_payment_method', '_oauth_refresh_token', '_looks_codex_refresh_token',
     '_normalize_account_type', '_jwt_account_type', '_account_type', '_refresh_token_status', '_status', '_looks_at_invalid',

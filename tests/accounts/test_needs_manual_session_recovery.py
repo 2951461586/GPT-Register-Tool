@@ -30,6 +30,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from sms_tool import storage
+from sms_tool.store import connection
 from sms_tool.registration_handlers import RegistrationEmailWorkflow
 from sms_tool.registration_outcome import _failure_result, needs_manual_session_recovery
 from sms_tool.registration_runtime import RegistrationRuntimeState
@@ -215,7 +216,7 @@ def test_the_completed_assembly_says_no_when_we_hold_the_password():
 
 def _write_and_read_audit(tmp_path, data, *, state):
     db_path = tmp_path / "accounts.sqlite3"
-    with patch.object(storage, "database_path", return_value=db_path):
+    with connection.database_path_override(db_path):
         assert storage.record_registration_audit(data, batch_id="b", state=state)
         conn = storage._connect()
         try:

@@ -46,6 +46,22 @@ def _mark_test_telemetry(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _restore_database_path_provider():
+    """A test that redirects the store must not leak the redirect.
+
+    ``set_database_path_provider`` is process-global by design (26 ``_connect()``
+    call sites would otherwise each carry a parameter), so the suite snapshots and
+    restores it around every test -- including the session-scoped sandbox guard
+    installed by ``isolated_runtime``.
+    """
+    from sms_tool.store import connection as store_connection
+
+    previous = store_connection.database_path_provider()
+    yield
+    store_connection.set_database_path_provider(previous)
+
+
+@pytest.fixture(autouse=True)
 def _restore_cwd():
     """Tests that chdir must not leak it into the next test."""
     origin = Path.cwd()
@@ -329,7 +345,6 @@ def isolated_runtime(request, runtime_sandbox, monkeypatch):
         yield None
         return
 
-    from sms_tool import storage
     from sms_tool.kernel import paths
     from sms_tool.store import connection as store_connection
 
@@ -345,7 +360,7 @@ def isolated_runtime(request, runtime_sandbox, monkeypatch):
     # own ``sqlite_path`` still get exactly what they asked for.
     real_db = Path(__file__).resolve().parents[1] / "runtime" / "accounts.sqlite3"
     sandbox_db = runtime_sandbox / "accounts.sqlite3"
-    original_database_path = storage.database_path
+    original_database_path = store_connection.default_database_path
 
     def _guarded_database_path(*args, **kwargs):
         path = Path(original_database_path(*args, **kwargs))
@@ -365,8 +380,9 @@ def isolated_runtime(request, runtime_sandbox, monkeypatch):
             pass
         return path
 
-    monkeypatch.setattr(storage, "database_path", _guarded_database_path)
-    monkeypatch.setattr(store_connection, "database_path", _guarded_database_path)
+    previous_provider = store_connection.database_path_provider()
+    store_connection.set_database_path_provider(_guarded_database_path)
+    request.addfinalizer(lambda: store_connection.set_database_path_provider(previous_provider))
     yield runtime_sandbox
 
 
@@ -400,23 +416,25 @@ def isolated_payment_operations(tmp_path, monkeypatch):
 
 
 @pytest.fixture
-def isolated_database(monkeypatch, tmp_path):
+def isolated_database(tmp_path):
     """Point the account store at a throwaway SQLite file.
 
-    Patches the public ``sms_tool.storage`` module (not ``store.connection``)
-    because that is the indirection the store deliberately keeps so tests can
-    redirect internal callers -- see the comment in ``store/_connect``.
+    Uses the explicit path seam (``database_path_provider``), which is what the
+    production resolver consults on every call -- no module attribute is
+    monkeypatched and ``store`` no longer reaches into ``sms_tool.storage``.
 
     Yields the database path.
     """
-    from sms_tool import storage
+    from sms_tool.store import connection as store_connection
 
     db_path = tmp_path / "accounts.sqlite3"
-    monkeypatch.setattr(storage, "database_path", lambda *args, **kwargs: db_path)
+    previous = store_connection.database_path_provider()
+    store_connection.set_database_path_provider(lambda *args, **kwargs: db_path)
     # Reset before as well as after: an earlier test may have populated the memo
     # for this same path, and the memo is keyed by path, not by test.
-    reset_database_init_cache()
+    store_connection.reset_database_init_cache()
     try:
         yield db_path
     finally:
-        reset_database_init_cache()
+        store_connection.set_database_path_provider(previous)
+        store_connection.reset_database_init_cache()

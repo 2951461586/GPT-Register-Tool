@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from sms_tool import storage
+from sms_tool.store import connection
 
 from sms_tool.accounts import account_health_queue
 from sms_tool.accounts.account_health import (
@@ -300,7 +301,7 @@ def test_worker_claim_installs_and_clears_lease():
 def test_storage_persists_unified_health_result_without_token():
     with tempfile.TemporaryDirectory() as tmp:
         db_path = Path(tmp) / "accounts.sqlite3"
-        with patch.object(storage, "database_path", return_value=db_path):
+        with connection.database_path_override(db_path):
             assert storage.upsert_account(
                 {"email": "health@example.com", "success": True, "access_token": "secret-at"}
             )
