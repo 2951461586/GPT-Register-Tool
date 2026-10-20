@@ -136,29 +136,26 @@ would buy the graph nothing while removing LSP diagnostics and symbol search fro
 340 test files the operator navigates daily.
 
 **Auto-formatting is off** (`"format": {"enabled": false}`). `pi-lens` runs a
-deferred formatter over every file it edits, but this repository enforces
-formatting on the **protocol-registration lane only** -- `scripts/format_guard.py`
-checks `sms_tool/auth_flow/` and `sms_tool/registration_*.py`, and its own
-docstring states why the scope is the lane and not the package:
-
-> widening it to ``sms_tool/`` would reformat ~100 unrelated files in one commit
-> and bury the real edit.
-
-The auto-formatter did exactly that on 2026-10-10: four files *outside* the lane
+deferred formatter over every file it edits. On 2026-10-10 that reformatted four
+files *outside* the protocol-registration lane the repository gated at the time
 (`accounts/account_payment_eligibility.py`, `pay_link/__init__.py`,
 `services/protocol-payment/momo/ac_paylink_core.py`,
-`tests/accounts/test_account_payment_eligibility.py`) were reformatted to fix pre-existing
+`tests/accounts/test_account_payment_eligibility.py`) to fix pre-existing
 drift the project had decided not to touch -- 431 insertions / 180 deletions,
 against edits of one to three lines each. `format.enabled` is one of the
 project-scoped *mutation controls* `pi-lens` honours (the others are
 `autofix.enabled` and `actionableWarnings.autoFix.enabled`), so this is the
 supported way to stop it, not a local preference.
 
-Nothing is lost: the lane's formatting is enforced by the gate, which runs in
-both the pre-commit hook and CI, and `scripts/format_guard.py --fix` is the
-developer convenience. The two decisions are pinned together by
-`tests/config/test_pilens_scope_config.py`, so turning auto-format back on without also
-widening the gate -- or removing the gate while auto-format stays off -- fails.
+**That lane split no longer exists.** On 2026-10-20 the whole Python tree was
+reformatted in one dedicated commit (`64aa42c`) and `scripts/format_guard.py`
+was widened from the lane to `sms_tool` / `services` / `scripts` / `tests`, in
+the pre-commit hook and in CI. A file touched by an editor or an agent can
+therefore no longer drift out of format unnoticed -- which is what makes keeping
+auto-format off cost-free, and `scripts/format_guard.py --fix` is the developer
+convenience. The two decisions are pinned together by
+`tests/config/test_pilens_scope_config.py`: narrowing the gate back below
+`sms_tool/`, or removing it while auto-format stays off, fails the suite.
 
 **Suppressing a finding uses the analyser's own marker, not `pi-lens`'s.**  A
 Pyright finding needs the tool-native, *same-line* form

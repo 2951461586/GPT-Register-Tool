@@ -21,12 +21,18 @@ See ``docs/architecture.md`` "Review-graph scope (`pi-lens`)" for the reasoning
 and for why `tests/` is deliberately *not* ignored.
 
 This file also pins the **formatting** decision.  ``pi-lens`` auto-formats every
-file it edits, but this repo enforces formatting on the protocol-registration
-lane only (``scripts/format_guard.py``, wired into the pre-commit hook and CI).
-Auto-formatting outside that lane reformatted four unrelated files -- 431
-insertions / 180 deletions -- to fix pre-existing drift the project had
-*decided* not to touch, burying the real edit.  ``format.enabled: false`` is the
-project-scoped mutation control that stops it; the lane keeps its gate.
+file it edits, and on 2026-10-10 that reformatted four files outside the
+protocol-registration lane the repo gated at the time -- 431 insertions / 180
+deletions -- to fix pre-existing drift the project had *decided* not to touch,
+burying the real edit.  ``format.enabled: false`` is the project-scoped mutation
+control that stops it.
+
+Since 2026-10-20 the lane split itself is gone: the whole Python tree was
+reformatted once (64aa42c) and ``scripts/format_guard.py`` now covers
+``sms_tool`` / ``services`` / ``scripts`` / ``tests``, so no file -- edited by a
+human, an editor or an agent -- can drift out of format unnoticed.  The gate is
+still what makes turning auto-format off safe, which is what the test below
+pins.
 """
 
 from __future__ import annotations
@@ -35,6 +41,8 @@ import json
 from pathlib import Path
 
 import pytest
+
+from scripts import format_guard
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / ".pi-lens.json"
@@ -205,18 +213,20 @@ def test_pi_lens_autoformat_is_disabled():
 
 
 def test_the_format_lane_is_still_gated():
-    """Disabling auto-format must not leave the lane unformatted.
+    """Disabling auto-format must not leave the tree unformatted.
 
-    ``format_guard.py`` is what enforces the lane, and it is wired into both the
-    pre-commit hook and CI.  If that wiring ever goes away, turning off
+    ``format_guard.py`` is what enforces formatting, and it is wired into both
+    the pre-commit hook and CI.  If that wiring ever goes away, turning off
     auto-format stops being safe -- so the two decisions are pinned together.
+
+    The scope is data, so assert the declaration rather than a call site.  The
+    lane that motivated the gate (``auth_flow/`` and ``registration_*.py``) now
+    sits inside the ``sms_tool`` tree scope, which is why that is what is
+    asserted: narrowing the scope must not silently drop the lane again.
     """
-    guard = ROOT / "scripts" / "format_guard.py"
-    assert guard.is_file()
-    source = guard.read_text(encoding="utf-8")
-    # The lane itself: the scope is data, so assert the declaration, not a call site.
-    assert 'SCOPE_DIRS = ("sms_tool/auth_flow",)' in source
-    assert 'SCOPE_GLOBS = ("sms_tool/registration_*.py",)' in source
+    assert "sms_tool" in format_guard.SCOPE_DIRS, (
+        "the registration lane must stay covered: sms_tool/ carries auth_flow/ and registration_*.py"
+    )
 
     hook = (ROOT / ".githooks" / "pre-commit").read_text(encoding="utf-8")
     assert "scripts/format_guard.py" in hook
