@@ -42,24 +42,27 @@ _CLEAN = 'def f():\n    return {"ok": False}, None\n'
 # ------------------------------------------------------------------ scope
 
 
-def test_scope_covers_the_protocol_registration_lane():
+def test_scope_covers_every_python_tree_this_repo_owns():
+    """Widened on 2026-10-20 after the whole tree was reformatted in one commit."""
+    scope = set(guard.scope_paths())
+    for path in (
+        "sms_tool/auth_flow/steps.py",
+        "sms_tool/registration_handlers.py",
+        "sms_tool/cli.py",
+        "sms_tool/auth_state.py",
+        "sms_tool/registration_drivers/base.py",
+        "services/protocol-payment/common/redaction.py",
+        "scripts/format_guard.py",
+        "tests/governance/test_format_guard.py",
+    ):
+        assert path in scope, path
+
+
+def test_scope_still_excludes_generated_directories():
+    """`__pycache__` is the only exclusion left; it holds no source."""
     scope = guard.scope_paths()
-    assert "sms_tool/auth_flow/steps.py" in scope
-    assert "sms_tool/auth_flow/otp.py" in scope
-    assert "sms_tool/registration_handlers.py" in scope
-    assert "sms_tool/registration_otp_stages.py" in scope
-
-
-def test_scope_excludes_unrelated_modules():
-    """Widening to the whole package would reformat ~100 unrelated files."""
-    scope = guard.scope_paths()
-    assert "sms_tool/cli.py" not in scope
-    assert "sms_tool/auth_state.py" not in scope
-    assert "sms_tool/registration_drivers/base.py" not in scope
-
-
-def test_scope_has_no_pycache_entries():
-    assert all("__pycache__" not in path for path in guard.scope_paths())
+    assert scope
+    assert all("__pycache__" not in path for path in scope)
 
 
 def test_every_scoped_path_exists():
@@ -94,7 +97,7 @@ def test_the_mangled_fixture_is_actually_valid_python():
 
 
 @pytest.mark.skipif(importlib.util.find_spec("ruff") is None, reason="ruff not installed")
-def test_the_lane_is_ruff_format_clean():
+def test_the_tree_is_ruff_format_clean():
     assert guard.main([]) == 0
 
 

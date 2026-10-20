@@ -1,10 +1,10 @@
-"""Gate: the protocol-registration lane must stay ``ruff format``-clean.
+"""Gate: the Python tree must stay ``ruff format``-clean.
 
 Why this exists
 ---------------
-``sms_tool/auth_flow/`` and ``sms_tool/registration_*.py`` are the protocol
-registration lane.  ``ruff format --check`` was never run on them, so on
-2026-10-08 a mangled tuple survived review in ``auth_flow/otp.py``::
+``ruff format --check`` was never run on ``sms_tool/auth_flow/`` and
+``sms_tool/registration_*.py``, so on 2026-10-08 a mangled tuple survived review
+in ``auth_flow/otp.py``::
 
     return (
 {        "ok": False,
@@ -16,19 +16,24 @@ It is syntactically valid, so every existing gate was blind to it --
 and the whole pytest suite all pass a file whose layout no longer resembles its
 intent.
 
-Scope is deliberately the *lane*, not the whole package: widening it to
-``sms_tool/`` would reformat ~100 unrelated files in one commit and bury the
-real edit.  It is data (``SCOPE_DIRS`` / ``SCOPE_GLOBS``), so a new registration
-module is covered by adding it in one place rather than by editing a command
-line in three.
+Scope history
+-------------
+Scope was the registration lane until 2026-10-20, deliberately: widening it then
+would have reformatted ~430 unrelated files in one commit and buried the real
+edit. On 2026-10-20 that reformat was done as its own commit (with the ruff
+version pinned in ``constraints-tools.txt``) and the scope widened to **every
+Python tree this repository owns**, because a lane-only gate leaves the other
+~700 files free to drift the same way. ``MIXED`` scopes are still data
+(``SCOPE_DIRS`` / ``SCOPE_GLOBS``), so excluding a tree again is a one-line edit
+rather than a command-line change in three places.
 
 Standard library only; shells out to ``python -m ruff format`` with *this*
 interpreter, so the tool pinned in ``constraints-tools.txt`` is the one that
-runs.  A missing ``ruff`` fails the gate rather than silently passing it -- a
+runs. A missing ``ruff`` fails the gate rather than silently passing it -- a
 gate that skips itself is decoration.
 
 Usage:
-    python scripts/format_guard.py            # check the lane (gate)
+    python scripts/format_guard.py            # check the tree (gate)
     python scripts/format_guard.py --list     # print the scope and exit
     python scripts/format_guard.py --fix      # reformat (developer convenience)
 """
@@ -43,11 +48,15 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-#: Directories whose whole ``.py`` tree is in scope.
-SCOPE_DIRS = ("sms_tool/auth_flow",)
+#: Directories whose whole ``.py`` tree is in scope. Every Python tree this
+#: repository owns: the application package, the subprocess services, the
+#: operator scripts and the offline test suite.
+SCOPE_DIRS = ("sms_tool", "services", "scripts", "tests")
 
-#: File globs (relative to the repo root) that are in scope.
-SCOPE_GLOBS = ("sms_tool/registration_*.py",)
+#: File globs (relative to the repo root) that are in scope, on top of
+#: ``SCOPE_DIRS``. Empty today -- here so a future tree can be included without
+#: widening a directory.
+SCOPE_GLOBS: tuple[str, ...] = ()
 
 _SKIP_DIR_NAMES = {"__pycache__"}
 
@@ -70,8 +79,16 @@ def scope_paths(root: Path = ROOT) -> list[str]:
     return sorted(found)
 
 
-def check(paths, *, fix: bool = False, root: Path = ROOT) -> tuple[int, str]:
-    """Run ruff on *paths*; return ``(returncode, combined_output)``."""
+#: Windows caps a process command line at 32,767 characters. Handing every
+#: scoped path (765 files) to one ``ruff format`` invocation fails with
+#: ``WinError 206: filename or extension is too long`` -- measured on 2026-10-20
+#: right after the scope widened. Batches keep the command line short; the
+#: number is chosen so a typical repo path fits with room to spare.
+MAX_PATHS_PER_INVOCATION = 60
+
+
+def _run_ruff(paths, *, fix: bool, root: Path) -> tuple[int, str]:
+    """Run one ``ruff format`` invocation over *paths*."""
     command = [sys.executable, "-m", "ruff", "format"]
     if not fix:
         command.append("--check")
@@ -91,6 +108,27 @@ def check(paths, *, fix: bool = False, root: Path = ROOT) -> tuple[int, str]:
     return completed.returncode, (completed.stdout or "") + (completed.stderr or "")
 
 
+def check(paths, *, fix: bool = False, root: Path = ROOT) -> tuple[int, str]:
+    """Run ruff over *paths* in batches; return ``(returncode, combined_output)``.
+
+    ``--check`` stops at the first failing batch (one counter-example is enough to
+    block); ``--fix`` walks every batch, because the caller wants the whole tree
+    reformatted, and keeps the first non-zero code.
+    """
+    paths = list(paths)
+    returncode = 0
+    output = ""
+    for start in range(0, len(paths), MAX_PATHS_PER_INVOCATION):
+        batch = paths[start : start + MAX_PATHS_PER_INVOCATION]
+        code, text = _run_ruff(batch, fix=fix, root=root)
+        if code != 0:
+            returncode = code
+            output += text
+            if not fix:
+                break
+    return returncode, output
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--list", action="store_true", help="print the scope and exit")
@@ -104,12 +142,12 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if not paths:
-        print("format-guard: scope is empty -- the lane was renamed or moved", file=sys.stderr)
+        print("format-guard: scope is empty -- the trees were renamed or moved", file=sys.stderr)
         return 1
 
     if importlib.util.find_spec("ruff") is None:
         print(
-            "format-guard: ruff is not installed in this interpreter; the lane cannot be checked.\n"
+            "format-guard: ruff is not installed in this interpreter; the tree cannot be checked.\n"
             "  Install it with: python -m pip install ruff -c constraints-tools.txt",
             file=sys.stderr,
         )
@@ -118,13 +156,11 @@ def main(argv: list[str] | None = None) -> int:
     returncode, output = check(paths, fix=args.fix)
     if returncode == 0:
         action = "reformatted" if args.fix else "clean"
-        print(f"format-guard: {action} ({len(paths)} files in the protocol-registration lane)")
+        print(f"format-guard: {action} ({len(paths)} files in the Python tree)")
         return 0
 
     header = "reformatted what it could" if args.fix else "would reformat"
-    print(
-        f"format-guard: BLOCKED -- the protocol-registration lane is not ruff-format clean ({header})", file=sys.stderr
-    )
+    print(f"format-guard: BLOCKED -- the Python tree is not ruff-format clean ({header})", file=sys.stderr)
     print("-" * 100, file=sys.stderr)
     print(output.rstrip(), file=sys.stderr)
     print("-" * 100, file=sys.stderr)
