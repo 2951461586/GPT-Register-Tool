@@ -18,6 +18,7 @@ Measured on 2026-10-19 (Windows, warm page cache, Python 3.12):
 | Resident account delta, 434 rows | 3.5 KB | — | `test_desktop_read_delta.py` |
 | Resident desktop read, 795 rows + 10 deltas | 37 MB RSS | 150 MB | `test_performance_budget.py` |
 | Browser pool, 1 / 4 headless Chromium instances | 478 / 1907 MB RSS | — | documented only (measured 2026-10-21; Camoufox is heavier) |
+| Account list read, 435 rows | 60.3 ms | — | documented only (measured 2026-10-20) |
 | Full account payload, 434 rows | 681 KB | — | comparison point |
 | `--doctor --json` (warm) | 1.74 s | — | documented only |
 
@@ -33,6 +34,30 @@ startup, antivirus) far more than the code, so a hard ceiling would be noise.
 The measurable parts are pinned structurally instead — import surface
 (`test_cli_import_surface.py`), delta shape (`test_desktop_read_delta.py`), and
 the process-lifetime cache bounds (see `telemetry-and-runtime.md`).
+
+## The account list read must carry `raw_json` (measured 2026-10-20)
+
+`store/accounts.py::list_account_records` is `SELECT * FROM accounts ORDER BY
+updated_at DESC`: 435 rows, **60.3 ms**, and `raw_json` is 23.2 MB of it (median
+58 KB/row). Projecting every column *except* `raw_json` measurably helps --
+**60.3 ms -> 45.0 ms** through the production function on a copy of the real
+database -- but it is **not** a free win: it was implemented, tested, and
+reverted in the same change.
+
+`desktop_read._record_payload` derives six fields by parsing that blob:
+`promotion_status`, `promotion_state`, `payment_eligibility`, `imported_status`,
+`paypal_amount` and `at_probe_status_code`.
+`tests/workbench/test_desktop_read.py::test_lightweight_account_read_skips_full_session_sanitization`
+failed immediately (`KeyError: 'imported_status'`), which is the test doing its
+job: the account table's 优惠状态 column is built from `raw_json`, not from a
+column.
+
+So the read is not wasteful -- it is doing work the table needs. Making it lean
+requires **materializing those six derived fields as columns** (computed on
+write, backfilled for existing rows, and refreshed on every probe that mutates
+the session), which is a schema change with a backfill and a drift risk, not a
+query tweak. Deferred as its own task; the measurement above is what justifies
+it.
 
 ## Reading a failure
 
