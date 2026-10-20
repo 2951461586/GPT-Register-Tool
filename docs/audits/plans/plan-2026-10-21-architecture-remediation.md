@@ -32,8 +32,8 @@
 | 1 | 图谱解析率低、死代码假阳性 | 一个 `blik_qr_extract.py` 引 13 个 `common/*` 模块，图谱全判死 | `services/protocol-payment` 不是包：无 `__init__.py`，靠 `sys.path.insert` + `from common.x import`；测试用 `spec_from_file_location` 按路径加载 |
 | 2 | 图谱过期、与门禁两套算法 | — | 图谱是快照，`import_layer_ratchet.py` 才是 AST 精确的权威；两者从不对账 |
 | 3 | 互指关系无法判定方向 | 267 条模块级跨目录边 / 28 对 / 10 对互指（历史 441/43/30） | `sms_tool/` 根节点混装两层；`SUBPACKAGES` 只认 13 个子包 |
-| 4 | 模块级 SCC | **5 个**：registration stage 簇 9、`auth_flow` 包内 7、`browser_flow` 包内 6、`upi_link` 包内 4、`phone_pool` ↔ `phone_provider_lifecycle` 2 | 前三个是**包门面环**（`__init__` re-export 子模块 + 子模块 `from . import …` 回边）；registration 簇是 stage 互相 import；`phone_pool` 是两条根模块互指 |
-| 4b | 被误报的「环」 | `account_liveness` ↔ `browser_flow` 等 **5 个看起来的环** 已在函数内导入层面断开 | 本仓把「改成函数内导入」作为既定的破环手段（`delayed_import_ratchet` 按总量单独守），把它与真环混算会得出 10 个 SCC 的错数 |
+| 4 | 模块级 SCC | 重测后 **2 个真环**：`auth_flow` 包内 7、`upi_link` 包内 4（都是包门面环：`__init__` re-export 子模块 + 子模块 `from . import …` 回边） | 初次测量得到 5 个，其中 **3 个是 `if TYPE_CHECKING:` 造成的假环**（registration stage 簇 9、`browser_flow` 6、`phone_pool` 2）—— 注解导入不执行，不可能成环 |
+| 4b | 被误报的「环」 | 另有 5 个「看起来的环」由**函数内导入**断开（`account_liveness` ↔ `browser_flow` 等） | 本仓把「改成函数内导入」作为既定的破环手段（`delayed_import_ratchet` 按总量单独守），与真环混算会得出 10 个 SCC 的错数 |
 | 5 | 枢纽模块 | `config` 73 依赖者 / 1042 行；`kernel/sanitizer` 38；`kernel/paths` 32 | `config.py` 同时是 loader / schema / runtime view / legacy view / migration |
 | 6 | provider 反向依赖 | 21 条边、11 个根模块（`mail_otp` 4、`mailbox_types` 3、`mailbox_poll` 2、`mailbox_pool_writer` 2、`config` 2、`phone_proxy` 2、`storage` 2、`mailbox_errors` 1、`mailbox_quarantine` 1、`desktop_ipc` 1） | Rule 03 只禁了 `registration` / `payment` / `paypal` 三个包，漏掉这些根模块 |
 | 7 | 根目录扁平 | 155 个冻结模块，53,144 行；`registration_*` 29、`payment_*` 15、`mailbox_*` 15、`paypal_*` 9、`proxy_*` 7 | `root_module_ratchet` 只冻结名字、不允许新增，但没有迁出路径 |
@@ -88,9 +88,9 @@
 
 | 序 | 任务 | 做法 | 验证 |
 |---|---|---|---|
-| P2-1 | registration stage 簇解环（9 模块） | `registration_handlers` 从「import 具体 stage」改为 stage 注册表查表；stage 只依赖 `RegistrationStageContext` 协议 | SCC 从 5 降到 4；`pytest tests/registration` |
-| P2-2 | 包门面环惰性导出（`auth_flow` 7 + `browser_flow` 6 + `upi_link` 4） | 三个包的 `__init__.py` 改 PEP 562 `__getattr__`，子模块不再在包导入时被拉入；子模块 `from . import x` 的回边保留（它是真实依赖） | SCC 4 → 1；`pytest tests/registration tests/payment tests/workbench`（`deps.py` 的按属性 patch 必须仍生效） |
-| P2-3 | `phone_pool` ↔ `phone_provider_lifecycle` 解环（2） | 生命周期模块接受 `pool: PoolPort` 注入，不再反向 import `phone_pool` | SCC 1 → 0；`pytest tests/accounts tests/mailbox` |
+| P2-1 | `TYPE_CHECKING` 导入不计入运行时环 | 两个解析器都把 `if TYPE_CHECKING:` 里的导入单独计为 `type`；它们不执行，不可能成环。SCC 5 → 2，**没有改一行产品代码** | `dependency_graph.py` → 2 cycles, 11 type-only；`pytest tests/governance` |
+| P2-2 | 包门面环惰性导出（`auth_flow` 7 + `upi_link` 4） | 两个包的 `__init__.py` 改 PEP 562 `__getattr__`，子模块不再在包导入时被拉入；子模块 `from . import x` 的回边保留（它是真实依赖） | SCC 2 → 0；`pytest tests/registration tests/payment tests/workbench`（`deps.py` 的按属性 patch 必须仍生效） |
+| P2-3 | ~~`phone_pool` ↔ `phone_provider_lifecycle`~~ | **并入 P2-1**：那条互指是 `phone_provider_lifecycle` 的注解导入 | — |
 | P2-4 | `proxy_*` → `sms_tool/proxy/`（7） | `git mv` + codemod 改 dotted 引用；`SUBPACKAGES` 加 `proxy`；`directory_map_groups.json` 加组 | 全量 `pytest`；`root_module_ratchet --update-baseline` 降 7 |
 | P2-5 | `mailbox_*` → `sms_tool/mailbox/`（15） | 同上；`mailbox.py` → `mailbox/router.py` + `__init__` 门面（`sms_tool.mailbox` 路径不变） | 同上，降 15 |
 | P2-6 | `paypal_*` → `sms_tool/paypal/`（9） | 同上，并入既有 `paypal/` 包 | 同上，降 9 |
@@ -138,6 +138,34 @@ python scripts/format_guard.py
   与 codemod 同提交，`git revert` 单簇即可。
 
 ## 8. 落地记录
+
+### P1-1（层清单 + 方向门禁）
+
+153 个根模块 + 13 子包 + 5 个包内覆盖，层号沿用 `architecture.md` 的顺序（1 表层 → 5 适配器）。
+门禁判据是 `source > target`，**含同目录边** —— 只看跨目录边会漏掉包门面环（`__init__` 引用自己的高层子模块）。
+allow 只有 2 条，各带 reason + owner。落地时先按「1 = 最内层」编号，发现与 `architecture.md`
+的「outermost first」相反，整体翻转为 1 = 最外层，判据随之从 `source >= target` 改为 `source <= target`。
+
+### P1-2（config 拆包）— 延后
+
+原计划把 1042 行的 `config.py` 拆成 `loader/schema/runtime/legacy`。调研后判断这一步的风险与收益不成比例：
+
+- 收益只是文件内可读性 —— 73 个 import 方仍然指向 `sms_tool.config`，**枢纽依赖者数量一个都不减**。
+- 代价是一组协调改动：`_CONFIG_DIR` / `_CURRENT_CONFIG` / `_write_shards` 是**测试直接 patch 的模块级状态**
+  （5 个测试文件、31 处引用），拆包后 `patch.object(config, "_CONFIG_DIR", …)` 不再影响子模块；
+  另有 3 个门禁按路径硬编码 `sms_tool/config.py`（`config_key_ratchet`、`bare_print_baseline`、
+  `delayed_import_baseline`），加一处 `docs/current/*.md` 的行号锚点。
+- 需要单独一轮「patch 兼容 + 门禁迁移」，不适合与本轮的结构性改动同批落地。
+
+保留为后续项；若要做，正确顺序是先把模块级状态收进一个 `config/_state.py` 并让测试改 patch 目标，
+再搬函数。
+
+### P2-1（`TYPE_CHECKING` 不是运行时边）
+
+两个解析器把 `if TYPE_CHECKING:` 内的导入单独计为 `type`。SCC 5 → 2，产品代码零改动。
+这一条同时解释了初次测量里最大的三个「环」：registration stage 簇 9、`browser_flow` 6、
+`phone_pool` 2 —— 每个 stage 只是为注解 import 了 `RegistrationEmailWorkflow`，运行时不成立。
+
 
 ### P0-1（`services_import_resolution.py`）
 

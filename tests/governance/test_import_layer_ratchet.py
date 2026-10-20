@@ -93,6 +93,7 @@ def test_exact_fixture_totals(fixture_tree: Path):
         "mutual_pairs": 2,
         "minority_edges": 2,
         "delayed_cross_dir_edges": 1,
+        "type_only_edges": 0,
     }
 
 
@@ -284,7 +285,44 @@ def test_summary_facts_are_pinned():
         # ones. Before that, 190 -> 188 when store/connection.py stopped
         # importing the sms_tool.storage shell inside _init_cache_key/_connect.
         "delayed_cross_dir_edges": 190,
+        # Imports under `if TYPE_CHECKING:` never run, so they are not runtime
+        # edges. All eleven in the tree today are same-directory, hence 0 here;
+        # the metric exists so a cross-directory one is visible rather than silent.
+        "type_only_edges": 0,
     }
+
+
+def test_a_type_checking_import_is_not_a_runtime_edge(tmp_path: Path):
+    """The registration stage cluster looked like a 9-module cycle until these
+    were classified: every stage names the workflow for annotations only."""
+
+    nl = chr(10)
+    for rel, text in {
+        "__init__.py": "",
+        "handlers.py": "from .stages import run" + nl,
+        "stages.py": (
+            "from typing import TYPE_CHECKING"
+            + nl
+            + "if TYPE_CHECKING:"
+            + nl
+            + "    from .handlers import Workflow"
+            + nl
+        ),
+    }.items():
+        path = tmp_path / "sms_tool" / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8", newline=nl)
+
+    analysis = ilr.analyze(tmp_path)
+    assert [(e.source_module, e.target_module) for e in analysis.all_module_edges()] == [
+        ("sms_tool.handlers", "sms_tool.stages")
+    ]
+    # The annotation-only edge must not appear in any runtime bucket: only the
+    # real handlers -> stages edge is a same-directory runtime edge.
+    assert analysis.type_edges == []
+    assert [(e.source_module, e.target_module) for e in analysis.same_directory] == [
+        ("sms_tool.handlers", "sms_tool.stages")
+    ]
 
 
 def test_vendor_tree_stays_out_of_the_real_scan():

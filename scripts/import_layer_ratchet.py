@@ -107,6 +107,10 @@ SUBPACKAGES = (
 
 MODULE_SCOPE = "module"
 DELAYED_SCOPE = "delayed"
+#: Imports inside ``if TYPE_CHECKING:`` never run, so they cannot create a runtime
+#: cycle. Counting them made the registration stage cluster look like a 9-module
+#: cycle when every stage only names the workflow for annotations.
+TYPE_SCOPE = "type"
 
 
 @dataclass
@@ -152,6 +156,10 @@ class Analysis:
     def delayed_edges(self) -> list[Edge]:
         return [e for e in self.edges if e.scope == DELAYED_SCOPE]
 
+    @property
+    def type_edges(self) -> list[Edge]:
+        return [e for e in self.edges if e.scope == TYPE_SCOPE]
+
     def pair_counts(self) -> dict[str, int]:
         counts: Counter[str] = Counter(e.pair for e in self.module_edges)
         return {pair: counts[pair] for pair in sorted(counts)}
@@ -179,6 +187,7 @@ class Analysis:
             "mutual_pairs": len(self.mutual_pairs()),
             "minority_edges": len(self.minority_edges()),
             "delayed_cross_dir_edges": len(self.delayed_edges),
+            "type_only_edges": len(self.type_edges),
         }
 
 
@@ -232,6 +241,15 @@ def _resolve_any(spec: str, modules: dict[str, Path]) -> str | None:
     return None
 
 
+def _is_type_checking_test(node: ast.AST) -> bool:
+    """``if TYPE_CHECKING:`` / ``if typing.TYPE_CHECKING:`` -- never executed."""
+    if isinstance(node, ast.Name):
+        return node.id == "TYPE_CHECKING"
+    if isinstance(node, ast.Attribute):
+        return node.attr == "TYPE_CHECKING"
+    return False
+
+
 def analyze(root: Path = ROOT) -> Analysis:
     """Collect every cross-directory import edge under ``root/sms_tool``."""
     files, modules, is_package = _index(root)
@@ -247,11 +265,16 @@ def analyze(root: Path = ROOT) -> Analysis:
 
         # Any import nested inside a function/class body is a delayed import.
         nested: set[int] = set()
+        type_only: set[int] = set()
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
                 for child in ast.walk(node):
                     if isinstance(child, (ast.Import, ast.ImportFrom)):
                         nested.add(id(child))
+            elif isinstance(node, ast.If) and _is_type_checking_test(node.test):
+                for child in ast.walk(node):
+                    if isinstance(child, (ast.Import, ast.ImportFrom)):
+                        type_only.add(id(child))
 
         lines = source.splitlines()
         for node in ast.walk(tree):
@@ -275,7 +298,9 @@ def analyze(root: Path = ROOT) -> Analysis:
                     source_module=module,
                     target_module=target,
                     line=node.lineno,
-                    scope=DELAYED_SCOPE if id(node) in nested else MODULE_SCOPE,
+                    scope=(
+                        TYPE_SCOPE if id(node) in type_only else DELAYED_SCOPE if id(node) in nested else MODULE_SCOPE
+                    ),
                     text=lines[node.lineno - 1].strip() if node.lineno <= len(lines) else "",
                 )
                 if source_dir == target_dir:

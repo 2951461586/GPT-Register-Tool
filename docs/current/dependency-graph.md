@@ -6,6 +6,8 @@ Module-level import edges between `sms_tool` modules, resolved from the AST
 (absolute and relative imports, aliases included). Function-local imports are
 counted separately: they are this repo's documented way to break a runtime
 cycle, so folding them into the cycle view would report a fix as a defect.
+Imports under `if TYPE_CHECKING:` are type-only and are counted on their own
+line for the same reason -- they never execute, so they cannot form a cycle.
 
 `python scripts/dependency_graph.py` fails when this file and the source
 disagree, so the numbers cannot go stale. `import_layer_ratchet.py` remains
@@ -16,21 +18,19 @@ the *gate* (per-pair, only-down); this file is the *view*.
 | Measure | Value |
 | --- | ---: |
 | Modules | 299 |
-| Module-level import edges | 985 |
+| Module-level import edges | 974 |
 | Delayed (function-local) edges | 274 |
-| Strongly connected components (size > 1) | 5 |
-| Modules inside a cycle | 28 |
+| Type-only (`if TYPE_CHECKING`) edges | 11 |
+| Strongly connected components (size > 1) | 2 |
+| Modules inside a cycle | 11 |
 | Mutually dependent directory pairs | 10 |
 
 ## Cycles
 
 | Size | Modules |
 | ---: | --- |
-| 9 | `sms_tool.registration_account_stages`<br>`sms_tool.registration_edge_challenge`<br>`sms_tool.registration_finalize`<br>`sms_tool.registration_handlers`<br>`sms_tool.registration_otp_stages`<br>`sms_tool.registration_reference_lane`<br>`sms_tool.registration_resume`<br>`sms_tool.registration_sentinel_stages`<br>`sms_tool.registration_warmup` |
 | 7 | `sms_tool.auth_flow`<br>`sms_tool.auth_flow.login`<br>`sms_tool.auth_flow.otp`<br>`sms_tool.auth_flow.password_step`<br>`sms_tool.auth_flow.signup`<br>`sms_tool.auth_flow.steps`<br>`sms_tool.auth_flow.totp` |
-| 6 | `sms_tool.registration_drivers.browser_flow`<br>`sms_tool.registration_drivers.browser_flow.flow_steps`<br>`sms_tool.registration_drivers.browser_flow.form_steps`<br>`sms_tool.registration_drivers.browser_flow.orchestrator`<br>`sms_tool.registration_drivers.browser_flow.page_state`<br>`sms_tool.registration_drivers.browser_flow.session` |
 | 4 | `sms_tool.upi_link`<br>`sms_tool.upi_link.flows`<br>`sms_tool.upi_link.pipeline`<br>`sms_tool.upi_link.sentinel` |
-| 2 | `sms_tool.phone_pool`<br>`sms_tool.phone_provider_lifecycle` |
 
 ## Directory pairs with edges in both directions
 

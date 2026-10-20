@@ -64,12 +64,16 @@ class ModuleGraph:
     is_package: dict[str, bool]
     edges: dict[str, set[str]]
     delayed: dict[str, set[str]]
+    type_only: dict[str, set[str]]
 
     def module_edge_count(self) -> int:
         return sum(len(targets) for targets in self.edges.values())
 
     def delayed_edge_count(self) -> int:
         return sum(len(targets) for targets in self.delayed.values())
+
+    def type_edge_count(self) -> int:
+        return sum(len(targets) for targets in self.type_only.values())
 
 
 def _module_name(root: Path, path: Path) -> str:
@@ -134,12 +138,22 @@ def _import_targets(node: ast.AST, module: str, is_package: bool, own_package: s
     return named or None, aliases
 
 
+def _is_type_checking(node: ast.AST) -> bool:
+    """``if TYPE_CHECKING:`` -- annotations only, never a runtime dependency."""
+    if isinstance(node, ast.Name):
+        return node.id == "TYPE_CHECKING"
+    if isinstance(node, ast.Attribute):
+        return node.attr == "TYPE_CHECKING"
+    return False
+
+
 def build(root: Path | None = None) -> ModuleGraph:
     """Resolve the module graph for ``root/sms_tool``."""
     root = ROOT if root is None else root
     files, modules, is_package = _index(root)
     edges: dict[str, set[str]] = defaultdict(set)
     delayed: dict[str, set[str]] = defaultdict(set)
+    type_only: dict[str, set[str]] = defaultdict(set)
 
     for path in files:
         module = _module_name(root, path)
@@ -148,15 +162,23 @@ def build(root: Path | None = None) -> ModuleGraph:
         except (OSError, UnicodeDecodeError, SyntaxError):
             continue
         nested: set[int] = set()
+        type_guarded: set[int] = set()
         for node in ast.walk(tree):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
                 for child in ast.walk(node):
                     if isinstance(child, (ast.Import, ast.ImportFrom)):
                         nested.add(id(child))
+            elif isinstance(node, ast.If) and _is_type_checking(node.test):
+                for child in ast.walk(node):
+                    if isinstance(child, (ast.Import, ast.ImportFrom)):
+                        type_guarded.add(id(child))
         for node in ast.walk(tree):
             if not isinstance(node, (ast.Import, ast.ImportFrom)):
                 continue
-            bucket = delayed if id(node) in nested else edges
+            if id(node) in type_guarded:
+                bucket = type_only
+            else:
+                bucket = delayed if id(node) in nested else edges
             own_package = module if is_package[module] else module.rsplit(".", 1)[0]
             head, aliases = _import_targets(node, module, is_package[module], own_package)
             targets = {
@@ -171,6 +193,7 @@ def build(root: Path | None = None) -> ModuleGraph:
         is_package=is_package,
         edges={key: value for key, value in edges.items()},
         delayed={key: value for key, value in delayed.items()},
+        type_only={key: value for key, value in type_only.items()},
     )
 
 
@@ -262,6 +285,8 @@ def render(graph: ModuleGraph) -> str:
         "(absolute and relative imports, aliases included). Function-local imports are",
         "counted separately: they are this repo's documented way to break a runtime",
         "cycle, so folding them into the cycle view would report a fix as a defect.",
+        "Imports under `if TYPE_CHECKING:` are type-only and are counted on their own",
+        "line for the same reason -- they never execute, so they cannot form a cycle.",
         "",
         "`python scripts/dependency_graph.py` fails when this file and the source",
         "disagree, so the numbers cannot go stale. `import_layer_ratchet.py` remains",
@@ -274,6 +299,7 @@ def render(graph: ModuleGraph) -> str:
         f"| Modules | {len(graph.modules)} |",
         f"| Module-level import edges | {graph.module_edge_count()} |",
         f"| Delayed (function-local) edges | {graph.delayed_edge_count()} |",
+        f"| Type-only (`if TYPE_CHECKING`) edges | {graph.type_edge_count()} |",
         f"| Strongly connected components (size > 1) | {len(components)} |",
         f"| Modules inside a cycle | {in_cycle} |",
         f"| Mutually dependent directory pairs | {len(mutual)} |",
