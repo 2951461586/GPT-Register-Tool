@@ -26,6 +26,49 @@ def _imports(path: Path) -> set[str]:
     return result
 
 
+#: Application modules a provider adapter must reach through
+#: ``providers/ports.py`` instead of importing. Rule 3 forbade the registration and
+#: payment workflow; the 2026-10-21 audit found two more: pool persistence and the
+#: stdout/IPC channel. Both are things the routing owner knows, not the adapter.
+PROVIDER_FORBIDDEN_APP_MODULES = ("desktop_ipc", "mailbox_pool_writer")
+
+#: The one provider module allowed to name those modules: it is the seam that
+#: receives them, and it imports them lazily so the module-level graph stays clean.
+PROVIDER_PORTS_MODULE = "ports.py"
+
+
+def provider_port_violations(py_root: Path) -> list[str]:
+    """Provider modules importing the application concerns they must receive."""
+    failures: list[str] = []
+    providers = py_root / "providers"
+    if not providers.is_dir():
+        return failures
+    for path in sorted(providers.glob("*.py")):
+        if path.name == PROVIDER_PORTS_MODULE:
+            continue
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except (OSError, SyntaxError):
+            failures.append(f"cannot parse provider module: providers/{path.name}")
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ImportFrom):
+                continue
+            name = node.module or ""
+            if node.level == 2:
+                target = name.split(".")[0]
+            elif name.startswith("sms_tool."):
+                target = name[len("sms_tool.") :].split(".")[0]
+            else:
+                continue
+            if target in PROVIDER_FORBIDDEN_APP_MODULES:
+                failures.append(
+                    f"providers/{path.name}:{node.lineno} imports the application module {target!r}; "
+                    "receive it through providers/ports.py (Rule 3)"
+                )
+    return failures
+
+
 def main() -> int:
     failures: list[str] = []
     warnings: list[str] = []
@@ -98,6 +141,7 @@ def main() -> int:
         )
     if not (PY_ROOT / "accounts" / "__init__.py").is_file():
         failures.append("missing sms_tool/accounts/__init__.py")
+    failures.extend(provider_port_violations(PY_ROOT))
     # providers/ naming contract: low-level `_client` modules must never
     # import the registration-facing `mailbox_*` flows that compose them.
     for client in (PY_ROOT / "providers").glob("*_client.py"):

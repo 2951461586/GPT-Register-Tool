@@ -2,7 +2,7 @@ from typing import Any
 
 from curl_cffi import requests as curl_requests
 
-from ..mailbox_pool_writer import apply_rotation
+from . import ports
 
 
 class MailboxTokenExpiredError(RuntimeError):
@@ -56,7 +56,7 @@ def ms_oauth_refresh(mailbox, cfg, proxy=None, scope_override=None):
         # in-memory record and the pool file in step -- a pool that still holds
         # the retired token fails the *next* run with invalid_grant, which reads
         # as "mailbox dead" while the mailbox is perfectly healthy.
-        apply_rotation(
+        ports.apply_rotation(
             mailbox,
             previous=str(getattr(mailbox, "refresh_token", "") or ""),
             current=str(body["refresh_token"]),

@@ -20,6 +20,7 @@ marker-delimited blocks. This module pins both directions:
 
 from __future__ import annotations
 
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -60,7 +61,11 @@ def test_the_committed_docs_are_up_to_date():
 def test_a_hand_edited_number_is_reported_and_repaired(tmp_path, monkeypatch):
     root = sandbox(tmp_path, monkeypatch)
     path, text, block = doc_block(root, "docs/architecture.md")
-    path.write_bytes(text.replace(block, block.replace("| 267 |", "| 999 |"), 1).encode("utf-8"))
+    # Value-agnostic on purpose: pinning one literal here turned every ratchet
+    # change into a second, unrelated edit in this test.
+    edited = re.sub(r"\| \d+ \|", "| 999 |", block, count=1)
+    assert edited != block, "the block has no numeric cell to tamper with"
+    path.write_bytes(text.replace(block, edited, 1).encode("utf-8"))
 
     assert refresh.main([]) == 1, "a hand-edited block must fail the check"
     assert refresh.main(["--apply"]) == 0

@@ -182,8 +182,9 @@ def test_ratchet_holds_for_the_current_tree():
 def test_summary_facts_are_pinned():
     """Pin the decomposition so a silent metric change is caught.
 
-    470 raw directory-level edges decompose into 276 module-scope edges (frozen
-    here) plus 188 delayed imports (frozen by ``delayed_import_ratchet.py``).
+    470 raw directory-level edges decompose into 264 module-scope edges (frozen
+    here) plus 190 delayed cross-directory imports (frozen by
+    ``delayed_import_ratchet.py``).
 
     276 (was 277) / 54 minority (was 56) on 2026-10-17: the pure auth wire
     helpers (``_is_existing_login_redirect``, ``_with_query_param``,
@@ -246,6 +247,19 @@ def test_summary_facts_are_pinned():
     Sentinel pair (183 was 182). Two baselines plus this literal all have to
     move together, which is the point of the pin.
 
+    264 (was 267) / 42 minority (was 45) / 190 delayed (was 188) on 2026-10-21:
+    provider adapters stopped importing the two application concerns they were
+    only *receiving*. ``providers/mailbox_gmail`` and ``providers/mailbox_graph``
+    imported ``mailbox_pool_writer.apply_rotation``, and
+    ``providers/mailbox_remail`` imported ``desktop_ipc.progress_dots_enabled``;
+    both now arrive through ``sms_tool/providers/ports.py``, which imports them
+    lazily -- the remedy this ratchet's failure text names for a documented DI
+    seam. Three module-scope edges leave (267 -> 264, minority 45 -> 42) and two
+    delayed cross-directory edges join (188 -> 190); ``delayed_import_ratchet``
+    records 415 -> 417, each with a written reason in
+    ``delayed_import_reasons.json``. Pairs and mutual pairs are unchanged: the
+    seam stays inside the same ``sms_tool/providers -> sms_tool`` pair.
+
     190 (was 188) / 267 (was 276) / 28 pairs (was 29) / 10 mutual (was 11) / 45
     minority (was 54) on 2026-10-18: the CLI entrypoint stopped importing every
     command adapter at module scope. Seven adapters plus ``batch_runner``,
@@ -261,13 +275,15 @@ def test_summary_facts_are_pinned():
     """
     totals = ilr.analyze(ROOT).totals()
     assert totals == {
-        "total_module_edges": 267,
+        "total_module_edges": 264,
         "ordered_pairs": 28,
         "mutual_pairs": 10,
-        "minority_edges": 45,
-        # 2026-10-21: 190 -> 188 when store/connection.py stopped importing the
-        # sms_tool.storage shell inside _init_cache_key/_connect (the path seam).
-        "delayed_cross_dir_edges": 188,
+        "minority_edges": 42,
+        # 2026-10-21: 188 -> 190 when the provider ports seam (providers/ports.py)
+        # took over the mailbox_pool_writer and desktop_ipc imports as delayed
+        # ones. Before that, 190 -> 188 when store/connection.py stopped
+        # importing the sms_tool.storage shell inside _init_cache_key/_connect.
+        "delayed_cross_dir_edges": 190,
     }
 
 

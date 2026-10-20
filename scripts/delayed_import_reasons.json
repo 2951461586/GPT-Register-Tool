@@ -1,3 +1,12 @@
 {
-  "edges": {}
+  "edges": {
+    "sms_tool/providers/ports.py -> sms_tool.desktop_ipc": {
+      "reason": "deferred",
+      "why": "provider port wires lazily so provider adapters never import the IPC channel at module scope (Rule 3)"
+    },
+    "sms_tool/providers/ports.py -> sms_tool.mailbox_pool_writer": {
+      "reason": "deferred",
+      "why": "provider port wires lazily so provider adapters never import pool persistence at module scope (Rule 3)"
+    }
+  }
 }

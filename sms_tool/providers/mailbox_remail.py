@@ -21,7 +21,7 @@ from ..kernel.paths import project_path, runtime_file
 from ..kernel.sanitizer import mask_otp
 from ..phone_proxy import redact_proxy_url
 from ..proxy_health import ProxyHealthTracker
-from ..desktop_ipc import progress_dots_enabled
+from . import ports
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -991,7 +991,7 @@ def _poll_remail_otp(
     transport_failures = 0
     # Unnewlined dots glue themselves to the head of the next line another
     # thread flushes, which breaks the host's line-anchored envelope parsing.
-    dots = progress_dots_enabled()
+    dots = ports.progress_dots_enabled()
 
     if _remail_preflight_enabled():
         try:

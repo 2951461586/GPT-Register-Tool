@@ -241,6 +241,8 @@
     "sms_tool/providers/mailbox_remail.py -> sms_tool.storage": "deferred",
     "sms_tool/providers/mailbox_smailr.py -> sms_tool.providers.smailr_client": "provider",
     "sms_tool/providers/mailbox_smailr.py -> sms_tool.storage": "deferred",
+    "sms_tool/providers/ports.py -> sms_tool.desktop_ipc": "deferred",
+    "sms_tool/providers/ports.py -> sms_tool.mailbox_pool_writer": "deferred",
     "sms_tool/providers/smailr_client.py -> sms_tool.mail_otp": "deferred",
     "sms_tool/providers/smailr_client.py -> sms_tool.mailbox_poll": "deferred",
     "sms_tool/proxy_bridge.py -> base64": "deferred",
@@ -390,6 +392,7 @@
     "sms_tool/providers/mailbox_cfworker.py": 1,
     "sms_tool/providers/mailbox_remail.py": 1,
     "sms_tool/providers/mailbox_smailr.py": 6,
+    "sms_tool/providers/ports.py": 2,
     "sms_tool/providers/smailr_client.py": 2,
     "sms_tool/proxy_bridge.py": 4,
     "sms_tool/proxy_edge_probe.py": 2,
@@ -431,10 +434,10 @@
   },
   "reasons": {
     "cycle": 8,
-    "deferred": 177,
+    "deferred": 179,
     "provider": 34,
     "startup": 96,
     "test-seam": 0
   },
-  "total": 415
+  "total": 417
 }
