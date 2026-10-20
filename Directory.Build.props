@@ -1,6 +1,10 @@
 <Project>
   <PropertyGroup>
-    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <!-- Pinned, not `latest-recommended`: an SDK upgrade must not silently add
+         analyzer rules. Bumping this line is a deliberate commit whose diff
+         `scripts/dotnet_warning_ratchet.py` shows: either the new rules report
+         nothing, or their warnings are fixed / baselined in the same commit. -->
+    <AnalysisLevel>10.0</AnalysisLevel>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <Deterministic>true</Deterministic>
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>

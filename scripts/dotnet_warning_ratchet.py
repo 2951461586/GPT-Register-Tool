@@ -12,32 +12,49 @@ the solution carried **12** of them -- all in ``tests/SmsWorkbench.Tests``
 **0**: a file absent from the baseline has an allowance of 0, and any new
 warning fails CI.
 
-Why SARIF and not the console output
-------------------------------------
-The build output is **localized** (this checkout reports ``已通过!`` /
-``12 个警告``, and the SARIF itself carries ``tool.language: zh-CN``). A
-``warning CS8767:`` regex therefore depends on the machine's UI language, and a
-machine set to another locale would silently match nothing and report a clean
-tree. ``-p:ErrorLog=<abs>.sarif`` makes MSBuild emit a machine-readable log
-whose ``ruleId`` and ``locations[].resultFile.uri`` are stable contracts
-regardless of language.
+Why the console text and NOT the compiler's SARIF
+-------------------------------------------------
+``-p:ErrorLog=<file>.sarif`` looks like the obvious machine-readable source, and
+it is wrong for this gate in two independent ways, both measured:
+
+1. **The error log is not "what the build reports".** It records every
+   diagnostic an analyzer produced, *before* the severity policy is applied. On
+   a clean tree the console printed ``0 Warning(s)`` while the SARIF held **359**
+   results: ``CS0618`` x272 in generated ``*.g.cs`` (suppressed by the MVVM
+   toolkit's own pragmas), ``MVVMTK0042``/``SYSLIB1045`` x84 at ``note`` level,
+   and one ``CA1001`` that ``.editorconfig`` does not surface. Re-implementing
+   Roslyn's severity resolution (editorconfig + pragmas + analyzer config) in a
+   script is not a gate, it is a second compiler.
+2. **A single ``-p:ErrorLog`` is one file every project truncates**, so only the
+   last-compiled project survives. Measured with a ``#warning`` planted in
+   ``SmsWorkbench/StageMatrixStore.cs``: the build reported 2 warnings while the
+   shared SARIF had ``results: []`` -- the gate could not see production code at
+   all.
+
+The console line IS parseable without depending on the machine's language:
+``<path>(<line>,<col>): warning <rule>: <message> [<project.csproj>]`` keeps the
+``warning`` keyword and the rule id in English even when the rest of the output
+is localized (verified on a ``zh-CN`` checkout). To remove the remaining risk the
+child build is pinned to ``DOTNET_CLI_UI_LANGUAGE=en-US``, and the parsed count
+is cross-checked against MSBuild's own ``N Warning(s)`` summary -- if the two
+disagree in the "parser found nothing but the build says it warned" direction,
+the gate **fails** instead of passing on an output format it no longer
+understands.
 
 Why ``-t:Rebuild`` is mandatory
 -------------------------------
-An up-to-date incremental build does not run ``csc``, so it emits no warnings
-**and writes no SARIF at all** (measured: 0 warnings, file absent). A ratchet
-that accepted that would report "clean" without ever having compiled. So the
-build is always forced to rebuild, and "the build succeeded but no SARIF exists"
-is an **error** (exit 2), never a clean result -- the same failure mode the
-pyright ratchet guards against.
+An up-to-date incremental build does not run ``csc``, so it reports
+``0 Warning(s)`` without having compiled anything. A ratchet that accepted that
+would go green forever. The compile is therefore always forced.
 
-Two more measured traps, both handled here:
-
-* ``ErrorLog`` resolves a **relative** path against each *project* directory
-  (``SmsWorkbench.Contracts/runtime/tmp/x.sarif`` -> ``CS0016``), so the log
-  path is always absolute.
-* ``file:///`` URIs are percent-encoded absolute paths; they are normalised to
-  repo-relative POSIX paths before counting.
+Why the duplicates are collapsed
+--------------------------------
+WPF builds a ``SmsWorkbench_<hash>_wpftmp.csproj`` alongside the real project, so
+one source diagnostic is reported once per project (and the console repeats some
+lines). Identical ``(rule, file, line, column)`` warnings are counted once --
+otherwise a fixed multiplier would read as growth. Attribution still uses the
+``[<project>.csproj]`` suffix, so a warning is filed under the project that owns
+the source.
 
 Why a ratchet and not ``WarningsAsErrors`` in the csproj
 --------------------------------------------------------
@@ -49,14 +66,14 @@ shows up as a baseline diff a reviewer approves once, via
 
 What it measures
 ----------------
-``level == "warning"`` results only. ``error`` results already fail the build
-(and would have raised above), and ``note`` is not a defect. The baseline stores
-three views:
+Diagnostics the build reports at ``warning`` severity. The baseline stores three
+views:
 
 * ``per_file`` -- the gated number. A file absent from the baseline has an
   allowance of 0, so a brand-new file must be clean.
-* ``per_project`` -- the same counts summed per .NET project, so a reviewer sees
-  which project carries debt. Not a second gate: growth is decided per file.
+* ``per_project`` -- the same counts summed per .NET project directory, so a
+  reviewer sees which project carries debt. Not a second gate: growth is decided
+  per file.
 * ``total`` -- the sum, pinned separately so a baseline that somehow loses rows
   fails loudly instead of silently passing.
 
@@ -79,12 +96,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import locale
+import os
+import re
 import subprocess
 import sys
-import tempfile
 from collections import Counter
 from pathlib import Path
-from urllib.parse import unquote, urlparse
 
 ROOT = Path(__file__).resolve().parent.parent
 BASELINE = Path(__file__).resolve().parent / "dotnet_warning_baseline.json"
@@ -97,9 +115,12 @@ SOLUTION = "GPTRegisterTool.slnx"
 #: ``dotnet test -c Release``; Debug adds its own analyzers/conditionals.
 CONFIGURATION = "Release"
 
-#: Known .NET project directories, longest prefix first. Anything else is
-#: attributed to ``<unknown>`` -- still gated, just not attributed, so a newly
-#: added project cannot hide by being unrecognised.
+#: Pinned so the diagnostic lines and the summary keep one shape on every
+#: machine. Without it a localized SDK changes the wording the parser matches.
+BUILD_LANGUAGE = "en-US"
+
+#: Known .NET project directories, longest prefix first, used only when a
+#: diagnostic line has no ``[<project>.csproj]`` suffix.
 PROJECT_DIRS: tuple[str, ...] = (
     "tests/SmsWorkbench.Tests",
     "SmsWorkbench.Contracts",
@@ -109,16 +130,30 @@ PROJECT_DIRS: tuple[str, ...] = (
 #: A hung MSBuild must fail the gate rather than stall CI forever.
 BUILD_TIMEOUT_SECONDS = 900
 
+#: ``<abs path>(<line>,<col>): warning <rule>: <message> [<project.csproj>]``.
+#: The severity keyword and the rule id stay English even on a localized SDK;
+#: ``DOTNET_CLI_UI_LANGUAGE`` removes the residual doubt.
+_DIAGNOSTIC = re.compile(
+    r"^(?P<file>.*?)\((?P<line>\d+),(?P<column>\d+)\):\s+"
+    r"(?P<severity>warning|error)\s+(?P<rule>[A-Za-z]+\d+):\s*(?P<message>.*?)\s*$"
+)
 
-def _relpath(uri: str) -> str:
-    """Turn a SARIF ``resultFile.uri`` into a POSIX repo-relative path."""
-    raw = uri
-    if raw.startswith("file:"):
-        parsed = urlparse(raw)
-        # file:///F:/repo/x.cs -> /F:/repo/x.cs on Windows.
-        raw = unquote(parsed.path or "")
-        if raw.startswith("/") and len(raw) > 2 and raw[2] == ":":
-            raw = raw[1:]
+#: MSBuild's own count for the whole build, e.g. ``    3 Warning(s)``.
+_SUMMARY = re.compile(r"^\s*(?P<count>\d+)\s+Warning\(s\)\s*$")
+
+#: The project a diagnostic was reported for, in the line's trailing brackets.
+_PROJECT_SUFFIX = re.compile(r"\[([^\[\]]+\.csproj)\]\s*$")
+
+
+def _relpath(raw: str) -> str:
+    """Normalise a printed file path to a POSIX repo-relative path.
+
+    Returns ``""`` for an empty path instead of ``"."``: ``Path("").resolve()`` is
+    the repository root, so an empty input would otherwise be filed as a ``.``
+    row in the baseline (a path no source file has).
+    """
+    if not raw or not raw.strip():
+        return ""
     path = Path(raw)
     try:
         return path.resolve().relative_to(ROOT).as_posix()
@@ -126,103 +161,146 @@ def _relpath(uri: str) -> str:
         return path.as_posix()
 
 
-def project_of(relpath: str) -> str:
-    """Attribute a repo-relative source path to its .NET project directory."""
+def project_of(relpath: str, project_file: str = "") -> str:
+    """Attribute a source path to its .NET project directory."""
+    if project_file:
+        directory = Path(_relpath(project_file)).parent.as_posix()
+        return directory if directory not in ("", ".") else "<unknown>"
     for candidate in PROJECT_DIRS:
         if relpath == candidate or relpath.startswith(candidate + "/"):
             return candidate
     return "<unknown>"
 
 
-def run_build(targets: str = SOLUTION) -> dict:
-    """Rebuild the solution and return the parsed SARIF payload.
+def _decode_output(raw: bytes) -> str:
+    """Decode captured MSBuild output without assuming one encoding.
 
-    Raises ``RuntimeError`` when the build fails, hangs, or produces no log --
-    a broken checker must never be mistaken for a clean tree.
+    ``dotnet`` writes UTF-8 when it detects a UTF-8 console and the OEM code page
+    otherwise; ``text=True`` picks the *locale* codec, which raises mid-stream on
+    the mismatched one and leaves ``proc.stdout`` empty. Try UTF-8 first, then the
+    locale's preferred encoding, and only then degrade lossily.
     """
-    with tempfile.TemporaryDirectory(prefix="dotnet-warning-ratchet-") as tmp:
-        log = Path(tmp) / "warnings.sarif"
-        command = [
-            "dotnet",
-            "build",
-            targets,
-            "-c",
-            CONFIGURATION,
-            # Incremental builds emit no warnings AND write no SARIF (see the
-            # module docstring), so the compile is always forced.
-            "-t:Rebuild",
-            "-v:q",
-            "-nologo",
-            # Must be absolute: a relative ErrorLog is resolved per project.
-            f"-p:ErrorLog={log}",
-        ]
+    for encoding in ("utf-8", locale.getpreferredencoding(False), "cp1252"):
         try:
-            proc = subprocess.run(
-                command,
-                cwd=str(ROOT),
-                capture_output=True,
-                # NOT ``text=True``: that decodes with the machine's locale codec
-                # (GBK here), while MSBuild writes UTF-8 -- the reader thread then
-                # dies on the first CJK byte and leaves ``proc.stdout`` empty. The
-                # output is only used for a failure tail, so a lossy decode is fine.
-                encoding="utf-8",
-                errors="replace",
-                timeout=BUILD_TIMEOUT_SECONDS,
-            )
-        except FileNotFoundError as exc:
-            raise RuntimeError(f"dotnet is not installed or not on PATH: {exc}") from exc
-        except subprocess.TimeoutExpired as exc:
-            raise RuntimeError(f"dotnet build did not finish within {BUILD_TIMEOUT_SECONDS}s") from exc
+            return raw.decode(encoding)
+        except (UnicodeDecodeError, LookupError):
+            continue
+    return raw.decode("utf-8", errors="replace")
 
-        if proc.returncode != 0:
-            tail = "\n".join((proc.stdout or "").strip().splitlines()[-12:])
-            raise RuntimeError(
-                f"dotnet build failed (exit {proc.returncode}); fix the build before "
-                f"asking the ratchet about warnings:\n{tail}"
-            )
-        if not log.exists():
-            raise RuntimeError(
-                "dotnet build succeeded but wrote no SARIF log; the gate cannot judge the "
-                "tree. Refusing to report clean."
-            )
-        payload = log.read_text(encoding="utf-8", errors="replace").strip()
 
-    if not payload:
-        raise RuntimeError("the SARIF log is empty; cannot judge the tree")
+def run_build(targets: str = SOLUTION) -> tuple[list[tuple[str, str, int, int]], int]:
+    """Rebuild the solution and return ``(diagnostics, reported_warning_total)``.
+
+    Each diagnostic is ``(project_dir, repo_path, line, column)``. Raises
+    ``RuntimeError`` when the build fails, hangs, or prints output this gate
+    cannot interpret -- a broken checker must never be mistaken for a clean tree.
+    """
+    command = [
+        "dotnet",
+        "build",
+        targets,
+        "-c",
+        CONFIGURATION,
+        # An incremental build does not compile, so it reports 0 warnings without
+        # having looked at the code (see the module docstring).
+        "-t:Rebuild",
+        "-nologo",
+    ]
+    env = dict(os.environ)
+    env["DOTNET_CLI_UI_LANGUAGE"] = BUILD_LANGUAGE
+    env.setdefault("DOTNET_NOLOGO", "1")
     try:
-        data = json.loads(payload)
-    except ValueError as exc:
-        raise RuntimeError(f"the SARIF log is not parseable: {exc}") from exc
-    if not isinstance(data, dict) or not isinstance(data.get("runs"), list):
-        raise RuntimeError("the SARIF payload is missing 'runs'")
-    return data
+        proc = subprocess.run(
+            command,
+            cwd=str(ROOT),
+            # Bytes: the output encoding follows the console, so it is decoded once
+            # afterwards. See ``_decode_output``.
+            capture_output=True,
+            timeout=BUILD_TIMEOUT_SECONDS,
+            env=env,
+        )
+    except FileNotFoundError as exc:
+        raise RuntimeError(f"dotnet is not installed or not on PATH: {exc}") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f"dotnet build did not finish within {BUILD_TIMEOUT_SECONDS}s") from exc
+
+    output = _decode_output(proc.stdout or b"")
+    if proc.returncode != 0:
+        tail = "\n".join(output.strip().splitlines()[-12:])
+        raise RuntimeError(
+            f"dotnet build failed (exit {proc.returncode}); fix the build before "
+            f"asking the ratchet about warnings:\n{tail}"
+        )
+    return parse_build_output(output)
 
 
-def count_warnings(data: dict) -> Counter[str]:
-    """Count ``warning``-level diagnostics per repo-relative source path."""
-    warnings: Counter[str] = Counter()
-    for run in data.get("runs") or []:
-        for result in (run or {}).get("results") or []:
-            if not isinstance(result, dict) or result.get("level") != "warning":
-                continue
-            locations = result.get("locations") or []
-            if not locations:
-                # A warning with no location (the usual shape for a project-level
-                # diagnostic) still counts -- attributing it to ``<unknown>`` is
-                # more honest than dropping the defect on the floor.
-                warnings["<no location>"] += 1
-                continue
-            file_uri = ((locations[0] or {}).get("resultFile") or {}).get("uri") or ""
-            warnings[_relpath(str(file_uri)) or "<no location>"] += 1
-    return warnings
+def parse_build_output(output: str) -> tuple[list[tuple[str, str, int, int]], int]:
+    """Parse ``(diagnostics, reported_warning_total)`` out of MSBuild's output.
+
+    Split out from ``run_build`` so the parser can be pinned without running
+    ``dotnet`` -- the failure mode worth testing is a format this gate stops
+    understanding, not MSBuild's verdict.
+    """
+    diagnostics: list[tuple[str, str, int, int]] = []
+    reported_total: int | None = None
+    for line in output.splitlines():
+        summary = _SUMMARY.match(line)
+        if summary:
+            reported_total = int(summary.group("count"))
+            continue
+        match = _DIAGNOSTIC.match(line.strip())
+        if not match or match.group("severity") != "warning":
+            continue
+        # A diagnostic may be printed without a file (``(12,3): warning CS1: ...``).
+        # Filing that under ``.`` would put a bogus row in the baseline, so it is
+        # labelled instead -- and ``_relpath`` refuses to normalise an empty path.
+        relpath = _relpath(match.group("file")) or "<no location>"
+        diagnostics.append(
+            (
+                project_of(relpath, _project_file_of(match.group("message"))),
+                relpath,
+                int(match.group("line")),
+                int(match.group("column")),
+            )
+        )
+
+    if reported_total is None:
+        raise RuntimeError(
+            "the build printed no 'N Warning(s)' summary; the output format changed and this "
+            "gate cannot judge the tree. Refusing to report clean."
+        )
+    if reported_total > 0 and not diagnostics:
+        raise RuntimeError(
+            f"the build reported {reported_total} warning(s) but none could be parsed; the "
+            "diagnostic line format changed. Refusing to report clean."
+        )
+    return diagnostics, reported_total
 
 
-def per_project(warnings: Counter[str]) -> dict[str, int]:
-    """Sum the per-file counts per .NET project."""
-    projects: Counter[str] = Counter()
-    for path, count in warnings.items():
-        projects[project_of(path)] += count
-    return dict(projects)
+def _project_file_of(message: str) -> str:
+    """Return the project file printed in a diagnostic line's trailing bracket."""
+    match = _PROJECT_SUFFIX.search(message)
+    return match.group(1) if match else ""
+
+
+def count_warnings(diagnostics: list[tuple[str, str, int, int]]) -> tuple[Counter[str], Counter[str]]:
+    """Return ``(per_file, per_project)`` counters, de-duplicated.
+
+    Identical ``(rule, file, line, column)`` diagnostics collapse: WPF compiles the
+    same source through a temporary ``*_wpftmp.csproj``, so one planted warning is
+    reported twice. Without this, a fixed multiplier would read as growth.
+    """
+    per_file: Counter[str] = Counter()
+    per_project: Counter[str] = Counter()
+    seen: set[tuple[str, str, int, int]] = set()
+    for project, relpath, line, column in diagnostics:
+        key = (project, relpath, line, column)
+        if key in seen:
+            continue
+        seen.add(key)
+        per_file[relpath] += 1
+        per_project[project] += 1
+    return per_file, per_project
 
 
 def load_baseline(path: Path = BASELINE) -> dict:
@@ -271,36 +349,35 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        data = run_build()
+        diagnostics, reported_total = run_build()
     except RuntimeError as exc:
         print(f"dotnet-warning-ratchet: {exc}", file=sys.stderr)
         return 2
 
-    warnings = count_warnings(data)
-    projects = per_project(warnings)
-    total = sum(warnings.values())
+    per_file, per_project = count_warnings(diagnostics)
+    total = sum(per_file.values())
 
     if args.detail:
-        print("=== warnings per project ===")
-        for project, count in sorted(projects.items(), key=lambda item: (-item[1], item[0])):
+        print(f"=== warnings per project (build reported {reported_total}) ===")
+        for project, count in sorted(per_project.items(), key=lambda item: (-item[1], item[0])):
             print(f"  {count:5}  {project}")
         print("\n=== warnings per file ===")
-        for path, count in warnings.most_common():
+        for path, count in per_file.most_common():
             print(f"  {count:5}  {path}")
 
     if args.update_baseline:
         previous = baseline_per_file(load_baseline())
         payload = {
             "total": total,
-            "per_project": dict(sorted(projects.items())),
-            "per_file": dict(sorted(warnings.items())),
+            "per_project": dict(sorted(per_project.items())),
+            "per_file": dict(sorted(per_file.items())),
         }
         with BASELINE.open("w", encoding="utf-8", newline="\n") as handle:
             handle.write(json.dumps(payload, indent=2, sort_keys=True) + "\n")
-        print(f"baseline updated: {BASELINE.name} ({total} warning(s) over {len(warnings)} file(s))")
-        for path in sorted(set(previous) | set(warnings)):
+        print(f"baseline updated: {BASELINE.name} ({total} warning(s) over {len(per_file)} file(s))")
+        for path in sorted(set(previous) | set(per_file)):
             before = previous.get(path, 0)
-            after = warnings.get(path, 0)
+            after = per_file.get(path, 0)
             if before != after:
                 print(f"  {before:5} -> {after:<5} {path}")
         return 0
@@ -313,7 +390,7 @@ def main(argv: list[str] | None = None) -> int:
     baseline = load_baseline(BASELINE)
     allowed = baseline_per_file(baseline)
 
-    regressions = grown(warnings, allowed)
+    regressions = grown(per_file, allowed)
     pinned_total = baseline.get("total")
     if isinstance(pinned_total, int) and total > pinned_total:
         regressions.append(("<total>", total, pinned_total))
@@ -330,7 +407,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     print(
-        f"dotnet-warning ratchet OK ({total} warning(s) over {len(warnings)} file(s), "
+        f"dotnet-warning ratchet OK ({total} warning(s) over {len(per_file)} file(s); "
         f"baseline {pinned_total if isinstance(pinned_total, int) else 'n/a'})"
     )
     return 0

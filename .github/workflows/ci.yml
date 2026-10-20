@@ -73,10 +73,18 @@ jobs:
       # that ordering can never see this class of defect.
       - run: python -m pytest -q tests/registration tests/workbench
       - run: dotnet test GPTRegisterTool.slnx -c Release
+      # C# build-warning ratchet. `Directory.Build.props` turns only NuGet codes
+      # into errors, so CS/CA/xUnit-analyzer warnings had no gate at all: 12 of
+      # them had accumulated in the test project by 2026-10-20 with every check
+      # green. The baseline is zero, so any new warning fails here. It rebuilds
+      # the solution itself, which is why it runs after `dotnet test` (warm
+      # outputs) rather than before it.
+      - run: python scripts/dotnet_warning_ratchet.py
       - run: python -c "import sms_tool.cli"
       - run: >-
           python -m pytest -q tests/payment/test_protocol_payment_common.py
-          tests/payment/test_wallet_provider.py tests/payment/test_wallet_manager_integration.py
+          tests/payment/test_wallet_provider.py
+          tests/payment/test_wallet_manager_integration.py
       # Secret gates — precommit_guard is the hard gate (non-zero on
       # tracked-file violation); the other two are informational scanners
       # that print findings.
@@ -99,9 +107,9 @@ jobs:
       # issuance silently degraded to the legacy issuer, and 126/126 accounts
       # failed
       # (docs/audits/scans/scan-2026-09-18-sentinel-runner-hash-mismatch.md).
-      # `tests/governance/test_gate_list_consistency.py` pins which hook gates have no CI
-      # or test coverage; this step removes `sentinel_asset_guard` from that
-      # list, so the two must move together.
+      # `tests/governance/test_gate_list_consistency.py` pins which hook gates
+      # have no CI or test coverage; this step removes `sentinel_asset_guard`
+      # from that list, so the two must move together.
       - run: python scripts/sentinel_asset_guard.py
       - run: python scripts/extractor_parity_report.py
       - run: python scripts/config_schema_check.py

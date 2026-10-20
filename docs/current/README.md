@@ -14,6 +14,7 @@ below so existing links do not break:
 - [`telemetry-and-runtime.md`](telemetry-and-runtime.md) - 日志关联、测试隔离与只读清理清单
 - [`runtime-packaging.md`](runtime-packaging.md) - 自包含安装包里的 CPython 固定版本、校验与解释器优先级
 - [`typing.md`](typing.md) - pyright 类型门禁（逐文件 ratchet）的安装、运行与修复约定
+- [`dotnet-gates.md`](dotnet-gates.md) - C# 构建告警门禁：为什么是零基线、为什么解析控制台而不是 SARIF、如何退债
 - [`cli-reference.md`](cli-reference.md) - 由 argparse 生成的完整 CLI 选项表
 - [`performance-budgets.md`](performance-budgets.md) - 入口延迟/RSS 的回归预算、测量口径与排查方法
 - [`randomness.md`](randomness.md) - `random` 与 `secrets` 的人工分类判据与已复核调用点
