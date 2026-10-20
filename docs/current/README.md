@@ -40,6 +40,7 @@ below so existing links do not break:
 - [`runtime-packaging.md`](runtime-packaging.md) - 自包含安装包里的 CPython 固定版本、校验与解释器优先级
 - [`typing.md`](typing.md) - pyright 类型门禁（逐文件 ratchet）的安装、运行与修复约定
 - [`dotnet-gates.md`](dotnet-gates.md) - C# 构建告警门禁：为什么是零基线、为什么解析控制台而不是 SARIF、如何退债
+- [`testing.md`](testing.md) - 测试执行：并行分片（`-n 4 --dist loadfile`）的实测收益、为什么顺序敏感分片仍是独立串行进程
 - [`cli-reference.md`](cli-reference.md) - 由 argparse 生成的完整 CLI 选项表
 - [`performance-budgets.md`](performance-budgets.md) - 入口延迟/RSS 的回归预算、测量口径与排查方法
 - [`randomness.md`](randomness.md) - `random` 与 `secrets` 的人工分类判据与已复核调用点

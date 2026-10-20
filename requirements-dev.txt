@@ -5,6 +5,10 @@
 # Test runner used by CI and the documented validation command
 pytest>=8.0
 pytest-cov>=5.0
+# Parallel runner. CI and the documented command use `-n 4 --dist loadfile`;
+# the ordering-sensitive shard stays serial in its own process. Measurements and
+# the policy live in docs/current/testing.md.
+pytest-xdist>=3.8
 
 # Type checker driven by scripts/pyright_ratchet.py (via `python -m pyright`).
 # It is a tool, not a runtime import, so it lives here and is pinned in

@@ -55,14 +55,17 @@ jobs:
       # facade re-exports (ADR-0009) and are deliberately not enabled yet.
       - run: python -m pip install -q ruff -c constraints-tools.txt
       - run: python -m ruff check sms_tool services scripts
-      # The protocol-registration lane additionally has to stay `ruff format`
-      # clean. `ruff check` cannot see layout, so a syntactically valid but
-      # mangled expression (auth_flow/otp.py, 2026-10-08) passed every gate.
-      # Scope is the lane, not the whole package -- see scripts/format_guard.py.
+      # The whole Python tree has to stay `ruff format` clean. `ruff check`
+      # cannot see layout, so a syntactically valid but mangled expression
+      # (auth_flow/otp.py, 2026-10-08) passed every gate.
       - run: python scripts/format_guard.py
       - run: python -m pytest --collect-only -q
+      # Parallel shards (`-n 4 --dist loadfile`). `loadfile` keeps one test file
+      # on one worker so module-level monkeypatching stays ordered; 2026-10-20
+      # measurement: 620 s serial -> 221 s parallel, identical result set.
+      # The ordering guard below deliberately stays a separate serial process.
       - run: >-
-          python -m pytest -q --cov=sms_tool --cov=services
+          python -m pytest -q -n 4 --dist loadfile --cov=sms_tool --cov=services
           --cov-report=term-missing
       # Order-dependence guard. This shard order reproduced a real defect on
       # 2026-10-18: `cli._heavy_deps_loaded` was a one-shot latch set while a

@@ -49,6 +49,8 @@ Directory layout (since 2026-09-06):
   如何安装与运行、修一条类型错误的首选写法。
 - [C# Gates](current/dotnet-gates.md) - C# 构建告警门禁：零基线、为什么解析控制台
   而不是编译器 SARIF、`--update-baseline` 的使用条件与修复一条告警的写法。
+- [Testing](current/testing.md) - 测试执行：并行分片（`-n 4 --dist loadfile`）
+  的实测收益、为什么 `tests/registration` + `tests/workbench` 仍是独立串行进程。
 - [Randomness](current/randomness.md) - `random` vs `secrets` 的判据、已复核调用点与
   新增敏感标识时的约定。
 
