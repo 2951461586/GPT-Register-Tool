@@ -76,7 +76,9 @@ def render_architecture() -> list[str]:
 
     coverage = _tool("module_coverage_check")
     tracked = {path for path in coverage.tracked_paths("sms_tool") if path.endswith(".py")}
-    unclaimed, claims, rows_seen = coverage.check(tracked=tracked)
+    unclaimed, claims, groups_seen, mismatches = coverage.check(tracked=tracked)
+    if mismatches:  # the gate catches this too; keep the number honest here
+        raise RuntimeError("; ".join(mismatches))
     named, _duplicates = coverage.coverage_counts(tracked, claims)
 
     return [
@@ -88,7 +90,7 @@ def render_architecture() -> list[str]:
         f"| Delayed cross-directory edges | {totals['delayed_cross_dir_edges']} |",
         f"| Delayed imports in the package | {delayed_total} (baseline {delayed_allowed}) |",
         f"| Claimed tracked `sms_tool` modules | {len(named)} of {len(tracked)} "
-        f"({len(unclaimed)} unclaimed, {rows_seen} directory-map rows) |",
+        f"({len(unclaimed)} unclaimed, {groups_seen} directory-map groups) |",
     ]
 
 
