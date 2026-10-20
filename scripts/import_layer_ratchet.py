@@ -119,19 +119,34 @@ class Edge:
     line: int
     scope: str
     text: str
+    target_module: str = ""
 
     @property
     def pair(self) -> str:
         return f"{self.source_dir} -> {self.target_dir}"
 
+    @property
+    def key(self) -> str:
+        """Module-level identity used by the layer map's allow list."""
+        return f"{self.source_module} -> {self.target_module}"
+
 
 @dataclass
 class Analysis:
     edges: list[Edge] = field(default_factory=list)
+    #: Module-scope edges whose two ends live in the same directory. They are not
+    #: ratcheted (the unit here is the directory relationship) but the layer check
+    #: needs them: a package's ``__init__`` importing its own higher-layer submodule
+    #: is exactly the facade direction question, and it never crosses a boundary.
+    same_directory: list[Edge] = field(default_factory=list)
 
     @property
     def module_edges(self) -> list[Edge]:
         return [e for e in self.edges if e.scope == MODULE_SCOPE]
+
+    def all_module_edges(self) -> list[Edge]:
+        """Module-scope edges including same-directory ones (the layer check's view)."""
+        return self.module_edges + self.same_directory
 
     @property
     def delayed_edges(self) -> list[Edge]:
@@ -254,18 +269,20 @@ def analyze(root: Path = ROOT) -> Analysis:
                     continue
                 source_dir = _directory_of(module, is_package[module])
                 target_dir = _directory_of(target, is_package[target])
-                if source_dir == target_dir:
-                    continue
-                analysis.edges.append(
-                    Edge(
-                        source_dir=source_dir,
-                        target_dir=target_dir,
-                        source_module=module,
-                        line=node.lineno,
-                        scope=DELAYED_SCOPE if id(node) in nested else MODULE_SCOPE,
-                        text=lines[node.lineno - 1].strip() if node.lineno <= len(lines) else "",
-                    )
+                edge = Edge(
+                    source_dir=source_dir,
+                    target_dir=target_dir,
+                    source_module=module,
+                    target_module=target,
+                    line=node.lineno,
+                    scope=DELAYED_SCOPE if id(node) in nested else MODULE_SCOPE,
+                    text=lines[node.lineno - 1].strip() if node.lineno <= len(lines) else "",
                 )
+                if source_dir == target_dir:
+                    if edge.scope == MODULE_SCOPE:
+                        analysis.same_directory.append(edge)
+                    continue
+                analysis.edges.append(edge)
     return analysis
 
 
@@ -399,6 +416,118 @@ def _baseline_int(baseline: dict[str, object], key: str) -> int | None:
         return None
 
 
+LAYER_MANIFEST = Path(__file__).resolve().parent / "layer_manifest.json"
+
+
+@dataclass
+class Layers:
+    """The reviewed module-level layer map (see ``scripts/layer_manifest.json``)."""
+
+    packages: dict[str, int]
+    overrides: dict[str, int]
+    root_modules: dict[str, int]
+    allow: dict[str, str]
+
+
+def load_layers(path: Path | None = None) -> Layers:
+    """Load the layer map; ``path`` resolves at call time so tests can redirect it."""
+    path = path or LAYER_MANIFEST
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return load_layers_payload(data, source=path.name)
+
+
+def load_layers_payload(data: object, *, source: str = "layer_manifest") -> Layers:
+    """Validate one already-parsed manifest (the file loader and tests share this)."""
+    if not isinstance(data, dict):
+        raise ValueError(f"{source}: root must be an object")
+    packages = data.get("packages") or {}
+    overrides = data.get("module_overrides") or {}
+    root_modules = data.get("root_modules") or {}
+    raw_allow = data.get("allow") or {}
+    if not isinstance(raw_allow, dict):
+        raise ValueError(f"{source}: allow must be an object")
+    allow: dict[str, str] = {}
+    for key, entry in raw_allow.items():
+        if not isinstance(entry, dict):
+            raise ValueError(f"{source}: allow[{key!r}] must be an object with a reason")
+        allow[key] = str(entry.get("reason") or "")
+    for name, table in (("packages", packages), ("module_overrides", overrides), ("root_modules", root_modules)):
+        if not isinstance(table, dict):
+            raise ValueError(f"{source}: {name} must be an object")
+        for key, value in table.items():
+            if not isinstance(value, int) or not 1 <= value <= 5:
+                raise ValueError(f"{source}: {name}[{key!r}] must be a layer 1..5")
+    for key, reason in allow.items():
+        if len(reason.split()) < 5:
+            raise ValueError(f"{source}: allow[{key!r}] needs a reason of at least 5 words")
+    return Layers(packages=packages, overrides=overrides, root_modules=root_modules, allow=allow)
+
+
+def layer_of(module: str, layers: Layers) -> int | None:
+    """Layer of one module, or ``None`` when no rule claims it.
+
+    Overrides are keyed by path without the package prefix
+    (``registration_drivers/browser_flow/decisions``), so the longest match wins;
+    then the subpackage table; then the root-module table.
+    """
+    parts = module.split(".")
+    if len(parts) == 1:
+        return None
+    for depth in (4, 3, 2):
+        key = "/".join(parts[1 : 1 + depth])
+        if key in layers.overrides:
+            return layers.overrides[key]
+    if parts[1] in layers.packages:
+        return layers.packages[parts[1]]
+    return layers.root_modules.get(parts[1] + ".py")
+
+
+def direction_violations(
+    analysis: Analysis, layers: Layers, modules: list[str]
+) -> tuple[list[str], list[Edge], list[Edge]]:
+    """(unclassified modules, allowed inward edges, unallowed inward edges).
+
+    Layer 1 is the outermost surface and layer 5 the innermost adapter (the order
+    ``docs/architecture.md`` uses), so the legal direction is ``source <= target``
+    and a violation is an inner module importing something further out.
+    """
+    # The package root itself is not a layer member; everything else must be claimed.
+    unclassified = sorted(module for module in modules if module != PKG and layer_of(module, layers) is None)
+    allowed: list[Edge] = []
+    unallowed: list[Edge] = []
+    for edge in analysis.all_module_edges():
+        source = layer_of(edge.source_module, layers)
+        target = layer_of(edge.target_module, layers)
+        if source is None or target is None or source <= target:
+            continue
+        (allowed if edge.key in layers.allow else unallowed).append(edge)
+    return unclassified, allowed, unallowed
+
+
+def _format_direction_failure(unclassified: list[str], unallowed: list[Edge], allowed: list[Edge]) -> str:
+    lines: list[str] = []
+    if unclassified:
+        lines.append("modules no layer rule claims (add them to scripts/layer_manifest.json):")
+        lines.extend(f"  {name}" for name in unclassified)
+    if unallowed:
+        if lines:
+            lines.append("")
+        lines.append("imports pointing outward (an inner layer importing a further-out one):")
+        lines.extend(
+            f"  {edge.source_module}:{edge.line} -> {edge.target_module} [{edge.source_dir} -> {edge.target_dir}]"
+            for edge in unallowed
+        )
+        lines.append("")
+        lines.append(
+            "Move the shared helper into a layer both sides may import, invert the call, or -- if the "
+            "direction is deliberate -- add the edge to layer_manifest.json's 'allow' with a reason."
+        )
+    if allowed:
+        lines.append("")
+        lines.append(f"({len(allowed)} inward edge(s) are allow-listed in layer_manifest.json)")
+    return "\n".join(lines)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Ratchet on cross-directory import edges inside sms_tool.")
     parser.add_argument("--detail", action="store_true", help="print per-pair and per-module tables")
@@ -469,6 +598,21 @@ def main(argv: list[str] | None = None) -> int:
         if allowed is not None and totals[key] > allowed:
             grown.append((key, totals[key], allowed))
 
+    layers = load_layers()
+    _files, modules, _is_package = _index(args.root)
+    unclassified, allowed_inward, unallowed = direction_violations(analysis, layers, list(modules))
+    if args.detail:
+        print("\n=== layer map ===")
+        for module in sorted(modules):
+            print(f"  layer {layer_of(module, layers)}  {module}")
+        print("\n=== allow-listed inward edges ===")
+        for edge in allowed_inward:
+            print(f"  {edge.key}")
+
+    if unclassified or unallowed:
+        print(_format_direction_failure(unclassified, unallowed, allowed_inward), file=sys.stderr)
+        return 1
+
     if grown:
         for name, current, allowed in grown:
             print(
@@ -484,7 +628,8 @@ def main(argv: list[str] | None = None) -> int:
     print(
         f"import-layer ratchet OK ({totals['total_module_edges']} module-level edge(s) over "
         f"{totals['ordered_pairs']} pair(s); {totals['mutual_pairs']} mutual, "
-        f"{totals['minority_edges']} minority; {totals['delayed_cross_dir_edges']} delayed)"
+        f"{totals['minority_edges']} minority; {totals['delayed_cross_dir_edges']} delayed; "
+        f"{len(allowed_inward)} allow-listed inward edge(s), 0 unclassified module(s))"
     )
     return 0
 

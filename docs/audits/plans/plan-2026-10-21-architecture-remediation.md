@@ -81,7 +81,7 @@
 
 | 序 | 任务 | 做法 | 验证 |
 |---|---|---|---|
-| P1-1 | 模块级层清单 + 方向门禁 | 新增 `scripts/layer_manifest.json`（155 根模块 + 13 子包各标 1–5 层）；`import_layer_ratchet` 增加方向判定：禁止出现 下层 → 上层 的新边，现有 45 条 minority 边转逐条 allow-list（`reason` + `owner`）；新增「每个模块必须被清单认领」断言 | 造一条向上边 → 失败并打印模块名；删一条 allow-list 边 → 提示基线可收紧 |
+| P1-1 | 模块级层清单 + 方向门禁 | 新增 `scripts/layer_manifest.json`：153 个根模块 + 13 子包 + 5 个包内覆盖，层号沿用 `architecture.md` 的顺序（1 表层 → 5 适配器）；`import_layer_ratchet` 增加方向判定（`source > target` 即违规，**含同目录边**，否则包门面环看不见）与「每个模块必须被认领」断言；allow 只有 2 条，各带 reason + owner | `import_layer_ratchet.py` → `2 allow-listed inward edge(s), 0 unclassified`；10 个新用例覆盖违规/合法/allow/未认领/同目录 |
 | P1-2 | `config` 拆包 | `sms_tool/config/` = `loader.py`（分片/迁移）、`schema.py`（`validate_config` + warnings）、`runtime.py`（`RuntimeConfig`/scope）、`legacy.py`（`LegacyConfigView`），`__init__.py` 只 re-export；73 个 import 一行不改 | `pytest tests/config/`；`config_schema_check.py`；`config_key_ratchet.py` |
 
 ### P2 — 环与根目录

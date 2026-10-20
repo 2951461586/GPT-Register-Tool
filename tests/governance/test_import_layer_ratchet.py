@@ -305,3 +305,146 @@ def test_updating_the_baseline_cannot_silently_raise_a_pair(tmp_path: Path, monk
     monkeypatch.setattr(ilr, "load_baseline", lambda *a, **k: written)
     counts = ilr.analyze(ROOT).pair_counts()
     assert not [p for p in counts if counts[p] > written["pairs"].get(p, 0)]
+
+
+# --------------------------------------------------------------------------
+# Layer direction: the reviewed module map in scripts/layer_manifest.json.
+# --------------------------------------------------------------------------
+
+LAYER_MANIFEST = {
+    "packages": {"adapters": 5, "flows": 3},
+    "module_overrides": {},
+    "root_modules": {"leaf.py": 5, "workflow.py": 3, "cli.py": 2},
+    "allow": {},
+}
+
+
+def layers_from(**overrides) -> ilr.Layers:
+    payload = dict(LAYER_MANIFEST)
+    payload.update(overrides)
+    return ilr.load_layers_payload(payload)
+
+
+def analysis_of(tmp_path: Path, files: dict[str, str]) -> tuple[ilr.Analysis, list[str]]:
+    for rel, text in files.items():
+        path = tmp_path / "sms_tool" / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8", newline="\n")
+    _files, modules, _is_package = ilr._index(tmp_path)
+    return ilr.analyze(tmp_path), list(modules)
+
+
+def test_an_inner_module_importing_an_outer_one_is_a_violation(tmp_path):
+    analysis, modules = analysis_of(
+        tmp_path,
+        {
+            "__init__.py": "",
+            "leaf.py": "from .workflow import thing\n",
+            "workflow.py": "thing = 1\n",
+        },
+    )
+    unclassified, allowed, unallowed = ilr.direction_violations(analysis, layers_from(), modules)
+    assert unclassified == []
+    assert allowed == []
+    assert [edge.key for edge in unallowed] == ["sms_tool.leaf -> sms_tool.workflow"]
+
+
+def test_an_outer_module_importing_an_inner_one_is_legal(tmp_path):
+    analysis, modules = analysis_of(
+        tmp_path,
+        {
+            "__init__.py": "",
+            "leaf.py": "thing = 1\n",
+            "cli.py": "from .leaf import thing\n",
+        },
+    )
+    _unclassified, _allowed, unallowed = ilr.direction_violations(analysis, layers_from(), modules)
+    assert unallowed == []
+
+
+def test_same_layer_edges_are_legal(tmp_path):
+    analysis, modules = analysis_of(
+        tmp_path,
+        {
+            "__init__.py": "",
+            "adapters/__init__.py": "",
+            "adapters/a.py": "from .b import thing\n",
+            "adapters/b.py": "thing = 1\n",
+        },
+    )
+    _unclassified, _allowed, unallowed = ilr.direction_violations(analysis, layers_from(), modules)
+    assert unallowed == []
+
+
+def test_an_allow_entry_absorbs_a_documented_inward_edge(tmp_path):
+    analysis, modules = analysis_of(
+        tmp_path,
+        {
+            "__init__.py": "",
+            "leaf.py": "from .workflow import thing\n",
+            "workflow.py": "thing = 1\n",
+        },
+    )
+    layers = layers_from(
+        allow={
+            "sms_tool.leaf -> sms_tool.workflow": {
+                "reason": "the leaf is the documented facade for this workflow",
+                "owner": "sms_tool/leaf.py",
+            }
+        }
+    )
+    _unclassified, allowed, unallowed = ilr.direction_violations(analysis, layers, modules)
+    assert unallowed == []
+    assert [edge.key for edge in allowed] == ["sms_tool.leaf -> sms_tool.workflow"]
+
+
+def test_a_module_no_rule_claims_is_reported(tmp_path):
+    analysis, modules = analysis_of(
+        tmp_path,
+        {
+            "__init__.py": "",
+            "unclaimed.py": "thing = 1\n",
+        },
+    )
+    unclassified, _allowed, _unallowed = ilr.direction_violations(analysis, layers_from(), modules)
+    assert unclassified == ["sms_tool.unclaimed"]
+
+
+def test_a_same_directory_inward_edge_is_still_checked(tmp_path):
+    """A package __init__ importing its own higher-layer submodule never crosses a
+    directory boundary, so the per-pair ratchet cannot see it -- the layer check must."""
+
+    analysis, modules = analysis_of(
+        tmp_path,
+        {
+            "__init__.py": "",
+            "adapters/__init__.py": "from .high import thing\n",
+            "adapters/high.py": "thing = 1\n",
+        },
+    )
+    layers = layers_from(module_overrides={"adapters/high": 3})
+    _unclassified, _allowed, unallowed = ilr.direction_violations(analysis, layers, modules)
+    assert [edge.key for edge in unallowed] == ["sms_tool.adapters -> sms_tool.adapters.high"]
+
+
+def test_a_layer_outside_one_to_five_is_rejected():
+    with pytest.raises(ValueError, match="layer 1..5"):
+        layers_from(root_modules={"leaf.py": 9})
+
+
+def test_an_allow_entry_needs_a_written_reason():
+    with pytest.raises(ValueError, match="at least 5 words"):
+        layers_from(allow={"sms_tool.a -> sms_tool.b": {"reason": "because"}})
+
+
+def test_the_committed_manifest_claims_every_module():
+    layers = ilr.load_layers()
+    _files, modules, _is_package = ilr._index(ROOT)
+    assert [m for m in modules if m != "sms_tool" and ilr.layer_of(m, layers) is None] == []
+
+
+def test_the_committed_tree_has_no_unallowed_inward_edge():
+    layers = ilr.load_layers()
+    _files, modules, _is_package = ilr._index(ROOT)
+    _unclassified, _allowed, unallowed = ilr.direction_violations(ilr.analyze(ROOT), layers, list(modules))
+    assert unallowed == []

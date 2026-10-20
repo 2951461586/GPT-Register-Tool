@@ -52,6 +52,18 @@ provider-free. The seams fixed in place are `account_seed` (seed lookup),
 PayPal browser lane's one dependency on the protocol lane). See
 [Boundary Rule Checks](#boundary-rule-checks) for the enforceable form.
 
+The stack above is *per module*, not per directory: `sms_tool/` holds leaf
+contracts and application workflows side by side, so a directory-level reading
+made every pair look legal in both directions. `scripts/layer_manifest.json`
+assigns each module one of five layers (1 surface, 2 command adapter, 3
+workflow, 4 domain contract, 5 adapter) and
+`scripts/import_layer_ratchet.py` fails on any module-scope import that points
+outward (`source layer > target layer`), including same-directory edges such as
+a package `__init__` re-exporting a higher-layer submodule. Two edges are
+allow-listed there with a written reason; everything else must move the shared
+helper down or invert the call. A module the manifest does not claim fails the
+check, so coverage cannot silently rot.
+
 Operation proxy precedence is explicit input, optional saved registration
 affinity, then the operation pool and its documented fallback. The ordered
 candidates and their non-sensitive source labels come from
