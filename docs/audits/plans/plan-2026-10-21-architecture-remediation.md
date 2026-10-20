@@ -1,0 +1,165 @@
+# 方案：架构健康度整改（图谱可信度 → 分层门禁 → 环 → 根目录）— 2026-10-21
+
+> **状态（2026-10-21）**：已拍板，按 P0 → P1 → P2 → P3 顺序落地中；每阶段的落地结果回写到本文对应小节，并同步 `docs/architecture.md` / `docs/directory-map.md`。
+>
+> **性质**：方案文档 + 落地记录。所有数字来自 2026-10-21 用 AST 重测（见 §1 的测量口径），不引用 pi-lens 的目录级数字。
+
+## 0. 与既有扫描的关系（先读这段）
+
+`docs/audits/scans/scan-2026-10-04-import-cycle-decomposition.md` 已经把 pi-lens 报的
+「470 边循环依赖」分解过一次，结论是：**288 条模块级 + 182 条函数内**，真正互指的只有
+**11 对 / 60 条反向边**，其中 **46 条拆不得**（5 条 wildcard 门面、17 条 `mailbox_*` 门面、
+29 条惰性边、`auth_flow/deps.py` 的 DI 注入面），并给出 §10 的增量收敛顺序。
+
+本方案**不推翻那份扫描**，只做它没做的三件事：
+
+1. **把「层」定义到模块粒度**。扫描停在目录粒度，于是 `sms_tool/` 这一个节点同时装着
+   应用工作流和叶子契约，任何一对目录都"两个方向都合法"⇒ 层无法判定。§4 P1-1 解决。
+2. **把测量变成生成物**。扫描是快照，两天后就会过期（本轮复测已从 288/31/11 降到
+   267/28/10）。§4 P0-2 让依赖图成为 CI 生成并校验的文件。
+3. **处理扫描 §10 中标注「需先拍板」的 providers 平局的一个有界切片**。扫描把
+   `sms_tool ↔ providers` 的 19/19 平局列为「高」风险、需要「共同词汇层」的架构决策。
+   本方案不整体推进它，只先切两条最没有道理的边（provider 直接写池文件、provider 发 UI 事件），
+   并把「共同词汇层」记为明确延后项（§6）。
+
+## 1. 问题与证据（2026-10-21 复测）
+
+测量口径：`scripts/dependency_graph.py`（本方案 P0-2 新增）用 AST 解析 `sms_tool/**/*.py`
+与 `services/**/*.py`，相对导入按包深度还原，函数体内导入单独计为 `delayed`。
+
+| # | 问题 | 实测 | 根因 |
+|---|---|---|---|
+| 1 | 图谱解析率低、死代码假阳性 | 一个 `blik_qr_extract.py` 引 13 个 `common/*` 模块，图谱全判死 | `services/protocol-payment` 不是包：无 `__init__.py`，靠 `sys.path.insert` + `from common.x import`；测试用 `spec_from_file_location` 按路径加载 |
+| 2 | 图谱过期、与门禁两套算法 | — | 图谱是快照，`import_layer_ratchet.py` 才是 AST 精确的权威；两者从不对账 |
+| 3 | 互指关系无法判定方向 | 267 条模块级跨目录边 / 28 对 / 10 对互指（历史 441/43/30） | `sms_tool/` 根节点混装两层；`SUBPACKAGES` 只认 13 个子包 |
+| 4 | 模块级 SCC | **5 个**：registration stage 簇 9、`auth_flow` 包内 7、`browser_flow` 包内 6、`upi_link` 包内 4、`phone_pool` ↔ `phone_provider_lifecycle` 2 | 前三个是**包门面环**（`__init__` re-export 子模块 + 子模块 `from . import …` 回边）；registration 簇是 stage 互相 import；`phone_pool` 是两条根模块互指 |
+| 4b | 被误报的「环」 | `account_liveness` ↔ `browser_flow` 等 **5 个看起来的环** 已在函数内导入层面断开 | 本仓把「改成函数内导入」作为既定的破环手段（`delayed_import_ratchet` 按总量单独守），把它与真环混算会得出 10 个 SCC 的错数 |
+| 5 | 枢纽模块 | `config` 73 依赖者 / 1042 行；`kernel/sanitizer` 38；`kernel/paths` 32 | `config.py` 同时是 loader / schema / runtime view / legacy view / migration |
+| 6 | provider 反向依赖 | 21 条边、11 个根模块（`mail_otp` 4、`mailbox_types` 3、`mailbox_poll` 2、`mailbox_pool_writer` 2、`config` 2、`phone_proxy` 2、`storage` 2、`mailbox_errors` 1、`mailbox_quarantine` 1、`desktop_ipc` 1） | Rule 03 只禁了 `registration` / `payment` / `paypal` 三个包，漏掉这些根模块 |
+| 7 | 根目录扁平 | 155 个冻结模块，53,144 行；`registration_*` 29、`payment_*` 15、`mailbox_*` 15、`paypal_*` 9、`proxy_*` 7 | `root_module_ratchet` 只冻结名字、不允许新增，但没有迁出路径 |
+| 8 | 未使用导入集中在门面 | 330 条 / 75 文件（历史 456 / 84），`upi_link/pipeline.py` 72、`payment_link_manager.py` 42、`registration.py` 26、`paypal_link/gen_link.py` 25 | 门面 re-export 的历史残留，不是死代码 |
+| 9 | spec graph 缺失 | 无 `SPEC.md`、无 `id/type` frontmatter | 由 `docs/architecture.md` + `docs/rules/rule-NN-*` + ADR 承担，但没有可查询的图 |
+
+## 2. 目标 / 非目标
+
+**目标**
+
+- 依赖图由代码生成、CI 校验，不再过期；死代码判定不再被 `sys.path` hack 污染。
+- 分层从「逐对计数」升级为「逐模块方向」，新增违规精确报点，基线只能降。
+- 三个模块级环各有一个可验证的拆法。
+- 根目录 5 个模块族迁入子包，`root_module_ratchet` 的冻结数从 155 降到约 80。
+- 边界/契约有可查询的 spec 图，且与 `rule-NN` / ADR 不冲突。
+
+**非目标（本轮明确不做）**
+
+- 不整体推进 `sms_tool ↔ providers` 的 19/19 平局（扫描 §10 序 5，需先拍板「共同词汇层」）。
+- 不拆扫描 §4 记录的 46 条有意设计边。
+- 不把 spec graph 全量迁移（会与 4 套文档门禁打架）。
+- 不把根目录清零（剩余 glue 模块保留，冻结数只降到约 80）。
+
+## 3. 已确认决策
+
+| 决策 | 结论 |
+|---|---|
+| 落地范围 | P0 → P1 → P2 全量（含根目录逐簇迁移），P3 走最小版 |
+| 分支 | 直接在 `main` 提交 |
+| 每步验收 | 相关域 `pytest` + 全部相关 ratchet/scan + `ruff check` + `format_guard` |
+| spec 图 | 只给边界/契约建 ~10 个，`implements: rule-NN`、`depends-on: adr-NNNN` |
+
+## 4. 阶段任务
+
+### P0 — 工具与门禁（行为中立，除 P0-3 新增一个开关）
+
+| 序 | 任务 | 做法 | 验证 |
+|---|---|---|---|
+| P0-1 | `services/protocol-payment` 的 `common.*` 导入根可解析 | **不重命名目录**（`pyrightconfig.json` 已用 `executionEnvironments.extraPaths` 声明了这个导入根，改名要动 300 处引用且不改运行时行为）。改为新增 `scripts/services_import_resolution.py`：用运行时同一条规则解析 `common.*`，并断言 ① 每条导入都落到 `common/` 下真实模块 ② 每个 `common/*.py` 都能从某个提取器到达；配 8 个 fixture 测试钉住解析器 | `python scripts/services_import_resolution.py`；`pytest tests/governance/test_services_import_resolution.py` |
+| P0-2 | 生成式依赖图 | 新增 `scripts/dependency_graph.py`（AST，含相对导入还原、SCC、互指对、根节点入度），`--check` 校验 `docs/current/dependency-graph.md` 是否与源码一致，`--write` 重生成；CI 加一步 | 手改一行 import → `--check` 失败并指出文件行号 |
+| P0-3 | `--init-config` | 新增 CLI 开关：按 `SHARD_FILES` 写 `proxy/runtime/payment` 三个分片，已存在则跳过；`--doctor` 在无配置时打印该命令 | 空目录跑一次 → 三个分片；再跑一次 → 全跳过 |
+| P0-4 | provider 端口化（有界切片） | 新增 `sms_tool/providers/ports.py`：`PoolWriterPort` / `ProgressPort`；`mailbox_gmail` / `mailbox_graph` 的 `apply_rotation` 与 `mailbox_remail` 的 `progress_dots_enabled` 改为端口注入；Rule 03 的 grep 扩到这两个模块 | `grep -rn "from \.\.\(mailbox_pool_writer\|desktop_ipc\)" sms_tool/providers/` 为空；`import_layer_ratchet` 收紧 |
+
+### P1 — 分层与枢纽
+
+| 序 | 任务 | 做法 | 验证 |
+|---|---|---|---|
+| P1-1 | 模块级层清单 + 方向门禁 | 新增 `scripts/layer_manifest.json`（155 根模块 + 13 子包各标 1–5 层）；`import_layer_ratchet` 增加方向判定：禁止出现 下层 → 上层 的新边，现有 45 条 minority 边转逐条 allow-list（`reason` + `owner`）；新增「每个模块必须被清单认领」断言 | 造一条向上边 → 失败并打印模块名；删一条 allow-list 边 → 提示基线可收紧 |
+| P1-2 | `config` 拆包 | `sms_tool/config/` = `loader.py`（分片/迁移）、`schema.py`（`validate_config` + warnings）、`runtime.py`（`RuntimeConfig`/scope）、`legacy.py`（`LegacyConfigView`），`__init__.py` 只 re-export；73 个 import 一行不改 | `pytest tests/config/`；`config_schema_check.py`；`config_key_ratchet.py` |
+
+### P2 — 环与根目录
+
+| 序 | 任务 | 做法 | 验证 |
+|---|---|---|---|
+| P2-1 | registration stage 簇解环（9 模块） | `registration_handlers` 从「import 具体 stage」改为 stage 注册表查表；stage 只依赖 `RegistrationStageContext` 协议 | SCC 从 5 降到 4；`pytest tests/registration` |
+| P2-2 | 包门面环惰性导出（`auth_flow` 7 + `browser_flow` 6 + `upi_link` 4） | 三个包的 `__init__.py` 改 PEP 562 `__getattr__`，子模块不再在包导入时被拉入；子模块 `from . import x` 的回边保留（它是真实依赖） | SCC 4 → 1；`pytest tests/registration tests/payment tests/workbench`（`deps.py` 的按属性 patch 必须仍生效） |
+| P2-3 | `phone_pool` ↔ `phone_provider_lifecycle` 解环（2） | 生命周期模块接受 `pool: PoolPort` 注入，不再反向 import `phone_pool` | SCC 1 → 0；`pytest tests/accounts tests/mailbox` |
+| P2-4 | `proxy_*` → `sms_tool/proxy/`（7） | `git mv` + codemod 改 dotted 引用；`SUBPACKAGES` 加 `proxy`；`directory_map_groups.json` 加组 | 全量 `pytest`；`root_module_ratchet --update-baseline` 降 7 |
+| P2-5 | `mailbox_*` → `sms_tool/mailbox/`（15） | 同上；`mailbox.py` → `mailbox/router.py` + `__init__` 门面（`sms_tool.mailbox` 路径不变） | 同上，降 15 |
+| P2-6 | `paypal_*` → `sms_tool/paypal/`（9） | 同上，并入既有 `paypal/` 包 | 同上，降 9 |
+| P2-7 | `payment_*` → `sms_tool/payment/`（15） | 同上 | 同上，降 15 |
+| P2-8 | `registration_*` → `sms_tool/registration/`（29） | `registration.py` → `registration/orchestrator.py` + `__init__` 门面 | 同上，降 29 |
+
+### P3 — spec 图（最小版）
+
+| 序 | 任务 | 做法 | 验证 |
+|---|---|---|---|
+| P3-1 | 边界 spec 图 | 为 10 个边界/契约建 `architecture-design` spec，`implements: rule-NN`、`depends-on: adr-NNNN`；CI 加 `spec_validate` | `spec_validate` 无 dangling / cycle |
+
+## 5. 每步的公共验收
+
+```text
+python -m pytest -q <相关域>
+python scripts/import_layer_ratchet.py
+python scripts/root_module_ratchet.py
+python scripts/module_coverage_check.py
+python scripts/architecture_scan.py
+python -m ruff check sms_tool services scripts
+python scripts/format_guard.py
+```
+
+搬模块的步骤额外跑：`python -m pytest -q`（全量，约 220 s 并行）。
+
+## 6. 明确延后
+
+- **providers 19/19 平局的整体处理**：需要先拍板「共同词汇层」（`mail_otp` / `mailbox_types` /
+  `config` / `storage` 下沉到哪一层），属架构决策，不在本轮的清理动作里。本轮只切
+  `mailbox_pool_writer` 与 `desktop_ipc` 两条。
+- **`sms_tool/registration.py` ↔ `registration_drivers` 的 4 条反向边**：扫描 §10 序 4 已记录为
+  「同层横跳」，结论是记录、不动。
+- **`unused_import` 330 条**：门面残留，按文件逐个清理，不在本方案内一次性处理。
+- **`services/mail-otp-web`**：零耦合运维工具，不是死代码；是否加启动脚本另议。
+
+## 7. 回滚
+
+每一步是独立提交，且只依赖前一步的产物：
+
+- P0-1 / P0-3 独立可回滚。
+- P0-2 / P1-1 是纯新增脚本与 CI 步骤，回滚不影响运行时代码。
+- P1-2 拆包保留 `sms_tool.config` 的 re-export 面，回滚只需恢复单文件。
+- P2-1..3 解环都保留原有调用面；P2-4..8 每簇一个提交，`root_module_ratchet --update-baseline`
+  与 codemod 同提交，`git revert` 单簇即可。
+
+## 8. 落地记录
+
+### P0-1（`services_import_resolution.py`）
+
+原计划是「包化 + 删 `sys.path` + 改 `from ..common`」。落地时发现 `pyrightconfig.json` 已有
+`executionEnvironments.extraPaths` 声明了这个导入根，且目录名带连字符本来就不可包化 ——
+改名要动 300 处引用却不改变运行时行为。改为「让工具认识这个导入根」，并新增门禁两向都测：
+解析不到的导入报行号，没有任何提取器能到达的 `common/*.py` 报孤儿。实测 11 个提取器 →
+21 个模块、6 条 `common` 内部边、0 孤儿。
+
+### P0-2（`dependency_graph.py` + `docs/current/dependency-graph.md`）
+
+生成式视图落地，实测 **298 模块 / 981 条模块级边 / 262 条函数内边 / 5 个 SCC / 10 对互指**。
+落地过程修正了方案的两处判断：
+
+1. **SCC 不是 10 个而是 5 个**。先前脚本把函数内导入也算进环，于是
+   `account_liveness` ↔ `browser_flow` 这类「已经用惰性导入破掉的环」被当成真环。
+   现在惰性边单独计（本仓的破环手段），5 个真环里 **3 个是包门面环**，形状一致。
+2. **P2-2 的对象换了**。原计划要切 `account_liveness` ↔ `browser_flow`，实测那条边已经是
+   函数内导入，无需改动；真正需要处理的是 `browser_flow` 包内 6 模块环，它与 `auth_flow`、
+   `upi_link` 是同一个「包 `__init__` re-export + 子模块回边」形状，所以合并成一步。
+
+`import_layer_ratchet` 仍是**门禁**（逐对、只许下降），新文件是**视图**；两者计数单位不同
+（语句 vs 模块对），因此 `tests/governance/test_dependency_graph.py` 钉的是**有序目录对集合**
+与**互指对集合**相等，而不是总数相等。
+
