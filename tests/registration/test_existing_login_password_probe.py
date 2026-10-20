@@ -432,7 +432,9 @@ class LaneProbePolicyTests(unittest.TestCase):
 
         self.assertFalse(result["ok"])
         self.assertEqual(result["error"], "existing_login_password_step_unknown")
-        self.assertEqual(result["password_probe"]["signal"], "no_transaction_state")
+        probe_report = result["password_probe"]
+        assert isinstance(probe_report, dict)
+        self.assertEqual(probe_report["signal"], "no_transaction_state")
         send.assert_not_called()
 
     def test_the_probe_reads_the_transaction_continue_url(self):

@@ -224,7 +224,9 @@ def test_failed_validate_dumps_the_client_auth_session():
 
     assert dumps == [DUMP_LABEL]
     assert result["ok"] is False
-    assert result["error"].startswith("existing_login_otp_validate:")
+    error = result["error"]
+    assert isinstance(error, str)
+    assert error.startswith("existing_login_otp_validate:")
 
 
 def test_successful_validate_does_not_dump():
@@ -255,7 +257,9 @@ def test_a_profile_step_landing_is_reported_as_a_failure():
     )
 
     assert result["ok"] is False
-    assert result["error"].startswith("existing_login_landed_on_profile_step:")
+    error = result["error"]
+    assert isinstance(error, str)
+    assert error.startswith("existing_login_landed_on_profile_step:")
 
 
 def test_a_profile_step_landing_is_not_followed():
@@ -283,7 +287,9 @@ def test_a_page_type_of_about_you_also_stops_the_lane():
     )
 
     assert result["ok"] is False
-    assert result["error"].startswith("existing_login_landed_on_profile_step:")
+    error = result["error"]
+    assert isinstance(error, str)
+    assert error.startswith("existing_login_landed_on_profile_step:")
 
 
 def test_a_real_login_landing_still_completes():

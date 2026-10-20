@@ -87,7 +87,7 @@ class CodexOauthTests(unittest.TestCase):
             }
         )
 
-        self.assertIsNotNone(result)
+        assert result is not None
         self.assertEqual(result.provider, "smailr")
         self.assertEqual(result.source, "purchase")
         self.assertEqual(result.token, "mailbox-id")
@@ -106,6 +106,7 @@ class CodexOauthTests(unittest.TestCase):
         with patch("sms_tool.codex_oauth.mailbox_has_inbox_credentials", return_value=True):
             result = codex_oauth._mailbox_from_data(data)
 
+        assert result is not None
         self.assertEqual(result.provider, "cfworker")
         self.assertEqual(result.password, "")
 
