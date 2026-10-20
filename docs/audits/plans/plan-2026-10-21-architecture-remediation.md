@@ -184,6 +184,35 @@ allow 只有 2 条，各带 reason + owner。落地时先按「1 = 最内层」�
 **教训**：迁移脚本必须把「门禁同步」当作迁移的一部分，而不是事后补 —— 五个门禁里有三个是
 **按模块名或行号硬编码**的，只改代码不改它们必然红。
 
+### 迁移工具（已落地）
+
+`scripts/module_move.py` + `scripts/move_specs/*.json`：一条命令完成「移动 + 改写 + 门禁同步 +
+基线重生成 + 门禁验证」。它按顺序做：
+
+1. `git mv` 七个/任意个模块进目标包（必要时建 `__init__.py`）；
+2. 重写相对导入 —— 用**反向映射**取旧模块名（第一次尝试的 bug 就在这：文件已在新区，
+   用新名解析兄弟模块会得到 `sms_tool.proxy.proxy_entry`），并正确处理
+   `from . import a, b as c` 里「部分名字被移动」的情况；
+3. 重写绝对点号名、`from sms_tool import <mod>` 形式、裸回退导入
+   （`upi_link` 为直接脚本执行保留的 `from proxy_edge_probe import …`）、
+   文件路径字符串与文档里的 `xxx.py:NN` 锚点；
+4. 同步门禁元数据：`SUBPACKAGES`、`layer_manifest.json`（包层号 + 删根条目）、
+   `directory_map_groups.json`（折叠成 `sms_tool/<pkg>/*.py`）、
+   `delayed_import_ratchet.DOCUMENTED_CYCLES`（按 spec 提供的新键）；
+5. `ruff format` → `dependency_graph.py --write` → 三个 ratchet `--update-baseline`
+   → 回写 `test_import_layer_ratchet` 的固定总数；
+6. 跑 8 个门禁，任一失败即非零退出（`git checkout .` 可整簇回滚）。
+
+`--check` 只校验 spec 并打印计划，不动树。
+
+**本轮实测**：`proxy` 簇用该工具一次跑完，8 个门禁全绿、`module coverage 302/302`、
+`dependency graph 0 cycles`、`pinned totals 278/35/11/45/205` 自动回写。全量测试从 11 红收敛到
+**1 红**：`tests/workbench/test_cli_one_click_sms.py::test_one_click_sms_forces_one_phone_per_email`
+—— 该用例直接调用 `cli._one_click_sms_max_reuse`，而这个全局由 `_load_helper_deps()` 填充；
+迁移后它在「先跑该用例」的顺序下拿到 `None`。根因未定位（`_load_helper_deps` 的调用点在
+`_load_light_deps` 与 `_payment_command_context`，二者都不在该用例路径上），所以整簇仍回滚，
+工具与 spec 保留。**下一步只需定位这一个调用序**，其余四个簇可直接用同一命令推进。
+
 ### 本轮未开始
 
 `P2-4`…`P2-8`（`proxy_*` / `mailbox_*` / `paypal_*` / `payment_*` / `registration_*` 迁入子包）与
