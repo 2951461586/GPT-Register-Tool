@@ -45,3 +45,7 @@ pytest-cov==7.1.0
 # (never imported by source), pinned here so the gate cannot drift when a new
 # pyright release changes its diagnostic set.
 pyright==1.1.414
+# Parallel test runner. Declared in requirements-dev.txt and used by CI's
+# `-n 4 --dist loadfile` shards; pinned so the worker protocol cannot drift
+# under the ordering-sensitive serial shard.
+pytest-xdist==3.8.0
