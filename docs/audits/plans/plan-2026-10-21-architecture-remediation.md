@@ -1,6 +1,8 @@
 # 方案：架构健康度整改（图谱可信度 → 分层门禁 → 环 → 根目录）— 2026-10-21
 
-> **状态（2026-10-21）**：已拍板，按 P0 → P1 → P2 → P3 顺序落地中；每阶段的落地结果回写到本文对应小节，并同步 `docs/architecture.md` / `docs/directory-map.md`。
+> **状态（2026-10-21）**：**P0 全部落地，P1-1 落地，P1-2 延后，P2 的解环部分落地（SCC 5 → 0），P2 的根目录迁移与 P3 未开始**。落地结果回写在 §8，并已同步 `docs/architecture.md` / `docs/directory-map.md` / `docs/current/dependency-graph.md`。
+>
+> 未完成的项（`P2-4`…`P2-8` 五个模块族迁移、`P3-1` spec 图）**没有留下半成品**：工作区在每个提交点都是绿的，剩余项按原顺序可直接接续。
 >
 > **性质**：方案文档 + 落地记录。所有数字来自 2026-10-21 用 AST 重测（见 §1 的测量口径），不引用 pi-lens 的目录级数字。
 
@@ -159,6 +161,14 @@ allow 只有 2 条，各带 reason + owner。落地时先按「1 = 最内层」�
 
 保留为后续项；若要做，正确顺序是先把模块级状态收进一个 `config/_state.py` 并让测试改 patch 目标，
 再搬函数。
+
+### 本轮未开始
+
+`P2-4`…`P2-8`（`proxy_*` / `mailbox_*` / `paypal_*` / `payment_*` / `registration_*` 迁入子包）与
+`P3-1`（边界 spec 图）未开始。它们的共同前置已经就绪：层清单（P1-1）给出每个模块该去哪一层，
+生成式依赖图（P0-2）给出搬迁前后的边数对照，`root_module_ratchet --update-baseline` 是降冻结数的通道。
+每簇仍应单独一个提交，并在同一提交里更新 `import_layer_baseline.json`、`directory_map_groups.json`
+与 `docs/directory-map.md` 的 claim。
 
 ### P2-2（包门面惰性导出）
 
