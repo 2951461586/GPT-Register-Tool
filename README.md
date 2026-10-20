@@ -157,8 +157,7 @@ GPT-Register-Tool-Setup-vYYYY.MM.DD.exe
 
 ```powershell
 python -m pip install -r requirements.txt -c constraints.txt
-New-Item -ItemType Directory -Force "$env:LOCALAPPDATA\GPTRegisterTool\config" | Out-Null
-copy config.example.json "$env:LOCALAPPDATA\GPTRegisterTool\config\config.json"
+python -m sms_tool --init-config
 ```
 
 ### 方式二：便携压缩包
@@ -173,8 +172,7 @@ GPT-Register-Tool-win-x64-vYYYY.MM.DD.zip
 
 ```powershell
 python -m pip install -r requirements.txt -c constraints.txt
-New-Item -ItemType Directory -Force "$env:LOCALAPPDATA\GPTRegisterTool\config" | Out-Null
-copy config.example.json "$env:LOCALAPPDATA\GPTRegisterTool\config\config.json"
+python -m sms_tool --init-config
 .\dist\net10\SmsWorkbench.exe
 ```
 
@@ -184,8 +182,7 @@ copy config.example.json "$env:LOCALAPPDATA\GPTRegisterTool\config\config.json"
 git clone https://github.com/2951461586/GPT-Register-Tool.git
 cd GPT-Register-Tool
 python -m pip install -r requirements.txt -c constraints.txt
-New-Item -ItemType Directory -Force "$env:LOCALAPPDATA\GPTRegisterTool\config" | Out-Null
-copy config.example.json "$env:LOCALAPPDATA\GPTRegisterTool\config\config.json"
+python -m sms_tool --init-config
 powershell -ExecutionPolicy Bypass -File .\SmsWorkbench\build_dotnet.ps1
 .\dist\net10\SmsWorkbench.exe
 ```

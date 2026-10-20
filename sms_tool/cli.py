@@ -7,7 +7,7 @@ import sys
 import time
 from typing import Any
 
-from .config import CFG, initialize_runtime_config
+from .config import CFG, ConfigError, default_config_dir, initialize_config_shards, initialize_runtime_config
 from .diagnostics import install_safe_stdio, safe_print
 from .desktop_ipc import emit_result
 from .kernel.paths import output_dir, runtime_file
@@ -376,7 +376,36 @@ def build_parser():
     return parser
 
 
+def _init_config_command() -> int:
+    """Bootstrap the config shards, then exit.
+
+    Runs before ``initialize_runtime_config`` on purpose: the machine this
+    command exists for has no config at all, and ``load_runtime_config`` raises
+    on an empty config (``chatgpt must be an object``) before the CLI can even
+    parse ``--init-config``. Existing shards are never overwritten, so the
+    command is safe to re-run.
+    """
+    try:
+        results = initialize_config_shards()
+    except ConfigError as error:
+        safe_print(f"--init-config: {error}", file=sys.stderr)
+        return 2
+    config_dir = default_config_dir()
+    for filename, status in results:
+        safe_print(f"{status:8s} {config_dir / filename}")
+    if all(status == "skipped" for _, status in results):
+        safe_print("nothing to do: every config shard already exists")
+    return 0
+
+
 def main():
+    # Parsed ahead of the real parser so `--init-config` can run on a machine
+    # whose config is empty -- `initialize_runtime_config` would raise first.
+    pre_parser = argparse.ArgumentParser(add_help=False)
+    pre_parser.add_argument("--init-config", action="store_true")
+    pre_args, _ = pre_parser.parse_known_args()
+    if pre_args.init_config:
+        raise SystemExit(_init_config_command())
     initialize_runtime_config()
     for stream in (sys.stdout, sys.stderr):
         reconfigure = getattr(stream, "reconfigure", None)

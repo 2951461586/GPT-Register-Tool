@@ -28,6 +28,29 @@ same value to every Python process it starts, so both sides always agree.
 * `sessions/` and `runtime/` stay in the project root (they are gitignored
   runtime output, not configuration).
 
+## Bootstrapping a fresh machine
+
+`python -m sms_tool --init-config` writes `proxy.json`, `runtime.json` and
+`payment.json` from `config.example.json` and exits. It exists because the two
+older paths both had a sharp edge:
+
+* copying the example to `config.json` only worked by triggering the legacy
+  first-load migration, which then moved the file; and
+* doing nothing left the directory empty, and `load_runtime_config` raises on an
+  empty config (`chatgpt must be an object`) **before** the CLI parses arguments
+  — so `--doctor`, the command that is supposed to explain the problem, could
+  not run either.
+
+It is safe to re-run: an existing shard is reported `skipped` and left byte-for-
+byte alone, so a partially configured machine (an operator edited `proxy.json`
+but never had `payment.json`) is completed rather than reset. The example is
+looked up in the config directory first, then beside the package, so a portable
+install works without a checkout.
+
+`--init-config` is handled ahead of the real parser for the same reason: it must
+run on the machine whose config is the thing that is broken. `--doctor` reports a
+missing shard as `config_shards: warn` and names this command in the hint.
+
 Default load order:
 
 1. If **any** shard exists, merge existing shards in order:

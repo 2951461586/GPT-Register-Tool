@@ -109,6 +109,9 @@ SHARD_OWNERSHIP: dict[str, str] = {
 # Credential-bearing shards live outside the git checkout (see sms_tool/paths.py).
 _CONFIG_DIR = _resolve_config_dir()
 
+#: The portable template ``--init-config`` bootstraps the shards from.
+EXAMPLE_CONFIG_NAME = "config.example.json"
+
 
 def _deep_merge(target: dict, source: Mapping) -> None:
     for key, value in source.items():
@@ -505,6 +508,65 @@ def initialize_runtime_config(path: str | Path | None = None) -> RuntimeConfig:
     config = load_runtime_config(path)
     _CURRENT_CONFIG.set(config)
     return config
+
+
+def example_config_candidates(config_dir: Path | None = None) -> list[Path]:
+    """Where ``config.example.json`` is looked for, most specific first.
+
+    The config directory is outside the checkout (``kernel.paths.config_dir``),
+    so the example is not guaranteed to sit beside the shards: a repo checkout
+    has it at the root, an installed build may ship it next to the package, and
+    an operator may copy it into the config directory itself.
+    """
+    package_dir = Path(__file__).resolve().parent
+    return [
+        (Path(config_dir) if config_dir else _CONFIG_DIR) / EXAMPLE_CONFIG_NAME,
+        package_dir.parent / EXAMPLE_CONFIG_NAME,
+        package_dir / EXAMPLE_CONFIG_NAME,
+    ]
+
+
+def initialize_config_shards(
+    config_dir: str | Path | None = None, source: str | Path | None = None
+) -> list[tuple[str, str]]:
+    """Create the config shards from ``config.example.json``, never overwriting.
+
+    Returns ``[(filename, "written" | "skipped"), ...]`` in shard order. The
+    distinction matters: "all three files exist" is true either way, so a
+    caller cannot tell a first-run bootstrap from a no-op without it.
+
+    Existing shards are left untouched. A partially configured machine is the
+    normal case (an operator edited ``proxy.json`` but never had ``payment.json``),
+    and merging the example over live credentials would be the worst possible
+    outcome of a convenience command.
+    """
+    target_dir = Path(config_dir) if config_dir else _CONFIG_DIR
+    example = (
+        Path(source)
+        if source
+        else next((candidate for candidate in example_config_candidates(target_dir) if candidate.is_file()), None)
+    )
+    if example is None:
+        searched = ", ".join(str(candidate) for candidate in example_config_candidates(target_dir))
+        raise ConfigError(f"{EXAMPLE_CONFIG_NAME} not found (looked in: {searched})")
+
+    # Loading the example is allowed to raise: a malformed template is a
+    # packaging defect the operator must see, not a silently empty config.
+    # pi-lens-ignore: unchecked-throwing-call-python
+    raw = json.loads(example.read_text(encoding="utf-8-sig"))
+    if not isinstance(raw, dict):
+        raise ConfigError(f"{example} root must be a JSON object")
+    shards = _split_into_shards(raw)
+
+    results: list[tuple[str, str]] = []
+    for name, filename in SHARD_FILES.items():
+        path = target_dir / filename
+        if path.exists():
+            results.append((filename, "skipped"))
+            continue
+        _atomic_write_json(path, dict(shards[name]))
+        results.append((filename, "written"))
+    return results
 
 
 def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -> None:

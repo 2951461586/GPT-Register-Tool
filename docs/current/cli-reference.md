@@ -66,6 +66,7 @@ are omitted.
 | `--import-cpa` | — | Import an existing AT-only session JSON into CPA/SUB2API |
 | `--import-target` | choices: `cpa`, `sub2api`, `cliproxyapi` | Target for --import-cpa and 401 re-import |
 | `--inbox-limit` | value | Max messages for --view-inbox |
+| `--init-config` | — | Create the proxy/runtime/payment config shards from config.example.json, skipping any that already exist, then exit |
 | `--json` | — | Machine-readable JSON output for --doctor |
 | `--list-payment-methods` | — | List protocol payment methods and adapter availability |
 | `--list-paypal-ba-queue` | — | List durable PayPal BA authorization queue |

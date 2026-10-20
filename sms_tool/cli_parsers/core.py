@@ -18,6 +18,14 @@ def register(parser: argparse.ArgumentParser) -> None:
         "--json", dest="json_output", action="store_true", help="Machine-readable JSON output for --doctor"
     )
     parser.add_argument(
+        "--init-config",
+        action="store_true",
+        help=(
+            "Create the proxy/runtime/payment config shards from config.example.json, "
+            "skipping any that already exist, then exit"
+        ),
+    )
+    parser.add_argument(
         "--desktop-read",
         choices=["accounts", "account", "mailbox-file", "account-file", "payment-url-file", "mailbox-pool"],
         default=None,

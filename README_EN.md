@@ -145,7 +145,7 @@ Download the latest installer or portable archive from [GitHub Releases](https:/
 git clone https://github.com/2951461586/GPT-Register-Tool.git
 cd GPT-Register-Tool
 python -m pip install -r requirements.txt -c constraints.txt
-copy config.example.json config.json
+python -m sms_tool --init-config
 powershell -ExecutionPolicy Bypass -File .\SmsWorkbench\build_dotnet.ps1
 .\dist\net10\SmsWorkbench.exe
 ```

@@ -24,6 +24,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
+from .config import SHARD_FILES
 from .kernel.paths import resolve_config_file
 
 
@@ -294,9 +295,29 @@ def _probe_config(config: Mapping[str, Any], config_source: str) -> list[dict[st
             str(config_source or "unknown"),
             ""
             if not using_fallback
-            else "project-root config.json is missing; create one from config.example.json for full behavior",
+            else "project-root config.json is missing; run `python -m sms_tool --init-config` to create the shards",
         )
     )
+
+    # A directory source is the canonical sharded layout, so "does it exist" is
+    # a question about the three files, not about the directory. Before this
+    # check a fresh machine reported `config_source: ok` for an empty config
+    # directory and then failed on the first command with
+    # "chatgpt must be an object".
+    source_path = Path(config_source) if config_source else None
+    if source_path is not None and source_path.is_dir():
+        missing = [filename for filename in SHARD_FILES.values() if not (source_path / filename).is_file()]
+        if missing:
+            checks.append(
+                _check(
+                    "config_shards",
+                    "warn",
+                    "missing " + ", ".join(missing),
+                    "run `python -m sms_tool --init-config` to create them from config.example.json",
+                )
+            )
+        else:
+            checks.append(_check("config_shards", "ok", ", ".join(SHARD_FILES.values()) + " present"))
 
     _raw_proxy_cfg: object = config.get("proxy")
     proxy_cfg: Mapping = _raw_proxy_cfg if isinstance(_raw_proxy_cfg, Mapping) else {}

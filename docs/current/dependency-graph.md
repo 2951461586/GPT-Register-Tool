@@ -16,7 +16,7 @@ the *gate* (per-pair, only-down); this file is the *view*.
 | Measure | Value |
 | --- | ---: |
 | Modules | 298 |
-| Module-level import edges | 981 |
+| Module-level import edges | 982 |
 | Delayed (function-local) edges | 272 |
 | Strongly connected components (size > 1) | 5 |
 | Modules inside a cycle | 28 |
@@ -51,7 +51,7 @@ the *gate* (per-pair, only-down); this file is the *view*.
 
 | Module | Importers |
 | --- | ---: |
-| `sms_tool.config` | 63 |
+| `sms_tool.config` | 64 |
 | `sms_tool.kernel.sanitizer` | 36 |
 | `sms_tool.kernel.paths` | 31 |
 | `sms_tool` | 29 |
