@@ -181,6 +181,17 @@ RULES: tuple[Rule, ...] = (
         match_dir="browser_profiles",
     ),
     Rule(
+        name="rotated payment run trails",
+        min_age_days=30,
+        note=(
+            "payment_link_runs.<UTC stamp>.jsonl -- pay_link/persistence.py rotates the "
+            "live trail at 8 MiB because the live file is reconciliation state and sits in "
+            "NEVER_DELETE, so rotation is the only bound. The archives are rotated history "
+            "and retire on the normal 30-day floor."
+        ),
+        match_name="payment_link_runs.*.jsonl",
+    ),
+    Rule(
         name="per-batch payment artifacts",
         min_age_days=30,
         note="payment_batches/*.json|*.jsonl -- 3,879 files on 2026-09-09.",

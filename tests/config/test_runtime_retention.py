@@ -6,6 +6,7 @@ tests here are weighted toward the *veto* logic rather than the happy path.
 
 from __future__ import annotations
 
+import ast
 import os
 import shutil
 import subprocess
@@ -120,6 +121,22 @@ class RuleMatching(unittest.TestCase):
         )
         self.assertFalse(rule.matches("payment_operations/gates/h/state.json"))
 
+    def test_the_rotated_trail_matches_and_the_live_one_stays_protected(self):
+        """Rotation bounds the trail; it must not make the live file deletable.
+
+        ``payment_link_runs.jsonl`` is reconciliation state, so it stays in
+        ``NEVER_DELETE``. The archives ``pay_link/persistence.py`` writes are
+        rotated history and are the only part that ages out.
+        """
+        rule = next(r for r in RULES if r.name == "rotated payment run trails")
+        self.assertTrue(rule.matches("payment_link_runs.20261020T120000Z.jsonl"))
+        self.assertTrue(rule.matches("payment_link_runs.20261020T120000Z-1.jsonl"))
+        self.assertFalse(
+            rule.matches("payment_link_runs.jsonl"),
+            "the live trail must never be swept -- it is the current reconciliation state",
+        )
+        self.assertTrue(is_protected("payment_link_runs.jsonl"))
+
     def test_every_rule_matches_something(self):
         """A rule that can never fire is dead weight and hides intent."""
         samples = {
@@ -127,6 +144,7 @@ class RuleMatching(unittest.TestCase):
             "empty payment-operation gate locks": ("payment_operations/gates/payment-operation-abc123/slot-0.lock"),
             "browser profiles": "browser_profiles/camoufox/p/default/x.json",
             "per-batch payment artifacts": "payment_batches/gcash_1.json",
+            "rotated payment run trails": "payment_link_runs.20261020T120000Z.jsonl",
             "one-off scan snapshots": "promotion_scan.json",
             "operator logs and scratch files": "app_20260908.log",
             "mailbox imports": "mailbox_imports/report.json",
@@ -311,15 +329,39 @@ class SafetyRails(unittest.TestCase):
     """The tool must stay an operator tool and stay opt-in."""
 
     def test_no_production_module_imports_it(self):
+        """No production module may *import* the planner.
+
+        Parsed, not grepped. A docstring may legitimately name the planner --
+        ``pay_link/persistence.py`` rotates the trail this tool later sweeps, and
+        says so -- while a substring search cannot tell prose from an import.
+        What is still flagged: an ``Import`` / ``ImportFrom`` naming the module,
+        and a call whose string argument names it (``importlib.import_module(
+        "runtime_retention")``), which is how a dynamic import would sneak in.
+        """
         hits: list[str] = []
         for base in ("sms_tool", "services"):
             for path in (ROOT / base).rglob("*.py"):
                 try:
-                    text = path.read_text(encoding="utf-8", errors="replace")
-                except OSError:
+                    tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+                except (OSError, SyntaxError):
                     continue
-                if "runtime_retention" in text:
-                    hits.append(str(path.relative_to(ROOT)))
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.Import):
+                        found = any("runtime_retention" in alias.name for alias in node.names)
+                    elif isinstance(node, ast.ImportFrom):
+                        found = "runtime_retention" in (node.module or "")
+                    elif isinstance(node, ast.Call):
+                        found = any(
+                            isinstance(arg, ast.Constant)
+                            and isinstance(arg.value, str)
+                            and "runtime_retention" in arg.value
+                            for arg in node.args
+                        )
+                    else:
+                        continue
+                    if found:
+                        hits.append(str(path.relative_to(ROOT)))
+                        break
         self.assertEqual(
             [],
             hits,
