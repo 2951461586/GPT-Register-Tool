@@ -116,6 +116,11 @@ jobs:
       - run: python scripts/ipc_schema_check.py
       - run: python scripts/docs_consistency_scan.py
       - run: python scripts/module_coverage_check.py
+      # Legacy payment lanes are closed to new implementation: the file set of
+      # `paypal_link/` and `upi_link/` is frozen, so a new method has to land in
+      # `pay_link/` where the registry, the catalog and the desktop picker can
+      # see it. Contents are not frozen -- bug fixes still go in.
+      - run: python scripts/payment_legacy_manifest.py
       # Kernel boundary: a kernel module must not import application code.
       - run: python scripts/kernel_boundary_ratchet.py
       - shell: powershell

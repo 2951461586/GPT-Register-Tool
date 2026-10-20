@@ -32,6 +32,7 @@ export remain separate workflows.
 | `store/` | Persistence and domain facts | Provider side effects |
 | `accounts/account_recovery.py`, `codex_oauth.py` | Existing-account recovery and OAuth | Automatic new signup |
 | `payment_*`, `pay_link/`, `paypal/` | Payment planning and explicit execution | Mailbox purchasing or account signup |
+| `pay_link/` vs `paypal_link/` + `upi_link/` | `pay_link/` is the **registry** and the shared extraction state machine: a new payment method goes there, and `scripts/payment_legacy_manifest.py` fails the build if a file is added under either legacy lane. `paypal_link/` and `upi_link/` are frozen legacy lanes that still take bug fixes. A method that lives in a legacy lane bypasses the registry, `payment_catalog` and the desktop method picker -- the exact drift the manifest gate exists to stop. | A new method implemented in a legacy lane |
 
 ## Dependency Direction
 
