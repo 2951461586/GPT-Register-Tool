@@ -50,6 +50,27 @@ launch, WPF reads that preference before creating its main window. A missing,
 unreadable or invalid file falls back to the system theme. This desktop-only
 preference does not enter the shared Python configuration shards.
 
+## Browser pool memory valve stays off by default (decision 2026-10-21)
+
+`registration.browser_process_pool.max_total_rss_mb` is a **RSS watchdog**, not a
+soft limit: when the pool's process tree exceeds it, the watchdog recycles a
+browser that may be mid-registration. So the default stays `0` (off) in both the
+code (`PoolConfig.max_total_rss_mb`) and `config.example.json` -- the same
+reasoning as ADR-0013 for the other opt-in valves: turning it on for existing
+installations without a canary can abort a live registration.
+
+What was missing was the number to configure, not the switch. Measured
+2026-10-20 (3 repetitions): one headless Chromium process tree settles at
+**~478 MB**, four at **~1.9 GB**; Camoufox is Gecko and heavier. The
+recommendation is therefore `max_concurrent * 512 MB` -- 2048 MB for the default
+4-way pool -- and it is not written into the example config. It is surfaced
+three ways instead:
+
+* `PoolConfig.recommended_max_total_rss_mb()` (the arithmetic, in one place);
+* a one-per-pool warning when the valve is off with more than one browser;
+* `pool.stats()["recommended_max_total_rss_mb"]`, so an operator can see the
+  number for the pool they actually run.
+
 ## Manifest versus validation
 
 `config_schema.json` is the cross-language **shard ownership manifest**, not
