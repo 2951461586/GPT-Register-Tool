@@ -11,7 +11,10 @@ next to it never gets turned on.
 Measured 2026-10-21 on this machine (3 reps): one headless Chromium process tree
 settles at ~478 MB, four at ~1.9 GB. Camoufox is Gecko and heavier, so the
 recommendation is ``max_concurrent * 512`` MB (2048 for the default 4-way pool),
-surfaced in ``config.example.json``, the pool warning, and ``stats()``.
+surfaced by ``recommended_max_total_rss_mb()``, the pool warning and ``stats()``
+-- deliberately **not** pre-set in ``config.example.json``, because an example
+config is copied verbatim and turning the valve on for every installation
+without a canary is the behaviour ADR-0013 rules out.
 
 These tests pin: the default stays off, the recommendation is derived (not a
 stale constant), the warning fires once per pool only when the valve is off with
@@ -42,15 +45,24 @@ def test_the_recommendation_is_derived_from_concurrency():
     assert PoolConfig.recommended_max_total_rss_mb(PoolConfig(max_concurrent=2)) == 1024
 
 
-def test_the_example_config_carries_the_recommended_cap():
+def test_the_example_config_leaves_the_valve_off_but_keeps_the_number_visible():
+    """The template must not switch the watchdog on by being copied.
+
+    The recommendation is still discoverable: it is derived from the pool size
+    the example declares, so the operator gets the number for the pool they run
+    without inheriting a behaviour change.
+    """
     import json
     from pathlib import Path
 
     example = Path(__file__).resolve().parents[2] / "config.example.json"
     data = json.loads(example.read_text(encoding="utf-8"))
     pool = data["registration"]["browser_process_pool"]
-    expected = PoolConfig.from_config(config(concurrent=pool["max_concurrent"]))
-    assert pool["max_total_rss_mb"] == expected.recommended_max_total_rss_mb()
+    parsed = PoolConfig.from_config(config(concurrent=pool["max_concurrent"]))
+
+    assert pool["max_total_rss_mb"] == 0, "the example must not enable the watchdog"
+    assert parsed.max_total_rss_mb == 0
+    assert parsed.recommended_max_total_rss_mb() == 2048
 
 
 def test_a_disabled_watchdog_warns_once_with_the_number(caplog):
