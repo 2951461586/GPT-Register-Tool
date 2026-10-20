@@ -111,9 +111,7 @@ class LoadCachedSentinelTests(unittest.TestCase):
 
     def test_a_bom_is_tolerated(self):
         payload = {"sentinel_token": "tok"}
-        self.assertEqual(
-            self._load(json.dumps(payload), encoding="utf-8-sig"), payload
-        )
+        self.assertEqual(self._load(json.dumps(payload), encoding="utf-8-sig"), payload)
 
     def test_a_directory_in_place_of_the_file_is_rejected(self):
         """路径被同名的目录占了（手工误建 / 同步软件冲突）时不能炸。"""
@@ -203,14 +201,10 @@ class StripCookieNamesTests(unittest.TestCase):
         """cookie 名大小写不敏感，黑名单必须两边都归一。"""
         for header in ("OAI-DID=x; a=1", "oai-did=x; a=1", "Oai-Did=x; a=1"):
             with self.subTest(header=header):
-                self.assertEqual(
-                    codex_sentinel.strip_cookie_names(header, {"oai-did"}), "a=1"
-                )
+                self.assertEqual(codex_sentinel.strip_cookie_names(header, {"oai-did"}), "a=1")
 
     def test_blocked_names_may_be_spelled_with_mixed_case(self):
-        self.assertEqual(
-            codex_sentinel.strip_cookie_names("a=1; oai-did=x", {"OAI-DID"}), "a=1"
-        )
+        self.assertEqual(codex_sentinel.strip_cookie_names("a=1; oai-did=x", {"OAI-DID"}), "a=1")
 
     def test_multiple_names_can_be_blocked_at_once(self):
         self.assertEqual(
@@ -219,33 +213,26 @@ class StripCookieNamesTests(unittest.TestCase):
         )
 
     def test_the_header_is_rebuilt_with_a_canonical_separator(self):
-        self.assertEqual(
-            codex_sentinel.strip_cookie_names("a=1;b=2", set()), "a=1; b=2"
-        )
+        self.assertEqual(codex_sentinel.strip_cookie_names("a=1;b=2", set()), "a=1; b=2")
 
     def test_items_without_an_equals_sign_are_dropped(self):
         self.assertEqual(codex_sentinel.strip_cookie_names("flag; a=1", set()), "a=1")
 
     def test_names_and_values_are_normalised(self):
         """输出是重新拼的字符串，不是原样切片。"""
-        self.assertEqual(codex_sentinel.strip_cookie_names("  a  =  1  ;b=2", set()),
-                         "a=1; b=2")
+        self.assertEqual(codex_sentinel.strip_cookie_names("  a  =  1  ;b=2", set()), "a=1; b=2")
 
     def test_a_blank_blocklist_entry_cannot_match_an_empty_cookie_name(self):
         """⚠️ 生产会先把黑名单里的空名过滤掉（源码 :57 的 ``if str(name or "").strip()``）。
         少了这层过滤，``{"", None}`` 会变成 ``blocked == {""}``，于是 ``"=1"`` 这种
         畸形条目被当成"命中黑名单"删掉——调用方传进来的黑名单里混个空值，
         就会静默改变哪些 cookie 能过。"""
-        self.assertEqual(
-            codex_sentinel.strip_cookie_names("=1; a=2", {"", None}), "=1; a=2"
-        )
+        self.assertEqual(codex_sentinel.strip_cookie_names("=1; a=2", {"", None}), "=1; a=2")
 
     def test_blank_blocked_names_are_ignored(self):
         """``blocked`` 里会混入 ``None`` / ``""``；若不先过滤，空名字会把
         ``"=1"`` 这类条目整段删掉（虽然它们本来也导不进去）。"""
-        self.assertEqual(
-            codex_sentinel.strip_cookie_names("a=1; b=2", {"", None, "  "}), "a=1; b=2"
-        )
+        self.assertEqual(codex_sentinel.strip_cookie_names("a=1; b=2", {"", None, "  "}), "a=1; b=2")
 
     def test_empty_and_none_inputs_yield_an_empty_string(self):
         for header in (None, "", "   "):
@@ -253,9 +240,7 @@ class StripCookieNamesTests(unittest.TestCase):
                 self.assertEqual(codex_sentinel.strip_cookie_names(header, {"a"}), "")
 
     def test_none_names_blocks_nothing(self):
-        self.assertEqual(
-            codex_sentinel.strip_cookie_names("a=1; b=2", None), "a=1; b=2"
-        )
+        self.assertEqual(codex_sentinel.strip_cookie_names("a=1; b=2", None), "a=1; b=2")
 
 
 class ImportCachedAuthCookiesTests(unittest.TestCase):
@@ -308,9 +293,7 @@ class WithSentinelTests(unittest.TestCase):
     TOKEN = {"sentinel_token": "tok", "sentinel_so_token": "so"}
 
     def _with(self, headers=None, sentinel=None):
-        with mock.patch.object(
-            codex_sentinel, "load_cached_sentinel", lambda: self.TOKEN
-        ):
+        with mock.patch.object(codex_sentinel, "load_cached_sentinel", lambda: self.TOKEN):
             return codex_sentinel.with_sentinel(headers, sentinel)
 
     def test_the_caller_dict_is_never_mutated(self):
@@ -353,9 +336,7 @@ class AttachSentinelTests(unittest.TestCase):
 
     def test_values_are_stripped(self):
         headers = {}
-        codex_sentinel.attach_sentinel(
-            headers, {"sentinel_token": "  tok  ", "sentinel_so_token": " so\n"}
-        )
+        codex_sentinel.attach_sentinel(headers, {"sentinel_token": "  tok  ", "sentinel_so_token": " so\n"})
         self.assertEqual(headers["openai-sentinel-token"], "tok")
         self.assertEqual(headers["openai-sentinel-so-token"], "so")
 
@@ -363,9 +344,7 @@ class AttachSentinelTests(unittest.TestCase):
         for value in ("", "   ", None):
             with self.subTest(value=value):
                 headers = {}
-                codex_sentinel.attach_sentinel(
-                    headers, {"sentinel_token": value, "sentinel_so_token": value}
-                )
+                codex_sentinel.attach_sentinel(headers, {"sentinel_token": value, "sentinel_so_token": value})
                 self.assertEqual(headers, {})
 
     def test_missing_keys_add_no_header(self):
@@ -380,13 +359,13 @@ class AttachSentinelTests(unittest.TestCase):
             "openai-sentinel-token": "caller-token",
             "openai-sentinel-so-token": "caller-so",
         }
-        codex_sentinel.attach_sentinel(
-            headers, {"sentinel_token": "cache-token", "sentinel_so_token": "cache-so"}
+        codex_sentinel.attach_sentinel(headers, {"sentinel_token": "cache-token", "sentinel_so_token": "cache-so"})
+        self.assertEqual(
+            headers["openai-sentinel-token"], "cache-token", "the plain token overwrites whatever the caller set"
         )
-        self.assertEqual(headers["openai-sentinel-token"], "cache-token",
-                         "the plain token overwrites whatever the caller set")
-        self.assertEqual(headers["openai-sentinel-so-token"], "caller-so",
-                         "the so-token must NOT overwrite the caller's value")
+        self.assertEqual(
+            headers["openai-sentinel-so-token"], "caller-so", "the so-token must NOT overwrite the caller's value"
+        )
 
     def test_a_non_string_token_is_stringified(self):
         headers = {}

@@ -74,7 +74,7 @@ def to_openai_pay_url(stripe_hosted_url: str) -> str:
     if not url:
         return ""
     if url.startswith(endpoints.STRIPE_CHECKOUT_BASE):
-        return endpoints.OPENAI_PAY_BASE + url[len(endpoints.STRIPE_CHECKOUT_BASE):]
+        return endpoints.OPENAI_PAY_BASE + url[len(endpoints.STRIPE_CHECKOUT_BASE) :]
     parsed = urlsplit(url)
     if parsed.netloc.lower() == "checkout.stripe.com":
         return urlunsplit((parsed.scheme or "https", "pay.openai.com", parsed.path, parsed.query, parsed.fragment))
@@ -155,8 +155,12 @@ def resolve_confirm_payload(
     if not redirect_url and submission.get("state") == "requires_approval":
         log("需要 ChatGPT approve...")
         approve_proxies = approve_proxy_candidates(checkout_proxy, provider_proxy, approve_pool)
-        log(f"需要 approve：{provider_label} 0 元场景，优先使用历史成功/当前 Provider 代理，失败后切换下一个 Provider 代理。")
-        approve_proxy = approve_with_retry(access_token, device_id, checkout, approve_proxies, session_token, "provider")
+        log(
+            f"需要 approve：{provider_label} 0 元场景，优先使用历史成功/当前 Provider 代理，失败后切换下一个 Provider 代理。"
+        )
+        approve_proxy = approve_with_retry(
+            access_token, device_id, checkout, approve_proxies, session_token, "provider"
+        )
         log("跟随跳转提取最终链...")
         redirect_url, poll_qr = poll_payment_page(stripe, checkout, stripe_pk, ctx, current_pm_id=pm_id)
         qr_urls.extend(poll_qr)

@@ -95,7 +95,9 @@ class GmailMailboxTests(unittest.TestCase):
         self.assertEqual(mailbox.refresh_token, "refresh-token")
 
     def test_fetch_gmail_imap_messages_with_app_password(self):
-        mailbox = MailboxAccount(email="target@gmail.com", provider="gmail", password="abcd efgh ijkl mnop", auth_mode="app_password")
+        mailbox = MailboxAccount(
+            email="target@gmail.com", provider="gmail", password="abcd efgh ijkl mnop", auth_mode="app_password"
+        )
 
         with patch("sms_tool.mailbox_gmail.imaplib.IMAP4_SSL", _FakeImap):
             messages = mailbox_gmail.fetch_gmail_imap_messages(mailbox, limit=5)
@@ -107,7 +109,9 @@ class GmailMailboxTests(unittest.TestCase):
         self.assertIn("654321", messages[0]["body"]["content"])
 
     def test_fetch_gmail_imap_messages_uses_proxy_client(self):
-        mailbox = MailboxAccount(email="target@gmail.com", provider="gmail", password="abcd efgh ijkl mnop", auth_mode="app_password")
+        mailbox = MailboxAccount(
+            email="target@gmail.com", provider="gmail", password="abcd efgh ijkl mnop", auth_mode="app_password"
+        )
 
         with patch("sms_tool.mailbox_gmail._imap_ssl_client", return_value=_FakeImap()) as client:
             messages = mailbox_gmail.fetch_gmail_imap_messages(
@@ -133,11 +137,15 @@ class GmailMailboxTests(unittest.TestCase):
         self.assertEqual(request[-2:], (993).to_bytes(2, "big"))
 
     def test_fetch_mailbox_messages_passes_resolved_proxy_to_gmail_imap(self):
-        mailbox = MailboxAccount(email="target@gmail.com", provider="gmail", password="abcd efgh ijkl mnop", auth_mode="app_password")
+        mailbox = MailboxAccount(
+            email="target@gmail.com", provider="gmail", password="abcd efgh ijkl mnop", auth_mode="app_password"
+        )
 
-        with patch.object(mailbox_module, "CFG", {"mailbox_proxy": "socks5h://127.0.0.1:7897"}), \
-             patch.object(mailbox_module, "_email_cfg", return_value={"gmail": {"imap_enabled": True}}), \
-             patch.object(mailbox_module.mailbox_gmail, "fetch_gmail_imap_messages", return_value=[]) as fetch:
+        with (
+            patch.object(mailbox_module, "CFG", {"mailbox_proxy": "socks5h://127.0.0.1:7897"}),
+            patch.object(mailbox_module, "_email_cfg", return_value={"gmail": {"imap_enabled": True}}),
+            patch.object(mailbox_module.mailbox_gmail, "fetch_gmail_imap_messages", return_value=[]) as fetch,
+        ):
             messages = mailbox_module._fetch_mailbox_messages(
                 mailbox,
                 limit=5,
@@ -148,14 +156,18 @@ class GmailMailboxTests(unittest.TestCase):
         self.assertEqual(fetch.call_args.kwargs["proxy"], "socks5h://127.0.0.1:7897")
 
     def test_gmail_config_requires_exact_login_email(self):
-        with patch.object(mailbox_module, "_email_cfg", return_value={
-            "gmail": {
-                "enabled": True,
-                "email": "samplegmail01@gmail.com",
-                "app_password": "abcd efgh ijkl mnop",
-                "auth_mode": "app_password",
-            }
-        }):
+        with patch.object(
+            mailbox_module,
+            "_email_cfg",
+            return_value={
+                "gmail": {
+                    "enabled": True,
+                    "email": "samplegmail01@gmail.com",
+                    "app_password": "abcd efgh ijkl mnop",
+                    "auth_mode": "app_password",
+                }
+            },
+        ):
             mailbox = mailbox_module._gmail_mailbox_from_config(
                 type("Args", (), {"email": "samplegmai.l01+pj8@gmail.com"})()
             )
@@ -169,15 +181,19 @@ class GmailMailboxTests(unittest.TestCase):
                 "gmail://samplemailer236@gmail.com---qrst uvwx yzab vfgv\n",
                 encoding="utf-8",
             )
-            with patch.object(mailbox_module, "_email_cfg", return_value={
-                "token_file": str(token_file),
-                "gmail": {
-                    "enabled": True,
-                    "email": "samplegmail01@gmail.com",
-                    "app_password": "abcd efgh ijkl tnht",
-                    "auth_mode": "app_password",
+            with patch.object(
+                mailbox_module,
+                "_email_cfg",
+                return_value={
+                    "token_file": str(token_file),
+                    "gmail": {
+                        "enabled": True,
+                        "email": "samplegmail01@gmail.com",
+                        "app_password": "abcd efgh ijkl tnht",
+                        "auth_mode": "app_password",
+                    },
                 },
-            }):
+            ):
                 mailbox = mailbox_module._gmail_mailbox_from_config(
                     type("Args", (), {"email": "sa.m.p.le.ma.i.ler236+43wqm@gmail.com"})()
                 )

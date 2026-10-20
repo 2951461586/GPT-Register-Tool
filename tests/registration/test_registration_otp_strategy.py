@@ -37,8 +37,10 @@ class RegistrationOtpStrategyTests(unittest.TestCase):
             calls.append(args[2])
             return FakeResponse(400, {"error": {"code": "bad_request"}})
 
-        with patch.object(otp_strategy, "CFG", {"email_registration": {}}), \
-             patch.object(otp_strategy, "request_with_retry", side_effect=fake_request):
+        with (
+            patch.object(otp_strategy, "CFG", {"email_registration": {}}),
+            patch.object(otp_strategy, "request_with_retry", side_effect=fake_request),
+        ):
             response = registration._send_registration_email_otp(
                 session=object(),
                 auth_base="https://auth.openai.com",
@@ -87,8 +89,10 @@ class RegistrationOtpStrategyTests(unittest.TestCase):
             seen.update(kwargs)
             return FakeResponse(200)
 
-        with patch.object(otp_strategy, "request_with_retry", side_effect=fake_request), \
-             patch.object(otp_strategy, "auth_impersonate", return_value="chrome146"):
+        with (
+            patch.object(otp_strategy, "request_with_retry", side_effect=fake_request),
+            patch.object(otp_strategy, "auth_impersonate", return_value="chrome146"),
+        ):
             otp_strategy.send_registration_email_otp(
                 session=object(),
                 auth_base="https://auth.openai.com",
@@ -122,9 +126,7 @@ class OtpPollObservabilityTests(unittest.TestCase):
 
     def _poll_events(self):
         return [
-            record
-            for record in self.records
-            if str(getattr(record, "event", "") or "").startswith("email_otp_poll_")
+            record for record in self.records if str(getattr(record, "event", "") or "").startswith("email_otp_poll_")
         ]
 
     def test_single_shot_provider_logs_budget_and_outcome(self):
@@ -178,6 +180,7 @@ class OtpPollObservabilityTests(unittest.TestCase):
 
     def test_icloud_url_gets_a_second_send_window_by_default(self):
         """``icloud_url`` 是转发 URL 渠道，晚到是常态 ⇒ 必须进默认名单。"""
+
         class Mailbox:
             provider = "icloud_url"
 
@@ -206,6 +209,7 @@ class OtpPollObservabilityTests(unittest.TestCase):
 
         「调用方没接回调」= 本模块的 bug；「这个渠道没有重发能力」= 能力缺口。
         """
+
         class Mailbox:
             provider = "gmail"
 
@@ -213,14 +217,21 @@ class OtpPollObservabilityTests(unittest.TestCase):
             return None
 
         otp_strategy._poll_registration_email_otp(
-            Mailbox(), subject_keyword="k", timeout=300, issued_after_unix=0,
-            resend_callback=lambda: FakeResponse(200), poll_otp_fn=poll,
+            Mailbox(),
+            subject_keyword="k",
+            timeout=300,
+            issued_after_unix=0,
+            resend_callback=lambda: FakeResponse(200),
+            poll_otp_fn=poll,
         )
         self.assertEqual(self._poll_events()[0].otp_resend_reason, "provider_not_eligible")
 
         self.records.clear()
         otp_strategy._poll_registration_email_otp(
-            Mailbox(), subject_keyword="k", timeout=300, issued_after_unix=0,
+            Mailbox(),
+            subject_keyword="k",
+            timeout=300,
+            issued_after_unix=0,
             poll_otp_fn=poll,
         )
         self.assertEqual(self._poll_events()[0].otp_resend_reason, "no_callback")
@@ -231,6 +242,7 @@ class OtpPollObservabilityTests(unittest.TestCase):
         注册泳道注入的是 ``MailboxService.poll_otp``；绕过它等于同一件事两条
         路径（本项目铁律 5）。把默认轮询器换成会抛异常的替身来钉住这一点。
         """
+
         class Mailbox:
             provider = "remail"
 
@@ -242,7 +254,10 @@ class OtpPollObservabilityTests(unittest.TestCase):
 
         with patch.object(otp_strategy, "_poll_email_otp", side_effect=AssertionError("bypassed")):
             code = otp_strategy._poll_registration_email_otp(
-                Mailbox(), subject_keyword="k", timeout=300, issued_after_unix=0,
+                Mailbox(),
+                subject_keyword="k",
+                timeout=300,
+                issued_after_unix=0,
                 resend_callback=lambda: FakeResponse(200),
                 resend_after_seconds=0,
                 poll_otp_fn=fake_poll,
@@ -278,9 +293,7 @@ class OtpResendAllowlistTests(unittest.TestCase):
             calls.append(kwargs["timeout"])
             return "654321" if len(calls) > 1 else None
 
-        with patch.object(
-            otp_strategy, "CFG", {"email_registration": {}} if cfg is None else cfg
-        ):
+        with patch.object(otp_strategy, "CFG", {"email_registration": {}} if cfg is None else cfg):
             code = otp_strategy._poll_registration_email_otp(
                 self._Mailbox(provider),
                 subject_keyword="verification code",

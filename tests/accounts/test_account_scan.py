@@ -13,12 +13,19 @@ class AccountScanTests(unittest.TestCase):
             session = Path(tmp) / "session.json"
             session.write_text('{"email":"a@example.com","access_token":"old"}', encoding="utf-8")
             result = {"email": "a@example.com", "ok": True, "scan_status": "alive"}
-            with patch("sms_tool.accounts.account_scan.atomic_write_text", side_effect=OSError("denied")), \
-                 patch("sms_tool.accounts.account_scan.upsert_account", return_value=True) as upsert:
+            with (
+                patch("sms_tool.accounts.account_scan.atomic_write_text", side_effect=OSError("denied")),
+                patch("sms_tool.accounts.account_scan.upsert_account", return_value=True) as upsert,
+            ):
                 outcome = account_scan._persist_scan({"email": "a@example.com"}, str(session), result)
             self.assertEqual(
                 outcome,
-                {"session_saved": False, "account_saved": True, "persisted": False, "error_code": "session_write_failed"},
+                {
+                    "session_saved": False,
+                    "account_saved": True,
+                    "persisted": False,
+                    "error_code": "session_write_failed",
+                },
             )
             self.assertEqual(result["persistence"], outcome)
             self.assertTrue(result["ok"])
@@ -36,12 +43,21 @@ class AccountScanTests(unittest.TestCase):
 
     def test_scan_summary_counts_persistence_failure_separately(self):
         remote = {
-            "index": 0, "email": "a@example.com", "ok": True, "scan_status": "alive",
-            "persistence": {"session_saved": False, "account_saved": True, "persisted": False,
-                            "error_code": "session_write_failed"},
+            "index": 0,
+            "email": "a@example.com",
+            "ok": True,
+            "scan_status": "alive",
+            "persistence": {
+                "session_saved": False,
+                "account_saved": True,
+                "persisted": False,
+                "error_code": "session_write_failed",
+            },
         }
-        with patch("sms_tool.accounts.account_scan._scan_one_with_lane", return_value=remote), \
-             patch("sms_tool.accounts.account_scan._refresh_quota_after_scan", return_value=None):
+        with (
+            patch("sms_tool.accounts.account_scan._scan_one_with_lane", return_value=remote),
+            patch("sms_tool.accounts.account_scan._refresh_quota_after_scan", return_value=None),
+        ):
             summary = account_scan.scan_accounts(["a@example.com"], workers=1)
         self.assertEqual(summary["alive"], 1)
         self.assertEqual(summary["failed"], 0)
@@ -50,9 +66,18 @@ class AccountScanTests(unittest.TestCase):
         self.assertEqual(summary["results"][0]["persistence"]["error_code"], "session_write_failed")
 
     def test_scan_accounts_returns_summary_with_parallel_result_lists(self):
-        with patch("sms_tool.accounts.account_scan._scan_one_with_lane", return_value={
-            "index": 0, "email": "a@example.com", "ok": True, "scan_status": "alive",
-        }), patch("sms_tool.accounts.account_scan._refresh_quota_after_scan", return_value=None):
+        with (
+            patch(
+                "sms_tool.accounts.account_scan._scan_one_with_lane",
+                return_value={
+                    "index": 0,
+                    "email": "a@example.com",
+                    "ok": True,
+                    "scan_status": "alive",
+                },
+            ),
+            patch("sms_tool.accounts.account_scan._refresh_quota_after_scan", return_value=None),
+        ):
             summary = account_scan.scan_accounts(["a@example.com"], workers=1)
         self.assertIsInstance(summary, dict)
         self.assertEqual(summary["total"], 1)
@@ -135,11 +160,19 @@ class AccountScanTests(unittest.TestCase):
         self.assertIn("curl: (56)", result["error"])
 
     def test_scan_one_disables_workspace_by_default(self):
-        with patch("sms_tool.accounts.account_scan._load_seed_session", return_value=({"email": "a@example.com"}, "")), \
-             patch("sms_tool.accounts.account_scan._workspace_probe", return_value={"ok": True, "status": "workspace_check_disabled"}) as workspace_probe, \
-             patch("sms_tool.accounts.account_scan._openai_refresh_token", return_value=""), \
-             patch("sms_tool.accounts.account_scan.collect_codex_oauth_tokens", return_value={"ok": True, "tokens": {"access_token": "at_123"}}), \
-             patch("sms_tool.accounts.account_scan._persist_scan"):
+        with (
+            patch("sms_tool.accounts.account_scan._load_seed_session", return_value=({"email": "a@example.com"}, "")),
+            patch(
+                "sms_tool.accounts.account_scan._workspace_probe",
+                return_value={"ok": True, "status": "workspace_check_disabled"},
+            ) as workspace_probe,
+            patch("sms_tool.accounts.account_scan._openai_refresh_token", return_value=""),
+            patch(
+                "sms_tool.accounts.account_scan.collect_codex_oauth_tokens",
+                return_value={"ok": True, "tokens": {"access_token": "at_123"}},
+            ),
+            patch("sms_tool.accounts.account_scan._persist_scan"),
+        ):
             result = account_scan._scan_one(0, 1, "a@example.com", deep_probe=True)
 
         self.assertTrue(result["ok"])
@@ -170,11 +203,19 @@ class AccountScanTests(unittest.TestCase):
         self.assertEqual(saved["account_type"], "free")
 
     def test_scan_one_keeps_alive_when_workspace_check_is_inconclusive(self):
-        with patch("sms_tool.accounts.account_scan._load_seed_session", return_value=({"email": "a@example.com"}, "")), \
-             patch("sms_tool.accounts.account_scan._workspace_probe", return_value={"ok": False, "status": "workspace_check_inconclusive", "error": "curl: (56)"}), \
-             patch("sms_tool.accounts.account_scan._openai_refresh_token", return_value=""), \
-             patch("sms_tool.accounts.account_scan.collect_codex_oauth_tokens", return_value={"ok": True, "tokens": {"access_token": "at_123"}}), \
-             patch("sms_tool.accounts.account_scan._persist_scan"):
+        with (
+            patch("sms_tool.accounts.account_scan._load_seed_session", return_value=({"email": "a@example.com"}, "")),
+            patch(
+                "sms_tool.accounts.account_scan._workspace_probe",
+                return_value={"ok": False, "status": "workspace_check_inconclusive", "error": "curl: (56)"},
+            ),
+            patch("sms_tool.accounts.account_scan._openai_refresh_token", return_value=""),
+            patch(
+                "sms_tool.accounts.account_scan.collect_codex_oauth_tokens",
+                return_value={"ok": True, "tokens": {"access_token": "at_123"}},
+            ),
+            patch("sms_tool.accounts.account_scan._persist_scan"),
+        ):
             result = account_scan._scan_one(0, 1, "a@example.com", deep_probe=True)
 
         self.assertTrue(result["ok"])
@@ -182,22 +223,40 @@ class AccountScanTests(unittest.TestCase):
         self.assertEqual(result["workspace"]["status"], "workspace_check_inconclusive")
 
     def test_scan_one_relogin_recovers_token_invalid_before_scan_failure(self):
-        with patch(
-            "sms_tool.accounts.account_scan._load_seed_session",
-            side_effect=[
-                ({"email": "a@example.com", "access_token": "old_at"}, "session.json"),
-                ({"email": "a@example.com", "access_token": "new_at", "oauth_refresh_token": "new_rt"}, "session.json"),
-            ],
-        ), \
-             patch("sms_tool.accounts.account_scan.probe_account_liveness", side_effect=[
-                 {"ok": False, "status": "token_invalid", "quota_status": "401失效"},
-                 {"ok": True, "status": "active", "quota_status": "3/5"},
-             ]), \
-             patch("sms_tool.accounts.account_scan.relogin_codex_account", return_value={"ok": True, "mode": "codex_oauth_pkce", "probe": {"ok": True, "status": "active", "status_code": 200, "quota_status": "3/5"}}) as relogin, \
-             patch("sms_tool.accounts.account_scan._workspace_probe", return_value={"ok": True, "status": "workspace_check_disabled"}), \
-             patch("sms_tool.accounts.account_scan._openai_refresh_token", return_value=""), \
-             patch("sms_tool.accounts.account_scan.collect_codex_oauth_tokens") as collect, \
-             patch("sms_tool.accounts.account_scan._persist_scan"):
+        with (
+            patch(
+                "sms_tool.accounts.account_scan._load_seed_session",
+                side_effect=[
+                    ({"email": "a@example.com", "access_token": "old_at"}, "session.json"),
+                    (
+                        {"email": "a@example.com", "access_token": "new_at", "oauth_refresh_token": "new_rt"},
+                        "session.json",
+                    ),
+                ],
+            ),
+            patch(
+                "sms_tool.accounts.account_scan.probe_account_liveness",
+                side_effect=[
+                    {"ok": False, "status": "token_invalid", "quota_status": "401失效"},
+                    {"ok": True, "status": "active", "quota_status": "3/5"},
+                ],
+            ),
+            patch(
+                "sms_tool.accounts.account_scan.relogin_codex_account",
+                return_value={
+                    "ok": True,
+                    "mode": "codex_oauth_pkce",
+                    "probe": {"ok": True, "status": "active", "status_code": 200, "quota_status": "3/5"},
+                },
+            ) as relogin,
+            patch(
+                "sms_tool.accounts.account_scan._workspace_probe",
+                return_value={"ok": True, "status": "workspace_check_disabled"},
+            ),
+            patch("sms_tool.accounts.account_scan._openai_refresh_token", return_value=""),
+            patch("sms_tool.accounts.account_scan.collect_codex_oauth_tokens") as collect,
+            patch("sms_tool.accounts.account_scan._persist_scan"),
+        ):
             result = account_scan._scan_one(0, 1, "a@example.com", quota_relogin_on_401=True)
 
         self.assertTrue(result["ok"])
@@ -209,15 +268,29 @@ class AccountScanTests(unittest.TestCase):
         collect.assert_not_called()
 
     def test_scan_one_keeps_alive_when_existing_at_is_valid_but_auth_probe_transport_fails(self):
-        with patch("sms_tool.accounts.account_scan._load_seed_session", return_value=({"email": "a@example.com", "access_token": "at_123"}, "")), \
-             patch("sms_tool.accounts.account_scan.probe_account_liveness", return_value={"ok": True, "status": "active", "quota_status": "3/5"}), \
-             patch("sms_tool.accounts.account_scan._workspace_probe", return_value={"ok": False, "status": "workspace_check_inconclusive", "error": "curl: (56)"}), \
-             patch("sms_tool.accounts.account_scan._openai_refresh_token", return_value=""), \
-             patch(
-                 "sms_tool.accounts.account_scan.collect_codex_oauth_tokens",
-                 return_value={"ok": False, "error": "Failed to perform, curl: (56) CONNECT tunnel failed, response 403"},
-             ), \
-             patch("sms_tool.accounts.account_scan._persist_scan"):
+        with (
+            patch(
+                "sms_tool.accounts.account_scan._load_seed_session",
+                return_value=({"email": "a@example.com", "access_token": "at_123"}, ""),
+            ),
+            patch(
+                "sms_tool.accounts.account_scan.probe_account_liveness",
+                return_value={"ok": True, "status": "active", "quota_status": "3/5"},
+            ),
+            patch(
+                "sms_tool.accounts.account_scan._workspace_probe",
+                return_value={"ok": False, "status": "workspace_check_inconclusive", "error": "curl: (56)"},
+            ),
+            patch("sms_tool.accounts.account_scan._openai_refresh_token", return_value=""),
+            patch(
+                "sms_tool.accounts.account_scan.collect_codex_oauth_tokens",
+                return_value={
+                    "ok": False,
+                    "error": "Failed to perform, curl: (56) CONNECT tunnel failed, response 403",
+                },
+            ),
+            patch("sms_tool.accounts.account_scan._persist_scan"),
+        ):
             result = account_scan._scan_one(0, 1, "a@example.com", deep_probe=True)
 
         self.assertTrue(result["ok"])
@@ -225,12 +298,23 @@ class AccountScanTests(unittest.TestCase):
         self.assertEqual(result["token_probe"]["status"], "active")
 
     def test_scan_one_probe_only_does_not_start_oauth_or_otp(self):
-        with patch("sms_tool.accounts.account_scan._load_seed_session", return_value=({"email": "a@example.com", "access_token": "at_123"}, "")), \
-             patch("sms_tool.accounts.account_scan.probe_account_liveness", return_value={"ok": True, "status": "active", "quota_status": "3/5"}), \
-             patch("sms_tool.accounts.account_scan._workspace_probe", return_value={"ok": True, "status": "workspace_check_disabled"}), \
-             patch("sms_tool.accounts.account_scan.collect_codex_oauth_tokens") as collect, \
-             patch("sms_tool.payment_capability.payment_method_capability_probe") as checkout, \
-             patch("sms_tool.accounts.account_scan._persist_scan"):
+        with (
+            patch(
+                "sms_tool.accounts.account_scan._load_seed_session",
+                return_value=({"email": "a@example.com", "access_token": "at_123"}, ""),
+            ),
+            patch(
+                "sms_tool.accounts.account_scan.probe_account_liveness",
+                return_value={"ok": True, "status": "active", "quota_status": "3/5"},
+            ),
+            patch(
+                "sms_tool.accounts.account_scan._workspace_probe",
+                return_value={"ok": True, "status": "workspace_check_disabled"},
+            ),
+            patch("sms_tool.accounts.account_scan.collect_codex_oauth_tokens") as collect,
+            patch("sms_tool.payment_capability.payment_method_capability_probe") as checkout,
+            patch("sms_tool.accounts.account_scan._persist_scan"),
+        ):
             result = account_scan._scan_one(0, 1, "a@example.com")
 
         self.assertTrue(result["ok"])
@@ -239,19 +323,27 @@ class AccountScanTests(unittest.TestCase):
         checkout.assert_not_called()
 
     def test_scan_one_marks_relogin_failed_instead_of_generic_scan_failed(self):
-        with patch(
-            "sms_tool.accounts.account_scan._load_seed_session",
-            return_value=({"email": "a@example.com", "access_token": "old_at"}, "session.json"),
-        ), \
-             patch("sms_tool.accounts.account_scan.probe_account_liveness", return_value={"ok": False, "status": "token_invalid", "quota_status": "401失效"}), \
-             patch(
+        with (
+            patch(
+                "sms_tool.accounts.account_scan._load_seed_session",
+                return_value=({"email": "a@example.com", "access_token": "old_at"}, "session.json"),
+            ),
+            patch(
+                "sms_tool.accounts.account_scan.probe_account_liveness",
+                return_value={"ok": False, "status": "token_invalid", "quota_status": "401失效"},
+            ),
+            patch(
                 "sms_tool.accounts.account_scan.relogin_codex_account",
                 return_value={"ok": False, "error": "passwordless_missing_mailbox"},
-            ), \
-             patch("sms_tool.accounts.account_scan._workspace_probe", return_value={"ok": True, "status": "workspace_check_disabled"}), \
-             patch("sms_tool.accounts.account_scan._openai_refresh_token", return_value=""), \
-             patch("sms_tool.accounts.account_scan.collect_codex_oauth_tokens") as collect, \
-             patch("sms_tool.accounts.account_scan._persist_scan"):
+            ),
+            patch(
+                "sms_tool.accounts.account_scan._workspace_probe",
+                return_value={"ok": True, "status": "workspace_check_disabled"},
+            ),
+            patch("sms_tool.accounts.account_scan._openai_refresh_token", return_value=""),
+            patch("sms_tool.accounts.account_scan.collect_codex_oauth_tokens") as collect,
+            patch("sms_tool.accounts.account_scan._persist_scan"),
+        ):
             result = account_scan._scan_one(0, 1, "a@example.com", quota_relogin_on_401=True)
 
         self.assertFalse(result["ok"])
@@ -260,22 +352,33 @@ class AccountScanTests(unittest.TestCase):
         collect.assert_not_called()
 
     def test_scan_one_passes_codex_only_relogin_mode(self):
-        with patch(
-            "sms_tool.accounts.account_scan._load_seed_session",
-            side_effect=[
-                ({"email": "a@example.com", "access_token": "old_at"}, "session.json"),
-                ({"email": "a@example.com", "access_token": "new_at"}, "session.json"),
-            ],
-        ), \
-             patch("sms_tool.accounts.account_scan.probe_account_liveness", side_effect=[
-                 {"ok": False, "status": "token_invalid", "quota_status": "401失效"},
-                 {"ok": True, "status": "active", "quota_status": "1/5"},
-             ]), \
-             patch("sms_tool.accounts.account_scan.relogin_codex_account", return_value={"ok": True, "mode": "codex_oauth_pkce"}) as relogin, \
-             patch("sms_tool.accounts.account_scan._workspace_probe", return_value={"ok": True, "status": "workspace_check_disabled"}), \
-             patch("sms_tool.accounts.account_scan._openai_refresh_token", return_value=""), \
-             patch("sms_tool.accounts.account_scan.collect_codex_oauth_tokens") as collect, \
-             patch("sms_tool.accounts.account_scan._persist_scan"):
+        with (
+            patch(
+                "sms_tool.accounts.account_scan._load_seed_session",
+                side_effect=[
+                    ({"email": "a@example.com", "access_token": "old_at"}, "session.json"),
+                    ({"email": "a@example.com", "access_token": "new_at"}, "session.json"),
+                ],
+            ),
+            patch(
+                "sms_tool.accounts.account_scan.probe_account_liveness",
+                side_effect=[
+                    {"ok": False, "status": "token_invalid", "quota_status": "401失效"},
+                    {"ok": True, "status": "active", "quota_status": "1/5"},
+                ],
+            ),
+            patch(
+                "sms_tool.accounts.account_scan.relogin_codex_account",
+                return_value={"ok": True, "mode": "codex_oauth_pkce"},
+            ) as relogin,
+            patch(
+                "sms_tool.accounts.account_scan._workspace_probe",
+                return_value={"ok": True, "status": "workspace_check_disabled"},
+            ),
+            patch("sms_tool.accounts.account_scan._openai_refresh_token", return_value=""),
+            patch("sms_tool.accounts.account_scan.collect_codex_oauth_tokens") as collect,
+            patch("sms_tool.accounts.account_scan._persist_scan"),
+        ):
             result = account_scan._scan_one(
                 0,
                 1,
@@ -290,11 +393,13 @@ class AccountScanTests(unittest.TestCase):
 
     def test_scan_one_skips_all_network_relogin_for_terminal_account(self):
         data = {"email": "a@example.com", "status": "account_deactivated", "access_token": "old_at"}
-        with patch("sms_tool.accounts.account_scan._load_seed_session", return_value=(data, "session.json")), \
-             patch("sms_tool.accounts.account_scan.probe_account_liveness") as probe, \
-             patch("sms_tool.accounts.account_scan.relogin_codex_account") as relogin, \
-             patch("sms_tool.accounts.account_scan.collect_codex_oauth_tokens") as collect, \
-             patch("sms_tool.accounts.account_scan._persist_scan"):
+        with (
+            patch("sms_tool.accounts.account_scan._load_seed_session", return_value=(data, "session.json")),
+            patch("sms_tool.accounts.account_scan.probe_account_liveness") as probe,
+            patch("sms_tool.accounts.account_scan.relogin_codex_account") as relogin,
+            patch("sms_tool.accounts.account_scan.collect_codex_oauth_tokens") as collect,
+            patch("sms_tool.accounts.account_scan._persist_scan"),
+        ):
             result = account_scan._scan_one(0, 1, "a@example.com", quota_relogin_on_401=True)
 
         self.assertEqual(result["scan_status"], "account_deactivated")
@@ -333,19 +438,27 @@ class ScanFailureStatusTests(unittest.TestCase):
         self.assertEqual(account_scan._scan_failure_status("unknown", {"ok": True}), "scan_failed")
 
     def test_auth_state_error_is_not_reported_as_relogin_failed(self):
-        with patch(
-            "sms_tool.accounts.account_scan._load_seed_session",
-            return_value=({"email": "a@example.com", "access_token": "old_at"}, "session.json"),
-        ), \
-             patch("sms_tool.accounts.account_scan.probe_account_liveness", return_value={"ok": False, "status": "token_invalid", "quota_status": "401失效"}), \
-             patch(
+        with (
+            patch(
+                "sms_tool.accounts.account_scan._load_seed_session",
+                return_value=({"email": "a@example.com", "access_token": "old_at"}, "session.json"),
+            ),
+            patch(
+                "sms_tool.accounts.account_scan.probe_account_liveness",
+                return_value={"ok": False, "status": "token_invalid", "quota_status": "401失效"},
+            ),
+            patch(
                 "sms_tool.accounts.account_scan.relogin_codex_account",
                 return_value={"ok": False, "error": "invalid_auth_step"},
-            ), \
-             patch("sms_tool.accounts.account_scan._workspace_probe", return_value={"ok": True, "status": "workspace_check_disabled"}), \
-             patch("sms_tool.accounts.account_scan._openai_refresh_token", return_value=""), \
-             patch("sms_tool.accounts.account_scan.collect_codex_oauth_tokens") as collect, \
-             patch("sms_tool.accounts.account_scan._persist_scan"):
+            ),
+            patch(
+                "sms_tool.accounts.account_scan._workspace_probe",
+                return_value={"ok": True, "status": "workspace_check_disabled"},
+            ),
+            patch("sms_tool.accounts.account_scan._openai_refresh_token", return_value=""),
+            patch("sms_tool.accounts.account_scan.collect_codex_oauth_tokens") as collect,
+            patch("sms_tool.accounts.account_scan._persist_scan"),
+        ):
             result = account_scan._scan_one(0, 1, "a@example.com", quota_relogin_on_401=True)
 
         self.assertFalse(result["ok"])

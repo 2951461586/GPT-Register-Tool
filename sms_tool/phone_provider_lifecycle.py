@@ -77,11 +77,7 @@ def rental_client(provider: str, api_key: str, endpoint: str):
     :class:`PhoneSlot` -- the standalone ``--phone-register`` entry point --
     share this rule instead of re-deriving it.
     """
-    client_class = (
-        NexSmsClient
-        if rental_protocol(provider) == sms_providers.PROTOCOL_NEXSMS
-        else SmsBowerClient
-    )
+    client_class = NexSmsClient if rental_protocol(provider) == sms_providers.PROTOCOL_NEXSMS else SmsBowerClient
     return client_class(api_key=api_key, endpoint=endpoint)
 
 
@@ -115,17 +111,19 @@ def _price_matches(left, right) -> bool:
 def _refresh_smsbower_provider_ids(client: SmsBowerClient, slot: PhoneSlot, country: str) -> None:
     min_price = str(slot.min_price or "").strip()
     max_price = str(slot.max_price or "").strip()
-    selected_price = max_price if min_price and max_price and _price_matches(min_price, max_price) else str(
-        slot.target_price or max_price or min_price or ""
-    ).strip()
+    selected_price = (
+        max_price
+        if min_price and max_price and _price_matches(min_price, max_price)
+        else str(slot.target_price or max_price or min_price or "").strip()
+    )
     if not selected_price:
         return
     offers = client.get_prices(service=slot.service, country=country)
     provider_ids = []
     for offer in offers:
-        if normalize_country(offer.get("country_id")) != normalize_country(country):
+        if normalize_country(offer.get("country_id") or "") != normalize_country(country):
             continue
-        if normalize_service(offer.get("service")) != normalize_service(slot.service):
+        if normalize_service(offer.get("service") or "") != normalize_service(slot.service):
             continue
         if not _price_matches(offer.get("price"), selected_price):
             continue
@@ -227,7 +225,11 @@ def _acquire_nexsms_number(slot: PhoneSlot) -> bool:
                 emit(
                     _LOGGER,
                     "  [%s] country=%s acquire failed (%s/%s): %s",
-                    slot.provider, country, attempt, RENTAL_NO_NUMBERS_MAX_ATTEMPTS, exc,
+                    slot.provider,
+                    country,
+                    attempt,
+                    RENTAL_NO_NUMBERS_MAX_ATTEMPTS,
+                    exc,
                 )
                 if not getattr(exc, "retryable", True):
                     return False
@@ -245,7 +247,10 @@ def _acquire_nexsms_number(slot: PhoneSlot) -> bool:
             emit(
                 _LOGGER,
                 "  [%s] acquired %s (country=%s, price=%s)",
-                slot.provider, slot.phone, country, activation.price,
+                slot.provider,
+                slot.phone,
+                country,
+                activation.price,
             )
             return True
     return False
@@ -268,13 +273,15 @@ def _prepare_smsbower_for_send(slot: PhoneSlot) -> bool:
         emit(
             _LOGGER,
             "  [%s] rental %s ready for another code",
-            slot.provider, slot.rental_handle,
+            slot.provider,
+            slot.rental_handle,
         )
         return True
     emit(
         _LOGGER,
         "  [%s] rental %s could not request another code; cancelling and acquiring a new number",
-        slot.provider, slot.rental_handle,
+        slot.provider,
+        slot.rental_handle,
     )
     _cancel_smsbower_activation(slot)
     return _acquire_rental_number(slot)
@@ -316,7 +323,8 @@ def _complete_smsbower_activation(slot: PhoneSlot):
             emit(
                 _LOGGER,
                 "  [%s] rental %s completion failed; cancelled",
-                slot.provider, handle,
+                slot.provider,
+                handle,
             )
     _reset_smsbower_slot(slot)
 

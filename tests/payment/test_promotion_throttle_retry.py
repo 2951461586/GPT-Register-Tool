@@ -35,11 +35,14 @@ def no_sleep(monkeypatch):
 @pytest.fixture
 def one_account(monkeypatch):
     monkeypatch.setattr(promotion_batch, "CFG", {})
-    monkeypatch.setattr("sms_tool.storage.get_account_record", lambda email: {
-        "email": email,
-        "access_token": "at",
-        "raw_json": json.dumps({"access_token": "at"}),
-    })
+    monkeypatch.setattr(
+        "sms_tool.storage.get_account_record",
+        lambda email: {
+            "email": email,
+            "access_token": "at",
+            "raw_json": json.dumps({"access_token": "at"}),
+        },
+    )
     monkeypatch.setattr("sms_tool.storage.mark_promotion_status", lambda *args, **kwargs: True)
 
 
@@ -65,12 +68,14 @@ def _throttled_then_ok(probe_ok):
         if len(calls) == 1:
             return {"ok": False, "promotion_status": "HTTP 429", "error": "http_429", "status_code": 429}
         return probe_ok
+
     return probe
 
 
 # --------------------------------------------------------------------------
 # 429 retry behaviour
 # --------------------------------------------------------------------------
+
 
 def test_429_rotates_to_the_next_proxy_after_a_backoff(monkeypatch, no_sleep, one_account):
     """A throttled probe sleeps first, then tries a fresh exit."""
@@ -141,9 +146,14 @@ def test_other_http_errors_are_not_retried(monkeypatch, no_sleep, one_account):
 
 def test_transport_errors_still_rotate_without_sleeping(monkeypatch, no_sleep, one_account):
     """Pre-existing behaviour preserved: proxy rotation only, no artificial delay."""
+
     def probe(_account, calls):
         if len(calls) == 1:
-            return {"ok": False, "promotion_status": "检测失败", "error": "Failed to perform, curl: (28) Connection timed out"}
+            return {
+                "ok": False,
+                "promotion_status": "检测失败",
+                "error": "Failed to perform, curl: (28) Connection timed out",
+            }
         return {"ok": True, "promotion_status": "Free·无优惠"}
 
     result, calls = _refresh(
@@ -161,6 +171,7 @@ def test_transport_errors_still_rotate_without_sleeping(monkeypatch, no_sleep, o
 # --------------------------------------------------------------------------
 # Retry-After handling
 # --------------------------------------------------------------------------
+
 
 def test_retry_after_header_is_honoured(monkeypatch, no_sleep, one_account):
     result, _calls = _refresh(
@@ -187,7 +198,13 @@ def test_oversized_retry_after_is_clamped(monkeypatch, no_sleep, one_account):
     _refresh(
         monkeypatch,
         lambda _a, calls: (
-            {"ok": False, "promotion_status": "HTTP 429", "error": "http_429", "status_code": 429, "retry_after": "3600"}
+            {
+                "ok": False,
+                "promotion_status": "HTTP 429",
+                "error": "http_429",
+                "status_code": 429,
+                "retry_after": "3600",
+            }
             if len(calls) == 1
             else {"ok": True, "promotion_status": "Free·无优惠"}
         ),
@@ -200,7 +217,13 @@ def test_garbage_retry_after_falls_back_to_the_default(monkeypatch, no_sleep, on
     _refresh(
         monkeypatch,
         lambda _a, calls: (
-            {"ok": False, "promotion_status": "HTTP 429", "error": "http_429", "status_code": 429, "retry_after": "soon"}
+            {
+                "ok": False,
+                "promotion_status": "HTTP 429",
+                "error": "http_429",
+                "status_code": 429,
+                "retry_after": "soon",
+            }
             if len(calls) == 1
             else {"ok": True, "promotion_status": "Free·无优惠"}
         ),
@@ -213,20 +236,25 @@ def test_garbage_retry_after_falls_back_to_the_default(monkeypatch, no_sleep, on
 # Auth-failure detection must not key off the Chinese display label
 # --------------------------------------------------------------------------
 
+
 def test_auth_failure_uses_the_persisted_code_not_the_label():
     """A record with status_code 401 is an auth failure even with an unknown label."""
-    assert _promotion_auth_failure({
-        "promotion_status": "任何别的措辞",
-        "promotion": {"status_code": "401", "status": "任何别的措辞"},
-    })
+    assert _promotion_auth_failure(
+        {
+            "promotion_status": "任何别的措辞",
+            "promotion": {"status_code": "401", "status": "任何别的措辞"},
+        }
+    )
 
 
 def test_non_auth_code_is_not_an_auth_failure_even_with_the_legacy_label():
     """Once a real code is present it wins -- a stale label must not override it."""
-    assert not _promotion_auth_failure({
-        "promotion_status": "AT失效",
-        "promotion": {"status_code": "200", "status": "AT失效"},
-    })
+    assert not _promotion_auth_failure(
+        {
+            "promotion_status": "AT失效",
+            "promotion": {"status_code": "200", "status": "AT失效"},
+        }
+    )
 
 
 def test_legacy_label_still_detected_when_no_code_was_persisted():

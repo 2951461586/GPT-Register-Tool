@@ -42,6 +42,8 @@ def _upi_browser_available() -> bool:
         return True
     except Exception:
         return False
+
+
 def _upi_browser_proxy(proxy: Any) -> dict[str, str] | None:
     """Convert a proxy URL to Playwright's launch proxy dict.
 
@@ -68,6 +70,8 @@ def _upi_browser_proxy(proxy: Any) -> dict[str, str] | None:
     if parsed.password:
         result["password"] = unquote(parsed.password)
     return result
+
+
 def _upi_browser_capture(
     *,
     access_token: Any,
@@ -286,6 +290,8 @@ def _upi_browser_capture(
     except Exception as exc:
         result["error"] = f"{type(exc).__name__}: {str(exc)[:180]}"
     return result
+
+
 def _upi_browser_approve(
     *,
     access_token: Any,
@@ -423,6 +429,8 @@ def _upi_browser_approve(
     except Exception as exc:
         result["error"] = f"{type(exc).__name__}: {str(exc)[:180]}"
     return result
+
+
 def _upi_browser_id() -> str:
     """Stripe 的 guid / muid / sid 形态: ``randomUUID()`` 拼 6 位 hex = 42 字符。
 

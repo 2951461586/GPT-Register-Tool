@@ -87,14 +87,18 @@ class AuthHeadersAndClassificationTests(unittest.TestCase):
         auth_headers._AUTH_FINGERPRINT_LOCAL.profile_name = AUTH_IMPERSONATE
 
     def test_sentinel_fingerprint_matches_auth_profile(self):
-        with patch.object(auth_headers, "current_auth_fingerprint", return_value={
-            "name": "chrome146",
-            "impersonate": "chrome146",
-            "user_agent": "Mozilla/5.0 Chrome/146.0.0.0 Safari/537.36",
-            "sec_ch_ua": '"Chromium";v="146"',
-            "sec_ch_ua_mobile": "?0",
-            "sec_ch_ua_platform": '"Windows"',
-        }):
+        with patch.object(
+            auth_headers,
+            "current_auth_fingerprint",
+            return_value={
+                "name": "chrome146",
+                "impersonate": "chrome146",
+                "user_agent": "Mozilla/5.0 Chrome/146.0.0.0 Safari/537.36",
+                "sec_ch_ua": '"Chromium";v="146"',
+                "sec_ch_ua_mobile": "?0",
+                "sec_ch_ua_platform": '"Windows"',
+            },
+        ):
             fingerprint = sentinel_fingerprint()
         self.assertEqual(fingerprint["impersonate"], "chrome146")
         self.assertIn("Chrome/146.", fingerprint["user_agent"])
@@ -104,8 +108,11 @@ class AuthHeadersAndClassificationTests(unittest.TestCase):
         # Same device id → identical hardware/display readings every time, so a
         # single account looks like one stable machine across relogin/recovery.
         hardware_keys = (
-            "screen", "hardware_concurrency", "device_memory",
-            "device_pixel_ratio", "js_heap_size_limit",
+            "screen",
+            "hardware_concurrency",
+            "device_memory",
+            "device_pixel_ratio",
+            "js_heap_size_limit",
         )
         set_fingerprint_device("device-alpha")
         first = {key: sentinel_fingerprint()[key] for key in hardware_keys}
@@ -284,9 +291,15 @@ class FamilyHardwareProfileTests(unittest.TestCase):
         # A misclassified impersonate token must degrade to a populated desktop
         # profile, never to a half-empty dict that would drop required keys.
         unknown = hardware_profile_for_family("netscape-1.0")
-        self.assertEqual(set(unknown.keys()), {
-            "navigator_platform", "navigator_vendor", "max_touch_points", "sec_ch_ua_platform_version",
-        })
+        self.assertEqual(
+            set(unknown.keys()),
+            {
+                "navigator_platform",
+                "navigator_vendor",
+                "max_touch_points",
+                "sec_ch_ua_platform_version",
+            },
+        )
         self.assertEqual(unknown["navigator_platform"], "Win32")
 
     def test_non_desktop_family_picks_up_own_platform_without_contradiction(self):
@@ -301,12 +314,18 @@ class FamilyHardwareProfileTests(unittest.TestCase):
             "sec_ch_ua_platform_version": "14.5.0",
         }
         with patch.dict(auth_headers._HARDWARE_PROFILES, {"macos": mac_entry}):
-            with patch.object(auth_headers, "current_auth_fingerprint", return_value={
-                "name": "safari17_0",
-                "impersonate": "safari17_0",
-                "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari/17.0",
-                "sec_ch_ua": "", "sec_ch_ua_mobile": "?0", "sec_ch_ua_platform": '"macOS"',
-            }):
+            with patch.object(
+                auth_headers,
+                "current_auth_fingerprint",
+                return_value={
+                    "name": "safari17_0",
+                    "impersonate": "safari17_0",
+                    "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari/17.0",
+                    "sec_ch_ua": "",
+                    "sec_ch_ua_mobile": "?0",
+                    "sec_ch_ua_platform": '"macOS"',
+                },
+            ):
                 fp = sentinel_fingerprint()
         self.assertEqual(fp["navigator_platform"], "MacIntel")
         self.assertEqual(fp["navigator_vendor"], "Apple Computer, Inc.")

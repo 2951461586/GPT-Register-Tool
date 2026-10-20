@@ -45,7 +45,9 @@ class HttpClientRetryTests(unittest.TestCase):
         with self.assertRaises(http_client.SessionCircuitOpen):
             http_client.request_with_retry(session, "get", "https://example.test", attempts=1)
         http_client.clear_session_circuit(session)
-        self.assertEqual(http_client.request_with_retry(session, "get", "https://example.test", attempts=1).status_code, 403)
+        self.assertEqual(
+            http_client.request_with_retry(session, "get", "https://example.test", attempts=1).status_code, 403
+        )
 
 
 if __name__ == "__main__":

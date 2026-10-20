@@ -42,19 +42,13 @@ class OffsetTests(unittest.TestCase):
 
     @unittest.skipUnless(_REAL_TZDB, "requires the IANA tz database (tzdata)")
     def test_london_moves_with_dst(self):
-        self.assertEqual(
-            offset_minutes_for_timezone("Europe/London", at=datetime(2026, 1, 15)), 0
-        )
-        self.assertEqual(
-            offset_minutes_for_timezone("Europe/London", at=datetime(2026, 7, 15)), 60
-        )
+        self.assertEqual(offset_minutes_for_timezone("Europe/London", at=datetime(2026, 1, 15)), 0)
+        self.assertEqual(offset_minutes_for_timezone("Europe/London", at=datetime(2026, 7, 15)), 60)
 
     @unittest.skipUnless(_REAL_TZDB, "requires the IANA tz database (tzdata)")
     def test_zones_without_dst_are_stable(self):
         for moment in (datetime(2026, 1, 15), datetime(2026, 7, 15)):
-            self.assertEqual(
-                offset_minutes_for_timezone("Asia/Tokyo", at=moment), 540
-            )
+            self.assertEqual(offset_minutes_for_timezone("Asia/Tokyo", at=moment), 540)
 
     @unittest.skipUnless(_REAL_TZDB, "requires the IANA tz database (tzdata)")
     def test_unknown_zone_falls_back_to_the_default(self):
@@ -123,9 +117,7 @@ class BrowserEnvironmentOffsetTests(unittest.TestCase):
         # output comes from the zone, not the table.
         table_value = BROWSER_LOCALE_PROFILES["us"]["timezone_offset_minutes"]
         bogus = -1234
-        with patch.dict(
-            BROWSER_LOCALE_PROFILES["us"], {"timezone_offset_minutes": bogus}
-        ):
+        with patch.dict(BROWSER_LOCALE_PROFILES["us"], {"timezone_offset_minutes": bogus}):
             env = build_browser_environment(None)
         self.assertNotEqual(env["timezone_offset_minutes"], bogus)
         self.assertEqual(

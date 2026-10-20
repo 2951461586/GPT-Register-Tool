@@ -293,7 +293,9 @@ def resolve_payment_route(
     target_country = context.payment_country(payment_method, getattr(args, "target_country", ""))
     checkout_country = str(getattr(args, "checkout_country", "") or target_country).strip().upper()
     promotion_proxy = context.promotion_proxy_arg(args, payment_method)
-    _raw_configured_pools: object = context.payment_proxy_pools(payment_method) if callable(context.payment_proxy_pools) else {}
+    _raw_configured_pools: object = (
+        context.payment_proxy_pools(payment_method) if callable(context.payment_proxy_pools) else {}
+    )
     configured_pools = _raw_configured_pools if isinstance(_raw_configured_pools, Mapping) else {}
     explicit_checkout_route = any(
         str(getattr(args, name, None) or "").strip()

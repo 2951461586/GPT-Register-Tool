@@ -129,6 +129,7 @@ def refresh_local_quota_statuses(
         relogin_codex_account,
         runtime_file,
     )
+
     if relogin_on_401:
         _refresh_mailbox_quarantine_state()
     accounts = _local_quota_accounts(emails)
@@ -267,7 +268,9 @@ def refresh_local_quota_statuses(
                     acquired = remaining > 0.0 and browser_slots.acquire(timeout=remaining)
                     if acquired:
                         try:
-                            with browser_fetch_for_account(account, proxy=proxy, timeout=probe_timeout) as browser_fetch:
+                            with browser_fetch_for_account(
+                                account, proxy=proxy, timeout=probe_timeout
+                            ) as browser_fetch:
                                 if browser_fetch is not None:
                                     browser_probe = probe_account_liveness(
                                         account,
@@ -502,7 +505,11 @@ def refresh_local_quota_statuses(
         "liveness_401": at_invalid,
         "mailbox_auth_invalid": mailbox_auth_invalid,
         "results": results,
-        "timed_out": sum(1 for item in results if item.get("timed_out") or item.get("health_status") in {"batch_timeout", "account_timeout"}),
+        "timed_out": sum(
+            1
+            for item in results
+            if item.get("timed_out") or item.get("health_status") in {"batch_timeout", "account_timeout"}
+        ),
         "batch_timed_out": sum(1 for item in results if item.get("health_status") == "batch_timeout"),
         "account_timed_out": sum(1 for item in results if item.get("health_status") == "account_timeout"),
         "partial": len(results) < len(accounts) or any(item.get("timed_out") for item in results),
@@ -525,6 +532,7 @@ def _probe_liveness_with_retries(
         probe_account_liveness,
         proxy_pool_for,
     )
+
     has_affinity = bool((account.get("identity_context") or {}).get("proxy_affinity"))
     configured = proxy_pool_for(CFG, "liveness")
     # An explicit command proxy is authoritative.  Do not silently replace it
@@ -541,9 +549,7 @@ def _probe_liveness_with_retries(
     last: dict[str, Any] = {}
     for candidate in candidates:
         effective_proxy = candidate
-        last = probe_account_liveness(
-            account, proxy=effective_proxy, timeout=timeout, browser_fetch=browser_fetch
-        )
+        last = probe_account_liveness(account, proxy=effective_proxy, timeout=timeout, browser_fetch=browser_fetch)
         if isinstance(last, dict):
             last.setdefault("proxy_source", source)
         if int(last.get("status_code") or 0) != 0 or last.get("ok"):
@@ -570,6 +576,7 @@ def _needs_browser_fallback(probe: dict[str, Any]) -> bool:
 def _clear_promotion_marker_after_probe(email: str) -> None:
     """Clear a stale promotion 401 while remaining compatible with test seams."""
     from .account_recovery import clear_stale_promotion_at_marker
+
     try:
         clear_stale_promotion_at_marker(email, verified_at=int(time.time()))
     except TypeError:
@@ -604,14 +611,16 @@ def _emit_account_batch_event(
     try:
         from ..desktop_ipc import emit_event
 
-        emit_event({
-            "domain": "account_scan",
-            "run_id": run_id,
-            "account_ref": account_ref,
-            "stage": stage,
-            "status": status,
-            "total": int(total or 0),
-            "detail": detail,
-        })
+        emit_event(
+            {
+                "domain": "account_scan",
+                "run_id": run_id,
+                "account_ref": account_ref,
+                "stage": stage,
+                "status": status,
+                "total": int(total or 0),
+                "detail": detail,
+            }
+        )
     except Exception:
         pass

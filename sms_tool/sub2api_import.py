@@ -244,7 +244,9 @@ def _prepare_sub2api_import_data(
             if mode == "agent_identity":
                 return {"ok": False, "error": "agent_identity_requires_free_plan", "plan_type": plan_type}
         else:
-            created = create_agent_identity(source_result["data"], proxy=proxy, timeout=min(max(int(timeout or 30), 1), 60))
+            created = create_agent_identity(
+                source_result["data"], proxy=proxy, timeout=min(max(int(timeout or 30), 1), 60)
+            )
             if created.get("ok"):
                 persisted = write_agent_identity(created["data"], export_dir=export_dir)
                 if persisted.get("ok"):
@@ -368,7 +370,9 @@ def upload_to_sub2api(
         priority=priority,
         concurrency=concurrency,
     )
-    response = _request_json(origin, "/api/v1/admin/accounts/import/codex-session", token=token, method="POST", body=payload)
+    response = _request_json(
+        origin, "/api/v1/admin/accounts/import/codex-session", token=token, method="POST", body=payload
+    )
     if not response.get("ok"):
         return response
 
@@ -654,13 +658,11 @@ def _resolve_sub2api_config(
     resolved_group_ids = group_ids if group_ids is not None else source.get("group_ids") or source.get("group_id")
     return {
         "origin": _normalize_sub2api_origin(
-            api_url
-            or source.get("api_url")
-            or source.get("base_url")
-            or source.get("url")
-            or ""
+            api_url or source.get("api_url") or source.get("base_url") or source.get("url") or ""
         ),
-        "api_token": str(api_token or source.get("api_token") or source.get("token") or source.get("access_token") or "").strip(),
+        "api_token": str(
+            api_token or source.get("api_token") or source.get("token") or source.get("access_token") or ""
+        ).strip(),
         "login_email": str(login_email or source.get("email") or source.get("login_email") or "").strip(),
         "login_password": str(login_password or source.get("password") or source.get("login_password") or "").strip(),
         "group_name": str(group_name or source.get("group_name") or source.get("group") or DEFAULT_GROUP_NAME).strip(),
@@ -730,7 +732,9 @@ def _looks_like_sub2api_admin_key(token: str) -> bool:
     return str(token or "").strip().lower().startswith("admin-")
 
 
-def _resolve_group_ids(origin: str, token: str, group_name: str = "", group_ids: list[int] | None = None) -> dict[str, Any]:
+def _resolve_group_ids(
+    origin: str, token: str, group_name: str = "", group_ids: list[int] | None = None
+) -> dict[str, Any]:
     parsed_ids = _parse_int_list(group_ids)
     if parsed_ids:
         return {"ok": True, "group_ids": parsed_ids}
@@ -744,7 +748,8 @@ def _resolve_group_ids(origin: str, token: str, group_name: str = "", group_ids:
     for name in names:
         group = next(
             (
-                item for item in groups
+                item
+                for item in groups
                 if str(item.get("name") or "").strip().lower() == name.lower()
                 and str(item.get("platform") or "openai").strip().lower() in {"", "openai"}
             ),
@@ -784,12 +789,16 @@ def _resolve_proxy_id(
     proxies = _as_list(result.get("data"))
     lowered = name.lower()
     matches = [
-        item for item in proxies
-        if str(item.get("name") or "").strip().lower() == lowered
-        or str(item.get("id") or "").strip() == name
+        item
+        for item in proxies
+        if str(item.get("name") or "").strip().lower() == lowered or str(item.get("id") or "").strip() == name
     ]
     if len(matches) != 1:
-        return {"ok": False, "error": "sub2api_proxy_not_found" if not matches else "sub2api_proxy_ambiguous", "proxy_name": name}
+        return {
+            "ok": False,
+            "error": "sub2api_proxy_not_found" if not matches else "sub2api_proxy_ambiguous",
+            "proxy_name": name,
+        }
     return _as_int(matches[0].get("id")) or None
 
 
@@ -865,7 +874,9 @@ def _sub2api_account_to_auth_file(item: Any) -> dict[str, Any]:
         or item_map.get("name")
         or item_map.get("username")
     )
-    error_message = str(item_map.get("error_message") or item_map.get("error") or item_map.get("temp_unschedulable_reason") or "").strip()
+    error_message = str(
+        item_map.get("error_message") or item_map.get("error") or item_map.get("temp_unschedulable_reason") or ""
+    ).strip()
     probe = {}
     if re.search(r"\b401\b|unauthorized|invalid_grant|refresh_token|token", error_message, re.I):
         probe["status_code"] = 401

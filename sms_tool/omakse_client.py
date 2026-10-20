@@ -37,14 +37,15 @@ DEFAULT_CONFIG_PATH = os.path.join(PROJECT_ROOT, "config.json")
 from .kernel.timeouts import DEFAULT_TIMEOUT
 
 DEFAULT_BASE_URL = "http://oai.omakse.xyz"
-POLL_INTERVAL = 1.5          # seconds between status polls
-MAX_POLL_DURATION = 300      # 5 minutes default
+POLL_INTERVAL = 1.5  # seconds between status polls
+MAX_POLL_DURATION = 300  # 5 minutes default
 TERMINAL_STATES = {"completed", "failed", "stopped"}
 
 
 def _load_json(path: str) -> dict:
     if os.path.abspath(path) == os.path.abspath(DEFAULT_CONFIG_PATH):
         from .config import load_merged_config
+
         return load_merged_config()
     try:
         with open(path, "r", encoding="utf-8-sig") as f:
@@ -56,7 +57,8 @@ def _load_json(path: str) -> dict:
 
 def _omakse_cfg() -> dict:
     cfg = _load_json(DEFAULT_CONFIG_PATH)
-    return cfg.get("omakse") if isinstance(cfg.get("omakse"), dict) else {}
+    section = cfg.get("omakse")
+    return section if isinstance(section, dict) else {}
 
 
 def _resolve_base_url(explicit: str | None = None) -> str:
@@ -75,11 +77,13 @@ def _resolve_proxy(explicit: str | None = None) -> str:
 
 def _make_session(proxy: str = "") -> requests.Session:
     s = requests.Session()
-    s.headers.update({
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Accept": "application/json",
-        "Content-Type": "application/json",
-    })
+    s.headers.update(
+        {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        }
+    )
     if proxy:
         s.proxies = {"http": proxy, "https": proxy}
     return s
@@ -137,10 +141,7 @@ def create_extract_job(
     )
     data = resp.json() if resp.text else {}
     if resp.status_code >= 400:
-        raise RuntimeError(
-            f"omakse create job failed: {resp.status_code} "
-            f"{data.get('detail', resp.text[:300])}"
-        )
+        raise RuntimeError(f"omakse create job failed: {resp.status_code} {data.get('detail', resp.text[:300])}")
     return data
 
 
@@ -160,10 +161,7 @@ def get_extract_job(
     )
     data = resp.json() if resp.text else {}
     if resp.status_code >= 400:
-        raise RuntimeError(
-            f"omakse get job failed: {resp.status_code} "
-            f"{data.get('detail', resp.text[:300])}"
-        )
+        raise RuntimeError(f"omakse get job failed: {resp.status_code} {data.get('detail', resp.text[:300])}")
     return data
 
 
@@ -189,6 +187,7 @@ def extract_links(
     Returns:
         Final job object with status, counters, links, logs.
     """
+
     def _log(step: str, msg: str) -> None:
         if on_log:
             on_log(step, msg)
@@ -253,8 +252,7 @@ def extract_links(
                 _log("job", str(line))
             last_log_len = len(logs)
 
-        _log("poll", f"#{poll_count} status={status} total={total} "
-             f"success={success} failed={failed} running={running}")
+        _log("poll", f"#{poll_count} status={status} total={total} success={success} failed={failed} running={running}")
 
         if status in TERMINAL_STATES:
             break
@@ -329,10 +327,7 @@ def run_us_payment(
     )
     data = resp.json() if resp.text else {}
     if resp.status_code >= 400:
-        raise RuntimeError(
-            f"omakse US payment run failed: {resp.status_code} "
-            f"{data.get('detail', resp.text[:300])}"
-        )
+        raise RuntimeError(f"omakse US payment run failed: {resp.status_code} {data.get('detail', resp.text[:300])}")
 
     job_id = data.get("job_id", "")
     return {
@@ -355,7 +350,9 @@ def get_us_payment_status(
     base = _resolve_base_url(base_url)
     session = _make_session(_resolve_proxy(local_proxy))
 
-    params = {"tail": tail}
+    # Annotated: ``tail`` is an int and ``jobId`` a str, so an inferred
+    # ``dict[str, int]`` makes the second assignment a type error.
+    params: dict[str, Any] = {"tail": tail}
     if job_id:
         params["jobId"] = job_id
 
@@ -366,10 +363,7 @@ def get_us_payment_status(
     )
     data = resp.json() if resp.text else {}
     if resp.status_code >= 400:
-        raise RuntimeError(
-            f"omakse US status failed: {resp.status_code} "
-            f"{data.get('detail', resp.text[:300])}"
-        )
+        raise RuntimeError(f"omakse US status failed: {resp.status_code} {data.get('detail', resp.text[:300])}")
     return data
 
 
@@ -384,7 +378,7 @@ def get_us_payment_logs(
     base = _resolve_base_url(base_url)
     session = _make_session(_resolve_proxy(local_proxy))
 
-    params = {"tail": tail}
+    params: dict[str, Any] = {"tail": tail}
     if job_id:
         params["jobId"] = job_id
 
@@ -437,6 +431,7 @@ def run_us_payment_and_wait(
     Returns:
         {ok, job_id, status, result, logs}
     """
+
     def _log(step: str, msg: str) -> None:
         if on_log:
             on_log(step, msg)
@@ -466,7 +461,9 @@ def run_us_payment_and_wait(
         poll_count += 1
         try:
             status_data = get_us_payment_status(
-                job_id, base_url=base_url, local_proxy=local_proxy,
+                job_id,
+                base_url=base_url,
+                local_proxy=local_proxy,
             )
         except Exception as e:
             _log("poll", f"Poll #{poll_count} error: {e}")
@@ -476,8 +473,11 @@ def run_us_payment_and_wait(
         result = status_data.get("result") or {}
         queue = status_data.get("queue") or {}
 
-        _log("poll", f"#{poll_count} status={status} "
-             f"result_ok={result.get('ok')} queue={queue.get('active', 0)}/{queue.get('total', 0)}")
+        _log(
+            "poll",
+            f"#{poll_count} status={status} "
+            f"result_ok={result.get('ok')} queue={queue.get('active', 0)}/{queue.get('total', 0)}",
+        )
 
         # Print new logs
         logs = get_us_payment_logs(job_id, base_url=base_url, local_proxy=local_proxy)
@@ -564,8 +564,7 @@ def extract_links_for_account(
                 # codebase; the bare `email=?` missed accounts stored with
                 # different casing and reported "No access token found".
                 c.execute(
-                    "SELECT access_token FROM accounts WHERE lower(email)=lower(?)"
-                    " ORDER BY updated_at DESC LIMIT 1",
+                    "SELECT access_token FROM accounts WHERE lower(email)=lower(?) ORDER BY updated_at DESC LIMIT 1",
                     (email,),
                 )
                 row = c.fetchone()
@@ -598,5 +597,3 @@ def extract_links_for_account(
 # normalizes it through the read-only ``paypal_authorization`` parser so callers
 # get a stable, PaymentResult-compatible view (ok/status/error_code/retryable)
 # without changing any existing return structure.
-
-

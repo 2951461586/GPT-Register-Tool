@@ -41,10 +41,7 @@ class ICloudUrlMailboxTests(unittest.TestCase):
         self.assertTrue(all(record.auth_mode == "otp_url" for record in records))
 
     def test_real_world_shape_works_through_legacy_mixed_file_route(self):
-        line = (
-            "target@icloud.com----"
-            "https://mail.example/messages/AbCd_0123-credential/target%40icloud.com"
-        )
+        line = "target@icloud.com----https://mail.example/messages/AbCd_0123-credential/target%40icloud.com"
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "icloud.txt"
             path.write_text("\ufeff" + line + "\r\n", encoding="utf-8")
@@ -88,8 +85,10 @@ class ICloudUrlMailboxTests(unittest.TestCase):
             provider="icloud_url",
             token="https://icloud-api.example/show/secret/target@icloud.com",
         )
-        with patch.object(mailbox_icloud_url.curl_requests, "get", return_value=_Response(text=page)), \
-             patch.object(mailbox_icloud_url, "record_mailbox_auth_invalid") as quarantine:
+        with (
+            patch.object(mailbox_icloud_url.curl_requests, "get", return_value=_Response(text=page)),
+            patch.object(mailbox_icloud_url, "record_mailbox_auth_invalid") as quarantine,
+        ):
             with self.assertRaisesRegex(MailboxAuthInvalidError, "mailbox_auth_invalid"):
                 mailbox_icloud_url.fetch_icloud_url_messages(mailbox, limit=10)
         quarantine.assert_called_once()
@@ -177,13 +176,18 @@ class ICloudUrlMailboxTests(unittest.TestCase):
         var pageBase='/api/messages/secret/target@icloud.com';
         </script>
         """
-        listing = {"items": [{
-            "id": 42,
-            "mailbox": "JUNK",
-            "subject": "你的临时 ChatGPT 登录代码",
-            "from_address": "OpenAI",
-            "received_at": "2026-08-03 13:53:09",
-        }], "has_more": False}
+        listing = {
+            "items": [
+                {
+                    "id": 42,
+                    "mailbox": "JUNK",
+                    "subject": "你的临时 ChatGPT 登录代码",
+                    "from_address": "OpenAI",
+                    "received_at": "2026-08-03 13:53:09",
+                }
+            ],
+            "has_more": False,
+        }
         encoded_body = base64.b64encode("<p>你的临时代码是 456789</p>".encode("utf-8")).decode("ascii")
         detail = {
             "body": "data:text/html;charset=utf-8;base64," + encoded_body,
@@ -212,10 +216,12 @@ class ICloudUrlMailboxTests(unittest.TestCase):
         var pageBase='/api/messages/secret/target@icloud.com';
         </script>
         """
-        listing = {"items": [
-            {"id": 41, "subject": "older", "received_at": "2026-08-03 13:52:09"},
-            {"id": 42, "subject": "newer", "received_at": "2026-08-03 13:53:09"},
-        ]}
+        listing = {
+            "items": [
+                {"id": 41, "subject": "older", "received_at": "2026-08-03 13:52:09"},
+                {"id": 42, "subject": "newer", "received_at": "2026-08-03 13:53:09"},
+            ]
+        }
         mailbox = MailboxAccount(
             email="target@icloud.com",
             provider="icloud_url",
@@ -281,12 +287,14 @@ class ICloudUrlMailboxTests(unittest.TestCase):
         ]
         mailbox.seen_message_ids = tuple(message["id"] for message in old_messages)
         mailbox.seen_message_received_ts = mailbox_module._message_received_ts(old_messages[0])
-        self.assertIsNone(mailbox_module._latest_email_otp_candidate(
-            mailbox,
-            keyword="login code",
-            issued_after_unix=0,
-            override_messages=old_messages,
-        ))
+        self.assertIsNone(
+            mailbox_module._latest_email_otp_candidate(
+                mailbox,
+                keyword="login code",
+                issued_after_unix=0,
+                override_messages=old_messages,
+            )
+        )
 
         new_messages = [
             self._otp_message("new", "333333", "2026-08-04T10:00:10+00:00"),
@@ -380,8 +388,10 @@ class ICloudUrlMailboxTests(unittest.TestCase):
             provider="icloud_url",
             token="https://ima3.example/api/secret/target@icloud.com",
         )
-        with patch.object(mailbox_icloud_url, "_parse_card_messages") as card, \
-             patch.object(mailbox_icloud_url.curl_requests, "get", return_value=_Response(text=payload)):
+        with (
+            patch.object(mailbox_icloud_url, "_parse_card_messages") as card,
+            patch.object(mailbox_icloud_url.curl_requests, "get", return_value=_Response(text=payload)),
+        ):
             messages = mailbox_icloud_url.fetch_icloud_url_messages(mailbox, limit=10)
 
         self.assertEqual(messages, [])
@@ -448,8 +458,10 @@ class ICloudUrlMailboxTests(unittest.TestCase):
             provider="icloud_url",
             token="https://ima3.example/api/secret/target@icloud.com",
         )
-        with patch.object(mailbox_icloud_url, "_parse_card_messages") as card, \
-             patch.object(mailbox_icloud_url.curl_requests, "get", return_value=_Response(text=payload)):
+        with (
+            patch.object(mailbox_icloud_url, "_parse_card_messages") as card,
+            patch.object(mailbox_icloud_url.curl_requests, "get", return_value=_Response(text=payload)),
+        ):
             messages = mailbox_icloud_url.snapshot_icloud_url_messages(mailbox, limit=10)
 
         self.assertEqual(messages, [])
@@ -486,9 +498,7 @@ class ICloudUrlSplitContractTests(unittest.TestCase):
     def test_four_field_line_keeps_only_the_first_two_fields(self):
         email, url = mailbox_icloud_url.split_icloud_url_line(self.QUERY_STYLE)
         self.assertEqual(email, "sample-380069+oai02@icloud.com")
-        self.assertEqual(
-            url, "https://api798.com/latest?email=sample-380069%40icloud.com&auth_code=AUTHCODE123"
-        )
+        self.assertEqual(url, "https://api798.com/latest?email=sample-380069%40icloud.com&auth_code=AUTHCODE123")
         self.assertNotIn("----", url)
         self.assertNotIn("sample-pass.", url)
 
@@ -509,8 +519,7 @@ class ICloudUrlSplitContractTests(unittest.TestCase):
         self.assertEqual(email, "sample-05924c+oai02@icloud.com")
         self.assertEqual(
             url,
-            "https://icloud-api.top/s/SAMPLEPATHTOKEN000000000000000000/"
-            "sample-05924c+oai02@icloud.com",
+            "https://icloud-api.top/s/SAMPLEPATHTOKEN000000000000000000/sample-05924c+oai02@icloud.com",
         )
         self.assertNotIn("----", url)
 
@@ -546,9 +555,7 @@ class ICloudUrlSplitContractTests(unittest.TestCase):
         )
 
     def test_a_non_icloud_domain_is_still_rejected(self):
-        self.assertFalse(
-            mailbox_icloud_url.is_icloud_url_line("who@gmail.com----https://h/s/T/who@gmail.com")
-        )
+        self.assertFalse(mailbox_icloud_url.is_icloud_url_line("who@gmail.com----https://h/s/T/who@gmail.com"))
 
     def test_pool_loader_drops_the_tail_for_a_four_field_line(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -575,22 +582,22 @@ class LatestMailJsChannelTests(unittest.TestCase):
     """
 
     LATEST_PAGE = (
-        "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><title>最新邮件</title></head><body>"
-        "<div class=\"container\"><h1>最新邮件信息</h1>"
-        "<div class=\"info\"><div class=\"label\">接收时间：</div>"
-        "<div class=\"time\">2026年09月16日 23:48:03 (北京时间)</div></div>"
-        "<div class=\"info\"><div class=\"label\">邮件主题：</div>"
-        "<div class=\"subject\">Mã xác minh tạm thời của bạn cho ChatGPT</div></div>"
-        "<div class=\"info\"><div class=\"label\">邮件内容：</div>"
-        "<iframe class=\"email-frame\" id=\"emailFrame\"></iframe></div></div>"
+        '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>最新邮件</title></head><body>'
+        '<div class="container"><h1>最新邮件信息</h1>'
+        '<div class="info"><div class="label">接收时间：</div>'
+        '<div class="time">2026年09月16日 23:48:03 (北京时间)</div></div>'
+        '<div class="info"><div class="label">邮件主题：</div>'
+        '<div class="subject">Mã xác minh tạm thời của bạn cho ChatGPT</div></div>'
+        '<div class="info"><div class="label">邮件内容：</div>'
+        '<iframe class="email-frame" id="emailFrame"></iframe></div></div>'
         "<script>setTimeout(function(){ location.reload(); }, 30000);\n"
-        "(function() { var frame = document.getElementById(\"emailFrame\");"
+        '(function() { var frame = document.getElementById("emailFrame");'
         # 正文必须是**完整邮件**：验证码提取器要求验证码附近有 code/verification/chatgpt
         # 之类的上下文标记（否则 `_looks_fake_otp_context` 会把它当样式数字丢掉），
         # 所以这里保留真实邮件里的 "ChatGPT" 标题与 font-size 样式。
-        " var htmlContent = \"<html>\\r\\n  <head><title>M\\u00e3 x\\u00e1c minh</title></head>"
-        "\\r\\n  <body><p style=\\\"font-size: 16px;\\\">Your login code</p>"
-        "\\r\\n  <p>494652</p></body>\\r\\n</html>\";"
+        ' var htmlContent = "<html>\\r\\n  <head><title>M\\u00e3 x\\u00e1c minh</title></head>'
+        '\\r\\n  <body><p style=\\"font-size: 16px;\\">Your login code</p>'
+        '\\r\\n  <p>494652</p></body>\\r\\n</html>";'
         " frame.srcdoc = htmlContent; })();</script></body></html>"
     )
     EMAIL = "sample-380069+oai02@icloud.com"
@@ -631,11 +638,7 @@ class LatestMailJsChannelTests(unittest.TestCase):
         self.assertEqual(_message_received_ts(messages[0]), 1789573683)
 
     def test_the_no_mail_page_is_not_mistaken_for_the_latest_layout(self):
-        self.assertIsNone(
-            mailbox_icloud_url._latest_mail_js_message(
-                "<h1>未找到匹配的邮件</h1>", email=self.EMAIL
-            )
-        )
+        self.assertIsNone(mailbox_icloud_url._latest_mail_js_message("<h1>未找到匹配的邮件</h1>", email=self.EMAIL))
 
     def test_a_card_page_is_not_mistaken_for_the_latest_layout(self):
         self.assertIsNone(
@@ -649,8 +652,8 @@ class LatestMailJsChannelTests(unittest.TestCase):
         """版式对但没有正文时不返回 None —— 否则「读不出」会伪装成「没邮件」。"""
         page = (
             "<h1>最新邮件信息</h1>"
-            "<div class=\"label\">接收时间：</div><div class=\"time\">2026年09月16日 23:48:03 (北京时间)</div>"
-            "<div class=\"label\">邮件主题：</div><div class=\"subject\">Subject only</div>"
+            '<div class="label">接收时间：</div><div class="time">2026年09月16日 23:48:03 (北京时间)</div>'
+            '<div class="label">邮件主题：</div><div class="subject">Subject only</div>'
         )
         messages = mailbox_icloud_url._latest_mail_js_message(page, email=self.EMAIL)
 
@@ -659,9 +662,7 @@ class LatestMailJsChannelTests(unittest.TestCase):
         self.assertEqual(messages[0]["body"]["content"], "")
 
     def test_js_string_escapes_are_decoded(self):
-        self.assertEqual(
-            mailbox_icloud_url._decode_js_string('a\\"b\\r\\nM\\u00e3\\/c'), 'a"b\r\nMã/c'
-        )
+        self.assertEqual(mailbox_icloud_url._decode_js_string('a\\"b\\r\\nM\\u00e3\\/c'), 'a"b\r\nMã/c')
         self.assertEqual(mailbox_icloud_url._decode_js_string("plain"), "plain")
 
     def test_unparseable_time_does_not_invent_a_timestamp(self):
@@ -669,9 +670,10 @@ class LatestMailJsChannelTests(unittest.TestCase):
         self.assertEqual(mailbox_icloud_url._latest_mail_received_at(""), "")
 
     def test_fetch_dispatches_the_latest_layout_before_the_card_parser(self):
-        with patch.object(mailbox_icloud_url, "_parse_card_messages") as card, \
-             patch.object(mailbox_icloud_url.curl_requests, "get",
-                          return_value=_Response(text=self.LATEST_PAGE)):
+        with (
+            patch.object(mailbox_icloud_url, "_parse_card_messages") as card,
+            patch.object(mailbox_icloud_url.curl_requests, "get", return_value=_Response(text=self.LATEST_PAGE)),
+        ):
             messages = mailbox_icloud_url.fetch_icloud_url_messages(self._mailbox(), limit=5)
 
         card.assert_not_called()
@@ -679,9 +681,10 @@ class LatestMailJsChannelTests(unittest.TestCase):
         self.assertEqual(messages[0]["receivedDateTime"], "2026-09-16T23:48:03+08:00")
 
     def test_snapshot_also_dispatches_the_latest_layout(self):
-        with patch.object(mailbox_icloud_url, "_parse_card_messages") as card, \
-             patch.object(mailbox_icloud_url.curl_requests, "get",
-                          return_value=_Response(text=self.LATEST_PAGE)):
+        with (
+            patch.object(mailbox_icloud_url, "_parse_card_messages") as card,
+            patch.object(mailbox_icloud_url.curl_requests, "get", return_value=_Response(text=self.LATEST_PAGE)),
+        ):
             messages = mailbox_icloud_url.snapshot_icloud_url_messages(self._mailbox(), limit=5)
 
         card.assert_not_called()
@@ -690,13 +693,12 @@ class LatestMailJsChannelTests(unittest.TestCase):
     def test_a_card_page_still_reaches_the_card_parser(self):
         """新分支不许把 ``icloud-api.top`` 的卡片页截胡。"""
         page = (
-            "<div class=\"card\"><div class=\"fr\">OpenAI &lt;noreply@openai.com&gt;</div>"
-            "<div class=\"su\">你的临时 ChatGPT 登录代码</div>"
-            "<div class=\"dt\">Mon, 03 Aug 2026 06:32:17 +0000 (UTC)</div>"
-            "<div class=\"bd\">你的临时代码：654321</div></div>"
+            '<div class="card"><div class="fr">OpenAI &lt;noreply@openai.com&gt;</div>'
+            '<div class="su">你的临时 ChatGPT 登录代码</div>'
+            '<div class="dt">Mon, 03 Aug 2026 06:32:17 +0000 (UTC)</div>'
+            '<div class="bd">你的临时代码：654321</div></div>'
         )
-        with patch.object(mailbox_icloud_url.curl_requests, "get",
-                          return_value=_Response(text=page)):
+        with patch.object(mailbox_icloud_url.curl_requests, "get", return_value=_Response(text=page)):
             messages = mailbox_icloud_url.fetch_icloud_url_messages(self._mailbox(), limit=5)
 
         self.assertEqual(len(messages), 1)

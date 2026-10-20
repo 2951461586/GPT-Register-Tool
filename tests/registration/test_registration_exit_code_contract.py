@@ -19,6 +19,7 @@ The end-to-end tests below drive ``main()`` with the *real* save step, so the
 exit code is asserted against genuine report output rather than a hand-written
 literal.
 """
+
 from __future__ import annotations
 
 import io
@@ -61,9 +62,12 @@ def _run_registration(tmp_path, results, *, count, extra_args=()):
     mailboxes = [_Mailbox(f"pool{index}@example.com") for index in range(count)]
     argv = [
         "sms_tool",
-        "--email", "pool0@example.com",
-        "--count", str(count),
-        "--workers", "1",
+        "--email",
+        "pool0@example.com",
+        "--count",
+        str(count),
+        "--workers",
+        "1",
         *extra_args,
     ]
     buffer = io.StringIO()
@@ -74,19 +78,21 @@ def _run_registration(tmp_path, results, *, count, extra_args=()):
         "sms_tool.accounts.account_health_queue.enqueue_post_registration_checks",
         return_value=[],
     )
-    with patch.object(cli, "CFG", _config()), \
-         patch.object(sys, "argv", argv), \
-         patch.object(cli, "_load_mailbox_pool", return_value=mailboxes), \
-         patch.object(cli, "_preflight_registration_before_mailbox", return_value={"ok": True}), \
-         patch.object(cli, "_registration_phone_pool", return_value=None), \
-         patch.object(cli, "_proxy_pool_values", return_value=[]), \
-         patch.object(cli, "run_batch", return_value=list(results)), \
-         patch.object(cli, "upsert_account", return_value=True), \
-         patch.object(cli, "database_path", return_value=tmp_path / "accounts.sqlite3"), \
-         patch("sms_tool.storage.record_registration_audit"), \
-         patch("sms_tool.batch_runner.get_account_records", return_value={}), \
-         health_queue, \
-         redirect_stdout(buffer):
+    with (
+        patch.object(cli, "CFG", _config()),
+        patch.object(sys, "argv", argv),
+        patch.object(cli, "_load_mailbox_pool", return_value=mailboxes),
+        patch.object(cli, "_preflight_registration_before_mailbox", return_value={"ok": True}),
+        patch.object(cli, "_registration_phone_pool", return_value=None),
+        patch.object(cli, "_proxy_pool_values", return_value=[]),
+        patch.object(cli, "run_batch", return_value=list(results)),
+        patch.object(cli, "upsert_account", return_value=True),
+        patch.object(cli, "database_path", return_value=tmp_path / "accounts.sqlite3"),
+        patch("sms_tool.storage.record_registration_audit"),
+        patch("sms_tool.batch_runner.get_account_records", return_value={}),
+        health_queue,
+        redirect_stdout(buffer),
+    ):
         try:
             cli.main()
         except SystemExit as exc:
@@ -105,6 +111,7 @@ def _succeeded(email):
 # --------------------------------------------------------------------------
 # the exit code itself
 # --------------------------------------------------------------------------
+
 
 def test_the_exit_code_follows_the_report_failed_count():
     assert _registration_exit_code({"ok": True, "failed": 0}) == 0
@@ -147,6 +154,7 @@ def test_a_stringified_failed_count_still_exits_non_zero():
 # --------------------------------------------------------------------------
 # end to end through main()
 # --------------------------------------------------------------------------
+
 
 def test_a_batch_that_registered_nothing_exits_three(tmp_path):
     """The defect shape: ``0/3 registered`` used to come with exit status 0.
@@ -196,18 +204,22 @@ def test_the_phone_lane_also_reports_a_failed_batch(tmp_path):
     """
     buffer = io.StringIO()
     argv = ["sms_tool", "--phone-register", "--count", "1"]
-    with patch.object(cli, "CFG", _config()), \
-         patch.object(sys, "argv", argv), \
-         patch.object(cli, "_load_mailbox_pool", return_value=[_Mailbox("pool0@example.com")]), \
-         patch.object(cli, "_preflight_registration_before_mailbox", return_value={"ok": True}), \
-         patch.object(cli, "_registration_phone_pool", return_value=None), \
-         patch.object(cli, "_proxy_pool_values", return_value=[]), \
-         patch("sms_tool.registration.run_phone_register",
-               return_value={"success": False, "phone": "+15550000000", "error": "sms_timeout"}), \
-         patch.object(cli, "upsert_account", return_value=True), \
-         patch.object(cli, "database_path", return_value=tmp_path / "accounts.sqlite3"), \
-         patch("sms_tool.storage.record_registration_audit"), \
-         redirect_stdout(buffer):
+    with (
+        patch.object(cli, "CFG", _config()),
+        patch.object(sys, "argv", argv),
+        patch.object(cli, "_load_mailbox_pool", return_value=[_Mailbox("pool0@example.com")]),
+        patch.object(cli, "_preflight_registration_before_mailbox", return_value={"ok": True}),
+        patch.object(cli, "_registration_phone_pool", return_value=None),
+        patch.object(cli, "_proxy_pool_values", return_value=[]),
+        patch(
+            "sms_tool.registration.run_phone_register",
+            return_value={"success": False, "phone": "+15550000000", "error": "sms_timeout"},
+        ),
+        patch.object(cli, "upsert_account", return_value=True),
+        patch.object(cli, "database_path", return_value=tmp_path / "accounts.sqlite3"),
+        patch("sms_tool.storage.record_registration_audit"),
+        redirect_stdout(buffer),
+    ):
         try:
             cli.main()
         except SystemExit as exc:
@@ -235,17 +247,19 @@ def test_the_desktop_client_still_gets_the_payload_when_the_batch_fails(tmp_path
     }
     mailboxes = [_Mailbox("pool0@example.com")]
     argv = ["sms_tool", "--email", "pool0@example.com", "--count", "1", "--desktop-ipc"]
-    with patch.object(cli, "CFG", _config()), \
-         patch.object(sys, "argv", argv), \
-         patch.object(cli, "_load_mailbox_pool", return_value=mailboxes), \
-         patch.object(cli, "_preflight_registration_before_mailbox", return_value={"ok": True}), \
-         patch.object(cli, "_registration_phone_pool", return_value=None), \
-         patch.object(cli, "_proxy_pool_values", return_value=[]), \
-         patch.object(cli, "run_batch", return_value=[_failed("pool0@example.com")]), \
-         patch.object(cli, "_save_registration_results", return_value=report), \
-         patch("sms_tool.batch_runner.get_account_records", return_value={}), \
-         patch.object(cli, "emit_result") as emit, \
-         redirect_stdout(io.StringIO()):
+    with (
+        patch.object(cli, "CFG", _config()),
+        patch.object(sys, "argv", argv),
+        patch.object(cli, "_load_mailbox_pool", return_value=mailboxes),
+        patch.object(cli, "_preflight_registration_before_mailbox", return_value={"ok": True}),
+        patch.object(cli, "_registration_phone_pool", return_value=None),
+        patch.object(cli, "_proxy_pool_values", return_value=[]),
+        patch.object(cli, "run_batch", return_value=[_failed("pool0@example.com")]),
+        patch.object(cli, "_save_registration_results", return_value=report),
+        patch("sms_tool.batch_runner.get_account_records", return_value={}),
+        patch.object(cli, "emit_result") as emit,
+        redirect_stdout(io.StringIO()),
+    ):
         try:
             cli.main()
         except SystemExit as exc:
@@ -260,6 +274,7 @@ def test_the_desktop_client_still_gets_the_payload_when_the_batch_fails(tmp_path
 # wiring guards
 # --------------------------------------------------------------------------
 
+
 def test_both_registration_tails_consult_the_report():
     """The phone lane had the same shape, so it gets the same guard.
 
@@ -268,17 +283,13 @@ def test_both_registration_tails_consult_the_report():
     the report exists and *before* the process exits.
     """
     body = _source("sms_tool/cli.py").split("\ndef _registration_exit_code", 1)[0]
-    tails = [
-        index for index in range(len(body))
-        if body.startswith("raise SystemExit(exit_code)", index)
-    ]
+    tails = [index for index in range(len(body)) if body.startswith("raise SystemExit(exit_code)", index)]
     assert len(tails) == 2, "expected the phone lane and the mailbox lane to both exit on failure"
     for at in tails:
         emit_at = body.rindex("emit_result(report, enabled=True)", 0, at)
         save_at = body.rindex("report = _save_registration_results(", 0, at)
         assert save_at < emit_at < at, (
-            "a registration tail raised without first writing the IPC envelope "
-            "for its own report"
+            "a registration tail raised without first writing the IPC envelope for its own report"
         )
 
 

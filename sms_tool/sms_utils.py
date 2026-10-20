@@ -126,7 +126,7 @@ def _poll_sms_code(
                 if text:
                     code = _extract_sms_code(text)
                     if code and attempt > 2:
-                        if not hasattr(_poll_sms_code, '_last_seen') or _poll_sms_code._last_seen != text:
+                        if not hasattr(_poll_sms_code, "_last_seen") or _poll_sms_code._last_seen != text:
                             _poll_sms_code._last_seen = text
                             print(f"\n[*] SMS code received (new message): {code}")
                             return code
@@ -136,7 +136,7 @@ def _poll_sms_code(
 
         remaining = int(deadline - time.time())
         if dots:
-            print(f". [{attempt}/{timeout//poll_interval}]", end="", flush=True)
+            print(f". [{attempt}/{timeout // poll_interval}]", end="", flush=True)
         time.sleep(poll_interval)
 
     print(f"\n[!] SMS poll timeout after {timeout}s")

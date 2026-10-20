@@ -56,9 +56,15 @@ def live_page():
     return FakePage(evaluate=lambda script, arg: arg["value"])
 
 
-ADDRESS = {"line1": "3110 Sunset Blvd", "city": "Los Angeles",
-           "state": "CA", "postal_code": "90026", "country": "US",
-           "first_name": "Ada", "last_name": "Lovelace"}
+ADDRESS = {
+    "line1": "3110 Sunset Blvd",
+    "city": "Los Angeles",
+    "state": "CA",
+    "postal_code": "90026",
+    "country": "US",
+    "first_name": "Ada",
+    "last_name": "Lovelace",
+}
 
 
 # ──────────────────────── the unbound-global defect ──────────────────────────
@@ -80,15 +86,20 @@ def test_form_steps_imports_random_and_re():
         "step that reaches it raises NameError mid-payment"
     )
     assert hasattr(form_steps, "re"), (
-        "form_step calls re.sub but does not import re - _fill_phone_if_present "
-        "raises NameError mid-payment"
+        "form_step calls re.sub but does not import re - _fill_phone_if_present raises NameError mid-payment"
     )
 
 
-@pytest.mark.parametrize("name", [
-    "_fill_signup_name", "_fill_phone_if_present", "_fill_password",
-    "_fill_card", "_fill_billing_address",
-])
+@pytest.mark.parametrize(
+    "name",
+    [
+        "_fill_signup_name",
+        "_fill_phone_if_present",
+        "_fill_password",
+        "_fill_card",
+        "_fill_billing_address",
+    ],
+)
 def test_steps_that_touch_random_or_re_complete_without_error(name, live_page):
     """The five entry points that touch `random`/`re` must finish the fill.
 
@@ -102,8 +113,7 @@ def test_steps_that_touch_random_or_re_complete_without_error(name, live_page):
         "_fill_signup_name": (live_page, "Ada", "Lovelace"),
         "_fill_phone_if_present": (live_page, "+1 (555) 010-0134"),
         "_fill_password": (live_page, "pw"),
-        "_fill_card": (live_page, {"number": "4242", "exp_month": "12",
-                                   "exp_year": "2030", "cvv": "123"}),
+        "_fill_card": (live_page, {"number": "4242", "exp_month": "12", "exp_year": "2030", "cvv": "123"}),
         "_fill_billing_address": (live_page, dict(ADDRESS)),
     }[name]
     fn(*args)  # must not raise
@@ -165,13 +175,11 @@ def test_ensure_country_us_returns_false_when_the_select_is_already_us():
 
 
 def test_ensure_country_us_accepts_the_long_country_value():
-    assert form_steps._ensure_country_us(
-        _country_page({"value": "united states", "text": ""})) is False
+    assert form_steps._ensure_country_us(_country_page({"value": "united states", "text": ""})) is False
 
 
 def test_ensure_country_us_matches_the_visible_option_text():
-    assert form_steps._ensure_country_us(
-        _country_page({"value": "xyz", "text": "united states of america"})) is False
+    assert form_steps._ensure_country_us(_country_page({"value": "xyz", "text": "united states of america"})) is False
 
 
 def test_ensure_country_us_comparison_relies_on_the_in_page_lowercasing(monkeypatch):
@@ -183,8 +191,7 @@ def test_ensure_country_us_comparison_relies_on_the_in_page_lowercasing(monkeypa
     re-selects it - a needless mutation on a live payment form.
     """
     called = []
-    monkeypatch.setattr(form_steps, "_select_with_fallback",
-                        lambda *a, **k: called.append(True) or False)
+    monkeypatch.setattr(form_steps, "_select_with_fallback", lambda *a, **k: called.append(True) or False)
 
     # lowercased (what the real JS returns) -> recognised, no re-select
     form_steps._ensure_country_us(_country_page({"value": "us", "text": "united states"}))
@@ -211,9 +218,11 @@ def test_ensure_country_us_swallows_errors_and_still_offers_all_six_selectors(mo
     el.evaluate = lambda script: (_ for _ in ()).throw(RuntimeError("boom"))
     page = FakePage(locators={'select[id="country"]': el})
     offered = {}
-    monkeypatch.setattr(form_steps, "_select_with_fallback",
-                        lambda p, selectors, value, **k: offered.update(n=len(selectors),
-                                                                        value=value) or False)
+    monkeypatch.setattr(
+        form_steps,
+        "_select_with_fallback",
+        lambda p, selectors, value, **k: offered.update(n=len(selectors), value=value) or False,
+    )
     assert form_steps._ensure_country_us(page) is False
     assert offered == {"n": 6, "value": "US"}
 
@@ -264,14 +273,11 @@ def test_openai_checkout_helpers_propagate_a_false_result(monkeypatch):
 
 def test_fill_openai_checkout_billing_skips_blank_values(monkeypatch):
     calls = []
-    monkeypatch.setattr(form_steps, "_fill_visible_input",
-                        lambda page, sel, value, **k: calls.append(value) or False)
-    monkeypatch.setattr(form_steps, "_fill_with_fallback",
-                        lambda page, sel, value, **k: calls.append(value) or False)
+    monkeypatch.setattr(form_steps, "_fill_visible_input", lambda page, sel, value, **k: calls.append(value) or False)
+    monkeypatch.setattr(form_steps, "_fill_with_fallback", lambda page, sel, value, **k: calls.append(value) or False)
     monkeypatch.setattr(form_steps, "_select_with_fallback", lambda *a, **k: True)
 
-    form_steps._fill_openai_checkout_billing(
-        FakePage(), {"country": "US", "line1": "", "city": ""}, "Ada", "", "")
+    form_steps._fill_openai_checkout_billing(FakePage(), {"country": "US", "line1": "", "city": ""}, "Ada", "", "")
 
     # Only the full name is attempted (by both strategies); every blank value is
     # skipped outright rather than being sent as an empty fill.
@@ -281,10 +287,12 @@ def test_fill_openai_checkout_billing_skips_blank_values(monkeypatch):
 
 def test_fill_openai_checkout_billing_tries_both_fill_strategies_per_field(monkeypatch):
     order = []
-    monkeypatch.setattr(form_steps, "_fill_visible_input",
-                        lambda page, sel, value, **k: order.append("visible") or False)
-    monkeypatch.setattr(form_steps, "_fill_with_fallback",
-                        lambda page, sel, value, **k: order.append("fallback") or False)
+    monkeypatch.setattr(
+        form_steps, "_fill_visible_input", lambda page, sel, value, **k: order.append("visible") or False
+    )
+    monkeypatch.setattr(
+        form_steps, "_fill_with_fallback", lambda page, sel, value, **k: order.append("fallback") or False
+    )
     monkeypatch.setattr(form_steps, "_select_with_fallback", lambda *a, **k: True)
 
     form_steps._fill_openai_checkout_billing(FakePage(), {"country": "US"}, "Ada", "", "")
@@ -293,10 +301,12 @@ def test_fill_openai_checkout_billing_tries_both_fill_strategies_per_field(monke
 
 def test_fill_openai_checkout_billing_stops_after_the_first_successful_strategy(monkeypatch):
     order = []
-    monkeypatch.setattr(form_steps, "_fill_visible_input",
-                        lambda page, sel, value, **k: order.append("visible") or True)
-    monkeypatch.setattr(form_steps, "_fill_with_fallback",
-                        lambda page, sel, value, **k: order.append("fallback") or True)
+    monkeypatch.setattr(
+        form_steps, "_fill_visible_input", lambda page, sel, value, **k: order.append("visible") or True
+    )
+    monkeypatch.setattr(
+        form_steps, "_fill_with_fallback", lambda page, sel, value, **k: order.append("fallback") or True
+    )
     monkeypatch.setattr(form_steps, "_select_with_fallback", lambda *a, **k: True)
 
     form_steps._fill_openai_checkout_billing(FakePage(), {"country": "US"}, "Ada", "", "")
@@ -305,21 +315,22 @@ def test_fill_openai_checkout_billing_stops_after_the_first_successful_strategy(
 
 def test_fill_openai_checkout_billing_always_selects_a_country(monkeypatch):
     seen = {}
-    monkeypatch.setattr(form_steps, "_select_with_fallback",
-                        lambda page, selectors, value, **k: seen.update(value=value) or True)
+    monkeypatch.setattr(
+        form_steps, "_select_with_fallback", lambda page, selectors, value, **k: seen.update(value=value) or True
+    )
     form_steps._fill_openai_checkout_billing(FakePage(), {"country": "DE"}, "A", "B", "")
     assert seen["value"] == "DE"
 
 
 def test_fill_openai_checkout_billing_prefers_postal_code_over_zip(monkeypatch):
     seen = []
-    monkeypatch.setattr(form_steps, "_fill_visible_input",
-                        lambda page, sel, value, **k: seen.append(value) or True)
+    monkeypatch.setattr(form_steps, "_fill_visible_input", lambda page, sel, value, **k: seen.append(value) or True)
     monkeypatch.setattr(form_steps, "_fill_with_fallback", lambda *a, **k: True)
     monkeypatch.setattr(form_steps, "_select_with_fallback", lambda *a, **k: True)
 
     form_steps._fill_openai_checkout_billing(
-        FakePage(), {"country": "US", "postal_code": "90026", "zip": "00000"}, "A", "", "")
+        FakePage(), {"country": "US", "postal_code": "90026", "zip": "00000"}, "A", "", ""
+    )
     assert "90026" in seen and "00000" not in seen
 
 
@@ -328,16 +339,18 @@ def test_fill_openai_checkout_billing_prefers_postal_code_over_zip(monkeypatch):
 
 def test_click_create_account_tries_the_guest_card_path_first(monkeypatch):
     seen = []
-    monkeypatch.setattr(form_steps, "_click_with_fallback",
-                        lambda page, selectors, timeout=0: seen.append(selectors[0]) or True)
+    monkeypatch.setattr(
+        form_steps, "_click_with_fallback", lambda page, selectors, timeout=0: seen.append(selectors[0]) or True
+    )
     form_steps._click_create_account(FakePage())
     assert seen == ['text="Pay with Debit or Credit Card"']
 
 
 def test_click_create_account_falls_back_to_the_signup_link(capsys, monkeypatch):
     seen = []
-    monkeypatch.setattr(form_steps, "_click_with_fallback",
-                        lambda page, selectors, timeout=0: seen.append(selectors[0]) or False)
+    monkeypatch.setattr(
+        form_steps, "_click_with_fallback", lambda page, selectors, timeout=0: seen.append(selectors[0]) or False
+    )
     form_steps._click_create_account(FakePage())
     assert seen == ['text="Pay with Debit or Credit Card"', 'text="Create an account"']
     assert "already on form" in capsys.readouterr().out
@@ -399,8 +412,7 @@ def test_fill_signup_email_refills_the_email_if_it_is_lost_after_continue(monkey
     monkeypatch.setattr(form_steps, "_wait_for_checkout_form_after_email", lambda page: True)
 
     refills = []
-    monkeypatch.setattr(form_steps, "_fill_visible_input",
-                        lambda page, sel, value, **k: refills.append(value) or True)
+    monkeypatch.setattr(form_steps, "_fill_visible_input", lambda page, sel, value, **k: refills.append(value) or True)
 
     # case A: still filled after continue -> no refill
     monkeypatch.setattr(form_steps, "_visible_field_has_value", lambda *a, **k: True)
@@ -418,12 +430,21 @@ def test_fill_signup_email_refills_the_email_if_it_is_lost_after_continue(monkey
 
 
 def _page_with_all_fields_present():
-    return FakePage(evaluate=lambda script, arg: {
-        "email": "a@b.com", "phone": "555", "cardNumber": "4242", "cardExpiry": "12/30",
-        "cardCvv": "123", "firstName": "Ada", "lastName": "Lovelace",
-        "billingLine1": "1 Main", "billingLocality": "LA", "billingPostalCode": "90026",
-        "password": "pw",
-    }.get(arg, None))
+    return FakePage(
+        evaluate=lambda script, arg: {
+            "email": "a@b.com",
+            "phone": "555",
+            "cardNumber": "4242",
+            "cardExpiry": "12/30",
+            "cardCvv": "123",
+            "firstName": "Ada",
+            "lastName": "Lovelace",
+            "billingLine1": "1 Main",
+            "billingLocality": "LA",
+            "billingPostalCode": "90026",
+            "password": "pw",
+        }.get(arg, None)
+    )
 
 
 def test_verify_checkout_fields_passes_when_every_required_field_has_a_value(capsys):
@@ -444,9 +465,18 @@ def test_verify_checkout_fields_raises_listing_every_blank_required_field():
     with pytest.raises(_PayPalStepError) as exc:
         form_steps._verify_checkout_fields(page)
     detail = exc.value.detail
-    for field in ("email", "cardNumber", "cardExpiry", "cardCvv", "firstName",
-                  "lastName", "billingLine1", "billingCity", "billingPostalCode",
-                  "password"):
+    for field in (
+        "email",
+        "cardNumber",
+        "cardExpiry",
+        "cardCvv",
+        "firstName",
+        "lastName",
+        "billingLine1",
+        "billingCity",
+        "billingPostalCode",
+        "password",
+    ):
         assert field in detail
 
 
@@ -458,11 +488,21 @@ def test_verify_checkout_fields_does_not_require_a_phone_number():
 
 def test_verify_checkout_fields_falls_back_to_selectors_when_ids_are_blank():
     page = FakePage(
-        locators={sel: FakeElement(visible=True, value="filled") for sel in (
-            'input[id="email"]', 'input[id="cardNumber"]', 'input[id="cardExpiry"]',
-            'input[id="cardCvv"]', 'input[id="firstName"]', 'input[id="lastName"]',
-            'input[id="billingLine1"]', 'input[id="billingCity"]',
-            'input[id="billingPostalCode"]', 'input[id="password"]')},
+        locators={
+            sel: FakeElement(visible=True, value="filled")
+            for sel in (
+                'input[id="email"]',
+                'input[id="cardNumber"]',
+                'input[id="cardExpiry"]',
+                'input[id="cardCvv"]',
+                'input[id="firstName"]',
+                'input[id="lastName"]',
+                'input[id="billingLine1"]',
+                'input[id="billingCity"]',
+                'input[id="billingPostalCode"]',
+                'input[id="password"]',
+            )
+        },
         evaluate=lambda script, arg: None,
     )
     form_steps._verify_checkout_fields(page)  # must not raise
@@ -487,8 +527,9 @@ def test_accept_terms_checks_the_first_visible_unchecked_box():
 
 def test_accept_terms_stops_after_the_first_match():
     first, second = FakeElement(visible=True), FakeElement(visible=True)
-    page = FakePage(locators={'input[type="checkbox"][name*="agree"]': first,
-                              'input[type="checkbox"][name*="terms"]': second})
+    page = FakePage(
+        locators={'input[type="checkbox"][name*="agree"]': first, 'input[type="checkbox"][name*="terms"]': second}
+    )
     form_steps._accept_terms(page)
     assert first.record and second.record == []
 

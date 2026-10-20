@@ -34,13 +34,13 @@ def solve_captcha_with_nodriver(
         # available while never being able to run on a fresh install.
         # ASCII-only on purpose - CI stdout is cp1252 and non-Latin-1 prints
         # raise UnicodeEncodeError there.
-        print("[!] nodriver is not installed - the PayPal CAPTCHA fallback is "
-              "unavailable. Run: pip install nodriver (listed in requirements.txt)")
+        print(
+            "[!] nodriver is not installed - the PayPal CAPTCHA fallback is "
+            "unavailable. Run: pip install nodriver (listed in requirements.txt)"
+        )
         return {"ok": False, "error": "nodriver not installed (pip install nodriver)"}
 
-    return uc.loop().run_until_complete(
-        _solve_async(uc, page_url, proxy, headless, timeout)
-    )
+    return uc.loop().run_until_complete(_solve_async(uc, page_url, proxy, headless, timeout))
 
 
 async def _solve_async(
@@ -226,6 +226,7 @@ async def _extract_cookies(browser: Any) -> dict[str, str]:
             for tab in browser.tabs:
                 try:
                     from nodriver import cdp
+
                     result = await tab.send(cdp.storage.get_cookies())
                     for c in result:
                         if hasattr(c, "name"):

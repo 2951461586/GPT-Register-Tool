@@ -635,12 +635,16 @@ def solve_recaptcha_on_page(
             for name, value in cookies.items():
                 try:
                     if name and value and len(str(name)) < 128 and len(str(value)) < 2048:
-                        context.add_cookies([{
-                            "name": str(name),
-                            "value": str(value),
-                            "domain": ".paypal.com",
-                            "path": "/",
-                        }])
+                        context.add_cookies(
+                            [
+                                {
+                                    "name": str(name),
+                                    "value": str(value),
+                                    "domain": ".paypal.com",
+                                    "path": "/",
+                                }
+                            ]
+                        )
                 except Exception:
                     pass
 
@@ -666,9 +670,7 @@ def solve_recaptcha_on_page(
 
         if not recaptcha_frame:
             # Maybe it's invisible v3 - try extracting token directly
-            token = page.evaluate(
-                "typeof grecaptcha !== 'undefined' ? grecaptcha.getResponse() : ''"
-            )
+            token = page.evaluate("typeof grecaptcha !== 'undefined' ? grecaptcha.getResponse() : ''")
             if token:
                 log(f"[captcha] reCAPTCHA v3 token extracted, len={len(token)}")
                 return token, ""
@@ -691,9 +693,7 @@ def solve_recaptcha_on_page(
 
         # Click the checkbox inside the reCAPTCHA iframe
         try:
-            checkbox = recaptcha_frame.wait_for_selector(
-                ".recaptcha-checkbox-border, #recaptcha-anchor", timeout=10000
-            )
+            checkbox = recaptcha_frame.wait_for_selector(".recaptcha-checkbox-border, #recaptcha-anchor", timeout=10000)
             if checkbox:
                 checkbox.click()
                 time.sleep(2)
@@ -702,9 +702,7 @@ def solve_recaptcha_on_page(
 
         # Wait for token to appear (checkbox solved or challenge completed)
         while time.time() < deadline:
-            token = page.evaluate(
-                "typeof grecaptcha !== 'undefined' ? grecaptcha.getResponse() : ''"
-            )
+            token = page.evaluate("typeof grecaptcha !== 'undefined' ? grecaptcha.getResponse() : ''")
             if token:
                 log(f"[captcha] reCAPTCHA solved, token_len={len(token)}")
                 return token, ""

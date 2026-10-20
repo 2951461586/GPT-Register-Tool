@@ -82,8 +82,7 @@ def main(argv: list[str]) -> int:
         current = TARGET.read_text(encoding="utf-8") if TARGET.is_file() else ""
         if current != markdown:
             print(
-                f"{TARGET.relative_to(ROOT)} is stale; run "
-                "`python scripts/generate_cli_reference.py --write`.",
+                f"{TARGET.relative_to(ROOT)} is stale; run `python scripts/generate_cli_reference.py --write`.",
                 file=sys.stderr,
             )
             return 1

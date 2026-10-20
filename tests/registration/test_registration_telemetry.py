@@ -10,7 +10,9 @@ def test_logs_carry_command_and_run_ids_without_proxy_credentials(monkeypatch):
     monkeypatch.setenv("SMS_TOOL_COMMAND_ID", "test-command")
     token = current_run_id.set("test-run")
     try:
-        record = logging.LogRecord("test", logging.ERROR, "", 0, "url=%s", ("http://private:password@proxy.example:80",), None)
+        record = logging.LogRecord(
+            "test", logging.ERROR, "", 0, "url=%s", ("http://private:password@proxy.example:80",), None
+        )
         data = json.loads(CorrelatedJsonFormatter().format(record))
         assert data["run_id"] == "test-run"
         assert data["command_id"] == "test-command"
@@ -21,10 +23,12 @@ def test_logs_carry_command_and_run_ids_without_proxy_credentials(monkeypatch):
 
 
 def test_test_records_are_excluded_from_quality_metrics():
-    metrics = registration_quality_metrics([
-        {"source": "test", "success": False},
-        {"source": "live", "success": True},
-    ])
+    metrics = registration_quality_metrics(
+        [
+            {"source": "test", "success": False},
+            {"source": "live", "success": True},
+        ]
+    )
     assert metrics["runs"] == 1
     assert metrics["success_rate"] == 1
 

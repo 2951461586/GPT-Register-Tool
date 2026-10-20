@@ -60,12 +60,32 @@ SCAN_ROOTS = ("sms_tool", "services")
 SKIP_PARTS = {"__pycache__", ".venv", "dist", "runtime", "tests"}
 
 BUILTINS = frozenset(dir(builtins))
-DUNDER_OK = frozenset({
-    "__name__", "__file__", "__doc__", "__package__", "__spec__", "__loader__",
-    "__builtins__", "__all__", "__path__", "__debug__", "__class__", "__module__",
-    "__qualname__", "__dict__", "__annotations__", "__await__", "__aiter__",
-    "__anext__", "__aenter__", "__aexit__", "__enter__", "__exit__",
-})
+DUNDER_OK = frozenset(
+    {
+        "__name__",
+        "__file__",
+        "__doc__",
+        "__package__",
+        "__spec__",
+        "__loader__",
+        "__builtins__",
+        "__all__",
+        "__path__",
+        "__debug__",
+        "__class__",
+        "__module__",
+        "__qualname__",
+        "__dict__",
+        "__annotations__",
+        "__await__",
+        "__aiter__",
+        "__anext__",
+        "__aenter__",
+        "__aexit__",
+        "__enter__",
+        "__exit__",
+    }
+)
 
 # Known findings that need a product decision rather than a mechanical fix.
 # Each entry must carry a reason; an unexplained entry is a bug in this guard.
@@ -98,8 +118,7 @@ def _annotation_names(tree: ast.Module) -> set[ast.Name]:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             if node.returns is not None:
                 nodes.append(node.returns)
-            for arg in list(node.args.posonlyargs) + list(node.args.args) + \
-                    list(node.args.kwonlyargs):
+            for arg in list(node.args.posonlyargs) + list(node.args.args) + list(node.args.kwonlyargs):
                 if arg.annotation is not None:
                     nodes.append(arg.annotation)
         elif isinstance(node, ast.AnnAssign) and node.annotation is not None:
@@ -183,8 +202,7 @@ def _unresolved_relative_imports(path: Path) -> list[tuple[int, str, str]]:
             parts = parts[: -(node.level - 1)]
         base = Path(*parts) if parts else ROOT
         module = node.module or ""
-        candidate_file = base / (module.replace(".", "/") + ".py") if module \
-            else base / "__init__.py"
+        candidate_file = base / (module.replace(".", "/") + ".py") if module else base / "__init__.py"
         # Dotted targets are nested packages: `from .a.b import x` lives at
         # <base>/a/b/__init__.py, NOT at a single directory literally named
         # "a.b".  Forgetting the replace() here makes every nested relative
@@ -194,11 +212,13 @@ def _unresolved_relative_imports(path: Path) -> list[tuple[int, str, str]]:
             continue
         if candidate_pkg is not None and candidate_pkg.exists():
             continue
-        findings.append((
-            node.lineno,
-            "." * node.level + module,
-            candidate_file.relative_to(ROOT).as_posix(),
-        ))
+        findings.append(
+            (
+                node.lineno,
+                "." * node.level + module,
+                candidate_file.relative_to(ROOT).as_posix(),
+            )
+        )
     return findings
 
 
@@ -231,9 +251,7 @@ IMPORT_FINDINGS = _collect_imports()
 
 def test_guard_scanned_a_real_amount_of_source():
     """Meta-check: a broken scanner would make every assertion below vacuous."""
-    assert len(_iter_source_files()) > 100, (
-        "the scanner found almost no files - path filters are wrong"
-    )
+    assert len(_iter_source_files()) > 100, "the scanner found almost no files - path filters are wrong"
 
 
 @pytest.mark.parametrize(

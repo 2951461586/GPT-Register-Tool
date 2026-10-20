@@ -101,9 +101,7 @@ class LocalProxyBridge:
         if self.upstream is None:
             raise RuntimeError("proxy_bridge: no upstream proxy configured")
         self._loop = asyncio.get_running_loop()
-        self._server = await asyncio.start_server(
-            self._on_client, self.listen_host, self.listen_port
-        )
+        self._server = await asyncio.start_server(self._on_client, self.listen_host, self.listen_port)
         socket_name = self._server.sockets[0].getsockname()
         self._port = int(socket_name[1])
         logger.info(
@@ -209,9 +207,7 @@ class LocalProxyBridge:
         if server is not None and loop is not None and loop.is_running():
             # Let the background loop close the server so wait_closed is awaited.
             try:
-                future = asyncio.run_coroutine_threadsafe(
-                    self._close_server(server), loop
-                )
+                future = asyncio.run_coroutine_threadsafe(self._close_server(server), loop)
                 future.result(timeout=3)
             except Exception as exc:  # pragma: no cover - defensive
                 logger.debug("proxy_bridge stop close error: %s", exc)
@@ -267,9 +263,7 @@ class LocalProxyBridge:
 
     # ── client handler ─────────────────────────────────────────────────────
 
-    async def _on_client(
-        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
-    ) -> None:
+    async def _on_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         try:
             await self._handle_client(reader, writer)
         except asyncio.CancelledError:
@@ -283,9 +277,7 @@ class LocalProxyBridge:
             except Exception:
                 pass
 
-    async def _handle_client(
-        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
-    ) -> None:
+    async def _handle_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         # greeting
         try:
             hdr = await asyncio.wait_for(_read_exact(reader, 2), timeout=10)
@@ -326,7 +318,9 @@ class LocalProxyBridge:
         except Exception as exc:
             logger.debug(
                 "proxy_bridge upstream connect failed for %s:%s: %s",
-                dest_host, dest_port, exc,
+                dest_host,
+                dest_port,
+                exc,
             )
             writer.write(_build_socks5_reply(_REP_CONN_REFUSED))
             await writer.drain()
@@ -366,9 +360,7 @@ class LocalProxyBridge:
             label=upstream.masked,
         )
         connector = Socks5Server(connect_timeout=self.connect_timeout)
-        return await connector._connect_through_upstream(
-            fake, dest_host, dest_port, dest_atyp
-        )
+        return await connector._connect_through_upstream(fake, dest_host, dest_port, dest_atyp)
 
     async def _connect_http_upstream(
         self, upstream: ProxyEntry, dest_host: str, dest_port: int
@@ -385,13 +377,9 @@ class LocalProxyBridge:
         port = upstream.port or _SOCKS_DEFAULT_PORT
         timeout = self.connect_timeout
         try:
-            r, w = await asyncio.wait_for(
-                asyncio.open_connection(upstream.host, port), timeout=timeout
-            )
+            r, w = await asyncio.wait_for(asyncio.open_connection(upstream.host, port), timeout=timeout)
         except (asyncio.TimeoutError, OSError) as exc:
-            raise ConnectionError(
-                f"HTTP upstream connect failed within {timeout}s: {upstream.masked}"
-            ) from exc
+            raise ConnectionError(f"HTTP upstream connect failed within {timeout}s: {upstream.masked}") from exc
         try:
             authority = f"{dest_host}:{dest_port}"
             lines = [f"CONNECT {authority} HTTP/1.1", f"Host: {authority}"]
@@ -405,20 +393,14 @@ class LocalProxyBridge:
             await asyncio.wait_for(w.drain(), timeout=timeout)
             status_line = await asyncio.wait_for(r.readline(), timeout=timeout)
             status_text = status_line.decode("ascii", errors="replace")
-            code = (
-                int(status_text.split(" ", 2)[1])
-                if len(status_text.split(" ", 2)) > 1
-                else 0
-            )
+            code = int(status_text.split(" ", 2)[1]) if len(status_text.split(" ", 2)) > 1 else 0
             while True:
                 line = await asyncio.wait_for(r.readline(), timeout=timeout)
                 if line in (b"\r\n", b"\n", b""):
                     break
         except (asyncio.TimeoutError, ValueError, ConnectionError, OSError) as exc:
             await _close_writer(w)
-            raise ConnectionError(
-                f"HTTP CONNECT failed within {timeout}s: {upstream.masked} ({exc})"
-            ) from exc
+            raise ConnectionError(f"HTTP CONNECT failed within {timeout}s: {upstream.masked} ({exc})") from exc
         if not (200 <= code < 300):
             await _close_writer(w)
             raise ConnectionError(f"HTTP CONNECT failed: {status_text.strip()}")
@@ -461,9 +443,7 @@ class LocalProxyBridge:
 def _basic_auth_header(username: str, password: str) -> str:
     import base64
 
-    token = base64.b64encode(
-        f"{username}:{password}".encode("utf-8", errors="replace")
-    ).decode("ascii")
+    token = base64.b64encode(f"{username}:{password}".encode("utf-8", errors="replace")).decode("ascii")
     return token
 
 
@@ -518,9 +498,7 @@ def proxy_for_browser(proxy: Any, *, env_prefix: str = "PROXY") -> tuple[str, An
     return bridge.local_url, bridge.stop
 
 
-async def async_proxy_for_browser(
-    proxy: Any, *, env_prefix: str = "PROXY"
-) -> tuple[str, Any]:
+async def async_proxy_for_browser(proxy: Any, *, env_prefix: str = "PROXY") -> tuple[str, Any]:
     """Async variant of :func:`proxy_for_browser` for use inside a running loop.
 
     ``closer`` is an awaitable coroutine function that stops the bridge.

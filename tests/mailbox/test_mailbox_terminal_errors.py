@@ -47,10 +47,15 @@ def test_invalid_credential_stops_repeated_reads_until_changed(monkeypatch, isol
 def test_malformed_retry_after_keeps_quarantine_instead_of_raising(isolated_quarantine):
     """A hand-edited/corrupt entry must fail closed, not break every mailbox read."""
     path = quarantine.quarantine_path()
-    path.write_text(json.dumps({
-        "version": 1,
-        "entries": {"abc": {"code": "mailbox_auth_invalid", "retry_after": "soon"}},
-    }), encoding="utf-8")
+    path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "entries": {"abc": {"code": "mailbox_auth_invalid", "retry_after": "soon"}},
+            }
+        ),
+        encoding="utf-8",
+    )
     entries = quarantine._read(path)
     assert "abc" in entries
 
@@ -72,8 +77,15 @@ def test_browser_poll_does_not_swallow_terminal_provider_errors(error, monkeypat
     monkeypatch.setattr(flow_steps.dom_fields, "_browser_heartbeat", lambda browser, page: page)
     with pytest.raises(type(error)):
         flow_steps._poll_browser_otp(
-            service, Mock(), browser=Mock(), page=Mock(), driver_name="camoufox",
-            subject_keyword="code", timeout=300, issued_after_unix=0,
-            proxy=None, excluded_otps=set(),
+            service,
+            Mock(),
+            browser=Mock(),
+            page=Mock(),
+            driver_name="camoufox",
+            subject_keyword="code",
+            timeout=300,
+            issued_after_unix=0,
+            proxy=None,
+            excluded_otps=set(),
         )
     service.poll_otp.assert_called_once()

@@ -175,13 +175,9 @@ def test_verify_hint_makes_the_measurement_win_over_a_wrong_claim(fresh_resolver
     """供应商不认地区码时，指纹必须跟**实测**走，而不是跟着声明走。"""
     from sms_tool.geo import ProxyGeo
 
-    fresh_resolver.probe = lambda *a, **k: ProxyGeo(
-        country="VN", timezone="Asia/Ho_Chi_Minh", source="probe"
-    )
+    fresh_resolver.probe = lambda *a, **k: ProxyGeo(country="VN", timezone="Asia/Ho_Chi_Minh", source="probe")
 
-    profile = FingerprintPool(mode="round_robin", verify_hint=True).next(
-        retarget_region(ROLA_VN, _SECOND_EGRESS)
-    )
+    profile = FingerprintPool(mode="round_robin", verify_hint=True).next(retarget_region(ROLA_VN, _SECOND_EGRESS))
 
     assert profile.country == "VN"
     assert profile.timezone == "Asia/Ho_Chi_Minh"
@@ -199,9 +195,7 @@ def test_without_verify_hint_the_claim_is_trusted_and_no_probe_happens(fresh_res
 
 
 def test_verify_hint_is_read_from_config():
-    on = FingerprintPool.from_config(
-        {"registration": {"fingerprint_pool": {"verify_hint": True}}}
-    )
+    on = FingerprintPool.from_config({"registration": {"fingerprint_pool": {"verify_hint": True}}})
     off = FingerprintPool.from_config({"registration": {"fingerprint_pool": {}}})
     assert on._verify_hint is True
     assert off._verify_hint is False

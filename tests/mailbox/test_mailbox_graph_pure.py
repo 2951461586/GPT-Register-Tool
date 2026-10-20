@@ -34,6 +34,7 @@ Quirks pinned, not fixed:
   from ``mailbox.access_token`` -- a mailbox object carrying a token in the
   ``token`` attribute silently overrides the configured client id.
 """
+
 from __future__ import annotations
 
 import unittest
@@ -85,8 +86,7 @@ class _Mailbox:
 
 
 class _RefreshCase(unittest.TestCase):
-    def run_refresh(self, response, *, mailbox=None, cfg=None,
-                    proxy=None, scope_override=None):
+    def run_refresh(self, response, *, mailbox=None, cfg=None, proxy=None, scope_override=None):
         """Returns ``(outcome, fake, mailbox, cfg)``.
 
         ``outcome`` is either the returned token or the raised exception.
@@ -96,8 +96,10 @@ class _RefreshCase(unittest.TestCase):
         with mock.patch.object(mailbox_graph, "curl_requests", fake):
             try:
                 result = mailbox_graph.ms_oauth_refresh(
-                    box, cfg if cfg is not None else {},
-                    proxy=proxy, scope_override=scope_override,
+                    box,
+                    cfg if cfg is not None else {},
+                    proxy=proxy,
+                    scope_override=scope_override,
                 )
             except Exception as exc:
                 result = exc
@@ -130,8 +132,7 @@ class RequestShapeTests(_RefreshCase):
         """⚠️ Pinned: ``impersonate="chrome124"`` and ``timeout=30`` are the TLS
         fingerprint and the bound on how long one account can block a worker.
         Neither is covered by any config key."""
-        _, fake, _, _ = self.run_refresh(
-            _Response(payload={"access_token": "at"}))
+        _, fake, _, _ = self.run_refresh(_Response(payload={"access_token": "at"}))
         call = fake.calls[0]
         self.assertEqual(call["url"], DEFAULT_TOKEN_URL)
         self.assertEqual(call["impersonate"], "chrome124")
@@ -139,25 +140,24 @@ class RequestShapeTests(_RefreshCase):
 
     def test_the_form_payload_carries_the_refresh_grant(self):
         box = _Mailbox(refresh_token="rt-abc")
-        _, fake, _, _ = self.run_refresh(_Response(payload={"access_token": "at"}),
-                                         mailbox=box)
-        self.assertEqual(fake.calls[0]["data"], {
-            "grant_type": "refresh_token",
-            "client_id": DEFAULT_CLIENT_ID,
-            "refresh_token": "rt-abc",
-            "scope": DEFAULT_SCOPE,
-        })
+        _, fake, _, _ = self.run_refresh(_Response(payload={"access_token": "at"}), mailbox=box)
+        self.assertEqual(
+            fake.calls[0]["data"],
+            {
+                "grant_type": "refresh_token",
+                "client_id": DEFAULT_CLIENT_ID,
+                "refresh_token": "rt-abc",
+                "scope": DEFAULT_SCOPE,
+            },
+        )
 
     def test_no_proxy_means_no_proxies_key(self):
         _, fake, _, _ = self.run_refresh(_Response(payload={"access_token": "at"}))
         self.assertIsNone(fake.calls[0]["proxies"])
 
     def test_a_proxy_is_applied_to_both_schemes(self):
-        _, fake, _, _ = self.run_refresh(_Response(payload={"access_token": "at"}),
-                                         proxy="http://127.0.0.1:7897")
-        self.assertEqual(fake.calls[0]["proxies"],
-                         {"http": "http://127.0.0.1:7897",
-                          "https": "http://127.0.0.1:7897"})
+        _, fake, _, _ = self.run_refresh(_Response(payload={"access_token": "at"}), proxy="http://127.0.0.1:7897")
+        self.assertEqual(fake.calls[0]["proxies"], {"http": "http://127.0.0.1:7897", "https": "http://127.0.0.1:7897"})
 
 
 class ClientIdTests(_RefreshCase):
@@ -167,14 +167,12 @@ class ClientIdTests(_RefreshCase):
     def test_the_mailbox_token_attribute_wins_over_the_config(self):
         box = _Mailbox(token="from-mailbox")
         cfg = {"oauth_client_id": "from-cfg"}
-        _, fake, _, _ = self.run_refresh(_Response(payload={"access_token": "at"}),
-                                         mailbox=box, cfg=cfg)
+        _, fake, _, _ = self.run_refresh(_Response(payload={"access_token": "at"}), mailbox=box, cfg=cfg)
         self.assertEqual(fake.calls[0]["data"]["client_id"], "from-mailbox")
 
     def test_the_config_wins_over_the_hardcoded_default(self):
         cfg = {"oauth_client_id": "from-cfg"}
-        _, fake, _, _ = self.run_refresh(_Response(payload={"access_token": "at"}),
-                                         cfg=cfg)
+        _, fake, _, _ = self.run_refresh(_Response(payload={"access_token": "at"}), cfg=cfg)
         self.assertEqual(fake.calls[0]["data"]["client_id"], "from-cfg")
 
     def test_the_hardcoded_default_is_used_when_nothing_is_supplied(self):
@@ -186,21 +184,19 @@ class ClientIdTests(_RefreshCase):
         treated as absent."""
         box = _Mailbox(token="")
         cfg = {"oauth_client_id": "from-cfg"}
-        _, fake, _, _ = self.run_refresh(_Response(payload={"access_token": "at"}),
-                                         mailbox=box, cfg=cfg)
+        _, fake, _, _ = self.run_refresh(_Response(payload={"access_token": "at"}), mailbox=box, cfg=cfg)
         self.assertEqual(fake.calls[0]["data"]["client_id"], "from-cfg")
 
 
 class ScopeAndUrlTests(_RefreshCase):
     def test_scope_override_beats_the_config(self):
         _, fake, _, _ = self.run_refresh(
-            _Response(payload={"access_token": "at"}),
-            cfg={"oauth_scope": "cfg-scope"}, scope_override="override-scope")
+            _Response(payload={"access_token": "at"}), cfg={"oauth_scope": "cfg-scope"}, scope_override="override-scope"
+        )
         self.assertEqual(fake.calls[0]["data"]["scope"], "override-scope")
 
     def test_the_configured_scope_beats_the_default(self):
-        _, fake, _, _ = self.run_refresh(
-            _Response(payload={"access_token": "at"}), cfg={"oauth_scope": "cfg-scope"})
+        _, fake, _, _ = self.run_refresh(_Response(payload={"access_token": "at"}), cfg={"oauth_scope": "cfg-scope"})
         self.assertEqual(fake.calls[0]["data"]["scope"], "cfg-scope")
 
     def test_the_default_scope_is_the_graph_offline_access_pair(self):
@@ -209,16 +205,15 @@ class ScopeAndUrlTests(_RefreshCase):
 
     def test_the_token_url_is_configurable(self):
         _, fake, _, _ = self.run_refresh(
-            _Response(payload={"access_token": "at"}),
-            cfg={"oauth_token_url": "https://example.test/token"})
+            _Response(payload={"access_token": "at"}), cfg={"oauth_token_url": "https://example.test/token"}
+        )
         self.assertEqual(fake.calls[0]["url"], "https://example.test/token")
 
 
 class HappyPathTests(_RefreshCase):
     def test_the_access_token_is_returned_and_stored(self):
         box = _Mailbox()
-        outcome, _, box, _ = self.run_refresh(
-            _Response(payload={"access_token": "at-1"}), mailbox=box)
+        outcome, _, box, _ = self.run_refresh(_Response(payload={"access_token": "at-1"}), mailbox=box)
         self.assertEqual(outcome, "at-1")
         self.assertEqual(box.access_token, "at-1")
 
@@ -227,9 +222,7 @@ class HappyPathTests(_RefreshCase):
         back means the *next* refresh uses a dead token -- the account dies one
         cycle later, which is a miserable failure to debug."""
         box = _Mailbox(refresh_token="rt-1")
-        self.run_refresh(_Response(payload={"access_token": "at",
-                                            "refresh_token": "rt-2"}),
-                         mailbox=box)
+        self.run_refresh(_Response(payload={"access_token": "at", "refresh_token": "rt-2"}), mailbox=box)
         self.assertEqual(box.refresh_token, "rt-2")
 
     def test_the_old_refresh_token_survives_when_none_is_returned(self):
@@ -260,8 +253,7 @@ class ExpiredTokenTests(_RefreshCase):
     """The classification that decides whether an account is abandoned."""
 
     def _classify(self, payload=None, text="", status_code=400):
-        outcome, _, _, _ = self.run_refresh(
-            _Response(status_code=status_code, payload=payload, text=text))
+        outcome, _, _, _ = self.run_refresh(_Response(status_code=status_code, payload=payload, text=text))
         return outcome
 
     def test_invalid_grant_in_the_error_field_means_expired(self):
@@ -310,22 +302,18 @@ class ExpiredTokenTests(_RefreshCase):
 
     def test_the_expired_error_names_the_mailbox(self):
         box = _Mailbox(email="dead@example.test")
-        outcome, _, _, _ = self.run_refresh(
-            _Response(status_code=400, payload={"error": "invalid_grant"}),
-            mailbox=box)
+        outcome, _, _, _ = self.run_refresh(_Response(status_code=400, payload={"error": "invalid_grant"}), mailbox=box)
         self.assertIn("dead@example.test", str(outcome))
 
     def test_a_200_response_is_never_classified_as_expired(self):
         """Only the non-200 branch inspects error codes at all."""
-        outcome = self._classify({"error": "invalid_grant", "access_token": "at"},
-                                 status_code=200)
+        outcome = self._classify({"error": "invalid_grant", "access_token": "at"}, status_code=200)
         self.assertEqual(outcome, "at")
 
 
 class UnparseableBodyTests(_RefreshCase):
     def test_a_non_json_body_is_kept_as_raw_text(self):
-        outcome, _, _, _ = self.run_refresh(
-            _Response(status_code=502, text="<html>gateway</html>"))
+        outcome, _, _, _ = self.run_refresh(_Response(status_code=502, text="<html>gateway</html>"))
         self.assertIsInstance(outcome, RuntimeError)
         self.assertIn("gateway", str(outcome))
 
@@ -333,17 +321,14 @@ class UnparseableBodyTests(_RefreshCase):
         """⚠️ Pinned: ``r.text[:500]``.  Anything the marker appears in *after*
         character 500 is invisible to the expired-token classifier."""
         long_body = "x" * 700 + "invalid_grant"
-        outcome, _, _, _ = self.run_refresh(
-            _Response(status_code=502, text=long_body))
+        outcome, _, _, _ = self.run_refresh(_Response(status_code=502, text=long_body))
         self.assertIsInstance(outcome, RuntimeError)
         self.assertNotIsInstance(outcome, mailbox_graph.MailboxTokenExpiredError)
         self.assertIn("x" * 500, str(outcome))
         self.assertNotIn("x" * 501, str(outcome))
 
     def test_a_json_parse_error_is_swallowed(self):
-        outcome, _, _, _ = self.run_refresh(
-            _Response(status_code=500, raises=ValueError("not json"),
-                      text="boom"))
+        outcome, _, _, _ = self.run_refresh(_Response(status_code=500, raises=ValueError("not json"), text="boom"))
         self.assertIsInstance(outcome, RuntimeError)
         self.assertIn("boom", str(outcome))
 
@@ -356,12 +341,16 @@ def test_oauth_client_id_matches_the_cross_language_fixture():
     from pathlib import Path
 
     fixture = json.loads(
-        (Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "oauth_client_id.json")
-        .read_text(encoding="utf-8")
+        (Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "oauth_client_id.json").read_text(
+            encoding="utf-8"
+        )
     )
-    source = (Path(__file__).resolve().parents[2] / "sms_tool" / "providers" / "mailbox_graph.py").read_text(encoding="utf-8")
+    source = (Path(__file__).resolve().parents[2] / "sms_tool" / "providers" / "mailbox_graph.py").read_text(
+        encoding="utf-8"
+    )
     found = re.findall(r'"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})"', source)
     assert fixture["client_id"] in found
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -99,7 +99,9 @@ def main() -> int:
         print("baseline updated: " + ", ".join(f"{s}={len(v)}" for s, v in current.items()))
         return 0
 
-    baseline = {k: set(v) for k, v in json.loads(BASELINE.read_text(encoding="utf-8")).items()} if BASELINE.exists() else {}
+    baseline = (
+        {k: set(v) for k, v in json.loads(BASELINE.read_text(encoding="utf-8")).items()} if BASELINE.exists() else {}
+    )
     failures = []
     for sec in SECTIONS:
         extra = current[sec] - baseline.get(sec, set())

@@ -34,11 +34,14 @@ def test_account_identity_reuses_registration_proxy_session_and_fingerprint():
     assert identity["device_id"] == "device-123"
     assert identity["proxy_affinity"]["session_id"] == "NEW5678"
     assert "secret" not in str(identity)
-    assert resolve_account_proxy(
-        {"identity_context": identity},
-        fallback_proxy="http://127.0.0.1:7897",
-        config=config,
-    ) == registration_proxy
+    assert (
+        resolve_account_proxy(
+            {"identity_context": identity},
+            fallback_proxy="http://127.0.0.1:7897",
+            config=config,
+        )
+        == registration_proxy
+    )
 
     bind_account_identity(identity)
     assert auth_headers.current_auth_fingerprint()["name"] == "chrome146"
@@ -96,11 +99,13 @@ def test_session_file_preserves_registration_identity_context():
         device_id="device-session",
     )
 
-    session = build_session_file({
-        "email": "session@example.com",
-        "access_token": "at-secret",
-        "identity_context": identity,
-    })
+    session = build_session_file(
+        {
+            "email": "session@example.com",
+            "access_token": "at-secret",
+            "identity_context": identity,
+        }
+    )
 
     assert session["identity_context"] == identity
     assert "proxy-secret" not in str(session["identity_context"])
@@ -109,13 +114,15 @@ def test_session_file_preserves_registration_identity_context():
 def test_session_file_forwards_register_method_session_type_plan_type():
     # Dropping these keys in the builder made every stored account fall back
     # to register_method/session_type "unknown" in accounts.sqlite3.
-    session = build_session_file({
-        "email": "method@example.com",
-        "access_token": "at-secret",
-        "register_method": "email",
-        "session_type": "web",
-        "plan_type": "plus",
-    })
+    session = build_session_file(
+        {
+            "email": "method@example.com",
+            "access_token": "at-secret",
+            "register_method": "email",
+            "session_type": "web",
+            "plan_type": "plus",
+        }
+    )
 
     assert session["register_method"] == "email"
     assert session["session_type"] == "web"

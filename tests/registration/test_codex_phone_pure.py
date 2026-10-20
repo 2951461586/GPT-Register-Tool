@@ -29,8 +29,14 @@ from sms_tool import codex_phone
 from sms_tool import phone_reuse
 
 POOL_SUCCESS_KEYS = {
-    "ok", "next_url", "phone", "provider", "activation_id",
-    "reuse_count", "max_reuse_count", "remaining",
+    "ok",
+    "next_url",
+    "phone",
+    "provider",
+    "activation_id",
+    "reuse_count",
+    "max_reuse_count",
+    "remaining",
 }
 POOL_FAILURE_KEYS = {"ok", "error", "phone", "body", "message"}
 
@@ -50,9 +56,7 @@ def _docstring_node_ids(tree: ast.AST) -> set[int]:
         if not body:
             continue
         first = body[0]
-        if (isinstance(first, ast.Expr)
-                and isinstance(first.value, ast.Constant)
-                and isinstance(first.value.value, str)):
+        if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant) and isinstance(first.value.value, str):
             found.add(id(first.value))
     return found
 
@@ -70,12 +74,9 @@ class CodexPhoneTestBase(unittest.TestCase):
         self.pool_result = {"ok": True}
         self.pool_calls = []
 
-        self._start(mock.patch.object(codex_phone, "load_cached_sentinel",
-                                      return_value=self.sentinel))
+        self._start(mock.patch.object(codex_phone, "load_cached_sentinel", return_value=self.sentinel))
         # 函数内 import → 打在源模块上，调用时才重新读属性。
-        self._start(mock.patch(
-            "sms_tool.phone_reuse.complete_phone_verification_with_reuse",
-            side_effect=self._pool))
+        self._start(mock.patch("sms_tool.phone_reuse.complete_phone_verification_with_reuse", side_effect=self._pool))
 
     def _start(self, patcher):
         started = patcher.start()
@@ -98,20 +99,20 @@ class DispatchTest(CodexPhoneTestBase):
         池子是调用方的显式意图，``enabled`` 只是全局开关 —— 前者的优先级更高。
         反过来写的话，"关掉自动手机处理"会把已经在池子里的租号悄悄丢掉。"""
         pool = object()
-        codex_phone.complete_phone_verification(
-            _FakeSession(), "did", "https://cur", enabled=False, phone_pool=pool)
+        codex_phone.complete_phone_verification(_FakeSession(), "did", "https://cur", enabled=False, phone_pool=pool)
         self.assertEqual(len(self.pool_calls), 1)
         self.assertIs(self.pool_calls[0]["phone_pool"], pool)
 
     def test_without_a_pool_and_disabled_the_caller_is_told_to_add_a_phone(self):
-        result = codex_phone.complete_phone_verification(
-            _FakeSession(), "did", "https://cur", enabled=False)
-        self.assertEqual(result, {
-            "ok": False,
-            "error": "add_phone_required",
-            "message": ("OpenAI requested phone verification; "
-                        "automatic phone handling is disabled."),
-        })
+        result = codex_phone.complete_phone_verification(_FakeSession(), "did", "https://cur", enabled=False)
+        self.assertEqual(
+            result,
+            {
+                "ok": False,
+                "error": "add_phone_required",
+                "message": ("OpenAI requested phone verification; automatic phone handling is disabled."),
+            },
+        )
         self.assertEqual(self.pool_calls, [])
 
     def test_without_a_pool_and_enabled_the_failure_names_the_config_keys(self):
@@ -125,8 +126,7 @@ class DispatchTest(CodexPhoneTestBase):
         让这条断言依赖跑测试那台机器的 ``proxy.json``。
         """
         with mock.patch.dict(phone_reuse.CFG, {"phone_reuse": {"source": "smsbower"}}, clear=False):
-            result = codex_phone.complete_phone_verification(
-                _FakeSession(), "did", "https://cur", enabled=True)
+            result = codex_phone.complete_phone_verification(_FakeSession(), "did", "https://cur", enabled=True)
         self.assertFalse(result["ok"])
         self.assertEqual(result["error"], "phone_pool_unavailable")
         self.assertIn("phone_reuse.source", result["message"])
@@ -140,46 +140,40 @@ class DispatchTest(CodexPhoneTestBase):
         ``phone_reuse.smsbower.api_key`` 这个错的键上，照做也不会生效。
         """
         with mock.patch.dict(phone_reuse.CFG, {"phone_reuse": {"source": "herosms"}}, clear=False):
-            result = codex_phone.complete_phone_verification(
-                _FakeSession(), "did", "https://cur", enabled=True)
+            result = codex_phone.complete_phone_verification(_FakeSession(), "did", "https://cur", enabled=True)
         self.assertIn("phone_reuse.herosms.api_key", result["message"])
         self.assertIn("HEROSMS_API_KEY", result["message"])
         self.assertNotIn("smsbower", result["message"])
 
     def test_the_unavailable_result_has_exactly_three_keys(self):
-        result = codex_phone.complete_phone_verification(
-            _FakeSession(), "did", "https://cur", enabled=True)
+        result = codex_phone.complete_phone_verification(_FakeSession(), "did", "https://cur", enabled=True)
         self.assertEqual(set(result), {"ok", "error", "message"})
 
     def test_the_disabled_path_is_taken_by_default(self):
         """``enabled`` 的默认值是 ``False`` —— 没传就是不开。"""
-        result = codex_phone.complete_phone_verification(
-            _FakeSession(), "did", "https://cur")
+        result = codex_phone.complete_phone_verification(_FakeSession(), "did", "https://cur")
         self.assertEqual(result["error"], "add_phone_required")
 
     def test_an_empty_pool_is_still_no_pool(self):
         """⚠️ 判据是 ``if phone_pool:`` 的真值，不是 ``is not None``。
         空字典/空列表/0 都会被当成"没给池子"。"""
-        for label, pool in {"empty dict": {}, "empty list": [], "zero": 0,
-                            "empty str": ""}.items():
+        for label, pool in {"empty dict": {}, "empty list": [], "zero": 0, "empty str": ""}.items():
             with self.subTest(label=label):
                 self.pool_calls.clear()
                 result = codex_phone.complete_phone_verification(
-                    _FakeSession(), "did", "https://cur",
-                    enabled=True, phone_pool=pool)
-                self.assertEqual(self.pool_calls, [],
-                                 f"{label!r} 应当被当成「没给池子」")
+                    _FakeSession(), "did", "https://cur", enabled=True, phone_pool=pool
+                )
+                self.assertEqual(self.pool_calls, [], f"{label!r} 应当被当成「没给池子」")
                 self.assertEqual(result["error"], "phone_pool_unavailable")
 
     def test_the_disabled_result_has_exactly_three_keys(self):
-        result = codex_phone.complete_phone_verification(
-            _FakeSession(), "did", "https://cur", enabled=False)
+        result = codex_phone.complete_phone_verification(_FakeSession(), "did", "https://cur", enabled=False)
         self.assertEqual(set(result), {"ok", "error", "message"})
 
     def test_the_proxy_is_forwarded_to_the_pool_path(self):
         codex_phone.complete_phone_verification(
-            _FakeSession(), "did", "https://cur",
-            proxy="http://p:8080", phone_pool=object())
+            _FakeSession(), "did", "https://cur", proxy="http://p:8080", phone_pool=object()
+        )
         self.assertEqual(self.pool_calls[0]["proxy"], "http://p:8080")
 
 
@@ -187,19 +181,33 @@ class ReusePoolTest(CodexPhoneTestBase):
     """``_verify_with_reuse_pool`` 的结果整形。"""
 
     def _run(self):
-        return codex_phone._verify_with_reuse_pool(
-            _FakeSession(), "did", "https://cur", object())
+        return codex_phone._verify_with_reuse_pool(_FakeSession(), "did", "https://cur", object())
 
     def test_a_successful_pool_result_is_reshaped_to_nine_fields(self):
-        self.pool_result = {"ok": True, "next_url": "https://n", "phone": "+1555",
-                            "provider": "smsbower", "activation_id": "A1",
-                            "reuse_count": 2, "max_reuse_count": 5, "remaining": 3}
+        self.pool_result = {
+            "ok": True,
+            "next_url": "https://n",
+            "phone": "+1555",
+            "provider": "smsbower",
+            "activation_id": "A1",
+            "reuse_count": 2,
+            "max_reuse_count": 5,
+            "remaining": 3,
+        }
         result = self._run()
-        self.assertEqual(result, {
-            "ok": True, "next_url": "https://n", "phone": "+1555",
-            "provider": "smsbower", "activation_id": "A1",
-            "reuse_count": 2, "max_reuse_count": 5, "remaining": 3,
-        })
+        self.assertEqual(
+            result,
+            {
+                "ok": True,
+                "next_url": "https://n",
+                "phone": "+1555",
+                "provider": "smsbower",
+                "activation_id": "A1",
+                "reuse_count": 2,
+                "max_reuse_count": 5,
+                "remaining": 3,
+            },
+        )
 
     def test_a_bare_success_still_yields_every_key(self):
         """池子只回 ``{"ok": True}`` 时，其余字段必须补默认值，
@@ -221,8 +229,13 @@ class ReusePoolTest(CodexPhoneTestBase):
                 self.assertIsInstance(result[key], int)
 
     def test_a_failed_pool_result_is_reshaped_to_five_fields(self):
-        self.pool_result = {"ok": False, "error": "no_number", "phone": "+1555",
-                            "body": "sold out", "message": "try later"}
+        self.pool_result = {
+            "ok": False,
+            "error": "no_number",
+            "phone": "+1555",
+            "body": "sold out",
+            "message": "try later",
+        }
         result = self._run()
         self.assertEqual(set(result), POOL_FAILURE_KEYS)
         self.assertEqual(result["error"], "no_number")
@@ -253,8 +266,7 @@ class ReusePoolTest(CodexPhoneTestBase):
 
     def test_the_branch_hinges_on_the_truthiness_of_ok(self):
         """``if result.get("ok")`` —— ``0`` / ``""`` / ``{}`` 都是假，走失败分支。"""
-        for label, ok in {"zero": 0, "empty str": "", "empty dict": {},
-                          "none": None, "false": False}.items():
+        for label, ok in {"zero": 0, "empty str": "", "empty dict": {}, "none": None, "false": False}.items():
             with self.subTest(label=label):
                 self.pool_result = {"ok": ok}
                 self.assertEqual(set(self._run()), POOL_FAILURE_KEYS)
@@ -307,13 +319,14 @@ class NoStaticResidueTest(unittest.TestCase):
         executed = {
             node.value
             for node in ast.walk(tree)
-            if isinstance(node, ast.Constant)
-            and isinstance(node.value, str)
-            and id(node) not in docstrings
+            if isinstance(node, ast.Constant) and isinstance(node.value, str) and id(node) not in docstrings
         }
         removed_keys = {
-            "phone_pool", "phone_number", "phone_numbers",
-            "sms_api_url", "phone_index_file",
+            "phone_pool",
+            "phone_number",
+            "phone_numbers",
+            "sms_api_url",
+            "phone_index_file",
         }
         for needle in sorted(removed_keys):
             with self.subTest(needle=needle):
@@ -328,8 +341,7 @@ class NoStaticResidueTest(unittest.TestCase):
                 imported.add(node.module)
             elif isinstance(node, ast.Import):
                 imported.update(alias.name for alias in node.names)
-        self.assertEqual(
-            {name for name in imported if "paypal_auto" in name}, set())
+        self.assertEqual({name for name in imported if "paypal_auto" in name}, set())
 
 
 if __name__ == "__main__":

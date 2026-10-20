@@ -131,8 +131,20 @@ class NamePredicateTests(unittest.TestCase):
     """
 
     def test_a_bare_credential_word_is_recognised(self):
-        for name in ("password", "PASSWORD", "Password", "secret", "SECRET",
-                     "token", "TOKEN", "pwd", "key", "KEY", "auth", "credential"):
+        for name in (
+            "password",
+            "PASSWORD",
+            "Password",
+            "secret",
+            "SECRET",
+            "token",
+            "TOKEN",
+            "pwd",
+            "key",
+            "KEY",
+            "auth",
+            "credential",
+        ):
             with self.subTest(name=name):
                 self.assertTrue(scanner.credential_name(name))
 
@@ -144,9 +156,16 @@ class NamePredicateTests(unittest.TestCase):
                 self.assertIn("literal", [item[0] for item in scanner.scan_line(line)])
 
     def test_a_separated_credential_word_is_recognised(self):
-        for name in ("api_token", "API_TOKEN", "SESSION_TOKEN_ENV", "client_secret",
-                     "MY-PASSWORD", "db.pwd", "oauth_credentials",
-                     "pwd_hash_salt"):  # 含 `pwd` 段就值得看一眼，由值判定决定去留
+        for name in (
+            "api_token",
+            "API_TOKEN",
+            "SESSION_TOKEN_ENV",
+            "client_secret",
+            "MY-PASSWORD",
+            "db.pwd",
+            "oauth_credentials",
+            "pwd_hash_salt",
+        ):  # 含 `pwd` 段就值得看一眼，由值判定决定去留
             with self.subTest(name=name):
                 self.assertTrue(scanner.credential_name(name))
 
@@ -163,16 +182,27 @@ class NamePredicateTests(unittest.TestCase):
 
     def test_a_word_that_merely_starts_with_a_credential_word_is_not(self):
         """子串匹配会把这一整类判成凭据，而误报的处置方式是 --no-verify。"""
-        for name in ("keyboard", "keyboard_layout", "author", "authors", "authorization",
-                     "tokenizer", "secretary", "passwordless", "keyspace"):
+        for name in (
+            "keyboard",
+            "keyboard_layout",
+            "author",
+            "authors",
+            "authorization",
+            "tokenizer",
+            "secretary",
+            "passwordless",
+            "keyspace",
+        ):
             with self.subTest(name=name):
                 self.assertFalse(scanner.credential_name(name))
 
     def test_a_word_that_merely_starts_with_a_credential_word_is_silent(self):
-        for line in ('keyboard = "abcdEFGH1234ijkl"\n',
-                     'author = "abcdEFGH1234ijkl"\n',
-                     'tokenizer = "abcdEFGH1234ijkl"\n',
-                     'secretary = "abcdEFGH1234ijkl"\n'):
+        for line in (
+            'keyboard = "abcdEFGH1234ijkl"\n',
+            'author = "abcdEFGH1234ijkl"\n',
+            'tokenizer = "abcdEFGH1234ijkl"\n',
+            'secretary = "abcdEFGH1234ijkl"\n',
+        ):
             with self.subTest(line=line):
                 self.assertEqual(scanner.scan_line(line), [])
 
@@ -191,13 +221,13 @@ class CommentAndDocstringTests(unittest.TestCase):
 
     def test_a_docstring_example_is_skipped(self):
         text = (
-            'def f():\n'
+            "def f():\n"
             '    """Do a thing.\n'
-            '\n'
-            '    Returns:\n'
+            "\n"
+            "    Returns:\n"
             '        {"ok": True, "totp_secret": "JBSWY3DPEHPK3PXP"}\n'
             '    """\n'
-            '    return 1\n'
+            "    return 1\n"
         )
         lines = list(scanner.iter_scannable_lines(text, ".py"))
         self.assertEqual([number for number, _ in lines], [1, 7])
@@ -216,13 +246,10 @@ class CommentAndDocstringTests(unittest.TestCase):
 
     def test_code_after_a_docstring_is_scanned_again(self):
         """三引号奇数次才切换状态 —— 一次切换写错就会让文件后半段全部隐形。"""
-        text = (
-            '"""Module."""\n'
-            'totp_secret = "JBSWY3DPEHPK3PXP"\n'
-        )
+        text = '"""Module."""\ntotp_secret = "JBSWY3DPEHPK3PXP"\n'
         numbers = [number for number, _ in scanner.iter_scannable_lines(text, ".py")]
         self.assertEqual(numbers, [2])
-        self.assertEqual(len(scanner.scan_line("totp_secret = \"JBSWY3DPEHPK3PXP\"\n")), 1)
+        self.assertEqual(len(scanner.scan_line('totp_secret = "JBSWY3DPEHPK3PXP"\n')), 1)
 
     def test_a_csharp_comment_is_skipped(self):
         text = '// token = "abcdEFGH1234ijkl"\nint x = 1;\n'
@@ -257,7 +284,7 @@ class PrecommitGuardParityTests(unittest.TestCase):
         (".py", "def f():\n    '''Doc.'''\n    return 1\n"),
         (".py", '# comment\ntotp_secret = "JBSWY3DPEHPK3PXP"\n'),
         (".py", 'x = 1\n"""a"""\ny = 2\n"""b"""\nz = 3\n'),
-        (".cs", '// c\n/* d */\n* e\n/// f\ng();\n'),
+        (".cs", "// c\n/* d */\n* e\n/// f\ng();\n"),
         (".md", '# Title\ntoken = "abcdEFGH1234ijkl"\n'),
         (".sh", '# c\ntoken = "abcdEFGH1234ijkl"\n'),
         (".yml", '# c\ntoken: "abcdEFGH1234ijkl"\n'),
@@ -280,8 +307,17 @@ class PublicIdentifierTests(unittest.TestCase):
     """
 
     def test_a_public_client_id_is_recognised(self):
-        for name in ("client_id", "CLIENT_ID", "oauth_client_id", "OAuth-Client-Id",
-                     "app_id", "APP_ID", "application_id", "tenant_id", "project_id"):
+        for name in (
+            "client_id",
+            "CLIENT_ID",
+            "oauth_client_id",
+            "OAuth-Client-Id",
+            "app_id",
+            "APP_ID",
+            "application_id",
+            "tenant_id",
+            "project_id",
+        ):
             with self.subTest(name=name):
                 self.assertTrue(scanner.is_public_identifier(name))
 
@@ -310,9 +346,20 @@ class PublicIpTests(unittest.TestCase):
                 self.assertTrue(scanner.is_public_ip(address))
 
     def test_local_and_documentation_ranges_are_not_public(self):
-        for address in ("127.0.0.1", "10.1.2.3", "192.168.1.5", "169.254.1.1", "0.0.0.0",
-                        "172.16.0.1", "172.31.255.254", "192.0.2.1", "198.51.100.7",
-                        "203.0.113.9", "224.0.0.1", "255.255.255.255"):
+        for address in (
+            "127.0.0.1",
+            "10.1.2.3",
+            "192.168.1.5",
+            "169.254.1.1",
+            "0.0.0.0",
+            "172.16.0.1",
+            "172.31.255.254",
+            "192.0.2.1",
+            "198.51.100.7",
+            "203.0.113.9",
+            "224.0.0.1",
+            "255.255.255.255",
+        ):
             with self.subTest(address=address):
                 self.assertFalse(scanner.is_public_ip(address))
 
@@ -329,9 +376,11 @@ class PublicIpTests(unittest.TestCase):
                 self.assertFalse(scanner.is_public_ip(address))
 
     def test_a_local_endpoint_in_source_is_silent(self):
-        for line in ('BASE = "http://127.0.0.1:8080"\n',
-                     'PROXY = "http://192.168.1.10:7897"\n',
-                     'DOC = "http://192.0.2.1:80"\n'):
+        for line in (
+            'BASE = "http://127.0.0.1:8080"\n',
+            'PROXY = "http://192.168.1.10:7897"\n',
+            'DOC = "http://192.0.2.1:80"\n',
+        ):
             with self.subTest(line=line):
                 self.assertEqual(scanner.scan_line(line), [])
 
@@ -340,9 +389,14 @@ class SecretValueHeuristicTests(unittest.TestCase):
     """``looks_like_secret_value`` 是 PAT3 的降噪闸 —— 字符集放宽后必须补的这一道。"""
 
     def test_urls_paths_and_prose_are_rejected(self):
-        for value in ("http://example.com/abcdefgh", "https://x.test/y",
-                      "/usr/local/share/thing", "\\server\\share\\thing",
-                      "./relative/path/thing", "../up/and/away/thing"):
+        for value in (
+            "http://example.com/abcdefgh",
+            "https://x.test/y",
+            "/usr/local/share/thing",
+            "\\server\\share\\thing",
+            "./relative/path/thing",
+            "../up/and/away/thing",
+        ):
             with self.subTest(value=value):
                 self.assertFalse(scanner.looks_like_secret_value(value))
 
@@ -364,9 +418,11 @@ class SecretValueHeuristicTests(unittest.TestCase):
         只给符号分支加这一道，``"auth_state": "auth_state_failed"`` 这种普通映射
         就会漏进来 —— 实测在 ``accounts/account_scan.py:53`` 报过一条这样的假阳性。
         """
-        for line in ('"auth_state": "auth_state_failed"\n',
-                     'auth_state = "authenticated"\n',
-                     'client_secret = "unset"\n'):
+        for line in (
+            '"auth_state": "auth_state_failed"\n',
+            'auth_state = "authenticated"\n',
+            'client_secret = "unset"\n',
+        ):
             with self.subTest(line=line):
                 self.assertEqual(scanner.scan_line(line), [])
 
@@ -381,16 +437,29 @@ class NoiseGuardTests(unittest.TestCase):
     """这些豁免此前已存在，一并钉住 —— 改动 scan_line 最容易把它们弄丢。"""
 
     def test_placeholder_values_are_skipped(self):
-        for value in ("your_token_here", "CHANGEME123456", "placeholder_value",
-                      "test_value_12345", "dummy_value_12345", "REDACTED1234567"):
+        for value in (
+            "your_token_here",
+            "CHANGEME123456",
+            "placeholder_value",
+            "test_value_12345",
+            "dummy_value_12345",
+            "REDACTED1234567",
+        ):
             with self.subTest(value=value):
                 line = 'api_token = "%s"\n' % value
                 self.assertEqual(scanner.scan_line(line), [])
 
     def test_non_credential_variable_names_are_skipped(self):
-        for name in ("site_key", "PROBE_TOKEN", "PLACEHOLDER_KEY",
-                     "PERSISTENCE_KEY", "FALLBACK_TOKEN", "UNAUTHORIZED_TOKEN",
-                     "STATUS_TOKEN", "PASSWORDLESS_SIGNUP_CODE"):
+        for name in (
+            "site_key",
+            "PROBE_TOKEN",
+            "PLACEHOLDER_KEY",
+            "PERSISTENCE_KEY",
+            "FALLBACK_TOKEN",
+            "UNAUTHORIZED_TOKEN",
+            "STATUS_TOKEN",
+            "PASSWORDLESS_SIGNUP_CODE",
+        ):
             with self.subTest(name=name):
                 line = '%s = "abcdEFGH1234ijkl"\n' % name
                 self.assertEqual(scanner.scan_line(line), [])
@@ -414,6 +483,7 @@ class OutputContractTests(unittest.TestCase):
     def test_a_leak_exits_nonzero(self):
         """没有这一步脚本永远 exit 0，在 CI 上就是个装饰品。"""
         import tempfile
+
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
             self._tree(root, {"leak.js": 'const AUTH = "http://64.90.20.244:8443";\n'})
@@ -425,6 +495,7 @@ class OutputContractTests(unittest.TestCase):
 
     def test_a_clean_tree_exits_zero(self):
         import tempfile
+
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
             self._tree(root, {"clean.js": 'const AUTH = "http://127.0.0.1:8443";\n'})
@@ -437,6 +508,7 @@ class OutputContractTests(unittest.TestCase):
     def test_only_the_prefix_of_a_secret_is_printed(self):
         """完整值一旦进了 CI 日志就等于又泄漏一次。"""
         import tempfile
+
         secret = "Zq3Xk9Mv7Rt2Lp5Wb8"
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
@@ -477,8 +549,7 @@ class RepositoryIntegrationTests(unittest.TestCase):
 
     def test_the_scanner_itself_is_still_scanned(self):
         """不能靠豁免文件来解决自我命中 —— 真凭据粘进去必须看得见。"""
-        target = os.path.normpath(
-            Path(__file__).resolve().parents[2] / "scripts" / "scan_hardcoded_secrets.py")
+        target = os.path.normpath(Path(__file__).resolve().parents[2] / "scripts" / "scan_hardcoded_secrets.py")
         self.assertIn(target, list(scanner.iter_files()))
 
 

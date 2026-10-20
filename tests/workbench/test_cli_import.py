@@ -42,34 +42,43 @@ class CliImportTests(unittest.TestCase):
         ]
 
         with patch.object(cli, "list_paypal_accounts", return_value=rows):
-            with patch("sms_tool.import_targets.import_account_sessions", return_value={
-                "ok": True,
-                "total": 3,
-                "success": 3,
-                "failed": 0,
-                "results": [],
-            }) as imported:
+            with patch(
+                "sms_tool.import_targets.import_account_sessions",
+                return_value={
+                    "ok": True,
+                    "total": 3,
+                    "success": 3,
+                    "failed": 0,
+                    "results": [],
+                },
+            ) as imported:
                 cli._import_cpa(_args("cpa"))
 
         imported.assert_called_once()
         self.assertEqual(imported.call_args.args[0], "cpa")
-        self.assertEqual(imported.call_args.args[1], [
-            "registered@example.com",
-            "pending@example.com",
-            "paid@example.com",
-        ])
+        self.assertEqual(
+            imported.call_args.args[1],
+            [
+                "registered@example.com",
+                "pending@example.com",
+                "paid@example.com",
+            ],
+        )
 
     def test_one_click_import_supports_sub2api_target(self):
         rows = [{"email": "registered@example.com", "access_token": "at_1", "paypal_status": ""}]
 
         with patch.object(cli, "list_paypal_accounts", return_value=rows):
-            with patch("sms_tool.import_targets.import_account_sessions", return_value={
-                "ok": True,
-                "total": 1,
-                "success": 1,
-                "failed": 0,
-                "results": [],
-            }) as imported:
+            with patch(
+                "sms_tool.import_targets.import_account_sessions",
+                return_value={
+                    "ok": True,
+                    "total": 1,
+                    "success": 1,
+                    "failed": 0,
+                    "results": [],
+                },
+            ) as imported:
                 cli._import_cpa(_args("sub2api"))
 
         imported.assert_called_once()

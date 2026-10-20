@@ -124,9 +124,7 @@ class RuleMatching(unittest.TestCase):
         """A rule that can never fire is dead weight and hides intent."""
         samples = {
             "empty batch gate locks": "payment_batch_locks/gates/b/slot-0.lock",
-            "empty payment-operation gate locks": (
-                "payment_operations/gates/payment-operation-abc123/slot-0.lock"
-            ),
+            "empty payment-operation gate locks": ("payment_operations/gates/payment-operation-abc123/slot-0.lock"),
             "browser profiles": "browser_profiles/camoufox/p/default/x.json",
             "per-batch payment artifacts": "payment_batches/gcash_1.json",
             "one-off scan snapshots": "promotion_scan.json",
@@ -185,9 +183,7 @@ class PlanRetention(unittest.TestCase):
         _touch(self.root / "payment_batches" / "fresh.json", age_days=2)
         items = {i.relpath: i for i in plan_retention(self.root)}
         self.assertIn("payment_batches/old.json", {i.replace("\\", "/") for i in items})
-        self.assertNotIn(
-            "payment_batches/fresh.json", {i.replace("\\", "/") for i in items}
-        )
+        self.assertNotIn("payment_batches/fresh.json", {i.replace("\\", "/") for i in items})
 
     def test_veto_outranks_a_rule_that_would_otherwise_fire(self):
         """The veto must win even where a rule covers the location.
@@ -212,9 +208,7 @@ class PlanRetention(unittest.TestCase):
         )
         for name in ("accounts.sqlite3", "payment_link_runs.jsonl"):
             with self.subTest(name=name):
-                self.assertNotIn(
-                    name, planned, f"veto failed to protect {name} from a matching rule"
-                )
+                self.assertNotIn(name, planned, f"veto failed to protect {name} from a matching rule")
 
     def test_min_age_override_applies_to_every_rule(self):
         _touch(self.root / "payment_batches" / "mid.json", age_days=10)
@@ -304,9 +298,7 @@ class ApplyAndPurge(unittest.TestCase):
         _touch(self.root / "payment_batch_locks" / "gates" / "b" / "slot-0.lock", age_days=99)
         gate_dir = self.root / "payment_batch_locks" / "gates" / "b"
         relocate(self.root, plan_retention(self.root), "20260909-000000")
-        self.assertFalse(
-            gate_dir.exists(), "emptied batch gate directory should be pruned"
-        )
+        self.assertFalse(gate_dir.exists(), "emptied batch gate directory should be pruned")
 
     def test_purge_removes_relocated_trees(self):
         _touch(self.root / "payment_batches" / "old.json", age_days=99)

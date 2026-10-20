@@ -46,11 +46,7 @@ def test_concurrent_writes_never_tear_a_line():
     lines = _concurrent_lines(threads, per_thread, payload_len)
 
     assert len(lines) == threads * per_thread
-    torn = [
-        line
-        for line in lines
-        if not re.fullmatch(r"L\d\d-x{%d}" % payload_len, line)
-    ]
+    torn = [line for line in lines if not re.fullmatch(r"L\d\d-x{%d}" % payload_len, line)]
     assert torn == []
 
 

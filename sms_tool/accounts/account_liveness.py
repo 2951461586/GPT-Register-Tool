@@ -124,6 +124,10 @@ def browser_fetch_for_account(
             except Exception:
                 pass
         page = browser.page
+        # ``page`` is optional on the session object; without it the caller falls
+        # back to the HTTP probe, which is exactly what the ``except`` below does.
+        if page is None:
+            raise RuntimeError("browser session exposed no page")
         page.goto(chat_base, wait_until="domcontentloaded", timeout=max(5_000, int(timeout) * 1000))
         browser_flow.page_state._wait_for_challenge_clear(page, max_wait_seconds=min(30, int(timeout)))
         fetch_fn = browser.fetch_json
@@ -184,7 +188,9 @@ def probe_account_liveness(
     # Health probes restore the registration proxy affinity so the access token
     # is presented from the same egress identity used during signup.
     selected_proxy = select_operation_proxy_candidate(
-        account if had_identity_context else {key: value for key, value in account.items() if key != "identity_context"},
+        account
+        if had_identity_context
+        else {key: value for key, value in account.items() if key != "identity_context"},
         operation="liveness",
         explicit=proxy,
         config=CFG,
@@ -217,20 +223,20 @@ def probe_account_liveness(
             if isinstance(result, dict) and "status_code" in result:
                 return {
                     **quota_result_from_payload(
-                    result,
-                    status_code=result.get("status_code"),
-                    mode="browser",
-                    account_id=account_id,
+                        result,
+                        status_code=result.get("status_code"),
+                        mode="browser",
+                        account_id=account_id,
                     ),
                     "proxy_source": proxy_source,
                 }
             return {
                 **quota_result_from_payload(
-                {"status_code": 0, "body": result},
-                status_code=0,
-                mode="browser",
-                account_id=account_id,
-                transport_ok=False,
+                    {"status_code": 0, "body": result},
+                    status_code=0,
+                    mode="browser",
+                    account_id=account_id,
+                    transport_ok=False,
                 ),
                 "proxy_source": proxy_source,
             }
@@ -258,10 +264,10 @@ def probe_account_liveness(
             body = {"raw": str(response.text or "")[:500]}
         return {
             **quota_result_from_payload(
-            {"status_code": response.status_code, "body": body},
-            status_code=response.status_code,
-            mode="local",
-            account_id=account_id,
+                {"status_code": response.status_code, "body": body},
+                status_code=response.status_code,
+                mode="local",
+                account_id=account_id,
             ),
             "proxy_source": proxy_source,
         }
@@ -357,7 +363,9 @@ def _quota_status_label(payload: dict[str, Any], status_code: int, error_text: s
         except Exception:
             body = {}
     if isinstance(body, dict):
-        text_candidates = [str(body[key]) for key in ("status", "message", "quota_status", "usage_status") if body.get(key)]
+        text_candidates = [
+            str(body[key]) for key in ("status", "message", "quota_status", "usage_status") if body.get(key)
+        ]
         for section_key in ("quota", "usage", "limits", "codex"):
             section = body.get(section_key)
             if not isinstance(section, dict):
@@ -376,10 +384,14 @@ def _quota_status_label(payload: dict[str, Any], status_code: int, error_text: s
 
 
 def _is_token_invalid(status_code: int, error_text: str) -> bool:
-    return _as_int(status_code) == 401 or re.search(
-        r"\b401\b|unauthorized|authentication token has been invalidated|token has been invalidated|invalid_grant|refresh_token",
-        str(error_text or "").lower(),
-    ) is not None
+    return (
+        _as_int(status_code) == 401
+        or re.search(
+            r"\b401\b|unauthorized|authentication token has been invalidated|token has been invalidated|invalid_grant|refresh_token",
+            str(error_text or "").lower(),
+        )
+        is not None
+    )
 
 
 def _as_int(value: Any) -> int:

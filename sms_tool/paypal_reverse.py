@@ -54,13 +54,15 @@ class ReversePayResult:
     def to_dict(self) -> dict[str, Any]:
         d: dict[str, Any] = {"ok": self.ok, "email": self.email}
         if self.ok:
-            d.update({
-                "access_token": self.access_token,
-                "oauth_refresh_token": self.oauth_refresh_token,
-                "refresh_token_status": self.refresh_token_status,
-                "paypal_status": self.paypal_status,
-                "redirect_url": self.redirect_url,
-            })
+            d.update(
+                {
+                    "access_token": self.access_token,
+                    "oauth_refresh_token": self.oauth_refresh_token,
+                    "refresh_token_status": self.refresh_token_status,
+                    "paypal_status": self.paypal_status,
+                    "redirect_url": self.redirect_url,
+                }
+            )
         else:
             d.update({"error": self.error, "failed_step": self.failed_step})
         return d
@@ -191,24 +193,26 @@ class PayPalReverseClient:
             # curl_cffi's ``ProxySpec`` is an invariant TypedDict; the plain
             # mapping is what every call site passes and accepts at runtime.
             s.proxies = {"http": self.proxy, "https": self.proxy}  # pyright: ignore[reportAttributeAccessIssue]
-        s.headers.update({
-            "User-Agent": _USER_AGENT,
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Accept-Encoding": "gzip, deflate, br",
-            "Connection": "keep-alive",
-            "Upgrade-Insecure-Requests": "1",
-            "Cache-Control": "max-age=0",
-            "Priority": "u=0, i",
-            "sec-ch-ua": f'"Chromium";v="{_CHROME_VERSION}", "Google Chrome";v="{_CHROME_VERSION}", "Not.A/Brand";v="99"',
-            "sec-ch-ua-full-version-list": f'"Chromium";v="{_CHROME_FULL_VERSION}", "Google Chrome";v="{_CHROME_FULL_VERSION}", "Not.A/Brand";v="99.0.0.0"',
-            "sec-ch-ua-mobile": "?0",
-            "sec-ch-ua-platform": '"Windows"',
-            "Sec-Fetch-Dest": "document",
-            "Sec-Fetch-Mode": "navigate",
-            "Sec-Fetch-Site": "none",
-            "Sec-Fetch-User": "?1",
-        })
+        s.headers.update(
+            {
+                "User-Agent": _USER_AGENT,
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Accept-Encoding": "gzip, deflate, br",
+                "Connection": "keep-alive",
+                "Upgrade-Insecure-Requests": "1",
+                "Cache-Control": "max-age=0",
+                "Priority": "u=0, i",
+                "sec-ch-ua": f'"Chromium";v="{_CHROME_VERSION}", "Google Chrome";v="{_CHROME_VERSION}", "Not.A/Brand";v="99"',
+                "sec-ch-ua-full-version-list": f'"Chromium";v="{_CHROME_FULL_VERSION}", "Google Chrome";v="{_CHROME_FULL_VERSION}", "Not.A/Brand";v="99.0.0.0"',
+                "sec-ch-ua-mobile": "?0",
+                "sec-ch-ua-platform": '"Windows"',
+                "Sec-Fetch-Dest": "document",
+                "Sec-Fetch-Mode": "navigate",
+                "Sec-Fetch-Site": "none",
+                "Sec-Fetch-User": "?1",
+            }
+        )
         return s
 
     def _parse_redirect_url(self):
@@ -371,10 +375,14 @@ class PayPalReverseClient:
 
         action, fields = form
         name_map = {
-            "firstName": self.first_name, "first_name": self.first_name,
-            "givenName": self.first_name, "given-name": self.first_name,
-            "lastName": self.last_name, "last_name": self.last_name,
-            "familyName": self.last_name, "family-name": self.last_name,
+            "firstName": self.first_name,
+            "first_name": self.first_name,
+            "givenName": self.first_name,
+            "given-name": self.first_name,
+            "lastName": self.last_name,
+            "last_name": self.last_name,
+            "familyName": self.last_name,
+            "family-name": self.last_name,
         }
         for key, value in name_map.items():
             if key in fields:
@@ -455,9 +463,7 @@ class PayPalReverseClient:
                 return True
         return False
 
-    def _poll_sms(
-        self, api_url: str, baseline: dict, timeout: int = 120, interval: int = 5
-    ) -> str | None:
+    def _poll_sms(self, api_url: str, baseline: dict, timeout: int = 120, interval: int = 5) -> str | None:
         """Poll SMS API for verification code."""
         if not api_url:
             return None
@@ -486,11 +492,19 @@ class PayPalReverseClient:
 
     def _fill_card_and_billing(self):
         """Fill card details and billing address."""
-        form = self._find_form_by_fields([
-            "cardNumber", "card_number", "cc-number",
-            "expirationDate", "expiration_date", "expMonth",
-            "billingLine1", "billingAddressLine1", "billingPostalCode",
-        ])
+        form = self._find_form_by_fields(
+            [
+                "cardNumber",
+                "card_number",
+                "cc-number",
+                "expirationDate",
+                "expiration_date",
+                "expMonth",
+                "billingLine1",
+                "billingAddressLine1",
+                "billingPostalCode",
+            ]
+        )
         if not form:
             print("[re] No card form found, may already be filled")
             return
@@ -501,8 +515,10 @@ class PayPalReverseClient:
 
         # Card fields
         card_map = {
-            "cardNumber": card["number"], "card_number": card["number"],
-            "cc-number": card["number"], "cardNum": card["number"],
+            "cardNumber": card["number"],
+            "card_number": card["number"],
+            "cc-number": card["number"],
+            "cardNum": card["number"],
         }
         exp_fields = {
             "expirationDate": f"{card['exp_month']}/{card['exp_year'][-2:]}",
@@ -511,15 +527,19 @@ class PayPalReverseClient:
             "expiryDate": f"{card['exp_month']}/{card['exp_year'][-2:]}",
         }
         month_fields = {
-            "expMonth": card["exp_month"], "exp_month": card["exp_month"],
+            "expMonth": card["exp_month"],
+            "exp_month": card["exp_month"],
             "expirationMonth": card["exp_month"],
         }
         year_fields = {
-            "expYear": card["exp_year"], "exp_year": card["exp_year"],
+            "expYear": card["exp_year"],
+            "exp_year": card["exp_year"],
             "expirationYear": card["exp_year"],
         }
         cvv_fields = {
-            "cvv": card["cvv"], "cvc": card["cvv"], "cvvNumber": card["cvv"],
+            "cvv": card["cvv"],
+            "cvc": card["cvv"],
+            "cvvNumber": card["cvv"],
             "securityCode": card["cvv"],
         }
 
@@ -530,17 +550,29 @@ class PayPalReverseClient:
 
         # Billing address
         addr_map = {
-            "line1": addr.get("line1", ""), "addressLine1": addr.get("line1", ""),
-            "billingLine1": addr.get("line1", ""), "billingAddressLine1": addr.get("line1", ""),
-            "streetAddress": addr.get("line1", ""), "address_line1": addr.get("line1", ""),
-            "city": addr.get("city", ""), "addressCity": addr.get("city", ""),
-            "billingCity": addr.get("city", ""), "billingLocality": addr.get("city", ""),
-            "state": addr.get("state", ""), "addressState": addr.get("state", ""),
-            "billingState": addr.get("state", ""), "billingAdministrativeArea": addr.get("state", ""),
-            "postalCode": addr.get("postal_code", ""), "zip": addr.get("postal_code", ""),
-            "postal_code": addr.get("postal_code", ""), "zipCode": addr.get("postal_code", ""),
+            "line1": addr.get("line1", ""),
+            "addressLine1": addr.get("line1", ""),
+            "billingLine1": addr.get("line1", ""),
+            "billingAddressLine1": addr.get("line1", ""),
+            "streetAddress": addr.get("line1", ""),
+            "address_line1": addr.get("line1", ""),
+            "city": addr.get("city", ""),
+            "addressCity": addr.get("city", ""),
+            "billingCity": addr.get("city", ""),
+            "billingLocality": addr.get("city", ""),
+            "state": addr.get("state", ""),
+            "addressState": addr.get("state", ""),
+            "billingState": addr.get("state", ""),
+            "billingAdministrativeArea": addr.get("state", ""),
+            "postalCode": addr.get("postal_code", ""),
+            "zip": addr.get("postal_code", ""),
+            "postal_code": addr.get("postal_code", ""),
+            "zipCode": addr.get("postal_code", ""),
             "billingPostalCode": addr.get("postal_code", ""),
-            "country": "US", "countryCode": "US", "billingCountry": "US", "billingCountryCode": "US",
+            "country": "US",
+            "countryCode": "US",
+            "billingCountry": "US",
+            "billingCountryCode": "US",
         }
         for key, value in addr_map.items():
             if key in fields:
@@ -558,9 +590,14 @@ class PayPalReverseClient:
     def _submit_payment(self):
         """Submit the final payment / agree to terms."""
         # Look for agree/submit form
-        form = self._find_form_by_fields([
-            "agree", "terms", "consent", "agreement",
-        ])
+        form = self._find_form_by_fields(
+            [
+                "agree",
+                "terms",
+                "consent",
+                "agreement",
+            ]
+        )
         if not form:
             # Try finding submit form by button text
             form = self._find_submit_form()
@@ -682,24 +719,30 @@ class PayPalReverseClient:
 
     def _find_signup_form(self) -> tuple[str, dict] | None:
         """Find the main signup/login form on the page."""
-        return self._find_form_by_fields([
-            "email", "login_email", "signup_email", "login_emailcopy",
-        ])
+        return self._find_form_by_fields(
+            [
+                "email",
+                "login_email",
+                "signup_email",
+                "login_emailcopy",
+            ]
+        )
 
     def _find_submit_form(self) -> tuple[str, dict] | None:
         """Find a form with a submit button containing agree/pay text."""
         html = self._current_html
         # Look for form with submit button
         form_pattern = re.compile(
-            r'<form[^>]*>(.*?)</form>',
+            r"<form[^>]*>(.*?)</form>",
             re.DOTALL | re.IGNORECASE,
         )
         for match in form_pattern.finditer(html):
             form_html = match.group(0)
             # Check for submit button with relevant text
             if re.search(
-                r'(?:agree|pay\s*now|continue|submit|confirm|authorize)',
-                form_html, re.I,
+                r"(?:agree|pay\s*now|continue|submit|confirm|authorize)",
+                form_html,
+                re.I,
             ):
                 action = self._extract_form_action(form_html)
                 fields = self._extract_hidden_fields(form_html)
@@ -710,7 +753,7 @@ class PayPalReverseClient:
         """Find a form containing any of the specified field names."""
         html = self._current_html
         form_pattern = re.compile(
-            r'<form[^>]*>(.*?)</form>',
+            r"<form[^>]*>(.*?)</form>",
             re.DOTALL | re.IGNORECASE,
         )
         for match in form_pattern.finditer(html):
@@ -757,7 +800,7 @@ class PayPalReverseClient:
         """Extract all input fields from a form."""
         fields = {}
         pattern = re.compile(
-            r'<input[^>]*>',
+            r"<input[^>]*>",
             re.IGNORECASE,
         )
         for match in pattern.finditer(form_html):
@@ -772,7 +815,7 @@ class PayPalReverseClient:
     def _extract_select_fields(self, form_html: str) -> dict:
         """Extract select field names with their selected/default option values."""
         fields = {}
-        pattern = re.compile(r'<select[^>]*>.*?</select>', re.IGNORECASE | re.DOTALL)
+        pattern = re.compile(r"<select[^>]*>.*?</select>", re.IGNORECASE | re.DOTALL)
         for match in pattern.finditer(form_html):
             tag = match.group(0)
             name = self._get_attr(tag, "name")
@@ -855,13 +898,15 @@ class PayPalReverseClient:
         # Extract challenge form action
         action_match = re.search(
             r'<form[^>]*name=["\']?challenge["\']?[^>]*action=["\']([^"\']+)["\']',
-            html, re.I,
+            html,
+            re.I,
         )
         if not action_match:
             # Try alternative patterns
             action_match = re.search(
                 r'action=["\']([^"\']*(?:challenge|auth)[^"\']*)["\']',
-                html, re.I,
+                html,
+                re.I,
             )
         if not action_match:
             print("[re] No challenge form action found, skipping challenge submit")
@@ -875,7 +920,8 @@ class PayPalReverseClient:
         # Extract hidden fields from the challenge form
         form_match = re.search(
             r'<form[^>]*name=["\']?challenge["\']?[^>]*>(.*?)</form>',
-            html, re.DOTALL | re.I,
+            html,
+            re.DOTALL | re.I,
         )
         fields = {}
         if form_match:

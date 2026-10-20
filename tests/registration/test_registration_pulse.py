@@ -38,6 +38,7 @@ def _fail(error, failure_class="unknown"):
 # PulseConfig
 # --------------------------------------------------------------------------
 
+
 def test_defaults_are_disabled_with_sane_wave_shape():
     cfg = PulseConfig()
     assert cfg.enabled is False
@@ -50,19 +51,21 @@ def test_defaults_are_disabled_with_sane_wave_shape():
 
 
 def test_from_config_reads_nested_registration_pulse():
-    cfg = PulseConfig.from_config({
-        "registration": {
-            "pulse": {
-                "enabled": True,
-                "wave_size": 3,
-                "wave_delay_seconds": 1.5,
-                "ban_threshold": 5,
-                "ban_pause_seconds": 12,
-                "max_waves": 7,
-                "canary_enabled": False,
+    cfg = PulseConfig.from_config(
+        {
+            "registration": {
+                "pulse": {
+                    "enabled": True,
+                    "wave_size": 3,
+                    "wave_delay_seconds": 1.5,
+                    "ban_threshold": 5,
+                    "ban_pause_seconds": 12,
+                    "max_waves": 7,
+                    "canary_enabled": False,
+                }
             }
         }
-    })
+    )
     assert cfg.enabled is True
     assert (cfg.wave_size, cfg.wave_delay_seconds) == (3, 1.5)
     assert (cfg.ban_threshold, cfg.ban_pause_seconds, cfg.max_waves) == (5, 12.0, 7)
@@ -85,6 +88,7 @@ def test_from_config_clamps_degenerate_values():
 # --------------------------------------------------------------------------
 # ban detection
 # --------------------------------------------------------------------------
+
 
 def test_success_is_never_a_ban_signal():
     assert _is_otp_ban_signal(_ok(0)) is False
@@ -127,6 +131,7 @@ def test_detect_ip_ban_ignores_a_wave_with_a_success():
 # run_pulse_batch
 # --------------------------------------------------------------------------
 
+
 def test_runs_every_account_once_and_preserves_order():
     seen = []
 
@@ -160,7 +165,10 @@ def test_first_wave_is_a_single_account_canary():
         on_wave_complete=lambda indices, _results: waves.append(list(indices)),
         workers=4,
         pulse_config=PulseConfig(
-            enabled=True, wave_size=4, wave_delay_seconds=0, canary_enabled=True,
+            enabled=True,
+            wave_size=4,
+            wave_delay_seconds=0,
+            canary_enabled=True,
         ),
     )
 
@@ -179,8 +187,12 @@ def test_failed_canary_rotates_then_keeps_the_next_wave_as_a_canary(no_sleep):
         on_wave_complete=lambda indices, _results: waves.append(list(indices)),
         workers=3,
         pulse_config=PulseConfig(
-            enabled=True, wave_size=3, wave_delay_seconds=0,
-            ban_threshold=2, ban_pause_seconds=10, canary_enabled=True,
+            enabled=True,
+            wave_size=3,
+            wave_delay_seconds=0,
+            ban_threshold=2,
+            ban_pause_seconds=10,
+            canary_enabled=True,
         ),
     )
 
@@ -196,8 +208,11 @@ def test_rotation_message_is_truthful_when_no_alternate_slot_exists(capsys, no_s
         on_dispatch_block=lambda: False,
         workers=1,
         pulse_config=PulseConfig(
-            enabled=True, wave_size=2, wave_delay_seconds=0,
-            ban_pause_seconds=10, canary_enabled=True,
+            enabled=True,
+            wave_size=2,
+            wave_delay_seconds=0,
+            ban_pause_seconds=10,
+            canary_enabled=True,
         ),
     )
 
@@ -224,7 +239,10 @@ def test_wave_delay_is_applied_between_waves_only(no_sleep):
         run_one_fn=lambda idx: (idx, _ok(idx)),
         workers=1,
         pulse_config=PulseConfig(
-            enabled=True, wave_size=2, wave_delay_seconds=9, canary_enabled=False,
+            enabled=True,
+            wave_size=2,
+            wave_delay_seconds=9,
+            canary_enabled=False,
         ),
     )
     # 4 accounts / wave_size 2 => 2 waves => exactly one inter-wave gap.
@@ -242,8 +260,12 @@ def test_ip_ban_pauses_before_next_wave(no_sleep):
         run_one_fn=run_one,
         workers=2,
         pulse_config=PulseConfig(
-            enabled=True, wave_size=2, wave_delay_seconds=3,
-            ban_threshold=2, ban_pause_seconds=30, canary_enabled=False,
+            enabled=True,
+            wave_size=2,
+            wave_delay_seconds=3,
+            ban_threshold=2,
+            ban_pause_seconds=30,
+            canary_enabled=False,
         ),
     )
     # The blocked full wave forces the remaining accounts back through
@@ -261,8 +283,12 @@ def test_no_pause_when_below_threshold(no_sleep):
         run_one_fn=run_one,
         workers=2,
         pulse_config=PulseConfig(
-            enabled=True, wave_size=2, wave_delay_seconds=3,
-            ban_threshold=2, ban_pause_seconds=30, canary_enabled=False,
+            enabled=True,
+            wave_size=2,
+            wave_delay_seconds=3,
+            ban_threshold=2,
+            ban_pause_seconds=30,
+            canary_enabled=False,
         ),
     )
     # Below the threshold no 30s ban pause is inserted: only the 3s wave gap.
@@ -281,8 +307,11 @@ def test_max_waves_reports_skipped_accounts_instead_of_dropping_them():
         run_one_fn=run_one,
         workers=2,
         pulse_config=PulseConfig(
-            enabled=True, wave_size=2, wave_delay_seconds=0,
-            max_waves=1, canary_enabled=False,
+            enabled=True,
+            wave_size=2,
+            wave_delay_seconds=0,
+            max_waves=1,
+            canary_enabled=False,
         ),
     )
 
@@ -312,8 +341,11 @@ def test_max_waves_notifies_callback_for_skipped_accounts():
         on_result=lambda idx, result: notified.__setitem__(idx, result),
         workers=2,
         pulse_config=PulseConfig(
-            enabled=True, wave_size=2, wave_delay_seconds=0,
-            max_waves=1, canary_enabled=False,
+            enabled=True,
+            wave_size=2,
+            wave_delay_seconds=0,
+            max_waves=1,
+            canary_enabled=False,
         ),
     )
     assert sorted(notified) == [0, 1, 2, 3, 4, 5]
@@ -331,12 +363,15 @@ def test_serial_path_used_for_single_worker():
 
 
 def test_zero_count_returns_empty():
-    assert run_pulse_batch(
-        0,
-        run_one_fn=lambda idx: (idx, _ok(idx)),
-        workers=2,
-        pulse_config=PulseConfig(enabled=True),
-    ) == []
+    assert (
+        run_pulse_batch(
+            0,
+            run_one_fn=lambda idx: (idx, _ok(idx)),
+            workers=2,
+            pulse_config=PulseConfig(enabled=True),
+        )
+        == []
+    )
 
 
 def test_cancel_event_marks_remaining_accounts_cancelled():

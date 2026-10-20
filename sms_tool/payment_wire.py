@@ -87,6 +87,7 @@ __all__ = [
 
 # ─── 共享内核（自 paypal_extract 逐字搬迁）────────────────────────────────────
 
+
 class CheckoutNotZeroDueError(Exception):
     error_code = "checkout_not_zero_due"
     error_stage = "eligibility"

@@ -6,6 +6,7 @@
 用法:
   python -m scripts.manual.recover_remail_tokens <email1> <email2> ... [--out <file>]
 """
+
 from __future__ import annotations
 
 import argparse

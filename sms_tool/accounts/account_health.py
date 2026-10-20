@@ -9,6 +9,7 @@ from typing import Any, Mapping
 
 from ..kernel.sanitizer import drop_sensitive_fields
 
+
 class HealthCheckKind(str, Enum):
     PLAN = "plan"
     DEEP_LIVENESS = "deep_liveness"

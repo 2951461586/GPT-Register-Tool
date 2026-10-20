@@ -311,8 +311,7 @@ def test_module_to_dist_map_has_no_stale_entries() -> None:
 
 @pytest.mark.parametrize(
     "dist",
-    sorted(set(REQUIREMENTS_MAP) - set(IMPORTED) - set(UNRESOLVABLE)
-           - set(DECLARED_NOT_IMPORTED)),
+    sorted(set(REQUIREMENTS_MAP) - set(IMPORTED) - set(UNRESOLVABLE) - set(DECLARED_NOT_IMPORTED)),
     ids=lambda d: d,
 )
 def test_declared_dependency_is_actually_imported(dist: str) -> None:
@@ -396,10 +395,7 @@ def test_constraints_versions_satisfy_requirements_specifiers() -> None:
             continue
         requirement = Requirement(f"{dist}{spec}") if spec else Requirement(dist)
         if not requirement.specifier.contains(version):
-            problems.append(
-                f"{dist}: requirements says '{spec or 'any'}' but constraints "
-                f"pins '{pinned}'"
-            )
+            problems.append(f"{dist}: requirements says '{spec or 'any'}' but constraints pins '{pinned}'")
     assert not problems, "contradictory version declarations:\n  " + "\n  ".join(problems)
 
 
@@ -451,8 +447,7 @@ def test_constraints_file_contains_only_names_and_version_specifiers() -> None:
         if stripped and not stripped.startswith("-")
     ]
     assert len(scanned) >= 10, (
-        f"only {len(scanned)} constraint entries were scanned - the check is not "
-        f"running against the real file"
+        f"only {len(scanned)} constraint entries were scanned - the check is not running against the real file"
     )
     problems = _constraint_violations(text)
     assert not problems, (
@@ -466,10 +461,7 @@ def test_the_constraint_checker_flags_extras_and_direct_references(tmp_path: Pat
     """Negative test: the checker must fail on the exact shape that broke CI."""
     bad = tmp_path / "constraints.txt"
     bad.write_text(
-        "httpx[http2,socks]==0.28.1\n"
-        "camoufox[geoip]==0.5.4\n"
-        "qrcode[pil]==8.2\n"
-        "pkg @ https://example.com/pkg.whl\n",
+        "httpx[http2,socks]==0.28.1\ncamoufox[geoip]==0.5.4\nqrcode[pil]==8.2\npkg @ https://example.com/pkg.whl\n",
         encoding="utf-8",
     )
     problems = _constraint_violations(bad.read_text(encoding="utf-8"))

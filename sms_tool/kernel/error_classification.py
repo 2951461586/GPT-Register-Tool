@@ -14,9 +14,17 @@ from .failure_registry import FAILURE_CLASSES, TERMINAL_ERROR_MARKERS as _TERMIN
 
 # 注册表顺序即匹配优先序（cancelled 最先）。以下公共元组名被多个模块与测试
 # 直接引用，作为兼容视图保留。
-_CANCELLED_CLASS, _INTERNAL_CLASS, _CONFIGURATION_CLASS, _ACCOUNT_CLASS, \
-    _MAILBOX_CLASS, _RATE_LIMIT_CLASS, _NETWORK_CLASS, _AUTH_STATE_CLASS, \
-    _UPI_PAYMENT_CLASS = FAILURE_CLASSES
+(
+    _CANCELLED_CLASS,
+    _INTERNAL_CLASS,
+    _CONFIGURATION_CLASS,
+    _ACCOUNT_CLASS,
+    _MAILBOX_CLASS,
+    _RATE_LIMIT_CLASS,
+    _NETWORK_CLASS,
+    _AUTH_STATE_CLASS,
+    _UPI_PAYMENT_CLASS,
+) = FAILURE_CLASSES
 
 UPI_PAYMENT_ERROR_MARKERS = _UPI_PAYMENT_CLASS.markers
 
@@ -49,9 +57,7 @@ CANCELLED_ERROR_MARKERS = _CANCELLED_CLASS.markers
 #
 # Derived from NETWORK_ERROR_MARKERS rather than hardcoded, so adding a new
 # ``curl: (NN)`` marker automatically extends the demotion.
-CURL_TRANSPORT_MARKERS = tuple(
-    marker for marker in NETWORK_ERROR_MARKERS if marker.startswith("curl:")
-)
+CURL_TRANSPORT_MARKERS = tuple(marker for marker in NETWORK_ERROR_MARKERS if marker.startswith("curl:"))
 
 # Bare transport vocabulary ("timeout", "connection", "proxy", ...). These are
 # substrings of stage-scoped failure codes, and NETWORK is tested before
@@ -66,9 +72,7 @@ CURL_TRANSPORT_MARKERS = tuple(
 # generic vocabulary, while a compound token (``curl: (35)``,
 # ``session_circuit_open``, ``connection reset``, ``winerror 10060``) names a
 # specific condition and stays decisive on its own.
-GENERIC_TRANSPORT_MARKERS = tuple(
-    marker for marker in NETWORK_ERROR_MARKERS if marker.isalpha()
-)
+GENERIC_TRANSPORT_MARKERS = tuple(marker for marker in NETWORK_ERROR_MARKERS if marker.isalpha())
 
 INTERNAL_ERROR_MARKERS = _INTERNAL_CLASS.markers
 

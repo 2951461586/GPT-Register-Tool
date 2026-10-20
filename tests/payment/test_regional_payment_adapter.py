@@ -47,7 +47,11 @@ def test_regional_contract_profiles(method, stripe_type, country, currency):
     profile = regional_profile(method)
     contract = CheckoutRequestContract.for_payment_method(method)
     assert profile.stripe_type == stripe_type
-    assert (contract.billing_country, contract.currency, contract.stripe_payment_method) == (country, currency, stripe_type)
+    assert (contract.billing_country, contract.currency, contract.stripe_payment_method) == (
+        country,
+        currency,
+        stripe_type,
+    )
     assert PAYMENT_METHODS[method].batch_enabled is True
     assert PAYMENT_METHODS[method].registration_enabled is False
 
@@ -82,7 +86,11 @@ def test_capability_probe_has_no_payment_method_or_confirm_side_effects():
 
 @pytest.mark.parametrize(
     ("method", "redirect"),
-    [("qris", "https://midtrans.com/pay/abc"), ("bizum", "https://bizum.es/pay/abc"), ("naver_pay", "https://pay.naver.com/pay/abc")],
+    [
+        ("qris", "https://midtrans.com/pay/abc"),
+        ("bizum", "https://bizum.es/pay/abc"),
+        ("naver_pay", "https://pay.naver.com/pay/abc"),
+    ],
 )
 def test_full_adapter_uses_independent_provider_host_allowlists(method, redirect):
     transport = FakeTransport(redirect=redirect)

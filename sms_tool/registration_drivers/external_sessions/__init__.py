@@ -6,10 +6,18 @@ from ...kernel.driver_env import driver_config as _driver_config
 from ..base import BROWSER_REGISTRATION_DRIVERS, BrowserRegistrationError, normalize_registration_driver
 from ..browser_session import PlaywrightBrowserSession, _playwright_proxy
 from .managed import (
-    CamoufoxBrowserSession, CloakBrowserSession,
-    ConnectedPlaywrightSession, RoxyBrowserSession,
-    MOZ_DISABLE_CONTENT_SANDBOX, _first, _normalize_debugger_address, _require, _roxy_retryable,
-    apply_playwright_stealth, curl_requests, time,
+    CamoufoxBrowserSession,
+    CloakBrowserSession,
+    ConnectedPlaywrightSession,
+    RoxyBrowserSession,
+    MOZ_DISABLE_CONTENT_SANDBOX,
+    _first,
+    _normalize_debugger_address,
+    _require,
+    _roxy_retryable,
+    apply_playwright_stealth,
+    curl_requests,
+    time,
 )
 from .profiles import _browser_profile_dir, _inject_browser_profile, _inject_screen_size
 from .probe import verify_browser_proxy_country
@@ -21,9 +29,16 @@ _BROWSER_SESSION_FACTORIES: dict[str, type[PlaywrightBrowserSession]] = {
 }
 assert set(_BROWSER_SESSION_FACTORIES) == BROWSER_REGISTRATION_DRIVERS - {"playwright"}
 
+
 def create_browser_session(
-    driver: str, *, config: Mapping[str, Any], proxy: str | None, headless: bool,
-    timeout_ms: int, locale: str, timezone_id: str,
+    driver: str,
+    *,
+    config: Mapping[str, Any],
+    proxy: str | None,
+    headless: bool,
+    timeout_ms: int,
+    locale: str,
+    timezone_id: str,
     browser_identity: Mapping[str, Any] | None = None,
     viewport: tuple[int, int] | None = None,
 ) -> PlaywrightBrowserSession:
@@ -39,8 +54,11 @@ def create_browser_session(
     # below; provider-owned drivers get None and are left untouched.
     config = _inject_screen_size(config, driver, viewport)
     kwargs = {
-        "proxy": proxy, "headless": headless, "timeout_ms": timeout_ms,
-        "locale": locale, "timezone_id": timezone_id,
+        "proxy": proxy,
+        "headless": headless,
+        "timeout_ms": timeout_ms,
+        "locale": locale,
+        "timezone_id": timezone_id,
     }
     if driver == "playwright":
         kwargs["viewport"] = viewport
@@ -55,6 +73,9 @@ def create_browser_session(
 
 
 __all__ = [
-    "CamoufoxBrowserSession", "CloakBrowserSession", "RoxyBrowserSession",
-    "create_browser_session", "verify_browser_proxy_country",
+    "CamoufoxBrowserSession",
+    "CloakBrowserSession",
+    "RoxyBrowserSession",
+    "create_browser_session",
+    "verify_browser_proxy_country",
 ]

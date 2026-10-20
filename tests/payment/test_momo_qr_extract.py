@@ -32,7 +32,9 @@ class IsScannableMomoArtifactTests(unittest.TestCase):
 
     def test_payment_method_brand_icon_is_not_scannable(self):
         self.assertFalse(
-            momo.is_scannable_momo_artifact("https://js.stripe.com/v3/fingerprinted/img/payment-methods/icon-pm-momo.png")
+            momo.is_scannable_momo_artifact(
+                "https://js.stripe.com/v3/fingerprinted/img/payment-methods/icon-pm-momo.png"
+            )
         )
 
     def test_bare_token_is_not_scannable(self):
@@ -136,17 +138,23 @@ class ProbeAccountTests(unittest.TestCase):
     }
 
     def test_parse_only_short_circuits_without_network(self):
-        with patch.object(momo, "load_credential_text", return_value=("tok", "", {"credential_valid": True, "decision": "credential_ready"})):
+        with patch.object(
+            momo,
+            "load_credential_text",
+            return_value=("tok", "", {"credential_valid": True, "decision": "credential_ready"}),
+        ):
             with patch.object(momo, "create_checkout") as create:
-                result, idx = momo.probe_account(
-                    "A", None, "tok", [""], 0, parse_only=True
-                )
+                result, idx = momo.probe_account("A", None, "tok", [""], 0, parse_only=True)
         create.assert_not_called()
         self.assertTrue(result["conclusive"])
         self.assertIsNone(result["supported"])
 
     def test_invalid_credential_short_circuits_without_network(self):
-        with patch.object(momo, "load_credential_text", return_value=("", "", {"credential_valid": False, "decision": "credential_parse_failed"})):
+        with patch.object(
+            momo,
+            "load_credential_text",
+            return_value=("", "", {"credential_valid": False, "decision": "credential_parse_failed"}),
+        ):
             with patch.object(momo, "create_checkout") as create:
                 result, idx = momo.probe_account("A", None, "garbage", [""], 0)
         create.assert_not_called()
@@ -154,8 +162,16 @@ class ProbeAccountTests(unittest.TestCase):
         self.assertTrue(result["conclusive"])
 
     def test_ready_with_qr_happy_path(self):
-        with patch.object(momo, "load_credential_text", return_value=("tok", "", {"credential_valid": True, "decision": "credential_ready"})):
-            with patch.object(momo, "create_checkout", return_value=(dict(self._CHECKOUT_DATA), "cs_test123456", "pk_live_x", "", 1, 0)):
+        with patch.object(
+            momo,
+            "load_credential_text",
+            return_value=("tok", "", {"credential_valid": True, "decision": "credential_ready"}),
+        ):
+            with patch.object(
+                momo,
+                "create_checkout",
+                return_value=(dict(self._CHECKOUT_DATA), "cs_test123456", "pk_live_x", "", 1, 0),
+            ):
                 with patch.object(momo, "stripe_init", return_value=(dict(self._READY_INIT), "ok", 1)):
                     with patch.object(momo, "emit_momo_qr", return_value=dict(self._QR_INFO)) as emit:
                         result, idx = momo.probe_account("A", None, "tok", [""], 0, emit_qr=True)
@@ -167,8 +183,16 @@ class ProbeAccountTests(unittest.TestCase):
 
     def test_nonzero_momo_is_blocked_before_emitting_qr(self):
         nonzero_init = dict(self._READY_INIT, total_summary={"due": 128000})
-        with patch.object(momo, "load_credential_text", return_value=("tok", "", {"credential_valid": True, "decision": "credential_ready"})):
-            with patch.object(momo, "create_checkout", return_value=(dict(self._CHECKOUT_DATA), "cs_test123456", "pk_live_x", "", 1, 0)):
+        with patch.object(
+            momo,
+            "load_credential_text",
+            return_value=("tok", "", {"credential_valid": True, "decision": "credential_ready"}),
+        ):
+            with patch.object(
+                momo,
+                "create_checkout",
+                return_value=(dict(self._CHECKOUT_DATA), "cs_test123456", "pk_live_x", "", 1, 0),
+            ):
                 with patch.object(momo, "stripe_init", return_value=(nonzero_init, "ok", 1)):
                     with patch.object(momo, "apply_promo_update", return_value=(False, "update_rejected")):
                         with patch.object(momo, "emit_momo_qr") as emit:
@@ -186,14 +210,32 @@ class ProbeAccountTests(unittest.TestCase):
             "approve": "http://approve",
             "redirect": "http://redirect",
         }
-        with patch.object(momo, "load_credential_text", return_value=("tok", "", {"credential_valid": True, "decision": "credential_ready"})), \
-             patch.object(momo, "create_checkout", return_value=(dict(self._CHECKOUT_DATA), "cs_test123456", "pk_live_x", "http://checkout", 1, 0)) as create, \
-             patch.object(momo, "stripe_init", side_effect=[(nonzero, "ok", 1), (dict(self._READY_INIT), "ok", 1)]) as stripe, \
-             patch.object(momo, "apply_promo_update", return_value=(True, "ok")) as promo, \
-             patch.object(momo, "emit_momo_qr", return_value=dict(self._QR_INFO)) as emit:
+        with (
+            patch.object(
+                momo,
+                "load_credential_text",
+                return_value=("tok", "", {"credential_valid": True, "decision": "credential_ready"}),
+            ),
+            patch.object(
+                momo,
+                "create_checkout",
+                return_value=(dict(self._CHECKOUT_DATA), "cs_test123456", "pk_live_x", "http://checkout", 1, 0),
+            ) as create,
+            patch.object(
+                momo, "stripe_init", side_effect=[(nonzero, "ok", 1), (dict(self._READY_INIT), "ok", 1)]
+            ) as stripe,
+            patch.object(momo, "apply_promo_update", return_value=(True, "ok")) as promo,
+            patch.object(momo, "emit_momo_qr", return_value=dict(self._QR_INFO)) as emit,
+        ):
             result, _ = momo.probe_account(
-                "A", None, "tok", ["http://fallback"], 0,
-                emit_qr=True, max_attempts=1, stage_proxies=stages,
+                "A",
+                None,
+                "tok",
+                ["http://fallback"],
+                0,
+                emit_qr=True,
+                max_attempts=1,
+                stage_proxies=stages,
             )
         self.assertEqual(create.call_args.args[2], ["http://checkout"])
         self.assertEqual(stripe.call_args_list[0].args[2], "http://provider")
@@ -210,10 +252,14 @@ class ChooseDecisionTests(unittest.TestCase):
         self.assertEqual(momo.choose_decision(True, True, "subscription", True, amount_due_cents=0), "ready")
 
     def test_momo_nonzero_is_promo_nonzero(self):
-        self.assertEqual(momo.choose_decision(True, True, "subscription", True, amount_due_cents=128000), "promo_nonzero")
+        self.assertEqual(
+            momo.choose_decision(True, True, "subscription", True, amount_due_cents=128000), "promo_nonzero"
+        )
 
     def test_unknown_methods(self):
-        self.assertEqual(momo.choose_decision(True, True, "subscription", None, amount_due_cents=0), "payment_methods_unknown")
+        self.assertEqual(
+            momo.choose_decision(True, True, "subscription", None, amount_due_cents=0), "payment_methods_unknown"
+        )
 
     def test_unexpected_mode_wins_before_momo(self):
         # a non-subscription mode is terminal even when momo+zero would otherwise be ready
@@ -223,23 +269,33 @@ class ChooseDecisionTests(unittest.TestCase):
         self.assertEqual(momo.choose_decision(True, True, None, True, amount_due_cents=0), "ready")
 
     def test_no_momo_nonzero_full_price_is_card_only(self):
-        self.assertEqual(momo.choose_decision(False, False, "subscription", False, amount_due_cents=99000), "card_only_full_price")
+        self.assertEqual(
+            momo.choose_decision(False, False, "subscription", False, amount_due_cents=99000), "card_only_full_price"
+        )
 
     def test_no_momo_zero_ineligible_is_trial_ineligible(self):
-        self.assertEqual(momo.choose_decision(False, False, "subscription", False, amount_due_cents=0), "account_trial_ineligible")
+        self.assertEqual(
+            momo.choose_decision(False, False, "subscription", False, amount_due_cents=0), "account_trial_ineligible"
+        )
 
     def test_no_momo_zero_unknown_eligibility_is_trial_not_applied(self):
-        self.assertEqual(momo.choose_decision(None, False, "subscription", False, amount_due_cents=0), "trial_not_applied")
+        self.assertEqual(
+            momo.choose_decision(None, False, "subscription", False, amount_due_cents=0), "trial_not_applied"
+        )
 
     def test_no_momo_with_trial_is_momo_not_enabled(self):
-        self.assertEqual(momo.choose_decision(True, True, "subscription", False, amount_due_cents=0), "momo_not_enabled")
+        self.assertEqual(
+            momo.choose_decision(True, True, "subscription", False, amount_due_cents=0), "momo_not_enabled"
+        )
 
 
 class UsablePayTextTests(unittest.TestCase):
     def test_empty_and_junk_rejected(self):
         self.assertFalse(momo._usable_pay_text(""))
         self.assertFalse(momo._usable_pay_text("momo"))
-        self.assertFalse(momo._usable_pay_text("https://js.stripe.com/v3/fingerprinted/img/payment-methods/icon-pm-momo.png"))
+        self.assertFalse(
+            momo._usable_pay_text("https://js.stripe.com/v3/fingerprinted/img/payment-methods/icon-pm-momo.png")
+        )
 
     def test_urls_and_data_image_accepted(self):
         self.assertTrue(momo._usable_pay_text("https://payment.momo.vn/x"))
@@ -263,7 +319,9 @@ class UsableQrImageTests(unittest.TestCase):
         self.assertTrue(momo._usable_qr_image(_PNG_DATA_URI))
 
     def test_brand_icon_rejected(self):
-        self.assertFalse(momo._usable_qr_image("https://js.stripe.com/v3/fingerprinted/img/payment-methods/icon-pm-momo.png"))
+        self.assertFalse(
+            momo._usable_qr_image("https://js.stripe.com/v3/fingerprinted/img/payment-methods/icon-pm-momo.png")
+        )
 
     def test_qr_keyword_url_accepted(self):
         self.assertTrue(momo._usable_qr_image("https://cdn.example.com/qrcode.png"))

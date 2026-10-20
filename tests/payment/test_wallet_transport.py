@@ -62,7 +62,10 @@ def request(stage, *, method="gopay", payload=None, redirect_url="", attempt=1, 
 class WalletTransportTests(unittest.TestCase):
     def test_checkout_and_approve_use_chatgpt_contract_and_stage_proxy(self):
         transport = ChatGPTStripeWalletTransport()
-        responses = [FakeResponse(payload={"checkout_session_id": "cs_fixture"}), FakeResponse(payload={"result": "approved"})]
+        responses = [
+            FakeResponse(payload={"checkout_session_id": "cs_fixture"}),
+            FakeResponse(payload={"result": "approved"}),
+        ]
         calls = []
 
         def checkout_post(url, body, access_token, cookie, proxy, timeout, extra_headers=None):
@@ -87,10 +90,12 @@ class WalletTransportTests(unittest.TestCase):
             return FakeResponse(payload={"success": True})
 
         with patch("sms_tool.gen_pp_link._checkout_post", side_effect=checkout_post):
-            result = transport.update_checkout(request(
-                "promotion",
-                payload={"checkout_session_id": "cs_fixture"},
-            ))
+            result = transport.update_checkout(
+                request(
+                    "promotion",
+                    payload={"checkout_session_id": "cs_fixture"},
+                )
+            )
 
         self.assertTrue(result["success"])
         self.assertEqual(calls[0][0], "https://chatgpt.com/backend-api/payments/checkout/update")
@@ -113,8 +118,10 @@ class WalletTransportTests(unittest.TestCase):
             "http://session-one@approve.test:80",
             "http://session-two@approve.test:80",
         ]
-        with patch("sms_tool.gen_pp_link._checkout_post", side_effect=checkout_post), \
-             patch("sms_tool.paypal_proxy.rotate_proxy_session", side_effect=rotated) as rotate:
+        with (
+            patch("sms_tool.gen_pp_link._checkout_post", side_effect=checkout_post),
+            patch("sms_tool.paypal_proxy.rotate_proxy_session", side_effect=rotated) as rotate,
+        ):
             transport.approve_checkout(request("approve", attempt=1, transport_context=context))
             transport.approve_checkout(request("approve", attempt=2, transport_context=context))
 
@@ -136,8 +143,10 @@ class WalletTransportTests(unittest.TestCase):
             "http://poll-session-one@provider.test:80",
             "http://poll-session-two@provider.test:80",
         ]
-        with patch("sms_tool.paypal_proxy.rotate_proxy_session", side_effect=rotated), \
-             patch("sms_tool.gen_pp_link._new_session", side_effect=sessions) as new_session:
+        with (
+            patch("sms_tool.paypal_proxy.rotate_proxy_session", side_effect=rotated),
+            patch("sms_tool.gen_pp_link._new_session", side_effect=sessions) as new_session,
+        ):
             transport.poll_payment(request("poll", attempt=1, transport_context=context))
             transport.poll_payment(request("poll", attempt=2, transport_context=context))
 
@@ -145,12 +154,14 @@ class WalletTransportTests(unittest.TestCase):
         self.assertTrue(all(session.calls[0][0] == "get" for session in sessions))
 
     def test_stripe_stages_use_form_contract_and_provider_proxy(self):
-        session = FakeSession([
-            FakeResponse(payload={"payment_method_types": ["gopay"]}),
-            FakeResponse(payload={"id": "pm_fixture"}),
-            FakeResponse(payload={"status": "requires_action"}),
-            FakeResponse(payload={"payment_intent": {}}),
-        ])
+        session = FakeSession(
+            [
+                FakeResponse(payload={"payment_method_types": ["gopay"]}),
+                FakeResponse(payload={"id": "pm_fixture"}),
+                FakeResponse(payload={"status": "requires_action"}),
+                FakeResponse(payload={"payment_intent": {}}),
+            ]
+        )
         transport = ChatGPTStripeWalletTransport()
         with patch("sms_tool.gen_pp_link._new_session", return_value=session) as new_session:
             transport.stripe_init(request("stripe_init"))
@@ -166,30 +177,38 @@ class WalletTransportTests(unittest.TestCase):
         self.assertEqual(session.calls[0][2]["headers"]["Content-Type"], "application/x-www-form-urlencoded")
 
     def test_redirect_chain_is_manual_and_stops_on_provider_host(self):
-        session = FakeSession([
-            FakeResponse(302, headers={"Location": "https://app.midtrans.com/snap/v4/redirection/fixture"}),
-            FakeResponse(200, url="https://app.midtrans.com/snap/v4/redirection/fixture"),
-        ])
+        session = FakeSession(
+            [
+                FakeResponse(302, headers={"Location": "https://app.midtrans.com/snap/v4/redirection/fixture"}),
+                FakeResponse(200, url="https://app.midtrans.com/snap/v4/redirection/fixture"),
+            ]
+        )
         transport = ChatGPTStripeWalletTransport()
         with patch("sms_tool.gen_pp_link._new_session", return_value=session):
-            result = transport.follow_redirect(request(
-                "follow_redirect",
-                redirect_url="https://pm-redirects.stripe.com/authorize/fixture",
-            ))
+            result = transport.follow_redirect(
+                request(
+                    "follow_redirect",
+                    redirect_url="https://pm-redirects.stripe.com/authorize/fixture",
+                )
+            )
         self.assertEqual(result["final_url"], "https://app.midtrans.com/snap/v4/redirection/fixture")
         self.assertTrue(all(call[2]["allow_redirects"] is False for call in session.calls))
 
     def test_redirect_chain_rejects_off_allowlist_location(self):
-        session = FakeSession([
-            FakeResponse(302, headers={"Location": "https://attacker.example/collect"}),
-        ])
+        session = FakeSession(
+            [
+                FakeResponse(302, headers={"Location": "https://attacker.example/collect"}),
+            ]
+        )
         transport = ChatGPTStripeWalletTransport()
         with patch("sms_tool.gen_pp_link._new_session", return_value=session):
             with self.assertRaisesRegex(Exception, "not allowed"):
-                transport.follow_redirect(request(
-                    "follow_redirect",
-                    redirect_url="https://pm-redirects.stripe.com/authorize/fixture",
-                ))
+                transport.follow_redirect(
+                    request(
+                        "follow_redirect",
+                        redirect_url="https://pm-redirects.stripe.com/authorize/fixture",
+                    )
+                )
 
 
 if __name__ == "__main__":

@@ -99,9 +99,10 @@ def test_aligned_locale_timezone_does_not_clobber_when_geo_is_unknown():
     mismatch the alignment exists to prevent.
     """
     us_default_profile = {"navigator_language": "en-US", "timezone_iana": "America/New_York"}
-    assert decisions.aligned_locale_timezone(
-        us_default_profile, "pt-BR", "America/Sao_Paulo"
-    ) == ("pt-BR", "America/Sao_Paulo")
+    assert decisions.aligned_locale_timezone(us_default_profile, "pt-BR", "America/Sao_Paulo") == (
+        "pt-BR",
+        "America/Sao_Paulo",
+    )
     # Same profile, but the egress really was measured as the US -> override.
     assert decisions.aligned_locale_timezone(
         dict(us_default_profile, geo={"country": "US"}), "pt-BR", "America/Sao_Paulo"
@@ -193,7 +194,10 @@ def test_screen_and_provider_driver_sets_are_disjoint_and_complete():
     # Every browser driver must be exactly one of: screen-managed or provider-managed.
     assert not (decisions.SCREEN_MANAGED_DRIVERS & decisions.PROVIDER_MANAGED_DRIVERS)
     assert decisions.SCREEN_MANAGED_DRIVERS | decisions.PROVIDER_MANAGED_DRIVERS == {
-        "playwright", "camoufox", "roxy", "cloak",
+        "playwright",
+        "camoufox",
+        "roxy",
+        "cloak",
     }
 
 
@@ -240,9 +244,7 @@ def test_proxy_country_check_mode_defaults_with_an_empty_config():
     assert decisions.proxy_country_check_mode("camoufox", {}) == "diagnostic"
 
 
-@pytest.mark.parametrize(
-    "mode", ["blocking", "diagnostic", "off"]
-)
+@pytest.mark.parametrize("mode", ["blocking", "diagnostic", "off"])
 def test_proxy_country_check_mode_config_overrides_both_ways(mode):
     cfg = {"registration": {"browser_proxy_country_check": mode}}
     assert decisions.proxy_country_check_mode("roxy", cfg) == mode

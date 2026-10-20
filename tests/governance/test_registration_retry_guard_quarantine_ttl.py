@@ -20,6 +20,7 @@
 
 → ``docs/audits/scans/scan-2026-09-18-latest-protocol-batch-diagnosis.md``
 """
+
 from __future__ import annotations
 
 import json
@@ -60,6 +61,7 @@ def _rewind(tmp_path, email, *, seconds):
 # 写入侧：隔离必须带截止时刻
 # --------------------------------------------------------------------------
 
+
 def test_quarantine_records_a_ttl_deadline(tmp_path):
     guard = _guard(tmp_path)
     _quarantine(guard, "a@example.com")
@@ -85,6 +87,7 @@ def test_the_first_observation_is_a_cooldown_not_a_quarantine(tmp_path):
 # --------------------------------------------------------------------------
 # 读取侧：三处必须同时释放
 # --------------------------------------------------------------------------
+
 
 def test_a_quarantine_inside_its_ttl_still_defers(tmp_path):
     guard = _guard(tmp_path)
@@ -125,6 +128,7 @@ def test_expired_quarantine_leaves_the_pool_filters(tmp_path):
 # 🔴 承重用例：到期 = 重新计时，不是永久豁免
 # --------------------------------------------------------------------------
 
+
 def test_expiry_restarts_the_count_instead_of_re_quarantining_at_once(tmp_path):
     """到期后第一次 stuck 必须只拿到冷却。
 
@@ -153,6 +157,7 @@ def test_expiry_restarts_the_count_instead_of_re_quarantining_at_once(tmp_path):
 # --------------------------------------------------------------------------
 # 向后兼容与保守兜底
 # --------------------------------------------------------------------------
+
 
 def test_rows_written_before_the_ttl_existed_still_expire(tmp_path):
     """09-18 及更早隔离的记录没有 ``quarantine_until``。
@@ -231,6 +236,7 @@ def test_a_success_still_clears_the_row(tmp_path):
 # --------------------------------------------------------------------------
 # 配置
 # --------------------------------------------------------------------------
+
 
 def test_ttl_comes_from_the_retry_policy_and_is_floored(tmp_path):
     configured = RegistrationRetryGuard(

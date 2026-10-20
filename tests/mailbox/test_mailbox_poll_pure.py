@@ -30,6 +30,7 @@ Quirks pinned, not fixed:
 * ``reraise`` is written ``except reraise or ():`` -- a ``None`` reraise means
   "swallow everything", and a tuple only re-raises those exact types.
 """
+
 from __future__ import annotations
 
 import io
@@ -110,8 +111,7 @@ class HappyPathTests(_PollCase):
         self.assertEqual(out.clock.sleeps, [1.5], "exactly one settle-length sleep")
 
     def test_settle_zero_returns_immediately_without_sleeping(self):
-        out = self.run_poll([{"otp": "123456", "received_ts": 1}],
-                            timeout=10, interval=2.0, settle_seconds=0)
+        out = self.run_poll([{"otp": "123456", "received_ts": 1}], timeout=10, interval=2.0, settle_seconds=0)
         self.assertEqual(out.result, "123456")
         self.assertEqual(out.clock.sleeps, [])
 
@@ -185,61 +185,67 @@ class CandidateShapeTests(_PollCase):
 
 class ExcludedOtpTests(_PollCase):
     def test_excluded_codes_are_skipped_without_settling(self):
-        out = self.run_poll([{"otp": "111111", "received_ts": 1}],
-                            excluded_otps=["111111"], **DEFAULTS)
+        out = self.run_poll([{"otp": "111111", "received_ts": 1}], excluded_otps=["111111"], **DEFAULTS)
         self.assertIsNone(out.result)
-        self.assertEqual(out.clock.sleeps, [2.0] * 5,
-                         "an excluded candidate must not enter the settle loop")
+        self.assertEqual(out.clock.sleeps, [2.0] * 5, "an excluded candidate must not enter the settle loop")
 
     def test_excluded_values_are_stringified_and_stripped(self):
-        out = self.run_poll([{"otp": "111111", "received_ts": 1}],
-                            excluded_otps=["  111111  "], timeout=4, interval=2.0,
-                            settle_seconds=1.5)
+        out = self.run_poll(
+            [{"otp": "111111", "received_ts": 1}],
+            excluded_otps=["  111111  "],
+            timeout=4,
+            interval=2.0,
+            settle_seconds=1.5,
+        )
         self.assertIsNone(out.result)
         self.assertEqual(out.clock.sleeps, [2.0] * 2)
 
     def test_none_in_excluded_becomes_the_empty_string(self):
         """⚠️ Pinned: ``str(value or "").strip()`` turns ``None`` into ``""``, so
         listing ``None`` as excluded silently excludes empty-string codes too."""
-        out = self.run_poll([{"otp": "", "received_ts": 1}], excluded_otps=[None],
-                            timeout=4, interval=2.0, settle_seconds=1.5)
+        out = self.run_poll(
+            [{"otp": "", "received_ts": 1}], excluded_otps=[None], timeout=4, interval=2.0, settle_seconds=1.5
+        )
         self.assertIsNone(out.result)
         self.assertEqual(out.clock.sleeps, [2.0] * 2, "no settle -- it was excluded")
 
     def test_a_later_non_excluded_code_is_returned(self):
-        out = self.run_poll([{"otp": "111111", "received_ts": 1},
-                             {"otp": "222222", "received_ts": 2}],
-                            excluded_otps=["111111"], **DEFAULTS)
+        out = self.run_poll(
+            [{"otp": "111111", "received_ts": 1}, {"otp": "222222", "received_ts": 2}],
+            excluded_otps=["111111"],
+            **DEFAULTS,
+        )
         self.assertEqual(out.result, "222222")
 
 
 class SettleStabilityTests(_PollCase):
     def test_a_newer_candidate_replaces_the_pending_one(self):
         """The whole point of the module: keep waiting while newer codes arrive."""
-        out = self.run_poll([{"otp": "111111", "received_ts": 1},
-                             {"otp": "222222", "received_ts": 5}], **DEFAULTS)
+        out = self.run_poll([{"otp": "111111", "received_ts": 1}, {"otp": "222222", "received_ts": 5}], **DEFAULTS)
         self.assertEqual(out.result, "222222")
-        self.assertEqual(out.clock.sleeps, [1.5, 1.5],
-                         "the settle window is extended once by the newer code")
+        self.assertEqual(out.clock.sleeps, [1.5, 1.5], "the settle window is extended once by the newer code")
 
     def test_an_older_or_equal_candidate_does_not_replace_it(self):
-        out = self.run_poll([{"otp": "111111", "received_ts": 5},
-                             {"otp": "222222", "received_ts": 5}], **DEFAULTS)
+        out = self.run_poll([{"otp": "111111", "received_ts": 5}, {"otp": "222222", "received_ts": 5}], **DEFAULTS)
         self.assertEqual(out.result, "111111")
         self.assertEqual(out.clock.sleeps, [1.5])
 
     def test_custom_is_newer_is_used(self):
-        out = self.run_poll([{"otp": "111111", "received_ts": 1},
-                             {"otp": "222222", "received_ts": 5}],
-                            is_newer=lambda newer, older: False, **DEFAULTS)
+        out = self.run_poll(
+            [{"otp": "111111", "received_ts": 1}, {"otp": "222222", "received_ts": 5}],
+            is_newer=lambda newer, older: False,
+            **DEFAULTS,
+        )
         self.assertEqual(out.result, "111111")
 
     def test_the_settle_loop_is_bounded_by_the_deadline(self):
         """⚠️ Pinned: with an always-newer stream the settle window keeps being
         extended, so the *deadline* is the only thing that ends it."""
-        out = self.run_poll([{"otp": "111111", "received_ts": 1},
-                             {"otp": "222222", "received_ts": 5}],
-                            is_newer=lambda newer, older: True, **DEFAULTS)
+        out = self.run_poll(
+            [{"otp": "111111", "received_ts": 1}, {"otp": "222222", "received_ts": 5}],
+            is_newer=lambda newer, older: True,
+            **DEFAULTS,
+        )
         self.assertEqual(out.result, "222222")
         self.assertTrue(out.clock.sleeps)
         self.assertEqual(set(out.clock.sleeps), {1.5})
@@ -248,8 +254,7 @@ class SettleStabilityTests(_PollCase):
         """⚠️ Pinned: the settle loop stops at the deadline, but the ``return``
         afterwards does not re-check it -- so a code found just inside the window
         is still returned after it."""
-        out = self.run_poll([{"otp": "123456", "received_ts": 1}],
-                            timeout=1, interval=2.0, settle_seconds=1.5)
+        out = self.run_poll([{"otp": "123456", "received_ts": 1}], timeout=1, interval=2.0, settle_seconds=1.5)
         self.assertEqual(out.result, "123456")
         self.assertGreater(out.clock.now, 1001.0, "we are past the deadline")
 
@@ -260,20 +265,19 @@ class ReraiseTests(_PollCase):
             self.run_poll([ValueError("boom")], reraise=(ValueError,), **DEFAULTS)
 
     def test_unlisted_exception_types_are_swallowed(self):
-        out = self.run_poll([ValueError("boom"), {"otp": "123456", "received_ts": 1}],
-                            reraise=(KeyError,), **DEFAULTS)
+        out = self.run_poll([ValueError("boom"), {"otp": "123456", "received_ts": 1}], reraise=(KeyError,), **DEFAULTS)
         self.assertEqual(out.result, "123456")
         self.assertIn("boom", out.stdout)
 
     def test_no_reraise_swallows_everything(self):
         """``except reraise or ()`` -- a ``None`` reraise matches nothing."""
-        out = self.run_poll([RuntimeError("boom"), {"otp": "123456", "received_ts": 1}],
-                            **DEFAULTS)
+        out = self.run_poll([RuntimeError("boom"), {"otp": "123456", "received_ts": 1}], **DEFAULTS)
         self.assertEqual(out.result, "123456")
 
     def test_the_log_prefix_appears_in_the_error_line(self):
-        out = self.run_poll([RuntimeError("boom"), {"otp": "123456", "received_ts": 1}],
-                            log_prefix="mailbox-7", **DEFAULTS)
+        out = self.run_poll(
+            [RuntimeError("boom"), {"otp": "123456", "received_ts": 1}], log_prefix="mailbox-7", **DEFAULTS
+        )
         self.assertIn("mailbox-7", out.stdout)
 
 

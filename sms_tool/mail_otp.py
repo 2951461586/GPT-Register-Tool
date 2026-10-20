@@ -38,6 +38,7 @@ FAKE_OTP_CONTEXT_MARKERS = (
     "message-id",
 )
 
+
 def _extract_otp_from_text(text):
     text = text or ""
     candidates = []
@@ -45,7 +46,7 @@ def _extract_otp_from_text(text):
         code = match.group(2)
         start, end = match.span(2)
         # Skip numbers that are part of an email address
-        around = text[max(0, start - 3):min(len(text), end + 3)]
+        around = text[max(0, start - 3) : min(len(text), end + 3)]
         if re.search(r"[a-z0-9._%+-]\.?\d{6}@|@.*\d{6}[a-z0-9._-]", around, re.I):
             continue
         # Skip if preceded/followed by hex-ish chars (part of longer token)
@@ -55,16 +56,18 @@ def _extract_otp_from_text(text):
             continue
         if char_after and re.match(r"[a-fA-F0-9-]", char_after):
             continue
-        before = text[max(0, start - 2):start]
-        after = text[end:end + 2]
-        context = text[max(0, start - 80):min(len(text), end + 80)]
+        before = text[max(0, start - 2) : start]
+        after = text[end : end + 2]
+        context = text[max(0, start - 80) : min(len(text), end + 80)]
         context_lc = context.lower()
-        before_context = text[max(0, start - 60):start].lower()
-        if any(marker in before_context for marker in FAKE_OTP_CONTEXT_MARKERS) and not any(marker in before_context for marker in OTP_CONTEXT_MARKERS):
+        before_context = text[max(0, start - 60) : start].lower()
+        if any(marker in before_context for marker in FAKE_OTP_CONTEXT_MARKERS) and not any(
+            marker in before_context for marker in OTP_CONTEXT_MARKERS
+        ):
             continue
         if _looks_fake_otp_context(context_lc):
             continue
-        if text[max(0, start - 1):end].startswith("#"):
+        if text[max(0, start - 1) : end].startswith("#"):
             continue
         if re.search(r"(?i)(color|background|border|rgb|rgba|font)[^\n]{0,20}#?" + re.escape(code), context):
             continue
@@ -76,7 +79,10 @@ def _extract_otp_from_text(text):
         if re.search(r"(?i)" + re.escape(code) + r"\s*(px|em|rem|%)\b", context):
             continue
         score = 0
-        if any(k in context_lc for k in ("code", "verification", "verify", "openai", "chatgpt", "login", "验证码", "驗證碼")):
+        if any(
+            k in context_lc
+            for k in ("code", "verification", "verify", "openai", "chatgpt", "login", "验证码", "驗證碼")
+        ):
             score += 10
         if any(k in context_lc for k in ("your", "is", "use", "enter", "sign")):
             score += 2
@@ -190,6 +196,7 @@ def _looks_fake_otp_context(lowered_text):
 def _message_looks_fake_otp_noise(text):
     return _looks_fake_otp_context(str(text or "").lower())
 
+
 def _message_recipients(msg):
     recipients = []
     for key in ("toRecipients", "ccRecipients", "bccRecipients"):
@@ -201,7 +208,9 @@ def _message_recipients(msg):
         name = str((header or {}).get("name") or "").strip().lower()
         value = str((header or {}).get("value") or "")
         if name in {"to", "cc", "bcc", "delivered-to", "x-original-to", "x-forwarded-to"}:
-            recipients.extend(addr.lower() for addr in re.findall(r"(?i)[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}", value))
+            recipients.extend(
+                addr.lower() for addr in re.findall(r"(?i)[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}", value)
+            )
     return set(recipients)
 
 

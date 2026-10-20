@@ -101,7 +101,9 @@ def inspect_workspace(
         result["error"] = "workspace_deactivated"
     elif fetch_result.get("inconclusive") or fetch_result.get("error") == "workspace_check_transport_error":
         result["status"] = "workspace_check_inconclusive"
-        result["error"] = str(fetch_result.get("transport_error") or fetch_result.get("error") or "workspace_check_inconclusive")
+        result["error"] = str(
+            fetch_result.get("transport_error") or fetch_result.get("error") or "workspace_check_inconclusive"
+        )
         result["inconclusive"] = True
     elif fetch_result.get("error") == "missing_session_cookie":
         # AT claim is still useful for inventory, but not enough to prove live
@@ -119,11 +121,20 @@ def inspect_workspace(
         result["error"] = "workspace_not_target"
 
     fallback_candidates = list(fallback_workspace_ids or [])
-    if account_type_before == "k12" and result["status"] in {"workspace_deactivated", "workspace_check_failed", "workspace_not_target"}:
+    if account_type_before == "k12" and result["status"] in {
+        "workspace_deactivated",
+        "workspace_check_failed",
+        "workspace_not_target",
+    }:
         fallback_candidates.extend(_available_workspace_ids(available_workspaces, exclude={actual}))
     switch_ids = _switch_candidates(target, fallback_candidates, actual)
     should_switch = (
-        bool(auto_switch or target or fallback_workspace_ids or (account_type_before == "k12" and result["status"] == "workspace_deactivated"))
+        bool(
+            auto_switch
+            or target
+            or fallback_workspace_ids
+            or (account_type_before == "k12" and result["status"] == "workspace_deactivated")
+        )
         and bool(switch_ids)
         and (target or result["status"] != "workspace_ok")
     )
@@ -146,7 +157,10 @@ def inspect_workspace(
             result["actual_workspace_name"] = str(switch.get("actual_workspace_name") or "")
             result["workspace_name"] = str(switch.get("actual_workspace_name") or "")
             result["switched_workspace_id"] = str(switch.get("workspace_id") or "")
-            result["account_type_after"] = _workspace_account_type(_workspace_by_id(available_workspaces, result["actual_workspace_id"])) or account_type_before
+            result["account_type_after"] = (
+                _workspace_account_type(_workspace_by_id(available_workspaces, result["actual_workspace_id"]))
+                or account_type_before
+            )
         elif result["status"] in {"workspace_deactivated", "workspace_not_target", "workspace_check_failed"}:
             result["status"] = "workspace_switch_failed"
             result["ok"] = False
@@ -167,8 +181,12 @@ def inspect_workspace(
             if switch.get("ok"):
                 result["ok"] = True
                 result["status"] = "workspace_fallback_free"
-                result["actual_workspace_id"] = str(switch.get("actual_workspace_id") or switch.get("workspace_id") or "")
-                result["actual_workspace_name"] = str(switch.get("actual_workspace_name") or personal.get("name") or personal.get("title") or "")
+                result["actual_workspace_id"] = str(
+                    switch.get("actual_workspace_id") or switch.get("workspace_id") or ""
+                )
+                result["actual_workspace_name"] = str(
+                    switch.get("actual_workspace_name") or personal.get("name") or personal.get("title") or ""
+                )
                 result["workspace_name"] = result["actual_workspace_name"]
                 result["account_type_after"] = "free"
                 result.pop("error", None)
@@ -216,7 +234,11 @@ def switch_workspace(
             actual_info = _workspace_by_id(workspaces, actual)
             attempt["actual_workspace_id"] = actual
             attempt["actual_workspace_name"] = str(actual_info.get("name") or actual_info.get("title") or "")
-            attempt["fetch"] = {"ok": True, "actual_workspace_id": actual, "actual_workspace_name": attempt["actual_workspace_name"]}
+            attempt["fetch"] = {
+                "ok": True,
+                "actual_workspace_id": actual,
+                "actual_workspace_name": attempt["actual_workspace_name"],
+            }
             attempts.append(attempt)
             if actual == workspace_id:
                 return {
@@ -299,9 +321,7 @@ def _account_type(data):
     token_account = _token_account_id(_extract_access_token(data))
     k12_status = str(data.get("k12_status") or _nested_string(data.get("k12"), "status") or "").strip().lower()
     if (token_account and str(data.get("k12_workspace_id") or "") == token_account) or (
-        ("k12" in k12_status or "edu" in k12_status)
-        and "left" not in k12_status
-        and "fallback_free" not in k12_status
+        ("k12" in k12_status or "edu" in k12_status) and "left" not in k12_status and "fallback_free" not in k12_status
     ):
         return "k12"
     for value in (
@@ -376,20 +396,49 @@ def _extract_workspace_candidates(value):
         if depth > 6:
             return
         if isinstance(node, dict):
-            node_id = str(node.get("id") or node.get("workspace_id") or node.get("workspaceId") or node.get("account_id") or node.get("accountId") or "").strip()
-            has_workspace_shape = node_id and any(k in node for k in ("name", "title", "is_personal", "isPersonal", "disabled", "deactivated", "role", "plan_type", "planType"))
+            node_id = str(
+                node.get("id")
+                or node.get("workspace_id")
+                or node.get("workspaceId")
+                or node.get("account_id")
+                or node.get("accountId")
+                or ""
+            ).strip()
+            has_workspace_shape = node_id and any(
+                k in node
+                for k in (
+                    "name",
+                    "title",
+                    "is_personal",
+                    "isPersonal",
+                    "disabled",
+                    "deactivated",
+                    "role",
+                    "plan_type",
+                    "planType",
+                )
+            )
             if has_workspace_shape and node_id not in seen:
                 seen.add(node_id)
-                found.append({
-                    "id": node_id,
-                    "name": str(node.get("name") or node.get("title") or ""),
-                    "title": str(node.get("title") or node.get("name") or ""),
-                    "is_personal": bool(node.get("is_personal") or node.get("isPersonal") or node.get("personal")),
-                    "disabled": bool(node.get("disabled") or node.get("deactivated")),
-                    "account_type": _workspace_account_type(node),
-                })
+                found.append(
+                    {
+                        "id": node_id,
+                        "name": str(node.get("name") or node.get("title") or ""),
+                        "title": str(node.get("title") or node.get("name") or ""),
+                        "is_personal": bool(node.get("is_personal") or node.get("isPersonal") or node.get("personal")),
+                        "disabled": bool(node.get("disabled") or node.get("deactivated")),
+                        "account_type": _workspace_account_type(node),
+                    }
+                )
             for key, child in node.items():
-                if key.lower() in {"access_token", "accesstoken", "refresh_token", "refreshtoken", "cookie", "cookie_header"}:
+                if key.lower() in {
+                    "access_token",
+                    "accesstoken",
+                    "refresh_token",
+                    "refreshtoken",
+                    "cookie",
+                    "cookie_header",
+                }:
                     continue
                 visit(child, depth + 1)
         elif isinstance(node, list):
@@ -407,12 +456,14 @@ def _public_workspaces(workspaces):
             continue
         if _looks_workspace_deactivated(item):
             continue
-        output.append({
-            "id": str(item.get("id") or ""),
-            "name": str(item.get("name") or item.get("title") or ""),
-            "is_personal": bool(item.get("is_personal")),
-            "account_type": str(item.get("account_type") or ""),
-        })
+        output.append(
+            {
+                "id": str(item.get("id") or ""),
+                "name": str(item.get("name") or item.get("title") or ""),
+                "is_personal": bool(item.get("is_personal")),
+                "account_type": str(item.get("account_type") or ""),
+            }
+        )
     return output
 
 

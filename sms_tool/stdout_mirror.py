@@ -23,6 +23,7 @@ Two deliberate constraints:
   ``sanitize_log_text``, so the new file inherits the same redaction policy as
   every other operator-visible channel instead of becoming a fresh leak surface.
 """
+
 from __future__ import annotations
 
 import logging

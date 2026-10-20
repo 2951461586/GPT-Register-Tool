@@ -68,7 +68,9 @@ class EgressCheckError(Exception):
             "url": "",
             "error": str(self),
             "error_code": self.error_code,
-            "failure_class": "proxy_country_mismatch" if self.error_code == "egress_country_mismatch" else "proxy_transport_failed",
+            "failure_class": "proxy_country_mismatch"
+            if self.error_code == "egress_country_mismatch"
+            else "proxy_transport_failed",
             "error_stage": "preparing_proxy",
             "retryable": self.retryable,
             "egress": {
@@ -117,6 +119,7 @@ def _cached_probe(
 ) -> tuple[bool, str, str]:
     """Probe with a monotonic cache so batch runs do not re-probe healthy proxies."""
     from .paypal_proxy import proxy_key
+
     key = (proxy_key(proxy), expected)
     now = time.monotonic()
     with _cache_lock:

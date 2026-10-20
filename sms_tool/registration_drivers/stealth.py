@@ -30,35 +30,36 @@ def build_playwright_stealth(*, label: str = "browser", provider_prefix: str = "
         logger.debug("[%s] playwright-stealth is unavailable; continuing without the optional init script", label)
         return None
     kwargs = dict(
-            # Keep the provider's native UA, client hints, platform, and WebGL.
-            navigator_user_agent=False,
-            navigator_user_agent_data=False,
-            navigator_platform=False,
-            sec_ch_ua=False,
-            webgl_vendor=False,
-            # Patch browser automation signals only.
-            chrome_runtime=True,
-            chrome_app=True,
-            chrome_csi=True,
-            chrome_load_times=True,
-            hairline=True,
-            iframe_content_window=True,
-            media_codecs=True,
-            navigator_hardware_concurrency=True,
-            navigator_languages=True,
-            navigator_permissions=True,
-            navigator_plugins=True,
-            navigator_vendor=True,
-            navigator_webdriver=True,
-            error_prototype=True,
-            init_scripts_only=True,
-        )
+        # Keep the provider's native UA, client hints, platform, and WebGL.
+        navigator_user_agent=False,
+        navigator_user_agent_data=False,
+        navigator_platform=False,
+        sec_ch_ua=False,
+        webgl_vendor=False,
+        # Patch browser automation signals only.
+        chrome_runtime=True,
+        chrome_app=True,
+        chrome_csi=True,
+        chrome_load_times=True,
+        hairline=True,
+        iframe_content_window=True,
+        media_codecs=True,
+        navigator_hardware_concurrency=True,
+        navigator_languages=True,
+        navigator_permissions=True,
+        navigator_plugins=True,
+        navigator_vendor=True,
+        navigator_webdriver=True,
+        error_prototype=True,
+        init_scripts_only=True,
+    )
     # playwright-stealth warns when navigator_platform is disabled while its
     # default override remains populated.  Explicitly clear that override when
     # supported by the installed version; retain compatibility with older
     # releases that do not expose the keyword.
     try:
         import inspect
+
         if "navigator_platform_override" in inspect.signature(Stealth).parameters:
             kwargs["navigator_platform_override"] = None
     except Exception:

@@ -12,21 +12,25 @@ from sms_tool.mailbox_types import MailboxAccount
 
 
 def _config():
-    return RuntimeConfig.from_mapping({
-        "chatgpt": {},
-        "email_registration": {"otp_poll_interval": 1},
-        "protocol_payments": {"matrix": {"cells": []}},
-    })
+    return RuntimeConfig.from_mapping(
+        {
+            "chatgpt": {},
+            "email_registration": {"otp_poll_interval": 1},
+            "protocol_payments": {"matrix": {"cells": []}},
+        }
+    )
 
 
 def test_injected_mailbox_registry_routes_fetch_and_poll_without_global_registration():
     registry = MailboxProviderRegistry()
-    registry.register(FunctionMailboxProviderAdapter(
-        "fake",
-        lambda mailbox, config: mailbox.provider == "fake",
-        lambda mailbox, **kwargs: [{"id": "message-1"}],
-        lambda mailbox, **kwargs: "123456",
-    ))
+    registry.register(
+        FunctionMailboxProviderAdapter(
+            "fake",
+            lambda mailbox, config: mailbox.provider == "fake",
+            lambda mailbox, **kwargs: [{"id": "message-1"}],
+            lambda mailbox, **kwargs: "123456",
+        )
+    )
     service = MailboxService.create(_config(), registry)
     mailbox = MailboxAccount("user@example.com", provider="fake")
 
@@ -43,11 +47,13 @@ def test_frozen_registry_rejects_runtime_mutation():
 
 def test_matcher_failure_is_typed_instead_of_silently_skipped():
     registry = MailboxProviderRegistry()
-    registry.register(FunctionMailboxProviderAdapter(
-        "broken",
-        lambda *_: (_ for _ in ()).throw(ValueError("secret provider detail")),
-        lambda *_args, **_kwargs: [],
-    ))
+    registry.register(
+        FunctionMailboxProviderAdapter(
+            "broken",
+            lambda *_: (_ for _ in ()).throw(ValueError("secret provider detail")),
+            lambda *_args, **_kwargs: [],
+        )
+    )
     with pytest.raises(MailboxProviderResolutionError, match="matcher failed: broken: ValueError"):
         registry.resolve_fetcher(MailboxAccount("user@example.com"), {})
 
@@ -85,24 +91,21 @@ def test_a_newly_registered_provider_wins_without_touching_graph():
         lambda mailbox, _config: mailbox.provider == "brand_new",
         lambda mailbox, **_kwargs: ["from-brand-new"],
     )
-    resolved = registry.resolve_fetcher(
-        MailboxAccount("user@example.com", provider="brand_new"), {})
+    resolved = registry.resolve_fetcher(MailboxAccount("user@example.com", provider="brand_new"), {})
     assert resolved is not None
     assert resolved.name == "brand_new"
 
 
 def test_graph_still_catches_providers_nobody_claims():
     registry = DEFAULT_MAILBOX_PROVIDERS.clone()
-    resolved = registry.resolve_fetcher(
-        MailboxAccount("user@example.com", provider="nobody_implements_this"), {})
+    resolved = registry.resolve_fetcher(MailboxAccount("user@example.com", provider="nobody_implements_this"), {})
     assert resolved is not None
     assert resolved.name == "graph_api"
 
 
 def test_a_fallback_never_wins_just_because_it_was_registered_first():
     registry = MailboxProviderRegistry()
-    registry.register_fetcher("catch_all", lambda *_: True, lambda *_a, **_k: ["fallback"],
-                              fallback=True)
+    registry.register_fetcher("catch_all", lambda *_: True, lambda *_a, **_k: ["fallback"], fallback=True)
     registry.register_fetcher("specific", lambda *_: True, lambda *_a, **_k: ["specific"])
     resolved = registry.resolve_fetcher(MailboxAccount("user@example.com"), {})
     assert resolved is not None
@@ -124,8 +127,7 @@ def test_the_real_graph_adapter_loses_when_registered_first():
         lambda mailbox, _config: mailbox.provider == "cfworker",
         lambda mailbox, **_kwargs: ["from-cfworker"],
     )
-    resolved = registry.resolve_fetcher(
-        MailboxAccount("user@example.com", provider="cfworker"), {})
+    resolved = registry.resolve_fetcher(MailboxAccount("user@example.com", provider="cfworker"), {})
     assert resolved is not None
     assert resolved.name == "cfworker"
 

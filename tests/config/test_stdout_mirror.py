@@ -36,9 +36,7 @@ def test_mirror_persists_complete_lines(tmp_path):
     mirror.write("  Existing account OTP send: /resend 409\n")
     mirror.close()
 
-    assert _text(tmp_path) == (
-        "  Status: 409\n  Existing account OTP send: /resend 409\n"
-    )
+    assert _text(tmp_path) == ("  Status: 409\n  Existing account OTP send: /resend 409\n")
 
 
 def test_disk_mirror_correlates_without_changing_stdout(tmp_path, monkeypatch):
@@ -98,12 +96,12 @@ def test_mirror_does_not_change_what_the_wrapped_stream_receives(tmp_path):
     mirror = _mirror(tmp_path)
     stream = SanitizingTextIO(sink, mirror=mirror)
 
-    stream.write("@@SMSWORKBENCH_V2@@ {\"stage\": \"started\"}\n")
+    stream.write('@@SMSWORKBENCH_V2@@ {"stage": "started"}\n')
     stream.flush()
     mirror.close()
 
-    assert sink.getvalue() == "@@SMSWORKBENCH_V2@@ {\"stage\": \"started\"}\n"
-    assert _text(tmp_path) == "@@SMSWORKBENCH_V2@@ {\"stage\": \"started\"}\n"
+    assert sink.getvalue() == '@@SMSWORKBENCH_V2@@ {"stage": "started"}\n'
+    assert _text(tmp_path) == '@@SMSWORKBENCH_V2@@ {"stage": "started"}\n'
 
 
 def test_mirror_receives_sanitized_text_not_raw_credentials(tmp_path):

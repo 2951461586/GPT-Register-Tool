@@ -52,6 +52,7 @@ def _terminal_markers() -> tuple[str, ...]:
     try:
         sys.path.insert(0, str(Path(__file__).resolve().parent))
         from batch_enable_2fa import TERMINAL_ERROR_MARKERS
+
         return tuple(TERMINAL_ERROR_MARKERS)
     except Exception:  # pragma: no cover - classification is best-effort
         return ()
@@ -87,14 +88,16 @@ def load_rows() -> list[dict]:
             data = {}
         if str(data.get("promotion_status") or "") != PROMO_FREE:
             continue
-        rows.append({
-            "email": str(r["email"] or "").strip().lower(),
-            "account_url": str(r["mailbox_token"] or data.get("mailbox_token") or "").strip(),
-            # Column first, raw_json only as a fallback -- see module docstring.
-            "totp_secret": str(r["totp_secret"] or data.get("totp_secret") or "").strip(),
-            "twofa_enrolled_at": int(r["twofa_enrolled_at"] or 0),
-            "twofa_enroll_error": str(data.get("twofa_enroll_error") or "").strip(),
-        })
+        rows.append(
+            {
+                "email": str(r["email"] or "").strip().lower(),
+                "account_url": str(r["mailbox_token"] or data.get("mailbox_token") or "").strip(),
+                # Column first, raw_json only as a fallback -- see module docstring.
+                "totp_secret": str(r["totp_secret"] or data.get("totp_secret") or "").strip(),
+                "twofa_enrolled_at": int(r["twofa_enrolled_at"] or 0),
+                "twofa_enroll_error": str(data.get("twofa_enroll_error") or "").strip(),
+            }
+        )
     conn.close()
     rows.sort(key=lambda r: r["email"])
     return rows
@@ -103,8 +106,7 @@ def load_rows() -> list[dict]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Export Email----URL----2FA manifest")
     parser.add_argument("--out", default="")
-    parser.add_argument("--only-2fa", action="store_true",
-                        help="emit only rows that actually have a TOTP secret")
+    parser.add_argument("--only-2fa", action="store_true", help="emit only rows that actually have a TOTP secret")
     args = parser.parse_args()
 
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -164,12 +166,16 @@ def main() -> int:
         if args.only_2fa and not row["totp_secret"]:
             continue
         lines.append(f"{email}----{url}----{row['totp_secret']}")
-        audit.append({
-            "email": email, "url": url, "url_source": source,
-            "has_2fa": bool(row["totp_secret"]),
-            "pool_url_differs": bool(pool_url and account_url and pool_url != account_url),
-            "twofa_enroll_error": row["twofa_enroll_error"],
-        })
+        audit.append(
+            {
+                "email": email,
+                "url": url,
+                "url_source": source,
+                "has_2fa": bool(row["totp_secret"]),
+                "pool_url_differs": bool(pool_url and account_url and pool_url != account_url),
+                "twofa_enroll_error": row["twofa_enroll_error"],
+            }
+        )
 
     # The empty-2FA rows are not a neutral outcome -- whoever consumes this file
     # cannot use them.  The main file stays complete (1684 rows, no row dropped,
@@ -195,8 +201,7 @@ def main() -> int:
     # ratchet baselines; guarded repo-wide by tests/governance/test_line_ending_guard.py.
     txt_path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
     audit_path = out_dir / f"icloud_no_trial_email_url_2fa{suffix}_{stamp}.audit.json"
-    audit_path.write_text(json.dumps(audit, ensure_ascii=False, indent=2),
-                          encoding="utf-8", newline="\n")
+    audit_path.write_text(json.dumps(audit, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
 
     list_path = None
     if no2fa_terminal or no2fa_retryable:
@@ -208,22 +213,19 @@ def main() -> int:
             "",
             f"## 终态：再跑轮次无效，需补邮箱源或放弃  ({len(no2fa_terminal)} 行)",
         ]
-        block += [f"{i['email']}----{i['url']}----{i['twofa_enroll_error']}"
-                  for i in no2fa_terminal]
+        block += [f"{i['email']}----{i['url']}----{i['twofa_enroll_error']}" for i in no2fa_terminal]
         block += [
             "",
             f"## 可重试：再跑一轮可能成功  ({len(no2fa_retryable)} 行)",
         ]
-        block += [f"{i['email']}----{i['url']}----{i['twofa_enroll_error']}"
-                  for i in no2fa_retryable]
+        block += [f"{i['email']}----{i['url']}----{i['twofa_enroll_error']}" for i in no2fa_retryable]
         list_path.write_text("\n".join(block) + "\n", encoding="utf-8", newline="\n")
 
     print(json.dumps(stats, ensure_ascii=False, indent=2))
     print(f"导出: {txt_path}  ({len(lines)} 行)")
     print(f"审计: {audit_path}")
     if list_path is not None:
-        print(f"空 2FA 清单: {list_path}  "
-              f"(终态 {len(no2fa_terminal)} / 可重试 {len(no2fa_retryable)})")
+        print(f"空 2FA 清单: {list_path}  (终态 {len(no2fa_terminal)} / 可重试 {len(no2fa_retryable)})")
     if stats["without_2fa"]:
         print(
             f"\n⚠️  {stats['without_2fa']} 行的 2FA 字段为空 —— 这些行不可用：\n"

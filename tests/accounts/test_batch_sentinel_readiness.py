@@ -19,11 +19,14 @@ def _batch():
 
 def test_missing_runner_stops_before_account_lookup_and_proxy_preflight(capsys):
     with (
-        patch.object(batch_runner, "CFG", {
-            "email_registration": {"sentinel_backend": "node_runner", "sentinel_legacy_fallback": False}
-        }),
-        patch.object(batch_runner, "check_node_runner_readiness",
-              side_effect=SentinelRunnerError("sentinel_runner_node_missing")),
+        patch.object(
+            batch_runner,
+            "CFG",
+            {"email_registration": {"sentinel_backend": "node_runner", "sentinel_legacy_fallback": False}},
+        ),
+        patch.object(
+            batch_runner, "check_node_runner_readiness", side_effect=SentinelRunnerError("sentinel_runner_node_missing")
+        ),
         patch.object(batch_runner, "_drop_already_registered") as accounts,
         patch.object(batch_runner, "select_registration_proxy_pool") as proxies,
     ):
@@ -36,11 +39,16 @@ def test_missing_runner_stops_before_account_lookup_and_proxy_preflight(capsys):
 
 def test_enabled_fallback_reports_safe_reason_and_keeps_batch(capsys):
     with (
-        patch.object(batch_runner, "CFG", {
-            "email_registration": {"sentinel_backend": "node_runner", "sentinel_legacy_fallback": True}
-        }),
-        patch.object(batch_runner, "check_node_runner_readiness",
-              side_effect=SentinelRunnerError("sentinel_runtime_hash_mismatch")),
+        patch.object(
+            batch_runner,
+            "CFG",
+            {"email_registration": {"sentinel_backend": "node_runner", "sentinel_legacy_fallback": True}},
+        ),
+        patch.object(
+            batch_runner,
+            "check_node_runner_readiness",
+            side_effect=SentinelRunnerError("sentinel_runtime_hash_mismatch"),
+        ),
         patch.object(batch_runner, "_drop_already_registered", return_value=([object()], [], [])),
         patch.object(batch_runner, "select_registration_proxy_pool", return_value=[]),
     ):
@@ -65,11 +73,12 @@ def test_legacy_backend_does_not_check_node(capsys):
 def test_unexpected_readiness_failure_never_discloses_sensitive_path(capsys):
     secret = "password-in-configured-node-path"
     with (
-        patch.object(batch_runner, "CFG", {
-            "email_registration": {"sentinel_backend": "node_runner", "sentinel_legacy_fallback": True}
-        }),
-        patch.object(batch_runner, "check_node_runner_readiness",
-              side_effect=SentinelRunnerError(secret)),
+        patch.object(
+            batch_runner,
+            "CFG",
+            {"email_registration": {"sentinel_backend": "node_runner", "sentinel_legacy_fallback": True}},
+        ),
+        patch.object(batch_runner, "check_node_runner_readiness", side_effect=SentinelRunnerError(secret)),
         patch.object(batch_runner, "_drop_already_registered", return_value=([object()], [], [])),
         patch.object(batch_runner, "select_registration_proxy_pool", return_value=[]),
     ):

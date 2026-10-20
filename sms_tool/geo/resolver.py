@@ -243,9 +243,7 @@ def _http_get(url: str, proxy: str, timeout: float) -> tuple[int, str]:
 
         handler = urllib.request.ProxyHandler({"http": proxy, "https": proxy} if proxy else {})
         opener = urllib.request.build_opener(handler)
-        request = urllib.request.Request(
-            url, headers={"User-Agent": CHROME_UA, "Accept": "*/*"}
-        )
+        request = urllib.request.Request(url, headers={"User-Agent": CHROME_UA, "Accept": "*/*"})
         with opener.open(request, timeout=timeout) as response:
             return int(response.status or 0), response.read().decode("utf-8", "replace")
     except Exception as exc:
@@ -271,7 +269,7 @@ def probe_exit_geo(
     if not proxy:
         return _EMPTY
     best = _EMPTY
-    for url, kind in (endpoints or GEO_ENDPOINTS):
+    for url, kind in endpoints or GEO_ENDPOINTS:
         try:
             status, body = _http_get(url, proxy, timeout)
         except Exception:
@@ -375,9 +373,10 @@ class GeoResolver:
             geo = self._probe(key, timeout, probe, need_timezone)
             if geo.known and code and geo.country and geo.country != code:
                 logger.warning(
-                    "proxy exit %s: template hint %s disagrees with measured %s "
-                    "(measured wins)",
-                    key, code, geo.country,
+                    "proxy exit %s: template hint %s disagrees with measured %s (measured wins)",
+                    key,
+                    code,
+                    geo.country,
                 )
         if not geo.known and cached is not None and cached.known:
             # A fresh miss must not erase an answer we already had.
@@ -560,12 +559,8 @@ def resolve_proxy_geo(
         return _EMPTY
     shared = shared_geo_resolver()
     if timeout == shared.timeout:
-        return shared.resolve(
-            proxy, hint=hint, need_timezone=need_timezone
-        )
-    return GeoResolver(timeout=timeout).resolve(
-        proxy, hint=hint, need_timezone=need_timezone
-    )
+        return shared.resolve(proxy, hint=hint, need_timezone=need_timezone)
+    return GeoResolver(timeout=timeout).resolve(proxy, hint=hint, need_timezone=need_timezone)
 
 
 __all__ = [

@@ -31,22 +31,32 @@ def test_protocol_candidate_can_be_returned_without_persistence():
 
 
 def test_auth_session_email_reads_nested_session_user():
-    assert session_refresh._auth_session_email({"session": {"user": {"email": "User@Example.com"}}}) == "user@example.com"
+    assert (
+        session_refresh._auth_session_email({"session": {"user": {"email": "User@Example.com"}}}) == "user@example.com"
+    )
 
 
 def test_browser_refresh_paths_are_removed():
     # Browser-based re-login was deleted; only the protocol path remains.
     assert not hasattr(session_refresh, "_refresh_session_browser")
     assert not hasattr(session_refresh, "_complete_browser_email_login")
-    assert "browser" not in session_refresh.refresh_session.__doc__.lower() or "removed" in session_refresh.refresh_session.__doc__.lower()
+    assert (
+        "browser" not in session_refresh.refresh_session.__doc__.lower()
+        or "removed" in session_refresh.refresh_session.__doc__.lower()
+    )
 
 
 def test_explicit_session_file_rehydrates_flattened_mailbox_credentials(tmp_path):
     path = tmp_path / "session.json"
-    path.write_text(json.dumps({
-        "email": "liziai@smailr.com",
-        "mailbox": {"email": "liziai@smailr.com", "provider": "smailr"},
-    }), encoding="utf-8")
+    path.write_text(
+        json.dumps(
+            {
+                "email": "liziai@smailr.com",
+                "mailbox": {"email": "liziai@smailr.com", "provider": "smailr"},
+            }
+        ),
+        encoding="utf-8",
+    )
     record = {
         "email": "liziai@smailr.com",
         "mailbox_provider": "smailr",
@@ -189,9 +199,7 @@ def test_dead_session_refresh_reports_status_200_without_retry_after():
         return {}
 
     with patch.object(session_refresh, "_fetch_protocol_auth_session", side_effect=fake_fetch):
-        result = session_refresh._refresh_session_protocol(
-            data, "session.json", "dead@example.com", 30, persist=False
-        )
+        result = session_refresh._refresh_session_protocol(data, "session.json", "dead@example.com", 30, persist=False)
 
     assert result["last_status"] == "200"
     assert "retry_after" not in result

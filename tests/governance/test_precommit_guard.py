@@ -184,9 +184,7 @@ def test_short_placeholder_value_is_allowed() -> None:
 
 def test_findings_never_contain_the_full_value() -> None:
     secret = "d0ZH9kQ2mX7pL4nR8vT1wY6bC3fA5eQC"
-    findings = run_guard_on(
-        ROOT / "runtime", "_t_mask.json", '{"api_key": "%s"}\n' % secret
-    )
+    findings = run_guard_on(ROOT / "runtime", "_t_mask.json", '{"api_key": "%s"}\n' % secret)
     assert findings
     rendered = " ".join(str(part) for row in findings for part in row)
     assert secret not in rendered, "guard must not print full secret values"
@@ -230,9 +228,7 @@ def test_no_tracked_file_contains_credentials() -> None:
         text=True,
     )
     assert result.returncode == 0, (
-        "precommit guard found credentials in tracked files:\n"
-        + (result.stdout or "")
-        + (result.stderr or "")
+        "precommit guard found credentials in tracked files:\n" + (result.stdout or "") + (result.stderr or "")
     )
 
 

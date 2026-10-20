@@ -25,11 +25,15 @@ def _load_json(path: str) -> dict:
         return data if isinstance(data, dict) else {}
     except Exception:
         return {}
+
+
 def _method_cfg(cfg: dict, payment_method: str) -> dict:
     method = str(payment_method or "").strip().lower().replace("-", "_")
     _raw_section: object = cfg.get(method)
     section: dict = _raw_section if isinstance(_raw_section, dict) else {}
     return section if isinstance(section, dict) else {}
+
+
 def _payment_stage_proxies_from_config(cfg: dict, payment_method: str) -> dict:
     method = str(payment_method or "").strip().lower().replace("-", "_")
     method_cfg = _method_cfg(cfg, method)
@@ -51,6 +55,8 @@ def _payment_stage_proxies_from_config(cfg: dict, payment_method: str) -> dict:
     provider = pick("provider") or pick("stripe_init") or proxy_default
     approve = pick("approve") or pick("confirm") or provider or proxy_default
     return {"checkout": checkout, "provider": provider, "approve": approve}
+
+
 def _upi_first_string(data: Any, keys: Sequence[str]) -> str:
     """First non-empty string among ``keys``; a nested dict may carry the value."""
     if not isinstance(data, Mapping):
@@ -65,6 +71,8 @@ def _upi_first_string(data: Any, keys: Sequence[str]) -> str:
         if isinstance(value, str) and value.strip():
             return value.strip()
     return ""
+
+
 def _upi_payment_intent_id(value: Any) -> str:
     """Extract ``pi_...`` from a bare id or a ``pi_..._secret_...`` client secret."""
     text = str(value or "").strip()
@@ -72,6 +80,8 @@ def _upi_payment_intent_id(value: Any) -> str:
         return text.split("_secret_", 1)[0]
     match = re.search(r"(pi_[A-Za-z0-9]+)", text)
     return match.group(1) if match else ""
+
+
 def _upi_retarget_region(proxy: Any, country: Any) -> str:
     """Rewrite a known region-tagged proxy to ``country``; unknown stays as-is.
 

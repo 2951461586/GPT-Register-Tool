@@ -31,6 +31,8 @@ _TERMINAL = {"completed", "failed", "cancelled"}
 _PENDING_TTL_SECONDS = 6 * 60 * 60
 _LEASE_SECONDS = 120
 _HEARTBEAT_SECONDS = 30
+
+
 def queue_path() -> Path:
     return runtime_file(CFG, "account_health") / "queue.json"
 
@@ -63,9 +65,7 @@ def enqueue_account_health(
                 and (
                     item.get("status") in _ACTIVE
                     or (
-                        not force
-                        and item.get("status") == "completed"
-                        and now - int(item.get("updated_at") or 0) < 300
+                        not force and item.get("status") == "completed" and now - int(item.get("updated_at") or 0) < 300
                     )
                 )
             ),
@@ -121,13 +121,15 @@ def enqueue_post_registration_checks(
     max_pending = max(1, min(int(health.get("max_pending") or 1000), 10000))
     jobs: list[dict[str, Any]] = []
     if include_plan:
-        jobs.append(enqueue_account_health(
-            email,
-            HealthCheckKind.PLAN.value,
-            source=source,
-            auto_start=False,
-            max_pending=max_pending,
-        ))
+        jobs.append(
+            enqueue_account_health(
+                email,
+                HealthCheckKind.PLAN.value,
+                source=source,
+                auto_start=False,
+                max_pending=max_pending,
+            )
+        )
     deep_liveness_enabled = (
         _as_bool(health.get("post_registration_deep_liveness", True))
         if include_deep_liveness is None
@@ -426,10 +428,7 @@ def _load_unlocked(*, recover_running: bool = True) -> list[dict[str, Any]]:
             pid = int(item.get("worker_pid") or 0)
             lease_expires_at = int(item.get("lease_expires_at") or 0)
             lease_expired = lease_expires_at > 0 and now >= lease_expires_at
-            legacy_stale = (
-                lease_expires_at <= 0
-                and now - int(item.get("updated_at") or 0) > 1800
-            )
+            legacy_stale = lease_expires_at <= 0 and now - int(item.get("updated_at") or 0) > 1800
             if lease_expired or legacy_stale or not _pid_alive(pid):
                 item["status"] = "pending"
                 item["last_error"] = "recovered_interrupted_worker"

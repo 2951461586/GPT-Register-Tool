@@ -45,7 +45,13 @@ _LOGGER = logging.getLogger(__name__)
 #: Image-name fragments that identify a browser this project could have started.
 #: Used as the guard on termination, never as the way a holder is *found*.
 BROWSER_IMAGE_MARKERS = (
-    "camoufox", "firefox", "chrome", "chromium", "msedge", "playwright", "node",
+    "camoufox",
+    "firefox",
+    "chrome",
+    "chromium",
+    "msedge",
+    "playwright",
+    "node",
 )
 
 _PROCESS_TIMEOUT_S = 15.0
@@ -87,7 +93,7 @@ def _references_profile(command_line: str, target: str) -> bool:
         if token == target:
             return True
         for prefix in _PROFILE_FLAG_PREFIXES:
-            if token.startswith(prefix) and token[len(prefix):].strip("=").rstrip("/") == target:
+            if token.startswith(prefix) and token[len(prefix) :].strip("=").rstrip("/") == target:
                 return True
     return False
 
@@ -119,15 +125,14 @@ def _iter_processes_windows() -> Iterable[tuple[int, str, str]]:
     try:
         proc = subprocess.run(
             ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
-            capture_output=True, timeout=_PROCESS_TIMEOUT_S,
+            capture_output=True,
+            timeout=_PROCESS_TIMEOUT_S,
         )
     except (OSError, subprocess.SubprocessError) as exc:
         _LOGGER.warning("could not enumerate processes: %s", exc)
         return
     if proc.returncode != 0:
-        _LOGGER.warning(
-            "process enumeration exited %s: %s", proc.returncode, _decode(proc.stderr)[:200]
-        )
+        _LOGGER.warning("process enumeration exited %s: %s", proc.returncode, _decode(proc.stderr)[:200])
         return
     try:
         rows = json.loads(_decode(proc.stdout) or "[]")
@@ -192,12 +197,14 @@ def profile_holders(
     for pid, image, cmdline in enumerate_processes() or ():
         if not cmdline or not _references_profile(cmdline, target):
             continue
-        holders.append({
-            "pid": int(pid),
-            "image": str(image or ""),
-            "command_line": str(cmdline or ""),
-            "is_browser": is_browser_image(image),
-        })
+        holders.append(
+            {
+                "pid": int(pid),
+                "image": str(image or ""),
+                "command_line": str(cmdline or ""),
+                "is_browser": is_browser_image(image),
+            }
+        )
     return holders
 
 
@@ -214,13 +221,10 @@ def describe_contention(
     holders = profile_holders(profile_dir, enumerate_processes=enumerate_processes)
     if not holders:
         return ""
-    described = ", ".join(
-        f"PID {holder['pid']} ({holder['image'] or 'unknown'})" for holder in holders[:4]
-    )
+    described = ", ".join(f"PID {holder['pid']} ({holder['image'] or 'unknown'})" for holder in holders[:4])
     extra = "" if len(holders) <= 4 else f" and {len(holders) - 4} more"
     return (
-        f"profile {profile_dir} is held by {described}{extra}; "
-        "close it or run the profile reclaim path before retrying"
+        f"profile {profile_dir} is held by {described}{extra}; close it or run the profile reclaim path before retrying"
     )
 
 
@@ -269,7 +273,8 @@ def _terminate(pid: int) -> bool:
             # and would blow up the reader thread (see ``_decode``).
             proc = subprocess.run(
                 ["taskkill", "/PID", str(pid), "/T", "/F"],
-                capture_output=True, timeout=_PROCESS_TIMEOUT_S,
+                capture_output=True,
+                timeout=_PROCESS_TIMEOUT_S,
             )
         except (OSError, subprocess.SubprocessError) as exc:
             _LOGGER.warning("taskkill %s failed: %s", pid, exc)

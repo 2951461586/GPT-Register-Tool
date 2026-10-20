@@ -143,7 +143,9 @@ def _retire_phone_slot_for_batch(phone_pool: PhonePool, phone_slot: PhoneSlot, r
     phone_pool.save_state()
 
 
-def _send_phone_otp_with_retries(session, did, current_url, phone_slot: PhoneSlot, phone: str, sentinel=None, proxy=None) -> dict:
+def _send_phone_otp_with_retries(
+    session, did, current_url, phone_slot: PhoneSlot, phone: str, sentinel=None, proxy=None
+) -> dict:
     attempts = max(1, int(phone_slot.send_retry_attempts or 1))
     retry_delay = max(0, int(phone_slot.send_retry_delay_seconds or 0))
     last_result = {}
@@ -364,13 +366,10 @@ def _should_retry_with_new_provider_number(phone_pool: PhonePool, result: dict) 
     if error.endswith("_prepare_failed") or error in {"phone_pool_exhausted", "phone_proxy_unavailable"}:
         return False
     if error.startswith("phone_send_failed:"):
-        return (
-            any(
-                marker in error or marker in body
-                for marker in ("fraud_guard", "unsupported_phone_number", "invalid_phone_number")
-            )
-            or _phone_number_already_in_use(result)
-        )
+        return any(
+            marker in error or marker in body
+            for marker in ("fraud_guard", "unsupported_phone_number", "invalid_phone_number")
+        ) or _phone_number_already_in_use(result)
     if error.startswith("phone_validate_failed:"):
         return (
             "429" in error
@@ -409,12 +408,19 @@ def _complete_phone_verification_once_locked(
     if _is_rental_slot(phone_slot):
         try:
             from .phone_proxy import apply_proxy_to_session, phone_proxy_cfg, select_phone_proxy
+
             proxy_cfg = phone_proxy_cfg()
         except Exception:
             apply_proxy_to_session = None
             select_phone_proxy = None
             proxy_cfg = {}
-        should_probe_proxy = session is not None and (bool(proxy) or any(proxy_cfg.get(key) for key in ("proxy", "proxy_template", "proxies", "proxy_api_url", "white_api_url", "api_url")))
+        should_probe_proxy = session is not None and (
+            bool(proxy)
+            or any(
+                proxy_cfg.get(key)
+                for key in ("proxy", "proxy_template", "proxies", "proxy_api_url", "white_api_url", "api_url")
+            )
+        )
         if should_probe_proxy and select_phone_proxy is not None:
             try:
                 proxy_result = select_phone_proxy(
@@ -444,11 +450,15 @@ def _complete_phone_verification_once_locked(
     phone = normalize_phone(phone_slot.phone)
     print(f"[*] Phone verification: {phone} (reuse {phone_slot.reuse_count + 1}/{phone_slot.max_reuse_count})")
 
-    send_result = _send_phone_otp_with_retries(session, did, current_url, phone_slot, phone, sentinel=sentinel, proxy=selected_proxy)
+    send_result = _send_phone_otp_with_retries(
+        session, did, current_url, phone_slot, phone, sentinel=sentinel, proxy=selected_proxy
+    )
     phone_pool.save_state()
     if not send_result.get("ok"):
         if _is_rental_slot(phone_slot) and _phone_number_already_in_use(send_result):
-            print(f"  [{phone_slot.provider}] phone already in use; cancelling rental {phone_slot.rental_handle} before retry")
+            print(
+                f"  [{phone_slot.provider}] phone already in use; cancelling rental {phone_slot.rental_handle} before retry"
+            )
             _cancel_provider_activation(phone_slot)
             phone_pool.save_state()
         elif _is_terminal_send_rejection(send_result):
@@ -471,7 +481,9 @@ def _complete_phone_verification_once_locked(
 
     if not code:
         if _is_rental_slot(phone_slot):
-            print(f"  [{phone_slot.provider}] SMS timeout; cancelling rental {phone_slot.rental_handle} so this run can buy a new number")
+            print(
+                f"  [{phone_slot.provider}] SMS timeout; cancelling rental {phone_slot.rental_handle} so this run can buy a new number"
+            )
             _cancel_provider_activation(phone_slot)
             phone_pool.save_state()
         return {
@@ -486,7 +498,9 @@ def _complete_phone_verification_once_locked(
     if not validate_result.get("ok"):
         if _is_rental_slot(phone_slot):
             if _is_terminal_validate_rejection(validate_result):
-                print(f"  [{phone_slot.provider}] phone rejected by OpenAI; cancelling rental {phone_slot.rental_handle} so next round buys a new number")
+                print(
+                    f"  [{phone_slot.provider}] phone rejected by OpenAI; cancelling rental {phone_slot.rental_handle} so next round buys a new number"
+                )
             _cancel_provider_activation(phone_slot)
             phone_pool.save_state()
         return {
@@ -537,9 +551,7 @@ def create_phone_pool(
     source = sms_providers.resolve_provider(raw_source)
     max_reuse = max_reuse_count or _int_value(cfg.get("max_reuse_count"), 1)
     send_cooldown = (
-        max(0, int(send_cooldown_seconds))
-        if send_cooldown_seconds is not None
-        else _send_cooldown_seconds(cfg)
+        max(0, int(send_cooldown_seconds)) if send_cooldown_seconds is not None else _send_cooldown_seconds(cfg)
     )
     send_retries = _send_retry_attempts(cfg)
     send_retry_delay = _send_retry_delay_seconds(cfg)
@@ -549,34 +561,35 @@ def create_phone_pool(
     provider_cfg = _provider_cfg(cfg, source)
     api_key = _provider_api_key(cfg, source)
     if api_key:
-        endpoint = (
-            str(provider_cfg.get("endpoint") or "").strip()
-            or sms_providers.default_endpoint(source, DEFAULT_ENDPOINT)
+        endpoint = str(provider_cfg.get("endpoint") or "").strip() or sms_providers.default_endpoint(
+            source, DEFAULT_ENDPOINT
         )
         pool_size = max(1, _int_value(provider_cfg.get("pool_size"), 1))
         service = normalize_service(provider_cfg.get("service") or OPENAI_SERVICE_CODE)
         country = provider_cfg.get("country") or GHANA_COUNTRY_CODE
         for index in range(pool_size):
-            phones.append(PhoneSlot(
-                phone="",
-                provider=source,
-                api_key=api_key,
-                endpoint=endpoint,
-                service=service,
-                country=country,
-                min_price=str(provider_cfg.get("min_price") or "").strip(),
-                max_price=str(provider_cfg.get("max_price") or "0.06").strip(),
-                target_price=str(provider_cfg.get("target_price") or "0.054").strip(),
-                provider_ids=str(provider_cfg.get("provider_ids") or "").strip(),
-                max_reuse_count=max_reuse,
-                slot_id=f"{source}:{index}",
-                sms_timeout=_int_value(provider_cfg.get("sms_timeout"), 120),
-                sms_poll_interval=_int_value(provider_cfg.get("sms_poll_interval"), 5),
-                send_cooldown_seconds=_int_value(provider_cfg.get("send_cooldown_seconds"), send_cooldown),
-                send_retry_attempts=_int_value(provider_cfg.get("send_retry_attempts"), send_retries),
-                send_retry_delay_seconds=_int_value(provider_cfg.get("send_retry_delay_seconds"), send_retry_delay),
-                number_attempts=_int_value(provider_cfg.get("number_attempts"), number_attempts),
-            ))
+            phones.append(
+                PhoneSlot(
+                    phone="",
+                    provider=source,
+                    api_key=api_key,
+                    endpoint=endpoint,
+                    service=service,
+                    country=country,
+                    min_price=str(provider_cfg.get("min_price") or "").strip(),
+                    max_price=str(provider_cfg.get("max_price") or "0.06").strip(),
+                    target_price=str(provider_cfg.get("target_price") or "0.054").strip(),
+                    provider_ids=str(provider_cfg.get("provider_ids") or "").strip(),
+                    max_reuse_count=max_reuse,
+                    slot_id=f"{source}:{index}",
+                    sms_timeout=_int_value(provider_cfg.get("sms_timeout"), 120),
+                    sms_poll_interval=_int_value(provider_cfg.get("sms_poll_interval"), 5),
+                    send_cooldown_seconds=_int_value(provider_cfg.get("send_cooldown_seconds"), send_cooldown),
+                    send_retry_attempts=_int_value(provider_cfg.get("send_retry_attempts"), send_retries),
+                    send_retry_delay_seconds=_int_value(provider_cfg.get("send_retry_delay_seconds"), send_retry_delay),
+                    number_attempts=_int_value(provider_cfg.get("number_attempts"), number_attempts),
+                )
+            )
 
     pool = PhonePool(phones=phones, state_file=str(cfg.get("state_file") or "runtime/phone_reuse_state.json"))
     pool.load_state()

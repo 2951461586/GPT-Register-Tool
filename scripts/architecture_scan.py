@@ -1,4 +1,5 @@
 """Static architecture guardrails for the Python/WPF boundary."""
+
 from __future__ import annotations
 
 import ast
@@ -42,7 +43,9 @@ def main() -> int:
     storage_accounts = PY_ROOT / "store" / "accounts.py"
     try:
         storage_text = storage_accounts.read_text(encoding="utf-8")
-        if re.search(r"(?:from|import)\s+[^\n]*mailbox_(?:remail|gmail|smailr|cfworker|graph|chongzhi|icloud)", storage_text):
+        if re.search(
+            r"(?:from|import)\s+[^\n]*mailbox_(?:remail|gmail|smailr|cfworker|graph|chongzhi|icloud)", storage_text
+        ):
             failures.append("sms_tool/store/accounts.py imports a concrete mailbox provider")
     except OSError:
         failures.append("cannot read sms_tool/store/accounts.py")
@@ -56,7 +59,9 @@ def main() -> int:
         try:
             tree = ast.parse(facade.read_text(encoding="utf-8"))
             if any(isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) for node in tree.body):
-                failures.append(f"{facade.relative_to(ROOT)} is a compatibility facade but defines implementation symbols")
+                failures.append(
+                    f"{facade.relative_to(ROOT)} is a compatibility facade but defines implementation symbols"
+                )
         except (OSError, SyntaxError):
             failures.append(f"cannot parse provider facade: {facade.relative_to(ROOT)}")
     outlook_facade = ROOT / "sms_tool" / "outlook_imap.py"
@@ -84,8 +89,7 @@ def main() -> int:
     # set 9 -> 5 and the total module edge count 287 -> 277.
     _ALLOWED_TOP_LEVEL_ACCOUNT_HELPERS = {"account_creation.py", "account_seed.py"}
     stray_accounts = sorted(
-        p.name for p in PY_ROOT.glob("account_*.py")
-        if p.name not in _ALLOWED_TOP_LEVEL_ACCOUNT_HELPERS
+        p.name for p in PY_ROOT.glob("account_*.py") if p.name not in _ALLOWED_TOP_LEVEL_ACCOUNT_HELPERS
     )
     if stray_accounts:
         failures.append(

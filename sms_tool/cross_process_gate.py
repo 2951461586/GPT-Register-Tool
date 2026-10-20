@@ -32,12 +32,17 @@ try:  # Windows
 except ImportError:  # POSIX fallback
     import fcntl
 
+    # ``pyrightconfig.json`` pins ``pythonPlatform: Windows``, so this branch is
+    # unreachable for the checker and it has no ``fcntl`` stubs: the module and its
+    # POSIX-only attributes are invisible to it. The runtime shape is correct
+    # (``fcntl.flock`` exists wherever this branch is taken), so the suppression is
+    # at the two call sites rather than a loosening of the checker.
     def _lock_byte(handle) -> None:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)  # pyright: ignore[reportAttributeAccessIssue]
 
     def _unlock_byte(handle) -> None:
         try:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)  # pyright: ignore[reportAttributeAccessIssue]
         except OSError:
             pass
 
@@ -73,9 +78,7 @@ class CrossProcessSemaphore:
                         self._handles.append(handle)
                         return
             if time.monotonic() >= deadline:
-                raise GateTimeoutError(
-                    f"cross-process gate '{self.name}' did not free a slot within {timeout}s"
-                )
+                raise GateTimeoutError(f"cross-process gate '{self.name}' did not free a slot within {timeout}s")
             time.sleep(poll_interval)
 
     def _try_acquire_any_slot(self):
@@ -184,9 +187,7 @@ def cross_process_write_lock(lock_path: str | Path, *, timeout: float = 30.0, po
                 break
             except OSError:
                 if time.monotonic() >= deadline:
-                    raise GateTimeoutError(
-                        f"cross-process write lock {lock_path} not acquired within {timeout}s"
-                    )
+                    raise GateTimeoutError(f"cross-process write lock {lock_path} not acquired within {timeout}s")
                 time.sleep(poll_interval)
         yield
     finally:

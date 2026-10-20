@@ -16,9 +16,7 @@ PAYPAL_USER_AGENT = (
     f"Chrome/{PAYPAL_CHROME_VERSION}.0.0.0 Safari/537.36"
 )
 PAYPAL_SEC_CH_UA = (
-    f'"Chromium";v="{PAYPAL_CHROME_VERSION}", '
-    f'"Google Chrome";v="{PAYPAL_CHROME_VERSION}", '
-    '"Not-A.Brand";v="99"'
+    f'"Chromium";v="{PAYPAL_CHROME_VERSION}", "Google Chrome";v="{PAYPAL_CHROME_VERSION}", "Not-A.Brand";v="99"'
 )
 PAYPAL_SEC_CH_UA_MOBILE = "?0"
 PAYPAL_SEC_CH_UA_PLATFORM = '"Windows"'  # noqa: RUF001

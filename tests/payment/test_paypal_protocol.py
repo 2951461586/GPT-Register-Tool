@@ -8,9 +8,7 @@ from sms_tool import paypal_protocol
 class PayPalProtocolTests(unittest.TestCase):
     def test_extracts_ba_and_ec_tokens(self):
         self.assertEqual(
-            paypal_protocol.extract_ba_token(
-                "https://www.paypal.com/agreements/approve?ba_token=BA-123_ABC-def"
-            ),
+            paypal_protocol.extract_ba_token("https://www.paypal.com/agreements/approve?ba_token=BA-123_ABC-def"),
             "BA-123_ABC-def",
         )
         self.assertEqual(

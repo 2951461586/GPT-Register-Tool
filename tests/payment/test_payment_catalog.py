@@ -47,10 +47,12 @@ class PaymentCatalogTests(unittest.TestCase):
         return load_payment_catalog(self._write_catalog(payload))
 
     def test_top_level_country_lists_default_onto_methods(self):
-        catalog = self.load(_catalog_payload(
-            checkout_countries=["ID", "PH"],
-            approve_countries=["JP", "TR"],
-        ))
+        catalog = self.load(
+            _catalog_payload(
+                checkout_countries=["ID", "PH"],
+                approve_countries=["JP", "TR"],
+            )
+        )
 
         self.assertEqual(catalog.checkout_countries, ("ID", "PH"))
         self.assertEqual(catalog.approve_countries, ("JP", "TR"))
@@ -60,12 +62,14 @@ class PaymentCatalogTests(unittest.TestCase):
 
     def test_country_list_entries_may_be_code_label_objects(self):
         # The desktop writes display-shaped entries: {"code": "JP", "label": ...}.
-        catalog = self.load(_catalog_payload(
-            approve_countries=[
-                {"code": "jp", "label": "日本 JP"},
-                {"code": "TR", "label": "土耳其 TR"},
-            ],
-        ))
+        catalog = self.load(
+            _catalog_payload(
+                approve_countries=[
+                    {"code": "jp", "label": "日本 JP"},
+                    {"code": "TR", "label": "土耳其 TR"},
+                ],
+            )
+        )
 
         self.assertEqual(catalog.approve_countries, ("JP", "TR"))
         self.assertEqual(catalog.methods["gopay"].approve_countries, ("JP", "TR"))
@@ -119,11 +123,13 @@ class PaymentCatalogTests(unittest.TestCase):
 
     def test_declarative_artifact_and_reconciliation_contracts_are_loaded(self):
         payload = _catalog_payload()
-        payload["methods"][0].update({
-            "artifact_validator": "url_or_qr",
-            "probe_output_kind": "availability",
-            "reconciliation_policy": "provider_status",
-        })
+        payload["methods"][0].update(
+            {
+                "artifact_validator": "url_or_qr",
+                "probe_output_kind": "availability",
+                "reconciliation_policy": "provider_status",
+            }
+        )
         definition = self.load(payload).methods["gopay"]
         self.assertEqual(definition.artifact_validator, "url_or_qr")
         self.assertEqual(definition.probe_output_kind, "availability")

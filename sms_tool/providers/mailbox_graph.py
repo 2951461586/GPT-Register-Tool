@@ -1,3 +1,5 @@
+from typing import Any
+
 from curl_cffi import requests as curl_requests
 
 from ..mailbox_pool_writer import apply_rotation
@@ -5,6 +7,7 @@ from ..mailbox_pool_writer import apply_rotation
 
 class MailboxTokenExpiredError(RuntimeError):
     """Raised when the mailbox refresh token is permanently invalid (invalid_grant)."""
+
     pass
 
 
@@ -32,7 +35,9 @@ def ms_oauth_refresh(mailbox, cfg, proxy=None, scope_override=None):
         "refresh_token": mailbox.refresh_token,
         "scope": scope,
     }
-    proxies = {"http": proxy, "https": proxy} if proxy else None
+    # curl_cffi types ``proxies`` as ``ProxySpec`` (a TypedDict) while accepting any
+    # proxy mapping at runtime, which is what every call site in this package passes.
+    proxies: Any = {"http": proxy, "https": proxy} if proxy else None
     r = curl_requests.post(token_url, data=data, proxies=proxies, impersonate="chrome124", timeout=30)
     try:
         body = r.json()

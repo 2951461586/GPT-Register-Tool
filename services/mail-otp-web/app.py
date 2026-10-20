@@ -8,6 +8,7 @@ Input formats supported by the UI/API:
 The password is accepted for operator compatibility but is not persisted and is
 not used for Microsoft Graph refresh-token authentication.
 """
+
 from __future__ import annotations
 
 import hmac
@@ -169,10 +170,7 @@ def normalize_payload(data: dict[str, Any]) -> dict[str, str]:
         or ""
     ).strip()
     refresh_token = str(
-        data.get("refresh_token")
-        or data.get("refreshToken")
-        or parsed.get("refresh_token")
-        or ""
+        data.get("refresh_token") or data.get("refreshToken") or parsed.get("refresh_token") or ""
     ).strip()
     subject_keyword = str(data.get("subject_keyword") or "").strip()
     return {
@@ -367,11 +365,21 @@ def extract_flow(payload: dict[str, Any]) -> dict[str, Any]:
         return {"ok": False, "error": "缺少刷新令牌"}
     token = refresh_graph_token(account["client_id"], account["refresh_token"])
     if not token.get("ok"):
-        return {"ok": False, "stage": "token", "email": email, "error": token.get("error") or "刷新令牌换取 access_token 失败"}
+        return {
+            "ok": False,
+            "stage": "token",
+            "email": email,
+            "error": token.get("error") or "刷新令牌换取 access_token 失败",
+        }
     limit = int(payload.get("limit") or CFG.get("message_limit") or 15)
     msgs = fetch_graph_messages(str(token["access_token"]), limit)
     if not msgs.get("ok"):
-        return {"ok": False, "stage": "messages", "email": email, "error": safe_error(msgs.get("data")) or "读取邮件失败"}
+        return {
+            "ok": False,
+            "stage": "messages",
+            "email": email,
+            "error": safe_error(msgs.get("data")) or "读取邮件失败",
+        }
     values = (msgs.get("data") or {}).get("value") or []
     if not isinstance(values, list):
         values = []
@@ -392,7 +400,7 @@ def extract_flow(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-INDEX_HTML = r'''<!doctype html>
+INDEX_HTML = r"""<!doctype html>
 <html lang="zh-CN" data-theme="light">
 <head>
   <meta charset="utf-8" />
@@ -448,7 +456,7 @@ function renderInbox(data){currentMessages=data.messages||[]; $('mailboxName').t
 $('submitBtn').onclick=async()=>{parseLine(); $('submitBtn').disabled=true; setStatus('正在加载...'); $('mailboxName').textContent=$('email').value||'收件箱'; $('code').textContent='......'; $('code').classList.remove('danger'); $('mailRows').innerHTML='<tr><td colspan="4"><div class="empty">正在刷新令牌并获取收件箱...</div></td></tr>'; try{const res=await fetch('/api/extract',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({account_line:$('accountLine').value,email:$('email').value,password:$('password').value,client_id:$('clientId').value,refresh_token:$('rt').value,subject_keyword:$('keyword').value,limit:12})}); const data=await res.json(); if(!data.ok){setStatus('加载失败'); $('code').textContent='FAILED'; $('code').classList.add('danger'); $('mailRows').innerHTML=`<tr><td colspan="4"><div class="empty">${esc(data.error||'加载失败')}</div></td></tr>`; $('detail').innerHTML=`<div class="detailTitle">错误</div><div class="meta">${esc(data.stage||'')}</div><div class="preview">${esc(JSON.stringify(data,null,2))}</div>`; return;} setStatus(`最近 ${data.message_count} 封邮件`); renderInbox(data); if(data.new_refresh_token){setStatus(`最近 ${data.message_count} 封邮件 · RT已更新`);} }catch(e){setStatus('请求异常'); $('code').textContent='ERROR'; $('code').classList.add('danger'); $('mailRows').innerHTML=`<tr><td colspan="4"><div class="empty">${esc(e)}</div></td></tr>`;} finally{$('submitBtn').disabled=false;}};
 </script>
 </body>
-</html>'''
+</html>"""
 
 
 class Handler(BaseHTTPRequestHandler):

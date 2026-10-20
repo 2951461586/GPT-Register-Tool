@@ -24,5 +24,5 @@ class MailboxAccount:
     purchase_total_cost: str = ""
     balance_after: str = ""
     # Self-hosted / IMAP mailbox connection hints (Gmail, generic IMAP, etc.).
-    host: str = ""          # IMAP base host
-    port: int = 0           # IMAP/Submission port when not default
+    host: str = ""  # IMAP base host
+    port: int = 0  # IMAP/Submission port when not default

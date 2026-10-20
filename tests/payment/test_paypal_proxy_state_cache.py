@@ -72,9 +72,7 @@ class PayPalProxyStateCacheTests(unittest.TestCase):
         state = pp._paypal_proxy_state(self._cfg())
         state.record_result("checkout", "http://user:pass@gw.example.com:9000", False, reason="proxy auth")
         reloaded = pp._paypal_proxy_state(self._cfg())
-        record = reloaded._load()["stages"]["checkout"].get(
-            pp.proxy_key("http://user:pass@gw.example.com:9000")
-        )
+        record = reloaded._load()["stages"]["checkout"].get(pp.proxy_key("http://user:pass@gw.example.com:9000"))
         self.assertIsNotNone(record)
         self.assertEqual(int(record["fail"]), 1)
 

@@ -61,14 +61,17 @@ def run_nodriver_pay(
         # strategy looked selectable while never being able to run.
         # ASCII-only on purpose - CI stdout is cp1252 and non-Latin-1 prints
         # raise UnicodeEncodeError there.
-        print("[!] nodriver is not installed - the nodriver PayPal payment "
-              "strategy is unavailable. Run: pip install nodriver "
-              "(listed in requirements.txt)")
+        print(
+            "[!] nodriver is not installed - the nodriver PayPal payment "
+            "strategy is unavailable. Run: pip install nodriver "
+            "(listed in requirements.txt)"
+        )
         return {"ok": False, "error": "nodriver not installed"}
 
     return uc.loop().run_until_complete(
-        _run(uc, paypal_url, card, address, first_name, last_name,
-             alias_email, password, phone, sms_cfg, proxy, timeout)
+        _run(
+            uc, paypal_url, card, address, first_name, last_name, alias_email, password, phone, sms_cfg, proxy, timeout
+        )
     )
 
 
@@ -108,9 +111,17 @@ async def _run(
         )
 
         return await _do_pay(
-            browser, paypal_url, card, address,
-            first_name, last_name, alias_email, password,
-            phone, sms_cfg, timeout,
+            browser,
+            paypal_url,
+            card,
+            address,
+            first_name,
+            last_name,
+            alias_email,
+            password,
+            phone,
+            sms_cfg,
+            timeout,
         )
     finally:
         if browser is not None:
@@ -198,61 +209,105 @@ async def _do_pay(
 
     # ── Step 4: Fill email ──
     print(f"[nd-pay] Filling email: {alias_email}")
-    await _fill_field(page, alias_email,
-                      selectors=["#email", "input[name='login_email']", "input[type='email']"],
-                      clear=True)
+    await _fill_field(
+        page, alias_email, selectors=["#email", "input[name='login_email']", "input[type='email']"], clear=True
+    )
 
     # ── Step 5: Click Next / Submit email ──
-    await _click_button(page, [
-        "下一页", "Next", "下一步", "Continue", "Continue with email",
-    ])
+    await _click_button(
+        page,
+        [
+            "下一页",
+            "Next",
+            "下一步",
+            "Continue",
+            "Continue with email",
+        ],
+    )
     await asyncio.sleep(3)
     await _debug_page(page, "03_after_email_next")
 
     # ── Step 6: Fill password ──
     print(f"[nd-pay] Filling password...")
-    await _fill_field(page, password,
-                      selectors=["#password", "input[name='login_password']", "input[name='password']",
-                                 "input[name='createPassword']", "input[type='password']"],
-                      clear=True)
+    await _fill_field(
+        page,
+        password,
+        selectors=[
+            "#password",
+            "input[name='login_password']",
+            "input[name='password']",
+            "input[name='createPassword']",
+            "input[type='password']",
+        ],
+        clear=True,
+    )
 
     # ── Step 7: Fill name ──
     print(f"[nd-pay] Filling name: {first_name} {last_name}")
-    await _fill_field(page, first_name,
-                      selectors=["input[name='firstName']", "input[name='first_name']",
-                                 "#firstName", "#first_name"],
-                      clear=True)
-    await _fill_field(page, last_name,
-                      selectors=["input[name='lastName']", "input[name='last_name']",
-                                 "#lastName", "#last_name"],
-                      clear=True)
+    await _fill_field(
+        page,
+        first_name,
+        selectors=["input[name='firstName']", "input[name='first_name']", "#firstName", "#first_name"],
+        clear=True,
+    )
+    await _fill_field(
+        page,
+        last_name,
+        selectors=["input[name='lastName']", "input[name='last_name']", "#lastName", "#last_name"],
+        clear=True,
+    )
     await _debug_page(page, "04_after_password_name")
 
     # ── Step 8: Fill phone ──
     print(f"[nd-pay] Filling phone: {phone}")
-    await _fill_field(page, phone,
-                      selectors=["input[name='phoneNumber']", "input[name='phone']",
-                                 "input[name='login_phone']", "input[type='tel']"],
-                      clear=True)
+    await _fill_field(
+        page,
+        phone,
+        selectors=[
+            "input[name='phoneNumber']",
+            "input[name='phone']",
+            "input[name='login_phone']",
+            "input[type='tel']",
+        ],
+        clear=True,
+    )
 
     # ── Step 9: Fill card ──
     print("[nd-pay] Filling card: [REDACTED]")
-    await _fill_field(page, card["number"],
-                      selectors=["input[name='cardNumber']", "input[name='card_number']",
-                                 "#cardNumber", "input[autocomplete='cc-number']"],
-                      clear=True)
-    await _fill_field(page, card["exp_month"],
-                      selectors=["input[name='expMonth']", "input[name='exp_month']",
-                                 "input[name='cardExpiry']", "input[autocomplete='cc-exp-month']"],
-                      clear=True)
-    await _fill_field(page, card["exp_year"],
-                      selectors=["input[name='expYear']", "input[name='exp_year']",
-                                 "input[autocomplete='cc-exp-year']"],
-                      clear=True)
-    await _fill_field(page, card["cvv"],
-                      selectors=["input[name='cvv']", "input[name='cvvNumber']",
-                                 "#cvv", "input[autocomplete='cc-csc']"],
-                      clear=True)
+    await _fill_field(
+        page,
+        card["number"],
+        selectors=[
+            "input[name='cardNumber']",
+            "input[name='card_number']",
+            "#cardNumber",
+            "input[autocomplete='cc-number']",
+        ],
+        clear=True,
+    )
+    await _fill_field(
+        page,
+        card["exp_month"],
+        selectors=[
+            "input[name='expMonth']",
+            "input[name='exp_month']",
+            "input[name='cardExpiry']",
+            "input[autocomplete='cc-exp-month']",
+        ],
+        clear=True,
+    )
+    await _fill_field(
+        page,
+        card["exp_year"],
+        selectors=["input[name='expYear']", "input[name='exp_year']", "input[autocomplete='cc-exp-year']"],
+        clear=True,
+    )
+    await _fill_field(
+        page,
+        card["cvv"],
+        selectors=["input[name='cvv']", "input[name='cvvNumber']", "#cvv", "input[autocomplete='cc-csc']"],
+        clear=True,
+    )
 
     await _debug_page(page, "05_after_card")
 
@@ -263,17 +318,19 @@ async def _do_pay(
     postal = address.get("postal_code", "")
 
     print(f"[nd-pay] Filling address: {addr_line}, {city}, {state} {postal}")
-    await _fill_field(page, addr_line,
-                      selectors=["input[name='line1']", "input[name='address1']",
-                                 "input[name='billingAddress.line1']"],
-                      clear=True)
-    await _fill_field(page, city,
-                      selectors=["input[name='city']", "input[name='billingAddress.city']"],
-                      clear=True)
-    await _fill_field(page, postal,
-                      selectors=["input[name='postalCode']", "input[name='postal_code']",
-                                 "input[name='billingAddress.postalCode']"],
-                      clear=True)
+    await _fill_field(
+        page,
+        addr_line,
+        selectors=["input[name='line1']", "input[name='address1']", "input[name='billingAddress.line1']"],
+        clear=True,
+    )
+    await _fill_field(page, city, selectors=["input[name='city']", "input[name='billingAddress.city']"], clear=True)
+    await _fill_field(
+        page,
+        postal,
+        selectors=["input[name='postalCode']", "input[name='postal_code']", "input[name='billingAddress.postalCode']"],
+        clear=True,
+    )
 
     await _debug_page(page, "06_after_address")
 
@@ -295,11 +352,22 @@ async def _do_pay(
 
     # ── Step 13: Submit payment ──
     print("[nd-pay] Submitting payment...")
-    await _click_button(page, [
-        "Agree & Pay", "Agree and Pay", "同意并付款", "同意并支付",
-        "Pay", "Pay Now", "Submit", "确认",
-        "同意并继续", "Continue", "下一页",
-    ])
+    await _click_button(
+        page,
+        [
+            "Agree & Pay",
+            "Agree and Pay",
+            "同意并付款",
+            "同意并支付",
+            "Pay",
+            "Pay Now",
+            "Submit",
+            "确认",
+            "同意并继续",
+            "Continue",
+            "下一页",
+        ],
+    )
     await asyncio.sleep(5)
 
     # ── Step 14: Wait for redirect ──
@@ -325,6 +393,7 @@ async def _do_pay(
     if ok:
         # Try to extract access token from URL fragment
         from urllib.parse import parse_qs, urlparse
+
         parsed = urlparse(final_url)
         fragment = parsed.fragment or ""
         params = parse_qs(fragment)
@@ -438,10 +507,19 @@ async def _handle_sms(page, phone: str, sms_cfg: dict, deadline: float) -> str |
             baseline_raw = r.text.strip()
 
     # Click "Send Code" button
-    await _click_button(page, [
-        "发送验证码", "Send Code", "获取验证码", "发送", "Send",
-        "Send SMS", "发送短信", "Send verification code",
-    ])
+    await _click_button(
+        page,
+        [
+            "发送验证码",
+            "Send Code",
+            "获取验证码",
+            "发送",
+            "Send",
+            "Send SMS",
+            "发送短信",
+            "Send verification code",
+        ],
+    )
     await asyncio.sleep(2)
 
     # Poll for SMS code
@@ -459,11 +537,18 @@ async def _handle_sms(page, phone: str, sms_cfg: dict, deadline: float) -> str |
                     if match:
                         code = match.group(1)
                         # Fill code
-                        await _fill_field(page, code,
-                                          selectors=["input[name='code']", "input[name='otp']",
-                                                     "input[name='smsCode']", "input[type='text']",
-                                                     "input[name='phoneCode']"],
-                                          clear=True)
+                        await _fill_field(
+                            page,
+                            code,
+                            selectors=[
+                                "input[name='code']",
+                                "input[name='otp']",
+                                "input[name='smsCode']",
+                                "input[type='text']",
+                                "input[name='phoneCode']",
+                            ],
+                            clear=True,
+                        )
                         return code
         await asyncio.sleep(poll_interval)
 

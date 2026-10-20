@@ -118,9 +118,12 @@ def test_definition_sites_match_the_rename(relpath, names):
     for name, expected in sorted(names.items()):
         sites = _def_sites(name)
         actual = sites.get(relpath, 0)
-        assert actual == expected, (
-            "%s: expected %d definition(s) of %s, found %d (whole tree: %s)"
-            % (relpath, expected, name, actual, sites)
+        assert actual == expected, "%s: expected %d definition(s) of %s, found %d (whole tree: %s)" % (
+            relpath,
+            expected,
+            name,
+            actual,
+            sites,
         )
 
 
@@ -157,7 +160,12 @@ DIVERGENT_PAIRS = [
         "services/protocol-payment/direct_card/direct_card_extract.py",
         "rotate_direct_card_proxy_session",
     ),
-    ("sms_tool/pay_link/registry.py", "payment_method_label", "sms_tool/commands/helpers.py", "cli_payment_method_label"),
+    (
+        "sms_tool/pay_link/registry.py",
+        "payment_method_label",
+        "sms_tool/commands/helpers.py",
+        "cli_payment_method_label",
+    ),
     (
         "sms_tool/pay_link/registry.py",
         "payment_method_label",

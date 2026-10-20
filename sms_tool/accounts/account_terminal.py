@@ -26,12 +26,14 @@ from typing import Any
 # ``at_invalid`` from scan failures -- those rows stay REMOVABLE-NO: an
 # error-text token failure without an explicit terminal verdict remains
 # eligible for recheck.
-TERMINAL_ACCOUNT_STATUSES = frozenset({
-    "account_deactivated",
-    "deactivated",
-    "dropped",
-    "token_revoked",
-})
+TERMINAL_ACCOUNT_STATUSES = frozenset(
+    {
+        "account_deactivated",
+        "deactivated",
+        "dropped",
+        "token_revoked",
+    }
+)
 
 ACCOUNT_DEACTIVATED_MARKERS = (
     "account_deactivated",

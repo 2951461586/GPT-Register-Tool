@@ -77,7 +77,9 @@ def _browser_access_token_probe(browser: Any, account: Mapping[str, Any], *, tim
                     CODEX_USAGE_URL,
                     timeout_ms=max(5_000, int(timeout or 30) * 1_000),
                 )
-            status_code = int(payload.get("status") or payload.get("status_code") or 0) if isinstance(payload, Mapping) else 0
+            status_code = (
+                int(payload.get("status") or payload.get("status_code") or 0) if isinstance(payload, Mapping) else 0
+            )
             if os.environ.get("CAMOUFOX_PROBE_TRACE"):
                 logger.warning(
                     "[AT_PROBE_TRACE] raw payload status=%s body=%s",
@@ -277,16 +279,18 @@ def _browser_diagnostics(page: Any, driver: str) -> dict[str, Any]:
             # ``diagnostics`` was seeded with str values, so its inferred type
             # rejects the int/bool entries below; it is a heterogeneous audit bag.
             diagnostics: dict[str, Any] = dict(diagnostics)
-            diagnostics.update({
-                "ready_state": str(state.get("ready_state") or "")[:20],
-                "email_inputs": int(state.get("email_inputs") or 0),
-                "password_inputs": int(state.get("password_inputs") or 0),
-                "verification_inputs": int(state.get("verification_inputs") or 0),
-                "button_count": int(state.get("buttons") or 0),
-                "challenge_present": bool(state.get("challenge")),
-                "auth_path": bool(state.get("auth_path")),
-                "chat_path": bool(state.get("chat_path")),
-            })
+            diagnostics.update(
+                {
+                    "ready_state": str(state.get("ready_state") or "")[:20],
+                    "email_inputs": int(state.get("email_inputs") or 0),
+                    "password_inputs": int(state.get("password_inputs") or 0),
+                    "verification_inputs": int(state.get("verification_inputs") or 0),
+                    "button_count": int(state.get("buttons") or 0),
+                    "challenge_present": bool(state.get("challenge")),
+                    "auth_path": bool(state.get("auth_path")),
+                    "chat_path": bool(state.get("chat_path")),
+                }
+            )
     except Exception:
         pass
     return diagnostics
@@ -334,26 +338,50 @@ def _browser_failure_class(code: str) -> str:
         return "account"
     if any(marker in value for marker in ("otp_timeout", "otp_rejected", "mailbox", "email_otp")):
         return "mailbox"
-    if any(marker in value for marker in (
-        "identity_provider", "manual_challenge", "session_email_mismatch",
-        "session_access_token_missing", "session_unauthorized", "session_forbidden",
-        "session_access_denied", "session_oauth_callback_failed", "session_token_refresh_failed",
-        "chatgpt_context_unavailable", "profile_", "passwordless_otp", "otp_restart_state",
-        "registration_state_unknown", "email_verification", "email_field", "auth_state",
-        # ``browser_email_value_mismatch`` (form_steps) means the email field kept
-        # a different value than the address we typed, i.e. an unexpected page
-        # state -- the same family as ``browser_email_field_not_editable``. It is
-        # listed here so this lane agrees with ``failure_registry`` instead of
-        # falling through to the blanket ``network`` default below.
-        "email_value_mismatch",
-    )):
+    if any(
+        marker in value
+        for marker in (
+            "identity_provider",
+            "manual_challenge",
+            "session_email_mismatch",
+            "session_access_token_missing",
+            "session_unauthorized",
+            "session_forbidden",
+            "session_access_denied",
+            "session_oauth_callback_failed",
+            "session_token_refresh_failed",
+            "chatgpt_context_unavailable",
+            "profile_",
+            "passwordless_otp",
+            "otp_restart_state",
+            "registration_state_unknown",
+            "email_verification",
+            "email_field",
+            "auth_state",
+            # ``browser_email_value_mismatch`` (form_steps) means the email field kept
+            # a different value than the address we typed, i.e. an unexpected page
+            # state -- the same family as ``browser_email_field_not_editable``. It is
+            # listed here so this lane agrees with ``failure_registry`` instead of
+            # falling through to the blanket ``network`` default below.
+            "email_value_mismatch",
+        )
+    ):
         return "auth_state"
     if "proxy_blocked" in value or "proxy_country_mismatch" in value:
         return "network"
-    if any(marker in value for marker in (
-        "dependency_missing", "api_key_missing", "workspace_id_missing", "profile_create_failed",
-        "debug_address_missing", "session_endpoint_unavailable", "config", "unsupported",
-    )):
+    if any(
+        marker in value
+        for marker in (
+            "dependency_missing",
+            "api_key_missing",
+            "workspace_id_missing",
+            "profile_create_failed",
+            "debug_address_missing",
+            "session_endpoint_unavailable",
+            "config",
+            "unsupported",
+        )
+    ):
         return "configuration"
     return "network"
 
@@ -366,7 +394,11 @@ _TOTP_FETCH_BUDGET_MS = 20_000
 
 
 def _bind_totp_in_browser(
-    page: Any, access_token: str, device_id: str, *, chat_base: str,
+    page: Any,
+    access_token: str,
+    device_id: str,
+    *,
+    chat_base: str,
     budget_ms: int = _TOTP_FETCH_BUDGET_MS,
 ) -> dict[str, Any]:
     """Enroll and activate TOTP 2FA through the browser's fetch API.
@@ -462,20 +494,32 @@ def _bind_totp_in_browser(
         # Generate TOTP code and activate
         try:
             import pyotp
+
             totp_code = pyotp.TOTP(secret).now()
         except ImportError:
             return {"ok": False, "error": "pyotp_not_installed", "totp_secret": secret}
 
         activate_result = page.evaluate(
             activate_script,
-            [f"{chat_base}/backend-api/accounts/mfa/user/activate_enrollment", access_token, device_id, totp_code, session_id, budget],
+            [
+                f"{chat_base}/backend-api/accounts/mfa/user/activate_enrollment",
+                access_token,
+                device_id,
+                totp_code,
+                session_id,
+                budget,
+            ],
         )
         if not isinstance(activate_result, dict) or activate_result.get("status") != 200:
             error_detail = str(activate_result)[:300] if activate_result else "no response"
             return {"ok": False, "error": f"browser_totp_activate_failed: {error_detail}", "totp_secret": secret}
         activate_body = activate_result.get("body") or {}
         if not activate_body.get("success"):
-            return {"ok": False, "error": f"browser_totp_activate_not_successful: {activate_body}", "totp_secret": secret}
+            return {
+                "ok": False,
+                "error": f"browser_totp_activate_not_successful: {activate_body}",
+                "totp_secret": secret,
+            }
         return {"ok": True, "totp_secret": secret}
     except Exception as exc:
         return {"ok": False, "error": f"browser_totp_exception: {type(exc).__name__}: {exc}"}

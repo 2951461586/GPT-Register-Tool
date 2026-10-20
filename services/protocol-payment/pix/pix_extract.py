@@ -474,9 +474,7 @@ def stripe_update_tax_region(
     }
     if billing.get("state"):
         body["tax_region[state]"] = billing["state"]
-    response = stripe.post(
-        f"{endpoints.STRIPE_PAYMENT_PAGES}/{cs_id}", data=body, timeout=core.PAY_LONG_LINK_TIMEOUT
-    )
+    response = stripe.post(f"{endpoints.STRIPE_PAYMENT_PAGES}/{cs_id}", data=body, timeout=core.PAY_LONG_LINK_TIMEOUT)
     if response.status_code >= 400:
         raise RuntimeError(f"stripe tax_region failed: HTTP {response.status_code} {response.text[:300]}")
 

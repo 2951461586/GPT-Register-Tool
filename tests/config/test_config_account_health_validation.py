@@ -39,6 +39,7 @@ def _config(**account_health):
 # warnings: unknown keys
 # --------------------------------------------------------------------------
 
+
 def test_unknown_account_health_key_is_reported():
     warnings = config_warnings(_config(workers=2, workes=4))
     assert len(warnings) == 1
@@ -47,13 +48,18 @@ def test_unknown_account_health_key_is_reported():
 
 
 def test_known_keys_produce_no_warning():
-    assert config_warnings(_config(
-        use_registration_affinity=True,
-        batch_timeout_seconds=900,
-        workers=4,
-        max_pending=1000,
-        proxies={"liveness": ["http://127.0.0.1:7897"]},
-    )) == []
+    assert (
+        config_warnings(
+            _config(
+                use_registration_affinity=True,
+                batch_timeout_seconds=900,
+                workers=4,
+                max_pending=1000,
+                proxies={"liveness": ["http://127.0.0.1:7897"]},
+            )
+        )
+        == []
+    )
 
 
 def test_the_relogin_dead_end_switch_is_a_known_key():
@@ -83,9 +89,7 @@ def test_every_documented_example_key_is_known():
     import json
     from pathlib import Path
 
-    example = json.loads(
-        (Path(__file__).resolve().parents[2] / "config.example.json").read_text(encoding="utf-8")
-    )
+    example = json.loads((Path(__file__).resolve().parents[2] / "config.example.json").read_text(encoding="utf-8"))
     health = example.get("account_health") or {}
     assert set(health) - ACCOUNT_HEALTH_KEYS == set()
 
@@ -99,6 +103,7 @@ def test_non_mapping_health_section_is_ignored():
 # --------------------------------------------------------------------------
 # warnings: silently clamped worker count
 # --------------------------------------------------------------------------
+
 
 def test_workers_above_the_effective_range_warns_with_the_clamped_value():
     warnings = config_warnings(_config(workers=16))
@@ -131,6 +136,7 @@ def test_boolean_workers_is_not_treated_as_a_number():
 # --------------------------------------------------------------------------
 # validation: scalar types
 # --------------------------------------------------------------------------
+
 
 def test_negative_workers_is_an_error():
     with pytest.raises(ConfigError) as excinfo:

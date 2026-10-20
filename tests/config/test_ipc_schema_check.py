@@ -28,12 +28,9 @@ import ipc_schema_check as ipc  # noqa: E402
 # extraction helpers -- each of these can silently go empty and vacuously pass
 # --------------------------------------------------------------------------
 
+
 def test_py_error_codes_extraction():
-    src = (
-        'CODE_BAD_REQUEST = "bad_request"\n'
-        'CODE_UNKNOWN_OP = "unknown_operation"\n'
-        'OTHER_CONSTANT = "not_a_code"\n'
-    )
+    src = 'CODE_BAD_REQUEST = "bad_request"\nCODE_UNKNOWN_OP = "unknown_operation"\nOTHER_CONSTANT = "not_a_code"\n'
     assert ipc._py_error_codes(src) == ["bad_request", "unknown_operation"]
 
 
@@ -76,7 +73,7 @@ def test_cs_envelope_keys_read_covers_both_call_shapes():
 # --------------------------------------------------------------------------
 
 _PY = (
-    'PROTOCOL_VERSION = 1\n'
+    "PROTOCOL_VERSION = 1\n"
     'SUPPORTED_OPS = ["hello", "ping"]\n'
     'CODE_BAD_REQUEST = "bad_request"\n'
     'CODE_INTERNAL = "internal"\n'
@@ -140,9 +137,7 @@ def test_backend_code_the_client_cannot_parse_is_reported():
 
 
 def test_undeclared_envelope_key_built_by_python_is_reported():
-    failures = ipc.check_manifest(
-        _manifest(event_envelope_keys=["payload", "schema"]), _PY, _PY_IPC, _CS, ""
-    )
+    failures = ipc.check_manifest(_manifest(event_envelope_keys=["payload", "schema"]), _PY, _PY_IPC, _CS, "")
     assert any("event envelope keys differ" in f for f in failures)
 
 
@@ -155,6 +150,7 @@ def test_csharp_reading_an_envelope_key_python_never_emits_is_reported():
 # --------------------------------------------------------------------------
 # the real tree
 # --------------------------------------------------------------------------
+
 
 def test_real_tree_passes():
     assert ipc.main() == 0

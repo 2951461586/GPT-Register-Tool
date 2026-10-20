@@ -21,6 +21,7 @@ What is pinned here:
 * **JWT parsing never raises.** ``_jwt_claims`` swallows every exception and
   returns ``{}`` -- including when the payload is valid JSON but not an object.
 """
+
 from __future__ import annotations
 
 import base64
@@ -146,8 +147,9 @@ class Base64UrlJsonTests(unittest.TestCase):
         ``_jwt_claims`` does exactly that at k12_identity.py:36, so round-trips
         stay consistent even though the intermediate form is unpadded."""
         self.assertNotIn("=", _base64url_json({"a": 1}))
-        self.assertEqual(_base64url_json({"a": 1, "b": 2}),
-                         base64.urlsafe_b64encode(b'{"a":1,"b":2}').decode().rstrip("="))
+        self.assertEqual(
+            _base64url_json({"a": 1, "b": 2}), base64.urlsafe_b64encode(b'{"a":1,"b":2}').decode().rstrip("=")
+        )
 
     def test_uses_the_urlsafe_alphabet(self):
         """Standard base64 would use '+' and '/' -- neither may appear."""
@@ -194,8 +196,7 @@ class TokenAccountIdTests(unittest.TestCase):
 
 class TokenUserIdTests(unittest.TestCase):
     def test_profile_user_id_wins(self):
-        token = _jwt({PROFILE: {"user_id": "p1", "id": "p2"}, AUTH: {"user_id": "a1"},
-                      "user_id": "t1", "sub": "s1"})
+        token = _jwt({PROFILE: {"user_id": "p1", "id": "p2"}, AUTH: {"user_id": "a1"}, "user_id": "t1", "sub": "s1"})
         self.assertEqual(_token_user_id(token), "p1")
 
     def test_profile_id_is_the_second_choice(self):
@@ -269,8 +270,11 @@ class ExtractAccessTokenTests(unittest.TestCase):
                 self.assertEqual(_extract_access_token(data), expected)
 
     def test_top_level_beats_nested(self):
-        data = {"access_token": "top", "tokens": {"access_token": "nested"},
-                "auth_session": {"session": {"access_token": "deep"}}}
+        data = {
+            "access_token": "top",
+            "tokens": {"access_token": "nested"},
+            "auth_session": {"session": {"access_token": "deep"}},
+        }
         self.assertEqual(_extract_access_token(data), "top")
 
     def test_auth_session_is_skipped_when_it_is_not_a_dict(self):
@@ -319,13 +323,11 @@ class ExtractUserIdFromDataTests(unittest.TestCase):
         self.assertEqual(_extract_user_id_from_data(data), "from-data")
 
     def test_jwt_fallback_uses_id_token_first(self):
-        data = {"id_token": _jwt({"sub": "idtok"}),
-                "access_token": _jwt({"sub": "acctok"})}
+        data = {"id_token": _jwt({"sub": "idtok"}), "access_token": _jwt({"sub": "acctok"})}
         self.assertEqual(_extract_user_id_from_data(data), "idtok")
 
     def test_jwt_fallback_falls_through_to_access_token(self):
-        data = {"access_token": _jwt({"sub": "acctok"}),
-                "accessToken": _jwt({"sub": "cameltok"})}
+        data = {"access_token": _jwt({"sub": "acctok"}), "accessToken": _jwt({"sub": "cameltok"})}
         self.assertEqual(_extract_user_id_from_data(data), "acctok")
 
     def test_jwt_fallback_uses_accessToken_last(self):
@@ -381,13 +383,13 @@ class ExtractAccountIdFromDataTests(unittest.TestCase):
         self.assertEqual(_extract_account_id_from_data(data), "from-data")
 
     def test_jwt_fallback_order(self):
-        data = {"id_token": _jwt({AUTH: {"chatgpt_account_id": "idtok"}}),
-                "access_token": _jwt({AUTH: {"chatgpt_account_id": "acctok"}})}
+        data = {
+            "id_token": _jwt({AUTH: {"chatgpt_account_id": "idtok"}}),
+            "access_token": _jwt({AUTH: {"chatgpt_account_id": "acctok"}}),
+        }
         self.assertEqual(_extract_account_id_from_data(data), "idtok")
         self.assertEqual(
-            _extract_account_id_from_data(
-                {"accessToken": _jwt({AUTH: {"chatgpt_account_id": "cameltok"}})}
-            ),
+            _extract_account_id_from_data({"accessToken": _jwt({AUTH: {"chatgpt_account_id": "cameltok"}})}),
             "cameltok",
         )
 

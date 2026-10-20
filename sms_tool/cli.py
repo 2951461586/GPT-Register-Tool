@@ -92,6 +92,7 @@ def _load_batch_deps() -> None:
         filter_registered_mailboxes as _filter,
         run_batch_impl as _run,
     )
+
     if filter_registered_mailboxes is None:
         filter_registered_mailboxes = _filter
     if run_batch is None:
@@ -116,6 +117,7 @@ def _load_storage_deps() -> None:
         rebuild_from_session_dir as _rebuild_from_session_dir,
         upsert_account as _upsert_account,
     )
+
     if database_path is None:
         database_path = _database_path
     if get_paypal_url is None:
@@ -144,6 +146,7 @@ def _load_helper_deps() -> None:
         payment_method as _payment_method_impl,
         read_email_file as _read_email_file_impl,
     )
+
     if _read_email_file is None:
         _read_email_file = _read_email_file_impl
     if _payment_method is None:
@@ -179,6 +182,7 @@ def _load_heavy_deps() -> None:
             _load_mailbox_pool as _lmp,
             _remail_enabled as _re,
         )
+
         if _load_mailbox_pool is None:
             _load_mailbox_pool = _lmp
         if _remail_enabled is None:
@@ -189,6 +193,7 @@ def _load_heavy_deps() -> None:
             _mailbox_snapshot as _ms,
             run_email as _re2,
         )
+
         if _build_session_file is None:
             _build_session_file = _bsf
         if _mailbox_snapshot is None:
@@ -199,6 +204,7 @@ def _load_heavy_deps() -> None:
 
 def _registration_proxy_lane(registration_driver: object = None) -> str:
     from .registration_drivers.base import normalize_registration_driver
+
     driver = normalize_registration_driver(registration_driver, CFG)
     return "protocol_registration" if driver == "protocol" else "browser_registration"
 
@@ -228,10 +234,7 @@ def _configured_registration_proxy(registration_driver: object = None, tracker=N
             tracker = tracker or ProxyHealthTracker(CFG)
             return tracker.rank(values)[0]
         return values[0]
-    return str(
-        proxy_cfg.get("default")
-        or ""
-    ).strip()
+    return str(proxy_cfg.get("default") or "").strip()
 
 
 def _apply_registration_proxy_defaults(args) -> None:
@@ -417,6 +420,7 @@ def main():
     if args.delete_account:
         from .accounts.account_lifecycle import AccountDeleteRequest, AccountLifecycle
         from .commands.helpers import read_email_file, unique_emails
+
         emails = read_email_file(args.email_file)
         if args.email:
             emails.insert(0, args.email)
@@ -435,9 +439,11 @@ def main():
             "deleted": len(emails) - failures,
             "failed": failures,
             "results": [
-                ({"ok": False, "email": email, "error": str(result)}
-                 if isinstance(result, Exception)
-                 else {"ok": True, **result.to_dict()})
+                (
+                    {"ok": False, "email": email, "error": str(result)}
+                    if isinstance(result, Exception)
+                    else {"ok": True, **result.to_dict()}
+                )
                 for email, result in zip(emails, results)
             ],
         }
@@ -538,7 +544,7 @@ def main():
     if args.one_click_scan:
         _one_click_scan(args)
         return
-    
+
     if args.convert_session_json:
         _convert_session_json(args)
         return
@@ -593,6 +599,7 @@ def _main_early_commands(args) -> bool:
             read_accounts,
             read_mailbox_pool,
         )
+
         if args.desktop_read == "accounts":
             payload = {"ok": True, "accounts": read_accounts(CFG, include_session=False)}
         elif args.desktop_read == "account":
@@ -684,18 +691,26 @@ def _main_registration_pipeline(args, base_dir) -> None:
     if getattr(args, "buy_remail_mailbox", False) or getattr(args, "remail_service_mode", None):
         effective_count = len(mailboxes)
         if effective_count != requested_count:
-            print(f"[!] Requested {requested_count} mailbox(es), ReMail returned {effective_count}; registering returned mailboxes only.")
+            print(
+                f"[!] Requested {requested_count} mailbox(es), ReMail returned {effective_count}; registering returned mailboxes only."
+            )
     elif getattr(args, "buy_cfworker_mailbox", False):
         effective_count = len(mailboxes)
         if effective_count != requested_count:
-            print(f"[!] Requested {requested_count} mailbox(es), CFWorker returned {effective_count}; registering returned mailboxes only.")
+            print(
+                f"[!] Requested {requested_count} mailbox(es), CFWorker returned {effective_count}; registering returned mailboxes only."
+            )
     elif getattr(args, "buy_smailr_mailbox", False):
         effective_count = len(mailboxes)
         if effective_count != requested_count:
-            print(f"[!] Requested {requested_count} mailbox(es), Smailr returned {effective_count}; registering returned mailboxes only.")
+            print(
+                f"[!] Requested {requested_count} mailbox(es), Smailr returned {effective_count}; registering returned mailboxes only."
+            )
     elif mailboxes and requested_count > len(mailboxes):
         effective_count = len(mailboxes)
-        print(f"[!] Requested {requested_count} account(s), but only {effective_count} mailbox(es) were loaded; registering loaded mailboxes only.")
+        print(
+            f"[!] Requested {requested_count} account(s), but only {effective_count} mailbox(es) were loaded; registering loaded mailboxes only."
+        )
 
     # Phone reuse pool (auto-enable when smsbower or paypal_auto phone is configured)
     phone_pool = _registration_phone_pool(args)
@@ -703,18 +718,20 @@ def _main_registration_pipeline(args, base_dir) -> None:
     # Phone registration mode (via SMSBower)
     if getattr(args, "phone_register", False):
         from .registration import run_phone_register
+
         proxy_pool = _proxy_pool_values(args)
         if len(proxy_pool) > 1:
             from .batch_runner import select_registration_proxy_base
+
             selected_proxy = select_registration_proxy_base(proxy_pool, args.proxy)
             proxy_pool = [selected_proxy] if selected_proxy else []
         registration_proxy = proxy_pool[0] if proxy_pool else args.proxy
         results = []
         register_started = time.time()
         for i in range(effective_count):
-            print(f"\n{'='*60}")
-            print(f"[*] Phone registration {i+1}/{effective_count}")
-            print(f"{'='*60}")
+            print(f"\n{'=' * 60}")
+            print(f"[*] Phone registration {i + 1}/{effective_count}")
+            print(f"{'=' * 60}")
             result = run_phone_register(
                 proxy=registration_proxy,
                 password=args.password,
@@ -738,8 +755,12 @@ def _main_registration_pipeline(args, base_dir) -> None:
             else:
                 print(f"[FAIL] {result.get('error', 'unknown')}")
         report = _save_registration_results(
-            args, results, effective_count=effective_count, base_dir=base_dir,
-            pipeline_started=pipeline_started, mailbox_seconds=0,
+            args,
+            results,
+            effective_count=effective_count,
+            base_dir=base_dir,
+            pipeline_started=pipeline_started,
+            mailbox_seconds=0,
             register_seconds=time.time() - register_started,
         )
         if bool(getattr(args, "desktop_ipc", False)):
@@ -752,6 +773,7 @@ def _main_registration_pipeline(args, base_dir) -> None:
     register_started = time.time()
     if effective_count > 1:
         proxy_pool = _proxy_pool_values(args)
+
         def persist_completed_result(_index, result):
             registration_commands.persist_registration_result(
                 args,
@@ -943,7 +965,6 @@ def _export_codex_json(args):
     return account_commands.export_codex_json(args, _account_command_context())
 
 
-
 def _import_cpa(args):
     return account_commands.import_cpa(args, _account_command_context())
 
@@ -1014,7 +1035,6 @@ def _extract_payment_link(args):
     return payment_commands.extract_payment_link(args, _payment_command_context())
 
 
-
 def _convert_session_json(args):
     return account_commands.convert_session_json(args)
 
@@ -1062,6 +1082,7 @@ def _persist_one_click_sms_failure(data, json_path, email, result):
 
 
 # ─── Omakse handlers ──────────────────────────────────────────────────────────
+
 
 def _omakse_extract(args):
     return omakse_commands.omakse_extract(args, omakse_commands.OmakseCommandContext(runtime_config=CFG))

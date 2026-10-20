@@ -59,11 +59,15 @@ class FunctionMailboxProviderAdapter:
 
     @property
     def capabilities(self) -> frozenset[str]:
-        return frozenset(item for item, value in (
-            ("fetch", self.message_fetcher),
-            ("poll", self.otp_poller),
-            ("credentials", self.credential_checker),
-        ) if value is not None)
+        return frozenset(
+            item
+            for item, value in (
+                ("fetch", self.message_fetcher),
+                ("poll", self.otp_poller),
+                ("credentials", self.credential_checker),
+            )
+            if value is not None
+        )
 
     def matches(self, mailbox: Any, config: Mapping[str, Any]) -> bool:
         return bool(self.matcher(mailbox, config))
@@ -107,27 +111,35 @@ class MailboxProviderRegistry:
         registry._adapters = list(self._adapters)
         return registry
 
-    def register_fetcher(self, name: str, matcher: Callable[..., bool], fetcher: MessageFetcher, *, fallback: bool = False) -> None:
+    def register_fetcher(
+        self, name: str, matcher: Callable[..., bool], fetcher: MessageFetcher, *, fallback: bool = False
+    ) -> None:
         existing = self._find(name)
-        self.register(FunctionMailboxProviderAdapter(
-            name,
-            matcher,
-            fetcher,
-            existing.otp_poller if existing else None,
-            existing.credential_checker if existing else None,
-            fallback,
-        ))
+        self.register(
+            FunctionMailboxProviderAdapter(
+                name,
+                matcher,
+                fetcher,
+                existing.otp_poller if existing else None,
+                existing.credential_checker if existing else None,
+                fallback,
+            )
+        )
 
-    def register_poller(self, name: str, matcher: Callable[..., bool], poller: OtpPoller, *, fallback: bool = False) -> None:
+    def register_poller(
+        self, name: str, matcher: Callable[..., bool], poller: OtpPoller, *, fallback: bool = False
+    ) -> None:
         existing = self._find(name)
-        self.register(FunctionMailboxProviderAdapter(
-            name,
-            matcher,
-            existing.message_fetcher if existing else None,
-            poller,
-            existing.credential_checker if existing else None,
-            fallback,
-        ))
+        self.register(
+            FunctionMailboxProviderAdapter(
+                name,
+                matcher,
+                existing.message_fetcher if existing else None,
+                poller,
+                existing.credential_checker if existing else None,
+                fallback,
+            )
+        )
 
     def register_credentials(
         self,
@@ -138,14 +150,16 @@ class MailboxProviderRegistry:
         fallback: bool = False,
     ) -> None:
         existing = self._find(name)
-        self.register(FunctionMailboxProviderAdapter(
-            name,
-            matcher,
-            existing.message_fetcher if existing else None,
-            existing.otp_poller if existing else None,
-            checker,
-            fallback,
-        ))
+        self.register(
+            FunctionMailboxProviderAdapter(
+                name,
+                matcher,
+                existing.message_fetcher if existing else None,
+                existing.otp_poller if existing else None,
+                checker,
+                fallback,
+            )
+        )
 
     def resolve_fetcher(self, mailbox: Any, config: Mapping[str, Any]) -> FunctionMailboxProviderAdapter | None:
         return self._resolve(mailbox, config, require="fetch")
@@ -163,7 +177,9 @@ class MailboxProviderRegistry:
     def _find(self, name: str) -> FunctionMailboxProviderAdapter | None:
         return next((item for item in self._adapters if item.name == name), None)
 
-    def _resolve(self, mailbox: Any, config: Mapping[str, Any], *, require: str) -> FunctionMailboxProviderAdapter | None:
+    def _resolve(
+        self, mailbox: Any, config: Mapping[str, Any], *, require: str
+    ) -> FunctionMailboxProviderAdapter | None:
         """First specific adapter that matches; otherwise the first fallback.
 
         Two passes rather than one: a catch-all must not win just because it
@@ -193,6 +209,7 @@ class MailboxProviderRegistry:
                 matched_fallback = adapter
         return matched_fallback
 
+
 # ── Strategy lists ─────────────────────────────────────────────────────────────
 
 # Each entry is a tuple: (name, matcher, fetcher)
@@ -205,6 +222,7 @@ DEFAULT_MAILBOX_PROVIDERS = MailboxProviderRegistry()
 
 
 # ── Registration helpers ──────────────────────────────────────────────────────
+
 
 def register_message_fetcher(
     name: str,
@@ -234,6 +252,7 @@ def register_otp_poller(
 
 
 # ── Dispatch ──────────────────────────────────────────────────────────────────
+
 
 def resolve_message_fetcher(
     mailbox: Any,
@@ -312,8 +331,10 @@ def _graph_poll_otp(
 
     def _fetch_candidate():
         return _latest_email_otp_candidate(
-            mailbox, keyword=keyword,
-            issued_after_unix=issued_after_unix, proxy=proxy,
+            mailbox,
+            keyword=keyword,
+            issued_after_unix=issued_after_unix,
+            proxy=proxy,
         )
 
     return _poll_otp_with_settle(
@@ -322,7 +343,7 @@ def _graph_poll_otp(
         interval=_otp_poll_interval(),
         settle_seconds=_email_otp_settle_seconds(),
         excluded_otps=excluded_otps,
-        log_prefix='graph poll',
+        log_prefix="graph poll",
         is_newer=_candidate_is_newer,
         reraise=(MailboxTokenExpiredError, MailboxAuthInvalidError),
     )
@@ -353,8 +374,10 @@ def _icloud_poll_otp(
 
     def _fetch_candidate():
         return _latest_email_otp_candidate(
-            mailbox, keyword=keyword,
-            issued_after_unix=issued_after_unix, proxy=proxy,
+            mailbox,
+            keyword=keyword,
+            issued_after_unix=issued_after_unix,
+            proxy=proxy,
         )
 
     return _poll_otp_with_settle(

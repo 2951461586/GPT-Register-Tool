@@ -39,11 +39,7 @@ class DesktopServeTests(unittest.TestCase):
         self.assertFalse(desktop_serve.handle_request(None)["ok"])
 
     def test_serve_forever_round_trips_lines_until_eof(self):
-        requests = (
-            json.dumps({"id": 1, "op": "accounts"}) + "\n"
-            + json.dumps({"id": 2, "op": "pools"}) + "\n"
-            + "\n"
-        )
+        requests = json.dumps({"id": 1, "op": "accounts"}) + "\n" + json.dumps({"id": 2, "op": "pools"}) + "\n" + "\n"
         stdin = io.StringIO(requests)
         stdout = io.StringIO()
         with patch.object(desktop_serve, "_payload_for", _fake_payload):
@@ -66,9 +62,11 @@ class DesktopServeTests(unittest.TestCase):
             self.assertIsNone(since)
             return {"accounts": [{"id": "9"}], "ids": ["9"], "cursor": 10, "full": True}
 
-        with patch.object(desktop_serve, "read_mailbox_pool", fake_pool), \
-                patch.object(desktop_serve, "read_accounts_delta", fake_accounts), \
-                patch.object(desktop_serve, "load_runtime_config", lambda: {}):
+        with (
+            patch.object(desktop_serve, "read_mailbox_pool", fake_pool),
+            patch.object(desktop_serve, "read_accounts_delta", fake_accounts),
+            patch.object(desktop_serve, "load_runtime_config", lambda: {}),
+        ):
             payload = desktop_serve._payload_for("pools", {"extra_files": ["mailbox.txt"]})
         self.assertEqual(captured["extra_files"], ("mailbox.txt",))
         self.assertEqual(payload["accounts"], [{"id": "9"}])
@@ -200,9 +198,7 @@ class DesktopServeWatchdogTests(unittest.TestCase):
         exited = threading.Event()
         requests = json.dumps({"id": 1, "op": "ping"}) + "\n"
         with patch.object(desktop_serve, "_hard_exit", lambda _code: exited.set()):
-            code = desktop_serve.serve_forever(
-                stdin=io.StringIO(requests), stdout=io.StringIO(), watchdog_seconds=0.2
-            )
+            code = desktop_serve.serve_forever(stdin=io.StringIO(requests), stdout=io.StringIO(), watchdog_seconds=0.2)
         self.assertEqual(code, 0)
         self.assertFalse(exited.is_set())
 

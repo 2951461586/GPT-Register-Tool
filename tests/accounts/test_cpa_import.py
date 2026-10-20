@@ -46,8 +46,21 @@ class CpaImportTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            with patch.object(cpa_import, "_resolve_cpa_config", return_value=("https://cpa.example/v0/management/auth-files", "token")):
-                with patch.object(cpa_import, "upload_to_cpa", return_value={"ok": True, "mode": "multipart", "status_code": 200, "filename": "codex-paid@example.com-plus.json"}) as upload:
+            with patch.object(
+                cpa_import,
+                "_resolve_cpa_config",
+                return_value=("https://cpa.example/v0/management/auth-files", "token"),
+            ):
+                with patch.object(
+                    cpa_import,
+                    "upload_to_cpa",
+                    return_value={
+                        "ok": True,
+                        "mode": "multipart",
+                        "status_code": 200,
+                        "filename": "codex-paid@example.com-plus.json",
+                    },
+                ) as upload:
                     with patch.object(cpa_import, "get_account_record", return_value={}):
                         with patch.object(cpa_import, "upsert_account", return_value=True):
                             result = cpa_import.import_cpa_session(
@@ -114,10 +127,16 @@ class CpaImportTests(unittest.TestCase):
 
     def test_refresh_cpa_quota_statuses_persists_matching_email(self):
         fetch_result = {"ok": True, "files": [{"email": "ok@example.com", "auth_index": "idx1"}]}
-        with patch.object(cpa_import, "fetch_cpa_auth_files", return_value=fetch_result), \
-             patch.object(cpa_import, "probe_cpa_codex_quota", return_value={"ok": True, "status": "active", "quota_status": "??"}), \
-             patch.object(cpa_import, "mark_quota_status", return_value=True) as marked:
-            result = cpa_import.refresh_cpa_quota_statuses(["ok@example.com"], api_url="https://cpa.example", api_token="token")
+        with (
+            patch.object(cpa_import, "fetch_cpa_auth_files", return_value=fetch_result),
+            patch.object(
+                cpa_import, "probe_cpa_codex_quota", return_value={"ok": True, "status": "active", "quota_status": "??"}
+            ),
+            patch.object(cpa_import, "mark_quota_status", return_value=True) as marked,
+        ):
+            result = cpa_import.refresh_cpa_quota_statuses(
+                ["ok@example.com"], api_url="https://cpa.example", api_token="token"
+            )
 
         self.assertTrue(result["ok"])
         self.assertEqual(result["success"], 1)
@@ -127,10 +146,14 @@ class CpaImportTests(unittest.TestCase):
 
     def test_refresh_cpa_quota_statuses_marks_missing_email_not_imported(self):
         fetch_result = {"ok": True, "files": [{"email": "other@example.com", "auth_index": "idx1"}]}
-        with patch.object(cpa_import, "fetch_cpa_auth_files", return_value=fetch_result), \
-             patch.object(cpa_import, "probe_cpa_codex_quota") as probe, \
-             patch.object(cpa_import, "mark_quota_status", return_value=True) as marked:
-            result = cpa_import.refresh_cpa_quota_statuses(["missing@example.com"], api_url="https://cpa.example", api_token="token")
+        with (
+            patch.object(cpa_import, "fetch_cpa_auth_files", return_value=fetch_result),
+            patch.object(cpa_import, "probe_cpa_codex_quota") as probe,
+            patch.object(cpa_import, "mark_quota_status", return_value=True) as marked,
+        ):
+            result = cpa_import.refresh_cpa_quota_statuses(
+                ["missing@example.com"], api_url="https://cpa.example", api_token="token"
+            )
 
         self.assertTrue(result["ok"])
         self.assertEqual(result["total"], 1)
@@ -148,8 +171,12 @@ class CpaImportTests(unittest.TestCase):
             def json(self):
                 return {"files": [{"email": "ok@example.com", "auth_index": "idx1"}]}
 
-        with patch.object(cpa_import, "_resolve_cpa_config", return_value=("https://cpa.example/v0/management", "token")), \
-             patch.object(cpa_import.curl_requests, "get", return_value=FakeResponse()) as get:
+        with (
+            patch.object(
+                cpa_import, "_resolve_cpa_config", return_value=("https://cpa.example/v0/management", "token")
+            ),
+            patch.object(cpa_import.curl_requests, "get", return_value=FakeResponse()) as get,
+        ):
             result = cpa_import.fetch_cpa_auth_files()
 
         self.assertTrue(result["ok"])

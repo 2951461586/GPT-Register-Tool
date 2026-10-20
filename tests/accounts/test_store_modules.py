@@ -185,9 +185,7 @@ class StoreMarkersTests(unittest.TestCase):
         self.assertTrue(markers.mark_quota_status("a@b.com", "ok", result))
         conn = connection._connect()
         try:
-            row = conn.execute(
-                "SELECT raw_json FROM accounts WHERE lower(email)=lower(?)", ("a@b.com",)
-            ).fetchone()
+            row = conn.execute("SELECT raw_json FROM accounts WHERE lower(email)=lower(?)", ("a@b.com",)).fetchone()
         finally:
             conn.close()
         self.assertNotIn("secret", row["raw_json"])

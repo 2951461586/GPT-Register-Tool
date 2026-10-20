@@ -132,27 +132,22 @@ class TestRemovedConfigKeys:
         for path in sorted(SMS_TOOL.rglob("*.py")):
             for lineno, key in _config_reads(path):
                 offenders.append(f"{path.relative_to(REPO_ROOT)}:{lineno} -> {key!r}")
-        assert offenders == [], (
-            "the static phone pool was removed; these reads bring it back: "
-            + ", ".join(offenders))
+        assert offenders == [], "the static phone pool was removed; these reads bring it back: " + ", ".join(offenders)
 
     def test_the_guard_actually_fires_on_a_reintroduced_read(self, tmp_path):
         """Mutation check: the scan above is only worth having if a re-added
         ``cfg.get("phone_numbers")`` would turn it red. A guard that cannot go
         red is decoration."""
         probe = tmp_path / "probe.py"
-        probe.write_text("def f(cfg):\n    return cfg.get('phone_numbers') or []\n",
-                         encoding="utf-8")
+        probe.write_text("def f(cfg):\n    return cfg.get('phone_numbers') or []\n", encoding="utf-8")
         assert _config_reads(probe) == [(2, "phone_numbers")]
 
     def test_the_guard_ignores_a_paypal_form_field_name(self, tmp_path):
         """The false positive this scan was written to avoid."""
         probe = tmp_path / "probe.py"
         probe.write_text(
-            "def f(form):\n"
-            "    fields = ['phone', 'phoneNumber', 'phone_number']\n"
-            "    return fields\n",
-            encoding="utf-8")
+            "def f(form):\n    fields = ['phone', 'phoneNumber', 'phone_number']\n    return fields\n", encoding="utf-8"
+        )
         assert _config_reads(probe) == []
 
     def test_the_guard_ignores_a_session_record_field(self, tmp_path):
@@ -160,9 +155,9 @@ class TestRemovedConfigKeys:
         -- a session-record field. Deleting it would be wrong."""
         probe = tmp_path / "probe.py"
         probe.write_text(
-            "def f(data):\n"
-            "    return str((data or {}).get('phone') or (data or {}).get('phone_number') or '')\n",
-            encoding="utf-8")
+            "def f(data):\n    return str((data or {}).get('phone') or (data or {}).get('phone_number') or '')\n",
+            encoding="utf-8",
+        )
         assert _config_reads(probe) == []
 
     def test_the_guard_ignores_a_forwarded_parameter(self, tmp_path):
@@ -170,9 +165,9 @@ class TestRemovedConfigKeys:
         pool *object*, not the removed config key."""
         probe = tmp_path / "probe.py"
         probe.write_text(
-            "def run_phone(*args, **kwargs):\n"
-            "    return run_email(phone_pool=kwargs.get('phone_pool'))\n",
-            encoding="utf-8")
+            "def run_phone(*args, **kwargs):\n    return run_email(phone_pool=kwargs.get('phone_pool'))\n",
+            encoding="utf-8",
+        )
         assert _config_reads(probe) == []
 
     def test_the_guard_catches_a_read_through_self(self, tmp_path):
@@ -180,10 +175,8 @@ class TestRemovedConfigKeys:
         otherwise every read inside a client class is invisible."""
         probe = tmp_path / "probe.py"
         probe.write_text(
-            "class C:\n"
-            "    def f(self):\n"
-            "        return self.sms_cfg.get('phone_numbers')\n",
-            encoding="utf-8")
+            "class C:\n    def f(self):\n        return self.sms_cfg.get('phone_numbers')\n", encoding="utf-8"
+        )
         assert _config_reads(probe) == [(3, "phone_numbers")]
 
 
@@ -195,14 +188,17 @@ class TestExportSurface:
 
     def test_the_picker_is_gone_from_the_package_namespace(self):
         import sms_tool.paypal as paypal_pkg
+
         assert not hasattr(paypal_pkg, "_pick_phone_and_sms")
 
     def test_the_picker_is_gone_from_the_compatibility_shell(self):
         import sms_tool.paypal_auto as shell
+
         assert not hasattr(shell, "_pick_phone_and_sms")
 
     def test_the_picker_is_not_listed_in_dunder_all(self):
         import sms_tool.paypal as paypal_pkg
+
         assert "_pick_phone_and_sms" not in paypal_pkg.__all__
 
     def test_the_card_picker_survives(self):
@@ -237,11 +233,11 @@ class TestFlowStepsGate:
 
     def test_a_gate_without_a_source_raises_before_polling(self, monkeypatch):
         polled = []
-        monkeypatch.setattr(flow_steps, "_poll_sms_code",
-                            lambda *a, **k: polled.append((a, k)))
+        monkeypatch.setattr(flow_steps, "_poll_sms_code", lambda *a, **k: polled.append((a, k)))
         with pytest.raises(_PayPalStepError) as excinfo:
             flow_steps._handle_sms_verification(
-                _FakePage(), {"timeout": 120, "poll_interval": 5}, baseline={"raw": "", "timestamp": 0})
+                _FakePage(), {"timeout": 120, "poll_interval": 5}, baseline={"raw": "", "timestamp": 0}
+            )
         assert excinfo.value.step == "sms_verify"
         assert excinfo.value.detail == NO_NUMBER_SOURCE
         assert polled == [], "an empty api_url must not reach the poll loop"
@@ -249,8 +245,7 @@ class TestFlowStepsGate:
     def test_a_configured_source_still_polls(self, monkeypatch):
         """The guard must not break the path it is guarding."""
         polled = []
-        monkeypatch.setattr(flow_steps, "_poll_sms_code",
-                            lambda url, baseline, **k: polled.append(url) or "123456")
+        monkeypatch.setattr(flow_steps, "_poll_sms_code", lambda url, baseline, **k: polled.append(url) or "123456")
         monkeypatch.setattr(flow_steps, "_click_with_fallback", lambda *a, **k: None)
         page = _FakePage()
         # Filling the code needs a locator that reports not-visible on the
@@ -258,8 +253,10 @@ class TestFlowStepsGate:
         # post-fill helpers instead of the page.
         monkeypatch.setattr(flow_steps.time, "sleep", lambda *a, **k: None)
         code = flow_steps._handle_sms_verification(
-            page, {"api_url": "https://sms.example", "timeout": 120,
-                   "poll_interval": 5}, baseline={"raw": "", "timestamp": 0})
+            page,
+            {"api_url": "https://sms.example", "timeout": 120, "poll_interval": 5},
+            baseline={"raw": "", "timestamp": 0},
+        )
         assert code == "123456"
         assert polled == ["https://sms.example"]
 
@@ -269,16 +266,22 @@ class TestReverseGate:
 
     def _client(self, sms_cfg):
         return paypal_reverse.PayPalReverseClient(
-            redirect_url="https://paypal.example/approve", card={}, address={},
-            first_name="", last_name="", alias_email="", password="",
-            phone="", sms_cfg=sms_cfg)
+            redirect_url="https://paypal.example/approve",
+            card={},
+            address={},
+            first_name="",
+            last_name="",
+            alias_email="",
+            password="",
+            phone="",
+            sms_cfg=sms_cfg,
+        )
 
     def test_a_gate_without_a_source_raises_before_polling(self, monkeypatch):
         client = self._client({"api_url": ""})
         client._current_html = '<input name="smsCode">'
         polled = []
-        monkeypatch.setattr(client, "_poll_sms",
-                            lambda *a, **k: polled.append(a) or "123456")
+        monkeypatch.setattr(client, "_poll_sms", lambda *a, **k: polled.append(a) or "123456")
         with pytest.raises(paypal_reverse._NeedBrowserFallback) as excinfo:
             client._handle_sms()
         assert excinfo.value.step == "sms"
@@ -304,8 +307,7 @@ class TestNodriverGate:
     """
 
     def test_a_missing_source_returns_none_instead_of_raising(self, monkeypatch, capsys):
-        result = asyncio.run(
-            nodriver_paypal._handle_sms(None, "", {}, deadline=0))
+        result = asyncio.run(nodriver_paypal._handle_sms(None, "", {}, deadline=0))
         assert result is None
         assert NO_NUMBER_SOURCE_MESSAGE in capsys.readouterr().out
 

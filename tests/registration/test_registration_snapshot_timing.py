@@ -35,9 +35,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _HANDLERS = PROJECT_ROOT / "sms_tool" / "registration_handlers.py"
 # 浏览器 lane：同一语义的第二份实现。它**本来就写对了**（快照在 `_fill_email`
 # 之前），但没人看守 —— 将来有人"顺手改"就会踩和协议 lane 同一个坑。
-_ORCHESTRATOR = (
-    PROJECT_ROOT / "sms_tool" / "registration_drivers" / "browser_flow" / "orchestrator.py"
-)
+_ORCHESTRATOR = PROJECT_ROOT / "sms_tool" / "registration_drivers" / "browser_flow" / "orchestrator.py"
 _ORCHESTRATOR_FUNC = "run_browser_registration"
 _FILL_EMAIL_ATTR = "_fill_email"
 
@@ -49,6 +47,7 @@ class _RecordingHandler(logging.Handler):
 
     def emit(self, record):
         self.sink.append(record)
+
 
 _SNAPSHOT_ATTR = "_snapshot_mailbox_message"
 
@@ -72,10 +71,7 @@ def snapshot_call_sites(source: str) -> dict[str, bool]:
     for node in ast.walk(tree):
         if not isinstance(node, ast.FunctionDef):
             continue
-        calls = any(
-            isinstance(sub, ast.Attribute) and sub.attr == _SNAPSHOT_ATTR
-            for sub in ast.walk(node)
-        )
+        calls = any(isinstance(sub, ast.Attribute) and sub.attr == _SNAPSHOT_ATTR for sub in ast.walk(node))
         # 同名方法可能出现多次（不同类），任一处调用即视为该名字调用了快照。
         sites[node.name] = sites.get(node.name, False) or calls
     return sites
@@ -98,9 +94,7 @@ def call_line_numbers(source: str, func_name: str, attr_name: str) -> list[int]:
     return sorted(
         node.lineno
         for node in ast.walk(target)
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Attribute)
-        and node.func.attr == attr_name
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == attr_name
     )
 
 
@@ -121,8 +115,7 @@ class SnapshotTimingGuardTests(unittest.TestCase):
     def test_bootstrap_takes_the_pre_otp_baseline(self):
         self.assertTrue(
             self.sites["_bootstrap"],
-            "_bootstrap 必须在任何 OTP 阶段之前做一次邮箱快照，"
-            "否则上一轮遗留的旧验证码会被当成候选",
+            "_bootstrap 必须在任何 OTP 阶段之前做一次邮箱快照，否则上一轮遗留的旧验证码会被当成候选",
         )
 
     def test_no_otp_stage_snapshots_the_mailbox(self):
@@ -235,8 +228,7 @@ class BrowserLaneSnapshotOrderTests(unittest.TestCase):
         self.assertLess(
             min(snapshots),
             min(fills),
-            "浏览器 lane 的邮箱快照必须早于 _fill_email："
-            "填邮箱才会触发 OTP，晚于它取基线就会把刚到的验证码标成已见",
+            "浏览器 lane 的邮箱快照必须早于 _fill_email：填邮箱才会触发 OTP，晚于它取基线就会把刚到的验证码标成已见",
         )
 
 
@@ -263,9 +255,7 @@ class MailboxBaselineSnapshotLogTests(unittest.TestCase):
 
     def _events(self):
         return [
-            record
-            for record in self.records
-            if str(getattr(record, "event", "") or "") == "mailbox_baseline_snapshot"
+            record for record in self.records if str(getattr(record, "event", "") or "") == "mailbox_baseline_snapshot"
         ]
 
     def _mailbox(self, provider="icloud_url"):
@@ -302,9 +292,7 @@ class MailboxBaselineSnapshotLogTests(unittest.TestCase):
 
         这条记录是为了让这些 provider 的超时**不要**被误读成快照时序 bug。
         """
-        with mock.patch.object(
-            mailbox_icloud_url, "snapshot_icloud_url_messages"
-        ) as snapshot:
+        with mock.patch.object(mailbox_icloud_url, "snapshot_icloud_url_messages") as snapshot:
             self.assertEqual(mailbox._snapshot_mailbox_message(self._mailbox("gmail")), "")
 
         snapshot.assert_not_called()
@@ -339,9 +327,7 @@ class MailboxBaselineSnapshotLogTests(unittest.TestCase):
         events = self._events()
         self.assertTrue(events)
         for record in events:
-            blob = " ".join(
-                [record.getMessage()] + [str(value) for value in vars(record).values()]
-            )
+            blob = " ".join([record.getMessage()] + [str(value) for value in vars(record).values()])
             self.assertNotIn("s3cret", blob)
             self.assertNotIn("alice", blob)
             self.assertNotIn("proxy.example.com", blob)

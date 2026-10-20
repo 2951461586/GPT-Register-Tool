@@ -107,7 +107,7 @@
    它会把**占用该 profile 的进程**列出来（PID + 映像名）。
 2. 🔴 **不要用 `parent.lock` 判断**。Camoufox 每次**正常退出**也会留下它，
    「文件存在」不等于「有进程持有」。
-3. `describe_contention`（`sms_tool/browser_profile_reclaim.py:204`）只把**精确引用**该 profile
+3. `describe_contention`（`sms_tool/browser_profile_reclaim.py:211`）只把**精确引用**该 profile
    路径的进程算作占用者；命令行里只是**提到**这个路径的进程不算。
 4. 需要清理时用 `reclaim_stale_profile(..., terminate=True)`，它会跳过非浏览器映像与自身进程。
 

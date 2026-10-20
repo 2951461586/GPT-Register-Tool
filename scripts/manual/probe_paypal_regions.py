@@ -54,8 +54,9 @@ from sms_tool.storage import list_paypal_accounts
 DEFAULT_REGIONS = ("US", "JP", "TR", "GB", "DE", "AU", "SG", "TH", "CA", "NZ", "IE", "FR")
 
 
-def _create_checkout(access_token: str, checkout_country: str, currency: str,
-                     proxy: str, cookie_header: str, with_promo: bool = True) -> dict[str, Any]:
+def _create_checkout(
+    access_token: str, checkout_country: str, currency: str, proxy: str, cookie_header: str, with_promo: bool = True
+) -> dict[str, Any]:
     """Stage 1: create a ChatGPT checkout session for the given billing country."""
     body = {
         "entry_point": "all_plans_pricing_modal",
@@ -67,7 +68,11 @@ def _create_checkout(access_token: str, checkout_country: str, currency: str,
         body["promo_campaign"] = {"promo_campaign_id": "plus-1-month-free", "is_coupon_from_query_param": False}
     r = _checkout_post(
         "https://chatgpt.com/backend-api/payments/checkout",
-        body, access_token, cookie_header, proxy, CHATGPT_TIMEOUT,
+        body,
+        access_token,
+        cookie_header,
+        proxy,
+        CHATGPT_TIMEOUT,
     )
     if r.status_code == 401:
         raise RuntimeError("access_token invalid or expired (401)")
@@ -110,8 +115,14 @@ def _stripe_init(cs_id: str, stripe_pk: str, proxy: str) -> dict[str, Any]:
     return r.json()
 
 
-def probe_region(access_token: str, region: str, checkout_proxy: str,
-                 provider_proxy: str, cookie_header: str, with_promo: bool = True) -> dict[str, Any]:
+def probe_region(
+    access_token: str,
+    region: str,
+    checkout_proxy: str,
+    provider_proxy: str,
+    cookie_header: str,
+    with_promo: bool = True,
+) -> dict[str, Any]:
     currency = CURRENCY_MAP.get(region, "USD")
     result: dict[str, Any] = {
         "region": region,
@@ -158,18 +169,22 @@ def _resolve_accounts(emails: list[str]) -> list[dict[str, str]]:
     if emails:
         for email in emails:
             data, _ = load_account_seed(email=email)
-            accounts.append({
-                "email": email,
-                "access_token": extract_access_token(data),
-                "cookie_header": str(data.get("cookie_header") or ""),
-            })
+            accounts.append(
+                {
+                    "email": email,
+                    "access_token": extract_access_token(data),
+                    "cookie_header": str(data.get("cookie_header") or ""),
+                }
+            )
         return accounts
     for row in list_paypal_accounts():
-        accounts.append({
-            "email": row.get("email", ""),
-            "access_token": str(row.get("access_token") or "").strip(),
-            "cookie_header": "",
-        })
+        accounts.append(
+            {
+                "email": row.get("email", ""),
+                "access_token": str(row.get("access_token") or "").strip(),
+                "cookie_header": "",
+            }
+        )
     return accounts
 
 
@@ -178,8 +193,14 @@ def main() -> int:
     parser.add_argument("--emails", default="", help="Comma-separated account emails (default: all pool accounts)")
     parser.add_argument("--regions", default="", help="Comma-separated regions (default: built-in set)")
     parser.add_argument("--json", dest="json_out", default="", help="Write full JSON results to this path")
-    parser.add_argument("--no-promo", action="store_true", help="Omit the plus-1-month-free promo (elicits non-zero amount / PayPal)")
-    parser.add_argument("--proxy-template", default="", help="proxy credential template (kookeey password tail -CC or region-XX username); routes each region through its own egress IP")
+    parser.add_argument(
+        "--no-promo", action="store_true", help="Omit the plus-1-month-free promo (elicits non-zero amount / PayPal)"
+    )
+    parser.add_argument(
+        "--proxy-template",
+        default="",
+        help="proxy credential template (kookeey password tail -CC or region-XX username); routes each region through its own egress IP",
+    )
     args = parser.parse_args()
 
     emails = [e.strip() for e in args.emails.split(",") if e.strip()]
@@ -194,7 +215,10 @@ def main() -> int:
     if proxy_template:
         print("[proxy] per-region routing via template (fresh sid per region)", file=sys.stderr)
     else:
-        print(f"[proxy] checkout={default_checkout_proxy or 'DIRECT'} provider={default_provider_proxy or 'DIRECT'}", file=sys.stderr)
+        print(
+            f"[proxy] checkout={default_checkout_proxy or 'DIRECT'} provider={default_provider_proxy or 'DIRECT'}",
+            file=sys.stderr,
+        )
 
     accounts = _resolve_accounts(emails)
     accounts = [a for a in accounts if a["access_token"]]
@@ -216,7 +240,12 @@ def main() -> int:
                 checkout_proxy = default_checkout_proxy
                 provider_proxy = default_provider_proxy
             row = probe_region(
-                acct["access_token"], region, checkout_proxy, provider_proxy, acct["cookie_header"], with_promo,
+                acct["access_token"],
+                region,
+                checkout_proxy,
+                provider_proxy,
+                acct["cookie_header"],
+                with_promo,
             )
             rows.append(row)
             if row["error"]:

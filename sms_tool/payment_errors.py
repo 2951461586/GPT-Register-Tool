@@ -63,9 +63,7 @@ def annotate_error(exc: BaseException, **attributes: Any) -> BaseException:
     """
     unknown = sorted(set(attributes) - PAYMENT_ERROR_ATTRS)
     if unknown:
-        raise ValueError(
-            "unknown payment error attribute(s): " + ", ".join(unknown)
-        )
+        raise ValueError("unknown payment error attribute(s): " + ", ".join(unknown))
     for name, value in attributes.items():
         if value is None:
             continue

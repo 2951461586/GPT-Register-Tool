@@ -10,9 +10,7 @@ import unittest
 from pathlib import Path
 
 # Load as part of the ``common`` package so ``from . import endpoints`` resolves.
-_COMMON_DIR = (
-    Path(__file__).resolve().parents[2] / "services" / "protocol-payment"
-)
+_COMMON_DIR = Path(__file__).resolve().parents[2] / "services" / "protocol-payment"
 if str(_COMMON_DIR) not in sys.path:
     sys.path.insert(0, str(_COMMON_DIR))
 
@@ -137,6 +135,7 @@ class LookupProxyCountryTests(unittest.TestCase):
     def test_cache_hit_short_circuits_network(self):
         record = {"country": "NL", "country_as": "AS9", "country_checked_at": 9999999999, "country_pre_proxy": False}
         import time
+
         record["country_checked_at"] = int(time.time())
         _r, saved, session, kwargs = self._make({}, record=record)
         country, asn, source = GEO.lookup_proxy_country("seed", "http://p", **kwargs)
@@ -156,11 +155,16 @@ class LookupProxyTargetsTests(unittest.TestCase):
         session = _FakeSession({"chatgpt": _FakeResponse(200)})
         record = {}
         ok, reason = GEO.lookup_proxy_targets(
-            "seed", "http://p",
-            record=record, save_state=lambda: None,
+            "seed",
+            "http://p",
+            record=record,
+            save_state=lambda: None,
             new_session=lambda proxy, use_pre_proxy=True: session,
-            env_bool=_env_bool, env_int=_env_int, redact=_redact,
-            env_prefix="TEST", user_agent="UA",
+            env_bool=_env_bool,
+            env_int=_env_int,
+            redact=_redact,
+            env_prefix="TEST",
+            user_agent="UA",
         )
         self.assertTrue(ok)
         self.assertEqual(reason, "ok")
@@ -170,11 +174,16 @@ class LookupProxyTargetsTests(unittest.TestCase):
         session = _FakeSession({"chatgpt": _FakeResponse(503)})
         record = {}
         ok, reason = GEO.lookup_proxy_targets(
-            "seed", "http://p",
-            record=record, save_state=lambda: None,
+            "seed",
+            "http://p",
+            record=record,
+            save_state=lambda: None,
             new_session=lambda proxy, use_pre_proxy=True: session,
-            env_bool=_env_bool, env_int=_env_int, redact=_redact,
-            env_prefix="TEST", user_agent="UA",
+            env_bool=_env_bool,
+            env_int=_env_int,
+            redact=_redact,
+            env_prefix="TEST",
+            user_agent="UA",
         )
         self.assertFalse(ok)
         self.assertIn("503", reason)
@@ -184,7 +193,8 @@ class EnsureTests(unittest.TestCase):
     def test_ensure_country_raises_on_mismatch(self):
         with self.assertRaises(RuntimeError):
             GEO.ensure_proxy_country(
-                "seed", "http://p",
+                "seed",
+                "http://p",
                 lookup_country=lambda g, p: ("US", "", "ip-api"),
                 expected_countries=lambda g: {"PL"},
                 env_bool=lambda n, d=True: True,
@@ -196,7 +206,8 @@ class EnsureTests(unittest.TestCase):
 
     def test_ensure_country_passes_on_match(self):
         GEO.ensure_proxy_country(
-            "seed", "http://p",
+            "seed",
+            "http://p",
             lookup_country=lambda g, p: ("PL", "", "ip-api"),
             expected_countries=lambda g: {"PL"},
             env_bool=lambda n, d=True: True,
@@ -209,7 +220,8 @@ class EnsureTests(unittest.TestCase):
     def test_ensure_targets_raises_on_unreachable(self):
         with self.assertRaises(RuntimeError):
             GEO.ensure_proxy_targets(
-                "seed", "http://p",
+                "seed",
+                "http://p",
                 lookup_targets=lambda g, p: (False, "HTTP_503"),
                 env_bool=lambda n, d=True: True,
                 log=lambda *a, **k: None,
@@ -221,9 +233,11 @@ class EnsureTests(unittest.TestCase):
 class ExpectedCountriesTests(unittest.TestCase):
     def test_checkout_uses_single_country(self):
         import os
+
         os.environ.pop("TEST_CHECKOUT_PROXY_COUNTRY", None)
         result = GEO.expected_proxy_countries(
-            "checkout", env_prefix="TEST",
+            "checkout",
+            env_prefix="TEST",
             default_checkout_country=lambda: "PL",
             default_country=lambda: "NL",
             default_provider_countries=lambda: "NL,BE",
@@ -232,10 +246,12 @@ class ExpectedCountriesTests(unittest.TestCase):
 
     def test_provider_parses_list(self):
         import os
+
         os.environ["TEST_PROVIDER_PROXY_COUNTRIES"] = "nl, be ;de"
         try:
             result = GEO.expected_proxy_countries(
-                "provider", env_prefix="TEST",
+                "provider",
+                env_prefix="TEST",
                 default_checkout_country=lambda: "PL",
                 default_country=lambda: "NL",
                 default_provider_countries=lambda: "NL",
@@ -247,4 +263,3 @@ class ExpectedCountriesTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

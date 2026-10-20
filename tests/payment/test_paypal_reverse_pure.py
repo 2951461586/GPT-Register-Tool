@@ -89,12 +89,15 @@ class ReversePayResultContractTests(unittest.TestCase):
             oauth_refresh_token="rt-LEAK",
         )
         d = r.to_dict()
-        self.assertEqual(d, {
-            "ok": False,
-            "email": "taro@example.com",
-            "error": "captcha wall",
-            "failed_step": "card",
-        })
+        self.assertEqual(
+            d,
+            {
+                "ok": False,
+                "email": "taro@example.com",
+                "error": "captcha wall",
+                "failed_step": "card",
+            },
+        )
         for leaky in ("eyJLEAK", "rt-LEAK"):
             self.assertNotIn(leaky, repr(d))
 
@@ -218,8 +221,7 @@ class HiddenAndInputFieldTests(unittest.TestCase):
     def test_hidden_fields_are_collected_by_name(self):
         c = _client()
         html = (
-            '<form><input type="hidden" name="csrf" value="T1">'
-            '<input type="hidden" name="step" value="review"></form>'
+            '<form><input type="hidden" name="csrf" value="T1"><input type="hidden" name="step" value="review"></form>'
         )
         self.assertEqual({"csrf": "T1", "step": "review"}, c._extract_hidden_fields(html))
 
@@ -300,8 +302,10 @@ class SelectFieldTests(unittest.TestCase):
 
     def test_multiple_selects_are_all_collected(self):
         c = _client()
-        html = ('<select name="a"><option value="1" selected>1</option></select>'
-                '<select name="b"><option value="2" selected>2</option></select>')
+        html = (
+            '<select name="a"><option value="1" selected>1</option></select>'
+            '<select name="b"><option value="2" selected>2</option></select>'
+        )
         self.assertEqual({"a": "1", "b": "2"}, c._extract_select_fields(html))
 
 
@@ -312,8 +316,7 @@ class FindFormByFieldsTests(unittest.TestCase):
 
     def test_matching_form_returns_action_and_fields(self):
         c = _client(
-            '<form action="/signup"><input type="hidden" name="csrf" value="T">'
-            '<input name="email" value=""></form>'
+            '<form action="/signup"><input type="hidden" name="csrf" value="T"><input name="email" value=""></form>'
         )
         action, fields = c._find_form_by_fields(["email"])
         self.assertEqual("https://www.paypal.com/signup", action)
@@ -346,8 +349,10 @@ class FindFormByFieldsTests(unittest.TestCase):
         搜 "email" 会被表单任意位置出现的 "email"（比如一段文案）命中，
         于是可能选中不含 email 输入框的表单。
         """
-        c = _client('<form action="/wrong"><span>contact email support</span></form>'
-                    '<form action="/right"><input name="login_email" value=""></form>')
+        c = _client(
+            '<form action="/wrong"><span>contact email support</span></form>'
+            '<form action="/right"><input name="login_email" value=""></form>'
+        )
         action, _ = c._find_form_by_fields(["email"])
         self.assertEqual("https://www.paypal.com/wrong", action)
 
@@ -453,8 +458,7 @@ class CheckBlockedTests(unittest.TestCase):
         """
         c = _client()
         c._captcha_solved_by_nodriver = True
-        with patch.object(c, "_try_solve_captcha",
-                          side_effect=AssertionError("CAPTCHA 检查没有被短路")):
+        with patch.object(c, "_try_solve_captcha", side_effect=AssertionError("CAPTCHA 检查没有被短路")):
             c._check_blocked('<div class="g-recaptcha"></div>', "card")
         self.assertEqual([], c._session.calls)
 
@@ -497,8 +501,10 @@ class CheckBlockedTests(unittest.TestCase):
         """解出来且复检干净 → 不抛，页面被重新拉过一次，挑战被提交过一次。"""
         c = _client()
         c._session = FakeSession([FakeResponse(200, "<html>clean now</html>", _CURRENT)])
-        with patch.object(c, "_try_solve_captcha", return_value="tok"), \
-             patch.object(c, "_submit_captcha_challenge") as submit:
+        with (
+            patch.object(c, "_try_solve_captcha", return_value="tok"),
+            patch.object(c, "_submit_captcha_challenge") as submit,
+        ):
             c._check_blocked('<div class="g-recaptcha"></div>', "card")
         submit.assert_called_once()
         self.assertEqual("<html>clean now</html>", c._current_html)
@@ -507,8 +513,7 @@ class CheckBlockedTests(unittest.TestCase):
     def test_captcha_persisting_after_solve_still_falls_back(self):
         c = _client()
         c._session = FakeSession([FakeResponse(200, '<div class="g-recaptcha"></div>', _CURRENT)])
-        with patch.object(c, "_try_solve_captcha", return_value="tok"), \
-             patch.object(c, "_submit_captcha_challenge"):
+        with patch.object(c, "_try_solve_captcha", return_value="tok"), patch.object(c, "_submit_captcha_challenge"):
             with self.assertRaises(_NeedBrowserFallback):
                 c._check_blocked('<div class="g-recaptcha"></div>', "card")
 

@@ -181,8 +181,10 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
     def test_create_mailboxes_never_synthesizes_addresses_after_provider_failures(self):
         client = CFWorkerMailboxClient("https://worker.example", admin_token="admin")
 
-        with patch.object(cfworker_client.curl_requests, "post", return_value=EmptyCreateMailboxResponse()), \
-             patch.object(cfworker_client.curl_requests, "get", return_value=EmptyCreateMailboxResponse()):
+        with (
+            patch.object(cfworker_client.curl_requests, "post", return_value=EmptyCreateMailboxResponse()),
+            patch.object(cfworker_client.curl_requests, "get", return_value=EmptyCreateMailboxResponse()),
+        ):
             with self.assertRaisesRegex(RuntimeError, "cfworker mailbox creation failed"):
                 client.create_mailboxes(count=1, domain="liziai.cloud")
 
@@ -209,7 +211,9 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
     def test_mixed_plain_and_encoded_rfc2047_subject_is_decoded(self):
         subject = "OpenAI - Access =?UTF-8?Q?Deactivated=0A=0A=5BC-q4RKCjo6DIKv=5D?="
 
-        self.assertEqual(cfworker_client._decode_header_value(subject), "OpenAI - Access Deactivated\n\n[C-q4RKCjo6DIKv]")
+        self.assertEqual(
+            cfworker_client._decode_header_value(subject), "OpenAI - Access Deactivated\n\n[C-q4RKCjo6DIKv]"
+        )
 
     def test_cfworker_client_uses_configurable_timeout(self):
         with patch.object(mailbox_cfworker_module, "CFWorkerMailboxClient") as client:
@@ -327,7 +331,7 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
                     "Subject: Your temporary ChatGPT verification code\r\n"
                     "MIME-Version: 1.0\r\n"
                     "Content-Type: text/html; charset=utf-8\r\n\r\n"
-                    "<html><body><div style=\"color:#353740\">"
+                    '<html><body><div style="color:#353740">'
                     + (" " * 120)
                     + "</div><strong>333350</strong></body></html>"
                 ),
@@ -353,9 +357,9 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
                 "subject": "Your temporary ChatGPT verification code",
                 "extracted_json": '[{"value":"682375"}]',
                 "body": (
-                    '<html><head><style>.top{color:#202123}</style></head><body>'
-                    '<p>Enter this temporary verification code to continue:</p>'
-                    '<strong>096114</strong></body></html>'
+                    "<html><head><style>.top{color:#202123}</style></head><body>"
+                    "<p>Enter this temporary verification code to continue:</p>"
+                    "<strong>096114</strong></body></html>"
                 ),
             },
             email="target@liziai.cloud",
@@ -441,7 +445,9 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
             "toRecipients": [{"emailAddress": {"address": "target@edu.liziai.cloud"}}],
         }
 
-        with patch.object(mailbox_module, "_email_cfg", return_value={"cfworker_otp_settle_seconds": 0.01, "otp_poll_interval": 0.01}):
+        with patch.object(
+            mailbox_module, "_email_cfg", return_value={"cfworker_otp_settle_seconds": 0.01, "otp_poll_interval": 0.01}
+        ):
             with patch.object(mailbox_module, "_fetch_mailbox_messages", side_effect=[[old], [new], [new]]):
                 code = mailbox_module._poll_email_otp(mailbox, timeout=1)
 
@@ -468,7 +474,9 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
             },
         ]
 
-        with patch.object(mailbox_module, "_email_cfg", return_value={"cfworker_otp_settle_seconds": 0, "otp_poll_interval": 0.01}):
+        with patch.object(
+            mailbox_module, "_email_cfg", return_value={"cfworker_otp_settle_seconds": 0, "otp_poll_interval": 0.01}
+        ):
             with patch.object(mailbox_module, "_fetch_mailbox_messages", return_value=messages):
                 code = mailbox_module._poll_email_otp(
                     mailbox,
@@ -531,7 +539,9 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
         client = CFWorkerMailboxClient("https://worker.example", admin_token="")
 
         with patch.object(cfworker_client.curl_requests, "get", side_effect=RuntimeError("curl timeout")):
-            with patch.object(client, "_request_urllib", return_value={"ok": True, "data": RawTextEndpointResponse().json()}):
+            with patch.object(
+                client, "_request_urllib", return_value={"ok": True, "data": RawTextEndpointResponse().json()}
+            ):
                 messages = client.fetch_messages("target@edu.liziai.cloud", limit=5)
 
         self.assertEqual(len(messages), 1)
@@ -540,12 +550,20 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
     def test_cfworker_fetch_falls_back_to_direct_when_configured(self):
         mailbox = MailboxAccount(email="target@edu.liziai.cloud", provider="cfworker")
 
-        with patch.object(mailbox_module, "CFG", {}), \
-             patch.object(mailbox_module, "_email_cfg", return_value={"cfworker_poll_proxy": True, "cfworker_direct_fallback": True}):
+        with (
+            patch.object(mailbox_module, "CFG", {}),
+            patch.object(
+                mailbox_module,
+                "_email_cfg",
+                return_value={"cfworker_poll_proxy": True, "cfworker_direct_fallback": True},
+            ),
+        ):
             with patch.object(mailbox_module, "_cfworker_client") as client_factory:
                 proxy_client = type("ProxyClient", (), {})()
                 direct_client = type("DirectClient", (), {})()
-                proxy_client.fetch_messages = lambda email, limit=25: (_ for _ in ()).throw(RuntimeError("proxy timeout"))
+                proxy_client.fetch_messages = lambda email, limit=25: (_ for _ in ()).throw(
+                    RuntimeError("proxy timeout")
+                )
                 direct_client.fetch_messages = lambda email, limit=25: [{"id": "m1"}]
                 client_factory.side_effect = [proxy_client, direct_client]
 
@@ -558,11 +576,15 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
     def test_cfworker_fetch_does_not_fall_back_to_direct_by_default(self):
         mailbox = MailboxAccount(email="target@edu.liziai.cloud", provider="cfworker")
 
-        with patch.object(mailbox_module, "CFG", {}), \
-             patch.object(mailbox_module, "_email_cfg", return_value={"cfworker_poll_proxy": True}):
+        with (
+            patch.object(mailbox_module, "CFG", {}),
+            patch.object(mailbox_module, "_email_cfg", return_value={"cfworker_poll_proxy": True}),
+        ):
             with patch.object(mailbox_module, "_cfworker_client") as client_factory:
                 proxy_client = type("ProxyClient", (), {})()
-                proxy_client.fetch_messages = lambda email, limit=25: (_ for _ in ()).throw(RuntimeError("proxy timeout"))
+                proxy_client.fetch_messages = lambda email, limit=25: (_ for _ in ()).throw(
+                    RuntimeError("proxy timeout")
+                )
                 client_factory.return_value = proxy_client
 
                 with self.assertRaises(RuntimeError):
@@ -574,8 +596,10 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
     def test_cfworker_fetch_can_skip_proxy_when_configured(self):
         mailbox = MailboxAccount(email="target@edu.liziai.cloud", provider="cfworker")
 
-        with patch.object(mailbox_module, "CFG", {}), \
-             patch.object(mailbox_module, "_email_cfg", return_value={"cfworker_poll_proxy": False}):
+        with (
+            patch.object(mailbox_module, "CFG", {}),
+            patch.object(mailbox_module, "_email_cfg", return_value={"cfworker_poll_proxy": False}),
+        ):
             with patch.object(mailbox_module, "_cfworker_client") as client_factory:
                 direct_client = type("DirectClient", (), {})()
                 direct_client.fetch_messages = lambda email, limit=25: [{"id": "m1"}]

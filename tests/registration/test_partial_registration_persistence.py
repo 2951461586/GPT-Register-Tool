@@ -95,6 +95,7 @@ def _partial(email="half@example.test"):
 # the partial branch
 # --------------------------------------------------------------------------
 
+
 def test_a_partial_registration_is_upserted_even_without_an_access_token(tmp_path):
     ctx, calls = _ctx()
 
@@ -183,6 +184,7 @@ def test_the_partial_line_is_printed_once(tmp_path, capsys):
 # the branch must not swallow ordinary failures
 # --------------------------------------------------------------------------
 
+
 def test_an_ordinary_failure_is_still_not_written_to_the_accounts_table(tmp_path):
     """The whole point of the early return -- and it must survive the change."""
     ctx, calls = _ctx()
@@ -257,6 +259,7 @@ def test_a_successful_registration_still_takes_the_normal_path(tmp_path):
 # --------------------------------------------------------------------------
 # the audit row has to agree with the accounts row
 # --------------------------------------------------------------------------
+
 
 def test_the_audit_row_for_a_partial_is_not_recorded_as_a_plain_failure(tmp_path, _storage_audit):
     """Two stores, one verdict: ``state='failed'`` here while ``accounts`` holds a

@@ -53,9 +53,16 @@ class BootstrapConfigTests(unittest.TestCase):
             self.assertFalse(bootstrap_config(cfg)["enabled"])
 
     def test_reads_registration_section(self):
-        cfg = bootstrap_config({"registration": {"chatgpt_bootstrap": {
-            "enabled": True, "anonymous": False,
-        }}})
+        cfg = bootstrap_config(
+            {
+                "registration": {
+                    "chatgpt_bootstrap": {
+                        "enabled": True,
+                        "anonymous": False,
+                    }
+                }
+            }
+        )
         self.assertTrue(cfg["enabled"])
         self.assertFalse(cfg["anonymous"])
         self.assertTrue(cfg["authenticated"])  # default preserved
@@ -144,9 +151,7 @@ class ConfigGatedEntryPointTests(unittest.TestCase):
 
     def test_enabled_runs_warm_up(self):
         page = _FakePage()
-        result = run_anonymous_bootstrap(
-            page, {"registration": {"chatgpt_bootstrap": {"enabled": True}}}
-        )
+        result = run_anonymous_bootstrap(page, {"registration": {"chatgpt_bootstrap": {"enabled": True}}})
         self.assertFalse(result.get("skipped"))
         self.assertEqual(len(page.urls), 6)
 

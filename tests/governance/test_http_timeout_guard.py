@@ -33,8 +33,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-SKIP_DIRS = {"dist", "runtime", ".venv", ".git", "__pycache__", "tests",
-             ".dotnet", "node_modules", "logs", "sessions"}
+SKIP_DIRS = {"dist", "runtime", ".venv", ".git", "__pycache__", "tests", ".dotnet", "node_modules", "logs", "sessions"}
 
 HTTP_METHODS = {"get", "post", "put", "patch", "delete", "head", "request", "urlopen"}
 
@@ -97,18 +96,19 @@ def _call_sites():
         aliases = _family_map(tree)
 
         for node in ast.walk(tree):
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
-                    and node.func.attr == "Session":
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "Session":
                 owner = node.func.value
                 owner_name = owner.id if isinstance(owner, ast.Name) else ""
                 family = aliases.get(owner_name)
                 # curl_cffi's 30 s safety net is disabled by timeout=None.
                 if family == ("curl_cffi", True):
                     for keyword in node.keywords:
-                        if keyword.arg == "timeout" and isinstance(keyword.value, ast.Constant) \
-                                and keyword.value.value is None:
-                            yield (relative, node.lineno,
-                                   "curl_cffi Session(timeout=None) disables the 30 s default")
+                        if (
+                            keyword.arg == "timeout"
+                            and isinstance(keyword.value, ast.Constant)
+                            and keyword.value.value is None
+                        ):
+                            yield (relative, node.lineno, "curl_cffi Session(timeout=None) disables the 30 s default")
 
             if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
                 continue
@@ -131,13 +131,11 @@ def _call_sites():
             if splatted:
                 yield (relative, node.lineno, f"{owner_name}.{node.func.attr} via **kwargs")
             else:
-                yield (relative, node.lineno,
-                       f"{owner_name}.{node.func.attr} has NO timeout and {name} has no default")
+                yield (relative, node.lineno, f"{owner_name}.{node.func.attr} has NO timeout and {name} has no default")
 
 
 def test_no_http_call_can_hang_forever():
-    offenders = [(path, line, note) for path, line, note in _call_sites()
-                 if not note.endswith("via **kwargs")]
+    offenders = [(path, line, note) for path, line, note in _call_sites() if not note.endswith("via **kwargs")]
     assert not offenders, (
         "HTTP calls with no timeout on a client that has no library default "
         "(requests / urllib hang forever; curl_cffi is safe at 30 s):\n"
@@ -146,8 +144,7 @@ def test_no_http_call_can_hang_forever():
 
 
 def test_kwargs_mediated_timeouts_are_audited():
-    splatted = [(path, line) for path, line, note in _call_sites()
-                if note.endswith("via **kwargs")]
+    splatted = [(path, line) for path, line, note in _call_sites() if note.endswith("via **kwargs")]
     assert len(splatted) <= MAX_SPLATTED_SITES, (
         f"{len(splatted)} HTTP call sites pass their arguments through **kwargs, "
         f"above the audited ceiling of {MAX_SPLATTED_SITES}. A static check cannot "

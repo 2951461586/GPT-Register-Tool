@@ -22,7 +22,9 @@ from urllib.parse import urlsplit
 from .kernel.driver_env import driver_config
 from .kernel.paths import config_dir as _resolve_config_dir
 from .kernel.paths import migrate_legacy_root_files_if_default
-from .kernel.paths import resolve_config_file as resolve_config_file  # re-export: config is the layer subpackages already depend on
+from .kernel.paths import (
+    resolve_config_file as resolve_config_file,
+)  # re-export: config is the layer subpackages already depend on
 
 
 class ConfigError(ValueError):

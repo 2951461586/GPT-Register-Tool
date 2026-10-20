@@ -17,6 +17,7 @@ def test_account_lifecycle_deletes_row_and_archives_session(tmp_path):
         "protocol_payments": {"matrix": {"cells": []}},
     }
     from sms_tool import storage
+
     storage.upsert_account({"email": "delete@example.com", "access_token": "at"}, runtime_config=config)
     result = AccountLifecycle(config).delete(AccountDeleteRequest("delete@example.com"))
     assert result.removed_database_rows == 1
@@ -48,9 +49,7 @@ def test_account_lifecycle_removes_all_supported_mailbox_line_shapes(tmp_path):
 def test_account_lifecycle_delete_many_preserves_order_and_shared_mailbox_file(tmp_path):
     pool = tmp_path / "mailboxes.txt"
     pool.write_text(
-        "first@example.com----password\n"
-        "second@example.com----password\n"
-        "keep@example.com----password\n",
+        "first@example.com----password\nsecond@example.com----password\nkeep@example.com----password\n",
         encoding="utf-8",
     )
     config = {
@@ -78,8 +77,7 @@ def test_account_lifecycle_fuzzy_deletes_at_plus_alias(tmp_path):
     database = tmp_path / "accounts.sqlite3"
     # The mailbox file stores the ORIGINAL "@+" form.
     pool.write_text(
-        "sampleaccount66@+oai01hotmail.com----password\n"
-        "keep@example.com----password\n",
+        "sampleaccount66@+oai01hotmail.com----password\nkeep@example.com----password\n",
         encoding="utf-8",
     )
     config = {
@@ -90,6 +88,7 @@ def test_account_lifecycle_fuzzy_deletes_at_plus_alias(tmp_path):
         "protocol_payments": {"matrix": {"cells": []}},
     }
     from sms_tool import storage
+
     # Database also stores the ORIGINAL "@+" form.
     storage.upsert_account(
         {"email": "sampleaccount66@+oai01hotmail.com", "access_token": "at"},
@@ -115,6 +114,7 @@ def test_account_lifecycle_fuzzy_match_does_not_over_delete(tmp_path):
         "protocol_payments": {"matrix": {"cells": []}},
     }
     from sms_tool import storage
+
     storage.upsert_account(
         {"email": "sampleaccount66@+oai01hotmail.com", "access_token": "at"},
         runtime_config=config,
@@ -130,6 +130,7 @@ def test_account_lifecycle_fuzzy_match_does_not_over_delete(tmp_path):
     assert result.removed_database_rows == 1
     # The unrelated account must survive.
     import sqlite3
+
     with sqlite3.connect(database) as conn:
         rows = conn.execute("SELECT email FROM accounts").fetchall()
     assert any("sampleaccount66other@gmail.com" in r[0] for r in rows)

@@ -410,7 +410,9 @@ class ToggleGateTests(unittest.TestCase):
         Before the consolidation each hand-rolled its own truthy whitelist, so a
         typo in the config was silently treated as one of three different things.
         """
-        self.assertFalse(self._gate({"registration": {"prime_about_you_page": "maybe"}}, "_prime_about_you_page_enabled"))
+        self.assertFalse(
+            self._gate({"registration": {"prime_about_you_page": "maybe"}}, "_prime_about_you_page_enabled")
+        )
         self.assertEqual(
             self._gate(
                 {"registration": {"create_account_disallowed_backoff": "maybe"}},

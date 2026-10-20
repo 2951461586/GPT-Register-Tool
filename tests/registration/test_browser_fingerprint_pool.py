@@ -28,9 +28,7 @@ from sms_tool.registration_drivers.external_sessions.profiles import _browser_pr
 class BrowserFingerprintPoolTests(unittest.TestCase):
     def test_browser_profile_dir_uses_configured_runtime_root(self):
         with self.subTest("configured runtime"):
-            path = _browser_profile_dir(
-                "camoufox", "profile-1", config={"runtime": {"directory": "tmp-runtime"}}
-            )
+            path = _browser_profile_dir("camoufox", "profile-1", config={"runtime": {"directory": "tmp-runtime"}})
             self.assertTrue(path.replace("\\", "/").endswith("/tmp-runtime/browser_profiles/camoufox/profile-1"))
 
     def test_select_browser_profile_deterministic_by_seed(self):
@@ -52,9 +50,7 @@ class BrowserFingerprintPoolTests(unittest.TestCase):
 
     def test_runtime_config_does_not_partition_the_builtin_pool(self):
         first = shared_browser_profile_pool({"registration": {}})
-        second = shared_browser_profile_pool(
-            {"registration": {"drivers": {"playwright": {"user_data_dir": "other"}}}}
-        )
+        second = shared_browser_profile_pool({"registration": {"drivers": {"playwright": {"user_data_dir": "other"}}}})
         self.assertIs(first, second)
 
     def test_locale_profile_key_from_geo_map_and_fallback(self):
@@ -163,51 +159,75 @@ class BrowserProfileValidationTests(unittest.TestCase):
         self.assertEqual(unreachable, set(), msg=f"unreachable locale profiles: {unreachable}")
 
     def test_validate_flags_language_missing_from_languages(self):
-        issues = validate_browser_profile({
-            "navigator_language": "ja-JP",
-            "navigator_languages": ["en-US"],
-            "accept_language": "ja-JP,ja;q=0.9",
-            "timezone_iana": "Asia/Tokyo",
-        })
+        issues = validate_browser_profile(
+            {
+                "navigator_language": "ja-JP",
+                "navigator_languages": ["en-US"],
+                "accept_language": "ja-JP,ja;q=0.9",
+                "timezone_iana": "Asia/Tokyo",
+            }
+        )
         self.assertTrue(any("navigator_language" in item for item in issues))
 
     def test_validate_flags_accept_language_mismatch(self):
-        issues = validate_browser_profile({
-            "navigator_language": "ja-JP",
-            "navigator_languages": ["ja-JP"],
-            "accept_language": "en-US,en;q=0.9",
-            "timezone_iana": "Asia/Tokyo",
-        })
+        issues = validate_browser_profile(
+            {
+                "navigator_language": "ja-JP",
+                "navigator_languages": ["ja-JP"],
+                "accept_language": "en-US,en;q=0.9",
+                "timezone_iana": "Asia/Tokyo",
+            }
+        )
         self.assertTrue(any("accept_language" in item for item in issues))
 
     def test_validate_flags_blank_and_non_iana_timezone(self):
-        blank = validate_browser_profile({
-            "navigator_language": "en-US", "navigator_languages": ["en-US"],
-            "accept_language": "en-US,en;q=0.9", "timezone_iana": "",
-        })
+        blank = validate_browser_profile(
+            {
+                "navigator_language": "en-US",
+                "navigator_languages": ["en-US"],
+                "accept_language": "en-US,en;q=0.9",
+                "timezone_iana": "",
+            }
+        )
         self.assertTrue(any("timezone_iana" in item for item in blank))
-        bogus = validate_browser_profile({
-            "navigator_language": "en-US", "navigator_languages": ["en-US"],
-            "accept_language": "en-US,en;q=0.9", "timezone_iana": "Tokyo",
-        })
+        bogus = validate_browser_profile(
+            {
+                "navigator_language": "en-US",
+                "navigator_languages": ["en-US"],
+                "accept_language": "en-US,en;q=0.9",
+                "timezone_iana": "Tokyo",
+            }
+        )
         self.assertTrue(any("IANA" in item for item in bogus))
 
     def test_validate_flags_out_of_range_hardware(self):
-        issues = validate_browser_profile({
-            "navigator_language": "en-US", "navigator_languages": ["en-US"],
-            "accept_language": "en-US,en;q=0.9", "timezone_iana": "America/New_York",
-            "screen_width": 10, "hardware_concurrency": 9999,
-        })
+        issues = validate_browser_profile(
+            {
+                "navigator_language": "en-US",
+                "navigator_languages": ["en-US"],
+                "accept_language": "en-US,en;q=0.9",
+                "timezone_iana": "America/New_York",
+                "screen_width": 10,
+                "hardware_concurrency": 9999,
+            }
+        )
         self.assertTrue(any("screen_width" in item for item in issues))
         self.assertTrue(any("hardware_concurrency" in item for item in issues))
 
     def test_validate_ignores_absent_provider_owned_fields(self):
         # Roxy/Cloak/Camoufox own the screen size; a profile without it is
         # normal here, not a contradiction.
-        self.assertEqual(validate_browser_profile({
-            "navigator_language": "en-US", "navigator_languages": ["en-US"],
-            "accept_language": "en-US,en;q=0.9", "timezone_iana": "America/New_York",
-        }), [])
+        self.assertEqual(
+            validate_browser_profile(
+                {
+                    "navigator_language": "en-US",
+                    "navigator_languages": ["en-US"],
+                    "accept_language": "en-US,en;q=0.9",
+                    "timezone_iana": "America/New_York",
+                }
+            ),
+            [],
+        )
 
     def test_validate_rejects_non_mapping(self):
         issues = validate_browser_profile("not-a-dict")
@@ -216,14 +236,19 @@ class BrowserProfileValidationTests(unittest.TestCase):
 
     def test_select_browser_profile_survives_contradictions(self):
         # Validation must never raise out of the selection path.
-        with patch.dict(BROWSER_LOCALE_PROFILES, {"us": {
-            "navigator_language": "en-US",
-            "navigator_languages": ["fr-FR"],  # deliberately contradictory
-            "accept_language": "en-US,en;q=0.9",
-            "timezone_iana": "America/Los_Angeles",
-            "timezone_offset_minutes": -420,
-            "timezone_name": "Pacific Daylight Time",
-        }}):
+        with patch.dict(
+            BROWSER_LOCALE_PROFILES,
+            {
+                "us": {
+                    "navigator_language": "en-US",
+                    "navigator_languages": ["fr-FR"],  # deliberately contradictory
+                    "accept_language": "en-US,en;q=0.9",
+                    "timezone_iana": "America/Los_Angeles",
+                    "timezone_offset_minutes": -420,
+                    "timezone_name": "Pacific Daylight Time",
+                }
+            },
+        ):
             env = select_browser_profile(None, seed="device-x")
         self.assertEqual(env["navigator_language"], "en-US")
         self.assertTrue(validate_browser_profile(env))

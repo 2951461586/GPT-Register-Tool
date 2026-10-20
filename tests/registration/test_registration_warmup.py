@@ -102,8 +102,12 @@ class WarmupWalkTests(unittest.TestCase):
 
     def test_dwell_range_parsing(self):
         self.assertEqual(warmup.dwell_range(ON), (18.0, 45.0))
-        self.assertEqual(warmup.dwell_range({"registration": {"post_registration_dwell_seconds_range": "45,18"}}), (18.0, 45.0))
-        self.assertEqual(warmup.dwell_range({"registration": {"post_registration_dwell_seconds_range": "x"}}), (0.0, 0.0))
+        self.assertEqual(
+            warmup.dwell_range({"registration": {"post_registration_dwell_seconds_range": "45,18"}}), (18.0, 45.0)
+        )
+        self.assertEqual(
+            warmup.dwell_range({"registration": {"post_registration_dwell_seconds_range": "x"}}), (0.0, 0.0)
+        )
         self.assertEqual(warmup.dwell_range({}), (0.0, 0.0))
 
 

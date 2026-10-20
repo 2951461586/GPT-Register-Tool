@@ -44,15 +44,29 @@ def test_migrate_account_email_is_atomic_and_updates_session(tmp_path):
     session.write_text(json.dumps({"email": "old@example.com", "access_token": "old-at"}), encoding="utf-8")
     cfg = {"chatgpt": {}, "storage": {"sqlite_path": str(db)}}
     init_database(runtime_config=cfg)
-    upsert_account({
-        "email": "old@example.com", "success": True, "status": "registered",
-        "access_token": "old-at", "json_path": str(session),
-        "mailbox": {"email": "old@example.com", "provider": "graph"},
-    }, runtime_config=cfg)
-    assert migrate_account_email("old@example.com", "new@example.com", {
-        "email": "new@example.com", "access_token": "new-at", "cookie_header": "session=new",
-        "json_path": str(session), "mailbox": {"email": "new@example.com", "provider": "icloud"},
-    }, runtime_config=cfg)
+    upsert_account(
+        {
+            "email": "old@example.com",
+            "success": True,
+            "status": "registered",
+            "access_token": "old-at",
+            "json_path": str(session),
+            "mailbox": {"email": "old@example.com", "provider": "graph"},
+        },
+        runtime_config=cfg,
+    )
+    assert migrate_account_email(
+        "old@example.com",
+        "new@example.com",
+        {
+            "email": "new@example.com",
+            "access_token": "new-at",
+            "cookie_header": "session=new",
+            "json_path": str(session),
+            "mailbox": {"email": "new@example.com", "provider": "icloud"},
+        },
+        runtime_config=cfg,
+    )
     rows = list_account_records(runtime_config=cfg)
     assert [row["email"] for row in rows] == ["new@example.com"]
     assert rows[0]["access_token"] == "new-at"

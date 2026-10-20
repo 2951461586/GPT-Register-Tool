@@ -135,7 +135,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.summary:
-        rows = [json.loads(line) for line in Path(args.summary).read_text(encoding="utf-8").splitlines() if line.strip()]
+        rows = [
+            json.loads(line) for line in Path(args.summary).read_text(encoding="utf-8").splitlines() if line.strip()
+        ]
         print(json.dumps(summarize(rows), ensure_ascii=False, indent=2))
         return 0
     if not args.ids:

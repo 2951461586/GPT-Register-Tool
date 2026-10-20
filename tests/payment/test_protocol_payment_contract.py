@@ -86,11 +86,7 @@ class ProtocolPaymentV1SchemaTests(unittest.TestCase):
 
 class RedactionTests(unittest.TestCase):
     def test_sanitize_text_masks_bearer_and_jwt_and_proxy_auth(self):
-        text = (
-            "auth Bearer eyJabc.def.ghi "
-            "proxy http://user:secret@gw.example.com:9000 "
-            "key sk_live_1234567890abcdef"
-        )
+        text = "auth Bearer eyJabc.def.ghi proxy http://user:secret@gw.example.com:9000 key sk_live_1234567890abcdef"
         clean = sanitize_text(text)
         self.assertNotIn("eyJabc", clean)
         self.assertNotIn("secret@gw.example.com", clean)

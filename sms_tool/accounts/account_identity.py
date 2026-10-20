@@ -21,9 +21,7 @@ from ..proxy_entry import infer_region, rebuild_proxy_credentials
 
 IDENTITY_VERSION = 1
 _USER_SID_RE = re.compile(r"(?<=-sid-)[A-Za-z0-9]+(?=-t-|-|$)")
-_KOOKEEY_PASSWORD_RE = re.compile(
-    r"^(?P<base>.+?)-(?P<cc>[A-Za-z]{2})-(?P<sid>[A-Za-z0-9]+)-(?P<ttl>\d+[smhd])$"
-)
+_KOOKEEY_PASSWORD_RE = re.compile(r"^(?P<base>.+?)-(?P<cc>[A-Za-z]{2})-(?P<sid>[A-Za-z0-9]+)-(?P<ttl>\d+[smhd])$")
 
 
 def create_registration_identity(
@@ -86,15 +84,11 @@ def account_identity(account: Mapping[str, Any] | None) -> dict[str, Any]:
     identity.setdefault("version", IDENTITY_VERSION)
     identity["proxy_affinity"] = dict(identity.get("proxy_affinity") or {})
     identity["fingerprint_key"] = _canonical_fingerprint_key(
-        identity.get("fingerprint_key")
-        or value.get("auth_fingerprint_profile")
-        or value.get("fingerprint_key")
+        identity.get("fingerprint_key") or value.get("auth_fingerprint_profile") or value.get("fingerprint_key")
     )
     identity["device_id"] = str(identity.get("device_id") or value.get("device_id") or "").strip()
     identity["auth_session_logging_id"] = str(
-        identity.get("auth_session_logging_id")
-        or value.get("auth_session_logging_id")
-        or ""
+        identity.get("auth_session_logging_id") or value.get("auth_session_logging_id") or ""
     ).strip()
     identity.setdefault("account_key", str(value.get("account_key") or value.get("email") or "").strip())
     if identity.get("browser_identity") is None and value.get("browser_identity"):
@@ -138,7 +132,7 @@ def resolve_account_proxy(
         restored = _restore_session(base, affinity) if base else ""
         if restored:
             return restored
-    normalized = normalize_proxy_url(fallback_proxy)
+    normalized = normalize_proxy_url(fallback_proxy or "")
     return normalized or None
 
 
@@ -172,7 +166,7 @@ def proxy_egress_key(proxy: str | None) -> str:
 
 
 def _proxy_affinity(proxy: str | None, *, pool_index: int) -> dict[str, Any]:
-    normalized = normalize_proxy_url(proxy)
+    normalized = normalize_proxy_url(proxy or "")
     if not normalized:
         return {}
     parsed = urlsplit(normalized)
@@ -198,9 +192,7 @@ def _configured_affinity_base(
     configured = proxy_cfg.get("pool") or []
     if isinstance(configured, str):
         configured = [
-            item.strip()
-            for item in configured.replace(";", "\n").replace(",", "\n").splitlines()
-            if item.strip()
+            item.strip() for item in configured.replace(";", "\n").replace(",", "\n").splitlines() if item.strip()
         ]
     candidates = list(configured) if isinstance(configured, (list, tuple)) else []
     for key in ("registration", "default"):
@@ -259,10 +251,7 @@ def _restore_session(base_proxy: str, affinity: Mapping[str, Any]) -> str:
         match = _KOOKEEY_PASSWORD_RE.match(password)
         if not match:
             return ""
-        password = (
-            f"{match.group('base')}-{match.group('cc')}-"
-            f"{session_id}-{match.group('ttl')}"
-        )
+        password = f"{match.group('base')}-{match.group('cc')}-{session_id}-{match.group('ttl')}"
         return rebuild_proxy_credentials(parsed, username, password)
     return ""
 

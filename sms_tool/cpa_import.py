@@ -250,6 +250,7 @@ def probe_cpa_codex_quota(item, api_url="", api_token="", timeout=30):
     except Exception as exc:
         return {"ok": False, "status": "unknown", "error": str(exc)}
 
+
 def refresh_cpa_quota_statuses(emails=None, workers=4, api_url="", api_token="", timeout=30):
     wanted = {_normalize_email(email) for email in (emails or []) if _normalize_email(email)}
     auth_files_result = fetch_cpa_auth_files(api_url=api_url, api_token=api_token, timeout=timeout)
@@ -302,13 +303,15 @@ def refresh_cpa_quota_statuses(emails=None, workers=4, api_url="", api_token="",
             status,
             quota_result={"ok": False, "status": "not_imported", "error": "not_found_in_cpa_auth_files"},
         )
-        results.append({
-            "ok": bool(persisted),
-            "email": email,
-            "quota_status": status,
-            "probe": {"ok": False, "status": "not_imported", "error": "not_found_in_cpa_auth_files"},
-            "persisted": bool(persisted),
-        })
+        results.append(
+            {
+                "ok": bool(persisted),
+                "email": email,
+                "quota_status": status,
+                "probe": {"ok": False, "status": "not_imported", "error": "not_found_in_cpa_auth_files"},
+                "persisted": bool(persisted),
+            }
+        )
     success = sum(1 for item in results if item.get("ok"))
     return {
         "ok": success == len(results),
@@ -322,16 +325,26 @@ def refresh_cpa_quota_statuses(emails=None, workers=4, api_url="", api_token="",
 
 def classify_cpa_auth_file(item):
     status = str((item or {}).get("status") or "").strip().lower()
-    text = " ".join([
-        str((item or {}).get("status") or ""),
-        str((item or {}).get("status_message") or ""),
-        str((item or {}).get("message") or ""),
-        str((item or {}).get("error") or ""),
-        str(((item or {}).get("probe") or {}).get("status_code") if isinstance((item or {}).get("probe"), dict) else ""),
-        str(((item or {}).get("probe") or {}).get("statusCode") if isinstance((item or {}).get("probe"), dict) else ""),
-        str(((item or {}).get("probe") or {}).get("error") if isinstance((item or {}).get("probe"), dict) else ""),
-        str(((item or {}).get("probe") or {}).get("raw") if isinstance((item or {}).get("probe"), dict) else ""),
-    ]).lower()
+    text = " ".join(
+        [
+            str((item or {}).get("status") or ""),
+            str((item or {}).get("status_message") or ""),
+            str((item or {}).get("message") or ""),
+            str((item or {}).get("error") or ""),
+            str(
+                ((item or {}).get("probe") or {}).get("status_code")
+                if isinstance((item or {}).get("probe"), dict)
+                else ""
+            ),
+            str(
+                ((item or {}).get("probe") or {}).get("statusCode")
+                if isinstance((item or {}).get("probe"), dict)
+                else ""
+            ),
+            str(((item or {}).get("probe") or {}).get("error") if isinstance((item or {}).get("probe"), dict) else ""),
+            str(((item or {}).get("probe") or {}).get("raw") if isinstance((item or {}).get("probe"), dict) else ""),
+        ]
+    ).lower()
     _raw_probe: object = (item or {}).get("probe")
     probe: dict = _raw_probe if isinstance(_raw_probe, dict) else {}
     try:
@@ -339,8 +352,14 @@ def classify_cpa_auth_file(item):
     except Exception:
         probe_status = 0
     if (
-        re.search(r"\b401\b|unauthorized|auth_unavailable|authentication token has been invalidated|token has been invalidated|refresh_token_expired|refresh token expired|refresh_token_reused|refresh_token_invalidated|invalid_grant", text)
-        or re.search(r"\bbanned\b|\bsuspended\b|\bdeactivated\b|\bterminated\b|account closed|account_locked|fraud|abuse|违反|封禁", text)
+        re.search(
+            r"\b401\b|unauthorized|auth_unavailable|authentication token has been invalidated|token has been invalidated|refresh_token_expired|refresh token expired|refresh_token_reused|refresh_token_invalidated|invalid_grant",
+            text,
+        )
+        or re.search(
+            r"\bbanned\b|\bsuspended\b|\bdeactivated\b|\bterminated\b|account closed|account_locked|fraud|abuse|违反|封禁",
+            text,
+        )
         or probe_status == 401
         or status in {"disabled", "unavailable"}
         or (item or {}).get("disabled") is True
@@ -352,6 +371,7 @@ def classify_cpa_auth_file(item):
     if re.search(r"timeout|temporarily|context canceled", text):
         return "transient"
     return status or "unknown"
+
 
 def extract_cpa_auth_email(item):
     if not isinstance(item, dict):
@@ -456,11 +476,7 @@ def _build_cpa_payload(token_data):
     }
     return {
         "ok": True,
-        "data": {
-            key: value
-            for key, value in payload.items()
-            if value != "" or key not in optional_empty
-        },
+        "data": {key: value for key, value in payload.items() if value != "" or key not in optional_empty},
     }
 
 
@@ -510,6 +526,7 @@ def _extract_chatgpt_account_id(item):
             return account_id
     return ""
 
+
 def _parse_cpa_auth_files_payload(payload):
     if isinstance(payload, list):
         return [item for item in payload if isinstance(item, dict)]
@@ -537,7 +554,6 @@ def _parse_cpa_auth_files_payload(payload):
 def _normalize_email(value):
     text = str(value or "").strip().lower()
     return text if re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", text) else ""
-
 
 
 def _cpa_error_text(payload, status_code):
@@ -616,7 +632,9 @@ def _has_access_token(data):
         auth_session.get("accessToken") if isinstance(auth_session, dict) else "",
         auth_session.get("access_token") if isinstance(auth_session, dict) else "",
         (auth_session.get("session") or {}).get("accessToken") if isinstance(auth_session.get("session"), dict) else "",
-        (auth_session.get("session") or {}).get("access_token") if isinstance(auth_session.get("session"), dict) else "",
+        (auth_session.get("session") or {}).get("access_token")
+        if isinstance(auth_session.get("session"), dict)
+        else "",
     ]
     return any(str(value or "").strip() for value in candidates)
 

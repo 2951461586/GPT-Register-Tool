@@ -15,6 +15,7 @@ aborts an unrecoverable ``auth_session_pending`` checkpoint with
 row and the address came back on **every** batch -- one address 8 times, another
 3 times, each time claiming a mailbox slot and aborting before any stage ran.
 """
+
 from __future__ import annotations
 
 import time
@@ -33,6 +34,7 @@ def _guard(tmp_path, **kwargs):
 # --------------------------------------------------------------------------
 # the flag survives the clock
 # --------------------------------------------------------------------------
+
 
 def test_mark_dead_end_survives_a_reload(tmp_path):
     guard = _guard(tmp_path)
@@ -72,6 +74,7 @@ def test_a_fresh_address_is_not_a_dead_end(tmp_path):
 # record() must not delete its own evidence
 # --------------------------------------------------------------------------
 
+
 def test_record_keeps_a_user_already_exists_failure_as_a_dead_end(tmp_path):
     guard = _guard(tmp_path)
     guard.record(
@@ -106,6 +109,7 @@ def test_a_successful_attempt_clears_the_dead_end(tmp_path):
 # the bulk lookup the pool filter uses
 # --------------------------------------------------------------------------
 
+
 def test_dead_end_emails_is_case_insensitive(tmp_path):
     guard = _guard(tmp_path)
     guard.mark_dead_end("A@Example.com", reason="user_already_exists")
@@ -134,6 +138,7 @@ def test_an_unreadable_file_is_not_a_dead_end(tmp_path):
 # P1-2: 恢复检查点的窗口判决也必须是死路，而不是「查完就忘」
 # --------------------------------------------------------------------------
 
+
 def _recovery_payload(**overrides):
     """``auth_session_pending`` 检查点的形状（``create_ok`` + 可用 cookie）。"""
     return {
@@ -141,8 +146,9 @@ def _recovery_payload(**overrides):
         "create_ok": True,
         "session_recovery_started_at": int(time.time()),
         "session_recovery_attempts": 0,
-        "session_cookies": [{"name": "fixture", "value": "synthetic",
-                             "domain": "auth.example.test", "path": "/", "secure": True}],
+        "session_cookies": [
+            {"name": "fixture", "value": "synthetic", "domain": "auth.example.test", "path": "/", "secure": True}
+        ],
         **overrides,
     }
 
@@ -165,7 +171,10 @@ def test_every_recovery_checkpoint_verdict_is_a_permanent_dead_end(tmp_path, ove
     assert registration_retry_decision(expected).retryable is False
 
     RegistrationRetryGuard({}, path=tmp_path / "guard.json").record(
-        "stale@example.com", failure_class="account", error=expected, success=False,
+        "stale@example.com",
+        failure_class="account",
+        error=expected,
+        success=False,
     )
 
     state = _guard(tmp_path).check("stale@example.com")
@@ -177,11 +186,12 @@ def test_every_recovery_checkpoint_verdict_is_a_permanent_dead_end(tmp_path, ove
 
 def test_an_expired_checkpoint_is_not_re_attempted_on_the_next_batch(tmp_path):
     """原始症状：同一地址每个批次重来一次（实测 8 次 / 3 次）。"""
-    error = registration_checkpoint.session_recovery_error(
-        _recovery_payload(session_recovery_started_at=1)
-    )
+    error = registration_checkpoint.session_recovery_error(_recovery_payload(session_recovery_started_at=1))
     RegistrationRetryGuard({}, path=tmp_path / "guard.json").record(
-        "stale@example.com", failure_class="account", error=error, success=False,
+        "stale@example.com",
+        failure_class="account",
+        error=error,
+        success=False,
     )
 
     # 下一个批次从磁盘重读同一份账本 —— 必须直接跳过，不再消费邮箱槽。
@@ -204,6 +214,7 @@ def test_a_recovery_marker_does_not_swallow_neighbouring_failures(tmp_path):
 # --------------------------------------------------------------------------
 # OTP dispatch pending: cool down once, quarantine on the second batch
 # --------------------------------------------------------------------------
+
 
 def test_first_otp_send_stuck_enters_cross_batch_cooldown(tmp_path):
     guard = _guard(tmp_path, cooldown_seconds=600)
@@ -265,4 +276,3 @@ def test_mailbox_side_no_code_does_not_increment_otp_pending_escalation(tmp_path
     state = guard.check("mailbox@example.com")
     assert state["otp_pending_count"] == 0
     assert state["quarantined"] is False
-

@@ -105,9 +105,15 @@ def process_paypal_ba_authorizations(
             current = _update(queue_id, status="failed", last_error=sanitize_text(str(exc)))
         _emit(progress, current, "authorize", str(current.get("status") or "failed"), account_terminal=True)
         processed.append(current)
-    counts = {state: sum(item.get("status") == state for item in processed) for state in (*_TERMINAL, "running", "pending")}
-    return {"ok": bool(processed) and counts.get("failed", 0) == 0 and counts.get("unknown", 0) == 0,
-            "processed": len(processed), "counts": counts, "results": processed}
+    counts = {
+        state: sum(item.get("status") == state for item in processed) for state in (*_TERMINAL, "running", "pending")
+    }
+    return {
+        "ok": bool(processed) and counts.get("failed", 0) == 0 and counts.get("unknown", 0) == 0,
+        "processed": len(processed),
+        "counts": counts,
+        "results": processed,
+    }
 
 
 def _result_status(result: dict[str, Any]) -> str:
@@ -159,10 +165,22 @@ def _write_unlocked(items: list[dict[str, Any]]) -> None:
 
 
 def _public_item(item: dict[str, Any]) -> dict[str, Any]:
-    value = {key: item.get(key) for key in (
-        "id", "email", "account_ref", "batch_id", "source_report", "status",
-        "attempts", "created_at", "updated_at", "last_error", "result",
-    )}
+    value = {
+        key: item.get(key)
+        for key in (
+            "id",
+            "email",
+            "account_ref",
+            "batch_id",
+            "source_report",
+            "status",
+            "attempts",
+            "created_at",
+            "updated_at",
+            "last_error",
+            "result",
+        )
+    }
     value["approval_url_present"] = bool(item.get("approval_url"))
     value["ba_token_present"] = bool(item.get("ba_token"))
     return value
@@ -172,12 +190,29 @@ def _account_ref(email: str) -> str:
     return hashlib.sha256(str(email or "").encode("utf-8")).hexdigest()[:16]
 
 
-def _emit(progress: Callable[[dict[str, Any]], None] | None, item: dict[str, Any], stage: str, status: str, **extra: Any) -> None:
+def _emit(
+    progress: Callable[[dict[str, Any]], None] | None, item: dict[str, Any], stage: str, status: str, **extra: Any
+) -> None:
     if progress is None:
         return
-    progress({"domain": "payment", "operation": "paypal_ba_authorize", "method": "paypal",
-              "batch_id": item.get("batch_id", ""), "run_id": item.get("id", ""),
-              "account_ref": item.get("account_ref", ""), "stage": stage, "status": status, **extra})
+    progress(
+        {
+            "domain": "payment",
+            "operation": "paypal_ba_authorize",
+            "method": "paypal",
+            "batch_id": item.get("batch_id", ""),
+            "run_id": item.get("id", ""),
+            "account_ref": item.get("account_ref", ""),
+            "stage": stage,
+            "status": status,
+            **extra,
+        }
+    )
 
 
-__all__ = ["enqueue_paypal_ba_authorization", "list_paypal_ba_authorizations", "process_paypal_ba_authorizations", "queue_path"]
+__all__ = [
+    "enqueue_paypal_ba_authorization",
+    "list_paypal_ba_authorizations",
+    "process_paypal_ba_authorizations",
+    "queue_path",
+]

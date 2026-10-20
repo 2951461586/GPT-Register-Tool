@@ -247,16 +247,11 @@ def normalize_provider_form(
 
     parts = text.split(":", 3)
     qualifies = (
-        len(parts) == 4
-        and (not require_numeric_port or parts[1].isdigit())
-        and (not require_no_at or "@" not in text)
+        len(parts) == 4 and (not require_numeric_port or parts[1].isdigit()) and (not require_no_at or "@" not in text)
     )
     if qualifies:
         host, port, username, password = parts
-        return (
-            f"{default_scheme}://{quote(username, safe=quote_safe)}:"
-            f"{quote(password, safe=quote_safe)}@{host}:{port}"
-        )
+        return f"{default_scheme}://{quote(username, safe=quote_safe)}:{quote(password, safe=quote_safe)}@{host}:{port}"
 
     if on_unparseable == "raise":
         if unparseable_error is not None:

@@ -155,10 +155,14 @@ def scan_accounts(
     )
     failed_count = len(results) - ok_count - deactivated_count - phone_required_count
     persist_failed = sum(
-        1 for r in results
-        if isinstance(r.get("persistence"), dict) and not r["persistence"].get("persisted")
+        1 for r in results if isinstance(r.get("persistence"), dict) and not r["persistence"].get("persisted")
     )
-    at_invalid_count = sum(1 for r in results if str(r.get("scan_status") or r.get("status") or "").lower() in {"at_invalid", "access_token_invalid", "token_invalidated"})
+    at_invalid_count = sum(
+        1
+        for r in results
+        if str(r.get("scan_status") or r.get("status") or "").lower()
+        in {"at_invalid", "access_token_invalid", "token_invalidated"}
+    )
     summary = {
         "ok": failed_count == 0 and persist_failed == 0,
         "total": len(results),
@@ -305,8 +309,15 @@ def _scan_one(
 
     if not deep_probe and not relogin_result and _token_probe_is_active(token_probe):
         result = _result(
-            index, email, "alive", True, had_rt, had_phone,
-            token_probe=token_probe, started=started, workspace_result=workspace_result,
+            index,
+            email,
+            "alive",
+            True,
+            had_rt,
+            had_phone,
+            token_probe=token_probe,
+            started=started,
+            workspace_result=workspace_result,
         )
         result["subscription_type"] = _subscription_type(data)
         result["at_status"] = _at_status_label(result, {}, oauth_result)
@@ -322,9 +333,11 @@ def _scan_one(
         if tokens:
             data["access_token"] = str(tokens.get("access_token") or data.get("access_token") or "").strip()
             data["id_token"] = str(tokens.get("id_token") or data.get("id_token") or "").strip()
-            data["oauth_refresh_token"] = str(tokens.get("refresh_token") or data.get("oauth_refresh_token") or "").strip()
-            data["refresh_token_status"] = "oauth_present" if data.get("oauth_refresh_token") else str(
-                data.get("refresh_token_status") or "no_rt"
+            data["oauth_refresh_token"] = str(
+                tokens.get("refresh_token") or data.get("oauth_refresh_token") or ""
+            ).strip()
+            data["refresh_token_status"] = (
+                "oauth_present" if data.get("oauth_refresh_token") else str(data.get("refresh_token_status") or "no_rt")
             )
             data["refresh_token_updated_at"] = int(time.time())
         result = _result(
@@ -467,7 +480,11 @@ def _persist_scan(data: dict[str, Any] | None, json_path: str, result: dict[str,
         updated["workspace_scan"] = workspace
         updated["workspace_status"] = str(workspace.get("status") or "")
         updated["workspace_id"] = "" if is_free_workspace else str(workspace.get("actual_workspace_id") or "")
-        updated["workspace_name"] = "" if is_free_workspace else str(workspace.get("workspace_name") or workspace.get("actual_workspace_name") or "")
+        updated["workspace_name"] = (
+            ""
+            if is_free_workspace
+            else str(workspace.get("workspace_name") or workspace.get("actual_workspace_name") or "")
+        )
         updated["workspace_switch_result"] = str(workspace.get("switch_status") or workspace.get("switch_error") or "")
         updated["workspace_updated_at"] = now
         if workspace.get("account_type_after"):
@@ -516,26 +533,32 @@ def _persist_scan(data: dict[str, Any] | None, json_path: str, result: dict[str,
             "token_invalidated",
         }:
             updated["status"] = "registered"
-    elif status in {"relogin_failed", "scan_failed"} and _token_probe_is_invalid((result or {}).get("token_probe") or {}):
+    elif status in {"relogin_failed", "scan_failed"} and _token_probe_is_invalid(
+        (result or {}).get("token_probe") or {}
+    ):
         updated["success"] = False
         updated["status"] = "at_invalid"
         updated["error"] = _oauth_error(
-            (result or {}).get("relogin")
-            or (result or {}).get("oauth")
-            or (result or {}).get("refresh")
-            or {}
+            (result or {}).get("relogin") or (result or {}).get("oauth") or (result or {}).get("refresh") or {}
         )
-    elif status not in {"alive", "alive_probe_inconclusive", "account_deactivated", "phone_verification_required", "secondary_phone_verification_required"}:
+    elif status not in {
+        "alive",
+        "alive_probe_inconclusive",
+        "account_deactivated",
+        "phone_verification_required",
+        "secondary_phone_verification_required",
+    }:
         # A transient scan failure must not inherit a stale registration
         # status/success bit from an earlier run.
         updated["success"] = False
         updated["status"] = status or "scan_failed"
-        updated["error"] = _oauth_error(
-            (result or {}).get("relogin")
-            or (result or {}).get("oauth")
-            or (result or {}).get("refresh")
-            or {}
-        ) or status or "scan_failed"
+        updated["error"] = (
+            _oauth_error(
+                (result or {}).get("relogin") or (result or {}).get("oauth") or (result or {}).get("refresh") or {}
+            )
+            or status
+            or "scan_failed"
+        )
 
     if json_path:
         try:
@@ -598,13 +621,17 @@ def _result(
 
 def _scan_overview(result):
     dropped_value = str((result or {}).get("dropped") or "").strip().lower()
-    dropped = (
-        str((result or {}).get("scan_status") or "").strip() == "account_deactivated"
-        or dropped_value in {"是", "yes", "true", "1"}
-    )
+    dropped = str((result or {}).get("scan_status") or "").strip() == "account_deactivated" or dropped_value in {
+        "是",
+        "yes",
+        "true",
+        "1",
+    }
     return {
         "email": str((result or {}).get("email") or "").strip(),
-        "at_status": _at_status_label(result or {}, (result or {}).get("refresh") or {}, (result or {}).get("oauth") or {}),
+        "at_status": _at_status_label(
+            result or {}, (result or {}).get("refresh") or {}, (result or {}).get("oauth") or {}
+        ),
         "phone_verification_required": "是" if bool((result or {}).get("phone_verification_required")) else "否",
         "subscription_type": _subscription_type(result or {}),
         "dropped": "是" if dropped else "否",
@@ -755,7 +782,15 @@ def _gmail_scan_lane_key(email):
     return value if local else ""
 
 
-def _workspace_probe(data, proxy=None, timeout=120, enabled=True, switch_workspace_id="", fallback_workspace_ids=None, auto_switch_workspace=False):
+def _workspace_probe(
+    data,
+    proxy=None,
+    timeout=120,
+    enabled=True,
+    switch_workspace_id="",
+    fallback_workspace_ids=None,
+    auto_switch_workspace=False,
+):
     fallback_ids = fallback_workspace_ids
     if isinstance(fallback_ids, str):
         fallback_ids = parse_workspace_fallback_ids(fallback_ids)

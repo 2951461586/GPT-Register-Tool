@@ -22,20 +22,59 @@ from ..config import CFG
 from ..storage import upsert_account
 
 _STATE_ABBREV = {
-    "alabama": "AL", "alaska": "AK", "arizona": "AZ", "arkansas": "AR",
-    "california": "CA", "colorado": "CO", "connecticut": "CT", "delaware": "DE",
-    "florida": "FL", "georgia": "GA", "hawaii": "HI", "idaho": "ID",
-    "illinois": "IL", "indiana": "IN", "iowa": "IA", "kansas": "KS",
-    "kentucky": "KY", "louisiana": "LA", "maine": "ME", "maryland": "MD",
-    "massachusetts": "MA", "michigan": "MI", "minnesota": "MN", "mississippi": "MS",
-    "missouri": "MO", "montana": "MT", "nebraska": "NE", "nevada": "NV",
-    "new hampshire": "NH", "new jersey": "NJ", "new mexico": "NM", "new york": "NY",
-    "north carolina": "NC", "north dakota": "ND", "ohio": "OH", "oklahoma": "OK",
-    "oregon": "OR", "pennsylvania": "PA", "rhode island": "RI", "south carolina": "SC",
-    "south dakota": "SD", "tennessee": "TN", "texas": "TX", "utah": "UT",
-    "vermont": "VT", "virginia": "VA", "washington": "WA", "west virginia": "WV",
-    "wisconsin": "WI", "wyoming": "WY", "district of columbia": "DC",
+    "alabama": "AL",
+    "alaska": "AK",
+    "arizona": "AZ",
+    "arkansas": "AR",
+    "california": "CA",
+    "colorado": "CO",
+    "connecticut": "CT",
+    "delaware": "DE",
+    "florida": "FL",
+    "georgia": "GA",
+    "hawaii": "HI",
+    "idaho": "ID",
+    "illinois": "IL",
+    "indiana": "IN",
+    "iowa": "IA",
+    "kansas": "KS",
+    "kentucky": "KY",
+    "louisiana": "LA",
+    "maine": "ME",
+    "maryland": "MD",
+    "massachusetts": "MA",
+    "michigan": "MI",
+    "minnesota": "MN",
+    "mississippi": "MS",
+    "missouri": "MO",
+    "montana": "MT",
+    "nebraska": "NE",
+    "nevada": "NV",
+    "new hampshire": "NH",
+    "new jersey": "NJ",
+    "new mexico": "NM",
+    "new york": "NY",
+    "north carolina": "NC",
+    "north dakota": "ND",
+    "ohio": "OH",
+    "oklahoma": "OK",
+    "oregon": "OR",
+    "pennsylvania": "PA",
+    "rhode island": "RI",
+    "south carolina": "SC",
+    "south dakota": "SD",
+    "tennessee": "TN",
+    "texas": "TX",
+    "utah": "UT",
+    "vermont": "VT",
+    "virginia": "VA",
+    "washington": "WA",
+    "west virginia": "WV",
+    "wisconsin": "WI",
+    "wyoming": "WY",
+    "district of columbia": "DC",
 }
+
 
 def _pick_card_and_address(cfg: dict) -> tuple[dict, dict]:
     cards = cfg.get("cards") or []
@@ -60,16 +99,19 @@ def _pick_card_and_address(cfg: dict) -> tuple[dict, dict]:
         "postal_code": addr.get("postal_code", ""),
     }
 
+
 def _read_index(path: str) -> int:
     try:
         return int(Path(path).read_text(encoding="utf-8").strip())
     except Exception:
         return 0
 
+
 def _write_index(path: str, value: int):
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(str(value), encoding="utf-8")
+
 
 def _generate_alias_email(base_email: str) -> str:
     """Generate a PayPal alias email (always Gmail) from base mailbox email."""
@@ -81,6 +123,7 @@ def _generate_alias_email(base_email: str) -> str:
         gmail_local = f"buyer{random.randint(1000, 9999)}"
     suffix = random.randint(100, 999)
     return f"{gmail_local}+pp{suffix}@gmail.com"
+
 
 def _save_paypal_result(data: dict, json_path: str) -> str:
     """Save payment result to session JSON and SQLite."""

@@ -13,10 +13,7 @@ import sys
 import unittest
 from pathlib import Path
 
-MODULE_PATH = (
-    Path(__file__).resolve().parents[2]
-    / "services" / "protocol-payment" / "common" / "redaction.py"
-)
+MODULE_PATH = Path(__file__).resolve().parents[2] / "services" / "protocol-payment" / "common" / "redaction.py"
 SPEC = importlib.util.spec_from_file_location("redaction", MODULE_PATH)
 REDACT = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
@@ -59,9 +56,7 @@ class RegistryTests(unittest.TestCase):
         """
         registry = REDACT.RedactionRegistry()
         registry.register({"1.2.3.4", "1.2.3.4:8080", "http://u:p@1.2.3.4:8080"})
-        self.assertEqual(
-            registry.snapshot(), ["http://u:p@1.2.3.4:8080", "1.2.3.4:8080", "1.2.3.4"]
-        )
+        self.assertEqual(registry.snapshot(), ["http://u:p@1.2.3.4:8080", "1.2.3.4:8080", "1.2.3.4"])
 
     def test_instances_are_independent(self):
         """Each extractor owns one -- a shared registry would leak proxies."""
@@ -117,9 +112,7 @@ class RegistryTests(unittest.TestCase):
 class RegisterProxyTests(unittest.TestCase):
     def _set(self, proxy, normalize=lambda value: value):
         registry = REDACT.RedactionRegistry()
-        REDACT.register_proxy_for_redaction(
-            proxy, registry=registry, normalize=normalize
-        )
+        REDACT.register_proxy_for_redaction(proxy, registry=registry, normalize=normalize)
         return set(registry.snapshot())
 
     def test_empty_input_registers_nothing(self):
@@ -133,9 +126,9 @@ class RegisterProxyTests(unittest.TestCase):
         self.assertEqual(
             self._set("http://u:p@1.2.3.4:8080"),
             {
-                "http://u:p@1.2.3.4:8080",   # raw + normalised + decoded
-                "u:p@1.2.3.4:8080",          # netloc
-                "1.2.3.4:8080",              # host:port
+                "http://u:p@1.2.3.4:8080",  # raw + normalised + decoded
+                "u:p@1.2.3.4:8080",  # netloc
+                "1.2.3.4:8080",  # host:port
             },
         )
 
@@ -185,9 +178,9 @@ class RegisterProxyTests(unittest.TestCase):
         self.assertEqual(
             values,
             {
-                "http://u:p@1.2.3.4:8080",   # raw only
-                "http://normalized",         # normalised + decoded
-                "normalized",                # netloc / hostname
+                "http://u:p@1.2.3.4:8080",  # raw only
+                "http://normalized",  # normalised + decoded
+                "normalized",  # netloc / hostname
             },
         )
 
@@ -199,8 +192,7 @@ class RedactLogTextTests(unittest.TestCase):
         return REDACT.redact_log_text(text, registry=registry, proxy_label=label)
 
     def test_replaces_every_registered_value(self):
-        out = self._redact("a http://u:p@1.2.3.4:8080 b 1.2.3.4 c",
-                           {"http://u:p@1.2.3.4:8080", "1.2.3.4"})
+        out = self._redact("a http://u:p@1.2.3.4:8080 b 1.2.3.4 c", {"http://u:p@1.2.3.4:8080", "1.2.3.4"})
         self.assertEqual(out, "a <23> b <7> c")
 
     def test_nothing_registered_means_unchanged(self):
@@ -340,7 +332,8 @@ class NoEarlyBoundDefaultTests(unittest.TestCase):
                 if default is None:
                     continue
                 self.assertNotIsInstance(
-                    default, ast.Attribute,
+                    default,
+                    ast.Attribute,
                     "%s has an un-patchable bound default" % node.name,
                 )
 
@@ -351,23 +344,20 @@ class NoEarlyBoundDefaultTests(unittest.TestCase):
             ("register_proxy_for_redaction", ("registry", "normalize")),
             ("redact_text", ("registry", "proxy_label", "limit_env", "env_int")),
         ):
-            node = next(n for n in tree.body
-                        if isinstance(n, ast.FunctionDef) and n.name == name)
+            node = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == name)
             names = [a.arg for a in node.args.kwonlyargs]
             defaults = node.args.kw_defaults
             pad = len(names) - len(defaults)
             for knob in knobs:
                 self.assertIn(knob, names)
-                self.assertIsNone(defaults[names.index(knob) - pad],
-                                  "%s.%s must have no default" % (name, knob))
+                self.assertIsNone(defaults[names.index(knob) - pad], "%s.%s must have no default" % (name, knob))
 
 
 class ModuleContractTests(unittest.TestCase):
     def test_exports(self):
         self.assertEqual(
             sorted(REDACT.__all__),
-            ["RedactionRegistry", "redact_log_text", "redact_text",
-             "register_proxy_for_redaction"],
+            ["RedactionRegistry", "redact_log_text", "redact_text", "register_proxy_for_redaction"],
         )
 
     def test_stays_free_of_the_host_package(self):
@@ -389,8 +379,7 @@ class ModuleContractTests(unittest.TestCase):
                 tops.update(a.name.split(".")[0] for a in node.names)
             elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
                 tops.add(node.module.split(".")[0])
-        self.assertEqual(tops, {"__future__", "hashlib", "re", "threading",
-                                "typing", "urllib"})
+        self.assertEqual(tops, {"__future__", "hashlib", "re", "threading", "typing", "urllib"})
 
 
 class ExtractorWiringTests(unittest.TestCase):
@@ -405,13 +394,11 @@ class ExtractorWiringTests(unittest.TestCase):
         self.fail("%s has no %s" % (path.name, name))
 
     def _is_stub(self, node, shared_name):
-        body = [n for n in node.body
-                if not (isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant))]
+        body = [n for n in node.body if not (isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant))]
         if len(body) != 1:
             return False
         stmt = body[0]
-        call = stmt.value if isinstance(stmt, ast.Return) else (
-            stmt.value if isinstance(stmt, ast.Expr) else None)
+        call = stmt.value if isinstance(stmt, ast.Return) else (stmt.value if isinstance(stmt, ast.Expr) else None)
         return (
             call is not None
             and isinstance(call, ast.Call)
@@ -422,31 +409,29 @@ class ExtractorWiringTests(unittest.TestCase):
     def test_all_four_delegate_redact_log_text(self):
         for provider, path in EXTRACTORS.items():
             self.assertTrue(
-                self._is_stub(self._func(path, "redact_log_text"),
-                              "shared_redact_log_text"),
+                self._is_stub(self._func(path, "redact_log_text"), "shared_redact_log_text"),
                 provider,
             )
 
     def test_all_four_delegate_register_proxy_for_redaction(self):
         for provider, path in EXTRACTORS.items():
             self.assertTrue(
-                self._is_stub(self._func(path, "register_proxy_for_redaction"),
-                              "shared_register_proxy_for_redaction"),
+                self._is_stub(self._func(path, "register_proxy_for_redaction"), "shared_register_proxy_for_redaction"),
                 provider,
             )
 
     def test_ideal_and_twint_delegate_redact_text(self):
         for provider in ("ideal", "twint"):
             self.assertTrue(
-                self._is_stub(self._func(EXTRACTORS[provider], "_redact_text"),
-                              "shared_redact_text"),
+                self._is_stub(self._func(EXTRACTORS[provider], "_redact_text"), "shared_redact_text"),
                 provider,
             )
 
     def test_blik_keeps_its_own_redact_text(self):
         node = self._func(EXTRACTORS["blik"], "_redact_text")
-        self.assertFalse(self._is_stub(node, "shared_redact_text"),
-                         "blik's _redact_text has extra IDEAL_BLIK_CODE logic")
+        self.assertFalse(
+            self._is_stub(node, "shared_redact_text"), "blik's _redact_text has extra IDEAL_BLIK_CODE logic"
+        )
 
     def test_old_per_module_globals_are_gone(self):
         """The pair moved into RedactionRegistry; leaving it behind would mean
@@ -455,8 +440,7 @@ class ExtractorWiringTests(unittest.TestCase):
             source = path.read_text(encoding="utf-8")
             self.assertNotIn("_proxy_redaction_values", source, provider)
             self.assertNotIn("_proxy_redaction_lock", source, provider)
-            self.assertIn("_proxy_redaction_registry = RedactionRegistry()",
-                          source, provider)
+            self.assertIn("_proxy_redaction_registry = RedactionRegistry()", source, provider)
 
     def test_each_delegation_passes_its_own_knobs(self):
         """The values injected at the call site, not just the callee name.
@@ -475,14 +459,14 @@ class ExtractorWiringTests(unittest.TestCase):
             for func in ("redact_log_text", "register_proxy_for_redaction"):
                 node = self._func(path, func)
                 call = next(
-                    n for n in ast.walk(node)
-                    if isinstance(n, ast.Call)
-                    and isinstance(n.func, ast.Name)
-                    and n.func.id.startswith("shared_")
+                    n
+                    for n in ast.walk(node)
+                    if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id.startswith("shared_")
                 )
                 kwargs = {k.arg: ast.unparse(k.value) for k in call.keywords}
                 self.assertEqual(
-                    kwargs.get("registry"), "_proxy_redaction_registry",
+                    kwargs.get("registry"),
+                    "_proxy_redaction_registry",
                     "%s.%s" % (provider, func),
                 )
                 self.assertEqual(
@@ -493,21 +477,22 @@ class ExtractorWiringTests(unittest.TestCase):
             if provider in expected:
                 node = self._func(path, "_redact_text")
                 call = next(
-                    n for n in ast.walk(node)
-                    if isinstance(n, ast.Call)
-                    and isinstance(n.func, ast.Name)
-                    and n.func.id == "shared_redact_text"
+                    n
+                    for n in ast.walk(node)
+                    if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "shared_redact_text"
                 )
                 kwargs = {k.arg: ast.unparse(k.value) for k in call.keywords}
                 # ast.unparse re-quotes string constants, so compare the value
                 self.assertEqual(
                     (kwargs.get("limit_env") or "").strip("'\""),
-                    expected[provider], provider,
+                    expected[provider],
+                    provider,
                 )
                 self.assertEqual(kwargs.get("env_int"), "env_int", provider)
             else:
                 source_names = [
-                    n.func.id for n in ast.walk(ast.parse(source))
+                    n.func.id
+                    for n in ast.walk(ast.parse(source))
                     if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
                 ]
                 self.assertNotIn("shared_redact_text", source_names, provider)
@@ -518,10 +503,9 @@ class ExtractorWiringTests(unittest.TestCase):
         for provider, path in EXTRACTORS.items():
             tree = ast.parse(path.read_text(encoding="utf-8"))
             calls = [
-                n for n in ast.walk(tree)
-                if isinstance(n, ast.Call)
-                and isinstance(n.func, ast.Name)
-                and n.func.id == "RedactionRegistry"
+                n
+                for n in ast.walk(tree)
+                if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "RedactionRegistry"
             ]
             self.assertEqual(len(calls), 1, provider)
 

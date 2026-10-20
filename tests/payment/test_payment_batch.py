@@ -33,10 +33,12 @@ class PaymentBatchTests(unittest.TestCase):
             "has_momo": True,
             "url": "https://payment.momo.vn/v2/gateway/pay?t=1",
         }
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(payment_batch, "ensure_payment_access_token", return_value=auth), \
-             patch.object(payment_batch, "generate_payment_link", return_value=payment), \
-             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "report.json"):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(payment_batch, "ensure_payment_access_token", return_value=auth),
+            patch.object(payment_batch, "generate_payment_link", return_value=payment),
+            patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "report.json"),
+        ):
             report = payment_batch.run_payment_batch(
                 ["A@example.com", "a@example.com"],
                 payment_method="momo",
@@ -53,13 +55,19 @@ class PaymentBatchTests(unittest.TestCase):
         auth_probe = {"status_code": 200, "ok": True}
         payment = {"ok": True, "decision": "ready", "url": "https://pay.example.test/opaque"}
         progress_events = []
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(payment_batch, "ensure_payment_access_token", side_effect=AssertionError("persisted auth must not run")), \
-             patch("sms_tool.accounts.account_liveness.probe_account_liveness", return_value=auth_probe) as probe, \
-             patch.object(payment_batch, "generate_payment_link", return_value=payment) as generate, \
-             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "manual.json"):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(
+                payment_batch, "ensure_payment_access_token", side_effect=AssertionError("persisted auth must not run")
+            ),
+            patch("sms_tool.accounts.account_liveness.probe_account_liveness", return_value=auth_probe) as probe,
+            patch.object(payment_batch, "generate_payment_link", return_value=payment) as generate,
+            patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "manual.json"),
+        ):
             report = payment_batch.run_payment_batch(
-                ["AT-1"], payment_method="momo", retries=0,
+                ["AT-1"],
+                payment_method="momo",
+                retries=0,
                 access_tokens={"AT-1": "secret-manual-at"},
                 progress=progress_events.append,
             )
@@ -84,13 +92,18 @@ class PaymentBatchTests(unittest.TestCase):
                 "qr_path": "C:/private/payment.png",
             },
         }
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(payment_batch, "ensure_payment_access_token", return_value=auth), \
-             patch.object(payment_batch, "generate_payment_link", return_value=payment), \
-             patch.object(payment_batch, "_record_canary_state", return_value={"paused": False}), \
-             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "canary.json"):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(payment_batch, "ensure_payment_access_token", return_value=auth),
+            patch.object(payment_batch, "generate_payment_link", return_value=payment),
+            patch.object(payment_batch, "_record_canary_state", return_value={"paused": False}),
+            patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "canary.json"),
+        ):
             report = payment_batch.run_payment_batch(
-                ["a@example.com"], payment_method="gopay", canary=1, retries=0,
+                ["a@example.com"],
+                payment_method="gopay",
+                canary=1,
+                retries=0,
             )
             checkpoint = json.loads((Path(tmp) / "canary.json").read_text(encoding="utf-8"))
 
@@ -107,8 +120,10 @@ class PaymentBatchTests(unittest.TestCase):
         self.assertTrue(persisted_row["details"]["qr_path_present"])
         serialized = json.dumps(checkpoint)
         for artifact in (
-            payment["url"], payment["provider_redirect_url"],
-            payment["details"]["fallback_url"], payment["details"]["qr_data"],
+            payment["url"],
+            payment["provider_redirect_url"],
+            payment["details"]["fallback_url"],
+            payment["details"]["qr_data"],
             payment["details"]["qr_path"],
         ):
             self.assertNotIn(artifact, serialized)
@@ -275,17 +290,25 @@ class PaymentBatchTests(unittest.TestCase):
             "auth_context": {"registration_country": "ID"},
             "probed": 1,
         }
-        matrix = {"cells": [{
-            "name": "us-approve",
-            "payment_method": "gopay",
-            "checkout_country": "ID",
-            "approve_country": "US",
-        }]}
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(payment_batch, "load_account_seed", return_value=({}, "")), \
-             patch.object(payment_batch, "ensure_payment_access_token", return_value=auth), \
-             patch.object(payment_batch, "generate_payment_link", return_value={"ok": True, "url": "https://example.test/pay"}) as generate, \
-             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "coerce.json"):
+        matrix = {
+            "cells": [
+                {
+                    "name": "us-approve",
+                    "payment_method": "gopay",
+                    "checkout_country": "ID",
+                    "approve_country": "US",
+                }
+            ]
+        }
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(payment_batch, "load_account_seed", return_value=({}, "")),
+            patch.object(payment_batch, "ensure_payment_access_token", return_value=auth),
+            patch.object(
+                payment_batch, "generate_payment_link", return_value={"ok": True, "url": "https://example.test/pay"}
+            ) as generate,
+            patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "coerce.json"),
+        ):
             report = payment_batch.run_payment_batch(
                 ["coerce@example.com"],
                 payment_method="gopay",
@@ -342,13 +365,17 @@ class PaymentBatchTests(unittest.TestCase):
             seen.append((list(pool), expected_country, stage))
             return f"http://selected-{stage}:8080", [{"ok": True}]
 
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(payment_batch, "CFG", config), \
-             patch.object(payment_batch, "load_account_seed", return_value=({}, "")), \
-             patch.object(payment_batch, "ensure_payment_access_token", return_value=auth), \
-             patch.object(payment_batch, "generate_payment_link", return_value={"ok": True, "url": "https://example.test/pay"}) as generate, \
-             patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose), \
-             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "pool.json"):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(payment_batch, "CFG", config),
+            patch.object(payment_batch, "load_account_seed", return_value=({}, "")),
+            patch.object(payment_batch, "ensure_payment_access_token", return_value=auth),
+            patch.object(
+                payment_batch, "generate_payment_link", return_value={"ok": True, "url": "https://example.test/pay"}
+            ) as generate,
+            patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose),
+            patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "pool.json"),
+        ):
             report = payment_batch.run_payment_batch(
                 ["pool@example.com"],
                 payment_method="gopay",
@@ -401,32 +428,41 @@ class PaymentBatchTests(unittest.TestCase):
             events.append(("payment", kwargs["proxy"], kwargs["checkout_proxy"]))
             return payment_results.pop(0)
 
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(payment_batch, "load_account_seed", side_effect=load_seed), \
-             patch.object(payment_batch, "ensure_payment_access_token", side_effect=ensure_auth), \
-             patch.object(payment_batch, "generate_payment_link", side_effect=generate) as payment, \
-             patch("sms_tool.paypal_proxy.rotate_proxy_session", side_effect=rotate_proxy) as rotate, \
-             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "route.json"):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(payment_batch, "load_account_seed", side_effect=load_seed),
+            patch.object(payment_batch, "ensure_payment_access_token", side_effect=ensure_auth),
+            patch.object(payment_batch, "generate_payment_link", side_effect=generate) as payment,
+            patch("sms_tool.paypal_proxy.rotate_proxy_session", side_effect=rotate_proxy) as rotate,
+            patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "route.json"),
+        ):
             report = payment_batch.run_payment_batch(
                 ["a@example.com"],
                 payment_method="gopay",
                 proxy=base,
-                matrix={"cells": [{
-                    "name": "id_gopay",
-                    "payment_method": "gopay",
-                    "registration_country": "ID",
-                    "checkout_country": "ID",
-                }]},
+                matrix={
+                    "cells": [
+                        {
+                            "name": "id_gopay",
+                            "payment_method": "gopay",
+                            "registration_country": "ID",
+                            "checkout_country": "ID",
+                        }
+                    ]
+                },
                 retries=1,
             )
 
         self.assertEqual(events[0], "seed")
         self.assertEqual(events[1], ("rotate", base, "ID"))
         self.assertEqual(events[2], ("auth", resolved))
-        self.assertEqual(events[3:], [
-            ("payment", resolved, resolved),
-            ("payment", resolved, resolved),
-        ])
+        self.assertEqual(
+            events[3:],
+            [
+                ("payment", resolved, resolved),
+                ("payment", resolved, resolved),
+            ],
+        )
         rotate.assert_called_once_with(base, "ID")
         self.assertEqual(payment.call_count, 2)
         self.assertTrue(report["results"][0]["ok"])
@@ -449,12 +485,14 @@ class PaymentBatchTests(unittest.TestCase):
             "conclusive": True,
             "decision": "payment_method_available",
         }
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(payment_batch, "load_account_seed", return_value=({}, "")), \
-             patch.object(payment_batch, "ensure_payment_access_token", return_value=auth) as ensure, \
-             patch.object(payment_batch, "probe_payment_method", return_value=capability) as probe, \
-             patch("sms_tool.paypal_proxy.rotate_proxy_session") as rotate, \
-             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "probe-route.json"):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(payment_batch, "load_account_seed", return_value=({}, "")),
+            patch.object(payment_batch, "ensure_payment_access_token", return_value=auth) as ensure,
+            patch.object(payment_batch, "probe_payment_method", return_value=capability) as probe,
+            patch("sms_tool.paypal_proxy.rotate_proxy_session") as rotate,
+            patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "probe-route.json"),
+        ):
             report = payment_batch.run_payment_batch(
                 ["a@example.com"],
                 payment_method="gcash",
@@ -473,22 +511,29 @@ class PaymentBatchTests(unittest.TestCase):
     def test_conclusive_ineligible_result_is_not_retried(self):
         auth = {"ok": True, "access_token": "secret", "auth_context": {}, "probed": 1}
         payment = {"ok": False, "decision": "account_trial_ineligible", "error": "no trial"}
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(payment_batch, "ensure_payment_access_token", return_value=auth), \
-             patch.object(payment_batch, "generate_payment_link", return_value=payment) as generate, \
-             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "report.json"):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(payment_batch, "ensure_payment_access_token", return_value=auth),
+            patch.object(payment_batch, "generate_payment_link", return_value=payment) as generate,
+            patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "report.json"),
+        ):
             report = payment_batch.run_payment_batch(
-                ["a@example.com"], payment_method="momo", retries=2,
+                ["a@example.com"],
+                payment_method="momo",
+                retries=2,
             )
         self.assertEqual(generate.call_count, 1)
         self.assertEqual(report["counts"]["trial_ineligible"], 1)
 
     def test_terminal_result_counts_preserve_unknown_cancelled_and_timeout(self):
-        counts = payment_batch._batch_counts([
-            {"status": "cancelled", "ok": False},
-            {"status": "unknown", "ok": False, "retryable": False},
-            {"status": "timed_out", "ok": False, "retryable": True},
-        ], 3)
+        counts = payment_batch._batch_counts(
+            [
+                {"status": "cancelled", "ok": False},
+                {"status": "unknown", "ok": False, "retryable": False},
+                {"status": "timed_out", "ok": False, "retryable": True},
+            ],
+            3,
+        )
 
         self.assertEqual(counts["cancelled"], 1)
         self.assertEqual(counts["unknown"], 1)
@@ -499,31 +544,42 @@ class PaymentBatchTests(unittest.TestCase):
         # Money may already have moved. _replay_allowed refuses to replay these,
         # so re-queueing them would only degrade into a payment_worker_exception
         # row flagged retryable=True -- the opposite of what an operator needs.
-        self.assertTrue(payment_batch._checkpoint_row_resumable(
-            {"ok": False, "status": "unknown", "requires_reconciliation": True},
-        ))
-        self.assertTrue(payment_batch._checkpoint_row_resumable(
-            {"ok": False, "side_effect_started": True, "retryable": False},
-        ))
+        self.assertTrue(
+            payment_batch._checkpoint_row_resumable(
+                {"ok": False, "status": "unknown", "requires_reconciliation": True},
+            )
+        )
+        self.assertTrue(
+            payment_batch._checkpoint_row_resumable(
+                {"ok": False, "side_effect_started": True, "retryable": False},
+            )
+        )
 
     def test_settled_success_stays_resumable(self):
         # Locks in the parenthesised rewrite of the old `A or B and not C`
         # form: a success with a side effect must remain reusable.
-        self.assertTrue(payment_batch._checkpoint_row_resumable(
-            {"ok": True, "side_effect_started": True},
-        ))
+        self.assertTrue(
+            payment_batch._checkpoint_row_resumable(
+                {"ok": True, "side_effect_started": True},
+            )
+        )
 
     def test_retryable_failure_is_requeued(self):
-        self.assertFalse(payment_batch._checkpoint_row_resumable(
-            {"ok": False, "retryable": True},
-        ))
+        self.assertFalse(
+            payment_batch._checkpoint_row_resumable(
+                {"ok": False, "retryable": True},
+            )
+        )
 
     def test_reconciliation_required_counts_flag_not_status(self):
-        counts = payment_batch._batch_counts([
-            {"status": "completed", "ok": True, "requires_reconciliation": True},
-            {"status": "unknown", "ok": False, "requires_reconciliation": True},
-            {"status": "completed", "ok": True},
-        ], 3)
+        counts = payment_batch._batch_counts(
+            [
+                {"status": "completed", "ok": True, "requires_reconciliation": True},
+                {"status": "unknown", "ok": False, "requires_reconciliation": True},
+                {"status": "completed", "ok": True},
+            ],
+            3,
+        )
         # The status-based count sees one row; the flag sees two. Rows marked
         # by an executor without ever becoming status == "unknown" used to be
         # invisible in the summary.
@@ -538,16 +594,22 @@ class PaymentBatchTests(unittest.TestCase):
             "probed": 1,
         }
         payment = {"ok": False, "decision": "account_trial_ineligible"}
-        matrix = {"cells": [
-            {"name": "kr-kakao", "payment_method": "kakao", "registration_country": "KR"},
-            {"name": "vn-momo", "payment_method": "momo", "registration_country": "VN"},
-        ]}
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(payment_batch, "ensure_payment_access_token", return_value=auth), \
-             patch.object(payment_batch, "generate_payment_link", return_value=payment), \
-             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "report.json"):
+        matrix = {
+            "cells": [
+                {"name": "kr-kakao", "payment_method": "kakao", "registration_country": "KR"},
+                {"name": "vn-momo", "payment_method": "momo", "registration_country": "VN"},
+            ]
+        }
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(payment_batch, "ensure_payment_access_token", return_value=auth),
+            patch.object(payment_batch, "generate_payment_link", return_value=payment),
+            patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "report.json"),
+        ):
             report = payment_batch.run_payment_batch(
-                ["a@example.com"], payment_method="momo", matrix=matrix,
+                ["a@example.com"],
+                payment_method="momo",
+                matrix=matrix,
             )
         self.assertEqual(report["results"][0]["matrix_cell"], "vn-momo")
 
@@ -558,29 +620,44 @@ class PaymentBatchTests(unittest.TestCase):
             "auth_context": {"registration_country": "US"},
             "probed": 1,
         }
-        matrix = {"cells": [
-            {"name": "vn-momo", "payment_method": "momo", "registration_country": "VN"},
-        ]}
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(payment_batch, "ensure_payment_access_token", return_value=auth), \
-             patch.object(payment_batch, "generate_payment_link") as generate, \
-             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "report.json"):
+        matrix = {
+            "cells": [
+                {"name": "vn-momo", "payment_method": "momo", "registration_country": "VN"},
+            ]
+        }
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(payment_batch, "ensure_payment_access_token", return_value=auth),
+            patch.object(payment_batch, "generate_payment_link") as generate,
+            patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "report.json"),
+        ):
             report = payment_batch.run_payment_batch(
-                ["a@example.com"], payment_method="momo", matrix=matrix,
+                ["a@example.com"],
+                payment_method="momo",
+                matrix=matrix,
             )
         self.assertEqual(report["results"][0]["decision"], "matrix_registration_country_mismatch")
         generate.assert_not_called()
 
     def test_stable_batch_id_resumes_checkpointed_accounts(self):
         auth = {"ok": True, "access_token": "secret", "auth_context": {}, "probed": 1}
-        payment = {"ok": True, "decision": "ready_with_qr", "amount_due": 0, "has_momo": True,
-                   "url": "https://payment.momo.vn/pay/1"}
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(payment_batch, "ensure_payment_access_token", return_value=auth) as ensure, \
-             patch.object(payment_batch, "generate_payment_link", return_value=payment), \
-             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "resume.json"):
+        payment = {
+            "ok": True,
+            "decision": "ready_with_qr",
+            "amount_due": 0,
+            "has_momo": True,
+            "url": "https://payment.momo.vn/pay/1",
+        }
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(payment_batch, "ensure_payment_access_token", return_value=auth) as ensure,
+            patch.object(payment_batch, "generate_payment_link", return_value=payment),
+            patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "resume.json"),
+        ):
             first = payment_batch.run_payment_batch(
-                ["a@example.com"], payment_method="momo", batch_id="resume",
+                ["a@example.com"],
+                payment_method="momo",
+                batch_id="resume",
             )
             checkpoint = json.loads((Path(tmp) / "resume.json").read_text(encoding="utf-8"))
             report = payment_batch.run_payment_batch(["a@example.com"], payment_method="momo", batch_id="resume")
@@ -603,17 +680,29 @@ class PaymentBatchTests(unittest.TestCase):
             "retryable": True,
         }
         success = {"ok": True, "url": "https://example.test/pay"}
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(payment_batch, "ensure_payment_access_token", return_value=auth) as ensure, \
-             patch.object(payment_batch, "probe_payment_method", return_value={"ok": True, "eligible": True, "conclusive": True, "decision": "payment_method_available"}), \
-             patch.object(payment_batch, "generate_payment_link", side_effect=[retryable, success]) as generate, \
-             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "retry.json"):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(payment_batch, "ensure_payment_access_token", return_value=auth) as ensure,
+            patch.object(
+                payment_batch,
+                "probe_payment_method",
+                return_value={"ok": True, "eligible": True, "conclusive": True, "decision": "payment_method_available"},
+            ),
+            patch.object(payment_batch, "generate_payment_link", side_effect=[retryable, success]) as generate,
+            patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "retry.json"),
+        ):
             payment_batch.run_payment_batch(
-                ["a@example.com"], payment_method="paypal", batch_id="retry", retries=0,
+                ["a@example.com"],
+                payment_method="paypal",
+                batch_id="retry",
+                retries=0,
                 resume_checkpoint=True,
             )
             report = payment_batch.run_payment_batch(
-                ["a@example.com"], payment_method="paypal", batch_id="retry", retries=0,
+                ["a@example.com"],
+                payment_method="paypal",
+                batch_id="retry",
+                retries=0,
                 resume_checkpoint=True,
             )
 
@@ -630,17 +719,29 @@ class PaymentBatchTests(unittest.TestCase):
             "decision": "payment_method_unavailable",
             "retryable": False,
         }
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(payment_batch, "ensure_payment_access_token", return_value=auth) as ensure, \
-             patch.object(payment_batch, "probe_payment_method", return_value={"ok": True, "eligible": True, "conclusive": True, "decision": "payment_method_available"}), \
-             patch.object(payment_batch, "generate_payment_link", return_value=terminal) as generate, \
-             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "terminal.json"):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(payment_batch, "ensure_payment_access_token", return_value=auth) as ensure,
+            patch.object(
+                payment_batch,
+                "probe_payment_method",
+                return_value={"ok": True, "eligible": True, "conclusive": True, "decision": "payment_method_available"},
+            ),
+            patch.object(payment_batch, "generate_payment_link", return_value=terminal) as generate,
+            patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "terminal.json"),
+        ):
             payment_batch.run_payment_batch(
-                ["a@example.com"], payment_method="paypal", batch_id="terminal", retries=0,
+                ["a@example.com"],
+                payment_method="paypal",
+                batch_id="terminal",
+                retries=0,
                 resume_checkpoint=True,
             )
             report = payment_batch.run_payment_batch(
-                ["a@example.com"], payment_method="paypal", batch_id="terminal", retries=0,
+                ["a@example.com"],
+                payment_method="paypal",
+                batch_id="terminal",
+                retries=0,
                 resume_checkpoint=True,
             )
 
@@ -659,15 +760,19 @@ class PaymentBatchTests(unittest.TestCase):
             "conclusive": True,
             "decision": "payment_method_available",
         }
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(payment_batch, "ensure_payment_access_token", return_value=auth), \
-             patch.object(payment_batch, "probe_payment_method", return_value=capability) as probe, \
-             patch.object(payment_batch, "generate_payment_link") as generate, \
-             patch.object(payment_batch, "_active_canary_pause") as active_pause, \
-             patch.object(payment_batch, "_record_canary_state") as record_canary, \
-             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "probe.json"):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(payment_batch, "ensure_payment_access_token", return_value=auth),
+            patch.object(payment_batch, "probe_payment_method", return_value=capability) as probe,
+            patch.object(payment_batch, "generate_payment_link") as generate,
+            patch.object(payment_batch, "_active_canary_pause") as active_pause,
+            patch.object(payment_batch, "_record_canary_state") as record_canary,
+            patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "probe.json"),
+        ):
             report = payment_batch.run_payment_batch(
-                ["a@example.com"], payment_method="paypal", probe_only=True,
+                ["a@example.com"],
+                payment_method="paypal",
+                probe_only=True,
             )
         generate.assert_not_called()
         probe.assert_called_once()
@@ -696,12 +801,17 @@ class PaymentBatchTests(unittest.TestCase):
             "decision": "payment_method_unavailable",
             "retryable": False,
         }
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(payment_batch, "ensure_payment_access_token", return_value=auth), \
-             patch.object(payment_batch, "probe_payment_method", side_effect=[transient, completed]) as probe, \
-             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "probe-retry.json"):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(payment_batch, "ensure_payment_access_token", return_value=auth),
+            patch.object(payment_batch, "probe_payment_method", side_effect=[transient, completed]) as probe,
+            patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "probe-retry.json"),
+        ):
             report = payment_batch.run_payment_batch(
-                ["a@example.com"], payment_method="gcash", probe_only=True, retries=1,
+                ["a@example.com"],
+                payment_method="gcash",
+                probe_only=True,
+                retries=1,
             )
 
         self.assertEqual(probe.call_count, 2)
@@ -719,14 +829,19 @@ class PaymentBatchTests(unittest.TestCase):
             "decision": "stripe_init_failed",
             "retryable": True,
         }
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(payment_batch, "ensure_payment_access_token", return_value=auth), \
-             patch.object(payment_batch, "probe_payment_method", return_value=capability), \
-             patch.object(payment_batch, "generate_payment_link") as generate, \
-             patch.object(payment_batch, "_record_canary_state", return_value={"paused": True}) as record_canary, \
-             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "probe-canary.json"):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(payment_batch, "ensure_payment_access_token", return_value=auth),
+            patch.object(payment_batch, "probe_payment_method", return_value=capability),
+            patch.object(payment_batch, "generate_payment_link") as generate,
+            patch.object(payment_batch, "_record_canary_state", return_value={"paused": True}) as record_canary,
+            patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "probe-canary.json"),
+        ):
             report = payment_batch.run_payment_batch(
-                ["a@example.com"], payment_method="paypal", probe_only=True, canary=1,
+                ["a@example.com"],
+                payment_method="paypal",
+                probe_only=True,
+                canary=1,
             )
         generate.assert_not_called()
         record_canary.assert_called_once()
@@ -735,19 +850,35 @@ class PaymentBatchTests(unittest.TestCase):
     def test_probe_checkpoint_is_not_reused_for_payment_execution(self):
         auth = {"ok": True, "access_token": "secret", "auth_context": {}, "probed": 1}
         payment = {"ok": True, "url": "https://example.test/pay"}
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(payment_batch, "ensure_payment_access_token", return_value=auth) as ensure, \
-             patch.object(payment_batch, "probe_payment_method", return_value={
-                 "ok": True, "status": "completed", "classification": "eligible",
-                 "eligible": True, "conclusive": True, "decision": "payment_method_available",
-             }), \
-             patch.object(payment_batch, "generate_payment_link", return_value=payment) as generate, \
-             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "same-id.json"):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(payment_batch, "ensure_payment_access_token", return_value=auth) as ensure,
+            patch.object(
+                payment_batch,
+                "probe_payment_method",
+                return_value={
+                    "ok": True,
+                    "status": "completed",
+                    "classification": "eligible",
+                    "eligible": True,
+                    "conclusive": True,
+                    "decision": "payment_method_available",
+                },
+            ),
+            patch.object(payment_batch, "generate_payment_link", return_value=payment) as generate,
+            patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "same-id.json"),
+        ):
             payment_batch.run_payment_batch(
-                ["a@example.com"], payment_method="paypal", batch_id="same-id", probe_only=True,
+                ["a@example.com"],
+                payment_method="paypal",
+                batch_id="same-id",
+                probe_only=True,
             )
             report = payment_batch.run_payment_batch(
-                ["a@example.com"], payment_method="paypal", batch_id="same-id", probe_only=False,
+                ["a@example.com"],
+                payment_method="paypal",
+                batch_id="same-id",
+                probe_only=False,
             )
         self.assertEqual(ensure.call_count, 2)
         self.assertEqual(generate.call_count, 1)
@@ -763,10 +894,12 @@ class PaymentBatchTests(unittest.TestCase):
             "error": "connect http://user:pass@proxy.example:8080 failed",
             "detail": {"checkout_proxy": "http://user:pass@proxy.example:8080"},
         }
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(payment_batch, "ensure_payment_access_token", return_value=auth), \
-             patch.object(payment_batch, "generate_payment_link", return_value=payment), \
-             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "report.json"):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(payment_batch, "ensure_payment_access_token", return_value=auth),
+            patch.object(payment_batch, "generate_payment_link", return_value=payment),
+            patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "report.json"),
+        ):
             report = payment_batch.run_payment_batch(["a@example.com"], payment_method="momo", retries=0)
         serialized = str(report)
         self.assertNotIn("user:pass", serialized)
@@ -778,10 +911,14 @@ class PaymentBatchTests(unittest.TestCase):
 
     def test_report_contains_mode_and_per_account_stage_timing(self):
         auth = {"ok": True, "access_token": "secret", "auth_context": {}, "probed": 1}
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(payment_batch, "ensure_payment_access_token", return_value=auth), \
-             patch.object(payment_batch, "generate_payment_link", return_value={"ok": True, "url": "https://example.test/pay"}), \
-             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "extract.json"):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(payment_batch, "ensure_payment_access_token", return_value=auth),
+            patch.object(
+                payment_batch, "generate_payment_link", return_value={"ok": True, "url": "https://example.test/pay"}
+            ),
+            patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "extract.json"),
+        ):
             report = payment_batch.run_payment_batch(["a@example.com"], payment_method="momo", retries=0)
         self.assertEqual(report["mode"], "extract")
         row = report["results"][0]
@@ -799,12 +936,17 @@ class PaymentBatchTests(unittest.TestCase):
             kwargs["progress"]({"stage": "stripe_init", "state": "running"})
             return {"ok": True, "url": "https://example.test/pay"}
 
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(payment_batch, "ensure_payment_access_token", return_value=auth), \
-             patch.object(payment_batch, "generate_payment_link", side_effect=generate), \
-             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "extract.json"):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(payment_batch, "ensure_payment_access_token", return_value=auth),
+            patch.object(payment_batch, "generate_payment_link", side_effect=generate),
+            patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "extract.json"),
+        ):
             report = payment_batch.run_payment_batch(
-                ["a@example.com"], payment_method="momo", retries=0, progress=events.append,
+                ["a@example.com"],
+                payment_method="momo",
+                retries=0,
+                progress=events.append,
             )
 
         adapter_event = next(event for event in events if event["stage"] == "stripe_init")
@@ -818,14 +960,19 @@ class PaymentBatchTests(unittest.TestCase):
         auth = {"ok": True, "access_token": "secret", "auth_context": {}, "probed": 1}
         payment = {"ok": True, "url": "https://example.test/pay"}
         replayed = []
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(payment_batch, "ensure_payment_access_token", return_value=auth), \
-             patch.object(payment_batch, "generate_payment_link", return_value=payment), \
-             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "resume.json"), \
-             patch.object(payment_batch, "_event_path", return_value=Path(tmp) / "resume.events.jsonl"):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(payment_batch, "ensure_payment_access_token", return_value=auth),
+            patch.object(payment_batch, "generate_payment_link", return_value=payment),
+            patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "resume.json"),
+            patch.object(payment_batch, "_event_path", return_value=Path(tmp) / "resume.events.jsonl"),
+        ):
             payment_batch.run_payment_batch(["a@example.com"], payment_method="momo", batch_id="resume")
             payment_batch.run_payment_batch(
-                ["a@example.com"], payment_method="momo", batch_id="resume", progress=replayed.append,
+                ["a@example.com"],
+                payment_method="momo",
+                batch_id="resume",
+                progress=replayed.append,
             )
 
         self.assertTrue(replayed)

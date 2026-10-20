@@ -826,5 +826,3 @@ def _upi_extract_qr_from_html(html: str) -> dict:
                 _upi_merge_qr_key(result, "qr_image_url_png", src)
                 _upi_merge_qr_key(result, "qr_image_url_svg", src)
     return result
-
-

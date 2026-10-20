@@ -65,9 +65,7 @@ class BridgedGeoLocaleTimezoneTests(unittest.TestCase):
         # The locale table only covers a handful of markets; an uncurated
         # country still has a measured clock, which is the valuable half.
         proxy = "http://u:p@egress.example:8080"
-        geo.remember_proxy_geo(
-            proxy, ProxyGeo(country="BR", timezone="America/Sao_Paulo")
-        )
+        geo.remember_proxy_geo(proxy, ProxyGeo(country="BR", timezone="America/Sao_Paulo"))
         _, timezone = _BRIDGED(proxy, "", "", "en-US", "America/New_York")
         self.assertEqual(timezone, "America/Sao_Paulo")
 

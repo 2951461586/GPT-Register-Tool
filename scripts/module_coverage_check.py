@@ -59,9 +59,7 @@ def tracked_paths(*pathspecs: str) -> set[str]:
     return {path.decode() for path in raw.split(b"\0") if path}
 
 
-def parse_claims(
-    text: str, resolver=tracked_paths
-) -> tuple[dict[str, list[str]], int]:
+def parse_claims(text: str, resolver=tracked_paths) -> tuple[dict[str, list[str]], int]:
     """Map each claimed path to its owning group names.
 
     Returns ``(claims, rows_seen)``. Only rows that name a ``git ls-files``
@@ -103,14 +101,10 @@ def check(
     return unclaimed, claims, rows_seen
 
 
-def coverage_counts(
-    tracked: set[str], claims: dict[str, list[str]]
-) -> tuple[set[str], dict[str, list[str]]]:
+def coverage_counts(tracked: set[str], claims: dict[str, list[str]]) -> tuple[set[str], dict[str, list[str]]]:
     """Report only tracked sms_tool modules, not incidental row-level paths."""
     named = tracked & claims.keys()
-    duplicates = {
-        path: claims[path] for path in sorted(named) if len(claims[path]) > 1
-    }
+    duplicates = {path: claims[path] for path in sorted(named) if len(claims[path]) > 1}
     return named, duplicates
 
 

@@ -40,6 +40,7 @@ Two inconsistencies found while writing these tests are **pinned, not fixed**
 * ``_classify_exception``'s mro scan is a substring test for ``"timeout"``, so
   a class named ``ExtractorTimedOut`` is not recognised as ``timed_out``.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -105,8 +106,14 @@ class NormalizedContractValueTests(unittest.TestCase):
 
 class CanonicalTerminalStateTests(unittest.TestCase):
     def test_cancelled_aliases(self):
-        for raw in ("cancelled", "canceled", "Cancelled_By_User", "interrupted",
-                    "KeyboardInterrupt", "Keyboard-Interrupt"):
+        for raw in (
+            "cancelled",
+            "canceled",
+            "Cancelled_By_User",
+            "interrupted",
+            "KeyboardInterrupt",
+            "Keyboard-Interrupt",
+        ):
             with self.subTest(raw=raw):
                 self.assertEqual(_canonical_terminal_state(raw), "cancelled")
 
@@ -116,14 +123,19 @@ class CanonicalTerminalStateTests(unittest.TestCase):
                 self.assertEqual(_canonical_terminal_state(raw), "cancelled")
 
     def test_timed_out_aliases_and_suffix(self):
-        for raw in ("timed_out", "timeout", "timeout_expired",
-                    "extractor_timeout", "browser_timed_out"):
+        for raw in ("timed_out", "timeout", "timeout_expired", "extractor_timeout", "browser_timed_out"):
             with self.subTest(raw=raw):
                 self.assertEqual(_canonical_terminal_state(raw), "timed_out")
 
     def test_unknown_aliases_and_suffix(self):
-        for raw in ("unknown", "outcome_unknown", "payment_outcome_unknown",
-                    "indeterminate", "inconclusive", "link_outcome_unknown"):
+        for raw in (
+            "unknown",
+            "outcome_unknown",
+            "payment_outcome_unknown",
+            "indeterminate",
+            "inconclusive",
+            "link_outcome_unknown",
+        ):
             with self.subTest(raw=raw):
                 self.assertEqual(_canonical_terminal_state(raw), "unknown")
 
@@ -137,7 +149,7 @@ class CanonicalTerminalStateTests(unittest.TestCase):
         self.assertEqual(_canonical_terminal_state(124), "")
 
     def test_cancelled_wins_over_unknown_when_both_present_in_one_value(self):
-        """"cancelled_unknown" ends with neither suffix; cancelled set is checked first."""
+        """ "cancelled_unknown" ends with neither suffix; cancelled set is checked first."""
         # "cancelled_unknown" is not in any literal set and matches no suffix,
         # so it must fall through to '' -- the sets are not substring-matched.
         self.assertEqual(_canonical_terminal_state("cancelled_unknown"), "")
@@ -184,8 +196,7 @@ class ExplicitTerminalStateTests(unittest.TestCase):
         self.assertEqual(_explicit_terminal_state({"exit_code": "not-a-number"}), "")
 
     def test_pending_without_artifact_is_unknown(self):
-        for status in ("pending", "processing", "submitted",
-                       "requires_action", "awaiting_confirmation"):
+        for status in ("pending", "processing", "submitted", "requires_action", "awaiting_confirmation"):
             with self.subTest(status=status):
                 self.assertEqual(_explicit_terminal_state({"status": status}), "unknown")
 
@@ -221,9 +232,16 @@ class IsRetryableFailureTests(unittest.TestCase):
                 self.assertFalse(_is_retryable_failure({"status_code": code}))
 
     def test_retryable_error_codes(self):
-        for code in ("connection_error", "connect_timeout", "read_timeout",
-                     "network_error", "proxy_error", "proxy_unavailable",
-                     "rate_limited", "service_unavailable"):
+        for code in (
+            "connection_error",
+            "connect_timeout",
+            "read_timeout",
+            "network_error",
+            "proxy_error",
+            "proxy_unavailable",
+            "rate_limited",
+            "service_unavailable",
+        ):
             with self.subTest(code=code):
                 self.assertTrue(_is_retryable_failure({"error_code": code}))
 
@@ -294,8 +312,7 @@ class NormalizeErrorContractTests(unittest.TestCase):
         self.assertEqual(data["error_stage"], "adapter_contract")
 
     def test_eligibility_codes_get_the_eligibility_stage(self):
-        for code in ("checkout_not_zero_due", "nonzero_offer",
-                     "paypal_payment_method_unavailable"):
+        for code in ("checkout_not_zero_due", "nonzero_offer", "paypal_payment_method_unavailable"):
             with self.subTest(code=code):
                 data = {"ok": False, "error_code": code}
                 _normalize_error_contract(data)
@@ -420,9 +437,7 @@ class NormalizeResultTests(unittest.TestCase):
             "operation": "execute_payment",
             "link_type": "blik_protocol_completed",
         }
-        for key, replacement in (("status", "pending"),
-                                 ("operation", "extract_link"),
-                                 ("link_type", "blik_protocol")):
+        for key, replacement in (("status", "pending"), ("operation", "extract_link"), ("link_type", "blik_protocol")):
             with self.subTest(key=key):
                 broken = dict(payload, **{key: replacement})
                 self.assertFalse(_normalize_result(spec, broken)["ok"])
@@ -473,10 +488,8 @@ class NormalizeResultTests(unittest.TestCase):
         callers branch on ``error_code`` to decide whether to reconcile.
         """
         for payload, expected in (
-            ({"status": "cancelled", "error_code": "payment_link_extraction_failed"},
-             "payment_link_cancelled"),
-            ({"status": "timeout", "error_code": "payment_link_extraction_failed"},
-             "payment_link_timed_out"),
+            ({"status": "cancelled", "error_code": "payment_link_extraction_failed"}, "payment_link_cancelled"),
+            ({"status": "timeout", "error_code": "payment_link_extraction_failed"}, "payment_link_timed_out"),
         ):
             with self.subTest(payload=payload):
                 data = _normalize_result(_spec(), dict(payload))
@@ -484,8 +497,7 @@ class NormalizeResultTests(unittest.TestCase):
 
     def test_explicit_terminal_overrides_the_generic_extraction_error(self):
         """A terminal state must not keep the generic 'extraction failed' code."""
-        for raw, expected in (("cancelled", "payment_link_cancelled"),
-                              ("timeout", "payment_link_timed_out")):
+        for raw, expected in (("cancelled", "payment_link_cancelled"), ("timeout", "payment_link_timed_out")):
             with self.subTest(raw=raw):
                 data = _normalize_result(_spec(), {"exit_code": 124 if raw == "timeout" else 130})
                 self.assertEqual(data["error_code"], expected)

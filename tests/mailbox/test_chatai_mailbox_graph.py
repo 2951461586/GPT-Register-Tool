@@ -30,10 +30,12 @@ class ChataiMailboxGraphTests(unittest.TestCase):
             provider="chatai",
         )
 
-        with patch.object(mailbox_module, "CFG", {}), \
-             patch.object(mailbox_module, "_email_cfg", return_value={"outlook_imap_enabled": False}), \
-             patch.object(mailbox_module.curl_requests, "post", return_value=FakeTokenResponse()) as post, \
-             patch.object(mailbox_module.curl_requests, "get", return_value=FakeMessagesResponse()) as get:
+        with (
+            patch.object(mailbox_module, "CFG", {}),
+            patch.object(mailbox_module, "_email_cfg", return_value={"outlook_imap_enabled": False}),
+            patch.object(mailbox_module.curl_requests, "post", return_value=FakeTokenResponse()) as post,
+            patch.object(mailbox_module.curl_requests, "get", return_value=FakeMessagesResponse()) as get,
+        ):
             messages = mailbox_module._fetch_mailbox_messages(
                 mailbox,
                 limit=5,
@@ -41,14 +43,20 @@ class ChataiMailboxGraphTests(unittest.TestCase):
             )
 
         self.assertEqual(messages, [])
-        self.assertEqual(post.call_args.kwargs["proxies"], {
-            "http": "socks5h://127.0.0.1:7897",
-            "https": "socks5h://127.0.0.1:7897",
-        })
-        self.assertEqual(get.call_args.kwargs["proxies"], {
-            "http": "socks5h://127.0.0.1:7897",
-            "https": "socks5h://127.0.0.1:7897",
-        })
+        self.assertEqual(
+            post.call_args.kwargs["proxies"],
+            {
+                "http": "socks5h://127.0.0.1:7897",
+                "https": "socks5h://127.0.0.1:7897",
+            },
+        )
+        self.assertEqual(
+            get.call_args.kwargs["proxies"],
+            {
+                "http": "socks5h://127.0.0.1:7897",
+                "https": "socks5h://127.0.0.1:7897",
+            },
+        )
         self.assertEqual(
             post.call_args.kwargs["data"]["scope"],
             "https://graph.microsoft.com/.default offline_access",
@@ -62,10 +70,12 @@ class ChataiMailboxGraphTests(unittest.TestCase):
             provider="chatai",
         )
 
-        with patch.object(mailbox_module, "CFG", {"mailbox_proxy": "127.0.0.1:7897"}), \
-             patch.object(mailbox_module, "_email_cfg", return_value={"outlook_imap_enabled": False}), \
-             patch.object(mailbox_module.curl_requests, "post", return_value=FakeTokenResponse()) as post, \
-             patch.object(mailbox_module.curl_requests, "get", return_value=FakeMessagesResponse()) as get:
+        with (
+            patch.object(mailbox_module, "CFG", {"mailbox_proxy": "127.0.0.1:7897"}),
+            patch.object(mailbox_module, "_email_cfg", return_value={"outlook_imap_enabled": False}),
+            patch.object(mailbox_module.curl_requests, "post", return_value=FakeTokenResponse()) as post,
+            patch.object(mailbox_module.curl_requests, "get", return_value=FakeMessagesResponse()) as get,
+        ):
             messages = mailbox_module._fetch_mailbox_messages(
                 mailbox,
                 limit=5,
@@ -73,14 +83,20 @@ class ChataiMailboxGraphTests(unittest.TestCase):
             )
 
         self.assertEqual(messages, [])
-        self.assertEqual(post.call_args.kwargs["proxies"], {
-            "http": "http://127.0.0.1:7897",
-            "https": "http://127.0.0.1:7897",
-        })
-        self.assertEqual(get.call_args.kwargs["proxies"], {
-            "http": "http://127.0.0.1:7897",
-            "https": "http://127.0.0.1:7897",
-        })
+        self.assertEqual(
+            post.call_args.kwargs["proxies"],
+            {
+                "http": "http://127.0.0.1:7897",
+                "https": "http://127.0.0.1:7897",
+            },
+        )
+        self.assertEqual(
+            get.call_args.kwargs["proxies"],
+            {
+                "http": "http://127.0.0.1:7897",
+                "https": "http://127.0.0.1:7897",
+            },
+        )
 
 
 if __name__ == "__main__":

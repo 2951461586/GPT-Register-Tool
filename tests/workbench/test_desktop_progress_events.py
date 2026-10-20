@@ -15,7 +15,7 @@ def test_emit_event_is_opt_in_and_sanitized(monkeypatch, capsys):
     assert desktop_ipc.emit_event({"stage": "checkout", "access_token": "secret"}) is True
     line = capsys.readouterr().out.strip()
     assert line.startswith(desktop_ipc.EVENT_PREFIX)
-    envelope = json.loads(line[len(desktop_ipc.EVENT_PREFIX):])
+    envelope = json.loads(line[len(desktop_ipc.EVENT_PREFIX) :])
     assert envelope["schema"] == "smsworkbench.ipc.v2"
     assert envelope["version"] == 2
     assert envelope["type"] == "event"
@@ -28,7 +28,7 @@ def test_registration_progress_emits_realtime_stage(monkeypatch, capsys):
     progress = RegistrationProgress("user@example.com")
     progress.stage("email_otp_wait", detail="waiting")
     lines = capsys.readouterr().out.strip().splitlines()
-    payload = json.loads(lines[-1][len(desktop_ipc.EVENT_PREFIX):])["payload"]
+    payload = json.loads(lines[-1][len(desktop_ipc.EVENT_PREFIX) :])["payload"]
     assert payload["domain"] == "registration"
     assert payload["account_ref"] == account_reference("user@example.com")
     assert payload["stage"] == "email_otp_wait"
@@ -37,7 +37,7 @@ def test_registration_progress_emits_realtime_stage(monkeypatch, capsys):
 def test_payment_method_field_survives_event_sanitization(monkeypatch, capsys):
     monkeypatch.setenv(desktop_ipc.EVENT_ENV, "1")
     desktop_ipc.emit_event({"domain": "payment", "payment_method": "qris", "method": "qris", "stage": "checkout"})
-    payload = json.loads(capsys.readouterr().out.strip()[len(desktop_ipc.EVENT_PREFIX):])["payload"]
+    payload = json.loads(capsys.readouterr().out.strip()[len(desktop_ipc.EVENT_PREFIX) :])["payload"]
     assert payload["method"] == "qris"
     assert payload["payment_method"] == "qris"
 
@@ -54,7 +54,7 @@ def test_one_click_sms_event_contains_terminal_failure_class(monkeypatch, capsys
         account_terminal=True,
         failure_class="mailbox",
     )
-    payload = json.loads(capsys.readouterr().out.strip()[len(desktop_ipc.EVENT_PREFIX):])["payload"]
+    payload = json.loads(capsys.readouterr().out.strip()[len(desktop_ipc.EVENT_PREFIX) :])["payload"]
     assert payload["domain"] == "one_click_sms"
     assert payload["account_ref"] == account_reference("user@example.com")
     assert payload["failure_class"] == "mailbox"
@@ -76,7 +76,7 @@ def test_mailboxes_skipped_event_is_emitted_with_masked_list(monkeypatch, capsys
     )
     out = capsys.readouterr().out.strip()
     assert out.startswith(desktop_ipc.EVENT_PREFIX)
-    payload = json.loads(out[len(desktop_ipc.EVENT_PREFIX):])["payload"]
+    payload = json.loads(out[len(desktop_ipc.EVENT_PREFIX) :])["payload"]
     assert payload["stage"] == "mailboxes_skipped"
     assert payload["skipped_count"] == 2
     assert payload["reason"] == "dead_end_or_quarantined"

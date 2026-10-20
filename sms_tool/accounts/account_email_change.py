@@ -167,7 +167,9 @@ def _cookie_header(account: Mapping[str, Any]) -> str:
 def _session_id(account: Mapping[str, Any]) -> str:
     _raw_auth: object = account.get("auth_session")
     auth: dict = _raw_auth if isinstance(_raw_auth, dict) else {}
-    return str(account.get("oai_session_id") or account.get("auth_session_logging_id") or auth.get("id") or uuid.uuid4()).strip()
+    return str(
+        account.get("oai_session_id") or account.get("auth_session_logging_id") or auth.get("id") or uuid.uuid4()
+    ).strip()
 
 
 def _chat_headers(account: Mapping[str, Any], path: str) -> dict[str, str]:
@@ -204,19 +206,59 @@ def _json_response(response: Any) -> dict[str, Any]:
     return body if isinstance(body, dict) else {}
 
 
-def change_email_begin(account: Mapping[str, Any], target_email: str, *, timeout: int = 30, proxy: str | None = None, transport: Callable[..., Any] | None = None) -> dict[str, Any]:
-    return _change_email_request(account, CHANGE_EMAIL_BEGIN, {"email": target_email}, timeout=timeout, proxy=proxy, transport=transport)
+def change_email_begin(
+    account: Mapping[str, Any],
+    target_email: str,
+    *,
+    timeout: int = 30,
+    proxy: str | None = None,
+    transport: Callable[..., Any] | None = None,
+) -> dict[str, Any]:
+    return _change_email_request(
+        account, CHANGE_EMAIL_BEGIN, {"email": target_email}, timeout=timeout, proxy=proxy, transport=transport
+    )
 
 
-def change_email_verify(account: Mapping[str, Any], target_email: str, code: str, *, timeout: int = 30, proxy: str | None = None, transport: Callable[..., Any] | None = None) -> dict[str, Any]:
-    return _change_email_request(account, CHANGE_EMAIL_VERIFY, {"email": target_email, "code": code}, timeout=timeout, proxy=proxy, transport=transport)
+def change_email_verify(
+    account: Mapping[str, Any],
+    target_email: str,
+    code: str,
+    *,
+    timeout: int = 30,
+    proxy: str | None = None,
+    transport: Callable[..., Any] | None = None,
+) -> dict[str, Any]:
+    return _change_email_request(
+        account,
+        CHANGE_EMAIL_VERIFY,
+        {"email": target_email, "code": code},
+        timeout=timeout,
+        proxy=proxy,
+        transport=transport,
+    )
 
 
-def check_change_email_eligibility(account: Mapping[str, Any], *, timeout: int = 30, proxy: str | None = None, transport: Callable[..., Any] | None = None) -> dict[str, Any]:
-    return _change_email_request(account, CHANGE_EMAIL_ELIGIBILITY, None, timeout=timeout, proxy=proxy, transport=transport)
+def check_change_email_eligibility(
+    account: Mapping[str, Any],
+    *,
+    timeout: int = 30,
+    proxy: str | None = None,
+    transport: Callable[..., Any] | None = None,
+) -> dict[str, Any]:
+    return _change_email_request(
+        account, CHANGE_EMAIL_ELIGIBILITY, None, timeout=timeout, proxy=proxy, transport=transport
+    )
 
 
-def _change_email_request(account: Mapping[str, Any], path: str, payload: dict[str, Any] | None, *, timeout: int, proxy: str | None, transport: Callable[..., Any] | None) -> dict[str, Any]:
+def _change_email_request(
+    account: Mapping[str, Any],
+    path: str,
+    payload: dict[str, Any] | None,
+    *,
+    timeout: int,
+    proxy: str | None,
+    transport: Callable[..., Any] | None,
+) -> dict[str, Any]:
     if not _cookie_header(account):
         return {"ok": False, "status_code": 0, "error": "missing_session_cookie"}
     if transport is None:
@@ -229,16 +271,37 @@ def _change_email_request(account: Mapping[str, Any], path: str, payload: dict[s
         if proxy:
             session.proxies = {"http": proxy, "https": proxy}
         method = "get" if payload is None else "post"
-        response = getattr(session, method)(base + path, headers=_chat_headers(account, path), json=payload, timeout=max(5, int(timeout or 30)), impersonate="chrome110")
+        response = getattr(session, method)(
+            base + path,
+            headers=_chat_headers(account, path),
+            json=payload,
+            timeout=max(5, int(timeout or 30)),
+            impersonate="chrome110",
+        )
     else:
         response = transport(path, payload, _chat_headers(account, path), timeout, proxy)
     body = _json_response(response)
     status = int(getattr(response, "status_code", 0) or 0)
     ok = 200 <= status < 300 and body.get("success", True) is not False
-    return {"ok": ok, "status_code": status, "success": body.get("success"), "eligible": body.get("eligible"), "eligibility_type": body.get("eligibility_type"), "error": "" if ok else _safe_error(body.get("error") or body.get("message") or f"http_{status}")}
+    return {
+        "ok": ok,
+        "status_code": status,
+        "success": body.get("success"),
+        "eligible": body.get("eligible"),
+        "eligibility_type": body.get("eligibility_type"),
+        "error": "" if ok else _safe_error(body.get("error") or body.get("message") or f"http_{status}"),
+    }
 
 
-def change_one_account(account: Mapping[str, Any], target: MailboxAccount, request: EmailChangeRequest, *, transport: Callable[..., Any] | None = None, relogin: Callable[..., dict[str, Any]] | None = None, liveness: Callable[..., dict[str, Any]] | None = None) -> dict[str, Any]:
+def change_one_account(
+    account: Mapping[str, Any],
+    target: MailboxAccount,
+    request: EmailChangeRequest,
+    *,
+    transport: Callable[..., Any] | None = None,
+    relogin: Callable[..., dict[str, Any]] | None = None,
+    liveness: Callable[..., dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     old_email = str(account.get("email") or "").strip().lower()
     target_email = str(target.email or "").strip().lower()
     if not old_email or not target_email:
@@ -251,67 +314,166 @@ def change_one_account(account: Mapping[str, Any], target: MailboxAccount, reque
     except TypeError:
         old_login = relogin_fn(dict(account), proxy=request.proxy, timeout=request.timeout)
     if not old_login.get("ok"):
-        return {"ok": False, "email": old_email, "target_email": target_email, "stage": "old_login", "error": _safe_error(old_login.get("error") or "old_login_failed")}
+        return {
+            "ok": False,
+            "email": old_email,
+            "target_email": target_email,
+            "stage": "old_login",
+            "error": _safe_error(old_login.get("error") or "old_login_failed"),
+        }
     _verified_raw: object = old_login.get("_verified_data")
     active_account: dict[str, Any] = _verified_raw if isinstance(_verified_raw, dict) else dict(account)
-    eligibility = check_change_email_eligibility(active_account, timeout=request.timeout, proxy=request.proxy, transport=transport)
+    eligibility = check_change_email_eligibility(
+        active_account, timeout=request.timeout, proxy=request.proxy, transport=transport
+    )
     eligibility_type = str(eligibility.get("eligibility_type") or "").strip().lower()
     if not eligibility.get("ok") or eligibility.get("eligible") is False:
-        return {"ok": False, "email": old_email, "target_email": target_email, "stage": "eligibility", "error": eligibility.get("error") or "change_email_ineligible"}
+        return {
+            "ok": False,
+            "email": old_email,
+            "target_email": target_email,
+            "stage": "eligibility",
+            "error": eligibility.get("error") or "change_email_ineligible",
+        }
     if eligibility_type and eligibility_type not in {"password", "email", "otp"}:
-        return {"ok": False, "email": old_email, "target_email": target_email, "stage": "eligibility", "error": "social_account_change_not_supported"}
+        return {
+            "ok": False,
+            "email": old_email,
+            "target_email": target_email,
+            "stage": "eligibility",
+            "error": "social_account_change_not_supported",
+        }
     issued_after = int(time.time())
-    begun = change_email_begin(active_account, target_email, timeout=request.timeout, proxy=request.proxy, transport=transport)
+    begun = change_email_begin(
+        active_account, target_email, timeout=request.timeout, proxy=request.proxy, transport=transport
+    )
     if not begun.get("ok"):
-        return {"ok": False, "email": old_email, "target_email": target_email, "stage": "begin", "error": begun.get("error") or "change_email_begin_failed"}
+        return {
+            "ok": False,
+            "email": old_email,
+            "target_email": target_email,
+            "stage": "begin",
+            "error": begun.get("error") or "change_email_begin_failed",
+        }
     try:
-        code = _poll_email_otp(target, subject_keyword="", timeout=max(30, int(request.otp_timeout or 300)), issued_after_unix=issued_after, proxy=request.proxy)
+        code = _poll_email_otp(
+            target,
+            subject_keyword="",
+            timeout=max(30, int(request.otp_timeout or 300)),
+            issued_after_unix=issued_after,
+            proxy=request.proxy,
+        )
     except Exception as exc:
-        return {"ok": False, "email": old_email, "target_email": target_email, "stage": "otp", "error": _safe_error(exc)}
+        return {
+            "ok": False,
+            "email": old_email,
+            "target_email": target_email,
+            "stage": "otp",
+            "error": _safe_error(exc),
+        }
     if not code:
         return {"ok": False, "email": old_email, "target_email": target_email, "stage": "otp", "error": "otp_timeout"}
-    verified = change_email_verify(active_account, target_email, code, timeout=request.timeout, proxy=request.proxy, transport=transport)
+    verified = change_email_verify(
+        active_account, target_email, code, timeout=request.timeout, proxy=request.proxy, transport=transport
+    )
     if not verified.get("ok"):
-        return {"ok": False, "email": old_email, "target_email": target_email, "stage": "verify", "error": verified.get("error") or "change_email_verify_failed"}
+        return {
+            "ok": False,
+            "email": old_email,
+            "target_email": target_email,
+            "stage": "verify",
+            "error": verified.get("error") or "change_email_verify_failed",
+        }
     candidate: dict[str, Any] = dict(active_account)
-    candidate.update({"email": target_email, "mailbox": _mailbox_data(target), "mailbox_provider": target.provider, "mailbox_source": target.source, "mailbox_token": target.token})
+    candidate.update(
+        {
+            "email": target_email,
+            "mailbox": _mailbox_data(target),
+            "mailbox_provider": target.provider,
+            "mailbox_source": target.source,
+            "mailbox_token": target.token,
+        }
+    )
     try:
         login = relogin_fn(candidate, proxy=request.proxy, timeout=request.timeout, persist=False)
     except TypeError:
         login = relogin_fn(candidate, proxy=request.proxy, timeout=request.timeout)
     if not login.get("ok"):
-        return {"ok": False, "email": old_email, "target_email": target_email, "stage": "relogin", "error": _safe_error(login.get("error") or "relogin_failed")}
+        return {
+            "ok": False,
+            "email": old_email,
+            "target_email": target_email,
+            "stage": "relogin",
+            "error": _safe_error(login.get("error") or "relogin_failed"),
+        }
     _verified_raw2: object = login.get("_verified_data")
     verified_data: dict[str, Any] = _verified_raw2 if isinstance(_verified_raw2, dict) else dict(candidate)
     probe = liveness or probe_account_liveness
     live = probe(verified_data, proxy=request.proxy, timeout=min(60, max(10, request.timeout)))
     if int(live.get("status_code") or 0) != 200:
-        return {"ok": False, "email": old_email, "target_email": target_email, "stage": "liveness", "error": "liveness_failed", "liveness": {"ok": bool(live.get("ok")), "status_code": live.get("status_code")}}
+        return {
+            "ok": False,
+            "email": old_email,
+            "target_email": target_email,
+            "stage": "liveness",
+            "error": "liveness_failed",
+            "liveness": {"ok": bool(live.get("ok")), "status_code": live.get("status_code")},
+        }
     migrated = migrate_account_email(old_email, target_email, verified_data, runtime_config=CFG)
     if not migrated:
-        return {"ok": False, "email": old_email, "target_email": target_email, "stage": "storage", "error": "storage_migration_failed"}
+        return {
+            "ok": False,
+            "email": old_email,
+            "target_email": target_email,
+            "stage": "storage",
+            "error": "storage_migration_failed",
+        }
     return {"ok": True, "email": old_email, "target_email": target_email, "stage": "completed", "status_code": 200}
 
 
-def change_email_batch(accounts: Iterable[Mapping[str, Any]], request: EmailChangeRequest, *, allocate: Callable[[EmailChangeRequest, int], list[MailboxAccount]] = allocate_target_mailboxes, transport: Callable[..., Any] | None = None, relogin: Callable[..., dict[str, Any]] | None = None, liveness: Callable[..., dict[str, Any]] | None = None) -> dict[str, Any]:
+def change_email_batch(
+    accounts: Iterable[Mapping[str, Any]],
+    request: EmailChangeRequest,
+    *,
+    allocate: Callable[[EmailChangeRequest, int], list[MailboxAccount]] = allocate_target_mailboxes,
+    transport: Callable[..., Any] | None = None,
+    relogin: Callable[..., dict[str, Any]] | None = None,
+    liveness: Callable[..., dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     selected = [dict(item) for item in accounts if str(item.get("email") or "").strip()]
     if not selected:
         return {"ok": True, "total": 0, "success": 0, "failed": 0, "results": []}
     mailboxes = allocate(request, len(selected))
     ordered: list[dict[str, Any] | None] = [None] * len(selected)
     workers = max(1, min(int(request.workers or 1), 16, len(selected)))
+
     def run(index: int):
         try:
-            return index, change_one_account(selected[index], mailboxes[index], request, transport=transport, relogin=relogin, liveness=liveness)
+            return index, change_one_account(
+                selected[index], mailboxes[index], request, transport=transport, relogin=relogin, liveness=liveness
+            )
         except Exception as exc:
-            return index, {"ok": False, "email": selected[index].get("email", ""), "stage": "unexpected", "error": _safe_error(exc)}
+            return index, {
+                "ok": False,
+                "email": selected[index].get("email", ""),
+                "stage": "unexpected",
+                "error": _safe_error(exc),
+            }
+
     with ThreadPoolExecutor(max_workers=workers) as executor:
         for future in as_completed([executor.submit(run, i) for i in range(len(selected))]):
             index, result = future.result()
             ordered[index] = result
     results = [item for item in ordered if item is not None]
     success = sum(bool(item.get("ok")) for item in results)
-    return {"ok": success == len(results), "total": len(results), "success": success, "failed": len(results) - success, "provider": _provider_name(request.provider), "results": results}
+    return {
+        "ok": success == len(results),
+        "total": len(results),
+        "success": success,
+        "failed": len(results) - success,
+        "provider": _provider_name(request.provider),
+        "results": results,
+    }
 
 
 def load_change_email_accounts(emails: Iterable[str] | None = None) -> list[dict[str, Any]]:

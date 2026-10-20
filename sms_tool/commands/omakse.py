@@ -42,7 +42,9 @@ def omakse_extract(args: Any, ctx: OmakseCommandContext) -> None:
     us_proxies = (args.omakse_us_proxies or "").strip()
     if not us_proxies:
         # Fall back to config stage_proxies.checkout or proxy.default
-        us_proxies = _paypal_stage_proxies(ctx.runtime_config).get("checkout") or (ctx.runtime_config.get("proxy") or {}).get("default", "")
+        us_proxies = _paypal_stage_proxies(ctx.runtime_config).get("checkout") or (
+            ctx.runtime_config.get("proxy") or {}
+        ).get("default", "")
         if us_proxies:
             safe_print(f"[*] Using checkout stage proxy as US proxy: {us_proxies}", file=sys.stderr)
 
@@ -102,12 +104,17 @@ def omakse_us_pay(args: Any, ctx: OmakseCommandContext) -> None:
     # Resolve payment proxy: explicit --checkout-proxy, or config stage
     proxy = (args.checkout_proxy or "").strip()
     if not proxy:
-        proxy = _paypal_stage_proxies(ctx.runtime_config).get("checkout") or (ctx.runtime_config.get("proxy") or {}).get("default", "")
+        proxy = _paypal_stage_proxies(ctx.runtime_config).get("checkout") or (
+            ctx.runtime_config.get("proxy") or {}
+        ).get("default", "")
         if proxy:
             safe_print(f"[*] Using config proxy for US payment: {proxy}", file=sys.stderr)
 
     if not proxy:
-        print("[Error] No proxy available for US payment. Use --checkout-proxy or configure proxy.default", file=sys.stderr)
+        print(
+            "[Error] No proxy available for US payment. Use --checkout-proxy or configure proxy.default",
+            file=sys.stderr,
+        )
         raise SystemExit(2)
 
     result = run_us_payment_and_wait(

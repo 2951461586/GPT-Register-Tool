@@ -2,7 +2,8 @@ import importlib.util
 from pathlib import Path
 
 _spec = importlib.util.spec_from_file_location(
-    "registration_inventory", Path(__file__).resolve().parents[2] / "scripts" / "registration_inventory.py",
+    "registration_inventory",
+    Path(__file__).resolve().parents[2] / "scripts" / "registration_inventory.py",
 )
 inventory = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(inventory)

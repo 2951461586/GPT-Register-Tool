@@ -52,6 +52,7 @@ def _poll_browser_otp(
     deadline = time.monotonic() + max(1, int(timeout or 1))
     while time.monotonic() < deadline:
         from ...registration_cancel import registration_cancel_requested
+
         if registration_cancel_requested():
             raise BrowserRegistrationError("registration_cancelled")
         remaining = max(1, int(deadline - time.monotonic()))
@@ -105,9 +106,13 @@ def _restart_email_otp_flow(
     state = page_state._wait_for_registration_state(page, min(timeout_seconds, 30), browser=browser, config=config)
     if state in {"challenge", "identity_provider"}:
         if state == "challenge" and page_state._wait_for_challenge_clear(page, max_wait_seconds=30):
-            state = page_state._wait_for_registration_state(page, min(timeout_seconds, 30), browser=browser, config=config)
+            state = page_state._wait_for_registration_state(
+                page, min(timeout_seconds, 30), browser=browser, config=config
+            )
         if state in {"challenge", "identity_provider"}:
-            raise BrowserRegistrationError("manual_challenge_required" if state == "challenge" else "browser_unexpected_identity_provider")
+            raise BrowserRegistrationError(
+                "manual_challenge_required" if state == "challenge" else "browser_unexpected_identity_provider"
+            )
     if state == "login_password":
         raise BrowserRegistrationError("browser_existing_account")
     if state == "password":
@@ -184,9 +189,15 @@ def _browser_session_scope(
     if not pool_config.enabled:
         close_browser_process_pool()
         session = session_factory(
-            driver_name, config=config, proxy=proxy, headless=headless,
-            timeout_ms=timeout_ms, locale=locale, timezone_id=timezone_id,
-            browser_identity=browser_identity, viewport=viewport,
+            driver_name,
+            config=config,
+            proxy=proxy,
+            headless=headless,
+            timeout_ms=timeout_ms,
+            locale=locale,
+            timezone_id=timezone_id,
+            browser_identity=browser_identity,
+            viewport=viewport,
         )
         with session as browser:
             yield browser

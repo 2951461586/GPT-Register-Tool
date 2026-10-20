@@ -135,12 +135,9 @@ class SmailrClient:
                 break
             except Exception as exc:
                 error_code = int(getattr(exc, "code", 0) or 0)
-                should_retry = (
-                    error_code in _RETRYABLE_CONNECT_ERROR_CODES
-                    and attempt + 1 < self.retry_attempts
-                )
+                should_retry = error_code in _RETRYABLE_CONNECT_ERROR_CODES and attempt + 1 < self.retry_attempts
                 if should_retry:
-                    time.sleep(self.retry_backoff_seconds * (2 ** attempt))
+                    time.sleep(self.retry_backoff_seconds * (2**attempt))
                     continue
                 message = _redact_secret(_redact_proxy_text(exc, self.proxy), self.api_key)
                 raise SmailrError(f"smailr request failed: {message}", body=message) from exc
@@ -206,6 +203,7 @@ class SmailrClient:
 
 
 # ── Response shaping ──────────────────────────────────────────────────────────
+
 
 def _mailbox_email(mb: dict) -> str:
     if not isinstance(mb, dict):
@@ -282,11 +280,7 @@ def _normalize_message(raw: dict, mailbox_email: str = "") -> dict:
             raw_list = [raw_list]
         for item in raw_list:
             if isinstance(item, dict):
-                address = (
-                    item.get("address")
-                    or (item.get("emailAddress") or {}).get("address")
-                    or item.get("email")
-                )
+                address = item.get("address") or (item.get("emailAddress") or {}).get("address") or item.get("email")
             else:
                 address = item
             address = str(address or "").strip().lower()
@@ -298,11 +292,21 @@ def _normalize_message(raw: dict, mailbox_email: str = "") -> dict:
         nested = body.get("content") or body.get("text") or body_text
         body_text = str(nested or body_text)
 
-    received = str(_format_received(_first(
-        "received_at", "receivedAt", "received_datetime",
-        "created_at", "createdAt", "date", "timestamp",
-        "sent_at", "sentAt",
-    )))
+    received = str(
+        _format_received(
+            _first(
+                "received_at",
+                "receivedAt",
+                "received_datetime",
+                "created_at",
+                "createdAt",
+                "date",
+                "timestamp",
+                "sent_at",
+                "sentAt",
+            )
+        )
+    )
 
     return {
         "id": str(_first("id", "mail_id", "message_id") or ""),
@@ -317,6 +321,7 @@ def _normalize_message(raw: dict, mailbox_email: str = "") -> dict:
 
 
 # ── OTP polling ──────────────────────────────────────────────────────────────
+
 
 def fetch_messages(client: SmailrClient, mailbox_id: str, mailbox_email: str, limit: int = 25) -> list[dict]:
     """Fetch up to *limit* mails and shape them with ``_normalize_message``."""

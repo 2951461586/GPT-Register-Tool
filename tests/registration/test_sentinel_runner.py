@@ -215,7 +215,9 @@ def test_client_splits_runner_so_out_of_main_token():
     so = json.loads(result.so_token)
     assert so == {"so": "observer-blob", "c": "challenge-test", "id": DEVICE_ID, "flow": "authorize_continue"}
 
-    without_so = json.dumps({"p": "proof", "t": "t", "c": "challenge-test", "id": DEVICE_ID, "flow": "authorize_continue"})
+    without_so = json.dumps(
+        {"p": "proof", "t": "t", "c": "challenge-test", "id": DEVICE_ID, "flow": "authorize_continue"}
+    )
     with patch("sms_tool.sentinel.client.run_sentinel_sdk", return_value=without_so):
         empty = client.issue_sentinel_token(
             flow="authorize_continue", device_id=DEVICE_ID, session=_Session(), profile=PROFILE

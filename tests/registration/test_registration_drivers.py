@@ -54,49 +54,57 @@ class RegistrationDriverTests(unittest.TestCase):
         )
 
     def test_browser_result_uses_canonical_session_contract(self):
-        session = build_browser_session_file({
-            "email": "user@example.com",
-            "password": "Password!1",
-            "access_token": "at",
-            "auth_session": {"user": {"email": "user@example.com"}},
-            "registration_driver": "playwright",
-        })
+        session = build_browser_session_file(
+            {
+                "email": "user@example.com",
+                "password": "Password!1",
+                "access_token": "at",
+                "auth_session": {"user": {"email": "user@example.com"}},
+                "registration_driver": "playwright",
+            }
+        )
         self.assertEqual(session["email"], "user@example.com")
         self.assertEqual(session["access_token"], "at")
         self.assertEqual(session["registration_driver"], "playwright")
 
     def test_browser_result_persists_mode_and_diagnostics(self):
         diagnostics = {"url": "https://chatgpt.com/", "title": "ChatGPT"}
-        session = build_browser_session_file({
-            "email": "user@example.com",
-            "registration_driver": "playwright",
-            "registration_mode": "browser",
-            "browser_diagnostics": diagnostics,
-        })
+        session = build_browser_session_file(
+            {
+                "email": "user@example.com",
+                "registration_driver": "playwright",
+                "registration_mode": "browser",
+                "browser_diagnostics": diagnostics,
+            }
+        )
         self.assertEqual(session["registration_mode"], "browser")
         self.assertEqual(session["registration_driver"], "playwright")
         self.assertEqual(session["browser_diagnostics"], diagnostics)
 
     def test_browser_result_persists_sanitized_proxy_audit(self):
         audit = {"pool_index": 1, "expected_country": "US", "actual_country": "US", "scheme": "http"}
-        session = build_browser_session_file({
-            "email": "user@example.com",
-            "registration_driver": "cloak",
-            "proxy_audit": audit,
-        })
+        session = build_browser_session_file(
+            {
+                "email": "user@example.com",
+                "registration_driver": "cloak",
+                "proxy_audit": audit,
+            }
+        )
         self.assertEqual(session["proxy_audit"], audit)
 
     def test_browser_result_preserves_mailbox_credentials_for_session_artifact(self):
-        session = build_browser_session_file({
-            "email": "user@example.com",
-            "access_token": "chatgpt-at",
-            "mailbox": {
+        session = build_browser_session_file(
+            {
                 "email": "user@example.com",
-                "provider": "graph",
-                "token": "mailbox-token",
-                "refresh_token": "mailbox-refresh-token",
-            },
-        })
+                "access_token": "chatgpt-at",
+                "mailbox": {
+                    "email": "user@example.com",
+                    "provider": "graph",
+                    "token": "mailbox-token",
+                    "refresh_token": "mailbox-refresh-token",
+                },
+            }
+        )
 
         self.assertEqual(session["mailbox"]["token"], "mailbox-token")
         self.assertEqual(session["mailbox"]["refresh_token"], "mailbox-refresh-token")
@@ -125,21 +133,34 @@ class RegistrationDriverTests(unittest.TestCase):
 
         snapshot = _browser_mailbox_snapshot(mailbox)
 
-        self.assertEqual(snapshot, {
-            "email": "user@example.com",
-            "source": "pool",
-            "provider": "graph",
-            "order_no": "order-1",
-            "auth_mode": "oauth_refresh",
-            "purchase_id": "purchase-1",
-            "project_name": "project-1",
-            "price": "0.10",
-        })
-        self.assertFalse({
-            "password", "login_password", "refresh_token", "access_token",
-            "token", "client_secret", "seen_message_id", "message_content",
-            "otp", "proxy",
-        } & snapshot.keys())
+        self.assertEqual(
+            snapshot,
+            {
+                "email": "user@example.com",
+                "source": "pool",
+                "provider": "graph",
+                "order_no": "order-1",
+                "auth_mode": "oauth_refresh",
+                "purchase_id": "purchase-1",
+                "project_name": "project-1",
+                "price": "0.10",
+            },
+        )
+        self.assertFalse(
+            {
+                "password",
+                "login_password",
+                "refresh_token",
+                "access_token",
+                "token",
+                "client_secret",
+                "seen_message_id",
+                "message_content",
+                "otp",
+                "proxy",
+            }
+            & snapshot.keys()
+        )
 
     def test_example_config_uses_runtime_roxy_api_default(self):
         config_path = Path(__file__).resolve().parents[2] / "config.example.json"
@@ -153,12 +174,17 @@ class RegistrationDriverTests(unittest.TestCase):
 
     def test_browser_registration_rejects_protocol_and_unknown_driver(self):
         from sms_tool.registration_drivers.playwright import run_browser_registration
+
         mailbox = type("Mailbox", (), {"email": "user@example.com"})()
         config = {"chatgpt": {"chat_base_url": "https://chatgpt.com"}, "registration": {}}
         for driver in ("protocol", "not-a-driver"):
             with self.subTest(driver=driver):
                 result = run_browser_registration(
-                    driver_name=driver, proxy=None, password="Password!1", mailbox=mailbox, config=config,
+                    driver_name=driver,
+                    proxy=None,
+                    password="Password!1",
+                    mailbox=mailbox,
+                    config=config,
                 )
                 self.assertFalse(result["success"])
                 self.assertEqual(result["failure_class"], "configuration")
@@ -184,7 +210,6 @@ class RegistrationDriverTests(unittest.TestCase):
         config = {"registration": {"drivers": {"roxy": {}}}}
         with patch.dict(os.environ, {"ROXY_WORKSPACE_ID": "env-workspace"}, clear=False):
             self.assertEqual(validate_registration_driver_config(config, "roxy"), "roxy")
-
 
     @patch("sms_tool.registration_drivers.playwright.run_browser_registration")
     def test_run_email_dispatches_every_explicit_browser_driver(self, browser_run):
@@ -240,14 +265,20 @@ class RegistrationDriverTests(unittest.TestCase):
     @patch("sms_tool.registration_drivers.external_sessions.create_browser_session")
     def test_missing_playwright_dependency_is_sanitized(self, session_cls):
         session_cls.side_effect = RuntimeError("browser_dependency_missing:playwright")
-        mailbox = type("Mailbox", (), {
-            "email": "user@example.com",
-            "provider": "graph",
-            "password": "mail-password",
-            "refresh_token": "mail-refresh-token",
-            "token": "provider-token",
-        })()
-        result = __import__("sms_tool.registration_drivers.playwright", fromlist=["run_playwright_registration"]).run_playwright_registration(
+        mailbox = type(
+            "Mailbox",
+            (),
+            {
+                "email": "user@example.com",
+                "provider": "graph",
+                "password": "mail-password",
+                "refresh_token": "mail-refresh-token",
+                "token": "provider-token",
+            },
+        )()
+        result = __import__(
+            "sms_tool.registration_drivers.playwright", fromlist=["run_playwright_registration"]
+        ).run_playwright_registration(
             proxy=None,
             password="Password!1",
             mailbox=mailbox,
@@ -265,10 +296,13 @@ class RegistrationDriverTests(unittest.TestCase):
             calls.append(kwargs)
             return {"success": True, "email": kwargs["mailbox"].email}
 
-        with patch("sms_tool.batch_runner.CFG", {
-            "registration": {"driver": "roxy"},
-            "email_registration": {},
-        }):
+        with patch(
+            "sms_tool.batch_runner.CFG",
+            {
+                "registration": {"driver": "roxy"},
+                "email_registration": {},
+            },
+        ):
             result = run_batch_impl(
                 count=1,
                 workers=1,
@@ -284,7 +318,10 @@ class RegistrationDriverTests(unittest.TestCase):
     @patch("sms_tool.batch_runner.refresh_proxy_sid", side_effect=lambda value: value + "-sid")
     @patch("sms_tool.batch_runner.select_registration_proxy_pool", side_effect=lambda pool, _fallback: pool)
     def test_roxy_country_mismatch_keeps_pinned_proxy_on_retry(
-        self, _select_pool, _refresh_sid, _infer_country,
+        self,
+        _select_pool,
+        _refresh_sid,
+        _infer_country,
     ):
         # Audit #4: a retry must NOT rotate to a different pool member -- that
         # egress churn is a ban trigger.  The account stays pinned to pool[0];
@@ -302,18 +339,26 @@ class RegistrationDriverTests(unittest.TestCase):
             return {"success": True}
 
         result = run_batch_impl(
-            count=1, workers=1, max_attempts=2, retry_delay_seconds=0,
+            count=1,
+            workers=1,
+            max_attempts=2,
+            retry_delay_seconds=0,
             proxy_pool=["http://pool-a.test:8000", "http://pool-b.test:8000"],
-            registration_driver="roxy", run_email_func=run_email,
+            registration_driver="roxy",
+            run_email_func=run_email,
         )
 
         self.assertTrue(result[0]["success"])
         # Both attempts stay on the pinned pool[0] egress (only the sid is
         # refreshed each time, which the patched refresh_proxy_sid makes a
         # no-op here).
-        self.assertEqual([call["proxy"] for call in calls], [
-            "http://pool-a.test:8000-sid", "http://pool-a.test:8000-sid",
-        ])
+        self.assertEqual(
+            [call["proxy"] for call in calls],
+            [
+                "http://pool-a.test:8000-sid",
+                "http://pool-a.test:8000-sid",
+            ],
+        )
         self.assertEqual(calls[0]["proxy_metadata"]["pool_index"], 0)
         self.assertEqual(calls[1]["proxy_metadata"]["pool_index"], 0)
         self.assertEqual(calls[0]["proxy_metadata"]["expected_country"], "US")
@@ -344,10 +389,13 @@ class BrowserWorkerLimitTests(unittest.TestCase):
 
         mailboxes = [SimpleNamespace(email=f"user{i}@example.com") for i in range(count)]
         stdout = io.StringIO()
-        with patch("sms_tool.batch_runner.CFG", {
-            "registration": registration_cfg,
-            "email_registration": {},
-        }):
+        with patch(
+            "sms_tool.batch_runner.CFG",
+            {
+                "registration": registration_cfg,
+                "email_registration": {},
+            },
+        ):
             with contextlib.redirect_stdout(stdout):
                 result = run_batch_impl(
                     count=count,

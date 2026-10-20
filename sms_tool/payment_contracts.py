@@ -150,9 +150,8 @@ class PaymentResult:
         reconciliation = _as_bool(raw.get("requires_reconciliation")) is True or status == "unknown"
 
         explicit_side_effect = _as_bool(raw.get("side_effect_started"))
-        inferred_side_effect = (
-            error_stage in _SIDE_EFFECT_STAGES
-            or (operation_name == "execute_payment" and (ok or status in _IN_FLIGHT_STATUSES))
+        inferred_side_effect = error_stage in _SIDE_EFFECT_STAGES or (
+            operation_name == "execute_payment" and (ok or status in _IN_FLIGHT_STATUSES)
         )
         side_effect_started = bool(explicit_side_effect) if explicit_side_effect is not None else inferred_side_effect
         side_effect_started = side_effect_started or reconciliation
@@ -181,8 +180,17 @@ class PaymentResult:
             requires_reconciliation=reconciliation,
         )
         known = {
-            "ok", "status", "payment_method", "operation", "error", "error_code",
-            "error_stage", "retryable", "side_effect_started", "requires_reconciliation", "url",
+            "ok",
+            "status",
+            "payment_method",
+            "operation",
+            "error",
+            "error_code",
+            "error_stage",
+            "retryable",
+            "side_effect_started",
+            "requires_reconciliation",
+            "url",
         }
         extras = MappingProxyType({key: item for key, item in raw.items() if key not in known})
         return cls(
@@ -198,19 +206,21 @@ class PaymentResult:
 
     def to_dict(self) -> PaymentResultDict:
         result: dict[str, Any] = dict(self.extra)
-        result.update({
-            "ok": self.ok,
-            "status": self.outcome.status,
-            "payment_method": self.payment_method,
-            "operation": self.operation,
-            "error": self.error.message,
-            "error_code": self.error.code,
-            "error_stage": self.error.stage,
-            "retryable": self.error.retryable,
-            "side_effect_started": self.outcome.side_effect_started,
-            "requires_reconciliation": self.outcome.requires_reconciliation,
-            "url": self.url,
-        })
+        result.update(
+            {
+                "ok": self.ok,
+                "status": self.outcome.status,
+                "payment_method": self.payment_method,
+                "operation": self.operation,
+                "error": self.error.message,
+                "error_code": self.error.code,
+                "error_stage": self.error.stage,
+                "retryable": self.error.retryable,
+                "side_effect_started": self.outcome.side_effect_started,
+                "requires_reconciliation": self.outcome.requires_reconciliation,
+                "url": self.url,
+            }
+        )
         return result  # type: ignore[return-value]
 
 

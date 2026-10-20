@@ -70,7 +70,5 @@ def test_bound_facade_probe_preserves_patch_scope_and_unknown_checkpoint():
     workflow.runtime.proxy = "http://proxy.invalid:8080"
     workflow._persist_checkpoint = Mock()
     workflow.probe_access_token()
-    probe.assert_called_once_with(
-        "test-token", {}, proxy="http://proxy.invalid:8080", cfg=workflow.config
-    )
+    probe.assert_called_once_with("test-token", {}, proxy="http://proxy.invalid:8080", cfg=workflow.config)
     workflow._persist_checkpoint.assert_called_once_with("at_probe_transport_unknown")

@@ -40,10 +40,21 @@ REFRESH_TOKEN_MIN_LENGTH_DEFAULT = 20
 #: Substrings that only ever appear in a template or a hand-filled placeholder.
 #: Matched case-insensitively against the whole value.
 _PLACEHOLDER_MARKERS = (
-    "your_refresh", "your-refresh", "your_token", "your-token",
-    "refresh_token_here", "refresh-token-here",
-    "changeme", "change_me", "replace_me", "replaceme",
-    "placeholder", "fill_me", "fillme", "dummy_token", "dummy-token",
+    "your_refresh",
+    "your-refresh",
+    "your_token",
+    "your-token",
+    "refresh_token_here",
+    "refresh-token-here",
+    "changeme",
+    "change_me",
+    "replace_me",
+    "replaceme",
+    "placeholder",
+    "fill_me",
+    "fillme",
+    "dummy_token",
+    "dummy-token",
 )
 _TEMPLATE_SHAPE_RE = re.compile(r"^[<\[{].*[>\]}]$")
 
@@ -93,7 +104,11 @@ def _screen_refresh_token(value, *, provider, source_path, line_no, label):
         emit(
             _LOGGER,
             "[!] Skip %s %s:%s: refresh_token %s (len=%d)",
-            label, source_path, line_no, reason, measured,
+            label,
+            source_path,
+            line_no,
+            reason,
+            measured,
             extra={
                 "event": "mailbox_refresh_token_rejected",
                 "provider": provider,
@@ -106,7 +121,10 @@ def _screen_refresh_token(value, *, provider, source_path, line_no, label):
         emit(
             _LOGGER,
             "[!] Suspicious %s %s:%s: refresh_token %s",
-            label, source_path, line_no, reason,
+            label,
+            source_path,
+            line_no,
+            reason,
             extra={
                 "event": "mailbox_refresh_token_suspicious",
                 "provider": provider,
@@ -148,7 +166,9 @@ def _normalize_mailbox_email(email):
 
 def _is_cfworker_line(line):
     lowered = line.lower()
-    return lowered.startswith("cfworker://") or lowered.endswith("@edu.liziai.cloud") or lowered.endswith("@liziai.cloud")
+    return (
+        lowered.startswith("cfworker://") or lowered.endswith("@edu.liziai.cloud") or lowered.endswith("@liziai.cloud")
+    )
 
 
 def _is_gmail_line(line):
@@ -247,8 +267,11 @@ def _parse_gmail_line(line, source_path, line_no):
                 print(f"[!] Skip malformed Gmail OAuth mailbox line {source_path}:{line_no}")
                 return None
             refresh_token = _screen_refresh_token(
-                refresh_token, provider="google", source_path=source_path,
-                line_no=line_no, label="Gmail OAuth mailbox line",
+                refresh_token,
+                provider="google",
+                source_path=source_path,
+                line_no=line_no,
+                label="Gmail OAuth mailbox line",
             )
             if refresh_token is None:
                 return None
@@ -312,7 +335,7 @@ def _parse_gmail_line(line, source_path, line_no):
     )
 
 
-def parse_mailbox_pool_line(line, source_path="", line_no=0):
+def parse_mailbox_pool_line(line, source_path: str | Path = "", line_no=0):
     """Parse one mailbox-pool line with the canonical provider dispatch order.
 
     This is the single owner of pool-line format detection (used by both the
@@ -345,14 +368,21 @@ def parse_mailbox_pool_line(line, source_path="", line_no=0):
                 print(f"[!] Skip malformed chatai email {source_path}:{line_no}")
             return None
         refresh_token = _screen_refresh_token(
-            refresh_token, provider="microsoft", source_path=source_path,
-            line_no=line_no, label="chatai line",
+            refresh_token,
+            provider="microsoft",
+            source_path=source_path,
+            line_no=line_no,
+            label="chatai line",
         )
         if refresh_token is None:
             return None
         return MailboxAccount(
-            email=email.lower(), password=password, refresh_token=refresh_token,
-            source=str(source_path), provider="chatai", token=client_id,
+            email=email.lower(),
+            password=password,
+            refresh_token=refresh_token,
+            source=str(source_path),
+            provider="chatai",
+            token=client_id,
         )
     parts = line.split("---", 4)
     if len(parts) < 3:
@@ -366,14 +396,21 @@ def parse_mailbox_pool_line(line, source_path="", line_no=0):
             print(f"[!] Skip malformed mailbox email {source_path}:{line_no}")
         return None
     refresh_token = _screen_refresh_token(
-        refresh_token, provider="microsoft", source_path=source_path,
-        line_no=line_no, label="mailbox line",
+        refresh_token,
+        provider="microsoft",
+        source_path=source_path,
+        line_no=line_no,
+        label="mailbox line",
     )
     if refresh_token is None:
         return None
     return MailboxAccount(
-        email=email.lower(), password=password, refresh_token=refresh_token,
-        access_token=access_token, source=str(source_path), provider="graph",
+        email=email.lower(),
+        password=password,
+        refresh_token=refresh_token,
+        access_token=access_token,
+        source=str(source_path),
+        provider="graph",
     )
 
 
@@ -420,13 +457,15 @@ def _parse_mailbox_password_file(path):
             print(f"[!] Skip malformed mailbox email {password_path}:{line_no}")
             continue
         provider = "gmail" if email.endswith(("@gmail.com", "@googlemail.com")) else "graph"
-        records.append(MailboxAccount(
-            email=email.lower(),
-            password=password,
-            source=str(password_path),
-            provider=provider,
-            auth_mode="app_password" if provider == "gmail" else "",
-        ))
+        records.append(
+            MailboxAccount(
+                email=email.lower(),
+                password=password,
+                source=str(password_path),
+                provider=provider,
+                auth_mode="app_password" if provider == "gmail" else "",
+            )
+        )
     return records
 
 

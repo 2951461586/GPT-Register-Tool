@@ -4,6 +4,7 @@ The WPF client consumes this boundary instead of opening SQLite. Secret-bearing
 mailbox material is written to a local temporary file and only its path crosses
 IPC; normal account reads contain the token-free session snapshot.
 """
+
 from __future__ import annotations
 
 import json
@@ -22,20 +23,57 @@ from .promotion_states import (
 )
 from .registration_retry_guard import RegistrationRetryGuard, mailbox_registration_status
 from .kernel.sanitizer import sanitize
-from .storage import _account_type, _looks_codex_refresh_token, get_account_record_by_id, get_account_records, list_account_records
+from .storage import (
+    _account_type,
+    _looks_codex_refresh_token,
+    get_account_record_by_id,
+    get_account_records,
+    list_account_records,
+)
 
 
 _PUBLIC_COLUMNS = (
-    "id", "email", "success", "status", "error", "device_id", "source",
-    "register_method", "session_type", "plan_type", "paypal_ok",
-    "payment_method", "paypal_status", "paypal_updated_at", "refresh_token_status",
-    "refresh_token_updated_at", "workspace_status", "workspace_id", "workspace_name",
-    "workspace_switch_result", "workspace_updated_at", "account_type",
-    "batch_id", "registration_state", "registration_country", "twofa_enrolled_at",
-    "twofa_enroll_error", "auth_session_logging_id", "device_id_generated_at",
-    "mailbox_provider", "mailbox_source", "purchase_id", "project_name", "price",
-    "purchase_total_cost", "balance_after", "json_path", "timing_total_seconds",
-    "pipeline_total_seconds", "created_at", "updated_at",
+    "id",
+    "email",
+    "success",
+    "status",
+    "error",
+    "device_id",
+    "source",
+    "register_method",
+    "session_type",
+    "plan_type",
+    "paypal_ok",
+    "payment_method",
+    "paypal_status",
+    "paypal_updated_at",
+    "refresh_token_status",
+    "refresh_token_updated_at",
+    "workspace_status",
+    "workspace_id",
+    "workspace_name",
+    "workspace_switch_result",
+    "workspace_updated_at",
+    "account_type",
+    "batch_id",
+    "registration_state",
+    "registration_country",
+    "twofa_enrolled_at",
+    "twofa_enroll_error",
+    "auth_session_logging_id",
+    "device_id_generated_at",
+    "mailbox_provider",
+    "mailbox_source",
+    "purchase_id",
+    "project_name",
+    "price",
+    "purchase_total_cost",
+    "balance_after",
+    "json_path",
+    "timing_total_seconds",
+    "pipeline_total_seconds",
+    "created_at",
+    "updated_at",
 )
 
 
@@ -107,14 +145,18 @@ def _paypal_amount(session: Any) -> str:
     paypal = session["paypal"]
     currency = str(paypal.get("currency") or "").strip().upper()
     raw_amount = next(
-        (str(paypal.get(key) or "").strip() for key in ("amount_due", "due", "expected_amount")
-         if str(paypal.get(key) or "").strip()),
+        (
+            str(paypal.get(key) or "").strip()
+            for key in ("amount_due", "due", "expected_amount")
+            if str(paypal.get(key) or "").strip()
+        ),
         "",
     )
     if not raw_amount:
         return ""
     try:
         from decimal import Decimal, InvalidOperation
+
         display = Decimal(raw_amount) / Decimal("100")
         text = f"{display:.2f}"
     except (InvalidOperation, ValueError):
@@ -128,21 +170,27 @@ def _record_payload(record: dict[str, Any], *, include_session: bool = True) -> 
     has_access = bool(str(record.get("access_token") or "").strip()) or file_state["has_access_token"]
     stored_oauth_refresh = str(record.get("oauth_refresh_token") or "").strip()
     stored_legacy_refresh = str(record.get("refresh_token") or "").strip()
-    has_refresh = bool(stored_oauth_refresh) or _looks_codex_refresh_token(stored_legacy_refresh) or file_state["has_refresh_token"]
-    result.update({
-        "has_access_token": has_access,
-        "has_refresh_token": has_refresh,
-        "has_payment_url": bool(str(record.get("paypal_url") or "").strip()),
-        "has_totp": bool(str(record.get("totp_secret") or "").strip()),
-        # These names intentionally end in `_present`: the shared redaction
-        # policy preserves presence metadata while redacting token-bearing
-        # fields such as `has_access_token`.
-        "access_token_present": has_access,
-        "refresh_token_present": has_refresh,
-        "payment_url_present": bool(str(record.get("paypal_url") or "").strip()),
-        "totp_present": bool(str(record.get("totp_secret") or "").strip()),
-        "at_probe_status_code": file_state["at_probe_status_code"],
-    })
+    has_refresh = (
+        bool(stored_oauth_refresh)
+        or _looks_codex_refresh_token(stored_legacy_refresh)
+        or file_state["has_refresh_token"]
+    )
+    result.update(
+        {
+            "has_access_token": has_access,
+            "has_refresh_token": has_refresh,
+            "has_payment_url": bool(str(record.get("paypal_url") or "").strip()),
+            "has_totp": bool(str(record.get("totp_secret") or "").strip()),
+            # These names intentionally end in `_present`: the shared redaction
+            # policy preserves presence metadata while redacting token-bearing
+            # fields such as `has_access_token`.
+            "access_token_present": has_access,
+            "refresh_token_present": has_refresh,
+            "payment_url_present": bool(str(record.get("paypal_url") or "").strip()),
+            "totp_present": bool(str(record.get("totp_secret") or "").strip()),
+            "at_probe_status_code": file_state["at_probe_status_code"],
+        }
+    )
     if has_refresh and str(result.get("refresh_token_status") or "").strip().lower() in {"", "no_rt"}:
         result["refresh_token_status"] = "oauth_present"
     if file_state["account_type"]:
@@ -151,10 +199,7 @@ def _record_payload(record: dict[str, Any], *, include_session: bool = True) -> 
     if isinstance(raw_json, str) and raw_json.strip():
         try:
             session = _parsed_session(raw_json)
-            result["at_probe_status_code"] = (
-                result["at_probe_status_code"]
-                or _access_token_probe_status_code(session)
-            )
+            result["at_probe_status_code"] = result["at_probe_status_code"] or _access_token_probe_status_code(session)
             promotion_status, promotion_state = _promotion_presentation(session)
             # Payment rails appended to the same 优惠状态 cell, e.g.
             # ``可试用Plus-100% · card/upi/momo``.  Composed here (not stored in
@@ -183,9 +228,7 @@ def _record_payload(record: dict[str, Any], *, include_session: bool = True) -> 
             if eligibility_label:
                 result["payment_eligibility"] = eligibility_label
             if promotion_status or eligibility_label:
-                result["promotion_display"] = promotion_status_with_eligibility(
-                    promotion_status, eligibility_label
-                )
+                result["promotion_display"] = promotion_status_with_eligibility(promotion_status, eligibility_label)
             result["imported_status"] = _imported_status(session)
             result["paypal_amount"] = _paypal_amount(session)
             if include_session:
@@ -296,7 +339,9 @@ def _session_file_state(record: dict[str, Any]) -> dict[str, Any]:
     state["has_access_token"] = bool(str(data.get("access_token") or "").strip())
     oauth_refresh = str(data.get("oauth_refresh_token") or "").strip()
     legacy_refresh = str(data.get("refresh_token") or "").strip()
-    state["has_refresh_token"] = bool(oauth_refresh and _looks_codex_refresh_token(oauth_refresh)) or _looks_codex_refresh_token(legacy_refresh)
+    state["has_refresh_token"] = bool(
+        oauth_refresh and _looks_codex_refresh_token(oauth_refresh)
+    ) or _looks_codex_refresh_token(legacy_refresh)
     state["at_probe_status_code"] = _access_token_probe_status_code(data)
     _raw_auth_session: object = data.get("auth_session")
     auth_session: dict = _raw_auth_session if isinstance(_raw_auth_session, dict) else {}
@@ -312,7 +357,9 @@ def _session_file_state(record: dict[str, Any]) -> dict[str, Any]:
 
 def read_accounts(runtime_config: ConfigInput = None, *, include_session: bool = True) -> list[dict[str, Any]]:
     config = resolve_runtime_config(runtime_config, workflow="storage")
-    return [_record_payload(row, include_session=include_session) for row in list_account_records(runtime_config=config)]
+    return [
+        _record_payload(row, include_session=include_session) for row in list_account_records(runtime_config=config)
+    ]
 
 
 def _as_epoch(value: Any) -> int:
@@ -344,9 +391,9 @@ def read_accounts_delta(
     records = list_account_records(runtime_config=config)
     ids = [str(record.get("id") or "") for record in records]
     cursor = max((_as_epoch(record.get("updated_at")) for record in records), default=0)
-    changed = records if since is None else [
-        record for record in records if _as_epoch(record.get("updated_at")) > since
-    ]
+    changed = (
+        records if since is None else [record for record in records if _as_epoch(record.get("updated_at")) > since]
+    )
     return {
         "accounts": [_record_payload(record, include_session=include_session) for record in changed],
         "ids": ids,
@@ -360,6 +407,7 @@ def read_account(account_id: str = "", email: str = "", runtime_config: ConfigIn
     row = get_account_record_by_id(account_id, runtime_config=config) if str(account_id or "").strip() else {}
     if not row and email:
         from .storage import get_account_record
+
         row = get_account_record(email, runtime_config=config)
     return _record_payload(row) if row else {}
 
@@ -384,11 +432,13 @@ def read_mailbox_pool(
     partial = RegistrationRetryGuard(config.data).dead_end_emails()
     files = []
     for path in _known_mailbox_pool_files(config, extra_files, root, include_config_dir=root_dir is None):
-        files.append({
-            "path": str(path),
-            "name": path.name,
-            "lines": _read_pool_lines(path),
-        })
+        files.append(
+            {
+                "path": str(path),
+                "name": path.name,
+                "lines": _read_pool_lines(path),
+            }
+        )
     lines = [line for file in files for line in file["lines"]]
     try:
         records = get_account_records([line["email"] for line in lines], runtime_config=config)
@@ -465,9 +515,9 @@ def _pool_line_payload(account, raw_line: str) -> dict[str, Any]:
     provider = str(account.provider or "").strip().lower()
     # chatai and Gmail-OAuth lines store the OAuth client id in the generic
     # token slot; surface it explicitly so callers need no format knowledge.
-    client_id = account.token if provider == "chatai" or (
-        provider == "gmail" and account.auth_mode == "oauth_refresh"
-    ) else ""
+    client_id = (
+        account.token if provider == "chatai" or (provider == "gmail" and account.auth_mode == "oauth_refresh") else ""
+    )
     return {
         "raw_line": raw_line,
         "email": account.email,
@@ -513,7 +563,9 @@ def create_account_file(account_id: str = "", email: str = "", runtime_config: C
     return {"ok": True, "path": str(target)}
 
 
-def create_payment_url_file(account_id: str = "", email: str = "", runtime_config: ConfigInput = None) -> dict[str, Any]:
+def create_payment_url_file(
+    account_id: str = "", email: str = "", runtime_config: ConfigInput = None
+) -> dict[str, Any]:
     row = _find_record(account_id, email, runtime_config)
     if not row:
         return {"ok": False, "error": "account_not_found"}
@@ -529,6 +581,7 @@ def _find_record(account_id: str, email: str, runtime_config: ConfigInput) -> di
     row = get_account_record_by_id(account_id, runtime_config=config) if str(account_id or "").strip() else {}
     if not row and email:
         from .storage import get_account_record
+
         row = get_account_record(email, runtime_config=config)
     return row
 
@@ -554,9 +607,22 @@ def _full_account_payload(row: dict[str, Any]) -> dict[str, Any]:
             pass
 
     for key in (
-        "email", "password", "success", "status", "error", "session_token", "access_token",
-        "refresh_token", "oauth_refresh_token", "cookie_header", "device_id", "totp_secret",
-        "auth_session_logging_id", "registration_country", "refresh_token_status", "payment_method",
+        "email",
+        "password",
+        "success",
+        "status",
+        "error",
+        "session_token",
+        "access_token",
+        "refresh_token",
+        "oauth_refresh_token",
+        "cookie_header",
+        "device_id",
+        "totp_secret",
+        "auth_session_logging_id",
+        "registration_country",
+        "refresh_token_status",
+        "payment_method",
     ):
         value = row.get(key)
         if value not in (None, ""):
@@ -585,9 +651,13 @@ def _full_account_payload(row: dict[str, Any]) -> dict[str, Any]:
     payment: dict = _raw_payment if isinstance(_raw_payment, dict) else {}
     payment = dict(payment)
     for key, column in (
-        ("ok", "paypal_ok"), ("url", "paypal_url"), ("status", "paypal_status"),
-        ("cs_id", "paypal_cs_id"), ("pm_id", "paypal_pm_id"),
-        ("currency", "paypal_currency"), ("amount_due", "paypal_amount_due"),
+        ("ok", "paypal_ok"),
+        ("url", "paypal_url"),
+        ("status", "paypal_status"),
+        ("cs_id", "paypal_cs_id"),
+        ("pm_id", "paypal_pm_id"),
+        ("currency", "paypal_currency"),
+        ("amount_due", "paypal_amount_due"),
         ("has_paypal", "paypal_has_paypal"),
     ):
         value = row.get(column)

@@ -54,9 +54,3 @@ def _fetch_auth_session_from_cookie(account, proxy=None, timeout=30):
     raw["auth_session"] = body
     account["raw"] = raw
     return body
-
-
-
-
-
-

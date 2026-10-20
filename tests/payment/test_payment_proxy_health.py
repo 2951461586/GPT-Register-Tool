@@ -18,8 +18,12 @@ def test_probe_cache_serves_second_selection_without_network(tmp_path, monkeypat
     def fake_net(value, expected, stage, timeout):
         calls.append(value)
         return ProxyProbeResult(
-            ok=True, stage=stage, expected_country=expected,
-            ip="1.2.3.4", country_code=expected or "US", country="X",
+            ok=True,
+            stage=stage,
+            expected_country=expected,
+            ip="1.2.3.4",
+            country_code=expected or "US",
+            country="X",
         )
 
     monkeypatch.setattr(paypal_proxy, "_probe_proxy_network", fake_net)
@@ -38,7 +42,9 @@ def test_no_state_probe_is_never_cached(tmp_path, monkeypatch):
 
     def fake_net(value, expected, stage, timeout):
         calls.append(value)
-        return ProxyProbeResult(ok=True, stage=stage, expected_country=expected, ip="1", country_code="US", country="US")
+        return ProxyProbeResult(
+            ok=True, stage=stage, expected_country=expected, ip="1", country_code="US", country="US"
+        )
 
     monkeypatch.setattr(paypal_proxy, "_probe_proxy_network", fake_net)
     proxy = "http://user-region-US:pass@host:1000"
@@ -63,7 +69,9 @@ def test_select_pool_skips_cooldown_and_prefers_healthy(tmp_path, monkeypatch):
 
     def fake_net(value, expected, stage, timeout):
         probed.append(value)
-        return ProxyProbeResult(ok=True, stage=stage, expected_country=expected, ip="1", country_code="US", country="US")
+        return ProxyProbeResult(
+            ok=True, stage=stage, expected_country=expected, ip="1", country_code="US", country="US"
+        )
 
     monkeypatch.setattr(paypal_proxy, "_probe_proxy_network", fake_net)
     selected, attempts = select_proxy_from_pool([bad, good], "US", "checkout", state=state)

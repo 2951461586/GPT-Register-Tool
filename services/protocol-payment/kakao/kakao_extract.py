@@ -1269,8 +1269,7 @@ def kakao_link(
     log(f"{PROVIDER_COUNTRY} Stripe confirm")
     processor_entity = str(checkout.get("processor_entity") or "openai_llc")
     success_url = (
-        f"{endpoints.CHATGPT_CHECKOUT_API}/{processor_entity}/{checkout_id}/success?"
-        f"billing_country={PROVIDER_COUNTRY}"
+        f"{endpoints.CHATGPT_CHECKOUT_API}/{processor_entity}/{checkout_id}/success?billing_country={PROVIDER_COUNTRY}"
     )
     return_url = (
         f"{endpoints.STRIPE_CHECKOUT_BASE}/c/pay/{checkout_id}?returned_from_redirect=true&ui_mode=custom&"

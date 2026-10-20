@@ -39,8 +39,15 @@ def _processes(*rows):
 
 class ImageClassificationTests(unittest.TestCase):
     def test_browser_images_are_recognized(self):
-        for image in ("camoufox.exe", "firefox", "chrome.exe", "msedge.exe",
-                      "playwright.cmd", "node.exe", "CamouFox.exe"):
+        for image in (
+            "camoufox.exe",
+            "firefox",
+            "chrome.exe",
+            "msedge.exe",
+            "playwright.cmd",
+            "node.exe",
+            "CamouFox.exe",
+        ):
             with self.subTest(image=image):
                 self.assertTrue(reclaim.is_browser_image(image))
 
@@ -75,8 +82,7 @@ class HolderLookupTests(unittest.TestCase):
         holders = reclaim.profile_holders(
             r"C:\repo\runtime\browser_profiles\camoufox\box@example.com",
             enumerate_processes=_processes(
-                (21, "camoufox.exe",
-                 r'-profile C:\repo\runtime\browser_profiles\camoufox\BOX@example.com -headless'),
+                (21, "camoufox.exe", r"-profile C:\repo\runtime\browser_profiles\camoufox\BOX@example.com -headless"),
             ),
         )
         self.assertEqual([h["pid"] for h in holders], [21])
@@ -107,7 +113,7 @@ class HolderLookupTests(unittest.TestCase):
         holders = reclaim.profile_holders(
             "/profiles/box",
             enumerate_processes=_processes(
-                (42, "python.exe", 'python -c "print(\'/profiles/box\')"'),
+                (42, "python.exe", "python -c \"print('/profiles/box')\""),
                 (43, "grep", "grep -r something /profiles/box/cache2"),
             ),
         )
@@ -166,18 +172,14 @@ class ReclaimTests(unittest.TestCase):
 
     def test_termination_skips_non_browser_images_and_ourselves(self):
         with mock.patch.object(reclaim, "_terminate", return_value=True) as killer:
-            report = reclaim.reclaim_stale_profile(
-                "/profiles/box", terminate=True, enumerate_processes=self.rows
-            )
+            report = reclaim.reclaim_stale_profile("/profiles/box", terminate=True, enumerate_processes=self.rows)
         killer.assert_called_once_with(81)
         self.assertEqual(report["terminated"], [81])
         self.assertCountEqual(report["skipped"], [82, os.getpid()])
 
     def test_a_failed_termination_is_reported_as_skipped_not_terminated(self):
         with mock.patch.object(reclaim, "_terminate", return_value=False):
-            report = reclaim.reclaim_stale_profile(
-                "/profiles/box", terminate=True, enumerate_processes=self.rows
-            )
+            report = reclaim.reclaim_stale_profile("/profiles/box", terminate=True, enumerate_processes=self.rows)
         self.assertEqual(report["terminated"], [])
         self.assertIn(81, report["skipped"])
 
@@ -213,8 +215,7 @@ class WindowsDecodeTests(unittest.TestCase):
 
     def test_a_gbk_path_in_the_process_list_does_not_empty_the_lookup(self):
         payload = json.dumps(
-            [{"ProcessId": 91, "Name": "camoufox.exe",
-              "CommandLine": r"--profile C:\用户\box"}]
+            [{"ProcessId": 91, "Name": "camoufox.exe", "CommandLine": r"--profile C:\用户\box"}]
         ).encode("utf-8")
         with self._run_with(payload):
             rows = list(reclaim._iter_processes_windows())

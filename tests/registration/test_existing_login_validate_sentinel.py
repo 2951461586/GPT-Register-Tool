@@ -74,8 +74,7 @@ class _Response:
         return self._body
 
 
-def _drive(*, validate_result, validate_calls, dumps, calls=None, bodies=None,
-           authorize_landing=VERIFICATION_URL):
+def _drive(*, validate_result, validate_calls, dumps, calls=None, bodies=None, authorize_landing=VERIFICATION_URL):
     """Walk the real existing-login lane up to ``email-otp/validate``."""
     calls = calls if calls is not None else []
     bodies = bodies if bodies is not None else []
@@ -118,12 +117,12 @@ def _drive(*, validate_result, validate_calls, dumps, calls=None, bodies=None,
     def fake_dump(session, auth_base, base_headers, label):
         dumps.append(label)
 
-    with patch.object(auth_flow.deps, "request_with_retry", side_effect=handler), patch.object(
-        auth_flow.sentinel_flow, "_authorize_continue_sentinel", lambda *a, **k: ({}, "", "")
-    ), patch.object(auth_flow.deps, "_poll_email_otp", lambda *a, **k: "123456"), patch.object(
-        auth_flow.deps, "_validate_email_otp", side_effect=fake_validate
-    ), patch.object(
-        auth_flow.deps, "_fetch_client_auth_session_dump", side_effect=fake_dump
+    with (
+        patch.object(auth_flow.deps, "request_with_retry", side_effect=handler),
+        patch.object(auth_flow.sentinel_flow, "_authorize_continue_sentinel", lambda *a, **k: ({}, "", "")),
+        patch.object(auth_flow.deps, "_poll_email_otp", lambda *a, **k: "123456"),
+        patch.object(auth_flow.deps, "_validate_email_otp", side_effect=fake_validate),
+        patch.object(auth_flow.deps, "_fetch_client_auth_session_dump", side_effect=fake_dump),
     ):
         return auth_flow._login_existing_account_with_email_otp(
             session=Mock(),
@@ -239,6 +238,7 @@ def test_successful_validate_does_not_dump():
 # --------------------------------------------------------------------------
 # a profile-step landing is a dead end, not a login
 # --------------------------------------------------------------------------
+
 
 def test_a_profile_step_landing_is_reported_as_a_failure():
     """``/about-you`` is a *signup* step, so this transaction never logs in.

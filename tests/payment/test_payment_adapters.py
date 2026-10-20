@@ -165,4 +165,3 @@ def test_build_kakao_env_prefers_explicit_proxy_file_and_routes_runtime_dirs(tmp
 
     fallback_env = adapters._build_kakao_env("tok", "", "", script, {})
     assert fallback_env["KAKAO_PROXY_SEED_FILE"] == str(seed_pool)
-

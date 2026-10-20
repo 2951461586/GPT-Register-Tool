@@ -144,25 +144,17 @@ def _scan_package() -> tuple[dict[str, int], dict[str, int]]:
     return dict(reads), dict(writes)
 
 
-def _read_but_never_written(
-    reads: dict[str, int], writes: dict[str, int], allowed: dict[str, str]
-) -> list[str]:
+def _read_but_never_written(reads: dict[str, int], writes: dict[str, int], allowed: dict[str, str]) -> list[str]:
     """Fields a reader depends on that no code path can ever set."""
     return sorted(
-        name
-        for name in _FIELD_GROUPS
-        if reads.get(name, 0) > 0 and writes.get(name, 0) == 0 and name not in allowed
+        name for name in _FIELD_GROUPS if reads.get(name, 0) > 0 and writes.get(name, 0) == 0 and name not in allowed
     )
 
 
-def _never_read_never_written(
-    reads: dict[str, int], writes: dict[str, int], allowed: dict[str, str]
-) -> list[str]:
+def _never_read_never_written(reads: dict[str, int], writes: dict[str, int], allowed: dict[str, str]) -> list[str]:
     """Fields that are dead weight in the checkpoint schema."""
     return sorted(
-        name
-        for name in _FIELD_GROUPS
-        if reads.get(name, 0) == 0 and writes.get(name, 0) == 0 and name not in allowed
+        name for name in _FIELD_GROUPS if reads.get(name, 0) == 0 and writes.get(name, 0) == 0 and name not in allowed
     )
 
 
@@ -245,8 +237,7 @@ class TheRealTreeTests(unittest.TestCase):
             unexpected,
             [],
             "these fields are read by sms_tool/ but never assigned anywhere, so "
-            "every reader silently gets the dataclass default: "
-            + ", ".join(unexpected),
+            "every reader silently gets the dataclass default: " + ", ".join(unexpected),
         )
 
     def test_no_field_is_both_unread_and_unwritten(self):

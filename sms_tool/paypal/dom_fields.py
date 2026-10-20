@@ -12,6 +12,7 @@ import random
 import re
 import time
 
+
 def _value_matches(actual: str, expected: str) -> bool:
     actual_s = str(actual or "").strip()
     expected_s = str(expected or "").strip()
@@ -25,6 +26,7 @@ def _value_matches(actual: str, expected: str) -> bool:
         return True
     return expected_s.lower() in actual_s.lower()
 
+
 def _locator_has_value(locator, expected: str) -> bool:
     """Return True when a text-like control visibly kept the expected value."""
     try:
@@ -32,6 +34,7 @@ def _locator_has_value(locator, expected: str) -> bool:
     except Exception:
         return True
     return _value_matches(actual, expected)
+
 
 def _set_field_value(locator, value: str, timeout: int = 8000):
     """Set an input value and fire the DOM events PayPal/Stripe listen for."""
@@ -58,6 +61,7 @@ def _set_field_value(locator, value: str, timeout: int = 8000):
         with contextlib.suppress(Exception):
             locator.dispatch_event(event_name)
 
+
 def _click_with_fallback(page, selectors: list[str], timeout: int = 8000):
     """Try multiple selectors, click the first one found."""
     for selector in selectors:
@@ -69,6 +73,7 @@ def _click_with_fallback(page, selectors: list[str], timeout: int = 8000):
         except Exception:
             continue
     return False
+
 
 def _fill_with_fallback(page, selectors: list[str], value: str, timeout: int = 8000) -> bool:
     """Try multiple selectors, fill the first one found."""
@@ -82,6 +87,7 @@ def _fill_with_fallback(page, selectors: list[str], value: str, timeout: int = 8
         except Exception:
             continue
     return False
+
 
 def _fill_dom_id(page, element_id: str, value: str) -> bool:
     """Fill PayPal checkoutweb controls by their stable DOM id."""
@@ -122,11 +128,13 @@ def _fill_dom_id(page, element_id: str, value: str) -> bool:
             continue
     return False
 
+
 def _fill_dom_ids(page, element_ids: list[str], value: str) -> bool:
     for element_id in element_ids:
         if _fill_dom_id(page, element_id, value):
             return True
     return False
+
 
 def _field_has_any_value(page, element_ids: list[str]) -> bool:
     for element_id in element_ids:
@@ -145,6 +153,7 @@ def _field_has_any_value(page, element_ids: list[str]) -> bool:
                 continue
     return False
 
+
 def _visible_field_has_value(page, selectors: list[str], expected: str = "") -> bool:
     for scope in [page, *getattr(page, "frames", [])]:
         for selector in selectors:
@@ -161,6 +170,7 @@ def _visible_field_has_value(page, selectors: list[str], expected: str = "") -> 
             except Exception:
                 continue
     return False
+
 
 def _fill_by_label_fallback(page, labels: list[str], value: str, timeout: int = 8000) -> bool:
     """Fill PayPal fields whose visible floating label is more stable than CSS attrs."""
@@ -248,6 +258,7 @@ def _fill_by_label_fallback(page, labels: list[str], value: str, timeout: int = 
             continue
     return False
 
+
 def _fill_by_visible_label_text(page, label: str, value: str) -> bool:
     """Fill a control by an exact visible floating-label text node."""
     for scope in [page, *getattr(page, "frames", [])]:
@@ -322,6 +333,7 @@ def _fill_by_visible_label_text(page, label: str, value: str) -> bool:
             continue
     return False
 
+
 def _fill_visible_input(page, selectors: list[str], value: str, timeout: int = 8000) -> bool:
     """Click and type into a visible input, then verify its value."""
     scopes = [page, *getattr(page, "frames", [])]
@@ -345,7 +357,10 @@ def _fill_visible_input(page, selectors: list[str], value: str, timeout: int = 8
                 continue
     return False
 
-def _select_with_fallback(page, selectors: list[str], value: str, labels: list[str] | None = None, timeout: int = 8000) -> bool:
+
+def _select_with_fallback(
+    page, selectors: list[str], value: str, labels: list[str] | None = None, timeout: int = 8000
+) -> bool:
     """Select an option by value/text and dispatch change events."""
     labels = labels or []
     wanted = [value, *labels]
@@ -383,6 +398,7 @@ def _select_with_fallback(page, selectors: list[str], value: str, labels: list[s
             continue
     return False
 
+
 def _read_field_value(page, element_ids: list[str], selectors: list[str]) -> str:
     for element_id in element_ids:
         for scope in [page, *getattr(page, "frames", [])]:
@@ -410,6 +426,7 @@ def _read_field_value(page, element_ids: list[str], selectors: list[str]) -> str
             except Exception:
                 continue
     return ""
+
 
 def _type_human(page, selector: str, text: str, delay_range: tuple = (50, 150)):
     """Type text with human-like delays."""

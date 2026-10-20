@@ -79,7 +79,7 @@ class EmailOtpFilteringTests(unittest.TestCase):
         self.assertNotEqual(LOGIN_EMAIL_OTP_SUBJECT_KEYWORD, REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORD)
 
     def test_otp_extractor_ignores_hex_color_context(self):
-        text = "style=\"color:#123456\" Your ChatGPT verification code is 654321."
+        text = 'style="color:#123456" Your ChatGPT verification code is 654321.'
         self.assertEqual(_extract_otp_from_text(text), "654321")
 
     def test_otp_candidate_rejects_shadow_tm1_sender(self):
@@ -155,8 +155,12 @@ class EmailOtpFilteringTests(unittest.TestCase):
         newer["id"] = "newer"
         newer["bodyPreview"] = "Enter this temporary verification code to continue:\n\n169441"
 
-        with unittest.mock.patch.object(mailbox_module, "_email_cfg", return_value={"otp_settle_seconds": 0.01, "otp_poll_interval": 0.01}):
-            with unittest.mock.patch.object(mailbox_module, "_fetch_mailbox_messages", side_effect=[[first], [newer, first], [newer, first]]):
+        with unittest.mock.patch.object(
+            mailbox_module, "_email_cfg", return_value={"otp_settle_seconds": 0.01, "otp_poll_interval": 0.01}
+        ):
+            with unittest.mock.patch.object(
+                mailbox_module, "_fetch_mailbox_messages", side_effect=[[first], [newer, first], [newer, first]]
+            ):
                 code = mailbox_module._poll_email_otp(
                     mailbox,
                     subject_keyword=REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORD,

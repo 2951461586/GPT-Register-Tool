@@ -13,6 +13,7 @@ bugs hid inside it as a result:
 
 Both are now fixed. These tests lock the fixes so neither can regress quietly.
 """
+
 import inspect
 import logging
 import os
@@ -60,9 +61,7 @@ class ResilientRotationTests(unittest.TestCase):
     """
 
     def _handler(self, path):
-        return logging_setup.ResilientRotatingFileHandler(
-            path, maxBytes=1, backupCount=1, encoding="utf-8", delay=True
-        )
+        return logging_setup.ResilientRotatingFileHandler(path, maxBytes=1, backupCount=1, encoding="utf-8", delay=True)
 
     def test_records_survive_a_failing_rotation(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -130,14 +129,9 @@ class ResilientRotationTests(unittest.TestCase):
             self.assertEqual(
                 1,
                 handler._rollover_failures,
-                "no rollover was attempted, so nothing about the announcement "
-                "was exercised",
+                "no rollover was attempted, so nothing about the announcement was exercised",
             )
-            messages = [
-                record.getMessage()
-                for record in captured
-                if record.levelno >= logging.WARNING
-            ]
+            messages = [record.getMessage() for record in captured if record.levelno >= logging.WARNING]
             self.assertTrue(
                 any("log rotation failed" in message for message in messages),
                 f"no rotation warning reached the logging system: {messages}",
@@ -218,9 +212,7 @@ class ConfigureLoggingTests(unittest.TestCase):
         before = set(map(id, logging.getLogger().handlers))
         logging_setup.configure_logging(to_console=False)
         rotating = [
-            h
-            for h in logging.getLogger().handlers
-            if id(h) not in before and isinstance(h, RotatingFileHandler)
+            h for h in logging.getLogger().handlers if id(h) not in before and isinstance(h, RotatingFileHandler)
         ]
         # Human stage log (sms_tool.log) + machine envelope log (sms_tool.jsonl).
         self.assertEqual(len(rotating), 2)
@@ -233,11 +225,7 @@ class ConfigureLoggingTests(unittest.TestCase):
     def test_human_log_normalizes_stages_and_jsonl_keeps_the_envelope(self):
         before = set(map(id, logging.getLogger().handlers))
         logging_setup.configure_logging(to_console=False)
-        added = [
-            h
-            for h in logging.getLogger().handlers
-            if id(h) not in before and isinstance(h, RotatingFileHandler)
-        ]
+        added = [h for h in logging.getLogger().handlers if id(h) not in before and isinstance(h, RotatingFileHandler)]
         by_suffix = {Path(h.baseFilename).suffix: h for h in added}
         logging.getLogger("sms_tool.registration_progress").info(
             "Registration stage=%s status=%s", "create_account", "running"
@@ -262,11 +250,7 @@ class ConfigureLoggingTests(unittest.TestCase):
     def test_both_channels_use_the_resilient_handler(self):
         before = set(map(id, logging.getLogger().handlers))
         logging_setup.configure_logging(to_console=False)
-        added = [
-            h
-            for h in logging.getLogger().handlers
-            if id(h) not in before and isinstance(h, RotatingFileHandler)
-        ]
+        added = [h for h in logging.getLogger().handlers if id(h) not in before and isinstance(h, RotatingFileHandler)]
         self.assertTrue(added)
         for handler in added:
             self.assertIsInstance(handler, logging_setup.ResilientRotatingFileHandler)
@@ -283,14 +267,10 @@ class ConfigureLoggingTests(unittest.TestCase):
             before = set(map(id, logging.getLogger().handlers))
             logging_setup.configure_logging(log_path=blocker, to_console=False)
             added = [
-                h
-                for h in logging.getLogger().handlers
-                if id(h) not in before and isinstance(h, RotatingFileHandler)
+                h for h in logging.getLogger().handlers if id(h) not in before and isinstance(h, RotatingFileHandler)
             ]
             try:
-                self.assertEqual(
-                    ["sms_tool.jsonl"], sorted(Path(h.baseFilename).name for h in added)
-                )
+                self.assertEqual(["sms_tool.jsonl"], sorted(Path(h.baseFilename).name for h in added))
             finally:
                 # Close before the temporary directory is removed: an open
                 # handle makes the Windows cleanup fail, not the assertion.
@@ -308,9 +288,7 @@ class ConfigureLoggingTests(unittest.TestCase):
         added_stream_handlers = [
             h
             for h in logging.getLogger().handlers
-            if id(h) not in before
-            and isinstance(h, logging.StreamHandler)
-            and not isinstance(h, RotatingFileHandler)
+            if id(h) not in before and isinstance(h, logging.StreamHandler) and not isinstance(h, RotatingFileHandler)
         ]
         self.assertEqual(added_stream_handlers, [])
 
@@ -320,9 +298,7 @@ class ConfigureLoggingTests(unittest.TestCase):
         added_stream_handlers = [
             h
             for h in logging.getLogger().handlers
-            if id(h) not in before
-            and isinstance(h, logging.StreamHandler)
-            and not isinstance(h, RotatingFileHandler)
+            if id(h) not in before and isinstance(h, logging.StreamHandler) and not isinstance(h, RotatingFileHandler)
         ]
         self.assertEqual(len(added_stream_handlers), 1)
 
@@ -352,15 +328,9 @@ class ConfigureLoggingTests(unittest.TestCase):
         # warnings.formatwarning() output.
         before = set(map(id, logging.getLogger().handlers))
         logging_setup.configure_logging(to_console=False)
-        added = [
-            h
-            for h in logging.getLogger().handlers
-            if id(h) not in before and isinstance(h, RotatingFileHandler)
-        ]
+        added = [h for h in logging.getLogger().handlers if id(h) not in before and isinstance(h, RotatingFileHandler)]
         by_suffix = {Path(h.baseFilename).suffix: h for h in added}
-        message = warnings_module.formatwarning(
-            "captured-warning-marker", UserWarning, __file__, 1
-        )
+        message = warnings_module.formatwarning("captured-warning-marker", UserWarning, __file__, 1)
         logging.getLogger("py.warnings").warning("%s", message)
         for handler in added:
             handler.flush()

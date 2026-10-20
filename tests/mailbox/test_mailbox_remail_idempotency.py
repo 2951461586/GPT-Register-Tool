@@ -5,6 +5,7 @@ Before the fix, ``mailbox_remail.py`` sent a fresh ``uuid.uuid4()`` as the
 second order instead of being de-duplicated by the server (double charge). The key
 must now be stable per order intent (sha256 of mode + supply + canonical payload).
 """
+
 import re
 from types import SimpleNamespace
 
@@ -52,9 +53,7 @@ def test_create_remail_batch_reuses_stable_key(monkeypatch):
 
     k1 = headers_seen[0].get("Idempotency-Key")
     k2 = headers_seen[1].get("Idempotency-Key")
-    assert re.fullmatch(r"[0-9a-f]{64}", k1 or ""), (
-        "Idempotency-Key must be a stable sha256, not a random uuid4"
-    )
+    assert re.fullmatch(r"[0-9a-f]{64}", k1 or ""), "Idempotency-Key must be a stable sha256, not a random uuid4"
     assert k1 == k2, "same order intent must reuse the same Idempotency-Key (was uuid4 before the fix)"
 
 
@@ -87,4 +86,3 @@ def test_create_remail_batch_separates_distinct_batch_ids(monkeypatch):
 
     assert headers_seen[0]["Idempotency-Key"] == headers_seen[1]["Idempotency-Key"]
     assert headers_seen[0]["Idempotency-Key"] != headers_seen[2]["Idempotency-Key"]
-

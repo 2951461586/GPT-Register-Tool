@@ -98,9 +98,7 @@ def load_account(email: str, sessions_dir: str) -> tuple[dict[str, Any], float, 
 
 
 def probe_account(account: dict[str, Any], proxy: str, timeout: int, browser_fetch=None) -> dict[str, Any]:
-    return probe_account_liveness(
-        account, proxy=proxy or None, timeout=timeout, browser_fetch=browser_fetch
-    )
+    return probe_account_liveness(account, proxy=proxy or None, timeout=timeout, browser_fetch=browser_fetch)
 
 
 def classify_probe(result: dict[str, Any]) -> str:
@@ -136,10 +134,13 @@ def main() -> int:
     parser.add_argument("--proxy", default=None, help="Override proxy; defaults to config registration/default proxy")
     parser.add_argument("--workers", type=int, default=10)
     parser.add_argument("--timeout", type=int, default=20)
-    parser.add_argument("--browser", action="store_true",
-                        help="Route quota probes through a headless browser (camoufox/playwright) "
-                             "via browser_fetch_for_account, carrying the account's real fingerprint "
-                             "and cookies to bypass Cloudflare TLS-stage resets on protocol-only probes.")
+    parser.add_argument(
+        "--browser",
+        action="store_true",
+        help="Route quota probes through a headless browser (camoufox/playwright) "
+        "via browser_fetch_for_account, carrying the account's real fingerprint "
+        "and cookies to bypass Cloudflare TLS-stage resets on protocol-only probes.",
+    )
     parser.add_argument("--json-out", default="", help="Write per-account JSON results")
     args = parser.parse_args()
 
@@ -211,11 +212,23 @@ def main() -> int:
         "no_account": "No SQLite/session account",
         "no_token": "No access token",
     }
-    order = ["alive", "unauthorized", "deactivated", "forbidden", "rate_limited", "error", "browser_error", "no_account", "no_token"]
+    order = [
+        "alive",
+        "unauthorized",
+        "deactivated",
+        "forbidden",
+        "rate_limited",
+        "error",
+        "browser_error",
+        "no_account",
+        "no_token",
+    ]
 
     mode_label = "browser_fetch" if args.browser else "protocol(curl_cffi)"
     print("=" * 56)
-    print(f"Account liveness: {total}  endpoint={LIVENESS_ENDPOINT}  mode={mode_label}  proxy={'configured' if proxy else 'direct'}")
+    print(
+        f"Account liveness: {total}  endpoint={LIVENESS_ENDPOINT}  mode={mode_label}  proxy={'configured' if proxy else 'direct'}"
+    )
     print("=" * 56)
     for key in order + [category for category in counts if category not in order]:
         count = counts.get(key)

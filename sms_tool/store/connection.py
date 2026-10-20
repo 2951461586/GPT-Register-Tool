@@ -79,7 +79,6 @@ def database_path(cfg: ConfigInput = None):
     return runtime_file(cfg, "accounts.sqlite3")
 
 
-
 def _connect(path=None, runtime_config: ConfigInput = None):
     # Resolve database_path through the public `sms_tool.storage` module so that
     # `patch.object(storage, "database_path", ...)` (used widely across the test
@@ -117,7 +116,6 @@ def _connect(path=None, runtime_config: ConfigInput = None):
     # => Re-enable `PRAGMA journal_mode=WAL` TOGETHER WITH the init_database()
     #    fix (audit-2026-09-01-round4 §8 item 6), not before it.
     return conn
-
 
 
 def init_database(path=None, runtime_config: ConfigInput = None, force: bool = False):
@@ -282,7 +280,6 @@ def _init_database_uncached(path=None, runtime_config: ConfigInput = None):
         conn.close()
 
 
-
 def _ensure_extra_columns(conn):
     existing = {row["name"] for row in conn.execute("PRAGMA table_info(accounts)")}
     for name, definition in EXTRA_COLUMNS.items():
@@ -321,4 +318,3 @@ def _ensure_extra_columns(conn):
           THEN 'account_deactivated' ELSE 'active' END
         WHERE terminal_state='' OR terminal_state IS NULL
     """)
-

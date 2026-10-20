@@ -5,14 +5,17 @@ from sms_tool.registration_policy import registration_retry_decision
 from sms_tool.registration_retry_guard import RegistrationRetryGuard
 
 
-@pytest.mark.parametrize("error", [
-    "manual_challenge_required: timeout",
-    "browser_proxy_blocked",
-    "mailbox_auth_invalid: connection rejected",
-    "mailbox_endpoint_unavailable",
-    "session_circuit_open:http_429",
-    "stage_budget_exceeded:email_otp_wait",
-])
+@pytest.mark.parametrize(
+    "error",
+    [
+        "manual_challenge_required: timeout",
+        "browser_proxy_blocked",
+        "mailbox_auth_invalid: connection rejected",
+        "mailbox_endpoint_unavailable",
+        "session_circuit_open:http_429",
+        "stage_budget_exceeded:email_otp_wait",
+    ],
+)
 def test_terminal_failures_never_retry_even_with_transport_keywords(error, tmp_path):
     decision = registration_retry_decision(error)
     assert not decision.retryable

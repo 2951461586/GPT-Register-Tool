@@ -145,6 +145,7 @@ def run_browser_registration(
     machine = RegistrationStateMachine(registration_progress.registration_stage)
     machine.transition(RegistrationState.MAILBOX_READY)
     from ...storage import get_device_context
+
     device_context = get_device_context(email, runtime_config=config)
     device_id = str((device_context or {}).get("device_id") or uuid.uuid4())
     machine.transition(RegistrationState.IDENTITY_READY)
@@ -178,18 +179,9 @@ def run_browser_registration(
     locale_parts = str(locale or "").replace("_", "-").split("-")
     locale_country = locale_parts[-1] if len(locale_parts) > 1 else ""
     geo_audit = {
-        "fingerprint_country": (
-            locale_country
-            if driver_name in decisions.SCREEN_MANAGED_DRIVERS else ""
-        ),
-        "exit_country": str(
-            (_browser_geo or {}).get("country")
-            or (proxy_metadata or {}).get("actual_country") or ""
-        ),
-        "source": (
-            "geo_probe" if (_browser_geo or {}).get("country")
-            else "preflight"
-        ),
+        "fingerprint_country": (locale_country if driver_name in decisions.SCREEN_MANAGED_DRIVERS else ""),
+        "exit_country": str((_browser_geo or {}).get("country") or (proxy_metadata or {}).get("actual_country") or ""),
+        "source": ("geo_probe" if (_browser_geo or {}).get("country") else "preflight"),
     }
     # P1-3: playwright consumes this as its viewport; camoufox consumes it as
     # Screen(max_width, max_height) (previously hardcoded 1280x900, so the pool
@@ -201,9 +193,15 @@ def run_browser_registration(
         # idle Camoufox instances while the auth cap was saturated.
         registration_progress.admit_registration_stage("auth_flow")
         with flow_steps._browser_session_scope(
-            driver_name=driver_name, config=config, proxy=proxy, headless=headless,
-            timeout_ms=max(5_000, timeout * 1_000), locale=locale, timezone_id=timezone_id,
-            browser_identity=browser_identity, viewport=_browser_viewport,
+            driver_name=driver_name,
+            config=config,
+            proxy=proxy,
+            headless=headless,
+            timeout_ms=max(5_000, timeout * 1_000),
+            locale=locale,
+            timezone_id=timezone_id,
+            browser_identity=browser_identity,
+            viewport=_browser_viewport,
             session_factory=session_factory,
         ) as browser:
             # P2-3: every browser driver probes its egress now. Provider
@@ -211,7 +209,11 @@ def run_browser_registration(
             # and warn -- a wrong country is evidence, not a gate.
             _country_check = decisions.proxy_country_check_mode(driver_name, config)
             if _country_check != "off":
-                verification = external_sessions.verify_browser_proxy_country(browser, expected_country=str((proxy_metadata or {}).get("expected_country") or ""), timeout_seconds=min(20, timeout))
+                verification = external_sessions.verify_browser_proxy_country(
+                    browser,
+                    expected_country=str((proxy_metadata or {}).get("expected_country") or ""),
+                    timeout_seconds=min(20, timeout),
+                )
                 if proxy_metadata is not None:
                     proxy_metadata = dict(proxy_metadata)
                     proxy_metadata["actual_country"] = verification.get("actual_country", "")
@@ -223,7 +225,8 @@ def run_browser_registration(
                         raise BrowserRegistrationError(f"{driver_name}_proxy_country_mismatch", _country_error)
                     logger.warning(
                         "egress country probe (%s, non-fatal): %s (expected=%s actual=%s)",
-                        driver_name, _country_error,
+                        driver_name,
+                        _country_error,
                         str((proxy_metadata or {}).get("expected_country") or ""),
                         str(verification.get("actual_country") or ""),
                     )
@@ -354,8 +357,12 @@ def run_browser_registration(
                                 if not dom_fields._page_is_alive(page):
                                     try:
                                         page, _ = flow_steps._restart_email_otp_flow(
-                                            browser, page, start_url=start_url, email=email,
-                                            password=password or "", timeout_seconds=timeout,
+                                            browser,
+                                            page,
+                                            start_url=start_url,
+                                            email=email,
+                                            password=password or "",
+                                            timeout_seconds=timeout,
                                             config=config,
                                         )
                                         restarted = True
@@ -386,8 +393,12 @@ def run_browser_registration(
                         if not dom_fields._page_is_alive(page):
                             try:
                                 page, _ = flow_steps._restart_email_otp_flow(
-                                    browser, page, start_url=start_url, email=email,
-                                    password=password or "", timeout_seconds=timeout,
+                                    browser,
+                                    page,
+                                    start_url=start_url,
+                                    email=email,
+                                    password=password or "",
+                                    timeout_seconds=timeout,
                                     config=config,
                                 )
                                 restarted = True
@@ -400,9 +411,7 @@ def run_browser_registration(
             state = page_state._post_otp_registration_state(
                 page,
                 browser=browser,
-                timeout_seconds=recovery.stage_timeout(
-                    config, "create_account", min(30, max(5, timeout)), maximum=180
-                ),
+                timeout_seconds=recovery.stage_timeout(config, "create_account", min(30, max(5, timeout)), maximum=180),
                 config=config,
             )
             # Slow signups can sit on the post-OTP email-verification route for
@@ -414,11 +423,7 @@ def run_browser_registration(
                     break
                 registration_progress.registration_stage(
                     "create_account_retry",
-                    detail=(
-                        "email_verification_reload"
-                        if state == "email_verification_stuck"
-                        else "state_probe_retry"
-                    )
+                    detail=("email_verification_reload" if state == "email_verification_stuck" else "state_probe_retry")
                     + (f"_round{retry_round + 1}" if retry_round else ""),
                 )
                 if state == "email_verification_stuck":
@@ -472,9 +477,7 @@ def run_browser_registration(
                 browser,
                 chat_base,
                 email,
-                timeout_seconds=recovery.stage_timeout(
-                    config, "auth_session", timeout, minimum=15, maximum=120
-                ),
+                timeout_seconds=recovery.stage_timeout(config, "auth_session", timeout, minimum=15, maximum=120),
             )
             auth_body = session_info["body"]
             access_token = session_info["access_token"]
@@ -493,14 +496,17 @@ def run_browser_registration(
                     timeout=int(kwargs.get("timeout") or timeout),
                 )
             probe = registration_outcome._probe_registration_access_token(
-                access_token, auth_body,
+                access_token,
+                auth_body,
                 # The browser context owns the egress and fingerprint for the
                 # probe.  Passing proxy=None would break local drivers that
                 # need the proxy for the curl fallback, so only suppress it
                 # when the browser probe is active.
                 proxy=(None if effective_probe_fn is not None else proxy),
-                cfg=config, probe_fn=effective_probe_fn,
-                stage_fn=registration_progress.registration_stage, sleep_fn=time.sleep,
+                cfg=config,
+                probe_fn=effective_probe_fn,
+                stage_fn=registration_progress.registration_stage,
+                sleep_fn=time.sleep,
             )
             success, error, warning = registration_outcome._registration_outcome(True, {}, access_token, probe)
             # A token plus a transport-unknown probe means the account was
@@ -518,7 +524,10 @@ def run_browser_registration(
             if success and enroll_2fa:
                 try:
                     twofa_result = session._bind_totp_in_browser(
-                        page, access_token, device_id, chat_base=chat_base,
+                        page,
+                        access_token,
+                        device_id,
+                        chat_base=chat_base,
                     )
                     if twofa_result.get("ok"):
                         totp_secret = str(twofa_result.get("totp_secret") or "")
@@ -575,9 +584,7 @@ def run_browser_registration(
             # canonical per-account fingerprint label (the protocol path stores
             # the curl impersonate label under the same key).
             auth_fingerprint_profile = str(
-                identity_context.get("browser_fingerprint_profile")
-                or identity_context.get("fingerprint_key")
-                or ""
+                identity_context.get("browser_fingerprint_profile") or identity_context.get("fingerprint_key") or ""
             )
             registration_state, registration_success_basis = decisions.registration_state_and_basis(
                 success, at_probe_pending
@@ -630,7 +637,9 @@ def run_browser_registration(
         # content into logs.
         logger.warning(
             "browser registration failed driver=%s code=%s cancelled=%s",
-            driver_name, exc.code, cancelled,
+            driver_name,
+            exc.code,
+            cancelled,
         )
         return registration_result.build_registration_failure_result(
             error=dom_fields._safe_text(exc),
@@ -658,7 +667,9 @@ def run_browser_registration(
         # redacted, but put the full traceback into the log for diagnosis.
         logger.error(
             "browser registration crashed driver=%s: %s",
-            driver_name, error, exc_info=exc,
+            driver_name,
+            error,
+            exc_info=exc,
         )
         return registration_result.build_registration_failure_result(
             error=dom_fields._safe_text(error),

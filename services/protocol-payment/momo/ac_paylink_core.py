@@ -68,17 +68,33 @@ COUNTRY_ALIASES = {
     "FRANCE": "FR",
 }
 COUNTRY_CURRENCY = {
-    "US": "USD", "GB": "GBP", "DE": "EUR", "JP": "JPY", "AU": "AUD",
-    "CA": "CAD", "IN": "INR", "SG": "SGD", "TR": "TRY", "NL": "EUR", "FR": "EUR",
+    "US": "USD",
+    "GB": "GBP",
+    "DE": "EUR",
+    "JP": "JPY",
+    "AU": "AUD",
+    "CA": "CAD",
+    "IN": "INR",
+    "SG": "SGD",
+    "TR": "TRY",
+    "NL": "EUR",
+    "FR": "EUR",
 }
 COUNTRY_LANGUAGE = {
-    "US": "en-US", "GB": "en-GB", "DE": "de-DE", "JP": "ja-JP", "AU": "en-AU",
-    "CA": "en-CA", "IN": "en-IN", "SG": "en-SG", "TR": "tr-TR", "NL": "nl-NL", "FR": "fr-FR",
+    "US": "en-US",
+    "GB": "en-GB",
+    "DE": "de-DE",
+    "JP": "ja-JP",
+    "AU": "en-AU",
+    "CA": "en-CA",
+    "IN": "en-IN",
+    "SG": "en-SG",
+    "TR": "tr-TR",
+    "NL": "nl-NL",
+    "FR": "fr-FR",
 }
 DEFAULT_USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/136.0.0.0 Safari/537.36"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
 )
 JWT_RE = re.compile(r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+")
 OPENAI_PAY_PREFIX = f"{endpoints.OPENAI_PAY_BASE}/c/pay/"
@@ -87,8 +103,7 @@ STRIPE_PAY_PREFIX = f"{endpoints.STRIPE_CHECKOUT_BASE}/c/pay/"
 # 用环境变量 PP_STRIPE_PUBLISHABLE_KEY 统一覆盖两处副本（本文件与
 # sms_tool/gen_pp_link.py），避免 OpenAI 轮换 PK 时改代码。
 DEFAULT_STRIPE_PK = (os.environ.get("PP_STRIPE_PUBLISHABLE_KEY", "") or "").strip() or (
-    "pk_live_51HOrSwC6h1nxGoI3lTAgRjYVrz4dU3fVOabyCcKR3pbEJguCVAlqCxdxCUvoRh1"
-    "XWwRacViovU3kLKvpkjh7IqkW00iXQsjo3n"
+    "pk_live_51HOrSwC6h1nxGoI3lTAgRjYVrz4dU3fVOabyCcKR3pbEJguCVAlqCxdxCUvoRh1XWwRacViovU3kLKvpkjh7IqkW00iXQsjo3n"
 )
 STRIPE_VERSION_FULL = os.environ.get(
     "MOMO_STRIPE_API_VERSION",
@@ -310,7 +325,9 @@ def build_opener(proxy_url: str = "") -> urllib.request.OpenerDirector:
     return urllib.request.build_opener(handler)
 
 
-def build_headers(access_token: str, *, session_token: str = "", cookies: str = "", language: str = DEFAULT_LANGUAGE) -> dict[str, str]:
+def build_headers(
+    access_token: str, *, session_token: str = "", cookies: str = "", language: str = DEFAULT_LANGUAGE
+) -> dict[str, str]:
     token = str(access_token or "").strip()
     if not JWT_RE.fullmatch(token):
         raise PaylinkError("access_token must be a JWT string")
@@ -362,7 +379,9 @@ def to_openai_pay_url(url: str) -> str:
     except Exception:
         return text
     if (parsed.netloc or "").lower() == "checkout.stripe.com":
-        return urllib.parse.urlunsplit((parsed.scheme or "https", "pay.openai.com", parsed.path, parsed.query, parsed.fragment))
+        return urllib.parse.urlunsplit(
+            (parsed.scheme or "https", "pay.openai.com", parsed.path, parsed.query, parsed.fragment)
+        )
     return text
 
 
@@ -602,10 +621,7 @@ def resolve_real_hosted_checkout(
     hosted = str(init_payload.get("stripe_hosted_url") or init_payload.get("url") or "").strip()
     hosted = to_openai_pay_url(hosted)
     if not is_browser_openable_hosted_url(hosted):
-        raise PaylinkError(
-            "stripe init did not return a browser-openable hosted URL "
-            f"(got {hosted[:120]!r})"
-        )
+        raise PaylinkError(f"stripe init did not return a browser-openable hosted URL (got {hosted[:120]!r})")
     amount = extract_amount_due_cents(init_payload)
     return hosted, amount, init_payload
 
@@ -669,7 +685,12 @@ def create_checkout_from_access_token(
 
     do_resolve = resolve_hosted
     if do_resolve is None:
-        do_resolve = str(os.environ.get("PP_RESOLVE_HOSTED_URL", "1") or "1").strip().lower() in ("1", "true", "yes", "on")
+        do_resolve = str(os.environ.get("PP_RESOLVE_HOSTED_URL", "1") or "1").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
     return finalize_checkout_result(raw, proxy=proxy_url, resolve_hosted=do_resolve, timeout=timeout)
 
 
@@ -717,10 +738,7 @@ def finalize_checkout_result(
     if not checkout_session_id and client_secret.startswith("cs_"):
         checkout_session_id = client_secret.split("_secret_", 1)[0]
     if not checkout_session_id.startswith("cs_"):
-        raise PaylinkError(
-            "checkout response missing checkout_session_id; "
-            f"keys={sorted(raw.keys())[:20]}"
-        )
+        raise PaylinkError(f"checkout response missing checkout_session_id; keys={sorted(raw.keys())[:20]}")
 
     publishable_key = str(raw.get("publishable_key") or raw.get("stripe_publishable_key") or DEFAULT_STRIPE_PK).strip()
     promo_campaign_id = extract_promo_campaign_id(raw)
@@ -813,7 +831,9 @@ def emit_result(result: CheckoutResult, fmt: str) -> None:
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Create pay.openai.com Plus checkout URL from accessToken/session JSON.")
+    parser = argparse.ArgumentParser(
+        description="Create pay.openai.com Plus checkout URL from accessToken/session JSON."
+    )
     source = parser.add_mutually_exclusive_group()
     source.add_argument("--access-token", help="Raw ChatGPT accessToken JWT.")
     source.add_argument("--access-token-file", help="File containing raw JWT, JSON, or accessToken snippet.")

@@ -38,14 +38,21 @@ SAMPLE_LINES = [
     "gmail://user@gmail.com----cid-1----sec-1----refresh-1",
     "cfworker://user@example.com",
     "user@liziai.cloud",
-    "user@example.com----pw-1----cid-1----refresh-1",       # chatai (4 hyphens)
-    "user@example.com---pw-1---refresh-1---access-1",       # graph (3 hyphens)
+    "user@example.com----pw-1----cid-1----refresh-1",  # chatai (4 hyphens)
+    "user@example.com---pw-1---refresh-1---access-1",  # graph (3 hyphens)
     "user@icloud.com----https://mail.example/messages/secret/user%40icloud.com",
 ]
 
 COMPARED_FIELDS = (
-    "email", "password", "refresh_token", "access_token", "token",
-    "provider", "auth_mode", "order_no", "purchase_id",
+    "email",
+    "password",
+    "refresh_token",
+    "access_token",
+    "token",
+    "provider",
+    "auth_mode",
+    "order_no",
+    "purchase_id",
 )
 
 
@@ -97,22 +104,21 @@ class MailboxLineFormatTests(unittest.TestCase):
         self.assertEqual(account.token, "cid-1")
         for field in ("password", "refresh_token", "token"):
             self.assertNotIn(
-                "-", (getattr(account, field) or "")[:1],
+                "-",
+                (getattr(account, field) or "")[:1],
                 f"{field} was built from a mis-split chatai line",
             )
 
     def test_blank_and_comment_lines_are_skipped_by_every_loader(self):
         path = _write("\n# a comment\n   \nuser@example.com---pw-1---refresh-1\n")
-        for loader in (_parse_mailbox_token_file, _parse_chatai_mailbox_file,
-                       _parse_mailbox_lines):
+        for loader in (_parse_mailbox_token_file, _parse_chatai_mailbox_file, _parse_mailbox_lines):
             with self.subTest(loader=loader.__name__):
                 records = loader(path)
                 self.assertEqual(len(records), 1)
                 self.assertEqual(records[0].provider, "graph")
 
     def test_missing_file_yields_no_records(self):
-        for loader in (_parse_mailbox_token_file, _parse_chatai_mailbox_file,
-                       _parse_mailbox_lines):
+        for loader in (_parse_mailbox_token_file, _parse_chatai_mailbox_file, _parse_mailbox_lines):
             with self.subTest(loader=loader.__name__):
                 self.assertEqual(loader(Path(tempfile.gettempdir()) / "does-not-exist.txt"), [])
 

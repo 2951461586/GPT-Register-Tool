@@ -19,10 +19,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock
 
-MODULE_PATH = (
-    Path(__file__).resolve().parents[2]
-    / "services" / "protocol-payment" / "common" / "logging_setup.py"
-)
+MODULE_PATH = Path(__file__).resolve().parents[2] / "services" / "protocol-payment" / "common" / "logging_setup.py"
 SPEC = importlib.util.spec_from_file_location("protocol_payment_logging_setup", MODULE_PATH)
 LOGSETUP = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
@@ -60,9 +57,7 @@ class StdoutIsolationTests(unittest.TestCase):
                 for handler in logger.handlers:
                     # FileHandler subclasses StreamHandler, so the discriminator
                     # is the *target*: a rotating file, never a console stream.
-                    self.assertIsInstance(
-                        handler, LOGSETUP.ResilientRotatingFileHandler
-                    )
+                    self.assertIsInstance(handler, LOGSETUP.ResilientRotatingFileHandler)
                     self.assertTrue(handler.baseFilename.startswith(tmp))
             finally:
                 self._close(logger)
@@ -70,9 +65,7 @@ class StdoutIsolationTests(unittest.TestCase):
 
 class ResilientRotationTests(unittest.TestCase):
     def _handler(self, path):
-        return LOGSETUP.ResilientRotatingFileHandler(
-            path, maxBytes=1, backupCount=1, encoding="utf-8", delay=True
-        )
+        return LOGSETUP.ResilientRotatingFileHandler(path, maxBytes=1, backupCount=1, encoding="utf-8", delay=True)
 
     def test_failed_rotation_degrades_to_appending(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -82,9 +75,7 @@ class ResilientRotationTests(unittest.TestCase):
             # by default); a held-open file is what makes it fail on Windows.
             handler.rotate = Mock(side_effect=PermissionError(13, "file is in use"))
             for index in range(5):
-                record = logging.LogRecord(
-                    "t", logging.INFO, __file__, 10, f"payload-{index}", (), None
-                )
+                record = logging.LogRecord("t", logging.INFO, __file__, 10, f"payload-{index}", (), None)
                 handler.emit(record)
             handler.close()
             text = path.read_text(encoding="utf-8")
@@ -109,9 +100,7 @@ class ResilientRotationTests(unittest.TestCase):
             target.setLevel(logging.WARNING)
             try:
                 for _ in range(3):
-                    record = logging.LogRecord(
-                        "t", logging.INFO, __file__, 10, "payload", (), None
-                    )
+                    record = logging.LogRecord("t", logging.INFO, __file__, 10, "payload", (), None)
                     handler.emit(record)
             finally:
                 target.removeHandler(capture)
@@ -134,9 +123,7 @@ class LoggerShapeTests(unittest.TestCase):
             second = LOGSETUP.make_file_logger("beta", Path(tmp))
             try:
                 self.assertIsNot(first, second)
-                self.assertNotEqual(
-                    first.handlers[0].baseFilename, second.handlers[0].baseFilename
-                )
+                self.assertNotEqual(first.handlers[0].baseFilename, second.handlers[0].baseFilename)
                 first.info("only-alpha")
                 second.info("only-beta")
                 for handler in first.handlers + second.handlers:
@@ -152,9 +139,7 @@ class LoggerShapeTests(unittest.TestCase):
 
     def test_redact_callback_is_applied(self):
         with tempfile.TemporaryDirectory() as tmp:
-            logger = LOGSETUP.make_file_logger(
-                "redact", Path(tmp), redact=lambda text: text.replace("secret", "***")
-            )
+            logger = LOGSETUP.make_file_logger("redact", Path(tmp), redact=lambda text: text.replace("secret", "***"))
             try:
                 logger.info("the secret value")
                 for handler in logger.handlers:
@@ -181,4 +166,3 @@ class LoggerShapeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

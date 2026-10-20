@@ -60,8 +60,7 @@ def _no_screenshots(monkeypatch):
     monkeypatch.setattr(flow_steps, "_screenshot", lambda *a, **k: None)
 
 
-SMS_CFG = {"api_url": "https://sms.example/api", "phone": "5550100134",
-           "timeout": 60, "poll_interval": 3}
+SMS_CFG = {"api_url": "https://sms.example/api", "phone": "5550100134", "timeout": 60, "poll_interval": 3}
 
 #: ``_sms_baseline`` returns this shape; ``_poll_sms_code`` reads ``.get("raw")``.
 _BASELINE = {"raw": "baseline", "timestamp": 0}
@@ -100,9 +99,7 @@ def test_is_human_verification_page_returns_false_for_unrelated_body_text():
 
 
 def test_is_human_verification_page_swallows_a_failing_body_read():
-    body = FakeElement(
-        visible=False, inner_text=lambda timeout=None: (_ for _ in ()).throw(RuntimeError("boom"))
-    )
+    body = FakeElement(visible=False, inner_text=lambda timeout=None: (_ for _ in ()).throw(RuntimeError("boom")))
     page = FakePage(locators={"body": body})
     assert flow_steps._is_human_verification_page(page) is False
 
@@ -125,15 +122,13 @@ def test_is_human_verification_page_is_idempotent(dead_page):
 
 
 def test_human_verification_gate_is_a_no_op_when_the_page_is_clean(dead_page):
-    assert flow_steps._handle_human_verification_gate(
-        dead_page, {}, "", False, "human_verification") is None
+    assert flow_steps._handle_human_verification_gate(dead_page, {}, "", False, "human_verification") is None
 
 
 def test_human_verification_gate_raises_immediately_when_manual_is_not_allowed(monkeypatch, dead_page):
     monkeypatch.setattr(flow_steps, "_is_human_verification_page", lambda page: True)
     with pytest.raises(_PayPalStepError) as exc:
-        flow_steps._handle_human_verification_gate(
-            dead_page, {}, "", False, "human_verification")
+        flow_steps._handle_human_verification_gate(dead_page, {}, "", False, "human_verification")
     assert exc.value.step == "human_verification"
     assert exc.value.detail == "paypal_human_verification_required"
 
@@ -149,7 +144,8 @@ def test_human_verification_gate_waits_and_returns_when_the_challenge_clears(mon
     states = iter([True, True, False])
     monkeypatch.setattr(flow_steps, "_is_human_verification_page", lambda page: next(states))
     flow_steps._handle_human_verification_gate(
-        dead_page, {"manual_human_verification": True}, "", False, "human_verification")
+        dead_page, {"manual_human_verification": True}, "", False, "human_verification"
+    )
     assert clock.sleeps  # some waiting actually happened
 
 
@@ -158,8 +154,12 @@ def test_human_verification_gate_raises_after_the_timeout_expires(monkeypatch, d
     monkeypatch.setattr(flow_steps, "_is_human_verification_page", lambda page: True)
     with pytest.raises(_PayPalStepError) as exc:
         flow_steps._handle_human_verification_gate(
-            dead_page, {"manual_human_verification": True, "human_verification_timeout": 6},
-            "", False, "human_verification")
+            dead_page,
+            {"manual_human_verification": True, "human_verification_timeout": 6},
+            "",
+            False,
+            "human_verification",
+        )
     assert exc.value.detail == "paypal_human_verification_required"
     assert sum(clock.sleeps) >= 6
 
@@ -168,7 +168,8 @@ def test_human_verification_gate_defaults_to_a_300_second_window(monkeypatch, de
     monkeypatch.setattr(flow_steps, "_is_human_verification_page", lambda page: True)
     with pytest.raises(_PayPalStepError):
         flow_steps._handle_human_verification_gate(
-            dead_page, {"manual_human_verification": True}, "", False, "human_verification")
+            dead_page, {"manual_human_verification": True}, "", False, "human_verification"
+        )
     assert sum(clock.sleeps) >= 300
 
 
@@ -177,8 +178,12 @@ def test_human_verification_gate_treats_a_blank_timeout_as_300(monkeypatch, dead
     monkeypatch.setattr(flow_steps, "_is_human_verification_page", lambda page: True)
     with pytest.raises(_PayPalStepError):
         flow_steps._handle_human_verification_gate(
-            dead_page, {"manual_human_verification": True, "human_verification_timeout": 0},
-            "", False, "human_verification")
+            dead_page,
+            {"manual_human_verification": True, "human_verification_timeout": 0},
+            "",
+            False,
+            "human_verification",
+        )
     assert sum(clock.sleeps) >= 300
 
 
@@ -191,7 +196,8 @@ def test_human_verification_gate_swallows_a_failing_networkidle_wait(monkeypatch
             raise RuntimeError("networkidle boom")
 
     flow_steps._handle_human_verification_gate(
-        Page(), {"manual_human_verification": True}, "", False, "human_verification")
+        Page(), {"manual_human_verification": True}, "", False, "human_verification"
+    )
 
 
 # ───────────────────────── _handle_sms_verification ──────────────────────────
@@ -204,8 +210,9 @@ def test_handle_sms_verification_returns_none_when_no_code_field_is_present(dead
 def test_handle_sms_verification_clicks_send_when_the_code_field_is_not_yet_visible(monkeypatch, dead_page, clock):
     """When no OTP box exists it first asks PayPal to send one."""
     clicked = []
-    monkeypatch.setattr(flow_steps, "_click_with_fallback",
-                        lambda page, selectors, timeout=0: clicked.append(selectors[0]) or True)
+    monkeypatch.setattr(
+        flow_steps, "_click_with_fallback", lambda page, selectors, timeout=0: clicked.append(selectors[0]) or True
+    )
     flow_steps._handle_sms_verification(dead_page, SMS_CFG, _BASELINE)
     assert clicked == ['button:has-text("Send Code")']
 
@@ -224,8 +231,9 @@ def test_handle_sms_verification_fills_the_code_and_confirms(monkeypatch, clock)
     page = FakePage(locators={'input[name="code"]': el})
     monkeypatch.setattr(flow_steps, "_poll_sms_code", lambda *a, **k: "123456")
     confirmed = {}
-    monkeypatch.setattr(flow_steps, "_click_with_fallback",
-                        lambda p, selectors, timeout=0: confirmed.update(n=len(selectors)) or True)
+    monkeypatch.setattr(
+        flow_steps, "_click_with_fallback", lambda p, selectors, timeout=0: confirmed.update(n=len(selectors)) or True
+    )
 
     assert flow_steps._handle_sms_verification(page, SMS_CFG, _BASELINE) == "123456"
     assert el.value == "123456"
@@ -237,20 +245,18 @@ def test_handle_sms_verification_passes_the_poll_settings_through(monkeypatch, c
     seen = {}
 
     def _poll(api_url, baseline, timeout=None, poll_interval=None):
-        seen.update(api_url=api_url, baseline=baseline,
-                    timeout=timeout, poll_interval=poll_interval)
+        seen.update(api_url=api_url, baseline=baseline, timeout=timeout, poll_interval=poll_interval)
         return "654321"
 
     monkeypatch.setattr(flow_steps, "_poll_sms_code", _poll)
     baseline = {"raw": "BASE", "timestamp": 0}
     flow_steps._handle_sms_verification(page, SMS_CFG, baseline)
-    assert seen == {"api_url": SMS_CFG["api_url"], "baseline": baseline,
-                    "timeout": 60, "poll_interval": 3}
+    assert seen == {"api_url": SMS_CFG["api_url"], "baseline": baseline, "timeout": 60, "poll_interval": 3}
 
 
 def test_handle_sms_verification_stops_filling_after_the_first_visible_code_box(monkeypatch, clock):
     first, second = FakeElement(visible=True, value=""), FakeElement(visible=True, value="")
-    page = FakePage(locators={'input[name="code"]': first, '#code': second})
+    page = FakePage(locators={'input[name="code"]': first, "#code": second})
     monkeypatch.setattr(flow_steps, "_poll_sms_code", lambda *a, **k: "111111")
     monkeypatch.setattr(flow_steps, "_click_with_fallback", lambda *a, **k: True)
     flow_steps._handle_sms_verification(page, SMS_CFG, _BASELINE)
@@ -357,8 +363,7 @@ def test_wait_for_stripe_redirect_truncates_the_url_in_the_error(url_clock):
 
 
 def test_wait_for_stripe_redirect_polls_until_the_url_changes(url_clock):
-    page = UrlPage(["https://www.paypal.com/a", "https://www.paypal.com/b",
-                    "https://checkout.stripe.com/c/pay/cs_1"])
+    page = UrlPage(["https://www.paypal.com/a", "https://www.paypal.com/b", "https://checkout.stripe.com/c/pay/cs_1"])
 
     original_sleep = flow_steps.time.sleep
 
@@ -376,18 +381,24 @@ def test_wait_for_stripe_redirect_polls_until_the_url_changes(url_clock):
 def test_prepare_openai_checkout_returns_false_for_a_non_openai_url(dead_page):
     dead_page.url = "https://www.paypal.com/checkout"
     flow_steps._is_openai_checkout_url = lambda url: False
-    assert flow_steps._prepare_openai_checkout_paypal(
-        dead_page, address={}, first_name="A", last_name="B", phone="",
-        debug_dir="", debug_enabled=False) is False
+    assert (
+        flow_steps._prepare_openai_checkout_paypal(
+            dead_page, address={}, first_name="A", last_name="B", phone="", debug_dir="", debug_enabled=False
+        )
+        is False
+    )
 
 
 def test_prepare_openai_checkout_returns_true_as_soon_as_the_url_is_paypal(dead_page):
     dead_page.url = "https://www.paypal.com/checkout"
     flow_steps._is_openai_checkout_url = lambda url: True
     flow_steps._is_paypal_url = lambda url: True
-    assert flow_steps._prepare_openai_checkout_paypal(
-        dead_page, address={}, first_name="A", last_name="B", phone="",
-        debug_dir="", debug_enabled=False) is True
+    assert (
+        flow_steps._prepare_openai_checkout_paypal(
+            dead_page, address={}, first_name="A", last_name="B", phone="", debug_dir="", debug_enabled=False
+        )
+        is True
+    )
 
 
 def test_prepare_openai_checkout_fills_billing_and_selects_paypal(dead_page, clock):
@@ -408,8 +419,8 @@ def test_prepare_openai_checkout_fills_billing_and_selects_paypal(dead_page, clo
     flow_steps.time.sleep = _stopping_sleep
 
     flow_steps._prepare_openai_checkout_paypal(
-        dead_page, address={}, first_name="A", last_name="B", phone="",
-        debug_dir="", debug_enabled=False)
+        dead_page, address={}, first_name="A", last_name="B", phone="", debug_dir="", debug_enabled=False
+    )
     assert calls == ["billing", "select", "continue"]
 
 
@@ -430,9 +441,12 @@ def test_prepare_openai_checkout_swallows_a_failing_load_state_wait(dead_page, c
         clock.now += 45
 
     flow_steps.time.sleep = lambda secs: _stopping_sleep(secs)
-    assert flow_steps._prepare_openai_checkout_paypal(
-        Page(), address={}, first_name="A", last_name="B", phone="",
-        debug_dir="", debug_enabled=False) is False
+    assert (
+        flow_steps._prepare_openai_checkout_paypal(
+            Page(), address={}, first_name="A", last_name="B", phone="", debug_dir="", debug_enabled=False
+        )
+        is False
+    )
 
 
 def test_prepare_openai_checkout_keeps_retrying_within_its_45_second_budget(dead_page, clock):
@@ -446,8 +460,8 @@ def test_prepare_openai_checkout_keeps_retrying_within_its_45_second_budget(dead
     flow_steps._click_openai_checkout_continue = lambda page: False
 
     result = flow_steps._prepare_openai_checkout_paypal(
-        dead_page, address={}, first_name="A", last_name="B", phone="",
-        debug_dir="", debug_enabled=False)
+        dead_page, address={}, first_name="A", last_name="B", phone="", debug_dir="", debug_enabled=False
+    )
 
     assert result is False
     assert len(fill_calls) >= 45  # one per second of the 45s budget
@@ -458,6 +472,9 @@ def test_prepare_openai_checkout_returns_false_once_the_budget_is_spent_on_a_non
     dead_page.url = "https://example.com/somewhere"
     flow_steps._is_openai_checkout_url = lambda url: False
     flow_steps._is_paypal_url = lambda url: False
-    assert flow_steps._prepare_openai_checkout_paypal(
-        dead_page, address={}, first_name="A", last_name="B", phone="",
-        debug_dir="", debug_enabled=False) is False
+    assert (
+        flow_steps._prepare_openai_checkout_paypal(
+            dead_page, address={}, first_name="A", last_name="B", phone="", debug_dir="", debug_enabled=False
+        )
+        is False
+    )

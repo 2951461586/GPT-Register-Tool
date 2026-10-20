@@ -69,8 +69,12 @@ _STATUS_NORMALIZED = {
 }
 
 
-def _dig(value: Mapping[str, Any], *path: str, default: Any = None) -> Any:
-    """Case-insensitive nested dict lookup across a path of keys."""
+def _dig(value: Mapping[str, Any], *path: str | int, default: Any = None) -> Any:
+    """Case-insensitive nested dict lookup across a path of keys.
+
+    ``int`` is allowed because a path element may index a list-shaped payload
+    (``_dig(raw, "errors", 0, "code")``); every comparison below is on ``str(key)``.
+    """
     node: Any = value
     for key in path:
         if not isinstance(node, Mapping):
@@ -100,7 +104,7 @@ class PayPalAuthorizationContext:
     ec_token: str = ""
     funding_context: Mapping[str, Any] = field(default_factory=dict)
     approved: bool = False
-    status: str = ""          # normalized: completed / failed / cancelled / unknown
+    status: str = ""  # normalized: completed / failed / cancelled / unknown
     error_code: str = ""
     error_stage: str = ""
     raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
@@ -158,18 +162,10 @@ def parse_authorization_context(
         or _dig(raw, "data", "billingAgreementId")
         or _token_from_text(text, _BILLING_AGREEMENT_RE)
     )
-    ctx_ba = _as_text(
-        _dig(raw, "baToken") or _dig(raw, "ba_token") or _token_from_text(text, _BA_RE)
-    )
-    ctx_ec = _as_text(
-        _dig(raw, "ecToken") or _dig(raw, "ec_token") or _token_from_text(text, _EC_RE)
-    )
+    ctx_ba = _as_text(_dig(raw, "baToken") or _dig(raw, "ba_token") or _token_from_text(text, _BA_RE))
+    ctx_ec = _as_text(_dig(raw, "ecToken") or _dig(raw, "ec_token") or _token_from_text(text, _EC_RE))
 
-    approved = _as_bool(
-        _dig(raw, "approved")
-        or _dig(raw, "isApproved")
-        or _dig(raw, "data", "approved")
-    )
+    approved = _as_bool(_dig(raw, "approved") or _dig(raw, "isApproved") or _dig(raw, "data", "approved"))
     if approved is None:
         # heuristics: a concrete B- id or BA token alongside no error implies ok
         approved = bool(billing_agreement_id) and not _contains_fatal(raw)
@@ -196,9 +192,7 @@ def parse_authorization_context(
         funding = {}
 
     # normalize status
-    raw_status = _as_text(
-        _dig(raw, "status") or _dig(raw, "state") or _dig(raw, "data", "status")
-    ).lower()
+    raw_status = _as_text(_dig(raw, "status") or _dig(raw, "state") or _dig(raw, "data", "status")).lower()
     status = _STATUS_NORMALIZED.get(raw_status, "")
     if not status:
         if approved:
@@ -304,15 +298,13 @@ def to_payment_result(
     """Map a parsed context to a dict consumable by ``PaymentResult.from_mapping``."""
     outcome = classify_authorization_outcome(ctx)
     result: dict[str, Any] = dict(outcome)
-    result.update({
-        "payment_method": payment_method,
-        "operation": operation,
-        "error": (
-            _as_text(ctx.raw.get("error") or ctx.raw.get("message"))
-            if not outcome["ok"]
-            else ""
-        ),
-    })
+    result.update(
+        {
+            "payment_method": payment_method,
+            "operation": operation,
+            "error": (_as_text(ctx.raw.get("error") or ctx.raw.get("message")) if not outcome["ok"] else ""),
+        }
+    )
     if url:
         result["url"] = url
     return result

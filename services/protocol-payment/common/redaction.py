@@ -54,9 +54,7 @@ __all__ = [
 
 _BEARER_RE = re.compile(r"(Bearer\s+)[A-Za-z0-9._=-]+")
 _SESSION_COOKIE_RE = re.compile(r"(__Secure-next-auth\.session-token=)[^;\\s]+")
-_TOKEN_FIELD_RE = re.compile(
-    r"(accessToken|access_token|sessionToken|token)(['\"]?\s*[:=]\s*['\"])[^'\"]+"
-)
+_TOKEN_FIELD_RE = re.compile(r"(accessToken|access_token|sessionToken|token)(['\"]?\s*[:=]\s*['\"])[^'\"]+")
 
 
 class RedactionRegistry:
@@ -175,5 +173,8 @@ def redact_text(
     text = _TOKEN_FIELD_RE.sub(r"\1\2***", text)
     text = redact_log_text(text, registry=registry, proxy_label=proxy_label)
     if limit is None:
-        limit = env_int(limit_env, 6000, minimum=500)
+        # Positional: the parameter is typed ``Callable[[str, int, int], int]``, so
+        # a keyword name is not part of the contract even though every injected
+        # implementation accepts it (blik/ideal/twint all default ``minimum=1``).
+        limit = env_int(limit_env, 6000, 500)
     return text[:limit]

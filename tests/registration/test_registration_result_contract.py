@@ -68,33 +68,48 @@ class BuildRegistrationFailureResultTests(unittest.TestCase):
 class BuildRegistrationResultTests(unittest.TestCase):
     def test_fingerprint_geo_audit_has_one_safe_shape_for_both_paths(self):
         audit = safe_fingerprint_geo_audit(
-            fingerprint_country="us", exit_country="DE", source="browser_probe",
+            fingerprint_country="us",
+            exit_country="DE",
+            source="browser_probe",
             allowed_countries=["VN"],
         )
-        self.assertEqual(audit, {
-            "status": "mismatch", "fingerprint_country": "US",
-            "exit_country": "DE", "source": "browser_probe",
-            "allowed_status": "mismatch",
-        })
-        self.assertEqual(safe_fingerprint_geo_audit(
-            fingerprint_country="US", exit_country="", source="unknown"
-        )["status"], "unknown")
-        self.assertEqual(safe_fingerprint_geo_audit(
-            fingerprint_country="https://user:pass@proxy.invalid", exit_country="US",
-            source="https://user:pass@proxy.invalid",
-        )["fingerprint_country"], "")
-        self.assertEqual(safe_fingerprint_geo_audit(
-            fingerprint_country="US", exit_country="US", source="probe"
-        )["status"], "matched")
+        self.assertEqual(
+            audit,
+            {
+                "status": "mismatch",
+                "fingerprint_country": "US",
+                "exit_country": "DE",
+                "source": "browser_probe",
+                "allowed_status": "mismatch",
+            },
+        )
+        self.assertEqual(
+            safe_fingerprint_geo_audit(fingerprint_country="US", exit_country="", source="unknown")["status"], "unknown"
+        )
+        self.assertEqual(
+            safe_fingerprint_geo_audit(
+                fingerprint_country="https://user:pass@proxy.invalid",
+                exit_country="US",
+                source="https://user:pass@proxy.invalid",
+            )["fingerprint_country"],
+            "",
+        )
+        self.assertEqual(
+            safe_fingerprint_geo_audit(fingerprint_country="US", exit_country="US", source="probe")["status"], "matched"
+        )
 
     def test_geo_mismatch_warns_without_changing_success_or_failure(self):
         for success in (True, False):
             with self.subTest(success=success):
                 result = build_registration_result(
-                    success=success, registration_mode="protocol", registration_state="active",
+                    success=success,
+                    registration_mode="protocol",
+                    registration_state="active",
                     fingerprint_geo_audit={
-                        "fingerprint_country": "US", "exit_country": "DE",
-                        "source": "preflight", "allowed_countries": ["VN"],
+                        "fingerprint_country": "US",
+                        "exit_country": "DE",
+                        "source": "preflight",
+                        "allowed_countries": ["VN"],
                     },
                     registration_warning="existing warning",
                 )
@@ -156,10 +171,7 @@ class SharedAssemblyGuardTests(unittest.TestCase):
                     if isinstance(node, ast.Call)
                     and (
                         (isinstance(node.func, ast.Name) and node.func.id == "build_registration_result")
-                        or (
-                            isinstance(node.func, ast.Attribute)
-                            and node.func.attr == "build_registration_result"
-                        )
+                        or (isinstance(node.func, ast.Attribute) and node.func.attr == "build_registration_result")
                     )
                 ]
                 self.assertEqual(
@@ -181,25 +193,19 @@ class SharedAssemblyGuardTests(unittest.TestCase):
                 for node in ast.walk(tree):
                     if not isinstance(node, ast.Assign):
                         continue
-                    if not any(
-                        isinstance(target, ast.Name) and target.id == "result"
-                        for target in node.targets
-                    ):
+                    if not any(isinstance(target, ast.Name) and target.id == "result" for target in node.targets):
                         continue
                     value = node.value
                     if not isinstance(value, ast.Dict):
                         continue
                     keys = {
-                        key.value
-                        for key in value.keys
-                        if isinstance(key, ast.Constant) and isinstance(key.value, str)
+                        key.value for key in value.keys if isinstance(key, ast.Constant) and isinstance(key.value, str)
                     }
                     overlap = keys & sentinel_keys
                     self.assertEqual(
                         set(),
                         overlap,
-                        f"{path.name}: hand-rolled result assembly reintroduced "
-                        f"with contract keys {sorted(overlap)}",
+                        f"{path.name}: hand-rolled result assembly reintroduced with contract keys {sorted(overlap)}",
                     )
 
 

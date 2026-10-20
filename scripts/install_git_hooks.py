@@ -23,9 +23,7 @@ HOOK_REL = ".githooks"
 
 
 def git(*args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        ["git", *args], cwd=str(ROOT), capture_output=True, text=True
-    )
+    return subprocess.run(["git", *args], cwd=str(ROOT), capture_output=True, text=True)
 
 
 def current_hooks_path() -> str:

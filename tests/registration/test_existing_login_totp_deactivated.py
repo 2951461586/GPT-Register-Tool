@@ -23,9 +23,10 @@ def _run(verify_status, verify_body):
     issue = Mock(status_code=200)
     verify = Mock(status_code=verify_status)
     verify.json.return_value = verify_body
-    with patch.object(totp.deps, "request_with_retry", Mock(side_effect=[issue, verify])), patch(
-        "pyotp.TOTP"
-    ) as totp_cls:
+    with (
+        patch.object(totp.deps, "request_with_retry", Mock(side_effect=[issue, verify])),
+        patch("pyotp.TOTP") as totp_cls,
+    ):
         totp_cls.return_value.now.return_value = "123456"
         return totp._complete_existing_login_totp(
             Mock(),
@@ -53,9 +54,10 @@ class TotpVerifyDeactivationTests(unittest.TestCase):
         issue = Mock(status_code=200)
         verify = Mock(status_code=403, text="account_deactivated")
         verify.json.side_effect = ValueError("not json")
-        with patch.object(totp.deps, "request_with_retry", Mock(side_effect=[issue, verify])), patch(
-            "pyotp.TOTP"
-        ) as totp_cls:
+        with (
+            patch.object(totp.deps, "request_with_retry", Mock(side_effect=[issue, verify])),
+            patch("pyotp.TOTP") as totp_cls,
+        ):
             totp_cls.return_value.now.return_value = "123456"
             result = totp._complete_existing_login_totp(
                 Mock(),
@@ -71,7 +73,9 @@ class TotpVerifyDeactivationTests(unittest.TestCase):
     def test_the_recovery_chain_reads_the_verdict_as_terminal(self):
         from sms_tool.accounts.account_recovery import _looks_account_deactivated
 
-        self.assertTrue(_looks_account_deactivated({"error": "existing_login_totp_verify_failed:403:account_deactivated"}))
+        self.assertTrue(
+            _looks_account_deactivated({"error": "existing_login_totp_verify_failed:403:account_deactivated"})
+        )
         self.assertFalse(_looks_account_deactivated({"error": "existing_login_totp_verify_failed:403"}))
 
 

@@ -59,7 +59,9 @@ def mark_quota_status(email, quota_status="", quota_result=None, *, runtime_conf
         verified_active = False
         if isinstance(quota_result, dict):
             try:
-                verified_active = bool(quota_result.get("ok")) and 200 <= int(quota_result.get("status_code") or 0) < 300
+                verified_active = (
+                    bool(quota_result.get("ok")) and 200 <= int(quota_result.get("status_code") or 0) < 300
+                )
             except (TypeError, ValueError):
                 verified_active = False
             if verified_active:
@@ -86,7 +88,6 @@ def mark_quota_status(email, quota_status="", quota_result=None, *, runtime_conf
     if json_path:
         _update_session_json(json_path, data)
     return True
-
 
 
 def mark_account_health_result(
@@ -134,11 +135,13 @@ def mark_account_health_result(
         _raw_checks: object = health.get("checks")
         checks: dict = _raw_checks if isinstance(_raw_checks, dict) else {}
         checks[check] = safe_result
-        health.update({
-            "latest": safe_result,
-            "checks": checks,
-            "updated_at": now,
-        })
+        health.update(
+            {
+                "latest": safe_result,
+                "checks": checks,
+                "updated_at": now,
+            }
+        )
         data["account_health"] = health
         plan_type = str(safe_result.get("plan_type") or "").strip().lower()
         terminal = bool(safe_result.get("terminal"))
@@ -169,17 +172,28 @@ def mark_account_health_result(
     return True
 
 
-
 # Never persist these into raw_json even if a caller hands them over: the
 # eligibility probe is designed to return an enumerable, token-free dict, and
 # this is the backstop that keeps it that way.
-_PAYMENT_CAPABILITY_METHODS = frozenset({
-    "payment_method_types", "ordered_payment_method_types", "custom_payment_methods", "methods",
-})
-_PAYMENT_CAPABILITY_FACTS = frozenset({
-    "billing_country", "carrier_method", "currency", "offer_state",
-    "error_code", "error_stage", "checkout_kind",
-})
+_PAYMENT_CAPABILITY_METHODS = frozenset(
+    {
+        "payment_method_types",
+        "ordered_payment_method_types",
+        "custom_payment_methods",
+        "methods",
+    }
+)
+_PAYMENT_CAPABILITY_FACTS = frozenset(
+    {
+        "billing_country",
+        "carrier_method",
+        "currency",
+        "offer_state",
+        "error_code",
+        "error_stage",
+        "checkout_kind",
+    }
+)
 
 
 def _payment_capability_snapshot(value, *, updated_at: int):
@@ -199,8 +213,7 @@ def _payment_capability_snapshot(value, *, updated_at: int):
         items = value.get(key)
         if isinstance(items, (list, tuple)):
             snapshot[key] = [
-                item for item in items[:16]
-                if isinstance(item, str) and re.fullmatch(r"[a-z][a-z0-9_]{0,31}", item)
+                item for item in items[:16] if isinstance(item, str) and re.fullmatch(r"[a-z][a-z0-9_]{0,31}", item)
             ]
     for key in _PAYMENT_CAPABILITY_FACTS:
         item = value.get(key)
@@ -347,11 +360,7 @@ def mark_promotion_status(
                 promotion["payment_capability"] = snapshot
         # Machine state next to the display label (sms_tool/promotion_states.py):
         # the desktop filter/sort keys off this, not off the Chinese copy.
-        promotion_state = str(
-            promotion_state
-            or (promotion_result or {}).get("promotion_state")
-            or ""
-        ).strip()
+        promotion_state = str(promotion_state or (promotion_result or {}).get("promotion_state") or "").strip()
         promotion["state"] = promotion_state
         data["promotion_state"] = promotion_state
         # Promotion and liveness are separate contracts. A promotion 401 is
@@ -361,7 +370,9 @@ def mark_promotion_status(
         if isinstance(promotion_result, dict):
             promotion_code = str(promotion_result.get("status_code") or "").strip()
             if not promotion_code and str(promotion_result.get("error") or "").strip().lower() in {
-                "token_invalid", "access_token_invalid", "token_invalidated"
+                "token_invalid",
+                "access_token_invalid",
+                "token_invalidated",
             }:
                 promotion_code = "401"
         promotion["status_code"] = promotion_code
@@ -376,7 +387,6 @@ def mark_promotion_status(
     if json_path:
         _update_session_json(json_path, data)
     return True
-
 
 
 def clear_stale_promotion_at_marker(email, *, verified_at: int | None = None, runtime_config: ConfigInput = None):
@@ -451,4 +461,3 @@ def clear_stale_promotion_at_marker(email, *, verified_at: int | None = None, ru
     if json_path:
         _update_session_json(json_path, data)
     return True
-

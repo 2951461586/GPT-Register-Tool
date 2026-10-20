@@ -70,12 +70,26 @@ def _normalize_debugger_address(value: Any) -> str:
 
 def _roxy_retryable(exc: Exception) -> bool:
     text = f"{type(exc).__name__}: {exc}".lower()
-    return any(marker in text for marker in (
-        "timeout", "timed out", "connection", "temporarily", "unavailable",
-        "reset", "refused", "http_408", "http_409", "http_425", "http_429",
-        "http_500", "http_502", "http_503", "http_504",
-    ))
-
+    return any(
+        marker in text
+        for marker in (
+            "timeout",
+            "timed out",
+            "connection",
+            "temporarily",
+            "unavailable",
+            "reset",
+            "refused",
+            "http_408",
+            "http_409",
+            "http_425",
+            "http_429",
+            "http_500",
+            "http_502",
+            "http_503",
+            "http_504",
+        )
+    )
 
 
 class ConnectedPlaywrightSession(PlaywrightBrowserSession):
@@ -91,10 +105,14 @@ class ConnectedPlaywrightSession(PlaywrightBrowserSession):
     def _adopt_browser(self, browser: Any) -> None:
         self.browser = browser
         contexts = list(getattr(browser, "contexts", []) or [])
-        self.context = contexts[0] if contexts else browser.new_context(
-            locale=self.locale,
-            timezone_id=self.timezone_id,
-            viewport={"width": DEFAULT_VIEWPORT_WIDTH, "height": DEFAULT_VIEWPORT_HEIGHT},
+        self.context = (
+            contexts[0]
+            if contexts
+            else browser.new_context(
+                locale=self.locale,
+                timezone_id=self.timezone_id,
+                viewport={"width": DEFAULT_VIEWPORT_WIDTH, "height": DEFAULT_VIEWPORT_HEIGHT},
+            )
         )
         self.context.set_default_timeout(self.timeout_ms)
         pages = list(getattr(self.context, "pages", []) or [])
@@ -283,6 +301,7 @@ class CamoufoxBrowserSession(ConnectedPlaywrightSession):
         using_bridge = False
         if raw_proxy:
             from ...proxy_bridge import proxy_for_browser, needs_bridge
+
             using_bridge = needs_bridge(raw_proxy)
             browser_proxy, closer = proxy_for_browser(raw_proxy)
         self._proxy_bridge_closer = closer
@@ -301,6 +320,7 @@ class CamoufoxBrowserSession(ConnectedPlaywrightSession):
         }
         if browser_proxy:
             from urllib.parse import urlsplit as _urlsplit
+
             pp = _urlsplit(browser_proxy)
             # Convert socks5h:// to socks5:// — Firefox's proxy parser does
             # not recognize the "h" suffix; remote DNS is handled by the
@@ -347,6 +367,7 @@ class CamoufoxBrowserSession(ConnectedPlaywrightSession):
             # user_data_dir is configured. We own this directory, not Camoufox:
             # its context manager closes the process but preserves profiles.
             import tempfile
+
             if not user_data_dir:
                 self._owned_profile = tempfile.mkdtemp(prefix="camoufox_reg_")
             tmp_profile = user_data_dir or self._owned_profile
@@ -361,9 +382,7 @@ class CamoufoxBrowserSession(ConnectedPlaywrightSession):
             # instead). Camoufox still fires its "pass geoip=True" LeakWarning
             # for proxy+geoip=False, a known false positive for this design —
             # silence it here rather than in the global warnings filters.
-            launch_warnings = (
-                warnings.catch_warnings() if browser_proxy and not geoip else contextlib.nullcontext()
-            )
+            launch_warnings = warnings.catch_warnings() if browser_proxy and not geoip else contextlib.nullcontext()
             with launch_warnings:
                 if browser_proxy and not geoip:
                     warnings.filterwarnings("ignore", message=".*geoip=True.*")
@@ -418,9 +437,7 @@ class CamoufoxBrowserSession(ConnectedPlaywrightSession):
             return locale, timezone
         if measured is None or not measured.known:
             return locale, timezone
-        profile = bfp.BROWSER_LOCALE_PROFILES.get(
-            bfp.locale_profile_key_from_geo(measured.to_dict())
-        ) or {}
+        profile = bfp.BROWSER_LOCALE_PROFILES.get(bfp.locale_profile_key_from_geo(measured.to_dict())) or {}
         if not configured_locale:
             language = str(profile.get("navigator_language") or "")
             if language:
@@ -509,13 +526,18 @@ class RoxyBrowserSession(ConnectedPlaywrightSession):
         last_error: Exception | None = None
         for attempt in range(attempts):
             try:
-                request_kwargs: dict[str, Any] = {"headers": self._headers(), "timeout": min(60, max(10, self.timeout_ms // 1000))}
+                request_kwargs: dict[str, Any] = {
+                    "headers": self._headers(),
+                    "timeout": min(60, max(10, self.timeout_ms // 1000)),
+                }
                 if normalized_method == "GET":
                     if body:
                         request_kwargs["params"] = body
                 else:
                     request_kwargs["json"] = body
-                response = curl_requests.request(normalized_method, urljoin(self.api_base.rstrip("/") + "/", path.lstrip("/")), **request_kwargs)
+                response = curl_requests.request(
+                    normalized_method, urljoin(self.api_base.rstrip("/") + "/", path.lstrip("/")), **request_kwargs
+                )
                 try:
                     data = response.json()
                 except Exception:
@@ -525,7 +547,12 @@ class RoxyBrowserSession(ConnectedPlaywrightSession):
                 if isinstance(data, Mapping):
                     code = data.get("code")
                     normalized_code = str(code).strip().lower() if code is not None else ""
-                    if normalized_code and normalized_code not in {"0", "200", "ok", "success"} and data.get("ok") is not True and data.get("success") is not True:
+                    if (
+                        normalized_code
+                        and normalized_code not in {"0", "200", "ok", "success"}
+                        and data.get("ok") is not True
+                        and data.get("success") is not True
+                    ):
                         raise BrowserRegistrationError("roxy_api_error", "response_code_invalid")
                     if data.get("ok") is False and data.get("success") is not True:
                         raise BrowserRegistrationError("roxy_api_error", "response_not_ok")
@@ -540,7 +567,6 @@ class RoxyBrowserSession(ConnectedPlaywrightSession):
                 time.sleep(retry_delay * (attempt + 1))
         raise last_error or BrowserRegistrationError("roxy_api_error", "request_failed")
 
-
     def _proxy_info(self) -> dict[str, Any] | None:
         value = normalize_proxy_url(self.proxy)
         if not value:
@@ -550,8 +576,13 @@ class RoxyBrowserSession(ConnectedPlaywrightSession):
             return None
         protocol = "SOCKS5" if parsed.scheme.startswith("socks5") else parsed.scheme.upper()
         result: dict[str, Any] = {
-            "moduleId": 0, "proxyMethod": "custom", "proxyCategory": protocol,
-            "ipType": "IPV4", "protocol": protocol, "host": parsed.hostname, "port": str(parsed.port),
+            "moduleId": 0,
+            "proxyMethod": "custom",
+            "proxyCategory": protocol,
+            "ipType": "IPV4",
+            "protocol": protocol,
+            "host": parsed.hostname,
+            "port": str(parsed.port),
         }
         if parsed.username:
             result["proxyUserName"] = unquote(parsed.username)
@@ -582,9 +613,18 @@ class RoxyBrowserSession(ConnectedPlaywrightSession):
             created = self._request(create_method, create_path, payload)
             self.profile_id = _first(
                 created,
-                ("id",), ("dirId",), ("dir_id",), ("profile_id",), ("profileId",), ("browser_id",),
-                ("data", "id"), ("data", "dirId"), ("data", "dir_id"),
-                ("data", "profile_id"), ("data", "profileId"), ("data", "browser_id"),
+                ("id",),
+                ("dirId",),
+                ("dir_id",),
+                ("profile_id",),
+                ("profileId",),
+                ("browser_id",),
+                ("data", "id"),
+                ("data", "dirId"),
+                ("data", "dir_id"),
+                ("data", "profile_id"),
+                ("data", "profileId"),
+                ("data", "browser_id"),
             )
             if not self.profile_id:
                 raise BrowserRegistrationError("roxy_profile_create_failed")
@@ -594,11 +634,17 @@ class RoxyBrowserSession(ConnectedPlaywrightSession):
         open_method = str(self.driver_config.get("open_method") or "POST").upper()
         open_path = self._path("open_path", "/browser/open")
         try:
-            opened = self._request(open_method, open_path, {
-                "workspaceId": workspace_value,
-                "dirId": profile_value,
-                "args": [], "forceOpen": True, "headless": self.headless,
-            })
+            opened = self._request(
+                open_method,
+                open_path,
+                {
+                    "workspaceId": workspace_value,
+                    "dirId": profile_value,
+                    "args": [],
+                    "forceOpen": True,
+                    "headless": self.headless,
+                },
+            )
         except Exception:
             # __enter__ 内 open 失败：清理已建 profile，避免孤儿占满 Roxy 3/3 额度
             try:
@@ -607,20 +653,44 @@ class RoxyBrowserSession(ConnectedPlaywrightSession):
                 pass
             raise
         ws_address = _first(
-            opened, ("ws",), ("wsEndpoint",), ("ws_endpoint",), ("debuggerWsUrl",),
-            ("data", "ws"), ("data", "wsEndpoint"), ("data", "ws_endpoint"), ("data", "debuggerWsUrl"),
-            ("result", "ws"), ("result", "wsEndpoint"), ("result", "ws_endpoint"),
+            opened,
+            ("ws",),
+            ("wsEndpoint",),
+            ("ws_endpoint",),
+            ("debuggerWsUrl",),
+            ("data", "ws"),
+            ("data", "wsEndpoint"),
+            ("data", "ws_endpoint"),
+            ("data", "debuggerWsUrl"),
+            ("result", "ws"),
+            ("result", "wsEndpoint"),
+            ("result", "ws_endpoint"),
         )
         self.debugger_address = _first(
             opened,
-            ("http",), ("debuggerAddress",), ("debugger_address",), ("debugAddress",),
-            ("debugHttp",), ("debug_http",), ("debuggingPortUrl",), ("debugging_port_url",),
-            ("remoteDebuggingAddress",), ("remote_debugging_address",),
-            ("data", "http"), ("data", "debuggerAddress"), ("data", "debugger_address"),
-            ("data", "debugAddress"), ("data", "debugHttp"), ("data", "debug_http"),
-            ("data", "debuggingPortUrl"), ("data", "debugging_port_url"),
-            ("data", "remoteDebuggingAddress"), ("data", "remote_debugging_address"),
-            ("result", "http"), ("result", "debugAddress"), ("result", "debugHttp"),
+            ("http",),
+            ("debuggerAddress",),
+            ("debugger_address",),
+            ("debugAddress",),
+            ("debugHttp",),
+            ("debug_http",),
+            ("debuggingPortUrl",),
+            ("debugging_port_url",),
+            ("remoteDebuggingAddress",),
+            ("remote_debugging_address",),
+            ("data", "http"),
+            ("data", "debuggerAddress"),
+            ("data", "debugger_address"),
+            ("data", "debugAddress"),
+            ("data", "debugHttp"),
+            ("data", "debug_http"),
+            ("data", "debuggingPortUrl"),
+            ("data", "debugging_port_url"),
+            ("data", "remoteDebuggingAddress"),
+            ("data", "remote_debugging_address"),
+            ("result", "http"),
+            ("result", "debugAddress"),
+            ("result", "debugHttp"),
         )
         address = ws_address or self.debugger_address
         if not address:
@@ -645,7 +715,6 @@ class RoxyBrowserSession(ConnectedPlaywrightSession):
             except Exception:
                 pass
             raise BrowserRegistrationError("roxy_connect_failed", type(exc).__name__) from exc
-
 
     def close(self) -> None:
         keep_open = bool(self.driver_config.get("keep_browser_open", False))
@@ -682,14 +751,15 @@ class RoxyBrowserSession(ConnectedPlaywrightSession):
                             self._request(close_method, close_path, common)
                         except Exception:
                             pass
-                        time.sleep(2 ** attempt)
+                        time.sleep(2**attempt)
             # 3 次仍失败：不抛（delete_profile_after_run 仅做清理），但必须
             # 告警——孤儿 profile 会静默累积直到占满 Roxy 额度。
             if last_err is not None:
                 logger.warning(
                     "roxy profile delete failed after 3 attempts; orphan "
                     "profile %s left behind (delete_profile_after_run=true): %s",
-                    self.profile_id, type(last_err).__name__,
+                    self.profile_id,
+                    type(last_err).__name__,
                 )
         self.profile_id = ""
         self.user_id = ""

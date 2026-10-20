@@ -5,6 +5,7 @@ repair anything. The generator rewrites both tiers from the symbol each pointer
 names. Its danger is the mirror image of the gate's: a rewriter that guesses wrong
 silently *writes* a wrong number. These tests pin the three rails that prevent it.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -141,10 +142,7 @@ def test_a_pointer_directly_after_another_pointer_is_left_alone(tmp_path, monkey
 
 def test_rewritten_doc_passes_the_consistency_gate(tmp_path, monkeypatch):
     """The two halves must agree: what the generator writes, the gate accepts."""
-    body = (
-        "| `Widget` | `widget.py:1` | a widget |\n"
-        "见 `Widget()`（`widget.py:1`）定义。\n"
-    )
+    body = "| `Widget` | `widget.py:1` | a widget |\n见 `Widget()`（`widget.py:1`）定义。\n"
     out = _rewrite(
         tmp_path,
         monkeypatch,

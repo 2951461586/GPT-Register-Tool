@@ -22,9 +22,11 @@ class Sub2ApiImportTests(unittest.TestCase):
         }
         upload_result = {"ok": True, "created": 1, "updated": 0, "failed": 0}
 
-        with patch.object(sub2api_import, "_prepare_sub2api_import_data", return_value=prepared), \
-             patch.object(sub2api_import, "upload_to_sub2api", return_value=upload_result) as upload, \
-             patch.object(sub2api_import, "_record_sub2api_import"):
+        with (
+            patch.object(sub2api_import, "_prepare_sub2api_import_data", return_value=prepared),
+            patch.object(sub2api_import, "upload_to_sub2api", return_value=upload_result) as upload,
+            patch.object(sub2api_import, "_record_sub2api_import"),
+        ):
             result = sub2api_import.import_sub2api_session(
                 email="free@example.com",
                 api_url="https://sub.example",
@@ -41,12 +43,16 @@ class Sub2ApiImportTests(unittest.TestCase):
             if path == "/api/v1/admin/groups/all":
                 return {"ok": True, "data": [{"id": 7, "name": "codex", "platform": "openai"}]}
             if path == "/api/v1/admin/accounts/import/codex-session":
-                return {"ok": True, "status_code": 200, "data": {
-                    "created": 1,
-                    "updated": 0,
-                    "failed": 0,
-                    "items": [{"action": "created", "account_id": 42}],
-                }}
+                return {
+                    "ok": True,
+                    "status_code": 200,
+                    "data": {
+                        "created": 1,
+                        "updated": 0,
+                        "failed": 0,
+                        "items": [{"action": "created", "account_id": 42}],
+                    },
+                }
             if path == "/api/v1/admin/accounts/42":
                 return {"ok": True, "data": {"id": 42, "group_ids": [7], "status": "active"}}
             return {"ok": False, "error": "unexpected"}
@@ -72,12 +78,16 @@ class Sub2ApiImportTests(unittest.TestCase):
             if path == "/api/v1/admin/groups/all":
                 return {"ok": True, "data": [{"id": 7, "name": "codex", "platform": "openai"}]}
             if path == "/api/v1/admin/accounts/import/codex-session":
-                return {"ok": True, "status_code": 200, "data": {
-                    "created": 1,
-                    "updated": 0,
-                    "failed": 0,
-                    "items": [{"action": "created", "account_id": 42}],
-                }}
+                return {
+                    "ok": True,
+                    "status_code": 200,
+                    "data": {
+                        "created": 1,
+                        "updated": 0,
+                        "failed": 0,
+                        "items": [{"action": "created", "account_id": 42}],
+                    },
+                }
             return {"ok": False, "error": "unexpected"}
 
         with (
@@ -254,7 +264,9 @@ class Sub2ApiImportTests(unittest.TestCase):
             return {"ok": False, "error": "unexpected"}
 
         with patch.object(sub2api_import, "_request_json", side_effect=fake_request):
-            result = sub2api_import.fetch_sub2api_auth_files(api_url="https://sub.example/api/v1", api_token="jwt-token")
+            result = sub2api_import.fetch_sub2api_auth_files(
+                api_url="https://sub.example/api/v1", api_token="jwt-token"
+            )
 
         self.assertTrue(result["ok"])
         self.assertEqual(result["files"][0]["email"], "bad@example.com")
@@ -281,11 +293,13 @@ class Sub2ApiImportTests(unittest.TestCase):
             "message": "Agent registry is not enabled.",
         }
 
-        with patch.object(sub2api_import, "_load_cpa_source", side_effect=fake_load_cpa_source), \
-             patch.object(sub2api_import, "_load_direct_agent_identity", return_value={"ok": False}), \
-             patch.object(sub2api_import, "load_agent_identity", return_value={"ok": False}), \
-             patch.object(sub2api_import, "create_agent_identity", return_value=agent_error), \
-             patch.object(sub2api_import, "_write_cpa_json", return_value="export/free.json") as write_cpa:
+        with (
+            patch.object(sub2api_import, "_load_cpa_source", side_effect=fake_load_cpa_source),
+            patch.object(sub2api_import, "_load_direct_agent_identity", return_value={"ok": False}),
+            patch.object(sub2api_import, "load_agent_identity", return_value={"ok": False}),
+            patch.object(sub2api_import, "create_agent_identity", return_value=agent_error),
+            patch.object(sub2api_import, "_write_cpa_json", return_value="export/free.json") as write_cpa,
+        ):
             result = sub2api_import._prepare_sub2api_import_data(
                 "free@example.com",
                 auth_mode="auto",
@@ -318,11 +332,13 @@ class Sub2ApiImportTests(unittest.TestCase):
             "message": "Agent registry is not enabled.",
         }
 
-        with patch.object(sub2api_import, "_load_cpa_source", side_effect=fake_load_cpa_source), \
-             patch.object(sub2api_import, "_load_direct_agent_identity", return_value={"ok": False}), \
-             patch.object(sub2api_import, "load_agent_identity", return_value={"ok": False}), \
-             patch.object(sub2api_import, "create_agent_identity", return_value=agent_error), \
-             patch.object(sub2api_import, "_write_cpa_json", return_value="export/free.json") as write_cpa:
+        with (
+            patch.object(sub2api_import, "_load_cpa_source", side_effect=fake_load_cpa_source),
+            patch.object(sub2api_import, "_load_direct_agent_identity", return_value={"ok": False}),
+            patch.object(sub2api_import, "load_agent_identity", return_value={"ok": False}),
+            patch.object(sub2api_import, "create_agent_identity", return_value=agent_error),
+            patch.object(sub2api_import, "_write_cpa_json", return_value="export/free.json") as write_cpa,
+        ):
             result = sub2api_import._prepare_sub2api_import_data(
                 "free@example.com",
                 auth_mode="agent_identity",
@@ -352,10 +368,12 @@ class Sub2ApiImportTests(unittest.TestCase):
             "error": "agent_registration_request_failed",
         }
 
-        with patch.object(sub2api_import, "_load_cpa_source", side_effect=fake_load_cpa_source), \
-             patch.object(sub2api_import, "_load_direct_agent_identity", return_value={"ok": False}), \
-             patch.object(sub2api_import, "load_agent_identity", return_value={"ok": False}), \
-             patch.object(sub2api_import, "create_agent_identity", return_value=agent_error):
+        with (
+            patch.object(sub2api_import, "_load_cpa_source", side_effect=fake_load_cpa_source),
+            patch.object(sub2api_import, "_load_direct_agent_identity", return_value={"ok": False}),
+            patch.object(sub2api_import, "load_agent_identity", return_value={"ok": False}),
+            patch.object(sub2api_import, "create_agent_identity", return_value=agent_error),
+        ):
             result = sub2api_import._prepare_sub2api_import_data(
                 "free@example.com",
                 auth_mode="agent_identity",

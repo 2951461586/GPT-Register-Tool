@@ -82,6 +82,7 @@ class PlaywrightBrowserSession:
             browser_proxy = _playwright_proxy(self.proxy)
             if self.user_data_dir:
                 import pathlib
+
                 pathlib.Path(self.user_data_dir).mkdir(parents=True, exist_ok=True)
                 launch_kwargs: dict[str, Any] = {"headless": self.headless}
                 if browser_proxy:
@@ -128,7 +129,8 @@ class PlaywrightBrowserSession:
                     contention = ""
                 if contention:
                     _LOGGER.error(
-                        "browser launch failed and %s", contention,
+                        "browser launch failed and %s",
+                        contention,
                         extra={"event": "browser_profile_contention", "profile": self.user_data_dir},
                     )
             raise
@@ -206,9 +208,7 @@ class PlaywrightBrowserSession:
             return ""
         cookies = self.context.cookies()
         return "; ".join(
-            f"{item.get('name')}={item.get('value')}"
-            for item in cookies
-            if item.get("name") and item.get("value")
+            f"{item.get('name')}={item.get('value')}" for item in cookies if item.get("name") and item.get("value")
         )
 
     def cookies(self) -> list[dict[str, Any]]:
@@ -242,7 +242,9 @@ class PlaywrightBrowserSession:
             # Prefer the active auth step over a stale ChatGPT tab.  Cloud
             # providers commonly leave the callback page open while creating
             # a second page for the final session.
-            if any(marker in path for marker in ("email-verification", "email_verification", "/verify", "/otp", "/code")):
+            if any(
+                marker in path for marker in ("email-verification", "email_verification", "/verify", "/otp", "/code")
+            ):
                 return 100
             if "password" in path:
                 return 90
@@ -314,7 +316,9 @@ class PlaywrightBrowserSession:
         for base in (chat_base, auth_base):
             parsed = urlsplit(str(base or ""))
             if parsed.scheme and parsed.netloc:
-                cookies.append({"name": "oai-did", "value": str(device_id), "url": f"{parsed.scheme}://{parsed.netloc}/"})
+                cookies.append(
+                    {"name": "oai-did", "value": str(device_id), "url": f"{parsed.scheme}://{parsed.netloc}/"}
+                )
         if cookies:
             self.context.add_cookies(cookies)
 
@@ -342,14 +346,22 @@ class PlaywrightBrowserSession:
                     body = {"raw": str(text or "")[:500]}
                 payload = {"status": int(response.status or 0), "body": body if isinstance(body, dict) else {}}
                 request_payload = payload
-                candidate = payload["body"].get("session") if isinstance(payload["body"].get("session"), dict) else payload["body"]
+                candidate = (
+                    payload["body"].get("session")
+                    if isinstance(payload["body"].get("session"), dict)
+                    else payload["body"]
+                )
                 if candidate.get("accessToken") or candidate.get("access_token"):
                     return payload
             except Exception:
                 request_payload = None
         if request_payload is not None:
             body = request_payload.get("body") or {}
-            marker = " ".join(str(body.get(key) or "").lower() for key in ("error", "code")) if isinstance(body, dict) else ""
+            marker = (
+                " ".join(str(body.get(key) or "").lower() for key in ("error", "code"))
+                if isinstance(body, dict)
+                else ""
+            )
             status = int(request_payload.get("status") or 0)
             # Preserve terminal/diagnostic responses for the caller.  Returning
             # them is important: a page fallback can otherwise turn a 401 or

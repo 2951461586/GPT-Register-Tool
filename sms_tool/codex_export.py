@@ -152,12 +152,14 @@ def _is_terminal_account_deactivated(result):
         return False
     if result.get("terminal") and result.get("error") == "account_deactivated":
         return True
-    text = " ".join([
-        str(result.get("error") or ""),
-        str(result.get("body") or ""),
-        str((result.get("refresh") or {}).get("error") if isinstance(result.get("refresh"), dict) else ""),
-        str((result.get("refresh") or {}).get("body") if isinstance(result.get("refresh"), dict) else ""),
-    ]).lower()
+    text = " ".join(
+        [
+            str(result.get("error") or ""),
+            str(result.get("body") or ""),
+            str((result.get("refresh") or {}).get("error") if isinstance(result.get("refresh"), dict) else ""),
+            str((result.get("refresh") or {}).get("body") if isinstance(result.get("refresh"), dict) else ""),
+        ]
+    ).lower()
     return "account_deactivated" in text or "deleted or deactivated" in text
 
 
@@ -266,7 +268,9 @@ def build_codex_json(data):
     if synthetic_id_token:
         warnings.append("Missing real id_token; generated synthetic CPA-compatible id_token.")
     if not refresh_token:
-        warnings.append("Missing refresh_token; exported CPA JSON cannot refresh automatically after access token expiry.")
+        warnings.append(
+            "Missing refresh_token; exported CPA JSON cannot refresh automatically after access token expiry."
+        )
 
     output = {
         "type": "codex",
@@ -297,7 +301,9 @@ def build_codex_json(data):
     return filtered, warnings
 
 
-def _refresh_seed(data, json_path, target_email, proxy=None, timeout=300, require_refresh_token=False, force_email_otp_login=False):
+def _refresh_seed(
+    data, json_path, target_email, proxy=None, timeout=300, require_refresh_token=False, force_email_otp_login=False
+):
     _raw_auth_session: object = data.get("auth_session")
     auth_session: dict = _raw_auth_session if isinstance(_raw_auth_session, dict) else {}
     refresh_token = _openai_refresh_token(data, auth_session)

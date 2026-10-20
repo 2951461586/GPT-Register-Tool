@@ -243,9 +243,7 @@ def payment_flow_profile(payment_method: Any, method_config: Mapping[str, Any] |
     base = FLOW_PROFILES.get(method, _GENERIC_REDIRECT)
     raw_stages = configured.get("stages")
     if isinstance(raw_stages, (list, tuple)):
-        stages = tuple(
-            stage for item in raw_stages if (stage := normalize_payment_stage(item))
-        )
+        stages = tuple(stage for item in raw_stages if (stage := normalize_payment_stage(item)))
         if stages:
             return PaymentFlowProfile(
                 configured_key or base.key,

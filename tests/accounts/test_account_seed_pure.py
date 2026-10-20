@@ -29,6 +29,7 @@ Quirks pinned, not fixed:
 * **``setdefault`` keys off presence, not truthiness** -- a seed file holding
   ``email: ""`` keeps the empty string and never gets the DB value.
 """
+
 from __future__ import annotations
 
 import json
@@ -48,8 +49,15 @@ def _write(path: Path, payload, encoding: str = "utf-8") -> Path:
 #: The seven keys ``load_account_seed`` backfills from the SQLite record. Whenever
 #: a record is returned at all, **all seven land in the result** (empty string if
 #: the column was absent) -- so "seed contains nothing" never means ``{}``.
-DEFAULT_KEYS = ("email", "access_token", "cookie_header", "oauth_refresh_token",
-                "refresh_token", "registration_country", "batch_id")
+DEFAULT_KEYS = (
+    "email",
+    "access_token",
+    "cookie_header",
+    "oauth_refresh_token",
+    "refresh_token",
+    "registration_country",
+    "batch_id",
+)
 EMPTY_DEFAULTS = {key: "" for key in DEFAULT_KEYS}
 
 
@@ -126,8 +134,7 @@ class LoadAccountSeedTests(_TmpDirCase):
         gone = self.tmp / "gone.json"
         data, returned, _ = self._seed({"json_path": str(gone)})
         self.assertEqual(data, EMPTY_DEFAULTS)
-        self.assertEqual(returned, str(gone),
-                         "the path is echoed back even though nothing was read")
+        self.assertEqual(returned, str(gone), "the path is echoed back even though nothing was read")
 
     def test_a_record_always_yields_all_seven_default_keys(self):
         """⚠️ Pinned: the ``setdefault`` block runs whenever ``record`` is truthy,
@@ -141,8 +148,7 @@ class LoadAccountSeedTests(_TmpDirCase):
     def test_file_contents_outrank_the_raw_json_column(self):
         """``data = {**raw_data, **data}`` -- the file is applied last, so it wins."""
         path = _write(self.tmp / "acct.json", {"email": "from-file"})
-        data, _, _ = self._seed({"json_path": str(path),
-                                 "raw_json": json.dumps({"email": "from-db"})})
+        data, _, _ = self._seed({"json_path": str(path), "raw_json": json.dumps({"email": "from-db"})})
         self.assertEqual(data["email"], "from-file")
 
     def test_raw_json_fills_keys_the_file_is_missing(self):
@@ -180,8 +186,15 @@ class LoadAccountSeedTests(_TmpDirCase):
         self.assertEqual(data["email"], "")
 
     def test_every_documented_default_key_is_backfilled(self):
-        keys = ("email", "access_token", "cookie_header", "oauth_refresh_token",
-                "refresh_token", "registration_country", "batch_id")
+        keys = (
+            "email",
+            "access_token",
+            "cookie_header",
+            "oauth_refresh_token",
+            "refresh_token",
+            "registration_country",
+            "batch_id",
+        )
         data, _, _ = self._seed({key: f"value-{key}" for key in keys})
         for key in keys:
             with self.subTest(key=key):
@@ -215,8 +228,7 @@ class ReadJsonTests(_TmpDirCase):
         scalar comes back unchanged. Callers that index the result will break."""
         for payload in ([1, 2, 3], "just a string", 42, None, True):
             with self.subTest(payload=payload):
-                self.assertEqual(account_seed.read_json(_write(self.tmp / "a.json", payload)),
-                                 payload)
+                self.assertEqual(account_seed.read_json(_write(self.tmp / "a.json", payload)), payload)
 
     def test_a_directory_gives_an_empty_dict(self):
         self.assertEqual(account_seed.read_json(self.tmp), {})
@@ -237,8 +249,7 @@ class ExtractAccessTokenTests(unittest.TestCase):
         for value in ("", None, 0, False):
             with self.subTest(value=value):
                 self.assertEqual(
-                    account_seed.extract_access_token({"access_token": value,
-                                                       "auth_session": {"accessToken": "T"}}),
+                    account_seed.extract_access_token({"access_token": value, "auth_session": {"accessToken": "T"}}),
                     "T",
                 )
 

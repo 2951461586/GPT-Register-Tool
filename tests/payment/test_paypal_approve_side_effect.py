@@ -96,7 +96,9 @@ class ApproveSideEffectTests(unittest.TestCase):
         extractor = _extractor()
         with patch.object(extractor, "_prepare_stage_proxy", return_value="http://approve"):
             with patch.object(extractor, "_chatgpt_approve", return_value=None):
-                with patch.object(extractor, "_poll_payment_page", return_value="https://pm-redirects.stripe.com/authorize/x"):
+                with patch.object(
+                    extractor, "_poll_payment_page", return_value="https://pm-redirects.stripe.com/authorize/x"
+                ):
                     url = extractor._approve_and_poll("cs_live_X", "openai_llc")
         self.assertEqual(url, "https://pm-redirects.stripe.com/authorize/x")
 
@@ -175,7 +177,11 @@ class ApproveUnknownContractTests(unittest.TestCase):
                 )
 
         with patch.object(gen_pp_link, "_load_json", return_value={"paypal": {}}):
-            with patch.object(gen_pp_link, "_proxies_from_config", return_value={"checkout": "", "provider": "", "approve": "", "promotion": ""}):
+            with patch.object(
+                gen_pp_link,
+                "_proxies_from_config",
+                return_value={"checkout": "", "provider": "", "approve": "", "promotion": ""},
+            ):
                 with patch.object(gen_pp_link, "PPLinkExtractor", FakeExtractor):
                     result = gen_pp_link.generate_pp_link("at")
 
@@ -203,11 +209,14 @@ class CheckoutContractReuseTests(unittest.TestCase):
 
         def fake_post(url, body, access_token, cookie_header="", proxy="", timeout=30, extra_headers=None):
             seen["body"] = body
-            return _Resp(200, {
-                "checkout_session_id": "cs_live_X",
-                "processor_entity": "openai_llc",
-                "publishable_key": "pk_live_x",
-            })
+            return _Resp(
+                200,
+                {
+                    "checkout_session_id": "cs_live_X",
+                    "processor_entity": "openai_llc",
+                    "publishable_key": "pk_live_x",
+                },
+            )
 
         with patch.object(extractor, "_prepare_stage_proxy", return_value=""):
             with patch.object(paypal_extract, "_checkout_post", side_effect=fake_post):
@@ -221,11 +230,14 @@ class CheckoutContractReuseTests(unittest.TestCase):
         extractor = _extractor()
 
         def fake_post(url, body, access_token, cookie_header="", proxy="", timeout=30, extra_headers=None):
-            return _Resp(200, {
-                "checkout_session_id": "oaics_live_X",
-                "processor_entity": "openai_llc",
-                "publishable_key": "pk_live_x",
-            })
+            return _Resp(
+                200,
+                {
+                    "checkout_session_id": "oaics_live_X",
+                    "processor_entity": "openai_llc",
+                    "publishable_key": "pk_live_x",
+                },
+            )
 
         with patch.object(extractor, "_prepare_stage_proxy", return_value=""):
             with patch.object(paypal_extract, "_checkout_post", side_effect=fake_post):
@@ -264,11 +276,14 @@ class CheckoutContractReuseTests(unittest.TestCase):
         class FakeSession:
             def post(self, url, data=None, timeout=None):
                 seen["data"] = data
-                return _Resp(200, {
-                    "payment_method_types": ["paypal"],
-                    "currency": "jpy",
-                    "total_summary": {"due": 0, "currency": "jpy"},
-                })
+                return _Resp(
+                    200,
+                    {
+                        "payment_method_types": ["paypal"],
+                        "currency": "jpy",
+                        "total_summary": {"due": 0, "currency": "jpy"},
+                    },
+                )
 
         extractor._stripe_session = FakeSession()
         extractor._stripe_init("cs_live_X")

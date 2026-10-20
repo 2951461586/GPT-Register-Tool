@@ -33,10 +33,7 @@ SHA256_TOK_16 = "1a7674eb4ee78df7"
 # urlsafe 字母表：A-Z a-z 0-9 '-'(62) '_'(63)。
 # 可打印 ASCII 载荷里，只有落在三字节组第 3 位的 '>'/'~'(0x3E/0x7E) 能产出 62，
 # '?'(0x3F) 能产出 63 —— 所以这个载荷是特意搜出来的，别随手改。
-URLSAFE_PAYLOAD_B64 = (
-    "eyJpYXQiOiAxNzAwMDAwMDAwLCAiZXhwIjogMTcwMDAwMzYwMCwgImoiOiAi"
-    "YmFhMzNiMmNiMzM_PjI_YWE-PjNiPzE_In0"
-)
+URLSAFE_PAYLOAD_B64 = "eyJpYXQiOiAxNzAwMDAwMDAwLCAiZXhwIjogMTcwMDAwMzYwMCwgImoiOiAiYmFhMzNiMmNiMzM_PjI_YWE-PjNiPzE_In0"
 
 # 长度 %4 == 2 / 3 的未补齐载荷，用来钉住 `"=" * (-len(parts[1]) % 4)`
 PAYLOAD_MOD4_2 = "eyJpYXQiOiAxNzAwMDAwMDAwLCAiZXhwIjogMTcwMDAwMzYwMCwgImoiOiAiYjMifQ"
@@ -104,7 +101,8 @@ class TokenHashTest(unittest.TestCase):
                 with self.subTest(value=value):
                     self.assertEqual(access_token_telemetry(value)["token_hash"], "")
         self.assertNotEqual(
-            "", hashlib.sha256(b"").hexdigest()[:16],
+            "",
+            hashlib.sha256(b"").hexdigest()[:16],
             "空串哈希是个真实存在的值，两者必须能区分开",
         )
 
@@ -179,7 +177,7 @@ class PayloadDecodingTest(unittest.TestCase):
                 self.assertEqual(info["exp"], 1700003600)
 
     def test_an_already_padded_payload_is_accepted(self):
-        padded = PAYLOAD_MOD4_2 + "=="   # 手工补成 %4 == 0
+        padded = PAYLOAD_MOD4_2 + "=="  # 手工补成 %4 == 0
         self.assertEqual(len(padded) % 4, 0)
         with _frozen(NOW):
             info = access_token_telemetry(f"hdr.{padded}.sig")
@@ -307,8 +305,7 @@ class TimingMathTest(unittest.TestCase):
         }.items():
             with self.subTest(label=label):
                 with _frozen(NOW):
-                    self.assertEqual(
-                        access_token_telemetry(_jwt(payload))["lifetime_seconds"], 0)
+                    self.assertEqual(access_token_telemetry(_jwt(payload))["lifetime_seconds"], 0)
 
     def test_lifetime_is_clamped_at_zero_when_exp_precedes_iat(self):
         """``max(0, ...)`` 这一层：``iat``/``exp`` 都非零但顺序反了。"""
@@ -318,8 +315,7 @@ class TimingMathTest(unittest.TestCase):
 
     def test_age_uses_acquired_at_when_provided(self):
         with _frozen(NOW):
-            info = access_token_telemetry(
-                _jwt({"iat": 1700000000, "exp": 1700003600}), acquired_at=NOW - 120)
+            info = access_token_telemetry(_jwt({"iat": 1700000000, "exp": 1700003600}), acquired_at=NOW - 120)
         self.assertEqual(info["age_seconds"], 120)
 
     def test_age_falls_back_to_iat_when_acquired_at_is_absent(self):
@@ -329,8 +325,7 @@ class TimingMathTest(unittest.TestCase):
 
     def test_age_falls_back_to_iat_when_acquired_at_is_uncoercible(self):
         with _frozen(NOW):
-            info = access_token_telemetry(
-                _jwt({"iat": NOW - 300, "exp": NOW + 3000}), acquired_at="nonsense")
+            info = access_token_telemetry(_jwt({"iat": NOW - 300, "exp": NOW + 3000}), acquired_at="nonsense")
         self.assertEqual(info["age_seconds"], 300)
 
     def test_age_is_zero_without_any_time_reference(self):
@@ -376,8 +371,7 @@ class ReturnShapeTest(unittest.TestCase):
 
     def test_the_key_set_is_exactly_these_six_keys(self):
         with _frozen(NOW):
-            self.assertEqual(set(access_token_telemetry(_jwt({"iat": 1, "exp": 2}))),
-                             EXPECTED_KEYS)
+            self.assertEqual(set(access_token_telemetry(_jwt({"iat": 1, "exp": 2}))), EXPECTED_KEYS)
 
     def test_the_shape_is_stable_for_an_unparseable_token(self):
         with _frozen(NOW):

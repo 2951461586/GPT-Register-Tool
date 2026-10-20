@@ -10,7 +10,12 @@ from sms_tool import storage
 
 
 def _base_config():
-    return {"chatgpt": {"auth_base_url": "https://auth.openai.com", "chat_base_url": "https://chatgpt.com"}, "proxy": {"pool": []}, "registration": {"at_probe_timeout_seconds": 30}, "protocol_payments": {"enabled_methods": ["paypal"], "matrix": {"cells": []}}}
+    return {
+        "chatgpt": {"auth_base_url": "https://auth.openai.com", "chat_base_url": "https://chatgpt.com"},
+        "proxy": {"pool": []},
+        "registration": {"at_probe_timeout_seconds": 30},
+        "protocol_payments": {"enabled_methods": ["paypal"], "matrix": {"cells": []}},
+    }
 
 
 def test_config_import_performs_no_file_io():
@@ -47,7 +52,10 @@ def test_explicit_config_is_immutable_and_independent_of_cwd(tmp_path, monkeypat
 
 def test_payment_schema_rejects_unknown_method_and_country(tmp_path):
     value = _base_config()
-    value["protocol_payments"] = {"enabled_methods": ["not-a-method"], "matrix": {"cells": [{"registration_country": "USA"}]}}
+    value["protocol_payments"] = {
+        "enabled_methods": ["not-a-method"],
+        "matrix": {"cells": [{"registration_country": "USA"}]},
+    }
     path = tmp_path / "config.json"
     path.write_text(json.dumps(value), encoding="utf-8")
     with pytest.raises(ConfigError, match="unsupported protocol payment methods"):
@@ -65,9 +73,7 @@ def test_registration_schema_rejects_unknown_stage_timeout(tmp_path):
 
 def test_registration_schema_rejects_retired_browser_profile_pool(tmp_path):
     value = _base_config()
-    value["registration"]["browser_profile_pool"] = {
-        "profiles": [{"screen_width": 1440}]
-    }
+    value["registration"]["browser_profile_pool"] = {"profiles": [{"screen_width": 1440}]}
     path = tmp_path / "config.json"
     path.write_text(json.dumps(value), encoding="utf-8")
     with pytest.raises(ConfigError, match="browser hardware profiles are built in"):
@@ -79,9 +85,7 @@ def test_registration_schema_rejects_non_boolean_pulse_canary(tmp_path):
     value["registration"]["pulse"] = {"canary_enabled": "yes"}
     path = tmp_path / "config.json"
     path.write_text(json.dumps(value), encoding="utf-8")
-    with pytest.raises(
-        ConfigError, match=r"registration\.pulse\.canary_enabled must be a boolean"
-    ):
+    with pytest.raises(ConfigError, match=r"registration\.pulse\.canary_enabled must be a boolean"):
         load_runtime_config(path)
 
 
@@ -103,12 +107,14 @@ def test_registration_schema_rejects_non_positive_retry_policy(tmp_path, key):
 
 def test_payment_matrix_validates_method_country_and_sample_size(tmp_path):
     value = _base_config()
-    value["protocol_payments"]["matrix"]["cells"] = [{
-        "name": "wrong",
-        "payment_method": "gopay",
-        "checkout_country": "PH",
-        "sample_size": 0,
-    }]
+    value["protocol_payments"]["matrix"]["cells"] = [
+        {
+            "name": "wrong",
+            "payment_method": "gopay",
+            "checkout_country": "PH",
+            "sample_size": 0,
+        }
+    ]
     path = tmp_path / "config.json"
     path.write_text(json.dumps(value), encoding="utf-8")
     with pytest.raises(ConfigError, match="sample_size must be a positive integer"):
@@ -154,7 +160,9 @@ def test_storage_runtime_config_controls_every_database_operation(tmp_path):
         {"email": "injected@example.com", "access_token": "secret", "success": True},
         runtime_config=injected,
     )
-    assert storage.get_account_record("injected@example.com", runtime_config=injected)["email"] == "injected@example.com"
+    assert (
+        storage.get_account_record("injected@example.com", runtime_config=injected)["email"] == "injected@example.com"
+    )
     assert storage.mark_quota_status(
         "injected@example.com",
         "available",

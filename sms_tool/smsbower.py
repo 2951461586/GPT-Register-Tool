@@ -123,18 +123,8 @@ class SmsBowerClient:
 
     def _parse_get_number_v2(self, result: str, service: str, country: str) -> SmsBowerActivation:
         data = json.loads(result)
-        activation_id = str(
-            data.get("activationId")
-            or data.get("activation_id")
-            or data.get("id")
-            or ""
-        ).strip()
-        phone = normalize_phone(
-            data.get("phoneNumber")
-            or data.get("phone")
-            or data.get("number")
-            or ""
-        )
+        activation_id = str(data.get("activationId") or data.get("activation_id") or data.get("id") or "").strip()
+        phone = normalize_phone(data.get("phoneNumber") or data.get("phone") or data.get("number") or "")
         price = str(data.get("activationCost") or data.get("price") or "")
         if not activation_id or not phone:
             error = data.get("error") or data.get("message") or result[:200]
@@ -164,12 +154,12 @@ class SmsBowerClient:
 
     def _parse_status(self, result: str) -> dict:
         if result.startswith("STATUS_OK:"):
-            code = result[len("STATUS_OK:"):].strip().strip("'\"")
+            code = result[len("STATUS_OK:") :].strip().strip("'\"")
             return {"status": "OK", "code": code}
         if result == "STATUS_WAIT_CODE":
             return {"status": "WAIT_CODE"}
         if result.startswith("STATUS_WAIT_RETRY:"):
-            code = result[len("STATUS_WAIT_RETRY:"):].strip().strip("'\"")
+            code = result[len("STATUS_WAIT_RETRY:") :].strip().strip("'\"")
             return {"status": "WAIT_RETRY", "code": code}
         if result == "STATUS_CANCEL":
             return {"status": "CANCEL"}
@@ -239,7 +229,8 @@ class SmsBowerClient:
         except Exception as error:
             _LOGGER.warning(
                 "smsbower cancel errored for activation %s: %s",
-                activation_id, error,
+                activation_id,
+                error,
                 extra={"event": "smsbower_cancel_failed", "activation_id": activation_id},
             )
             return False
@@ -247,7 +238,8 @@ class SmsBowerClient:
             return True
         _LOGGER.warning(
             "smsbower refused to cancel activation %s: %s",
-            activation_id, status,
+            activation_id,
+            status,
             extra={
                 "event": "smsbower_cancel_refused",
                 "activation_id": activation_id,
@@ -270,12 +262,7 @@ class SmsBowerClient:
         for key, item in enumerate(items):
             if not isinstance(item, dict):
                 continue
-            country_id = str(
-                item.get("activate_org_code")
-                or item.get("id")
-                or item.get("country_id")
-                or key
-            )
+            country_id = str(item.get("activate_org_code") or item.get("id") or item.get("country_id") or key)
             name = item.get("eng") or item.get("title") or item.get("name") or str(key)
             countries.append({"id": country_id, "name": name, "prefix": item.get("prefix", "")})
         return countries
@@ -304,13 +291,13 @@ def _flatten_prices(data) -> list[dict]:
             for provider_id, offer in by_provider.items():
                 if not isinstance(offer, dict):
                     continue
-                offers.append({
-                    "country_id": str(country_id),
-                    "service": str(service),
-                    "provider_id": str(offer.get("provider_id") or provider_id),
-                    "price": str(offer.get("price", "")),
-                    "count": offer.get("count", 0),
-                })
+                offers.append(
+                    {
+                        "country_id": str(country_id),
+                        "service": str(service),
+                        "provider_id": str(offer.get("provider_id") or provider_id),
+                        "price": str(offer.get("price", "")),
+                        "count": offer.get("count", 0),
+                    }
+                )
     return sorted(offers, key=lambda item: (_as_price(item.get("price")), str(item.get("provider_id"))))
-
-

@@ -59,4 +59,3 @@ KNOWN_EMAIL_DOMAINS = (
     "msn.com",
     "gmail.com",
 )
-

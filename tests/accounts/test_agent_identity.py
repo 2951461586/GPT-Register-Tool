@@ -22,15 +22,17 @@ def _jwt(claims):
 
 class AgentIdentityTests(unittest.TestCase):
     def test_create_agent_identity_builds_valid_sub2api_payload_without_retaining_at(self):
-        access_token = _jwt({
-            "exp": int(time.time()) + 3600,
-            "https://api.openai.com/auth": {
-                "chatgpt_account_id": "acct-free",
-                "chatgpt_user_id": "user-free",
-                "chatgpt_plan_type": "free",
-            },
-            "https://api.openai.com/profile": {"email": "free@example.com"},
-        })
+        access_token = _jwt(
+            {
+                "exp": int(time.time()) + 3600,
+                "https://api.openai.com/auth": {
+                    "chatgpt_account_id": "acct-free",
+                    "chatgpt_user_id": "user-free",
+                    "chatgpt_plan_type": "free",
+                },
+                "https://api.openai.com/profile": {"email": "free@example.com"},
+            }
+        )
         captured = {}
 
         class FakeResponse:
@@ -109,11 +111,21 @@ class AgentIdentityTests(unittest.TestCase):
         }
         source = {"email": "free@example.com", "access_token": "header.payload.signature"}
         with (
-            patch.object(agent_identity, "build_codex_json", return_value=({"email": "free@example.com", "plan_type": "free"}, [])),
+            patch.object(
+                agent_identity,
+                "build_codex_json",
+                return_value=({"email": "free@example.com", "plan_type": "free"}, []),
+            ),
             patch.object(agent_identity, "load_agent_identity", return_value={"ok": False}),
-            patch.object(agent_identity, "create_agent_identity", return_value={"ok": True, "data": auth_json, "warnings": []}) as created,
+            patch.object(
+                agent_identity, "create_agent_identity", return_value={"ok": True, "data": auth_json, "warnings": []}
+            ) as created,
             patch.object(agent_identity, "register_agent_identity_task") as register_task,
-            patch.object(agent_identity, "write_agent_identity", return_value={"ok": True, "path": "agent.json", "data": auth_json}) as written,
+            patch.object(
+                agent_identity,
+                "write_agent_identity",
+                return_value={"ok": True, "path": "agent.json", "data": auth_json},
+            ) as written,
         ):
             result = agent_identity.provision_agent_identity(source)
 
@@ -138,8 +150,14 @@ class AgentIdentityTests(unittest.TestCase):
             },
         }
         with (
-            patch.object(agent_identity, "build_codex_json", return_value=({"email": "free@example.com", "plan_type": "free"}, [])),
-            patch.object(agent_identity, "load_agent_identity", return_value={"ok": True, "path": "stale.json", "data": stale}),
+            patch.object(
+                agent_identity,
+                "build_codex_json",
+                return_value=({"email": "free@example.com", "plan_type": "free"}, []),
+            ),
+            patch.object(
+                agent_identity, "load_agent_identity", return_value={"ok": True, "path": "stale.json", "data": stale}
+            ),
             patch.object(agent_identity, "register_agent_identity_task") as register_task,
             patch.object(agent_identity, "create_agent_identity") as created,
         ):
@@ -251,7 +269,9 @@ class AgentIdentityTests(unittest.TestCase):
             text = 'data: {"type":"response.created"}\n\ndata: {"type":"response.completed"}\n\n'
 
         with (
-            patch.object(agent_identity, "register_agent_identity_task", return_value={"ok": True, "task_id": "task-probe"}) as register_task,
+            patch.object(
+                agent_identity, "register_agent_identity_task", return_value={"ok": True, "task_id": "task-probe"}
+            ) as register_task,
             patch.object(agent_identity.curl_requests, "post", return_value=FakeResponse()) as post,
         ):
             result = agent_identity.probe_agent_identity(auth_json, disposable_canary=True)
@@ -290,7 +310,9 @@ class AgentIdentityTests(unittest.TestCase):
                 return {"error": {"message": "invalid reasoning summary", "type": "invalid_request_error"}}
 
         with (
-            patch.object(agent_identity, "register_agent_identity_task", return_value={"ok": True, "task_id": "task-probe"}),
+            patch.object(
+                agent_identity, "register_agent_identity_task", return_value={"ok": True, "task_id": "task-probe"}
+            ),
             patch.object(agent_identity.curl_requests, "post", return_value=FakeResponse()),
         ):
             result = agent_identity.probe_agent_identity(auth_json, disposable_canary=True)
@@ -318,9 +340,17 @@ class AgentIdentityTests(unittest.TestCase):
 
         with (
             patch.object(agent_identity, "_refresh_agent_identity_codex_rt", return_value=(codex_source, "")),
-            patch.object(agent_identity, "_refresh_agent_identity_chatgpt_session", return_value=(session_source, "session.json", "")),
+            patch.object(
+                agent_identity,
+                "_refresh_agent_identity_chatgpt_session",
+                return_value=(session_source, "session.json", ""),
+            ),
             patch.object(agent_identity, "create_agent_identity", side_effect=create) as created,
-            patch.object(agent_identity, "write_agent_identity", return_value={"ok": True, "path": "agent.json", "data": identity}),
+            patch.object(
+                agent_identity,
+                "write_agent_identity",
+                return_value={"ok": True, "path": "agent.json", "data": identity},
+            ),
         ):
             result = agent_identity.rebuild_agent_identity(source_data=source)
 
@@ -349,10 +379,32 @@ class AgentIdentityTests(unittest.TestCase):
         }
         with (
             patch.object(sub2api_import, "load_agent_identity", return_value={"ok": False}),
-            patch.object(sub2api_import, "_load_cpa_source", return_value={"ok": True, "data": source, "path": "session.json", "mode": "session_json"}),
-            patch.object(sub2api_import, "build_codex_json", return_value=({"access_token": source["access_token"], "email": source["email"], "account_id": source["account_id"], "plan_type": "free"}, [])),
-            patch.object(sub2api_import, "create_agent_identity", return_value={"ok": True, "data": auth_json, "warnings": []}) as created,
-            patch.object(sub2api_import, "write_agent_identity", return_value={"ok": True, "path": "agent.json", "data": auth_json}),
+            patch.object(
+                sub2api_import,
+                "_load_cpa_source",
+                return_value={"ok": True, "data": source, "path": "session.json", "mode": "session_json"},
+            ),
+            patch.object(
+                sub2api_import,
+                "build_codex_json",
+                return_value=(
+                    {
+                        "access_token": source["access_token"],
+                        "email": source["email"],
+                        "account_id": source["account_id"],
+                        "plan_type": "free",
+                    },
+                    [],
+                ),
+            ),
+            patch.object(
+                sub2api_import, "create_agent_identity", return_value={"ok": True, "data": auth_json, "warnings": []}
+            ) as created,
+            patch.object(
+                sub2api_import,
+                "write_agent_identity",
+                return_value={"ok": True, "path": "agent.json", "data": auth_json},
+            ),
         ):
             result = sub2api_import._prepare_sub2api_import_data("free@example.com", auth_mode="auto")
 
@@ -382,7 +434,9 @@ class AgentIdentityTests(unittest.TestCase):
 
         with (
             patch.object(sub2api_import, "_request_json", side_effect=fake_request),
-            patch.object(sub2api_import, "_request_sub2api_test", return_value={"ok": True, "event": "test_complete"}) as tested,
+            patch.object(
+                sub2api_import, "_request_sub2api_test", return_value={"ok": True, "event": "test_complete"}
+            ) as tested,
         ):
             result = sub2api_import.upload_to_sub2api(
                 {"auth_mode": "agent_identity", "agent_identity": {"email": "free@example.com"}},

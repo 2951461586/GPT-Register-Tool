@@ -194,11 +194,7 @@ def extractors():
 
 def _actual_divergences() -> dict[tuple[str, str], str]:
     analysis = ratchet.analyze(ROOT)
-    return {
-        (pair.provider_file, pair.name): pair.common_file
-        for pair in analysis.pairs
-        if pair.kind == "divergent"
-    }
+    return {(pair.provider_file, pair.name): pair.common_file for pair in analysis.pairs if pair.kind == "divergent"}
 
 
 def test_divergent_set_is_frozen():
@@ -265,14 +261,10 @@ def test_blik_redirect_predicate_honours_action_field_and_resources(extractors):
 def test_momo_url_mapping_targets_openai_pay(extractors):
     core = extractors["momo_core"]
 
-    assert core.to_openai_pay_url("https://checkout.stripe.com/c/pay/cs_1") == (
-        "https://pay.openai.com/c/pay/cs_1"
-    )
+    assert core.to_openai_pay_url("https://checkout.stripe.com/c/pay/cs_1") == ("https://pay.openai.com/c/pay/cs_1")
     assert core.to_openai_pay_url(core.STRIPE_PAY_PREFIX + "cs_2") == core.OPENAI_PAY_PREFIX + "cs_2"
     # Already-mapped and non-Stripe URLs are returned untouched.
-    assert core.to_openai_pay_url("https://pay.openai.com/c/pay/cs_1") == (
-        "https://pay.openai.com/c/pay/cs_1"
-    )
+    assert core.to_openai_pay_url("https://pay.openai.com/c/pay/cs_1") == ("https://pay.openai.com/c/pay/cs_1")
     assert core.to_openai_pay_url("") == ""
 
 

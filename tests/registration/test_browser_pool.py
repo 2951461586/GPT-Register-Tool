@@ -83,6 +83,7 @@ def _pool(**overrides) -> BrowserProcessPool:
 # PoolConfig
 # --------------------------------------------------------------------------
 
+
 def test_pool_config_is_disabled_by_default():
     cfg = PoolConfig.from_config({})
     assert cfg.enabled is False
@@ -90,11 +91,17 @@ def test_pool_config_is_disabled_by_default():
 
 
 def test_pool_config_reads_registration_browser_process_pool():
-    cfg = PoolConfig.from_config({
-        "registration": {"browser_process_pool": {
-            "enabled": True, "max_concurrent": 3, "max_uses_per_process": 7,
-        }}
-    })
+    cfg = PoolConfig.from_config(
+        {
+            "registration": {
+                "browser_process_pool": {
+                    "enabled": True,
+                    "max_concurrent": 3,
+                    "max_uses_per_process": 7,
+                }
+            }
+        }
+    )
     assert cfg.enabled is True
     assert cfg.max_concurrent == 3
     assert cfg.max_uses_per_process == 7
@@ -129,6 +136,7 @@ def test_pool_config_clamps_zero_concurrency():
 # slot bookkeeping
 # --------------------------------------------------------------------------
 
+
 def test_slot_recycles_on_failure_and_on_use_limit():
     slot = BrowserSlot(slot_id=0)
     assert slot.needs_recycle(10) is False
@@ -142,6 +150,7 @@ def test_slot_recycles_on_failure_and_on_use_limit():
 # --------------------------------------------------------------------------
 # session lifecycle
 # --------------------------------------------------------------------------
+
 
 def test_session_yields_browser_and_keeps_process_alive():
     factory = RecordingFactory()
@@ -317,6 +326,7 @@ def test_pool_timeout_raises_when_no_slot_frees_up(monkeypatch):
 # wiring: registration entry point routes through the pool when enabled
 # --------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def reset_shared_pool():
     # 必须指向真正持有这些全局的模块：_BROWSER_POOL / _BROWSER_POOL_KEY 是
@@ -339,9 +349,16 @@ def test_scope_bypasses_pool_when_disabled():
 
     factory = RecordingFactory()
     with pw._browser_session_scope(
-        driver_name="camoufox", config={}, proxy=None, headless=True,
-        timeout_ms=1000, locale="en-US", timezone_id="UTC",
-        browser_identity=None, viewport=None, session_factory=factory,
+        driver_name="camoufox",
+        config={},
+        proxy=None,
+        headless=True,
+        timeout_ms=1000,
+        locale="en-US",
+        timezone_id="UTC",
+        browser_identity=None,
+        viewport=None,
+        session_factory=factory,
     ) as browser:
         assert isinstance(browser, FakeBrowser)
     assert pw._BROWSER_POOL is None
@@ -355,16 +372,30 @@ def test_disabling_pool_closes_previous_residents():
     disabled = {"registration": {"browser_process_pool": {"enabled": False}}}
     factory = RecordingFactory()
     with pw._browser_session_scope(
-        driver_name="camoufox", config=enabled, proxy="http://1.1.1.1:1", headless=True,
-        timeout_ms=1000, locale="en-US", timezone_id="UTC", browser_identity=None,
-        viewport=None, session_factory=factory,
+        driver_name="camoufox",
+        config=enabled,
+        proxy="http://1.1.1.1:1",
+        headless=True,
+        timeout_ms=1000,
+        locale="en-US",
+        timezone_id="UTC",
+        browser_identity=None,
+        viewport=None,
+        session_factory=factory,
     ):
         pass
     resident = factory.browsers[0]
     with pw._browser_session_scope(
-        driver_name="camoufox", config=disabled, proxy=None, headless=True,
-        timeout_ms=1000, locale="en-US", timezone_id="UTC", browser_identity=None,
-        viewport=None, session_factory=factory,
+        driver_name="camoufox",
+        config=disabled,
+        proxy=None,
+        headless=True,
+        timeout_ms=1000,
+        locale="en-US",
+        timezone_id="UTC",
+        browser_identity=None,
+        viewport=None,
+        session_factory=factory,
     ):
         pass
     assert resident.process_closed is True
@@ -381,9 +412,15 @@ def test_scope_uses_a_process_wide_pool_when_enabled():
     factory = RecordingFactory()
     for proxy in ("http://1.1.1.1:1", "http://2.2.2.2:2"):
         with pw._browser_session_scope(
-            driver_name="camoufox", config=config, proxy=proxy, headless=True,
-            timeout_ms=1000, locale="en-US", timezone_id="UTC",
-            browser_identity={"profile_id": proxy}, viewport=None,
+            driver_name="camoufox",
+            config=config,
+            proxy=proxy,
+            headless=True,
+            timeout_ms=1000,
+            locale="en-US",
+            timezone_id="UTC",
+            browser_identity={"profile_id": proxy},
+            viewport=None,
             session_factory=factory,
         ) as browser:
             assert isinstance(browser, FakeBrowser)
@@ -403,9 +440,16 @@ def test_scope_rebuilds_pool_when_driver_changes():
     factory = RecordingFactory()
     for driver in ("camoufox", "playwright"):
         with pw._browser_session_scope(
-            driver_name=driver, config=config, proxy=None, headless=True,
-            timeout_ms=1000, locale="en-US", timezone_id="UTC",
-            browser_identity=None, viewport=None, session_factory=factory,
+            driver_name=driver,
+            config=config,
+            proxy=None,
+            headless=True,
+            timeout_ms=1000,
+            locale="en-US",
+            timezone_id="UTC",
+            browser_identity=None,
+            viewport=None,
+            session_factory=factory,
         ):
             pass
     assert pw._BROWSER_POOL.driver == "playwright"
@@ -470,6 +514,7 @@ def test_pool_relaunches_when_browser_identity_changes():
 # --------------------------------------------------------------------------
 # Memory watchdog
 # --------------------------------------------------------------------------
+
 
 def _rss_pool(sampler, *, limit_mb: int = 100, **overrides) -> BrowserProcessPool:
     config = {

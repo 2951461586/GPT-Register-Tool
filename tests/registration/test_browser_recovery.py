@@ -31,10 +31,12 @@ def test_proxy_health_tracker_ranks_and_sanitizes_endpoint(tmp_path):
     tracker.record("http://user:pass@proxy-a.test:8000", ok=False, error="timeout")
     tracker.record("http://proxy-b.test:8000", ok=True)
     assert ProxyHealthTracker.key("http://user:pass@proxy-a.test:8000").startswith("proxy-a.test:8000#sid-")
-    assert tracker.rank([
-        "http://user:pass@proxy-a.test:8000",
-        "http://proxy-b.test:8000",
-    ])[0].endswith("proxy-b.test:8000")
+    assert tracker.rank(
+        [
+            "http://user:pass@proxy-a.test:8000",
+            "http://proxy-b.test:8000",
+        ]
+    )[0].endswith("proxy-b.test:8000")
 
 
 def test_retry_guard_cools_down_repeated_same_class_failures(tmp_path):

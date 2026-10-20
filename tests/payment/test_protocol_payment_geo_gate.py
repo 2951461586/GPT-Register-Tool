@@ -65,9 +65,7 @@ class OptInTests(unittest.TestCase):
             return n == "TWINT_PROXY_GEO_CHECK"
 
         with patch.object(TWINT, "env_bool", side_effect=_env):
-            with patch.object(geo, "ensure_proxy_country"), patch.object(
-                geo, "ensure_proxy_targets"
-            ) as mock_targets:
+            with patch.object(geo, "ensure_proxy_country"), patch.object(geo, "ensure_proxy_targets") as mock_targets:
                 TWINT.maybe_check_proxy_geo("http://a:1", "http://a:1")
                 mock_targets.assert_not_called()
 

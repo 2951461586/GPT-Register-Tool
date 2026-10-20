@@ -14,13 +14,11 @@ def _as_bool(value):
     return 1 if bool(value) else 0
 
 
-
 def _as_int(value):
     try:
         return int(value)
     except Exception:
         return 0
-
 
 
 def _as_float(value):
@@ -30,17 +28,14 @@ def _as_float(value):
         return 0.0
 
 
-
 def _get(data, key, default=""):
     value = data.get(key, default) if isinstance(data, Mapping) else default
     return "" if value is None else value
 
 
-
 def _nested(data, key):
     value = _get(data, key, {})
     return value if isinstance(value, Mapping) else {}
-
 
 
 def _nested_field(data, *keys):
@@ -50,7 +45,6 @@ def _nested_field(data, *keys):
             return ""
         current = current.get(key)
     return current
-
 
 
 def _normalize_account_email(email):
@@ -71,7 +65,6 @@ def _normalize_account_email(email):
     return value.lower()
 
 
-
 def _find_existing_account_email(conn, email):
     canonical = _normalize_account_email(email)
     if not canonical:
@@ -89,7 +82,6 @@ def _find_existing_account_email(conn, email):
     return ""
 
 
-
 def _resolve_account_email(conn, email):
     canonical = _normalize_account_email(email)
     existing = _find_existing_account_email(conn, canonical)
@@ -105,7 +97,6 @@ def _resolve_account_email(conn, email):
         return matched or existing
 
 
-
 def _nested_token(data, *keys):
     current = data
     for key in keys:
@@ -113,7 +104,6 @@ def _nested_token(data, *keys):
             return ""
         current = current.get(key)
     return current if isinstance(current, str) else ""
-
 
 
 def _paypal_status(data, paypal):
@@ -132,7 +122,6 @@ def _paypal_status(data, paypal):
     if paypal.get("ok"):
         return "ready"
     return "missing"
-
 
 
 def _payment_method(data, paypal):
@@ -163,7 +152,6 @@ def _payment_method(data, paypal):
     return ""
 
 
-
 def _oauth_refresh_token(data, auth_session):
     candidates = (
         str(_get(data, "oauth_refresh_token")).strip(),
@@ -176,7 +164,6 @@ def _oauth_refresh_token(data, auth_session):
         if _looks_codex_refresh_token(token):
             return token
     return ""
-
 
 
 def _looks_codex_refresh_token(token):
@@ -198,7 +185,6 @@ def _looks_codex_refresh_token(token):
     )
 
 
-
 def _normalize_account_type(value):
     text = str(value or "").strip().lower()
     if "team" in text or "business" in text or "enterprise" in text:
@@ -212,12 +198,12 @@ def _normalize_account_type(value):
     return ""
 
 
-
 def _jwt_account_type(access_token):
     try:
         parts = str(access_token or "").split(".")
         if len(parts) >= 2:
             import base64
+
             payload = parts[1] + "=" * ((4 - len(parts[1]) % 4) % 4)
             claims = json.loads(base64.urlsafe_b64decode(payload.encode("ascii")))
             auth = claims.get("https://api.openai.com/auth") if isinstance(claims, dict) else {}
@@ -226,7 +212,6 @@ def _jwt_account_type(access_token):
     except Exception:
         pass
     return ""
-
 
 
 def _account_type(data, auth_session, workspace, access_token):
@@ -252,7 +237,6 @@ def _account_type(data, auth_session, workspace, access_token):
     return ""
 
 
-
 def _refresh_token_status(data, auth_session):
     explicit = str(_get(data, "refresh_token_status")).strip()
     if _oauth_refresh_token(data, auth_session):
@@ -262,7 +246,6 @@ def _refresh_token_status(data, auth_session):
     if _looks_codex_refresh_token(_get(data, "refresh_token")):
         return "legacy_present"
     return "no_rt"
-
 
 
 def _status(data, paypal, access_token, has_refresh_token=False):
@@ -304,7 +287,6 @@ def _status(data, paypal, access_token, has_refresh_token=False):
     if access_token:
         return "registered"
     return "pending"
-
 
 
 # Account-state markers. The WPF host matches the same substrings against
@@ -354,7 +336,6 @@ def _looks_at_invalid(data, paypal):
     return any(marker in text for marker in AT_INVALID_MARKERS)
 
 
-
 def _looks_account_deactivated(data, paypal):
     text = " ".join(
         str(value or "")
@@ -368,12 +349,10 @@ def _looks_account_deactivated(data, paypal):
     return any(marker in text for marker in ACCOUNT_DEACTIVATED_MARKERS)
 
 
-
 def _success_value(data, access_token):
     if isinstance(data, Mapping) and "success" in data:
         return bool(data.get("success"))
     return bool(access_token)
-
 
 
 def _update_session_json(path, data):
@@ -385,14 +364,12 @@ def _update_session_json(path, data):
         print(f"[!] Failed to update session JSON {path}: {e}")
 
 
-
 def _is_http_url(value):
     try:
         parsed = urlparse(str(value or ""))
     except Exception:
         return False
     return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
-
 
 
 def _mark_plan_type_plus(data):
@@ -413,4 +390,3 @@ def _mark_plan_type_plus(data):
             auth_account = {}
             auth_session["account"] = auth_account
         auth_account["planType"] = "plus"
-

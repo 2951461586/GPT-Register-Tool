@@ -168,9 +168,7 @@ class BrowserProcessPool:
         self.session_factory = session_factory
 
         self._semaphore = threading.Semaphore(self.pool_config.max_concurrent)
-        self._slots: list[BrowserSlot] = [
-            BrowserSlot(slot_id=i) for i in range(self.pool_config.max_concurrent)
-        ]
+        self._slots: list[BrowserSlot] = [BrowserSlot(slot_id=i) for i in range(self.pool_config.max_concurrent)]
         self._lock = threading.Lock()
         self._closed = False
         # Resident browser processes, keyed by slot id.  Unlike the old design
@@ -235,7 +233,8 @@ class BrowserProcessPool:
                     except Exception as exc:
                         self._log.warning(
                             "resident close failed during relaunch slot=%s: %s",
-                            slot.slot_id, exc,
+                            slot.slot_id,
+                            exc,
                         )
                 self._resident_proxy.pop(slot.slot_id, None)
                 kwargs = {
@@ -261,9 +260,7 @@ class BrowserProcessPool:
                     if renew is None:
                         raise AttributeError("renew_account_context_unavailable")
                     per_account = {
-                        k: session_overrides[k]
-                        for k in ("locale", "timezone_id", "viewport")
-                        if k in session_overrides
+                        k: session_overrides[k] for k in ("locale", "timezone_id", "viewport") if k in session_overrides
                     }
                     renew(**per_account)
                 except Exception:
@@ -319,7 +316,8 @@ class BrowserProcessPool:
                     except Exception as exc:
                         self._log.warning(
                             "resident close failed during recycle slot=%s: %s",
-                            slot.slot_id, exc,
+                            slot.slot_id,
+                            exc,
                         )
                 self._residents.pop(slot.slot_id, None)
                 self._resident_proxy.pop(slot.slot_id, None)
@@ -337,7 +335,8 @@ class BrowserProcessPool:
                 except Exception as exc:
                     self._log.warning(
                         "resident context release failed slot=%s: %s",
-                        slot.slot_id, exc,
+                        slot.slot_id,
+                        exc,
                     )
             self._release_slot(slot)
             self._semaphore.release()
@@ -412,9 +411,7 @@ class BrowserProcessPool:
             return
         with self._lock:
             idle = [
-                candidate
-                for candidate in self._slots
-                if not candidate.in_use and candidate.slot_id in self._residents
+                candidate for candidate in self._slots if not candidate.in_use and candidate.slot_id in self._residents
             ]
             victim = min(idle, key=lambda candidate: candidate.last_used) if idle else slot
             resident = self._residents.pop(victim.slot_id, None)
@@ -451,9 +448,7 @@ class BrowserProcessPool:
                 "max_concurrent": self.pool_config.max_concurrent,
                 "max_uses_per_process": self.pool_config.max_uses_per_process,
                 "max_total_rss_mb": self.pool_config.max_total_rss_mb,
-                "rss_mb": round(self._sample_rss_mb(), 1)
-                if self.pool_config.max_total_rss_mb > 0
-                else None,
+                "rss_mb": round(self._sample_rss_mb(), 1) if self.pool_config.max_total_rss_mb > 0 else None,
                 "resident_browsers": len(self._residents),
                 "slots": [
                     {

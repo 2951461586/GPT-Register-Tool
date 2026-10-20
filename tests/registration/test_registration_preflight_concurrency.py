@@ -54,8 +54,9 @@ def _one_host_pool(size: int) -> list[str]:
 
 def _run(pool, probe, config=None, monkeypatch=None):
     monkeypatch.setattr(cli, "CFG", config or _config())
-    with patch.object(cli, "_proxy_pool_values", return_value=pool), patch(
-        "sms_tool.registration.registration_network_preflight", side_effect=probe
+    with (
+        patch.object(cli, "_proxy_pool_values", return_value=pool),
+        patch("sms_tool.registration.registration_network_preflight", side_effect=probe),
     ):
         return cli._preflight_registration_before_mailbox(_args())
 
@@ -175,8 +176,9 @@ def test_successful_routes_follow_candidate_order_not_completion_order(monkeypat
 
     args = _args()
     monkeypatch.setattr(cli, "CFG", _config())
-    with patch.object(cli, "_proxy_pool_values", return_value=pool), patch(
-        "sms_tool.registration.registration_network_preflight", side_effect=probe
+    with (
+        patch.object(cli, "_proxy_pool_values", return_value=pool),
+        patch("sms_tool.registration.registration_network_preflight", side_effect=probe),
     ):
         result = cli._preflight_registration_before_mailbox(args)
 

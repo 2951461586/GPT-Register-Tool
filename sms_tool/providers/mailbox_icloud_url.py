@@ -28,8 +28,20 @@ from .mailbox_graph import MailboxAuthInvalidError
 
 PROVIDER = "icloud_url"
 _VOID_HTML_TAGS = {
-    "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta",
-    "param", "source", "track", "wbr",
+    "area",
+    "base",
+    "br",
+    "col",
+    "embed",
+    "hr",
+    "img",
+    "input",
+    "link",
+    "meta",
+    "param",
+    "source",
+    "track",
+    "wbr",
 }
 _OTP_CONTEXT_RE = re.compile(
     r"openai|chatgpt|login\s+code|verification\s+code|temporary\s+code|"
@@ -47,18 +59,38 @@ _OTP_CONTEXT_RE = re.compile(
 #: ⚠️ ``code`` 在这个渠道的「无码」响应里取值 ``"no_code"`` —— 不是 6 位数字，
 #: 所以 ``_six_digit_code`` 不会把它当成验证码（这是刻意的：宁可漏报不误报）。
 _API_OTP_KEYS: tuple[str, ...] = (
-    "verification_code", "verificationcode", "verify_code", "verifycode",
-    "mail_code", "mailcode", "otp", "one_time_code", "onetimecode", "code",
+    "verification_code",
+    "verificationcode",
+    "verify_code",
+    "verifycode",
+    "mail_code",
+    "mailcode",
+    "otp",
+    "one_time_code",
+    "onetimecode",
+    "code",
 )
 
 #: 递归遍历 JSON 时跳过的键：它们的值经常是数字但不是验证码。
 #: 除参考实现的集合外多加了 ``id`` —— 消息/请求 id 是 6 位数字的概率不低，
 #: 且它**永远**不可能是验证码，所以这里刻意比参考实现更保守。
-_API_IGNORED_KEYS: frozenset[str] = frozenset({
-    "email", "mail", "url", "api_url", "password", "pass", "token",
-    "status", "status_code", "timestamp", "created_at", "updated_at",
-    "id",
-})
+_API_IGNORED_KEYS: frozenset[str] = frozenset(
+    {
+        "email",
+        "mail",
+        "url",
+        "api_url",
+        "password",
+        "pass",
+        "token",
+        "status",
+        "status_code",
+        "timestamp",
+        "created_at",
+        "updated_at",
+        "id",
+    }
+)
 
 #: 合成邮件的外观：下游 ``_normalize_otp_subject`` 会把带上下文的主题改写成
 #: ``… login code``，从而命中注册泳道的 ``verification code|login code`` 关键词。
@@ -224,7 +256,9 @@ def _fetch_icloud_url_page(mailbox, *, limit: int, proxy: str | None) -> tuple[s
 
 
 def _request(url: str, *, proxy: str | None = None):
-    proxies = {"http": proxy, "https": proxy} if proxy else None
+    # ``ProxySpec`` is a TypedDict; a plain mapping is what every call site passes
+    # and what curl_cffi accepts at runtime.
+    proxies: Any = {"http": proxy, "https": proxy} if proxy else None
     try:
         return curl_requests.get(
             url,
@@ -264,15 +298,9 @@ def _with_message_limit(url: str, limit: int) -> str:
 #: 同批 17 个 ``icloud-api.top`` 邮箱不受影响（它们的正文在 DOM 卡片里）。
 _LATEST_MAIL_MARKERS = ("最新邮件信息", "接收时间：", "邮件主题：")
 _JS_HTML_CONTENT_RE = re.compile(r'var\s+htmlContent\s*=\s*"((?:[^"\\]|\\.)*)"', re.S)
-_LATEST_RECEIVED_RE = re.compile(
-    r'class="label">\s*接收时间：\s*</div>\s*<div[^>]*>\s*(.*?)\s*</div>', re.S
-)
-_LATEST_SUBJECT_RE = re.compile(
-    r'class="label">\s*邮件主题：\s*</div>\s*<div[^>]*>\s*(.*?)\s*</div>', re.S
-)
-_CN_TIME_RE = re.compile(
-    r"(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日\s*(\d{1,2})\s*:\s*(\d{2})\s*:\s*(\d{2})"
-)
+_LATEST_RECEIVED_RE = re.compile(r'class="label">\s*接收时间：\s*</div>\s*<div[^>]*>\s*(.*?)\s*</div>', re.S)
+_LATEST_SUBJECT_RE = re.compile(r'class="label">\s*邮件主题：\s*</div>\s*<div[^>]*>\s*(.*?)\s*</div>', re.S)
+_CN_TIME_RE = re.compile(r"(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日\s*(\d{1,2})\s*:\s*(\d{2})\s*:\s*(\d{2})")
 
 
 def _label_value(pattern: re.Pattern[str], text: str) -> str:
@@ -303,9 +331,7 @@ def _latest_mail_received_at(value: str) -> str:
         return ""
     year, month, day, hour, minute, second = (int(part) for part in match.groups())
     try:
-        return datetime(
-            year, month, day, hour, minute, second, tzinfo=timezone(timedelta(hours=8))
-        ).isoformat()
+        return datetime(year, month, day, hour, minute, second, tzinfo=timezone(timedelta(hours=8))).isoformat()
     except ValueError:
         return ""
 
@@ -326,9 +352,7 @@ def _latest_mail_js_message(text: str, *, email: str) -> list[dict[str, Any]] | 
     return [
         _message(
             email=email,
-            message_id=hashlib.sha256(
-                f"api798-latest:{subject}\n{received_at}".encode("utf-8")
-            ).hexdigest()[:24],
+            message_id=hashlib.sha256(f"api798-latest:{subject}\n{received_at}".encode("utf-8")).hexdigest()[:24],
             subject=subject,
             sender="",
             received_at=received_at,
@@ -350,14 +374,16 @@ def _api_payload_messages(text: str, *, email: str) -> list[dict[str, Any]] | No
     code = _api_payload_otp(payload)
     if not code:
         return []
-    return [_message(
-        email=email,
-        message_id=hashlib.sha256(f"icloud-api-otp:{code}".encode("utf-8")).hexdigest()[:24],
-        subject=_API_OTP_SUBJECT,
-        sender=_API_OTP_SENDER,
-        received_at=_now_iso(),
-        body=f"{_API_OTP_SUBJECT}. Enter this code to continue: {code}",
-    )]
+    return [
+        _message(
+            email=email,
+            message_id=hashlib.sha256(f"icloud-api-otp:{code}".encode("utf-8")).hexdigest()[:24],
+            subject=_API_OTP_SUBJECT,
+            sender=_API_OTP_SENDER,
+            received_at=_now_iso(),
+            body=f"{_API_OTP_SUBJECT}. Enter this code to continue: {code}",
+        )
+    ]
 
 
 def _load_json_payload(text: str) -> Any:
@@ -473,14 +499,16 @@ def _fetch_yangyang_messages(
             continue
         subject = str(detail.get("subject") or item.get("subject") or "").strip()
         body = _decode_mail_body(detail.get("body"))
-        messages.append(_message(
-            email=email,
-            message_id=str(item.get("id") or ""),
-            subject=subject,
-            sender=str(detail.get("fromAddress") or item.get("from_address") or ""),
-            received_at=str(detail.get("receivedAt") or item.get("received_at") or ""),
-            body=body,
-        ))
+        messages.append(
+            _message(
+                email=email,
+                message_id=str(item.get("id") or ""),
+                subject=subject,
+                sender=str(detail.get("fromAddress") or item.get("from_address") or ""),
+                received_at=str(detail.get("receivedAt") or item.get("received_at") or ""),
+                body=body,
+            )
+        )
     return messages
 
 
@@ -504,9 +532,11 @@ def _fetch_yangyang_items(
     items = payload.get("items") if isinstance(payload, dict) else []
     items = sorted(
         (item for item in list(items or []) if isinstance(item, dict)),
-        key=lambda item: _message_received_ts({
-            "receivedDateTime": _iso_datetime(item.get("received_at") or item.get("receivedAt")),
-        }),
+        key=lambda item: _message_received_ts(
+            {
+                "receivedDateTime": _iso_datetime(item.get("received_at") or item.get("receivedAt")),
+            }
+        ),
         reverse=True,
     )
     return [item for item in items[: max(1, min(int(limit or 25), 50))] if item.get("id") not in (None, "")]
@@ -542,16 +572,23 @@ class _CardMessageParser(HTMLParser):
             self.card_tag = tag
             self.current = {"sender": [], "subject": [], "received_at": [], "body": []}
         elif self.current is not None and not self.field:
-            field = next((name for css, name in (
-                ("fr", "sender"),
-                ("su", "subject"),
-                ("dt", "received_at"),
-                ("bd", "body"),
-                ("meta", "sender"),
-                ("subject", "subject"),
-                ("date", "received_at"),
-                ("body", "body"),
-            ) if css in classes), "")
+            field = next(
+                (
+                    name
+                    for css, name in (
+                        ("fr", "sender"),
+                        ("su", "subject"),
+                        ("dt", "received_at"),
+                        ("bd", "body"),
+                        ("meta", "sender"),
+                        ("subject", "subject"),
+                        ("date", "received_at"),
+                        ("body", "body"),
+                    )
+                    if css in classes
+                ),
+                "",
+            )
             if field:
                 self.field = field
                 self.field_depth = self.depth
@@ -601,14 +638,16 @@ def _parse_card_messages(text: str, *, email: str, limit: int) -> list[dict[str,
         digest = hashlib.sha256(
             f"{subject}\n{card.get('received_at', '')}\n{body}".encode("utf-8", errors="ignore")
         ).hexdigest()[:24]
-        messages.append(_message(
-            email=email,
-            message_id=digest,
-            subject=subject,
-            sender=card.get("sender", ""),
-            received_at=card.get("received_at", ""),
-            body=body,
-        ))
+        messages.append(
+            _message(
+                email=email,
+                message_id=digest,
+                subject=subject,
+                sender=card.get("sender", ""),
+                received_at=card.get("received_at", ""),
+                body=body,
+            )
+        )
     return messages
 
 

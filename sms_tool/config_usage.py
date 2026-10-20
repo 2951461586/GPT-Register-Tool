@@ -48,6 +48,7 @@ measured one rather than an oversight:
 ⇒ Read the report as "no **Python** code path reads this". For the desktop
 half, :data:`CSHARP_CONSUMED_KEYS` is the complete accounting.
 """
+
 from __future__ import annotations
 
 import ast
@@ -221,11 +222,7 @@ def unread_config_keys(root: Path | str | None = None) -> list[UnreadKey]:
         for path, shards in sorted(shard_paths.items())
         if not is_read(path) and path not in CSHARP_CONSUMED_KEYS
     ]
-    documented_only = [
-        UnreadKey(path, (), True)
-        for path in sorted(example - set(shard_paths))
-        if not is_read(path)
-    ]
+    documented_only = [UnreadKey(path, (), True) for path in sorted(example - set(shard_paths)) if not is_read(path)]
     return unread + documented_only
 
 
@@ -293,10 +290,7 @@ def _write_cache(path: Path, fingerprint: str, keys: list[UnreadKey]) -> None:
     payload = {
         "schema": CACHE_SCHEMA,
         "fingerprint": fingerprint,
-        "keys": [
-            {"path": key.path, "shards": list(key.shards), "in_example": key.in_example}
-            for key in keys
-        ],
+        "keys": [{"path": key.path, "shards": list(key.shards), "in_example": key.in_example} for key in keys],
     }
     try:
         path.parent.mkdir(parents=True, exist_ok=True)

@@ -38,7 +38,6 @@ def save_registration_checkpoint(email, state, payload, *, runtime_config: Confi
     return cursor.rowcount > 0
 
 
-
 def get_registration_checkpoint(email, *, runtime_config: ConfigInput = None):
     normalized = _normalize_account_email(email)
     if not normalized:
@@ -61,10 +60,9 @@ def get_registration_checkpoint(email, *, runtime_config: ConfigInput = None):
 
 def get_registration_checkpoints(emails, *, runtime_config: ConfigInput = None):
     """Fetch candidate checkpoints in one query, keyed by normalized email."""
-    normalized = list(dict.fromkeys(
-        value for value in (_normalize_account_email(email) for email in (emails or []))
-        if value
-    ))
+    normalized = list(
+        dict.fromkeys(value for value in (_normalize_account_email(email) for email in (emails or [])) if value)
+    )
     if not normalized:
         return {}
     init_database(runtime_config=runtime_config)
@@ -88,7 +86,6 @@ def get_registration_checkpoints(emails, *, runtime_config: ConfigInput = None):
     return result
 
 
-
 def clear_registration_checkpoint(email, *, runtime_config: ConfigInput = None):
     normalized = _normalize_account_email(email)
     if not normalized:
@@ -101,4 +98,3 @@ def clear_registration_checkpoint(email, *, runtime_config: ConfigInput = None):
     finally:
         conn.close()
     return True
-

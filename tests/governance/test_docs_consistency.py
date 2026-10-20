@@ -29,9 +29,7 @@ def test_live_documentation_pointers_are_current():
 def _mailbox_contract() -> dict[str, str]:
     path = scan.ROOT / "docs" / "current" / "mailbox.md"
     body = path.read_text(encoding="utf-8")
-    table = body.split("<!-- mailbox-contract:start -->", 1)[1].split(
-        "<!-- mailbox-contract:end -->", 1
-    )[0]
+    table = body.split("<!-- mailbox-contract:start -->", 1)[1].split("<!-- mailbox-contract:end -->", 1)[0]
     contract: dict[str, str] = {}
     for line in table.splitlines():
         cells = [cell.strip().strip("`") for cell in line.strip().strip("|").split("|")]
@@ -59,14 +57,8 @@ def test_mailbox_document_is_live_and_matches_runtime_semantics():
     registry = MailboxProviderRegistry()
     always = lambda _mailbox, _config: True
     fetch = lambda _mailbox, **_kwargs: []
-    registry.register(
-        FunctionMailboxProviderAdapter(
-            "fallback", always, message_fetcher=fetch, fallback=True
-        )
-    )
-    registry.register(
-        FunctionMailboxProviderAdapter("specific", always, message_fetcher=fetch)
-    )
+    registry.register(FunctionMailboxProviderAdapter("fallback", always, message_fetcher=fetch, fallback=True))
+    registry.register(FunctionMailboxProviderAdapter("specific", always, message_fetcher=fetch))
     resolved = registry.resolve_fetcher(SimpleNamespace(), {})
 
     auth_error = RuntimeError("bad credentials")
@@ -82,14 +74,11 @@ def test_mailbox_document_is_live_and_matches_runtime_semantics():
     )
     observed = {
         "provider_resolution": (
-            "specific_then_fallback"
-            if resolved is not None and resolved.name == "specific"
-            else "fallback_first"
+            "specific_then_fallback" if resolved is not None and resolved.name == "specific" else "fallback_first"
         ),
         "auth_invalid": (
             "terminal_quarantine"
-            if mailbox_error_disposition(auth_error)
-            is MailboxErrorDisposition.AUTH_INVALID
+            if mailbox_error_disposition(auth_error) is MailboxErrorDisposition.AUTH_INVALID
             else "retry_until_deadline"
         ),
         "endpoint_unavailable": (
@@ -100,13 +89,10 @@ def test_mailbox_document_is_live_and_matches_runtime_semantics():
         ),
         "other_errors": (
             "retry_until_deadline"
-            if mailbox_error_disposition(RuntimeError("temporary"))
-            is MailboxErrorDisposition.RETRY
+            if mailbox_error_disposition(RuntimeError("temporary")) is MailboxErrorDisposition.RETRY
             else "terminal"
         ),
-        "operation_proxy_fallback_default": (
-            "true" if routes[-1] == "http://operation.example:8003" else "false"
-        ),
+        "operation_proxy_fallback_default": ("true" if routes[-1] == "http://operation.example:8003" else "false"),
         "proxy_order": ",".join(
             {
                 "http://mailbox.example:8001": "mailbox_proxy",
@@ -184,7 +170,9 @@ def test_provider_compatibility_facades_alias_the_implementation_modules():
         facade = importlib.import_module(f"sms_tool.mailbox_{name}")
         implementation = importlib.import_module(f"sms_tool.providers.mailbox_{name}")
         assert facade is implementation
-    assert importlib.import_module("sms_tool.outlook_imap") is importlib.import_module("sms_tool.providers.outlook_imap_client")
+    assert importlib.import_module("sms_tool.outlook_imap") is importlib.import_module(
+        "sms_tool.providers.outlook_imap_client"
+    )
 
 
 # --------------------------------------------------------------------------- #

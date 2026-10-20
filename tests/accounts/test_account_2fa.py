@@ -78,7 +78,9 @@ def test_recent_auth_failure_uses_existing_account_reauth_callback():
     assert result["ok"] is True
     assert result["access_token"] == "fresh-at"
     assert reauth_calls == [True]
-    enroll_headers = [kwargs["headers"]["Authorization"] for url, kwargs in session.post_calls if url.endswith("/mfa/enroll")]
+    enroll_headers = [
+        kwargs["headers"]["Authorization"] for url, kwargs in session.post_calls if url.endswith("/mfa/enroll")
+    ]
     assert enroll_headers == ["Bearer stale-at", "Bearer fresh-at"]
 
 

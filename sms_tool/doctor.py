@@ -43,13 +43,13 @@ def _probe_node() -> dict[str, str]:
     binary = os.environ.get("OPENAI_SENTINEL_NODE_PATH") or shutil.which("node")
     if not binary:
         return _check(
-            "node", "fail", "not found on PATH",
+            "node",
+            "fail",
+            "not found on PATH",
             "install Node.js LTS (Sentinel token extraction shells out to node)",
         )
     try:
-        proc = subprocess.run(
-            [binary, "--version"], capture_output=True, text=True, timeout=15
-        )
+        proc = subprocess.run([binary, "--version"], capture_output=True, text=True, timeout=15)
         version = (proc.stdout or "").strip() or (proc.stderr or "").strip()
     except Exception as exc:  # noqa: BLE001 - any launch failure is the finding
         return _check("node", "fail", binary, f"node exists but failed to run: {type(exc).__name__}")
@@ -73,21 +73,23 @@ def _probe_playwright() -> dict[str, str]:
         spec = None
     if spec is None:
         return _check(
-            "playwright", "fail", "package not installed",
+            "playwright",
+            "fail",
+            "package not installed",
             "python -m pip install playwright",
         )
     version = _distribution_version("playwright") or "installed"
     browsers = Path(os.environ.get("PLAYWRIGHT_BROWSERS_PATH") or _default_browsers_dir())
     try:
-        has_chromium = browsers.is_dir() and any(
-            entry.name.startswith("chromium-") for entry in browsers.iterdir()
-        )
+        has_chromium = browsers.is_dir() and any(entry.name.startswith("chromium-") for entry in browsers.iterdir())
     except OSError:
         has_chromium = False
     if has_chromium:
         return _check("playwright", "ok", f"{version} ({browsers})")
     return _check(
-        "playwright", "fail", f"{version}; chromium not found under {browsers}",
+        "playwright",
+        "fail",
+        f"{version}; chromium not found under {browsers}",
         "python -m playwright install chromium",
     )
 
@@ -118,13 +120,17 @@ def _probe_curl_cffi() -> dict[str, str]:
         spec = None
     if spec is None:
         return _check(
-            "curl_cffi", "fail", "package not installed",
+            "curl_cffi",
+            "fail",
+            "package not installed",
             "python -m pip install 'curl_cffi>=0.15.0,<0.17'",
         )
     version = _distribution_version("curl_cffi")
     if not version.startswith(("0.15.", "0.16.")):
         return _check(
-            "curl_cffi", "fail", f"version {version or 'unknown'}",
+            "curl_cffi",
+            "fail",
+            f"version {version or 'unknown'}",
             "registration requires curl_cffi 0.15.x or 0.16.x (chrome146 TLS profile)",
         )
     return _check("curl_cffi", "ok", f"{version} (impersonation profiles available)")
@@ -237,14 +243,13 @@ def _check_phone_providers(config: Mapping[str, Any]) -> dict[str, str]:
     rows = _phone_provider_rows(config)
     if not rows:
         return _check(
-            "phone_providers", "warn", "could not determine provider key status",
+            "phone_providers",
+            "warn",
+            "could not determine provider key status",
             "run `python -m sms_tool --doctor --json` from the project root",
         )
     selected = next((row for row in rows if row.get("selected")), rows[0])
-    summary = ", ".join(
-        "%s=%s" % (row["provider"], row["origin"] if row["configured"] else "missing")
-        for row in rows
-    )
+    summary = ", ".join("%s=%s" % (row["provider"], row["origin"] if row["configured"] else "missing") for row in rows)
     collisions = _phone_key_collisions(config)
     if collisions:
         detail = "providers sharing one api_key: %s; %s" % (", ".join(collisions), summary)
@@ -252,8 +257,7 @@ def _check_phone_providers(config: Mapping[str, Any]) -> dict[str, str]:
             "Give each provider its own key: %s. A shared key means one vendor's "
             "credential was written into another vendor's section -- on the desktop "
             "that is the 设置 → 接码供应商 dropdown, which decides which section the "
-            "API Key box writes to."
-            % ", ".join("phone_reuse.%s.api_key" % provider for provider in collisions)
+            "API Key box writes to." % ", ".join("phone_reuse.%s.api_key" % provider for provider in collisions)
         )
         if not selected["configured"]:
             # Both facts, in this order: a missing key for the selected provider
@@ -265,12 +269,14 @@ def _check_phone_providers(config: Mapping[str, Any]) -> dict[str, str]:
         return _check("phone_providers", "warn", detail, hint)
     if selected["configured"]:
         return _check(
-            "phone_providers", "ok",
+            "phone_providers",
+            "ok",
             "selected=%s (origin=%s, endpoint=%s); %s"
             % (selected["provider"], selected["origin"], selected["endpoint"], summary),
         )
     return _check(
-        "phone_providers", "warn",
+        "phone_providers",
+        "warn",
         "selected=%s has no key; %s" % (selected["provider"], summary),
         _missing_key_hint(str(selected["provider"] or "")),
     )
@@ -281,13 +287,16 @@ def _probe_config(config: Mapping[str, Any], config_source: str) -> list[dict[st
     package_dir = os.path.dirname(os.path.abspath(__file__))
     bundled = os.path.normcase(os.path.join(package_dir, "config.json"))
     using_fallback = config_source and os.path.normcase(str(config_source)) == bundled
-    checks.append(_check(
-        "config_source",
-        "warn" if using_fallback else "ok",
-        str(config_source or "unknown"),
-        "" if not using_fallback else
-        "project-root config.json is missing; create one from config.example.json for full behavior",
-    ))
+    checks.append(
+        _check(
+            "config_source",
+            "warn" if using_fallback else "ok",
+            str(config_source or "unknown"),
+            ""
+            if not using_fallback
+            else "project-root config.json is missing; create one from config.example.json for full behavior",
+        )
+    )
 
     _raw_proxy_cfg: object = config.get("proxy")
     proxy_cfg: Mapping = _raw_proxy_cfg if isinstance(_raw_proxy_cfg, Mapping) else {}
@@ -295,10 +304,14 @@ def _probe_config(config: Mapping[str, Any], config_source: str) -> list[dict[st
     if str(proxy_cfg.get("default") or "").strip() or pool:
         checks.append(_check("config_proxy", "ok", "proxy.default or proxy.pool configured"))
     else:
-        checks.append(_check(
-            "config_proxy", "warn", "no proxy configured",
-            "registration/payment flows need proxy.default or proxy.pool",
-        ))
+        checks.append(
+            _check(
+                "config_proxy",
+                "warn",
+                "no proxy configured",
+                "registration/payment flows need proxy.default or proxy.pool",
+            )
+        )
 
     _raw_email_cfg: object = config.get("email_registration")
     email_cfg: Mapping = _raw_email_cfg if isinstance(_raw_email_cfg, Mapping) else {}
@@ -319,10 +332,14 @@ def _probe_config(config: Mapping[str, Any], config_source: str) -> list[dict[st
     if mailbox_sources:
         checks.append(_check("config_mailbox", "ok", ", ".join(mailbox_sources)))
     else:
-        checks.append(_check(
-            "config_mailbox", "warn", "no usable mailbox source",
-            "configure email_registration.token_file, remail, smailr or cfworker",
-        ))
+        checks.append(
+            _check(
+                "config_mailbox",
+                "warn",
+                "no usable mailbox source",
+                "configure email_registration.token_file, remail, smailr or cfworker",
+            )
+        )
     checks.append(_check_phone_providers(config))
     return checks
 
@@ -378,7 +395,10 @@ def run_doctor(
         ("requests", _probe_requests),
         ("pyotp", lambda: _probe_import("pyotp", "pyotp", "TOTP 2FA enrollment", required=False)),
         ("qrcode", lambda: _probe_import("qrcode", "qrcode", "UPI QR rendering", required=False)),
-        ("nacl", lambda: _probe_import("nacl", "pynacl", "Agent Identity signing", required=False, distribution="pynacl")),
+        (
+            "nacl",
+            lambda: _probe_import("nacl", "pynacl", "Agent Identity signing", required=False, distribution="pynacl"),
+        ),
         # Advisory, and injectable like every other probe: it walks the whole
         # source tree, so tests must be able to stub it out.
         ("config_unread_keys", _probe_unread_config_keys),
@@ -403,9 +423,7 @@ def run_doctor(
     warned = sum(1 for item in checks if item["status"] == "warn")
     # Full list for --json: the console line is truncated, and 60+ key names
     # would bury every other check.
-    unread_detail = next(
-        (item for item in checks if item["name"] == "config_unread_keys"), None
-    )
+    unread_detail = next((item for item in checks if item["name"] == "config_unread_keys"), None)
     return {
         "ok": failed == 0,
         "failed": failed,

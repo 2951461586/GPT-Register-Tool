@@ -77,6 +77,7 @@ class AccountLifecycle:
         removed_rows = 0
         if db.exists():
             import sqlite3
+
             with self._database_lock:
                 # `with sqlite3.connect(...)` is a TRANSACTION context manager,
                 # not a resource one: it commits/rolls back but never closes the
@@ -107,10 +108,7 @@ class AccountLifecycle:
                                     "SELECT rowid, email FROM accounts WHERE lower(email) LIKE ? ESCAPE '\\'",
                                     (pattern,),
                                 ).fetchall()
-                                doomed_ids = [
-                                    row[0] for row in candidate_rows
-                                    if _email_core(row[1]) == target_core
-                                ]
+                                doomed_ids = [row[0] for row in candidate_rows if _email_core(row[1]) == target_core]
                                 for rowid in doomed_ids:
                                     conn.execute("DELETE FROM accounts WHERE rowid=?", (rowid,))
                                 removed_rows = len(doomed_ids)

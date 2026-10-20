@@ -12,7 +12,7 @@ def test_emit_result_uses_versioned_single_line_contract(capsys):
 
     line = capsys.readouterr().out.strip()
     assert line.startswith(IPC_PREFIX)
-    envelope = json.loads(line[len(IPC_PREFIX):])
+    envelope = json.loads(line[len(IPC_PREFIX) :])
     assert envelope["schema"] == "smsworkbench.ipc.v2"
     assert envelope["version"] == 2
     assert envelope["type"] == "result"
@@ -37,15 +37,18 @@ def test_emit_result_redacts_sensitive_values(capsys):
 
 
 def test_emit_result_keeps_token_presence_flags(capsys):
-    emit_result({
-        "has_access_token": True,
-        "has_refresh_token": True,
-        "access_token_present": True,
-        "refresh_token_present": True,
-    }, enabled=True)
+    emit_result(
+        {
+            "has_access_token": True,
+            "has_refresh_token": True,
+            "access_token_present": True,
+            "refresh_token_present": True,
+        },
+        enabled=True,
+    )
 
     line = capsys.readouterr().out.strip()
-    envelope = json.loads(line[len(IPC_PREFIX):])
+    envelope = json.loads(line[len(IPC_PREFIX) :])
     payload = envelope["payload"]
     assert payload["has_access_token"] == "[REDACTED]"
     assert payload["has_refresh_token"] == "[REDACTED]"
@@ -57,7 +60,7 @@ def test_emit_result_keeps_at_probe_status_code(capsys):
     emit_result({"at_probe_status_code": "401"}, enabled=True)
 
     line = capsys.readouterr().out.strip()
-    envelope = json.loads(line[len(IPC_PREFIX):])
+    envelope = json.loads(line[len(IPC_PREFIX) :])
     assert envelope["payload"]["at_probe_status_code"] == "401"
 
 
@@ -83,7 +86,7 @@ def test_view_inbox_failure_uses_desktop_ipc_envelope(monkeypatch, capsys):
     assert exit_info.value.code == 2
     line = capsys.readouterr().out.strip()
     assert line.startswith(IPC_PREFIX)
-    envelope = json.loads(line[len(IPC_PREFIX):])
+    envelope = json.loads(line[len(IPC_PREFIX) :])
     assert envelope["payload"] == {
         "ok": False,
         "email": "missing@example.com",

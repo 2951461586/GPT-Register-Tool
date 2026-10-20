@@ -21,6 +21,7 @@ Before (3) and (4) existed, ``error_codes`` was a decorative field: it looked
 like a validated contract but nothing read it, and the v2 envelope had no
 declaration at all.
 """
+
 from __future__ import annotations
 
 import ast
@@ -82,7 +83,9 @@ def check_manifest(manifest, py, py_ipc, cs, cs_events="") -> list[str]:
     cs_version = int(re.search(r"public const int Version =\s*(\d+)", cs).group(1))
     protocol_version = int(manifest.get("protocol_version", manifest.get("version", 0)))
     if py_version != protocol_version or cs_version != protocol_version:
-        failures.append(f"protocol version mismatch: manifest={protocol_version} python={py_version} csharp={cs_version}")
+        failures.append(
+            f"protocol version mismatch: manifest={protocol_version} python={py_version} csharp={cs_version}"
+        )
     if "event_envelope_version" in manifest or "event_envelope_schema" in manifest:
         envelope_version = int(manifest.get("event_envelope_version", 0))
         envelope_schema = str(manifest.get("event_envelope_schema") or "")
@@ -90,11 +93,20 @@ def check_manifest(manifest, py, py_ipc, cs, cs_events="") -> list[str]:
         version_match = re.search(r'"version"\s*:\s*(\d+)', py_envelope)
         schema_match = re.search(r'"schema"\s*:\s*"([^"]+)"', py_envelope)
         if not version_match or int(version_match.group(1)) != envelope_version:
-            failures.append(f"event envelope version mismatch: manifest={envelope_version} python={version_match.group(1) if version_match else 'missing'}")
+            failures.append(
+                f"event envelope version mismatch: manifest={envelope_version} python={version_match.group(1) if version_match else 'missing'}"
+            )
         if not schema_match or schema_match.group(1) != envelope_schema:
-            failures.append(f"event envelope schema mismatch: manifest={envelope_schema} python={schema_match.group(1) if schema_match else 'missing'}")
+            failures.append(
+                f"event envelope schema mismatch: manifest={envelope_schema} python={schema_match.group(1) if schema_match else 'missing'}"
+            )
     tree = ast.parse(py)
-    supported = next(node for node in tree.body if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "SUPPORTED_OPS" for t in node.targets))
+    supported = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        and any(isinstance(t, ast.Name) and t.id == "SUPPORTED_OPS" for t in node.targets)
+    )
     py_ops = [elt.value for elt in supported.value.elts if isinstance(elt, ast.Constant)]
     if py_ops != manifest["ops"]:
         failures.append(f"Python ops differ: {py_ops}")
@@ -103,15 +115,11 @@ def check_manifest(manifest, py, py_ipc, cs, cs_events="") -> list[str]:
     manifest_codes = sorted(manifest.get("error_codes") or [])
     py_codes = _py_error_codes(py)
     if py_codes != manifest_codes:
-        failures.append(
-            f"error codes differ: manifest={manifest_codes} python={py_codes}"
-        )
+        failures.append(f"error codes differ: manifest={manifest_codes} python={py_codes}")
     cs_known = _cs_parseable_codes(cs)
     unparseable = sorted(set(py_codes) - set(cs_known))
     if unparseable:
-        failures.append(
-            "error codes the C# client cannot parse: " + ", ".join(unparseable)
-        )
+        failures.append("error codes the C# client cannot parse: " + ", ".join(unparseable))
 
     # --- v2 event envelope ---
     declared = sorted(manifest.get("event_envelope_keys") or [])
@@ -122,10 +130,7 @@ def check_manifest(manifest, py, py_ipc, cs, cs_events="") -> list[str]:
         read = _cs_envelope_keys_read(cs_events)
         undeclared = sorted(set(read) - set(declared))
         if undeclared:
-            failures.append(
-                "C# reads event envelope keys the backend does not emit: "
-                + ", ".join(undeclared)
-            )
+            failures.append("C# reads event envelope keys the backend does not emit: " + ", ".join(undeclared))
 
     return failures
 

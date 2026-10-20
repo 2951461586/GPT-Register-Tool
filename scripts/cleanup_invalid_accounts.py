@@ -95,9 +95,7 @@ def cleanup(database: Path, sessions_dir: Path, pool_files: list[Path], *, apply
     result["database_backup"] = str(backup)
     result["archive_directory"] = str(archive)
     result["removed_session_files"] = moved
-    result["removed_pool_lines"] = {
-        str(path): _remove_pool_lines(path, emails) for path in pool_files
-    }
+    result["removed_pool_lines"] = {str(path): _remove_pool_lines(path, emails) for path in pool_files}
     return result
 
 

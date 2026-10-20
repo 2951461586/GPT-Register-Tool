@@ -11,9 +11,7 @@ import unittest
 from pathlib import Path
 
 # Load as part of the ``common`` package so ``from . import endpoints`` resolves.
-_COMMON_DIR = (
-    Path(__file__).resolve().parents[2] / "services" / "protocol-payment"
-)
+_COMMON_DIR = Path(__file__).resolve().parents[2] / "services" / "protocol-payment"
 if str(_COMMON_DIR) not in sys.path:
     sys.path.insert(0, str(_COMMON_DIR))
 
@@ -27,9 +25,7 @@ def _nl(value):
 
 class UrlBuilderTests(unittest.TestCase):
     def test_processor_entity_explicit_wins(self):
-        self.assertEqual(
-            FLOW.processor_entity_for_country("NL", "openai_x", normalize_country=_nl), "openai_x"
-        )
+        self.assertEqual(FLOW.processor_entity_for_country("NL", "openai_x", normalize_country=_nl), "openai_x")
 
     def test_processor_entity_us_vs_other(self):
         self.assertEqual(FLOW.processor_entity_for_country("us", normalize_country=_nl), "openai_llc")
@@ -51,9 +47,11 @@ class UrlBuilderTests(unittest.TestCase):
 
     def test_confirm_return_url_sets_success_param(self):
         url = FLOW.stripe_confirm_return_url(
-            "cs_1", {"billing_country": "NL", "processor_entity": ""},
+            "cs_1",
+            {"billing_country": "NL", "processor_entity": ""},
             "https://pay.openai.com/c/pay/cs_1",
-            normalize_country=_nl, default_country="NL",
+            normalize_country=_nl,
+            default_country="NL",
         )
         self.assertIn("success_return_url=", url)
 
@@ -72,9 +70,21 @@ class ResolveConfirmPayloadTests(unittest.TestCase):
             return "polled-url", ["qr-poll"]
 
         result = FLOW.resolve_confirm_payload(
-            None, payload, {}, "pk", {}, "pm_1",
-            "at", "did", "st", "cp", "pp", [],
-            provider_label="iDEAL", redirect_label="扫码/授权 URL", no_redirect_note="redirect/QR",
+            None,
+            payload,
+            {},
+            "pk",
+            {},
+            "pm_1",
+            "at",
+            "did",
+            "st",
+            "cp",
+            "pp",
+            [],
+            provider_label="iDEAL",
+            redirect_label="扫码/授权 URL",
+            no_redirect_note="redirect/QR",
             raise_if_setup_intent_blocked=lambda *a, **k: None,
             extract_redirect_url=lambda p: p.get("redirect", ""),
             stripe_payload_intent_redirect_url=lambda *a, **k: redirect_from_intent,

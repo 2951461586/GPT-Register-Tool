@@ -65,7 +65,7 @@ def _call_slice(text, anchor):
         elif char == ")":
             depth -= 1
             if depth == 0:
-                return text[start:index + 1]
+                return text[start : index + 1]
         index += 1
     raise AssertionError("unbalanced parentheses in %r" % anchor)
 
@@ -91,16 +91,13 @@ class SettingsCatalogDriverParityTests(unittest.TestCase):
         options = set(catalog_driver_options())
         registered = set(DRIVERS)
         self.assertEqual(
-            options - registered, set(),
-            "桌面端下拉框提供了后端不认的驱动：%s" % sorted(options - registered))
-        self.assertEqual(
-            registered - options, set(),
-            "桌面端下拉框缺少已注册的驱动：%s" % sorted(registered - options))
+            options - registered, set(), "桌面端下拉框提供了后端不认的驱动：%s" % sorted(options - registered)
+        )
+        self.assertEqual(registered - options, set(), "桌面端下拉框缺少已注册的驱动：%s" % sorted(registered - options))
 
     def test_the_fallback_is_a_registered_driver(self):
         """``Options`` 的第四个参数是默认值，写错会让新配置直接落在非法驱动上。"""
-        literals = re.findall(r'"((?:[^"\\]|\\.)*)"', _call_slice(
-            CATALOG.read_text(encoding="utf-8"), ANCHOR))
+        literals = re.findall(r'"((?:[^"\\]|\\.)*)"', _call_slice(CATALOG.read_text(encoding="utf-8"), ANCHOR))
         self.assertIn(literals[3], DRIVERS)
         self.assertIn(literals[3], catalog_driver_options())
 
@@ -115,10 +112,7 @@ class ExtractorTests(unittest.TestCase):
     """抽取器本身的行为 —— 它读的是源码文本，解析错误会静默改变结论。"""
 
     def test_options_spanning_lines_are_all_collected(self):
-        text = (
-            'Options("registration_driver", "L", "p", "a",\n'
-            '    "a", "b", "c"),\n'
-        )
+        text = 'Options("registration_driver", "L", "p", "a",\n    "a", "b", "c"),\n'
         self.assertEqual(catalog_driver_options(text), ["a", "b", "c"])
 
     def test_an_escaped_quote_does_not_end_the_string(self):

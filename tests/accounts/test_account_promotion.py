@@ -55,7 +55,9 @@ def test_parse_paid_subscription():
 
 
 def test_parse_free_without_promo():
-    body = {"accounts": {"default": {"account": {"plan_type": "free"}, "entitlement": {"has_active_subscription": False}}}}
+    body = {
+        "accounts": {"default": {"account": {"plan_type": "free"}, "entitlement": {"has_active_subscription": False}}}
+    }
     result = parse_accounts_check(body)
     assert promotion_status_label(result) == "Free·无优惠"
 
@@ -95,11 +97,14 @@ def test_promotion_uses_dedicated_health_proxy_with_account_fingerprint_and_devi
         },
     )
 
-    with patch.object(account_promotion, "CFG", config), patch.object(
-        account_promotion.curl_requests,
-        "get",
-        return_value=response,
-    ) as get:
+    with (
+        patch.object(account_promotion, "CFG", config),
+        patch.object(
+            account_promotion.curl_requests,
+            "get",
+            return_value=response,
+        ) as get,
+    ):
         result = account_promotion.check_account_promotion(
             account,
             proxy="http://127.0.0.1:7897",
@@ -120,7 +125,11 @@ def test_refresh_promotion_statuses_emits_terminal_event_per_account(monkeypatch
     monkeypatch.setattr("sms_tool.desktop_ipc.emit_event", lambda payload, enabled=None: events.append(payload) or True)
     monkeypatch.setattr("sms_tool.storage.get_account_record", lambda email: {"email": email, "access_token": "at"})
     monkeypatch.setattr("sms_tool.storage.mark_promotion_status", lambda *args, **kwargs: True)
-    monkeypatch.setattr(promotion_batch, "check_account_promotion", lambda account, **kwargs: {"ok": True, "promotion_status": "Free·无优惠"})
+    monkeypatch.setattr(
+        promotion_batch,
+        "check_account_promotion",
+        lambda account, **kwargs: {"ok": True, "promotion_status": "Free·无优惠"},
+    )
 
     # Promotion-only subject: the payment-eligibility probe is a separate
     # network boundary (Checkout + Stripe init) and would otherwise fire real
@@ -138,11 +147,14 @@ def test_refresh_promotion_statuses_emits_terminal_event_per_account(monkeypatch
 
 def test_refresh_promotion_statuses_reports_partial_save_without_losing_probe_success(monkeypatch):
     events = []
-    monkeypatch.setattr(promotion_batch, "_emit_account_batch_event", lambda *args, **kwargs: events.append((args, kwargs)))
+    monkeypatch.setattr(
+        promotion_batch, "_emit_account_batch_event", lambda *args, **kwargs: events.append((args, kwargs))
+    )
     monkeypatch.setattr("sms_tool.storage.get_account_record", lambda email: {"email": email, "access_token": "at"})
     monkeypatch.setattr("sms_tool.storage.mark_promotion_status", lambda *args, **kwargs: False)
     monkeypatch.setattr(
-        promotion_batch, "check_account_promotion",
+        promotion_batch,
+        "check_account_promotion",
         lambda account, **kwargs: {"ok": True, "promotion_status": "Free·无优惠"},
     )
 
@@ -157,11 +169,14 @@ def test_refresh_promotion_statuses_reports_partial_save_without_losing_probe_su
 
 
 def test_refresh_promotion_statuses_rotates_stateless_proxy_after_timeout(monkeypatch):
-    monkeypatch.setattr("sms_tool.storage.get_account_record", lambda email: {
-        "email": email,
-        "access_token": "at",
-        "raw_json": json.dumps({"access_token": "at"}),
-    })
+    monkeypatch.setattr(
+        "sms_tool.storage.get_account_record",
+        lambda email: {
+            "email": email,
+            "access_token": "at",
+            "raw_json": json.dumps({"access_token": "at"}),
+        },
+    )
     monkeypatch.setattr("sms_tool.storage.mark_promotion_status", lambda *args, **kwargs: True)
     calls = []
 
@@ -255,12 +270,11 @@ def test_refresh_reports_trial_eligible_for_trial_accounts(monkeypatch):
     monkeypatch.setattr("sms_tool.storage.get_account_record", lambda email: {"email": email, "access_token": "at"})
     monkeypatch.setattr("sms_tool.storage.mark_promotion_status", lambda *args, **kwargs: True)
     monkeypatch.setattr(
-        promotion_batch, "check_account_promotion",
+        promotion_batch,
+        "check_account_promotion",
         lambda account, **kwargs: _trial_probe(),
     )
-    result = promotion_batch.refresh_promotion_statuses(
-        ["trial@example.com"], workers=1, payment_eligibility=False
-    )
+    result = promotion_batch.refresh_promotion_statuses(["trial@example.com"], workers=1, payment_eligibility=False)
 
     assert result["trial_eligible"] == 1
 
@@ -269,18 +283,35 @@ def test_payment_eligibility_diagnostics_only_groups_safe_failure_facts():
     from sms_tool.accounts.account_payment_eligibility import payment_eligibility_diagnostics
 
     observations = [
-        {"ok": False, "error_stage": "preparing_proxy", "error_code": "egress_country_mismatch",
-         "billing_country": "IN", "expected_country": "IN", "observed_country": "US"},
-        {"ok": False, "error_stage": "checkout_create", "error_code": "checkout_risk_blocked",
-         "http_status": 400, "error": "Bearer private-access-token"},
-        {"ok": False, "error_stage": "checkout_create", "error_code": "Bearer private-access-token",
-         "http_status": 400},
+        {
+            "ok": False,
+            "error_stage": "preparing_proxy",
+            "error_code": "egress_country_mismatch",
+            "billing_country": "IN",
+            "expected_country": "IN",
+            "observed_country": "US",
+        },
+        {
+            "ok": False,
+            "error_stage": "checkout_create",
+            "error_code": "checkout_risk_blocked",
+            "http_status": 400,
+            "error": "Bearer private-access-token",
+        },
+        {
+            "ok": False,
+            "error_stage": "checkout_create",
+            "error_code": "Bearer private-access-token",
+            "http_status": 400,
+        },
         {"ok": True, "methods": ["card"]},
     ]
     diagnostics = payment_eligibility_diagnostics(observations)
     assert diagnostics["by_stage"] == {"checkout_create": 2, "preparing_proxy": 1}
     assert diagnostics["by_error_code"] == {
-        "checkout_risk_blocked": 1, "egress_country_mismatch": 1, "other": 1,
+        "checkout_risk_blocked": 1,
+        "egress_country_mismatch": 1,
+        "other": 1,
     }
     assert diagnostics["by_http_status"] == {"400": 2}
     assert "private-access-token" not in json.dumps(diagnostics)
@@ -304,11 +335,13 @@ def test_registration_save_invokes_optional_promotion_stage(tmp_path):
     }
     promotion = {"ok": True, "total": 1, "success": 1, "failed": 0, "trial_eligible": 1, "results": []}
 
-    with patch.object(cli, "CFG", {"output": {"filename_pattern": "session_{email}_{timestamp}.json"}}), \
-         patch.object(cli, "upsert_account", return_value=True), \
-         patch.object(cli, "database_path", return_value=tmp_path / "accounts.sqlite3"), \
-         patch("sms_tool.storage.record_registration_audit"), \
-         patch.object(cli, "_check_registered_promotions", return_value=promotion) as check:
+    with (
+        patch.object(cli, "CFG", {"output": {"filename_pattern": "session_{email}_{timestamp}.json"}}),
+        patch.object(cli, "upsert_account", return_value=True),
+        patch.object(cli, "database_path", return_value=tmp_path / "accounts.sqlite3"),
+        patch("sms_tool.storage.record_registration_audit"),
+        patch.object(cli, "_check_registered_promotions", return_value=promotion) as check,
+    ):
         report = cli._save_registration_results(
             args,
             [registration],
@@ -321,7 +354,9 @@ def test_registration_save_invokes_optional_promotion_stage(tmp_path):
 
     check.assert_called_once()
     assert check.call_args.args[0] == ["new@example.com"]
-    assert {key: report["promotion"][key] for key in ("total", "success", "failed", "trial_eligible")} == {key: promotion[key] for key in ("total", "success", "failed", "trial_eligible")}
+    assert {key: report["promotion"][key] for key in ("total", "success", "failed", "trial_eligible")} == {
+        key: promotion[key] for key in ("total", "success", "failed", "trial_eligible")
+    }
 
 
 def test_promotion_uses_browser_fetch_when_browser_identity_present():
@@ -355,10 +390,13 @@ def test_promotion_uses_browser_fetch_when_browser_identity_present():
     def fake_browser_fetch(url, *, headers=None, timeout_ms=None):
         return browser_response
 
-    with patch.object(account_promotion, "CFG", config), patch.object(
-        account_promotion.curl_requests,
-        "get",
-    ) as curl_get:
+    with (
+        patch.object(account_promotion, "CFG", config),
+        patch.object(
+            account_promotion.curl_requests,
+            "get",
+        ) as curl_get,
+    ):
         result = account_promotion.check_account_promotion(
             account,
             proxy="http://127.0.0.1:7897",
@@ -414,9 +452,7 @@ def test_promotion_normalizes_browser_fetch_status_key():
         }
 
     with patch.object(account_promotion, "CFG", config):
-        result = account_promotion.check_account_promotion(
-            account, proxy=None, browser_fetch=fake_browser_fetch
-        )
+        result = account_promotion.check_account_promotion(account, proxy=None, browser_fetch=fake_browser_fetch)
 
     assert result["ok"], result
     assert result["status_code"] == 200
@@ -431,9 +467,7 @@ def test_promotion_surfaces_real_browser_http_errors_not_zero():
         return {"status": 401, "body": {"error": {"message": "Could not parse your authentication token."}}}
 
     with patch.object(account_promotion, "CFG", config):
-        result = account_promotion.check_account_promotion(
-            account, proxy=None, browser_fetch=fake_browser_fetch
-        )
+        result = account_promotion.check_account_promotion(account, proxy=None, browser_fetch=fake_browser_fetch)
 
     assert result["status_code"] == 401
     assert result["promotion_status"] == "AT失效"
@@ -491,6 +525,8 @@ def test_liveness_200_restores_shared_at_status_after_promotion_401(tmp_path):
     record = get_account_record(session["email"], runtime_config=config)
     assert record["status"] == "registered"
     assert record["quota_status"] == "可用"
+
+
 def test_promotion_explicit_proxy_wins_over_pool():
     config = {
         "account_health": {
@@ -498,9 +534,10 @@ def test_promotion_explicit_proxy_wins_over_pool():
         },
     }
     with patch.object(promotion_batch, "CFG", config):
-        assert promotion_batch._promotion_proxy_candidates(
-            {"email": "a@example.com"}, "http://explicit:3", None
-        ) == ["http://explicit:3", "http://pool:1"]
+        assert promotion_batch._promotion_proxy_candidates({"email": "a@example.com"}, "http://explicit:3", None) == [
+            "http://explicit:3",
+            "http://pool:1",
+        ]
 
 
 # ---------------------------------------------------------------------------

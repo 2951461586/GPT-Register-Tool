@@ -124,7 +124,9 @@ def imap_message_to_graph_shape(folder, num, raw_bytes):
     body_text = message_text_from_email_message(msg)
     recipients = []
     for header in ("To", "Cc", "Bcc", "Delivered-To", "X-Original-To", "X-Forwarded-To"):
-        recipients.extend(addr.lower() for addr in re.findall(r"(?i)[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}", msg.get(header, "")))
+        recipients.extend(
+            addr.lower() for addr in re.findall(r"(?i)[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}", msg.get(header, ""))
+        )
     to_recipients = [{"emailAddress": {"address": addr}} for addr in recipients]
     headers = [{"name": key, "value": value} for key, value in msg.items()]
     received_ts = imap_message_received_ts(msg)
@@ -215,7 +217,7 @@ def fetch_outlook_imap_messages(mailbox, token_fetcher, folders=None, limit=25):
                     typ, nums = mail.search(None, "ALL")
                     if typ != "OK" or not nums or not nums[0]:
                         continue
-                    selected = nums[0].split()[-max(1, min(int(limit or 25), 50)):]
+                    selected = nums[0].split()[-max(1, min(int(limit or 25), 50)) :]
                     for num in reversed(selected):
                         typ, data = mail.fetch(num, "(RFC822)")
                         if typ != "OK" or not data:

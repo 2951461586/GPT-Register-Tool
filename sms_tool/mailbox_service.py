@@ -11,7 +11,8 @@ from .config import ConfigInput, RuntimeConfig, resolve_runtime_config, runtime_
 from .mailbox_strategies import DEFAULT_MAILBOX_PROVIDERS, MailboxProviderRegistry
 from .mailbox_errors import MailboxErrorDisposition, mailbox_error_disposition
 from .mailbox_quarantine import (
-    raise_if_mailbox_quarantined, record_mailbox_auth_invalid,
+    raise_if_mailbox_quarantined,
+    record_mailbox_auth_invalid,
     record_mailbox_endpoint_unavailable,
 )
 

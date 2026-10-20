@@ -743,9 +743,7 @@ class CheckoutExtractor:
         # cookie-derived id (standalone runs with a session file) and only then to
         # a fresh one.
         self.device_id = (
-            sentinel_device_id()
-            or cookie_header_value(credentials.session_cookie, "oai-did")
-            or str(uuid.uuid4())
+            sentinel_device_id() or cookie_header_value(credentials.session_cookie, "oai-did") or str(uuid.uuid4())
         )
         self.chatgpt_session_id = str(uuid.uuid4())
 

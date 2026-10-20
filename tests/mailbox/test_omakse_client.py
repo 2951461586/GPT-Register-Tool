@@ -140,8 +140,20 @@ class LinkExtractionTests(unittest.TestCase):
         # Simulate: first call returns "running", second returns "completed"
         create_response = _FakeResponse(200, {"id": "job-abc", "status": "running"})
         poll_responses = [
-            _FakeResponse(200, {"id": "job-abc", "status": "running", "counters": {"total": 1, "success": 0}, "logs": ["starting"]}),
-            _FakeResponse(200, {"id": "job-abc", "status": "completed", "counters": {"total": 1, "success": 1}, "logs": ["starting", "done"], "links": ["https://paypal.com/..."]}),
+            _FakeResponse(
+                200,
+                {"id": "job-abc", "status": "running", "counters": {"total": 1, "success": 0}, "logs": ["starting"]},
+            ),
+            _FakeResponse(
+                200,
+                {
+                    "id": "job-abc",
+                    "status": "completed",
+                    "counters": {"total": 1, "success": 1},
+                    "logs": ["starting", "done"],
+                    "links": ["https://paypal.com/..."],
+                },
+            ),
         ]
         call_count = [0]
 
@@ -262,7 +274,14 @@ class USPaymentTests(unittest.TestCase):
         start_response = _FakeResponse(200, {"job_id": "us-wait-123", "status": "started"})
         status_responses = [
             _FakeResponse(200, {"status": "running", "result": {"ok": None}, "queue": {"active": 1, "total": 1}}),
-            _FakeResponse(200, {"status": "completed", "result": {"ok": True, "url": "https://paypal.com/..."}, "queue": {"active": 0, "total": 1}}),
+            _FakeResponse(
+                200,
+                {
+                    "status": "completed",
+                    "result": {"ok": True, "url": "https://paypal.com/..."},
+                    "queue": {"active": 0, "total": 1},
+                },
+            ),
         ]
         logs_response = _FakeResponse(200, {"lines": ["log1", "log2"]})
 

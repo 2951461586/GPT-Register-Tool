@@ -7,6 +7,7 @@ also skip shards whose content did not change -- otherwise the shard mtime stops
 being usable as "which part of the config was edited", which is exactly the
 signal that made the provider-key cross-write hard to attribute.
 """
+
 import os
 from pathlib import Path
 from unittest.mock import patch
@@ -88,7 +89,9 @@ def test_write_shards_skips_shards_whose_content_did_not_change(tmp_path):
         }
         # Nothing exists yet, so the first save writes all three.
         assert sorted(config._write_shards(shards, tmp_path)) == [
-            "payment.json", "proxy.json", "runtime.json",
+            "payment.json",
+            "proxy.json",
+            "runtime.json",
         ]
         first_proxy = (tmp_path / "proxy.json").read_text(encoding="utf-8")
         first_runtime = (tmp_path / "runtime.json").read_text(encoding="utf-8")
@@ -112,7 +115,9 @@ def test_write_shards_returns_only_what_it_wrote(tmp_path):
     with patch.object(config, "_CONFIG_DIR", tmp_path):
         shards = {"proxy": {}, "runtime": {}, "payment": {}}
         assert sorted(config._write_shards(shards, tmp_path)) == [
-            "payment.json", "proxy.json", "runtime.json",
+            "payment.json",
+            "proxy.json",
+            "runtime.json",
         ]
         assert config._write_shards(shards, tmp_path) == []
 

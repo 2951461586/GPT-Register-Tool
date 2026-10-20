@@ -108,20 +108,12 @@ class RewriteTests(_PoolCase):
 
     def test_gmail_oauth_row_token_is_replaced(self):
         self.write_pool(GMAIL_OAUTH_ROW)
-        status = persist_rotated_refresh_token(
-            self.mailbox(email="box@gmail.com"), previous=OLD_RT, current=NEW_RT
-        )
+        status = persist_rotated_refresh_token(self.mailbox(email="box@gmail.com"), previous=OLD_RT, current=NEW_RT)
         self.assertEqual(status, STATUS_UPDATED)
         self.assertEqual(self.read_pool().decode(), f"gmail://box@gmail.com----cid-1----sec-1----{NEW_RT}\n")
 
     def test_untouched_neighbours_comments_and_blank_lines_survive(self):
-        text = (
-            "# supplier batch 2026-09-20\n"
-            "\n"
-            + REMAIL_ROW
-            + GRAPH_ROW
-            + "# trailing note\n"
-        )
+        text = "# supplier batch 2026-09-20\n\n" + REMAIL_ROW + GRAPH_ROW + "# trailing note\n"
         self.write_pool(text)
         persist_rotated_refresh_token(self.mailbox(), previous=OLD_RT, current=NEW_RT)
         after = self.read_pool().decode()
@@ -347,9 +339,7 @@ class ProviderIntegrationTests(_PoolCase):
         box = self.mailbox()
         fake = _FakeRequests(_Response(payload={"access_token": "at-new", "refresh_token": NEW_RT}))
         with mock.patch.object(mailbox_graph, "curl_requests", fake):
-            with mock.patch(
-                "sms_tool.mailbox_pool_writer._replace_anchor", side_effect=OSError("disk full")
-            ):
+            with mock.patch("sms_tool.mailbox_pool_writer._replace_anchor", side_effect=OSError("disk full")):
                 token = mailbox_graph.ms_oauth_refresh(box, {})
         self.assertEqual(token, "at-new")
         self.assertEqual(box.refresh_token, NEW_RT)

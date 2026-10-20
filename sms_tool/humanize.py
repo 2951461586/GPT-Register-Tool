@@ -34,10 +34,10 @@ logger = logging.getLogger(__name__)
 # kind -> (baseline_seconds, jitter_fraction).
 # The baseline is the historical fixed sleep; jitter is applied around it.
 HUMANIZE_DELAYS: dict[str, tuple[float, float]] = {
-    "page_settle": (0.5, 0.5),   # 0.25 .. 0.75s
-    "click": (0.25, 0.6),        # 0.10 .. 0.40s
+    "page_settle": (0.5, 0.5),  # 0.25 .. 0.75s
+    "click": (0.25, 0.6),  # 0.10 .. 0.40s
     "state_probe": (0.25, 0.6),  # 0.10 .. 0.40s
-    "retry": (0.4, 0.5),         # 0.20 .. 0.60s
+    "retry": (0.4, 0.5),  # 0.20 .. 0.60s
     "default": (0.3, 0.5),
 }
 

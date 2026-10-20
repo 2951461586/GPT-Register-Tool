@@ -137,5 +137,3 @@ def import_account_sessions(
         api_url=cpa_api_url,
         api_token=cpa_api_token,
     )
-
-

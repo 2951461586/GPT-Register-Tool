@@ -30,10 +30,7 @@ def extractors():
             sys.path.insert(0, source)
     if str(PROTOCOL_ROOT) not in sys.path:
         sys.path.insert(0, str(PROTOCOL_ROOT))
-    return {
-        name: importlib.import_module(module)
-        for name, (_, module) in PROVIDERS.items()
-    }
+    return {name: importlib.import_module(module) for name, (_, module) in PROVIDERS.items()}
 
 
 @pytest.mark.parametrize(
@@ -46,7 +43,12 @@ def extractors():
     ],
 )
 def test_locale_defaults_blank_values_and_env_overrides(
-    extractors, monkeypatch, name, mode, prefix, defaults,
+    extractors,
+    monkeypatch,
+    name,
+    mode,
+    prefix,
+    defaults,
 ):
     module = extractors[name]
     monkeypatch.setenv("IDEAL_PAYMENT_METHOD", mode)
@@ -78,26 +80,76 @@ def test_locale_defaults_blank_values_and_env_overrides(
 @pytest.mark.parametrize(
     "name,mode,expected,default_country",
     [
-        ("ideal", "ideal", {
-            "NL": "EUR", "BE": "EUR", "DE": "EUR", "FR": "EUR",
-            "US": "USD", "IN": "INR", "JP": "JPY", "VN": "VND",
-        }, "NL"),
-        ("twint", "twint", {
-            "CH": "CHF", "NL": "EUR", "BE": "EUR", "DE": "EUR",
-            "FR": "EUR", "US": "USD", "IN": "INR", "JP": "JPY", "VN": "VND",
-        }, "CH"),
-        ("blik", "blik", {
-            "NL": "EUR", "BE": "EUR", "DE": "EUR", "FR": "EUR",
-            "PL": "PLN", "US": "USD", "IN": "INR", "JP": "JPY",
-        }, "PL"),
-        ("blik", "ideal", {
-            "NL": "EUR", "BE": "EUR", "DE": "EUR", "FR": "EUR",
-            "PL": "PLN", "US": "USD", "IN": "INR", "JP": "JPY",
-        }, "NL"),
+        (
+            "ideal",
+            "ideal",
+            {
+                "NL": "EUR",
+                "BE": "EUR",
+                "DE": "EUR",
+                "FR": "EUR",
+                "US": "USD",
+                "IN": "INR",
+                "JP": "JPY",
+                "VN": "VND",
+            },
+            "NL",
+        ),
+        (
+            "twint",
+            "twint",
+            {
+                "CH": "CHF",
+                "NL": "EUR",
+                "BE": "EUR",
+                "DE": "EUR",
+                "FR": "EUR",
+                "US": "USD",
+                "IN": "INR",
+                "JP": "JPY",
+                "VN": "VND",
+            },
+            "CH",
+        ),
+        (
+            "blik",
+            "blik",
+            {
+                "NL": "EUR",
+                "BE": "EUR",
+                "DE": "EUR",
+                "FR": "EUR",
+                "PL": "PLN",
+                "US": "USD",
+                "IN": "INR",
+                "JP": "JPY",
+            },
+            "PL",
+        ),
+        (
+            "blik",
+            "ideal",
+            {
+                "NL": "EUR",
+                "BE": "EUR",
+                "DE": "EUR",
+                "FR": "EUR",
+                "PL": "PLN",
+                "US": "USD",
+                "IN": "INR",
+                "JP": "JPY",
+            },
+            "NL",
+        ),
     ],
 )
 def test_country_currency_tables_and_unknown_country_fallback(
-    extractors, monkeypatch, name, mode, expected, default_country,
+    extractors,
+    monkeypatch,
+    name,
+    mode,
+    expected,
+    default_country,
 ):
     module = extractors[name]
     monkeypatch.setenv("IDEAL_PAYMENT_METHOD", mode)
@@ -110,11 +162,18 @@ def test_country_currency_tables_and_unknown_country_fallback(
         assert module.currency_for_country(country) == expected[default_country]
 
 
-@pytest.mark.parametrize("name,four_part", [
-    ("ideal", "none"), ("twint", "none"), ("blik", "user_first"),
-])
+@pytest.mark.parametrize(
+    "name,four_part",
+    [
+        ("ideal", "none"),
+        ("twint", "none"),
+        ("blik", "user_first"),
+    ],
+)
 def test_proxy_normalization_keeps_its_existing_shared_adapter(
-    extractors, name, four_part,
+    extractors,
+    name,
+    four_part,
 ):
     module = extractors[name]
     with patch.object(module, "shared_normalize_proxy_url", return_value="fixture") as shared:

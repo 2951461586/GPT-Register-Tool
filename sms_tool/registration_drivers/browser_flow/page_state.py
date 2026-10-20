@@ -23,25 +23,33 @@ def _raise_if_registration_cancelled() -> None:
 def _manual_challenge(page) -> bool:
     text = dom_fields._body_text(page)
     markers = (
-        "verify you are human", "captcha", "security challenge", "unusual activity",
-        "checking your browser", "just a moment", "performing security verification",
-        "验证您是真人", "安全验证", "人机验证",
+        "verify you are human",
+        "captcha",
+        "security challenge",
+        "unusual activity",
+        "checking your browser",
+        "just a moment",
+        "performing security verification",
+        "验证您是真人",
+        "安全验证",
+        "人机验证",
     )
     if any(marker in text for marker in markers):
         return True
     try:
-        return page.locator(
-            "iframe[src*='challenge'], iframe[src*='captcha'], iframe[src*='turnstile'], "
-            "iframe[src*='challenges.cloudflare.com'], [data-testid*='captcha'], "
-            "[class*='cf-chl'], [id*='turnstile']"
-        ).count() > 0
+        return (
+            page.locator(
+                "iframe[src*='challenge'], iframe[src*='captcha'], iframe[src*='turnstile'], "
+                "iframe[src*='challenges.cloudflare.com'], [data-testid*='captcha'], "
+                "[class*='cf-chl'], [id*='turnstile']"
+            ).count()
+            > 0
+        )
     except Exception:
         return False
 
 
-def _ensure_signup_page_ready(
-    page, *, timeout_seconds: int = 45, config: Mapping[str, Any] | None = None
-) -> None:
+def _ensure_signup_page_ready(page, *, timeout_seconds: int = 45, config: Mapping[str, Any] | None = None) -> None:
     """Wait for either the email form or a classified proxy/challenge result."""
     if not callable(getattr(page, "locator", None)):
         return
@@ -142,7 +150,8 @@ def _quick_auth_state(page) -> str:
     if state.get("challenge"):
         return "challenge"
     if state.get("password") and (
-        "/log-in/password" in path or "/login/password" in path
+        "/log-in/password" in path
+        or "/login/password" in path
         or str(state.get("passwordAutocomplete") or "").lower() == "current-password"
     ):
         return "login_password"
@@ -238,17 +247,19 @@ def _wait_for_registration_state(
                     # continuation/reprobe instead of collapsing into unknown.
                     return "email_verification"
                 if (
-                    (current_host == "chatgpt.com" or current_host.endswith(".chatgpt.com"))
-                    and "/auth/" not in current_path
-                ):
+                    current_host == "chatgpt.com" or current_host.endswith(".chatgpt.com")
+                ) and "/auth/" not in current_path:
                     return "authenticated"
                 if any(marker in current_path for marker in ("about-you", "profile", "create-account")):
                     profile_field = dom_fields._first_visible(
                         page,
                         (
-                            "input[name='name']", "input[autocomplete='name']",
-                            "input[name*='birth' i]", "input[type='date']",
-                            "input[name='age']", "input[type='number']",
+                            "input[name='name']",
+                            "input[autocomplete='name']",
+                            "input[name*='birth' i]",
+                            "input[type='date']",
+                            "input[name='age']",
+                            "input[type='number']",
                             "[role='spinbutton'][data-type]",
                             "[data-testid='hidden-select-container'] select",
                         ),
@@ -274,16 +285,22 @@ def _wait_for_registration_state(
             return "password"
         if dom_fields._otp_fields(page) is not None and not wait_for_otp_transition:
             return "otp"
-        if dom_fields._first_visible(
-            page,
-            (
-                "input[name='name']", "input[autocomplete='name']",
-                "input[name*='birth' i]", "input[type='date']",
-                "input[name='age']", "input[type='number']",
-                "[role='spinbutton'][data-type]",
-                "[data-testid='hidden-select-container'] select",
-            ),
-        ) is not None:
+        if (
+            dom_fields._first_visible(
+                page,
+                (
+                    "input[name='name']",
+                    "input[autocomplete='name']",
+                    "input[name*='birth' i]",
+                    "input[type='date']",
+                    "input[name='age']",
+                    "input[type='number']",
+                    "[role='spinbutton'][data-type]",
+                    "[data-testid='hidden-select-container'] select",
+                ),
+            )
+            is not None
+        ):
             return "profile"
         try:
             parsed = urlsplit(str(page.url or ""))
@@ -384,9 +401,7 @@ def _post_otp_registration_state(
     return "unknown"
 
 
-def _wait_after_otp_submit(
-    page, timeout_seconds: int = 30, *, require_transition: bool = False
-) -> str:
+def _wait_after_otp_submit(page, timeout_seconds: int = 30, *, require_transition: bool = False) -> str:
     """Wait for OTP acceptance, optionally requiring destination evidence."""
     deadline = time.monotonic() + max(1, int(timeout_seconds or 30))
     last: dict[str, Any] = {}
@@ -406,14 +421,14 @@ def _wait_after_otp_submit(
         page.wait_for_timeout(500)
     if dom_fields._otp_fields(page) is None:
         return "accepted"
-    if any(str(item.get("aria_invalid") or "").lower() == "true" for item in last.get("inputs", [])) or last.get("errors"):
+    if any(str(item.get("aria_invalid") or "").lower() == "true" for item in last.get("inputs", [])) or last.get(
+        "errors"
+    ):
         return "invalid"
     return "pending" if require_transition else "accepted"
 
 
-def _wait_for_profile_completion(
-    page: Any, timeout_seconds: int = 30, config: Mapping[str, Any] | None = None
-) -> bool:
+def _wait_for_profile_completion(page: Any, timeout_seconds: int = 30, config: Mapping[str, Any] | None = None) -> bool:
     """Confirm that the profile form has routed away before fetching a session."""
     if not callable(getattr(page, "evaluate", None)):
         return True

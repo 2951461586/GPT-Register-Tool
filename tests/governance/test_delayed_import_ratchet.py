@@ -26,30 +26,39 @@ def test_top_level_imports_are_not_counted():
 
 
 def test_import_inside_function_is_counted():
-    assert _count("""
+    assert (
+        _count("""
         def f():
             import os
-    """) == 1
+    """)
+        == 1
+    )
 
 
 def test_class_body_import_is_not_delayed():
     # A class body executes at import time, so for cycle and startup purposes
     # it behaves like a top-level import.
-    assert _count("""
+    assert (
+        _count("""
         class C:
             import os
-    """) == 0
+    """)
+        == 0
+    )
 
 
 def test_nested_scopes_inside_a_function_still_count():
-    assert _count("""
+    assert (
+        _count("""
         def f():
             if True:
                 try:
                     from . import x
                 except ImportError:
                     import y
-    """) == 2
+    """)
+        == 2
+    )
 
 
 def test_baseline_file_is_present_and_populated():

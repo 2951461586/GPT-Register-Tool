@@ -72,9 +72,7 @@ def test_camoufox_user_profile_is_never_removed(fake_camoufox, tmp_path):
 def test_camoufox_failed_launch_cleans_owned_profile_even_with_keep_open(fake_camoufox):
     factory, manager = fake_camoufox
     manager.__enter__.side_effect = RuntimeError("fake launch failure")
-    session = es.CamoufoxBrowserSession(
-        config={"registration": {"drivers": {"camoufox": {"keep_browser_open": True}}}}
-    )
+    session = es.CamoufoxBrowserSession(config={"registration": {"drivers": {"camoufox": {"keep_browser_open": True}}}})
     with pytest.raises(es.BrowserRegistrationError):
         session.__enter__()
     assert not Path(factory.call_args.kwargs["user_data_dir"]).exists()
@@ -82,9 +80,7 @@ def test_camoufox_failed_launch_cleans_owned_profile_even_with_keep_open(fake_ca
 
 def test_camoufox_keep_open_preserves_owned_profile(fake_camoufox):
     factory, _ = fake_camoufox
-    session = es.CamoufoxBrowserSession(
-        config={"registration": {"drivers": {"camoufox": {"keep_browser_open": True}}}}
-    )
+    session = es.CamoufoxBrowserSession(config={"registration": {"drivers": {"camoufox": {"keep_browser_open": True}}}})
     try:
         session.__enter__()
         profile = Path(factory.call_args.kwargs["user_data_dir"])
@@ -124,7 +120,11 @@ def test_totp_requests_carry_an_in_page_deadline():
         {"status": 200, "body": {"success": True}},
     ]
     assert _bind_totp_in_browser(
-        page, "tok", "did", chat_base="https://chat.example/", budget_ms=1234,
+        page,
+        "tok",
+        "did",
+        chat_base="https://chat.example/",
+        budget_ms=1234,
     )["ok"]
     assert page.evaluate.call_count == 2
     for call in page.evaluate.call_args_list:
@@ -142,7 +142,11 @@ def test_totp_deadline_falls_back_on_invalid_budget(bad):
         {"status": 200, "body": {"success": True}},
     ]
     assert _bind_totp_in_browser(
-        page, "tok", "did", chat_base="https://chat.example/", budget_ms=bad,
+        page,
+        "tok",
+        "did",
+        chat_base="https://chat.example/",
+        budget_ms=bad,
     )["ok"]
     for call in page.evaluate.call_args_list:
         assert call.args[1][-1] == 20_000

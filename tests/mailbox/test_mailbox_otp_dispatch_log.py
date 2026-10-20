@@ -12,6 +12,7 @@ mailbox proxy is the first candidate.  Logging candidates wholesale would print
 live mailbox credentials into ``runtime/logs``.  So the assertions below check
 both halves: the record exists, and it is credential-free.
 """
+
 from __future__ import annotations
 
 import dataclasses
@@ -65,24 +66,22 @@ class MailboxOtpDispatchLogTests(unittest.TestCase):
         def fake_poller(target, **kwargs):
             return poller_result
 
-        with mock.patch.object(
-            mailbox_strategies, "resolve_otp_poller", return_value=fake_poller
-        ), mock.patch.object(mailbox, "_email_cfg", return_value={}), mock.patch.object(
-            mailbox, "_provider_otp_issued_after", return_value=0
-        ), mock.patch.object(
-            mailbox,
-            "_mailbox_proxy_candidates",
-            return_value=[proxy] if proxy else [],
-        ), mock.patch.object(
-            mailbox, "_resolve_mailbox_proxy", return_value=proxy
+        with (
+            mock.patch.object(mailbox_strategies, "resolve_otp_poller", return_value=fake_poller),
+            mock.patch.object(mailbox, "_email_cfg", return_value={}),
+            mock.patch.object(mailbox, "_provider_otp_issued_after", return_value=0),
+            mock.patch.object(
+                mailbox,
+                "_mailbox_proxy_candidates",
+                return_value=[proxy] if proxy else [],
+            ),
+            mock.patch.object(mailbox, "_resolve_mailbox_proxy", return_value=proxy),
         ):
             return mailbox._poll_email_otp(_FakeMailbox(provider), timeout=300, proxy=proxy)
 
     def _dispatch_events(self):
         return [
-            record
-            for record in self.records
-            if str(getattr(record, "event", "") or "") == "mailbox_otp_poll_dispatch"
+            record for record in self.records if str(getattr(record, "event", "") or "") == "mailbox_otp_poll_dispatch"
         ]
 
     def test_dispatch_logs_provider_poller_and_budget(self):
@@ -144,15 +143,12 @@ class MailboxServiceDispatchLogTests(unittest.TestCase):
         self.logger.setLevel(self.old_level)
 
     def _poll(self, proxy=None, issued_after_unix=0):
-        service = dataclasses.replace(
-            mailbox_service.MailboxService.create(), providers=_FakeRegistry()
-        )
-        with mock.patch.object(
-            mailbox, "_mailbox_proxy_candidates", return_value=[proxy] if proxy else []
-        ), mock.patch.object(mailbox, "_email_cfg", return_value={}), mock.patch.object(
-            mailbox, "_provider_otp_issued_after", return_value=issued_after_unix
-        ), mock.patch.object(
-            mailbox, "_resolve_mailbox_proxy", return_value=proxy
+        service = dataclasses.replace(mailbox_service.MailboxService.create(), providers=_FakeRegistry())
+        with (
+            mock.patch.object(mailbox, "_mailbox_proxy_candidates", return_value=[proxy] if proxy else []),
+            mock.patch.object(mailbox, "_email_cfg", return_value={}),
+            mock.patch.object(mailbox, "_provider_otp_issued_after", return_value=issued_after_unix),
+            mock.patch.object(mailbox, "_resolve_mailbox_proxy", return_value=proxy),
         ):
             return service.poll_otp(
                 _FakeMailbox("icloud_url"),
@@ -163,9 +159,7 @@ class MailboxServiceDispatchLogTests(unittest.TestCase):
 
     def _events(self):
         return [
-            record
-            for record in self.records
-            if str(getattr(record, "event", "") or "") == "mailbox_otp_poll_dispatch"
+            record for record in self.records if str(getattr(record, "event", "") or "") == "mailbox_otp_poll_dispatch"
         ]
 
     def test_registration_path_logs_dispatch(self):

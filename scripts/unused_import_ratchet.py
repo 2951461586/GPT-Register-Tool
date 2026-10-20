@@ -147,10 +147,7 @@ def main(argv: list[str] | None = None) -> int:
             encoding="utf-8",
             newline="\n",
         )
-        print(
-            f"baseline updated: {sum(current.values())} unused imports "
-            f"across {len(current)} files"
-        )
+        print(f"baseline updated: {sum(current.values())} unused imports across {len(current)} files")
         return 0
 
     if not BASELINE.exists():
@@ -166,9 +163,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  {n:4d}  (base {allowed.get(path, 0):4d})  {path}")
 
     failures = [
-        f"  {path}: {allowed.get(path, 0)} -> {n}"
-        for path, n in sorted(current.items())
-        if n > allowed.get(path, 0)
+        f"  {path}: {allowed.get(path, 0)} -> {n}" for path, n in sorted(current.items()) if n > allowed.get(path, 0)
     ]
     if failures:
         print("unused-import ratchet FAILED (a file grew; remove the unused import):")
@@ -176,10 +171,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     total = sum(current.values())
-    print(
-        f"unused-import ratchet OK ({total} <= baseline {baseline.get('total')}, "
-        f"{len(current)} files)"
-    )
+    print(f"unused-import ratchet OK ({total} <= baseline {baseline.get('total')}, {len(current)} files)")
     return 0
 
 

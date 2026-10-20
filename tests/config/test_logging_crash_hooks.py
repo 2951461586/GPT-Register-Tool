@@ -128,17 +128,13 @@ class CrashRecordTests(ExceptionHookTests):
     def test_a_thread_exception_is_logged(self):
         self._install()
         thread = threading.Thread(target=lambda: None, name="worker-7")
-        threading.excepthook(
-            threading.ExceptHookArgs((ValueError, ValueError("thread boom"), None, thread))
-        )
+        threading.excepthook(threading.ExceptHookArgs((ValueError, ValueError("thread boom"), None, thread)))
         self.assertIn("uncaught_thread_exception", self.capture.events())
 
     def test_the_original_thread_hook_still_runs(self):
         self._install()
         thread = threading.Thread(target=lambda: None, name="worker-8")
-        threading.excepthook(
-            threading.ExceptHookArgs((ValueError, ValueError("x"), None, thread))
-        )
+        threading.excepthook(threading.ExceptHookArgs((ValueError, ValueError("x"), None, thread)))
         self.assertEqual(len(self.previous_thread_calls), 1, "the original thread channel must survive")
 
 

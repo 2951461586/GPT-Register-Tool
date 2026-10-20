@@ -74,27 +74,60 @@ _EXTRA_BILLING_CURRENCY: dict[str, str] = {
     "NL": "EUR",
 }
 
-_ELIGIBILITY_STAGES = frozenset({
-    "validation", "preparing_proxy", "checkout_create", "checkout_response",
-    "stripe_init", "stripe_elements", "custom_checkout", "payment_eligibility",
-    "capability_probe", "checkout_contract", "capability_classification",
-})
-_ELIGIBILITY_ERROR_CODES = frozenset({
-    "missing_access_token", "egress_country_unverified", "egress_country_mismatch",
-    "egress_probe_failed", "checkout_risk_blocked", "checkout_creation_rate_limited",
-    "checkout_unauthorized", "checkout_failed", "checkout_transport_failed",
-    "checkout_identity_mismatch",
-    "checkout_failed_bad_json", "checkout_session_invalid", "checkout_contract_invalid",
-    "stripe_init_failed", "stripe_init_unauthorized", "stripe_init_transport_failed",
-    "stripe_init_failed_bad_json", "stripe_elements_failed", "stripe_elements_unauthorized",
-    "stripe_elements_failed_bad_json", "custom_checkout_failed", "custom_checkout_unauthorized",
-    "custom_checkout_failed_bad_json", "custom_checkout_unavailable",
-    "custom_checkout_transport_failed", "checkout_currency_mismatch",
-    "checkout_currency_unknown", "checkout_amount_unknown", "nonzero_offer",
-    "payment_method_unavailable", "payment_methods_unavailable",
-    "eligibility_probe_exception", "eligibility_probe_bad_result", "eligibility_probe_failed",
-    "capability_probe_unexpected",
-})
+_ELIGIBILITY_STAGES = frozenset(
+    {
+        "validation",
+        "preparing_proxy",
+        "checkout_create",
+        "checkout_response",
+        "stripe_init",
+        "stripe_elements",
+        "custom_checkout",
+        "payment_eligibility",
+        "capability_probe",
+        "checkout_contract",
+        "capability_classification",
+    }
+)
+_ELIGIBILITY_ERROR_CODES = frozenset(
+    {
+        "missing_access_token",
+        "egress_country_unverified",
+        "egress_country_mismatch",
+        "egress_probe_failed",
+        "checkout_risk_blocked",
+        "checkout_creation_rate_limited",
+        "checkout_unauthorized",
+        "checkout_failed",
+        "checkout_transport_failed",
+        "checkout_identity_mismatch",
+        "checkout_failed_bad_json",
+        "checkout_session_invalid",
+        "checkout_contract_invalid",
+        "stripe_init_failed",
+        "stripe_init_unauthorized",
+        "stripe_init_transport_failed",
+        "stripe_init_failed_bad_json",
+        "stripe_elements_failed",
+        "stripe_elements_unauthorized",
+        "stripe_elements_failed_bad_json",
+        "custom_checkout_failed",
+        "custom_checkout_unauthorized",
+        "custom_checkout_failed_bad_json",
+        "custom_checkout_unavailable",
+        "custom_checkout_transport_failed",
+        "checkout_currency_mismatch",
+        "checkout_currency_unknown",
+        "checkout_amount_unknown",
+        "nonzero_offer",
+        "payment_method_unavailable",
+        "payment_methods_unavailable",
+        "eligibility_probe_exception",
+        "eligibility_probe_bad_result",
+        "eligibility_probe_failed",
+        "capability_probe_unexpected",
+    }
+)
 
 
 def payment_eligibility_diagnostics(observations: list[dict[str, Any]]) -> dict[str, dict[str, int]]:
@@ -199,9 +232,7 @@ def probe_account_payment_eligibility(
 
     identity = account_identity(account) if isinstance(account, Mapping) else {}
     device_id = str(
-        identity.get("device_id")
-        or (account.get("device_id") if isinstance(account, Mapping) else "")
-        or ""
+        identity.get("device_id") or (account.get("device_id") if isinstance(account, Mapping) else "") or ""
     )
     # Only rewrite known provider country templates. An opaque proxy stays
     # untouched and must still pass the observed-exit gate below.
@@ -320,11 +351,16 @@ def _normalize_probe(raw: Mapping[str, Any], *, target_country: str) -> dict[str
         "error_stage": "",
         "http_status": raw.get("http_status") if isinstance(raw.get("http_status"), int) else 0,
         "retryable": bool(raw.get("retryable")),
-        "checkout_kind": raw.get("checkout_kind") if isinstance(raw.get("checkout_kind"), str) and raw["checkout_kind"] in {"stripe", "oaics"} else "",
+        "checkout_kind": raw.get("checkout_kind")
+        if isinstance(raw.get("checkout_kind"), str) and raw["checkout_kind"] in {"stripe", "oaics"}
+        else "",
         "evidence_sources": [
-            source for source in (raw.get("evidence_sources") or [])
+            source
+            for source in (raw.get("evidence_sources") or [])
             if isinstance(source, str) and source in {"stripe_init", "stripe_elements", "custom_checkout"}
-        ] if isinstance(raw.get("evidence_sources"), (list, tuple)) else [],
+        ]
+        if isinstance(raw.get("evidence_sources"), (list, tuple))
+        else [],
     }
     raw_code = str(raw.get("error_code") or raw.get("decision") or "")
     raw_stage = str(raw.get("error_stage") or "")
@@ -340,8 +376,7 @@ def _token_tuple(value: Any) -> tuple[str, ...]:
         return ()
     tokens = (str(item or "").strip().lower() for item in value)
     return tuple(
-        token for token in tokens
-        if re.fullmatch(r"[a-z][a-z0-9_]{0,31}", token) and not token.startswith("cpmt_")
+        token for token in tokens if re.fullmatch(r"[a-z][a-z0-9_]{0,31}", token) and not token.startswith("cpmt_")
     )
 
 
@@ -369,11 +404,13 @@ def probe_payment_eligibility_statuses(
     timeout: int = 45,
 ) -> dict[str, Any]:
     """Explicit, serial Checkout observations; never perform a plan or payment action."""
-    candidates = list(dict.fromkeys(
-        ([proxy] if proxy else [])
-        + parse_proxy_pool(proxy_pool)
-        + payment_proxy_pools(CFG, ELIGIBILITY_CARRIER_METHOD)["checkout"]
-    )) or [None]
+    candidates = list(
+        dict.fromkeys(
+            ([proxy] if proxy else [])
+            + parse_proxy_pool(proxy_pool)
+            + payment_proxy_pools(CFG, ELIGIBILITY_CARRIER_METHOD)["checkout"]
+        )
+    ) or [None]
     results = []
     for email in dict.fromkeys(str(item or "").strip().lower() for item in emails):
         if not email:
@@ -395,13 +432,15 @@ def probe_payment_eligibility_statuses(
             if observation.get("error_stage") != "preparing_proxy":
                 break
         persisted = bool(storage.mark_payment_capability(email, observation))
-        results.append({
-            "email": email,
-            "ok": bool(observation.get("ok")),
-            "persisted": persisted,
-            "payment_capability": observation,
-            "payment_eligibility": payment_eligibility_label(observation),
-        })
+        results.append(
+            {
+                "email": email,
+                "ok": bool(observation.get("ok")),
+                "persisted": persisted,
+                "payment_capability": observation,
+                "payment_eligibility": payment_eligibility_label(observation),
+            }
+        )
     observations = [item["payment_capability"] for item in results if "payment_capability" in item]
     success = sum(bool(item["ok"]) for item in results)
     return {

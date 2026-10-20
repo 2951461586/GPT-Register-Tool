@@ -22,10 +22,7 @@ import unittest
 from pathlib import Path
 from urllib.parse import quote, unquote
 
-MODULE_PATH = (
-    Path(__file__).resolve().parents[2]
-    / "services" / "protocol-payment" / "common" / "proxy_selection.py"
-)
+MODULE_PATH = Path(__file__).resolve().parents[2] / "services" / "protocol-payment" / "common" / "proxy_selection.py"
 SPEC = importlib.util.spec_from_file_location("proxy_selection", MODULE_PATH)
 assert SPEC is not None and SPEC.loader is not None
 SELECT = importlib.util.module_from_spec(SPEC)
@@ -40,9 +37,7 @@ EXTRACTORS = {
     "kakao": PROTOCOL_PAYMENT / "kakao" / "kakao_extract.py",
 }
 
-SELECTOR = re.compile(
-    r"(?i)(?P<name>country|region)(?P<separator>[-_=])(?P<value>[a-z]{2}(?:,[a-z]{2})*)"
-)
+SELECTOR = re.compile(r"(?i)(?P<name>country|region)(?P<separator>[-_=])(?P<value>[a-z]{2}(?:,[a-z]{2})*)")
 
 
 def _country(value):
@@ -95,15 +90,13 @@ class ProxyForCountryTests(unittest.TestCase):
         self.assertIn("country-US", unquote(upper))
 
     def test_keeps_everything_that_carries_the_sticky_session(self):
-        (status, out), _ = self._derive(
-            "http://user-sid-abc-country-de:pass@1.2.3.4:8080")
+        (status, out), _ = self._derive("http://user-sid-abc-country-de:pass@1.2.3.4:8080")
         self.assertEqual(status, "ok")
         self.assertIn("user-sid-abc-country-us", unquote(out))
         self.assertIn("1.2.3.4:8080", out)
 
     def test_retains_path_query_and_fragment(self):
-        (status, out), _ = self._derive(
-            "http://u-country-de:p@1.2.3.4:8080/keep?a=1#frag")
+        (status, out), _ = self._derive("http://u-country-de:p@1.2.3.4:8080/keep?a=1#frag")
         self.assertEqual(status, "ok")
         self.assertIn("/keep?a=1#frag", out)
 
@@ -132,8 +125,7 @@ class ProxyForCountryTests(unittest.TestCase):
     def test_missing_selector_raises_with_the_labelled_proxy(self):
         (status, message), _ = self._derive("http://user:pass@1.2.3.4:8080")
         self.assertEqual(status, "RAISED:RuntimeError")
-        self.assertIn("proxy#http://user:pass@1.2.3.4:8080", message,
-                      "the error must not leak the raw proxy")
+        self.assertIn("proxy#http://user:pass@1.2.3.4:8080", message, "the error must not leak the raw proxy")
 
     def test_the_derived_proxy_is_registered_for_redaction(self):
         """The derived proxy is a NEW credential.  If it is not registered, the
@@ -163,8 +155,8 @@ class ProxyForCountryTests(unittest.TestCase):
             return "PL"
 
         (status, out), _ = self._derive(
-            "http://u-country-de:p@1.2.3.4:8080", country="XX",
-            country_normalizer=country_normalizer)
+            "http://u-country-de:p@1.2.3.4:8080", country="XX", country_normalizer=country_normalizer
+        )
         self.assertEqual(seen, ["XX"])
         self.assertIn("country-pl", unquote(out))
 
@@ -176,13 +168,13 @@ class ProxyForCountryTests(unittest.TestCase):
 
 
 class IsPreferredProxyTests(unittest.TestCase):
-    def _call(self, group, proxy, state, env=None, score_env="X_PROXY_SCORE",
-              key=lambda proxy: "K:" + proxy):
+    def _call(self, group, proxy, state, env=None, score_env="X_PROXY_SCORE", key=lambda proxy: "K:" + proxy):
         def env_bool(name, default=False):
             return (env or {}).get(name, default)
 
         return SELECT.is_preferred_proxy(
-            group, proxy,
+            group,
+            proxy,
             score_env=score_env,
             env_bool=env_bool,
             load_state=lambda: state,
@@ -194,12 +186,11 @@ class IsPreferredProxyTests(unittest.TestCase):
 
     def test_switch_off_means_nothing_is_preferred(self):
         self.assertFalse(
-            self._call("seed", "http://a", {"seed": {"K:http://a": {"success": 3}}},
-                       env={"X_PROXY_SCORE": False}))
+            self._call("seed", "http://a", {"seed": {"K:http://a": {"success": 3}}}, env={"X_PROXY_SCORE": False})
+        )
 
     def test_switch_defaults_to_on(self):
-        self.assertTrue(
-            self._call("seed", "http://a", {"seed": {"K:http://a": {"success": 1}}}))
+        self.assertTrue(self._call("seed", "http://a", {"seed": {"K:http://a": {"success": 1}}}))
 
     def test_success_above_zero_is_preferred(self):
         state = {"seed": {"K:http://a": {"success": 1}, "K:http://b": {"success": 0}}}
@@ -223,23 +214,28 @@ class IsPreferredProxyTests(unittest.TestCase):
             return default
 
         SELECT.is_preferred_proxy(
-            "seed", "http://a", score_env="IDEAL_PROXY_SCORE",
-            env_bool=env_bool, load_state=lambda: {}, key=lambda p: "K:" + p)
+            "seed",
+            "http://a",
+            score_env="IDEAL_PROXY_SCORE",
+            env_bool=env_bool,
+            load_state=lambda: {},
+            key=lambda p: "K:" + p,
+        )
         self.assertEqual(seen, ["IDEAL_PROXY_SCORE"])
 
     def test_key_is_injected(self):
         """blik keys by ``(group, proxy)`` and ideal/twint by proxy alone; the
         shared rule must not assume either."""
         state = {"seed": {"seed|http://a": {"success": 2}}}
-        self.assertTrue(
-            self._call("seed", "http://a", state,
-                       key=lambda proxy: "seed|" + proxy))
+        self.assertTrue(self._call("seed", "http://a", state, key=lambda proxy: "seed|" + proxy))
 
 
 class PickRandomProxiesTests(unittest.TestCase):
     def _call(self, proxies, limit, group="seed", preferred=(), order=None):
         return SELECT.pick_random_proxies(
-            list(proxies), limit, group,
+            list(proxies),
+            limit,
+            group,
             order_group=order or (lambda g, p: list(p)),
             is_preferred=lambda g, p: p in preferred,
         )
@@ -308,7 +304,7 @@ class PickRandomProxiesTests(unittest.TestCase):
         self.assertEqual(sorted(out), ["a", "b", "c"])
         self.assertEqual(out[0], "b")
         random.seed(3)
-        huge = self._call(["a", "b", "c"], 10 ** 6, preferred=("c",))
+        huge = self._call(["a", "b", "c"], 10**6, preferred=("c",))
         self.assertEqual(huge[0], "c")
         self.assertEqual(sorted(huge), ["a", "b", "c"])
 
@@ -330,28 +326,23 @@ class NoEarlyBoundDefaultTests(unittest.TestCase):
             for default in list(node.args.defaults) + list(node.args.kw_defaults):
                 if default is None:
                     continue
-                self.assertNotIsInstance(
-                    default, ast.Attribute,
-                    "%s has an un-patchable bound default" % node.name)
+                self.assertNotIsInstance(default, ast.Attribute, "%s has an un-patchable bound default" % node.name)
 
     def test_injected_knobs_have_no_default(self):
         tree = ast.parse(MODULE_PATH.read_text(encoding="utf-8"))
         expected = {
-            "proxy_for_country": ("normalize", "country_normalizer", "selector",
-                                  "label", "register"),
+            "proxy_for_country": ("normalize", "country_normalizer", "selector", "label", "register"),
             "is_preferred_proxy": ("score_env", "env_bool", "load_state", "key"),
             "pick_random_proxies": ("order_group", "is_preferred"),
         }
         for name, knobs in expected.items():
-            node = next(n for n in tree.body
-                        if isinstance(n, ast.FunctionDef) and n.name == name)
+            node = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == name)
             names = [a.arg for a in node.args.kwonlyargs]
             defaults = node.args.kw_defaults
             pad = len(names) - len(defaults)
             for knob in knobs:
                 self.assertIn(knob, names, "%s.%s" % (name, knob))
-                self.assertIsNone(defaults[names.index(knob) - pad],
-                                  "%s.%s must have no default" % (name, knob))
+                self.assertIsNone(defaults[names.index(knob) - pad], "%s.%s must have no default" % (name, knob))
 
 
 class BuildAttemptBatchesTests(unittest.TestCase):
@@ -402,9 +393,10 @@ class BuildAttemptBatchesTests(unittest.TestCase):
 
 class ModuleContractTests(unittest.TestCase):
     def test_exports(self):
-        self.assertEqual(sorted(SELECT.__all__),
-                         ["build_attempt_batches", "is_preferred_proxy",
-                          "pick_random_proxies", "proxy_for_country"])
+        self.assertEqual(
+            sorted(SELECT.__all__),
+            ["build_attempt_batches", "is_preferred_proxy", "pick_random_proxies", "proxy_for_country"],
+        )
 
     def test_stays_free_of_the_host_package(self):
         """architecture.md Rule 10: protocol-payment must not import sms_tool."""
@@ -441,8 +433,7 @@ class ExtractorWiringTests(unittest.TestCase):
         self.assertIsNotNone(node, "%s missing" % name)
         assert node is not None
         for sub in ast.walk(node):
-            if isinstance(sub, ast.Call) and isinstance(sub.func, ast.Name) \
-                    and sub.func.id == callee:
+            if isinstance(sub, ast.Call) and isinstance(sub.func, ast.Name) and sub.func.id == callee:
                 return {k.arg: ast.unparse(k.value) for k in sub.keywords}
         self.fail("%s does not call %s" % (name, callee))
 
@@ -450,52 +441,43 @@ class ExtractorWiringTests(unittest.TestCase):
         node = self._func(path, name)
         if node is None:
             return False
-        body = [n for n in node.body
-                if not (isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant))]
+        body = [n for n in node.body if not (isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant))]
         if len(body) != 1:
             return False
         stmt = body[0]
-        call = stmt.value if isinstance(stmt, ast.Return) else (
-            stmt.value if isinstance(stmt, ast.Expr) else None)
-        return (isinstance(call, ast.Call) and isinstance(call.func, ast.Name)
-                and call.func.id == callee)
+        call = stmt.value if isinstance(stmt, ast.Return) else (stmt.value if isinstance(stmt, ast.Expr) else None)
+        return isinstance(call, ast.Call) and isinstance(call.func, ast.Name) and call.func.id == callee
 
     def test_three_extractors_delegate_proxy_for_country(self):
         for provider in ("ideal", "twint", "blik"):
             self.assertTrue(
-                self._is_stub(EXTRACTORS[provider], "proxy_for_country",
-                              "shared_proxy_for_country"), provider)
+                self._is_stub(EXTRACTORS[provider], "proxy_for_country", "shared_proxy_for_country"), provider
+            )
 
     def test_three_extractors_delegate_pick_random_proxies(self):
         for provider in ("ideal", "twint", "blik"):
             self.assertTrue(
-                self._is_stub(EXTRACTORS[provider], "pick_random_proxies",
-                              "shared_pick_random_proxies"), provider)
+                self._is_stub(EXTRACTORS[provider], "pick_random_proxies", "shared_pick_random_proxies"), provider
+            )
 
     def test_ideal_and_twint_delegate_is_preferred_proxy(self):
         for provider in ("ideal", "twint"):
             self.assertTrue(
-                self._is_stub(EXTRACTORS[provider], "is_preferred_proxy",
-                              "shared_is_preferred_proxy"), provider)
+                self._is_stub(EXTRACTORS[provider], "is_preferred_proxy", "shared_is_preferred_proxy"), provider
+            )
 
     def test_kakao_keeps_its_own_proxy_for_country(self):
-        self.assertFalse(
-            self._is_stub(EXTRACTORS["kakao"], "proxy_for_country",
-                          "shared_proxy_for_country"))
+        self.assertFalse(self._is_stub(EXTRACTORS["kakao"], "proxy_for_country", "shared_proxy_for_country"))
 
     def test_blik_keeps_its_own_is_preferred_proxy(self):
-        self.assertFalse(
-            self._is_stub(EXTRACTORS["blik"], "is_preferred_proxy",
-                          "shared_is_preferred_proxy"))
+        self.assertFalse(self._is_stub(EXTRACTORS["blik"], "is_preferred_proxy", "shared_is_preferred_proxy"))
 
     def test_score_env_is_per_provider(self):
         """A swapped name would make ideal answer to TWINT_PROXY_SCORE."""
         expected = {"ideal": "IDEAL_PROXY_SCORE", "twint": "TWINT_PROXY_SCORE"}
         for provider, want in expected.items():
-            kwargs = self._shared_call(EXTRACTORS[provider], "is_preferred_proxy",
-                                       "shared_is_preferred_proxy")
-            self.assertEqual((kwargs.get("score_env") or "").strip("'\""), want,
-                             provider)
+            kwargs = self._shared_call(EXTRACTORS[provider], "is_preferred_proxy", "shared_is_preferred_proxy")
+            self.assertEqual((kwargs.get("score_env") or "").strip("'\""), want, provider)
 
     def test_proxy_for_country_passes_the_modules_own_knobs(self):
         want = {
@@ -506,16 +488,14 @@ class ExtractorWiringTests(unittest.TestCase):
             "register": "register_proxy_for_redaction",
         }
         for provider in ("ideal", "twint", "blik"):
-            kwargs = self._shared_call(EXTRACTORS[provider], "proxy_for_country",
-                                       "shared_proxy_for_country")
+            kwargs = self._shared_call(EXTRACTORS[provider], "proxy_for_country", "shared_proxy_for_country")
             for knob, value in want.items():
                 self.assertEqual(kwargs.get(knob), value, "%s.%s" % (provider, knob))
 
     def test_pick_passes_the_modules_own_preference_rule(self):
         """blik's rule is not the shared one, and this is where that shows."""
         for provider in ("ideal", "twint", "blik"):
-            kwargs = self._shared_call(EXTRACTORS[provider], "pick_random_proxies",
-                                       "shared_pick_random_proxies")
+            kwargs = self._shared_call(EXTRACTORS[provider], "pick_random_proxies", "shared_pick_random_proxies")
             self.assertEqual(kwargs.get("order_group"), "order_proxy_group", provider)
             self.assertEqual(kwargs.get("is_preferred"), "is_preferred_proxy", provider)
 

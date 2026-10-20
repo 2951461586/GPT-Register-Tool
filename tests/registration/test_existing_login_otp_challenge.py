@@ -43,15 +43,11 @@ from sms_tool import auth_flow
 
 
 def test_continue_url_establishes_the_challenge():
-    assert auth_flow._otp_challenge_established(
-        {"continue_url": "https://auth.openai.com/email-verification"}
-    )
+    assert auth_flow._otp_challenge_established({"continue_url": "https://auth.openai.com/email-verification"})
 
 
 def test_page_type_email_otp_verification_establishes_the_challenge():
-    assert auth_flow._otp_challenge_established(
-        {"page": {"type": "email_otp_verification"}}
-    )
+    assert auth_flow._otp_challenge_established({"page": {"type": "email_otp_verification"}})
 
 
 def test_top_level_email_verification_mode_establishes_the_challenge():
@@ -59,9 +55,7 @@ def test_top_level_email_verification_mode_establishes_the_challenge():
 
 
 def test_nested_email_verification_mode_establishes_the_challenge():
-    assert auth_flow._otp_challenge_established(
-        {"page": {"payload": {"email_verification_mode": "login"}}}
-    )
+    assert auth_flow._otp_challenge_established({"page": {"payload": {"email_verification_mode": "login"}}})
 
 
 def test_bare_success_acknowledgement_is_not_a_challenge():
@@ -83,6 +77,4 @@ def test_blank_and_mismatched_markers_are_not_challenges():
     assert not auth_flow._otp_challenge_established({"page": "email_otp_verification"})
     # A different verification step is not the login email-OTP challenge.
     assert not auth_flow._otp_challenge_established({"page": {"type": "mfa_challenge"}})
-    assert not auth_flow._otp_challenge_established(
-        {"page": {"payload": {"email_verification_mode": ""}}}
-    )
+    assert not auth_flow._otp_challenge_established({"page": {"payload": {"email_verification_mode": ""}}})

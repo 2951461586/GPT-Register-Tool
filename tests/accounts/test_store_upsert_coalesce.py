@@ -77,6 +77,7 @@ def _token_only_round(**extra) -> dict:
 # 1. A blank round must not erase the durable facts
 # --------------------------------------------------------------------------
 
+
 def test_blank_round_keeps_the_one_shot_credentials(tmp_path):
     """``password`` and ``totp_secret`` are OpenAI-side persistent state.
 
@@ -149,6 +150,7 @@ def test_the_preserved_mailbox_still_counts_as_recovery_material(tmp_path):
 # 2. The guard must stay narrow -- these are the anti-over-guard tests
 # --------------------------------------------------------------------------
 
+
 def test_a_blank_error_still_clears(tmp_path):
     """``error`` is deliberately NOT guarded.
 
@@ -188,6 +190,7 @@ def test_tokens_still_overwrite_and_can_be_cleared(tmp_path):
 # --------------------------------------------------------------------------
 # 3. Non-blank values still win, and the insert path is untouched
 # --------------------------------------------------------------------------
+
 
 def test_non_blank_values_still_overwrite(tmp_path):
     config = _config(tmp_path)
@@ -248,9 +251,7 @@ def test_twofa_enrolled_at_follows_the_secret(tmp_path):
     assert get_account_record(EMAIL, runtime_config=config)["twofa_enrolled_at"] == first
 
     # A round that re-enrols moves both.
-    assert upsert_account(
-        {"email": EMAIL, "success": True, "totp_secret": "ANOTHERSECRET"}, runtime_config=config
-    )
+    assert upsert_account({"email": EMAIL, "success": True, "totp_secret": "ANOTHERSECRET"}, runtime_config=config)
     record = get_account_record(EMAIL, runtime_config=config)
     assert record["totp_secret"] == "ANOTHERSECRET"
     assert record["twofa_enrolled_at"] >= first
@@ -259,6 +260,7 @@ def test_twofa_enrolled_at_follows_the_secret(tmp_path):
 # --------------------------------------------------------------------------
 # 4. The raw_json limitation, stated so it is not mistaken for coverage
 # --------------------------------------------------------------------------
+
 
 def test_raw_json_is_still_rebuilt_from_the_safe_snapshot_whitelist(tmp_path):
     """This module guards COLUMNS.  ``raw_json`` is a separate contract.

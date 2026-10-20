@@ -20,6 +20,7 @@ Anything a tier cannot resolve (env-var names, prose-anchored pointers into a
 function body) is skipped rather than failed -- the gate must never fire on a
 pointer it does not understand.
 """
+
 from __future__ import annotations
 
 import ast
@@ -163,8 +164,7 @@ def check_line_refs(failures: list[str]) -> None:
                 total = len(source.read_text(encoding="utf-8").splitlines())
                 if num < 1 or num > total:
                     failures.append(
-                        f"{rel}:{lineno} {ref_text} past EOF "
-                        f"({source.relative_to(ROOT)} has {total} lines)"
+                        f"{rel}:{lineno} {ref_text} past EOF ({source.relative_to(ROOT)} has {total} lines)"
                     )
 
 
@@ -249,9 +249,7 @@ def check_csharp_file_refs(failures: list[str]) -> None:
                 else:
                     resolved = ref in index
                 if not resolved:
-                    failures.append(
-                        f"{rel}:{lineno} documented C# file does not exist: {ref}"
-                    )
+                    failures.append(f"{rel}:{lineno} documented C# file does not exist: {ref}")
 
 
 def _csharp_index() -> set[str]:

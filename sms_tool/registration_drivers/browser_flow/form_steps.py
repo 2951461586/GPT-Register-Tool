@@ -18,7 +18,8 @@ from urllib.parse import urlsplit
 def _safe_submit_email_form(page, email: str) -> bool:
     """Submit the email form structurally without selecting a social IdP."""
     try:
-        result = page.evaluate("""({email}) => {
+        result = page.evaluate(
+            """({email}) => {
           const visible = el => !!el && !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length)
             && getComputedStyle(el).visibility !== 'hidden' && getComputedStyle(el).display !== 'none'
             && !el.disabled && el.getAttribute('aria-disabled') !== 'true';
@@ -43,7 +44,9 @@ def _safe_submit_email_form(page, email: str) -> bool:
           if (!target) return {ok:false, reason:'safe_submit_missing'};
           target.click();
           return {ok:true};
-        }""", {"email": str(email)})
+        }""",
+            {"email": str(email)},
+        )
         return bool(isinstance(result, dict) and result.get("ok"))
     except Exception:
         return False
@@ -129,7 +132,8 @@ def _submit_email_via_nextauth(page, email: str, *, budget_ms: int = _NEXTAUTH_F
         parsed_budget = 0
     budget = parsed_budget if parsed_budget > 0 else _NEXTAUTH_FETCH_BUDGET_MS
     try:
-        result = page.evaluate("""async ({email, did, logId, budgetMs}) => {
+        result = page.evaluate(
+            """async ({email, did, logId, budgetMs}) => {
           const withDeadline = (promise, ms) => Promise.race([
             promise,
             new Promise((_, reject) => setTimeout(() => reject(new Error('deadline')), Math.max(1, ms)))
@@ -172,7 +176,9 @@ def _submit_email_via_nextauth(page, email: str, *, budget_ms: int = _NEXTAUTH_F
             location.assign(target.toString());
             return {ok: true};
           } catch (error) { return {ok: false, stage: 'exception'}; }
-        }""", {"email": str(email), "did": str(uuid.uuid4()), "logId": str(uuid.uuid4()), "budgetMs": budget})
+        }""",
+            {"email": str(email), "did": str(uuid.uuid4()), "logId": str(uuid.uuid4()), "budgetMs": budget},
+        )
         return bool(isinstance(result, dict) and result.get("ok"))
     except Exception:
         return False
@@ -238,7 +244,10 @@ def _fill_email(page, email: str, config: Mapping[str, Any] | None = None) -> No
                             return
                     if dom_fields._otp_fields(page) is not None:
                         return
-                    if dom_fields._first_visible(page, ("input[type='password']", "input[name='password']"), 500) is not None:
+                    if (
+                        dom_fields._first_visible(page, ("input[type='password']", "input[name='password']"), 500)
+                        is not None
+                    ):
                         return
                 except BrowserRegistrationError:
                     # Preserve explicit state classifications raised while the
@@ -266,9 +275,7 @@ def _fill_email(page, email: str, config: Mapping[str, Any] | None = None) -> No
             return
 
 
-def _fill_password_if_present(
-    page, password: str, config: Mapping[str, Any] | None = None
-) -> bool:
+def _fill_password_if_present(page, password: str, config: Mapping[str, Any] | None = None) -> bool:
     state = page_state._quick_auth_state(page)
     path = str(urlsplit(str(getattr(page, "url", "") or "")).path or "").lower()
     if state == "login_password" or "/log-in/password" in path or "/login/password" in path:
@@ -297,7 +304,9 @@ def _fill_password_if_present(
         if next_state == "login_password":
             raise BrowserRegistrationError("browser_existing_account")
         raise BrowserRegistrationError("browser_passwordless_otp_state_unknown")
-    field = dom_fields._first_visible(page, ("input[type='password']", "input[name='password']", "input[autocomplete='new-password']"))
+    field = dom_fields._first_visible(
+        page, ("input[type='password']", "input[name='password']", "input[autocomplete='new-password']")
+    )
     if field is None:
         return False
     field.fill(password)
@@ -330,7 +339,8 @@ def _complete_profile(page, name: str, birthdate: str) -> None:
     year, month, day = parts
     age = date.today().year - int(year) - ((date.today().month, date.today().day) < (int(month), int(day)))
     try:
-        result = page.evaluate("""({name, birthday, year, month, day, age}) => {
+        result = page.evaluate(
+            """({name, birthday, year, month, day, age}) => {
           const visible = el => !!el && !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length)
             && getComputedStyle(el).visibility !== 'hidden' && getComputedStyle(el).display !== 'none'
             && !el.disabled && !el.readOnly;
@@ -398,7 +408,9 @@ def _complete_profile(page, name: str, birthdate: str) -> None:
             if (visible(el) && (el.checked === false || el.getAttribute('aria-checked') === 'false')) el.click();
           }
           return set;
-        }""", {"name": name, "birthday": birthdate, "year": year, "month": month, "day": day, "age": str(age)})
+        }""",
+            {"name": name, "birthday": birthdate, "year": year, "month": month, "day": day, "age": str(age)},
+        )
         if not isinstance(result, Mapping) or not result.get("birth"):
             raise BrowserRegistrationError("browser_profile_birthdate_missing")
         if not result.get("name"):
@@ -411,8 +423,12 @@ def _complete_profile(page, name: str, birthdate: str) -> None:
         pass
 
     # Conservative fallback for simple native forms.
-    name_field = dom_fields._first_visible(page, ("input[name='name']", "input[autocomplete='name']", "input[placeholder*='name' i]"))
-    date_field = dom_fields._first_visible(page, ("input[type='date']", "input[name*='birth' i]", "input[placeholder*='birth' i]"))
+    name_field = dom_fields._first_visible(
+        page, ("input[name='name']", "input[autocomplete='name']", "input[placeholder*='name' i]")
+    )
+    date_field = dom_fields._first_visible(
+        page, ("input[type='date']", "input[name*='birth' i]", "input[placeholder*='birth' i]")
+    )
     if name_field is None or date_field is None:
         raise BrowserRegistrationError("browser_profile_fields_missing")
     name_field.fill(name)

@@ -102,7 +102,9 @@ def phone_proxy_cfg() -> dict:
     return merged
 
 
-def normalize_proxy_url(proxy: str, default_scheme: str = "http") -> str:
+def normalize_proxy_url(proxy: str | None, default_scheme: str = "http") -> str:
+    # ``None`` is accepted because every caller passes an optional configured
+    # value and the body already normalises it through ``str(proxy or "")``.
     value = str(proxy or "").strip()
     if not value:
         return ""
@@ -295,7 +297,9 @@ def configured_base_proxy(explicit_proxy: str | None = None) -> str:
     return normalize_proxy_url(default_proxy) if default_proxy else ""
 
 
-def build_phone_proxy(base_proxy: str, country_iso: str = "", *, refresh_sid: bool = True, match_region: bool = True) -> str:
+def build_phone_proxy(
+    base_proxy: str, country_iso: str = "", *, refresh_sid: bool = True, match_region: bool = True
+) -> str:
     proxy = normalize_proxy_url(base_proxy)
     if match_region and country_iso:
         proxy = match_proxy_region(proxy, country_iso)
@@ -353,7 +357,12 @@ def _save_probe_cache() -> None:
 def _probe_timeout_seconds() -> int:
     pcfg = phone_proxy_cfg()
     try:
-        return max(3, int(pcfg.get("proxy_probe_timeout_seconds", DEFAULT_PROBE_TIMEOUT_SECONDS) or DEFAULT_PROBE_TIMEOUT_SECONDS))
+        return max(
+            3,
+            int(
+                pcfg.get("proxy_probe_timeout_seconds", DEFAULT_PROBE_TIMEOUT_SECONDS) or DEFAULT_PROBE_TIMEOUT_SECONDS
+            ),
+        )
     except Exception:
         return DEFAULT_PROBE_TIMEOUT_SECONDS
 
@@ -396,7 +405,13 @@ def probe_proxy(proxy: str, expected_country: str = "", *, use_cache: bool = Tru
         live = _probe_proxy_live(proxy, expected_country)
         result = {**live, "proxy": proxy, "scheme": urlsplit(proxy).scheme, "cache": False}
     except Exception as exc:
-        result = {"ok": False, "proxy": proxy, "scheme": urlsplit(proxy).scheme, "error": f"{type(exc).__name__}: {str(exc)[:240]}", "cache": False}
+        result = {
+            "ok": False,
+            "proxy": proxy,
+            "scheme": urlsplit(proxy).scheme,
+            "error": f"{type(exc).__name__}: {str(exc)[:240]}",
+            "cache": False,
+        }
     if ttl > 0:
         with _CACHE_LOCK:
             _TRANSIENT_CACHE[key] = {"ts": now, "result": result}
@@ -499,8 +514,17 @@ def select_phone_proxy(
     for region in _region_candidates(country_iso, base):
         candidate = build_phone_proxy(base, region, refresh_sid=random_sid, match_region=match_region)
         if not probe:
-            return {"ok": True, "proxy": candidate, "base_proxy": base, "country_iso": country_iso, "region": region, "attempts": []}
-        checked = probe_proxy_with_scheme_detection(candidate, region if match_region and region else "", use_cache=use_cache)
+            return {
+                "ok": True,
+                "proxy": candidate,
+                "base_proxy": base,
+                "country_iso": country_iso,
+                "region": region,
+                "attempts": [],
+            }
+        checked = probe_proxy_with_scheme_detection(
+            candidate, region if match_region and region else "", use_cache=use_cache
+        )
         checked["region"] = region
         attempts.append(checked)
         if checked.get("ok"):

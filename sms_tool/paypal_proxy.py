@@ -15,7 +15,11 @@ from urllib.parse import unquote, urlsplit
 import requests
 
 from .cross_process_gate import cross_process_write_lock
-from .phone_proxy import normalize_proxy_url as _normalize_proxy_url, redact_proxy_url as _canon_redact_proxy_url, redact_proxy_text as _canon_redact_proxy_text
+from .phone_proxy import (
+    normalize_proxy_url as _normalize_proxy_url,
+    redact_proxy_url as _canon_redact_proxy_url,
+    redact_proxy_text as _canon_redact_proxy_text,
+)
 
 
 _NETWORK_ERROR_MARKERS = (
@@ -85,7 +89,6 @@ def rotate_proxy_session(proxy: str, country: str = "") -> str:
     from .proxy_entry import rotate_session
 
     return rotate_session(normalize_proxy_url(proxy), country)
-
 
 
 def infer_proxy_country(proxy: str) -> str:
@@ -315,15 +318,12 @@ def select_proxy_from_pool(
     if not raw_pool and callable(pool_loader):
         try:
             loaded: Any = pool_loader()
-            raw_pool = list(dict.fromkeys(
-                str(item or "").strip() for item in (loaded or []) if str(item or "").strip()
-            ))
+            raw_pool = list(
+                dict.fromkeys(str(item or "").strip() for item in (loaded or []) if str(item or "").strip())
+            )
         except Exception:
             raw_pool = []
-    candidates = list(dict.fromkeys(
-        normalize_proxy_url(item)
-        for item in raw_pool
-    ))
+    candidates = list(dict.fromkeys(normalize_proxy_url(item) for item in raw_pool))
     if state is not None and candidates:
         # Prefer healthy proxies and skip ones still in their failure cooldown;
         # fall back to raw order if every candidate is cooling down.
@@ -337,16 +337,18 @@ def select_proxy_from_pool(
             result = probe_proxy(candidate, expected_country=expected, stage=stage, state=state, timeout=timeout)
         else:
             result = probe_proxy(candidate, expected_country=expected, stage=stage, timeout=timeout)
-        attempts.append({
-            "proxy": redact_proxy_url(candidate),
-            "ok": result.ok,
-            "stage": result.stage,
-            "expected_country": result.expected_country,
-            "ip": result.ip,
-            "country_code": result.country_code,
-            "country": result.country,
-            "error": result.error,
-        })
+        attempts.append(
+            {
+                "proxy": redact_proxy_url(candidate),
+                "ok": result.ok,
+                "stage": result.stage,
+                "expected_country": result.expected_country,
+                "ip": result.ip,
+                "country_code": result.country_code,
+                "country": result.country,
+                "error": result.error,
+            }
+        )
         if state is not None:
             state.record_result(stage, candidate, result.ok, reason=result.error, country=result.country_code)
         if result.ok:
@@ -549,12 +551,16 @@ class PayPalProxyState:
             return
         key = f"{proxy_key(checkout_proxy)}:{proxy_key(provider_proxy)}"
         with self._lock:
-            record = self._load().setdefault("pairs", {}).setdefault(
-                key,
-                {
-                    "checkout": proxy_key(checkout_proxy),
-                    "provider": proxy_key(provider_proxy),
-                },
+            record = (
+                self._load()
+                .setdefault("pairs", {})
+                .setdefault(
+                    key,
+                    {
+                        "checkout": proxy_key(checkout_proxy),
+                        "provider": proxy_key(provider_proxy),
+                    },
+                )
             )
             now = int(time.time())
             if success:
@@ -747,22 +753,32 @@ def _proxies_from_config(cfg: dict, checkout_country: str = "", target_country: 
     )
     stripe_init_value = _stage_proxy_value(stage_proxies, "stripe_init") or provider
     stripe_init = _rank_stage_proxy(
-        paypal_cfg, state, "stripe_init", stripe_init_value, country=target_country, checkout_proxy=checkout,
+        paypal_cfg,
+        state,
+        "stripe_init",
+        stripe_init_value,
+        country=target_country,
+        checkout_proxy=checkout,
     )
     payment_method_value = _stage_proxy_value(stage_proxies, "payment_method") or provider
     payment_method = _rank_stage_proxy(
-        paypal_cfg, state, "payment_method", payment_method_value, country=target_country, checkout_proxy=checkout,
+        paypal_cfg,
+        state,
+        "payment_method",
+        payment_method_value,
+        country=target_country,
+        checkout_proxy=checkout,
     )
     confirm_value = _stage_proxy_value(stage_proxies, "confirm") or provider
     confirm = _rank_stage_proxy(
-        paypal_cfg, state, "confirm", confirm_value, country=target_country, checkout_proxy=checkout,
+        paypal_cfg,
+        state,
+        "confirm",
+        confirm_value,
+        country=target_country,
+        checkout_proxy=checkout,
     )
-    approve_value = (
-        _stage_proxy_value(stage_proxies, "approve")
-        or confirm
-        or provider
-        or proxy_default
-    )
+    approve_value = _stage_proxy_value(stage_proxies, "approve") or confirm or provider or proxy_default
     approve = _rank_stage_proxy(
         paypal_cfg,
         state,
@@ -773,9 +789,8 @@ def _proxies_from_config(cfg: dict, checkout_country: str = "", target_country: 
     )
     # Promotion stage is OPT-IN: only resolved from explicit config, no fallback
     # to provider/default, so leaving it unset keeps the original behaviour.
-    promotion_value = (
-        _stage_proxy_value(stage_proxies, "promotion")
-        or _stage_proxy_value(stage_proxies, "promotion_update")
+    promotion_value = _stage_proxy_value(stage_proxies, "promotion") or _stage_proxy_value(
+        stage_proxies, "promotion_update"
     )
     promotion = _rank_stage_proxy(
         paypal_cfg,

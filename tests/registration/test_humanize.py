@@ -78,7 +78,9 @@ class HumanizeDelayTests(unittest.TestCase):
 
     def test_explicit_baseline_and_jitter_override(self):
         sleeps = self._recorded(
-            "default", config=_enabled(), times=1,
+            "default",
+            config=_enabled(),
+            times=1,
         )
         self.assertTrue(sleeps)
         # Explicit override wins over the table.

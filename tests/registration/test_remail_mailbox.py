@@ -47,9 +47,11 @@ class RegistrationPhonePoolTests(unittest.TestCase):
             phone_source="smsbower",
         )
 
-        with patch("sms_tool.phone_reuse.has_phone_reuse_config", return_value=True), \
-             patch("sms_tool.phone_reuse.create_phone_pool", return_value=phone_pool) as create, \
-             patch("sms_tool.phone_reuse.print_phone_pool_status") as print_status:
+        with (
+            patch("sms_tool.phone_reuse.has_phone_reuse_config", return_value=True),
+            patch("sms_tool.phone_reuse.create_phone_pool", return_value=phone_pool) as create,
+            patch("sms_tool.phone_reuse.print_phone_pool_status") as print_status,
+        ):
             result = cli._registration_phone_pool(args)
 
         self.assertIs(result, phone_pool)
@@ -78,15 +80,17 @@ class RegistrationPhonePoolTests(unittest.TestCase):
             registration_mode="passwordless",
         )
 
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(cli, "_registration_phone_pool", return_value=phone_pool), \
-             patch.object(cli, "_load_mailbox_pool", return_value=[mailbox]), \
-             patch.object(cli, "_proxy_pool_values", return_value=[]), \
-             patch.object(cli, "_payment_method", return_value="paypal"), \
-             patch.object(cli, "run_batch", return_value=[{"success": True}]) as run_batch, \
-             patch.object(cli, "_save_registration_results", return_value={"success": 1, "quality": {}}), \
-             patch.object(cli, "runtime_file", return_value=Path(tmp) / "report.json"), \
-             redirect_stdout(io.StringIO()):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(cli, "_registration_phone_pool", return_value=phone_pool),
+            patch.object(cli, "_load_mailbox_pool", return_value=[mailbox]),
+            patch.object(cli, "_proxy_pool_values", return_value=[]),
+            patch.object(cli, "_payment_method", return_value="paypal"),
+            patch.object(cli, "run_batch", return_value=[{"success": True}]) as run_batch,
+            patch.object(cli, "_save_registration_results", return_value={"success": 1, "quality": {}}),
+            patch.object(cli, "runtime_file", return_value=Path(tmp) / "report.json"),
+            redirect_stdout(io.StringIO()),
+        ):
             cli._run_target_at200(args, Path(tmp))
             report = json.loads((Path(tmp) / "report.json").read_text(encoding="utf-8"))
 
@@ -123,8 +127,10 @@ class ReMailOrderTests(unittest.TestCase):
         }
 
     def test_create_code_order_uses_bearer_idempotency_and_parses_account(self):
-        with patch.object(mailbox_remail, "_remail_cfg", return_value=self.cfg), \
-             patch.object(mailbox_remail.http_requests, "post", return_value=FakeResponse(order_payload())) as post:
+        with (
+            patch.object(mailbox_remail, "_remail_cfg", return_value=self.cfg),
+            patch.object(mailbox_remail.http_requests, "post", return_value=FakeResponse(order_payload())) as post,
+        ):
             account = mailbox_remail._create_remail_order()
 
         self.assertEqual(account.provider, "remail")
@@ -154,10 +160,12 @@ class ReMailOrderTests(unittest.TestCase):
             FakeResponse({"error": "bad gateway"}, 502),
             FakeResponse(order_payload()),
         ]
-        with patch.object(mailbox_remail, "_remail_cfg", return_value=self.cfg), \
-             patch.object(mailbox_remail.time, "sleep", return_value=None), \
-             patch.object(mailbox_remail.http_requests, "post", side_effect=responses) as post, \
-             redirect_stdout(io.StringIO()):
+        with (
+            patch.object(mailbox_remail, "_remail_cfg", return_value=self.cfg),
+            patch.object(mailbox_remail.time, "sleep", return_value=None),
+            patch.object(mailbox_remail.http_requests, "post", side_effect=responses) as post,
+            redirect_stdout(io.StringIO()),
+        ):
             account = mailbox_remail._create_remail_order()
 
         self.assertEqual(account.order_no, "R1")
@@ -166,10 +174,14 @@ class ReMailOrderTests(unittest.TestCase):
         self.assertEqual(len(keys), 1)  # retry reuses the same key, never double-charges
 
     def test_create_order_does_not_retry_non_retryable_4xx(self):
-        with patch.object(mailbox_remail, "_remail_cfg", return_value=self.cfg), \
-             patch.object(mailbox_remail.time, "sleep", return_value=None), \
-             patch.object(mailbox_remail.http_requests, "post", return_value=FakeResponse({"error": "bad_request"}, 400)) as post, \
-             redirect_stdout(io.StringIO()):
+        with (
+            patch.object(mailbox_remail, "_remail_cfg", return_value=self.cfg),
+            patch.object(mailbox_remail.time, "sleep", return_value=None),
+            patch.object(
+                mailbox_remail.http_requests, "post", return_value=FakeResponse({"error": "bad_request"}, 400)
+            ) as post,
+            redirect_stdout(io.StringIO()),
+        ):
             with self.assertRaises(mailbox_remail.ReMailHttpError):
                 mailbox_remail._create_remail_order()
 
@@ -184,9 +196,11 @@ class ReMailOrderTests(unittest.TestCase):
             token="st-secret",
         )
         live = MailboxAccount(email="live@example.com", provider="remail", order_no="R-LIVE", token="st-live")
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(mailbox_remail, "_dead_remail_registry_path", return_value=Path(tmp) / "dead.json"), \
-             patch("sms_tool.storage.list_terminal_remail_accounts", return_value=[]):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(mailbox_remail, "_dead_remail_registry_path", return_value=Path(tmp) / "dead.json"),
+            patch("sms_tool.storage.list_terminal_remail_accounts", return_value=[]),
+        ):
             self.assertTrue(mailbox_remail.record_dead_remail_account(dead))
             filtered = mailbox_remail.filter_dead_remail_mailboxes([dead, live])
             payload = (Path(tmp) / "dead.json").read_text(encoding="utf-8")
@@ -196,12 +210,19 @@ class ReMailOrderTests(unittest.TestCase):
 
     def test_dead_history_filter_includes_terminal_database_records(self):
         mailbox = MailboxAccount(email="dead@example.com", provider="remail", order_no="R-DEAD")
-        with patch.object(mailbox_remail, "_read_dead_remail_registry", return_value=[]), \
-             patch("sms_tool.storage.list_terminal_remail_accounts", return_value=[{
-                 "email": "dead@example.com",
-                 "order_no": "R-DEAD",
-                 "purchase_id": "",
-             }]):
+        with (
+            patch.object(mailbox_remail, "_read_dead_remail_registry", return_value=[]),
+            patch(
+                "sms_tool.storage.list_terminal_remail_accounts",
+                return_value=[
+                    {
+                        "email": "dead@example.com",
+                        "order_no": "R-DEAD",
+                        "purchase_id": "",
+                    }
+                ],
+            ),
+        ):
             filtered = mailbox_remail.filter_dead_remail_mailboxes([mailbox])
 
         self.assertEqual(filtered, [])
@@ -212,9 +233,11 @@ class ReMailOrderTests(unittest.TestCase):
             {"index": 1, "status": "failed", "error": {"code": "insufficient_inventory", "message": "empty"}},
         ]
         args = argparse.Namespace(count=2)
-        with patch.object(mailbox_remail, "_remail_cfg", return_value=self.cfg), \
-             patch.object(mailbox_remail.http_requests, "post", return_value=FakeResponse(response)) as post, \
-             redirect_stdout(io.StringIO()):
+        with (
+            patch.object(mailbox_remail, "_remail_cfg", return_value=self.cfg),
+            patch.object(mailbox_remail.http_requests, "post", return_value=FakeResponse(response)) as post,
+            redirect_stdout(io.StringIO()),
+        ):
             accounts = mailbox_remail._create_remail_mailboxes(args, service_mode="purchase")
 
         self.assertEqual(len(accounts), 1)
@@ -225,8 +248,10 @@ class ReMailOrderTests(unittest.TestCase):
     def test_large_purchase_batch_scales_request_timeout(self):
         response = [{"index": 0, "status": "succeeded", "order": order_payload(1, "purchase")}]
         args = argparse.Namespace(count=100)
-        with patch.object(mailbox_remail, "_remail_cfg", return_value=self.cfg), \
-             patch.object(mailbox_remail.http_requests, "post", return_value=FakeResponse(response)) as post:
+        with (
+            patch.object(mailbox_remail, "_remail_cfg", return_value=self.cfg),
+            patch.object(mailbox_remail.http_requests, "post", return_value=FakeResponse(response)) as post,
+        ):
             mailbox_remail._create_remail_mailboxes(args, service_mode="purchase")
 
         self.assertEqual(post.call_args.kwargs["timeout"], 200)
@@ -249,10 +274,12 @@ class ReMailOrderTests(unittest.TestCase):
             return details[path.rsplit("/", 1)[-1]]
 
         args = argparse.Namespace(count=2)
-        with patch.object(mailbox_remail, "_remail_cfg", return_value=self.cfg), \
-             patch.object(mailbox_remail, "_remail_request", side_effect=request) as call, \
-             patch.object(mailbox_remail.time, "time", return_value=1_000), \
-             redirect_stdout(io.StringIO()):
+        with (
+            patch.object(mailbox_remail, "_remail_cfg", return_value=self.cfg),
+            patch.object(mailbox_remail, "_remail_request", side_effect=request) as call,
+            patch.object(mailbox_remail.time, "time", return_value=1_000),
+            redirect_stdout(io.StringIO()),
+        ):
             accounts = mailbox_remail._create_remail_mailboxes(args, service_mode="purchase")
 
         self.assertEqual([account.order_no for account in accounts], ["R1", "R2"])
@@ -261,8 +288,10 @@ class ReMailOrderTests(unittest.TestCase):
     def test_purchase_batch_does_not_recover_non_ambiguous_400(self):
         args = argparse.Namespace(count=2)
         error = mailbox_remail.ReMailHttpError(400, {"error": "invalid_request"})
-        with patch.object(mailbox_remail, "_remail_cfg", return_value=self.cfg), \
-             patch.object(mailbox_remail, "_remail_request", side_effect=error) as call:
+        with (
+            patch.object(mailbox_remail, "_remail_cfg", return_value=self.cfg),
+            patch.object(mailbox_remail, "_remail_request", side_effect=error) as call,
+        ):
             with self.assertRaises(mailbox_remail.ReMailHttpError):
                 mailbox_remail._create_remail_mailboxes(args, service_mode="purchase")
 
@@ -301,8 +330,10 @@ class ReMailOrderTests(unittest.TestCase):
         token = "st-private-token"
         body = {"message": f"bad rk-secret-key {token}"}
         output = io.StringIO()
-        with patch.object(mailbox_remail, "_remail_cfg", return_value=self.cfg), \
-             patch.object(mailbox_remail.http_requests, "get", return_value=FakeResponse(body, 401)):
+        with (
+            patch.object(mailbox_remail, "_remail_cfg", return_value=self.cfg),
+            patch.object(mailbox_remail.http_requests, "get", return_value=FakeResponse(body, 401)),
+        ):
             with self.assertRaises(RuntimeError) as caught, redirect_stdout(output):
                 mailbox_remail._remail_request("GET", "/v1/pickup", secrets=(token,))
         rendered = str(caught.exception) + output.getvalue()
@@ -355,15 +386,17 @@ class ReMailPickupTests(unittest.TestCase):
 
         def message(message_id, code, recipient="alias@example.com", offset=0):
             received = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(issued_after + offset))
-            return mailbox_remail._normalize_remail_message({
-                "id": message_id,
-                "sender": "noreply@tm.openai.com",
-                "recipient": recipient,
-                "receivedAt": received,
-                "subject": "Your verification code",
-                "bodyPreview": f"Your verification code is {code}",
-                "verificationCode": code,
-            })
+            return mailbox_remail._normalize_remail_message(
+                {
+                    "id": message_id,
+                    "sender": "noreply@tm.openai.com",
+                    "recipient": recipient,
+                    "receivedAt": received,
+                    "subject": "Your verification code",
+                    "bodyPreview": f"Your verification code is {code}",
+                    "verificationCode": code,
+                }
+            )
 
         messages = [
             message(10, "111111", offset=5),
@@ -407,13 +440,20 @@ class ReMailPickupTests(unittest.TestCase):
 
     def test_router_uses_remail_polling_and_applies_clock_skew_grace(self):
         issued_after = 1_000
-        with patch.object(mailbox_router, "_email_cfg", return_value={
-            "remail_otp_issued_after_grace_seconds": 90,
-        }), patch.object(
-            mailbox_remail,
-            "_poll_remail_otp",
-            return_value="654321",
-        ) as poll:
+        with (
+            patch.object(
+                mailbox_router,
+                "_email_cfg",
+                return_value={
+                    "remail_otp_issued_after_grace_seconds": 90,
+                },
+            ),
+            patch.object(
+                mailbox_remail,
+                "_poll_remail_otp",
+                return_value="654321",
+            ) as poll,
+        ):
             code = mailbox_router._poll_email_otp(
                 self.account,
                 subject_keyword="verification code|login code",
@@ -447,18 +487,22 @@ class ReMailPickupTests(unittest.TestCase):
 
     def test_inbox_mode_fetches_detail_even_when_summary_has_code(self):
         summary = {
-            "items": [{
-                "id": 12,
-                "sender": "noreply@tm.openai.com",
-                "recipient": "alias@example.com",
-                "receivedAt": "2026-07-21T08:00:00Z",
-                "subject": "Your login code",
-                "bodyPreview": "Your code is 654321",
-                "verificationCode": "654321",
-            }]
+            "items": [
+                {
+                    "id": 12,
+                    "sender": "noreply@tm.openai.com",
+                    "recipient": "alias@example.com",
+                    "receivedAt": "2026-07-21T08:00:00Z",
+                    "subject": "Your login code",
+                    "bodyPreview": "Your code is 654321",
+                    "verificationCode": "654321",
+                }
+            ]
         }
         detail = dict(summary["items"][0], body="Full ReMail message body")
-        with patch.object(mailbox_remail.http_requests, "get", side_effect=[FakeResponse(summary), FakeResponse(detail)]) as get:
+        with patch.object(
+            mailbox_remail.http_requests, "get", side_effect=[FakeResponse(summary), FakeResponse(detail)]
+        ) as get:
             messages = mailbox_remail._fetch_remail_messages(self.account, include_body=True)
 
         self.assertEqual(get.call_count, 2)
@@ -474,8 +518,10 @@ class ReMailPickupTests(unittest.TestCase):
             FakeResponse({"items": []}),
         ]
         cfg = {"api_key": "rk-secret-key", "base_url": "https://remail.example"}
-        with patch.object(mailbox_remail, "_remail_cfg", return_value=cfg), \
-             patch.object(mailbox_remail.http_requests, "get", side_effect=responses) as get:
+        with (
+            patch.object(mailbox_remail, "_remail_cfg", return_value=cfg),
+            patch.object(mailbox_remail.http_requests, "get", side_effect=responses) as get,
+        ):
             messages = mailbox_remail._fetch_remail_messages(self.account)
 
         self.assertEqual(messages, [])
@@ -491,10 +537,12 @@ class ReMailPickupTests(unittest.TestCase):
             {"message": "Credential is invalid or expired.", "requestId": "req-401"},
         )
 
-        with patch.object(mailbox_remail, "_pickup_remail_messages", side_effect=pickup_error) as pickup, \
-             patch.object(mailbox_remail, "_recover_remail_service_token", side_effect=RuntimeError("expired order")), \
-             patch.object(mailbox_remail, "record_remail_credential_failure") as quarantine, \
-             patch.object(mailbox_remail.time, "sleep", return_value=None):
+        with (
+            patch.object(mailbox_remail, "_pickup_remail_messages", side_effect=pickup_error) as pickup,
+            patch.object(mailbox_remail, "_recover_remail_service_token", side_effect=RuntimeError("expired order")),
+            patch.object(mailbox_remail, "record_remail_credential_failure") as quarantine,
+            patch.object(mailbox_remail.time, "sleep", return_value=None),
+        ):
             with self.assertRaises(mailbox_remail.ReMailCredentialError) as caught:
                 mailbox_remail._poll_remail_otp(self.account, timeout=30)
 
@@ -518,11 +566,14 @@ class ReMailPickupTests(unittest.TestCase):
                 config,
             )
 
-        self.assertEqual(candidates, [
-            "http://127.0.0.1:7897",
-            "http://mailbox-a.example:8080",
-            "http://registration.example:8080",
-        ])
+        self.assertEqual(
+            candidates,
+            [
+                "http://127.0.0.1:7897",
+                "http://mailbox-a.example:8080",
+                "http://registration.example:8080",
+            ],
+        )
 
     def test_poll_401_does_not_quarantine_when_provider_api_key_is_invalid(self):
         pickup_error = mailbox_remail.ReMailHttpError(
@@ -533,10 +584,12 @@ class ReMailPickupTests(unittest.TestCase):
             401,
             {"message": "API key is invalid", "requestId": "req-api"},
         )
-        with patch.object(mailbox_remail, "_pickup_remail_messages", side_effect=pickup_error), \
-             patch.object(mailbox_remail, "_recover_remail_service_token", side_effect=api_error), \
-             patch.object(mailbox_remail, "record_remail_credential_failure") as quarantine, \
-             patch.object(mailbox_remail.time, "sleep", return_value=None):
+        with (
+            patch.object(mailbox_remail, "_pickup_remail_messages", side_effect=pickup_error),
+            patch.object(mailbox_remail, "_recover_remail_service_token", side_effect=api_error),
+            patch.object(mailbox_remail, "record_remail_credential_failure") as quarantine,
+            patch.object(mailbox_remail.time, "sleep", return_value=None),
+        ):
             with self.assertRaises(mailbox_remail.ReMailCredentialError) as caught:
                 mailbox_remail._poll_remail_otp(self.account, timeout=30)
 
@@ -556,12 +609,19 @@ class ReMailPickupTests(unittest.TestCase):
             calls.append(proxy)
             raise error
 
-        with patch.object(mailbox_remail, "_remail_cfg", return_value={
-            "preflight_enabled": False,
-            "transport_retry_attempts": 3,
-        }), patch.object(mailbox_remail, "_remail_proxy_tracker", return_value=None), \
-             patch.object(mailbox_remail, "_pickup_remail_messages", side_effect=pickup), \
-             patch.object(mailbox_remail.time, "sleep", return_value=None):
+        with (
+            patch.object(
+                mailbox_remail,
+                "_remail_cfg",
+                return_value={
+                    "preflight_enabled": False,
+                    "transport_retry_attempts": 3,
+                },
+            ),
+            patch.object(mailbox_remail, "_remail_proxy_tracker", return_value=None),
+            patch.object(mailbox_remail, "_pickup_remail_messages", side_effect=pickup),
+            patch.object(mailbox_remail.time, "sleep", return_value=None),
+        ):
             with self.assertRaises(mailbox_remail.ReMailTransportError) as caught:
                 mailbox_remail._poll_remail_otp(
                     self.account,
@@ -574,26 +634,37 @@ class ReMailPickupTests(unittest.TestCase):
 
         self.assertEqual(caught.exception.code, "mailbox_transport_unavailable")
         self.assertEqual(len(calls), 3)
-        self.assertEqual(calls, [
-            "http://proxy-a.example:8080",
-            "http://proxy-b.example:8080",
-            "http://proxy-a.example:8080",
-        ])
+        self.assertEqual(
+            calls,
+            [
+                "http://proxy-a.example:8080",
+                "http://proxy-b.example:8080",
+                "http://proxy-a.example:8080",
+            ],
+        )
 
     def test_expired_code_order_reports_that_api_key_cannot_read_old_inbox(self):
         expired_order = order_payload()
-        expired_order.update({
-            "deliveryEmail": self.account.email,
-            "serviceToken": "",
-            "status": "completed",
-            "receiveUntil": "2026-07-22T18:08:59Z",
-        })
+        expired_order.update(
+            {
+                "deliveryEmail": self.account.email,
+                "serviceToken": "",
+                "status": "completed",
+                "receiveUntil": "2026-07-22T18:08:59Z",
+            }
+        )
         cfg = {"api_key": "rk-secret-key", "base_url": "https://remail.example"}
-        with patch.object(mailbox_remail, "_remail_cfg", return_value=cfg), \
-             patch.object(mailbox_remail.http_requests, "get", side_effect=[
-                 FakeResponse({"message": "Credential is invalid or expired."}, 401),
-                 FakeResponse(expired_order),
-             ]):
+        with (
+            patch.object(mailbox_remail, "_remail_cfg", return_value=cfg),
+            patch.object(
+                mailbox_remail.http_requests,
+                "get",
+                side_effect=[
+                    FakeResponse({"message": "Credential is invalid or expired."}, 401),
+                    FakeResponse(expired_order),
+                ],
+            ),
+        ):
             with self.assertRaisesRegex(RuntimeError, "2026-07-22T18:08:59Z") as caught:
                 mailbox_remail._fetch_remail_messages(self.account)
 
@@ -615,16 +686,18 @@ class ReMailPickupTests(unittest.TestCase):
             inbox_limit=20,
             proxy=None,
         )
-        messages = [{
-            "id": "12",
-            "receivedDateTime": "2026-07-21T08:00:00Z",
-            "from": "noreply@tm.openai.com",
-            "toRecipients": [{"emailAddress": {"address": "alias@example.com"}}],
-            "subject": "Your login code",
-            "bodyPreview": "Your code is 654321",
-            "body": {"content": "Full ReMail message body"},
-            "verificationCode": "654321",
-        }]
+        messages = [
+            {
+                "id": "12",
+                "receivedDateTime": "2026-07-21T08:00:00Z",
+                "from": "noreply@tm.openai.com",
+                "toRecipients": [{"emailAddress": {"address": "alias@example.com"}}],
+                "subject": "Your login code",
+                "bodyPreview": "Your code is 654321",
+                "body": {"content": "Full ReMail message body"},
+                "verificationCode": "654321",
+            }
+        ]
         output = io.StringIO()
         with patch("sms_tool.mailbox._fetch_mailbox_messages", return_value=messages) as fetch, redirect_stdout(output):
             cli._view_inbox(args)
@@ -669,10 +742,12 @@ class ReMailPickupTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             session_path = Path(tmp) / "session.json"
             session_path.write_text(json.dumps(data), encoding="utf-8")
-            with patch("sms_tool.session_refresh._load_seed_session", return_value=(data, str(session_path))), \
-                 patch("sms_tool.mailbox._fetch_mailbox_messages", side_effect=fetch), \
-                 patch.object(cli, "upsert_account", return_value=True) as upsert, \
-                 redirect_stdout(io.StringIO()):
+            with (
+                patch("sms_tool.session_refresh._load_seed_session", return_value=(data, str(session_path))),
+                patch("sms_tool.mailbox._fetch_mailbox_messages", side_effect=fetch),
+                patch.object(cli, "upsert_account", return_value=True) as upsert,
+                redirect_stdout(io.StringIO()),
+            ):
                 cli._view_inbox(args)
 
             saved = json.loads(session_path.read_text(encoding="utf-8"))
@@ -688,8 +763,10 @@ class ReMailRouterTests(unittest.TestCase):
             self.assertEqual(mailbox_router._load_mailbox_pool(args), [expected])
             create.assert_called_once_with(args, service_mode="purchase")
 
-        with patch.object(mailbox_router, "_remail_enabled", return_value=True), \
-             patch.object(mailbox_router.mailbox_remail, "_create_remail_order", return_value=expected) as create:
+        with (
+            patch.object(mailbox_router, "_remail_enabled", return_value=True),
+            patch.object(mailbox_router.mailbox_remail, "_create_remail_order", return_value=expected) as create,
+        ):
             self.assertIs(mailbox_router._ensure_mailbox_account(), expected)
             create.assert_called_once_with(service_mode="code")
 
@@ -706,8 +783,10 @@ class ReMailRouterTests(unittest.TestCase):
 
     def test_direct_service_token_requires_email_and_uses_remail_provider(self):
         cfg = {"service_token": "st-config", "delivery_email": "saved@example.com", "order_no": "R9"}
-        with patch.object(mailbox_router.mailbox_remail, "_remail_cfg", return_value=cfg), \
-             patch.object(mailbox_router, "_gmail_mailbox_from_config", return_value=None):
+        with (
+            patch.object(mailbox_router.mailbox_remail, "_remail_cfg", return_value=cfg),
+            patch.object(mailbox_router, "_gmail_mailbox_from_config", return_value=None),
+        ):
             account = mailbox_router._mailbox_from_config(argparse.Namespace(remail_token=None, email=None))
         self.assertEqual(account.provider, "remail")
         self.assertEqual(account.email, "saved@example.com")
@@ -715,9 +794,11 @@ class ReMailRouterTests(unittest.TestCase):
 
     def test_service_token_can_be_passed_without_process_arguments(self):
         args = argparse.Namespace(remail_token=None, email="saved@example.com")
-        with patch.dict("os.environ", {"REMAIL_SERVICE_TOKEN": "st-environment"}), \
-             patch.object(mailbox_router.mailbox_remail, "_remail_cfg", return_value={}), \
-             patch.object(mailbox_router, "_gmail_mailbox_from_config", return_value=None):
+        with (
+            patch.dict("os.environ", {"REMAIL_SERVICE_TOKEN": "st-environment"}),
+            patch.object(mailbox_router.mailbox_remail, "_remail_cfg", return_value={}),
+            patch.object(mailbox_router, "_gmail_mailbox_from_config", return_value=None),
+        ):
             account = mailbox_router._mailbox_from_config(args)
 
         self.assertEqual(account.provider, "remail")

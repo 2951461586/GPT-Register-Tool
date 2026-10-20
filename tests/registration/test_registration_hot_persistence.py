@@ -144,9 +144,7 @@ def test_hot_persistence_is_visible_in_sqlite_and_finalization_is_idempotent(tmp
             pipeline_timing={"total_seconds": 0.1},
         )
         if result["email"] == "quick@example.com":
-            callback_db_visible.append(
-                storage.get_account_record("quick@example.com", runtime_config=cfg)
-            )
+            callback_db_visible.append(storage.get_account_record("quick@example.com", runtime_config=cfg))
             assert list(tmp_path.glob("session_quick@example.com_*.json"))
             release_slow.set()
 

@@ -85,7 +85,6 @@ class HumanFormatter(logging.Formatter):
         return f"{stamp} {marker} [{name}] {message}"
 
 
-
 class ResilientRotatingFileHandler(RotatingFileHandler):
     """A rotating handler that never lets a failed rotation drop a record.
 
@@ -163,9 +162,7 @@ def make_file_logger(
     logger = logging.Logger(name, level)
     logger.propagate = False
 
-    handler = ResilientRotatingFileHandler(
-        path, maxBytes=max_bytes, backupCount=backups, encoding="utf-8", delay=True
-    )
+    handler = ResilientRotatingFileHandler(path, maxBytes=max_bytes, backupCount=backups, encoding="utf-8", delay=True)
     if redact is not None:
         _redact = redact
 

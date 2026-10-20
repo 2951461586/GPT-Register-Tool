@@ -59,12 +59,33 @@ def normalize_stage_event(payload):
         "account_terminal": account_terminal,
         "batch_terminal": batch_terminal,
         "total": int(source.get("total") or 0),
-        **{key: value for key, value in source.items() if key not in {
-            "domain", "run_id", "operation_id", "batch_id", "account_ref", "method",
-            "operation", "stage", "status", "state", "detail", "message", "attempt",
-            "max_attempts", "country", "duration_ms", "last_failed_stage",
-            "account_terminal", "batch_terminal", "total",
-        }},
+        **{
+            key: value
+            for key, value in source.items()
+            if key
+            not in {
+                "domain",
+                "run_id",
+                "operation_id",
+                "batch_id",
+                "account_ref",
+                "method",
+                "operation",
+                "stage",
+                "status",
+                "state",
+                "detail",
+                "message",
+                "attempt",
+                "max_attempts",
+                "country",
+                "duration_ms",
+                "last_failed_stage",
+                "account_terminal",
+                "batch_terminal",
+                "total",
+            }
+        },
     }
 
 
@@ -84,7 +105,9 @@ def _envelope(message_type, payload):
         "run_id": run_id,
         "sequence": sequence,
         "timestamp_ms": int(time.time() * 1000),
-        "terminal": message_type == "result" or str(body.get("status") or body.get("state") or "").lower() in {"completed", "success", "failed", "cancelled", "error"},
+        "terminal": message_type == "result"
+        or str(body.get("status") or body.get("state") or "").lower()
+        in {"completed", "success", "failed", "cancelled", "error"},
         "payload": sanitize(body),
     }
 

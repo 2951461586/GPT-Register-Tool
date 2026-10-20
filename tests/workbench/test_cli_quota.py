@@ -85,12 +85,14 @@ class CliQuotaTests(unittest.TestCase):
             "total": 1,
             "success": 0,
             "failed": 1,
-            "results": [{
-                "email": "user@example.com",
-                "ok": False,
-                "probe": {"ok": False, "status": "account_deactivated", "terminal": True},
-                "persisted": True,
-            }],
+            "results": [
+                {
+                    "email": "user@example.com",
+                    "ok": False,
+                    "probe": {"ok": False, "status": "account_deactivated", "terminal": True},
+                    "persisted": True,
+                }
+            ],
         }
         with (
             patch("sms_tool.accounts.recovery_batch.refresh_local_quota_statuses", return_value=local),
@@ -151,7 +153,9 @@ class ReloginPanelNoteTests(unittest.TestCase):
 
     def test_cooldown_and_concurrency_are_distinguished(self):
         self.assertIn("冷却中", self._note({"ok": False, "mode": "cooldown", "error": "relogin_cooldown"}))
-        self.assertIn("并发槽", self._note({"ok": False, "mode": "concurrency_limited", "error": "relogin_concurrency_limited"}))
+        self.assertIn(
+            "并发槽", self._note({"ok": False, "mode": "concurrency_limited", "error": "relogin_concurrency_limited"})
+        )
 
     def test_generic_failure_includes_the_error(self):
         note = self._note({"ok": False, "mode": "chatgpt_email_otp", "error": "email_otp_timeout"})

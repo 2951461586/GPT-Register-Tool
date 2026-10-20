@@ -44,10 +44,7 @@ AUTH_FINGERPRINT_PROFILES = {
     "firefox144": {
         "name": "firefox144",
         "impersonate": "firefox144",
-        "user_agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; "
-            "rv:144.0) Gecko/20100101 Firefox/144.0"
-        ),
+        "user_agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0"),
         "sec_ch_ua": "",
         "sec_ch_ua_mobile": "?0",
         "sec_ch_ua_platform": '"Windows"',
@@ -55,10 +52,7 @@ AUTH_FINGERPRINT_PROFILES = {
     "firefox147": {
         "name": "firefox147",
         "impersonate": "firefox147",
-        "user_agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; "
-            "rv:147.0) Gecko/20100101 Firefox/147.0"
-        ),
+        "user_agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:147.0) Gecko/20100101 Firefox/147.0"),
         "sec_ch_ua": "",
         "sec_ch_ua_mobile": "?0",
         "sec_ch_ua_platform": '"Windows"',
@@ -66,10 +60,7 @@ AUTH_FINGERPRINT_PROFILES = {
     "firefox135": {
         "name": "firefox135",
         "impersonate": "firefox135",
-        "user_agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; "
-            "rv:135.0) Gecko/20100101 Firefox/135.0"
-        ),
+        "user_agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:135.0) Gecko/20100101 Firefox/135.0"),
         "sec_ch_ua": "",
         "sec_ch_ua_mobile": "?0",
         "sec_ch_ua_platform": '"Windows"',
@@ -77,10 +68,7 @@ AUTH_FINGERPRINT_PROFILES = {
     "firefox133": {
         "name": "firefox133",
         "impersonate": "firefox133",
-        "user_agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; "
-            "rv:133.0) Gecko/20100101 Firefox/133.0"
-        ),
+        "user_agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0"),
         "sec_ch_ua": "",
         "sec_ch_ua_mobile": "?0",
         "sec_ch_ua_platform": '"Windows"',
@@ -316,6 +304,8 @@ def hardware_profile_for_family(impersonate: str) -> dict[str, object]:
     hw = dict(_HARDWARE_PROFILES.get(cls, _HARDWARE_PROFILES["windows"]))
     hw["navigator_vendor"] = _VENDOR_BY_FAMILY.get(_browser_family(impersonate), "")
     return hw
+
+
 _AUTH_FINGERPRINT_LOCAL = threading.local()
 
 # 协议路径地理档案 = geo/profiles.MARKET_PROFILES 的渲染视图（单一事实源，
@@ -373,8 +363,16 @@ def set_fingerprint_geo(
 # within realistic Windows-desktop Chrome ranges (deviceMemory is capped at 8 as
 # Chrome does; touch points stay 0 for a desktop profile).
 _SCREEN_CHOICES = (
-    "1920x1080", "1536x864", "1366x768", "1600x900", "2560x1440",
-    "1440x900", "1680x1050", "1920x1200", "2048x1152", "2560x1080",
+    "1920x1080",
+    "1536x864",
+    "1366x768",
+    "1600x900",
+    "2560x1440",
+    "1440x900",
+    "1680x1050",
+    "1920x1200",
+    "2048x1152",
+    "2560x1080",
 )
 _DPR_CHOICES = (1.0, 1.0, 1.25, 1.5)
 _CPU_CHOICES = (4, 6, 8, 8, 12, 16)
@@ -513,9 +511,7 @@ def select_auth_fingerprint(rotate=False):
         # Avoid repeating the immediately-previous profile for a more even spread,
         # but fall back to the full set if there is only one candidate.
         candidates = [name for name in names if name != previous] or names
-        name = random.SystemRandom().choices(
-            candidates, weights=[weights[n] for n in candidates], k=1
-        )[0]
+        name = random.SystemRandom().choices(candidates, weights=[weights[n] for n in candidates], k=1)[0]
     else:
         name = configured if configured in names else names[0]
     _AUTH_FINGERPRINT_LOCAL.profile_name = name
@@ -679,8 +675,7 @@ def sentinel_fingerprint() -> dict[str, object]:
         "performance_now": device["performance_now"],
         # Sec-CH-UA-* client hints are Chromium-only; Firefox emits none of them.
         "sec_ch_ua_full_version_list": (
-            f'"Chromium";v="{version}", "Google Chrome";v="{version}", "Not.A/Brand";v="99"'
-            if is_chrome else ""
+            f'"Chromium";v="{version}", "Google Chrome";v="{version}", "Not.A/Brand";v="99"' if is_chrome else ""
         ),
         "sec_ch_ua_arch": "x86" if is_chrome else "",
         "sec_ch_ua_bitness": "64" if is_chrome else "",
@@ -756,16 +751,18 @@ def openai_auth_headers(
     # Sec-CH-UA-* client hints are Chromium-only. Firefox emits none, so only
     # attach them when the active fingerprint is Chrome-family.
     if browser_family == "chrome":
-        headers.update({
-            "sec-ch-ua": fingerprint["sec_ch_ua"],
-            "sec-ch-ua-mobile": fingerprint["sec_ch_ua_mobile"],
-            "sec-ch-ua-platform": fingerprint["sec_ch_ua_platform"],
-            "sec-ch-ua-full-version-list": str(environment["sec_ch_ua_full_version_list"]),
-            "sec-ch-ua-arch": str(environment["sec_ch_ua_arch"]),
-            "sec-ch-ua-bitness": str(environment["sec_ch_ua_bitness"]),
-            "sec-ch-ua-model": str(environment["sec_ch_ua_model"]),
-            "sec-ch-ua-platform-version": str(environment["sec_ch_ua_platform_version"]),
-        })
+        headers.update(
+            {
+                "sec-ch-ua": fingerprint["sec_ch_ua"],
+                "sec-ch-ua-mobile": fingerprint["sec_ch_ua_mobile"],
+                "sec-ch-ua-platform": fingerprint["sec_ch_ua_platform"],
+                "sec-ch-ua-full-version-list": str(environment["sec_ch_ua_full_version_list"]),
+                "sec-ch-ua-arch": str(environment["sec_ch_ua_arch"]),
+                "sec-ch-ua-bitness": str(environment["sec_ch_ua_bitness"]),
+                "sec-ch-ua-model": str(environment["sec_ch_ua_model"]),
+                "sec-ch-ua-platform-version": str(environment["sec_ch_ua_platform_version"]),
+            }
+        )
     if referer:
         headers["Referer"] = str(referer)
     resolved_origin = str(origin or "").strip() or origin_from_referer(referer)
@@ -798,23 +795,33 @@ def openai_auth_headers(
         headers.update({str(k): str(v) for k, v in extra.items() if v is not None})
     if str(family or "").strip().lower() == "nextauth":
         for key in (
-            "sec-ch-ua-full-version-list", "sec-ch-ua-arch", "sec-ch-ua-bitness",
-            "sec-ch-ua-model", "sec-ch-ua-platform-version", "traceparent", "tracestate",
-            "x-datadog-origin", "x-datadog-parent-id", "x-datadog-sampling-priority",
-            "x-datadog-trace-id", "openai-sentinel-token", "openai-sentinel-so-token",
+            "sec-ch-ua-full-version-list",
+            "sec-ch-ua-arch",
+            "sec-ch-ua-bitness",
+            "sec-ch-ua-model",
+            "sec-ch-ua-platform-version",
+            "traceparent",
+            "tracestate",
+            "x-datadog-origin",
+            "x-datadog-parent-id",
+            "x-datadog-sampling-priority",
+            "x-datadog-trace-id",
+            "openai-sentinel-token",
+            "openai-sentinel-so-token",
         ):
             headers.pop(key, None)
     elif str(family or "").strip().lower() == "chatgpt":
-        headers.update({
-            "oai-client-build-number": CHATGPT_CLIENT_BUILD_NUMBER,
-            "oai-client-version": CHATGPT_CLIENT_VERSION,
-        })
+        headers.update(
+            {
+                "oai-client-build-number": CHATGPT_CLIENT_BUILD_NUMBER,
+                "oai-client-version": CHATGPT_CLIENT_VERSION,
+            }
+        )
     return headers
 
 
 def nextauth_headers(did: str = "", **kwargs) -> dict[str, str]:
     return openai_auth_headers(did, family="nextauth", include_trace=False, **kwargs)
-
 
 
 def chatgpt_headers(did: str = "", **kwargs) -> dict[str, str]:

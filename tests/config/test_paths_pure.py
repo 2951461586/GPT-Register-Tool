@@ -36,8 +36,7 @@ class ProjectRootTest(unittest.TestCase):
 
     def test_it_is_the_repository_root(self):
         # ``paths`` lives in ``sms_tool/kernel/`` since the kernel split.
-        self.assertEqual(paths.PROJECT_ROOT,
-                         Path(paths.__file__).resolve().parents[2])
+        self.assertEqual(paths.PROJECT_ROOT, Path(paths.__file__).resolve().parents[2])
 
     def test_it_is_absolute_and_free_of_dot_components(self):
         self.assertTrue(paths.PROJECT_ROOT.is_absolute())
@@ -69,8 +68,7 @@ class ProjectPathTest(unittest.TestCase):
 
     def test_the_default_is_used_and_is_also_root_relative(self):
         os.chdir(self.tmp_path)
-        self.assertEqual(paths.project_path(None, "runtime"),
-                         paths.PROJECT_ROOT / "runtime")
+        self.assertEqual(paths.project_path(None, "runtime"), paths.PROJECT_ROOT / "runtime")
 
     def test_the_built_in_default_is_the_project_itself(self):
         """``default="."`` → 解析成 ``PROJECT_ROOT / "."``，点和点都在。"""
@@ -79,23 +77,19 @@ class ProjectPathTest(unittest.TestCase):
     def test_a_falsy_value_falls_back_to_the_default(self):
         """``str(value or default)`` 里的 ``or`` **是有语义的**（和"假值归一化纯装饰"
         那类不同）：去掉它，``0`` 会变成 ``PROJECT_ROOT / "0"``。"""
-        for label, value in {"none": None, "empty": "", "zero": 0,
-                             "false": False, "empty list": []}.items():
+        for label, value in {"none": None, "empty": "", "zero": 0, "false": False, "empty list": []}.items():
             with self.subTest(label=label):
-                self.assertEqual(paths.project_path(value, "runtime"),
-                                 paths.PROJECT_ROOT / "runtime")
+                self.assertEqual(paths.project_path(value, "runtime"), paths.PROJECT_ROOT / "runtime")
 
     def test_a_blank_value_falls_back_to_the_default_after_stripping(self):
         """第二层防御：``.strip()`` 之后再用一次 ``or default``。
         ``"   "`` 是真值，第一层 ``or`` 拦不住，只有第二层拦得住。"""
         for value in ("   ", "\t\n ", "  \r\n  "):
             with self.subTest(value=repr(value)):
-                self.assertEqual(paths.project_path(value, "runtime"),
-                                 paths.PROJECT_ROOT / "runtime")
+                self.assertEqual(paths.project_path(value, "runtime"), paths.PROJECT_ROOT / "runtime")
 
     def test_surrounding_whitespace_is_stripped(self):
-        self.assertEqual(paths.project_path("  sessions  "),
-                         paths.PROJECT_ROOT / "sessions")
+        self.assertEqual(paths.project_path("  sessions  "), paths.PROJECT_ROOT / "sessions")
 
     def test_a_user_home_prefix_is_expanded(self):
         self.assertEqual(paths.project_path("~/sessions"), Path.home() / "sessions")
@@ -112,10 +106,8 @@ class ProjectPathTest(unittest.TestCase):
     def test_dot_and_dotdot_components_are_preserved_not_resolved(self):
         """⚠️ 没有 ``.resolve()`` —— 结果是拼接出来的，不是规整过的。
         钉住它：谁加 ``.resolve()`` 谁改变返回值（且会去碰真实文件系统）。"""
-        self.assertEqual(paths.project_path("a/../b"),
-                         paths.PROJECT_ROOT / "a" / ".." / "b")
-        self.assertNotEqual(paths.project_path("a/../b"),
-                            paths.PROJECT_ROOT / "b")
+        self.assertEqual(paths.project_path("a/../b"), paths.PROJECT_ROOT / "a" / ".." / "b")
+        self.assertNotEqual(paths.project_path("a/../b"), paths.PROJECT_ROOT / "b")
 
     def test_the_result_is_always_a_path(self):
         for value in (None, "", "x", 0, Path("y")):
@@ -133,13 +125,11 @@ class ConfigDirectoryTest(unittest.TestCase):
 
     def test_runtime_reads_the_runtime_bucket(self):
         target = self.tmp_path / "rt"
-        self.assertEqual(bound_runtime_dir({"runtime": {"directory": str(target)}}),
-                         target)
+        self.assertEqual(bound_runtime_dir({"runtime": {"directory": str(target)}}), target)
 
     def test_output_reads_the_output_bucket(self):
         target = self.tmp_path / "out"
-        self.assertEqual(paths.output_dir({"output": {"directory": str(target)}}),
-                         target)
+        self.assertEqual(paths.output_dir({"output": {"directory": str(target)}}), target)
 
     def test_the_two_buckets_do_not_cross_read(self):
         out, rt = self.tmp_path / "out", self.tmp_path / "rt"
@@ -169,20 +159,16 @@ class ConfigDirectoryTest(unittest.TestCase):
 
     def test_a_none_bucket_falls_back_to_the_default(self):
         """``or {}`` 这一层：桶可以是 JSON 里的显式 ``null``。"""
-        self.assertEqual(bound_runtime_dir({"runtime": None}),
-                         paths.PROJECT_ROOT / "runtime")
-        self.assertEqual(paths.output_dir({"output": None}),
-                         paths.PROJECT_ROOT / "sessions")
+        self.assertEqual(bound_runtime_dir({"runtime": None}), paths.PROJECT_ROOT / "runtime")
+        self.assertEqual(paths.output_dir({"output": None}), paths.PROJECT_ROOT / "sessions")
 
     def test_a_missing_directory_key_falls_back_to_the_default(self):
-        self.assertEqual(bound_runtime_dir({"runtime": {}}),
-                         paths.PROJECT_ROOT / "runtime")
+        self.assertEqual(bound_runtime_dir({"runtime": {}}), paths.PROJECT_ROOT / "runtime")
 
     def test_a_null_or_blank_directory_falls_back_to_the_default(self):
         for value in (None, "", "   "):
             with self.subTest(value=repr(value)):
-                self.assertEqual(bound_runtime_dir({"runtime": {"directory": value}}),
-                                 paths.PROJECT_ROOT / "runtime")
+                self.assertEqual(bound_runtime_dir({"runtime": {"directory": value}}), paths.PROJECT_ROOT / "runtime")
 
     def test_a_non_dict_bucket_raises(self):
         """``(cfg.get("runtime") or {}).get(...)`` —— ``or {}`` 只挡假值，
@@ -211,8 +197,7 @@ class RuntimeFileTest(unittest.TestCase):
 
     def test_it_returns_directory_over_filename(self):
         cfg = {"runtime": {"directory": str(self.tmp_path / "rt")}}
-        self.assertEqual(bound_runtime_file(cfg, "x.json"),
-                         self.tmp_path / "rt" / "x.json")
+        self.assertEqual(bound_runtime_file(cfg, "x.json"), self.tmp_path / "rt" / "x.json")
 
     def test_it_creates_the_directory_as_a_side_effect(self):
         """⚠️ 这个函数**会建目录**，不只是拼路径。调用它就有磁盘副作用。"""
@@ -231,8 +216,7 @@ class RuntimeFileTest(unittest.TestCase):
         cfg = {"runtime": {"directory": str(self.tmp_path / "rt")}}
         bound_runtime_file(cfg, "a.json")
         bound_runtime_file(cfg, "b.json")
-        self.assertEqual(sorted(p.name for p in (self.tmp_path / "rt").iterdir()),
-                         [])
+        self.assertEqual(sorted(p.name for p in (self.tmp_path / "rt").iterdir()), [])
 
     def test_it_does_not_create_the_file_itself(self):
         cfg = {"runtime": {"directory": str(self.tmp_path / "rt")}}

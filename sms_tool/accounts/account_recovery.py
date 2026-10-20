@@ -44,7 +44,9 @@ from ..utils import atomic_write_text
 logger = logging.getLogger(__name__)
 
 
-def relogin_web_session_account(account: dict[str, Any], proxy: str | None = None, timeout: int = 180) -> dict[str, Any]:
+def relogin_web_session_account(
+    account: dict[str, Any], proxy: str | None = None, timeout: int = 180
+) -> dict[str, Any]:
     """Refresh a web access token from an existing ChatGPT session cookie."""
     if not isinstance(account, dict):
         return {"ok": False, "mode": "web_session", "error": "invalid_account"}
@@ -56,14 +58,17 @@ def relogin_web_session_account(account: dict[str, Any], proxy: str | None = Non
 
         data = dict(account)
         data["email"] = email
-        result = dict(_refresh_session_protocol(
-            data,
-            str(account.get("json_path") or ""),
-            email,
-            max(30, int(timeout or 180)),
-            proxy=proxy,
-            persist=False,
-        ) or {})
+        result = dict(
+            _refresh_session_protocol(
+                data,
+                str(account.get("json_path") or ""),
+                email,
+                max(30, int(timeout or 180)),
+                proxy=proxy,
+                persist=False,
+            )
+            or {}
+        )
         if not result.get("ok"):
             safe = _safe_relogin_result(result)
             safe.update({"ok": False, "mode": "web_session"})
@@ -224,14 +229,16 @@ def relogin_chatgpt_email_account(
             return {"ok": False, "mode": "chatgpt_email_otp", "error": "auth_session_email_mismatch"}
 
         candidate = dict(account)
-        candidate.update({
-            "email": email,
-            "device_id": device_id,
-            "access_token": access_token,
-            "auth_session": auth_session,
-            "cookie_header": str(auth_result.get("cookie_header") or ""),
-            "refresh_token_status": "no_rt",
-        })
+        candidate.update(
+            {
+                "email": email,
+                "device_id": device_id,
+                "access_token": access_token,
+                "auth_session": auth_session,
+                "cookie_header": str(auth_result.get("cookie_header") or ""),
+                "refresh_token_status": "no_rt",
+            }
+        )
         return _verify_and_persist_candidate(
             account,
             candidate,
@@ -317,12 +324,14 @@ def relogin_codex_account(
     skip_strategies: set[str] = set()
     for strategy, handler, strategy_timeout in strategies:
         if strategy in skip_strategies:
-            attempts.append({
-                "ok": False,
-                "mode": strategy,
-                "error": "skipped_same_mailbox_otp_poll_timeout",
-                "skipped": True,
-            })
+            attempts.append(
+                {
+                    "ok": False,
+                    "mode": strategy,
+                    "error": "skipped_same_mailbox_otp_poll_timeout",
+                    "skipped": True,
+                }
+            )
             continue
         candidates = proxy_candidates if strategy in retry_across_proxies else [recovery_proxy]
         result: dict[str, Any] = {}
@@ -438,12 +447,14 @@ def relogin_local_codex_account(
         probe = probe_account_liveness(candidate, proxy=proxy, timeout=min(max(10, int(timeout or 30)), 60))
         if int(probe.get("status_code") or 0) != 200:
             safe = _safe_relogin_result(result)
-            safe.update({
-                "ok": False,
-                "error": f"oauth_access_token_probe_failed:{probe.get('status_code') or 'unknown'}",
-                "probe": probe,
-                "persisted": False,
-            })
+            safe.update(
+                {
+                    "ok": False,
+                    "error": f"oauth_access_token_probe_failed:{probe.get('status_code') or 'unknown'}",
+                    "probe": probe,
+                    "persisted": False,
+                }
+            )
             return safe
 
         _mark_successful_relogin(data, probe)
@@ -539,9 +550,7 @@ def relogin_browser_session_account(
             # Wait for Cloudflare challenge to clear automatically
             browser_flow.page_state._wait_for_challenge_clear(page, max_wait_seconds=30)
             # Extract session info
-            session_info = browser_flow.session._session_payload(
-                browser, chat_base, email, timeout_seconds=timeout
-            )
+            session_info = browser_flow.session._session_payload(browser, chat_base, email, timeout_seconds=timeout)
             auth_body = session_info.get("body") or {}
             access_token = str(session_info.get("access_token") or "").strip()
             if not access_token:
@@ -551,13 +560,15 @@ def relogin_browser_session_account(
                     "error": "browser_session_no_access_token",
                 }
             candidate = dict(account)
-            candidate.update({
-                "email": email,
-                "device_id": device_id,
-                "access_token": access_token,
-                "auth_session": auth_body,
-                "cookie_header": str(browser.cookie_header() or ""),
-            })
+            candidate.update(
+                {
+                    "email": email,
+                    "device_id": device_id,
+                    "access_token": access_token,
+                    "auth_session": auth_body,
+                    "cookie_header": str(browser.cookie_header() or ""),
+                }
+            )
             return _verify_and_persist_candidate(
                 account,
                 candidate,
@@ -673,14 +684,17 @@ def _mark_successful_relogin(data: dict[str, Any], probe: dict[str, Any], *, now
     }:
         data["status"] = "registered"
     error = str(data.get("error") or "").strip().lower()
-    if any(marker in error for marker in (
-        "401",
-        "unauthorized",
-        "token_invalid",
-        "token_expired",
-        "could not validate your token",
-        "oauth_refresh_http_401",
-    )):
+    if any(
+        marker in error
+        for marker in (
+            "401",
+            "unauthorized",
+            "token_invalid",
+            "token_expired",
+            "could not validate your token",
+            "oauth_refresh_http_401",
+        )
+    ):
         data.pop("error", None)
     # A previous promotion probe can persist an auth-failure marker. A verified
     # replacement AT makes that marker stale; keep its detailed result for
@@ -702,11 +716,13 @@ def _mark_successful_relogin(data: dict[str, Any], probe: dict[str, Any], *, now
         data["promotion"] = promotion
     _scan_raw: object = data.get("account_scan")
     account_scan: dict[str, Any] = _scan_raw if isinstance(_scan_raw, dict) else {}
-    account_scan.update({
-        "ok": True,
-        "scan_status": "alive",
-        "token_probe": _safe_relogin_result(probe),
-    })
+    account_scan.update(
+        {
+            "ok": True,
+            "scan_status": "alive",
+            "token_probe": _safe_relogin_result(probe),
+        }
+    )
     data["account_scan"] = account_scan
     data["account_scan_status"] = "alive"
     data["account_scan_updated_at"] = timestamp
@@ -757,12 +773,14 @@ def _select_recovery_proxy(account: dict[str, Any], proxy: str | None) -> tuple[
         selected, attempts = select_proxy_from_pool(candidates, country, "account_recovery")
         return (selected or proxy or str(candidates[0])), attempts
     except Exception as exc:
-        return proxy or str(candidates[0]), [{
-            "ok": False,
-            "stage": "account_recovery",
-            "expected_country": country,
-            "error": _redact_recovery_error(exc)[:200],
-        }]
+        return proxy or str(candidates[0]), [
+            {
+                "ok": False,
+                "stage": "account_recovery",
+                "expected_country": country,
+                "error": _redact_recovery_error(exc)[:200],
+            }
+        ]
 
 
 def _recovery_proxy_candidates(affinity_proxy: str | None, selected_proxy: str | None) -> list[str | None]:
@@ -836,9 +854,7 @@ def _local_quota_accounts(emails: list[str] | None) -> list[dict[str, Any]]:
     requested = [_normalize_email(email) for email in (emails or []) if _normalize_email(email)]
     if not requested:
         requested = [
-            _normalize_email(row.get("email"))
-            for row in list_paypal_accounts()
-            if _normalize_email(row.get("email"))
+            _normalize_email(row.get("email")) for row in list_paypal_accounts() if _normalize_email(row.get("email"))
         ]
     accounts = []
     seen = set()
@@ -924,16 +940,18 @@ def _persist_token_revoked_drop(account: dict[str, Any]) -> bool:
     if not email:
         return False
     now = int(time.time())
-    data.update({
-        "email": email,
-        "status": "at_invalid",
-        "error": "token_revoked_unrecoverable",
-        "terminal_failure": {
-            "code": "token_revoked",
-            "reason": "token_invalid_no_relogin_material",
-            "updated_at": now,
-        },
-    })
+    data.update(
+        {
+            "email": email,
+            "status": "at_invalid",
+            "error": "token_revoked_unrecoverable",
+            "terminal_failure": {
+                "code": "token_revoked",
+                "reason": "token_invalid_no_relogin_material",
+                "updated_at": now,
+            },
+        }
+    )
     json_path = str(data.get("json_path") or account.get("json_path") or "").strip()
     if json_path:
         try:
@@ -950,18 +968,20 @@ def _persist_permanent_deactivation(account: dict[str, Any], result: dict[str, A
     if not email:
         return False
     now = int(time.time())
-    data.update({
-        "email": email,
-        "success": False,
-        "status": "account_deactivated",
-        "error": "account_deactivated",
-        "account_scan_status": "account_deactivated",
-        "terminal_failure": {
-            "code": "account_deactivated",
-            "reason": "account_deactivated",
-            "updated_at": now,
-        },
-    })
+    data.update(
+        {
+            "email": email,
+            "success": False,
+            "status": "account_deactivated",
+            "error": "account_deactivated",
+            "account_scan_status": "account_deactivated",
+            "terminal_failure": {
+                "code": "account_deactivated",
+                "reason": "account_deactivated",
+                "updated_at": now,
+            },
+        }
+    )
     json_path = str(data.get("json_path") or account.get("json_path") or "").strip()
     if json_path:
         try:
@@ -973,8 +993,17 @@ def _persist_permanent_deactivation(account: dict[str, Any], result: dict[str, A
 
 def _safe_relogin_result(result: dict[str, Any] | None) -> dict[str, Any]:
     blocked = {
-        "tokens", "access_token", "id_token", "refresh_token", "oauth_refresh_token",
-        "data", "auth_session", "cookie_header", "password", "mailbox", "raw_json",
+        "tokens",
+        "access_token",
+        "id_token",
+        "refresh_token",
+        "oauth_refresh_token",
+        "data",
+        "auth_session",
+        "cookie_header",
+        "password",
+        "mailbox",
+        "raw_json",
     }
     safe: dict[str, Any] = {}
     for key, value in dict(result or {}).items():
@@ -1068,7 +1097,9 @@ def _relogin_cooldown_active(account: dict[str, Any]) -> bool:
     # written inside the current cooldown window. Never turn an old historical
     # failure into a permanent skip.
     if updated_at and time.time() - updated_at < _relogin_cooldown_seconds():
-        if status in {"relogin_cooldown", "relogin_otp_failed"} or ("otp" in status and any(marker in status for marker in ("fail", "失", "ʧ"))):
+        if status in {"relogin_cooldown", "relogin_otp_failed"} or (
+            "otp" in status and any(marker in status for marker in ("fail", "失", "ʧ"))
+        ):
             return True
     try:
         data = json.loads(_relogin_guard_path().read_text(encoding="utf-8"))

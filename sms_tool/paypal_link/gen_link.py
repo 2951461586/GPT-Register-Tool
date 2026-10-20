@@ -1299,9 +1299,7 @@ def generate_hosted_long_url(
         emit("stripe_init", f"Stage 2: proxy={redact_proxy_url(stripe_init_proxy)} for Stripe init")
         stripe = _plm._new_session(stripe_init_proxy)
         init_body = contract.stripe_init_payload(stripe_pk, stripe_version=STRIPE_VERSION)
-        init_resp = stripe.post(
-            endpoints.stripe_payment_page(cs_id, "init"), data=init_body, timeout=DEFAULT_TIMEOUT
-        )
+        init_resp = stripe.post(endpoints.stripe_payment_page(cs_id, "init"), data=init_body, timeout=DEFAULT_TIMEOUT)
         if init_resp.status_code >= 400:
             return {
                 "ok": False,

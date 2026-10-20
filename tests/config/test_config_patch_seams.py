@@ -20,6 +20,7 @@ flaky for a full day before it was traced.
 The seam that works is ``sms_tool.pay_link.base.current_config_data`` (the one
 ``_config_data()`` resolves).  See ``tests/payment/test_payment_result_contract.py``.
 """
+
 from __future__ import annotations
 
 import ast
@@ -110,8 +111,7 @@ def test_no_test_patches_an_inert_config_seam():
 
     assert not offenders, (
         "these patch targets do not reach the code under test; the pay_link "
-        "subpackage binds its own current_config_data: \n  "
-        + "\n  ".join(offenders)
+        "subpackage binds its own current_config_data: \n  " + "\n  ".join(offenders)
     )
 
 

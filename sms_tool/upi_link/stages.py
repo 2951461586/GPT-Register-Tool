@@ -109,13 +109,25 @@ def _stage_pre_exit(ops: UpiOperations, state: UpiStageContext) -> Any:
         _exit_attempts = ops._upi_india_exit_attempts(state.upi_cfg)
         _exit_timeout = ops._upi_india_exit_timeout(state.upi_cfg)
         state._rc.checkout_proxy = ops._upi_select_india_exit(
-            state._rc.checkout_proxy, country=state.checkout_country, attempts=_exit_attempts, timeout=_exit_timeout, emit=state.emit
+            state._rc.checkout_proxy,
+            country=state.checkout_country,
+            attempts=_exit_attempts,
+            timeout=_exit_timeout,
+            emit=state.emit,
         )
         state._rc.provider_proxy = ops._upi_select_india_exit(
-            state._rc.provider_proxy, country=state.checkout_country, attempts=_exit_attempts, timeout=_exit_timeout, emit=state.emit
+            state._rc.provider_proxy,
+            country=state.checkout_country,
+            attempts=_exit_attempts,
+            timeout=_exit_timeout,
+            emit=state.emit,
         )
         state._rc.approve_proxy = ops._upi_select_india_exit(
-            state._rc.approve_proxy, country=state.checkout_country, attempts=_exit_attempts, timeout=_exit_timeout, emit=state.emit
+            state._rc.approve_proxy,
+            country=state.checkout_country,
+            attempts=_exit_attempts,
+            timeout=_exit_timeout,
+            emit=state.emit,
         )
         state.checkout_proxy = str(state._rc.checkout_proxy or "")
         state.provider_proxy = str(state._rc.provider_proxy or "")
@@ -137,7 +149,9 @@ def _stage_checkout(ops: UpiOperations, state: UpiStageContext) -> Any:
         "checkout",
         f"Stage 1: using {ops.redact_proxy_text(state.checkout_proxy or 'DIRECT', state.checkout_proxy)} for UPI checkout (ui_mode={state.checkout_ui_mode})",
     )
-    state.cs = ops._upi_new_chatgpt_session(state.checkout_proxy, state.fingerprint, state.device_id, state.session_token)
+    state.cs = ops._upi_new_chatgpt_session(
+        state.checkout_proxy, state.fingerprint, state.device_id, state.session_token
+    )
     state.cs.headers.update(
         {
             "Authorization": f"Bearer {state.access_token}",
@@ -221,7 +235,11 @@ def _stage_checkout(ops: UpiOperations, state: UpiStageContext) -> Any:
         # the deferred-intent rail sees the authoritative method list.
         state.checkout_ui_mode = "deferred"
         state._oaics_state = ops._upi_fetch_oaics_state(
-            state.cs, state.access_token, cs_id=state.cs_id, processor_entity=state.processor_entity, proxy=state.checkout_proxy
+            state.cs,
+            state.access_token,
+            cs_id=state.cs_id,
+            processor_entity=state.processor_entity,
+            proxy=state.checkout_proxy,
         )
         state.emit(
             "oaics",
@@ -250,7 +268,11 @@ def _stage_stripe_init(ops: UpiOperations, state: UpiStageContext) -> Any:
         customer_session_secret = str(
             state.checkout_data.get("customer_session_client_secret")
             or state.checkout_data.get("customer_session_secret")
-            or (state._oaics_state.get("customer_session_client_secret") if isinstance(state._oaics_state, Mapping) else "")
+            or (
+                state._oaics_state.get("customer_session_client_secret")
+                if isinstance(state._oaics_state, Mapping)
+                else ""
+            )
             or (state._oaics_state.get("customer_session_secret") if isinstance(state._oaics_state, Mapping) else "")
             or ""
         )
@@ -279,7 +301,9 @@ def _stage_stripe_init(ops: UpiOperations, state: UpiStageContext) -> Any:
                 "cs_id": state.cs_id,
             }
     else:
-        state.init = ops._upi_stripe_init(state.stripe, state.cs_id, state.stripe_pk, state.fingerprint, state.stripe_js_id)
+        state.init = ops._upi_stripe_init(
+            state.stripe, state.cs_id, state.stripe_pk, state.fingerprint, state.stripe_js_id
+        )
     state.ctx = ops._upi_build_ctx(state.init, state.fingerprint, state.stripe_js_id)
     # Stripe's passive hCaptcha token cannot be forged offline; a confirm
     # without it is answered later at the payment-setup stage with
@@ -483,7 +507,9 @@ def _stage_repeat_tax(ops: UpiOperations, state: UpiStageContext) -> Any:
     if state.update_tax_region and ops._upi_repeat_tax_region(state.upi_cfg):
         state.emit("tax_region", "Stage 4.5: re-init + re-tax before confirm")
         try:
-            state.refreshed_init = ops._upi_stripe_init(state.stripe, state.cs_id, state.stripe_pk, state.fingerprint, state.stripe_js_id)
+            state.refreshed_init = ops._upi_stripe_init(
+                state.stripe, state.cs_id, state.stripe_pk, state.fingerprint, state.stripe_js_id
+            )
         except Exception as exc:
             state.refreshed_init = None
             state.emit("tax_region", f"Stage 4.5 re-init skipped (non-fatal): {type(exc).__name__}: {exc}")
@@ -624,7 +650,6 @@ def _stage_confirm(ops: UpiOperations, state: UpiStageContext) -> Any:
     # SetupIntent 失败判读（旧实现完全没有这一步）
     ops._upi_raise_if_setup_intent_blocked(state.confirm_data, "stripe confirm", current_pm_id=state.pm_id)
 
-
     return None
 
 
@@ -684,7 +709,9 @@ def _stage_approve(ops: UpiOperations, state: UpiStageContext) -> Any:
             if browser_approve["ok"]:
                 state.approval_ok = True
                 state.approval_data = {"result": "approved", "via": "headless_browser"}
-        approve_session = ops._upi_new_chatgpt_session(state.approve_proxy, state.fingerprint, state.device_id, state.session_token)
+        approve_session = ops._upi_new_chatgpt_session(
+            state.approve_proxy, state.fingerprint, state.device_id, state.session_token
+        )
         approve_session.headers.update(
             {
                 "Authorization": f"Bearer {state.access_token}",
@@ -842,7 +869,6 @@ def _stage_mandate(ops: UpiOperations, state: UpiStageContext) -> Any:
     # 否则 Stage 7 的 rescue 会被上一步的失败永久挡掉。
     state.mandate_ok = False
 
-
     if not _absorb_mandate(ops, state, state.confirm_data, state.approval_data):
         state.emit(
             "mandate",
@@ -908,6 +934,7 @@ def _stage_redirect(ops: UpiOperations, state: UpiStageContext) -> Any:
         state.confirm_data = retry_resp.json() or {}
         state.emit("decline_retry", f"swapped in {fresh_pm} and re-confirmed the same session")
         return fresh_pm
+
     # ── Stage 7: Extract redirect / upi:// URI ───────────────────────
     state.emit("poll", "Stage 7: extracting UPI redirect / QR data")
     state.qr_data: dict[str, Any] = {}
@@ -986,7 +1013,9 @@ def _stage_redirect(ops: UpiOperations, state: UpiStageContext) -> Any:
     if not state.redirect_url and not state.qr_data.get("upi_uri"):
         state.emit("poll", "re-init + second confirm to resolve UPI data")
         try:
-            state.refreshed_init = ops._upi_stripe_init(state.stripe, state.cs_id, state.stripe_pk, state.fingerprint, state.stripe_js_id)
+            state.refreshed_init = ops._upi_stripe_init(
+                state.stripe, state.cs_id, state.stripe_pk, state.fingerprint, state.stripe_js_id
+            )
         except Exception as exc:
             state.emit("poll", f"re-init failed (non-fatal): {type(exc).__name__}: {exc}")
             state.refreshed_init = None
@@ -1075,8 +1104,12 @@ def _stage_redirect(ops: UpiOperations, state: UpiStageContext) -> Any:
     state.paid_state = {"paid": False, "payment_status": "not_requested"}
     if state.wait_paid:
         state.emit("paid", f"waiting up to {state.paid_timeout:g}s for payment on {state.cs_id[:20]}...")
-        state.paid_state = ops._upi_wait_paid(state.stripe, cs_id=state.cs_id, stripe_pk=state.stripe_pk, ctx=state.ctx, timeout=state.paid_timeout)
-        state.emit("paid", f"payment_status={state.paid_state.get('payment_status')} paid={state.paid_state.get('paid')}")
+        state.paid_state = ops._upi_wait_paid(
+            state.stripe, cs_id=state.cs_id, stripe_pk=state.stripe_pk, ctx=state.ctx, timeout=state.paid_timeout
+        )
+        state.emit(
+            "paid", f"payment_status={state.paid_state.get('payment_status')} paid={state.paid_state.get('paid')}"
+        )
 
     return None
 
@@ -1149,7 +1182,6 @@ def _stage_verify(ops: UpiOperations, state: UpiStageContext) -> Any:
     return None
 
 
-
 _STAGES: tuple[Any, ...] = (
     _stage_checkout,
     _stage_stripe_init,
@@ -1164,6 +1196,7 @@ _STAGES: tuple[Any, ...] = (
     _stage_redirect,
     _stage_verify,
 )
+
 
 def run_upi_qr_link_once(
     ops: UpiOperations,
@@ -1295,4 +1328,3 @@ def run_upi_qr_link_once(
             "qr_path": "",
         }
     return {}
-

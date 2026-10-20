@@ -110,9 +110,7 @@ def proxy_for_country(
     username = selector.sub(replace_country, username)
     password = selector.sub(replace_country, password)
     if not replacements:
-        raise RuntimeError(
-            f"代理未包含可改写的 country/region 选择器: {label(proxy)}"
-        )
+        raise RuntimeError(f"代理未包含可改写的 country/region 选择器: {label(proxy)}")
 
     hostname = parsed.hostname or ""
     host = f"[{hostname}]" if ":" in hostname and not hostname.startswith("[") else hostname

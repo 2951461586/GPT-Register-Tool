@@ -94,9 +94,7 @@ class LoginPasswordStepSignalTests(unittest.TestCase):
     def test_the_transaction_page_type_is_recognised(self):
         for page_type in ("password", "login_password", "create_account_password"):
             with self.subTest(page_type=page_type):
-                self.assertTrue(
-                    auth_flow._is_login_password_step("", {"page": {"type": page_type}})
-                )
+                self.assertTrue(auth_flow._is_login_password_step("", {"page": {"type": page_type}}))
 
     def test_a_flat_page_type_is_recognised_too(self):
         self.assertTrue(auth_flow._is_login_password_step("", {"page_type": "login_password"}))
@@ -126,9 +124,7 @@ class PasswordFormDetectionTests(unittest.TestCase):
     def test_a_form_without_a_password_input_is_not(self):
         # This is the shape the email-verification shell has, and the shape that
         # makes ``False`` a meaningful answer rather than a missing page.
-        self.assertFalse(
-            auth_flow._has_password_form(self._response('<form action="/email-verification"></form>'))
-        )
+        self.assertFalse(auth_flow._has_password_form(self._response('<form action="/email-verification"></form>')))
 
     def test_a_page_without_a_form_is_not(self):
         self.assertFalse(auth_flow._has_password_form(self._response("<html></html>")))
@@ -191,9 +187,7 @@ class ProbeLoginPasswordStepTests(unittest.TestCase):
         password" and "choose a password".  Only the sibling form separates them.
         """
         from_transaction, _ = self._probe(payload={"page": {"type": "create_account_password"}})
-        from_form, _ = self._probe(
-            response=Mock(status_code=200, text='<form><input type="password"></form>')
-        )
+        from_form, _ = self._probe(response=Mock(status_code=200, text='<form><input type="password"></form>'))
 
         self.assertTrue(from_transaction["password_step"])
         self.assertTrue(from_form["password_step"])
@@ -471,9 +465,7 @@ class ExistingLoginContinueToggleTests(unittest.TestCase):
 
     def _enabled(self, value=_MISSING, *, cfg=None):
         if cfg is None:
-            registration = {} if value is _MISSING else {
-                "existing_login_continue_on_verified_page": value
-            }
+            registration = {} if value is _MISSING else {"existing_login_continue_on_verified_page": value}
             cfg = {"registration": registration}
         with patch.object(auth_flow.deps, "current_config_data", Mock(return_value=cfg)):
             return auth_flow._existing_login_continue_enabled()

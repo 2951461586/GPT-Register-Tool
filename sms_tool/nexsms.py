@@ -49,6 +49,7 @@ import requests as _requests
 
 from .operator_output import emit
 from .sms_providers import PROVIDERS as _PROVIDERS
+
 # Service codes and country ids follow the sms-activate numbering, so the
 # normalisers are shared with that family rather than duplicated. The module
 # they live in carries a vendor name, but the helpers themselves are
@@ -288,9 +289,7 @@ class NexSmsClient:
         country_code = normalize_country(country)
         if country_code:
             params["countryId"] = _as_country_id(country_code)
-        data = self._unwrap(
-            self._get(PATH_COUNTRY_BY_SERVICE, params), "quote lookup failed"
-        )
+        data = self._unwrap(self._get(PATH_COUNTRY_BY_SERVICE, params), "quote lookup failed")
         item = data[0] if isinstance(data, list) and data else data
         if not isinstance(item, dict):
             return None
@@ -336,9 +335,7 @@ class NexSmsClient:
             )
         quote = self.get_country_quote(service_code, country_code)
         if not quote or quote.get("min_price") is None:
-            raise NexSmsError(
-                f"nexsms returned no quote for country={country_code} service={service_code}"
-            )
+            raise NexSmsError(f"nexsms returned no quote for country={country_code} service={service_code}")
         price = quote["min_price"]
         refusal = _price_window_refusal(price, min_price, max_price)
         if refusal:
@@ -424,7 +421,9 @@ class NexSmsClient:
             except Exception as exc:
                 _LOGGER.warning(
                     "nexsms poll attempt %s failed for %s: %s",
-                    attempt, handle, exc,
+                    attempt,
+                    handle,
+                    exc,
                     extra={"event": "nexsms_poll_failed", "attempt": attempt},
                 )
             wait = min(poll_interval, max(1, deadline - time.time()))
@@ -462,7 +461,8 @@ class NexSmsClient:
         except Exception as error:
             _LOGGER.warning(
                 "nexsms refused to cancel %s: %s",
-                number, error,
+                number,
+                error,
                 extra={"event": "nexsms_cancel_refused", "phone": number},
             )
             return False

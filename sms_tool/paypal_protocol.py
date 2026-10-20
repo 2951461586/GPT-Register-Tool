@@ -10,6 +10,7 @@ from typing import Any, Optional
 
 try:
     from curl_cffi.requests import Session as _CffiSession
+
     _HAS_CFFI = True
 except ImportError:
     _CffiSession = None
@@ -35,15 +36,18 @@ _EC_RE = re.compile(r"(EC-[A-Z0-9]{17,})")
 
 # ── Config helper ──────────────────────────────────────────────────────────────
 
+
 def _load_config() -> dict[str, Any]:
     try:
         from .config import load_merged_config
+
         return load_merged_config()
     except Exception:
         return {}
 
 
 # ── HTTP Session ───────────────────────────────────────────────────────────────
+
 
 def _paypal_redirect_impersonate() -> str:
     try:
@@ -55,13 +59,16 @@ def _paypal_redirect_impersonate() -> str:
 
 
 def _make_session(proxy: Optional[str] = None) -> Any:
-    if _HAS_CFFI:
+    # ``_HAS_CFFI`` and ``_CffiSession`` are set together in the try/except above,
+    # but a checker cannot correlate two module globals; testing the symbol itself
+    # is what narrows it, and it is the property this code actually needs.
+    if _HAS_CFFI and _CffiSession is not None:
         s = _CffiSession(impersonate=_paypal_redirect_impersonate())
         s.trust_env = False
         if proxy:
             p = proxy
             if p.startswith("socks5://"):
-                p = "socks5h://" + p[len("socks5://"):]
+                p = "socks5h://" + p[len("socks5://") :]
             s.proxies = {"http": p, "https": p}
         else:
             s.proxies = {"http": "", "https": ""}
@@ -74,8 +81,8 @@ def _make_session(proxy: Optional[str] = None) -> Any:
     return s
 
 
-
 # ── BA / EC Token extraction ───────────────────────────────────────────────────
+
 
 def extract_ba_token(paypal_redirect_url: str) -> Optional[str]:
     """从 Stripe 返回的 PayPal redirect URL 中提取 BA token。
@@ -104,6 +111,7 @@ def _extract_paypal_approve_url(text: str) -> str:
 
 
 # ── Stripe redirect follower ───────────────────────────────────────────────────
+
 
 def _follow_stripe_redirect(
     stripe_url: str,

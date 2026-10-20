@@ -84,8 +84,14 @@ def test_batch_end_does_not_reprobe_accounts_already_checked(tmp_path):
     events.clear()
 
     report = save_registration_results(
-        args, results, effective_count=2, base_dir=tmp_path,
-        pipeline_started=time.time() - 1, mailbox_seconds=0, register_seconds=1, ctx=ctx,
+        args,
+        results,
+        effective_count=2,
+        base_dir=tmp_path,
+        pipeline_started=time.time() - 1,
+        mailbox_seconds=0,
+        register_seconds=1,
+        ctx=ctx,
     )
 
     assert [kind for kind, *_ in events] == []
@@ -108,8 +114,14 @@ def test_batch_end_probes_only_accounts_without_an_immediate_result(tmp_path):
     events.clear()
 
     report = save_registration_results(
-        args, [done, late], effective_count=2, base_dir=tmp_path,
-        pipeline_started=time.time() - 1, mailbox_seconds=0, register_seconds=1, ctx=ctx,
+        args,
+        [done, late],
+        effective_count=2,
+        base_dir=tmp_path,
+        pipeline_started=time.time() - 1,
+        mailbox_seconds=0,
+        register_seconds=1,
+        ctx=ctx,
     )
 
     probes = [event for event in events if event[0] == "probe"]
@@ -135,8 +147,14 @@ def test_a_raising_probe_never_breaks_persistence_and_falls_back_to_batch_end(tm
 
     events.clear()
     report = save_registration_results(
-        args, [data], effective_count=1, base_dir=tmp_path,
-        pipeline_started=time.time() - 1, mailbox_seconds=0, register_seconds=1, ctx=ctx,
+        args,
+        [data],
+        effective_count=1,
+        base_dir=tmp_path,
+        pipeline_started=time.time() - 1,
+        mailbox_seconds=0,
+        register_seconds=1,
+        ctx=ctx,
     )
     assert [event[1] for event in events if event[0] == "probe"] == [("a@example.com",)]
     assert report["promotion"]["total"] == 1

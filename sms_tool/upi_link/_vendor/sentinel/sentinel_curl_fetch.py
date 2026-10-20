@@ -1,4 +1,5 @@
 """curl_cffi transport bridge for sentinel_bridge.js on Windows/SOCKS proxies."""
+
 from __future__ import annotations
 
 import json
@@ -18,10 +19,15 @@ def main() -> None:
         timeout=float(payload.get("timeout") or 120),
         impersonate="chrome136",
     )
-    sys.stdout.write(json.dumps({
-        "status": int(response.status_code),
-        "body": response.text,
-    }, ensure_ascii=False))
+    sys.stdout.write(
+        json.dumps(
+            {
+                "status": int(response.status_code),
+                "body": response.text,
+            },
+            ensure_ascii=False,
+        )
+    )
 
 
 if __name__ == "__main__":

@@ -83,12 +83,16 @@ TRANSIENT_AUTH_INVALID_COOLDOWN_SECONDS = 300
 
 
 def record_mailbox_auth_invalid(
-    mailbox: Any, *, reason: str = "mailbox_auth_invalid",
+    mailbox: Any,
+    *,
+    reason: str = "mailbox_auth_invalid",
     cooldown_seconds: int = MAILBOX_AUTH_INVALID_COOLDOWN_SECONDS,
 ) -> str:
     """Persist only a fingerprint and public metadata, never URL/token values."""
     return _record_failure(
-        mailbox, reason=reason, code="mailbox_auth_invalid",
+        mailbox,
+        reason=reason,
+        code="mailbox_auth_invalid",
         cooldown_seconds=cooldown_seconds,
     )
 
@@ -96,13 +100,19 @@ def record_mailbox_auth_invalid(
 def record_mailbox_endpoint_unavailable(mailbox: Any) -> str:
     """A missing inbox endpoint is transient, not an invalid credential."""
     return _record_failure(
-        mailbox, reason="mailbox_endpoint_unavailable",
-        code="mailbox_endpoint_unavailable", cooldown_seconds=300,
+        mailbox,
+        reason="mailbox_endpoint_unavailable",
+        code="mailbox_endpoint_unavailable",
+        cooldown_seconds=300,
     )
 
 
 def _record_failure(
-    mailbox: Any, *, reason: str, code: str, cooldown_seconds: int = 0,
+    mailbox: Any,
+    *,
+    reason: str,
+    code: str,
+    cooldown_seconds: int = 0,
 ) -> str:
     fingerprint = mailbox_fingerprint(mailbox)
     if not fingerprint:

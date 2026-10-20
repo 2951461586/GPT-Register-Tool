@@ -29,7 +29,9 @@ _COUNTRY_PROBE_SCRIPT = """
 """
 
 
-def verify_browser_proxy_country(browser: Any, *, expected_country: str = "", timeout_seconds: int = 20) -> dict[str, Any]:
+def verify_browser_proxy_country(
+    browser: Any, *, expected_country: str = "", timeout_seconds: int = 20
+) -> dict[str, Any]:
     """Ask the live page which country it egresses from.
 
     ``timeout_seconds`` is enforced *inside* the page via an ``AbortController``

@@ -48,8 +48,7 @@ def test_cli_import_stays_within_its_time_and_memory_budget() -> None:
         [
             PYTHON,
             "-c",
-            "import psutil, sms_tool.cli; "
-            "print(round(psutil.Process().memory_info().rss / 1048576))",
+            "import psutil, sms_tool.cli; print(round(psutil.Process().memory_info().rss / 1048576))",
         ]
     )
     rss_mb = int(stdout.strip().splitlines()[-1])

@@ -38,11 +38,11 @@ DIALOG = REPO_ROOT / "SmsWorkbench" / "MainWindow.SmsProvider.cs"
 #: 所以它按原样捕获，再由 ``protocol_constant`` 解析成值。
 ROW_PATTERN = re.compile(
     r'new SmsProvider\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,'
-    r'\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)')
+    r"\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)"
+)
 
 #: ``internal const string SmsActivateProtocol = "sms_activate_handler";``
-PROTOCOL_CONST_PATTERN = re.compile(
-    r'internal\s+const\s+string\s+(SmsActivateProtocol|NexsmsProtocol)\s*=\s*"([^"]+)"')
+PROTOCOL_CONST_PATTERN = re.compile(r'internal\s+const\s+string\s+(SmsActivateProtocol|NexsmsProtocol)\s*=\s*"([^"]+)"')
 
 #: 下拉框那一行。
 DROPDOWN_ANCHOR = 'Options("phone_provider"'
@@ -112,7 +112,7 @@ def brace_block(text, anchor):
         elif text[index] == "}":
             depth -= 1
             if depth == 0:
-                return text[start:index + 1]
+                return text[start : index + 1]
     raise AssertionError("unbalanced braces after %r" % anchor)
 
 
@@ -142,7 +142,8 @@ def default_provider_constant(text=None):
 
 #: ``Options(key, label, path, <fallback>, ...)`` —— 只取第四个实参的原文。
 _FALLBACK_PATTERN = re.compile(
-    r'Options\(\s*"phone_provider"\s*,\s*"(?:[^"\\]|\\.)*"\s*,\s*"(?:[^"\\]|\\.)*"\s*,\s*([^,\n]+)')
+    r'Options\(\s*"phone_provider"\s*,\s*"(?:[^"\\]|\\.)*"\s*,\s*"(?:[^"\\]|\\.)*"\s*,\s*([^,\n]+)'
+)
 
 
 def dropdown_fallback_argument(text=None):
@@ -163,8 +164,7 @@ class ExtractorTests(unittest.TestCase):
         self.assertEqual(len(rows), 4, rows)
 
     def test_a_reformatted_row_still_parses(self):
-        text = ('new SmsProvider(\n    "k",\n    "L",\n    "https://h/x",\n    "K_ENV",\n'
-                '    SmsActivateProtocol)\n')
+        text = 'new SmsProvider(\n    "k",\n    "L",\n    "https://h/x",\n    "K_ENV",\n    SmsActivateProtocol)\n'
         self.assertEqual(csharp_providers(text), [("k", "L", "https://h/x", "K_ENV", "SmsActivateProtocol")])
 
     def test_a_row_with_a_missing_field_is_not_silently_skipped(self):
@@ -195,10 +195,8 @@ class ProviderParityTests(unittest.TestCase):
         """双向相等：少一个（选不到）和多一个（选了必失败）都是缺陷。"""
         csharp = {row[0] for row in csharp_providers()}
         python = set(sms_providers.available_provider_keys())
-        self.assertEqual(csharp - python, set(),
-                         "C# 提供了 Python 不认的供应商：%s" % sorted(csharp - python))
-        self.assertEqual(python - csharp, set(),
-                         "C# 缺少 Python 已注册的供应商：%s" % sorted(python - csharp))
+        self.assertEqual(csharp - python, set(), "C# 提供了 Python 不认的供应商：%s" % sorted(csharp - python))
+        self.assertEqual(python - csharp, set(), "C# 缺少 Python 已注册的供应商：%s" % sorted(python - csharp))
 
     def test_the_default_endpoints_match(self):
         """🔴 这条是最隐蔽的漂移面：端点写错时下拉框照常工作、余额也读得到，
@@ -249,22 +247,30 @@ class ProviderParityTests(unittest.TestCase):
         # 目录读取：两个读取器都必须出现，且都挂在同一个协议判断上。
         # 参数列表不展开匹配（它会跨行、且与这里要钉的契约无关），只要求
         # 「条件 → 吗 / 冒号 → 两个已知读取器名」这个形状。
-        ternary = (r"provider\.CatalogIsSmsActivate\s*\?\s*await\s+SmsProviderCatalogClient\.(\w+)"
-                   r".{0,200}?:\s*await\s+SmsProviderCatalogClient\.(\w+)")
+        ternary = (
+            r"provider\.CatalogIsSmsActivate\s*\?\s*await\s+SmsProviderCatalogClient\.(\w+)"
+            r".{0,200}?:\s*await\s+SmsProviderCatalogClient\.(\w+)"
+        )
         matches = re.findall(ternary, code, re.S)
         self.assertTrue(matches, "the dialog no longer dispatches the catalog read on the protocol")
         # 三元分派有两处：目录与余额，各自的读取器都必须是「激活族 / nexsms 族」这一对。
-        self.assertIn(("LoadOpenAiCatalogAsync", "LoadNexsmsCatalogAsync"), matches,
-                      "the catalog dispatch does not pair the sms-activate reader with the nexsms one")
-        self.assertIn(("LoadBalanceAsync", "LoadNexsmsBalanceAsync"), matches,
-                      "the balance dispatch does not pair the sms-activate reader with the nexsms one")
+        self.assertIn(
+            ("LoadOpenAiCatalogAsync", "LoadNexsmsCatalogAsync"),
+            matches,
+            "the catalog dispatch does not pair the sms-activate reader with the nexsms one",
+        )
+        self.assertIn(
+            ("LoadBalanceAsync", "LoadNexsmsBalanceAsync"),
+            matches,
+            "the balance dispatch does not pair the sms-activate reader with the nexsms one",
+        )
 
         # 不得有第二个、脱离协议判断的读取调用。
         for reader in ("LoadOpenAiCatalogAsync", "LoadNexsmsCatalogAsync"):
             with self.subTest(reader=reader):
                 self.assertEqual(
-                    code.count(reader), 1,
-                    "%s must be called from exactly one place (the protocol dispatch)" % reader)
+                    code.count(reader), 1, "%s must be called from exactly one place (the protocol dispatch)" % reader
+                )
 
     def test_the_fallback_path_reads_the_saved_choice(self):
         """回退路径必须真的从配置读国家与档位 —— 写死一个默认国会让「切到
@@ -293,10 +299,8 @@ class ProviderParityTests(unittest.TestCase):
         self.assertIn(gate, text, "the config-derived path no longer gates the write-back")
 
         block = strip_csharp_comments(brace_block(text, gate))
-        self.assertIn("return true;", block,
-                      "the config-derived path must return before the write-back")
-        self.assertNotIn("UpdateConfig", block,
-                         "the config-derived path must not write the provider section")
+        self.assertIn("return true;", block, "the config-derived path must return before the write-back")
+        self.assertNotIn("UpdateConfig", block, "the config-derived path must not write the provider section")
 
     def test_only_a_successful_online_lookup_marks_the_choice_as_catalog_sourced(self):
         """``fromCatalog`` 是上面那条闸门的**唯一**开关，所以它必须由在线目录的
@@ -311,16 +315,16 @@ class ProviderParityTests(unittest.TestCase):
         text = DIALOG.read_text(encoding="utf-8")
         code = strip_csharp_comments(text)
 
-        self.assertIn("bool fromCatalog = online is not null;", code,
-                      "fromCatalog must be derived from the lookup result, not assigned later")
-        self.assertNotIn("fromCatalog = true;", code,
-                         "fromCatalog must not be re-assigned after the derivation")
-        self.assertNotIn("fromCatalog = false;", code,
-                         "fromCatalog must not be re-assigned after the derivation")
+        self.assertIn(
+            "bool fromCatalog = online is not null;",
+            code,
+            "fromCatalog must be derived from the lookup result, not assigned later",
+        )
+        self.assertNotIn("fromCatalog = true;", code, "fromCatalog must not be re-assigned after the derivation")
+        self.assertNotIn("fromCatalog = false;", code, "fromCatalog must not be re-assigned after the derivation")
 
         # 派生出来的旗子必须真的驱动闸门，否则它只是一个没接线的变量。
-        self.assertIn("if (!fromCatalog)", code,
-                      "the write-back gate no longer keys off fromCatalog")
+        self.assertIn("if (!fromCatalog)", code, "the write-back gate no longer keys off fromCatalog")
 
     def test_a_failed_online_lookup_reports_why_before_falling_back(self):
         """回退**必须**把失败原因带出来，不能静默。
@@ -341,13 +345,12 @@ class ProviderParityTests(unittest.TestCase):
         text = DIALOG.read_text(encoding="utf-8")
         code = strip_csharp_comments(text)
 
-        self.assertIn("catalogError = exc.Message;", code,
-                      "the catalog failure reason is no longer captured")
+        self.assertIn("catalogError = exc.Message;", code, "the catalog failure reason is no longer captured")
         # 无路可退时，原因必须被**插值**进弹窗正文，而不是只写一句通用的「读取失败」。
         self.assertRegex(code, r"无法读取 OpenAI 号码地区和价格档位：\{catalogError\}")
         # 有路可退时，原因必须进日志（含占位符 ``{Error}`` 与实参 ``catalogError``）。
         self.assertRegex(code, r"catalog unavailable \(\{Error\}\)")
-        self.assertRegex(code, r'provider\.Label,\s*catalogError\)')
+        self.assertRegex(code, r"provider\.Label,\s*catalogError\)")
 
     def test_a_failed_online_lookup_does_not_end_the_flow(self):
         """在线目录读失败**不能**结束流程 —— 只有「配置里也没有国家与档位」才可以。
@@ -368,18 +371,24 @@ class ProviderParityTests(unittest.TestCase):
 
         # 加载失败弹窗必须落在「在线失败 且 配置回退不可用」这一支里。
         self.assertRegex(
-            code, r"else\s+if\s*\(\s*savedChoice\s+is\s+not\s+null\s*\)\s*\{",
-            "the saved-config fallback branch disappeared")
+            code,
+            r"else\s+if\s*\(\s*savedChoice\s+is\s+not\s+null\s*\)\s*\{",
+            "the saved-config fallback branch disappeared",
+        )
         self.assertRegex(
-            code, r"else\s*\{\s*ShowThemedInfoDialog\(\s*" + re.escape(marker),
-            "the load-failure dialog must fire only when the config has no country/tier")
+            code,
+            r"else\s*\{\s*ShowThemedInfoDialog\(\s*" + re.escape(marker),
+            "the load-failure dialog must fire only when the config has no country/tier",
+        )
 
         # 回退那一支必须是**可用的**：先取配置里的选择项，再继续往下走。
         fallback = brace_block(code, "else if (savedChoice is not null)")
-        self.assertIn("countries = new[] { savedChoice };", fallback,
-                      "the fallback branch must actually use the configured choice")
-        self.assertNotIn("return false;", fallback,
-                         "the fallback branch must not end the flow")
+        self.assertIn(
+            "countries = new[] { savedChoice };",
+            fallback,
+            "the fallback branch must actually use the configured choice",
+        )
+        self.assertNotIn("return false;", fallback, "the fallback branch must not end the flow")
 
     def test_the_labels_are_not_empty_and_unique(self):
         labels = [row[1] for row in csharp_providers()]
@@ -400,8 +409,7 @@ class ProviderParityTests(unittest.TestCase):
         ``assertNotIn('"smsbower"', call)`` 就是这个错。
         """
         fallback = dropdown_fallback_argument()
-        self.assertEqual(fallback, "DefaultPhoneProvider",
-                         "supply the constant, not a literal: %r" % fallback)
+        self.assertEqual(fallback, "DefaultPhoneProvider", "supply the constant, not a literal: %r" % fallback)
         self.assertEqual(default_provider_constant(), sms_providers.DEFAULT_PROVIDER)
 
     def test_nexsms_is_offered_once_a_client_exists(self):
@@ -424,9 +432,7 @@ class ProviderParityTests(unittest.TestCase):
         也会通过 —— 而后果是所有请求 404，且要到真跑一次才发现。这条独立钉住
         形状：其余三家都带 handler 路径，唯独这家不能带。
         """
-        endpoint = dict(
-            (key, url) for key, _label, url, _env, _protocol in csharp_providers()
-        )["nexsms"]
+        endpoint = dict((key, url) for key, _label, url, _env, _protocol in csharp_providers())["nexsms"]
         self.assertNotIn("/stubs/", endpoint)
         self.assertFalse(endpoint.rstrip("/").endswith(".php"), endpoint)
         self.assertEqual(endpoint, sms_providers.default_endpoint("nexsms"))
@@ -439,13 +445,17 @@ class NoCredentialsInCsharpCatalogTests(unittest.TestCase):
         for row in csharp_providers():
             for field in row:
                 with self.subTest(field=field):
-                    self.assertIsNone(_CREDENTIAL.search(field),
-                                      "credential-shaped literal in SmsProviderCatalog.cs: %r" % field)
+                    self.assertIsNone(
+                        _CREDENTIAL.search(field), "credential-shaped literal in SmsProviderCatalog.cs: %r" % field
+                    )
 
     def test_the_file_declares_no_key_like_literal(self):
         text = PROVIDER_CATALOG.read_text(encoding="utf-8")
-        offenders = [line.strip() for line in text.splitlines()
-                     if _CREDENTIAL.search(line) and not line.lstrip().startswith("//")]
+        offenders = [
+            line.strip()
+            for line in text.splitlines()
+            if _CREDENTIAL.search(line) and not line.lstrip().startswith("//")
+        ]
         self.assertEqual(offenders, [], "key-like literal in SmsProviderCatalog.cs: %s" % offenders)
 
 
@@ -467,10 +477,12 @@ class DialogUsesTheSelectedProviderTests(unittest.TestCase):
 
 
 #: 允许出现供应商键字面量的**生产**文件，只有目录本身：表与下拉框。
-CATALOG_FILES = frozenset({
-    (REPO_ROOT / "SmsWorkbench" / "SmsProviderCatalog.cs").resolve(),
-    (REPO_ROOT / "SmsWorkbench" / "SettingsCatalog.cs").resolve(),
-})
+CATALOG_FILES = frozenset(
+    {
+        (REPO_ROOT / "SmsWorkbench" / "SmsProviderCatalog.cs").resolve(),
+        (REPO_ROOT / "SmsWorkbench" / "SettingsCatalog.cs").resolve(),
+    }
+)
 
 #: 只扫生产工程。测试工程**允许**写供应商键 —— 它本来就要构造具体取值。
 CSHARP_ROOTS = (REPO_ROOT / "SmsWorkbench", REPO_ROOT / "SmsWorkbench.Contracts")
@@ -490,7 +502,7 @@ def provider_literals(text):
     found = []
     for match in _STRING_LITERAL.finditer(text):
         line_start = text.rfind("\n", 0, match.start()) + 1
-        if "//" in text[line_start:match.start()]:
+        if "//" in text[line_start : match.start()]:
             continue
         if match.group(1) in _PROVIDER_KEYS:
             found.append(match.group(1))
@@ -536,9 +548,7 @@ class NoHardcodedProviderOutsideTheCatalogTests(unittest.TestCase):
                 found = provider_literals(path.read_text(encoding="utf-8"))
                 if found:
                     offenders.append("%s: %s" % (relative.as_posix(), found))
-        self.assertEqual(
-            offenders, [],
-            "供应商键被写死在注册表之外（应改从 SmsProviderCatalog 取）：%s" % offenders)
+        self.assertEqual(offenders, [], "供应商键被写死在注册表之外（应改从 SmsProviderCatalog 取）：%s" % offenders)
 
 
 if __name__ == "__main__":

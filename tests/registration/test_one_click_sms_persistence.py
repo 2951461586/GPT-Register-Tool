@@ -18,7 +18,9 @@ def test_failed_oauth_preserves_session_and_db_with_atomic_file_write(tmp_path):
         return True
 
     result = codex_oauth.persist_one_click_sms_failure(
-        {"access_token": "at", "response": {}}, str(session), "e@example.test",
+        {"access_token": "at", "response": {}},
+        str(session),
+        "e@example.test",
         {"error": "phone_sms_timeout", "tokens": {"refresh_token": "secret"}},
         upsert=upsert,
     )
@@ -34,12 +36,19 @@ def test_failed_oauth_preserves_session_and_db_with_atomic_file_write(tmp_path):
 def test_failed_oauth_does_not_persist_raw_response_bodies(tmp_path):
     session = tmp_path / "session.json"
     codex_oauth.persist_one_click_sms_failure(
-        {}, str(session), "e@example.test",
+        {},
+        str(session),
+        "e@example.test",
         {
             "error": "phone_sms_timeout",
             "body": "private-auth-code",
-            "phone_attempt": {"ok": False, "error": "sms_timeout", "phone": "1234",
-                              "body": "private-supplier-reply", "next_url": "private-redirect"},
+            "phone_attempt": {
+                "ok": False,
+                "error": "sms_timeout",
+                "phone": "1234",
+                "body": "private-supplier-reply",
+                "next_url": "private-redirect",
+            },
         },
         upsert=lambda data, *, json_path: True,
     )
@@ -58,7 +67,9 @@ def test_failed_session_write_reports_partial_success_and_preserves_existing_fil
 
     with patch("sms_tool.codex_oauth.atomic_write_text", side_effect=OSError("permission denied")):
         result = codex_oauth.persist_one_click_sms_failure(
-            {"access_token": "at"}, str(session), "e@example.test",
+            {"access_token": "at"},
+            str(session),
+            "e@example.test",
             {"error": "phone_sms_timeout"},
             upsert=lambda data, *, json_path: writes.append(data) or True,
         )
@@ -75,7 +86,9 @@ def test_failed_session_write_reports_partial_success_and_preserves_existing_fil
 
 def test_unserializable_session_is_reported_as_partial_save(tmp_path):
     result = codex_oauth.persist_one_click_sms_failure(
-        {"non_json_value": object()}, str(tmp_path / "session.json"), "e@example.test",
+        {"non_json_value": object()},
+        str(tmp_path / "session.json"),
+        "e@example.test",
         {"error": "phone_sms_timeout"},
         upsert=lambda data, *, json_path: True,
     )
@@ -87,7 +100,10 @@ def test_unserializable_session_is_reported_as_partial_save(tmp_path):
 def test_failed_db_write_reports_partial_success(tmp_path):
     session = tmp_path / "session.json"
     result = codex_oauth.persist_one_click_sms_failure(
-        {}, str(session), "e@example.test", {"error": "phone_sms_timeout"},
+        {},
+        str(session),
+        "e@example.test",
+        {"error": "phone_sms_timeout"},
         upsert=lambda data, *, json_path: False,
     )
     assert session.is_file()
@@ -103,15 +119,19 @@ def test_successful_oauth_reports_failed_db_save_without_losing_remote_success(t
     session = tmp_path / "session.json"
     with patch.object(codex_oauth, "upsert_account", return_value=False):
         result = codex_oauth._save_oauth_tokens(
-            {"email": "e@example.test"}, str(session),
+            {"email": "e@example.test"},
+            str(session),
             {"access_token": "at", "refresh_token": "rt"},
-            "e@example.test", "codex_oauth_pkce",
+            "e@example.test",
+            "codex_oauth_pkce",
         )
 
     assert result["ok"] is True
     assert result["persistence"] == {
-        "session_saved": True, "account_saved": False,
-        "persisted": False, "error_code": "account_write_failed",
+        "session_saved": True,
+        "account_saved": False,
+        "persisted": False,
+        "error_code": "account_write_failed",
     }
     assert result["persisted"] is False
     assert session.is_file()
@@ -123,15 +143,19 @@ def test_successful_oauth_attempts_db_save_after_session_write_failure(tmp_path)
         patch.object(codex_oauth, "upsert_account", return_value=True) as upsert,
     ):
         result = codex_oauth._save_oauth_tokens(
-            {"email": "e@example.test"}, str(tmp_path / "session.json"),
+            {"email": "e@example.test"},
+            str(tmp_path / "session.json"),
             {"access_token": "at", "refresh_token": "rt"},
-            "e@example.test", "codex_oauth_pkce",
+            "e@example.test",
+            "codex_oauth_pkce",
         )
 
     assert result["ok"] is True
     assert result["persistence"] == {
-        "session_saved": False, "account_saved": True,
-        "persisted": False, "error_code": "session_write_failed",
+        "session_saved": False,
+        "account_saved": True,
+        "persisted": False,
+        "error_code": "session_write_failed",
     }
     upsert.assert_called_once()
 

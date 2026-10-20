@@ -120,10 +120,12 @@ def send_registration_email_otp(session, auth_base, base_headers, current_url=""
     if mode == "passwordless":
         endpoints = [("/api/accounts/email-otp/resend", {})]
         if otp_fallback_send_enabled():
-            endpoints.extend([
-                ("/api/accounts/passwordless/send-otp", {}),
-                ("/api/accounts/email-otp/send", {}),
-            ])
+            endpoints.extend(
+                [
+                    ("/api/accounts/passwordless/send-otp", {}),
+                    ("/api/accounts/email-otp/send", {}),
+                ]
+            )
     else:
         endpoints = [
             ("/api/accounts/email-otp/send", {}),

@@ -50,9 +50,7 @@ class PhoneReuseAtomicWriteTests(unittest.TestCase):
 
     def test_atomic_write_keeps_old_file_when_replace_fails(self):
         # Pre-existing valid state must survive a failed replace.
-        self.state_file.write_text(
-            json.dumps({"current_index": 3, "phones": [], "updated_at": 1}), encoding="utf-8"
-        )
+        self.state_file.write_text(json.dumps({"current_index": 3, "phones": [], "updated_at": 1}), encoding="utf-8")
         pool = self._pool()
         with mock.patch.object(phone_reuse_os(), "replace", side_effect=OSError("disk full")):
             with self.assertRaises(OSError):

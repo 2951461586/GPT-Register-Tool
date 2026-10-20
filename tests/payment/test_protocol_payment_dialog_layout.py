@@ -8,10 +8,7 @@ ROOT = Path(__file__).resolve().parents[2]
 def test_protocol_payment_proxy_pool_editor_keeps_text_above_horizontal_scrollbar():
     root = ET.parse(ROOT / "SmsWorkbench" / "ProtocolPaymentWindow.xaml").getroot()
     namespace = {"wpf": "http://schemas.microsoft.com/winfx/2006/xaml/presentation"}
-    editors = [
-        item for item in root.findall(".//wpf:TextBox", namespace)
-        if "ProxyPool" in item.attrib.get("Text", "")
-    ]
+    editors = [item for item in root.findall(".//wpf:TextBox", namespace) if "ProxyPool" in item.attrib.get("Text", "")]
 
     assert len(editors) == 2
     assert all(item.attrib.get("VerticalContentAlignment") == "Top" for item in editors)

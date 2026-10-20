@@ -72,8 +72,13 @@ class ChatGPTStripeRegionalTransport:
     def _context(request: Mapping[str, Any]) -> dict[str, Any]:
         context = dict(request.get("transport_context") or {})
         for key in (
-            "proxy", "checkout_proxy", "stripe_init_proxy", "provider_proxy",
-            "payment_method_proxy", "confirm_proxy", "redirect_proxy",
+            "proxy",
+            "checkout_proxy",
+            "stripe_init_proxy",
+            "provider_proxy",
+            "payment_method_proxy",
+            "confirm_proxy",
+            "redirect_proxy",
         ):
             value = request.get(key)
             if value:
@@ -106,7 +111,9 @@ class ChatGPTStripeRegionalTransport:
             billing_country=str(request.get("billing_country") or ""),
         )
         identifiers = WalletFlowIdentifiers.create()
-        response = dict(self._wallet.create_checkout(self._request("checkout", request, contract.checkout_payload())) or {})
+        response = dict(
+            self._wallet.create_checkout(self._request("checkout", request, contract.checkout_payload())) or {}
+        )
         checkout = CheckoutSessionContract.from_payload(response, billing_country=contract.billing_country)
         self._states[checkout.checkout_session_id] = {
             "contract": contract,
@@ -122,11 +129,16 @@ class ChatGPTStripeRegionalTransport:
         checkout = state["checkout"]
         identifiers = state["identifiers"]
         wire_request = {**dict(request), "processor_entity": checkout.processor_entity}
-        response = dict(self._wallet.stripe_init(self._request(
-            "stripe_init",
-            wire_request,
-            contract.stripe_init_payload(checkout.publishable_key, stripe_js_id=identifiers.stripe_js_id),
-        )) or {})
+        response = dict(
+            self._wallet.stripe_init(
+                self._request(
+                    "stripe_init",
+                    wire_request,
+                    contract.stripe_init_payload(checkout.publishable_key, stripe_js_id=identifiers.stripe_js_id),
+                )
+            )
+            or {}
+        )
         state["init"] = response
         return response
 
@@ -139,7 +151,9 @@ class ChatGPTStripeRegionalTransport:
             checkout.checkout_session_id,
             checkout.publishable_key,
             state["identifiers"],
-            billing_details=request.get("billing_details") if isinstance(request.get("billing_details"), Mapping) else None,
+            billing_details=request.get("billing_details")
+            if isinstance(request.get("billing_details"), Mapping)
+            else None,
         )
         return self._wallet.create_payment_method(self._request("payment_method", request, payload))
 
@@ -182,7 +196,9 @@ class ChatGPTStripeRegionalTransport:
 
 
 class RegionalPaymentError(RuntimeError):
-    def __init__(self, message: str, *, error_code: str, error_stage: str, retryable: bool, status: str = "failed") -> None:
+    def __init__(
+        self, message: str, *, error_code: str, error_stage: str, retryable: bool, status: str = "failed"
+    ) -> None:
         self.error_code = error_code
         self.error_stage = error_stage
         self.retryable = retryable
@@ -290,23 +306,29 @@ class RegionalPaymentAdapter:
                 retryable=False,
             )
         base = dict(checkout_request or {})
-        base.update({
-            "access_token": access_token,
-            "payment_method": self.profile.key,
-            "billing_country": country,
-            "auth_context": dict((checkout_request or {}).get("auth_context") or {}),
-            "transport_context": dict((checkout_request or {}).get("transport_context") or {}),
-            "proxy": (checkout_request or {}).get("proxy") or "",
-        })
+        base.update(
+            {
+                "access_token": access_token,
+                "payment_method": self.profile.key,
+                "billing_country": country,
+                "auth_context": dict((checkout_request or {}).get("auth_context") or {}),
+                "transport_context": dict((checkout_request or {}).get("transport_context") or {}),
+                "proxy": (checkout_request or {}).get("proxy") or "",
+            }
+        )
 
         def emit(stage: str, status: str = "running", detail: str = "") -> None:
             if callable(progress):
-                progress({"stage": stage, "status": status, "detail": detail, "method": self.profile.key, "country": country})
+                progress(
+                    {"stage": stage, "status": status, "detail": detail, "method": self.profile.key, "country": country}
+                )
 
         try:
             emit("checkout")
             checkout = dict(self.transport.create_checkout(base) or {})
-            session_id = str(checkout.get("checkout_session_id") or checkout.get("session_id") or checkout.get("id") or "").strip()
+            session_id = str(
+                checkout.get("checkout_session_id") or checkout.get("session_id") or checkout.get("id") or ""
+            ).strip()
             publishable_key = str(checkout.get("publishable_key") or "").strip()
             if not session_id or not publishable_key.startswith("pk_"):
                 raise RegionalPaymentError(
@@ -317,7 +339,12 @@ class RegionalPaymentAdapter:
                 )
             emit("checkout", "completed")
             emit("stripe_init")
-            init = dict(self.transport.stripe_init({**base, "checkout_session_id": session_id, "publishable_key": publishable_key}) or {})
+            init = dict(
+                self.transport.stripe_init(
+                    {**base, "checkout_session_id": session_id, "publishable_key": publishable_key}
+                )
+                or {}
+            )
             evidence = StripeCapabilityEvidence.from_payload(init, fallback_currency=self.profile.currency)
             expected = self.profile.stripe_type
             classification, eligible = evidence.classification_for(expected)
@@ -336,7 +363,13 @@ class RegionalPaymentAdapter:
                 return result
             if eligible is not True:
                 emit("stripe_init", "failed", classification)
-                result.update({"ok": False, "error": "payment method is not advertised by Stripe init", "error_stage": "stripe_init"})
+                result.update(
+                    {
+                        "ok": False,
+                        "error": "payment method is not advertised by Stripe init",
+                        "error_stage": "stripe_init",
+                    }
+                )
                 return result
             emit("stripe_init", "completed", classification)
             payload = build_regional_payment_method_payload(
@@ -347,22 +380,32 @@ class RegionalPaymentAdapter:
                 billing_details=billing_details,
             )
             emit("payment_method")
-            payment_method = dict(self.transport.create_payment_method({
-                **base,
-                "checkout_session_id": session_id,
-                "publishable_key": publishable_key,
-                "billing_details": billing_details or {},
-                "payload": payload,
-            }) or {})
+            payment_method = dict(
+                self.transport.create_payment_method(
+                    {
+                        **base,
+                        "checkout_session_id": session_id,
+                        "publishable_key": publishable_key,
+                        "billing_details": billing_details or {},
+                        "payload": payload,
+                    }
+                )
+                or {}
+            )
             emit("payment_method", "completed")
             emit("confirm")
-            confirmed = dict(self.transport.confirm_payment({
-                **base,
-                **payment_method,
-                "checkout_session_id": session_id,
-                "publishable_key": publishable_key,
-                "payload": {},
-            }) or {})
+            confirmed = dict(
+                self.transport.confirm_payment(
+                    {
+                        **base,
+                        **payment_method,
+                        "checkout_session_id": session_id,
+                        "publishable_key": publishable_key,
+                        "payload": {},
+                    }
+                )
+                or {}
+            )
             redirect_value = _redirect_value(confirmed)
             if not redirect_value:
                 raise RegionalPaymentError(
@@ -375,9 +418,21 @@ class RegionalPaymentAdapter:
             redirect_url = validate_provider_redirect(self.profile, redirect_value)
             emit("confirm", "completed")
             emit("redirect")
-            followed = dict(self.transport.follow_redirect({**base, "redirect_url": redirect_url, "checkout_session_id": session_id}) or {})
+            followed = dict(
+                self.transport.follow_redirect(
+                    {**base, "redirect_url": redirect_url, "checkout_session_id": session_id}
+                )
+                or {}
+            )
             artifact = _redirect_value(followed) or redirect_url
-            result.update({"ok": True, "url": validate_provider_redirect(self.profile, artifact), "side_effects": True, "status": "completed"})
+            result.update(
+                {
+                    "ok": True,
+                    "url": validate_provider_redirect(self.profile, artifact),
+                    "side_effects": True,
+                    "status": "completed",
+                }
+            )
             if self.profile.artifact_kind == "url_or_qr":
                 result["qr_data"] = str(followed.get("qr_data") or confirmed.get("qr_data") or "")
             emit("redirect", "completed")

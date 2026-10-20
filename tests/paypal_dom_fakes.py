@@ -110,9 +110,10 @@ class MissingElement(FakeElement):
     """
 
     def __init__(self):
-        super().__init__(visible=False, fail={"fill", "click", "type", "press",
-                                              "select_option", "input_value",
-                                              "scroll_into_view_if_needed"})
+        super().__init__(
+            visible=False,
+            fail={"fill", "click", "type", "press", "select_option", "input_value", "scroll_into_view_if_needed"},
+        )
 
 
 class FakePage:

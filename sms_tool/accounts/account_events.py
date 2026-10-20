@@ -22,4 +22,3 @@ def notify_account_deactivated(data: Mapping[str, Any]) -> None:
     except Exception as exc:
         # Persistence has already succeeded; provider history is best effort.
         print(f"[!] Failed to update ReMail dead-account history: {exc}")
-

@@ -76,7 +76,7 @@ def _preflight_limits(config: Mapping[str, Any] | None) -> tuple[int, float]:
     healthy candidate still returns immediately, so they cannot hide a working
     route that the unbounded loop would have found.
     """
-    section = ((config or {}).get("registration") or {})
+    section = (config or {}).get("registration") or {}
     if not isinstance(section, Mapping):
         section = {}
 
@@ -183,9 +183,11 @@ def preflight_registration_before_mailbox(args: Any, ctx: RegistrationCommandCon
             attempted += len(batch)
             batch_started = time.time()
             futures = {
-                executor.submit(
-                    registration_network_preflight, candidate, proxy_attempts=2
-                ): (index, candidate, _preflight_host_label(candidate))
+                executor.submit(registration_network_preflight, candidate, proxy_attempts=2): (
+                    index,
+                    candidate,
+                    _preflight_host_label(candidate),
+                )
                 for index, candidate in batch
             }
             batch_failures: dict[str, int] = {}
@@ -235,8 +237,7 @@ def preflight_registration_before_mailbox(args: Any, ctx: RegistrationCommandCon
         args.proxy_pool = "\n".join(healthy)
         args.proxy = healthy[0] if healthy else None
         safe_print(
-            f"[*] 注册预检完成：{len(successful_routes)}/{attempted} 条实测可用，"
-            "批次只使用通过 OpenAI 边界检查的路由"
+            f"[*] 注册预检完成：{len(successful_routes)}/{attempted} 条实测可用，批次只使用通过 OpenAI 边界检查的路由"
         )
         return successful_routes[0][1]
     raise RuntimeError(
@@ -264,7 +265,9 @@ def registration_phone_pool(args: Any):
     )
     if not phone_pool.phones:
         if explicit:
-            safe_print("[Error] --phone-reuse enabled but no phone numbers configured. Add phone_reuse.smsbower.api_key, SMSBOWER_API_KEY, phone_reuse.phone_pool, or paypal_auto.phone_numbers")
+            safe_print(
+                "[Error] --phone-reuse enabled but no phone numbers configured. Add phone_reuse.smsbower.api_key, SMSBOWER_API_KEY, phone_reuse.phone_pool, or paypal_auto.phone_numbers"
+            )
             raise SystemExit(2)
         return None
 
@@ -339,8 +342,11 @@ def check_registered_promotions(emails, workers=4, proxy=None, timeout=20, proxy
     )
     logger.info(
         "promotion check finished: success=%s/%s trial_eligible=%s payment_eligibility=%s/%s",
-        int(report.get("success") or 0), int(report.get("total") or 0), trial_eligible,
-        eligibility_ok, eligibility_total,
+        int(report.get("success") or 0),
+        int(report.get("total") or 0),
+        trial_eligible,
+        eligibility_ok,
+        eligibility_total,
     )
     for item in results:
         if not isinstance(item, dict):
@@ -382,9 +388,7 @@ def merge_promotion_reports(reports):
     merged["payment_methods_seen"] = sorted(
         {str(token) for item in rows for token in (item.get("payment_methods_seen") or [])}
     )
-    merged["results"] = [
-        result for item in rows for result in (item.get("results") or []) if isinstance(result, dict)
-    ]
+    merged["results"] = [result for item in rows for result in (item.get("results") or []) if isinstance(result, dict)]
     return merged
 
 
@@ -474,15 +478,17 @@ def persist_registration_result(
         # A persistence failure (e.g. a temporary DB error) must surface as a
         # retryable terminal journal state, not propagate or leave ``running``
         # forever. The retry can re-acquire the lock from the failed record.
-        op.finish({
-            "ok": False,
-            "status": "failed",
-            "error": str(exc),
-            "error_code": f"persist_result_{type(exc).__name__.lower()}",
-            "error_stage": "persist_result",
-            "retryable": True,
-            "side_effect_started": False,
-        })
+        op.finish(
+            {
+                "ok": False,
+                "status": "failed",
+                "error": str(exc),
+                "error_code": f"persist_result_{type(exc).__name__.lower()}",
+                "error_stage": "persist_result",
+                "retryable": True,
+                "side_effect_started": False,
+            }
+        )
         return {
             "status": "failed",
             "session_saved": 0,
@@ -508,15 +514,17 @@ def persist_registration_result(
         # Logical registration failures are terminal for this persistence
         # attempt, but remain explicitly retryable because no side effect was
         # committed and a later finalization pass may safely replay them.
-        op.finish({
-            "ok": False,
-            "status": "failed",
-            "error": str(result.get("error") or "registration_result_not_persisted"),
-            "error_code": "registration_result_not_persisted",
-            "error_stage": "persist_result",
-            "retryable": True,
-            "side_effect_started": False,
-        })
+        op.finish(
+            {
+                "ok": False,
+                "status": "failed",
+                "error": str(result.get("error") or "registration_result_not_persisted"),
+                "error_code": "registration_result_not_persisted",
+                "error_stage": "persist_result",
+                "retryable": True,
+                "side_effect_started": False,
+            }
+        )
     return result
 
 
@@ -555,11 +563,10 @@ def _persist_registration_result_core(
     data[_PERSISTENCE_KEY] = marker
 
     try:
-        deferred_probe = (
-            str(data.get("registration_state") or "").strip().lower()
-            in {"at_probe_pending", "at_probe_transport_unknown"}
-            and bool(str(data.get("access_token") or "").strip())
-        )
+        deferred_probe = str(data.get("registration_state") or "").strip().lower() in {
+            "at_probe_pending",
+            "at_probe_transport_unknown",
+        } and bool(str(data.get("access_token") or "").strip())
         # 🔴 2026-09-15: ``partial_registered`` must be persisted too.
         #
         # The server has stated the address already exists; this run simply did
@@ -570,17 +577,12 @@ def _persist_registration_result_core(
         # written to stop this address from being re-registered never fired, and
         # every batch re-selected it as an "unregistered mailbox" and spent
         # another email code.
-        partial_registered = (
-            str(data.get("registration_state") or "").strip().lower() == "partial_registered"
-        )
+        partial_registered = str(data.get("registration_state") or "").strip().lower() == "partial_registered"
         if not data.get("success", False) and not deferred_probe and not partial_registered:
             failed_email = data.get("email") or data.get("phone") or "unknown"
             failed_error = str(data.get("error") or "registration_failed")
             if not marker.get("failure_reported"):
-                safe_print(
-                    f"[!] Registration failed for {mask_account(failed_email)}: "
-                    f"{failed_error[:500]}"
-                )
+                safe_print(f"[!] Registration failed for {mask_account(failed_email)}: {failed_error[:500]}")
                 marker["failure_reported"] = True
             if not marker.get("failure_audited"):
                 record_registration_audit(
@@ -598,10 +600,7 @@ def _persist_registration_result_core(
                 except Exception:
                     pass
                 marker["dead_remail_recorded"] = True
-            if (
-                failed_error == "phone_already_registered_or_login_redirect"
-                and not marker.get("skip_reported")
-            ):
+            if failed_error == "phone_already_registered_or_login_redirect" and not marker.get("skip_reported"):
                 safe_print("    Skipped: phone number already registered, not saving to database")
                 marker["skip_reported"] = True
             marker["status"] = "complete"
@@ -611,8 +610,7 @@ def _persist_registration_result_core(
         # Keep transport-unknown AT probes resumable. The account already has
         # an auth session, so persisting it is safer than replaying signup.
         data["registration_state"] = (
-            "at_probe_pending" if deferred_probe
-            else ("partial_registered" if partial_registered else "pending")
+            "at_probe_pending" if deferred_probe else ("partial_registered" if partial_registered else "pending")
         )
         if not marker.get("pending_audited"):
             record_registration_audit(
@@ -660,12 +658,9 @@ def _persist_registration_result_core(
 
         session_data["batch_id"] = batch_id
         session_data["registration_state"] = (
-            "at_probe_pending" if deferred_probe
-            else ("partial_registered" if partial_registered else "active")
+            "at_probe_pending" if deferred_probe else ("partial_registered" if partial_registered else "active")
         )
-        out_pattern = ctx.runtime_config.get("output", {}).get(
-            "filename_pattern", "session_{email}_{timestamp}.json"
-        )
+        out_pattern = ctx.runtime_config.get("output", {}).get("filename_pattern", "session_{email}_{timestamp}.json")
         os.makedirs(base_dir, exist_ok=True)
         if not marker.get("session_path"):
             identifier = (session_data.get("email") or session_data.get("phone") or "unknown").replace("+", "")
@@ -704,19 +699,12 @@ def _persist_registration_result_core(
                     # An explicit post-registration promotion check runs once
                     # for the whole batch below. Do not enqueue the same plan
                     # probe per account a second time.
-                    include_plan=not bool(
-                        getattr(args, "check_promotion_after_registration", False)
-                    ),
+                    include_plan=not bool(getattr(args, "check_promotion_after_registration", False)),
                 )
-                marker["account_health_jobs"] = [
-                    str(item.get("id") or "") for item in health_jobs if item.get("id")
-                ]
+                marker["account_health_jobs"] = [str(item.get("id") or "") for item in health_jobs if item.get("id")]
                 marker["account_health_enqueued"] = True
             except Exception as exc:
-                safe_print(
-                    "[!] Post-registration health queue warning: "
-                    f"{type(exc).__name__}"
-                )
+                safe_print(f"[!] Post-registration health queue warning: {type(exc).__name__}")
         if (
             marker.get("db_saved")
             and not deferred_probe
@@ -726,9 +714,7 @@ def _persist_registration_result_core(
             # Before the audit write and the session-saved line: the access
             # token is only minutes old, so this is the time-critical step.
             marker["promotion_checked"] = True
-            marker["promotion_report"] = probe_promotion_now(
-                args, ctx, str(session_data.get("email") or "")
-            )
+            marker["promotion_report"] = probe_promotion_now(args, ctx, str(session_data.get("email") or ""))
         if not marker.get("active_audited"):
             record_registration_audit(
                 data,
@@ -793,18 +779,17 @@ def save_registration_results(
             import_emails.append(outcome["import_email"])
             if isinstance(outcome.get("promotion_report"), Mapping):
                 inline_promotion[str(outcome["import_email"]).strip().lower()] = outcome["promotion_report"]
-        health_job_ids.extend(
-            str(item)
-            for item in (outcome.get("account_health_jobs") or [])
-            if str(item or "")
-        )
+        health_job_ids.extend(str(item) for item in (outcome.get("account_health_jobs") or []) if str(item or ""))
 
     success_count = sum(1 for r in results if r and r.get("success"))
     safe_print(f"[*] SQLite index: {ctx.database_path()} ({db_saved_count} record(s) upserted)")
-    safe_print(f"\n[*] Done. {success_count}/{effective_count} registered successfully, {saved_count} session file(s) saved.")
+    safe_print(
+        f"\n[*] Done. {success_count}/{effective_count} registered successfully, {saved_count} session file(s) saved."
+    )
     quality = None
     if getattr(args, "buy_remail_mailbox", False) or getattr(args, "remail_service_mode", None):
         from ..providers.mailbox_remail import record_remail_batch_quality
+
         quality = record_remail_batch_quality(batch_id, results, requested=effective_count)
         safe_print(
             f"[*] ReMail quality: deactivated={quality['account_deactivated']}/"
@@ -850,16 +835,14 @@ def save_registration_results(
         "quality": quality,
         "promotion": promotion_report,
         "funnel": summarize_registration_funnel(
-            results, attempted=effective_count, promotion=promotion_report,
+            results,
+            attempted=effective_count,
+            promotion=promotion_report,
         ),
         "health": {
             "queued": len(dict.fromkeys(health_job_ids)),
             "promotion_completed": promotion_report is not None,
-            "promotion_ok": (
-                bool(promotion_report.get("ok"))
-                if isinstance(promotion_report, dict)
-                else None
-            ),
+            "promotion_ok": (bool(promotion_report.get("ok")) if isinstance(promotion_report, dict) else None),
         },
     }
 
@@ -916,6 +899,7 @@ def run_target_at200(args, base_dir, ctx: RegistrationCommandContext):
                 halted = True
                 break
             round_started = time.time()
+
             def persist_completed_result(_index, result):
                 persist_registration_result(
                     args,
@@ -944,15 +928,18 @@ def run_target_at200(args, base_dir, ctx: RegistrationCommandContext):
                 run_email_func=ctx.run_email,
                 on_result=persist_completed_result,
             )
-            saved = ctx.save_results(
-                args,
-                results,
-                effective_count=len(mailboxes),
-                base_dir=base_dir,
-                pipeline_started=round_started,
-                mailbox_seconds=0,
-                register_seconds=time.time() - round_started,
-            ) or {}
+            saved = (
+                ctx.save_results(
+                    args,
+                    results,
+                    effective_count=len(mailboxes),
+                    base_dir=base_dir,
+                    pipeline_started=round_started,
+                    mailbox_seconds=0,
+                    register_seconds=time.time() - round_started,
+                )
+                or {}
+            )
             gained = int(saved.get("success") or 0)
             active += gained
             _raw_quality: object = saved.get("quality")
@@ -970,17 +957,19 @@ def run_target_at200(args, base_dir, ctx: RegistrationCommandContext):
             promotion_success += int(promotion.get("success") or 0)
             trial_eligible += int(promotion.get("trial_eligible") or 0)
             halted = bool(quality.get("halt_replenishment"))
-            rounds.append({
-                "requested": quantity,
-                "mailboxes": len(mailboxes),
-                "active": gained,
-                "deactivated": int(quality.get("account_deactivated") or 0),
-                "promotion_total": int(promotion.get("total") or 0),
-                "promotion_success": int(promotion.get("success") or 0),
-                "trial_eligible": int(promotion.get("trial_eligible") or 0),
-                "funnel": round_funnels[-1],
-                "halted": halted,
-            })
+            rounds.append(
+                {
+                    "requested": quantity,
+                    "mailboxes": len(mailboxes),
+                    "active": gained,
+                    "deactivated": int(quality.get("account_deactivated") or 0),
+                    "promotion_total": int(promotion.get("total") or 0),
+                    "promotion_success": int(promotion.get("success") or 0),
+                    "trial_eligible": int(promotion.get("trial_eligible") or 0),
+                    "funnel": round_funnels[-1],
+                    "halted": halted,
+                }
+            )
     finally:
         args.count = original_count
     report = {

@@ -12,14 +12,10 @@ from sms_tool.storage import _status
 class BatchErrorClassificationTests(unittest.TestCase):
     def test_worker_exception_is_redacted_in_result_and_console_output(self):
         def fail(**_kwargs):
-            raise RuntimeError(
-                "proxy=http://user:pass@proxy.example:8080 access_token=sk-live_secret"
-            )
+            raise RuntimeError("proxy=http://user:pass@proxy.example:8080 access_token=sk-live_secret")
 
         output = StringIO()
-        with redirect_stdout(output), patch(
-            "sms_tool.batch_runner.CFG", {"email_registration": {}}
-        ):
+        with redirect_stdout(output), patch("sms_tool.batch_runner.CFG", {"email_registration": {}}):
             result = run_batch_impl(
                 count=1,
                 workers=1,
@@ -118,19 +114,26 @@ class BatchErrorClassificationTests(unittest.TestCase):
             def record(self, *_args, **_kwargs):
                 pass
 
-        with patch("sms_tool.batch_runner.ProxyHealthTracker", FlatteningTracker), \
-             patch("sms_tool.batch_runner.refresh_proxy_sid", side_effect=lambda value: value), \
-             patch(
-                 "sms_tool.batch_runner.probe_proxy_with_scheme_detection",
-                 return_value={"ok": True, "country_code": "IN"},
-             ):
+        with (
+            patch("sms_tool.batch_runner.ProxyHealthTracker", FlatteningTracker),
+            patch("sms_tool.batch_runner.refresh_proxy_sid", side_effect=lambda value: value),
+            patch(
+                "sms_tool.batch_runner.probe_proxy_with_scheme_detection",
+                return_value={"ok": True, "country_code": "IN"},
+            ),
+        ):
             selected = select_registration_proxy_pool(pool)
 
         hosts = [urlsplit(value).hostname for value in selected]
-        self.assertEqual(hosts, [
-            "provider-a.example", "provider-b.example",
-            "provider-a.example", "provider-b.example",
-        ])
+        self.assertEqual(
+            hosts,
+            [
+                "provider-a.example",
+                "provider-b.example",
+                "provider-a.example",
+                "provider-b.example",
+            ],
+        )
 
     def test_account_proxy_egress_is_pinned_across_retries(self):
         # Audit #4: rotating the egress on every retry looks like proxy churn
@@ -146,9 +149,11 @@ class BatchErrorClassificationTests(unittest.TestCase):
                 return {"success": False, "error": "proxy connection timed out", "failure_class": "network"}
             return {"success": True}
 
-        with patch("sms_tool.batch_runner.select_registration_proxy_pool", return_value=pool), \
-             patch("sms_tool.batch_runner.refresh_proxy_sid", side_effect=lambda value: value + "-sid"), \
-             patch("sms_tool.batch_runner.CFG", {"email_registration": {}}):
+        with (
+            patch("sms_tool.batch_runner.select_registration_proxy_pool", return_value=pool),
+            patch("sms_tool.batch_runner.refresh_proxy_sid", side_effect=lambda value: value + "-sid"),
+            patch("sms_tool.batch_runner.CFG", {"email_registration": {}}),
+        ):
             results = run_batch_impl(
                 count=2,
                 proxy_pool=pool,

@@ -24,7 +24,9 @@ class BrowserRegistrationContext:
     auth_base: str
 
 
-def prepare_browser_context(config: Mapping[str, Any], driver_name: str, browser_headless: bool | None) -> BrowserRegistrationContext:
+def prepare_browser_context(
+    config: Mapping[str, Any], driver_name: str, browser_headless: bool | None
+) -> BrowserRegistrationContext:
     selected = _driver_config(config, driver_name)
     if browser_headless is not None:
         headless = bool(browser_headless)

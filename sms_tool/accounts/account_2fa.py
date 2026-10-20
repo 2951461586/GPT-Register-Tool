@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 def _impersonate() -> str:
     try:
         from ..auth_headers import auth_impersonate
+
         return auth_impersonate()
     except Exception:
         return "chrome146"
@@ -36,6 +37,7 @@ def _impersonate() -> str:
 def _trigger_password_reauth(session, csrf_token: str, email: str, did: str, base_headers: dict) -> str:
     """POST /api/auth/signin/openai?reauth=password → triggers email OTP dispatch."""
     import urllib.parse
+
     auth_base = "https://auth.openai.com"
     query = {
         "connection": "password",
@@ -48,13 +50,16 @@ def _trigger_password_reauth(session, csrf_token: str, email: str, did: str, bas
     headers = dict(base_headers)
     headers["content-type"] = "application/x-www-form-urlencoded"
     headers["origin"] = "https://chatgpt.com"
-    body = urllib.parse.urlencode({
-        "callbackUrl": "https://chatgpt.com/?action=enable&factor=totp",
-        "csrfToken": csrf_token,
-        "json": "true",
-    })
-    r = request_with_retry(session, "post", url, headers=headers, data=body,
-                           impersonate=_impersonate(), label="2FA reauth signin")
+    body = urllib.parse.urlencode(
+        {
+            "callbackUrl": "https://chatgpt.com/?action=enable&factor=totp",
+            "csrfToken": csrf_token,
+            "json": "true",
+        }
+    )
+    r = request_with_retry(
+        session, "post", url, headers=headers, data=body, impersonate=_impersonate(), label="2FA reauth signin"
+    )
     r.raise_for_status()
     data = r.json()
     auth_url = data.get("url")
@@ -69,8 +74,15 @@ def _follow_reauth_authorize(session, auth_url: str, base_headers: dict) -> None
     headers["Referer"] = "https://chatgpt.com/"
     headers["sec-fetch-mode"] = "navigate"
     headers["sec-fetch-dest"] = "document"
-    r = request_with_retry(session, "get", auth_url, headers=headers, allow_redirects=True,
-                           impersonate=_impersonate(), label="2FA reauth authorize")
+    r = request_with_retry(
+        session,
+        "get",
+        auth_url,
+        headers=headers,
+        allow_redirects=True,
+        impersonate=_impersonate(),
+        label="2FA reauth authorize",
+    )
     r.raise_for_status()
 
 
@@ -78,8 +90,7 @@ def _fetch_csrf_token(session, base_headers: dict) -> str:
     url = "https://chatgpt.com/api/auth/csrf"
     headers = dict(base_headers)
     headers["Accept"] = "application/json"
-    r = request_with_retry(session, "get", url, headers=headers,
-                           impersonate=_impersonate(), label="2FA csrf")
+    r = request_with_retry(session, "get", url, headers=headers, impersonate=_impersonate(), label="2FA csrf")
     r.raise_for_status()
     return r.json()["csrfToken"]
 
@@ -92,8 +103,9 @@ def _validate_email_otp(session, code: str, base_headers: dict) -> str:
     headers["origin"] = "https://auth.openai.com"
     headers["referer"] = "https://auth.openai.com/email-verification"
     body = json.dumps({"code": code})
-    r = request_with_retry(session, "post", url, headers=headers, data=body,
-                           impersonate=_impersonate(), label="2FA email otp validate")
+    r = request_with_retry(
+        session, "post", url, headers=headers, data=body, impersonate=_impersonate(), label="2FA email otp validate"
+    )
     r.raise_for_status()
     data = r.json()
     continue_url = data.get("continue_url")
@@ -109,8 +121,15 @@ def _exchange_token_after_reauth(session, continue_url: str, base_headers: dict)
     headers["Referer"] = "https://auth.openai.com/email-verification"
     headers["sec-fetch-mode"] = "navigate"
     headers["sec-fetch-dest"] = "document"
-    request_with_retry(session, "get", continue_url, headers=headers, allow_redirects=True,
-                       impersonate=_impersonate(), label="2FA reauth continue")
+    request_with_retry(
+        session,
+        "get",
+        continue_url,
+        headers=headers,
+        allow_redirects=True,
+        impersonate=_impersonate(),
+        label="2FA reauth continue",
+    )
 
     # Fetch fresh session
     chat_base = "https://chatgpt.com"
@@ -118,8 +137,7 @@ def _exchange_token_after_reauth(session, continue_url: str, base_headers: dict)
     headers2 = dict(base_headers)
     headers2["Accept"] = "application/json"
     headers2["Referer"] = f"{chat_base}/"
-    r = request_with_retry(session, "get", url, headers=headers2,
-                           impersonate=_impersonate(), label="2FA auth session")
+    r = request_with_retry(session, "get", url, headers=headers2, impersonate=_impersonate(), label="2FA auth session")
     r.raise_for_status()
     data = r.json()
     access_token = data.get("accessToken")
@@ -137,8 +155,15 @@ def _enroll_totp(session, access_token: str, did: str, base_headers: dict) -> tu
     headers["oai-language"] = "en-US"
     headers["Content-Type"] = "application/json"
     headers["Referer"] = "https://chatgpt.com/"
-    r = request_with_retry(session, "post", url, headers=headers, json={"factor_type": "totp"},
-                           impersonate=_impersonate(), label="2FA mfa enroll")
+    r = request_with_retry(
+        session,
+        "post",
+        url,
+        headers=headers,
+        json={"factor_type": "totp"},
+        impersonate=_impersonate(),
+        label="2FA mfa enroll",
+    )
     if r.status_code != 200:
         raise RuntimeError(f"mfa enroll HTTP {r.status_code}: {r.text[:300]}")
     data = r.json()
@@ -165,7 +190,9 @@ def _activate_totp(session, access_token: str, did: str, secret: str, session_id
     headers["Referer"] = "https://chatgpt.com/"
     totp_code = pyotp.TOTP(secret).now()
     r = request_with_retry(
-        session, "post", url,
+        session,
+        "post",
+        url,
         headers=headers,
         json={"code": totp_code, "factor_type": "totp", "session_id": session_id},
         impersonate=_impersonate(),
@@ -187,8 +214,9 @@ def _mfa_info(session, access_token: str, did: str, base_headers: dict) -> dict[
     headers["oai-language"] = "en-US"
     headers["Referer"] = "https://chatgpt.com/"
     try:
-        response = request_with_retry(session, "get", url, headers=headers,
-                                      impersonate=_impersonate(), label="2FA mfa info")
+        response = request_with_retry(
+            session, "get", url, headers=headers, impersonate=_impersonate(), label="2FA mfa info"
+        )
     except Exception:
         return None
     if response.status_code != 200:
@@ -213,9 +241,16 @@ def _totp_already_enabled(info: dict[str, Any] | None) -> bool:
 
 def _needs_reauth(error: BaseException) -> bool:
     text = str(error).lower()
-    return any(token in text for token in (
-        "recent_auth_required", "reauth", "login_challenge", "mfa enroll http 401", "mfa enroll http 403",
-    ))
+    return any(
+        token in text
+        for token in (
+            "recent_auth_required",
+            "reauth",
+            "login_challenge",
+            "mfa enroll http 401",
+            "mfa enroll http 403",
+        )
+    )
 
 
 def _enroll_and_activate_inline(session, access_token: str, did: str, base_headers: dict) -> dict[str, Any]:
@@ -300,12 +335,14 @@ def setup_totp_2fa(
             secret, session_id = _enroll_totp(session, access_token, did, base_headers)
             _activate_totp(session, access_token, did, secret, session_id, base_headers)
             verified = _mfa_info(session, access_token, did, base_headers)
-            result.update({
-                "ok": True,
-                "totp_secret": secret,
-                "access_token": access_token,
-                "mfa_enabled": bool(verified and verified.get("mfa_enabled")),
-            })
+            result.update(
+                {
+                    "ok": True,
+                    "totp_secret": secret,
+                    "access_token": access_token,
+                    "mfa_enabled": bool(verified and verified.get("mfa_enabled")),
+                }
+            )
             return result
 
         # --- Step 1: Legacy password reauth trigger ---
@@ -364,5 +401,3 @@ def setup_totp_2fa(
         logger.error(f"[2FA] ❌ Failed: {e}")
         result["error"] = str(e)
     return result
-
-

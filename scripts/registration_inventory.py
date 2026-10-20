@@ -42,8 +42,10 @@ def cleanup_inventory(runtime: Path) -> dict:
         if not path.is_file():
             continue
         name = path.name.lower()
-        if path.suffix == ".py" or name.startswith("venv_install") or (
-            path.suffix == ".log" and name.startswith(("camoufox_", "cloak_", "_"))
+        if (
+            path.suffix == ".py"
+            or name.startswith("venv_install")
+            or (path.suffix == ".log" and name.startswith(("camoufox_", "cloak_", "_")))
         ):
             group = "review_debug_artifacts"
         elif path.suffix in {".sqlite3", ".db"} or "backup" in name or ".pre_" in name:
@@ -61,7 +63,9 @@ def cleanup_inventory(runtime: Path) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
-    parser.add_argument("--pool-file", type=Path, default=None, help="default: the mailbox pool in the config directory")
+    parser.add_argument(
+        "--pool-file", type=Path, default=None, help="default: the mailbox pool in the config directory"
+    )
     args = parser.parse_args()
     pool_file = args.pool_file
     if pool_file is None:
@@ -69,10 +73,16 @@ def main() -> None:
         from sms_tool.kernel.paths import resolve_config_file
 
         pool_file = resolve_config_file(None)
-    print(json.dumps({
-        "candidates": candidate_counts(pool_file),
-        "cleanup": cleanup_inventory(args.root / "runtime"),
-    }, ensure_ascii=True, indent=2))
+    print(
+        json.dumps(
+            {
+                "candidates": candidate_counts(pool_file),
+                "cleanup": cleanup_inventory(args.root / "runtime"),
+            },
+            ensure_ascii=True,
+            indent=2,
+        )
+    )
 
 
 if __name__ == "__main__":

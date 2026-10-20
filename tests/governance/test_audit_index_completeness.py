@@ -22,9 +22,7 @@ import re
 import unittest
 from pathlib import Path
 
-_AUDITS = (
-    Path(__file__).resolve().parent.parent.parent / "docs" / "audits"
-)
+_AUDITS = Path(__file__).resolve().parent.parent.parent / "docs" / "audits"
 _INDEX = _AUDITS / "README.md"
 
 # Files that legitimately live in docs/audits/ without being indexed.
@@ -38,11 +36,7 @@ _BARE_FILENAME = re.compile(r"`([A-Za-z0-9_.\-]+\.(?:md|txt))`")
 
 def audit_files_on_disk() -> set[str]:
     """Every indexable file under ``docs/audits/`` (including its kind subdirectories)."""
-    return {
-        p.name
-        for p in _AUDITS.rglob("*")
-        if p.is_file() and p.suffix in {".md", ".txt"}
-    } - _EXEMPT_FILES
+    return {p.name for p in _AUDITS.rglob("*") if p.is_file() and p.suffix in {".md", ".txt"}} - _EXEMPT_FILES
 
 
 def filenames_mentioned_in_index() -> set[str]:
@@ -98,9 +92,7 @@ class AuditIndexCompleteness(unittest.TestCase):
         )
 
     def test_index_never_references_a_file_that_does_not_exist(self):
-        dangling = sorted(
-            filenames_mentioned_anywhere() - audit_files_on_disk() - _EXEMPT_FILES
-        )
+        dangling = sorted(filenames_mentioned_anywhere() - audit_files_on_disk() - _EXEMPT_FILES)
         self.assertEqual(
             [],
             dangling,
@@ -114,11 +106,7 @@ class AuditIndexCompleteness(unittest.TestCase):
         two set checks above while being useless as an index.
         """
         text = _INDEX.read_text(encoding="utf-8")
-        rows = [
-            line
-            for line in text.splitlines()
-            if line.startswith("| `") and ".md`" in line or ".txt`" in line
-        ]
+        rows = [line for line in text.splitlines() if line.startswith("| `") and ".md`" in line or ".txt`" in line]
         self.assertGreaterEqual(
             len(rows),
             15,

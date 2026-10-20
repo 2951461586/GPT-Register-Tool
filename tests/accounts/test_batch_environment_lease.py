@@ -74,6 +74,7 @@ def teardown_function(_func=None):
 # Acquire
 # --------------------------------------------------------------------------
 
+
 def test_hold_leases_the_configured_egress_of_the_attempt():
     with _TempDb() as db:
         lease = _hold_environment_lease(POOL_A, account_ref="a@x.test", batch_id="b1")
@@ -138,6 +139,7 @@ def test_an_empty_egress_never_allocates():
 # --------------------------------------------------------------------------
 # Release
 # --------------------------------------------------------------------------
+
 
 def test_release_records_the_outcome_and_frees_the_egress():
     with _TempDb():
@@ -207,8 +209,10 @@ def test_release_survives_a_ledger_failure():
     """
     with _TempDb():
         lease = _hold_environment_lease(POOL_A, account_ref="a@x.test", batch_id="b1")
-        with patch("sms_tool.batch_runner.record_environment_observations", side_effect=RuntimeError("db gone")), \
-             patch("sms_tool.batch_runner.release_environment_lease", side_effect=RuntimeError("db gone")):
+        with (
+            patch("sms_tool.batch_runner.record_environment_observations", side_effect=RuntimeError("db gone")),
+            patch("sms_tool.batch_runner.release_environment_lease", side_effect=RuntimeError("db gone")),
+        ):
             _release_environment_lease(lease, {"success": True}, POOL_A)
 
         # Nothing was recorded because both writes failed -- and nothing raised.
@@ -218,6 +222,7 @@ def test_release_survives_a_ledger_failure():
 # --------------------------------------------------------------------------
 # The IP read must never probe
 # --------------------------------------------------------------------------
+
 
 def test_cached_exit_ip_reads_the_cache_without_probing():
     remember_proxy_geo(POOL_A, ProxyGeo(ip="198.51.100.7", country="US"))
@@ -237,6 +242,7 @@ def test_cached_exit_ip_is_blank_when_nothing_was_measured():
 # End to end through run_batch_impl
 # --------------------------------------------------------------------------
 
+
 class _NoopGuard:
     def __init__(self, *_args, **_kwargs):
         pass
@@ -254,12 +260,14 @@ class _NoopGuard:
 def _run_batch_over(*, proxy_pool, mailboxes, run_email, workers, count):
     from sms_tool.batch_runner import run_batch_impl
 
-    with patch("sms_tool.batch_runner.CFG", {"email_registration": {}, "registration": {"driver": "protocol"}}), \
-         patch("sms_tool.batch_runner.RegistrationRetryGuard", _NoopGuard), \
-         patch("sms_tool.batch_runner.ProxyHealthTracker"), \
-         patch("sms_tool.batch_runner.get_account_records", return_value={}), \
-         patch("sms_tool.batch_runner.list_account_records", return_value=[]), \
-         patch("sms_tool.batch_runner.get_registration_checkpoints", return_value={}):
+    with (
+        patch("sms_tool.batch_runner.CFG", {"email_registration": {}, "registration": {"driver": "protocol"}}),
+        patch("sms_tool.batch_runner.RegistrationRetryGuard", _NoopGuard),
+        patch("sms_tool.batch_runner.ProxyHealthTracker"),
+        patch("sms_tool.batch_runner.get_account_records", return_value={}),
+        patch("sms_tool.batch_runner.list_account_records", return_value=[]),
+        patch("sms_tool.batch_runner.get_registration_checkpoints", return_value={}),
+    ):
         return run_batch_impl(
             count=count,
             proxy_pool=list(proxy_pool),
@@ -307,25 +315,23 @@ def test_every_attempt_in_a_batch_is_accounted_for():
                 "auth_fingerprint_profile": "chrome136",
             }
 
-        results = _run_batch_over(
-            proxy_pool=[proxy], mailboxes=mailboxes, run_email=run_email, workers=2, count=2
-        )
+        results = _run_batch_over(proxy_pool=[proxy], mailboxes=mailboxes, run_email=run_email, workers=2, count=2)
 
         assert len(results) == 2
         assert all(result.get("success") for result in results)
 
         rows = list_environment_leases(limit=10)
         assert rows, "the batch must leave a record at all"
-        assert all(row["exit_key"] == "http://plain.proxy.example:8080" for row in rows), \
+        assert all(row["exit_key"] == "http://plain.proxy.example:8080" for row in rows), (
             "a non-sticky entry has exactly one configured egress"
+        )
         assert all(row["state"] == "released" for row in rows)
         assert all(row["active_holders"] == 0 for row in rows)
         assert all(row["reason"] == "registered" for row in rows)
         assert all(row["observed_fingerprint_key"] == "chrome136" for row in rows)
 
         assert len(rows) + sum(int(row["reuse_count"]) for row in rows) == 2, (
-            f"every attempt must be accounted for: rows={len(rows)}, "
-            f"reuse={[row['reuse_count'] for row in rows]}"
+            f"every attempt must be accounted for: rows={len(rows)}, reuse={[row['reuse_count'] for row in rows]}"
         )
 
 
@@ -344,9 +350,7 @@ def test_a_sticky_pool_entry_gives_each_attempt_its_own_key():
         def run_email(**kwargs):
             return {"success": True, "email": kwargs.get("mailbox").email}
 
-        results = _run_batch_over(
-            proxy_pool=[POOL_A], mailboxes=mailboxes, run_email=run_email, workers=1, count=2
-        )
+        results = _run_batch_over(proxy_pool=[POOL_A], mailboxes=mailboxes, run_email=run_email, workers=1, count=2)
 
         assert len(results) == 2
         rows = list_environment_leases(limit=10)
@@ -369,9 +373,7 @@ def test_a_failed_attempt_still_releases_its_lease():
         def run_email(**_kwargs):
             raise RuntimeError("worker blew up")
 
-        results = _run_batch_over(
-            proxy_pool=[POOL_A], mailboxes=[mailbox], run_email=run_email, workers=1, count=1
-        )
+        results = _run_batch_over(proxy_pool=[POOL_A], mailboxes=[mailbox], run_email=run_email, workers=1, count=1)
 
         assert len(results) == 1
         rows = list_environment_leases(limit=10)

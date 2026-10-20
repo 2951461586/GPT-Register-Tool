@@ -15,6 +15,7 @@ being swallowed by the WPF stdout capture:
 The previous state was 534 ``print()`` calls with zero rotation and zero
 persistence. The call is idempotent: a second invocation is a no-op.
 """
+
 from __future__ import annotations
 
 import logging
@@ -53,6 +54,7 @@ _STRUCTURED_RECORD_FIELDS = (
     "matched",
     "registration_status",
 )
+
 
 class CorrelatedJsonFormatter(logging.Formatter):
     """One JSON envelope; sanitize both message arguments and exception text."""
@@ -112,9 +114,7 @@ _MODULE_LABELS = {
     # WPF panel renders without any formatter).
     "py.warnings": "告警",
 }
-_MODULE_LABELS_SORTED = tuple(
-    sorted(_MODULE_LABELS.items(), key=lambda item: -len(item[0]))
-)
+_MODULE_LABELS_SORTED = tuple(sorted(_MODULE_LABELS.items(), key=lambda item: -len(item[0])))
 
 _STAGE_LABELS = {
     "created": "已创建",
@@ -336,7 +336,8 @@ def _install_exception_hooks() -> None:
         if not issubclass(exc_type, KeyboardInterrupt):
             try:
                 crash_logger.critical(
-                    "uncaught exception: %s", exc_value,
+                    "uncaught exception: %s",
+                    exc_value,
                     exc_info=(exc_type, exc_value, exc_tb),
                     extra={"event": "uncaught_exception"},
                 )
@@ -352,7 +353,8 @@ def _install_exception_hooks() -> None:
         try:
             crash_logger.critical(
                 "uncaught exception in thread %s: %s",
-                getattr(args.thread, "name", "?"), args.exc_value,
+                getattr(args.thread, "name", "?"),
+                args.exc_value,
                 exc_info=(args.exc_type, args.exc_value, args.exc_traceback),
                 extra={"event": "uncaught_thread_exception"},
             )

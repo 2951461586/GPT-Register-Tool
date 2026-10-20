@@ -27,20 +27,29 @@ class PaymentCapabilityBatchTests(unittest.TestCase):
             "conclusive": True,
             "decision": "payment_method_available",
         }
-        matrix = {"cells": [{
-            "name": "id-gopay",
-            "payment_method": "gopay",
-            "registration_country": "ID",
-            "checkout_country": "ID",
-            "provider_country": "ID",
-        }]}
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(payment_batch, "normalize_payment_method", return_value="gopay"), \
-             patch.object(payment_batch, "ensure_payment_access_token", return_value=auth), \
-             patch.object(payment_batch, "probe_payment_method", return_value=capability) as probe, \
-             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "probe.json"):
+        matrix = {
+            "cells": [
+                {
+                    "name": "id-gopay",
+                    "payment_method": "gopay",
+                    "registration_country": "ID",
+                    "checkout_country": "ID",
+                    "provider_country": "ID",
+                }
+            ]
+        }
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(payment_batch, "normalize_payment_method", return_value="gopay"),
+            patch.object(payment_batch, "ensure_payment_access_token", return_value=auth),
+            patch.object(payment_batch, "probe_payment_method", return_value=capability) as probe,
+            patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "probe.json"),
+        ):
             report = payment_batch.run_payment_batch(
-                ["a@example.com"], payment_method="gopay", probe_only=True, matrix=matrix,
+                ["a@example.com"],
+                payment_method="gopay",
+                probe_only=True,
+                matrix=matrix,
             )
         self.assertEqual(probe.call_args.kwargs["checkout_country"], "ID")
         self.assertEqual(report["matrix"][0]["eligible"], 1)
@@ -81,12 +90,14 @@ class PaymentCapabilityBatchTests(unittest.TestCase):
         }
         checkout_proxy = "http://id-checkout.test:80"
         promotion_proxy = "http://th-promotion.test:80"
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(payment_batch, "load_account_seed", return_value=({"registration_country": "ID"}, "")), \
-             patch.object(payment_batch, "ensure_payment_access_token", return_value=auth), \
-             patch.object(payment_batch, "_record_canary_state", return_value={"paused": False}), \
-             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "gopay-canary.json"), \
-             patch("sms_tool.payment_capability.payment_method_capability_probe") as generic_probe:
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(payment_batch, "load_account_seed", return_value=({"registration_country": "ID"}, "")),
+            patch.object(payment_batch, "ensure_payment_access_token", return_value=auth),
+            patch.object(payment_batch, "_record_canary_state", return_value={"paused": False}),
+            patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "gopay-canary.json"),
+            patch("sms_tool.payment_capability.payment_method_capability_probe") as generic_probe,
+        ):
             report = payment_batch.run_payment_batch(
                 ["a@example.com"],
                 payment_method="gopay",
@@ -116,16 +127,20 @@ class PaymentCapabilityBatchTests(unittest.TestCase):
     def test_unknown_capability_canary_pauses_profile(self):
         report = {
             "probe_only": True,
-            "results": [{
-                "capability_probed": True,
-                "classification": "unknown",
-                "decision": "stripe_init_failed",
-                "retryable": True,
-            }],
+            "results": [
+                {
+                    "capability_probed": True,
+                    "classification": "unknown",
+                    "decision": "stripe_init_failed",
+                    "retryable": True,
+                }
+            ],
             "counts": {},
         }
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(payment_batch, "_canary_state_path", return_value=Path(tmp) / "state.json"):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(payment_batch, "_canary_state_path", return_value=Path(tmp) / "state.json"),
+        ):
             state = payment_batch._record_canary_state("gopay", report)
         self.assertTrue(state["paused"])
         self.assertEqual(state["capability_probed"], 1)
@@ -133,16 +148,20 @@ class PaymentCapabilityBatchTests(unittest.TestCase):
     def test_conclusive_unavailable_method_does_not_pause_profile(self):
         report = {
             "probe_only": True,
-            "results": [{
-                "capability_probed": True,
-                "classification": "ineligible",
-                "conclusive": True,
-                "decision": "payment_method_unavailable",
-            }],
+            "results": [
+                {
+                    "capability_probed": True,
+                    "classification": "ineligible",
+                    "conclusive": True,
+                    "decision": "payment_method_unavailable",
+                }
+            ],
             "counts": {},
         }
-        with tempfile.TemporaryDirectory() as tmp, \
-             patch.object(payment_batch, "_canary_state_path", return_value=Path(tmp) / "state.json"):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(payment_batch, "_canary_state_path", return_value=Path(tmp) / "state.json"),
+        ):
             state = payment_batch._record_canary_state("gopay", report)
         self.assertFalse(state["paused"])
         self.assertEqual(state["completed"], 1)

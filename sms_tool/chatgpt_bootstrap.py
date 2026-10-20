@@ -160,15 +160,22 @@ def _auth_headers(access_token: str = "", device_id: str = "") -> dict[str, str]
     headers = {"Referer": REFERER, "oai-language": "en-US"}
     token = str(access_token or "").strip()
     if token:
-        headers["Authorization"] = (
-            token if token.lower().startswith("bearer ") else f"Bearer {token}"
-        )
+        headers["Authorization"] = token if token.lower().startswith("bearer ") else f"Bearer {token}"
     if device_id:
         headers["oai-device-id"] = str(device_id)
     return headers
 
 
-def _run_paths(page: Any, base: str, paths: tuple[str, ...], headers: dict[str, str], tz: int, *, strict: bool, stats: dict[str, int]) -> None:
+def _run_paths(
+    page: Any,
+    base: str,
+    paths: tuple[str, ...],
+    headers: dict[str, str],
+    tz: int,
+    *,
+    strict: bool,
+    stats: dict[str, int],
+) -> None:
     for path in paths:
         url = f"{base}{path.format(tz=tz)}"
         _get(page, url, headers, label=path.split("?")[0], strict=strict, stats=stats)
@@ -190,8 +197,13 @@ def anonymous_bootstrap(
     logger.info("[bootstrap] anonymous ChatGPT warm-up start")
     try:
         _run_paths(
-            page, ANON_BASE, _ANON_PATHS, _auth_headers(), tz,
-            strict=strict, stats=stats,
+            page,
+            ANON_BASE,
+            _ANON_PATHS,
+            _auth_headers(),
+            tz,
+            strict=strict,
+            stats=stats,
         )
     except Exception as exc:
         # strict is a diagnostic escape hatch: surface the real error so a
@@ -203,7 +215,8 @@ def anonymous_bootstrap(
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}", "stats": stats}
     logger.info(
         "[bootstrap] anonymous ChatGPT warm-up done ok=%s failed=%s",
-        stats["ok"], stats["failed"],
+        stats["ok"],
+        stats["failed"],
     )
     return {"ok": stats["failed"] == 0, "stats": stats}
 
@@ -226,9 +239,13 @@ def authenticated_bootstrap(
     logger.info("[bootstrap] authenticated ChatGPT warm-up start")
     try:
         _run_paths(
-            page, API_BASE, _AUTH_PATHS,
-            _auth_headers(access_token, device_id), tz,
-            strict=strict, stats=stats,
+            page,
+            API_BASE,
+            _AUTH_PATHS,
+            _auth_headers(access_token, device_id),
+            tz,
+            strict=strict,
+            stats=stats,
         )
     except Exception as exc:
         # strict is a diagnostic escape hatch: surface the real error so a
@@ -240,7 +257,8 @@ def authenticated_bootstrap(
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}", "stats": stats}
     logger.info(
         "[bootstrap] authenticated ChatGPT warm-up done ok=%s failed=%s",
-        stats["ok"], stats["failed"],
+        stats["ok"],
+        stats["failed"],
     )
     return {"ok": stats["failed"] == 0, "stats": stats}
 
@@ -272,9 +290,7 @@ def run_authenticated_bootstrap(
     if not cfg["enabled"] or not cfg["authenticated"]:
         return {"ok": True, "skipped": True, "reason": "disabled"}
     try:
-        return authenticated_bootstrap(
-            page, access_token, device_id=device_id, strict=False
-        )
+        return authenticated_bootstrap(page, access_token, device_id=device_id, strict=False)
     except Exception as exc:  # defensive: warm-up must never break registration
         logger.debug("[bootstrap] authenticated warm-up crashed: %s", exc)
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}

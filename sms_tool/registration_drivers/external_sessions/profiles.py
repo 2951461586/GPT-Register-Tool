@@ -14,7 +14,9 @@ def _browser_profile_dir(driver: str, profile_id: str, config: Mapping[str, Any]
 
 
 def _inject_screen_size(
-    config: Mapping[str, Any], driver: str, size: tuple[int, int] | None,
+    config: Mapping[str, Any],
+    driver: str,
+    size: tuple[int, int] | None,
 ) -> Mapping[str, Any]:
     """Feed the pooled screen size into a driver that can consume it (P1-3).
 
@@ -48,7 +50,9 @@ def _inject_screen_size(
 
 
 def _inject_browser_profile(
-    config: Mapping[str, Any], driver: str, browser_identity: Mapping[str, Any] | None,
+    config: Mapping[str, Any],
+    driver: str,
+    browser_identity: Mapping[str, Any] | None,
 ) -> Mapping[str, Any]:
     if not browser_identity or not browser_identity.get("profile_id"):
         return config

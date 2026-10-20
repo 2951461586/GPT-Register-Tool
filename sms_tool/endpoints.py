@@ -79,8 +79,7 @@ def chatgpt_checkout_page(processor_entity: str, checkout_id: str) -> str:
 def chatgpt_checkout_verify(cs_id: str, processor_entity: str) -> str:
     """The success/verify URL Stripe returns to after a completed payment."""
     return (
-        f"{CHATGPT_BASE}/checkout/verify?stripe_session_id={cs_id}"
-        f"&processor_entity={processor_entity}&plan_type=plus"
+        f"{CHATGPT_BASE}/checkout/verify?stripe_session_id={cs_id}&processor_entity={processor_entity}&plan_type=plus"
     )
 
 

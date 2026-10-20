@@ -9,6 +9,7 @@ out *after* spending an email OTP on the way to ``/about-you``.
 These tests pin the skip and, just as importantly, the ways it must **not**
 fire: a non-``registered`` row, an unreadable database, and the off switch.
 """
+
 from __future__ import annotations
 
 from unittest.mock import Mock, patch
@@ -149,6 +150,7 @@ def _drop_all(pool):
 # the predicate
 # --------------------------------------------------------------------------
 
+
 def test_a_registered_mailbox_is_dropped_and_the_rest_kept():
     with _records({"used@example.com": {"status": "registered"}}):
         kept, skipped = _drop(_pool("used@example.com", "fresh@example.com"))
@@ -213,6 +215,7 @@ def test_the_switch_turns_the_skip_off():
 # end to end: the signup lane must not be reached
 # --------------------------------------------------------------------------
 
+
 def test_a_fully_registered_pool_never_reaches_the_signup_lane():
     calls = []
     pool = _pool("a@example.com", "b@example.com")
@@ -248,6 +251,7 @@ def test_only_the_fresh_mailbox_reaches_the_signup_lane():
 # --------------------------------------------------------------------------
 # the command layer filters first; the inner filter must stay quiet
 # --------------------------------------------------------------------------
+
 
 def test_the_public_filter_reports_once_and_is_idempotent(capsys):
     """The command layer calls this before sizing or billing the batch."""
@@ -286,6 +290,7 @@ def test_run_batch_impl_stays_quiet_after_the_caller_filtered(capsys):
 # wiring guards: the filter must run *before* the batch is sized or billed
 # --------------------------------------------------------------------------
 
+
 def _source(relative):
     from pathlib import Path
 
@@ -319,6 +324,7 @@ def test_the_target_at200_loop_filters_before_counting_purchases():
 # --------------------------------------------------------------------------
 # dead ends: the server said "already registered" and we hold no credentials
 # --------------------------------------------------------------------------
+
 
 def test_a_dead_end_mailbox_is_skipped_without_an_account_row():
     """The row is *absent* from ``accounts.sqlite3`` -- that is the whole point.
@@ -402,9 +408,7 @@ def test_expired_recovery_checkpoint_is_filtered_before_batch_sizing(monkeypatch
         lambda emails: {"stale@example.com": checkpoint},
     )
     with _records({}):
-        kept = batch_runner.filter_registered_mailboxes(
-            _pool("stale@example.com", "fresh@example.com")
-        )
+        kept = batch_runner.filter_registered_mailboxes(_pool("stale@example.com", "fresh@example.com"))
 
     assert [item.email for item in kept] == ["fresh@example.com"]
     assert "unrecoverable registration state" in capsys.readouterr().out
@@ -451,9 +455,7 @@ def test_the_inner_guard_also_stops_a_dead_end_the_filter_let_through():
     """
     calls = []
     with (
-        patch.object(
-            batch_runner, "CFG", {"registration": {"skip_registered_mailboxes": False}}
-        ),
+        patch.object(batch_runner, "CFG", {"registration": {"skip_registered_mailboxes": False}}),
         _records({}),
         _guard_with(["dead@example.com"]),
     ):
@@ -485,9 +487,7 @@ def test_the_inner_guard_reports_otp_pending_quarantine_without_retry(monkeypatc
 
     monkeypatch.setattr(batch_runner, "RegistrationRetryGuard", _QuarantinedGuard)
     with (
-        patch.object(
-            batch_runner, "CFG", {"registration": {"skip_registered_mailboxes": False}}
-        ),
+        patch.object(batch_runner, "CFG", {"registration": {"skip_registered_mailboxes": False}}),
         _records({}),
     ):
         results = batch_runner.run_batch_impl(
@@ -507,6 +507,7 @@ def test_the_inner_guard_reports_otp_pending_quarantine_without_retry(monkeypatc
 # alias/base conflicts: reordered, never skipped
 # --------------------------------------------------------------------------
 
+
 def test_an_alias_over_an_occupied_base_is_deferred_not_skipped():
     """Measured 2026-09-15: 292 of that day's 305 ``user_already_exists`` were
     aliases whose base already held an account.
@@ -517,9 +518,7 @@ def test_an_alias_over_an_occupied_base_is_deferred_not_skipped():
     ones.
     """
     with _records({}, bases=["taken@example.com"]):
-        kept, skipped, skipped_dead = _drop_all(
-            _pool("taken+oai01@example.com", "fresh@example.com")
-        )
+        kept, skipped, skipped_dead = _drop_all(_pool("taken+oai01@example.com", "fresh@example.com"))
 
     assert [m.email for m in kept] == ["fresh@example.com", "taken+oai01@example.com"]
     assert skipped == [] and skipped_dead == []
@@ -610,9 +609,7 @@ def test_a_base_registered_between_two_calls_defers_the_alias_on_the_second():
 def test_a_deferred_alias_is_not_announced_as_skipped(capsys):
     """Deferred mailboxes still run, so no skip line may claim otherwise."""
     with _records({}, bases=["taken@example.com"]):
-        kept = batch_runner.filter_registered_mailboxes(
-            _pool("taken+oai01@example.com", "fresh@example.com")
-        )
+        kept = batch_runner.filter_registered_mailboxes(_pool("taken+oai01@example.com", "fresh@example.com"))
         out = capsys.readouterr().out
 
     assert len(kept) == 2

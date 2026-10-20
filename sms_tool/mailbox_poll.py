@@ -57,8 +57,11 @@ def _poll_otp_with_settle(
     if settle_seconds is None:
         settle_seconds = _DEFAULT_SETTLE_SECONDS
     if is_newer is None:
-        def is_newer(a, b):
+
+        def _fallback_is_newer(a, b):
             return (a or {}).get("received_ts", 0) > (b or {}).get("received_ts", 0)
+
+        is_newer = _fallback_is_newer
 
     excluded = {str(value or "").strip() for value in (excluded_otps or ())}
     deadline = time.time() + timeout
@@ -77,7 +80,7 @@ def _poll_otp_with_settle(
                     if is_newer(newer, candidate):
                         candidate = newer
                         stable_until = time.time() + settle_seconds
-                otp_code = str(candidate.get("otp") or "")
+                otp_code = str((candidate or {}).get("otp") or "")
                 if otp_code:
                     print(f" code:{mask_otp(otp_code)}!")
                     return otp_code

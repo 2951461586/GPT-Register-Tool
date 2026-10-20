@@ -37,10 +37,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-MODULE_PATH = (
-    Path(__file__).resolve().parents[2]
-    / "services" / "protocol-payment" / "common" / "file_loading.py"
-)
+MODULE_PATH = Path(__file__).resolve().parents[2] / "services" / "protocol-payment" / "common" / "file_loading.py"
 SPEC = importlib.util.spec_from_file_location("file_loading", MODULE_PATH)
 LOADING = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
@@ -203,9 +200,7 @@ class LoadTokenTests(unittest.TestCase):
         """The tuple's order is the contract, not just its membership."""
         env = {"PP_TOKEN": "first", "IDEAL_TOKEN": "second"}
 
-        token, _ = self._call(
-            env_names=("PP_TOKEN", "IDEAL_TOKEN"), env_get=lambda name: env.get(name, "")
-        )
+        token, _ = self._call(env_names=("PP_TOKEN", "IDEAL_TOKEN"), env_get=lambda name: env.get(name, ""))
         self.assertEqual(token, "first")
 
     def test_env_path_reports_the_name_that_hit(self):
@@ -215,12 +210,8 @@ class LoadTokenTests(unittest.TestCase):
         self.assertIn("使用环境变量 TWINT_TOKEN", messages)
 
     def test_session_cookie_env_overrides_the_parsed_one(self):
-        with mock.patch.dict(
-            os.environ, {"PP_TOKEN": "tok|parsed", "PP_SESSION_TOKEN": "explicit"}, clear=False
-        ):
-            token, session = self._call(
-                normalize_token=_norm_split, env_get=lambda name: os.environ.get(name, "")
-            )
+        with mock.patch.dict(os.environ, {"PP_TOKEN": "tok|parsed", "PP_SESSION_TOKEN": "explicit"}, clear=False):
+            token, session = self._call(normalize_token=_norm_split, env_get=lambda name: os.environ.get(name, ""))
         self.assertEqual(token, "tok")
         self.assertEqual(session, "explicit")
 
@@ -276,9 +267,7 @@ class LoadTokenTests(unittest.TestCase):
             empty = Path(tmp) / "token.txt"  # exists but is empty
             empty.write_text("", encoding="utf-8", newline="\n")
             with mock.patch.dict(os.environ, {}, clear=True):
-                token, session = self._call(
-                    token_file=empty, prompt=prompt, env_get=lambda name: ""
-                )
+                token, session = self._call(token_file=empty, prompt=prompt, env_get=lambda name: "")
         self.assertEqual(token, "typed-token")
         self.assertEqual(session, "")
         self.assertEqual(prompts, ["请输入 access_token: "])
@@ -355,11 +344,13 @@ class InjectableSeamTests(unittest.TestCase):
                 if isinstance(default, ast.Attribute):
                     bound.append("%s: %s" % (node.name, ast.unparse(default)))
                 elif isinstance(default, ast.Name) and default.id in {
-                    "input", "print", "open", "shuffle",
+                    "input",
+                    "print",
+                    "open",
+                    "shuffle",
                 }:
                     builtin.append("%s: %s" % (node.name, ast.unparse(default)))
-        self.assertEqual(bound + builtin, [],
-                         "captured-early default: bound=%s builtin=%s" % (bound, builtin))
+        self.assertEqual(bound + builtin, [], "captured-early default: bound=%s builtin=%s" % (bound, builtin))
 
 
 class ModuleContractTests(unittest.TestCase):

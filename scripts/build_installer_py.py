@@ -48,8 +48,7 @@ def main() -> int:
 
     if shutil.which("powershell") is None:
         return fail(
-            "PowerShell 不可用，无法委托 build_installer.ps1。"
-            "请在 Windows 环境直接运行: scripts/build_installer.ps1"
+            "PowerShell 不可用，无法委托 build_installer.ps1。请在 Windows 环境直接运行: scripts/build_installer.ps1"
         )
 
     cmd = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(PS1), *ps_args]

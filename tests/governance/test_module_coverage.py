@@ -72,7 +72,8 @@ def test_script_exits_zero_on_real_tree() -> None:
 
 def test_unclaimed_module_fails() -> None:
     unclaimed, claims, _ = gate.check(
-        _DOC, tracked={"sms_tool/a.py", "sms_tool/b.py", "sms_tool/c.py", "sms_tool/zzz.py"},
+        _DOC,
+        tracked={"sms_tool/a.py", "sms_tool/b.py", "sms_tool/c.py", "sms_tool/zzz.py"},
         resolver=_resolver,
     )
     assert unclaimed == ["sms_tool/zzz.py"]
@@ -81,9 +82,7 @@ def test_unclaimed_module_fails() -> None:
 
 
 def test_removing_a_row_makes_its_module_unclaimed() -> None:
-    mutated = _DOC.replace(
-        "| Beta | `b.py` | second | `git ls-files sms_tool/b.py sms_tool/c.py` |\n", ""
-    )
+    mutated = _DOC.replace("| Beta | `b.py` | second | `git ls-files sms_tool/b.py sms_tool/c.py` |\n", "")
     unclaimed, _, _ = gate.check(
         mutated,
         tracked={"sms_tool/a.py", "sms_tool/b.py", "sms_tool/c.py"},
@@ -93,9 +92,7 @@ def test_removing_a_row_makes_its_module_unclaimed() -> None:
 
 
 def test_prose_rows_are_ignored() -> None:
-    _, _, rows_seen = gate.check(
-        _DOC, tracked={"sms_tool/a.py"}, resolver=_resolver
-    )
+    _, _, rows_seen = gate.check(_DOC, tracked={"sms_tool/a.py"}, resolver=_resolver)
     assert rows_seen == 2
 
 
@@ -105,18 +102,14 @@ def test_duplicate_claims_are_reported_not_fatal() -> None:
         "| Alpha | `a.py` | first | `git ls-files sms_tool/a.py sms_tool/b.py` |\n"
         "| Gamma | `b.py` | overlap | `git ls-files sms_tool/b.py` |",
     )
-    unclaimed, claims, _ = gate.check(
-        doc, tracked={"sms_tool/a.py", "sms_tool/b.py"}, resolver=_resolver
-    )
+    unclaimed, claims, _ = gate.check(doc, tracked={"sms_tool/a.py", "sms_tool/b.py"}, resolver=_resolver)
     assert unclaimed == []
     assert {"Alpha", "Gamma"} <= set(claims["sms_tool/b.py"])
 
 
 def test_check_supports_injected_tracked_set_without_git() -> None:
     # The resolver is injected, so no real Git index is consulted.
-    unclaimed, _, _ = gate.check(
-        _DOC, tracked={"sms_tool/a.py", "sms_tool/zzz.py"}, resolver=_resolver
-    )
+    unclaimed, _, _ = gate.check(_DOC, tracked={"sms_tool/a.py", "sms_tool/zzz.py"}, resolver=_resolver)
     assert unclaimed == ["sms_tool/zzz.py"]
 
 

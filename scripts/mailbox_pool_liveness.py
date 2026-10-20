@@ -138,16 +138,15 @@ def main() -> int:
         "confirmed_dead": len(confirmed_indexes),
         "quarantine": str(quarantine_path),
         "dry_run": not args.apply,
-        "results": [
-            {key: value for key, value in row.items() if key not in {"index"}}
-            for row in results
-        ],
+        "results": [{key: value for key, value in row.items() if key not in {"index"}} for row in results],
     }
     if args.apply and confirmed_indexes:
         stamp = time.strftime("%Y%m%d_%H%M%S")
         backup = args.pool_file.with_name(f"{args.pool_file.name}.pre_liveness_{stamp}")
         shutil.copy2(args.pool_file, backup)
-        args.pool_file.write_text("".join(line for index, line in enumerate(lines) if index not in confirmed_indexes), encoding="utf-8")
+        args.pool_file.write_text(
+            "".join(line for index, line in enumerate(lines) if index not in confirmed_indexes), encoding="utf-8"
+        )
         report["backup"] = str(backup)
         report["removed_lines"] = len(confirmed_indexes)
         report["remaining_lines"] = len(lines) - len(confirmed_indexes)

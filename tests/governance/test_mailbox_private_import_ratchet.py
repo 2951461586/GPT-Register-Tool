@@ -44,15 +44,11 @@ def _triples(source: str) -> set[tuple[str, str, str]]:
 
 
 def test_relative_private_import_is_counted():
-    assert _triples("from .mailbox import _poll_email_otp") == {
-        ("importer.py", "mailbox", "_poll_email_otp")
-    }
+    assert _triples("from .mailbox import _poll_email_otp") == {("importer.py", "mailbox", "_poll_email_otp")}
 
 
 def test_parent_relative_private_import_is_counted():
-    assert _triples("from ..mailbox import _load_mailbox_pool") == {
-        ("importer.py", "mailbox", "_load_mailbox_pool")
-    }
+    assert _triples("from ..mailbox import _load_mailbox_pool") == {("importer.py", "mailbox", "_load_mailbox_pool")}
 
 
 def test_absolute_package_private_import_is_counted():
@@ -100,9 +96,9 @@ def test_repeated_import_of_same_symbol_counts_once():
 
 
 def test_mixed_public_and_private_keeps_only_private():
-    assert _triples(
-        "from .mailbox import MailboxAccount, _poll_email_otp, MailboxTokenExpiredError"
-    ) == {("importer.py", "mailbox", "_poll_email_otp")}
+    assert _triples("from .mailbox import MailboxAccount, _poll_email_otp, MailboxTokenExpiredError") == {
+        ("importer.py", "mailbox", "_poll_email_otp")
+    }
 
 
 def test_attribute_access_is_a_known_blind_spot():
@@ -112,10 +108,13 @@ def test_attribute_access_is_a_known_blind_spot():
     the gate does not guess at it. This test pins the limitation so nobody
     mistakes silence for coverage.
     """
-    assert _triples("""
+    assert (
+        _triples("""
         import sms_tool.mailbox as mailbox
         mailbox._poll_email_otp()
-    """) == set()
+    """)
+        == set()
+    )
 
 
 # --------------------------------------------------------------------------
@@ -299,9 +298,7 @@ def test_cli_reports_growth_in_a_single_module(tmp_path):
 def test_cli_passes_when_the_tree_is_at_baseline(tmp_path):
     synthetic = tmp_path / "repo"
     (synthetic / "sms_tool").mkdir(parents=True)
-    (synthetic / "sms_tool" / "consumer.py").write_text(
-        "from .utils import _random_name\n", encoding="utf-8"
-    )
+    (synthetic / "sms_tool" / "consumer.py").write_text("from .utils import _random_name\n", encoding="utf-8")
     baseline_path = tmp_path / "baseline.json"
     baseline_path.write_text(
         '{"modules": {"utils": {"total": 1, "per_file": {}, "pairs": []}}}',
@@ -348,9 +345,7 @@ def test_a_watched_module_is_not_its_own_consumer(tmp_path):
     counted as a consumer of its own private surface."""
     synthetic = tmp_path / "repo"
     (synthetic / "sms_tool").mkdir(parents=True)
-    (synthetic / "sms_tool" / "utils.py").write_text(
-        "from .utils import _self_helper\n", encoding="utf-8"
-    )
+    (synthetic / "sms_tool" / "utils.py").write_text("from .utils import _self_helper\n", encoding="utf-8")
     _total, per_module, _per_file, triples = ratchet.collect(root=synthetic)
     assert per_module.get("utils", 0) == 0, f"self-import leaked: {triples}"
 
@@ -363,9 +358,7 @@ def test_a_nested_module_sharing_a_hub_name_is_still_scanned(tmp_path):
     """
     synthetic = tmp_path / "repo"
     (synthetic / "sms_tool" / "paypal").mkdir(parents=True)
-    (synthetic / "sms_tool" / "paypal" / "utils.py").write_text(
-        "from ..utils import _random_name\n", encoding="utf-8"
-    )
+    (synthetic / "sms_tool" / "paypal" / "utils.py").write_text("from ..utils import _random_name\n", encoding="utf-8")
     _total, per_module, per_file, triples = ratchet.collect(root=synthetic)
     assert per_module.get("utils", 0) == 1, f"nested consumer lost: {triples}"
     assert per_file == {"sms_tool/paypal/utils.py": 1}

@@ -48,10 +48,14 @@ def test_create_response_persists_partial_before_followup(tmp_path, monkeypatch,
         assert RegistrationRetryGuard({}).check(w.runtime.username)["registration_status"] == "partial_registered"
 
     w._operations = SimpleNamespace(
-        request_with_retry=Mock(return_value=response), _auth_request_headers=Mock(return_value={}),
-        auth_impersonate=Mock(return_value=""), _sanitize_text=str, think_stage=Mock(),
+        request_with_retry=Mock(return_value=response),
+        _auth_request_headers=Mock(return_value={}),
+        auth_impersonate=Mock(return_value=""),
+        _sanitize_text=str,
+        think_stage=Mock(),
         _is_user_already_exists=lambda data: data["error"]["code"] == "user_already_exists",
-        _follow_continue_url=Mock(side_effect=follow), _create_account_continue_url=Mock(return_value=""),
+        _follow_continue_url=Mock(side_effect=follow),
+        _create_account_continue_url=Mock(return_value=""),
     )
     w.create_account()
     assert w.runtime.existing_account
@@ -65,9 +69,9 @@ def test_partial_filter_survives_database_lookup_failure(tmp_path, monkeypatch):
     monkeypatch.setattr(batch_runner, "CFG", {})
     monkeypatch.setattr(batch_runner, "get_account_records", Mock(side_effect=OSError("unavailable")))
     RegistrationRetryGuard({}).mark_dead_end("half@example.test")
-    kept, registered, partial = batch_runner._drop_already_registered([
-        SimpleNamespace(email="half@example.test"), SimpleNamespace(email="fresh@example.test")
-    ])
+    kept, registered, partial = batch_runner._drop_already_registered(
+        [SimpleNamespace(email="half@example.test"), SimpleNamespace(email="fresh@example.test")]
+    )
     assert [row.email for row in kept] == ["fresh@example.test"]
     assert registered == []
     assert partial == ["half@example.test"]
@@ -102,9 +106,7 @@ def test_abort_result_omits_the_relogin_cause_when_the_lane_never_ran():
     w = object.__new__(RegistrationEmailWorkflow)
     w.runtime = RegistrationRuntimeState(username="fresh@example.test")
     w.machine = Mock()
-    w._operations = SimpleNamespace(
-        _failure_result=Mock(return_value={"error": "create_account_failed"})
-    )
+    w._operations = SimpleNamespace(_failure_result=Mock(return_value={"error": "create_account_failed"}))
 
     result = w._abort_result("create_account_failed")
 

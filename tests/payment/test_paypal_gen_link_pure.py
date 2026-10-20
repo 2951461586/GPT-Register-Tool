@@ -39,13 +39,17 @@ class NormalizedGenerationTypeTests(unittest.TestCase):
 
     def test_config_keys_are_tried_in_order(self):
         """link_generation_type → generation_type → paypal_generation_type。"""
-        self.assertEqual("first", gen_link._normalized_generation_type(
-            {"link_generation_type": "first", "generation_type": "second",
-             "paypal_generation_type": "third"}))
-        self.assertEqual("second", gen_link._normalized_generation_type(
-            {"generation_type": "second", "paypal_generation_type": "third"}))
-        self.assertEqual("third", gen_link._normalized_generation_type(
-            {"paypal_generation_type": "third"}))
+        self.assertEqual(
+            "first",
+            gen_link._normalized_generation_type(
+                {"link_generation_type": "first", "generation_type": "second", "paypal_generation_type": "third"}
+            ),
+        )
+        self.assertEqual(
+            "second",
+            gen_link._normalized_generation_type({"generation_type": "second", "paypal_generation_type": "third"}),
+        )
+        self.assertEqual("third", gen_link._normalized_generation_type({"paypal_generation_type": "third"}))
 
     def test_case_and_hyphens_are_normalised(self):
         for raw, expected in [
@@ -84,18 +88,28 @@ class GenerationTypePredicateTests(unittest.TestCase):
     """钉住四个谓词：一个配置值属于哪条 money path 全靠它们。"""
 
     PAYPAL_DIRECT = [
-        "pp_direct", "paypal_direct", "direct_pp", "paypal_approve", "ba_direct", "ba_approve",
+        "pp_direct",
+        "paypal_direct",
+        "direct_pp",
+        "paypal_approve",
+        "ba_direct",
+        "ba_approve",
     ]
     ZERO_DUE = [
-        "pp_direct_zero_due", "paypal_direct_zero_due", "direct_pp_zero_due",
-        "paypal_approve_zero_due", "ba_direct_zero_due", "ba_approve_zero_due",
-        "pp_direct_0_due", "paypal_direct_0_due",
-        "pp_direct_force_zero", "paypal_direct_force_zero", "paypal_direct_require_zero_due",
+        "pp_direct_zero_due",
+        "paypal_direct_zero_due",
+        "direct_pp_zero_due",
+        "paypal_approve_zero_due",
+        "ba_direct_zero_due",
+        "ba_approve_zero_due",
+        "pp_direct_0_due",
+        "paypal_direct_0_due",
+        "pp_direct_force_zero",
+        "paypal_direct_force_zero",
+        "paypal_direct_require_zero_due",
     ]
-    HOSTED = ["long", "long_link", "hosted", "hosted_long", "hosted_long_url",
-              "stripe_hosted", "chatgpt_checkout"]
-    CHATGPT_CHECKOUT_LINK = ["chatgpt_checkout_link", "checkout_link",
-                             "short_checkout", "chatgpt_short_link"]
+    HOSTED = ["long", "long_link", "hosted", "hosted_long", "hosted_long_url", "stripe_hosted", "chatgpt_checkout"]
+    CHATGPT_CHECKOUT_LINK = ["chatgpt_checkout_link", "checkout_link", "short_checkout", "chatgpt_short_link"]
 
     def test_direct_aliases_are_recognised(self):
         for value in self.PAYPAL_DIRECT + self.ZERO_DUE:
@@ -289,8 +303,7 @@ class ParseTokenTests(unittest.TestCase):
 class PayPalConfigTests(unittest.TestCase):
     def test_routes_through_payment_routing(self):
         cfg = {"paypal": {"target_country": "GB"}}
-        with patch("sms_tool.payment_routing.method_payment_config",
-                   return_value={"target_country": "JP"}) as routed:
+        with patch("sms_tool.payment_routing.method_payment_config", return_value={"target_country": "JP"}) as routed:
             out = gen_link._paypal_config(cfg)
         routed.assert_called_once_with(cfg, "paypal")
         self.assertEqual({"target_country": "JP"}, out)
@@ -303,13 +316,11 @@ class PayPalConfigTests(unittest.TestCase):
 
     def test_falls_back_to_legacy_paypal_block_on_import_error(self):
         cfg = {"paypal": {"target_country": "GB"}}
-        with patch("sms_tool.payment_routing.method_payment_config",
-                   side_effect=ImportError("no routing")):
+        with patch("sms_tool.payment_routing.method_payment_config", side_effect=ImportError("no routing")):
             self.assertEqual({"target_country": "GB"}, gen_link._paypal_config(cfg))
 
     def test_legacy_fallback_ignores_non_mapping_paypal_block(self):
-        with patch("sms_tool.payment_routing.method_payment_config",
-                   side_effect=ImportError("no routing")):
+        with patch("sms_tool.payment_routing.method_payment_config", side_effect=ImportError("no routing")):
             self.assertEqual({}, gen_link._paypal_config({"paypal": "nope"}))
 
 
@@ -362,8 +373,7 @@ class LoadJsonTests(unittest.TestCase):
 
 
 def _probe(**kw) -> ProxyProbeResult:
-    defaults = dict(ok=True, stage="checkout", expected_country="JP",
-                    ip="1.2.3.4", country_code="JP", country="Japan")
+    defaults = dict(ok=True, stage="checkout", expected_country="JP", ip="1.2.3.4", country_code="JP", country="Japan")
     defaults.update(kw)
     return ProxyProbeResult(**defaults)
 
@@ -384,11 +394,13 @@ class PrepareConfiguredStageProxyTests(unittest.TestCase):
         """
         state = self._state()
         emitted = []
-        with patch.object(gen_link, "probe_proxy") as probe, \
-             patch.object(gen_link, "rotate_stage_proxy_session") as rotate:
+        with (
+            patch.object(gen_link, "probe_proxy") as probe,
+            patch.object(gen_link, "rotate_stage_proxy_session") as rotate,
+        ):
             prepared, detail = gen_link._prepare_configured_stage_proxy(
-                {}, state, "checkout", "", "JP",
-                lambda step, msg, **kw: emitted.append((step, msg)))
+                {}, state, "checkout", "", "JP", lambda step, msg, **kw: emitted.append((step, msg))
+            )
         self.assertEqual("", prepared)
         self.assertEqual({"ok": True, "stage": "checkout", "proxy": "DIRECT"}, detail)
         probe.assert_not_called()
@@ -399,7 +411,8 @@ class PrepareConfiguredStageProxyTests(unittest.TestCase):
         state = self._state()
         with patch.object(gen_link, "probe_proxy") as probe:
             prepared, detail = gen_link._prepare_configured_stage_proxy(
-                {}, state, "checkout", "http://127.0.0.1:8080", "JP", gen_link._emit)
+                {}, state, "checkout", "http://127.0.0.1:8080", "JP", gen_link._emit
+            )
         self.assertEqual("http://127.0.0.1:8080", prepared)
         self.assertTrue(detail["ok"])
         self.assertEqual("checkout", detail["stage"])
@@ -409,8 +422,8 @@ class PrepareConfiguredStageProxyTests(unittest.TestCase):
         state = self._state()
         with patch.object(gen_link, "probe_proxy", return_value=_probe()) as probe:
             prepared, detail = gen_link._prepare_configured_stage_proxy(
-                {"preflight_proxy_check": True}, state, "checkout",
-                "http://127.0.0.1:8080", "JP", gen_link._emit)
+                {"preflight_proxy_check": True}, state, "checkout", "http://127.0.0.1:8080", "JP", gen_link._emit
+            )
         probe.assert_called_once()
         self.assertEqual("http://127.0.0.1:8080", prepared)
         self.assertEqual("JP", detail["country_code"])
@@ -419,12 +432,13 @@ class PrepareConfiguredStageProxyTests(unittest.TestCase):
     def test_preflight_failure_raises_with_stage_and_expected_country(self):
         """预检失败是硬失败 —— 错误串里必须带上 stage/expected/actual 便于定位。"""
         state = self._state()
-        with patch.object(gen_link, "probe_proxy",
-                          return_value=_probe(ok=False, country_code="US", error="geo mismatch")):
+        with patch.object(
+            gen_link, "probe_proxy", return_value=_probe(ok=False, country_code="US", error="geo mismatch")
+        ):
             with self.assertRaises(RuntimeError) as ctx:
                 gen_link._prepare_configured_stage_proxy(
-                    {"preflight_proxy_check": True}, state, "approve",
-                    "http://127.0.0.1:8080", "JP", gen_link._emit)
+                    {"preflight_proxy_check": True}, state, "approve", "http://127.0.0.1:8080", "JP", gen_link._emit
+                )
         msg = str(ctx.exception)
         self.assertIn("proxy_preflight_failed:approve", msg)
         self.assertIn("expected=JP", msg)
@@ -433,32 +447,33 @@ class PrepareConfiguredStageProxyTests(unittest.TestCase):
 
     def test_preflight_failure_without_expected_country_reports_any(self):
         state = self._state()
-        with patch.object(gen_link, "probe_proxy",
-                          return_value=_probe(ok=False, country_code="", error="timeout")):
+        with patch.object(gen_link, "probe_proxy", return_value=_probe(ok=False, country_code="", error="timeout")):
             with self.assertRaises(RuntimeError) as ctx:
                 gen_link._prepare_configured_stage_proxy(
-                    {"preflight_proxy_check": True}, state, "approve",
-                    "http://127.0.0.1:8080", "", gen_link._emit)
+                    {"preflight_proxy_check": True}, state, "approve", "http://127.0.0.1:8080", "", gen_link._emit
+                )
         self.assertIn("expected=ANY", str(ctx.exception))
 
     def test_preflight_failure_is_recorded_in_state(self):
         state = self._state()
-        with patch.object(gen_link, "probe_proxy",
-                          return_value=_probe(ok=False, country_code="US", error="geo mismatch")), \
-             patch.object(state, "record_result") as record:
+        with (
+            patch.object(
+                gen_link, "probe_proxy", return_value=_probe(ok=False, country_code="US", error="geo mismatch")
+            ),
+            patch.object(state, "record_result") as record,
+        ):
             with self.assertRaises(RuntimeError):
                 gen_link._prepare_configured_stage_proxy(
-                    {"preflight_proxy_check": True}, state, "approve",
-                    "http://127.0.0.1:8080", "JP", gen_link._emit)
+                    {"preflight_proxy_check": True}, state, "approve", "http://127.0.0.1:8080", "JP", gen_link._emit
+                )
         record.assert_called_once_with("approve", "http://127.0.0.1:8080", False, "geo mismatch", "US")
 
     def test_rotation_is_applied_when_enabled(self):
         state = self._state()
-        with patch.object(gen_link, "rotate_stage_proxy_session",
-                          return_value="http://127.0.0.1:9999") as rotate:
+        with patch.object(gen_link, "rotate_stage_proxy_session", return_value="http://127.0.0.1:9999") as rotate:
             prepared, _ = gen_link._prepare_configured_stage_proxy(
-                {"rotate_proxy_sessions": True}, state, "checkout",
-                "http://127.0.0.1:8080", "JP", gen_link._emit)
+                {"rotate_proxy_sessions": True}, state, "checkout", "http://127.0.0.1:8080", "JP", gen_link._emit
+            )
         rotate.assert_called_once()
         self.assertEqual("http://127.0.0.1:9999", prepared)
 
@@ -466,15 +481,16 @@ class PrepareConfiguredStageProxyTests(unittest.TestCase):
         state = self._state()
         with patch.object(gen_link, "rotate_stage_proxy_session") as rotate:
             gen_link._prepare_configured_stage_proxy(
-                {}, state, "checkout", "http://127.0.0.1:8080", "JP", gen_link._emit)
+                {}, state, "checkout", "http://127.0.0.1:8080", "JP", gen_link._emit
+            )
         rotate.assert_not_called()
 
     def test_proxy_is_normalised_before_use(self):
         state = self._state()
         with patch.object(gen_link, "probe_proxy", return_value=_probe()):
             prepared, _ = gen_link._prepare_configured_stage_proxy(
-                {"preflight_proxy_check": True}, state, "checkout",
-                "127.0.0.1:8080", "JP", gen_link._emit)
+                {"preflight_proxy_check": True}, state, "checkout", "127.0.0.1:8080", "JP", gen_link._emit
+            )
         self.assertNotEqual("127.0.0.1:8080", prepared)
         self.assertTrue(str(prepared).startswith("http"), prepared)
 
@@ -482,8 +498,8 @@ class PrepareConfiguredStageProxyTests(unittest.TestCase):
         state = self._state()
         with patch.object(gen_link, "probe_proxy", return_value=_probe()) as probe:
             gen_link._prepare_configured_stage_proxy(
-                {"preflight_proxy_check": True}, state, "checkout",
-                "http://127.0.0.1:8080", "jp", gen_link._emit)
+                {"preflight_proxy_check": True}, state, "checkout", "http://127.0.0.1:8080", "jp", gen_link._emit
+            )
         self.assertEqual("JP", probe.call_args.kwargs["expected_country"])
 
     def test_probe_timeout_comes_from_config(self):
@@ -491,15 +507,20 @@ class PrepareConfiguredStageProxyTests(unittest.TestCase):
         with patch.object(gen_link, "probe_proxy", return_value=_probe()) as probe:
             gen_link._prepare_configured_stage_proxy(
                 {"preflight_proxy_check": True, "proxy_probe_timeout_seconds": 3},
-                state, "checkout", "http://127.0.0.1:8080", "JP", gen_link._emit)
+                state,
+                "checkout",
+                "http://127.0.0.1:8080",
+                "JP",
+                gen_link._emit,
+            )
         self.assertEqual(3.0, probe.call_args.kwargs["timeout"])
 
     def test_probe_timeout_defaults_to_twelve_seconds(self):
         state = self._state()
         with patch.object(gen_link, "probe_proxy", return_value=_probe()) as probe:
             gen_link._prepare_configured_stage_proxy(
-                {"preflight_proxy_check": True}, state, "checkout",
-                "http://127.0.0.1:8080", "JP", gen_link._emit)
+                {"preflight_proxy_check": True}, state, "checkout", "http://127.0.0.1:8080", "JP", gen_link._emit
+            )
         self.assertEqual(12.0, probe.call_args.kwargs["timeout"])
 
     def test_emit_is_called_with_a_redacted_proxy(self):
@@ -508,8 +529,13 @@ class PrepareConfiguredStageProxyTests(unittest.TestCase):
         emitted = []
         with patch.object(gen_link, "redact_proxy_url", return_value="REDACTED") as redact:
             gen_link._prepare_configured_stage_proxy(
-                {}, state, "checkout", "http://user:pw@127.0.0.1:8080", "JP",
-                lambda step, msg, **kw: emitted.append((step, msg)))
+                {},
+                state,
+                "checkout",
+                "http://user:pw@127.0.0.1:8080",
+                "JP",
+                lambda step, msg, **kw: emitted.append((step, msg)),
+            )
         redact.assert_called_once()
         # preflight 关闭分支发的就是 "proxy" 这一步，不带 stage 名。
         self.assertEqual([("proxy", "checkout proxy=REDACTED (preflight disabled)")], emitted)

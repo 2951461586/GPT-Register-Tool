@@ -62,21 +62,31 @@ DRIVERS: dict[str, BrowserDriverSpec] = {
         supports_crash_recovery=False,
     ),
     RegistrationDriver.PLAYWRIGHT.value: BrowserDriverSpec(
-        "playwright", frozenset({"playwright", "pw"}),
+        "playwright",
+        frozenset({"playwright", "pw"}),
         supports_context_reuse=True,
     ),
     RegistrationDriver.ROXY.value: BrowserDriverSpec(
         "roxy",
-        frozenset({
-            "roxy", "roxybrowser", "roxy_browser",
-            "browser", "browser_registration", "fingerprint", "fingerprint_browser",
-        }),
+        frozenset(
+            {
+                "roxy",
+                "roxybrowser",
+                "roxy_browser",
+                "browser",
+                "browser_registration",
+                "fingerprint",
+                "fingerprint_browser",
+            }
+        ),
     ),
     RegistrationDriver.CLOAK.value: BrowserDriverSpec(
-        "cloak", frozenset({"cloak", "cloakbrowser", "cloak_browser"}),
+        "cloak",
+        frozenset({"cloak", "cloakbrowser", "cloak_browser"}),
     ),
     RegistrationDriver.CAMOUFOX.value: BrowserDriverSpec(
-        "camoufox", frozenset({"camoufox", "camou", "fox", "cf"}),
+        "camoufox",
+        frozenset({"camoufox", "camou", "fox", "cf"}),
     ),
 }
 

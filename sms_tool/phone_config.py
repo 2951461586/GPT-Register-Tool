@@ -199,21 +199,19 @@ def provider_key_status(cfg: dict | None = None) -> list[dict[str, object]]:
         spec = sms_providers.provider_spec(key)
         provider_cfg = _provider_cfg(cfg, key)
         resolved = _provider_api_key(cfg, key)
-        rows.append({
-            "provider": key,
-            "label": spec.label if spec else key,
-            "selected": key == selected_key,
-            "configured": bool(resolved),
-            "origin": (
-                _key_origin(str(provider_cfg.get("api_key") or ""), key)
-                if resolved else KEY_ORIGIN_MISSING
-            ),
-            "env": sms_providers.api_key_env(key),
-            "endpoint": (
-                str(provider_cfg.get("endpoint") or "").strip()
-                or sms_providers.default_endpoint(key)
-            ),
-        })
+        rows.append(
+            {
+                "provider": key,
+                "label": spec.label if spec else key,
+                "selected": key == selected_key,
+                "configured": bool(resolved),
+                "origin": (
+                    _key_origin(str(provider_cfg.get("api_key") or ""), key) if resolved else KEY_ORIGIN_MISSING
+                ),
+                "env": sms_providers.api_key_env(key),
+                "endpoint": (str(provider_cfg.get("endpoint") or "").strip() or sms_providers.default_endpoint(key)),
+            }
+        )
     return rows
 
 

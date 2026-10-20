@@ -42,8 +42,9 @@ def test_browser_style_send_is_the_default_when_unset():
 def test_legacy_send_keeps_the_cached_sentinel_and_json_body_but_logs_the_answer(capsys):
     session = Mock()
     session.post.return_value = _ok_response(pending=True, mode="weird-mode-string")
-    with _cfg(browser_style_send_otp=False), patch.object(
-        codex_oauth, "load_cached_sentinel", return_value={"sentinel_token": "cached"}
+    with (
+        _cfg(browser_style_send_otp=False),
+        patch.object(codex_oauth, "load_cached_sentinel", return_value={"sentinel_token": "cached"}),
     ):
         result = codex_oauth._send_passwordless_otp(session, "did-1", "https://auth.openai.com/log-in")
     assert result["ok"]
@@ -88,8 +89,9 @@ def test_browser_style_send_mints_a_fresh_flow_token_and_posts_an_empty_body(cap
 
 def test_browser_style_send_fails_the_arm_when_the_sentinel_cannot_be_minted():
     session = Mock()
-    with _cfg(browser_style_send_otp=True), patch.object(
-        codex_oauth, "issue_sentinel_flow", side_effect=RuntimeError("runner down")
+    with (
+        _cfg(browser_style_send_otp=True),
+        patch.object(codex_oauth, "issue_sentinel_flow", side_effect=RuntimeError("runner down")),
     ):
         result = codex_oauth._send_passwordless_otp(session, "did-1", "u")
     assert result["hard_error"]

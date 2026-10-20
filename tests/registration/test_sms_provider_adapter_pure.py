@@ -24,6 +24,7 @@ There is **no network and no I/O** in ``sms_provider_adapter.py`` -- everything 
 is pure. ``DispatcherTests`` imports ``phone_reuse`` and therefore touches the
 config singleton, but still performs no I/O.
 """
+
 from __future__ import annotations
 
 import unittest
@@ -87,14 +88,12 @@ class ProviderNameTests(unittest.TestCase):
         a future lenient dispatcher rents from the wrong vendor."""
         for value in ("SMSBower", "SMSBOWER", "SmsBower", "HeroSMS", "HERO_SMS"):
             with self.subTest(value=value):
-                self.assertEqual(
-                    sms_provider_adapter.provider_name(_Slot(value)), value.strip().lower())
+                self.assertEqual(sms_provider_adapter.provider_name(_Slot(value)), value.strip().lower())
 
     def test_surrounding_whitespace_is_stripped(self):
         for value in ("  smsbower", "smsbower  ", "  smsbower  ", "\tsmsbower\n"):
             with self.subTest(value=value):
-                self.assertEqual(
-                    sms_provider_adapter.provider_name(_Slot(value)), "smsbower")
+                self.assertEqual(sms_provider_adapter.provider_name(_Slot(value)), "smsbower")
 
     def test_non_string_values_are_stringified(self):
         self.assertEqual(sms_provider_adapter.provider_name(_Slot(12345)), "12345")
@@ -102,8 +101,7 @@ class ProviderNameTests(unittest.TestCase):
     def test_non_string_falsy_values_still_fall_back(self):
         for value in (0, 0.0, [], {}, ()):
             with self.subTest(value=value):
-                self.assertEqual(
-                    sms_provider_adapter.provider_name(_Slot(value)), "smsbower")
+                self.assertEqual(sms_provider_adapter.provider_name(_Slot(value)), "smsbower")
 
     def test_the_fallback_matches_the_class_default(self):
         """The two resolvers used to disagree here (``"legacy"`` vs the class
@@ -153,14 +151,12 @@ class AdapterProviderPropertyTests(unittest.TestCase):
         break any flow that fills ``slot.provider`` in after constructing the
         adapter (which is exactly what ``_prepare_smsbower_for_send`` does to
         the slot)."""
-        self.assertIsInstance(
-            sms_provider_adapter.SmsProviderAdapter.__dict__["provider"], property)
+        self.assertIsInstance(sms_provider_adapter.SmsProviderAdapter.__dict__["provider"], property)
         slot = _Slot("smspool")
         adapter = _Adapter(slot)
         self.assertEqual(adapter.provider, "smspool")
         slot.provider = "smsbower"
-        self.assertEqual(adapter.provider, "smsbower",
-                         "the property must be re-read, not snapshotted")
+        self.assertEqual(adapter.provider, "smsbower", "the property must be re-read, not snapshotted")
 
 
 class DispatchConsistencyTests(unittest.TestCase):
@@ -169,8 +165,7 @@ class DispatchConsistencyTests(unittest.TestCase):
 
     def test_they_agree_on_a_plain_lower_case_name(self):
         slot = _Slot("smsbower")
-        self.assertEqual(sms_provider_adapter.provider_name(slot),
-                         _DefaultProviderAdapter(slot).provider)
+        self.assertEqual(sms_provider_adapter.provider_name(slot), _DefaultProviderAdapter(slot).provider)
 
     def test_they_agree_on_the_default(self):
         """This used to be the disagreement: ``provider_name`` said ``"legacy"``
@@ -189,8 +184,7 @@ class DispatchConsistencyTests(unittest.TestCase):
         self.assertEqual(_DefaultProviderAdapter(slot).provider, "SMSBower")
 
     def test_the_defaults_are_the_same_string_for_the_base_class(self):
-        self.assertEqual(_Adapter(_Slot()).provider,
-                         sms_provider_adapter.provider_name(_Slot()))
+        self.assertEqual(_Adapter(_Slot()).provider, sms_provider_adapter.provider_name(_Slot()))
 
 
 class LifecycleTests(unittest.TestCase):
@@ -290,12 +284,8 @@ class DispatcherTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     self._adapter(key)
 
-        synthetic = sms_providers.SmsProviderSpec(
-            "synthetic", "Synthetic", protocol=sms_providers.PROTOCOL_UNVERIFIED
-        )
-        self.assertNotIn(
-            sms_providers.PROTOCOL_UNVERIFIED, sms_providers.IMPLEMENTED_PROTOCOLS
-        )
+        synthetic = sms_providers.SmsProviderSpec("synthetic", "Synthetic", protocol=sms_providers.PROTOCOL_UNVERIFIED)
+        self.assertNotIn(sms_providers.PROTOCOL_UNVERIFIED, sms_providers.IMPLEMENTED_PROTOCOLS)
         self.assertFalse(synthetic.has_client)
         self.assertFalse(synthetic.is_rental)
 

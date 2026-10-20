@@ -29,9 +29,7 @@ def check_node() -> tuple[bool, str, str]:
     if not exe:
         return False, "node 不在 PATH", "安装 Node.js 18+（https://nodejs.org）并确保 node 在 PATH"
     try:
-        proc = subprocess.run(
-            [exe, "--version"], capture_output=True, text=True, timeout=10
-        )
+        proc = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=10)
     except Exception as exc:  # pragma: no cover - defensive
         return False, f"无法执行 node：{exc}", "重新安装 Node.js 18+"
     version = (proc.stdout or proc.stderr or "").strip()

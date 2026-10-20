@@ -13,17 +13,26 @@ def _jwt(payload):
     def part(value):
         raw = json.dumps(value, separators=(",", ":")).encode("utf-8")
         return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
-    return f"{part({'alg':'none'})}.{part(payload)}."
+
+    return f"{part({'alg': 'none'})}.{part(payload)}."
 
 
 class SessionConverterTests(unittest.TestCase):
     def test_collect_nested_session_like_objects(self):
-        access = _jwt({
-            "exp": 1782973350,
-            "https://api.openai.com/auth": {"chatgpt_account_id": "acct-1", "chatgpt_plan_type": "plus"},
-            "https://api.openai.com/profile": {"email": "a@example.com", "user_id": "user-1"},
-        })
-        document = {"outer": {"items": [{"credentials": {"access_token": access, "chatgpt_account_id": "acct-1", "email": "a@example.com"}}]}}
+        access = _jwt(
+            {
+                "exp": 1782973350,
+                "https://api.openai.com/auth": {"chatgpt_account_id": "acct-1", "chatgpt_plan_type": "plus"},
+                "https://api.openai.com/profile": {"email": "a@example.com", "user_id": "user-1"},
+            }
+        )
+        document = {
+            "outer": {
+                "items": [
+                    {"credentials": {"access_token": access, "chatgpt_account_id": "acct-1", "email": "a@example.com"}}
+                ]
+            }
+        }
 
         found = conv.collect_session_like_objects(document)
 
@@ -31,11 +40,13 @@ class SessionConverterTests(unittest.TestCase):
         self.assertEqual(found[0]["path"], "$.outer.items[0]")
 
     def test_convert_session_outputs_multiple_formats(self):
-        access = _jwt({
-            "exp": 1782973350,
-            "https://api.openai.com/auth": {"chatgpt_account_id": "acct-1", "chatgpt_plan_type": "plus"},
-            "https://api.openai.com/profile": {"email": "a@example.com", "user_id": "user-1"},
-        })
+        access = _jwt(
+            {
+                "exp": 1782973350,
+                "https://api.openai.com/auth": {"chatgpt_account_id": "acct-1", "chatgpt_plan_type": "plus"},
+                "https://api.openai.com/profile": {"email": "a@example.com", "user_id": "user-1"},
+            }
+        )
         record = {
             "user": {"id": "user-1", "email": "a@example.com"},
             "account": {"id": "acct-1", "planType": "plus"},
@@ -57,15 +68,19 @@ class SessionConverterTests(unittest.TestCase):
         self.assertEqual(axon["tokens"]["refresh_token"], conv.AXONHUB_PLACEHOLDER_REFRESH_TOKEN)
 
     def test_cli_convert_session_json_writes_output(self):
-        access = _jwt({
-            "exp": 1782973350,
-            "https://api.openai.com/auth": {"chatgpt_account_id": "acct-2"},
-            "https://api.openai.com/profile": {"email": "b@example.com", "user_id": "user-2"},
-        })
+        access = _jwt(
+            {
+                "exp": 1782973350,
+                "https://api.openai.com/auth": {"chatgpt_account_id": "acct-2"},
+                "https://api.openai.com/profile": {"email": "b@example.com", "user_id": "user-2"},
+            }
+        )
         with tempfile.TemporaryDirectory() as tmp:
             src = Path(tmp) / "input.json"
             out = Path(tmp) / "out.json"
-            src.write_text(json.dumps({"nested": {"accessToken": access, "user": {"email": "b@example.com"}}}), encoding="utf-8")
+            src.write_text(
+                json.dumps({"nested": {"accessToken": access, "user": {"email": "b@example.com"}}}), encoding="utf-8"
+            )
             argv = [
                 "chatgpt_phone_reg.py",
                 "--convert-session-json",

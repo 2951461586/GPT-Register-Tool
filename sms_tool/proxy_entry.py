@@ -72,8 +72,8 @@ class ProxyEntry:
     port: int
     username: str
     password: str
-    scheme: str = "http"          # canonical scheme
-    raw: str = ""                 # original input (masked in ``masked``)
+    scheme: str = "http"  # canonical scheme
+    raw: str = ""  # original input (masked in ``masked``)
 
     @classmethod
     def parse(cls, raw: Any, default_scheme: str = "http") -> "ProxyEntry | None":
@@ -341,12 +341,8 @@ _USER_SID_RE = re.compile(r"(?:(?<=-sid-)|(?<=_sid_))[A-Za-z0-9]+(?=[_-]|$)")
 # (``aZ3q``) and an out-of-range ``_99`` both returned 200 with a fresh VN egress
 # IP.  So this is a session id, not a pre-provisioned 1..N slot index, and
 # rotating it is safe.  Do not "fix" this into a bounded 1..N counter.
-_ROLA_SID_RE = re.compile(
-    rf"(?<=_)[A-Za-z0-9]+(?=-{_REGION_TAG}-[A-Za-z]{{2}}(?=[_:]|$))"
-)
-_KOOKEEY_PW_RE = re.compile(
-    r"^(?P<base>.+?)-(?P<cc>[A-Za-z]{2})-(?P<sid>[A-Za-z0-9]+)-(?P<ttl>\d+[smhd])$"
-)
+_ROLA_SID_RE = re.compile(rf"(?<=_)[A-Za-z0-9]+(?=-{_REGION_TAG}-[A-Za-z]{{2}}(?=[_:]|$))")
+_KOOKEEY_PW_RE = re.compile(r"^(?P<base>.+?)-(?P<cc>[A-Za-z]{2})-(?P<sid>[A-Za-z0-9]+)-(?P<ttl>\d+[smhd])$")
 # NOTE: the tag group must stay *non-capturing* here — ``infer_region`` reads
 # ``match.group(1)`` as the country code, so a capturing tag group would make it
 # return ``"GEO"`` instead of ``"VN"``.
@@ -427,15 +423,11 @@ def retarget_region(proxy: str, iso_code: str) -> str:
     if not username and not password:
         return value
     changed = False
-    new_user, count = _USER_REGION_RE.subn(
-        lambda m: f"{m.group(1)}{m.group('tag')}-{iso}", username, count=1
-    )
+    new_user, count = _USER_REGION_RE.subn(lambda m: f"{m.group(1)}{m.group('tag')}-{iso}", username, count=1)
     if count:
         username = new_user
         changed = True
-    new_user, count = _IPWO_CUSTOM_ZONE_RE.subn(
-        lambda match: f"{match.group('prefix')}{iso}", username, count=1
-    )
+    new_user, count = _IPWO_CUSTOM_ZONE_RE.subn(lambda match: f"{match.group('prefix')}{iso}", username, count=1)
     if count:
         username = new_user
         changed = True
@@ -472,15 +464,11 @@ def rotate_session(proxy: str, iso_code: str = "") -> str:
         # hardcoded ``region-`` makes both providers reject the credential.
         # This is reachable: ``paypal_proxy.rotate_proxy_session`` calls
         # ``rotate_session(proxy, country)`` with a real country code.
-        new_user, count = _USER_REGION_RE.subn(
-            lambda m: f"{m.group(1)}{m.group('tag')}-{iso}", username, count=1
-        )
+        new_user, count = _USER_REGION_RE.subn(lambda m: f"{m.group(1)}{m.group('tag')}-{iso}", username, count=1)
         if count:
             username = new_user
             changed = True
-        new_user, count = _IPWO_CUSTOM_ZONE_RE.subn(
-            lambda match: f"{match.group('prefix')}{iso}", username, count=1
-        )
+        new_user, count = _IPWO_CUSTOM_ZONE_RE.subn(lambda match: f"{match.group('prefix')}{iso}", username, count=1)
         if count:
             username = new_user
             changed = True
@@ -491,9 +479,7 @@ def rotate_session(proxy: str, iso_code: str = "") -> str:
         username = new_user
         changed = True
     new_user, count = _ROLA_SID_RE.subn(
-        lambda m: _random_session_id(
-            len(m.group(0)), digits_only=m.group(0).isdigit(), avoid=m.group(0)
-        ),
+        lambda m: _random_session_id(len(m.group(0)), digits_only=m.group(0).isdigit(), avoid=m.group(0)),
         username,
         count=1,
     )

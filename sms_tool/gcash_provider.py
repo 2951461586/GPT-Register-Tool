@@ -19,10 +19,12 @@ from .kernel.sanitizer import sanitize_text
 
 
 DEFAULT_GCASH_CUSTOM_PAYMENT_METHOD_ID = "cpmt_1TOgstC6h1nxGoI3WUVEY2cJ"
-_ADYEN_REDIRECT_HOSTS = frozenset({
-    "checkoutshopper-live.adyen.com",
-    "checkoutshopper-test.adyen.com",
-})
+_ADYEN_REDIRECT_HOSTS = frozenset(
+    {
+        "checkoutshopper-live.adyen.com",
+        "checkoutshopper-test.adyen.com",
+    }
+)
 _UNKNOWN_AFTER_CONFIRM = frozenset({"confirm", "start"})
 
 
@@ -130,9 +132,7 @@ def run_gcash_provider(
     try:
         token = str(access_token or "").strip()
         if not token:
-            raise GCashProviderError(
-                "access_token is required", error_code="missing_access_token", error_stage=stage
-            )
+            raise GCashProviderError("access_token is required", error_code="missing_access_token", error_stage=stage)
         contract = CheckoutRequestContract.for_payment_method("gcash")
         context = dict(auth_context or {})
         context.setdefault("device_id", str(uuid.uuid4()))
@@ -141,12 +141,10 @@ def run_gcash_provider(
         stage = "checkout"
         checkout_request = dict(contract.checkout_payload())
         checkout_request["check_card_proxy"] = True
-        checkout_payload = transport.create_checkout(_request(
-            stage, contract, token, checkout_request, context, wire_context
-        ))
-        session = CheckoutSessionContract.from_payload(
-            dict(checkout_payload), billing_country=contract.billing_country
+        checkout_payload = transport.create_checkout(
+            _request(stage, contract, token, checkout_request, context, wire_context)
         )
+        session = CheckoutSessionContract.from_payload(dict(checkout_payload), billing_country=contract.billing_country)
 
         stage = "update"
         update_payload = {
@@ -162,39 +160,39 @@ def run_gcash_provider(
         }
         update_response: Mapping[str, Any] = {}
         try:
-            update_response = transport.update_checkout(_request(
-                stage, contract, token, update_payload, context, wire_context, session
-            ))
+            update_response = transport.update_checkout(
+                _request(stage, contract, token, update_payload, context, wire_context, session)
+            )
         except Exception as exc:
             warnings.append({"stage": stage, "error": sanitize_text(exc)})
 
         stage = "taxes"
         try:
-            transport.update_taxes(_request(
-                stage, contract, token, _tax_payload(contract, session), context, wire_context, session
-            ))
+            transport.update_taxes(
+                _request(stage, contract, token, _tax_payload(contract, session), context, wire_context, session)
+            )
         except Exception as exc:
             warnings.append({"stage": stage, "error": sanitize_text(exc)})
 
         stage = "resolve"
-        resolved = transport.resolve_checkout(_request(
-            stage, contract, token, {}, context, wire_context, session
-        ))
+        resolved = transport.resolve_checkout(_request(stage, contract, token, {}, context, wire_context, session))
         stage = "custom_capability"
         custom_capability: Mapping[str, Any] = {}
         try:
-            custom_capability = transport.probe_custom_payment(_request(
-                stage,
-                contract,
-                token,
-                {
-                    "checkout": checkout_payload,
-                    "custom_payment_method_type_id": custom_payment_method_type_id,
-                },
-                context,
-                wire_context,
-                session,
-            ))
+            custom_capability = transport.probe_custom_payment(
+                _request(
+                    stage,
+                    contract,
+                    token,
+                    {
+                        "checkout": checkout_payload,
+                        "custom_payment_method_type_id": custom_payment_method_type_id,
+                    },
+                    context,
+                    wire_context,
+                    session,
+                )
+            )
         except Exception as exc:
             warnings.append({"stage": stage, "error": sanitize_text(exc)})
         custom_probe = GCashCapability.from_payloads(
@@ -254,33 +252,37 @@ def run_gcash_provider(
             )
 
         stage = "confirm"
-        transport.confirm_custom_payment(_request(
-            stage,
-            contract,
-            token,
-            {
-                "checkout_session_id": session.checkout_session_id,
-                "type": "custom_payment_method",
-                "selected_payment_method_type": capability.custom_payment_method_type_id,
-            },
-            context,
-            wire_context,
-            session,
-        ))
+        transport.confirm_custom_payment(
+            _request(
+                stage,
+                contract,
+                token,
+                {
+                    "checkout_session_id": session.checkout_session_id,
+                    "type": "custom_payment_method",
+                    "selected_payment_method_type": capability.custom_payment_method_type_id,
+                },
+                context,
+                wire_context,
+                session,
+            )
+        )
 
         stage = "start"
-        started = transport.start_custom_payment(_request(
-            stage,
-            contract,
-            token,
-            {
-                "checkout_session_id": session.checkout_session_id,
-                "custom_payment_method_type_id": capability.custom_payment_method_type_id,
-            },
-            context,
-            wire_context,
-            session,
-        ))
+        started = transport.start_custom_payment(
+            _request(
+                stage,
+                contract,
+                token,
+                {
+                    "checkout_session_id": session.checkout_session_id,
+                    "custom_payment_method_type_id": capability.custom_payment_method_type_id,
+                },
+                context,
+                wire_context,
+                session,
+            )
+        )
         redirect_url = _next_action_url(started)
         _validate_adyen_url(redirect_url)
         return {
@@ -297,13 +299,19 @@ def run_gcash_provider(
             "error_stage": "",
         }
     except asyncio.CancelledError:
-        return _failure(GCashProviderError(
-            "GCash flow was cancelled", error_code="gcash_cancelled", error_stage=stage, status="cancelled"
-        ), capability)
+        return _failure(
+            GCashProviderError(
+                "GCash flow was cancelled", error_code="gcash_cancelled", error_stage=stage, status="cancelled"
+            ),
+            capability,
+        )
     except concurrent.futures.CancelledError:
-        return _failure(GCashProviderError(
-            "GCash flow was cancelled", error_code="gcash_cancelled", error_stage=stage, status="cancelled"
-        ), capability)
+        return _failure(
+            GCashProviderError(
+                "GCash flow was cancelled", error_code="gcash_cancelled", error_stage=stage, status="cancelled"
+            ),
+            capability,
+        )
     except Exception as exc:
         return _failure(_structured_error(exc, stage), capability)
 
@@ -349,8 +357,10 @@ def _capability_result(capability: GCashCapability, *, require_zero: bool) -> di
         "currency": capability.currency,
         "custom_payment_method_type_id": capability.custom_payment_method_type_id,
         "offer_state": (
-            "zero_due" if capability.amount_minor == 0
-            else "nonzero_due" if capability.amount_minor is not None
+            "zero_due"
+            if capability.amount_minor == 0
+            else "nonzero_due"
+            if capability.amount_minor is not None
             else "unknown_amount"
         ),
         "custom_payment_method_present": bool(capability.custom_payment_method_type_id),
@@ -412,8 +422,10 @@ def _walk_values(value: Any):
     if isinstance(value, Mapping):
         for key, item in value.items():
             if str(key).lower() in {
-                "payment_method_types", "ordered_payment_method_types",
-                "custom_payment_methods", "custom_payment_method_data",
+                "payment_method_types",
+                "ordered_payment_method_types",
+                "custom_payment_methods",
+                "custom_payment_method_data",
             }:
                 yield item
             if isinstance(item, (Mapping, list)):
@@ -432,11 +444,7 @@ def _has_custom_method_evidence(value: Any) -> bool:
             if isinstance(item, (Mapping, list)) and _has_custom_method_evidence(item):
                 return True
     elif isinstance(value, list):
-        return any(
-            _has_custom_method_evidence(item)
-            for item in value
-            if isinstance(item, (Mapping, list))
-        )
+        return any(_has_custom_method_evidence(item) for item in value if isinstance(item, (Mapping, list)))
     return False
 
 
@@ -457,7 +465,9 @@ def _structured_error(exc: BaseException, stage: str) -> GCashProviderError:
         return exc
     if isinstance(exc, TimeoutError):
         return GCashProviderError(
-            f"{stage} timed out", error_code="gcash_timed_out", error_stage=stage,
+            f"{stage} timed out",
+            error_code="gcash_timed_out",
+            error_stage=stage,
             retryable=stage not in _UNKNOWN_AFTER_CONFIRM,
             status="unknown" if stage in _UNKNOWN_AFTER_CONFIRM else "timed_out",
         )

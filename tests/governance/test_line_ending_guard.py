@@ -113,7 +113,9 @@ def test_cli_fails_loudly_when_the_classifier_is_gutted(
         GUARD_PATH.write_bytes(broken)
         result = subprocess.run(
             [sys.executable, str(GUARD_PATH), "--all"],
-            cwd=str(ROOT), capture_output=True, text=True,
+            cwd=str(ROOT),
+            capture_output=True,
+            text=True,
         )
         assert result.returncode != 0
         assert "SELF-TEST FAILED" in result.stderr
@@ -230,10 +232,7 @@ def test_no_tracked_file_mixes_line_endings() -> None:
         f"if the file's index entry is already LF, normalising to LF is diff-free."
     )
     stale = sorted(exempt - set(offenders))
-    assert not stale, (
-        f"{stale} are no longer mixed -- drop them from MIXED_EXEMPT so the "
-        f"guard tightens automatically."
-    )
+    assert not stale, f"{stale} are no longer mixed -- drop them from MIXED_EXEMPT so the guard tightens automatically."
 
 
 def test_no_tracked_text_file_is_crlf_while_its_index_is_lf() -> None:
@@ -294,17 +293,28 @@ def _paths_declaring_crlf_eol() -> list[str]:
     attribute change, including patterns like `*.ps1` that we would otherwise
     have to duplicate by hand.
     """
-    listed = subprocess.run(
-        ["git", "ls-files", "-z"], cwd=str(ROOT), capture_output=True,
-    ).stdout.decode("utf-8", "replace").split("\0")
+    listed = (
+        subprocess.run(
+            ["git", "ls-files", "-z"],
+            cwd=str(ROOT),
+            capture_output=True,
+        )
+        .stdout.decode("utf-8", "replace")
+        .split("\0")
+    )
     listed = [p for p in listed if p]
     if not listed:
         return []
-    checked = subprocess.run(
-        ["git", "check-attr", "--stdin", "-z", "eol"],
-        cwd=str(ROOT), input="\0".join(listed).encode("utf-8"),
-        capture_output=True,
-    ).stdout.decode("utf-8", "replace").split("\0")
+    checked = (
+        subprocess.run(
+            ["git", "check-attr", "--stdin", "-z", "eol"],
+            cwd=str(ROOT),
+            input="\0".join(listed).encode("utf-8"),
+            capture_output=True,
+        )
+        .stdout.decode("utf-8", "replace")
+        .split("\0")
+    )
     out = []
     for i in range(0, len(checked) - 2, 3):
         path, _attr, value = checked[i], checked[i + 1], checked[i + 2]
@@ -319,7 +329,9 @@ def _paths_declaring_crlf_eol() -> list[str]:
 def _run_cli(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, str(GUARD_PATH), *args],
-        cwd=str(ROOT), capture_output=True, text=True,
+        cwd=str(ROOT),
+        capture_output=True,
+        text=True,
     )
 
 

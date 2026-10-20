@@ -11,10 +11,7 @@ import sys
 import unittest
 from pathlib import Path
 
-MODULE_PATH = (
-    Path(__file__).resolve().parents[2]
-    / "services" / "protocol-payment" / "common" / "endpoints.py"
-)
+MODULE_PATH = Path(__file__).resolve().parents[2] / "services" / "protocol-payment" / "common" / "endpoints.py"
 SPEC = importlib.util.spec_from_file_location("protocol_payment_endpoints", MODULE_PATH)
 EP = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None

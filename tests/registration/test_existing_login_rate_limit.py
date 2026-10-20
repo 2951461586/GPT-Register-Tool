@@ -104,6 +104,7 @@ def _drive(*, otp_status, otp_headers=None, otp_body=None):
     live run was in (``Existing account continue: skipped``), and answers the
     OTP send with ``otp_status``.
     """
+
     def handler(record):
         url = record["url"]
         if url == f"{CHAT_BASE}/":
@@ -123,8 +124,9 @@ def _drive(*, otp_status, otp_headers=None, otp_body=None):
         raise AssertionError(f"unexpected call: {record['method']} {url}")
 
     recorder = _Recorder(handler)
-    with patch.object(auth_flow.deps, "request_with_retry", recorder), patch.object(
-        auth_flow.sentinel_flow, "_authorize_continue_sentinel", lambda *a, **k: ({}, "", "")
+    with (
+        patch.object(auth_flow.deps, "request_with_retry", recorder),
+        patch.object(auth_flow.sentinel_flow, "_authorize_continue_sentinel", lambda *a, **k: ({}, "", "")),
     ):
         result = auth_flow._login_existing_account_with_email_otp(
             session=object(),
@@ -144,6 +146,7 @@ def _drive(*, otp_status, otp_headers=None, otp_body=None):
 # --------------------------------------------------------------------------
 # the 429
 # --------------------------------------------------------------------------
+
 
 def test_a_429_arms_the_registration_rate_limit_circuit():
     result, _ = _drive(
@@ -197,6 +200,7 @@ def test_the_armed_circuit_actually_blocks_the_next_stage_admission():
 # --------------------------------------------------------------------------
 # the control: everything that is not a 429 keeps its old behaviour
 # --------------------------------------------------------------------------
+
 
 def test_a_non_429_keeps_the_old_error_and_leaves_the_circuit_closed():
     result, _ = _drive(otp_status=500)

@@ -28,26 +28,38 @@ def atomic_write_text(path, text: str) -> None:
     temp.write_text(text, encoding="utf-8")
     temp.replace(target)
 
+
 # ==========================================
 # Timing
 # ==========================================
 def _tl():
-    if not hasattr(_tls, "timings"): _tls.timings = []
+    if not hasattr(_tls, "timings"):
+        _tls.timings = []
     return _tls.timings
+
+
 def _tick(name):
     _tl().append((name, time.time()))
     print(f"[{name}]", flush=True)
+
+
 def _tock():
-    t = _tl(); t[-1] = (t[-1][0], time.time() - t[-1][1])
+    t = _tl()
+    t[-1] = (t[-1][0], time.time() - t[-1][1])
+
+
 def _print_timings():
-    t = _tl(); total = sum(e for _, e in t)
+    t = _tl()
+    total = sum(e for _, e in t)
     print("\n" + "=" * 50)
     print(f"{'Step':<40} {'Time (s)':>10}")
     print("-" * 50)
-    for name, elapsed in t: print(f"{name:<40} {elapsed:>10.2f}")
+    for name, elapsed in t:
+        print(f"{name:<40} {elapsed:>10.2f}")
     print("-" * 50)
     print(f"{'TOTAL':<40} {total:>10.2f}")
     print("=" * 50)
+
 
 def _timing_summary():
     t = _tl()
@@ -71,9 +83,11 @@ def _random_name():
     last = ["Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller", "Davis", "Wilson", "Anderson"]
     return random.choice(first), random.choice(last)
 
+
 def _random_birthdate():
     y, m, d = random.randint(1985, 2004), random.randint(1, 12), random.randint(1, 28)
     return f"{y}-{m:02d}-{d:02d}"
+
 
 def _generate_password():
     reg = CFG.get("registration", {})

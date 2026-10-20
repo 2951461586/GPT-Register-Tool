@@ -77,7 +77,11 @@ class ProxyHealthTracker:
                 row = data.setdefault(item_key, {"success": 0, "failure": 0, "cooldown_until": 0, "last_error": ""})
                 row["success" if ok else "failure"] = int(row.get("success" if ok else "failure", 0) or 0) + 1
                 row["last_error"] = "" if ok else str(error or "")[:120]
-                if not ok and int(row.get("failure", 0)) >= 3 and int(row.get("failure", 0)) > int(row.get("success", 0)):
+                if (
+                    not ok
+                    and int(row.get("failure", 0)) >= 3
+                    and int(row.get("failure", 0)) > int(row.get("success", 0))
+                ):
                     row["cooldown_until"] = time.time() + 120
                 if ok:
                     row["cooldown_until"] = 0
@@ -106,6 +110,7 @@ class ProxyHealthTracker:
         with self._lock:
             data = self._read()
         now = time.time()
+
         def score(proxy: str) -> tuple[int, float, int]:
             row = data.get(self.key(proxy)) or data.get(self._endpoint_key(proxy), {})
             cooldown = float(row.get("cooldown_until", 0) or 0)
@@ -115,6 +120,7 @@ class ProxyHealthTracker:
             failure = int(row.get("failure", 0) or 0)
             rate = (success + _SMOOTHING_PRIOR) / (success + failure + 2 * _SMOOTHING_PRIOR)
             return (0, -rate, failure)
+
         return sorted(dict.fromkeys(proxies), key=score)
 
 

@@ -134,9 +134,7 @@ class _Watchdog:
         self._deadline: float | None = None
         self._request_id = 0
         self._stopped = threading.Event()
-        self._thread = threading.Thread(
-            target=self._run, name="desktop-serve-watchdog", daemon=True
-        )
+        self._thread = threading.Thread(target=self._run, name="desktop-serve-watchdog", daemon=True)
         self._thread.start()
 
     @property

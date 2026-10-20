@@ -94,8 +94,13 @@ class _Recorder:
         return [record["url"] for record in self.calls]
 
 
-def _drive(*, mint_token, authorize_landing, caller_token=CALLER_TOKEN,
-           signin_authorize_url=f"{AUTH_BASE}/api/accounts/authorize"):
+def _drive(
+    *,
+    mint_token,
+    authorize_landing,
+    caller_token=CALLER_TOKEN,
+    signin_authorize_url=f"{AUTH_BASE}/api/accounts/authorize",
+):
     """Run the real function against a scripted transport.
 
     Returns ``(result, signin_payloads, authorize_urls, recorder)``.
@@ -119,8 +124,9 @@ def _drive(*, mint_token, authorize_landing, caller_token=CALLER_TOKEN,
         raise AssertionError(f"unexpected call: {record['method']} {url}")
 
     recorder = _Recorder(handler)
-    with patch.object(auth_flow.deps, "request_with_retry", recorder), patch.object(
-        auth_flow.sentinel_flow, "_authorize_continue_sentinel", lambda *a, **k: ({}, "", "")
+    with (
+        patch.object(auth_flow.deps, "request_with_retry", recorder),
+        patch.object(auth_flow.sentinel_flow, "_authorize_continue_sentinel", lambda *a, **k: ({}, "", "")),
     ):
         result = auth_flow._login_existing_account_with_email_otp(
             session=session,
@@ -160,9 +166,7 @@ class CsrfMintingTests(unittest.TestCase):
             raise RuntimeError("connection reset")
 
         with patch.object(auth_flow.deps, "request_with_retry", _Recorder(handler)):
-            token = auth_flow._fetch_session_csrf_token(
-                object(), CHAT_BASE, {}, "did-1", "slog-1"
-            )
+            token = auth_flow._fetch_session_csrf_token(object(), CHAT_BASE, {}, "did-1", "slog-1")
 
         self.assertEqual(token, "")
 
@@ -175,9 +179,7 @@ class CsrfMintingTests(unittest.TestCase):
                 raise ValueError("not json")
 
         with patch.object(auth_flow.deps, "request_with_retry", _Recorder(lambda record: _NoJson())):
-            token = auth_flow._fetch_session_csrf_token(
-                object(), CHAT_BASE, {}, "did-1", "slog-1"
-            )
+            token = auth_flow._fetch_session_csrf_token(object(), CHAT_BASE, {}, "did-1", "slog-1")
 
         self.assertEqual(token, "")
 
@@ -186,18 +188,14 @@ class SigninTokenSourceTests(unittest.TestCase):
     """The signin POST must carry a token minted on its own session."""
 
     def test_signin_uses_the_session_minted_token_not_the_callers(self):
-        _, signin_payloads, _, _ = _drive(
-            mint_token=SESSION_TOKEN, authorize_landing=LOGIN_LANDING
-        )
+        _, signin_payloads, _, _ = _drive(mint_token=SESSION_TOKEN, authorize_landing=LOGIN_LANDING)
 
         self.assertEqual(len(signin_payloads), 1)
         self.assertEqual(signin_payloads[0]["csrfToken"], [SESSION_TOKEN])
         self.assertNotEqual(signin_payloads[0]["csrfToken"], [CALLER_TOKEN])
 
     def test_a_failed_mint_falls_back_to_the_callers_token(self):
-        _, signin_payloads, _, _ = _drive(
-            mint_token=None, authorize_landing=LOGIN_LANDING
-        )
+        _, signin_payloads, _, _ = _drive(mint_token=None, authorize_landing=LOGIN_LANDING)
 
         self.assertEqual(len(signin_payloads), 1)
         self.assertEqual(signin_payloads[0]["csrfToken"], [CALLER_TOKEN])
@@ -223,9 +221,7 @@ class LoginLandingGuardTests(unittest.TestCase):
     """Landing on the chatgpt login page must stop before ``continue``."""
 
     def test_login_landing_stops_before_the_doomed_continue(self):
-        result, _, _, recorder = _drive(
-            mint_token=SESSION_TOKEN, authorize_landing=LOGIN_LANDING
-        )
+        result, _, _, recorder = _drive(mint_token=SESSION_TOKEN, authorize_landing=LOGIN_LANDING)
 
         self.assertFalse(result["ok"])
         self.assertTrue(result["error"].startswith(GUARD_PREFIX))
@@ -234,17 +230,13 @@ class LoginLandingGuardTests(unittest.TestCase):
 
     def test_the_callback_landing_still_returns_ok(self):
         """Regression guard for the pre-existing "already signed in" branch."""
-        result, _, _, recorder = _drive(
-            mint_token=SESSION_TOKEN, authorize_landing=CALLBACK_LANDING
-        )
+        result, _, _, recorder = _drive(mint_token=SESSION_TOKEN, authorize_landing=CALLBACK_LANDING)
 
         self.assertTrue(result["ok"])
         self.assertNotIn(f"{AUTH_BASE}/api/accounts/authorize/continue", recorder.urls())
 
     def test_the_guard_error_stays_a_retryable_auth_state(self):
-        result, _, _, _ = _drive(
-            mint_token=SESSION_TOKEN, authorize_landing=LOGIN_LANDING
-        )
+        result, _, _, _ = _drive(mint_token=SESSION_TOKEN, authorize_landing=LOGIN_LANDING)
 
         # Naming it after the failure it pre-empts is deliberate: a bare new
         # name would classify as ``unknown`` (terminal) and silently drop the
@@ -257,9 +249,7 @@ class AuthorizeContextTests(unittest.TestCase):
     """The authorize URL must carry the context the signup lane fills in."""
 
     def test_authorize_url_carries_the_login_context(self):
-        _, _, authorize_urls, _ = _drive(
-            mint_token=SESSION_TOKEN, authorize_landing=LOGIN_LANDING
-        )
+        _, _, authorize_urls, _ = _drive(mint_token=SESSION_TOKEN, authorize_landing=LOGIN_LANDING)
 
         self.assertEqual(len(authorize_urls), 1)
         query = parse_qs(urlparse(authorize_urls[0]).query)

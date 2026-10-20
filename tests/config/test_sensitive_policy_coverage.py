@@ -50,9 +50,7 @@ CREDENTIAL_ROOT = re.compile(
 
 # The fragments the policy must keep. If someone trims a fragment to silence a
 # false positive, this fails loudly instead of silently re-opening a leak.
-REQUIRED_FRAGMENTS = frozenset(
-    {"token", "secret", "password", "cookie", "session_id", "api_key"}
-)
+REQUIRED_FRAGMENTS = frozenset({"token", "secret", "password", "cookie", "session_id", "api_key"})
 
 PROBE = "ZZFAKE123456"
 
@@ -86,9 +84,7 @@ def _dict_keys(tree: ast.AST) -> set[str]:
 
 def _collect_candidate_keys() -> dict[str, list[str]]:
     """key -> sorted list of 'path:line' locations where it appears."""
-    safe_suffixes = tuple(
-        str(item).lower() for item in SENSITIVE_POLICY.get("safe_key_suffixes") or ()
-    )
+    safe_suffixes = tuple(str(item).lower() for item in SENSITIVE_POLICY.get("safe_key_suffixes") or ())
     # `safe_key_paths` is path-scoped (e.g. `proxy_affinity.session_id`), but
     # this guard only sees bare key names - it has no way to know whether a
     # given `session_id` literal sits inside `proxy_affinity` or not. So the
@@ -96,8 +92,7 @@ def _collect_candidate_keys() -> dict[str, list[str]]:
     # the path-precision cases in test_sanitizer.py, which assert the exemption
     # is surgical (a look-alike path is still redacted).
     exempt_leaves = frozenset(
-        str(item).lower().rsplit(".", 1)[-1]
-        for item in SENSITIVE_POLICY.get("safe_key_paths") or ()
+        str(item).lower().rsplit(".", 1)[-1] for item in SENSITIVE_POLICY.get("safe_key_paths") or ()
     )
     locations: dict[str, list[str]] = {}
 
@@ -128,9 +123,7 @@ CANDIDATE_KEYS = _collect_candidate_keys()
 
 
 def test_policy_keeps_the_fragments_that_close_the_round5_gaps():
-    present = frozenset(
-        str(item).lower() for item in SENSITIVE_POLICY.get("sensitive_key_fragments") or ()
-    )
+    present = frozenset(str(item).lower() for item in SENSITIVE_POLICY.get("sensitive_key_fragments") or ())
     missing = sorted(REQUIRED_FRAGMENTS - present)
     assert not missing, (
         "sensitive_policy.json lost fragment(s) that the round-5 audit added: "

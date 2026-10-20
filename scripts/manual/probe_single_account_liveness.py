@@ -10,6 +10,7 @@
   status == "token_invalid"         -> 掉号（401/403/token 失效）
   其余 / 检测失败                   -> 不确定（需人工复核）
 """
+
 from __future__ import annotations
 
 import argparse

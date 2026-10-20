@@ -105,13 +105,15 @@ def proxy_key(proxy: str, normalize: Callable[[str], str]) -> str:
 
 # Hosts whose URLs are noise in a redirect trace.  Shared because the set is
 # provider-independent: Stripe's CDN is Stripe's CDN in every flow.
-_KNOWN_STATIC_HOSTS = frozenset({
-    "stripe-camo.global.ssl.fastly.net",
-    "files.stripe.com",
-    "js.stripe.com",
-    "m.stripe.network",
-    "q.stripe.com",
-})
+_KNOWN_STATIC_HOSTS = frozenset(
+    {
+        "stripe-camo.global.ssl.fastly.net",
+        "files.stripe.com",
+        "js.stripe.com",
+        "m.stripe.network",
+        "q.stripe.com",
+    }
+)
 
 
 def is_known_static_host(url: str) -> bool:

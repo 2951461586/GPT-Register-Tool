@@ -43,11 +43,13 @@ def view_inbox(args: Any, ctx: MailboxCommandContext) -> None:
         if mailbox is None and (getattr(args, "remail_token", None) or os.environ.get("REMAIL_SERVICE_TOKEN")):
             mailbox = _mailbox_from_config(args)
     if mailbox is None:
-        output({
-            "ok": False,
-            "email": args.email or data.get("email", ""),
-            "error": "missing_mailbox_credentials",
-        })
+        output(
+            {
+                "ok": False,
+                "email": args.email or data.get("email", ""),
+                "error": "missing_mailbox_credentials",
+            }
+        )
         raise SystemExit(2)
     try:
         original_mailbox_token = str(getattr(mailbox, "token", "") or "")
@@ -66,31 +68,39 @@ def view_inbox(args: Any, ctx: MailboxCommandContext) -> None:
             ):
                 _raw_mailbox_data: object = data.get("mailbox")
                 mailbox_data: dict = _raw_mailbox_data if isinstance(_raw_mailbox_data, dict) else {}
-                mailbox_data.update({
-                    "email": mailbox.email,
-                    "provider": "remail",
-                    "token": refreshed_mailbox_token,
-                    "order_no": str(getattr(mailbox, "order_no", "") or mailbox_data.get("order_no") or ""),
-                    "purchase_id": str(getattr(mailbox, "purchase_id", "") or mailbox_data.get("purchase_id") or ""),
-                })
+                mailbox_data.update(
+                    {
+                        "email": mailbox.email,
+                        "provider": "remail",
+                        "token": refreshed_mailbox_token,
+                        "order_no": str(getattr(mailbox, "order_no", "") or mailbox_data.get("order_no") or ""),
+                        "purchase_id": str(
+                            getattr(mailbox, "purchase_id", "") or mailbox_data.get("purchase_id") or ""
+                        ),
+                    }
+                )
                 data["mailbox"] = mailbox_data
                 if json_path:
                     Path(json_path).write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
                 ctx.upsert_account(data, json_path=json_path)
     except Exception as exc:
-        output({
-            "ok": False,
+        output(
+            {
+                "ok": False,
+                "email": mailbox.email,
+                "provider": mailbox.provider,
+                "error": str(exc),
+            }
+        )
+        raise SystemExit(3)
+    output(
+        {
+            "ok": True,
             "email": mailbox.email,
             "provider": mailbox.provider,
-            "error": str(exc),
-        })
-        raise SystemExit(3)
-    output({
-        "ok": True,
-        "email": mailbox.email,
-        "provider": mailbox.provider,
-        "messages": [public_mail_message(item) for item in messages],
-    })
+            "messages": [public_mail_message(item) for item in messages],
+        }
+    )
 
 
 def gmail_send(args: Any) -> None:
@@ -107,19 +117,31 @@ def gmail_send(args: Any) -> None:
         if mailbox is None:
             mailbox = _mailbox_from_config(args)
     if mailbox is None:
-        print(json.dumps({
-            "ok": False,
-            "email": args.email or data.get("email", ""),
-            "error": "missing_gmail_mailbox_credentials",
-        }, ensure_ascii=False, indent=2))
+        print(
+            json.dumps(
+                {
+                    "ok": False,
+                    "email": args.email or data.get("email", ""),
+                    "error": "missing_gmail_mailbox_credentials",
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
         raise SystemExit(2)
     if not is_gmail_mailbox(mailbox):
-        print(json.dumps({
-            "ok": False,
-            "email": mailbox.email,
-            "provider": mailbox.provider,
-            "error": "selected_mailbox_is_not_gmail",
-        }, ensure_ascii=False, indent=2))
+        print(
+            json.dumps(
+                {
+                    "ok": False,
+                    "email": mailbox.email,
+                    "provider": mailbox.provider,
+                    "error": "selected_mailbox_is_not_gmail",
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
         raise SystemExit(2)
     recipients = args.gmail_send_to or ""
     if args.gmail_send_self or not str(recipients or "").strip():
@@ -136,11 +158,17 @@ def gmail_send(args: Any) -> None:
                 html_body=args.gmail_send_html or "",
             )
     except Exception as exc:
-        print(json.dumps({
-            "ok": False,
-            "email": mailbox.email,
-            "provider": mailbox.provider,
-            "error": str(exc),
-        }, ensure_ascii=False, indent=2))
+        print(
+            json.dumps(
+                {
+                    "ok": False,
+                    "email": mailbox.email,
+                    "provider": mailbox.provider,
+                    "error": str(exc),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
         raise SystemExit(3)
     print(json.dumps(result, ensure_ascii=False, indent=2))

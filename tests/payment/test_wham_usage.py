@@ -37,9 +37,7 @@ def test_parse_accepts_alternate_window_spellings() -> None:
 
 
 def test_parse_carries_reset_timestamp() -> None:
-    parsed = wham_usage.parse_wham_usage(
-        {"5h": {"used": 1, "limit": 2, "resets_at": "2026-09-25T00:00:00Z"}}
-    )
+    parsed = wham_usage.parse_wham_usage({"5h": {"used": 1, "limit": 2, "resets_at": "2026-09-25T00:00:00Z"}})
     assert parsed is not None
     assert parsed["5h"]["reset_at"] == "2026-09-25T00:00:00Z"
 

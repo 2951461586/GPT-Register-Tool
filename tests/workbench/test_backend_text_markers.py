@@ -14,6 +14,7 @@ failing quietly in production.
 Output is ASCII-only: CI runs on a Windows runner whose stdout is cp1252, and a
 non-Latin-1 ``print`` there aborts the step (see MEMORY.md).
 """
+
 import ast
 import re
 import unittest
@@ -36,12 +37,7 @@ UNION_LISTS = {"AT_INVALID_MARKERS": ("AtInvalid", "AccountDeactivated")}
 def _csharp_constants(path):
     """Pull ``public const string Name = "value";`` out of a C# file."""
     source = path.read_text(encoding="utf-8-sig")
-    return {
-        name: value
-        for name, value in re.findall(
-            r'public\s+const\s+string\s+(\w+)\s*=\s*"([^"]*)"\s*;', source
-        )
-    }
+    return {name: value for name, value in re.findall(r'public\s+const\s+string\s+(\w+)\s*=\s*"([^"]*)"\s*;', source)}
 
 
 def _python_constants(path):
@@ -93,9 +89,7 @@ def _python_string_tuples(path):
             left, right = node.value.left, node.value.right
             if isinstance(left, ast.Tuple) and isinstance(right, ast.Name):
                 try:
-                    simple[target.id] = [ast.literal_eval(e) for e in left.elts] + simple.get(
-                        right.id, []
-                    )
+                    simple[target.id] = [ast.literal_eval(e) for e in left.elts] + simple.get(right.id, [])
                 except ValueError:
                     pass
         elif isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
@@ -118,8 +112,7 @@ class MarkerParityTests(unittest.TestCase):
                 self.assertEqual(
                     py[py_name],
                     cs[cs_name],
-                    "marker drift: the host matches Python stdout by substring, "
-                    "so these two must stay byte-identical",
+                    "marker drift: the host matches Python stdout by substring, so these two must stay byte-identical",
                 )
 
     def test_markers_are_non_empty_and_defined(self):
@@ -162,9 +155,7 @@ class AccountStateMarkerParityTests(unittest.TestCase):
         self.assertIn("account_deatived", py_tuples["ACCOUNT_DEACTIVATED_MARKERS"])
 
     def test_csharp_uses_the_shared_lists_not_inline_literals(self):
-        source = (PROJECT_ROOT / "SmsWorkbench" / "AccountStatusInterpreter.cs").read_text(
-            encoding="utf-8-sig"
-        )
+        source = (PROJECT_ROOT / "SmsWorkbench" / "AccountStatusInterpreter.cs").read_text(encoding="utf-8-sig")
         self.assertIn("BackendTextMarkers.AtInvalid", source)
         self.assertIn("BackendTextMarkers.AccountDeactivated", source)
         # the old inline chain must be gone
@@ -190,9 +181,7 @@ class MarkerUsageTests(unittest.TestCase):
         self.assertNotIn('print(f"[*] Saved session:', source)
 
     def test_csharp_matches_through_the_constant(self):
-        source = (PROJECT_ROOT / "SmsWorkbench" / "MainWindow.Tasks.cs").read_text(
-            encoding="utf-8-sig"
-        )
+        source = (PROJECT_ROOT / "SmsWorkbench" / "MainWindow.Tasks.cs").read_text(encoding="utf-8-sig")
         for cs_name in PAIRED_MARKERS.values():
             with self.subTest(csharp=cs_name):
                 self.assertIn(f"BackendTextMarkers.{cs_name}", source)

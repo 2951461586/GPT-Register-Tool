@@ -15,11 +15,13 @@ def test_registration_has_no_payment_generation_entrypoint():
 
 
 def test_qr_only_registration_session_is_marked_ready():
-    session = registration._build_session_file({
-        "email": "qr@example.com",
-        "access_token": "at-test",
-        "paypal": {"ok": True, "payment_method": "momo", "qr_path": "qr.png"},
-    })
+    session = registration._build_session_file(
+        {
+            "email": "qr@example.com",
+            "access_token": "at-test",
+            "paypal": {"ok": True, "payment_method": "momo", "qr_path": "qr.png"},
+        }
+    )
     assert session["paypal_status"] == "qr_ready"
 
 
@@ -60,11 +62,13 @@ def test_single_account_probe_runs_checkout_capability_instead_of_stopping_after
         "eligible": True,
     }
 
-    with patch.object(cli, "CFG", {}), \
-         patch.object(cli, "_resolve_payment_access_token", return_value=("", None)), \
-         patch.object(cli, "_protocol_proxy_pool", return_value=[]), \
-         patch("sms_tool.payment_auth.ensure_payment_access_token", return_value=auth), \
-         patch("sms_tool.payment_link_manager.generate_payment_link", return_value=capability) as generate:
+    with (
+        patch.object(cli, "CFG", {}),
+        patch.object(cli, "_resolve_payment_access_token", return_value=("", None)),
+        patch.object(cli, "_protocol_proxy_pool", return_value=[]),
+        patch("sms_tool.payment_auth.ensure_payment_access_token", return_value=auth),
+        patch("sms_tool.payment_link_manager.generate_payment_link", return_value=capability) as generate,
+    ):
         cli._extract_payment_link(args)
 
     assert generate.call_count == 1
@@ -88,15 +92,19 @@ def test_probe_batch_returns_nonzero_when_capability_is_unknown(tmp_path):
     report = {
         "ok": False,
         "counts": {"authenticated": 1, "capability_probed": 1},
-        "results": [{
-            "classification": "unknown",
-            "error_code": "stripe_init_failed",
-        }],
+        "results": [
+            {
+                "classification": "unknown",
+                "error_code": "stripe_init_failed",
+            }
+        ],
     }
 
-    with patch.object(cli, "CFG", {}), \
-         patch.object(cli, "_protocol_proxy_pool", return_value=[]), \
-         patch("sms_tool.payment_batch.run_payment_batch", return_value=report):
+    with (
+        patch.object(cli, "CFG", {}),
+        patch.object(cli, "_protocol_proxy_pool", return_value=[]),
+        patch("sms_tool.payment_batch.run_payment_batch", return_value=report),
+    ):
         with pytest.raises(SystemExit) as exc:
             cli._extract_payment_link(args)
 
@@ -112,9 +120,10 @@ def test_payment_stage_args_preserves_legacy_country_override_hook():
     )
     expected = ("legacy", "checkout", "provider", "approve")
 
-    with patch.object(cli, "CFG", {}), patch.object(
-        cli, "_apply_stage_country_overrides", return_value=expected
-    ) as apply:
+    with (
+        patch.object(cli, "CFG", {}),
+        patch.object(cli, "_apply_stage_country_overrides", return_value=expected) as apply,
+    ):
         result = cli._at_payment_stage_args(args, "gopay")
 
     assert result == expected
@@ -172,12 +181,8 @@ def test_payment_route_selects_checkout_and_approve_pools_independently():
     assert [item[2] for item in seen] == ["checkout", "approve"]
     assert seen[0][1] == "JP"
     assert seen[1][1] == "TR"
-    assert route["checkout_proxy_pool"] == [
-        "http://checkout-a:8080", "http://checkout-b:8080"
-    ]
-    assert route["approve_proxy_pool"] == [
-        "http://approve-a:8080", "http://approve-b:8080"
-    ]
+    assert route["checkout_proxy_pool"] == ["http://checkout-a:8080", "http://checkout-b:8080"]
+    assert route["approve_proxy_pool"] == ["http://approve-a:8080", "http://approve-b:8080"]
 
 
 def test_gopay_route_defaults_approve_pool_country_to_jp():
@@ -250,10 +255,13 @@ def test_gopay_shared_pool_fallback_defaults_approve_country_to_jp():
         rotations.append((proxy, country))
         return f"{proxy}/{country}"
 
-    with patch(
-        "sms_tool.paypal_proxy.select_proxy_from_pool",
-        return_value=("http://pool.example:8080", [{"ok": True}]),
-    ), patch("sms_tool.paypal_proxy.rotate_proxy_session", side_effect=rotate):
+    with (
+        patch(
+            "sms_tool.paypal_proxy.select_proxy_from_pool",
+            return_value=("http://pool.example:8080", [{"ok": True}]),
+        ),
+        patch("sms_tool.paypal_proxy.rotate_proxy_session", side_effect=rotate),
+    ):
         route = cli.payment_commands.resolve_payment_route(args, "gopay", context)
 
     assert route["approve_proxy"].endswith("/JP")
@@ -350,9 +358,7 @@ def test_promotion_proxy_comes_from_protocol_method_config():
         },
     }
 
-    assert cli.payment_commands.promotion_proxy_arg(args, "gopay", config) == (
-        "http://gopay-update.example:8080"
-    )
+    assert cli.payment_commands.promotion_proxy_arg(args, "gopay", config) == ("http://gopay-update.example:8080")
 
 
 def test_gopay_stage_country_defaults_to_th_and_config_and_cli_take_precedence():
@@ -383,9 +389,7 @@ def test_gopay_stage_country_defaults_to_th_and_config_and_cli_take_precedence()
     }
 
     args.promotion_proxy_country = "PH"
-    assert cli.payment_commands.stage_country_overrides(args, "gopay", config)[
-        "promotion"
-    ] == "PH"
+    assert cli.payment_commands.stage_country_overrides(args, "gopay", config)["promotion"] == "PH"
 
 
 def test_explicit_proxy_resolver_failure_is_not_swallowed():
@@ -450,13 +454,15 @@ def test_single_payment_resolves_checkout_route_before_jit_and_reuses_it():
         "auth_context": {"email": "route@example.com"},
     }
 
-    with patch.object(cli, "CFG", config), \
-         patch.object(cli, "_resolve_payment_access_token", return_value=("", None)), \
-         patch("sms_tool.payment_auth.ensure_payment_access_token", return_value=auth_result) as auth, \
-         patch(
-             "sms_tool.payment_link_manager.generate_payment_link",
-             return_value={"ok": True, "operation": "probe"},
-         ) as generate:
+    with (
+        patch.object(cli, "CFG", config),
+        patch.object(cli, "_resolve_payment_access_token", return_value=("", None)),
+        patch("sms_tool.payment_auth.ensure_payment_access_token", return_value=auth_result) as auth,
+        patch(
+            "sms_tool.payment_link_manager.generate_payment_link",
+            return_value={"ok": True, "operation": "probe"},
+        ) as generate,
+    ):
         cli._extract_payment_link(args)
 
     checkout_route = "http://checkout.example:8080"
@@ -509,15 +515,17 @@ def test_healthy_pool_is_selected_before_jit_and_shared_with_checkout():
         rotations.append((value, country))
         return value
 
-    with patch.object(cli, "CFG", config), \
-         patch.object(cli, "_resolve_payment_access_token", return_value=("", None)), \
-         patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=select_proxy), \
-         patch("sms_tool.paypal_proxy.rotate_proxy_session", side_effect=rotate_proxy), \
-         patch("sms_tool.payment_auth.ensure_payment_access_token", side_effect=ensure_auth) as auth, \
-         patch(
-             "sms_tool.payment_link_manager.generate_payment_link",
-             return_value={"ok": True, "operation": "probe"},
-         ) as generate:
+    with (
+        patch.object(cli, "CFG", config),
+        patch.object(cli, "_resolve_payment_access_token", return_value=("", None)),
+        patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=select_proxy),
+        patch("sms_tool.paypal_proxy.rotate_proxy_session", side_effect=rotate_proxy),
+        patch("sms_tool.payment_auth.ensure_payment_access_token", side_effect=ensure_auth) as auth,
+        patch(
+            "sms_tool.payment_link_manager.generate_payment_link",
+            return_value={"ok": True, "operation": "probe"},
+        ) as generate,
+    ):
         cli._extract_payment_link(args)
 
     assert events == ["select", "auth"]
@@ -552,14 +560,14 @@ def test_batch_jit_receives_the_resolved_checkout_route(tmp_path):
     }
     report = {"ok": True, "counts": {"capability_probed": 1}, "results": []}
 
-    with patch.object(cli, "CFG", config), \
-         patch("sms_tool.payment_batch.run_payment_batch", return_value=report) as batch:
+    with (
+        patch.object(cli, "CFG", config),
+        patch("sms_tool.payment_batch.run_payment_batch", return_value=report) as batch,
+    ):
         cli._extract_payment_link(args)
 
     assert batch.call_args.kwargs["proxy"] == "http://checkout.example:8080"
-    assert batch.call_args.kwargs["payment_kwargs"]["checkout_proxy"] == (
-        "http://checkout.example:8080"
-    )
+    assert batch.call_args.kwargs["payment_kwargs"]["checkout_proxy"] == ("http://checkout.example:8080")
 
 
 def test_cli_payment_method_choices_follow_catalog_and_accept_alias_and_th(monkeypatch):
@@ -579,10 +587,13 @@ def test_cli_payment_method_choices_follow_catalog_and_accept_alias_and_th(monke
             "TH",
         ],
     )
-    with patch.object(cli, "CFG", {}), patch(
-        "sms_tool.payment_link_manager.generate_payment_link",
-        return_value={"ok": True, "operation": "probe"},
-    ) as generate:
+    with (
+        patch.object(cli, "CFG", {}),
+        patch(
+            "sms_tool.payment_link_manager.generate_payment_link",
+            return_value={"ok": True, "operation": "probe"},
+        ) as generate,
+    ):
         cli.main()
 
     assert generate.call_args.kwargs["payment_method"] == "gopay"

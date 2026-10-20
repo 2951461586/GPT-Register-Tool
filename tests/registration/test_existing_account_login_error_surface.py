@@ -67,9 +67,7 @@ class RegistrationOutcomeCauseTests(unittest.TestCase):
     """``_registration_outcome`` when there is no access token to return."""
 
     def test_existing_login_error_replaces_the_generic_fallback(self):
-        success, error, _ = registration._registration_outcome(
-            True, {}, "", {}, _LOGIN_ERROR
-        )
+        success, error, _ = registration._registration_outcome(True, {}, "", {}, _LOGIN_ERROR)
 
         self.assertFalse(success)
         self.assertEqual(error, _LOGIN_ERROR)
@@ -77,9 +75,7 @@ class RegistrationOutcomeCauseTests(unittest.TestCase):
     def test_create_account_error_still_wins_over_the_login_cause(self):
         create_data = {"error": {"code": "invalid_auth_step", "message": "Invalid authorization step."}}
 
-        success, error, _ = registration._registration_outcome(
-            False, create_data, "", {}, _LOGIN_ERROR
-        )
+        success, error, _ = registration._registration_outcome(False, create_data, "", {}, _LOGIN_ERROR)
 
         self.assertFalse(success)
         self.assertIn("invalid_auth_step", error)
@@ -132,8 +128,7 @@ class ExistingAccountLoginSurfaceTests(unittest.TestCase):
         operations._sanitize_text.side_effect = lambda value: str(value)  # type: ignore[attr-defined]
         operations._login_existing_account_with_email_otp.return_value = login_result
         operations._registration_outcome = Mock(
-            side_effect=lambda create_ok, create_data, access_token, at_probe,
-            existing_login_error="": (
+            side_effect=lambda create_ok, create_data, access_token, at_probe, existing_login_error="": (
                 False,
                 existing_login_error or "missing_auth_session_access_token",
                 "",
@@ -276,9 +271,7 @@ class ExistingLoginProbeTests(unittest.TestCase):
 
     def test_the_inconclusive_verdict_is_also_written_to_the_retry_guard(self):
         """``unknown`` is not a licence to spend a code on a known-registered address."""
-        workflow = self._workflow(
-            login_result={"ok": False, "error": "existing_login_password_step_unknown"}
-        )
+        workflow = self._workflow(login_result={"ok": False, "error": "existing_login_password_step_unknown"})
 
         with self._guard() as guard_cls:
             workflow.fetch_auth_session()
@@ -373,9 +366,7 @@ class LoginProbePasswordGateTests(unittest.TestCase):
         return state
 
     def test_a_known_existing_account_password_is_submitted(self):
-        self.assertEqual(
-            registration_handlers._login_probe_password(self._state()), "StoredPass123"
-        )
+        self.assertEqual(registration_handlers._login_probe_password(self._state()), "StoredPass123")
 
     def test_an_unknown_existing_account_password_is_withheld(self):
         """The inverse guard: submitting the generated password would be a guess."""
@@ -384,17 +375,13 @@ class LoginProbePasswordGateTests(unittest.TestCase):
         self.assertEqual(registration_handlers._login_probe_password(state), "")
 
     def test_a_fresh_registration_submits_the_password_we_just_set(self):
-        state = self._state(
-            existing_account=False, existing_account_password_known=False, password_unknown=False
-        )
+        state = self._state(existing_account=False, existing_account_password_known=False, password_unknown=False)
 
         self.assertEqual(registration_handlers._login_probe_password(state), "StoredPass123")
 
     def test_a_resumed_verification_does_not_submit_a_password_we_do_not_own(self):
         """``--resume-email-verification`` without a password cannot vouch for it."""
-        state = self._state(
-            existing_account=False, existing_account_password_known=False, password_unknown=True
-        )
+        state = self._state(existing_account=False, existing_account_password_known=False, password_unknown=True)
 
         self.assertEqual(registration_handlers._login_probe_password(state), "")
 
@@ -442,9 +429,7 @@ class ReauthHandsTheProbeItsInputsTests(unittest.TestCase):
             kwargs["reauth_login_fn"]()
             return {"ok": True, "totp_secret": "NEWSECRET", "access_token": "fresh-at"}
 
-        with patch(
-            "sms_tool.accounts.account_2fa.setup_totp_2fa", side_effect=fake_setup_totp_2fa
-        ):
+        with patch("sms_tool.accounts.account_2fa.setup_totp_2fa", side_effect=fake_setup_totp_2fa):
             workflow.enroll_totp()
         return workflow._operations._login_existing_account_with_email_otp.call_args.kwargs  # type: ignore[attr-defined]
 
@@ -530,9 +515,7 @@ class CreateAccountPasswordKnownTests(unittest.TestCase):
         return workflow
 
     def _sentinel(self):
-        return patch.object(
-            RegistrationEmailWorkflow, "_issue_sentinel", return_value=Mock(token="t", so_token="s")
-        )
+        return patch.object(RegistrationEmailWorkflow, "_issue_sentinel", return_value=Mock(token="t", so_token="s"))
 
     def test_a_stored_password_makes_a_password_login_possible(self):
         workflow = self._workflow(status_code=400, body=self._CREATE_DATA, password_from_storage=True)

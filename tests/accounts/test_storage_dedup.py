@@ -11,22 +11,36 @@ from sms_tool import storage
 class StorageDedupTests(unittest.TestCase):
     @staticmethod
     def _access_token(plan_type):
-        payload = base64.urlsafe_b64encode(json.dumps({
-            "https://api.openai.com/auth": {"chatgpt_plan_type": plan_type},
-        }).encode()).decode().rstrip("=")
+        payload = (
+            base64.urlsafe_b64encode(
+                json.dumps(
+                    {
+                        "https://api.openai.com/auth": {"chatgpt_plan_type": plan_type},
+                    }
+                ).encode()
+            )
+            .decode()
+            .rstrip("=")
+        )
         return "header." + payload + ".signature"
 
     def test_registration_failure_is_audited_without_entering_accounts(self):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "accounts.sqlite3"
             with patch.object(storage, "database_path", return_value=db_path):
-                self.assertTrue(storage.record_registration_audit({
-                    "email": "failed@example.com",
-                    "success": False,
-                    "error": "access_token_probe_http_401",
-                    "response": {"access_token_probe": {"status_code": 401}},
-                    "access_token_telemetry": {"token_hash": "hash", "iat": 1, "exp": 2},
-                }, batch_id="batch-1", state="failed"))
+                self.assertTrue(
+                    storage.record_registration_audit(
+                        {
+                            "email": "failed@example.com",
+                            "success": False,
+                            "error": "access_token_probe_http_401",
+                            "response": {"access_token_probe": {"status_code": 401}},
+                            "access_token_telemetry": {"token_hash": "hash", "iat": 1, "exp": 2},
+                        },
+                        batch_id="batch-1",
+                        state="failed",
+                    )
+                )
                 conn = storage._connect()
                 try:
                     accounts = conn.execute("SELECT count(*) FROM accounts").fetchone()[0]
@@ -49,18 +63,22 @@ class StorageDedupTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "accounts.sqlite3"
             with patch.object(storage, "database_path", return_value=db_path):
-                self.assertTrue(storage.record_registration_audit({
-                    "email": "half@example.com",
-                    "success": False,
-                    "error": "existing_account_user_already_exists:continue_to_login",
-                    "existing_login_error": "existing_login_password_step_unknown",
-                    "response": {"access_token_probe": {"status_code": 0}},
-                }, batch_id="batch-2", state="partial_registered"))
+                self.assertTrue(
+                    storage.record_registration_audit(
+                        {
+                            "email": "half@example.com",
+                            "success": False,
+                            "error": "existing_account_user_already_exists:continue_to_login",
+                            "existing_login_error": "existing_login_password_step_unknown",
+                            "response": {"access_token_probe": {"status_code": 0}},
+                        },
+                        batch_id="batch-2",
+                        state="partial_registered",
+                    )
+                )
                 conn = storage._connect()
                 try:
-                    row = conn.execute(
-                        "SELECT state,error,detail_json FROM registration_audit"
-                    ).fetchone()
+                    row = conn.execute("SELECT state,error,detail_json FROM registration_audit").fetchone()
                 finally:
                     conn.close()
 
@@ -77,11 +95,14 @@ class StorageDedupTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "accounts.sqlite3"
             with patch.object(storage, "database_path", return_value=db_path):
-                storage.record_registration_audit({
-                    "email": "fresh@example.com",
-                    "success": False,
-                    "error": "create_account_failed",
-                }, state="failed")
+                storage.record_registration_audit(
+                    {
+                        "email": "fresh@example.com",
+                        "success": False,
+                        "error": "create_account_failed",
+                    },
+                    state="failed",
+                )
                 conn = storage._connect()
                 try:
                     row = conn.execute("SELECT detail_json FROM registration_audit").fetchone()
@@ -93,18 +114,26 @@ class StorageDedupTests(unittest.TestCase):
     def test_deactivated_remail_account_is_added_to_dead_history(self):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "accounts.sqlite3"
-            with patch.object(storage, "database_path", return_value=db_path), \
-                 patch("sms_tool.mailbox_remail.record_dead_remail_account") as record:
-                self.assertTrue(storage.upsert_account({
-                    "email": "dead@example.com",
-                    "success": False,
-                    "error": "account_deactivated",
-                    "oauth_refresh_token": "rt_TEST",
-                    "mailbox": {"provider": "remail", "email": "dead@example.com", "order_no": "R-DEAD"},
-                }))
+            with (
+                patch.object(storage, "database_path", return_value=db_path),
+                patch("sms_tool.mailbox_remail.record_dead_remail_account") as record,
+            ):
+                self.assertTrue(
+                    storage.upsert_account(
+                        {
+                            "email": "dead@example.com",
+                            "success": False,
+                            "error": "account_deactivated",
+                            "oauth_refresh_token": "rt_TEST",
+                            "mailbox": {"provider": "remail", "email": "dead@example.com", "order_no": "R-DEAD"},
+                        }
+                    )
+                )
                 conn = storage._connect()
                 try:
-                    row = conn.execute("SELECT status,error FROM accounts WHERE email=?", ("dead@example.com",)).fetchone()
+                    row = conn.execute(
+                        "SELECT status,error FROM accounts WHERE email=?", ("dead@example.com",)
+                    ).fetchone()
                 finally:
                     conn.close()
 
@@ -116,8 +145,12 @@ class StorageDedupTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "accounts.sqlite3"
             with patch.object(storage, "database_path", return_value=db_path):
-                self.assertTrue(storage.upsert_account({"email": "User@Example.com", "success": False, "error": "first"}))
-                self.assertTrue(storage.upsert_account({"email": "user@example.com", "success": True, "access_token": "tok"}))
+                self.assertTrue(
+                    storage.upsert_account({"email": "User@Example.com", "success": False, "error": "first"})
+                )
+                self.assertTrue(
+                    storage.upsert_account({"email": "user@example.com", "success": True, "access_token": "tok"})
+                )
 
                 conn = storage._connect()
                 try:
@@ -135,20 +168,28 @@ class StorageDedupTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "accounts.sqlite3"
             with patch.object(storage, "database_path", return_value=db_path):
-                self.assertTrue(storage.upsert_account({
-                    "email": "rt@example.com",
-                    "success": False,
-                    "error": "passwordless_email_otp_poll_timeout",
-                }))
-                self.assertTrue(storage.upsert_account({
-                    "email": "rt@example.com",
-                    "success": True,
-                    "access_token": "at",
-                    "oauth_refresh_token": "rt_TEST",
-                    "refresh_token_status": "oauth_present",
-                    "error": "passwordless_email_otp_poll_timeout",
-                    "paypal": {"ok": True, "url": "https://example.com/pay"},
-                }))
+                self.assertTrue(
+                    storage.upsert_account(
+                        {
+                            "email": "rt@example.com",
+                            "success": False,
+                            "error": "passwordless_email_otp_poll_timeout",
+                        }
+                    )
+                )
+                self.assertTrue(
+                    storage.upsert_account(
+                        {
+                            "email": "rt@example.com",
+                            "success": True,
+                            "access_token": "at",
+                            "oauth_refresh_token": "rt_TEST",
+                            "refresh_token_status": "oauth_present",
+                            "error": "passwordless_email_otp_poll_timeout",
+                            "paypal": {"ok": True, "url": "https://example.com/pay"},
+                        }
+                    )
+                )
 
                 conn = storage._connect()
                 try:
@@ -170,14 +211,18 @@ class StorageDedupTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "accounts.sqlite3"
             with patch.object(storage, "database_path", return_value=db_path):
-                self.assertTrue(storage.upsert_account({
-                    "email": "mailbox-rt@example.com",
-                    "success": True,
-                    "access_token": "at",
-                    "oauth_refresh_token": "M.C_FAKE_MAILBOX_TOKEN",
-                    "refresh_token": "M.C_FAKE_MAILBOX_TOKEN",
-                    "refresh_token_status": "oauth_present",
-                }))
+                self.assertTrue(
+                    storage.upsert_account(
+                        {
+                            "email": "mailbox-rt@example.com",
+                            "success": True,
+                            "access_token": "at",
+                            "oauth_refresh_token": "M.C_FAKE_MAILBOX_TOKEN",
+                            "refresh_token": "M.C_FAKE_MAILBOX_TOKEN",
+                            "refresh_token_status": "oauth_present",
+                        }
+                    )
+                )
 
                 conn = storage._connect()
                 try:
@@ -197,13 +242,17 @@ class StorageDedupTests(unittest.TestCase):
             db_path = Path(tmp) / "accounts.sqlite3"
             opaque = "ab." + "A" * 96 + "." + "B" * 96
             with patch.object(storage, "database_path", return_value=db_path):
-                self.assertTrue(storage.upsert_account({
-                    "email": "opaque-rt@example.com",
-                    "success": True,
-                    "access_token": "at",
-                    "oauth_refresh_token": opaque,
-                    "refresh_token_status": "oauth_present",
-                }))
+                self.assertTrue(
+                    storage.upsert_account(
+                        {
+                            "email": "opaque-rt@example.com",
+                            "success": True,
+                            "access_token": "at",
+                            "oauth_refresh_token": opaque,
+                            "refresh_token_status": "oauth_present",
+                        }
+                    )
+                )
                 conn = storage._connect()
                 try:
                     row = conn.execute(
@@ -221,15 +270,21 @@ class StorageDedupTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "accounts.sqlite3"
             with patch.object(storage, "database_path", return_value=db_path):
-                self.assertTrue(storage.upsert_account({
-                    "email": "plan@example.com",
-                    "success": True,
-                    "access_token": "at",
-                    "auth_session": {"account": {"planType": "plus"}},
-                }))
+                self.assertTrue(
+                    storage.upsert_account(
+                        {
+                            "email": "plan@example.com",
+                            "success": True,
+                            "access_token": "at",
+                            "auth_session": {"account": {"planType": "plus"}},
+                        }
+                    )
+                )
                 conn = storage._connect()
                 try:
-                    row = conn.execute("SELECT account_type FROM accounts WHERE email=?", ("plan@example.com",)).fetchone()
+                    row = conn.execute(
+                        "SELECT account_type FROM accounts WHERE email=?", ("plan@example.com",)
+                    ).fetchone()
                 finally:
                     conn.close()
 
@@ -239,15 +294,21 @@ class StorageDedupTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "accounts.sqlite3"
             with patch.object(storage, "database_path", return_value=db_path):
-                self.assertTrue(storage.upsert_account({
-                    "email": "upgraded@example.com",
-                    "success": True,
-                    "access_token": self._access_token("plus"),
-                    "auth_session": {"account": {"planType": "free"}},
-                }))
+                self.assertTrue(
+                    storage.upsert_account(
+                        {
+                            "email": "upgraded@example.com",
+                            "success": True,
+                            "access_token": self._access_token("plus"),
+                            "auth_session": {"account": {"planType": "free"}},
+                        }
+                    )
+                )
                 conn = storage._connect()
                 try:
-                    row = conn.execute("SELECT account_type FROM accounts WHERE email=?", ("upgraded@example.com",)).fetchone()
+                    row = conn.execute(
+                        "SELECT account_type FROM accounts WHERE email=?", ("upgraded@example.com",)
+                    ).fetchone()
                 finally:
                     conn.close()
 
@@ -257,7 +318,9 @@ class StorageDedupTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "accounts.sqlite3"
             with patch.object(storage, "database_path", return_value=db_path):
-                self.assertTrue(storage.upsert_account({"email": "SampleAccount66@+oai01hotmail.com", "success": False}))
+                self.assertTrue(
+                    storage.upsert_account({"email": "SampleAccount66@+oai01hotmail.com", "success": False})
+                )
 
                 conn = storage._connect()
                 try:
@@ -286,11 +349,15 @@ class StorageDedupTests(unittest.TestCase):
                 finally:
                     conn.close()
 
-                self.assertTrue(storage.upsert_account({
-                    "email": "sampleaccount66+oai01@hotmail.com",
-                    "success": True,
-                    "access_token": "tok",
-                }))
+                self.assertTrue(
+                    storage.upsert_account(
+                        {
+                            "email": "sampleaccount66+oai01@hotmail.com",
+                            "success": True,
+                            "access_token": "tok",
+                        }
+                    )
+                )
 
                 conn = storage._connect()
                 try:
@@ -307,17 +374,21 @@ class StorageDedupTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "accounts.sqlite3"
             with patch.object(storage, "database_path", return_value=db_path):
-                self.assertTrue(storage.upsert_account({
-                    "email": "pm@example.com",
-                    "success": True,
-                    "access_token": "at",
-                    "paypal": {
-                        "ok": True,
-                        "link_type": "pm_created",
-                        "pm_id": "pm_TESTPAYPAL",
-                        "url": "",
-                    },
-                }))
+                self.assertTrue(
+                    storage.upsert_account(
+                        {
+                            "email": "pm@example.com",
+                            "success": True,
+                            "access_token": "at",
+                            "paypal": {
+                                "ok": True,
+                                "link_type": "pm_created",
+                                "pm_id": "pm_TESTPAYPAL",
+                                "url": "",
+                            },
+                        }
+                    )
+                )
 
                 conn = storage._connect()
                 try:
@@ -338,17 +409,21 @@ class StorageDedupTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "accounts.sqlite3"
             with patch.object(storage, "database_path", return_value=db_path):
-                self.assertTrue(storage.upsert_account({
-                    "email": "upi@example.com",
-                    "success": True,
-                    "access_token": "at",
-                    "paypal": {
-                        "ok": True,
-                        "url": "https://pay.openai.com/c/pay/cs_live_UPI",
-                        "currency": "inr",
-                        "payment_method_types": ["card", "upi"],
-                    },
-                }))
+                self.assertTrue(
+                    storage.upsert_account(
+                        {
+                            "email": "upi@example.com",
+                            "success": True,
+                            "access_token": "at",
+                            "paypal": {
+                                "ok": True,
+                                "url": "https://pay.openai.com/c/pay/cs_live_UPI",
+                                "currency": "inr",
+                                "payment_method_types": ["card", "upi"],
+                            },
+                        }
+                    )
+                )
 
                 conn = storage._connect()
                 try:

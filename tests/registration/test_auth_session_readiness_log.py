@@ -37,6 +37,7 @@
 * **探针必须与提取器同判据。** 匿名 session 会回 `{"accessToken": null}`，
   只看"键存在"会报 `token_key_present=True`，把"未认证"误诊成"提取器漏路径"。
 """
+
 from __future__ import annotations
 
 import logging
@@ -46,9 +47,7 @@ from unittest import mock
 from sms_tool import account_creation
 
 # 派生而非硬编码：logging 自己知道哪些属性是标准的，升级 Python 也不会漏。
-_STANDARD_LOG_ATTRS = frozenset(
-    logging.LogRecord("", 0, "", 0, "", (), None).__dict__
-)
+_STANDARD_LOG_ATTRS = frozenset(logging.LogRecord("", 0, "", 0, "", (), None).__dict__)
 _EXPECTED_READINESS_FIELDS = frozenset(
     {
         "event",
@@ -137,9 +136,7 @@ class ContainsAccessTokenKeyTests(unittest.TestCase):
         self.assertTrue(account_creation._contains_access_token_key(body))
 
     def test_false_when_there_is_genuinely_no_token(self):
-        self.assertFalse(
-            account_creation._contains_access_token_key({"user": {}, "expires": "x"})
-        )
+        self.assertFalse(account_creation._contains_access_token_key({"user": {}, "expires": "x"}))
 
     def test_null_token_key_is_not_a_present_token(self):
         """匿名 session 会回 `{"accessToken": null, ...}` —— 键在，但**不是** token。
@@ -178,20 +175,15 @@ class AuthSessionReadinessLogTests(unittest.TestCase):
 
     def _events(self):
         return [
-            record
-            for record in self.records
-            if str(getattr(record, "event", "") or "") == "auth_session_readiness"
+            record for record in self.records if str(getattr(record, "event", "") or "") == "auth_session_readiness"
         ]
 
     def _fetch(self, responses, attempts=None, session=None):
-        with mock.patch.object(
-            account_creation, "request_with_retry", side_effect=responses
-        ), mock.patch.object(
-            account_creation, "auth_impersonate", return_value=None
-        ), mock.patch.object(
-            account_creation, "CFG", {"timeouts": {"auth_session": 5}}
-        ), mock.patch.object(
-            account_creation.time, "sleep", return_value=None
+        with (
+            mock.patch.object(account_creation, "request_with_retry", side_effect=responses),
+            mock.patch.object(account_creation, "auth_impersonate", return_value=None),
+            mock.patch.object(account_creation, "CFG", {"timeouts": {"auth_session": 5}}),
+            mock.patch.object(account_creation.time, "sleep", return_value=None),
         ):
             kwargs = {"attempts": attempts} if attempts is not None else {}
             return account_creation._fetch_auth_session(
@@ -316,9 +308,7 @@ class AuthSessionReadinessLogTests(unittest.TestCase):
         events = self._events()
         self.assertTrue(events)
         for record in events:
-            blob = " ".join(
-                [record.getMessage()] + [str(value) for value in vars(record).values()]
-            )
+            blob = " ".join([record.getMessage()] + [str(value) for value in vars(record).values()])
             self.assertNotIn(secret, blob)
 
     def test_message_and_structured_field_never_disagree(self):
@@ -368,9 +358,7 @@ class AuthSessionReadinessLogTests(unittest.TestCase):
 
         for record in self._events():
             line = sanitize_log_text(record.getMessage())
-            self.assertNotIn(
-                "[REDACTED]", line, f"落盘后字段被脱敏吃掉：{line}"
-            )
+            self.assertNotIn("[REDACTED]", line, f"落盘后字段被脱敏吃掉：{line}")
             _atp = getattr(record, "access_token_present", None)
             self.assertIn(f"access_token_present={_atp}", line)
             _tkp = getattr(record, "token_key_present", None)
@@ -392,11 +380,7 @@ class AuthSessionReadinessLogTests(unittest.TestCase):
         self._fetch([_Response(200, {"user": {}, "expires": "x"})], attempts=1)
         record = self._events()[0]
 
-        custom = {
-            field: value
-            for field, value in vars(record).items()
-            if field not in _STANDARD_LOG_ATTRS
-        }
+        custom = {field: value for field, value in vars(record).items() if field not in _STANDARD_LOG_ATTRS}
         self.assertTrue(custom, "记录里应有自定义字段")
         for field, value in custom.items():
             self.assertNotEqual(
@@ -410,9 +394,7 @@ class AuthSessionReadinessLogTests(unittest.TestCase):
         self._fetch([_Response(200, {"user": {}, "expires": "x"})], attempts=1)
         record = self._events()[0]
 
-        self.assertLessEqual(
-            _EXPECTED_READINESS_FIELDS, set(vars(record)), "readiness 记录缺字段"
-        )
+        self.assertLessEqual(_EXPECTED_READINESS_FIELDS, set(vars(record)), "readiness 记录缺字段")
 
 
 if __name__ == "__main__":

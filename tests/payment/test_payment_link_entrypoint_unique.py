@@ -73,8 +73,7 @@ def test_manager_shell_points_at_the_single_implementation():
     fn = getattr(payment_link_manager, ENTRYPOINT, None)
     assert fn is not None, f"sms_tool.payment_link_manager lost {ENTRYPOINT}"
     assert fn.__module__ == "sms_tool.pay_link.core", (
-        f"sms_tool.payment_link_manager.{ENTRYPOINT} resolves to "
-        f"{fn.__module__}, expected sms_tool.pay_link.core"
+        f"sms_tool.payment_link_manager.{ENTRYPOINT} resolves to {fn.__module__}, expected sms_tool.pay_link.core"
     )
 
 

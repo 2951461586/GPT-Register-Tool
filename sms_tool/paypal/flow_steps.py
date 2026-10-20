@@ -43,6 +43,7 @@ from .session import (
     _wait_for_paypal_load,
 )
 
+
 def _is_human_verification_page(page) -> bool:
     """Detect PayPal's visible human-verification challenge page."""
     selectors = [
@@ -70,6 +71,7 @@ def _is_human_verification_page(page) -> bool:
         or "please enable js and disable any ad blocker" in text
     )
 
+
 def _handle_human_verification_gate(page, sms_cfg: dict, debug_dir: str, debug_enabled: bool, step: str) -> None:
     """Pause for manual PayPal human verification when allowed."""
     if not _is_human_verification_page(page):
@@ -94,12 +96,17 @@ def _handle_human_verification_gate(page, sms_cfg: dict, debug_dir: str, debug_e
 
     raise _PayPalStepError(step, "paypal_human_verification_required")
 
+
 def _handle_sms_verification(page, sms_cfg: dict, baseline: dict) -> str | None:
     """Handle SMS verification if prompted."""
     code_selectors = [
-        'input[name="code"]', 'input[name="smsCode"]',
-        'input[name="otpCode"]', 'input[placeholder*="code"]',
-        'input[placeholder*="Code"]', '#code', '#otp',
+        'input[name="code"]',
+        'input[name="smsCode"]',
+        'input[name="otpCode"]',
+        'input[placeholder*="code"]',
+        'input[placeholder*="Code"]',
+        "#code",
+        "#otp",
     ]
     needs_sms = False
     for selector in code_selectors:
@@ -111,11 +118,15 @@ def _handle_sms_verification(page, sms_cfg: dict, baseline: dict) -> str | None:
             continue
 
     if not needs_sms:
-        _click_with_fallback(page, [
-            'button:has-text("Send Code")',
-            'button:has-text("Send")',
-            'button:has-text("Text me")',
-        ], timeout=3000)
+        _click_with_fallback(
+            page,
+            [
+                'button:has-text("Send Code")',
+                'button:has-text("Send")',
+                'button:has-text("Text me")',
+            ],
+            timeout=3000,
+        )
         time.sleep(2)
         for selector in code_selectors:
             try:
@@ -137,7 +148,8 @@ def _handle_sms_verification(page, sms_cfg: dict, baseline: dict) -> str | None:
 
     print("[*] SMS verification required, polling for code...")
     code = _poll_sms_code(
-        api_url, baseline,
+        api_url,
+        baseline,
         timeout=sms_cfg["timeout"],
         poll_interval=sms_cfg["poll_interval"],
     )
@@ -154,14 +166,19 @@ def _handle_sms_verification(page, sms_cfg: dict, baseline: dict) -> str | None:
             continue
     time.sleep(1)
 
-    _click_with_fallback(page, [
-        'button:has-text("Confirm")',
-        'button:has-text("Verify")',
-        'button:has-text("Submit")',
-        'button[type="submit"]',
-    ], timeout=5000)
+    _click_with_fallback(
+        page,
+        [
+            'button:has-text("Confirm")',
+            'button:has-text("Verify")',
+            'button:has-text("Submit")',
+            'button[type="submit"]',
+        ],
+        timeout=5000,
+    )
     time.sleep(2)
     return code
+
 
 def _submit_payment(page):
     """Click the final payment/agree button."""
@@ -174,13 +191,14 @@ def _submit_payment(page):
         'button:has-text("Agree")',
         'button[type="submit"]',
         '[data-testid="submit-button"]',
-        '#payment-submit-btn',
+        "#payment-submit-btn",
     ]
     if _click_with_fallback(page, selectors, timeout=10000):
         print("[*] Payment submitted")
         time.sleep(3)
     else:
         raise _PayPalStepError("submit", "submit button not found")
+
 
 def _wait_for_stripe_redirect(page, timeout: int = 60):
     """Wait for redirect back to Stripe or ChatGPT."""
@@ -192,6 +210,7 @@ def _wait_for_stripe_redirect(page, timeout: int = 60):
             return
         time.sleep(2)
     raise _PayPalStepError("wait_redirect", f"redirect timeout (current: {page.url[:80]})")
+
 
 def _prepare_openai_checkout_paypal(
     page,
@@ -237,6 +256,7 @@ def _prepare_openai_checkout_paypal(
         time.sleep(1)
 
     return _is_paypal_url(page.url)
+
 
 def _run_browser_steps(
     page,

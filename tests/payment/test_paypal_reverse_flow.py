@@ -157,20 +157,28 @@ class FollowRedirectsTests(unittest.TestCase):
         self.assertEqual(1, len(c._session.calls))
 
     def test_follows_relative_location_using_urljoin(self):
-        c = _client(self._chain([
-            (302, "/next", "https://a.example/start"),
-            (200, None, "https://a.example/next"),
-        ]))
+        c = _client(
+            self._chain(
+                [
+                    (302, "/next", "https://a.example/start"),
+                    (200, None, "https://a.example/next"),
+                ]
+            )
+        )
         c._follow_redirects("https://a.example/dir/start")
         self.assertEqual(["https://a.example/dir/start", "https://a.example/next"], c._session.urls)
 
     def test_every_3xx_status_is_followed(self):
         for status in (301, 302, 303, 307, 308):
             with self.subTest(status=status):
-                c = _client(self._chain([
-                    (status, "https://a.example/next", "https://a.example/start"),
-                    (200, None, "https://a.example/next"),
-                ]))
+                c = _client(
+                    self._chain(
+                        [
+                            (status, "https://a.example/next", "https://a.example/start"),
+                            (200, None, "https://a.example/next"),
+                        ]
+                    )
+                )
                 c._follow_redirects("https://a.example/start")
                 self.assertEqual(2, len(c._session.calls))
 
@@ -199,8 +207,13 @@ class FollowRedirectsTests(unittest.TestCase):
 
 class ExtractAuthTokensTests(unittest.TestCase):
     def _client_with_final(self, final_url, cookies=None, json_body=None):
-        c = _client([FakeResponse(200, "", final_url, cookies=cookies or {},
-                                  json_data=json_body if json_body is not None else {})])
+        c = _client(
+            [
+                FakeResponse(
+                    200, "", final_url, cookies=cookies or {}, json_data=json_body if json_body is not None else {}
+                )
+            ]
+        )
         c._current_url = "https://www.paypal.com/pay"
         return c
 
@@ -303,11 +316,12 @@ class ExtractAuthTokensTests(unittest.TestCase):
             "https://chatgpt.com/",
             json_body=None,
         )
-        c._session = FakeSession([
-            FakeResponse(200, "", "https://chatgpt.com/"),
-            FakeResponse(200, "", "https://chatgpt.com/api/auth/session",
-                         raise_on_json=ValueError("bad json")),
-        ])
+        c._session = FakeSession(
+            [
+                FakeResponse(200, "", "https://chatgpt.com/"),
+                FakeResponse(200, "", "https://chatgpt.com/api/auth/session", raise_on_json=ValueError("bad json")),
+            ]
+        )
         result = c._extract_auth_tokens()
         self.assertFalse(result.ok)
         self.assertEqual("auth_token", result.failed_step)
@@ -470,9 +484,11 @@ class SubmitFormTests(unittest.TestCase):
 
 class SubmitPaymentTests(unittest.TestCase):
     def test_agreement_checkboxes_are_forced_on(self):
-        html = ('<form action="/confirm"><input type="hidden" name="csrf" value="T">'
-                '<input type="checkbox" name="agree" value="0">'
-                '<input type="checkbox" name="termsOfService" value="0"></form>')
+        html = (
+            '<form action="/confirm"><input type="hidden" name="csrf" value="T">'
+            '<input type="checkbox" name="agree" value="0">'
+            '<input type="checkbox" name="termsOfService" value="0"></form>'
+        )
         c = _client([FakeResponse(200, "clean", "https://www.paypal.com/done")])
         c._current_html = html
         c._submit_payment()
@@ -546,8 +562,9 @@ class NewSessionTests(unittest.TestCase):
         with patch("sms_tool.paypal_reverse.CurlSession", None):
             session = c._new_session()
         try:
-            self.assertEqual({"http": "http://user:pw@127.0.0.1:8080",
-                               "https": "http://user:pw@127.0.0.1:8080"}, session.proxies)
+            self.assertEqual(
+                {"http": "http://user:pw@127.0.0.1:8080", "https": "http://user:pw@127.0.0.1:8080"}, session.proxies
+            )
         finally:
             session.close()
 
@@ -590,8 +607,10 @@ class NewSessionTests(unittest.TestCase):
 class AuthorizeTests(unittest.TestCase):
     def test_browser_fallback_is_reported_with_its_step(self):
         c = _client()
-        with patch.object(c, "_new_session", return_value=FakeSession()), \
-             patch.object(c, "_do_authorize", side_effect=_NeedBrowserFallback("card", "captcha wall")):
+        with (
+            patch.object(c, "_new_session", return_value=FakeSession()),
+            patch.object(c, "_do_authorize", side_effect=_NeedBrowserFallback("card", "captcha wall")),
+        ):
             result = c.authorize()
         self.assertFalse(result.ok)
         self.assertEqual("card", result.failed_step)
@@ -599,8 +618,10 @@ class AuthorizeTests(unittest.TestCase):
 
     def test_unexpected_exception_is_reported_as_unknown_step(self):
         c = _client()
-        with patch.object(c, "_new_session", return_value=FakeSession()), \
-             patch.object(c, "_do_authorize", side_effect=RuntimeError("boom")):
+        with (
+            patch.object(c, "_new_session", return_value=FakeSession()),
+            patch.object(c, "_do_authorize", side_effect=RuntimeError("boom")),
+        ):
             result = c.authorize()
         self.assertFalse(result.ok)
         self.assertEqual("unknown", result.failed_step)
@@ -609,8 +630,10 @@ class AuthorizeTests(unittest.TestCase):
     def test_session_is_closed_even_on_failure(self):
         c = _client()
         fake = FakeSession()
-        with patch.object(c, "_new_session", return_value=fake), \
-             patch.object(c, "_do_authorize", side_effect=RuntimeError("boom")):
+        with (
+            patch.object(c, "_new_session", return_value=fake),
+            patch.object(c, "_do_authorize", side_effect=RuntimeError("boom")),
+        ):
             c.authorize()
         self.assertTrue(fake.closed)
 
@@ -618,8 +641,10 @@ class AuthorizeTests(unittest.TestCase):
         c = _client()
         fake = FakeSession()
         fake.close = lambda: (_ for _ in ()).throw(RuntimeError("close failed"))
-        with patch.object(c, "_new_session", return_value=fake), \
-             patch.object(c, "_do_authorize", side_effect=RuntimeError("boom")):
+        with (
+            patch.object(c, "_new_session", return_value=fake),
+            patch.object(c, "_do_authorize", side_effect=RuntimeError("boom")),
+        ):
             result = c.authorize()
         self.assertEqual("boom", result.error)
 
@@ -628,26 +653,31 @@ class AuthorizeTests(unittest.TestCase):
 
         c = _client()
         expected = ReversePayResult(ok=True, access_token="eyJ1")
-        with patch.object(c, "_new_session", return_value=FakeSession()), \
-             patch.object(c, "_do_authorize", return_value=expected):
+        with (
+            patch.object(c, "_new_session", return_value=FakeSession()),
+            patch.object(c, "_do_authorize", return_value=expected),
+        ):
             self.assertIs(expected, c.authorize())
 
 
 class TryReversePayTests(unittest.TestCase):
     def test_returns_a_plain_dict_with_error_shape(self):
-        with patch.object(PayPalReverseClient, "authorize",
-                          return_value=_result(ok=False, error="[card] captcha", failed_step="card")):
+        with patch.object(
+            PayPalReverseClient, "authorize", return_value=_result(ok=False, error="[card] captcha", failed_step="card")
+        ):
             out = try_reverse_pay(_PP, {}, {}, "A", "B", "a@b.c", "pw", "+81", {})
-        self.assertEqual({
-            "ok": False,
-            "email": "",
-            "error": "[card] captcha",
-            "failed_step": "card",
-        }, out)
+        self.assertEqual(
+            {
+                "ok": False,
+                "email": "",
+                "error": "[card] captcha",
+                "failed_step": "card",
+            },
+            out,
+        )
 
     def test_success_shape_carries_tokens(self):
-        with patch.object(PayPalReverseClient, "authorize",
-                          return_value=_result(ok=True, access_token="eyJ9")):
+        with patch.object(PayPalReverseClient, "authorize", return_value=_result(ok=True, access_token="eyJ9")):
             out = try_reverse_pay(_PP, {}, {}, "A", "B", "a@b.c", "pw", "+81", {})
         self.assertTrue(out["ok"])
         self.assertEqual("eyJ9", out["access_token"])
@@ -657,14 +687,25 @@ class TryReversePayTests(unittest.TestCase):
         seen = {}
 
         def _fake_authorize(self):
-            seen.update(redirect_url=self.redirect_url, alias_email=self.alias_email,
-                        proxy=self.proxy, timeout=self.timeout)
+            seen.update(
+                redirect_url=self.redirect_url, alias_email=self.alias_email, proxy=self.proxy, timeout=self.timeout
+            )
             return _result(ok=True, access_token="eyJ")
 
         with patch.object(PayPalReverseClient, "authorize", _fake_authorize):
-            try_reverse_pay(_PP, {"number": "1"}, {"city": "Tokyo"}, "A", "B",
-                            "taro@example.com", "pw", "+81", {},
-                            proxy="http://127.0.0.1:8080", timeout=11)
+            try_reverse_pay(
+                _PP,
+                {"number": "1"},
+                {"city": "Tokyo"},
+                "A",
+                "B",
+                "taro@example.com",
+                "pw",
+                "+81",
+                {},
+                proxy="http://127.0.0.1:8080",
+                timeout=11,
+            )
         self.assertEqual(_PP, seen["redirect_url"])
         self.assertEqual("taro@example.com", seen["alias_email"])
         self.assertEqual("http://127.0.0.1:8080", seen["proxy"])

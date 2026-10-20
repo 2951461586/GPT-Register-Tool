@@ -57,16 +57,18 @@ class GCashTransportTests(unittest.TestCase):
     def test_custom_capability_uses_stripe_elements_contract(self):
         session = FakeSession(FakeResponse(payload={"custom_payment_method_data": []}))
         base = request("custom_capability")
-        capability_request = GCashTransportRequest(**{
-            **base.__dict__,
-            "payload": {
-                "checkout": {
-                    "customer_session_client_secret": "customer-secret-fixture",
-                    "payment_method_types": ["card", "custom_payment_method"],
+        capability_request = GCashTransportRequest(
+            **{
+                **base.__dict__,
+                "payload": {
+                    "checkout": {
+                        "customer_session_client_secret": "customer-secret-fixture",
+                        "payment_method_types": ["card", "custom_payment_method"],
+                    },
+                    "custom_payment_method_type_id": "cpmt_fixture_gcash",
                 },
-                "custom_payment_method_type_id": "cpmt_fixture_gcash",
-            },
-        })
+            }
+        )
         with patch("sms_tool.gcash_transport._new_http_session", return_value=session):
             ChatGPTGCashTransport().probe_custom_payment(capability_request)
 
@@ -132,7 +134,9 @@ class GCashTransportTests(unittest.TestCase):
     def test_confirm_unsupported_custom_method_is_terminal_contract_failure(self):
         with patch(
             "sms_tool.gen_pp_link._checkout_post",
-            return_value=FakeResponse(400, {"detail": "Unsupported custom payment method type for this checkout session"}),
+            return_value=FakeResponse(
+                400, {"detail": "Unsupported custom payment method type for this checkout session"}
+            ),
         ):
             with self.assertRaises(GCashProviderError) as caught:
                 ChatGPTGCashTransport().confirm_custom_payment(request("confirm"))

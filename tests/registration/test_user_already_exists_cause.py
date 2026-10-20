@@ -76,16 +76,12 @@ class ExistingAccountErrorHelperTests(unittest.TestCase):
     def test_non_dict_recovery_object_adds_no_suffix(self):
         data = {"error": {"code": "user_already_exists", "userAlreadyExistsRecovery": "nope"}}
 
-        self.assertEqual(
-            _existing_account_error(data), "existing_account_user_already_exists"
-        )
+        self.assertEqual(_existing_account_error(data), "existing_account_user_already_exists")
 
     def test_blank_recovery_action_adds_no_suffix(self):
         data = {"error": {"code": "user_already_exists", "userAlreadyExistsRecovery": {"action": "  "}}}
 
-        self.assertEqual(
-            _existing_account_error(data), "existing_account_user_already_exists"
-        )
+        self.assertEqual(_existing_account_error(data), "existing_account_user_already_exists")
 
     def test_another_create_error_is_not_claimed(self):
         self.assertEqual(_existing_account_error({"error": {"code": "invalid_state"}}), "")
@@ -100,9 +96,7 @@ class RegistrationOutcomePrefersTheRealCauseTests(unittest.TestCase):
     """The outcome must not collapse to the fallback's OTP symptom."""
 
     def test_used_address_beats_the_fallback_symptom(self):
-        success, error, _ = registration._registration_outcome(
-            True, _CREATE_DATA, "", {}, _FALLBACK_SYMPTOM
-        )
+        success, error, _ = registration._registration_outcome(True, _CREATE_DATA, "", {}, _FALLBACK_SYMPTOM)
 
         self.assertFalse(success)
         self.assertEqual(error, "existing_account_user_already_exists:continue_to_login")
@@ -111,9 +105,7 @@ class RegistrationOutcomePrefersTheRealCauseTests(unittest.TestCase):
     def test_used_address_is_classified_account_and_never_retried(self):
         """The quota-saving assertion: a used address must not be re-attempted."""
 
-        _, error, _ = registration._registration_outcome(
-            True, _CREATE_DATA, "", {}, _FALLBACK_SYMPTOM
-        )
+        _, error, _ = registration._registration_outcome(True, _CREATE_DATA, "", {}, _FALLBACK_SYMPTOM)
         decision = registration_retry_decision(error)
 
         self.assertEqual(decision.failure_class, "account")
@@ -144,9 +136,7 @@ class RegistrationOutcomePrefersTheRealCauseTests(unittest.TestCase):
             }
         }
 
-        _, error, _ = registration._registration_outcome(
-            False, data, "", {}, _FALLBACK_SYMPTOM
-        )
+        _, error, _ = registration._registration_outcome(False, data, "", {}, _FALLBACK_SYMPTOM)
 
         self.assertIn("create_account_failed", error)
         self.assertIn("user_already_exists", error)
@@ -155,9 +145,7 @@ class RegistrationOutcomePrefersTheRealCauseTests(unittest.TestCase):
     def test_fallback_symptom_still_wins_when_the_address_is_not_flagged(self):
         """Regression: the pre-existing precedence is untouched."""
 
-        _, error, _ = registration._registration_outcome(
-            True, {}, "", {}, _FALLBACK_SYMPTOM
-        )
+        _, error, _ = registration._registration_outcome(True, {}, "", {}, _FALLBACK_SYMPTOM)
 
         self.assertEqual(error, _FALLBACK_SYMPTOM)
         self.assertEqual(classify_error(error), "unknown")

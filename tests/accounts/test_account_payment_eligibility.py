@@ -25,11 +25,17 @@ import pytest
 from sms_tool.accounts.account_models import AccountSessionModel
 
 
-@pytest.mark.parametrize("command,payment_flag", [
-    ("check_payment_eligibility", False), ("check_promotion", True),
-])
+@pytest.mark.parametrize(
+    "command,payment_flag",
+    [
+        ("check_payment_eligibility", False),
+        ("check_promotion", True),
+    ],
+)
 def test_explicit_checkout_commands_reject_missing_account_selection(
-    monkeypatch, command, payment_flag,
+    monkeypatch,
+    command,
+    payment_flag,
 ):
     from sms_tool.commands import accounts
 
@@ -42,6 +48,8 @@ def test_explicit_checkout_commands_reject_missing_account_selection(
 
     with pytest.raises(SystemExit, match="--email"):
         getattr(accounts, command)(args, NoAccountSweep())
+
+
 from sms_tool.accounts.account_payment_eligibility import (
     billing_country_for,
     billing_currency_for,
@@ -77,6 +85,7 @@ def _offline_egress_gate():
 # --------------------------------------------------------------------------
 # Billing country / currency resolution
 # --------------------------------------------------------------------------
+
 
 def test_billing_country_prefers_the_registration_country():
     assert billing_country_for({"registration_country": "in"}) == "IN"
@@ -118,6 +127,7 @@ def test_payment_locale_follows_the_country():
 # --------------------------------------------------------------------------
 # Probe wiring
 # --------------------------------------------------------------------------
+
 
 def test_probe_without_access_token_never_calls_the_transport():
     with patch("sms_tool.payment_capability.payment_method_capability_probe") as probe:
@@ -185,14 +195,18 @@ def test_account_probe_reuses_saved_identity_through_custom_checkout():
         "cookie_header": "oai-did=saved-device; session=fixture",
     }
     checkout = SimpleNamespace(
-        status_code=200, json=lambda: {"checkout_session_id": "oaics_fixture"},
+        status_code=200,
+        json=lambda: {"checkout_session_id": "oaics_fixture"},
     )
     custom = SimpleNamespace(
-        status_code=200, json=lambda: {"currency": "inr", "payment_method_types": ["upi"]},
+        status_code=200,
+        json=lambda: {"currency": "inr", "payment_method_types": ["upi"]},
     )
-    with patch("sms_tool.accounts.account_payment_eligibility.payment_egress.assert_egress_countries"), \
-         patch.object(gen_pp_link, "_checkout_post", return_value=checkout) as post, \
-         patch.object(gen_pp_link, "_checkout_get", return_value=custom) as get:
+    with (
+        patch("sms_tool.accounts.account_payment_eligibility.payment_egress.assert_egress_countries"),
+        patch.object(gen_pp_link, "_checkout_post", return_value=checkout) as post,
+        patch.object(gen_pp_link, "_checkout_get", return_value=custom) as get,
+    ):
         result = probe_account_payment_eligibility(account, proxy="http://exit.test:80")
 
     assert result["ok"] is True
@@ -209,8 +223,10 @@ def test_account_probe_reports_conflicting_device_cookie_without_checkout():
         "identity_context": {"device_id": "saved-device"},
         "cookie_header": "oai-did=other-device; session=fixture",
     }
-    with patch("sms_tool.accounts.account_payment_eligibility.payment_egress.assert_egress_countries"), \
-         patch.object(gen_pp_link, "_checkout_post", side_effect=AssertionError("checkout must not start")):
+    with (
+        patch("sms_tool.accounts.account_payment_eligibility.payment_egress.assert_egress_countries"),
+        patch.object(gen_pp_link, "_checkout_post", side_effect=AssertionError("checkout must not start")),
+    ):
         result = probe_account_payment_eligibility(account, proxy="http://exit.test:80")
     assert result["ok"] is False
     assert result["error_code"] == "checkout_identity_mismatch"
@@ -283,6 +299,7 @@ def test_probe_failure_without_an_error_string_still_names_the_reason():
 # --------------------------------------------------------------------------
 # Badge formatting
 # --------------------------------------------------------------------------
+
 
 def test_label_lists_methods_in_stripe_order():
     result = {"methods": ["card", "link", "apple_pay", "upi", "momo"]}
@@ -366,6 +383,7 @@ def test_composition_shows_the_unknown_marker_next_to_the_promotion_label():
 # Persistence + the closed-whitelist guard
 # --------------------------------------------------------------------------
 
+
 def test_safe_snapshot_keeps_payment_capability():
     """The whitelist guard.
 
@@ -374,10 +392,12 @@ def test_safe_snapshot_keeps_payment_capability():
     warning.  If this assertion ever fails, every relogin/health pass silently
     deletes the payment-eligibility result again.
     """
-    model = AccountSessionModel.from_value({
-        "email": "guard@example.test",
-        "payment_capability": {"ok": True, "methods": ["card", "upi"]},
-    })
+    model = AccountSessionModel.from_value(
+        {
+            "email": "guard@example.test",
+            "payment_capability": {"ok": True, "methods": ["card", "upi"]},
+        }
+    )
 
     assert model.safe_snapshot()["payment_capability"] == {"ok": True, "methods": ["card", "upi"]}
     assert model.safe_snapshot()["payment_capability"] == dict(model.payment_capability)
@@ -470,14 +490,19 @@ def test_standalone_payment_save_preserves_promotion_marker(tmp_path):
     from sms_tool.storage import mark_payment_capability
 
     config = _config(tmp_path)
-    assert upsert_account({"email": "standalone@example.test", "success": True, "access_token": "at"}, runtime_config=config)
+    assert upsert_account(
+        {"email": "standalone@example.test", "success": True, "access_token": "at"}, runtime_config=config
+    )
     assert mark_promotion_status(
-        "standalone@example.test", "可试用Plus",
-        promotion_result={"promotion_state": "trial_eligible"}, runtime_config=config,
+        "standalone@example.test",
+        "可试用Plus",
+        promotion_result={"promotion_state": "trial_eligible"},
+        runtime_config=config,
     )
     previous = json.loads(get_account_record("standalone@example.test", runtime_config=config)["raw_json"])
     assert mark_payment_capability(
-        "standalone@example.test", {"ok": True, "methods": ["upi"], "access_token": "secret"},
+        "standalone@example.test",
+        {"ok": True, "methods": ["upi"], "access_token": "secret"},
         runtime_config=config,
     )
     stored = json.loads(get_account_record("standalone@example.test", runtime_config=config)["raw_json"])
@@ -495,9 +520,14 @@ def test_standalone_payment_save_discards_unrecognized_and_nested_diagnostics(tm
     assert upsert_account({"email": "private@example.test", "success": True}, runtime_config=config)
     assert mark_payment_capability(
         "private@example.test",
-        {"ok": False, "methods": ["card"], "error_code": "checkout_risk_blocked",
-         "error": "upstream secret", "extra": {"access_token": "secret"},
-         "evidence_sources": ["stripe_init", "Bearer secret"]},
+        {
+            "ok": False,
+            "methods": ["card"],
+            "error_code": "checkout_risk_blocked",
+            "error": "upstream secret",
+            "extra": {"access_token": "secret"},
+            "evidence_sources": ["stripe_init", "Bearer secret"],
+        },
         runtime_config=config,
     )
     stored = json.loads(get_account_record("private@example.test", runtime_config=config)["raw_json"])
@@ -511,10 +541,15 @@ def test_standalone_payment_save_discards_unrecognized_and_nested_diagnostics(tm
 def test_currency_mismatch_never_displays_checkout_method_list():
     from sms_tool.accounts.account_payment_eligibility import _normalize_probe
 
-    result = _normalize_probe({
-        "ok": True, "decision": "checkout_currency_mismatch",
-        "payment_method_types": ["card", "upi"], "currency": "USD",
-    }, target_country="IN")
+    result = _normalize_probe(
+        {
+            "ok": True,
+            "decision": "checkout_currency_mismatch",
+            "payment_method_types": ["card", "upi"],
+            "currency": "USD",
+        },
+        target_country="IN",
+    )
     assert result["ok"] is False
     assert result["methods"] == []
     assert result["error_code"] == "checkout_currency_mismatch"
@@ -523,11 +558,15 @@ def test_currency_mismatch_never_displays_checkout_method_list():
 def test_malformed_evidence_metadata_does_not_break_batch_normalization():
     from sms_tool.accounts.account_payment_eligibility import _normalize_probe
 
-    result = _normalize_probe({
-        "ok": True, "payment_method_types": ["card"],
-        "checkout_kind": {"unexpected": True},
-        "evidence_sources": [{"unexpected": True}, "stripe_init"],
-    }, target_country="US")
+    result = _normalize_probe(
+        {
+            "ok": True,
+            "payment_method_types": ["card"],
+            "checkout_kind": {"unexpected": True},
+            "evidence_sources": [{"unexpected": True}, "stripe_init"],
+        },
+        target_country="US",
+    )
     assert result["checkout_kind"] == ""
     assert result["evidence_sources"] == ["stripe_init"]
 
@@ -535,11 +574,17 @@ def test_malformed_evidence_metadata_does_not_break_batch_normalization():
 def test_normalized_failure_never_repeats_upstream_error_text():
     from sms_tool.accounts.account_payment_eligibility import _normalize_probe
 
-    result = _normalize_probe({
-        "ok": False, "error_code": "checkout_risk_blocked",
-        "error_stage": "checkout_create", "error": "Bearer private-token",
-        "payment_method_types": ["card"], "http_status": 400,
-    }, target_country="US")
+    result = _normalize_probe(
+        {
+            "ok": False,
+            "error_code": "checkout_risk_blocked",
+            "error_stage": "checkout_create",
+            "error": "Bearer private-token",
+            "payment_method_types": ["card"],
+            "http_status": 400,
+        },
+        target_country="US",
+    )
     assert result["error"] == "checkout_risk_blocked"
     assert result["methods"] == []
     assert "private-token" not in str(result)
@@ -548,18 +593,35 @@ def test_normalized_failure_never_repeats_upstream_error_text():
 def test_standalone_probe_uses_payment_exit_and_does_not_run_promotion(monkeypatch):
     from sms_tool.accounts import account_payment_eligibility
 
-    monkeypatch.setattr("sms_tool.storage.get_account_record", lambda email: {
-        "email": email, "access_token": "at", "raw_json": json.dumps({"registration_country": "IN"}),
-    })
+    monkeypatch.setattr(
+        "sms_tool.storage.get_account_record",
+        lambda email: {
+            "email": email,
+            "access_token": "at",
+            "raw_json": json.dumps({"registration_country": "IN"}),
+        },
+    )
     monkeypatch.setattr("sms_tool.storage.mark_payment_capability", lambda *args, **kwargs: True)
-    monkeypatch.setattr(account_payment_eligibility, "payment_proxy_pools", lambda config, method: {
-        "checkout": ["http://in.example:80"],
-    })
+    monkeypatch.setattr(
+        account_payment_eligibility,
+        "payment_proxy_pools",
+        lambda config, method: {
+            "checkout": ["http://in.example:80"],
+        },
+    )
     observed = []
-    monkeypatch.setattr(account_payment_eligibility, "probe_account_payment_eligibility",
-                        lambda account, **kwargs: observed.append(kwargs["proxy"]) or {
-                            "ok": True, "methods": ["upi"], "billing_country": "IN",
-                        })
+    monkeypatch.setattr(
+        account_payment_eligibility,
+        "probe_account_payment_eligibility",
+        lambda account, **kwargs: (
+            observed.append(kwargs["proxy"])
+            or {
+                "ok": True,
+                "methods": ["upi"],
+                "billing_country": "IN",
+            }
+        ),
+    )
     result = account_payment_eligibility.probe_payment_eligibility_statuses(["e@example.test"])
     assert observed == ["http://in.example:80"]
     assert result["success"] == 1
@@ -591,6 +653,7 @@ def test_credential_keys_are_never_persisted_into_the_capability_blob(tmp_path):
 # --------------------------------------------------------------------------
 # Desktop read composition
 # --------------------------------------------------------------------------
+
 
 def test_desktop_read_composes_the_promotion_and_eligibility_badges(tmp_path):
     from sms_tool.desktop_read import read_account
@@ -642,7 +705,9 @@ def test_desktop_read_marks_a_failed_probe_instead_of_leaving_it_blank(tmp_path)
     from sms_tool.desktop_read import read_account
 
     config = _config(tmp_path)
-    assert upsert_account({"email": "blocked@example.test", "success": True, "access_token": "at"}, runtime_config=config)
+    assert upsert_account(
+        {"email": "blocked@example.test", "success": True, "access_token": "at"}, runtime_config=config
+    )
     assert mark_promotion_status(
         "blocked@example.test",
         "Free·无优惠",
@@ -676,7 +741,9 @@ def test_desktop_read_does_not_mark_an_account_the_probe_never_reached(tmp_path)
     from sms_tool.desktop_read import read_account
 
     config = _config(tmp_path)
-    assert upsert_account({"email": "untouched@example.test", "success": True, "access_token": "at"}, runtime_config=config)
+    assert upsert_account(
+        {"email": "untouched@example.test", "success": True, "access_token": "at"}, runtime_config=config
+    )
     assert mark_promotion_status(
         "untouched@example.test",
         "Free·无优惠",
@@ -700,7 +767,10 @@ def test_a_non_401_promotion_failure_does_not_start_checkout(status_code, monkey
         promotion_batch,
         "check_account_promotion",
         lambda account, **kwargs: {
-            "ok": False, "status_code": status_code, "promotion_status": "检测失败", "error": "http_500"
+            "ok": False,
+            "status_code": status_code,
+            "promotion_status": "检测失败",
+            "error": "http_500",
         },
     )
     with patch.object(promotion_batch, "_probe_payment_eligibility") as eligibility:
@@ -726,7 +796,8 @@ def test_a_401_promotion_failure_clears_stale_payment_methods(monkeypatch):
     saved = []
     monkeypatch.setattr("sms_tool.storage.mark_promotion_status", lambda *args, **kwargs: saved.append(kwargs) or True)
     monkeypatch.setattr(
-        promotion_batch, "check_account_promotion",
+        promotion_batch,
+        "check_account_promotion",
         lambda account, **kwargs: {"ok": False, "status_code": 401, "promotion_status": "AT失效"},
     )
     with patch.object(promotion_batch, "_probe_payment_eligibility") as eligibility:
@@ -742,15 +813,20 @@ def test_a_successful_promotion_passes_its_exit_to_eligibility(monkeypatch):
     monkeypatch.setattr("sms_tool.storage.get_account_record", lambda email: {"email": email, "access_token": "at"})
     monkeypatch.setattr("sms_tool.storage.mark_promotion_status", lambda *args, **kwargs: True)
     monkeypatch.setattr(
-        promotion_batch, "check_account_promotion",
+        promotion_batch,
+        "check_account_promotion",
         lambda account, **kwargs: {"ok": True, "promotion_status": "Free·无优惠"},
     )
     with patch.object(
-        promotion_batch, "_probe_payment_eligibility",
+        promotion_batch,
+        "_probe_payment_eligibility",
         return_value={"ok": True, "methods": ["card"]},
     ) as eligibility:
         result = promotion_batch.refresh_promotion_statuses(
-            ["ok@example.test"], workers=1, proxy="http://exit.test:80", payment_eligibility=True,
+            ["ok@example.test"],
+            workers=1,
+            proxy="http://exit.test:80",
+            payment_eligibility=True,
         )
 
     assert eligibility.call_args.kwargs["proxy"] == "http://exit.test:80"
@@ -762,8 +838,11 @@ def test_successful_promotion_does_not_implicitly_create_checkout(monkeypatch):
 
     monkeypatch.setattr("sms_tool.storage.get_account_record", lambda email: {"email": email, "access_token": "at"})
     monkeypatch.setattr("sms_tool.storage.mark_promotion_status", lambda *args, **kwargs: True)
-    monkeypatch.setattr(promotion_batch, "check_account_promotion",
-                        lambda account, **kwargs: {"ok": True, "promotion_status": "Free·无优惠"})
+    monkeypatch.setattr(
+        promotion_batch,
+        "check_account_promotion",
+        lambda account, **kwargs: {"ok": True, "promotion_status": "Free·无优惠"},
+    )
     with patch.object(promotion_batch, "_probe_payment_eligibility") as checkout:
         result = promotion_batch.refresh_promotion_statuses(["e@example.test"], proxy="http://exit.test:80")
     checkout.assert_not_called()
@@ -774,12 +853,17 @@ def test_eligibility_rejects_a_mismatched_exit_before_checkout():
     from sms_tool.payment_egress import EgressCheckError
 
     error = EgressCheckError(
-        "wrong exit", error_code="egress_country_mismatch", retryable=True,
-        stage="checkout", expected_country="IN", observed_country="US",
+        "wrong exit",
+        error_code="egress_country_mismatch",
+        retryable=True,
+        stage="checkout",
+        expected_country="IN",
+        observed_country="US",
     )
-    with patch("sms_tool.payment_egress.assert_egress_countries", side_effect=error) as gate, patch(
-        "sms_tool.payment_capability.payment_method_capability_probe"
-    ) as checkout:
+    with (
+        patch("sms_tool.payment_egress.assert_egress_countries", side_effect=error) as gate,
+        patch("sms_tool.payment_capability.payment_method_capability_probe") as checkout,
+    ):
         result = probe_account_payment_eligibility(
             {"access_token": "at", "registration_country": "IN"},
             proxy="http://user:secret@exit.test:80",
@@ -796,12 +880,16 @@ def test_eligibility_rejects_a_mismatched_exit_before_checkout():
 
 def test_eligibility_retargets_proxy_region_for_account_before_egress_check():
     original = "http://demo-region-VN-sid-Fixture123-t-5:sample@proxy.example:2000"
-    with patch("sms_tool.payment_egress.assert_egress_countries") as gate, patch(
-        "sms_tool.payment_capability.payment_method_capability_probe",
-        return_value={"ok": True, "payment_method_types": ["upi"], "currency": "INR"},
-    ) as checkout:
+    with (
+        patch("sms_tool.payment_egress.assert_egress_countries") as gate,
+        patch(
+            "sms_tool.payment_capability.payment_method_capability_probe",
+            return_value={"ok": True, "payment_method_types": ["upi"], "currency": "INR"},
+        ) as checkout,
+    ):
         result = probe_account_payment_eligibility(
-            {"access_token": "at", "registration_country": "IN"}, proxy=original,
+            {"access_token": "at", "registration_country": "IN"},
+            proxy=original,
         )
 
     routed = gate.call_args.args[0]["checkout_proxy"]
@@ -816,12 +904,17 @@ def test_eligibility_retargeted_region_still_requires_verified_exit():
     from sms_tool.payment_egress import EgressCheckError
 
     error = EgressCheckError(
-        "wrong exit", error_code="egress_country_mismatch", retryable=True,
-        stage="checkout", expected_country="IN", observed_country="VN",
+        "wrong exit",
+        error_code="egress_country_mismatch",
+        retryable=True,
+        stage="checkout",
+        expected_country="IN",
+        observed_country="VN",
     )
-    with patch("sms_tool.payment_egress.assert_egress_countries", side_effect=error) as gate, patch(
-        "sms_tool.payment_capability.payment_method_capability_probe"
-    ) as checkout:
+    with (
+        patch("sms_tool.payment_egress.assert_egress_countries", side_effect=error) as gate,
+        patch("sms_tool.payment_capability.payment_method_capability_probe") as checkout,
+    ):
         result = probe_account_payment_eligibility(
             {"access_token": "at", "registration_country": "IN"},
             proxy="http://demo-region-VN-sid-Fixture123-t-5:sample@proxy.example:2000",
@@ -838,9 +931,13 @@ def test_standalone_batch_uses_each_accounts_country_for_the_same_proxy_template
 
     original = "http://demo-region-VN-sid-Fixture123-t-5:sample@proxy.example:2000"
     countries = {"first@example.test": "IN", "second@example.test": "VN"}
-    monkeypatch.setattr("sms_tool.storage.get_account_record", lambda email: {
-        "access_token": "at", "raw_json": json.dumps({"registration_country": countries[email]}),
-    })
+    monkeypatch.setattr(
+        "sms_tool.storage.get_account_record",
+        lambda email: {
+            "access_token": "at",
+            "raw_json": json.dumps({"registration_country": countries[email]}),
+        },
+    )
     monkeypatch.setattr("sms_tool.storage.mark_payment_capability", lambda *args, **kwargs: True)
     monkeypatch.setattr(eligibility, "payment_proxy_pools", lambda config, method: {"checkout": []})
     exits = []
@@ -851,11 +948,16 @@ def test_standalone_batch_uses_each_accounts_country_for_the_same_proxy_template
     def checkout(**kwargs):
         return {"ok": True, "currency": kwargs["currency"], "payment_method_types": ["card"]}
 
-    with patch("sms_tool.payment_egress.assert_egress_countries", side_effect=gate), patch(
-        "sms_tool.payment_capability.payment_method_capability_probe", side_effect=checkout,
+    with (
+        patch("sms_tool.payment_egress.assert_egress_countries", side_effect=gate),
+        patch(
+            "sms_tool.payment_capability.payment_method_capability_probe",
+            side_effect=checkout,
+        ),
     ):
         report = eligibility.probe_payment_eligibility_statuses(
-            list(countries), proxy=original,
+            list(countries),
+            proxy=original,
         )
 
     assert report["success"] == 2
@@ -864,9 +966,10 @@ def test_standalone_batch_uses_each_accounts_country_for_the_same_proxy_template
 
 
 def test_eligibility_rejects_an_unverifiable_exit_before_checkout():
-    with patch("sms_tool.payment_egress.assert_egress_countries") as gate, patch(
-        "sms_tool.payment_capability.payment_method_capability_probe"
-    ) as checkout:
+    with (
+        patch("sms_tool.payment_egress.assert_egress_countries") as gate,
+        patch("sms_tool.payment_capability.payment_method_capability_probe") as checkout,
+    ):
         result = probe_account_payment_eligibility({"access_token": "at", "registration_country": "IN"})
 
     gate.assert_not_called()
@@ -876,9 +979,10 @@ def test_eligibility_rejects_an_unverifiable_exit_before_checkout():
 
 
 def test_eligibility_does_not_expose_unexpected_egress_errors():
-    with patch("sms_tool.payment_egress.assert_egress_countries", side_effect=RuntimeError("Bearer secret-token")), patch(
-        "sms_tool.payment_capability.payment_method_capability_probe"
-    ) as checkout:
+    with (
+        patch("sms_tool.payment_egress.assert_egress_countries", side_effect=RuntimeError("Bearer secret-token")),
+        patch("sms_tool.payment_capability.payment_method_capability_probe") as checkout,
+    ):
         result = probe_account_payment_eligibility(
             {"access_token": "at", "registration_country": "IN"}, proxy="http://exit.test:80"
         )
@@ -889,10 +993,13 @@ def test_eligibility_does_not_expose_unexpected_egress_errors():
 
 
 def test_eligibility_proceeds_after_verified_matching_exit():
-    with patch("sms_tool.payment_egress.assert_egress_countries") as gate, patch(
-        "sms_tool.payment_capability.payment_method_capability_probe",
-        return_value={"ok": True, "payment_method_types": ["upi"]},
-    ) as checkout:
+    with (
+        patch("sms_tool.payment_egress.assert_egress_countries") as gate,
+        patch(
+            "sms_tool.payment_capability.payment_method_capability_probe",
+            return_value={"ok": True, "payment_method_types": ["upi"]},
+        ) as checkout,
+    ):
         result = probe_account_payment_eligibility(
             {"access_token": "at", "registration_country": "IN"},
             proxy="http://exit.test:80",

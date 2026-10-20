@@ -87,27 +87,20 @@ def test_no_utf8_bom_in_python_sources():
     not. This guard closes the class instead of the instance.
     """
     offenders = [
-        path.relative_to(ROOT).as_posix()
-        for path in _iter_sources()
-        if path.read_bytes().startswith(b"\xef\xbb\xbf")
+        path.relative_to(ROOT).as_posix() for path in _iter_sources() if path.read_bytes().startswith(b"\xef\xbb\xbf")
     ]
     assert not offenders, (
         "these Python files start with a UTF-8 BOM, which makes ast.parse() fail "
-        "for any tool reading them as plain UTF-8. Strip the first three bytes:\n  "
-        + "\n  ".join(offenders)
+        "for any tool reading them as plain UTF-8. Strip the first three bytes:\n  " + "\n  ".join(offenders)
     )
 
 
 def test_guard_detects_a_planted_defect():
     """Mutation check: a guard that cannot fail is not a guard."""
     planted = ast.parse(
-        "def f():\n"
-        "    from x import y\n"
-        '    """A long explanatory docstring that landed in the wrong place."""\n'
+        'def f():\n    from x import y\n    """A long explanatory docstring that landed in the wrong place."""\n'
     )
-    assert _misplaced_docstrings(planted) == [
-        (3, "f", "A long explanatory docstring that landed in the wrong place.")
-    ]
+    assert _misplaced_docstrings(planted) == [(3, "f", "A long explanatory docstring that landed in the wrong place.")]
 
 
 def test_guard_accepts_a_real_docstring_and_ignores_values():
@@ -157,8 +150,7 @@ def test_no_module_level_function_takes_a_self_parameter():
             offenders.append(f"{rel}:{lineno}: {name}()")
     assert not offenders, (
         "module-level functions must not take a `self` parameter: name the "
-        "workflow instance `workflow` and annotate it under TYPE_CHECKING:\n  "
-        + "\n  ".join(offenders)
+        "workflow instance `workflow` and annotate it under TYPE_CHECKING:\n  " + "\n  ".join(offenders)
     )
 
 

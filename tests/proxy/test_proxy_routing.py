@@ -62,9 +62,7 @@ def test_health_pool_avoids_registration_exit_when_alternative_exists():
     }
     account = {
         "email": "fresh@example.com",
-        "identity_context": {
-            "proxy_affinity": {"host": "signup.example", "port": 8000}
-        },
+        "identity_context": {"proxy_affinity": {"host": "signup.example", "port": 8000}},
     }
     assert select_operation_proxy(account, operation="liveness", config=config) == "http://clean-health.example:8000"
 
@@ -91,9 +89,7 @@ def test_explicit_proxy_wins_over_enabled_affinity_and_operation_pool():
     }
     account = {
         "email": "user@example.com",
-        "identity_context": {
-            "proxy_affinity": {"host": "saved.example", "port": 8000, "scheme": "http"}
-        },
+        "identity_context": {"proxy_affinity": {"host": "saved.example", "port": 8000, "scheme": "http"}},
     }
     selected = select_operation_proxy_candidate(
         account,
@@ -104,12 +100,15 @@ def test_explicit_proxy_wins_over_enabled_affinity_and_operation_pool():
     assert selected is not None
     assert selected.proxy == "http://explicit.example:8000"
     assert selected.source == "explicit"
-    assert select_operation_proxy(
-        account,
-        operation="liveness",
-        explicit="http://explicit.example:8000",
-        config=config,
-    ) == "http://explicit.example:8000"
+    assert (
+        select_operation_proxy(
+            account,
+            operation="liveness",
+            explicit="http://explicit.example:8000",
+            config=config,
+        )
+        == "http://explicit.example:8000"
+    )
 
 
 def test_operation_candidates_have_one_canonical_precedence_order():
@@ -122,9 +121,7 @@ def test_operation_candidates_have_one_canonical_precedence_order():
     }
     account = {
         "email": "user@example.com",
-        "identity_context": {
-            "proxy_affinity": {"host": "saved.example", "port": 8000, "scheme": "http"}
-        },
+        "identity_context": {"proxy_affinity": {"host": "saved.example", "port": 8000, "scheme": "http"}},
     }
     candidates = operation_proxy_candidates(
         account,

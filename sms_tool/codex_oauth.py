@@ -17,7 +17,13 @@ from .config import CFG
 from .endpoints import AUTH_BASE
 from .operator_output import emit as _emit
 from .codex_phone import complete_phone_verification
-from .codex_sentinel import attach_sentinel, import_cached_auth_cookies, import_cookie_header, load_cached_sentinel, with_sentinel
+from .codex_sentinel import (
+    attach_sentinel,
+    import_cached_auth_cookies,
+    import_cookie_header,
+    load_cached_sentinel,
+    with_sentinel,
+)
 from .auth_headers import auth_impersonate, openai_auth_headers_lower, select_auth_fingerprint
 from .http_client import request_with_retry
 from .http_utils import _absolute_url
@@ -25,6 +31,7 @@ from .mailbox import MailboxAccount, MailboxTokenExpiredError, _poll_email_otp, 
 from .providers import mailbox_gmail
 from .kernel.sanitizer import sanitize_text
 from .storage import upsert_account
+
 # ``/about-you`` completion reuses the signup lane's own primitives instead of
 # re-deriving them: ``_create_account_continue_url`` already knows that an
 # already-existing account states its recovery redirect under
@@ -187,11 +194,7 @@ def _login_and_exchange(
         )
         if start_resp.status_code != 200:
             body = start_resp.text[:300]
-            if (
-                start_resp.status_code == 409
-                and "invalid_state" in body
-                and restart_attempt < max_restarts
-            ):
+            if start_resp.status_code == 409 and "invalid_state" in body and restart_attempt < max_restarts:
                 print(f"[*] OAuth state invalid, restarting auth flow (attempt {restart_attempt + 1}/{max_restarts})")
                 with contextlib.suppress(Exception):
                     session.cookies.clear(domain="auth.openai.com")
@@ -258,7 +261,9 @@ def _run_protocol_login_stages(
     print(f"[*] Codex OAuth protocol stage: {stage}")
 
     if _codex_oauth_protocol_ready_stage(stage):
-        final = _finish_authorization(session, oauth, did, current_url, proxy=proxy, phone_pool=phone_pool, phone_probe_only=phone_probe_only)
+        final = _finish_authorization(
+            session, oauth, did, current_url, proxy=proxy, phone_pool=phone_pool, phone_probe_only=phone_probe_only
+        )
         if final.get("ok"):
             final.setdefault("protocol_stage", stage)
         return final
@@ -287,7 +292,11 @@ def _run_protocol_login_stages(
         if first_try.get("ok"):
             first_try.setdefault("protocol_stage", "password")
             return first_try
-        _emit(_LOGGER, "[*] Relogin password-first failed (%s); falling back to email OTP", first_try.get("error") or "unknown")
+        _emit(
+            _LOGGER,
+            "[*] Relogin password-first failed (%s); falling back to email OTP",
+            first_try.get("error") or "unknown",
+        )
 
     if force_email_otp_login and stage not in {"email_otp", "callback", "consent", "add_phone"}:
         print(f"[*] force_email_otp_login: overriding stage '{stage}' -> 'email_otp'")
@@ -313,7 +322,9 @@ def _run_protocol_login_stages(
             email_otp_result.setdefault("protocol_stage", "email_otp")
             return email_otp_result
         email_otp_result.setdefault("protocol_stage", "email_otp")
-        email_otp_result.setdefault("fallback_from", "email_otp_forced" if force_email_otp_login else "email_otp_required")
+        email_otp_result.setdefault(
+            "fallback_from", "email_otp_forced" if force_email_otp_login else "email_otp_required"
+        )
         return email_otp_result
     elif stage == "password":
         password_result = _password_login_and_exchange(
@@ -354,7 +365,9 @@ def _run_protocol_login_stages(
         email_otp_result["password_attempt"] = password_result
         return email_otp_result
     elif stage == "add_phone":
-        final = _finish_authorization(session, oauth, did, current_url, proxy=proxy, phone_pool=phone_pool, phone_probe_only=phone_probe_only)
+        final = _finish_authorization(
+            session, oauth, did, current_url, proxy=proxy, phone_pool=phone_pool, phone_probe_only=phone_probe_only
+        )
         if final.get("ok"):
             final.setdefault("protocol_stage", "add_phone")
             return final
@@ -374,7 +387,9 @@ def _run_protocol_login_stages(
         "protocol_stage": stage,
     }
 
-    final = _finish_authorization(session, oauth, did, current_url, proxy=proxy, phone_pool=phone_pool, phone_probe_only=phone_probe_only)
+    final = _finish_authorization(
+        session, oauth, did, current_url, proxy=proxy, phone_pool=phone_pool, phone_probe_only=phone_probe_only
+    )
     if final.get("ok"):
         final.setdefault("protocol_stage", stage)
         return final
@@ -429,7 +444,11 @@ def _passwordless_login_and_exchange(
         str(value or "").strip()
         for value in (
             data.get("registration_email_otp"),
-            *((data.get("excluded_email_otps") or ()) if isinstance(data.get("excluded_email_otps"), (list, tuple, set)) else ()),
+            *(
+                (data.get("excluded_email_otps") or ())
+                if isinstance(data.get("excluded_email_otps"), (list, tuple, set))
+                else ()
+            ),
         )
         if str(value or "").strip()
     }
@@ -472,7 +491,9 @@ def _passwordless_login_and_exchange(
         validate = session.post(
             "https://auth.openai.com/api/accounts/email-otp/validate",
             headers=with_sentinel(
-                _oai_headers(did, {"Referer": "https://auth.openai.com/email-verification", "content-type": "application/json"}),
+                _oai_headers(
+                    did, {"Referer": "https://auth.openai.com/email-verification", "content-type": "application/json"}
+                ),
                 load_cached_sentinel(),
             ),
             json={"code": code},
@@ -533,7 +554,9 @@ def _passwordless_login_and_exchange(
                     "last_url": _safe_url(current_url),
                     "about_you": about_attempt,
                 }
-        final = _finish_authorization(session, oauth, did, current_url, proxy=proxy, phone_pool=phone_pool, phone_probe_only=phone_probe_only)
+        final = _finish_authorization(
+            session, oauth, did, current_url, proxy=proxy, phone_pool=phone_pool, phone_probe_only=phone_probe_only
+        )
         if final.get("ok"):
             final["login_method"] = "passwordless_email_otp"
             final["fallback_from"] = reason
@@ -575,7 +598,18 @@ def _passwordless_login_and_exchange(
     }
 
 
-def _password_login_and_exchange(session, oauth, data, did, current_url, proxy=None, timeout=180, phone_pool=None, phone_probe_only=False, browser_headless: bool | None = None):
+def _password_login_and_exchange(
+    session,
+    oauth,
+    data,
+    did,
+    current_url,
+    proxy=None,
+    timeout=180,
+    phone_pool=None,
+    phone_probe_only=False,
+    browser_headless: bool | None = None,
+):
     password = str(data.get("password") or "").strip()
     if not password:
         return {
@@ -645,7 +679,9 @@ def _password_login_and_exchange(session, oauth, data, did, current_url, proxy=N
             return email_otp_result
         _, current_url = _follow_redirects(session, email_otp_result.get("next_url", ""), proxy=proxy)
 
-    final = _finish_authorization(session, oauth, did, current_url, proxy=proxy, phone_pool=phone_pool, phone_probe_only=phone_probe_only)
+    final = _finish_authorization(
+        session, oauth, did, current_url, proxy=proxy, phone_pool=phone_pool, phone_probe_only=phone_probe_only
+    )
     if final.get("ok"):
         final["login_method"] = "password"
         return final
@@ -793,7 +829,9 @@ def _resend_email_otp(session, did, current_url):
         response = session.post(
             "https://auth.openai.com/api/accounts/email-otp/resend",
             headers=with_sentinel(
-                _oai_headers(did, {"Referer": "https://auth.openai.com/email-verification", "content-type": "application/json"}),
+                _oai_headers(
+                    did, {"Referer": "https://auth.openai.com/email-verification", "content-type": "application/json"}
+                ),
                 sentinel,
             ),
             json={},
@@ -925,9 +963,7 @@ def _complete_about_you(session, did, current_url, proxy=None):
             # on purpose -- the caller already caps it at 300 characters, and a
             # second cap would be a branch no test could tell apart from this
             # one (an equivalent mutant).
-            {"raw": str(raw)}
-            if raw
-            else {"keys": sorted(body)[:12] if isinstance(body, dict) else []}
+            {"raw": str(raw)} if raw else {"keys": sorted(body)[:12] if isinstance(body, dict) else []}
         )
         return {
             **detail,
@@ -965,7 +1001,9 @@ def _finish_authorization(session, oauth, did, current_url, proxy=None, phone_po
         if phone_pool:
             print("[*] Waiting for single-phone OAuth lane...")
             with phone_pool.lock:
-                return _finish_phone_authorization_locked(session, oauth, did, current_url, proxy=proxy, phone_pool=phone_pool)
+                return _finish_phone_authorization_locked(
+                    session, oauth, did, current_url, proxy=proxy, phone_pool=phone_pool
+                )
         return _finish_phone_authorization_locked(session, oauth, did, current_url, proxy=proxy, phone_pool=phone_pool)
 
     return {"ok": False, "last_url": _safe_url(current_url)}
@@ -1044,7 +1082,9 @@ def _complete_email_otp(session, data, did, current_url, proxy=None, timeout=180
     validate = session.post(
         "https://auth.openai.com/api/accounts/email-otp/validate",
         headers=with_sentinel(
-            _oai_headers(did, {"Referer": "https://auth.openai.com/email-verification", "content-type": "application/json"}),
+            _oai_headers(
+                did, {"Referer": "https://auth.openai.com/email-verification", "content-type": "application/json"}
+            ),
             load_cached_sentinel(),
         ),
         json={"code": code},
@@ -1088,7 +1128,9 @@ def _select_workspace(session, did, referer, workspace_id, proxy=None, timeout=3
     if not workspace_id:
         return {"ok": False, "error": "missing_workspace_id"}
     headers = with_sentinel(
-        _oai_headers(did, {"Referer": referer or "https://auth.openai.com/workspace", "content-type": "application/json"}),
+        _oai_headers(
+            did, {"Referer": referer or "https://auth.openai.com/workspace", "content-type": "application/json"}
+        ),
         load_cached_sentinel(),
     )
     if isinstance(extra_headers, dict):
@@ -1111,7 +1153,9 @@ def _select_workspace(session, did, referer, workspace_id, proxy=None, timeout=3
     return {"ok": True, "workspace_id": workspace_id, "status": response.status_code, "next_url": _next_url(response)}
 
 
-def select_workspace_by_cookie(cookie_header, workspace_id, device_id="", proxy=None, timeout=30, referer="https://auth.openai.com/workspace"):
+def select_workspace_by_cookie(
+    cookie_header, workspace_id, device_id="", proxy=None, timeout=30, referer="https://auth.openai.com/workspace"
+):
     """Select an auth workspace using saved cookies.
 
     This is the protocol adapter reused by one-click scan when it needs to move
@@ -1291,8 +1335,7 @@ def persist_one_click_sms_failure(data, json_path, email, result, *, upsert=upse
     _raw_response: object = refreshed.get("response")
     response: dict = _raw_response if isinstance(_raw_response, dict) else {}
     public_result = {
-        key: value for key, value in result.items()
-        if key in {"ok", "mode", "status", "phone_verification_required"}
+        key: value for key, value in result.items() if key in {"ok", "mode", "status", "phone_verification_required"}
     }
     public_result["error"] = refreshed["error"]
     _raw_tokens: object = result.get("tokens")
@@ -1304,7 +1347,8 @@ def persist_one_click_sms_failure(data, json_path, email, result, *, upsert=upse
     phone_attempt: dict = _raw_phone_attempt if isinstance(_raw_phone_attempt, dict) else {}
     if phone_attempt:
         public_phone = {
-            key: value for key, value in phone_attempt.items()
+            key: value
+            for key, value in phone_attempt.items()
             if key in {"ok", "phone", "provider", "activation_id", "reuse_count", "max_reuse_count", "remaining"}
         }
         if phone_attempt.get("error"):
@@ -1379,6 +1423,7 @@ def _mailbox_from_data(data):
         balance_after=str(mailbox.get("balance_after") or "").strip(),
     )
     from .mailbox_quarantine import is_mailbox_quarantined
+
     if is_mailbox_quarantined(result):
         return None
     if not mailbox_has_inbox_credentials(result):
@@ -1435,20 +1480,26 @@ def _is_terminal_account_data(data):
         return False
     _raw_terminal: object = data.get("terminal_failure")
     terminal: dict = _raw_terminal if isinstance(_raw_terminal, dict) else {}
-    text = " ".join(str(value or "") for value in (
-        data.get("status"),
-        data.get("error"),
-        data.get("account_scan_status"),
-        terminal.get("code"),
-        terminal.get("reason"),
-    )).lower()
-    return any(marker in text for marker in (
-        "account_deactivated",
-        "account_deatived",
-        "deleted or deactivated",
-        "account has been deleted",
-        "account has been deactivated",
-    ))
+    text = " ".join(
+        str(value or "")
+        for value in (
+            data.get("status"),
+            data.get("error"),
+            data.get("account_scan_status"),
+            terminal.get("code"),
+            terminal.get("reason"),
+        )
+    ).lower()
+    return any(
+        marker in text
+        for marker in (
+            "account_deactivated",
+            "account_deatived",
+            "deleted or deactivated",
+            "account has been deleted",
+            "account has been deactivated",
+        )
+    )
 
 
 def _oai_headers(did, extra=None):
@@ -1460,7 +1511,9 @@ def _next_url(response):
         body = response.json()
     except Exception:
         body = {}
-    return _absolute_url("https://auth.openai.com", body.get("continue_url") or response.headers.get("Location") or response.url)
+    return _absolute_url(
+        "https://auth.openai.com", body.get("continue_url") or response.headers.get("Location") or response.url
+    )
 
 
 def _needs_email_otp(url):
@@ -1575,4 +1628,6 @@ def _as_int(value):
 
 
 def _iso_utc(epoch_seconds):
-    return datetime.fromtimestamp(int(epoch_seconds), tz=timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+    return (
+        datetime.fromtimestamp(int(epoch_seconds), tz=timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+    )

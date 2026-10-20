@@ -61,25 +61,21 @@ BLOCKED_SUFFIXES = (
 # plus an smsbower api_key while sitting untracked in the public repo root).
 # Snapshot suffixes are unbounded — `.bak`, `.bak-<desc>`, `.old`, `.save` — so
 # match the credential-config FAMILY instead of enumerating suffixes.
-BLOCKED_CONFIG_FAMILY = re.compile(
-    r"^(?:config|proxy|runtime|payment|session)\.json(?:\..+)?$"
-)
+BLOCKED_CONFIG_FAMILY = re.compile(r"^(?:config|proxy|runtime|payment|session)\.json(?:\..+)?$")
 
 # Explicitly allowed even though the name looks dangerous.
 ALLOWED_EXACT = {
-    "sensitive_policy.json",   # policy definitions, not values
-    "config.example.json",     # template with placeholders
+    "sensitive_policy.json",  # policy definitions, not values
+    "config.example.json",  # template with placeholders
     "packages.lock.json",
     "skills-lock.json",
     "payment_methods.json",
     "global.json",
-    "proxy.json.example",      # mirrors the .gitignore exception
+    "proxy.json.example",  # mirrors the .gitignore exception
     "config.json.example",
 }
 
-ALLOWED_SUFFIXES = (
-    ".example.json",
-)
+ALLOWED_SUFFIXES = (".example.json",)
 
 # ---------------------------------------------------------------- content gate
 
@@ -97,9 +93,7 @@ PAT_CONST_HEX = re.compile(
     r"""(?P<name>(?:[A-Z][A-Z0-9_]*)?(?:TOKEN|KEY|SECRET|PASSWORD|AUTH)[A-Z0-9_]*)\s*[:=]\s*["'](?P<val>[0-9a-fA-F]{32,})["']"""
 )
 # "api_key": "value" -- key name must be declared sensitive in the shared policy.
-PAT_JSON_TEMPLATE = (
-    r"""["'](?P<name>{names})["']\s*:\s*["'](?P<val>[A-Za-z0-9_\-\.]{{16,}})["']"""
-)
+PAT_JSON_TEMPLATE = r"""["'](?P<name>{names})["']\s*:\s*["'](?P<val>[A-Za-z0-9_\-\.]{{16,}})["']"""
 # http://user:pass@host
 PAT_PROXY = re.compile(r"(?i)\b(?:https?|socks5h?)://[^\s/@]+:[^\s/@]+@")
 PAT_EXAMPLE_URL = re.compile(r"""(?i)\b(?:https?|socks[45]h?)://[^\s"'<>]+""")
@@ -145,9 +139,25 @@ ALIAS_MAILBOX = re.compile(
 # Apple domain is treated as a real alias; use ``sample-<n>`` in new fixtures.
 SYNTHETIC_MAILBOX_LOCALS = frozenset(
     {
-        "user", "target", "ok", "dead", "also", "test", "plain", "first", "second",
-        "who", "someone", "name", "alpha.one", "beta.two", "foo", "alias", "sample",
-        "example", "noreply_at_tm_openai_com",
+        "user",
+        "target",
+        "ok",
+        "dead",
+        "also",
+        "test",
+        "plain",
+        "first",
+        "second",
+        "who",
+        "someone",
+        "name",
+        "alpha.one",
+        "beta.two",
+        "foo",
+        "alias",
+        "sample",
+        "example",
+        "noreply_at_tm_openai_com",
     }
 )
 
@@ -166,6 +176,7 @@ def scan_alias_mailboxes(rel: str, text: str) -> list[tuple[str, int, str, int, 
             findings.append((rel, number, "alias-mailbox", len(local), ""))
     return findings
 
+
 # Directories where a credential-looking string is an example by definition.
 DOC_OR_TEST = re.compile(r"(?i)(^|/)(docs?|tests?)/|(\.(md|html|rst))$")
 
@@ -179,9 +190,26 @@ def load_sensitive_keys() -> set[str]:
         return set()
     return {str(k).lower() for k in policy.get("sensitive_keys") or []}
 
+
 TEXT_SUFFIXES = {
-    ".py", ".cs", ".json", ".js", ".ts", ".ps1", ".sh", ".md", ".txt",
-    ".yml", ".yaml", ".xml", ".config", ".props", ".ini", ".toml", ".env", ".example",
+    ".py",
+    ".cs",
+    ".json",
+    ".js",
+    ".ts",
+    ".ps1",
+    ".sh",
+    ".md",
+    ".txt",
+    ".yml",
+    ".yaml",
+    ".xml",
+    ".config",
+    ".props",
+    ".ini",
+    ".toml",
+    ".env",
+    ".example",
 }
 MAX_FILE_BYTES = 4 * 1024 * 1024
 
@@ -295,9 +323,7 @@ def scan_file(path: Path, sensitive_keys: set[str], *, text: str | None = None) 
         # ROXY_TOKEN = "cfat_..." is not pure hex, so the name-based patterns
         # below would never see it.
         for match in VENDOR_PREFIX.finditer(line):
-            findings.append(
-                (rel, number, "vendor-token-prefix", len(match.group(0)), match.group(0)[:8])
-            )
+            findings.append((rel, number, "vendor-token-prefix", len(match.group(0)), match.group(0)[:8]))
         for match in PAT_PROXY.finditer(line):
             url = match.group(0)
             # f-strings that *build* a proxy URL (f"http://{u}:{p}@{host}") are
@@ -320,7 +346,9 @@ def scan_file(path: Path, sensitive_keys: set[str], *, text: str | None = None) 
 def staged_files() -> list[Path]:
     out = subprocess.run(
         ["git", "diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z"],
-        cwd=str(ROOT), capture_output=True, text=True,
+        cwd=str(ROOT),
+        capture_output=True,
+        text=True,
     )
     if out.returncode != 0:
         print(f"precommit-guard: git diff failed: {out.stderr.strip()}", file=sys.stderr)
@@ -333,7 +361,9 @@ def staged_text(path: Path) -> str:
     """Scan the bytes about to be committed, not an unstaged replacement."""
     rel = path.relative_to(ROOT).as_posix()
     result = subprocess.run(
-        ["git", "show", f":{rel}"], cwd=str(ROOT), capture_output=True,
+        ["git", "show", f":{rel}"],
+        cwd=str(ROOT),
+        capture_output=True,
     )
     if result.returncode:
         raise RuntimeError(f"cannot read staged file: {rel}")
@@ -342,7 +372,10 @@ def staged_text(path: Path) -> str:
 
 def tracked_files() -> list[Path]:
     out = subprocess.run(
-        ["git", "ls-files", "-z"], cwd=str(ROOT), capture_output=True, text=True,
+        ["git", "ls-files", "-z"],
+        cwd=str(ROOT),
+        capture_output=True,
+        text=True,
     )
     if out.returncode != 0:
         print(f"precommit-guard: git ls-files failed: {out.stderr.strip()}", file=sys.stderr)

@@ -15,10 +15,7 @@ from .kernel.sanitizer import sanitize_text
 
 _BASE = "https://chatgpt.com/backend-api/payments"
 _STRIPE_ELEMENTS_URL = "https://api.stripe.com/v1/elements/sessions"
-_USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) "
-    "Gecko/20100101 Firefox/144.0"
-)
+_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0"
 _ROUTES = {
     "checkout": "/backend-api/payments/checkout",
     "update": "/backend-api/payments/checkout/update",
@@ -75,9 +72,7 @@ class ChatGPTGCashTransport:
                 status="unknown",
             )
         publishable_key = str(
-            checkout.get("publishable_key")
-            or checkout.get("stripe_publishable_key")
-            or DEFAULT_STRIPE_PK
+            checkout.get("publishable_key") or checkout.get("stripe_publishable_key") or DEFAULT_STRIPE_PK
         ).strip()
         params: dict[str, str] = {
             "customer_session_client_secret": customer_secret,
@@ -226,11 +221,7 @@ class ChatGPTGCashTransport:
         status_code = int(getattr(response, "status_code", 0) or 0)
         if status_code >= 400:
             detail = _response_error_detail(response)
-            if (
-                stage == "confirm"
-                and status_code == 400
-                and "unsupported custom payment method" in detail.lower()
-            ):
+            if stage == "confirm" and status_code == 400 and "unsupported custom payment method" in detail.lower():
                 raise GCashProviderError(
                     "GCash custom payment method is not supported by this checkout session",
                     error_code="gcash_custom_method_unsupported",

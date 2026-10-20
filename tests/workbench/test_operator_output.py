@@ -46,6 +46,7 @@ def _logger():
 # The seam
 # ---------------------------------------------------------------------------
 
+
 def test_emit_feeds_both_channels_from_one_source(capsys):
     log = _logger()
     sink = _Sink()
@@ -72,6 +73,7 @@ def test_emit_passes_extra_fields_to_the_log(capsys):
 # The ratchet predicate, both directions
 # ---------------------------------------------------------------------------
 
+
 def _count(source: str) -> int:
     path = ROOT / "runtime" / "tmp" / "_ratchet_probe.py"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -95,6 +97,7 @@ def test_attribute_print_is_not_counted():
 # ---------------------------------------------------------------------------
 # The real tree
 # ---------------------------------------------------------------------------
+
 
 def test_baseline_is_frozen_on_the_real_tree():
     current = ratchet.scan()

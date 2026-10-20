@@ -18,7 +18,15 @@ from ._extract import (
     _upi_is_instructions_url,
     _upi_qr_image_kind,
 )
-from .constants import UPI_CONFIRMATION_TOKENS_URL, UPI_CPMT_CONFIRM_URL, UPI_CPMT_START_URL, UPI_PAYMENT_INTENT_CONFIRM_URL_T, UPI_PAYMENT_INTENT_GET_URL_T, UPI_QR_POLL_INTERVAL, UPI_QR_POLL_MAX_ATTEMPTS
+from .constants import (
+    UPI_CONFIRMATION_TOKENS_URL,
+    UPI_CPMT_CONFIRM_URL,
+    UPI_CPMT_START_URL,
+    UPI_PAYMENT_INTENT_CONFIRM_URL_T,
+    UPI_PAYMENT_INTENT_GET_URL_T,
+    UPI_QR_POLL_INTERVAL,
+    UPI_QR_POLL_MAX_ATTEMPTS,
+)
 from .env import _emit
 from .dump import _upi_dump_http
 from .config import _upi_first_string, _upi_payment_intent_id
@@ -183,6 +191,8 @@ def _upi_run_cpmt_flow(
         "approval_blocked": False,
         "checkout_proxy": checkout_proxy,
     }
+
+
 def _upi_run_oaics_flow(
     stripe: Any,
     cs: Any,

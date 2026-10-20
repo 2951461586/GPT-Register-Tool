@@ -14,10 +14,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-MODULE_PATH = (
-    Path(__file__).resolve().parents[2]
-    / "services" / "protocol-payment" / "common" / "http_dump.py"
-)
+MODULE_PATH = Path(__file__).resolve().parents[2] / "services" / "protocol-payment" / "common" / "http_dump.py"
 SPEC = importlib.util.spec_from_file_location("http_dump", MODULE_PATH)
 DUMP = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
@@ -38,12 +35,21 @@ def _env_bool(mapping):
         if raw == "":
             return default
         return raw.strip().lower() not in ("0", "false", "no", "off", "")
+
     return env_bool
 
 
-def _call(dump_dir, env=None, force=False, stage="checkout", body=None,
-          response=None, counter=None, redact=lambda text: text,
-          strftime=lambda fmt: "20260101-000000"):
+def _call(
+    dump_dir,
+    env=None,
+    force=False,
+    stage="checkout",
+    body=None,
+    response=None,
+    counter=None,
+    redact=lambda text: text,
+    strftime=lambda fmt: "20260101-000000",
+):
     return DUMP.dump_http(
         response,
         stage,
@@ -109,6 +115,7 @@ class DumpCounterTests(unittest.TestCase):
         the increment AND the read; splitting them would allow duplicate
         filenames."""
         import threading
+
         counter = DUMP.DumpCounter()
         seen = []
         lock = threading.Lock()
@@ -149,13 +156,11 @@ class DumpHttpTests(unittest.TestCase):
         twint reads TWINT_DUMP.  Neither may answer to the other's switch."""
         with tempfile.TemporaryDirectory() as tmp:
             _call(Path(tmp), env={"OTHER_DUMP": "1"}, force=False)
-            self.assertEqual(list(Path(tmp).iterdir()), [],
-                             "must not honour a different provider's switch")
+            self.assertEqual(list(Path(tmp).iterdir()), [], "must not honour a different provider's switch")
 
     def test_filename_is_timestamp_index_stage(self):
         with tempfile.TemporaryDirectory() as tmp:
-            _call(Path(tmp), env={"X_DUMP": "1"}, stage="checkout",
-                  strftime=lambda fmt: "20260101-000000")
+            _call(Path(tmp), env={"X_DUMP": "1"}, stage="checkout", strftime=lambda fmt: "20260101-000000")
             name = list(Path(tmp).iterdir())[0].name
         self.assertEqual(name, "20260101-000000_0001_checkout.txt")
 
@@ -183,8 +188,9 @@ class DumpHttpTests(unittest.TestCase):
 
     def test_layout_with_a_response(self):
         with tempfile.TemporaryDirectory() as tmp:
-            _call(Path(tmp), env={"X_DUMP": "1"}, body={"a": 1},
-                  response=FakeResponse(200, "https://e.test", "resp-body"))
+            _call(
+                Path(tmp), env={"X_DUMP": "1"}, body={"a": 1}, response=FakeResponse(200, "https://e.test", "resp-body")
+            )
             text = list(Path(tmp).iterdir())[0].read_text(encoding="utf-8")
         self.assertIn("stage: checkout", text)
         self.assertIn("request: POST https://example.test/x", text)
@@ -222,9 +228,13 @@ class DumpHttpTests(unittest.TestCase):
             return text.replace("sk_live_1", "[REDACTED]")
 
         with tempfile.TemporaryDirectory() as tmp:
-            _call(Path(tmp), env={"X_DUMP": "1"}, body={"k": "sk_live_1"},
-                  response=FakeResponse(200, "https://e.test", "sk_live_1"),
-                  redact=redact)
+            _call(
+                Path(tmp),
+                env={"X_DUMP": "1"},
+                body={"k": "sk_live_1"},
+                response=FakeResponse(200, "https://e.test", "sk_live_1"),
+                redact=redact,
+            )
             text = list(Path(tmp).iterdir())[0].read_text(encoding="utf-8")
         self.assertIn("[REDACTED]", text)
         self.assertNotIn("sk_live_1", text)
@@ -260,8 +270,7 @@ class ModuleContractTests(unittest.TestCase):
                 tops.update(alias.name.split(".")[0] for alias in node.names)
             elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
                 tops.add(node.module.split(".")[0])
-        self.assertEqual(tops, {"__future__", "json", "re", "time", "pathlib",
-                                "threading", "typing"})
+        self.assertEqual(tops, {"__future__", "json", "re", "time", "pathlib", "threading", "typing"})
 
     def test_exports_exactly_two_names(self):
         self.assertEqual(sorted(DUMP.__all__), ["DumpCounter", "dump_http"])
@@ -276,8 +285,7 @@ class ModuleContractTests(unittest.TestCase):
         front with ``None`` for the args that have no default).
         """
         tree = ast.parse(MODULE_PATH.read_text(encoding="utf-8"))
-        node = next(n for n in tree.body
-                    if isinstance(n, ast.FunctionDef) and n.name == "dump_http")
+        node = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "dump_http")
         names = [a.arg for a in node.args.kwonlyargs]
         self.assertIn("dump_env", names)
         idx = names.index("dump_env")

@@ -44,9 +44,7 @@ _STRING_ENTRY = re.compile(r'"((?:[^"\\]|\\.)*)"')
 # an earlier revision of this extractor only looked at literals and reported
 # the prefix as orphaned, which was a false positive.
 _LITERAL = r"\"(?:[^\"\\]|\\.)*\"|'(?:[^'\\]|\\.)*'"
-_PRINT_CALL = re.compile(
-    rf"\bprint\s*\(\s*(?:f)?(?P<arg>{_LITERAL}|[A-Za-z_][A-Za-z0-9_]*)"
-)
+_PRINT_CALL = re.compile(rf"\bprint\s*\(\s*(?:f)?(?P<arg>{_LITERAL}|[A-Za-z_][A-Za-z0-9_]*)")
 _ASSIGN_LITERAL = re.compile(
     rf"^\s*(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?:f)?(?P<lit>{_LITERAL})",
     re.MULTILINE,
@@ -75,10 +73,7 @@ def csharp_noise_prefixes() -> list[str]:
     match = _NOISE_BLOCK.search(text)
     if not match:
         return []
-    return [
-        s.replace("\\[", "[").replace("\\]", "]")
-        for s in _STRING_ENTRY.findall(match.group("body"))
-    ]
+    return [s.replace("\\[", "[").replace("\\]", "]") for s in _STRING_ENTRY.findall(match.group("body"))]
 
 
 def python_emitted_lines() -> list[str]:
@@ -103,7 +98,7 @@ def python_emitted_lines() -> list[str]:
 
         for match in _PRINT_CALL.finditer(text):
             arg = match.group("arg")
-            if arg[:1] in ("\"", "'"):
+            if arg[:1] in ('"', "'"):
                 head = _literal_head(arg[1:-1])
             else:
                 head = assigned.get(arg, "")

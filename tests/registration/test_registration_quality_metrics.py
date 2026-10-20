@@ -4,10 +4,13 @@ from sms_tool.session_builder import build_session_file
 
 def test_quality_metrics_reports_auth_session_and_retries():
     rows = [
-        {"success": True, "events": [
-            {"stage": "auth_session", "duration_ms": 100},
-            {"stage": "auth_flow_retry", "duration_ms": 20},
-        ]},
+        {
+            "success": True,
+            "events": [
+                {"stage": "auth_session", "duration_ms": 100},
+                {"stage": "auth_flow_retry", "duration_ms": 20},
+            ],
+        },
         {"success": False, "events": [{"stage": "auth_session", "duration_ms": 300}]},
     ]
     metrics = registration_quality_metrics(rows)

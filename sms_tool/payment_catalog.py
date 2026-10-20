@@ -140,7 +140,9 @@ def load_payment_catalog(path: str | Path | None = None) -> PaymentMethodCatalog
             release_tier=str(
                 item.get("release_tier")
                 or ("offline" if str(item.get("adapter") or "").strip() == "regional_wallet" else "production")
-            ).strip().lower(),
+            )
+            .strip()
+            .lower(),
             script=str(item.get("script") or "").strip(),
             aliases=tuple(str(alias).strip().lower().replace(" ", "_") for alias in item.get("aliases") or ()),
             batch_enabled=bool(item.get("batch_enabled", True)),
@@ -155,7 +157,8 @@ def load_payment_catalog(path: str | Path | None = None) -> PaymentMethodCatalog
             or not definition.stripe_type
             or not definition.stages
             or definition.artifact_kind not in {"url", "url_or_qr", "completion"}
-            or definition.artifact_validator not in {"http_url", "paypal_ba_url", "url_or_qr", "completion", "provider_redirect", "checkout_url"}
+            or definition.artifact_validator
+            not in {"http_url", "paypal_ba_url", "url_or_qr", "completion", "provider_redirect", "checkout_url"}
             or definition.probe_output_kind not in {"capability", "availability", "provider_redirect"}
             or definition.reconciliation_policy not in {"artifact", "paypal_return", "provider_status", "none"}
             or definition.release_tier not in {"production", "canary", "offline"}

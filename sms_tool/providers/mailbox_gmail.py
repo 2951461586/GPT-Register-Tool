@@ -44,7 +44,11 @@ def mailbox_auth_mode(mailbox):
     explicit = str(getattr(mailbox, "auth_mode", "") or "").strip().lower()
     if explicit in {"app_password", "oauth_refresh"}:
         return explicit
-    if getattr(mailbox, "refresh_token", "") and getattr(mailbox, "token", "") and getattr(mailbox, "client_secret", ""):
+    if (
+        getattr(mailbox, "refresh_token", "")
+        and getattr(mailbox, "token", "")
+        and getattr(mailbox, "client_secret", "")
+    ):
         return "oauth_refresh"
     if getattr(mailbox, "access_token", "") and not getattr(mailbox, "password", ""):
         return "oauth_refresh"

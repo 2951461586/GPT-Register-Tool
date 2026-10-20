@@ -160,26 +160,28 @@ class AccountSessionModel:
     def to_storage_mapping(self) -> Mapping[str, Any]:
         """Return a detached compatibility mapping only at the repository seam."""
         value = dict(self._raw)
-        value.update({
-            "email": self.email,
-            "success": self.success,
-            "status": self.status,
-            "error": self.error,
-            "source": self.source,
-            "register_method": self.register_method,
-            "session_type": self.session_type,
-            "plan_type": self.plan_type,
-            "password": self.password,
-            "device_id": self.device_id,
-            "access_token": self.credentials.access_token,
-            "refresh_token": self.credentials.refresh_token,
-            "oauth_refresh_token": self.credentials.oauth_refresh_token,
-            "id_token": self.credentials.id_token,
-            "session_token": self.credentials.session_token,
-            "cookie_header": self.credentials.cookie_header,
-            "totp_secret": self.credentials.totp_secret,
-            "identity_context": dict(self.identity_context),
-        })
+        value.update(
+            {
+                "email": self.email,
+                "success": self.success,
+                "status": self.status,
+                "error": self.error,
+                "source": self.source,
+                "register_method": self.register_method,
+                "session_type": self.session_type,
+                "plan_type": self.plan_type,
+                "password": self.password,
+                "device_id": self.device_id,
+                "access_token": self.credentials.access_token,
+                "refresh_token": self.credentials.refresh_token,
+                "oauth_refresh_token": self.credentials.oauth_refresh_token,
+                "id_token": self.credentials.id_token,
+                "session_token": self.credentials.session_token,
+                "cookie_header": self.credentials.cookie_header,
+                "totp_secret": self.credentials.totp_secret,
+                "identity_context": dict(self.identity_context),
+            }
+        )
         return value
 
     def safe_snapshot(self) -> dict[str, Any]:

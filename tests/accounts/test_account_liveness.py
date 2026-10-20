@@ -59,11 +59,14 @@ def test_liveness_prefers_explicit_proxy_with_account_fingerprint_and_device():
         def json():
             return {"quota": {"remaining": 3, "limit": 5}}
 
-    with patch.object(account_liveness, "CFG", config), patch.object(
-        account_liveness.curl_requests,
-        "get",
-        return_value=FakeResponse(),
-    ) as get:
+    with (
+        patch.object(account_liveness, "CFG", config),
+        patch.object(
+            account_liveness.curl_requests,
+            "get",
+            return_value=FakeResponse(),
+        ) as get,
+    ):
         result = account_liveness.probe_account_liveness(
             account,
             proxy="http://127.0.0.1:7897",

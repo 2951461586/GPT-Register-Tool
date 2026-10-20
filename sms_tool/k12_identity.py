@@ -1,5 +1,6 @@
 import json
 
+
 def _extract_access_token(data):
     if not isinstance(data, dict):
         return ""
@@ -22,8 +23,6 @@ def _extract_access_token(data):
         if token:
             return token
     return ""
-
-
 
 
 def _jwt_claims(token):
@@ -147,4 +146,3 @@ def _extract_account_id_from_data(data):
         if account_id:
             return account_id
     return ""
-

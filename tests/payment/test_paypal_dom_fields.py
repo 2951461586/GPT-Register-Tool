@@ -290,9 +290,20 @@ def test_fill_with_fallback_treats_empty_value_as_success_on_first_visible_field
 
 
 def test_fill_with_fallback_never_raises_when_every_operation_explodes():
-    el = FakeElement(visible=True, value="",
-                     fail={"click", "fill", "press", "type", "dispatch_event",
-                           "scroll_into_view_if_needed", "input_value", "evaluate"})
+    el = FakeElement(
+        visible=True,
+        value="",
+        fail={
+            "click",
+            "fill",
+            "press",
+            "type",
+            "dispatch_event",
+            "scroll_into_view_if_needed",
+            "input_value",
+            "evaluate",
+        },
+    )
     page = FakePage(locators={"#a": el})
     assert dom_fields._fill_with_fallback(page, ["#a"], "4242") is False
 
@@ -539,8 +550,7 @@ def test_select_with_fallback_returns_true_on_select_option_success():
 def test_select_with_fallback_tries_every_label_before_giving_up():
     el = FakeElement(visible=True, fail={"select_option"})
     page = FakePage(locators={"#state": el})
-    assert dom_fields._select_with_fallback(page, ["#state"], "CA",
-                                            labels=["California"]) is False
+    assert dom_fields._select_with_fallback(page, ["#state"], "CA", labels=["California"]) is False
     assert [v for kind, v in el.record if kind == "select_option"] == ["CA", "California"]
 
 
@@ -677,16 +687,19 @@ def test_type_human_on_an_empty_string_touches_nothing_but_the_click(monkeypatch
 # ────────────────── cross-cutting: the silent-failure contract ───────────────
 
 
-@pytest.mark.parametrize("call", [
-    lambda: dom_fields._click_with_fallback(FakePage(), ["#a"]),
-    lambda: dom_fields._fill_with_fallback(FakePage(), ["#a"], "v"),
-    lambda: dom_fields._fill_dom_id(FakePage(), "a", "v"),
-    lambda: dom_fields._fill_dom_ids(FakePage(), ["a"], "v"),
-    lambda: dom_fields._fill_by_label_fallback(FakePage(), ["L"], "v"),
-    lambda: dom_fields._fill_by_visible_label_text(FakePage(), "L", "v"),
-    lambda: dom_fields._fill_visible_input(FakePage(), ["#a"], "v"),
-    lambda: dom_fields._select_with_fallback(FakePage(), ["#a"], "v"),
-])
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda: dom_fields._click_with_fallback(FakePage(), ["#a"]),
+        lambda: dom_fields._fill_with_fallback(FakePage(), ["#a"], "v"),
+        lambda: dom_fields._fill_dom_id(FakePage(), "a", "v"),
+        lambda: dom_fields._fill_dom_ids(FakePage(), ["a"], "v"),
+        lambda: dom_fields._fill_by_label_fallback(FakePage(), ["L"], "v"),
+        lambda: dom_fields._fill_by_visible_label_text(FakePage(), "L", "v"),
+        lambda: dom_fields._fill_visible_input(FakePage(), ["#a"], "v"),
+        lambda: dom_fields._select_with_fallback(FakePage(), ["#a"], "v"),
+    ],
+)
 def test_all_fill_primitives_report_failure_as_false_and_nothing_else(call, caplog):
     """AUDIT POINT: the whole layer fails identically and indistinguishably.
 
@@ -700,11 +713,14 @@ def test_all_fill_primitives_report_failure_as_false_and_nothing_else(call, capl
     assert caplog.records == []
 
 
-@pytest.mark.parametrize("call", [
-    lambda: dom_fields._click_with_fallback(FakePage(), ["#a"]),
-    lambda: dom_fields._fill_with_fallback(FakePage(), ["#a"], "v"),
-    lambda: dom_fields._fill_dom_ids(FakePage(), ["a"], "v"),
-    lambda: dom_fields._fill_visible_input(FakePage(), ["#a"], "v"),
-])
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda: dom_fields._click_with_fallback(FakePage(), ["#a"]),
+        lambda: dom_fields._fill_with_fallback(FakePage(), ["#a"], "v"),
+        lambda: dom_fields._fill_dom_ids(FakePage(), ["a"], "v"),
+        lambda: dom_fields._fill_visible_input(FakePage(), ["#a"], "v"),
+    ],
+)
 def test_fill_primitives_are_idempotent_on_a_dead_page(call):
     assert [call() for _ in range(3)] == [False, False, False]

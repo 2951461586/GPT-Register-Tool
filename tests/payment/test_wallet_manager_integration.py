@@ -118,10 +118,12 @@ class WalletManagerIntegrationTests(unittest.TestCase):
         # probed.
         #
         # The transport itself is unused: registry._run_wallet_adapter is mocked.
-        with tempfile.TemporaryDirectory() as tmp, \
-             _overlay(protocol_payments={"enabled_methods": ["gopay"]}), \
-             patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"), \
-             patch("sms_tool.pay_link.registry._run_wallet_adapter", return_value=adapter_result) as adapter:
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            _overlay(protocol_payments={"enabled_methods": ["gopay"]}),
+            patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"),
+            patch("sms_tool.pay_link.registry._run_wallet_adapter", return_value=adapter_result) as adapter,
+        ):
             result = manager.generate_payment_link(
                 "token",
                 payment_method="gopay",
@@ -172,10 +174,12 @@ class WalletManagerIntegrationTests(unittest.TestCase):
                 },
             },
         }
-        with tempfile.TemporaryDirectory() as tmp, \
-             _overlay(**config), \
-             patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"), \
-             patch("sms_tool.payment_capability.payment_method_capability_probe") as generic_probe:
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            _overlay(**config),
+            patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"),
+            patch("sms_tool.payment_capability.payment_method_capability_probe") as generic_probe,
+        ):
             result = manager.generate_payment_link(
                 "token",
                 payment_method="gopay",

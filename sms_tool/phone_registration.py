@@ -81,6 +81,7 @@ def run_phone_register(
 
     try:
         from .phone_proxy import select_phone_proxy
+
         proxy_result = select_phone_proxy(proxy, country=country, provider=provider, country_cfg=provider_cfg)
     except Exception as exc:
         proxy_result = {"ok": False, "error": f"phone_proxy_select_failed:{exc}"}
@@ -91,7 +92,9 @@ def run_phone_register(
 
     print(f"[*] ChatGPT Phone Registration Started (country={country})")
     if proxy:
-        print(f"[*] Phone registration proxy ready: region={proxy_result.get('region', '')} ip={proxy_result.get('ip', '')}")
+        print(
+            f"[*] Phone registration proxy ready: region={proxy_result.get('region', '')} ip={proxy_result.get('ip', '')}"
+        )
 
     # Step 0: Acquire phone number from the selected provider
     _tick("0-Acquire phone number")
@@ -143,12 +146,23 @@ def run_phone_register(
     try:
         # Auth flow: prime + signin + authorize
         _tick("2-Auth flow")
-        request_with_retry(session, "get", f"{auth_base}/create-account", label="Auth prime",
-            headers={**base_headers, "Accept": "text/html,application/xhtml+xml"}, impersonate=auth_impersonate())
+        request_with_retry(
+            session,
+            "get",
+            f"{auth_base}/create-account",
+            label="Auth prime",
+            headers={**base_headers, "Accept": "text/html,application/xhtml+xml"},
+            impersonate=auth_impersonate(),
+        )
 
-        csrf_resp = request_with_retry(session, "get", f"{chat_base}/api/auth/csrf", label="Auth csrf",
+        csrf_resp = request_with_retry(
+            session,
+            "get",
+            f"{chat_base}/api/auth/csrf",
+            label="Auth csrf",
             headers={**base_headers, "Accept": "application/json", "Referer": f"{chat_base}/"},
-            impersonate=auth_impersonate())
+            impersonate=auth_impersonate(),
+        )
         csrf_token = (_json_or_raw(csrf_resp).get("csrfToken") or "").strip()
 
         # Key difference: prompt=login (not screen_hint=signup)
@@ -163,16 +177,36 @@ def run_phone_register(
             "callbackUrl": f"{chat_base}/",
             "json": "true",
         }
-        signin_resp = request_with_retry(session, "post", signin_url, label="Auth signin", data=urlencode(signin_payload),
-            headers={**base_headers, "Content-Type": "application/x-www-form-urlencoded",
-                     "Origin": chat_base, "Referer": f"{chat_base}/"},
-            impersonate=auth_impersonate())
+        signin_resp = request_with_retry(
+            session,
+            "post",
+            signin_url,
+            label="Auth signin",
+            data=urlencode(signin_payload),
+            headers={
+                **base_headers,
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Origin": chat_base,
+                "Referer": f"{chat_base}/",
+            },
+            impersonate=auth_impersonate(),
+        )
         signin_body = _json_or_raw(signin_resp, limit=1000)
         auth_session_url = signin_body.get("url") or signin_resp.headers.get("location") or signin_resp.url
         auth_session_url = _with_query_param(auth_session_url, "device_id", did)
-        r = request_with_retry(session, "get", auth_session_url, label="Auth authorize",
-            headers={**base_headers, "Accept": "text/html,application/xhtml+xml", "Origin": auth_base, "Referer": f"{chat_base}/"},
-            impersonate=auth_impersonate())
+        r = request_with_retry(
+            session,
+            "get",
+            auth_session_url,
+            label="Auth authorize",
+            headers={
+                **base_headers,
+                "Accept": "text/html,application/xhtml+xml",
+                "Origin": auth_base,
+                "Referer": f"{chat_base}/",
+            },
+            impersonate=auth_impersonate(),
+        )
         _tock()
         redirect_path = r.url.split("auth.openai.com")[-1]
         print(f"  Redirect: {redirect_path}")
@@ -196,7 +230,11 @@ def run_phone_register(
             "sentinel_token": username_sentinel.token,
             "oai_did": did,
         }
-        r = request_with_retry(session, "post", f"{auth_base}/api/accounts/user/register", label="User register",
+        r = request_with_retry(
+            session,
+            "post",
+            f"{auth_base}/api/accounts/user/register",
+            label="User register",
             json={"password": password, "username": phone},
             headers=_auth_request_headers(
                 base_headers,
@@ -205,12 +243,15 @@ def run_phone_register(
                 origin=auth_base,
                 sentinel_token=username_sentinel.token,
             ),
-            impersonate=auth_impersonate())
+            impersonate=auth_impersonate(),
+        )
         _tock()
 
         reg_data = {}
-        try: reg_data = r.json()
-        except (ValueError, TypeError): reg_data = {"_raw": r.text[:300]}
+        try:
+            reg_data = r.json()
+        except (ValueError, TypeError):
+            reg_data = {"_raw": r.text[:300]}
         print(f"  Status: {r.status_code}")
         print(f"  Response: {json.dumps(reg_data, ensure_ascii=False)[:300]}")
 
@@ -237,7 +278,10 @@ def run_phone_register(
 
         # Step 5: Validate phone OTP
         _tick("5-Validate phone OTP")
-        validate_resp = request_with_retry(session, "post", f"{auth_base}/api/accounts/phone-otp/validate",
+        validate_resp = request_with_retry(
+            session,
+            "post",
+            f"{auth_base}/api/accounts/phone-otp/validate",
             label="Phone OTP validate",
             json={"code": sms_code},
             headers=_auth_request_headers(
@@ -247,12 +291,15 @@ def run_phone_register(
                 origin=auth_base,
                 sentinel_token=username_sentinel.token,
             ),
-            impersonate=auth_impersonate())
+            impersonate=auth_impersonate(),
+        )
         _tock()
 
         validate_data = {}
-        try: validate_data = validate_resp.json()
-        except (ValueError, TypeError): validate_data = {"_raw": validate_resp.text[:300]}
+        try:
+            validate_data = validate_resp.json()
+        except (ValueError, TypeError):
+            validate_data = {"_raw": validate_resp.text[:300]}
         print(f"  Status: {validate_resp.status_code}")
         print(f"  Response: {json.dumps(validate_data, ensure_ascii=False)[:300]}")
 
@@ -287,7 +334,10 @@ def run_phone_register(
         create_body = {"name": full_name, "birthdate": birthdate}
         if continue_url:
             create_body["continue_url"] = continue_url
-        create_resp = request_with_retry(session, "post", f"{auth_base}/api/accounts/create_account",
+        create_resp = request_with_retry(
+            session,
+            "post",
+            f"{auth_base}/api/accounts/create_account",
             label="Create account",
             json=create_body,
             headers=_auth_request_headers(
@@ -298,12 +348,15 @@ def run_phone_register(
                 sentinel_token=create_sentinel.token,
                 sentinel_so_token=create_sentinel.so_token,
             ),
-            impersonate=auth_impersonate())
+            impersonate=auth_impersonate(),
+        )
         _tock()
 
         create_data = {}
-        try: create_data = create_resp.json()
-        except (ValueError, TypeError): create_data = {"_raw": create_resp.text[:300]}
+        try:
+            create_data = create_resp.json()
+        except (ValueError, TypeError):
+            create_data = {"_raw": create_resp.text[:300]}
         print(f"  Status: {create_resp.status_code}")
         print(f"  Response: {json.dumps(create_data, ensure_ascii=False)[:300]}")
 
@@ -313,8 +366,10 @@ def run_phone_register(
 
     except Exception as e:
         _safe_tock()
-        try: sms_client.cancel(handle)
-        except Exception: pass
+        try:
+            sms_client.cancel(handle)
+        except Exception:
+            pass
         return _failure_result(f"transport_error: {e}", email=phone)
 
     # Step 7: Fetch auth session for access_token
@@ -323,9 +378,14 @@ def run_phone_register(
     id_token = ""
     try:
         for attempt in range(6):
-            session_resp = request_with_retry(session, "get", f"{chat_base}/api/auth/session",
-                label=f"Auth session (attempt {attempt+1})",
-                headers={**base_headers, "Referer": f"{chat_base}/"}, impersonate=auth_impersonate())
+            session_resp = request_with_retry(
+                session,
+                "get",
+                f"{chat_base}/api/auth/session",
+                label=f"Auth session (attempt {attempt + 1})",
+                headers={**base_headers, "Referer": f"{chat_base}/"},
+                impersonate=auth_impersonate(),
+            )
             session_data = _json_or_raw(session_resp, limit=2000)
             access_token = session_data.get("accessToken") or session_data.get("access_token") or ""
             id_token = session_data.get("idToken") or session_data.get("id_token") or ""
@@ -347,6 +407,7 @@ def run_phone_register(
         _tick("8-Codex OAuth")
         try:
             from .codex_oauth import collect_codex_oauth_tokens
+
             oauth_result = collect_codex_oauth_tokens(
                 data={
                     "email": phone,

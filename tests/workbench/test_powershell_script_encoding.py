@@ -16,6 +16,7 @@ A BOM check is a proxy for "parses under PowerShell 5.1", and it is the right
 proxy: it is cheap, deterministic, and independent of the installed PowerShell.
 The negative test below pins that the checker actually fires.
 """
+
 from __future__ import annotations
 
 import os

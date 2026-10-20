@@ -269,9 +269,7 @@ class PaymentRoutePlanner:
         self._validate_countries(method, countries, values)
         _raw_countries_value: object = values.get("stage_proxy_countries")
         raw_explicit_countries: Mapping[str, Any] = (
-            _raw_countries_value
-            if not automatic_country and isinstance(_raw_countries_value, Mapping)
-            else {}
+            _raw_countries_value if not automatic_country and isinstance(_raw_countries_value, Mapping) else {}
         )
         explicit_countries = {
             normalize_payment_stage(key): str(value or "").strip().upper()
@@ -296,7 +294,9 @@ class PaymentRoutePlanner:
         _raw_stage_routes: object = routing_method_cfg.get("stage_routes")
         stage_routes: Mapping = _raw_stage_routes if isinstance(_raw_stage_routes, Mapping) else {}
         _raw_explicit_stage_routes: object = values.get("stage_routes")
-        explicit_stage_routes: Mapping = _raw_explicit_stage_routes if isinstance(_raw_explicit_stage_routes, Mapping) else {}
+        explicit_stage_routes: Mapping = (
+            _raw_explicit_stage_routes if isinstance(_raw_explicit_stage_routes, Mapping) else {}
+        )
         stage_routes = {**dict(stage_routes), **dict(explicit_stage_routes)}
         _raw_stage_pools: object = routing_method_cfg.get("stage_proxy_pools")
         stage_pools: Mapping = _raw_stage_pools if isinstance(_raw_stage_pools, Mapping) else {}
@@ -306,9 +306,13 @@ class PaymentRoutePlanner:
         )
         stage_pools = {**dict(stage_pools), **dict(explicit_stage_pools)}
         _raw_configured_stage_proxies: object = routing_method_cfg.get("stage_proxies")
-        configured_stage_proxies: Mapping = _raw_configured_stage_proxies if isinstance(_raw_configured_stage_proxies, Mapping) else {}
+        configured_stage_proxies: Mapping = (
+            _raw_configured_stage_proxies if isinstance(_raw_configured_stage_proxies, Mapping) else {}
+        )
         _raw_explicit_stage_proxies: object = values.get("stage_proxies")
-        explicit_stage_proxies: Mapping = _raw_explicit_stage_proxies if isinstance(_raw_explicit_stage_proxies, Mapping) else {}
+        explicit_stage_proxies: Mapping = (
+            _raw_explicit_stage_proxies if isinstance(_raw_explicit_stage_proxies, Mapping) else {}
+        )
         checkout_scalar = self._explicit_stage_proxy(
             PaymentStage.CHECKOUT.value,
             explicit_stage_proxies,
@@ -337,9 +341,7 @@ class PaymentRoutePlanner:
                 continue
             _route_raw: object = stage_routes.get(stage)
             route_cfg: Mapping[str, Any] = (
-                _route_raw
-                if isinstance(_route_raw, Mapping)
-                else ({"pool": _route_raw} if _route_raw else {})
+                _route_raw if isinstance(_route_raw, Mapping) else ({"pool": _route_raw} if _route_raw else {})
             )
             group_name = str(route_cfg.get("pool") or _DEFAULT_GROUP_BY_STAGE.get(stage) or "checkout").strip()
             explicit = self._explicit_stage_proxy(stage, explicit_stage_proxies, values, {})
@@ -435,11 +437,11 @@ class PaymentRoutePlanner:
                     selected_by_group[reuse_key] = chosen_base
             chosen = chosen_base
             _raw_configured_countries: object = routing_method_cfg.get("stage_proxy_countries")
-            configured_countries: Mapping = _raw_configured_countries if isinstance(_raw_configured_countries, Mapping) else {}
-            _loop_countries_raw: object = values.get("stage_proxy_countries")
-            loop_explicit_countries: Mapping = (
-                _loop_countries_raw if isinstance(_loop_countries_raw, Mapping) else {}
+            configured_countries: Mapping = (
+                _raw_configured_countries if isinstance(_raw_configured_countries, Mapping) else {}
             )
+            _loop_countries_raw: object = values.get("stage_proxy_countries")
+            loop_explicit_countries: Mapping = _loop_countries_raw if isinstance(_loop_countries_raw, Mapping) else {}
             country_requested = bool(
                 route_cfg.get("country")
                 or configured_countries.get(stage)
@@ -519,14 +521,10 @@ class PaymentRoutePlanner:
         _cfg_countries_raw: object = method_cfg.get("stage_proxy_countries")
         _values_countries_raw: object = values.get("stage_proxy_countries")
         configured: Mapping[str, Any] = (
-            {}
-            if automatic
-            else (_cfg_countries_raw if isinstance(_cfg_countries_raw, Mapping) else {})
+            {} if automatic else (_cfg_countries_raw if isinstance(_cfg_countries_raw, Mapping) else {})
         )
         explicit: Mapping[str, Any] = (
-            {}
-            if automatic
-            else (_values_countries_raw if isinstance(_values_countries_raw, Mapping) else {})
+            {} if automatic else (_values_countries_raw if isinstance(_values_countries_raw, Mapping) else {})
         )
         countries = {
             normalize_payment_stage(key): str(value or "").strip().upper()

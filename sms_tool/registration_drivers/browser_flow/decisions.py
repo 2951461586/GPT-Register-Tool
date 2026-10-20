@@ -70,9 +70,7 @@ PROXY_COUNTRY_BLOCKING_DRIVERS = frozenset({"roxy", "cloak"})
 PROXY_COUNTRY_CHECK_MODES = frozenset({"blocking", "diagnostic", "off"})
 
 
-def proxy_country_check_mode(
-    driver_name: str, config: Mapping[str, Any] | None = None
-) -> str:
+def proxy_country_check_mode(driver_name: str, config: Mapping[str, Any] | None = None) -> str:
     """How strictly to enforce the post-open exit-country probe (P2-3).
 
     Returns ``"blocking"``, ``"diagnostic"`` or ``"off"``:
@@ -97,9 +95,7 @@ def proxy_country_check_mode(
     return "blocking" if driver_name in PROXY_COUNTRY_BLOCKING_DRIVERS else "diagnostic"
 
 
-def browser_screen_size(
-    profile: Mapping[str, Any], driver_name: str
-) -> tuple[int, int] | None:
+def browser_screen_size(profile: Mapping[str, Any], driver_name: str) -> tuple[int, int] | None:
     """Screen size this driver can consume from the fingerprint pool, else ``None``.
 
     P1-3: both ``playwright`` (viewport) and ``camoufox`` (``Screen(max_width,
@@ -115,9 +111,7 @@ def browser_screen_size(
     )
 
 
-def playwright_viewport(
-    profile: Mapping[str, Any], driver_name: str
-) -> tuple[int, int] | None:
+def playwright_viewport(profile: Mapping[str, Any], driver_name: str) -> tuple[int, int] | None:
     """Screen size for the local Playwright driver, ``None`` for everyone else.
 
     Kept for the Playwright-specific call sites; delegates to
@@ -128,9 +122,7 @@ def playwright_viewport(
     return browser_screen_size(profile, driver_name)
 
 
-def aligned_locale_timezone(
-    profile: Mapping[str, Any], locale: str, timezone_id: str
-) -> tuple[str, str]:
+def aligned_locale_timezone(profile: Mapping[str, Any], locale: str, timezone_id: str) -> tuple[str, str]:
     """Override the configured locale/timezone with the fingerprint pool's.
 
     Only overrides when the pool actually supplies a value -- an empty string

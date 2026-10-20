@@ -44,8 +44,11 @@ class PromotionUpdateStageTests(unittest.TestCase):
 
     def test_update_promotion_posts_to_update_endpoint_via_promotion_proxy(self):
         e = g.PPLinkExtractor(
-            "attoken", provider_proxy="http://us", promotion_proxy="http://vn",
-            target_country="US", checkout_country="US",
+            "attoken",
+            provider_proxy="http://us",
+            promotion_proxy="http://vn",
+            target_country="US",
+            checkout_country="US",
         )
         seen = {}
 
@@ -74,8 +77,12 @@ class PromotionUpdateStageTests(unittest.TestCase):
     def test_extract_runs_stripe_init_before_post_approval_promotion(self):
         """The standard flow must not apply promotion before Stripe init."""
         e = g.PPLinkExtractor(
-            "attoken", checkout_proxy="http://us", provider_proxy="http://us",
-            promotion_proxy="http://vn", target_country="US", checkout_country="US",
+            "attoken",
+            checkout_proxy="http://us",
+            provider_proxy="http://us",
+            promotion_proxy="http://vn",
+            target_country="US",
+            checkout_country="US",
             require_zero=True,
         )
         calls = []
@@ -83,7 +90,14 @@ class PromotionUpdateStageTests(unittest.TestCase):
         def fake_checkout_post(url, body, access_token, cookie_header="", proxy="", timeout=30, extra_headers=None):
             calls.append(("POST", url, proxy))
             if url.endswith("/payments/checkout"):
-                return _Resp(200, {"checkout_session_id": "cs_live_X", "processor_entity": "openai_llc", "publishable_key": "pk_live_x"})
+                return _Resp(
+                    200,
+                    {
+                        "checkout_session_id": "cs_live_X",
+                        "processor_entity": "openai_llc",
+                        "publishable_key": "pk_live_x",
+                    },
+                )
             if url.endswith("/checkout/update"):
                 return _Resp(200, {"success": True})
             raise AssertionError(url)
@@ -100,8 +114,8 @@ class PromotionUpdateStageTests(unittest.TestCase):
                         e.extract()
 
         seq = [c[0] if c[0] != "POST" else c[1].rsplit("/", 1)[-1] for c in calls]
-        self.assertEqual(seq[0], "checkout")            # create checkout first
-        self.assertEqual(seq[1], "STRIPE_INIT")         # initialize before approval/promotion
+        self.assertEqual(seq[0], "checkout")  # create checkout first
+        self.assertEqual(seq[1], "STRIPE_INIT")  # initialize before approval/promotion
         self.assertNotIn("update", seq)
 
     def test_run_batch_promotion_matrix_searches_and_stops_on_zero_ba(self):
@@ -115,14 +129,19 @@ class PromotionUpdateStageTests(unittest.TestCase):
             def extract(self):
                 if len(attempts) == 1:
                     return {"ok": True, "amount": 2000, "link_type": "paypal_ba_approve", "url": "x"}
-                return {"ok": True, "amount": 0, "link_type": "paypal_ba_approve",
-                        "url": "https://www.paypal.com/agreements/approve?ba_token=BA-OK123456789",
-                        "cs_id": "cs_x"}
+                return {
+                    "ok": True,
+                    "amount": 0,
+                    "link_type": "paypal_ba_approve",
+                    "url": "https://www.paypal.com/agreements/approve?ba_token=BA-OK123456789",
+                    "cs_id": "cs_x",
+                }
 
         tpl = "http://user-region-JP-sid-abc-t-5:pw@gate:443"
         with patch.object(g, "PPLinkExtractor", FakeExtractor):
-            result = g.run_batch("at", tpl, target_countries=["US", "DE"],
-                                 promotion_countries=["JP", "TH"], emit=lambda *a, **k: None)
+            result = g.run_batch(
+                "at", tpl, target_countries=["US", "DE"], promotion_countries=["JP", "TH"], emit=lambda *a, **k: None
+            )
 
         self.assertTrue(result["ok"])
         self.assertIn("matrix", result)
@@ -137,16 +156,28 @@ class PromotionUpdateStageTests(unittest.TestCase):
                 captured.update(kwargs)
 
             def extract(self):
-                return {"ok": True, "link_type": "paypal_ba_approve",
-                        "url": "https://www.paypal.com/agreements/approve?ba_token=BA-TEST123456789",
-                        "ba_token": "BA-TEST123456789", "cs_id": "cs_test",
-                        "promotion_proxy": captured.get("promotion_proxy", "")}
+                return {
+                    "ok": True,
+                    "link_type": "paypal_ba_approve",
+                    "url": "https://www.paypal.com/agreements/approve?ba_token=BA-TEST123456789",
+                    "ba_token": "BA-TEST123456789",
+                    "cs_id": "cs_test",
+                    "promotion_proxy": captured.get("promotion_proxy", ""),
+                }
 
         orig_ext, orig_load = g.PPLinkExtractor, g._load_json
         g.PPLinkExtractor = FakeExtractor
-        g._load_json = lambda _p: {"paypal": {"stage_proxies": {"provider": "http://us", "approve": "http://us",
-                                                                 "checkout": "http://us", "promotion": "http://vn"},
-                                              "link_generation_type": "paypal_direct"}}
+        g._load_json = lambda _p: {
+            "paypal": {
+                "stage_proxies": {
+                    "provider": "http://us",
+                    "approve": "http://us",
+                    "checkout": "http://us",
+                    "promotion": "http://vn",
+                },
+                "link_generation_type": "paypal_direct",
+            }
+        }
         try:
             result = g.generate_pp_link("at")
         finally:

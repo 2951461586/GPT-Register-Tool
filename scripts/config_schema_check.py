@@ -1,4 +1,5 @@
 """Verify the shared config ownership manifest matches both runtimes."""
+
 from __future__ import annotations
 
 import json
@@ -22,7 +23,10 @@ def _csharp_ownership() -> dict[str, str]:
     block = text.split("private static readonly Dictionary<string, string> ShardOwnership", 1)[1]
     block = block.split("};", 1)[0]
     pairs = re.findall(r'\["([^"\\]+)"\]\s*=\s*(ProxyShard|RuntimeShard|PaymentShard)', block)
-    return {key: {"ProxyShard": "proxy", "RuntimeShard": "runtime", "PaymentShard": "payment"}[value] for key, value in pairs}
+    return {
+        key: {"ProxyShard": "proxy", "RuntimeShard": "runtime", "PaymentShard": "payment"}[value]
+        for key, value in pairs
+    }
 
 
 def main() -> int:

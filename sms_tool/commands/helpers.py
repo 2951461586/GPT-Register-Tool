@@ -64,10 +64,16 @@ def public_mail_message(msg):
     message: dict = _raw_msg if isinstance(_raw_msg, dict) else {}
     from_value = message.get("from")
     if isinstance(from_value, dict):
-        email_address = (from_value.get("emailAddress") or {}) if isinstance(from_value.get("emailAddress"), dict) else {}
+        email_address = (
+            (from_value.get("emailAddress") or {}) if isinstance(from_value.get("emailAddress"), dict) else {}
+        )
         sender_name = str(email_address.get("name") or from_value.get("name") or "").strip()
         sender_address = str(email_address.get("address") or from_value.get("address") or "").strip()
-        from_value = formataddr((sender_name, sender_address)) if sender_name and sender_address else (sender_address or sender_name)
+        from_value = (
+            formataddr((sender_name, sender_address))
+            if sender_name and sender_address
+            else (sender_address or sender_name)
+        )
     _raw_body: object = message.get("body")
     body: dict = _raw_body if isinstance(_raw_body, dict) else {}
     _raw_recipients: object = message.get("toRecipients")
@@ -79,11 +85,15 @@ def public_mail_message(msg):
             recipient = str(email_address.get("address") or "").strip()
     return {
         "id": str(message.get("id") or message.get("message_id") or ""),
-        "receivedDateTime": str(message.get("receivedDateTime") or message.get("received_at") or message.get("created_at") or ""),
+        "receivedDateTime": str(
+            message.get("receivedDateTime") or message.get("received_at") or message.get("created_at") or ""
+        ),
         "from": str(from_value or message.get("from_email") or message.get("sender") or ""),
         "recipient": recipient or str(message.get("recipient") or message.get("to") or ""),
         "subject": str(message.get("subject") or message.get("title") or ""),
-        "bodyPreview": str(message.get("bodyPreview") or message.get("preview") or body.get("content") or message.get("text") or "")[:2000],
+        "bodyPreview": str(
+            message.get("bodyPreview") or message.get("preview") or body.get("content") or message.get("text") or ""
+        )[:2000],
         "body": str(body.get("content") or message.get("text") or message.get("bodyPreview") or ""),
         "verificationCode": str(message.get("verificationCode") or ""),
     }

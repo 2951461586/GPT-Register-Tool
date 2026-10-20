@@ -19,10 +19,7 @@ import unittest
 from pathlib import Path
 
 
-MODULE_PATH = (
-    Path(__file__).resolve().parents[2]
-    / "services" / "protocol-payment" / "common" / "proxy_bookkeeping.py"
-)
+MODULE_PATH = Path(__file__).resolve().parents[2] / "services" / "protocol-payment" / "common" / "proxy_bookkeeping.py"
 SPEC = importlib.util.spec_from_file_location("proxy_bookkeeping", MODULE_PATH)
 BOOKKEEPING = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
@@ -104,7 +101,7 @@ class ProxyLabelTests(unittest.TestCase):
         self.assertEqual(len(digest), 64)
         # a key must be a prefix-extension of the short label's digest
         short = BOOKKEEPING.proxy_short("http://a:1", identity)
-        self.assertTrue(digest.startswith(short[len("proxy#"):]))
+        self.assertTrue(digest.startswith(short[len("proxy#") :]))
 
 
 class KnownStaticHostTests(unittest.TestCase):
@@ -207,10 +204,16 @@ class ModuleContractTests(unittest.TestCase):
     def test_exports_exactly_the_six_extracted_functions(self):
         self.assertEqual(
             sorted(BOOKKEEPING.__all__),
-            sorted([
-                "proxy_short", "proxy_label", "proxy_key",
-                "is_known_static_host", "find_named_token", "token_key_name",
-            ]),
+            sorted(
+                [
+                    "proxy_short",
+                    "proxy_label",
+                    "proxy_key",
+                    "is_known_static_host",
+                    "find_named_token",
+                    "token_key_name",
+                ]
+            ),
         )
 
 

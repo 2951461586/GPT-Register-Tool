@@ -107,8 +107,7 @@ def test_extract_captcha_config_only_reaches_recaptcha_via_js_variables():
 
 
 def test_extract_captcha_config_reads_the_hcaptcha_js_variable():
-    assert extract_captcha_config('{"hcaptcha_site_key": "hc"}') == {
-        "type": "hcaptcha", "site_key": "hc", "rqdata": ""}
+    assert extract_captcha_config('{"hcaptcha_site_key": "hc"}') == {"type": "hcaptcha", "site_key": "hc", "rqdata": ""}
 
 
 def test_extract_captcha_config_picks_up_rqdata_from_the_js_variables():
@@ -117,11 +116,10 @@ def test_extract_captcha_config_picks_up_rqdata_from_the_js_variables():
 
 
 def test_extract_captcha_config_returns_empty_strings_when_nothing_matches():
-    assert extract_captcha_config("<html><body>no captcha</body></html>") == {
-        "type": "", "site_key": "", "rqdata": ""}
+    assert extract_captcha_config("<html><body>no captcha</body></html>") == {"type": "", "site_key": "", "rqdata": ""}
 
 
-@pytest.mark.parametrize("html", ["", "   ", "<<<>>>", '\x00\x01', "data-sitekey=", "{\"site_key\": "])
+@pytest.mark.parametrize("html", ["", "   ", "<<<>>>", "\x00\x01", "data-sitekey=", '{"site_key": '])
 def test_extract_captcha_config_is_safe_on_malformed_html(html):
     assert extract_captcha_config(html)["type"] in ("", "hcaptcha", "recaptcha")
 
@@ -156,23 +154,29 @@ def test_solve_captcha_raises_when_the_page_has_no_captcha():
 
 
 def test_solve_captcha_raises_for_an_unsupported_type(no_browser, monkeypatch):
-    monkeypatch.setattr(captcha_solver, "extract_captcha_config",
-                        lambda html: {"type": "turnstile", "site_key": "k", "rqdata": ""})
+    monkeypatch.setattr(
+        captcha_solver, "extract_captcha_config", lambda html: {"type": "turnstile", "site_key": "k", "rqdata": ""}
+    )
     with pytest.raises(CaptchaError, match="unsupported CAPTCHA type: turnstile"):
         solve_captcha("anything")
 
 
 def test_solve_captcha_raises_when_the_type_is_present_but_the_key_is_not(no_browser, monkeypatch):
-    monkeypatch.setattr(captcha_solver, "extract_captcha_config",
-                        lambda html: {"type": "hcaptcha", "site_key": "", "rqdata": ""})
+    monkeypatch.setattr(
+        captcha_solver, "extract_captcha_config", lambda html: {"type": "hcaptcha", "site_key": "", "rqdata": ""}
+    )
     with pytest.raises(CaptchaError, match="no CAPTCHA found"):
         solve_captcha("anything")
 
 
 def test_solve_captcha_dispatches_to_the_hcaptcha_solver(no_browser):
-    token, ekey = solve_captcha('<div data-sitekey="hc-1" data-rqdata="rq"></div>',
-                                proxy="http://u:p@h:1", headless=True, timeout_ms=5,
-                                locale="zh-CN")
+    token, ekey = solve_captcha(
+        '<div data-sitekey="hc-1" data-rqdata="rq"></div>',
+        proxy="http://u:p@h:1",
+        headless=True,
+        timeout_ms=5,
+        locale="zh-CN",
+    )
     assert (token, ekey) == ("hc-token", "hc-ekey")
     name, kwargs = no_browser[0]
     assert name == "hcaptcha"
@@ -220,8 +224,9 @@ def test_solve_captcha_propagates_a_solver_failure(no_browser, monkeypatch):
 def test_build_hcaptcha_bridge_url_defaults_to_the_invisible_page():
     url = _build_hcaptcha_bridge_url()
     assert "HCaptchaInvisible.html" in url
-    assert _build_hcaptcha_bridge_url(invisible=False).endswith("HCaptcha.html?") or "HCaptcha.html" in \
-           _build_hcaptcha_bridge_url(invisible=False)
+    assert _build_hcaptcha_bridge_url(invisible=False).endswith(
+        "HCaptcha.html?"
+    ) or "HCaptcha.html" in _build_hcaptcha_bridge_url(invisible=False)
 
 
 def test_build_hcaptcha_bridge_url_uses_the_visible_page_when_asked():
@@ -291,7 +296,7 @@ def test_build_hcaptcha_bridge_html_does_not_neutralise_a_script_close_tag():
     clean = _build_hcaptcha_bridge_html("f", "u", "sk", "rq")
     assert clean.count("</script>") == 1
 
-    hostile = _build_hcaptcha_bridge_html("f", "u", 'x</script><img src=y>', "rq")
+    hostile = _build_hcaptcha_bridge_html("f", "u", "x</script><img src=y>", "rq")
     assert hostile.count("</script>") == 3
     assert "<img src=y>" in hostile
 
@@ -342,8 +347,11 @@ def test_playwright_proxy_returns_none_for_a_blank_url():
 
 def test_playwright_proxy_parses_host_port_and_credentials():
     assert _playwright_proxy("http://user:pw@1.2.3.4:8080") == {
-        "server": "http://1.2.3.4:8080", "bypass": "127.0.0.1,localhost",
-        "username": "user", "password": "pw"}
+        "server": "http://1.2.3.4:8080",
+        "bypass": "127.0.0.1,localhost",
+        "username": "user",
+        "password": "pw",
+    }
 
 
 def test_playwright_proxy_normalizes_socks5h_to_socks5():
@@ -379,15 +387,18 @@ def test_playwright_proxy_is_idempotent():
 # ──────────────────────── _accept_language_for_locale ────────────────────────
 
 
-@pytest.mark.parametrize("locale,expected", [
-    ("zh-CN", "zh-CN,zh;q=0.9,en;q=0.8"),
-    ("zh", "zh-CN,zh;q=0.9,en;q=0.8"),
-    ("ZH-TW", "zh-CN,zh;q=0.9,en;q=0.8"),
-    ("id-ID", "id-ID,id;q=0.9,en;q=0.8"),
-    ("id", "id-ID,id;q=0.9,en;q=0.8"),
-    ("fr-FR", "en-US,en;q=0.9"),
-    ("en-US", "en-US,en;q=0.9"),
-])
+@pytest.mark.parametrize(
+    "locale,expected",
+    [
+        ("zh-CN", "zh-CN,zh;q=0.9,en;q=0.8"),
+        ("zh", "zh-CN,zh;q=0.9,en;q=0.8"),
+        ("ZH-TW", "zh-CN,zh;q=0.9,en;q=0.8"),
+        ("id-ID", "id-ID,id;q=0.9,en;q=0.8"),
+        ("id", "id-ID,id;q=0.9,en;q=0.8"),
+        ("fr-FR", "en-US,en;q=0.9"),
+        ("en-US", "en-US,en;q=0.9"),
+    ],
+)
 def test_accept_language_for_locale(locale, expected):
     assert _accept_language_for_locale(locale) == expected
 

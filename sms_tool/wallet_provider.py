@@ -35,6 +35,7 @@ _TERMINAL_FAILURE_STATES = frozenset({"declined", "denied", "failed", "rejected"
 _TERMINAL_CANCEL_STATES = frozenset({"canceled", "cancelled"})
 _SESSION_ID_RE = re.compile(r"\b(?:cs|oaics|pm|pi|seti)_(?:live_|test_)?[A-Za-z0-9_]{8,}\b")
 
+
 @dataclass(frozen=True)
 class WalletMethodSpec:
     """Wallet-specific behavior layered on the shared Checkout profile."""
@@ -649,10 +650,7 @@ def _promotion_update_enabled(
         return True
     if configured is False:
         return False
-    return any(
-        str(transport_context.get(key) or "").strip()
-        for key in ("promotion_proxy", "update_proxy")
-    )
+    return any(str(transport_context.get(key) or "").strip() for key in ("promotion_proxy", "update_proxy"))
 
 
 def _promotion_payload(
@@ -739,10 +737,7 @@ def _confirm_return_url(hosted_url: str, session: CheckoutSessionContract) -> st
         return "https://pay.openai.com" + hosted_url[len("https://checkout.stripe.com") :]
     if hosted_url.startswith("https://pay.openai.com"):
         return hosted_url
-    return (
-        f"https://pay.openai.com/c/pay/{session.checkout_session_id}"
-        "?returned_from_redirect=true&ui_mode=custom"
-    )
+    return f"https://pay.openai.com/c/pay/{session.checkout_session_id}?returned_from_redirect=true&ui_mode=custom"
 
 
 def _response_state(payload: Any, *, prefer_result: bool = False) -> str:
@@ -823,11 +818,7 @@ def _is_provider_url(value: str, spec: WalletMethodSpec) -> bool:
 
 def _structured_error(exc: Exception, stage: str) -> WalletProviderError:
     if isinstance(exc, WalletProviderError):
-        if (
-            stage in _SIDE_EFFECT_STAGES
-            and exc.status == "failed"
-            and exc.error_code != "wallet_provider_rejected"
-        ):
+        if stage in _SIDE_EFFECT_STAGES and exc.status == "failed" and exc.error_code != "wallet_provider_rejected":
             return WalletProviderError(
                 str(exc),
                 error_code=exc.error_code,
@@ -851,7 +842,9 @@ def _structured_error(exc: Exception, stage: str) -> WalletProviderError:
     if isinstance(exc, TimeoutError):
         return WalletTimedOutError(str(exc) or "wallet transport timed out", error_stage=stage)
     status_code = _exception_status_code(exc)
-    retryable = status_code == 429 or status_code >= 500 if status_code else not isinstance(exc, (TypeError, ValueError))
+    retryable = (
+        status_code == 429 or status_code >= 500 if status_code else not isinstance(exc, (TypeError, ValueError))
+    )
     # Once a side-effecting request starts, a local exception cannot prove that
     # the provider rejected it. Treat every unstructured failure as unknown.
     uncertain = stage in _SIDE_EFFECT_STAGES

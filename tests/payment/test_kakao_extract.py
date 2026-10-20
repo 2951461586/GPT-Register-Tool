@@ -98,9 +98,7 @@ class AccountLivenessTests(unittest.TestCase):
         # no network is touched.
         kakao.set_access_token_probe(None)
         expected = {"ok": True, "status_code": 200}
-        with patch.object(
-            kakao, "_default_access_token_probe", return_value=expected
-        ) as fallback:
+        with patch.object(kakao, "_default_access_token_probe", return_value=expected) as fallback:
             result = kakao.probe_kakao_access_token("at_123", "http://proxy.example:8080")
         self.assertEqual(result, expected)
         fallback.assert_called_once_with("at_123", "http://proxy.example:8080")

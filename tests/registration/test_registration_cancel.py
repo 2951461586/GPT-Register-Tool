@@ -241,9 +241,7 @@ class PulseCancelTests(unittest.TestCase):
 
         pulse_config = PulseConfig(wave_size=1, wave_delay_seconds=1.0)
 
-        with patch(
-            "sms_tool.registration_pulse.cancellable_sleep", return_value=True
-        ) as sleep_mock:
+        with patch("sms_tool.registration_pulse.cancellable_sleep", return_value=True) as sleep_mock:
             results = run_pulse_batch(
                 2,
                 run_one_fn=run_one,
@@ -260,9 +258,7 @@ class ProtocolCancelTests(unittest.TestCase):
         operations = Mock()
         operations._tl.return_value = []
         operations.runtime_config_scope.return_value = nullcontext()
-        operations._failure_result.side_effect = lambda error, **kwargs: _failure_result(
-            error, **kwargs
-        )
+        operations._failure_result.side_effect = lambda error, **kwargs: _failure_result(error, **kwargs)
         return RegistrationEmailWorkflow(
             machine,
             config={"registration": {}},

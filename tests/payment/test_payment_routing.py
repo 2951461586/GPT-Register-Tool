@@ -113,8 +113,11 @@ class PaymentRoutePlannerTests(unittest.TestCase):
             seen.append((list(pool), country, stage))
             return pool[0], [{"ok": True}]
 
-        with patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=select), patch(
-            "sms_tool.paypal_proxy.rotate_proxy_session", side_effect=lambda proxy, country: f"{proxy}/{country}"
+        with (
+            patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=select),
+            patch(
+                "sms_tool.paypal_proxy.rotate_proxy_session", side_effect=lambda proxy, country: f"{proxy}/{country}"
+            ),
         ):
             plan = PaymentRoutePlanner(config).plan("gopay")
 
@@ -124,15 +127,9 @@ class PaymentRoutePlannerTests(unittest.TestCase):
         self.assertNotIn("secret", str(plan.public_dict()))
 
     def test_explicit_shared_proxy_bypasses_configured_pools(self):
-        config = {
-            "protocol_payments": {
-                "methods": {"gopay": {"checkout_proxy_pool": ["http://pool.example:8080"]}}
-            }
-        }
+        config = {"protocol_payments": {"methods": {"gopay": {"checkout_proxy_pool": ["http://pool.example:8080"]}}}}
         with patch("sms_tool.paypal_proxy.select_proxy_from_pool") as select:
-            plan = PaymentRoutePlanner(config).plan(
-                "gopay", options={"proxy": "http://explicit.example:8080"}
-            )
+            plan = PaymentRoutePlanner(config).plan("gopay", options={"proxy": "http://explicit.example:8080"})
         select.assert_not_called()
         self.assertEqual(plan.checkout_proxy, "http://explicit.example:8080")
 
@@ -215,18 +212,8 @@ class PaymentRoutePlannerTests(unittest.TestCase):
     def test_ipwo_bare_pool_is_canonicalized_and_retargeted_to_stage_country(self):
         config = {
             "protocol_payments": {
-                "proxy_pools": {
-                    "checkout": [
-                        "us.ipwo.net:7878:account_custom_zone_US:password"
-                    ]
-                },
-                "methods": {
-                    "paypal": {
-                        "stage_routes": {
-                            "checkout": {"pool": "checkout", "country": "JP"}
-                        }
-                    }
-                },
+                "proxy_pools": {"checkout": ["us.ipwo.net:7878:account_custom_zone_US:password"]},
+                "methods": {"paypal": {"stage_routes": {"checkout": {"pool": "checkout", "country": "JP"}}}},
             }
         }
 

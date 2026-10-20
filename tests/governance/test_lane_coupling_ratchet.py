@@ -106,9 +106,7 @@ def test_function_local_import_is_still_an_edge(tree):
     current = tree(
         {
             "registration_handlers.py": (
-                "def _geo(proxy):\n"
-                "    from . import paypal_proxy\n"
-                "    return paypal_proxy.infer_proxy_country(proxy)\n"
+                "def _geo(proxy):\n    from . import paypal_proxy\n    return paypal_proxy.infer_proxy_country(proxy)\n"
             )
         }
     )
@@ -148,8 +146,7 @@ def test_payment_lane_may_borrow_shared_infrastructure(tree):
         {
             "pay_link/__init__.py": "",
             "pay_link/core.py": (
-                "from .. import sentinel, phone_proxy\n"
-                "from ..auth_headers import AUTH_FINGERPRINT_PROFILES\n"
+                "from .. import sentinel, phone_proxy\nfrom ..auth_headers import AUTH_FINGERPRINT_PROFILES\n"
             ),
         }
     )

@@ -71,9 +71,20 @@ IP_GEO_ENDPOINTS = [
 # Country (ISO-3166 alpha-2) -> locale profile key.  每个市场一个独立档案
 # （CA/AU 不再别名到 us/gb，时区与出口严格一致），键即小写国家码。
 COUNTRY_LOCALE_PROFILE_MAP = {
-    "JP": "jp", "CN": "cn", "HK": "hk", "TW": "tw", "US": "us", "CA": "ca",
-    "SG": "sg", "GB": "gb", "AU": "au", "DE": "de", "FR": "fr", "NL": "nl",
-    "VN": "vn", "PH": "ph",
+    "JP": "jp",
+    "CN": "cn",
+    "HK": "hk",
+    "TW": "tw",
+    "US": "us",
+    "CA": "ca",
+    "SG": "sg",
+    "GB": "gb",
+    "AU": "au",
+    "DE": "de",
+    "FR": "fr",
+    "NL": "nl",
+    "VN": "vn",
+    "PH": "ph",
     # 2026-09-18：第二供应商（9http ``geo-IN``）接入时补。漏这一项会让
     # ``locale_profile_key_from_geo`` 静默回退 ``'us'`` —— 印度出口配美国指纹。
     "IN": "in",
@@ -158,13 +169,62 @@ BROWSER_LOCALE_PROFILES: dict[str, dict[str, Any]] = {
 # Common macOS Chrome desktop hardware profiles.  One is drawn per registration
 # (round-robin or seed-stable); the HAR capture baseline is only one candidate.
 BROWSER_PROFILE_POOL = [
-    {"screen_width": 1680, "screen_height": 1050, "hardware_concurrency": 6, "device_memory": 8, "js_heap_size_limit": 4395630592, "device_pixel_ratio": 2},
-    {"screen_width": 1440, "screen_height": 900, "hardware_concurrency": 8, "device_memory": 8, "js_heap_size_limit": 4294967296, "device_pixel_ratio": 2},
-    {"screen_width": 1512, "screen_height": 982, "hardware_concurrency": 8, "device_memory": 8, "js_heap_size_limit": 4294967296, "device_pixel_ratio": 2},
-    {"screen_width": 1680, "screen_height": 1050, "hardware_concurrency": 8, "device_memory": 8, "js_heap_size_limit": 4294967296, "device_pixel_ratio": 2},
-    {"screen_width": 1728, "screen_height": 1117, "hardware_concurrency": 10, "device_memory": 8, "js_heap_size_limit": 4294967296, "device_pixel_ratio": 2},
-    {"screen_width": 1800, "screen_height": 1169, "hardware_concurrency": 10, "device_memory": 8, "js_heap_size_limit": 4294967296, "device_pixel_ratio": 2},
-    {"screen_width": 2056, "screen_height": 1329, "hardware_concurrency": 12, "device_memory": 8, "js_heap_size_limit": 4294967296, "device_pixel_ratio": 2},
+    {
+        "screen_width": 1680,
+        "screen_height": 1050,
+        "hardware_concurrency": 6,
+        "device_memory": 8,
+        "js_heap_size_limit": 4395630592,
+        "device_pixel_ratio": 2,
+    },
+    {
+        "screen_width": 1440,
+        "screen_height": 900,
+        "hardware_concurrency": 8,
+        "device_memory": 8,
+        "js_heap_size_limit": 4294967296,
+        "device_pixel_ratio": 2,
+    },
+    {
+        "screen_width": 1512,
+        "screen_height": 982,
+        "hardware_concurrency": 8,
+        "device_memory": 8,
+        "js_heap_size_limit": 4294967296,
+        "device_pixel_ratio": 2,
+    },
+    {
+        "screen_width": 1680,
+        "screen_height": 1050,
+        "hardware_concurrency": 8,
+        "device_memory": 8,
+        "js_heap_size_limit": 4294967296,
+        "device_pixel_ratio": 2,
+    },
+    {
+        "screen_width": 1728,
+        "screen_height": 1117,
+        "hardware_concurrency": 10,
+        "device_memory": 8,
+        "js_heap_size_limit": 4294967296,
+        "device_pixel_ratio": 2,
+    },
+    {
+        "screen_width": 1800,
+        "screen_height": 1169,
+        "hardware_concurrency": 10,
+        "device_memory": 8,
+        "js_heap_size_limit": 4294967296,
+        "device_pixel_ratio": 2,
+    },
+    {
+        "screen_width": 2056,
+        "screen_height": 1329,
+        "hardware_concurrency": 12,
+        "device_memory": 8,
+        "js_heap_size_limit": 4294967296,
+        "device_pixel_ratio": 2,
+    },
 ]
 
 # Stable label per pool index, so the chosen profile is human-readable in logs
@@ -368,10 +428,29 @@ REJECT_CLOUD_PROXY = False
 # can false-positive on some ISP org strings, which is acceptable only because
 # this is diagnostic: enabling it logs a warning, it never blocks a run.
 CLOUD_PROXY_ORG_KEYWORDS = [
-    "amazon", "aws", "google cloud", "google llc", "microsoft", "azure",
-    "digitalocean", "linode", "akamai", "ovh", "hetzner", "oracle",
-    "tencent", "alibaba", "aliyun", "huawei cloud", "vultr", "contabo",
-    "data center", "datacenter", "hosting", "server", "cloud",
+    "amazon",
+    "aws",
+    "google cloud",
+    "google llc",
+    "microsoft",
+    "azure",
+    "digitalocean",
+    "linode",
+    "akamai",
+    "ovh",
+    "hetzner",
+    "oracle",
+    "tencent",
+    "alibaba",
+    "aliyun",
+    "huawei cloud",
+    "vultr",
+    "contabo",
+    "data center",
+    "datacenter",
+    "hosting",
+    "server",
+    "cloud",
 ]
 
 
@@ -440,21 +519,23 @@ def build_browser_environment(
         int(locale.get("timezone_offset_minutes", 0)),
     )
     profile = dict(base_profile or {})
-    profile.update({
-        "locale_profile": key,
-        "geo": dict(geo or {}),
-        "navigator_language": locale["navigator_language"],
-        "navigator_languages": list(locale["navigator_languages"]),
-        "accept_language": locale["accept_language"],
-        "timezone_iana": locale["timezone_iana"],
-        "timezone_offset_minutes": int(locale["timezone_offset_minutes"]),
-        "timezone_name": locale.get("timezone_name", ""),
-        "fingerprint_seed": str(profile.get("fingerprint_seed") or ""),
-        # P4 diagnostic: the egress org/ASN class is always carried through so
-        # it shows up in logs and persisted identity even when rejection is off.
-        "proxy_org": str((geo or {}).get("org") or ""),
-        "proxy_org_class": classify_proxy_org(geo),
-    })
+    profile.update(
+        {
+            "locale_profile": key,
+            "geo": dict(geo or {}),
+            "navigator_language": locale["navigator_language"],
+            "navigator_languages": list(locale["navigator_languages"]),
+            "accept_language": locale["accept_language"],
+            "timezone_iana": locale["timezone_iana"],
+            "timezone_offset_minutes": int(locale["timezone_offset_minutes"]),
+            "timezone_name": locale.get("timezone_name", ""),
+            "fingerprint_seed": str(profile.get("fingerprint_seed") or ""),
+            # P4 diagnostic: the egress org/ASN class is always carried through so
+            # it shows up in logs and persisted identity even when rejection is off.
+            "proxy_org": str((geo or {}).get("org") or ""),
+            "proxy_org_class": classify_proxy_org(geo),
+        }
+    )
     return profile
 
 
@@ -515,18 +596,13 @@ def validate_browser_profile(profile: Any) -> list[str]:
     if not languages:
         issues.append("navigator_languages must not be empty")
     elif language and language not in languages:
-        issues.append(
-            f"navigator_language {language!r} is not in navigator_languages {languages!r}"
-        )
+        issues.append(f"navigator_language {language!r} is not in navigator_languages {languages!r}")
 
     accept_language = str(profile.get("accept_language") or "").strip()
     if not accept_language:
         issues.append("accept_language must not be blank")
     elif language and not accept_language.lower().startswith(language.lower()):
-        issues.append(
-            f"accept_language {accept_language!r} does not start with "
-            f"navigator_language {language!r}"
-        )
+        issues.append(f"accept_language {accept_language!r} does not start with navigator_language {language!r}")
 
     timezone = str(profile.get("timezone_iana") or "").strip()
     if not timezone:

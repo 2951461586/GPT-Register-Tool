@@ -18,6 +18,7 @@ from email.header import decode_header, make_header
 from email.parser import Parser
 from html import unescape
 from html.parser import HTMLParser
+from typing import Any
 from urllib.parse import quote
 
 from curl_cffi import requests as curl_requests
@@ -55,12 +56,14 @@ class CFWorkerMailboxClient:
         for method, path, body in candidates:
             result = self._request(method, path, json_body=body, allow_404=True)
             if not result.get("ok"):
-                diagnostics.append({
-                    "method": method,
-                    "endpoint": path.split("?", 1)[0],
-                    "status_code": result.get("status_code"),
-                    "error": _safe_error(result.get("error", "")),
-                })
+                diagnostics.append(
+                    {
+                        "method": method,
+                        "endpoint": path.split("?", 1)[0],
+                        "status_code": result.get("status_code"),
+                        "error": _safe_error(result.get("error", "")),
+                    }
+                )
                 continue
             emails = _extract_emails(result.get("data"), domain=domain)
             if emails:
@@ -73,12 +76,14 @@ class CFWorkerMailboxClient:
                     "returned": len(emails[:count]),
                 }
                 return emails[:count]
-            diagnostics.append({
-                "method": method,
-                "endpoint": path.split("?", 1)[0],
-                "status_code": result.get("status_code"),
-                "error": "response contained no mailbox addresses",
-            })
+            diagnostics.append(
+                {
+                    "method": method,
+                    "endpoint": path.split("?", 1)[0],
+                    "status_code": result.get("status_code"),
+                    "error": "response contained no mailbox addresses",
+                }
+            )
         self.last_create_diagnostic = {
             "ok": False,
             "requested": count,
@@ -152,7 +157,9 @@ class CFWorkerMailboxClient:
         all_result = self._request("GET", f"/admin/all?limit={scan_limit}", allow_404=True)
         all_endpoint_available = bool(all_result.get("ok"))
         if all_result.get("ok"):
-            messages = _messages_for_mailbox(_extract_messages(all_result.get("data")), email, allow_missing_recipient=False)
+            messages = _messages_for_mailbox(
+                _extract_messages(all_result.get("data")), email, allow_missing_recipient=False
+            )
             if messages:
                 return [self._fetch_admin_message_detail(msg, email) for msg in messages[:limit]]
         if not all_result.get("ok") and all_result.get("error") != "not_found":
@@ -164,7 +171,9 @@ class CFWorkerMailboxClient:
         page = 1
         max_pages = 10
         total_pages = 1
-        address_query = f"&address={quote(email, safe='')}&to_address={quote(email, safe='')}&email={quote(email, safe='')}"
+        address_query = (
+            f"&address={quote(email, safe='')}&to_address={quote(email, safe='')}&email={quote(email, safe='')}"
+        )
         while page <= min(max_pages, total_pages):
             result = self._request("GET", f"/admin/emails?page={page}{domain_query}{address_query}", allow_404=True)
             if not result.get("ok"):
@@ -174,7 +183,11 @@ class CFWorkerMailboxClient:
             data = result.get("data")
             messages = _extract_messages(data)
             collected.extend(_messages_for_mailbox(messages, email, allow_missing_recipient=False))
-            page_data = data.get("data") if isinstance(data, dict) and isinstance(data.get("data"), dict) else {}
+            # Reading ``data.get("data")`` twice makes the checker evaluate the two
+            # calls independently, so the ``else`` branch keeps ``None`` in the union
+            # (the same shape ``docs/current/typing.md`` calls out). Read it once.
+            raw_page = data.get("data") if isinstance(data, dict) else None
+            page_data = raw_page if isinstance(raw_page, dict) else {}
             try:
                 page_size = max(1, int(page_data.get("pageSize") or len(messages) or 20))
                 total = max(0, int(page_data.get("total") or len(messages) or 0))
@@ -206,7 +219,10 @@ class CFWorkerMailboxClient:
     def _request(self, method, path, json_body=None, allow_404=False):
         url = self.base_url + path
         headers = self._headers()
-        proxies = {"http": self.proxy, "https": self.proxy} if self.proxy else None
+        # curl_cffi types ``proxies`` as ``ProxySpec`` (a TypedDict), but accepts any
+        # proxy mapping at runtime -- that is what every call site in this package
+        # passes. ``Any`` records the actual contract instead of re-declaring it.
+        proxies: Any = {"http": self.proxy, "https": self.proxy} if self.proxy else None
         try:
             if method == "POST":
                 response = curl_requests.post(
@@ -218,7 +234,9 @@ class CFWorkerMailboxClient:
                     impersonate="chrome124",
                 )
             else:
-                response = curl_requests.get(url, headers=headers, proxies=proxies, timeout=self.timeout, impersonate="chrome124")
+                response = curl_requests.get(
+                    url, headers=headers, proxies=proxies, timeout=self.timeout, impersonate="chrome124"
+                )
             if allow_404 and response.status_code == 404:
                 return {"ok": False, "error": "not_found"}
             try:
@@ -319,7 +337,19 @@ def _extract_single_message(data):
     if isinstance(data, dict):
         for key in ("message", "email", "mail", "item", "data", "result"):
             value = data.get(key)
-            if isinstance(value, dict) and any(k in value for k in ("subject", "bodyPreview", "body", "from", "receivedDateTime", "created_at", "message_id", "to_address")):
+            if isinstance(value, dict) and any(
+                k in value
+                for k in (
+                    "subject",
+                    "bodyPreview",
+                    "body",
+                    "from",
+                    "receivedDateTime",
+                    "created_at",
+                    "message_id",
+                    "to_address",
+                )
+            ):
                 return value
         if any(k in data for k in ("subject", "bodyPreview", "body", "from", "receivedDateTime", "created_at")):
             return data
@@ -376,24 +406,30 @@ def _message_body_text(msg):
         return displayed_body
     if extracted_codes:
         return extracted
-    return _display_text(_first(
-        msg,
-        "bodyPreview",
-        "preview",
-        "text",
-        "content",
-        "body",
-        "raw_text",
-        "html",
-        "raw_html",
-        "extracted_json",
-        "results",
-    ) or "")
+    return _display_text(
+        _first(
+            msg,
+            "bodyPreview",
+            "preview",
+            "text",
+            "content",
+            "body",
+            "raw_text",
+            "html",
+            "raw_html",
+            "extracted_json",
+            "results",
+        )
+        or ""
+    )
 
 
 def _decode_rfc822_body(raw):
     value = str(raw or "")
-    if not value or not re.search(r"(?mi)^(from|subject|content-type|mime-version|received|dkim-signature|arc-|return-path|sender|to|date):", value):
+    if not value or not re.search(
+        r"(?mi)^(from|subject|content-type|mime-version|received|dkim-signature|arc-|return-path|sender|to|date):",
+        value,
+    ):
         return ""
     try:
         message = Parser(policy=policy.default).parsestr(value)

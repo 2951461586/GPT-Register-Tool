@@ -23,9 +23,17 @@ def _config(tmp_path: Path) -> dict:
 
 
 def _access_token(plan_type: str) -> str:
-    payload = base64.urlsafe_b64encode(json.dumps({
-        "https://api.openai.com/auth": {"chatgpt_plan_type": plan_type},
-    }).encode()).decode().rstrip("=")
+    payload = (
+        base64.urlsafe_b64encode(
+            json.dumps(
+                {
+                    "https://api.openai.com/auth": {"chatgpt_plan_type": plan_type},
+                }
+            ).encode()
+        )
+        .decode()
+        .rstrip("=")
+    )
     return "header." + payload + ".signature"
 
 
@@ -154,12 +162,14 @@ def test_public_read_exposes_latest_access_token_probe_status_code(tmp_path):
 
 
 def test_smailr_mailbox_line_falls_back_to_source_id(tmp_path):
-    source = json.dumps({
-        "address": "reuse@smailr.com",
-        "id": "b2432eb0-2bd2-43a3-93ac-20c57ff4f76e",
-        "user_id": "ffcaec5b-5e12-4bbc-9ec4-000000000000",
-        "mail_count": 4,
-    })
+    source = json.dumps(
+        {
+            "address": "reuse@smailr.com",
+            "id": "b2432eb0-2bd2-43a3-93ac-20c57ff4f76e",
+            "user_id": "ffcaec5b-5e12-4bbc-9ec4-000000000000",
+            "mail_count": 4,
+        }
+    )
     session = {
         "email": "reuse@smailr.com",
         "password": "account-password",
@@ -182,11 +192,16 @@ def test_smailr_mailbox_line_falls_back_to_source_id(tmp_path):
 
 
 def test_remail_mailbox_line_never_emits_incomplete_pickup_credential():
-    assert _mailbox_line({
-        "email": "user@icloud.com",
-        "provider": "remail",
-        "purchase_id": "1063043",
-    }) == ""
+    assert (
+        _mailbox_line(
+            {
+                "email": "user@icloud.com",
+                "provider": "remail",
+                "purchase_id": "1063043",
+            }
+        )
+        == ""
+    )
 
 
 def test_public_read_prefers_newer_relogin_probe_over_stale_401(tmp_path):
@@ -206,16 +221,18 @@ def test_public_read_prefers_newer_relogin_probe_over_stale_401(tmp_path):
 
     # Relogin has updated the session file, while SQLite still contains the
     # previous 401 snapshot.
-    session.update({
-        "success": True,
-        "status": "registered",
-        "access_token": "new-access-token",
-        "quota_updated_at": 200,
-        "quota": {
-            "updated_at": 200,
-            "last_result": {"status": "active", "status_code": 200},
-        },
-    })
+    session.update(
+        {
+            "success": True,
+            "status": "registered",
+            "access_token": "new-access-token",
+            "quota_updated_at": 200,
+            "quota": {
+                "updated_at": 200,
+                "last_result": {"status": "active", "status_code": 200},
+            },
+        }
+    )
     session_path.write_text(json.dumps(session), encoding="utf-8")
 
     row = read_account(email=session["email"], runtime_config=_config(tmp_path))
@@ -230,19 +247,24 @@ def _pool_config(tmp_path: Path, token_name: str = "mailbox_tokens.txt") -> dict
 
 
 def test_mailbox_pool_parses_every_supported_format(tmp_path):
-    (tmp_path / "mailbox_tokens.txt").write_text("\n".join([
-        "# comment",
-        "cfworker://worker@example.test",
-        "bare@edu.liziai.cloud",
-        "remail://remail@example.test---service-token---order-1---purchase-9",
-        "smailr://smailr@example.test---mailbox-id",
-        "user@icloud.com----https://mail.example/inbox/private-token",
-        "gmail://app@gmail.com---app-password",
-        "gmail://oauth@gmail.com----client-id----client-secret----refresh-token",
-        "chatai@example.test----password----9f8b4c2a-1234-4bcd-8efa-0123456789ab----chatai-refresh",
-        "graph@example.test---password---graph-refresh---graph-access---0",
-        "",
-    ]), encoding="utf-8")
+    (tmp_path / "mailbox_tokens.txt").write_text(
+        "\n".join(
+            [
+                "# comment",
+                "cfworker://worker@example.test",
+                "bare@edu.liziai.cloud",
+                "remail://remail@example.test---service-token---order-1---purchase-9",
+                "smailr://smailr@example.test---mailbox-id",
+                "user@icloud.com----https://mail.example/inbox/private-token",
+                "gmail://app@gmail.com---app-password",
+                "gmail://oauth@gmail.com----client-id----client-secret----refresh-token",
+                "chatai@example.test----password----9f8b4c2a-1234-4bcd-8efa-0123456789ab----chatai-refresh",
+                "graph@example.test---password---graph-refresh---graph-access---0",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
 
     result = read_mailbox_pool(_pool_config(tmp_path), root_dir=tmp_path)
 
@@ -251,8 +273,15 @@ def test_mailbox_pool_parses_every_supported_format(tmp_path):
     assert pool_file["name"] == "mailbox_tokens.txt"
     lines = pool_file["lines"]
     assert [line["provider"] for line in lines] == [
-        "cfworker", "cfworker", "remail", "smailr", "icloud_url",
-        "gmail", "gmail", "chatai", "graph",
+        "cfworker",
+        "cfworker",
+        "remail",
+        "smailr",
+        "icloud_url",
+        "gmail",
+        "gmail",
+        "chatai",
+        "graph",
     ]
     by_email = {line["email"]: line for line in lines}
     assert by_email["worker@example.test"]["raw_line"] == "cfworker://worker@example.test"
@@ -282,15 +311,20 @@ def test_mailbox_pool_parses_every_supported_format(tmp_path):
 
 
 def test_mailbox_pool_skips_malformed_lines(tmp_path):
-    (tmp_path / "mailbox_tokens.txt").write_text("\n".join([
-        "remail://missing-order---service-token",
-        "smailr://missing-id",
-        "gmail://",
-        "not-an-email----password----client----refresh",
-        "two---parts",
-        "graph@example.test---password---",
-        "ok@example.test---password---refresh",
-    ]), encoding="utf-8")
+    (tmp_path / "mailbox_tokens.txt").write_text(
+        "\n".join(
+            [
+                "remail://missing-order---service-token",
+                "smailr://missing-id",
+                "gmail://",
+                "not-an-email----password----client----refresh",
+                "two---parts",
+                "graph@example.test---password---",
+                "ok@example.test---password---refresh",
+            ]
+        ),
+        encoding="utf-8",
+    )
 
     result = read_mailbox_pool(_pool_config(tmp_path), root_dir=tmp_path)
 
@@ -312,12 +346,9 @@ def test_mailbox_pool_tolerates_missing_files(tmp_path):
 def test_mailbox_pool_enumerates_known_files_once(tmp_path):
     selected = tmp_path / "selected.txt"
     selected.write_text("sel@example.test---password---refresh", encoding="utf-8")
-    (tmp_path / "mailbox_tokens.txt").write_text(
-        "tok@example.test---password---refresh", encoding="utf-8")
-    (tmp_path / "hotmail.txt").write_text(
-        "hot@example.test----password----client----refresh", encoding="utf-8")
-    (tmp_path / "my_chatai_export.txt").write_text(
-        "cfworker://glob@example.test", encoding="utf-8")
+    (tmp_path / "mailbox_tokens.txt").write_text("tok@example.test---password---refresh", encoding="utf-8")
+    (tmp_path / "hotmail.txt").write_text("hot@example.test----password----client----refresh", encoding="utf-8")
+    (tmp_path / "my_chatai_export.txt").write_text("cfworker://glob@example.test", encoding="utf-8")
     (tmp_path / "notes.md").write_text("ignored@example.test---p---r", encoding="utf-8")
 
     result = read_mailbox_pool(
@@ -328,10 +359,7 @@ def test_mailbox_pool_enumerates_known_files_once(tmp_path):
 
     names = [entry["name"] for entry in result["files"]]
     assert names == ["selected.txt", "mailbox_tokens.txt", "hotmail.txt", "my_chatai_export.txt"]
-    emails = {
-        entry["name"]: [line["email"] for line in entry["lines"]]
-        for entry in result["files"]
-    }
+    emails = {entry["name"]: [line["email"] for line in entry["lines"]] for entry in result["files"]}
     assert emails["selected.txt"] == ["sel@example.test"]
     assert emails["mailbox_tokens.txt"] == ["tok@example.test"]
     assert emails["hotmail.txt"] == ["hot@example.test"]

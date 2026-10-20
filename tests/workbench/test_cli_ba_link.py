@@ -25,8 +25,15 @@ class GenerateBaLinkCliProxyTests(unittest.TestCase):
 
         def fake_probe(proxy, expected_country="", stage="proxy", timeout=12, **_kwargs):
             from sms_tool.paypal_proxy import ProxyProbeResult
+
             ok = "as.zooproxy.com" in proxy
-            return ProxyProbeResult(ok, stage, expected_country, country_code=expected_country if ok else "", error="timeout" if not ok else "")
+            return ProxyProbeResult(
+                ok,
+                stage,
+                expected_country,
+                country_code=expected_country if ok else "",
+                error="timeout" if not ok else "",
+            )
 
         argv = [
             "chatgpt_phone_reg.py",
@@ -39,7 +46,9 @@ class GenerateBaLinkCliProxyTests(unittest.TestCase):
         with patch.object(cli, "CFG", cfg):
             with patch("sys.argv", argv):
                 with patch("sms_tool.paypal_proxy.probe_proxy", side_effect=fake_probe):
-                    with patch("sms_tool.payment_link_manager.generate_payment_link", side_effect=fake_generate_payment_link):
+                    with patch(
+                        "sms_tool.payment_link_manager.generate_payment_link", side_effect=fake_generate_payment_link
+                    ):
                         cli.main()
 
         self.assertIn("as.zooproxy.com", seen["proxy"])
@@ -64,12 +73,20 @@ class GenerateBaLinkCliProxyTests(unittest.TestCase):
         ]
         with patch.object(cli, "CFG", cfg):
             with patch("sys.argv", argv):
-                with patch("sms_tool.session_refresh._load_seed_session", return_value=({
-                    "email": "selected@example.com",
-                    "access_token": "selected-at",
-                    "cookie_header": "session=cookie",
-                }, "session.json")):
-                    with patch("sms_tool.payment_link_manager.generate_payment_link", side_effect=fake_generate_payment_link):
+                with patch(
+                    "sms_tool.session_refresh._load_seed_session",
+                    return_value=(
+                        {
+                            "email": "selected@example.com",
+                            "access_token": "selected-at",
+                            "cookie_header": "session=cookie",
+                        },
+                        "session.json",
+                    ),
+                ):
+                    with patch(
+                        "sms_tool.payment_link_manager.generate_payment_link", side_effect=fake_generate_payment_link
+                    ):
                         cli.main()
 
         self.assertEqual(seen["access_token"], "selected-at")
@@ -107,7 +124,9 @@ class GenerateBaLinkCliProxyTests(unittest.TestCase):
         ]
         with patch.object(cli, "CFG", cfg):
             with patch("sys.argv", argv):
-                with patch("sms_tool.payment_link_manager.generate_payment_link", side_effect=fake_generate_payment_link):
+                with patch(
+                    "sms_tool.payment_link_manager.generate_payment_link", side_effect=fake_generate_payment_link
+                ):
                     cli.main()
 
         self.assertIn("base-JP-", seen["checkout_proxy"])
@@ -129,6 +148,7 @@ class GenerateBaLinkCliProxyTests(unittest.TestCase):
 
         def fake_probe(proxy, expected_country="", stage="proxy", timeout=12, **_kwargs):
             from sms_tool.paypal_proxy import ProxyProbeResult
+
             return ProxyProbeResult(True, stage, expected_country, "203.0.113.10", expected_country, "Test")
 
         stdout = io.StringIO()
@@ -230,9 +250,6 @@ class GenerateBaLinkCliProxyTests(unittest.TestCase):
         self.assertIsNone(seen["provider_proxy"])
         self.assertIsNone(seen["approve_proxy"])
 
-
-
-
     def test_generate_chatgpt_checkout_link_uses_checkout_country(self):
         seen = {}
         cfg = {"paypal": {"target_country": "US", "billing_regions": ["JP"]}, "output": {"directory": "sessions"}}
@@ -273,14 +290,18 @@ class GenerateBaLinkCliProxyTests(unittest.TestCase):
                     "checkout": "socks5h://checkout-proxy",
                     "provider": "http://provider-proxy:11001",
                     "approve": "http://approve-proxy:11002",
-                }
+                },
             },
             "output": {"directory": "sessions"},
         }
 
         def fake_generate_pp_link(**kwargs):
             seen.update(kwargs)
-            return {"ok": True, "url": "https://pay.openai.com/c/pay/cs_live_TEST#fid", "short_url": "https://pay.openai.com/c/pay/cs_live_TEST"}
+            return {
+                "ok": True,
+                "url": "https://pay.openai.com/c/pay/cs_live_TEST#fid",
+                "short_url": "https://pay.openai.com/c/pay/cs_live_TEST",
+            }
 
         argv = [
             "chatgpt_phone_reg.py",
@@ -373,7 +394,6 @@ class GenerateBaLinkCliProxyTests(unittest.TestCase):
         self.assertIsNone(seen["checkout_proxy"])
         self.assertIsNone(seen["provider_proxy"])
         self.assertIsNone(seen["approve_proxy"])
-
 
     def test_generate_upi_qr_cli_country_overrides_are_split(self):
         seen = {}

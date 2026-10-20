@@ -15,16 +15,19 @@ class CheckoutContractTests(unittest.TestCase):
         self.assertEqual(contract.billing_country, "ID")
         self.assertEqual(contract.currency, "IDR")
         self.assertEqual(contract.stripe_payment_method, "gopay")
-        self.assertEqual(contract.checkout_payload(), {
-            "entry_point": "all_plans_pricing_modal",
-            "plan_name": "chatgptplusplan",
-            "billing_details": {"country": "ID", "currency": "IDR"},
-            "checkout_ui_mode": "custom",
-            "promo_campaign": {
-                "promo_campaign_id": "plus-1-month-free",
-                "is_coupon_from_query_param": False,
+        self.assertEqual(
+            contract.checkout_payload(),
+            {
+                "entry_point": "all_plans_pricing_modal",
+                "plan_name": "chatgptplusplan",
+                "billing_details": {"country": "ID", "currency": "IDR"},
+                "checkout_ui_mode": "custom",
+                "promo_campaign": {
+                    "promo_campaign_id": "plus-1-month-free",
+                    "is_coupon_from_query_param": False,
+                },
             },
-        })
+        )
         init = contract.stripe_init_payload("pk_live_fixture", stripe_js_id="fixture-js-id")
         self.assertEqual(init["browser_locale"], "id-ID")
         self.assertEqual(init["browser_timezone"], "Asia/Jakarta")
@@ -39,11 +42,13 @@ class CheckoutContractTests(unittest.TestCase):
         self.assertEqual(session.processor_entity, "openai_ie")
 
     def test_stripe_capability_collects_nested_and_custom_methods(self):
-        evidence = StripeCapabilityEvidence.from_payload({
-            "elements_options": {"amount": 0, "currency": "idr", "payment_method_types": ["card", "gopay"]},
-            "ordered_payment_method_types": ["gopay", "card"],
-            "custom_payment_methods": [{"type": "gcash"}],
-        })
+        evidence = StripeCapabilityEvidence.from_payload(
+            {
+                "elements_options": {"amount": 0, "currency": "idr", "payment_method_types": ["card", "gopay"]},
+                "ordered_payment_method_types": ["gopay", "card"],
+                "custom_payment_methods": [{"type": "gcash"}],
+            }
+        )
         self.assertEqual(evidence.amount_minor, 0)
         self.assertEqual(evidence.currency, "IDR")
         self.assertEqual(evidence.payment_method_types, ("card", "gopay", "gcash"))

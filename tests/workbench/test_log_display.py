@@ -4,6 +4,7 @@
 command_id / run_id envelope metadata, no raw JSON); ``sms_tool.jsonl`` keeps
 the full telemetry envelope for tooling.
 """
+
 import json
 import logging
 import unittest
@@ -61,9 +62,7 @@ class ModuleLabelTests(unittest.TestCase):
 
 class HumanLogFormatterTests(unittest.TestCase):
     def test_stage_line_is_normalized_without_envelope_metadata(self):
-        line = HumanLogFormatter().format(
-            _record("Registration stage=%s status=%s", args=("user_register", "running"))
-        )
+        line = HumanLogFormatter().format(_record("Registration stage=%s status=%s", args=("user_register", "running")))
         self.assertRegex(
             line,
             r"^\d{2}:\d{2}:\d{2} \[\*\] \[注册\] 阶段 · 提交注册 \(user_register\) — 进行中$",
@@ -78,16 +77,12 @@ class HumanLogFormatterTests(unittest.TestCase):
         self.assertIn("[.]", HumanLogFormatter().format(_record("dbg", level=logging.DEBUG)))
 
     def test_proxy_credentials_are_sanitized(self):
-        line = HumanLogFormatter().format(
-            _record("upstream http://user:pass@proxy.test:8000", name="proxy_bridge")
-        )
+        line = HumanLogFormatter().format(_record("upstream http://user:pass@proxy.test:8000", name="proxy_bridge"))
         self.assertNotIn("user:pass", line)
         self.assertIn("[代理桥接]", line)
 
     def test_account_email_is_masked_in_persisted_log_text(self):
-        line = HumanLogFormatter().format(
-            _record("registration failed for user.name@example.com")
-        )
+        line = HumanLogFormatter().format(_record("registration failed for user.name@example.com"))
         self.assertNotIn("user.name@example.com", line)
         self.assertIn("us***@example.com", line)
 
@@ -108,9 +103,7 @@ class HumanLogFormatterTests(unittest.TestCase):
         )
 
     def test_records_without_an_account_ref_keep_the_plain_shape(self):
-        line = HumanLogFormatter().format(
-            _record("Registration stage=%s status=%s", args=("user_register", "running"))
-        )
+        line = HumanLogFormatter().format(_record("Registration stage=%s status=%s", args=("user_register", "running")))
         self.assertNotIn("account_ref", line)
 
     def test_json_machine_envelope_keeps_full_metadata(self):

@@ -27,17 +27,14 @@ COUNT_RE = re.compile(r"^(\d+) files\.", re.MULTILINE)
 
 def _reports() -> list[Path]:
     """Every indexed artefact under docs/audits/ (the README indexes itself too)."""
-    return sorted(
-        p for p in AUDITS.rglob("*") if p.is_file() and p.suffix in {".md", ".txt"}
-    )
+    return sorted(p for p in AUDITS.rglob("*") if p.is_file() and p.suffix in {".md", ".txt"})
 
 
 def test_readme_self_reported_count_matches_directory():
     text = README.read_text(encoding="utf-8")
     match = COUNT_RE.search(text)
     assert match, (
-        "docs/audits/README.md must open its Contents section with '<N> files.' "
-        "-- the count is what this guard pins."
+        "docs/audits/README.md must open its Contents section with '<N> files.' -- the count is what this guard pins."
     )
     stated = int(match.group(1))
     actual = len(_reports())

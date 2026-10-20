@@ -41,8 +41,7 @@ from sms_tool.paypal_link.reconciliation import (
 )
 
 
-def _hop(index: int = 0, stage: ReturnStage = ReturnStage.CHECKOUT_VERIFY,
-         **kw: Any) -> ReconciliationHop:
+def _hop(index: int = 0, stage: ReturnStage = ReturnStage.CHECKOUT_VERIFY, **kw: Any) -> ReconciliationHop:
     base = dict(index=index, stage=stage, host="chatgpt.com", status_code=200)
     base.update(kw)
     return ReconciliationHop(**base)
@@ -60,8 +59,7 @@ class ReturnURLValidationTests(unittest.TestCase):
         self.assertEqual(self._code("http://chatgpt.com/"), "https_required")
 
     def test_userinfo_is_forbidden(self):
-        self.assertEqual(
-            self._code("https://user:pw@chatgpt.com/"), "userinfo_forbidden")
+        self.assertEqual(self._code("https://user:pw@chatgpt.com/"), "userinfo_forbidden")
 
     def test_non_standard_port_is_forbidden(self):
         self.assertEqual(self._code("https://chatgpt.com:8443/"), "port_forbidden")
@@ -79,8 +77,7 @@ class ReturnURLValidationTests(unittest.TestCase):
 
     def test_empty_and_oversized(self):
         self.assertEqual(self._code(""), "empty_url")
-        self.assertEqual(self._code("https://chatgpt.com/?q=" + "a" * 20_000),
-                         "url_too_long")
+        self.assertEqual(self._code("https://chatgpt.com/?q=" + "a" * 20_000), "url_too_long")
 
     def test_control_characters_are_rejected(self):
         self.assertEqual(self._code("https://chatgpt.com/\x00"), "invalid_url")
@@ -100,14 +97,12 @@ class ReturnURLValidationTests(unittest.TestCase):
                 self.assertIs(stage, expected)
 
     def test_stripe_path_must_be_allowlisted(self):
-        self.assertEqual(self._code("https://pm-redirects.stripe.com/admin"),
-                         "path_not_allowed")
+        self.assertEqual(self._code("https://pm-redirects.stripe.com/admin"), "path_not_allowed")
 
     def test_openai_pay_requires_an_id(self):
         for path in ("/c/pay/", "/c/pay/", "/c/pay/a/b", "/c/pay/.."):
             with self.subTest(path=path):
-                self.assertEqual(self._code(f"https://pay.openai.com{path}"),
-                                 "path_not_allowed")
+                self.assertEqual(self._code(f"https://pay.openai.com{path}"), "path_not_allowed")
 
     def test_error_messages_never_echo_the_url(self):
         """错误消息要能安全写进日志 —— 所以不能带 query 参数。"""
@@ -178,37 +173,28 @@ class MergeStatusTests(unittest.TestCase):
             if other in self._TERMINAL_BAD:
                 continue
             with self.subTest(other=other):
-                self.assertIs(_merge_status(RemoteStatus.FAILED, other),
-                              RemoteStatus.FAILED)
-                self.assertIs(_merge_status(other, RemoteStatus.FAILED),
-                              RemoteStatus.FAILED)
+                self.assertIs(_merge_status(RemoteStatus.FAILED, other), RemoteStatus.FAILED)
+                self.assertIs(_merge_status(other, RemoteStatus.FAILED), RemoteStatus.FAILED)
 
     def test_cancelled_is_sticky_against_non_terminal_statuses(self):
         for other in RemoteStatus:
             if other in self._TERMINAL_BAD:
                 continue
             with self.subTest(other=other):
-                self.assertIs(_merge_status(RemoteStatus.CANCELLED, other),
-                              RemoteStatus.CANCELLED)
-                self.assertIs(_merge_status(other, RemoteStatus.CANCELLED),
-                              RemoteStatus.CANCELLED)
+                self.assertIs(_merge_status(RemoteStatus.CANCELLED, other), RemoteStatus.CANCELLED)
+                self.assertIs(_merge_status(other, RemoteStatus.CANCELLED), RemoteStatus.CANCELLED)
 
     def test_bad_news_from_observed_wins_over_existing_unknown(self):
-        self.assertIs(_merge_status(RemoteStatus.UNKNOWN, RemoteStatus.CANCELLED),
-                      RemoteStatus.CANCELLED)
+        self.assertIs(_merge_status(RemoteStatus.UNKNOWN, RemoteStatus.CANCELLED), RemoteStatus.CANCELLED)
 
     def test_success_beats_pending_and_unknown(self):
-        self.assertIs(_merge_status(RemoteStatus.PENDING, RemoteStatus.SUCCEEDED),
-                      RemoteStatus.SUCCEEDED)
-        self.assertIs(_merge_status(RemoteStatus.UNKNOWN, RemoteStatus.PENDING),
-                      RemoteStatus.PENDING)
+        self.assertIs(_merge_status(RemoteStatus.PENDING, RemoteStatus.SUCCEEDED), RemoteStatus.SUCCEEDED)
+        self.assertIs(_merge_status(RemoteStatus.UNKNOWN, RemoteStatus.PENDING), RemoteStatus.PENDING)
 
     def test_observed_terminal_wins_when_both_bad(self):
         """FAILED 撞 CANCELLED：听 observed（第二个参数）的。"""
-        self.assertIs(_merge_status(RemoteStatus.FAILED, RemoteStatus.CANCELLED),
-                      RemoteStatus.CANCELLED)
-        self.assertIs(_merge_status(RemoteStatus.CANCELLED, RemoteStatus.FAILED),
-                      RemoteStatus.FAILED)
+        self.assertIs(_merge_status(RemoteStatus.FAILED, RemoteStatus.CANCELLED), RemoteStatus.CANCELLED)
+        self.assertIs(_merge_status(RemoteStatus.CANCELLED, RemoteStatus.FAILED), RemoteStatus.FAILED)
 
     def test_merge_is_idempotent(self):
         for status in RemoteStatus:
@@ -226,8 +212,7 @@ class EvidenceTerminalOutcomeTests(unittest.TestCase):
 
     def test_failure_precedes_cancellation(self):
         """响应里先判 FAILED 再判 CANCELLED —— 顺序写在实现里，这里钉住。"""
-        ev = _Evidence(response_status=RemoteStatus.FAILED,
-                       redirect_status=RemoteStatus.CANCELLED)
+        ev = _Evidence(response_status=RemoteStatus.FAILED, redirect_status=RemoteStatus.CANCELLED)
         self.assertIs(ev.terminal_outcome(), PaymentOutcome.FAILED)
 
     def test_cancelled_when_only_cancelled_present(self):
@@ -235,14 +220,15 @@ class EvidenceTerminalOutcomeTests(unittest.TestCase):
         self.assertIs(ev.terminal_outcome(), PaymentOutcome.CANCELLED)
 
     def test_priority_is_response_then_redirect_then_stripe(self):
-        ev = _Evidence(stripe_return_status=RemoteStatus.FAILED,
-                       redirect_status=RemoteStatus.CANCELLED,
-                       response_status=RemoteStatus.UNKNOWN)
+        ev = _Evidence(
+            stripe_return_status=RemoteStatus.FAILED,
+            redirect_status=RemoteStatus.CANCELLED,
+            response_status=RemoteStatus.UNKNOWN,
+        )
         # redirect 在 stripe 之前 -> CANCELLED 胜出
         self.assertIs(ev.terminal_outcome(), PaymentOutcome.CANCELLED)
 
-        ev2 = _Evidence(stripe_return_status=RemoteStatus.CANCELLED,
-                        response_status=RemoteStatus.FAILED)
+        ev2 = _Evidence(stripe_return_status=RemoteStatus.CANCELLED, response_status=RemoteStatus.FAILED)
         self.assertIs(ev2.terminal_outcome(), PaymentOutcome.FAILED)
 
     def test_success_evidence_ignores_stripe_return_status(self):
@@ -277,13 +263,18 @@ class EvidenceTerminalOutcomeTests(unittest.TestCase):
     def test_observed_flags_are_sticky_once_true(self):
         ev = _Evidence()
         ev.observed_client_secret = True
-        ev.observe_url(NormalizedReturnState(
-            stage=ReturnStage.CHATGPT_LANDING, host="chatgpt.com",
-            redirect_status=RemoteStatus.UNKNOWN,
-            stripe_return_status=RemoteStatus.UNKNOWN,
-            has_setup_intent=False, has_client_secret=False,
-            has_success_return_url=False, success_return_stage=None,
-        ))
+        ev.observe_url(
+            NormalizedReturnState(
+                stage=ReturnStage.CHATGPT_LANDING,
+                host="chatgpt.com",
+                redirect_status=RemoteStatus.UNKNOWN,
+                stripe_return_status=RemoteStatus.UNKNOWN,
+                has_setup_intent=False,
+                has_client_secret=False,
+                has_success_return_url=False,
+                success_return_stage=None,
+            )
+        )
         self.assertTrue(ev.observed_client_secret)
 
 
@@ -302,14 +293,12 @@ class StageTransitionTests(unittest.TestCase):
     def test_backwards_transition_is_rejected(self):
         """已经到 landing 就不能再跳回 verify —— 防的是重放/伪造跳转链。"""
         with self.assertRaises(ReturnURLValidationError) as raised:
-            _validate_transition(ReturnStage.CHATGPT_LANDING,
-                                 ReturnStage.CHECKOUT_VERIFY)
+            _validate_transition(ReturnStage.CHATGPT_LANDING, ReturnStage.CHECKOUT_VERIFY)
         self.assertEqual(raised.exception.code, "invalid_stage_transition")
 
     def test_stripe_cannot_go_straight_to_landing(self):
         with self.assertRaises(ReturnURLValidationError):
-            _validate_transition(ReturnStage.STRIPE_RETURN,
-                                 ReturnStage.CHATGPT_LANDING)
+            _validate_transition(ReturnStage.STRIPE_RETURN, ReturnStage.CHATGPT_LANDING)
 
     def test_self_transitions_are_allowed(self):
         for stage in ReturnStage:
@@ -319,22 +308,17 @@ class StageTransitionTests(unittest.TestCase):
 
 class NormalizeReturnStateTests(unittest.TestCase):
     def test_stripe_return_reads_status_not_redirect_status(self):
-        state = normalize_return_state(
-            "https://pm-redirects.stripe.com/return?status=failed"
-            "&redirect_status=succeeded"
-        )
+        state = normalize_return_state("https://pm-redirects.stripe.com/return?status=failed&redirect_status=succeeded")
         self.assertIs(state.stripe_return_status, RemoteStatus.FAILED)
         self.assertIs(state.redirect_status, RemoteStatus.SUCCEEDED)
 
     def test_non_stripe_host_ignores_status_query(self):
-        state = normalize_return_state(
-            "https://chatgpt.com/checkout/verify?status=failed")
+        state = normalize_return_state("https://chatgpt.com/checkout/verify?status=failed")
         self.assertIs(state.stripe_return_status, RemoteStatus.UNKNOWN)
 
     def test_secret_flags_are_detected(self):
         state = normalize_return_state(
-            "https://chatgpt.com/checkout/verify"
-            "?setup_intent=seti_1&setup_intent_client_secret=pi_secret_1"
+            "https://chatgpt.com/checkout/verify?setup_intent=seti_1&setup_intent_client_secret=pi_secret_1"
         )
         self.assertTrue(state.has_setup_intent)
         self.assertTrue(state.has_client_secret)
@@ -347,8 +331,7 @@ class NormalizeReturnStateTests(unittest.TestCase):
         """
         with self.assertRaises(ReturnURLValidationError) as raised:
             normalize_return_state(
-                "https://pm-redirects.stripe.com/return"
-                "?success_return_url=https%3A%2F%2Fchatgpt.com%2Fadmin"
+                "https://pm-redirects.stripe.com/return?success_return_url=https%3A%2F%2Fchatgpt.com%2Fadmin"
             )
         self.assertEqual(raised.exception.code, "path_not_allowed")
 
@@ -367,16 +350,14 @@ class NormalizeReturnStateTests(unittest.TestCase):
 
     def test_allowed_success_return_url_records_its_stage(self):
         state = normalize_return_state(
-            "https://pm-redirects.stripe.com/return"
-            "?success_return_url=https%3A%2F%2Fchatgpt.com%2Fcheckout%2Fverify"
+            "https://pm-redirects.stripe.com/return?success_return_url=https%3A%2F%2Fchatgpt.com%2Fcheckout%2Fverify"
         )
         self.assertTrue(state.has_success_return_url)
         self.assertIs(state.success_return_stage, ReturnStage.CHECKOUT_VERIFY)
 
     def test_normalized_state_carries_no_secrets(self):
         """to_dict 是落盘/上报的出口 —— 不能带 query 里的任何值。"""
-        state = normalize_return_state(
-            "https://chatgpt.com/checkout/verify?setup_intent_client_secret=LEAKME")
+        state = normalize_return_state("https://chatgpt.com/checkout/verify?setup_intent_client_secret=LEAKME")
         blob = state.to_dict()
         for value in blob.values():
             self.assertNotIn("LEAKME", str(value))
@@ -407,14 +388,23 @@ class ResultSanitizationTests(unittest.TestCase):
 
     def test_ok_requires_both_conclusive_and_succeeded(self):
         unknown = _make_result(
-            ReconciliationClassification.UNKNOWN, PaymentOutcome.SUCCEEDED,
-            retryable=True, error_stage=None, error_code=None, reason="?")
+            ReconciliationClassification.UNKNOWN,
+            PaymentOutcome.SUCCEEDED,
+            retryable=True,
+            error_stage=None,
+            error_code=None,
+            reason="?",
+        )
         self.assertFalse(unknown.ok, "UNKNOWN 分类下 outcome=succeeded 也不能算 ok")
 
         failed = _make_result(
-            ReconciliationClassification.CONCLUSIVE, PaymentOutcome.FAILED,
-            retryable=False, error_stage="stripe_return",
-            error_code="remote_payment_failed", reason="no")
+            ReconciliationClassification.CONCLUSIVE,
+            PaymentOutcome.FAILED,
+            retryable=False,
+            error_stage="stripe_return",
+            error_code="remote_payment_failed",
+            reason="no",
+        )
         self.assertFalse(failed.ok)
 
     def test_to_dict_exposes_no_url_or_token(self):
@@ -422,7 +412,10 @@ class ResultSanitizationTests(unittest.TestCase):
         result = _make_result(
             ReconciliationClassification.CONCLUSIVE,
             PaymentOutcome.SUCCEEDED,
-            retryable=False, error_stage=None, error_code=None, reason="ok",
+            retryable=False,
+            error_stage=None,
+            error_code=None,
+            reason="ok",
             final_stage=ReturnStage.CHECKOUT_VERIFY,
             hops=(_hop(host="chatgpt.com", status_code=200),),
         )
@@ -433,8 +426,13 @@ class ResultSanitizationTests(unittest.TestCase):
 
     def test_retryable_survives_serialization(self):
         result = _make_result(
-            ReconciliationClassification.UNKNOWN, PaymentOutcome.UNKNOWN,
-            retryable=True, error_stage=None, error_code="timeout", reason="slow")
+            ReconciliationClassification.UNKNOWN,
+            PaymentOutcome.UNKNOWN,
+            retryable=True,
+            error_stage=None,
+            error_code="timeout",
+            reason="slow",
+        )
         self.assertTrue(result.to_dict()["retryable"])
 
     def test_retryable_false_is_not_silently_flipped(self):
@@ -443,21 +441,35 @@ class ResultSanitizationTests(unittest.TestCase):
         （变异验证 M14 抓到的缺口：``retryable`` 恒为 True 时原测试全绿。）
         """
         result = _make_result(
-            ReconciliationClassification.CONCLUSIVE, PaymentOutcome.FAILED,
-            retryable=False, error_stage="stripe_return",
-            error_code="remote_payment_failed", reason="no")
+            ReconciliationClassification.CONCLUSIVE,
+            PaymentOutcome.FAILED,
+            retryable=False,
+            error_stage="stripe_return",
+            error_code="remote_payment_failed",
+            reason="no",
+        )
         self.assertFalse(result.retryable)
         self.assertFalse(result.to_dict()["retryable"])
 
     def test_retryable_only_matters_when_not_conclusive(self):
         """CONCLUSIVE 的结论不能被重试 —— 这是调用方分支的依据。"""
         conclusive = _make_result(
-            ReconciliationClassification.CONCLUSIVE, PaymentOutcome.UNKNOWN,
-            retryable=True, error_stage=None, error_code=None, reason="?")
+            ReconciliationClassification.CONCLUSIVE,
+            PaymentOutcome.UNKNOWN,
+            retryable=True,
+            error_stage=None,
+            error_code=None,
+            reason="?",
+        )
         self.assertTrue(conclusive.conclusive)
         unknown = _make_result(
-            ReconciliationClassification.UNKNOWN, PaymentOutcome.UNKNOWN,
-            retryable=True, error_stage=None, error_code=None, reason="?")
+            ReconciliationClassification.UNKNOWN,
+            PaymentOutcome.UNKNOWN,
+            retryable=True,
+            error_stage=None,
+            error_code=None,
+            reason="?",
+        )
         self.assertFalse(unknown.conclusive)
 
 
@@ -471,8 +483,7 @@ class CandidateHTMLParserTests(unittest.TestCase):
         return parser.urls
 
     def test_collects_anchor_hrefs(self):
-        self.assertIn("/checkout/verify",
-                      self._urls('<a href="/checkout/verify">go</a>'))
+        self.assertIn("/checkout/verify", self._urls('<a href="/checkout/verify">go</a>'))
 
     def test_ignores_script_contents(self):
         doc = '<script>var u = "/checkout/verify";</script><a href="/ok">x</a>'
@@ -499,8 +510,7 @@ class CandidateHTMLParserTests(unittest.TestCase):
 class _FakeResponse:
     """只提供 reconciliation 会读的三个属性：status_code / text / headers。"""
 
-    def __init__(self, status_code: int = 200, text: str = "",
-                 headers: Mapping[str, str] | None = None) -> None:
+    def __init__(self, status_code: int = 200, text: str = "", headers: Mapping[str, str] | None = None) -> None:
         self.status_code = status_code
         self.text = text
         self.headers = dict(headers or {})
@@ -517,10 +527,8 @@ class _FakeTransport:
         self._responses = dict(responses)
         self.calls: list[dict[str, Any]] = []
 
-    def get(self, url: str, *, timeout: object = None,
-            allow_redirects: object = None) -> _FakeResponse:
-        self.calls.append({"url": url, "timeout": timeout,
-                           "allow_redirects": allow_redirects})
+    def get(self, url: str, *, timeout: object = None, allow_redirects: object = None) -> _FakeResponse:
+        self.calls.append({"url": url, "timeout": timeout, "allow_redirects": allow_redirects})
         response = self._responses.get(url, _FakeResponse(200, "", {}))
         if isinstance(response, BaseException):
             raise response
@@ -538,8 +546,7 @@ class OrchestrationTests(unittest.TestCase):
     因为重试一笔已失败的付款 = 重复扣款。
     """
 
-    def _run(self, source: Any, responses: Mapping[str, Any] | None = None,
-             **kw: Any) -> tuple[Any, _FakeTransport]:
+    def _run(self, source: Any, responses: Mapping[str, Any] | None = None, **kw: Any) -> tuple[Any, _FakeTransport]:
         transport = _FakeTransport(responses or {})
         result = rec.reconcile_paypal_return(source, transport=transport, **kw)
         return result, transport
@@ -549,9 +556,7 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual(self._run(url, max_hops=0)[0].error_code, "invalid_max_hops")
         self.assertEqual(self._run(url, max_hops=True)[0].error_code, "invalid_max_hops")
         self.assertEqual(self._run(url, timeout=0)[0].error_code, "invalid_timeout")
-        self.assertEqual(
-            rec.reconcile_paypal_return(url, transport=None).error_code,
-            "invalid_transport")
+        self.assertEqual(rec.reconcile_paypal_return(url, transport=None).error_code, "invalid_transport")
 
     def test_missing_return_url(self):
         result, transport = self._run({})
@@ -579,16 +584,14 @@ class OrchestrationTests(unittest.TestCase):
 
     def test_transport_never_follows_redirects(self):
         """每跳都要先过白名单再请求 —— 不交给 transport 自动跟。"""
-        _result, transport = self._run(
-            VERIFY_URL, {VERIFY_URL: _FakeResponse(200, "payment was successful")})
+        _result, transport = self._run(VERIFY_URL, {VERIFY_URL: _FakeResponse(200, "payment was successful")})
         self.assertTrue(transport.calls)
         for call in transport.calls:
             with self.subTest(call=call):
                 self.assertIs(call["allow_redirects"], False)
 
     def test_transport_error_is_retryable(self):
-        result, _transport = self._run(
-            VERIFY_URL, {VERIFY_URL: TimeoutError("boom")})
+        result, _transport = self._run(VERIFY_URL, {VERIFY_URL: TimeoutError("boom")})
         self.assertEqual(result.error_code, "transport_error")
         self.assertTrue(result.retryable, "网络抖一下不该把付款判死")
         self.assertIs(result.outcome, PaymentOutcome.UNKNOWN)
@@ -612,22 +615,19 @@ class OrchestrationTests(unittest.TestCase):
         self.assertFalse(result.conclusive)
 
     def test_failure_marker_in_body_ends_the_chain(self):
-        result, _ = self._run(
-            VERIFY_URL, {VERIFY_URL: _FakeResponse(200, "<p>card was declined</p>")})
+        result, _ = self._run(VERIFY_URL, {VERIFY_URL: _FakeResponse(200, "<p>card was declined</p>")})
         self.assertIs(result.outcome, PaymentOutcome.FAILED)
         self.assertTrue(result.conclusive)
         self.assertFalse(result.retryable)
         self.assertEqual(result.error_code, "remote_payment_failed")
 
     def test_cancelled_marker_in_body_ends_the_chain(self):
-        result, _ = self._run(
-            VERIFY_URL, {VERIFY_URL: _FakeResponse(200, "payment cancelled")})
+        result, _ = self._run(VERIFY_URL, {VERIFY_URL: _FakeResponse(200, "payment cancelled")})
         self.assertIs(result.outcome, PaymentOutcome.CANCELLED)
         self.assertEqual(result.error_code, "remote_payment_cancelled")
 
     def test_success_marker_on_verify_is_conclusive(self):
-        result, _ = self._run(
-            VERIFY_URL, {VERIFY_URL: _FakeResponse(200, "payment was successful")})
+        result, _ = self._run(VERIFY_URL, {VERIFY_URL: _FakeResponse(200, "payment was successful")})
         self.assertTrue(result.ok)
         self.assertIs(result.outcome, PaymentOutcome.SUCCEEDED)
         self.assertFalse(result.retryable)
@@ -641,56 +641,57 @@ class OrchestrationTests(unittest.TestCase):
 
     def test_landing_without_success_evidence_is_not_ok(self):
         """跳到了 landing 但没看到成功证据 —— 可疑，但不能判成功。"""
-        result, _ = self._run(
-            VERIFY_URL,
-            {VERIFY_URL: _FakeResponse(302, "", {"location": LANDING_URL})})
+        result, _ = self._run(VERIFY_URL, {VERIFY_URL: _FakeResponse(302, "", {"location": LANDING_URL})})
         self.assertEqual(result.error_code, "landing_without_success_evidence")
         self.assertIs(result.final_stage, ReturnStage.CHATGPT_LANDING)
         self.assertFalse(result.ok)
         self.assertTrue(result.retryable)
 
     def test_redirect_loop_is_detected(self):
-        result, _ = self._run(
-            VERIFY_URL,
-            {VERIFY_URL: _FakeResponse(302, "", {"location": "/checkout/verify"})})
+        result, _ = self._run(VERIFY_URL, {VERIFY_URL: _FakeResponse(302, "", {"location": "/checkout/verify"})})
         self.assertEqual(result.error_code, "redirect_loop")
         self.assertFalse(result.retryable)
 
     def test_illegal_redirect_target_is_rejected_before_requesting_it(self):
         result, transport = self._run(
-            VERIFY_URL,
-            {VERIFY_URL: _FakeResponse(302, "", {"location": "https://evil.example/x"})})
+            VERIFY_URL, {VERIFY_URL: _FakeResponse(302, "", {"location": "https://evil.example/x"})}
+        )
         self.assertEqual(result.error_code, "host_not_allowed")
         self.assertEqual(len(transport.calls), 1, "非法目标不该被真正请求")
 
     def test_hop_limit_is_enforced(self):
-        chain = {VERIFY_URL: _FakeResponse(302, "", {"location": f"{VERIFY_URL}?n=1"}),
-                 f"{VERIFY_URL}?n=1": _FakeResponse(302, "", {"location": f"{VERIFY_URL}?n=2"})}
+        chain = {
+            VERIFY_URL: _FakeResponse(302, "", {"location": f"{VERIFY_URL}?n=1"}),
+            f"{VERIFY_URL}?n=1": _FakeResponse(302, "", {"location": f"{VERIFY_URL}?n=2"}),
+        }
         result, _ = self._run(VERIFY_URL, chain, max_hops=1)
         self.assertEqual(result.error_code, "max_hops_exceeded")
 
     def test_result_carries_no_secret_from_the_source_mapping(self):
         """source 里带 client_secret 是常态 —— 出口的 to_dict 不能带出来。"""
         result, _ = self._run(
-            {"return_url": VERIFY_URL, "client_secret": "pi_SUPERSECRET_VALUE",
-             "setup_intent": "seti_1"},
-            {VERIFY_URL: _FakeResponse(200, "payment was successful")})
-        self.assertTrue(result.ok,
-                        "先确认链路真跑通了，否则脱敏断言在一个失败结果上也是绿的")
+            {"return_url": VERIFY_URL, "client_secret": "pi_SUPERSECRET_VALUE", "setup_intent": "seti_1"},
+            {VERIFY_URL: _FakeResponse(200, "payment was successful")},
+        )
+        self.assertTrue(result.ok, "先确认链路真跑通了，否则脱敏断言在一个失败结果上也是绿的")
         blob = result.to_dict()
         self.assertNotIn("SUPERSECRET", repr(blob))
         self.assertTrue(blob["observed_setup_intent"])
-        self.assertTrue(blob["observed_client_secret"],
-                        "是否观察到 secret 是布尔位，值本身不外泄")
+        self.assertTrue(blob["observed_client_secret"], "是否观察到 secret 是布尔位，值本身不外泄")
 
     def test_mapping_source_is_accepted(self):
         """调用方常传 dict 而不是裸 URL —— 认的是 _INPUT_URL_KEYS 白名单。"""
-        for key in ("return_url", "returnURL", "returnUrl", "redirect_url",
-                    "final_redirect_url", "success_return_url", "verification_url"):
+        for key in (
+            "return_url",
+            "returnURL",
+            "returnUrl",
+            "redirect_url",
+            "final_redirect_url",
+            "success_return_url",
+            "verification_url",
+        ):
             with self.subTest(key=key):
-                result, _ = self._run(
-                    {key: VERIFY_URL},
-                    {VERIFY_URL: _FakeResponse(200, "payment was successful")})
+                result, _ = self._run({key: VERIFY_URL}, {VERIFY_URL: _FakeResponse(200, "payment was successful")})
                 self.assertTrue(result.ok, f"{key} 没被认成起始 URL")
 
     def test_plain_url_key_is_not_recognized(self):
@@ -707,16 +708,15 @@ class OrchestrationTests(unittest.TestCase):
     def test_nested_mapping_source_is_accepted(self):
         """URL 常常埋在 result / data 这类容器里（最深 4 层）。"""
         result, _ = self._run(
-            {"result": {"data": {"return_url": VERIFY_URL}}},
-            {VERIFY_URL: _FakeResponse(200, "payment was successful")})
+            {"result": {"data": {"return_url": VERIFY_URL}}}, {VERIFY_URL: _FakeResponse(200, "payment was successful")}
+        )
         self.assertTrue(result.ok)
 
     def test_backwards_redirect_is_rejected(self):
         """verify 之后又跳回 stripe return —— 跳转链被伪造，必须挡下。"""
         result, transport = self._run(
-            VERIFY_URL,
-            {VERIFY_URL: _FakeResponse(
-                302, "", {"location": "https://pm-redirects.stripe.com/return"})})
+            VERIFY_URL, {VERIFY_URL: _FakeResponse(302, "", {"location": "https://pm-redirects.stripe.com/return"})}
+        )
         self.assertEqual(result.error_code, "invalid_stage_transition")
         self.assertFalse(result.retryable)
         self.assertEqual(len(transport.calls), 1, "非法目标不该被真正请求")

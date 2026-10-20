@@ -26,6 +26,7 @@ Quirks pinned, not fixed:
 * A 4-digit code in 2000..2099 is rejected outright (it looks like a year), but
   a 6-digit code starting with 20 is accepted.
 """
+
 from __future__ import annotations
 
 import unittest
@@ -226,8 +227,7 @@ class PollSmsCodeTests(unittest.TestCase):
             "timeout": timeout,
             "poll_interval": poll_interval,
         }
-        with mock.patch.object(sms_utils, "_requests", fake), \
-             mock.patch.object(sms_utils, "time", clock):
+        with mock.patch.object(sms_utils, "_requests", fake), mock.patch.object(sms_utils, "time", clock):
             result = sms_utils._poll_sms_code(**args)
         return result, fake, clock
 
@@ -241,8 +241,7 @@ class PollSmsCodeTests(unittest.TestCase):
         """⚠️ Pinned: the "new message" branch is gated on ``attempt > 2``, so a
         stale message that equals the baseline is not mistaken for a new one."""
         responses = [_FakeResponse(200, "Your code is 123456")] * 3
-        result, fake, clock = self._poll(responses, baseline={"raw": "Your code is 123456",
-                                                              "timestamp": 0})
+        result, fake, clock = self._poll(responses, baseline={"raw": "Your code is 123456", "timestamp": 0})
         self.assertEqual(result, "123456")
         self.assertEqual(len(fake.calls), 3, "attempts 1 and 2 must be skipped")
 
@@ -256,15 +255,13 @@ class PollSmsCodeTests(unittest.TestCase):
 
         second, fake, clock = self._poll([message] * 30, baseline=baseline)
         self.assertIsNone(second, "the dedupe state leaks across calls -- pinned")
-        self.assertEqual(len(fake.calls), 24,
-                         "the second call burns the entire 120s window and gives up")
+        self.assertEqual(len(fake.calls), 24, "the second call burns the entire 120s window and gives up")
         self.assertEqual(clock.sleeps, [5] * 24)
 
     def test_timeout_returns_none_and_sleeps_once_per_attempt(self):
-        result, fake, clock = self._poll([_FakeResponse(200, "nothing here")], timeout=20,
-                                         poll_interval=5)
+        result, fake, clock = self._poll([_FakeResponse(200, "nothing here")], timeout=20, poll_interval=5)
         self.assertIsNone(result)
-        self.assertEqual(len(fake.calls), 4)          # 20s / 5s
+        self.assertEqual(len(fake.calls), 4)  # 20s / 5s
         self.assertEqual(clock.sleeps, [5, 5, 5, 5])
 
     def test_zero_timeout_never_polls(self):
@@ -274,26 +271,22 @@ class PollSmsCodeTests(unittest.TestCase):
         self.assertEqual(clock.sleeps, [])
 
     def test_non_200_responses_are_ignored(self):
-        result, fake, _ = self._poll([_FakeResponse(500, "code 1234"),
-                                      _FakeResponse(200, "code 5678")])
+        result, fake, _ = self._poll([_FakeResponse(500, "code 1234"), _FakeResponse(200, "code 5678")])
         self.assertEqual(result, "5678")
         self.assertEqual(len(fake.calls), 2)
 
     def test_transport_errors_are_swallowed_and_polling_continues(self):
-        result, fake, _ = self._poll([ConnectionError("down"),
-                                      _FakeResponse(200, "code 5678")])
+        result, fake, _ = self._poll([ConnectionError("down"), _FakeResponse(200, "code 5678")])
         self.assertEqual(result, "5678")
         self.assertEqual(len(fake.calls), 2)
 
     def test_empty_response_body_is_not_a_content_change(self):
-        result, fake, _ = self._poll([_FakeResponse(200, ""),
-                                      _FakeResponse(200, "code 5678")])
+        result, fake, _ = self._poll([_FakeResponse(200, ""), _FakeResponse(200, "code 5678")])
         self.assertEqual(result, "5678")
         self.assertEqual(len(fake.calls), 2)
 
     def test_changed_text_without_a_code_keeps_polling(self):
-        result, fake, _ = self._poll([_FakeResponse(200, "welcome"),
-                                      _FakeResponse(200, "code 5678")])
+        result, fake, _ = self._poll([_FakeResponse(200, "welcome"), _FakeResponse(200, "code 5678")])
         self.assertEqual(result, "5678")
         self.assertEqual(len(fake.calls), 2)
 

@@ -67,7 +67,7 @@ def _interleave_proxy_endpoints(proxies) -> list[str]:
 
 def _registration_proxy_candidates(proxy_pool, fallback=None):
     candidates = []
-    for item in (proxy_pool or []):
+    for item in proxy_pool or []:
         value = normalize_proxy_url(str(item or "").strip())
         if value:
             candidates.append(value)
@@ -291,12 +291,22 @@ def _drop_already_registered(mailboxes):
     _raw_registration_cfg: object = CFG.get("registration")
     registration_cfg: dict = _raw_registration_cfg if isinstance(_raw_registration_cfg, dict) else {}
     skip_registered = registration_cfg.get("skip_registered_mailboxes", True) not in (
-        False, 0, "0", "false", "False", "no",
+        False,
+        0,
+        "0",
+        "false",
+        "False",
+        "no",
     )
     if not skip_registered:
         return items, [], []
     deprioritize = registration_cfg.get("deprioritize_base_conflicts", True) not in (
-        False, 0, "0", "false", "False", "no",
+        False,
+        0,
+        "0",
+        "false",
+        "False",
+        "no",
     )
 
     emails = [str(getattr(mailbox, "email", "") or "").strip() for mailbox in items]
@@ -318,9 +328,7 @@ def _drop_already_registered(mailboxes):
     from .registration_checkpoint import candidate_checkpoint_error
 
     checkpoint_errors = {
-        email: error
-        for email, checkpoint in checkpoints.items()
-        if (error := candidate_checkpoint_error(checkpoint))
+        email: error for email, checkpoint in checkpoints.items() if (error := candidate_checkpoint_error(checkpoint))
     }
     if retry_guard is not None:
         for checkpoint_email, checkpoint_error in checkpoint_errors.items():
@@ -357,9 +365,7 @@ def _drop_already_registered(mailboxes):
 def _announce_skipped(skipped) -> None:
     preview = ", ".join(mask_account(email) for email in skipped[:5])
     suffix = f" (+{len(skipped) - 5} more)" if len(skipped) > 5 else ""
-    safe_print(
-        f"[*] Skipped {len(skipped)} mailbox(es) that already have a registered account: {preview}{suffix}"
-    )
+    safe_print(f"[*] Skipped {len(skipped)} mailbox(es) that already have a registered account: {preview}{suffix}")
     _emit_mailboxes_skipped(skipped, reason="already_registered")
 
 
@@ -392,16 +398,18 @@ def _emit_mailboxes_skipped(skipped, *, reason: str) -> None:
         preview = ", ".join(mask_account(email) for email in skipped[:3])
         suffix = f" +{len(skipped) - 3}" if len(skipped) > 3 else ""
         reason_zh = "已注册" if reason == "already_registered" else "冷却/隔离/死路"
-        emit_event({
-            "domain": "registration",
-            "operation": "registration",
-            "stage": "mailboxes_skipped",
-            "status": "running",
-            "detail": f"后端剔除 {len(skipped)} 个（{reason_zh}）：{preview}{suffix}",
-            "reason": reason,
-            "skipped_count": len(skipped),
-            "skipped": [mask_account(email) for email in skipped],
-        })
+        emit_event(
+            {
+                "domain": "registration",
+                "operation": "registration",
+                "stage": "mailboxes_skipped",
+                "status": "running",
+                "detail": f"后端剔除 {len(skipped)} 个（{reason_zh}）：{preview}{suffix}",
+                "reason": reason,
+                "skipped_count": len(skipped),
+                "skipped": [mask_account(email) for email in skipped],
+            }
+        )
     except Exception:
         # Reporting skipped mailboxes must never break the batch that skipped
         # them -- the console line above already carried the fact.
@@ -483,6 +491,7 @@ def run_batch_impl(
     if run_email_func is None:
         raise ValueError("run_email_func is required")
     from .registration_drivers.base import normalize_registration_driver
+
     explicit_registration_driver = registration_driver is not None
     registration_driver = normalize_registration_driver(registration_driver, CFG)
     # Direct callers use the same gate as the CLI preflight. It must precede
@@ -516,7 +525,17 @@ def run_batch_impl(
     batch_id = uuid.uuid4().hex
     try:
         from .desktop_ipc import emit_event
-        emit_event({"domain": "registration", "batch_id": batch_id, "operation": "registration", "stage": "batch_started", "status": "running", "total": int(count or 0)})
+
+        emit_event(
+            {
+                "domain": "registration",
+                "batch_id": batch_id,
+                "operation": "registration",
+                "stage": "batch_started",
+                "status": "running",
+                "total": int(count or 0),
+            }
+        )
     except Exception:
         emit_event = None
     original_pool = list(proxy_pool)
@@ -525,7 +544,9 @@ def run_batch_impl(
     pool_indices = {value: index for index, value in enumerate(original_pool)}
     proxy = proxy_pool[0] if proxy_pool else proxy
     if mailboxes and int(count or 1) > len(mailboxes):
-        safe_print(f"[!] Requested {count} account(s), but only {len(mailboxes)} unique mailbox(es) are available; capping batch size.")
+        safe_print(
+            f"[!] Requested {count} account(s), but only {len(mailboxes)} unique mailbox(es) are available; capping batch size."
+        )
         count = len(mailboxes)
     results = []
     progress_lock = threading.Lock()
@@ -542,7 +563,12 @@ def run_batch_impl(
     except (TypeError, ValueError):
         breaker_threshold = 3
     breaker_enabled = registration_cfg.get("batch_circuit_breaker_enabled", True) not in (
-        False, 0, "0", "false", "False", "no",
+        False,
+        0,
+        "0",
+        "false",
+        "False",
+        "no",
     )
     breaker = BatchCircuitBreaker(breaker_threshold, enabled=breaker_enabled)
     safe_print(f"\n{'=' * 60}")
@@ -592,7 +618,10 @@ def run_batch_impl(
             # base slot with the prewarm so it cannot be applied to a new slot.
             first_attempt_proxies[index] = (base_proxy, worker_proxy)
             prewarmed[index] = prewarm_executor.submit(
-                _extract_sentinel, proxy=worker_proxy, force_fresh=True, persist=False,
+                _extract_sentinel,
+                proxy=worker_proxy,
+                force_fresh=True,
+                persist=False,
             )
 
     def _prewarmed_sentinel(index):
@@ -722,9 +751,7 @@ def run_batch_impl(
             # pool is round-robined, so two live accounts would otherwise leave
             # through the same address and nothing recorded it
             # (store/environment_ledger.py).
-            environment_lease = _hold_environment_lease(
-                worker_proxy, account_ref=mailbox_email, batch_id=batch_id
-            )
+            environment_lease = _hold_environment_lease(worker_proxy, account_ref=mailbox_email, batch_id=batch_id)
             try:
                 # Annotated: the literal infers a narrow value union, and the
                 # metadata dict assigned below does not fit it.
@@ -755,7 +782,11 @@ def run_batch_impl(
                     "success": False,
                     "error": safe_error,
                     "failure_class": failure_class,
-                    "dropped": True if failure_class in BATCH_DROPPED_CLASSES else False if failure_class in BATCH_RETRY_CLASSES else None,
+                    "dropped": True
+                    if failure_class in BATCH_DROPPED_CLASSES
+                    else False
+                    if failure_class in BATCH_RETRY_CLASSES
+                    else None,
                 }
             if not isinstance(result, dict):
                 result = {"success": False, "error": "invalid_registration_result", "failure_class": "unknown"}
@@ -815,14 +846,18 @@ def run_batch_impl(
                     )
                     if emit_event is not None:
                         try:
-                            emit_event({
-                                "domain": "registration", "batch_id": batch_id,
-                                "operation": "registration", "stage": "batch_paused",
-                                "status": "paused",
-                                "failure_class": str(result.get("failure_class") or ""),
-                                "consecutive": int(breaker.consecutive),
-                                "total": int(count or 0),
-                            })
+                            emit_event(
+                                {
+                                    "domain": "registration",
+                                    "batch_id": batch_id,
+                                    "operation": "registration",
+                                    "stage": "batch_paused",
+                                    "status": "paused",
+                                    "failure_class": str(result.get("failure_class") or ""),
+                                    "consecutive": int(breaker.consecutive),
+                                    "total": int(count or 0),
+                                }
+                            )
                         except Exception:
                             pass
                 return i, result
@@ -854,42 +889,42 @@ def run_batch_impl(
             done = completed_count
         if emit_event is not None:
             try:
-                emit_event({
-                    "domain": "registration", "batch_id": batch_id,
-                    "account_ref": account_reference(result.get("email")),
-                    "operation": "registration", "stage": "account_completed",
-                    "status": "success" if result.get("success") else "failed",
-                    "attempt": int(result.get("registration_attempts") or 0),
-                })
-                emit_event({
-                    "domain": "registration",
-                    "batch_id": batch_id,
-                    "operation": "registration",
-                    "stage": "batch_progress",
-                    "status": "running" if done < int(count or 0) else "completed",
-                    "completed": done,
-                    "total": int(count or 0),
-                    "success": bool(result.get("success")),
-                    "failure_class": str(result.get("failure_class") or "")[:80],
-                })
+                emit_event(
+                    {
+                        "domain": "registration",
+                        "batch_id": batch_id,
+                        "account_ref": account_reference(result.get("email")),
+                        "operation": "registration",
+                        "stage": "account_completed",
+                        "status": "success" if result.get("success") else "failed",
+                        "attempt": int(result.get("registration_attempts") or 0),
+                    }
+                )
+                emit_event(
+                    {
+                        "domain": "registration",
+                        "batch_id": batch_id,
+                        "operation": "registration",
+                        "stage": "batch_progress",
+                        "status": "running" if done < int(count or 0) else "completed",
+                        "completed": done,
+                        "total": int(count or 0),
+                        "success": bool(result.get("success")),
+                        "failure_class": str(result.get("failure_class") or "")[:80],
+                    }
+                )
             except Exception:
                 pass
         # One consistent per-account verdict line for the log panel; failures
         # are already reported by the persistence path with the error string.
         if result.get("success"):
-            safe_print(
-                f"[*] Account {index + 1}/{int(count or 0)} "
-                f"{mask_account(result.get('email'))}: registered"
-            )
+            safe_print(f"[*] Account {index + 1}/{int(count or 0)} {mask_account(result.get('email'))}: registered")
         if on_result is None:
             return
         try:
             on_result(index, result)
         except Exception as exc:
-            safe_print(
-                f"[!] Result callback failed for account {index + 1}: "
-                f"{type(exc).__name__}; batch continues."
-            )
+            safe_print(f"[!] Result callback failed for account {index + 1}: {type(exc).__name__}; batch continues.")
 
     def _close_browser_pool():
         if registration_driver == "protocol":
@@ -916,7 +951,16 @@ def run_batch_impl(
                     results.append(result)
                     _notify_result(i, result)
                 if emit_event is not None:
-                    emit_event({"domain": "registration", "batch_id": batch_id, "operation": "registration", "stage": "batch_completed", "status": "completed", "total": len(results)})
+                    emit_event(
+                        {
+                            "domain": "registration",
+                            "batch_id": batch_id,
+                            "operation": "registration",
+                            "stage": "batch_completed",
+                            "status": "completed",
+                            "total": len(results),
+                        }
+                    )
                 return results
             finally:
                 if prewarm_executor is not None:
@@ -940,7 +984,16 @@ def run_batch_impl(
                     on_dispatch_block=_rotate_proxy_pool_cursor,
                 )
                 if emit_event is not None:
-                    emit_event({"domain": "registration", "batch_id": batch_id, "operation": "registration", "stage": "batch_completed", "status": "completed", "total": len(pulse_results)})
+                    emit_event(
+                        {
+                            "domain": "registration",
+                            "batch_id": batch_id,
+                            "operation": "registration",
+                            "stage": "batch_completed",
+                            "status": "completed",
+                            "total": len(pulse_results),
+                        }
+                    )
                 return pulse_results
             finally:
                 # The all-at-once path shuts the prewarm pool down at the end of
@@ -960,7 +1013,16 @@ def run_batch_impl(
                     _notify_result(i, result)
             results.extend(result for result in ordered if result is not None)
             if emit_event is not None:
-                emit_event({"domain": "registration", "batch_id": batch_id, "operation": "registration", "stage": "batch_completed", "status": "completed", "total": len(results)})
+                emit_event(
+                    {
+                        "domain": "registration",
+                        "batch_id": batch_id,
+                        "operation": "registration",
+                        "stage": "batch_completed",
+                        "status": "completed",
+                        "total": len(results),
+                    }
+                )
             return results
         finally:
             if prewarm_executor is not None:

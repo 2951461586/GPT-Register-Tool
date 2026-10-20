@@ -63,9 +63,7 @@ _BUCKET_IDS = [
     _BUCKET_CASES,
     ids=_BUCKET_IDS,
 )
-def test_the_bucket_needs_all_three_facts(
-    success, access_token, existing_account, password_known, expected
-):
+def test_the_bucket_needs_all_three_facts(success, access_token, existing_account, password_known, expected):
     """三个事实缺一不可。
 
     🔴 特别钉住 ``existing_account_password_known`` 这一条：判据**不能**改用
@@ -107,6 +105,7 @@ def test_a_successful_run_never_asks_for_a_human_even_with_a_stale_flag():
 # ---------------------------------------------------------------------------
 # 2) 两条装配路径
 # ---------------------------------------------------------------------------
+
 
 def test_the_failure_assembly_carries_the_bucket():
     result = _failure_result(
@@ -213,6 +212,7 @@ def test_the_completed_assembly_says_no_when_we_hold_the_password():
 # 3) 审计表：封闭白名单 + 防漂移
 # ---------------------------------------------------------------------------
 
+
 def _write_and_read_audit(tmp_path, data, *, state):
     db_path = tmp_path / "accounts.sqlite3"
     with patch.object(storage, "database_path", return_value=db_path):
@@ -249,9 +249,14 @@ def test_the_audit_row_keeps_only_safe_fingerprint_geo_verdict(tmp_path):
     from sms_tool.registration_result import build_registration_result
 
     result = build_registration_result(
-        success=False, registration_mode="protocol", registration_state="failed",
-        email="geo@example.test", fingerprint_geo_audit={
-            "fingerprint_country": "US", "exit_country": "DE", "source": "preflight",
+        success=False,
+        registration_mode="protocol",
+        registration_state="failed",
+        email="geo@example.test",
+        fingerprint_geo_audit={
+            "fingerprint_country": "US",
+            "exit_country": "DE",
+            "source": "preflight",
             "proxy": "http://user:secret@proxy.invalid",
         },
     )
@@ -287,7 +292,4 @@ def test_the_bucket_the_result_emits_is_the_bucket_the_audit_stores(tmp_path):
 
     row = _write_and_read_audit(tmp_path, result, state="partial_registered")
 
-    assert (
-        json.loads(row["detail_json"])["needs_manual_session_recovery"]
-        == result["needs_manual_session_recovery"]
-    )
+    assert json.loads(row["detail_json"])["needs_manual_session_recovery"] == result["needs_manual_session_recovery"]

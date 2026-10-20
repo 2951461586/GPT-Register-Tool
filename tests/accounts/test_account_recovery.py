@@ -48,8 +48,12 @@ def test_refresh_local_quota_uses_light_probe_before_browser(monkeypatch):
 
 def test_liveness_explicit_proxy_wins_over_configured_pool():
     account = {"email": "proxy@example.com", "access_token": "at"}
-    with patch.object(account_recovery, "proxy_pool_for", return_value=["http://pool-a:1", "http://pool-b:2"]), \
-         patch.object(account_recovery, "probe_account_liveness", return_value={"ok": True, "status": "active"}) as probe:
+    with (
+        patch.object(account_recovery, "proxy_pool_for", return_value=["http://pool-a:1", "http://pool-b:2"]),
+        patch.object(
+            account_recovery, "probe_account_liveness", return_value={"ok": True, "status": "active"}
+        ) as probe,
+    ):
         recovery_batch._probe_liveness_with_retries(account, proxy="http://explicit:3", timeout=10)
     assert probe.call_args.kwargs["proxy"] == "http://explicit:3"
 
@@ -70,10 +74,12 @@ def test_icloud_mailbox_url_is_resolved_from_configured_pool_without_persisting_
         auth_mode="otp_url",
     )
     with patch.object(codex_oauth, "_mailbox_from_configured_pool", return_value=mailbox) as lookup:
-        result = codex_oauth._mailbox_from_data({
-            "email": "ok@icloud.com",
-            "mailbox": {"email": "ok@icloud.com", "provider": "icloud_url", "source": "token_file"},
-        })
+        result = codex_oauth._mailbox_from_data(
+            {
+                "email": "ok@icloud.com",
+                "mailbox": {"email": "ok@icloud.com", "provider": "icloud_url", "source": "token_file"},
+            }
+        )
 
     assert result is mailbox
     lookup.assert_called_once_with("ok@icloud.com")
@@ -81,7 +87,9 @@ def test_icloud_mailbox_url_is_resolved_from_configured_pool_without_persisting_
 
 def test_refresh_local_quota_statuses_persists_result():
     with (
-        patch.object(account_recovery, "get_account_record", return_value={"email": "ok@example.com", "access_token": "at_123"}),
+        patch.object(
+            account_recovery, "get_account_record", return_value={"email": "ok@example.com", "access_token": "at_123"}
+        ),
         patch.object(account_recovery, "probe_account_liveness", return_value={"ok": True, "quota_status": "active"}),
         patch.object(account_recovery, "mark_quota_status", return_value=True) as marked,
     ):
@@ -143,8 +151,14 @@ def test_refresh_local_quota_reprobes_transport_unknown_scan_probe():
 
 def test_refresh_local_quota_keeps_probe_health_when_persistence_fails():
     with (
-        patch.object(account_recovery, "get_account_record", return_value={"email": "ok@example.com", "access_token": "at_123"}),
-        patch.object(account_recovery, "probe_account_liveness", return_value={"ok": True, "status": "active", "quota_status": "active"}),
+        patch.object(
+            account_recovery, "get_account_record", return_value={"email": "ok@example.com", "access_token": "at_123"}
+        ),
+        patch.object(
+            account_recovery,
+            "probe_account_liveness",
+            return_value={"ok": True, "status": "active", "quota_status": "active"},
+        ),
         patch.object(account_recovery, "mark_quota_status", return_value=False),
     ):
         result = recovery_batch.refresh_local_quota_statuses(["ok@example.com"])
@@ -161,11 +175,17 @@ def test_refresh_local_quota_statuses_emits_terminal_event_per_account(monkeypat
     events = []
     monkeypatch.setenv("SMSWORKBENCH_EVENTS", "1")
     monkeypatch.setattr("sms_tool.desktop_ipc.emit_event", lambda payload, enabled=None: events.append(payload) or True)
-    monkeypatch.setattr(account_recovery, "_local_quota_accounts", lambda emails: [
-        {"email": "a@example.com", "access_token": "at-a"},
-        {"email": "b@example.com", "access_token": "at-b"},
-    ])
-    monkeypatch.setattr(account_recovery, "probe_account_liveness", lambda account, **kwargs: {"ok": True, "quota_status": "active"})
+    monkeypatch.setattr(
+        account_recovery,
+        "_local_quota_accounts",
+        lambda emails: [
+            {"email": "a@example.com", "access_token": "at-a"},
+            {"email": "b@example.com", "access_token": "at-b"},
+        ],
+    )
+    monkeypatch.setattr(
+        account_recovery, "probe_account_liveness", lambda account, **kwargs: {"ok": True, "quota_status": "active"}
+    )
     monkeypatch.setattr(account_recovery, "mark_quota_status", lambda *args, **kwargs: True)
 
     result = recovery_batch.refresh_local_quota_statuses(["a@example.com", "b@example.com"], workers=2)
@@ -179,12 +199,21 @@ def test_refresh_local_quota_statuses_emits_terminal_event_per_account(monkeypat
 
 def test_refresh_local_quota_statuses_recovers_401():
     with (
-        patch.object(account_recovery, "get_account_record", return_value={"email": "ok@example.com", "access_token": "old_at"}),
-        patch.object(account_recovery, "probe_account_liveness", return_value={"ok": False, "status": "token_invalid", "quota_status": "invalid"}),
+        patch.object(
+            account_recovery, "get_account_record", return_value={"email": "ok@example.com", "access_token": "old_at"}
+        ),
+        patch.object(
+            account_recovery,
+            "probe_account_liveness",
+            return_value={"ok": False, "status": "token_invalid", "quota_status": "invalid"},
+        ),
         patch.object(
             account_recovery,
             "relogin_codex_account",
-            return_value={"ok": True, "probe": {"ok": True, "status": "active", "status_code": 200, "quota_status": "active"}},
+            return_value={
+                "ok": True,
+                "probe": {"ok": True, "status": "active", "status_code": 200, "quota_status": "active"},
+            },
         ) as relogin,
         patch.object(account_recovery, "mark_quota_status", return_value=True),
     ):
@@ -432,19 +461,29 @@ def test_health_status_codes_distinguish_relogin_otp_and_timeout(monkeypatch):
 
     assert timed_out["health_status"] == "batch_timeout"
     assert timed_out["timed_out"] is True
-    assert account_recovery._health_status_code(
-        {"ok": False, "status": "token_invalid"},
-        {"ok": False, "error": "email_otp_timeout"},
-    ) == "relogin_otp_failed"
+    assert (
+        account_recovery._health_status_code(
+            {"ok": False, "status": "token_invalid"},
+            {"ok": False, "error": "email_otp_timeout"},
+        )
+        == "relogin_otp_failed"
+    )
     assert account_recovery._health_status_code({"ok": True, "status": "active"}, {}) == "active"
 
 
 def test_liveness_result_distinguishes_401_and_blocks_relogin_when_mailbox_pool_is_quarantined(monkeypatch):
     account = {"email": "user@example.com", "access_token": "at"}
     monkeypatch.setattr(account_recovery, "get_account_record", lambda email: account)
-    monkeypatch.setattr(account_recovery, "probe_account_liveness", lambda *args, **kwargs: {
-        "ok": False, "status": "token_invalid", "status_code": 401, "quota_status": "401失效",
-    })
+    monkeypatch.setattr(
+        account_recovery,
+        "probe_account_liveness",
+        lambda *args, **kwargs: {
+            "ok": False,
+            "status": "token_invalid",
+            "status_code": 401,
+            "quota_status": "401失效",
+        },
+    )
     monkeypatch.setattr(account_recovery, "mailbox_relogin_allowed", lambda email=None: False)
     monkeypatch.setattr(account_recovery, "mark_quota_status", lambda *args, **kwargs: True)
     # No recovery material on this account, so the 掉号 marker would fire;
@@ -536,18 +575,20 @@ def test_relogin_skips_second_otp_poll_after_first_times_out():
 
     with (
         patch.object(account_recovery, "_select_recovery_proxy", return_value=(None, [])),
+        patch.object(account_recovery, "relogin_refresh_token_account", return_value=fail("missing_refresh_token")),
         patch.object(
-            account_recovery, "relogin_refresh_token_account", return_value=fail("missing_refresh_token")
-        ),
-        patch.object(
-            account_recovery, "relogin_web_session_account", return_value=fail("web_session_access_token_probe_failed:401")
+            account_recovery,
+            "relogin_web_session_account",
+            return_value=fail("web_session_access_token_probe_failed:401"),
         ),
         patch.object(
             account_recovery, "relogin_chatgpt_email_account", return_value=fail("existing_login_otp_poll_timeout")
         ),
         patch.object(account_recovery, "relogin_local_codex_account") as codex,
         patch.object(
-            account_recovery, "relogin_browser_session_account", return_value=fail("browser_session_access_token_missing")
+            account_recovery,
+            "relogin_browser_session_account",
+            return_value=fail("browser_session_access_token_missing"),
         ),
     ):
         result = account_recovery.relogin_codex_account(
@@ -566,11 +607,11 @@ def test_relogin_runs_second_otp_poll_when_first_fails_for_other_reasons():
 
     with (
         patch.object(account_recovery, "_select_recovery_proxy", return_value=(None, [])),
+        patch.object(account_recovery, "relogin_refresh_token_account", return_value=fail("missing_refresh_token")),
         patch.object(
-            account_recovery, "relogin_refresh_token_account", return_value=fail("missing_refresh_token")
-        ),
-        patch.object(
-            account_recovery, "relogin_web_session_account", return_value=fail("web_session_access_token_probe_failed:401")
+            account_recovery,
+            "relogin_web_session_account",
+            return_value=fail("web_session_access_token_probe_failed:401"),
         ),
         patch.object(
             account_recovery, "relogin_chatgpt_email_account", return_value=fail("mailbox_transport_unavailable")
@@ -579,7 +620,9 @@ def test_relogin_runs_second_otp_poll_when_first_fails_for_other_reasons():
             account_recovery, "relogin_local_codex_account", return_value=fail("passwordless_email_otp_poll_timeout")
         ) as codex,
         patch.object(
-            account_recovery, "relogin_browser_session_account", return_value=fail("browser_session_access_token_missing")
+            account_recovery,
+            "relogin_browser_session_account",
+            return_value=fail("browser_session_access_token_missing"),
         ),
     ):
         result = account_recovery.relogin_codex_account(
@@ -606,9 +649,7 @@ def test_dropped_account_skips_probe_and_relogin():
         patch.object(account_recovery, "mark_quota_status", return_value=True),
         patch.object(account_recovery, "upsert_account", return_value=True),
     ):
-        result = recovery_batch.refresh_local_quota_statuses(
-            ["gone@example.com"], relogin_on_401=True
-        )
+        result = recovery_batch.refresh_local_quota_statuses(["gone@example.com"], relogin_on_401=True)
 
     probe_mock.assert_not_called()
     relogin_mock.assert_not_called()
@@ -621,9 +662,16 @@ def test_dropped_account_skips_probe_and_relogin():
 def test_token_invalid_with_mailbox_material_is_not_marked_when_breaker_closed(monkeypatch):
     account = {"email": "keep@example.com", "access_token": "at", "mailbox_token": "mt"}
     monkeypatch.setattr(account_recovery, "get_account_record", lambda email: account)
-    monkeypatch.setattr(account_recovery, "probe_account_liveness", lambda *a, **k: {
-        "ok": False, "status": "token_invalid", "status_code": 401, "quota_status": "401失效",
-    })
+    monkeypatch.setattr(
+        account_recovery,
+        "probe_account_liveness",
+        lambda *a, **k: {
+            "ok": False,
+            "status": "token_invalid",
+            "status_code": 401,
+            "quota_status": "401失效",
+        },
+    )
     monkeypatch.setattr(account_recovery, "mailbox_relogin_allowed", lambda email=None: False)
     monkeypatch.setattr(account_recovery, "mark_quota_status", lambda *a, **k: True)
     dropped = []
@@ -641,9 +689,16 @@ def test_token_invalid_with_mailbox_material_is_not_marked_when_breaker_closed(m
 def test_token_invalid_during_relogin_cooldown_is_not_marked(monkeypatch):
     account = {"email": "cool@example.com", "access_token": "at"}
     monkeypatch.setattr(account_recovery, "get_account_record", lambda email: account)
-    monkeypatch.setattr(account_recovery, "probe_account_liveness", lambda *a, **k: {
-        "ok": False, "status": "token_invalid", "status_code": 401, "quota_status": "401失效",
-    })
+    monkeypatch.setattr(
+        account_recovery,
+        "probe_account_liveness",
+        lambda *a, **k: {
+            "ok": False,
+            "status": "token_invalid",
+            "status_code": 401,
+            "quota_status": "401失效",
+        },
+    )
     monkeypatch.setattr(account_recovery, "mailbox_relogin_allowed", lambda email=None: True)
     monkeypatch.setattr(account_recovery, "_relogin_cooldown_active", lambda acc: True)
     monkeypatch.setattr(account_recovery, "mark_quota_status", lambda *a, **k: True)
@@ -685,13 +740,27 @@ def test_relogin_terminal_deactivation_is_not_double_marked(monkeypatch):
     _persist_permanent_deactivation; the 掉号 marker must not pile on."""
     account = {"email": "term@example.com", "access_token": "at"}
     monkeypatch.setattr(account_recovery, "get_account_record", lambda email: account)
-    monkeypatch.setattr(account_recovery, "probe_account_liveness", lambda *a, **k: {
-        "ok": False, "status": "token_invalid", "status_code": 401, "quota_status": "401失效",
-    })
+    monkeypatch.setattr(
+        account_recovery,
+        "probe_account_liveness",
+        lambda *a, **k: {
+            "ok": False,
+            "status": "token_invalid",
+            "status_code": 401,
+            "quota_status": "401失效",
+        },
+    )
     monkeypatch.setattr(account_recovery, "mailbox_relogin_allowed", lambda email=None: True)
-    monkeypatch.setattr(account_recovery, "relogin_codex_account", lambda *a, **k: {
-        "ok": False, "mode": "chatgpt_email_otp", "error": "account_deactivated", "terminal": True,
-    })
+    monkeypatch.setattr(
+        account_recovery,
+        "relogin_codex_account",
+        lambda *a, **k: {
+            "ok": False,
+            "mode": "chatgpt_email_otp",
+            "error": "account_deactivated",
+            "terminal": True,
+        },
+    )
     monkeypatch.setattr(account_recovery, "mark_quota_status", lambda *a, **k: True)
     dropped = []
     monkeypatch.setattr(account_recovery, "_persist_token_revoked_drop", lambda acc: dropped.append(acc) or True)
@@ -705,11 +774,21 @@ def test_relogin_terminal_deactivation_is_not_double_marked(monkeypatch):
 
 
 def test_relogin_otp_failure_enters_cooldown(tmp_path, monkeypatch):
-    monkeypatch.setattr(account_recovery, "CFG", {"runtime": {"directory": str(tmp_path)}, "account_health": {"relogin_cooldown_seconds": 1800}})
-    account = {"email": "known@example.com", "quota_status": "legacy/OTP failure", "quota_updated_at": int(__import__('time').time())}
+    monkeypatch.setattr(
+        account_recovery,
+        "CFG",
+        {"runtime": {"directory": str(tmp_path)}, "account_health": {"relogin_cooldown_seconds": 1800}},
+    )
+    account = {
+        "email": "known@example.com",
+        "quota_status": "legacy/OTP failure",
+        "quota_updated_at": int(__import__("time").time()),
+    }
     assert account_recovery._relogin_cooldown_active(account)
     account = {"email": "new@example.com"}
-    account_recovery._record_relogin_failure(account["email"], {"ok": False, "mode": "chatgpt_email_otp", "error": "otp_timeout"})
+    account_recovery._record_relogin_failure(
+        account["email"], {"ok": False, "mode": "chatgpt_email_otp", "error": "otp_timeout"}
+    )
     assert account_recovery._relogin_cooldown_active(account)
 
 
@@ -781,7 +860,11 @@ def test_a_permanent_dead_end_survives_an_expired_cooldown(tmp_path, monkeypatch
     import json
     import time
 
-    monkeypatch.setattr(account_recovery, "CFG", {"runtime": {"directory": str(tmp_path)}, "account_health": {"relogin_cooldown_seconds": 300}})
+    monkeypatch.setattr(
+        account_recovery,
+        "CFG",
+        {"runtime": {"directory": str(tmp_path)}, "account_health": {"relogin_cooldown_seconds": 300}},
+    )
     past = int(time.time()) - 10_000
     path = account_recovery._relogin_guard_path()
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -808,7 +891,11 @@ def test_an_expired_cooldown_without_a_dead_end_is_released(tmp_path, monkeypatc
     import json
     import time
 
-    monkeypatch.setattr(account_recovery, "CFG", {"runtime": {"directory": str(tmp_path)}, "account_health": {"relogin_cooldown_seconds": 300}})
+    monkeypatch.setattr(
+        account_recovery,
+        "CFG",
+        {"runtime": {"directory": str(tmp_path)}, "account_health": {"relogin_cooldown_seconds": 300}},
+    )
     past = int(time.time()) - 10_000
     path = account_recovery._relogin_guard_path()
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -1001,8 +1088,15 @@ def test_relogin_persists_only_after_http_200_probe():
     oauth_result = {"ok": True, "tokens": {"access_token": "new_at", "refresh_token": "rt_new"}}
     with (
         patch("sms_tool.codex_oauth.refresh_codex_oauth_session", return_value=oauth_result),
-        patch("sms_tool.codex_oauth._save_oauth_tokens", return_value={"ok": True, "mode": "codex_oauth_pkce", "persisted": True}) as save,
-        patch.object(account_recovery, "probe_account_liveness", return_value={"ok": True, "status": "active", "status_code": 200}),
+        patch(
+            "sms_tool.codex_oauth._save_oauth_tokens",
+            return_value={"ok": True, "mode": "codex_oauth_pkce", "persisted": True},
+        ) as save,
+        patch.object(
+            account_recovery,
+            "probe_account_liveness",
+            return_value={"ok": True, "status": "active", "status_code": 200},
+        ),
     ):
         result = account_recovery.relogin_local_codex_account({"email": "ok@example.com", "access_token": "old_at"})
 
@@ -1015,10 +1109,15 @@ def test_codex_relogin_does_not_claim_saved_token_after_persistence_failure():
     oauth_result = {"ok": True, "tokens": {"access_token": "new_at", "refresh_token": "rt_new"}}
     with (
         patch("sms_tool.codex_oauth.refresh_codex_oauth_session", return_value=oauth_result),
-        patch("sms_tool.codex_oauth._save_oauth_tokens", return_value={
-            "ok": True, "mode": "codex_oauth_pkce", "persisted": False,
-            "persistence": {"error_code": "account_write_failed"},
-        }),
+        patch(
+            "sms_tool.codex_oauth._save_oauth_tokens",
+            return_value={
+                "ok": True,
+                "mode": "codex_oauth_pkce",
+                "persisted": False,
+                "persistence": {"error_code": "account_write_failed"},
+            },
+        ),
         patch.object(account_recovery, "probe_account_liveness", return_value={"ok": True, "status_code": 200}),
     ):
         result = account_recovery.relogin_local_codex_account({"email": "ok@example.com", "access_token": "old_at"})
@@ -1031,8 +1130,11 @@ def test_codex_relogin_does_not_claim_saved_token_after_persistence_failure():
 
 def test_auto_relogin_does_not_spend_another_otp_after_oauth_save_failure():
     failed_save = {
-        "ok": False, "mode": "codex_oauth_pkce", "remote_ok": True,
-        "persisted": False, "error": "oauth_persistence_failed",
+        "ok": False,
+        "mode": "codex_oauth_pkce",
+        "remote_ok": True,
+        "persisted": False,
+        "error": "oauth_persistence_failed",
     }
     with (
         patch.object(account_recovery, "relogin_refresh_token_account", return_value={"ok": False}),
@@ -1111,10 +1213,13 @@ def test_refresh_token_recovery_verifies_before_persisting():
     }
     with (
         patch("sms_tool.codex_export._openai_refresh_token", return_value="rt_old"),
-        patch("sms_tool.codex_export._refresh_with_openai_oauth", return_value={
-            "ok": True,
-            "data": {"access_token": "new_at", "oauth_refresh_token": "rt_new"},
-        }),
+        patch(
+            "sms_tool.codex_export._refresh_with_openai_oauth",
+            return_value={
+                "ok": True,
+                "data": {"access_token": "new_at", "oauth_refresh_token": "rt_new"},
+            },
+        ),
         patch.object(
             account_recovery,
             "probe_account_liveness",
@@ -1139,10 +1244,13 @@ def test_refresh_token_recovery_rejects_unverified_candidate():
     account = {"email": "ok@example.com", "oauth_refresh_token": "rt_old"}
     with (
         patch("sms_tool.codex_export._openai_refresh_token", return_value="rt_old"),
-        patch("sms_tool.codex_export._refresh_with_openai_oauth", return_value={
-            "ok": True,
-            "data": {"access_token": "new_at"},
-        }),
+        patch(
+            "sms_tool.codex_export._refresh_with_openai_oauth",
+            return_value={
+                "ok": True,
+                "data": {"access_token": "new_at"},
+            },
+        ),
         patch.object(
             account_recovery,
             "probe_account_liveness",
@@ -1178,13 +1286,17 @@ def test_web_session_rejects_a_cookie_for_another_account():
 
 def test_recovery_proxy_uses_registration_country_and_pool():
     with (
-        patch.dict(account_recovery.CFG, {
-            "proxy": {
-                "pool": ["http://pool.example:8080"],
-                "registration": "http://registration.example:8080",
-                "default": "http://default.example:8080",
-            }
-        }, clear=False),
+        patch.dict(
+            account_recovery.CFG,
+            {
+                "proxy": {
+                    "pool": ["http://pool.example:8080"],
+                    "registration": "http://registration.example:8080",
+                    "default": "http://default.example:8080",
+                }
+            },
+            clear=False,
+        ),
         patch(
             "sms_tool.paypal_proxy.select_proxy_from_pool",
             return_value=("http://selected.example:8080", [{"ok": True, "expected_country": "JP"}]),
@@ -1199,7 +1311,6 @@ def test_recovery_proxy_uses_registration_country_and_pool():
     assert attempts[0]["ok"]
     assert select.call_args.args[1:] == ("JP", "account_recovery")
     assert select.call_args.args[0][0] == "http://explicit.example:8080"
-
 
 
 def test_refresh_local_quota_statuses_clears_stale_promotion_marker_after_relogin():
@@ -1223,7 +1334,10 @@ def test_refresh_local_quota_statuses_clears_stale_promotion_marker_after_relogi
         patch.object(
             account_recovery,
             "relogin_codex_account",
-            return_value={"ok": True, "probe": {"ok": True, "status": "active", "status_code": 200, "quota_status": "active"}},
+            return_value={
+                "ok": True,
+                "probe": {"ok": True, "status": "active", "status_code": 200, "quota_status": "active"},
+            },
         ),
         patch.object(account_recovery, "clear_stale_promotion_at_marker", side_effect=fake_clear),
         patch.object(account_recovery, "mark_quota_status", return_value=True),
@@ -1269,16 +1383,19 @@ def test_liveness_transport_failure_retries_configured_pool(monkeypatch):
             return {"ok": False, "status_code": 0, "error": "curl: (35) connection reset", "quota_status": "检测失败"}
         return {"ok": True, "status_code": 200, "status": "active", "quota_status": "可用"}
 
-    monkeypatch.setattr(account_recovery, "CFG", {
-        "proxy": {"registration": "http://registration.example:8080", "pool": [
-            "http://pool-a.example:8080", "http://pool-b.example:8080"
-        ]},
-        "account_health": {"use_registration_affinity": True},
-    })
-    monkeypatch.setattr(account_recovery, "probe_account_liveness", fake_probe)
-    result = recovery_batch._probe_liveness_with_retries(
-        account, proxy="http://127.0.0.1:7897", timeout=5
+    monkeypatch.setattr(
+        account_recovery,
+        "CFG",
+        {
+            "proxy": {
+                "registration": "http://registration.example:8080",
+                "pool": ["http://pool-a.example:8080", "http://pool-b.example:8080"],
+            },
+            "account_health": {"use_registration_affinity": True},
+        },
     )
+    monkeypatch.setattr(account_recovery, "probe_account_liveness", fake_probe)
+    result = recovery_batch._probe_liveness_with_retries(account, proxy="http://127.0.0.1:7897", timeout=5)
     assert result["ok"]
     assert calls == ["http://127.0.0.1:7897", "http://registration.example:8080"]
 
@@ -1294,12 +1411,14 @@ def test_desktop_read_hides_stale_promotion_at_marker_after_verified_200():
             "id": "1",
             "email": "stale@example.com",
             "json_path": "",
-            "raw_json": json_mod.dumps({
-                "email": "stale@example.com",
-                "promotion_status": stale_label,
-                "promotion": {"status": stale_label, "last_result": {"status_code": 401}},
-                **probe_state,
-            }),
+            "raw_json": json_mod.dumps(
+                {
+                    "email": "stale@example.com",
+                    "promotion_status": stale_label,
+                    "promotion": {"status": stale_label, "last_result": {"status_code": 401}},
+                    **probe_state,
+                }
+            ),
         }
 
     fresh_probe = {
@@ -1343,11 +1462,26 @@ def test_browser_recovery_uses_driver_from_browser_identity():
     mock_browser.cookie_header.return_value = ""
 
     with (
-        patch("sms_tool.accounts.account_recovery.CFG", {"chatgpt": {"chat_base_url": "https://chatgpt.com", "auth_base_url": "https://auth.openai.com"}, "registration": {}}),
-        patch("sms_tool.registration_drivers.external_sessions.create_browser_session", return_value=mock_browser) as create_session,
+        patch(
+            "sms_tool.accounts.account_recovery.CFG",
+            {
+                "chatgpt": {"chat_base_url": "https://chatgpt.com", "auth_base_url": "https://auth.openai.com"},
+                "registration": {},
+            },
+        ),
+        patch(
+            "sms_tool.registration_drivers.external_sessions.create_browser_session", return_value=mock_browser
+        ) as create_session,
         patch("sms_tool.registration_drivers.browser_flow.page_state._wait_for_challenge_clear"),
-        patch("sms_tool.registration_drivers.browser_flow.session._session_payload", return_value={"body": {}, "access_token": "new_at", "id_token": ""}),
-        patch.object(account_recovery, "probe_account_liveness", return_value={"ok": True, "status": "active", "status_code": 200}),
+        patch(
+            "sms_tool.registration_drivers.browser_flow.session._session_payload",
+            return_value={"body": {}, "access_token": "new_at", "id_token": ""},
+        ),
+        patch.object(
+            account_recovery,
+            "probe_account_liveness",
+            return_value={"ok": True, "status": "active", "status_code": 200},
+        ),
         patch("sms_tool.session_refresh._save_refreshed", return_value="session.json"),
     ):
         result = account_recovery.relogin_browser_session_account(account)
@@ -1356,7 +1490,10 @@ def test_browser_recovery_uses_driver_from_browser_identity():
     # Must use the driver from browser_identity, not the default camoufox
     assert create_session.call_args.args[0] == "cloak"
     # Must pass browser_identity so the same profile is reopened
-    assert create_session.call_args.kwargs["browser_identity"] == {"driver": "cloak", "profile_id": "browser@example.com"}
+    assert create_session.call_args.kwargs["browser_identity"] == {
+        "driver": "cloak",
+        "profile_id": "browser@example.com",
+    }
 
 
 def test_refresh_local_quota_statuses_uses_browser_fetch_when_browser_identity_present():
@@ -1385,9 +1522,13 @@ def test_refresh_local_quota_statuses_uses_browser_fetch_when_browser_identity_p
 
     with (
         patch.object(account_recovery, "get_account_record", return_value=account),
-        patch("sms_tool.registration_drivers.external_sessions.create_browser_session", return_value=mock_session) as create_session,
+        patch(
+            "sms_tool.registration_drivers.external_sessions.create_browser_session", return_value=mock_session
+        ) as create_session,
         patch("sms_tool.registration_drivers.browser_flow.page_state._wait_for_challenge_clear"),
-        patch.object(account_recovery, "probe_account_liveness", wraps=account_recovery.probe_account_liveness) as probe,
+        patch.object(
+            account_recovery, "probe_account_liveness", wraps=account_recovery.probe_account_liveness
+        ) as probe,
         patch.object(account_recovery, "mark_quota_status", return_value=True),
     ):
         result = recovery_batch.refresh_local_quota_statuses(["browser@example.com"])
@@ -1426,7 +1567,9 @@ def test_browser_liveness_reuses_persisted_geo_aligned_profile():
 
     with (
         patch.object(account_recovery, "get_account_record", return_value=account),
-        patch("sms_tool.registration_drivers.external_sessions.create_browser_session", return_value=mock_session) as create_session,
+        patch(
+            "sms_tool.registration_drivers.external_sessions.create_browser_session", return_value=mock_session
+        ) as create_session,
         patch("sms_tool.registration_drivers.browser_flow.page_state._wait_for_challenge_clear"),
         patch.object(account_recovery, "mark_quota_status", return_value=True),
     ):
@@ -1455,7 +1598,9 @@ def test_refresh_local_quota_statuses_falls_back_to_curl_when_no_browser_identit
     with (
         patch.object(account_recovery, "get_account_record", return_value=account),
         patch("sms_tool.registration_drivers.external_sessions.create_browser_session") as create_session,
-        patch.object(account_recovery, "probe_account_liveness", return_value={"ok": True, "quota_status": "active"}) as probe,
+        patch.object(
+            account_recovery, "probe_account_liveness", return_value={"ok": True, "quota_status": "active"}
+        ) as probe,
         patch.object(account_recovery, "mark_quota_status", return_value=True),
     ):
         result = recovery_batch.refresh_local_quota_statuses(["plain@example.com"])
@@ -1485,7 +1630,10 @@ def test_browser_liveness_does_not_downgrade_to_curl_when_context_unavailable():
 
     with (
         patch.object(account_recovery, "get_account_record", return_value=account),
-        patch("sms_tool.registration_drivers.external_sessions.create_browser_session", side_effect=RuntimeError("unavailable")),
+        patch(
+            "sms_tool.registration_drivers.external_sessions.create_browser_session",
+            side_effect=RuntimeError("unavailable"),
+        ),
         patch.object(account_recovery, "probe_account_liveness") as probe,
         patch.object(account_recovery, "mark_quota_status", return_value=True),
     ):
@@ -1675,12 +1823,8 @@ def test_auto_chain_gives_web_session_a_workable_but_bounded_budget():
                 return_value={"ok": False, "error": "missing_refresh_token"},
             ),
             patch.object(account_recovery, "relogin_web_session_account", side_effect=web_session),
-            patch.object(
-                account_recovery, "relogin_chatgpt_email_account", return_value={"ok": False, "error": "otp"}
-            ),
-            patch.object(
-                account_recovery, "relogin_local_codex_account", return_value={"ok": False, "error": "codex"}
-            ),
+            patch.object(account_recovery, "relogin_chatgpt_email_account", return_value={"ok": False, "error": "otp"}),
+            patch.object(account_recovery, "relogin_local_codex_account", return_value={"ok": False, "error": "codex"}),
             patch.object(
                 account_recovery, "relogin_browser_session_account", return_value={"ok": False, "error": "browser"}
             ),
@@ -1756,7 +1900,12 @@ def _relogin_all_methods_failed(otp_error=_OTP_409):
         "attempts": [
             {"ok": False, "mode": "oauth_refresh_token", "error": "missing_refresh_token", "skipped": True},
             {"ok": False, "mode": "web_session", "error": "auth_session_missing_access_token", "last_status": "403"},
-            {"ok": False, "mode": "web_session", "error": "web_session_access_token_probe_failed:401", "proxy_index": 1},
+            {
+                "ok": False,
+                "mode": "web_session",
+                "error": "web_session_access_token_probe_failed:401",
+                "proxy_index": 1,
+            },
             {"ok": False, "mode": "chatgpt_email_otp", "error": otp_error},
             {"ok": False, "mode": "codex_oauth_pkce", "error": "passwordless_email_otp_poll_timeout"},
             {"ok": False, "mode": "browser_session", "error": "page_state"},

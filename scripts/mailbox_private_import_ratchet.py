@@ -138,10 +138,7 @@ def _watched_module_of(node: ast.ImportFrom) -> str | None:
     if node.level == 0:
         prefix = module[: -len(last) - 1] if module != last else ""
         allowed = WATCHED_QUALIFIERS.get(last, ("sms_tool",))
-        if not any(
-            prefix == candidate or prefix.startswith(f"{candidate}.")
-            for candidate in allowed
-        ):
+        if not any(prefix == candidate or prefix.startswith(f"{candidate}.") for candidate in allowed):
             return None
         return last
     # Relative (level > 0): the package qualifier is implied by the importing
@@ -181,9 +178,7 @@ def _pairs_in_source(source: str, rel: str) -> set[tuple[str, str, str]]:
     return found
 
 
-def collect(root: Path = ROOT) -> tuple[
-    int, dict[str, int], dict[str, int], list[str]
-]:
+def collect(root: Path = ROOT) -> tuple[int, dict[str, int], dict[str, int], list[str]]:
     """Return ``(total, {module: count}, {relative_path: count}, sorted_triples)``."""
     per_module: dict[str, int] = {name: 0 for name in WATCHED_MODULES}
     per_file: dict[str, int] = {}
@@ -288,11 +283,7 @@ def main(argv: list[str] | None = None) -> int:
                 name: {
                     "total": per_module.get(name, 0),
                     "per_file": {
-                        rel: sum(
-                            1
-                            for item in triples
-                            if item.startswith(f"{rel}:") and f":{name}." in item
-                        )
+                        rel: sum(1 for item in triples if item.startswith(f"{rel}:") and f":{name}." in item)
                         for rel in sorted({item.split(":", 1)[0] for item in _triples_for_module(triples, name)})
                     },
                     "pairs": _triples_for_module(triples, name),

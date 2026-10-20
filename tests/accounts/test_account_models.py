@@ -6,19 +6,21 @@ from sms_tool import storage
 
 
 def test_account_session_model_hides_credentials_and_emits_safe_snapshot():
-    model = AccountSessionModel.from_value({
-        "email": "typed@example.com",
-        "success": True,
-        "source": "register",
-        "register_method": "email",
-        "session_type": "oauth",
-        "plan_type": "plus",
-        "access_token": "eyJsecret.payload.signature",
-        "oauth_refresh_token": "rt_secret",
-        "totp_secret": "TOTPSECRET",
-        "mailbox": {"provider": "remail", "token": "mail-secret"},
-        "paypal": {"ok": True, "url": "https://pay.example/?ba_token=BA-secret", "card_last4": "4242"},
-    })
+    model = AccountSessionModel.from_value(
+        {
+            "email": "typed@example.com",
+            "success": True,
+            "source": "register",
+            "register_method": "email",
+            "session_type": "oauth",
+            "plan_type": "plus",
+            "access_token": "eyJsecret.payload.signature",
+            "oauth_refresh_token": "rt_secret",
+            "totp_secret": "TOTPSECRET",
+            "mailbox": {"provider": "remail", "token": "mail-secret"},
+            "paypal": {"ok": True, "url": "https://pay.example/?ba_token=BA-secret", "card_last4": "4242"},
+        }
+    )
 
     assert "rt_secret" not in repr(model)
     assert not hasattr(model, "payload")
@@ -36,16 +38,18 @@ def test_account_session_model_hides_credentials_and_emits_safe_snapshot():
 def test_storage_accepts_typed_model_and_raw_json_is_token_free(tmp_path, monkeypatch):
     database = tmp_path / "accounts.sqlite3"
     monkeypatch.setattr(storage, "database_path", lambda cfg=None: database)
-    model = AccountSessionModel.from_value({
-        "email": "typed-storage@example.com",
-        "success": True,
-        "source": "import",
-        "register_method": "apple",
-        "session_type": "at_only",
-        "plan_type": "free",
-        "access_token": "at-secret-value",
-        "oauth_refresh_token": "rt_secret_value",
-    })
+    model = AccountSessionModel.from_value(
+        {
+            "email": "typed-storage@example.com",
+            "success": True,
+            "source": "import",
+            "register_method": "apple",
+            "session_type": "at_only",
+            "plan_type": "free",
+            "access_token": "at-secret-value",
+            "oauth_refresh_token": "rt_secret_value",
+        }
+    )
 
     assert storage.upsert_account(model)
     record = storage.get_account_record("typed-storage@example.com")
@@ -101,9 +105,7 @@ def test_get_account_records_batches_one_query(tmp_path, monkeypatch):
     storage.upsert_account({"email": "batch3@example.com", "access_token": "at3"})
 
     # Case-insensitive match, and only the requested emails come back.
-    rows = storage.get_account_records(
-        ["batch1@example.com", "batch2@example.com", "missing@example.com"]
-    )
+    rows = storage.get_account_records(["batch1@example.com", "batch2@example.com", "missing@example.com"])
     assert set(rows) == {"batch1@example.com", "batch2@example.com"}
     assert rows["batch1@example.com"]["access_token"] == "at1"
     assert rows["batch2@example.com"]["access_token"] == "at2"

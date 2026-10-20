@@ -28,7 +28,11 @@ class AtSurvivalWatchTests(unittest.TestCase):
 
     def test_row_carries_no_secrets_and_flags_revocation(self):
         row = watch.probe_row(
-            "A", 7, 5.0, 0, {"status_code": 401, "status": "token_invalid", "error": "Encountered invalidated oauth token"}
+            "A",
+            7,
+            5.0,
+            0,
+            {"status_code": 401, "status": "token_invalid", "error": "Encountered invalidated oauth token"},
         )
         self.assertEqual((row["label"], row["account_id"], row["status_code"]), ("A", 7, 401))
         self.assertTrue(row["revoked"])

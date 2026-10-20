@@ -65,13 +65,17 @@ class TestClassifyAndMap(unittest.TestCase):
         self.assertFalse(out["retryable"])
 
     def test_fatal_not_retryable(self):
-        ctx = parse_authorization_context({"errorCode": "ACCOUNT_LOCKED", "checkoutSessionType": "BILLING_WITHOUT_PURCHASE"})
+        ctx = parse_authorization_context(
+            {"errorCode": "ACCOUNT_LOCKED", "checkoutSessionType": "BILLING_WITHOUT_PURCHASE"}
+        )
         out = classify_authorization_outcome(ctx)
         self.assertFalse(out["ok"])
         self.assertFalse(out["retryable"])
 
     def test_transient_retryable(self):
-        ctx = parse_authorization_context({"errorCode": "TOO_MANY_REQUESTS", "checkoutSessionType": "BILLING_WITHOUT_PURCHASE"})
+        ctx = parse_authorization_context(
+            {"errorCode": "TOO_MANY_REQUESTS", "checkoutSessionType": "BILLING_WITHOUT_PURCHASE"}
+        )
         out = classify_authorization_outcome(ctx)
         self.assertFalse(out["ok"])
         self.assertTrue(out["retryable"])
@@ -95,12 +99,16 @@ class TestClassifyAndMap(unittest.TestCase):
 
     def test_payment_retry_allowed_gate(self):
         # fatal -> no retry
-        ctx = parse_authorization_context({"errorCode": "PAYER_ACCOUNT_RESTRICTED", "checkoutSessionType": "BILLING_WITHOUT_PURCHASE"})
+        ctx = parse_authorization_context(
+            {"errorCode": "PAYER_ACCOUNT_RESTRICTED", "checkoutSessionType": "BILLING_WITHOUT_PURCHASE"}
+        )
         res = to_payment_result(ctx)
         self.assertFalse(payment_retry_allowed(res))
 
     def test_payment_retry_allowed_transient(self):
-        ctx = parse_authorization_context({"errorCode": "INTERNAL_SERVER_ERROR", "checkoutSessionType": "BILLING_WITHOUT_PURCHASE"})
+        ctx = parse_authorization_context(
+            {"errorCode": "INTERNAL_SERVER_ERROR", "checkoutSessionType": "BILLING_WITHOUT_PURCHASE"}
+        )
         res = to_payment_result(ctx)
         self.assertTrue(payment_retry_allowed(res))
 

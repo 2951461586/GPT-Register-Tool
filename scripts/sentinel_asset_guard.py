@@ -160,8 +160,7 @@ def main(argv: list[str]) -> int:
         return 0
 
     print(
-        f"sentinel-asset-guard: {len(offenders)} vendored asset(s) disagree with "
-        "sms_tool/sentinel/bundle.py.",
+        f"sentinel-asset-guard: {len(offenders)} vendored asset(s) disagree with sms_tool/sentinel/bundle.py.",
         file=sys.stderr,
     )
     print("", file=sys.stderr)

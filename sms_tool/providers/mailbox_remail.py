@@ -60,9 +60,7 @@ def _remail_idempotency_key(
 DEFAULT_BASE_URL = "https://remail.aishop6.com"
 DEFAULT_PROJECT_ID = 2
 _DEAD_REMAIL_LOCK = threading.Lock()
-_OPENAI_REMAIL_SENDERS = re.compile(
-    r"(?i)(?:otp@tm1\.openai\.com|noreply@tm\.openai\.com|(?:otp|noreply)@openai\.com)"
-)
+_OPENAI_REMAIL_SENDERS = re.compile(r"(?i)(?:otp@tm1\.openai\.com|noreply@tm\.openai\.com|(?:otp|noreply)@openai\.com)")
 
 
 class ReMailHttpError(RuntimeError):
@@ -179,11 +177,7 @@ def _remail_base_url():
 
 def _dead_remail_registry_path():
     configured = str(_remail_cfg().get("dead_registry_file") or "").strip()
-    return (
-        project_path(configured)
-        if configured
-        else runtime_file(current_config_data(), "remail_dead_accounts.json")
-    )
+    return project_path(configured) if configured else runtime_file(current_config_data(), "remail_dead_accounts.json")
 
 
 def _remail_dead_history_enabled():
@@ -215,11 +209,7 @@ def _remail_identity(value):
 
 def _remail_identity_keys(value):
     identity = _remail_identity(value)
-    return {
-        f"{key}:{item.lower() if key == 'email' else item}"
-        for key, item in identity.items()
-        if item
-    }
+    return {f"{key}:{item.lower() if key == 'email' else item}" for key, item in identity.items() if item}
 
 
 def _read_dead_remail_registry():
@@ -307,8 +297,7 @@ def record_remail_batch_quality(batch_id, results, *, requested=0):
     total = max(int(requested or 0), len(rows))
     deactivated = sum("account_deactivated" in str(row.get("error") or "").lower() for row in rows)
     otp_timeout = sum(
-        "otp" in str(row.get("error") or "").lower()
-        and "timeout" in str(row.get("error") or "").lower()
+        "otp" in str(row.get("error") or "").lower() and "timeout" in str(row.get("error") or "").lower()
         for row in rows
     )
     dead_rate = (deactivated / total) if total else 0.0
@@ -364,7 +353,9 @@ def _remail_request(method, path, *, auth=False, headers=None, secrets=(), proxy
     if "json" in kwargs:
         request_headers.setdefault("Content-Type", "application/json")
     normalized_proxy = str(proxy or "").strip()
-    proxies = {"http": normalized_proxy, "https": normalized_proxy} if normalized_proxy else None
+    # ``request_kwargs`` is splatted into requests/curl_cffi, which accept a plain
+    # proxy mapping; the TypedDict annotation only exists on the callee side.
+    proxies: Any = {"http": normalized_proxy, "https": normalized_proxy} if normalized_proxy else None
     request_kwargs = {
         "headers": request_headers,
         "timeout": 30,
@@ -442,8 +433,7 @@ def _post_remail_order(path, *, params, payload, idempotency_key=None, timeout=3
                 raise
         wait = _remail_order_retry_backoff(attempt)
         print(
-            f"[!] ReMail order {path} attempt {attempt + 1}/{attempts + 1} failed "
-            f"({last_exc}); retrying in {wait:.0f}s"
+            f"[!] ReMail order {path} attempt {attempt + 1}/{attempts + 1} failed ({last_exc}); retrying in {wait:.0f}s"
         )
         time.sleep(wait)
     if last_exc:
@@ -469,9 +459,11 @@ def _order_options(args=None, service_mode=None):
         project_id = int(_arg_or_config(args, "remail_project_id", "project_id", DEFAULT_PROJECT_ID))
     except (TypeError, ValueError) as exc:
         raise ValueError("ReMail project_id must be an integer") from exc
-    suffix = str(
-        _arg_or_config(args, "remail_email_suffix", "email_suffix", "outlook.com") or "outlook.com"
-    ).strip().lstrip("@")
+    suffix = (
+        str(_arg_or_config(args, "remail_email_suffix", "email_suffix", "outlook.com") or "outlook.com")
+        .strip()
+        .lstrip("@")
+    )
     payload = {"projectId": project_id, "emailSuffix": suffix}
     return mode, supply, payload
 
@@ -551,7 +543,7 @@ def _fetch_remail_order_detail(order):
         except Exception as exc:
             last_error = exc
             if attempt < 2:
-                time.sleep(2 ** attempt)
+                time.sleep(2**attempt)
     if last_error is None:
         raise RuntimeError("ReMail order lookup failed")
     raise last_error
@@ -712,9 +704,9 @@ def _lookup_remail_order(mailbox, proxy=None):
     )
     items = response.get("items") if isinstance(response, dict) else []
     matches = [
-        item for item in (items or [])
-        if isinstance(item, dict)
-        and str(item.get("deliveryEmail") or "").strip().lower() == email
+        item
+        for item in (items or [])
+        if isinstance(item, dict) and str(item.get("deliveryEmail") or "").strip().lower() == email
     ]
     if not matches:
         raise RuntimeError("ReMail API Key cannot find an order for the selected mailbox")
@@ -838,13 +830,10 @@ def _fetch_remail_messages(mailbox, limit=25, proxy=None, include_body=False):
     response = _pickup_remail_messages_with_recovery(mailbox, proxy=proxy)
     items = response.get("items") if isinstance(response, dict) else []
     normalized = []
-    for item in list(items or [])[:max(1, int(limit or 25))]:
+    for item in list(items or [])[: max(1, int(limit or 25))]:
         if not isinstance(item, dict):
             continue
-        text = "\n".join(
-            str(item.get(key) or "")
-            for key in ("subject", "bodyPreview", "verificationCode")
-        )
+        text = "\n".join(str(item.get(key) or "") for key in ("subject", "bodyPreview", "verificationCode"))
         if (include_body or not _extract_otp_from_text(text)) and item.get("id") is not None:
             try:
                 # Separate name: assigning back to ``item`` widened its inferred
@@ -1050,7 +1039,7 @@ def _poll_remail_otp(
             # Fast path: check verificationCode directly from raw items
             best_code = None
             best_ts = 0
-            for item in (items or []):
+            for item in items or []:
                 if not isinstance(item, dict):
                     continue
                 msg_id = str(item.get("id") or "").strip()

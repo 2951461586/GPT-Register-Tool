@@ -47,10 +47,14 @@ def create_agent_identity(source_data, proxy="", timeout=30):
         format=serialization.PrivateFormat.PKCS8,
         encryption_algorithm=serialization.NoEncryption(),
     )
-    public_key = private_key.public_key().public_bytes(
-        encoding=serialization.Encoding.OpenSSH,
-        format=serialization.PublicFormat.OpenSSH,
-    ).decode("ascii")
+    public_key = (
+        private_key.public_key()
+        .public_bytes(
+            encoding=serialization.Encoding.OpenSSH,
+            format=serialization.PublicFormat.OpenSSH,
+        )
+        .decode("ascii")
+    )
 
     request_body = {
         "abom": {
@@ -184,11 +188,15 @@ def rebuild_agent_identity(email="", source_data=None, export_dir="", proxy="", 
             return None
         seen.add(token)
         created = create_agent_identity(candidate, proxy=proxy, timeout=timeout)
-        attempts.append({
-            "source": token_source,
-            "ok": bool(created.get("ok")),
-            **({"error": str(created.get("error") or "agent_registration_failed")} if not created.get("ok") else {}),
-        })
+        attempts.append(
+            {
+                "source": token_source,
+                "ok": bool(created.get("ok")),
+                **(
+                    {"error": str(created.get("error") or "agent_registration_failed")} if not created.get("ok") else {}
+                ),
+            }
+        )
         if not created.get("ok"):
             return None
         persisted = write_agent_identity(created["data"], export_dir=export_dir)
@@ -319,9 +327,7 @@ def register_agent_identity_task(auth_json, proxy="", timeout=30, disposable_can
         if not isinstance(private_key, Ed25519PrivateKey):
             raise ValueError("not_ed25519")
         timestamp = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
-        signature = base64.b64encode(
-            private_key.sign(f"{runtime_id}:{timestamp}".encode("utf-8"))
-        ).decode("ascii")
+        signature = base64.b64encode(private_key.sign(f"{runtime_id}:{timestamp}".encode("utf-8"))).decode("ascii")
     except Exception:
         return {"ok": False, "error": "invalid_agent_identity_private_key"}
 
@@ -351,9 +357,7 @@ def register_agent_identity_task(auth_json, proxy="", timeout=30, disposable_can
         return {"ok": False, "error": "agent_task_registration_invalid_json", "status_code": response.status_code}
     task_id = str((response_data or {}).get("task_id") or (response_data or {}).get("taskId") or "").strip()
     encrypted = str(
-        (response_data or {}).get("encrypted_task_id")
-        or (response_data or {}).get("encryptedTaskId")
-        or ""
+        (response_data or {}).get("encrypted_task_id") or (response_data or {}).get("encryptedTaskId") or ""
     ).strip()
     if not task_id and encrypted:
         try:
@@ -365,9 +369,12 @@ def register_agent_identity_task(auth_json, proxy="", timeout=30, disposable_can
                 serialization.PrivateFormat.Raw,
                 serialization.NoEncryption(),
             )
-            task_id = SealedBox(SigningKey(seed).to_curve25519_private_key()).decrypt(
-                base64.b64decode(encrypted, validate=True)
-            ).decode("utf-8").strip()
+            task_id = (
+                SealedBox(SigningKey(seed).to_curve25519_private_key())
+                .decrypt(base64.b64decode(encrypted, validate=True))
+                .decode("utf-8")
+                .strip()
+            )
         except Exception:
             return {"ok": False, "error": "agent_task_decryption_failed"}
     if not task_id:
@@ -391,18 +398,22 @@ def build_agent_identity_authorization(auth_json, timestamp=""):
         if not isinstance(private_key, Ed25519PrivateKey):
             raise ValueError("not_ed25519")
         timestamp = str(timestamp or datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z"))
-        signature = base64.b64encode(
-            private_key.sign(f"{runtime_id}:{task_id}:{timestamp}".encode("utf-8"))
-        ).decode("ascii")
+        signature = base64.b64encode(private_key.sign(f"{runtime_id}:{task_id}:{timestamp}".encode("utf-8"))).decode(
+            "ascii"
+        )
         envelope = {
             "agent_runtime_id": runtime_id,
             "signature": signature,
             "task_id": task_id,
             "timestamp": timestamp,
         }
-        encoded = base64.urlsafe_b64encode(
-            json.dumps(envelope, ensure_ascii=True, separators=(",", ":"), sort_keys=True).encode("utf-8")
-        ).decode("ascii").rstrip("=")
+        encoded = (
+            base64.urlsafe_b64encode(
+                json.dumps(envelope, ensure_ascii=True, separators=(",", ":"), sort_keys=True).encode("utf-8")
+            )
+            .decode("ascii")
+            .rstrip("=")
+        )
     except Exception:
         return {"ok": False, "error": "invalid_agent_identity_private_key"}
     return {"ok": True, "authorization": f"AgentAssertion {encoded}", "timestamp": timestamp}
@@ -441,11 +452,13 @@ def probe_agent_identity(auth_json, proxy="", timeout=90, model="gpt-5.5", dispo
     body = {
         "model": str(model or "gpt-5.5").strip() or "gpt-5.5",
         "instructions": "Reply with exactly OK.",
-        "input": [{
-            "type": "message",
-            "role": "user",
-            "content": [{"type": "input_text", "text": "Reply with exactly OK."}],
-        }],
+        "input": [
+            {
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "input_text", "text": "Reply with exactly OK."}],
+            }
+        ],
         "tools": [],
         "tool_choice": "auto",
         "parallel_tool_calls": False,
@@ -501,13 +514,13 @@ def probe_agent_identity(auth_json, proxy="", timeout=90, model="gpt-5.5", dispo
     }
 
 
-
 def validate_agent_identity(value):
     identity = _identity_dict(value)
     if not identity:
         return {"ok": False, "error": "invalid_agent_identity"}
     missing = [
-        key for key in ("agent_runtime_id", "agent_private_key", "account_id", "chatgpt_user_id")
+        key
+        for key in ("agent_runtime_id", "agent_private_key", "account_id", "chatgpt_user_id")
         if not str(identity.get(key) or "").strip()
     ]
     if missing:

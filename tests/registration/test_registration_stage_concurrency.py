@@ -27,8 +27,9 @@ def test_ungated_stage_returns_no_lease():
 
 def test_stage_transitions_are_independently_leased_and_record_metrics():
     registration_concurrency.registration_stage_metrics(reset=True)
-    with patch.object(registration_concurrency, "CFG", STAGE_CFG), patch.object(
-        registration_concurrency, "_stage_gates", {}
+    with (
+        patch.object(registration_concurrency, "CFG", STAGE_CFG),
+        patch.object(registration_concurrency, "_stage_gates", {}),
     ):
         leases = []
         try:
@@ -54,8 +55,9 @@ def test_stage_transitions_are_independently_leased_and_record_metrics():
 
 def test_lease_release_is_idempotent_and_reports_over_release():
     registration_concurrency.registration_stage_metrics(reset=True)
-    with patch.object(registration_concurrency, "CFG", STAGE_CFG), patch.object(
-        registration_concurrency, "_stage_gates", {}
+    with (
+        patch.object(registration_concurrency, "CFG", STAGE_CFG),
+        patch.object(registration_concurrency, "_stage_gates", {}),
     ):
         lease = registration_concurrency.acquire_registration_stage("email_otp_send")
         assert lease is not None
@@ -74,8 +76,9 @@ def test_lease_release_is_idempotent_and_reports_over_release():
 
 
 def test_lease_supports_context_manager():
-    with patch.object(registration_concurrency, "CFG", STAGE_CFG), patch.object(
-        registration_concurrency, "_stage_gates", {}
+    with (
+        patch.object(registration_concurrency, "CFG", STAGE_CFG),
+        patch.object(registration_concurrency, "_stage_gates", {}),
     ):
         gate = registration_concurrency._gate_for("auth")
         capacity = _gate_permits(gate)
@@ -111,8 +114,9 @@ def test_unpaired_stage_lease_does_not_leak_into_next_threadpool_task():
     cap. Reproduced on CPython 3.13 with both single and multiple workers; the
     previous context-local ownership failed this with ``[1, 1]``.
     """
-    with patch.object(registration_concurrency, "CFG", STAGE_CFG), patch.object(
-        registration_concurrency, "_stage_gates", {}
+    with (
+        patch.object(registration_concurrency, "CFG", STAGE_CFG),
+        patch.object(registration_concurrency, "_stage_gates", {}),
     ):
         gate = registration_concurrency._gate_for("network")
         capacity = _gate_permits(gate)
@@ -147,8 +151,9 @@ def test_unpaired_stage_lease_does_not_leak_into_next_threadpool_task():
 
 def test_unpaired_stage_lease_does_not_leak_with_multiple_workers():
     """Same guarantee as above when the pool interleaves tasks across workers."""
-    with patch.object(registration_concurrency, "CFG", STAGE_CFG), patch.object(
-        registration_concurrency, "_stage_gates", {}
+    with (
+        patch.object(registration_concurrency, "CFG", STAGE_CFG),
+        patch.object(registration_concurrency, "_stage_gates", {}),
     ):
         gate = registration_concurrency._gate_for("network")
         capacity = _gate_permits(gate)
@@ -178,9 +183,11 @@ def test_progress_object_owns_its_gate_and_releases_on_track_exit():
     """``RegistrationProgress`` must own the lease, not a context-local slot."""
     from sms_tool import registration_progress
 
-    with patch.object(registration_concurrency, "CFG", STAGE_CFG), patch.object(
-        registration_concurrency, "_stage_gates", {}
-    ), patch.object(registration_progress, "_current") as current:
+    with (
+        patch.object(registration_concurrency, "CFG", STAGE_CFG),
+        patch.object(registration_concurrency, "_stage_gates", {}),
+        patch.object(registration_progress, "_current") as current,
+    ):
         progress = registration_progress.RegistrationProgress("a@example.com")
         current.get.return_value = progress
         try:
@@ -199,9 +206,11 @@ def test_browser_admission_reuses_auth_lease_at_stage_transition():
     from sms_tool import registration_progress
 
     registration_concurrency.registration_stage_metrics(reset=True)
-    with patch.object(registration_concurrency, "CFG", STAGE_CFG), patch.object(
-        registration_concurrency, "_stage_gates", {}
-    ), patch.object(registration_progress, "_current") as current:
+    with (
+        patch.object(registration_concurrency, "CFG", STAGE_CFG),
+        patch.object(registration_concurrency, "_stage_gates", {}),
+        patch.object(registration_progress, "_current") as current,
+    ):
         progress = registration_progress.RegistrationProgress("a@example.com")
         current.get.return_value = progress
         waited = registration_progress.admit_registration_stage("auth_flow")
@@ -229,8 +238,9 @@ def test_browser_orchestrator_admits_before_opening_session():
 def test_track_registration_releases_gate_even_when_the_call_fails():
     from sms_tool import registration_progress
 
-    with patch.object(registration_concurrency, "CFG", STAGE_CFG), patch.object(
-        registration_concurrency, "_stage_gates", {}
+    with (
+        patch.object(registration_concurrency, "CFG", STAGE_CFG),
+        patch.object(registration_concurrency, "_stage_gates", {}),
     ):
         gate = registration_concurrency._gate_for("auth")
         capacity = _gate_permits(gate)

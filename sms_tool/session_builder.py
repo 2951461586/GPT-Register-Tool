@@ -4,6 +4,7 @@ Responsibility: take the raw registration result dict (as produced by
 ``registration.run_email``) and normalize it into the canonical session JSON
 shape consumed by the rest of the toolchain (CPA import, quota refresh, etc.).
 """
+
 import time
 
 
@@ -40,6 +41,7 @@ def _session_token_from_cookie_header(cookie_header):
             if name.startswith(prefix + ".") and name[len(prefix) + 1 :].isdigit():
                 chunks[int(name[len(prefix) + 1 :])] = value
     return "".join(chunks[index] for index in sorted(chunks))
+
 
 def build_session_file(data):
     """Build the canonical session-file dict from a registration result.
@@ -170,9 +172,7 @@ def build_session_file(data):
         "totp_secret": data.get("totp_secret", ""),
         "twofa_enrolled_at": data.get("twofa_enrolled_at", 0),
         "twofa_enroll_error": (
-            data.get("twofa_enrollment", {}).get("error", "")
-            if isinstance(data.get("twofa_enrollment"), dict)
-            else ""
+            data.get("twofa_enrollment", {}).get("error", "") if isinstance(data.get("twofa_enrollment"), dict) else ""
         ),
         "browser_diagnostics": data.get("browser_diagnostics") or {},
         "purchase": data.get("purchase") or purchase,
@@ -190,6 +190,8 @@ def build_session_file(data):
             "price": mailbox.get("price", ""),
             "purchase_total_cost": mailbox.get("purchase_total_cost", ""),
             "balance_after": mailbox.get("balance_after", ""),
-        } if mailbox else {},
+        }
+        if mailbox
+        else {},
         "created_at": int(time.time()),
     }

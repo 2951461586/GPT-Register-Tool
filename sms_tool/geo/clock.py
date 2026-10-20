@@ -71,9 +71,7 @@ def _warn_once() -> None:
     )
 
 
-def offset_minutes_for_timezone(
-    tz_name: str, default: int = 0, *, at: datetime | None = None
-) -> int:
+def offset_minutes_for_timezone(tz_name: str, default: int = 0, *, at: datetime | None = None) -> int:
     """UTC offset in minutes for ``tz_name`` at ``at`` (default: now), DST included.
 
     ``at`` exists so the DST boundary can be tested: the whole point of this

@@ -102,7 +102,9 @@ def one_click_sms(args: Any, ctx: OneClickCommandContext) -> None:
         source_override=args.phone_source,
     )
     if not phone_pool.phones:
-        print("[Error] --one-click-sms requires a phone pool. Configure the selected provider's key, e.g. phone_reuse.smsbower.api_key / SMSBOWER_API_KEY.")
+        print(
+            "[Error] --one-click-sms requires a phone pool. Configure the selected provider's key, e.g. phone_reuse.smsbower.api_key / SMSBOWER_API_KEY."
+        )
         raise SystemExit(2)
     phone_pool.reset_exhausted_slots()
     print_phone_pool_status(phone_pool)
@@ -166,8 +168,11 @@ def one_click_sms(args: Any, ctx: OneClickCommandContext) -> None:
             # Never expose the exception text or automatically retry this account.
             logger.warning("one-click SMS worker failed: account=%s stage=%s", account_reference(email), stage)
             result = {
-                "email": email, "ok": False, "batch_status": "unknown",
-                "error_code": "one_click_worker_exception", "error_stage": stage,
+                "email": email,
+                "ok": False,
+                "batch_status": "unknown",
+                "error_code": "one_click_worker_exception",
+                "error_stage": stage,
             }
             _emit_one_click_event(
                 run_id=account_run_id,
@@ -191,7 +196,9 @@ def one_click_sms(args: Any, ctx: OneClickCommandContext) -> None:
             result["batch_status"] = "success"
             if persisted:
                 output_line = f"[OK] {email} RT stored: {result.get('refresh_token_status', '')}"
-                logger.info("one-click SMS %s: RT stored (%s)", account_reference(email), result.get("refresh_token_status", ""))
+                logger.info(
+                    "one-click SMS %s: RT stored (%s)", account_reference(email), result.get("refresh_token_status", "")
+                )
             else:
                 output_line = f"[FAIL] {email}: OAuth completed, local save failed"
                 logger.warning("one-click SMS local save failed: account=%s", account_reference(email))
@@ -235,7 +242,10 @@ def one_click_sms(args: Any, ctx: OneClickCommandContext) -> None:
         result.pop("tokens", None)
         return index, result, fatal
 
-    ordered = [None] * len(emails)
+    # Slots are filled as workers finish, so the list is sparse until the tail of
+    # this function. Typed as optional for that reason, not because a run may end
+    # with a hole: the loop below fills every one of them.
+    ordered: list[dict[str, Any] | None] = [None] * len(emails)
     stopped = False
     if workers <= 1:
         for index, email in enumerate(emails):
@@ -259,15 +269,25 @@ def one_click_sms(args: Any, ctx: OneClickCommandContext) -> None:
                     except Exception:
                         # Defensive fallback for failures outside the worker's
                         # own exception guard; do not lose its account slot.
-                        i, result, fatal = index, {
-                            "email": emails[index], "ok": False, "batch_status": "unknown",
-                            "error_code": "one_click_worker_exception",
-                        }, True
+                        i, result, fatal = (
+                            index,
+                            {
+                                "email": emails[index],
+                                "ok": False,
+                                "batch_status": "unknown",
+                                "error_code": "one_click_worker_exception",
+                            },
+                            True,
+                        )
                         _emit_one_click_event(
                             run_id=f"{batch_id}:{account_reference(emails[index])}",
-                            batch_id=batch_id, stage="unknown", status="unknown",
-                            email=emails[index], detail="接码结果未知，已停止派发新账号",
-                            account_terminal=True, failure_class="internal",
+                            batch_id=batch_id,
+                            stage="unknown",
+                            status="unknown",
+                            email=emails[index],
+                            detail="接码结果未知，已停止派发新账号",
+                            account_terminal=True,
+                            failure_class="internal",
                         )
                     ordered[i] = result
                     stopped = stopped or fatal
@@ -283,18 +303,24 @@ def one_click_sms(args: Any, ctx: OneClickCommandContext) -> None:
         ordered[index] = {"email": email, "ok": False, "batch_status": "skipped", "error_code": "batch_stopped"}
         _emit_one_click_event(
             run_id=f"{batch_id}:{account_reference(email)}",
-            batch_id=batch_id, stage="skipped", status="skipped",
-            email=email, detail="前序异常，未执行",
+            batch_id=batch_id,
+            stage="skipped",
+            status="skipped",
+            email=email,
+            detail="前序异常，未执行",
             account_terminal=True,
         )
 
-    results = ordered
+    if any(result is None for result in ordered):
+        raise AssertionError("one-click dispatch left an unfilled result slot")
+    results: list[dict[str, Any]] = [result for result in ordered if result is not None]
     ok_count = sum(1 for result in results if result.get("ok"))
     failed_count = sum(1 for result in results if result.get("batch_status") == "failed")
     unknown_count = sum(1 for result in results if result.get("batch_status") == "unknown")
     skipped_count = sum(1 for result in results if result.get("batch_status") == "skipped")
     persist_failed = sum(
-        1 for result in results
+        1
+        for result in results
         if result.get("batch_status") not in {"unknown", "skipped"} and result.get("persisted") is False
     )
     batch_ok = ok_count == len(emails) and not persist_failed

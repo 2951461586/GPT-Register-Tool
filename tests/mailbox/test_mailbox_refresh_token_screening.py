@@ -70,8 +70,14 @@ class RefreshTokenFindingTests(unittest.TestCase):
                 self.assertIn("template", reason)
 
     def test_placeholder_markers_are_rejected(self):
-        for value in ("your_refresh_token", "CHANGEME", "replace_me", "placeholder-value",
-                      "dummy_token", "refresh_token_here"):
+        for value in (
+            "your_refresh_token",
+            "CHANGEME",
+            "replace_me",
+            "placeholder-value",
+            "dummy_token",
+            "refresh_token_here",
+        ):
             with self.subTest(value=value):
                 severity, _ = refresh_token_finding(value, provider="microsoft")
                 self.assertEqual(severity, "reject")
@@ -92,9 +98,7 @@ class RefreshTokenFindingTests(unittest.TestCase):
     def test_google_has_a_lower_floor_than_microsoft(self):
         """Google refresh tokens are ~100 chars, Microsoft's ~800; one shared
         floor would either reject every Google token or catch nothing."""
-        self.assertLess(
-            REFRESH_TOKEN_MIN_LENGTH["google"], REFRESH_TOKEN_MIN_LENGTH["microsoft"]
-        )
+        self.assertLess(REFRESH_TOKEN_MIN_LENGTH["google"], REFRESH_TOKEN_MIN_LENGTH["microsoft"])
         token = "1//" + "aB9" * 15
         self.assertEqual(refresh_token_finding(token, provider="google")[0], "")
         self.assertEqual(refresh_token_finding(token, provider="microsoft")[0], "warn")

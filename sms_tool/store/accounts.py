@@ -9,7 +9,24 @@ from ..accounts.account_models import AccountSessionModel
 from ..config import ConfigInput
 
 from .connection import _connect, init_database
-from .normalize import _account_type, _as_bool, _as_float, _as_int, _find_existing_account_email, _get, _is_http_url, _nested, _normalize_account_email, _oauth_refresh_token, _payment_method, _paypal_status, _refresh_token_status, _resolve_account_email, _status, _success_value
+from .normalize import (
+    _account_type,
+    _as_bool,
+    _as_float,
+    _as_int,
+    _find_existing_account_email,
+    _get,
+    _is_http_url,
+    _nested,
+    _normalize_account_email,
+    _oauth_refresh_token,
+    _payment_method,
+    _paypal_status,
+    _refresh_token_status,
+    _resolve_account_email,
+    _status,
+    _success_value,
+)
 
 
 def _terminal_state_from(status: str, error: str, raw_json: str) -> str:
@@ -19,9 +36,13 @@ def _terminal_state_from(status: str, error: str, raw_json: str) -> str:
     s = status.lower()
     e = error.lower()
     r = raw_json.lower()
-    if (s in ("account_deactivated", "account_deatived")
-            or "account_deactivated" in e or "account_deatived" in e
-            or "account_deactivated" in r or "account_deatived" in r):
+    if (
+        s in ("account_deactivated", "account_deatived")
+        or "account_deactivated" in e
+        or "account_deatived" in e
+        or "account_deactivated" in r
+        or "account_deatived" in r
+    ):
         return "account_deactivated"
     return "active"
 
@@ -143,23 +164,37 @@ def upsert_account(
         "paypal_amount_due": model.payment.amount_due,
         "paypal_has_paypal": _as_bool(model.payment.has_paypal),
         "refresh_token_status": refresh_token_status,
-        "refresh_token_updated_at": _as_int(_get(data, "refresh_token_updated_at")) or (now if oauth_refresh_token else 0),
+        "refresh_token_updated_at": _as_int(_get(data, "refresh_token_updated_at"))
+        or (now if oauth_refresh_token else 0),
         "oauth_refresh_token": oauth_refresh_token,
         "workspace_status": str(_get(data, "workspace_status") or _get(workspace, "status")),
-        "workspace_id": "" if str(_get(data, "account_type") or _get(workspace, "account_type_after")).strip().lower() == "free" else str(_get(data, "workspace_id") or _get(workspace, "actual_workspace_id")),
-        "workspace_name": "" if str(_get(data, "account_type") or _get(workspace, "account_type_after")).strip().lower() == "free" else str(_get(data, "workspace_name") or _get(workspace, "workspace_name") or _get(workspace, "actual_workspace_name")),
-        "workspace_switch_result": str(_get(data, "workspace_switch_result") or _get(workspace, "switch_status") or _get(workspace, "switch_error")),
+        "workspace_id": ""
+        if str(_get(data, "account_type") or _get(workspace, "account_type_after")).strip().lower() == "free"
+        else str(_get(data, "workspace_id") or _get(workspace, "actual_workspace_id")),
+        "workspace_name": ""
+        if str(_get(data, "account_type") or _get(workspace, "account_type_after")).strip().lower() == "free"
+        else str(
+            _get(data, "workspace_name")
+            or _get(workspace, "workspace_name")
+            or _get(workspace, "actual_workspace_name")
+        ),
+        "workspace_switch_result": str(
+            _get(data, "workspace_switch_result") or _get(workspace, "switch_status") or _get(workspace, "switch_error")
+        ),
         "workspace_updated_at": _as_int(_get(data, "workspace_updated_at")) or _as_int(_get(workspace, "updated_at")),
         "account_type": _account_type(data, auth_session, workspace, access_token),
         "quota_status": str(_get(data, "quota_status") or quota.get("status", "")),
         "batch_id": str(_get(data, "batch_id")),
-        "registration_state": str(_get(data, "registration_state") or ("active" if _get(data, "success") else "failed")),
+        "registration_state": str(
+            _get(data, "registration_state") or ("active" if _get(data, "success") else "failed")
+        ),
         "registration_country": str(_get(data, "registration_country")),
         "totp_secret": model.credentials.totp_secret,
         "twofa_enrolled_at": _as_int(_get(data, "twofa_enrolled_at")) or (now if model.credentials.totp_secret else 0),
         "twofa_enroll_error": str(_get(data, "twofa_enroll_error")),
         "auth_session_logging_id": str(_get(data, "auth_session_logging_id")),
-        "device_id_generated_at": _as_int(_get(data, "device_id_generated_at")) or (now if _get(data, "device_id") else 0),
+        "device_id_generated_at": _as_int(_get(data, "device_id_generated_at"))
+        or (now if _get(data, "device_id") else 0),
         "mailbox_provider": model.mailbox.provider,
         "mailbox_source": model.mailbox.source,
         "mailbox_token": model.mailbox.token,
@@ -184,10 +219,7 @@ def upsert_account(
     # window, and the implicit transaction that `_resolve_account_email`'s
     # rename UPDATE opens still covers everything (tests/accounts/test_store_transaction.py).
     updates = ", ".join(
-        (
-            f"{column}=CASE WHEN {_COALESCE_IF_BLANK[column]} "
-            f"THEN excluded.{column} ELSE accounts.{column} END"
-        )
+        (f"{column}=CASE WHEN {_COALESCE_IF_BLANK[column]} THEN excluded.{column} ELSE accounts.{column} END")
         if column in _COALESCE_IF_BLANK
         else f"{column}=excluded.{column}"
         for column in columns
@@ -210,7 +242,6 @@ def upsert_account(
 
         notify_account_deactivated(row)
     return True
-
 
 
 def record_registration_audit(data, *, batch_id="", state="", runtime_config: ConfigInput = None):
@@ -273,13 +304,20 @@ def record_registration_audit(data, *, batch_id="", state="", runtime_config: Co
             ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
-                str(batch_id or data.get("batch_id") or "")[:100], email, registration_state,
-                error, str(data.get("failure_class") or "")[:80], _as_int(probe.get("status_code")),
-                str(telemetry.get("token_hash") or "")[:32], _as_int(telemetry.get("iat")),
-                _as_int(telemetry.get("exp")), _as_int(telemetry.get("age_seconds")),
+                str(batch_id or data.get("batch_id") or "")[:100],
+                email,
+                registration_state,
+                error,
+                str(data.get("failure_class") or "")[:80],
+                _as_int(probe.get("status_code")),
+                str(telemetry.get("token_hash") or "")[:32],
+                _as_int(telemetry.get("iat")),
+                _as_int(telemetry.get("exp")),
+                _as_int(telemetry.get("age_seconds")),
                 str(data.get("registration_country") or "")[:8],
                 str(data.get("auth_fingerprint_profile") or "")[:80],
-                str(data.get("sentinel_version") or "")[:80], int(time.time()),
+                str(data.get("sentinel_version") or "")[:80],
+                int(time.time()),
                 json.dumps(detail, ensure_ascii=False, separators=(",", ":")),
             ),
         )
@@ -287,7 +325,6 @@ def record_registration_audit(data, *, batch_id="", state="", runtime_config: Co
         return True
     finally:
         conn.close()
-
 
 
 def list_paypal_accounts(email="", *, runtime_config: ConfigInput = None):
@@ -310,7 +347,6 @@ def list_paypal_accounts(email="", *, runtime_config: ConfigInput = None):
         conn.close()
 
 
-
 def get_paypal_url(email, *, runtime_config: ConfigInput = None):
     rows = list_paypal_accounts(email, runtime_config=runtime_config)
     for row in rows:
@@ -318,7 +354,6 @@ def get_paypal_url(email, *, runtime_config: ConfigInput = None):
         if _is_http_url(url):
             return url
     return ""
-
 
 
 def get_account_record(email, *, runtime_config: ConfigInput = None):
@@ -335,7 +370,6 @@ def get_account_record(email, *, runtime_config: ConfigInput = None):
     return dict(row) if row else {}
 
 
-
 def get_account_record_by_id(account_id, *, runtime_config: ConfigInput = None):  # noqa: E302
     init_database(runtime_config=runtime_config)
     digits = str(account_id or "").strip()
@@ -347,7 +381,6 @@ def get_account_record_by_id(account_id, *, runtime_config: ConfigInput = None):
     finally:
         conn.close()
     return dict(row) if row else {}
-
 
 
 def get_account_records(emails, *, runtime_config: ConfigInput = None):
@@ -383,7 +416,6 @@ def get_account_records(emails, *, runtime_config: ConfigInput = None):
     return result
 
 
-
 def list_account_records(*, runtime_config: ConfigInput = None):
     init_database(runtime_config=runtime_config)
     conn = _connect(runtime_config=runtime_config)
@@ -392,7 +424,6 @@ def list_account_records(*, runtime_config: ConfigInput = None):
     finally:
         conn.close()
     return [dict(row) for row in rows]
-
 
 
 def get_device_context(email, *, runtime_config: ConfigInput = None):
@@ -413,7 +444,6 @@ def get_device_context(email, *, runtime_config: ConfigInput = None):
         "device_id": device_id,
         "auth_session_logging_id": logging_id,
     }
-
 
 
 def migrate_account_email(old_email, new_email, verified_data, *, runtime_config: ConfigInput = None):
@@ -481,7 +511,12 @@ def migrate_account_email(old_email, new_email, verified_data, *, runtime_config
             "email": new,
             "password": model.password or row.get("password", ""),
             "success": _as_bool(_success_value(session_payload, model.credentials.access_token)),
-            "status": _status(session_payload, _nested(session_payload, "paypal"), model.credentials.access_token, has_refresh_token=bool(model.credentials.refresh_token or model.credentials.oauth_refresh_token)),
+            "status": _status(
+                session_payload,
+                _nested(session_payload, "paypal"),
+                model.credentials.access_token,
+                has_refresh_token=bool(model.credentials.refresh_token or model.credentials.oauth_refresh_token),
+            ),
             "error": model.error,
             "session_token": model.credentials.session_token or row.get("session_token", ""),
             "access_token": model.credentials.access_token or row.get("access_token", ""),
@@ -509,7 +544,10 @@ def migrate_account_email(old_email, new_email, verified_data, *, runtime_config
             temp.write_text(json.dumps(session_payload, ensure_ascii=False, indent=2), encoding="utf-8")
             temp.replace(session_target)
             session_replaced = True
-        cursor = conn.execute("UPDATE accounts SET " + ", ".join(f"{key}=:{key}" for key in updates) + " WHERE lower(email)=lower(:old)", {**updates, "old": old})
+        cursor = conn.execute(
+            "UPDATE accounts SET " + ", ".join(f"{key}=:{key}" for key in updates) + " WHERE lower(email)=lower(:old)",
+            {**updates, "old": old},
+        )
         if cursor.rowcount != 1:
             conn.rollback()
             return False
@@ -533,7 +571,6 @@ def migrate_account_email(old_email, new_email, verified_data, *, runtime_config
     return True
 
 
-
 def rebuild_from_session_dir(session_dir, *, runtime_config: ConfigInput = None):
     init_database(runtime_config=runtime_config)
     count = 0
@@ -546,7 +583,6 @@ def rebuild_from_session_dir(session_dir, *, runtime_config: ConfigInput = None)
         if upsert_account(data, json_path=str(path), runtime_config=runtime_config):
             count += 1
     return count
-
 
 
 def list_terminal_remail_accounts(*, runtime_config: ConfigInput = None):
@@ -575,4 +611,3 @@ def list_terminal_remail_accounts(*, runtime_config: ConfigInput = None):
             item["order_no"] = ""
         results.append(item)
     return results
-

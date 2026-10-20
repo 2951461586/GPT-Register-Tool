@@ -261,9 +261,7 @@ class ProbeCacheBoundTests(unittest.TestCase):
 
         with patch.object(payment_egress, "_PROBE_CACHE_LIMIT", 3):
             for index in range(10):
-                payment_egress._cached_probe(
-                    probe, f"http://10.0.0.{index}:8080", "US", "checkout", 1.0, 600.0, 180.0
-                )
+                payment_egress._cached_probe(probe, f"http://10.0.0.{index}:8080", "US", "checkout", 1.0, 600.0, 180.0)
         self.assertLessEqual(len(payment_egress._probe_cache), 3)
 
     def test_prune_drops_expired_entries_before_the_oldest_live_one(self):

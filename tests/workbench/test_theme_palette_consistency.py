@@ -18,6 +18,7 @@ colour change.
 
 Output is ASCII-only: CI runs on a Windows runner whose stdout is cp1252.
 """
+
 import re
 import unittest
 from pathlib import Path
@@ -26,9 +27,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 APP_XAML = PROJECT_ROOT / "SmsWorkbench" / "App.xaml"
 THEME_CS = PROJECT_ROOT / "SmsWorkbench" / "MainWindow.Theme.cs"
 
-XAML_BRUSH = re.compile(
-    r'<SolidColorBrush\s+x:Key="(?P<key>[^"]+)"\s+Color="(?P<color>#[0-9A-Fa-f]{6,8})"'
-)
+XAML_BRUSH = re.compile(r'<SolidColorBrush\s+x:Key="(?P<key>[^"]+)"\s+Color="(?P<color>#[0-9A-Fa-f]{6,8})"')
 CS_BRUSH = re.compile(r'SetBrush\(\s*"(?P<key>[^"]+)"\s*,\s*"(?P<color>#[0-9A-Fa-f]{6,8})"\s*\)')
 
 
@@ -41,9 +40,7 @@ def _normalise(value):
 
 
 def _xaml_brushes():
-    return {
-        key: _normalise(color) for key, color in XAML_BRUSH.findall(APP_XAML.read_text(encoding="utf-8-sig"))
-    }
+    return {key: _normalise(color) for key, color in XAML_BRUSH.findall(APP_XAML.read_text(encoding="utf-8-sig"))}
 
 
 def _csharp_brushes():
@@ -73,11 +70,7 @@ class PaletteDriftTests(unittest.TestCase):
         cs = _csharp_brushes()
         shared = sorted(set(xaml) & set(cs))
         self.assertGreater(len(shared), 10, "expected a meaningful overlap to check")
-        mismatched = {
-            key: (xaml[key], cs[key])
-            for key in shared
-            if xaml[key] not in cs[key]
-        }
+        mismatched = {key: (xaml[key], cs[key]) for key in shared if xaml[key] not in cs[key]}
         self.assertEqual(
             mismatched,
             {},

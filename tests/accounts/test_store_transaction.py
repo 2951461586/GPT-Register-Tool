@@ -19,6 +19,7 @@ The guard that matters is therefore not "wrap it in BEGIN IMMEDIATE" but
 to ``sqlite3.connect`` would silently turn the two statements into two
 transactions and create exactly the partial-write the finding described.
 """
+
 import inspect
 import shutil
 import sqlite3
@@ -105,8 +106,7 @@ class UpsertAtomicityTests(_SqliteCase):
         try:
             email = _resolve_account_email(conn, "oldtag@example.com")
             conn.execute(
-                "INSERT INTO accounts (email, plan) VALUES (?, ?) "
-                "ON CONFLICT(email) DO UPDATE SET plan=excluded.plan",
+                "INSERT INTO accounts (email, plan) VALUES (?, ?) ON CONFLICT(email) DO UPDATE SET plan=excluded.plan",
                 (email, "plus"),
             )
             conn.commit()
@@ -177,9 +177,7 @@ class InitCacheResetTests(_SqliteCase):
                 connection.init_database(path)
         connection.init_database(path)
         check = self.open_db(path)
-        self.assertEqual(
-            check.execute("PRAGMA user_version").fetchone()[0], SCHEMA_VERSION
-        )
+        self.assertEqual(check.execute("PRAGMA user_version").fetchone()[0], SCHEMA_VERSION)
 
     def test_memo_is_keyed_by_path_so_a_new_path_initializes_afresh(self):
         first = self.make_db(seeded=False)

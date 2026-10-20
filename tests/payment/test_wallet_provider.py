@@ -323,9 +323,7 @@ class WalletProviderFailureTests(unittest.TestCase):
         class TimeoutTransport(FixtureTransport):
             def stripe_init(self, request):
                 self.calls.append(("stripe_init", request))
-                raise TimeoutError(
-                    "access_token=very-secret-token publishable_key=pk_test_very_secret_key_123456"
-                )
+                raise TimeoutError("access_token=very-secret-token publishable_key=pk_test_very_secret_key_123456")
 
         result = run_wallet_provider("gopay", "very-secret-token", TimeoutTransport(fixture), probe_only=True)
 
@@ -435,8 +433,12 @@ class WalletProviderFailureTests(unittest.TestCase):
             "pi_test_payment_intent_identifier_123456"
         )
         for secret in (
-            "bearer-secret", "user", "pass", "pi_secret_value",
-            "cs_live_session_identifier_123456", "pi_test_payment_intent_identifier_123456",
+            "bearer-secret",
+            "user",
+            "pass",
+            "pi_secret_value",
+            "cs_live_session_identifier_123456",
+            "pi_test_payment_intent_identifier_123456",
         ):
             self.assertNotIn(secret, redacted)
 

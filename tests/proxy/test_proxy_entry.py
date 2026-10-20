@@ -69,15 +69,15 @@ class TestParseProxy(unittest.TestCase):
     def test_http_without_port_is_rejected_across_all_forms(self):
         # The "http/https needs an explicit port" rule must hold no matter which
         # parse branch handles the input, not only the bare host branch.
-        self.assertIsNone(parse_proxy("http://user:pass@host"))      # userinfo branch
+        self.assertIsNone(parse_proxy("http://user:pass@host"))  # userinfo branch
         self.assertIsNone(parse_proxy("https://user:pass@host"))
-        self.assertIsNone(parse_proxy("http://[::1]"))               # ipv6 branch
-        self.assertIsNone(parse_proxy("user:pass@host"))             # implied http scheme
+        self.assertIsNone(parse_proxy("http://[::1]"))  # ipv6 branch
+        self.assertIsNone(parse_proxy("user:pass@host"))  # implied http scheme
 
     def test_socks_defaults_port_across_all_forms(self):
-        self.assertEqual(parse_proxy("socks5://u:p@h").port, 1080)   # userinfo branch
-        self.assertEqual(parse_proxy("socks5://h").port, 1080)       # bare host branch
-        self.assertEqual(parse_proxy("socks5://[::1]").port, 1080)   # ipv6 branch
+        self.assertEqual(parse_proxy("socks5://u:p@h").port, 1080)  # userinfo branch
+        self.assertEqual(parse_proxy("socks5://h").port, 1080)  # bare host branch
+        self.assertEqual(parse_proxy("socks5://[::1]").port, 1080)  # ipv6 branch
 
     def test_port_zero_is_invalid(self):
         # Port 0 is never a real proxy port; a missing/zero http port stays
@@ -325,8 +325,8 @@ class TestUnknownTemplateIsLeftAlone(unittest.TestCase):
     UNKNOWN = (
         "http://plainuser:plainpass@host:8080",
         "http://user-country-vietnam:pw@host:8080",  # tag present, not ISO-2
-        "http://user-cc-vn:pw@host:8080",            # tag name not in the set
-        "http://SYS433954tbr_1:pw@host:2000",        # rola shape minus the region
+        "http://user-cc-vn:pw@host:8080",  # tag name not in the set
+        "http://SYS433954tbr_1:pw@host:2000",  # rola shape minus the region
     )
 
     def test_retarget_is_a_noop(self):
@@ -435,6 +435,7 @@ def test_csharp_normalized_pool_entries_round_trip_through_proxy_entry():
         assert entry.port == case["port"], case["name"]
         assert entry.username == case["username"], case["name"]
         assert entry.password == case["password"], case["name"]
+
 
 if __name__ == "__main__":
     unittest.main()

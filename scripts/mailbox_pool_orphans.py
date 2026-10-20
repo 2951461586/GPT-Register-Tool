@@ -84,7 +84,9 @@ def reconcile(
     domain: str,
 ) -> dict[str, object]:
     lines = pool_file.read_text(encoding="utf-8-sig").splitlines(keepends=True) if pool_file.exists() else []
-    pool_emails = {email for line in lines if (email := _pool_email(line)) and (not domain or email.endswith("@" + domain.lower()))}
+    pool_emails = {
+        email for line in lines if (email := _pool_email(line)) and (not domain or email.endswith("@" + domain.lower()))
+    }
     db = _db_emails(database, domain)
     session_files = _session_stems(sessions_dir)
 

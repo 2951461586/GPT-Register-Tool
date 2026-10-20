@@ -45,8 +45,9 @@ def test_health_contract_redacts_camel_case_secret_keys():
 
 
 def test_queue_sanitizes_mapping_handler_results():
-    with tempfile.TemporaryDirectory() as tmp, patch.object(
-        account_health_queue, "queue_path", return_value=Path(tmp) / "queue.json"
+    with (
+        tempfile.TemporaryDirectory() as tmp,
+        patch.object(account_health_queue, "queue_path", return_value=Path(tmp) / "queue.json"),
     ):
         account_health_queue.enqueue_account_health("user@example.com", "plan", auto_start=False)
         account_health_queue.process_account_health_jobs(
@@ -75,17 +76,16 @@ def test_health_contract_records_recovery_chain_and_final_verification():
 
 
 def test_queue_deduplicates_active_jobs_and_persists_status():
-    with tempfile.TemporaryDirectory() as tmp, patch.object(
-        account_health_queue,
-        "queue_path",
-        return_value=Path(tmp) / "queue.json",
+    with (
+        tempfile.TemporaryDirectory() as tmp,
+        patch.object(
+            account_health_queue,
+            "queue_path",
+            return_value=Path(tmp) / "queue.json",
+        ),
     ):
-        first = account_health_queue.enqueue_account_health(
-            "User@Example.com", "plan", auto_start=False
-        )
-        duplicate = account_health_queue.enqueue_account_health(
-            "user@example.com", "plan", auto_start=False
-        )
+        first = account_health_queue.enqueue_account_health("User@Example.com", "plan", auto_start=False)
+        duplicate = account_health_queue.enqueue_account_health("user@example.com", "plan", auto_start=False)
         summary = account_health_queue.process_account_health_jobs(
             handler=lambda job: {
                 "ok": True,
@@ -117,15 +117,16 @@ def test_queue_worker_concurrency_is_bounded():
             active -= 1
         return {"ok": True, "email": job["email"], "check": job["kind"], "state": "healthy"}
 
-    with tempfile.TemporaryDirectory() as tmp, patch.object(
-        account_health_queue,
-        "queue_path",
-        return_value=Path(tmp) / "queue.json",
+    with (
+        tempfile.TemporaryDirectory() as tmp,
+        patch.object(
+            account_health_queue,
+            "queue_path",
+            return_value=Path(tmp) / "queue.json",
+        ),
     ):
         for index in range(6):
-            account_health_queue.enqueue_account_health(
-                f"user{index}@example.com", "deep_liveness", auto_start=False
-            )
+            account_health_queue.enqueue_account_health(f"user{index}@example.com", "deep_liveness", auto_start=False)
         summary = account_health_queue.process_account_health_jobs(workers=2, handler=handler)
 
     assert summary["processed"] == 6
@@ -133,17 +134,16 @@ def test_queue_worker_concurrency_is_bounded():
 
 
 def test_queue_serializes_jobs_for_the_same_account():
-    with tempfile.TemporaryDirectory() as tmp, patch.object(
-        account_health_queue,
-        "queue_path",
-        return_value=Path(tmp) / "queue.json",
+    with (
+        tempfile.TemporaryDirectory() as tmp,
+        patch.object(
+            account_health_queue,
+            "queue_path",
+            return_value=Path(tmp) / "queue.json",
+        ),
     ):
-        account_health_queue.enqueue_account_health(
-            "same@example.com", "plan", auto_start=False
-        )
-        account_health_queue.enqueue_account_health(
-            "same@example.com", "deep_liveness", auto_start=False
-        )
+        account_health_queue.enqueue_account_health("same@example.com", "plan", auto_start=False)
+        account_health_queue.enqueue_account_health("same@example.com", "deep_liveness", auto_start=False)
         first = account_health_queue.process_account_health_jobs(
             workers=2,
             handler=lambda job: {
@@ -193,10 +193,13 @@ def test_pid_alive_rejects_invalid_pids():
 
 
 def test_running_item_owned_by_current_process_is_not_recovered():
-    with tempfile.TemporaryDirectory() as tmp, patch.object(
-        account_health_queue,
-        "queue_path",
-        return_value=Path(tmp) / "queue.json",
+    with (
+        tempfile.TemporaryDirectory() as tmp,
+        patch.object(
+            account_health_queue,
+            "queue_path",
+            return_value=Path(tmp) / "queue.json",
+        ),
     ):
         account_health_queue._write_unlocked(
             [
@@ -220,10 +223,13 @@ def test_running_item_owned_by_current_process_is_not_recovered():
 
 
 def test_recover_account_health_queue_expires_old_pending_jobs():
-    with tempfile.TemporaryDirectory() as tmp, patch.object(
-        account_health_queue,
-        "queue_path",
-        return_value=Path(tmp) / "queue.json",
+    with (
+        tempfile.TemporaryDirectory() as tmp,
+        patch.object(
+            account_health_queue,
+            "queue_path",
+            return_value=Path(tmp) / "queue.json",
+        ),
     ):
         account_health_queue._write_unlocked(
             [
@@ -246,22 +252,27 @@ def test_recover_account_health_queue_expires_old_pending_jobs():
 
 
 def test_expired_running_lease_is_recovered_even_when_pid_is_alive():
-    with tempfile.TemporaryDirectory() as tmp, patch.object(
-        account_health_queue,
-        "queue_path",
-        return_value=Path(tmp) / "queue.json",
+    with (
+        tempfile.TemporaryDirectory() as tmp,
+        patch.object(
+            account_health_queue,
+            "queue_path",
+            return_value=Path(tmp) / "queue.json",
+        ),
     ):
         account_health_queue._write_unlocked(
-            [{
-                "id": "expired-lease",
-                "email": "owner@example.com",
-                "kind": "plan",
-                "status": "running",
-                "worker_pid": os.getpid(),
-                "lease_id": "old",
-                "lease_expires_at": int(time.time()) - 1,
-                "updated_at": int(time.time()),
-            }]
+            [
+                {
+                    "id": "expired-lease",
+                    "email": "owner@example.com",
+                    "kind": "plan",
+                    "status": "running",
+                    "worker_pid": os.getpid(),
+                    "lease_id": "old",
+                    "lease_expires_at": int(time.time()) - 1,
+                    "updated_at": int(time.time()),
+                }
+            ]
         )
         summary = account_health_queue.recover_account_health_queue()
         saved = json.loads((Path(tmp) / "queue.json").read_text(encoding="utf-8"))
@@ -280,14 +291,15 @@ def test_worker_claim_installs_and_clears_lease():
         observed.update(saved[0])
         return {"ok": True, "email": job["email"], "check": job["kind"], "state": "healthy"}
 
-    with tempfile.TemporaryDirectory() as tmp, patch.object(
-        account_health_queue,
-        "queue_path",
-        return_value=Path(tmp) / "queue.json",
+    with (
+        tempfile.TemporaryDirectory() as tmp,
+        patch.object(
+            account_health_queue,
+            "queue_path",
+            return_value=Path(tmp) / "queue.json",
+        ),
     ):
-        account_health_queue.enqueue_account_health(
-            "lease@example.com", "plan", auto_start=False
-        )
+        account_health_queue.enqueue_account_health("lease@example.com", "plan", auto_start=False)
         account_health_queue.process_account_health_jobs(handler=handler)
         saved = json.loads((Path(tmp) / "queue.json").read_text(encoding="utf-8"))
 
@@ -301,9 +313,7 @@ def test_storage_persists_unified_health_result_without_token():
     with tempfile.TemporaryDirectory() as tmp:
         db_path = Path(tmp) / "accounts.sqlite3"
         with patch.object(storage, "database_path", return_value=db_path):
-            assert storage.upsert_account(
-                {"email": "health@example.com", "success": True, "access_token": "secret-at"}
-            )
+            assert storage.upsert_account({"email": "health@example.com", "success": True, "access_token": "secret-at"})
             assert storage.mark_account_health_result(
                 "health@example.com",
                 {
@@ -325,19 +335,21 @@ def test_storage_persists_unified_health_result_without_token():
 def test_deep_liveness_runs_light_probe_recovery_and_final_probe():
     record = {"email": "recover@example.com", "access_token": "new-at", "raw_json": "{}"}
     report = {
-        "results": [{
-            "email": "recover@example.com",
-            "ok": True,
-            "probe_ok": True,
-            "persisted": True,
-            "probe": {
+        "results": [
+            {
+                "email": "recover@example.com",
                 "ok": True,
-                "status": "active",
-                "status_code": 200,
-                "quota_status": "可用",
-            },
-            "relogin": {"ok": True, "mode": "chatgpt_email_otp"},
-        }],
+                "probe_ok": True,
+                "persisted": True,
+                "probe": {
+                    "ok": True,
+                    "status": "active",
+                    "status_code": 200,
+                    "quota_status": "可用",
+                },
+                "relogin": {"ok": True, "mode": "chatgpt_email_otp"},
+            }
+        ],
     }
     with (
         patch("sms_tool.storage.get_account_record", return_value=record),

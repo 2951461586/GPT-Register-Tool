@@ -37,7 +37,7 @@ import precommit_guard  # noqa: E402
 # （`.bak` / `.bak-<描述>` / `.old` / `.save` / `.tmp`），所以按家族断言。
 CREDENTIAL_CONFIG_SNAPSHOTS = (
     "proxy.json",
-    "proxy.json.bak-vn-migration",   # 2026-09-11 事故原文
+    "proxy.json.bak-vn-migration",  # 2026-09-11 事故原文
     "proxy.json.old",
     "proxy.json.save",
     "config.json",
@@ -92,8 +92,7 @@ def git_ignores(rel: str) -> bool:
 def test_gitignore_rejects_credential_config_snapshots(rel: str) -> None:
     """这一层才是决定性的：闸门只信 git。"""
     assert git_ignores(rel), (
-        f"{rel} 未被 .gitignore 拒绝 —— release payload gate 对它完全失明"
-        f"（闸门问的是 git，git 说没忽略就放行）"
+        f"{rel} 未被 .gitignore 拒绝 —— release payload gate 对它完全失明（闸门问的是 git，git 说没忽略就放行）"
     )
 
 
@@ -155,8 +154,7 @@ def test_payload_gate_blocks_an_unanticipated_suffix(tmp_path: Path) -> None:
     proc = run_payload_gate(payload)
 
     assert proc.returncode != 0, (
-        "闸门放行了一个 git-ignored、后缀又不被任何白名单承认的文件 —— "
-        "fail-open 又回来了\n" + proc.stdout + proc.stderr
+        "闸门放行了一个 git-ignored、后缀又不被任何白名单承认的文件 —— fail-open 又回来了\n" + proc.stdout + proc.stderr
     )
     assert "proxy.json.bak-vn-migration" in (proc.stdout + proc.stderr), (
         "闸门拦了，但报错里没点名是哪个文件\n" + proc.stdout + proc.stderr
@@ -172,6 +170,5 @@ def test_payload_gate_passes_a_clean_payload(tmp_path: Path) -> None:
     proc = run_payload_gate(payload)
 
     assert proc.returncode == 0, (
-        "干净的载荷被闸门拦了 —— 说明它现在是 fail-closed 过头（一律拦截）\n"
-        + proc.stdout + proc.stderr
+        "干净的载荷被闸门拦了 —— 说明它现在是 fail-closed 过头（一律拦截）\n" + proc.stdout + proc.stderr
     )

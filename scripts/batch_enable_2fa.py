@@ -176,10 +176,7 @@ class Journal:
 
     def append(self, email: str, state: str, secret: str) -> None:
         now = int(time.time())
-        line = (
-            f"{email}\t{state}\t{secret}\t{now}\t"
-            f"{datetime.fromtimestamp(now).strftime('%Y-%m-%d %H:%M:%S')}\n"
-        )
+        line = f"{email}\t{state}\t{secret}\t{now}\t{datetime.fromtimestamp(now).strftime('%Y-%m-%d %H:%M:%S')}\n"
         with _JOURNAL_LOCK:
             with open(self.path, "a", encoding="utf-8", newline="") as handle:
                 handle.write(line)
@@ -204,9 +201,7 @@ def persist_twofa(email: str, secret: str, error: str = "") -> bool:
     data: dict = {}
     try:
         lookup = _find_existing_account_email(conn, email) or email
-        row = conn.execute(
-            "SELECT raw_json, json_path FROM accounts WHERE email=?", (lookup,)
-        ).fetchone()
+        row = conn.execute("SELECT raw_json, json_path FROM accounts WHERE email=?", (lookup,)).fetchone()
         if row is None:
             return False
         try:
@@ -242,10 +237,16 @@ def persist_twofa(email: str, secret: str, error: str = "") -> bool:
             WHERE email = ?
             """,
             (
-                secret, secret,
-                secret, now,
-                secret, error, error[:500],
-                now, raw_json, lookup,
+                secret,
+                secret,
+                secret,
+                now,
+                secret,
+                error,
+                error[:500],
+                now,
+                raw_json,
+                lookup,
             ),
         )
         conn.commit()
@@ -289,10 +290,7 @@ def load_targets(scope: str, *, retry_terminal: bool = False) -> list[dict]:
         # that are already done.  (Today both agree -- 925 both / 759 neither
         # / 0 column-only -- but that is a coincidence of history, not a
         # guarantee.)
-        has_2fa = bool(
-            str(r["totp_secret"] or "").strip()
-            or str(data.get("totp_secret") or "").strip()
-        )
+        has_2fa = bool(str(r["totp_secret"] or "").strip() or str(data.get("totp_secret") or "").strip())
         if scope == "no-trial" and label != PROMO_FREE:
             continue
         if scope in {"no-trial", "all-icloud"} and has_2fa:
@@ -302,14 +300,16 @@ def load_targets(scope: str, *, retry_terminal: bool = False) -> list[dict]:
             if any(m in last_error for m in TERMINAL_ERROR_MARKERS):
                 continue
         account = dict(data)
-        account.update({
-            "email": r["email"],
-            "access_token": r["access_token"] or data.get("access_token") or "",
-            "device_id": r["device_id"] or data.get("device_id") or "",
-            "mailbox_token": r["mailbox_token"] or data.get("mailbox_token") or "",
-            "mailbox_provider": r["mailbox_provider"] or data.get("mailbox_provider") or "",
-            "json_path": r["json_path"] or data.get("json_path") or "",
-        })
+        account.update(
+            {
+                "email": r["email"],
+                "access_token": r["access_token"] or data.get("access_token") or "",
+                "device_id": r["device_id"] or data.get("device_id") or "",
+                "mailbox_token": r["mailbox_token"] or data.get("mailbox_token") or "",
+                "mailbox_provider": r["mailbox_provider"] or data.get("mailbox_provider") or "",
+                "json_path": r["json_path"] or data.get("json_path") or "",
+            }
+        )
         account["_promo_label"] = label
         rows.append(account)
     conn.close()
@@ -328,13 +328,17 @@ def _prime(session, chat_base: str, base_headers: dict) -> str:
     from sms_tool.http_client import request_with_retry
 
     request_with_retry(
-        session, "get", f"{chat_base}/",
+        session,
+        "get",
+        f"{chat_base}/",
         label="2FA batch prime",
         headers={**base_headers, "Accept": "text/html,application/xhtml+xml"},
         impersonate=auth_impersonate(),
     )
     response = request_with_retry(
-        session, "get", f"{chat_base}/api/auth/csrf",
+        session,
+        "get",
+        f"{chat_base}/api/auth/csrf",
         label="2FA batch csrf",
         headers={**base_headers, "Accept": "application/json", "Referer": f"{chat_base}/"},
         impersonate=auth_impersonate(),
@@ -342,14 +346,16 @@ def _prime(session, chat_base: str, base_headers: dict) -> str:
     return str(_json_or_raw(response).get("csrfToken") or "").strip()
 
 
-def enroll_with_token(session, access_token: str, did: str, base_headers: dict,
-                      journal: Journal, email: str) -> dict:
+def enroll_with_token(session, access_token: str, did: str, base_headers: dict, journal: Journal, email: str) -> dict:
     """Enroll using an access token we already hold. No email OTP is spent.
 
     The secret is journaled between enroll and activate -- see module docstring.
     """
     from sms_tool.accounts.account_2fa import (
-        _activate_totp, _enroll_totp, _mfa_info, _totp_already_enabled,
+        _activate_totp,
+        _enroll_totp,
+        _mfa_info,
+        _totp_already_enabled,
     )
 
     info = _mfa_info(session, access_token, did, base_headers)
@@ -383,7 +389,10 @@ def enroll_with_token(session, access_token: str, did: str, base_headers: dict,
 
 
 def run_one(
-    account: dict, journal: Journal, proxy_limit: int, explicit_proxy: str = "",
+    account: dict,
+    journal: Journal,
+    proxy_limit: int,
+    explicit_proxy: str = "",
 ) -> dict:
     """Try, in order: held access token -> email-OTP re-login, across proxies.
 
@@ -398,12 +407,15 @@ def run_one(
 
     from sms_tool.accounts.account_2fa import _needs_reauth
     from sms_tool.account_creation import (
-        _auth_session_access_token, _fetch_auth_session,
+        _auth_session_access_token,
+        _fetch_auth_session,
     )
     from sms_tool.accounts.account_recovery import _stored_registration_password
     from sms_tool.auth_flow import _login_existing_account_with_email_otp
     from sms_tool.auth_headers import (
-        auth_impersonate, openai_auth_headers, select_auth_fingerprint,
+        auth_impersonate,
+        openai_auth_headers,
+        select_auth_fingerprint,
     )
     from sms_tool.codex_oauth import _mailbox_from_data
     from sms_tool.config import CFG
@@ -417,8 +429,7 @@ def run_one(
 
     mailbox = _mailbox_from_data(account)
     if mailbox is None:
-        return {"email": email, "ok": False, "state": "no_mailbox",
-                "error": "missing_mailbox"}
+        return {"email": email, "ok": False, "state": "no_mailbox", "error": "missing_mailbox"}
 
     _raw_chat_cfg: object = CFG.get("chatgpt")
     chat_cfg: dict = _raw_chat_cfg if isinstance(_raw_chat_cfg, dict) else {}
@@ -426,18 +437,22 @@ def run_one(
     chat_base = str(chat_cfg.get("chat_base_url") or "https://chatgpt.com").rstrip("/")
 
     try:
-        candidates = [c.proxy for c in operation_proxy_candidates(
-            account, operation="liveness", config=CFG,
-            explicit=explicit_proxy or None,
-        )]
+        candidates = [
+            c.proxy
+            for c in operation_proxy_candidates(
+                account,
+                operation="liveness",
+                config=CFG,
+                explicit=explicit_proxy or None,
+            )
+        ]
     except Exception:
         candidates = []
     if not candidates:
         candidates = [None]
     candidates = candidates[: max(1, proxy_limit)]
 
-    last: dict = {"email": email, "ok": False, "state": "no_attempt",
-                  "error": "no_proxy_attempted"}
+    last: dict = {"email": email, "ok": False, "state": "no_attempt", "error": "no_proxy_attempted"}
 
     for proxy in candidates:
         try:
@@ -447,19 +462,25 @@ def run_one(
                 session.proxies = {"http": proxy, "https": proxy}
             _set_oai_did_cookie(session, device_id)
             base_headers = openai_auth_headers(
-                device_id, accept="application/json", include_trace=True,
+                device_id,
+                accept="application/json",
+                include_trace=True,
             )
             csrf_token = _prime(session, chat_base, base_headers)
             if not csrf_token:
-                last = {"email": email, "ok": False, "state": "prime_failed",
-                        "error": "missing_csrf_token"}
+                last = {"email": email, "ok": False, "state": "prime_failed", "error": "missing_csrf_token"}
                 continue
 
             # --- lane A: the token we already hold (no email cost) ---
             if held_token:
                 try:
                     result = enroll_with_token(
-                        session, held_token, device_id, base_headers, journal, email,
+                        session,
+                        held_token,
+                        device_id,
+                        base_headers,
+                        journal,
+                        email,
                     )
                     if result.get("ok"):
                         result["email"] = email
@@ -474,11 +495,9 @@ def run_one(
                         last = {**result, "email": email, "lane": "held_token"}
                 except Exception as exc:
                     if not _needs_reauth(exc):
-                        last = {"email": email, "ok": False, "state": "held_token_failed",
-                                "error": str(exc)[:500]}
+                        last = {"email": email, "ok": False, "state": "held_token_failed", "error": str(exc)[:500]}
                         continue
-                    last = {"email": email, "ok": False, "state": "needs_reauth",
-                            "error": str(exc)[:300]}
+                    last = {"email": email, "ok": False, "state": "needs_reauth", "error": str(exc)[:300]}
 
             # --- lane B: full email-OTP re-login on the same session ---
             def reauth_login_fn() -> str:
@@ -512,7 +531,12 @@ def run_one(
 
             fresh_token = reauth_login_fn()
             result = enroll_with_token(
-                session, fresh_token, device_id, base_headers, journal, email,
+                session,
+                fresh_token,
+                device_id,
+                base_headers,
+                journal,
+                email,
             )
             result["email"] = email
             result["lane"] = "email_otp_relogin"
@@ -520,8 +544,7 @@ def run_one(
                 return result
             last = result
         except Exception as exc:
-            last = {"email": email, "ok": False, "state": "exception",
-                    "error": f"{type(exc).__name__}: {exc}"[:500]}
+            last = {"email": email, "ok": False, "state": "exception", "error": f"{type(exc).__name__}: {exc}"[:500]}
             continue
 
     return last
@@ -576,7 +599,9 @@ def _pool_rejects_credentials(explicit_proxy: str = "", timeout: float = 12.0) -
         candidates = [
             c.proxy
             for c in operation_proxy_candidates(
-                None, operation="liveness", config=CFG,
+                None,
+                operation="liveness",
+                config=CFG,
                 explicit=explicit_proxy or None,
             )
         ]
@@ -599,22 +624,26 @@ def _pool_rejects_credentials(explicit_proxy: str = "", timeout: float = 12.0) -
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Batch TOTP enrollment for saved accounts")
-    parser.add_argument("--scope", default="no-trial",
-                        choices=["no-trial", "all-icloud"])
+    parser.add_argument("--scope", default="no-trial", choices=["no-trial", "all-icloud"])
     parser.add_argument("--limit", type=int, default=0, help="0 = no limit")
     parser.add_argument("--workers", type=int, default=4)
-    parser.add_argument("--proxy-limit", type=int, default=3,
-                        help="max egress candidates tried per account")
+    parser.add_argument("--proxy-limit", type=int, default=3, help="max egress candidates tried per account")
     parser.add_argument("--dry-run", action="store_true")
-    parser.add_argument("--retry-terminal", action="store_true",
-                        help="also attempt accounts whose last failure was "
-                             "permanent (dead mailbox / deleted account); by "
-                             "default they are skipped")
-    parser.add_argument("--explicit-proxy", default="",
-                        help="pin this run's egress to one proxy URL, ahead of "
-                             "the configured pool (e.g. http://127.0.0.1:7897). "
-                             "Pair with --proxy-limit 1 to use it exclusively. "
-                             "Does NOT modify proxy.json.")
+    parser.add_argument(
+        "--retry-terminal",
+        action="store_true",
+        help="also attempt accounts whose last failure was "
+        "permanent (dead mailbox / deleted account); by "
+        "default they are skipped",
+    )
+    parser.add_argument(
+        "--explicit-proxy",
+        default="",
+        help="pin this run's egress to one proxy URL, ahead of "
+        "the configured pool (e.g. http://127.0.0.1:7897). "
+        "Pair with --proxy-limit 1 to use it exclusively. "
+        "Does NOT modify proxy.json.",
+    )
     parser.add_argument("--emails-file", default="")
     parser.add_argument("--out", default="")
     args = parser.parse_args()
@@ -641,9 +670,11 @@ def main() -> int:
     print(f"report  : {report_path}")
     if args.dry_run:
         for a in targets[:20]:
-            print(f"  {a['email']}  promo={a['_promo_label']}  "
-                  f"at={'yes' if a.get('access_token') else 'NO'}  "
-                  f"mailbox={'yes' if a.get('mailbox_token') else 'NO'}")
+            print(
+                f"  {a['email']}  promo={a['_promo_label']}  "
+                f"at={'yes' if a.get('access_token') else 'NO'}  "
+                f"mailbox={'yes' if a.get('mailbox_token') else 'NO'}"
+            )
         print(f"  ... ({len(targets)} total)")
         return 0
 
@@ -684,9 +715,15 @@ def main() -> int:
                 account = next(target_iter)
             except StopIteration:
                 return
-            pending[executor.submit(
-                run_one, account, journal, args.proxy_limit, args.explicit_proxy,
-            )] = account
+            pending[
+                executor.submit(
+                    run_one,
+                    account,
+                    journal,
+                    args.proxy_limit,
+                    args.explicit_proxy,
+                )
+            ] = account
 
     with open(report_path, "a", encoding="utf-8") as report:
         try:
@@ -698,9 +735,12 @@ def main() -> int:
                     try:
                         result = future.result()
                     except Exception as exc:
-                        result = {"email": account["email"], "ok": False,
-                                  "state": "worker_crash",
-                                  "error": traceback.format_exc()[-500:]}
+                        result = {
+                            "email": account["email"],
+                            "ok": False,
+                            "state": "worker_crash",
+                            "error": traceback.format_exc()[-500:],
+                        }
                     result["ts"] = int(time.time())
 
                     secret = str(result.get("totp_secret") or "")
@@ -737,8 +777,7 @@ def main() -> int:
                             rate = done / max(1e-6, time.time() - started)
                             eta = (len(targets) - done) / max(1e-6, rate)
                             print(
-                                f"[{done}/{len(targets)}] ok={ok} "
-                                f"({rate:.2f}/s, ETA {eta/60:.1f} min)",
+                                f"[{done}/{len(targets)}] ok={ok} ({rate:.2f}/s, ETA {eta / 60:.1f} min)",
                                 flush=True,
                             )
 
@@ -814,8 +853,7 @@ def main() -> int:
                             flush=True,
                         )
                         break
-                    print("   post-cooldown probe: pool answers again, resuming.",
-                          flush=True)
+                    print("   post-cooldown probe: pool answers again, resuming.", flush=True)
 
                 # Session-lane 429 circuit.  Not a streak condition: one hit
                 # means the whole lane is shut, and every further account fails
@@ -832,10 +870,7 @@ def main() -> int:
                             flush=True,
                         )
                         break
-                    pause_for = (
-                        _parse_retry_after(session_circuit_text)
-                        or SESSION_CIRCUIT_DEFAULT_WAIT
-                    )
+                    pause_for = _parse_retry_after(session_circuit_text) or SESSION_CIRCUIT_DEFAULT_WAIT
                     session_waits += 1
                     print(
                         f"\n⏸ session lane circuit open (429): sleeping "
@@ -871,7 +906,8 @@ def main() -> int:
     }
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     (out_dir / f"2fa_enroll_summary_{stamp}.json").write_text(
-        json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8",
+        json.dumps(summary, ensure_ascii=False, indent=2),
+        encoding="utf-8",
     )
     return 0
 

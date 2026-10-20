@@ -105,8 +105,14 @@ def _resolver(**kwargs) -> GeoResolver:
 class NormalizeTests(unittest.TestCase):
     def test_ipinfo_shape(self):
         geo_out = normalize_geo_response(
-            {"ip": "1.2.3.4", "country": "JP", "region": "Tokyo",
-             "city": "Shibuya", "timezone": "Asia/Tokyo", "org": "AS1 NTT"}
+            {
+                "ip": "1.2.3.4",
+                "country": "JP",
+                "region": "Tokyo",
+                "city": "Shibuya",
+                "timezone": "Asia/Tokyo",
+                "org": "AS1 NTT",
+            }
         )
         self.assertEqual(geo_out.country, "JP")
         self.assertEqual(geo_out.timezone, "Asia/Tokyo")
@@ -114,8 +120,7 @@ class NormalizeTests(unittest.TestCase):
 
     def test_ipapi_shape_uses_country_code(self):
         geo_out = normalize_geo_response(
-            {"ip": "5.6.7.8", "country_code": "de", "region": "Berlin",
-             "timezone": "Europe/Berlin"}
+            {"ip": "5.6.7.8", "country_code": "de", "region": "Berlin", "timezone": "Europe/Berlin"}
         )
         self.assertEqual(geo_out.country, "DE")  # upper-cased
 
@@ -470,18 +475,14 @@ class CrossCallerIntegrationTests(unittest.TestCase):
         )
         paypal_proxy._publish_probe_geo("http://user:pw@geo.example:8080", result)
         self.assertEqual(
-            geo.shared_geo_resolver()
-            .resolve("http://user:pw@geo.example:8080")
-            .country,
+            geo.shared_geo_resolver().resolve("http://user:pw@geo.example:8080").country,
             "JP",
         )
 
     def test_failed_preflight_publishes_nothing(self):
         from sms_tool import paypal_proxy
 
-        result = paypal_proxy.ProxyProbeResult(
-            ok=False, stage="proxy", error="proxy_probe_failed:timeout"
-        )
+        result = paypal_proxy.ProxyProbeResult(ok=False, stage="proxy", error="proxy_probe_failed:timeout")
         paypal_proxy._publish_probe_geo("http://user:pw@geo.example:8080", result)
         self.assertEqual(len(geo.shared_geo_resolver()._cache), 0)
 
@@ -509,9 +510,7 @@ class ProtocolPathGeoTests(unittest.TestCase):
     def test_uncurated_country_gets_the_measured_clock(self):
         # BR is not in ``_GEO_PROFILES`` (only US/CA/GB/DE/FR/JP/SG/AU are).
         proxy = "socks5h://user:pw@br.example.net:1080"
-        geo.remember_proxy_geo(
-            proxy, ProxyGeo(country="BR", timezone="America/Sao_Paulo")
-        )
+        geo.remember_proxy_geo(proxy, ProxyGeo(country="BR", timezone="America/Sao_Paulo"))
         with patch(
             "sms_tool.browser_fingerprint_pool._query_geo_endpoints",
             side_effect=AssertionError("must not probe"),

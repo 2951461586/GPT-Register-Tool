@@ -72,7 +72,7 @@ _MISMATCH_BODY = {
 #: The string ``registration_outcome._create_account_error`` builds from it --
 #: this is what actually reaches ``record()`` / ``last_error``.
 _MISMATCH_ERROR = (
-    'create_account_failed:identity_provider_mismatch: You tried signing in as '
+    "create_account_failed:identity_provider_mismatch: You tried signing in as "
     '"ec***@icloud.com" using a password, which is not the authentication method you '
     "used during sign up. Try again using the authentication method you used during sign up."
 )
@@ -81,6 +81,7 @@ _MISMATCH_ERROR = (
 # ---------------------------------------------------------------------------
 # 1) The predicate
 # ---------------------------------------------------------------------------
+
 
 def test_the_structured_code_is_enough():
     assert is_passwordless_signup_mismatch(_MISMATCH_BODY) is True
@@ -107,7 +108,7 @@ def test_an_assembled_error_string_still_matches():
         {"error": {}},
         {"error": "not-a-mapping"},
         {"code": "identity_provider_mismatch"},  # 没有 ``error`` 外壳 ⇒ 不猜
-        "existing_login_otp_validate:{\"status\": 401}",
+        'existing_login_otp_validate:{"status": 401}',
     ],
 )
 def test_unrelated_shapes_are_not_matched(value):
@@ -123,6 +124,7 @@ def test_the_code_constant_is_the_string_the_server_actually_sent():
 # ---------------------------------------------------------------------------
 # 2) The guard consumes it
 # ---------------------------------------------------------------------------
+
 
 def test_the_marker_is_registered():
     assert PASSWORDLESS_SIGNUP_CODE in DEAD_END_MARKERS
@@ -143,7 +145,7 @@ def test_the_marker_survives_the_160_char_truncation():
 
 def test_a_different_verdict_is_not_captured_by_the_new_marker():
     assert _dead_end_reason("create_account_failed:invalid_auth_step") == ""
-    assert _dead_end_reason("existing_login_otp_validate:{\"status\": 401}") == ""
+    assert _dead_end_reason('existing_login_otp_validate:{"status": 401}') == ""
 
 
 def test_the_guard_records_the_second_spelling_under_its_own_name(tmp_path):
@@ -166,14 +168,13 @@ def test_a_later_failure_cannot_erase_the_verdict(tmp_path):
 # 3) ``create_account`` -- the only place the code is ever produced
 # ---------------------------------------------------------------------------
 
+
 def _workflow(tmp_path, monkeypatch, response, *, is_user_already_exists=None):
     monkeypatch.setattr(registration_retry_guard, "runtime_file", lambda cfg, name: tmp_path / name)
     monkeypatch.setenv("SMSWORKBENCH_EVENTS", "1")
     w = object.__new__(RegistrationEmailWorkflow)
     w.config = {}
-    w.runtime = RegistrationRuntimeState(
-        username="conflict@example.test", auth_base="https://auth.example.test"
-    )
+    w.runtime = RegistrationRuntimeState(username="conflict@example.test", auth_base="https://auth.example.test")
     w._issue_sentinel = Mock(return_value=SimpleNamespace(token="", so_token=""))
     w._operations = SimpleNamespace(
         request_with_retry=Mock(return_value=response),

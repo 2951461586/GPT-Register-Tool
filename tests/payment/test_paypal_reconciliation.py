@@ -76,10 +76,7 @@ class PayPalReconciliationTests(unittest.TestCase):
             "&setup_intent_client_secret=seti_PRIVATE_secret_VALUE"
             f"&success_return_url={quote(verify_url, safe='')}"
         )
-        start_url = (
-            "https://pm-redirects.stripe.com/return?status=success"
-            "&billing_agreement=BA-PRIVATE"
-        )
+        start_url = "https://pm-redirects.stripe.com/return?status=success&billing_agreement=BA-PRIVATE"
         transport = FakeTransport(
             FakeResponse(302, {"Location": pay_url}),
             FakeResponse(302, {"location": verify_url}),
@@ -111,9 +108,7 @@ class PayPalReconciliationTests(unittest.TestCase):
             "data": {
                 "billing": {
                     "authorize": {
-                        "returnURL": {
-                            "href": "https://pm-redirects.stripe.com/return?status=success&token=PRIVATE"
-                        }
+                        "returnURL": {"href": "https://pm-redirects.stripe.com/return?status=success&token=PRIVATE"}
                     }
                 }
             },
@@ -144,9 +139,7 @@ class PayPalReconciliationTests(unittest.TestCase):
     def test_final_redirect_failure_is_observed_even_when_return_url_is_preferred(self):
         source = {
             "return_url": "https://pm-redirects.stripe.com/return?status=success",
-            "final_redirect_url": (
-                "https://pay.openai.com/c/pay/cs_live_PRIVATE?redirect_status=failed"
-            ),
+            "final_redirect_url": ("https://pay.openai.com/c/pay/cs_live_PRIVATE?redirect_status=failed"),
         }
         transport = FakeTransport()
 
@@ -295,10 +288,13 @@ class PayPalReconciliationTests(unittest.TestCase):
         )
 
         self.assertTrue(result.ok)
-        self.assertEqual([hop.next_stage for hop in result.hops[:2]], [
-            ReturnStage.OPENAI_PAY,
-            ReturnStage.CHECKOUT_VERIFY,
-        ])
+        self.assertEqual(
+            [hop.next_stage for hop in result.hops[:2]],
+            [
+                ReturnStage.OPENAI_PAY,
+                ReturnStage.CHECKOUT_VERIFY,
+            ],
+        )
 
     def test_transient_http_and_authentication_have_distinct_retryability(self):
         for status, retryable, code in (

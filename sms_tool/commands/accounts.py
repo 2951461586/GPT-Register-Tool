@@ -78,14 +78,19 @@ def print_paypal_links(email: str, ctx: AccountCommandContext) -> None:
         print("[*] No payment records found")
         return
     for row in rows:
-        print(json.dumps({
-            "email": row.get("email", ""),
-            "payment_method": row.get("payment_method", ""),
-            "paypal_url": row.get("paypal_url", ""),
-            "paypal_status": row.get("paypal_status", ""),
-            "refresh_token_status": row.get("refresh_token_status", ""),
-            "json_path": row.get("json_path", ""),
-        }, ensure_ascii=False))
+        print(
+            json.dumps(
+                {
+                    "email": row.get("email", ""),
+                    "payment_method": row.get("payment_method", ""),
+                    "paypal_url": row.get("paypal_url", ""),
+                    "paypal_status": row.get("paypal_status", ""),
+                    "refresh_token_status": row.get("refresh_token_status", ""),
+                    "json_path": row.get("json_path", ""),
+                },
+                ensure_ascii=False,
+            )
+        )
 
 
 def open_paypal_link(email: str, ctx: AccountCommandContext) -> None:
@@ -99,6 +104,7 @@ def open_paypal_link(email: str, ctx: AccountCommandContext) -> None:
         return
     print(url)
     webbrowser.open(url)
+
 
 def refresh_session(args: Any) -> None:
     from ..session_refresh import refresh_session as refresh_auth_session
@@ -137,7 +143,8 @@ def export_codex_json(args: Any, ctx: AccountCommandContext) -> None:
         )
     else:
         rows = [
-            row for row in ctx.list_paypal_accounts()
+            row
+            for row in ctx.list_paypal_accounts()
             if str(row.get("paypal_status") or "").strip().lower() == "completed"
         ]
         emails = [row.get("email", "") for row in rows if row.get("email")]
@@ -195,7 +202,12 @@ def import_cpa(args: Any, ctx: AccountCommandContext) -> None:
         raise SystemExit(3)
     try:
         from ..cpa_import import refresh_cpa_quota_statuses
-        quota_emails = emails if emails else [str(item.get("email") or "") for item in (result.get("results") or []) if isinstance(item, dict)]
+
+        quota_emails = (
+            emails
+            if emails
+            else [str(item.get("email") or "") for item in (result.get("results") or []) if isinstance(item, dict)]
+        )
         if not quota_emails and isinstance(result, dict) and result.get("email"):
             quota_emails = [str(result.get("email") or "")]
         quota_result = refresh_cpa_quota_statuses(
@@ -238,7 +250,9 @@ def check_promotion(args: Any, ctx: AccountCommandContext) -> None:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     logger.info(
         "promotion check finished: ok=%s success=%s/%s",
-        bool(result.get("ok")), int(result.get("success") or 0), int(result.get("total") or 0),
+        bool(result.get("ok")),
+        int(result.get("success") or 0),
+        int(result.get("total") or 0),
     )
     if not result.get("ok"):
         raise SystemExit(3)
@@ -246,6 +260,7 @@ def check_promotion(args: Any, ctx: AccountCommandContext) -> None:
 
 def check_payment_eligibility(args: Any, ctx: AccountCommandContext) -> None:
     from ..accounts.account_payment_eligibility import probe_payment_eligibility_statuses
+
     emails = read_email_file(args.email_file)
     if args.email:
         emails = [(args.email or "").strip()]
@@ -282,7 +297,9 @@ def refresh_cpa_quota(args: Any, ctx: AccountCommandContext) -> None:
     emails = unique_emails(emails)
     if not emails:
         emails = [str(row.get("email") or "").strip() for row in ctx.list_paypal_accounts()]
-    quota_mode = "local" if getattr(args, "refresh_local_quota", False) else str(getattr(args, "quota_mode", "local") or "local")
+    quota_mode = (
+        "local" if getattr(args, "refresh_local_quota", False) else str(getattr(args, "quota_mode", "local") or "local")
+    )
     if quota_mode == "cpa":
         result = refresh_cpa_quota_statuses(
             emails=emails,
@@ -317,10 +334,9 @@ def refresh_cpa_quota(args: Any, ctx: AccountCommandContext) -> None:
             for item in result.get("results", [])
             if not item.get("ok")
             and str((item.get("probe") or {}).get("status") or "").strip().lower() != "account_deactivated"
-            and not bool(
-                (item.get("relogin") if isinstance(item.get("relogin"), dict) else {}).get("terminal")
-            )
-            and "account_deactivated" not in str(
+            and not bool((item.get("relogin") if isinstance(item.get("relogin"), dict) else {}).get("terminal"))
+            and "account_deactivated"
+            not in str(
                 (item.get("relogin") if isinstance(item.get("relogin"), dict) else {}).get("error") or ""
             ).lower()
         ]
@@ -363,16 +379,17 @@ def _print_promotion_summary(result):
         seen = "/".join(methods) if isinstance(methods, list) and methods else "无"
         emit(
             logger,
-            f"[*] 支付资格：{eligibility_ok}/{len(eligibility_rows)} 个账号枚举成功；"
-            f"本批出现过的方式：{seen}",
+            f"[*] 支付资格：{eligibility_ok}/{len(eligibility_rows)} 个账号枚举成功；本批出现过的方式：{seen}",
         )
         diagnostics = result.get("payment_eligibility_diagnostics") or {}
         for field, label in (("by_stage", "失败阶段"), ("by_error_code", "失败原因"), ("by_http_status", "HTTP")):
             counts = diagnostics.get(field) if isinstance(diagnostics, dict) else None
             if isinstance(counts, dict) and counts:
-                emit(logger, f"[*] 支付资格{label}：" + "、".join(
-                    f"{name}={count}" for name, count in sorted(counts.items())[:12]
-                ))
+                emit(
+                    logger,
+                    f"[*] 支付资格{label}："
+                    + "、".join(f"{name}={count}" for name, count in sorted(counts.items())[:12]),
+                )
     for item in rows:
         if item.get("ok"):
             continue
@@ -397,13 +414,10 @@ def _print_quota_summary(result):
     deactivated = sum(
         1
         for item in rows
-        if str((item.get("probe") or {}).get("status") or "").strip().lower()
-        == "account_deactivated"
+        if str((item.get("probe") or {}).get("status") or "").strip().lower() == "account_deactivated"
     )
     other_failed = len(rows) - ok - deactivated
-    print(
-        f"[*] 测活完成：共 {len(rows)} 个账号，正常 {ok}，掉号 {deactivated}，其他失败 {other_failed}"
-    )
+    print(f"[*] 测活完成：共 {len(rows)} 个账号，正常 {ok}，掉号 {deactivated}，其他失败 {other_failed}")
     logger.info("liveness check finished: ok=%s/%s deactivated=%s", ok, len(rows), deactivated)
     for item in rows:
         email = str(item.get("email") or "").strip()
@@ -418,7 +432,9 @@ def _print_quota_summary(result):
             continue
         _raw_probe: object = item.get("probe")
         probe: dict = _raw_probe if isinstance(_raw_probe, dict) else {}
-        raw_reason = str(probe.get("status") or probe.get("error") or relogin.get("error") or item.get("error") or "failed")
+        raw_reason = str(
+            probe.get("status") or probe.get("error") or relogin.get("error") or item.get("error") or "failed"
+        )
         reason = _probe_reason_label(raw_reason)
         note = _relogin_panel_note(relogin)
         dropped = "（已标记掉号：令牌吊销且无可恢复凭据）" if str(probe.get("dropped") or "") == "token_revoked" else ""
@@ -546,13 +562,19 @@ def convert_session_json(args: Any) -> None:
         target = Path(args.convert_output)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(output_text, encoding="utf-8")
-        print(json.dumps({
-            "ok": bool(result.get("converted")),
-            "format": args.convert_format,
-            "converted": len(result.get("converted") or []),
-            "skipped": result.get("skipped") or [],
-            "output": str(target),
-        }, ensure_ascii=False, indent=2))
+        print(
+            json.dumps(
+                {
+                    "ok": bool(result.get("converted")),
+                    "format": args.convert_format,
+                    "converted": len(result.get("converted") or []),
+                    "skipped": result.get("skipped") or [],
+                    "output": str(target),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
     else:
         print(output_text)
         if result.get("skipped"):

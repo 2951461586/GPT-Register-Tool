@@ -54,9 +54,7 @@ def test_source_edit_invalidates_cache(tmp_path):
     # Wiring the key up must be visible on the very next doctor run, not after
     # some TTL. The per-process literal cache is a separate layer and has to be
     # cleared explicitly in a test.
-    (root / "sms_tool" / "mod.py").write_text(
-        'KEY = "alpha"\nOTHER = "beta"\n', encoding="utf-8"
-    )
+    (root / "sms_tool" / "mod.py").write_text('KEY = "alpha"\nOTHER = "beta"\n', encoding="utf-8")
     config_usage.source_string_literals.cache_clear()
 
     assert _keys(root, cache) == set()

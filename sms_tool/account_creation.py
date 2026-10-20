@@ -16,13 +16,12 @@ from .http_utils import (
 
 _LOGGER = logging.getLogger(__name__)
 
+
 def _create_account_sentinel_token(sentinel_data, proxy=None):
     token = str((sentinel_data or {}).get("sentinel_oauth_token") or "").strip()
     if token:
         return token
     raise RuntimeError("sentinel_extract_failed: oauth_create_account SDK token is required")
-
-
 
 
 def _email_otp_send_url(reg_data):
@@ -64,6 +63,7 @@ def _is_user_already_exists(create_data):
     error: dict = _error_raw if isinstance(_error_raw, dict) else {}
     return str(error.get("code") or "").strip() == "user_already_exists"
 
+
 def _validate_email_otp(session, auth_base, base_headers, code, sentinel_data=None, use_sentinel=True):
     # Primary endpoint: same as codex_oauth (proven working)
     primary_endpoint = "/api/accounts/email-otp/validate"
@@ -87,28 +87,46 @@ def _validate_email_otp(session, auth_base, base_headers, code, sentinel_data=No
         validate_headers = with_sentinel(validate_headers, sentinel)
     # Try primary endpoint first with {"code": payload (matches codex_oauth)
     url = _absolute_url(auth_base, primary_endpoint)
-    r = request_with_retry(session, "post", url, label=f"Email OTP validate {primary_endpoint}",
-        json={"code": code}, headers=validate_headers, impersonate=auth_impersonate())
+    r = request_with_retry(
+        session,
+        "post",
+        url,
+        label=f"Email OTP validate {primary_endpoint}",
+        json={"code": code},
+        headers=validate_headers,
+        impersonate=auth_impersonate(),
+    )
     body = _json_or_raw(r)
     if r.status_code == 200:
         print(f"  Email OTP validate: {primary_endpoint} {r.status_code}")
         return True, body
     last_error = {"endpoint": primary_endpoint, "status": r.status_code, "body": body}
-    print(f"  Email OTP validate: {primary_endpoint} {r.status_code} {json.dumps(body, ensure_ascii=False, default=str)[:200]}")
+    print(
+        f"  Email OTP validate: {primary_endpoint} {r.status_code} {json.dumps(body, ensure_ascii=False, default=str)[:200]}"
+    )
     # If primary returns 404/405, try fallback endpoints
     if r.status_code in (404, 405):
         for endpoint in fallback_endpoints:
             url = _absolute_url(auth_base, endpoint)
             for payload in ({"code": code}, {"otp": code}):
-                r = request_with_retry(session, "post", url, label=f"Email OTP validate {endpoint}",
-                    json=payload, headers=validate_headers, impersonate=auth_impersonate())
+                r = request_with_retry(
+                    session,
+                    "post",
+                    url,
+                    label=f"Email OTP validate {endpoint}",
+                    json=payload,
+                    headers=validate_headers,
+                    impersonate=auth_impersonate(),
+                )
                 body = _json_or_raw(r)
                 if r.status_code == 200:
                     print(f"  Email OTP validate: {endpoint} {r.status_code}")
                     return True, body
                 if r.status_code not in (404, 405):
                     last_error = {"endpoint": endpoint, "status": r.status_code, "body": body}
-                    print(f"  Email OTP validate failed: {endpoint} {r.status_code} {json.dumps(body, ensure_ascii=False, default=str)[:200]}")
+                    print(
+                        f"  Email OTP validate failed: {endpoint} {r.status_code} {json.dumps(body, ensure_ascii=False, default=str)[:200]}"
+                    )
                     break
                 last_error = {"endpoint": endpoint, "status": r.status_code, "body": body}
     return False, last_error
@@ -122,8 +140,6 @@ def _is_wrong_email_otp_code(data):
         return code == "wrong_email_otp_code" or "wrong code" in message
     except Exception:
         return False
-
-
 
 
 def _extract_nested(data, *keys):
@@ -214,9 +230,16 @@ def _fetch_auth_session(session, chat_base, base_headers, attempts=8, delay=0.5)
         request_timeout = 12
     last = {"status_code": 0, "body": {}, "cookie_header": _cookie_header(session)}
     for attempt in range(1, max(1, int(attempts or 1)) + 1):
-        r = request_with_retry(session, "get", f"{chat_base}/api/auth/session", label="Auth session",
+        r = request_with_retry(
+            session,
+            "get",
+            f"{chat_base}/api/auth/session",
+            label="Auth session",
             headers={**base_headers, "Accept": "application/json", "Origin": chat_base, "Referer": f"{chat_base}/"},
-            impersonate=auth_impersonate(), attempts=1, timeout=request_timeout)
+            impersonate=auth_impersonate(),
+            attempts=1,
+            timeout=request_timeout,
+        )
         body = _json_or_raw(r, limit=1000)
         last = {
             "status_code": r.status_code,
@@ -293,6 +316,8 @@ def _fetch_auth_session(session, chat_base, base_headers, attempts=8, delay=0.5)
         if attempt < attempts:
             time.sleep(min(max(0.0, float(delay or 0)), 2.0))
     return last
+
+
 # ==========================================
 # Core Email Registration Flow
 # ==========================================

@@ -98,32 +98,36 @@ class PaymentOperation:
         # The shared result contract, not a payment adapter: it is how every
         # workflow names a terminal outcome, and both lanes pass through here.
         contract = PaymentResult.from_mapping(result)
-        self.record.update({
-            "status": contract.outcome.status,
-            "stage": contract.error.stage or "completed",
-            "side_effect_started": contract.outcome.side_effect_started,
-            "requires_reconciliation": contract.outcome.requires_reconciliation,
-            "retryable": contract.error.retryable,
-            "error_code": sanitize_text(contract.error.code)[:120],
-            "updated_at": int(time.time()),
-            "finished_at": int(time.time()),
-            "sequence": int(self.record.get("sequence") or 0) + 1,
-        })
+        self.record.update(
+            {
+                "status": contract.outcome.status,
+                "stage": contract.error.stage or "completed",
+                "side_effect_started": contract.outcome.side_effect_started,
+                "requires_reconciliation": contract.outcome.requires_reconciliation,
+                "retryable": contract.error.retryable,
+                "error_code": sanitize_text(contract.error.code)[:120],
+                "updated_at": int(time.time()),
+                "finished_at": int(time.time()),
+                "sequence": int(self.record.get("sequence") or 0) + 1,
+            }
+        )
         _atomic_write(self.path, self.record)
         self.close()
 
     def fail_unknown(self, stage: str, error_code: str) -> None:
-        self.record.update({
-            "status": "unknown",
-            "stage": str(stage or "executor"),
-            "side_effect_started": True,
-            "requires_reconciliation": True,
-            "retryable": False,
-            "error_code": sanitize_text(error_code)[:120],
-            "updated_at": int(time.time()),
-            "finished_at": int(time.time()),
-            "sequence": int(self.record.get("sequence") or 0) + 1,
-        })
+        self.record.update(
+            {
+                "status": "unknown",
+                "stage": str(stage or "executor"),
+                "side_effect_started": True,
+                "requires_reconciliation": True,
+                "retryable": False,
+                "error_code": sanitize_text(error_code)[:120],
+                "updated_at": int(time.time()),
+                "finished_at": int(time.time()),
+                "sequence": int(self.record.get("sequence") or 0) + 1,
+            }
+        )
         _atomic_write(self.path, self.record)
         self.close()
 
@@ -169,14 +173,17 @@ class PaymentOperationStore:
             gate.acquire(timeout=30)
         except GateTimeoutError as exc:
             previous = _read_record(path)
-            raise PaymentOperationConflict(previous or {
-                "status": "running",
-                "stage": "idempotency",
-                "side_effect_started": False,
-                "requires_reconciliation": True,
-                "operation_id": str(operation_id or ""),
-                "idempotency_key_hash": key_hash,
-            }) from exc
+            raise PaymentOperationConflict(
+                previous
+                or {
+                    "status": "running",
+                    "stage": "idempotency",
+                    "side_effect_started": False,
+                    "requires_reconciliation": True,
+                    "operation_id": str(operation_id or ""),
+                    "idempotency_key_hash": key_hash,
+                }
+            ) from exc
         try:
             previous = _read_record(path)
             if previous and not _replay_allowed(previous):
@@ -222,7 +229,9 @@ def conflict_result(conflict: PaymentOperationConflict) -> dict[str, Any]:
         "ok": False,
         "status": "unknown" if uncertain else "failed",
         "error": sanitize_text(str(conflict)),
-        "error_code": "payment_operation_reconciliation_required" if uncertain else "payment_operation_already_finalized",
+        "error_code": "payment_operation_reconciliation_required"
+        if uncertain
+        else "payment_operation_already_finalized",
         "error_stage": str(previous.get("stage") or "idempotency"),
         "retryable": False,
         "side_effect_started": bool(previous.get("side_effect_started")),
@@ -255,13 +264,15 @@ def _read_record(path: Path) -> dict[str, Any]:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError, UnicodeError) as exc:
-        raise PaymentOperationConflict({
-            "status": "unknown",
-            "stage": "operation_journal",
-            "side_effect_started": True,
-            "requires_reconciliation": True,
-            "error_code": f"operation_journal_{type(exc).__name__.lower()}",
-        }) from exc
+        raise PaymentOperationConflict(
+            {
+                "status": "unknown",
+                "stage": "operation_journal",
+                "side_effect_started": True,
+                "requires_reconciliation": True,
+                "error_code": f"operation_journal_{type(exc).__name__.lower()}",
+            }
+        ) from exc
     return dict(value) if isinstance(value, Mapping) else {}
 
 

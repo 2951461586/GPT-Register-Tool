@@ -63,6 +63,7 @@ def _keys():
 # 1. The key must separate sticky sessions
 # --------------------------------------------------------------------------
 
+
 def test_egress_key_separates_sticky_sessions_on_one_host():
     """The pool-collapse trap.
 
@@ -94,11 +95,15 @@ def test_egress_key_of_nothing_is_empty():
 # 2. Arbitration
 # --------------------------------------------------------------------------
 
+
 def test_a_free_exit_is_leased(tmp_path):
     config = _config(tmp_path)
     key_a, _ = _keys()
     lease = acquire_environment_lease(
-        exit_key=key_a, fingerprint_key="chrome136", account_ref="a@x.test", batch_id="b1",
+        exit_key=key_a,
+        fingerprint_key="chrome136",
+        account_ref="a@x.test",
+        batch_id="b1",
         runtime_config=config,
     )
     assert lease["ok"] is True
@@ -109,7 +114,7 @@ def test_a_free_exit_is_leased(tmp_path):
 
 
 def test_a_live_lease_refuses_the_same_exit_and_names_the_holder(tmp_path):
-    """"busy" is not actionable; "held by a@x.test" is."""
+    """ "busy" is not actionable; "held by a@x.test" is."""
     config = _config(tmp_path)
     key_a, _ = _keys()
     first = acquire_environment_lease(exit_key=key_a, account_ref="a@x.test", runtime_config=config)
@@ -147,6 +152,7 @@ def test_an_unkeyed_request_never_allocates(tmp_path):
 # 3. The window has to open again -- this is the capacity-wall guard
 # --------------------------------------------------------------------------
 
+
 def test_releasing_the_last_holder_frees_the_exit(tmp_path):
     config = _config(tmp_path)
     key_a, _ = _keys()
@@ -172,9 +178,7 @@ def test_a_lease_past_its_ttl_frees_the_exit(tmp_path):
     # CI (``assert True is False`` on the *refusal* below): the two acquires
     # landed in different seconds, so the first lease read as expired.  It was
     # the test's sub-second assumption, not a lease bug.
-    first = acquire_environment_lease(
-        exit_key=key_a, account_ref="a@x.test", ttl_seconds=60, runtime_config=config
-    )
+    first = acquire_environment_lease(exit_key=key_a, account_ref="a@x.test", ttl_seconds=60, runtime_config=config)
     assert first["ok"] is True
 
     # Still inside the window: refused.
@@ -200,9 +204,7 @@ def test_the_acquire_path_sweeps_expired_leases_by_itself(tmp_path):
     """
     config = _config(tmp_path)
     key_a, _ = _keys()
-    stale = acquire_environment_lease(
-        exit_key=key_a, account_ref="a@x.test", ttl_seconds=1, runtime_config=config
-    )
+    stale = acquire_environment_lease(exit_key=key_a, account_ref="a@x.test", ttl_seconds=1, runtime_config=config)
     time.sleep(1.2)
 
     second = acquire_environment_lease(exit_key=key_a, account_ref="b@x.test", runtime_config=config)
@@ -224,6 +226,7 @@ def test_the_acquire_path_sweeps_expired_leases_by_itself(tmp_path):
 # 4. Saturation reuse: allowed, recorded, and never for a profile clash
 # --------------------------------------------------------------------------
 
+
 def test_saturated_pool_reuse_is_allowed_and_recorded(tmp_path):
     config = _config(tmp_path)
     key_a, _ = _keys()
@@ -231,8 +234,11 @@ def test_saturated_pool_reuse_is_allowed_and_recorded(tmp_path):
         exit_key=key_a, fingerprint_key="chrome136", account_ref="a@x.test", runtime_config=config
     )
     shared = acquire_environment_lease(
-        exit_key=key_a, fingerprint_key="safari18_0", account_ref="b@x.test",
-        allow_reuse=True, runtime_config=config,
+        exit_key=key_a,
+        fingerprint_key="safari18_0",
+        account_ref="b@x.test",
+        allow_reuse=True,
+        runtime_config=config,
     )
 
     assert shared["ok"] is True
@@ -278,8 +284,11 @@ def test_the_loser_of_a_precheck_race_still_shares_the_lease(tmp_path):
 
     with patch.object(ledger, "_live_conflicts", blind_once):
         second = acquire_environment_lease(
-            exit_key=key_a, fingerprint_key="safari18_0", account_ref="b@x.test",
-            allow_reuse=True, runtime_config=config,
+            exit_key=key_a,
+            fingerprint_key="safari18_0",
+            account_ref="b@x.test",
+            allow_reuse=True,
+            runtime_config=config,
         )
 
     assert second["ok"] is True, "the loser must still get a lease"
@@ -297,8 +306,11 @@ def test_reuse_never_papers_over_a_fingerprint_clash(tmp_path):
     key_a, key_b = _keys()
     acquire_environment_lease(exit_key=key_a, fingerprint_key="chrome136", runtime_config=config)
     clash = acquire_environment_lease(
-        exit_key=key_b, fingerprint_key="chrome136", account_ref="c@x.test",
-        allow_reuse=True, runtime_config=config,
+        exit_key=key_b,
+        fingerprint_key="chrome136",
+        account_ref="c@x.test",
+        allow_reuse=True,
+        runtime_config=config,
     )
 
     assert clash["ok"] is False
@@ -310,10 +322,15 @@ def test_shared_lease_is_reference_counted(tmp_path):
     """The first task to finish must not free an exit another one is still using."""
     config = _config(tmp_path)
     key_a, _ = _keys()
-    first = acquire_environment_lease(exit_key=key_a, fingerprint_key="chrome136", account_ref="a@x.test", runtime_config=config)
+    first = acquire_environment_lease(
+        exit_key=key_a, fingerprint_key="chrome136", account_ref="a@x.test", runtime_config=config
+    )
     acquire_environment_lease(
-        exit_key=key_a, fingerprint_key="safari18_0", account_ref="b@x.test",
-        allow_reuse=True, runtime_config=config,
+        exit_key=key_a,
+        fingerprint_key="safari18_0",
+        account_ref="b@x.test",
+        allow_reuse=True,
+        runtime_config=config,
     )
 
     release_environment_lease(first["lease_id"], runtime_config=config)
@@ -343,9 +360,7 @@ def test_concurrent_releases_never_strand_the_lease(tmp_path):
 
     config = _config(tmp_path)
     key_a, _ = _keys()
-    first = acquire_environment_lease(
-        exit_key=key_a, account_ref="a@x.test", runtime_config=config
-    )
+    first = acquire_environment_lease(exit_key=key_a, account_ref="a@x.test", runtime_config=config)
     for index in range(3):
         acquired = acquire_environment_lease(
             exit_key=key_a,
@@ -388,6 +403,7 @@ def test_concurrent_releases_never_strand_the_lease(tmp_path):
 # 5. The measured exit IP is observation, not a gate
 # --------------------------------------------------------------------------
 
+
 def test_two_live_leases_measured_at_one_ip_are_reported(tmp_path):
     """The configured keys said "different exits"; the wire said otherwise.
 
@@ -399,7 +415,12 @@ def test_two_live_leases_measured_at_one_ip_are_reported(tmp_path):
     first = acquire_environment_lease(exit_key=key_a, account_ref="a@x.test", runtime_config=config)
     second = acquire_environment_lease(exit_key=key_b, account_ref="b@x.test", runtime_config=config)
 
-    assert record_environment_observations(first["lease_id"], exit_ip="198.51.100.7", runtime_config=config)["exit_ip_collisions"] == []
+    assert (
+        record_environment_observations(first["lease_id"], exit_ip="198.51.100.7", runtime_config=config)[
+            "exit_ip_collisions"
+        ]
+        == []
+    )
     result = record_environment_observations(second["lease_id"], exit_ip="198.51.100.7", runtime_config=config)
 
     assert result["recorded"] is True
@@ -414,7 +435,12 @@ def test_a_released_lease_does_not_count_as_an_ip_collision(tmp_path):
     release_environment_lease(first["lease_id"], runtime_config=config)
 
     second = acquire_environment_lease(exit_key=key_b, account_ref="b@x.test", runtime_config=config)
-    assert record_environment_observations(second["lease_id"], exit_ip="198.51.100.7", runtime_config=config)["exit_ip_collisions"] == []
+    assert (
+        record_environment_observations(second["lease_id"], exit_ip="198.51.100.7", runtime_config=config)[
+            "exit_ip_collisions"
+        ]
+        == []
+    )
 
 
 def test_the_profile_is_recorded_post_hoc_and_a_live_clash_is_reported(tmp_path):
@@ -428,12 +454,13 @@ def test_the_profile_is_recorded_post_hoc_and_a_live_clash_is_reported(tmp_path)
     second = acquire_environment_lease(exit_key=key_b, account_ref="b@x.test", runtime_config=config)
 
     # Neither was keyed up front (the batch runner does not know the profile yet).
-    assert record_environment_observations(
-        first["lease_id"], fingerprint_key="chrome136", runtime_config=config
-    )["fingerprint_collisions"] == []
-    result = record_environment_observations(
-        second["lease_id"], fingerprint_key="chrome136", runtime_config=config
+    assert (
+        record_environment_observations(first["lease_id"], fingerprint_key="chrome136", runtime_config=config)[
+            "fingerprint_collisions"
+        ]
+        == []
     )
+    result = record_environment_observations(second["lease_id"], fingerprint_key="chrome136", runtime_config=config)
 
     assert result["recorded"] is True
     assert result["fingerprint_collisions"] == ["a@x.test"]
@@ -488,6 +515,7 @@ def test_recording_an_ip_for_an_unknown_lease_is_a_no_op(tmp_path):
 # 6. Schema
 # --------------------------------------------------------------------------
 
+
 def test_the_ledger_table_is_created_and_the_version_is_stamped(tmp_path):
     config = _config(tmp_path)
     init_database(runtime_config=config)
@@ -496,14 +524,8 @@ def test_the_ledger_table_is_created_and_the_version_is_stamped(tmp_path):
 
     conn = _connect(runtime_config=config)
     try:
-        tables = {
-            row["name"]
-            for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
-        }
-        indexes = {
-            row["name"]
-            for row in conn.execute("SELECT name FROM sqlite_master WHERE type='index'")
-        }
+        tables = {row["name"] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        indexes = {row["name"] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='index'")}
         version = conn.execute("PRAGMA user_version").fetchone()[0]
     finally:
         conn.close()
@@ -524,9 +546,7 @@ def test_the_unique_indexes_are_partial_so_a_released_row_does_not_block(tmp_pat
 
     conn = _connect(runtime_config=config)
     try:
-        sql = conn.execute(
-            "SELECT sql FROM sqlite_master WHERE name='idx_environment_ledger_live_exit'"
-        ).fetchone()[0]
+        sql = conn.execute("SELECT sql FROM sqlite_master WHERE name='idx_environment_ledger_live_exit'").fetchone()[0]
     finally:
         conn.close()
 

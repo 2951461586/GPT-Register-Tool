@@ -251,7 +251,9 @@ def violations(current: dict[str, list], baseline: dict[str, list]) -> list[str]
     for source in sorted(new_importers):
         problems.append(f"new non-payment consumer of payment code: {source}")
 
-    for source, target in sorted(_pairs(current["root_to_adapter_layers"]) - _pairs(baseline.get("root_to_adapter_layers", []))):
+    for source, target in sorted(
+        _pairs(current["root_to_adapter_layers"]) - _pairs(baseline.get("root_to_adapter_layers", []))
+    ):
         owner = "" if source == ADAPTER_OWNER else f" (only {ADAPTER_OWNER} may)"
         problems.append(f"root module imports an adapter layer{owner}: {source} -> {target}")
 

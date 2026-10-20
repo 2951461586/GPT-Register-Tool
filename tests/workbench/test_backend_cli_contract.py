@@ -91,17 +91,15 @@ def _python_flags() -> dict[str, tuple[str, list[str] | None]]:
                 if attr != "add_argument":
                     continue
                 flags = [
-                    a.value for a in node.args
-                    if isinstance(a, ast.Constant)
-                    and isinstance(a.value, str)
-                    and a.value.startswith("--")
+                    a.value
+                    for a in node.args
+                    if isinstance(a, ast.Constant) and isinstance(a.value, str) and a.value.startswith("--")
                 ]
                 choices: list[str] | None = None
                 for kw in node.keywords:
                     if kw.arg == "choices" and isinstance(kw.value, (ast.List, ast.Tuple)):
                         choices = [
-                            e.value for e in kw.value.elts
-                            if isinstance(e, ast.Constant) and isinstance(e.value, str)
+                            e.value for e in kw.value.elts if isinstance(e, ast.Constant) and isinstance(e.value, str)
                         ]
                 for flag in flags:
                     out.setdefault(flag, (rel, choices))
@@ -147,7 +145,7 @@ def _csharp_flag_values() -> dict[str, dict[str, set[str]]]:
                     continue
                 entry = out.setdefault(literal, {"where": set(), "values": set()})
                 entry["where"].add(rel)
-                for follower in literals[index + 1:]:
+                for follower in literals[index + 1 :]:
                     if FLAG_RE.fullmatch(f'"{follower}"'):
                         break  # another flag - this one takes no literal value
                     if follower:
@@ -206,9 +204,7 @@ def test_csharp_flag_is_defined_by_the_python_parser(flag: str) -> None:
         (flag, value)
         for flag, data in CSHARP_FLAGS.items()
         for value in data["values"]
-        if flag in PYTHON_FLAGS
-        and PYTHON_FLAGS[flag][1] is not None
-        and value not in PYTHON_FLAGS[flag][1]
+        if flag in PYTHON_FLAGS and PYTHON_FLAGS[flag][1] is not None and value not in PYTHON_FLAGS[flag][1]
     ),
     ids=lambda v: str(v),
 )

@@ -62,7 +62,9 @@ def _create_cfworker_mailboxes(args=None, email_cfg=None, client_func=None):
     domain = str(getattr(args, "cfworker_domain", None) or cfg["domain"] or "liziai.cloud").strip().lstrip("@").lower()
     quantity = max(1, int(getattr(args, "count", None) or 1))
     print(f"[*] CFWorker mailbox batch: domain={domain} quantity={quantity}")
-    client = (client_func or (lambda proxy=None: _cfworker_client(email_cfg, proxy=proxy)))(proxy=getattr(args, "proxy", None))
+    client = (client_func or (lambda proxy=None: _cfworker_client(email_cfg, proxy=proxy)))(
+        proxy=getattr(args, "proxy", None)
+    )
     emails = client.create_mailboxes(count=quantity, domain=domain)
     accounts = [
         MailboxAccount(
@@ -143,6 +145,7 @@ def _poll_cfworker_otp(
         return (a or {}).get("id") != (b or {}).get("id") and a is not None
 
     from ..mailbox_poll import _poll_otp_with_settle
+
     return _poll_otp_with_settle(
         _fetch_candidate,
         timeout=timeout,

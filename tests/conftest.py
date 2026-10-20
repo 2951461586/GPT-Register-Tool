@@ -357,9 +357,7 @@ def isolated_runtime(request, runtime_sandbox, monkeypatch):
                     # would still say "initialized" and later readers would hit
                     # "no such table".  The real file never vanished, so this
                     # case did not exist before the redirect.
-                    store_connection._INITIALIZED.discard(
-                        os.path.normcase(str(sandbox_db.resolve()))
-                    )
+                    store_connection._INITIALIZED.discard(os.path.normcase(str(sandbox_db.resolve())))
                 return sandbox_db
         except OSError:
             pass
