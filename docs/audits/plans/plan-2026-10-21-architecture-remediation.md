@@ -162,6 +162,28 @@ allow 只有 2 条，各带 reason + owner。落地时先按「1 = 最内层」�
 保留为后续项；若要做，正确顺序是先把模块级状态收进一个 `config/_state.py` 并让测试改 patch 目标，
 再搬函数。
 
+### P2-4（`proxy_*` 迁移）— 已尝试并回滚
+
+迁移本身可以机械完成（7 个模块 `git mv` 进 `sms_tool/proxy/`，`proxy_bridge`→`bridge` 等，
+~120 处引用由脚本改写，`import sms_tool.cli` 正常），但**没有一次跑绿**，因此整体回滚到
+`763e185`，不留半成品。未通过的门禁与原因，供下一次直接接续：
+
+| 门禁 | 现象 | 需要做的 |
+|---|---|---|
+| `tests/governance/test_dependency_guard.py` | `proxy-edge-probe` 被 `upi_link/india_exit.py`、`pipeline.py` 报成未声明的第三方依赖 | 该测试从 import 语句推导发行包名，`sms_tool.proxy.*` 需要被识别为仓库内包（它已有 `LOCAL_PACKAGE_PREFIXES` / `_repo_module_stems` 两个入口，改动点在这两处之一） |
+| `docs_consistency_scan.py` | `registration-and-proxy-architecture.md` 的 `proxy_routing.py:85` 等行号锚点失效 | 锚点改成 `proxy/routing.py:NN` **并核对行号**（迁移只改文件头 import，行号可能位移） |
+| `test_import_layer_ratchet.py::test_summary_facts_are_pinned` | 固定总数变化：278 边 / 35 对 / 11 mutual / 45 minority / 205 delayed | 按该文件惯例补一段变更记录并更新断言 |
+| `delayed_import_ratchet.py` | 文档化环表的键是「最后一段」，`proxy_routing`→`routing` 后分类从 `cycle` 掉成 `deferred` | 已定位：`DOCUMENTED_CYCLES` 需加 `("routing", "account_identity")`（本轮已改过，回滚时一并丢弃） |
+| `format_guard.py` | 改写后需 `ruff format` | 迁移脚本最后一步应包含它 |
+
+另外两个**不是**迁移引入、但会被 per-edit 检查报出来的既有债务（`pyright_baseline.json` 已冻结）：
+`sms_tool/accounts/account_liveness.py`（baseline 3）与 `sms_tool/proxy/bridge.py`（baseline 3）。
+迁移后 `bridge.py` 的 3 条已顺手修掉（`_close_server` 缺 `@staticmethod`、`upstream` 未收窄），
+`account_liveness` 用 `proxies: Any` 收窄到 0 —— 这两处修复也随回滚丢弃。
+
+**教训**：迁移脚本必须把「门禁同步」当作迁移的一部分，而不是事后补 —— 五个门禁里有三个是
+**按模块名或行号硬编码**的，只改代码不改它们必然红。
+
 ### 本轮未开始
 
 `P2-4`…`P2-8`（`proxy_*` / `mailbox_*` / `paypal_*` / `payment_*` / `registration_*` 迁入子包）与
