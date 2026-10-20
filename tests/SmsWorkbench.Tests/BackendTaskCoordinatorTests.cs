@@ -61,7 +61,7 @@ public sealed class BackendTaskCoordinatorTests
 
         public async Task<BackendCommandResult> RunAsync(
             BackendCommand command,
-            IProgress<BackendOutputLine> progress = null!,
+            IProgress<BackendOutputLine>? progress = null,
             CancellationToken cancellationToken = default)
         {
             Started.SetResult();
@@ -77,7 +77,7 @@ public sealed class BackendTaskCoordinatorTests
 
         public Task<BackendCommandResult> RunAsync(
             BackendCommand command,
-            IProgress<BackendOutputLine> progress = null!,
+            IProgress<BackendOutputLine>? progress = null,
             CancellationToken cancellationToken = default) => Task.FromResult(_result);
     }
 }

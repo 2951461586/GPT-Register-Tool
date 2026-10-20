@@ -44,7 +44,7 @@ public sealed class DesktopReadClientResidentStderrTests
 
         public IReadOnlyList<SettingsCategoryViewModel> Load() => Array.Empty<SettingsCategoryViewModel>();
 
-        public SettingsSaveResult Save(IEnumerable<SettingsCategoryViewModel> categories) => new(true, null);
+        public SettingsSaveResult Save(IEnumerable<SettingsCategoryViewModel> categories) => new(true);
 
         public string GetString(string path, string fallback = "") =>
             path == "runtime.python_path" ? _python : fallback;

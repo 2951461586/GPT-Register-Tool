@@ -7,7 +7,8 @@ public sealed class StageMatrixTests
     {
         const string line = "@@SMSWORKBENCH_V2@@{\"schema\":\"smsworkbench.ipc.v2\",\"version\":2,\"type\":\"event\",\"run_id\":\"r1\",\"sequence\":7,\"timestamp_ms\":123,\"terminal\":false,\"payload\":{\"domain\":\"registration\",\"run_id\":\"r1\",\"account_ref\":\"a@example.test\",\"stage\":\"email_otp_wait\",\"status\":\"running\",\"detail\":\"waiting\",\"attempt\":2,\"max_attempts\":3,\"country\":\"US\",\"total\":12}}";
 
-        Assert.True(BackendProgressEventParser.TryParse(line, out BackendProgressEvent value));
+        Assert.True(BackendProgressEventParser.TryParse(line, out BackendProgressEvent? value));
+        Assert.NotNull(value);
         Assert.Equal("registration", value.Domain);
         Assert.Equal("email_otp_wait", value.Stage);
         Assert.Equal(2, value.Attempt);
@@ -49,7 +50,8 @@ public sealed class StageMatrixTests
     {
         const string line = "@@SMSWORKBENCH_V2@@{\"schema\":\"smsworkbench.ipc.v2\",\"version\":2,\"type\":\"event\",\"run_id\":\"p1\",\"sequence\":1,\"timestamp_ms\":123,\"terminal\":false,\"payload\":{\"domain\":\"payment\",\"run_id\":\"p1\",\"method\":\"bizum\",\"stage\":\"routing\",\"state\":\"preparing_proxy\",\"message\":\"payment routes prepared\"}}";
 
-        Assert.True(BackendProgressEventParser.TryParse(line, out BackendProgressEvent value));
+        Assert.True(BackendProgressEventParser.TryParse(line, out BackendProgressEvent? value));
+        Assert.NotNull(value);
         Assert.Equal("preparing_proxy", value.Status);
         Assert.Equal("payment routes prepared", value.Detail);
     }

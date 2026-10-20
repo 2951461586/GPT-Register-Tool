@@ -72,7 +72,11 @@ public sealed class SettingsServiceTests
             field => field.Key.StartsWith("agent_identity_", StringComparison.Ordinal));
 
         SettingDefinition importMode = SettingsCatalog.AllFields.Single(field => field.Key == "sub2api_auth_mode");
-        Assert.Contains("agent_identity", importMode.Options);
+        // `Options` is nullable on the record because non-enum settings have none;
+        // this setting must expose the explicit-import option list.
+        IReadOnlyList<string>? options = importMode.Options;
+        Assert.NotNull(options);
+        Assert.Contains("agent_identity", options);
     }
 
     [Fact]

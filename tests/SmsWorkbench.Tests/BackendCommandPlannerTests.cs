@@ -311,8 +311,8 @@ public sealed class BackendCommandPlannerTests
         Assert.Contains("1680", plan.Arguments);
         Assert.Contains("--quota-account-timeout", plan.Arguments);
         Assert.Contains("120", plan.Arguments);
-        Assert.Single(plan.Arguments.Where(a => a == "--quota-batch-timeout"));
-        Assert.Single(plan.Arguments.Where(a => a == "--quota-account-timeout"));
+        Assert.Single(plan.Arguments, a => a == "--quota-batch-timeout");
+        Assert.Single(plan.Arguments, a => a == "--quota-account-timeout");
         Assert.Contains("--desktop-ipc", plan.Arguments);
         // Recovery must outlive the widened 1680s batch deadline.
         Assert.Equal(30 * 60 * 1000, plan.TimeoutMilliseconds);
@@ -331,8 +331,8 @@ public sealed class BackendCommandPlannerTests
         // Each flag is emitted exactly once. Recovery needs room for an OTP
         // round trip per account; the probe-only figure is 840.
         var args = plan.Arguments.ToList();
-        Assert.Single(args.Where(a => a == "--quota-batch-timeout"));
-        Assert.Single(args.Where(a => a == "--quota-account-timeout"));
+        Assert.Single(args, a => a == "--quota-batch-timeout");
+        Assert.Single(args, a => a == "--quota-account-timeout");
         Assert.Equal("1680", args[args.IndexOf("--quota-batch-timeout") + 1]);
         // The per-account figure still bounds the probe phase only.
         Assert.Equal("120", args[args.IndexOf("--quota-account-timeout") + 1]);

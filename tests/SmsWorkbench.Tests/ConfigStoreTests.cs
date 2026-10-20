@@ -160,7 +160,7 @@ public sealed class ConfigStoreTests
         Assert.False(text.Contains("\\u002B", StringComparison.Ordinal), "'+' must not be \\u-escaped");
         // Part of the same contract: Python writes `json.dumps(...) + "\n"`, and both
         // writers compare payloads byte for byte to decide whether a shard changed.
-        Assert.True(text.EndsWith("\n", StringComparison.Ordinal), "shards end with a newline");
+        Assert.True(text.EndsWith('\n'), "shards end with a newline");
     }
 
     [Fact]
