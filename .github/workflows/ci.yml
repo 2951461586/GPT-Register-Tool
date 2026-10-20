@@ -115,6 +115,18 @@ jobs:
       # from that list, so the two must move together.
       - run: python scripts/sentinel_asset_guard.py
       - run: python scripts/extractor_parity_report.py
+      # ``services/protocol-payment`` is not a package (the hyphen makes it
+      # unimportable), so extractors put the directory on ``sys.path`` and
+      # import ``common.*`` as a top-level package. Static analysers that do
+      # not know that extra root report every ``common/*`` module as dead
+      # code; the 2026-09-22 and 2026-10-04 scans both had to refute that by
+      # hand. This gate resolves the imports with the runtime's own rule.
+      - run: python scripts/services_import_resolution.py
+      # The dependency view is *generated*: this step fails when the committed
+      # `docs/current/dependency-graph.md` and the source disagree, so the
+      # cycle/mutual-pair numbers cannot go stale the way a hand-built review
+      # graph does.
+      - run: python scripts/dependency_graph.py
       - run: python scripts/config_schema_check.py
       - run: python scripts/ipc_schema_check.py
       - run: python scripts/docs_consistency_scan.py

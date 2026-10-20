@@ -12,6 +12,7 @@
 | 失败之后怎么办：分类、协作取消、并发、可观测性 | [registration-recovery.md](registration-recovery.md) | 正常路径的端点与步骤 |
 | 怎么做受控对照、开哪个开关、看什么指标判定 | [registration-ab-runbook.md](registration-ab-runbook.md) | 系统本身的行为（前四篇） |
 | 账号健康 / 优惠检查 / 恢复的副作用与代理优先级 | [account-health.md](account-health.md) | 注册成功判定 |
+| 谁 import 谁、哪些模块成环、哪些目录互指 | [dependency-graph.md](dependency-graph.md) | 单模块职责与边界（看 [architecture.md](../architecture.md)）；它只给测量，不给处置 |
 | 邮箱 provider 能力、轮询与终止错误 | [mailbox.md](mailbox.md) | 注册流程 |
 | 一键接码的供应商与租号 | [one-click-sms.md](one-click-sms.md) | 注册流程 |
 
