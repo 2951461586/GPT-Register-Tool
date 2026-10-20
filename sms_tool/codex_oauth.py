@@ -27,7 +27,7 @@ from .codex_sentinel import (
 from .auth_headers import auth_impersonate, openai_auth_headers_lower, select_auth_fingerprint
 from .http_client import request_with_retry
 from .http_utils import _absolute_url
-from .mailbox import MailboxAccount, MailboxTokenExpiredError, _poll_email_otp, mailbox_has_inbox_credentials
+from .mailbox import MailboxAccount, MailboxTokenExpiredError, poll_email_otp, mailbox_has_inbox_credentials
 from .providers import mailbox_gmail
 from .kernel.sanitizer import sanitize_text
 from .storage import upsert_account
@@ -467,7 +467,7 @@ def _passwordless_login_and_exchange(
             elif int(resend_result.get("status_code") or 0) == 409:
                 print("[*] Email OTP resend already pending; keeping previous OTP search window")
         try:
-            code = _poll_email_otp(
+            code = poll_email_otp(
                 mailbox,
                 subject_keyword=LOGIN_EMAIL_OTP_SUBJECT_KEYWORD,
                 timeout=min(max(int(timeout or 180), 30), 300),
@@ -1070,7 +1070,7 @@ def _complete_email_otp(session, data, did, current_url, proxy=None, timeout=180
             timeout=30,
             impersonate=auth_impersonate(),
         )
-    code = _poll_email_otp(
+    code = poll_email_otp(
         mailbox,
         subject_keyword=LOGIN_EMAIL_OTP_SUBJECT_KEYWORD,
         timeout=min(max(int(timeout or 180), 30), 300),
@@ -1441,9 +1441,9 @@ def _mailbox_from_data(data):
             if fallback is not None and mailbox_has_inbox_credentials(fallback):
                 return fallback
         if mailbox_gmail.is_gmail_mailbox(result):
-            from .mailbox import _mailbox_from_config
+            from .mailbox import mailbox_from_config
 
-            fallback = _mailbox_from_config(argparse.Namespace(email=email))
+            fallback = mailbox_from_config(argparse.Namespace(email=email))
             if fallback is not None and mailbox_has_inbox_credentials(fallback):
                 return fallback
         return None
@@ -1462,11 +1462,11 @@ def _mailbox_from_configured_pool(email):
 def _configured_mailbox_index():
     """Load the configured mailbox pool once per recovery process."""
     try:
-        from .mailbox import _load_mailbox_pool
+        from .mailbox import load_mailbox_pool
 
         return {
             str(getattr(candidate, "email", "") or "").strip().lower(): candidate
-            for candidate in _load_mailbox_pool()
+            for candidate in load_mailbox_pool()
             if str(getattr(candidate, "email", "") or "").strip()
         }
     except Exception:

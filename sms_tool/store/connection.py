@@ -1,9 +1,11 @@
 """connection submodule of the former storage.py (mechanical split, bodies unchanged)."""
 
+from contextlib import contextmanager
 from pathlib import Path
 import os
 import sqlite3
 import threading
+from typing import Iterator, Protocol
 
 from ..config import ConfigInput
 from ..config import current_config_data
@@ -37,26 +39,78 @@ _INIT_LOCK = threading.Lock()
 _INITIALIZED: set[str] = set()
 
 
-# DELIBERATE REVERSE DEPENDENCY - do not "clean this up".
+# --------------------------------------------------------------- path seam
 #
-# `store` reaching back into `sms_tool.storage` (the back-compat shell) forms an
-# import cycle, and that is intentional. The shell is the test suite's patch
-# injection point: 7 test files do `patch.object(storage, "database_path", ...)`.
-# Resolving through the shell re-reads the attribute on every call, so the patch
-# still redirects internal callers. Binding the local `connection.database_path`
-# instead would make every internal caller silently use the real database.
+# `store` must not import `sms_tool.storage` (the back-compat shell). That edge
+# existed only so the test suite could rebind `storage.database_path` and have
+# internal callers observe it; it made a test convenience part of the production
+# import graph. The seam is explicit now: every resolver asks the registered
+# `DatabasePathProvider`, and tests redirect it with
+# `set_database_path_provider()` or `database_path_override()`.
+#
+# The provider is a process-global rather than a constructor argument on purpose:
+# 26 `_connect()` call sites and their callers would otherwise each grow a
+# parameter, and this seam exists for tests and repair scripts -- production has
+# exactly one resolver.
+
+
+class DatabasePathProvider(Protocol):
+    """Callable that resolves the SQLite file for one runtime config."""
+
+    def __call__(self, runtime_config: ConfigInput = None) -> Path: ...
+
+
+_PATH_PROVIDER: "DatabasePathProvider | None" = None
+
+
+def default_database_path(cfg: ConfigInput = None) -> Path:
+    """Configured `storage.sqlite_path`, else `<runtime>/accounts.sqlite3`."""
+    cfg = resolve_runtime_config(cfg).data if cfg is not None else current_config_data()
+    configured = ((cfg.get("storage") or {}).get("sqlite_path") or "").strip()
+    if configured:
+        path = project_path(configured)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        return path
+    return runtime_file(cfg, "accounts.sqlite3")
+
+
+def database_path(cfg: ConfigInput = None) -> Path:
+    """Resolve the database file through the registered provider."""
+    provider = _PATH_PROVIDER or default_database_path
+    return Path(provider(cfg))
+
+
+def database_path_provider() -> "DatabasePathProvider | None":
+    """The installed provider, or ``None`` when the default resolver is used."""
+    return _PATH_PROVIDER
+
+
+def set_database_path_provider(provider: "DatabasePathProvider | None") -> None:
+    """Install (or clear, with ``None``) the process-wide path provider."""
+    global _PATH_PROVIDER
+    _PATH_PROVIDER = provider
+
+
+@contextmanager
+def database_path_override(path) -> Iterator[Path]:
+    """Point every store call at ``path`` for the duration of the block.
+
+    Public on purpose: it replaces ``patch.object(storage, "database_path")``
+    in tests and is the documented way for repair/rebuild scripts to work on a
+    copy instead of the live database.
+    """
+    previous = _PATH_PROVIDER
+    target = Path(path)
+    set_database_path_provider(lambda runtime_config=None, _target=target: _target)
+    try:
+        yield target
+    finally:
+        set_database_path_provider(previous)
 
 
 def _init_cache_key(path=None, runtime_config: ConfigInput = None) -> str:
-    """Resolved, normalized path used to memoize schema initialization.
-
-    Resolved through `sms_tool.storage.database_path` for the same reason
-    `_connect()` does: the test suite patches that symbol, so binding the local
-    `connection.database_path` here would silently key on the real database.
-    """
-    import sms_tool.storage as _storage
-
-    raw = Path(path) if path else _storage.database_path(runtime_config)
+    """Resolved, normalized path used to memoize schema initialization."""
+    raw = Path(path) if path else database_path(runtime_config)
     try:
         return os.path.normcase(str(Path(raw).resolve()))
     except OSError:
@@ -69,25 +123,8 @@ def reset_database_init_cache() -> None:
         _INITIALIZED.clear()
 
 
-def database_path(cfg: ConfigInput = None):
-    cfg = resolve_runtime_config(cfg).data if cfg is not None else current_config_data()
-    configured = ((cfg.get("storage") or {}).get("sqlite_path") or "").strip()
-    if configured:
-        path = project_path(configured)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        return path
-    return runtime_file(cfg, "accounts.sqlite3")
-
-
 def _connect(path=None, runtime_config: ConfigInput = None):
-    # Resolve database_path through the public `sms_tool.storage` module so that
-    # `patch.object(storage, "database_path", ...)` (used widely across the test
-    # suite) still redirects internal callers after the module was split into the
-    # `store` subpackage. Without this, _connect would bind the local
-    # `connection.database_path` and ignore the monkeypatch.
-    import sms_tool.storage as _storage
-
-    db_path = Path(path) if path else _storage.database_path(runtime_config)
+    db_path = Path(path) if path else database_path(runtime_config)
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
@@ -102,19 +139,30 @@ def _connect(path=None, runtime_config: ConfigInput = None):
     # 5 s is insufficient, and a larger value only converts a loud failure into a
     # longer silent hang. Revisit only with evidence of real lock timeouts.
     #
-    # WAL is likewise deliberately NOT enabled — measured on this 42 MB /
-    # 795-row database with a writer looping init_database()'s three full-table
-    # UPDATEs (each ~32 MB of changes, i.e. far past the 1000-page
-    # autocheckpoint threshold, so every commit rewrites the database):
-    #     delete (current)          : 41 write tx / 6 s,  reader p95   1.68 ms
-    #     WAL                       : 26 write tx / 6 s,  reader p95   4.43 ms
-    #     WAL + wal_autocheckpoint=0: 17 write tx / 6 s,  reader p95 121.36 ms
-    # WAL is ~1.8x SLOWER with today's giant write transactions. It flips to a
-    # clear win once those transactions are small — the same harness with
-    # single-row UPDATEs gave WAL 57 reads vs delete 7, and the delete-mode
-    # reader hit `database is locked` while the WAL reader never did.
-    # => Re-enable `PRAGMA journal_mode=WAL` TOGETHER WITH the init_database()
-    #    fix (audit-2026-09-01-round4 §8 item 6), not before it.
+    # WAL is likewise deliberately NOT enabled. 2026-09-01 measured it as ~1.8x
+    # SLOWER under init_database()'s three full-table UPDATEs and deferred it
+    # until that replay left the hot path - which it since did (the memo above).
+    # The deferred re-test ran 2026-10-20 on a synthetic 795-row / 38.5 MB
+    # database using the production pattern (one connection per operation,
+    # 3 repeats, medians):
+    #     single-row commit     delete 62.6 tx/s    WAL 42.2 tx/s
+    #     upsert-shaped write   delete 56.0 tx/s    WAL 44.4 tx/s   (rewrites raw_json)
+    #     init_database(force)  ~165-176 ms in delete, WAL and WAL+NORMAL
+    #     2 writers + 4 readers ~56-58 tx/s, zero `database is locked` in every mode
+    #     reader p95 under write  delete 42.9 ms    WAL 29.2 ms
+    # The 09-01 prediction ("small transactions flip WAL to a clear win") did NOT
+    # reproduce: at one connection per operation WAL is ~1.3-1.5x slower and
+    # nothing contends. It only wins once connections are reused - the same
+    # harness at one connection per thread measured delete 105-117 tx/s vs WAL
+    # 500-563 tx/s - so connection reuse is the lever here, not the journal mode.
+    # Production volume is far below that crossover too: a batch of ~800 accounts
+    # issues a few thousand transactions spread over hours (well under 1 tx/s),
+    # so neither change is user-visible today. Revisit only with a measured
+    # write-rate or lock-wait problem, and land connection reuse first if it ever
+    # comes to that - enabling WAL alone would make today's pattern slower.
+    # History: the 09-01 run (writer looping init_database's UPDATEs) measured
+    # delete 41 tx / 6 s at reader p95 1.68 ms, WAL 26 tx / 6 s at 4.43 ms, and
+    # WAL+wal_autocheckpoint=0 17 tx / 6 s at 121.36 ms.
     return conn
 
 

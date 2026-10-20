@@ -24,7 +24,7 @@ import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeGuard
 
 from ..registration_retry_guard import RegistrationRetryGuard
 
@@ -61,7 +61,7 @@ def _prune_liveness_snapshots(directory, keep: int = _LIVENESS_SNAPSHOT_KEEP, ex
     return removed
 
 
-def _probe_is_fresh_definitive(probe: dict[str, Any] | None) -> bool:
+def _probe_is_fresh_definitive(probe: dict[str, Any] | None) -> TypeGuard[dict[str, Any]]:
     if not isinstance(probe, dict) or not probe:
         return False
     return str(probe.get("status") or "").strip().lower() in _FRESH_PROBE_DEFINITIVE_STATUSES
@@ -465,7 +465,7 @@ def refresh_local_quota_statuses(
         and not _item_is_account_deactivated(item)
         and not _probe_is_token_invalid(item.get("probe"))
     )
-    relogin_results = [item.get("relogin") for item in results if isinstance(item.get("relogin"), dict)]
+    relogin_results = [relogin for item in results if isinstance((relogin := item.get("relogin")), dict)]
     relogin_success = sum(1 for item in relogin_results if item.get("ok"))
     relogin_deactivated = sum(1 for item in relogin_results if _looks_account_deactivated(item))
     mailbox_auth_invalid = sum(1 for item in results if item.get("mailbox_auth_invalid"))
@@ -592,9 +592,9 @@ def _clear_promotion_marker_after_probe(email: str) -> None:
 def _refresh_mailbox_quarantine_state() -> None:
     """Prune records for credentials removed or replaced in the repaired pool."""
     try:
-        from ..mailbox import _load_mailbox_pool
+        from ..mailbox import load_mailbox_pool
 
-        _load_mailbox_pool()
+        load_mailbox_pool()
     except Exception:
         pass
 

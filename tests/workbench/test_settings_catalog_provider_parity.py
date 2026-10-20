@@ -29,9 +29,9 @@ from sms_tool import sms_providers
 from test_settings_catalog_driver_parity import _call_slice
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-PROVIDER_CATALOG = REPO_ROOT / "SmsWorkbench" / "SmsProviderCatalog.cs"
-SETTINGS_CATALOG = REPO_ROOT / "SmsWorkbench" / "SettingsCatalog.cs"
-DIALOG = REPO_ROOT / "SmsWorkbench" / "MainWindow.SmsProvider.cs"
+PROVIDER_CATALOG = REPO_ROOT / "SmsWorkbench" / "Models" / "SmsProviderCatalog.cs"
+SETTINGS_CATALOG = REPO_ROOT / "SmsWorkbench" / "Services" / "SettingsCatalog.cs"
+DIALOG = REPO_ROOT / "SmsWorkbench" / "Views" / "MainWindow.SmsProvider.cs"
 
 #: C# 供应商表的行锚点。用 ``new SmsProvider(`` 而不是裸字符串。
 #: 第五个实参是**协议族**（`SmsActivateProtocol` / `NexsmsProtocol` 标识符，不是字面量），
@@ -479,8 +479,8 @@ class DialogUsesTheSelectedProviderTests(unittest.TestCase):
 #: 允许出现供应商键字面量的**生产**文件，只有目录本身：表与下拉框。
 CATALOG_FILES = frozenset(
     {
-        (REPO_ROOT / "SmsWorkbench" / "SmsProviderCatalog.cs").resolve(),
-        (REPO_ROOT / "SmsWorkbench" / "SettingsCatalog.cs").resolve(),
+        (REPO_ROOT / "SmsWorkbench" / "Models" / "SmsProviderCatalog.cs").resolve(),
+        (REPO_ROOT / "SmsWorkbench" / "Services" / "SettingsCatalog.cs").resolve(),
     }
 )
 

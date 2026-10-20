@@ -1,7 +1,7 @@
 """Mailbox facade: provider registration, proxy resolution, OTP polling.
 
 This is the entry point the registration flow uses to obtain a mailbox account
-(``_ensure_mailbox_account``) and to read its OTP (``_poll_email_otp`` /
+(``ensure_mailbox_account``) and to read its OTP (``poll_email_otp`` /
 ``_poll_cfworker_otp``). It aggregates every backend behind one shape so the
 workflow never branches on which provider it is talking to.
 
@@ -11,6 +11,16 @@ Layout, which is the result of two earlier splits:
   ``_register_mailbox_strategies``;
 * ``MailboxAccount`` lives in ``mailbox_types``, token/password file parsing in
   ``mailbox_parsers``, quarantine bookkeeping in ``mailbox_quarantine``.
+
+Public surface (2026-10-21). The functions other modules are allowed to use are
+public, not ``_``-prefixed: ``poll_email_otp``, ``fetch_mailbox_messages``,
+``fetch_mailbox_messages_local``, ``latest_email_otp_candidate``,
+``load_mailbox_pool``, ``mailbox_from_config``, ``mailbox_email_config``,
+``mailbox_proxy_candidates``, ``resolve_mailbox_proxy``, ``ensure_mailbox_account``,
+``snapshot_mailbox_message``, ``provider_otp_issued_after``, ``remail_enabled``,
+``otp_poll_interval``, ``email_otp_settle_seconds``. A ``_``-prefixed name is
+now internal by contract, and ``scripts/mailbox_private_import_ratchet.py``
+fails on any new private import from this module (its baseline is 0).
 
 Two traps worth knowing before editing:
 
@@ -37,7 +47,7 @@ from .kernel.paths import resolve_config_file
 from .providers import outlook_imap_client
 from .providers import mailbox_gmail
 from .mail_otp import (
-    _candidate_is_newer,
+    candidate_is_newer,
     _email_otp_candidate,
     _extract_otp_from_text,
     _message_id,
@@ -81,7 +91,7 @@ def _config_data(runtime_config: ConfigInput = None) -> Mapping[str, object]:
     return current_config_data()
 
 
-def _email_cfg(runtime_config: ConfigInput = None):
+def mailbox_email_config(runtime_config: ConfigInput = None):
     value = _config_data(runtime_config).get("email_registration", {})
     return value if isinstance(value, Mapping) else {}
 
@@ -234,12 +244,12 @@ _register_mailbox_strategies()
 mailbox_strategies.DEFAULT_MAILBOX_PROVIDERS.freeze()
 
 
-def _remail_enabled():
-    return mailbox_remail._remail_enabled()
+def remail_enabled():
+    return mailbox_remail.remail_enabled()
 
 
 def _gmail_cfg():
-    email_cfg = _email_cfg()
+    email_cfg = mailbox_email_config()
     _raw_gmail_cfg: object = email_cfg.get("gmail")
     gmail_cfg: dict = _raw_gmail_cfg if isinstance(_raw_gmail_cfg, dict) else {}
     return gmail_cfg
@@ -260,9 +270,9 @@ def _gmail_enabled():
     return bool(str(cfg.get("email") or "").strip())
 
 
-def _otp_poll_interval():
+def otp_poll_interval():
     try:
-        return max(1.0, float(_email_cfg().get("otp_poll_interval", 2)))
+        return max(1.0, float(mailbox_email_config().get("otp_poll_interval", 2)))
     except Exception:
         return 2.0
 
@@ -271,11 +281,11 @@ def _otp_poll_interval():
 
 
 def _cfworker_cfg():
-    return mailbox_cfworker._cfworker_cfg(_email_cfg())
+    return mailbox_cfworker._cfworker_cfg(mailbox_email_config())
 
 
 def _cfworker_client(proxy=None):
-    return mailbox_cfworker._cfworker_client(_email_cfg(), proxy=proxy)
+    return mailbox_cfworker._cfworker_client(mailbox_email_config(), proxy=proxy)
 
 
 def _normalize_mailbox_proxy(value):
@@ -297,7 +307,7 @@ def _coerce_int(value, default: int = 0) -> int:
 
 def _configured_mailbox_proxy(runtime_config: ConfigInput = None):
     config = _config_data(runtime_config)
-    email_cfg = _email_cfg(runtime_config)
+    email_cfg = mailbox_email_config(runtime_config)
     proxy_value = config.get("proxy")
     _raw_proxy_cfg: object = proxy_value
     proxy_cfg: Mapping = _raw_proxy_cfg if isinstance(_raw_proxy_cfg, Mapping) else {}
@@ -309,11 +319,11 @@ def _configured_mailbox_proxy(runtime_config: ConfigInput = None):
     )
 
 
-def _resolve_mailbox_proxy(proxy=None, runtime_config: ConfigInput = None):
+def resolve_mailbox_proxy(proxy=None, runtime_config: ConfigInput = None):
     return _configured_mailbox_proxy(runtime_config) or _normalize_mailbox_proxy(proxy)
 
 
-def _mailbox_proxy_candidates(proxy=None, runtime_config: ConfigInput = None):
+def mailbox_proxy_candidates(proxy=None, runtime_config: ConfigInput = None):
     """Build ordered mailbox routes with the operation proxy as a failover.
 
     The mailbox proxy remains authoritative for normal traffic.  When it
@@ -321,7 +331,7 @@ def _mailbox_proxy_candidates(proxy=None, runtime_config: ConfigInput = None):
     proxy instead of retrying the same dead local route for the full OTP wait.
     """
     config = _config_data(runtime_config)
-    email_cfg = _email_cfg(runtime_config)
+    email_cfg = mailbox_email_config(runtime_config)
     _raw_proxy_cfg: object = config.get("proxy")
     proxy_cfg: Mapping = _raw_proxy_cfg if isinstance(_raw_proxy_cfg, Mapping) else {}
     values = []
@@ -368,20 +378,7 @@ def _mailbox_proxy_candidates(proxy=None, runtime_config: ConfigInput = None):
     return values or [_normalize_mailbox_proxy(proxy)]
 
 
-def mailbox_proxy_candidates(proxy=None, runtime_config: ConfigInput = None):
-    """Public seam for lane resolvers such as :mod:`proxy_registry`.
-
-    ``mailbox.py`` exposes almost no public surface, so the proxy registry's
-    read-only facade would otherwise reach into the private implementation.
-    The private name stays authoritative; this wrapper exists so the registry
-    can front the mailbox lane without a cross-module private import (tracked
-    by ``scripts/mailbox_private_import_ratchet.py``). Live polling continues
-    to call ``_mailbox_proxy_candidates`` directly.
-    """
-    return _mailbox_proxy_candidates(proxy, runtime_config)
-
-
-def _provider_otp_issued_after(mailbox, issued_after_unix, runtime_config: ConfigInput = None):
+def provider_otp_issued_after(mailbox, issued_after_unix, runtime_config: ConfigInput = None):
     issued_after_unix = _coerce_int(issued_after_unix)
     provider = str(getattr(mailbox, "provider", "") or "").strip().lower()
     defaults = {
@@ -393,17 +390,19 @@ def _provider_otp_issued_after(mailbox, issued_after_unix, runtime_config: Confi
     if provider not in defaults:
         return issued_after_unix
     try:
-        grace = int(_email_cfg(runtime_config).get(f"{provider}_otp_issued_after_grace_seconds", defaults[provider]))
+        grace = int(
+            mailbox_email_config(runtime_config).get(f"{provider}_otp_issued_after_grace_seconds", defaults[provider])
+        )
     except (TypeError, ValueError):
         grace = defaults[provider]
     return max(0, issued_after_unix - min(max(0, grace), 300))
 
 
-def _snapshot_mailbox_message(mailbox, proxy=None):
+def snapshot_mailbox_message(mailbox, proxy=None):
     """Record the pre-OTP baseline: every message id visible *right now*.
 
     Everything this marks as seen is permanently skipped by
-    ``_latest_email_otp_candidate``, so the **call site** matters more than the
+    ``latest_email_otp_candidate``, so the **call site** matters more than the
     implementation -- it must run before anything can send an OTP.  See
     ``RegistrationEmailWorkflow._bootstrap`` for the protocol lane and
     ``browser_flow.orchestrator`` for the browser lane.
@@ -430,10 +429,10 @@ def _snapshot_mailbox_message(mailbox, proxy=None):
             messages = mailbox_icloud_url.snapshot_icloud_url_messages(
                 mailbox,
                 limit=25,
-                proxy=_resolve_mailbox_proxy(proxy),
+                proxy=resolve_mailbox_proxy(proxy),
             )
         else:
-            messages = _fetch_mailbox_messages(mailbox, limit=1, proxy=proxy)
+            messages = fetch_mailbox_messages(mailbox, limit=1, proxy=proxy)
         message_id = _message_id(messages[0]) if messages else ""
         mailbox.seen_message_id = message_id
         mailbox.seen_message_ids = tuple(
@@ -483,7 +482,7 @@ def _snapshot_mailbox_message(mailbox, proxy=None):
 def _create_cfworker_mailboxes(args=None):
     return mailbox_cfworker._create_cfworker_mailboxes(
         args=args,
-        email_cfg=_email_cfg(),
+        email_cfg=mailbox_email_config(),
         client_func=_cfworker_client,
     )
 
@@ -510,7 +509,7 @@ def _gmail_mailbox_from_token_files(email):
     if not target_email or "@" not in target_email:
         return None
     paths = []
-    configured = _configured_token_file(_email_cfg().get("token_file"))
+    configured = _configured_token_file(mailbox_email_config().get("token_file"))
     if configured:
         paths.append(configured)
     paths.append(_default_nb_register_token_file())
@@ -529,7 +528,7 @@ def _gmail_mailbox_from_token_files(email):
 def _gmail_mailbox_from_config(args=None):
     args = args or argparse.Namespace()
     cfg = _gmail_cfg()
-    email_cfg = _email_cfg()
+    email_cfg = mailbox_email_config()
     requested_email = (getattr(args, "email", None) or cfg.get("email") or email_cfg.get("email") or "").strip().lower()
     if not requested_email:
         return None
@@ -594,7 +593,7 @@ def _gmail_mailbox_from_config(args=None):
     )
 
 
-def _mailbox_from_config(args=None):
+def mailbox_from_config(args=None):
     args = args or argparse.Namespace()
     remail_cfg = mailbox_remail._remail_cfg()
     remail_token = str(
@@ -606,7 +605,7 @@ def _mailbox_from_config(args=None):
     gmail_mailbox = _gmail_mailbox_from_config(args)
     if gmail_mailbox is not None and not remail_token:
         return gmail_mailbox
-    email = (getattr(args, "email", None) or _email_cfg().get("email") or "").strip().lower()
+    email = (getattr(args, "email", None) or mailbox_email_config().get("email") or "").strip().lower()
     if not email and remail_token:
         email = str(remail_cfg.get("delivery_email") or "").strip().lower()
     if not email:
@@ -621,9 +620,13 @@ def _mailbox_from_config(args=None):
         )
     return MailboxAccount(
         email=email,
-        password=(getattr(args, "email_password", None) or _email_cfg().get("password") or "").strip(),
-        refresh_token=(getattr(args, "email_refresh_token", None) or _email_cfg().get("refresh_token") or "").strip(),
-        access_token=(getattr(args, "email_access_token", None) or _email_cfg().get("access_token") or "").strip(),
+        password=(getattr(args, "email_password", None) or mailbox_email_config().get("password") or "").strip(),
+        refresh_token=(
+            getattr(args, "email_refresh_token", None) or mailbox_email_config().get("refresh_token") or ""
+        ).strip(),
+        access_token=(
+            getattr(args, "email_access_token", None) or mailbox_email_config().get("access_token") or ""
+        ).strip(),
         source="config",
         provider="graph",
     )
@@ -636,7 +639,7 @@ def _mailbox_from_config(args=None):
 # moved _parse_chatai_mailbox_file to dedicated mailbox module.
 
 
-def _load_mailbox_pool(args=None):
+def load_mailbox_pool(args=None):
     args = args or argparse.Namespace()
     if getattr(args, "buy_remail_mailbox", False):
         mode = getattr(args, "remail_service_mode", None) or "purchase"
@@ -652,38 +655,38 @@ def _load_mailbox_pool(args=None):
     elif getattr(args, "mailbox_file", None):
         pool = _parse_mailbox_token_file(args.mailbox_file)
     else:
-        direct = _mailbox_from_config(args)
+        direct = mailbox_from_config(args)
         if direct:
             pool = [direct]
         else:
-            configured = _configured_token_file(_email_cfg().get("token_file"))
+            configured = _configured_token_file(mailbox_email_config().get("token_file"))
             pool = _parse_mailbox_token_file(configured or _default_nb_register_token_file())
     pool = mailbox_remail.filter_dead_remail_mailboxes(pool)
     prune_quarantine_against_pool(pool)
     return filter_quarantined_mailboxes(pool)
 
 
-def _ensure_mailbox_account(mailbox=None):
+def ensure_mailbox_account(mailbox=None):
     if mailbox:
         filtered = mailbox_remail.filter_dead_remail_mailboxes([mailbox])
         return filtered[0] if filtered else None
-    if _remail_enabled():
+    if remail_enabled():
         return mailbox_remail._create_remail_order(service_mode="code")
     return None
 
 
 def _ms_oauth_refresh(mailbox, proxy=None, scope_override=None):
     mailbox_graph.curl_requests = curl_requests
-    return mailbox_graph.ms_oauth_refresh(mailbox, _email_cfg(), proxy=proxy, scope_override=scope_override)
+    return mailbox_graph.ms_oauth_refresh(mailbox, mailbox_email_config(), proxy=proxy, scope_override=scope_override)
 
 
 def _gmail_oauth_refresh(mailbox, proxy=None, scope_override=None):
     return mailbox_gmail.refresh_gmail_access_token(mailbox, _gmail_cfg(), proxy=proxy, scope_override=scope_override)
 
 
-def _email_otp_settle_seconds():
+def email_otp_settle_seconds():
     try:
-        cfg = _email_cfg()
+        cfg = mailbox_email_config()
         if "otp_settle_seconds" in cfg:
             return max(0.0, float(cfg.get("otp_settle_seconds", 0)))
         return max(0.0, float(cfg.get("cfworker_otp_settle_seconds", 3)))
@@ -695,7 +698,7 @@ def _email_otp_settle_seconds():
 
 
 def _outlook_imap_enabled():
-    cfg = _email_cfg()
+    cfg = mailbox_email_config()
     value = cfg.get("outlook_imap_enabled", True)
     if isinstance(value, str):
         return value.strip().lower() in {"1", "true", "yes", "on"}
@@ -703,7 +706,7 @@ def _outlook_imap_enabled():
 
 
 def _outlook_imap_folders():
-    cfg = _email_cfg()
+    cfg = mailbox_email_config()
     configured = cfg.get("outlook_imap_folders")
     if isinstance(configured, str) and configured.strip():
         return [part.strip() for part in configured.split(",") if part.strip()]
@@ -745,11 +748,11 @@ def _gmail_imap_port():
 def mailbox_has_inbox_credentials(mailbox):
     return mailbox_strategies.DEFAULT_MAILBOX_PROVIDERS.has_credentials(
         mailbox,
-        _email_cfg(),
+        mailbox_email_config(),
     )
 
 
-def _latest_email_otp_candidate(mailbox, keyword="", issued_after_unix=0, proxy=None, override_messages=None):
+def latest_email_otp_candidate(mailbox, keyword="", issued_after_unix=0, proxy=None, override_messages=None):
     latest = None
     seen_message_id = str(getattr(mailbox, "seen_message_id", "") or "").strip()
     seen_message_ids = {
@@ -760,7 +763,7 @@ def _latest_email_otp_candidate(mailbox, keyword="", issued_after_unix=0, proxy=
     if seen_message_id:
         seen_message_ids.add(seen_message_id)
     seen_message_received_ts = _coerce_int(getattr(mailbox, "seen_message_received_ts", 0))
-    messages = override_messages if override_messages is not None else _fetch_mailbox_messages(mailbox, proxy=proxy)
+    messages = override_messages if override_messages is not None else fetch_mailbox_messages(mailbox, proxy=proxy)
     for msg in messages:
         if _message_id(msg) in seen_message_ids:
             continue
@@ -782,7 +785,7 @@ def _latest_email_otp_candidate(mailbox, keyword="", issued_after_unix=0, proxy=
     return latest
 
 
-def _fetch_mailbox_messages(
+def fetch_mailbox_messages(
     mailbox,
     limit=25,
     proxy=None,
@@ -791,9 +794,9 @@ def _fetch_mailbox_messages(
     runtime_config: ConfigInput = None,
     registry=None,
 ):
-    proxy_candidates = _mailbox_proxy_candidates(proxy, runtime_config)
-    proxy = proxy_candidates[0] if proxy_candidates else _resolve_mailbox_proxy(proxy, runtime_config)
-    cfg = _email_cfg(runtime_config)
+    proxy_candidates = mailbox_proxy_candidates(proxy, runtime_config)
+    proxy = proxy_candidates[0] if proxy_candidates else resolve_mailbox_proxy(proxy, runtime_config)
+    cfg = mailbox_email_config(runtime_config)
 
     # Try registered provider strategies in order (cfworker → remail → icloud → gmail → Graph API fallback)
     fetcher = mailbox_strategies.resolve_message_fetcher(mailbox, cfg, registry=registry)
@@ -821,7 +824,7 @@ def _fetch_mailbox_messages(
 # Message recipient extraction moved to sms_tool.mail_otp.
 
 
-def _poll_email_otp(
+def poll_email_otp(
     mailbox,
     subject_keyword="",
     timeout=300,
@@ -832,12 +835,12 @@ def _poll_email_otp(
     runtime_config: ConfigInput = None,
     registry=None,
 ):
-    cfg = _email_cfg(runtime_config)
+    cfg = mailbox_email_config(runtime_config)
     provider = str(getattr(mailbox, "provider", "") or "")
 
-    issued_after_unix = _provider_otp_issued_after(mailbox, issued_after_unix, runtime_config)
-    proxy_candidates = _mailbox_proxy_candidates(proxy, runtime_config)
-    proxy = proxy_candidates[0] if proxy_candidates else _resolve_mailbox_proxy(proxy, runtime_config)
+    issued_after_unix = provider_otp_issued_after(mailbox, issued_after_unix, runtime_config)
+    proxy_candidates = mailbox_proxy_candidates(proxy, runtime_config)
+    proxy = proxy_candidates[0] if proxy_candidates else resolve_mailbox_proxy(proxy, runtime_config)
 
     # Try registered OTP pollers in order (cfworker -> remail -> Graph API fallback graph_otp_poll)
     poller = mailbox_strategies.resolve_otp_poller(mailbox, cfg, registry=registry)
@@ -891,15 +894,15 @@ def _poll_email_otp(
 
 
 def _cfworker_otp_settle_seconds():
-    return mailbox_cfworker._cfworker_otp_settle_seconds(_email_cfg())
+    return mailbox_cfworker._cfworker_otp_settle_seconds(mailbox_email_config())
 
 
 def _cfworker_poll_proxy_enabled():
-    return mailbox_cfworker._cfworker_poll_proxy_enabled(_email_cfg())
+    return mailbox_cfworker._cfworker_poll_proxy_enabled(mailbox_email_config())
 
 
 def _cfworker_direct_fallback_enabled():
-    return mailbox_cfworker._cfworker_direct_fallback_enabled(_email_cfg())
+    return mailbox_cfworker._cfworker_direct_fallback_enabled(mailbox_email_config())
 
 
 def _poll_cfworker_otp(
@@ -918,9 +921,9 @@ def _poll_cfworker_otp(
         timeout=timeout,
         issued_after_unix=issued_after_unix,
         proxy=proxy,
-        email_cfg=_email_cfg(runtime_config),
-        otp_poll_interval_func=_otp_poll_interval,
-        fetch_messages_func=lambda account, **kwargs: _fetch_mailbox_messages(
+        email_cfg=mailbox_email_config(runtime_config),
+        otp_poll_interval_func=otp_poll_interval,
+        fetch_messages_func=lambda account, **kwargs: fetch_mailbox_messages(
             account,
             runtime_config=runtime_config,
             registry=registry,
@@ -937,19 +940,19 @@ def _latest_cfworker_otp_candidate(mailbox, keyword="", issued_after_unix=0, see
         issued_after_unix=issued_after_unix,
         seen_message_id=seen_message_id,
         proxy=proxy,
-        fetch_messages_func=_fetch_mailbox_messages,
+        fetch_messages_func=fetch_mailbox_messages,
     )
 
 
-def _fetch_mailbox_messages_local(mailbox, limit=25, proxy=None):
+def fetch_mailbox_messages_local(mailbox, limit=25, proxy=None):
     """Fetch messages using local Graph API / IMAP only."""
-    proxy = _resolve_mailbox_proxy(proxy)
+    proxy = resolve_mailbox_proxy(proxy)
     if getattr(mailbox, "provider", "") == "cfworker":
         return mailbox_cfworker._fetch_cfworker_messages(
             mailbox,
             limit=limit,
             proxy=proxy,
-            email_cfg=_email_cfg(),
+            email_cfg=mailbox_email_config(),
             client_func=_cfworker_client,
         )
     if mailbox_gmail.is_gmail_mailbox(mailbox):
@@ -967,7 +970,7 @@ def _fetch_mailbox_messages_local(mailbox, limit=25, proxy=None):
     graph_error = None
     graph_messages = []
     try:
-        cfg = _email_cfg()
+        cfg = mailbox_email_config()
         token = mailbox.access_token or _ms_oauth_refresh(mailbox, proxy=proxy)
         graph_url = cfg.get("graph_messages_url", "https://graph.microsoft.com/v1.0/me/messages")
         params = {

@@ -149,7 +149,7 @@ from .otp_strategy import (
     _poll_registration_email_otp,
     send_registration_email_otp as _send_registration_email_otp,
 )
-from .mailbox import _ensure_mailbox_account, _poll_email_otp, _snapshot_mailbox_message
+from .mailbox import ensure_mailbox_account, poll_email_otp, snapshot_mailbox_message
 from .kernel.paths import runtime_file
 from .phone_registration import run_phone_register as _run_phone_register_impl
 from .registration_outcome import (
@@ -276,7 +276,7 @@ def _email_registration_operations() -> RegistrationOperations:
             "_stored_registration_password": _stored_registration_password,
             "_stored_registration_totp": _stored_registration_totp,
             "_email_otp_send_url": _email_otp_send_url,
-            "_ensure_mailbox_account": _ensure_mailbox_account,
+            "ensure_mailbox_account": ensure_mailbox_account,
             "_is_wrong_email_otp_code": _is_wrong_email_otp_code,
             "_mailbox_snapshot": _mailbox_snapshot,
             "otp_poll": RegistrationOtpPollingOperations(
@@ -284,7 +284,7 @@ def _email_registration_operations() -> RegistrationOperations:
                 poll=_poll_registration_email_otp,
                 resend=_send_registration_email_otp,
             ),
-            "_snapshot_mailbox_message": _snapshot_mailbox_message,
+            "snapshot_mailbox_message": snapshot_mailbox_message,
             "_validate_email_otp": _validate_email_otp,
             "_failure_result": _failure_result,
             "_print_timings": _print_timings,

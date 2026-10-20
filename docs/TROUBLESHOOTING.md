@@ -157,7 +157,7 @@
    CLI 的 `--registration-driver` choices 与配置校验都从它派生。
 2. 会话工厂表必须与注册表一致 —— 不一致会在 **import 时**直接断言失败
    （`sms_tool/registration_drivers/external_sessions/__init__.py:22`）。
-3. 🔴 **桌面端是手写的第二份**：`SmsWorkbench/SettingsCatalog.cs:56` 单独列了驱动枚举。
+3. 🔴 **桌面端是手写的第二份**：`SmsWorkbench/Services/SettingsCatalog.cs:56` 单独列了驱动枚举。
    Python 加了驱动而这里没加 ⇒ 下拉框里选不到；C# 留了已删的驱动 ⇒ 能选中但后端
    抛 `unsupported_registration_driver`。
 4. 两侧一致性由 `tests/workbench/test_settings_catalog_driver_parity.py` 钉住。它变红就是上面第 3 条。
@@ -309,7 +309,7 @@ CI 上**看不见**这个问题。
 
 **根因**（三个事实叠在一起）：
 
-1. `SmsWorkbench/MainWindow.SmsProvider.cs:235/238` 会往**当前供应商**的 section 里写
+1. `SmsWorkbench/Views/MainWindow.SmsProvider.cs:235/238` 会往**当前供应商**的 section 里写
    `service_name` 与 `country_name_zh`（纯展示用，两语言下都没有读取方）。
 2. `sms_tool/config_usage.py` 的判定是「**leaf 名是否作为独立字符串字面量**出现在
    `sms_tool/` + `services/`」——`service_name` / `country_name_zh` 两个 leaf 都不出现，
@@ -352,7 +352,7 @@ self.assertIn(key.rsplit(".", 1)[-1], writes, "counter-example moved")
 1. 弹窗要先用**在线目录**（国家 + 价格档位）让操作员选，再把选择回写进配置；
 2. 它读目录用的是 sms-activate handler 协议 —— `{endpoint}?api_key=…&action=getCountries`、
    `…&action=getPricesV3&service=dr`，余额还要求响应以 `ACCESS_BALANCE:` 开头
-   （`SmsWorkbench/SmsProviderCatalogClient.cs`）；
+   （`SmsWorkbench/Interop/SmsProviderCatalogClient.cs`）；
 3. `nexsms` 是 REST（`/api/` 路径 + `{code,message,data}` 信封），**上面三个 URL 全部 403**。
    实测：`openresty` 的 403 页；同机打它的合法路由 `/api/getCountryByService` 正常返回
    ⇒ 这是**路由级**拒绝，不是网络 / 主机 / 凭据问题，换代理也没用；
@@ -364,7 +364,7 @@ self.assertIn(key.rsplit(".", 1)[-1], writes, "counter-example moved")
 Python 后端，协议细节全在 `sms_tool/`（`nexsms.py`）里 ⇒ 命令行与批量跑批一直是好的。
 
 **现在的行为**（2026-09-23 第二次修订）：弹窗按 `SmsProviderCatalog.SmsProvider.Protocol`
-分派到**两个在线读取器**，两者都在 `SmsWorkbench/SmsProviderCatalogClient.cs` 里：
+分派到**两个在线读取器**，两者都在 `SmsWorkbench/Interop/SmsProviderCatalogClient.cs` 里：
 
 | 协议族 | 目录 | 余额 | 供应商 |
 | --- | --- | --- | --- |

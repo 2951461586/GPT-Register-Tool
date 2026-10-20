@@ -25,7 +25,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 APP_XAML = PROJECT_ROOT / "SmsWorkbench" / "App.xaml"
-THEME_CS = PROJECT_ROOT / "SmsWorkbench" / "MainWindow.Theme.cs"
+THEME_CS = PROJECT_ROOT / "SmsWorkbench" / "Views" / "MainWindow.Theme.cs"
 
 XAML_BRUSH = re.compile(r'<SolidColorBrush\s+x:Key="(?P<key>[^"]+)"\s+Color="(?P<color>#[0-9A-Fa-f]{6,8})"')
 CS_BRUSH = re.compile(r'SetBrush\(\s*"(?P<key>[^"]+)"\s*,\s*"(?P<color>#[0-9A-Fa-f]{6,8})"\s*\)')

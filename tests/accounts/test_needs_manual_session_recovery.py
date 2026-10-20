@@ -25,12 +25,15 @@ from __future__ import annotations
 
 import json
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from typing import Callable, cast
+from unittest.mock import Mock
 
 import pytest
 
 from sms_tool import storage
+from sms_tool.store import connection
 from sms_tool.registration_handlers import RegistrationEmailWorkflow
+from sms_tool.registration_operations import RegistrationOperations
 from sms_tool.registration_outcome import _failure_result, needs_manual_session_recovery
 from sms_tool.registration_runtime import RegistrationRuntimeState
 
@@ -85,8 +88,11 @@ def test_the_bucket_needs_all_three_facts(success, access_token, existing_accoun
 
 def test_the_predicate_refuses_positional_arguments():
     """四个布尔量按位置传是等着被写反的，签名必须只收关键字。"""
+    # The signature is keyword-only, so the *call* is deliberately illegal here;
+    # the cast states that intent without silencing the checker on the callee.
+    positional = cast("Callable[..., bool]", needs_manual_session_recovery)
     with pytest.raises(TypeError):
-        needs_manual_session_recovery(False, "", True, False)
+        positional(False, "", True, False)
 
 
 def test_a_successful_run_never_asks_for_a_human_even_with_a_stale_flag():
@@ -136,7 +142,10 @@ def test_the_abort_path_hands_the_runtime_facts_to_the_predicate():
     w.runtime.existing_account_password_known = False
     w.runtime.access_token = ""
     w.machine = Mock()
-    w._operations = SimpleNamespace(_failure_result=Mock(return_value={"error": "x"}))
+    w._operations = cast(
+        "RegistrationOperations",
+        SimpleNamespace(_failure_result=Mock(return_value={"error": "x"})),
+    )
 
     w._abort_result("existing_account_user_already_exists")
 
@@ -215,7 +224,7 @@ def test_the_completed_assembly_says_no_when_we_hold_the_password():
 
 def _write_and_read_audit(tmp_path, data, *, state):
     db_path = tmp_path / "accounts.sqlite3"
-    with patch.object(storage, "database_path", return_value=db_path):
+    with connection.database_path_override(db_path):
         assert storage.record_registration_audit(data, batch_id="b", state=state)
         conn = storage._connect()
         try:

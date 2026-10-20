@@ -38,10 +38,16 @@ def _mailbox_contract() -> dict[str, str]:
     return contract
 
 
+class _AuthInvalidError(RuntimeError):
+    """A provider error carrying the ``code`` the disposition helper reads."""
+
+    code = "mailbox_auth_invalid"
+
+
 def test_mailbox_document_is_live_and_matches_runtime_semantics():
     from types import SimpleNamespace
 
-    from sms_tool.mailbox import _mailbox_proxy_candidates
+    from sms_tool.mailbox import mailbox_proxy_candidates
     from sms_tool.mailbox_errors import (
         MailboxEndpointUnavailableError,
         MailboxErrorDisposition,
@@ -61,9 +67,8 @@ def test_mailbox_document_is_live_and_matches_runtime_semantics():
     registry.register(FunctionMailboxProviderAdapter("specific", always, message_fetcher=fetch))
     resolved = registry.resolve_fetcher(SimpleNamespace(), {})
 
-    auth_error = RuntimeError("bad credentials")
-    auth_error.code = "mailbox_auth_invalid"
-    routes = _mailbox_proxy_candidates(
+    auth_error = _AuthInvalidError("bad credentials")
+    routes = mailbox_proxy_candidates(
         "http://operation.example:8003",
         {
             "chatgpt": {},

@@ -15,7 +15,7 @@ from urllib.parse import quote
 import requests as http_requests
 
 from ..config import current_config_data
-from ..mail_otp import _candidate_is_newer, _email_otp_candidate, _extract_otp_from_text, _message_received_ts
+from ..mail_otp import candidate_is_newer, _email_otp_candidate, _extract_otp_from_text, _message_received_ts
 from ..mailbox_types import MailboxAccount
 from ..kernel.paths import project_path, runtime_file
 from ..kernel.sanitizer import mask_otp
@@ -113,12 +113,12 @@ def _remail_request_id(error):
     return ""
 
 
-def _email_cfg():
+def mailbox_email_config():
     return current_config_data().get("email_registration", {})
 
 
 def _remail_cfg():
-    email_cfg = _email_cfg()
+    email_cfg = mailbox_email_config()
     nested = email_cfg.get("remail")
     return nested if isinstance(nested, Mapping) else {}
 
@@ -163,7 +163,7 @@ def _remail_api_key():
     return str(os.environ.get("REMAIL_API_KEY") or _remail_cfg().get("api_key") or "").strip()
 
 
-def _remail_enabled():
+def remail_enabled():
     cfg = _remail_cfg()
     enabled = cfg.get("enabled")
     if enabled is not None and str(enabled).strip().lower() in {"0", "false", "no", "off"}:
@@ -864,7 +864,7 @@ def _latest_remail_otp_candidate(mailbox, messages, keyword="", issued_after_uni
         )
         if not candidate or candidate.get("otp") in excluded:
             continue
-        if _candidate_is_newer(candidate, latest):
+        if candidate_is_newer(candidate, latest):
             latest = candidate
     return latest
 

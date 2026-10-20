@@ -192,6 +192,7 @@ from common.timeouts import CHATGPT_TIMEOUT, DEFAULT_TIMEOUT
 from common import stripe_flow as shared_stripe_flow
 from common import geo as shared_geo
 from common import endpoints
+from common import stripe_setup as shared_stripe_setup
 
 LOG_DIR = Path(os.environ.get("TWINT_LOG_DIR", "").strip() or (SCRIPT_DIR / "logs"))
 DUMP_DIR = Path(os.environ.get("TWINT_DUMP_DIR", "").strip() or (SCRIPT_DIR / "dumps"))
@@ -317,7 +318,8 @@ def random_user_agent() -> str:
 
 
 def random_runtime_version() -> str:
-    return os.environ.get("PP_RUNTIME_VERSION", "").strip() or DEFAULT_STRIPE_RUNTIME_VERSION
+    """Delegate to ``common/stripe_setup.py`` (batch 7)."""
+    return shared_stripe_setup.random_runtime_version(default=DEFAULT_STRIPE_RUNTIME_VERSION)
 
 
 def build_email(first_name: str, last_name: str) -> str:
@@ -351,14 +353,13 @@ def payment_browser_timezone() -> str:
 
 
 def saved_payment_value() -> str:
-    return os.environ.get("TWINT_SAVED_PAYMENT_VALUE", "never").strip() or "never"
+    """Delegate to ``common/stripe_setup.py`` (batch 7)."""
+    return shared_stripe_setup.saved_payment_value(env_prefix="TWINT")
 
 
 def payment_accept_language() -> str:
-    locale = payment_browser_locale()
-    if locale.lower().startswith("en"):
-        return "en-US,en;q=0.9"
-    return f"{locale},{locale.split('-', 1)[0]};q=0.9,en;q=0.8"
+    """Delegate to ``common/stripe_setup.py`` (batch 7)."""
+    return shared_stripe_setup.payment_accept_language(payment_browser_locale)
 
 
 def normalize_proxy_url(proxy: str) -> str:
@@ -1123,33 +1124,25 @@ def update_twint_checkout_taxes(
 
 
 def stripe_init(cs_id: str, stripe_pk: str, proxy: str) -> dict[str, Any]:
-    stripe = new_session(proxy)
-    stripe.headers.update({"User-Agent": random_user_agent(), "Accept-Language": payment_accept_language()})
-    stripe_js_id = str(uuid.uuid4())
-    body = {
-        "browser_locale": payment_browser_locale(),
-        "browser_timezone": payment_browser_timezone(),
-        "elements_session_client[client_betas][0]": "custom_checkout_server_updates_1",
-        "elements_session_client[client_betas][1]": "custom_checkout_manual_approval_1",
-        "elements_session_client[elements_init_source]": "custom_checkout",
-        "elements_session_client[referrer_host]": "chatgpt.com",
-        "elements_session_client[stripe_js_id]": stripe_js_id,
-        "elements_session_client[locale]": payment_elements_locale(),
-        "elements_session_client[is_aggregation_expected]": "false",
-        "elements_options_client[saved_payment_method][enable_save]": "never",
-        "elements_options_client[saved_payment_method][enable_redisplay]": "never",
-        "key": stripe_pk,
-        "_stripe_version": STRIPE_VERSION_FULL,
-    }
-    url = endpoints.stripe_payment_page(cs_id, "init")
-    resp = stripe.post(url, data=body, timeout=DEFAULT_TIMEOUT)
-    dump_http(resp, "stripe_init", body, "POST", url, force=resp.status_code >= 400)
-    if resp.status_code >= 400:
-        raise RuntimeError(f"Stripe init 失败 HTTP {resp.status_code}: {resp.text[:500]}")
-    payload = resp.json() or {}
-    payload["client_stripe_js_id"] = stripe_js_id
-    payload["_client_context"] = {"stripe_js_id": stripe_js_id}
-    return payload
+    """Delegate to ``common/stripe_setup.py`` (batch 7).
+
+    The user agent, the locale callables, the API version and the dump wrapper
+    are this module's own; they are resolved per call so patching any of them
+    still takes effect.
+    """
+    return shared_stripe_setup.stripe_init(
+        cs_id,
+        stripe_pk,
+        proxy,
+        new_session=new_session,
+        user_agent=random_user_agent(),
+        accept_language=payment_accept_language(),
+        browser_locale=payment_browser_locale,
+        browser_timezone=payment_browser_timezone,
+        elements_locale=payment_elements_locale,
+        stripe_version=STRIPE_VERSION_FULL,
+        dump_http=dump_http,
+    )
 
 
 def amount_from_payload(payload: Any) -> int:
@@ -1180,20 +1173,8 @@ def build_ctx(init_payload: dict[str, Any], checkout: dict[str, str]) -> dict[st
 
 
 def stripe_elements_session_params(ctx: dict[str, Any]) -> dict[str, str]:
-    return {
-        "elements_session_client[client_betas][0]": "custom_checkout_server_updates_1",
-        "elements_session_client[client_betas][1]": "custom_checkout_manual_approval_1",
-        "elements_session_client[elements_init_source]": "custom_checkout",
-        "elements_session_client[referrer_host]": "chatgpt.com",
-        "elements_session_client[session_id]": str(
-            ctx.get("elements_session_id") or f"elements_session_{uuid.uuid4().hex[:11]}"
-        ),
-        "elements_session_client[stripe_js_id]": str(ctx.get("stripe_js_id") or uuid.uuid4()),
-        "elements_session_client[locale]": str(ctx.get("locale") or payment_elements_locale()),
-        "elements_session_client[is_aggregation_expected]": "false",
-        "elements_options_client[saved_payment_method][enable_save]": "never",
-        "elements_options_client[saved_payment_method][enable_redisplay]": "never",
-    }
+    """Delegate to ``common/stripe_setup.py`` (batch 7)."""
+    return shared_stripe_setup.stripe_elements_session_params(ctx, elements_locale=payment_elements_locale)
 
 
 def twint_billing_profile() -> dict[str, str]:

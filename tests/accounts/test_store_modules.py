@@ -11,7 +11,6 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -81,7 +80,7 @@ class StoreNormalizeTests(unittest.TestCase):
 class StoreConnectionTests(unittest.TestCase):
     def test_init_database_creates_tables(self):
         tmp = Path(tempfile.mkdtemp()) / "accounts.sqlite3"
-        with mock.patch("sms_tool.storage.database_path", return_value=tmp):
+        with connection.database_path_override(tmp):
             connection.init_database()
             conn = connection._connect()
             try:
@@ -96,9 +95,8 @@ class StoreConnectionTests(unittest.TestCase):
 class StoreCheckpointsTests(unittest.TestCase):
     def setUp(self):
         self._tmp = Path(tempfile.mkdtemp()) / "accounts.sqlite3"
-        patcher = mock.patch("sms_tool.storage.database_path", return_value=self._tmp)
-        patcher.start()
-        self.addCleanup(patcher.stop)
+        connection.set_database_path_provider(lambda *args, _p=self._tmp, **kwargs: _p)
+        self.addCleanup(connection.set_database_path_provider, None)
         connection.init_database()
 
     def test_save_get_clear_round_trip(self):
@@ -122,9 +120,8 @@ class StoreCheckpointsTests(unittest.TestCase):
 class StoreAccountsTests(unittest.TestCase):
     def setUp(self):
         self._tmp = Path(tempfile.mkdtemp()) / "accounts.sqlite3"
-        patcher = mock.patch("sms_tool.storage.database_path", return_value=self._tmp)
-        patcher.start()
-        self.addCleanup(patcher.stop)
+        connection.set_database_path_provider(lambda *args, _p=self._tmp, **kwargs: _p)
+        self.addCleanup(connection.set_database_path_provider, None)
         connection.init_database()
 
     def test_upsert_account_persists_normalized_email(self):
@@ -156,9 +153,8 @@ class StoreAccountsTests(unittest.TestCase):
 class StoreMarkersTests(unittest.TestCase):
     def setUp(self):
         self._tmp = Path(tempfile.mkdtemp()) / "accounts.sqlite3"
-        patcher = mock.patch("sms_tool.storage.database_path", return_value=self._tmp)
-        patcher.start()
-        self.addCleanup(patcher.stop)
+        connection.set_database_path_provider(lambda *args, _p=self._tmp, **kwargs: _p)
+        self.addCleanup(connection.set_database_path_provider, None)
         connection.init_database()
         conn = connection._connect()
         conn.execute(

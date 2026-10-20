@@ -2,7 +2,11 @@ import unittest
 from unittest.mock import patch
 
 from sms_tool import mailbox as mailbox_module
-from sms_tool import mailbox_cfworker as mailbox_cfworker_module
+
+# ``sms_tool/mailbox_cfworker.py`` is a compatibility facade that swaps itself
+# for the provider module in ``sys.modules``; import the implementation, which is
+# the same module object at runtime and the only one a checker can see into.
+from sms_tool.providers import mailbox_cfworker as mailbox_cfworker_module
 from sms_tool.mailbox import MailboxAccount
 from sms_tool.providers import cfworker_client
 from sms_tool.providers.cfworker_client import CFWorkerMailboxClient
@@ -446,10 +450,12 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
         }
 
         with patch.object(
-            mailbox_module, "_email_cfg", return_value={"cfworker_otp_settle_seconds": 0.01, "otp_poll_interval": 0.01}
+            mailbox_module,
+            "mailbox_email_config",
+            return_value={"cfworker_otp_settle_seconds": 0.01, "otp_poll_interval": 0.01},
         ):
-            with patch.object(mailbox_module, "_fetch_mailbox_messages", side_effect=[[old], [new], [new]]):
-                code = mailbox_module._poll_email_otp(mailbox, timeout=1)
+            with patch.object(mailbox_module, "fetch_mailbox_messages", side_effect=[[old], [new], [new]]):
+                code = mailbox_module.poll_email_otp(mailbox, timeout=1)
 
         self.assertEqual(code, "222222")
 
@@ -475,10 +481,12 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
         ]
 
         with patch.object(
-            mailbox_module, "_email_cfg", return_value={"cfworker_otp_settle_seconds": 0, "otp_poll_interval": 0.01}
+            mailbox_module,
+            "mailbox_email_config",
+            return_value={"cfworker_otp_settle_seconds": 0, "otp_poll_interval": 0.01},
         ):
-            with patch.object(mailbox_module, "_fetch_mailbox_messages", return_value=messages):
-                code = mailbox_module._poll_email_otp(
+            with patch.object(mailbox_module, "fetch_mailbox_messages", return_value=messages):
+                code = mailbox_module.poll_email_otp(
                     mailbox,
                     timeout=1,
                     excluded_otps={"682375"},
@@ -554,7 +562,7 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
             patch.object(mailbox_module, "CFG", {}),
             patch.object(
                 mailbox_module,
-                "_email_cfg",
+                "mailbox_email_config",
                 return_value={"cfworker_poll_proxy": True, "cfworker_direct_fallback": True},
             ),
         ):
@@ -567,7 +575,7 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
                 direct_client.fetch_messages = lambda email, limit=25: [{"id": "m1"}]
                 client_factory.side_effect = [proxy_client, direct_client]
 
-                messages = mailbox_module._fetch_mailbox_messages(mailbox, limit=1, proxy="socks5h://127.0.0.1:7897")
+                messages = mailbox_module.fetch_mailbox_messages(mailbox, limit=1, proxy="socks5h://127.0.0.1:7897")
 
         self.assertEqual(messages, [{"id": "m1"}])
         self.assertEqual(client_factory.call_args_list[0].kwargs["proxy"], "socks5h://127.0.0.1:7897")
@@ -578,7 +586,7 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
 
         with (
             patch.object(mailbox_module, "CFG", {}),
-            patch.object(mailbox_module, "_email_cfg", return_value={"cfworker_poll_proxy": True}),
+            patch.object(mailbox_module, "mailbox_email_config", return_value={"cfworker_poll_proxy": True}),
         ):
             with patch.object(mailbox_module, "_cfworker_client") as client_factory:
                 proxy_client = type("ProxyClient", (), {})()
@@ -588,7 +596,7 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
                 client_factory.return_value = proxy_client
 
                 with self.assertRaises(RuntimeError):
-                    mailbox_module._fetch_mailbox_messages(mailbox, limit=1, proxy="socks5h://127.0.0.1:7897")
+                    mailbox_module.fetch_mailbox_messages(mailbox, limit=1, proxy="socks5h://127.0.0.1:7897")
 
         client_factory.assert_called_once()
         self.assertEqual(client_factory.call_args.kwargs["proxy"], "socks5h://127.0.0.1:7897")
@@ -598,14 +606,14 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
 
         with (
             patch.object(mailbox_module, "CFG", {}),
-            patch.object(mailbox_module, "_email_cfg", return_value={"cfworker_poll_proxy": False}),
+            patch.object(mailbox_module, "mailbox_email_config", return_value={"cfworker_poll_proxy": False}),
         ):
             with patch.object(mailbox_module, "_cfworker_client") as client_factory:
                 direct_client = type("DirectClient", (), {})()
                 direct_client.fetch_messages = lambda email, limit=25: [{"id": "m1"}]
                 client_factory.return_value = direct_client
 
-                messages = mailbox_module._fetch_mailbox_messages(mailbox, limit=1, proxy="socks5h://127.0.0.1:7897")
+                messages = mailbox_module.fetch_mailbox_messages(mailbox, limit=1, proxy="socks5h://127.0.0.1:7897")
 
         self.assertEqual(messages, [{"id": "m1"}])
         client_factory.assert_called_once()

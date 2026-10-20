@@ -60,7 +60,7 @@ class CodexOauthTests(unittest.TestCase):
         )
         with (
             patch("sms_tool.codex_oauth.mailbox_has_inbox_credentials", side_effect=[False, True]),
-            patch("sms_tool.mailbox._mailbox_from_config", return_value=fallback) as from_config,
+            patch("sms_tool.mailbox.mailbox_from_config", return_value=fallback) as from_config,
         ):
             result = codex_oauth._mailbox_from_data({"email": "samplegmail01@gmail.com"})
 
@@ -70,7 +70,7 @@ class CodexOauthTests(unittest.TestCase):
     def test_mailbox_from_data_does_not_fallback_to_config_for_non_gmail(self):
         with (
             patch("sms_tool.codex_oauth.mailbox_has_inbox_credentials", return_value=False),
-            patch("sms_tool.mailbox._mailbox_from_config") as from_config,
+            patch("sms_tool.mailbox.mailbox_from_config") as from_config,
         ):
             result = codex_oauth._mailbox_from_data({"email": "user@example.com"})
 
@@ -348,7 +348,7 @@ class CodexOauthTests(unittest.TestCase):
         with (
             patch.dict(codex_oauth.CFG, {"email_registration": {"max_otp_retries": 2}}, clear=False),
             patch("sms_tool.codex_oauth.time.time", side_effect=fake_time),
-            patch("sms_tool.codex_oauth._poll_email_otp", side_effect=poll),
+            patch("sms_tool.codex_oauth.poll_email_otp", side_effect=poll),
             patch("sms_tool.codex_oauth.load_cached_sentinel", return_value={}),
         ):
             result = codex_oauth._passwordless_login_and_exchange(
@@ -381,7 +381,7 @@ class CodexOauthTests(unittest.TestCase):
 
         with (
             patch.dict(codex_oauth.CFG, {"email_registration": {"max_otp_retries": 2}}, clear=False),
-            patch("sms_tool.codex_oauth._poll_email_otp", side_effect=poll),
+            patch("sms_tool.codex_oauth.poll_email_otp", side_effect=poll),
             patch("sms_tool.codex_oauth.load_cached_sentinel", return_value={}),
             patch("sms_tool.codex_oauth._next_url", return_value="https://auth.openai.com/consent"),
             patch("sms_tool.codex_oauth._follow_redirects", return_value=(None, "https://auth.openai.com/consent")),
@@ -661,7 +661,7 @@ class PasswordlessAboutYouIntegrationTests(unittest.TestCase):
         session = self._session()
         with (
             patch.dict(codex_oauth.CFG, {"email_registration": {"max_otp_retries": 1}}, clear=False),
-            patch("sms_tool.codex_oauth._poll_email_otp", return_value="123456"),
+            patch("sms_tool.codex_oauth.poll_email_otp", return_value="123456"),
             patch("sms_tool.codex_oauth.load_cached_sentinel", return_value={}),
             patch("sms_tool.codex_oauth._next_url", return_value="https://auth.openai.com/about-you"),
             patch(
@@ -697,7 +697,7 @@ class PasswordlessAboutYouIntegrationTests(unittest.TestCase):
         }
         with (
             patch.dict(codex_oauth.CFG, {"email_registration": {"max_otp_retries": 1}}, clear=False),
-            patch("sms_tool.codex_oauth._poll_email_otp", return_value="123456"),
+            patch("sms_tool.codex_oauth.poll_email_otp", return_value="123456"),
             patch("sms_tool.codex_oauth.load_cached_sentinel", return_value={}),
             patch("sms_tool.codex_oauth._next_url", return_value="https://auth.openai.com/about-you"),
             patch(
@@ -720,7 +720,7 @@ class PasswordlessAboutYouIntegrationTests(unittest.TestCase):
         session = self._session()
         with (
             patch.dict(codex_oauth.CFG, {"email_registration": {"max_otp_retries": 1}}, clear=False),
-            patch("sms_tool.codex_oauth._poll_email_otp", return_value="123456"),
+            patch("sms_tool.codex_oauth.poll_email_otp", return_value="123456"),
             patch("sms_tool.codex_oauth.load_cached_sentinel", return_value={}),
             patch("sms_tool.codex_oauth._next_url", return_value="https://auth.openai.com/consent"),
             patch(

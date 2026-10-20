@@ -71,7 +71,7 @@ def test_view_inbox_failure_uses_desktop_ipc_envelope(monkeypatch, capsys):
 
     monkeypatch.setattr(session_refresh, "_load_seed_session", lambda **_: ({}, ""))
     monkeypatch.setattr(codex_oauth, "_mailbox_from_data", lambda _: None)
-    monkeypatch.setattr(mailbox, "_mailbox_from_config", lambda _: None)
+    monkeypatch.setattr(mailbox, "mailbox_from_config", lambda _: None)
     monkeypatch.setattr(cli, "_mailbox_from_explicit_args", lambda _: None)
     args = SimpleNamespace(
         desktop_ipc=True,

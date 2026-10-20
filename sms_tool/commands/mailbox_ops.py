@@ -29,7 +29,7 @@ class MailboxCommandContext:
 def view_inbox(args: Any, ctx: MailboxCommandContext) -> None:
     from ..codex_oauth import _mailbox_from_data
     from ..desktop_ipc import emit_result
-    from ..mailbox import _fetch_mailbox_messages, _mailbox_from_config
+    from ..mailbox import fetch_mailbox_messages, mailbox_from_config
     from ..session_refresh import _load_seed_session
 
     def output(payload):
@@ -41,7 +41,7 @@ def view_inbox(args: Any, ctx: MailboxCommandContext) -> None:
         if mailbox is None:
             mailbox = _mailbox_from_data(data)
         if mailbox is None and (getattr(args, "remail_token", None) or os.environ.get("REMAIL_SERVICE_TOKEN")):
-            mailbox = _mailbox_from_config(args)
+            mailbox = mailbox_from_config(args)
     if mailbox is None:
         output(
             {
@@ -54,7 +54,7 @@ def view_inbox(args: Any, ctx: MailboxCommandContext) -> None:
     try:
         original_mailbox_token = str(getattr(mailbox, "token", "") or "")
         with contextlib.redirect_stdout(sys.stderr):
-            messages = _fetch_mailbox_messages(
+            messages = fetch_mailbox_messages(
                 mailbox,
                 limit=max(1, min(int(args.inbox_limit or 20), 100)),
                 proxy=args.proxy,
@@ -105,7 +105,7 @@ def view_inbox(args: Any, ctx: MailboxCommandContext) -> None:
 
 def gmail_send(args: Any) -> None:
     from ..codex_oauth import _mailbox_from_data
-    from ..mailbox import _mailbox_from_config
+    from ..mailbox import mailbox_from_config
     from ..providers.mailbox_gmail import is_gmail_mailbox, send_gmail_message
     from ..session_refresh import _load_seed_session
 
@@ -115,7 +115,7 @@ def gmail_send(args: Any) -> None:
         if mailbox is None:
             mailbox = _mailbox_from_data(data)
         if mailbox is None:
-            mailbox = _mailbox_from_config(args)
+            mailbox = mailbox_from_config(args)
     if mailbox is None:
         print(
             json.dumps(

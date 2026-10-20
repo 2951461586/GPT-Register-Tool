@@ -18,7 +18,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
-from sms_tool import storage
+from sms_tool.store import connection
 from sms_tool.batch_runner import (
     _cached_exit_ip,
     _hold_environment_lease,
@@ -52,12 +52,12 @@ class _TempDb:
     def __enter__(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.path = Path(self._tmp.name) / "accounts.sqlite3"
-        self._patch = patch.object(storage, "database_path", return_value=self.path)
-        self._patch.start()
+        self._previous = connection.database_path_provider()
+        connection.set_database_path_provider(lambda *args, _p=self.path, **kwargs: _p)
         return self
 
     def __exit__(self, *exc):
-        self._patch.stop()
+        connection.set_database_path_provider(self._previous)
         self._tmp.cleanup()
         return False
 
@@ -303,6 +303,8 @@ def test_every_attempt_in_a_batch_is_accounted_for():
         barrier = threading.Barrier(2, timeout=10)
 
         def run_email(**kwargs):
+            mailbox = kwargs.get("mailbox")
+            assert mailbox is not None
             try:
                 # Force the two attempts to overlap; a timeout here must not turn
                 # into a failed registration, it only makes the share less likely.
@@ -311,7 +313,7 @@ def test_every_attempt_in_a_batch_is_accounted_for():
                 pass
             return {
                 "success": True,
-                "email": kwargs.get("mailbox").email,
+                "email": mailbox.email,
                 "auth_fingerprint_profile": "chrome136",
             }
 
@@ -348,7 +350,9 @@ def test_a_sticky_pool_entry_gives_each_attempt_its_own_key():
         mailboxes = [SimpleNamespace(email="a@x.test"), SimpleNamespace(email="b@x.test")]
 
         def run_email(**kwargs):
-            return {"success": True, "email": kwargs.get("mailbox").email}
+            mailbox = kwargs.get("mailbox")
+            assert mailbox is not None
+            return {"success": True, "email": mailbox.email}
 
         results = _run_batch_over(proxy_pool=[POOL_A], mailboxes=mailboxes, run_email=run_email, workers=1, count=2)
 

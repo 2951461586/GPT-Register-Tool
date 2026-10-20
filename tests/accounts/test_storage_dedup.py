@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from sms_tool import storage
+from sms_tool.store import connection
 
 
 class StorageDedupTests(unittest.TestCase):
@@ -27,7 +28,7 @@ class StorageDedupTests(unittest.TestCase):
     def test_registration_failure_is_audited_without_entering_accounts(self):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "accounts.sqlite3"
-            with patch.object(storage, "database_path", return_value=db_path):
+            with connection.database_path_override(db_path):
                 self.assertTrue(
                     storage.record_registration_audit(
                         {
@@ -62,7 +63,7 @@ class StorageDedupTests(unittest.TestCase):
         """
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "accounts.sqlite3"
-            with patch.object(storage, "database_path", return_value=db_path):
+            with connection.database_path_override(db_path):
                 self.assertTrue(
                     storage.record_registration_audit(
                         {
@@ -94,7 +95,7 @@ class StorageDedupTests(unittest.TestCase):
         from "the lane ran and this column predates the field"."""
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "accounts.sqlite3"
-            with patch.object(storage, "database_path", return_value=db_path):
+            with connection.database_path_override(db_path):
                 storage.record_registration_audit(
                     {
                         "email": "fresh@example.com",
@@ -115,7 +116,7 @@ class StorageDedupTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "accounts.sqlite3"
             with (
-                patch.object(storage, "database_path", return_value=db_path),
+                connection.database_path_override(db_path),
                 patch("sms_tool.mailbox_remail.record_dead_remail_account") as record,
             ):
                 self.assertTrue(
@@ -144,7 +145,7 @@ class StorageDedupTests(unittest.TestCase):
     def test_upsert_reuses_existing_email_case_insensitively(self):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "accounts.sqlite3"
-            with patch.object(storage, "database_path", return_value=db_path):
+            with connection.database_path_override(db_path):
                 self.assertTrue(
                     storage.upsert_account({"email": "User@Example.com", "success": False, "error": "first"})
                 )
@@ -167,7 +168,7 @@ class StorageDedupTests(unittest.TestCase):
     def test_upsert_clears_failed_error_when_refresh_token_is_acquired(self):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "accounts.sqlite3"
-            with patch.object(storage, "database_path", return_value=db_path):
+            with connection.database_path_override(db_path):
                 self.assertTrue(
                     storage.upsert_account(
                         {
@@ -210,7 +211,7 @@ class StorageDedupTests(unittest.TestCase):
     def test_upsert_does_not_treat_mailbox_refresh_token_as_codex_rt(self):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "accounts.sqlite3"
-            with patch.object(storage, "database_path", return_value=db_path):
+            with connection.database_path_override(db_path):
                 self.assertTrue(
                     storage.upsert_account(
                         {
@@ -241,7 +242,7 @@ class StorageDedupTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "accounts.sqlite3"
             opaque = "ab." + "A" * 96 + "." + "B" * 96
-            with patch.object(storage, "database_path", return_value=db_path):
+            with connection.database_path_override(db_path):
                 self.assertTrue(
                     storage.upsert_account(
                         {
@@ -269,7 +270,7 @@ class StorageDedupTests(unittest.TestCase):
     def test_upsert_derives_account_type_from_auth_session(self):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "accounts.sqlite3"
-            with patch.object(storage, "database_path", return_value=db_path):
+            with connection.database_path_override(db_path):
                 self.assertTrue(
                     storage.upsert_account(
                         {
@@ -293,7 +294,7 @@ class StorageDedupTests(unittest.TestCase):
     def test_upsert_prefers_refreshed_token_plan_over_stale_auth_session(self):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "accounts.sqlite3"
-            with patch.object(storage, "database_path", return_value=db_path):
+            with connection.database_path_override(db_path):
                 self.assertTrue(
                     storage.upsert_account(
                         {
@@ -317,7 +318,7 @@ class StorageDedupTests(unittest.TestCase):
     def test_upsert_repairs_misplaced_alias_plus(self):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "accounts.sqlite3"
-            with patch.object(storage, "database_path", return_value=db_path):
+            with connection.database_path_override(db_path):
                 self.assertTrue(
                     storage.upsert_account({"email": "SampleAccount66@+oai01hotmail.com", "success": False})
                 )
@@ -333,7 +334,7 @@ class StorageDedupTests(unittest.TestCase):
     def test_upsert_reuses_preexisting_misplaced_alias_plus_row(self):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "accounts.sqlite3"
-            with patch.object(storage, "database_path", return_value=db_path):
+            with connection.database_path_override(db_path):
                 storage.init_database()
                 conn = storage._connect()
                 try:
@@ -373,7 +374,7 @@ class StorageDedupTests(unittest.TestCase):
     def test_upsert_marks_pm_created_state_without_paypal_url(self):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "accounts.sqlite3"
-            with patch.object(storage, "database_path", return_value=db_path):
+            with connection.database_path_override(db_path):
                 self.assertTrue(
                     storage.upsert_account(
                         {
@@ -408,7 +409,7 @@ class StorageDedupTests(unittest.TestCase):
     def test_upsert_detects_upi_payment_method_from_currency_and_types(self):
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "accounts.sqlite3"
-            with patch.object(storage, "database_path", return_value=db_path):
+            with connection.database_path_override(db_path):
                 self.assertTrue(
                     storage.upsert_account(
                         {

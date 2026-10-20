@@ -143,10 +143,10 @@ class GmailMailboxTests(unittest.TestCase):
 
         with (
             patch.object(mailbox_module, "CFG", {"mailbox_proxy": "socks5h://127.0.0.1:7897"}),
-            patch.object(mailbox_module, "_email_cfg", return_value={"gmail": {"imap_enabled": True}}),
+            patch.object(mailbox_module, "mailbox_email_config", return_value={"gmail": {"imap_enabled": True}}),
             patch.object(mailbox_module.mailbox_gmail, "fetch_gmail_imap_messages", return_value=[]) as fetch,
         ):
-            messages = mailbox_module._fetch_mailbox_messages(
+            messages = mailbox_module.fetch_mailbox_messages(
                 mailbox,
                 limit=5,
                 proxy="socks5h://127.0.0.1:1080",
@@ -158,7 +158,7 @@ class GmailMailboxTests(unittest.TestCase):
     def test_gmail_config_requires_exact_login_email(self):
         with patch.object(
             mailbox_module,
-            "_email_cfg",
+            "mailbox_email_config",
             return_value={
                 "gmail": {
                     "enabled": True,
@@ -183,7 +183,7 @@ class GmailMailboxTests(unittest.TestCase):
             )
             with patch.object(
                 mailbox_module,
-                "_email_cfg",
+                "mailbox_email_config",
                 return_value={
                     "token_file": str(token_file),
                     "gmail": {

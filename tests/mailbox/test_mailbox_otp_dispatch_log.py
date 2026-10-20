@@ -1,6 +1,6 @@
 """Observability + credential-safety tests for the mailbox OTP dispatch log.
 
-``sms_tool/mailbox.py::_poll_email_otp`` dispatches to a provider-specific
+``sms_tool/mailbox.py::poll_email_otp`` dispatches to a provider-specific
 poller (cfworker / remail / graph) chosen at runtime.  Before 2026-09-11 that
 choice was invisible: a run pinned at the 300s OTP timeout produced no record
 of *which* backend was being waited on, so "the mail never arrived" and "the
@@ -68,16 +68,16 @@ class MailboxOtpDispatchLogTests(unittest.TestCase):
 
         with (
             mock.patch.object(mailbox_strategies, "resolve_otp_poller", return_value=fake_poller),
-            mock.patch.object(mailbox, "_email_cfg", return_value={}),
-            mock.patch.object(mailbox, "_provider_otp_issued_after", return_value=0),
+            mock.patch.object(mailbox, "mailbox_email_config", return_value={}),
+            mock.patch.object(mailbox, "provider_otp_issued_after", return_value=0),
             mock.patch.object(
                 mailbox,
-                "_mailbox_proxy_candidates",
+                "mailbox_proxy_candidates",
                 return_value=[proxy] if proxy else [],
             ),
-            mock.patch.object(mailbox, "_resolve_mailbox_proxy", return_value=proxy),
+            mock.patch.object(mailbox, "resolve_mailbox_proxy", return_value=proxy),
         ):
-            return mailbox._poll_email_otp(_FakeMailbox(provider), timeout=300, proxy=proxy)
+            return mailbox.poll_email_otp(_FakeMailbox(provider), timeout=300, proxy=proxy)
 
     def _dispatch_events(self):
         return [
@@ -125,7 +125,7 @@ class MailboxServiceDispatchLogTests(unittest.TestCase):
     """Registration reaches the OTP wait through ``MailboxService.poll_otp``.
 
     ``registration_handlers.wait_email_otp`` passes ``poll_otp_fn=self.poll_otp``,
-    so a hook on ``mailbox._poll_email_otp`` never fires during a real run --
+    so a hook on ``mailbox.poll_email_otp`` never fires during a real run --
     it was green in tests and invisible in production (2026-09-11).  These
     assertions target the path registration actually uses.
     """
@@ -145,10 +145,10 @@ class MailboxServiceDispatchLogTests(unittest.TestCase):
     def _poll(self, proxy=None, issued_after_unix=0):
         service = dataclasses.replace(mailbox_service.MailboxService.create(), providers=_FakeRegistry())
         with (
-            mock.patch.object(mailbox, "_mailbox_proxy_candidates", return_value=[proxy] if proxy else []),
-            mock.patch.object(mailbox, "_email_cfg", return_value={}),
-            mock.patch.object(mailbox, "_provider_otp_issued_after", return_value=issued_after_unix),
-            mock.patch.object(mailbox, "_resolve_mailbox_proxy", return_value=proxy),
+            mock.patch.object(mailbox, "mailbox_proxy_candidates", return_value=[proxy] if proxy else []),
+            mock.patch.object(mailbox, "mailbox_email_config", return_value={}),
+            mock.patch.object(mailbox, "provider_otp_issued_after", return_value=issued_after_unix),
+            mock.patch.object(mailbox, "resolve_mailbox_proxy", return_value=proxy),
         ):
             return service.poll_otp(
                 _FakeMailbox("icloud_url"),

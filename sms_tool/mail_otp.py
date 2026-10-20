@@ -144,7 +144,7 @@ def _email_otp_candidate(mailbox, msg, keyword="", issued_after_unix=0):
     }
 
 
-def _candidate_is_newer(candidate, current):
+def candidate_is_newer(candidate, current):
     if not candidate:
         return False
     if not current:

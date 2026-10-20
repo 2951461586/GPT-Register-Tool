@@ -8,14 +8,14 @@ had no compiler connection between them:
   * the ``--phone-source`` argparse ``choices`` in ``cli_parsers/core.py``,
   * the alias table inside ``phone_reuse._phone_source``,
   * the ``SMSBOWER_API_KEY`` env lookup in ``phone_reuse._resolve_secret``,
-  * the hardcoded ``DefaultEndpoint`` in ``SmsWorkbench/SmsProviderCatalogClient.cs``,
-  * the settings rows in ``SmsWorkbench/SettingsCatalog.cs``.
+  * the hardcoded ``DefaultEndpoint`` in ``SmsWorkbench/Interop/SmsProviderCatalogClient.cs``,
+  * the settings rows in ``SmsWorkbench/Services/SettingsCatalog.cs``.
 
 Adding a provider meant editing all of them, and the C# half had no mechanical
 link to the Python half at all. They now derive from :data:`PROVIDERS` below.
 ``tests/registration/test_sms_provider_registry.py`` pins this module, and
 ``tests/workbench/test_settings_catalog_provider_parity.py`` pins the C# mirror
-(``SmsWorkbench/SmsProviderCatalog.cs``) against it.
+(``SmsWorkbench/Models/SmsProviderCatalog.cs``) against it.
 
 Protocol families
 -----------------

@@ -3,12 +3,12 @@
 契约（2026-09-11 batch ``5e32aa85`` 血的教训，12 run 里 10 失败）：
 
 * ``RegistrationEmailWorkflow._bootstrap`` **必须**调用
-  ``_snapshot_mailbox_message`` —— 它回答的是「本次尝试开始前，邮箱里已经
+  ``snapshot_mailbox_message`` —— 它回答的是「本次尝试开始前，邮箱里已经
   有什么」，用来把上一轮遗留的旧验证码排除掉。
 * ``send_email_otp`` **不得**再调用它。passwordless 模式（``registration_mode``
   的默认值）下 OTP 是更早的 ``auth_flow``(authorize) 步骤发出的，等
   ``send_email_otp`` 执行时验证码邮件**可能已经在转发页上可见**；此时快照会把
-  它写进 ``mailbox.seen_message_ids``，而 ``_latest_email_otp_candidate``
+  它写进 ``mailbox.seen_message_ids``，而 ``latest_email_otp_candidate``
   （``mailbox.py``）对 id 命中者**直接跳过** ⇒ 随后 300s 轮询无论转发页怎么
   刷新都看不到正主，报 ``email_otp_poll_timeout``。
 * 同理 ``auth_flow`` / ``user_register`` 也不得抢跑快照。
@@ -26,6 +26,7 @@ import logging
 import textwrap
 import unittest
 from pathlib import Path
+from typing import cast
 from unittest import mock
 
 from sms_tool import mailbox, mailbox_icloud_url
@@ -40,6 +41,15 @@ _ORCHESTRATOR_FUNC = "run_browser_registration"
 _FILL_EMAIL_ATTR = "_fill_email"
 
 
+def _field(record: logging.LogRecord, name: str) -> object:
+    """Read a structured ``extra=`` field off a record.
+
+    ``logging`` has no typed slot for ``extra=`` keys, so ``record.provider``
+    exists only at runtime; ``getattr`` is the honest accessor.
+    """
+    return getattr(record, name)
+
+
 class _RecordingHandler(logging.Handler):
     def __init__(self, sink):
         super().__init__()
@@ -49,7 +59,7 @@ class _RecordingHandler(logging.Handler):
         self.sink.append(record)
 
 
-_SNAPSHOT_ATTR = "_snapshot_mailbox_message"
+_SNAPSHOT_ATTR = "snapshot_mailbox_message"
 
 # 方法名 -> 期望是否调用快照。
 _EXPECTED = {
@@ -61,9 +71,9 @@ _EXPECTED = {
 
 
 def snapshot_call_sites(source: str) -> dict[str, bool]:
-    """方法名 -> 方法体内是否出现 ``_snapshot_mailbox_message`` 调用。
+    """方法名 -> 方法体内是否出现 ``snapshot_mailbox_message`` 调用。
 
-    只看 ``ast.Attribute``（即 ``r._snapshot_mailbox_message(...)`` 形式），
+    只看 ``ast.Attribute``（即 ``r.snapshot_mailbox_message(...)`` 形式），
     注释/字符串里的同名文本不算 —— 这正是 AST 相对 grep 的价值。
     """
     tree = ast.parse(source)
@@ -122,7 +132,7 @@ class SnapshotTimingGuardTests(unittest.TestCase):
         for name in ("send_email_otp", "auth_flow", "user_register"):
             self.assertFalse(
                 self.sites[name],
-                f"{name} 不得再调用 _snapshot_mailbox_message："
+                f"{name} 不得再调用 snapshot_mailbox_message："
                 "passwordless 下验证码邮件此时可能已可见，"
                 "快照会把它写进 seen_message_ids 从而永久屏蔽它",
             )
@@ -141,10 +151,10 @@ class SnapshotTimingGuardMutationTests(unittest.TestCase):
             """
             class H:
                 def _bootstrap(self):
-                    r._snapshot_mailbox_message(s.mailbox, proxy=s.proxy)
+                    r.snapshot_mailbox_message(s.mailbox, proxy=s.proxy)
 
                 def send_email_otp(self):
-                    r._snapshot_mailbox_message(s.mailbox, proxy=s.proxy)
+                    r.snapshot_mailbox_message(s.mailbox, proxy=s.proxy)
             """
         )
         sites = snapshot_call_sites(synthetic)
@@ -159,10 +169,10 @@ class SnapshotTimingGuardMutationTests(unittest.TestCase):
             """
             class H:
                 def _bootstrap(self):
-                    r._snapshot_mailbox_message(s.mailbox, proxy=s.proxy)
+                    r.snapshot_mailbox_message(s.mailbox, proxy=s.proxy)
 
                 def send_email_otp(self):
-                    # 注释里提到 _snapshot_mailbox_message 不算调用
+                    # 注释里提到 snapshot_mailbox_message 不算调用
                     r._email_otp_send_url(...)
             """
         )
@@ -183,7 +193,7 @@ class SnapshotTimingGuardMutationTests(unittest.TestCase):
             """
             def run_browser_registration(page):
                 form_steps._fill_email(page, email)
-                mailbox_pkg._snapshot_mailbox_message(mailbox)
+                mailbox_pkg.snapshot_mailbox_message(mailbox)
             """
         )
         snapshots = call_line_numbers(synthetic, "run_browser_registration", _SNAPSHOT_ATTR)
@@ -214,7 +224,7 @@ class BrowserLaneSnapshotOrderTests(unittest.TestCase):
         fills = call_line_numbers(self.source, _ORCHESTRATOR_FUNC, _FILL_EMAIL_ATTR)
         self.assertTrue(
             snapshots,
-            f"{_ORCHESTRATOR.name}::{_ORCHESTRATOR_FUNC} 里找不到 _snapshot_mailbox_message 调用",
+            f"{_ORCHESTRATOR.name}::{_ORCHESTRATOR_FUNC} 里找不到 snapshot_mailbox_message 调用",
         )
         self.assertTrue(
             fills,
@@ -278,14 +288,14 @@ class MailboxBaselineSnapshotLogTests(unittest.TestCase):
             "snapshot_icloud_url_messages",
             return_value=messages,
         ):
-            mailbox._snapshot_mailbox_message(self._mailbox())
+            mailbox.snapshot_mailbox_message(self._mailbox())
 
         events = self._events()
         self.assertEqual(len(events), 1)
-        self.assertEqual(events[0].provider, "icloud_url")
-        self.assertEqual(events[0].result, "ok")
-        self.assertEqual(events[0].seen_id_count, 2)
-        self.assertGreater(events[0].seen_newest_ts, 0)
+        self.assertEqual(_field(events[0], "provider"), "icloud_url")
+        self.assertEqual(_field(events[0], "result"), "ok")
+        self.assertEqual(_field(events[0], "seen_id_count"), 2)
+        self.assertGreater(cast("float", _field(events[0], "seen_newest_ts")), 0.0)
 
     def test_unsupported_provider_logs_a_skip(self):
         """gmail/graph/outlook 没有基线，只能靠 issued_after 兜底。
@@ -293,13 +303,13 @@ class MailboxBaselineSnapshotLogTests(unittest.TestCase):
         这条记录是为了让这些 provider 的超时**不要**被误读成快照时序 bug。
         """
         with mock.patch.object(mailbox_icloud_url, "snapshot_icloud_url_messages") as snapshot:
-            self.assertEqual(mailbox._snapshot_mailbox_message(self._mailbox("gmail")), "")
+            self.assertEqual(mailbox.snapshot_mailbox_message(self._mailbox("gmail")), "")
 
         snapshot.assert_not_called()
         events = self._events()
         self.assertEqual(len(events), 1)
-        self.assertEqual(events[0].result, "skipped")
-        self.assertEqual(events[0].seen_id_count, 0)
+        self.assertEqual(_field(events[0], "result"), "skipped")
+        self.assertEqual(_field(events[0], "seen_id_count"), 0)
 
     def test_snapshot_failure_is_logged_not_swallowed(self):
         """快照失败**不是**无害的：基线为空时轮询可能捞到上一轮的旧验证码。"""
@@ -308,11 +318,11 @@ class MailboxBaselineSnapshotLogTests(unittest.TestCase):
             "snapshot_icloud_url_messages",
             side_effect=RuntimeError("listing exploded"),
         ):
-            self.assertEqual(mailbox._snapshot_mailbox_message(self._mailbox()), "")
+            self.assertEqual(mailbox.snapshot_mailbox_message(self._mailbox()), "")
 
         events = self._events()
         self.assertEqual(len(events), 1)
-        self.assertEqual(events[0].result, "error")
+        self.assertEqual(_field(events[0], "result"), "error")
         self.assertIn("listing exploded", events[0].getMessage())
 
     def test_baseline_snapshot_log_never_carries_proxy_credentials(self):
@@ -322,7 +332,7 @@ class MailboxBaselineSnapshotLogTests(unittest.TestCase):
             "snapshot_icloud_url_messages",
             return_value=[{"id": 1, "subject": "s", "receivedDateTime": "2026-08-03T13:52:09+00:00"}],
         ):
-            mailbox._snapshot_mailbox_message(self._mailbox(), proxy=proxy)
+            mailbox.snapshot_mailbox_message(self._mailbox(), proxy=proxy)
 
         events = self._events()
         self.assertTrue(events)

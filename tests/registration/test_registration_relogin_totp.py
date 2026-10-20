@@ -84,7 +84,7 @@ def test_existing_login_uses_fresh_authorize_sentinel_for_otp_steps():
         patch.object(auth_flow.deps, "_follow_continue_url", return_value=follow),
         patch.object(auth_flow.steps, "_print_protocol_diagnostic"),
         patch.object(auth_flow.otp, "_send_existing_login_otp", return_value=(True, Mock(status_code=200))) as send,
-        patch.object(auth_flow.deps, "_poll_email_otp", return_value="123456"),
+        patch.object(auth_flow.deps, "poll_email_otp", return_value="123456"),
         patch.object(
             auth_flow.deps, "_validate_email_otp", return_value=(True, {"continue_url": authorize.url})
         ) as validate,

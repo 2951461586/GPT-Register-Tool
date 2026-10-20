@@ -86,14 +86,14 @@ SKIP_DIRS = frozenset({"__pycache__", ".venv", "dist", "runtime", ".git", "logs"
 #:   that distinction is exactly why C# is not scanned wholesale (see the module
 #:   docstring, and ``phone_reuse.smsbower.service_name`` as the counter-example).
 #:
-#: 2026-09-23: ``runtime.python_path`` added. ``SmsWorkbench/PythonBackendClient.cs``
+#: 2026-09-23: ``runtime.python_path`` added. ``SmsWorkbench/Interop/PythonBackendClient.cs``
 #: resolves the interpreter from it (``_settings.GetString("runtime.python_path", "python")``)
 #: and ``DesktopReadClient.cs`` does the same for the resident read transport, so
 #: ``doctor`` was telling the operator that a working setting had no effect.
 CSHARP_CONSUMED_KEYS: dict[str, tuple[str, ...]] = {
     "runtime.python_path": (
-        "SmsWorkbench/PythonBackendClient.cs",
-        "SmsWorkbench/DesktopReadClient.cs",
+        "SmsWorkbench/Interop/PythonBackendClient.cs",
+        "SmsWorkbench/Interop/DesktopReadClient.cs",
     ),
 }
 

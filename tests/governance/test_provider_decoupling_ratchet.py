@@ -172,12 +172,12 @@ def test_ratchet_holds_for_the_current_tree():
 
 
 def test_summary_facts_are_pinned():
-    """239 same-named defs: 212 already migrated, 0 verbatim copies, 27 forks."""
+    """256 same-named defs: 225 already migrated, 0 verbatim copies, 31 forks."""
     assert pdr.analyze(ROOT).summary() == {
-        "same_named_total": 239,
-        pdr.DELEGATING: 212,
+        "same_named_total": 256,
+        pdr.DELEGATING: 225,
         pdr.IDENTICAL: 0,
-        pdr.DIVERGENT: 27,
+        pdr.DIVERGENT: 31,
         "files_with_frozen_pairs": 7,
     }
 
@@ -186,14 +186,14 @@ def test_the_migrated_extractors_have_no_verbatim_copies_left():
     """Pin the three migrated extractors so an inlining regression fails."""
     analysis = pdr.analyze(ROOT)
     expected_delegating = {
-        "ideal/ideal_qr_extract.py": 67,
-        "twint/twint_extract.py": 67,
-        "blik/blik_qr_extract.py": 67,
+        "ideal/ideal_qr_extract.py": 72,
+        "twint/twint_extract.py": 72,
+        "blik/blik_qr_extract.py": 70,
     }
     expected_divergent = {
         "ideal/ideal_qr_extract.py": 2,
         "twint/twint_extract.py": 2,
-        "blik/blik_qr_extract.py": 12,
+        "blik/blik_qr_extract.py": 14,
     }
     for provider_file, delegating in expected_delegating.items():
         counts = analysis.counts_for(provider_file)
@@ -203,37 +203,40 @@ def test_the_migrated_extractors_have_no_verbatim_copies_left():
 
 
 def test_blik_carries_the_documented_divergent_bulk():
-    """blik's remaining 12 pairs are real forks, not un-migrated copies.
+    """blik's remaining 14 pairs are real forks, not un-migrated copies.
 
     ``blik`` was the last extractor still carrying verbatim copies -- eight of
     them (the payload/redirect predicates and the two proxy-error classifiers).
     They were converged onto ``common/payment_predicates.py`` and
     ``common/extractor_helpers.py`` on 2026-10-10, and the 20 proxy-state,
     seed-file, and resource-URL helpers were delegated to ``common/`` on
-    2026-10-15, bringing ``blik`` to 66 delegating / 0 identical / 12 divergent
-    (matching ``ideal`` and ``twint`` on all 66 delegating helpers).
-    ``build_attempt_batches`` followed on 2026-10-19, taking all three to 67.
+    2026-10-15. Batch 7 (2026-10-20) moved three more (accept-language,
+    saved-payment value, runtime version) onto ``common/stripe_setup.py`` and
+    made its ``stripe_init`` / ``stripe_elements_session_params`` visible as
+    forks, leaving 69 delegating / 0 identical / 14 divergent.
     """
     analysis = pdr.analyze(ROOT)
     counts = analysis.counts_for("blik/blik_qr_extract.py")
-    assert counts == {pdr.DELEGATING: 67, pdr.IDENTICAL: 0, pdr.DIVERGENT: 12}
+    assert counts == {pdr.DELEGATING: 70, pdr.IDENTICAL: 0, pdr.DIVERGENT: 14}
 
 
-def test_momo_shares_the_pure_primitives_and_keeps_its_two_forks():
+def test_momo_shares_the_pure_primitives_and_keeps_its_forks():
     """momo's private ``_strict_true`` / ``_strict_false`` became delegating on
     2026-10-10; ``is_user_already_paid_error`` and ``normalize_proxy_url`` stay
     divergent -- different signature and semantics, which Rule 19 forbids
-    converging without fresh evidence.
+    converging without fresh evidence. Batch 7 (2026-10-20) added ``stripe_init``
+    to the fork list when it moved to ``common/stripe_setup.py``: momo's version
+    delegates to ``paylink.stripe_init_payment_page`` and returns a 3-tuple.
     """
     analysis = pdr.analyze(ROOT)
     counts = analysis.counts_for("momo/momo_qr_extract.py")
     assert counts[pdr.IDENTICAL] == 0
     assert counts[pdr.DELEGATING] == 2
-    assert counts[pdr.DIVERGENT] == 2
+    assert counts[pdr.DIVERGENT] == 3
     forked = {
         p.name for p in analysis.pairs if p.provider_file == "momo/momo_qr_extract.py" and p.kind == pdr.DIVERGENT
     }
-    assert forked == {"is_user_already_paid_error", "normalize_proxy_url"}
+    assert forked == {"is_user_already_paid_error", "normalize_proxy_url", "stripe_init"}
 
 
 def test_blik_build_email_stays_divergent():

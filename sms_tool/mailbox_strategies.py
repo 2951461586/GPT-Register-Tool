@@ -1,7 +1,7 @@
 """Mailbox provider strategy registry.
 
-Replaces the if-elif chains in ``_fetch_mailbox_messages`` and
-``_poll_email_otp`` with a dispatch table (provider -> handler).
+Replaces the if-elif chains in ``fetch_mailbox_messages`` and
+``poll_email_otp`` with a dispatch table (provider -> handler).
 
 The composition point binds each provider's matcher, fetcher, poller and
 credential capability into one adapter. Provider modules own wire behaviour;
@@ -296,13 +296,13 @@ def _graph_fetch_messages(
     proxy: str | None = None,
     include_body: bool = False,
     email_cfg: dict | None = None,
-    _fetch_mailbox_messages_local: Callable | None = None,
+    fetch_mailbox_messages_local: Callable | None = None,
     **kwargs: Any,
 ) -> list:
     """Default Microsoft Graph API fetcher (delegates to existing local impl)."""
-    if _fetch_mailbox_messages_local is None:
-        from .mailbox import _fetch_mailbox_messages_local
-    return _fetch_mailbox_messages_local(mailbox, limit=limit, proxy=proxy)
+    if fetch_mailbox_messages_local is None:
+        from .mailbox import fetch_mailbox_messages_local
+    return fetch_mailbox_messages_local(mailbox, limit=limit, proxy=proxy)
 
 
 def _graph_poll_otp(
@@ -318,10 +318,10 @@ def _graph_poll_otp(
     """Graph API fallback OTP poller using settle-stability detection."""
     # Import here to avoid a hard dependency at strategy-module load time.
     from .mailbox import (
-        _latest_email_otp_candidate,
-        _candidate_is_newer,
-        _otp_poll_interval,
-        _email_otp_settle_seconds,
+        latest_email_otp_candidate,
+        candidate_is_newer,
+        otp_poll_interval,
+        email_otp_settle_seconds,
     )
     from .mailbox_poll import _poll_otp_with_settle
     from .mailbox import MailboxTokenExpiredError
@@ -330,7 +330,7 @@ def _graph_poll_otp(
     keyword = (subject_keyword or "").lower()
 
     def _fetch_candidate():
-        return _latest_email_otp_candidate(
+        return latest_email_otp_candidate(
             mailbox,
             keyword=keyword,
             issued_after_unix=issued_after_unix,
@@ -340,11 +340,11 @@ def _graph_poll_otp(
     return _poll_otp_with_settle(
         _fetch_candidate,
         timeout=timeout,
-        interval=_otp_poll_interval(),
-        settle_seconds=_email_otp_settle_seconds(),
+        interval=otp_poll_interval(),
+        settle_seconds=email_otp_settle_seconds(),
         excluded_otps=excluded_otps,
         log_prefix="graph poll",
-        is_newer=_candidate_is_newer,
+        is_newer=candidate_is_newer,
         reraise=(MailboxTokenExpiredError, MailboxAuthInvalidError),
     )
 
@@ -361,10 +361,10 @@ def _icloud_poll_otp(
 ) -> Optional[str]:
     """Poll iCloud through its own fetcher, never through Graph fallback."""
     from .mailbox import (
-        _latest_email_otp_candidate,
-        _candidate_is_newer,
-        _otp_poll_interval,
-        _email_otp_settle_seconds,
+        latest_email_otp_candidate,
+        candidate_is_newer,
+        otp_poll_interval,
+        email_otp_settle_seconds,
     )
     from .mailbox_poll import _poll_otp_with_settle
     from .mailbox import MailboxTokenExpiredError
@@ -373,7 +373,7 @@ def _icloud_poll_otp(
     keyword = (subject_keyword or "").lower()
 
     def _fetch_candidate():
-        return _latest_email_otp_candidate(
+        return latest_email_otp_candidate(
             mailbox,
             keyword=keyword,
             issued_after_unix=issued_after_unix,
@@ -383,11 +383,11 @@ def _icloud_poll_otp(
     return _poll_otp_with_settle(
         _fetch_candidate,
         timeout=timeout,
-        interval=_otp_poll_interval(),
-        settle_seconds=_email_otp_settle_seconds(),
+        interval=otp_poll_interval(),
+        settle_seconds=email_otp_settle_seconds(),
         excluded_otps=excluded_otps,
         log_prefix="icloud poll",
-        is_newer=_candidate_is_newer,
+        is_newer=candidate_is_newer,
         reraise=(MailboxTokenExpiredError, MailboxAuthInvalidError),
     )
 

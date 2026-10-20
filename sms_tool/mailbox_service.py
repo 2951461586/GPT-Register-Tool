@@ -55,11 +55,11 @@ class MailboxService:
         proxy: str | None = None,
         include_body: bool = False,
     ) -> list[Any]:
-        from .mailbox import _email_cfg, _resolve_mailbox_proxy
+        from .mailbox import mailbox_email_config, resolve_mailbox_proxy
 
         with runtime_config_scope(self.config, workflow="mailbox"), _mailbox_access(mailbox):
-            config = _email_cfg(self.config)
-            resolved_proxy = _resolve_mailbox_proxy(proxy, self.config)
+            config = mailbox_email_config(self.config)
+            resolved_proxy = resolve_mailbox_proxy(proxy, self.config)
             adapter = self.providers.resolve_fetcher(mailbox, config)
             if adapter is None:
                 raise RuntimeError("no mailbox message fetcher resolved")
@@ -84,21 +84,21 @@ class MailboxService:
         excluded_otps: set[str] | None = None,
     ) -> str | None:
         from .mailbox import (
-            _email_cfg,
-            _mailbox_proxy_candidates,
-            _provider_otp_issued_after,
-            _resolve_mailbox_proxy,
+            mailbox_email_config,
+            mailbox_proxy_candidates,
+            provider_otp_issued_after,
+            resolve_mailbox_proxy,
         )
 
         with runtime_config_scope(self.config, workflow="mailbox"), _mailbox_access(mailbox):
-            config = _email_cfg(self.config)
-            issued_after_unix = _provider_otp_issued_after(mailbox, issued_after_unix, self.config)
-            proxy_candidates = _mailbox_proxy_candidates(proxy, self.config)
-            resolved_proxy = proxy_candidates[0] if proxy_candidates else _resolve_mailbox_proxy(proxy, self.config)
+            config = mailbox_email_config(self.config)
+            issued_after_unix = provider_otp_issued_after(mailbox, issued_after_unix, self.config)
+            proxy_candidates = mailbox_proxy_candidates(proxy, self.config)
+            resolved_proxy = proxy_candidates[0] if proxy_candidates else resolve_mailbox_proxy(proxy, self.config)
             adapter = self.providers.resolve_poller(mailbox, config)
             if adapter is None:
                 raise RuntimeError("no mailbox OTP poller resolved")
-            # This is the path registration actually uses -- `mailbox._poll_email_otp`
+            # This is the path registration actually uses -- `mailbox.poll_email_otp`
             # is NOT on it (the handler passes `poll_otp_fn=self.poll_otp`), so an
             # observability hook placed there never fires for a stuck run.
             # `otp_issued_after_unix` is logged because it is the whole story when

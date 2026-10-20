@@ -53,7 +53,7 @@ def test_cli_main_uses_registration_proxy_for_direct_registration():
     with (
         patch.object(cli, "CFG", config),
         patch.object(sys, "argv", ["sms_tool", "--email", "account@example.com", "--registration-at-only"]),
-        patch.object(cli, "_load_mailbox_pool", return_value=[SimpleNamespace(email="account@example.com")]),
+        patch.object(cli, "load_mailbox_pool", return_value=[SimpleNamespace(email="account@example.com")]),
         patch.object(cli, "_preflight_registration_before_mailbox", return_value={"ok": True}),
         patch.object(cli, "_registration_phone_pool", return_value=None),
         patch.object(cli, "run_email", side_effect=run_email),
@@ -78,7 +78,7 @@ def test_cli_registration_emits_standard_desktop_result():
         patch.object(
             sys, "argv", ["sms_tool", "--email", "account@example.com", "--registration-at-only", "--desktop-ipc"]
         ),
-        patch.object(cli, "_load_mailbox_pool", return_value=[SimpleNamespace(email="account@example.com")]),
+        patch.object(cli, "load_mailbox_pool", return_value=[SimpleNamespace(email="account@example.com")]),
         patch.object(cli, "_preflight_registration_before_mailbox", return_value={"ok": True}),
         patch.object(cli, "_registration_phone_pool", return_value=None),
         patch.object(cli, "run_batch", return_value=[{"success": True, "email": "account@example.com"}]),
@@ -340,7 +340,7 @@ def test_cli_explicit_proxy_pool_does_not_inherit_configured_registration_proxy(
 
 
 def test_desktop_registration_proxy_resolver_has_no_payment_fallback():
-    source = (ROOT / "SmsWorkbench" / "MainWindow.Helpers.cs").read_text(encoding="utf-8")
+    source = (ROOT / "SmsWorkbench" / "Views" / "MainWindow.Helpers.cs").read_text(encoding="utf-8")
     method = source.split("private string GetRegistrationProxy()", 1)[1].split(
         "private List<string> GetRegistrationProxyPool()", 1
     )[0]

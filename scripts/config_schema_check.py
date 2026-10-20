@@ -19,7 +19,7 @@ def _python_ownership() -> dict[str, str]:
 
 
 def _csharp_ownership() -> dict[str, str]:
-    text = (ROOT / "SmsWorkbench" / "ConfigStore.cs").read_text(encoding="utf-8")
+    text = (ROOT / "SmsWorkbench" / "Services" / "ConfigStore.cs").read_text(encoding="utf-8")
     block = text.split("private static readonly Dictionary<string, string> ShardOwnership", 1)[1]
     block = block.split("};", 1)[0]
     pairs = re.findall(r'\["([^"\\]+)"\]\s*=\s*(ProxyShard|RuntimeShard|PaymentShard)', block)

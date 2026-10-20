@@ -11,7 +11,11 @@ from types import SimpleNamespace
 
 import pytest
 
-import sms_tool.mailbox_remail as m
+# The provider lives in ``providers/``; ``sms_tool/mailbox_remail.py`` is a
+# compatibility facade that swaps itself for this module in ``sys.modules``, so
+# importing the implementation directly is the same module object at runtime and
+# the only form a type checker can see into.
+from sms_tool.providers import mailbox_remail as m
 
 
 def test_remail_idempotency_key_is_stable_and_distinct():

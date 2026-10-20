@@ -256,18 +256,37 @@ that duplication and a shared layer absorbs the parts proven provider-neutral:
 
 - `scripts/extractor_parity_report.py` freezes, per file pair, the number of
   top-level functions that stay AST-identical after provider tokens are erased.
-  It may only go down. Current baseline: `ideal:twint=34`, `ideal:blik=18`,
-  `twint:blik=15`, `momo:kakao=0` (momo/kakao is the negative control).
+  It may only go down.
 - `scripts/provider_decoupling_ratchet.py` freezes, per provider file, how many
-  same-named definitions delegate to `common/` versus diverge from it. Current
-  state: 212 delegating, 0 verbatim copies, 27 deliberate forks.
+  same-named definitions delegate to `common/` versus diverge from it.
 - `common/extractor_runtime.py` owns the provider-neutral runtime helpers:
   `normalize_pre_proxy_url`, `proxy_chain_key` and the country-selector regex.
   iDEAL/TWINT/BLIK import them instead of carrying a copy.
+- `common/stripe_setup.py` (batch 7, 2026-10-20) owns the Stripe wire setup that
+  iDEAL/TWINT carried byte-identically and BLIK copied: `stripe_init`,
+  `stripe_elements_session_params`, `payment_accept_language`,
+  `saved_payment_value` and `random_runtime_version`. Every provider-specific
+  piece is a parameter — the env prefix, the locale callables, the session
+  factory and the `dump_http` wrapper — so each extractor keeps a same-named
+  thin wrapper and its own patch targets.
 
-What deliberately stays per-extractor: anything that resolves a
-provider-specific value (`payment_accept_language`, `saved_payment_value`,
-`stripe_*`, `set_proxy` with its own redaction registry). Rule 19 in
+<!-- ratchet-numbers:begin payment -->
+| Extractor pair | AST-identical functions |
+| --- | ---: |
+| `ideal:blik` | 15 |
+| `ideal:twint` | 29 |
+| `momo:kakao` (negative control) | 0 |
+| `twint:blik` | 12 |
+
+Same-named definitions against `common/`: **225 delegating**, **0 verbatim copies**, **31 deliberate forks**.
+<!-- ratchet-numbers:end payment -->
+
+What deliberately stays per-extractor: anything whose *values* are provider
+state rather than a parameter. Batch 7 made four of those visible as forks and
+they stay local: `stripe_init` in BLIK (returns `client_elements_session_id` and
+reads `enable_save` from `saved_payment_value()`), in Kakao (different signature
+and ko-KR payload) and in MoMo (delegates to `paylink.stripe_init_payment_page`),
+plus `stripe_elements_session_params` in BLIK (requires every ctx key). Rule 19 in
 `docs/architecture.md` records the same-name forks, including kakao's
 `proxy_chain_key`, which strips a trailing country code from the sid and must
 not be converged. A full parameterized engine is still gated on the differential

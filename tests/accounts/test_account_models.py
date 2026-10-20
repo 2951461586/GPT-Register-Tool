@@ -3,6 +3,7 @@ import json
 from sms_tool.accounts.account_models import AccountSessionModel
 from sms_tool.accounts.account_identity import create_registration_identity
 from sms_tool import storage
+from sms_tool.store import connection as store_connection
 
 
 def test_account_session_model_hides_credentials_and_emits_safe_snapshot():
@@ -37,7 +38,7 @@ def test_account_session_model_hides_credentials_and_emits_safe_snapshot():
 
 def test_storage_accepts_typed_model_and_raw_json_is_token_free(tmp_path, monkeypatch):
     database = tmp_path / "accounts.sqlite3"
-    monkeypatch.setattr(storage, "database_path", lambda cfg=None: database)
+    store_connection.set_database_path_provider(lambda runtime_config=None: database)
     model = AccountSessionModel.from_value(
         {
             "email": "typed-storage@example.com",
@@ -71,7 +72,7 @@ def test_storage_accepts_typed_model_and_raw_json_is_token_free(tmp_path, monkey
 
 def test_storage_persists_safe_account_identity_context(tmp_path, monkeypatch):
     database = tmp_path / "accounts.sqlite3"
-    monkeypatch.setattr(storage, "database_path", lambda cfg=None: database)
+    store_connection.set_database_path_provider(lambda runtime_config=None: database)
     base_proxy = "http://user-region-US-sid-OLD1234-t-5:proxy-secret@proxy.example:443"
     registration_proxy = "http://user-region-US-sid-NEW5678-t-5:proxy-secret@proxy.example:443"
     identity = create_registration_identity(
@@ -99,7 +100,7 @@ def test_storage_persists_safe_account_identity_context(tmp_path, monkeypatch):
 
 def test_get_account_records_batches_one_query(tmp_path, monkeypatch):
     database = tmp_path / "accounts.sqlite3"
-    monkeypatch.setattr(storage, "database_path", lambda cfg=None: database)
+    store_connection.set_database_path_provider(lambda runtime_config=None: database)
     storage.upsert_account({"email": "batch1@example.com", "access_token": "at1"})
     storage.upsert_account({"email": "BATCH2@Example.com", "access_token": "at2"})
     storage.upsert_account({"email": "batch3@example.com", "access_token": "at3"})

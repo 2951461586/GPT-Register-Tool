@@ -1,5 +1,9 @@
 # 注册链路线上受控对照 Runbook
 
+> **Scope.** 只负责「如何受控地做对照、看什么指标判定」。系统本身的行为见
+> [registration-architecture.md](registration-architecture.md) 与
+> [protocol-registration.md](protocol-registration.md)，本篇不复述。
+
 本 runbook 描述**如何受控地执行**并**如何判读**三项"已落地但尚未线上对照"的改动：
 
 | # | 假设 | 开关 | 参考 |

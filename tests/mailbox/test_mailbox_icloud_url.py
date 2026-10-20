@@ -47,7 +47,7 @@ class ICloudUrlMailboxTests(unittest.TestCase):
             path.write_text("\ufeff" + line + "\r\n", encoding="utf-8")
 
             records = mailbox_parsers._parse_chatai_mailbox_file(path)
-            loaded = mailbox_module._load_mailbox_pool(Namespace(chatai_mailbox_file=str(path)))
+            loaded = mailbox_module.load_mailbox_pool(Namespace(chatai_mailbox_file=str(path)))
 
         self.assertEqual(len(records), 1)
         self.assertEqual(records[0].provider, "icloud_url")
@@ -232,7 +232,7 @@ class ICloudUrlMailboxTests(unittest.TestCase):
             "get",
             side_effect=[_Response(text=page), _Response(payload=listing)],
         ) as get:
-            message_id = mailbox_module._snapshot_mailbox_message(mailbox)
+            message_id = mailbox_module.snapshot_mailbox_message(mailbox)
 
         self.assertEqual(message_id, "42")
         self.assertEqual(mailbox.seen_message_ids, ("42", "41"))
@@ -247,7 +247,7 @@ class ICloudUrlMailboxTests(unittest.TestCase):
         )
         self.assertTrue(mailbox_module.mailbox_has_inbox_credentials(mailbox))
         with patch.object(mailbox_icloud_url, "fetch_icloud_url_messages", return_value=[{"id": "m1"}]) as fetch:
-            messages = mailbox_module._fetch_mailbox_messages(mailbox, limit=1)
+            messages = mailbox_module.fetch_mailbox_messages(mailbox, limit=1)
         self.assertEqual(messages, [{"id": "m1"}])
         fetch.assert_called_once()
 
@@ -259,11 +259,11 @@ class ICloudUrlMailboxTests(unittest.TestCase):
         )
         candidate = {"otp": "654321", "received_ts": 999}
         with (
-            patch.object(mailbox_module, "_latest_email_otp_candidate", return_value=candidate) as latest,
-            patch.object(mailbox_module, "_email_otp_settle_seconds", return_value=0),
-            patch.object(mailbox_module, "_email_cfg", return_value={}),
+            patch.object(mailbox_module, "latest_email_otp_candidate", return_value=candidate) as latest,
+            patch.object(mailbox_module, "email_otp_settle_seconds", return_value=0),
+            patch.object(mailbox_module, "mailbox_email_config", return_value={}),
         ):
-            code = mailbox_module._poll_email_otp(
+            code = mailbox_module.poll_email_otp(
                 mailbox,
                 subject_keyword="login code",
                 timeout=1,
@@ -288,7 +288,7 @@ class ICloudUrlMailboxTests(unittest.TestCase):
         mailbox.seen_message_ids = tuple(message["id"] for message in old_messages)
         mailbox.seen_message_received_ts = mailbox_module._message_received_ts(old_messages[0])
         self.assertIsNone(
-            mailbox_module._latest_email_otp_candidate(
+            mailbox_module.latest_email_otp_candidate(
                 mailbox,
                 keyword="login code",
                 issued_after_unix=0,
@@ -300,7 +300,7 @@ class ICloudUrlMailboxTests(unittest.TestCase):
             self._otp_message("new", "333333", "2026-08-04T10:00:10+00:00"),
             *old_messages,
         ]
-        candidate = mailbox_module._latest_email_otp_candidate(
+        candidate = mailbox_module.latest_email_otp_candidate(
             mailbox,
             keyword="login code",
             issued_after_unix=0,
@@ -310,7 +310,7 @@ class ICloudUrlMailboxTests(unittest.TestCase):
         self.assertEqual(candidate["id"], "new")
 
         undated = self._otp_message("new-undated", "444444", "")
-        candidate = mailbox_module._latest_email_otp_candidate(
+        candidate = mailbox_module.latest_email_otp_candidate(
             mailbox,
             keyword="login code",
             issued_after_unix=0,

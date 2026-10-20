@@ -13,7 +13,7 @@ Storage model::
 
 This module exposes four helpers plus the two low-level configs required by
 the strategy registry (``_fetch_smailr_messages`` / ``_poll_smailr_otp``).
-They are wired into ``_fetch_mailbox_messages`` / ``_poll_email_otp`` via
+They are wired into ``fetch_mailbox_messages`` / ``poll_email_otp`` via
 ``mailbox._register_mailbox_strategies`` when ``email_registration.smailr``
 is configured.
 """
@@ -38,7 +38,7 @@ SMAILR_LV1_DOMAINS = (
 )
 
 
-def _email_cfg() -> Mapping[str, Any]:
+def mailbox_email_config() -> Mapping[str, Any]:
     return current_config_data().get("email_registration") or {}
 
 
@@ -55,7 +55,7 @@ def _smailr_cfg() -> Mapping[str, Any]:
     correct sibling shape (``Mapping``); this is the same 2026-10-07 P1-D
     class that ``auth_flow/steps.py`` already fixed for three toggles.
     """
-    cfg = _email_cfg().get("smailr")
+    cfg = mailbox_email_config().get("smailr")
     return cfg if isinstance(cfg, Mapping) else {}
 
 

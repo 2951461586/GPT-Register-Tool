@@ -7,7 +7,7 @@ The 2026-10-18 scan reproduced an order-dependent failure:
 
 Root cause: `_heavy_deps_loaded` was a one-shot latch *and* the lazily imported
 symbols were cached separately.  A test called `cli.main()` inside
-``patch.object(cli, "_load_mailbox_pool", ...)``; the latch was set while the
+``patch.object(cli, "load_mailbox_pool", ...)``; the latch was set while the
 mock was in place, `patch.object` then restored the symbol to ``None``, and
 every later call in the same process skipped the import for good.  The
 workbench one-click command then called ``None(...)``
@@ -31,8 +31,8 @@ import sms_tool.cli as cli
 def unresolved_heavy_deps(monkeypatch):
     """Start each test from the state a fresh process has, and restore after."""
     for name in (
-        "_load_mailbox_pool",
-        "_remail_enabled",
+        "load_mailbox_pool",
+        "remail_enabled",
         "_build_session_file",
         "_mailbox_snapshot",
         "run_email",
@@ -41,19 +41,19 @@ def unresolved_heavy_deps(monkeypatch):
 
 
 def test_heavy_deps_resolve_again_after_a_patched_symbol_is_restored():
-    with patch.object(cli, "_load_mailbox_pool", return_value=[]):
+    with patch.object(cli, "load_mailbox_pool", return_value=[]):
         cli._load_heavy_deps()
-        assert cli._load_mailbox_pool is not None
+        assert cli.load_mailbox_pool is not None
 
     # `patch.object` restored the pre-patch value (None).  The next call must
     # re-resolve instead of trusting a latch set under the patch.
-    assert cli._load_mailbox_pool is None
+    assert cli.load_mailbox_pool is None
     cli._load_heavy_deps()
-    assert callable(cli._load_mailbox_pool)
+    assert callable(cli.load_mailbox_pool)
 
 
 def test_one_click_context_never_carries_a_none_loader():
-    with patch.object(cli, "_load_mailbox_pool", return_value=[]):
+    with patch.object(cli, "load_mailbox_pool", return_value=[]):
         cli._load_heavy_deps()
 
     context = cli._one_click_command_context()

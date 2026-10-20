@@ -1,7 +1,12 @@
 """Re-exports of the former sms_tool.storage module (mechanical split)."""
 
 from .connection import (
+    DatabasePathProvider,
     database_path,
+    database_path_override,
+    database_path_provider,
+    default_database_path,
+    set_database_path_provider,
     _connect,
     init_database,
     reset_database_init_cache,
@@ -79,6 +84,11 @@ from .constants import (
 
 __all__ = [
     "database_path",
+    "default_database_path",
+    "set_database_path_provider",
+    "database_path_provider",
+    "database_path_override",
+    "DatabasePathProvider",
     "_connect",
     "init_database",
     "reset_database_init_cache",

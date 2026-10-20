@@ -37,7 +37,7 @@ _SEAM_MODULE = {
     "request_with_retry": "deps",
     "_json_or_raw": "deps",
     "_follow_continue_url": "deps",
-    "_poll_email_otp": "deps",
+    "poll_email_otp": "deps",
     "_validate_email_otp": "deps",
     "_fetch_client_auth_session_dump": "deps",
     "current_config_data": "deps",

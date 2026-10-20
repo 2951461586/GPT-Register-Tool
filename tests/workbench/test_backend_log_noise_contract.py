@@ -1,4 +1,4 @@
-"""``SmsWorkbench/BackendLogPresenter.cs`` noise prefixes must stay real.
+"""``SmsWorkbench/Views/BackendLogPresenter.cs`` noise prefixes must stay real.
 
 ``NoiseLinePrefixes`` is a hand-maintained list of whole-line prefixes the
 WPF log panel never shows. It is a **duplicate of knowledge that lives in
@@ -28,7 +28,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-CSHARP = ROOT / "SmsWorkbench" / "BackendLogPresenter.cs"
+CSHARP = ROOT / "SmsWorkbench" / "Views" / "BackendLogPresenter.cs"
 PYTHON_ROOT = ROOT / "sms_tool"
 
 # The array literal in BackendLogPresenter.cs.

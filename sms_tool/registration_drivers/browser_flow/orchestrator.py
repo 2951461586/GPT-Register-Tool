@@ -101,7 +101,7 @@ def run_browser_registration(
             extra={"registration_driver": driver_name},
         )
     try:
-        mailbox = mailbox_pkg._ensure_mailbox_account(mailbox)
+        mailbox = mailbox_pkg.ensure_mailbox_account(mailbox)
     except Exception as exc:
         return registration_result.build_registration_failure_result(
             error="browser_mailbox_setup_failed",
@@ -263,7 +263,7 @@ def run_browser_registration(
                     timeout_seconds=recovery.stage_timeout(config, "auth_flow", min(30, timeout), maximum=120),
                     config=config,
                 )
-            mailbox_pkg._snapshot_mailbox_message(mailbox, proxy=proxy)
+            mailbox_pkg.snapshot_mailbox_message(mailbox, proxy=proxy)
             started = int(time.time())
             form_steps._fill_email(page, email, config=config)
             machine.transition(RegistrationState.USER_REGISTER)

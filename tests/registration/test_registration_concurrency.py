@@ -517,7 +517,7 @@ class RegistrationConcurrencyTests(unittest.TestCase):
         resend_response = Mock(status_code=200)
         with (
             patch.object(registration, "CFG", {"email_registration": {}}),
-            patch("sms_tool.otp_strategy._poll_email_otp", side_effect=[None, "654321"]) as poll,
+            patch("sms_tool.otp_strategy.poll_email_otp", side_effect=[None, "654321"]) as poll,
         ):
             code = _poll_registration_email_otp(
                 mailbox,

@@ -16,7 +16,7 @@ namespace SmsWorkbench.Tests
             DirectoryInfo? dir = new DirectoryInfo(AppContext.BaseDirectory);
             for (int i = 0; i < 10 && dir != null; i++, dir = dir.Parent)
             {
-                if (File.Exists(Path.Combine(dir.FullName, "SmsWorkbench", "MainWindow.Export.cs")))
+                if (File.Exists(Path.Combine(dir.FullName, "SmsWorkbench", "Views", "MainWindow.Export.cs")))
                     return dir.FullName;
             }
             throw new InvalidOperationException("repo root not found from test output");
@@ -30,7 +30,7 @@ namespace SmsWorkbench.Tests
             string expected = doc.RootElement.GetProperty("client_id").GetString() ?? "";
 
             string source = File.ReadAllText(
-                Path.Combine(RepoRoot(), "SmsWorkbench", "MainWindow.Export.cs"));
+                Path.Combine(RepoRoot(), "SmsWorkbench", "Views", "MainWindow.Export.cs"));
             Assert.Contains(expected, source);
         }
     }

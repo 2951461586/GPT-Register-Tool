@@ -18,7 +18,7 @@ from typing import Any, Callable, Iterable, Mapping
 from .account_liveness import account_chatgpt_id, probe_account_liveness
 from .account_recovery import relogin_chatgpt_email_account
 from ..config import CFG, ConfigInput
-from ..mailbox import _load_mailbox_pool, _poll_email_otp
+from ..mailbox import load_mailbox_pool, poll_email_otp
 from ..mailbox_types import MailboxAccount
 from ..storage import (
     list_account_records,
@@ -130,7 +130,7 @@ def allocate_target_mailboxes(request: EmailChangeRequest, count: int) -> list[M
         mailboxes = create_smailr_mailboxes(count=count, domain=request.smailr_domain, proxy=request.proxy)
     elif provider in {"icloud", "outlook", "hotmail"}:
         args.buy_remail_mailbox = args.buy_cfworker_mailbox = args.buy_smailr_mailbox = False
-        mailboxes = _load_mailbox_pool(args)
+        mailboxes = load_mailbox_pool(args)
         mailboxes = [item for item in mailboxes if _matches_persistent_provider(item, provider)]
         if len(mailboxes) < count:
             raise ValueError(f"target mailbox credentials insufficient: required={count} available={len(mailboxes)}")
@@ -356,7 +356,7 @@ def change_one_account(
             "error": begun.get("error") or "change_email_begin_failed",
         }
     try:
-        code = _poll_email_otp(
+        code = poll_email_otp(
             target,
             subject_keyword="",
             timeout=max(30, int(request.otp_timeout or 300)),

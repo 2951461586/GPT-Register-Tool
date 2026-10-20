@@ -81,7 +81,7 @@ def _run_registration(tmp_path, results, *, count, extra_args=()):
     with (
         patch.object(cli, "CFG", _config()),
         patch.object(sys, "argv", argv),
-        patch.object(cli, "_load_mailbox_pool", return_value=mailboxes),
+        patch.object(cli, "load_mailbox_pool", return_value=mailboxes),
         patch.object(cli, "_preflight_registration_before_mailbox", return_value={"ok": True}),
         patch.object(cli, "_registration_phone_pool", return_value=None),
         patch.object(cli, "_proxy_pool_values", return_value=[]),
@@ -207,7 +207,7 @@ def test_the_phone_lane_also_reports_a_failed_batch(tmp_path):
     with (
         patch.object(cli, "CFG", _config()),
         patch.object(sys, "argv", argv),
-        patch.object(cli, "_load_mailbox_pool", return_value=[_Mailbox("pool0@example.com")]),
+        patch.object(cli, "load_mailbox_pool", return_value=[_Mailbox("pool0@example.com")]),
         patch.object(cli, "_preflight_registration_before_mailbox", return_value={"ok": True}),
         patch.object(cli, "_registration_phone_pool", return_value=None),
         patch.object(cli, "_proxy_pool_values", return_value=[]),
@@ -250,7 +250,7 @@ def test_the_desktop_client_still_gets_the_payload_when_the_batch_fails(tmp_path
     with (
         patch.object(cli, "CFG", _config()),
         patch.object(sys, "argv", argv),
-        patch.object(cli, "_load_mailbox_pool", return_value=mailboxes),
+        patch.object(cli, "load_mailbox_pool", return_value=mailboxes),
         patch.object(cli, "_preflight_registration_before_mailbox", return_value={"ok": True}),
         patch.object(cli, "_registration_phone_pool", return_value=None),
         patch.object(cli, "_proxy_pool_values", return_value=[]),

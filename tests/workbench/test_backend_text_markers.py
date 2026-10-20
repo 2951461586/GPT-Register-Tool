@@ -155,7 +155,9 @@ class AccountStateMarkerParityTests(unittest.TestCase):
         self.assertIn("account_deatived", py_tuples["ACCOUNT_DEACTIVATED_MARKERS"])
 
     def test_csharp_uses_the_shared_lists_not_inline_literals(self):
-        source = (PROJECT_ROOT / "SmsWorkbench" / "AccountStatusInterpreter.cs").read_text(encoding="utf-8-sig")
+        source = (PROJECT_ROOT / "SmsWorkbench" / "Views" / "AccountStatusInterpreter.cs").read_text(
+            encoding="utf-8-sig"
+        )
         self.assertIn("BackendTextMarkers.AtInvalid", source)
         self.assertIn("BackendTextMarkers.AccountDeactivated", source)
         # the old inline chain must be gone
@@ -181,7 +183,7 @@ class MarkerUsageTests(unittest.TestCase):
         self.assertNotIn('print(f"[*] Saved session:', source)
 
     def test_csharp_matches_through_the_constant(self):
-        source = (PROJECT_ROOT / "SmsWorkbench" / "MainWindow.Tasks.cs").read_text(encoding="utf-8-sig")
+        source = (PROJECT_ROOT / "SmsWorkbench" / "Views" / "MainWindow.Tasks.cs").read_text(encoding="utf-8-sig")
         for cs_name in PAIRED_MARKERS.values():
             with self.subTest(csharp=cs_name):
                 self.assertIn(f"BackendTextMarkers.{cs_name}", source)

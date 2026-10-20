@@ -7,9 +7,11 @@ IPC; normal account reads contain the token-free session snapshot.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 import threading
+from collections import OrderedDict
 from pathlib import Path
 from typing import Any
 
@@ -260,40 +262,65 @@ def _promotion_presentation(session: dict[str, Any]) -> tuple[str, str]:
 # raw_json strings repeat verbatim between refreshes; sanitize is deterministic
 # and dominates the per-row cost, so cache parse + sanitize on the exact text.
 #
-# Each cache gets its own lock. Every one of them does check-then-act
-# (get -> miss -> build -> size check -> clear -> store); a pool refresh runs
-# these from a thread pool, so two threads can interleave between the size check
-# and the store. Under the GIL the worst case today is a wasted parse or a cache
-# that overshoots its bound, both harmless - but the pattern is one dropped GIL
-# away from being a real bug, and the lock costs ~100ns next to a json.loads.
-_SESSION_PARSE_CACHE: dict[str, Any] = {}
+# Row caches hold the parsed and sanitized session trees for the resident
+# channel. Two properties matter beyond "it is bounded":
+#
+# * the key is a 16-byte digest, NOT the raw JSON. Keying on the JSON kept a
+#   second full copy of every session in the dict (sessions are 5-20 KB, so a
+#   full 4096-entry cache pinned 20-80 MB of strings *on top of* the parsed
+#   trees), and the hash costs ~1 us against a json.loads;
+# * overflow evicts the oldest entry, not the whole dict. Clearing wholesale
+#   re-parsed the entire pool on the next refresh -- a latency spike exactly
+#   when the pool was largest.
+#
+# Each cache keeps its own lock: the build happens outside it (sanitize() and
+# json.loads() must not serialise the row scan), and `while len > limit` makes
+# an interleaved overshoot self-correct instead of relying on the size check.
+_SESSION_CACHE_LIMIT = 4096
+_MISS = object()
+_SESSION_PARSE_CACHE: "OrderedDict[bytes, Any]" = OrderedDict()
 _SESSION_PARSE_LOCK = threading.Lock()
-_SESSION_SANITIZE_CACHE: dict[str, dict[str, Any]] = {}
+_SESSION_SANITIZE_CACHE: "OrderedDict[bytes, dict[str, Any]]" = OrderedDict()
 _SESSION_SANITIZE_LOCK = threading.Lock()
 
 
+def _session_cache_key(raw_json: str) -> bytes:
+    return hashlib.blake2b(raw_json.encode("utf-8", "surrogatepass"), digest_size=16).digest()
+
+
+def _cache_lookup(cache, lock, key):
+    with lock:
+        try:
+            value = cache[key]
+        except KeyError:
+            return _MISS
+        cache.move_to_end(key)
+        return value
+
+
+def _cache_store(cache, lock, key, value) -> None:
+    with lock:
+        cache[key] = value
+        cache.move_to_end(key)
+        while len(cache) > _SESSION_CACHE_LIMIT:
+            cache.popitem(last=False)
+
+
 def _parsed_session(raw_json: str) -> Any:
-    with _SESSION_PARSE_LOCK:
-        cached = _SESSION_PARSE_CACHE.get(raw_json)
-        if cached is None:
-            cached = json.loads(raw_json)
-            if len(_SESSION_PARSE_CACHE) > 4096:
-                _SESSION_PARSE_CACHE.clear()
-            _SESSION_PARSE_CACHE[raw_json] = cached
-        return cached
+    key = _session_cache_key(raw_json)
+    cached = _cache_lookup(_SESSION_PARSE_CACHE, _SESSION_PARSE_LOCK, key)
+    if cached is _MISS:
+        cached = json.loads(raw_json)
+        _cache_store(_SESSION_PARSE_CACHE, _SESSION_PARSE_LOCK, key, cached)
+    return cached
 
 
 def _sanitized_session(raw_json: str, session: Any) -> Any:
-    # sanitize() is the expensive part and needs no protection - only the dict
-    # does. Holding the lock across it would serialise the whole row scan.
-    with _SESSION_SANITIZE_LOCK:
-        cached = _SESSION_SANITIZE_CACHE.get(raw_json)
-    if cached is None:
+    key = _session_cache_key(raw_json)
+    cached = _cache_lookup(_SESSION_SANITIZE_CACHE, _SESSION_SANITIZE_LOCK, key)
+    if cached is _MISS:
         cached = sanitize(session)
-        with _SESSION_SANITIZE_LOCK:
-            if len(_SESSION_SANITIZE_CACHE) > 4096:
-                _SESSION_SANITIZE_CACHE.clear()
-            _SESSION_SANITIZE_CACHE[raw_json] = cached
+        _cache_store(_SESSION_SANITIZE_CACHE, _SESSION_SANITIZE_LOCK, key, cached)
     return dict(cached) if isinstance(cached, dict) else cached
 
 
@@ -313,7 +340,7 @@ def _empty_session_state() -> dict[str, Any]:
 # that grows (or a sessions directory an operator prunes by hand) must not grow
 # this dict without limit. Clearing wholesale is the same trade the parse and
 # sanitize caches take -- a miss costs one file read.
-_SESSION_STATE_CACHE: dict[str, tuple[float, int, dict[str, Any]]] = {}
+_SESSION_STATE_CACHE: "OrderedDict[str, tuple[float, int, dict[str, Any]]]" = OrderedDict()
 _SESSION_STATE_CACHE_LIMIT = 4096
 _SESSION_STATE_LOCK = threading.Lock()
 
@@ -349,8 +376,8 @@ def _session_file_state(record: dict[str, Any]) -> dict[str, Any]:
     workspace: dict = _raw_workspace if isinstance(_raw_workspace, dict) else {}
     state["account_type"] = _account_type(data, auth_session, workspace, data.get("access_token"))
     with _SESSION_STATE_LOCK:
-        if len(_SESSION_STATE_CACHE) >= _SESSION_STATE_CACHE_LIMIT:
-            _SESSION_STATE_CACHE.clear()
+        while len(_SESSION_STATE_CACHE) >= _SESSION_STATE_CACHE_LIMIT:
+            _SESSION_STATE_CACHE.popitem(last=False)
         _SESSION_STATE_CACHE[str(path)] = (stat.st_mtime, stat.st_size, state)
     return dict(state)
 

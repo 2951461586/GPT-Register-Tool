@@ -1,5 +1,10 @@
 # Browser Registration Recovery
 
+> **Scope.** Owns what happens *after* a failure: classification, cooperative
+> cancellation, concurrency and observability for the browser lane. The forward
+> path and its retry vocabulary belong to
+> [registration-architecture.md](registration-architecture.md).
+
 ## Failure Policy
 
 - Navigation transport errors (`NS_ERROR_ABORT`, TLS/CONNECT failures) retry

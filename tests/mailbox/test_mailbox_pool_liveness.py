@@ -12,7 +12,7 @@ def test_mailbox_pool_liveness_requires_two_definitive_observations_before_apply
 
     monkeypatch.setattr(
         probe,
-        "_fetch_mailbox_messages",
+        "fetch_mailbox_messages",
         lambda mailbox, limit=1, proxy=None: (_ for _ in ()).throw(RuntimeError("HTTP 404")),
     )
     monkeypatch.setattr(probe, "_quarantine_path", lambda value: quarantine)

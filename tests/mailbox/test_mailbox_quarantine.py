@@ -150,7 +150,7 @@ def test_icloud_poll_stops_on_auth_invalid_without_retrying():
         token="https://mail.example/dead-secret",
     )
     with patch(
-        "sms_tool.mailbox._latest_email_otp_candidate",
+        "sms_tool.mailbox.latest_email_otp_candidate",
         side_effect=MailboxAuthInvalidError(mailbox.email, "invalid"),
     ) as fetch:
         try:

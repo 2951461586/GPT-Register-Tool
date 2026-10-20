@@ -75,11 +75,11 @@ OPERATION_GROUPS: dict[str, tuple[str, ...]] = {
     ),
     "email_otp_mailbox": (
         "_email_otp_send_url",
-        "_ensure_mailbox_account",
+        "ensure_mailbox_account",
         "_is_wrong_email_otp_code",
         "_mailbox_snapshot",
         "otp_poll",
-        "_snapshot_mailbox_message",
+        "snapshot_mailbox_message",
         "_validate_email_otp",
     ),
     "checkpoint_outcome_telemetry": (
@@ -164,11 +164,11 @@ class RegistrationOperations:
 
     # --- email otp & mailbox -----------------------------------------------
     _email_otp_send_url: Callable[..., Any]
-    _ensure_mailbox_account: Callable[..., Any]
+    ensure_mailbox_account: Callable[..., Any]
     _is_wrong_email_otp_code: Callable[..., Any]
     _mailbox_snapshot: Callable[..., Any]
     otp_poll: RegistrationOtpPollingOperations
-    _snapshot_mailbox_message: Callable[..., Any]
+    snapshot_mailbox_message: Callable[..., Any]
     _validate_email_otp: Callable[..., Any]
 
     # --- checkpoint, outcome & telemetry -----------------------------------

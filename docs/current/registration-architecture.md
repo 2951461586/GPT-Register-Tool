@@ -1,5 +1,11 @@
 # Registration Architecture
 
+> **Scope.** Owns the stage order, runtime state groups, session ownership and
+> the error/retry vocabulary. Endpoints live in
+> [protocol-registration.md](protocol-registration.md), proxy lanes in
+> [registration-and-proxy-architecture.md](registration-and-proxy-architecture.md),
+> post-failure handling in [registration-recovery.md](registration-recovery.md).
+
 ## Protocol workflow
 
 `registration.py` binds an immutable `RegistrationOperations` per call. Existing

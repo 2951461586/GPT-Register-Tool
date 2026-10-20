@@ -49,7 +49,7 @@ import provider_decoupling_ratchet as ratchet  # noqa: E402  # type: ignore
 #: ``provider_io``    -- provider-owned file/state location or dump format
 #: ``provider_wire``  -- provider-owned wire value (URL mapping, error vocabulary, sid tagging)
 EXPECTED_DIVERGENCES: dict[tuple[str, str], tuple[str, str]] = {
-    # BLIK (12)
+    # BLIK (14)
     ("blik/blik_qr_extract.py", "build_email"): (
         "provider_data",
         "random gmail/outlook/icloud/hotmail local-part pool; the other providers use a different seed shape",
@@ -98,6 +98,14 @@ EXPECTED_DIVERGENCES: dict[tuple[str, str], tuple[str, str]] = {
         "provider_wire",
         "treats a form action field as a redirect and excludes resource URLs",
     ),
+    ("blik/blik_qr_extract.py", "stripe_init"): (
+        "provider_wire",
+        "BLIK's init payload returns client_elements_session_id and reads enable_save from saved_payment_value()",
+    ),
+    ("blik/blik_qr_extract.py", "stripe_elements_session_params"): (
+        "provider_wire",
+        "requires every ctx key and fills enable_save/enable_redisplay from saved_payment_value()",
+    ),
     # direct_card (1)
     ("direct_card/direct_card_extract.py", "processor_entity_for_country"): (
         "provider_data",
@@ -112,7 +120,7 @@ EXPECTED_DIVERGENCES: dict[tuple[str, str], tuple[str, str]] = {
         "provider_io",
         "iDEAL dump naming/format is provider-owned",
     ),
-    # Kakao (7)
+    # Kakao (8)
     ("kakao/kakao_extract.py", "register_proxy_for_redaction"): (
         "provider_state",
         "Kakao registers into its own redaction registry so its proxy lines stay redacted",
@@ -141,7 +149,11 @@ EXPECTED_DIVERGENCES: dict[tuple[str, str], tuple[str, str]] = {
         "provider_io",
         "reads a Kakao token file instead of the adapter-injected PP_TOKEN",
     ),
-    # MoMo (3)
+    ("kakao/kakao_extract.py", "stripe_init"): (
+        "provider_wire",
+        "different signature and body: ko-KR init payload returning (payload, stripe_js_id)",
+    ),
+    # MoMo (4)
     ("momo/ac_paylink_core.py", "to_openai_pay_url"): (
         "provider_wire",
         "maps Stripe hosted checkout URLs onto pay.openai.com for the MoMo redirect",
@@ -153,6 +165,10 @@ EXPECTED_DIVERGENCES: dict[tuple[str, str], tuple[str, str]] = {
     ("momo/momo_qr_extract.py", "is_user_already_paid_error"): (
         "provider_wire",
         "MoMo's already-paid vocabulary (already_subscribed, active_subscription, ...)",
+    ),
+    ("momo/momo_qr_extract.py", "stripe_init"): (
+        "provider_wire",
+        "delegates to paylink.stripe_init_payment_page and returns (payload, status, attempts)",
     ),
     # TWINT (2)
     ("twint/twint_extract.py", "register_proxy_for_redaction"): (
@@ -169,7 +185,7 @@ EXPECTED_CATEGORIES = {
     "provider_data": 6,
     "provider_state": 8,
     "provider_io": 7,
-    "provider_wire": 6,
+    "provider_wire": 10,
 }
 
 
