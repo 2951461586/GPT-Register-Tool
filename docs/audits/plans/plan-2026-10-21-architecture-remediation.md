@@ -89,7 +89,7 @@
 | 序 | 任务 | 做法 | 验证 |
 |---|---|---|---|
 | P2-1 | `TYPE_CHECKING` 导入不计入运行时环 | 两个解析器都把 `if TYPE_CHECKING:` 里的导入单独计为 `type`；它们不执行，不可能成环。SCC 5 → 2，**没有改一行产品代码** | `dependency_graph.py` → 2 cycles, 11 type-only；`pytest tests/governance` |
-| P2-2 | 包门面环惰性导出（`auth_flow` 7 + `upi_link` 4） | 两个包的 `__init__.py` 改 PEP 562 `__getattr__`，子模块不再在包导入时被拉入；子模块 `from . import x` 的回边保留（它是真实依赖） | SCC 2 → 0；`pytest tests/registration tests/payment tests/workbench`（`deps.py` 的按属性 patch 必须仍生效） |
+| P2-2 | 包门面环惰性导出（`auth_flow` 7 + `upi_link` 4） | 两个包的 `__init__.py` 改 PEP 562 `__getattr__`（名字表由原 import 块机械生成），并保留一个 `if TYPE_CHECKING:` 块给 pyright；子模块 `from . import x` 的回边保留（它是真实依赖） | SCC 2 → **0**；全量 `pytest` 6692 passed；`tests/governance/test_lazy_facades.py` 钉住「导入包不导入子模块」 |
 | P2-3 | ~~`phone_pool` ↔ `phone_provider_lifecycle`~~ | **并入 P2-1**：那条互指是 `phone_provider_lifecycle` 的注解导入 | — |
 | P2-4 | `proxy_*` → `sms_tool/proxy/`（7） | `git mv` + codemod 改 dotted 引用；`SUBPACKAGES` 加 `proxy`；`directory_map_groups.json` 加组 | 全量 `pytest`；`root_module_ratchet --update-baseline` 降 7 |
 | P2-5 | `mailbox_*` → `sms_tool/mailbox/`（15） | 同上；`mailbox.py` → `mailbox/router.py` + `__init__` 门面（`sms_tool.mailbox` 路径不变） | 同上，降 15 |
@@ -159,6 +159,22 @@ allow 只有 2 条，各带 reason + owner。落地时先按「1 = 最内层」�
 
 保留为后续项；若要做，正确顺序是先把模块级状态收进一个 `config/_state.py` 并让测试改 patch 目标，
 再搬函数。
+
+### P2-2（包门面惰性导出）
+
+`auth_flow`（64 个名字）与 `upi_link`（160 个名字）的 `__init__` 改为 PEP 562 `__getattr__`，
+名字表从原 import 块机械生成。**SCC 2 → 0**，全量 6692 passed。
+
+两个细节必须同时做，否则会换一种坏法：
+
+1. **必须保留 `if TYPE_CHECKING:` 块**。只做 `__getattr__` 时 pyright 在每个消费者里报
+   `"X" is unknown import symbol`（实测 9 个错误落在 `test_registration_concurrency.py`、
+   1 个落在 `account_recovery.py`），`pyright_ratchet` 会因为这两个文件基线为 0 而失败。
+   加上 TYPE_CHECKING 块后 pyright 恢复可见，而图里这些边是 type-only，不构成运行时环。
+2. **`upi_link` 原本没有 `__all__`**，生成器必须回退成 `sorted(_LAZY)`，否则 `import *` 会静默变成空。
+
+`tests/governance/test_lazy_facades.py` 用**子进程**验证「导入包不导入任何子模块」—— 这是破环的
+实质属性，在同一个进程里测不出来（`sys.modules` 已被别的测试污染）。
 
 ### P2-1（`TYPE_CHECKING` 不是运行时边）
 

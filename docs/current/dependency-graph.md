@@ -18,19 +18,16 @@ the *gate* (per-pair, only-down); this file is the *view*.
 | Measure | Value |
 | --- | ---: |
 | Modules | 299 |
-| Module-level import edges | 974 |
+| Module-level import edges | 954 |
 | Delayed (function-local) edges | 274 |
-| Type-only (`if TYPE_CHECKING`) edges | 11 |
-| Strongly connected components (size > 1) | 2 |
-| Modules inside a cycle | 11 |
+| Type-only (`if TYPE_CHECKING`) edges | 31 |
+| Strongly connected components (size > 1) | 0 |
+| Modules inside a cycle | 0 |
 | Mutually dependent directory pairs | 10 |
 
 ## Cycles
 
-| Size | Modules |
-| ---: | --- |
-| 7 | `sms_tool.auth_flow`<br>`sms_tool.auth_flow.login`<br>`sms_tool.auth_flow.otp`<br>`sms_tool.auth_flow.password_step`<br>`sms_tool.auth_flow.signup`<br>`sms_tool.auth_flow.steps`<br>`sms_tool.auth_flow.totp` |
-| 4 | `sms_tool.upi_link`<br>`sms_tool.upi_link.flows`<br>`sms_tool.upi_link.pipeline`<br>`sms_tool.upi_link.sentinel` |
+None.
 
 ## Directory pairs with edges in both directions
 
