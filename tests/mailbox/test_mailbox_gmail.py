@@ -5,7 +5,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from sms_tool import mailbox as mailbox_module, mailbox_gmail, mailbox_parsers
+from sms_tool import mailbox as mailbox_module, mailbox_parsers
+from sms_tool.providers import mailbox_gmail
 from sms_tool.mailbox_types import MailboxAccount
 
 
@@ -220,6 +221,7 @@ class GmailMailboxTests(unittest.TestCase):
 
         self.assertTrue(result["ok"])
         self.assertEqual(fake.logged_in, ("sender@gmail.com", "abcdefghijklmnop"))
+        assert fake.sent is not None
         self.assertEqual(fake.sent["To"], "receiver@example.com")
         self.assertEqual(fake.sent["Subject"], "Test")
 

@@ -14,7 +14,7 @@ import sys
 from types import SimpleNamespace
 
 from sms_tool.config import initialize_runtime_config
-from sms_tool import mailbox_remail
+from sms_tool.providers import mailbox_remail
 
 
 def recover(email: str) -> dict | None:

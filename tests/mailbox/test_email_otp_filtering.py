@@ -1,4 +1,6 @@
 import unittest
+from typing import TypeVar
+from unittest import mock
 from sms_tool import codex_oauth
 from sms_tool import mailbox as mailbox_module
 from sms_tool.mailbox import (
@@ -12,6 +14,15 @@ from sms_tool.registration import (
     REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORD,
     REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORDS,
 )
+
+
+_T = TypeVar("_T")
+
+
+def _required(value: "_T | None") -> "_T":
+    """Unwrap the Optional ``_email_otp_candidate`` declares so the check stays typed."""
+    assert value is not None
+    return value
 
 
 class EmailOtpFilteringTests(unittest.TestCase):
@@ -42,7 +53,7 @@ class EmailOtpFilteringTests(unittest.TestCase):
         )
 
         self.assertIsNone(login_candidate)
-        self.assertEqual(verification_candidate["otp"], "123456")
+        self.assertEqual(_required(verification_candidate)["otp"], "123456")
 
     def test_registration_poll_keyword_accepts_login_code_fallback(self):
         mailbox = MailboxAccount(email="target@hotmail.com", provider="chatai")
@@ -54,7 +65,7 @@ class EmailOtpFilteringTests(unittest.TestCase):
             issued_after_unix=0,
         )
 
-        self.assertEqual(login_candidate["otp"], "123456")
+        self.assertEqual(_required(login_candidate)["otp"], "123456")
 
     def test_cfworker_registration_otp_issued_after_has_small_grace(self):
         mailbox = MailboxAccount(email="target@edu.liziai.cloud", provider="cfworker")
@@ -99,7 +110,7 @@ class EmailOtpFilteringTests(unittest.TestCase):
 
         candidate = _email_otp_candidate(mailbox, msg, keyword="login code")
 
-        self.assertEqual(candidate["otp"], "213244")
+        self.assertEqual(_required(candidate)["otp"], "213244")
 
     def test_otp_candidate_rejects_non_openai_sender_for_outlook_or_gmail(self):
         mailbox = MailboxAccount(email="target@hotmail.com", provider="chatai")
@@ -138,7 +149,7 @@ class EmailOtpFilteringTests(unittest.TestCase):
         )
 
         self.assertIsNone(old_candidate)
-        self.assertEqual(new_candidate["otp"], "123456")
+        self.assertEqual(_required(new_candidate)["otp"], "123456")
 
     def test_chatai_poll_waits_for_newer_code_during_settle_window(self):
         mailbox = MailboxAccount(email="target@hotmail.com", provider="chatai")
@@ -155,10 +166,10 @@ class EmailOtpFilteringTests(unittest.TestCase):
         newer["id"] = "newer"
         newer["bodyPreview"] = "Enter this temporary verification code to continue:\n\n169441"
 
-        with unittest.mock.patch.object(
+        with mock.patch.object(
             mailbox_module, "mailbox_email_config", return_value={"otp_settle_seconds": 0.01, "otp_poll_interval": 0.01}
         ):
-            with unittest.mock.patch.object(
+            with mock.patch.object(
                 mailbox_module, "fetch_mailbox_messages", side_effect=[[first], [newer, first], [newer, first]]
             ):
                 code = mailbox_module.poll_email_otp(

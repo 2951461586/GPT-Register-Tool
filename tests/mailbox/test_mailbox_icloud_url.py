@@ -6,10 +6,30 @@ from pathlib import Path
 from unittest.mock import patch
 
 from sms_tool import mailbox as mailbox_module
-from sms_tool import mailbox_icloud_url, mailbox_parsers
+
+# ``sms_tool/mailbox_icloud_url.py`` is one of the ``sys.modules`` facades; a
+# checker cannot see through them, so import the provider implementation (the
+# same module object at runtime).
+from sms_tool.providers import mailbox_icloud_url
+from sms_tool import mailbox_parsers
 from sms_tool.mail_otp import _email_otp_candidate, _extract_otp_from_text, _message_received_ts
 from sms_tool.mailbox_types import MailboxAccount
+from typing import TypeVar
 from sms_tool.providers.mailbox_graph import MailboxAuthInvalidError
+
+
+_T = TypeVar("_T")
+
+
+def _required(value: "_T | None") -> "_T":
+    """Unwrap an Optional the provider seam declares, failing loudly if absent.
+
+    ``fetch_icloud_url_messages`` / ``_email_otp_candidate`` return ``None`` on
+    "no data"; every assertion below is about the populated case, so unwrapping
+    keeps the check honest and the type narrow instead of suppressing it.
+    """
+    assert value is not None
+    return value
 
 
 class _Response:
@@ -73,10 +93,10 @@ class ICloudUrlMailboxTests(unittest.TestCase):
         with patch.object(mailbox_icloud_url.curl_requests, "get", return_value=_Response(text=page)):
             messages = mailbox_icloud_url.fetch_icloud_url_messages(mailbox, limit=10)
 
-        self.assertEqual(len(messages), 1)
-        candidate = _email_otp_candidate(mailbox, messages[0], keyword="login code")
-        self.assertEqual(candidate["otp"], "654321")
-        self.assertNotIn("123456", messages[0]["body"]["content"])
+        self.assertEqual(len(_required(messages)), 1)
+        candidate = _email_otp_candidate(mailbox, _required(messages)[0], keyword="login code")
+        self.assertEqual(_required(candidate)["otp"], "654321")
+        self.assertNotIn("123456", _required(messages)[0]["body"]["content"])
 
     def test_account_login_failure_page_fails_fast_and_quarantines(self):
         page = "<div class='card'><p>账号登录失败，应用专用密码可能失效</p></div>"
@@ -110,9 +130,9 @@ class ICloudUrlMailboxTests(unittest.TestCase):
         with patch.object(mailbox_icloud_url.curl_requests, "get", return_value=_Response(text=page)):
             messages = mailbox_icloud_url.fetch_icloud_url_messages(mailbox, limit=10)
 
-        self.assertEqual(len(messages), 1)
-        candidate = _email_otp_candidate(mailbox, messages[0], keyword="login code")
-        self.assertEqual(candidate["otp"], "654321")
+        self.assertEqual(len(_required(messages)), 1)
+        candidate = _email_otp_candidate(mailbox, _required(messages)[0], keyword="login code")
+        self.assertEqual(_required(candidate)["otp"], "654321")
 
     def test_mail_card_article_page_is_normalized_for_otp_polling(self):
         page = """
@@ -135,10 +155,10 @@ class ICloudUrlMailboxTests(unittest.TestCase):
         with patch.object(mailbox_icloud_url.curl_requests, "get", return_value=_Response(text=page)):
             messages = mailbox_icloud_url.fetch_icloud_url_messages(mailbox, limit=10)
 
-        self.assertEqual(len(messages), 1)
-        candidate = _email_otp_candidate(mailbox, messages[0], keyword="login code|verification code")
-        self.assertEqual(candidate["otp"], "654321")
-        self.assertIn("noreply@openai.com", messages[0]["from"])
+        self.assertEqual(len(_required(messages)), 1)
+        candidate = _email_otp_candidate(mailbox, _required(messages)[0], keyword="login code|verification code")
+        self.assertEqual(_required(candidate)["otp"], "654321")
+        self.assertIn("noreply@openai.com", _required(messages)[0]["from"])
 
     def test_card_messages_are_normalized_to_newest_first(self):
         page = """
@@ -164,7 +184,7 @@ class ICloudUrlMailboxTests(unittest.TestCase):
             messages = mailbox_icloud_url.fetch_icloud_url_messages(mailbox, limit=1)
 
         self.assertEqual(
-            [_email_otp_candidate(mailbox, message, keyword="login code")["otp"] for message in messages],
+            [_required(_email_otp_candidate(mailbox, message, keyword="login code"))["otp"] for message in messages],
             ["222222"],
         )
 
@@ -205,8 +225,8 @@ class ICloudUrlMailboxTests(unittest.TestCase):
         with patch.object(mailbox_icloud_url.curl_requests, "get", side_effect=responses):
             messages = mailbox_icloud_url.fetch_icloud_url_messages(mailbox, limit=10)
 
-        candidate = _email_otp_candidate(mailbox, messages[0], keyword="login code")
-        self.assertEqual(candidate["otp"], "456789")
+        candidate = _email_otp_candidate(mailbox, _required(messages)[0], keyword="login code")
+        self.assertEqual(_required(candidate)["otp"], "456789")
 
     def test_snapshot_uses_yangyang_listing_without_fetching_message_details(self):
         page = """
@@ -306,8 +326,8 @@ class ICloudUrlMailboxTests(unittest.TestCase):
             issued_after_unix=0,
             override_messages=new_messages,
         )
-        self.assertEqual(candidate["otp"], "333333")
-        self.assertEqual(candidate["id"], "new")
+        self.assertEqual(_required(candidate)["otp"], "333333")
+        self.assertEqual(_required(candidate)["id"], "new")
 
         undated = self._otp_message("new-undated", "444444", "")
         candidate = mailbox_module.latest_email_otp_candidate(
@@ -316,8 +336,8 @@ class ICloudUrlMailboxTests(unittest.TestCase):
             issued_after_unix=0,
             override_messages=[*old_messages, undated],
         )
-        self.assertEqual(candidate["otp"], "444444")
-        self.assertEqual(candidate["id"], "new-undated")
+        self.assertEqual(_required(candidate)["otp"], "444444")
+        self.assertEqual(_required(candidate)["id"], "new-undated")
 
     @staticmethod
     def _otp_message(message_id, code, received_at):
@@ -413,9 +433,9 @@ class ICloudUrlMailboxTests(unittest.TestCase):
         with patch.object(mailbox_icloud_url.curl_requests, "get", return_value=_Response(text=payload)):
             messages = mailbox_icloud_url.fetch_icloud_url_messages(mailbox, limit=10)
 
-        self.assertEqual(len(messages), 1)
-        candidate = _email_otp_candidate(mailbox, messages[0], keyword="verification code|login code")
-        self.assertEqual(candidate["otp"], "483920")
+        self.assertEqual(len(_required(messages)), 1)
+        candidate = _email_otp_candidate(mailbox, _required(messages)[0], keyword="verification code|login code")
+        self.assertEqual(_required(candidate)["otp"], "483920")
 
     def test_api_json_channel_reads_nested_and_text_only_codes(self):
         """码可能不在顶层 ``code`` 上：嵌套字段与纯文本兜底都要能取到。"""
@@ -430,8 +450,8 @@ class ICloudUrlMailboxTests(unittest.TestCase):
         ):
             with patch.object(mailbox_icloud_url.curl_requests, "get", return_value=_Response(text=payload)):
                 messages = mailbox_icloud_url.fetch_icloud_url_messages(mailbox, limit=10)
-            candidate = _email_otp_candidate(mailbox, messages[0], keyword="verification code|login code")
-            self.assertEqual(candidate["otp"], expected)
+            candidate = _email_otp_candidate(mailbox, _required(messages)[0], keyword="verification code|login code")
+            self.assertEqual(_required(candidate)["otp"], expected)
 
     def test_api_json_channel_does_not_read_ids_or_timestamps_as_codes(self):
         """6 位数字不等于验证码：``id`` / ``timestamp`` 这类忽略键必须被挡掉。
@@ -507,7 +527,7 @@ class ICloudUrlSplitContractTests(unittest.TestCase):
         from urllib.parse import parse_qsl, urlsplit
 
         mailbox = mailbox_parsers._parse_icloud_url_line(self.QUERY_STYLE, "pool.txt", 1)
-        request_url = mailbox_icloud_url._with_message_limit(mailbox.token, 25)
+        request_url = mailbox_icloud_url._with_message_limit(_required(mailbox).token, 25)
         query = dict(parse_qsl(urlsplit(request_url).query))
 
         self.assertEqual(query["auth_code"], "AUTHCODE123")
@@ -610,8 +630,8 @@ class LatestMailJsChannelTests(unittest.TestCase):
         messages = mailbox_icloud_url._latest_mail_js_message(self.LATEST_PAGE, email=self.EMAIL)
 
         self.assertIsNotNone(messages)
-        self.assertEqual(len(messages), 1)
-        body = messages[0]["body"]["content"]
+        self.assertEqual(len(_required(messages)), 1)
+        body = _required(messages)[0]["body"]["content"]
         self.assertIn("<html>", body)
         self.assertIn("494652", body)
         # 转义必须被解开，否则验证码会被埋在 \\uXXXX 与 \\r\\n 里
@@ -621,21 +641,21 @@ class LatestMailJsChannelTests(unittest.TestCase):
     def test_latest_mail_otp_is_extractable_by_the_shared_extractor(self):
         messages = mailbox_icloud_url._latest_mail_js_message(self.LATEST_PAGE, email=self.EMAIL)
 
-        self.assertEqual(_extract_otp_from_text(messages[0]["body"]["content"]), "494652")
+        self.assertEqual(_extract_otp_from_text(_required(messages)[0]["body"]["content"]), "494652")
 
     def test_latest_mail_subject_is_normalized_to_login_code(self):
         """主题必须被改写成 ``… login code``，否则过不了注册泳道的关键词过滤。"""
         messages = mailbox_icloud_url._latest_mail_js_message(self.LATEST_PAGE, email=self.EMAIL)
 
-        self.assertTrue(messages[0]["subject"].endswith("login code"))
-        self.assertIn("ChatGPT", messages[0]["subject"])
+        self.assertTrue(_required(messages)[0]["subject"].endswith("login code"))
+        self.assertIn("ChatGPT", _required(messages)[0]["subject"])
 
     def test_latest_mail_received_at_is_beijing_time(self):
         messages = mailbox_icloud_url._latest_mail_js_message(self.LATEST_PAGE, email=self.EMAIL)
 
-        self.assertEqual(messages[0]["receivedDateTime"], "2026-09-16T23:48:03+08:00")
+        self.assertEqual(_required(messages)[0]["receivedDateTime"], "2026-09-16T23:48:03+08:00")
         # 解析得出时刻才会参与 issued_after 比较，而不是落回「0 ⇒ 不比较」
-        self.assertEqual(_message_received_ts(messages[0]), 1789573683)
+        self.assertEqual(_message_received_ts(_required(messages)[0]), 1789573683)
 
     def test_the_no_mail_page_is_not_mistaken_for_the_latest_layout(self):
         self.assertIsNone(mailbox_icloud_url._latest_mail_js_message("<h1>未找到匹配的邮件</h1>", email=self.EMAIL))
@@ -657,9 +677,9 @@ class LatestMailJsChannelTests(unittest.TestCase):
         )
         messages = mailbox_icloud_url._latest_mail_js_message(page, email=self.EMAIL)
 
-        self.assertEqual(len(messages), 1)
-        self.assertEqual(messages[0]["subject"], "Subject only")
-        self.assertEqual(messages[0]["body"]["content"], "")
+        self.assertEqual(len(_required(messages)), 1)
+        self.assertEqual(_required(messages)[0]["subject"], "Subject only")
+        self.assertEqual(_required(messages)[0]["body"]["content"], "")
 
     def test_js_string_escapes_are_decoded(self):
         self.assertEqual(mailbox_icloud_url._decode_js_string('a\\"b\\r\\nM\\u00e3\\/c'), 'a"b\r\nMã/c')
@@ -677,8 +697,8 @@ class LatestMailJsChannelTests(unittest.TestCase):
             messages = mailbox_icloud_url.fetch_icloud_url_messages(self._mailbox(), limit=5)
 
         card.assert_not_called()
-        self.assertEqual(len(messages), 1)
-        self.assertEqual(messages[0]["receivedDateTime"], "2026-09-16T23:48:03+08:00")
+        self.assertEqual(len(_required(messages)), 1)
+        self.assertEqual(_required(messages)[0]["receivedDateTime"], "2026-09-16T23:48:03+08:00")
 
     def test_snapshot_also_dispatches_the_latest_layout(self):
         with (
@@ -688,7 +708,7 @@ class LatestMailJsChannelTests(unittest.TestCase):
             messages = mailbox_icloud_url.snapshot_icloud_url_messages(self._mailbox(), limit=5)
 
         card.assert_not_called()
-        self.assertEqual(len(messages), 1)
+        self.assertEqual(len(_required(messages)), 1)
 
     def test_a_card_page_still_reaches_the_card_parser(self):
         """新分支不许把 ``icloud-api.top`` 的卡片页截胡。"""
@@ -701,8 +721,8 @@ class LatestMailJsChannelTests(unittest.TestCase):
         with patch.object(mailbox_icloud_url.curl_requests, "get", return_value=_Response(text=page)):
             messages = mailbox_icloud_url.fetch_icloud_url_messages(self._mailbox(), limit=5)
 
-        self.assertEqual(len(messages), 1)
-        self.assertIn("654321", messages[0]["body"]["content"])
+        self.assertEqual(len(_required(messages)), 1)
+        self.assertIn("654321", _required(messages)[0]["body"]["content"])
 
 
 if __name__ == "__main__":

@@ -23,6 +23,11 @@ from unittest import mock
 from sms_tool import mailbox, mailbox_service, mailbox_strategies
 
 
+def _field(record: logging.LogRecord, name: str) -> object:
+    """Read a structured ``extra=`` field off a record (logging has no typed slot)."""
+    return getattr(record, name)
+
+
 class _FakeMailbox:
     def __init__(self, provider="icloud"):
         self.provider = provider
@@ -88,16 +93,16 @@ class MailboxOtpDispatchLogTests(unittest.TestCase):
         self.assertEqual(self._dispatch(provider="icloud"), "123456")
         events = self._dispatch_events()
         self.assertEqual(len(events), 1)
-        self.assertEqual(events[0].provider, "icloud")
-        self.assertEqual(events[0].poller, "fake_poller")
-        self.assertEqual(events[0].otp_timeout_s, 300)
+        self.assertEqual(_field(events[0], "provider"), "icloud")
+        self.assertEqual(_field(events[0], "poller"), "fake_poller")
+        self.assertEqual(_field(events[0], "otp_timeout_s"), 300)
 
     def test_dispatch_logs_candidate_count_instead_of_candidates(self):
         proxy = "http://alice:s3cret@proxy.example.com:8080"
         self._dispatch(provider="remail", proxy=proxy)
         events = self._dispatch_events()
         self.assertEqual(len(events), 1)
-        self.assertEqual(events[0].proxy_candidate_count, 1)
+        self.assertEqual(_field(events[0], "proxy_candidate_count"), 1)
 
     def test_dispatch_log_never_carries_proxy_credentials(self):
         proxy = "http://alice:s3cret@proxy.example.com:8080"
@@ -166,8 +171,8 @@ class MailboxServiceDispatchLogTests(unittest.TestCase):
         self.assertEqual(self._poll(), "123456")
         events = self._events()
         self.assertEqual(len(events), 1)
-        self.assertEqual(events[0].provider, "icloud_url")
-        self.assertEqual(events[0].otp_timeout_s, 300)
+        self.assertEqual(_field(events[0], "provider"), "icloud_url")
+        self.assertEqual(_field(events[0], "otp_timeout_s"), 300)
 
     def test_dispatch_logs_the_issued_after_floor(self):
         """The floor that silently discards a real OTP as 'too old'.
@@ -178,7 +183,7 @@ class MailboxServiceDispatchLogTests(unittest.TestCase):
         """
         self._poll(issued_after_unix=1789110000)
         events = self._events()
-        self.assertEqual(events[0].otp_issued_after_unix, 1789110000)
+        self.assertEqual(_field(events[0], "otp_issued_after_unix"), 1789110000)
 
     def test_dispatch_log_never_carries_proxy_credentials(self):
         proxy = "http://alice:s3cret@proxy.example.com:8080"

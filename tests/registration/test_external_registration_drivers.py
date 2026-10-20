@@ -2,6 +2,7 @@ import json
 import os
 import sys
 import unittest
+from typing import cast
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -268,16 +269,16 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
         context = SimpleNamespace(pages=[], set_default_timeout=MagicMock(), new_page=MagicMock())
         page = context.new_page.return_value
         fake = _Playwright()
-        fake.browser.new_context = MagicMock(return_value=context)
-        session._playwright = fake
+        setattr(fake.browser, "new_context", MagicMock(return_value=context))
+        setattr(session, "_playwright", fake)
         session.browser = fake.browser
         with patch(
             "sms_tool.registration_drivers.browser_session.apply_playwright_stealth",
             return_value={"playwright_stealth": True},
         ) as apply:
-            session.context = context
-            session.page = page
-            session.stealth_status = apply(context, page, label="playwright", provider_prefix="playwright")
+            setattr(session, "context", context)
+            setattr(session, "page", page)
+            setattr(session, "stealth_status", apply(context, page, label="playwright", provider_prefix="playwright"))
         self.assertTrue(session.stealth_status["playwright_stealth"])
         apply.assert_called_once()
 
@@ -581,7 +582,9 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
                 return {"status": 200, "body": {"accessToken": "at", "user": {"email": "user@example.com"}}}
 
         browser = LegacyBrowser()
-        result = _session_payload(browser, "https://chatgpt.com", "user@example.com", timeout_seconds=1)
+        result = _session_payload(
+            cast("PlaywrightBrowserSession", browser), "https://chatgpt.com", "user@example.com", timeout_seconds=1
+        )
 
         self.assertEqual(result["access_token"], "at")
         self.assertEqual(browser.calls, ["https://chatgpt.com/api/auth/session"])
@@ -682,8 +685,8 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
         session = PlaywrightBrowserSession()
         auth = _Page("https://auth.openai.com/about-you")
         callback = _Page("https://chatgpt.com/")
-        session.context = SimpleNamespace(pages=[auth, callback])
-        session.page = auth
+        setattr(session, "context", SimpleNamespace(pages=[auth, callback]))
+        setattr(session, "page", auth)
 
         payload = session.fetch_json("https://chatgpt.com/api/auth/session")
 
@@ -697,8 +700,8 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
         page = _Page("https://chatgpt.com/")
         request = MagicMock()
         request.get.return_value = _RequestResponse({"error": "SessionRequired"}, status=401)
-        session.context = SimpleNamespace(pages=[page], request=request)
-        session.page = page
+        setattr(session, "context", SimpleNamespace(pages=[page], request=request))
+        setattr(session, "page", page)
 
         payload = session.fetch_json("https://chatgpt.com/api/auth/session")
 
@@ -709,8 +712,8 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
         session = PlaywrightBrowserSession()
         stale_chatgpt = _Page("https://chatgpt.com/")
         active_otp = _Page("https://auth.openai.com/email-verification")
-        session.context = SimpleNamespace(pages=[stale_chatgpt, active_otp])
-        session.page = stale_chatgpt
+        setattr(session, "context", SimpleNamespace(pages=[stale_chatgpt, active_otp]))
+        setattr(session, "page", stale_chatgpt)
 
         selected = session.select_live_page()
 
@@ -1125,8 +1128,8 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
                 "user": {"email": "user@example.com"},
             }
         )
-        session.context = SimpleNamespace(pages=[page], request=request)
-        session.page = page
+        setattr(session, "context", SimpleNamespace(pages=[page], request=request))
+        setattr(session, "page", page)
 
         payload = session.fetch_json("https://chatgpt.com/api/auth/session")
 
@@ -1801,11 +1804,14 @@ class TestPooledScreenSizeInjection(unittest.TestCase):
 
     def test_camoufox_session_receives_the_pooled_size(self):
         with patch.dict(_BROWSER_SESSION_FACTORIES, {"camoufox": _RecordingSession}):
-            session = create_browser_session(
-                "camoufox",
-                config={"registration": {}},
-                viewport=(1680, 1050),
-                **_SESSION_KWARGS,
+            session = cast(
+                "_RecordingSession",
+                create_browser_session(
+                    "camoufox",
+                    config={"registration": {}},
+                    viewport=(1680, 1050),
+                    **_SESSION_KWARGS,
+                ),
             )
         self.assertEqual(self._driver_cfg(session.config, "camoufox")["max_width"], 1680)
         self.assertEqual(self._driver_cfg(session.config, "camoufox")["max_height"], 1050)
@@ -1818,6 +1824,7 @@ class TestPooledScreenSizeInjection(unittest.TestCase):
                 viewport=(1680, 1050),
                 **_SESSION_KWARGS,
             )
+        session = cast("_RecordingSession", session)
         self.assertEqual(self._driver_cfg(session.config, "roxy"), {"api_key": "k"})
 
     def test_playwright_keeps_taking_the_size_as_its_viewport(self):
@@ -1828,6 +1835,7 @@ class TestPooledScreenSizeInjection(unittest.TestCase):
                 viewport=(1440, 900),
                 **_SESSION_KWARGS,
             )
+        session = cast("_RecordingSession", session)
         self.assertEqual(session.kwargs["viewport"], (1440, 900))
 
 
@@ -1973,7 +1981,7 @@ class TestExitCountryProbeCoversAllDrivers(unittest.TestCase):
     def test_probe_survives_a_junk_timeout(self):
         page = MagicMock()
         page.evaluate.return_value = {"country": "US", "status": 200}
-        verify_browser_proxy_country(SimpleNamespace(page=page), timeout_seconds="abc")
+        verify_browser_proxy_country(SimpleNamespace(page=page), timeout_seconds=cast("int", "abc"))
         self.assertIn("20000", page.evaluate.call_args[0][0])
 
 

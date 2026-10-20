@@ -32,6 +32,17 @@ def _fingerprint(raw: str) -> str:
     return hashlib.sha256(raw.strip().encode("utf-8")).hexdigest()
 
 
+def _as_int(value: object) -> int:
+    """Read a count off a ``dict[str, object]`` row.
+
+    Rows are assembled from JSON, so the value is ``object``; the previous
+    ``_as_int(row.get("index"))`` relied on the runtime type being int or str.
+    """
+    if isinstance(value, (int, str)):
+        return int(value)
+    return 0
+
+
 def _quarantine_path(value: Path | None) -> Path:
     return value or (ROOT / "runtime" / "mailbox_liveness_quarantine.json")
 
@@ -97,14 +108,14 @@ def main() -> int:
         futures = [executor.submit(_probe, item) for item in items]
         for future in as_completed(futures):
             results.append(future.result())
-    results.sort(key=lambda row: int(row.get("index") or 0))
+    results.sort(key=lambda row: _as_int(row.get("index")))
     quarantine_path = _quarantine_path(args.quarantine)
     quarantine = _load_quarantine(quarantine_path)
-    dead_indexes = {int(row["index"]) for row in results if row.get("definitive_dead")}
+    dead_indexes = {_as_int(row["index"]) for row in results if row.get("definitive_dead")}
     confirmed_indexes: set[int] = set()
     now = int(time.time())
     for row in results:
-        index = int(row.get("index") or 0)
+        index = _as_int(row.get("index"))
         fp = _fingerprint(lines[index]) if 0 <= index < len(lines) else ""
         if row.get("definitive_dead") and fp:
             _raw_previous: object = quarantine.get(fp)

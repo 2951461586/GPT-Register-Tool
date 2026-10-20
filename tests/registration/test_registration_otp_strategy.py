@@ -49,6 +49,7 @@ class RegistrationOtpStrategyTests(unittest.TestCase):
                 mode="passwordless",
             )
 
+        assert response is not None
         self.assertEqual(response.status_code, 204)
         self.assertEqual(len(calls), 1)
         self.assertIn("/email-otp/resend", calls[0])

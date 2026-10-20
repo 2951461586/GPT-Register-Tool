@@ -1,5 +1,6 @@
 import unittest
-from unittest.mock import patch
+from typing import TypeVar
+from unittest.mock import MagicMock, patch
 
 from sms_tool import mailbox as mailbox_module
 
@@ -10,6 +11,15 @@ from sms_tool.providers import mailbox_cfworker as mailbox_cfworker_module
 from sms_tool.mailbox import MailboxAccount
 from sms_tool.providers import cfworker_client
 from sms_tool.providers.cfworker_client import CFWorkerMailboxClient
+
+
+_T = TypeVar("_T")
+
+
+def _required(value: "_T | None") -> "_T":
+    """Unwrap the Optional the extractor declares so the assertion stays typed."""
+    assert value is not None
+    return value
 
 
 class FakeResponse:
@@ -320,7 +330,7 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
             keyword="verification code",
             issued_after_unix=0,
         )
-        self.assertEqual(candidate["otp"], "971234")
+        self.assertEqual(_required(candidate)["otp"], "971234")
 
     def test_rfc822_body_otp_beats_decoy_extracted_json(self):
         msg = cfworker_client._normalize_message(
@@ -350,7 +360,7 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
             issued_after_unix=0,
         )
 
-        self.assertEqual(candidate["otp"], "333350")
+        self.assertEqual(_required(candidate)["otp"], "333350")
 
     def test_html_body_otp_beats_header_number_in_extracted_json(self):
         msg = cfworker_client._normalize_message(
@@ -376,7 +386,7 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
             issued_after_unix=0,
         )
 
-        self.assertEqual(candidate["otp"], "096114")
+        self.assertEqual(_required(candidate)["otp"], "096114")
 
     def test_plain_text_detail_strips_leading_css_and_uses_visible_otp(self):
         msg = cfworker_client._normalize_message(
@@ -408,7 +418,7 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
             keyword="verification code",
             issued_after_unix=0,
         )
-        self.assertEqual(candidate["otp"], "388302")
+        self.assertEqual(_required(candidate)["otp"], "388302")
 
     def test_cfworker_json_remark_does_not_make_otp_look_like_css_unit(self):
         mailbox = MailboxAccount(email="target@edu.liziai.cloud", provider="cfworker")
@@ -428,7 +438,7 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
             issued_after_unix=0,
         )
 
-        self.assertEqual(candidate["otp"], "453831")
+        self.assertEqual(_required(candidate)["otp"], "453831")
 
     def test_cfworker_otp_poll_waits_for_newer_duplicate_code(self):
         mailbox = MailboxAccount(email="target@edu.liziai.cloud", provider="cfworker")
@@ -517,7 +527,7 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
             fetch_messages_func=lambda _mailbox, **_kwargs: [message],
         )
 
-        self.assertEqual(candidate["otp"], "866835")
+        self.assertEqual(_required(candidate)["otp"], "866835")
 
     def test_email_otp_candidate_accepts_code_in_subject(self):
         mailbox = MailboxAccount(email="target@edu.liziai.cloud", provider="cfworker")
@@ -532,7 +542,7 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
 
         candidate = mailbox_module._email_otp_candidate(mailbox, msg, issued_after_unix=0)
 
-        self.assertEqual(candidate["otp"], "333333")
+        self.assertEqual(_required(candidate)["otp"], "333333")
 
     def test_target_endpoint_exposes_otp_from_raw_text_when_extracted_json_is_empty(self):
         client = CFWorkerMailboxClient("https://worker.example", admin_token="")
@@ -567,12 +577,10 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
             ),
         ):
             with patch.object(mailbox_module, "_cfworker_client") as client_factory:
-                proxy_client = type("ProxyClient", (), {})()
-                direct_client = type("DirectClient", (), {})()
-                proxy_client.fetch_messages = lambda email, limit=25: (_ for _ in ()).throw(
-                    RuntimeError("proxy timeout")
-                )
-                direct_client.fetch_messages = lambda email, limit=25: [{"id": "m1"}]
+                proxy_client = MagicMock()
+                direct_client = MagicMock()
+                proxy_client.fetch_messages.side_effect = RuntimeError("proxy timeout")
+                direct_client.fetch_messages.return_value = [{"id": "m1"}]
                 client_factory.side_effect = [proxy_client, direct_client]
 
                 messages = mailbox_module.fetch_mailbox_messages(mailbox, limit=1, proxy="socks5h://127.0.0.1:7897")
@@ -589,10 +597,8 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
             patch.object(mailbox_module, "mailbox_email_config", return_value={"cfworker_poll_proxy": True}),
         ):
             with patch.object(mailbox_module, "_cfworker_client") as client_factory:
-                proxy_client = type("ProxyClient", (), {})()
-                proxy_client.fetch_messages = lambda email, limit=25: (_ for _ in ()).throw(
-                    RuntimeError("proxy timeout")
-                )
+                proxy_client = MagicMock()
+                proxy_client.fetch_messages.side_effect = RuntimeError("proxy timeout")
                 client_factory.return_value = proxy_client
 
                 with self.assertRaises(RuntimeError):
@@ -609,8 +615,8 @@ class CFWorkerMailboxClientTests(unittest.TestCase):
             patch.object(mailbox_module, "mailbox_email_config", return_value={"cfworker_poll_proxy": False}),
         ):
             with patch.object(mailbox_module, "_cfworker_client") as client_factory:
-                direct_client = type("DirectClient", (), {})()
-                direct_client.fetch_messages = lambda email, limit=25: [{"id": "m1"}]
+                direct_client = MagicMock()
+                direct_client.fetch_messages.return_value = [{"id": "m1"}]
                 client_factory.return_value = direct_client
 
                 messages = mailbox_module.fetch_mailbox_messages(mailbox, limit=1, proxy="socks5h://127.0.0.1:7897")
