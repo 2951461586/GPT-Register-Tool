@@ -1,8 +1,10 @@
 # 方案：架构健康度整改（图谱可信度 → 分层门禁 → 环 → 根目录）— 2026-10-21
 
-> **状态（2026-10-21）**：**P0 全部落地，P1-1 落地，P1-2 延后，P2 的解环部分落地（SCC 5 → 0），P2 的根目录迁移与 P3 未开始**。落地结果回写在 §8，并已同步 `docs/architecture.md` / `docs/directory-map.md` / `docs/current/dependency-graph.md`。
+> **状态（2026-10-22 复核）**：**P0 全部落地，P1-1 落地，P1-2 延后，P2 的解环部分落地（SCC 5 → 0），P2-4（`proxy_*` 迁移）已落地**；**P2-5…P2-8 四个模块族迁移与 P3-1 spec 图未开始**。落地结果回写在 §8，并已同步 `docs/architecture.md` / `docs/directory-map.md` / `docs/current/dependency-graph.md`。
 >
-> 未完成的项（`P2-4`…`P2-8` 五个模块族迁移、`P3-1` spec 图）**没有留下半成品**：工作区在每个提交点都是绿的，剩余项按原顺序可直接接续。
+> 未完成的项（`P1-2` config 拆包、`P2-5`…`P2-8` 四个模块族迁移、`P3-1` spec 图）**没有留下半成品**：工作区在每个提交点都是绿的，剩余项按原顺序可直接接续。
+>
+> 2026-10-22 复核实测（全部为仓库现有门禁的原始输出）：`dependency_graph` 300 模块 / 957 条模块级边 / 274 条函数内边 / 31 条 type-only / **0 个 SCC** / 11 对互指；`import_layer_ratchet` 281 边 / 35 对 / 11 mutual / 45 minority / 205 delayed / 2 条 allow、0 个未认领模块；`root_module_ratchet` **148 冻结**（155 − 7 个 `proxy_*`）。
 >
 > **性质**：方案文档 + 落地记录。所有数字来自 2026-10-21 用 AST 重测（见 §1 的测量口径），不引用 pi-lens 的目录级数字。
 
@@ -75,7 +77,7 @@
 | 序 | 任务 | 做法 | 验证 |
 |---|---|---|---|
 | P0-1 | `services/protocol-payment` 的 `common.*` 导入根可解析 | **不重命名目录**（`pyrightconfig.json` 已用 `executionEnvironments.extraPaths` 声明了这个导入根，改名要动 300 处引用且不改运行时行为）。改为新增 `scripts/services_import_resolution.py`：用运行时同一条规则解析 `common.*`，并断言 ① 每条导入都落到 `common/` 下真实模块 ② 每个 `common/*.py` 都能从某个提取器到达；配 8 个 fixture 测试钉住解析器 | `python scripts/services_import_resolution.py`；`pytest tests/governance/test_services_import_resolution.py` |
-| P0-2 | 生成式依赖图 | 新增 `scripts/dependency_graph.py`（AST，含相对导入还原、SCC、互指对、根节点入度），`--check` 校验 `docs/current/dependency-graph.md` 是否与源码一致，`--write` 重生成；CI 加一步 | 手改一行 import → `--check` 失败并指出文件行号 |
+| P0-2 | 生成式依赖图 | 新增 `scripts/dependency_graph.py`（AST，含相对导入还原、SCC、互指对、根节点入度），校验 `docs/current/dependency-graph.md` 是否与源码一致，`--write` 重生成；CI 加一步 | 手改一行 import → `python scripts/dependency_graph.py` 失败并指出文件行号。**注意**：落地时没有做 `--check` 开关 —— 无参数即校验、`--write` 才重生成，少一个「忘了加 --check 就静默通过」的口子 |
 | P0-3 | `--init-config` | 新增 CLI 开关：按 `SHARD_FILES` 写 `proxy/runtime/payment` 三个分片，已存在则跳过；`--doctor` 在无配置时打印该命令 | 空目录跑一次 → 三个分片；再跑一次 → 全跳过 |
 | P0-4 | provider 端口化（有界切片） | 新增 `sms_tool/providers/ports.py`：`PoolWriterPort` / `ProgressPort`；`mailbox_gmail` / `mailbox_graph` 的 `apply_rotation` 与 `mailbox_remail` 的 `progress_dots_enabled` 改为端口注入；Rule 03 的 grep 扩到这两个模块 | `grep -rn "from \.\.\(mailbox_pool_writer\|desktop_ipc\)" sms_tool/providers/` 为空；`import_layer_ratchet` 收紧 |
 
@@ -162,11 +164,14 @@ allow 只有 2 条，各带 reason + owner。落地时先按「1 = 最内层」�
 保留为后续项；若要做，正确顺序是先把模块级状态收进一个 `config/_state.py` 并让测试改 patch 目标，
 再搬函数。
 
-### P2-4（`proxy_*` 迁移）— 已尝试并回滚
+### P2-4（`proxy_*` 迁移）— 已落地（`1b34697`）
 
-迁移本身可以机械完成（7 个模块 `git mv` 进 `sms_tool/proxy/`，`proxy_bridge`→`bridge` 等，
-~120 处引用由脚本改写，`import sms_tool.cli` 正常），但**没有一次跑绿**，因此整体回滚到
-`763e185`，不留半成品。未通过的门禁与原因，供下一次直接接续：
+7 个模块迁入 `sms_tool/proxy/`（`proxy_bridge`→`bridge`、`proxy_routing`→`routing` 等），
+~120 处引用由 `scripts/module_move.py` 改写，`root_module_ratchet` 冻结数 155 → 148，
+`dependency_graph` 仍为 **0 个 SCC**，`module coverage 302/302`。
+
+第一次尝试（2026-10-21）**没有一次跑绿**，整簇回滚到 `763e185`；回滚不是终点，它把五个
+门禁的耦合点暴露了出来，`module_move.py` 就是把这五点做成工具的产物。下表保留为工具的设计依据：
 
 | 门禁 | 现象 | 需要做的 |
 |---|---|---|
@@ -178,8 +183,9 @@ allow 只有 2 条，各带 reason + owner。落地时先按「1 = 最内层」�
 
 另外两个**不是**迁移引入、但会被 per-edit 检查报出来的既有债务（`pyright_baseline.json` 已冻结）：
 `sms_tool/accounts/account_liveness.py`（baseline 3）与 `sms_tool/proxy/bridge.py`（baseline 3）。
-迁移后 `bridge.py` 的 3 条已顺手修掉（`_close_server` 缺 `@staticmethod`、`upstream` 未收窄），
-`account_liveness` 用 `proxies: Any` 收窄到 0 —— 这两处修复也随回滚丢弃。
+第一次尝试时顺手修掉了 `bridge.py` 的 3 条（`_close_server` 缺 `@staticmethod`、`upstream` 未收窄）
+与 `account_liveness` 的 `proxies: Any`，但随回滚一并丢弃；它们仍是**未处理的既有债务**，
+不在本轮范围内。
 
 **教训**：迁移脚本必须把「门禁同步」当作迁移的一部分，而不是事后补 —— 五个门禁里有三个是
 **按模块名或行号硬编码**的，只改代码不改它们必然红。
@@ -205,21 +211,22 @@ allow 只有 2 条，各带 reason + owner。落地时先按「1 = 最内层」�
 
 `--check` 只校验 spec 并打印计划，不动树。
 
-**本轮实测**：`proxy` 簇用该工具一次跑完，8 个门禁全绿、`module coverage 302/302`、
-`dependency graph 0 cycles`、`pinned totals 278/35/11/45/205` 自动回写。全量测试从 11 红收敛到
-**1 红**：`tests/workbench/test_cli_one_click_sms.py::test_one_click_sms_forces_one_phone_per_email`
+**收尾过程**：`proxy` 簇第一次跑完时，8 个门禁全绿、`pinned totals` 自动回写，全量测试从 11 红
+收敛到 **1 红**：`tests/workbench/test_cli_one_click_sms.py::test_one_click_sms_forces_one_phone_per_email`
 —— 该用例直接调用 `cli._one_click_sms_max_reuse`，而这个全局由 `_load_helper_deps()` 填充；
-迁移后它在「先跑该用例」的顺序下拿到 `None`。根因未定位（`_load_helper_deps` 的调用点在
-`_load_light_deps` 与 `_payment_command_context`，二者都不在该用例路径上），所以整簇仍回滚，
-工具与 spec 保留。**下一步只需定位这一个调用序**，其余四个簇可直接用同一命令推进。
+迁移后它在「先跑该用例」的顺序下拿到 `None`。根因不在迁移本身，而是**用例依赖执行顺序**：
+`24ec800` 让用例自己解析 helper deps，不再靠「别的用例先跑过」；`04c3c19` 补齐工具的三个缺口
+（`architecture_scan` 的包名、`delayed_import_ratchet` 的键、`mailbox` spec）；`600ae5b` 让
+`delayed_import_ratchet` 按被分析树的实际路径解析目标。三笔修完，`1b34697` 把 `proxy` 簇落地。
 
-### 本轮未开始
+### 剩余未完成（2026-10-22 复核）
 
-`P2-4`…`P2-8`（`proxy_*` / `mailbox_*` / `paypal_*` / `payment_*` / `registration_*` 迁入子包）与
-`P3-1`（边界 spec 图）未开始。它们的共同前置已经就绪：层清单（P1-1）给出每个模块该去哪一层，
-生成式依赖图（P0-2）给出搬迁前后的边数对照，`root_module_ratchet --update-baseline` 是降冻结数的通道。
-每簇仍应单独一个提交，并在同一提交里更新 `import_layer_baseline.json`、`directory_map_groups.json`
-与 `docs/directory-map.md` 的 claim。
+`P1-2`（config 拆包，见 §8 的延后理由）、`P2-5`…`P2-8`（`mailbox_*` / `paypal_*` / `payment_*` /
+`registration_*` 迁入子包）与 `P3-1`（边界 spec 图）未开始。它们的共同前置已经就绪：层清单（P1-1）
+给出每个模块该去哪一层，生成式依赖图（P0-2）给出搬迁前后的边数对照，`module_move.py` 把
+「移动 + 改写 + 门禁同步 + 基线重生成 + 门禁验证」做成一条命令，`scripts/move_specs/mailbox.json`
+已备好。每簇仍应单独一个提交，并在同一提交里更新 `import_layer_baseline.json`、
+`directory_map_groups.json` 与 `docs/directory-map.md` 的 claim。
 
 ### P2-2（包门面惰性导出）
 
