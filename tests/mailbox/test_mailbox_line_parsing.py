@@ -72,7 +72,7 @@ class MailboxLineFormatTests(unittest.TestCase):
         for line in SAMPLE_LINES:
             with self.subTest(line=line):
                 account = parse_mailbox_pool_line(line, "sample", 1)
-                self.assertIsNotNone(account, f"{line!r} no longer parses at all")
+                assert account is not None, f"{line!r} no longer parses at all"
                 self.assertTrue(account.email, f"{line!r} parsed without an email")
                 self.assertTrue(account.provider)
 

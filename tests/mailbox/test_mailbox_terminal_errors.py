@@ -1,5 +1,6 @@
 import json
 from types import SimpleNamespace
+from typing import Any, cast
 from unittest.mock import Mock
 
 import pytest
@@ -24,7 +25,10 @@ def test_missing_inbox_stops_polling_and_cools_down(status, monkeypatch, isolate
     monkeypatch.setattr(icloud, "_request", request)
     for _ in range(2):
         with pytest.raises(MailboxEndpointUnavailableError):
-            _poll_otp_with_settle(lambda: icloud.fetch_icloud_url_messages(mailbox), timeout=300)
+            # The settle loop reads the *first* candidate; this provider returns a list.
+            _poll_otp_with_settle(
+                lambda: cast("dict[str, Any] | None", icloud.fetch_icloud_url_messages(mailbox)), timeout=300
+            )
     assert request.call_count == 1
     # The same credential may be probed again after the bounded cooldown.
     now = quarantine.time.time()

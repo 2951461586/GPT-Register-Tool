@@ -113,6 +113,7 @@ def test_retag_normalises_the_region_code_to_upper_case_and_rolls_back_equivalen
     back = retarget_region(ph, "VN")
     assert "country-VN" in back
     before, after = parse_proxy(ROLA_VN), parse_proxy(back)
+    assert before is not None and after is not None
     assert after.username.upper() == before.username.upper()
     assert (after.host, after.port, after.password) == (before.host, before.port, before.password)
 

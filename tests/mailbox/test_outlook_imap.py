@@ -1,7 +1,7 @@
 import unittest
 from email.message import EmailMessage
 
-from sms_tool import outlook_imap
+from sms_tool.providers import outlook_imap_client as outlook_imap
 
 
 class OutlookImapTests(unittest.TestCase):

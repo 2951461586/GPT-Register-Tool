@@ -21,13 +21,39 @@ from sms_tool.proxy.entry import (
 )
 
 
+def _parsed(raw: object, default_scheme: str = "http") -> ProxyEntry:
+    """``parse_proxy`` narrowed to a value: the assertions below read as data.
+
+    ``parse_proxy`` answers ``None`` for every rejected form, so a test that
+    dereferences the result has to say which case it is in.  Doing that once here
+    keeps the per-case assertions about the parser instead of about ``Optional``.
+    """
+    entry = parse_proxy(raw, default_scheme)
+    assert entry is not None
+    return entry
+
+
+def _entry(raw: object) -> ProxyEntry:
+    """``ProxyEntry.parse`` narrowed to a value (see :func:`_parsed`)."""
+    entry = ProxyEntry.parse(raw)
+    assert entry is not None
+    return entry
+
+
+def _chosen(pool, index: int | None = None) -> ProxyEntry:
+    """``choose_proxy_entry`` narrowed to a value (see :func:`_parsed`)."""
+    entry = choose_proxy_entry(pool, index=index)
+    assert entry is not None
+    return entry
+
+
 class TestParseProxy(unittest.TestCase):
     def test_empty_returns_none(self):
         self.assertIsNone(parse_proxy(""))
         self.assertIsNone(parse_proxy(None))
 
     def test_bare_4_segment(self):
-        e = parse_proxy("gate.kookeey.info:1000:user:pass-JP")
+        e = _parsed("gate.kookeey.info:1000:user:pass-JP")
         self.assertIsNotNone(e)
         self.assertEqual(e.host, "gate.kookeey.info")
         self.assertEqual(e.port, 1000)
@@ -37,30 +63,30 @@ class TestParseProxy(unittest.TestCase):
         self.assertEqual(proxy_to_url(e), "http://user:pass-JP@gate.kookeey.info:1000")
 
     def test_url_with_auth(self):
-        e = parse_proxy("http://user:pass@host:8080")
+        e = _parsed("http://user:pass@host:8080")
         self.assertEqual(e.host, "host")
         self.assertEqual(e.port, 8080)
         self.assertEqual(e.username, "user")
         self.assertEqual(e.password, "pass")
 
     def test_socks5_scheme_preserved(self):
-        e = parse_proxy("socks5h://u:p@h:1080")
+        e = _parsed("socks5h://u:p@h:1080")
         self.assertEqual(e.scheme, "socks5h")
         self.assertEqual(proxy_to_url(e), "socks5h://u:p@h:1080")
 
     def test_socks_alias_normalized(self):
-        e = parse_proxy("socks://u:p@h:1080")
+        e = _parsed("socks://u:p@h:1080")
         self.assertEqual(e.scheme, "socks5")
 
     def test_no_auth_host_port(self):
-        e = parse_proxy("1.2.3.4:9999")
+        e = _parsed("1.2.3.4:9999")
         self.assertEqual(e.host, "1.2.3.4")
         self.assertEqual(e.port, 9999)
         self.assertEqual(e.username, "")
         self.assertEqual(proxy_to_url(e), "http://1.2.3.4:9999")
 
     def test_socks_default_port(self):
-        e = parse_proxy("socks5://u:p@h")
+        e = _parsed("socks5://u:p@h")
         self.assertEqual(e.port, 1080)
 
     def test_http_without_port_returns_none(self):
@@ -75,36 +101,36 @@ class TestParseProxy(unittest.TestCase):
         self.assertIsNone(parse_proxy("user:pass@host"))  # implied http scheme
 
     def test_socks_defaults_port_across_all_forms(self):
-        self.assertEqual(parse_proxy("socks5://u:p@h").port, 1080)  # userinfo branch
-        self.assertEqual(parse_proxy("socks5://h").port, 1080)  # bare host branch
-        self.assertEqual(parse_proxy("socks5://[::1]").port, 1080)  # ipv6 branch
+        self.assertEqual(_parsed("socks5://u:p@h").port, 1080)  # userinfo branch
+        self.assertEqual(_parsed("socks5://h").port, 1080)  # bare host branch
+        self.assertEqual(_parsed("socks5://[::1]").port, 1080)  # ipv6 branch
 
     def test_port_zero_is_invalid(self):
         # Port 0 is never a real proxy port; a missing/zero http port stays
         # invalid and a zero socks port falls back to the socks default.
         self.assertIsNone(parse_proxy("http://host:0"))
-        self.assertEqual(parse_proxy("socks5://host:0").port, 1080)
+        self.assertEqual(_parsed("socks5://host:0").port, 1080)
 
     def test_userinfo_scheme_implied(self):
-        e = parse_proxy("user:pass@host:3128")
+        e = _parsed("user:pass@host:3128")
         self.assertEqual(e.scheme, "http")
         self.assertEqual(e.host, "host")
         self.assertEqual(e.port, 3128)
 
     def test_ipv6_bracketed_bare(self):
-        e = parse_proxy("[::1]:8080:u:p")
+        e = _parsed("[::1]:8080:u:p")
         self.assertEqual(e.host, "::1")
         self.assertEqual(e.port, 8080)
         self.assertEqual(e.username, "u")
         self.assertEqual(e.password, "p")
 
     def test_ipv6_url(self):
-        e = parse_proxy("http://[::1]:8080")
+        e = _parsed("http://[::1]:8080")
         self.assertEqual(e.host, "::1")
         self.assertEqual(e.port, 8080)
 
     def test_ipv6_url_with_auth(self):
-        e = parse_proxy("socks5://u:p@[::1]:1080")
+        e = _parsed("socks5://u:p@[::1]:1080")
         self.assertEqual(e.host, "::1")
         self.assertEqual(e.port, 1080)
         self.assertEqual(e.username, "u")
@@ -113,12 +139,12 @@ class TestParseProxy(unittest.TestCase):
         self.assertIsNone(parse_proxy("weird://host:1234"))
 
     def test_masked_does_not_leak_credentials(self):
-        e = parse_proxy("http://user:secret@host:8080")
+        e = _parsed("http://user:secret@host:8080")
         self.assertNotIn("secret", e.masked)
         self.assertNotIn("user", e.masked)
 
     def test_repr_no_credentials(self):
-        e = parse_proxy("http://user:secret@host:8080")
+        e = _parsed("http://user:secret@host:8080")
         self.assertNotIn("secret", repr(e))
         self.assertNotIn("user", repr(e))
 
@@ -151,10 +177,10 @@ class TestPoolAndChooser(unittest.TestCase):
 
     def test_choose_proxy_entry_by_index(self):
         pool = [ProxyEntry.parse("h1:1:u:p"), ProxyEntry.parse("h2:2:u:p")]
-        self.assertEqual(choose_proxy_entry(pool, index=0).host, "h1")
-        self.assertEqual(choose_proxy_entry(pool, index=1).host, "h2")
+        self.assertEqual(_chosen(pool, index=0).host, "h1")
+        self.assertEqual(_chosen(pool, index=1).host, "h2")
         # clamped / wrapped
-        self.assertEqual(choose_proxy_entry(pool, index=5).host, "h2")
+        self.assertEqual(_chosen(pool, index=5).host, "h2")
 
     @patch.dict(os.environ, {"PROXY_ENABLED": "1", "PROXY_POOL": "h1:1:u:p"}, clear=False)
     def test_build_proxy_config(self):
@@ -172,21 +198,21 @@ class TestPoolAndChooser(unittest.TestCase):
 
 class TestProxyEntryClass(unittest.TestCase):
     def test_parse_classmethod(self):
-        e = ProxyEntry.parse("socks5://1.2.3.4:1080")
+        e = _entry("socks5://1.2.3.4:1080")
         self.assertEqual(e.host, "1.2.3.4")
         self.assertEqual(e.port, 1080)
         self.assertEqual(e.scheme, "socks5")
 
     def test_is_socks(self):
-        self.assertTrue(ProxyEntry.parse("socks5://h:1080").is_socks)
-        self.assertFalse(ProxyEntry.parse("http://h:80").is_socks)
+        self.assertTrue(_entry("socks5://h:1080").is_socks)
+        self.assertFalse(_entry("http://h:80").is_socks)
 
     def test_url_property(self):
-        e = ProxyEntry.parse("host:8080:user:pass")
+        e = _entry("host:8080:user:pass")
         self.assertEqual(e.url, "http://user:pass@host:8080")
 
     def test_to_dict(self):
-        e = ProxyEntry.parse("host:8080:user:pass")
+        e = _entry("host:8080:user:pass")
         d = e.to_dict()
         self.assertEqual(d["host"], "host")
         self.assertEqual(d["port"], 8080)
@@ -307,7 +333,7 @@ class TestRolaCountryTemplate(unittest.TestCase):
     def test_credentials_survive_the_rotation(self):
         # The password contains ``^#``; hand-built URLs lose it to fragment
         # parsing, so this pins the ``ProxyEntry.url`` round trip.
-        entry = parse_proxy(rotate_session(self.PROXY))
+        entry = _parsed(rotate_session(self.PROXY))
         self.assertIsNotNone(entry)
         self.assertEqual(entry.password, "tWL^#B")
         self.assertEqual(entry.host, "gate.rola.vip")
@@ -389,7 +415,7 @@ class TestResolveProxyValue(unittest.TestCase):
         )
 
     def test_bare_credential_accepts_full_width_colons(self):
-        entry = parse_proxy("gate.example:8080：user：pass")
+        entry = _parsed("gate.example:8080：user：pass")
         self.assertEqual(entry.url, "http://user:pass@gate.example:8080")
 
     def test_pool_picks_first_usable(self):
@@ -428,7 +454,7 @@ def test_csharp_normalized_pool_entries_round_trip_through_proxy_entry():
     cases = json.loads(fixture.read_text(encoding="utf-8"))["cases"]
     assert cases
     for case in cases:
-        entry = parse_proxy(case["csharp_normalized"], default_scheme="socks5")
+        entry = _parsed(case["csharp_normalized"], default_scheme="socks5")
         assert entry is not None, case["name"]
         assert entry.scheme == case["scheme"], case["name"]
         assert entry.host == case["host"], case["name"]

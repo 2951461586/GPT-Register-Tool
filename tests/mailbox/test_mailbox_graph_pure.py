@@ -1,4 +1,10 @@
-"""Behaviour tests for ``sms_tool/mailbox_graph.py`` (2026-09-03, round 7).
+"""Behaviour tests for the Microsoft Graph mailbox provider (2026-09-03, round 7).
+
+Imported from ``sms_tool.providers.mailbox_graph`` -- the implementation --
+rather than the ``sms_tool/mailbox_graph.py`` facade.  The facade does
+``sys.modules[__name__] = _impl``, which makes them the *same module object* at
+runtime but leaves a static checker looking at a 5-line file that defines
+nothing.  The patch seam below is therefore still the real module attribute.
 
 39 lines, one function, **zero test coverage** -- and it sits on the mailbox auth
 path for every Microsoft-account mailbox.  The reason it matters is one line in
@@ -40,7 +46,7 @@ from __future__ import annotations
 import unittest
 from unittest import mock
 
-from sms_tool import mailbox_graph
+from sms_tool.providers import mailbox_graph
 
 DEFAULT_CLIENT_ID = "9e5f94bc-e8a4-4e73-b8be-63364c29d753"
 DEFAULT_SCOPE = "https://graph.microsoft.com/.default offline_access"
@@ -77,8 +83,10 @@ class _FakeRequests:
 class _Mailbox:
     """Only the four attributes the function actually reads/writes."""
 
-    def __init__(self, email="box@example.test", refresh_token="rt-1", token=None):
+    def __init__(self, email="box@example.test", refresh_token: str | None = "rt-1", token=None):
         self.email = email
+        # ``None`` is a real input: ``ms_oauth_refresh`` must reject it before
+        # any network call, and one of the guards below feeds exactly that.
         self.refresh_token = refresh_token
         self.access_token = ""
         if token is not None:

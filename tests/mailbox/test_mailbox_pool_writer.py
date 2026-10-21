@@ -28,7 +28,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from sms_tool import mailbox_gmail, mailbox_graph
+from sms_tool.providers import mailbox_gmail, mailbox_graph
 from sms_tool.mailbox_pool_writer import (
     STATUS_AMBIGUOUS,
     STATUS_DISABLED,
@@ -55,6 +55,10 @@ REMAIL_ROW = "remail://other@example.com---tok-1---ord-1---pid-1\n"
 
 class _Mailbox:
     """Only the attributes the write-back reads."""
+
+    #: Gmail's OAuth client id/secret pair, set by the gmail case below.
+    token: str | None = None
+    client_secret: str | None = None
 
     def __init__(self, email="box@example.com", refresh_token=OLD_RT, source=""):
         self.email = email

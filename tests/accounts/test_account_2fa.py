@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from typing import Any, cast
 
 from sms_tool.accounts import account_2fa
 from sms_tool.mailbox_types import MailboxAccount
@@ -101,7 +102,9 @@ def test_icloud_registration_reuses_mailbox_for_reauth_otp(monkeypatch):
 
     workflow = RegistrationEmailWorkflow(
         RegistrationStateMachine(lambda *args: None),
-        operations=Operations(),
+        # The stub carries only the two members this path reads; the real
+        # ``RegistrationOperations`` is a 40-field seam this test never enters.
+        operations=cast(Any, Operations()),
     )
     workflow.runtime.success = True
     workflow.runtime.access_token = "at"

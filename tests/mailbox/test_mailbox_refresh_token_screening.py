@@ -126,11 +126,12 @@ class ParserScreeningTests(unittest.TestCase):
 
     def test_a_short_token_is_kept_not_dropped(self):
         account = _parse_one(f"box@example.com---pw---{SHORT_RT}---at")
-        self.assertIsNotNone(account, "a short token must warn, not delete the mailbox")
+        assert account is not None, "a short token must warn, not delete the mailbox"
         self.assertEqual(account.refresh_token, SHORT_RT)
 
     def test_a_good_token_row_still_parses_with_every_field_intact(self):
         account = _parse_one(f"box@example.com---pw---{GOOD_MS_RT}---at")
+        assert account is not None
         self.assertEqual(account.email, "box@example.com")
         self.assertEqual(account.password, "pw")
         self.assertEqual(account.refresh_token, GOOD_MS_RT)
@@ -146,7 +147,7 @@ class ParserScreeningTests(unittest.TestCase):
         ):
             with self.subTest(line=line):
                 account = _parse_one(line)
-                self.assertIsNotNone(account)
+                assert account is not None
                 self.assertEqual(account.provider, provider)
 
 

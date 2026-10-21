@@ -5,8 +5,8 @@ from pathlib import Path
 
 APP_PATH = Path(__file__).resolve().parents[2] / "services" / "mail-otp-web" / "app.py"
 _spec = importlib.util.spec_from_file_location("mail_otp_web_app", APP_PATH)
+assert _spec is not None and _spec.loader is not None
 mail_otp_web_app = importlib.util.module_from_spec(_spec)
-assert _spec and _spec.loader
 _spec.loader.exec_module(mail_otp_web_app)
 
 

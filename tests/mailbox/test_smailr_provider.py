@@ -1,8 +1,9 @@
 from unittest.mock import patch
 
+from curl_cffi.const import CurlECode
 from curl_cffi.requests.exceptions import SSLError
 
-from sms_tool import mailbox_smailr
+from sms_tool.providers import mailbox_smailr
 from sms_tool.mailbox_parsers import _parse_mailbox_token_file
 from sms_tool.providers.smailr_client import SmailrClient, SmailrError, fetch_messages, poll_otp, _normalize_message
 
@@ -145,7 +146,7 @@ def test_smailr_poll_otp_falls_back_when_provider_subject_is_mojibake():
 
 
 def test_smailr_retries_tls_handshake_failure_before_create():
-    tls_error = SSLError("SSL_connect closed abruptly", 35)
+    tls_error = SSLError("SSL_connect closed abruptly", CurlECode.SSL_CONNECT_ERROR)
     response = FakeResponse({"data": {"id": "mb-1", "email": "otp@smailr.com"}}, 201)
 
     with (
