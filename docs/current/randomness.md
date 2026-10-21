@@ -30,7 +30,7 @@ Use `random` when the value only needs to be *varied*, not *unguessable*:
 | `sms_tool/auth_headers.py` `datadog_trace_headers` | `traceparent` / parent id | **`secrets.randbits(64)`** — echoed to OpenAI telemetry |
 | `sms_tool/auth_headers.py` `_device_profile_for` | screen/DPR/CPU choices | `random.Random(sha256(seed))` — deterministic fingerprint |
 | `sms_tool/auth_headers.py` `_auth_fingerprint` | profile pick | already `random.SystemRandom` |
-| `sms_tool/proxy_entry.py` `_random_session_id` | sticky proxy session id | **`secrets.choice`** — egress selection |
+| `sms_tool/proxy/entry.py` `_random_session_id` | sticky proxy session id | **`secrets.choice`** — egress selection |
 | `services/protocol-payment/pix/pix_core.py` `random_proxy_sid` | sticky proxy session id | **`secrets.choice`** |
 | `services/protocol-payment/direct_card/direct_card_extract.py` `new_proxy_session_id` | sticky proxy session id | **`secrets.randbelow`** |
 | `services/protocol-payment/common/provider_profile.py` `build_email` | buyer e-mail local part | `random` — presentation only |

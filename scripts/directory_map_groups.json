@@ -284,12 +284,7 @@
       "sms_tool/paypal_authorization_queue.py"
     ],
     "Proxy authority, lanes, health and bridge": [
-      "sms_tool/proxy_entry.py",
-      "sms_tool/proxy_routing.py",
-      "sms_tool/proxy_registry.py",
-      "sms_tool/proxy_health.py",
-      "sms_tool/proxy_bridge.py",
-      "sms_tool/proxy_edge_probe.py"
+      "sms_tool/proxy/*.py"
     ],
     "Proxy exit-geo resolution": [
       "sms_tool/geo/*.py"
@@ -299,14 +294,14 @@
       "sms_tool/http_client.py",
       "sms_tool/captcha_solver.py",
       "sms_tool/nodriver_captcha.py",
-      "sms_tool/proxy_pool.py",
       "sms_tool/promotion_states.py",
       "sms_tool/doctor.py",
       "sms_tool/utils.py",
       "sms_tool/timeouts.py",
       "sms_tool/driver_env.py",
       "sms_tool/operator_output.py",
-      "sms_tool/stdout_mirror.py"
+      "sms_tool/stdout_mirror.py",
+      "sms_tool/proxy/*.py"
     ],
     "Transport retry primitives": [
       "sms_tool/backoff.py"

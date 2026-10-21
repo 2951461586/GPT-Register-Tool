@@ -6,7 +6,7 @@ from typing import Mapping
 from .config import CFG
 from .backoff import bounded_cooldown, transport_backoff
 from .kernel.error_classification import is_terminal_registration_error
-from .proxy_edge_probe import EDGE_CHALLENGE, EDGE_UNKNOWN, edge_challenge_verdict
+from .proxy.edge_probe import EDGE_CHALLENGE, EDGE_UNKNOWN, edge_challenge_verdict
 from .kernel.sanitizer import sanitize_text
 
 

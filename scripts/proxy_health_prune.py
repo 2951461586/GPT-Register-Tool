@@ -26,11 +26,11 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from sms_tool import proxy_registry as proxy_registry  # noqa: E402
+from sms_tool.proxy import registry as proxy_registry  # noqa: E402
 from sms_tool.config import load_merged_config  # noqa: E402
 from sms_tool.cross_process_gate import cross_process_write_lock  # noqa: E402
 from sms_tool.kernel.paths import runtime_file  # noqa: E402
-from sms_tool.proxy_health import ProxyHealthTracker  # noqa: E402
+from sms_tool.proxy.health import ProxyHealthTracker  # noqa: E402
 
 
 def _endpoint_of(key: str) -> str:

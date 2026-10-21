@@ -1,4 +1,4 @@
-"""Unit tests for sms_tool.proxy_entry (unified proxy parser + pool loader)."""
+"""Unit tests for sms_tool.proxy.entry (unified proxy parser + pool loader)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import os
 import unittest
 from unittest.mock import patch
 
-from sms_tool.proxy_entry import (
+from sms_tool.proxy.entry import (
     ProxyEntry,
     build_proxy_config,
     choose_proxy_entry,

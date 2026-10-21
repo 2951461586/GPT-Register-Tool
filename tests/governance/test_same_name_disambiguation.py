@@ -49,7 +49,7 @@ SKIP_PARTS = {"dist", "runtime", "__pycache__", ".venv", "node_modules"}
 EXPECTED_DEFS = {
     "sms_tool/payment_routing.py": {"parse_proxy_pool": 1},
     "sms_tool/commands/payment.py": {"parse_proxy_pool": 1},
-    "sms_tool/proxy_routing.py": {"parse_lane_proxy_pool": 1, "parse_proxy_pool": 0},
+    "sms_tool/proxy/routing.py": {"parse_lane_proxy_pool": 1, "parse_proxy_pool": 0},
     "sms_tool/paypal_proxy.py": {"rotate_proxy_session": 1},
     "sms_tool/pp_link_helpers.py": {"rotate_proxy_session_id": 1, "rotate_proxy_session": 0},
     "services/protocol-payment/direct_card/direct_card_extract.py": {
@@ -71,7 +71,7 @@ ALL_NAMES = sorted({name for names in EXPECTED_DEFS.values() for name in names})
 # with it. ``gen_pp_link`` is a ``from .paypal_link import *`` facade, so it is
 # the cheapest proof that the ``__all__`` lists were updated too.
 EXPECTED_EXPORTS = [
-    ("sms_tool.proxy_routing", "parse_lane_proxy_pool"),
+    ("sms_tool.proxy.routing", "parse_lane_proxy_pool"),
     ("sms_tool.payment_routing", "parse_proxy_pool"),
     ("sms_tool.paypal_proxy", "rotate_proxy_session"),
     ("sms_tool.pp_link_helpers", "rotate_proxy_session_id"),
@@ -152,7 +152,7 @@ def _body(relpath: str, name: str) -> ast.FunctionDef:
 
 
 DIVERGENT_PAIRS = [
-    ("sms_tool/payment_routing.py", "parse_proxy_pool", "sms_tool/proxy_routing.py", "parse_lane_proxy_pool"),
+    ("sms_tool/payment_routing.py", "parse_proxy_pool", "sms_tool/proxy/routing.py", "parse_lane_proxy_pool"),
     ("sms_tool/paypal_proxy.py", "rotate_proxy_session", "sms_tool/pp_link_helpers.py", "rotate_proxy_session_id"),
     (
         "sms_tool/paypal_proxy.py",

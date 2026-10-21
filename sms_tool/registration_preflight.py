@@ -18,7 +18,7 @@ from . import endpoints
 from .http_client import request_with_retry
 from .accounts.account_liveness import CODEX_USAGE_URL
 from .phone_proxy import normalize_proxy_url, redact_proxy_url, refresh_proxy_sid
-from .proxy_edge_probe import BLOCKED, classify_edge_response
+from .proxy.edge_probe import BLOCKED, classify_edge_response
 from .sentinel.bundle import sentinel_version
 
 # ``auto`` keeps the historical mislabeled-provider correction; ``off`` pins the
@@ -74,7 +74,7 @@ def _preflight_login_page(cfg=None) -> str:
 
 def _with_proxy_scheme(proxy: str, scheme: str) -> str:
     """Re-render a proxy URL under a different scheme without string surgery."""
-    from .proxy_entry import parse_proxy, proxy_to_url
+    from .proxy.entry import parse_proxy, proxy_to_url
 
     entry = parse_proxy(proxy)
     return proxy_to_url(replace(entry, scheme=scheme)) if entry is not None else ""

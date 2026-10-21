@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from sms_tool.browser_pool import BrowserProcessPool
-from sms_tool.proxy_entry import rotate_session
+from sms_tool.proxy.entry import rotate_session
 from sms_tool.registration_drivers import external_sessions as es
 from sms_tool.registration_drivers.external_sessions import managed
 from sms_tool.registration_drivers.browser_flow import form_steps
@@ -23,7 +23,7 @@ def test_pool_annotations_resolve():
 def test_rotate_session_preserves_provider_template(separator):
     username = f"user{separator}sid{separator}Ab123{separator}t{separator}10"
     proxy = f"http://{username}:pass@proxy.example:8080"
-    with patch("sms_tool.proxy_entry._random_session_id", return_value="New12"):
+    with patch("sms_tool.proxy.entry._random_session_id", return_value="New12"):
         rotated = rotate_session(proxy)
     assert rotated == proxy.replace("Ab123", "New12")
 
@@ -87,7 +87,9 @@ def test_camoufox_keep_open_preserves_owned_profile(fake_camoufox):
         session.close()
         assert profile.exists()
     finally:
-        session.driver_config["keep_browser_open"] = False
+        driver_config = session.driver_config
+        assert isinstance(driver_config, dict), "driver_config must be mutable for this test"
+        driver_config["keep_browser_open"] = False
         session.close()
     assert not profile.exists()
 

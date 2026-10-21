@@ -4,7 +4,7 @@
 > The **number is a contract**: tests, scripts and other docs cite `Rule 13`,
 > so a renumbered rule is a broken reference, not a cosmetic change.
 
-- **Enforced by**: `grep -rn "^def \(parse_proxy\|rebuild_proxy_credentials\|retarget_region\|rotate_session\|infer_region\|infer_proxy_country\)(" sms_tool/` — `proxy_entry.py` only
+- **Enforced by**: `grep -rn "^def \(parse_proxy\|rebuild_proxy_credentials\|retarget_region\|rotate_session\|infer_region\|infer_proxy_country\)(" sms_tool/` — `proxy/entry.py` only
 - **Source section**: Proxy Routing Boundary
 
 ## Rule

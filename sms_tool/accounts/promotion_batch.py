@@ -42,8 +42,8 @@ from ..promotion_states import (
     payment_method_tokens,
     promotion_status_with_eligibility,
 )
-from ..proxy_edge_probe import DEAD, probe_openai_edge
-from ..proxy_routing import operation_proxy_candidates, parse_lane_proxy_pool
+from ..proxy.edge_probe import DEAD, probe_openai_edge
+from ..proxy.routing import operation_proxy_candidates, parse_lane_proxy_pool
 
 logger = logging.getLogger(__name__)
 

@@ -94,7 +94,7 @@ def _upi_retarget_region(proxy: Any, country: Any) -> str:
     if not value or not target or len(target) != 2:
         return value
     try:
-        from ..proxy_entry import retarget_region
+        from ..proxy.entry import retarget_region
 
         return str(retarget_region(value, target) or value)
     except Exception:

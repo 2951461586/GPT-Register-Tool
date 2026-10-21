@@ -36,7 +36,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from sms_tool.config import load_merged_config  # noqa: E402
-from sms_tool.proxy_edge_probe import (  # noqa: E402
+from sms_tool.proxy.edge_probe import (  # noqa: E402
     BLOCKED,
     CLEAN,
     DEAD,
@@ -45,8 +45,8 @@ from sms_tool.proxy_edge_probe import (  # noqa: E402
     EdgeVerdict,
     probe_openai_edge,
 )
-from sms_tool.proxy_registry import resolve_registration  # noqa: E402
-from sms_tool.proxy_routing import parse_lane_proxy_pool  # noqa: E402
+from sms_tool.proxy.registry import resolve_registration  # noqa: E402
+from sms_tool.proxy.routing import parse_lane_proxy_pool  # noqa: E402
 
 _ORDER = {CLEAN: 0, DEGRADED: 1, BLOCKED: 2, DEAD: 3}
 

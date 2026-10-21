@@ -10,8 +10,8 @@ from collections.abc import Mapping
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from .cross_process_gate import cross_process_write_lock
-from .kernel.paths import runtime_file
+from ..cross_process_gate import cross_process_write_lock
+from ..kernel.paths import runtime_file
 
 
 _FILE_LOCK = threading.Lock()

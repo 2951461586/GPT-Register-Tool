@@ -31,7 +31,7 @@ HEAVY_MODULES = (
     "sms_tool.commands.payment_links",
     "sms_tool.commands.registration",
     "sms_tool.gen_pp_link",
-    "sms_tool.proxy_routing",
+    "sms_tool.proxy.routing",
     "sms_tool.upi_link",
 )
 

@@ -120,7 +120,7 @@ Module ownership and responsibility per layer:
 | ⑤ Provider / persistence adapters&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `mailbox_service.py`, `mailbox_strategies.py`, `providers/` | Mailbox routing, capability resolution, polling policy, provider transport |
 | ⑤ Provider / persistence adapters&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `pay_link/`, `paypal/`, `paypal_link/`, `upi_link/` | Checkout contract, capability probe, wallets / GCash |
 | ⑤ Provider / persistence adapters&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `store/` | SQLite + Session JSON persistence and domain facts |
-| ⑤ Provider / persistence adapters&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `geo/`, `proxy_routing.py`, `fingerprint_pool.py` | Exit GeoIP and fingerprint binding |
+| ⑤ Provider / persistence adapters&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `geo/`, `proxy/routing.py`, `fingerprint_pool.py` | Exit GeoIP and fingerprint binding |
 
 `services/` holds optional local protocol services behind a subprocess boundary (`mail-otp-web` and `protocol-payment`); it is not one of the five layers.
 

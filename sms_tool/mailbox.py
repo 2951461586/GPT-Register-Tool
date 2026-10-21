@@ -337,7 +337,7 @@ def mailbox_proxy_candidates(proxy=None, runtime_config: ConfigInput = None):
     values = []
     # Optional canonical lane (``proxy.lanes.mailbox``) is authoritative when
     # present; absent, the legacy mailbox keys below are used unchanged.
-    from .proxy_routing import canonical_lane_pool
+    from .proxy.routing import canonical_lane_pool
 
     canonical = canonical_lane_pool(config, "mailbox")
     if canonical:

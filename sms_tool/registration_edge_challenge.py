@@ -28,8 +28,8 @@ from typing import TYPE_CHECKING, Any
 
 from .http_client import EDGE_CHALLENGE_HOOK_ATTR, clear_session_circuit
 from .operator_output import emit as _emit
-from .proxy_edge_probe import EDGE_UNKNOWN
-from .proxy_entry import rotate_session
+from .proxy.edge_probe import EDGE_UNKNOWN
+from .proxy.entry import rotate_session
 from .registration_flags import registration_flag
 from .kernel.sanitizer import describe_exception
 

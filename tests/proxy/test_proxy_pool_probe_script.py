@@ -21,7 +21,7 @@ if _spec is None or _spec.loader is None:
 probe_mod = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(probe_mod)
 
-from sms_tool.proxy_edge_probe import BLOCKED, CLEAN, DEAD, DEGRADED, EdgeVerdict  # noqa: E402
+from sms_tool.proxy.edge_probe import BLOCKED, CLEAN, DEAD, DEGRADED, EdgeVerdict  # noqa: E402
 
 
 def _verdict(proxy, status):

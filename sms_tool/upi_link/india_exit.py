@@ -15,10 +15,10 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 try:  # pragma: no cover - direct script execution
-    from ..proxy_edge_probe import CHATGPT_CHECKOUT_PATH
+    from ..proxy.edge_probe import CHATGPT_CHECKOUT_PATH
     from .env import _env_bool, _env_int, _float_env
 except ImportError:  # pragma: no cover
-    from proxy_edge_probe import CHATGPT_CHECKOUT_PATH  # type: ignore
+    from sms_tool.proxy.edge_probe import CHATGPT_CHECKOUT_PATH  # type: ignore
     from env import _env_bool, _env_int, _float_env  # type: ignore
 
 

@@ -76,7 +76,7 @@ def _redact_proxy_auth_text(value: Any) -> str:
 
 
 def _rebuild_proxy_url(parsed: Any, username: str, password: str) -> str:
-    from .proxy_entry import rebuild_proxy_credentials
+    from .proxy.entry import rebuild_proxy_credentials
 
     return rebuild_proxy_credentials(parsed, username, password)
 
@@ -86,7 +86,7 @@ def rotate_proxy_session(proxy: str, country: str = "") -> str:
 
     Thin wrapper over the single-authority ``proxy_entry.rotate_session``.
     """
-    from .proxy_entry import rotate_session
+    from .proxy.entry import rotate_session
 
     return rotate_session(normalize_proxy_url(proxy), country)
 
@@ -101,7 +101,7 @@ def infer_proxy_country(proxy: str) -> str:
     importers and ``patch("sms_tool.paypal_proxy.infer_proxy_country")`` targets
     keep working.
     """
-    from .proxy_entry import infer_proxy_country as _infer_proxy_country
+    from .proxy.entry import infer_proxy_country as _infer_proxy_country
 
     return _infer_proxy_country(proxy)
 

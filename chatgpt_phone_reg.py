@@ -1,4 +1,5 @@
 """Backward-compatible entrypoint for the modular sms_tool package."""
+
 from sms_tool.cli import main
 
 

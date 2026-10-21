@@ -359,7 +359,7 @@ def test_cli_registration_proxy_prefers_healthiest_via_tracker():
     import tempfile
     from pathlib import Path
 
-    from sms_tool.proxy_health import ProxyHealthTracker
+    from sms_tool.proxy.health import ProxyHealthTracker
 
     tracker = ProxyHealthTracker({}, path=Path(tempfile.mkdtemp()) / "h.json")
     bad, good = "http://bad:8080", "http://good:8080"
@@ -379,7 +379,7 @@ def test_cli_registration_proxy_fresh_tracker_keeps_input_order():
     import tempfile
     from pathlib import Path
 
-    from sms_tool.proxy_health import ProxyHealthTracker
+    from sms_tool.proxy.health import ProxyHealthTracker
 
     tracker = ProxyHealthTracker({}, path=Path(tempfile.mkdtemp()) / "h.json")
     bad, good = "http://bad:8080", "http://good:8080"
@@ -396,7 +396,7 @@ def test_cli_registration_proxy_single_candidate_skips_rank():
     import tempfile
     from pathlib import Path
 
-    from sms_tool.proxy_health import ProxyHealthTracker
+    from sms_tool.proxy.health import ProxyHealthTracker
 
     tracker = ProxyHealthTracker({}, path=Path(tempfile.mkdtemp()) / "h.json")
     only = "http://only:8080"
@@ -418,7 +418,7 @@ def test_cli_registration_proxy_single_candidate_skips_rank():
 def _tracker():
     import tempfile
 
-    from sms_tool.proxy_health import ProxyHealthTracker
+    from sms_tool.proxy.health import ProxyHealthTracker
 
     return ProxyHealthTracker({}, path=Path(tempfile.mkdtemp()) / "h.json")
 

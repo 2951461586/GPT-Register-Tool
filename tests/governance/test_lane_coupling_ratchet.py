@@ -46,7 +46,7 @@ def _package(tmp_path: Path, files: dict[str, str]) -> Path:
         "paypal_proxy.py": "",
         "payment_contracts.py": "",
         "payment_catalog.py": "",
-        "proxy_entry.py": "",
+        "proxy/entry.py": "",
         "phone_proxy.py": "",
         "auth_headers.py": "",
         "registration_handlers.py": "",
@@ -228,7 +228,7 @@ def test_the_fix_is_pinned_in_both_directions():
     assert ("sms_tool.registration_finalize", "sms_tool.paypal_proxy") not in found
     assert ("sms_tool.registration_drivers.browser_flow.orchestrator", "sms_tool.paypal_proxy") not in found
     assert ("sms_tool.commands.registration", "sms_tool.payment_operation") not in found
-    assert ("sms_tool.registration_handlers", "sms_tool.proxy_entry") in found
+    assert ("sms_tool.registration_handlers", "sms_tool.proxy.entry") in found
     assert ("sms_tool.commands.registration", "sms_tool.operation_journal") in found
 
 

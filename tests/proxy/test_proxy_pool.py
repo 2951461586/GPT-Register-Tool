@@ -1,4 +1,4 @@
-"""Unit tests for sms_tool.proxy_pool."""
+"""Unit tests for sms_tool.proxy.pool."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import struct
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from sms_tool.proxy_pool import (
+from sms_tool.proxy.pool import (
     _ATYP_DOMAIN,
     _ATYP_IPV4,
     _ATYP_IPV6,
@@ -23,7 +23,7 @@ from sms_tool.proxy_pool import (
     _http_connect_authority,
     _http_connect_handshake,
 )
-from sms_tool.proxy_health import ProxyHealthTracker
+from sms_tool.proxy.health import ProxyHealthTracker
 
 
 def _pick(server, **kwargs):

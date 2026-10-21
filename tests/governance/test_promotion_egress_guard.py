@@ -24,7 +24,7 @@ import json
 import pytest
 
 from sms_tool.accounts import promotion_batch
-from sms_tool.proxy_edge_probe import BLOCKED, CLEAN, DEAD, EdgeVerdict
+from sms_tool.proxy.edge_probe import BLOCKED, CLEAN, DEAD, EdgeVerdict
 
 
 def _verdict(status: str) -> EdgeVerdict:

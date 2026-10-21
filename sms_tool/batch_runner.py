@@ -16,7 +16,7 @@ from .phone_proxy import normalize_proxy_url, probe_proxy_with_scheme_detection,
 from .kernel.sanitizer import sanitize_text
 from .kernel.sanitizer import account_reference, mask_account
 from .diagnostics import safe_print
-from .proxy_health import ProxyHealthTracker
+from .proxy.health import ProxyHealthTracker
 from .registration_retry_guard import RegistrationRetryGuard, mailbox_registration_status
 from .registration_policy import registration_retry_decision
 from .registration_result import safe_proxy_audit

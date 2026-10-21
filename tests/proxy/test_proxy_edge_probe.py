@@ -1,4 +1,4 @@
-"""Contract tests for :mod:`sms_tool.proxy_edge_probe`.
+"""Contract tests for :mod:`sms_tool.proxy.edge_probe`.
 
 The probe exists because the SOCKS5 pool's tunnel-only health check cannot see a
 Cloudflare 403.  These tests pin the two properties an operator tool depends on:
@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 import pytest
 
-from sms_tool.proxy_edge_probe import (
+from sms_tool.proxy.edge_probe import (
     BLOCKED,
     CLEAN,
     DEAD,
@@ -148,7 +148,7 @@ def test_direct_probe_is_labelled_and_makes_no_proxy_claims():
 
 
 def _edge_health_with(verdict):
-    with patch("sms_tool.proxy_edge_probe.probe_openai_edge", return_value=verdict):
+    with patch("sms_tool.proxy.edge_probe.probe_openai_edge", return_value=verdict):
         return edge_health("http://u:p@h:1")
 
 

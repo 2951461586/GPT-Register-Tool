@@ -70,7 +70,7 @@ def test_pool_geo_is_applied_instead_of_the_template_guess():
             return_value=SimpleNamespace(size=1, next=lambda proxy: _profile()),
         ),
         patch("sms_tool.registration_handlers.set_auth_fingerprint") as set_fp,
-        patch("sms_tool.proxy_entry.infer_proxy_country", return_value="") as infer,
+        patch("sms_tool.proxy.entry.infer_proxy_country", return_value="") as infer,
     ):
         _apply_protocol_fingerprint(ops, {}, "http://user:pass@host:8080")
 
@@ -90,7 +90,7 @@ def test_falls_back_to_the_template_guess_when_the_pool_is_empty():
             "sms_tool.fingerprint_pool.shared_fingerprint_pool",
             return_value=SimpleNamespace(size=0, next=lambda proxy: None),
         ),
-        patch("sms_tool.proxy_entry.infer_proxy_country", return_value="JP"),
+        patch("sms_tool.proxy.entry.infer_proxy_country", return_value="JP"),
     ):
         _apply_protocol_fingerprint(ops, {}, "http://host:8080")
     assert ops.geo_calls == [("JP", {})]
@@ -100,7 +100,7 @@ def test_falls_back_when_the_pool_raises():
     ops = _RecordingOps()
     with (
         patch("sms_tool.fingerprint_pool.shared_fingerprint_pool", side_effect=RuntimeError("pool unavailable")),
-        patch("sms_tool.proxy_entry.infer_proxy_country", return_value="US"),
+        patch("sms_tool.proxy.entry.infer_proxy_country", return_value="US"),
     ):
         _apply_protocol_fingerprint(ops, {}, "http://host:8080")
     assert ops.geo_calls[0][0] == "US"

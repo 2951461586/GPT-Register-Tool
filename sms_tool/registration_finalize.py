@@ -19,7 +19,7 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any
 
-from . import proxy_entry as _proxy_entry
+from .proxy import entry as _proxy_entry
 from . import registration_checkpoint
 from . import token_telemetry as _token_telemetry
 from .auth_headers import current_auth_fingerprint

@@ -1,4 +1,4 @@
-"""Tests for the unified proxy-pool registry (``sms_tool.proxy_registry``).
+"""Tests for the unified proxy-pool registry (``sms_tool.proxy.registry``).
 
 The registry fronts three resolvers that are deliberately different (Rule 19);
 what these tests pin is the *facade* contract:
@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import pytest
 
-from sms_tool import proxy_registry as pr
+from sms_tool.proxy import registry as pr
 
 
 def test_endpoints_of_dedupes_and_keeps_non_proxy_entries():

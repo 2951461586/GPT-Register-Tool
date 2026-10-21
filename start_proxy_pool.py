@@ -29,9 +29,9 @@ import signal
 import sys
 
 from sms_tool.phone_proxy import redact_proxy_url
-from sms_tool.proxy_edge_probe import edge_health
-from sms_tool.proxy_health import ProxyHealthTracker
-from sms_tool.proxy_pool import Socks5Server, UPSTREAM_SCHEMES, UpstreamProxy
+from sms_tool.proxy.edge_probe import edge_health
+from sms_tool.proxy.health import ProxyHealthTracker
+from sms_tool.proxy.pool import Socks5Server, UPSTREAM_SCHEMES, UpstreamProxy
 
 logger = logging.getLogger("proxy_pool")
 

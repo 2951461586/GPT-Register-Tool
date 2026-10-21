@@ -276,15 +276,15 @@ def test_summary_facts_are_pinned():
     """
     totals = ilr.analyze(ROOT).totals()
     assert totals == {
-        "total_module_edges": 264,
-        "ordered_pairs": 28,
-        "mutual_pairs": 10,
-        "minority_edges": 42,
+        "total_module_edges": 281,
+        "ordered_pairs": 35,
+        "mutual_pairs": 11,
+        "minority_edges": 45,
         # 2026-10-21: 188 -> 190 when the provider ports seam (providers/ports.py)
         # took over the mailbox_pool_writer and desktop_ipc imports as delayed
         # ones. Before that, 190 -> 188 when store/connection.py stopped
         # importing the sms_tool.storage shell inside _init_cache_key/_connect.
-        "delayed_cross_dir_edges": 190,
+        "delayed_cross_dir_edges": 205,
         # Imports under `if TYPE_CHECKING:` never run, so they are not runtime
         # edges. All eleven in the tree today are same-directory, hence 0 here;
         # the metric exists so a cross-directory one is visible rather than silent.

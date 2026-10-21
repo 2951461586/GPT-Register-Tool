@@ -16,7 +16,7 @@ from urllib.parse import unquote, urlsplit
 
 from ..fingerprint_pool import shared_fingerprint_pool
 from ..phone_proxy import normalize_proxy_url
-from ..proxy_entry import infer_region, rebuild_proxy_credentials
+from ..proxy.entry import infer_region, rebuild_proxy_credentials
 
 
 IDENTITY_VERSION = 1

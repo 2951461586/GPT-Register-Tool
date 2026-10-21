@@ -184,7 +184,7 @@ The three egress lanes resolve through three deliberately different modules
 | mailbox / OTP | `mailbox._mailbox_proxy_candidates` | `mailbox_proxy` / `mailbox_proxy_pool` |
 | payment | `payment_routing` + per-method sections | `protocol_payments.proxy_pools`, `<method>.stage_proxies` |
 
-`sms_tool/proxy_registry.py` is the single read/manage surface over all three
+`sms_tool/proxy/registry.py` is the single read/manage surface over all three
 (`resolve` / `census`, credential-free). It **fronts** the resolvers; it does
 not replace them.
 

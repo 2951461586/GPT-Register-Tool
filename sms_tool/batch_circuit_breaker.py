@@ -3,7 +3,7 @@
 The per-account machinery already knows when a *single* registration should not
 be retried (:class:`~sms_tool.registration_retry_guard.RegistrationRetryGuard`)
 and when a *single* proxy is unhealthy
-(:class:`~sms_tool.proxy_health.ProxyHealthTracker`). Neither one can see the
+(:class:`~sms_tool.proxy.health.ProxyHealthTracker`). Neither one can see the
 pattern that actually destroys a batch: when the environment dies -- the proxy
 pool goes down, or the signup page changes shape -- every account fails the same
 way, and the batch walks through the entire mailbox list before anyone notices.

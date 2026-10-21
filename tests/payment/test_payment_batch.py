@@ -148,7 +148,7 @@ class PaymentBatchTests(unittest.TestCase):
             "promotion_proxy": base,
             "stage_proxy_countries": {"checkout": "US", "promotion": "JP"},
         }
-        with patch("sms_tool.proxy_entry._random_session_id", side_effect=["New11111", "New22222"]):
+        with patch("sms_tool.proxy.entry._random_session_id", side_effect=["New11111", "New22222"]):
             result = payment_batch._cell_payment_kwargs(values, {}, base)
 
         self.assertIn("region-US-sid-New11111", result["checkout_proxy"])

@@ -300,7 +300,7 @@ class CamoufoxBrowserSession(ConnectedPlaywrightSession):
         closer = None
         using_bridge = False
         if raw_proxy:
-            from ...proxy_bridge import proxy_for_browser, needs_bridge
+            from ...proxy.bridge import proxy_for_browser, needs_bridge
 
             using_bridge = needs_bridge(raw_proxy)
             browser_proxy, closer = proxy_for_browser(raw_proxy)

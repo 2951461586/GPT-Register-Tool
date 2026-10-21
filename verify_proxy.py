@@ -4,7 +4,7 @@
 两种探测回答两个不同的问题：
 
 * 默认（连通性 + 出口地理）：``ipinfo.io`` 显示代理能否连出去、出口在哪。
-* ``--chatgpt``：额外用 :mod:`sms_tool.proxy_edge_probe` 匿名 GET ChatGPT 登录边缘
+* ``--chatgpt``：额外用 :mod:`sms_tool.proxy.edge_probe` 匿名 GET ChatGPT 登录边缘
   —— 这才回答“这个出口会不会被 Cloudflare 403 拦截”，也是注册真正需要的信号。
   ``ipinfo`` 能连通不等于 ChatGPT 边缘放行。
 
@@ -23,7 +23,7 @@ import requests
 
 from sms_tool.config import load_merged_config
 from sms_tool.phone_proxy import redact_proxy_url
-from sms_tool.proxy_edge_probe import CLEAN, DEFAULT_CHAT_BASE, probe_openai_edge
+from sms_tool.proxy.edge_probe import CLEAN, DEFAULT_CHAT_BASE, probe_openai_edge
 
 
 def test_proxy(proxy_url, test_url="https://ipinfo.io/json"):

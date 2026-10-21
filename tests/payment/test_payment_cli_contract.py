@@ -402,7 +402,7 @@ def test_explicit_proxy_resolver_failure_is_not_swallowed():
     )
 
     with patch(
-        "sms_tool.proxy_entry.resolve_proxy_value",
+        "sms_tool.proxy.entry.resolve_proxy_value",
         side_effect=RuntimeError("resolver unavailable"),
     ):
         with pytest.raises(RuntimeError, match="resolver unavailable"):

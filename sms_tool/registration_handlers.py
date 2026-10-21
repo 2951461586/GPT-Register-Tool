@@ -25,7 +25,7 @@ from typing import Any, Callable, Mapping
 from . import endpoints, registration_checkpoint
 from . import fingerprint_pool as _fingerprint_pool
 from . import mailbox_service as _mailbox_service
-from . import proxy_entry as _proxy_entry
+from .proxy import entry as _proxy_entry
 from . import registration_account_stages as _account_stages
 from . import registration_concurrency as _registration_concurrency
 from . import registration_edge_challenge as _edge_challenge

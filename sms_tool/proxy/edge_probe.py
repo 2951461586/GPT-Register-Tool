@@ -41,7 +41,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
-from .phone_proxy import normalize_proxy_url, redact_proxy_url
+from ..phone_proxy import normalize_proxy_url, redact_proxy_url
 
 CLEAN = "clean"
 BLOCKED = "blocked"
@@ -252,7 +252,7 @@ def edge_challenge_verdict(response: Any, *, body_limit: int = 4096) -> str:
     # sms_tool/accounts`` edge that ``scripts/import_layer_ratchet.py`` freezes
     # (9 pairs); that ratchet's own failure text names a function-local import
     # as the remedy, which is also how ``payment_auth`` reaches the package.
-    from .accounts.account_terminal import text_has_account_deactivated
+    from ..accounts.account_terminal import text_has_account_deactivated
 
     if text_has_account_deactivated(body):
         return EDGE_NOT_CHALLENGE

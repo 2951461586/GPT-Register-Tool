@@ -293,7 +293,7 @@ def _try_nodriver_pay(
     # Normalize proxy: bridge credential/http(s) upstreams to a local socks5h
     # endpoint the browser can consume; also restores remote-DNS semantics.
     # Two dots - `proxy_bridge` is in `sms_tool/`, see the note above.
-    from ..proxy_bridge import proxy_for_browser
+    from ..proxy.bridge import proxy_for_browser
 
     nd_proxy, close_bridge = proxy_for_browser(proxy)
 
@@ -362,7 +362,7 @@ def _try_browser_pay(
     # Normalize proxy: bridge credential/http(s) upstreams to a local socks5h
     # endpoint the browser can consume; also restores remote-DNS semantics.
     # Two dots - `proxy_bridge` is in `sms_tool/`, see the note above.
-    from ..proxy_bridge import proxy_for_browser
+    from ..proxy.bridge import proxy_for_browser
 
     browser_proxy, close_bridge = proxy_for_browser(proxy)
 

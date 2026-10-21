@@ -33,7 +33,7 @@ from .. import payment_egress
 from ..checkout_contract import browser_profile_for_country
 from ..payment_wire import CURRENCY_MAP
 from ..payment_routing import parse_proxy_pool, payment_proxy_pools
-from ..proxy_entry import retarget_region
+from ..proxy.entry import retarget_region
 from ..config import CFG
 from .. import storage
 from ..promotion_states import (

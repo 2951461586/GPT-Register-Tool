@@ -22,7 +22,7 @@
 | --- | --- | --- |
 | 阶段顺序 / 状态组 / 重试与错误分类 | `registration-architecture.md` | `registration_handlers.py`、`registration_policy.py`、`failure_registry.py` |
 | 端点、请求体、Sentinel 契约 | `protocol-registration.md` | `auth_flow/`、`sentinel/` |
-| 代理串解析、车道选择、驱动→池映射 | `registration-and-proxy-architecture.md` | `proxy_entry.py`、`proxy_routing.py` |
+| 代理串解析、车道选择、驱动→池映射 | `registration-and-proxy-architecture.md` | `proxy/entry.py`、`proxy/routing.py` |
 | 取消 / 并发 / 恢复流程 | `registration-recovery.md` | `registration_cancel.py`、`registration_concurrency.py` |
 | A/B 开关与判定口径 | `registration-ab-runbook.md` | `config.example.json` 中对应开关 |
 

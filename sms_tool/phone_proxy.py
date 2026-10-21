@@ -111,7 +111,7 @@ def normalize_proxy_url(proxy: str | None, default_scheme: str = "http") -> str:
     # Delegate to the unified, single-authority parser first; fall back to the
     # historical permissive logic (e.g. http proxy without a port) when the
     # strict parser refuses (returns None) so behaviour stays backward-compatible.
-    from .proxy_entry import parse_proxy, proxy_to_url
+    from .proxy.entry import parse_proxy, proxy_to_url
 
     entry = parse_proxy(value, default_scheme=default_scheme)
     if entry is not None:
@@ -186,7 +186,7 @@ def redact_proxy_text(value: Any, proxy: str | None = None) -> str:
 
 
 def _rebuild_proxy_url(parsed: Any, username: str, password: str) -> str:
-    from .proxy_entry import rebuild_proxy_credentials
+    from .proxy.entry import rebuild_proxy_credentials
 
     return rebuild_proxy_credentials(parsed, username, password)
 
@@ -197,7 +197,7 @@ def match_proxy_region(proxy: str, iso_code: str) -> str:
     Thin wrapper over the single-authority ``proxy_entry.retarget_region`` after
     normalizing to canonical URL form.
     """
-    from .proxy_entry import retarget_region
+    from .proxy.entry import retarget_region
 
     return retarget_region(normalize_proxy_url(proxy), iso_code)
 
@@ -207,7 +207,7 @@ def refresh_proxy_sid(proxy: str) -> str:
 
     Thin wrapper over the single-authority ``proxy_entry.rotate_session``.
     """
-    from .proxy_entry import rotate_session
+    from .proxy.entry import rotate_session
 
     normalized = normalize_proxy_url(proxy)
     if not normalized:

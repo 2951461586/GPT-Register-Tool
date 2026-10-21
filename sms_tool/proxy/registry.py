@@ -41,8 +41,8 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from .proxy_entry import parse_proxy, proxy_to_url
-from .proxy_routing import canonical_lane_pool, canonical_payment_pools, parse_lane_proxy_pool, proxy_pool_for
+from .entry import parse_proxy, proxy_to_url
+from .routing import canonical_lane_pool, canonical_payment_pools, parse_lane_proxy_pool, proxy_pool_for
 
 __all__ = [
     "LANES",
@@ -123,7 +123,7 @@ def resolve_mailbox(config: Mapping[str, Any] | None, *, operation_proxy: str | 
     # to an empty pool rather than raising.  Live polling still uses mailbox's
     # own resolver, not this facade.
     try:
-        from .mailbox import mailbox_proxy_candidates  # lazy: pulls provider adapters
+        from ..mailbox import mailbox_proxy_candidates  # lazy: pulls provider adapters
 
         return parse_lane_proxy_pool(mailbox_proxy_candidates(operation_proxy, config))
     except Exception:
@@ -188,7 +188,7 @@ def resolve_payment(config: Mapping[str, Any] | None, *, method: str = "paypal")
         regions_source = "proxy.lanes.payment"
 
     stages: dict[str, list[str]] = {}
-    from .payment_routing import payment_proxy_pools  # lazy: pulls the payment catalog
+    from ..payment_routing import payment_proxy_pools  # lazy: pulls the payment catalog
 
     try:
         stages = {str(name): pool for name, pool in payment_proxy_pools(cfg, method).items() if pool}

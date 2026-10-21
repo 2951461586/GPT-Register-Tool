@@ -210,7 +210,7 @@ def _registration_proxy_lane(registration_driver: object = None) -> str:
 
 
 def _configured_registration_proxy(registration_driver: object = None, tracker=None) -> str:
-    from .proxy_routing import proxy_pool_for
+    from .proxy.routing import proxy_pool_for
 
     _raw_proxy_cfg: object = CFG.get("proxy")
     proxy_cfg: dict = _raw_proxy_cfg if isinstance(_raw_proxy_cfg, dict) else {}
@@ -228,7 +228,7 @@ def _configured_registration_proxy(registration_driver: object = None, tracker=N
         # shared ProxyHealthTracker instead of always pinning the first. On a fresh
         # tracker (no health data) rank() preserves input order, so behaviour is
         # unchanged for a single-account run that has never recorded failures.
-        from .proxy_health import ProxyHealthTracker
+        from .proxy.health import ProxyHealthTracker
 
         if len(values) > 1:
             tracker = tracker or ProxyHealthTracker(CFG)
@@ -247,7 +247,7 @@ def _apply_registration_proxy_defaults(args) -> None:
 
 
 def _proxy_pool_values(args) -> list[str]:
-    from .proxy_routing import proxy_pool_for
+    from .proxy.routing import proxy_pool_for
 
     raw = str(getattr(args, "proxy_pool", "") or "").strip()
     values = [item.strip() for item in re.split(r"[\r\n,;]+", raw) if item.strip()]

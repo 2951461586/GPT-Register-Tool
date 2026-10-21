@@ -37,7 +37,7 @@ from ..promotion_states import (
     PROMOTION_STATE_TRIAL_ELIGIBLE,
     PROMOTION_STATE_UNKNOWN,
 )
-from ..proxy_routing import select_operation_proxy_candidate
+from ..proxy.routing import select_operation_proxy_candidate
 
 ACCOUNTS_CHECK_PATH = "/backend-api/accounts/check/v4-2023-04-27"
 ACCOUNTS_CHECK_URL = f"https://chatgpt.com{ACCOUNTS_CHECK_PATH}"

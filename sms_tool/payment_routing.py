@@ -10,8 +10,8 @@ from typing import Any
 
 from .payment_catalog import PAYMENT_METHODS, normalize_payment_method
 from .payment_flow import PaymentStage, STAGE_ORDER, normalize_payment_stage, payment_flow_profile
-from .proxy_entry import parse_proxy_list, resolve_proxy_value
-from .proxy_routing import canonical_payment_pools
+from .proxy.entry import parse_proxy_list, resolve_proxy_value
+from .proxy.routing import canonical_payment_pools
 
 
 LEGACY_STAGE_KEYS: dict[str, tuple[str, ...]] = {

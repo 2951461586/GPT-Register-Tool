@@ -10,7 +10,7 @@ The HTTP side matters because every residential provider we buy hands out
 dial and exited with "no upstreams configured" on a perfectly good pool file.
 
 Usage:
-    from sms_tool.proxy_pool import Socks5Server, UpstreamProxy
+    from sms_tool.proxy.pool import Socks5Server, UpstreamProxy
     server = Socks5Server("127.0.0.1", 18080, upstreams)
     asyncio.run(server.run())
 """
@@ -31,7 +31,7 @@ from datetime import datetime, timezone
 from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .proxy_health import ProxyHealthTracker
+    from .health import ProxyHealthTracker
 
 logger = logging.getLogger("proxy_pool")
 
@@ -117,7 +117,7 @@ class UpstreamProxy:
         ``127.0.0.1:1080`` upstream, which is exactly the failure a pool
         server must refuse loudly instead of serving.
         """
-        from .proxy_entry import parse_proxy
+        from .entry import parse_proxy
 
         entry = parse_proxy(url, default_scheme="socks5")
         if entry is None:

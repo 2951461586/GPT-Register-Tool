@@ -147,7 +147,7 @@ _ALLOWED_DISCARD_SITES = {
 
 # ``set.discard()`` calls that merely share the method name.
 _EXEMPT_DISCARD_SITES = {
-    ("sms_tool/proxy_pool.py", "_active_tasks"),
+    ("sms_tool/proxy/pool.py", "_active_tasks"),
 }
 
 

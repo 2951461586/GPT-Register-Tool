@@ -23,7 +23,7 @@ from .wham_usage import format_wham_usage_label, parse_wham_usage
 from ..auth_headers import auth_impersonate, chatgpt_headers
 from ..config import CFG
 from ..phone_proxy import normalize_proxy_url, redact_proxy_url as _redact_proxy_url
-from ..proxy_routing import (
+from ..proxy.routing import (
     proxy_pool_for,
     select_operation_proxy,
     select_operation_proxy_candidate,
@@ -206,7 +206,10 @@ def probe_account_liveness(
     if account_id:
         headers["Chatgpt-Account-Id"] = account_id
     normalized_proxy = normalize_proxy_url(resolved_proxy)
-    proxies = {"http": normalized_proxy, "https": normalized_proxy} if normalized_proxy else None
+    # ``Any`` on purpose: curl_cffi's ``ProxySpec`` is a ``TypedDict`` that a plain
+    # ``dict[str, str]`` is not assignable to, while the runtime accepts it (same
+    # narrowing as ``account_promotion``'s quota probe).
+    proxies: Any = {"http": normalized_proxy, "https": normalized_proxy} if normalized_proxy else None
 
     # When a browser fetch callable is provided, route the probe through the
     # browser context to carry the real fingerprint and cookies.  This bypasses

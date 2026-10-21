@@ -1,4 +1,4 @@
-"""Unit tests for sms_tool.proxy_bridge (local SOCKS5 bridge lifecycle)."""
+"""Unit tests for sms_tool.proxy.bridge (local SOCKS5 bridge lifecycle)."""
 
 from __future__ import annotations
 
@@ -7,13 +7,13 @@ import time
 import unittest
 from unittest.mock import patch
 
-from sms_tool.proxy_bridge import (
+from sms_tool.proxy.bridge import (
     LocalProxyBridge,
     async_proxy_for_browser,
     needs_bridge,
     proxy_for_browser,
 )
-from sms_tool.proxy_entry import parse_proxy
+from sms_tool.proxy.entry import parse_proxy
 
 
 class TestLocalProxyBridgeLifecycle(unittest.TestCase):
@@ -45,7 +45,7 @@ class TestLocalProxyBridgeLifecycle(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             bridge.start()
 
-    @patch("sms_tool.proxy_bridge.LocalProxyBridge._connect_upstream")
+    @patch("sms_tool.proxy.bridge.LocalProxyBridge._connect_upstream")
     def test_start_stop_does_not_connect_upstream(self, mock_connect):
         bridge = LocalProxyBridge(upstream=self.upstream)
         try:

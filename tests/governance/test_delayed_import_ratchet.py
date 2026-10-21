@@ -89,7 +89,7 @@ def test_reason_is_derived_for_documented_cycles():
     assert classify("sms_tool/payment_catalog.py", "sms_tool.checkout_contract") == "cycle"
     assert classify("sms_tool/sentinel/client.py", "sms_tool.sentinel_tokens") == "cycle"
     # The five-module cycle's lazy edge.
-    assert classify("sms_tool/proxy_routing.py", "sms_tool.accounts.account_identity") == "cycle"
+    assert classify("sms_tool/proxy/routing.py", "sms_tool.accounts.account_identity") == "cycle"
 
 
 def test_reason_is_startup_for_the_cli_seam():

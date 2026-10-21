@@ -79,6 +79,7 @@ DOCUMENTED_CYCLES: frozenset[tuple[str, str]] = frozenset(
         ("paypal_proxy", "payment_routing"),
         ("sentinel_tokens", "client"),
         ("client", "sentinel_tokens"),
+        ("routing", "account_identity"),
         # The five-module cycle: account_identity -> fingerprint_pool ->
         # paypal_proxy -> payment_routing -> proxy_routing -> account_identity.
         ("proxy_routing", "account_identity"),

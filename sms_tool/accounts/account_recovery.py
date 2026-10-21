@@ -23,7 +23,7 @@ from .account_liveness import browser_fetch_for_account, probe_account_liveness
 from .account_terminal import text_has_account_deactivated
 from ..config import CFG
 from ..http_client import is_transient_transport_error
-from ..proxy_routing import proxy_pool_for
+from ..proxy.routing import proxy_pool_for
 from ..kernel.paths import runtime_file
 from ..registration_state import _stored_registration_password
 from ..storage import (

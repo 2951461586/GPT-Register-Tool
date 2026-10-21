@@ -11,8 +11,8 @@ single unified bridge covers all common cases.
 
 Usage::
 
-    from sms_tool.proxy_entry import parse_proxy
-    from sms_tool.proxy_bridge import LocalProxyBridge
+    from sms_tool.proxy.entry import parse_proxy
+    from sms_tool.proxy.bridge import LocalProxyBridge
 
     with LocalProxyBridge(upstream=parse_proxy("host:port:user:pass")) as bridge:
         browser_url = bridge.local_url   # "socks5h://127.0.0.1:12345"
@@ -30,8 +30,8 @@ import threading
 from dataclasses import dataclass, field
 from typing import Any
 
-from .proxy_entry import ProxyEntry, _SOCKS_DEFAULT_PORT, _normalize_scheme
-from .proxy_pool import (
+from .entry import ProxyEntry, _SOCKS_DEFAULT_PORT, _normalize_scheme
+from .pool import (
     _ATYP_DOMAIN,
     _ATYP_IPV4,
     _ATYP_IPV6,
@@ -151,6 +151,7 @@ class LocalProxyBridge:
             return self._port
         if self.upstream is None:
             raise RuntimeError("proxy_bridge: no upstream proxy configured")
+        upstream = self.upstream
 
         ready = threading.Event()
         failure: list[BaseException] = []
@@ -173,7 +174,7 @@ class LocalProxyBridge:
                     "proxy_bridge listening on %s:%s -> upstream %s (sync)",
                     self.listen_host,
                     self._port,
-                    self.upstream.masked,
+                    upstream.masked,
                 )
                 ready.set()
                 inner.run_forever()
@@ -250,6 +251,7 @@ class LocalProxyBridge:
             except Exception:  # pragma: no cover - defensive
                 pass
 
+    @staticmethod
     async def _close_server(server: asyncio.Server) -> None:
         server.close()
         await server.wait_closed()
@@ -461,7 +463,7 @@ def needs_bridge(proxy: Any) -> bool:
     Bridging is needed when the proxy is absent (no), carries credentials, or
     is http(s) — all of which a browser cannot consume directly as a SOCKS proxy.
     """
-    from .proxy_entry import parse_proxy
+    from .entry import parse_proxy
 
     if not str(proxy or "").strip():
         return False
@@ -479,7 +481,7 @@ def proxy_for_browser(proxy: Any, *, env_prefix: str = "PROXY") -> tuple[str, An
     ``closer()`` stops any bridge that was started (no-op if none).  The caller
     must invoke ``closer()`` when the browser session is finished.
     """
-    from .proxy_entry import parse_proxy
+    from .entry import parse_proxy
 
     value = str(proxy or "").strip()
     if not value:
@@ -503,7 +505,7 @@ async def async_proxy_for_browser(proxy: Any, *, env_prefix: str = "PROXY") -> t
 
     ``closer`` is an awaitable coroutine function that stops the bridge.
     """
-    from .proxy_entry import parse_proxy
+    from .entry import parse_proxy
 
     value = str(proxy or "").strip()
     if not value:

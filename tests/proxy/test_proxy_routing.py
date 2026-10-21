@@ -1,4 +1,4 @@
-from sms_tool.proxy_routing import (
+from sms_tool.proxy.routing import (
     operation_proxy_candidates,
     proxy_pool_for,
     select_operation_proxy,

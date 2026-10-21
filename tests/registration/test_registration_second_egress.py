@@ -33,7 +33,7 @@ from sms_tool.browser_fingerprint_pool import (
 )
 from sms_tool.fingerprint_pool import FingerprintPool
 from sms_tool.geo.profiles import MARKET_PROFILES
-from sms_tool.proxy_entry import infer_region, parse_proxy, retarget_region
+from sms_tool.proxy.entry import infer_region, parse_proxy, retarget_region
 
 # 三条**真实池模板**（照抄 proxy.json 的拼写，含各自的地区标签与密码形态）。
 NINEHTTP_VN = "http://SYNTHACCT10-geo-VN-sid-mwT3-ttl-5:SYNTHETIC_PASSWORD_1@global.9http.com:9091"

@@ -63,7 +63,7 @@ def workflow(monkeypatch, payload=None):
     )
     w._run_stage = Mock()
     monkeypatch.setattr(MailboxService, "create", Mock())
-    monkeypatch.setattr("sms_tool.proxy_entry.infer_proxy_country", lambda value: "")
+    monkeypatch.setattr("sms_tool.proxy.entry.infer_proxy_country", lambda value: "")
     return w
 
 

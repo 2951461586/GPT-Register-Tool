@@ -419,7 +419,7 @@ def run_one(
     )
     from sms_tool.codex_oauth import _mailbox_from_data
     from sms_tool.config import CFG
-    from sms_tool.proxy_routing import operation_proxy_candidates
+    from sms_tool.proxy.routing import operation_proxy_candidates
     from sms_tool.session_refresh import _auth_session_email
     from sms_tool.sentinel_tokens import _set_oai_did_cookie
 
@@ -594,7 +594,7 @@ def _pool_rejects_credentials(explicit_proxy: str = "", timeout: float = 12.0) -
         from curl_cffi import requests as curl_requests
 
         from sms_tool.config import CFG
-        from sms_tool.proxy_routing import operation_proxy_candidates
+        from sms_tool.proxy.routing import operation_proxy_candidates
 
         candidates = [
             c.proxy

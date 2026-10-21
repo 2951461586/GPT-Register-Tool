@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Print the unified proxy-pool census (credential-free).
 
-Resolves every egress lane through :mod:`sms_tool.proxy_registry` -- the single
+Resolves every egress lane through :mod:`sms_tool.proxy.registry` -- the single
 facade over the registration, mailbox and payment resolvers -- and prints the
 distinct ``host:port`` endpoints.  Credentials are never printed.
 
@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from sms_tool import proxy_registry as proxy_registry  # noqa: E402
+from sms_tool.proxy import registry as proxy_registry  # noqa: E402
 from sms_tool.config import load_merged_config  # noqa: E402
 
 

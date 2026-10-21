@@ -23,8 +23,8 @@
 | 反爬 Token | `sms_tool/sentinel_tokens.py` + `sms_tool/sentinel/` | 真实 Node SDK 执行 + 缓存 + DID 一致性 |
 | 预检 + 协议纠正 | `sms_tool/registration_preflight.py` | 边界探活 + socks5↔http 纠错 |
 | 注册门面 | `sms_tool/registration.py` | 编排入口（对外暴露 helper，不含实现） |
-| 代理单一范式 | `sms_tool/proxy_entry.py` | 解析 / 重建凭据 / 地区重定 / 会话轮换 |
-| 代理路由 | `sms_tool/proxy_routing.py` | 按 lane 选池 + 单向回退 |
+| 代理单一范式 | `sms_tool/proxy/entry.py` | 解析 / 重建凭据 / 地区重定 / 会话轮换 |
+| 代理路由 | `sms_tool/proxy/routing.py` | 按 lane 选池 + 单向回退 |
 | 指纹池（协议路径） | `sms_tool/fingerprint_pool.py` | `ProtocolEnvironmentProfile` + `FingerprintPool` 单例 |
 | 指纹池（浏览器路径） | `sms_tool/browser_fingerprint_pool.py` | 7 硬件档案 + 出口地理对齐（4 个浏览器驱动共享） |
 | 浏览器进程池 | `sms_tool/browser_pool.py` | 常驻进程池（支持池化的浏览器驱动共享，非每驱动独立） |
@@ -112,9 +112,9 @@ Sentinel 不是纯 Python PoW，而是调用**真实 Node SDK**：
 | ② 邮箱/OTP 代理 | OTP 轮询收件 | `mailbox_proxy` / `mailbox_proxy_pool` 优先；`email_registration.mailbox_proxy_fallback_to_operation_proxy=true` 时把本次 operation proxy 追加为故障回退 |
 | ③ 协议支付代理 | Checkout/Approve | **随用户选择的 checkout/approve 出口动态选择**：取 `protocol_payments.methods.<method>.checkout_proxy_pool` / `approve_proxy_pool` 持有的候选池（如 IPWO US/JP/GB），**非固定 JP/US/GB 混用** |
 
-- **按 lane 选池**：`proxy_pool_for()`（`proxy_routing.py:85`）返回 lane 专属池 + 单向回退。已知 lane：`browser_registration`、`protocol_registration`、`liveness`、`promotion`、`health_browser`。
-- **统一操作代理候选**：`select_operation_proxy()`（`proxy_routing.py:266`）按显式输入、可选 registration affinity、operation pool 和文档化回退取首项，并保留非敏感来源标签。
-- **统一读面 / 可选单一声明点**：`proxy_registry.py` 是三条 lane 的唯一 façade（`resolve` / `census`，凭据永不输出），提供 `scripts/proxy_census.py` 一键普查。可选段 `proxy.lanes` 存在时对匹配 lane **权威**，缺省则完全走旧键；三条实路径（`proxy_pool_for`、`mailbox._mailbox_proxy_candidates`、`PaymentRoutePlanner._named_pools`）均已接通。详见 `PROXY_GUIDE.md` 的 *Unified Proxy Registry*。
+- **按 lane 选池**：`proxy_pool_for()`（`proxy/routing.py:85`）返回 lane 专属池 + 单向回退。已知 lane：`browser_registration`、`protocol_registration`、`liveness`、`promotion`、`health_browser`。
+- **统一操作代理候选**：`select_operation_proxy()`（`proxy/routing.py:266`）按显式输入、可选 registration affinity、operation pool 和文档化回退取首项，并保留非敏感来源标签。
+- **统一读面 / 可选单一声明点**：`proxy/registry.py` 是三条 lane 的唯一 façade（`resolve` / `census`，凭据永不输出），提供 `scripts/proxy_census.py` 一键普查。可选段 `proxy.lanes` 存在时对匹配 lane **权威**，缺省则完全走旧键；三条实路径（`proxy_pool_for`、`mailbox._mailbox_proxy_candidates`、`PaymentRoutePlanner._named_pools`）均已接通。详见 `PROXY_GUIDE.md` 的 *Unified Proxy Registry*。
 
 > 实战含义：本地用 Clash/代理软件把 `127.0.0.1:7897` 作为 OTP 收件专用出口，注册与支付各走独立上游；不要把同一个 session 出口同时喂给注册和健康探测。
 
@@ -122,21 +122,21 @@ Sentinel 不是纯 Python PoW，而是调用**真实 Node SDK**：
 
 ## 6. ProxyEntry 单一范式与动态轮换
 
-代理字符串操作**只有一个权威来源**：`sms_tool/proxy_entry.py`。`phone_proxy` 与 `paypal_proxy` 的 `refresh_proxy_sid` / `match_proxy_region` / `retarget_proxy_country` 等都是**薄封装**，归一化后委托给 `proxy_entry`，保证同一供应商代理在不同流程中轮换方式完全一致。
+代理字符串操作**只有一个权威来源**：`sms_tool/proxy/entry.py`。`phone_proxy` 与 `paypal_proxy` 的 `refresh_proxy_sid` / `match_proxy_region` / `retarget_proxy_country` 等都是**薄封装**，归一化后委托给 `proxy_entry`，保证同一供应商代理在不同流程中轮换方式完全一致。
 
-- **单一模型**：`ProxyEntry` frozen dataclass（`proxy_entry.py:68`）—— 全项目的规范代理表示。
-- **六形式解析**：`parse_proxy()`（`proxy_entry.py:129`）处理 6 种代理 URL 写法。
+- **单一模型**：`ProxyEntry` frozen dataclass（`proxy/entry.py:68`）—— 全项目的规范代理表示。
+- **六形式解析**：`parse_proxy()`（`proxy/entry.py:129`）处理 6 种代理 URL 写法。
 - **重建 / 重定 / 轮换**：
-  - `rebuild_proxy_credentials()`（`proxy_entry.py:385`）
-  - `retarget_region()`（`proxy_entry.py:406`）—— 重定出口地区
-  - `rotate_session()`（`proxy_entry.py:441`）—— 刷新 sticky session id
+  - `rebuild_proxy_credentials()`（`proxy/entry.py:385`）
+  - `retarget_region()`（`proxy/entry.py:406`）—— 重定出口地区
+  - `rotate_session()`（`proxy/entry.py:441`）—— 刷新 sticky session id
 - **供应商模板**：
   - **Cliproxy**：username `region-XX` + `-sid-<id>-t-<n>`
   - **9http / 9proxy**：username `geo-XX` + `-sid-<id>-ttl-<n>`。地区标签是 `geo` 而非 `region`，`_INFER_USER_REGION_RE` / `_USER_REGION_RE` 同时接受两种拼写；**重定地区时保留原标签**，否则 `geo-VN` 会被改写成供应商不认的 `region-US`。
   - **IPWO**：`custom_zone_XX`
   - **rola**：username `..._<sid>-country-XX`。地区标签是 `country`，`_REGION_TAG` 必须包含它，否则重定与会话轮换对它**静默 no-op**；`_ROLA_SID_RE` 用 lookbehind 取 `_` 与 `-country-XX` 之间的 sid。国家码**大小写不敏感**（实测 `country-US` 拿到 US 出口），重定后会被规范成大写。
   - **Kookeey**：password `BASE-CC-SESSION-TTL`，TTL 单位 `\d+[smhd]` 超集
-- **选池**：`load_proxy_pool()`（`proxy_entry.py:548`）/ `choose_proxy_entry()`（`proxy_entry.py:614`）。
+- **选池**：`load_proxy_pool()`（`proxy/entry.py:548`）/ `choose_proxy_entry()`（`proxy/entry.py:614`）。
 - **脱敏**：`masked` 去除凭据，日志/报告只显示脱敏串。
 - **池形态约束（以 `proxy.json` 为准）**：
   🔴 **2026-09-22 现状：单地区 VN、lajiao 10 条。** `proxy.registration` /
@@ -167,7 +167,7 @@ Sentinel 不是纯 Python PoW，而是调用**真实 Node SDK**：
 
   <details><summary>历史（2026-09-13 / 09-17 的 VN 与 IPWO 实测，保留供追溯）</summary>
 
-  顶层 `proxy.registration` / `default` / `pool` 曾是 **30 条**，三家供应商混编。**主出口 VN（20 条）**：9http（`global.9http.com:9091`，`geo-VN` 模板，10 条）与 IPWO（`us.ipwo.net:7878`，`custom_zone_VN` 模板，10 条），出口实测落在 FPT Telecom / VNPT / Viettel 等本地 ISP；**第二出口 PH（10 条）**：rola（`gate.rola.vip:2000`，`country-PH` 模板）。加第二出口的原因是原池 30 条**地区维度零冗余（全是 VN）**，一个地区被拒即整批同时死；⚠️ 注意别把「主机有三家」当成冗余——主机维度确实有冗余，**地区维度没有**。🔴 **2026-09-13 实测（用活跃池凭据，已推翻上一版的保留意见）**：`us.ipwo.net:7878` 用**活跃池里的** `custom_zone_VN` 凭据在 CONNECT 阶段回 `403 {"code":403,"msg":"access denied,china IP is not allow"}`——被拒的是**本机自己的中国出口 IP**（响应头 `X-Client-Remote-Addr: 115.197.164.253`），与地区标签、账号余额、凭据有效性都无关 ⇒ 这条出口**从这台机器上不可能通**，除非先经非中国 IP 中转。`global.9http.com:9091` 则是 TCP 连通后**在 `recv` 阶段被 RST**（明文与 TLS 包裹结果相同、无任何 HTTP 响应）⇒ 不是 scheme/端口错配；原因无法坐实，**推断**同为客户端 IP 封锁。结论：**当前唯一可用出口是 rola PH**，所以"VN 主 / PH 备"在实际可用性上是反的——这也正是加第二出口的价值所在。要判定活跃池健康度请用 `runtime/_probe_egress_regions.py` 实测（它会按 `(host, 声明地区)` 分组抽测并对账）。`proxy.registration` / `default` 仍指向 9http 的 VN 条目，所以 VN 保持主出口，PH 靠 `ProxyHealthTracker` 的健康排序在主出口冷却时才被优先选中。**PH 的地理档案已一并补齐**：手改 **3 处**——规范表 `geo/profiles.MARKET_PROFILES`（`en-PH` / `Asia/Manila`）+ `browser_fingerprint_pool.COUNTRY_LOCALE_PROFILE_MAP["PH"]="ph"` + `TIMEZONE_NAME_BY_IANA["Asia/Manila"]="Singapore Standard Time"`（Windows 无菲律宾专属时区，走 CLDR）；`auth_headers._GEO_PROFILES` 与 `BROWSER_LOCALE_PROFILES` 是**派生视图，自动生效**。缺任一手改项都会静默降级：协议路径回退 UTC、浏览器路径回退 `'us'` 档案，出现"菲律宾出口 + 美国指纹"。对账手段见 `runtime/_probe_egress_regions.py`（实测地区 vs 凭据声明）与 `registration.fingerprint_pool.verify_hint`。协议支付 / PayPal 的 `checkout_proxy_pool`、`approve_proxy_pool`、`proxies`、`stage_proxy_pools`、`proxy_pool` **仍按用户选择的 checkout/approve 出口动态选取**（候选为 IPWO US/JP/GB，见 §7 代理 lane 表），**不是固定 JP/US/GB 混用**，且**不随注册池切换到 VN**。**Kookeey（`gate.kookeey.info`）只保留在支付方法的 `stage_proxies` / 单方法 `proxy` 字段**（各 payment method 的 stage 拉取那一步），不参与注册与 checkout/approve；`direct_card` 等仍通过同一 ProxyEntry 模板规则旋转 Kookeey sticky 密码。**Cliproxy 用户名处理（`region-XX`）在 `proxy_entry.py` 中仍保留**，但未配置 Cliproxy URL，属未启用状态。
+  顶层 `proxy.registration` / `default` / `pool` 曾是 **30 条**，三家供应商混编。**主出口 VN（20 条）**：9http（`global.9http.com:9091`，`geo-VN` 模板，10 条）与 IPWO（`us.ipwo.net:7878`，`custom_zone_VN` 模板，10 条），出口实测落在 FPT Telecom / VNPT / Viettel 等本地 ISP；**第二出口 PH（10 条）**：rola（`gate.rola.vip:2000`，`country-PH` 模板）。加第二出口的原因是原池 30 条**地区维度零冗余（全是 VN）**，一个地区被拒即整批同时死；⚠️ 注意别把「主机有三家」当成冗余——主机维度确实有冗余，**地区维度没有**。🔴 **2026-09-13 实测（用活跃池凭据，已推翻上一版的保留意见）**：`us.ipwo.net:7878` 用**活跃池里的** `custom_zone_VN` 凭据在 CONNECT 阶段回 `403 {"code":403,"msg":"access denied,china IP is not allow"}`——被拒的是**本机自己的中国出口 IP**（响应头 `X-Client-Remote-Addr: 115.197.164.253`），与地区标签、账号余额、凭据有效性都无关 ⇒ 这条出口**从这台机器上不可能通**，除非先经非中国 IP 中转。`global.9http.com:9091` 则是 TCP 连通后**在 `recv` 阶段被 RST**（明文与 TLS 包裹结果相同、无任何 HTTP 响应）⇒ 不是 scheme/端口错配；原因无法坐实，**推断**同为客户端 IP 封锁。结论：**当前唯一可用出口是 rola PH**，所以"VN 主 / PH 备"在实际可用性上是反的——这也正是加第二出口的价值所在。要判定活跃池健康度请用 `runtime/_probe_egress_regions.py` 实测（它会按 `(host, 声明地区)` 分组抽测并对账）。`proxy.registration` / `default` 仍指向 9http 的 VN 条目，所以 VN 保持主出口，PH 靠 `ProxyHealthTracker` 的健康排序在主出口冷却时才被优先选中。**PH 的地理档案已一并补齐**：手改 **3 处**——规范表 `geo/profiles.MARKET_PROFILES`（`en-PH` / `Asia/Manila`）+ `browser_fingerprint_pool.COUNTRY_LOCALE_PROFILE_MAP["PH"]="ph"` + `TIMEZONE_NAME_BY_IANA["Asia/Manila"]="Singapore Standard Time"`（Windows 无菲律宾专属时区，走 CLDR）；`auth_headers._GEO_PROFILES` 与 `BROWSER_LOCALE_PROFILES` 是**派生视图，自动生效**。缺任一手改项都会静默降级：协议路径回退 UTC、浏览器路径回退 `'us'` 档案，出现"菲律宾出口 + 美国指纹"。对账手段见 `runtime/_probe_egress_regions.py`（实测地区 vs 凭据声明）与 `registration.fingerprint_pool.verify_hint`。协议支付 / PayPal 的 `checkout_proxy_pool`、`approve_proxy_pool`、`proxies`、`stage_proxy_pools`、`proxy_pool` **仍按用户选择的 checkout/approve 出口动态选取**（候选为 IPWO US/JP/GB，见 §7 代理 lane 表），**不是固定 JP/US/GB 混用**，且**不随注册池切换到 VN**。**Kookeey（`gate.kookeey.info`）只保留在支付方法的 `stage_proxies` / 单方法 `proxy` 字段**（各 payment method 的 stage 拉取那一步），不参与注册与 checkout/approve；`direct_card` 等仍通过同一 ProxyEntry 模板规则旋转 Kookeey sticky 密码。**Cliproxy 用户名处理（`region-XX`）在 `proxy/entry.py` 中仍保留**，但未配置 Cliproxy URL，属未启用状态。
   
   </details>
 - **配置真源提醒**：`config.json` 在 `proxy.json` / `runtime.json` / `payment.json` 任一分片存在时即退化为 legacy 死文件（`config.py:163-181`），且其 `proxy.registration` 仍是历史的 100 条列表形态，与分片不一致。**改代理只改 `proxy.json`**。
@@ -195,7 +195,7 @@ Sentinel 不是纯 Python PoW，而是调用**真实 Node SDK**：
 
 | Lane | 选取入口 | 落地池（config 键） | 备注 |
 | --- | --- | --- | --- |
-| 注册（全部 6 驱动） | `proxy_pool_for(config, "protocol_registration"` / `"browser_registration")`（`proxy_routing.py:40`） | `proxy.registration` + `proxy.pool` → 回退 `proxy.default`（现为 **10 条 rola `country-in`**） | `browser_registration` 先查 `browser_pool`/`browser_registration_pool` 别名，空则回退注册主池（`proxy_routing.py:53`、`:68`）。**两条注册路径共用同一个池**，且活体/健康 lane 也回退到它——改注册池会连带改变健康探测出口 |
+| 注册（全部 6 驱动） | `proxy_pool_for(config, "protocol_registration"` / `"browser_registration")`（`proxy/routing.py:40`） | `proxy.registration` + `proxy.pool` → 回退 `proxy.default`（现为 **10 条 rola `country-in`**） | `browser_registration` 先查 `browser_pool`/`browser_registration_pool` 别名，空则回退注册主池（`proxy/routing.py:53`、`:68`）。**两条注册路径共用同一个池**，且活体/健康 lane 也回退到它——改注册池会连带改变健康探测出口 |
 | 邮箱/OTP | `mailbox._mailbox_proxy_candidates` | `mailbox_proxy` → `mailbox_proxy_pool` → 可选 operation proxy | mailbox 配置保持第一优先；operation proxy 仅在开关启用时作为尾部故障回退 |
 | 协议支付 | 方法配置 `protocol_payments.methods.<method>.checkout_proxy_pool` / `approve_proxy_pool`（`config.json:650` 起） | **随用户选择的 checkout/approve 出口动态选择**，候选池形如 IPWO US/JP/GB | **不是固定 JP/US/GB 混用**（见 §6 池形态约束更正） |
 | 活体/推广/健康 | `operation_proxy_candidates(...)` / `select_operation_proxy(...)` | 显式输入 → 可选 registration affinity → operation pool → 文档化回退 | 候选来源随诊断记录；调用方不得自行重排 |
@@ -263,14 +263,14 @@ WPF 桌面端（`SmsWorkbench/`）通过 `PythonBackendClient` 启动 `python -m
 | `OPENAI_SENTINEL_BACKEND` | `sentinel/client.py:59`（默认 `node_runner`） | Sentinel 后端选择 |
 | `_get_cached_sentinel` / `_save_sentinel_cache` | `sentinel_tokens.py:79` / `:97` | 线程安全缓存 |
 | `_sentinel_device_id` / `assert_sentinel_device_id` | `sentinel_tokens.py:136` / `:148` | DID 一致性 |
-| `proxy_pool_for` | `proxy_routing.py:85` | 按 lane 选池 + 单向回退 |
-| `select_operation_proxy` | `proxy_routing.py:266` | 从统一候选序列选择操作代理 |
-| `ProxyEntry` | `proxy_entry.py:68` | 规范代理模型 |
-| `parse_proxy` | `proxy_entry.py:129` | 6 形式解析 |
-| `rebuild_proxy_credentials` | `proxy_entry.py:385` | 凭据重建 |
-| `retarget_region` | `proxy_entry.py:406` | 地区重定 |
-| `rotate_session` | `proxy_entry.py:441` | 会话轮换 |
-| `load_proxy_pool` / `choose_proxy_entry` | `proxy_entry.py:548` / `:614` | 选池 |
+| `proxy_pool_for` | `proxy/routing.py:85` | 按 lane 选池 + 单向回退 |
+| `select_operation_proxy` | `proxy/routing.py:266` | 从统一候选序列选择操作代理 |
+| `ProxyEntry` | `proxy/entry.py:68` | 规范代理模型 |
+| `parse_proxy` | `proxy/entry.py:129` | 6 形式解析 |
+| `rebuild_proxy_credentials` | `proxy/entry.py:385` | 凭据重建 |
+| `retarget_region` | `proxy/entry.py:406` | 地区重定 |
+| `rotate_session` | `proxy/entry.py:441` | 会话轮换 |
+| `load_proxy_pool` / `choose_proxy_entry` | `proxy/entry.py:548` / `:614` | 选池 |
 | `registration_network_preflight` | `registration_preflight.py:139` | 边界探活 |
 | `_resolve_proxy_scheme` | `registration_preflight.py:105` | socks5↔http 纠错 |
 | `shared_fingerprint_pool` | `fingerprint_pool.py:345` | 协议路径指纹池单例 |

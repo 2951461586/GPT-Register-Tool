@@ -133,7 +133,7 @@ def _explicit_proxy_arg(args: Any) -> str | None:
     if not raw or not getattr(args, "proxy_explicit", False):
         return None
 
-    from ..proxy_entry import resolve_proxy_value
+    from ..proxy.entry import resolve_proxy_value
 
     resolved = resolve_proxy_value(raw)
     if not resolved:

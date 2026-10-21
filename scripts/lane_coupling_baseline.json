@@ -75,7 +75,7 @@
     "sms_tool.desktop_read",
     "sms_tool.fingerprint_pool",
     "sms_tool.operation_journal",
-    "sms_tool.proxy_registry",
+    "sms_tool.proxy.registry",
     "sms_tool.store.markers",
     "sms_tool.store.normalize"
   ],

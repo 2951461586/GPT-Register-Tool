@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit
 
-from .phone_proxy import normalize_proxy_url
+from ..phone_proxy import normalize_proxy_url
 
 
 def parse_lane_proxy_pool(value: Any) -> list[str]:
@@ -175,7 +175,7 @@ def _saved_registration_proxy(
     if not (_use_registration_affinity(config) and isinstance(account, Mapping) and account.get("identity_context")):
         return ""
     try:
-        from .accounts.account_identity import resolve_account_proxy
+        from ..accounts.account_identity import resolve_account_proxy
 
         return normalize_proxy_url(resolve_account_proxy(account, config=config) or "") or ""
     except Exception:

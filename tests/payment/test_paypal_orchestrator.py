@@ -487,7 +487,7 @@ def test_try_nodriver_pay_closes_the_proxy_bridge_even_on_success(monkeypatch):
     fake_mod = types.SimpleNamespace(
         proxy_for_browser=lambda proxy: ("socks5://127.0.0.1:1", lambda: closed.append(True))
     )
-    monkeypatch.setitem(sys.modules, "sms_tool.proxy_bridge", fake_mod)
+    monkeypatch.setitem(sys.modules, "sms_tool.proxy.bridge", fake_mod)
 
     nodriver = types.SimpleNamespace(run_nodriver_pay=lambda **k: {"ok": True})
     monkeypatch.setitem(sys.modules, "sms_tool.nodriver_paypal", nodriver)
@@ -515,7 +515,7 @@ def test_try_nodriver_pay_closes_the_proxy_bridge_even_when_the_run_raises(monke
     fake_mod = types.SimpleNamespace(
         proxy_for_browser=lambda proxy: ("socks5://127.0.0.1:1", lambda: closed.append(True))
     )
-    monkeypatch.setitem(sys.modules, "sms_tool.proxy_bridge", fake_mod)
+    monkeypatch.setitem(sys.modules, "sms_tool.proxy.bridge", fake_mod)
 
     def _boom(**k):
         raise RuntimeError("nodriver exploded")

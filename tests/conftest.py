@@ -208,7 +208,7 @@ def _no_real_promotion_preflight(request, monkeypatch):
         return
 
     from sms_tool.accounts import promotion_batch
-    from sms_tool.proxy_edge_probe import CLEAN, EdgeVerdict
+    from sms_tool.proxy.edge_probe import CLEAN, EdgeVerdict
 
     monkeypatch.setattr(
         promotion_batch,

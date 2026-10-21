@@ -28,13 +28,13 @@ try:  # pragma: no cover - direct script execution
 except ImportError:
     from geo.resolver import resolve_proxy_geo  # type: ignore
 try:  # pragma: no cover - direct script execution
-    from ..proxy_edge_probe import CHATGPT_CHECKOUT_PATH, probe_openai_edge
+    from ..proxy.edge_probe import CHATGPT_CHECKOUT_PATH, probe_openai_edge
 except ImportError:
-    from proxy_edge_probe import CHATGPT_CHECKOUT_PATH, probe_openai_edge  # type: ignore
+    from sms_tool.proxy.edge_probe import CHATGPT_CHECKOUT_PATH, probe_openai_edge  # type: ignore
 try:  # pragma: no cover - direct script execution
-    from ..proxy_entry import rotate_session
+    from ..proxy.entry import rotate_session
 except ImportError:
-    from proxy_entry import rotate_session  # type: ignore
+    from sms_tool.proxy.entry import rotate_session  # type: ignore
 from typing import Any
 from collections.abc import Mapping
 from types import SimpleNamespace

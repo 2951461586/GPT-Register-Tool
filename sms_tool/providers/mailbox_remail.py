@@ -20,7 +20,7 @@ from ..mailbox_types import MailboxAccount
 from ..kernel.paths import project_path, runtime_file
 from ..kernel.sanitizer import mask_otp
 from ..phone_proxy import redact_proxy_url
-from ..proxy_health import ProxyHealthTracker
+from ..proxy.health import ProxyHealthTracker
 from . import ports
 from typing import Any
 

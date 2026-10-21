@@ -21,12 +21,12 @@ from ... import (
     browser_fingerprint_pool,
     chatgpt_bootstrap,
     mailbox as mailbox_pkg,
-    proxy_entry,
     registration_outcome,
     registration_progress,
     registration_result,
     storage,
 )
+from ...proxy import entry as proxy_entry
 from ...accounts import account_identity
 from ...mailbox_service import MailboxService
 from ...phone_proxy import redact_proxy_text
