@@ -7,7 +7,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
-from sms_tool import registration
+from sms_tool.registration import orchestrator as registration
 from sms_tool import phone_config, phone_pool, phone_provider_lifecycle, phone_reuse
 from sms_tool import sms_providers
 from sms_tool.phone_reuse import (

@@ -1,7 +1,7 @@
 """Batch-level circuit breaker for environment failures (P2-2).
 
 The per-account machinery already knows when a *single* registration should not
-be retried (:class:`~sms_tool.registration_retry_guard.RegistrationRetryGuard`)
+be retried (:class:`~sms_tool.registration.retry_guard.RegistrationRetryGuard`)
 and when a *single* proxy is unhealthy
 (:class:`~sms_tool.proxy.health.ProxyHealthTracker`). Neither one can see the
 pattern that actually destroys a batch: when the environment dies -- the proxy
@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import threading
 
-from .registration_policy import RETRYABLE_CLASSES
+from .registration.policy import RETRYABLE_CLASSES
 
 # Consecutive environment failures tolerated before the batch parks itself.
 # Matches the reference implementation's "3 consecutive network/env errors".

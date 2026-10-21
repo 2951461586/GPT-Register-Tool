@@ -17,7 +17,7 @@ from sms_tool.logging_setup import (
 )
 
 
-def _record(message, *, name="sms_tool.registration_progress", level=logging.INFO, args=None):
+def _record(message, *, name="sms_tool.registration.progress", level=logging.INFO, args=None):
     return logging.LogRecord(name, level, __file__, 0, message, args, None)
 
 
@@ -41,7 +41,7 @@ class StageDisplayTests(unittest.TestCase):
 
 class ModuleLabelTests(unittest.TestCase):
     def test_known_loggers_map_to_module_labels(self):
-        self.assertEqual(module_label("sms_tool.registration_progress"), "注册")
+        self.assertEqual(module_label("sms_tool.registration.progress"), "注册")
         self.assertEqual(
             module_label("sms_tool.registration_drivers.browser_flow.orchestrator"),
             "浏览器注册",
@@ -53,8 +53,8 @@ class ModuleLabelTests(unittest.TestCase):
         self.assertEqual(module_label("py.warnings"), "告警")
 
     def test_most_specific_prefix_wins(self):
-        self.assertEqual(module_label("sms_tool.registration"), "注册")
-        self.assertEqual(module_label("sms_tool.registration_retry_guard"), "注册")
+        self.assertEqual(module_label("sms_tool.registration.orchestrator"), "注册")
+        self.assertEqual(module_label("sms_tool.registration.retry_guard"), "注册")
 
     def test_unknown_logger_uses_the_last_dotted_segment(self):
         self.assertEqual(module_label("third_party.noisy"), "noisy")

@@ -3,7 +3,7 @@
 Every submodule is reached module-qualified (``from . import steps`` then
 ``steps._is_about_you_step(...)``) so ``patch`` on the defining submodule is
 seen by all callers; this package re-exports the same names for external
-consumers (``registration.py`` and friends) that import from ``.auth_flow``."""
+consumers (``registration/orchestrator.py`` and friends) that import from ``.auth_flow``."""
 
 from __future__ import annotations
 

@@ -59,8 +59,8 @@ from sms_tool import auth_flow, http_utils
 from sms_tool.account_creation import _email_otp_send_url
 from sms_tool.kernel.error_classification import classify_error
 from sms_tool.kernel.failure_registry import BATCH_DROPPED_CLASSES, BATCH_RETRY_CLASSES
-from sms_tool.registration_handlers import RegistrationAbort, RegistrationEmailWorkflow
-from sms_tool.registration_runtime import RegistrationRuntimeState
+from sms_tool.registration.handlers import RegistrationAbort, RegistrationEmailWorkflow
+from sms_tool.registration.runtime import RegistrationRuntimeState
 
 #: 服务端 200 体里 ``continue_url`` 实际给的落点。
 _CONTINUE_URL = "https://auth.openai.com/api/accounts/email-otp/send"
@@ -743,7 +743,7 @@ def test_the_login_page_dead_end_names_a_marker_the_guard_recognises():
     那等于让账本用**另一个错误串的名字**记录本次事件（服务端说的是
     ``invalid_auth_step``）。所以新 marker 必须先进 ``DEAD_END_MARKERS``。
     """
-    from sms_tool.registration_retry_guard import DEAD_END_MARKERS, _dead_end_reason
+    from sms_tool.registration.retry_guard import DEAD_END_MARKERS, _dead_end_reason
 
     assert "signup_routed_to_login" in DEAD_END_MARKERS
     assert _dead_end_reason("existing_account_signup_routed_to_login") == "signup_routed_to_login"

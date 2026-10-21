@@ -19,7 +19,7 @@ from unittest.mock import patch
 import pytest
 
 from sms_tool import cli
-from sms_tool import registration_preflight as rp
+from sms_tool.registration import preflight as rp
 
 _CHATGPT_BASE = "https://chatgpt.com"
 _AUTH_BASE = "https://auth.openai.com"
@@ -151,7 +151,7 @@ def test_preflight_command_reports_a_cloudflare_challenge(monkeypatch, capsys):
     monkeypatch.setattr(cli, "CFG", _config())
     with (
         patch.object(cli, "_proxy_pool_values", return_value=pool),
-        patch("sms_tool.registration.registration_network_preflight", side_effect=probe),
+        patch("sms_tool.registration.orchestrator.registration_network_preflight", side_effect=probe),
     ):
         with pytest.raises(RuntimeError):
             cli._preflight_registration_before_mailbox(_args())

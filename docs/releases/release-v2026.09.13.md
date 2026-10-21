@@ -7,7 +7,7 @@ policy、WPF 邮箱解析迁 Contracts、构建双胞胎合并、诊断脚本归
 ## god file 拆解（候选1）
 
 - **`registration_handlers`（1133 行）**：检查点 payload 形状、落盘与可续跑判定
-  拆至新模块 `sms_tool/registration_checkpoint.py`（数据契约与编排分离）；
+  拆至新模块 `sms_tool/registration/checkpoint.py`（数据契约与编排分离）；
   `run()` 的三条 except 臂收敛为单一 `_abort_result` 构造器；
   `registration_outcome._failure_result` 改走 `build_registration_failure_result`
   ——协议路径失败与浏览器路径共享 ADR-0008 全量契约。

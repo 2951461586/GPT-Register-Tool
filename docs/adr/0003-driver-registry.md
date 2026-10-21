@@ -10,7 +10,7 @@
 cli choices、config 校验白名单、分派分支等六七处硬编码字符串里，新增驱动
 要改多处且容易漏。
 
-新驱动只改 `base.py` 一张表 + 一个 Session 实现；`registration.py` 的字符串
+新驱动只改 `base.py` 一张表 + 一个 Session 实现；`registration/orchestrator.py` 的字符串
 分派和 `config.py` 的白名单都读注册表。
 
 ## Consequences
@@ -18,4 +18,4 @@ cli choices、config 校验白名单、分派分支等六七处硬编码字符�
 - `driver_capabilities` 成为 orchestrator 结果契约字段 `driver_capabilities`
   的唯一来源。
 - `roxy.py` / `camoufox.py` / `cloak.py` 三个 wrapper 退化为文档化示例，
-  无生产调用（分派在 `registration.py`）。
+  无生产调用（分派在 `registration/orchestrator.py`）。

@@ -13,8 +13,8 @@
 
 | 调用点 | 位置 | 理由 |
 | --- | --- | --- |
-| `ChatGPT prime` | `registration_handlers.py` `RegistrationEmailWorkflow.auth_flow`，**仅 `passwordless` 分支** | 它是**预热**请求：`GET {chat_base}/` 的唯一作用是在该 session 上先铺好 cookie 与 TLS 连接，紧接着的 `Auth csrf` 才是真正被消费的调用。**它的返回值被丢弃**，所以重试它只增加启动延迟、不改变结果。 |
-| 预检的每次检查 | `registration_preflight.py` `registration_network_preflight` | 预检是**闸门**不是投递路径。一个候选要跑 4 个检查，每个检查默认 3 次尝试 ⇒ 单检查最坏 `3×15s + 2s + 4s = 51s`；一个候选（4 检查 × 外层 2 次换出口）最坏可达 **≈408s**，而预检总预算只有 **180s** —— **一个候选就能吃光全部预算**。改成 1 次后单检查 15s、单候选最坏 `4×15×2 = 120s`，回到预算之内。 |
+| `ChatGPT prime` | `registration/handlers.py` `RegistrationEmailWorkflow.auth_flow`，**仅 `passwordless` 分支** | 它是**预热**请求：`GET {chat_base}/` 的唯一作用是在该 session 上先铺好 cookie 与 TLS 连接，紧接着的 `Auth csrf` 才是真正被消费的调用。**它的返回值被丢弃**，所以重试它只增加启动延迟、不改变结果。 |
+| 预检的每次检查 | `registration/preflight.py` `registration_network_preflight` | 预检是**闸门**不是投递路径。一个候选要跑 4 个检查，每个检查默认 3 次尝试 ⇒ 单检查最坏 `3×15s + 2s + 4s = 51s`；一个候选（4 检查 × 外层 2 次换出口）最坏可达 **≈408s**，而预检总预算只有 **180s** —— **一个候选就能吃光全部预算**。改成 1 次后单检查 15s、单候选最坏 `4×15×2 = 120s`，回到预算之内。 |
 
 ## 这不是「取消重试」
 
@@ -62,5 +62,5 @@
   与 §5④
 - `sms_tool/http_client.py:65-114`（`TRANSIENT_MARKERS` / `is_transient_transport_error`）
 - `sms_tool/backoff.py:12-17`（`transport_backoff`）
-- `sms_tool/registration_preflight.py:104-171`（外层 `proxy_attempts` 换出口循环）
-- `sms_tool/registration_handlers.py:725-745`（两个 prime 调用）
+- `sms_tool/registration/preflight.py:104-171`（外层 `proxy_attempts` 换出口循环）
+- `sms_tool/registration/handlers.py:725-745`（两个 prime 调用）

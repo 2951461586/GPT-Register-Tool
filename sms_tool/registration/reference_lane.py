@@ -33,16 +33,16 @@ import logging
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
-from . import endpoints
-from .auth_headers import auth_impersonate, chatgpt_headers, nextauth_headers
-from .operator_output import emit as _emit
-from . import registration_sentinel_stages as _sentinel_stages
-from .registration_flags import registration_flag
-from .registration_warmup import tz_offset_minutes
-from .kernel.sanitizer import describe_exception
+from .. import endpoints
+from ..auth_headers import auth_impersonate, chatgpt_headers, nextauth_headers
+from ..operator_output import emit as _emit
+from . import sentinel_stages as _sentinel_stages
+from .flags import registration_flag
+from .warmup import tz_offset_minutes
+from ..kernel.sanitizer import describe_exception
 
 if TYPE_CHECKING:  # pragma: no cover - import cycle guard for type checkers only
-    from .registration_handlers import RegistrationEmailWorkflow
+    from .handlers import RegistrationEmailWorkflow
 
 _LOGGER = logging.getLogger(__name__)
 

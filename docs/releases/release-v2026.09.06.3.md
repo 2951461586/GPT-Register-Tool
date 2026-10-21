@@ -6,10 +6,10 @@ camoufox，21 跑 8 成 11 败）日志诊断驱动的四项修复；其二是�
 
 ## 注册链路加固（ADR-0009，显式依赖与 scoped 失效策略）
 
-- 以每次调用绑定的不可变 `RegistrationOperations`（`registration_operations.py`）
+- 以每次调用绑定的不可变 `RegistrationOperations`（`registration/operations.py`）
   取代整模块工作流注入，保留 facade 导入与调用前 patch 面。
-- 运行时状态分组收敛到 `registration_runtime.py`，持久化 checkpoint/结果
-  schema 不变；重试决策共享（`registration_policy.py`），跨生命周期的可变
+- 运行时状态分组收敛到 `registration/runtime.py`，持久化 checkpoint/结果
+  schema 不变；重试决策共享（`registration/policy.py`），跨生命周期的可变
   熔断状态不再共享。
 - `external_sessions.py` 拆为 `external_sessions/` 包（生命周期、profile
   配置、出口审计分离）；子进程启动环境 workaround 收敛到

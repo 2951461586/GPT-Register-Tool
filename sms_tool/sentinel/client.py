@@ -129,7 +129,7 @@ def _root_reason(exc: BaseException, proxy: str | None = None) -> str:
     into the log.
 
     The result is bounded because the progress ledger truncates the error field to
-    300 characters (``registration_progress.py:180``) and the account store to 800
+    300 characters (``registration/progress.py:180``) and the account store to 800
     (``store/accounts.py:159``); an unbounded message would push the useful tail
     out of both.
     """

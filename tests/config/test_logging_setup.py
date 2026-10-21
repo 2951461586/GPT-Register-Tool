@@ -227,7 +227,7 @@ class ConfigureLoggingTests(unittest.TestCase):
         logging_setup.configure_logging(to_console=False)
         added = [h for h in logging.getLogger().handlers if id(h) not in before and isinstance(h, RotatingFileHandler)]
         by_suffix = {Path(h.baseFilename).suffix: h for h in added}
-        logging.getLogger("sms_tool.registration_progress").info(
+        logging.getLogger("sms_tool.registration.progress").info(
             "Registration stage=%s status=%s", "create_account", "running"
         )
         for handler in added:

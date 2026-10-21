@@ -79,10 +79,10 @@ only when its file has a test that fails today):
 | 3 | `tests/registration/test_remail_mailbox.py` | 59 | Test fixtures typing. |
 | 4 | `tests/proxy/test_proxy_entry.py` | 53 | Test fixtures typing. |
 | 5 | `sms_tool/accounts/account_scan.py` | 32 | Payload narrowing in the scan loop. |
-| 6 | remaining `sms_tool/` files (`registration_retry_guard.py` is already at 0) | — | Narrow values, never silence. |
+| 6 | remaining `sms_tool/` files (`registration/retry_guard.py` is already at 0) | — | Narrow values, never silence. |
 
 Already retired (2026-10-18): `sms_tool/cli.py` (3 → 0),
-`sms_tool/registration_retry_guard.py` (16 → 0 — the object-typed JSON reads now
+`sms_tool/registration/retry_guard.py` (16 → 0 — the object-typed JSON reads now
 go through `_as_int` / `_as_float`, which `cast` to `float | int | str` so an
 unexpected type still raises exactly as before), and
 `tests/registration/test_registration_hot_persistence.py` (38 → 0 — the recursive

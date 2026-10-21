@@ -18,7 +18,7 @@ from sms_tool.auth_headers import (
 )
 from sms_tool.fingerprint_pool import FingerprintPool
 from sms_tool.kernel.error_classification import classify_error
-from sms_tool.registration_policy import registration_retry_decision
+from sms_tool.registration.policy import registration_retry_decision
 
 
 class AuthHeadersAndClassificationTests(unittest.TestCase):

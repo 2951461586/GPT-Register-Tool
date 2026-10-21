@@ -25,7 +25,7 @@ from ..config import CFG
 from ..http_client import is_transient_transport_error
 from ..proxy.routing import proxy_pool_for
 from ..kernel.paths import runtime_file
-from ..registration_state import _stored_registration_password
+from ..registration.state import _stored_registration_password
 from ..storage import (
     clear_stale_promotion_at_marker,
     get_account_record,
@@ -148,7 +148,7 @@ def relogin_chatgpt_email_account(
         from ..auth_headers import auth_impersonate, openai_auth_headers, select_auth_fingerprint
         from ..codex_oauth import _mailbox_from_data
         from ..http_client import request_with_retry
-        from ..registration import _login_existing_account_with_email_otp
+        from ..registration.orchestrator import _login_existing_account_with_email_otp
         from ..sentinel_tokens import _set_oai_did_cookie
         from ..session_refresh import _auth_session_email
 

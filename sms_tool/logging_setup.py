@@ -87,11 +87,11 @@ _LEVEL_MARKERS = {
 # Logger name -> operator-facing module label. Matched by dotted prefix, most
 # specific first (the tuple is pre-sorted by length below).
 _MODULE_LABELS = {
-    "sms_tool.registration_progress": "注册",
-    "sms_tool.registration_handlers": "注册",
-    "sms_tool.registration_retry_guard": "注册",
+    "sms_tool.registration.progress": "注册",
+    "sms_tool.registration.handlers": "注册",
+    "sms_tool.registration.retry_guard": "注册",
     "sms_tool.registration_drivers": "浏览器注册",
-    "sms_tool.registration": "注册",
+    "sms_tool.registration.orchestrator": "注册",
     "sms_tool.batch_runner": "批量注册",
     "sms_tool.commands.one_click": "一键接码",
     "sms_tool.commands.registration": "注册",

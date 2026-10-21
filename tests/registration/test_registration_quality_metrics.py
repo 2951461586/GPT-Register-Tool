@@ -1,4 +1,4 @@
-from sms_tool.registration_progress import registration_quality_metrics
+from sms_tool.registration.progress import registration_quality_metrics
 from sms_tool.session_builder import build_session_file
 
 

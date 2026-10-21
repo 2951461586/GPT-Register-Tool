@@ -27,15 +27,15 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from . import registration_checkpoint
-from .auth_headers import current_auth_fingerprint, set_auth_fingerprint
-from .operator_output import emit as _emit
-from .registration_protocol_helpers import _new_registration_session
-from .registration_state import RegistrationState
-from .kernel.sanitizer import describe_exception
+from . import checkpoint as registration_checkpoint
+from ..auth_headers import current_auth_fingerprint, set_auth_fingerprint
+from ..operator_output import emit as _emit
+from .protocol_helpers import _new_registration_session
+from .state import RegistrationState
+from ..kernel.sanitizer import describe_exception
 
 if TYPE_CHECKING:  # pragma: no cover - import cycle guard for type checkers only
-    from .registration_handlers import RegistrationEmailWorkflow
+    from .handlers import RegistrationEmailWorkflow
 
 _LOGGER = logging.getLogger(__name__)
 

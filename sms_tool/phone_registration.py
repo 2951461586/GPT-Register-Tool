@@ -13,7 +13,7 @@ from .http_utils import _json_or_raw
 from .auth_headers import auth_impersonate, openai_auth_headers, select_auth_fingerprint
 from .config import current_config_data
 from .http_client import request_with_retry
-from .registration_outcome import _failure_result
+from .registration.outcome import _failure_result
 from .sentinel import issue_sentinel_flow
 from .sentinel_tokens import _import_sentinel_cookies, _sentinel_device_id
 from .utils import (

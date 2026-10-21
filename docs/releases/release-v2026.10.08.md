@@ -82,9 +82,9 @@
 
 ## 结构性重构（无行为变更）
 
-- **`registration_handlers.py` 1552 → 1335 行**：in-flow 挑战 hook、checkpoint/恢复、
-  Sentinel 发放分别落到 `registration_edge_challenge.py` / `registration_resume.py` /
-  `registration_sentinel_stages.py`，类上保留薄委托（沿用 `registration_otp_stages` 先例）。
+- **`registration/handlers.py` 1552 → 1335 行**：in-flow 挑战 hook、checkpoint/恢复、
+  Sentinel 发放分别落到 `registration/edge_challenge.py` / `registration/resume.py` /
+  `registration/sentinel_stages.py`，类上保留薄委托（沿用 `registration_otp_stages` 先例）。
 - **`auth_flow` 拆为包**（`steps` / `signup` / `login` / `otp` / `totp` / `sentinel_flow` /
   `deps`），并新增协议注册契约文档。
 - **`upi_link` 按依赖 DAG 拆为分层包**（`pipeline` 1824 → 585 行；`stages` 承载阶段函数）。

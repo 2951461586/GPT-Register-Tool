@@ -9,19 +9,19 @@ import time
 import uuid
 from typing import Any, Callable
 
-from .config import CFG
-from .kernel.paths import runtime_file
-from .registration_concurrency import (
+from ..config import CFG
+from ..kernel.paths import runtime_file
+from .concurrency import (
     RegistrationStageLease,
     acquire_registration_stage,
     registration_stage_group,
     registration_stage_metrics,
 )
-from .cross_process_gate import cross_process_write_lock
-from .kernel.sanitizer import sanitize as _sanitize, sanitize_text as _sanitize_text
-from .kernel.sanitizer import account_reference
-from .registration_policy import registration_retry_decision
-from .telemetry import correlation_fields, current_run_id
+from ..cross_process_gate import cross_process_write_lock
+from ..kernel.sanitizer import sanitize as _sanitize, sanitize_text as _sanitize_text
+from ..kernel.sanitizer import account_reference
+from .policy import registration_retry_decision
+from ..telemetry import correlation_fields, current_run_id
 
 
 _current: contextvars.ContextVar["RegistrationProgress | None"] = contextvars.ContextVar(
@@ -147,7 +147,7 @@ class RegistrationProgress:
             },
         )
         try:
-            from .desktop_ipc import emit_event
+            from ..desktop_ipc import emit_event
 
             emit_event(
                 {
@@ -198,7 +198,7 @@ class RegistrationProgress:
             now_mono = time.monotonic()
             self.events[-1]["duration_ms"] = int(max(0.0, now_mono - self._stage_started_monotonic) * 1000)
             self.events[-1]["finished_at"] = int(time.time())
-        from .registration_result import safe_device_identity, safe_fingerprint_geo_audit, safe_proxy_audit
+        from .result import safe_device_identity, safe_fingerprint_geo_audit, safe_proxy_audit
 
         proxy_audit = safe_proxy_audit((result or {}).get("proxy_audit"))
         fingerprint_geo_audit = safe_fingerprint_geo_audit((result or {}).get("fingerprint_geo_audit"))
@@ -375,8 +375,8 @@ def _mailbox_email(kwargs: dict[str, Any]) -> str:
 def track_registration(func: Callable[..., dict[str, Any]]) -> Callable[..., dict[str, Any]]:
     @functools.wraps(func)
     def wrapper(*args: Any, **kwargs: Any) -> dict[str, Any]:
-        from .config import resolve_runtime_config
-        from .registration_drivers.base import normalize_registration_driver
+        from ..config import resolve_runtime_config
+        from ..registration_drivers.base import normalize_registration_driver
 
         try:
             config = resolve_runtime_config(kwargs.get("runtime_config"), workflow="registration")

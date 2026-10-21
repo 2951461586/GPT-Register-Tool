@@ -16,7 +16,7 @@ no severity to filter on -- a diagnostic and a failure look identical.  Measured
 
 Both lines are worth having -- the ``signals`` answer "which auth mode did the
 server pick", and the 600-char budget exists so ``userAlreadyExistsRecovery``
-survives the cut (see the comment at ``registration_handlers.py``).  So the fix
+survives the cut (see the comment at ``registration/handlers.py``).  So the fix
 is compaction, not deletion, and the tests below pin **both** halves: the line
 got shorter *and* nothing was lost.
 """
@@ -27,7 +27,8 @@ import unittest
 from contextlib import redirect_stdout
 from unittest.mock import Mock, patch
 
-from sms_tool import auth_state, registration_handlers
+from sms_tool import auth_state
+from sms_tool.registration import handlers as registration_handlers
 
 _CALLBACK = "https://chatgpt.com/api/auth/callback/openai"
 #: A single-use OAuth code, verbatim shape from the 15:13 run.

@@ -1,6 +1,6 @@
 """CLI boundary for registration pipeline commands.
 
-The registration domain modules (``sms_tool.registration``, ``batch_runner``,
+The registration domain modules (``sms_tool.registration.orchestrator``, ``batch_runner``,
 ``storage``) own protocol behavior and persistence.  This module only
 orchestrates ``argparse`` values into those domain calls.
 ``RegistrationCommandContext`` keeps the legacy CLI's replaceable hooks
@@ -25,8 +25,8 @@ from ..batch_runner import ensure_batch_sentinel_readiness, filter_registered_ma
 from ..config import validate_registration_driver_config
 from ..operation_journal import PaymentOperationConflict, PaymentOperationStore
 from ..proxy.entry import parse_proxy
-from ..registration_preflight import CLOUDFLARE_CHALLENGE_MARKER
-from ..registration_funnel import combine_registration_funnels, summarize_registration_funnel
+from ..registration.preflight import CLOUDFLARE_CHALLENGE_MARKER
+from ..registration.funnel import combine_registration_funnels, summarize_registration_funnel
 from ..kernel.sanitizer import mask_account, sanitize_log_text
 from ..diagnostics import safe_print
 
@@ -116,7 +116,7 @@ def preflight_registration_before_mailbox(args: Any, ctx: RegistrationCommandCon
     ensure_batch_sentinel_readiness(ctx.runtime_config, selected_driver)
     # Every remaining driver launches its browser locally, so a Sentinel/
     # ChatGPT probe from this process measures the real registration egress.
-    from ..registration import registration_network_preflight
+    from ..registration.orchestrator import registration_network_preflight
 
     per_host_limit, budget_seconds = _preflight_limits(ctx.runtime_config)
     total = len(candidates)

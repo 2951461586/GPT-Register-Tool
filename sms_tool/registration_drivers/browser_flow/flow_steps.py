@@ -51,7 +51,7 @@ def _poll_browser_otp(
     # the signature so callers and tests keep a stable seam.
     deadline = time.monotonic() + max(1, int(timeout or 1))
     while time.monotonic() < deadline:
-        from ...registration_cancel import registration_cancel_requested
+        from ...registration.cancel import registration_cancel_requested
 
         if registration_cancel_requested():
             raise BrowserRegistrationError("registration_cancelled")

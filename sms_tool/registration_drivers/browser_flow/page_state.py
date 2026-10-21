@@ -14,7 +14,7 @@ from urllib.parse import urlsplit
 
 
 def _raise_if_registration_cancelled() -> None:
-    from ...registration_cancel import registration_cancel_requested
+    from ...registration.cancel import registration_cancel_requested
 
     if registration_cancel_requested():
         raise BrowserRegistrationError("registration_cancelled")

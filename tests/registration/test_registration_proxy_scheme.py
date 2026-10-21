@@ -9,7 +9,7 @@ actually failing a reachability check against the real auth edge, and the
 import unittest
 from unittest.mock import patch
 
-from sms_tool import registration_preflight as preflight
+from sms_tool.registration import preflight as preflight
 
 
 class ResolveProxySchemeTests(unittest.TestCase):

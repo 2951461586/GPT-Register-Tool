@@ -3,9 +3,9 @@
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from sms_tool.registration_handlers import RegistrationEmailWorkflow, _apply_protocol_fingerprint
-from sms_tool.registration_result import build_registration_failure_result
-from sms_tool.registration_state import RegistrationStateMachine
+from sms_tool.registration.handlers import RegistrationEmailWorkflow, _apply_protocol_fingerprint
+from sms_tool.registration.result import build_registration_failure_result
+from sms_tool.registration.state import RegistrationStateMachine
 
 
 def test_protocol_country_policy_mismatch_remains_nonfatal_and_visible():

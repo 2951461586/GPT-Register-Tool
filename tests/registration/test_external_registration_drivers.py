@@ -1157,10 +1157,10 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
         reloaded.fill.assert_called_once_with("user@example.com", timeout=5_000)
         self.assertEqual(click_continue.call_count, 2)
 
-    @patch("sms_tool.registration_outcome._browser_mailbox_snapshot", return_value={})
-    @patch("sms_tool.registration_outcome._registration_outcome", return_value=(True, "", ""))
+    @patch("sms_tool.registration.outcome._browser_mailbox_snapshot", return_value={})
+    @patch("sms_tool.registration.outcome._registration_outcome", return_value=(True, "", ""))
     @patch(
-        "sms_tool.registration_outcome._probe_registration_access_token", return_value={"ok": True, "status_code": 200}
+        "sms_tool.registration.outcome._probe_registration_access_token", return_value={"ok": True, "status_code": 200}
     )
     @patch(
         "sms_tool.registration_drivers.browser_flow.session._session_payload",
@@ -1241,10 +1241,10 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
         self.assertEqual(history.count("email_otp_validate"), 2)
         self.assertEqual(history.count("email_otp_wait"), 1)
 
-    @patch("sms_tool.registration_outcome._browser_mailbox_snapshot", return_value={})
-    @patch("sms_tool.registration_outcome._registration_outcome", return_value=(True, "", ""))
+    @patch("sms_tool.registration.outcome._browser_mailbox_snapshot", return_value={})
+    @patch("sms_tool.registration.outcome._registration_outcome", return_value=(True, "", ""))
     @patch(
-        "sms_tool.registration_outcome._probe_registration_access_token", return_value={"ok": True, "status_code": 200}
+        "sms_tool.registration.outcome._probe_registration_access_token", return_value={"ok": True, "status_code": 200}
     )
     @patch(
         "sms_tool.registration_drivers.browser_flow.session._session_payload",
@@ -1326,7 +1326,7 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
                     side_effect=lambda *_args, **_kwargs: next(reprobe),
                 ),
                 patch(
-                    "sms_tool.registration_progress.registration_stage",
+                    "sms_tool.registration.progress.registration_stage",
                     side_effect=lambda name, status="running", detail="": stage_calls.append(name),
                 ),
                 patch("sms_tool.registration_drivers.browser_flow.dom_fields._otp_fields", return_value=object()),
@@ -1346,10 +1346,10 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
 
         return run, stage_calls
 
-    @patch("sms_tool.registration_outcome._browser_mailbox_snapshot", return_value={})
-    @patch("sms_tool.registration_outcome._registration_outcome", return_value=(True, "", ""))
+    @patch("sms_tool.registration.outcome._browser_mailbox_snapshot", return_value={})
+    @patch("sms_tool.registration.outcome._registration_outcome", return_value=(True, "", ""))
     @patch(
-        "sms_tool.registration_outcome._probe_registration_access_token", return_value={"ok": True, "status_code": 200}
+        "sms_tool.registration.outcome._probe_registration_access_token", return_value={"ok": True, "status_code": 200}
     )
     @patch(
         "sms_tool.registration_drivers.browser_flow.session._session_payload",
@@ -1390,10 +1390,10 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
         self.assertTrue(result["success"])
         self.assertEqual(stage_calls.count("create_account_retry"), 2)
 
-    @patch("sms_tool.registration_outcome._browser_mailbox_snapshot", return_value={})
-    @patch("sms_tool.registration_outcome._registration_outcome", return_value=(True, "", ""))
+    @patch("sms_tool.registration.outcome._browser_mailbox_snapshot", return_value={})
+    @patch("sms_tool.registration.outcome._registration_outcome", return_value=(True, "", ""))
     @patch(
-        "sms_tool.registration_outcome._probe_registration_access_token", return_value={"ok": True, "status_code": 200}
+        "sms_tool.registration.outcome._probe_registration_access_token", return_value={"ok": True, "status_code": 200}
     )
     @patch(
         "sms_tool.registration_drivers.browser_flow.session._session_payload",
@@ -1438,10 +1438,10 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
         "sms_tool.browser_fingerprint_pool.detect_proxy_exit_geo",
         return_value={"country": "JP", "timezone": "Asia/Tokyo", "ip": "1.2.3.4"},
     )
-    @patch("sms_tool.registration_outcome._browser_mailbox_snapshot", return_value={})
-    @patch("sms_tool.registration_outcome._registration_outcome", return_value=(True, "", ""))
+    @patch("sms_tool.registration.outcome._browser_mailbox_snapshot", return_value={})
+    @patch("sms_tool.registration.outcome._registration_outcome", return_value=(True, "", ""))
     @patch(
-        "sms_tool.registration_outcome._probe_registration_access_token", return_value={"ok": True, "status_code": 200}
+        "sms_tool.registration.outcome._probe_registration_access_token", return_value={"ok": True, "status_code": 200}
     )
     @patch(
         "sms_tool.registration_drivers.browser_flow.session._session_payload",
@@ -1549,10 +1549,10 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
                 side_effect=lambda *_args, **_kwargs: events.append("session") or session_result,
             ),
             patch(
-                "sms_tool.registration_outcome._probe_registration_access_token",
+                "sms_tool.registration.outcome._probe_registration_access_token",
                 return_value={"ok": True, "status_code": 200},
             ),
-            patch("sms_tool.registration_outcome._registration_outcome", return_value=(True, "", "")),
+            patch("sms_tool.registration.outcome._registration_outcome", return_value=(True, "", "")),
         ):
             result = run_browser_registration(
                 driver_name="playwright",
@@ -1607,10 +1607,10 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
             patch("sms_tool.registration_drivers.browser_flow.page_state._wait_for_profile_completion") as wait_profile,
             patch("sms_tool.registration_drivers.browser_flow.session._session_payload", return_value=session_result),
             patch(
-                "sms_tool.registration_outcome._probe_registration_access_token",
+                "sms_tool.registration.outcome._probe_registration_access_token",
                 return_value={"ok": True, "status_code": 200},
             ),
-            patch("sms_tool.registration_outcome._registration_outcome", return_value=(True, "", "")),
+            patch("sms_tool.registration.outcome._registration_outcome", return_value=(True, "", "")),
         ):
             result = run_browser_registration(
                 driver_name="playwright",

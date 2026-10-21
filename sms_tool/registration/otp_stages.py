@@ -25,19 +25,19 @@ import uuid
 from collections.abc import Mapping as MappingABC
 from typing import TYPE_CHECKING, Any
 
-from .auth_state import otp_dispatch_verdict, passwordless_arm_armed
-from .operator_output import emit as _emit
-from .kernel.sanitizer import describe_exception
-from .kernel.failure_registry import (
+from ..auth_state import otp_dispatch_verdict, passwordless_arm_armed
+from ..operator_output import emit as _emit
+from ..kernel.sanitizer import describe_exception
+from ..kernel.failure_registry import (
     OTP_ARM_MISMATCH_MARKER,
     OTP_MAILBOX_SIDE_MARKER,
     OTP_NO_RESEND_MARKER,
 )
-from .registration_protocol_helpers import _safe_int, registration_flag
-from .otp_strategy import otp_resend_eligible
+from .protocol_helpers import _safe_int, registration_flag
+from ..otp_strategy import otp_resend_eligible
 
 if TYPE_CHECKING:  # pragma: no cover - import cycle guard for type checkers only
-    from .registration_handlers import RegistrationEmailWorkflow
+    from .handlers import RegistrationEmailWorkflow
 
 _LOGGER = logging.getLogger(__name__)
 

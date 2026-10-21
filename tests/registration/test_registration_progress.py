@@ -5,8 +5,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from sms_tool import registration_progress
-from sms_tool.registration_state import RegistrationState, RegistrationStateMachine
+from sms_tool.registration import progress as registration_progress
+from sms_tool.registration.state import RegistrationState, RegistrationStateMachine
 from sms_tool.kernel.sanitizer import account_reference
 
 

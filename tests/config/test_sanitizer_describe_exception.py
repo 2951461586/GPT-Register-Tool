@@ -2,7 +2,7 @@
 
 Why this file exists
 --------------------
-``registration_handlers.py`` and friends log the text of a caught exception on
+``registration/handlers.py`` and friends log the text of a caught exception on
 registration, login, OTP and 2FA paths.  Those exceptions are raised on the
 wire contract with ``auth.openai.com``, so their ``str()`` can embed a bearer
 token, a password, a cookie or an API key.

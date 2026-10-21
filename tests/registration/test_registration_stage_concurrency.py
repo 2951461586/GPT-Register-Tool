@@ -2,8 +2,8 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import patch
 
-from sms_tool import registration_concurrency
-from sms_tool.registration_concurrency import RegistrationStageLease
+from sms_tool.registration import concurrency as registration_concurrency
+from sms_tool.registration.concurrency import RegistrationStageLease
 
 STAGE_CFG = {"registration": {"stage_concurrency": {"auth": 1, "network": 2, "at_probe": 1, "cross_process": False}}}
 
@@ -181,7 +181,7 @@ def test_unpaired_stage_lease_does_not_leak_with_multiple_workers():
 
 def test_progress_object_owns_its_gate_and_releases_on_track_exit():
     """``RegistrationProgress`` must own the lease, not a context-local slot."""
-    from sms_tool import registration_progress
+    from sms_tool.registration import progress as registration_progress
 
     with (
         patch.object(registration_concurrency, "CFG", STAGE_CFG),
@@ -203,7 +203,7 @@ def test_progress_object_owns_its_gate_and_releases_on_track_exit():
 
 
 def test_browser_admission_reuses_auth_lease_at_stage_transition():
-    from sms_tool import registration_progress
+    from sms_tool.registration import progress as registration_progress
 
     registration_concurrency.registration_stage_metrics(reset=True)
     with (
@@ -236,7 +236,7 @@ def test_browser_orchestrator_admits_before_opening_session():
 
 
 def test_track_registration_releases_gate_even_when_the_call_fails():
-    from sms_tool import registration_progress
+    from sms_tool.registration import progress as registration_progress
 
     with (
         patch.object(registration_concurrency, "CFG", STAGE_CFG),

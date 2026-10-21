@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from .registration_state import (
+from .state import (
     RegistrationStage,
     RegistrationState,
     RegistrationStateMachine,

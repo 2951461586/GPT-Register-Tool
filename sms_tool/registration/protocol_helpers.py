@@ -6,8 +6,8 @@ workflow's ``self.runtime`` / ``self.r`` bus, so it is safe to unit test on its
 own and it cannot create an import cycle back into the workflow.
 
 ``registration_handlers`` re-imports every public name below, so the historical
-``from sms_tool.registration_handlers import _login_probe_password`` (and the
-``patch("sms_tool.registration_handlers._new_registration_session")`` targets)
+``from sms_tool.registration.handlers import _login_probe_password`` (and the
+``patch("sms_tool.registration.handlers._new_registration_session")`` targets)
 keep resolving.
 """
 
@@ -19,13 +19,13 @@ from urllib.parse import urlsplit
 
 from curl_cffi import requests as curl_requests
 
-from .registration_flags import registration_flag
+from .flags import registration_flag
 
 # ``registration_flag`` is re-exported, not re-implemented: it moved to
 # ``registration_flags`` on 2026-10-10 (scan P1-C′) so the four hand-rolled
 # toggles outside ``auth_flow`` could share one Mapping-safe, two-sided parser.
 # The import above keeps the historical
-# ``from sms_tool.registration_protocol_helpers import registration_flag`` path
+# ``from sms_tool.registration.protocol_helpers import registration_flag`` path
 # working, and ``__all__`` still lists it so analysers see the re-export as used.
 
 

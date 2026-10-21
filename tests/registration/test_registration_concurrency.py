@@ -4,7 +4,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from sms_tool import auth_flow, batch_runner, otp_strategy, registration
+from sms_tool import auth_flow, batch_runner, otp_strategy
+from sms_tool.registration import orchestrator as registration
 
 from sms_tool import account_creation
 from sms_tool.auth_flow import _ensure_authorize_context
@@ -627,7 +628,7 @@ class RegistrationConcurrencyTests(unittest.TestCase):
             seen.append(mailbox.email)
             return {"success": False, "email": mailbox.email, "error": "stub"}
 
-        with patch("sms_tool.registration.run_email", side_effect=fake_run_email):
+        with patch("sms_tool.registration.orchestrator.run_email", side_effect=fake_run_email):
             results = run_batch(count=4, proxy=None, mailboxes=mailboxes, workers=4)
 
         self.assertEqual([r["email"] for r in results], ["a+oai01@hotmail.com", "b+oai01@hotmail.com"])
@@ -651,7 +652,7 @@ class RegistrationConcurrencyTests(unittest.TestCase):
                 return {"success": True, "email": kwargs["mailbox"].email}
 
             with (
-                patch("sms_tool.registration.run_email", side_effect=fake_run_email),
+                patch("sms_tool.registration.orchestrator.run_email", side_effect=fake_run_email),
                 patch("sms_tool.batch_runner.CFG", {"email_registration": {}}),
             ):
                 results = run_batch(count=3, proxy="socks5h://127.0.0.1:7897", mailboxes=mailboxes, workers=2)

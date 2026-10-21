@@ -43,7 +43,7 @@ property bag.  Four construction shapes break it, each verified in the tree:
 
 * **factory ``cls(...)``** -- ``account_models.py:128``, ``browser_pool.py:69``.
   The callee is ``cls``, so constructor keyword arguments are invisible.
-* **declaration-only interface** -- ``registration_operations.py:104``.  Its
+* **declaration-only interface** -- ``registration/operations.py:104``.  Its
   attributes are satisfied by the implementing object at runtime; there is no
   dataclass write by design.  This one class accounts for 60 of the 130.
 * **declared default / injection seam** -- ``geo/resolver.py:319-328``.  Relying
@@ -71,7 +71,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from sms_tool.registration_runtime import _FIELD_GROUPS  # noqa: E402
+from sms_tool.registration.runtime import _FIELD_GROUPS  # noqa: E402
 
 #: Fields that are read but never written, with the reason each one is tolerated.
 #:
@@ -79,7 +79,7 @@ from sms_tool.registration_runtime import _FIELD_GROUPS  # noqa: E402
 #: fill ``response["phone_verification"]`` and ``extra["phone"]``, but no code
 #: path assigns it, so both are permanently ``{}`` and ``""``.  The lane also
 #: accepts a ``phone_pool`` constructor argument and stores it without ever
-#: using it (``registration_handlers.py:290``/``:305``), and ``accounts`` has no
+#: using it (``registration/handlers.py:290``/``:305``), and ``accounts`` has no
 #: ``phone`` column at all -- so wiring it up is a product decision (does this
 #: lane do phone verification?) rather than a mechanical fix.  Remove this entry
 #: when that decision lands either way.

@@ -32,9 +32,9 @@ from typing import Any, cast
 from unittest.mock import Mock, patch
 
 from sms_tool import auth_flow
-from sms_tool import registration_otp_stages as otp_stages
-from sms_tool.registration_handlers import RegistrationEmailWorkflow
-from sms_tool.registration_protocol_helpers import registration_flag
+from sms_tool.registration import otp_stages as otp_stages
+from sms_tool.registration.handlers import RegistrationEmailWorkflow
+from sms_tool.registration.protocol_helpers import registration_flag
 
 
 # ── D1: turb signin / authorize context ──────────────────────────────────────

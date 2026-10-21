@@ -22,31 +22,32 @@ import time
 import uuid
 from typing import Any, Callable, Mapping
 
-from . import endpoints, registration_checkpoint
-from . import fingerprint_pool as _fingerprint_pool
-from .mailbox import service as _mailbox_service
-from .proxy import entry as _proxy_entry
-from . import registration_account_stages as _account_stages
-from . import registration_concurrency as _registration_concurrency
-from . import registration_edge_challenge as _edge_challenge
-from . import registration_finalize as _registration_finalize
-from . import registration_otp_stages as _otp_stages
-from . import registration_reference_lane as _reference_lane
-from . import registration_resume as _resume
-from . import registration_sentinel_stages as _sentinel_stages
-from . import registration_warmup as _warmup
-from .auth_headers import set_auth_fingerprint
-from .auth_state import signup_lane_verdict
-from .codex_oauth import collect_codex_oauth_tokens
-from .kernel.failure_registry import PASSWORD_CLAIMED_MARKER
-from .mailbox.errors import MailboxEndpointUnavailableError
-from .operator_output import emit as _emit
-from .providers.mailbox_graph import MailboxAuthInvalidError
-from .registration_cancel import RegistrationCancelled, cancellable_sleep, ensure_not_cancelled
-from .registration_flags import registration_flag
-from .registration_operations import RegistrationOperations
-from .registration_persistence import RegistrationPersistence, StorageRegistrationPersistence
-from .registration_protocol_helpers import (
+from .. import endpoints
+from . import checkpoint as registration_checkpoint
+from .. import fingerprint_pool as _fingerprint_pool
+from ..mailbox import service as _mailbox_service
+from ..proxy import entry as _proxy_entry
+from . import account_stages as _account_stages
+from . import concurrency as _registration_concurrency
+from . import edge_challenge as _edge_challenge
+from . import finalize as _registration_finalize
+from . import otp_stages as _otp_stages
+from . import reference_lane as _reference_lane
+from . import resume as _resume
+from . import sentinel_stages as _sentinel_stages
+from . import warmup as _warmup
+from ..auth_headers import set_auth_fingerprint
+from ..auth_state import signup_lane_verdict
+from ..codex_oauth import collect_codex_oauth_tokens
+from ..kernel.failure_registry import PASSWORD_CLAIMED_MARKER
+from ..mailbox.errors import MailboxEndpointUnavailableError
+from ..operator_output import emit as _emit
+from ..providers.mailbox_graph import MailboxAuthInvalidError
+from .cancel import RegistrationCancelled, cancellable_sleep, ensure_not_cancelled
+from .flags import registration_flag
+from .operations import RegistrationOperations
+from .persistence import RegistrationPersistence, StorageRegistrationPersistence
+from .protocol_helpers import (
     _create_account_response_line,
     _is_existing_login_dead_end_error,
     _login_probe_password,
@@ -54,11 +55,11 @@ from .registration_protocol_helpers import (
     _safe_float,
     _safe_int,
 )
-from .registration_result import attach_fingerprint_geo_audit, safe_device_identity, safe_proxy_audit
-from .registration_retry_guard import DEAD_END_SIGNUP_ROUTED_TO_LOGIN, RegistrationRetryGuard
-from .registration_runtime import RegistrationRuntimeState
-from .registration_stage_runner import RegistrationAbort, RegistrationStageRunner
-from .registration_state import (
+from .result import attach_fingerprint_geo_audit, safe_device_identity, safe_proxy_audit
+from .retry_guard import DEAD_END_SIGNUP_ROUTED_TO_LOGIN, RegistrationRetryGuard
+from .runtime import RegistrationRuntimeState
+from .stage_runner import RegistrationAbort, RegistrationStageRunner
+from .state import (
     RegistrationStageOverrun,
     RegistrationState,
     RegistrationStateMachine,
@@ -570,7 +571,7 @@ class RegistrationEmailWorkflow:
     def extract_sentinel(self) -> None:
         r = self.r
         s = self.runtime
-        from .sentinel import sentinel_backend
+        from ..sentinel import sentinel_backend
 
         if self.input_sentinel:
             _emit(_LOGGER, "[*] Using provided sentinel tokens")
@@ -599,7 +600,7 @@ class RegistrationEmailWorkflow:
         stored_device_id = str(device_context.get("device_id") or "").strip()
         sentinel_device_id = str(r._sentinel_device_id(s.sentinel_data) or "").strip()
         if stored_device_id and stored_device_id != sentinel_device_id:
-            from .sentinel import sentinel_backend
+            from ..sentinel import sentinel_backend
 
             if sentinel_backend(self.config) == "legacy" or self.input_sentinel:
                 _emit(_LOGGER, "  [Device] Regenerating Sentinel tokens for persisted device context")

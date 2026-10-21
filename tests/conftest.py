@@ -106,12 +106,12 @@ def _reset_upi_sentinel_mint_cache():
 def _reset_registration_cancel():
     """Reset the process-global registration cancel flag around every test.
 
-    ``sms_tool.registration_cancel._cancel_event`` is a module-level Event.
+    ``sms_tool.registration.cancel._cancel_event`` is a module-level Event.
     A test that requests cancellation and does not clear it would cancel
     every later registration test in the same session -- the same
     green-alone, red-in-full-run shape as the logging flag above.
     """
-    from sms_tool import registration_cancel
+    from sms_tool.registration import cancel as registration_cancel
 
     registration_cancel.clear_registration_cancel()
     yield

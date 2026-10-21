@@ -9,7 +9,7 @@
 - ``codex_phone.py:87,113``   接码平台登录
 - ``phone_reuse.py:755,803``  手机号复用判定
 - ``sentinel_tokens.py:148``  Cloudflare cookie 回灌
-- ``registration.py:66``      主注册流程
+- ``registration/orchestrator.py:66``      主注册流程
 
 而且它带一条**账号隔离的安全契约**（源码 :36 的注释）：
 

@@ -64,30 +64,15 @@
       "sms_tool/fingerprint_pool.py"
     ],
     "Registration state and policy": [
-      "sms_tool/registration_operations.py",
-      "sms_tool/registration_runtime.py",
-      "sms_tool/registration_policy.py",
-      "sms_tool/registration_funnel.py",
-      "sms_tool/telemetry.py"
+      "sms_tool/telemetry.py",
+      "sms_tool/registration/*.py"
     ],
     "Registration failure and batch safety": [
       "sms_tool/failure_registry.py",
       "sms_tool/batch_circuit_breaker.py"
     ],
     "Registration checkpoints, helpers and completion": [
-      "sms_tool/registration_checkpoint.py",
-      "sms_tool/registration_finalize.py",
-      "sms_tool/registration_persistence.py",
-      "sms_tool/registration_stage_runner.py",
-      "sms_tool/registration_protocol_helpers.py",
-      "sms_tool/registration_flags.py",
-      "sms_tool/registration_otp_stages.py",
-      "sms_tool/registration_account_stages.py",
-      "sms_tool/registration_edge_challenge.py",
-      "sms_tool/registration_resume.py",
-      "sms_tool/registration_sentinel_stages.py",
-      "sms_tool/registration_warmup.py",
-      "sms_tool/registration_reference_lane.py"
+      "sms_tool/registration/*.py"
     ],
     "Registration browser support": [
       "sms_tool/chatgpt_bootstrap.py",
@@ -106,19 +91,7 @@
       "sms_tool/http_utils.py"
     ],
     "Registration/auth": [
-      "sms_tool/registration.py",
-      "sms_tool/registration_handlers.py",
-      "sms_tool/registration_state.py",
-      "sms_tool/registration_progress.py",
-      "sms_tool/registration_concurrency.py",
       "sms_tool/cross_process_gate.py",
-      "sms_tool/registration_outcome.py",
-      "sms_tool/registration_result.py",
-      "sms_tool/registration_preflight.py",
-      "sms_tool/registration_probe.py",
-      "sms_tool/registration_retry_guard.py",
-      "sms_tool/registration_cancel.py",
-      "sms_tool/registration_pulse.py",
       "sms_tool/session_builder.py",
       "sms_tool/accounts/account_2fa.py",
       "sms_tool/auth_flow/__init__.py",
@@ -141,7 +114,8 @@
       "sms_tool/codex_sentinel.py",
       "sms_tool/codex_phone.py",
       "sms_tool/phone_registration.py",
-      "sms_tool/session_refresh.py"
+      "sms_tool/session_refresh.py",
+      "sms_tool/registration/*.py"
     ],
     "Agent Identity / explicit import": [
       "sms_tool/agent_identity.py",

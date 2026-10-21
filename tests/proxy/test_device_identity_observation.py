@@ -11,10 +11,10 @@ from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from sms_tool.registration_funnel import combine_registration_funnels, summarize_registration_funnel
-from sms_tool.registration_handlers import RegistrationEmailWorkflow
-from sms_tool.registration_result import build_registration_result, safe_device_identity
-from sms_tool.registration_state import RegistrationStateMachine
+from sms_tool.registration.funnel import combine_registration_funnels, summarize_registration_funnel
+from sms_tool.registration.handlers import RegistrationEmailWorkflow
+from sms_tool.registration.result import build_registration_result, safe_device_identity
+from sms_tool.registration.state import RegistrationStateMachine
 
 FULL_DID = "0123456789abcdef-secret-tail"
 
@@ -53,8 +53,8 @@ def _workflow(email: str, stored: dict, fresh_did: str, registration: dict | Non
 
 def _prepare(workflow) -> None:
     with (
-        patch("sms_tool.registration_handlers._new_registration_session", return_value=Mock()),
-        patch("sms_tool.registration_handlers._apply_protocol_fingerprint"),
+        patch("sms_tool.registration.handlers._new_registration_session", return_value=Mock()),
+        patch("sms_tool.registration.handlers._apply_protocol_fingerprint"),
     ):
         workflow.prepare_identity()
 
@@ -153,7 +153,7 @@ def test_seed_is_a_pure_function_of_the_normalised_address():
     import re
     import uuid
 
-    from sms_tool.registration_state import seeded_device_identity
+    from sms_tool.registration.state import seeded_device_identity
 
     a = seeded_device_identity("Same@Example.com ")
     assert a == seeded_device_identity("same@example.com")
@@ -170,14 +170,14 @@ def test_seed_is_a_pure_function_of_the_normalised_address():
 def test_seed_uses_a_private_salt_not_turbs_public_literal():
     import uuid
 
-    from sms_tool.registration_state import seeded_device_identity
+    from sms_tool.registration.state import seeded_device_identity
 
     turb = str(uuid.uuid5(uuid.NAMESPACE_URL, "device_id:registration:same@example.com"))
     assert seeded_device_identity("same@example.com")["device_id"] != turb
 
 
 def test_plus_alias_is_a_different_address_with_a_different_identity():
-    from sms_tool.registration_state import seeded_device_identity
+    from sms_tool.registration.state import seeded_device_identity
 
     base = seeded_device_identity("name@icloud.com")
     alias = seeded_device_identity("name+tag@icloud.com")

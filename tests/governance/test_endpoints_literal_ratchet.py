@@ -59,9 +59,9 @@ WIRED = (
 
 #: sms_tool call sites wired to the sms_tool authority.
 WIRED_SMS_TOOL = (
-    "sms_tool/registration_handlers.py",
-    "sms_tool/registration_account_stages.py",
-    "sms_tool/registration_preflight.py",
+    "sms_tool/registration/handlers.py",
+    "sms_tool/registration/account_stages.py",
+    "sms_tool/registration/preflight.py",
     "sms_tool/chatgpt_bootstrap.py",
     "sms_tool/sentinel/client.py",
     "sms_tool/registration_drivers/browser_flow/context.py",

@@ -21,8 +21,8 @@
 | 驱动枚举 / 归一化 | `sms_tool/registration_drivers/base.py` | 区分 protocol 与 browser 两类注册入口 |
 | 指纹 + 鉴权头 | `sms_tool/auth_headers.py` | 确定性指纹 + `oai-*` 头注入 |
 | 反爬 Token | `sms_tool/sentinel_tokens.py` + `sms_tool/sentinel/` | 真实 Node SDK 执行 + 缓存 + DID 一致性 |
-| 预检 + 协议纠正 | `sms_tool/registration_preflight.py` | 边界探活 + socks5↔http 纠错 |
-| 注册门面 | `sms_tool/registration.py` | 编排入口（对外暴露 helper，不含实现） |
+| 预检 + 协议纠正 | `sms_tool/registration/preflight.py` | 边界探活 + socks5↔http 纠错 |
+| 注册门面 | `sms_tool/registration/orchestrator.py` | 编排入口（对外暴露 helper，不含实现） |
 | 代理单一范式 | `sms_tool/proxy/entry.py` | 解析 / 重建凭据 / 地区重定 / 会话轮换 |
 | 代理路由 | `sms_tool/proxy/routing.py` | 按 lane 选池 + 单向回退 |
 | 指纹池（协议路径） | `sms_tool/fingerprint_pool.py` | `ProtocolEnvironmentProfile` + `FingerprintPool` 单例 |
@@ -62,7 +62,7 @@ class RegistrationDriver(str, Enum):
 
 **核心结论**：两条路径在「指纹 → 鉴权头 → Sentinel Token → AT 探活 → 持久化」这条主干上**完全共用**，差异只在最前端的 signup 执行方式。这意味着无论走哪条路，反关联与反爬强度是一致的，不存在「浏览器路径更稳」或「协议路径更弱」的本质区别——强弱由指纹/头/Sentinel 一致性决定，而非驱动选择。
 
-> 这也解释了为什么 `registration.py` 只是一个**门面**（`from .auth_flow import ...`、`from .account_creation import ...`、`from .sentinel_tokens import ...`），具体实现被拆到 `auth_flow / account_creation / otp_strategy / mailbox / session_builder / storage`，门面只负责对外暴露 helper 并禁止本地遮蔽。
+> 这也解释了为什么 `registration/orchestrator.py` 只是一个**门面**（`from .auth_flow import ...`、`from .account_creation import ...`、`from .sentinel_tokens import ...`），具体实现被拆到 `auth_flow / account_creation / otp_strategy / mailbox / session_builder / storage`，门面只负责对外暴露 helper 并禁止本地遮蔽。
 
 ---
 
@@ -94,7 +94,7 @@ Sentinel 不是纯 Python PoW，而是调用**真实 Node SDK**：
 
 账号「活着」的边界只有一个：**持久化的 Access Token + 结论性 HTTP 200 探活**。
 
-- `registration_outcome._probe_registration_access_token`（经 `registration.py` 门面暴露）做**多轮稳定性探测**，`--target-at200` 即以稳定 200 成功数作为目标。
+- `registration_outcome._probe_registration_access_token`（经 `registration/orchestrator.py` 门面暴露）做**多轮稳定性探测**，`--target-at200` 即以稳定 200 成功数作为目标。
 - **可恢复检查点**：post-create AT 探测前写原子 checkpoint，transport-unknown 的探测可 resume，不会重放账号创建。
 - 每个账号保留一个 proxy-bound HTTP session；只有被归类为网络/鉴权态的重试才会新建 session 并换新鲜代理出口。
 - `http_client` 持有每会话 403/429 熔断；HTTP 429 单独归类为 `rate_limit`，不立即重试，首个 429 打开进程内认证流冷却电路，阻止同批次等待账号继续冲击上游。
@@ -187,7 +187,7 @@ Sentinel 不是纯 Python PoW，而是调用**真实 Node SDK**：
 | `protocol` | `FingerprintPool`（`fingerprint_pool.py:121`） | `shared_fingerprint_pool(config)`（`fingerprint_pool.py:328`） | TLS/UA 档案 `ProtocolEnvironmentProfile`（`fingerprint_pool.py:37`） | `next(proxy)`（`fingerprint_pool.py:249`）按 `_GEO_PROFILES`（`auth_headers.py:313`）覆盖 locale/timezone |
 | `browser_*`（4 个） | `BrowserProfilePool`（`browser_fingerprint_pool.py:198`） | `shared_browser_profile_pool(config)`（`browser_fingerprint_pool.py:234`），经 `select_browser_profile(...)`（`browser_fingerprint_pool.py:537`）取档 | 7 个内置桌面硬件档案 `BROWSER_PROFILE_POOL`（`browser_fingerprint_pool.py:148`） | `detect_proxy_exit_geo(proxy)`（`browser_fingerprint_pool.py:317`）经共享 `geo.resolver`（Cloudflare trace 优先）→ `BROWSER_LOCALE_PROFILES`（`browser_fingerprint_pool.py:79`，经 `COUNTRY_LOCALE_PROFILE_MAP` 把 `VN` 映射到 `vn`） |
 
-**核心结论**：浏览器路径的 7 个硬件档案是**进程级单例、被全部 4 个浏览器驱动共享**——playwright / camoufox / cloak / roxy 都走 `run_browser_registration`（`registration_drivers/browser_flow/orchestrator.py:73`）→ `_browser_session_scope`（`registration_drivers/browser_flow/flow_steps.py:160`）→ `select_browser_profile(_browser_geo, seed=device_id, config=config)`（`browser_fingerprint_pool.py:537`）取同一池。协议路径用独立的 `FingerprintPool`，两者**互不复用**。硬件档案只来自内置池；已退休的 `registration.browser_profile_pool` 会在配置校验时报错，不再制造“配置已生效”的假 Interface。
+**核心结论**：浏览器路径的 7 个硬件档案是**进程级单例、被全部 4 个浏览器驱动共享**——playwright / camoufox / cloak / roxy 都走 `run_browser_registration`（`registration_drivers/browser_flow/orchestrator.py:69`）→ `_browser_session_scope`（`registration_drivers/browser_flow/flow_steps.py:160`）→ `select_browser_profile(_browser_geo, seed=device_id, config=config)`（`browser_fingerprint_pool.py:537`）取同一池。协议路径用独立的 `FingerprintPool`，两者**互不复用**。硬件档案只来自内置池；已退休的 `registration.browser_profile_pool` 会在配置校验时报错，不再制造“配置已生效”的假 Interface。
 
 > **地区覆盖（2026-09-11）**：两侧都已收录 `VN`——协议路径 `_GEO_PROFILES["VN"]` = `Asia/Ho_Chi_Minh` / `vi-VN`；浏览器路径 `BROWSER_LOCALE_PROFILES["vn"]` + `COUNTRY_LOCALE_PROFILE_MAP["VN"] = "vn"`，并在 `TIMEZONE_NAME_BY_IANA` 补了 `Asia/Ho_Chi_Minh`。**未收录的国家不会报错，而是静默回退**：协议路径回退到"实测时区 + 档案原语言"，浏览器路径 `locale_profile_key_from_geo` 直接回退 `"us"`。因此**新增出口地区时必须同步补这三张表**，否则会出现"出口在 A 国、语言是 en-US"的隐性矛盾。
 
@@ -229,14 +229,14 @@ Sentinel 不是纯 Python PoW，而是调用**真实 Node SDK**：
 
 注册真正开始前，先跑网络边界预检（在认领邮箱之前）：
 
-- `registration_network_preflight()`（`registration_preflight.py:139`）探测 chatgpt / auth / sentinel 边界，使用 `impersonate` 模拟。
-- `_resolve_proxy_scheme()`（`registration_preflight.py:105`）纠正被标错的 socks5↔http；并可用 `proxy_scheme_fallback=off` **钉死** scheme，避免运行时被自动回退到错误协议。
+- `registration_network_preflight()`（`registration/preflight.py:139`）探测 chatgpt / auth / sentinel 边界，使用 `impersonate` 模拟。
+- `_resolve_proxy_scheme()`（`registration/preflight.py:105`）纠正被标错的 socks5↔http；并可用 `proxy_scheme_fallback=off` **钉死** scheme，避免运行时被自动回退到错误协议。
 
 ---
 
 ## 9. 桌面端如何调用（IPC）
 
-WPF 桌面端（`SmsWorkbench/`）通过 `PythonBackendClient` 启动 `python -m sms_tool` 子进程，结构化结果走 `smsworkbench.ipc.v2` 信封（见 `architecture.md` 的 *WPF UI* 节）。注册逻辑**始终在 `sms_tool.registration`**，桌面端只负责启动 + 读取已脱敏结果，绝不回流 ChatGPT 注册生命周期。
+WPF 桌面端（`SmsWorkbench/`）通过 `PythonBackendClient` 启动 `python -m sms_tool` 子进程，结构化结果走 `smsworkbench.ipc.v2` 信封（见 `architecture.md` 的 *WPF UI* 节）。注册逻辑**始终在 `sms_tool.registration.orchestrator`**，桌面端只负责启动 + 读取已脱敏结果，绝不回流 ChatGPT 注册生命周期。
 
 编译唯一入口：`SmsWorkbench/build_dotnet.ps1`（使用 `dotnet publish` 输出到 `dist/net10/SmsWorkbench.exe`，随后清理中间产物）。**禁止**直接 `dotnet build`——只会产出非分发目录的中间物且不自动清理。
 
@@ -271,15 +271,15 @@ WPF 桌面端（`SmsWorkbench/`）通过 `PythonBackendClient` 启动 `python -m
 | `retarget_region` | `proxy/entry.py:406` | 地区重定 |
 | `rotate_session` | `proxy/entry.py:441` | 会话轮换 |
 | `load_proxy_pool` / `choose_proxy_entry` | `proxy/entry.py:548` / `:614` | 选池 |
-| `registration_network_preflight` | `registration_preflight.py:139` | 边界探活 |
-| `_resolve_proxy_scheme` | `registration_preflight.py:105` | socks5↔http 纠错 |
+| `registration_network_preflight` | `registration/preflight.py:139` | 边界探活 |
+| `_resolve_proxy_scheme` | `registration/preflight.py:105` | socks5↔http 纠错 |
 | `shared_fingerprint_pool` | `fingerprint_pool.py:345` | 协议路径指纹池单例 |
 | `FingerprintPool` / `ProtocolEnvironmentProfile` | `fingerprint_pool.py:122` / `:38` | 协议路径 TLS/UA 档案 |
 | `shared_browser_profile_pool` | `browser_fingerprint_pool.py:309` | 浏览器路径内置指纹池单例 |
 | `select_browser_profile` | `browser_fingerprint_pool.py:623` | 取浏览器硬件档案（seed 稳定） |
 | `detect_proxy_exit_geo` | `browser_fingerprint_pool.py:385` | 穿透代理查出口地理 |
 | `BrowserProfilePool` / `BROWSER_PROFILE_POOL` | `browser_fingerprint_pool.py:270` / `:171` | 7 个内置桌面硬件档案（4 个浏览器驱动共享） |
-| `run_browser_registration` | `registration_drivers/browser_flow/orchestrator.py:73` | 5 浏览器驱动统一入口 |
+| `run_browser_registration` | `registration_drivers/browser_flow/orchestrator.py:69` | 5 浏览器驱动统一入口 |
 | `PoolConfig`（进程池） | `browser_pool.py:67` | `registration.browser_process_pool` 解析 |
 
 ---

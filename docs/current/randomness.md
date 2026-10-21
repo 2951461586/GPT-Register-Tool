@@ -37,7 +37,7 @@ Use `random` when the value only needs to be *varied*, not *unguessable*:
 | `services/protocol-payment/*/…_extract.py` billing helpers | name / address / postal / phone | `random` |
 | `services/protocol-payment/kakao/kakao_extract.py` `random_kakao_billing` | billing identity | `random.Random(sha256(token + uuid4))` — already CSPRNG-seeded |
 | `sms_tool/utils.py` name/birthday/jitter helpers | fake persona, delays | `random` |
-| `sms_tool/humanize.py`, `sms_tool/registration_warmup.py` | delay jitter | `random` |
+| `sms_tool/humanize.py`, `sms_tool/registration/warmup.py` | delay jitter | `random` |
 | `sms_tool/fingerprint_pool.py` | weighted profile pick | `random.choices` |
 | `sms_tool/paypal/*`, `sms_tool/upi_link/*` | click/typing cadence | `random` |
 | `services/protocol-payment/*` proxy `shuffle` / `sample` | candidate order | `random` — every candidate is trusted |

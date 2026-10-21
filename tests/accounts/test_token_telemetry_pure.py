@@ -353,7 +353,7 @@ class TimingMathTest(unittest.TestCase):
 
     def test_expires_in_is_negative_for_an_already_expired_token(self):
         """🔴 故意不夹 0 —— 和 ``lifetime_seconds`` / ``age_seconds`` 的做法相反。
-        **负值就是"已过期"的唯一信号**，调用方（``registration_handlers.py:1031``、
+        **负值就是"已过期"的唯一信号**，调用方（``registration/handlers.py:1031``、
         ``session_builder.py:131``）靠它判断要不要重新登录。谁给它加 ``max(0, ...)``，
         过期令牌就会被当成"还剩 0 秒"，续期逻辑整个停摆。"""
         with _frozen(NOW):

@@ -26,7 +26,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, TypeGuard
 
-from ..registration_retry_guard import RegistrationRetryGuard
+from ..registration.retry_guard import RegistrationRetryGuard
 
 logger = logging.getLogger(__name__)
 

@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, fields
 from typing import TYPE_CHECKING, Any, Mapping
 
-from .registration_state import RegistrationContext
+from .state import RegistrationContext
 
 
 @dataclass(repr=False)

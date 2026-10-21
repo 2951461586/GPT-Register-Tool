@@ -8,7 +8,7 @@ from sms_tool.accounts.account_identity import (
     create_registration_identity,
     resolve_account_proxy,
 )
-from sms_tool.registration_handlers import RegistrationEmailWorkflow
+from sms_tool.registration.handlers import RegistrationEmailWorkflow
 from sms_tool.session_builder import build_session_file
 
 

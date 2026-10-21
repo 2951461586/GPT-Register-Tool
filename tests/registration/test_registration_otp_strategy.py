@@ -2,7 +2,8 @@ import logging
 import unittest
 from unittest.mock import patch
 
-from sms_tool import otp_strategy, registration
+from sms_tool import otp_strategy
+from sms_tool.registration import orchestrator as registration
 from sms_tool.auth_headers import AUTH_IMPERSONATE, set_auth_fingerprint
 
 

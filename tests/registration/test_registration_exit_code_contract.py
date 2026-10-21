@@ -212,7 +212,7 @@ def test_the_phone_lane_also_reports_a_failed_batch(tmp_path):
         patch.object(cli, "_registration_phone_pool", return_value=None),
         patch.object(cli, "_proxy_pool_values", return_value=[]),
         patch(
-            "sms_tool.registration.run_phone_register",
+            "sms_tool.registration.orchestrator.run_phone_register",
             return_value={"success": False, "phone": "+15550000000", "error": "sms_timeout"},
         ),
         patch.object(cli, "upsert_account", return_value=True),

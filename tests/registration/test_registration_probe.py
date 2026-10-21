@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from sms_tool import registration_probe as rp
+from sms_tool.registration import probe as rp
 
 
 class _Resp:

@@ -22,8 +22,8 @@ from sms_tool.kernel.failure_registry import (
     FAILURE_CLASSES,
     FUTURE_BATCH_CLASSES,
 )
-from sms_tool.registration_policy import RETRYABLE_CLASSES
-from sms_tool.registration_pulse import _OTP_BAN_MARKERS, _is_otp_ban_signal
+from sms_tool.registration.policy import RETRYABLE_CLASSES
+from sms_tool.registration.pulse import _OTP_BAN_MARKERS, _is_otp_ban_signal
 
 
 def test_error_classification_tuples_are_registry_views():
@@ -58,7 +58,7 @@ def test_batch_and_policy_and_pulse_derive_from_the_registry():
 
 def test_advice_is_the_single_source_for_policy():
     # registration_policy._ADVICE 曾是独立副本；现在两者同源。
-    from sms_tool import registration_policy
+    from sms_tool.registration import policy as registration_policy
 
     assert registration_policy._ADVICE is ADVICE
 

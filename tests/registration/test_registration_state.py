@@ -5,18 +5,18 @@ from contextlib import nullcontext
 from pathlib import Path
 from unittest.mock import Mock
 
-from sms_tool.registration_state import (
+from sms_tool.registration.state import (
     RegistrationState,
     RegistrationStage,
     RegistrationStageOverrun,
     RegistrationStateMachine,
     prepare_registration_context,
 )
-from sms_tool.registration_handlers import (
+from sms_tool.registration.handlers import (
     RegistrationEmailWorkflow,
     RegistrationStageRunner,
 )
-from sms_tool.registration_runtime import RegistrationRuntimeState
+from sms_tool.registration.runtime import RegistrationRuntimeState
 
 
 class Mailbox:
@@ -95,7 +95,7 @@ class RegistrationStateTests(unittest.TestCase):
         )
 
     def test_handlers_do_not_reverse_import_registration_facade(self):
-        path = Path(__file__).resolve().parents[2] / "sms_tool" / "registration_handlers.py"
+        path = Path(__file__).resolve().parents[2] / "sms_tool" / "registration/handlers.py"
         tree = ast.parse(path.read_text(encoding="utf-8-sig"))
         imported_modules = [node.module for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) and node.module]
         self.assertNotIn("registration", imported_modules)

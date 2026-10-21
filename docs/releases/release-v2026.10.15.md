@@ -24,8 +24,8 @@
 
 ## 结构性重构（无行为变更）
 
-- **协议注册阶段拆分与输出通道统一** —— 从 `sms_tool/registration_handlers.py` 抽离 `sms_tool/registration_account_stages.py`
-  承载 `create_account` 与 `user_register` 阶段；`registration_handlers.py`、`registration_otp_stages.py`、`registration_finalize.py`
+- **协议注册阶段拆分与输出通道统一** —— 从 `sms_tool/registration/handlers.py` 抽离 `sms_tool/registration/account_stages.py`
+  承载 `create_account` 与 `user_register` 阶段；`registration/handlers.py`、`registration/otp_stages.py`、`registration/finalize.py`
   中的 32 处裸 `print` 统一迁至 `operator_output.emit`，并消除 8 处函数内延迟导入。
 - **支付提取器 URL 全面单源化与公共助手复用** —— 清理 PayPal 与 `services/protocol-payment/` 共 94 处内联 URL 字面量并统一由 `endpoints.py`
   导出（`endpoints_literal_baseline.json` 归零）；iDEAL / TWINT / BLIK / Kakao 共用 `services/protocol-payment/common/payload_helpers.py`

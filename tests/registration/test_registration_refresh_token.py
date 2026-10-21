@@ -24,12 +24,12 @@ stays exactly as normalised.  It is **off by default**
 normalised to remains byte-identical unless an operator opts in.
 
 2026-09-22: ``obtain_oauth_refresh_token`` / ``enroll_totp`` / ``finalize`` were
-**moved out of ``registration_handlers`` into ``sms_tool/registration_finalize.py``**
+**moved out of ``registration_handlers`` into ``sms_tool/registration/finalize.py``**
 (commit a2349d7, "extract result-assembly stages into registration_finalize").
 ``registration_handlers`` keeps thin delegating wrappers, so ``self.…`` call sites
 are unchanged -- but **the patch surface moved with the implementation**.  Every
 ``patch`` below therefore targets
-``sms_tool.registration_finalize.collect_codex_oauth_tokens``; patching the
+``sms_tool.registration.finalize.collect_codex_oauth_tokens``; patching the
 ``registration_handlers`` binding no longer reaches the call (see
 ``TheExchangeIsImportedAtModuleScopeTests``, which pins that fact).
 """
@@ -38,10 +38,13 @@ import inspect
 import unittest
 from unittest.mock import Mock, patch
 
-from sms_tool import registration, registration_finalize, registration_handlers, registration_resume
+from sms_tool.registration import orchestrator as registration
+from sms_tool.registration import finalize as registration_finalize
+from sms_tool.registration import handlers as registration_handlers
+from sms_tool.registration import resume as registration_resume
 from sms_tool.accounts.account_models import AccountSessionModel
-from sms_tool.registration_handlers import RegistrationEmailWorkflow
-from sms_tool.registration_state import RegistrationStateMachine
+from sms_tool.registration.handlers import RegistrationEmailWorkflow
+from sms_tool.registration.state import RegistrationStateMachine
 
 _TOKENS = {
     "access_token": "codex_at",
@@ -77,7 +80,7 @@ class RefreshTokenIsOptInTests(unittest.TestCase):
 
     def test_no_config_section_means_no_exchange(self):
         workflow = _workflow(config=None)
-        with patch("sms_tool.registration_finalize.collect_codex_oauth_tokens") as collect:
+        with patch("sms_tool.registration.finalize.collect_codex_oauth_tokens") as collect:
             workflow.obtain_oauth_refresh_token()
 
         collect.assert_not_called()
@@ -86,14 +89,14 @@ class RefreshTokenIsOptInTests(unittest.TestCase):
 
     def test_an_explicit_false_means_no_exchange(self):
         workflow = _workflow(config={"registration": {"obtain_refresh_token": False}})
-        with patch("sms_tool.registration_finalize.collect_codex_oauth_tokens") as collect:
+        with patch("sms_tool.registration.finalize.collect_codex_oauth_tokens") as collect:
             workflow.obtain_oauth_refresh_token()
 
         collect.assert_not_called()
 
     def test_a_non_mapping_registration_section_means_no_exchange(self):
         workflow = _workflow(config={"registration": "not-a-mapping"})
-        with patch("sms_tool.registration_finalize.collect_codex_oauth_tokens") as collect:
+        with patch("sms_tool.registration.finalize.collect_codex_oauth_tokens") as collect:
             workflow.obtain_oauth_refresh_token()
 
         collect.assert_not_called()
@@ -101,7 +104,7 @@ class RefreshTokenIsOptInTests(unittest.TestCase):
     def test_a_string_false_does_not_turn_the_opt_in_on(self):
         """2026-10-11 scan P1-B: ``bool(cfg.get(...))`` made ``"false"`` truthy."""
         workflow = _workflow(config={"registration": {"obtain_refresh_token": "false"}})
-        with patch("sms_tool.registration_finalize.collect_codex_oauth_tokens") as collect:
+        with patch("sms_tool.registration.finalize.collect_codex_oauth_tokens") as collect:
             workflow.obtain_oauth_refresh_token()
 
         collect.assert_not_called()
@@ -109,7 +112,7 @@ class RefreshTokenIsOptInTests(unittest.TestCase):
     def test_a_string_true_is_honoured(self):
         workflow = _workflow(config={"registration": {"obtain_refresh_token": "true"}})
         with patch(
-            "sms_tool.registration_finalize.collect_codex_oauth_tokens", return_value=dict(_OAUTH_OK)
+            "sms_tool.registration.finalize.collect_codex_oauth_tokens", return_value=dict(_OAUTH_OK)
         ) as collect:
             workflow.obtain_oauth_refresh_token()
 
@@ -123,7 +126,7 @@ class RefreshTokenExchangeTests(unittest.TestCase):
     def test_a_successful_exchange_stores_the_refresh_token(self):
         workflow = self._enabled()
         with patch(
-            "sms_tool.registration_finalize.collect_codex_oauth_tokens", return_value=dict(_OAUTH_OK)
+            "sms_tool.registration.finalize.collect_codex_oauth_tokens", return_value=dict(_OAUTH_OK)
         ) as collect:
             workflow.obtain_oauth_refresh_token()
 
@@ -137,7 +140,7 @@ class RefreshTokenExchangeTests(unittest.TestCase):
         pay exactly the code this is meant to save."""
         workflow = self._enabled()
         with patch(
-            "sms_tool.registration_finalize.collect_codex_oauth_tokens", return_value=dict(_OAUTH_OK)
+            "sms_tool.registration.finalize.collect_codex_oauth_tokens", return_value=dict(_OAUTH_OK)
         ) as collect:
             workflow.obtain_oauth_refresh_token()
 
@@ -152,7 +155,7 @@ class RefreshTokenExchangeTests(unittest.TestCase):
         """The Codex access token is scoped to the Codex client -- it is not a
         substitute for this run's ChatGPT web AT, which was just probed."""
         workflow = self._enabled()
-        with patch("sms_tool.registration_finalize.collect_codex_oauth_tokens", return_value=dict(_OAUTH_OK)):
+        with patch("sms_tool.registration.finalize.collect_codex_oauth_tokens", return_value=dict(_OAUTH_OK)):
             workflow.obtain_oauth_refresh_token()
 
         self.assertEqual(workflow.runtime.access_token, "web_at")
@@ -162,7 +165,7 @@ class RefreshTokenExchangeTests(unittest.TestCase):
         """``finalize`` writes ``_oauth_result_summary(s.oauth_result)`` into the
         persisted ``codex_oauth`` field, so that is the real consumer."""
         workflow = self._enabled()
-        with patch("sms_tool.registration_finalize.collect_codex_oauth_tokens", return_value=dict(_OAUTH_OK)):
+        with patch("sms_tool.registration.finalize.collect_codex_oauth_tokens", return_value=dict(_OAUTH_OK)):
             workflow.obtain_oauth_refresh_token()
 
         summary = registration._oauth_result_summary(workflow.runtime.oauth_result)
@@ -179,7 +182,7 @@ class RefreshTokenNeverChangesTheOutcomeTests(unittest.TestCase):
     def test_a_failed_exchange_leaves_success_and_error_untouched(self):
         workflow = self._enabled()
         with patch(
-            "sms_tool.registration_finalize.collect_codex_oauth_tokens",
+            "sms_tool.registration.finalize.collect_codex_oauth_tokens",
             return_value={"ok": False, "mode": "codex_oauth_pkce", "error": "nope"},
         ):
             workflow.obtain_oauth_refresh_token()
@@ -191,7 +194,7 @@ class RefreshTokenNeverChangesTheOutcomeTests(unittest.TestCase):
     def test_a_raising_exchange_is_contained(self):
         workflow = self._enabled()
         with patch(
-            "sms_tool.registration_finalize.collect_codex_oauth_tokens",
+            "sms_tool.registration.finalize.collect_codex_oauth_tokens",
             side_effect=RuntimeError("transport exploded"),
         ):
             workflow.obtain_oauth_refresh_token()
@@ -202,14 +205,14 @@ class RefreshTokenNeverChangesTheOutcomeTests(unittest.TestCase):
 
     def test_no_access_token_means_no_exchange(self):
         workflow = self._enabled(access_token="")
-        with patch("sms_tool.registration_finalize.collect_codex_oauth_tokens") as collect:
+        with patch("sms_tool.registration.finalize.collect_codex_oauth_tokens") as collect:
             workflow.obtain_oauth_refresh_token()
 
         collect.assert_not_called()
 
     def test_a_failed_registration_means_no_exchange(self):
         workflow = self._enabled(success=False)
-        with patch("sms_tool.registration_finalize.collect_codex_oauth_tokens") as collect:
+        with patch("sms_tool.registration.finalize.collect_codex_oauth_tokens") as collect:
             workflow.obtain_oauth_refresh_token()
 
         collect.assert_not_called()
@@ -259,7 +262,7 @@ class TheExchangeIsImportedAtModuleScopeTests(unittest.TestCase):
     The consequence is that patching ``sms_tool.codex_oauth.collect_codex_oauth_tokens``
     does not reach this call site -- ``registration_finalize`` holds its own
     binding.  That is why every test above patches
-    ``sms_tool.registration_finalize.collect_codex_oauth_tokens``.  Without this
+    ``sms_tool.registration.finalize.collect_codex_oauth_tokens``.  Without this
     test, moving the import back into the function body would break four
     exchange tests in a way that reads like a mock bug rather than a moved
     import.
@@ -307,9 +310,9 @@ class TheExchangeIsImportedAtModuleScopeTests(unittest.TestCase):
         """
         workflow = _workflow(config={"registration": {"obtain_refresh_token": True}})
         with (
-            patch("sms_tool.registration_handlers.collect_codex_oauth_tokens") as decoy,
+            patch("sms_tool.registration.handlers.collect_codex_oauth_tokens") as decoy,
             patch(
-                "sms_tool.registration_finalize.collect_codex_oauth_tokens",
+                "sms_tool.registration.finalize.collect_codex_oauth_tokens",
                 return_value=dict(_OAUTH_OK),
             ) as real,
         ):

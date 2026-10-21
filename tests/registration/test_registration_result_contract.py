@@ -10,7 +10,7 @@ import ast
 import unittest
 from pathlib import Path
 
-from sms_tool.registration_result import (
+from sms_tool.registration.result import (
     COMMON_RESULT_KEYS,
     build_registration_failure_result,
     build_registration_result,
@@ -18,8 +18,8 @@ from sms_tool.registration_result import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-HANDLERS = REPO_ROOT / "sms_tool" / "registration_handlers.py"
-FINALIZE = REPO_ROOT / "sms_tool" / "registration_finalize.py"
+HANDLERS = REPO_ROOT / "sms_tool" / "registration/handlers.py"
+FINALIZE = REPO_ROOT / "sms_tool" / "registration/finalize.py"
 ORCHESTRATOR = REPO_ROOT / "sms_tool" / "registration_drivers" / "browser_flow" / "orchestrator.py"
 
 # The protocol path's result assembly moved from HANDLERS to FINALIZE in a2349d7

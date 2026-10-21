@@ -17,20 +17,16 @@ logger = logging.getLogger(__name__)
 from . import decisions, dom_fields, flow_steps, form_steps, page_state, recovery, session
 from .context import prepare_browser_context
 
-from ... import (
-    browser_fingerprint_pool,
-    chatgpt_bootstrap,
-    registration_outcome,
-    registration_progress,
-    registration_result,
-    storage,
-)
+from ... import browser_fingerprint_pool, chatgpt_bootstrap, storage
+from ...registration import outcome as registration_outcome
+from ...registration import progress as registration_progress
+from ...registration import result as registration_result
 from ...mailbox import router as mailbox_pkg
 from ...proxy import entry as proxy_entry
 from ...accounts import account_identity
 from ...mailbox.service import MailboxService
 from ...phone_proxy import redact_proxy_text
-from ...registration_state import RegistrationState, RegistrationStateMachine
+from ...registration.state import RegistrationState, RegistrationStateMachine
 from ...utils import _generate_password, _random_birthdate, _random_name
 from .. import external_sessions
 from ..base import BrowserRegistrationError, driver_capabilities, normalize_registration_driver

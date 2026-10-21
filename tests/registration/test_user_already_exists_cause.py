@@ -35,11 +35,11 @@ Two consequences are pinned here:
 
 import unittest
 
-from sms_tool import registration
+from sms_tool.registration import orchestrator as registration
 from sms_tool.kernel.error_classification import ACCOUNT_ERROR_MARKERS, classify_error
 from sms_tool.kernel.failure_registry import BATCH_DROPPED_CLASSES, BATCH_RETRY_CLASSES
-from sms_tool.registration_outcome import _existing_account_error
-from sms_tool.registration_policy import registration_retry_decision
+from sms_tool.registration.outcome import _existing_account_error
+from sms_tool.registration.policy import registration_retry_decision
 
 
 # Verbatim shape from the live 2026-09-14 response body.

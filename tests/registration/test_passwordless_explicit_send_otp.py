@@ -14,7 +14,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from sms_tool import registration_otp_stages as otp_stages
+from sms_tool.registration import otp_stages as otp_stages
 from sms_tool.auth_state import auth_dump_summary, otp_dispatch_verdict, send_pending_value
 
 AUTH = "https://auth.openai.com"

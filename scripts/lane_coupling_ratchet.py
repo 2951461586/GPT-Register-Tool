@@ -35,7 +35,7 @@ What this freezes
    entrypoint (``docs/architecture.md`` Ownership Matrix) -- physically at the
    root, but not a workflow module.  So the enforceable rule is not "root must
    not import adapters" (false) but "only ``cli`` does".
-5. **``registration.py`` fan-out: frozen target set.**  It is the compatibility
+5. **``registration/orchestrator.py`` fan-out: frozen target set.**  It is the compatibility
    facade for the whole lane; 31 distinct modules today.  Freezing the *set*
    rather than the count means moving an import within the facade cannot mask a
    new dependency.
@@ -106,7 +106,7 @@ ADAPTER_LAYERS = ("commands", "cli_parsers")
 ADAPTER_OWNER = "sms_tool.cli"
 
 #: The compatibility facade whose fan-out is frozen.
-FACADE = "sms_tool.registration"
+FACADE = "sms_tool.registration.orchestrator"
 
 
 def _module_name(path: Path) -> str:

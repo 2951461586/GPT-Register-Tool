@@ -2,7 +2,7 @@
 
 ## 注册协作取消接通
 
-- 新增 `sms_tool/registration_cancel.py` 生产者与生命周期管理：`cancel_scope()`
+- 新增 `sms_tool/registration/cancel.py` 生产者与生命周期管理：`cancel_scope()`
   在批次期间安装 SIGINT/SIGBREAK 处理器（第一次 Ctrl+C 请求优雅取消，第二次
   硬中断），批次结束时恢复处理器并清除全局标志，取消不再泄漏到下一个批次。
 - 协议注册路径接入取消检查点：`RegistrationEmailWorkflow.run` 进入前、每个
@@ -30,7 +30,7 @@
 
 ## 注册结果契约统一
 
-- 新增 `sms_tool/registration_result.py`：协议与浏览器两条路径的结果 dict
+- 新增 `sms_tool/registration/result.py`：协议与浏览器两条路径的结果 dict
   统一由 `build_registration_result` 装配，`COMMON_RESULT_KEYS` 固化共有核心键。
 - 新增 `tests/test_registration_result_contract.py`：契约单元断言 + AST 守卫
   （两个生产文件各恰好一次 builder 调用，禁止手写装配字面量回归）。
@@ -51,7 +51,7 @@
   结构与 09-06 实测行数、patch 失效面根除记录）、`directory-map.md`
   （补齐 registration 系列 10+ 模块与 browser 驱动组）、`docs/README.md`
   （落码位置规则改指 `registration_drivers/browser_flow/` 与
-  `registration_handlers.py` 等）。
+  `registration/handlers.py` 等）。
 - 补齐 6 份 ADR：驱动注册表单一事实源、browser_flow 分层拆分（含本次
   patch 面修订）、协作取消、浏览器进程池与脉冲调度、
   email_verification_stuck 分类、注册结果契约统一。

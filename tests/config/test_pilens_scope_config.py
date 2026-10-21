@@ -72,7 +72,7 @@ REQUIRED_IGNORES = {
 #: The product. Ignoring any of these would remove the architecture view the
 #: review graph exists to provide.
 IN_SCOPE = (
-    "sms_tool/registration_handlers.py",
+    "sms_tool/registration/handlers.py",
     "sms_tool/auth_flow/steps.py",
     "sms_tool/upi_link/stages.py",
     "services/protocol-payment/common/protocol_core.py",

@@ -18,7 +18,7 @@ from ..http_client import _retry_after_seconds, request_with_retry
 from ..http_utils import _absolute_url, _cookie_presence, _follow_continue_url, _json_or_raw
 from ..mailbox.router import poll_email_otp
 from ..phone_proxy import redact_proxy_url
-from ..registration_concurrency import mark_registration_rate_limited
+from ..registration.concurrency import mark_registration_rate_limited
 
 __all__ = [
     "_absolute_url",

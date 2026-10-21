@@ -70,7 +70,7 @@ WPF `[后端进度]` 三处用**同一个哈希**，一条账号可跨三个通�
 ## HTTP 重试覆盖（09-12 扫描 P2）
 
 `request_with_retry` 补齐到最后三处直连调用点：`accounts/account_2fa.py`（7 处）、
-`sentinel/client.py`（challenge）、`registration_preflight.py`（scheme 探针与边界预检）。
+`sentinel/client.py`（challenge）、`registration/preflight.py`（scheme 探针与边界预检）。
 
 关键动机在 scheme 探针：一次瞬时 reset 会被判成「该 scheme 不可达」，进而把**整轮**
 代理协议降级为 `http://`。先重试传输层，再下结论。

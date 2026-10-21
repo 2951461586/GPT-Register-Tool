@@ -8,7 +8,7 @@
 
 ## Protocol workflow
 
-`registration.py` binds an immutable `RegistrationOperations` per call. Existing
+`registration/orchestrator.py` binds an immutable `RegistrationOperations` per call. Existing
 facade patches made before `run_email` are respected; changing a facade symbol
 mid-run no longer changes an already bound workflow. Isolated tests may inject
 a fake operations object.
@@ -18,7 +18,7 @@ bound from the facade on each invocation. Other `RegistrationOperations`
 dependencies remain flat; this is an incremental interface change, not a new
 workflow or a change to persisted state.
 
-`registration_runtime.py` separates mutable state into resources, identity,
+`registration/runtime.py` separates mutable state into resources, identity,
 auth, OTP, account and outcome groups. Flat field access is a transitional
 compatibility view of the same storage, not a second copy. Checkpoint schemas
 remain unchanged. New stage code should consume the smallest group it
@@ -32,7 +32,7 @@ The auth-session/AT-probe stage stays behind the per-invocation bound
 binding and the resumable non-200 checkpoint, without changing stage order.
 
 Batch reports include a token-free `funnel` summary from
-`registration_funnel.py`. `registered_per_attempted` uses eligible attempted
+`registration/funnel.py`. `registered_per_attempted` uses eligible attempted
 mailboxes, after the already-registered/dead-end filter. Promotion is a
 separate measurement: `successful_per_registered` reports promotion coverage,
 and `eligible_per_successful_probe` divides Plus-trial eligibility by
@@ -139,7 +139,7 @@ that the server account was only partially created. Legacy `dead_end` records ar
 read as the same state. A failed recovery retains it; a successful recovery clears
 the guard, and verified account data takes precedence in the desktop grid.
 
-`registration_policy.py` owns retry classification, disposition and actionable
+`registration/policy.py` owns retry classification, disposition and actionable
 advice. Its pure `RetryDecision` separates three questions:
 
 - `attempt_retryable`: may this account retry immediately inside the same batch;

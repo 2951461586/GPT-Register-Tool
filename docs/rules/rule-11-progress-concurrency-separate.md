@@ -4,7 +4,7 @@
 > The **number is a contract**: tests, scripts and other docs cite `Rule 11`,
 > so a renumbered rule is a broken reference, not a cosmetic change.
 
-- **Enforced by**: `grep -n "registration_progress" sms_tool/registration_concurrency.py`
+- **Enforced by**: `grep -n "registration_progress" sms_tool/registration/concurrency.py`
 - **Source section**: Registration Progress and Concurrency
 
 ## Rule

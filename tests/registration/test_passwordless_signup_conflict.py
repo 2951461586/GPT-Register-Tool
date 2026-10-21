@@ -41,20 +41,20 @@ from unittest.mock import Mock
 
 import pytest
 
-from sms_tool import registration_retry_guard
+from sms_tool.registration import retry_guard as registration_retry_guard
 from sms_tool.kernel.failure_registry import (
     PASSWORDLESS_SIGNUP_CODE,
     PASSWORDLESS_SIGNUP_MESSAGE_MARKER,
     is_passwordless_signup_mismatch,
 )
-from sms_tool.registration_handlers import RegistrationEmailWorkflow
-from sms_tool.registration_outcome import _create_account_error
-from sms_tool.registration_retry_guard import (
+from sms_tool.registration.handlers import RegistrationEmailWorkflow
+from sms_tool.registration.outcome import _create_account_error
+from sms_tool.registration.retry_guard import (
     DEAD_END_MARKERS,
     RegistrationRetryGuard,
     _dead_end_reason,
 )
-from sms_tool.registration_runtime import RegistrationRuntimeState
+from sms_tool.registration.runtime import RegistrationRuntimeState
 
 #: The real response body, verbatim, minus the address masking.
 _MISMATCH_BODY = {

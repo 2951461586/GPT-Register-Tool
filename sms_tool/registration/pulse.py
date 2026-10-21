@@ -24,15 +24,15 @@ from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
-from .config import CFG
-from .kernel.failure_registry import (
+from ..config import CFG
+from ..kernel.failure_registry import (
     OTP_ARM_MISMATCH_MARKER as _OTP_ARM_MISMATCH_MARKER,
     OTP_BAN_MARKERS as _OTP_BAN_MARKERS,
     OTP_DISPATCH_VERDICT_EXCLUDED_CLASSES as _OTP_DISPATCH_VERDICT_EXCLUDED_CLASSES,
     OTP_MAILBOX_SIDE_MARKER as _OTP_MAILBOX_SIDE_MARKER,
     OTP_UNDISPATCHED_MARKER as _OTP_UNDISPATCHED_MARKER,
 )
-from .registration_cancel import cancellable_sleep
+from .cancel import cancellable_sleep
 
 # Failure signatures that indicate OTP delivery was blocked, most likely
 # by an IP-level ban rather than per-account issues. 词汇在 failure_registry
@@ -207,7 +207,7 @@ def run_pulse_batch(
     next_wave_is_canary = pulse_config.canary_enabled
 
     def cancelled() -> bool:
-        from .registration_cancel import registration_cancel_requested
+        from .cancel import registration_cancel_requested
 
         return (cancel_event is not None and cancel_event.is_set()) or registration_cancel_requested()
 

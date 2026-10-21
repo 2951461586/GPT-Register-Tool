@@ -15,9 +15,9 @@ from unittest.mock import Mock
 
 import pytest
 
-from sms_tool.registration_handlers import RegistrationEmailWorkflow
-from sms_tool.registration_state import RegistrationStateMachine
-from sms_tool import registration
+from sms_tool.registration.handlers import RegistrationEmailWorkflow
+from sms_tool.registration.state import RegistrationStateMachine
+from sms_tool.registration import orchestrator as registration
 from unittest.mock import patch
 
 

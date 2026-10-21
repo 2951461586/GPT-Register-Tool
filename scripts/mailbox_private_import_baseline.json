@@ -16,7 +16,7 @@
         "sms_tool/otp_strategy.py:http_utils._absolute_url",
         "sms_tool/otp_strategy.py:http_utils._json_or_raw",
         "sms_tool/phone_registration.py:http_utils._json_or_raw",
-        "sms_tool/registration.py:http_utils._follow_continue_url"
+        "sms_tool/registration/orchestrator.py:http_utils._follow_continue_url"
       ],
       "per_file": {
         "sms_tool/account_creation.py": 5,
@@ -25,7 +25,7 @@
         "sms_tool/codex_oauth.py": 1,
         "sms_tool/otp_strategy.py": 2,
         "sms_tool/phone_registration.py": 1,
-        "sms_tool/registration.py": 1
+        "sms_tool/registration/orchestrator.py": 1
       },
       "total": 15
     },
@@ -61,13 +61,13 @@
         "sms_tool/batch_runner.py:sentinel_tokens._sentinel_max_concurrency",
         "sms_tool/phone_registration.py:sentinel_tokens._import_sentinel_cookies",
         "sms_tool/phone_registration.py:sentinel_tokens._sentinel_device_id",
-        "sms_tool/registration.py:sentinel_tokens._cookie_jar_header",
-        "sms_tool/registration.py:sentinel_tokens._extract_sentinel",
-        "sms_tool/registration.py:sentinel_tokens._extract_sentinel_http",
-        "sms_tool/registration.py:sentinel_tokens._import_sentinel_cookies",
-        "sms_tool/registration.py:sentinel_tokens._sentinel_device_id",
-        "sms_tool/registration.py:sentinel_tokens._sentinel_frame_version",
-        "sms_tool/registration.py:sentinel_tokens._set_oai_did_cookie",
+        "sms_tool/registration/orchestrator.py:sentinel_tokens._cookie_jar_header",
+        "sms_tool/registration/orchestrator.py:sentinel_tokens._extract_sentinel",
+        "sms_tool/registration/orchestrator.py:sentinel_tokens._extract_sentinel_http",
+        "sms_tool/registration/orchestrator.py:sentinel_tokens._import_sentinel_cookies",
+        "sms_tool/registration/orchestrator.py:sentinel_tokens._sentinel_device_id",
+        "sms_tool/registration/orchestrator.py:sentinel_tokens._sentinel_frame_version",
+        "sms_tool/registration/orchestrator.py:sentinel_tokens._set_oai_did_cookie",
         "sms_tool/sentinel/client.py:sentinel_tokens._extract_sentinel"
       ],
       "per_file": {
@@ -75,7 +75,7 @@
         "sms_tool/accounts/account_recovery.py": 1,
         "sms_tool/batch_runner.py": 2,
         "sms_tool/phone_registration.py": 2,
-        "sms_tool/registration.py": 7,
+        "sms_tool/registration/orchestrator.py": 7,
         "sms_tool/sentinel/client.py": 1
       },
       "total": 14
@@ -127,27 +127,27 @@
         "sms_tool/phone_registration.py:utils._timing_summary",
         "sms_tool/phone_registration.py:utils._tl",
         "sms_tool/phone_registration.py:utils._tock",
-        "sms_tool/registration.py:utils._generate_password",
-        "sms_tool/registration.py:utils._print_timings",
-        "sms_tool/registration.py:utils._random_birthdate",
-        "sms_tool/registration.py:utils._random_name",
-        "sms_tool/registration.py:utils._safe_tock",
-        "sms_tool/registration.py:utils._tick",
-        "sms_tool/registration.py:utils._timing_summary",
-        "sms_tool/registration.py:utils._tl",
-        "sms_tool/registration.py:utils._tock",
+        "sms_tool/registration/orchestrator.py:utils._generate_password",
+        "sms_tool/registration/orchestrator.py:utils._print_timings",
+        "sms_tool/registration/orchestrator.py:utils._random_birthdate",
+        "sms_tool/registration/orchestrator.py:utils._random_name",
+        "sms_tool/registration/orchestrator.py:utils._safe_tock",
+        "sms_tool/registration/orchestrator.py:utils._tick",
+        "sms_tool/registration/orchestrator.py:utils._timing_summary",
+        "sms_tool/registration/orchestrator.py:utils._tl",
+        "sms_tool/registration/orchestrator.py:utils._tock",
+        "sms_tool/registration/outcome.py:utils._timing_summary",
         "sms_tool/registration_drivers/browser_flow/orchestrator.py:utils._generate_password",
         "sms_tool/registration_drivers/browser_flow/orchestrator.py:utils._random_birthdate",
-        "sms_tool/registration_drivers/browser_flow/orchestrator.py:utils._random_name",
-        "sms_tool/registration_outcome.py:utils._timing_summary"
+        "sms_tool/registration_drivers/browser_flow/orchestrator.py:utils._random_name"
       ],
       "per_file": {
         "sms_tool/codex_oauth.py": 2,
         "sms_tool/paypal/orchestrator.py": 2,
         "sms_tool/phone_registration.py": 9,
-        "sms_tool/registration.py": 9,
-        "sms_tool/registration_drivers/browser_flow/orchestrator.py": 3,
-        "sms_tool/registration_outcome.py": 1
+        "sms_tool/registration/orchestrator.py": 9,
+        "sms_tool/registration/outcome.py": 1,
+        "sms_tool/registration_drivers/browser_flow/orchestrator.py": 3
       },
       "total": 26
     }

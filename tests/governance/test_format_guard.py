@@ -47,7 +47,7 @@ def test_scope_covers_every_python_tree_this_repo_owns():
     scope = set(guard.scope_paths())
     for path in (
         "sms_tool/auth_flow/steps.py",
-        "sms_tool/registration_handlers.py",
+        "sms_tool/registration/handlers.py",
         "sms_tool/cli.py",
         "sms_tool/auth_state.py",
         "sms_tool/registration_drivers/base.py",

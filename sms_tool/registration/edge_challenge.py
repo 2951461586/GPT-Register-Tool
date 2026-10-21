@@ -26,15 +26,15 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from .http_client import EDGE_CHALLENGE_HOOK_ATTR, clear_session_circuit
-from .operator_output import emit as _emit
-from .proxy.edge_probe import EDGE_UNKNOWN
-from .proxy.entry import rotate_session
-from .registration_flags import registration_flag
-from .kernel.sanitizer import describe_exception
+from ..http_client import EDGE_CHALLENGE_HOOK_ATTR, clear_session_circuit
+from ..operator_output import emit as _emit
+from ..proxy.edge_probe import EDGE_UNKNOWN
+from ..proxy.entry import rotate_session
+from .flags import registration_flag
+from ..kernel.sanitizer import describe_exception
 
 if TYPE_CHECKING:  # pragma: no cover - import cycle guard for type checkers only
-    from .registration_handlers import RegistrationEmailWorkflow
+    from .handlers import RegistrationEmailWorkflow
 
 _LOGGER = logging.getLogger(__name__)
 

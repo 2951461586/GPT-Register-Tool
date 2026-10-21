@@ -5,7 +5,7 @@ from pathlib import Path
 from sms_tool import storage
 from sms_tool.store import connection
 from sms_tool.kernel.error_classification import classify_error
-from sms_tool.registration_outcome import _registration_outcome, _retain_registration_checkpoint
+from sms_tool.registration.outcome import _registration_outcome, _retain_registration_checkpoint
 
 
 class RegistrationCheckpointTests(unittest.TestCase):

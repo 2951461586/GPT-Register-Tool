@@ -19,9 +19,11 @@ from types import MappingProxyType, SimpleNamespace
 from unittest.mock import Mock, patch
 
 from sms_tool import config as config_module
-from sms_tool import registration_edge_challenge, registration_probe, registration_sentinel_stages
+from sms_tool.registration import edge_challenge as registration_edge_challenge
+from sms_tool.registration import probe as registration_probe
+from sms_tool.registration import sentinel_stages as registration_sentinel_stages
 from sms_tool.providers import mailbox_smailr
-from sms_tool.registration_handlers import RegistrationEmailWorkflow
+from sms_tool.registration.handlers import RegistrationEmailWorkflow
 from sms_tool.sentinel import bundle
 
 
@@ -198,7 +200,7 @@ def test_an_unrecognised_value_is_two_sided_on_purpose():
 # toggles outside it kept hand-rolling the parse, with three different
 # unknown-value semantics -- ``sentinel_password_bundle`` even failed **open**
 # (an unrecognised value turned a default-off switch on).  They now read through
-# ``sms_tool.registration_flags.registration_flag``; these tests pin both the
+# ``sms_tool.registration.flags.registration_flag``; these tests pin both the
 # frozen-section read and the fixed fail-closed polarity.
 
 #: ``(key, callable(self))`` for every toggle that shares the leaf parser.
@@ -263,6 +265,6 @@ def test_the_converged_toggles_and_auth_flow_agree_on_an_unknown_value():
         assert steps._signin_prompt_login_enabled() is False
 
     leaf = MappingProxyType({"registration": MappingProxyType({"signin_prompt_login": "maybe"})})
-    from sms_tool.registration_flags import registration_flag
+    from sms_tool.registration.flags import registration_flag
 
     assert registration_flag(leaf, "signin_prompt_login", False) is False

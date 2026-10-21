@@ -56,7 +56,7 @@ reported so a shift from module-scope to delayed is visible in ``--detail``.
 Per-pair on purpose, not one grand total: with a single number, wiring one pair
 would mask a new back-edge added to another. The trade-off is stated so it is
 not mistaken for full coverage -- moving an import *within* a pair (say from
-``cli.py`` to ``registration.py``, both ``sms_tool`` -> ``commands``) leaves the
+``cli.py`` to ``registration/orchestrator.py``, both ``sms_tool`` -> ``commands``) leaves the
 pair count unchanged. That is deliberate: the unit of architecture here is the
 directory relationship, and a same-pair redistribution does not worsen it. The
 per-source-module breakdown is printed by ``--detail`` for anyone who needs it.
@@ -90,6 +90,7 @@ EXCLUDED_DIRS = {"__pycache__", "_vendor"}
 #: Subpackages that are their own directory node. Anything else directly under
 #: ``sms_tool/`` collapses into the ``sms_tool`` node.
 SUBPACKAGES = (
+    "registration",
     "payment",
     "mailbox",
     "proxy",

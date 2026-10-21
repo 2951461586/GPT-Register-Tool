@@ -6,7 +6,7 @@ import json
 import time
 
 from . import deps, steps, totp
-from ..registration_protocol_helpers import _safe_int
+from ..registration.protocol_helpers import _safe_int
 
 
 def _otp_challenge_established(body):
@@ -266,7 +266,7 @@ def _existing_login_otp(
     )
     if not otp_ok:
         # The signup lane dumps the client auth session on this exact failure
-        # (``registration_handlers.py`` ``after_otp_validate_failed``).  Without
+        # (``registration/handlers.py`` ``after_otp_validate_failed``).  Without
         # it a 401 here is indistinguishable from a plain wrong-code rejection.
         try:
             deps._fetch_client_auth_session_dump(

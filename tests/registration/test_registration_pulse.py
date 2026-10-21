@@ -1,12 +1,12 @@
-"""Tests for pulse-wave batch scheduling (``sms_tool/registration_pulse.py``)."""
+"""Tests for pulse-wave batch scheduling (``sms_tool/registration/pulse.py``)."""
 
 from __future__ import annotations
 
 import pytest
 import threading
 
-from sms_tool import registration_pulse as pulse_module
-from sms_tool.registration_pulse import (
+from sms_tool.registration import pulse as pulse_module
+from sms_tool.registration.pulse import (
     PulseConfig,
     _detect_ip_ban,
     _is_otp_ban_signal,

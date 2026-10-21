@@ -22,7 +22,7 @@ import unittest
 from sms_tool import http_client
 from sms_tool.accounts import account_2fa
 from sms_tool.sentinel import client as sentinel_client
-from sms_tool import registration_preflight
+from sms_tool.registration import preflight as registration_preflight
 
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -220,7 +220,7 @@ _HTTP_VERBS = {"get", "post", "put", "delete", "patch", "head", "request"}
 GUARDED_MODULES = (
     "sms_tool/accounts/account_2fa.py",
     "sms_tool/sentinel/client.py",
-    "sms_tool/registration_preflight.py",
+    "sms_tool/registration/preflight.py",
 )
 
 

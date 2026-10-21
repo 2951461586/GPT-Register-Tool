@@ -1,8 +1,8 @@
 from unittest.mock import Mock
 
-from sms_tool.registration_handlers import RegistrationEmailWorkflow
-from sms_tool.registration_runtime import RegistrationRuntimeState
-from sms_tool.registration_state import RegistrationStateMachine
+from sms_tool.registration.handlers import RegistrationEmailWorkflow
+from sms_tool.registration.runtime import RegistrationRuntimeState
+from sms_tool.registration.state import RegistrationStateMachine
 
 
 def test_grouped_state_and_flat_compatibility_share_storage():

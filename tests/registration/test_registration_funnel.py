@@ -1,4 +1,4 @@
-from sms_tool.registration_funnel import (
+from sms_tool.registration.funnel import (
     combine_registration_funnels,
     summarize_registration_funnel,
 )

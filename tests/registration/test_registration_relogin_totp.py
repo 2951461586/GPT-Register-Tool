@@ -1,6 +1,7 @@
 from unittest.mock import Mock, patch
 
-from sms_tool import auth_flow, registration
+from sms_tool import auth_flow
+from sms_tool.registration import orchestrator as registration
 
 
 def _mfa_payload():

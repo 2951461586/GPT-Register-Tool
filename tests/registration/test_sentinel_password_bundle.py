@@ -12,7 +12,7 @@ import json
 from types import SimpleNamespace
 from typing import Any
 
-from sms_tool import registration_handlers as rh
+from sms_tool.registration import handlers as rh
 from sms_tool import sentinel as sentinel_pkg
 from sms_tool.sentinel import client
 

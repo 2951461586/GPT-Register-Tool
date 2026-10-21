@@ -14,9 +14,9 @@ import unittest
 from contextlib import nullcontext
 from unittest.mock import Mock, patch
 
-from sms_tool import registration_cancel
+from sms_tool.registration import cancel as registration_cancel
 from sms_tool.batch_runner import run_batch_impl
-from sms_tool.registration_cancel import (
+from sms_tool.registration.cancel import (
     RegistrationCancelled,
     cancellable_sleep,
     cancel_scope,
@@ -25,10 +25,10 @@ from sms_tool.registration_cancel import (
     registration_cancel_requested,
     request_registration_cancel,
 )
-from sms_tool.registration_handlers import RegistrationEmailWorkflow
-from sms_tool.registration_outcome import _failure_result
-from sms_tool.registration_pulse import PulseConfig, run_pulse_batch
-from sms_tool.registration_state import RegistrationStateMachine
+from sms_tool.registration.handlers import RegistrationEmailWorkflow
+from sms_tool.registration.outcome import _failure_result
+from sms_tool.registration.pulse import PulseConfig, run_pulse_batch
+from sms_tool.registration.state import RegistrationStateMachine
 
 
 def _mailbox(email="user@example.com"):
@@ -185,7 +185,7 @@ class BatchCancelTests(unittest.TestCase):
             return True
 
         with patch(
-            "sms_tool.registration_cancel.cancellable_sleep",
+            "sms_tool.registration.cancel.cancellable_sleep",
             side_effect=slow_cancelled_sleep,
         ):
             results = run_batch_impl(
@@ -241,7 +241,7 @@ class PulseCancelTests(unittest.TestCase):
 
         pulse_config = PulseConfig(wave_size=1, wave_delay_seconds=1.0)
 
-        with patch("sms_tool.registration_pulse.cancellable_sleep", return_value=True) as sleep_mock:
+        with patch("sms_tool.registration.pulse.cancellable_sleep", return_value=True) as sleep_mock:
             results = run_pulse_batch(
                 2,
                 run_one_fn=run_one,

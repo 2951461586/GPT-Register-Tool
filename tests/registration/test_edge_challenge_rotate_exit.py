@@ -35,8 +35,8 @@ import unittest
 from unittest.mock import Mock
 
 from sms_tool import http_client
-from sms_tool.registration_handlers import RegistrationEmailWorkflow
-from sms_tool.registration_result import safe_proxy_audit
+from sms_tool.registration.handlers import RegistrationEmailWorkflow
+from sms_tool.registration.result import safe_proxy_audit
 
 _ROTATABLE = "http://user-region-US-sid-OLD1234-t-5:secret@proxy.example:443"
 #: A provider with no sticky session id: ``rotate_session`` cannot change it.

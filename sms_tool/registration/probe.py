@@ -22,7 +22,7 @@ Limitations (reported, not guessed)
 * A network/transport failure is ``unknown`` with an ``error`` field: "not
   probed" and "registered" are different answers and are never conflated.
 
-The reference implementation (``gpt-reg-review`` ``registration_probe.py``)
+The reference implementation (``gpt-reg-review`` ``registration/probe.py``)
 posts the continue step and accepts the possible OTP; this project keeps the
 read-only boundary and reports the ambiguous landing instead.
 """
@@ -35,9 +35,9 @@ from collections.abc import Mapping
 from typing import Any
 from urllib.parse import urlencode, urlparse
 
-from . import config as config_module
-from . import endpoints
-from .auth_flow import deps, password_step, steps
+from .. import config as config_module
+from .. import endpoints
+from ..auth_flow import deps, password_step, steps
 
 STATUS_REGISTERED = "registered"
 STATUS_UNREGISTERED = "unregistered"
@@ -251,7 +251,7 @@ def probe_registration(
     started = time.perf_counter()
     try:
         if active_session is None:
-            from .registration_handlers import _new_registration_session
+            from .handlers import _new_registration_session
 
             active_session = _new_registration_session(proxy)
         _seed_device_cookie(active_session, resolved_device_id)

@@ -7,7 +7,7 @@
 
 ## 注册链路
 
-- **`_run_stage` 异常分类修复**（潜在真 bug）：`registration_handlers.py` 此前只把
+- **`_run_stage` 异常分类修复**（潜在真 bug）：`registration/handlers.py` 此前只把
   NameError/AttributeError/ImportError/KeyError/TypeError 归入 `_internal:`，其余
   一律落 `_transport:` 计为可重试网络错误——IndexError 等编程错误会被当成网络抖动
   重试（"报错名掩盖真因"的镜像）。现按异常类型显式分类，并与

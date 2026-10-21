@@ -23,7 +23,7 @@ from .promotion_states import (
     promotion_marker_is_stale,
     promotion_status_with_eligibility,
 )
-from .registration_retry_guard import RegistrationRetryGuard, mailbox_registration_status
+from .registration.retry_guard import RegistrationRetryGuard, mailbox_registration_status
 from .kernel.sanitizer import sanitize
 from .storage import (
     _account_type,

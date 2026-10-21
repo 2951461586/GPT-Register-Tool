@@ -1,7 +1,7 @@
 """
 注册结果判定模块。
 
-从 registration.py 解耦出来，包含：
+从 registration/orchestrator.py 解耦出来，包含：
 - 账号创建阶段的错误归一化（_create_account_error）
 - AT 稳定性探测（_probe_registration_access_token）
 - 注册链路是否依赖 refresh_token / 手机验证码的开关（_requires_* 两个小函数）
@@ -15,14 +15,14 @@ import time
 from collections.abc import Mapping
 from typing import Any
 
-from .accounts.account_liveness import probe_account_liveness
-from .config import CFG
-from .kernel.error_classification import classify_error
-from .registration_policy import registration_retry_decision
-from .registration_progress import registration_stage
-from .registration_result import build_registration_failure_result
-from .kernel.sanitizer import sanitize as _sanitize, sanitize_text as _sanitize_text
-from .utils import _timing_summary
+from ..accounts.account_liveness import probe_account_liveness
+from ..config import CFG
+from ..kernel.error_classification import classify_error
+from .policy import registration_retry_decision
+from .progress import registration_stage
+from .result import build_registration_failure_result
+from ..kernel.sanitizer import sanitize as _sanitize, sanitize_text as _sanitize_text
+from ..utils import _timing_summary
 
 
 def _create_account_error(create_ok, create_data):

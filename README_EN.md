@@ -110,11 +110,11 @@ Module ownership and responsibility per layer:
 | ---------------------------------------- | --- | --- |
 | ① Desktop UI | `SmsWorkbench/` | Generic Host / DI, MVVM pages, settings, batch-payment window, account pool; calls the backend through `IBackendClient` with argument lists plus cancel / timeout / process-tree kill |
 | ② CLI / command adapters | `cli.py`, `commands/`, `cli_parsers/` | Argument parsing, task orchestration, batches, exit status; owns no provider implementation |
-| ③ Application workflows | `registration.py`, `registration_handlers.py` | Registration facade and protocol lane: stage order, Sentinel issuance, OTP, AT probe |
-| ③ Application workflows | `batch_runner.py`, `registration_pulse.py` | Concurrency and pulse scheduling, JIT AT gate, atomic checkpoints and resume |
+| ③ Application workflows | `registration/orchestrator.py`, `registration/handlers.py` | Registration facade and protocol lane: stage order, Sentinel issuance, OTP, AT probe |
+| ③ Application workflows | `batch_runner.py`, `registration/pulse.py` | Concurrency and pulse scheduling, JIT AT gate, atomic checkpoints and resume |
 | ③ Application workflows | `registration_drivers/` | Browser drivers (playwright · camoufox · roxy · cloak) plus `browser_flow/` and `external_sessions/` |
 | ③ Application workflows | `accounts/`, `codex_oauth.py` | Existing-account recovery and Codex OAuth; never new signup |
-| ④ Domain contracts | `registration_result.py`, `registration_flags.py`, `checkout_contract.py`, `payment/wire.py`, `desktop_ipc.py` | Immutable seams bound once per invocation; `RegistrationOperations` is a fixed interface, not a live module passed into the workflow |
+| ④ Domain contracts | `registration/result.py`, `registration/flags.py`, `checkout_contract.py`, `payment/wire.py`, `desktop_ipc.py` | Immutable seams bound once per invocation; `RegistrationOperations` is a fixed interface, not a live module passed into the workflow |
 | ⑤ Provider / persistence adapters&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `auth_flow/` | Step functions: signin / authorize / continue / OTP / TOTP |
 | ⑤ Provider / persistence adapters&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `sentinel/` | Sentinel token issuance (Node `sdk.js` runner) |
 | ⑤ Provider / persistence adapters&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `mailbox/service.py`, `mailbox/strategies.py`, `providers/` | Mailbox routing, capability resolution, polling policy, provider transport |

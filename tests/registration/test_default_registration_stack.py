@@ -11,8 +11,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from sms_tool import registration_reference_lane as lane
-from sms_tool.registration_state import _normalize_registration_mode
+from sms_tool.registration import reference_lane as lane
+from sms_tool.registration.state import _normalize_registration_mode
 from sms_tool.sentinel import bundle
 
 ROOT = Path(__file__).resolve().parents[2]

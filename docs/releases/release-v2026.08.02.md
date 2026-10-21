@@ -20,7 +20,7 @@ account health, registration concurrency, and desktop payment-method metadata.
   explicit HTTP-401 OAuth recovery, and permanent-deactivation handling.
 - Reduced `sms_tool.cpa_import` to CPA listing, remote quota proxying, payload
   conversion, and upload responsibilities.
-- Added `sms_tool.registration_concurrency` so resource admission and wait
+- Added `sms_tool.registration.concurrency` so resource admission and wait
   metrics are independent from registration progress persistence.
 - Centralized WPF payment names, aliases, countries, and single/batch
   availability in `SmsWorkbench/PaymentMethods.cs`.

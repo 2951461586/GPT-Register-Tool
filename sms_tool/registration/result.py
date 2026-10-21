@@ -13,7 +13,7 @@
   浏览器的 ``registration_driver``/``browser_diagnostics`` 等）通过 ``extra``
   合入，不进入共享契约。
 
-判定逻辑（成功/失败/何种错误）仍归 :mod:`sms_tool.registration_outcome` 的
+判定逻辑（成功/失败/何种错误）仍归 :mod:`sms_tool.registration.outcome` 的
 ``_registration_outcome`` / ``_probe_registration_access_token``，本模块只负责
 装配，不重复判定。
 """
@@ -25,8 +25,8 @@ from typing import Any
 import logging
 import re
 
-from .kernel.sanitizer import sanitize_text
-from .registration_policy import registration_retry_decision
+from ..kernel.sanitizer import sanitize_text
+from .policy import registration_retry_decision
 
 logger = logging.getLogger(__name__)
 

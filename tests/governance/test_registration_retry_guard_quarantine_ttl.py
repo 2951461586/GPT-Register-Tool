@@ -26,7 +26,7 @@ from __future__ import annotations
 import json
 import time
 
-from sms_tool.registration_retry_guard import RegistrationRetryGuard
+from sms_tool.registration.retry_guard import RegistrationRetryGuard
 
 TTL = 3600
 

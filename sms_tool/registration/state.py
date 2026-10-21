@@ -9,8 +9,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Mapping
 
-from .config import current_config_data
-from .kernel.sanitizer import sanitize_text
+from ..config import current_config_data
+from ..kernel.sanitizer import sanitize_text
 
 
 class RegistrationState(str, Enum):
@@ -265,7 +265,7 @@ def _stored_registration_record(email):
     for ``storage`` themselves.
     """
     try:
-        from .storage import get_account_record
+        from ..storage import get_account_record
 
         return get_account_record(email) or {}
     except Exception:

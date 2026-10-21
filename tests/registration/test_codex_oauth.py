@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 from sms_tool import codex_oauth
 from sms_tool.kernel.error_classification import classify_error
 from sms_tool.kernel.failure_registry import BATCH_DROPPED_CLASSES
-from sms_tool.registration_outcome import _oauth_result_summary
+from sms_tool.registration.outcome import _oauth_result_summary
 
 # These tests drive the legacy cached-Sentinel send (``json={}``). The send is
 # browser-style by default now; that path has its own file

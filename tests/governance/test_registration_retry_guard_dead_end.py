@@ -22,9 +22,9 @@ import time
 
 import pytest
 
-from sms_tool import registration_checkpoint
-from sms_tool.registration_policy import registration_retry_decision
-from sms_tool.registration_retry_guard import RegistrationRetryGuard
+from sms_tool.registration import checkpoint as registration_checkpoint
+from sms_tool.registration.policy import registration_retry_decision
+from sms_tool.registration.retry_guard import RegistrationRetryGuard
 
 
 def _guard(tmp_path, **kwargs):

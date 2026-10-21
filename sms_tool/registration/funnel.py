@@ -6,9 +6,9 @@ from collections import Counter
 from collections.abc import Iterable, Mapping
 from typing import Any
 
-from .kernel.error_classification import classify_error
-from .kernel.failure_registry import FAILURE_CLASSES
-from .registration_state import RegistrationState
+from ..kernel.error_classification import classify_error
+from ..kernel.failure_registry import FAILURE_CLASSES
+from .state import RegistrationState
 
 _FAILURE_CLASSES = frozenset(item.code for item in FAILURE_CLASSES)
 _STAGES = frozenset(state.value for state in RegistrationState) - {"failed", "completed"}

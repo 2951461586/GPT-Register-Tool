@@ -19,7 +19,7 @@ from sms_tool.browser_fingerprint_pool import (
     TIMEZONE_NAME_BY_IANA,
     build_browser_environment,
 )
-from sms_tool.registration_handlers import (
+from sms_tool.registration.handlers import (
     _apply_protocol_fingerprint,
     _new_registration_session,
 )
@@ -69,7 +69,7 @@ def test_pool_geo_is_applied_instead_of_the_template_guess():
             "sms_tool.fingerprint_pool.shared_fingerprint_pool",
             return_value=SimpleNamespace(size=1, next=lambda proxy: _profile()),
         ),
-        patch("sms_tool.registration_handlers.set_auth_fingerprint") as set_fp,
+        patch("sms_tool.registration.handlers.set_auth_fingerprint") as set_fp,
         patch("sms_tool.proxy.entry.infer_proxy_country", return_value="") as infer,
     ):
         _apply_protocol_fingerprint(ops, {}, "http://user:pass@host:8080")

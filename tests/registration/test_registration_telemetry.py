@@ -2,7 +2,7 @@ import json
 import logging
 
 from sms_tool.logging_setup import CorrelatedJsonFormatter
-from sms_tool.registration_progress import RegistrationProgress, registration_quality_metrics
+from sms_tool.registration.progress import RegistrationProgress, registration_quality_metrics
 from sms_tool.telemetry import current_run_id
 
 
@@ -34,7 +34,7 @@ def test_test_records_are_excluded_from_quality_metrics():
 
 
 def test_progress_persists_driver_even_without_a_result(tmp_path, monkeypatch):
-    from sms_tool import registration_progress
+    from sms_tool.registration import progress as registration_progress
 
     path = tmp_path / "progress.jsonl"
     monkeypatch.setattr(registration_progress, "runtime_file", lambda *a: path)

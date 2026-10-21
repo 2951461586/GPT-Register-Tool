@@ -1,4 +1,4 @@
-from sms_tool.registration_policy import registration_retry_decision
+from sms_tool.registration.policy import registration_retry_decision
 
 
 def test_network_failure_allows_attempt_and_future_batch_retry():

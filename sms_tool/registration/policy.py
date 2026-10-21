@@ -11,10 +11,10 @@ without importing this policy module.
 
 from dataclasses import dataclass
 
-from .kernel.error_classification import classify_error, error_text, is_terminal_registration_error
-from .kernel.failure_registry import ADVICE as _ADVICE
-from .kernel.failure_registry import FAILURE_CLASSES as _REGISTRY_CLASSES
-from .kernel.failure_registry import PASSWORD_CLAIMED_MARKER
+from ..kernel.error_classification import classify_error, error_text, is_terminal_registration_error
+from ..kernel.failure_registry import ADVICE as _ADVICE
+from ..kernel.failure_registry import FAILURE_CLASSES as _REGISTRY_CLASSES
+from ..kernel.failure_registry import PASSWORD_CLAIMED_MARKER
 
 # 类别→可重试的判定来自注册表（retryable=True 的类）。新增类别在
 # failure_registry 改一处，这里与 classify_error 自动跟随。

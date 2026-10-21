@@ -4,11 +4,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 REGISTRATION_MODULES = (
-    "sms_tool/registration.py",
-    "sms_tool/registration_handlers.py",
-    "sms_tool/registration_state.py",
-    "sms_tool/registration_progress.py",
-    "sms_tool/registration_concurrency.py",
+    "sms_tool/registration/orchestrator.py",
+    "sms_tool/registration/handlers.py",
+    "sms_tool/registration/state.py",
+    "sms_tool/registration/progress.py",
+    "sms_tool/registration/concurrency.py",
     "sms_tool/account_creation.py",
 )
 FORBIDDEN_PAYMENT_MODULES = {

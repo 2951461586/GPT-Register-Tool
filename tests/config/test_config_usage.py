@@ -132,7 +132,7 @@ KNOWN_FALSE_POSITIVES = {
 # EXPECTED_UNREAD" -- is the other direction working.
 #
 # Note the detector matches on the *leaf* name, so `paypal_*.phone_pool` never
-# appears here: the literal `"phone_pool"` still exists in `registration.py`
+# appears here: the literal `"phone_pool"` still exists in `registration/orchestrator.py`
 # (a forwarded parameter) and in `sms_providers.REMOVED_SOURCE_VALUES`. Those
 # two keys are dead in exactly the same way and stay invisible to this ratchet.
 

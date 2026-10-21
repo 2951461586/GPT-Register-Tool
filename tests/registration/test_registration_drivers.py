@@ -15,7 +15,7 @@ from sms_tool.config import ConfigError, validate_registration_driver_config
 from sms_tool.registration_drivers.base import normalize_registration_driver
 from sms_tool.registration_drivers.browser_session import _playwright_proxy
 from sms_tool.registration_drivers.playwright import build_browser_session_file
-from sms_tool.registration_outcome import _browser_mailbox_snapshot
+from sms_tool.registration.outcome import _browser_mailbox_snapshot
 from sms_tool.registration import run_email
 
 
@@ -189,7 +189,7 @@ class RegistrationDriverTests(unittest.TestCase):
                 self.assertFalse(result["success"])
                 self.assertEqual(result["failure_class"], "configuration")
 
-    @patch("sms_tool.registration_handlers.RegistrationEmailWorkflow")
+    @patch("sms_tool.registration.handlers.RegistrationEmailWorkflow")
     def test_run_email_forwards_registration_seams(self, workflow_cls):
         workflow_cls.return_value.run.return_value = {"success": True}
         persistence = object()

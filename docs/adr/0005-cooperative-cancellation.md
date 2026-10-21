@@ -3,7 +3,7 @@
 - Status: Accepted
 - Date: 2026-09-06
 
-注册批次使用进程内协作取消：`sms_tool/registration_cancel.py` 持有一个全局
+注册批次使用进程内协作取消：`sms_tool/registration/cancel.py` 持有一个全局
 `threading.Event`，外加可选的 per-batch `cancel_event` 参数（双通道按位或）。
 取消语义是**协作式的**：worker 在有界检查点观察到取消后，以
 `error="registration_cancelled"` / `failure_class="cancelled"` /

@@ -188,7 +188,7 @@ def _load_heavy_deps() -> None:
         if remail_enabled is None:
             remail_enabled = _re
     if _build_session_file is None or _mailbox_snapshot is None or run_email is None:
-        from .registration import (
+        from .registration.orchestrator import (
             _build_session_file as _bsf,
             _mailbox_snapshot as _ms,
             run_email as _re2,
@@ -746,7 +746,7 @@ def _main_registration_pipeline(args, base_dir) -> None:
 
     # Phone registration mode (via SMSBower)
     if getattr(args, "phone_register", False):
-        from .registration import run_phone_register
+        from .registration.orchestrator import run_phone_register
 
         proxy_pool = _proxy_pool_values(args)
         if len(proxy_pool) > 1:

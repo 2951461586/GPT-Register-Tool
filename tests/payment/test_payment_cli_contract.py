@@ -3,7 +3,8 @@ from unittest.mock import patch
 
 import pytest
 
-from sms_tool import cli, registration
+from sms_tool import cli
+from sms_tool.registration import orchestrator as registration
 
 from sms_tool import account_creation
 

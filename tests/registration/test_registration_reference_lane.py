@@ -9,10 +9,10 @@ from unittest.mock import Mock, patch
 import pytest
 
 from sms_tool import auth_flow
-from sms_tool import registration_reference_lane as lane
+from sms_tool.registration import reference_lane as lane
 from sms_tool.auth_flow import signup as signup_module
-from sms_tool.registration_handlers import RegistrationEmailWorkflow
-from sms_tool.registration_state import RegistrationStateMachine
+from sms_tool.registration.handlers import RegistrationEmailWorkflow
+from sms_tool.registration.state import RegistrationStateMachine
 from sms_tool.sentinel import client as sentinel_client
 
 DEVICE_ID = "33333333-3333-4333-8333-333333333333"
@@ -296,7 +296,7 @@ def test_reference_lane_polls_the_mailbox_even_when_dispatch_still_shows_pending
 
 
 def test_without_the_lane_a_pending_dispatch_still_stops_before_polling():
-    from sms_tool.registration_handlers import RegistrationAbort
+    from sms_tool.registration.handlers import RegistrationAbort
 
     workflow = _otp_workflow({"registration": {}})
     workflow.r.otp_poll.poll = Mock(return_value="123456")

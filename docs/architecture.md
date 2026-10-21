@@ -22,13 +22,13 @@ export remain separate workflows.
 | --- | --- | --- |
 | `SmsWorkbench/` | UI, command planning, task lifecycle, presentation | Provider protocol and registration state |
 | `sms_tool/commands/` | CLI argument adaptation | Provider implementation |
-| `registration.py` | Stable entry points and compatibility exports | Stage implementations |
-| `registration_handlers.py` | Protocol workflow and stage ordering | Payment or recovery orchestration |
-| `registration_persistence.py`, `registration_stage_runner.py`, `registration_protocol_helpers.py`, `registration_otp_stages.py`, `registration_account_stages.py`, `registration_edge_challenge.py`, `registration_resume.py`, `registration_sentinel_stages.py` | Persistence seam, stage executor + abort signal, pure transport/format helpers, the email-OTP stages, the account-creation / session / AT-probe stages, the in-flow edge-challenge hook (same-pool exit move + audit counters), checkpoint persistence + the post-create resume stage, and Sentinel issuance (switch / password-page bundle / per-flow); re-exported by `registration_handlers.py` | Stage ordering |
+| `registration/orchestrator.py` | Stable entry points and compatibility exports | Stage implementations |
+| `registration/handlers.py` | Protocol workflow and stage ordering | Payment or recovery orchestration |
+| `registration/persistence.py`, `registration/stage_runner.py`, `registration/protocol_helpers.py`, `registration/otp_stages.py`, `registration/account_stages.py`, `registration/edge_challenge.py`, `registration/resume.py`, `registration/sentinel_stages.py` | Persistence seam, stage executor + abort signal, pure transport/format helpers, the email-OTP stages, the account-creation / session / AT-probe stages, the in-flow edge-challenge hook (same-pool exit move + audit counters), checkpoint persistence + the post-create resume stage, and Sentinel issuance (switch / password-page bundle / per-flow); re-exported by `registration/handlers.py` | Stage ordering |
 | `registration_drivers/browser_flow/` | Browser page state and form workflow | Mailbox provider transport |
 | `registration_drivers/external_sessions/` | Session creation, managed lifecycle, profile config and egress probe | Registration stages |
 | `mailbox/service.py`, `mailbox/strategies.py`, `providers/` | Mailbox routing, capability resolution, polling policy and provider transport | Registration success |
-| `registration_result.py` | Shared result assembly | Success decisions |
+| `registration/result.py` | Shared result assembly | Success decisions |
 | `store/` | Persistence and domain facts | Provider side effects |
 | `accounts/account_recovery.py`, `codex_oauth.py` | Existing-account recovery and OAuth | Automatic new signup |
 | `payment_*`, `pay_link/`, `paypal/` | Payment planning and explicit execution | Mailbox purchasing or account signup |
@@ -210,12 +210,12 @@ above.
 <!-- ratchet-numbers:begin architecture -->
 | Measure | Value |
 | --- | --- |
-| Module-level cross-directory edges | 341 |
-| Directory pairs | 54 |
-| Mutual pairs / minority-direction edges | 15 / 50 |
-| Delayed cross-directory edges | 235 |
+| Module-level cross-directory edges | 437 |
+| Directory pairs | 66 |
+| Mutual pairs / minority-direction edges | 18 / 49 |
+| Delayed cross-directory edges | 253 |
 | Delayed imports in the package | 417 (baseline 417) |
-| Claimed tracked `sms_tool` modules | 309 of 309 (0 unclaimed, 41 directory-map groups) |
+| Claimed tracked `sms_tool` modules | 310 of 310 (0 unclaimed, 41 directory-map groups) |
 <!-- ratchet-numbers:end architecture -->
 
 `tests/config/test_pilens_scope_config.py` pins the scope and the formatting

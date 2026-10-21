@@ -46,13 +46,14 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from sms_tool import registration, registration_handlers
+from sms_tool.registration import orchestrator as registration
+from sms_tool.registration import handlers as registration_handlers
 from sms_tool.account_creation import _is_user_already_exists
 from sms_tool.kernel.error_classification import classify_error
-from sms_tool.registration_handlers import RegistrationEmailWorkflow
-from sms_tool.registration_policy import registration_retry_decision
-from sms_tool.registration_runtime import RegistrationRuntimeState
-from sms_tool.registration_state import RegistrationStateMachine
+from sms_tool.registration.handlers import RegistrationEmailWorkflow
+from sms_tool.registration.policy import registration_retry_decision
+from sms_tool.registration.runtime import RegistrationRuntimeState
+from sms_tool.registration.state import RegistrationStateMachine
 
 
 # Shape taken verbatim from auth_flow._login_existing_account_with_email_otp.
@@ -219,7 +220,7 @@ class ExistingLoginProbeTests(unittest.TestCase):
         # ``registration_handlers`` binds the class at import time, so the seam
         # is that module's own symbol -- patching the defining module would not
         # reach the call site.
-        return patch("sms_tool.registration_handlers.RegistrationRetryGuard")
+        return patch("sms_tool.registration.handlers.RegistrationRetryGuard")
 
     def test_the_lane_is_asked_with_the_password_and_email_forbidden(self):
         workflow = self._workflow(login_result={"ok": True})

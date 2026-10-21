@@ -1,8 +1,8 @@
 import pytest
 
 from sms_tool.backoff import transport_backoff
-from sms_tool.registration_policy import registration_retry_decision
-from sms_tool.registration_retry_guard import RegistrationRetryGuard
+from sms_tool.registration.policy import registration_retry_decision
+from sms_tool.registration.retry_guard import RegistrationRetryGuard
 
 
 @pytest.mark.parametrize(

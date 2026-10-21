@@ -109,11 +109,11 @@ flowchart TB
 | ---------------------------------------- | --- | --- |
 | ① 桌面端 UI | `SmsWorkbench/` | Generic Host / DI、MVVM 页面、设置页、批量协议支付窗口、账号池；经 `IBackendClient` 以参数列表调用后端，并管理取消 / 超时 / 进程树终止 |
 | ② CLI / 命令适配 | `cli.py`、`commands/`、`cli_parsers/` | 参数解析、任务编排、批量任务、退出码；不承载 provider 实现 |
-| ③ 应用工作流 | `registration.py`、`registration_handlers.py` | 注册门面与协议泳道：阶段顺序、Sentinel 签发、OTP、AT 探活 |
-| ③ 应用工作流 | `batch_runner.py`、`registration_pulse.py` | 并发与脉冲调度、JIT AT 门禁、原子断点与断点续跑 |
+| ③ 应用工作流 | `registration/orchestrator.py`、`registration/handlers.py` | 注册门面与协议泳道：阶段顺序、Sentinel 签发、OTP、AT 探活 |
+| ③ 应用工作流 | `batch_runner.py`、`registration/pulse.py` | 并发与脉冲调度、JIT AT 门禁、原子断点与断点续跑 |
 | ③ 应用工作流 | `registration_drivers/` | 浏览器驱动（playwright · camoufox · roxy · cloak）与 `browser_flow/`、`external_sessions/` |
 | ③ 应用工作流 | `accounts/`、`codex_oauth.py` | 存量账号恢复与 Codex OAuth；不负责新注册 |
-| ④ 领域契约 | `registration_result.py`、`registration_flags.py`、`checkout_contract.py`、`payment/wire.py`、`desktop_ipc.py` | 每次调用绑定一次的不可变接缝；`RegistrationOperations` 为固定接口，不作为活模块传入工作流 |
+| ④ 领域契约 | `registration/result.py`、`registration/flags.py`、`checkout_contract.py`、`payment/wire.py`、`desktop_ipc.py` | 每次调用绑定一次的不可变接缝；`RegistrationOperations` 为固定接口，不作为活模块传入工作流 |
 | ⑤ Provider / 持久化适配&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `auth_flow/` | 步骤函数：signin / authorize / continue / OTP / TOTP |
 | ⑤ Provider / 持久化适配&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `sentinel/` | Sentinel Token 签发（Node `sdk.js` runner） |
 | ⑤ Provider / 持久化适配&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `mailbox/service.py`、`mailbox/strategies.py`、`providers/` | 邮箱路由、能力解析、轮询策略与 provider 传输 |

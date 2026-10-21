@@ -24,9 +24,9 @@ import pytest
 from sms_tool.auth_state import passwordless_arm_armed
 from sms_tool.kernel.error_classification import classify_error
 from sms_tool.kernel.failure_registry import OTP_ARM_MISMATCH_MARKER, OTP_UNDISPATCHED_MARKER
-from sms_tool.registration_handlers import RegistrationAbort, RegistrationEmailWorkflow
-from sms_tool.registration_pulse import _detect_ip_ban, _is_otp_ban_signal
-from sms_tool.registration_state import RegistrationStateMachine
+from sms_tool.registration.handlers import RegistrationAbort, RegistrationEmailWorkflow
+from sms_tool.registration.pulse import _detect_ip_ban, _is_otp_ban_signal
+from sms_tool.registration.state import RegistrationStateMachine
 
 
 def _summary(*, mode, pending=True):

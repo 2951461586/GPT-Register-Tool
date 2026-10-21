@@ -29,29 +29,29 @@ from typing import TYPE_CHECKING, Any, Callable
 
 from curl_cffi import requests as curl_requests
 
-from . import registration_checkpoint
-from .desktop_ipc import emit_event
-from .kernel.failure_registry import PASSWORDLESS_SIGNUP_CODE, is_passwordless_signup_mismatch
-from .operator_output import emit as _emit
-from .registration_cancel import RegistrationCancelled, cancellable_sleep
-from .registration_flags import registration_flag
-from .registration_protocol_helpers import (
+from . import checkpoint as registration_checkpoint
+from ..desktop_ipc import emit_event
+from ..kernel.failure_registry import PASSWORDLESS_SIGNUP_CODE, is_passwordless_signup_mismatch
+from ..operator_output import emit as _emit
+from .cancel import RegistrationCancelled, cancellable_sleep
+from .flags import registration_flag
+from .protocol_helpers import (
     _create_account_response_line,
     _is_existing_login_dead_end_error,
     _login_probe_password,
     _safe_int,
 )
-from .registration_retry_guard import RegistrationRetryGuard
-from .kernel.sanitizer import account_reference, describe_exception
-from .telemetry import current_run_id
+from .retry_guard import RegistrationRetryGuard
+from ..kernel.sanitizer import account_reference, describe_exception
+from ..telemetry import current_run_id
 
 if TYPE_CHECKING:  # pragma: no cover - import cycle guard for type checkers only
-    from .registration_handlers import RegistrationEmailWorkflow
+    from .handlers import RegistrationEmailWorkflow
 
-#: Keep the ``sms_tool.registration_handlers`` logger channel so ``sms_tool.log``
-#: category tagging (``注册``) and ``assertLogs("sms_tool.registration_handlers")``
+#: Keep the ``sms_tool.registration.handlers`` logger channel so ``sms_tool.log``
+#: category tagging (``注册``) and ``assertLogs("sms_tool.registration.handlers")``
 #: contract tests observe the same stream after the module split.
-_LOGGER = logging.getLogger("sms_tool.registration_handlers")
+_LOGGER = logging.getLogger("sms_tool.registration.handlers")
 
 
 def prime_about_you_page_enabled(workflow: RegistrationEmailWorkflow) -> bool:

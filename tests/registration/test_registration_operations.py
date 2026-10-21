@@ -5,13 +5,13 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from sms_tool import registration
-from sms_tool.registration_operations import (
+from sms_tool.registration import orchestrator as registration
+from sms_tool.registration.operations import (
     OPERATION_GROUPS,
     RegistrationOperations,
     RegistrationOtpPollingOperations,
 )
-from sms_tool.registration_handlers import StorageRegistrationPersistence
+from sms_tool.registration.handlers import StorageRegistrationPersistence
 
 
 def test_operation_binding_respects_callers_patch_scope_and_is_immutable():
@@ -28,7 +28,7 @@ def test_interface_covers_only_dependencies_the_workflow_uses():
     """The protocol workflow spans several modules, so scan all of them.
 
     2026-09-22: ``finalize`` / ``obtain_oauth_refresh_token`` / ``enroll_totp``
-    were extracted into ``sms_tool/registration_finalize.py`` (a2349d7), and
+    were extracted into ``sms_tool/registration/finalize.py`` (a2349d7), and
     ``registration_handlers`` kept delegating wrappers.  Scanning only the
     handlers module then reported ``_oauth_result_summary`` and
     ``_retain_registration_checkpoint`` as unused interface members -- they are
@@ -36,7 +36,7 @@ def test_interface_covers_only_dependencies_the_workflow_uses():
     declares exactly what the workflow reaches"); the workflow is what moved.
 
     2026-10-01: the email-OTP stages moved to
-    ``sms_tool/registration_otp_stages.py``, which reached ``r.SyntheticResponse``
+    ``sms_tool/registration/otp_stages.py``, which reached ``r.SyntheticResponse``
     / ``r._email_otp_send_url`` / ``r._validate_email_otp`` /
     ``r._is_wrong_email_otp_code`` -- the same shape, so that module is scanned
     too.  Add any future workflow-stage module here.
@@ -44,10 +44,10 @@ def test_interface_covers_only_dependencies_the_workflow_uses():
     root = Path(__file__).resolve().parents[2] / "sms_tool"
     names: set[str] = set()
     for module in (
-        "registration_handlers.py",
-        "registration_account_stages.py",
-        "registration_finalize.py",
-        "registration_otp_stages.py",
+        "registration/handlers.py",
+        "registration/account_stages.py",
+        "registration/finalize.py",
+        "registration/otp_stages.py",
     ):
         tree = ast.parse((root / module).read_text(encoding="utf-8"))
         names |= {
@@ -133,7 +133,7 @@ def test_email_workflow_wiring_is_explicit_not_a_globals_sweep():
     a different module, and linters reported every one of those imports as
     unused. The wiring has to name each dependency literally instead.
     """
-    source = (Path(__file__).resolve().parents[2] / "sms_tool/registration.py").read_text(encoding="utf-8")
+    source = (Path(__file__).resolve().parents[2] / "sms_tool/registration/orchestrator.py").read_text(encoding="utf-8")
     tree = ast.parse(source)
 
     # AST, not a substring search: the helper docstring legitimately mentions

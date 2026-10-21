@@ -2,10 +2,11 @@ import json
 from types import SimpleNamespace
 from unittest.mock import Mock
 
-from sms_tool import desktop_read, registration_retry_guard
-from sms_tool.registration_handlers import RegistrationEmailWorkflow
-from sms_tool.registration_retry_guard import RegistrationRetryGuard
-from sms_tool.registration_runtime import RegistrationRuntimeState
+from sms_tool import desktop_read
+from sms_tool.registration import retry_guard as registration_retry_guard
+from sms_tool.registration.handlers import RegistrationEmailWorkflow
+from sms_tool.registration.retry_guard import RegistrationRetryGuard
+from sms_tool.registration.runtime import RegistrationRuntimeState
 
 
 def test_partial_verdict_survives_failed_recovery(tmp_path):
@@ -114,7 +115,7 @@ def test_abort_result_omits_the_relogin_cause_when_the_lane_never_ran():
 
 
 def test_confirmed_account_takes_precedence_over_stale_partial_verdict():
-    from sms_tool.registration_retry_guard import mailbox_registration_status
+    from sms_tool.registration.retry_guard import mailbox_registration_status
 
     assert mailbox_registration_status({"status": "registered"}, known_partial=True) == "registered"
     assert mailbox_registration_status({"status": "partial_registered"}) == "partial_registered"

@@ -1863,7 +1863,7 @@ def test_relogin_hands_the_stored_password_to_the_login_probe():
             "sms_tool.accounts.account_recovery._stored_registration_password",
             return_value="StoredPass123",
         ),
-        patch("sms_tool.registration._login_existing_account_with_email_otp", side_effect=fake_login),
+        patch("sms_tool.registration.orchestrator._login_existing_account_with_email_otp", side_effect=fake_login),
     ):
         account_recovery.relogin_chatgpt_email_account({"email": "ok@example.com"})
 

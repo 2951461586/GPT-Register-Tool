@@ -6,13 +6,14 @@ from unittest.mock import Mock
 
 import pytest
 
-from sms_tool import registration_checkpoint, storage
+from sms_tool import storage
+from sms_tool.registration import checkpoint as registration_checkpoint
 from sms_tool.mailbox import router as mailbox
 from sms_tool.store import connection
 from sms_tool.mailbox.errors import MailboxEndpointUnavailableError
-from sms_tool.registration_handlers import RegistrationEmailWorkflow
-from sms_tool.registration_runtime import RegistrationRuntimeState
-from sms_tool.registration_state import RegistrationStateMachine
+from sms_tool.registration.handlers import RegistrationEmailWorkflow
+from sms_tool.registration.runtime import RegistrationRuntimeState
+from sms_tool.registration.state import RegistrationStateMachine
 
 
 class MemoryPersistence:
@@ -137,8 +138,8 @@ def session_payload(**overrides):
     ],
 )
 def test_unusable_session_checkpoint_stops_without_new_signup(monkeypatch, overrides, expected):
-    from sms_tool.registration_handlers import RegistrationAbort
-    from sms_tool.registration_policy import registration_retry_decision
+    from sms_tool.registration.handlers import RegistrationAbort
+    from sms_tool.registration.policy import registration_retry_decision
 
     w = workflow(monkeypatch, session_payload(**overrides))
     w._bootstrap()
@@ -154,7 +155,7 @@ def test_session_recovery_only_fetches_session_then_probes_and_finalizes(monkeyp
     # resume body moved to ``registration_resume`` on 2026-10-08, so a patch
     # aimed at ``registration_handlers`` no longer reaches this path (the same
     # "patch the defining module" rule the other split-out stages follow).
-    from sms_tool import registration_resume
+    from sms_tool.registration import resume as registration_resume
 
     w = workflow(monkeypatch, session_payload())
     w._bootstrap()

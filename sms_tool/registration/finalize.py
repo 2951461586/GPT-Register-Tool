@@ -19,20 +19,20 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any
 
-from .proxy import entry as _proxy_entry
-from . import registration_checkpoint
-from . import token_telemetry as _token_telemetry
-from .auth_headers import current_auth_fingerprint
-from .codex_oauth import collect_codex_oauth_tokens
-from .operator_output import emit as _emit
-from .registration_outcome import needs_manual_session_recovery
-from .registration_result import build_registration_result
-from .registration_retry_guard import RegistrationRetryGuard
-from .registration_state import RegistrationState
-from .kernel.sanitizer import describe_exception
+from ..proxy import entry as _proxy_entry
+from . import checkpoint as registration_checkpoint
+from .. import token_telemetry as _token_telemetry
+from ..auth_headers import current_auth_fingerprint
+from ..codex_oauth import collect_codex_oauth_tokens
+from ..operator_output import emit as _emit
+from .outcome import needs_manual_session_recovery
+from .result import build_registration_result
+from .retry_guard import RegistrationRetryGuard
+from .state import RegistrationState
+from ..kernel.sanitizer import describe_exception
 
 if TYPE_CHECKING:  # pragma: no cover - import cycle guard for type checkers only
-    from .registration_handlers import RegistrationEmailWorkflow
+    from .handlers import RegistrationEmailWorkflow
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -122,7 +122,7 @@ def obtain_oauth_refresh_token(workflow: RegistrationEmailWorkflow) -> None:
 def enroll_totp(workflow: RegistrationEmailWorkflow) -> None:
     # Delayed import: registration_handlers imports this module, so the
     # helper it still owns has to be fetched here, not at module top.
-    from .registration_handlers import _login_probe_password
+    from .handlers import _login_probe_password
 
     r = workflow.r
     s = workflow.runtime
@@ -177,7 +177,7 @@ def enroll_totp(workflow: RegistrationEmailWorkflow) -> None:
         return refreshed_token
 
     try:
-        from .accounts.account_2fa import setup_totp_2fa
+        from ..accounts.account_2fa import setup_totp_2fa
 
         s.twofa_result = setup_totp_2fa(
             session=s.session,
@@ -210,11 +210,11 @@ def enroll_totp(workflow: RegistrationEmailWorkflow) -> None:
 def finalize(workflow: RegistrationEmailWorkflow) -> dict[str, Any]:
     r = workflow.r
     s = workflow.runtime
-    from .sentinel.bundle import sentinel_version
+    from ..sentinel.bundle import sentinel_version
 
     fingerprint = current_auth_fingerprint()
     token_telemetry = _token_telemetry.access_token_telemetry(s.access_token)
-    from .accounts.account_identity import create_registration_identity, complete_registration_identity
+    from ..accounts.account_identity import create_registration_identity, complete_registration_identity
 
     identity_context = complete_registration_identity(
         create_registration_identity(

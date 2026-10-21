@@ -286,7 +286,20 @@ def rewrite_python_file(path: pathlib.Path, spec: Spec) -> bool:
 
 def rewrite_names_and_paths(spec: Spec) -> list[str]:
     """Absolute dotted names, bare fallback imports and file-path strings."""
-    dotted = [(re.compile(r"\b" + re.escape(old) + r"\b"), new) for old, new in spec.moves.items()]
+    dotted = []
+    for old, new in spec.moves.items():
+        pattern = r"\b" + re.escape(old) + r"\b"
+        if new.startswith(old + "."):
+            # ``sms_tool.registration`` -> ``sms_tool.registration.orchestrator``:
+            # the OLD name is still a valid module path (it is now the package),
+            # so a reference that *imports from* it must keep pointing at the
+            # package. Without this, the blanket rewrite turned
+            # ``from sms_tool.registration import pulse`` into
+            # ``from sms_tool.registration import pulse`` and 29 test
+            # modules failed to collect. Every earlier cluster was safe because
+            # its new path never extended the old one.
+            pattern += r"(?!\s+import\b)"
+        dotted.append((re.compile(pattern), new))
     # The bare fallback imports (``from paypal_extract import ...`` inside a
     # ``try/except ImportError`` kept for direct-script execution) are spelled
     # with the *short* module name, which the dotted pass cannot see. They are

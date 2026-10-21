@@ -44,12 +44,12 @@ from sms_tool.kernel.failure_registry import (
     OTP_NO_RESEND_MARKER,
     OTP_UNDISPATCHED_MARKER,
 )
-from sms_tool.registration_handlers import (
+from sms_tool.registration.handlers import (
     RegistrationAbort,
     RegistrationEmailWorkflow,
 )
-from sms_tool.registration_pulse import _detect_ip_ban, _is_otp_ban_signal
-from sms_tool.registration_state import RegistrationStateMachine
+from sms_tool.registration.pulse import _detect_ip_ban, _is_otp_ban_signal
+from sms_tool.registration.state import RegistrationStateMachine
 
 
 def _summary(keys):
@@ -266,7 +266,7 @@ def test_a_stuck_send_never_calls_the_poller():
 def test_a_stuck_send_is_classified_and_counted_as_a_dispatch_side_signal():
     """新错误名必须进注册表，否则分类成 ``unknown``（既不重试也不记账）。"""
     from sms_tool.kernel.error_classification import classify_error
-    from sms_tool.registration_policy import registration_retry_decision
+    from sms_tool.registration.policy import registration_retry_decision
 
     assert classify_error("email_otp_send_stuck") == "mailbox"
     assert "mailbox" in BATCH_RETRY_CLASSES
@@ -492,7 +492,7 @@ def test_the_suffix_decision_is_load_bearing_in_a_real_wave(no_sleep):
     只测 ``_is_otp_ban_signal`` 不够 —— 它被 ``_detect_ip_ban`` 包一层，
     真正花钱的是 wave 之间的 ``ban_pause_seconds``。
     """
-    from sms_tool.registration_pulse import PulseConfig, run_pulse_batch
+    from sms_tool.registration.pulse import PulseConfig, run_pulse_batch
 
     def run_wave(run_one, *, count, wave_size):
         run_pulse_batch(
@@ -545,7 +545,7 @@ def test_the_suffix_decision_is_load_bearing_in_a_real_wave(no_sleep):
 @pytest.fixture(autouse=True)
 def no_sleep(monkeypatch):
     """记录 sleep 而不真的等 —— 与 ``test_registration_pulse`` 同款。"""
-    from sms_tool import registration_pulse as pulse_module
+    from sms_tool.registration import pulse as pulse_module
 
     calls: list[float] = []
     monkeypatch.setattr(pulse_module.time, "sleep", calls.append)

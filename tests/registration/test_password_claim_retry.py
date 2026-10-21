@@ -12,10 +12,10 @@ from unittest.mock import Mock
 import pytest
 
 from sms_tool.kernel.failure_registry import PASSWORD_CLAIMED_MARKER
-from sms_tool.registration_handlers import RegistrationEmailWorkflow
-from sms_tool.registration_policy import registration_retry_decision
-from sms_tool.registration_retry_guard import RegistrationRetryGuard
-from sms_tool.registration_state import RegistrationState, RegistrationStateMachine
+from sms_tool.registration.handlers import RegistrationEmailWorkflow
+from sms_tool.registration.policy import registration_retry_decision
+from sms_tool.registration.retry_guard import RegistrationRetryGuard
+from sms_tool.registration.state import RegistrationState, RegistrationStateMachine
 
 TRANSPORT = "create_account_transport:Failed to perform, curl: (28) Operation timed out"
 

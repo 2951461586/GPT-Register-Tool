@@ -17,9 +17,9 @@ from .kernel.sanitizer import sanitize_text
 from .kernel.sanitizer import account_reference, mask_account
 from .diagnostics import safe_print
 from .proxy.health import ProxyHealthTracker
-from .registration_retry_guard import RegistrationRetryGuard, mailbox_registration_status
-from .registration_policy import registration_retry_decision
-from .registration_result import safe_proxy_audit
+from .registration.retry_guard import RegistrationRetryGuard, mailbox_registration_status
+from .registration.policy import registration_retry_decision
+from .registration.result import safe_proxy_audit
 from .sentinel.runner import SentinelRunnerError, check_node_runner_readiness
 from typing import Any
 
@@ -325,7 +325,7 @@ def _drop_already_registered(mailboxes):
         checkpoints = get_registration_checkpoints([email for email in emails if email])
     except Exception:
         checkpoints = {}
-    from .registration_checkpoint import candidate_checkpoint_error
+    from .registration.checkpoint import candidate_checkpoint_error
 
     checkpoint_errors = {
         email: error for email, checkpoint in checkpoints.items() if (error := candidate_checkpoint_error(checkpoint))
@@ -635,7 +635,7 @@ def run_batch_impl(
 
     def _run_one(i):
         nonlocal proxy_pool_offset, proxy_rotation_generation
-        from .registration_cancel import registration_cancel_requested
+        from .registration.cancel import registration_cancel_requested
 
         def _cancelled(attempt: int = 0):
             return {
@@ -867,7 +867,7 @@ def run_batch_impl(
                 f"({attempt + 1}/{max_attempts})"
             )
             if retry_delay_seconds:
-                from .registration_cancel import cancellable_sleep
+                from .registration.cancel import cancellable_sleep
 
                 if cancellable_sleep(retry_delay_seconds, requested=_cancel_requested):
                     return i, _cancelled(attempt)
@@ -941,7 +941,7 @@ def run_batch_impl(
     # checkpoints instead of dying mid-account; on exit the scope restores
     # the previous handlers and clears the flag so a cancellation can never
     # leak into a later batch in the same process.
-    from .registration_cancel import cancel_scope
+    from .registration.cancel import cancel_scope
 
     with cancel_scope():
         if workers <= 1:
@@ -969,7 +969,7 @@ def run_batch_impl(
 
         # Pulse-wave scheduling: when enabled, split the batch into discrete
         # waves with IP-ban detection between waves.
-        from .registration_pulse import PulseConfig, run_pulse_batch
+        from .registration.pulse import PulseConfig, run_pulse_batch
 
         pulse_config = PulseConfig.from_config(CFG)
         if pulse_config.enabled:

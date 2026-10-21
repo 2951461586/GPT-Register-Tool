@@ -28,11 +28,11 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from .registration_flags import registration_flag
-from .kernel.sanitizer import describe_exception
+from .flags import registration_flag
+from ..kernel.sanitizer import describe_exception
 
 if TYPE_CHECKING:  # pragma: no cover - import cycle guard for type checkers only
-    from .registration_handlers import RegistrationEmailWorkflow
+    from .handlers import RegistrationEmailWorkflow
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -66,7 +66,7 @@ def prime_password_sentinel_bundle(workflow: RegistrationEmailWorkflow, *, refer
     # `registration_reference_lane`), not at identity time like the legacy switch.
     if lane != reference_page:
         return
-    from .sentinel import issue_password_page_bundle, issue_sentinel_bundle, sentinel_backend
+    from ..sentinel import issue_password_page_bundle, issue_sentinel_bundle, sentinel_backend
 
     if sentinel_backend(workflow.config) != "node_runner":
         return
@@ -120,7 +120,7 @@ def issue_sentinel(workflow: RegistrationEmailWorkflow, flow: str, *, force_fres
     "refreshing the proof" wording is a lie and the retry replays the exact
     token the server just rejected.
     """
-    from .sentinel import issue_sentinel_flow, sentinel_backend
+    from ..sentinel import issue_sentinel_flow, sentinel_backend
 
     s = workflow.runtime
     issued = issue_sentinel_flow(

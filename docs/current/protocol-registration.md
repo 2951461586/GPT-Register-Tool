@@ -18,15 +18,15 @@ rate; see [Validation limits](#validation-limits).
 | Concern | Module |
 | --- | --- |
 | Protocol step functions (signin, authorize, continue, OTP, TOTP) | `sms_tool/auth_flow/` (`steps`, `signup`, `login`, `otp`, `totp`) |
-| Stage order, runtime state, persistence | `sms_tool/registration_handlers.py` |
-| Persistence seam, stage executor, pure helpers, email-OTP stages, account/session/AT-probe stages, edge-challenge hook, resume stage, Sentinel stages | `sms_tool/registration_persistence.py`, `registration_stage_runner.py`, `registration_protocol_helpers.py`, `registration_otp_stages.py`, `registration_account_stages.py`, `registration_edge_challenge.py`, `registration_resume.py`, `registration_sentinel_stages.py` |
-| `registration.*` boolean toggle parsing (one `Mapping`-safe, two-sided owner) | `sms_tool/registration_flags.py` — `auth_flow.steps._registration_flag` keeps a deliberate copy, because importing the leaf module from `auth_flow` would grow the import-layer ratchet |
+| Stage order, runtime state, persistence | `sms_tool/registration/handlers.py` |
+| Persistence seam, stage executor, pure helpers, email-OTP stages, account/session/AT-probe stages, edge-challenge hook, resume stage, Sentinel stages | `sms_tool/registration/persistence.py`, `registration/stage_runner.py`, `registration/protocol_helpers.py`, `registration/otp_stages.py`, `registration/account_stages.py`, `registration/edge_challenge.py`, `registration/resume.py`, `registration/sentinel_stages.py` |
+| `registration.*` boolean toggle parsing (one `Mapping`-safe, two-sided owner) | `sms_tool/registration/flags.py` — `auth_flow.steps._registration_flag` keeps a deliberate copy, because importing the leaf module from `auth_flow` would grow the import-layer ratchet |
 | Account creation and OTP validate wire calls | `sms_tool/accounts/account_creation.py` |
 | Sentinel token issuance | `sms_tool/sentinel/` (facade `sms_tool/sentinel_tokens.py`) |
-| AT probe, result contract, funnel | `sms_tool/registration_outcome.py`, `registration_result.py`, `registration_funnel.py` |
-| `sms_tool/registration.py` | compatibility facade only — re-exports, no implementation |
+| AT probe, result contract, funnel | `sms_tool/registration/outcome.py`, `registration/result.py`, `registration/funnel.py` |
+| `sms_tool/registration/orchestrator.py` | compatibility facade only — re-exports, no implementation |
 
-`registration_handlers.py` owns stage order; the `auth_flow/` package owns only
+`registration/handlers.py` owns stage order; the `auth_flow/` package owns only
 the step functions. A change to endpoint order belongs in the handler, not in a
 step.
 
@@ -467,7 +467,7 @@ The password lane ignores the toggle. Evidence and unknowns:
 `docs/audits/scans/scan-2026-10-11-har-passwordless-signup.md`; design:
 `registration-ab-runbook.md` (P3-1).
 
-`registration.reference_lane` (default `false`, `sms_tool/registration_reference_lane.py`)
+`registration.reference_lane` (default `false`, `sms_tool/registration/reference_lane.py`)
 runs the reference project's `main.py` password stage order as one lane:
 preflight → anonymous ChatGPT bootstrap (`accounts/check`, CES settings, `me`,
 regional pricing) → `providers` → `csrf` → signin from `/auth/login`
@@ -499,7 +499,7 @@ challenge reported `so.required=true` for `authorize_continue` / `oauth_create_a
 `auth_headers.py`).
 
 `registration.chatgpt_bootstrap.enabled` (default `false`) now also drives a
-protocol-lane warm-up (`sms_tool/registration_warmup.py`): right after the
+protocol-lane warm-up (`sms_tool/registration/warmup.py`): right after the
 access token is confirmed, 14 read-only bearer GETs (consent, `me`,
 `accounts/check`, models, conversations, ...) plus a dwell taken from
 `registration.post_registration_dwell_seconds_range`, logged as
@@ -594,7 +594,7 @@ see it, and a marker whose trigger is conditional must declare
 
 ## Read-only registration probe
 
-`sms_tool/registration_probe.py` answers "is this mailbox new to OpenAI?" with
+`sms_tool/registration/probe.py` answers "is this mailbox new to OpenAI?" with
 the same `signin -> authorize` handshake the signup lane uses, and stops at the
 authorize landing. It never posts `authorize/continue`, registers a password,
 sends an OTP or creates an account. `classify_registration_landing` maps an

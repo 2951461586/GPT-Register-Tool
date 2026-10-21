@@ -69,8 +69,8 @@ import time
 
 from curl_cffi import requests as curl_requests
 
-from .codex_sentinel import import_cookie_header, load_cached_sentinel, with_sentinel
-from .auth_headers import (
+from ..codex_sentinel import import_cookie_header, load_cached_sentinel, with_sentinel
+from ..auth_headers import (
     auth_fingerprint_capabilities,
     auth_impersonate,
     chatgpt_headers,
@@ -82,8 +82,8 @@ from .auth_headers import (
     set_fingerprint_geo,
     select_auth_fingerprint,
 )
-from .kernel.error_classification import classify_error
-from .config import (
+from ..kernel.error_classification import classify_error
+from ..config import (
     CFG,
     current_config_data,
     resolve_runtime_config,
@@ -91,9 +91,9 @@ from .config import (
     validate_config,
     validate_registration_driver_config,
 )
-from .http_client import request_with_retry
-from .phone_proxy import normalize_proxy_url, refresh_proxy_sid
-from .sentinel_tokens import (
+from ..http_client import request_with_retry
+from ..phone_proxy import normalize_proxy_url, refresh_proxy_sid
+from ..sentinel_tokens import (
     _cookie_jar_header,
     _extract_sentinel,
     _extract_sentinel_http,
@@ -103,7 +103,7 @@ from .sentinel_tokens import (
     _sentinel_frame_version,
     _set_oai_did_cookie,
 )
-from .auth_flow import (
+from ..auth_flow import (
     LOGIN_EMAIL_OTP_SUBJECT_KEYWORD,
     _absolute_url,
     _auth_request_headers,
@@ -130,7 +130,7 @@ from .auth_flow import (
     _totp_factor_id,
     _with_query_param,
 )
-from .account_creation import (
+from ..account_creation import (
     _auth_session_access_token,
     _cookie_header,
     _create_account_continue_url,
@@ -142,17 +142,17 @@ from .account_creation import (
     _minimal_chatgpt_cookie_header,
     _validate_email_otp,
 )
-from .http_utils import _follow_continue_url
-from .auth_state import fetch_client_auth_session_dump as _fetch_client_auth_session_dump
-from .otp_strategy import (
+from ..http_utils import _follow_continue_url
+from ..auth_state import fetch_client_auth_session_dump as _fetch_client_auth_session_dump
+from ..otp_strategy import (
     SyntheticResponse,
     _poll_registration_email_otp,
     send_registration_email_otp as _send_registration_email_otp,
 )
-from .mailbox.router import ensure_mailbox_account, poll_email_otp, snapshot_mailbox_message
-from .kernel.paths import runtime_file
-from .phone_registration import run_phone_register as _run_phone_register_impl
-from .registration_outcome import (
+from ..mailbox.router import ensure_mailbox_account, poll_email_otp, snapshot_mailbox_message
+from ..kernel.paths import runtime_file
+from ..phone_registration import run_phone_register as _run_phone_register_impl
+from .outcome import (
     _create_account_error,
     _failure_result,
     _mailbox_snapshot,
@@ -163,9 +163,9 @@ from .registration_outcome import (
     _registration_requires_refresh_token,
     _retain_registration_checkpoint as _retain_registration_checkpoint_impl,
 )
-from .registration_preflight import _resolve_proxy_scheme, registration_network_preflight
-from .registration_progress import registration_stage, track_registration
-from .registration_cancel import (
+from .preflight import _resolve_proxy_scheme, registration_network_preflight
+from .progress import registration_stage, track_registration
+from .cancel import (
     RegistrationCancelled,
     cancellable_sleep,
     cancel_scope,
@@ -174,7 +174,7 @@ from .registration_cancel import (
     registration_cancel_requested,
     request_registration_cancel,
 )
-from .registration_state import (
+from .state import (
     RegistrationStage,
     RegistrationState,
     RegistrationStateMachine,
@@ -183,10 +183,10 @@ from .registration_state import (
     _stored_registration_totp,
     prepare_registration_context,
 )
-from .kernel.sanitizer import sanitize as _sanitize, sanitize_text as _sanitize_text
-from .session_builder import build_session_file
-from .accounts import account_liveness
-from .utils import (
+from ..kernel.sanitizer import sanitize as _sanitize, sanitize_text as _sanitize_text
+from ..session_builder import build_session_file
+from ..accounts import account_liveness
+from ..utils import (
     _generate_password,
     _print_timings,
     _random_birthdate,
@@ -198,8 +198,8 @@ from .utils import (
     _tl,
     think_stage,
 )
-from .registration_drivers.base import normalize_registration_driver
-from .registration_operations import RegistrationOperations, RegistrationOtpPollingOperations
+from ..registration_drivers.base import normalize_registration_driver
+from .operations import RegistrationOperations, RegistrationOtpPollingOperations
 
 REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORD = "verification code"
 REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORDS = f"{REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORD}|{LOGIN_EMAIL_OTP_SUBJECT_KEYWORD}"
@@ -326,7 +326,7 @@ def run_email(
     # disposable mailbox or create an external profile/session.
     validate_registration_driver_config(config.data, selected_driver, proxy=proxy)
     if selected_driver != "protocol":
-        from .registration_drivers.playwright import run_browser_registration
+        from ..registration_drivers.playwright import run_browser_registration
 
         result = run_browser_registration(
             driver_name=selected_driver,
@@ -345,7 +345,7 @@ def run_email(
         if isinstance(result, dict) and batch_id:
             result["batch_id"] = str(batch_id)
         return result
-    from .registration_handlers import RegistrationEmailWorkflow
+    from .handlers import RegistrationEmailWorkflow
 
     flow = RegistrationStateMachine(registration_stage)
     result = RegistrationEmailWorkflow(
@@ -440,7 +440,7 @@ def run_batch(
     cancel_event=None,
 ):
     """Compatibility entry point for callers importing ``registration.run_batch``."""
-    from .batch_runner import run_batch_impl
+    from ..batch_runner import run_batch_impl
 
     return run_batch_impl(
         count=count,

@@ -3,7 +3,9 @@ import sys
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from sms_tool import cli, registration, registration_preflight, sentinel_tokens
+from sms_tool import cli, sentinel_tokens
+from sms_tool.registration import orchestrator as registration
+from sms_tool.registration import preflight as registration_preflight
 from sms_tool.config import ConfigError
 
 
@@ -132,7 +134,7 @@ def test_cli_preflights_before_claiming_mailbox_and_promotes_healthy_proxy():
             "_proxy_pool_values",
             return_value=["http://first.example:8080", "http://second.example:8080"],
         ),
-        patch("sms_tool.registration.registration_network_preflight", side_effect=preflight),
+        patch("sms_tool.registration.orchestrator.registration_network_preflight", side_effect=preflight),
     ):
         result = cli._preflight_registration_before_mailbox(args)
 
@@ -155,7 +157,7 @@ def test_cli_rejects_missing_browser_driver_credentials_before_network_preflight
     }
     with (
         patch.object(cli, "CFG", config),
-        patch("sms_tool.registration.registration_network_preflight") as network_preflight,
+        patch("sms_tool.registration.orchestrator.registration_network_preflight") as network_preflight,
     ):
         try:
             cli._preflight_registration_before_mailbox(args)

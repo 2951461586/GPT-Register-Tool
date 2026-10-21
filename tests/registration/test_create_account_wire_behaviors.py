@@ -47,9 +47,9 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from sms_tool import registration_handlers as rh
-from sms_tool.registration_cancel import RegistrationCancelled
-from sms_tool.registration_handlers import RegistrationEmailWorkflow
+from sms_tool.registration import handlers as rh
+from sms_tool.registration.cancel import RegistrationCancelled
+from sms_tool.registration.handlers import RegistrationEmailWorkflow
 
 
 def _response(status=200, body=None, text=""):
@@ -182,7 +182,7 @@ class PrimeAboutYouPageTests(unittest.TestCase):
         )
         ops._follow_continue_url = Mock(return_value=Mock(url="https://auth.openai.com/log-in/password"))
 
-        with self.assertLogs("sms_tool.registration_handlers", level="INFO") as captured:
+        with self.assertLogs("sms_tool.registration.handlers", level="INFO") as captured:
             w.create_account()
 
         self.assertIn("About you page prime landed off the profile step", "\n".join(captured.output))
@@ -356,7 +356,7 @@ class CreateAccountDisallowedBackoffTests(unittest.TestCase):
         )
 
         with patch.object(rh, "cancellable_sleep", return_value=False):
-            with self.assertLogs("sms_tool.registration_handlers", level="INFO") as captured:
+            with self.assertLogs("sms_tool.registration.handlers", level="INFO") as captured:
                 w.create_account()
 
         self.assertIn("Create account temporarily disallowed", "\n".join(captured.output))

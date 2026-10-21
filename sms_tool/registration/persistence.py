@@ -32,27 +32,27 @@ class StorageRegistrationPersistence:
     """Default adapter kept at the application seam, not inside stage logic."""
 
     def save_checkpoint(self, email, state, payload, *, runtime_config=None):
-        from .storage import save_registration_checkpoint
+        from ..storage import save_registration_checkpoint
 
         return save_registration_checkpoint(email, state, payload, runtime_config=runtime_config)
 
     def upsert_account(self, payload, *, runtime_config=None):
-        from .storage import upsert_account
+        from ..storage import upsert_account
 
         return upsert_account(payload, runtime_config=runtime_config)
 
     def get_checkpoint(self, email, *, runtime_config=None):
-        from .storage import get_registration_checkpoint
+        from ..storage import get_registration_checkpoint
 
         return get_registration_checkpoint(email, runtime_config=runtime_config)
 
     def get_device_context(self, email):
-        from .storage import get_device_context
+        from ..storage import get_device_context
 
         return get_device_context(email)
 
     def clear_checkpoint(self, email, *, runtime_config=None):
-        from .storage import clear_registration_checkpoint
+        from ..storage import clear_registration_checkpoint
 
         return clear_registration_checkpoint(email, runtime_config=runtime_config)
 

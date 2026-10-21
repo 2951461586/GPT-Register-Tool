@@ -34,7 +34,7 @@ from sms_tool.mailbox import router as mailbox
 from sms_tool.mailbox.types import MailboxAccount
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-_HANDLERS = PROJECT_ROOT / "sms_tool" / "registration_handlers.py"
+_HANDLERS = PROJECT_ROOT / "sms_tool" / "registration/handlers.py"
 # 浏览器 lane：同一语义的第二份实现。它**本来就写对了**（快照在 `_fill_email`
 # 之前），但没人看守 —— 将来有人"顺手改"就会踩和协议 lane 同一个坑。
 _ORCHESTRATOR = PROJECT_ROOT / "sms_tool" / "registration_drivers" / "browser_flow" / "orchestrator.py"

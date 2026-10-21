@@ -729,13 +729,13 @@ class ProbePositionGuardTests(unittest.TestCase):
         the caller's flag -- not the probe -- is what stops the code there.
         """
         # 2026-09-19: one caller moved with ``enroll_totp`` into
-        # ``registration_finalize.py`` (the P1 finalize/totp split), so the two
+        # ``registration/finalize.py`` (the P1 finalize/totp split), so the two
         # call sites now live in two files.  The invariant -- *both* lanes pass
         # the flag -- is what matters, not which file each lives in.
         src = (
-            _source("sms_tool/registration_handlers.py")
-            + _source("sms_tool/registration_account_stages.py")
-            + _source("sms_tool/registration_finalize.py")
+            _source("sms_tool/registration/handlers.py")
+            + _source("sms_tool/registration/account_stages.py")
+            + _source("sms_tool/registration/finalize.py")
         )
 
         self.assertEqual(src.count("allow_passwordless=not s.existing_account"), 2)

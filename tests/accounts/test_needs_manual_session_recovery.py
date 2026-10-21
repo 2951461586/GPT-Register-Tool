@@ -32,10 +32,10 @@ import pytest
 
 from sms_tool import storage
 from sms_tool.store import connection
-from sms_tool.registration_handlers import RegistrationEmailWorkflow
-from sms_tool.registration_operations import RegistrationOperations
-from sms_tool.registration_outcome import _failure_result, needs_manual_session_recovery
-from sms_tool.registration_runtime import RegistrationRuntimeState
+from sms_tool.registration.handlers import RegistrationEmailWorkflow
+from sms_tool.registration.operations import RegistrationOperations
+from sms_tool.registration.outcome import _failure_result, needs_manual_session_recovery
+from sms_tool.registration.runtime import RegistrationRuntimeState
 
 # ---------------------------------------------------------------------------
 # 1) 判据本身
@@ -255,7 +255,7 @@ def test_the_audit_row_keeps_the_bucket(tmp_path):
 
 
 def test_the_audit_row_keeps_only_safe_fingerprint_geo_verdict(tmp_path):
-    from sms_tool.registration_result import build_registration_result
+    from sms_tool.registration.result import build_registration_result
 
     result = build_registration_result(
         success=False,

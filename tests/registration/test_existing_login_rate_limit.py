@@ -38,9 +38,10 @@ from unittest.mock import patch
 
 import pytest
 
-from sms_tool import auth_flow, registration_concurrency
+from sms_tool import auth_flow
+from sms_tool.registration import concurrency as registration_concurrency
 from sms_tool.kernel.error_classification import classify_error
-from sms_tool.registration_policy import registration_retry_decision
+from sms_tool.registration.policy import registration_retry_decision
 
 
 CHAT_BASE = "https://chatgpt.com"

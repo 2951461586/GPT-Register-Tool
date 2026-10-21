@@ -5,7 +5,7 @@ from __future__ import annotations
 import unittest
 from types import SimpleNamespace
 
-from sms_tool import registration_warmup as warmup
+from sms_tool.registration import warmup as warmup
 
 
 class _Session:

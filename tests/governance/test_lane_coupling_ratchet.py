@@ -50,7 +50,8 @@ def _package(tmp_path: Path, files: dict[str, str]) -> Path:
         "proxy/entry.py": "",
         "phone_proxy.py": "",
         "auth_headers.py": "",
-        "registration_handlers.py": "",
+        "registration/__init__.py": "",
+        "registration/handlers.py": "",
         "sentinel/__init__.py": "",
         "commands/__init__.py": "",
         "commands/registration.py": "",
@@ -82,13 +83,13 @@ def tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 
 def test_absolute_import_is_an_edge(tree):
-    current = tree({"registration_handlers.py": "from sms_tool.paypal import proxy\n"})
-    assert ["sms_tool.registration_handlers", "sms_tool.paypal.proxy"] in current["registration_to_payment"]
+    current = tree({"registration/handlers.py": "from sms_tool.paypal import proxy\n"})
+    assert ["sms_tool.registration.handlers", "sms_tool.paypal.proxy"] in current["registration_to_payment"]
 
 
 def test_relative_import_is_an_edge(tree):
-    current = tree({"registration_handlers.py": "from .paypal import proxy\n"})
-    assert ["sms_tool.registration_handlers", "sms_tool.paypal.proxy"] in current["registration_to_payment"]
+    current = tree({"registration/handlers.py": "from ..paypal import proxy\n"})
+    assert ["sms_tool.registration.handlers", "sms_tool.paypal.proxy"] in current["registration_to_payment"]
 
 
 def test_package_relative_import_resolves_against_the_package(tree):
@@ -106,25 +107,25 @@ def test_function_local_import_is_still_an_edge(tree):
     """A lazy import is the documented cycle-break, not an exemption."""
     current = tree(
         {
-            "registration_handlers.py": (
+            "registration/handlers.py": (
                 "def _geo(proxy):\n"
-                "    from .paypal.proxy import infer_proxy_country\n"
+                "    from ..paypal.proxy import infer_proxy_country\n"
                 "    return infer_proxy_country(proxy)\n"
             )
         }
     )
-    assert ["sms_tool.registration_handlers", "sms_tool.paypal.proxy"] in current["registration_to_payment"]
+    assert ["sms_tool.registration.handlers", "sms_tool.paypal.proxy"] in current["registration_to_payment"]
 
 
 def test_vendor_and_pycache_are_excluded(tree):
     current = tree(
         {
             "_vendor/vendored.py": "from ..paypal import proxy\n",
-            "registration_handlers.py": "from .paypal import proxy\n",
+            "registration/handlers.py": "from ..paypal import proxy\n",
         }
     )
     sources = {source for source, _target in current["registration_to_payment"]}
-    assert sources == {"sms_tool.registration_handlers"}
+    assert sources == {"sms_tool.registration.handlers"}
 
 
 # --------------------------------------------------------------------------
@@ -133,13 +134,13 @@ def test_vendor_and_pycache_are_excluded(tree):
 
 
 def test_registration_to_payment_is_a_violation(tree):
-    current = tree({"registration_handlers.py": "from .paypal import proxy\n"})
+    current = tree({"registration/handlers.py": "from ..paypal import proxy\n"})
     problems = lcr.violations(current, {"registration_to_payment": []})
     assert any("registration lane imports the payment lane" in p for p in problems)
 
 
 def test_payment_lane_may_not_borrow_registration_workflow(tree):
-    current = tree({"pay_link/__init__.py": "", "pay_link/core.py": "from .. import registration_handlers\n"})
+    current = tree({"pay_link/__init__.py": "", "pay_link/core.py": "from ..registration import handlers\n"})
     problems = lcr.violations(current, {"registration_to_payment": []})
     assert any("registration workflow" in p for p in problems)
 
@@ -164,7 +165,10 @@ def test_new_neutral_consumer_of_payment_code_is_a_violation(tree):
 
 
 def test_non_cli_root_module_importing_adapters_is_a_violation(tree):
-    current = tree({"registration_finalize.py": "from .commands import registration\n"})
+    # The rule is about *root* modules (``source.count(".") == 1``), so the fixture
+    # has to stay at the package root; ``registration_finalize.py`` moved into the
+    # registration package and would no longer exercise it.
+    current = tree({"batch_runner.py": "from .commands import registration\n"})
     problems = lcr.violations(current, {"root_to_adapter_layers": []})
     assert any("only sms_tool.cli may" in p for p in problems)
 
@@ -184,8 +188,8 @@ def test_cli_importing_adapters_is_allowed(tree):
 
 
 def test_facade_gaining_a_dependency_is_a_violation(tree):
-    current = tree({"registration.py": "from .payment import catalog\n"})
-    problems = lcr.violations(current, {"registration_facade_fanout": ["sms_tool.registration_handlers"]})
+    current = tree({"registration/orchestrator.py": "from ..payment import catalog\n"})
+    problems = lcr.violations(current, {"registration_facade_fanout": ["sms_tool.registration.handlers"]})
     assert any("registration facade gained a dependency" in p for p in problems)
 
 
@@ -227,11 +231,11 @@ def test_the_fix_is_pinned_in_both_directions():
     assertion fails; if either shell is deleted, importers break loudly.
     """
     found = lcr.edges()
-    assert ("sms_tool.registration_handlers", "sms_tool.paypal.proxy") not in found
-    assert ("sms_tool.registration_finalize", "sms_tool.paypal.proxy") not in found
+    assert ("sms_tool.registration.handlers", "sms_tool.paypal.proxy") not in found
+    assert ("sms_tool.registration.finalize", "sms_tool.paypal.proxy") not in found
     assert ("sms_tool.registration_drivers.browser_flow.orchestrator", "sms_tool.paypal.proxy") not in found
     assert ("sms_tool.commands.registration", "sms_tool.payment.operation") not in found
-    assert ("sms_tool.registration_handlers", "sms_tool.proxy.entry") in found
+    assert ("sms_tool.registration.handlers", "sms_tool.proxy.entry") in found
     assert ("sms_tool.commands.registration", "sms_tool.operation_journal") in found
 
 

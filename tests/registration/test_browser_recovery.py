@@ -4,7 +4,7 @@ from sms_tool.registration_drivers.browser_flow.recovery import (
     stage_timeout,
 )
 from sms_tool.proxy.health import ProxyHealthTracker
-from sms_tool.registration_retry_guard import RegistrationRetryGuard
+from sms_tool.registration.retry_guard import RegistrationRetryGuard
 from sms_tool.registration_drivers import driver_capabilities
 
 

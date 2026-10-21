@@ -16,7 +16,7 @@ from .auth_wire import _invalid_state_auth_response
 from .http_utils import _absolute_url, _json_or_raw
 from .http_client import request_with_retry
 from .mailbox.router import poll_email_otp
-from .registration_progress import registration_stage
+from .registration.progress import registration_stage
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -190,7 +190,7 @@ def _poll_registration_email_otp(
     resend_after_seconds=None,
     poll_otp_fn=None,
 ):
-    from .registration_cancel import ensure_not_cancelled
+    from .registration.cancel import ensure_not_cancelled
 
     ensure_not_cancelled()
     poll_otp_fn = poll_otp_fn or poll_email_otp
