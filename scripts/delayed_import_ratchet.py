@@ -165,7 +165,7 @@ def _module_of(importer: str) -> str:
     return importer.removesuffix(".py").replace("/", ".")
 
 
-def resolve_target(importer: str, node: ast.Import | ast.ImportFrom) -> str:
+def resolve_target(importer: str, node: ast.Import | ast.ImportFrom, root: Path = PACKAGE) -> str:
     """Resolve one import statement to a dotted module, relative ones included.
 
     ``from . import endpoints`` inside ``sms_tool/delayed.py`` becomes
@@ -187,13 +187,14 @@ def resolve_target(importer: str, node: ast.Import | ast.ImportFrom) -> str:
     # ``from . import X`` names a submodule *or* an attribute re-exported by the
     # package ``__init__`` (a function, a constant). Only the first is an edge to
     # a module; treating the second as one invents a module that does not exist.
-    return candidate if _is_module(candidate) else prefix
+    return candidate if _is_module(candidate, root) else prefix
 
 
-def _is_module(name: str) -> bool:
-    """Whether ``name`` names a real module or package in this tree."""
+def _is_module(name: str, root: Path = PACKAGE) -> bool:
+    """Whether ``name`` names a real module or package in ``root``'s tree."""
     rel = name.replace(".", "/")
-    return (PACKAGE.parent / f"{rel}.py").is_file() or (PACKAGE.parent / rel / "__init__.py").is_file()
+    base = root.parent
+    return (base / f"{rel}.py").is_file() or (base / rel / "__init__.py").is_file()
 
 
 def _last_segment(name: str) -> str:
@@ -256,7 +257,7 @@ def collect_delayed_edges(root: Path = PACKAGE, reasons: dict[str, dict[str, str
             continue
         importer = path.relative_to(root.parent).as_posix()
         for node in _delayed_imports(tree):
-            target = resolve_target(importer, node)
+            target = resolve_target(importer, node, root)
             override = overrides.get(f"{importer} -> {target}")
             reason = override["reason"] if override else classify(importer, target)
             edges.setdefault((importer, target), DelayedEdge(importer, target, reason))
