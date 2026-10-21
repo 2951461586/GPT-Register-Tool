@@ -14,7 +14,7 @@ per-user directory **outside the repository**:
 off Windows). `GPT_REGISTER_CONFIG_DIR` overrides it; the WPF shell exports the
 same value to every Python process it starts, so both sides always agree.
 
-* Resolution: `sms_tool/paths.py:config_dir()` and C# `ApplicationPaths.ConfigDirectory`.
+* Resolution: `sms_tool/kernel/paths.py:config_dir()` and C# `ApplicationPaths.ConfigDirectory`.
 * Migration: when the directory is the implicit default, files left in the repo
   root (`config.json`, `proxy.json`, `runtime.json`, `payment.json`,
   `mailbox_tokens.txt` and their `.bak`) are **moved** once, never overwriting an

@@ -128,21 +128,20 @@ thing it would otherwise inherit from is a statement about this repository:
   `build`, `.venv`, `.ruff_cache`, `.pytest_cache`, `__pycache__`, `.agents`,
   `.claude`, `.codex`, `vendor`, …). That list changes between `pi-lens`
   versions, and it does **not** include `runtime/`, `sessions/`, `.dotnet/`, the
-  `.workbuddy*` agent state, `browser_extensions/`, `outlook_results/`, or the
-  .NET `bin/`/`obj/` trees.
+  `.workbuddy*` agent state, or the .NET `bin/`/`obj/` trees.
 - Everything else is left to `.gitignore`, which is a statement about **git**,
   not about code review. `pi-lens` also rescues a *tracked* file that matches
   `.gitignore` (git's own "a tracked file is never ignored" semantic), so a
   generated tree that is ever committed stops being excluded. A project
   `ignore` entry is the stronger layer: it is never tracked-rescued.
 
-This matters because `runtime/` alone holds 340 Python files (operator state,
-logs and dumps, plus the reference-repo clones the audits make under
-`runtime/tmp/refrepos/`), and it grows without bound.
+This matters because `runtime/` alone holds thousands of Python files (4,044 on
+2026-10-22: operator state, logs and dumps, plus the reference-repo clones the
+audits make under `runtime/tmp/refrepos/`), and it grows without bound.
 
 | In scope (the product) | Excluded (tooling, generated, state, vendored) |
 | --- | --- |
-| `sms_tool/`, `services/protocol-payment/`, `SmsWorkbench/`, `SmsWorkbench.Contracts/` | `scripts/`, `dist/`, `runtime/`, `sessions/`, `.dotnet/`, `.workbuddy*/`, `browser_extensions/`, `outlook_results/`, .NET `bin/`+`obj/`, `sms_tool/upi_link/_vendor/` |
+| `sms_tool/`, `services/protocol-payment/`, `SmsWorkbench/`, `SmsWorkbench.Contracts/` | `scripts/`, `dist/`, `runtime/`, `sessions/`, `.dotnet/`, `.workbuddy*/`, .NET `bin/`+`obj/`, `sms_tool/upi_link/_vendor/` |
 
 `scripts/` is excluded **on purpose**, and the trade-off is stated so it is not
 re-litigated. The review graph is an architecture view of the *product*, and the
@@ -302,10 +301,11 @@ no file behind it.
 - **Rule 1 — resolved 2026-09-07.** Transport no longer imports registration
   policy. The shared pieces were pushed *down* instead of hidden in a lazy
   import: pure backoff maths moved to `sms_tool/backoff.py` and terminal-error
-  classification to `sms_tool/error_classification.py`
-  (`is_terminal_registration_error`). `http_client.py` now imports from those
-  two only. Do not "restore" the `registration_retry_decision(...)` call —
-  it is exactly equivalent and reintroduces the layering violation.
+  classification to `sms_tool/kernel/error_classification.py`
+  (`is_terminal_registration_error`; the module has since moved under
+  `kernel/`). `http_client.py` now imports from those two only. Do not
+  "restore" the `registration_retry_decision(...)` call — it is exactly
+  equivalent and reintroduces the layering violation.
 - **Rule 6 — resolved 2026-09-12.** `sms_tool/paypal/orchestrator.py` no
   longer imports `gen_pp_link`. The execution layer consumes the URL the
   caller owns; when none exists the command adapter

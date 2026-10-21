@@ -21,7 +21,7 @@ rate; see [Validation limits](#validation-limits).
 | Stage order, runtime state, persistence | `sms_tool/registration/handlers.py` |
 | Persistence seam, stage executor, pure helpers, email-OTP stages, account/session/AT-probe stages, edge-challenge hook, resume stage, Sentinel stages | `sms_tool/registration/persistence.py`, `registration/stage_runner.py`, `registration/protocol_helpers.py`, `registration/otp_stages.py`, `registration/account_stages.py`, `registration/edge_challenge.py`, `registration/resume.py`, `registration/sentinel_stages.py` |
 | `registration.*` boolean toggle parsing (one `Mapping`-safe, two-sided owner) | `sms_tool/registration/flags.py` — `auth_flow.steps._registration_flag` keeps a deliberate copy, because importing the leaf module from `auth_flow` would grow the import-layer ratchet |
-| Account creation and OTP validate wire calls | `sms_tool/accounts/account_creation.py` |
+| Account creation and OTP validate wire calls | `sms_tool/account_creation.py` |
 | Sentinel token issuance | `sms_tool/sentinel/` (facade `sms_tool/sentinel_tokens.py`) |
 | AT probe, result contract, funnel | `sms_tool/registration/outcome.py`, `registration/result.py`, `registration/funnel.py` |
 | `sms_tool/registration/orchestrator.py` | compatibility facade only — re-exports, no implementation |
@@ -62,7 +62,7 @@ are relative to those hosts.
 | User register | POST | `{auth_base}/api/accounts/user/register` | `registration_handlers.user_register` |
 | OTP send | **GET** | `{auth_base}/api/accounts/email-otp/send` | `auth_flow` (`_send_existing_login_otp`) |
 | OTP resend | POST | `{auth_base}/api/accounts/email-otp/resend` | `auth_flow` (fallback only) |
-| OTP validate | POST | `{auth_base}/api/accounts/email-otp/validate` | `accounts/account_creation._validate_email_otp` |
+| OTP validate | POST | `{auth_base}/api/accounts/email-otp/validate` | `account_creation._validate_email_otp` |
 | Create account | POST | `{auth_base}/api/accounts/create_account` | `registration_handlers.create_account` |
 | Callback | GET | `{chat_base}/api/auth/callback/openai` | server redirect (terminal success) |
 

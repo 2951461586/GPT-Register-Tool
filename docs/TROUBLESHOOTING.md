@@ -120,7 +120,7 @@
 1. 该状态被单列为 `email_verification`，判定「卡死」需要走完**一次显式续进 + 一次 reload 重探**
    （`docs/adr/0007-email-verification-stuck.md`）—— 慢 SPA 不会被误判成死路由。
 2. 二次仍卡死才抛 `browser_email_verification_stuck`，归类为 `auth_state`。
-3. 该错误码是**批次事件的稳定性锚点**：改名必须同步 `sms_tool/error_classification.py` 与
+3. 该错误码是**批次事件的稳定性锚点**：改名必须同步 `sms_tool/kernel/error_classification.py` 与
    `docs/current/registration-recovery.md`。
 
 ---

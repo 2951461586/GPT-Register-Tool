@@ -41,8 +41,9 @@ is wrong for this gate in two measured ways:
    compiler, not a gate.
 2. **One `-p:ErrorLog` is one file that every project truncates**, so only the
    last-compiled project survives. With a `#warning` planted in
-   `SmsWorkbench/StageMatrixStore.cs` the build reported 2 warnings while the
-   shared SARIF had `results: []` — the gate was blind to production code.
+   `SmsWorkbench/Services/StageMatrixStore.cs` the build reported 2 warnings
+   while the shared SARIF had `results: []` — the gate was blind to production
+   code.
 
 The console line itself is stable enough to parse:
 `<path>(<line>,<col>): warning <rule>: <message> [<project.csproj>]` keeps the

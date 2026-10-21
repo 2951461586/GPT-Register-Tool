@@ -13,11 +13,9 @@
 .codex/
 sms_tool/config.json
 services/mail-otp-web/config.json
-outlook_results/
 dist/
 sessions/
 /runtime/
-browser_extensions/
 .dotnet/
 sms_tool/sentinel_cache.json
 mailbox_tokens.txt

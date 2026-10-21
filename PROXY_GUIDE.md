@@ -180,7 +180,7 @@ Three egress lanes used to resolve independently:
 | mailbox / OTP | `mailbox._mailbox_proxy_candidates` | `mailbox_proxy` / `mailbox_proxy_pool` |
 | payment | `payment_routing` + per-method sections | `protocol_payments.proxy_pools`, `<method>.stage_proxies` |
 
-`sms_tool/proxy_registry.py` is the single surface over all three. It does not
+`sms_tool/proxy/registry.py` is the single surface over all three. It does not
 replace the resolvers (their differences are deliberate, Rule 19) — it fronts
 them with one vocabulary (`registration` / `mailbox` / `payment`), one resolve
 call, and one credential-free census:

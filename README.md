@@ -76,8 +76,8 @@ flowchart TB
 
     subgraph L4["④ 领域契约（不可变接缝）"]
         direction LR
-        RESULT["registration_result"]
-        WIRE["payment_wire"]
+        RESULT["registration/result.py"]
+        WIRE["payment/wire.py"]
         CHECKOUT["checkout_contract"]
         DIPC["desktop_ipc"]
     end

@@ -77,8 +77,8 @@ flowchart TB
 
     subgraph L4["④ Domain contracts (immutable seams)"]
         direction LR
-        RESULT["registration_result"]
-        WIRE["payment_wire"]
+        RESULT["registration/result.py"]
+        WIRE["payment/wire.py"]
         CHECKOUT["checkout_contract"]
         DIPC["desktop_ipc"]
     end

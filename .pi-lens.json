@@ -12,8 +12,6 @@
     ".dotnet/**",
     ".workbuddy/**",
     ".workbuddy-ai/**",
-    "browser_extensions/**",
-    "outlook_results/**",
     "SmsWorkbench/bin/**",
     "SmsWorkbench/obj/**",
     "SmsWorkbench.Contracts/bin/**",

@@ -2,12 +2,11 @@
 
 The scope is a *decision*, and it is load-bearing: `pi-lens`'s built-in
 excluded-directory list changes between versions and does not cover `runtime/`,
-`sessions/`, `.dotnet/`, the `.workbuddy*` state, `browser_extensions/`,
-`outlook_results/` or the .NET `bin/`/`obj/` trees; everything else would fall
-back to `.gitignore`, which `pi-lens` rescues for **tracked** files. `runtime/`
-alone holds 340 Python files and grows without bound, so losing its exclusion
-would silently pull operator state and the `runtime/tmp/refrepos/` clones into
-the graph.
+`sessions/`, `.dotnet/`, the `.workbuddy*` state, or the .NET `bin/`/`obj/`
+trees; everything else would fall back to `.gitignore`, which `pi-lens` rescues
+for **tracked** files. `runtime/` alone holds thousands of Python files (4,044
+on 2026-10-22) and grows without bound, so losing its exclusion would silently
+pull operator state and the `runtime/tmp/refrepos/` clones into the graph.
 
 `scripts/` is excluded too, on purpose: the graph is an architecture view of the
 **product**, and the gate/ratchet scripts are tooling. While they were in scope,
@@ -59,8 +58,6 @@ REQUIRED_IGNORES = {
     ".dotnet/**",
     ".workbuddy/**",
     ".workbuddy-ai/**",
-    "browser_extensions/**",
-    "outlook_results/**",
     "SmsWorkbench/bin/**",
     "SmsWorkbench/obj/**",
     "SmsWorkbench.Contracts/bin/**",
@@ -157,8 +154,8 @@ def test_scripts_are_excluded_on_purpose():
 def test_tests_are_not_ignored_wholesale():
     """The graph drops test files by role; the symbol index must not.
 
-    Ignoring `tests/**` would cost LSP diagnostics and symbol search on 340
-    files to buy the review graph nothing.
+    Ignoring `tests/**` would cost LSP diagnostics and symbol search on 391
+    test modules to buy the review graph nothing.
     """
     patterns = _config()["ignore"]
     assert "tests/**" not in patterns
