@@ -312,7 +312,7 @@ class AccountScanTests(unittest.TestCase):
                 return_value={"ok": True, "status": "workspace_check_disabled"},
             ),
             patch("sms_tool.accounts.account_scan.collect_codex_oauth_tokens") as collect,
-            patch("sms_tool.payment_capability.payment_method_capability_probe") as checkout,
+            patch("sms_tool.payment.capability.payment_method_capability_probe") as checkout,
             patch("sms_tool.accounts.account_scan._persist_scan"),
         ):
             result = account_scan._scan_one(0, 1, "a@example.com")

@@ -1,4 +1,4 @@
-"""Re-exports of the former sms_tool.payment_link_manager module (mechanical split)."""
+"""Re-exports of the former sms_tool.payment.link_manager module (mechanical split)."""
 
 from .base import (
     _config_data,

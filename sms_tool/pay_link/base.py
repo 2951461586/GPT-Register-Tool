@@ -1,4 +1,4 @@
-"""base submodule of the former payment_link_manager.py (mechanical split, bodies unchanged)."""
+"""base submodule of the former payment/link_manager.py (mechanical split, bodies unchanged)."""
 
 from __future__ import annotations
 import json
@@ -10,18 +10,18 @@ from pathlib import Path
 from typing import Any, Mapping
 from ..config import current_config_data, resolve_runtime_config
 from ..kernel.paths import project_path, runtime_file
-from ..payment_catalog import (
+from ..payment.catalog import (
     PAYMENT_METHODS as CATALOG_METHODS,
     normalize_payment_method as normalize_catalog_payment_method,
     offline_method_error,
     validate_catalog_consistency,
 )
-from ..payment_operation import (
+from ..payment.operation import (
     PaymentOperationConflict,
     PaymentOperationStore,
     conflict_result as payment_operation_conflict_result,
 )
-from ..payment_routing import (
+from ..payment.routing import (
     PaymentRoutePlan,
     PaymentRoutePlanner,
     parse_proxy_pool,
@@ -175,7 +175,7 @@ def _redact_sensitive_values(value: Any) -> Any:
     return _canonical_sanitize(value)
 
 
-_LOGGER = logging.getLogger("sms_tool.payment_link_manager")
+_LOGGER = logging.getLogger("sms_tool.payment.link_manager")
 
 
 GOPAY_DEFAULT_APPROVE_COUNTRIES = ("JP", "TR")

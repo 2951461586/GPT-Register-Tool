@@ -5,9 +5,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from sms_tool import payment_link_manager as manager
-from sms_tool.payment_catalog import PAYMENT_CATALOG
-from sms_tool.payment_routing import PaymentRoutePlan
+from sms_tool.payment import link_manager as manager
+from sms_tool.payment.catalog import PAYMENT_CATALOG
+from sms_tool.payment.routing import PaymentRoutePlan
 
 
 class PaymentLinkManagerTests(unittest.TestCase):
@@ -34,7 +34,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
             "evidence_sources": ["stripe_init", "stripe_elements"],
         }
         with (
-            patch("sms_tool.payment_capability.payment_method_capability_probe", return_value=observation) as probe,
+            patch("sms_tool.payment.capability.payment_method_capability_probe", return_value=observation) as probe,
             patch("sms_tool.pay_link.core.PAYMENT_ADAPTERS.execute_mapping") as executor,
         ):
             result = probe_payment_method(
@@ -206,7 +206,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
             return pool[0], [{"ok": True}]
 
         with patch("sms_tool.paypal.proxy.select_proxy_from_pool", side_effect=choose):
-            with self.assertLogs("sms_tool.payment_link_manager", level="WARNING") as logs:
+            with self.assertLogs("sms_tool.payment.link_manager", level="WARNING") as logs:
                 _proxy, values = manager._resolve_proxy_pool_routes(
                     "gopay",
                     None,
@@ -230,7 +230,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
             return pool[0], [{"ok": True}]
 
         with patch("sms_tool.paypal.proxy.select_proxy_from_pool", side_effect=choose):
-            with self.assertLogs("sms_tool.payment_link_manager", level="WARNING"):
+            with self.assertLogs("sms_tool.payment.link_manager", level="WARNING"):
                 _proxy, values = manager._resolve_proxy_pool_routes(
                     "gopay",
                     None,
@@ -272,7 +272,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
         self.assertNotIn("approve_country", values)
 
     def test_gopay_approve_allowlist_honors_catalog_override(self):
-        from sms_tool.payment_catalog import PaymentMethodDefinition
+        from sms_tool.payment.catalog import PaymentMethodDefinition
 
         override = PaymentMethodDefinition(
             key="gopay",
@@ -291,7 +291,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
 
         with patch("sms_tool.pay_link.registry.CATALOG_METHODS", {"gopay": override}):
             with patch("sms_tool.paypal.proxy.select_proxy_from_pool", side_effect=choose):
-                with self.assertLogs("sms_tool.payment_link_manager", level="WARNING"):
+                with self.assertLogs("sms_tool.payment.link_manager", level="WARNING"):
                     _proxy, values = manager._resolve_proxy_pool_routes(
                         "gopay",
                         None,
@@ -345,7 +345,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
             patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"),
             patch("sms_tool.wallet_provider.run_wallet_provider", return_value=adapter_result),
         ):
-            with self.assertLogs("sms_tool.payment_link_manager", level="WARNING"):
+            with self.assertLogs("sms_tool.payment.link_manager", level="WARNING"):
                 result = manager.generate_payment_link(
                     "token",
                     payment_method="gopay",
@@ -416,7 +416,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as tmp:
             with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
-                with patch("sms_tool.payment_link_manager.subprocess.run", return_value=completed):
+                with patch("sms_tool.payment.link_manager.subprocess.run", return_value=completed):
                     result = manager.generate_payment_link(
                         "token", payment_method="blik", seed_proxy="socks5h://127.0.0.1:1080", blik_code="123456"
                     )
@@ -442,7 +442,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
         with (
             tempfile.TemporaryDirectory() as tmp,
             patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"),
-            patch("sms_tool.payment_link_manager.subprocess.run", return_value=completed),
+            patch("sms_tool.payment.link_manager.subprocess.run", return_value=completed),
         ):
             result = manager.generate_payment_link(
                 "token",
@@ -466,7 +466,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as tmp:
             with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
-                with patch("sms_tool.payment_link_manager.subprocess.run", return_value=completed):
+                with patch("sms_tool.payment.link_manager.subprocess.run", return_value=completed):
                     result = manager.generate_payment_link(
                         "token", payment_method="blik", seed_proxy="socks5h://127.0.0.1:1080", blik_code="123456"
                     )
@@ -476,7 +476,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
     def test_blik_requires_explicit_six_digit_code_before_starting_subprocess(self):
         with tempfile.TemporaryDirectory() as tmp:
             with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
-                with patch("sms_tool.payment_link_manager.subprocess.run") as run:
+                with patch("sms_tool.payment.link_manager.subprocess.run") as run:
                     result = manager.generate_payment_link(
                         "token", payment_method="blik", seed_proxy="socks5h://127.0.0.1:1080"
                     )
@@ -493,7 +493,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as tmp:
             with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
-                with patch("sms_tool.payment_link_manager.subprocess.run", return_value=failed):
+                with patch("sms_tool.payment.link_manager.subprocess.run", return_value=failed):
                     result = manager.generate_payment_link(
                         "token", payment_method="pix", seed_proxy="socks5h://127.0.0.1:1080"
                     )
@@ -515,7 +515,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
                 with patch.object(manager.payment_egress, "assert_egress_countries"):
-                    with patch("sms_tool.payment_link_manager.subprocess.run", return_value=completed):
+                    with patch("sms_tool.payment.link_manager.subprocess.run", return_value=completed):
                         result = manager.generate_payment_link(
                             "token", payment_method="direct_card", checkout_proxy="socks5h://127.0.0.1:1080"
                         )
@@ -527,7 +527,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
     def test_direct_card_requires_checkout_proxy_before_subprocess(self):
         with tempfile.TemporaryDirectory() as tmp:
             with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
-                with patch("sms_tool.payment_link_manager.subprocess.run") as run:
+                with patch("sms_tool.payment.link_manager.subprocess.run") as run:
                     result = manager.generate_payment_link("token", payment_method="direct_card")
         self.assertFalse(result["ok"])
         self.assertIn("proxy", result["error"].lower())
@@ -550,7 +550,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
                 with patch.object(manager.payment_egress, "assert_egress_countries"):
-                    with patch("sms_tool.payment_link_manager.subprocess.run", side_effect=fake_run):
+                    with patch("sms_tool.payment.link_manager.subprocess.run", side_effect=fake_run):
                         result = manager.generate_payment_link(
                             "token", payment_method="direct_card", checkout_proxy=secret
                         )
@@ -582,7 +582,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
-                with patch("sms_tool.payment_link_manager.subprocess.run", side_effect=fake_run):
+                with patch("sms_tool.payment.link_manager.subprocess.run", side_effect=fake_run):
                     result = manager.generate_payment_link(
                         "token",
                         payment_method="pix",
@@ -611,7 +611,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as tmp:
             with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
-                with patch("sms_tool.payment_link_manager.subprocess.run", return_value=completed):
+                with patch("sms_tool.payment.link_manager.subprocess.run", return_value=completed):
                     result = manager.generate_payment_link(
                         "token",
                         payment_method="momo",
@@ -643,7 +643,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
         )
         with tempfile.TemporaryDirectory() as tmp:
             with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
-                with patch("sms_tool.payment_link_manager.subprocess.run", return_value=failed):
+                with patch("sms_tool.payment.link_manager.subprocess.run", return_value=failed):
                     result = manager.generate_payment_link(
                         "token", payment_method="kakao", seed_proxy="socks5h://127.0.0.1:1080"
                     )
@@ -692,7 +692,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
                 with patch.object(manager.payment_egress, "assert_egress_countries"):
-                    with patch("sms_tool.payment_link_manager.subprocess.run", return_value=completed):
+                    with patch("sms_tool.payment.link_manager.subprocess.run", return_value=completed):
                         result = manager.generate_payment_link(
                             "token",
                             payment_method="ideal",
@@ -718,7 +718,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
                 with patch.object(manager.payment_egress, "assert_egress_countries"):
-                    with patch("sms_tool.payment_link_manager.subprocess.run", return_value=completed):
+                    with patch("sms_tool.payment.link_manager.subprocess.run", return_value=completed):
                         result = manager.generate_payment_link(
                             "token",
                             payment_method="ideal",
@@ -912,7 +912,7 @@ class AdapterV1ContractTests(unittest.TestCase):
 class FacadeSurfaceTests(unittest.TestCase):
     """The compatibility shell's public surface must be declared, not accidental.
 
-    ``payment_link_manager.py`` re-exports ``pay_link`` with ``import *`` and
+    ``payment/link_manager.py`` re-exports ``pay_link`` with ``import *`` and
     then keeps a block of explicit pre-split imports.  A name consumed through
     the shell but absent from ``__all__`` is exported only by accident -- and
     the unused-import ratchet reports that explicit import as removable debt, so

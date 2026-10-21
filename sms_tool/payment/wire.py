@@ -35,12 +35,12 @@ from urllib.parse import urlsplit
 import requests
 
 try:
-    from .auth_headers import AUTH_FINGERPRINT_PROFILES
+    from ..auth_headers import AUTH_FINGERPRINT_PROFILES
 except ImportError:  # pragma: no cover - direct script execution
     from auth_headers import AUTH_FINGERPRINT_PROFILES  # type: ignore
 
 try:
-    from .kernel.timeouts import CHATGPT_TIMEOUT
+    from ..kernel.timeouts import CHATGPT_TIMEOUT
 except ImportError:  # pragma: no cover - direct script execution
     from timeouts import CHATGPT_TIMEOUT  # type: ignore
 
@@ -296,7 +296,7 @@ def _checkout_sentinel_headers(cookie_header, extra_headers, proxy):
     if not device_id:
         return {}
     try:
-        from .sentinel import checkout_sentinel_headers
+        from ..sentinel import checkout_sentinel_headers
 
         return checkout_sentinel_headers(
             device_id=device_id,

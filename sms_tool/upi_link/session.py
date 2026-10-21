@@ -5,9 +5,9 @@ try:  # pragma: no cover - direct script execution
 except ImportError:
     from checkout_contract import PLUS_TRIAL_CAMPAIGN_ID, browser_profile_for_country  # type: ignore
 try:  # pragma: no cover - direct script execution
-    from ..payment_wire import _new_session
+    from ..payment.wire import _new_session
 except ImportError:
-    from payment_wire import _new_session  # type: ignore
+    from sms_tool.payment.wire import _new_session  # type: ignore
 try:  # pragma: no cover - direct script execution
     from ..pp_link_helpers import DEFAULT_TIMEOUT, STRIPE_VERSION
 except ImportError:

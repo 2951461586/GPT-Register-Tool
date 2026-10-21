@@ -206,6 +206,16 @@ def rewrite_relative(source: str, old_module: str, new_module: str, is_package: 
         statements.extend(extra)
         if not statements:
             continue
+        # The statement is rebuilt from its names, so anything the AST does not
+        # model -- the trailing ``noqa`` marker on a deliberate re-export, for
+        # one -- would be dropped. Measured on the payment cluster:
+        # ``paypal/auto.py`` lost its marker and the unused-import ratchet went
+        # 0 -> 2 on a line that is *deliberately* an unused re-export.
+        tail = source[end:]
+        stripped = tail.lstrip(" \t")
+        if stripped.startswith("#"):
+            comment = stripped.split("\n", 1)[0].rstrip()
+            statements[-1] = f"{statements[-1]}  {comment}"
         replacement = ("\n" + indent).join(statements)
         if replacement != source[start:end]:
             edits.append((start, end, replacement))

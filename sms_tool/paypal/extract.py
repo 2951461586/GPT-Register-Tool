@@ -8,7 +8,7 @@ r"""PayPal 协议提取核心 -- 三段式代理提链器。
 
 **跨泳道共享**的那部分支付能力（会话工厂、Checkout 原语、币种表、供应商阶段
 顺序、五个失败词汇类、诊断助手）已于 2026-10-08 搬到中性的
-``sms_tool/payment_wire.py``（逐字搬迁、逐符号 AST 等价）。本模块**再导出**
+``sms_tool/payment/wire.py``（逐字搬迁、逐符号 AST 等价）。本模块**再导出**
 它们，所以历史导入与 ``patch(...)`` 目标不变；定义只归 ``payment_wire`` 一处。
 见 ``docs/architecture.md`` 的 Boundary Rule 20。
 
@@ -120,7 +120,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 # ``patch.object(paypal_extract, "_new_session" | "_checkout_post", ...)``
 # 仍然生效 —— 补丁打在本模块的命名空间上就能被看见。
 try:
-    from ..payment_wire import (
+    from ..payment.wire import (
         CURRENCY_MAP,
         CheckoutApprovalBlockedError,
         CheckoutNotZeroDueError,
@@ -133,7 +133,7 @@ try:
         _new_session,
     )
 except ImportError:  # pragma: no cover - direct script execution
-    from payment_wire import (  # type: ignore
+    from sms_tool.payment.wire import (  # type: ignore
         CURRENCY_MAP,
         CheckoutApprovalBlockedError,
         CheckoutNotZeroDueError,
@@ -151,14 +151,14 @@ except ImportError:  # pragma: no cover - direct script execution
 # **模块对象**本身，与 ``payment_wire`` 看到的是同一个对象；
 # ``_checkout_device_id`` / ``_checkout_get`` 由测试直接调用。
 try:
-    from ..payment_wire import (  # noqa: F401
+    from ..payment.wire import (  # noqa: F401
         _checkout_device_id,
         _checkout_get,
         curl_requests,
         requests,
     )
 except ImportError:  # pragma: no cover - direct script execution
-    from payment_wire import (  # type: ignore # noqa: F401
+    from sms_tool.payment.wire import (  # type: ignore # noqa: F401
         _checkout_device_id,
         _checkout_get,
         curl_requests,

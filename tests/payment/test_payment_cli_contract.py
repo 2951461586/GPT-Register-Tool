@@ -66,8 +66,8 @@ def test_single_account_probe_runs_checkout_capability_instead_of_stopping_after
         patch.object(cli, "CFG", {}),
         patch.object(cli, "_resolve_payment_access_token", return_value=("", None)),
         patch.object(cli, "_protocol_proxy_pool", return_value=[]),
-        patch("sms_tool.payment_auth.ensure_payment_access_token", return_value=auth),
-        patch("sms_tool.payment_link_manager.generate_payment_link", return_value=capability) as generate,
+        patch("sms_tool.payment.auth.ensure_payment_access_token", return_value=auth),
+        patch("sms_tool.payment.link_manager.generate_payment_link", return_value=capability) as generate,
     ):
         cli._extract_payment_link(args)
 
@@ -103,7 +103,7 @@ def test_probe_batch_returns_nonzero_when_capability_is_unknown(tmp_path):
     with (
         patch.object(cli, "CFG", {}),
         patch.object(cli, "_protocol_proxy_pool", return_value=[]),
-        patch("sms_tool.payment_batch.run_payment_batch", return_value=report),
+        patch("sms_tool.payment.batch.run_payment_batch", return_value=report),
     ):
         with pytest.raises(SystemExit) as exc:
             cli._extract_payment_link(args)
@@ -457,9 +457,9 @@ def test_single_payment_resolves_checkout_route_before_jit_and_reuses_it():
     with (
         patch.object(cli, "CFG", config),
         patch.object(cli, "_resolve_payment_access_token", return_value=("", None)),
-        patch("sms_tool.payment_auth.ensure_payment_access_token", return_value=auth_result) as auth,
+        patch("sms_tool.payment.auth.ensure_payment_access_token", return_value=auth_result) as auth,
         patch(
-            "sms_tool.payment_link_manager.generate_payment_link",
+            "sms_tool.payment.link_manager.generate_payment_link",
             return_value={"ok": True, "operation": "probe"},
         ) as generate,
     ):
@@ -520,9 +520,9 @@ def test_healthy_pool_is_selected_before_jit_and_shared_with_checkout():
         patch.object(cli, "_resolve_payment_access_token", return_value=("", None)),
         patch("sms_tool.paypal.proxy.select_proxy_from_pool", side_effect=select_proxy),
         patch("sms_tool.paypal.proxy.rotate_proxy_session", side_effect=rotate_proxy),
-        patch("sms_tool.payment_auth.ensure_payment_access_token", side_effect=ensure_auth) as auth,
+        patch("sms_tool.payment.auth.ensure_payment_access_token", side_effect=ensure_auth) as auth,
         patch(
-            "sms_tool.payment_link_manager.generate_payment_link",
+            "sms_tool.payment.link_manager.generate_payment_link",
             return_value={"ok": True, "operation": "probe"},
         ) as generate,
     ):
@@ -562,7 +562,7 @@ def test_batch_jit_receives_the_resolved_checkout_route(tmp_path):
 
     with (
         patch.object(cli, "CFG", config),
-        patch("sms_tool.payment_batch.run_payment_batch", return_value=report) as batch,
+        patch("sms_tool.payment.batch.run_payment_batch", return_value=report) as batch,
     ):
         cli._extract_payment_link(args)
 
@@ -571,7 +571,7 @@ def test_batch_jit_receives_the_resolved_checkout_route(tmp_path):
 
 
 def test_cli_payment_method_choices_follow_catalog_and_accept_alias_and_th(monkeypatch):
-    from sms_tool.payment_catalog import PAYMENT_CATALOG
+    from sms_tool.payment.catalog import PAYMENT_CATALOG
 
     assert set(cli._payment_method_choices()) == set(PAYMENT_CATALOG.aliases)
     monkeypatch.setattr(
@@ -590,7 +590,7 @@ def test_cli_payment_method_choices_follow_catalog_and_accept_alias_and_th(monke
     with (
         patch.object(cli, "CFG", {}),
         patch(
-            "sms_tool.payment_link_manager.generate_payment_link",
+            "sms_tool.payment.link_manager.generate_payment_link",
             return_value={"ok": True, "operation": "probe"},
         ) as generate,
     ):

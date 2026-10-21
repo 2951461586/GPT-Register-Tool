@@ -86,7 +86,7 @@ def test_ratchet_holds_for_the_current_tree():
 
 def test_reason_is_derived_for_documented_cycles():
     classify = delayed_import_ratchet.classify
-    assert classify("sms_tool/payment_catalog.py", "sms_tool.checkout_contract") == "cycle"
+    assert classify("sms_tool/payment/catalog.py", "sms_tool.checkout_contract") == "cycle"
     assert classify("sms_tool/sentinel/client.py", "sms_tool.sentinel_tokens") == "cycle"
     # The five-module cycle's lazy edge.
     assert classify("sms_tool/proxy/routing.py", "sms_tool.accounts.account_identity") == "cycle"
@@ -95,7 +95,7 @@ def test_reason_is_derived_for_documented_cycles():
 def test_reason_is_startup_for_the_cli_seam():
     classify = delayed_import_ratchet.classify
     assert classify("sms_tool/cli.py", "sms_tool.mailbox.router") == "startup"
-    assert classify("sms_tool/commands/payment.py", "sms_tool.payment_batch") == "startup"
+    assert classify("sms_tool/commands/payment.py", "sms_tool.payment.batch") == "startup"
     assert classify("sms_tool/cli_parsers/payment.py", "sms_tool.gen_pp_link") == "startup"
 
 

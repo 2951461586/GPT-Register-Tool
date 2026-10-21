@@ -21,7 +21,4 @@ keep working. New code should import from :mod:`sms_tool.paypal` directly.
 from __future__ import annotations
 
 from . import *  # noqa: F401,F403  (back-compat re-export surface)
-from . import (  # noqa: F401  (explicit primary API)
-    _PayPalStepError,
-    auto_pay,
-)
+from . import _PayPalStepError, auto_pay  # noqa: F401  (explicit primary API)

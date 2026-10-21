@@ -1,7 +1,7 @@
 import unittest
 
-from sms_tool.payment_batch import _is_transient
-from sms_tool.payment_contracts import PaymentResult, PaymentTerminalState
+from sms_tool.payment.batch import _is_transient
+from sms_tool.payment.contracts import PaymentResult, PaymentTerminalState
 
 
 class PaymentRetryGateTests(unittest.TestCase):
@@ -21,10 +21,10 @@ class PaymentRetryGateTests(unittest.TestCase):
             }
         ).to_dict()
 
-        self.assertEqual(result["status"], PaymentTerminalState.TIMED_OUT.value)
-        self.assertTrue(result["retryable"])
-        self.assertFalse(result["side_effect_started"])
-        self.assertEqual(result["adapter_detail"], "kept")
+        self.assertEqual(result.get("status"), PaymentTerminalState.TIMED_OUT.value)
+        self.assertTrue(result.get("retryable"))
+        self.assertFalse(result.get("side_effect_started"))
+        self.assertEqual(result.get("adapter_detail"), "kept")
 
     def test_confirm_approve_and_redirect_failures_are_never_retried(self):
         for stage in (

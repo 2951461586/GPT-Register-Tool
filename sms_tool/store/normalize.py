@@ -2,6 +2,7 @@
 
 from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlparse
 import json
 import sqlite3
@@ -28,7 +29,14 @@ def _as_float(value):
         return 0.0
 
 
-def _get(data, key, default=""):
+def _get(data, key, default: Any = ""):
+    """Read one key with a fallback that is **not** always a string.
+
+    ``_nested`` passes ``{}`` as the default, so annotating the parameter as
+    ``str`` (its inferred type from the literal default) made pyright reject the
+    only non-string caller. The body is deliberately untyped: this module is a
+    mechanical split of ``storage.py`` and the values come from JSON rows.
+    """
     value = data.get(key, default) if isinstance(data, Mapping) else default
     return "" if value is None else value
 
@@ -125,7 +133,7 @@ def _paypal_status(data, paypal):
 
 
 def _payment_method(data, paypal):
-    from ..payment_link_manager import normalize_payment_method
+    from ..payment.link_manager import normalize_payment_method
 
     value = (
         str(_get(data, "payment_method")).strip()

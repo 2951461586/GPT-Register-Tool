@@ -16,7 +16,7 @@ from unittest.mock import patch
 
 import pytest
 
-from sms_tool import payment_auth
+from sms_tool.payment import auth as payment_auth
 from sms_tool import cli
 
 
@@ -57,8 +57,8 @@ def _invoke_jit(**kwargs):
         patch("sms_tool.accounts.account_recovery.relogin_codex_account", side_effect=fake_relogin),
         patch("sms_tool.accounts.account_recovery.is_permanently_deactivated", return_value=False),
         patch("sms_tool.accounts.account_liveness.probe_account_liveness", return_value={"status_code": 401}),
-        patch("sms_tool.payment_auth.load_account_seed", return_value=({"email": "e", "access_token": "at"}, "p")),
-        patch("sms_tool.payment_auth.access_token_telemetry", return_value={}),
+        patch("sms_tool.payment.auth.load_account_seed", return_value=({"email": "e", "access_token": "at"}, "p")),
+        patch("sms_tool.payment.auth.access_token_telemetry", return_value={}),
     ):
         payment_auth.ensure_payment_access_token(email="e", proxy="p", **kwargs)
     return seen.get("mode")
@@ -95,7 +95,12 @@ def _run_extract(args):
         patch("sms_tool.desktop_ipc.emit_result"),
     ):
         with pytest.raises(SystemExit):
-            payment_commands.extract_payment_link(args, _Context())
+            # ``_Context`` is a deliberately partial stub: the patched
+            # ``resolve_payment_route`` returns ``ok: False`` on the first call, so
+            # only ``payment_method`` is ever reached. Building a full
+            # ``PaymentCommandContext`` (ten callables) to exercise a two-line
+            # short-circuit would hide what the test is about.
+            payment_commands.extract_payment_link(args, _Context())  # type: ignore[arg-type]
 
 
 def test_extract_payment_link_sets_env_from_flag(monkeypatch):

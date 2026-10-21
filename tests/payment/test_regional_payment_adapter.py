@@ -1,8 +1,8 @@
 import pytest
 
 from sms_tool.checkout_contract import CheckoutRequestContract
-from sms_tool.payment_catalog import PAYMENT_METHODS, normalize_payment_method
-from sms_tool.payment_link_manager import PAYMENT_ADAPTERS
+from sms_tool.payment.catalog import PAYMENT_METHODS, normalize_payment_method
+from sms_tool.payment.link_manager import PAYMENT_ADAPTERS
 from sms_tool.regional_payment_adapter import (
     REGIONAL_PAYMENT_PROFILES,
     RegionalPaymentAdapter,

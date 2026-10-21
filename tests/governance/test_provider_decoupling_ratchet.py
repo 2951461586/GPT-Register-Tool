@@ -129,8 +129,8 @@ def test_self_test_detects_a_single_bucket_classifier(monkeypatch: pytest.Monkey
     """Dumping everything into one bucket must fail the fixture check."""
     real = pdr.analyze
 
-    def flatten(root=None):
-        analysis = real(root)
+    def flatten(root: Path | None = None):
+        analysis = real(root) if root is not None else real()
         for pair in analysis.pairs:
             pair.kind = pdr.DIVERGENT
         return analysis

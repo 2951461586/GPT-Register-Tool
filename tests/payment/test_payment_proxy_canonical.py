@@ -1,6 +1,6 @@
 import unittest
 
-from sms_tool.payment_routing import parse_proxy_pool
+from sms_tool.payment.routing import parse_proxy_pool
 
 
 class PaymentProxyCanonicalTests(unittest.TestCase):

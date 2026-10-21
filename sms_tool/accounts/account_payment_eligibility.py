@@ -3,7 +3,7 @@
 Observes explicit payment methods for one billing-country Checkout session.
 ``cs_*`` uses Stripe init and optional Elements specs; ``oaics_*`` uses
 custom Checkout evidence. It stops before payment-method creation -- the
-side-effect boundary is owned by :mod:`sms_tool.payment_capability`.
+side-effect boundary is owned by :mod:`sms_tool.payment.capability`.
 
 Operator decisions (2026-09-21):
 
@@ -28,11 +28,11 @@ import re
 from collections import Counter
 from typing import Any, Mapping
 
-from .. import payment_capability
-from .. import payment_egress
+from ..payment import capability as payment_capability
+from ..payment import egress as payment_egress
 from ..checkout_contract import browser_profile_for_country
-from ..payment_wire import CURRENCY_MAP
-from ..payment_routing import parse_proxy_pool, payment_proxy_pools
+from ..payment.wire import CURRENCY_MAP
+from ..payment.routing import parse_proxy_pool, payment_proxy_pools
 from ..proxy.entry import retarget_region
 from ..config import CFG
 from .. import storage

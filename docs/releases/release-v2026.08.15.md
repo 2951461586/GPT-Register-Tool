@@ -19,9 +19,9 @@
 
 ## 协议支付架构
 
-- `payment_flow.py` 统一支付阶段词汇和各支付方式流程 profile。
-- `payment_routing.py` 统一方法级代理池、阶段路由、地区和 Session 选择，并输出脱敏的不可变执行计划。
-- `payment_executor.py` 统一执行状态机、取消/超时/未知终态、结果归一化和进度历史。
+- `payment/flow.py` 统一支付阶段词汇和各支付方式流程 profile。
+- `payment/routing.py` 统一方法级代理池、阶段路由、地区和 Session 选择，并输出脱敏的不可变执行计划。
+- `payment/executor.py` 统一执行状态机、取消/超时/未知终态、结果归一化和进度历史。
 - CLI、单账号和批量支付复用相同路由计划，删除重复的阶段代理分配代码。
 - 删除已退役的 `paypal_links.py`、对应测试和“重新生成支付链接”入口；PayPal 链接统一通过协议支付管理器生成。
 

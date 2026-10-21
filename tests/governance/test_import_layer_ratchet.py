@@ -170,8 +170,12 @@ def test_cli_fails_loudly_when_the_resolver_is_gutted(monkeypatch: pytest.Monkey
 def test_baseline_is_present_and_well_formed():
     baseline = ilr.load_baseline()
     assert baseline, "import_layer_baseline.json is missing or unreadable"
-    assert isinstance(baseline.get("pairs"), dict)
-    assert baseline["total_module_edges"] == sum(baseline["pairs"].values())
+    # Bind first, narrow the binding: ``isinstance(baseline.get("pairs"), dict)``
+    # proves nothing about a *separate* ``baseline["pairs"]`` subscript, so
+    # pyright still saw ``object`` at ``.values()``.
+    pairs = baseline.get("pairs")
+    assert isinstance(pairs, dict)
+    assert baseline["total_module_edges"] == sum(pairs.values())
 
 
 def test_ratchet_holds_for_the_current_tree():
@@ -283,15 +287,15 @@ def test_summary_facts_are_pinned():
     """
     totals = ilr.analyze(ROOT).totals()
     assert totals == {
-        "total_module_edges": 315,
-        "ordered_pairs": 45,
-        "mutual_pairs": 14,
-        "minority_edges": 45,
+        "total_module_edges": 341,
+        "ordered_pairs": 54,
+        "mutual_pairs": 15,
+        "minority_edges": 50,
         # 2026-10-21: 188 -> 190 when the provider ports seam (providers/ports.py)
         # took over the mailbox_pool_writer and desktop_ipc imports as delayed
         # ones. Before that, 190 -> 188 when store/connection.py stopped
         # importing the sms_tool.storage shell inside _init_cache_key/_connect.
-        "delayed_cross_dir_edges": 223,
+        "delayed_cross_dir_edges": 235,
         # Imports under `if TYPE_CHECKING:` never run, so they are not runtime
         # edges. All eleven in the tree today are same-directory, hence 0 here;
         # the metric exists so a cross-directory one is visible rather than silent.

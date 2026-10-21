@@ -11,11 +11,11 @@
       "sms_tool.sentinel"
     ],
     [
-      "sms_tool.payment_wire",
+      "sms_tool.payment.wire",
       "sms_tool.auth_headers"
     ],
     [
-      "sms_tool.payment_wire",
+      "sms_tool.payment.wire",
       "sms_tool.sentinel"
     ],
     [

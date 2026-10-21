@@ -113,7 +113,7 @@ flowchart TB
 | ③ 应用工作流 | `batch_runner.py`、`registration_pulse.py` | 并发与脉冲调度、JIT AT 门禁、原子断点与断点续跑 |
 | ③ 应用工作流 | `registration_drivers/` | 浏览器驱动（playwright · camoufox · roxy · cloak）与 `browser_flow/`、`external_sessions/` |
 | ③ 应用工作流 | `accounts/`、`codex_oauth.py` | 存量账号恢复与 Codex OAuth；不负责新注册 |
-| ④ 领域契约 | `registration_result.py`、`registration_flags.py`、`checkout_contract.py`、`payment_wire.py`、`desktop_ipc.py` | 每次调用绑定一次的不可变接缝；`RegistrationOperations` 为固定接口，不作为活模块传入工作流 |
+| ④ 领域契约 | `registration_result.py`、`registration_flags.py`、`checkout_contract.py`、`payment/wire.py`、`desktop_ipc.py` | 每次调用绑定一次的不可变接缝；`RegistrationOperations` 为固定接口，不作为活模块传入工作流 |
 | ⑤ Provider / 持久化适配&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `auth_flow/` | 步骤函数：signin / authorize / continue / OTP / TOTP |
 | ⑤ Provider / 持久化适配&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `sentinel/` | Sentinel Token 签发（Node `sdk.js` runner） |
 | ⑤ Provider / 持久化适配&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `mailbox/service.py`、`mailbox/strategies.py`、`providers/` | 邮箱路由、能力解析、轮询策略与 provider 传输 |

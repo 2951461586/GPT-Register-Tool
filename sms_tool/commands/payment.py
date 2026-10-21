@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from ..payment_routing import (
+from ..payment.routing import (
     PaymentRoutePlanner,
     method_payment_config as canonical_method_payment_config,
     parse_proxy_pool as canonical_parse_proxy_pool,
@@ -87,7 +87,7 @@ def payment_country(payment_method: str, explicit: str = "") -> str:
     if value:
         return value
 
-    from ..payment_link_manager import PAYMENT_METHODS
+    from ..payment.link_manager import PAYMENT_METHODS
 
     method = str(payment_method or "paypal").strip().lower().replace("-", "_")
     try:
@@ -483,7 +483,7 @@ def _probe_dependencies(packages: tuple[str, ...]) -> dict[str, bool]:
 
 
 def list_payment_methods() -> None:
-    from ..payment_link_manager import supported_payment_methods
+    from ..payment.link_manager import supported_payment_methods
 
     methods = supported_payment_methods()
     dependency_map = _method_dependency_map()
@@ -606,7 +606,7 @@ def test_payment_proxies(args: Any, context: PaymentCommandContext) -> None:
 def extract_payment_link(args: Any, context: PaymentCommandContext) -> None:
     """Extract a supported protocol payment link from an AT or saved account."""
     from ..desktop_ipc import emit_event, emit_result
-    from ..payment_link_manager import generate_payment_link
+    from ..payment.link_manager import generate_payment_link
 
     def output(payload: Any) -> None:
         emit_result(payload, enabled=bool(getattr(args, "desktop_ipc", False)))
@@ -647,7 +647,7 @@ def extract_payment_link(args: Any, context: PaymentCommandContext) -> None:
             )
             raise SystemExit(2)
 
-        from ..payment_batch import run_payment_batch
+        from ..payment.batch import run_payment_batch
 
         emails = context.read_email_file(email_file)
         if getattr(args, "email", None):
@@ -717,7 +717,7 @@ def extract_payment_link(args: Any, context: PaymentCommandContext) -> None:
     if not str(getattr(args, "at", None) or "").strip() and (
         getattr(args, "email", None) or getattr(args, "session_file", None)
     ):
-        from ..payment_auth import ensure_payment_access_token, public_payment_auth_result
+        from ..payment.auth import ensure_payment_access_token, public_payment_auth_result
 
         legacy_at, legacy_context = context.resolve_access_token(args)
         route = selected_route()

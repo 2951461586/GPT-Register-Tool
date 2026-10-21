@@ -309,7 +309,7 @@ def _payment_country(payment_method: str, explicit: str = "") -> str:
 
 
 def _payment_method_choices() -> tuple[str, ...]:
-    from .payment_catalog import PAYMENT_CATALOG
+    from .payment.catalog import PAYMENT_CATALOG
 
     return tuple(PAYMENT_CATALOG.aliases)
 

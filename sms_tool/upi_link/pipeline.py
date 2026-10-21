@@ -5,9 +5,9 @@ try:  # pragma: no cover - direct script execution
 except ImportError:
     from checkout_contract import PLUS_TRIAL_CAMPAIGN_ID  # type: ignore
 try:  # pragma: no cover - direct script execution
-    from ..payment_wire import CURRENCY_MAP, _new_session
+    from ..payment.wire import CURRENCY_MAP, _new_session
 except ImportError:
-    from payment_wire import CURRENCY_MAP, _new_session  # type: ignore
+    from sms_tool.payment.wire import CURRENCY_MAP, _new_session  # type: ignore
 try:  # pragma: no cover - direct script execution
     from ..phone_proxy import redact_proxy_text
 except ImportError:
@@ -17,7 +17,7 @@ try:  # pragma: no cover - direct script execution
 except ImportError:
     from pp_link_helpers import CHATGPT_TIMEOUT, DEFAULT_STRIPE_PK, DEFAULT_TIMEOUT, STRIPE_VERSION  # type: ignore
 try:  # pragma: no cover - direct script execution
-    from .. import payment_egress
+    from ..payment import egress as payment_egress
 except ImportError:
     # Direct-script execution imports this module as a bare sibling, so the
     # shared gate is unavailable there.  Explicit ``None`` rather than a silent

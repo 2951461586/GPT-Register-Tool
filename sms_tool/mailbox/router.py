@@ -985,7 +985,7 @@ def fetch_mailbox_messages_local(mailbox, limit=25, proxy=None):
         }
         # curl_cffi's ``ProxySpec`` is a ``TypedDict``; a plain ``{"http": ..,
         # "https": ..}`` mapping is accepted at runtime and is what every other
-        # call site in this repo passes (see payment_wire.py). Annotating as
+        # call site in this repo passes (see payment/wire.py). Annotating as
         # ``Any`` states that instead of pretending the shapes differ.
         proxies: Any = {"http": proxy, "https": proxy} if proxy else None
         r = curl_requests.get(

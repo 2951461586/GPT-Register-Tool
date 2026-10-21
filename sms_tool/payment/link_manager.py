@@ -2,7 +2,7 @@
 
 This module is now a thin backward-compatibility shell; all definitions
 live in the `pay_link` subpackage and are re-exported verbatim so every
-`from sms_tool.payment_link_manager import ...` / `sms_tool.payment_link_manager.X`
+`from sms_tool.payment.link_manager import ...` / `sms_tool.payment.link_manager.X`
 reference keeps working.
 
 The public surface is **declared**, not incidental: ``__all__`` is re-imported
@@ -27,30 +27,30 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Mapping
-from .config import ConfigError, current_config_data, resolve_runtime_config, validate_config
-from .kernel.paths import project_path, runtime_file
-from .payment_contracts import PaymentRequest, PaymentResult, payment_history_metadata
-from .payment_catalog import (
+from ..config import ConfigError, current_config_data, resolve_runtime_config, validate_config
+from ..kernel.paths import project_path, runtime_file
+from .contracts import PaymentRequest, PaymentResult, payment_history_metadata
+from .catalog import (
     PAYMENT_METHODS as CATALOG_METHODS,
     normalize_payment_method as normalize_catalog_payment_method,
     validate_catalog_consistency,
 )
-from .payment_adapters import FunctionPaymentAdapter, PaymentAdapterRegistry
-from .payment_executor import PaymentExecutionRequest, PaymentFlowExecutor
-from .payment_operation import (
+from .adapters import FunctionPaymentAdapter, PaymentAdapterRegistry
+from .executor import PaymentExecutionRequest, PaymentFlowExecutor
+from .operation import (
     PaymentOperationConflict,
     PaymentOperationStore,
     conflict_result as payment_operation_conflict_result,
 )
-from .payment_routing import (
+from .routing import (
     PaymentRoutePlan,
     PaymentRoutePlanner,
     parse_proxy_pool,
     payment_proxy_pools as canonical_payment_proxy_pools,
 )
-from .kernel.sanitizer import sanitize as _canonical_sanitize, sanitize_text as _canonical_sanitize_text
-from . import payment_egress
+from ..kernel.sanitizer import sanitize as _canonical_sanitize, sanitize_text as _canonical_sanitize_text
+from . import egress as payment_egress
 
 
-from .pay_link import *  # noqa: F401,F403
-from .pay_link import __all__ as __all__  # noqa: F401
+from ..pay_link import *  # noqa: F401,F403
+from ..pay_link import __all__ as __all__  # noqa: F401

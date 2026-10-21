@@ -1,21 +1,21 @@
-"""normalize submodule of the former payment_link_manager.py (mechanical split, bodies unchanged)."""
+"""normalize submodule of the former payment/link_manager.py (mechanical split, bodies unchanged)."""
 
 from __future__ import annotations
 import re
 import subprocess
 from typing import Any
 from ..config import current_config_data
-from ..payment_catalog import (
+from ..payment.catalog import (
     PAYMENT_METHODS as CATALOG_METHODS,
     normalize_payment_method as normalize_catalog_payment_method,
     validate_catalog_consistency,
 )
-from ..payment_operation import (
+from ..payment.operation import (
     PaymentOperationConflict,
     PaymentOperationStore,
     conflict_result as payment_operation_conflict_result,
 )
-from ..payment_routing import (
+from ..payment.routing import (
     PaymentRoutePlan,
     PaymentRoutePlanner,
     parse_proxy_pool,

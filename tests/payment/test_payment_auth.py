@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from sms_tool import payment_auth
+from sms_tool.payment import auth as payment_auth
 
 
 class PaymentAuthTests(unittest.TestCase):

@@ -15,7 +15,7 @@ from sms_tool.checkout_contract import (
     discount_breakdown,
     payable_amount,
 )
-from sms_tool.payment_capability import build_capability_probe_result
+from sms_tool.payment.capability import build_capability_probe_result
 
 
 def test_payable_amount_prefers_due_over_tax_component():

@@ -1,0 +1,21 @@
+{
+  "package": "payment",
+  "layer": 5,
+  "modules": {
+    "payment_adapters": "adapters",
+    "payment_auth": "auth",
+    "payment_batch": "batch",
+    "payment_batch_setup": "batch_setup",
+    "payment_capability": "capability",
+    "payment_catalog": "catalog",
+    "payment_contracts": "contracts",
+    "payment_egress": "egress",
+    "payment_errors": "errors",
+    "payment_executor": "executor",
+    "payment_flow": "flow",
+    "payment_link_manager": "link_manager",
+    "payment_operation": "operation",
+    "payment_routing": "routing",
+    "payment_wire": "wire"
+  }
+}

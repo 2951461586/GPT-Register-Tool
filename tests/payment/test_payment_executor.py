@@ -1,7 +1,7 @@
 import unittest
 
-from sms_tool.payment_executor import PaymentExecutionRequest, PaymentFlowExecutor
-from sms_tool.payment_routing import PaymentRoutePlan
+from sms_tool.payment.executor import PaymentExecutionRequest, PaymentFlowExecutor
+from sms_tool.payment.routing import PaymentRoutePlan
 
 
 class PaymentFlowExecutorTests(unittest.TestCase):

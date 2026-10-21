@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from .payment_link_manager import parse_proxy_pool
+from .link_manager import parse_proxy_pool
 
 
 def apply_configured_stage_pools(

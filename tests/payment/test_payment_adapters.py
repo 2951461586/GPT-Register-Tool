@@ -2,13 +2,13 @@ import logging
 
 import pytest
 
-from sms_tool.payment_adapters import FunctionPaymentAdapter, PaymentAdapterRegistry
-from sms_tool.payment_catalog import PAYMENT_METHODS
-from sms_tool.payment_contracts import PaymentRequest, PaymentResult
-from sms_tool.payment_link_manager import PAYMENT_ADAPTERS, _reference_root
+from sms_tool.payment.adapters import FunctionPaymentAdapter, PaymentAdapterRegistry
+from sms_tool.payment.catalog import PAYMENT_METHODS
+from sms_tool.payment.contracts import PaymentRequest, PaymentResult
+from sms_tool.payment.link_manager import PAYMENT_ADAPTERS, _reference_root
 from sms_tool.pay_link.base import PAYMENT_METHODS as PAYMENT_SPECS, PaymentMethodSpec
 
-_LOGGER_NAME = "sms_tool.payment_link_manager"
+_LOGGER_NAME = "sms_tool.payment.link_manager"
 
 
 class _Proc:

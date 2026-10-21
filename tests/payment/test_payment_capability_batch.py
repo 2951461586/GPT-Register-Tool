@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from sms_tool import payment_batch
+from sms_tool.payment import batch as payment_batch
 
 
 class PaymentCapabilityBatchTests(unittest.TestCase):
@@ -96,7 +96,7 @@ class PaymentCapabilityBatchTests(unittest.TestCase):
             patch.object(payment_batch, "ensure_payment_access_token", return_value=auth),
             patch.object(payment_batch, "_record_canary_state", return_value={"paused": False}),
             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "gopay-canary.json"),
-            patch("sms_tool.payment_capability.payment_method_capability_probe") as generic_probe,
+            patch("sms_tool.payment.capability.payment_method_capability_probe") as generic_probe,
         ):
             report = payment_batch.run_payment_batch(
                 ["a@example.com"],

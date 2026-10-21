@@ -6,13 +6,14 @@ from unittest.mock import patch
 
 import pytest
 
-from sms_tool import payment_batch
-from sms_tool import payment_link_manager as manager
-from sms_tool.payment_catalog import (
+from sms_tool.payment import batch as payment_batch
+from sms_tool.payment import link_manager as manager
+from sms_tool.payment.catalog import (
     OFFLINE_ERROR_CODE,
     PAYMENT_METHODS,
     offline_method_error,
 )
+from sms_tool.payment.errors import error_code_of, error_stage_of, retryable_of
 
 OFFLINE = ("ideal", "pix", "kakao", "blik", "twint", "momo")
 ONLINE = ("paypal", "gopay", "gcash", "grabpay", "upi", "direct_card")
@@ -41,9 +42,13 @@ def test_probe_stays_allowed_for_offline_methods():
 def test_refusal_carries_a_classifiable_non_retryable_code():
     error = offline_method_error("pix")
     assert isinstance(error, ValueError)
-    assert error.error_code == OFFLINE_ERROR_CODE == "payment_method_offline"
-    assert error.error_stage == "validation"
-    assert error.retryable is False
+    # Read through the accessors, not the attributes: ``payment/errors.py`` is the
+    # single place that owns those names and their defaults (the writer side uses
+    # ``annotate_error``). Direct ``error.error_code`` was the only reason pyright
+    # saw ``ValueError`` with three unknown attributes.
+    assert error_code_of(error) == OFFLINE_ERROR_CODE == "payment_method_offline"
+    assert error_stage_of(error) == "validation"
+    assert retryable_of(error) is False
 
 
 def test_unknown_method_is_not_reported_as_offline():
@@ -58,7 +63,7 @@ def test_generate_refuses_before_any_checkout_or_subprocess(method):
             return_value={"chatgpt": {}, "protocol_payments": {}},
         ),
         patch("sms_tool.pay_link.core.PAYMENT_ADAPTERS.execute_mapping") as adapter,
-        patch("sms_tool.payment_link_manager.subprocess.run") as run,
+        patch("sms_tool.payment.link_manager.subprocess.run") as run,
     ):
         result = manager.generate_payment_link("token", payment_method=method)
 
@@ -77,7 +82,7 @@ def test_generate_probe_only_is_not_refused_as_offline():
             "sms_tool.pay_link.base.current_config_data",
             return_value={"chatgpt": {}, "protocol_payments": {}},
         ),
-        patch("sms_tool.payment_capability.payment_method_capability_probe", return_value=observation),
+        patch("sms_tool.payment.capability.payment_method_capability_probe", return_value=observation),
     ):
         result = manager.generate_payment_link("token", payment_method="momo", probe_only=True)
 
@@ -88,4 +93,4 @@ def test_generate_probe_only_is_not_refused_as_offline():
 def test_batch_refuses_offline_method_with_the_offline_code(method):
     with pytest.raises(ValueError, match="payment method is offline") as caught:
         payment_batch.run_payment_batch(["a@example.com"], payment_method=method)
-    assert caught.value.error_code == OFFLINE_ERROR_CODE
+    assert error_code_of(caught.value) == OFFLINE_ERROR_CODE

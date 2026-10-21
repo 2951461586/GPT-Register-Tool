@@ -1,7 +1,7 @@
 """``sms_tool/token_telemetry.py`` 的行为测试（零覆盖 → 全覆盖 + 变异验证）。
 
 为什么值得测：``access_token_telemetry(...)["token_hash"]`` 是 **令牌是否被真正轮换**
-的判据。``payment_auth.py:48`` 先取一次 ``original_hash``，最多 3 次稳定探测，
+的判据。``payment/auth.py:48`` 先取一次 ``original_hash``，最多 3 次稳定探测，
 401 后重新登录再取一次 —— **只有这个哈希变了，运维才知道令牌真的换了**。
 哈希算错对象（比如算了未 strip 的原文）或算错长度，轮换检测会静默失效：
 令牌其实还在复用旧的那把，界面上却显示"已重新登录"。
@@ -325,7 +325,13 @@ class TimingMathTest(unittest.TestCase):
 
     def test_age_falls_back_to_iat_when_acquired_at_is_uncoercible(self):
         with _frozen(NOW):
-            info = access_token_telemetry(_jwt({"iat": NOW - 300, "exp": NOW + 3000}), acquired_at="nonsense")
+            # Deliberately uncoercible: the point of the case is that ``_as_int``
+            # swallows it and falls back to ``iat``. The annotation stays ``int``
+            # because that is the contract real callers must honour.
+            info = access_token_telemetry(
+                _jwt({"iat": NOW - 300, "exp": NOW + 3000}),
+                acquired_at="nonsense",  # type: ignore[reportArgumentType]
+            )
         self.assertEqual(info["age_seconds"], 300)
 
     def test_age_is_zero_without_any_time_reference(self):
@@ -387,4 +393,5 @@ class ReturnShapeTest(unittest.TestCase):
 
     def test_acquired_at_is_keyword_only(self):
         with self.assertRaises(TypeError):
-            access_token_telemetry(_jwt({"iat": 1}), 5)
+            # The whole assertion is that this call is a TypeError.
+            access_token_telemetry(_jwt({"iat": 1}), 5)  # type: ignore[reportCallIssue]

@@ -5,7 +5,7 @@
 ## 架构与性能
 
 - 将 `cli.py` 的注册、账号、邮箱、支付链接、一键操作和 Omakase 命令迁移到 `sms_tool/commands/`，CLI 保留兼容薄入口。
-- 清理 `payment_link_manager.py` 被覆盖或零引用的旧实现，保留单一支付路由和结果契约。
+- 清理 `payment/link_manager.py` 被覆盖或零引用的旧实现，保留单一支付路由和结果契约。
 - 新增常驻 `--desktop-serve` JSONL 后端；`DesktopReadClient` 支持请求 ID 关联、进程自动重启和 one-shot 回退，账号/邮箱合并读取并按文件元数据缓存。
 - 注册输出 `Saved session:` 后立即触发防抖异步刷新；多选账号删除合并为一个后端批量命令并发执行。
 - 注册代理预检并行化，支付批次 checkpoint 写入节流；`cross_process_gate.py` 防止 CLI 与桌面并行超卖注册阶段配额。

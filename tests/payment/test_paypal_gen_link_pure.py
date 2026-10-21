@@ -303,7 +303,7 @@ class ParseTokenTests(unittest.TestCase):
 class PayPalConfigTests(unittest.TestCase):
     def test_routes_through_payment_routing(self):
         cfg = {"paypal": {"target_country": "GB"}}
-        with patch("sms_tool.payment_routing.method_payment_config", return_value={"target_country": "JP"}) as routed:
+        with patch("sms_tool.payment.routing.method_payment_config", return_value={"target_country": "JP"}) as routed:
             out = gen_link._paypal_config(cfg)
         routed.assert_called_once_with(cfg, "paypal")
         self.assertEqual({"target_country": "JP"}, out)
@@ -316,11 +316,11 @@ class PayPalConfigTests(unittest.TestCase):
 
     def test_falls_back_to_legacy_paypal_block_on_import_error(self):
         cfg = {"paypal": {"target_country": "GB"}}
-        with patch("sms_tool.payment_routing.method_payment_config", side_effect=ImportError("no routing")):
+        with patch("sms_tool.payment.routing.method_payment_config", side_effect=ImportError("no routing")):
             self.assertEqual({"target_country": "GB"}, gen_link._paypal_config(cfg))
 
     def test_legacy_fallback_ignores_non_mapping_paypal_block(self):
-        with patch("sms_tool.payment_routing.method_payment_config", side_effect=ImportError("no routing")):
+        with patch("sms_tool.payment.routing.method_payment_config", side_effect=ImportError("no routing")):
             self.assertEqual({}, gen_link._paypal_config({"paypal": "nope"}))
 
 

@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from sms_tool.payment_routing import PaymentRoutePlanner, method_payment_config
+from sms_tool.payment.routing import PaymentRoutePlanner, method_payment_config
 
 
 class PaymentRoutePlannerTests(unittest.TestCase):

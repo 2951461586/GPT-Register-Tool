@@ -9,7 +9,11 @@ import time
 from typing import Any
 
 
-def access_token_telemetry(token: str, *, acquired_at: int = 0) -> dict[str, Any]:
+def access_token_telemetry(token: str | None, *, acquired_at: int = 0) -> dict[str, Any]:
+    """``token`` is ``str | None``: the body already normalises with ``str(token or "")``
+    and ``tests/accounts/test_token_telemetry_pure.py`` pins that ``None`` and ``""``
+    both yield an empty ``token_hash``. The narrower ``str`` annotation only made
+    that test untypeable."""
     text = str(token or "").strip()
     payload: dict[str, Any] = {}
     parts = text.split(".")

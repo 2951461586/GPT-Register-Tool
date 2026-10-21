@@ -103,7 +103,7 @@ def _gate_settings(runtime_config: Mapping[str, Any] | None) -> tuple[bool, floa
 
 
 def _default_probe(proxy: str, expected_country: str, stage: str, timeout: float):
-    from .paypal.proxy import probe_proxy
+    from ..paypal.proxy import probe_proxy
 
     return probe_proxy(proxy, expected_country=expected_country, stage=stage, timeout=timeout)
 
@@ -118,7 +118,7 @@ def _cached_probe(
     failure_cooldown: float,
 ) -> tuple[bool, str, str]:
     """Probe with a monotonic cache so batch runs do not re-probe healthy proxies."""
-    from .paypal.proxy import proxy_key
+    from ..paypal.proxy import proxy_key
 
     key = (proxy_key(proxy), expected)
     now = time.monotonic()

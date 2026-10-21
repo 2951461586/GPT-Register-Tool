@@ -24,7 +24,7 @@ from .checkout_contract import (
     CheckoutRequestContract,
     CheckoutSessionContract,
 )
-from .payment_capability import (
+from .payment.capability import (
     CapabilityProbeError,
     ChatGPTStripeCapabilityTransport,
 )

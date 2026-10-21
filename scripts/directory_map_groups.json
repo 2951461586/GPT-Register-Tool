@@ -174,25 +174,20 @@
       "scripts/export_mailbox_2fa.py"
     ],
     "Payment links and capability": [
-      "sms_tool/payment_link_manager.py",
-      "sms_tool/payment_auth.py",
       "sms_tool/checkout_contract.py",
       "sms_tool/capability_browser.py",
-      "sms_tool/payment_capability.py",
-      "sms_tool/payment_flow.py",
-      "sms_tool/payment_routing.py",
-      "sms_tool/payment_executor.py",
       "sms_tool/gen_pp_link.py",
       "sms_tool/wallet_provider.py",
       "sms_tool/wallet_transport.py",
       "sms_tool/gcash_provider.py",
       "sms_tool/gcash_transport.py",
       "sms_tool/regional_payment_adapter.py",
-      "sms_tool/paypal/*.py"
+      "sms_tool/paypal/*.py",
+      "sms_tool/payment/*.py"
     ],
     "Payment-link state machine": [
       "sms_tool/pay_link/*.py",
-      "sms_tool/payment_link_manager.py"
+      "sms_tool/payment/*.py"
     ],
     "PayPal-only link generation": [
       "sms_tool/paypal_link/__init__.py",
@@ -204,7 +199,7 @@
       "sms_tool/upi_link/*.py"
     ],
     "Payment batch execution": [
-      "sms_tool/payment_batch.py"
+      "sms_tool/payment/*.py"
     ],
     "Payment execution and reconciliation": [
       "sms_tool/paypal/*.py",
@@ -253,16 +248,9 @@
       "sms_tool/accounts/account_lifecycle.py"
     ],
     "Payment contracts, catalog and stage gates": [
-      "sms_tool/payment_catalog.py",
-      "sms_tool/payment_contracts.py",
-      "sms_tool/payment_errors.py",
-      "sms_tool/payment_adapters.py",
-      "sms_tool/payment_egress.py",
       "sms_tool/operation_journal.py",
-      "sms_tool/payment_operation.py",
-      "sms_tool/payment_batch_setup.py",
-      "sms_tool/payment_wire.py",
-      "sms_tool/paypal/*.py"
+      "sms_tool/paypal/*.py",
+      "sms_tool/payment/*.py"
     ],
     "Proxy authority, lanes, health and bridge": [
       "sms_tool/proxy/*.py"

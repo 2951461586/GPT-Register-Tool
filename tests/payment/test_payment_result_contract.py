@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from sms_tool import payment_link_manager as manager
+from sms_tool.payment import link_manager as manager
 
 
 # Every module in the ``pay_link`` subpackage binds ``current_config_data``
@@ -53,7 +53,7 @@ class PaymentResultContractTests(unittest.TestCase):
         # called) rather than on PaymentOperationStore.from_config because
         # the latter is a classmethod and mock's classmethod wrapper has
         # edge cases when the class is re-imported via different paths.
-        from sms_tool.payment_operation import PaymentOperationStore as _Store
+        from sms_tool.payment.operation import PaymentOperationStore as _Store
 
         self._store_root = Path(self._tmp.name) / "payment_operations"
         self._store_patch = patch(
@@ -219,8 +219,8 @@ class PaymentResultContractTests(unittest.TestCase):
             tempfile.TemporaryDirectory() as tmp,
             patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)),
             patch("sms_tool.pay_link.adapters._protocol_cfg", return_value={"timeout_seconds": 3}),
-            patch("sms_tool.payment_egress.assert_egress_countries"),
-            patch("sms_tool.payment_link_manager.subprocess.run", side_effect=timeout) as run_mock,
+            patch("sms_tool.payment.egress.assert_egress_countries"),
+            patch("sms_tool.payment.link_manager.subprocess.run", side_effect=timeout) as run_mock,
         ):
             result = manager.generate_payment_link(
                 "token",

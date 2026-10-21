@@ -53,8 +53,8 @@
 
 ### 1.2 当前项目的结果契约与授权链路
 
-- `sms_tool/payment_contracts.py`：`PaymentResult` / `PaymentError` / `StageOutcome` / `payment_retry_allowed`，统一归一化。
-- `sms_tool/payment_link_manager.py`：统一状态机 + adapter registry。
+- `sms_tool/payment/contracts.py`：`PaymentResult` / `PaymentError` / `StageOutcome` / `payment_retry_allowed`，统一归一化。
+- `sms_tool/payment/link_manager.py`：统一状态机 + adapter registry。
 - `sms_tool/omakse_client.run_us_payment`：把 BA token + 代理发给远程 omakse 服务器（外部授权引擎）。
 - `sms_tool/gen_pp_link.py`：`PPLinkExtractor` / `generate_pp_link`（三段式提链）。
 - `sms_tool/paypal/protocol.py`：BA/EC 提取、Stripe redirect。
@@ -179,7 +179,7 @@ def to_payment_result(ctx, *, payment_method="paypal") -> dict  # 映射到 Paym
 
 **集成点**：
 - `sms_tool/omakse_client.run_us_payment` 返回值（job `raw`）经 `parse_authorization_context` 归一化后再消费。
-- `sms_tool/payment_link_manager.py` 的 paypal adapter 可在提取到 BA 授权结果后，先归一化再持久化。
+- `sms_tool/payment/link_manager.py` 的 paypal adapter 可在提取到 BA 授权结果后，先归一化再持久化。
 
 **依赖**：无新增。
 
@@ -240,9 +240,9 @@ def to_payment_result(ctx, *, payment_method="paypal") -> dict  # 映射到 Paym
 
 Protocol-payment extraction now uses three common modules:
 
-- `payment_flow.py` defines the canonical stage vocabulary and method profiles.
-- `payment_routing.py` compiles named pools and stage routes into one immutable, redacted `PaymentRoutePlan`.
-- `payment_executor.py` owns execution states, cancellation/unknown outcomes, normalization, and progress history.
+- `payment/flow.py` defines the canonical stage vocabulary and method profiles.
+- `payment/routing.py` compiles named pools and stage routes into one immutable, redacted `PaymentRoutePlan`.
+- `payment/executor.py` owns execution states, cancellation/unknown outcomes, normalization, and progress history.
 
 CLI and batch paths compile the route plan before JIT authentication and pass
 the same object through probes, retries, adapters, and transports. Checkout and

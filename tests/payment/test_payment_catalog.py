@@ -3,8 +3,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from sms_tool import payment_catalog
-from sms_tool.payment_catalog import load_payment_catalog
+from sms_tool.payment import catalog as payment_catalog
+from sms_tool.payment.catalog import load_payment_catalog
 
 
 def _catalog_payload(**overrides):

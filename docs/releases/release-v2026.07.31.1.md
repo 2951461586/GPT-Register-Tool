@@ -5,7 +5,7 @@
 - Updated the operator README with the current desktop workflows for account liveness, AT state display, JIT AT refresh, stable AT 200 registration targets, and resumable batch protocol payment.
 - Documented the MoMo five-stage proxy chain, Kakao structured result contract, eligibility matrix fields, canary behavior, and token-free checkpoint reports.
 - Corrected the registration/authentication boundary: Agent Identity is no longer a registration stage and is available only through an explicit SUB2API import path.
-- Updated the architecture and directory maps with `payment_auth.py`, `payment_batch.py`, the WPF batch-payment surface, and the current module ownership rules.
+- Updated the architecture and directory maps with `payment/auth.py`, `payment/batch.py`, the WPF batch-payment surface, and the current module ownership rules.
 - Added release procedure guidance for same-day patch tags and pre-upload SHA-256 verification.
 
 ## Maintenance and code changes

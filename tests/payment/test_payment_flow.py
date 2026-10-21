@@ -1,6 +1,6 @@
 import unittest
 
-from sms_tool.payment_flow import payment_flow_profile
+from sms_tool.payment.flow import payment_flow_profile
 
 
 class PaymentFlowProfileTests(unittest.TestCase):

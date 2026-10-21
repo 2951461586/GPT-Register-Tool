@@ -74,7 +74,14 @@ REGISTRATION_PREFIXES = (
 )
 
 #: Second path component -> payment lane.
+#:
+#: ``"payment"`` is the subpackage created by the 2026-10-21 P2-7 move; without
+#: it every ``sms_tool.payment.*`` module classifies as ``neutral`` and the whole
+#: lane rule goes blind (``payment_to_registration`` would drop to ~0 while the
+#: gate kept reporting OK). ``"payment_"`` stays for the modules that have not
+#: moved yet.
 PAYMENT_PREFIXES = (
+    "payment",
     "payment_",
     "pay_link",
     "paypal",

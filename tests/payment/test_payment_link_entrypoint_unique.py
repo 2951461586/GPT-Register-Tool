@@ -10,7 +10,7 @@ managed_generate`` followed by a straight pass-through call. Both were exported
 depended on which module a call site happened to import from.
 
 Nothing detects that state, which is exactly why it survived: a test that
-patches ``sms_tool.payment_link_manager.generate_payment_link`` is completely
+patches ``sms_tool.payment.link_manager.generate_payment_link`` is completely
 invisible to a caller that imported the ``paypal_link`` copy, and vice versa.
 Deleting the stub fixes today's tree; this file is what stops a second one from
 being added tomorrow.
@@ -20,7 +20,7 @@ What is asserted
 1. exactly one ``def generate_payment_link`` exists anywhere under ``sms_tool/``
    (the scan is AST-based, so a re-export by import does not count as a
    definition);
-2. the canonical public shell ``sms_tool.payment_link_manager`` resolves to that
+2. the canonical public shell ``sms_tool.payment.link_manager`` resolves to that
    single implementation;
 3. the ``paypal_link`` facade no longer carries the name at all.
 """
@@ -68,12 +68,12 @@ def test_generate_payment_link_has_exactly_one_definition():
 
 
 def test_manager_shell_points_at_the_single_implementation():
-    from sms_tool import payment_link_manager
+    from sms_tool.payment import link_manager as payment_link_manager
 
     fn = getattr(payment_link_manager, ENTRYPOINT, None)
-    assert fn is not None, f"sms_tool.payment_link_manager lost {ENTRYPOINT}"
+    assert fn is not None, f"sms_tool.payment.link_manager lost {ENTRYPOINT}"
     assert fn.__module__ == "sms_tool.pay_link.core", (
-        f"sms_tool.payment_link_manager.{ENTRYPOINT} resolves to {fn.__module__}, expected sms_tool.pay_link.core"
+        f"sms_tool.payment.link_manager.{ENTRYPOINT} resolves to {fn.__module__}, expected sms_tool.pay_link.core"
     )
 
 

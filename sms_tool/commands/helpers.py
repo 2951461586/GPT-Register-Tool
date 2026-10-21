@@ -46,14 +46,14 @@ def unique_emails(emails):
 
 def payment_method(args):
     """Normalize payment method from args."""
-    from ..payment_link_manager import normalize_payment_method
+    from ..payment.link_manager import normalize_payment_method
 
     return normalize_payment_method(getattr(args, "payment_method", "")) or "paypal"
 
 
 def cli_payment_method_label(payment_method):
     """Human-readable payment method label."""
-    from ..payment_link_manager import payment_method_label as label
+    from ..payment.link_manager import payment_method_label as label
 
     return label(payment_method) or "PayPal"
 

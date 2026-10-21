@@ -20,7 +20,7 @@ precedent.
 
 from __future__ import annotations
 
-from .operation_journal import (
+from ..operation_journal import (
     LEDGER_DIR,
     SCHEMA_VERSION,
     PaymentOperation,

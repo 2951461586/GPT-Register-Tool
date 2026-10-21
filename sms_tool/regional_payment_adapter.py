@@ -24,7 +24,7 @@ from .wallet_provider import (
     build_payment_method_payload,
 )
 from .wallet_transport import ChatGPTStripeWalletTransport
-from .payment_catalog import PAYMENT_METHODS as CATALOG_PAYMENT_METHODS
+from .payment.catalog import PAYMENT_METHODS as CATALOG_PAYMENT_METHODS
 
 
 @dataclass(frozen=True)
@@ -59,6 +59,27 @@ class RegionalPaymentTransport(Protocol):
     def create_payment_method(self, request: Mapping[str, Any]) -> Mapping[str, Any]: ...
     def confirm_payment(self, request: Mapping[str, Any]) -> Mapping[str, Any]: ...
     def follow_redirect(self, request: Mapping[str, Any]) -> Mapping[str, Any]: ...
+
+
+def _as_mapping(value: Mapping[str, Any] | str, stage: str) -> Mapping[str, Any]:
+    """Enforce the transport contract at the boundary.
+
+    ``ChatGPTStripeWalletTransport`` used to declare ``-> Mapping[str, Any] | str``
+    on ``create_payment_method`` / ``follow_redirect`` even though every return
+    path produced a mapping, so this adapter's narrower contract was only true by
+    accident -- and a ``str`` would have surfaced as a ``ValueError`` inside the
+    caller's ``dict(...)``. The stale annotations are gone, but the boundary is
+    still worth stating: the transport is an injected protocol and a replacement
+    implementation can return anything its own signature allows.
+    """
+    if isinstance(value, Mapping):
+        return value
+    raise RegionalPaymentError(
+        f"regional {stage} response was not a JSON object",
+        error_code="regional_payment_response_invalid",
+        error_stage=stage,
+        retryable=False,
+    )
 
 
 class ChatGPTStripeRegionalTransport:
@@ -155,7 +176,10 @@ class ChatGPTStripeRegionalTransport:
             if isinstance(request.get("billing_details"), Mapping)
             else None,
         )
-        return self._wallet.create_payment_method(self._request("payment_method", request, payload))
+        return _as_mapping(
+            self._wallet.create_payment_method(self._request("payment_method", request, payload)),
+            "payment_method",
+        )
 
     def confirm_payment(self, request: Mapping[str, Any]) -> Mapping[str, Any]:
         state = self._state(request)
@@ -179,7 +203,10 @@ class ChatGPTStripeRegionalTransport:
         return self._wallet.confirm_payment(self._request("confirm", wire_request, payload))
 
     def follow_redirect(self, request: Mapping[str, Any]) -> Mapping[str, Any]:
-        return self._wallet.follow_redirect(self._request("follow_redirect", request, {}))
+        return _as_mapping(
+            self._wallet.follow_redirect(self._request("follow_redirect", request, {})),
+            "follow_redirect",
+        )
 
     def _state(self, request: Mapping[str, Any]) -> dict[str, Any]:
         session_id = str(request.get("checkout_session_id") or "").strip()

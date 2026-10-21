@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 from sms_tool import gen_pp_link
 from sms_tool.paypal import extract as paypal_extract
-from sms_tool.payment_contracts import payment_retry_allowed
+from sms_tool.payment.contracts import payment_retry_allowed
 
 
 class _Resp:
@@ -142,7 +142,7 @@ class ApproveUnknownContractTests(unittest.TestCase):
     """The unknown outcome must survive the whole manager pipeline."""
 
     def _run_manager(self):
-        from sms_tool import payment_link_manager
+        from sms_tool.payment import link_manager as payment_link_manager
 
         def boom(**kwargs):
             raise paypal_extract.PaymentOutcomeUnknownError(

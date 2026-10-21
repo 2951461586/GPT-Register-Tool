@@ -1,4 +1,4 @@
-"""Contract tests for ``sms_tool/payment_errors.py``.
+"""Contract tests for ``sms_tool/payment/errors.py``.
 
 Why this file exists
 --------------------
@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import pytest
 
-from sms_tool.payment_errors import (
+from sms_tool.payment.errors import (
     PAYMENT_ERROR_ATTRS,
     PaymentErrorInfo,
     annotate_error,

@@ -188,7 +188,7 @@ def resolve_payment(config: Mapping[str, Any] | None, *, method: str = "paypal")
         regions_source = "proxy.lanes.payment"
 
     stages: dict[str, list[str]] = {}
-    from ..payment_routing import payment_proxy_pools  # lazy: pulls the payment catalog
+    from ..payment.routing import payment_proxy_pools  # lazy: pulls the payment catalog
 
     try:
         stages = {str(name): pool for name, pool in payment_proxy_pools(cfg, method).items() if pool}

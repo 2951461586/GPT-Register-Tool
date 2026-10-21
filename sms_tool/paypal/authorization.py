@@ -7,7 +7,7 @@ fatal-contingency classification) used by the external paypal-agreement-protocol
 This module ONLY parses and normalizes an already-obtained authorization
 response (GraphQL / JSON).  It never crafts requests to evade risk controls.
 The output is a :class:`PayPalAuthorizationContext` plus helpers that produce
-dicts aligned with the project's :class:`sms_tool.payment_contracts.PaymentResult`
+dicts aligned with the project's :class:`sms_tool.payment.contracts.PaymentResult`
 contract, so downstream code (``omakse_client``, ``payment_link_manager``) can
 consume and gate retries uniformly.
 """

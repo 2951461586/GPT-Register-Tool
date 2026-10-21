@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from sms_tool import payment_batch
+from sms_tool.payment import batch as payment_batch
 
 
 class PaymentBatchTests(unittest.TestCase):

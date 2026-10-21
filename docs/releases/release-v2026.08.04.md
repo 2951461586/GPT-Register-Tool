@@ -13,7 +13,7 @@ repository cleanup and release boundaries.
   remains responsible for control state and invocation.
 - Kept ChatGPT Checkout/Stripe-init request and response normalization in
   `checkout_contract.py`, with side-effect-limited capability probing in
-  `payment_capability.py`.
+  `payment/capability.py`.
 - Kept GoPay, GCash, and GrabPay behind one shared wallet provider/transport
   adapter. This GoPay implementation is a ChatGPT Checkout wallet adapter and
   does not restore the retired gRPC, ADB, phone, or balance service.

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Mapping
 
-from .payment_catalog import PAYMENT_METHODS as CATALOG_PAYMENT_METHODS
+from .catalog import PAYMENT_METHODS as CATALOG_PAYMENT_METHODS
 
 
 class PaymentStage(str, Enum):

@@ -538,8 +538,8 @@ def _validate_positive_numbers(
 
 
 def _validate_payment_config(section: Mapping[str, Any], errors: list[str]) -> None:
-    from ..payment_catalog import PAYMENT_CATALOG, normalize_payment_method
-    from ..payment_flow import normalize_payment_stage
+    from ..payment.catalog import PAYMENT_CATALOG, normalize_payment_method
+    from ..payment.flow import normalize_payment_stage
 
     supported = set(PAYMENT_CATALOG.methods)
     enabled = section.get("enabled_methods", [])

@@ -91,7 +91,9 @@ def test_the_numbers_come_from_the_ratchet_scripts(tmp_path, monkeypatch):
     def fake_tool(name: str):
         module = real_tool(name)
         if name == "import_layer_ratchet":
-            module.analyze = lambda root: FakeAnalysis()
+            # ``setattr`` rather than ``module.analyze = ...``: pyright rejects
+            # assignment to an attribute it does not see declared on ``ModuleType``.
+            setattr(module, "analyze", lambda root: FakeAnalysis())
         return module
 
     monkeypatch.setattr(refresh, "_tool", fake_tool)

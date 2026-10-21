@@ -7,7 +7,7 @@ import uuid
 from dataclasses import dataclass
 from typing import Any, Iterable
 
-from .payment_catalog import PAYMENT_METHODS as CATALOG_PAYMENT_METHODS
+from .payment.catalog import PAYMENT_METHODS as CATALOG_PAYMENT_METHODS
 
 
 CHECKOUT_PATH = "/backend-api/payments/checkout"

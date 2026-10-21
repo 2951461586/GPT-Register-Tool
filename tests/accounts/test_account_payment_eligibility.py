@@ -78,7 +78,7 @@ def _config(tmp_path: Path) -> dict:
 @pytest.fixture(autouse=True)
 def _offline_egress_gate():
     """These tests exercise the probe contract without contacting geo endpoints."""
-    with patch("sms_tool.payment_egress.assert_egress_countries"):
+    with patch("sms_tool.payment.egress.assert_egress_countries"):
         yield
 
 
@@ -130,7 +130,7 @@ def test_payment_locale_follows_the_country():
 
 
 def test_probe_without_access_token_never_calls_the_transport():
-    with patch("sms_tool.payment_capability.payment_method_capability_probe") as probe:
+    with patch("sms_tool.payment.capability.payment_method_capability_probe") as probe:
         result = probe_account_payment_eligibility({"email": "e@example.test"})
 
     assert result["ok"] is False
@@ -163,7 +163,7 @@ def test_probe_requests_the_account_billing_country_and_enumerates_every_method(
         "device_id": "device-1",
         "cookie_header": "oai-did=device-1",
     }
-    with patch("sms_tool.payment_capability.payment_method_capability_probe", fake_probe):
+    with patch("sms_tool.payment.capability.payment_method_capability_probe", fake_probe):
         result = probe_account_payment_eligibility(account, proxy="http://exit.test:80", timeout=30)
 
     assert captured["payment_method"] == "direct_card"
@@ -244,7 +244,7 @@ def test_probe_never_echoes_credentials_back():
         "access_token": "super-secret-at",
         "cookie_header": "super-secret-cookie",
     }
-    with patch("sms_tool.payment_capability.payment_method_capability_probe", fake_probe):
+    with patch("sms_tool.payment.capability.payment_method_capability_probe", fake_probe):
         result = probe_account_payment_eligibility(account, proxy="http://user:pw@exit.test:80")
 
     blob = json.dumps(result)
@@ -263,7 +263,7 @@ def test_probe_reports_failure_without_raising():
             "retryable": True,
         }
 
-    with patch("sms_tool.payment_capability.payment_method_capability_probe", fake_probe):
+    with patch("sms_tool.payment.capability.payment_method_capability_probe", fake_probe):
         result = probe_account_payment_eligibility({"access_token": "at"}, proxy="http://exit.test:80")
 
     assert result["ok"] is False
@@ -277,7 +277,7 @@ def test_probe_swallows_an_unexpected_exception():
     def fake_probe(**_kwargs):
         raise RuntimeError("boom")
 
-    with patch("sms_tool.payment_capability.payment_method_capability_probe", fake_probe):
+    with patch("sms_tool.payment.capability.payment_method_capability_probe", fake_probe):
         result = probe_account_payment_eligibility({"access_token": "at"}, proxy="http://exit.test:80")
 
     assert result["ok"] is False
@@ -288,7 +288,7 @@ def test_probe_failure_without_an_error_string_still_names_the_reason():
     def fake_probe(**_kwargs):
         return {"ok": False, "decision": "payment_method_unavailable"}
 
-    with patch("sms_tool.payment_capability.payment_method_capability_probe", fake_probe):
+    with patch("sms_tool.payment.capability.payment_method_capability_probe", fake_probe):
         result = probe_account_payment_eligibility({"access_token": "at"}, proxy="http://exit.test:80")
 
     assert result["ok"] is False
@@ -850,7 +850,7 @@ def test_successful_promotion_does_not_implicitly_create_checkout(monkeypatch):
 
 
 def test_eligibility_rejects_a_mismatched_exit_before_checkout():
-    from sms_tool.payment_egress import EgressCheckError
+    from sms_tool.payment.egress import EgressCheckError
 
     error = EgressCheckError(
         "wrong exit",
@@ -861,8 +861,8 @@ def test_eligibility_rejects_a_mismatched_exit_before_checkout():
         observed_country="US",
     )
     with (
-        patch("sms_tool.payment_egress.assert_egress_countries", side_effect=error) as gate,
-        patch("sms_tool.payment_capability.payment_method_capability_probe") as checkout,
+        patch("sms_tool.payment.egress.assert_egress_countries", side_effect=error) as gate,
+        patch("sms_tool.payment.capability.payment_method_capability_probe") as checkout,
     ):
         result = probe_account_payment_eligibility(
             {"access_token": "at", "registration_country": "IN"},
@@ -881,9 +881,9 @@ def test_eligibility_rejects_a_mismatched_exit_before_checkout():
 def test_eligibility_retargets_proxy_region_for_account_before_egress_check():
     original = "http://demo-region-VN-sid-Fixture123-t-5:sample@proxy.example:2000"
     with (
-        patch("sms_tool.payment_egress.assert_egress_countries") as gate,
+        patch("sms_tool.payment.egress.assert_egress_countries") as gate,
         patch(
-            "sms_tool.payment_capability.payment_method_capability_probe",
+            "sms_tool.payment.capability.payment_method_capability_probe",
             return_value={"ok": True, "payment_method_types": ["upi"], "currency": "INR"},
         ) as checkout,
     ):
@@ -901,7 +901,7 @@ def test_eligibility_retargets_proxy_region_for_account_before_egress_check():
 
 
 def test_eligibility_retargeted_region_still_requires_verified_exit():
-    from sms_tool.payment_egress import EgressCheckError
+    from sms_tool.payment.egress import EgressCheckError
 
     error = EgressCheckError(
         "wrong exit",
@@ -912,8 +912,8 @@ def test_eligibility_retargeted_region_still_requires_verified_exit():
         observed_country="VN",
     )
     with (
-        patch("sms_tool.payment_egress.assert_egress_countries", side_effect=error) as gate,
-        patch("sms_tool.payment_capability.payment_method_capability_probe") as checkout,
+        patch("sms_tool.payment.egress.assert_egress_countries", side_effect=error) as gate,
+        patch("sms_tool.payment.capability.payment_method_capability_probe") as checkout,
     ):
         result = probe_account_payment_eligibility(
             {"access_token": "at", "registration_country": "IN"},
@@ -949,9 +949,9 @@ def test_standalone_batch_uses_each_accounts_country_for_the_same_proxy_template
         return {"ok": True, "currency": kwargs["currency"], "payment_method_types": ["card"]}
 
     with (
-        patch("sms_tool.payment_egress.assert_egress_countries", side_effect=gate),
+        patch("sms_tool.payment.egress.assert_egress_countries", side_effect=gate),
         patch(
-            "sms_tool.payment_capability.payment_method_capability_probe",
+            "sms_tool.payment.capability.payment_method_capability_probe",
             side_effect=checkout,
         ),
     ):
@@ -967,8 +967,8 @@ def test_standalone_batch_uses_each_accounts_country_for_the_same_proxy_template
 
 def test_eligibility_rejects_an_unverifiable_exit_before_checkout():
     with (
-        patch("sms_tool.payment_egress.assert_egress_countries") as gate,
-        patch("sms_tool.payment_capability.payment_method_capability_probe") as checkout,
+        patch("sms_tool.payment.egress.assert_egress_countries") as gate,
+        patch("sms_tool.payment.capability.payment_method_capability_probe") as checkout,
     ):
         result = probe_account_payment_eligibility({"access_token": "at", "registration_country": "IN"})
 
@@ -980,8 +980,8 @@ def test_eligibility_rejects_an_unverifiable_exit_before_checkout():
 
 def test_eligibility_does_not_expose_unexpected_egress_errors():
     with (
-        patch("sms_tool.payment_egress.assert_egress_countries", side_effect=RuntimeError("Bearer secret-token")),
-        patch("sms_tool.payment_capability.payment_method_capability_probe") as checkout,
+        patch("sms_tool.payment.egress.assert_egress_countries", side_effect=RuntimeError("Bearer secret-token")),
+        patch("sms_tool.payment.capability.payment_method_capability_probe") as checkout,
     ):
         result = probe_account_payment_eligibility(
             {"access_token": "at", "registration_country": "IN"}, proxy="http://exit.test:80"
@@ -994,9 +994,9 @@ def test_eligibility_does_not_expose_unexpected_egress_errors():
 
 def test_eligibility_proceeds_after_verified_matching_exit():
     with (
-        patch("sms_tool.payment_egress.assert_egress_countries") as gate,
+        patch("sms_tool.payment.egress.assert_egress_countries") as gate,
         patch(
-            "sms_tool.payment_capability.payment_method_capability_probe",
+            "sms_tool.payment.capability.payment_method_capability_probe",
             return_value={"ok": True, "payment_method_types": ["upi"]},
         ) as checkout,
     ):

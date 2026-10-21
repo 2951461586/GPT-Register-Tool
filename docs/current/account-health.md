@@ -203,7 +203,7 @@ stays unknown. The safe `pay_link.probe_payment_method` path uses the same
 capability implementation, while link extraction may continue into payment
 side effects. Callers reach the probe through module-qualified
 access (`from .. import payment_capability`), because a `from X import f`
-binding makes `patch("sms_tool.payment_capability.f")` silently ineffective —
+binding makes `patch("sms_tool.payment.capability.f")` silently ineffective —
 the project patches source modules.
 
 Billing context is set explicitly from the account's recorded registration

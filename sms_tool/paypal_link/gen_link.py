@@ -145,7 +145,7 @@ except ImportError:  # pragma: no cover - direct script execution
         _new_session,
     )
 
-# 注意：这些符号的**定义**在 ``sms_tool/payment_wire.py``，``paypal_extract``
+# 注意：这些符号的**定义**在 ``sms_tool/payment/wire.py``，``paypal_extract``
 # 只是再导出。此处刻意继续从 ``paypal_extract`` 取：本包与它同属 PayPal 族，
 # 而同族依赖不是需要消除的反向耦合；改成直接依赖 ``payment_wire`` 会给
 # ``sms_tool/paypal_link -> sms_tool`` 增加一条跨目录模块级边，而
@@ -184,7 +184,7 @@ def _paypal_config(config: Mapping[str, Any] | None) -> dict[str, Any]:
     _raw_source: object = config
     source: Mapping = _raw_source if isinstance(_raw_source, Mapping) else {}
     try:
-        from ..payment_routing import method_payment_config
+        from ..payment.routing import method_payment_config
 
         return method_payment_config(source, "paypal")
     except (ImportError, TypeError, AttributeError):  # pragma: no cover - direct script execution

@@ -131,7 +131,7 @@ class ChatGPTStripeWalletTransport:
         )
         return self._json_response(response, request.stage)
 
-    def create_payment_method(self, request: WalletTransportRequest) -> Mapping[str, Any] | str:
+    def create_payment_method(self, request: WalletTransportRequest) -> Mapping[str, Any]:
         response = self._session(request).post(
             PAYMENT_METHOD_URL,
             data=dict(request.payload),
@@ -182,7 +182,7 @@ class ChatGPTStripeWalletTransport:
         )
         return self._json_response(response, request.stage)
 
-    def follow_redirect(self, request: WalletTransportRequest) -> Mapping[str, Any] | str:
+    def follow_redirect(self, request: WalletTransportRequest) -> Mapping[str, Any]:
         current = str(request.redirect_url or "").strip()
         if not current:
             raise WalletProviderError(

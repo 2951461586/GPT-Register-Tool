@@ -25,7 +25,7 @@ from .checkout_contract import (
     PAYMENT_METHOD_PROFILES,
     StripeCapabilityEvidence,
 )
-from .payment_capability import build_capability_probe_result
+from .payment.capability import build_capability_probe_result
 from .kernel.sanitizer import sanitize_text as _canonical_sanitize_text
 
 
@@ -860,7 +860,10 @@ def _structured_error(exc: Exception, stage: str) -> WalletProviderError:
 def _exception_status_code(exc: Exception) -> int:
     for value in (getattr(exc, "status_code", None), getattr(getattr(exc, "response", None), "status_code", None)):
         try:
-            status = int(value)
+            # ``getattr`` is typed ``Any | None``. ``int(None)`` raised TypeError and
+            # hit ``continue``, so short-circuiting to 0 is behaviour-preserving and
+            # states the ``ConvertibleToInt`` contract explicitly.
+            status = 0 if value is None else int(value)
         except (TypeError, ValueError):
             continue
         if 100 <= status <= 599:

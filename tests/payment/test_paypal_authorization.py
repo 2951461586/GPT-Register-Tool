@@ -10,7 +10,7 @@ from sms_tool.paypal.authorization import (
     parse_authorization_context,
     to_payment_result,
 )
-from sms_tool.payment_contracts import PaymentResult, payment_retry_allowed
+from sms_tool.payment.contracts import PaymentResult, payment_retry_allowed
 
 
 class TestParseContext(unittest.TestCase):

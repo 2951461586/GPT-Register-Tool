@@ -47,7 +47,7 @@ class GenerateBaLinkCliProxyTests(unittest.TestCase):
             with patch("sys.argv", argv):
                 with patch("sms_tool.paypal.proxy.probe_proxy", side_effect=fake_probe):
                     with patch(
-                        "sms_tool.payment_link_manager.generate_payment_link", side_effect=fake_generate_payment_link
+                        "sms_tool.payment.link_manager.generate_payment_link", side_effect=fake_generate_payment_link
                     ):
                         cli.main()
 
@@ -85,7 +85,7 @@ class GenerateBaLinkCliProxyTests(unittest.TestCase):
                     ),
                 ):
                     with patch(
-                        "sms_tool.payment_link_manager.generate_payment_link", side_effect=fake_generate_payment_link
+                        "sms_tool.payment.link_manager.generate_payment_link", side_effect=fake_generate_payment_link
                     ):
                         cli.main()
 
@@ -125,7 +125,7 @@ class GenerateBaLinkCliProxyTests(unittest.TestCase):
         with patch.object(cli, "CFG", cfg):
             with patch("sys.argv", argv):
                 with patch(
-                    "sms_tool.payment_link_manager.generate_payment_link", side_effect=fake_generate_payment_link
+                    "sms_tool.payment.link_manager.generate_payment_link", side_effect=fake_generate_payment_link
                 ):
                     cli.main()
 

@@ -14,23 +14,23 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Callable
 
-from .account_seed import load_account_seed
-from .config import CFG
-from .cross_process_gate import CrossProcessSemaphore, GateTimeoutError
-from .kernel.sanitizer import sanitize as _canonical_sanitize, sanitize_text as _canonical_sanitize_text
-from .kernel.paths import runtime_file
-from .payment_auth import ensure_payment_access_token, public_payment_auth_result
-from .payment_link_manager import (
+from ..account_seed import load_account_seed
+from ..config import CFG
+from ..cross_process_gate import CrossProcessSemaphore, GateTimeoutError
+from ..kernel.sanitizer import sanitize as _canonical_sanitize, sanitize_text as _canonical_sanitize_text
+from ..kernel.paths import runtime_file
+from .auth import ensure_payment_access_token, public_payment_auth_result
+from .link_manager import (
     coerce_approve_country,
     generate_payment_link,
     normalize_payment_method,
     parse_proxy_pool,
     probe_payment_method,
 )
-from .payment_routing import PaymentRoutePlanner
-from .payment_contracts import PaymentResult, payment_history_metadata, payment_retry_allowed
-from .payment_catalog import PAYMENT_METHODS, offline_method_error
-from .payment_batch_setup import apply_configured_stage_pools
+from .routing import PaymentRoutePlanner
+from .contracts import PaymentResult, payment_history_metadata, payment_retry_allowed
+from .catalog import PAYMENT_METHODS, offline_method_error
+from .batch_setup import apply_configured_stage_pools
 
 # Minimum spacing between "running" checkpoint rewrites of the batch report
 # (terminal states always persist immediately).
@@ -249,7 +249,7 @@ def run_payment_batch(
                 manual_token = str(token_value or "").strip()
                 break
         if manual_token:
-            from .accounts.account_liveness import probe_account_liveness
+            from ..accounts.account_liveness import probe_account_liveness
 
             probe = probe_account_liveness(
                 {"email": email, "access_token": manual_token}, proxy=checkout_route, timeout=timeout
@@ -308,7 +308,7 @@ def run_payment_batch(
             # 白浪费一次 probe + 一次恢复链。这里显式落库，让后续批次过滤掉它。
             if auth.get("terminal") or row["decision"] == "account_deactivated":
                 try:
-                    from .accounts.account_recovery import _persist_permanent_deactivation, is_permanently_deactivated
+                    from ..accounts.account_recovery import _persist_permanent_deactivation, is_permanently_deactivated
 
                     seed_data, _ = load_account_seed(email=email)
                     if seed_data is not None and is_permanently_deactivated(seed_data):
@@ -499,7 +499,7 @@ def run_payment_batch(
         authorization_queue: dict[str, Any] = {}
         if method == "paypal" and last.get("ok") and last.get("url"):
             try:
-                from .paypal.authorization_queue import enqueue_paypal_ba_authorization
+                from ..paypal.authorization_queue import enqueue_paypal_ba_authorization
 
                 authorization_queue = enqueue_paypal_ba_authorization(
                     email=email,

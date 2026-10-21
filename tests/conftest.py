@@ -241,7 +241,7 @@ def _no_real_egress_probe(request, monkeypatch):
         yield
         return
 
-    from sms_tool import payment_egress
+    from sms_tool.payment import egress as payment_egress
 
     def _stub(proxy, expected, stage, timeout):
         # "the exit matches what the route plan expected" -- the only verdict
@@ -273,7 +273,8 @@ def _offline_payment_methods_online(request, monkeypatch):
 
     import dataclasses
 
-    from sms_tool import payment_batch, payment_catalog
+    from sms_tool.payment import batch as payment_batch
+    from sms_tool.payment import catalog as payment_catalog
 
     restored = {
         key: (
@@ -401,7 +402,7 @@ def isolated_payment_operations(tmp_path, monkeypatch):
 
     Yields the isolated root.
     """
-    from sms_tool.payment_operation import PaymentOperationStore
+    from sms_tool.payment.operation import PaymentOperationStore
 
     root = tmp_path / "payment_operations"
 

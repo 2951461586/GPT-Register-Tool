@@ -5,9 +5,9 @@ from __future__ import annotations
 import re
 from typing import Any, Mapping, Protocol
 
-from . import endpoints
-from .payment_errors import error_code_of, error_stage_of, retryable_flag
-from .checkout_contract import (
+from .. import endpoints
+from .errors import error_code_of, error_stage_of, retryable_flag
+from ..checkout_contract import (
     CHECKOUT_PATH,
     CHECKOUT_URL,
     PLUS_TRIAL_CAMPAIGN_ID,
@@ -75,7 +75,7 @@ class ChatGPTStripeCapabilityTransport:
         proxy: str,
         timeout: int,
     ) -> CheckoutSessionContract:
-        from . import gen_pp_link
+        from .. import gen_pp_link
 
         cookie_header = str((auth_context or {}).get("cookie_header") or "")
         device_id = str((auth_context or {}).get("device_id") or (auth_context or {}).get("oai_did") or "").strip()
@@ -132,7 +132,7 @@ class ChatGPTStripeCapabilityTransport:
         proxy: str,
         timeout: int,
     ) -> dict[str, Any]:
-        from . import gen_pp_link
+        from .. import gen_pp_link
 
         try:
             session = gen_pp_link._new_session(proxy)
@@ -174,7 +174,7 @@ class ChatGPTStripeCapabilityTransport:
         proxy: str,
         timeout: int,
     ) -> dict[str, Any]:
-        from . import gen_pp_link
+        from .. import gen_pp_link
 
         processor = checkout.processor_entity
         if not processor or not processor.replace("_", "").isalpha():
@@ -242,7 +242,7 @@ class ChatGPTStripeCapabilityTransport:
         proxy: str,
         timeout: int,
     ) -> dict[str, Any]:
-        from . import gen_pp_link
+        from .. import gen_pp_link
 
         evidence = StripeCapabilityEvidence.from_payload(init_payload)
         if evidence.amount_minor is None or not evidence.currency_present:
@@ -417,8 +417,8 @@ def payment_method_capability_probe(
             timeout=timeout,
         )
     if method == "gcash" and transport is None:
-        from .gcash_provider import DEFAULT_GCASH_CUSTOM_PAYMENT_METHOD_ID, run_gcash_provider
-        from .gcash_transport import ChatGPTGCashTransport
+        from ..gcash_provider import DEFAULT_GCASH_CUSTOM_PAYMENT_METHOD_ID, run_gcash_provider
+        from ..gcash_transport import ChatGPTGCashTransport
 
         return run_gcash_provider(
             str(access_token).strip(),
@@ -694,7 +694,7 @@ def _read_payment_methods_signal(
     creates, confirms or charges anything. Every failure degrades to ``{}`` so
     it can only add evidence, never change a probe outcome.
     """
-    from . import gen_pp_link
+    from .. import gen_pp_link
 
     token = str(access_token or "").strip()
     if not token:
@@ -801,7 +801,7 @@ def _paypal_capability_probe(
     zero-due PayPal offer without creating a payment method or approval.
     """
     try:
-        from .paypal.extract import PPLinkExtractor
+        from ..paypal.extract import PPLinkExtractor
 
         extractor = PPLinkExtractor(
             access_token=access_token,
@@ -898,7 +898,7 @@ def _paypal_capability_probe(
 
 
 def _amount_from_init(init: Mapping[str, Any]) -> dict[str, Any]:
-    from .pp_link_helpers import stripe_amount_details
+    from ..pp_link_helpers import stripe_amount_details
 
     return stripe_amount_details(dict(init or {}))
 

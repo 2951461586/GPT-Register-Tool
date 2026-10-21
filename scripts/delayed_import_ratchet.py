@@ -78,20 +78,30 @@ _SKIP_DIRS = {"__pycache__"}
 #: ``deferred`` and the regenerated baseline absorbed it silently. The segment
 #: key survives a *directory* move only when the file name is unchanged; a
 #: rename needs the key renamed here in the same commit.
+#:
+#: The ``payment_*`` move later the same day cost four more classifications for
+#: the same reason (``payment_catalog`` -> ``catalog``, ``payment_flow`` ->
+#: ``flow``, ``payment_routing`` -> ``routing``), taking the table from 8 live
+#: edges to 4. Both clusters are renamed here; a new cluster must do the same
+#: or the cycle view quietly empties out.
 DOCUMENTED_CYCLES: frozenset[tuple[str, str]] = frozenset(
     {
-        ("checkout_contract", "payment_catalog"),
-        ("payment_catalog", "checkout_contract"),
-        ("payment_catalog", "payment_flow"),
-        ("payment_flow", "payment_catalog"),
-        ("payment_routing", "proxy"),
-        ("proxy", "payment_routing"),
+        ("checkout_contract", "catalog"),
+        ("catalog", "checkout_contract"),
+        ("catalog", "flow"),
+        ("flow", "catalog"),
+        # ``payment.routing`` and ``proxy.routing`` share the last segment, so
+        # these two keys are ambiguous by construction. It is benign today
+        # because ``proxy.routing`` imports nothing PayPal-named; if that ever
+        # changes, key this table on full dotted paths instead of segments.
+        ("routing", "proxy"),
+        ("proxy", "routing"),
         ("sentinel_tokens", "client"),
         ("client", "sentinel_tokens"),
         ("routing", "account_identity"),
         # The five-module cycle: account_identity -> fingerprint_pool ->
-        # paypal.proxy -> payment_routing -> proxy.routing -> account_identity.
-        # ``proxy_routing`` became ``proxy.routing`` in the same move, so its
+        # paypal.proxy -> payment.routing -> proxy.routing -> account_identity.
+        # ``proxy_routing`` became ``proxy.routing`` in the paypal move, so its
         # old key was dead too; the ``(routing, account_identity)`` pair above
         # already covers it.
         ("fingerprint_pool", "proxy"),
@@ -216,7 +226,7 @@ def classify(importer: str, target: str) -> str:
     """Derive the reason for one edge from the rules above."""
     if importer == "sms_tool/store/connection.py" and target == "sms_tool.storage":
         return "test-seam"
-    # ``importer`` is a path (``sms_tool/payment_catalog.py``); compare module
+    # ``importer`` is a path (``sms_tool/payment/catalog.py``); compare module
     # names, not the path's last dotted segment (which would be ``py``).
     if (_last_segment(_module_of(importer)), _last_segment(target)) in DOCUMENTED_CYCLES:
         return "cycle"

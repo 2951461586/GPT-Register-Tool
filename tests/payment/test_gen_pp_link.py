@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from sms_tool import gen_pp_link
-from sms_tool import payment_egress
+from sms_tool.payment import egress as payment_egress
 from sms_tool.paypal import extract as paypal_extract
 
 

@@ -4,8 +4,8 @@ import unittest
 from dataclasses import dataclass
 from unittest.mock import patch
 
-from sms_tool import payment_egress
-from sms_tool.payment_link_manager import _run_protocol_script
+from sms_tool.payment import egress as payment_egress
+from sms_tool.payment.link_manager import _run_protocol_script
 
 
 @dataclass
@@ -150,7 +150,7 @@ class EgressGateTests(unittest.TestCase):
 
         spec = PAYMENT_METHODS["ideal"]
         with patch.object(payment_egress, "_default_probe", probe):
-            with patch("sms_tool.payment_link_manager._run_extractor_subprocess") as run_sub:
+            with patch("sms_tool.payment.link_manager._run_extractor_subprocess") as run_sub:
                 result = _run_protocol_script(
                     spec,
                     "token",

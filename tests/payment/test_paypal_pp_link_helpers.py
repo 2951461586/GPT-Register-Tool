@@ -764,7 +764,7 @@ def test_pp_link_extractor_honours_an_explicit_billing_variant():
 
 def test_curated_pools_cover_the_payment_catalog_markets():
     """Every market the catalog actually checks out in must have alternatives."""
-    from sms_tool.payment_catalog import PAYMENT_METHODS
+    from sms_tool.payment.catalog import PAYMENT_METHODS
 
     for definition in PAYMENT_METHODS.values():
         code = definition.country

@@ -8,7 +8,7 @@
 1. **两个栈不合并。** `sms_tool/paypal/` 是浏览器执行栈（编排 / flow / form /
    session / DOM / config / errors 七层，按 Rule 5 单向无环）；`sms_tool/paypal_link/`
    是 Checkout 提链与商户返回对账栈（`gen_link.py` / `reconciliation.py`）。
-   两者共享的是 `payment_wire.py` 的支付内核（Rule 20），不是彼此。
+   两者共享的是 `payment/wire.py` 的支付内核（Rule 20），不是彼此。
 2. **`_PlmProxy` 保留。** `paypal_link/gen_link.py` 用 `__getattr__` 在属性访问时
    从 `sys.modules` 读取 `sms_tool.gen_pp_link` 的活属性。它不是未清理的残留。
 3. **新增调用点直接 import 定义模块**（`paypal_link` / `paypal_extract` /
@@ -29,7 +29,7 @@
 
 - `paypal_link/gen_link.py` 里有 **14 处** `_plm.X`，覆盖 `PPLinkExtractor`、
   `_load_json`、`_proxies_from_config`、`_checkout_post` 等；`PPLinkExtractor` 定义在
-  `sms_tool/paypal/extract.py:169`，`_checkout_post` 定义在 `sms_tool/payment_wire.py`。
+  `sms_tool/paypal/extract.py:169`，`_checkout_post` 定义在 `sms_tool/payment/wire.py`。
   两者都不是 `gen_pp_link` 的所有物——壳只做再导出。
 - `tests/` 中对 `gen_pp_link` 的引用有 **140 行**，其中
   `patch.object(gen_pp_link, "_checkout_post" / "_checkout_get", ...)` 是活跃的 patch

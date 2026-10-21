@@ -1,18 +1,18 @@
-"""core submodule of the former payment_link_manager.py (mechanical split, bodies unchanged)."""
+"""core submodule of the former payment/link_manager.py (mechanical split, bodies unchanged)."""
 
 from __future__ import annotations
 import uuid
 from typing import Any, Callable, Mapping
 from ..config import ConfigError, current_config_data, validate_config
-from ..payment_contracts import PaymentRequest
-from ..payment_executor import PaymentExecutionRequest, PaymentFlowExecutor
-from ..payment_errors import annotate_error, error_stage_of
-from ..payment_operation import (
+from ..payment.contracts import PaymentRequest
+from ..payment.executor import PaymentExecutionRequest, PaymentFlowExecutor
+from ..payment.errors import annotate_error, error_stage_of
+from ..payment.operation import (
     PaymentOperationConflict,
     PaymentOperationStore,
     conflict_result as payment_operation_conflict_result,
 )
-from ..payment_routing import PaymentRoutePlan, PaymentRoutePlanner
+from ..payment.routing import PaymentRoutePlan, PaymentRoutePlanner
 
 from .adapters import _run_regional_wallet_adapter, _run_wallet_adapter
 from .base import PAYMENT_METHODS, _LOGGER, _config_data, _offline_refusal, _redact_sensitive_text
@@ -241,7 +241,7 @@ def probe_payment_method(
             **options,
         )
 
-    from ..payment_capability import payment_method_capability_probe
+    from ..payment.capability import payment_method_capability_probe
 
     return payment_method_capability_probe(
         access_token=access_token,

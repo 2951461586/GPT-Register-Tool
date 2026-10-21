@@ -32,10 +32,10 @@ TESTS_ROOT = Path(__file__).resolve().parent.parent
 
 INERT_TARGETS = {
     "sms_tool.config.current_config_data",
-    "sms_tool.payment_link_manager.current_config_data",
+    "sms_tool.payment.link_manager.current_config_data",
 }
 SHELL_MODULES = {
-    "sms_tool.payment_link_manager",
+    "sms_tool.payment.link_manager",
     "payment_link_manager",
 }
 CONFIG_ATTRS = {"current_config_data"}
@@ -55,7 +55,7 @@ def _shell_aliases(tree: ast.Module) -> set[str]:
                     aliases.add(alias.asname or alias.name)
         elif isinstance(node, ast.Import):
             for alias in node.names:
-                if alias.name == "sms_tool.payment_link_manager":
+                if alias.name == "sms_tool.payment.link_manager":
                     aliases.add(alias.asname or alias.name.split(".")[-1])
     return aliases
 

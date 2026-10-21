@@ -28,10 +28,10 @@ suite exposed three more (``33 failed / 64 errors``), then more again
    name goes unused inside its own module; some **other** module may import it
    *from* this one, and a re-export facade hides that because the facade exposes
    the name only as a side effect of an import it makes for its own reasons.
-   Measured 2026-09-30: ``payment_link_manager.py`` exposed ``parse_proxy_pool``
+   Measured 2026-09-30: ``payment/link_manager.py`` exposed ``parse_proxy_pool``
    solely because of its own ``from .payment_routing import parse_proxy_pool``;
    the name was **not** in ``pay_link.__all__``, and removing that line broke
-   ``payment_batch.py`` and ``payment_batch_setup.py`` at collection time
+   ``payment/batch.py`` and ``payment/batch_setup.py`` at collection time
    (``ImportError: cannot import name 'parse_proxy_pool'``).  A channel-modelled
    checker that only looks for dotted strings / ``patch.object`` / the name's own
    use misses this.  Detection: resolve every ``from X import n`` repo-wide to an

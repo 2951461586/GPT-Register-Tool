@@ -725,7 +725,7 @@ def _rank_stage_proxy(
 def _proxies_from_config(cfg: dict, checkout_country: str = "", target_country: str = "") -> dict:
     """Resolve payment stage proxies from the static ``paypal.stage_proxies`` config."""
     try:
-        from ..payment_routing import method_payment_config
+        from ..payment.routing import method_payment_config
 
         paypal_cfg = method_payment_config(cfg, "paypal")
     except (ImportError, TypeError, AttributeError):  # pragma: no cover - direct script execution

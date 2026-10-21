@@ -47,7 +47,7 @@ SKIP_PARTS = {"dist", "runtime", "__pycache__", ".venv", "node_modules"}
 # ``relpath -> {name: expected_definition_count}``. A count of 0 pins the
 # renamed-away form: re-introducing it is what this guard is here to stop.
 EXPECTED_DEFS = {
-    "sms_tool/payment_routing.py": {"parse_proxy_pool": 1},
+    "sms_tool/payment/routing.py": {"parse_proxy_pool": 1},
     "sms_tool/commands/payment.py": {"parse_proxy_pool": 1},
     "sms_tool/proxy/routing.py": {"parse_lane_proxy_pool": 1, "parse_proxy_pool": 0},
     "sms_tool/paypal/proxy.py": {"rotate_proxy_session": 1},
@@ -72,7 +72,7 @@ ALL_NAMES = sorted({name for names in EXPECTED_DEFS.values() for name in names})
 # the cheapest proof that the ``__all__`` lists were updated too.
 EXPECTED_EXPORTS = [
     ("sms_tool.proxy.routing", "parse_lane_proxy_pool"),
-    ("sms_tool.payment_routing", "parse_proxy_pool"),
+    ("sms_tool.payment.routing", "parse_proxy_pool"),
     ("sms_tool.paypal.proxy", "rotate_proxy_session"),
     ("sms_tool.pp_link_helpers", "rotate_proxy_session_id"),
     ("sms_tool.paypal_link", "rotate_proxy_session_id"),
@@ -152,7 +152,7 @@ def _body(relpath: str, name: str) -> ast.FunctionDef:
 
 
 DIVERGENT_PAIRS = [
-    ("sms_tool/payment_routing.py", "parse_proxy_pool", "sms_tool/proxy/routing.py", "parse_lane_proxy_pool"),
+    ("sms_tool/payment/routing.py", "parse_proxy_pool", "sms_tool/proxy/routing.py", "parse_lane_proxy_pool"),
     ("sms_tool/paypal/proxy.py", "rotate_proxy_session", "sms_tool/pp_link_helpers.py", "rotate_proxy_session_id"),
     (
         "sms_tool/paypal/proxy.py",

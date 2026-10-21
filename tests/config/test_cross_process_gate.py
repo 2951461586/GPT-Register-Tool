@@ -141,7 +141,7 @@ _SMS_TOOL = _PROJECT_ROOT / "sms_tool"
 # while an existing holder still owns the previous inode — two processes would
 # then hold the same slot.  New call sites must be added here deliberately.
 _ALLOWED_DISCARD_SITES = {
-    ("sms_tool/payment_batch.py", "process_gate"),
+    ("sms_tool/payment/batch.py", "process_gate"),
     ("sms_tool/operation_journal.py", "gate"),
 }
 

@@ -12,7 +12,7 @@
 - **Desktop read**: the read-only sanitized account/mailbox contract consumed by WPF.
 - **Payment wire**: the cross-lane payment kernel — the non-Checkout session
   factory, the Checkout primitives, the country→currency map, the provider-stage
-  order and the shared failure vocabulary. Owned by `sms_tool/payment_wire.py`;
+  order and the shared failure vocabulary. Owned by `sms_tool/payment/wire.py`;
   `paypal_extract` re-exports it rather than redefining it.
 - **Payment batch**: a resumable cohort execution with per-account terminal results.
 - **Payment capability probe**: a side-effect-limited Checkout and Stripe-init

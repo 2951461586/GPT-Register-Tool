@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from sms_tool.payment_operation import PaymentOperationConflict, PaymentOperationStore, conflict_result
+from sms_tool.payment.operation import PaymentOperationConflict, PaymentOperationStore, conflict_result
 
 
 class PaymentOperationTests(unittest.TestCase):

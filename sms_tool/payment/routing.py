@@ -8,10 +8,10 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any
 
-from .payment_catalog import PAYMENT_METHODS, normalize_payment_method
-from .payment_flow import PaymentStage, STAGE_ORDER, normalize_payment_stage, payment_flow_profile
-from .proxy.entry import parse_proxy_list, resolve_proxy_value
-from .proxy.routing import canonical_payment_pools
+from .catalog import PAYMENT_METHODS, normalize_payment_method
+from .flow import PaymentStage, STAGE_ORDER, normalize_payment_stage, payment_flow_profile
+from ..proxy.entry import parse_proxy_list, resolve_proxy_value
+from ..proxy.routing import canonical_payment_pools
 
 
 LEGACY_STAGE_KEYS: dict[str, tuple[str, ...]] = {
@@ -216,7 +216,7 @@ class PaymentRoutePlan:
         return options
 
     def public_dict(self) -> dict[str, Any]:
-        from .paypal.proxy import redact_proxy_url
+        from ..paypal.proxy import redact_proxy_url
 
         return {
             "payment_method": self.payment_method,
@@ -242,7 +242,7 @@ class PaymentRoutePlanner:
         _protocol_raw: object = config.get("protocol_payments")
         self.protocol: Mapping[str, Any] = _protocol_raw if isinstance(_protocol_raw, Mapping) else {}
         if proxy_state is None:
-            from .paypal.proxy import proxy_state_from_config
+            from ..paypal.proxy import proxy_state_from_config
 
             proxy_state = proxy_state_from_config(config)
         self.proxy_state = proxy_state
@@ -421,7 +421,7 @@ class PaymentRoutePlanner:
                     and not (explicit_seed and len(ordered) == 1 and self._proxy_value(ordered[0]) == default)
                 )
                 if should_probe:
-                    from .paypal.proxy import select_proxy_from_pool
+                    from ..paypal.proxy import select_proxy_from_pool
 
                     chosen_base, stage_attempts = select_proxy_from_pool(
                         ordered,
@@ -456,7 +456,7 @@ class PaymentRoutePlanner:
                 bool(explicit) or scalar_group or group_name.startswith("configured:") or bool(shared_override)
             )
             if chosen and expected and (country_requested or not scalar_route):
-                from .paypal.proxy import rotate_proxy_session
+                from ..paypal.proxy import rotate_proxy_session
 
                 rotation_key = (chosen, expected)
                 chosen = rotated_sessions.get(rotation_key)

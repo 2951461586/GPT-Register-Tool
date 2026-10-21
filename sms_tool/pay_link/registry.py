@@ -1,28 +1,28 @@
-"""registry submodule of the former payment_link_manager.py (mechanical split, bodies unchanged)."""
+"""registry submodule of the former payment/link_manager.py (mechanical split, bodies unchanged)."""
 
 from __future__ import annotations
 import re
 import subprocess
 from typing import Any, Mapping
 from ..config import current_config_data
-from ..payment_catalog import (
+from ..payment.catalog import (
     PAYMENT_METHODS as CATALOG_METHODS,
     normalize_payment_method as normalize_catalog_payment_method,
     validate_catalog_consistency,
 )
-from ..payment_adapters import FunctionPaymentAdapter, PaymentAdapterRegistry
-from ..payment_operation import (
+from ..payment.adapters import FunctionPaymentAdapter, PaymentAdapterRegistry
+from ..payment.operation import (
     PaymentOperationConflict,
     PaymentOperationStore,
     conflict_result as payment_operation_conflict_result,
 )
-from ..payment_routing import (
+from ..payment.routing import (
     PaymentRoutePlan,
     PaymentRoutePlanner,
     parse_proxy_pool,
     payment_proxy_pools as canonical_payment_proxy_pools,
 )
-from .. import payment_egress
+from ..payment import egress as payment_egress
 
 from .adapters import (
     _run_direct_card,

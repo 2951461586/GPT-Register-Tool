@@ -17,7 +17,7 @@ import unittest
 from dataclasses import dataclass
 from unittest.mock import patch
 
-from sms_tool import payment_egress
+from sms_tool.payment import egress as payment_egress
 from sms_tool.upi_link import pipeline as upi_pipeline
 
 _SENTINEL = "reach-stage-1"

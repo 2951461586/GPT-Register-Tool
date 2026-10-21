@@ -22,8 +22,8 @@ Two boundaries this module keeps:
   (``payment_operations``).  Renaming it would orphan the replay guard of an
   in-flight batch on upgrade -- the exact restart the guard exists for.
 
-``payment_operation.py`` is a thin re-export shim so existing importers (and
-``patch("sms_tool.payment_operation....")`` targets) keep working.
+``payment/operation.py`` is a thin re-export shim so existing importers (and
+``patch("sms_tool.payment.operation....")`` targets) keep working.
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ from typing import Any, Mapping
 
 from .cross_process_gate import CrossProcessSemaphore, GateTimeoutError
 from .kernel.paths import runtime_file
-from .payment_contracts import PaymentResult
+from .payment.contracts import PaymentResult
 from .kernel.sanitizer import sanitize_text
 
 

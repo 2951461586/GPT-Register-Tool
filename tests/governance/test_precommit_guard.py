@@ -20,11 +20,15 @@ ROOT = Path(__file__).resolve().parents[2]
 GUARD = ROOT / "scripts" / "precommit_guard.py"
 
 sys.path.insert(0, str(ROOT / "scripts"))
-import precommit_guard  # noqa: E402
+import precommit_guard  # noqa: E402  # type: ignore
 
 
-def run_guard_on(tmp_path: Path, filename: str, content: str) -> list[str]:
+def run_guard_on(tmp_path: Path, filename: str, content: str) -> list[tuple[str, int, str, int, str]]:
     """Write a file under tmp_path and return guard findings for it.
+
+    The return type is ``scan_file``'s tuple shape, not ``list[str]``: the
+    annotation said ``list[str]`` and nothing checked it until ``scripts/`` became
+    resolvable to pyright, which then reported the mismatch.
 
     Previously this wrote into the repo's runtime/ directory — the production
     data area (accounts.sqlite3, browser_profiles/). Leftover pytest logs there

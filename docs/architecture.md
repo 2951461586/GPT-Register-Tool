@@ -191,7 +191,7 @@ Pyright finding needs the tool-native, *same-line* form
 (``x = f(y)  # pyright: ignore[reportArgumentType]``); an ``# pi-lens-ignore:
 <rule>`` comment on the line above does **not** suppress it.  ``# pi-lens-ignore``
 is what works for the ``ast-grep`` rules, and it is what the existing markers in
-``services/protocol-payment/`` use.  Measured 2026-10-10 on ``payment_wire.py``
+``services/protocol-payment/`` use.  Measured 2026-10-10 on ``payment/wire.py``
 and ``momo/ac_paylink_core.py``: the same-line ``# pyright: ignore[...]`` cleared
 both Pyright findings on the first try, while the preceding-line
 ``# pi-lens-ignore`` and a stored ``false-positive`` disposition left them
@@ -210,10 +210,10 @@ above.
 <!-- ratchet-numbers:begin architecture -->
 | Measure | Value |
 | --- | --- |
-| Module-level cross-directory edges | 315 |
-| Directory pairs | 45 |
-| Mutual pairs / minority-direction edges | 14 / 45 |
-| Delayed cross-directory edges | 223 |
+| Module-level cross-directory edges | 341 |
+| Directory pairs | 54 |
+| Mutual pairs / minority-direction edges | 15 / 50 |
+| Delayed cross-directory edges | 235 |
 | Delayed imports in the package | 417 (baseline 417) |
 | Claimed tracked `sms_tool` modules | 309 of 309 (0 unclaimed, 41 directory-map groups) |
 <!-- ratchet-numbers:end architecture -->

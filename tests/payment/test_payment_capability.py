@@ -1,14 +1,16 @@
 import unittest
 from types import SimpleNamespace
+from typing import Any, NoReturn
 from unittest.mock import patch
 
 from curl_cffi.requests.impersonate import BrowserType
 
-from sms_tool import gen_pp_link, payment_wire
+from sms_tool import gen_pp_link
+from sms_tool.payment import wire as payment_wire
 from sms_tool.paypal import extract as paypal_extract
 from sms_tool.auth_headers import AUTH_FINGERPRINT_PROFILES
 from sms_tool.checkout_contract import CheckoutSessionContract
-from sms_tool.payment_capability import CapabilityProbeError, _response_json, payment_method_capability_probe
+from sms_tool.payment.capability import CapabilityProbeError, _response_json, payment_method_capability_probe
 
 
 class FakeCapabilityTransport:
@@ -24,6 +26,18 @@ class FakeCapabilityTransport:
     def stripe_init(self, contract, checkout, **kwargs):
         self.init_calls.append((contract, checkout, kwargs))
         return self.init_payload
+
+    def fail(self, message: str) -> NoReturn:
+        """Same contract as ``unittest.TestCase.fail``: a hard assertion failure.
+
+        Subclasses call ``self.fail(...)`` to prove a branch is never reached. The
+        transport is not a ``TestCase``, so without this the guard raised
+        ``AttributeError`` (a confusing failure) instead of ``AssertionError``.
+        ``NoReturn`` is load-bearing: ``stripe_init`` bodies are just
+        ``return self.fail(...)``, and a ``None`` return would violate the
+        ``PaymentCapabilityTransport`` protocol's ``-> dict[str, Any]``.
+        """
+        raise AssertionError(message)
 
 
 class PaymentCapabilityProbeTests(unittest.TestCase):
@@ -260,7 +274,7 @@ class PaymentCapabilityProbeTests(unittest.TestCase):
                     ],
                 }
 
-            def stripe_init(self, contract, checkout, **kwargs):
+            def stripe_init(self, contract, checkout, **kwargs) -> dict[str, Any]:
                 self.fail("oaics session must not call Stripe init")
 
         result = payment_method_capability_probe(

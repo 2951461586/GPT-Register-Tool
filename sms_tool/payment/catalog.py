@@ -87,7 +87,15 @@ class PaymentMethodCatalog:
 
 
 def catalog_path() -> Path:
-    return Path(__file__).resolve().parent.parent / "payment_methods.json"
+    """``payment_methods.json`` lives at the **repo root**, not next to this module.
+
+    Three ``.parent``s, not two: before the 2026-10-21 move this was
+    ``sms_tool/payment_catalog.py`` and ``parent.parent`` was the repo root. One
+    directory deeper it became ``sms_tool/``, so ``load_payment_catalog()`` --
+    which runs at import time -- looked for ``sms_tool/payment_methods.json`` and
+    every module that imports this one failed to import.
+    """
+    return Path(__file__).resolve().parent.parent.parent / "payment_methods.json"
 
 
 @lru_cache(maxsize=1)
@@ -214,8 +222,8 @@ def offline_method_error(method: str, *, probe_only: bool = False) -> ValueError
 
 def validate_catalog_consistency(*, adapter_methods: set[str] | None = None) -> None:
     """Fail fast when the canonical catalog drifts from executable contracts."""
-    from .checkout_contract import PAYMENT_METHOD_PROFILES
-    from .payment_flow import FLOW_PROFILES
+    from ..checkout_contract import PAYMENT_METHOD_PROFILES
+    from .flow import FLOW_PROFILES
 
     errors: list[str] = []
     for key, definition in PAYMENT_CATALOG.methods.items():

@@ -44,8 +44,9 @@ def _package(tmp_path: Path, files: dict[str, str]) -> Path:
     """
     seeded = {
         "paypal/proxy.py": "",
-        "payment_contracts.py": "",
-        "payment_catalog.py": "",
+        "payment/__init__.py": "",
+        "payment/contracts.py": "",
+        "payment/catalog.py": "",
         "proxy/entry.py": "",
         "phone_proxy.py": "",
         "auth_headers.py": "",
@@ -157,7 +158,7 @@ def test_payment_lane_may_borrow_shared_infrastructure(tree):
 
 
 def test_new_neutral_consumer_of_payment_code_is_a_violation(tree):
-    current = tree({"operation_journal.py": "from . import payment_contracts\n"})
+    current = tree({"operation_journal.py": "from .payment import contracts\n"})
     problems = lcr.violations(current, {"payment_importers_outside_lane": []})
     assert any("new non-payment consumer of payment code" in p for p in problems)
 
@@ -183,7 +184,7 @@ def test_cli_importing_adapters_is_allowed(tree):
 
 
 def test_facade_gaining_a_dependency_is_a_violation(tree):
-    current = tree({"registration.py": "from . import payment_catalog\n"})
+    current = tree({"registration.py": "from .payment import catalog\n"})
     problems = lcr.violations(current, {"registration_facade_fanout": ["sms_tool.registration_handlers"]})
     assert any("registration facade gained a dependency" in p for p in problems)
 
@@ -229,7 +230,7 @@ def test_the_fix_is_pinned_in_both_directions():
     assert ("sms_tool.registration_handlers", "sms_tool.paypal.proxy") not in found
     assert ("sms_tool.registration_finalize", "sms_tool.paypal.proxy") not in found
     assert ("sms_tool.registration_drivers.browser_flow.orchestrator", "sms_tool.paypal.proxy") not in found
-    assert ("sms_tool.commands.registration", "sms_tool.payment_operation") not in found
+    assert ("sms_tool.commands.registration", "sms_tool.payment.operation") not in found
     assert ("sms_tool.registration_handlers", "sms_tool.proxy.entry") in found
     assert ("sms_tool.commands.registration", "sms_tool.operation_journal") in found
 

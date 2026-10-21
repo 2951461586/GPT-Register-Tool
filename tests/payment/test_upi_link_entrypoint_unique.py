@@ -157,7 +157,7 @@ def test_cli_path_forwards_wait_options():
 
 
 def test_pay_link_adapter_forwards_wait_options():
-    from sms_tool.payment_contracts import PaymentRequest
+    from sms_tool.payment.contracts import PaymentRequest
     from sms_tool.pay_link.registry import build_default_payment_registry
 
     registry = build_default_payment_registry()

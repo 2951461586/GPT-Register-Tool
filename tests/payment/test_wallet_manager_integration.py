@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from unittest.mock import patch
 
-from sms_tool import payment_link_manager as manager
+from sms_tool.payment import link_manager as manager
 
 CONFIG = "sms_tool.pay_link.base.current_config_data"
 
@@ -178,7 +178,7 @@ class WalletManagerIntegrationTests(unittest.TestCase):
             tempfile.TemporaryDirectory() as tmp,
             _overlay(**config),
             patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"),
-            patch("sms_tool.payment_capability.payment_method_capability_probe") as generic_probe,
+            patch("sms_tool.payment.capability.payment_method_capability_probe") as generic_probe,
         ):
             result = manager.generate_payment_link(
                 "token",

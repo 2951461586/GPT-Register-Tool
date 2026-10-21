@@ -1,7 +1,7 @@
 """Behaviour tests for ``sms_tool/accounts/account_seed.py`` (2026-09-03, round 7).
 
 72 lines, **zero test files import it** (AST audit) -- yet it is on the money
-path: ``payment_auth.py`` (2 call sites), ``payment_batch.py`` (2) and
+path: ``payment/auth.py`` (2 call sites), ``payment/batch.py`` (2) and
 ``paypal/orchestrator.py`` (imported as ``_load_seed`` / ``_extract_access_token``)
 all go through it. It is the seam between payment adapters and persisted account
 state: whatever comes out of ``load_account_seed`` is what gets charged.

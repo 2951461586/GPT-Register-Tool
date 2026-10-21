@@ -17,13 +17,13 @@ the *gate* (per-pair, only-down); this file is the *view*.
 
 | Measure | Value |
 | --- | ---: |
-| Modules | 306 |
-| Module-level import edges | 971 |
+| Modules | 307 |
+| Module-level import edges | 972 |
 | Delayed (function-local) edges | 274 |
 | Type-only (`if TYPE_CHECKING`) edges | 32 |
 | Strongly connected components (size > 1) | 0 |
 | Modules inside a cycle | 0 |
-| Mutually dependent directory pairs | 14 |
+| Mutually dependent directory pairs | 15 |
 
 ## Cycles
 
@@ -36,7 +36,7 @@ None.
 | `sms_tool` ↔ `sms_tool/accounts` |
 | `sms_tool` ↔ `sms_tool/auth_flow` |
 | `sms_tool` ↔ `sms_tool/mailbox` |
-| `sms_tool` ↔ `sms_tool/pay_link` |
+| `sms_tool` ↔ `sms_tool/payment` |
 | `sms_tool` ↔ `sms_tool/paypal` |
 | `sms_tool` ↔ `sms_tool/paypal_link` |
 | `sms_tool` ↔ `sms_tool/providers` |
@@ -46,6 +46,7 @@ None.
 | `sms_tool` ↔ `sms_tool/store` |
 | `sms_tool` ↔ `sms_tool/upi_link` |
 | `sms_tool/mailbox` ↔ `sms_tool/providers` |
+| `sms_tool/pay_link` ↔ `sms_tool/payment` |
 | `sms_tool/paypal` ↔ `sms_tool/paypal_link` |
 
 ## Most imported modules
@@ -55,7 +56,7 @@ None.
 | `sms_tool.config` | 64 |
 | `sms_tool.kernel.sanitizer` | 36 |
 | `sms_tool.kernel.paths` | 33 |
-| `sms_tool` | 28 |
+| `sms_tool` | 24 |
 | `sms_tool.phone_proxy` | 24 |
 | `sms_tool.auth_headers` | 22 |
 | `sms_tool.http_client` | 18 |
@@ -65,5 +66,5 @@ None.
 | `sms_tool.checkout_contract` | 14 |
 | `sms_tool.providers` | 13 |
 | `sms_tool.registration_drivers.base` | 13 |
-| `sms_tool.payment_catalog` | 12 |
-| `sms_tool.payment_routing` | 11 |
+| `sms_tool.payment.catalog` | 12 |
+| `sms_tool.payment.routing` | 11 |

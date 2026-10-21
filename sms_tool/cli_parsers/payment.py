@@ -2,7 +2,7 @@
 
 import argparse
 
-from ..payment_catalog import PAYMENT_CATALOG
+from ..payment.catalog import PAYMENT_CATALOG
 
 
 def _payment_method_choices() -> tuple[str, ...]:

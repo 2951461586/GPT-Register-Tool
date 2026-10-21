@@ -134,7 +134,7 @@ def test_quota_contract_classifies_only_401_as_invalid_token():
 
 def test_registration_and_payment_use_the_canonical_liveness_seam():
     assert account_liveness.CODEX_USAGE_URL == "https://chatgpt.com/backend-api/wham/usage"
-    for relative in ("sms_tool/registration.py", "sms_tool/payment_auth.py"):
+    for relative in ("sms_tool/registration.py", "sms_tool/payment/auth.py"):
         source = (ROOT / relative).read_text(encoding="utf-8")
         assert "probe_account_liveness" in source
         assert "/backend-api/me" not in source
