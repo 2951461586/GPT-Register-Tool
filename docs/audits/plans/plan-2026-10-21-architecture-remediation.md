@@ -1,10 +1,6 @@
-# 方案：架构健康度整改（图谱可信度 → 分层门禁 → 环 → 根目录）— 2026-10-21
-
-> **状态（P2-6 落地后复核）**：**P0 全部落地，P1-1 落地，P1-2 落地，P2 的解环部分落地（SCC 5 → 0），P2-4（`proxy_*`）/ P2-5（`mailbox_*`）/ P2-6（`paypal_*`）三簇迁移已落地**；**P2-7（`payment_*` 15）与 P2-8（`registration_*` 29）两簇迁移、P3-1 spec 图未开始**。落地结果回写在 §8，并已同步 `docs/architecture.md` / `docs/directory-map.md` / `docs/current/dependency-graph.md`。
+> **状态（P3-1 落地后复核）**：**全部落地。** P0、P1-1、P1-2 落地；P2 解环落地（SCC 5 → 0）；P2-4（`proxy_*`）/ P2-5（`mailbox_*`）/ P2-6（`paypal_*`）/ P2-7（`payment_*`）/ P2-8（`registration_*`）五簇迁移全部落地；P3-1 边界 spec 图落地。落地结果回写在 §8，并已同步 `docs/architecture.md` / `docs/directory-map.md` / `docs/current/dependency-graph.md` / `docs/README.md`。
 >
-> 未完成的项（`P2-7`/`P2-8` 两簇迁移、`P3-1` spec 图）**没有留下半成品**：工作区在每个提交点都是绿的，剩余项按原顺序可直接接续。
->
-> 复核实测（全部为仓库现有门禁的原始输出）：`dependency_graph` 306 模块 / 971 条模块级边 / 274 条函数内边 / 32 条 type-only / **0 个 SCC** / 14 对互指；`import_layer_ratchet` 315 边 / 45 对 / 14 mutual / 45 minority / 223 delayed / 2 条 allow、0 个未认领模块；`root_module_ratchet` **123 冻结**（155 − 7 个 `proxy_*` − 15 个 `mailbox_*` − 9 个 `paypal_*`）；`module_coverage` 309/309。
+> 复核实测（全部为仓库现有门禁的原始输出）：`dependency_graph` 308 模块 / 977 条模块级边 / **0 个 SCC** / 18 对互指；`import_layer_ratchet` 437 边 / 66 对 / 18 mutual / 49 minority / 253 delayed / 2 条 allow、0 个未认领模块；`root_module_ratchet` **79 冻结**（155 − 7 `proxy_*` − 15 `mailbox_*` − 9 `paypal_*` − 15 `payment_*` − 29 `registration_*`，即方案 §2 预计的「约 80」）；`module_coverage` 311/311；`pyright_ratchet` 440 错误 / 90 文件（基线 850）。
 >
 > **性质**：方案文档 + 落地记录。所有数字来自 2026-10-21 用 AST 重测（见 §1 的测量口径），不引用 pi-lens 的目录级数字。
 
@@ -289,14 +285,77 @@ unknown import symbol）。
 另外 `docs/current/protocol-registration.md` 的符号行号锚点因头部注释位移，由
 `refresh_doc_symbol_lines.py --apply` 重生成（303 → 306）。
 
-### 剩余未完成（P2-6 落地后复核）
+### P2-7（`payment_*` 迁移）— 已落地
 
-`P2-7`（`payment_*` 15）与 `P2-8`（`registration_*` 29）两簇迁移、`P3-1`（边界 spec 图）未开始，
-`root_module_ratchet` 应从 123 继续降到约 **79**（123 − 15 − 29）。它们的共同前置已经就绪：层清单
-（P1-1）给出每个模块该去哪一层，生成式依赖图（P0-2）给出搬迁前后的边数对照，`module_move.py`
-把「移动 + 改写 + 门禁同步 + 基线重生成 + 门禁验证」做成一条命令，`scripts/move_specs/paypal.json`
-可作为下一个 spec 的模板。每簇仍应单独一个提交，并在同一提交里更新 `import_layer_baseline.json`、
-`directory_map_groups.json` 与 `docs/directory-map.md` 的 claim。
+15 个模块迁入 `sms_tool/payment/`，`root_module_ratchet` 123 → 108，`dependency_graph` 仍为 **0 个 SCC**。
+这一簇暴露的问题比前三簇更硬：
+
+| seam | 现象 | 修法 |
+|---|---|---|
+| `catalog_path()` 少一层 `__file__` 相对深度 | `load_payment_catalog()` 在 **import 时**执行，路径变成 `sms_tool/payment_methods.json`，**5694 个 collection 错误** | 补第三层 `.parent` |
+| `lane_coupling.PAYMENT_PREFIXES` 只有 `"payment_"` | 迁进包后二级路径是 `payment`，整条支付泳道规则**失明**（`payment_to_registration` 会掉到 0 而门禁照报 OK） | 两个拼写都列 |
+| `delayed_import_ratchet` 末段键 | 4 条 cycle 静默降级 deferred，被 `--update-baseline` 吸收（8 → 4） | 键改名，cycle 回到 8 |
+| `module_move.py` 重建 `from . import a, b` 丢行尾注释 | `paypal/auto.py` 丢 `noqa`，unused-import 0 → 2 | 工具搬运行尾注释 |
+| `module_move.py` 改写面过宽 | 合成夹具的**种子**被改，测试体仍 import 旧名 | 夹具更新到新布局 |
+
+同簇把 pyright 从 468/105 降到 440/90：`pyrightconfig.json` 增 `scripts/` 的 `extraPaths`（15 个 governance 测试用 `sys.path.insert` 导入脚本，pyright 一直解析不了），解析后暴露的 4 个真实类型错误逐个修掉而非改基线。
+
+### P2-8（`registration_*` 迁移）— 已落地
+
+29 个模块迁入 `sms_tool/registration/`，`root_module_ratchet` 108 → **79**，`dependency_graph` 仍为 **0 个 SCC**，
+全量 **6707 passed / 10 skipped**。
+
+**落地前先验证了门面形态，结论改变了实施方式。** `registration.py` 不是纯 re-export 模块：它定义转发包装，
+并在 `_email_registration_operations()` 里从**调用时的模块全局**读裸名构造依赖映射，其 docstring 明确写着
+「把它提成模块级常量会静默冻结 patch 值并弄坏套件」。三段式探针证实：模块门面下 `patch.object(包, x)` 能到达
+seam；包门面再导出子模块时**不能**，因为 seam 解析的是子模块的全局。因此所有打点目标必须落在
+`sms_tool.registration.orchestrator`。`module_move.py` 对两种写法都已正确改写（`from sms_tool import
+registration` → `from sms_tool.registration import orchestrator as registration`，局部名仍指向 seam 模块）；
+早先手工改成 `registration.orchestrator` 是多余的，已回退。
+
+`module_move.py` 在这一簇暴露两个缺口，都已在工具里修：
+
+* 全量点号改写把 `from sms_tool.registration import X` 破坏成 `from sms_tool.registration.orchestrator import X`，
+  影响 40 个文件——`registration` 是唯一「新包名是旧模块名前缀」的簇。现在当 `new.startswith(old + ".")` 时，
+  紧跟 `import` 的匹配不再改写（旧名仍是合法模块路径，它就是新的包）。
+* 路径改写伸进了 `PROJECT_ROOT / "sms_tool" / "commands" / "registration.py"`——那是**另一个模块**
+  （`commands.registration`），只是文件名相同。已还原；这是 mailbox 簇记录过的「改写面过宽」的第三次。
+
+`lane_coupling_ratchet` 的 `FACADE` 常量移到 `sms_tool.registration.orchestrator`（import 现在在那里），
+冻结的 33 目标集保留并改名为新路径，另加一条 `from . import <sibling>` 解析到父包的回边。其测试里的合成夹具
+按新深度更新；其中一条必须退回真正的根模块，因为该规则只在 depth 1 生效。
+
+### P3-1（边界 spec 图）— 已落地
+
+`docs/specs/` 下 10 个 `architecture-design` spec，frontmatter 是机器可读的一半：
+
+```yaml
+---
+id: spec-07-proxy-string-authority
+type: architecture-design
+status: accepted
+owner: sms_tool/proxy/entry.py
+implements:
+  - rule-13
+depends-on:
+  - adr-0011
+---
+```
+
+**形状是刻意选小的**：YAML 只支持 `key: value` 与 `key:` + `  - item` 两种形态，用标准库解析——
+本仓每个门禁都是 stdlib-only，才能在装依赖之前跑起来。`id` 必须等于 `spec-` + 文件名，
+`owner` 必须是真实存在的仓库路径（spec 不能比它描述的模块活得更久而没人发现）。
+
+`scripts/spec_validate.py` 校验：frontmatter 存在且可解析、`id` 唯一且与文件名一致、`type`/`status` 在允许集内、
+`owner` 路径存在、每个 `implements` 解析到 `docs/rules/rule-NN-*.md`、每个 `depends-on` 解析到
+`docs/adr/NNNN-*.md` 或另一个 spec、`depends-on` 图无环。`tests/governance/test_spec_validate.py`
+用合成树把每条检查都驱动成红（悬空 rule / 悬空 ADR / 缺失 spec / 环 / id 与文件名不符 / owner 不存在 /
+缺 frontmatter / 未闭合 / 重复 id / 非法 type 与 status），并单独钉住 frontmatter 子集的解析与拒绝行为——
+19 个用例。门禁经 pytest 进入 CI，不需要改 `.githooks/pre-commit` 的清单。
+
+### 剩余未完成
+
+无。方案的全部条目（P0、P1-1、P1-2、P2-1…P2-8、P3-1）均已落地，工作区在每个提交点都是绿的。
 
 ### P2-2（包门面惰性导出）
 

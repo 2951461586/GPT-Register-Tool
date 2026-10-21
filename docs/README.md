@@ -14,6 +14,9 @@ Directory layout (since 2026-09-06):
   `rounds/`, `scans/`, `plans/`, `landings/` and `records/` (index in
   `docs/audits/README.md`; every plan opens with a status line).
 - `docs/adr/` — accepted architecture decisions.
+- `docs/specs/` — 边界 spec 图：一个文件一个边界，frontmatter 声明 `id` / `type` /
+  `status` / `owner` / `implements`（引用 `rule-NN`）/ `depends-on`（引用 `adr-NNNN`
+  或另一个 spec），`scripts/spec_validate.py` 解析并校验悬空引用与环。
 - `docs/current/` — current-state entry points.
 
 ## Core documents
@@ -27,6 +30,9 @@ Directory layout (since 2026-09-06):
 - [Boundary Rules](rules/) - one file per numbered rule (`rule-NN-*.md`): the
   forbidden dependency, the check that proves it, and its source section. The
   numbering is referenced from tests and scripts, so it is append-only.
+- [Boundary Specs](specs/) - one file per boundary (`spec-NN-*.md`), with
+  frontmatter that resolves to the rule it implements and the ADR that shaped
+  it. `scripts/spec_validate.py` fails on a dangling reference or a cycle.
 - [Project Context](CONTEXT.md) - 领域术语与模块归属规则。
 - [Architecture Decisions](adr/README.md) - 已接受的架构决策。
 - [Registration Recovery & Cancellation](current/registration-recovery.md) -
