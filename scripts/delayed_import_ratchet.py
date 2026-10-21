@@ -67,23 +67,34 @@ REASONS_FILE = Path(__file__).resolve().parent / "delayed_import_reasons.json"
 _SKIP_DIRS = {"__pycache__"}
 
 #: Documented function-level cycles (``docs/architecture.md`` §Known
-#: function-level lazy cycles). Keyed by the *last* dotted segment so a later
-#: package move does not silently reclassify the edge.
+#: function-level lazy cycles).
+#:
+#: Keyed by the *last* dotted segment, which the original comment called
+#: "so a later package move does not silently reclassify the edge". That claim
+#: was wrong and 2026-10-21 disproved it twice over: the ``paypal_*`` move
+#: renamed ``paypal_proxy`` to ``paypal.proxy`` (last segment ``proxy``) and the
+#: two edges below stopped matching, so ``payment_routing -> paypal.proxy`` and
+#: ``fingerprint_pool -> paypal.proxy`` were reclassified ``cycle`` ->
+#: ``deferred`` and the regenerated baseline absorbed it silently. The segment
+#: key survives a *directory* move only when the file name is unchanged; a
+#: rename needs the key renamed here in the same commit.
 DOCUMENTED_CYCLES: frozenset[tuple[str, str]] = frozenset(
     {
         ("checkout_contract", "payment_catalog"),
         ("payment_catalog", "checkout_contract"),
         ("payment_catalog", "payment_flow"),
         ("payment_flow", "payment_catalog"),
-        ("payment_routing", "paypal_proxy"),
-        ("paypal_proxy", "payment_routing"),
+        ("payment_routing", "proxy"),
+        ("proxy", "payment_routing"),
         ("sentinel_tokens", "client"),
         ("client", "sentinel_tokens"),
         ("routing", "account_identity"),
         # The five-module cycle: account_identity -> fingerprint_pool ->
-        # paypal_proxy -> payment_routing -> proxy_routing -> account_identity.
-        ("proxy_routing", "account_identity"),
-        ("fingerprint_pool", "paypal_proxy"),
+        # paypal.proxy -> payment_routing -> proxy.routing -> account_identity.
+        # ``proxy_routing`` became ``proxy.routing`` in the same move, so its
+        # old key was dead too; the ``(routing, account_identity)`` pair above
+        # already covers it.
+        ("fingerprint_pool", "proxy"),
     }
 )
 

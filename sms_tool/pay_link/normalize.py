@@ -18,7 +18,6 @@ from ..payment_operation import (
 from ..payment_routing import (
     PaymentRoutePlan,
     PaymentRoutePlanner,
-    coerce_approve_country as canonical_coerce_approve_country,
     parse_proxy_pool,
     payment_proxy_pools as canonical_payment_proxy_pools,
 )
@@ -130,7 +129,10 @@ def _explicit_terminal_state(data: dict[str, Any]) -> str:
 
     exit_code = data.get("exit_code")
     try:
-        numeric_exit_code = int(exit_code)
+        # ``data`` 是 ``dict[str, Any]``，``.get`` 的静态类型是 ``Any | None``。
+        # ``int(None)`` 本来就会抛 TypeError 被下面接住，但那是运行时兜底，不是
+        # 契约；先显式收敛掉 None，pyright 才能接受这个 ``ConvertibleToInt``。
+        numeric_exit_code = 0 if exit_code is None else int(exit_code)
     except (TypeError, ValueError):
         numeric_exit_code = 0
     if numeric_exit_code in {124}:

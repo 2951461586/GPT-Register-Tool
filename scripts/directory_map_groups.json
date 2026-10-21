@@ -187,9 +187,8 @@
       "sms_tool/wallet_transport.py",
       "sms_tool/gcash_provider.py",
       "sms_tool/gcash_transport.py",
-      "sms_tool/paypal_proxy.py",
-      "sms_tool/paypal_reverse.py",
-      "sms_tool/regional_payment_adapter.py"
+      "sms_tool/regional_payment_adapter.py",
+      "sms_tool/paypal/*.py"
     ],
     "Payment-link state machine": [
       "sms_tool/pay_link/*.py",
@@ -209,9 +208,6 @@
     ],
     "Payment execution and reconciliation": [
       "sms_tool/paypal/*.py",
-      "sms_tool/paypal_auto.py",
-      "sms_tool/paypal_protocol.py",
-      "sms_tool/paypal_reconciliation.py",
       "sms_tool/nodriver_paypal.py",
       "sms_tool/omakse_client.py"
     ],
@@ -266,10 +262,7 @@
       "sms_tool/payment_operation.py",
       "sms_tool/payment_batch_setup.py",
       "sms_tool/payment_wire.py",
-      "sms_tool/paypal_extract.py",
-      "sms_tool/paypal_fingerprints.py",
-      "sms_tool/paypal_authorization.py",
-      "sms_tool/paypal_authorization_queue.py"
+      "sms_tool/paypal/*.py"
     ],
     "Proxy authority, lanes, health and bridge": [
       "sms_tool/proxy/*.py"

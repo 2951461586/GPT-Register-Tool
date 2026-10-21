@@ -1,6 +1,6 @@
 """Low-level DOM field primitives for the PayPal checkout page.
 
-Extracted from ``sms_tool.paypal_auto``. These are generic page-object
+Extracted from ``sms_tool.paypal.auto``. These are generic page-object
 helpers (locate / fill / read a field with selector fallbacks) with no
 PayPal-specific business meaning, and no dependency on any sibling module.
 """

@@ -143,7 +143,7 @@ def _no_real_proxy_probe(request, monkeypatch):
         yield
         return
 
-    from sms_tool import paypal_proxy
+    from sms_tool.paypal import proxy as paypal_proxy
 
     def _blocked(value, expected, stage, timeout):
         raise AssertionError(

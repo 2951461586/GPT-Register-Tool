@@ -210,12 +210,12 @@ above.
 <!-- ratchet-numbers:begin architecture -->
 | Measure | Value |
 | --- | --- |
-| Module-level cross-directory edges | 298 |
-| Directory pairs | 42 |
-| Mutual pairs / minority-direction edges | 13 / 44 |
-| Delayed cross-directory edges | 209 |
+| Module-level cross-directory edges | 315 |
+| Directory pairs | 45 |
+| Mutual pairs / minority-direction edges | 14 / 45 |
+| Delayed cross-directory edges | 223 |
 | Delayed imports in the package | 417 (baseline 417) |
-| Claimed tracked `sms_tool` modules | 307 of 307 (0 unclaimed, 41 directory-map groups) |
+| Claimed tracked `sms_tool` modules | 309 of 309 (0 unclaimed, 41 directory-map groups) |
 <!-- ratchet-numbers:end architecture -->
 
 `tests/config/test_pilens_scope_config.py` pins the scope and the formatting

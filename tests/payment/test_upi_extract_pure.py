@@ -1638,7 +1638,7 @@ class ZeroAmountCacheTests(unittest.TestCase):
         import tempfile
         from pathlib import Path
 
-        from sms_tool.paypal_proxy import PayPalProxyState
+        from sms_tool.paypal.proxy import PayPalProxyState
 
         tmp = tempfile.mkdtemp()
         return PayPalProxyState(Path(tmp) / "state.json", enabled=enabled, zero_cache_ttl_seconds=ttl)

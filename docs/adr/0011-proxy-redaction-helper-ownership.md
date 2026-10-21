@@ -14,7 +14,7 @@
 
 ## 为什么这条需要记录
 
-一个读者（或一次架构扫描）看到 `sms_tool/paypal_proxy.py:17`
+一个读者（或一次架构扫描）看到 `sms_tool/paypal/proxy.py:17`
 
 ```python
 from .phone_proxy import normalize_proxy_url as _normalize_proxy_url, ...
@@ -51,7 +51,7 @@ Rule 19 已把 `redact_proxy_url` 记为**有意分叉**：
 | 定义处 | 元数 | `empty_placeholder` |
 | --- | --- | --- |
 | `phone_proxy.py:130` | 2（含默认参数） | `"DIRECT"` |
-| `paypal_proxy.py:63` | 1 | 显式传 `"DIRECT"` |
+| `paypal/proxy.py:63` | 1 | 显式传 `"DIRECT"` |
 | `accounts/account_liveness.py:41` | 1 | 显式传 `""` |
 
 `phone_proxy.redact_proxy_url` 的 docstring 自己写明了这个参数的存在理由：
@@ -67,12 +67,12 @@ Rule 19 已把 `redact_proxy_url` 记为**有意分叉**：
 
 ### 3. 真实的链长比提案描述的更长，且同文件内不一致
 
-`sms_tool/paypal_extract.py` 同时以两种方式取这两个 helper：
+`sms_tool/paypal/extract.py` 同时以两种方式取这两个 helper：
 
 | helper | 取用路径 | 跳数 |
 | --- | --- | --- |
-| `normalize_proxy_url` | `paypal_extract.py:36` → `.phone_proxy` | 1 |
-| `redact_proxy_url` | `paypal_extract.py:88` → `.paypal_proxy`（`:92`）→ `.phone_proxy` | **3** |
+| `normalize_proxy_url` | `paypal/extract.py:36` → `.phone_proxy` | 1 |
+| `redact_proxy_url` | `paypal/extract.py:88` → `.paypal_proxy`（`:92`）→ `.phone_proxy` | **3** |
 
 所以真实情况是：`redact_proxy_url` 走
 `paypal_extract → paypal_proxy → phone_proxy`，**`proxy_entry` 全程不参与**。
@@ -83,10 +83,10 @@ Rule 19 已把 `redact_proxy_url` 记为**有意分叉**：
 - **`paypal_proxy` 的包装链保留**，它不依赖 `proxy_entry` 中转，而是消费
   `phone_proxy` 定义的真实实现。Rule 13 的散文对它保持沉默是**正确**的
   （Rule 13 管的是那五个解析/改写函数，脱敏不在其列）。
-- **`paypal_extract.py:88` 经由 `paypal_proxy` 取 `redact_proxy_url` 这件事，
+- **`paypal/extract.py:88` 经由 `paypal_proxy` 取 `redact_proxy_url` 这件事，
   本次不动**。它是一条可消除的 3 跳，但消除它属于「统一脱敏取用路径」，
   与「收 `paypal_proxy` 的包装链」是两件不同的事，应独立立项。
-- **本 ADR 不覆盖传输栈**：`paypal_proxy.py:14` 的模块级 `import requests` 与
+- **本 ADR 不覆盖传输栈**：`paypal/proxy.py:14` 的模块级 `import requests` 与
   `:188-205` 的 `curl_cffi → requests` 回退是**有意**的（该函数 docstring 原文：
   `Falls back to requests when curl_cffi is unavailable.`）。它是全仓支付模块里
   唯一一处 plain `requests`，但它是探测回退而非业务传输，不得以「统一传输栈」
@@ -101,5 +101,5 @@ Rule 19 已把 `redact_proxy_url` 记为**有意分叉**：
 - `docs/architecture.md` Boundary Rule 13（代理字符串单一权威）、Rule 19（同名函数非重复）
 - `docs/directory-map.md` 的「Proxy authority, lanes, health and bridge」行
 - `docs/audits/plans/plan-2026-10-08-paypal-family-boundaries.md` P2（本 ADR 驳回其结论）
-- `sms_tool/phone_proxy.py:103,130,154`（定义）· `sms_tool/paypal_proxy.py:17,59,63,69`（包装）
+- `sms_tool/phone_proxy.py:103,130,154`（定义）· `sms_tool/paypal/proxy.py:17,59,63,69`（包装）
 - `sms_tool/accounts/account_liveness.py:41`（另一条泳道的 1 元壳）

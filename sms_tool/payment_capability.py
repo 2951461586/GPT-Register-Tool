@@ -801,7 +801,7 @@ def _paypal_capability_probe(
     zero-due PayPal offer without creating a payment method or approval.
     """
     try:
-        from .paypal_extract import PPLinkExtractor
+        from .paypal.extract import PPLinkExtractor
 
         extractor = PPLinkExtractor(
             access_token=access_token,

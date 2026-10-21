@@ -12,7 +12,8 @@ from typing import Any, cast
 from unittest.mock import patch
 
 from sms_tool import capability_browser as cb
-from sms_tool import gen_pp_link, paypal_extract
+from sms_tool import gen_pp_link
+from sms_tool.paypal import extract as paypal_extract
 from sms_tool import payment_capability as pc
 from sms_tool.checkout_contract import CheckoutRequestContract, CheckoutSessionContract
 from sms_tool.payment_capability import (

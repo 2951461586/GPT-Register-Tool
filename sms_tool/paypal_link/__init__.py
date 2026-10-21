@@ -1,4 +1,4 @@
-"""Re-exports of the former sms_tool/paypal_reconciliation.py and sms_tool/gen_pp_link.py (mechanical split).
+"""Re-exports of the former sms_tool/paypal/reconciliation.py and sms_tool/gen_pp_link.py (mechanical split).
 
 The surface is the two modules' *public* names plus the private helpers their
 sibling consumers actually reach for.  It deliberately excludes the stdlib and
@@ -135,7 +135,7 @@ from .gen_link import (
 
 # 定义在 ``payment_wire``，此处经 ``paypal_extract`` 再导出取得；理由同
 # ``gen_link`` 顶部的说明（跨目录边由 import_layer_ratchet 冻结）。
-from ..paypal_extract import _checkout_get
+from ..paypal.extract import _checkout_get
 
 __all__ = [
     "BILLING_DATA",

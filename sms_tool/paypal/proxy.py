@@ -14,8 +14,8 @@ from urllib.parse import unquote, urlsplit
 
 import requests
 
-from .cross_process_gate import cross_process_write_lock
-from .phone_proxy import (
+from ..cross_process_gate import cross_process_write_lock
+from ..phone_proxy import (
     normalize_proxy_url as _normalize_proxy_url,
     redact_proxy_url as _canon_redact_proxy_url,
     redact_proxy_text as _canon_redact_proxy_text,
@@ -76,7 +76,7 @@ def _redact_proxy_auth_text(value: Any) -> str:
 
 
 def _rebuild_proxy_url(parsed: Any, username: str, password: str) -> str:
-    from .proxy.entry import rebuild_proxy_credentials
+    from ..proxy.entry import rebuild_proxy_credentials
 
     return rebuild_proxy_credentials(parsed, username, password)
 
@@ -86,7 +86,7 @@ def rotate_proxy_session(proxy: str, country: str = "") -> str:
 
     Thin wrapper over the single-authority ``proxy_entry.rotate_session``.
     """
-    from .proxy.entry import rotate_session
+    from ..proxy.entry import rotate_session
 
     return rotate_session(normalize_proxy_url(proxy), country)
 
@@ -98,10 +98,10 @@ def infer_proxy_country(proxy: str) -> str:
     The definition site moved there on 2026-10-18: exit-country inference is a
     proxy/geo concern, not a PayPal one, and the registration lane was importing
     this PayPal-named module for it.  Kept as a delegating shell so existing
-    importers and ``patch("sms_tool.paypal_proxy.infer_proxy_country")`` targets
+    importers and ``patch("sms_tool.paypal.proxy.infer_proxy_country")`` targets
     keep working.
     """
-    from .proxy.entry import infer_proxy_country as _infer_proxy_country
+    from ..proxy.entry import infer_proxy_country as _infer_proxy_country
 
     return _infer_proxy_country(proxy)
 
@@ -159,7 +159,7 @@ def _publish_probe_geo(value: str, result: "ProxyProbeResult") -> None:
     if not getattr(result, "ok", False) or not getattr(result, "country_code", ""):
         return
     with contextlib.suppress(Exception):
-        from .geo import ProxyGeo, remember_proxy_geo
+        from ..geo import ProxyGeo, remember_proxy_geo
 
         remember_proxy_geo(
             value,
@@ -626,7 +626,11 @@ class PayPalProxyState:
 # ``paypal.proxy_health`` 解析成各阶段的实际代理值。``_PAYPAL_PROXY_STATE_CACHE``
 # 是进程级单例缓存, ``gen_pp_link`` 通过 re-export 共享同一对象 (测试会 clear 它)。
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+# 本模块位于 ``sms_tool/paypal/``，项目根要**再上两层**（``sms_tool`` 的父目录）。
+# 迁移前它在 ``sms_tool/paypal_proxy.py``，``parent.parent`` 恰好是项目根；搬进子包
+# 后少一层会把默认的 ``runtime/paypal_proxy_state.json`` 解析到 ``sms_tool/runtime/``，
+# 在源码树里写出一份影子状态（既不被 .gitignore 挡住，也不再是 ``runtime/`` 那份活状态）。
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 _PAYPAL_PROXY_STATE_CACHE: dict[tuple[Any, ...], PayPalProxyState] = {}
 
@@ -721,7 +725,7 @@ def _rank_stage_proxy(
 def _proxies_from_config(cfg: dict, checkout_country: str = "", target_country: str = "") -> dict:
     """Resolve payment stage proxies from the static ``paypal.stage_proxies`` config."""
     try:
-        from .payment_routing import method_payment_config
+        from ..payment_routing import method_payment_config
 
         paypal_cfg = method_payment_config(cfg, "paypal")
     except (ImportError, TypeError, AttributeError):  # pragma: no cover - direct script execution

@@ -1,4 +1,4 @@
-"""Behaviour tests for sms_tool/paypal_reverse.py -- pure parsing layer (P1).
+"""Behaviour tests for sms_tool/paypal/reverse.py -- pure parsing layer (P1).
 
 Target: a 1146-line module that, before this file, had **zero** tests importing
 it (AST-verified with coverage_audit.py, not by grepping for function names).
@@ -21,7 +21,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from sms_tool.paypal_reverse import (
+from sms_tool.paypal.reverse import (
     _BLOCK_PATTERNS,
     _CAPTCHA_PATTERNS,
     _NeedBrowserFallback,

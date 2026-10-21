@@ -1,6 +1,6 @@
 """PayPal auto-payment orchestration: strategy selection and result persistence.
 
-Extracted from ``sms_tool.paypal_auto``. Tries the reverse-engineered HTTP
+Extracted from ``sms_tool.paypal.auto``. Tries the reverse-engineered HTTP
 protocol first, then nodriver, then an anti-detect browser (Camoufox with a
 CloakBrowser fallback), and finally persists the outcome to the session file.
 """
@@ -14,7 +14,7 @@ from typing import Any, Callable
 from ..account_seed import extract_access_token as _extract_access_token
 from ..account_seed import load_account_seed as _load_seed
 from ..config import CFG
-from ..paypal_fingerprints import PAYPAL_USER_AGENT as _USER_AGENT
+from .fingerprints import PAYPAL_USER_AGENT as _USER_AGENT
 from ..utils import _generate_password, _random_name
 from .config_picker import (
     _generate_alias_email,

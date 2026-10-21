@@ -22,7 +22,7 @@ of the "cycle" is deliberate design that must **not** be broken:
   this codebase breaks a runtime import cycle. They are counted by
   ``scripts/delayed_import_ratchet.py``, not here.
 * 5 edges are module-level **wildcard re-exports** (``storage.py`` ->
-  ``store``, ``paypal_auto.py`` -> ``paypal``, ...) and 17 more are the
+  ``store``, ``paypal/auto.py`` -> ``paypal``, ...) and 17 more are the
   ``mailbox_*`` / ``outlook_imap`` **compatibility facades**. Both are recorded
   decisions (ADR-0009, ``docs/architecture.md`` Rule 15); deleting them would
   break ~30 importers to satisfy a metric.

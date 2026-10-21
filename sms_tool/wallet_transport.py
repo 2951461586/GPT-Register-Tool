@@ -305,7 +305,7 @@ class ChatGPTStripeWalletTransport:
             countries = {}
         country_key = "approve" if request.stage == "final_review" else request.stage
         country = str(countries.get(country_key) or countries.get("provider") or "").strip().upper()
-        from .paypal_proxy import rotate_proxy_session
+        from .paypal.proxy import rotate_proxy_session
 
         return rotate_proxy_session(proxy, country)
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 r"""中性支付内核 —— Checkout 原语、会话工厂与共享失败词汇。
 
-自 ``paypal_extract.py`` 逐字搬迁（零行为变化）。本模块拥有**跨泳道共享**的
+自 ``paypal/extract.py`` 逐字搬迁（零行为变化）。本模块拥有**跨泳道共享**的
 那部分支付能力，因此刻意不以 PayPal 命名：
 
 * ``_new_session`` -- 非 Checkout 阶段（Stripe / approve / ...）的 requests 会话

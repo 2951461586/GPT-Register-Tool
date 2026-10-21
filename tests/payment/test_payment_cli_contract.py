@@ -172,7 +172,7 @@ def test_payment_route_selects_checkout_and_approve_pools_independently():
         seen.append((list(pool), expected_country, stage))
         return (f"http://selected-{stage}:8080", [{"ok": True, "stage": stage}])
 
-    with patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose):
+    with patch("sms_tool.paypal.proxy.select_proxy_from_pool", side_effect=choose):
         route = cli.payment_commands.resolve_payment_route(args, "gopay", context)
 
     assert route["checkout_proxy"] == "http://selected-checkout:8080"
@@ -216,7 +216,7 @@ def test_gopay_route_defaults_approve_pool_country_to_jp():
         seen.append((list(pool), expected_country, stage))
         return pool[0], [{"ok": True}]
 
-    with patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose):
+    with patch("sms_tool.paypal.proxy.select_proxy_from_pool", side_effect=choose):
         route = cli.payment_commands.resolve_payment_route(args, "gopay", context)
 
     assert route["checkout_proxy"] == "http://checkout.example:8080"
@@ -257,10 +257,10 @@ def test_gopay_shared_pool_fallback_defaults_approve_country_to_jp():
 
     with (
         patch(
-            "sms_tool.paypal_proxy.select_proxy_from_pool",
+            "sms_tool.paypal.proxy.select_proxy_from_pool",
             return_value=("http://pool.example:8080", [{"ok": True}]),
         ),
-        patch("sms_tool.paypal_proxy.rotate_proxy_session", side_effect=rotate),
+        patch("sms_tool.paypal.proxy.rotate_proxy_session", side_effect=rotate),
     ):
         route = cli.payment_commands.resolve_payment_route(args, "gopay", context)
 
@@ -518,8 +518,8 @@ def test_healthy_pool_is_selected_before_jit_and_shared_with_checkout():
     with (
         patch.object(cli, "CFG", config),
         patch.object(cli, "_resolve_payment_access_token", return_value=("", None)),
-        patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=select_proxy),
-        patch("sms_tool.paypal_proxy.rotate_proxy_session", side_effect=rotate_proxy),
+        patch("sms_tool.paypal.proxy.select_proxy_from_pool", side_effect=select_proxy),
+        patch("sms_tool.paypal.proxy.rotate_proxy_session", side_effect=rotate_proxy),
         patch("sms_tool.payment_auth.ensure_payment_access_token", side_effect=ensure_auth) as auth,
         patch(
             "sms_tool.payment_link_manager.generate_payment_link",

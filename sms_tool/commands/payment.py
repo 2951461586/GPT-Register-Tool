@@ -199,7 +199,7 @@ def apply_stage_country_overrides(
     provider_proxy: Any,
     approve_proxy: Any,
 ) -> tuple[Any, Any, Any, Any]:
-    from ..paypal_proxy import rotate_proxy_session
+    from ..paypal.proxy import rotate_proxy_session
 
     def apply(value: Any, option: str) -> Any:
         country = (getattr(args, option, None) or "").strip().upper()
@@ -221,7 +221,7 @@ def promotion_proxy_arg(
     """Resolve the optional promotion-update stage proxy."""
     explicit = (getattr(args, "promotion_proxy", None) or "").strip()
     if explicit:
-        from ..paypal_proxy import rotate_proxy_session
+        from ..paypal.proxy import rotate_proxy_session
 
         country = (getattr(args, "promotion_proxy_country", None) or "").strip().upper()
         return rotate_proxy_session(explicit, country) if country else explicit
@@ -236,7 +236,7 @@ def promotion_proxy_arg(
     )
     value = (str(resolved).strip() or None) if resolved else None
     if value:
-        from ..paypal_proxy import rotate_proxy_session
+        from ..paypal.proxy import rotate_proxy_session
 
         country = (getattr(args, "promotion_proxy_country", None) or "").strip().upper()
         if country:
@@ -380,7 +380,7 @@ def resolve_payment_route(
     if promotion_proxy and not stage_pools["approve"]:
         promotion_country = str(countries.get("promotion") or "").strip().upper()
         if promotion_country:
-            from ..paypal_proxy import rotate_proxy_session
+            from ..paypal.proxy import rotate_proxy_session
 
             promotion_proxy = rotate_proxy_session(promotion_proxy, promotion_country)
         adapter["promotion_proxy"] = promotion_proxy
@@ -496,7 +496,7 @@ def list_payment_methods() -> None:
 
 
 def test_payment_proxies(args: Any, context: PaymentCommandContext) -> None:
-    from ..paypal_proxy import (
+    from ..paypal.proxy import (
         probe_proxy,
         proxy_state_from_config,
         redact_proxy_url,
@@ -796,7 +796,7 @@ def extract_payment_link(args: Any, context: PaymentCommandContext) -> None:
     )
     if method == "paypal" and result.get("ok") and result.get("url"):
         try:
-            from ..paypal_authorization_queue import enqueue_paypal_ba_authorization
+            from ..paypal.authorization_queue import enqueue_paypal_ba_authorization
 
             queued = enqueue_paypal_ba_authorization(
                 email=str(getattr(args, "email", None) or ""),

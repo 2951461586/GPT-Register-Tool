@@ -91,7 +91,7 @@
 - **`pay_link` 删 138 处死导入**；适配器共用 `_prepare` / `_finish_extractor`。
 - **身份收敛 / `phone_reuse` 拆分**（config / pool / lifecycle），身份只分配一次。
 - `docs/audits/plans/plan-2026-10-08-paypal-family-boundaries.md` 记录 PayPal 家族的边界设计
-  （P0：`paypal_extract.py` 已成 UPI 也依赖的事实共享库）。**仅设计，未实现。**
+  （P0：`paypal/extract.py` 已成 UPI 也依赖的事实共享库）。**仅设计，未实现。**
 
 ## 门禁与工具
 

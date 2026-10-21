@@ -1,6 +1,6 @@
 """PayPal payment input selection: cards, addresses and result persistence.
 
-Extracted from ``sms_tool.paypal_auto``. Owns every helper that *chooses* or
+Extracted from ``sms_tool.paypal.auto``. Owns every helper that *chooses* or
 *persists* payment inputs; it contains no browser automation at all.
 
 ``_pick_phone_and_sms`` used to live here too, reading the static phone pool

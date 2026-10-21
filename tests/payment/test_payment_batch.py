@@ -169,7 +169,7 @@ class PaymentBatchTests(unittest.TestCase):
             seen.append((list(pool), expected_country, stage))
             return f"http://selected-{stage}:8080", [{"ok": True}]
 
-        with patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose):
+        with patch("sms_tool.paypal.proxy.select_proxy_from_pool", side_effect=choose):
             result = payment_batch._cell_payment_kwargs(values, {}, "")
 
         self.assertEqual(result["checkout_proxy"], "http://selected-checkout:8080")
@@ -194,7 +194,7 @@ class PaymentBatchTests(unittest.TestCase):
             seen.append((list(pool), expected_country, stage))
             return pool[0], [{"ok": True}]
 
-        with patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose):
+        with patch("sms_tool.paypal.proxy.select_proxy_from_pool", side_effect=choose):
             payment_batch._cell_payment_kwargs(
                 values,
                 {"checkout_country": "ID"},
@@ -204,7 +204,7 @@ class PaymentBatchTests(unittest.TestCase):
 
         self.assertEqual([item[1] for item in seen], ["ID", "JP"])
         seen.clear()
-        with patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose):
+        with patch("sms_tool.paypal.proxy.select_proxy_from_pool", side_effect=choose):
             payment_batch._cell_payment_kwargs(
                 values,
                 {"checkout_country": "ID", "approve_country": "TR"},
@@ -225,7 +225,7 @@ class PaymentBatchTests(unittest.TestCase):
             seen.append((list(pool), expected_country, stage))
             return pool[0], [{"ok": True}]
 
-        with patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose):
+        with patch("sms_tool.paypal.proxy.select_proxy_from_pool", side_effect=choose):
             result = payment_batch._cell_payment_kwargs(
                 values,
                 {"checkout_country": "ID", "approve_country": "US"},
@@ -249,7 +249,7 @@ class PaymentBatchTests(unittest.TestCase):
             seen.append((list(pool), expected_country, stage))
             return pool[0], [{"ok": True}]
 
-        with patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose):
+        with patch("sms_tool.paypal.proxy.select_proxy_from_pool", side_effect=choose):
             result = payment_batch._cell_payment_kwargs(
                 values,
                 {"checkout_country": "ID"},
@@ -272,7 +272,7 @@ class PaymentBatchTests(unittest.TestCase):
             seen.append((list(pool), expected_country, stage))
             return pool[0], [{"ok": True}]
 
-        with patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose):
+        with patch("sms_tool.paypal.proxy.select_proxy_from_pool", side_effect=choose):
             result = payment_batch._cell_payment_kwargs(
                 values,
                 {"checkout_country": "PH", "approve_country": "US"},
@@ -334,7 +334,7 @@ class PaymentBatchTests(unittest.TestCase):
             seen.append((list(pool), expected_country, stage))
             return pool[0], [{"ok": True}]
 
-        with patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose):
+        with patch("sms_tool.paypal.proxy.select_proxy_from_pool", side_effect=choose):
             payment_batch._cell_payment_kwargs(values, {}, "", pool_index=1)
 
         self.assertEqual(seen[0][0], ["http://checkout-b:8080", "http://checkout-a:8080"])
@@ -373,7 +373,7 @@ class PaymentBatchTests(unittest.TestCase):
             patch.object(
                 payment_batch, "generate_payment_link", return_value={"ok": True, "url": "https://example.test/pay"}
             ) as generate,
-            patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose),
+            patch("sms_tool.paypal.proxy.select_proxy_from_pool", side_effect=choose),
             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "pool.json"),
         ):
             report = payment_batch.run_payment_batch(
@@ -433,7 +433,7 @@ class PaymentBatchTests(unittest.TestCase):
             patch.object(payment_batch, "load_account_seed", side_effect=load_seed),
             patch.object(payment_batch, "ensure_payment_access_token", side_effect=ensure_auth),
             patch.object(payment_batch, "generate_payment_link", side_effect=generate) as payment,
-            patch("sms_tool.paypal_proxy.rotate_proxy_session", side_effect=rotate_proxy) as rotate,
+            patch("sms_tool.paypal.proxy.rotate_proxy_session", side_effect=rotate_proxy) as rotate,
             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "route.json"),
         ):
             report = payment_batch.run_payment_batch(
@@ -490,7 +490,7 @@ class PaymentBatchTests(unittest.TestCase):
             patch.object(payment_batch, "load_account_seed", return_value=({}, "")),
             patch.object(payment_batch, "ensure_payment_access_token", return_value=auth) as ensure,
             patch.object(payment_batch, "probe_payment_method", return_value=capability) as probe,
-            patch("sms_tool.paypal_proxy.rotate_proxy_session") as rotate,
+            patch("sms_tool.paypal.proxy.rotate_proxy_session") as rotate,
             patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "probe-route.json"),
         ):
             report = payment_batch.run_payment_batch(

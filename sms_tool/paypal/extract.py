@@ -28,8 +28,8 @@ from typing import Any
 from urllib.parse import quote
 
 try:
-    from .phone_proxy import normalize_proxy_url
-    from .pp_link_helpers import (
+    from ..phone_proxy import normalize_proxy_url
+    from ..pp_link_helpers import (
         DEFAULT_STRIPE_PK,
         STRIPE_VERSION,
         DEFAULT_TIMEOUT,
@@ -65,7 +65,7 @@ except ImportError:  # pragma: no cover - direct script execution
     )
 
 try:
-    from .checkout_contract import (
+    from ..checkout_contract import (
         PLUS_TRIAL_CAMPAIGN_ID,
         CheckoutRequestContract,
         CheckoutSessionContract,
@@ -80,7 +80,7 @@ except ImportError:  # pragma: no cover - direct script execution
     )
 
 try:
-    from .paypal_proxy import (
+    from .proxy import (
         PayPalProxyState,
         is_retryable_network_error,
         probe_proxy,
@@ -88,7 +88,7 @@ try:
         rotate_proxy_session as rotate_stage_proxy_session,
     )
 except ImportError:  # pragma: no cover - direct script execution
-    from paypal_proxy import (  # type: ignore
+    from sms_tool.paypal.proxy import (  # type: ignore
         PayPalProxyState,
         is_retryable_network_error,
         probe_proxy,
@@ -97,13 +97,16 @@ except ImportError:  # pragma: no cover - direct script execution
     )
 
 try:
-    from . import endpoints
+    from .. import endpoints
 except ImportError:  # pragma: no cover - direct script execution
     import endpoints  # type: ignore
 
 # ─── 常量 ────────────────────────────────────────────────────────────────────
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+# 本模块位于 ``sms_tool/paypal/``，项目根要**再上两层**（``sms_tool`` 的父目录）。
+# 迁移前它在 ``sms_tool/paypal_extract.py``，``parent.parent`` 恰好是项目根；搬进子包
+# 后少一层会让默认的代理健康状态指向 ``sms_tool/runtime/paypal_proxy_state.json``。
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 # ─── 共享支付内核（定义在 payment_wire；此处再导出）──────────────────────────
@@ -117,7 +120,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 # ``patch.object(paypal_extract, "_new_session" | "_checkout_post", ...)``
 # 仍然生效 —— 补丁打在本模块的命名空间上就能被看见。
 try:
-    from .payment_wire import (
+    from ..payment_wire import (
         CURRENCY_MAP,
         CheckoutApprovalBlockedError,
         CheckoutNotZeroDueError,
@@ -148,7 +151,7 @@ except ImportError:  # pragma: no cover - direct script execution
 # **模块对象**本身，与 ``payment_wire`` 看到的是同一个对象；
 # ``_checkout_device_id`` / ``_checkout_get`` 由测试直接调用。
 try:
-    from .payment_wire import (  # noqa: F401
+    from ..payment_wire import (  # noqa: F401
         _checkout_device_id,
         _checkout_get,
         curl_requests,
@@ -303,7 +306,7 @@ class PPLinkExtractor:
     def _fresh_approval_sentinel(self, session: Any) -> dict[str, str]:
         """Mint one checkout-approval Sentinel bound to this flow/session."""
         try:
-            from .sentinel import issue_sentinel_flow
+            from ..sentinel import issue_sentinel_flow
 
             issued = issue_sentinel_flow(
                 flow="checkout_session_approval",

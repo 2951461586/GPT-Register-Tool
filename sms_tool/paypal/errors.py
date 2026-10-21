@@ -1,6 +1,6 @@
 """PayPal automation error types.
 
-Extracted from ``sms_tool.paypal_auto`` during the module-split refactor.
+Extracted from ``sms_tool.paypal.auto`` during the module-split refactor.
 This module is dependency-free so every other sub-module can import it.
 """
 

@@ -27,7 +27,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from sms_tool.paypal_link import gen_link
-from sms_tool.paypal_proxy import PayPalProxyState, ProxyProbeResult
+from sms_tool.paypal.proxy import PayPalProxyState, ProxyProbeResult
 
 # ────────────────────────────── generation-type normalisation ──────────────────────────────
 

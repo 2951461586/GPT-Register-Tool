@@ -1,7 +1,10 @@
-config.json
-proxy.json
-runtime.json
-payment.json
+# 仓库根的本地配置（用户态，不入库）。**必须带前导 `/`**：不加锚点时
+# `payment.json` 会把 `scripts/move_specs/payment.json`（P2-7 的迁移 spec）一起吞掉，
+# `proxy.json` 同理吞掉 P2-4 的 spec。
+/config.json
+/proxy.json
+/runtime.json
+/payment.json
 .env
 .env.*
 !.env.example
@@ -20,7 +23,7 @@ sms_tool/sentinel_cache.json
 mailbox_tokens.txt
 hotmail*.txt
 *_tokens.txt
-session.json
+/session.json
 skills-lock.json
 
 __pycache__/
@@ -76,16 +79,28 @@ runtime/**/*.log
 # "被 .gitignore 拒绝的文件绝不能出货"的规则对它完全失效（闸门是问 git 的，
 # git 说没忽略，闸门就放行）。这里按**家族**忽略，而不是枚举后缀：
 # 枚举是补不完的，`proxy.json.old` / `proxy.json.save` 还会漏。
-proxy.json*
-config.json*
-runtime.json*
-payment.json*
-session.json*
+#
+# 2026-10-21 第二次踩坑：这几条原来没有前导 `/`，于是 `proxy.json*` 连
+# `scripts/move_specs/proxy.json`（`module_move.py` 的迁移输入 spec，是**仓库产物**
+# 而不是用户配置）一起吞了 —— P2-4 的 spec 因此从未入库，`git ls-files
+# scripts/move_specs/` 只剩 `mailbox.json`，而 `module_move.py` 自己的 docstring
+# 示例就是 `--spec scripts/move_specs/proxy.json`。要挡的是仓库根的用户配置，
+# 所以事故的载体是**位置**而不是后缀：家族规则按根锚定。
+/proxy.json*
+/config.json*
+/runtime.json*
+/payment.json*
+/session.json*
 # 例外：示例模板只有占位符，允许入库（沿用 config.example.json 的命名习惯）。
 # 少了这两行，将来新建 proxy.json.example 会被上面的家族规则静默吃掉 ——
 # 既不入库、也不进发布载荷，且不报错。
-!proxy.json.example
-!config.json.example
+!/proxy.json.example
+!/config.json.example
+# `scripts/move_specs/*.json` 是 `module_move.py` 的迁移输入 spec（仓库产物，按目标包
+# 命名：proxy / mailbox / paypal / payment …），不是用户配置。上面两处家族规则
+# 挡的是仓库根的用户态文件，它们唯一合法的例外就是这组 spec；少了这行，
+# `payment.json` 与 `proxy.json` 会把 P2-7 / P2-4 的 spec 静默吞掉。
+!scripts/move_specs/*.json
 
 SmsWorkbench/bin/
 SmsWorkbench/obj/
@@ -129,3 +144,7 @@ local/*
 
 # pyright ratchet scratch output
 .pyright-work/
+
+# 迁移进 sms_tool/paypal/ 后，PROJECT_ROOT 少一层时默认的 runtime/ 状态文件
+# 会落到这里。它既不是 runtime/ 那份活状态，也不该被提交。
+/sms_tool/runtime/

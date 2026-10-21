@@ -1,4 +1,4 @@
-"""reconciliation submodule of the former sms_tool/paypal_reconciliation.py (mechanical split, bodies unchanged)."""
+"""reconciliation submodule of the former sms_tool/paypal/reconciliation.py (mechanical split, bodies unchanged)."""
 
 from __future__ import annotations
 

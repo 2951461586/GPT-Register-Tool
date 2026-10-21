@@ -12,13 +12,13 @@
 2. **`_PlmProxy` 保留。** `paypal_link/gen_link.py` 用 `__getattr__` 在属性访问时
    从 `sys.modules` 读取 `sms_tool.gen_pp_link` 的活属性。它不是未清理的残留。
 3. **新增调用点直接 import 定义模块**（`paypal_link` / `paypal_extract` /
-   `payment_wire`），不得给两个根壳（`gen_pp_link.py`、`paypal_reconciliation.py`）
+   `payment_wire`），不得给两个根壳（`gen_pp_link.py`、`paypal/reconciliation.py`）
    增加新依赖。壳只服务既有 import 路径与既有 patch 目标。
 
 ## 为什么需要记录
 
 读者看到的形状像三份重复：`paypal/`（8 文件）、`paypal_link/`（3 文件）、根
-`paypal_extract.py` + 两个壳。2026-10-18 的深度扫描把 `_PlmProxy` 标为“机械拆分
+`paypal/extract.py` + 两个壳。2026-10-18 的深度扫描把 `_PlmProxy` 标为“机械拆分
 留下的间接层”，建议清理。**这个建议是错的**，而且错得静默：删掉它以后
 `patch.object(sms_tool.gen_pp_link, ...)` 仍然能安装补丁，但子模块再也读不到补丁后的
 属性——测试会继续变绿，因为“补丁了一个没人读的属性”不会报错。
@@ -29,7 +29,7 @@
 
 - `paypal_link/gen_link.py` 里有 **14 处** `_plm.X`，覆盖 `PPLinkExtractor`、
   `_load_json`、`_proxies_from_config`、`_checkout_post` 等；`PPLinkExtractor` 定义在
-  `sms_tool/paypal_extract.py:169`，`_checkout_post` 定义在 `sms_tool/payment_wire.py`。
+  `sms_tool/paypal/extract.py:169`，`_checkout_post` 定义在 `sms_tool/payment_wire.py`。
   两者都不是 `gen_pp_link` 的所有物——壳只做再导出。
 - `tests/` 中对 `gen_pp_link` 的引用有 **140 行**，其中
   `patch.object(gen_pp_link, "_checkout_post" / "_checkout_get", ...)` 是活跃的 patch
@@ -37,7 +37,7 @@
   `tests/payment/test_checkout_sentinel.py:156` 等）。这些补丁今天能生效，正是因为
   `_PlmProxy` 在**调用时**读取模块属性，而不是在 import 时绑定。
 - 两个壳是单向再导出：`gen_pp_link.py` → `paypal_link.*` 加 `upi_link` 遗留符号；
-  `paypal_reconciliation.py` → `paypal_link.*`。
+  `paypal/reconciliation.py` → `paypal_link.*`。
 - 执行栈与提链栈的方向约束是既有的：Rule 6 禁止 `sms_tool/paypal/` import
   `gen_pp_link`；反过来 `paypal_link/` 也不驱动浏览器，只产出链接与对账证据。
 

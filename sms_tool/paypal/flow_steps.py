@@ -1,6 +1,6 @@
 """PayPal checkout flow control: gates, SMS verification and the step runner.
 
-Extracted from ``sms_tool.paypal_auto``. Owns the ordered step machine
+Extracted from ``sms_tool.paypal.auto``. Owns the ordered step machine
 (``_run_browser_steps``) plus the human-verification / SMS gates that can
 interrupt it, and the OpenAI checkout pre-flight that runs before PayPal.
 """

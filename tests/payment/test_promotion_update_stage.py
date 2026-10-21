@@ -11,7 +11,7 @@ import unittest
 from unittest.mock import patch
 
 from sms_tool import gen_pp_link as g
-from sms_tool import paypal_extract
+from sms_tool.paypal import extract as paypal_extract
 
 
 class _Resp:

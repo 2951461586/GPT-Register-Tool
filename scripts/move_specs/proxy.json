@@ -1,0 +1,14 @@
+{
+  "package": "proxy",
+  "layer": 5,
+  "modules": {
+    "proxy_bridge": "bridge",
+    "proxy_edge_probe": "edge_probe",
+    "proxy_entry": "entry",
+    "proxy_health": "health",
+    "proxy_pool": "pool",
+    "proxy_registry": "registry",
+    "proxy_routing": "routing"
+  },
+  "documented_cycles": [["routing", "account_identity"]]
+}

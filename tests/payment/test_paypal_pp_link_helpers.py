@@ -727,7 +727,7 @@ def test_pp_link_extractor_bills_both_stages_from_one_identity():
     the *same* Checkout. A per-call rotation would bill them from different
     streets, which is why the variant is reserved once and cached per instance.
     """
-    from sms_tool.paypal_extract import PPLinkExtractor
+    from sms_tool.paypal.extract import PPLinkExtractor
 
     extractor = PPLinkExtractor(access_token="t", target_country="US")
     first = extractor._billing_identity()
@@ -755,7 +755,7 @@ def test_pp_link_extractor_bills_both_stages_from_one_identity():
 
 def test_pp_link_extractor_honours_an_explicit_billing_variant():
     """A caller-supplied variant must be used verbatim and not touch the cursor."""
-    from sms_tool.paypal_extract import PPLinkExtractor
+    from sms_tool.paypal.extract import PPLinkExtractor
 
     extractor = PPLinkExtractor(access_token="t", target_country="US", billing_variant=1)
     assert extractor._billing_variant == 1

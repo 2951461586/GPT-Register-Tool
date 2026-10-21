@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from sms_tool import paypal_authorization_queue as queue
+from sms_tool.paypal import authorization_queue as queue
 
 
 class PayPalAuthorizationQueueTests(unittest.TestCase):

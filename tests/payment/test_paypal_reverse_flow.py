@@ -1,4 +1,4 @@
-"""Behaviour tests for sms_tool/paypal_reverse.py -- orchestration layer (P3).
+"""Behaviour tests for sms_tool/paypal/reverse.py -- orchestration layer (P3).
 
 The money-relevant part of this module is not "does it parse HTML" (covered in
 ``test_paypal_reverse_pure.py``) but **branch selection**:
@@ -16,14 +16,14 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from sms_tool.paypal_reverse import (
+from sms_tool.paypal.reverse import (
     _NeedBrowserFallback,
     PayPalReverseClient,
     try_reverse_pay,
 )
 
 from paypal_reverse_fakes import FakeResponse, FakeSession, make_client
-from sms_tool.paypal_reverse import ReversePayResult
+from sms_tool.paypal.reverse import ReversePayResult
 
 _PP = "https://www.paypal.com/cgi-bin/webscr?cmd=_express-checkout&token=EC-123"
 _STRIPE = "https://pm-redirects.stripe.com/authorize/acct_1/pa_nonce_x"
@@ -284,7 +284,7 @@ class ExtractAuthTokensTests(unittest.TestCase):
             "https://chatgpt.com/",
             json_body={"accessToken": "AT-POLL", "refreshToken": "RT-POLL"},
         )
-        with patch("sms_tool.paypal_reverse.CFG", {"chatgpt": {"chat_base_url": "https://chatgpt.com"}}):
+        with patch("sms_tool.paypal.reverse.CFG", {"chatgpt": {"chat_base_url": "https://chatgpt.com"}}):
             result = c._extract_auth_tokens()
         self.assertTrue(result.ok)
         self.assertEqual("AT-POLL", result.access_token)
@@ -294,13 +294,13 @@ class ExtractAuthTokensTests(unittest.TestCase):
 
     def test_auth_session_poll_uses_configured_base_url(self):
         c = self._client_with_final("https://chatgpt.com/", json_body={"accessToken": "AT"})
-        with patch("sms_tool.paypal_reverse.CFG", {"chatgpt": {"chat_base_url": "https://proxy.example/"}}):
+        with patch("sms_tool.paypal.reverse.CFG", {"chatgpt": {"chat_base_url": "https://proxy.example/"}}):
             c._extract_auth_tokens()
         self.assertIn("https://proxy.example/api/auth/session", c._session.urls)
 
     def test_auth_session_poll_defaults_to_chatgpt_com(self):
         c = self._client_with_final("https://chatgpt.com/", json_body={"accessToken": "AT"})
-        with patch("sms_tool.paypal_reverse.CFG", {}):
+        with patch("sms_tool.paypal.reverse.CFG", {}):
             c._extract_auth_tokens()
         self.assertIn("https://chatgpt.com/api/auth/session", c._session.urls)
 
@@ -549,7 +549,7 @@ class NewSessionTests(unittest.TestCase):
     def test_falls_back_to_requests_when_curl_cffi_is_missing(self):
         """curl_cffi 缺失时退化成 requests.Session，而不是直接崩。"""
         c = _client()
-        with patch("sms_tool.paypal_reverse.CurlSession", None):
+        with patch("sms_tool.paypal.reverse.CurlSession", None):
             session = c._new_session()
         try:
             self.assertTrue(hasattr(session, "request"))
@@ -559,7 +559,7 @@ class NewSessionTests(unittest.TestCase):
 
     def test_proxy_is_applied_to_both_schemes(self):
         c = _client(proxy="http://user:pw@127.0.0.1:8080")
-        with patch("sms_tool.paypal_reverse.CurlSession", None):
+        with patch("sms_tool.paypal.reverse.CurlSession", None):
             session = c._new_session()
         try:
             self.assertEqual(
@@ -570,7 +570,7 @@ class NewSessionTests(unittest.TestCase):
 
     def test_no_proxy_leaves_proxies_untouched(self):
         c = _client(proxy=None)
-        with patch("sms_tool.paypal_reverse.CurlSession", None):
+        with patch("sms_tool.paypal.reverse.CurlSession", None):
             session = c._new_session()
         try:
             self.assertEqual({}, session.proxies)
@@ -587,13 +587,13 @@ class NewSessionTests(unittest.TestCase):
                 self.headers = {}
 
         c = _client(proxy="http://127.0.0.1:8080")
-        with patch("sms_tool.paypal_reverse.CurlSession", _FakeCurl):
+        with patch("sms_tool.paypal.reverse.CurlSession", _FakeCurl):
             c._new_session()
         self.assertTrue(str(seen["impersonate"]).startswith("chrome"))
 
     def test_browser_identity_headers_are_installed(self):
         c = _client()
-        with patch("sms_tool.paypal_reverse.CurlSession", None):
+        with patch("sms_tool.paypal.reverse.CurlSession", None):
             session = c._new_session()
         try:
             self.assertIn("User-Agent", session.headers)
@@ -649,7 +649,7 @@ class AuthorizeTests(unittest.TestCase):
         self.assertEqual("boom", result.error)
 
     def test_success_is_passed_through(self):
-        from sms_tool.paypal_reverse import ReversePayResult
+        from sms_tool.paypal.reverse import ReversePayResult
 
         c = _client()
         expected = ReversePayResult(ok=True, access_token="eyJ1")

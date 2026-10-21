@@ -1,6 +1,6 @@
 """Shared SMS polling and extraction utilities.
 
-Extracted from ``paypal_auto.py`` to resolve the circular import between
+Extracted from ``paypal/auto.py`` to resolve the circular import between
 ``paypal_auto`` and ``paypal_reverse``:  paypal_reverse imports SMS helpers
 from paypal_auto, while paypal_reverse was transitively pulled in by
 paypal_auto.  Both modules now import from this neutral shared module.
@@ -18,7 +18,7 @@ from .desktop_ipc import progress_dots_enabled
 # ─── SMS code extraction ──────────────────────────────────────────────────────
 
 
-def _extract_sms_code(text: str) -> str | None:
+def _extract_sms_code(text: str | None) -> str | None:
     """Extract verification code from SMS text, avoiding false positives."""
     if not text:
         return None

@@ -44,8 +44,8 @@
 - `a559b9c` —— `storage.py` 拆分下沉到 `sms_tool/store/` 子包（6 层 + 薄壳兼容），
   修复 `cli.py` 懒加载回归。
 - `5ec2850` —— `payment_link_manager.py` 拆分下沉到 `sms_tool/pay_link/` 子包（7 层 + 薄壳兼容）。
-- `a988bc8` —— `gen_pp_link.py` + `paypal_reconciliation.py` 拆到 `sms_tool/paypal_link/` 子包。
-- `bc9e9df` —— `paypal_auto.py` 拆为 `sms_tool/paypal/` 分层包。
+- `a988bc8` —— `gen_pp_link.py` + `paypal/reconciliation.py` 拆到 `sms_tool/paypal_link/` 子包。
+- `bc9e9df` —— `paypal/auto.py` 拆为 `sms_tool/paypal/` 分层包。
 
 ## 缺陷修复
 

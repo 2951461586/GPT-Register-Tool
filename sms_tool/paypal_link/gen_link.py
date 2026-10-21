@@ -89,7 +89,7 @@ except ImportError:  # pragma: no cover - direct script execution
 
 
 try:
-    from ..paypal_proxy import (
+    from ..paypal.proxy import (
         PayPalProxyState,
         infer_proxy_country,
         is_retryable_network_error,
@@ -106,7 +106,7 @@ try:
         _resolve_stage_proxy,
     )
 except ImportError:  # pragma: no cover - direct script execution
-    from paypal_proxy import (  # type: ignore
+    from sms_tool.paypal.proxy import (  # type: ignore
         PayPalProxyState,
         infer_proxy_country,
         is_retryable_network_error,
@@ -125,7 +125,7 @@ except ImportError:  # pragma: no cover - direct script execution
 
 
 try:
-    from ..paypal_extract import (
+    from ..paypal.extract import (
         CURRENCY_MAP,
         CheckoutNotZeroDueError,
         PPLinkExtractor,
@@ -135,7 +135,7 @@ try:
         _new_session,
     )
 except ImportError:  # pragma: no cover - direct script execution
-    from paypal_extract import (  # type: ignore
+    from sms_tool.paypal.extract import (  # type: ignore
         CURRENCY_MAP,
         CheckoutNotZeroDueError,
         PPLinkExtractor,

@@ -66,7 +66,7 @@ WIRED_SMS_TOOL = (
     "sms_tool/sentinel/client.py",
     "sms_tool/registration_drivers/browser_flow/context.py",
     "sms_tool/registration_drivers/browser_session.py",
-    "sms_tool/paypal_extract.py",
+    "sms_tool/paypal/extract.py",
     "sms_tool/paypal_link/gen_link.py",
 )
 

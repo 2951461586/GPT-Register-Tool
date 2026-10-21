@@ -10,7 +10,7 @@
 >
 > **状态（2026-10-06 整理）：本方案的三项能力均已落地并通过测试。**
 > `sms_tool/proxy/entry.py`（686 行）、`sms_tool/proxy/bridge.py`（548 行）、
-> `sms_tool/paypal_authorization.py`（317 行）均在仓库中，§5 承诺的
+> `sms_tool/paypal/authorization.py`（317 行）均在仓库中，§5 承诺的
 > `tests/proxy/test_proxy_entry.py` / `tests/proxy/test_proxy_bridge.py` /
 > `tests/payment/test_paypal_authorization.py` 三份测试也均存在。
 > ⚠️ 因此下文 §0 的「现状」列与 §1 的 recon 是**改动前**的记录，
@@ -27,7 +27,7 @@
 |---|-------------|-------------|----------|
 | 1 | `paypal/proxy.py` 代理解析器（`ProxyEntry.parse` / `load_proxy_pool` / `choose_proxy_entry`） | 已有 `phone_proxy.normalize_proxy_url` 与 `proxy_pool.UpstreamProxy.from_url`，但**逻辑重复、覆盖不全**（IPv6 裸格式、socks5/socks5h scheme 传播、端口默认值、无认证格式、池随机/轮询选择未统一） | **新增**统一 `ProxyEntry` 解析器 + 池加载/选择（`proxy/entry.py`） |
 | 2 | `session.py` / `flow.py` 把单条认证代理桥到本地会话 | 已有 `proxy_pool.Socks5Server`（多上游手动池），但需外部配置文件启动 | **新增**进程内单条认证代理 → 本地 `socks5://127.0.0.1:<port>` 桥（供 nodriver / 手动浏览器路径使用） |
-| 3 | `elevation_flow.py` 中"上下文校验 + 结果归一化"的工程模式（`checkoutSessionType` 校验、`BuyerFundingContext` 查询、fatal contingency 分类） | 已有 `PaymentResult.from_mapping` 结果契约，但**缺少从 PayPal GraphQL/JSON 响应解析授权上下文字段并归一化的通用辅助** | **新增**`PayPal 授权结果上下文归一化器`（`paypal_authorization.py`），只解析、不参与反风控交互 |
+| 3 | `elevation_flow.py` 中"上下文校验 + 结果归一化"的工程模式（`checkoutSessionType` 校验、`BuyerFundingContext` 查询、fatal contingency 分类） | 已有 `PaymentResult.from_mapping` 结果契约，但**缺少从 PayPal GraphQL/JSON 响应解析授权上下文字段并归一化的通用辅助** | **新增**`PayPal 授权结果上下文归一化器`（`paypal/authorization.py`），只解析、不参与反风控交互 |
 
 依赖：全部零新增第三方依赖（复用项目已有的 `requests` / `curl_cffi` / `asyncio`）。
 
@@ -40,9 +40,9 @@
 | 模块 | 职责 | 关键接口 |
 |------|------|----------|
 | `sms_tool/phone_proxy.py` | 手机注册链路的动态代理 | `normalize_proxy_url`（已含 `host:port:user:pass` → URL）、`probe_proxy`、`select_phone_proxy`、`redact_proxy_url` |
-| `sms_tool/paypal_proxy.py` | 支付链路的 provider 动态会话旋转 / 健康探测 / 状态排名 | `rotate_proxy_session`、`probe_proxy`、`select_proxy_from_pool`、`PayPalProxyState` |
+| `sms_tool/paypal/proxy.py` | 支付链路的 provider 动态会话旋转 / 健康探测 / 状态排名 | `rotate_proxy_session`、`probe_proxy`、`select_proxy_from_pool`、`PayPalProxyState` |
 | `sms_tool/proxy/pool.py` | 本地 SOCKS5 池服务器（多上游、健康检查、轮询） | `Socks5Server`、`UpstreamProxy.from_url`（已支持 4 段裸格式） |
-| `sms_tool/paypal_protocol.py` | BA/EC token 提取、Stripe redirect 追踪 | `extract_ba_token`、`extract_ec_token`、`_make_session` |
+| `sms_tool/paypal/protocol.py` | BA/EC token 提取、Stripe redirect 追踪 | `extract_ba_token`、`extract_ec_token`、`_make_session` |
 
 **发现的问题**：
 
@@ -57,9 +57,9 @@
 - `sms_tool/payment_link_manager.py`：统一状态机 + adapter registry。
 - `sms_tool/omakse_client.run_us_payment`：把 BA token + 代理发给远程 omakse 服务器（外部授权引擎）。
 - `sms_tool/gen_pp_link.py`：`PPLinkExtractor` / `generate_pp_link`（三段式提链）。
-- `sms_tool/paypal_protocol.py`：BA/EC 提取、Stripe redirect。
+- `sms_tool/paypal/protocol.py`：BA/EC 提取、Stripe redirect。
 
-**发现**：当前项目从 PayPal 授权响应中解析上下文（`checkoutSessionType`、`billingAgreementId`、fundingContext、EUAT 等）并归一化为 `PaymentResult` 的通用辅助缺失——`paypal_protocol.py` 只做 token/URL 提取，不解析授权结果结构。
+**发现**：当前项目从 PayPal 授权响应中解析上下文（`checkoutSessionType`、`billingAgreementId`、fundingContext、EUAT 等）并归一化为 `PaymentResult` 的通用辅助缺失——`paypal/protocol.py` 只做 token/URL 提取，不解析授权结果结构。
 
 ### 1.3 外部项目能力对照
 
@@ -76,7 +76,7 @@
 
 ### 2.1 能力 1：统一代理解析器（→ 新模块 `sms_tool/proxy/entry.py`）
 
-**目标**：提供**单一权威**的代理解析/加载/选择入口，被 `phone_proxy.py`、`paypal_proxy.py`、`proxy/pool.py` 复用。
+**目标**：提供**单一权威**的代理解析/加载/选择入口，被 `phone_proxy.py`、`paypal/proxy.py`、`proxy/pool.py` 复用。
 
 **数据结构**（对齐外部 `ProxyEntry`，但补齐 IPv6 / scheme / 默认端口）：
 
@@ -145,7 +145,7 @@ class LocalProxyBridge:
 
 **依赖**：无新增（复用 `proxy_pool` 与 `asyncio`）。
 
-### 2.3 能力 3：授权结果上下文归一化器（→ 新模块 `sms_tool/paypal_authorization.py`）
+### 2.3 能力 3：授权结果上下文归一化器（→ 新模块 `sms_tool/paypal/authorization.py`）
 
 **目标**：把外部项目 `IdentityElevationPayPalFlow` 中**"解析授权响应上下文 + 归一化结果 + 分类 fatal contingency"**的
 工程模式，落地为一个**只读、纯解析**的通用辅助：输入 PayPal GraphQL / JSON 响应体，输出归一化的授权上下文与 `PaymentResult`-兼容映射。
@@ -193,7 +193,7 @@ def to_payment_result(ctx, *, payment_method="paypal") -> dict  # 映射到 Paym
 |------|------|-----------|
 | `sms_tool/proxy/entry.py` | `ProxyEntry`、`parse_proxy`、`proxy_to_url`、`load_proxy_pool`、`choose_proxy_entry`、`masked` | proxyparser |
 | `sms_tool/proxy/bridge.py` | `LocalProxyBridge`（socks5 认证上游 → 本地 socks5 桥） | proxybridge |
-| `sms_tool/paypal_authorization.py` | `PayPalAuthorizationContext`、`parse_authorization_context`、`classify_authorization_outcome`、`to_payment_result` | elevation |
+| `sms_tool/paypal/authorization.py` | `PayPalAuthorizationContext`、`parse_authorization_context`、`classify_authorization_outcome`、`to_payment_result` | elevation |
 
 ### 3.2 集成改造（向后兼容，不破坏现有行为）
 
@@ -201,7 +201,7 @@ def to_payment_result(ctx, *, payment_method="paypal") -> dict  # 映射到 Paym
 |------|------|
 | `sms_tool/phone_proxy.py` | `normalize_proxy_url` 委托 `proxy_entry.parse_proxy`+`proxy_to_url`（保持原签名与返回；IPv6/无认证用原逻辑兜底） |
 | `sms_tool/proxy/pool.py` | `UpstreamProxy.from_url` 委托 `parse_proxy`（补齐 IPv6 / 无认证；默认端口对齐 socks5=1080） |
-| `sms_tool/paypal_proxy.py` | `select_proxy_from_pool` 增加可选 `pool_loader` 参数（默认走 `load_proxy_pool`） |
+| `sms_tool/paypal/proxy.py` | `select_proxy_from_pool` 增加可选 `pool_loader` 参数（默认走 `load_proxy_pool`） |
 | `sms_tool/omakse_client.py` | 在 `run_us_payment` 返回后提供可选的授权结果归一化 helper（不改变现有返回结构） |
 
 ### 3.3 依赖清单
@@ -219,7 +219,7 @@ def to_payment_result(ctx, *, payment_method="paypal") -> dict  # 映射到 Paym
 ## 4. 合规与风险说明
 
 1. **不移植**外部项目的 DataDome 绕过、guest→member 身份提升的具体反风控交互、GraphQL 反风控请求构造。
-2. `paypal_authorization.py` **只做只读解析与归一化**，不发起任何用于规避风控的请求；其上下文校验用于把既有授权结果规范化、可诊断。
+2. `paypal/authorization.py` **只做只读解析与归一化**，不发起任何用于规避风控的请求；其上下文校验用于把既有授权结果规范化、可诊断。
 3. 代理桥仅把用户提供的代理暴露为本地端口，属通用网络工程能力；不含任何针对特定站点的规避逻辑。
 4. 落地代码保持向后兼容，既有 `phone_proxy` / `proxy_pool` / `paypal_proxy` 的对外签名不变，旧行为由新模块委托+原逻辑兜底。
 
@@ -232,7 +232,7 @@ def to_payment_result(ctx, *, payment_method="paypal") -> dict  # 映射到 Paym
    - `tests/proxy/test_proxy_bridge.py`：本地桥启动/停止、`local_url`、上下文管理器（不连外网，仅验证端口与生命周期）。
    - `tests/payment/test_paypal_authorization.py`：纯解析——mock 的 GraphQL/JSON 响应 → `PayPalAuthorizationContext` → `classify_authorization_outcome` → `to_payment_result` 与 `PaymentResult.from_mapping` 对齐。
 2. 既有测试回归：`tests/registration/test_phone_proxy.py`、`tests/proxy/test_proxy_pool.py`、`tests/payment/test_paypal_proxy.py`、`tests/payment/test_paypal_protocol.py`、`tests/payment/test_payment_*` 需保持通过。
-3. 语法/导入检查：`python -c "import sms_tool.proxy.entry, sms_tool.proxy.bridge, sms_tool.paypal_authorization"`。
+3. 语法/导入检查：`python -c "import sms_tool.proxy.entry, sms_tool.proxy.bridge, sms_tool.paypal.authorization"`。
 
 ---
 

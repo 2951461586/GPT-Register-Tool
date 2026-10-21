@@ -1,6 +1,6 @@
 """Browser session helpers shared by the Camoufox and CloakBrowser engines.
 
-Extracted from ``sms_tool.paypal_auto``. Covers cookie import, fingerprint
+Extracted from ``sms_tool.paypal.auto``. Covers cookie import, fingerprint
 override injection, page-load waits, overlay dismissal and debug screenshots.
 """
 

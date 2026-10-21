@@ -35,7 +35,8 @@ from unittest import mock
 
 import pytest
 
-from sms_tool import nodriver_paypal, paypal_reverse
+from sms_tool import nodriver_paypal
+from sms_tool.paypal import reverse as paypal_reverse
 from sms_tool.paypal import config_picker, flow_steps
 from sms_tool.paypal.errors import _PayPalStepError
 from sms_tool.sms_utils import NO_NUMBER_SOURCE, NO_NUMBER_SOURCE_MESSAGE
@@ -192,7 +193,7 @@ class TestExportSurface:
         assert not hasattr(paypal_pkg, "_pick_phone_and_sms")
 
     def test_the_picker_is_gone_from_the_compatibility_shell(self):
-        import sms_tool.paypal_auto as shell
+        import sms_tool.paypal.auto as shell
 
         assert not hasattr(shell, "_pick_phone_and_sms")
 

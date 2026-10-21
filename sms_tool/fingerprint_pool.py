@@ -192,7 +192,7 @@ class FingerprintPool:
         if not proxy:
             return profile
         try:
-            from .paypal_proxy import infer_proxy_country
+            from .paypal.proxy import infer_proxy_country
         except Exception:
             return profile
         hint = ""

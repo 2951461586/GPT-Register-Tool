@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 try:  # pragma: no cover - direct script execution
-    from ..paypal_proxy import _stage_proxy_value
+    from ..paypal.proxy import _stage_proxy_value
 except ImportError:
-    from paypal_proxy import _stage_proxy_value  # type: ignore
+    from sms_tool.paypal.proxy import _stage_proxy_value  # type: ignore
 from typing import Any
 from collections.abc import Mapping
 from collections.abc import Sequence

@@ -11,7 +11,7 @@ from .kernel.failure_registry import BATCH_DROPPED_CLASSES, BATCH_RETRY_CLASSES
 from .config import CFG
 from .accounts.account_identity import proxy_egress_key
 from .geo import shared_geo_resolver
-from .paypal_proxy import infer_proxy_country
+from .paypal.proxy import infer_proxy_country
 from .phone_proxy import normalize_proxy_url, probe_proxy_with_scheme_detection, refresh_proxy_sid
 from .kernel.sanitizer import sanitize_text
 from .kernel.sanitizer import account_reference, mask_account

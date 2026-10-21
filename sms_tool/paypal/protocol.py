@@ -18,9 +18,9 @@ except ImportError:
 
 import requests
 
-from .paypal_fingerprints import PAYPAL_USER_AGENT as USER_AGENT
-from .pp_link_helpers import extract_ba_token as _extract_ba_token_str
-from .pp_link_helpers import extract_paypal_approve_url
+from .fingerprints import PAYPAL_USER_AGENT as USER_AGENT
+from ..pp_link_helpers import extract_ba_token as _extract_ba_token_str
+from ..pp_link_helpers import extract_paypal_approve_url
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ _EC_RE = re.compile(r"(EC-[A-Z0-9]{17,})")
 
 def _load_config() -> dict[str, Any]:
     try:
-        from .config import load_merged_config
+        from ..config import load_merged_config
 
         return load_merged_config()
     except Exception:

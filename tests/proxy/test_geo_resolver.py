@@ -462,7 +462,7 @@ class CrossCallerIntegrationTests(unittest.TestCase):
             bfp._GEO_CACHE.clear()
 
     def test_paypal_preflight_publishes_to_shared_cache(self):
-        from sms_tool import paypal_proxy
+        from sms_tool.paypal import proxy as paypal_proxy
 
         result = paypal_proxy.ProxyProbeResult(
             ok=True,
@@ -480,7 +480,7 @@ class CrossCallerIntegrationTests(unittest.TestCase):
         )
 
     def test_failed_preflight_publishes_nothing(self):
-        from sms_tool import paypal_proxy
+        from sms_tool.paypal import proxy as paypal_proxy
 
         result = paypal_proxy.ProxyProbeResult(ok=False, stage="proxy", error="proxy_probe_failed:timeout")
         paypal_proxy._publish_probe_geo("http://user:pw@geo.example:8080", result)

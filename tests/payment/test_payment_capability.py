@@ -4,7 +4,8 @@ from unittest.mock import patch
 
 from curl_cffi.requests.impersonate import BrowserType
 
-from sms_tool import gen_pp_link, paypal_extract, payment_wire
+from sms_tool import gen_pp_link, payment_wire
+from sms_tool.paypal import extract as paypal_extract
 from sms_tool.auth_headers import AUTH_FINGERPRINT_PROFILES
 from sms_tool.checkout_contract import CheckoutSessionContract
 from sms_tool.payment_capability import CapabilityProbeError, _response_json, payment_method_capability_probe

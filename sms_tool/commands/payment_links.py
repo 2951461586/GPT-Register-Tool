@@ -45,7 +45,7 @@ def _reverse_pay_adapter() -> Callable[..., dict[str, Any]]:
     ``sms_tool/commands -> sms_tool`` edge that ``import_layer_ratchet`` freezes;
     the function-local form is the remedy that ratchet names.
     """
-    from ..paypal_reverse import try_reverse_pay
+    from ..paypal.reverse import try_reverse_pay
 
     return try_reverse_pay
 
@@ -192,7 +192,7 @@ def generate_upi_qr(args: Any, ctx: PaymentLinkCommandContext) -> None:
 
 def auto_pay(args: Any) -> None:
     """Run automated PayPal payment for a ChatGPT account."""
-    from ..paypal_auto import auto_pay as run_auto_pay
+    from ..paypal.auto import auto_pay as run_auto_pay
 
     email = (args.email or "").strip()
     session_file = (args.session_file or "").strip()
@@ -235,7 +235,7 @@ def auto_pay(args: Any) -> None:
 
 def batch_auto_pay(args: Any) -> None:
     """Run automated PayPal payment for all pending accounts."""
-    from ..paypal_auto import auto_pay as run_auto_pay
+    from ..paypal.auto import auto_pay as run_auto_pay
     from ..storage import list_paypal_accounts
 
     limit = _clamped_int(args.batch_auto_pay_limit)
@@ -305,7 +305,7 @@ def batch_auto_pay(args: Any) -> None:
 
 def list_paypal_ba_queue(args: Any) -> None:
     from ..desktop_ipc import emit_result
-    from ..paypal_authorization_queue import list_paypal_ba_authorizations
+    from ..paypal.authorization_queue import list_paypal_ba_authorizations
 
     items = list_paypal_ba_authorizations(limit=_clamped_int(getattr(args, "paypal_ba_queue_limit", 0)))
     emit_result(
@@ -316,8 +316,8 @@ def list_paypal_ba_queue(args: Any) -> None:
 
 def process_paypal_ba_queue(args: Any) -> None:
     from ..desktop_ipc import emit_event, emit_result
-    from ..paypal_authorization_queue import process_paypal_ba_authorizations
-    from ..paypal_auto import auto_pay as run_auto_pay
+    from ..paypal.authorization_queue import process_paypal_ba_authorizations
+    from ..paypal.auto import auto_pay as run_auto_pay
 
     def authorize(item: dict[str, Any]) -> dict[str, Any]:
         return run_auto_pay(

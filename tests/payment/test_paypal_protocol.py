@@ -2,7 +2,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from sms_tool import paypal_protocol
+from sms_tool.paypal import protocol as paypal_protocol
 
 
 class PayPalProtocolTests(unittest.TestCase):

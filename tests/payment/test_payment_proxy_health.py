@@ -2,8 +2,8 @@
 
 import pytest
 
-from sms_tool import paypal_proxy
-from sms_tool.paypal_proxy import (
+from sms_tool.paypal import proxy as paypal_proxy
+from sms_tool.paypal.proxy import (
     PayPalProxyState,
     ProxyProbeResult,
     probe_proxy,

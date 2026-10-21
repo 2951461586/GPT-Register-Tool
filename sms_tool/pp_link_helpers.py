@@ -33,7 +33,7 @@ except ImportError:  # pragma: no cover - direct script execution
     from phone_proxy import match_proxy_region, normalize_proxy_url  # type: ignore
 
 try:
-    from .paypal_proxy import (
+    from .paypal.proxy import (
         PayPalProxyState,
         infer_proxy_country,
         is_retryable_network_error,
@@ -42,7 +42,7 @@ try:
         rotate_proxy_session as rotate_stage_proxy_session,
     )
 except ImportError:  # pragma: no cover - direct script execution
-    from paypal_proxy import (  # type: ignore
+    from sms_tool.paypal.proxy import (  # type: ignore
         PayPalProxyState,
         infer_proxy_country,
         is_retryable_network_error,

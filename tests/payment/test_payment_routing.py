@@ -22,7 +22,7 @@ class PaymentRoutePlannerTests(unittest.TestCase):
         }
 
         with patch(
-            "sms_tool.paypal_proxy.select_proxy_from_pool",
+            "sms_tool.paypal.proxy.select_proxy_from_pool",
             side_effect=lambda pool, *_args, **_kwargs: (pool[0], []),
         ):
             plan = PaymentRoutePlanner(config).plan(
@@ -73,7 +73,7 @@ class PaymentRoutePlannerTests(unittest.TestCase):
         self.assertEqual(merged["stage_proxies"], {})
 
         with patch(
-            "sms_tool.paypal_proxy.select_proxy_from_pool",
+            "sms_tool.paypal.proxy.select_proxy_from_pool",
             side_effect=lambda pool, *_args, **_kwargs: (pool[0], []),
         ):
             plan = PaymentRoutePlanner(config).plan(
@@ -114,9 +114,9 @@ class PaymentRoutePlannerTests(unittest.TestCase):
             return pool[0], [{"ok": True}]
 
         with (
-            patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=select),
+            patch("sms_tool.paypal.proxy.select_proxy_from_pool", side_effect=select),
             patch(
-                "sms_tool.paypal_proxy.rotate_proxy_session", side_effect=lambda proxy, country: f"{proxy}/{country}"
+                "sms_tool.paypal.proxy.rotate_proxy_session", side_effect=lambda proxy, country: f"{proxy}/{country}"
             ),
         ):
             plan = PaymentRoutePlanner(config).plan("gopay")
@@ -128,7 +128,7 @@ class PaymentRoutePlannerTests(unittest.TestCase):
 
     def test_explicit_shared_proxy_bypasses_configured_pools(self):
         config = {"protocol_payments": {"methods": {"gopay": {"checkout_proxy_pool": ["http://pool.example:8080"]}}}}
-        with patch("sms_tool.paypal_proxy.select_proxy_from_pool") as select:
+        with patch("sms_tool.paypal.proxy.select_proxy_from_pool") as select:
             plan = PaymentRoutePlanner(config).plan("gopay", options={"proxy": "http://explicit.example:8080"})
         select.assert_not_called()
         self.assertEqual(plan.checkout_proxy, "http://explicit.example:8080")
@@ -147,7 +147,7 @@ class PaymentRoutePlannerTests(unittest.TestCase):
             }
         }
         with patch(
-            "sms_tool.paypal_proxy.select_proxy_from_pool",
+            "sms_tool.paypal.proxy.select_proxy_from_pool",
             side_effect=lambda pool, *_args, **_kwargs: (pool[0], []),
         ):
             plan = PaymentRoutePlanner(config).plan(
@@ -170,7 +170,7 @@ class PaymentRoutePlannerTests(unittest.TestCase):
                 },
             }
         }
-        with patch("sms_tool.paypal_proxy.select_proxy_from_pool") as select:
+        with patch("sms_tool.paypal.proxy.select_proxy_from_pool") as select:
             plan = PaymentRoutePlanner(config).plan(
                 "direct_card",
                 options={"checkout_proxy": "http://operator.example:8080"},
@@ -203,7 +203,7 @@ class PaymentRoutePlannerTests(unittest.TestCase):
             seen.append((stage, country))
             return pool[0], []
 
-        with patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=select):
+        with patch("sms_tool.paypal.proxy.select_proxy_from_pool", side_effect=select):
             plan = PaymentRoutePlanner(config).plan("gopay", options={"auto_proxy_country": True})
 
         self.assertEqual(seen[0], ("checkout", "ID"))
@@ -218,7 +218,7 @@ class PaymentRoutePlannerTests(unittest.TestCase):
         }
 
         with patch(
-            "sms_tool.paypal_proxy.select_proxy_from_pool",
+            "sms_tool.paypal.proxy.select_proxy_from_pool",
             side_effect=lambda pool, *_args, **_kwargs: (pool[0], []),
         ):
             plan = PaymentRoutePlanner(config).plan("paypal")

@@ -24,11 +24,11 @@ except ImportError:
 
 import requests as _requests
 
-from .config import CFG
-from .paypal_fingerprints import PAYPAL_CHROME_FULL_VERSION as _CHROME_FULL_VERSION
-from .paypal_fingerprints import PAYPAL_CHROME_VERSION as _CHROME_VERSION
-from .paypal_fingerprints import PAYPAL_USER_AGENT as _USER_AGENT
-from .sms_utils import (
+from ..config import CFG
+from .fingerprints import PAYPAL_CHROME_FULL_VERSION as _CHROME_FULL_VERSION
+from .fingerprints import PAYPAL_CHROME_VERSION as _CHROME_VERSION
+from .fingerprints import PAYPAL_USER_AGENT as _USER_AGENT
+from ..sms_utils import (
     NO_NUMBER_SOURCE_MESSAGE,
     _extract_sms_code,
     _number_source_or_none,
@@ -961,7 +961,7 @@ class PayPalReverseClient:
         2. If that fails, load the real PayPal page in browser and solve v2
         """
         try:
-            from .captcha_solver import (
+            from ..captcha_solver import (
                 CaptchaError,
                 _PAYPAL_RECAPTCHA_SITE_KEY,
                 _solve_hcaptcha,
@@ -1049,7 +1049,7 @@ class PayPalReverseClient:
         # Step 3: nodriver fallback (undetected Chrome)
         print(f"[re] Trying nodriver for CAPTCHA at {step}...")
         try:
-            from .nodriver_captcha import solve_captcha_with_nodriver
+            from ..nodriver_captcha import solve_captcha_with_nodriver
 
             nd_result = solve_captcha_with_nodriver(
                 page_url=self._current_url,

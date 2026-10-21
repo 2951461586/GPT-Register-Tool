@@ -15,9 +15,9 @@ import uuid
 from pathlib import Path
 from typing import Any, Callable
 
-from .kernel.paths import runtime_file
-from .paypal_protocol import extract_ba_token
-from .kernel.sanitizer import sanitize_text
+from ..kernel.paths import runtime_file
+from .protocol import extract_ba_token
+from ..kernel.sanitizer import sanitize_text
 
 
 _LOCK = threading.Lock()

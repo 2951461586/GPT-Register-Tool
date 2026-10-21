@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from sms_tool import gen_pp_link
 from sms_tool import payment_egress
-from sms_tool import paypal_extract
+from sms_tool.paypal import extract as paypal_extract
 
 
 def _stub_egress_probe(proxy, expected_country, stage, timeout):

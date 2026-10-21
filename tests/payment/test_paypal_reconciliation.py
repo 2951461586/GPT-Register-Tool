@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import quote
 
-from sms_tool.paypal_reconciliation import (
+from sms_tool.paypal.reconciliation import (
     PaymentOutcome,
     ReconciliationClassification,
     RemoteStatus,

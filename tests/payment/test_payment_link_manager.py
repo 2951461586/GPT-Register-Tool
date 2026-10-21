@@ -128,7 +128,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
         with (
             tempfile.TemporaryDirectory() as tmp,
             patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"),
-            patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose),
+            patch("sms_tool.paypal.proxy.select_proxy_from_pool", side_effect=choose),
             patch("sms_tool.gen_pp_link.generate_pp_link", side_effect=fake_generate),
         ):
             result = manager.generate_payment_link(
@@ -162,7 +162,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
             seen.append((list(pool), expected_country, stage))
             return pool[0], [{"ok": True}]
 
-        with patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose):
+        with patch("sms_tool.paypal.proxy.select_proxy_from_pool", side_effect=choose):
             manager._resolve_proxy_pool_routes(
                 "gopay",
                 None,
@@ -172,7 +172,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
         self.assertEqual([item[1] for item in seen], ["ID", "JP"])
 
         seen.clear()
-        with patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose):
+        with patch("sms_tool.paypal.proxy.select_proxy_from_pool", side_effect=choose):
             manager._resolve_proxy_pool_routes(
                 "gopay",
                 None,
@@ -205,7 +205,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
             seen.append((list(pool), expected_country, stage))
             return pool[0], [{"ok": True}]
 
-        with patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose):
+        with patch("sms_tool.paypal.proxy.select_proxy_from_pool", side_effect=choose):
             with self.assertLogs("sms_tool.payment_link_manager", level="WARNING") as logs:
                 _proxy, values = manager._resolve_proxy_pool_routes(
                     "gopay",
@@ -229,7 +229,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
             seen.append((list(pool), expected_country, stage))
             return pool[0], [{"ok": True}]
 
-        with patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose):
+        with patch("sms_tool.paypal.proxy.select_proxy_from_pool", side_effect=choose):
             with self.assertLogs("sms_tool.payment_link_manager", level="WARNING"):
                 _proxy, values = manager._resolve_proxy_pool_routes(
                     "gopay",
@@ -249,7 +249,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
             return pool[0], [{"ok": True}]
 
         for approve in ("JP", "TR"):
-            with patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose):
+            with patch("sms_tool.paypal.proxy.select_proxy_from_pool", side_effect=choose):
                 _proxy, values = manager._resolve_proxy_pool_routes(
                     "gopay",
                     None,
@@ -261,7 +261,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
 
         # Blank approve country keeps the existing JP default without a
         # coercion write-back adding new keys to the kwargs.
-        with patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose):
+        with patch("sms_tool.paypal.proxy.select_proxy_from_pool", side_effect=choose):
             _proxy, values = manager._resolve_proxy_pool_routes(
                 "gopay",
                 None,
@@ -290,7 +290,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
             return pool[0], [{"ok": True}]
 
         with patch("sms_tool.pay_link.registry.CATALOG_METHODS", {"gopay": override}):
-            with patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose):
+            with patch("sms_tool.paypal.proxy.select_proxy_from_pool", side_effect=choose):
                 with self.assertLogs("sms_tool.payment_link_manager", level="WARNING"):
                     _proxy, values = manager._resolve_proxy_pool_routes(
                         "gopay",
@@ -321,7 +321,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
                 },
             },
         }
-        with patch("sms_tool.paypal_proxy.select_proxy_from_pool", side_effect=choose):
+        with patch("sms_tool.paypal.proxy.select_proxy_from_pool", side_effect=choose):
             _proxy, values = manager._resolve_proxy_pool_routes(
                 "grabpay",
                 None,

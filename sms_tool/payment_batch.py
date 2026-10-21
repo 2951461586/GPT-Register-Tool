@@ -499,7 +499,7 @@ def run_payment_batch(
         authorization_queue: dict[str, Any] = {}
         if method == "paypal" and last.get("ok") and last.get("url"):
             try:
-                from .paypal_authorization_queue import enqueue_paypal_ba_authorization
+                from .paypal.authorization_queue import enqueue_paypal_ba_authorization
 
                 authorization_queue = enqueue_paypal_ba_authorization(
                     email=email,

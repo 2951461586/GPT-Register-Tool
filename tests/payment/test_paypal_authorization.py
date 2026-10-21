@@ -1,10 +1,10 @@
-"""Unit tests for sms_tool.paypal_authorization (read-only normalization)."""
+"""Unit tests for sms_tool.paypal.authorization (read-only normalization)."""
 
 from __future__ import annotations
 
 import unittest
 
-from sms_tool.paypal_authorization import (
+from sms_tool.paypal.authorization import (
     PayPalAuthorizationContext,
     classify_authorization_outcome,
     parse_authorization_context,

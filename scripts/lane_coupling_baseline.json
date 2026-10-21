@@ -19,11 +19,11 @@
       "sms_tool.sentinel"
     ],
     [
-      "sms_tool.paypal_extract",
+      "sms_tool.paypal.extract",
       "sms_tool.phone_proxy"
     ],
     [
-      "sms_tool.paypal_extract",
+      "sms_tool.paypal.extract",
       "sms_tool.sentinel"
     ],
     [
@@ -31,7 +31,7 @@
       "sms_tool.phone_proxy"
     ],
     [
-      "sms_tool.paypal_proxy",
+      "sms_tool.paypal.proxy",
       "sms_tool.phone_proxy"
     ],
     [

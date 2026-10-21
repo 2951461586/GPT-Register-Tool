@@ -77,6 +77,15 @@ ALLOWED_EXACT = {
 
 ALLOWED_SUFFIXES = (".example.json",)
 
+# Explicitly allowed *directories*. `scripts/move_specs/` holds the migration specs
+# consumed by `module_move.py`, and each file is named after the package it moves
+# (`proxy.json`, `payment.json`, ...) -- so the family rule above matches them by
+# construction, exactly like `.gitignore`'s `proxy.json*` did before it was anchored.
+# They are schema-validated JSON (package / layer / module map) with no credential
+# surface, and the **content** gate below still runs on them: this lifts the name
+# check only, not the credential scan.
+ALLOWED_DIRS = ("scripts/move_specs/",)
+
 # ---------------------------------------------------------------- content gate
 
 # Detection is deliberately NARROW.  A generic "high entropy near a word that
@@ -240,6 +249,8 @@ def looks_like_secret(value: str) -> bool:
 
 
 def name_is_blocked(rel: str) -> bool:
+    if rel.startswith(ALLOWED_DIRS):
+        return False
     name = Path(rel).name
     if name in ALLOWED_EXACT:
         return False

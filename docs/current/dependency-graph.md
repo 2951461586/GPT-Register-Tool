@@ -23,7 +23,7 @@ the *gate* (per-pair, only-down); this file is the *view*.
 | Type-only (`if TYPE_CHECKING`) edges | 32 |
 | Strongly connected components (size > 1) | 0 |
 | Modules inside a cycle | 0 |
-| Mutually dependent directory pairs | 13 |
+| Mutually dependent directory pairs | 14 |
 
 ## Cycles
 
@@ -46,6 +46,7 @@ None.
 | `sms_tool` ↔ `sms_tool/store` |
 | `sms_tool` ↔ `sms_tool/upi_link` |
 | `sms_tool/mailbox` ↔ `sms_tool/providers` |
+| `sms_tool/paypal` ↔ `sms_tool/paypal_link` |
 
 ## Most imported modules
 

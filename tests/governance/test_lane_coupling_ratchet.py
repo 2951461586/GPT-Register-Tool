@@ -43,7 +43,7 @@ def _package(tmp_path: Path, files: dict[str, str]) -> Path:
     exist.  They are seeded empty unless the test supplies a body.
     """
     seeded = {
-        "paypal_proxy.py": "",
+        "paypal/proxy.py": "",
         "payment_contracts.py": "",
         "payment_catalog.py": "",
         "proxy/entry.py": "",
@@ -81,13 +81,13 @@ def tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
 
 
 def test_absolute_import_is_an_edge(tree):
-    current = tree({"registration_handlers.py": "from sms_tool import paypal_proxy\n"})
-    assert ["sms_tool.registration_handlers", "sms_tool.paypal_proxy"] in current["registration_to_payment"]
+    current = tree({"registration_handlers.py": "from sms_tool.paypal import proxy\n"})
+    assert ["sms_tool.registration_handlers", "sms_tool.paypal.proxy"] in current["registration_to_payment"]
 
 
 def test_relative_import_is_an_edge(tree):
-    current = tree({"registration_handlers.py": "from . import paypal_proxy\n"})
-    assert ["sms_tool.registration_handlers", "sms_tool.paypal_proxy"] in current["registration_to_payment"]
+    current = tree({"registration_handlers.py": "from .paypal import proxy\n"})
+    assert ["sms_tool.registration_handlers", "sms_tool.paypal.proxy"] in current["registration_to_payment"]
 
 
 def test_package_relative_import_resolves_against_the_package(tree):
@@ -95,10 +95,10 @@ def test_package_relative_import_resolves_against_the_package(tree):
     current = tree(
         {
             "registration_drivers/__init__.py": "",
-            "registration_drivers/flow.py": "from .. import paypal_proxy\n",
+            "registration_drivers/flow.py": "from ..paypal import proxy\n",
         }
     )
-    assert ["sms_tool.registration_drivers.flow", "sms_tool.paypal_proxy"] in current["registration_to_payment"]
+    assert ["sms_tool.registration_drivers.flow", "sms_tool.paypal.proxy"] in current["registration_to_payment"]
 
 
 def test_function_local_import_is_still_an_edge(tree):
@@ -106,18 +106,20 @@ def test_function_local_import_is_still_an_edge(tree):
     current = tree(
         {
             "registration_handlers.py": (
-                "def _geo(proxy):\n    from . import paypal_proxy\n    return paypal_proxy.infer_proxy_country(proxy)\n"
+                "def _geo(proxy):\n"
+                "    from .paypal.proxy import infer_proxy_country\n"
+                "    return infer_proxy_country(proxy)\n"
             )
         }
     )
-    assert ["sms_tool.registration_handlers", "sms_tool.paypal_proxy"] in current["registration_to_payment"]
+    assert ["sms_tool.registration_handlers", "sms_tool.paypal.proxy"] in current["registration_to_payment"]
 
 
 def test_vendor_and_pycache_are_excluded(tree):
     current = tree(
         {
-            "_vendor/vendored.py": "from .. import paypal_proxy\n",
-            "registration_handlers.py": "from . import paypal_proxy\n",
+            "_vendor/vendored.py": "from ..paypal import proxy\n",
+            "registration_handlers.py": "from .paypal import proxy\n",
         }
     )
     sources = {source for source, _target in current["registration_to_payment"]}
@@ -130,7 +132,7 @@ def test_vendor_and_pycache_are_excluded(tree):
 
 
 def test_registration_to_payment_is_a_violation(tree):
-    current = tree({"registration_handlers.py": "from . import paypal_proxy\n"})
+    current = tree({"registration_handlers.py": "from .paypal import proxy\n"})
     problems = lcr.violations(current, {"registration_to_payment": []})
     assert any("registration lane imports the payment lane" in p for p in problems)
 
@@ -224,9 +226,9 @@ def test_the_fix_is_pinned_in_both_directions():
     assertion fails; if either shell is deleted, importers break loudly.
     """
     found = lcr.edges()
-    assert ("sms_tool.registration_handlers", "sms_tool.paypal_proxy") not in found
-    assert ("sms_tool.registration_finalize", "sms_tool.paypal_proxy") not in found
-    assert ("sms_tool.registration_drivers.browser_flow.orchestrator", "sms_tool.paypal_proxy") not in found
+    assert ("sms_tool.registration_handlers", "sms_tool.paypal.proxy") not in found
+    assert ("sms_tool.registration_finalize", "sms_tool.paypal.proxy") not in found
+    assert ("sms_tool.registration_drivers.browser_flow.orchestrator", "sms_tool.paypal.proxy") not in found
     assert ("sms_tool.commands.registration", "sms_tool.payment_operation") not in found
     assert ("sms_tool.registration_handlers", "sms_tool.proxy.entry") in found
     assert ("sms_tool.commands.registration", "sms_tool.operation_journal") in found

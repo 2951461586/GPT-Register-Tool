@@ -1,6 +1,6 @@
 """PayPal checkout form field filling (business-aware page steps).
 
-Extracted from ``sms_tool.paypal_auto``. Each helper targets one semantic
+Extracted from ``sms_tool.paypal.auto``. Each helper targets one semantic
 field on the PayPal signup / checkout form (email, name, card, billing
 address, ...) and delegates the mechanical work to ``dom_fields``.
 """

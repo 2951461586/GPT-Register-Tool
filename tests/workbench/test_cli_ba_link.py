@@ -24,7 +24,7 @@ class GenerateBaLinkCliProxyTests(unittest.TestCase):
             return {"ok": True, "url": "https://payment.momo.vn/test"}
 
         def fake_probe(proxy, expected_country="", stage="proxy", timeout=12, **_kwargs):
-            from sms_tool.paypal_proxy import ProxyProbeResult
+            from sms_tool.paypal.proxy import ProxyProbeResult
 
             ok = "as.zooproxy.com" in proxy
             return ProxyProbeResult(
@@ -45,7 +45,7 @@ class GenerateBaLinkCliProxyTests(unittest.TestCase):
         ]
         with patch.object(cli, "CFG", cfg):
             with patch("sys.argv", argv):
-                with patch("sms_tool.paypal_proxy.probe_proxy", side_effect=fake_probe):
+                with patch("sms_tool.paypal.proxy.probe_proxy", side_effect=fake_probe):
                     with patch(
                         "sms_tool.payment_link_manager.generate_payment_link", side_effect=fake_generate_payment_link
                     ):
@@ -147,7 +147,7 @@ class GenerateBaLinkCliProxyTests(unittest.TestCase):
         }
 
         def fake_probe(proxy, expected_country="", stage="proxy", timeout=12, **_kwargs):
-            from sms_tool.paypal_proxy import ProxyProbeResult
+            from sms_tool.paypal.proxy import ProxyProbeResult
 
             return ProxyProbeResult(True, stage, expected_country, "203.0.113.10", expected_country, "Test")
 
@@ -164,7 +164,7 @@ class GenerateBaLinkCliProxyTests(unittest.TestCase):
         ]
         with patch.object(cli, "CFG", cfg):
             with patch("sys.argv", argv):
-                with patch("sms_tool.paypal_proxy.probe_proxy", side_effect=fake_probe):
+                with patch("sms_tool.paypal.proxy.probe_proxy", side_effect=fake_probe):
                     with patch("sys.stdout", stdout):
                         cli.main()
 

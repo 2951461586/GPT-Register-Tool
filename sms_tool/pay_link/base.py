@@ -24,7 +24,6 @@ from ..payment_operation import (
 from ..payment_routing import (
     PaymentRoutePlan,
     PaymentRoutePlanner,
-    coerce_approve_country as canonical_coerce_approve_country,
     parse_proxy_pool,
     payment_proxy_pools as canonical_payment_proxy_pools,
 )

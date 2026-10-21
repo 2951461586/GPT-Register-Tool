@@ -1,7 +1,7 @@
 """Behaviour tests for ``sms_tool/sms_utils.py`` (2026-09-03, round 7).
 
 102 lines, **zero test files import it** (AST audit). It was extracted from
-``paypal_auto.py`` purely to break a circular import, so it has no test of its
+``paypal/auto.py`` purely to break a circular import, so it has no test of its
 own even though both ``paypal_auto`` and ``paypal_reverse`` depend on it.
 
 Why it matters: ``_extract_sms_code`` decides **which digits in an SMS are the

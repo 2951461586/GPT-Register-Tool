@@ -6,6 +6,7 @@ leak duplicate instances. ``PayPalProxyState._save`` must also serialise the
 state-file replace across backend processes. These tests lock both behaviours.
 """
 
+import ast
 import sys
 import tempfile
 import threading
@@ -16,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from sms_tool import paypal_proxy as pp  # noqa: E402
+from sms_tool.paypal import proxy as pp  # noqa: E402
 
 
 class PayPalProxyStateCacheTests(unittest.TestCase):
@@ -75,6 +76,64 @@ class PayPalProxyStateCacheTests(unittest.TestCase):
         record = reloaded._load()["stages"]["checkout"].get(pp.proxy_key("http://user:pass@gw.example.com:9000"))
         self.assertIsNotNone(record)
         self.assertEqual(int(record["fail"]), 1)
+
+
+class PayPalProjectRootDepthTests(unittest.TestCase):
+    """``PROJECT_ROOT`` must stay at the repo root after the ``paypal/`` move.
+
+    ``sms_tool/paypal_proxy.py`` and ``sms_tool/paypal_extract.py`` used
+    ``Path(__file__).resolve().parent.parent``, which was the repo root while
+    they sat directly under ``sms_tool/``. The move into ``sms_tool/paypal/``
+    added a level without adding a ``.parent``, so the default
+    ``runtime/paypal_proxy_state.json`` started resolving to
+    ``sms_tool/runtime/paypal_proxy_state.json``: a shadow state file inside the
+    source tree, written by live payment runs and -- unlike ``/runtime/`` -- not
+    covered by ``.gitignore``. Nothing failed, because the reader and the writer
+    were wrong in the same direction. ``sms_tool/paypal_link/gen_link.py``
+    already carries the corrected depth plus a comment about this exact hazard;
+    these tests pin the same fact for the newer subpackage.
+    """
+
+    def test_proxy_project_root_is_the_repo_root(self):
+        self.assertEqual(Path(pp.PROJECT_ROOT).resolve(), ROOT)
+
+    def test_extract_project_root_is_the_repo_root(self):
+        from sms_tool.paypal import extract as px
+
+        self.assertEqual(Path(px.PROJECT_ROOT).resolve(), ROOT)
+
+    def test_default_state_file_lands_in_the_runtime_dir_not_the_package(self):
+        # No explicit ``state_file``: the default relative path is what live
+        # runs use, so this is the case that produced the stray tree.
+        state = pp._paypal_proxy_state({})
+        self.assertEqual(state.path, ROOT / "runtime" / "paypal_proxy_state.json")
+        self.assertNotEqual(state.path.parent.name, "sms_tool")
+
+    def test_no_module_in_the_paypal_package_points_project_root_at_the_package(self):
+        """A blanket guard: any moved module that kept the old depth goes red."""
+        package_dir = ROOT / "sms_tool" / "paypal"
+        offenders = []
+        for path in sorted(package_dir.glob("*.py")):
+            for node in ast.parse(path.read_text(encoding="utf-8")).body:
+                if not isinstance(node, ast.Assign):
+                    continue
+                targets = [t.id for t in node.targets if isinstance(t, ast.Name)]
+                if "PROJECT_ROOT" not in targets:
+                    continue
+                if not any(isinstance(sub, ast.Attribute) and sub.attr == "resolve" for sub in ast.walk(node.value)):
+                    continue
+                depth = sum(
+                    1 for sub in ast.walk(node.value) if isinstance(sub, ast.Attribute) and sub.attr == "parent"
+                )
+                offenders.append(f"{path.name}: PROJECT_ROOT uses {depth} .parent(s)")
+                if depth < 3:
+                    self.fail(
+                        f"{path.name}: PROJECT_ROOT resolves to the package dir, not the repo root "
+                        f"({depth} .parent(s); sms_tool/paypal/<module>.py needs 3)"
+                    )
+        self.assertEqual(
+            offenders, ["extract.py: PROJECT_ROOT uses 3 .parent(s)", "proxy.py: PROJECT_ROOT uses 3 .parent(s)"]
+        )
 
 
 if __name__ == "__main__":

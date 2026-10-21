@@ -1,0 +1,15 @@
+{
+  "package": "paypal",
+  "layer": 4,
+  "modules": {
+    "paypal_authorization": "authorization",
+    "paypal_authorization_queue": "authorization_queue",
+    "paypal_auto": "auto",
+    "paypal_extract": "extract",
+    "paypal_fingerprints": "fingerprints",
+    "paypal_protocol": "protocol",
+    "paypal_proxy": "proxy",
+    "paypal_reconciliation": "reconciliation",
+    "paypal_reverse": "reverse"
+  }
+}

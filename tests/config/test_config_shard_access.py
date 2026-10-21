@@ -196,7 +196,7 @@ class DeadConfigConstantsStayDead(unittest.TestCase):
     """``paypal_protocol.DEFAULT_CONFIG_PATH`` 是零引用死常量，删了不许复活。"""
 
     def test_paypal_protocol_has_no_config_path_constants(self):
-        path = PROJECT_ROOT / "sms_tool" / "paypal_protocol.py"
+        path = PROJECT_ROOT / "sms_tool" / "paypal/protocol.py"
         names = module_level_names(path)
         self.assertEqual(
             set(),

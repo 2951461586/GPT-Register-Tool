@@ -98,7 +98,7 @@ def test_uncurated_country_keeps_the_measured_timezone(monkeypatch):
     profile = pool.select(pool.names[0])
     assert profile is not None
 
-    monkeypatch.setattr("sms_tool.paypal_proxy.infer_proxy_country", lambda _proxy: "BR")
+    monkeypatch.setattr("sms_tool.paypal.proxy.infer_proxy_country", lambda _proxy: "BR")
     monkeypatch.setattr(
         pool,
         "_resolve_geo",
@@ -114,7 +114,7 @@ def test_curated_country_uses_the_curated_clock(monkeypatch):
     profile = pool.select(pool.names[0])
     assert profile is not None
 
-    monkeypatch.setattr("sms_tool.paypal_proxy.infer_proxy_country", lambda _proxy: "JP")
+    monkeypatch.setattr("sms_tool.paypal.proxy.infer_proxy_country", lambda _proxy: "JP")
     aligned = pool._with_geo(profile, "http://u:p@proxy.example:8080")
     assert aligned.country == "JP"
     assert aligned.timezone == "Asia/Tokyo"

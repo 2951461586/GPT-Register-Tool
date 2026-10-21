@@ -1,10 +1,10 @@
 # 方案：架构健康度整改（图谱可信度 → 分层门禁 → 环 → 根目录）— 2026-10-21
 
-> **状态（P2-5 落地后复核）**：**P0 全部落地，P1-1 落地，P1-2 落地，P2 的解环部分落地（SCC 5 → 0），P2-4（`proxy_*`）与 P2-5（`mailbox_*`）迁移已落地**；**P2-6…P2-8 三个模块族迁移与 P3-1 spec 图未开始**。落地结果回写在 §8，并已同步 `docs/architecture.md` / `docs/directory-map.md` / `docs/current/dependency-graph.md`。
+> **状态（P2-6 落地后复核）**：**P0 全部落地，P1-1 落地，P1-2 落地，P2 的解环部分落地（SCC 5 → 0），P2-4（`proxy_*`）/ P2-5（`mailbox_*`）/ P2-6（`paypal_*`）三簇迁移已落地**；**P2-7（`payment_*` 15）与 P2-8（`registration_*` 29）两簇迁移、P3-1 spec 图未开始**。落地结果回写在 §8，并已同步 `docs/architecture.md` / `docs/directory-map.md` / `docs/current/dependency-graph.md`。
 >
-> 未完成的项（`P2-6`…`P2-8` 三个模块族迁移、`P3-1` spec 图）**没有留下半成品**：工作区在每个提交点都是绿的，剩余项按原顺序可直接接续。
+> 未完成的项（`P2-7`/`P2-8` 两簇迁移、`P3-1` spec 图）**没有留下半成品**：工作区在每个提交点都是绿的，剩余项按原顺序可直接接续。
 >
-> 复核实测（全部为仓库现有门禁的原始输出）：`dependency_graph` 306 模块 / 971 条模块级边 / 274 条函数内边 / 32 条 type-only / **0 个 SCC** / 13 对互指；`import_layer_ratchet` 298 边 / 42 对 / 13 mutual / 44 minority / 209 delayed / 2 条 allow、0 个未认领模块；`root_module_ratchet` **132 冻结**（155 − 7 个 `proxy_*` − 15 个 `mailbox_*`）。
+> 复核实测（全部为仓库现有门禁的原始输出）：`dependency_graph` 306 模块 / 971 条模块级边 / 274 条函数内边 / 32 条 type-only / **0 个 SCC** / 14 对互指；`import_layer_ratchet` 315 边 / 45 对 / 14 mutual / 45 minority / 223 delayed / 2 条 allow、0 个未认领模块；`root_module_ratchet` **123 冻结**（155 − 7 个 `proxy_*` − 15 个 `mailbox_*` − 9 个 `paypal_*`）；`module_coverage` 309/309。
 >
 > **性质**：方案文档 + 落地记录。所有数字来自 2026-10-21 用 AST 重测（见 §1 的测量口径），不引用 pi-lens 的目录级数字。
 
@@ -269,12 +269,32 @@ unknown import symbol）。
 池写回断言因此失败（单跑该文件是绿的）。CI 的 `-n auto` 把两个文件分到不同 worker，一直没暴露。
 已用 monkeypatch 把 `_apply_rotation` / `_progress_dots` / `_wired` 一并登记，串行全量转绿。
 
-### 剩余未完成（P2-5 落地后复核）
+### P2-6（`paypal_*` 迁移）— 已落地
 
-`P2-6`…`P2-8`（`paypal_*` 9 / `payment_*` 15 / `registration_*` 29 迁入子包）与 `P3-1`（边界
-spec 图）未开始，`root_module_ratchet` 应从 132 继续降到约 79。它们的共同前置已经就绪：层清单
+9 个模块并入既有 `sms_tool/paypal/` 包（`paypal_extract`→`extract`、`paypal_proxy`→`proxy` 等），
+根目录 `paypal_*.py` 归零，`root_module_ratchet` 冻结数 132 → **123**，`module_coverage` 309/309，
+`dependency_graph` 仍为 **0 个 SCC**（互指目录对 13 → 14，新增 `sms_tool/paypal ↔ sms_tool/paypal_link`），
+全量 **6704 passed / 10 skipped**。
+
+移动本身由 `module_move.py` 一条命令完成。真正需要人工判断的是四类**门禁看不见、只会让门禁
+变装饰品**的 seam：
+
+| seam | 现象 | 修法 |
+| --- | --- | --- |
+| `PROJECT_ROOT` 的相对深度 | `paypal_proxy.py`/`paypal_extract.py` 里的 `Path(__file__).resolve().parent.parent` 在根目录时恰好是仓库根；搬进 `paypal/` 后少一层，默认的 `runtime/paypal_proxy_state.json` 被解析成 `sms_tool/runtime/paypal_proxy_state.json`。读端与写端**错在同一方向**，支付流程照常跑，只在源码树里养出一棵影子状态；`/runtime/` 那条 gitignore 也挡不住它 | 补第三层 `.parent`；`.gitignore` 增 `/sms_tool/runtime/` 兜底；`tests/payment/test_paypal_proxy_state_cache.py` 增 4 个用例钉住深度（含一条 AST 扫描：`sms_tool/paypal/*.py` 的 `PROJECT_ROOT` 少于 3 层即红） |
+| `delayed_import_ratchet.DOCUMENTED_CYCLES` | 键是**末段**，`paypal_proxy`→`paypal.proxy` 后末段变 `proxy`，两条边 `cycle` → `deferred`，`--update-baseline` 把这次降级直接吸收进基线（cycle 7 → 5） | 键改 `proxy`；删掉同一原因失效的 `("proxy_routing","account_identity")`；cycle 回到 **8**，并在该常量上写明「按末段做键挡不住**重命名**，只挡得住目录移动」 |
+| `test_lane_coupling_ratchet.py` 的合成树 | 种子已改成 `paypal/proxy.py`、断言已改成 `sms_tool.paypal.proxy`，但测试体内的 import 还是 `from . import paypal_proxy`。解析器只保留**真实存在**的一手模块，边被静默丢弃，6 个解析器用例全红 | 6 处 import 改成新布局（`from .paypal import proxy` / `from ..paypal import proxy`） |
+| `scripts/move_specs/proxy.json` | `.gitignore` 的家族规则 `proxy.json*` 没有前导 `/`，连 `scripts/move_specs/proxy.json`（P2-4 的迁移 spec，**仓库产物**）一起吞了，`git ls-files scripts/move_specs/` 只剩 `mailbox.json`，而 `module_move.py` 自己的 docstring 示例就指着它 | 家族规则按根锚定，并加 `!scripts/move_specs/*.json`（`payment.json` 与 P2-7 的 spec 同名，同一个陷阱） |
+
+另外 `docs/current/protocol-registration.md` 的符号行号锚点因头部注释位移，由
+`refresh_doc_symbol_lines.py --apply` 重生成（303 → 306）。
+
+### 剩余未完成（P2-6 落地后复核）
+
+`P2-7`（`payment_*` 15）与 `P2-8`（`registration_*` 29）两簇迁移、`P3-1`（边界 spec 图）未开始，
+`root_module_ratchet` 应从 123 继续降到约 **79**（123 − 15 − 29）。它们的共同前置已经就绪：层清单
 （P1-1）给出每个模块该去哪一层，生成式依赖图（P0-2）给出搬迁前后的边数对照，`module_move.py`
-把「移动 + 改写 + 门禁同步 + 基线重生成 + 门禁验证」做成一条命令，`scripts/move_specs/mailbox.json`
+把「移动 + 改写 + 门禁同步 + 基线重生成 + 门禁验证」做成一条命令，`scripts/move_specs/paypal.json`
 可作为下一个 spec 的模板。每簇仍应单独一个提交，并在同一提交里更新 `import_layer_baseline.json`、
 `directory_map_groups.json` 与 `docs/directory-map.md` 的 claim。
 
