@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import unittest
+from typing import Any
 from types import SimpleNamespace
 
 from sms_tool.registration import warmup as warmup
@@ -60,7 +61,11 @@ class WarmupToggleTests(unittest.TestCase):
         self.assertFalse(warmup.warmup_enabled({"registration": {"chatgpt_bootstrap": {"enabled": "false"}}}))
 
     def test_failed_registration_or_missing_token_is_skipped(self):
-        for kwargs in ({"success": False}, {"token": ""}):
+        # Annotated so ``**kwargs`` does not collapse to ``dict[str, bool | str]``:
+        # each case overrides a *different* keyword, and pyright unions the two
+        # literal shapes into one value type.
+        cases: tuple[dict[str, Any], ...] = ({"success": False}, {"token": ""})
+        for kwargs in cases:
             wf = _workflow(ON, **kwargs)
             result, _ = _run(wf)
             self.assertEqual(result["reason"], "no_session")

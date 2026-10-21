@@ -19,8 +19,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 GUARD = ROOT / "scripts" / "precommit_guard.py"
 
-sys.path.insert(0, str(ROOT / "scripts"))
-import precommit_guard  # noqa: E402  # type: ignore
+from scripts import precommit_guard
 
 
 def run_guard_on(tmp_path: Path, filename: str, content: str) -> list[tuple[str, int, str, int, str]]:

@@ -174,8 +174,13 @@ def _coerce_int(value: Any, default: int) -> int:
         return default
 
 
-def _paypal_config(config: Mapping[str, Any] | None) -> dict[str, Any]:
+def _paypal_config(config: object) -> dict[str, Any]:
     """Return PayPal config with the canonical protocol section applied.
+
+    ``config`` is ``object``, not ``Mapping | None``: the body normalises with
+    ``isinstance(_raw_source, Mapping)`` and ``tests/payment/test_paypal_gen_link_pure.py``
+    pins that ``None``, ``[]``, ``"x"`` and ``42`` all yield ``{}``. The narrower
+    annotation only made that test untypeable.
 
     The legacy top-level ``paypal`` block is still accepted, but it must not
     reintroduce stale stage-country values when a canonical protocol method
@@ -220,7 +225,7 @@ def _load_json(path: str) -> dict:
         return {}
 
 
-def parse_token(raw: str) -> str | None:
+def parse_token(raw: str | None) -> str | None:
     """解析 access token，支持 JWT 格式。"""
     token = str(raw or "").strip()
     if not token:
@@ -882,14 +887,21 @@ def generate_pp_link(
         }
 
 
-def _normalize_hosted_checkout_url(url: str) -> str:
+def _normalize_hosted_checkout_url(url: str | None) -> str:
+    """``url`` is ``str | None``: the body normalises with ``str(url or "")`` and
+    the tests pin the blank/None cases, so the narrower annotation was the only
+    thing rejecting them."""
     value = str(url or "").strip()
     if value:
         return value.replace("checkout.stripe.com", "pay.openai.com")
     return value
 
 
-def _canonical_checkout_long_url(cs_id: str) -> str:
+def _canonical_checkout_long_url(cs_id: str | None) -> str:
+    """``cs_id`` is ``str | None``: the body normalises with ``str(cs_id or "")``
+    and ``tests/payment/test_paypal_gen_link_pure.py`` pins that ``""``, ``"   "``
+    and ``None`` all yield ``""``. The narrower ``str`` annotation only made those
+    fifteen call sites untypeable."""
     cs_id = str(cs_id or "").strip()
     return f"{endpoints.OPENAI_PAY_BASE}/c/pay/{cs_id}" if cs_id else ""
 
@@ -964,7 +976,7 @@ def _is_chatgpt_checkout_link_generation_type(value: str) -> bool:
     return value in {"chatgpt_checkout_link", "checkout_link", "short_checkout", "chatgpt_short_link"}
 
 
-def _chatgpt_checkout_url(processor_entity: str, cs_id: str) -> str:
+def _chatgpt_checkout_url(processor_entity: str | None, cs_id: str | None) -> str:
     processor_entity = str(processor_entity or "").strip()
     cs_id = str(cs_id or "").strip()
     return endpoints.chatgpt_checkout_page(processor_entity, cs_id) if processor_entity and cs_id else ""

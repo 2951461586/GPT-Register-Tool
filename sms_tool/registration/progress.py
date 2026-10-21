@@ -203,8 +203,12 @@ class RegistrationProgress:
         proxy_audit = safe_proxy_audit((result or {}).get("proxy_audit"))
         fingerprint_geo_audit = safe_fingerprint_geo_audit((result or {}).get("fingerprint_geo_audit"))
         pool_index = -1
+        _raw_pool_index = proxy_audit.get("pool_index")
         try:
-            pool_index = int(proxy_audit.get("pool_index"))
+            # ``get`` is typed ``Any | None``; ``int(None)`` raised TypeError and
+            # hit the handler, so short-circuiting to -1 is behaviour-preserving
+            # and states the ``ConvertibleToInt`` contract explicitly.
+            pool_index = -1 if _raw_pool_index is None else int(_raw_pool_index)
         except (TypeError, ValueError):
             pool_index = -1
         row = _sanitize(

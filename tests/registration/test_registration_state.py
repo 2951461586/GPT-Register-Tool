@@ -1,4 +1,5 @@
 import unittest
+from typing import Any, cast
 import time
 import ast
 from contextlib import nullcontext
@@ -116,7 +117,9 @@ class RegistrationStateTests(unittest.TestCase):
         workflow = RegistrationEmailWorkflow(
             RegistrationStateMachine(lambda *_: None),
             config={"registration": {"stage_timeouts": {"email_otp_wait": 45}}},
-            operations=object(),
+            # Only ``_otp_poll_timeout()`` is exercised here; the workflow never
+            # reaches an operation, so the placeholder is deliberately not one.
+            operations=cast("Any", object()),
         )
         workflow.runtime.email_cfg = {"otp_timeout": 300}
         # The blocking poll receives the smaller of its own timeout and the
@@ -127,7 +130,9 @@ class RegistrationStateTests(unittest.TestCase):
         workflow = RegistrationEmailWorkflow(
             RegistrationStateMachine(lambda *_: None),
             config={"registration": {}},
-            operations=object(),
+            # Only ``_otp_poll_timeout()`` is exercised here; the workflow never
+            # reaches an operation, so the placeholder is deliberately not one.
+            operations=cast("Any", object()),
         )
         workflow.runtime.email_cfg = {"otp_timeout": 210}
         self.assertEqual(workflow._otp_poll_timeout(), 210)

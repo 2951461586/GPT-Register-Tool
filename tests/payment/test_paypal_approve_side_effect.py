@@ -7,6 +7,7 @@ with it (configured promo campaign, egress-matched Stripe fingerprint).
 """
 
 import unittest
+from typing import Any, cast
 from unittest.mock import patch
 
 from sms_tool import gen_pp_link
@@ -285,7 +286,12 @@ class CheckoutContractReuseTests(unittest.TestCase):
                     },
                 )
 
-        extractor._stripe_session = FakeSession()
+        # ``_stripe_session`` is typed ``curl_cffi.requests.Session | None`` and
+        # ``FakeSession`` is a local duck-typed double that only implements
+        # ``post``. pyright cannot accept a structural match for a concrete
+        # class, so the double is stated explicitly rather than the rule being
+        # silenced.
+        extractor._stripe_session = cast("Any", FakeSession())
         extractor._stripe_init("cs_live_X")
 
         self.assertEqual(seen["data"]["browser_timezone"], "Asia/Tokyo")

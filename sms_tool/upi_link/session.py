@@ -486,7 +486,7 @@ def _upi_runtime_version() -> str:
     return _env_str("UPI_STRIPE_RUNTIME_VERSION", "6f8494a281")
 
 
-def _normalize_hosted_checkout_url(url: str) -> str:
+def _normalize_hosted_checkout_url(url: str | None) -> str:
     value = str(url or "").strip()
     if value:
         return value.replace("checkout.stripe.com", "pay.openai.com")

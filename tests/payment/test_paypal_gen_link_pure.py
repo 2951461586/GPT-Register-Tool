@@ -23,6 +23,7 @@ import json
 import os
 import tempfile
 import unittest
+from typing import Any
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -373,7 +374,12 @@ class LoadJsonTests(unittest.TestCase):
 
 
 def _probe(**kw) -> ProxyProbeResult:
-    defaults = dict(ok=True, stage="checkout", expected_country="JP", ip="1.2.3.4", country_code="JP", country="Japan")
+    # Annotated so ``defaults.update(kw)`` and ``**defaults`` stay homogeneous:
+    # without it pyright infers ``dict[str, bool | str]`` from the literal and
+    # rejects the per-case overrides.
+    defaults: dict[str, Any] = dict(
+        ok=True, stage="checkout", expected_country="JP", ip="1.2.3.4", country_code="JP", country="Japan"
+    )
     defaults.update(kw)
     return ProxyProbeResult(**defaults)
 

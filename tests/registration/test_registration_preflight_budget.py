@@ -34,7 +34,13 @@ def _config(**registration):
 
 
 def _run(pool, probe, config=None, monkeypatch=None):
-    """Drive the real preflight with a stubbed network probe."""
+    """Drive the real preflight with a stubbed network probe.
+
+    ``monkeypatch`` has a ``None`` default only so the signature stays readable;
+    every caller passes one, and the assert is what tells the type checker so
+    (``None.setattr`` is the alternative it otherwise reports).
+    """
+    assert monkeypatch is not None
     monkeypatch.setattr(cli, "CFG", config or _config())
     with (
         patch.object(cli, "_proxy_pool_values", return_value=pool),
