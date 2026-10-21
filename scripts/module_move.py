@@ -277,13 +277,22 @@ def rewrite_python_file(path: pathlib.Path, spec: Spec) -> bool:
 def rewrite_names_and_paths(spec: Spec) -> list[str]:
     """Absolute dotted names, bare fallback imports and file-path strings."""
     dotted = [(re.compile(r"\b" + re.escape(old) + r"\b"), new) for old, new in spec.moves.items()]
+    # The bare fallback imports (``from paypal_extract import ...`` inside a
+    # ``try/except ImportError`` kept for direct-script execution) are spelled
+    # with the *short* module name, which the dotted pass cannot see. They are
+    # rewritten to the absolute subpackage path: the short module no longer
+    # exists, so leaving them alone leaves a guaranteed ImportError -- and
+    # ``test_dependency_guard`` reads the name as an undeclared distribution.
     bare = [
-        (re.compile(r"^(\s*)from " + re.escape(old) + r" import ", re.M), rf"\1from {new} import ")
-        for old, new in spec.moves.items()
+        (
+            re.compile(r"^(\s*)from " + re.escape(old) + r" import ", re.M),
+            rf"\1from sms_tool.{spec.package}.{new} import ",
+        )
+        for old, new in spec.modules.items()
     ]
     bare_import = [
-        (re.compile(r"^(\s*)import " + re.escape(old) + r"$", re.M), rf"\1import {new}")
-        for old, new in spec.moves.items()
+        (re.compile(r"^(\s*)import " + re.escape(old) + r"$", re.M), rf"\1import sms_tool.{spec.package}.{new}")
+        for old, new in spec.modules.items()
     ]
     backslash = chr(92)
     separator = "[/" + backslash + backslash + "]"
@@ -407,16 +416,29 @@ def sync_directory_map(spec: Spec) -> None:
 
 
 def sync_pinned_totals() -> None:
-    """Rewrite the pinned totals in test_import_layer_ratchet from the live tree."""
+    """Rewrite the pinned totals in ``test_summary_facts_are_pinned`` from the live tree.
+
+    Scoped to that one function on purpose: the file also pins the totals of a
+    seven-module *fixture* tree (``test_exact_fixture_totals``), and an
+    unanchored regex silently replaced those with the production numbers -- the
+    test then compared a fixture against the real tree and could never pass.
+    """
     sys.path.insert(0, str(ROOT / "scripts"))
     import import_layer_ratchet as ilr  # noqa: PLC0415
 
     totals = ilr.analyze(ROOT).totals()
     path = ROOT / "tests" / "governance" / "test_import_layer_ratchet.py"
     text = path.read_text(encoding="utf-8")
+    anchor = "def test_summary_facts_are_pinned"
+    start = text.find(anchor)
+    if start < 0:
+        raise SystemExit(f"{anchor} not found; refusing to guess which numbers to pin")
+    end = text.find("\ndef ", start + len(anchor))
+    end = len(text) if end < 0 else end
+    body = text[start:end]
     for key in ("total_module_edges", "ordered_pairs", "mutual_pairs", "minority_edges", "delayed_cross_dir_edges"):
-        text = re.sub(rf'("{key}": )\d+', rf"\g<1>{totals[key]}", text)
-    path.write_text(text, encoding="utf-8", newline="\n")
+        body = re.sub(rf'("{key}": )\d+', rf"\g<1>{totals[key]}", body)
+    path.write_text(text[:start] + body + text[end:], encoding="utf-8", newline="\n")
 
 
 # --------------------------------------------------------------------------
