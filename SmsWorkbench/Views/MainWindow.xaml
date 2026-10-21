@@ -440,7 +440,7 @@
                 <ColumnDefinition Width="Auto"/>
               </Grid.ColumnDefinitions>
               <Border Style="{StaticResource SidebarBrandLogoStyle}">
-                <Image Source="Assets/app-icon.ico" Width="22" Height="22" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                <Image Source="/Assets/app-icon.ico" Width="22" Height="22" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
               </Border>
               <StackPanel Grid.Column="1" Style="{StaticResource SidebarBrandTextPanelStyle}" Margin="10,0,8,0">
                 <TextBlock x:Name="SidebarBrandTitle"
