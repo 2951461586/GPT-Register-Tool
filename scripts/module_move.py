@@ -181,7 +181,13 @@ def rewrite_relative(source: str, old_module: str, new_module: str, is_package: 
             text = source[start:end]
             edits.append((start, end, text.replace(prefix, "from " + "." * level + module, 1)))
             continue
-        # `from . import a, b as c` -- each alias may name a module of its own.
+        # `from . import a, b as c` -- each alias may name a module of its own,
+        # and the *level* has to be recomputed even when nothing in the list
+        # moved: the file itself is one directory deeper now. Missing that is
+        # how ``from . import endpoints`` (``sms_tool.endpoints`` before the
+        # move) started resolving to ``sms_tool.paypal.endpoints``.
+        target = resolve_relative(old_module, is_package, node.level, None)
+        level, module = relative_from(new_module, is_package, target)
         kept: list[str] = []
         extra: list[str] = []
         for alias in node.names:
@@ -191,16 +197,18 @@ def rewrite_relative(source: str, old_module: str, new_module: str, is_package: 
                 kept.append(alias.name + (f" as {alias.asname}" if alias.asname else ""))
                 continue
             parent, leaf = moves[child].rsplit(".", 1)
-            level, parent_rel = relative_from(new_module, is_package, parent)
-            extra.append(f"from {'.' * level}{parent_rel} import {leaf} as {binding}")
-        if not extra:
-            continue
+            child_level, parent_rel = relative_from(new_module, is_package, parent)
+            extra.append(f"from {'.' * child_level}{parent_rel} import {leaf} as {binding}")
         statements: list[str] = []
         indent = " " * node.col_offset
         if kept:
-            statements.append("from " + "." * node.level + " import " + ", ".join(kept))
+            statements.append(f"from {'.' * level}{module} import " + ", ".join(kept))
         statements.extend(extra)
-        edits.append((start, end, ("\n" + indent).join(statements)))
+        if not statements:
+            continue
+        replacement = ("\n" + indent).join(statements)
+        if replacement != source[start:end]:
+            edits.append((start, end, replacement))
     for start, end, replacement in sorted(edits, reverse=True):
         source = source[:start] + replacement + source[end:]
     return source
