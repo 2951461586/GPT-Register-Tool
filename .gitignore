@@ -45,6 +45,11 @@ _*.py
 # upi_link/__init__.py imports this pure extractor; without the exception the
 # package would commit without it and fail at import time.
 !/sms_tool/upi_link/_extract.py
+# The config split (2026-10-21) put module-level state in ``config/_state.py``;
+# the rule above silently dropped it from that commit, so the committed tree
+# could not import ``sms_tool.config`` at all. Caught 2026-10-22 by diffing the
+# tracked module list against the working tree.
+!/sms_tool/config/_state.py
 build_log.txt
 *~
 *.bak
