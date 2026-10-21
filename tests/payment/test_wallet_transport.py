@@ -1,4 +1,5 @@
 import unittest
+from collections.abc import Mapping
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -120,7 +121,7 @@ class WalletTransportTests(unittest.TestCase):
         ]
         with (
             patch("sms_tool.gen_pp_link._checkout_post", side_effect=checkout_post),
-            patch("sms_tool.paypal_proxy.rotate_proxy_session", side_effect=rotated) as rotate,
+            patch("sms_tool.paypal.proxy.rotate_proxy_session", side_effect=rotated) as rotate,
         ):
             transport.approve_checkout(request("approve", attempt=1, transport_context=context))
             transport.approve_checkout(request("approve", attempt=2, transport_context=context))
@@ -144,7 +145,7 @@ class WalletTransportTests(unittest.TestCase):
             "http://poll-session-two@provider.test:80",
         ]
         with (
-            patch("sms_tool.paypal_proxy.rotate_proxy_session", side_effect=rotated),
+            patch("sms_tool.paypal.proxy.rotate_proxy_session", side_effect=rotated),
             patch("sms_tool.gen_pp_link._new_session", side_effect=sessions) as new_session,
         ):
             transport.poll_payment(request("poll", attempt=1, transport_context=context))
@@ -191,6 +192,7 @@ class WalletTransportTests(unittest.TestCase):
                     redirect_url="https://pm-redirects.stripe.com/authorize/fixture",
                 )
             )
+        assert isinstance(result, Mapping)
         self.assertEqual(result["final_url"], "https://app.midtrans.com/snap/v4/redirection/fixture")
         self.assertTrue(all(call[2]["allow_redirects"] is False for call in session.calls))
 

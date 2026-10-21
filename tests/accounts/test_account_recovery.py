@@ -1298,7 +1298,7 @@ def test_recovery_proxy_uses_registration_country_and_pool():
             clear=False,
         ),
         patch(
-            "sms_tool.paypal_proxy.select_proxy_from_pool",
+            "sms_tool.paypal.proxy.select_proxy_from_pool",
             return_value=("http://selected.example:8080", [{"ok": True, "expected_country": "JP"}]),
         ) as select,
     ):

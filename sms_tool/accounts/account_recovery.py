@@ -126,7 +126,7 @@ def relogin_refresh_token_account(
 
 
 def relogin_chatgpt_email_account(
-    account: dict[str, Any],
+    account: object,
     proxy: str | None = None,
     timeout: int = 300,
     *,
@@ -768,7 +768,7 @@ def _select_recovery_proxy(account: dict[str, Any], proxy: str | None) -> tuple[
     if not candidates:
         return proxy, []
     try:
-        from ..paypal_proxy import select_proxy_from_pool
+        from ..paypal.proxy import select_proxy_from_pool
 
         selected, attempts = select_proxy_from_pool(candidates, country, "account_recovery")
         return (selected or proxy or str(candidates[0])), attempts
