@@ -18,7 +18,6 @@
   "sms_tool/commands/one_click.py": 9,
   "sms_tool/commands/payment.py": 5,
   "sms_tool/commands/payment_links.py": 30,
-  "sms_tool/config.py": 1,
   "sms_tool/desktop_ipc.py": 3,
   "sms_tool/diagnostics.py": 1,
   "sms_tool/doctor.py": 5,
@@ -55,5 +54,6 @@
   "sms_tool/store/accounts.py": 1,
   "sms_tool/store/normalize.py": 1,
   "sms_tool/upi_link/env.py": 1,
-  "sms_tool/utils.py": 8
+  "sms_tool/utils.py": 8,
+  "sms_tool/config/runtime.py": 1
 }

@@ -23,7 +23,6 @@
     "codex_oauth.py",
     "codex_phone.py",
     "codex_sentinel.py",
-    "config.py",
     "config_usage.py",
     "cpa_import.py",
     "cross_process_gate.py",

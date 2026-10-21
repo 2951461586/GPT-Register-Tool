@@ -22,6 +22,7 @@
     "accounts": 3,
     "cli_parsers": 2,
     "commands": 2,
+    "config": 5,
     "proxy": 5
   },
   "module_overrides": {
@@ -52,7 +53,6 @@
     "codex_oauth.py": 3,
     "codex_phone.py": 3,
     "codex_sentinel.py": 4,
-    "config.py": 5,
     "config_usage.py": 2,
     "cpa_import.py": 3,
     "cross_process_gate.py": 5,

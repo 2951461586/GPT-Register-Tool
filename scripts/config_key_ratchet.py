@@ -49,7 +49,7 @@ def _section_keys(path: Path) -> dict[str, set]:
 
 def _validator_keys() -> dict[str, set]:
     """Keys validate_config references under each watched section."""
-    src = (ROOT / "sms_tool" / "config.py").read_text(encoding="utf-8")
+    src = (ROOT / "sms_tool" / "config" / "schema.py").read_text(encoding="utf-8")
     i = src.find("def validate_config")
     j = src.find("\ndef ", i + 5)
     body = src[i:j]

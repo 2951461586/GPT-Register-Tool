@@ -1,8 +1,8 @@
 # 方案：架构健康度整改（图谱可信度 → 分层门禁 → 环 → 根目录）— 2026-10-21
 
-> **状态（2026-10-22 复核）**：**P0 全部落地，P1-1 落地，P1-2 延后，P2 的解环部分落地（SCC 5 → 0），P2-4（`proxy_*` 迁移）已落地**；**P2-5…P2-8 四个模块族迁移与 P3-1 spec 图未开始**。落地结果回写在 §8，并已同步 `docs/architecture.md` / `docs/directory-map.md` / `docs/current/dependency-graph.md`。
+> **状态（2026-10-22 复核）**：**P0 全部落地，P1-1 落地，P1-2 落地，P2 的解环部分落地（SCC 5 → 0），P2-4（`proxy_*` 迁移）已落地**；**P2-5…P2-8 四个模块族迁移与 P3-1 spec 图未开始**。落地结果回写在 §8，并已同步 `docs/architecture.md` / `docs/directory-map.md` / `docs/current/dependency-graph.md`。
 >
-> 未完成的项（`P1-2` config 拆包、`P2-5`…`P2-8` 四个模块族迁移、`P3-1` spec 图）**没有留下半成品**：工作区在每个提交点都是绿的，剩余项按原顺序可直接接续。
+> 未完成的项（`P2-5`…`P2-8` 四个模块族迁移、`P3-1` spec 图）**没有留下半成品**：工作区在每个提交点都是绿的，剩余项按原顺序可直接接续。
 >
 > 2026-10-22 复核实测（全部为仓库现有门禁的原始输出）：`dependency_graph` 300 模块 / 957 条模块级边 / 274 条函数内边 / 31 条 type-only / **0 个 SCC** / 11 对互指；`import_layer_ratchet` 281 边 / 35 对 / 11 mutual / 45 minority / 205 delayed / 2 条 allow、0 个未认领模块；`root_module_ratchet` **148 冻结**（155 − 7 个 `proxy_*`）。
 >
@@ -150,19 +150,37 @@ python scripts/format_guard.py
 allow 只有 2 条，各带 reason + owner。落地时先按「1 = 最内层」编号，发现与 `architecture.md`
 的「outermost first」相反，整体翻转为 1 = 最外层，判据随之从 `source >= target` 改为 `source <= target`。
 
-### P1-2（config 拆包）— 延后
+### P1-2（config 拆包）— 已落地
 
-原计划把 1042 行的 `config.py` 拆成 `loader/schema/runtime/legacy`。调研后判断这一步的风险与收益不成比例：
+`config.py`（1104 行）拆成 `sms_tool/config/`：`_state.py`（30）· `loader.py`（286）· `schema.py`（637）·
+`runtime.py`（174）· `legacy.py`（58）· `__init__.py`（71，只做 re-export）。**73 个 import 方一行未改**。
 
-- 收益只是文件内可读性 —— 73 个 import 方仍然指向 `sms_tool.config`，**枢纽依赖者数量一个都不减**。
-- 代价是一组协调改动：`_CONFIG_DIR` / `_CURRENT_CONFIG` / `_write_shards` 是**测试直接 patch 的模块级状态**
-  （5 个测试文件、31 处引用），拆包后 `patch.object(config, "_CONFIG_DIR", …)` 不再影响子模块；
-  另有 3 个门禁按路径硬编码 `sms_tool/config.py`（`config_key_ratchet`、`bare_print_baseline`、
-  `delayed_import_baseline`），加一处 `docs/current/*.md` 的行号锚点。
-- 需要单独一轮「patch 兼容 + 门禁迁移」，不适合与本轮的结构性改动同批落地。
+方案里的实施顺序（「先把模块级状态收进 `config/_state.py`，再搬函数」）**做不到**：
+`sms_tool/config.py` 与 `sms_tool/config/` 在文件系统上不能共存，中间态无法提交。实际是一笔提交，
+分界线换成了「先定接口、再搬代码」。
 
-保留为后续项；若要做，正确顺序是先把模块级状态收进一个 `config/_state.py` 并让测试改 patch 目标，
-再搬函数。
+落地时真正花时间的不是搬函数，而是**四处 seam 会随拆分静默失效**——它们都不会报错，只会让测试
+测到真配置：
+
+| seam | 拆前 | 拆后必须改成 | 为什么 |
+|---|---|---|---|
+| 配置目录 | `patch.object(config, "_CONFIG_DIR", …)` | `patch.object(config_state, "CONFIG_DIR", …)` | 子模块若 `from ._state import CONFIG_DIR` 会把值在导入时定死 |
+| 包目录 | `config.__file__.parent` | `_state.PACKAGE_DIR` | `runtime.py` 的 `.parent` 是 `sms_tool/config/`，内置 fallback 会指错地方 |
+| 分片模板 | `patch.object(config, "example_config_candidates")` | `patch.object(config.loader, "example_config_candidates")` | 被调函数在 `loader` 的命名空间里解析 |
+| 冻结/视图 | `config._freeze` / `config.CFG` | 无需改（`__init__` re-export） | 但 re-export 必须是真身而非副本 |
+
+**第一个环是新拆出来的**：`loader`/`runtime` 里写 `from . import _state`，解析器把这条边算到**包**上
+（这是对的——它确实先 `import` 包），而 `__init__` 又 import 每个子模块，于是 4 模块环。改成
+`from ._state import config_dir`（读函数，函数读模块全局）后 **SCC 1 → 0**，seam 仍然有效。
+
+门禁同步六处：`config_key_ratchet`（读 `config/schema.py`）· `bare_print_baseline`（print 随
+`load_runtime_config` 进 `runtime.py`）· `delayed_import_baseline` + `delayed_import_reasons`（三条
+函数内导入换了文件名，理由要重写）· `lane_coupling_baseline`（payment 读取方改成
+`sms_tool.config.schema`，但 registration 扇出仍记包名）· `layer_manifest`（包层号 5 + 删根条目）·
+`directory_map_groups` + `docs/directory-map.md` + 一处 `docs/current` 行号锚点。
+
+实测：`module coverage 307/307` · `dependency graph 0 cycles` · `root_module_ratchet` 147 ·
+全量 **6700 passed**。
 
 ### P2-4（`proxy_*` 迁移）— 已落地（`1b34697`）
 
@@ -221,7 +239,7 @@ allow 只有 2 条，各带 reason + owner。落地时先按「1 = 最内层」�
 
 ### 剩余未完成（2026-10-22 复核）
 
-`P1-2`（config 拆包，见 §8 的延后理由）、`P2-5`…`P2-8`（`mailbox_*` / `paypal_*` / `payment_*` /
+`P2-5`…`P2-8`（`mailbox_*` / `paypal_*` / `payment_*` /
 `registration_*` 迁入子包）与 `P3-1`（边界 spec 图）未开始。它们的共同前置已经就绪：层清单（P1-1）
 给出每个模块该去哪一层，生成式依赖图（P0-2）给出搬迁前后的边数对照，`module_move.py` 把
 「移动 + 改写 + 门禁同步 + 基线重生成 + 门禁验证」做成一条命令，`scripts/move_specs/mailbox.json`

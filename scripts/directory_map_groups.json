@@ -8,7 +8,7 @@
     "Entrypoints/config": [
       "sms_tool/__main__.py",
       "sms_tool/cli.py",
-      "sms_tool/config.py",
+      "sms_tool/config/*.py",
       "sms_tool/paths.py",
       "sms_tool/commands/helpers.py"
     ],

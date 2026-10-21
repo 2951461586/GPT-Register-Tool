@@ -1,5 +1,13 @@
 {
   "edges": {
+    "sms_tool/config/schema.py -> sms_tool.payment_catalog": {
+      "reason": "deferred",
+      "why": "validate_config imports the catalog inside the function so sms_tool.config (imported by ~64 modules) does not pull the payment lane in at module scope"
+    },
+    "sms_tool/config/schema.py -> sms_tool.payment_flow": {
+      "reason": "deferred",
+      "why": "validate_config imports the stage vocabulary inside the function for the same reason as payment_catalog: the config hub must stay above the payment lane at import time"
+    },
     "sms_tool/providers/ports.py -> sms_tool.desktop_ipc": {
       "reason": "deferred",
       "why": "provider port wires lazily so provider adapters never import the IPC channel at module scope (Rule 3)"

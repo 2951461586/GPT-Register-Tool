@@ -71,7 +71,7 @@
     "sms_tool.commands.helpers",
     "sms_tool.commands.payment",
     "sms_tool.commands.payment_links",
-    "sms_tool.config",
+    "sms_tool.config.schema",
     "sms_tool.desktop_read",
     "sms_tool.fingerprint_pool",
     "sms_tool.operation_journal",

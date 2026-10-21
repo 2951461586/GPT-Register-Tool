@@ -9,15 +9,15 @@ signal that made the provider-key cross-write hard to attribute.
 """
 
 import os
-from pathlib import Path
 from unittest.mock import patch
 
 from sms_tool import config
+from sms_tool.config import _state as config_state
 from sms_tool.kernel import paths
 
 
 def test_write_shards_creates_all_three_shards(tmp_path):
-    with patch.object(config, "_CONFIG_DIR", tmp_path):
+    with patch.object(config_state, "CONFIG_DIR", tmp_path):
         shards = {
             "proxy": {"proxy": {"http": "http://127.0.0.1:7897"}},
             "runtime": {"timeouts": {"request": 30}},
@@ -33,7 +33,7 @@ def test_write_shards_creates_all_three_shards(tmp_path):
 
 
 def test_write_shards_keeps_a_backup_of_previous_content(tmp_path):
-    with patch.object(config, "_CONFIG_DIR", tmp_path):
+    with patch.object(config_state, "CONFIG_DIR", tmp_path):
         shards = {"proxy": {"proxy": {"http": "A"}}, "runtime": {}, "payment": {}}
         config._write_shards(shards, tmp_path)
         first = (tmp_path / "proxy.json").read_text(encoding="utf-8")
@@ -49,7 +49,7 @@ def test_write_shards_keeps_a_backup_of_previous_content(tmp_path):
 
 def test_write_shards_keeps_old_file_when_replace_fails(tmp_path):
     """A failed rename must never truncate the live shard."""
-    with patch.object(config, "_CONFIG_DIR", tmp_path):
+    with patch.object(config_state, "CONFIG_DIR", tmp_path):
         shards = {"proxy": {"proxy": {"http": "A"}}, "runtime": {}, "payment": {}}
         config._write_shards(shards, tmp_path)
         old = (tmp_path / "proxy.json").read_text(encoding="utf-8")
@@ -81,7 +81,7 @@ def test_write_shards_skips_shards_whose_content_did_not_change(tmp_path):
     three timestamps -- and overwrote the other shards' ``.bak`` with content
     that had not changed, discarding the last real backup.
     """
-    with patch.object(config, "_CONFIG_DIR", tmp_path):
+    with patch.object(config_state, "CONFIG_DIR", tmp_path):
         shards = {
             "proxy": {"proxy": {"http": "A"}},
             "runtime": {"timeouts": {"request": 30}},
@@ -112,7 +112,7 @@ def test_write_shards_skips_shards_whose_content_did_not_change(tmp_path):
 def test_write_shards_returns_only_what_it_wrote(tmp_path):
     """The return value is the only signal separating a working trim from a broken
     one: "all three files exist" is true either way."""
-    with patch.object(config, "_CONFIG_DIR", tmp_path):
+    with patch.object(config_state, "CONFIG_DIR", tmp_path):
         shards = {"proxy": {}, "runtime": {}, "payment": {}}
         assert sorted(config._write_shards(shards, tmp_path)) == [
             "payment.json",
@@ -123,7 +123,7 @@ def test_write_shards_returns_only_what_it_wrote(tmp_path):
 
 
 def test_load_merged_config_after_atomic_write_reads_back(tmp_path):
-    with patch.object(config, "_CONFIG_DIR", tmp_path):
+    with patch.object(config_state, "CONFIG_DIR", tmp_path):
         shards = {
             "proxy": {"proxy": {"http": "http://127.0.0.1:7897"}},
             "runtime": {"timeouts": {"request": 30}},
@@ -137,9 +137,9 @@ def test_load_merged_config_after_atomic_write_reads_back(tmp_path):
 
 
 def test_default_config_dir_is_the_resolved_credential_directory():
-    package_dir = Path(config.__file__).resolve().parent
+    package_dir = config_state.PACKAGE_DIR
     root = config.default_config_dir()
-    assert root == config._CONFIG_DIR
+    assert root == config_state.CONFIG_DIR
     assert root == paths.config_dir()
     # Credentials must never default to a location inside the git checkout.
     assert root != package_dir
@@ -156,10 +156,10 @@ def test_default_config_path_parent_degenerates_once_the_legacy_file_is_gone(tmp
     """
     package = tmp_path / "sms_tool"
     package.mkdir()
-    monkeypatch.setattr(config, "__file__", str(package / "config.py"))
-    monkeypatch.setattr(config, "_CONFIG_DIR", tmp_path / "empty_config_dir")
+    monkeypatch.setattr(config_state, "PACKAGE_DIR", package)
+    monkeypatch.setattr(config_state, "CONFIG_DIR", tmp_path / "empty_config_dir")
 
-    resolved_package = Path(config.__file__).resolve().parent
+    resolved_package = config_state.PACKAGE_DIR
     assert config.default_config_path() == resolved_package / "config.json"
     assert not config.default_config_path().is_file()
     assert config.default_config_path().parent == resolved_package

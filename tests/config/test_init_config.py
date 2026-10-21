@@ -23,6 +23,8 @@ from unittest.mock import patch
 import pytest
 
 from sms_tool import cli, config, doctor
+from sms_tool.config import _state as config_state
+from sms_tool.config import loader as config_loader
 
 EXAMPLE = {
     "proxy": {"default": "http://127.0.0.1:7897"},
@@ -76,8 +78,8 @@ def test_a_missing_example_names_every_searched_path(tmp_path):
     target = tmp_path / "cfg"
 
     with (
-        patch.object(config, "_CONFIG_DIR", target),
-        patch.object(config, "example_config_candidates", return_value=[tmp_path / "nowhere.json"]),
+        patch.object(config_state, "CONFIG_DIR", target),
+        patch.object(config_loader, "example_config_candidates", return_value=[tmp_path / "nowhere.json"]),
     ):
         with pytest.raises(config.ConfigError) as error:
             config.initialize_config_shards(target)
