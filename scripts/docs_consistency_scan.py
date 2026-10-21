@@ -1,6 +1,6 @@
 """Check live documentation pointers and current module layout.
 
-Three tiers, because the docs mix very different kinds of pointer:
+Four tiers, because the docs mix very different kinds of pointer:
 
 * **Weak (all docs).** A `` `path.py:NNN` `` pointer must name a file that exists
   and a line that is in range. This catches the catastrophic case -- a module
@@ -15,6 +15,13 @@ Three tiers, because the docs mix very different kinds of pointer:
   desktop project. Neither tier above looks at C# at all, so a renamed or deleted
   desktop file left prose no gate could see; see
   :func:`check_csharp_file_refs` for the measured instance that added this tier.
+* **Weak (repository paths, canonical docs).** A backticked, root-anchored path
+  (``sms_tool/...``, ``services/...``, ``scripts/...``, ``tests/...``,
+  ``docs/...``, ``SmsWorkbench/...``) must exist. The first two tiers only see
+  ``path.py:NNN`` pointers, so a pointer whose suffix is a *call*
+  (``sms_tool/paths.py:config_dir()``) or that carries no line number at all
+  slipped through every tier; see :func:`check_path_refs` for the measured
+  instances that added this one.
 
 Anything a tier cannot resolve (env-var names, prose-anchored pointers into a
 function body) is skipped rather than failed -- the gate must never fire on a
@@ -88,6 +95,81 @@ CSHARP_REF = re.compile(r"`((?:[A-Za-z0-9_./]+/)?[A-Za-z0-9_]+\.cs)`")
 #: skipped when indexing: generated copies of a renamed file would otherwise keep
 #: a deleted name alive for one build.
 CSHARP_ROOTS = ("SmsWorkbench", "SmsWorkbench.Contracts", "tests/SmsWorkbench.Tests")
+
+# ```sms_tool/payment/catalog.py``` -- a canonical doc naming a repository path
+# that is not a ``.py:NNN`` anchor. The fourth tier below; see check_path_refs.
+# The optional ``:...`` group is what lets ``sms_tool/paths.py:config_dir()``
+# resolve to the path: a colon followed by an identifier is a call suffix, not
+# the line number ``check_line_refs`` requires.
+PATH_REF = re.compile(r"`([A-Za-z0-9_.\-/]+)(?::[^`\s]*)?`")
+#: Trees a backticked path may be anchored in. Anything else (``runtime/``,
+#: ``%LOCALAPPDATA%``, an upstream repository) is not a claim about this tree.
+PATH_ROOTS = (
+    "sms_tool/",
+    "services/",
+    "scripts/",
+    "tests/",
+    "docs/",
+    "SmsWorkbench/",
+    "SmsWorkbench.Contracts/",
+)
+#: Extensions that make a token a file claim. A bare directory is a claim only
+#: when it is written with a trailing slash -- ``tests/payment`` is prose.
+PATH_SUFFIXES = (
+    ".py",
+    ".md",
+    ".json",
+    ".cs",
+    ".ps1",
+    ".js",
+    ".csproj",
+    ".xaml",
+    ".slnx",
+    ".toml",
+    ".txt",
+    ".yml",
+    ".yaml",
+    ".css",
+    ".html",
+)
+#: Characters that turn a token into a pattern, a call, or a range rather than
+#: one path. ``PATH_REF``'s class already excludes most of them; the set is kept
+#: explicit so widening that class cannot silently start guessing.
+PATH_OPAQUE = frozenset("*?<>{}%$|()[]:,'\"")
+#: ``There is no separate `docs/current/promotion.md` `` is a statement about
+#: absence, not a dangling pointer. Both languages are matched because the docs
+#: are bilingual.
+PATH_NEGATION = re.compile(
+    r"(?:\bno\b|\bnot\b|\bnever\b|\bwithout\b|不存在|没有|不要|无需)[^`]{0,40}$",
+    re.IGNORECASE,
+)
+#: Paths that are deliberately absent from a checkout: the doc names a location
+#: the operator creates, and ``.gitignore`` keeps it out of the tree.
+UNTRACKED_BY_DESIGN = {
+    "sms_tool/config.json": "gitignored operator config (`.gitignore`); the docs name the location, not a source file",
+}
+#: Build output and caches. These are absent from a clean checkout by
+#: definition, so a doc that classifies them -- ``directory-map.md`` calls
+#: ``SmsWorkbench/bin/`` + ``obj/`` "build intermediates ... never commit" -- is
+#: making a statement about generated state, not pointing at a missing file.
+GENERATED_SEGMENTS = frozenset(
+    {
+        "bin",
+        "obj",
+        "dist",
+        "node_modules",
+        "__pycache__",
+        ".venv",
+        ".dotnet",
+        ".pytest_cache",
+        ".ruff_cache",
+    }
+)
+#: An ADR records the layout **at decision time**. A path it names may have been
+#: deleted since (ADR-0004's ``tests/browser_flow_patch.py`` went away with the
+#: patch mechanism), and rewriting a decision record is worse than tolerating
+#: the pointer. The line-number and symbol tiers still cover ADRs.
+PATH_EXEMPT_PREFIXES = ("docs/adr/",)
 
 
 def _resolve_source(name: str) -> Path | None:
@@ -252,6 +334,75 @@ def check_csharp_file_refs(failures: list[str]) -> None:
                     failures.append(f"{rel}:{lineno} documented C# file does not exist: {ref}")
 
 
+def check_path_refs(failures: list[str]) -> None:
+    """A canonical doc that names a repository path must name one that exists.
+
+    **Weak tier, deliberately.** Only existence is checked -- a path is not a
+    symbol, and a directory has no ``ast`` module to introspect.
+
+    Why it is needed at all: the three tiers above each have a blind spot that
+    is not the same blind spot. ``check_line_refs`` only matches
+    ``path.py:NNN``, so it skipped ``docs/current/configuration.md``'s
+    ``sms_tool/paths.py:config_dir()`` (the suffix is a call, not a number) and
+    every pointer written without a line number. ``check_csharp_file_refs``
+    accepts a bare name if **any** project owns it, so it skipped
+    ``docs/current/dotnet-gates.md``'s ``SmsWorkbench/StageMatrixStore.cs`` --
+    the file had moved to ``SmsWorkbench/Services/``. Measured 2026-10-22, seven
+    such pointers were live and every gate was green: five module paths that had
+    moved into subpackages (``kernel/``, ``proxy/``, ``registration/``), one
+    desktop path missing its subdirectory, and two mermaid nodes naming modules
+    that no longer exist (``registration_result``, ``payment_wire``).
+
+    Deliberate silences, so it never fires on something it cannot judge:
+
+    * a token outside :data:`PATH_ROOTS` is not a claim about this tree;
+    * a backticked token that is not *exactly one path* never matches
+      :data:`PATH_REF`'s full-token shape, so it is never judged -- that is how
+      a glob (``sms_tool/*.py``), a command (``scripts/format_guard.py --fix``),
+      a call (``...edge_challenge_verdict(response)``) and a multi-path cell
+      (``tests/payment tests/config``) stay silent;
+    * :data:`PATH_OPAQUE` restates the same property inside the regex. Like the
+      glob guard in :func:`check_csharp_file_refs`, it is **unreachable today**
+      and becomes load-bearing the moment the character class is widened;
+    * a token that is neither a known extension nor a trailing-slash directory
+      is prose, not a pointer (``sms_tool/cli._load_heavy_deps`` names a
+      function);
+    * a token naming a build-output or cache segment (:data:`GENERATED_SEGMENTS`)
+      is generated state, absent from a clean checkout;
+    * a path listed in :data:`UNTRACKED_BY_DESIGN` is absent by design;
+    * a reference the same line negates is a statement about absence;
+    * ADR bodies are exempt (:data:`PATH_EXEMPT_PREFIXES`) -- see that constant.
+
+    Consequence worth knowing: writing a path that was deleted requires dropping
+    the anchor (name the module without ``sms_tool/``) or saying it is gone. A
+    backticked repository path is a **claim that the path exists**.
+    """
+    for rel in DOCS:
+        if rel.startswith(PATH_EXEMPT_PREFIXES):
+            continue
+        path = ROOT / rel
+        if not path.is_file():
+            continue
+        for lineno, text in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            for match in PATH_REF.finditer(text):
+                token = match.group(1)
+                if not token.startswith(PATH_ROOTS):
+                    continue
+                if any(char in token for char in PATH_OPAQUE):
+                    continue
+                if not (token.endswith("/") or token.endswith(PATH_SUFFIXES)):
+                    continue
+                if GENERATED_SEGMENTS.intersection(Path(token).parts):
+                    continue
+                if token in UNTRACKED_BY_DESIGN:
+                    continue
+                if PATH_NEGATION.search(text[: match.start()]):
+                    continue
+                if (ROOT / token.rstrip("/")).exists():
+                    continue
+                failures.append(f"{rel}:{lineno} documented path does not exist: {token}")
+
+
 def _csharp_index() -> set[str]:
     """Every ``.cs`` basename under :data:`CSHARP_ROOTS`, build output excluded."""
     names: set[str] = set()
@@ -294,6 +445,7 @@ def main() -> int:
     check_line_refs(failures)
     check_symbol_tables(failures)
     check_csharp_file_refs(failures)
+    check_path_refs(failures)
 
     if failures:
         print("Documentation consistency check failed")

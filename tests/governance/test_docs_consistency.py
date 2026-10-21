@@ -333,3 +333,130 @@ def test_a_bare_name_outside_the_declared_roots_is_not_indexed(tmp_path, monkeyp
     )
     assert len(failures) == 1
     assert "WidgetGen.cs" in failures[0]
+
+
+def _scan_path_doc(
+    tmp_path,
+    monkeypatch,
+    body: str,
+    existing: tuple[str, ...] = (),
+    doc: str = "architecture.md",
+) -> list[str]:
+    """Run the repository-path tier against a synthetic doc tree."""
+    for rel in existing:
+        target = tmp_path / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("", encoding="utf-8")
+    target = tmp_path / doc
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(body, encoding="utf-8")
+    monkeypatch.setattr(scan, "ROOT", tmp_path)
+    monkeypatch.setattr(scan, "DOCS", (doc,))
+    failures: list[str] = []
+    scan.check_path_refs(failures)
+    return failures
+
+
+def test_a_repository_path_named_in_a_doc_must_exist(tmp_path, monkeypatch):
+    """The regression this tier exists for: the module moved, the prose did not."""
+    assert (
+        _scan_path_doc(
+            tmp_path,
+            monkeypatch,
+            "Owner: `sms_tool/kernel/paths.py`.\n",
+            ("sms_tool/kernel/paths.py",),
+        )
+        == []
+    )
+
+    failures = _scan_path_doc(
+        tmp_path,
+        monkeypatch,
+        "Owner: `sms_tool/paths.py`.\n",
+        ("sms_tool/kernel/paths.py",),
+    )
+    assert failures == ["architecture.md:1 documented path does not exist: sms_tool/paths.py"]
+
+
+def test_a_call_suffix_does_not_hide_the_path(tmp_path, monkeypatch):
+    """The measured miss: `sms_tool/paths.py:config_dir()` has no line number.
+
+    `check_line_refs` matches `path.py:NNN`; a colon followed by an identifier is
+    not a number, so the whole pointer was skipped by every tier.
+    """
+    assert (
+        _scan_path_doc(
+            tmp_path,
+            monkeypatch,
+            "Resolution: `sms_tool/kernel/paths.py:config_dir()`.\n",
+            ("sms_tool/kernel/paths.py",),
+        )
+        == []
+    )
+
+    failures = _scan_path_doc(tmp_path, monkeypatch, "Resolution: `sms_tool/paths.py:config_dir()`.\n")
+    assert len(failures) == 1
+    assert "sms_tool/paths.py" in failures[0]
+
+
+def test_a_directory_is_a_claim_only_when_written_with_a_trailing_slash(tmp_path, monkeypatch):
+    assert _scan_path_doc(tmp_path, monkeypatch, "See `tests/payment`.\n") == []
+    assert _scan_path_doc(tmp_path, monkeypatch, "See `tests/payment/`.\n", ("tests/payment",)) == []
+
+    failures = _scan_path_doc(tmp_path, monkeypatch, "See `tests/gone/`.\n")
+    assert len(failures) == 1
+    assert "tests/gone/" in failures[0]
+
+
+def test_a_symbol_shaped_token_is_not_a_path_claim(tmp_path, monkeypatch):
+    """`sms_tool/cli._load_heavy_deps` names a function, not a file."""
+    body = "Lazy: `sms_tool/cli._load_heavy_deps` and `sms_tool/registration_result.build_registration_result`.\n"
+    assert _scan_path_doc(tmp_path, monkeypatch, body) == []
+
+
+def test_a_negated_reference_is_not_a_dangling_pointer(tmp_path, monkeypatch):
+    """`There is no separate X` is a statement about absence, not a pointer."""
+    body = "There is no separate `docs/current/promotion.md`, on purpose.\n"
+    assert _scan_path_doc(tmp_path, monkeypatch, body) == []
+
+    # The negation is line-local: a real pointer elsewhere on the page still fails.
+    body = "There is no separate `docs/current/promotion.md`, on purpose.\nOwner: `docs/current/gone.md`.\n"
+    failures = _scan_path_doc(tmp_path, monkeypatch, body)
+    assert len(failures) == 1
+    assert "docs/current/gone.md" in failures[0]
+
+
+def test_a_path_absent_by_design_is_not_reported(tmp_path, monkeypatch):
+    """`sms_tool/config.json` is gitignored; the doc names where it would live."""
+    assert _scan_path_doc(tmp_path, monkeypatch, "Local: `sms_tool/config.json`.\n") == []
+
+
+def test_a_path_outside_the_declared_roots_is_not_policed(tmp_path, monkeypatch):
+    """`runtime/` is operator state, absent from a fresh checkout."""
+    assert _scan_path_doc(tmp_path, monkeypatch, "State: `runtime/tmp/refrepos/`.\n") == []
+
+
+def test_adr_bodies_are_exempt_from_the_path_tier(tmp_path, monkeypatch):
+    """A decision record may name a file that was deleted after the decision."""
+    failures = _scan_path_doc(
+        tmp_path,
+        monkeypatch,
+        "The split added `tests/browser_flow_patch.py`.\n",
+        doc="docs/adr/0004-browser-flow-split.md",
+    )
+    assert failures == []
+
+
+def test_generated_build_output_is_not_reported(tmp_path, monkeypatch):
+    """`directory-map.md` classifies `bin/`+`obj/` as generated, never committed.
+
+    Those trees are absent from a clean checkout by definition, so the doc's
+    mention is a statement about generated state -- not a missing file.
+    """
+    body = "| `SmsWorkbench/bin/`, `SmsWorkbench/obj/` | .NET build intermediates | Rebuild from source. |\n"
+    assert _scan_path_doc(tmp_path, monkeypatch, body) == []
+
+    # A *file* named bin.py is not a build segment.
+    failures = _scan_path_doc(tmp_path, monkeypatch, "See `sms_tool/bin.py`.\n")
+    assert len(failures) == 1
+    assert "sms_tool/bin.py" in failures[0]
