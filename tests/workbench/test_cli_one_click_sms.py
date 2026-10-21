@@ -8,6 +8,14 @@ from sms_tool import cli
 
 
 class OneClickSmsCliTests(unittest.TestCase):
+    def setUp(self):
+        # ``_one_click_sms_max_reuse`` is a lazily-bound global: ``cli`` leaves it
+        # ``None`` until ``_load_helper_deps`` runs, which normally happens inside
+        # ``main()``. Depending on another test having triggered that is an
+        # order-dependence this file cannot see (it fails when run alone), so the
+        # fixture resolves it explicitly.
+        cli._load_helper_deps()
+
     def test_one_click_sms_forces_one_phone_per_email(self):
         args = Namespace(max_reuse_count=5)
 
