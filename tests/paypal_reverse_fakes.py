@@ -1,4 +1,4 @@
-"""Shared fakes for sms_tool/paypal_reverse.py (zero-coverage module, 1146 lines).
+"""Shared fakes for sms_tool/paypal/reverse.py (zero-coverage module, 1146 lines).
 
 This module replaces every external boundary the reverse-engineered PayPal
 client touches -- HTTP session, cookies, proxy -- with in-memory doubles.
@@ -16,6 +16,8 @@ Nothing here touches the network, a browser, or real money.
 """
 
 from __future__ import annotations
+
+from typing import Any
 
 
 class FakeCookieJar:
@@ -121,9 +123,9 @@ def make_client(redirect_url: str = "https://www.paypal.com/x?token=EC-1", **ove
 
     Imported lazily so importing this fakes module never pulls in curl_cffi.
     """
-    from sms_tool.paypal_reverse import PayPalReverseClient
+    from sms_tool.paypal.reverse import PayPalReverseClient
 
-    kwargs = dict(
+    kwargs: dict[str, Any] = dict(
         redirect_url=redirect_url,
         card={"number": "4111111111111111", "exp": "12/30", "cvc": "123"},
         address={"line1": "1 Main St", "city": "Tokyo", "postal_code": "100-0001"},
