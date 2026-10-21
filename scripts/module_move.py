@@ -55,7 +55,16 @@ import time
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 PY_ROOTS = ("sms_tool", "tests", "scripts")
 EXTRA_PY = ("start_proxy_pool.py", "verify_proxy.py", "chatgpt_phone_reg.py")
-TEXT_ROOTS = ("sms_tool", "tests", "scripts", "docs/current", "docs/rules", "SmsWorkbench", "SmsWorkbench.Contracts")
+TEXT_ROOTS = (
+    "sms_tool",
+    "tests",
+    "scripts",
+    "docs",
+    "SmsWorkbench",
+    "SmsWorkbench.Contracts",
+)
+#: Historical snapshots quote old paths on purpose; rewriting them would falsify the record.
+TEXT_EXCLUDED = ("docs/audits/",)
 TEXT_FILES = (
     "README.md",
     "README_EN.md",
@@ -246,6 +255,9 @@ def rewrite_names_and_paths(spec: Spec) -> list[str]:
         if not path.is_file() or path.suffix not in {".py", ".md", ".json", ".cs", ".xaml", ".ps1"}:
             continue
         if "__pycache__" in path.parts or "bin" in path.parts or "obj" in path.parts:
+            continue
+        rel = path.relative_to(ROOT).as_posix()
+        if any(rel.startswith(prefix) for prefix in TEXT_EXCLUDED):
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
         updated = text

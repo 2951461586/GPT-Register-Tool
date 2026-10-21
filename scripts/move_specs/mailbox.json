@@ -1,0 +1,21 @@
+{
+  "package": "mailbox",
+  "layer": 4,
+  "root_package_init": true,
+  "modules": {
+    "mailbox_cfworker": "cfworker",
+    "mailbox_errors": "errors",
+    "mailbox_gmail": "gmail",
+    "mailbox_graph": "graph",
+    "mailbox_icloud_url": "icloud_url",
+    "mailbox_parsers": "parsers",
+    "mailbox_poll": "poll",
+    "mailbox_pool_writer": "pool_writer",
+    "mailbox_quarantine": "quarantine",
+    "mailbox_remail": "remail",
+    "mailbox_service": "service",
+    "mailbox_smailr": "smailr",
+    "mailbox_strategies": "strategies",
+    "mailbox_types": "types"
+  }
+}

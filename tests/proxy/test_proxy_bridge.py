@@ -18,7 +18,9 @@ from sms_tool.proxy.entry import parse_proxy
 
 class TestLocalProxyBridgeLifecycle(unittest.TestCase):
     def setUp(self):
-        self.upstream = parse_proxy("socks5://user:pass@127.0.0.1:9999")
+        upstream = parse_proxy("socks5://user:pass@127.0.0.1:9999")
+        assert upstream is not None, "the fixture proxy must parse"
+        self.upstream = upstream
 
     def test_start_binds_port_and_local_url(self):
         bridge = LocalProxyBridge(upstream=self.upstream)
@@ -152,7 +154,9 @@ class TestHttpUpstreamConnectTimeout(unittest.TestCase):
     """P1-4: the HTTP CONNECT branch must be bounded like the SOCKS branch."""
 
     def setUp(self):
-        self.upstream = parse_proxy("http://user:pass@upstream.example:8080")
+        upstream = parse_proxy("http://user:pass@upstream.example:8080")
+        assert upstream is not None, "the fixture proxy must parse"
+        self.upstream = upstream
         self.bridge = LocalProxyBridge(upstream=self.upstream, connect_timeout=0.05)
 
     def _run(self, coro):

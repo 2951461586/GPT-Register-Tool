@@ -95,7 +95,10 @@ def main() -> int:
     # Provider implementations have one physical home. Top-level mailbox_* and
     # outlook_imap modules are compatibility facades and must not grow logic.
     for name in ("cfworker", "gmail", "graph", "icloud_url", "remail", "smailr"):
-        facade = ROOT / "sms_tool" / f"mailbox_{name}.py"
+        # The facades moved into sms_tool/mailbox/ on 2026-10-21; keep resolving
+        # the flat layout so the check still reads a checkout mid-migration.
+        candidates = (ROOT / "sms_tool" / "mailbox" / f"{name}.py", ROOT / "sms_tool" / f"mailbox_{name}.py")
+        facade = next((path for path in candidates if path.is_file()), candidates[1])
         implementation = ROOT / "sms_tool" / "providers" / f"mailbox_{name}.py"
         if not implementation.is_file():
             failures.append(f"missing provider implementation: {implementation.relative_to(ROOT)}")

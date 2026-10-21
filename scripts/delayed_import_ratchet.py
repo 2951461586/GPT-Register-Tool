@@ -183,7 +183,17 @@ def resolve_target(importer: str, node: ast.Import | ast.ImportFrom) -> str:
     if node.module:
         return f"{prefix}.{node.module}" if prefix else node.module
     name = node.names[0].name if node.names else ""
-    return f"{prefix}.{name}" if prefix else name
+    candidate = f"{prefix}.{name}" if prefix else name
+    # ``from . import X`` names a submodule *or* an attribute re-exported by the
+    # package ``__init__`` (a function, a constant). Only the first is an edge to
+    # a module; treating the second as one invents a module that does not exist.
+    return candidate if _is_module(candidate) else prefix
+
+
+def _is_module(name: str) -> bool:
+    """Whether ``name`` names a real module or package in this tree."""
+    rel = name.replace(".", "/")
+    return (PACKAGE.parent / f"{rel}.py").is_file() or (PACKAGE.parent / rel / "__init__.py").is_file()
 
 
 def _last_segment(name: str) -> str:
