@@ -9,15 +9,15 @@ from pathlib import Path
 from types import MappingProxyType, SimpleNamespace
 from unittest.mock import patch
 
-from sms_tool import mailbox as mailbox_router
+from sms_tool.mailbox import router as mailbox_router
 from sms_tool import cli
 
-# ``sms_tool/mailbox_remail.py`` is a compatibility facade that swaps itself
+# ``sms_tool/mailbox/remail.py`` is a compatibility facade that swaps itself
 # for the provider module in ``sys.modules``; import the implementation, which
 # is the same module object at runtime and the only one a checker can see into.
 from sms_tool.providers import mailbox_remail
-from sms_tool import mailbox_parsers
-from sms_tool.mailbox_types import MailboxAccount
+from sms_tool.mailbox import parsers as mailbox_parsers
+from sms_tool.mailbox.types import MailboxAccount
 
 
 class FakeResponse:
@@ -704,7 +704,10 @@ class ReMailPickupTests(unittest.TestCase):
             }
         ]
         output = io.StringIO()
-        with patch("sms_tool.mailbox.fetch_mailbox_messages", return_value=messages) as fetch, redirect_stdout(output):
+        with (
+            patch("sms_tool.mailbox.router.fetch_mailbox_messages", return_value=messages) as fetch,
+            redirect_stdout(output),
+        ):
             cli._view_inbox(args)
 
         payload = json.loads(output.getvalue())
@@ -749,7 +752,7 @@ class ReMailPickupTests(unittest.TestCase):
             session_path.write_text(json.dumps(data), encoding="utf-8")
             with (
                 patch("sms_tool.session_refresh._load_seed_session", return_value=(data, str(session_path))),
-                patch("sms_tool.mailbox.fetch_mailbox_messages", side_effect=fetch),
+                patch("sms_tool.mailbox.router.fetch_mailbox_messages", side_effect=fetch),
                 patch.object(cli, "upsert_account", return_value=True) as upsert,
                 redirect_stdout(io.StringIO()),
             ):

@@ -20,15 +20,15 @@ from .context import prepare_browser_context
 from ... import (
     browser_fingerprint_pool,
     chatgpt_bootstrap,
-    mailbox as mailbox_pkg,
     registration_outcome,
     registration_progress,
     registration_result,
     storage,
 )
+from ...mailbox import router as mailbox_pkg
 from ...proxy import entry as proxy_entry
 from ...accounts import account_identity
-from ...mailbox_service import MailboxService
+from ...mailbox.service import MailboxService
 from ...phone_proxy import redact_proxy_text
 from ...registration_state import RegistrationState, RegistrationStateMachine
 from ...utils import _generate_password, _random_birthdate, _random_name

@@ -1,8 +1,9 @@
 {
   "package": "mailbox",
-  "layer": 4,
+  "layer": 3,
   "root_package_init": true,
   "modules": {
+    "mailbox": "router",
     "mailbox_cfworker": "cfworker",
     "mailbox_errors": "errors",
     "mailbox_gmail": "gmail",

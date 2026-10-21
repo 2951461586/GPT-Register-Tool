@@ -1,10 +1,10 @@
 # 方案：架构健康度整改（图谱可信度 → 分层门禁 → 环 → 根目录）— 2026-10-21
 
-> **状态（2026-10-22 复核）**：**P0 全部落地，P1-1 落地，P1-2 落地，P2 的解环部分落地（SCC 5 → 0），P2-4（`proxy_*` 迁移）已落地**；**P2-5…P2-8 四个模块族迁移与 P3-1 spec 图未开始**。落地结果回写在 §8，并已同步 `docs/architecture.md` / `docs/directory-map.md` / `docs/current/dependency-graph.md`。
+> **状态（P2-5 落地后复核）**：**P0 全部落地，P1-1 落地，P1-2 落地，P2 的解环部分落地（SCC 5 → 0），P2-4（`proxy_*`）与 P2-5（`mailbox_*`）迁移已落地**；**P2-6…P2-8 三个模块族迁移与 P3-1 spec 图未开始**。落地结果回写在 §8，并已同步 `docs/architecture.md` / `docs/directory-map.md` / `docs/current/dependency-graph.md`。
 >
-> 未完成的项（`P2-5`…`P2-8` 四个模块族迁移、`P3-1` spec 图）**没有留下半成品**：工作区在每个提交点都是绿的，剩余项按原顺序可直接接续。
+> 未完成的项（`P2-6`…`P2-8` 三个模块族迁移、`P3-1` spec 图）**没有留下半成品**：工作区在每个提交点都是绿的，剩余项按原顺序可直接接续。
 >
-> 2026-10-22 复核实测（全部为仓库现有门禁的原始输出）：`dependency_graph` 300 模块 / 957 条模块级边 / 274 条函数内边 / 31 条 type-only / **0 个 SCC** / 11 对互指；`import_layer_ratchet` 281 边 / 35 对 / 11 mutual / 45 minority / 205 delayed / 2 条 allow、0 个未认领模块；`root_module_ratchet` **148 冻结**（155 − 7 个 `proxy_*`）。
+> 复核实测（全部为仓库现有门禁的原始输出）：`dependency_graph` 306 模块 / 971 条模块级边 / 274 条函数内边 / 32 条 type-only / **0 个 SCC** / 13 对互指；`import_layer_ratchet` 298 边 / 42 对 / 13 mutual / 44 minority / 209 delayed / 2 条 allow、0 个未认领模块；`root_module_ratchet` **132 冻结**（155 − 7 个 `proxy_*` − 15 个 `mailbox_*`）。
 >
 > **性质**：方案文档 + 落地记录。所有数字来自 2026-10-21 用 AST 重测（见 §1 的测量口径），不引用 pi-lens 的目录级数字。
 
@@ -237,13 +237,45 @@ allow 只有 2 条，各带 reason + owner。落地时先按「1 = 最内层」�
 （`architecture_scan` 的包名、`delayed_import_ratchet` 的键、`mailbox` spec）；`600ae5b` 让
 `delayed_import_ratchet` 按被分析树的实际路径解析目标。三笔修完，`1b34697` 把 `proxy` 簇落地。
 
-### 剩余未完成（2026-10-22 复核）
+### P2-5（`mailbox_*` 迁移）— 已落地
 
-`P2-5`…`P2-8`（`mailbox_*` / `paypal_*` / `payment_*` /
-`registration_*` 迁入子包）与 `P3-1`（边界 spec 图）未开始。它们的共同前置已经就绪：层清单（P1-1）
-给出每个模块该去哪一层，生成式依赖图（P0-2）给出搬迁前后的边数对照，`module_move.py` 把
-「移动 + 改写 + 门禁同步 + 基线重生成 + 门禁验证」做成一条命令，`scripts/move_specs/mailbox.json`
-已备好。每簇仍应单独一个提交，并在同一提交里更新 `import_layer_baseline.json`、
+15 个模块迁入 `sms_tool/mailbox/`（`mailbox.py` → `router.py`），`root_module_ratchet`
+冻结数 147 → 132，`dependency_graph` 仍为 **0 个 SCC**，`module coverage 307/307`，全量
+**6700 passed**。
+
+**`__init__.py` 必须是惰性门面**，理由与 P2-2 同源但更早：`providers/mailbox_*.py` 反过来
+import `..mailbox.<sub>`，若 `__init__` 在导入时 `from .router import ...`，就会在 `router`
+半初始化时把 router → providers → router 这条链跑一遍。所以这里不是「事后破环」，而是
+**搬迁时就不让环出现**；`TYPE_CHECKING` 块同样保留（否则 pyright 在每个消费者里报
+unknown import symbol）。
+
+迁移本身一行产品逻辑没改，真正花时间的是三类**不会报错、只会让测试测错东西**的 seam：
+
+| seam | 迁移前 | 迁移后 | 为什么 |
+|---|---|---|---|
+| 测试 patch 的目标 | `from sms_tool import mailbox as mailbox_module`，再 `patch.object(mailbox_module, "CFG", …)` | `from sms_tool.mailbox import router as mailbox_module` | 包门面的 `__getattr__` 让 `patch.object(包, …)` **完全无效**（属性落在包上，router 读的是自己的全局）。12 个测试模块受影响 |
+| private-import ratchet | hub 名 = import 语句最后一段（`mailbox`） | `PACKAGED_HUB_MODULES = {"mailbox": ("router",)}` | hub 搬进包后最后一段变成 `router`，旧谓词**静默返回 0** —— 门禁会变成装饰品。同时把 `router.py` 与包门面 `__init__.py` 一起算作 hub 自身，否则门面 re-export 的 3 个私有名会把 baseline 从 0 顶到 3 |
+| provider-ports 夹具路径 | `providers/mailbox_gmail.py` | 未变 | 见下 |
+
+**`module_move.py` 的改写面仍然过宽**：它把**不是模块引用的路径字符串**也一起改了 ——
+`tests/fixtures/oauth_client_id.json` 的注释、`SmsWorkbench.Contracts/MailboxCredentialLineParser.cs`
+的注释、`tests/governance/test_provider_ports.py` 的合成夹具路径、
+`tests/mailbox/test_mailbox_graph_pure.py` 的 `"providers" / "mailbox_graph.py"` 拼接，
+全被改成了并不存在的 `providers/mailbox/*`。四处已还原；工具下一次应只改写「解析得到真实模块」
+的点号名与路径（`providers/mailbox_*` 这一族**没有**迁移，不该被碰）。
+
+**串行全量跑出一个既有测试隔离缺陷**：`test_provider_ports.py::test_install_makes_both_ports_callable`
+用 `ports.install(...)` 写模块全局却不还原，后续 `tests/mailbox/test_mailbox_pool_writer.py` 的
+池写回断言因此失败（单跑该文件是绿的）。CI 的 `-n auto` 把两个文件分到不同 worker，一直没暴露。
+已用 monkeypatch 把 `_apply_rotation` / `_progress_dots` / `_wired` 一并登记，串行全量转绿。
+
+### 剩余未完成（P2-5 落地后复核）
+
+`P2-6`…`P2-8`（`paypal_*` 9 / `payment_*` 15 / `registration_*` 29 迁入子包）与 `P3-1`（边界
+spec 图）未开始，`root_module_ratchet` 应从 132 继续降到约 79。它们的共同前置已经就绪：层清单
+（P1-1）给出每个模块该去哪一层，生成式依赖图（P0-2）给出搬迁前后的边数对照，`module_move.py`
+把「移动 + 改写 + 门禁同步 + 基线重生成 + 门禁验证」做成一条命令，`scripts/move_specs/mailbox.json`
+可作为下一个 spec 的模板。每簇仍应单独一个提交，并在同一提交里更新 `import_layer_baseline.json`、
 `directory_map_groups.json` 与 `docs/directory-map.md` 的 claim。
 
 ### P2-2（包门面惰性导出）

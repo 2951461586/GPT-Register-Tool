@@ -2,13 +2,13 @@ import unittest
 from typing import TypeVar
 from unittest.mock import MagicMock, patch
 
-from sms_tool import mailbox as mailbox_module
+from sms_tool.mailbox import router as mailbox_module
 
-# ``sms_tool/mailbox_cfworker.py`` is a compatibility facade that swaps itself
+# ``sms_tool/mailbox/cfworker.py`` is a compatibility facade that swaps itself
 # for the provider module in ``sys.modules``; import the implementation, which is
 # the same module object at runtime and the only one a checker can see into.
 from sms_tool.providers import mailbox_cfworker as mailbox_cfworker_module
-from sms_tool.mailbox import MailboxAccount
+from sms_tool.mailbox.router import MailboxAccount
 from sms_tool.providers import cfworker_client
 from sms_tool.providers.cfworker_client import CFWorkerMailboxClient
 

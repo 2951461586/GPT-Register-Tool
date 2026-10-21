@@ -24,7 +24,7 @@ from typing import Any, Callable, Mapping
 
 from . import endpoints, registration_checkpoint
 from . import fingerprint_pool as _fingerprint_pool
-from . import mailbox_service as _mailbox_service
+from .mailbox import service as _mailbox_service
 from .proxy import entry as _proxy_entry
 from . import registration_account_stages as _account_stages
 from . import registration_concurrency as _registration_concurrency
@@ -39,7 +39,7 @@ from .auth_headers import set_auth_fingerprint
 from .auth_state import signup_lane_verdict
 from .codex_oauth import collect_codex_oauth_tokens
 from .kernel.failure_registry import PASSWORD_CLAIMED_MARKER
-from .mailbox_errors import MailboxEndpointUnavailableError
+from .mailbox.errors import MailboxEndpointUnavailableError
 from .operator_output import emit as _emit
 from .providers.mailbox_graph import MailboxAuthInvalidError
 from .registration_cancel import RegistrationCancelled, cancellable_sleep, ensure_not_cancelled

@@ -16,8 +16,8 @@ from urllib.parse import parse_qsl, unquote_to_bytes, urlencode, urljoin, urlspl
 from curl_cffi import requests as curl_requests
 
 from ..mail_otp import _extract_otp_from_text, _message_received_ts
-from ..mailbox_errors import MailboxEndpointUnavailableError
-from ..mailbox_quarantine import (
+from ..mailbox.errors import MailboxEndpointUnavailableError
+from ..mailbox.quarantine import (
     TRANSIENT_AUTH_INVALID_COOLDOWN_SECONDS,
     raise_if_mailbox_quarantined,
     record_mailbox_auth_invalid,
@@ -220,7 +220,7 @@ def _fetch_icloud_url_page(mailbox, *, limit: int, proxy: str | None) -> tuple[s
     if page.status_code == 401:
         # A 401 here is usually a rotated/expired forwarding token, not a dead
         # credential.  Quarantine it only briefly: a permanent entry froze OTP
-        # recovery for the whole pool (see mailbox_quarantine.py).
+        # recovery for the whole pool (see mailbox/quarantine.py).
         record_mailbox_auth_invalid(
             mailbox,
             reason=f"icloud_http_{page.status_code}",

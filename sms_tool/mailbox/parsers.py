@@ -2,9 +2,9 @@ import logging
 import re
 from pathlib import Path
 
-from .mailbox_types import MailboxAccount
-from .operator_output import emit
-from .providers import mailbox_icloud_url
+from .types import MailboxAccount
+from ..operator_output import emit
+from ..providers import mailbox_icloud_url
 
 
 _LOGGER = logging.getLogger(__name__)

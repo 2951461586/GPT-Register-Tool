@@ -1,14 +1,14 @@
 """Behaviour tests for the Microsoft Graph mailbox provider (2026-09-03, round 7).
 
 Imported from ``sms_tool.providers.mailbox_graph`` -- the implementation --
-rather than the ``sms_tool/mailbox_graph.py`` facade.  The facade does
+rather than the ``sms_tool/mailbox/graph.py`` facade.  The facade does
 ``sys.modules[__name__] = _impl``, which makes them the *same module object* at
 runtime but leaves a static checker looking at a 5-line file that defines
 nothing.  The patch seam below is therefore still the real module attribute.
 
 39 lines, one function, **zero test coverage** -- and it sits on the mailbox auth
 path for every Microsoft-account mailbox.  The reason it matters is one line in
-``mailbox_strategies.py:271``::
+``mailbox/strategies.py:271``::
 
     reraise=(MailboxTokenExpiredError,),
 
@@ -20,7 +20,7 @@ timeout window, or a transient network blip silently kills a good account.
 
 Production injects the HTTP client by assignment, not by import::
 
-    # sms_tool/mailbox.py:493
+    # sms_tool/mailbox/router.py:493
     mailbox_graph.curl_requests = curl_requests
 
 so ``curl_requests`` is a module attribute that production overwrites at call
@@ -129,7 +129,7 @@ class GuardTests(_RefreshCase):
         self.assertEqual(fake.calls, [])
 
     def test_the_expired_error_is_a_runtime_error_subclass(self):
-        """``mailbox.py:400`` and ``mailbox_strategies.py:271`` both catch it.
+        """``mailbox/router.py:400`` and ``mailbox/strategies.py:271`` both catch it.
         If it ever stops being a ``RuntimeError``, every ``except RuntimeError``
         upstream silently changes meaning."""
         self.assertTrue(issubclass(mailbox_graph.MailboxTokenExpiredError, RuntimeError))

@@ -103,7 +103,7 @@ def mailbox_from_explicit_args(args):
     """Load a specific mailbox from explicit CLI args."""
     if not (getattr(args, "chatai_mailbox_file", None) or getattr(args, "mailbox_file", None)):
         return None
-    from ..mailbox import load_mailbox_pool
+    from ..mailbox.router import load_mailbox_pool
 
     requested = str(getattr(args, "email", "") or "").strip().lower()
     mailboxes = load_mailbox_pool(args)

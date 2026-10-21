@@ -2,7 +2,7 @@
 
 Why this exists
 ---------------
-``sms_tool/mailbox.py`` used to define ~40 top-level functions with **every one
+``sms_tool/mailbox/router.py`` used to define ~40 top-level functions with **every one
 of them ``_``-prefixed** -- no public surface at all -- while being the most
 imported module in the package: registration, auth, recovery, mailbox routing,
 CLI adapters and ``scripts/`` all reached straight into those private names.
@@ -19,7 +19,7 @@ describes the top-level ``mailbox_*`` files as "compatibility facades only" and
 places the real implementations under ``sms_tool/providers/`` -- and
 ``tests/governance/test_docs_consistency.py`` does lock the six provider facades
 (``mailbox_cfworker`` / ``_gmail`` / ``_graph`` / ``_icloud_url`` / ``_remail`` /
-``_smailr``). But ``mailbox.py`` itself is not one of those facades: it is the
+``_smailr``). But ``mailbox/router.py`` itself is not one of those facades: it is the
 implementation *and* the private interface hub, and nothing counted its
 consumers.
 
@@ -54,7 +54,7 @@ the number moved for the right reason.
 Known blind spots (deliberate)
 ------------------------------
 1. Only ``from <...>.<watched> import _name`` counts. Attribute access through
-   an imported module (``import sms_tool.mailbox`` then ``mailbox._foo()``) is
+   an imported module (``import sms_tool.mailbox.router`` then ``mailbox._foo()``) is
    not detected. A 2026-09-17 scan found that form only inside comments and
    docstrings, so it is not implemented until a real occurrence appears --
    guessing at dynamic-attribute detection would produce a gate that fires on
@@ -68,7 +68,7 @@ The same-name trap
 Symbols are grouped by their **defining module**, resolved from the import
 statement itself, not by the file that happens to import them. ``load_mailbox_pool``
 is imported from ``.mailbox`` by ``sms_tool/cli.py`` and would otherwise be
-attributed to ``cli``. Conversely ``sms_tool/mailbox_service.py`` imports
+attributed to ``cli``. Conversely ``sms_tool/mailbox/service.py`` imports
 ``mailbox_email_config`` *from* ``.mailbox``: the consumer is the service file, the watched
 module is ``mailbox``. Grouping on the last dotted segment of the import -- and
 nothing else -- is what keeps the two apart.
@@ -118,41 +118,74 @@ WATCHED_QUALIFIERS: dict[str, tuple[str, ...]] = {
     "utils": ("sms_tool", "sms_tool.providers"),
 }
 
+#: Watched hubs that live **inside** a package instead of at the package root.
+#: ``mailbox`` moved from ``sms_tool/mailbox.py`` to ``sms_tool/mailbox/router.py``
+#: on 2026-10-22, so its consumers now spell ``.mailbox.router`` /
+#: ``sms_tool.mailbox.router`` and the last dotted segment (``router``) no longer
+#: names the hub. Without this table the hub silently drops out of the count: the
+#: ratchet would report a clean zero while every consumer still reached into the
+#: private surface. Keys are hub names; values are the module stems inside
+#: ``sms_tool/<hub>/`` that *are* the hub -- not every sibling, so
+#: ``from .mailbox.types import _x`` stays out of the mailbox baseline.
+PACKAGED_HUB_MODULES: dict[str, tuple[str, ...]] = {"mailbox": ("router",)}
+
+_PACKAGED_HUB_BY_STEM: dict[str, str] = {stem: hub for hub, stems in PACKAGED_HUB_MODULES.items() for stem in stems}
+
 
 # A watched hub's own file is never a consumer of its own surface. Kept as full
 # relative paths, not bare stems: a nested ``sms_tool/paypal/utils.py`` is a
-# different module and must still be scanned.
-SELF_PATHS = frozenset(f"{root}/{name}.py" for root in SCAN_ROOTS for name in WATCHED_MODULES)
+# different module and must still be scanned. A packaged hub owns two files:
+# the implementation (``sms_tool/mailbox/router.py``) and the lazy facade that
+# re-exports its names (``sms_tool/mailbox/__init__.py``). Both are the hub, so
+# neither counts as a consumer of it.
+SELF_PATHS = (
+    frozenset(f"{root}/{name}.py" for root in SCAN_ROOTS for name in WATCHED_MODULES)
+    | frozenset(f"sms_tool/{hub}/{stem}.py" for hub, stems in PACKAGED_HUB_MODULES.items() for stem in stems)
+    | frozenset(f"sms_tool/{hub}/__init__.py" for hub in PACKAGED_HUB_MODULES)
+)
 
 
 def _watched_module_of(node: ast.ImportFrom) -> str | None:
     """Return the watched module a ``from ... import`` statement targets, else ``None``.
 
     Accepts ``from .mailbox import``, ``from ..mailbox import`` and
-    ``from sms_tool.mailbox import`` -- matched on the *last* dotted segment, so
+    ``from sms_tool.mailbox.router import`` -- matched on the *last* dotted segment, so
     ``from .providers.mailbox_gmail import`` (a different module) is not caught,
     while the package guard rejects a same-named module outside ``sms_tool``.
+    A hub that now lives inside a package (``sms_tool/mailbox/router.py``) is
+    resolved through ``PACKAGED_HUB_MODULES`` instead of its last segment.
     """
     module = node.module or ""
     if not module:
         return None
-    last = module.split(".")[-1]
-    if last not in WATCHED_MODULES:
+    parts = module.split(".")
+    last = parts[-1]
+    if last in WATCHED_MODULES:
+        watched, qualifier = last, parts[:-1]
+    elif len(parts) >= 2 and _PACKAGED_HUB_BY_STEM.get(last) == parts[-2]:
+        # ``.mailbox.router`` / ``sms_tool.mailbox.router``
+        watched, qualifier = parts[-2], parts[:-2]
+    elif node.level > 0 and last in _PACKAGED_HUB_BY_STEM:
+        # ``from .router import`` inside the hub's own package. A relative import
+        # carries no qualifier, so the explicit stem table is the only evidence
+        # available -- same leniency as the relative branch below, but bounded to
+        # the stems listed in ``PACKAGED_HUB_MODULES``.
+        watched, qualifier = _PACKAGED_HUB_BY_STEM[last], []
+    else:
         return None
-    # A relative import (level > 0) whose last segment matched is one of the
+    # A relative import (level > 0) whose segment matched is one of the
     # package's own modules; an absolute import must name the package.
     if node.level == 0:
-        prefix = module[: -len(last) - 1] if module != last else ""
-        allowed = WATCHED_QUALIFIERS.get(last, ("sms_tool",))
+        prefix = ".".join(qualifier)
+        allowed = WATCHED_QUALIFIERS.get(watched, ("sms_tool",))
         if not any(prefix == candidate or prefix.startswith(f"{candidate}.") for candidate in allowed):
             return None
-        return last
     # Relative (level > 0): the package qualifier is implied by the importing
     # file's own location, so no explicit check is possible here and one is not
     # attempted -- the pre-existing lenient behaviour for relative imports is
     # kept. ``SELF_PATHS`` excludes the hub files themselves, so a self-import
     # cannot inflate a count.
-    return last
+    return watched
 
 
 def _private_aliases(node: ast.ImportFrom) -> list[str]:

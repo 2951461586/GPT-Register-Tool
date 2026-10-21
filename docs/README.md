@@ -164,7 +164,7 @@ Directory layout (since 2026-09-06):
   - 注册批次、并发与取消落在 `batch_runner.py`、`registration_pulse.py`、
     `registration_concurrency.py`、`registration_cancel.py`；结果装配统一走
     `registration_result.build_registration_result`。
-  - 邮箱逻辑仍在 `mailbox.py`、`providers/`、`mailbox_service.py` 等模块；
+  - 邮箱逻辑仍在 `mailbox/router.py`、`providers/`、`mailbox/service.py` 等模块；
     `k12_*`、`agent_identity.py`、`sub2api_import.py` 保持原有归属。
 - 新增 Agent Identity、SUB2API、导入导出逻辑时，在 `agent_identity.py`、
   `sub2api_import.py`、`session_converter.py` 中落实现，不侵入注册或支付模块。

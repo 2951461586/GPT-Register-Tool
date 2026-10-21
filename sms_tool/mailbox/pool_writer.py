@@ -51,7 +51,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from .cross_process_gate import GateTimeoutError, cross_process_write_lock
+from ..cross_process_gate import GateTimeoutError, cross_process_write_lock
 
 _LOGGER = logging.getLogger(__name__)
 

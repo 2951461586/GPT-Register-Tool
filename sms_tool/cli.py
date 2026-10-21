@@ -178,7 +178,7 @@ def _load_heavy_deps() -> None:
     _load_storage_deps()
     _load_helper_deps()
     if load_mailbox_pool is None or remail_enabled is None:
-        from .mailbox import (
+        from .mailbox.router import (
             load_mailbox_pool as _lmp,
             remail_enabled as _re,
         )

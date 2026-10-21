@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from .config import ConfigInput, RuntimeConfig, resolve_runtime_config
-from .mailbox_parsers import parse_mailbox_pool_line
+from .mailbox.parsers import parse_mailbox_pool_line
 from .kernel.paths import PROJECT_ROOT, config_dir, resolve_config_file
 from .promotion_states import (
     payment_eligibility_label,

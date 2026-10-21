@@ -8,7 +8,7 @@ a provider should **receive**, not fetch -- the routing owner knows whether a
 rotation must be persisted and whether stdout is a terminal or the desktop IPC
 pipe.
 
-``sms_tool/mailbox.py`` installs the real implementations at import time. A
+``sms_tool/mailbox/router.py`` installs the real implementations at import time. A
 provider imported without that wiring still behaves predictably:
 
 * ``progress_dots_enabled`` answers for a terminal (the pre-IPC default);
@@ -48,7 +48,7 @@ def _unwired_apply_rotation(
     pool_path: str | Path | None = None,
 ) -> str:
     raise RuntimeError(
-        "providers.ports.apply_rotation is not wired: import sms_tool.mailbox (the routing owner) "
+        "providers.ports.apply_rotation is not wired: import sms_tool.mailbox.router (the routing owner) "
         "or call providers.ports.install(...) before driving a provider directly"
     )
 
@@ -70,7 +70,7 @@ def _ensure_wired() -> None:
     if _wired:
         return
     from ..desktop_ipc import progress_dots_enabled as dots
-    from ..mailbox_pool_writer import apply_rotation as rotate
+    from ..mailbox.pool_writer import apply_rotation as rotate
 
     install(apply_rotation_impl=rotate, progress_dots_impl=dots)
     _wired = True
@@ -101,7 +101,7 @@ def install(
 ) -> None:
     """Install the application-side implementations.
 
-    Called once from ``sms_tool/mailbox.py``. Keyword-only and partial on
+    Called once from ``sms_tool/mailbox/router.py``. Keyword-only and partial on
     purpose: a test that needs only one port can install that one.
     """
     global _apply_rotation, _progress_dots, _wired

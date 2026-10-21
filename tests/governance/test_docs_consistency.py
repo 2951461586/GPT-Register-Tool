@@ -47,13 +47,13 @@ class _AuthInvalidError(RuntimeError):
 def test_mailbox_document_is_live_and_matches_runtime_semantics():
     from types import SimpleNamespace
 
-    from sms_tool.mailbox import mailbox_proxy_candidates
-    from sms_tool.mailbox_errors import (
+    from sms_tool.mailbox.router import mailbox_proxy_candidates
+    from sms_tool.mailbox.errors import (
         MailboxEndpointUnavailableError,
         MailboxErrorDisposition,
         mailbox_error_disposition,
     )
-    from sms_tool.mailbox_strategies import (
+    from sms_tool.mailbox.strategies import (
         FunctionMailboxProviderAdapter,
         MailboxProviderRegistry,
     )
@@ -172,7 +172,7 @@ def test_provider_compatibility_facades_alias_the_implementation_modules():
     import importlib
 
     for name in ("cfworker", "gmail", "graph", "icloud_url", "remail", "smailr"):
-        facade = importlib.import_module(f"sms_tool.mailbox_{name}")
+        facade = importlib.import_module(f"sms_tool.mailbox.{name}")
         implementation = importlib.import_module(f"sms_tool.providers.mailbox_{name}")
         assert facade is implementation
     assert importlib.import_module("sms_tool.outlook_imap") is importlib.import_module(

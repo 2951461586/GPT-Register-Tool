@@ -42,11 +42,11 @@ from collections.abc import Mapping
 
 from curl_cffi import requests as curl_requests
 
-from .config import ConfigInput, current_config_data, resolve_runtime_config
-from .kernel.paths import resolve_config_file
-from .providers import outlook_imap_client
-from .providers import mailbox_gmail
-from .mail_otp import (
+from ..config import ConfigInput, current_config_data, resolve_runtime_config
+from ..kernel.paths import resolve_config_file
+from ..providers import outlook_imap_client
+from ..providers import mailbox_gmail
+from ..mail_otp import (
     candidate_is_newer,
     _email_otp_candidate,
     _extract_otp_from_text,
@@ -54,9 +54,9 @@ from .mail_otp import (
     _message_received_ts,
     _message_recipients,
 )
-from .providers import mailbox_cfworker
-from .mailbox_types import MailboxAccount
-from .mailbox_parsers import (
+from ..providers import mailbox_cfworker
+from .types import MailboxAccount
+from .parsers import (
     _looks_ms_client_id,
     _split_chatai_client_refresh,
     _normalize_mailbox_email,
@@ -64,15 +64,15 @@ from .mailbox_parsers import (
     _parse_mailbox_password_file,
     _parse_chatai_mailbox_file,
 )
-from .providers import mailbox_remail
-from .providers import mailbox_graph
-from .providers.mailbox_graph import MailboxTokenExpiredError
-from .providers.mailbox_graph import MailboxAuthInvalidError
-from .mailbox_errors import MailboxEndpointUnavailableError
-from .mailbox_quarantine import filter_quarantined_mailboxes, prune_quarantine_against_pool
-from .providers import mailbox_icloud_url
-from .providers import mailbox_smailr
-from . import mailbox_strategies
+from ..providers import mailbox_remail
+from ..providers import mailbox_graph
+from ..providers.mailbox_graph import MailboxTokenExpiredError
+from ..providers.mailbox_graph import MailboxAuthInvalidError
+from .errors import MailboxEndpointUnavailableError
+from .quarantine import filter_quarantined_mailboxes, prune_quarantine_against_pool
+from ..providers import mailbox_icloud_url
+from ..providers import mailbox_smailr
+from . import strategies as mailbox_strategies
 from typing import Any
 
 _LOGGER = logging.getLogger(__name__)
@@ -337,7 +337,7 @@ def mailbox_proxy_candidates(proxy=None, runtime_config: ConfigInput = None):
     values = []
     # Optional canonical lane (``proxy.lanes.mailbox``) is authoritative when
     # present; absent, the legacy mailbox keys below are used unchanged.
-    from .proxy.routing import canonical_lane_pool
+    from ..proxy.routing import canonical_lane_pool
 
     canonical = canonical_lane_pool(config, "mailbox")
     if canonical:
@@ -866,7 +866,7 @@ def poll_email_otp(
             # NOTE: registration does NOT come through here.  The handler calls
             # `MailboxService.poll_otp` (passed as poll_otp_fn), which resolves its
             # own adapter.  This hook covers auth_flow / codex_oauth / email-change;
-            # the registration lane is covered in mailbox_service.py.
+            # the registration lane is covered in mailbox/service.py.
             _LOGGER.info(
                 "Mailbox OTP poll dispatch provider=%s poller=%s timeout=%ss proxy_candidates=%d",
                 provider or "unknown",

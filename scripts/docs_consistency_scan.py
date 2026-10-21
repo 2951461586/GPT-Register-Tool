@@ -66,7 +66,7 @@ DOCS = (
     "docs/adr/0008-registration-result-contract.md",
     "docs/adr/0009-registration-hardening.md",
     # The troubleshooting checklists quote concrete file:line anchors
-    # (``mailbox_pool_writer.py:209`` and friends) so operators can jump
+    # (``mailbox/pool_writer.py:209`` and friends) so operators can jump
     # straight to the owner. Those anchors rot exactly like the contract
     # docs' do, so this file is canonical too -- not an audit snapshot.
     "docs/TROUBLESHOOTING.md",

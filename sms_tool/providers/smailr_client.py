@@ -373,7 +373,7 @@ def poll_otp(
     log_prefix: str = "smailr",
 ) -> str | None:
     """Settle-stability OTP polling."""
-    from ..mailbox_poll import _poll_otp_with_settle
+    from ..mailbox.poll import _poll_otp_with_settle
     from ..mail_otp import _email_otp_candidate
 
     keyword = (subject_keyword or "").lower()

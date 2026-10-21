@@ -96,11 +96,19 @@ def test_an_unwired_rotation_raises_instead_of_losing_the_write_back(monkeypatch
         ports.apply_rotation(object(), previous="old", current="new")
 
     assert "not wired" in str(error.value)
-    assert "sms_tool.mailbox" in str(error.value)
+    assert "sms_tool.mailbox.router" in str(error.value)
 
 
 def test_install_makes_both_ports_callable(monkeypatch):
     monkeypatch.setattr(ports, "_ensure_wired", lambda: None)
+    # ``install`` assigns module globals, so every fake it writes has to be
+    # registered with monkeypatch too or it outlives this test: measured on a
+    # serial full run, the fake rotation made the pool-write assertions in
+    # ``tests/mailbox/test_mailbox_pool_writer.py`` fail (they pass alone, and
+    # CI hid it because ``-n auto`` puts the two files in different workers).
+    monkeypatch.setattr(ports, "_apply_rotation", ports._apply_rotation)
+    monkeypatch.setattr(ports, "_progress_dots", ports._progress_dots)
+    monkeypatch.setattr(ports, "_wired", ports._wired)
     calls: list[tuple[object, str, str]] = []
 
     def fake_rotation(mailbox, *, previous, current, pool_path=None):

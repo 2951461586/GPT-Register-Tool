@@ -123,7 +123,7 @@ def resolve_mailbox(config: Mapping[str, Any] | None, *, operation_proxy: str | 
     # to an empty pool rather than raising.  Live polling still uses mailbox's
     # own resolver, not this facade.
     try:
-        from ..mailbox import mailbox_proxy_candidates  # lazy: pulls provider adapters
+        from ..mailbox.router import mailbox_proxy_candidates  # lazy: pulls provider adapters
 
         return parse_lane_proxy_pool(mailbox_proxy_candidates(operation_proxy, config))
     except Exception:

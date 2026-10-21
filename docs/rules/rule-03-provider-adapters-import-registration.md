@@ -16,5 +16,5 @@ Provider adapters must not import the registration or payment workflow.
 They also must not import the two application concerns that the routing owner
 decides: **pool persistence** (`mailbox_pool_writer`) and the **stdout/IPC
 channel** (`desktop_ipc`). Both arrive through `sms_tool/providers/ports.py`,
-which `sms_tool/mailbox.py`'s layer wires lazily; an unwired rotation raises
+which `sms_tool/mailbox/router.py`'s layer wires lazily; an unwired rotation raises
 rather than silently skipping the write-back.

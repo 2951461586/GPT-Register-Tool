@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from sms_tool.accounts import account_recovery
 from sms_tool.accounts import recovery_batch
 from sms_tool import codex_oauth
-from sms_tool.mailbox import MailboxAccount
+from sms_tool.mailbox.router import MailboxAccount
 from sms_tool.accounts.account_identity import create_registration_identity
 
 

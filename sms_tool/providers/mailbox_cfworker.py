@@ -2,7 +2,7 @@ import argparse
 import time
 
 from ..mail_otp import _email_otp_candidate, _message_id
-from ..mailbox_types import MailboxAccount
+from ..mailbox.types import MailboxAccount
 from .cfworker_client import CFWorkerMailboxClient
 
 
@@ -144,7 +144,7 @@ def _poll_cfworker_otp(
     def _is_newer(a, b):
         return (a or {}).get("id") != (b or {}).get("id") and a is not None
 
-    from ..mailbox_poll import _poll_otp_with_settle
+    from ..mailbox.poll import _poll_otp_with_settle
 
     return _poll_otp_with_settle(
         _fetch_candidate,

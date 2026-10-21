@@ -7,10 +7,10 @@ from dataclasses import dataclass
 from contextlib import contextmanager
 from typing import Any
 
-from .config import ConfigInput, RuntimeConfig, resolve_runtime_config, runtime_config_scope
-from .mailbox_strategies import DEFAULT_MAILBOX_PROVIDERS, MailboxProviderRegistry
-from .mailbox_errors import MailboxErrorDisposition, mailbox_error_disposition
-from .mailbox_quarantine import (
+from ..config import ConfigInput, RuntimeConfig, resolve_runtime_config, runtime_config_scope
+from .strategies import DEFAULT_MAILBOX_PROVIDERS, MailboxProviderRegistry
+from .errors import MailboxErrorDisposition, mailbox_error_disposition
+from .quarantine import (
     raise_if_mailbox_quarantined,
     record_mailbox_auth_invalid,
     record_mailbox_endpoint_unavailable,
@@ -55,7 +55,7 @@ class MailboxService:
         proxy: str | None = None,
         include_body: bool = False,
     ) -> list[Any]:
-        from .mailbox import mailbox_email_config, resolve_mailbox_proxy
+        from .router import mailbox_email_config, resolve_mailbox_proxy
 
         with runtime_config_scope(self.config, workflow="mailbox"), _mailbox_access(mailbox):
             config = mailbox_email_config(self.config)
@@ -83,7 +83,7 @@ class MailboxService:
         proxy: str | None = None,
         excluded_otps: set[str] | None = None,
     ) -> str | None:
-        from .mailbox import (
+        from .router import (
             mailbox_email_config,
             mailbox_proxy_candidates,
             provider_otp_issued_after,

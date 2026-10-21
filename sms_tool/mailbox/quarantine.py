@@ -9,8 +9,8 @@ import time
 from pathlib import Path
 from typing import Any
 
-from .config import current_config_data
-from .kernel.paths import runtime_file
+from ..config import current_config_data
+from ..kernel.paths import runtime_file
 
 _LOCK = threading.Lock()
 
@@ -146,10 +146,10 @@ def raise_if_mailbox_quarantined(mailbox: Any) -> None:
     if not entry:
         return
     if entry.get("code") == "mailbox_endpoint_unavailable":
-        from .mailbox_errors import MailboxEndpointUnavailableError
+        from .errors import MailboxEndpointUnavailableError
 
         raise MailboxEndpointUnavailableError()
-    from .providers.mailbox_graph import MailboxAuthInvalidError
+    from ..providers.mailbox_graph import MailboxAuthInvalidError
 
     raise MailboxAuthInvalidError(detail="mailbox credential quarantined; repair the mailbox pool")
 
@@ -216,7 +216,7 @@ def mailbox_relogin_allowed(email: str | None = None) -> bool:
         # match, fail this account fast instead of burning a relogin lane.
         return False
     try:
-        from .providers.mailbox_remail import _read_dead_remail_registry
+        from ..providers.mailbox_remail import _read_dead_remail_registry
 
         # Test seams may replace quarantine_path with an isolated temporary
         # file; do not let the live runtime registry leak into those tests.

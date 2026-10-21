@@ -90,6 +90,7 @@ EXCLUDED_DIRS = {"__pycache__", "_vendor"}
 #: Subpackages that are their own directory node. Anything else directly under
 #: ``sms_tool/`` collapses into the ``sms_tool`` node.
 SUBPACKAGES = (
+    "mailbox",
     "proxy",
     "accounts",
     "auth_flow",

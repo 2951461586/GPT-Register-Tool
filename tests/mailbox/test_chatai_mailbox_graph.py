@@ -1,8 +1,8 @@
 import unittest
 from unittest.mock import patch
 
-from sms_tool import mailbox as mailbox_module
-from sms_tool.mailbox import MailboxAccount
+from sms_tool.mailbox import router as mailbox_module
+from sms_tool.mailbox.router import MailboxAccount
 
 
 class FakeTokenResponse:

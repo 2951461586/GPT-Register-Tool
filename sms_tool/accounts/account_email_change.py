@@ -18,8 +18,8 @@ from typing import Any, Callable, Iterable, Mapping
 from .account_liveness import account_chatgpt_id, probe_account_liveness
 from .account_recovery import relogin_chatgpt_email_account
 from ..config import CFG, ConfigInput
-from ..mailbox import load_mailbox_pool, poll_email_otp
-from ..mailbox_types import MailboxAccount
+from ..mailbox.router import load_mailbox_pool, poll_email_otp
+from ..mailbox.types import MailboxAccount
 from ..storage import (
     list_account_records,
     migrate_account_email,

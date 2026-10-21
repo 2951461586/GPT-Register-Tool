@@ -33,7 +33,7 @@ from ..storage import (
     mark_quota_status,
     upsert_account,
 )
-from ..mailbox_quarantine import mailbox_relogin_allowed
+from ..mailbox.quarantine import mailbox_relogin_allowed
 from ..promotion_states import (
     AUTH_INVALID_LABEL,
     PROMOTION_STATE_AUTH_INVALID,

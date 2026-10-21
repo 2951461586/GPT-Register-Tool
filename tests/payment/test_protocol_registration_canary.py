@@ -90,7 +90,7 @@ def test_protocol_identity_bootstrap_canary_is_offline():
 
     with (
         patch("sms_tool.sentinel.sentinel_backend", return_value="node_sdk"),
-        patch("sms_tool.mailbox_service.MailboxService.create", return_value=Mock()),
+        patch("sms_tool.mailbox.service.MailboxService.create", return_value=Mock()),
         patch("sms_tool.registration_handlers._new_registration_session", return_value=Mock()),
         patch("sms_tool.registration_handlers._apply_protocol_fingerprint"),
     ):

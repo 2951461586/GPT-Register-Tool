@@ -9,7 +9,7 @@ Two halves, on purpose:
 * the last tests scan the real tree, so the ratchet is enforced on every push
   (CI already runs pytest) without touching the workflow file.
 
-The regression this gate exists for: ``sms_tool/mailbox.py`` has **no public
+The regression this gate exists for: ``sms_tool/mailbox/router.py`` has **no public
 surface at all** (every top-level function is ``_``-prefixed) yet is the most
 imported module in the package, and nothing counted its consumers before
 2026-09-17. Five more modules were found in the same position the same day and
@@ -52,7 +52,7 @@ def test_parent_relative_private_import_is_counted():
 
 
 def test_absolute_package_private_import_is_counted():
-    assert _triples("from sms_tool.mailbox import _fetch_mailbox_messages") == {
+    assert _triples("from sms_tool.mailbox.router import _fetch_mailbox_messages") == {
         ("importer.py", "mailbox", "_fetch_mailbox_messages")
     }
 
@@ -110,7 +110,7 @@ def test_attribute_access_is_a_known_blind_spot():
     """
     assert (
         _triples("""
-        import sms_tool.mailbox as mailbox
+        import sms_tool.mailbox.router as mailbox
         mailbox._poll_email_otp()
     """)
         == set()

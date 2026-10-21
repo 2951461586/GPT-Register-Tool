@@ -17,13 +17,13 @@ the *gate* (per-pair, only-down); this file is the *view*.
 
 | Measure | Value |
 | --- | ---: |
-| Modules | 305 |
-| Module-level import edges | 969 |
+| Modules | 306 |
+| Module-level import edges | 971 |
 | Delayed (function-local) edges | 274 |
-| Type-only (`if TYPE_CHECKING`) edges | 31 |
+| Type-only (`if TYPE_CHECKING`) edges | 32 |
 | Strongly connected components (size > 1) | 0 |
 | Modules inside a cycle | 0 |
-| Mutually dependent directory pairs | 11 |
+| Mutually dependent directory pairs | 13 |
 
 ## Cycles
 
@@ -35,6 +35,7 @@ None.
 | --- |
 | `sms_tool` ↔ `sms_tool/accounts` |
 | `sms_tool` ↔ `sms_tool/auth_flow` |
+| `sms_tool` ↔ `sms_tool/mailbox` |
 | `sms_tool` ↔ `sms_tool/pay_link` |
 | `sms_tool` ↔ `sms_tool/paypal` |
 | `sms_tool` ↔ `sms_tool/paypal_link` |
@@ -44,6 +45,7 @@ None.
 | `sms_tool` ↔ `sms_tool/sentinel` |
 | `sms_tool` ↔ `sms_tool/store` |
 | `sms_tool` ↔ `sms_tool/upi_link` |
+| `sms_tool/mailbox` ↔ `sms_tool/providers` |
 
 ## Most imported modules
 
@@ -52,7 +54,7 @@ None.
 | `sms_tool.config` | 64 |
 | `sms_tool.kernel.sanitizer` | 36 |
 | `sms_tool.kernel.paths` | 33 |
-| `sms_tool` | 29 |
+| `sms_tool` | 28 |
 | `sms_tool.phone_proxy` | 24 |
 | `sms_tool.auth_headers` | 22 |
 | `sms_tool.http_client` | 18 |

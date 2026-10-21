@@ -50,7 +50,7 @@ property bag.  Four construction shapes break it, each verified in the tree:
   on ``verify_hint: bool = False`` is correct; ``probe`` is documented as a seam
   a caller or test swaps.
 * **``**mapping`` / ``from_config``** -- ``browser_pool.py:119``,
-  ``mailbox_service.py:46``.  Field names arrive as dict keys, not keywords.
+  ``mailbox/service.py:46``.  Field names arrive as dict keys, not keywords.
 
 ``RegistrationRuntimeState`` avoids all four: it is written by attribute
 assignment everywhere, and ``_compat_property`` routes even ``setattr(state,

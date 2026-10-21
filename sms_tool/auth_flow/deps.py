@@ -16,7 +16,7 @@ from ..auth_state import fetch_client_auth_session_dump as _fetch_client_auth_se
 from ..config import current_config_data
 from ..http_client import _retry_after_seconds, request_with_retry
 from ..http_utils import _absolute_url, _cookie_presence, _follow_continue_url, _json_or_raw
-from ..mailbox import poll_email_otp
+from ..mailbox.router import poll_email_otp
 from ..phone_proxy import redact_proxy_url
 from ..registration_concurrency import mark_registration_rate_limited
 

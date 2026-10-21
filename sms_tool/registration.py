@@ -149,7 +149,7 @@ from .otp_strategy import (
     _poll_registration_email_otp,
     send_registration_email_otp as _send_registration_email_otp,
 )
-from .mailbox import ensure_mailbox_account, poll_email_otp, snapshot_mailbox_message
+from .mailbox.router import ensure_mailbox_account, poll_email_otp, snapshot_mailbox_message
 from .kernel.paths import runtime_file
 from .phone_registration import run_phone_register as _run_phone_register_impl
 from .registration_outcome import (

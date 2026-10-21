@@ -15,7 +15,7 @@ camoufox，21 跑 8 成 11 败）日志诊断驱动的四项修复；其二是�
   配置、出口审计分离）；子进程启动环境 workaround 收敛到
   `platform_patches.py`（发布载荷闸门要求非下划线前缀命名），只作用于子进程。
 - 新增 `telemetry.py`：带版本号的 correlation 字段与 test/live 来源标注；
-  `mailbox_errors.py` 固化邮箱终端错误分类；`error_advice.py` 并入策略层。
+  `mailbox/errors.py` 固化邮箱终端错误分类；`error_advice.py` 并入策略层。
 - 桌面端后端退出日志级别修正（`PythonBackendClient.cs`）+ C# 回归测试。
 - 新增 `scripts/registration_inventory.py` 与对应守卫测试；文档拆分：
   `docs/current/{configuration,registration-architecture,telemetry-and-runtime}.md`、

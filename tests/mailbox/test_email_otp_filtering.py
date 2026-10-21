@@ -2,8 +2,8 @@ import unittest
 from typing import TypeVar
 from unittest import mock
 from sms_tool import codex_oauth
-from sms_tool import mailbox as mailbox_module
-from sms_tool.mailbox import (
+from sms_tool.mailbox import router as mailbox_module
+from sms_tool.mailbox.router import (
     MailboxAccount,
     _email_otp_candidate,
     _extract_otp_from_text,

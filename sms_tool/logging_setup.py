@@ -103,7 +103,7 @@ _MODULE_LABELS = {
     "sms_tool.accounts.account_promotion": "优惠检测",
     "sms_tool.accounts.promotion_batch": "优惠检测",
     "sms_tool.codex_oauth": "Codex 授权",
-    "sms_tool.mailbox": "邮箱",
+    "sms_tool.mailbox.router": "邮箱",
     "sms_tool.providers": "邮箱",
     "sms_tool.phone": "接码",
     "proxy_bridge": "代理桥接",

@@ -60,7 +60,7 @@ class CodexOauthTests(unittest.TestCase):
         )
         with (
             patch("sms_tool.codex_oauth.mailbox_has_inbox_credentials", side_effect=[False, True]),
-            patch("sms_tool.mailbox.mailbox_from_config", return_value=fallback) as from_config,
+            patch("sms_tool.mailbox.router.mailbox_from_config", return_value=fallback) as from_config,
         ):
             result = codex_oauth._mailbox_from_data({"email": "samplegmail01@gmail.com"})
 
@@ -70,7 +70,7 @@ class CodexOauthTests(unittest.TestCase):
     def test_mailbox_from_data_does_not_fallback_to_config_for_non_gmail(self):
         with (
             patch("sms_tool.codex_oauth.mailbox_has_inbox_credentials", return_value=False),
-            patch("sms_tool.mailbox.mailbox_from_config") as from_config,
+            patch("sms_tool.mailbox.router.mailbox_from_config") as from_config,
         ):
             result = codex_oauth._mailbox_from_data({"email": "user@example.com"})
 

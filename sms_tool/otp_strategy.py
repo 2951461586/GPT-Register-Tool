@@ -15,7 +15,7 @@ from .auth_headers import AUTH_IMPERSONATE, auth_impersonate, openai_auth_header
 from .auth_wire import _invalid_state_auth_response
 from .http_utils import _absolute_url, _json_or_raw
 from .http_client import request_with_retry
-from .mailbox import poll_email_otp
+from .mailbox.router import poll_email_otp
 from .registration_progress import registration_stage
 
 

@@ -35,11 +35,6 @@
       "sms_tool/commands/omakse.py"
     ],
     "Mailbox and phone inventory": [
-      "sms_tool/mailbox.py",
-      "sms_tool/mailbox_service.py",
-      "sms_tool/mailbox_strategies.py",
-      "sms_tool/mailbox_types.py",
-      "sms_tool/mailbox_parsers.py",
       "sms_tool/providers/mailbox_*.py",
       "sms_tool/providers/cfworker_client.py",
       "sms_tool/providers/smailr_client.py",
@@ -54,19 +49,12 @@
       "sms_tool/phone_provider_lifecycle.py",
       "sms_tool/phone_proxy.py",
       "sms_tool/sms_provider_adapter.py",
-      "sms_tool/sms_providers.py"
+      "sms_tool/sms_providers.py",
+      "sms_tool/mailbox/*.py"
     ],
     "Mailbox facades and polling primitives": [
-      "sms_tool/mailbox_cfworker.py",
-      "sms_tool/mailbox_errors.py",
-      "sms_tool/mailbox_gmail.py",
-      "sms_tool/mailbox_graph.py",
-      "sms_tool/mailbox_icloud_url.py",
-      "sms_tool/mailbox_poll.py",
-      "sms_tool/mailbox_quarantine.py",
-      "sms_tool/mailbox_remail.py",
-      "sms_tool/mailbox_smailr.py",
-      "sms_tool/outlook_imap.py"
+      "sms_tool/outlook_imap.py",
+      "sms_tool/mailbox/*.py"
     ],
     "Browser registration drivers": [
       "sms_tool/registration_drivers/*.py",
@@ -253,7 +241,7 @@
       "sms_tool/desktop_ipc.py"
     ],
     "Mailbox credential writeback": [
-      "sms_tool/mailbox_pool_writer.py"
+      "sms_tool/mailbox/*.py"
     ],
     "Persistence": [
       "sms_tool/storage.py",

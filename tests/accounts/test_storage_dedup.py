@@ -117,7 +117,7 @@ class StorageDedupTests(unittest.TestCase):
             db_path = Path(tmp) / "accounts.sqlite3"
             with (
                 connection.database_path_override(db_path),
-                patch("sms_tool.mailbox_remail.record_dead_remail_account") as record,
+                patch("sms_tool.mailbox.remail.record_dead_remail_account") as record,
             ):
                 self.assertTrue(
                     storage.upsert_account(

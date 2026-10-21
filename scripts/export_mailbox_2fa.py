@@ -59,7 +59,7 @@ def _terminal_markers() -> tuple[str, ...]:
 
 
 def load_pool() -> dict[str, str]:
-    from sms_tool.mailbox_parsers import parse_mailbox_pool_line
+    from sms_tool.mailbox.parsers import parse_mailbox_pool_line
 
     pool: dict[str, str] = {}
     text = POOL_FILE.read_text(encoding="utf-8", errors="replace")

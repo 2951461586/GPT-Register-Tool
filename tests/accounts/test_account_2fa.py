@@ -2,7 +2,7 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 from sms_tool.accounts import account_2fa
-from sms_tool.mailbox_types import MailboxAccount
+from sms_tool.mailbox.types import MailboxAccount
 from sms_tool.registration_handlers import RegistrationEmailWorkflow
 from sms_tool.registration_state import RegistrationStateMachine
 

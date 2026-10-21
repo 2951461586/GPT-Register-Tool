@@ -4,7 +4,7 @@ from curl_cffi.const import CurlECode
 from curl_cffi.requests.exceptions import SSLError
 
 from sms_tool.providers import mailbox_smailr
-from sms_tool.mailbox_parsers import _parse_mailbox_token_file
+from sms_tool.mailbox.parsers import _parse_mailbox_token_file
 from sms_tool.providers.smailr_client import SmailrClient, SmailrError, fetch_messages, poll_otp, _normalize_message
 
 
@@ -99,7 +99,7 @@ def test_smailr_fetches_detail_when_list_body_is_only_a_preview():
 def test_smailr_poll_otp_uses_shared_mailbox_poll_module():
     client = SmailrClient("nm_test")
     with patch(
-        "sms_tool.mailbox_poll._poll_otp_with_settle",
+        "sms_tool.mailbox.poll._poll_otp_with_settle",
         return_value="123456",
     ) as shared_poll:
         result = poll_otp(client, "mb-1", "otp@smailr.com", timeout=30)
@@ -130,7 +130,7 @@ def test_smailr_poll_otp_falls_back_when_provider_subject_is_mojibake():
             return_value=[message],
         ),
         patch(
-            "sms_tool.mailbox_poll._poll_otp_with_settle",
+            "sms_tool.mailbox.poll._poll_otp_with_settle",
             side_effect=settle,
         ),
     ):

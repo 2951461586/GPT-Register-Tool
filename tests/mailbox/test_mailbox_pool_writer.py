@@ -1,4 +1,4 @@
-"""Behaviour tests for ``sms_tool/mailbox_pool_writer.py`` (2026-09-22).
+"""Behaviour tests for ``sms_tool/mailbox/pool_writer.py`` (2026-09-22).
 
 Why this exists
 ---------------
@@ -29,7 +29,7 @@ from pathlib import Path
 from unittest import mock
 
 from sms_tool.providers import mailbox_gmail, mailbox_graph
-from sms_tool.mailbox_pool_writer import (
+from sms_tool.mailbox.pool_writer import (
     STATUS_AMBIGUOUS,
     STATUS_DISABLED,
     STATUS_NOT_FOUND,
@@ -343,7 +343,7 @@ class ProviderIntegrationTests(_PoolCase):
         box = self.mailbox()
         fake = _FakeRequests(_Response(payload={"access_token": "at-new", "refresh_token": NEW_RT}))
         with mock.patch.object(mailbox_graph, "curl_requests", fake):
-            with mock.patch("sms_tool.mailbox_pool_writer._replace_anchor", side_effect=OSError("disk full")):
+            with mock.patch("sms_tool.mailbox.pool_writer._replace_anchor", side_effect=OSError("disk full")):
                 token = mailbox_graph.ms_oauth_refresh(box, {})
         self.assertEqual(token, "at-new")
         self.assertEqual(box.refresh_token, NEW_RT)

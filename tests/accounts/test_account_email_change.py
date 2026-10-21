@@ -9,7 +9,7 @@ from sms_tool.accounts.account_email_change import (
     change_email_begin,
     change_email_verify,
 )
-from sms_tool.mailbox_types import MailboxAccount
+from sms_tool.mailbox.types import MailboxAccount
 from sms_tool.commands.email_change import run_change_email
 from sms_tool.storage import init_database, migrate_account_email, upsert_account, list_account_records
 

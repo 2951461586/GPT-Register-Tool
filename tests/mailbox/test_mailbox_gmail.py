@@ -5,9 +5,10 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from sms_tool import mailbox as mailbox_module, mailbox_parsers
+from sms_tool.mailbox import parsers as mailbox_parsers
+from sms_tool.mailbox import router as mailbox_module
 from sms_tool.providers import mailbox_gmail
-from sms_tool.mailbox_types import MailboxAccount
+from sms_tool.mailbox.types import MailboxAccount
 
 
 class _FakeImap:
@@ -100,7 +101,7 @@ class GmailMailboxTests(unittest.TestCase):
             email="target@gmail.com", provider="gmail", password="abcd efgh ijkl mnop", auth_mode="app_password"
         )
 
-        with patch("sms_tool.mailbox_gmail.imaplib.IMAP4_SSL", _FakeImap):
+        with patch("sms_tool.mailbox.gmail.imaplib.IMAP4_SSL", _FakeImap):
             messages = mailbox_gmail.fetch_gmail_imap_messages(mailbox, limit=5)
 
         self.assertEqual(len(messages), 1)
@@ -114,7 +115,7 @@ class GmailMailboxTests(unittest.TestCase):
             email="target@gmail.com", provider="gmail", password="abcd efgh ijkl mnop", auth_mode="app_password"
         )
 
-        with patch("sms_tool.mailbox_gmail._imap_ssl_client", return_value=_FakeImap()) as client:
+        with patch("sms_tool.mailbox.gmail._imap_ssl_client", return_value=_FakeImap()) as client:
             messages = mailbox_gmail.fetch_gmail_imap_messages(
                 mailbox,
                 limit=5,
@@ -211,7 +212,7 @@ class GmailMailboxTests(unittest.TestCase):
         )
         fake = _FakeSmtp()
 
-        with patch("sms_tool.mailbox_gmail.smtplib.SMTP_SSL", return_value=fake):
+        with patch("sms_tool.mailbox.gmail.smtplib.SMTP_SSL", return_value=fake):
             result = mailbox_gmail.send_gmail_message(
                 mailbox,
                 "receiver@example.com",

@@ -27,7 +27,7 @@ export remain separate workflows.
 | `registration_persistence.py`, `registration_stage_runner.py`, `registration_protocol_helpers.py`, `registration_otp_stages.py`, `registration_account_stages.py`, `registration_edge_challenge.py`, `registration_resume.py`, `registration_sentinel_stages.py` | Persistence seam, stage executor + abort signal, pure transport/format helpers, the email-OTP stages, the account-creation / session / AT-probe stages, the in-flow edge-challenge hook (same-pool exit move + audit counters), checkpoint persistence + the post-create resume stage, and Sentinel issuance (switch / password-page bundle / per-flow); re-exported by `registration_handlers.py` | Stage ordering |
 | `registration_drivers/browser_flow/` | Browser page state and form workflow | Mailbox provider transport |
 | `registration_drivers/external_sessions/` | Session creation, managed lifecycle, profile config and egress probe | Registration stages |
-| `mailbox_service.py`, `mailbox_strategies.py`, `providers/` | Mailbox routing, capability resolution, polling policy and provider transport | Registration success |
+| `mailbox/service.py`, `mailbox/strategies.py`, `providers/` | Mailbox routing, capability resolution, polling policy and provider transport | Registration success |
 | `registration_result.py` | Shared result assembly | Success decisions |
 | `store/` | Persistence and domain facts | Provider side effects |
 | `accounts/account_recovery.py`, `codex_oauth.py` | Existing-account recovery and OAuth | Automatic new signup |
@@ -210,10 +210,10 @@ above.
 <!-- ratchet-numbers:begin architecture -->
 | Measure | Value |
 | --- | --- |
-| Module-level cross-directory edges | 281 |
-| Directory pairs | 35 |
-| Mutual pairs / minority-direction edges | 11 / 45 |
-| Delayed cross-directory edges | 205 |
+| Module-level cross-directory edges | 298 |
+| Directory pairs | 42 |
+| Mutual pairs / minority-direction edges | 13 / 44 |
+| Delayed cross-directory edges | 209 |
 | Delayed imports in the package | 417 (baseline 417) |
 | Claimed tracked `sms_tool` modules | 307 of 307 (0 unclaimed, 41 directory-map groups) |
 <!-- ratchet-numbers:end architecture -->

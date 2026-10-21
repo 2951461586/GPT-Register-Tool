@@ -1,6 +1,6 @@
 """Observability + credential-safety tests for the mailbox OTP dispatch log.
 
-``sms_tool/mailbox.py::poll_email_otp`` dispatches to a provider-specific
+``sms_tool/mailbox/router.py::poll_email_otp`` dispatches to a provider-specific
 poller (cfworker / remail / graph) chosen at runtime.  Before 2026-09-11 that
 choice was invisible: a run pinned at the 300s OTP timeout produced no record
 of *which* backend was being waited on, so "the mail never arrived" and "the
@@ -20,7 +20,9 @@ import logging
 import unittest
 from unittest import mock
 
-from sms_tool import mailbox, mailbox_service, mailbox_strategies
+from sms_tool.mailbox import router as mailbox
+from sms_tool.mailbox import service as mailbox_service
+from sms_tool.mailbox import strategies as mailbox_strategies
 
 
 def _field(record: logging.LogRecord, name: str) -> object:

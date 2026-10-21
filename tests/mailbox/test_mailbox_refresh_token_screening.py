@@ -25,7 +25,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from sms_tool.mailbox_parsers import (
+from sms_tool.mailbox.parsers import (
     REFRESH_TOKEN_MIN_LENGTH,
     parse_mailbox_pool_line,
     refresh_token_finding,

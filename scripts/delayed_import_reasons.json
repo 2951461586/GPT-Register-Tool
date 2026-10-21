@@ -8,11 +8,23 @@
       "reason": "deferred",
       "why": "validate_config imports the stage vocabulary inside the function for the same reason as payment_catalog: the config hub must stay above the payment lane at import time"
     },
+    "sms_tool/providers/mailbox_cfworker.py -> sms_tool.mailbox.poll": {
+      "reason": "deferred",
+      "why": "the cfworker adapter pulls the settle loop in inside the poll function so the provider layer never imports the mailbox package at module scope (Rule 3)"
+    },
+    "sms_tool/providers/mailbox_remail.py -> sms_tool.storage": {
+      "reason": "deferred",
+      "why": "the terminal-remail account lookup is imported inside the function; a provider must not depend on the account store at module scope"
+    },
+    "sms_tool/providers/mailbox_smailr.py -> sms_tool.storage": {
+      "reason": "deferred",
+      "why": "the account-record lookup is imported inside the function for the same reason as the remail adapter"
+    },
     "sms_tool/providers/ports.py -> sms_tool.desktop_ipc": {
       "reason": "deferred",
       "why": "provider port wires lazily so provider adapters never import the IPC channel at module scope (Rule 3)"
     },
-    "sms_tool/providers/ports.py -> sms_tool.mailbox_pool_writer": {
+    "sms_tool/providers/ports.py -> sms_tool.mailbox.pool_writer": {
       "reason": "deferred",
       "why": "provider port wires lazily so provider adapters never import pool persistence at module scope (Rule 3)"
     }

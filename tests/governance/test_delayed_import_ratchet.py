@@ -94,7 +94,7 @@ def test_reason_is_derived_for_documented_cycles():
 
 def test_reason_is_startup_for_the_cli_seam():
     classify = delayed_import_ratchet.classify
-    assert classify("sms_tool/cli.py", "sms_tool.mailbox") == "startup"
+    assert classify("sms_tool/cli.py", "sms_tool.mailbox.router") == "startup"
     assert classify("sms_tool/commands/payment.py", "sms_tool.payment_batch") == "startup"
     assert classify("sms_tool/cli_parsers/payment.py", "sms_tool.gen_pp_link") == "startup"
 
@@ -120,7 +120,7 @@ def test_reason_is_test_seam_for_the_store_shell_edge():
 def test_reason_defaults_to_deferred_and_that_needs_a_why():
     classify = delayed_import_ratchet.classify
     assert classify("sms_tool/accounts/account_2fa.py", "sms_tool.auth_headers") == "deferred"
-    assert classify("sms_tool/mailbox.py", "sms_tool.mailbox_parsers") == "deferred"
+    assert classify("sms_tool/mailbox/router.py", "sms_tool.mailbox.parsers") == "deferred"
 
 
 def _write_reasons(tmp_path: Path, edges: dict) -> Path:
@@ -221,11 +221,11 @@ def test_a_rule_derived_new_edge_can_be_adopted(tmp_path, monkeypatch):
     baseline = tmp_path / "baseline.json"
     baseline.write_text(json.dumps({"total": 1, "per_file": {}, "reasons": {}, "edges": {}}), encoding="utf-8")
     monkeypatch.setattr(delayed_import_ratchet, "BASELINE", baseline)
-    edge = delayed_import_ratchet.DelayedEdge("sms_tool/cli.py", "sms_tool.mailbox", "startup")
+    edge = delayed_import_ratchet.DelayedEdge("sms_tool/cli.py", "sms_tool.mailbox.router", "startup")
     _fake_tree(monkeypatch, [edge])
     assert delayed_import_ratchet.main(["--update-baseline"]) == 0
     written = json.loads(baseline.read_text(encoding="utf-8"))
-    assert written["edges"] == {"sms_tool/cli.py -> sms_tool.mailbox": "startup"}
+    assert written["edges"] == {"sms_tool/cli.py -> sms_tool.mailbox.router": "startup"}
 
 
 def test_a_reason_change_fails_the_check(tmp_path, monkeypatch):

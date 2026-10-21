@@ -1,4 +1,4 @@
-from sms_tool.mailbox_errors import (
+from sms_tool.mailbox.errors import (
     MailboxEndpointUnavailableError,
     MailboxErrorDisposition,
     mailbox_error_disposition,

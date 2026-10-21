@@ -9,7 +9,7 @@
   的默认值）下 OTP 是更早的 ``auth_flow``(authorize) 步骤发出的，等
   ``send_email_otp`` 执行时验证码邮件**可能已经在转发页上可见**；此时快照会把
   它写进 ``mailbox.seen_message_ids``，而 ``latest_email_otp_candidate``
-  （``mailbox.py``）对 id 命中者**直接跳过** ⇒ 随后 300s 轮询无论转发页怎么
+  （``mailbox/router.py``）对 id 命中者**直接跳过** ⇒ 随后 300s 轮询无论转发页怎么
   刷新都看不到正主，报 ``email_otp_poll_timeout``。
 * 同理 ``auth_flow`` / ``user_register`` 也不得抢跑快照。
 
@@ -29,8 +29,9 @@ from pathlib import Path
 from typing import cast
 from unittest import mock
 
-from sms_tool import mailbox, mailbox_icloud_url
-from sms_tool.mailbox_types import MailboxAccount
+from sms_tool.mailbox import icloud_url as mailbox_icloud_url
+from sms_tool.mailbox import router as mailbox
+from sms_tool.mailbox.types import MailboxAccount
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _HANDLERS = PROJECT_ROOT / "sms_tool" / "registration_handlers.py"

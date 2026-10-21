@@ -1,6 +1,6 @@
 """Regression tests for ReMail batch idempotency (audit batch-3 item #2).
 
-Before the fix, ``mailbox_remail.py`` sent a fresh ``uuid.uuid4()`` as the
+Before the fix, ``mailbox/remail.py`` sent a fresh ``uuid.uuid4()`` as the
 ``Idempotency-Key`` on every batch order request, so a retried request created a
 second order instead of being de-duplicated by the server (double charge). The key
 must now be stable per order intent (sha256 of mode + supply + canonical payload).
@@ -11,7 +11,7 @@ from types import SimpleNamespace
 
 import pytest
 
-# The provider lives in ``providers/``; ``sms_tool/mailbox_remail.py`` is a
+# The provider lives in ``providers/``; ``sms_tool/mailbox/remail.py`` is a
 # compatibility facade that swaps itself for this module in ``sys.modules``, so
 # importing the implementation directly is the same module object at runtime and
 # the only form a type checker can see into.

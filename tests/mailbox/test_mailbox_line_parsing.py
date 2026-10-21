@@ -23,7 +23,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from sms_tool.mailbox_parsers import (
+from sms_tool.mailbox.parsers import (
     _parse_chatai_mailbox_file,
     _parse_mailbox_lines,
     _parse_mailbox_token_file,

@@ -6,9 +6,10 @@ from unittest.mock import Mock
 
 import pytest
 
-from sms_tool import mailbox, registration_checkpoint, storage
+from sms_tool import registration_checkpoint, storage
+from sms_tool.mailbox import router as mailbox
 from sms_tool.store import connection
-from sms_tool.mailbox_errors import MailboxEndpointUnavailableError
+from sms_tool.mailbox.errors import MailboxEndpointUnavailableError
 from sms_tool.registration_handlers import RegistrationEmailWorkflow
 from sms_tool.registration_runtime import RegistrationRuntimeState
 from sms_tool.registration_state import RegistrationStateMachine
@@ -38,7 +39,7 @@ class MemoryPersistence:
 
 
 def workflow(monkeypatch, payload=None):
-    from sms_tool.mailbox_service import MailboxService
+    from sms_tool.mailbox.service import MailboxService
 
     # ``object.__new__`` + attribute assignment deliberately builds a *partial*
     # workflow: the stage under test needs three collaborators, not the twelve

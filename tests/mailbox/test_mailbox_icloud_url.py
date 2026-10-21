@@ -5,15 +5,15 @@ from argparse import Namespace
 from pathlib import Path
 from unittest.mock import patch
 
-from sms_tool import mailbox as mailbox_module
+from sms_tool.mailbox import router as mailbox_module
 
-# ``sms_tool/mailbox_icloud_url.py`` is one of the ``sys.modules`` facades; a
+# ``sms_tool/mailbox/icloud_url.py`` is one of the ``sys.modules`` facades; a
 # checker cannot see through them, so import the provider implementation (the
 # same module object at runtime).
 from sms_tool.providers import mailbox_icloud_url
-from sms_tool import mailbox_parsers
+from sms_tool.mailbox import parsers as mailbox_parsers
 from sms_tool.mail_otp import _email_otp_candidate, _extract_otp_from_text, _message_received_ts
-from sms_tool.mailbox_types import MailboxAccount
+from sms_tool.mailbox.types import MailboxAccount
 from typing import TypeVar
 from sms_tool.providers.mailbox_graph import MailboxAuthInvalidError
 

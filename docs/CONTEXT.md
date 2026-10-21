@@ -24,7 +24,7 @@
 
 ## Ownership Rules
 
-- `sms_tool/providers/` owns provider implementations; `mailbox.py` owns routing.
+- `sms_tool/providers/` owns provider implementations; `mailbox/router.py` owns routing.
 - `sms_tool/store/` owns persistence and emits facts, not provider side effects.
 - `SmsWorkbench/` owns presentation and command planning; Python owns provider and protocol behavior.
 - `docs/architecture.md` describes current boundaries; `docs/audits/` contains historical evidence; `docs/adr/` records decisions.

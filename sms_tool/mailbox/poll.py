@@ -10,9 +10,9 @@ import time
 import logging
 from typing import Callable, Iterable, Optional
 
-from .kernel.sanitizer import mask_otp
-from .mailbox_errors import is_terminal_mailbox_error
-from .desktop_ipc import progress_dots_enabled
+from ..kernel.sanitizer import mask_otp
+from .errors import is_terminal_mailbox_error
+from ..desktop_ipc import progress_dots_enabled
 
 logger = logging.getLogger(__name__)
 

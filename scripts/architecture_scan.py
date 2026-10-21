@@ -156,7 +156,7 @@ def main() -> int:
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom) and node.module:
                 # Only the *providers-local* mailbox_* flows are upper layer.
-                # sms_tool/mailbox_poll.py is shared polling infrastructure that
+                # sms_tool/mailbox/poll.py is shared polling infrastructure that
                 # a client is allowed to reuse.
                 # NOTE: ast.ImportFrom stores the module name WITHOUT the leading
                 # dots -- the relative depth lives in ``node.level``.  Matching

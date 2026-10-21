@@ -1,14 +1,14 @@
 import pytest
 
 from sms_tool.config import RuntimeConfig
-from sms_tool.mailbox_service import MailboxService
-from sms_tool.mailbox_strategies import (
+from sms_tool.mailbox.service import MailboxService
+from sms_tool.mailbox.strategies import (
     DEFAULT_MAILBOX_PROVIDERS,
     FunctionMailboxProviderAdapter,
     MailboxProviderRegistry,
     MailboxProviderResolutionError,
 )
-from sms_tool.mailbox_types import MailboxAccount
+from sms_tool.mailbox.types import MailboxAccount
 
 
 def _config():

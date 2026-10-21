@@ -301,7 +301,7 @@ def _graph_fetch_messages(
 ) -> list:
     """Default Microsoft Graph API fetcher (delegates to existing local impl)."""
     if fetch_mailbox_messages_local is None:
-        from .mailbox import fetch_mailbox_messages_local
+        from .router import fetch_mailbox_messages_local
     return fetch_mailbox_messages_local(mailbox, limit=limit, proxy=proxy)
 
 
@@ -317,15 +317,15 @@ def _graph_poll_otp(
 ) -> Optional[str]:
     """Graph API fallback OTP poller using settle-stability detection."""
     # Import here to avoid a hard dependency at strategy-module load time.
-    from .mailbox import (
+    from .router import (
         latest_email_otp_candidate,
         candidate_is_newer,
         otp_poll_interval,
         email_otp_settle_seconds,
     )
-    from .mailbox_poll import _poll_otp_with_settle
-    from .mailbox import MailboxTokenExpiredError
-    from .providers.mailbox_graph import MailboxAuthInvalidError
+    from .poll import _poll_otp_with_settle
+    from .router import MailboxTokenExpiredError
+    from ..providers.mailbox_graph import MailboxAuthInvalidError
 
     keyword = (subject_keyword or "").lower()
 
@@ -360,15 +360,15 @@ def _icloud_poll_otp(
     **kwargs: Any,
 ) -> Optional[str]:
     """Poll iCloud through its own fetcher, never through Graph fallback."""
-    from .mailbox import (
+    from .router import (
         latest_email_otp_candidate,
         candidate_is_newer,
         otp_poll_interval,
         email_otp_settle_seconds,
     )
-    from .mailbox_poll import _poll_otp_with_settle
-    from .mailbox import MailboxTokenExpiredError
-    from .providers.mailbox_graph import MailboxAuthInvalidError
+    from .poll import _poll_otp_with_settle
+    from .router import MailboxTokenExpiredError
+    from ..providers.mailbox_graph import MailboxAuthInvalidError
 
     keyword = (subject_keyword or "").lower()
 

@@ -1,7 +1,7 @@
-"""Behaviour tests for ``sms_tool/mailbox_poll.py`` (2026-09-03, round 7).
+"""Behaviour tests for ``sms_tool/mailbox/poll.py`` (2026-09-03, round 7).
 
-88 lines, three production call sites (``mailbox_cfworker.py:143``,
-``mailbox_strategies.py:263``, ``providers/smailr_client.py:409``) -- and
+88 lines, three production call sites (``mailbox/cfworker.py:143``,
+``mailbox/strategies.py:263``, ``providers/smailr_client.py:409``) -- and
 **zero real executions**. ``tests/mailbox/test_smailr_provider.py`` mentions the symbol,
 but only to ``patch`` it out with a stub. So the shared OTP polling template that
 every mailbox provider goes through has never actually run under test.
@@ -38,7 +38,7 @@ import unittest
 from contextlib import redirect_stdout
 from unittest import mock
 
-from sms_tool import mailbox_poll
+from sms_tool.mailbox import poll as mailbox_poll
 
 
 class _FakeClock:

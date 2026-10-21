@@ -27,7 +27,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from ..config import current_config_data
-from ..mailbox_types import MailboxAccount
+from ..mailbox.types import MailboxAccount
 
 
 SMAILR_LV1_DOMAINS = (

@@ -86,6 +86,13 @@ def test_stdlib_and_prose_are_not_edges(fixture_tree: Path):
 
 
 def test_exact_fixture_totals(fixture_tree: Path):
+    """The fixture's own totals, NOT the production ones.
+
+    ``scripts/module_move.py``'s ``sync_pinned_totals`` used to rewrite every
+    ``"total_module_edges": N`` in this file, which silently replaced this
+    fixture pin with the production numbers and left the test comparing a
+    seven-module fixture against the real tree.
+    """
     analysis = ilr.analyze(fixture_tree)
     assert analysis.totals() == {
         "total_module_edges": 6,
@@ -276,15 +283,15 @@ def test_summary_facts_are_pinned():
     """
     totals = ilr.analyze(ROOT).totals()
     assert totals == {
-        "total_module_edges": 281,
-        "ordered_pairs": 35,
-        "mutual_pairs": 11,
-        "minority_edges": 45,
+        "total_module_edges": 298,
+        "ordered_pairs": 42,
+        "mutual_pairs": 13,
+        "minority_edges": 44,
         # 2026-10-21: 188 -> 190 when the provider ports seam (providers/ports.py)
         # took over the mailbox_pool_writer and desktop_ipc imports as delayed
         # ones. Before that, 190 -> 188 when store/connection.py stopped
         # importing the sms_tool.storage shell inside _init_cache_key/_connect.
-        "delayed_cross_dir_edges": 205,
+        "delayed_cross_dir_edges": 209,
         # Imports under `if TYPE_CHECKING:` never run, so they are not runtime
         # edges. All eleven in the tree today are same-directory, hence 0 here;
         # the metric exists so a cross-directory one is visible rather than silent.

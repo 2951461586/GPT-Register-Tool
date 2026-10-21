@@ -9,7 +9,7 @@ from sms_tool import auth_flow, batch_runner, otp_strategy, registration
 from sms_tool import account_creation
 from sms_tool.auth_flow import _ensure_authorize_context
 from sms_tool.auth_flow import _protocol_diagnostic
-from sms_tool.mailbox import _parse_chatai_mailbox_file
+from sms_tool.mailbox.router import _parse_chatai_mailbox_file
 from sms_tool.registration import (
     _create_account_continue_url,
     _cookie_jar_header,

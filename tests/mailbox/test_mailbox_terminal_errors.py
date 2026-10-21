@@ -5,10 +5,10 @@ from unittest.mock import Mock
 
 import pytest
 
-from sms_tool import mailbox_quarantine as quarantine
-from sms_tool.mailbox_errors import MailboxEndpointUnavailableError
-from sms_tool.mailbox_poll import _poll_otp_with_settle
-from sms_tool.mailbox_types import MailboxAccount
+from sms_tool.mailbox import quarantine as quarantine
+from sms_tool.mailbox.errors import MailboxEndpointUnavailableError
+from sms_tool.mailbox.poll import _poll_otp_with_settle
+from sms_tool.mailbox.types import MailboxAccount
 from sms_tool.providers import mailbox_icloud_url as icloud
 from sms_tool.providers.mailbox_graph import MailboxAuthInvalidError
 

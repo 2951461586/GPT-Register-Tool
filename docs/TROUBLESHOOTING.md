@@ -25,18 +25,18 @@
 
 1. `python -m sms_tool --doctor` 是否全绿。
 2. 该邮箱**行的形态**是否被解析器接受 —— 池文件支持 4 段（`email----url----client_id----rt`）、
-   3 段与 `---` 分隔等不同分支，分隔符数量决定走哪条解析路径（`sms_tool/mailbox_parsers.py`）。
+   3 段与 `---` 分隔等不同分支，分隔符数量决定走哪条解析路径（`sms_tool/mailbox/parsers.py`）。
 3. 日志里有没有 `[!] Skip ... refresh_token ...` 行。占位符或模板形态（`<...>`、`your_token`、
-   重复字符）在导入时就被拒绝，**根本不会进池**（`sms_tool/mailbox_parsers.py:77`）。
+   重复字符）在导入时就被拒绝，**根本不会进池**（`sms_tool/mailbox/parsers.py:77`）。
 4. 邮箱代理是否可达。`email_registration.mailbox_proxy_fallback_to_operation_proxy`
    （默认开启）会把 operation proxy 追加为兜底候选，但它**不是**「邮箱与注册一定同出口」的承诺
    （`docs/current/mailbox.md`）。
-5. 看轮询失败的**处置类别**。`sms_tool/mailbox_errors.py:25` 是唯一 owner：
+5. 看轮询失败的**处置类别**。`sms_tool/mailbox/errors.py:25` 是唯一 owner：
    - 凭据失效 / token 过期 → 立即终止轮询并**隔离**该邮箱；
    - endpoint 不可达 → 终止轮询并打开 endpoint 冷却；
    - transport 抖动 / 收件箱为空 → **可重试**，直到轮询截止。
 6. 是否被隔离区挡掉了。隔离是 token-free 的；per-account 模式下按凭据过滤，
-   只有**隔离凭据数达到阈值**才允许熔断整批（`sms_tool/mailbox_quarantine.py`）。
+   只有**隔离凭据数达到阈值**才允许熔断整批（`sms_tool/mailbox/quarantine.py`）。
 7. `MAILBOX_RT_WRITEBACK` 是否被设成了 `0`。设成 `0` 会关掉 RT 回写，见下一节。
 
 ---
@@ -45,10 +45,10 @@
 
 症状通常是账本里只有「取件失败」，看不出原因。按顺序检查：
 
-1. 日志里搜 `mailbox_refresh_token_writeback_missed`（`sms_tool/mailbox_pool_writer.py:209`）。
+1. 日志里搜 `mailbox_refresh_token_writeback_missed`（`sms_tool/mailbox/pool_writer.py:209`）。
 2. 该事件大量出现 ⇒ **池里的 refresh token 是旧的**。Microsoft / Google 在刷新时会轮换 RT，
    池文件若没跟着回写，**下一次**刷新就是 `invalid_grant`，而邮箱是完全健康的。
-   成功回写会记 `mailbox_refresh_token_writeback`（`sms_tool/mailbox_pool_writer.py:200`）。
+   成功回写会记 `mailbox_refresh_token_writeback`（`sms_tool/mailbox/pool_writer.py:200`）。
 3. 确认 `MAILBOX_RT_WRITEBACK` 没被设成 `0`。
 4. 确认池文件**可写**。回写走跨进程字节锁（`sms_tool/cross_process_gate.py`），
    拿不到锁会记 `_missed` 而不是抛异常 —— 锁超时看起来和「文件不可写」一样。
@@ -66,7 +66,7 @@
 1. 源文件是几段？供应商 4 段与 3 段走不同解析分支，段数对不上会整行丢弃。
 2. 分隔符是 `---` 还是 `----`？两者语义不同，不是同一个分隔符的不同写法。
 3. 是否被占位符筛除。长度偏短的 RT 只会 **WARN 并保留**，形态明显是模板的才 **reject** ——
-   所以「日志里有 WARN 但没有该邮箱」说明它在更早的分支就被丢了（`sms_tool/mailbox_parsers.py:46`）。
+   所以「日志里有 WARN 但没有该邮箱」说明它在更早的分支就被丢了（`sms_tool/mailbox/parsers.py:46`）。
 4. 别名池（如 `@icloud.com`）可能**已被别人注册过**，导入成功但注册阶段会失败。
 5. 导入后按 `docs/current/mailbox.md` 的 machine-readable 契约核对，而不是只看导入日志的行数。
 

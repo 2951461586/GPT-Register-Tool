@@ -154,6 +154,7 @@
     "sms_tool.kernel.paths",
     "sms_tool.kernel.sanitizer",
     "sms_tool.mailbox",
+    "sms_tool.mailbox.router",
     "sms_tool.otp_strategy",
     "sms_tool.phone_proxy",
     "sms_tool.phone_registration",

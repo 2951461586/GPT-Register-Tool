@@ -17,7 +17,7 @@
     "sms_tool/fingerprint_pool.py": 1,
     "sms_tool/http_utils.py": 1,
     "sms_tool/import_targets.py": 3,
-    "sms_tool/mailbox.py": 7,
+    "sms_tool/mailbox/router.py": 7,
     "sms_tool/nodriver_paypal.py": 1,
     "sms_tool/omakse_client.py": 1,
     "sms_tool/pay_link/adapters.py": 12,

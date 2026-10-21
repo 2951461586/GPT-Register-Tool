@@ -287,7 +287,7 @@ def refresh_cpa_quota(args: Any, ctx: AccountCommandContext) -> None:
     from ..cpa_import import refresh_cpa_quota_statuses
 
     if bool(getattr(args, "mailbox_pool_repaired", False)):
-        from ..mailbox_quarantine import mark_mailbox_pool_repaired
+        from ..mailbox.quarantine import mark_mailbox_pool_repaired
 
         mark_mailbox_pool_repaired()
 
