@@ -196,10 +196,51 @@ def rewrite_relative(source: str, old_module: str, new_module: str, is_package: 
         if not extra:
             continue
         statements: list[str] = []
+        indent = " " * node.col_offset
         if kept:
             statements.append("from " + "." * node.level + " import " + ", ".join(kept))
         statements.extend(extra)
-        edits.append((start, end, "\n".join(statements)))
+        edits.append((start, end, ("\n" + indent).join(statements)))
+    for start, end, replacement in sorted(edits, reverse=True):
+        source = source[:start] + replacement + source[end:]
+    return source
+
+
+def rewrite_root_package_imports(source: str, moves: dict[str, str]) -> str:
+    """Rewrite ``from sms_tool import <moved>`` into the subpackage form.
+
+    The dotted pass cannot see this form: the module name appears as a *binding*
+    after ``import``, not as part of a dotted path, so ``from sms_tool import
+    paypal_protocol`` survived every other pattern and left the module
+    unimportable. Measured on the paypal cluster: 15 test modules failed
+    collection on exactly this line.
+    """
+    tree = ast.parse(source)
+    starts = line_starts(source)
+    edits: list[tuple[int, int, str]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ImportFrom) or node.level or node.module != "sms_tool":
+            continue
+        kept: list[str] = []
+        extra: list[str] = []
+        for alias in node.names:
+            binding = alias.asname or alias.name
+            full = f"sms_tool.{alias.name}"
+            if full not in moves:
+                kept.append(alias.name + (f" as {alias.asname}" if alias.asname else ""))
+                continue
+            parent, leaf = moves[full].rsplit(".", 1)
+            extra.append(f"from {parent} import {leaf} as {binding}")
+        if not extra:
+            continue
+        start = starts[node.lineno - 1] + node.col_offset
+        end = starts[(node.end_lineno or node.lineno) - 1] + (node.end_col_offset or node.col_offset)
+        indent = " " * node.col_offset
+        statements: list[str] = []
+        if kept:
+            statements.append("from sms_tool import " + ", ".join(kept))
+        statements.extend(extra)
+        edits.append((start, end, ("\n" + indent).join(statements)))
     for start, end, replacement in sorted(edits, reverse=True):
         source = source[:start] + replacement + source[end:]
     return source
@@ -218,6 +259,7 @@ def rewrite_python_file(path: pathlib.Path, spec: Spec) -> bool:
     is_package = path.name == "__init__.py" or new_rel.endswith("__init__.py")
     original = path.read_text(encoding="utf-8")
     updated = rewrite_relative(original, old_module, new_module, is_package, spec.moves)
+    updated = rewrite_root_package_imports(updated, spec.moves)
     if updated != original:
         path.write_text(updated, encoding="utf-8", newline="\n")
         return True
@@ -242,8 +284,13 @@ def rewrite_names_and_paths(spec: Spec) -> list[str]:
         target = f"sms_tool/{spec.package}/{new}.py"
         path_pairs.append((re.compile("sms_tool" + separator + re.escape(old) + r"\.py"), target))
         path_pairs.append((re.compile("(['\"])" + re.escape(old) + r"\.py\1"), rf"\g<1>{spec.package}/{new}.py\g<1>"))
-        # Documentation anchors: `proxy/entry.py:68` and `proxy/entry.py`.
-        path_pairs.append((re.compile(r"\b" + re.escape(old) + r"\.py(?=:|\b)"), f"{spec.package}/{new}.py"))
+        # Documentation anchors: `proxy/entry.py:68` and `proxy/entry.py`. The
+        # lookbehind is load-bearing: without it a *different* file that merely
+        # ends in the moved name -- `providers/mailbox_gmail.py`, which did not
+        # move -- was rewritten into a path that does not exist. Measured on the
+        # 2026-10-21 mailbox cluster; four such rewrites had to be reverted by
+        # hand. A bare `old.py` (no directory in front of it) still matches.
+        path_pairs.append((re.compile(r"(?<![\w/\\])" + re.escape(old) + r"\.py(?=:|\b)"), f"{spec.package}/{new}.py"))
 
     changed: list[str] = []
     candidates: list[pathlib.Path] = []
@@ -337,7 +384,9 @@ def sync_directory_map(spec: Spec) -> None:
         if not touched:
             continue
         kept = [p for p in paths if not pattern.match(p)]
-        kept.append(f"sms_tool/{spec.package}/*.py")
+        glob = f"sms_tool/{spec.package}/*.py"
+        if glob not in kept:
+            kept.append(glob)
         data["groups"][name] = kept
     groups.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
 
