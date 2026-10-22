@@ -105,3 +105,74 @@ def test_select_never_rotates_past_the_last_attempt(monkeypatch, attempts):
     monkeypatch.setattr(p, "rotate_session", lambda proxy, country: proxy + "#")
     got = p._upi_select_india_exit("E", country="IN", attempts=attempts, timeout=5)
     assert got.count("#") == attempts - 1
+
+
+# ── Branches the 2026-10-22 coverage pass found unreached ────────────────────
+#
+# ``india_exit.py`` was at 95%: the timeout *fallback*, the rotate failure path,
+# and the "rotation changed nothing" break. All three are failure-tolerance
+# branches, i.e. the ones a happy-path suite never reaches and a regression
+# turns into a hung rotation loop or a crash inside the selector.
+
+
+def test_timeout_falls_back_to_the_env_then_to_its_default(monkeypatch):
+    """``upi_cfg`` absent → ``UPI_INDIA_EXIT_TIMEOUT`` → 8.0, clamped to [3, 20]."""
+    monkeypatch.delenv("UPI_INDIA_EXIT_TIMEOUT", raising=False)
+    assert p._upi_india_exit_timeout({}) == 8.0
+    assert p._upi_india_exit_timeout(None) == 8.0  # non-mapping config is not a crash
+    monkeypatch.setenv("UPI_INDIA_EXIT_TIMEOUT", "1")
+    assert p._upi_india_exit_timeout({}) == 3.0  # floor
+    monkeypatch.setenv("UPI_INDIA_EXIT_TIMEOUT", "60")
+    assert p._upi_india_exit_timeout({}) == 20.0  # ceiling
+    monkeypatch.setenv("UPI_INDIA_EXIT_TIMEOUT", "bad")
+    assert p._upi_india_exit_timeout({}) == 8.0
+
+
+def test_a_raising_rotate_keeps_the_candidate_instead_of_crashing(monkeypatch):
+    """A dead rotate endpoint must not fail the payment attempt by itself."""
+    monkeypatch.setattr(p, "resolve_proxy_geo", lambda proxy, **kw: SimpleNamespace(country="DZ"))
+    monkeypatch.setattr(p, "probe_openai_edge", lambda proxy, path="", timeout=0: _verdict(200))
+
+    def boom(*_a, **_k):
+        raise RuntimeError("rotate endpoint down")
+
+    monkeypatch.setattr(p, "rotate_session", boom)
+    proxy = "http://u:p@exit:1"
+    assert p._upi_select_india_exit(proxy, country="IN", attempts=3, timeout=5) == proxy
+
+
+@pytest.mark.parametrize("unchanged", ["same", ""])
+def test_rotation_that_changes_nothing_stops_immediately(monkeypatch, unchanged):
+    """A no-op rotation is the loop's stop condition, not something to retry.
+
+    Without the break the selector would burn every attempt on one exit; the
+    empty-string case matters because ``rotate_session`` returning ``""`` is how
+    a provider reports "no new session available".
+    """
+    calls = []
+    monkeypatch.setattr(p, "resolve_proxy_geo", lambda proxy, **kw: SimpleNamespace(country="DZ"))
+    monkeypatch.setattr(p, "probe_openai_edge", lambda proxy, path="", timeout=0: _verdict(200))
+
+    def rotate(proxy, country):
+        calls.append(proxy)
+        return proxy if unchanged == "same" else ""
+
+    monkeypatch.setattr(p, "rotate_session", rotate)
+    proxy = "http://u:p@exit:1"
+    assert p._upi_select_india_exit(proxy, country="IN", attempts=4, timeout=5) == proxy
+    assert len(calls) == 1, "a rotation that changes nothing must not be retried"
+
+
+def test_rotate_proxy_set_preserves_identity_across_duplicate_entries(monkeypatch):
+    """Three stages sharing one exit must stay one exit after rotation."""
+    seen = []
+
+    def rotate(proxy, country):
+        seen.append(proxy)
+        return proxy + "-rotated"
+
+    monkeypatch.setattr(p, "rotate_session", rotate)
+    shared = "http://u:p@exit:1"
+    got = p.india_exit._upi_rotate_proxy_set((shared, shared, "http://u:p@exit:2", ""), "IN", p._exit_ops())
+    assert got == (shared + "-rotated", shared + "-rotated", "http://u:p@exit:2-rotated", "")
+    assert seen == [shared, "http://u:p@exit:2"], "each distinct exit rotates exactly once"
