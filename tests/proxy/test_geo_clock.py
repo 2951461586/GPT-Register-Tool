@@ -101,7 +101,9 @@ class TimezoneNameTests(unittest.TestCase):
         tz = "America/New_York"
         now = now_in_timezone(tz)
         offset = offset_minutes_for_timezone(tz)
-        self.assertEqual(now.utcoffset().total_seconds() // 60, offset)
+        utcoffset = now.utcoffset()
+        assert utcoffset is not None
+        self.assertEqual(utcoffset.total_seconds() // 60, offset)
 
 
 class BrowserEnvironmentOffsetTests(unittest.TestCase):

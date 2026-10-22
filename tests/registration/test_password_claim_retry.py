@@ -7,6 +7,8 @@ run died at the OTP gate or at ``create_account``.  Before the POST, retrying is
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 from unittest.mock import Mock
 
 import pytest
@@ -61,7 +63,7 @@ def _workflow(registration_mode="password", *, reached=(), **runtime):
     workflow.runtime.access_token = runtime.get("access_token", "")
     workflow.runtime.existing_account = runtime.get("existing_account", False)
     workflow.runtime.signup_state = {}
-    workflow.r._is_signup_password_step = Mock(return_value=False)
+    cast(Any, workflow.r)._is_signup_password_step = Mock(return_value=False)
     for state in reached:
         machine.transition(state)
     return workflow
@@ -107,12 +109,12 @@ def test_runs_that_hold_a_token_or_an_existing_account_are_left_to_recovery(runt
 
 def test_abort_result_carries_the_tag_into_the_failure_result():
     workflow = _workflow(reached=PAST_REGISTER)
-    workflow.r._failure_result = Mock(side_effect=lambda error, **kw: {"error": error, "success": False})
+    cast(Any, workflow.r)._failure_result = Mock(side_effect=lambda error, **kw: {"error": error, "success": False})
     result = workflow._abort_result(TRANSPORT)
     assert result["error"].endswith(PASSWORD_CLAIMED_MARKER)
 
 
 def test_a_cancelled_run_keeps_its_exact_error():
     workflow = _workflow(reached=PAST_REGISTER)
-    workflow.r._failure_result = Mock(side_effect=lambda error, **kw: {"error": error, "success": False})
+    cast(Any, workflow.r)._failure_result = Mock(side_effect=lambda error, **kw: {"error": error, "success": False})
     assert workflow._abort_result("registration_cancelled", cancelled=True)["error"] == "registration_cancelled"

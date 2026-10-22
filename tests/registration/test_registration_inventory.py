@@ -5,6 +5,7 @@ _spec = importlib.util.spec_from_file_location(
     "registration_inventory",
     Path(__file__).resolve().parents[2] / "scripts" / "registration_inventory.py",
 )
+assert _spec is not None and _spec.loader is not None
 inventory = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(inventory)
 

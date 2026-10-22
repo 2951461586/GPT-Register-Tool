@@ -10,7 +10,7 @@ class RegistrationDriverCliChoicesTests(unittest.TestCase):
         # cannot silently drift if the help string is edited.
         parser = cli.build_parser()
         action = parser._option_string_actions["--registration-driver"]
-        return list(action.choices)
+        return list(action.choices or ())
 
     def test_all_expected_drivers_are_present(self):
         choices = self._driver_choices()

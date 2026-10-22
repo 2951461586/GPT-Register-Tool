@@ -267,7 +267,7 @@ def _build_hcaptcha_bridge_html(
 """
 
 
-def _playwright_proxy(proxy_url: str) -> Optional[dict]:
+def _playwright_proxy(proxy_url: str | None) -> Optional[dict]:
     """Convert a proxy URL to Playwright proxy config."""
     proxy_url = (proxy_url or "").strip()
     if not proxy_url:

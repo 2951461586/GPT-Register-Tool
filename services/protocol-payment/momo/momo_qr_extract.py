@@ -19,7 +19,7 @@ import sys
 import time
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 # ``ac_paylink_core`` is this module's sibling. The runner puts this directory
 # on ``sys.path`` before importing us, but a direct import (tests, a REPL) does
@@ -566,13 +566,26 @@ def _request_json(
         extra["proxies"] = {"http": effective_proxy, "https": effective_proxy}
 
     if curl_requests is not None:
+        verb = cast(Any, method.upper())
         if json_body is not None:
             resp = curl_requests.request(
-                method.upper(), url, json=json_body, headers=headers, impersonate="chrome", timeout=timeout, **extra
+                verb,
+                url,
+                json=json_body,
+                headers=headers,
+                impersonate="chrome",
+                timeout=timeout,
+                **extra,
             )
         else:
             resp = curl_requests.request(
-                method.upper(), url, data=form_body, headers=headers, impersonate="chrome", timeout=timeout, **extra
+                verb,
+                url,
+                data=form_body,
+                headers=headers,
+                impersonate="chrome",
+                timeout=timeout,
+                **extra,
             )
         return _HttpResponse(resp.status_code, resp.text)
 
@@ -1620,7 +1633,8 @@ def _finalize_qr_decision(
     emit_init = best.get("_init_payload") or {}
     emit_strategy = str(best.get("checkout_strategy") or "")
     if emit_strategy.startswith("hosted") or "custom" not in emit_strategy:
-        checkout_proxies = [stage_proxies.get("checkout")] if stage_proxies.get("checkout") else proxies
+        checkout_proxy = stage_proxies.get("checkout")
+        checkout_proxies = [checkout_proxy] if checkout_proxy else proxies
         data2, cs2, key2, proxy2, attempts2, next_index = create_checkout(
             access_token,
             session_token,
@@ -2068,8 +2082,9 @@ def print_result(result: dict[str, Any], as_json: bool) -> None:
 
 def main() -> int:
     args = parse_args()
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")
+    reconfigure = getattr(sys.stdout, "reconfigure", None)
+    if callable(reconfigure):
+        reconfigure(encoding="utf-8")
 
     configure_pre_proxy(args.pre_proxy)
     COUNTRY_CURRENCY["VN"] = "VND"

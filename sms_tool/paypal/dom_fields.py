@@ -13,7 +13,7 @@ import re
 import time
 
 
-def _value_matches(actual: str, expected: str) -> bool:
+def _value_matches(actual: str | None, expected: str | None) -> bool:
     actual_s = str(actual or "").strip()
     expected_s = str(expected or "").strip()
     if not expected_s:

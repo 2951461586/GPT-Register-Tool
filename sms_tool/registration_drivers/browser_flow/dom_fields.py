@@ -314,7 +314,7 @@ def _browser_heartbeat(browser: Any, page: Any) -> Any:
     except Exception as exc:
         if not _session_context_closed(f"{type(exc).__name__}: {exc}"):
             return page
-        replacement = None
+        replacement: Any = None
         if callable(select_page):
             try:
                 replacement = select_page()
@@ -322,7 +322,7 @@ def _browser_heartbeat(browser: Any, page: Any) -> Any:
                 replacement = None
         if replacement is not None and replacement is not page:
             try:
-                replacement.evaluate("() => ({host: location.hostname, ready: document.readyState})")
+                getattr(replacement, "evaluate")("() => ({host: location.hostname, ready: document.readyState})")
                 return replacement
             except Exception:
                 pass

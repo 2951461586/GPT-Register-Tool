@@ -93,7 +93,7 @@ def scan_accounts(
     workers = max(1, min(int(workers or 1), 8, len(emails) or 1))
     print(f"[*] One-click account scan: {len(emails)} account(s), workers={workers}")
 
-    ordered = [None] * len(emails)
+    ordered: list[dict[str, Any] | None] = [None] * len(emails)
     if workers <= 1:
         for index, email in enumerate(emails):
             ordered[index] = _scan_one_with_lane(
@@ -572,7 +572,7 @@ def _persist_scan(data: dict[str, Any] | None, json_path: str, result: dict[str,
         account_saved = bool(upsert_account(updated, json_path=json_path))
     except Exception:
         account_saved = False
-    persistence = {
+    persistence: dict[str, Any] = {
         "session_saved": session_saved,
         "account_saved": account_saved,
         "persisted": session_saved and account_saved,
@@ -761,7 +761,7 @@ def _public_probe_result(result):
     return output
 
 
-def _scan_one_with_lane(*args: object, **kwargs: object) -> dict[str, Any]:
+def _scan_one_with_lane(*args: Any, **kwargs: Any) -> dict[str, Any]:
     email = args[2] if len(args) >= 3 else kwargs.get("email", "")
     lane = _gmail_scan_lane_key(email)
     if not lane:

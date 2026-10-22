@@ -246,7 +246,7 @@ def _result_terminal_state(data: dict[str, Any]) -> str:
     return "completed" if data.get("ok") else (_explicit_terminal_state(data) or "failed")
 
 
-def _classify_exception(exc: Exception) -> tuple[str, str, bool]:
+def _classify_exception(exc: BaseException) -> tuple[str, str, bool]:
     explicit_state = _canonical_terminal_state(getattr(exc, "status", "") or getattr(exc, "terminal_state", ""))
     custom_code = str(getattr(exc, "error_code", "") or getattr(exc, "code", "") or "")
     if explicit_state:

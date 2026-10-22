@@ -2,6 +2,9 @@ import json
 import unittest
 from pathlib import Path
 
+from collections.abc import Mapping
+from typing import Any
+
 from sms_tool.wallet_provider import (
     WALLET_METHODS,
     WalletCancelledError,
@@ -19,7 +22,7 @@ def load_fixture(method: str) -> dict:
     return json.loads((FIXTURE_DIR / f"{method}.json").read_text(encoding="utf-8"))
 
 
-def assert_subset(testcase: unittest.TestCase, expected: dict, actual: dict) -> None:
+def assert_subset(testcase: unittest.TestCase, expected: Mapping[str, Any], actual: Mapping[str, Any]) -> None:
     for key, value in expected.items():
         testcase.assertIn(key, actual)
         if isinstance(value, dict):

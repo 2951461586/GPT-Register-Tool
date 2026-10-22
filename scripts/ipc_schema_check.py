@@ -79,8 +79,12 @@ def check_manifest(manifest, py, py_ipc, cs, cs_events="") -> list[str]:
     sources -- otherwise every negative case would need a real file on disk.
     """
     failures = []
-    py_version = int(re.search(r"PROTOCOL_VERSION\s*=\s*(\d+)", py).group(1))
-    cs_version = int(re.search(r"public const int Version =\s*(\d+)", cs).group(1))
+    py_match = re.search(r"PROTOCOL_VERSION\s*=\s*(\d+)", py)
+    cs_match = re.search(r"public const int Version =\s*(\d+)", cs)
+    if not py_match or not cs_match:
+        return ["protocol version constant missing from one runtime"]
+    py_version = int(py_match.group(1))
+    cs_version = int(cs_match.group(1))
     protocol_version = int(manifest.get("protocol_version", manifest.get("version", 0)))
     if py_version != protocol_version or cs_version != protocol_version:
         failures.append(
@@ -107,7 +111,11 @@ def check_manifest(manifest, py, py_ipc, cs, cs_events="") -> list[str]:
         if isinstance(node, ast.Assign)
         and any(isinstance(t, ast.Name) and t.id == "SUPPORTED_OPS" for t in node.targets)
     )
-    py_ops = [elt.value for elt in supported.value.elts if isinstance(elt, ast.Constant)]
+    py_ops = [
+        elt.value
+        for elt in (supported.value.elts if isinstance(supported.value, ast.List) else [])
+        if isinstance(elt, ast.Constant)
+    ]
     if py_ops != manifest["ops"]:
         failures.append(f"Python ops differ: {py_ops}")
 

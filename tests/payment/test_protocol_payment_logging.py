@@ -21,8 +21,8 @@ from unittest.mock import Mock
 
 MODULE_PATH = Path(__file__).resolve().parents[2] / "services" / "protocol-payment" / "common" / "logging_setup.py"
 SPEC = importlib.util.spec_from_file_location("protocol_payment_logging_setup", MODULE_PATH)
+assert SPEC is not None and SPEC.loader is not None
 LOGSETUP = importlib.util.module_from_spec(SPEC)
-assert SPEC.loader is not None
 sys.modules[SPEC.name] = LOGSETUP
 SPEC.loader.exec_module(LOGSETUP)
 

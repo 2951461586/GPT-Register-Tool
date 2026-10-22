@@ -42,7 +42,7 @@ from sms_tool.paypal_link.reconciliation import (
 
 
 def _hop(index: int = 0, stage: ReturnStage = ReturnStage.CHECKOUT_VERIFY, **kw: Any) -> ReconciliationHop:
-    base = dict(index=index, stage=stage, host="chatgpt.com", status_code=200)
+    base: dict[str, Any] = dict(index=index, stage=stage, host="chatgpt.com", status_code=200)
     base.update(kw)
     return ReconciliationHop(**base)
 
@@ -556,7 +556,11 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual(self._run(url, max_hops=0)[0].error_code, "invalid_max_hops")
         self.assertEqual(self._run(url, max_hops=True)[0].error_code, "invalid_max_hops")
         self.assertEqual(self._run(url, timeout=0)[0].error_code, "invalid_timeout")
-        self.assertEqual(rec.reconcile_paypal_return(url, transport=None).error_code, "invalid_transport")
+        # Deliberately out of contract: pins the invalid_transport refusal.
+        self.assertEqual(
+            rec.reconcile_paypal_return(url, transport=None).error_code,  # pyright: ignore[reportArgumentType]
+            "invalid_transport",
+        )
 
     def test_missing_return_url(self):
         result, transport = self._run({})

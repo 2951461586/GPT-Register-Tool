@@ -204,7 +204,9 @@ class TestNoCredentialsInRegistry(unittest.TestCase):
 
     def test_no_spec_field_contains_a_credential_shaped_token(self):
         offenders = [
-            (key, name, self._LONG_TOKEN.search(value).group(0))
+            (key, name, match.group(0))
+            for key, name, value in self._string_fields()
+            if (match := self._LONG_TOKEN.search(value))
             for key, name, value in self._string_fields()
             if self._LONG_TOKEN.search(value)
         ]

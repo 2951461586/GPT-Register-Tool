@@ -19,11 +19,16 @@ not turn ordinary failures into writes.
 from __future__ import annotations
 
 import types
+from typing import cast
 
 import pytest
 
 import sms_tool.storage as storage_mod
-from sms_tool.commands.registration import _PERSISTENCE_KEY, _persist_registration_result_core
+from sms_tool.commands.registration import (
+    _PERSISTENCE_KEY,
+    RegistrationCommandContext,
+    _persist_registration_result_core,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -65,14 +70,17 @@ def _ctx(*, access_token="", upsert_result=True):
         return upsert_result
 
     return (
-        types.SimpleNamespace(
-            runtime_config={"runtime": {"directory": "."}, "output": {}},
-            build_session_file=build_session_file,
-            upsert_account=upsert_account,
-            enqueue_post_registration_checks=lambda *a, **k: [],
-            record_registration_audit=lambda *a, **k: None,
-            check_registered_promotions=lambda *a, **k: None,
-            import_registered_accounts=lambda *a, **k: None,
+        cast(
+            RegistrationCommandContext,
+            types.SimpleNamespace(
+                runtime_config={"runtime": {"directory": "."}, "output": {}},
+                build_session_file=build_session_file,
+                upsert_account=upsert_account,
+                enqueue_post_registration_checks=lambda *a, **k: [],
+                record_registration_audit=lambda *a, **k: None,
+                check_registered_promotions=lambda *a, **k: None,
+                import_registered_accounts=lambda *a, **k: None,
+            ),
         ),
         calls,
     )

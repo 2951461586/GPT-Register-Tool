@@ -64,7 +64,7 @@ def probe_row(label: str, account_id: int, offset_min: float, t0: float, result:
         "offset_min": offset_min,
         "age_s": int(time.time() - t0),
         "at": int(time.time()),
-        "status_code": int(code) if str(code or "").isdigit() else 0,
+        "status_code": int(str(code)) if str(code or "").isdigit() else 0,
         "state": str(result.get("status") or ""),
         "alive": str(code) == "200",
         "revoked": "revoked" in error.lower() or "invalidated" in error.lower(),

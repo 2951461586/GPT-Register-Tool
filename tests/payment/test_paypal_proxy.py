@@ -145,7 +145,7 @@ class PayPalProxyTests(unittest.TestCase):
             self.assertIsNone(state.cached_probe(proxy, "JP", "approve"))
             # A different ask is still answered from cache (proxy stays skipped).
             skipped = state.cached_probe(proxy, "KR", "approve")
-            self.assertIsNotNone(skipped)
+            assert skipped is not None
             self.assertFalse(skipped.ok)
 
     def test_cached_transport_failure_still_skips_dead_proxy(self):
@@ -167,7 +167,7 @@ class PayPalProxyTests(unittest.TestCase):
             )
 
             cached = state.cached_probe(proxy, "JP", "approve")
-            self.assertIsNotNone(cached)
+            assert cached is not None
             self.assertFalse(cached.ok)
 
     def test_zero_cache_skips_known_nonzero_checkout(self):

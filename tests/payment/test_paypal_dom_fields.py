@@ -24,6 +24,8 @@ under test — the real production functions execute top to bottom.
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 import random
 
 import pytest
@@ -353,9 +355,9 @@ def test_fill_dom_id_swallows_evaluate_errors_from_a_frame():
 def test_fill_dom_id_handles_a_page_without_a_frames_attribute():
     class BarePage:
         def evaluate(self, script, arg=None):
-            return arg["value"]
+            return (arg or {})["value"]
 
-    assert dom_fields._fill_dom_id(BarePage(), "cardNumber", "4242") is True
+    assert dom_fields._fill_dom_id(cast(Any, BarePage()), "cardNumber", "4242") is True
 
 
 def test_fill_dom_ids_short_circuits_on_the_first_success():
@@ -556,28 +558,28 @@ def test_select_with_fallback_tries_every_label_before_giving_up():
 
 def test_select_with_fallback_falls_back_to_js_option_matching():
     el = FakeElement(visible=True, fail={"select_option"})
-    el.evaluate = lambda script, arg: True
+    el.evaluate = lambda script, arg: True  # pyright: ignore[reportAttributeAccessIssue]
     page = FakePage(locators={"#state": el})
     assert dom_fields._select_with_fallback(page, ["#state"], "CA") is True
 
 
 def test_select_with_fallback_returns_false_when_js_matching_finds_nothing():
     el = FakeElement(visible=True, fail={"select_option"})
-    el.evaluate = lambda script, arg: False
+    el.evaluate = lambda script, arg: False  # pyright: ignore[reportAttributeAccessIssue]
     page = FakePage(locators={"#state": el})
     assert dom_fields._select_with_fallback(page, ["#state"], "CA") is False
 
 
 def test_select_with_fallback_returns_false_for_an_empty_value_and_no_labels():
     el = FakeElement(visible=True, fail={"select_option"})
-    el.evaluate = lambda script, arg: False
+    el.evaluate = lambda script, arg: False  # pyright: ignore[reportAttributeAccessIssue]
     page = FakePage(locators={"#state": el})
     assert dom_fields._select_with_fallback(page, ["#state"], "") is False
 
 
 def test_select_with_fallback_never_raises_when_evaluate_explodes():
     el = FakeElement(visible=True, fail={"select_option"})
-    el.evaluate = lambda script, arg: (_ for _ in ()).throw(RuntimeError("boom"))
+    el.evaluate = lambda script, arg: (_ for _ in ()).throw(RuntimeError("boom"))  # pyright: ignore[reportAttributeAccessIssue]
     page = FakePage(locators={"#state": el})
     assert dom_fields._select_with_fallback(page, ["#state"], "CA") is False
 

@@ -144,8 +144,9 @@ def main() -> int:
     parser.add_argument("--json-out", default="", help="Write per-account JSON results")
     args = parser.parse_args()
 
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")
+    reconfigure = getattr(sys.stdout, "reconfigure", None)
+    if callable(reconfigure):
+        reconfigure(encoding="utf-8")
 
     proxy = args.proxy if args.proxy is not None else load_config_proxy()
     if args.browser:

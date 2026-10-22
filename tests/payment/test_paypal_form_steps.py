@@ -166,7 +166,7 @@ def test_fill_billing_address_redacts_nothing_but_logs_the_address(capsys):
 def _country_page(current):
     """A page whose country <select> reports *current* (the JS snippet's output)."""
     el = FakeElement(visible=True, fail={"select_option"})
-    el.evaluate = lambda script: current
+    el.evaluate = lambda script: current  # pyright: ignore[reportAttributeAccessIssue]
     return FakePage(locators={'select[id="country"]': el})
 
 
@@ -215,7 +215,7 @@ def test_ensure_country_us_reports_true_only_after_a_successful_select(monkeypat
 
 def test_ensure_country_us_swallows_errors_and_still_offers_all_six_selectors(monkeypatch):
     el = FakeElement(visible=True)
-    el.evaluate = lambda script: (_ for _ in ()).throw(RuntimeError("boom"))
+    el.evaluate = lambda script: (_ for _ in ()).throw(RuntimeError("boom"))  # pyright: ignore[reportAttributeAccessIssue]
     page = FakePage(locators={'select[id="country"]': el})
     offered = {}
     monkeypatch.setattr(
@@ -546,7 +546,7 @@ def test_accept_terms_swallows_errors_from_a_broken_checkbox():
 
 def test_accept_terms_skips_an_already_checked_box():
     el = FakeElement(visible=True)
-    el.is_checked = lambda: True
+    el.is_checked = lambda: True  # pyright: ignore[reportAttributeAccessIssue]
     page = FakePage(locators={'input[type="checkbox"][name*="agree"]': el})
     form_steps._accept_terms(page)
     assert ("check",) not in el.record

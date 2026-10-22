@@ -39,8 +39,8 @@ from unittest import mock
 
 MODULE_PATH = Path(__file__).resolve().parents[2] / "services" / "protocol-payment" / "common" / "file_loading.py"
 SPEC = importlib.util.spec_from_file_location("file_loading", MODULE_PATH)
+assert SPEC is not None and SPEC.loader is not None
 LOADING = importlib.util.module_from_spec(SPEC)
-assert SPEC.loader is not None
 sys.modules[SPEC.name] = LOADING
 SPEC.loader.exec_module(LOADING)
 
@@ -55,6 +55,11 @@ def _norm_split(value: str) -> tuple[str, str]:
         token, session = value.split("|", 1)
         return (token, session)
     return (value, "")
+
+
+def _non_interactive_prompt(message: str) -> None:
+    """The interactive ``input()`` fallback must never be reached in tests."""
+    return None
 
 
 class LoadProxyFileTests(unittest.TestCase):
@@ -156,7 +161,8 @@ class LoadTokenTests(unittest.TestCase):
         # The default `env_names` tuple is empty in most tests' environments, so
         # control would reach the interactive ``input()`` fallback.  Pin a
         # non-interactive prompt unless the test explicitly supplies one.
-        kwargs.setdefault("prompt", lambda message: "")
+        if "prompt" not in kwargs:
+            kwargs["prompt"] = _non_interactive_prompt
         return LOADING.load_token(**kwargs)
 
     def test_default_env_get_is_not_self_recursive(self):
@@ -408,7 +414,7 @@ class ModuleContractTests(unittest.TestCase):
             # Walk the WHOLE subtree, and do not descend into a nested function
             # that already shadowed a name -- otherwise its own parameters get
             # compared against the outer scope's names.
-            stack = list(func.body)
+            stack: list[ast.AST] = list(func.body)
             while stack:
                 node = stack.pop()
                 if isinstance(node, ast.FunctionDef):

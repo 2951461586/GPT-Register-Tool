@@ -8,13 +8,14 @@ state is touched, so the shared logic can be tested without standing up blik.
 import sys
 import unittest
 from pathlib import Path
+from typing import Any
 
 # Load as part of the ``common`` package so ``from . import endpoints`` resolves.
 _COMMON_DIR = Path(__file__).resolve().parents[2] / "services" / "protocol-payment"
 if str(_COMMON_DIR) not in sys.path:
     sys.path.insert(0, str(_COMMON_DIR))
 
-import common.endpoints  # noqa: E402,F401  (registers the package)
+import common.endpoints as _common_endpoints  # noqa: E402,F401  (registers the package)
 from common import geo as GEO  # noqa: E402
 
 
@@ -112,7 +113,7 @@ class LookupProxyCountryTests(unittest.TestCase):
         saved = []
         session = _FakeSession(responses)
         record = record if record is not None else {}
-        kwargs = dict(
+        kwargs: dict[str, Any] = dict(
             record=record,
             save_state=lambda: saved.append(True),
             new_session=lambda proxy, use_pre_proxy=False: session,

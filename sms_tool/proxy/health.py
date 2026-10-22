@@ -8,6 +8,7 @@ import threading
 import time
 from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 from urllib.parse import urlsplit
 
 from ..cross_process_gate import cross_process_write_lock
@@ -49,14 +50,14 @@ class ProxyHealthTracker:
             return f"{base}#sid-{sid_hash}"
         return base
 
-    def _read(self) -> dict[str, dict[str, float]]:
+    def _read(self) -> dict[str, dict[str, Any]]:
         try:
             value = json.loads(self._path.read_text(encoding="utf-8"))
             return value if isinstance(value, dict) else {}
         except (OSError, ValueError, TypeError):
             return {}
 
-    def _write(self, data: dict[str, dict[str, float]]) -> None:
+    def _write(self, data: dict[str, dict[str, Any]]) -> None:
         self._path.parent.mkdir(parents=True, exist_ok=True)
         temp = self._path.with_suffix(self._path.suffix + ".tmp")
         temp.write_text(json.dumps(data, ensure_ascii=True, separators=(",", ":")), encoding="utf-8")

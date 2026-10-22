@@ -204,7 +204,7 @@ def test_csharp_flag_is_defined_by_the_python_parser(flag: str) -> None:
         (flag, value)
         for flag, data in CSHARP_FLAGS.items()
         for value in data["values"]
-        if flag in PYTHON_FLAGS and PYTHON_FLAGS[flag][1] is not None and value not in PYTHON_FLAGS[flag][1]
+        if flag in PYTHON_FLAGS and (choices := PYTHON_FLAGS[flag][1]) is not None and value not in choices
     ),
     ids=lambda v: str(v),
 )
@@ -212,7 +212,7 @@ def test_csharp_passes_a_value_the_python_parser_accepts(flag: str, value: str) 
     _where, choices = PYTHON_FLAGS[flag]
     assert False, (
         f"{flag!r} is passed the literal {value!r} from C#, but the Python "
-        f"parser only accepts {sorted(choices)}. argparse will reject this at "
+        f"parser only accepts {sorted(choices or [])}. argparse will reject this at "
         f"runtime with a usage error, and because the backend is a child "
         f"process the front end just sees no result."
     )

@@ -1,9 +1,10 @@
 import pytest
 
 from sms_tool.config import ConfigError, validate_config
+from typing import Any
 
 
-def _base_config():
+def _base_config() -> dict[str, Any]:
     return {
         "chatgpt": {
             "auth_base_url": "https://auth.openai.com",

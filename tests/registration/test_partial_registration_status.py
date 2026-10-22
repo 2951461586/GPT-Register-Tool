@@ -1,5 +1,6 @@
 import json
 from types import SimpleNamespace
+from typing import Any, cast
 from unittest.mock import Mock
 
 from sms_tool import desktop_read
@@ -48,7 +49,7 @@ def test_create_response_persists_partial_before_followup(tmp_path, monkeypatch,
     def follow(*args, **kwargs):
         assert RegistrationRetryGuard({}).check(w.runtime.username)["registration_status"] == "partial_registered"
 
-    w._operations = SimpleNamespace(
+    cast(Any, w)._operations = SimpleNamespace(
         request_with_retry=Mock(return_value=response),
         _auth_request_headers=Mock(return_value={}),
         auth_impersonate=Mock(return_value=""),
@@ -92,7 +93,7 @@ def test_abort_result_carries_the_relogin_cause():
     w.runtime.existing_account = True
     w.runtime.existing_login_error = "existing_login_password_step_unknown"
     w.machine = Mock()
-    w._operations = SimpleNamespace(
+    cast(Any, w)._operations = SimpleNamespace(
         _failure_result=Mock(return_value={"error": "existing_account_user_already_exists"})
     )
 
@@ -107,7 +108,7 @@ def test_abort_result_omits_the_relogin_cause_when_the_lane_never_ran():
     w = object.__new__(RegistrationEmailWorkflow)
     w.runtime = RegistrationRuntimeState(username="fresh@example.test")
     w.machine = Mock()
-    w._operations = SimpleNamespace(_failure_result=Mock(return_value={"error": "create_account_failed"}))
+    cast(Any, w)._operations = SimpleNamespace(_failure_result=Mock(return_value={"error": "create_account_failed"}))
 
     result = w._abort_result("create_account_failed")
 

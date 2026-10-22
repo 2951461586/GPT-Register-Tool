@@ -21,6 +21,8 @@ never trip a batch-level breaker.
 
 from __future__ import annotations
 
+from typing import Any
+
 import threading
 
 from .registration.policy import RETRYABLE_CLASSES
@@ -42,7 +44,7 @@ class BatchCircuitBreaker:
     share one instance, so ``record`` is lock-guarded.
     """
 
-    def __init__(self, threshold: int = DEFAULT_THRESHOLD, *, enabled: bool = True) -> None:
+    def __init__(self, threshold: Any = DEFAULT_THRESHOLD, *, enabled: bool = True) -> None:
         try:
             parsed = int(threshold)
         except (TypeError, ValueError):

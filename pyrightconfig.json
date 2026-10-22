@@ -21,6 +21,14 @@
     "`Any`-heavy JSON payloads produce noise proportional to payload nesting",
     "rather than to defect risk.",
     "",
+    "The second `executionEnvironment` mirrors the `sys.path` the extractor",
+    "tests build themselves: `services/protocol-payment` puts `common` on the",
+    "path as a top-level package, and the extractor folders (`kakao`, `momo`)",
+    "are not packages at all. Without it pyright reports those imports as",
+    "unresolvable even though the tests import them fine. Note that a matching",
+    "execution environment *replaces* the top-level `extraPaths`, so `\".\"` has",
+    "to be repeated there.",
+    "",
     "See docs/current/typing.md for the ratchet workflow."
   ],
   "typeCheckingMode": "basic",
@@ -61,6 +69,17 @@
       "extraPaths": [
         "services/protocol-payment",
         "."
+      ]
+    },
+    {
+      "root": "tests/payment",
+      "extraPaths": [
+        ".",
+        "tests",
+        "services/protocol-payment",
+        "services/protocol-payment/common",
+        "services/protocol-payment/kakao",
+        "services/protocol-payment/momo"
       ]
     }
   ],

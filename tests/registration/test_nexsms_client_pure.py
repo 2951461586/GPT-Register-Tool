@@ -269,6 +269,7 @@ class ReadEndpointTests(unittest.TestCase):
         }
         with patch("sms_tool.nexsms._requests.get", return_value=_reply(payload)) as get:
             quote = client.get_country_quote("dr", "38")
+        assert quote is not None
         self.assertEqual(0.05, quote["min_price"])
         self.assertEqual("233", quote["phone_code"])
         self.assertEqual("38", quote["country_id"])
@@ -283,6 +284,7 @@ class ReadEndpointTests(unittest.TestCase):
         payload = {"code": 0, "data": [{"countryId": 16, "minPrice": 0.09}]}
         with patch("sms_tool.nexsms._requests.get", return_value=_reply(payload)):
             quote = client.get_country_quote("dr", "")
+        assert quote is not None
         self.assertEqual(0.09, quote["min_price"])
 
     def test_a_quote_without_a_price_is_reported_as_missing(self):

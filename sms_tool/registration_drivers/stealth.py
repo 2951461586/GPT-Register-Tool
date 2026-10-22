@@ -29,7 +29,11 @@ def build_playwright_stealth(*, label: str = "browser", provider_prefix: str = "
     except ImportError:
         logger.debug("[%s] playwright-stealth is unavailable; continuing without the optional init script", label)
         return None
-    kwargs = dict(
+    # Annotated ``dict[str, Any]`` on purpose: the keyword set spans bools, a
+    # tuple and a None override, and playwright-stealth's own signature is what
+    # validates them. Left unannotated, the inferred value type collapses to
+    # ``bool`` and every override below reads as a type error.
+    kwargs: dict[str, Any] = dict(
         # Keep the provider's native UA, client hints, platform, and WebGL.
         navigator_user_agent=False,
         navigator_user_agent_data=False,

@@ -30,6 +30,7 @@ from sms_tool.paypal.reverse import (
 )
 
 from paypal_reverse_fakes import FakeCookieJar, FakeResponse, FakeSession, make_client
+from typing import TypeVar
 
 _CURRENT = "https://www.paypal.com/cgi-bin/webscr?cmd=_express-checkout"
 
@@ -52,6 +53,15 @@ def _no_solver(c):
 
 
 # ────────────────────────────── result contract ──────────────────────────────
+
+
+_T = TypeVar("_T")
+
+
+def _found(value: _T | None) -> _T:
+    """The form finders return ``None`` when nothing matched; unwrap or fail."""
+    assert value is not None
+    return value
 
 
 class ReversePayResultContractTests(unittest.TestCase):
@@ -318,7 +328,7 @@ class FindFormByFieldsTests(unittest.TestCase):
         c = _client(
             '<form action="/signup"><input type="hidden" name="csrf" value="T"><input name="email" value=""></form>'
         )
-        action, fields = c._find_form_by_fields(["email"])
+        action, fields = _found(c._find_form_by_fields(["email"]))
         self.assertEqual("https://www.paypal.com/signup", action)
         self.assertEqual({"csrf": "T", "email": ""}, fields)
 
@@ -331,7 +341,7 @@ class FindFormByFieldsTests(unittest.TestCase):
             '<form action="/one"><input name="phone" value=""></form>'
             '<form action="/two"><input name="email" value=""></form>'
         )
-        action, _ = c._find_form_by_fields(["email"])
+        action, _ = _found(c._find_form_by_fields(["email"]))
         self.assertEqual("https://www.paypal.com/two", action)
 
     def test_select_fields_are_merged_last_and_win(self):
@@ -340,7 +350,7 @@ class FindFormByFieldsTests(unittest.TestCase):
             '<form action="/a"><input type="hidden" name="country" value="HID">'
             '<select name="country"><option selected value="JP">JP</option></select></form>'
         )
-        _, fields = c._find_form_by_fields(["country"])
+        _, fields = _found(c._find_form_by_fields(["country"]))
         self.assertEqual("JP", fields["country"])
 
     def test_substring_match_means_wrong_form_can_be_picked(self):
@@ -353,14 +363,14 @@ class FindFormByFieldsTests(unittest.TestCase):
             '<form action="/wrong"><span>contact email support</span></form>'
             '<form action="/right"><input name="login_email" value=""></form>'
         )
-        action, _ = c._find_form_by_fields(["email"])
+        action, _ = _found(c._find_form_by_fields(["email"]))
         self.assertEqual("https://www.paypal.com/wrong", action)
 
 
 class FindSubmitFormTests(unittest.TestCase):
     def test_form_with_agree_button_text_is_accepted(self):
         c = _client('<form action="/a"><button type="submit">Agree and Continue</button></form>')
-        action, fields = c._find_submit_form()
+        action, fields = _found(c._find_submit_form())
         self.assertEqual("https://www.paypal.com/a", action)
         self.assertEqual({}, fields)
 
@@ -384,7 +394,7 @@ class SignupFormTests(unittest.TestCase):
         for name in ("email", "login_email", "signup_email", "login_emailcopy"):
             with self.subTest(name=name):
                 c = _client(f'<form action="/s"><input name="{name}" value=""></form>')
-                action, _ = c._find_signup_form()
+                action, _ = _found(c._find_signup_form())
                 self.assertEqual("https://www.paypal.com/s", action)
 
     def test_signup_form_absent_returns_none(self):

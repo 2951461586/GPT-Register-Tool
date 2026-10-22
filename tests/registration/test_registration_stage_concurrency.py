@@ -61,6 +61,7 @@ def test_lease_release_is_idempotent_and_reports_over_release():
     ):
         lease = registration_concurrency.acquire_registration_stage("email_otp_send")
         assert lease is not None
+        assert lease is not None
         lease.release()
         lease.release()  # idempotent, must not raise
         assert lease.released
@@ -82,7 +83,9 @@ def test_lease_supports_context_manager():
     ):
         gate = registration_concurrency._gate_for("auth")
         capacity = _gate_permits(gate)
-        with registration_concurrency.acquire_registration_stage("auth_flow") as lease:
+        lease_scope = registration_concurrency.acquire_registration_stage("auth_flow")
+        assert lease_scope is not None
+        with lease_scope as lease:
             assert _gate_permits(gate) == capacity - 1
             assert not lease.released
         assert lease.released
@@ -127,9 +130,11 @@ def test_unpaired_stage_lease_does_not_leak_into_next_threadpool_task():
                 # Deliberately leak: acquire without releasing. Any new call
                 # site that forgets to release behaves like this.
                 lease = registration_concurrency.acquire_registration_stage("email_otp_send")
+                assert lease is not None
                 leaked.append(lease)
                 return None
             lease = registration_concurrency.acquire_registration_stage("email_otp_send")
+            assert lease is not None
             held = _gate_permits(gate)
             lease.release()
             return held
@@ -162,9 +167,11 @@ def test_unpaired_stage_lease_does_not_leak_with_multiple_workers():
         def task(index: int):
             if index == 0:
                 lease = registration_concurrency.acquire_registration_stage("email_otp_send")
+                assert lease is not None
                 leaked.append(lease)
                 return None
             lease = registration_concurrency.acquire_registration_stage("email_otp_send")
+            assert lease is not None
             held = _gate_permits(gate)
             lease.release()
             return held
@@ -248,7 +255,9 @@ def test_track_registration_releases_gate_even_when_the_call_fails():
 
         @registration_progress.track_registration
         def failing():
-            captured.append(registration_progress._current.get())
+            progress = registration_progress._current.get()
+            assert progress is not None
+            captured.append(progress)
             registration_progress.registration_stage("auth_flow")
             raise RuntimeError("boom")
 

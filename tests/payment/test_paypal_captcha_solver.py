@@ -127,7 +127,8 @@ def test_extract_captcha_config_is_safe_on_malformed_html(html):
 def test_extract_captcha_config_raises_on_none_instead_of_returning_empty():
     """No None guard, unlike the surrounding helper style in this codebase."""
     with pytest.raises(TypeError):
-        extract_captcha_config(None)
+        # Deliberately out of contract: pins that None is not silently accepted.
+        extract_captcha_config(None)  # pyright: ignore[reportArgumentType]
 
 
 def test_extract_captcha_config_uses_the_first_site_key_in_the_document():
@@ -355,19 +356,26 @@ def test_playwright_proxy_parses_host_port_and_credentials():
 
 
 def test_playwright_proxy_normalizes_socks5h_to_socks5():
-    assert _playwright_proxy("socks5h://h:1080")["server"] == "socks5://h:1080"
+    proxied = _playwright_proxy("socks5h://h:1080")
+    assert proxied is not None
+    assert proxied["server"] == "socks5://h:1080"
 
 
 def test_playwright_proxy_omits_the_port_when_absent():
-    assert _playwright_proxy("http://h")["server"] == "http://h"
+    proxied = _playwright_proxy("http://h")
+    assert proxied is not None
+    assert proxied["server"] == "http://h"
 
 
 def test_playwright_proxy_always_bypasses_localhost():
-    assert _playwright_proxy("http://h:1")["bypass"] == "127.0.0.1,localhost"
+    proxied = _playwright_proxy("http://h:1")
+    assert proxied is not None
+    assert proxied["bypass"] == "127.0.0.1,localhost"
 
 
 def test_playwright_proxy_omits_absent_credentials():
     out = _playwright_proxy("http://h:1")
+    assert out is not None
     assert "username" not in out and "password" not in out
 
 

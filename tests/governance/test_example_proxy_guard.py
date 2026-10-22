@@ -6,6 +6,7 @@ import pytest
 _spec = importlib.util.spec_from_file_location(
     "example_guard", Path(__file__).resolve().parents[2] / "scripts" / "precommit_guard.py"
 )
+assert _spec is not None and _spec.loader is not None
 guard = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(guard)
 

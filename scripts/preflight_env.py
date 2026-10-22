@@ -70,8 +70,9 @@ CHECKS = (
 
 
 def main() -> int:
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")
+    reconfigure = getattr(sys.stdout, "reconfigure", None)
+    if callable(reconfigure):
+        reconfigure(encoding="utf-8")
 
     print("GPT-Register-Tool 环境预检\n" + "=" * 40)
     failures: list[tuple[str, str, str]] = []

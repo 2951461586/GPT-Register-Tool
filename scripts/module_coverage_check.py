@@ -152,7 +152,7 @@ def coverage_counts(tracked: set[str], claims: dict[str, list[str]]) -> tuple[se
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     ap.add_argument("--detail", action="store_true", help="print each claimed tracked module")
     args = ap.parse_args(argv)
 

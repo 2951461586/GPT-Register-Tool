@@ -16,6 +16,7 @@ from pathlib import Path
 
 MODULE_PATH = Path(__file__).resolve().parents[2] / "services" / "protocol-payment" / "common" / "http_dump.py"
 SPEC = importlib.util.spec_from_file_location("http_dump", MODULE_PATH)
+assert SPEC is not None and SPEC.loader is not None
 DUMP = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 sys.modules[SPEC.name] = DUMP

@@ -23,6 +23,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 import json
 import time
 
@@ -69,7 +71,7 @@ def test_quarantine_records_a_ttl_deadline(tmp_path):
     row = guard._read()["a@example.com"]
     assert row["quarantined"] is True
     assert row["quarantine_reason"] == "email_otp_send_stuck"
-    assert row["quarantine_until"] == row["last_attempt_at"] + TTL
+    assert row["quarantine_until"] == cast(int, row["last_attempt_at"]) + TTL
     # ``cooldown_until: 0`` 现在只表示「不走冷却那条路」，不再等于「永久」。
     assert row["cooldown_until"] == 0
 
@@ -81,7 +83,7 @@ def test_the_first_observation_is_a_cooldown_not_a_quarantine(tmp_path):
     row = guard._read()["a@example.com"]
     assert row["quarantined"] is False
     assert row["quarantine_until"] == 0
-    assert row["cooldown_until"] == row["last_attempt_at"] + guard.cooldown_seconds
+    assert row["cooldown_until"] == cast(int, row["last_attempt_at"]) + guard.cooldown_seconds
 
 
 # --------------------------------------------------------------------------

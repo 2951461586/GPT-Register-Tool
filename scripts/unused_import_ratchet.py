@@ -124,7 +124,7 @@ def collect() -> dict[str, int]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     ap.add_argument("--detail", action="store_true", help="print per-file counts")
     ap.add_argument("--update-baseline", action="store_true")
     args = ap.parse_args(argv)

@@ -9,8 +9,8 @@ from sms_tool.accounts.account_liveness import CODEX_USAGE_URL
 
 SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "probe_account_liveness.py"
 SPEC = importlib.util.spec_from_file_location("probe_account_liveness_script", SCRIPT_PATH)
+assert SPEC is not None and SPEC.loader is not None
 LIVENESS = importlib.util.module_from_spec(SPEC)
-assert SPEC.loader is not None
 SPEC.loader.exec_module(LIVENESS)
 
 

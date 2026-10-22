@@ -1115,6 +1115,7 @@ class RentalProviderLifecycleTests(unittest.TestCase):
         """
         for module in (phone_provider_lifecycle, phone_pool, phone_config):
             with self.subTest(module=module.__name__):
+                assert module.__file__ is not None
                 with open(module.__file__, encoding="utf-8") as handle:
                     tree = ast.parse(handle.read())
                 docstrings = set()

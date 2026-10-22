@@ -224,7 +224,7 @@ class LoginLandingGuardTests(unittest.TestCase):
         result, _, _, recorder = _drive(mint_token=SESSION_TOKEN, authorize_landing=LOGIN_LANDING)
 
         self.assertFalse(result["ok"])
-        self.assertTrue(result["error"].startswith(GUARD_PREFIX))
+        self.assertTrue(str(result["error"]).startswith(GUARD_PREFIX))
         self.assertNotIn(f"{AUTH_BASE}/api/accounts/authorize/continue", recorder.urls())
         self.assertFalse([url for url in recorder.urls() if "email-otp" in url])
 

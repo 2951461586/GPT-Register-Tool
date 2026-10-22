@@ -174,6 +174,7 @@ def test_merge_promotion_reports_sums_and_marks_unmeasured():
     assert merge_promotion_reports([]) is None
     assert merge_promotion_reports([None]) is None
     merged = merge_promotion_reports([_report("a@x", trial=True), _report("b@x", ok=False), None])
+    assert merged is not None
     assert merged["total"] == 2 and merged["success"] == 1 and merged["failed"] == 1
     assert merged["trial_eligible"] == 1
     assert merged["ok"] is False

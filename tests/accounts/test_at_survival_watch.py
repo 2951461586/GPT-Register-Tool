@@ -9,6 +9,7 @@ from pathlib import Path
 _SPEC = importlib.util.spec_from_file_location(
     "at_survival_watch", Path(__file__).resolve().parents[2] / "scripts" / "at_survival_watch.py"
 )
+assert _SPEC is not None and _SPEC.loader is not None
 watch = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(watch)
 

@@ -35,7 +35,11 @@ import sys
 # any non-Latin1 character raises UnicodeEncodeError, which kills the CI step.
 # The messages below are already English; this guards future additions.
 try:
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    # ``sys.stdout`` is typed as ``TextIO``, which has no ``reconfigure``;
+    # the real stream does at runtime, and the except below covers the rest.
+    reconfigure = getattr(sys.stdout, "reconfigure", None)
+    if callable(reconfigure):
+        reconfigure(encoding="utf-8", errors="replace")
 except (AttributeError, OSError, ValueError):
     pass
 

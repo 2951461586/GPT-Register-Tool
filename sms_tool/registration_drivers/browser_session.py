@@ -62,7 +62,10 @@ class PlaywrightBrowserSession:
         # shared constants so the fallback is defined in exactly one place
         # (P2-10: was hardcoded 1440x900 duplicated from decisions.py).
         if viewport and len(viewport) == 2 and viewport[0] > 0 and viewport[1] > 0:
-            self.viewport: dict[str, int] = {"width": int(viewport[0]), "height": int(viewport[1])}
+            # Playwright types this as ``ViewportSize`` (a TypedDict); a plain
+            # dict is accepted at runtime, and this attribute is also handed to
+            # Camoufox through the shared kwargs bag.
+            self.viewport: Any = {"width": int(viewport[0]), "height": int(viewport[1])}
         else:
             self.viewport = {"width": DEFAULT_VIEWPORT_WIDTH, "height": DEFAULT_VIEWPORT_HEIGHT}
         self._persistent = bool(self.user_data_dir)
@@ -100,8 +103,9 @@ class PlaywrightBrowserSession:
                 launch_kwargs = {"headless": self.headless}
                 if browser_proxy:
                     launch_kwargs["proxy"] = browser_proxy
-                self.browser = self._playwright.chromium.launch(**launch_kwargs)
-                self.context = self.browser.new_context(
+                launched = self._playwright.chromium.launch(**launch_kwargs)
+                self.browser = launched
+                self.context = launched.new_context(
                     locale=self.locale,
                     timezone_id=self.timezone_id,
                     viewport=self.viewport,
@@ -143,7 +147,12 @@ class PlaywrightBrowserSession:
             if item is None:
                 continue
             try:
-                item.close() if item is not self._playwright else item.stop()
+                # Playwright's driver manager exposes ``stop``; contexts and
+                # browsers expose ``close``. The tuple is heterogeneous, so the
+                # call is dispatched by capability rather than by type.
+                shutdown = getattr(item, "stop", None) if item is self._playwright else getattr(item, "close", None)
+                if callable(shutdown):
+                    shutdown()
             except Exception:
                 pass
         self.page = None
@@ -189,10 +198,14 @@ class PlaywrightBrowserSession:
         loc = str(locale or self.locale or "en-US")
         tz = str(timezone_id or self.timezone_id or "America/New_York")
         if viewport and len(viewport) == 2 and viewport[0] > 0 and viewport[1] > 0:
-            vp: dict[str, int] = {"width": int(viewport[0]), "height": int(viewport[1])}
+            vp: Any = {"width": int(viewport[0]), "height": int(viewport[1])}
         else:
             vp = dict(self.viewport)
-        self.context = self.browser.new_context(locale=loc, timezone_id=tz, viewport=vp)
+        # ``self.browser`` is a ``Browser`` for every caller of this method (the
+        # pool only renews on a resident browser); the attribute is union-typed
+        # because a persistent context reports itself as the browser.
+        new_context = getattr(self.browser, "new_context")
+        self.context = new_context(locale=loc, timezone_id=tz, viewport=vp)
         self.context.set_default_timeout(self.timeout_ms)
         self.page = self.context.new_page()
         self.stealth_status = apply_playwright_stealth(
@@ -212,7 +225,11 @@ class PlaywrightBrowserSession:
         )
 
     def cookies(self) -> list[dict[str, Any]]:
-        return list(self.context.cookies()) if self.context is not None else []
+        if self.context is None:
+            return []
+        # Playwright yields ``Cookie`` TypedDicts; copy to plain dicts so the
+        # declared return type holds for every caller (session JSON writers).
+        return [dict(item) for item in self.context.cookies()]
 
     @staticmethod
     def _page_is_open(page: Any) -> bool:

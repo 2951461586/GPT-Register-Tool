@@ -455,7 +455,7 @@ def is_delegating_stub(node: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     return False
 
 
-def compare_sources(a: str, b: str) -> dict[str, list[str]]:
+def compare_sources(a: str, b: str) -> dict[str, Any]:
     """Classify top-level functions from two module sources.
 
     Returns ``{"identical": [...], "different": [...], "only_a": [...],
@@ -560,7 +560,7 @@ def load_baseline(path: Path | None = None) -> dict:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     parser.add_argument("--detail", action="store_true", help="print the per-pair table")
     parser.add_argument("--list", action="store_true", help="print function names")
     parser.add_argument("--pair", help="restrict --list/--detail output to one pair, e.g. ideal:twint")

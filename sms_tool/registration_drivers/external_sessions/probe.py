@@ -40,7 +40,7 @@ def verify_browser_proxy_country(
     ``page.evaluate`` is not governed by Playwright's default timeout, so an
     unresponsive geo endpoint would have blocked a registration indefinitely.
     """
-    page = getattr(browser, "page", None)
+    page: Any = getattr(browser, "page", None)
     if page is None:
         selector = getattr(browser, "select_live_page", None)
         page = selector() if callable(selector) else None

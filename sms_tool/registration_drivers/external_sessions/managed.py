@@ -342,7 +342,7 @@ class CamoufoxBrowserSession(ConnectedPlaywrightSession):
         timezone = configured_timezone or ("" if geoip else self.timezone_id)
         if using_bridge:
             locale, timezone = self._bridged_geo_locale_timezone(
-                raw_proxy, configured_locale, configured_timezone, locale, timezone
+                str(raw_proxy or ""), configured_locale, configured_timezone, locale, timezone
             )
         if locale:
             options["locale"] = locale
@@ -392,7 +392,11 @@ class CamoufoxBrowserSession(ConnectedPlaywrightSession):
             self.browser = getattr(self.context, "browser", None) or self.context
             pages = list(getattr(self.context, "pages", []) or [])
             self.page = pages[0] if pages else self.context.new_page()
-            self.context.set_default_timeout(self.timeout_ms)
+            # Camoufox's ``__enter__`` returns a ``Browser``; the timeout setter
+            # lives on the context Playwright creates for it.
+            set_default_timeout = getattr(self.context, "set_default_timeout", None)
+            if callable(set_default_timeout):
+                set_default_timeout(self.timeout_ms)
             self.stealth_status = apply_playwright_stealth(
                 self.context,
                 self.page,
@@ -536,7 +540,11 @@ class RoxyBrowserSession(ConnectedPlaywrightSession):
                 else:
                     request_kwargs["json"] = body
                 response = curl_requests.request(
-                    normalized_method, urljoin(self.api_base.rstrip("/") + "/", path.lstrip("/")), **request_kwargs
+                    # curl_cffi types ``method`` as a Literal union; callers pass
+                    # an arbitrary upper-cased str, which the library accepts.
+                    normalized_method,  # pyright: ignore[reportArgumentType]
+                    urljoin(self.api_base.rstrip("/") + "/", path.lstrip("/")),
+                    **request_kwargs,
                 )
                 try:
                     data = response.json()
@@ -698,6 +706,7 @@ class RoxyBrowserSession(ConnectedPlaywrightSession):
         address = _normalize_debugger_address(address)
         try:
             self._start_playwright()
+            assert self._playwright is not None
             browser = self._playwright.chromium.connect_over_cdp(address, timeout=self.timeout_ms)
             self._adopt_browser(browser)
             return self

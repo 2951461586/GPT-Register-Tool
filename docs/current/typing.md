@@ -97,3 +97,16 @@ returned `list[tuple[int, object]]`, so the `signal.signal(sig, previous)`
 restore passed an `object` where typeshed wants `_HANDLER`; the list and the
 return annotation now use a local `SignalHandler` alias). Baseline after that
 round: **313**.
+
+Retired 2026-10-23 (the whole remaining tree, 313 -> 0): production code got
+the annotations its own runtime guards already implied (`seeded_device_identity`
+and `_value_matches` accept `None`, `_classify_exception` takes `BaseException`
+because `CancelledError`/`KeyboardInterrupt` are not `Exception` subclasses,
+`is_redirect_like_url` and the captcha solver's `_playwright_proxy` accept
+`None`, the circuit breaker's `threshold` is validated rather than typed). Tests
+narrow Optional returns with `assert ... is not None` instead of
+`assertIsNotNone`, and reach deliberately-frozen or duck-typed doubles through
+`cast(Any, ...)`. Two `pyrightconfig.json` gaps were closed rather than coded
+around: the extractor tests' `sys.path` (`common`, `kakao_extract`,
+`momo_qr_extract`) now has a matching `executionEnvironment`, which removed 13
+phantom `reportMissingImports`. Baseline after this round: **0**.

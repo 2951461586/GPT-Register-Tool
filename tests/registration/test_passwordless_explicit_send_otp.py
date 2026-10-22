@@ -9,6 +9,8 @@ Sentinel, flow + navigation ids) and the answer carries
 
 from __future__ import annotations
 
+from typing import Any
+
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -123,7 +125,13 @@ class _Stage:
 def _send(stage):
     with patch.object(otp_stages, "_emit") as emit:
         otp_stages.send_email_otp(stage)
-    return [call.args[1] % call.args[2:] if len(call.args) > 2 else call.args[1] for call in emit.call_args_list]
+    emitted: list[Any] = []
+    for call in emit.call_args_list:
+        # ``Mock.call_args`` is typed as an empty tuple; the real emit signature
+        # is (level, template, *args), so read it as a plain list.
+        args: list[Any] = list(call.args)
+        emitted.append(args[1] % tuple(args[2:]) if len(args) > 2 else args[1])
+    return emitted
 
 
 def test_unset_toggle_sends_explicitly_since_the_2026_10_11_default_flip():
@@ -223,6 +231,7 @@ def test_ab_harness_preregisters_p3_1():
 
     path = Path(__file__).resolve().parents[2] / "scripts" / "registration_ab.py"
     spec = importlib.util.spec_from_file_location("registration_ab_p3_1", path)
+    assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     design = module.EXPERIMENTS["p3-1-passwordless-explicit-send-otp"]

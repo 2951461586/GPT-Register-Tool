@@ -11,7 +11,9 @@ Covers the four seams the cancel flag touches:
 import signal
 import threading
 import unittest
+from collections.abc import Callable
 from contextlib import nullcontext
+from typing import cast
 from unittest.mock import Mock, patch
 
 from sms_tool.registration import cancel as registration_cancel
@@ -98,7 +100,9 @@ class CancelFlagTests(unittest.TestCase):
         previous = signal.getsignal(signal.SIGINT)
         try:
             registration_cancel._install_cancel_signal_handlers()
-            handler = signal.getsignal(signal.SIGINT)
+            # getsignal() is typed as Handlers | Callable | None; the installer
+            # always puts a callable in place, which is what this pins.
+            handler = cast("Callable[[int, object], None]", signal.getsignal(signal.SIGINT))
             handler(signal.SIGINT, None)
             self.assertTrue(registration_cancel_requested())
             with self.assertRaises(KeyboardInterrupt):

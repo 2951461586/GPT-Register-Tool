@@ -21,7 +21,7 @@ def test_operation_binding_respects_callers_patch_scope_and_is_immutable():
     assert operations._fetch_auth_session is fake
     assert not hasattr(operations, "sys")
     with pytest.raises(FrozenInstanceError):
-        operations._fetch_auth_session = Mock()
+        operations._fetch_auth_session = Mock()  # pyright: ignore[reportAttributeAccessIssue]
 
 
 def test_interface_covers_only_dependencies_the_workflow_uses():
@@ -123,7 +123,7 @@ def test_otp_polling_group_binds_facade_patches_once_and_is_immutable():
     assert operations.otp_poll.resend is fake_resend
     assert operations.otp_poll.subject_keywords == "test otp"
     with pytest.raises(FrozenInstanceError):
-        operations.otp_poll.poll = Mock()
+        operations.otp_poll.poll = Mock()  # pyright: ignore[reportAttributeAccessIssue]
 
 
 def test_email_workflow_wiring_is_explicit_not_a_globals_sweep():
@@ -161,7 +161,11 @@ def test_email_workflow_wiring_is_explicit_not_a_globals_sweep():
     keys: set[str] = set()
     for node in ast.walk(helper):
         if isinstance(node, ast.Dict):
-            keys.update(key.value for key in node.keys if isinstance(key, ast.Constant))
+            keys.update(
+                key.value
+                for key in node.keys
+                if key is not None and isinstance(key, ast.Constant) and isinstance(key.value, str)
+            )
 
     declared = {item.name for item in fields(RegistrationOperations)}
     assert declared == keys, (

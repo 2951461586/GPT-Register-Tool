@@ -162,7 +162,7 @@ def test_a_429_arms_the_registration_rate_limit_circuit():
 def test_a_429_reports_the_string_the_signup_lane_already_uses():
     result, _ = _drive(otp_status=429)
 
-    assert result["error"].startswith(SIGNUP_LANE_PREFIX)
+    assert str(result["error"]).startswith(SIGNUP_LANE_PREFIX)
 
 
 def test_the_servers_retry_after_is_used_not_a_local_guess():

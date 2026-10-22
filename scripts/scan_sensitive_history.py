@@ -11,7 +11,11 @@ import sys
 # any non-Latin1 character raises UnicodeEncodeError, killing the step (which
 # then skips every later step in the job). Same for the other scan scripts.
 try:
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    # ``sys.stdout`` is typed as ``TextIO``, which has no ``reconfigure``;
+    # the real stream does at runtime, and the except below covers the rest.
+    reconfigure = getattr(sys.stdout, "reconfigure", None)
+    if callable(reconfigure):
+        reconfigure(encoding="utf-8", errors="replace")
 except (AttributeError, OSError, ValueError):
     pass
 

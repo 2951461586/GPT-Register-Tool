@@ -170,7 +170,7 @@ class RegistrationContext:
 _DEVICE_SEED_SALT = "gpt-register-tool:registration:"
 
 
-def seeded_device_identity(email: str) -> dict[str, str]:
+def seeded_device_identity(email: str | None) -> dict[str, str]:
     """``oai-did`` and ``auth_session_logging_id`` as a pure function of the address.
 
     S1 of the device-layer plan.  Same shape as the random ids they replace

@@ -269,6 +269,7 @@ def test_ab_harness_preregisters_p2_1_on_the_toggle_and_its_mechanism_line():
 
     path = Path(__file__).resolve().parents[2] / "scripts" / "registration_ab.py"
     spec = importlib.util.spec_from_file_location("registration_ab_p2_1", path)
+    assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     design = module.EXPERIMENTS["p2-1-device-identity-seeded"]

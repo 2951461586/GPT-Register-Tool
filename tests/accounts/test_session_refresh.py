@@ -41,8 +41,8 @@ def test_browser_refresh_paths_are_removed():
     assert not hasattr(session_refresh, "_refresh_session_browser")
     assert not hasattr(session_refresh, "_complete_browser_email_login")
     assert (
-        "browser" not in session_refresh.refresh_session.__doc__.lower()
-        or "removed" in session_refresh.refresh_session.__doc__.lower()
+        "browser" not in (session_refresh.refresh_session.__doc__ or "").lower()
+        or "removed" in (session_refresh.refresh_session.__doc__ or "").lower()
     )
 
 

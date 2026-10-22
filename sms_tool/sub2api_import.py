@@ -40,7 +40,7 @@ def import_sub2api_session(
     login_email: str = "",
     login_password: str = "",
     group_name: str = "",
-    group_ids: list[int] | None = None,
+    group_ids: list[int] | str | None = None,
     proxy_name: str = "",
     proxy_id: int | None = None,
     priority: int | None = None,
@@ -130,7 +130,7 @@ def import_sub2api_sessions(
     login_email: str = "",
     login_password: str = "",
     group_name: str = "",
-    group_ids: list[int] | None = None,
+    group_ids: list[int] | str | None = None,
     proxy_name: str = "",
     proxy_id: int | None = None,
     priority: int | None = None,
@@ -338,7 +338,7 @@ def upload_to_sub2api(
     login_email: str = "",
     login_password: str = "",
     group_name: str = "",
-    group_ids: list[int] | None = None,
+    group_ids: list[int] | str | None = None,
     proxy_name: str = "",
     proxy_id: int | None = None,
     priority: int | None = None,
@@ -423,7 +423,7 @@ def _verify_sub2api_account_config(
     origin: str,
     token: str,
     account_id: int,
-    group_ids: list[int] | None = None,
+    group_ids: list[int] | str | None = None,
     proxy_id: int | None = None,
 ) -> dict[str, Any]:
     account_id = _as_int(account_id)
@@ -605,7 +605,7 @@ def fetch_sub2api_auth_files(
 
 def _build_sub2api_payload(
     token_data: dict[str, Any],
-    group_ids: list[int] | None = None,
+    group_ids: list[int] | str | None = None,
     proxy_id: int | None = None,
     priority: int | None = None,
     concurrency: int | None = None,
@@ -642,7 +642,7 @@ def _resolve_sub2api_config(
     login_email: str = "",
     login_password: str = "",
     group_name: str = "",
-    group_ids: list[int] | None = None,
+    group_ids: list[int] | str | None = None,
     proxy_name: str = "",
     proxy_id: int | None = None,
     priority: int | None = None,
@@ -733,7 +733,7 @@ def _looks_like_sub2api_admin_key(token: str) -> bool:
 
 
 def _resolve_group_ids(
-    origin: str, token: str, group_name: str = "", group_ids: list[int] | None = None
+    origin: str, token: str, group_name: str = "", group_ids: list[int] | str | None = None
 ) -> dict[str, Any]:
     parsed_ids = _parse_int_list(group_ids)
     if parsed_ids:
@@ -772,7 +772,7 @@ def _resolve_proxy_id(
     origin: str,
     token: str,
     proxy_name: str = "",
-    proxy_id: int | None = None,
+    proxy_id: int | str | None = None,
 ) -> int | dict[str, Any] | None:
     parsed_id = _as_int(proxy_id)
     if parsed_id > 0:
@@ -822,8 +822,8 @@ def _request_json(
     try:
         # curl_cffi types ``method`` as a Literal union; the caller passes an
         # arbitrary upper-cased str, which the library accepts.
-        response = curl_requests.request(  # type: ignore[arg-type]
-            method.upper(),
+        response = curl_requests.request(
+            method.upper(),  # pyright: ignore[reportArgumentType]
             url,
             headers=headers,
             data=json.dumps(body, ensure_ascii=False).encode("utf-8") if body is not None else None,

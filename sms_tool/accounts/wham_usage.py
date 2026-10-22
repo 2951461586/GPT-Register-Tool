@@ -97,10 +97,11 @@ def _parse_usage_window(body: dict[str, Any], window_key: str) -> dict[str, Any]
         )
         if not isinstance(window, dict):
             continue
+        window_data: dict[str, Any] = window
 
         def pick(keys: tuple[str, ...]) -> int | None:
             for key in keys:
-                value = window.get(key)
+                value = window_data.get(key)
                 if value is not None:
                     try:
                         return int(value)

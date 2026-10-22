@@ -78,7 +78,9 @@ class ExceptionHookTests(unittest.TestCase):
         try:
             raise exc
         except type(exc):
-            sys.excepthook(*sys.exc_info())
+            exc_type, exc_value, exc_tb = sys.exc_info()
+            assert exc_type is not None and exc_value is not None
+            sys.excepthook(exc_type, exc_value, exc_tb)
 
 
 class InstallationTests(ExceptionHookTests):

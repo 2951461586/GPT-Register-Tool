@@ -32,12 +32,16 @@ import io
 import os
 import unittest
 from pathlib import Path
+import typing
 
 _spec = importlib.util.spec_from_file_location(
     "scan_hardcoded_secrets",
     Path(__file__).resolve().parents[2] / "scripts" / "scan_hardcoded_secrets.py",
 )
-scanner = importlib.util.module_from_spec(_spec)
+assert _spec is not None and _spec.loader is not None
+# ``_scanning`` below re-points the module-level roots; the module is loaded from
+# a path, so its attributes are only visible through ``Any``.
+scanner = typing.cast(typing.Any, importlib.util.module_from_spec(_spec))
 _spec.loader.exec_module(scanner)
 
 
@@ -275,7 +279,8 @@ class PrecommitGuardParityTests(unittest.TestCase):
     def setUpClass(cls):
         path = Path(__file__).resolve().parents[2] / "scripts" / "precommit_guard.py"
         spec = importlib.util.spec_from_file_location("precommit_guard_for_parity", path)
-        cls.guard = importlib.util.module_from_spec(spec)
+        assert spec is not None and spec.loader is not None
+        cls.guard = typing.cast(typing.Any, importlib.util.module_from_spec(spec))
         spec.loader.exec_module(cls.guard)
 
     CASES = (

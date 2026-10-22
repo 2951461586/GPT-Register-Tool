@@ -25,6 +25,7 @@ import sqlite3
 import sys
 import time
 from pathlib import Path
+from typing import cast
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -129,7 +130,11 @@ def main() -> int:
     result = reconcile(args.database, args.sessions_dir, args.pool_file, domain=args.domain)
     result["dry_run"] = not args.apply
     if args.apply:
-        result["prune"] = prune(args.pool_file, set(result["orphans_no_session"]))
+        orphans_no_session = result.get("orphans_no_session")
+        result["prune"] = prune(
+            args.pool_file,
+            set(cast("list[str]", orphans_no_session)) if isinstance(orphans_no_session, list) else set(),
+        )
 
     output = json.dumps(result, ensure_ascii=False, indent=2)
     print(output)

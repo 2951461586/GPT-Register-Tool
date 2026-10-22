@@ -47,7 +47,8 @@ def test_explicit_config_is_immutable_and_independent_of_cwd(tmp_path, monkeypat
     config = load_runtime_config(path)
     assert config.source == path.resolve()
     with pytest.raises(TypeError):
-        config.data["chatgpt"] = {}
+        # Deliberately out of contract: this pins that the mapping is read-only.
+        config.data["chatgpt"] = {}  # pyright: ignore[reportIndexIssue]
 
 
 def test_payment_schema_rejects_unknown_method_and_country(tmp_path):

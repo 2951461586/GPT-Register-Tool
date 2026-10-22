@@ -71,7 +71,7 @@ def _warn_once() -> None:
     )
 
 
-def offset_minutes_for_timezone(tz_name: str, default: int = 0, *, at: datetime | None = None) -> int:
+def offset_minutes_for_timezone(tz_name: str | None, default: int = 0, *, at: datetime | None = None) -> int:
     """UTC offset in minutes for ``tz_name`` at ``at`` (default: now), DST included.
 
     ``at`` exists so the DST boundary can be tested: the whole point of this
@@ -130,7 +130,7 @@ def timezone_abbreviation(tz_name: str) -> str:
         return ""
 
 
-def formatted_offset(minutes: int) -> str:
+def formatted_offset(minutes: int | None) -> str:
     """Format an offset the way a browser reports it: ``-240`` -> ``"-0400"``."""
     total = int(minutes or 0)
     sign = "-" if total < 0 else "+"

@@ -96,7 +96,7 @@ def is_resource_url(url: str) -> bool:
     )
 
 
-def is_redirect_like_url(profile: ProviderProfile, url: str, from_action_field: bool = False) -> bool:
+def is_redirect_like_url(profile: ProviderProfile, url: str | None, from_action_field: bool = False) -> bool:
     if not isinstance(url, str):
         return False
     url = url.strip()

@@ -56,6 +56,7 @@ class SentinelTokenTests(unittest.TestCase):
             result = sentinel_tokens._extract_sentinel_http(persist=False, device_id="did-fixed")
 
         save.assert_not_called()
+        assert result is not None
         self.assertEqual(result["oai_did"], "did-fixed")
         self.assertEqual(json.loads(result["sentinel_token"])["id"], "did-fixed")
         self.assertEqual(json.loads(result["sentinel_authorize_continue_token"])["flow"], "authorize_continue")
@@ -92,6 +93,7 @@ class SentinelTokenTests(unittest.TestCase):
             result = sentinel_tokens._extract_sentinel_quickjs(persist=False, device_id="did-fixed")
 
         save.assert_not_called()
+        assert result is not None
         self.assertEqual(result["oai_did"], "did-fixed")
         self.assertEqual(json.loads(result["sentinel_oauth_token"])["id"], "did-fixed")
         self.assertEqual(json.loads(result["sentinel_authorize_continue_token"])["id"], "did-fixed")
@@ -121,6 +123,7 @@ class SentinelTokenTests(unittest.TestCase):
         ctx.cookies.return_value = [{"name": "oai-did", "value": "did-fixed"}]
         with patch("sms_tool.sentinel_tokens._save_sentinel_cache"):
             result = sentinel_tokens._collect_sentinel_tokens(Page(), ctx, persist=False)
+        assert result is not None
         self.assertEqual(json.loads(result["sentinel_authorize_continue_token"])["flow"], "authorize_continue")
         self.assertEqual(json.loads(result["sentinel_authorize_continue_so_token"])["flow"], "authorize_continue")
 

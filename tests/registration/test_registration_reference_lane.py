@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from types import MappingProxyType, SimpleNamespace
+from typing import Any, cast
 from unittest.mock import Mock, patch
 
 import pytest
@@ -71,6 +72,7 @@ def test_workflow_applies_the_preset_and_overrides_a_caller_supplied_mode():
     workflow.input_registration_mode = "passwordless"
     workflow._apply_reference_lane()
     assert workflow.input_registration_mode == "password"
+    assert workflow.config is not None
     assert workflow.config["registration"]["prime_create_account_password"] is True
     assert workflow._reference_lane_active() is True
 
@@ -103,7 +105,7 @@ def _runtime(**extra):
 
 def test_pre_signin_reads_the_anonymous_set_then_providers_in_order():
     workflow = _workflow({"registration": {"reference_lane": True}})
-    workflow.runtime = _runtime()
+    workflow.runtime = cast(Any, _runtime())
     workflow.fingerprint_country = "IN"
 
     lane.pre_signin(workflow)
@@ -122,7 +124,7 @@ def test_pre_signin_reads_the_anonymous_set_then_providers_in_order():
 
 def test_bootstrap_failures_are_swallowed():
     workflow = _workflow({"registration": {"reference_lane": True}})
-    workflow.runtime = _runtime()
+    workflow.runtime = cast(Any, _runtime())
     workflow.runtime.session.get.side_effect = RuntimeError("boom")
     workflow.fingerprint_country = ""
 
@@ -133,7 +135,7 @@ def test_bootstrap_failures_are_swallowed():
 
 def test_prime_password_bundle_stores_the_token_where_issue_sentinel_reads_it():
     workflow = _workflow({"registration": {"reference_lane": True}})
-    workflow.runtime = _runtime()
+    workflow.runtime = cast(Any, _runtime())
     issued = SimpleNamespace(token='{"flow":"username_password_create"}')
     with (
         patch("sms_tool.sentinel.issue_password_page_bundle", return_value=issued) as bundle,
@@ -148,7 +150,7 @@ def test_prime_password_bundle_stores_the_token_where_issue_sentinel_reads_it():
 
 def test_prime_password_bundle_failure_falls_back_to_per_flow_issuance():
     workflow = _workflow({"registration": {"reference_lane": True}})
-    workflow.runtime = _runtime()
+    workflow.runtime = cast(Any, _runtime())
     with (
         patch("sms_tool.sentinel.issue_password_page_bundle", side_effect=RuntimeError("down")),
         patch("sms_tool.sentinel.sentinel_backend", return_value="node_runner"),
@@ -225,7 +227,7 @@ def _prepare(*, reference_navigation):
     session = Mock()
     session.post.return_value = signin_response
     session.get.return_value = authorize_response
-    kwargs = {"reference_navigation": True} if reference_navigation else {}
+    kwargs: dict[str, Any] = {"reference_navigation": True} if reference_navigation else {}
     with patch.object(signup_module, "_emit_operator_line"):
         auth_flow._prepare_signup_auth_state(
             session,
@@ -289,18 +291,18 @@ def _otp_workflow(config):
 
 def test_reference_lane_polls_the_mailbox_even_when_dispatch_still_shows_pending():
     workflow = _otp_workflow({"registration": {"reference_lane": True}})
-    workflow.r.otp_poll.poll = Mock(return_value="123456")
+    cast(Any, workflow.r).otp_poll.poll = Mock(return_value="123456")
     workflow.wait_email_otp()
     assert workflow.runtime.email_code == "123456"
-    workflow.r.otp_poll.poll.assert_called_once()
+    cast(Any, workflow.r).otp_poll.poll.assert_called_once()
 
 
 def test_without_the_lane_a_pending_dispatch_still_stops_before_polling():
     from sms_tool.registration.handlers import RegistrationAbort
 
     workflow = _otp_workflow({"registration": {}})
-    workflow.r.otp_poll.poll = Mock(return_value="123456")
-    workflow.r._is_signup_password_step = Mock(return_value=True)
+    cast(Any, workflow.r).otp_poll.poll = Mock(return_value="123456")
+    cast(Any, workflow.r)._is_signup_password_step = Mock(return_value=True)
     with pytest.raises(RegistrationAbort):
         workflow.wait_email_otp()
     workflow.r.otp_poll.poll.assert_not_called()

@@ -101,7 +101,7 @@ class AuthHeadersAndClassificationTests(unittest.TestCase):
         ):
             fingerprint = sentinel_fingerprint()
         self.assertEqual(fingerprint["impersonate"], "chrome146")
-        self.assertIn("Chrome/146.", fingerprint["user_agent"])
+        self.assertIn("Chrome/146.", str(fingerprint["user_agent"]))
         self.assertEqual(fingerprint["navigator_platform"], "Win32")
 
     def test_device_profile_is_deterministic_per_account_and_differs_across(self):
@@ -407,14 +407,14 @@ class FingerprintPoolVersionMatrixTests(unittest.TestCase):
         # Pick a real profile name from the pool to guarantee a match.
         real_name = pool._profiles[0].name
         found = pool.select(real_name)
-        self.assertIsNotNone(found, f"select({real_name!r}) returned None")
+        assert found is not None, f"select({real_name!r}) returned None"
         self.assertEqual(found.name, real_name)
 
         # A name with an underscore suffix must also match exactly.
         for p in pool._profiles:
             if "_" in p.name:
                 result = pool.select(p.name)
-                self.assertIsNotNone(result, f"select({p.name!r}) returned None")
+                assert result is not None, f"select({p.name!r}) returned None"
                 self.assertEqual(result.name, p.name)
                 break
 

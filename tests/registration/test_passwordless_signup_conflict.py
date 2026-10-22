@@ -55,6 +55,7 @@ from sms_tool.registration.retry_guard import (
     _dead_end_reason,
 )
 from sms_tool.registration.runtime import RegistrationRuntimeState
+from typing import Any, cast
 
 #: The real response body, verbatim, minus the address masking.
 _MISMATCH_BODY = {
@@ -176,7 +177,7 @@ def _workflow(tmp_path, monkeypatch, response, *, is_user_already_exists=None):
     w.config = {}
     w.runtime = RegistrationRuntimeState(username="conflict@example.test", auth_base="https://auth.example.test")
     w._issue_sentinel = Mock(return_value=SimpleNamespace(token="", so_token=""))
-    w._operations = SimpleNamespace(
+    cast(Any, w)._operations = SimpleNamespace(
         request_with_retry=Mock(return_value=response),
         _auth_request_headers=Mock(return_value={}),
         auth_impersonate=Mock(return_value=""),
@@ -236,12 +237,12 @@ def test_the_original_verdict_is_unchanged(tmp_path, monkeypatch, capsys):
 def test_the_dead_end_is_written_before_the_continue_follow(tmp_path, monkeypatch):
     """死路必须在后续网络调用**之前**落盘 —— 否则一个异常就把它丢了。"""
     w = _workflow(tmp_path, monkeypatch, _response(_MISMATCH_BODY))
-    seen: list[object] = []
+    seen: list[dict[str, Any]] = []
 
     def follow(*args, **kwargs):
         seen.append(RegistrationRetryGuard({}).check(w.runtime.username))
 
-    w._operations._follow_continue_url = Mock(side_effect=follow)
+    cast(Any, w)._operations._follow_continue_url = Mock(side_effect=follow)
     w.create_account()
     assert seen and seen[0]["dead_end"] is True
     assert json.dumps(seen[0])  # 行本身是可序列化的

@@ -65,7 +65,10 @@ def test_account_lifecycle_delete_many_preserves_order_and_shared_mailbox_file(t
         workers=2,
     )
 
-    assert [result.email for result in results] == ["first@example.com", "second@example.com"]
+    assert [result.email for result in results if not isinstance(result, Exception)] == [
+        "first@example.com",
+        "second@example.com",
+    ]
     assert pool.read_text(encoding="utf-8") == "keep@example.com----password\n"
 
 

@@ -1,5 +1,6 @@
 """Stable browser-session factory; implementation lives behind this import path."""
 
+from collections.abc import Callable
 from typing import Any, Mapping
 
 from ...kernel.driver_env import driver_config as _driver_config
@@ -22,7 +23,7 @@ from .managed import (
 from .profiles import _browser_profile_dir, _inject_browser_profile, _inject_screen_size
 from .probe import verify_browser_proxy_country
 
-_BROWSER_SESSION_FACTORIES: dict[str, type[PlaywrightBrowserSession]] = {
+_BROWSER_SESSION_FACTORIES: dict[str, Callable[..., PlaywrightBrowserSession]] = {
     "cloak": CloakBrowserSession,
     "camoufox": CamoufoxBrowserSession,
     "roxy": RoxyBrowserSession,

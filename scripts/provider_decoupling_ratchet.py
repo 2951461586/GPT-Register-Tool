@@ -127,6 +127,7 @@ def _normalised_ast(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
         decorator_list=[],
         returns=None,
         type_comment=None,
+        type_params=[],
     )
     module = ast.Module(body=[fingerprint], type_ignores=[])
     return ast.dump(ast.fix_missing_locations(module), annotate_fields=True, include_attributes=False)

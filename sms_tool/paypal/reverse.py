@@ -700,7 +700,7 @@ class PayPalReverseClient:
         return None
 
     @staticmethod
-    def _extract_token(data: dict, *keys: str) -> str:
+    def _extract_token(data: object, *keys: str) -> str:
         if not isinstance(data, dict):
             return ""
         for key in keys:

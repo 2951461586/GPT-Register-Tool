@@ -82,6 +82,7 @@ class WriteTests(unittest.TestCase):
     def test_the_sidecar_is_written_next_to_the_screenshot_name(self):
         path = page_truth.write_page_truth(_Page(TRUTH), self.out, "04_email_filled")
         self.assertIsNotNone(path)
+        assert path is not None
         self.assertEqual(path.name, "04_email_filled.json")
         payload = json.loads(path.read_text(encoding="utf-8"))
         for key, value in TRUTH.items():
@@ -89,6 +90,7 @@ class WriteTests(unittest.TestCase):
 
     def test_the_sidecar_records_that_it_precedes_the_screenshot(self):
         path = page_truth.write_page_truth(_Page(TRUTH), self.out, "step")
+        assert path is not None
         payload = json.loads(path.read_text(encoding="utf-8"))
         self.assertIs(payload["capturedBeforeScreenshot"], True)
         self.assertIn("capturedAt", payload)
@@ -96,6 +98,7 @@ class WriteTests(unittest.TestCase):
     def test_the_missing_directory_is_created(self):
         self.assertFalse(self.out.exists())
         path = page_truth.write_page_truth(_Page(TRUTH), self.out, "step")
+        assert path is not None
         self.assertTrue(path.parent.is_dir())
 
     def test_an_unreadable_page_writes_no_file(self):
@@ -109,6 +112,7 @@ class WriteTests(unittest.TestCase):
     def test_the_sidecar_uses_lf_endings(self):
         """Windows text mode would rewrite them and defeat the run-to-run diff."""
         path = page_truth.write_page_truth(_Page(TRUTH), self.out, "step")
+        assert path is not None
         raw = path.read_bytes()
         self.assertNotIn(b"\r\n", raw)
 
