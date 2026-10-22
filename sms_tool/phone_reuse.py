@@ -94,6 +94,7 @@ from .smsbower import (
     normalize_phone,
     normalize_service,
 )
+from . import endpoints
 
 #: Shared by both protocol families. Renamed off the vendor name when the second
 #: family landed: they are per-rental, not per-vendor.
@@ -190,7 +191,7 @@ def send_phone_otp(session, did, current_url, phone: str, sentinel=None, proxy=N
         extra={"content-type": "application/json"},
     )
     response = session.post(
-        "https://auth.openai.com/api/accounts/add-phone/send",
+        endpoints.AUTH_BASE + "/api/accounts/add-phone/send",
         headers=headers,
         json={"phone_number": normalize_phone(phone)},
         timeout=30,
@@ -224,12 +225,12 @@ def validate_phone_otp(session, did, code: str, sentinel=None, proxy=None) -> di
         sentinel = load_cached_sentinel()
     headers = openai_auth_headers_lower(
         did,
-        referer="https://auth.openai.com/phone-verification",
+        referer=endpoints.AUTH_BASE + "/phone-verification",
         sentinel=sentinel,
         extra={"content-type": "application/json"},
     )
     response = session.post(
-        "https://auth.openai.com/api/accounts/phone-otp/validate",
+        endpoints.AUTH_BASE + "/api/accounts/phone-otp/validate",
         headers=headers,
         json={"code": code},
         timeout=30,

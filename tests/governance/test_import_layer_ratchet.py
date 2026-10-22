@@ -286,8 +286,15 @@ def test_summary_facts_are_pinned():
     test pins the result.
     """
     totals = ilr.analyze(ROOT).totals()
+    # 2026-10-23: 437 -> 453. Wiring every caller to its host authority
+    # (`sms_tool/endpoints.py`) added 16 module-level edges, all into that one
+    # pure-constants leaf module. The alternative -- making each call site a
+    # function-local import -- moved 41 statements into
+    # `delayed_import_ratchet`, which hides the coupling instead of recording
+    # it. This is the reviewed increase: a leaf of string constants is the
+    # cheapest edge in the tree, and `endpoints_literal_ratchet` requires it.
     assert totals == {
-        "total_module_edges": 437,
+        "total_module_edges": 453,
         "ordered_pairs": 66,
         "mutual_pairs": 18,
         "minority_edges": 49,

@@ -16,6 +16,7 @@ import time
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import parse_qs, urljoin, urlparse
+from .. import endpoints
 
 try:
     from curl_cffi.requests import Session as CurlSession
@@ -686,7 +687,7 @@ class PayPalReverseClient:
 
     def _poll_auth_session(self, last_response: Any) -> dict | None:
         """Try to get auth session from ChatGPT API."""
-        chat_base = CFG.get("chatgpt", {}).get("chat_base_url", "https://chatgpt.com")
+        chat_base = CFG.get("chatgpt", {}).get("chat_base_url", endpoints.CHATGPT_BASE)
         auth_url = f"{chat_base.rstrip('/')}/api/auth/session"
 
         try:

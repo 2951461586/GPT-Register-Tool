@@ -2,22 +2,23 @@ from __future__ import annotations
 
 import os
 import re
+from .. import endpoints
 
 
 UPI_DUMP_DEFAULT_DIR = "runtime/upi_dumps"
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(os.path.dirname(SCRIPT_DIR))
 DEFAULT_CONFIG_PATH = os.path.join(PROJECT_ROOT, "config.json")
-UPI_CHECKOUT_URL = "https://chatgpt.com/backend-api/payments/checkout"
-UPI_CHECKOUT_CONFIRM_URL = "https://chatgpt.com/backend-api/payments/checkout/confirm"
-UPI_CHECKOUT_APPROVE_URL = "https://chatgpt.com/backend-api/payments/checkout/approve"
-UPI_CHECKOUT_SNAPSHOT_URL = "https://chatgpt.com/backend-api/payments/checkout/snapshot"
-UPI_SENTINEL_PING_URL = "https://chatgpt.com/backend-api/sentinel/ping"
-STRIPE_PAYMENT_PAGE_INIT_URL_T = "https://api.stripe.com/v1/payment_pages/{cs_id}/init"
-STRIPE_PAYMENT_PAGE_CONFIRM_URL_T = "https://api.stripe.com/v1/payment_pages/{cs_id}/confirm"
-STRIPE_PAYMENT_PAGE_GET_URL_T = "https://api.stripe.com/v1/payment_pages/{cs_id}"
-STRIPE_PAYMENT_METHODS_URL = "https://api.stripe.com/v1/payment_methods"
-STRIPE_INTENT_URL_T = "https://api.stripe.com/v1/{intent_path}/{intent_id}"
+UPI_CHECKOUT_URL = endpoints.CHATGPT_BASE + "/backend-api/payments/checkout"
+UPI_CHECKOUT_CONFIRM_URL = endpoints.CHATGPT_BASE + "/backend-api/payments/checkout/confirm"
+UPI_CHECKOUT_APPROVE_URL = endpoints.CHATGPT_BASE + "/backend-api/payments/checkout/approve"
+UPI_CHECKOUT_SNAPSHOT_URL = endpoints.CHATGPT_BASE + "/backend-api/payments/checkout/snapshot"
+UPI_SENTINEL_PING_URL = endpoints.CHATGPT_BASE + "/backend-api/sentinel/ping"
+STRIPE_PAYMENT_PAGE_INIT_URL_T = endpoints.STRIPE_API_BASE + "/v1/payment_pages/{cs_id}/init"
+STRIPE_PAYMENT_PAGE_CONFIRM_URL_T = endpoints.STRIPE_API_BASE + "/v1/payment_pages/{cs_id}/confirm"
+STRIPE_PAYMENT_PAGE_GET_URL_T = endpoints.STRIPE_API_BASE + "/v1/payment_pages/{cs_id}"
+STRIPE_PAYMENT_METHODS_URL = endpoints.STRIPE_API_BASE + "/v1/payment_methods"
+STRIPE_INTENT_URL_T = endpoints.STRIPE_API_BASE + "/v1/{intent_path}/{intent_id}"
 #: Stripe.js 在发出任何业务请求之前先向这里注册设备指纹（HAR 实测 4 次 POST，
 #: ``tag`` 依次为 stripejs-init-started / stripejs-init-complete /
 #: adyen-component-loaded / payment-element-mounted）。不发也能支付成功，但「长期
@@ -34,11 +35,11 @@ UPI_REFERENCE_STRIPE_VERSION = (
 )
 # Stripe.js runtime version the reference confirm body carries.
 UPI_REFERENCE_STRIPE_RUNTIME_VERSION = "a34694b057"
-UPI_CPMT_CONFIRM_URL = "https://chatgpt.com/backend-api/payments/checkout/confirm"
-UPI_CPMT_START_URL = "https://chatgpt.com/backend-api/payments/checkout/custom_payment_method/start"
-UPI_CONFIRMATION_TOKENS_URL = "https://api.stripe.com/v1/confirmation_tokens"
-UPI_PAYMENT_INTENT_CONFIRM_URL_T = "https://api.stripe.com/v1/payment_intents/{pi_id}/confirm"
-UPI_PAYMENT_INTENT_GET_URL_T = "https://api.stripe.com/v1/payment_intents/{pi_id}"
+UPI_CPMT_CONFIRM_URL = endpoints.CHATGPT_BASE + "/backend-api/payments/checkout/confirm"
+UPI_CPMT_START_URL = endpoints.CHATGPT_BASE + "/backend-api/payments/checkout/custom_payment_method/start"
+UPI_CONFIRMATION_TOKENS_URL = endpoints.STRIPE_API_BASE + "/v1/confirmation_tokens"
+UPI_PAYMENT_INTENT_CONFIRM_URL_T = endpoints.STRIPE_API_BASE + "/v1/payment_intents/{pi_id}/confirm"
+UPI_PAYMENT_INTENT_GET_URL_T = endpoints.STRIPE_API_BASE + "/v1/payment_intents/{pi_id}"
 UPI_SENTINEL_APPROVAL_FLOW = "checkout_session_approval"
 UPI_SENTINEL_CHECKOUT_FLOW = "chatgpt_checkout"
 UPI_WARMUP_TIMEOUT = 25

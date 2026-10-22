@@ -17,6 +17,7 @@ from typing import Any
 import json
 import time
 import uuid
+from .. import endpoints
 
 try:  # pragma: no cover - direct script execution
     from ..checkout_contract import PLUS_TRIAL_CAMPAIGN_ID
@@ -157,7 +158,7 @@ def _stage_checkout(ops: UpiOperations, state: UpiStageContext) -> Any:
             "Authorization": f"Bearer {state.access_token}",
             "Accept": "application/json",
             "Content-Type": "application/json",
-            "Referer": "https://chatgpt.com/",
+            "Referer": endpoints.CHATGPT_ORIGIN,
             # 网关路由头（参考实现在请求级传；本 session 只打这一个
             # 端点，放 session 头等价且不破坏 FakeSession.post 签名）
             "x-openai-target-path": "/backend-api/payments/checkout",
@@ -186,7 +187,7 @@ def _stage_checkout(ops: UpiOperations, state: UpiStageContext) -> Any:
         page_url=ops._upi_promo_page_url(),
     )
     state.cs.headers.update(state.checkout_sentinel_headers)
-    ops._upi_sentinel_ping(state.cs, proxy=state.checkout_proxy, referer="https://chatgpt.com/")
+    ops._upi_sentinel_ping(state.cs, proxy=state.checkout_proxy, referer=endpoints.CHATGPT_ORIGIN)
     checkout_body: dict[str, Any] = {
         "entry_point": "all_plans_pricing_modal",
         "plan_name": "chatgptplusplan",
@@ -600,7 +601,7 @@ def _stage_confirm(ops: UpiOperations, state: UpiStageContext) -> Any:
 
     state.return_url = (
         ops._normalize_hosted_checkout_url(str(state.init.get("stripe_hosted_url") or ""))
-        or f"https://chatgpt.com/checkout/{state.processor_entity}/{state.cs_id}"
+        or f"{endpoints.CHATGPT_BASE}/checkout/{state.processor_entity}/{state.cs_id}"
     )
     confirm_body = ops._upi_build_confirm_body(
         cs_id=state.cs_id,
@@ -721,7 +722,7 @@ def _stage_approve(ops: UpiOperations, state: UpiStageContext) -> Any:
                 "Authorization": f"Bearer {state.access_token}",
                 "Accept": "application/json",
                 "Content-Type": "application/json",
-                "Referer": f"https://chatgpt.com/checkout/{state.processor_entity}/{state.cs_id}",
+                "Referer": f"{endpoints.CHATGPT_BASE}/checkout/{state.processor_entity}/{state.cs_id}",
             }
         )
         # The approval endpoint is risk-gated: it needs the same deployment
@@ -735,7 +736,7 @@ def _stage_approve(ops: UpiOperations, state: UpiStageContext) -> Any:
                 approve_session,
                 access_token=state.access_token,
                 device_id=state.device_id,
-                page_url=f"https://chatgpt.com/checkout/{state.processor_entity}/{state.cs_id}",
+                page_url=f"{endpoints.CHATGPT_BASE}/checkout/{state.processor_entity}/{state.cs_id}",
                 fingerprint=state.fingerprint,
                 proxy=state.approve_proxy,
                 session_token=state.session_token,
@@ -1085,7 +1086,7 @@ def _stage_redirect(ops: UpiOperations, state: UpiStageContext) -> Any:
         state.upi_uri = mobile_auth if mobile_auth.startswith("upi://") else ""
     state.hosted_url = (
         ops._normalize_hosted_checkout_url(str(state.init.get("stripe_hosted_url") or ""))
-        or f"https://pay.openai.com/c/pay/{state.cs_id}"
+        or f"{endpoints.OPENAI_PAY_BASE}/c/pay/{state.cs_id}"
     )
     if not state.redirect_url:
         state.redirect_url = state.hosted_url

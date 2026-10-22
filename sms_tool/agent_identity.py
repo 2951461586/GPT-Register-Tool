@@ -15,11 +15,12 @@ from .codex_export import build_codex_json
 from .config import CFG
 from .kernel.paths import output_dir
 from .phone_proxy import normalize_proxy_url
+from . import endpoints
 
 
-REGISTER_URL = "https://auth.openai.com/api/accounts/v1/agent/register"
-TASK_REGISTER_URL = "https://auth.openai.com/api/accounts/v1/agent/{runtime_id}/task/register"
-RESPONSES_URL = "https://chatgpt.com/backend-api/codex/responses"
+REGISTER_URL = endpoints.AUTH_BASE + "/api/accounts/v1/agent/register"
+TASK_REGISTER_URL = endpoints.AUTH_BASE + "/api/accounts/v1/agent/{runtime_id}/task/register"
+RESPONSES_URL = endpoints.CHATGPT_BASE + "/backend-api/codex/responses"
 AGENT_VERSION = "0.138.0-alpha.6"
 AGENT_HARNESS_ID = "codex-cli"
 RUNNING_LOCATION = "local"

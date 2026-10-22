@@ -209,7 +209,7 @@ above.
 <!-- ratchet-numbers:begin architecture -->
 | Measure | Value |
 | --- | --- |
-| Module-level cross-directory edges | 437 |
+| Module-level cross-directory edges | 453 |
 | Directory pairs | 66 |
 | Mutual pairs / minority-direction edges | 18 / 49 |
 | Delayed cross-directory edges | 253 |

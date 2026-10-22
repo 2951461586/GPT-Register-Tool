@@ -188,7 +188,7 @@ class ChatGPTStripeCapabilityTransport:
             cookie_header = str(auth_context.get("cookie_header") or "")
             device_id = str(auth_context.get("device_id") or auth_context.get("oai_did") or "").strip()
             response = gen_pp_link._checkout_get(
-                f"https://chatgpt.com/backend-api/payments/checkout/{processor}/{checkout.checkout_session_id}",
+                f"{endpoints.CHATGPT_BASE}/backend-api/payments/checkout/{processor}/{checkout.checkout_session_id}",
                 access_token,
                 cookie_header,
                 proxy,
@@ -262,7 +262,7 @@ class ChatGPTStripeCapabilityTransport:
             }
             for index, method in enumerate(evidence.payment_method_types):
                 params[f"deferred_intent[payment_method_types][{index}]"] = method
-            response = session.get("https://api.stripe.com/v1/elements/sessions", params=params, timeout=timeout)
+            response = session.get(endpoints.STRIPE_API_BASE + "/v1/elements/sessions", params=params, timeout=timeout)
             return _response_json(
                 response,
                 stage="stripe_elements",

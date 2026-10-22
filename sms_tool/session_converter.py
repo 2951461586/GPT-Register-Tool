@@ -14,6 +14,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from . import endpoints
 
 
 FORMATS = {"cpa", "sub2api", "cockpit", "9router", "codex", "axonhub", "codexmanager"}
@@ -76,7 +77,7 @@ def openai_auth(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def openai_profile(payload: dict[str, Any]) -> dict[str, Any]:
-    value = payload.get("https://api.openai.com/profile") if isinstance(payload, dict) else {}
+    value = payload.get(endpoints.API_BASE + "/profile") if isinstance(payload, dict) else {}
     return value if isinstance(value, dict) else {}
 
 
@@ -161,7 +162,7 @@ def build_synthetic_codex_id_token(
     }
     if email:
         payload["email"] = email
-        payload["https://api.openai.com/profile"] = {"email": email, **({"user_id": user_id} if user_id else {})}
+        payload[endpoints.API_BASE + "/profile"] = {"email": email, **({"user_id": user_id} if user_id else {})}
     return f"{base64url_json({'alg': 'none', 'typ': 'JWT', 'synthetic': True})}.{base64url_json(payload)}."
 
 

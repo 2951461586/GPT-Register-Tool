@@ -27,6 +27,7 @@ from .utils import (
     _tl,
     _tock,
 )
+from . import endpoints
 
 
 def _provider_selection(phone_reuse_cfg: Mapping, api_key_override=None) -> tuple[str, dict, str, str]:
@@ -68,8 +69,8 @@ def run_phone_register(
     select_auth_fingerprint(rotate=True)
 
     config = current_config_data()
-    auth_base = config["chatgpt"].get("auth_base_url", "https://auth.openai.com")
-    chat_base = config["chatgpt"].get("chat_base_url", "https://chatgpt.com")
+    auth_base = config["chatgpt"].get("auth_base_url", endpoints.AUTH_BASE)
+    chat_base = config["chatgpt"].get("chat_base_url", endpoints.CHATGPT_BASE)
 
     # Load the selected provider's config before buying a number so the proxy
     # can be matched to the phone country and verified first.

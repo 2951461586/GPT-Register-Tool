@@ -28,9 +28,10 @@ from ..proxy.routing import (
     select_operation_proxy,
     select_operation_proxy_candidate,
 )
+from .. import endpoints
 
 
-CODEX_USAGE_URL = "https://chatgpt.com/backend-api/wham/usage"
+CODEX_USAGE_URL = endpoints.CHATGPT_BASE + "/backend-api/wham/usage"
 CODEX_QUOTA_HEADERS = {
     "Authorization": "Bearer $TOKEN$",
     "Content-Type": "application/json",
@@ -96,8 +97,8 @@ def browser_fetch_for_account(
         config=cfg,
     )
     chat_cfg = cfg.get("chatgpt", {}) if isinstance(cfg, dict) else {}
-    chat_base = str(chat_cfg.get("chat_base_url") or "https://chatgpt.com").rstrip("/")
-    auth_base = str(chat_cfg.get("auth_base_url") or "https://auth.openai.com").rstrip("/")
+    chat_base = str(chat_cfg.get("chat_base_url") or endpoints.CHATGPT_BASE).rstrip("/")
+    auth_base = str(chat_cfg.get("auth_base_url") or endpoints.AUTH_BASE).rstrip("/")
     device_id = str(identity.get("device_id") or account.get("device_id") or "").strip()
 
     session = None

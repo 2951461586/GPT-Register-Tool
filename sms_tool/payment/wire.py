@@ -26,6 +26,7 @@ r"""中性支付内核 —— Checkout 原语、会话工厂与共享失败词�
 """
 
 from __future__ import annotations
+from .. import endpoints
 
 import json
 import re
@@ -242,7 +243,7 @@ def _checkout_headers(access_token, cookie_header="", extra_headers=None):
     headers = {
         "Authorization": f"Bearer {access_token}",
         "Accept": "application/json",
-        "Referer": "https://chatgpt.com/",
+        "Referer": endpoints.CHATGPT_ORIGIN,
         "User-Agent": _CHECKOUT_FINGERPRINT["user_agent"],
     }
     if cookie_header:

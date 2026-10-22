@@ -27,6 +27,7 @@ from .checkout_contract import (
 )
 from .payment.capability import build_capability_probe_result
 from .kernel.sanitizer import sanitize_text as _canonical_sanitize_text
+from . import endpoints
 
 
 _RUNTIME_VERSION = "6f8494a281"
@@ -218,7 +219,7 @@ def build_payment_method_payload(
             f"stripe.js/{identifiers.runtime_version}; stripe-js-v3/{identifiers.runtime_version}; "
             "payment-element; deferred-intent"
         ),
-        "referrer": "https://chatgpt.com",
+        "referrer": endpoints.CHATGPT_BASE,
         "time_on_page": str(max(0, int(time_on_page_ms))),
         "client_attribution_metadata[client_session_id]": identifiers.stripe_js_id,
         "client_attribution_metadata[checkout_session_id]": checkout_session_id,
@@ -733,11 +734,11 @@ def _payment_method_id(response: Mapping[str, Any] | str) -> str:
 
 
 def _confirm_return_url(hosted_url: str, session: CheckoutSessionContract) -> str:
-    if hosted_url.startswith("https://checkout.stripe.com"):
-        return "https://pay.openai.com" + hosted_url[len("https://checkout.stripe.com") :]
-    if hosted_url.startswith("https://pay.openai.com"):
+    if hosted_url.startswith(endpoints.STRIPE_CHECKOUT_BASE):
+        return endpoints.OPENAI_PAY_BASE + hosted_url[len(endpoints.STRIPE_CHECKOUT_BASE) :]
+    if hosted_url.startswith(endpoints.OPENAI_PAY_BASE):
         return hosted_url
-    return f"https://pay.openai.com/c/pay/{session.checkout_session_id}?returned_from_redirect=true&ui_mode=custom"
+    return f"{endpoints.OPENAI_PAY_BASE}/c/pay/{session.checkout_session_id}?returned_from_redirect=true&ui_mode=custom"
 
 
 def _response_state(payload: Any, *, prefer_result: bool = False) -> str:

@@ -40,6 +40,7 @@ from ..promotion_states import (
 )
 from ..providers.mailbox_graph import MailboxAuthInvalidError
 from ..utils import atomic_write_text
+from .. import endpoints
 
 logger = logging.getLogger(__name__)
 
@@ -159,8 +160,8 @@ def relogin_chatgpt_email_account(
         select_auth_fingerprint(rotate=True)
         _chat_raw: object = CFG.get("chatgpt")
         chat_cfg: dict[str, Any] = _chat_raw if isinstance(_chat_raw, dict) else {}
-        auth_base = str(chat_cfg.get("auth_base_url") or "https://auth.openai.com").rstrip("/")
-        chat_base = str(chat_cfg.get("chat_base_url") or "https://chatgpt.com").rstrip("/")
+        auth_base = str(chat_cfg.get("auth_base_url") or endpoints.AUTH_BASE).rstrip("/")
+        chat_base = str(chat_cfg.get("chat_base_url") or endpoints.CHATGPT_BASE).rstrip("/")
         device_id = str(account.get("device_id") or uuid.uuid4())
         logging_id = str(uuid.uuid4()).replace("-", "")
         session = curl_requests.Session()
@@ -509,8 +510,8 @@ def relogin_browser_session_account(
         config = _raw_config if isinstance(_raw_config, dict) else {}
         _chat_raw: object = config.get("chatgpt")
         chat_cfg: dict[str, Any] = _chat_raw if isinstance(_chat_raw, dict) else {}
-        chat_base = str(chat_cfg.get("chat_base_url") or "https://chatgpt.com").rstrip("/")
-        auth_base = str(chat_cfg.get("auth_base_url") or "https://auth.openai.com").rstrip("/")
+        chat_base = str(chat_cfg.get("chat_base_url") or endpoints.CHATGPT_BASE).rstrip("/")
+        auth_base = str(chat_cfg.get("auth_base_url") or endpoints.AUTH_BASE).rstrip("/")
         device_id = str(account.get("device_id") or uuid.uuid4())
 
         # Determine the driver to use for browser recovery.  When the

@@ -40,7 +40,7 @@ from ..promotion_states import (
 from ..proxy.routing import select_operation_proxy_candidate
 
 ACCOUNTS_CHECK_PATH = "/backend-api/accounts/check/v4-2023-04-27"
-ACCOUNTS_CHECK_URL = f"https://chatgpt.com{ACCOUNTS_CHECK_PATH}"
+ACCOUNTS_CHECK_URL = f"{endpoints.CHATGPT_BASE}{ACCOUNTS_CHECK_PATH}"
 
 #: Read-only Plus-trial coupon probe.  It answers "is the one-month trial still
 #: redeemable for this account?" directly, where ``accounts/check`` only exposes
@@ -288,7 +288,7 @@ def check_account_promotion(
 
     account_id = account_chatgpt_id(account) if isinstance(account, dict) else chatgpt_account_id_from_token(token)
     did = str(identity.get("device_id") or (account.get("device_id") if isinstance(account, dict) else "") or "")
-    headers = chatgpt_headers(did, accept="*/*", referer="https://chatgpt.com/")
+    headers = chatgpt_headers(did, accept="*/*", referer=endpoints.CHATGPT_ORIGIN)
     headers["Authorization"] = f"Bearer {token}"
     headers["oai-language"] = "en-US"
     if account_id:

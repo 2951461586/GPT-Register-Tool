@@ -14,6 +14,7 @@ from ._extract import (
     _upi_int_value,
 )
 from .session import _upi_find_attestation
+from .. import endpoints
 
 
 #: Chromium flags for the headless risk-context rail. ``--ignore-certificate-errors``
@@ -117,7 +118,7 @@ def _upi_browser_capture(
     locale = str(fp.get("locale") or "en-US")
     timezone_id = str(fp.get("timezone") or "UTC")
     user_agent = str(fp.get("user_agent") or "").strip()
-    target = str(page_url or "https://chatgpt.com/") or "https://chatgpt.com/"
+    target = str(page_url or endpoints.CHATGPT_ORIGIN) or endpoints.CHATGPT_ORIGIN
     capture_ms = _upi_int_value(min(max(10.0, _upi_int_value(timeout_s)[0] or 30) * 1000, 40000))[0] or 30000
     cookies = {"oai-did": str(device_id or "")}
     if str(session_token or "").strip():
@@ -142,7 +143,7 @@ def _upi_browser_capture(
             with contextlib.suppress(Exception):
                 context.add_cookies(
                     [
-                        {"name": name, "value": value, "url": "https://chatgpt.com/"}
+                        {"name": name, "value": value, "url": endpoints.CHATGPT_ORIGIN}
                         for name, value in cookies.items()
                         if value
                     ]
@@ -220,7 +221,7 @@ def _upi_browser_capture(
                     found = _upi_find_attestation(serialized)
                     if found:
                         result["attestation"] = found
-            for cookie in context.cookies("https://chatgpt.com/"):
+            for cookie in context.cookies(endpoints.CHATGPT_ORIGIN):
                 name = str(cookie.get("name") or "")
                 value = str(cookie.get("value") or "")
                 if name and value:
@@ -239,7 +240,7 @@ def _upi_browser_capture(
                 try:
                     sdk_ms = _upi_int_value(min(max(5.0, _upi_int_value(timeout_s)[0] or 30) * 1000, 12000))[0] or 8000
                     if not page.evaluate("() => typeof globalThis.SentinelSDK === 'object'"):
-                        page.add_script_tag(url="https://chatgpt.com/backend-api/sentinel/sdk.js")
+                        page.add_script_tag(url=endpoints.CHATGPT_BASE + "/backend-api/sentinel/sdk.js")
                     page.wait_for_function(
                         "() => globalThis.SentinelSDK && typeof globalThis.SentinelSDK.token === 'function'",
                         timeout=sdk_ms,
@@ -330,7 +331,7 @@ def _upi_browser_approve(
     locale = str(fp.get("locale") or "en-US")
     timezone_id = str(fp.get("timezone") or "UTC")
     user_agent = str(fp.get("user_agent") or "").strip()
-    page_url = f"https://chatgpt.com/checkout/{processor_entity}/{cs_id}"
+    page_url = f"{endpoints.CHATGPT_BASE}/checkout/{processor_entity}/{cs_id}"
     page_ms = _upi_int_value(min(max(10.0, _upi_int_value(timeout_s)[0] or 40) * 1000, 60000))[0] or 40000
     seen: dict[str, str] = {}
     try:
@@ -349,11 +350,11 @@ def _upi_browser_approve(
             )
             context.add_cookies(
                 [
-                    {"name": "oai-did", "value": str(device_id or ""), "url": "https://chatgpt.com/"},
+                    {"name": "oai-did", "value": str(device_id or ""), "url": endpoints.CHATGPT_ORIGIN},
                     {
                         "name": "__Secure-next-auth.session-token",
                         "value": str(session_token or ""),
-                        "url": "https://chatgpt.com/",
+                        "url": endpoints.CHATGPT_ORIGIN,
                     },
                 ]
             )

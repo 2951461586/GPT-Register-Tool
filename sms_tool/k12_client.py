@@ -3,13 +3,14 @@ from curl_cffi import requests as curl_requests
 from .config import CFG
 from .http_client import is_transient_transport_error, request_with_retry
 from .k12_identity import _extract_access_token, _extract_account_id_from_data, _extract_user_id_from_data
+from . import endpoints
 
 
 def _fetch_auth_session_from_cookie(account, proxy=None, timeout=30):
     cookie = str(account.get("cookie_header") or "").strip()
     if not cookie:
         return {}
-    chat_base = (CFG.get("chatgpt") or {}).get("chat_base_url", "https://chatgpt.com").rstrip("/")
+    chat_base = (CFG.get("chatgpt") or {}).get("chat_base_url", endpoints.CHATGPT_BASE).rstrip("/")
     session = curl_requests.Session()
     if proxy:
         session.proxies = {"http": proxy, "https": proxy}

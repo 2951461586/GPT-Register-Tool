@@ -18,7 +18,7 @@ def _otp_challenge_established(body):
     ``/api/accounts/email-otp/send`` was ever tried, and ``send`` is the
     endpoint that returns the actual challenge (recorded live on 2026-09-12)::
 
-        {"continue_url": "https://auth.openai.com/email-verification",
+        {"continue_url": "<AUTH_BASE>/email-verification",
          "method": "GET",
          "page": {"type": "email_otp_verification", ...,
                   "payload": {"email_verification_mode": "login..."}}}

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .. import endpoints
 
 try:  # pragma: no cover - direct script execution
     from ..pp_link_helpers import CHATGPT_TIMEOUT, DEFAULT_TIMEOUT, STRIPE_VERSION
@@ -60,7 +61,7 @@ def _upi_run_cpmt_flow(
     ``setup_attempt_failed / generic_decline`` stage that the Stripe rail can
     hit. Returns the same result contract as the Stripe path.
     """
-    referer = f"https://chatgpt.com/checkout/{processor_entity}/{cs_id}"
+    referer = f"{endpoints.CHATGPT_BASE}/checkout/{processor_entity}/{cs_id}"
     risk_headers = _upi_sentinel_headers(cs, device_id, checkout_proxy)
     base_headers = {
         "Authorization": f"Bearer {access_token}",
@@ -234,7 +235,7 @@ def _upi_run_oaics_flow(
     the mandate form and mints a ``ctoken_``; ChatGPT refuses to confirm a
     non-``oaics_`` session (400 "only for internal checkout sessions").
     """
-    referer = f"https://chatgpt.com/checkout/{processor_entity}/{cs_id}"
+    referer = f"{endpoints.CHATGPT_BASE}/checkout/{processor_entity}/{cs_id}"
     methods = (
         _upi_get_payment_method_types(elements) or _upi_get_payment_method_types(oaics_state) or ["card", "link", "upi"]
     )
@@ -315,7 +316,7 @@ def _upi_run_oaics_flow(
         raise RuntimeError(f"oaics confirm missing PaymentIntent: keys={list(chat_json)[:20]}")
     _emit("oaics", f"payment intent ready ({payment_intent_id})")
 
-    return_url = f"https://chatgpt.com/checkout/{processor_entity}/{cs_id}"
+    return_url = f"{endpoints.CHATGPT_BASE}/checkout/{processor_entity}/{cs_id}"
     pi_body = {
         "return_url": return_url,
         "confirmation_token": confirm_token,
@@ -406,7 +407,7 @@ def _upi_run_oaics_flow(
         str(pi_json.get("hosted_instructions_url") or "")
         or _normalize_hosted_checkout_url(redirect_url)
         or redirect_url
-        or f"https://pay.openai.com/c/pay/{cs_id}"
+        or f"{endpoints.OPENAI_PAY_BASE}/c/pay/{cs_id}"
     )
     if upi_uri:
         target = upi_uri

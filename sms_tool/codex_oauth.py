@@ -14,6 +14,7 @@ from datetime import timezone, datetime
 from curl_cffi import requests as curl_requests
 
 from .config import CFG
+from . import endpoints
 from .endpoints import AUTH_BASE
 from .operator_output import emit as _emit
 from .codex_phone import complete_phone_verification
@@ -47,8 +48,8 @@ from typing import Any
 
 _LOGGER = logging.getLogger(__name__)
 
-AUTH_URL = "https://auth.openai.com/oauth/authorize"
-TOKEN_URL = "https://auth.openai.com/oauth/token"
+AUTH_URL = endpoints.AUTH_BASE + "/oauth/authorize"
+TOKEN_URL = endpoints.AUTH_BASE + "/oauth/token"
 CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
 REDIRECT_URI = "http://localhost:1455/auth/callback"
 SCOPE = "openid profile email offline_access"
@@ -185,7 +186,7 @@ def _login_and_exchange(
         headers = _oai_headers(did, {"Referer": current_url or AUTH_URL, "content-type": "application/json"})
         attach_sentinel(headers, sentinel)
         start_resp = session.post(
-            "https://auth.openai.com/api/accounts/authorize/continue",
+            endpoints.AUTH_BASE + "/api/accounts/authorize/continue",
             headers=headers,
             json={"username": {"value": email, "kind": "email"}},
             timeout=30,
@@ -489,10 +490,10 @@ def _passwordless_login_and_exchange(
             last_error = "passwordless_email_otp_poll_timeout"
             continue
         validate = session.post(
-            "https://auth.openai.com/api/accounts/email-otp/validate",
+            endpoints.AUTH_BASE + "/api/accounts/email-otp/validate",
             headers=with_sentinel(
                 _oai_headers(
-                    did, {"Referer": "https://auth.openai.com/email-verification", "content-type": "application/json"}
+                    did, {"Referer": endpoints.AUTH_BASE + "/email-verification", "content-type": "application/json"}
                 ),
                 load_cached_sentinel(),
             ),
@@ -621,7 +622,7 @@ def _password_login_and_exchange(
         }
 
     response = session.post(
-        "https://auth.openai.com/api/accounts/password/verify",
+        endpoints.AUTH_BASE + "/api/accounts/password/verify",
         headers=with_sentinel(
             _oai_headers(did, {"Referer": current_url, "content-type": "application/json"}),
             load_cached_sentinel(),
@@ -779,8 +780,8 @@ def _send_passwordless_otp(session, did, current_url, proxy=None):
             return {"ok": False, "hard_error": True, "error": f"passwordless_send_sentinel_failed:{exc}"}
         browser_headers = _browser_style_send_headers(did, issued.token)
     for endpoint in (
-        "https://auth.openai.com/api/accounts/passwordless/send-otp",
-        "https://auth.openai.com/api/accounts/email-otp/send",
+        endpoints.AUTH_BASE + "/api/accounts/passwordless/send-otp",
+        endpoints.AUTH_BASE + "/api/accounts/email-otp/send",
     ):
         try:
             if browser_style:
@@ -827,10 +828,10 @@ def _resend_email_otp(session, did, current_url):
     sentinel = load_cached_sentinel()
     try:
         response = session.post(
-            "https://auth.openai.com/api/accounts/email-otp/resend",
+            endpoints.AUTH_BASE + "/api/accounts/email-otp/resend",
             headers=with_sentinel(
                 _oai_headers(
-                    did, {"Referer": "https://auth.openai.com/email-verification", "content-type": "application/json"}
+                    did, {"Referer": endpoints.AUTH_BASE + "/email-verification", "content-type": "application/json"}
                 ),
                 sentinel,
             ),
@@ -894,11 +895,11 @@ def _complete_about_you(session, did, current_url, proxy=None):
     response = request_with_retry(
         session,
         "post",
-        "https://auth.openai.com/api/accounts/create_account",
+        endpoints.AUTH_BASE + "/api/accounts/create_account",
         label="Complete about-you",
         json={"name": full_name, "birthdate": birthdate},
         headers=with_sentinel(
-            _oai_headers(did, {"Referer": "https://auth.openai.com/about-you", "content-type": "application/json"}),
+            _oai_headers(did, {"Referer": endpoints.AUTH_BASE + "/about-you", "content-type": "application/json"}),
             {"sentinel_token": sentinel.token, "sentinel_so_token": sentinel.so_token},
         ),
         impersonate=auth_impersonate(),
@@ -1064,7 +1065,7 @@ def _complete_email_otp(session, data, did, current_url, proxy=None, timeout=180
     issued_after = int(time.time())
     with contextlib.suppress(Exception):
         session.post(
-            "https://auth.openai.com/api/accounts/email-otp/send",
+            endpoints.AUTH_BASE + "/api/accounts/email-otp/send",
             headers=_oai_headers(did, {"Referer": current_url, "content-type": "application/json"}),
             json={},
             timeout=30,
@@ -1080,10 +1081,10 @@ def _complete_email_otp(session, data, did, current_url, proxy=None, timeout=180
     if not code:
         return {"ok": False, "mode": "codex_oauth_pkce", "error": "email_otp_poll_timeout"}
     validate = session.post(
-        "https://auth.openai.com/api/accounts/email-otp/validate",
+        endpoints.AUTH_BASE + "/api/accounts/email-otp/validate",
         headers=with_sentinel(
             _oai_headers(
-                did, {"Referer": "https://auth.openai.com/email-verification", "content-type": "application/json"}
+                did, {"Referer": endpoints.AUTH_BASE + "/email-verification", "content-type": "application/json"}
             ),
             load_cached_sentinel(),
         ),
@@ -1129,14 +1130,14 @@ def _select_workspace(session, did, referer, workspace_id, proxy=None, timeout=3
         return {"ok": False, "error": "missing_workspace_id"}
     headers = with_sentinel(
         _oai_headers(
-            did, {"Referer": referer or "https://auth.openai.com/workspace", "content-type": "application/json"}
+            did, {"Referer": referer or endpoints.AUTH_BASE + "/workspace", "content-type": "application/json"}
         ),
         load_cached_sentinel(),
     )
     if isinstance(extra_headers, dict):
         headers.update(extra_headers)
     response = session.post(
-        "https://auth.openai.com/api/accounts/workspace/select",
+        endpoints.AUTH_BASE + "/api/accounts/workspace/select",
         headers=headers,
         json={"workspace_id": workspace_id},
         timeout=timeout,
@@ -1154,7 +1155,7 @@ def _select_workspace(session, did, referer, workspace_id, proxy=None, timeout=3
 
 
 def select_workspace_by_cookie(
-    cookie_header, workspace_id, device_id="", proxy=None, timeout=30, referer="https://auth.openai.com/workspace"
+    cookie_header, workspace_id, device_id="", proxy=None, timeout=30, referer=endpoints.AUTH_BASE + "/workspace"
 ):
     """Select an auth workspace using saved cookies.
 
@@ -1363,7 +1364,7 @@ def persist_one_click_sms_failure(data, json_path, email, result, *, upsert=upse
 
 
 def _follow_redirects(session, start_url, proxy=None, max_redirects=18):
-    current_url = _absolute_url("https://auth.openai.com", start_url)
+    current_url = _absolute_url(endpoints.AUTH_BASE, start_url)
     response = None
     for _ in range(max_redirects):
         if not current_url:
@@ -1512,7 +1513,7 @@ def _next_url(response):
     except Exception:
         body = {}
     return _absolute_url(
-        "https://auth.openai.com", body.get("continue_url") or response.headers.get("Location") or response.url
+        endpoints.AUTH_BASE, body.get("continue_url") or response.headers.get("Location") or response.url
     )
 
 

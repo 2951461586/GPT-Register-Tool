@@ -21,6 +21,7 @@ import time
 from typing import Any
 
 from ..http_client import request_with_retry
+from .. import endpoints
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,7 @@ def _trigger_password_reauth(session, csrf_token: str, email: str, did: str, bas
     """POST /api/auth/signin/openai?reauth=password → triggers email OTP dispatch."""
     import urllib.parse
 
-    auth_base = "https://auth.openai.com"
+    auth_base = endpoints.AUTH_BASE
     query = {
         "connection": "password",
         "login_hint": email,
@@ -49,10 +50,10 @@ def _trigger_password_reauth(session, csrf_token: str, email: str, did: str, bas
     url = f"{auth_base}/api/auth/signin/openai?{urllib.parse.urlencode(query)}"
     headers = dict(base_headers)
     headers["content-type"] = "application/x-www-form-urlencoded"
-    headers["origin"] = "https://chatgpt.com"
+    headers["origin"] = endpoints.CHATGPT_BASE
     body = urllib.parse.urlencode(
         {
-            "callbackUrl": "https://chatgpt.com/?action=enable&factor=totp",
+            "callbackUrl": endpoints.CHATGPT_BASE + "/?action=enable&factor=totp",
             "csrfToken": csrf_token,
             "json": "true",
         }
@@ -71,7 +72,7 @@ def _trigger_password_reauth(session, csrf_token: str, email: str, did: str, bas
 def _follow_reauth_authorize(session, auth_url: str, base_headers: dict) -> None:
     headers = dict(base_headers)
     headers["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
-    headers["Referer"] = "https://chatgpt.com/"
+    headers["Referer"] = endpoints.CHATGPT_ORIGIN
     headers["sec-fetch-mode"] = "navigate"
     headers["sec-fetch-dest"] = "document"
     r = request_with_retry(
@@ -87,7 +88,7 @@ def _follow_reauth_authorize(session, auth_url: str, base_headers: dict) -> None
 
 
 def _fetch_csrf_token(session, base_headers: dict) -> str:
-    url = "https://chatgpt.com/api/auth/csrf"
+    url = endpoints.CHATGPT_BASE + "/api/auth/csrf"
     headers = dict(base_headers)
     headers["Accept"] = "application/json"
     r = request_with_retry(session, "get", url, headers=headers, impersonate=_impersonate(), label="2FA csrf")
@@ -97,11 +98,11 @@ def _fetch_csrf_token(session, base_headers: dict) -> str:
 
 def _validate_email_otp(session, code: str, base_headers: dict) -> str:
     """POST auth.openai.com/api/accounts/email-otp/validate → continue_url"""
-    url = "https://auth.openai.com/api/accounts/email-otp/validate"
+    url = endpoints.AUTH_BASE + "/api/accounts/email-otp/validate"
     headers = dict(base_headers)
     headers["content-type"] = "application/json"
-    headers["origin"] = "https://auth.openai.com"
-    headers["referer"] = "https://auth.openai.com/email-verification"
+    headers["origin"] = endpoints.AUTH_BASE
+    headers["referer"] = endpoints.AUTH_BASE + "/email-verification"
     body = json.dumps({"code": code})
     r = request_with_retry(
         session, "post", url, headers=headers, data=body, impersonate=_impersonate(), label="2FA email otp validate"
@@ -118,7 +119,7 @@ def _exchange_token_after_reauth(session, continue_url: str, base_headers: dict)
     """Follow continue_url → refresh session token → fetch new accessToken."""
     headers = dict(base_headers)
     headers["Accept"] = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
-    headers["Referer"] = "https://auth.openai.com/email-verification"
+    headers["Referer"] = endpoints.AUTH_BASE + "/email-verification"
     headers["sec-fetch-mode"] = "navigate"
     headers["sec-fetch-dest"] = "document"
     request_with_retry(
@@ -132,7 +133,7 @@ def _exchange_token_after_reauth(session, continue_url: str, base_headers: dict)
     )
 
     # Fetch fresh session
-    chat_base = "https://chatgpt.com"
+    chat_base = endpoints.CHATGPT_BASE
     url = f"{chat_base}/api/auth/session"
     headers2 = dict(base_headers)
     headers2["Accept"] = "application/json"
@@ -148,13 +149,13 @@ def _exchange_token_after_reauth(session, continue_url: str, base_headers: dict)
 
 def _enroll_totp(session, access_token: str, did: str, base_headers: dict) -> tuple[str, str]:
     """POST /backend-api/accounts/mfa/enroll → {secret, session_id}"""
-    url = "https://chatgpt.com/backend-api/accounts/mfa/enroll"
+    url = endpoints.CHATGPT_BASE + "/backend-api/accounts/mfa/enroll"
     headers = dict(base_headers)
     headers["Authorization"] = f"Bearer {access_token}"
     headers["oai-device-id"] = did
     headers["oai-language"] = "en-US"
     headers["Content-Type"] = "application/json"
-    headers["Referer"] = "https://chatgpt.com/"
+    headers["Referer"] = endpoints.CHATGPT_ORIGIN
     r = request_with_retry(
         session,
         "post",
@@ -181,13 +182,13 @@ def _activate_totp(session, access_token: str, did: str, secret: str, session_id
     except ImportError as e:
         raise ImportError("pyotp is required for TOTP activation. Install: pip install pyotp") from e
 
-    url = "https://chatgpt.com/backend-api/accounts/mfa/user/activate_enrollment"
+    url = endpoints.CHATGPT_BASE + "/backend-api/accounts/mfa/user/activate_enrollment"
     headers = dict(base_headers)
     headers["Authorization"] = f"Bearer {access_token}"
     headers["oai-device-id"] = did
     headers["oai-language"] = "en-US"
     headers["Content-Type"] = "application/json"
-    headers["Referer"] = "https://chatgpt.com/"
+    headers["Referer"] = endpoints.CHATGPT_ORIGIN
     totp_code = pyotp.TOTP(secret).now()
     r = request_with_retry(
         session,
@@ -207,12 +208,12 @@ def _activate_totp(session, access_token: str, did: str, secret: str, session_id
 
 def _mfa_info(session, access_token: str, did: str, base_headers: dict) -> dict[str, Any] | None:
     """Return the account MFA state, when the endpoint is available."""
-    url = "https://chatgpt.com/backend-api/accounts/mfa_info"
+    url = endpoints.CHATGPT_BASE + "/backend-api/accounts/mfa_info"
     headers = dict(base_headers)
     headers["Authorization"] = f"Bearer {access_token}"
     headers["oai-device-id"] = did
     headers["oai-language"] = "en-US"
-    headers["Referer"] = "https://chatgpt.com/"
+    headers["Referer"] = endpoints.CHATGPT_ORIGIN
     try:
         response = request_with_retry(
             session, "get", url, headers=headers, impersonate=_impersonate(), label="2FA mfa info"

@@ -13,6 +13,7 @@ from .kernel.paths import output_dir
 from .session_refresh import _load_seed_session, _session_token, refresh_session
 from .storage import _looks_codex_refresh_token, upsert_account
 from typing import Any
+from . import endpoints
 
 
 def export_codex_session(
@@ -198,7 +199,7 @@ def build_codex_json(data):
     auth_claims: dict = _raw_auth_claims if isinstance(_raw_auth_claims, dict) else {}
     _raw_id_auth_claims: object = id_claims.get("https://api.openai.com/auth")
     id_auth_claims: dict = _raw_id_auth_claims if isinstance(_raw_id_auth_claims, dict) else {}
-    _raw_profile_claims: object = access_claims.get("https://api.openai.com/profile")
+    _raw_profile_claims: object = access_claims.get(endpoints.API_BASE + "/profile")
     profile_claims: dict = _raw_profile_claims if isinstance(_raw_profile_claims, dict) else {}
     _raw_user: object = auth_session.get("user")
     user: dict = _raw_user if isinstance(_raw_user, dict) else {}
@@ -339,7 +340,7 @@ def _refresh_seed(
 
 
 def _refresh_with_openai_oauth(data, refresh_token, proxy=None):
-    auth_base = CFG["chatgpt"].get("auth_base_url", "https://auth.openai.com").rstrip("/")
+    auth_base = CFG["chatgpt"].get("auth_base_url", endpoints.AUTH_BASE).rstrip("/")
     client_id = (
         str((CFG.get("chatgpt") or {}).get("codex_oauth_client_id") or "").strip()
         or _jwt_claims(str(data.get("access_token") or "")).get("client_id")

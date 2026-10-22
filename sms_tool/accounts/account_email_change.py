@@ -24,6 +24,7 @@ from ..storage import (
     list_account_records,
     migrate_account_email,
 )
+from .. import endpoints
 
 
 CHANGE_EMAIL_ELIGIBILITY = "/backend-api/accounts/change_email/eligibility"
@@ -178,8 +179,8 @@ def _chat_headers(account: Mapping[str, Any], path: str) -> dict[str, str]:
     headers = {
         "Accept": "*/*",
         "Content-Type": "application/json",
-        "Origin": str(chat_cfg.get("chat_base_url") or "https://chatgpt.com").rstrip("/"),
-        "Referer": str(chat_cfg.get("chat_base_url") or "https://chatgpt.com").rstrip("/") + "/",
+        "Origin": str(chat_cfg.get("chat_base_url") or endpoints.CHATGPT_BASE).rstrip("/"),
+        "Referer": str(chat_cfg.get("chat_base_url") or endpoints.CHATGPT_BASE).rstrip("/") + "/",
         "User-Agent": "Mozilla/5.0 Chrome/151.0.0.0 Safari/537.36",
         "OAI-Client-Build-Number": str(account.get("oai_client_build_number") or "9641653"),
         "OAI-Client-Version": str(account.get("oai_client_version") or "prod"),
@@ -266,7 +267,7 @@ def _change_email_request(
 
         _raw_chat_cfg: object = CFG.get("chatgpt")
         chat_cfg: dict = _raw_chat_cfg if isinstance(_raw_chat_cfg, dict) else {}
-        base = str(chat_cfg.get("chat_base_url") or "https://chatgpt.com").rstrip("/")
+        base = str(chat_cfg.get("chat_base_url") or endpoints.CHATGPT_BASE).rstrip("/")
         session = curl_requests.Session()
         if proxy:
             session.proxies = {"http": proxy, "https": proxy}

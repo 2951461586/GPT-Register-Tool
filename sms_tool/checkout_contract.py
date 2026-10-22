@@ -8,11 +8,12 @@ from dataclasses import dataclass
 from typing import Any, Iterable
 
 from .payment.catalog import PAYMENT_METHODS as CATALOG_PAYMENT_METHODS
+from . import endpoints
 
 
 CHECKOUT_PATH = "/backend-api/payments/checkout"
-CHECKOUT_URL = f"https://chatgpt.com{CHECKOUT_PATH}"
-STRIPE_INIT_URL = "https://api.stripe.com/v1/payment_pages/{checkout_session_id}/init"
+CHECKOUT_URL = f"{endpoints.CHATGPT_BASE}{CHECKOUT_PATH}"
+STRIPE_INIT_URL = endpoints.STRIPE_API_BASE + "/v1/payment_pages/{checkout_session_id}/init"
 DEFAULT_STRIPE_VERSION = "2025-03-31.basil; checkout_server_update_beta=v1; checkout_manual_approval_preview=v1"
 
 

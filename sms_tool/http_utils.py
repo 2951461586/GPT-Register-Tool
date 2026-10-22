@@ -22,6 +22,7 @@ from .config import CFG
 from .auth_headers import auth_impersonate
 from .http_client import request_with_retry
 from .operator_output import emit
+from . import endpoints
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -56,7 +57,7 @@ def _follow_continue_url(session, url, base_headers, referer="", label="continue
     """GET a continue URL (resolved against auth_base) with impersonation."""
     if not url:
         return None
-    full_url = _absolute_url(CFG["chatgpt"].get("auth_base_url", "https://auth.openai.com"), url)
+    full_url = _absolute_url(CFG["chatgpt"].get("auth_base_url", endpoints.AUTH_BASE), url)
     headers = {**base_headers, "Accept": "text/html,application/xhtml+xml"}
     if referer:
         headers["Referer"] = referer

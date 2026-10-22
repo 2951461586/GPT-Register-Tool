@@ -13,6 +13,7 @@ from collections.abc import Mapping
 from datetime import date
 from typing import Any
 from urllib.parse import urlsplit
+from ... import endpoints
 
 
 def _safe_submit_email_form(page, email: str) -> bool:
@@ -133,7 +134,7 @@ def _submit_email_via_nextauth(page, email: str, *, budget_ms: int = _NEXTAUTH_F
     budget = parsed_budget if parsed_budget > 0 else _NEXTAUTH_FETCH_BUDGET_MS
     try:
         result = page.evaluate(
-            """async ({email, did, logId, budgetMs}) => {
+            """async ({email, did, logId, budgetMs, origin}) => {
           const withDeadline = (promise, ms) => Promise.race([
             promise,
             new Promise((_, reject) => setTimeout(() => reject(new Error('deadline')), Math.max(1, ms)))
@@ -161,7 +162,7 @@ def _submit_email_via_nextauth(page, email: str, *, budget_ms: int = _NEXTAUTH_F
               'ext-passkey-client-capabilities': '11111',
               screen_hint: 'login_or_signup', login_hint: email
             });
-            const body = new URLSearchParams({callbackUrl: 'https://chatgpt.com/', csrfToken: csrf.csrfToken, json: 'true'});
+            const body = new URLSearchParams({callbackUrl: origin, csrfToken: csrf.csrfToken, json: 'true'});
             const response = await fetchJson('/api/auth/signin/openai?' + query.toString(), {
               method: 'POST', credentials: 'include',
               headers: {'accept': 'application/json', 'content-type': 'application/x-www-form-urlencoded'},
@@ -177,7 +178,13 @@ def _submit_email_via_nextauth(page, email: str, *, budget_ms: int = _NEXTAUTH_F
             return {ok: true};
           } catch (error) { return {ok: false, stage: 'exception'}; }
         }""",
-            {"email": str(email), "did": str(uuid.uuid4()), "logId": str(uuid.uuid4()), "budgetMs": budget},
+            {
+                "email": str(email),
+                "did": str(uuid.uuid4()),
+                "logId": str(uuid.uuid4()),
+                "budgetMs": budget,
+                "origin": endpoints.CHATGPT_ORIGIN,
+            },
         )
         return bool(isinstance(result, dict) and result.get("ok"))
     except Exception:

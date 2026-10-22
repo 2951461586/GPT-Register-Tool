@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .. import endpoints
 
 try:  # pragma: no cover - direct script execution
     from ..pp_link_helpers import CHATGPT_TIMEOUT, DEFAULT_TIMEOUT
@@ -399,7 +400,7 @@ def _upi_sentinel_headers(
         return {"OpenAI-Sentinel-Token": str(supplied_token).strip()}
 
     cookie_header = _upi_session_cookie_header(session, device_id)
-    page = str(page_url or "https://chatgpt.com/")
+    page = str(page_url or endpoints.CHATGPT_ORIGIN)
     minted: dict[str, Any] = {}
     for candidate_flow in _upi_sentinel_flow_candidates(flow):
         try:
@@ -488,9 +489,9 @@ def _upi_fetch_oaics_state(
     route = f"/backend-api/payments/checkout/{processor_entity}/{cs_id}"
     try:
         response = session.get(
-            "https://chatgpt.com" + route,
+            endpoints.CHATGPT_BASE + route,
             headers={
-                "Referer": f"https://chatgpt.com/checkout/{processor_entity}/{cs_id}",
+                "Referer": f"{endpoints.CHATGPT_BASE}/checkout/{processor_entity}/{cs_id}",
                 "x-openai-target-path": route,
                 "x-openai-target-route": route,
             },

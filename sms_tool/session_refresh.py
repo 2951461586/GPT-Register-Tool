@@ -10,6 +10,7 @@ from .kernel.paths import output_dir
 from .storage import get_account_record, list_paypal_accounts, upsert_account
 from .http_client import _retry_after_seconds
 from .http_utils import _minimal_chatgpt_cookie_header
+from . import endpoints
 
 
 def refresh_session(
@@ -196,7 +197,7 @@ def _fetch_protocol_auth_session(cookie_header, timeout=300, proxy=None, detail=
     chain moved to another exit -- while an HTTP-level failure such as a 403 is
     allowed to keep retrying, because those are observed to clear.
     """
-    chat_base = CFG["chatgpt"].get("chat_base_url", "https://chatgpt.com").rstrip("/")
+    chat_base = CFG["chatgpt"].get("chat_base_url", endpoints.CHATGPT_BASE).rstrip("/")
     deadline = time.time() + max(5, int(timeout or 30))
     session = curl_requests.Session()
     if proxy:
@@ -302,7 +303,7 @@ def _read_json(path):
 
 
 def _request_auth_session(ctx):
-    chat_base = CFG["chatgpt"].get("chat_base_url", "https://chatgpt.com").rstrip("/")
+    chat_base = CFG["chatgpt"].get("chat_base_url", endpoints.CHATGPT_BASE).rstrip("/")
     try:
         response = ctx.request.get(f"{chat_base}/api/auth/session", timeout=30000)
         if response.status == 200:

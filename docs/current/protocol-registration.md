@@ -136,7 +136,7 @@ through it at call time. Registered there are both checkout flows, and they are
 **not** interchangeable:
 
 - **Checkout create** mints `chatgpt_checkout` — `CHECKOUT_SENTINEL_FLOW` at `sms_tool/sentinel/client.py:44`, issued by `issue_checkout_sentinel` at `sms_tool/sentinel/client.py:596`.
-- **Checkout approve** mints `checkout_session_approval` — its own constant `UPI_SENTINEL_APPROVAL_FLOW` at `sms_tool/upi_link/constants.py:42`. Two rails request it explicitly: the UPI approve stage passes `sentinel_flow=UPI_SENTINEL_APPROVAL_FLOW` at `sms_tool/upi_link/stages.py:712`, and `PPLinkExtractor._fresh_approval_sentinel` mints it at `sms_tool/paypal/extract.py:306`.
+- **Checkout approve** mints `checkout_session_approval` — its own constant `UPI_SENTINEL_APPROVAL_FLOW` at `sms_tool/upi_link/constants.py:43`. Two rails request it explicitly: the UPI approve stage passes `sentinel_flow=UPI_SENTINEL_APPROVAL_FLOW` at `sms_tool/upi_link/stages.py:712`, and `PPLinkExtractor._fresh_approval_sentinel` mints it at `sms_tool/paypal/extract.py:306`.
 
   🔴 **How to write a guardable pointer here** — two rules, both learned the hard
   way by watching this pair drift by 13 lines when an unrelated `paypal/extract.py`

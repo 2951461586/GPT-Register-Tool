@@ -11,10 +11,11 @@ from typing import Any, Mapping
 from .gcash_provider import GCashProviderError, GCashTransportRequest
 from .phone_proxy import normalize_proxy_url
 from .kernel.sanitizer import sanitize_text
+from . import endpoints
 
 
-_BASE = "https://chatgpt.com/backend-api/payments"
-_STRIPE_ELEMENTS_URL = "https://api.stripe.com/v1/elements/sessions"
+_BASE = endpoints.CHATGPT_BASE + "/backend-api/payments"
+_STRIPE_ELEMENTS_URL = endpoints.STRIPE_API_BASE + "/v1/elements/sessions"
 _USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0"
 _ROUTES = {
     "checkout": "/backend-api/payments/checkout",
@@ -200,8 +201,8 @@ class ChatGPTGCashTransport:
         headers = {
             "Accept": "*/*",
             "Content-Type": "application/json",
-            "Origin": "https://chatgpt.com",
-            "Referer": "https://chatgpt.com/",
+            "Origin": endpoints.CHATGPT_BASE,
+            "Referer": endpoints.CHATGPT_ORIGIN,
             "User-Agent": _USER_AGENT,
             "OAI-Device-Id": device_id,
             "x-openai-target-path": route,

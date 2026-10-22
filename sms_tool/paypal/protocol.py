@@ -7,6 +7,7 @@ import logging
 import re
 import urllib.parse
 from typing import Any, Optional
+from .. import endpoints
 
 try:
     from curl_cffi.requests import Session as _CffiSession
@@ -125,7 +126,7 @@ def _follow_stripe_redirect(
     headers = {
         "User-Agent": USER_AGENT,
         "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
-        "Referer": "https://checkout.stripe.com/",
+        "Referer": endpoints.STRIPE_CHECKOUT_BASE + "/",
         "Sec-Fetch-Site": "cross-site",
         "Sec-Fetch-Mode": "navigate",
         "Sec-Fetch-Dest": "document",

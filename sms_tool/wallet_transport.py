@@ -10,14 +10,15 @@ from urllib.parse import urljoin, urlsplit
 
 from .checkout_contract import CHECKOUT_PATH, CHECKOUT_URL, STRIPE_INIT_URL
 from .wallet_provider import WALLET_METHODS, WalletProviderError, WalletTransportRequest
+from . import endpoints
 
 
-PAYMENT_METHOD_URL = "https://api.stripe.com/v1/payment_methods"
+PAYMENT_METHOD_URL = endpoints.STRIPE_API_BASE + "/v1/payment_methods"
 UPDATE_PATH = "/backend-api/payments/checkout/update"
-UPDATE_URL = f"https://chatgpt.com{UPDATE_PATH}"
+UPDATE_URL = f"{endpoints.CHATGPT_BASE}{UPDATE_PATH}"
 APPROVE_PATH = "/backend-api/payments/checkout/approve"
-APPROVE_URL = f"https://chatgpt.com{APPROVE_PATH}"
-_STRIPE_PAGE_URL = "https://api.stripe.com/v1/payment_pages/{checkout_session_id}"
+APPROVE_URL = f"{endpoints.CHATGPT_BASE}{APPROVE_PATH}"
+_STRIPE_PAGE_URL = endpoints.STRIPE_API_BASE + "/v1/payment_pages/{checkout_session_id}"
 _REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
 _BASE_REDIRECT_HOSTS = frozenset(
     {
@@ -103,7 +104,7 @@ class ChatGPTStripeWalletTransport:
 
         cookie_header = str(request.auth_context.get("cookie_header") or "")
         proxy = self._stage_proxy(request)
-        referer = f"https://chatgpt.com/checkout/{request.processor_entity}/{request.checkout_session_id}"
+        referer = f"{endpoints.CHATGPT_BASE}/checkout/{request.processor_entity}/{request.checkout_session_id}"
         try:
             response = gen_pp_link._checkout_post(
                 UPDATE_URL,
@@ -154,7 +155,7 @@ class ChatGPTStripeWalletTransport:
 
         cookie_header = str(request.auth_context.get("cookie_header") or "")
         proxy = self._stage_proxy(request)
-        referer = f"https://chatgpt.com/checkout/{request.processor_entity}/{request.checkout_session_id}"
+        referer = f"{endpoints.CHATGPT_BASE}/checkout/{request.processor_entity}/{request.checkout_session_id}"
         try:
             response = gen_pp_link._checkout_post(
                 APPROVE_URL,
@@ -206,7 +207,7 @@ class ChatGPTStripeWalletTransport:
                 current,
                 headers={
                     "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
-                    "Referer": "https://checkout.stripe.com/",
+                    "Referer": endpoints.STRIPE_CHECKOUT_BASE + "/",
                 },
                 timeout=self.timeout,
                 allow_redirects=False,
@@ -314,8 +315,8 @@ class ChatGPTStripeWalletTransport:
         return {
             "Accept": "application/json",
             "Content-Type": "application/x-www-form-urlencoded",
-            "Origin": "https://checkout.stripe.com",
-            "Referer": f"https://checkout.stripe.com/c/pay/{request.checkout_session_id}",
+            "Origin": endpoints.STRIPE_CHECKOUT_BASE,
+            "Referer": f"{endpoints.STRIPE_CHECKOUT_BASE}/c/pay/{request.checkout_session_id}",
         }
 
     @staticmethod

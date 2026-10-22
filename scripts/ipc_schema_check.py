@@ -113,7 +113,7 @@ def check_manifest(manifest, py, py_ipc, cs, cs_events="") -> list[str]:
     )
     py_ops = [
         elt.value
-        for elt in (supported.value.elts if isinstance(supported.value, ast.List) else [])
+        for elt in (supported.value.elts if isinstance(supported.value, (ast.List, ast.Tuple, ast.Set)) else [])
         if isinstance(elt, ast.Constant)
     ]
     if py_ops != manifest["ops"]:

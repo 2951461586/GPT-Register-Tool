@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .. import endpoints
 
 try:  # pragma: no cover - direct script execution
     from ..checkout_contract import PLUS_TRIAL_CAMPAIGN_ID, browser_profile_for_country
@@ -218,7 +219,7 @@ def _upi_apply_chatgpt_identity(
         return
     locale = str(fingerprint.get("locale", "") or "en-US") if fingerprint else "en-US"
     headers = {
-        "Origin": "https://chatgpt.com",
+        "Origin": endpoints.CHATGPT_BASE,
         "oai-device-id": device_id,
         "oai-language": locale,
         "oai-session-id": device_id,
@@ -319,7 +320,7 @@ def _upi_account_id_from_token(token: str) -> str:
 
 def _upi_promo_page_url(campaign: str = PLUS_TRIAL_CAMPAIGN_ID) -> str:
     """The campaign entry page the browser checkout navigates through first."""
-    return "https://chatgpt.com/?promo_campaign=" + quote(str(campaign or PLUS_TRIAL_CAMPAIGN_ID), safe="")
+    return endpoints.CHATGPT_BASE + "/?promo_campaign=" + quote(str(campaign or PLUS_TRIAL_CAMPAIGN_ID), safe="")
 
 
 def _upi_attestation_deploy_id(attestation: str) -> str:
@@ -410,7 +411,7 @@ def _upi_ensure_checkout_flow() -> str:
 
         flows = getattr(sentinel_client, "FLOW_PAGE_URLS", None)
         if isinstance(flows, dict):
-            flows.setdefault(UPI_SENTINEL_CHECKOUT_FLOW, "https://chatgpt.com/")
+            flows.setdefault(UPI_SENTINEL_CHECKOUT_FLOW, endpoints.CHATGPT_ORIGIN)
     return UPI_SENTINEL_CHECKOUT_FLOW
 
 
@@ -454,7 +455,7 @@ def _upi_elements_session(
     }
     try:
         response = stripe.get(
-            "https://api.stripe.com/v1/elements/sessions?" + urlencode(params),
+            endpoints.STRIPE_API_BASE + "/v1/elements/sessions?" + urlencode(params),
             timeout=DEFAULT_TIMEOUT,
         )
     except Exception as exc:

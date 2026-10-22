@@ -193,7 +193,9 @@ def test_both_process_boundaries_are_scanned(tmp_path):
     assert not any(path.startswith("services/protocol-payment/") for path in counts), (
         "services/protocol-payment/ is completely wired to common/endpoints.py and must stay at zero"
     )
-    assert any(path.startswith("sms_tool/") for path in counts)
+    # sms_tool/ is at zero too since 2026-10-23, so "is it scanned?" can no
+    # longer be answered from the real tree -- the synthetic tree below answers
+    # it instead, and is the stronger check anyway.
     # Prove services/protocol-payment is still actively scanned if a literal is introduced.
     fake_pp = tmp_path / "services" / "protocol-payment" / "ideal"
     fake_sms = tmp_path / "sms_tool"
@@ -224,10 +226,15 @@ def test_ratchet_holds_for_the_current_tree():
     )
 
 
-def test_ratchet_can_decrease_and_that_is_the_point():
-    """A ratchet that rejected decreases would be a freeze, not a ratchet."""
-    counts = eps.collect()
-    totals = sum(counts.values())
+def test_ratchet_can_decrease_and_that_is_the_point(tmp_path):
+    """A ratchet that rejected decreases would be a freeze, not a ratchet.
+
+    Measured on a synthetic tree: the real one has been at zero since
+    2026-10-23, so it can no longer demonstrate the arithmetic.
+    """
+    (tmp_path / "sms_tool").mkdir(parents=True)
+    (tmp_path / "sms_tool" / "probe.py").write_text('URL = "https://chatgpt.com/a"\n', encoding="utf-8")
+    totals = sum(eps.collect(tmp_path).values())
     assert totals > 0
     assert totals - 1 < totals
 
@@ -253,7 +260,10 @@ def test_cli_reports_growth_against_a_tightened_baseline(tmp_path, monkeypatch):
     baseline_path = tmp_path / "baseline.json"
     baseline_path.write_text(json.dumps({"files": {}}), encoding="utf-8")
     monkeypatch.setattr(eps, "BASELINE", baseline_path)
-    assert eps.main([]) == 1, "an empty baseline must trip the ratchet on the real tree"
+    root = tmp_path / "tree"
+    (root / "sms_tool").mkdir(parents=True)
+    (root / "sms_tool" / "probe.py").write_text('URL = "https://chatgpt.com/a"\n', encoding="utf-8")
+    assert eps.main(["--root", str(root)]) == 1, "an empty baseline must trip the ratchet"
 
 
 def test_cli_missing_baseline_is_a_hard_error(tmp_path, monkeypatch):
@@ -265,8 +275,11 @@ def test_corrupt_baseline_fails_loudly_rather_than_passing(tmp_path, monkeypatch
     baseline_path = tmp_path / "baseline.json"
     baseline_path.write_text("{not json", encoding="utf-8")
     monkeypatch.setattr(eps, "BASELINE", baseline_path)
+    root = tmp_path / "tree"
+    (root / "sms_tool").mkdir(parents=True)
+    (root / "sms_tool" / "probe.py").write_text('URL = "https://chatgpt.com/a"\n', encoding="utf-8")
     # Empty baseline => every current count is "grown" => exit 1, never 0.
-    assert eps.main([]) == 1
+    assert eps.main(["--root", str(root)]) == 1
 
 
 def test_baseline_is_written_with_lf_endings(tmp_path, monkeypatch):

@@ -1,4 +1,5 @@
 import json
+from . import endpoints
 
 
 def _extract_access_token(data):
@@ -55,7 +56,7 @@ def _token_account_id(token):
 
 def _token_user_id(token):
     claims = _jwt_claims(token)
-    _raw_profile: object = claims.get("https://api.openai.com/profile")
+    _raw_profile: object = claims.get(endpoints.API_BASE + "/profile")
     profile: dict = _raw_profile if isinstance(_raw_profile, dict) else {}
     _raw_auth: object = claims.get("https://api.openai.com/auth")
     auth: dict = _raw_auth if isinstance(_raw_auth, dict) else {}

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .. import endpoints
 
 try:  # pragma: no cover - direct script execution
     from ..endpoints import CHATGPT_ORIGIN
@@ -285,7 +286,7 @@ def _upi_build_confirm_body(
             "expected_amount": str(expected_amount),
             "tax_id_collection[purchasing_as_business]": "false",
             "expected_payment_method_type": "upi",
-            "return_url": return_url or f"https://chatgpt.com/checkout/{processor_entity}/{cs_id}",
+            "return_url": return_url or f"{endpoints.CHATGPT_BASE}/checkout/{processor_entity}/{cs_id}",
             "key": stripe_pk,
             "_stripe_version": UPI_REFERENCE_STRIPE_VERSION,
             "version": UPI_REFERENCE_STRIPE_RUNTIME_VERSION,
@@ -308,7 +309,7 @@ def _upi_build_confirm_body(
         "eid": "NA",
         "expected_amount": expected_amount,
         "expected_payment_method_type": "upi",
-        "return_url": return_url or f"https://chatgpt.com/checkout/{processor_entity}/{cs_id}",
+        "return_url": return_url or f"{endpoints.CHATGPT_BASE}/checkout/{processor_entity}/{cs_id}",
         "_stripe_version": STRIPE_VERSION,
         "guid": str(ctx.get("guid") or _upi_browser_id()),
         "muid": str(ctx.get("muid") or _upi_browser_id()),
@@ -358,7 +359,7 @@ def _upi_build_confirm_body(
                     f"stripe.js/{_upi_runtime_version()}; stripe-js-v3/{_upi_runtime_version()}; "
                     "payment-element; deferred-intent"
                 ),
-                "payment_method_data[referrer]": "https://chatgpt.com",
+                "payment_method_data[referrer]": endpoints.CHATGPT_BASE,
                 "payment_method_data[time_on_page]": str(secrets.randbelow(37000) + 18000),
                 "payment_method_data[client_attribution_metadata][checkout_session_id]": cs_id,
                 "payment_method_data[client_attribution_metadata][client_session_id]": str(
@@ -1056,7 +1057,7 @@ def _upi_hosted_fallback_result(
     """confirm 失败时的 hosted 兜底结果（保持旧字段集, 只多增不减少）。"""
     hosted_url = _normalize_hosted_checkout_url(str(init.get("stripe_hosted_url") or ""))
     if not hosted_url:
-        hosted_url = f"https://pay.openai.com/c/pay/{cs_id}"
+        hosted_url = f"{endpoints.OPENAI_PAY_BASE}/c/pay/{cs_id}"
     written_qr_path = _write_qr_png(hosted_url, qr_path or "")
     result: dict[str, Any] = {
         "ok": True,
@@ -1137,7 +1138,7 @@ def _upi_build_confirmation_token_body(
         "payment_method_data[payment_user_agent]": (
             f"stripe.js/{runtime_version}; stripe-js-v3/{runtime_version}; payment-element; deferred-intent"
         ),
-        "payment_method_data[referrer]": "https://chatgpt.com",
+        "payment_method_data[referrer]": endpoints.CHATGPT_BASE,
         "payment_method_data[time_on_page]": str(secrets.randbelow(37000) + 18000),
         "payment_method_data[guid]": str(ctx.get("guid") or _upi_browser_id()),
         "payment_method_data[muid]": str(ctx.get("muid") or _upi_browser_id()),

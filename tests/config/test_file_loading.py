@@ -35,6 +35,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Any
 from unittest import mock
 
 MODULE_PATH = Path(__file__).resolve().parents[2] / "services" / "protocol-payment" / "common" / "file_loading.py"
@@ -57,9 +58,13 @@ def _norm_split(value: str) -> tuple[str, str]:
     return (value, "")
 
 
-def _non_interactive_prompt(message: str) -> None:
-    """The interactive ``input()`` fallback must never be reached in tests."""
-    return None
+def _non_interactive_prompt(message: str) -> str:
+    """The interactive ``input()`` fallback must never be reached in tests.
+
+    Returns an empty string, not ``None``: the production seam calls
+    ``.strip()`` on whatever the prompt yields.
+    """
+    return ""
 
 
 class LoadProxyFileTests(unittest.TestCase):
@@ -151,7 +156,7 @@ class LoadProxyFileTests(unittest.TestCase):
 
 class LoadTokenTests(unittest.TestCase):
     def _call(self, **overrides):
-        kwargs = dict(
+        kwargs: dict[str, Any] = dict(
             env_names=("PP_TOKEN", "IDEAL_TOKEN"),
             token_file=Path("/definitely/not/here/token.txt"),
             normalize_token=_norm_identity,

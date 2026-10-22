@@ -42,6 +42,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
 from ..phone_proxy import normalize_proxy_url, redact_proxy_url
+from .. import endpoints
 
 CLEAN = "clean"
 BLOCKED = "blocked"
@@ -58,7 +59,7 @@ CHATGPT_LOGIN_PATH = "/login"
 #: frontend reaches it during the payment flow; a non-CF <500 reply means the
 #: exit can enter that flow.
 CHATGPT_CHECKOUT_PATH = "/backend-api/payments/checkout"
-DEFAULT_CHAT_BASE = "https://chatgpt.com"
+DEFAULT_CHAT_BASE = endpoints.CHATGPT_BASE
 DEFAULT_TIMEOUT = 15.0
 PROBE_IMPERSONATE = "chrome146"
 
