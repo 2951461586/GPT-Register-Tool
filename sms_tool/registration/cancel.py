@@ -19,6 +19,18 @@ from __future__ import annotations
 import contextlib
 import signal
 import threading
+from collections.abc import Callable
+from types import FrameType
+from typing import Any
+
+
+#: What ``signal.signal`` accepts and hands back: a callable, one of the
+#: ``SIG_IGN``/``SIG_DFL``/``Handlers`` sentinels, or ``None``.  typeshed spells
+#: this privately as ``signal._HANDLER``, so it is restated rather than imported.
+#: Without it the install/restore pair below was typed ``object`` and the restore
+#: call ``signal.signal(sig, previous)`` was the repo's last pyright error in the
+#: registration tree (``reportArgumentType``, cancel.py:94).
+SignalHandler = Callable[[int, FrameType | None], Any] | int | signal.Handlers | None
 
 
 _cancel_event = threading.Event()
@@ -51,7 +63,7 @@ def ensure_not_cancelled() -> None:
         raise RegistrationCancelled()
 
 
-def _install_cancel_signal_handlers() -> list[tuple[int, object]]:
+def _install_cancel_signal_handlers() -> list[tuple[int, SignalHandler]]:
     def _handler(signum, frame):
         if not registration_cancel_requested():
             request_registration_cancel()
@@ -63,7 +75,7 @@ def _install_cancel_signal_handlers() -> list[tuple[int, object]]:
             return
         raise KeyboardInterrupt
 
-    installed: list[tuple[int, object]] = []
+    installed: list[tuple[int, SignalHandler]] = []
     signals = [signal.SIGINT]
     sigbreak = getattr(signal, "SIGBREAK", None)
     if sigbreak is not None:

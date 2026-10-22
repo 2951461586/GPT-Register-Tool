@@ -74,7 +74,7 @@ only when its file has a test that fails today):
 
 | Batch | File | Errors | Shape of the work |
 | --- | --- | ---: | --- |
-| 1 | `sms_tool/upi_link/stages.py` | 101 | Optional-member access on staged dict guards; needs a read of the stage contract first, so it is its own round. |
+| ~~1~~ | ~~`sms_tool/upi_link/stages.py`~~ | ~~101~~ | **Retired 2026-10-22, and the row's diagnosis was wrong.** The 101 were not optional-member access on staged dict guards: 97 were `reportAttributeAccessIssue` on `ops.<name>` reads, because `UpiOperations` builds `__slots__` from `UPI_OPERATION_NAMES` and declared no annotations, so no analyser could see the attributes. Fixed by adding a bare-annotation block (type-only, no class attribute, no runtime cost) plus `tests/governance/test_upi_operations_surface.py` pinning the annotations against the slot tuple. The other 4 were `reportInvalidTypeForm` on `state.<attr>: T = ...` assignments inside stage bodies — `UpiStageContext` already declares those fields, so the inline annotation was both rejected and redundant. |
 | 2 | `tests/mailbox/test_mailbox_icloud_url.py` | 72 | Test fixtures typing; mechanical once the payload shapes are named. |
 | 3 | `tests/registration/test_remail_mailbox.py` | 59 | Test fixtures typing. |
 | 4 | `tests/proxy/test_proxy_entry.py` | 53 | Test fixtures typing. |
@@ -89,3 +89,11 @@ unexpected type still raises exactly as before), and
 `thaw` fixture now annotates its boundary as `dict[str, Any]`), and
 `sms_tool/desktop_read.py` (1 → 0 — the pool-line parser now receives a `str`
 path). Baseline after that round: **862**.
+
+Retired 2026-10-22 (batches 1 and a one-line neighbour):
+`sms_tool/upi_link/stages.py` (101 → 0) and
+`sms_tool/registration/cancel.py` (1 → 0 — `_install_cancel_signal_handlers`
+returned `list[tuple[int, object]]`, so the `signal.signal(sig, previous)`
+restore passed an `object` where typeshed wants `_HANDLER`; the list and the
+return annotation now use a local `SignalHandler` alias). Baseline after that
+round: **313**.

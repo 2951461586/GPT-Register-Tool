@@ -15,7 +15,6 @@
     "sms_tool/accounts/account_scan.py": 32,
     "sms_tool/accounts/wham_usage.py": 1,
     "sms_tool/proxy/health.py": 2,
-    "sms_tool/registration/cancel.py": 1,
     "sms_tool/registration_drivers/browser_flow/dom_fields.py": 1,
     "sms_tool/registration_drivers/browser_session.py": 8,
     "sms_tool/registration_drivers/external_sessions/__init__.py": 1,
@@ -23,7 +22,6 @@
     "sms_tool/registration_drivers/external_sessions/probe.py": 1,
     "sms_tool/registration_drivers/stealth.py": 15,
     "sms_tool/sub2api_import.py": 1,
-    "sms_tool/upi_link/stages.py": 101,
     "tests/accounts/test_account_lifecycle.py": 1,
     "tests/accounts/test_at_survival_watch.py": 3,
     "tests/accounts/test_batch_circuit_breaker.py": 1,
@@ -84,5 +82,5 @@
     "tests/workbench/test_backend_cli_contract.py": 2,
     "tests/workbench/test_cli_registration_driver.py": 1
   },
-  "total": 415
+  "total": 313
 }

@@ -228,7 +228,11 @@ def _stage_checkout(ops: UpiOperations, state: UpiStageContext) -> Any:
     )
     state.emit("checkout", f"checkout success: cs_id={state.cs_id}")
     state.is_oaics = state.cs_id.startswith("oaics_")
-    state._oaics_state: dict[str, Any] = {}
+    # ``UpiStageContext`` already declares every one of these fields, so an
+    # inline annotation here is rejected by pyright
+    # (``reportInvalidTypeForm``: an attribute target cannot be annotated inside
+    # a function body). The assignment alone keeps the declared type.
+    state._oaics_state = {}
     if state.is_oaics:
         # oaics_ sessions carry a CustomerSession secret instead of a
         # Checkout client secret; refresh the authenticated state once so
@@ -449,7 +453,7 @@ def _stage_oaics(ops: UpiOperations, state: UpiStageContext) -> Any:
 
 def _stage_tax_customer(ops: UpiOperations, state: UpiStageContext) -> Any:
     # ── Stage 4: Tax region + customer data sync ─────────────────────
-    state.tax_body: dict[str, str] = {}
+    state.tax_body = {}
     if state.update_tax_region:
         state.emit("tax_region", "Stage 4: updating tax region to IN")
         state.tax_body = {
@@ -679,7 +683,7 @@ def _stage_approve(ops: UpiOperations, state: UpiStageContext) -> Any:
     # Stage 7 会无条件遍历 (confirm_data, approval_data)，若只在
     # needs_approval 分支里赋值，跳过 approve 时会 UnboundLocalError。
     state.approval_ok = False
-    state.approval_data: dict[str, Any] = {}
+    state.approval_data = {}
     if needs_approval:
         state.emit(
             "approve",
@@ -937,7 +941,7 @@ def _stage_redirect(ops: UpiOperations, state: UpiStageContext) -> Any:
 
     # ── Stage 7: Extract redirect / upi:// URI ───────────────────────
     state.emit("poll", "Stage 7: extracting UPI redirect / QR data")
-    state.qr_data: dict[str, Any] = {}
+    state.qr_data = {}
     state.redirect_url = ""
 
     def _absorb(source: Any) -> None:
