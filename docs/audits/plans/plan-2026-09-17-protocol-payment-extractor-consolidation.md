@@ -1,5 +1,16 @@
 # 立项：协议支付提取器公共骨架抽取（ideal / twint / blik）
 
+> **状态（2026-10-22 复核）**：**阶段 2 首个小批次已落地**。`stripe_update_customer_data` 与
+> `stripe_update_tax_region`（ideal / twint / blik 三份逐字节相同的 45/46 行副本）下沉到
+> `common/stripe_flow.py`，六个同签名薄封装保留、调用点零改动。这次没有真实链路录制，
+> 因此按 `plan-2026-09-28-stage2-replay.md` 的要求改用**冻结的迁移前函数体**做 HEAD-vs-参数化差分：
+> `tests/payment/stage2_stripe_page_head.py` 由 `git show HEAD:...` 机械生成（只把环境依赖改为
+> `seams` 注入，无一处语句改写），`tests/governance/test_stage2_replay_selfcheck.py` 让两侧跑同一条
+> replay 流并逐字节比对请求指纹与返回值，覆盖 3 档 billing 形状 × 2 个 provider × 2 个函数。
+> parity 基线同步收紧：`ideal:twint 29→27`、`ideal:blik 15→13`、`twint:blik 12→10`；
+> provider 解耦 231 delegating / 32 divergent（+1 为 pix 的 `stripe_update_tax_region`，真实差异，已登记）。
+> 剩余 `stripe_*` / `run_*` / `new_session` / `build_ctx` 等仍需逐对拍板；全链路录制仍未取得。
+>
 > **状态（2026-10-20 复核）**：**阶段 1 已落地（含 batch 7），阶段 2/3 未做**。已落地：重复度 ratchet（`scripts/extractor_parity_report.py`、`scripts/provider_decoupling_ratchet.py`）与 `services/protocol-payment/common/` 纯工具层（`proxy_url` / `payload_helpers` / `payment_predicates` / `provider_profile` / `stripe_setup` 等）。ideal:twint 重复度 ratchet 的当前基线是 **29** 个函数（batch 6 后 38，批次 1e 与 batch 7 合并后 29）；剩余函数依赖各模块自己的 `log` / `dump_http` / `requests` / profile，成对参数化仍需单独拍板与回放证据（见 `plan-2026-09-28-stage2-replay.md`）。
 >
 > **状态（2026-10-19 复核）**：阶段 1 的最后一项 `build_attempt_batches`（批次 1e）已下沉到

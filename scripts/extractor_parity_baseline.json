@@ -1,16 +1,16 @@
 {
   "pairs": {
     "ideal:blik": {
-      "duplicates": 15
+      "duplicates": 13
     },
     "ideal:twint": {
-      "duplicates": 29
+      "duplicates": 27
     },
     "momo:kakao": {
       "duplicates": 0
     },
     "twint:blik": {
-      "duplicates": 12
+      "duplicates": 10
     }
   }
 }

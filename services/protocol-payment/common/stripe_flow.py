@@ -31,10 +31,12 @@ Rule 10: pure stdlib, no ``sms_tool`` import.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Callable
 from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 
 from . import endpoints
+from .timeouts import DEFAULT_TIMEOUT
 
 __all__ = [
     "processor_entity_for_country",
@@ -42,6 +44,9 @@ __all__ = [
     "to_openai_pay_url",
     "stripe_confirm_return_url",
     "resolve_confirm_payload",
+    "StripePageHooks",
+    "stripe_update_customer_data",
+    "stripe_update_tax_region",
 ]
 
 
@@ -170,3 +175,140 @@ def resolve_confirm_payload(
         qr_urls.extend(poll_qr)
 
     return redirect_url, list(dict.fromkeys(qr_urls)), approve_proxy
+
+
+@dataclass(frozen=True)
+class StripePageHooks:
+    """Per-extractor seams the two payment-page writers below need.
+
+    Both writers POST to ``{STRIPE_PAYMENT_PAGES}/<cs_id>`` with a body built
+    entirely from the caller's checkout context. The body is not provider
+    specific *except* for the two saved-payment-method switches, so that value
+    arrives as a callable: iDEAL and TWINT read different env vars
+    (``IDEAL_SAVED_PAYMENT_VALUE`` / ``TWINT_SAVED_PAYMENT_VALUE``), and baking
+    one in would silently change the other's request body.
+
+    ``stripe_version`` is a parameter rather than a module constant for the same
+    reason ``stripe_init`` takes it: it is part of the wire contract the
+    extractor owns, and a shared literal would make a future version bump a
+    cross-provider change.
+    """
+
+    dump_http: Callable[..., Any]
+    log: Callable[..., None]
+    saved_payment_value: Callable[[], str]
+    checkout_not_active: Callable[[Any], bool]
+    stripe_version: str
+
+
+def stripe_update_customer_data(
+    stripe: Any,
+    cs_id: str,
+    stripe_pk: str,
+    ctx: dict[str, Any],
+    billing: dict[str, str],
+    *,
+    hooks: StripePageHooks,
+) -> bool:
+    """Submit the customer_data half of a custom Checkout session.
+
+    Moved verbatim out of ``ideal_qr_extract.py`` / ``twint_extract.py`` (stage 2
+    of the consolidation plan). The two bodies were byte-identical; the
+    differential test in ``tests/governance/test_stage2_replay_selfcheck.py``
+    drives the frozen pre-move body and this one through the same replay
+    transport and compares the served request fingerprints.
+    """
+    body: dict[str, Any] = {
+        "key": stripe_pk,
+        "_stripe_version": hooks.stripe_version,
+        "expected_amount": str(ctx.get("checkout_amount") or 0),
+        "elements_session_client[session_id]": ctx["elements_session_id"],
+        "elements_session_client[stripe_js_id]": ctx["stripe_js_id"],
+        "elements_session_client[referrer_host]": "chatgpt.com",
+        "elements_session_client[elements_init_source]": "custom_checkout",
+        "elements_session_client[locale]": ctx["locale"],
+        "elements_session_client[client_betas][0]": "custom_checkout_server_updates_1",
+        "elements_session_client[client_betas][1]": "custom_checkout_manual_approval_1",
+        "customer_data[email]": billing["email"],
+        "customer_data[name]": billing["name"],
+        "customer_data[address][country]": billing["country"],
+        "customer_data[address][line1]": billing["line1"],
+        "customer_data[address][city]": billing["city"],
+        "customer_data[address][postal_code]": billing["postal_code"],
+    }
+    if billing.get("line2"):
+        body["customer_data[address][line2]"] = billing["line2"]
+    if billing.get("state"):
+        body["customer_data[address][state]"] = billing["state"]
+
+    url = f"{endpoints.STRIPE_PAYMENT_PAGES}/{cs_id}"
+    try:
+        resp = stripe.post(url, data=body, timeout=DEFAULT_TIMEOUT)
+        hooks.dump_http(resp, "customer_data_update_nl", body, "POST", url, force=resp.status_code >= 400)
+        if resp.status_code < 400:
+            hooks.log(f"荷兰 customer_data 已提交: {billing['name']} / {billing['city']} / {billing['postal_code']}")
+            return True
+        if hooks.checkout_not_active(resp.text):
+            raise RuntimeError("checkout_not_active_session")
+        hooks.log(f"荷兰 customer_data 提交失败 HTTP {resp.status_code}: {resp.text[:180]}", "[WARN] ")
+    except Exception as exc:
+        if hooks.checkout_not_active(exc):
+            raise
+        hooks.log(f"荷兰 customer_data 提交异常: {exc}", "[WARN] ")
+    return False
+
+
+def stripe_update_tax_region(
+    stripe: Any,
+    cs_id: str,
+    stripe_pk: str,
+    ctx: dict[str, Any],
+    billing: dict[str, str],
+    *,
+    hooks: StripePageHooks,
+) -> bool:
+    """Submit the tax_region half of a custom Checkout session.
+
+    Same provenance as :func:`stripe_update_customer_data`. The only
+    provider-varying values in the body are the two ``saved_payment_method``
+    switches, which is what ``hooks.saved_payment_value`` supplies.
+    """
+    body: dict[str, Any] = {
+        "key": stripe_pk,
+        "_stripe_version": hooks.stripe_version,
+        "elements_session_client[session_id]": ctx["elements_session_id"],
+        "elements_session_client[stripe_js_id]": ctx["stripe_js_id"],
+        "elements_session_client[referrer_host]": "chatgpt.com",
+        "elements_session_client[elements_init_source]": "custom_checkout",
+        "elements_session_client[is_aggregation_expected]": "false",
+        "elements_session_client[locale]": ctx["locale"],
+        "elements_session_client[client_betas][0]": "custom_checkout_server_updates_1",
+        "elements_session_client[client_betas][1]": "custom_checkout_manual_approval_1",
+        "elements_options_client[saved_payment_method][enable_save]": hooks.saved_payment_value(),
+        "elements_options_client[saved_payment_method][enable_redisplay]": hooks.saved_payment_value(),
+        "client_attribution_metadata[merchant_integration_additional_elements][0]": "expressCheckout",
+        "client_attribution_metadata[merchant_integration_additional_elements][1]": "payment",
+        "client_attribution_metadata[merchant_integration_additional_elements][2]": "address",
+        "tax_region[country]": billing["country"],
+        "tax_region[postal_code]": billing["postal_code"],
+        "tax_region[line1]": billing["line1"],
+        "tax_region[city]": billing["city"],
+    }
+    if billing.get("state"):
+        body["tax_region[state]"] = billing["state"]
+
+    url = f"{endpoints.STRIPE_PAYMENT_PAGES}/{cs_id}"
+    try:
+        resp = stripe.post(url, data=body, timeout=DEFAULT_TIMEOUT)
+        hooks.dump_http(resp, "tax_region_update", body, "POST", url, force=resp.status_code >= 400)
+        if resp.status_code < 400:
+            hooks.log(f"tax_region 已提交: {billing['country']} / {billing['city']} {billing['postal_code']}")
+            return True
+        if hooks.checkout_not_active(resp.text):
+            raise RuntimeError("checkout_not_active_session")
+        hooks.log(f"tax_region 提交失败 HTTP {resp.status_code}: {resp.text[:180]}", "[WARN] ")
+    except Exception as exc:
+        if hooks.checkout_not_active(exc):
+            raise
+        hooks.log(f"tax_region 提交异常: {exc}", "[WARN] ")
+    return False

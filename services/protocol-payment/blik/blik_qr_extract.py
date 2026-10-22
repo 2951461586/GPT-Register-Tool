@@ -1501,6 +1501,15 @@ def ideal_billing_profile() -> dict[str, str]:
     return profile
 
 
+_STRIPE_PAGE_HOOKS = shared_stripe_flow.StripePageHooks(
+    dump_http=dump_http,
+    log=log,
+    saved_payment_value=saved_payment_value,
+    checkout_not_active=is_checkout_not_active_error,
+    stripe_version=STRIPE_VERSION_FULL,
+)
+
+
 def stripe_update_customer_data(
     stripe: requests.Session,
     cs_id: str,
@@ -1508,44 +1517,10 @@ def stripe_update_customer_data(
     ctx: dict[str, Any],
     billing: dict[str, str],
 ) -> bool:
-    body: dict[str, Any] = {
-        "key": stripe_pk,
-        "_stripe_version": STRIPE_VERSION_FULL,
-        "expected_amount": str(ctx.get("checkout_amount") or 0),
-        "elements_session_client[session_id]": ctx["elements_session_id"],
-        "elements_session_client[stripe_js_id]": ctx["stripe_js_id"],
-        "elements_session_client[referrer_host]": "chatgpt.com",
-        "elements_session_client[elements_init_source]": "custom_checkout",
-        "elements_session_client[locale]": ctx["locale"],
-        "elements_session_client[client_betas][0]": "custom_checkout_server_updates_1",
-        "elements_session_client[client_betas][1]": "custom_checkout_manual_approval_1",
-        "customer_data[email]": billing["email"],
-        "customer_data[name]": billing["name"],
-        "customer_data[address][country]": billing["country"],
-        "customer_data[address][line1]": billing["line1"],
-        "customer_data[address][city]": billing["city"],
-        "customer_data[address][postal_code]": billing["postal_code"],
-    }
-    if billing.get("line2"):
-        body["customer_data[address][line2]"] = billing["line2"]
-    if billing.get("state"):
-        body["customer_data[address][state]"] = billing["state"]
-
-    url = f"{endpoints.STRIPE_PAYMENT_PAGES}/{cs_id}"
-    try:
-        resp = stripe.post(url, data=body, timeout=DEFAULT_TIMEOUT)
-        dump_http(resp, "customer_data_update_nl", body, "POST", url, force=resp.status_code >= 400)
-        if resp.status_code < 400:
-            log(f"荷兰 customer_data 已提交: {billing['name']} / {billing['city']} / {billing['postal_code']}")
-            return True
-        if is_checkout_not_active_error(resp.text):
-            raise RuntimeError("checkout_not_active_session")
-        log(f"荷兰 customer_data 提交失败 HTTP {resp.status_code}: {resp.text[:180]}", "[WARN] ")
-    except Exception as exc:
-        if is_checkout_not_active_error(exc):
-            raise
-        log(f"荷兰 customer_data 提交异常: {exc}", "[WARN] ")
-    return False
+    """Delegate to ``common/stripe_flow.py`` (stage 2, diff-proven)."""
+    return shared_stripe_flow.stripe_update_customer_data(
+        stripe, cs_id, stripe_pk, ctx, billing, hooks=_STRIPE_PAGE_HOOKS
+    )
 
 
 def stripe_update_tax_region(
@@ -1555,45 +1530,8 @@ def stripe_update_tax_region(
     ctx: dict[str, Any],
     billing: dict[str, str],
 ) -> bool:
-    body: dict[str, Any] = {
-        "key": stripe_pk,
-        "_stripe_version": STRIPE_VERSION_FULL,
-        "elements_session_client[session_id]": ctx["elements_session_id"],
-        "elements_session_client[stripe_js_id]": ctx["stripe_js_id"],
-        "elements_session_client[referrer_host]": "chatgpt.com",
-        "elements_session_client[elements_init_source]": "custom_checkout",
-        "elements_session_client[is_aggregation_expected]": "false",
-        "elements_session_client[locale]": ctx["locale"],
-        "elements_session_client[client_betas][0]": "custom_checkout_server_updates_1",
-        "elements_session_client[client_betas][1]": "custom_checkout_manual_approval_1",
-        "elements_options_client[saved_payment_method][enable_save]": saved_payment_value(),
-        "elements_options_client[saved_payment_method][enable_redisplay]": saved_payment_value(),
-        "client_attribution_metadata[merchant_integration_additional_elements][0]": "expressCheckout",
-        "client_attribution_metadata[merchant_integration_additional_elements][1]": "payment",
-        "client_attribution_metadata[merchant_integration_additional_elements][2]": "address",
-        "tax_region[country]": billing["country"],
-        "tax_region[postal_code]": billing["postal_code"],
-        "tax_region[line1]": billing["line1"],
-        "tax_region[city]": billing["city"],
-    }
-    if billing.get("state"):
-        body["tax_region[state]"] = billing["state"]
-
-    url = f"{endpoints.STRIPE_PAYMENT_PAGES}/{cs_id}"
-    try:
-        resp = stripe.post(url, data=body, timeout=DEFAULT_TIMEOUT)
-        dump_http(resp, "tax_region_update", body, "POST", url, force=resp.status_code >= 400)
-        if resp.status_code < 400:
-            log(f"tax_region 已提交: {billing['country']} / {billing['city']} {billing['postal_code']}")
-            return True
-        if is_checkout_not_active_error(resp.text):
-            raise RuntimeError("checkout_not_active_session")
-        log(f"tax_region 提交失败 HTTP {resp.status_code}: {resp.text[:180]}", "[WARN] ")
-    except Exception as exc:
-        if is_checkout_not_active_error(exc):
-            raise
-        log(f"tax_region 提交异常: {exc}", "[WARN] ")
-    return False
+    """Delegate to ``common/stripe_flow.py`` (stage 2, diff-proven)."""
+    return shared_stripe_flow.stripe_update_tax_region(stripe, cs_id, stripe_pk, ctx, billing, hooks=_STRIPE_PAGE_HOOKS)
 
 
 def checkout_snapshot(chatgpt: requests.Session, checkout: dict[str, str], billing: dict[str, str]) -> None:

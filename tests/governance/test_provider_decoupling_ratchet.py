@@ -172,13 +172,19 @@ def test_ratchet_holds_for_the_current_tree():
 
 
 def test_summary_facts_are_pinned():
-    """256 same-named defs: 225 already migrated, 0 verbatim copies, 31 forks."""
+    """263 same-named defs: 231 already migrated, 0 verbatim copies, 32 forks.
+
+    2026-10-22 (stage-2 batch "stripe page writers"): six more delegations
+    (``stripe_update_customer_data`` / ``stripe_update_tax_region`` in ideal,
+    twint and blik moved into ``common/stripe_flow.py``) and one new registered
+    fork (pix's ``stripe_update_tax_region``, which posts a different body).
+    """
     assert pdr.analyze(ROOT).summary() == {
-        "same_named_total": 256,
-        pdr.DELEGATING: 225,
+        "same_named_total": 263,
+        pdr.DELEGATING: 231,
         pdr.IDENTICAL: 0,
-        pdr.DIVERGENT: 31,
-        "files_with_frozen_pairs": 7,
+        pdr.DIVERGENT: 32,
+        "files_with_frozen_pairs": 8,
     }
 
 
@@ -186,9 +192,9 @@ def test_the_migrated_extractors_have_no_verbatim_copies_left():
     """Pin the three migrated extractors so an inlining regression fails."""
     analysis = pdr.analyze(ROOT)
     expected_delegating = {
-        "ideal/ideal_qr_extract.py": 72,
-        "twint/twint_extract.py": 72,
-        "blik/blik_qr_extract.py": 70,
+        "ideal/ideal_qr_extract.py": 74,
+        "twint/twint_extract.py": 74,
+        "blik/blik_qr_extract.py": 72,
     }
     expected_divergent = {
         "ideal/ideal_qr_extract.py": 2,
@@ -213,11 +219,15 @@ def test_blik_carries_the_documented_divergent_bulk():
     2026-10-15. Batch 7 (2026-10-20) moved three more (accept-language,
     saved-payment value, runtime version) onto ``common/stripe_setup.py`` and
     made its ``stripe_init`` / ``stripe_elements_session_params`` visible as
-    forks, leaving 69 delegating / 0 identical / 14 divergent.
+    forks, leaving 69 delegating / 0 identical / 14 divergent. The 2026-10-22
+    stage-2 batch moved ``stripe_update_customer_data`` and
+    ``stripe_update_tax_region`` onto ``common/stripe_flow.py`` too, so blik is
+    now 72 delegating / 0 identical / 14 divergent -- its fork count is
+    unchanged, which is the point: this batch converged copies, not forks.
     """
     analysis = pdr.analyze(ROOT)
     counts = analysis.counts_for("blik/blik_qr_extract.py")
-    assert counts == {pdr.DELEGATING: 70, pdr.IDENTICAL: 0, pdr.DIVERGENT: 14}
+    assert counts == {pdr.DELEGATING: 72, pdr.IDENTICAL: 0, pdr.DIVERGENT: 14}
 
 
 def test_momo_shares_the_pure_primitives_and_keeps_its_forks():
@@ -252,18 +262,30 @@ def test_blik_build_email_stays_divergent():
     assert kinds == {pdr.DIVERGENT}
 
 
-def test_pix_has_no_same_named_definitions():
-    """``pix`` was never forked from the same upstream, so it shares no names.
+def test_pix_shares_only_the_one_registered_fork():
+    """``pix`` was never forked from the same upstream, so it shares almost no names.
 
     Recorded explicitly so "0 divergent" is not mistaken for "fully migrated".
+    2026-10-22: ``common/stripe_flow.py`` gained ``stripe_update_tax_region``, so
+    pix's same-named writer is now measurable against it -- and it is a genuine
+    fork (eid=NA, hardcoded Sao Paulo fallbacks, no ``_stripe_version``, no
+    ``elements_session_client`` block, raises instead of returning a bool). It is
+    registered in ``tests/payment/test_extractor_divergence_contract.py``.
     """
     analysis = pdr.analyze(ROOT)
-    for provider_file in ("pix/pix_core.py", "pix/pix_extract.py", "pix/run_pix.py"):
+    for provider_file in ("pix/pix_core.py", "pix/run_pix.py"):
         assert analysis.counts_for(provider_file) == {
             pdr.DELEGATING: 0,
             pdr.IDENTICAL: 0,
             pdr.DIVERGENT: 0,
         }
+    assert analysis.counts_for("pix/pix_extract.py") == {
+        pdr.DELEGATING: 0,
+        pdr.IDENTICAL: 0,
+        pdr.DIVERGENT: 1,
+    }
+    forked = {p.name for p in analysis.pairs if p.provider_file == "pix/pix_extract.py" and p.kind == pdr.DIVERGENT}
+    assert forked == {"stripe_update_tax_region"}
 
 
 def test_updating_the_baseline_writes_what_it_measured(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

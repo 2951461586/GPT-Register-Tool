@@ -35,6 +35,7 @@ import payment_replay as PR  # noqa: E402
 PROVIDERS = {"ideal": "ideal_qr_extract", "twint": "twint_extract"}
 STRIPE_PM_URL = "https://api.stripe.com/v1/payment_methods"
 TAXES_URL = "https://chatgpt.com/backend-api/payments/checkout/taxes"
+PAGE_URL = "https://api.stripe.com/v1/payment_pages/cs_test"
 
 BILLING = {
     "name": "Test User",
@@ -50,6 +51,7 @@ CTX = {
     "elements_session_id": "elements_session_test",
     "elements_session_config_id": "elements_config_test",
     "config_id": "config_test",
+    "locale": "nl",
 }
 
 
@@ -83,6 +85,13 @@ def _exchanges(kind: str) -> list[dict]:
                 "response": {"status_code": 200, "body": "{}", "url": TAXES_URL},
             }
         ]
+    if kind in {"customer_data", "tax_region"}:
+        return [
+            {
+                "request": {"method": "POST", "url": PAGE_URL},
+                "response": {"status_code": 200, "body": "{}", "url": PAGE_URL},
+            }
+        ]
     return []
 
 
@@ -113,6 +122,11 @@ def drive(module, provider: str, kind: str, *, billing: dict | None = None):
             func = getattr(module, f"add_inline_{provider}_payment_method_data")
             func(body, "cs_test", billing, dict(CTX))
             return body, []
+        if kind in {"customer_data", "tax_region"}:
+            cursor = _cursor(kind)
+            func = getattr(module, f"stripe_update_{kind}")
+            result = func(PR.ReplaySession(cursor), "cs_test", "pk_test", dict(CTX), billing)
+            return result, cursor.served
     raise AssertionError(f"unknown slice: {kind}")
 
 
@@ -161,3 +175,98 @@ def test_real_recording_selfcheck():
     # above; wire the full-flow assertion when the first fixture lands.
     for recording in recordings:
         PR.load_recording(recording)  # must parse
+
+
+# ── Stage 2, batch "stripe page writers" (2026-10-22) ───────────────────────
+#
+# ``stripe_update_customer_data`` and ``stripe_update_tax_region`` were
+# byte-identical in ideal / twint / blik and moved into
+# ``common/stripe_flow.py``. The plan requires "HEAD vs parameterised" evidence
+# before such a move is accepted; a live recording is still missing, so the
+# "before" side is the frozen pre-merge body captured in
+# ``tests/payment/stage2_stripe_page_head.py``. Both sides are driven through the
+# same replay transport with the same seams, so the only thing under test is the
+# body that moved.
+
+PAGE_WRITERS = ("customer_data", "tax_region")
+
+#: Billing shapes that reach the optional branches (``line2``, ``state``).
+BILLING_MATRIX = (
+    BILLING,
+    dict(BILLING, line2="Apt 4", state="NH"),
+    dict(BILLING, country="CH", postal_code="8001", city="Zurich", line1="Bahnhofstrasse 1"),
+)
+
+
+def _load_frozen_head():
+    path = ROOT / "tests" / "payment" / "stage2_stripe_page_head.py"
+    spec = importlib.util.spec_from_file_location("stage2_stripe_page_head", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _seams(module):
+    """Build the pre-merge seam bundle from the extractor under test.
+
+    ``endpoints`` and ``DEFAULT_TIMEOUT`` are read off the extractor rather than
+    imported here: the extractor already imports them, and a direct ``common``
+    import from ``tests/`` is a ``reportMissingImports`` finding pyright cannot
+    resolve (the package only exists after the child-process ``sys.path`` setup).
+    """
+    head = _load_frozen_head()
+    return head.Seams(
+        dump_http=module.dump_http,
+        log=module.log,
+        saved_payment_value=module.saved_payment_value,
+        checkout_not_active=module.is_checkout_not_active_error,
+        stripe_version=module.STRIPE_VERSION_FULL,
+        stripe_payment_pages=module.endpoints.STRIPE_PAYMENT_PAGES,
+        timeout=module.DEFAULT_TIMEOUT,
+    )
+
+
+@pytest.mark.parametrize("kind", PAGE_WRITERS)
+def test_shared_page_writer_matches_the_frozen_pre_merge_body(provider, kind):
+    """The moved body must produce the same request bytes and the same verdict."""
+    module = _load(provider, PROVIDERS[provider])
+    head = _load_frozen_head()
+    seams = _seams(module)
+    head_func = getattr(head, f"stripe_update_{kind}")
+    for billing in BILLING_MATRIX:
+        expected_cursor = _cursor(kind)
+        expected = head_func(
+            PR.ReplaySession(expected_cursor), "cs_test", "pk_test", dict(CTX), dict(billing), seams=seams
+        )
+        actual, served = drive(module, provider, kind, billing=dict(billing))
+        assert served == expected_cursor.served, f"request stream diverged from the pre-merge body for {billing}"
+        assert actual == expected, f"return value diverged from the pre-merge body for {billing}"
+
+
+def test_page_writer_differential_is_sensitive_to_the_body(provider):
+    """Guard against a vacuous comparison: a changed body must change the bytes."""
+    module = _load(provider, PROVIDERS[provider])
+    _, base = drive(module, provider, "tax_region", billing=BILLING)
+    changed = dict(BILLING, postal_code="9999")
+    _, other = drive(module, provider, "tax_region", billing=changed)
+    assert base != other
+
+
+@pytest.mark.parametrize("value", ["1", "0"])
+def test_tax_region_carries_the_provider_saved_payment_switch(provider, value, monkeypatch):
+    """The one provider-varying value in the tax body must reach the wire.
+
+    ``saved_payment_value`` is the reason this function takes hooks at all; if a
+    future edit hardcoded it, ideal and twint would silently post each other's
+    value and nothing else in the suite would notice.
+    """
+    monkeypatch.setenv(f"{provider.upper()}_SAVED_PAYMENT_VALUE", value)
+    module = _load(provider, PROVIDERS[provider])
+    _, served = drive(module, provider, "tax_region")
+    body = "\n".join(fingerprint[2] for fingerprint in served)
+    save = '"elements_options_client[saved_payment_method][enable_save]": '
+    redisplay = '"elements_options_client[saved_payment_method][enable_redisplay]": '
+    assert f'{save}"{value}"' in body, body
+    assert f'{redisplay}"{value}"' in body, body

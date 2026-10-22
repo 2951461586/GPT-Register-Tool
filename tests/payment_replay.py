@@ -347,6 +347,11 @@ def freeze_determinism(*, start_time: float = 1_700_000_000.0, seed: int = 0):
         stack.enter_context(patch.object(random, "uniform", lambda a, b: rng.uniform(a, b)))
         stack.enter_context(patch.object(random, "random", lambda: rng.random()))
         stack.enter_context(patch.object(time, "time", lambda: start_time))
-        stack.enter_context(patch.object(time, "strftime", lambda fmt: "20260101-000000"))
+        # ``*args`` matters: ``datetime.datetime.strftime`` delegates to
+        # ``time.strftime(format, timetuple)``, so a one-argument stub makes
+        # every ``logging.Formatter`` that stamps a record raise inside the
+        # handler -- which logging swallows, silently dropping the line. That
+        # bit the durable extractor log during replay before this was widened.
+        stack.enter_context(patch.object(time, "strftime", lambda fmt, *args: "20260101-000000"))
         stack.enter_context(patch.object(time, "sleep", lambda _seconds: None))
         yield

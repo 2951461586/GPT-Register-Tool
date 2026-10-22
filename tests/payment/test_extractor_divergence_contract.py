@@ -170,6 +170,13 @@ EXPECTED_DIVERGENCES: dict[tuple[str, str], tuple[str, str]] = {
         "provider_wire",
         "delegates to paylink.stripe_init_payment_page and returns (payload, status, attempts)",
     ),
+    # PIX (1)
+    ("pix/pix_extract.py", "stripe_update_tax_region"): (
+        "provider_wire",
+        "PIX posts a minimal tax_region body (eid=NA, hardcoded Sao Paulo postcode/line1/city fallbacks, "
+        "no _stripe_version and no elements_session_client block) and raises on HTTP >= 400 instead of "
+        "returning a bool, so it cannot delegate to common/stripe_flow.py's ideal/twint/blik shape",
+    ),
     # TWINT (2)
     ("twint/twint_extract.py", "register_proxy_for_redaction"): (
         "provider_state",
@@ -185,7 +192,7 @@ EXPECTED_CATEGORIES = {
     "provider_data": 6,
     "provider_state": 8,
     "provider_io": 7,
-    "provider_wire": 10,
+    "provider_wire": 11,
 }
 
 
