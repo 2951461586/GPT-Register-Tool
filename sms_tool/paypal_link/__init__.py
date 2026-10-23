@@ -104,8 +104,6 @@ from .gen_link import (
     _proxy_health_cfg,
     _proxy_pool_values,
     _rank_stage_proxy,
-    _resolve_stage_proxy,
-    _stage_proxy_is_configured,
     billing_for_country,
     extract_ba_token,
     extract_redirect_url,
@@ -136,6 +134,12 @@ from .gen_link import (
 # 定义在 ``payment_wire``，此处经 ``paypal_extract`` 再导出取得；理由同
 # ``gen_link`` 顶部的说明（跨目录边由 import_layer_ratchet 冻结）。
 from ..paypal.extract import _checkout_get
+
+# 阶段代理解析的**定义**在 ``paypal.proxy``（Rule 13：代理串只有一个权威）。
+# 2026-10-23 之前 ``gen_link`` 自己带着 `_resolve_stage_proxy` /
+# `_stage_proxy_is_configured` 的内联副本；收敛到 ``resolve_stage_proxies``
+# 之后，这两个名字直接从拥有者取，不再经 ``gen_link`` 中转。
+from ..paypal.proxy import _resolve_stage_proxy, _stage_proxy_is_configured  # noqa: F401
 
 __all__ = [
     "BILLING_DATA",

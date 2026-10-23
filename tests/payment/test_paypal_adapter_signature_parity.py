@@ -2,39 +2,31 @@
 
 Why this exists
 ---------------
-``pay_link.registry.paypal_runner`` forwards a **literal whitelist** to
-``generate_pp_link``:
-
-```python
-**_select_kwargs(kwargs, {
-    "checkout_proxy", "provider_proxy", "stripe_init_proxy",
-    "payment_method_proxy", "confirm_proxy", "approve_proxy",
-    "promotion_proxy", "target_country", "checkout_country",
-    "require_zero", "require_ba_token", "stage_proxy_countries",
-    "max_checkout_retries", "max_stage_retries",
-})
-```
-
-A whitelist that is maintained by hand drifts in two directions, and both are
-silent:
+``pay_link.registry.paypal_runner`` used to forward a **literal 14-name
+whitelist** to ``generate_pp_link``. A hand-maintained whitelist drifts in two
+directions, and both are silent:
 
 * **grow past the callee** -> ``TypeError: generate_pp_link() got an unexpected
-  keyword argument`` at runtime, on the one path a user actually paid for.
-  Measured 2026-10-23: ``max_checkout_retries`` and ``max_stage_retries`` were
-  on the whitelist and were *not* parameters of ``generate_pp_link``. Nothing
-  caught it because no test ever drove the pay_link seam with those options --
-  the fields are read from ``paypal.*`` config by the callee, so the adapter
-  path is the only caller that could pass them as options.
-* **fall behind the callee** -> a new option is accepted by the entrypoint, the
-  adapter keeps dropping it. This already happened once on the UPI side, where
+  keyword argument`` at runtime, on the path a user actually paid for. Measured
+  2026-10-23: ``max_checkout_retries`` and ``max_stage_retries`` were on the
+  whitelist and were *not* parameters of ``generate_pp_link``. Nothing caught it
+  because no test drove the pay_link seam with those options -- the callee reads
+  them from ``paypal.*`` config, so the adapter was the only caller that could
+  pass them as options.
+* **fall behind the callee** -> a new option is accepted by the entrypoint while
+  the adapter keeps dropping it. This already happened on the UPI side, where
   ``wait_paid`` / ``paid_timeout`` / ``require_server_upi_mandate`` were dropped
-  (``test_upi_link_entrypoint_unique.py`` pins the fix).
+  (``test_upi_link_entrypoint_unique.py`` pins that fix).
 
-Both directions are pinned here, behaviourally: drive the real registry with an
-option set built from the callee's own signature, and assert what arrives.
+The whitelist is gone: the runner now asks the entrypoint's signature
+(``pay_link.base._forwardable_kwargs``), so neither direction can drift. These
+tests pin the mechanism on a stand-in callee (a new parameter is forwarded, an
+unknown one is dropped, ``None`` is dropped, explicitly passed names are not
+repeated) and the real seam end to end.
 
-The structural fix (``StageProxies`` dataclass instead of 12 proxy strings) is
-tracked separately; this test keeps the seam honest until then.
+``StageProxies`` collapses the seven proxy strings into one value at the
+entrypoint boundary; the per-stage keywords stay supported, and both spellings
+are covered here.
 """
 
 from __future__ import annotations
@@ -73,6 +65,7 @@ _PAYPAL_SAMPLE = {
     "stage_proxy_countries": {"checkout": "US", "approve": "US"},
     "max_checkout_retries": 2,
     "max_stage_retries": 3,
+    "stage_proxies": {"checkout": "http://checkout:1", "approve": "http://approve:1"},
 }
 
 
@@ -105,12 +98,51 @@ def _drive_paypal_adapter(options: dict):
         access_token="at-test",
         options=options,
     )
+    # ``autospec`` matters: forwarding is signature-driven, so a bare MagicMock
+    # (``(*args, **kwargs)``) would accept every key and turn the assertions
+    # below into tautologies.
+    from sms_tool.paypal_link.gen_link import generate_pp_link as real_entrypoint
+
     with (
-        patch("sms_tool.gen_pp_link.generate_pp_link", return_value={"ok": True}) as entrypoint,
+        patch(
+            "sms_tool.gen_pp_link.generate_pp_link",
+            autospec=real_entrypoint,
+            return_value={"ok": True},
+        ) as entrypoint,
         patch("sms_tool.pay_link.registry._assert_function_adapter_egress", return_value=None),
     ):
         registry.execute_mapping(request)
     return entrypoint.call_args.kwargs
+
+
+def test_forwarding_is_signature_driven():
+    """The mechanism: a callee parameter is forwarded without editing any list."""
+    from sms_tool.pay_link.base import _forwardable_kwargs
+
+    def callee(access_token: str, *, newly_added_option: int = 0, other: int = 0):
+        return None
+
+    values = {
+        "access_token": "at",
+        "newly_added_option": 7,
+        "other": None,
+        "not_a_parameter": 3,
+    }
+    forwarded = _forwardable_kwargs(callee, values, skip={"access_token"})
+    assert forwarded == {"newly_added_option": 7}, forwarded
+
+
+def test_a_renamed_parameter_is_dropped_instead_of_raising():
+    """The old whitelist raised TypeError here; the signature filter drops it."""
+
+    def callee(access_token: str, *, renamed_option: int = 0):
+        return None
+
+    from sms_tool.pay_link.base import _forwardable_kwargs
+
+    forwarded = _forwardable_kwargs(callee, {"access_token": "at", "old_option": 5}, skip={"access_token"})
+    assert forwarded == {}, forwarded
+    callee(**{"access_token": "at", **_forwardable_kwargs(callee, {"old_option": 5, "renamed_option": 5})})
 
 
 def test_the_sample_covers_every_forwardable_parameter():

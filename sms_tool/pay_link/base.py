@@ -1,6 +1,7 @@
 """base submodule of the former payment/link_manager.py (mechanical split, bodies unchanged)."""
 
 from __future__ import annotations
+import inspect
 import json
 import logging
 import re
@@ -103,6 +104,37 @@ def is_false(value: Any) -> bool:
 
 def _select_kwargs(values: dict[str, Any], allowed: set[str]) -> dict[str, Any]:
     return {key: value for key, value in values.items() if key in allowed and value is not None}
+
+
+def _forwardable_kwargs(
+    function: Any, values: Mapping[str, Any], *, skip: frozenset[str] | set[str] = frozenset()
+) -> dict[str, Any]:
+    """Keyword arguments ``function`` actually declares, dropping ``None`` values.
+
+    The PayPal adapter used to keep its own literal copy of the callee's option
+    names. A hand-maintained copy drifts both ways -- it forwarded
+    ``max_stage_retries`` to a function that never accepted it (TypeError on the
+    first caller who set the option) and it would silently drop a newly added
+    parameter. Asking the callable's signature makes drift impossible: an
+    unknown name is dropped, a declared one is forwarded, and neither list needs
+    maintenance.
+
+    ``skip`` names are passed positionally/by their own keyword by the runner and
+    must not be repeated (a duplicate keyword is a ``TypeError``, the exact
+    failure this replaces).
+    """
+    parameters = inspect.signature(function).parameters
+    # A callee that declares ``**kwargs`` accepts every name, so nothing is
+    # "unknown" to it. This also keeps test doubles working: a ``Mock`` has the
+    # signature ``(*args, **kwargs)``, and filtering it down to zero keywords
+    # would make every adapter test silently assert on an empty call.
+    takes_anything = any(parameter.kind is inspect.Parameter.VAR_KEYWORD for parameter in parameters.values())
+    accepted = None if takes_anything else set(parameters)
+    return {
+        key: value
+        for key, value in values.items()
+        if key not in skip and value is not None and (accepted is None or key in accepted)
+    }
 
 
 def _protocol_cfg(runtime_config: Mapping[str, Any] | None = None) -> Mapping[str, Any]:

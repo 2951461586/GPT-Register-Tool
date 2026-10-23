@@ -7,6 +7,7 @@ import os
 import re
 import threading
 import time
+from collections.abc import Iterator, Mapping
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Iterable
@@ -644,6 +645,88 @@ def _stage_proxy_value(stage_proxies: dict, key: str, fallback: str = "") -> str
     return str((stage_proxies or {}).get(key) or fallback or "").strip()
 
 
+#: The seven egress stages of a PayPal checkout, in resolution order.
+STAGE_PROXY_STAGES: tuple[str, ...] = (
+    "checkout",
+    "promotion",
+    "provider",
+    "stripe_init",
+    "payment_method",
+    "confirm",
+    "approve",
+)
+
+
+@dataclass(frozen=True)
+class StageProxies(Mapping[str, str]):
+    """One proxy string per checkout egress stage.
+
+    Why this exists
+    ---------------
+    The same seven strings used to travel between ``pay_link.registry``,
+    ``generate_pp_link`` and ``PPLinkExtractor`` as seven independent keyword
+    arguments, and the adapter kept its own copy of their names. That copy is
+    how ``max_stage_retries`` came to be forwarded to a function that never
+    accepted it (a ``TypeError`` waiting for the first caller that set the
+    option). One immutable value removes the ordering question, makes "which
+    stages exist" a single constant, and lets a caller pass the whole set
+    instead of seven keywords.
+
+    ``Mapping`` is implemented on purpose: every existing ``proxies["checkout"]``
+    and ``proxies.get("stripe_init", fallback)`` call site keeps working, while
+    ``StageProxies(...) == StageProxies(...)`` compares all seven strings.
+    """
+
+    checkout: str = ""
+    promotion: str = ""
+    provider: str = ""
+    stripe_init: str = ""
+    payment_method: str = ""
+    confirm: str = ""
+    approve: str = ""
+
+    def __getitem__(self, stage: str) -> str:
+        if stage not in STAGE_PROXY_STAGES:
+            raise KeyError(stage)
+        return str(getattr(self, stage) or "")
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(STAGE_PROXY_STAGES)
+
+    def __len__(self) -> int:
+        return len(STAGE_PROXY_STAGES)
+
+    def as_dict(self) -> dict[str, str]:
+        return {stage: self[stage] for stage in STAGE_PROXY_STAGES}
+
+    @classmethod
+    def from_mapping(cls, values: Any = None) -> StageProxies:
+        """Read ``stage -> proxy``; anything that is not a mapping reads as empty."""
+        source: Mapping = values if isinstance(values, Mapping) else {}
+        return cls(**{stage: str(source.get(stage) or "").strip() for stage in STAGE_PROXY_STAGES})
+
+    @classmethod
+    def from_options(cls, values: Any = None) -> StageProxies:
+        """Read the ``<stage>_proxy`` option spelling used by the adapter seam."""
+        source: Mapping = values if isinstance(values, Mapping) else {}
+        return cls.from_mapping({stage: source.get(f"{stage}_proxy") for stage in STAGE_PROXY_STAGES})
+
+    def overridden(self, values: Any = None) -> StageProxies:
+        """Copy with every non-empty entry of ``values`` winning.
+
+        Empty means "not supplied", which is the same rule
+        ``_resolve_stage_proxy`` applies to its explicit argument -- a caller that
+        passes ``checkout_proxy=""`` must not blank a configured stage.
+        """
+        source: Mapping = values if isinstance(values, Mapping) else {}
+        merged = self.as_dict()
+        for stage in STAGE_PROXY_STAGES:
+            value = str(source.get(stage) or "").strip()
+            if value:
+                merged[stage] = value
+        return StageProxies(**merged)
+
+
 def _proxy_health_cfg(paypal_cfg: dict) -> dict:
     _raw_value: object = paypal_cfg.get("proxy_health")
     value: dict = _raw_value if isinstance(_raw_value, dict) else {}
@@ -722,7 +805,7 @@ def _rank_stage_proxy(
     return ranked[0] if ranked else (normalize_proxy_url(configured_value) if configured_value else "")
 
 
-def _proxies_from_config(cfg: dict, checkout_country: str = "", target_country: str = "") -> dict:
+def _proxies_from_config(cfg: dict, checkout_country: str = "", target_country: str = "") -> StageProxies:
     """Resolve payment stage proxies from the static ``paypal.stage_proxies`` config."""
     # Function-local on purpose: ``import_layer_ratchet`` forbids the paypal ->
     # payment direction (payment is the outer layer), and ``payment.routing``
@@ -804,15 +887,15 @@ def _proxies_from_config(cfg: dict, checkout_country: str = "", target_country: 
         "promotion",
         promotion_value,
     )
-    return {
-        "checkout": checkout,
-        "promotion": promotion,
-        "provider": provider,
-        "stripe_init": stripe_init,
-        "payment_method": payment_method,
-        "confirm": confirm,
-        "approve": approve,
-    }
+    return StageProxies(
+        checkout=checkout,
+        promotion=promotion,
+        provider=provider,
+        stripe_init=stripe_init,
+        payment_method=payment_method,
+        confirm=confirm,
+        approve=approve,
+    )
 
 
 def _stage_proxy_is_configured(paypal_cfg: dict, *keys: str) -> bool:
@@ -838,3 +921,74 @@ def _resolve_stage_proxy(
     if configured and configured_value:
         return configured_value
     return single_value or configured_value
+
+
+def configured_stage_keys(paypal_cfg: Any) -> frozenset[str]:
+    """Stage names whose proxy is written literally in ``paypal.stage_proxies``.
+
+    The gate ``_resolve_stage_proxy`` calls ``configured`` exists so a
+    *ranked pool* value cannot silently outrank an explicitly supplied single
+    proxy: only a stage the operator actually wrote down may win. Reading the
+    raw section once produces the same answer as calling
+    ``_stage_proxy_is_configured`` per stage with that stage's key aliases.
+    """
+    source: Mapping = paypal_cfg if isinstance(paypal_cfg, Mapping) else {}
+    raw: object = source.get("stage_proxies")
+    stage_proxies: Mapping = raw if isinstance(raw, Mapping) else {}
+    return frozenset(key for key, value in stage_proxies.items() if str(value or "").strip())
+
+
+def resolve_stage_proxies(
+    configured: StageProxies,
+    explicit: StageProxies,
+    *,
+    single_proxy: Any = None,
+    provider_argument: Any = None,
+    configured_keys: frozenset[str] | set[str] = frozenset(),
+    single_proxy_overrides: bool = False,
+) -> StageProxies:
+    """Resolve every egress stage from (explicit, single, configured) values.
+
+    Precedence per stage, unchanged from the inline block this replaced:
+
+    1. the stage's own keyword (``checkout_proxy=...`` / ``StageProxies.checkout``);
+    2. the single ``proxy=...`` when ``explicit_proxy_overrides_stage_proxies`` is on;
+    3. the configured value, but only for a stage the operator wrote down;
+    4. the single ``proxy`` (or, for the stages the flow derives from the
+       provider, the resolved provider).
+
+    ``promotion`` is deliberately opt-in: it never falls back to the single
+    proxy, because a promotion update from the wrong region is worse than none.
+    """
+    single = str(single_proxy or "").strip()
+    provider_single = str(provider_argument or "").strip() or single
+
+    def _stage(stage: str, single_value: str, configured_value: str, *flag_keys: str) -> str:
+        return _resolve_stage_proxy(
+            explicit[stage],
+            single_value,
+            configured_value,
+            any(key in configured_keys for key in flag_keys),
+            single_proxy_overrides,
+        )
+
+    checkout = _stage("checkout", single, configured["checkout"], "checkout")
+    provider = _stage("provider", single, configured["provider"], "provider", "stripe_init")
+    provider_value = str(provider or "").strip()
+    stripe_init = _stage("stripe_init", provider_single, configured["stripe_init"] or provider_value, "stripe_init")
+    payment_method = _stage(
+        "payment_method", provider_single, configured["payment_method"] or provider_value, "payment_method"
+    )
+    confirm = _stage("confirm", provider_single, configured["confirm"] or provider_value, "confirm")
+    approve = _stage("approve", single, configured["approve"], "approve", "confirm")
+    promotion = explicit["promotion"] or configured["promotion"]
+
+    return StageProxies(
+        checkout=str(checkout or "").strip(),
+        promotion=str(promotion or "").strip(),
+        provider=provider_value,
+        stripe_init=str(stripe_init or provider_value).strip(),
+        payment_method=str(payment_method or provider_value).strip(),
+        confirm=str(confirm or provider_value).strip(),
+        approve=str(approve or "").strip(),
+    )

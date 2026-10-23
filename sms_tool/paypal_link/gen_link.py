@@ -63,6 +63,8 @@ from ..pp_link_helpers import (
 
 from ..paypal.proxy import (
     PayPalProxyState,
+    StageProxies,
+    configured_stage_keys,
     infer_proxy_country,
     is_retryable_network_error,
     probe_proxy,
@@ -74,8 +76,7 @@ from ..paypal.proxy import (
     _proxy_pool_values,
     _rank_stage_proxy,
     _proxies_from_config,
-    _stage_proxy_is_configured,
-    _resolve_stage_proxy,
+    resolve_stage_proxies,
 )
 
 
@@ -486,6 +487,7 @@ def generate_pp_link(
     runtime_config: Mapping[str, Any] | None = None,
     max_stage_retries: int | None = None,
     max_checkout_retries: int | None = None,
+    stage_proxies: StageProxies | Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """生成 PayPal BA 直链 (兼容旧接口)。
 
@@ -501,6 +503,8 @@ def generate_pp_link(
         max_stage_retries: 单阶段重试预算；None 时读 ``paypal.max_stage_retries``
         max_checkout_retries: Checkout 重建预算；None 时读
             ``paypal.max_checkout_retries``
+        stage_proxies: 七个阶段的代理聚合；单个 ``*_proxy`` 参数优先于它，它
+            优先于配置。见 ``sms_tool.paypal.proxy.StageProxies``。
 
     ``max_stage_retries`` / ``max_checkout_retries`` exist as parameters, not only
     as config keys, because ``pay_link.registry.paypal_runner`` advertises them
@@ -528,61 +532,47 @@ def generate_pp_link(
         .strip()
         .upper()
     )
-    stage_proxies = _plm._proxies_from_config(cfg, checkout_country=checkout_country, target_country=target_country)
+    # ``from_mapping`` on the way in: the resolver returns a ``StageProxies``
+    # already, but tests (and the ``_plm`` lazy proxy) may hand back a partial
+    # ``{"checkout": ..., "provider": ..., "approve": ...}`` mapping, and the
+    # per-stage reads below assume all seven keys exist.
+    configured_stage_proxies = StageProxies.from_mapping(
+        _plm._proxies_from_config(cfg, checkout_country=checkout_country, target_country=target_country)
+    )
+    # Two ways in, one value out: the legacy per-stage keywords and the aggregate
+    # ``stage_proxies`` argument are folded into one object before resolution.
+    # The per-stage keyword wins for its own stage (it is the older, more
+    # specific API); everything else comes from the aggregate or the config.
+    explicit_stage_proxies = StageProxies.from_mapping(stage_proxies).overridden(
+        StageProxies.from_options(
+            {
+                "checkout_proxy": checkout_proxy,
+                "provider_proxy": provider_proxy,
+                "stripe_init_proxy": stripe_init_proxy,
+                "payment_method_proxy": payment_method_proxy,
+                "confirm_proxy": confirm_proxy,
+                "approve_proxy": approve_proxy,
+                "promotion_proxy": promotion_proxy,
+            }
+        )
+    )
 
     single_proxy_overrides = bool(paypal_cfg.get("explicit_proxy_overrides_stage_proxies", False))
-    _checkout = _resolve_stage_proxy(
-        checkout_proxy,
-        proxy,
-        stage_proxies["checkout"],
-        _stage_proxy_is_configured(paypal_cfg, "checkout"),
-        single_proxy_overrides,
+    stage_proxies = resolve_stage_proxies(
+        configured_stage_proxies,
+        explicit_stage_proxies,
+        single_proxy=proxy,
+        provider_argument=provider_proxy,
+        configured_keys=configured_stage_keys(paypal_cfg),
+        single_proxy_overrides=single_proxy_overrides,
     )
-    _provider = _resolve_stage_proxy(
-        provider_proxy,
-        proxy,
-        stage_proxies["provider"],
-        _stage_proxy_is_configured(paypal_cfg, "provider", "stripe_init"),
-        single_proxy_overrides,
-    )
-    _stripe_init = _resolve_stage_proxy(
-        stripe_init_proxy,
-        provider_proxy or proxy,
-        stage_proxies.get("stripe_init", _provider),
-        _stage_proxy_is_configured(paypal_cfg, "stripe_init"),
-        single_proxy_overrides,
-    )
-    _payment_method = _resolve_stage_proxy(
-        payment_method_proxy,
-        provider_proxy or proxy,
-        stage_proxies.get("payment_method", _provider),
-        _stage_proxy_is_configured(paypal_cfg, "payment_method"),
-        single_proxy_overrides,
-    )
-    _confirm = _resolve_stage_proxy(
-        confirm_proxy,
-        provider_proxy or proxy,
-        stage_proxies.get("confirm", _provider),
-        _stage_proxy_is_configured(paypal_cfg, "confirm"),
-        single_proxy_overrides,
-    )
-    _approve = _resolve_stage_proxy(
-        approve_proxy,
-        proxy,
-        stage_proxies["approve"],
-        _stage_proxy_is_configured(paypal_cfg, "approve", "confirm"),
-        single_proxy_overrides,
-    )
-    # Promotion 阶段 opt-in: 仅显式传入或配置 promotion 代理时启用 (不回退到单代理/默认)
-    _promotion = promotion_proxy if promotion_proxy is not None else stage_proxies.get("promotion", "")
-
-    checkout_proxy = str(_checkout or "").strip()
-    provider_proxy = str(_provider or "").strip()
-    stripe_init_proxy = str(_stripe_init or provider_proxy).strip()
-    payment_method_proxy = str(_payment_method or provider_proxy).strip()
-    confirm_proxy = str(_confirm or provider_proxy).strip()
-    approve_proxy = str(_approve or "").strip()
-    promotion_proxy = str(_promotion or "").strip()
+    checkout_proxy = stage_proxies.checkout
+    provider_proxy = stage_proxies.provider
+    stripe_init_proxy = stage_proxies.stripe_init
+    payment_method_proxy = stage_proxies.payment_method
+    confirm_proxy = stage_proxies.confirm
+    approve_proxy = stage_proxies.approve
+    promotion_proxy = stage_proxies.promotion
     promotion_taxes = bool(paypal_cfg.get("promotion_taxes", False))
     promo_campaign_id = str(paypal_cfg.get("promo_campaign_id") or PLUS_TRIAL_CAMPAIGN_ID)
 

@@ -38,6 +38,7 @@ from .base import (
     PAYMENT_METHODS,
     _LOGGER,
     _config_data,
+    _forwardable_kwargs,
     _reference_root,
     _select_kwargs,
 )
@@ -94,26 +95,15 @@ def build_default_payment_registry() -> PaymentAdapterRegistry:
             access_token=access_token,
             proxy=proxy,
             auth_context=auth_context,
-            paypal_generation_type=kwargs.pop("paypal_generation_type", None),
             runtime_config=runtime_config,
-            **_select_kwargs(
+            # No hand-maintained option list: the entrypoint's own signature is
+            # the contract (see ``_forwardable_kwargs``). The 14-name whitelist
+            # that lived here had already grown a parameter the callee did not
+            # accept, which turned that option into a TypeError.
+            **_forwardable_kwargs(
+                generate_pp_link,
                 kwargs,
-                {
-                    "checkout_proxy",
-                    "provider_proxy",
-                    "stripe_init_proxy",
-                    "payment_method_proxy",
-                    "confirm_proxy",
-                    "approve_proxy",
-                    "promotion_proxy",
-                    "target_country",
-                    "checkout_country",
-                    "require_zero",
-                    "require_ba_token",
-                    "stage_proxy_countries",
-                    "max_checkout_retries",
-                    "max_stage_retries",
-                },
+                skip={"access_token", "proxy", "auth_context", "runtime_config"},
             ),
         )
 
