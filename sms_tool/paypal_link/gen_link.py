@@ -484,6 +484,8 @@ def generate_pp_link(
     require_ba_token: bool | None = None,
     stage_proxy_countries: dict[str, str] | None = None,
     runtime_config: Mapping[str, Any] | None = None,
+    max_stage_retries: int | None = None,
+    max_checkout_retries: int | None = None,
 ) -> dict[str, Any]:
     """生成 PayPal BA 直链 (兼容旧接口)。
 
@@ -496,6 +498,16 @@ def generate_pp_link(
         provider_proxy: Stage 2 代理 (Stripe)
         approve_proxy: Stage 3 代理 (approve)
         require_zero: 是否要求 0 元金额 (None 则从配置文件读取)
+        max_stage_retries: 单阶段重试预算；None 时读 ``paypal.max_stage_retries``
+        max_checkout_retries: Checkout 重建预算；None 时读
+            ``paypal.max_checkout_retries``
+
+    ``max_stage_retries`` / ``max_checkout_retries`` exist as parameters, not only
+    as config keys, because ``pay_link.registry.paypal_runner`` advertises them
+    to its callers -- it forwarded both before this signature accepted either,
+    which turned every option-carrying call into a ``TypeError``. The two-way
+    parity is pinned by
+    ``tests/payment/test_paypal_adapter_signature_parity.py``.
 
     Returns:
         {"ok": bool, "url": str, "ba_token": str, "cs_id": str, ...}
@@ -691,11 +703,19 @@ def generate_pp_link(
             preflight_proxy_check=bool(paypal_cfg.get("preflight_proxy_check", False)),
             rotate_proxy_sessions=bool(paypal_cfg.get("rotate_proxy_sessions", False)),
             proxy_probe_timeout=float(paypal_cfg.get("proxy_probe_timeout_seconds", 12) or 12),
-            max_stage_retries=int(
-                paypal_cfg.get("max_stage_retries", paypal_cfg.get("max_checkout_retries", RETRY_ATTEMPTS))
-                or RETRY_ATTEMPTS
+            max_stage_retries=(
+                _coerce_int(max_stage_retries, RETRY_ATTEMPTS)
+                if max_stage_retries is not None
+                else int(
+                    paypal_cfg.get("max_stage_retries", paypal_cfg.get("max_checkout_retries", RETRY_ATTEMPTS))
+                    or RETRY_ATTEMPTS
+                )
             ),
-            max_checkout_retries=int(paypal_cfg.get("max_checkout_retries", RETRY_ATTEMPTS) or RETRY_ATTEMPTS),
+            max_checkout_retries=(
+                _coerce_int(max_checkout_retries, RETRY_ATTEMPTS)
+                if max_checkout_retries is not None
+                else int(paypal_cfg.get("max_checkout_retries", RETRY_ATTEMPTS) or RETRY_ATTEMPTS)
+            ),
             proxy_state=state,
             stage_proxy_countries=stage_proxy_countries,
             device_id=device_id,
