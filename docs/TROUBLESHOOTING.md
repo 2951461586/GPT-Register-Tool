@@ -678,3 +678,34 @@ ERROR gw1 - Different tests were collected between gw0 and gw1
   test_write_shards_stages_every_shard_before_publishing_any`：断言第一次 rename
   之前**三片的临时文件都已存在**；`test_write_shards_keeps_old_file_when_replace_fails`
   追加「不留任何 staged 临时文件」。
+
+---
+
+## 19. 改了配置目录里的 `config.json`，但行为一点没变
+
+**现象**：在 `%LOCALAPPDATA%\GPTRegisterTool\config\config.json` 里改了
+`registration.fingerprint_pool` / `registration.chatgpt_bootstrap.enabled` /
+`registration.preflight_login_page` 之类的开关，重启后行为完全没变；`--doctor`
+也只报 `config_shards … present`，不报任何错误。
+
+**根因**：`sms_tool/config/loader.py:217` `load_merged_config()` 的规则是**任一分片存在即分片权威**。
+`config.json` 只在**首次迁移**时被读（`_split_into_shards` 写完三片之后就没有任何代码再读它），
+此后即使文件还在也被整文件忽略。配置目录里那份 `config.json` 通常是 `--init-config`
+之后的残留模板副本 —— 2026-10-23 实测它与仓库 `config.example.json` **逐键相同**。
+
+**一眼判断**（`27` = 只看分片；`55` = 分片缺失，读的是 legacy）：
+
+```text
+python -c "from sms_tool import config; print(len(config.CFG['registration']))"
+```
+
+**正确改法**：注册相关写 `runtime.json` 的 `registration` 段（`stage_timeouts`、
+`otp_poll_timeout` 等运行时项也在这一片），代理写 `proxy.json`，支付写 `payment.json`。
+桌面端设置页写的就是这三片，手工编辑后与它并存。
+
+**不要**把 loader 改成"分片 + `config.json` 合并"：这条优先级规则与 C#
+`ConfigStore` 共享（见 §17 的"优先级规则没有改"一段），单向改动会让两端对"当前配置"
+给出不同答案，而 `config_schema.json` 的跨语言检查看不到语义差异。
+
+**处置建议**：删掉或移走那个 `config.json`。它一旦被移走，`load_merged_config()` 也不会
+回落到 legacy 分支（因为分片仍在），所以是纯清理、零行为变化。

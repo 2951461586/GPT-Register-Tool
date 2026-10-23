@@ -516,6 +516,16 @@ neither the password arm nor the warm-up is what matters. The SDK cannot be used
 without SO (`create_account` -> `registration_disallowed`, 0/5). n is small and the
 exit/mailbox supplier are single; treat it as a strong lead, not a proven fix.
 
+Update 2026-10-23 (scan `scan-2026-10-23-live-protocol-registration-at-survival.md`):
+re-measured on the shipped default stack (passwordless + explicit send-otp, SDK
+`20260810913b` with SO, reference lane off, warm-up off, 2FA on) with **3 fresh
+accounts on US residential exits** (Proxylane, Charter/Comcast) and a different
+mailbox supplier (ReMail iCloud): registration 3/3, and every account answered
+HTTP 200 at 1/5/10/15 min, at 60 min, and again at 135-142 min. Nothing dropped
+inside the 10-minute window the 2026-10-11 audit made the failure signature. n=3,
+one exit supplier and one mailbox source, so the attribution to "old SDK / missing
+SO" is still an inference, not a proven cause.
+
 The shipped default is that measured stack: passwordless `login_or_signup`, SDK
 `20260810913b` with the SO header, `reference_lane` off, warm-up off
 (`tests/registration/test_default_registration_stack.py` pins it). No switch is needed to get it.

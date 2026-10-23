@@ -43,3 +43,50 @@
   `ConfigError: chatgpt must be an object`（两次 CI 各挂一个 worker）。现在每个 worker 各建
   一个目录；分片写入同时改为两阶段发布（先 staged 全部变更分片，再连续 rename），把该窗口
   从两次 `fsync` 压到三次 rename。详见 [`TROUBLESHOOTING.md` §18](../TROUBLESHOOTING.md)。
+
+---
+
+---
+
+## 重新发布记录
+
+两次重新发布都只换构建产物与文档，没有改注册 / 支付的对外行为。资产校验值见
+`GPT-Register-Tool-v2026.10.23.sha256.txt`。
+
+### 第一次重新发布（构建自 `cc433f0`）
+
+v2026.10.23 首次发布后，CI 在并行测试阶段失败；三个资产已用修复后的提交重新构建并覆盖
+（配置目录隔离那条修复的细节见 `docs/TROUBLESHOOTING.md` §18）。
+
+- **dotnet warning ratchet 的 GBK 解码测试依赖开发机 locale** —— 在 en-US runner（cp1252）上
+  必然失败，已改为注入被测 codec。
+
+### 第二次重新发布
+
+一次线上复测（3 个新号、US 住宅出口、出厂默认栈）暴露了一处只在**日志与产物**里可见的缺陷，
+单独修掉后再发一轮；代码修复在该提交的父提交里（`git log --oneline -2 v2026.10.23`）。
+
+- **计时表 `TOTAL` 是 epoch 量级** —— `_run_bootstrap` tick 了 `0-Bootstrap` 之后，
+  `_bootstrap()` 内部又跑两个 `_run_stage`（sentinel / identity）；嵌套 stage 的 `finally`
+  把共享的 `_timing_open` 清成 `False`，外层 `finally` 因此跳过关闭，该行保留
+  `time.time()` 原值，`TOTAL` 与结果里的 `timing.total_seconds` 都变成 epoch
+  （三次实测：`1792761800.40` / `1792762059.69` / `1792762179.63`）。
+  `_safe_tock()` 修不了它——只关最后一行，而此时最后一行是 identity stage。改为
+  `registration_protocol_helpers.tock_named(timings, name, *, now=None)` 按名字就地关闭：
+  顺序不变、幂等、时钟可注入。回归 `tests/registration/test_registration_bootstrap_timing.py`
+  （6 例，含"修复必须留在 `protocol_helpers` 而不是 utils / 门面"这条位置约束——三个棘轮共同
+  限定它：私有导入棘轮、泳道耦合棘轮、已提交的依赖图）。
+
+同批确认，不改代码，仅记录：
+
+- **十分钟掉号不复现** —— 出厂默认栈（passwordless + 显式 send-otp、Sentinel
+  `20260810913b` + SO、reference lane 关、预热关、2FA 开），3 个新号在 1 / 5 / 10 / 15 分钟、
+  60 分钟、135–142 分钟全部 HTTP 200。测量口径与证据见
+  `docs/audits/scans/scan-2026-10-23-live-protocol-registration-at-survival.md`。
+- **配置目录里的 `config.json` 是静默失效的** —— 它是与 `config.example.json` 逐键相同的
+  模板副本，其中 55 个 `registration.*` 键一个都不生效（`load_merged_config()`：任一分片存在
+  即分片权威）。已写入 `docs/TROUBLESHOOTING.md` §19。
+
+本次三个资产由 `scripts/build_installer.ps1` 从 tag `v2026.10.23` 指向的提交构建；
+`SmsWorkbench.exe` 的 ProductVersion 形如 `2026.10.23+<提交号>`，其中的提交号就是该 tag
+指向的提交（`git rev-parse v2026.10.23`）。
