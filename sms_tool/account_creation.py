@@ -64,7 +64,16 @@ def _is_user_already_exists(create_data):
     return str(error.get("code") or "").strip() == "user_already_exists"
 
 
-def _validate_email_otp(session, auth_base, base_headers, code, sentinel_data=None, use_sentinel=True):
+def _validate_email_otp(
+    session,
+    auth_base,
+    base_headers,
+    code,
+    sentinel_data=None,
+    use_sentinel=True,
+    flow_invocation_id="",
+    document_navigation_id="",
+):
     # Primary endpoint: same as codex_oauth (proven working)
     primary_endpoint = "/api/accounts/email-otp/validate"
     fallback_endpoints = [
@@ -73,13 +82,17 @@ def _validate_email_otp(session, auth_base, base_headers, code, sentinel_data=No
         "/api/accounts/verify-email",
     ]
     did = str((base_headers or {}).get("oai-device-id") or (base_headers or {}).get("Oai-Device-Id") or "").strip()
+    extra = {"content-type": "application/json"}
+    if document_navigation_id:
+        extra["x-openai-document-navigation-id"] = str(document_navigation_id)
     validate_headers = {
         **(base_headers or {}),
         **openai_auth_headers(
             did,
             referer=f"{auth_base}/email-verification",
             origin=auth_base,
-            extra={"content-type": "application/json"},
+            flow_invocation_id=str(flow_invocation_id or ""),
+            extra=extra,
         ),
     }
     if use_sentinel:

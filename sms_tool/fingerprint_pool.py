@@ -276,9 +276,9 @@ class FingerprintPool:
             return self._with_geo(
                 ProtocolEnvironmentProfile(
                     name="default",
-                    impersonate="chrome146",
-                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
-                    sec_ch_ua='"Chromium";v="146", "Google Chrome";v="146", "Not.A/Brand";v="99"',
+                    impersonate="chrome150",
+                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
+                    sec_ch_ua='"Google Chrome";v="150", "Chromium";v="150", "Not(A:Brand";v="24"',
                 ),
                 proxy,
             )

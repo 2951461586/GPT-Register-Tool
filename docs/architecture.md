@@ -209,11 +209,11 @@ above.
 <!-- ratchet-numbers:begin architecture -->
 | Measure | Value |
 | --- | --- |
-| Module-level cross-directory edges | 453 |
-| Directory pairs | 66 |
-| Mutual pairs / minority-direction edges | 18 / 49 |
-| Delayed cross-directory edges | 253 |
-| Delayed imports in the package | 417 (baseline 417) |
+| Module-level cross-directory edges | 448 |
+| Directory pairs | 65 |
+| Mutual pairs / minority-direction edges | 17 / 47 |
+| Delayed cross-directory edges | 257 |
+| Delayed imports in the package | 421 (baseline 421) |
 | Claimed tracked `sms_tool` modules | 311 of 311 (0 unclaimed, 41 directory-map groups) |
 <!-- ratchet-numbers:end architecture -->
 

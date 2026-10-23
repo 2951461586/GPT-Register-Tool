@@ -22,8 +22,7 @@ DEFAULT_SEC_CH_UA = ""
 #: The web build the `chatgpt`-family requests claim (`data-seq` / `data-build` of
 #: `chatgpt.com/auth/login`, read live 2026-10-12).  The previous pair
 #: (8370486 / prod-fb4a8a2a...) was months stale; the reference project tracks the page the same way.
-CHATGPT_CLIENT_BUILD_NUMBER = "12072619"
-CHATGPT_CLIENT_VERSION = "prod-197b1679dd37497ea6d03e0b6944e5ab66561ed8"
+CHATGPT_CLIENT_VERSION = "26.1022.91109"
 
 # Firefox (first) is the primary impersonation. At ChatGPT's edge, Cloudflare
 # challenges Chrome TLS/HTTP2 with HTTP 403 while Firefox passes, so the protocol
@@ -74,6 +73,21 @@ AUTH_FINGERPRINT_PROFILES = {
         "sec_ch_ua_platform": '"Windows"',
     },
     # ── Chrome family (CF-edge fallback, minority weight) ─────────────────────
+    "chrome150": {
+        # Newest impersonation curl_cffi 0.16.0 exposes (the 2026-10-23 HAR is
+        # Chrome 155, which curl_cffi cannot mimic yet). Closest supported
+        # version, and the only profile whose client hints match the current
+        # Not(A:Brand grease token.
+        "name": "chrome150",
+        "impersonate": "chrome150",
+        "user_agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
+        ),
+        "sec_ch_ua": '"Google Chrome";v="150", "Chromium";v="150", "Not(A:Brand";v="24"',
+        "sec_ch_ua_mobile": "?0",
+        "sec_ch_ua_platform": '"Windows"',
+    },
     "chrome146": {
         "name": "chrome146",
         "impersonate": "chrome146",
@@ -81,7 +95,7 @@ AUTH_FINGERPRINT_PROFILES = {
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
         ),
-        "sec_ch_ua": '"Chromium";v="146", "Google Chrome";v="146", "Not.A/Brand";v="99"',
+        "sec_ch_ua": '"Google Chrome";v="146", "Chromium";v="146", "Not(A:Brand";v="24"',
         "sec_ch_ua_mobile": "?0",
         "sec_ch_ua_platform": '"Windows"',
     },
@@ -92,7 +106,7 @@ AUTH_FINGERPRINT_PROFILES = {
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
         ),
-        "sec_ch_ua": '"Chromium";v="145", "Google Chrome";v="145", "Not.A/Brand";v="99"',
+        "sec_ch_ua": '"Google Chrome";v="145", "Chromium";v="145", "Not(A:Brand";v="24"',
         "sec_ch_ua_mobile": "?0",
         "sec_ch_ua_platform": '"Windows"',
     },
@@ -103,7 +117,7 @@ AUTH_FINGERPRINT_PROFILES = {
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
         ),
-        "sec_ch_ua": '"Chromium";v="142", "Google Chrome";v="142", "Not.A/Brand";v="99"',
+        "sec_ch_ua": '"Google Chrome";v="142", "Chromium";v="142", "Not(A:Brand";v="24"',
         "sec_ch_ua_mobile": "?0",
         "sec_ch_ua_platform": '"Windows"',
     },
@@ -114,7 +128,7 @@ AUTH_FINGERPRINT_PROFILES = {
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
         ),
-        "sec_ch_ua": '"Chromium";v="136", "Google Chrome";v="136", "Not.A/Brand";v="99"',
+        "sec_ch_ua": '"Google Chrome";v="136", "Chromium";v="136", "Not(A:Brand";v="24"',
         "sec_ch_ua_mobile": "?0",
         "sec_ch_ua_platform": '"Windows"',
     },
@@ -125,7 +139,7 @@ AUTH_FINGERPRINT_PROFILES = {
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
         ),
-        "sec_ch_ua": '"Chromium";v="131", "Google Chrome";v="131", "Not.A/Brand";v="99"',
+        "sec_ch_ua": '"Google Chrome";v="131", "Chromium";v="131", "Not(A:Brand";v="24"',
         "sec_ch_ua_mobile": "?0",
         "sec_ch_ua_platform": '"Windows"',
     },
@@ -136,7 +150,7 @@ AUTH_FINGERPRINT_PROFILES = {
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         ),
-        "sec_ch_ua": '"Chromium";v="124", "Google Chrome";v="124", "Not.A/Brand";v="99"',
+        "sec_ch_ua": '"Google Chrome";v="124", "Chromium";v="124", "Not(A:Brand";v="24"',
         "sec_ch_ua_mobile": "?0",
         "sec_ch_ua_platform": '"Windows"',
     },
@@ -258,7 +272,9 @@ _HARDWARE_PROFILES = {
     "windows": {
         "navigator_platform": "Win32",
         "max_touch_points": 0,
-        "sec_ch_ua_platform_version": "10.0.0",
+        # Windows 11 24H2+ reports 19.0.0 (HAR 2026-10-23); Win10 reports
+        # 10.0.0. The UA stays "Windows NT 10.0" for both.
+        "sec_ch_ua_platform_version": "19.0.0",
     },
     "macos": {
         "navigator_platform": "MacIntel",
@@ -675,7 +691,7 @@ def sentinel_fingerprint() -> dict[str, object]:
         "performance_now": device["performance_now"],
         # Sec-CH-UA-* client hints are Chromium-only; Firefox emits none of them.
         "sec_ch_ua_full_version_list": (
-            f'"Chromium";v="{version}", "Google Chrome";v="{version}", "Not.A/Brand";v="99"' if is_chrome else ""
+            f'"Google Chrome";v="{version}", "Chromium";v="{version}", "Not(A:Brand";v="24.0.0.0"' if is_chrome else ""
         ),
         "sec_ch_ua_arch": "x86" if is_chrome else "",
         "sec_ch_ua_bitness": "64" if is_chrome else "",
@@ -813,7 +829,9 @@ def openai_auth_headers(
     elif str(family or "").strip().lower() == "chatgpt":
         headers.update(
             {
-                "oai-client-build-number": CHATGPT_CLIENT_BUILD_NUMBER,
+                # The 2026-10-23 HAR carries only `oai-client-version` on
+                # chatgpt.com backend requests; the old build-number header is
+                # no longer sent by the web client.
                 "oai-client-version": CHATGPT_CLIENT_VERSION,
             }
         )

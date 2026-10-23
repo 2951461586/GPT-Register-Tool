@@ -66,6 +66,7 @@ class _Stage:
             device_id="did-1",
             session_logging_id="log-1",
             flow_invocation_id="flow-1",
+            document_navigation_id="nav-1",
             registration_mode="password" if password_lane else "passwordless",
             signup_state={"url": f"{AUTH}/email-verification"},
             otp_send_dump={},
@@ -161,8 +162,10 @@ def test_toggle_posts_send_otp_like_the_browser_page():
     assert headers["Referer"] == f"{AUTH}/email-verification"
     assert headers["Origin"] == AUTH
     assert headers["openai-sentinel-token"] == "sentinel-json"
-    assert headers["x-access-flow-invocation-id"] == "flow-1"
-    assert headers["x-openai-document-navigation-id"]
+    # Per-request id (HAR 2026-10-23): not the run-level "flow-1".
+    assert headers["x-access-flow-invocation-id"]
+    assert headers["x-access-flow-invocation-id"] != "flow-1"
+    assert headers["x-openai-document-navigation-id"] == "nav-1"
     assert headers["Sec-Fetch-Mode"] == "cors"
     # Absent is not enough: libcurl then labels the empty POST form-urlencoded
     # and the server answers 400 unsupported_content_type (live, 2026-10-11).

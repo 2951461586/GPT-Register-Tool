@@ -30,7 +30,9 @@ Rule 10: pure stdlib + ``common`` only, never ``sms_tool``.
 from __future__ import annotations
 
 import hashlib
+import os
 import re
+from collections.abc import Callable, Mapping, Sequence
 from urllib.parse import unquote
 
 from .proxy_url import normalize_proxy_url
@@ -53,6 +55,44 @@ def normalize_pre_proxy_url(proxy: str) -> str:
     return normalize_proxy_url(proxy)
 
 
+#: Values that mean "no pre-proxy" in any provider's ``*_PRE_PROXY`` variable.
+#: One set, so a new disabled spelling cannot be honoured by one extractor and
+#: ignored by another.
+PRE_PROXY_DISABLED_VALUES = frozenset({"", "0", "off", "none", "direct", "disabled"})
+
+
+def resolve_pre_proxy_url(
+    env_names: Sequence[str],
+    *,
+    normalize: Callable[[str], str],
+    register: Callable[[str], None],
+    environ: Mapping[str, str] | None = None,
+) -> str:
+    """Resolve the local pre-proxy from the first present provider variable.
+
+    ``pre_proxy_url`` was AST-identical in ideal / twint / blik apart from the
+    env-var prefix (and blik's dead ``raw = ""`` tail, which could only ever
+    return ``""``). The resolver is shared; ``normalize`` and ``register`` stay
+    injected because each extractor owns its own normaliser and its own
+    redaction registry -- ``register`` writes into *that* module's set, which is
+    exactly the "caller context" the consolidation plan requires to stay local.
+
+    ``environ`` is injectable so the differential test can drive the frozen
+    pre-merge body and this resolver with the same mapping.
+    """
+    source = os.environ if environ is None else environ
+    for name in env_names:
+        if name not in source:
+            continue
+        raw = str(source.get(name, "")).strip()
+        if raw.lower() in PRE_PROXY_DISABLED_VALUES:
+            return ""
+        proxy = normalize(raw)
+        register(proxy)
+        return proxy
+    return ""
+
+
 def proxy_chain_key(proxy: str) -> str:
     """Return a redacted identity that stays stable across country rewrites."""
     proxy = unquote(normalize_proxy_url(proxy))
@@ -64,7 +104,9 @@ def proxy_chain_key(proxy: str) -> str:
 
 
 __all__ = [
+    "PRE_PROXY_DISABLED_VALUES",
     "PROXY_COUNTRY_SELECTOR_RE",
     "normalize_pre_proxy_url",
     "proxy_chain_key",
+    "resolve_pre_proxy_url",
 ]

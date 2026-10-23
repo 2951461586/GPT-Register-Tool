@@ -561,6 +561,31 @@ chain records the account as terminal. A 401 access token on such an account is
 therefore usually a deactivated account, not a refreshable session: 0 of 43 recent
 401 iCloud accounts could be relogged in, 28 were confirmed deactivated.
 
+## Client fingerprint baseline (2026-10-23 HAR)
+
+The 2026-10-23 `chatgpt.com` HAR (Chrome 155 / Windows 11 24H2) is the current
+reference for the protocol lane's client hints. Values the code must keep in
+sync (`sms_tool/auth_headers.py`, `sms_tool/fingerprint_pool.py`):
+
+| Field | Current value | Note |
+| --- | --- | --- |
+| `sec-ch-ua` | `"Google Chrome";v="…", "Chromium";v="…", "Not(A:Brand";v="24"` | Google Chrome first; the old `Not.A/Brand";v="99"` token is stale |
+| `sec-ch-ua-full-version-list` | same order/token, `"Not(A:Brand";v="24.0.0.0"` | built from the profile's major version |
+| `sec-ch-ua-platform-version` | `19.0.0` | Windows 11 24H2+; the UA still says `Windows NT 10.0` |
+| `oai-client-version` | `26.1022.91109` | chatgpt.com backend requests; the web client no longer sends `oai-client-build-number` |
+| `x-openai-document-navigation-id` | one page-level value | sent on `passwordless/send-otp`, `email-otp/validate` and `create_account` |
+| `x-access-flow-invocation-id` | one value **per request** | the three auth POSTs differ; the run-level value in `base_headers` is overridden |
+
+The profile matrix keeps `chrome146` as a persisted-account key and adds
+`chrome150` — the newest impersonation `curl_cffi` 0.16.0 exposes. The HAR's
+Chrome 155 cannot be mimicked by `curl_cffi`, so 150 is the closest supported
+version.
+
+Sentinel SDK: the HAR was served `20260219f9f6`; the repo pins the newer
+`20260810913b` (both are still served). No endpoint or request-body change was
+observed: `passwordless/send-otp` is body-less, `email-otp/validate` sends
+`{"code"}`, and `create_account` sends `{"name","birthdate"}`.
+
 ## Validation limits
 
 Offline tests cover step ordering, redirect classification and Sentinel header

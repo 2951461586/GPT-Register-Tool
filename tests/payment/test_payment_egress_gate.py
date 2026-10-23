@@ -18,12 +18,36 @@ class _ProbeResult:
     error: str = ""
 
 
-def _cfg(enabled=True, ttl=600):
+def _cfg(enabled: object = True, ttl: int = 600):
+    # ``enabled`` is ``object`` because the parser tests feed the string
+    # spellings ("false"/"0"/"no") a hand-edited config can carry.
     return {
         "chatgpt": {"auth_base_url": "https://auth.openai.com", "chat_base_url": "https://chatgpt.com"},
         "proxy": {"default": "", "pool": []},
         "protocol_payments": {"egress_check": {"enabled": enabled, "cache_ttl_seconds": ttl}},
     }
+
+
+class EgressGateSettingsTests(unittest.TestCase):
+    @staticmethod
+    def _settings(enabled: object):
+        return payment_egress._gate_settings(
+            {"protocol_payments": {"egress_check": {"enabled": enabled, "cache_ttl_seconds": 600}}}
+        )
+
+    def test_string_false_disables_the_gate(self):
+        # Hand-edited configs and CLI-derived mappings carry "false", which
+        # ``bool("false")`` answered as enabled.
+        for spelling in ("false", "0", "no", "FALSE"):
+            with self.subTest(spelling=spelling):
+                enabled, *_ = self._settings(spelling)
+                self.assertFalse(enabled)
+
+    def test_absent_or_unparsable_value_keeps_the_gate_on(self):
+        enabled, *_ = payment_egress._gate_settings({"protocol_payments": {"egress_check": {}}})
+        self.assertTrue(enabled)
+        enabled, *_ = self._settings("maybe")
+        self.assertTrue(enabled)
 
 
 class EgressGateTests(unittest.TestCase):

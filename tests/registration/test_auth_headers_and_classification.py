@@ -4,7 +4,6 @@ from unittest.mock import patch
 from sms_tool import auth_headers
 from sms_tool.auth_headers import (
     AUTH_IMPERSONATE,
-    CHATGPT_CLIENT_BUILD_NUMBER,
     CHATGPT_CLIENT_VERSION,
     DEFAULT_SEC_CH_UA,
     DEFAULT_USER_AGENT,
@@ -57,8 +56,10 @@ class AuthHeadersAndClassificationTests(unittest.TestCase):
         nextauth = nextauth_headers("did", session_id="sid")
         chat = chatgpt_headers("did", session_id="sid")
         self.assertNotIn("traceparent", nextauth)
+        # The 2026-10-23 HAR carries only ``oai-client-version``; the web
+        # client no longer sends the build-number header.
         self.assertNotIn("oai-client-build-number", nextauth)
-        self.assertEqual(chat["oai-client-build-number"], CHATGPT_CLIENT_BUILD_NUMBER)
+        self.assertNotIn("oai-client-build-number", chat)
         self.assertEqual(chat["oai-client-version"], CHATGPT_CLIENT_VERSION)
         self.assertEqual(chat["oai-session-id"], "sid")
 
@@ -72,6 +73,41 @@ class AuthHeadersAndClassificationTests(unittest.TestCase):
             version = AUTH_IMPERSONATE.removeprefix("chrome")
             self.assertIn(f"Chrome/{version}.", DEFAULT_USER_AGENT)
             self.assertIn(f'v="{version}"', DEFAULT_SEC_CH_UA)
+
+    def test_auth_request_headers_forwards_per_request_ids(self):
+        from sms_tool.auth_wire import _auth_request_headers
+
+        headers = _auth_request_headers(
+            {"X-Base": "1"},
+            did="did-1",
+            flow_invocation_id="inv-1",
+            extra={"x-openai-document-navigation-id": "nav-1"},
+        )
+        self.assertEqual(headers["x-access-flow-invocation-id"], "inv-1")
+        self.assertEqual(headers["x-openai-document-navigation-id"], "nav-1")
+
+    def test_chrome_client_hints_use_the_current_brand_token(self):
+        """Chrome 155 (HAR 2026-10-23) puts Google Chrome first and uses
+        ``Not(A:Brand";v="24"``; the old ``Not.A/Brand";v="99"`` is stale."""
+        for name, profile in auth_headers.AUTH_FINGERPRINT_PROFILES.items():
+            if not name.startswith("chrome"):
+                continue
+            with self.subTest(profile=name):
+                self.assertTrue(profile["sec_ch_ua"].startswith('"Google Chrome";v="'), profile["sec_ch_ua"])
+                self.assertIn('"Not(A:Brand";v="24"', profile["sec_ch_ua"])
+                self.assertNotIn("Not.A/Brand", profile["sec_ch_ua"])
+
+    def test_chrome150_is_the_newest_supported_profile(self):
+        profile = auth_headers.AUTH_FINGERPRINT_PROFILES["chrome150"]
+        self.assertEqual(profile["impersonate"], "chrome150")
+        self.assertIn("Chrome/150.", profile["user_agent"])
+        self.assertIn('v="150"', profile["sec_ch_ua"])
+
+    def test_windows_platform_version_matches_the_har(self):
+        self.assertEqual(
+            hardware_profile_for_family("chrome150")["sec_ch_ua_platform_version"],
+            "19.0.0",
+        )
 
     def test_rotated_fingerprint_keeps_tls_and_client_hints_coherent(self):
         cfg = {"mode": "rotate", "profiles": ["chrome124", "chrome131"]}
@@ -271,7 +307,8 @@ class FamilyHardwareProfileTests(unittest.TestCase):
             fp = sentinel_fingerprint()
             self.assertEqual(fp["navigator_platform"], "Win32")
             self.assertEqual(fp["max_touch_points"], 0)
-            self.assertEqual(fp["sec_ch_ua_platform_version"], "10.0.0")
+            # HAR 2026-10-23 is Windows 11 24H2; the UA stays Windows NT 10.0.
+            self.assertEqual(fp["sec_ch_ua_platform_version"], "19.0.0")
         # Only Chrome carries the Google vendor; Firefox's vendor is empty.
         auth_headers._AUTH_FINGERPRINT_LOCAL.profile_name = "firefox144"
         self.assertEqual(sentinel_fingerprint()["navigator_vendor"], "")
@@ -351,9 +388,11 @@ class FingerprintPoolVersionMatrixTests(unittest.TestCase):
             auth_headers.AUTH_FINGERPRINT_PROFILES["firefox144"]["user_agent"],
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0",
         )
+        # The profile *name* is the persisted-account key and stays chrome146;
+        # its client hints follow the current Chrome format (HAR 2026-10-23).
         self.assertEqual(
             auth_headers.AUTH_FINGERPRINT_PROFILES["chrome146"]["sec_ch_ua"],
-            '"Chromium";v="146", "Google Chrome";v="146", "Not.A/Brand";v="99"',
+            '"Google Chrome";v="146", "Chromium";v="146", "Not(A:Brand";v="24"',
         )
 
     def test_matrix_spans_firefox_chrome_safari_with_ios(self):

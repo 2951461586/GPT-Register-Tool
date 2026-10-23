@@ -17,7 +17,7 @@ Boundary with the neighbouring modules:
   the tests that mock it) keeps working unchanged.
 
 They are module-level functions that take the workflow instance as their first
-parameter, named ``workflow`` and annotated with ``RegistrationEmailWorkflow``
+parameter, named ``workflow`` and annotated with ``RegistrationWorkflow``
 under ``TYPE_CHECKING``, so the type checker resolves the workflow's attributes
 without a runtime import cycle back into ``registration_handlers``.
 """
@@ -35,12 +35,12 @@ from .state import RegistrationState
 from ..kernel.sanitizer import describe_exception
 
 if TYPE_CHECKING:  # pragma: no cover - import cycle guard for type checkers only
-    from .handlers import RegistrationEmailWorkflow
+    from .state import RegistrationWorkflow
 
 _LOGGER = logging.getLogger(__name__)
 
 
-def checkpoint_payload(workflow: RegistrationEmailWorkflow) -> dict[str, Any]:
+def checkpoint_payload(workflow: RegistrationWorkflow) -> dict[str, Any]:
     """Build this run's checkpoint payload (data contract lives in ``registration_checkpoint``)."""
     payload = registration_checkpoint.build_checkpoint_payload(
         workflow.runtime, lambda: workflow.r._mailbox_snapshot(workflow.runtime.mailbox)
@@ -49,7 +49,7 @@ def checkpoint_payload(workflow: RegistrationEmailWorkflow) -> dict[str, Any]:
     return payload
 
 
-def persist_checkpoint(workflow: RegistrationEmailWorkflow, state: str) -> None:
+def persist_checkpoint(workflow: RegistrationWorkflow, state: str) -> None:
     """Write the checkpoint at a stage boundary; a failure is a warning, never fatal."""
     s = workflow.runtime
     if not s.username:
@@ -70,7 +70,7 @@ def persist_checkpoint(workflow: RegistrationEmailWorkflow, state: str) -> None:
         _emit(_LOGGER, "  [Checkpoint] persist warning: %s", describe_exception(exc))
 
 
-def resume_post_create(workflow: RegistrationEmailWorkflow) -> dict[str, Any] | None:
+def resume_post_create(workflow: RegistrationWorkflow) -> dict[str, Any] | None:
     """Re-enter the pipeline from a saved post-create checkpoint, or ``None``.
 
     The account and token already exist at this point, so signup and OTP stay
@@ -119,7 +119,7 @@ def resume_post_create(workflow: RegistrationEmailWorkflow) -> dict[str, Any] | 
     return workflow._run_stage(RegistrationState.FINALIZE, "10-Finalize resumed registration", workflow.finalize)
 
 
-def has_resume_checkpoint(workflow: RegistrationEmailWorkflow) -> bool:
+def has_resume_checkpoint(workflow: RegistrationWorkflow) -> bool:
     """True when this mailbox has a resumable checkpoint and a mailbox was supplied."""
     if workflow.input_mailbox is None:
         return False

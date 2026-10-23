@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any
@@ -11,7 +11,6 @@ from typing import Any
 from .catalog import PAYMENT_METHODS, normalize_payment_method
 from .flow import PaymentStage, STAGE_ORDER, normalize_payment_stage, payment_flow_profile
 from ..proxy.entry import parse_proxy_list, resolve_proxy_value
-from ..proxy.routing import canonical_payment_pools
 
 
 LEGACY_STAGE_KEYS: dict[str, tuple[str, ...]] = {
@@ -53,22 +52,16 @@ _DEFAULT_GROUP_BY_STAGE = {
     PaymentStage.ARTIFACT.value: "checkout",
 }
 
-_ROUTE_STAGE_ALIASES = {
-    "provider": PaymentStage.STRIPE_INIT.value,
-    "update": PaymentStage.PROMOTION.value,
-    "promotion_update": PaymentStage.PROMOTION.value,
-    "taxes": PaymentStage.STRIPE_INIT.value,
-    "resolve": PaymentStage.STRIPE_INIT.value,
-    "custom_capability": PaymentStage.PAYMENT_METHOD.value,
-    "start": PaymentStage.CONFIRM.value,
-    "final_review": PaymentStage.APPROVE.value,
-    "follow_redirect": PaymentStage.REDIRECT.value,
-}
-
 
 def route_stage(value: Any) -> str:
-    raw = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
-    return _ROUTE_STAGE_ALIASES.get(raw) or normalize_payment_stage(raw)
+    """Normalise a stage name through the single vocabulary in ``flow.py``.
+
+    This module used to carry its own alias table, five of whose keys also
+    existed in ``flow.STAGE_ALIASES``. Two tables can disagree; the extras
+    (``taxes`` / ``resolve`` / ``start`` / ``custom_capability``) now live in
+    ``flow.STAGE_ALIASES`` and this function only delegates.
+    """
+    return normalize_payment_stage(value)
 
 
 def _allowed_approve_countries(payment_method: str) -> tuple[str, ...]:
@@ -237,7 +230,14 @@ class PaymentRoutePlan:
 
 
 class PaymentRoutePlanner:
-    def __init__(self, config: Mapping[str, Any], *, proxy_state: Any = None) -> None:
+    def __init__(
+        self,
+        config: Mapping[str, Any],
+        *,
+        proxy_state: Any = None,
+        selector: Callable[[list[str], str, str], tuple[str, list[dict[str, Any]]]] | None = None,
+        rotator: Callable[[str, str], str] | None = None,
+    ) -> None:
         self.config = config
         _protocol_raw: object = config.get("protocol_payments")
         self.protocol: Mapping[str, Any] = _protocol_raw if isinstance(_protocol_raw, Mapping) else {}
@@ -246,6 +246,27 @@ class PaymentRoutePlanner:
 
             proxy_state = proxy_state_from_config(config)
         self.proxy_state = proxy_state
+        # Selection seams. ``plan()`` needs a live pool probe and a session
+        # rotation, which made it untestable without network and put I/O in a
+        # function that otherwise only shapes data. Both default to the real
+        # implementation; a test injects fakes. The imports stay function-local
+        # so importing this module does not pull ``paypal.proxy``.
+        self._selector = selector
+        self._rotator = rotator
+
+    def _select_proxy(self, pool: list[str], expected: str, stage: str) -> tuple[str, list[dict[str, Any]]]:
+        if self._selector is not None:
+            return self._selector(pool, expected, stage)
+        from ..paypal.proxy import select_proxy_from_pool
+
+        return select_proxy_from_pool(pool, expected, stage, state=self.proxy_state)
+
+    def _rotate_proxy(self, proxy: str, expected: str) -> str:
+        if self._rotator is not None:
+            return self._rotator(proxy, expected)
+        from ..paypal.proxy import rotate_proxy_session
+
+        return rotate_proxy_session(proxy, expected)
 
     def plan(
         self,
@@ -404,8 +425,10 @@ class PaymentRoutePlanner:
             if not chosen_base:
                 ordered = list(pool)
                 if ordered and pool_offset:
-                    # pi-lens-ignore: unchecked-throwing-call-python
-                    offset = int(pool_offset) % len(ordered)
+                    # ``pool_offset`` is declared ``int`` on ``plan()``; the old
+                    # ``int(pool_offset)`` was redundant and looked like an
+                    # unguarded numeric parse to the scanner.
+                    offset = pool_offset % len(ordered)
                     ordered = ordered[offset:] + ordered[:offset]
                 explicit_seed = bool(values.get("proxy") or values.get("checkout_proxy"))
                 scalar_group = (
@@ -421,13 +444,10 @@ class PaymentRoutePlanner:
                     and not (explicit_seed and len(ordered) == 1 and self._proxy_value(ordered[0]) == default)
                 )
                 if should_probe:
-                    from ..paypal.proxy import select_proxy_from_pool
-
-                    chosen_base, stage_attempts = select_proxy_from_pool(
+                    chosen_base, stage_attempts = self._select_proxy(
                         ordered,
                         selection_expected,
                         selection_stage,
-                        state=self.proxy_state,
                     )
                     if not chosen_base:
                         raise RuntimeError(f"payment_{selection_stage}_proxy_pool_unavailable")
@@ -456,12 +476,10 @@ class PaymentRoutePlanner:
                 bool(explicit) or scalar_group or group_name.startswith("configured:") or bool(shared_override)
             )
             if chosen and expected and (country_requested or not scalar_route):
-                from ..paypal.proxy import rotate_proxy_session
-
                 rotation_key = (chosen, expected)
                 chosen = rotated_sessions.get(rotation_key)
                 if not chosen:
-                    chosen = rotate_proxy_session(chosen_base, expected)
+                    chosen = self._rotate_proxy(chosen_base, expected)
                     rotated_sessions[rotation_key] = chosen
             selected[stage] = chosen
             attempts[stage] = tuple(stage_attempts)
@@ -488,6 +506,14 @@ class PaymentRoutePlanner:
         named = {str(name): tuple(parse_proxy_pool(value)) for name, value in raw.items()}
         # Optional canonical region pools (``proxy.lanes.payment.pools``) merge
         # over the legacy names; absent, this returns the legacy map unchanged.
+        #
+        # Function-local on purpose: ``proxy.routing`` imports ``phone_proxy``
+        # at module scope, which imports ``requests``. A module-level import
+        # here made every ``payment.routing`` consumer pay ~300 ms for a
+        # helper used by one branch; the planner is pure data shaping and must
+        # not pull a transport stack in.
+        from ..proxy.routing import canonical_payment_pools
+
         canonical = canonical_payment_pools(self.config)
         if canonical:
             for name, pool in canonical.items():

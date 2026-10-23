@@ -76,6 +76,7 @@ from common.extractor_runtime import (
     PROXY_COUNTRY_SELECTOR_RE as _PROXY_COUNTRY_SELECTOR_RE,
     normalize_pre_proxy_url,
     proxy_chain_key,
+    resolve_pre_proxy_url as shared_resolve_pre_proxy_url,
 )
 from common.payload_helpers import (
     configured_country,
@@ -710,17 +711,18 @@ def set_proxy(session: Any, proxy: str) -> None:
 
 
 def pre_proxy_url() -> str:
-    """本机前置代理：本机代理 -> 文件代理 -> 目标站。"""
-    for name in ("IDEAL_PRE_PROXY", "PP_PRE_PROXY", "PP_LOCAL_PROXY"):
-        if name in os.environ:
-            raw = os.environ.get(name, "").strip()
-            if raw.lower() in {"", "0", "off", "none", "direct", "disabled"}:
-                return ""
-            proxy = normalize_pre_proxy_url(raw)
-            register_proxy_for_redaction(proxy)
-            return proxy
-    raw = ""
-    return normalize_pre_proxy_url(raw) if raw else ""
+    """本机前置代理：本机代理 -> 文件代理 -> 目标站。
+
+    Delegate to ``common/extractor_runtime.py`` (batch 8 of the consolidation).
+    The normaliser and the redaction registrar stay injected: the first knows
+    ideal's four-field convention, the second writes into *this* module's
+    registry. ``runtime/tmp/p0_pre_proxy_diff.py`` pins the claim input by input.
+    """
+    return shared_resolve_pre_proxy_url(
+        ("IDEAL_PRE_PROXY", "PP_PRE_PROXY", "PP_LOCAL_PROXY"),
+        normalize=normalize_pre_proxy_url,
+        register=register_proxy_for_redaction,
+    )
 
 
 def load_proxy_file(path: Path) -> list[str]:

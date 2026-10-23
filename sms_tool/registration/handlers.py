@@ -646,6 +646,7 @@ class RegistrationEmailWorkflow:
         s.device_id = c.device_id
         s.session_logging_id = c.session_logging_id
         s.flow_invocation_id = str(uuid.uuid4())
+        s.document_navigation_id = str(uuid.uuid4())
         self.browser_headless = c.browser_headless
         s.sentinel_token = str(s.sentinel_data.get("sentinel_token") or "")
         s.sentinel_authorize_token = str(s.sentinel_data.get("sentinel_authorize_continue_token") or "")

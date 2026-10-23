@@ -1,5 +1,17 @@
 # 立项：协议支付提取器公共骨架抽取（ideal / twint / blik）
 
+> **状态（2026-10-23 复核）**：**阶段 2 第二个小批次已落地**。`pre_proxy_url`（ideal / twint
+> 逐字节相同、blik 仅少两行死代码 `raw = ""`）下沉到 `common/extractor_runtime.py` 的
+> `resolve_pre_proxy_url`，三份薄封装保留、调用点零改动；`normalize` / `register` 由调用方注入
+> （每个 extractor 有自己的归一化器和脱敏注册表，正是 Rule 10 要求留在本地的「调用方上下文」）。
+> 仍无真实链路录制，因此按 `plan-2026-09-28-stage2-replay.md` 用**冻结的迁移前函数体**做
+> HEAD-vs-参数化差分：`tests/payment/stage2_pre_proxy_head.py` 保留 HEAD 原文（含死尾巴），
+> `tests/governance/test_stage2_replay_selfcheck.py` 让两侧接收同一 `environ` 映射与同一注入，
+> 覆盖 8 档环境形状 × ideal/twint/blik，并逐项比对返回值与 `register` 调用序列。
+> parity 基线同步收紧：`ideal:twint 27→26`；`ideal:blik=13`、`twint:blik=10` 不变（该函数两侧
+> 从 `different` 变为「委派 stub」，按 `is_delegating_stub` 不再计入重复度）。
+> 剩余 `stripe_*` / `run_*` / `new_session` / `build_ctx` 等仍需逐对拍板；全链路录制仍未取得。
+>
 > **状态（2026-10-22 复核）**：**阶段 2 首个小批次已落地**。`stripe_update_customer_data` 与
 > `stripe_update_tax_region`（ideal / twint / blik 三份逐字节相同的 45/46 行副本）下沉到
 > `common/stripe_flow.py`，六个同签名薄封装保留、调用点零改动。这次没有真实链路录制，

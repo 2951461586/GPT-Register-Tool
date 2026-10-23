@@ -100,7 +100,19 @@ _IN_FLIGHT_STATUSES = {
 }
 
 
-def _as_bool(value: Any) -> bool | None:
+def as_bool(value: Any) -> bool | None:
+    """Tolerant boolean parse for config / CLI / adapter values.
+
+    The payment lane reads booleans from three places that are not JSON
+    booleans: hand-edited config files, CLI strings and provider payloads. A
+    bare ``bool(value)`` answers ``True`` for ``"false"``, ``"0"`` and
+    ``"no"``, which is how a config switch silently stays on. This is the one
+    owner of the two-sided spelling; ``pay_link.base._as_bool`` and the
+    ``payment`` config readers delegate here instead of re-implementing it.
+
+    Returns ``None`` for values that carry no boolean meaning, so callers can
+    distinguish "absent/garbage" from an explicit ``False``.
+    """
     if isinstance(value, bool):
         return value
     if isinstance(value, (int, float)) and value in {0, 1}:
@@ -112,6 +124,11 @@ def _as_bool(value: Any) -> bool | None:
         if normalized in {"0", "false", "no", "n"}:
             return False
     return None
+
+
+#: Historical private name, kept because ``contracts``' own call sites and the
+#: ``pay_link`` facade still import it. Same function object, one owner.
+_as_bool = as_bool
 
 
 def _normalized(value: Any) -> str:

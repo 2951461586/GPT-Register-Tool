@@ -18,12 +18,12 @@ the *gate* (per-pair, only-down); this file is the *view*.
 | Measure | Value |
 | --- | ---: |
 | Modules | 308 |
-| Module-level import edges | 1034 |
-| Delayed (function-local) edges | 274 |
-| Type-only (`if TYPE_CHECKING`) edges | 32 |
+| Module-level import edges | 1018 |
+| Delayed (function-local) edges | 277 |
+| Type-only (`if TYPE_CHECKING`) edges | 43 |
 | Strongly connected components (size > 1) | 0 |
 | Modules inside a cycle | 0 |
-| Mutually dependent directory pairs | 18 |
+| Mutually dependent directory pairs | 17 |
 
 ## Cycles
 
@@ -48,7 +48,6 @@ None.
 | `sms_tool/accounts` ↔ `sms_tool/registration` |
 | `sms_tool/auth_flow` ↔ `sms_tool/registration` |
 | `sms_tool/mailbox` ↔ `sms_tool/providers` |
-| `sms_tool/pay_link` ↔ `sms_tool/payment` |
 | `sms_tool/paypal` ↔ `sms_tool/paypal_link` |
 | `sms_tool/registration` ↔ `sms_tool/registration_drivers` |
 
@@ -59,8 +58,8 @@ None.
 | `sms_tool.config` | 64 |
 | `sms_tool` | 51 |
 | `sms_tool.endpoints` | 44 |
-| `sms_tool.kernel.sanitizer` | 36 |
-| `sms_tool.kernel.paths` | 33 |
+| `sms_tool.kernel.sanitizer` | 35 |
+| `sms_tool.kernel.paths` | 32 |
 | `sms_tool.phone_proxy` | 24 |
 | `sms_tool.auth_headers` | 22 |
 | `sms_tool.http_client` | 18 |
@@ -69,5 +68,5 @@ None.
 | `sms_tool.checkout_contract` | 14 |
 | `sms_tool.providers` | 13 |
 | `sms_tool.registration_drivers.base` | 13 |
-| `sms_tool.payment.catalog` | 12 |
-| `sms_tool.payment.routing` | 11 |
+| `sms_tool.payment.catalog` | 11 |
+| `sms_tool.proxy.entry` | 11 |

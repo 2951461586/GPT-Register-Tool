@@ -8,6 +8,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -240,6 +241,26 @@ def _log_extractor_terminal(
     )
 
 
+#: Upper bound on the Sentinel mint itself. The mint is a network call, so it
+#: keeps its own ceiling even when the run's budget is minutes long.
+_SENTINEL_MINT_TIMEOUT_SECONDS = 60
+
+
+def _deadline_remaining(deadline: float) -> int:
+    """Whole seconds left before ``deadline``, never below 1.
+
+    The extractor's configured ``timeout_seconds`` is the budget for the **whole**
+    run, not just the child process. The Sentinel mint used to sit outside it, so
+    a slow mint added up to 60s on top of whatever the operator configured. Both
+    the mint and the subprocess are now bounded by one deadline, which makes the
+    configured number the number the run can actually take.
+    """
+    # ``deadline`` is ``time.monotonic() + timeout`` and ``timeout`` comes from
+    # ``safe_int`` in ``_prepare_extractor``, so both operands are finite floats
+    # and ``int`` cannot raise here.
+    return max(1, int(deadline - time.monotonic()))  # pi-lens-ignore: unchecked-numeric-parse-python
+
+
 def _sentinel_env(proxy: str, *, timeout: int = 60) -> dict[str, str]:
     """Mint the Checkout-create Sentinel pair for the extractor subprocess.
 
@@ -427,6 +448,7 @@ def _run_protocol_script(
     if isinstance(ctx, dict):
         return ctx
     script, method_cfg, timeout = ctx.script, ctx.method_cfg, ctx.timeout
+    deadline = time.monotonic() + timeout
     seed_proxy = str(
         kwargs.get("seed_proxy")
         or proxy
@@ -472,14 +494,14 @@ def _run_protocol_script(
             return {"ok": False, "error": f"unsupported protocol payment method: {spec.key}"}
         env.update(builder(access_token, seed_proxy, proxy_file, script, kwargs))
 
-    env.update(_sentinel_env(seed_proxy))
+    env.update(_sentinel_env(seed_proxy, timeout=min(_SENTINEL_MINT_TIMEOUT_SECONDS, _deadline_remaining(deadline))))
 
     proc, output, parsed, timeout_err = _finish_extractor(
         spec,
         script,
         command,
         env=env,
-        timeout=timeout,
+        timeout=_deadline_remaining(deadline),
         cleanup_paths=(proxy_file,),
     )
     if timeout_err is not None:
@@ -742,6 +764,7 @@ def _run_direct_card(spec: PaymentMethodSpec, access_token: str, proxy: Any = No
     if isinstance(ctx, dict):
         return ctx
     script, method_cfg, timeout = ctx.script, ctx.method_cfg, ctx.timeout
+    deadline = time.monotonic() + timeout
 
     checkout_proxy = str(kwargs.get("checkout_proxy") or proxy or kwargs.get("provider_proxy") or "").strip()
     if not checkout_proxy:
@@ -772,7 +795,9 @@ def _run_direct_card(spec: PaymentMethodSpec, access_token: str, proxy: Any = No
     # The Checkout-create Sentinel pair, minted for a device id the extractor is
     # told to use. Without it the create gate answers 400 "unusual activity"
     # (measured 2026-10-06) and this extractor cannot produce a link at all.
-    env.update(_sentinel_env(checkout_proxy))
+    env.update(
+        _sentinel_env(checkout_proxy, timeout=min(_SENTINEL_MINT_TIMEOUT_SECONDS, _deadline_remaining(deadline)))
+    )
     token_file = _write_token_file(access_token)
     command = [
         sys.executable,
@@ -800,7 +825,7 @@ def _run_direct_card(spec: PaymentMethodSpec, access_token: str, proxy: Any = No
         script,
         command,
         env=env,
-        timeout=timeout,
+        timeout=_deadline_remaining(deadline),
         cleanup_paths=(token_file,),
     )
     if timeout_err is not None:

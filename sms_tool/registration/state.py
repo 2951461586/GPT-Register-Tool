@@ -7,10 +7,15 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Mapping
+from typing import TYPE_CHECKING, Any, Callable, Mapping, Protocol
 
 from ..config import current_config_data
 from ..kernel.sanitizer import sanitize_text
+
+if TYPE_CHECKING:  # pragma: no cover - type-only, never executed
+    from .operations import RegistrationOperations
+    from .persistence import RegistrationPersistence
+    from .runtime import RegistrationRuntimeState
 
 
 class RegistrationState(str, Enum):
@@ -90,6 +95,88 @@ class RegistrationStateMachine:
             "state": self.state.value,
             "history": [{"state": transition.state.value, "detail": transition.detail} for transition in self.history],
         }
+
+
+class RegistrationWorkflow(Protocol):
+    """The workflow surface the split stage modules actually use.
+
+    ``handlers.RegistrationEmailWorkflow`` satisfies it structurally. The stage
+    modules used to import that concrete class under ``TYPE_CHECKING`` and reach
+    through it for 35 attributes (20 private). Annotating them against this
+    Protocol instead documents the seam and lets a test drive one stage with a
+    small fake rather than constructing the whole workflow.
+
+    Kept in ``state.py`` because every stage module already imports this module;
+    a new module would need a directory-map/layer-manifest entry for no benefit.
+    The ``TYPE_CHECKING`` imports above keep this module free of runtime cycles.
+    """
+
+    @property
+    def r(self) -> RegistrationOperations: ...
+
+    runtime: RegistrationRuntimeState
+    config: Mapping[str, Any] | None
+    persistence: RegistrationPersistence
+    machine: RegistrationStateMachine
+    proxy_metadata: dict[str, Any]
+    enroll_2fa: bool
+    input_mailbox: Any
+    post_process_result: Callable[[dict[str, Any]], dict[str, Any]] | None
+    _timing_open: bool
+
+    def _run_stage(self, state: RegistrationState, label: str, handler: Callable[[], Any]) -> Any: ...
+
+    def _abort(self, error: str) -> None: ...
+
+    def _persist_checkpoint(self, state: str) -> None: ...
+
+    def _issue_sentinel(self, flow: str, *, force_fresh: bool = False) -> Any: ...
+
+    def _otp_poll_timeout(self) -> int: ...
+
+    def _otp_provider(self) -> str: ...
+
+    def _otp_timeout_error(self) -> str: ...
+
+    def _password_lane_active(self) -> bool: ...
+
+    def _fingerprint_geo_metadata(self) -> dict[str, Any]: ...
+
+    def _edge_challenge_rotate_exit_enabled(self) -> bool: ...
+
+    def _install_edge_challenge_hook(self, session: Any) -> None: ...
+
+    def _on_edge_challenge(self, session: Any, verdict: str, allow_rotate: bool) -> bool: ...
+
+    def _count_edge_challenge_rotate_failure(self, reason: str) -> None: ...
+
+    def _mark_partial_registration(self, *, reason: str = "user_already_exists") -> None: ...
+
+    def _obtain_refresh_token_enabled(self) -> bool: ...
+
+    def _prime_about_you_page(self) -> None: ...
+
+    def _prime_about_you_page_enabled(self) -> bool: ...
+
+    def _post_create_account_with_backoff(self) -> Any: ...
+
+    def _record_create_account_response(self, response: Any) -> None: ...
+
+    def _create_account_disallowed_backoff_delays(self) -> tuple[int, ...]: ...
+
+    def _set_outcome(self) -> None: ...
+
+    def fetch_auth_session(self) -> None: ...
+
+    def probe_access_token(self) -> None: ...
+
+    def enroll_totp(self) -> None: ...
+
+    def finalize(self) -> dict[str, Any]: ...
+
+    def obtain_oauth_refresh_token(self) -> None: ...
+
+    def post_signup_warmup(self) -> None: ...
 
 
 class RegistrationStageOverrun(TimeoutError):

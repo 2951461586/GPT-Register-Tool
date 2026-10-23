@@ -1,0 +1,16 @@
+# Dependencies of the vendored protocol-payment extractors.
+#
+# This file documents the subprocess boundary (Boundary Rule 10). The host's
+# `requirements.txt` stays authoritative for the pinned versions -- these are
+# the same floors, repeated here so the extractor tree does not depend on an
+# undeclared ambient environment.
+#
+# Installed by the host; the extractors are never installed on their own.
+curl_cffi==0.16.0
+requests>=2.31.0
+
+# Optional: `momo/ac_paylink_core.py` imports `playwright.sync_api` lazily for
+# the browser fallback and degrades to the HTTP path when it is missing. The
+# host already declares `playwright` in its own requirements.txt, so it is not
+# listed as a hard requirement here.
+# playwright>=1.40.0

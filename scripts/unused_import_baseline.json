@@ -26,7 +26,6 @@
     "sms_tool/pay_link/persistence.py": 11,
     "sms_tool/pay_link/registry.py": 6,
     "sms_tool/payment/batch.py": 1,
-    "sms_tool/payment/link_manager.py": 41,
     "sms_tool/paypal/orchestrator.py": 2,
     "sms_tool/paypal/protocol.py": 1,
     "sms_tool/paypal/reverse.py": 1,
@@ -75,5 +74,5 @@
     "tests/workbench/test_cli_registration_driver.py": 1,
     "tests/workbench/test_operator_output.py": 1
   },
-  "total": 322
+  "total": 281
 }

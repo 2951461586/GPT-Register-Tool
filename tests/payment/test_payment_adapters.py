@@ -31,7 +31,11 @@ def test_adapter_registry_routes_methods_and_rejects_duplicates():
     registry = PaymentAdapterRegistry()
     adapter = FunctionPaymentAdapter("fake", ("fake",), lambda **kwargs: {"ok": True})
     registry.register(adapter)
-    result = registry.execute(PaymentRequest.create(payment_method="fake", access_token="at"))
+    # A payment adapter registry, not a SQL cursor: the shared SQL-injection
+    # heuristic matches any ``.execute(<call>)`` sink.
+    result = registry.execute(  # pi-lens-ignore: python-sql-injection
+        PaymentRequest.create(payment_method="fake", access_token="at")
+    )
     assert isinstance(result, PaymentResult)
     assert result.ok
     with pytest.raises(ValueError):
@@ -165,3 +169,97 @@ def test_build_kakao_env_prefers_explicit_proxy_file_and_routes_runtime_dirs(tmp
 
     fallback_env = adapters._build_kakao_env("tok", "", "", script, {})
     assert fallback_env["KAKAO_PROXY_SEED_FILE"] == str(seed_pool)
+
+
+# ── P3-2: the Sentinel mint shares the extractor's deadline ─────────────────
+
+
+def test_deadline_remaining_is_never_below_one():
+    import time
+
+    from sms_tool.pay_link import adapters
+
+    assert adapters._deadline_remaining(time.monotonic() - 100) == 1
+    assert adapters._deadline_remaining(time.monotonic() + 30) >= 29
+
+
+@pytest.mark.parametrize(
+    ("configured", "mint_seconds", "expected_mint", "expected_child"),
+    [
+        # A short run: the mint is capped by the remaining budget, not by 60s.
+        (5, 50, 5, 1),
+        # A normal run: the mint keeps its own 60s ceiling and the child gets
+        # exactly what the mint did not spend.
+        (100, 10, 60, 90),
+        # A long run: the mint still never exceeds its own 60s ceiling.
+        (600, 10, 60, 590),
+    ],
+)
+def test_protocol_script_bounds_mint_and_child_by_one_deadline(
+    monkeypatch, tmp_path, configured, mint_seconds, expected_mint, expected_child
+):
+    from sms_tool.pay_link import adapters
+
+    clock = {"now": 1000.0}
+    captured: dict[str, int] = {}
+    ctx = adapters._ExtractorContext(
+        runtime_config=None,
+        script=tmp_path / "extractor.py",
+        method_cfg={},
+        timeout=configured,
+    )
+
+    def fake_sentinel(proxy, *, timeout=60):
+        captured["mint"] = timeout
+        clock["now"] += mint_seconds
+        return {}
+
+    def fake_finish(spec, script, command, *, env, timeout, cleanup_paths=()):
+        captured["child"] = timeout
+        return _Proc(), "", {"schema": "protocol_payment.v1", "ok": False}, None
+
+    monkeypatch.setattr(adapters.time, "monotonic", lambda: clock["now"])
+    monkeypatch.setattr(adapters, "_prepare_extractor", lambda spec, kwargs: ctx)
+    monkeypatch.setattr(adapters, "_sentinel_env", fake_sentinel)
+    monkeypatch.setattr(adapters, "_finish_extractor", fake_finish)
+    monkeypatch.setattr(adapters, "_runtime_temp_dir", lambda: tmp_path)
+
+    adapters._run_protocol_script(PAYMENT_SPECS["ideal"], "at", "socks5h://127.0.0.1:1080")
+
+    assert captured["mint"] == expected_mint
+    assert captured["child"] == expected_child
+
+
+def test_direct_card_bounds_mint_and_child_by_one_deadline(monkeypatch, tmp_path):
+    from sms_tool.pay_link import adapters
+
+    clock = {"now": 2000.0}
+    captured: dict[str, int] = {}
+    ctx = adapters._ExtractorContext(
+        runtime_config=None,
+        script=tmp_path / "direct_card_extract.py",
+        method_cfg={},
+        timeout=120,
+    )
+    token_file = tmp_path / "token.txt"
+    token_file.write_text("at\n", encoding="utf-8")
+
+    def fake_sentinel(proxy, *, timeout=60):
+        captured["mint"] = timeout
+        clock["now"] += 25
+        return {}
+
+    def fake_finish(spec, script, command, *, env, timeout, cleanup_paths=()):
+        captured["child"] = timeout
+        return _Proc(), "", {"ok": True, "long_url": "https://chatgpt.com/checkout/x/y"}, None
+
+    monkeypatch.setattr(adapters.time, "monotonic", lambda: clock["now"])
+    monkeypatch.setattr(adapters, "_prepare_extractor", lambda spec, kwargs: ctx)
+    monkeypatch.setattr(adapters, "_sentinel_env", fake_sentinel)
+    monkeypatch.setattr(adapters, "_finish_extractor", fake_finish)
+    monkeypatch.setattr(adapters, "_write_token_file", lambda access_token: str(token_file))
+
+    adapters._run_direct_card(PAYMENT_SPECS["direct_card"], "at", "http://checkout.example:1")
+
+    assert captured["mint"] == 60
+    assert captured["child"] == 95

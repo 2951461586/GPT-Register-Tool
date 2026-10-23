@@ -67,6 +67,7 @@ def _state():
         auth_base="https://auth.openai.com",
         base_headers={"X-Base": "1"},
         device_id="did-1",
+        document_navigation_id="nav-1",
         full_name="Test User",
         birthdate="1995-06-15",
         create_data=None,
@@ -252,6 +253,9 @@ class CreateAccountDisallowedBackoffTests(unittest.TestCase):
         header_args = ops._auth_request_headers.call_args_list[1].kwargs
         self.assertEqual(header_args["sentinel_token"], "fresh-1")
         self.assertEqual(header_args["sentinel_so_token"], "so-1")
+        # P2 (HAR 2026-10-23): same page nav id as send-otp/validate, own invocation id.
+        self.assertEqual(header_args["extra"], {"x-openai-document-navigation-id": "nav-1"})
+        self.assertTrue(header_args["flow_invocation_id"])
 
     def test_default_is_single_attempt_even_on_disallowed(self):
         """默认关 ⇒ 一次 POST；registration_disallowed 照旧终态，无重试。"""

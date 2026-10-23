@@ -31,7 +31,7 @@ from ..operator_output import emit as _emit
 from .flags import registration_flag
 
 if TYPE_CHECKING:  # pragma: no cover - import cycle guard for type checkers only
-    from .handlers import RegistrationEmailWorkflow
+    from .state import RegistrationWorkflow
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -100,7 +100,7 @@ def dwell_range(config: Any) -> tuple[float, float]:
 
 
 def run_post_signup_warmup(
-    workflow: RegistrationEmailWorkflow,
+    workflow: RegistrationWorkflow,
     *,
     sleep_fn: Callable[[float], None] = time.sleep,
     uniform_fn: Callable[[float, float], float] = random.uniform,

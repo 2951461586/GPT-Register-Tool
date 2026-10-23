@@ -270,3 +270,98 @@ def test_tax_region_carries_the_provider_saved_payment_switch(provider, value, m
     redisplay = '"elements_options_client[saved_payment_method][enable_redisplay]": '
     assert f'{save}"{value}"' in body, body
     assert f'{redisplay}"{value}"' in body, body
+
+
+# ── Stage 2, batch "pre-proxy resolver" (2026-10-23) ────────────────────────
+#
+# ``pre_proxy_url`` was AST-identical in ideal / twint / blik apart from the
+# env-var prefix (and blik's dead ``raw = ""`` tail). The plan requires "HEAD vs
+# parameterised" evidence before such a move is accepted; a live recording is
+# still missing, so the "before" side is the frozen pre-merge body captured in
+# ``tests/payment/stage2_pre_proxy_head.py``. Both sides receive the same
+# ``environ`` mapping and the same injected normaliser/registrar, so the only
+# thing under test is the body that moved.
+
+PRE_PROXY_ENV: dict[str, tuple[str, str, str]] = {
+    "ideal": ("IDEAL_PRE_PROXY", "PP_PRE_PROXY", "PP_LOCAL_PROXY"),
+    "twint": ("TWINT_PRE_PROXY", "PP_PRE_PROXY", "PP_LOCAL_PROXY"),
+}
+
+#: Every env name any extractor reads, so a scenario starts from a clean slate.
+PRE_PROXY_ENV_NAMES = ("IDEAL_PRE_PROXY", "TWINT_PRE_PROXY", "PP_PRE_PROXY", "PP_LOCAL_PROXY")
+
+BLIK_PRE_PROXY_ENV = ("IDEAL_PRE_PROXY", "PP_PRE_PROXY", "PP_LOCAL_PROXY")
+
+
+def _load_frozen_pre_proxy_head():
+    path = ROOT / "tests" / "payment" / "stage2_pre_proxy_head.py"
+    spec = importlib.util.spec_from_file_location("stage2_pre_proxy_head", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _pre_proxy_scenarios(env_names: tuple[str, str, str]) -> tuple[dict[str, str], ...]:
+    """Inputs that reach every branch of the resolver (presence, disabled, trim)."""
+    first, second = env_names[0], env_names[1]
+    return (
+        {},
+        {first: "127.0.0.1:7890"},
+        {first: "socks5h://user:pass@127.0.0.1:7890"},
+        {first: "http://a:b@h:1"},
+        {first: "off"},
+        {first: "  "},
+        {second: "socks5h://second:2"},
+        {first: "http://a:b@h:1", second: "socks5h://second:2"},
+    )
+
+
+def _assert_pre_proxy_matches_head(module, env_names: tuple[str, str, str], monkeypatch) -> None:
+    head = _load_frozen_pre_proxy_head()
+    for scenario in _pre_proxy_scenarios(env_names):
+        for name in PRE_PROXY_ENV_NAMES:
+            monkeypatch.delenv(name, raising=False)
+        for name, value in scenario.items():
+            monkeypatch.setenv(name, value)
+        expected_registered: list[str] = []
+        expected = head.pre_proxy_url(
+            env_names,
+            seams=head.Seams(
+                environ=scenario,
+                normalize=module.normalize_pre_proxy_url,
+                register=expected_registered.append,
+            ),
+        )
+        actual_registered: list[str] = []
+        monkeypatch.setattr(module, "register_proxy_for_redaction", actual_registered.append)
+        actual = module.pre_proxy_url()
+        assert actual == expected, f"value diverged for {scenario}"
+        assert actual_registered == expected_registered, f"registrar diverged for {scenario}"
+
+
+@pytest.mark.parametrize("provider", sorted(PRE_PROXY_ENV))
+def test_extractor_pre_proxy_url_matches_the_frozen_pre_merge_body(provider, monkeypatch):
+    module = _load(provider, PROVIDERS[provider])
+    _assert_pre_proxy_matches_head(module, PRE_PROXY_ENV[provider], monkeypatch)
+
+
+def test_blik_pre_proxy_url_matches_the_frozen_pre_merge_body(monkeypatch):
+    module = _load("blik", "blik_qr_extract")
+    _assert_pre_proxy_matches_head(module, BLIK_PRE_PROXY_ENV, monkeypatch)
+
+
+def test_pre_proxy_differential_is_sensitive_to_the_environment(monkeypatch):
+    """Guard against a vacuous comparison: a different env value must differ."""
+    module = _load("ideal", PROVIDERS["ideal"])
+    for name in PRE_PROXY_ENV_NAMES:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(module, "register_proxy_for_redaction", lambda proxy: None)
+    monkeypatch.setenv("PP_PRE_PROXY", "127.0.0.1:7890")
+    proxied = module.pre_proxy_url()
+    monkeypatch.setenv("PP_PRE_PROXY", "off")
+    disabled = module.pre_proxy_url()
+    assert proxied == "socks5h://127.0.0.1:7890"
+    assert disabled == ""
+    assert proxied != disabled

@@ -1,8 +1,8 @@
 {
-  "delayed_cross_dir_edges": 253,
-  "minority_edges": 49,
-  "mutual_pairs": 18,
-  "ordered_pairs": 66,
+  "delayed_cross_dir_edges": 257,
+  "minority_edges": 47,
+  "mutual_pairs": 17,
+  "ordered_pairs": 65,
   "pairs": {
     "sms_tool -> sms_tool/accounts": 2,
     "sms_tool -> sms_tool/geo": 6,
@@ -37,9 +37,8 @@
     "sms_tool/mailbox -> sms_tool/providers": 16,
     "sms_tool/pay_link -> sms_tool": 9,
     "sms_tool/pay_link -> sms_tool/payment": 25,
-    "sms_tool/payment -> sms_tool": 16,
-    "sms_tool/payment -> sms_tool/pay_link": 2,
-    "sms_tool/payment -> sms_tool/proxy": 2,
+    "sms_tool/payment -> sms_tool": 14,
+    "sms_tool/payment -> sms_tool/proxy": 1,
     "sms_tool/paypal -> sms_tool": 23,
     "sms_tool/paypal -> sms_tool/payment": 4,
     "sms_tool/paypal -> sms_tool/paypal_link": 2,
@@ -71,6 +70,6 @@
     "sms_tool/upi_link -> sms_tool/paypal": 2,
     "sms_tool/upi_link -> sms_tool/proxy": 6
   },
-  "total_module_edges": 453,
-  "type_only_edges": 0
+  "total_module_edges": 448,
+  "type_only_edges": 1
 }

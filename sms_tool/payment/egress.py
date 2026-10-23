@@ -20,6 +20,8 @@ import time
 from collections.abc import Callable, Mapping
 from typing import Any
 
+from .contracts import as_bool
+
 # stage -> (options key holding the proxy, stage_proxy_countries keys, in order)
 _STAGE_EXPECTATIONS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("checkout", "checkout_proxy", ("checkout",)),
@@ -82,10 +84,11 @@ class EgressCheckError(Exception):
 
 
 def _gate_settings(runtime_config: Mapping[str, Any] | None) -> tuple[bool, float, float, float]:
+    # ``enabled`` is parsed with ``as_bool`` at the return site: a hand-edited
+    # ``"false"`` is a real switch value, not a truthy string.
     protocol = runtime_config.get("protocol_payments") if isinstance(runtime_config, Mapping) else None
-    gate = protocol.get("egress_check") if isinstance(protocol, Mapping) else None
-    if not isinstance(gate, Mapping):
-        gate = {}
+    raw_gate = protocol.get("egress_check") if isinstance(protocol, Mapping) else None
+    gate: Mapping[str, Any] = raw_gate if isinstance(raw_gate, Mapping) else {}
     enabled = gate.get("enabled", True)
     try:
         timeout = max(3.0, float(gate.get("timeout_seconds") or _DEFAULT_TIMEOUT_SECONDS))
@@ -99,7 +102,7 @@ def _gate_settings(runtime_config: Mapping[str, Any] | None) -> tuple[bool, floa
         failure_cooldown = max(0.0, float(gate.get("failure_cooldown_seconds") or 180))
     except (TypeError, ValueError):
         failure_cooldown = 180.0
-    return bool(enabled), timeout, ttl, failure_cooldown
+    return as_bool(enabled) is not False, timeout, ttl, failure_cooldown
 
 
 def _default_probe(proxy: str, expected_country: str, stage: str, timeout: float):

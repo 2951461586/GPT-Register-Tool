@@ -725,19 +725,3 @@ def same_flow_so_token(token, expected_flow):
     if declared and declared != str(expected_flow or "").strip():
         return ""
     return token
-
-
-def _auth_request_headers(
-    base_headers, did="", referer="", origin="", sentinel_token="", sentinel_so_token="", extra=None
-):
-    return {
-        **(base_headers or {}),
-        **deps.openai_auth_headers(
-            did,
-            referer=referer,
-            origin=origin,
-            sentinel_token=sentinel_token,
-            sentinel_so_token=sentinel_so_token,
-            extra=extra or {},
-        ),
-    }

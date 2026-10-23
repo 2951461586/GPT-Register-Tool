@@ -1,13 +1,13 @@
 """Result-assembly and credential-enrollment stages of the registration workflow.
 
-Extracted from ``registration_handlers.RegistrationEmailWorkflow``
+Extracted from ``registration_handlers.RegistrationWorkflow``
 (2026-09-19, P1 split): that module was the god-object holding HTTP calls,
 the state machine, checkpointing, 2FA, result assembly and progress
 printing in one 1700-line class.  The three methods here --
 ``obtain_oauth_refresh_token``, ``enroll_totp`` and ``finalize`` -- are
 moved verbatim as module-level functions that take the workflow instance as
 their first parameter, named ``workflow`` and annotated with
-``RegistrationEmailWorkflow`` under ``TYPE_CHECKING``; the class keeps thin
+``RegistrationWorkflow`` under ``TYPE_CHECKING``; the class keeps thin
 delegates so no caller changes.
 Delayed imports inside the bodies are kept exactly as they were (they
 guard against import cycles), so behaviour is unchanged.
@@ -32,12 +32,12 @@ from .state import RegistrationState
 from ..kernel.sanitizer import describe_exception
 
 if TYPE_CHECKING:  # pragma: no cover - import cycle guard for type checkers only
-    from .handlers import RegistrationEmailWorkflow
+    from .state import RegistrationWorkflow
 
 _LOGGER = logging.getLogger(__name__)
 
 
-def obtain_oauth_refresh_token(workflow: RegistrationEmailWorkflow) -> None:
+def obtain_oauth_refresh_token(workflow: RegistrationWorkflow) -> None:
     """Exchange an OAuth refresh token while this run's session is still live.
 
     **Opt-in** (``registration.obtain_refresh_token``, default off) because
@@ -119,7 +119,7 @@ def obtain_oauth_refresh_token(workflow: RegistrationEmailWorkflow) -> None:
     )
 
 
-def enroll_totp(workflow: RegistrationEmailWorkflow) -> None:
+def enroll_totp(workflow: RegistrationWorkflow) -> None:
     # Delayed import: registration_handlers imports this module, so the
     # helper it still owns has to be fetched here, not at module top.
     from .handlers import _login_probe_password
@@ -207,7 +207,7 @@ def enroll_totp(workflow: RegistrationEmailWorkflow) -> None:
         _emit(_LOGGER, "  [2FA] Setup failed: %s", describe_exception(exc))
 
 
-def finalize(workflow: RegistrationEmailWorkflow) -> dict[str, Any]:
+def finalize(workflow: RegistrationWorkflow) -> dict[str, Any]:
     r = workflow.r
     s = workflow.runtime
     from ..sentinel.bundle import sentinel_version

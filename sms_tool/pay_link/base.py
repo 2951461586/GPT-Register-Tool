@@ -52,17 +52,21 @@ class PaymentMethodSpec:
 
 
 def _as_bool(value: Any) -> bool | None:
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, (int, float)) and value in {0, 1}:
-        return bool(value)
-    if isinstance(value, str):
-        normalized = value.strip().lower()
-        if normalized in {"1", "true", "yes", "y"}:
-            return True
-        if normalized in {"0", "false", "no", "n"}:
-            return False
-    return None
+    """Delegate to :func:`sms_tool.payment.contracts.as_bool`.
+
+    The two-sided spelling parser used to be copied here and in
+    ``payment.contracts``; the copies agreed, but only because nobody had edited
+    one. The private name stays because ``pay_link.__all__`` exports it and
+    ``normalize`` / ``adapters`` import it.
+
+    The import is function-local on purpose: ``pay_link -> payment`` is an
+    already-frozen facade edge, and a module-level import of one more
+    ``payment`` module would grow the layer ratchet for a one-line helper. The
+    delayed-import ratchet records this edge with its reason instead.
+    """
+    from ..payment.contracts import as_bool
+
+    return as_bool(value)
 
 
 def safe_int(value: Any, default: int = 0) -> int:

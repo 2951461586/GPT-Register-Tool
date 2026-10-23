@@ -16,7 +16,7 @@ creation and session/AT verification stages:
 Collaborators are reached via the workflow instance passed as ``workflow`` (its
 ``runtime``, ``r`` operations interface, and delegating methods), never by
 importing ``registration_handlers`` at runtime, avoiding any import cycle. The
-parameter is annotated with ``RegistrationEmailWorkflow`` under ``TYPE_CHECKING``
+parameter is annotated with ``RegistrationWorkflow`` under ``TYPE_CHECKING``
 so the type checker validates every attribute and delegate the stages touch.
 """
 
@@ -25,6 +25,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+import uuid
 from typing import TYPE_CHECKING, Any, Callable
 
 from curl_cffi import requests as curl_requests
@@ -46,7 +47,7 @@ from ..kernel.sanitizer import account_reference, describe_exception
 from ..telemetry import current_run_id
 
 if TYPE_CHECKING:  # pragma: no cover - import cycle guard for type checkers only
-    from .handlers import RegistrationEmailWorkflow
+    from .state import RegistrationWorkflow
 
 #: Keep the ``sms_tool.registration.handlers`` logger channel so ``sms_tool.log``
 #: category tagging (``注册``) and ``assertLogs("sms_tool.registration.handlers")``
@@ -54,7 +55,7 @@ if TYPE_CHECKING:  # pragma: no cover - import cycle guard for type checkers onl
 _LOGGER = logging.getLogger("sms_tool.registration.handlers")
 
 
-def prime_about_you_page_enabled(workflow: RegistrationEmailWorkflow) -> bool:
+def prime_about_you_page_enabled(workflow: RegistrationWorkflow) -> bool:
     """``registration.prime_about_you_page`` (default **False**).
 
     **Why this exists.**  ``create_account`` POSTs with
@@ -76,7 +77,7 @@ def prime_about_you_page_enabled(workflow: RegistrationEmailWorkflow) -> bool:
     return registration_flag(workflow.config, "prime_about_you_page", False)
 
 
-def prime_about_you_page(workflow: RegistrationEmailWorkflow) -> None:
+def prime_about_you_page(workflow: RegistrationWorkflow) -> None:
     """GET ``/about-you`` so the profile-page state exists before the POST.
 
     Only the navigation gap turb closes with ``navigate_about_you``; the
@@ -101,7 +102,7 @@ def prime_about_you_page(workflow: RegistrationEmailWorkflow) -> None:
         _emit(_LOGGER, "  About you page prime warning: %s", describe_exception(exc))
 
 
-def create_account_disallowed_backoff_delays(workflow: RegistrationEmailWorkflow) -> tuple[int, ...]:
+def create_account_disallowed_backoff_delays(workflow: RegistrationWorkflow) -> tuple[int, ...]:
     """Bounded retry delays for ``registration_disallowed`` on create_account.
 
     ``registration.create_account_disallowed_backoff`` (default **False**).
@@ -129,7 +130,7 @@ def create_account_disallowed_backoff_delays(workflow: RegistrationEmailWorkflow
     return (8, 20, 45)
 
 
-def create_account(workflow: RegistrationEmailWorkflow) -> None:
+def create_account(workflow: RegistrationWorkflow) -> None:
     r = workflow.r
     s = workflow.runtime
     # ``RegistrationRuntimeState`` attaches its flat fields from the group
@@ -169,7 +170,7 @@ def create_account(workflow: RegistrationEmailWorkflow) -> None:
 
 
 def post_create_account_with_backoff(
-    workflow: RegistrationEmailWorkflow,
+    workflow: RegistrationWorkflow,
     *,
     sleep_fn: Callable[[float], bool] = cancellable_sleep,
 ) -> Any:
@@ -196,6 +197,10 @@ def post_create_account_with_backoff(
                 origin=s.auth_base,
                 sentinel_token=create_sentinel.token,
                 sentinel_so_token=create_sentinel.so_token,
+                # HAR 2026-10-23: the same page-level navigation id as
+                # send-otp/validate, and a per-request invocation id.
+                extra={"x-openai-document-navigation-id": s.document_navigation_id},
+                flow_invocation_id=str(uuid.uuid4()),
             ),
             impersonate=r.auth_impersonate(),
         )
@@ -229,7 +234,7 @@ def post_create_account_with_backoff(
     return response
 
 
-def record_create_account_response(workflow: RegistrationEmailWorkflow, response: Any) -> None:
+def record_create_account_response(workflow: RegistrationWorkflow, response: Any) -> None:
     """Fold the ``create_account`` answer into the runtime state and dead-end ledger."""
     r = workflow.r
     s = workflow.runtime
@@ -302,7 +307,7 @@ def record_create_account_response(workflow: RegistrationEmailWorkflow, response
 
 
 def mark_partial_registration(
-    workflow: RegistrationEmailWorkflow,
+    workflow: RegistrationWorkflow,
     *,
     reason: str = "user_already_exists",
     retry_guard_cls: Any = RegistrationRetryGuard,
@@ -329,7 +334,7 @@ def mark_partial_registration(
 
 
 def fetch_auth_session(
-    workflow: RegistrationEmailWorkflow,
+    workflow: RegistrationWorkflow,
     *,
     retry_guard_cls: Any = RegistrationRetryGuard,
 ) -> None:
@@ -407,7 +412,7 @@ def fetch_auth_session(
         s.login_session = old_session
 
 
-def probe_access_token(workflow: RegistrationEmailWorkflow) -> None:
+def probe_access_token(workflow: RegistrationWorkflow) -> None:
     r = workflow.r
     s = workflow.runtime
     if not s.access_token:

@@ -23,7 +23,7 @@ lane.  It owns three things:
   (``frame.html`` + three flows sharing one ``p``).
 
 Everything else is the existing workflow; this module adds no stage of its own to
-``RegistrationEmailWorkflow.run`` and never changes a verdict.  Bootstrap GETs are
+``RegistrationWorkflow.run`` and never changes a verdict.  Bootstrap GETs are
 decoration: each failure is swallowed, as in the reference (``strict=False``).
 """
 
@@ -42,7 +42,7 @@ from .warmup import tz_offset_minutes
 from ..kernel.sanitizer import describe_exception
 
 if TYPE_CHECKING:  # pragma: no cover - import cycle guard for type checkers only
-    from .handlers import RegistrationEmailWorkflow
+    from .state import RegistrationWorkflow
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -105,7 +105,7 @@ def apply_reference_lane(config: Any) -> Any:
     return root
 
 
-def anonymous_bootstrap(workflow: RegistrationEmailWorkflow) -> list[int]:
+def anonymous_bootstrap(workflow: RegistrationWorkflow) -> list[int]:
     """The reference's pre-signin anonymous reads of ``chatgpt.com``.
 
     ``accounts/check``, the CES settings, ``me`` and the regional pricing config --
@@ -143,7 +143,7 @@ def anonymous_bootstrap(workflow: RegistrationEmailWorkflow) -> list[int]:
     return statuses
 
 
-def read_providers(workflow: RegistrationEmailWorkflow) -> int:
+def read_providers(workflow: RegistrationWorkflow) -> int:
     """``GET /api/auth/providers`` -- the reference's step 1, before ``csrf``."""
     s = workflow.runtime
     status = 0
@@ -162,14 +162,14 @@ def read_providers(workflow: RegistrationEmailWorkflow) -> int:
     return status
 
 
-def pre_signin(workflow: RegistrationEmailWorkflow) -> None:
+def pre_signin(workflow: RegistrationWorkflow) -> None:
     """Anonymous bootstrap, then ``providers`` -- everything before ``csrf``."""
     _emit(_LOGGER, "  Reference lane: pre-signin bootstrap")
     anonymous_bootstrap(workflow)
     read_providers(workflow)
 
 
-def prime_password_bundle(workflow: RegistrationEmailWorkflow) -> None:
+def prime_password_bundle(workflow: RegistrationWorkflow) -> None:
     """Load the password page's Sentinel iframe and keep its `username_password_create` token.
 
     Runs right before `user/register` (the reference does it after the

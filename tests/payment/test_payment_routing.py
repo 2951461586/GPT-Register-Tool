@@ -244,3 +244,53 @@ class PaymentRoutePlannerTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PaymentRoutePlannerSeamTests(unittest.TestCase):
+    """The selection seam keeps ``plan()`` testable without network I/O."""
+
+    def test_selector_and_rotator_are_injectable(self):
+        config = {
+            "protocol_payments": {
+                "proxy_pools": {"checkout": ["http://checkout.example:8080"]},
+                "methods": {"paypal": {"stage_proxy_countries": {"checkout": "US"}}},
+            }
+        }
+        calls: list[tuple] = []
+
+        def selector(pool, expected, stage):
+            calls.append(("select", tuple(pool), expected, stage))
+            return pool[0], [{"proxy": pool[0]}]
+
+        def rotator(proxy, expected):
+            calls.append(("rotate", proxy, expected))
+            return proxy.replace(":8080", ":8081")
+
+        plan = PaymentRoutePlanner(config, selector=selector, rotator=rotator).plan("paypal")
+
+        self.assertTrue(any(call[0] == "select" for call in calls), calls)
+        self.assertTrue(any(call[0] == "rotate" for call in calls), calls)
+        self.assertEqual(plan.checkout_proxy, "http://checkout.example:8081")
+        # The pool is selected once for the checkout group; the attempts ride on
+        # the first stage that performed the selection (auth_gate), not on every
+        # stage that reuses the chosen proxy.
+        self.assertEqual(plan.attempts["auth_gate"][0]["proxy"], "http://checkout.example:8080")
+
+    def test_default_seam_still_uses_the_live_selector(self):
+        config = {
+            "protocol_payments": {
+                "proxy_pools": {"checkout": ["http://checkout.example:8080"]},
+                "methods": {"paypal": {"stage_proxy_countries": {"checkout": "US"}}},
+            }
+        }
+        with (
+            patch(
+                "sms_tool.paypal.proxy.select_proxy_from_pool", return_value=("http://checkout.example:8080", [])
+            ) as select,
+            patch("sms_tool.paypal.proxy.rotate_proxy_session", side_effect=lambda proxy, expected: proxy) as rotate,
+        ):
+            plan = PaymentRoutePlanner(config).plan("paypal")
+
+        select.assert_called_once()
+        rotate.assert_called_once()
+        self.assertEqual(plan.checkout_proxy, "http://checkout.example:8080")

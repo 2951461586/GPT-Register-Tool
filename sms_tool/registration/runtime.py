@@ -37,6 +37,9 @@ class RegistrationIdentity:
     device_id: str = ""
     session_logging_id: str = ""
     flow_invocation_id: str = ""
+    # Page-level id the 2026-10-23 HAR sends on passwordless/send-otp,
+    # email-otp/validate and create_account (the same value on all three).
+    document_navigation_id: str = ""
 
 
 @dataclass(repr=False)
@@ -169,6 +172,7 @@ class RegistrationRuntimeState:
         device_id: str
         session_logging_id: str
         flow_invocation_id: str
+        document_navigation_id: str
         sentinel_data: Mapping[str, Any]
         sentinel_token: str
         sentinel_authorize_token: str

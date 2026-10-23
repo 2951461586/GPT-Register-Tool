@@ -21,6 +21,28 @@ from .persistence import _safe_persist_run
 from .registry import PAYMENT_ADAPTERS, _enabled_methods, normalize_payment_method
 
 
+#: Failures the validation / route-planning preamble normalises instead of
+#: letting escape. Both public entry points share this tuple so a pool outage
+#: cannot be a normalised result in one and a raw exception in the other.
+_PLANNING_FAILURES = (ConfigError, ValueError, TypeError, OSError, RuntimeError)
+
+
+def _annotate_planning_failure(exc: Exception) -> Exception:
+    """Attach the preamble stage the raise site did not name.
+
+    ``ValueError``/``ConfigError`` are validation failures (unsupported method,
+    disabled method, offline method, plan/method mismatch); everything else in
+    ``_PLANNING_FAILURES`` comes from resolving proxies, so it is
+    ``proxy_setup``.
+    """
+    if not error_stage_of(exc):
+        annotate_error(
+            exc,
+            error_stage=("validation" if isinstance(exc, (ValueError, ConfigError)) else "proxy_setup"),
+        )
+    return exc
+
+
 def generate_payment_link(
     access_token: str,
     proxy: Any = None,
@@ -59,13 +81,8 @@ def generate_payment_link(
                 options=options,
                 default_proxy=proxy,
             )
-    except (ConfigError, ValueError, TypeError, OSError, RuntimeError) as exc:
-        if not error_stage_of(exc):
-            annotate_error(
-                exc,
-                error_stage=("validation" if isinstance(exc, (ValueError, ConfigError)) else "proxy_setup"),
-            )
-        planning_error = exc
+    except _PLANNING_FAILURES as exc:
+        planning_error = _annotate_planning_failure(exc)
         plan = PaymentRoutePlan.empty(method_name)
 
     assert plan is not None
@@ -198,22 +215,35 @@ def probe_payment_method(
 
     ``payment_capability`` owns the cs_/oaics_ evidence contract. This route
     never starts payment-method creation, confirmation, approval or polling.
+
+    A validation/route-planning failure is returned as the probe result
+    contract, not raised: :func:`generate_payment_link` already normalises the
+    same failures into a result, and two public entry points that disagree on
+    "pool unavailable" force every caller to handle both shapes. Everything
+    after planning still propagates, because the executor (not this function)
+    owns the failure contract for a probe that actually ran.
     """
     method = normalize_payment_method(payment_method)
-    if not method:
-        raise ValueError(f"unsupported payment method: {payment_method}")
-
     source = _config_data(runtime_config)
     options = dict(kwargs)
     plan = options.pop("payment_route_plan", None)
-    if not isinstance(plan, PaymentRoutePlan):
-        plan = PaymentRoutePlanner(source).plan(
-            method,
-            options=options,
-            default_proxy=proxy,
-        )
-    elif plan.payment_method != method:
-        raise ValueError(f"payment route plan method mismatch: {plan.payment_method} != {method}")
+    try:
+        if not method:
+            raise ValueError(f"unsupported payment method: {payment_method}")
+        if not isinstance(plan, PaymentRoutePlan):
+            plan = PaymentRoutePlanner(source).plan(
+                method,
+                options=options,
+                default_proxy=proxy,
+            )
+        elif plan.payment_method != method:
+            raise ValueError(f"payment route plan method mismatch: {plan.payment_method} != {method}")
+    except _PLANNING_FAILURES as exc:
+        from ..payment.capability import capability_probe_failure
+
+        return capability_probe_failure(method or payment_method, _annotate_planning_failure(exc))
+
+    assert isinstance(plan, PaymentRoutePlan)
     options.update(plan.to_adapter_options())
     options.pop("probe_only", None)
 

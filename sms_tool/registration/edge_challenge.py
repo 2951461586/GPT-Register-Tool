@@ -16,7 +16,7 @@ The split is by ownership, not by size:
   workflow object keep working unchanged.
 
 They are module-level functions that take the workflow instance as their first
-parameter, named ``workflow`` and annotated with ``RegistrationEmailWorkflow``
+parameter, named ``workflow`` and annotated with ``RegistrationWorkflow``
 under ``TYPE_CHECKING``, so the type checker resolves the workflow's attributes
 without a runtime import cycle back into ``registration_handlers``.
 """
@@ -34,12 +34,12 @@ from .flags import registration_flag
 from ..kernel.sanitizer import describe_exception
 
 if TYPE_CHECKING:  # pragma: no cover - import cycle guard for type checkers only
-    from .handlers import RegistrationEmailWorkflow
+    from .state import RegistrationWorkflow
 
 _LOGGER = logging.getLogger(__name__)
 
 
-def edge_challenge_rotate_exit_enabled(workflow: RegistrationEmailWorkflow) -> bool:
+def edge_challenge_rotate_exit_enabled(workflow: RegistrationWorkflow) -> bool:
     """``registration.edge_challenge_rotate_exit`` (default **False**).
 
     On a Cloudflare challenge the transport asks this handler's hook whether
@@ -57,7 +57,7 @@ def edge_challenge_rotate_exit_enabled(workflow: RegistrationEmailWorkflow) -> b
     return registration_flag(workflow.config, "edge_challenge_rotate_exit", False)
 
 
-def install_edge_challenge_hook(workflow: RegistrationEmailWorkflow, session: Any) -> None:
+def install_edge_challenge_hook(workflow: RegistrationWorkflow, session: Any) -> None:
     """Let ``http_client`` ask this handler before acting on a challenge.
 
     Installed on every session this run makes requests with (the protocol
@@ -74,7 +74,7 @@ def install_edge_challenge_hook(workflow: RegistrationEmailWorkflow, session: An
         return
 
 
-def on_edge_challenge(workflow: RegistrationEmailWorkflow, session: Any, verdict: str, allow_rotate: bool) -> bool:
+def on_edge_challenge(workflow: RegistrationWorkflow, session: Any, verdict: str, allow_rotate: bool) -> bool:
     """Hook body: count the reply, then maybe rotate the exit once.
 
     Returns True only when the exit actually moved.  The two ways it does
@@ -122,7 +122,7 @@ def on_edge_challenge(workflow: RegistrationEmailWorkflow, session: Any, verdict
     return True
 
 
-def count_edge_challenge_rotate_failure(workflow: RegistrationEmailWorkflow, reason: str) -> None:
+def count_edge_challenge_rotate_failure(workflow: RegistrationWorkflow, reason: str) -> None:
     """Count one honest rotation failure (single-slot pool, or a rebind error)."""
     metadata = getattr(workflow, "proxy_metadata", None)
     if isinstance(metadata, dict):

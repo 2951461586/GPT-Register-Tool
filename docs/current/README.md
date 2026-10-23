@@ -49,7 +49,7 @@ below so existing links do not break:
 - [`mailbox.md`](mailbox.md) - 邮箱 provider 能力、配置注入、轮询和终止错误契约
 - [`one-click-sms.md`](one-click-sms.md) - 一键接码供应商、租号与持久化当前契约
 - [`registration-and-proxy-architecture.md`](registration-and-proxy-architecture.md) - runtime control flow and code locations for registration and the proxy lanes
-- [`protocol-payment-enhancement.md`](protocol-payment-enhancement.md) - protocol payment architecture and enhancements
+- [`protocol-payment-enhancement.md`](protocol-payment-enhancement.md) - protocol payment architecture (routing/executor/normalisation); design proposal archived under `docs/audits/plans/`
 - [`paypal-zero-due-link.md`](paypal-zero-due-link.md) - PayPal zero-due link contract
 - [`../README.md`](../README.md)
 

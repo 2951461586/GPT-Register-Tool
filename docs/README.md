@@ -46,7 +46,7 @@ Directory layout (since 2026-09-06):
 - [One-click SMS](current/one-click-sms.md) - 供应商协议族、租号与失败结果持久化。
 - [PayPal Zero-Due Link](current/paypal-zero-due-link.md) - promotion-update stage
   protocol, config keys, and region matrix search.
-- [Protocol Payment Enhancement](current/protocol-payment-enhancement.md) - 协议支付
+- [Protocol Payment Architecture](current/protocol-payment-enhancement.md) - 协议支付提链的现行路由/执行/归一契约
   提取器与终端报告契约。
 - [Troubleshooting](TROUBLESHOOTING.md) - 故障 → 编号检查清单（先跑
   `python -m sms_tool --doctor`）。每条清单按顺序可执行，并指向负责该行为的
@@ -62,6 +62,8 @@ Directory layout (since 2026-09-06):
 
 ## Release notes（docs/releases/，一个发布标签一份，不回写）
 
+- [v2026.10.23 发布说明](releases/release-v2026.10.23.md) - 自 v2026.10.19 以来的收口：
+  按 Chrome 155 HAR 更新客户端指纹与认证头、支付批量单行故障隔离、提取器超时预算与启动成本收紧。
 - [v2026.10.19 发布说明](releases/release-v2026.10.19.md) - 自 v2026.10.15 以来的收口：
   安装包内置 CPython、桌面账号列表增量刷新与 CLI/doctor 提速、进程级缓存上界、浏览器池内存上限，以及可选 Sentinel worker。
 - [v2026.10.15 发布说明](releases/release-v2026.10.15.md) - 自 v2026.10.12 以来的收口：

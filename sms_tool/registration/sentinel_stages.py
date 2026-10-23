@@ -18,7 +18,7 @@ codebase's documented way to keep the Node-runner dependency off the import
 graph until a run actually needs it.
 
 They are module-level functions that take the workflow instance as their first
-parameter, named ``workflow`` and annotated with ``RegistrationEmailWorkflow``
+parameter, named ``workflow`` and annotated with ``RegistrationWorkflow``
 under ``TYPE_CHECKING``, so the type checker resolves the workflow's attributes
 without a runtime import cycle back into ``registration_handlers``.
 """
@@ -32,12 +32,12 @@ from .flags import registration_flag
 from ..kernel.sanitizer import describe_exception
 
 if TYPE_CHECKING:  # pragma: no cover - import cycle guard for type checkers only
-    from .handlers import RegistrationEmailWorkflow
+    from .state import RegistrationWorkflow
 
 _LOGGER = logging.getLogger(__name__)
 
 
-def password_sentinel_bundle_enabled(workflow: RegistrationEmailWorkflow) -> bool:
+def password_sentinel_bundle_enabled(workflow: RegistrationWorkflow) -> bool:
     """``registration.sentinel_password_bundle`` (default off).
 
     Off by default because it changes the Sentinel payload shape -- the
@@ -51,7 +51,7 @@ def password_sentinel_bundle_enabled(workflow: RegistrationEmailWorkflow) -> boo
     return registration_flag(workflow.config, "sentinel_password_bundle", False)
 
 
-def prime_password_sentinel_bundle(workflow: RegistrationEmailWorkflow, *, reference_page: bool = False) -> None:
+def prime_password_sentinel_bundle(workflow: RegistrationWorkflow, *, reference_page: bool = False) -> None:
     """Pre-mint the password page's Sentinel flows from one shared proof.
 
     Only the password lane gets this: it is the page a browser primes a
@@ -109,7 +109,7 @@ def prime_password_sentinel_bundle(workflow: RegistrationEmailWorkflow, *, refer
     _LOGGER.info("Sentinel password flow bundle primed (shared requirements proof)")
 
 
-def issue_sentinel(workflow: RegistrationEmailWorkflow, flow: str, *, force_fresh: bool = False) -> Any:
+def issue_sentinel(workflow: RegistrationWorkflow, flow: str, *, force_fresh: bool = False) -> Any:
     """Issue one flow-bound Sentinel token for this run.
 
     ``force_fresh`` bypasses the supplied-bundle short-circuit

@@ -69,13 +69,29 @@ def _invalid_state_auth_response(data) -> bool:
     error: dict = _raw_error if isinstance(_raw_error, dict) else {}
     code = str(error.get("code") or "").strip().lower()
     message = str(error.get("message") or "").strip().lower()
-    return code == "invalid_state" or "session is no longer valid" in message
+    # The message literal contains " is "; the identity-operator rule reads
+    # that as an `is` comparison. This is a substring check.
+    return (
+        code == "invalid_state" or "session is no longer valid" in message
+    )  # pi-lens-ignore: no-identity-operator-on-literals
 
 
 def _auth_request_headers(
-    base_headers, did="", referer="", origin="", sentinel_token="", sentinel_so_token="", extra=None
+    base_headers,
+    did="",
+    referer="",
+    origin="",
+    sentinel_token="",
+    sentinel_so_token="",
+    extra=None,
+    flow_invocation_id="",
 ):
-    """Merge the canonical OpenAI auth headers over ``base_headers``."""
+    """Merge the canonical OpenAI auth headers over ``base_headers``.
+
+    ``flow_invocation_id`` overrides the run-level value carried by
+    ``base_headers``; the 2026-10-23 HAR sends a different id on each of
+    passwordless/send-otp, email-otp/validate and create_account.
+    """
     return {
         **(base_headers or {}),
         **openai_auth_headers(
@@ -84,6 +100,7 @@ def _auth_request_headers(
             origin=origin,
             sentinel_token=sentinel_token,
             sentinel_so_token=sentinel_so_token,
+            flow_invocation_id=flow_invocation_id,
             extra=extra or {},
         ),
     }

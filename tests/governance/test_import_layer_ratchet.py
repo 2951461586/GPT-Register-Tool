@@ -293,20 +293,34 @@ def test_summary_facts_are_pinned():
     # `delayed_import_ratchet`, which hides the coupling instead of recording
     # it. This is the reviewed increase: a leaf of string constants is the
     # cheapest edge in the tree, and `endpoints_literal_ratchet` requires it.
+    #
+    # 2026-10-23 (later): 453 -> 448, pairs 66 -> 65, mutual 18 -> 17. The P1
+    # import-cost work turned `registration/__init__.py`, `pay_link/__init__.py`
+    # and `payment/link_manager.py` into PEP 562 facades. The shell's
+    # `from ..pay_link import *` was the only `payment -> pay_link` runtime
+    # edge, so that pair disappears (the mutual pair count drops by one), and
+    # the facades no longer import their submodules at module scope. The shell's
+    # remaining cross-directory import of `pay_link` is type-only, which is why
+    # `type_only_edges` becomes 1 rather than 0.
     assert totals == {
-        "total_module_edges": 453,
-        "ordered_pairs": 66,
-        "mutual_pairs": 18,
-        "minority_edges": 49,
+        "total_module_edges": 448,
+        "ordered_pairs": 65,
+        "mutual_pairs": 17,
+        "minority_edges": 47,
         # 2026-10-21: 188 -> 190 when the provider ports seam (providers/ports.py)
         # took over the mailbox_pool_writer and desktop_ipc imports as delayed
         # ones. Before that, 190 -> 188 when store/connection.py stopped
         # importing the sms_tool.storage shell inside _init_cache_key/_connect.
-        "delayed_cross_dir_edges": 253,
+        # 2026-10-23 (P1): 256 -> 257 for the deferred
+        # `payment/routing.py -> proxy.routing` import that cut ~300 ms from
+        # every `payment.routing` consumer (see its reason in
+        # `delayed_import_reasons.json`).
+        "delayed_cross_dir_edges": 257,
         # Imports under `if TYPE_CHECKING:` never run, so they are not runtime
-        # edges. All eleven in the tree today are same-directory, hence 0 here;
-        # the metric exists so a cross-directory one is visible rather than silent.
-        "type_only_edges": 0,
+        # edges. 1 here since 2026-10-23: `payment/link_manager.py` declares its
+        # `pay_link` re-exports type-only (the module is not a package, so the
+        # lazy `__getattr__` resolves them at runtime instead).
+        "type_only_edges": 1,
     }
 
 

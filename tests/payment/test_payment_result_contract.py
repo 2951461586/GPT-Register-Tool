@@ -303,6 +303,51 @@ class PaymentResultContractTests(unittest.TestCase):
         self.assertEqual("validation", result["error_stage"])
         self.assertIs(False, result["retryable"])
 
+    def test_route_planning_failure_is_normalised_not_raised(self):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)),
+            patch(
+                "sms_tool.pay_link.core.PaymentRoutePlanner",
+                side_effect=RuntimeError("payment_checkout_proxy_pool_unavailable"),
+            ),
+        ):
+            result = manager.generate_payment_link("token", payment_method="direct_card")
+
+        self.assertIs(False, result["ok"])
+        self.assertEqual("proxy_setup", result["error_stage"])
+        self.assertIs(False, result["retryable"])
+        self.assertIn("proxy_pool_unavailable", result["error"])
+
+    def test_probe_and_generate_share_the_planning_failure_contract(self):
+        # Both public entry points must answer a pool outage the same way: a
+        # normalised result dict, never a raw exception.
+        failure = RuntimeError("payment_checkout_proxy_pool_unavailable")
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)),
+            patch("sms_tool.pay_link.core.PaymentRoutePlanner", side_effect=failure),
+        ):
+            extracted = manager.generate_payment_link("token", payment_method="direct_card")
+            probed = manager.probe_payment_method("token", "direct_card")
+
+        self.assertIs(False, extracted["ok"])
+        self.assertIs(False, probed["ok"])
+        self.assertEqual("proxy_setup", extracted["error_stage"])
+        self.assertEqual("proxy_setup", probed["error_stage"])
+        self.assertIs(False, extracted["retryable"])
+        self.assertIs(False, probed["retryable"])
+        self.assertEqual("payment_method_capability_probe", probed["operation"])
+        self.assertEqual("direct_card", probed["payment_method"])
+
+    def test_probe_normalises_an_unsupported_method_instead_of_raising(self):
+        probed = manager.probe_payment_method("token", "not-supported")
+
+        self.assertIs(False, probed["ok"])
+        self.assertEqual("validation", probed["error_stage"])
+        self.assertIs(False, probed["retryable"])
+        self.assertEqual("not-supported", probed["payment_method"])
+
 
 if __name__ == "__main__":
     unittest.main()

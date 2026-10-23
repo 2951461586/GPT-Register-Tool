@@ -29,7 +29,16 @@ import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
-FACADES = ("sms_tool.auth_flow", "sms_tool.upi_link")
+FACADES = (
+    "sms_tool.auth_flow",
+    "sms_tool.upi_link",
+    # 2026-10-23: the registration and payment-link facades joined the same
+    # pattern. ``registration`` used ``from .orchestrator import *`` (691 ms /
+    # 431 modules for a leaf submodule import, 378 ms of it curl_cffi) and
+    # ``pay_link`` imported all seven submodules eagerly (411 ms / 333 modules).
+    "sms_tool.registration",
+    "sms_tool.pay_link",
+)
 
 
 def _module(qualname: str):
@@ -74,3 +83,19 @@ def test_the_type_checking_block_declares_every_export(qualname):
                     declared.update(alias.asname or alias.name for alias in child.names)
     exported = set(_module(qualname).__all__)
     assert exported - declared == set()
+
+
+def test_link_manager_shell_does_not_import_pay_link_eagerly():
+    """``payment.link_manager`` is the compatibility shell for ``pay_link``.
+
+    It used ``from ..pay_link import *``, so ``import
+    sms_tool.payment.link_manager`` loaded the whole payment lane (461 ms / 329
+    modules) even for a caller that only wanted ``__all__``. PEP 562 resolves
+    each exported name on first access; this pins that the shell itself imports
+    no ``pay_link`` module.
+    """
+    code = (
+        "import sms_tool.payment.link_manager, sys;print([m for m in sys.modules if m.startswith('sms_tool.pay_link')])"
+    )
+    output = subprocess.check_output([sys.executable, "-c", code], cwd=str(PROJECT_ROOT), text=True)
+    assert output.strip() == "[]", f"payment.link_manager eagerly imported {output.strip()}"

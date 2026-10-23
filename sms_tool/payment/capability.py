@@ -346,6 +346,46 @@ def build_capability_probe_result(
     return result
 
 
+def capability_probe_failure(
+    payment_method: Any,
+    exc: BaseException,
+    *,
+    error_stage: str = "capability_probe",
+    default_error_code: str = "payment_method_capability_probe_failed",
+) -> dict[str, Any]:
+    """Return the probe contract for a failure that never created a Checkout.
+
+    The probe result shape is owned here, so the route-planning arm of
+    :func:`sms_tool.pay_link.core.probe_payment_method` and the PayPal fallback
+    cannot drift into two shapes. ``status`` follows the retry flag: a
+    retryable failure is ``unknown`` (nothing was learned about the method), a
+    non-retryable one is ``failed``.
+
+    ``retryable`` defaults to **False** because the callers are validation and
+    proxy-setup failures: an unsupported method or an unavailable pool is not
+    fixed by retrying the same request.
+    """
+    method = str(payment_method or "").strip().lower()
+    error_code = error_code_of(exc, default_error_code)
+    stage = error_stage_of(exc, error_stage)
+    retryable = retryable_flag(exc, False)
+    return {
+        "ok": False,
+        "operation": "payment_method_capability_probe",
+        "payment_method": method,
+        "status": "unknown" if retryable else "failed",
+        "classification": "unknown",
+        "decision": error_code,
+        "eligible": None,
+        "method_available": None,
+        "conclusive": False,
+        "error": _safe_error(exc),
+        "error_code": error_code,
+        "error_stage": stage,
+        "retryable": retryable,
+    }
+
+
 def payment_method_capability_probe(
     access_token: str,
     payment_method: str,
@@ -755,24 +795,11 @@ def _paypal_probe_failure(exc: BaseException) -> dict[str, Any]:
     Extracted from the ``except`` handler so the handler itself stays free of
     boolean operators (``no-boolean-in-except`` scans the whole clause body).
     """
-    error_code = error_code_of(exc, "paypal_capability_probe_failed")
-    error_stage = error_stage_of(exc, "capability_probe")
-    retryable = retryable_flag(exc, False)
-    return {
-        "ok": False,
-        "operation": "payment_method_capability_probe",
-        "payment_method": "paypal",
-        "status": "unknown" if retryable else "failed",
-        "classification": "unknown",
-        "decision": error_code,
-        "eligible": None,
-        "method_available": None,
-        "conclusive": False,
-        "error": _safe_error(exc),
-        "error_code": error_code,
-        "error_stage": error_stage,
-        "retryable": retryable,
-    }
+    return capability_probe_failure(
+        "paypal",
+        exc,
+        default_error_code="paypal_capability_probe_failed",
+    )
 
 
 def _paypal_capability_probe(

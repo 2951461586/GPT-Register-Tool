@@ -4,7 +4,7 @@ Split out of ``registration_handlers`` (2026-10-01, following the
 ``registration_finalize`` precedent): the send / wait / validate trio plus the
 two diagnostics that decide *why* a code never arrived form one cohesive unit.
 They are module-level functions that take the workflow instance as their first
-parameter, named ``workflow`` and annotated with ``RegistrationEmailWorkflow``
+parameter, named ``workflow`` and annotated with ``RegistrationWorkflow``
 under ``TYPE_CHECKING``, so the class keeps thin delegates and no caller (or
 test) changes.
 
@@ -37,12 +37,12 @@ from .protocol_helpers import _safe_int, registration_flag
 from ..otp_strategy import otp_resend_eligible
 
 if TYPE_CHECKING:  # pragma: no cover - import cycle guard for type checkers only
-    from .handlers import RegistrationEmailWorkflow
+    from .state import RegistrationWorkflow
 
 _LOGGER = logging.getLogger(__name__)
 
 
-def _otp_navigation_headers_enabled(workflow: RegistrationEmailWorkflow) -> bool:
+def _otp_navigation_headers_enabled(workflow: RegistrationWorkflow) -> bool:
     """``registration.otp_navigation_headers`` (default **False**).
 
     turb sends ``sec-fetch-site: same-origin`` + ``sec-fetch-user: ?1`` on the
@@ -55,7 +55,7 @@ def _otp_navigation_headers_enabled(workflow: RegistrationEmailWorkflow) -> bool
     return registration_flag(workflow.config, "otp_navigation_headers", False)
 
 
-def _otp_validate_sentinel_enabled(workflow: RegistrationEmailWorkflow) -> bool:
+def _otp_validate_sentinel_enabled(workflow: RegistrationWorkflow) -> bool:
     """``registration.otp_validate_sentinel`` (default **False**).
 
     turb mints a fresh ``authorize_continue`` Sentinel and attaches it (plus its
@@ -67,7 +67,7 @@ def _otp_validate_sentinel_enabled(workflow: RegistrationEmailWorkflow) -> bool:
     return registration_flag(workflow.config, "otp_validate_sentinel", False)
 
 
-def _otp_external_url_branch_enabled(workflow: RegistrationEmailWorkflow) -> bool:
+def _otp_external_url_branch_enabled(workflow: RegistrationWorkflow) -> bool:
     """``registration.otp_external_url_branch`` (default **False**).
 
     After a successful ``email-otp/validate`` the server's own answer decides
@@ -80,7 +80,7 @@ def _otp_external_url_branch_enabled(workflow: RegistrationEmailWorkflow) -> boo
     return registration_flag(workflow.config, "otp_external_url_branch", False)
 
 
-def _passwordless_explicit_send_otp_enabled(workflow: RegistrationEmailWorkflow) -> bool:
+def _passwordless_explicit_send_otp_enabled(workflow: RegistrationWorkflow) -> bool:
     """``registration.passwordless_explicit_send_otp`` (default **True** since 2026-10-11).
 
     Live, same exit (IN), fresh addresses: 5/5 explicit registrations versus 1/5
@@ -99,7 +99,7 @@ def _passwordless_explicit_send_otp_enabled(workflow: RegistrationEmailWorkflow)
     return registration_flag(workflow.config, "passwordless_explicit_send_otp", True)
 
 
-def _explicit_passwordless_send(workflow: RegistrationEmailWorkflow) -> Any:
+def _explicit_passwordless_send(workflow: RegistrationWorkflow) -> Any:
     """POST ``passwordless/send-otp`` the way the browser's verification page does."""
     r = workflow.r
     s = workflow.runtime
@@ -122,8 +122,11 @@ def _explicit_passwordless_send(workflow: RegistrationEmailWorkflow) -> Any:
             accept="*/*",
             sentinel_token=issued.token,
             session_id=s.session_logging_id,
-            flow_invocation_id=s.flow_invocation_id,
-            extra={"x-openai-document-navigation-id": str(uuid.uuid4())},
+            # Per-request id: the 2026-10-23 HAR sends a different
+            # x-access-flow-invocation-id on each of send-otp / validate /
+            # create_account, and the same page-level navigation id on all three.
+            flow_invocation_id=str(uuid.uuid4()),
+            extra={"x-openai-document-navigation-id": s.document_navigation_id},
         ),
         "Sec-Fetch-Dest": "empty",
         "Sec-Fetch-Mode": "cors",
@@ -172,7 +175,7 @@ _SEND_MODE_ENUM = frozenset({"passwordless_signup", "passwordless_login", "login
 _SEND_ERROR_CODE_RE = re.compile(r"[a-z0-9_.\-]{1,64}")
 
 
-def send_email_otp(workflow: RegistrationEmailWorkflow) -> None:
+def send_email_otp(workflow: RegistrationWorkflow) -> None:
     r = workflow.r
     s = workflow.runtime
     # Do NOT snapshot here.  The pre-OTP baseline is taken once in
@@ -222,12 +225,12 @@ def send_email_otp(workflow: RegistrationEmailWorkflow) -> None:
         s.otp_issued_after = max(0, s.auth_flow_started - 5)
 
 
-def _reference_lane_polls_anyway(workflow: RegistrationEmailWorkflow) -> bool:
+def _reference_lane_polls_anyway(workflow: RegistrationWorkflow) -> bool:
     probe = getattr(workflow, "_reference_lane_active", None)
     return bool(callable(probe) and probe() is True)
 
 
-def wait_email_otp(workflow: RegistrationEmailWorkflow) -> None:
+def wait_email_otp(workflow: RegistrationWorkflow) -> None:
     r = workflow.r
     s = workflow.runtime
     config = workflow.config if isinstance(workflow.config, MappingABC) else {}
@@ -280,13 +283,13 @@ def wait_email_otp(workflow: RegistrationEmailWorkflow) -> None:
         workflow._abort(workflow._otp_timeout_error())
 
 
-def _otp_provider(workflow: RegistrationEmailWorkflow) -> str:
+def _otp_provider(workflow: RegistrationWorkflow) -> str:
     """当前邮箱渠道名；拿不到就是空串（空串不在重发名单里 ⇒ 判「无重发」）。"""
     mailbox = getattr(workflow.runtime, "mailbox", None)
     return str(getattr(mailbox, "provider", "") or "").strip().lower()
 
 
-def _otp_timeout_error(workflow: RegistrationEmailWorkflow) -> str:
+def _otp_timeout_error(workflow: RegistrationWorkflow) -> str:
     """``email_otp_poll_timeout`` 加后缀，说明**码为什么没到**。
 
     脉冲调度（``registration_pulse``）把「一轮里 OTP 失败聚集」当成出口被
@@ -359,7 +362,7 @@ def _external_url_after_otp(otp_data: Any) -> str:
     return ""
 
 
-def validate_email_otp(workflow: RegistrationEmailWorkflow) -> None:
+def validate_email_otp(workflow: RegistrationWorkflow) -> None:
     r = workflow.r
     s = workflow.runtime
     use_sentinel = False
@@ -383,6 +386,8 @@ def validate_email_otp(workflow: RegistrationEmailWorkflow) -> None:
         s.email_code,
         sentinel_data=sentinel_data,
         use_sentinel=use_sentinel,
+        flow_invocation_id=str(uuid.uuid4()),
+        document_navigation_id=s.document_navigation_id,
     )
     if not otp_ok and r._is_wrong_email_otp_code(s.otp_data):
         _emit(_LOGGER, "  Email OTP was rejected; retrying latest mailbox code once...")

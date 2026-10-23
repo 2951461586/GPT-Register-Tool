@@ -28,7 +28,7 @@ from .link_manager import (
     probe_payment_method,
 )
 from .routing import PaymentRoutePlanner
-from .contracts import PaymentResult, payment_history_metadata, payment_retry_allowed
+from .contracts import PaymentResult, as_bool, payment_history_metadata, payment_retry_allowed
 from .catalog import PAYMENT_METHODS, offline_method_error
 from .batch_setup import apply_configured_stage_pools
 
@@ -185,8 +185,6 @@ def run_payment_batch(
     stage_state: dict[str, dict[str, Any]] = {}
 
     def emit(account_ref: str, stage: str, status: str = "running", **extra: Any) -> None:
-        if progress is None:
-            event = None
         now_mono = time.monotonic()
         state = stage_state.setdefault(
             account_ref,
@@ -220,334 +218,6 @@ def run_payment_batch(
         _append_event(event_path, event, run_signature, event_lock)
         if progress is not None:
             progress(event)
-
-    def run_one(index: int, email: str) -> tuple[int, dict[str, Any]]:
-        account_ref = _account_ref(email)
-        emit(account_ref, "routing")
-        seed_context, _ = load_account_seed(email=email)
-        seed_country = _registration_country(seed_context)
-        cell = _matrix_cell_for(index, cells, method, seed_country)
-        kwargs = _cell_payment_kwargs(base_kwargs, cell, proxy, payment_method=method, pool_index=index)
-        kwargs.pop("proxy", None)
-        plan = kwargs.get("payment_route_plan")
-        if plan is None:
-            plan = PaymentRoutePlanner(CFG).plan(
-                method,
-                options=kwargs,
-                default_proxy=proxy,
-                pool_offset=index,
-            )
-            kwargs = {**kwargs, **plan.to_adapter_options(), "payment_route_plan": plan}
-        checkout_route = plan.proxy_for("auth_gate") or plan.checkout_proxy or proxy
-        if checkout_route:
-            kwargs["checkout_proxy"] = checkout_route
-
-        emit(account_ref, "auth_gate")
-        manual_token = ""
-        for token_email, token_value in (access_tokens or {}).items():
-            if str(token_email).strip().lower() == email.strip().lower():
-                manual_token = str(token_value or "").strip()
-                break
-        if manual_token:
-            from ..accounts.account_liveness import probe_account_liveness
-
-            probe = probe_account_liveness(
-                {"email": email, "access_token": manual_token}, proxy=checkout_route, timeout=timeout
-            )
-            auth = {
-                "ok": int(probe.get("status_code") or 0) == 200,
-                "access_token": manual_token,
-                "auth_context": {"email": email, "access_token": manual_token},
-                "probed": True,
-                "refreshed": False,
-                "probe": probe,
-                "error": ""
-                if int(probe.get("status_code") or 0) == 200
-                else str(probe.get("error") or "token_invalid"),
-            }
-        else:
-            auth = ensure_payment_access_token(
-                email=email,
-                proxy=checkout_route,
-                timeout=timeout,
-                relogin_on_401=jit_refresh,
-                stabilization_probes=1,
-            )
-        auth_country = _registration_country(auth.get("auth_context"))
-        registration_country = auth_country or seed_country
-        expected_cell = _matrix_cell_for(index, cells, method, registration_country)
-        matrix_route_mismatch = expected_cell != cell
-        if matrix_route_mismatch:
-            cell = expected_cell
-        public_auth = public_payment_auth_result(auth)
-        public_auth.pop("email", None)
-        row: dict[str, Any] = {
-            "index": index,
-            "account_ref": _account_ref(email),
-            "matrix_cell": str(cell.get("name") or "default"),
-            "registration_country": registration_country,
-            "auth": public_auth,
-            "probed": bool(auth.get("probed")),
-            "refreshed": bool(auth.get("refreshed")),
-            "authenticated": bool(auth.get("ok")),
-            "eligible": None,
-            "capability_probed": False,
-            "attempted": False,
-            "ok": False,
-            "decision": "",
-            "error": "",
-        }
-        if not auth.get("ok"):
-            row["decision"] = str(auth.get("error") or "jit_auth_failed")
-            row["error"] = row["decision"]
-            if auth.get("terminal"):
-                row["retryable"] = False
-            # account_deactivated 是永久终态。ensure_payment_access_token 已经把终态
-            # 探测出来，但以前只写进 row["decision"] 就返回了，SQLite accounts 表
-            # 不会被更新 —— 下次批量还会把这个 deactivated 账号选进来再 JIT 一次，
-            # 白浪费一次 probe + 一次恢复链。这里显式落库，让后续批次过滤掉它。
-            if auth.get("terminal") or row["decision"] == "account_deactivated":
-                try:
-                    from ..accounts.account_recovery import _persist_permanent_deactivation, is_permanently_deactivated
-
-                    seed_data, _ = load_account_seed(email=email)
-                    if seed_data is not None and is_permanently_deactivated(seed_data):
-                        _persist_permanent_deactivation(seed_data)
-                        row["terminal_persisted"] = True
-                except (OSError, ValueError, TypeError, RuntimeError) as exc:
-                    # 落库失败不影响批次主流程，只标记一下，避免拖垮整批。
-                    row["terminal_persisted"] = False
-                    row["terminal_persist_error"] = _canonical_sanitize_text(str(exc))
-            row["status"] = "failed"
-            emit(account_ref, "auth_gate", "failed", detail=row["decision"], account_terminal=True)
-            timing = stage_state.get(account_ref, {})
-            row.update(
-                {
-                    "stage_timings_ms": dict(timing.get("timings") or {}),
-                    "total_duration_ms": int((time.monotonic() - timing.get("started", time.monotonic())) * 1000),
-                    "last_failed_stage": timing.get("last_failed_stage") or "auth_gate",
-                }
-            )
-            return index, row
-        emit(account_ref, "auth_gate", "completed")
-        if cell.get("matrix_mismatch") or matrix_route_mismatch:
-            row["eligible"] = False
-            row["decision"] = "matrix_registration_country_mismatch"
-            row["error"] = row["decision"]
-            row["retryable"] = False
-            emit(account_ref, "validation", "failed", detail=row["decision"], account_terminal=True)
-            timing = stage_state.get(account_ref, {})
-            row.update(
-                {
-                    "stage_timings_ms": dict(timing.get("timings") or {}),
-                    "total_duration_ms": int((time.monotonic() - timing.get("started", time.monotonic())) * 1000),
-                    "last_failed_stage": timing.get("last_failed_stage") or "validation",
-                }
-            )
-            return index, row
-        if probe_only:
-            emit(account_ref, "capability_probe")
-            capability: dict[str, Any] = {}
-            probe_attempt = 0
-            for probe_attempt in range(1, retry_count + 2):
-                capability = probe_payment_method(
-                    access_token=str(auth.get("access_token") or ""),
-                    payment_method=method,
-                    auth_context=auth.get("auth_context") if isinstance(auth.get("auth_context"), dict) else None,
-                    proxy=checkout_route,
-                    timeout=max(5, int(timeout or 30)),
-                    **kwargs,
-                )
-                if capability.get("ok") or not _is_transient(capability) or probe_attempt > retry_count:
-                    break
-            public = _public_payment_result(capability)
-            decision = str(public.get("decision") or public.get("error_code") or "capability_unknown")
-            row.update(public)
-            row.update(
-                {
-                    "auth": public_auth,
-                    "capability_probed": True,
-                    "attempted": False,
-                    "eligible": public.get("eligible") if isinstance(public.get("eligible"), bool) else None,
-                    "decision": decision,
-                    "attempts": probe_attempt,
-                }
-            )
-            emit(
-                account_ref,
-                "capability_probe",
-                "completed" if row.get("ok") else "failed",
-                account_terminal=True,
-            )
-            timing = stage_state.get(account_ref, {})
-            row.update(
-                {
-                    "stage_timings_ms": dict(timing.get("timings") or {}),
-                    "total_duration_ms": int((time.monotonic() - timing.get("started", time.monotonic())) * 1000),
-                    "last_failed_stage": timing.get("last_failed_stage"),
-                }
-            )
-            return index, row
-        if method == "paypal":
-            emit(account_ref, "capability_probe")
-            capability: dict[str, Any] = {}
-            probe_attempt = 0
-            for probe_attempt in range(1, retry_count + 2):
-                capability = probe_payment_method(
-                    access_token=str(auth.get("access_token") or ""),
-                    payment_method=method,
-                    auth_context=auth.get("auth_context") if isinstance(auth.get("auth_context"), dict) else None,
-                    proxy=checkout_route,
-                    timeout=max(5, int(timeout or 30)),
-                    **kwargs,
-                )
-                if capability.get("ok") or not _is_transient(capability) or probe_attempt > retry_count:
-                    break
-            public_capability = _public_payment_result(capability)
-            probed_eligible = public_capability.get("eligible")
-            if probed_eligible is not True:
-                decision = str(
-                    public_capability.get("decision")
-                    or public_capability.get("error_code")
-                    or ("trial_ineligible" if probed_eligible is False else "capability_unknown")
-                )
-                row.update(public_capability)
-                row.update(
-                    {
-                        "auth": public_auth,
-                        "capability_probed": True,
-                        "attempted": False,
-                        "eligible": probed_eligible if isinstance(probed_eligible, bool) else None,
-                        "decision": decision,
-                        "attempts": probe_attempt,
-                        "error_stage": str(public_capability.get("error_stage") or "eligibility"),
-                    }
-                )
-                if probed_eligible is False:
-                    row["classification"] = "ineligible"
-                    row["retryable"] = False
-                    row["error_stage"] = "eligibility"
-                emit(account_ref, "capability_probe", "failed", detail=decision, account_terminal=True)
-                timing = stage_state.get(account_ref, {})
-                row.update(
-                    {
-                        "stage_timings_ms": dict(timing.get("timings") or {}),
-                        "total_duration_ms": int((time.monotonic() - timing.get("started", time.monotonic())) * 1000),
-                        "last_failed_stage": timing.get("last_failed_stage") or "capability_probe",
-                    }
-                )
-                return index, row
-            row["capability_probed"] = True
-            row["eligible"] = True
-            emit(account_ref, "capability_probe", "completed")
-        last: dict[str, Any] = {}
-        attempt = 0
-        for attempt in range(1, retry_count + 2):
-            row["attempted"] = True
-            emit(account_ref, "provider", attempt=attempt, max_attempts=retry_count + 1)
-
-            def adapter_progress(event: dict[str, Any] | None = None) -> None:
-                """Fold adapter-level stages into the batch event/timing stream.
-
-                Adapters emit the detailed checkout/provider/redirect stages via
-                the payment-link manager.  Sending those events directly to the
-                caller used to leave the batch timing state stuck on ``provider``
-                and made the desktop progress view lose the canonical fields.
-                Re-emit through ``emit`` so every stage updates the same per-
-                account timer and event schema.
-                """
-                payload = dict(event or {})
-                stage = str(payload.pop("stage", "") or "provider").strip().lower()
-                status = str(payload.pop("status", payload.pop("state", "running")) or "running")
-                for key in (
-                    "domain",
-                    "run_id",
-                    "batch_id",
-                    "account_ref",
-                    "operation",
-                    "method",
-                    "attempt",
-                    "max_attempts",
-                    "account_terminal",
-                    "batch_terminal",
-                    "duration_ms",
-                    "stage_timings_ms",
-                    "last_failed_stage",
-                ):
-                    payload.pop(key, None)
-                emit(
-                    account_ref,
-                    stage,
-                    status,
-                    attempt=attempt,
-                    max_attempts=retry_count + 1,
-                    **payload,
-                )
-
-            last = generate_payment_link(
-                access_token=str(auth.get("access_token") or ""),
-                proxy=checkout_route,
-                payment_method=method,
-                operation_id=f"{batch_id}:{account_ref}",
-                idempotency_key=f"{batch_id}:{account_ref}",
-                auth_context=auth.get("auth_context") if isinstance(auth.get("auth_context"), dict) else None,
-                progress=adapter_progress,
-                **kwargs,
-            )
-            if last.get("ok") or not _is_transient(last) or attempt > retry_count:
-                break
-        authorization_queue: dict[str, Any] = {}
-        if method == "paypal" and last.get("ok") and last.get("url"):
-            try:
-                from ..paypal.authorization_queue import enqueue_paypal_ba_authorization
-
-                authorization_queue = enqueue_paypal_ba_authorization(
-                    email=email,
-                    approval_url=str(last.get("url") or ""),
-                    batch_id=batch_id,
-                    account_ref=account_ref,
-                    source_report=str(report_path),
-                )
-            except ValueError:
-                # Hosted Checkout links can legitimately omit a BA token. Only
-                # direct BA approval artifacts enter the follow-up queue.
-                authorization_queue = {}
-        public = _public_payment_result(last)
-        decision = str(
-            public.get("decision") or public.get("error_code") or ("ready" if public.get("ok") else "failed")
-        )
-        eligible = _eligible_from_result(method, public)
-        row.update(public)
-        if str(row.get("status") or "").lower() == "unknown":
-            row["requires_reconciliation"] = True
-        row.update(
-            {
-                "auth": public_auth,
-                "attempted": True,
-                "eligible": eligible,
-                "decision": decision,
-                "attempts": attempt,
-                "authorization_queued": bool(authorization_queue),
-                "authorization_queue_id": str(authorization_queue.get("id") or ""),
-                "authorization_status": str(authorization_queue.get("status") or ""),
-            }
-        )
-        emit(
-            account_ref,
-            "completed" if row.get("ok") else str(row.get("error_stage") or "failed"),
-            "completed" if row.get("ok") else "failed",
-            account_terminal=True,
-        )
-        timing = stage_state.get(account_ref, {})
-        row.update(
-            {
-                "stage_timings_ms": dict(timing.get("timings") or {}),
-                "total_duration_ms": int((time.monotonic() - timing.get("started", time.monotonic())) * 1000),
-                "last_failed_stage": timing.get("last_failed_stage")
-                or (str(row.get("error_stage") or "") if not row.get("ok") else ""),
-            }
-        )
-        return index, row
 
     last_checkpoint_write = [0.0]
 
@@ -584,25 +254,34 @@ def run_payment_batch(
         if pending:
             checkpoint("running", force=True)
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = {executor.submit(run_one, index, email): (index, email) for index, email in pending}
+            futures = {
+                executor.submit(
+                    _run_one_row,
+                    index,
+                    email,
+                    method=method,
+                    cells=cells,
+                    base_kwargs=base_kwargs,
+                    proxy=proxy,
+                    timeout=timeout,
+                    jit_refresh=jit_refresh,
+                    probe_only=probe_only,
+                    retry_count=retry_count,
+                    access_tokens=access_tokens,
+                    emit=emit,
+                    batch_id=batch_id,
+                    report_path=report_path,
+                    stage_state=stage_state,
+                ): (index, email)
+                for index, email in pending
+            }
             for future in as_completed(futures):
                 fallback_index, fallback_email = futures[future]
                 try:
                     index, row = future.result()
-                except (OSError, ValueError, TypeError, RuntimeError) as exc:
+                except Exception as exc:  # noqa: BLE001 - see _worker_exception_row
                     index = fallback_index
-                    row = {
-                        "index": index,
-                        "account_ref": _account_ref(fallback_email),
-                        "matrix_cell": "unassigned",
-                        "authenticated": False,
-                        "eligible": None,
-                        "attempted": False,
-                        "ok": False,
-                        "decision": "payment_worker_exception",
-                        "error": _canonical_sanitize_text(f"{type(exc).__name__}: {exc}"),
-                        "retryable": True,
-                    }
+                    row = _worker_exception_row(index, fallback_email, exc)
                 ordered[index] = row
                 checkpoint("running")
         report = checkpoint("finished")
@@ -618,6 +297,356 @@ def run_payment_batch(
         # accumulated before this line existed).
         process_gate.release()
         process_gate.discard()
+
+
+def _run_one_row(
+    index: int,
+    email: str,
+    *,
+    method: str,
+    cells: list[dict[str, Any]],
+    base_kwargs: dict[str, Any],
+    proxy: Any,
+    timeout: int,
+    jit_refresh: bool,
+    probe_only: bool,
+    retry_count: int,
+    access_tokens: dict[str, str] | None,
+    emit: Callable[..., None],
+    batch_id: str,
+    report_path: Path,
+    stage_state: dict[str, dict[str, Any]],
+) -> tuple[int, dict[str, Any]]:
+    """Run one account's JIT auth, capability probe and payment execution.
+
+    Extracted verbatim from the ``run_one`` closure (2026-10-23). The parameter
+    names are exactly the names the body already used, so the body is unchanged
+    apart from the dedent: the closure became an explicit argument list instead
+    of a hidden one. ``run_payment_batch`` keeps the orchestration (checkpoint,
+    executor, report) and submits this function.
+    """
+    account_ref = _account_ref(email)
+    emit(account_ref, "routing")
+    seed_context, _ = load_account_seed(email=email)
+    seed_country = _registration_country(seed_context)
+    cell = _matrix_cell_for(index, cells, method, seed_country)
+    kwargs = _cell_payment_kwargs(base_kwargs, cell, proxy, payment_method=method, pool_index=index)
+    kwargs.pop("proxy", None)
+    plan = kwargs.get("payment_route_plan")
+    if plan is None:
+        plan = PaymentRoutePlanner(CFG).plan(
+            method,
+            options=kwargs,
+            default_proxy=proxy,
+            pool_offset=index,
+        )
+        kwargs = {**kwargs, **plan.to_adapter_options(), "payment_route_plan": plan}
+    checkout_route = plan.proxy_for("auth_gate") or plan.checkout_proxy or proxy
+    if checkout_route:
+        kwargs["checkout_proxy"] = checkout_route
+
+    emit(account_ref, "auth_gate")
+    manual_token = ""
+    for token_email, token_value in (access_tokens or {}).items():
+        if str(token_email).strip().lower() == email.strip().lower():
+            manual_token = str(token_value or "").strip()
+            break
+    if manual_token:
+        from ..accounts.account_liveness import probe_account_liveness
+
+        probe = probe_account_liveness(
+            {"email": email, "access_token": manual_token}, proxy=checkout_route, timeout=timeout
+        )
+        auth = {
+            "ok": int(probe.get("status_code") or 0) == 200,
+            "access_token": manual_token,
+            "auth_context": {"email": email, "access_token": manual_token},
+            "probed": True,
+            "refreshed": False,
+            "probe": probe,
+            "error": "" if int(probe.get("status_code") or 0) == 200 else str(probe.get("error") or "token_invalid"),
+        }
+    else:
+        auth = ensure_payment_access_token(
+            email=email,
+            proxy=checkout_route,
+            timeout=timeout,
+            relogin_on_401=jit_refresh,
+            stabilization_probes=1,
+        )
+    auth_country = _registration_country(auth.get("auth_context"))
+    registration_country = auth_country or seed_country
+    expected_cell = _matrix_cell_for(index, cells, method, registration_country)
+    matrix_route_mismatch = expected_cell != cell
+    if matrix_route_mismatch:
+        cell = expected_cell
+    public_auth = public_payment_auth_result(auth)
+    public_auth.pop("email", None)
+    row: dict[str, Any] = {
+        "index": index,
+        "account_ref": _account_ref(email),
+        "matrix_cell": str(cell.get("name") or "default"),
+        "registration_country": registration_country,
+        "auth": public_auth,
+        "probed": bool(auth.get("probed")),
+        "refreshed": bool(auth.get("refreshed")),
+        "authenticated": bool(auth.get("ok")),
+        "eligible": None,
+        "capability_probed": False,
+        "attempted": False,
+        "ok": False,
+        "decision": "",
+        "error": "",
+    }
+    if not auth.get("ok"):
+        row["decision"] = str(auth.get("error") or "jit_auth_failed")
+        row["error"] = row["decision"]
+        if auth.get("terminal"):
+            row["retryable"] = False
+        # account_deactivated 是永久终态。ensure_payment_access_token 已经把终态
+        # 探测出来，但以前只写进 row["decision"] 就返回了，SQLite accounts 表
+        # 不会被更新 —— 下次批量还会把这个 deactivated 账号选进来再 JIT 一次，
+        # 白浪费一次 probe + 一次恢复链。这里显式落库，让后续批次过滤掉它。
+        if auth.get("terminal") or row["decision"] == "account_deactivated":
+            try:
+                from ..accounts.account_recovery import _persist_permanent_deactivation, is_permanently_deactivated
+
+                seed_data, _ = load_account_seed(email=email)
+                if seed_data is not None and is_permanently_deactivated(seed_data):
+                    _persist_permanent_deactivation(seed_data)
+                    row["terminal_persisted"] = True
+            except (OSError, ValueError, TypeError, RuntimeError) as exc:
+                # 落库失败不影响批次主流程，只标记一下，避免拖垮整批。
+                row["terminal_persisted"] = False
+                row["terminal_persist_error"] = _canonical_sanitize_text(str(exc))
+        row["status"] = "failed"
+        emit(account_ref, "auth_gate", "failed", detail=row["decision"], account_terminal=True)
+        timing = stage_state.get(account_ref, {})
+        row.update(
+            {
+                "stage_timings_ms": dict(timing.get("timings") or {}),
+                "total_duration_ms": int((time.monotonic() - timing.get("started", time.monotonic())) * 1000),
+                "last_failed_stage": timing.get("last_failed_stage") or "auth_gate",
+            }
+        )
+        return index, row
+    emit(account_ref, "auth_gate", "completed")
+    if cell.get("matrix_mismatch") or matrix_route_mismatch:
+        row["eligible"] = False
+        row["decision"] = "matrix_registration_country_mismatch"
+        row["error"] = row["decision"]
+        row["retryable"] = False
+        emit(account_ref, "validation", "failed", detail=row["decision"], account_terminal=True)
+        timing = stage_state.get(account_ref, {})
+        row.update(
+            {
+                "stage_timings_ms": dict(timing.get("timings") or {}),
+                "total_duration_ms": int((time.monotonic() - timing.get("started", time.monotonic())) * 1000),
+                "last_failed_stage": timing.get("last_failed_stage") or "validation",
+            }
+        )
+        return index, row
+    if probe_only:
+        emit(account_ref, "capability_probe")
+        capability: dict[str, Any] = {}
+        probe_attempt = 0
+        for probe_attempt in range(1, retry_count + 2):
+            capability = probe_payment_method(
+                access_token=str(auth.get("access_token") or ""),
+                payment_method=method,
+                auth_context=auth.get("auth_context") if isinstance(auth.get("auth_context"), dict) else None,
+                proxy=checkout_route,
+                timeout=max(5, int(timeout or 30)),
+                **kwargs,
+            )
+            if capability.get("ok") or not _is_transient(capability) or probe_attempt > retry_count:
+                break
+        public = _public_payment_result(capability)
+        decision = str(public.get("decision") or public.get("error_code") or "capability_unknown")
+        row.update(public)
+        row.update(
+            {
+                "auth": public_auth,
+                "capability_probed": True,
+                "attempted": False,
+                "eligible": public.get("eligible") if isinstance(public.get("eligible"), bool) else None,
+                "decision": decision,
+                "attempts": probe_attempt,
+            }
+        )
+        emit(
+            account_ref,
+            "capability_probe",
+            "completed" if row.get("ok") else "failed",
+            account_terminal=True,
+        )
+        timing = stage_state.get(account_ref, {})
+        row.update(
+            {
+                "stage_timings_ms": dict(timing.get("timings") or {}),
+                "total_duration_ms": int((time.monotonic() - timing.get("started", time.monotonic())) * 1000),
+                "last_failed_stage": timing.get("last_failed_stage"),
+            }
+        )
+        return index, row
+    if method == "paypal":
+        emit(account_ref, "capability_probe")
+        capability: dict[str, Any] = {}
+        probe_attempt = 0
+        for probe_attempt in range(1, retry_count + 2):
+            capability = probe_payment_method(
+                access_token=str(auth.get("access_token") or ""),
+                payment_method=method,
+                auth_context=auth.get("auth_context") if isinstance(auth.get("auth_context"), dict) else None,
+                proxy=checkout_route,
+                timeout=max(5, int(timeout or 30)),
+                **kwargs,
+            )
+            if capability.get("ok") or not _is_transient(capability) or probe_attempt > retry_count:
+                break
+        public_capability = _public_payment_result(capability)
+        probed_eligible = public_capability.get("eligible")
+        if probed_eligible is not True:
+            decision = str(
+                public_capability.get("decision")
+                or public_capability.get("error_code")
+                or ("trial_ineligible" if probed_eligible is False else "capability_unknown")
+            )
+            row.update(public_capability)
+            row.update(
+                {
+                    "auth": public_auth,
+                    "capability_probed": True,
+                    "attempted": False,
+                    "eligible": probed_eligible if isinstance(probed_eligible, bool) else None,
+                    "decision": decision,
+                    "attempts": probe_attempt,
+                    "error_stage": str(public_capability.get("error_stage") or "eligibility"),
+                }
+            )
+            if probed_eligible is False:
+                row["classification"] = "ineligible"
+                row["retryable"] = False
+                row["error_stage"] = "eligibility"
+            emit(account_ref, "capability_probe", "failed", detail=decision, account_terminal=True)
+            timing = stage_state.get(account_ref, {})
+            row.update(
+                {
+                    "stage_timings_ms": dict(timing.get("timings") or {}),
+                    "total_duration_ms": int((time.monotonic() - timing.get("started", time.monotonic())) * 1000),
+                    "last_failed_stage": timing.get("last_failed_stage") or "capability_probe",
+                }
+            )
+            return index, row
+        row["capability_probed"] = True
+        row["eligible"] = True
+        emit(account_ref, "capability_probe", "completed")
+    last: dict[str, Any] = {}
+    attempt = 0
+    for attempt in range(1, retry_count + 2):
+        row["attempted"] = True
+        emit(account_ref, "provider", attempt=attempt, max_attempts=retry_count + 1)
+
+        def adapter_progress(event: dict[str, Any] | None = None) -> None:
+            """Fold adapter-level stages into the batch event/timing stream.
+
+            Adapters emit the detailed checkout/provider/redirect stages via
+            the payment-link manager.  Sending those events directly to the
+            caller used to leave the batch timing state stuck on ``provider``
+            and made the desktop progress view lose the canonical fields.
+            Re-emit through ``emit`` so every stage updates the same per-
+            account timer and event schema.
+            """
+            payload = dict(event or {})
+            stage = str(payload.pop("stage", "") or "provider").strip().lower()
+            status = str(payload.pop("status", payload.pop("state", "running")) or "running")
+            for key in (
+                "domain",
+                "run_id",
+                "batch_id",
+                "account_ref",
+                "operation",
+                "method",
+                "attempt",
+                "max_attempts",
+                "account_terminal",
+                "batch_terminal",
+                "duration_ms",
+                "stage_timings_ms",
+                "last_failed_stage",
+            ):
+                payload.pop(key, None)
+            emit(
+                account_ref,
+                stage,
+                status,
+                attempt=attempt,
+                max_attempts=retry_count + 1,
+                **payload,
+            )
+
+        last = generate_payment_link(
+            access_token=str(auth.get("access_token") or ""),
+            proxy=checkout_route,
+            payment_method=method,
+            operation_id=f"{batch_id}:{account_ref}",
+            idempotency_key=f"{batch_id}:{account_ref}",
+            auth_context=auth.get("auth_context") if isinstance(auth.get("auth_context"), dict) else None,
+            progress=adapter_progress,
+            **kwargs,
+        )
+        if last.get("ok") or not _is_transient(last) or attempt > retry_count:
+            break
+    authorization_queue: dict[str, Any] = {}
+    if method == "paypal" and last.get("ok") and last.get("url"):
+        try:
+            from ..paypal.authorization_queue import enqueue_paypal_ba_authorization
+
+            authorization_queue = enqueue_paypal_ba_authorization(
+                email=email,
+                approval_url=str(last.get("url") or ""),
+                batch_id=batch_id,
+                account_ref=account_ref,
+                source_report=str(report_path),
+            )
+        except ValueError:
+            # Hosted Checkout links can legitimately omit a BA token. Only
+            # direct BA approval artifacts enter the follow-up queue.
+            authorization_queue = {}
+    public = _public_payment_result(last)
+    decision = str(public.get("decision") or public.get("error_code") or ("ready" if public.get("ok") else "failed"))
+    eligible = _eligible_from_result(method, public)
+    row.update(public)
+    if str(row.get("status") or "").lower() == "unknown":
+        row["requires_reconciliation"] = True
+    row.update(
+        {
+            "auth": public_auth,
+            "attempted": True,
+            "eligible": eligible,
+            "decision": decision,
+            "attempts": attempt,
+            "authorization_queued": bool(authorization_queue),
+            "authorization_queue_id": str(authorization_queue.get("id") or ""),
+            "authorization_status": str(authorization_queue.get("status") or ""),
+        }
+    )
+    emit(
+        account_ref,
+        "completed" if row.get("ok") else str(row.get("error_stage") or "failed"),
+        "completed" if row.get("ok") else "failed",
+        account_terminal=True,
+    )
+    timing = stage_state.get(account_ref, {})
+    row.update(
+        {
+            "stage_timings_ms": dict(timing.get("timings") or {}),
+            "total_duration_ms": int((time.monotonic() - timing.get("started", time.monotonic())) * 1000),
+            "last_failed_stage": timing.get("last_failed_stage")
+            or (str(row.get("error_stage") or "") if not row.get("ok") else ""),
+        }
+    )
+    return index, row
 
 
 def _build_report(
@@ -657,6 +686,60 @@ def _build_report(
         "matrix": _matrix_summary(results, cells),
         "results": results,
         "report_path": str(report_path),
+    }
+
+
+#: Exception types that mean "this row hit a code/contract defect", mirroring
+#: ``registration_handlers._run_stage``'s internal tuple. Re-running the account
+#: cannot fix them, so a worker row carrying one must not be requeued forever.
+_INTERNAL_WORKER_ERRORS = (
+    NameError,
+    AttributeError,
+    ImportError,
+    KeyError,
+    TypeError,
+    IndexError,
+    UnboundLocalError,
+    NotImplementedError,
+    RecursionError,
+)
+
+
+def _worker_exception_row(index: int, email: str, exc: BaseException) -> dict[str, Any]:
+    """Per-row fallback for an exception that escaped ``run_one``.
+
+    The worker loop below is the only place a checkpoint is written, so an
+    exception escaping ``future.result()`` aborts ``as_completed`` and loses the
+    report for every row that already finished. The catch used to be
+    ``(OSError, ValueError, TypeError, RuntimeError)``; a ``KeyError`` /
+    ``AttributeError`` / ``AssertionError`` from a provider payload, or any
+    custom ``Exception`` subclass, took the whole batch down with them. Catching
+    ``Exception`` is what makes "the batch always writes a checkpoint" true.
+
+    ``retryable`` still follows the shared taxonomy: a programming or
+    configuration defect is not fixed by re-running the account, while
+    transport/unknown failures stay retryable. ``failure_class`` records the
+    branch so an operator does not have to re-derive it from the message.
+    """
+    internal = isinstance(exc, _INTERNAL_WORKER_ERRORS)
+    # Function-local: the shared classifier is a leaf utility and this is its
+    # only call site in the payment lane, so a module-level edge would grow the
+    # layer ratchet for one use. The delayed-import ratchet records the reason.
+    from ..kernel.error_classification import classify_error
+
+    failure_class = "internal" if internal else classify_error(f"{type(exc).__name__}: {exc}")
+    return {
+        "index": index,
+        "account_ref": _account_ref(email),
+        "matrix_cell": "unassigned",
+        "authenticated": False,
+        "eligible": None,
+        "attempted": False,
+        "ok": False,
+        "decision": "payment_worker_exception",
+        "failure_class": failure_class,
+        "error": _canonical_sanitize_text(f"{type(exc).__name__}: {exc}"),
+        "retryable": failure_class not in {"internal", "configuration", "cancelled"},
     }
 
 
@@ -1019,7 +1102,10 @@ def _canary_state_path() -> Path:
 
 
 def _active_canary_pause(batch_cfg: dict[str, Any], method: str) -> dict[str, Any]:
-    if not bool(batch_cfg.get("pause_on_canary_failure", True)):
+    # ``as_bool`` instead of ``bool(...)``: a hand-edited ``"false"`` used to be
+    # truthy and kept the pause armed. Only an explicit false spelling disables
+    # it; absent or unparseable values keep the fail-safe default (paused).
+    if as_bool(batch_cfg.get("pause_on_canary_failure", True)) is False:
         return {}
     path = _canary_state_path()
     if not path.is_file():

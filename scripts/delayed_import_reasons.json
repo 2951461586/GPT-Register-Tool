@@ -27,6 +27,18 @@
     "sms_tool/providers/ports.py -> sms_tool.mailbox.pool_writer": {
       "reason": "deferred",
       "why": "provider port wires lazily so provider adapters never import pool persistence at module scope (Rule 3)"
+    },
+    "sms_tool/pay_link/base.py -> sms_tool.payment.contracts": {
+      "reason": "deferred",
+      "why": "P2-4: the tolerant boolean parser has one owner (payment.contracts.as_bool). pay_link -> payment is already a frozen facade edge, so importing one more payment module at module scope would grow the layer ratchet for a one-line delegation; the import runs inside _as_bool instead."
+    },
+    "sms_tool/payment/batch.py -> sms_tool.kernel.error_classification": {
+      "reason": "deferred",
+      "why": "P2-3: the shared failure classifier is a leaf utility with one call site in this module (_worker_exception_row). A module-level edge would grow the layer ratchet for one use, so the import runs inside the per-row fallback."
+    },
+    "sms_tool/payment/routing.py -> sms_tool.proxy.routing": {
+      "reason": "deferred",
+      "why": "P1 (2026-10-23): proxy.routing imports phone_proxy at module scope, which imports requests; a module-level import here made every payment.routing consumer pay ~300 ms for a helper used by one branch (_named_pools). The planner is pure data shaping and must not pull a transport stack in."
     }
   }
 }

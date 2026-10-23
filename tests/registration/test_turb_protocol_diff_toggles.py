@@ -32,6 +32,12 @@ from typing import Any, cast
 from unittest.mock import Mock, patch
 
 from sms_tool import auth_flow
+
+# Populate the lazy facade's submodule attributes explicitly: ``auth_flow.steps``
+# is normal attribute access, and a lazy package does not import submodules on
+# its own. Without this the file only passes when an earlier test happened to
+# import them (order dependence, not a behaviour contract).
+from sms_tool.auth_flow import deps, signup, steps  # noqa: F401
 from sms_tool.registration import otp_stages as otp_stages
 from sms_tool.registration.handlers import RegistrationEmailWorkflow
 from sms_tool.registration.protocol_helpers import registration_flag
@@ -226,6 +232,7 @@ class PrimePasswordPageFatalTests(unittest.TestCase):
 
 class _OtpStage:
     def __init__(self, config: dict, **runtime):
+        runtime.setdefault("document_navigation_id", "nav-1")
         self.runtime = SimpleNamespace(**runtime)
         self.config = config
         self.r = SimpleNamespace()
@@ -313,6 +320,9 @@ class OtpValidateSentinelTests(unittest.TestCase):
         stage = _validate_stage(sentinel_enabled=False, branch_enabled=False, otp_data={"page": {"type": "about_you"}})
         self.assertFalse(stage.r._validate_email_otp.call_args.kwargs["use_sentinel"])
         self.assertEqual(stage.r._validate_email_otp.call_args.kwargs["sentinel_data"], {"sentinel_token": "cached"})
+        # P2 (HAR 2026-10-23): per-request invocation id + page-level nav id.
+        self.assertTrue(stage.r._validate_email_otp.call_args.kwargs["flow_invocation_id"])
+        self.assertEqual(stage.r._validate_email_otp.call_args.kwargs["document_navigation_id"], "nav-1")
 
     def test_toggle_mints_a_fresh_authorize_continue_pair(self):
         stage = _validate_stage(sentinel_enabled=True, branch_enabled=False, otp_data={"page": {"type": "about_you"}})

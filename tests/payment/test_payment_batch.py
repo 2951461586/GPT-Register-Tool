@@ -979,6 +979,55 @@ class PaymentBatchTests(unittest.TestCase):
         self.assertTrue(any(event.get("replayed") for event in replayed))
         self.assertTrue(any(event.get("account_terminal") for event in replayed))
 
+    def test_any_worker_exception_still_writes_a_checkpoint_row(self):
+        # A KeyError is not OSError/ValueError/TypeError/RuntimeError, so it
+        # escaped the old per-row catch and aborted the as_completed loop --
+        # losing the checkpoint for every row that had already finished.
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(payment_batch, "load_account_seed", side_effect=KeyError("payload_shape")),
+            patch.object(payment_batch, "_report_path", return_value=Path(tmp) / "report.json"),
+        ):
+            report = payment_batch.run_payment_batch(["a@example.com"], payment_method="momo")
+
+        self.assertEqual(report["counts"]["requested"], 1)
+        self.assertEqual(report["counts"]["failed"], 1)
+        self.assertEqual(report["counts"]["retryable"], 0)
+        row = report["results"][0]
+        self.assertEqual(row["decision"], "payment_worker_exception")
+        self.assertEqual(row["failure_class"], "internal")
+        self.assertFalse(row["retryable"])
+        self.assertIn("KeyError", row["error"])
+
+    def test_worker_exception_row_keeps_transport_failures_retryable(self):
+        internal = payment_batch._worker_exception_row(0, "a@example.com", KeyError("x"))
+        transport = payment_batch._worker_exception_row(0, "a@example.com", RuntimeError("connection reset"))
+
+        self.assertEqual(internal["decision"], "payment_worker_exception")
+        self.assertFalse(internal["retryable"])
+        self.assertEqual(transport["decision"], "payment_worker_exception")
+        self.assertTrue(transport["retryable"])
+
+
+class CanaryPauseConfigTests(unittest.TestCase):
+    """The pause switch must honour the same boolean spellings as every other seam."""
+
+    def test_explicit_false_spellings_disable_the_pause(self):
+        for spelling in (False, "false", "0", "no"):
+            with self.subTest(spelling=spelling):
+                with patch.object(payment_batch, "_canary_state_path") as path:
+                    self.assertEqual(
+                        payment_batch._active_canary_pause({"pause_on_canary_failure": spelling}, "momo"),
+                        {},
+                    )
+                    path.assert_not_called()
+
+    def test_default_and_explicit_true_still_consult_the_state_file(self):
+        with patch.object(payment_batch, "_canary_state_path", return_value=Path("missing.json")) as path:
+            self.assertEqual(payment_batch._active_canary_pause({}, "momo"), {})
+            self.assertEqual(payment_batch._active_canary_pause({"pause_on_canary_failure": "true"}, "momo"), {})
+            self.assertEqual(path.call_count, 2)
+
 
 if __name__ == "__main__":
     unittest.main()
