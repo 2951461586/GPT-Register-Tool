@@ -196,9 +196,32 @@ class OutputDecoding(unittest.TestCase):
     def test_utf8_output_is_decoded_as_utf8(self):
         self.assertEqual(dwr._decode_output("#拒绝".encode()), "#拒绝")
 
-    def test_gbk_output_is_decoded_with_the_locale_fallback(self):
-        """MSBuild writes the OEM code page on some consoles; never crash on it."""
-        self.assertEqual(dwr._decode_output("已通过".encode("gbk")), "已通过")
+    def test_gbk_output_is_decoded_when_the_locale_says_gbk(self):
+        """MSBuild writes the console code page, so the *locale* picks the codec.
+
+        The encoding has to be injected. On an en-US runner the locale is cp1252,
+        which decodes **any** byte string without raising, so GBK bytes come back
+        as mojibake -- the previous version of this test therefore only passed on
+        a zh-CN machine and failed in CI (2026-10-23:
+        ``'\xd2\xd1\xcd\xa8\xb9\xfd' != '已通过'``, the first run that ever
+        reached this test).
+        """
+        with mock.patch.object(dwr.locale, "getpreferredencoding", return_value="gbk"):
+            self.assertEqual(dwr._decode_output("已通过".encode("gbk")), "已通过")
+
+    def test_undecodable_bytes_never_raise_whatever_the_locale(self):
+        """The contract is "always text": a decode failure must not kill the gate.
+
+        ``b"\\xff\\xfe"`` is invalid UTF-8, and cp1252 is the last resort on a
+        non-Chinese runner -- the point is that a mojibake string is returned
+        rather than an exception, because the CS markers the ratchet counts are
+        ASCII and survive any of these codecs.
+        """
+        raw = b"\xff\xfe# \xd2\xd1\xcd\xa8\xb9\xfd"
+        with mock.patch.object(dwr.locale, "getpreferredencoding", return_value="cp1252"):
+            decoded = dwr._decode_output(raw)
+        self.assertIsInstance(decoded, str)
+        self.assertIn("#", decoded)
 
 
 class TheCurrentTree(unittest.TestCase):
