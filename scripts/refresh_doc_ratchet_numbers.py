@@ -81,6 +81,9 @@ def render_architecture() -> list[str]:
         raise RuntimeError("; ".join(mismatches))
     named, _duplicates = coverage.coverage_counts(tracked, claims)
 
+    function_length = _tool("function_length_ratchet")
+    long_functions = function_length.collect()
+
     return [
         "| Measure | Value |",
         "| --- | --- |",
@@ -89,6 +92,8 @@ def render_architecture() -> list[str]:
         f"| Mutual pairs / minority-direction edges | {totals['mutual_pairs']} / {totals['minority_edges']} |",
         f"| Delayed cross-directory edges | {totals['delayed_cross_dir_edges']} |",
         f"| Delayed imports in the package | {delayed_total} (baseline {delayed_allowed}) |",
+        f"| Functions at or above {function_length.THRESHOLD} lines | {len(long_functions)} (frozen, "
+        "`scripts/function_length_ratchet.py`) |",
         f"| Claimed tracked `sms_tool` modules | {len(named)} of {len(tracked)} "
         f"({len(unclaimed)} unclaimed, {groups_seen} directory-map groups) |",
     ]
