@@ -302,11 +302,24 @@ def test_summary_facts_are_pinned():
     # the facades no longer import their submodules at module scope. The shell's
     # remaining cross-directory import of `pay_link` is type-only, which is why
     # `type_only_edges` becomes 1 rather than 0.
+    #
+    # 2026-10-23 (import cleanup + stage proxies): 448 -> 436, minority 47 -> 46.
+    # Two changes in one day, both reviewed:
+    #   -13: the 37 dead `except ImportError` fallbacks deleted that day included
+    #        13 that spelled the shadow copy out as a full `sms_tool.x.y` path.
+    #        Those were real module-level edges (unreachable at runtime, but the
+    #        graph counts statements), so removing the handler removed them: 12
+    #        were majority-direction for their pair and one was the only
+    #        minority-direction edge of its pair.
+    #   +1:  `paypal_link/__init__.py` now imports `_resolve_stage_proxy` /
+    #        `_stage_proxy_is_configured` from their owner `paypal.proxy` instead
+    #        of relaying them through `gen_link`. Same pair, same direction, one
+    #        more statement -- pairs and mutual pairs are unchanged.
     assert totals == {
-        "total_module_edges": 448,
+        "total_module_edges": 436,
         "ordered_pairs": 65,
         "mutual_pairs": 17,
-        "minority_edges": 47,
+        "minority_edges": 46,
         # 2026-10-21: 188 -> 190 when the provider ports seam (providers/ports.py)
         # took over the mailbox_pool_writer and desktop_ipc imports as delayed
         # ones. Before that, 190 -> 188 when store/connection.py stopped

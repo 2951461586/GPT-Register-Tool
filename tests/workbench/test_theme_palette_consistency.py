@@ -2,8 +2,11 @@
 
 The same brush keys are declared twice:
 
-* ``App.xaml`` declares ~48 ``SolidColorBrush`` resources (the first-frame
-  values, resolved before any code runs).
+* the XAML side declares ~48 ``SolidColorBrush`` resources (the first-frame
+  values, resolved before any code runs). Since 2026-10-23 they live in
+  ``Themes/Palette.xaml``, merged into ``App.xaml`` before ``Themes/Controls.xaml``;
+  this test reads both XAML files so the split cannot hide a brush from the
+  check.
 * ``MainWindow.Theme.cs`` re-declares them with ``SetBrush("Key", "#Hex")`` for
   both the light and dark palettes, and ``MainWindow.xaml.cs`` calls
   ``ApplyCustomThemeColors`` from the constructor -- so the C# values win from
@@ -25,6 +28,11 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 APP_XAML = PROJECT_ROOT / "SmsWorkbench" / "App.xaml"
+PALETTE_XAML = PROJECT_ROOT / "SmsWorkbench" / "Themes" / "Palette.xaml"
+#: Every XAML file that may declare a brush. ``Palette.xaml`` owns them since the
+#: 2026-10-23 split; ``App.xaml`` stays in the list so a brush added back to the
+#: application file is still compared against the theme code.
+BRUSH_XAML_FILES = (PALETTE_XAML, APP_XAML)
 THEME_CS = PROJECT_ROOT / "SmsWorkbench" / "Views" / "MainWindow.Theme.cs"
 
 XAML_BRUSH = re.compile(r'<SolidColorBrush\s+x:Key="(?P<key>[^"]+)"\s+Color="(?P<color>#[0-9A-Fa-f]{6,8})"')
@@ -40,7 +48,11 @@ def _normalise(value):
 
 
 def _xaml_brushes():
-    return {key: _normalise(color) for key, color in XAML_BRUSH.findall(APP_XAML.read_text(encoding="utf-8-sig"))}
+    found = {}
+    for path in BRUSH_XAML_FILES:
+        for key, color in XAML_BRUSH.findall(path.read_text(encoding="utf-8-sig")):
+            found[key] = _normalise(color)
+    return found
 
 
 def _csharp_brushes():
@@ -53,7 +65,8 @@ def _csharp_brushes():
 
 class PaletteDriftTests(unittest.TestCase):
     def test_both_sides_parse(self):
-        self.assertTrue(APP_XAML.is_file())
+        for path in BRUSH_XAML_FILES:
+            self.assertTrue(path.is_file(), path)
         self.assertTrue(THEME_CS.is_file())
         self.assertGreater(len(_xaml_brushes()), 20)
         self.assertGreater(len(_csharp_brushes()), 20)
@@ -87,11 +100,19 @@ class PaletteDriftTests(unittest.TestCase):
         xaml = _xaml_brushes()
         cs = _csharp_brushes()
         undeclared = sorted(set(cs) - set(xaml))
-        self.assertEqual(undeclared, [], "SetBrush targets keys App.xaml never declares")
+        self.assertEqual(undeclared, [], "SetBrush targets keys the XAML side never declares")
 
-    def test_no_duplicate_brush_key_in_app_xaml(self):
-        """A repeated x:Key is legal XAML but only the last one wins."""
-        keys = re.findall(r'<SolidColorBrush\s+x:Key="([^"]+)"', APP_XAML.read_text(encoding="utf-8-sig"))
+    def test_no_duplicate_brush_key(self):
+        """A repeated x:Key is legal XAML but only the last one wins.
+
+        Duplicates are checked across the two dictionaries as well: merging
+        ``Palette.xaml`` and ``App.xaml`` means a key declared in both silently
+        resolves to whichever dictionary wins, which is exactly the half-applied
+        colour change this module exists to prevent.
+        """
+        keys = []
+        for path in BRUSH_XAML_FILES:
+            keys.extend(re.findall(r'<SolidColorBrush\s+x:Key="([^"]+)"', path.read_text(encoding="utf-8-sig")))
         duplicates = sorted({key for key in keys if keys.count(key) > 1})
         self.assertEqual(duplicates, [])
 
