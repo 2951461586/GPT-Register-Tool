@@ -1,0 +1,67 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!--
+    Colour tokens only. Nothing here references a control style, so this dictionary
+    can be merged first and read on its own: every control style in Controls.xaml
+    points at these keys with DynamicResource, never StaticResource.
+
+    Split out of App.xaml on 2026-10-23. App.xaml was 719 lines of palette + control
+    styles, which made "add one brush" and "retemplate the scroll bar" the same file
+    to review. The two dictionaries keep the merge order App.xaml declares:
+    Wpf.Ui -> Palette -> Controls.
+  -->
+
+  <!-- Semantic palette: neutral workbench surfaces with one blue action accent. -->
+      <SolidColorBrush x:Key="AppBg" Color="#FFFFFF"/>
+      <SolidColorBrush x:Key="PanelBg" Color="#FFFFFF"/>
+      <SolidColorBrush x:Key="PanelBg2" Color="#F3F3F3"/>
+      <SolidColorBrush x:Key="PanelHover" Color="#F3F3F3"/>
+      <SolidColorBrush x:Key="Line" Color="#E2E2E2"/>
+      <SolidColorBrush x:Key="LineStrong" Color="#C8C8C8"/>
+      <SolidColorBrush x:Key="Primary" Color="#2563EB"/>
+      <SolidColorBrush x:Key="PrimarySoft" Color="#EAF2FF"/>
+      <SolidColorBrush x:Key="Danger" Color="#B42318"/>
+      <SolidColorBrush x:Key="DangerSoft" Color="#FEF0EE"/>
+      <SolidColorBrush x:Key="DangerBorder" Color="#F0B8B2"/>
+      <SolidColorBrush x:Key="Success" Color="#16794C"/>
+      <SolidColorBrush x:Key="SuccessSoft" Color="#EAF7F0"/>
+      <SolidColorBrush x:Key="SuccessBorder" Color="#9AD8B7"/>
+      <SolidColorBrush x:Key="TextMain" Color="#58595C"/>
+      <SolidColorBrush x:Key="TextSub" Color="#58595C"/>
+      <SolidColorBrush x:Key="TextMuted" Color="#58595C"/>
+      <SolidColorBrush x:Key="SidebarBg" Color="#F3F3F3"/>
+      <SolidColorBrush x:Key="SidebarButtonBg" Color="#F3F3F3"/>
+      <SolidColorBrush x:Key="GridAltBg" Color="#FAFAFA"/>
+      <SolidColorBrush x:Key="GridSelectionBg" Color="#C8C8C8"/>
+      <SolidColorBrush x:Key="SettingsSelectionBg" Color="#F3F3F3"/>
+      <SolidColorBrush x:Key="SettingsSelectionBorder" Color="#C8C8C8"/>
+      <SolidColorBrush x:Key="SplitterBg" Color="#E6E6E6"/>
+      <SolidColorBrush x:Key="StatusBg" Color="#FFFFFF"/>
+      <SolidColorBrush x:Key="LogBg" Color="#2A2A2A"/>
+      <SolidColorBrush x:Key="LogBorder" Color="#444444"/>
+      <SolidColorBrush x:Key="LogText" Color="#DFDFDF"/>
+
+  <!-- ── Status badge brushes ── -->
+      <SolidColorBrush x:Key="BadgeSuccessBg" Color="#EAF7F0"/>
+      <SolidColorBrush x:Key="BadgeSuccessFg" Color="#58595C"/>
+      <SolidColorBrush x:Key="BadgeSuccessBd" Color="#9AD8B7"/>
+      <SolidColorBrush x:Key="BadgeWarnBg" Color="#FFF7E6"/>
+      <SolidColorBrush x:Key="BadgeWarnFg" Color="#58595C"/>
+      <SolidColorBrush x:Key="BadgeWarnBd" Color="#F2C66D"/>
+      <SolidColorBrush x:Key="BadgeDangerBg" Color="#FEF0EE"/>
+      <SolidColorBrush x:Key="BadgeDangerFg" Color="#58595C"/>
+      <SolidColorBrush x:Key="BadgeDangerBd" Color="#F0B8B2"/>
+      <SolidColorBrush x:Key="BadgeInfoBg" Color="#EAF2FF"/>
+      <SolidColorBrush x:Key="BadgeInfoFg" Color="#58595C"/>
+      <SolidColorBrush x:Key="BadgeInfoBd" Color="#A9C5FF"/>
+      <SolidColorBrush x:Key="BadgeNeutralBg" Color="#F1F3F5"/>
+      <SolidColorBrush x:Key="BadgeNeutralFg" Color="#58595C"/>
+      <SolidColorBrush x:Key="BadgeNeutralBd" Color="#CBD5E1"/>
+
+  <!-- ── Card accent brushes ── -->
+      <SolidColorBrush x:Key="AccentBlue" Color="#2563EB"/>
+      <SolidColorBrush x:Key="AccentGreen" Color="#16A34A"/>
+      <SolidColorBrush x:Key="AccentOrange" Color="#D97706"/>
+      <SolidColorBrush x:Key="AccentPurple" Color="#7C3AED"/>
+      <SolidColorBrush x:Key="AccentRed" Color="#DC2626"/>
+</ResourceDictionary>

@@ -12,6 +12,13 @@ the root again. This test does.
 The root exception list is deliberately tiny and named: the application shell.
 Everything else must live in one of the role folders, and a new folder needs a
 decision here plus a line in ``docs/directory-map.md``.
+
+2026-10-23: ``Themes/`` joined as a **resource-only** folder (no C#, no
+code-behind). It holds the two ``ResourceDictionary`` files ``App.xaml`` merges
+(``Palette.xaml`` colour tokens, ``Controls.xaml`` control styles), split out of
+a 719-line ``App.xaml``. A ``ResourceDictionary`` is not a window, so the
+"xaml and its code-behind stay together" rule below applies only to XAML whose
+root element is a ``Window``/``UserControl``.
 """
 
 from __future__ import annotations
@@ -28,6 +35,20 @@ ROOT_SHELL = {"App.xaml", "App.xaml.cs", "AppHost.cs", "AssemblyInfo.cs", "Globa
 
 ROLE_FOLDERS = {"Views", "ViewModels", "Services", "Interop", "Models", "Dialogs"}
 
+#: Resource-only folders: XAML dictionaries, no C#. Kept apart from
+#: ``ROLE_FOLDERS`` so the "populated by ``.cs``" assertion stays meaningful.
+RESOURCE_FOLDERS = {"Themes"}
+
+#: Root elements that carry no code-behind by construction.
+CODELESS_XAML_ROOTS = ("ResourceDictionary",)
+
+
+def _xaml_root_element(path: Path) -> str:
+    """The document element's local name, without needing an XML parser."""
+    text = path.read_text(encoding="utf-8")
+    match = re.search(r"<([A-Za-z_][\w.:]*)[\s>/]", text)
+    return match.group(1).rsplit(":", 1)[-1] if match else ""
+
 
 def _project_sources() -> list[Path]:
     return [
@@ -43,12 +64,13 @@ def test_the_root_holds_only_the_application_shell():
 
 
 def test_every_source_lives_in_a_declared_role_folder():
+    declared = ROLE_FOLDERS | RESOURCE_FOLDERS
     stray = sorted(
         str(path.relative_to(PROJECT))
         for path in _project_sources()
-        if path.parent != PROJECT and path.parent.name not in ROLE_FOLDERS
+        if path.parent != PROJECT and path.parent.name not in declared
     )
-    assert stray == [], f"place these in one of {sorted(ROLE_FOLDERS)}: {stray}"
+    assert stray == [], f"place these in one of {sorted(declared)}: {stray}"
 
 
 def test_every_role_folder_exists_and_is_populated():
@@ -58,10 +80,24 @@ def test_every_role_folder_exists_and_is_populated():
         assert any(directory.glob("*.cs")), f"empty role folder: {folder}"
 
 
+def test_every_resource_folder_holds_a_dictionary():
+    for folder in sorted(RESOURCE_FOLDERS):
+        directory = PROJECT / folder
+        assert directory.is_dir(), f"missing resource folder: {folder}"
+        dictionaries = [path for path in directory.glob("*.xaml") if _xaml_root_element(path) == "ResourceDictionary"]
+        assert dictionaries, f"{folder}/ has no ResourceDictionary"
+
+
 def test_xaml_and_its_code_behind_stay_together():
-    """A window's .xaml and .xaml.cs must be siblings, or the next reader looks in two places."""
+    """A window's .xaml and .xaml.cs must be siblings, or the next reader looks in two places.
+
+    A ``ResourceDictionary`` is the exception: it has no code-behind by
+    construction, so requiring one would force an empty partial class.
+    """
     for xaml in PROJECT.rglob("*.xaml"):
         if "bin" in xaml.parts or "obj" in xaml.parts:
+            continue
+        if _xaml_root_element(xaml) in CODELESS_XAML_ROOTS:
             continue
         code_behind = xaml.with_suffix(".xaml.cs")
         assert code_behind.is_file(), f"{xaml.relative_to(PROJECT)} has no code-behind beside it"
