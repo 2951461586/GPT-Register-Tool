@@ -58,6 +58,37 @@ python -m pytest -q tests/payment
 `-n auto` 会按本机核数起 worker（开发机 12 核会起 12 个），每个 worker 都要
 import 整个包并各自跑真实门禁；CI 与文档统一用 **`-n 4`**，让耗时与内存可预期。
 
+## 每个 worker 一个配置目录：为什么必须
+
+`tests/conftest.py` 在**任何 `sms_tool` import 之前**把 `GPT_REGISTER_CONFIG_DIR` 指到一个
+从 `config.example.json` 播种的临时目录，避免套件读到（并在首装迁移里**移动**）操作者的
+真实凭据文件。
+
+并行时这里有个不显眼的坑：**controller 进程也会 import `tests/conftest.py`**，而 xdist 的
+worker 是**继承其环境变量**的子进程 —— 朴素写法等于把同一个目录发给全部 4 个 worker。
+于是每个 worker 同时跑「legacy `config.json` → 三片」的首装迁移，而
+[`configuration.md`](configuration.md) 的优先级是**「任一分片存在 ⇒ 分片即权威，不回头
+用 legacy 补齐」**，所以「只发布了 `proxy.json`」的瞬间被读到，就是一份没有 `chatgpt`
+段的配置：
+
+```text
+ERROR collecting tests/mailbox/test_email_otp_filtering.py
+sms_tool.config.schema.ConfigError: chatgpt must be an object
+```
+
+这正是 2026-10-23 的 CI 失败（两次运行各挂一个 worker），因为该文件在 import
+`sms_tool.registration` 时就读配置（`sentinel_tokens` 的模块级 `runtime_file(CFG, ...)`），
+窗口落在**收集阶段**，任何 fixture 都来不及介入。
+
+因此 conftest 给 controller 建目录时打 `GPT_REGISTER_TEST_CONFIG_DIR_OWNER=1`，worker
+看到这个标记（且 `PYTEST_XDIST_WORKER` 已设）就**再建一个自己的**目录。操作者显式设置的
+`GPT_REGISTER_CONFIG_DIR` 没有标记，永远不被替换。守卫：
+`tests/governance/test_worker_config_isolation.py`（用真子进程重放这次交接）。
+
+写入侧同时把 `_write_shards` 改成**两阶段发布**（先 staged 全部变更分片，再连续 rename），
+把「读者看到半个分片集」的窗口从两次 `fsync` 压到三次 rename。彻底消除需要跨进程锁，
+所以**测试侧隔离才是主修复** —— 不要因为写入侧变窄了就把这条隔离去掉。
+
 ## 依赖与门禁
 
 `pytest-xdist` 在 `requirements-dev.txt`（测试工具，不是运行时依赖），装法与

@@ -37,3 +37,9 @@
 - **`_auth_request_headers` 重复定义** —— `auth_flow/steps.py` 既导入又本地定义同名函数，新增参数只改到
   一份；统一到 `auth_wire` 单一实现。
 - **桌面端侧边栏 Logo 定位** —— 图标改为锚定程序集根路径，发布目录下不再丢失。
+- **并行测试共用配置目录导致 CI 收集失败**（发布后修复）—— `pytest -n 4` 的 controller
+  也会 import `tests/conftest.py`，它建的临时配置目录被 4 个 worker 继承；首装迁移
+  （legacy `config.json` → 三分片）因此并发执行，读到「只发布了 `proxy.json`」的瞬间就报
+  `ConfigError: chatgpt must be an object`（两次 CI 各挂一个 worker）。现在每个 worker 各建
+  一个目录；分片写入同时改为两阶段发布（先 staged 全部变更分片，再连续 rename），把该窗口
+  从两次 `fsync` 压到三次 rename。详见 [`TROUBLESHOOTING.md` §18](../TROUBLESHOOTING.md)。

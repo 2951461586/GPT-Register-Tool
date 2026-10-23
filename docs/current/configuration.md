@@ -24,7 +24,14 @@ same value to every Python process it starts, so both sides always agree.
 * A relative `email_registration.token_file` is relative to this directory
   (`resolve_config_file`); a legacy repo-root file is still honoured until moved.
 * The test suite sets `GPT_REGISTER_CONFIG_DIR` to a temporary directory seeded
-  from `config.example.json`, so it never sees operator credentials.
+  from `config.example.json`, so it never sees operator credentials. Under
+  `pytest -n 4` **every xdist worker gets its own** temporary directory: the
+  controller imports `tests/conftest.py` too and its environment is inherited by
+  the worker subprocesses, so a single shared directory would make all four
+  workers run the first-load migration at once — and a worker that reads while
+  only `proxy.json` is published sees a config with no `chatgpt` section
+  (`ConfigError: chatgpt must be an object`, TROUBLESHOOTING §18). An explicit
+  `GPT_REGISTER_CONFIG_DIR` set by the operator is never replaced.
 * `sessions/` and `runtime/` stay in the project root (they are gitignored
   runtime output, not configuration).
 

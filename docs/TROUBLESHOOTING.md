@@ -621,3 +621,60 @@ Python 后端，协议细节全在 `sms_tool/`（`nexsms.py`）里 ⇒ 命令行
 - 🔴 `test_write_shards_keeps_old_file_when_replace_fails` 原本**第二次写相同内容**，
   加上裁剪之后 `os.replace` 根本不会被调用 ⇒ 该测试会**永远通过**（同义反复）。
   已改成第二次写**不同**内容。任何「写两次」的测试在引入裁剪后都要重查这一点。
+
+---
+
+## 18. 并行跑测试时收集阶段报 `ConfigError: chatgpt must be an object`
+
+**症状**（2026-10-23 两次 CI 各复现一次）：
+
+```text
+_________ ERROR collecting tests/mailbox/test_email_otp_filtering.py _________
+  sms_tool\registration\__init__.py:346: in __getattr__
+  sms_tool\sentinel_tokens.py:25: in <module>
+      SENTINEL_CACHE_FILE = runtime_file(CFG, "sentinel_cache.json")
+  sms_tool\config\schema.py:485: in validate_config
+E   sms_tool.config.schema.ConfigError: chatgpt must be an object
+ERROR gw1 - Different tests were collected between gw0 and gw1
+```
+
+单个文件**只有一部分 worker** 收集失败，串行 `pytest` 与 `--collect-only` 都绿。
+
+**根因**（两个独立缺陷叠加，缺一不可）：
+
+1. **测试夹具让 4 个 worker 共用同一个配置目录**。`pytest -n 4` 的
+   **controller 进程也会 import `tests/conftest.py`**（xdist 的 worker 是继承其环境变量的
+   子进程），于是 controller 建的那个临时目录被所有 worker 继承。
+2. **首装迁移不是「整组发布」**。该目录里只有 legacy `config.json`，谁先读谁把它拆成
+   `proxy.json` / `runtime.json` / `payment.json`。而
+   [`configuration.md`](current/configuration.md) 的既定优先级是
+   **「任一 分片存在 ⇒ 分片布局即权威，且不回头用 legacy 补齐」** —— 于是
+   「只发布了 `proxy.json`」的瞬间被另一个 worker 读到，就是一份没有 `chatgpt`
+   段的配置。`test_email_otp_filtering.py` 在 import `sms_tool.registration` 时就
+   读配置（`sentinel_tokens` 的模块级 `runtime_file(CFG, ...)`），所以这个窗口落在
+   **收集阶段**，任何 fixture 都还没来得及介入。
+
+窗口有多大：`_atomic_write_json` 每片都要 `fsync`，所以在慢盘（CI runner）上是**毫秒级**，
+不是理论竞态 —— 把 `os.fsync` 人为放慢 0.3 s 后，`pytest -n 4 --dist loadfile tests/mailbox`
+在本机稳定复现同一条错误。
+
+**修复**：
+
+- `tests/conftest.py`：controller 建目录时打上 `GPT_REGISTER_TEST_CONFIG_DIR_OWNER=1`，
+  worker（`PYTEST_XDIST_WORKER` 已设）看到这个标记就**再建一个自己的目录**。操作者显式
+  设置的 `GPT_REGISTER_CONFIG_DIR` 没有这个标记，因此永远不会被替换。
+- `sms_tool/config/loader.py`：`_write_shards` 改成**两阶段发布** —— 先把所有变更分片
+  （备份 + 序列化 + `fsync`）staged 成同目录临时文件，再连续 rename。窗口从「两次 fsync」
+  压到三次 rename。彻底消除需要跨进程锁，所以测试侧仍是主修复。
+- 优先级规则（「任一分片存在即权威」）**没有改**：它是与 C# `ConfigStore` 共享的契约，
+  改动会同时影响桌面端，且需要同步改文档。
+
+**回归守卫**：
+
+- `tests/governance/test_worker_config_isolation.py`：用真子进程重放
+  controller → worker 的环境交接，断言 worker 目录 ≠ controller 目录，且操作者显式
+  指定的目录不被替换。
+- `tests/config/test_config_sharded_atomic_write.py::
+  test_write_shards_stages_every_shard_before_publishing_any`：断言第一次 rename
+  之前**三片的临时文件都已存在**；`test_write_shards_keeps_old_file_when_replace_fails`
+  追加「不留任何 staged 临时文件」。

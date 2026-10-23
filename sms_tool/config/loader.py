@@ -108,6 +108,47 @@ def _read_text_or_none(path: Path) -> str | None:
         return None
 
 
+def _unlink_quietly(path: Path) -> None:
+    try:
+        os.unlink(path)
+    except OSError:
+        pass
+
+
+def _stage_json(path: Path, data: Mapping[str, Any]) -> Path | None:
+    """Serialize ``data`` into a fsynced temp file beside ``path``; return it.
+
+    ``None`` means the file on disk already holds exactly this payload, so there
+    is nothing to publish. The stage/publish split exists for
+    :func:`_write_shards`: every slow step (backup copy, serialize, ``fsync``)
+    happens here, so the renames that make the shard set visible can run back to
+    back instead of one slow write apart.
+    """
+    payload = _dump_json(data)
+    if _read_text_or_none(path) == payload:
+        return None
+    directory = path.parent
+    directory.mkdir(parents=True, exist_ok=True)
+    backup = path.with_name(path.name + ".bak")
+    if path.exists():
+        try:
+            shutil.copy2(path, backup)
+        except OSError:
+            # Best-effort only; a missing/locked backup must not fail the write.
+            pass
+    prefix = "." + path.stem + "."
+    fd, tmp_name = tempfile.mkstemp(dir=directory, prefix=prefix, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+    except BaseException:
+        _unlink_quietly(Path(tmp_name))
+        raise
+    return Path(tmp_name)
+
+
 def _atomic_write_json(path: Path, data: Mapping[str, Any]) -> bool:
     """Write JSON atomically: a temp file in the *same* directory + ``os.replace``.
 
@@ -123,30 +164,13 @@ def _atomic_write_json(path: Path, data: Mapping[str, Any]) -> bool:
     audit signal), and the previous ``.bak`` survives instead of being
     overwritten by a save that changed nothing.
     """
-    if _read_text_or_none(path) == _dump_json(data):
+    staged = _stage_json(path, data)
+    if staged is None:
         return False
-    directory = path.parent
-    directory.mkdir(parents=True, exist_ok=True)
-    backup = path.with_name(path.name + ".bak")
-    if path.exists():
-        try:
-            shutil.copy2(path, backup)
-        except OSError:
-            # Best-effort only; a missing/locked backup must not fail the write.
-            pass
-    prefix = "." + path.stem + "."
-    fd, tmp_name = tempfile.mkstemp(dir=directory, prefix=prefix, suffix=".tmp")
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            handle.write(_dump_json(data))
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(tmp_name, path)
+        os.replace(staged, path)
     except BaseException:
-        try:
-            os.unlink(tmp_name)
-        except OSError:
-            pass
+        _unlink_quietly(staged)
         raise
     return True
 
@@ -157,11 +181,36 @@ def _write_shards(shards: Mapping[str, Mapping], config_dir: Path) -> list[str]:
     Returns the file names actually written. Callers and regression tests need
     that list: "all three files exist" stays true whether or not anything was
     written, so it cannot distinguish a working trim from a broken one.
+
+    Publication is two-phase (stage every changed shard, then rename them back
+    to back) because of a rule that is deliberately *not* symmetric with it:
+    ``load_merged_config`` treats "any shard exists" as "the sharded layout is
+    authoritative" and never backfills from the legacy ``config.json``
+    ([configuration.md](../../docs/current/configuration.md)). A concurrent
+    reader — the WPF shell starts several Python backends on one config
+    directory, and pytest-xdist workers share one — that looks while only
+    ``proxy.json`` is published therefore sees a config with no ``chatgpt``
+    section and fails with ``chatgpt must be an object``. Staging first shrinks
+    that window from "two fsyncs" to three consecutive renames. It cannot be
+    closed entirely without a cross-process lock; that is why the test harness
+    also gives every worker its own config directory.
     """
+    staged: list[tuple[Path, str]] = []
     written: list[str] = []
-    for name, filename in SHARD_FILES.items():
-        if _atomic_write_json(config_dir / filename, dict(shards[name])):
+    try:
+        for name, filename in SHARD_FILES.items():
+            temp = _stage_json(config_dir / filename, dict(shards[name]))
+            if temp is not None:
+                staged.append((temp, filename))
+        for temp, filename in staged:
+            os.replace(temp, config_dir / filename)
             written.append(filename)
+    except BaseException:
+        # A rename that failed leaves its own temp file (and every not-yet-
+        # published one) behind; the live shards keep their previous content.
+        for temp, _filename in staged:
+            _unlink_quietly(temp)
+        raise
     return written
 
 

@@ -27,14 +27,41 @@ import pytest
 # Must run before any `sms_tool` import: `sms_tool.config` resolves its config
 # directory at import time. Without this, the suite would read (and, through the
 # legacy-root migration, move) the operator's real credential files.
-if not os.environ.get("GPT_REGISTER_CONFIG_DIR"):
-    _TEST_CONFIG_DIR = Path(tempfile.mkdtemp(prefix="gpt_register_test_config_"))
-    # Seed from the public example so config-dependent code paths see a valid,
-    # credential-free configuration instead of the operator's real one.
-    _example = Path(__file__).resolve().parent.parent / "config.example.json"
-    if _example.is_file():
-        (_TEST_CONFIG_DIR / "config.json").write_bytes(_example.read_bytes())
-    os.environ["GPT_REGISTER_CONFIG_DIR"] = str(_TEST_CONFIG_DIR)
+_CONFIG_DIR_ENV = "GPT_REGISTER_CONFIG_DIR"
+# Set only when *this* file created the directory above. It is what lets a
+# worker tell "the pytest controller made this directory for us" apart from
+# "the operator chose this directory", which must never be replaced.
+_CONFIG_DIR_OWNER_ENV = "GPT_REGISTER_TEST_CONFIG_DIR_OWNER"
+
+
+def _seed_test_config_dir() -> Path:
+    """A fresh, credential-free config directory for one process.
+
+    Seeded from the public example so config-dependent code paths see a valid
+    configuration instead of the operator's real one.
+    """
+    directory = Path(tempfile.mkdtemp(prefix="gpt_register_test_config_"))
+    example = Path(__file__).resolve().parent.parent / "config.example.json"
+    if example.is_file():
+        (directory / "config.json").write_bytes(example.read_bytes())
+    return directory
+
+
+if not os.environ.get(_CONFIG_DIR_ENV):
+    os.environ[_CONFIG_DIR_ENV] = str(_seed_test_config_dir())
+    os.environ[_CONFIG_DIR_OWNER_ENV] = "1"
+elif os.environ.get(_CONFIG_DIR_OWNER_ENV) == "1" and os.environ.get("PYTEST_XDIST_WORKER"):
+    # `pytest -n 4` imports this file in the *controller* too, and every xdist
+    # worker is a subprocess that inherits the controller's environment -- so
+    # without this branch all four workers share ONE config directory. Each
+    # worker then runs the first-load migration (legacy `config.json` -> the
+    # three shards) at the same moment, and a worker that looks while only
+    # `proxy.json` is published sees a config with no `chatgpt` section and dies
+    # with `ConfigError: chatgpt must be an object` during collection (CI
+    # 2026-10-23, gw1/gw2 on tests/mailbox/test_email_otp_filtering.py -- that
+    # file imports `sms_tool.registration`, which reads the config at import).
+    # One directory per process makes the migration single-process again.
+    os.environ[_CONFIG_DIR_ENV] = str(_seed_test_config_dir())
 
 from sms_tool import logging_setup
 

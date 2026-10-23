@@ -69,9 +69,49 @@ def test_write_shards_keeps_old_file_when_replace_fails(tmp_path):
             except OSError:
                 pass
 
-        # Live file untouched, temp file cleaned up.
+        # Live file untouched, and no staged temp file is left behind for any of
+        # the three shards -- a leaked temp file is the fingerprint of a publish
+        # that died half way.
         assert (tmp_path / "proxy.json").read_text(encoding="utf-8") == old
         assert not list(tmp_path.glob(".proxy.*.tmp"))
+        assert not list(tmp_path.glob(".*.tmp"))
+
+
+def test_write_shards_stages_every_shard_before_publishing_any(tmp_path):
+    """The first rename must not happen until all changed shards are staged.
+
+    ``load_merged_config`` reads "any shard exists" as "the sharded layout is
+    authoritative" and does not backfill from the legacy ``config.json``, so a
+    reader that looks between the ``proxy.json`` rename and the ``runtime.json``
+    one gets a config with no ``chatgpt`` section and dies with
+    ``chatgpt must be an object`` (the 2026-10-23 CI failure, where four xdist
+    workers shared one config directory and migrated it concurrently).
+    """
+    with patch.object(config_state, "CONFIG_DIR", tmp_path):
+        shards = {
+            "proxy": {"proxy": {"http": "A"}},
+            "runtime": {"chatgpt": {"auth_base_url": "https://auth.openai.com"}},
+            "payment": {"paypal": {"mode": "hosted"}},
+        }
+        visible_at_first_publish: list[str] = []
+        real_replace = os.replace
+
+        def _record(source, destination):  # noqa: ANN001, ANN202
+            if not visible_at_first_publish:
+                visible_at_first_publish.extend(sorted(path.name for path in tmp_path.iterdir()))
+            return real_replace(source, destination)
+
+        with patch.object(os, "replace", _record):
+            assert sorted(config._write_shards(shards, tmp_path)) == [
+                "payment.json",
+                "proxy.json",
+                "runtime.json",
+            ]
+
+        staged = [name for name in visible_at_first_publish if name.endswith(".tmp")]
+        assert len(staged) == len(config.SHARD_FILES), (
+            f"a shard was renamed before the rest were staged: {visible_at_first_publish}"
+        )
 
 
 def test_write_shards_skips_shards_whose_content_did_not_change(tmp_path):
