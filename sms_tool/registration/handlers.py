@@ -54,6 +54,7 @@ from .protocol_helpers import (
     _new_registration_session,
     _safe_float,
     _safe_int,
+    tock_named,
 )
 from .result import attach_fingerprint_geo_audit, safe_device_identity, safe_proxy_audit
 from .retry_guard import DEAD_END_SIGNUP_ROUTED_TO_LOGIN, RegistrationRetryGuard
@@ -467,7 +468,6 @@ class RegistrationEmailWorkflow:
         """
         r = self.r
         r._tick("0-Bootstrap")
-        self._timing_open = True
         try:
             self._bootstrap()
         except (RegistrationAbort, RegistrationCancelled):
@@ -494,9 +494,11 @@ class RegistrationEmailWorkflow:
         except Exception as exc:
             raise RegistrationAbort(f"bootstrap_transport:{exc}") from exc
         finally:
-            if self._timing_open:
-                r._safe_tock()
-                self._timing_open = False
+            # ``_bootstrap`` runs two nested ``_run_stage`` calls whose own
+            # ``finally`` blocks close their entries and clear the shared
+            # ``_timing_open`` flag, so this outer row must be closed *by name*:
+            # by now the last entry is the identity stage, not this one.
+            tock_named(r._tl(), "0-Bootstrap")
 
     def _bootstrap(self) -> None:
         r = self.r

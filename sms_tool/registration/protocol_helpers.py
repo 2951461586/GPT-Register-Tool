@@ -14,6 +14,7 @@ keep resolving.
 from __future__ import annotations
 
 import json
+import time
 from typing import Any, Callable
 from urllib.parse import urlsplit
 
@@ -156,6 +157,30 @@ def _new_registration_session(proxy: str = "") -> Any:
     return session
 
 
+def tock_named(timings, name, *, now=None):
+    """Close the *named* timing row in place, preserving the stage order.
+
+    ``utils._tock`` / ``utils._safe_tock`` only close the **last** row, which is
+    wrong for a tick that encloses nested ticks: ``0-Bootstrap`` is followed by
+    the sentinel and identity ``_run_stage`` rows, so by the time the outer
+    ``finally`` ran the last row belonged to a stage and the bootstrap row kept
+    its raw epoch value -- which also made the printed ``TOTAL`` and
+    ``timing.total_seconds`` epoch-sized (observed live 2026-10-23 across three
+    protocol registrations).
+
+    The list is passed in rather than reached for, so this stays a pure helper;
+    searching backwards by name makes the call idempotent, because a second call
+    finds no epoch value left under that name.
+    """
+    clock = now or time.time
+    for index in range(len(timings) - 1, -1, -1):
+        entry_name, value = timings[index]
+        if entry_name == name and value > 1_000_000:
+            timings[index] = (entry_name, max(0.0, clock() - value))
+            return timings
+    return timings
+
+
 __all__ = [
     "EXISTING_LOGIN_DEAD_END_ERRORS",
     "_is_existing_login_dead_end_error",
@@ -165,4 +190,5 @@ __all__ = [
     "_safe_int",
     "_safe_float",
     "registration_flag",
+    "tock_named",
 ]
