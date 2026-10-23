@@ -33,117 +33,61 @@ from pathlib import Path
 
 from typing import Any
 
-try:
-    from ..checkout_contract import PLUS_TRIAL_CAMPAIGN_ID, CheckoutRequestContract, CheckoutSessionContract
-    from ..phone_proxy import normalize_proxy_url
-    from ..pp_link_helpers import (
-        DEFAULT_STRIPE_PK,
-        STRIPE_VERSION,
-        DEFAULT_TIMEOUT,
-        CHATGPT_TIMEOUT,
-        RETRY_ATTEMPTS,
-        _SIDE_EFFECT_STAGES,
-        endpoints,
-        normalize_proxy_template,
-        proxy_for_country_template,
-        rotate_proxy_session_id,
-        find_submission_attempt,
-        stripe_confirm_error_diagnostics,
-        is_paypal_ba_approve_url,
-        extract_ba_token,
-        find_url_in_value,
-        extract_redirect_url,
-        resolve_external_redirect,
-        billing_for_country,
-        stripe_amount_details,
-        BILLING_DATA,
-        PM_REDIRECT_RE,
-        PAYPAL_BA_RE,
-    )
-except ImportError:  # pragma: no cover - direct script execution
-    from checkout_contract import PLUS_TRIAL_CAMPAIGN_ID, CheckoutRequestContract, CheckoutSessionContract  # type: ignore
-    from phone_proxy import normalize_proxy_url  # type: ignore
-    from pp_link_helpers import (  # type: ignore
-        DEFAULT_STRIPE_PK,
-        STRIPE_VERSION,
-        DEFAULT_TIMEOUT,
-        CHATGPT_TIMEOUT,
-        RETRY_ATTEMPTS,
-        _SIDE_EFFECT_STAGES,
-        normalize_proxy_template,
-        proxy_for_country_template,
-        rotate_proxy_session_id,
-        find_submission_attempt,
-        stripe_confirm_error_diagnostics,
-        is_paypal_ba_approve_url,
-        extract_ba_token,
-        find_url_in_value,
-        extract_redirect_url,
-        resolve_external_redirect,
-        billing_for_country,
-        stripe_amount_details,
-        BILLING_DATA,
-        PM_REDIRECT_RE,
-        PAYPAL_BA_RE,
-    )
+from ..checkout_contract import PLUS_TRIAL_CAMPAIGN_ID, CheckoutRequestContract, CheckoutSessionContract
+from ..phone_proxy import normalize_proxy_url
+from ..pp_link_helpers import (
+    DEFAULT_STRIPE_PK,
+    STRIPE_VERSION,
+    DEFAULT_TIMEOUT,
+    CHATGPT_TIMEOUT,
+    RETRY_ATTEMPTS,
+    _SIDE_EFFECT_STAGES,
+    endpoints,
+    normalize_proxy_template,
+    proxy_for_country_template,
+    rotate_proxy_session_id,
+    find_submission_attempt,
+    stripe_confirm_error_diagnostics,
+    is_paypal_ba_approve_url,
+    extract_ba_token,
+    find_url_in_value,
+    extract_redirect_url,
+    resolve_external_redirect,
+    billing_for_country,
+    stripe_amount_details,
+    BILLING_DATA,
+    PM_REDIRECT_RE,
+    PAYPAL_BA_RE,
+)
 
 
-try:
-    from ..paypal.proxy import (
-        PayPalProxyState,
-        infer_proxy_country,
-        is_retryable_network_error,
-        probe_proxy,
-        redact_proxy_url,
-        rotate_proxy_session as rotate_stage_proxy_session,
-        _PAYPAL_PROXY_STATE_CACHE,
-        _proxy_health_cfg,
-        _paypal_proxy_state,
-        _proxy_pool_values,
-        _rank_stage_proxy,
-        _proxies_from_config,
-        _stage_proxy_is_configured,
-        _resolve_stage_proxy,
-    )
-except ImportError:  # pragma: no cover - direct script execution
-    from sms_tool.paypal.proxy import (  # type: ignore
-        PayPalProxyState,
-        infer_proxy_country,
-        is_retryable_network_error,
-        probe_proxy,
-        redact_proxy_url,
-        rotate_proxy_session as rotate_stage_proxy_session,
-        _PAYPAL_PROXY_STATE_CACHE,
-        _proxy_health_cfg,
-        _paypal_proxy_state,
-        _proxy_pool_values,
-        _rank_stage_proxy,
-        _proxies_from_config,
-        _stage_proxy_is_configured,
-        _resolve_stage_proxy,
-    )
+from ..paypal.proxy import (
+    PayPalProxyState,
+    infer_proxy_country,
+    is_retryable_network_error,
+    probe_proxy,
+    redact_proxy_url,
+    rotate_proxy_session as rotate_stage_proxy_session,
+    _PAYPAL_PROXY_STATE_CACHE,
+    _proxy_health_cfg,
+    _paypal_proxy_state,
+    _proxy_pool_values,
+    _rank_stage_proxy,
+    _proxies_from_config,
+    _stage_proxy_is_configured,
+    _resolve_stage_proxy,
+)
 
 
-try:
-    from ..paypal.extract import (
-        CURRENCY_MAP,
-        CheckoutNotZeroDueError,
-        PPLinkExtractor,
-        PaymentOutcomeUnknownError,
-        _checkout_post,
-        _compact_diagnostic,
-        _new_session,
-    )
-except ImportError:  # pragma: no cover - direct script execution
-    from sms_tool.paypal.extract import (  # type: ignore
-        CURRENCY_MAP,
-        CheckoutNotZeroDueError,
-        PPLinkExtractor,
-        PaymentOutcomeUnknownError,
-        _checkout_post,
-        _compact_diagnostic,
-        _new_session,
-    )
+from ..paypal.extract import (
+    CURRENCY_MAP,
+    CheckoutNotZeroDueError,
+    PPLinkExtractor,
+    PaymentOutcomeUnknownError,
+    _checkout_post,
+    _compact_diagnostic,
+    _new_session,
+)
 
 # 注意：这些符号的**定义**在 ``sms_tool/payment/wire.py``，``paypal_extract``
 # 只是再导出。此处刻意继续从 ``paypal_extract`` 取：本包与它同属 PayPal 族，
@@ -152,10 +96,7 @@ except ImportError:  # pragma: no cover - direct script execution
 # ``scripts/import_layer_ratchet.py`` 冻结的正是这条边（只允许下降）。
 
 
-try:
-    from ..kernel.sanitizer import sanitize_text
-except ImportError:  # pragma: no cover - direct script execution
-    from sanitizer import sanitize_text  # type: ignore
+from ..kernel.sanitizer import sanitize_text
 
 
 def _coerce_float(value: Any, default: float) -> float:
@@ -188,13 +129,14 @@ def _paypal_config(config: object) -> dict[str, Any]:
     """
     _raw_source: object = config
     source: Mapping = _raw_source if isinstance(_raw_source, Mapping) else {}
-    try:
-        from ..payment.routing import method_payment_config
+    # Function-local on purpose: ``import_layer_ratchet`` freezes the
+    # ``paypal_link -> payment`` direction (payment owns the router), and a
+    # module-level import here made this module un-importable in isolation.
+    # Deliberate lazy edge, not a portability fallback -- there is no
+    # ``except ImportError`` shadow copy, which would be unreachable anyway.
+    from ..payment.routing import method_payment_config
 
-        return method_payment_config(source, "paypal")
-    except (ImportError, TypeError, AttributeError):  # pragma: no cover - direct script execution
-        value = source.get("paypal")
-        return dict(value) if isinstance(value, Mapping) else {}
+    return method_payment_config(source, "paypal")
 
 
 def _emit(step: str, msg: str, **kw: Any) -> None:

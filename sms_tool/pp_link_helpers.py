@@ -21,35 +21,19 @@ from urllib.parse import parse_qsl, quote, urljoin, urlsplit
 
 import requests
 
-try:
-    from .checkout_contract import CheckoutRequestContract, CheckoutSessionContract
-    from .cross_process_gate import cross_process_write_lock
-    from .kernel.paths import runtime_file
-    from .phone_proxy import match_proxy_region, normalize_proxy_url
-except ImportError:  # pragma: no cover - direct script execution
-    from checkout_contract import CheckoutRequestContract, CheckoutSessionContract  # type: ignore
-    from cross_process_gate import cross_process_write_lock  # type: ignore
-    from paths import runtime_file  # type: ignore
-    from phone_proxy import match_proxy_region, normalize_proxy_url  # type: ignore
+from .checkout_contract import CheckoutRequestContract, CheckoutSessionContract
+from .cross_process_gate import cross_process_write_lock
+from .kernel.paths import runtime_file
+from .phone_proxy import match_proxy_region, normalize_proxy_url
 
-try:
-    from .paypal.proxy import (
-        PayPalProxyState,
-        infer_proxy_country,
-        is_retryable_network_error,
-        probe_proxy,
-        redact_proxy_url,
-        rotate_proxy_session as rotate_stage_proxy_session,
-    )
-except ImportError:  # pragma: no cover - direct script execution
-    from sms_tool.paypal.proxy import (  # type: ignore
-        PayPalProxyState,
-        infer_proxy_country,
-        is_retryable_network_error,
-        probe_proxy,
-        redact_proxy_url,
-        rotate_proxy_session as rotate_stage_proxy_session,
-    )
+from .paypal.proxy import (
+    PayPalProxyState,
+    infer_proxy_country,
+    is_retryable_network_error,
+    probe_proxy,
+    redact_proxy_url,
+    rotate_proxy_session as rotate_stage_proxy_session,
+)
 
 # curl_cffi functional API (preferred for checkout to avoid Session cookie conflicts)
 try:

@@ -19,43 +19,20 @@ import time
 import uuid
 from .. import endpoints
 
-try:  # pragma: no cover - direct script execution
-    from ..checkout_contract import PLUS_TRIAL_CAMPAIGN_ID
-except ImportError:  # pragma: no cover
-    from checkout_contract import PLUS_TRIAL_CAMPAIGN_ID  # type: ignore
+from ..checkout_contract import PLUS_TRIAL_CAMPAIGN_ID
 
-try:  # pragma: no cover - direct script execution
-    from ..pp_link_helpers import CHATGPT_TIMEOUT, DEFAULT_STRIPE_PK, DEFAULT_TIMEOUT, STRIPE_VERSION
-except ImportError:  # pragma: no cover
-    from pp_link_helpers import (  # type: ignore
-        CHATGPT_TIMEOUT,
-        DEFAULT_STRIPE_PK,
-        DEFAULT_TIMEOUT,
-        STRIPE_VERSION,
-    )
+from ..pp_link_helpers import CHATGPT_TIMEOUT, DEFAULT_STRIPE_PK, DEFAULT_TIMEOUT, STRIPE_VERSION
 
-try:  # pragma: no cover - direct script execution
-    from .constants import (
-        STRIPE_PAYMENT_PAGE_CONFIRM_URL_T,
-        STRIPE_PAYMENT_PAGE_GET_URL_T,
-        UPI_CHECKOUT_APPROVE_URL,
-        UPI_CHECKOUT_CONFIRM_URL,
-        UPI_CHECKOUT_URL,
-        UPI_SENTINEL_APPROVAL_FLOW,
-    )
-    from .operations import UpiOperations
-    from .verify import INCONCLUSIVE as UPI_VERIFY_INCONCLUSIVE
-except ImportError:  # pragma: no cover
-    from constants import (  # type: ignore
-        STRIPE_PAYMENT_PAGE_CONFIRM_URL_T,
-        STRIPE_PAYMENT_PAGE_GET_URL_T,
-        UPI_CHECKOUT_APPROVE_URL,
-        UPI_CHECKOUT_CONFIRM_URL,
-        UPI_CHECKOUT_URL,
-        UPI_SENTINEL_APPROVAL_FLOW,
-    )
-    from operations import UpiOperations  # type: ignore
-    from verify import INCONCLUSIVE as UPI_VERIFY_INCONCLUSIVE  # type: ignore
+from .constants import (
+    STRIPE_PAYMENT_PAGE_CONFIRM_URL_T,
+    STRIPE_PAYMENT_PAGE_GET_URL_T,
+    UPI_CHECKOUT_APPROVE_URL,
+    UPI_CHECKOUT_CONFIRM_URL,
+    UPI_CHECKOUT_URL,
+    UPI_SENTINEL_APPROVAL_FLOW,
+)
+from .operations import UpiOperations
+from .verify import INCONCLUSIVE as UPI_VERIFY_INCONCLUSIVE
 
 from .context import UpiStageContext
 

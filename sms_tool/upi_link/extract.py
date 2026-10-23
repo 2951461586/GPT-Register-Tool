@@ -1,13 +1,7 @@
 from __future__ import annotations
 
-try:  # pragma: no cover - direct script execution
-    from ..payment.wire import _new_session
-except ImportError:
-    from sms_tool.payment.wire import _new_session  # type: ignore
-try:  # pragma: no cover - direct script execution
-    from ..pp_link_helpers import DEFAULT_TIMEOUT
-except ImportError:
-    from pp_link_helpers import DEFAULT_TIMEOUT  # type: ignore
+from ..payment.wire import _new_session
+from ..pp_link_helpers import DEFAULT_TIMEOUT
 from typing import Any
 from collections.abc import Mapping
 from urllib.parse import urljoin

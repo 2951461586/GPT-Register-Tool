@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-try:  # pragma: no cover - direct script execution
-    from ..phone_proxy import redact_proxy_text
-except ImportError:
-    from phone_proxy import redact_proxy_text  # type: ignore
+from ..phone_proxy import redact_proxy_text
 import contextlib
 from typing import Any
 from pathlib import Path

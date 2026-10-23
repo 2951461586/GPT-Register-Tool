@@ -1,10 +1,7 @@
 from __future__ import annotations
 from .. import endpoints
 
-try:  # pragma: no cover - direct script execution
-    from ..pp_link_helpers import CHATGPT_TIMEOUT, DEFAULT_TIMEOUT
-except ImportError:
-    from pp_link_helpers import CHATGPT_TIMEOUT, DEFAULT_TIMEOUT  # type: ignore
+from ..pp_link_helpers import CHATGPT_TIMEOUT, DEFAULT_TIMEOUT
 import contextlib
 from typing import Any
 from collections.abc import Mapping

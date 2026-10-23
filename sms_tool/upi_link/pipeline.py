@@ -1,40 +1,13 @@
 from __future__ import annotations
 
-try:  # pragma: no cover - direct script execution
-    from ..checkout_contract import PLUS_TRIAL_CAMPAIGN_ID
-except ImportError:
-    from checkout_contract import PLUS_TRIAL_CAMPAIGN_ID  # type: ignore
-try:  # pragma: no cover - direct script execution
-    from ..payment.wire import CURRENCY_MAP, _new_session
-except ImportError:
-    from sms_tool.payment.wire import CURRENCY_MAP, _new_session  # type: ignore
-try:  # pragma: no cover - direct script execution
-    from ..phone_proxy import redact_proxy_text
-except ImportError:
-    from phone_proxy import redact_proxy_text  # type: ignore
-try:  # pragma: no cover - direct script execution
-    from ..pp_link_helpers import CHATGPT_TIMEOUT, DEFAULT_STRIPE_PK, DEFAULT_TIMEOUT, STRIPE_VERSION
-except ImportError:
-    from pp_link_helpers import CHATGPT_TIMEOUT, DEFAULT_STRIPE_PK, DEFAULT_TIMEOUT, STRIPE_VERSION  # type: ignore
-try:  # pragma: no cover - direct script execution
-    from ..payment import egress as payment_egress
-except ImportError:
-    # Direct-script execution imports this module as a bare sibling, so the
-    # shared gate is unavailable there.  Explicit ``None`` rather than a silent
-    # skip: the package path (CLI and ``native_upi``) always has it.
-    payment_egress = None  # type: ignore[assignment]
-try:  # pragma: no cover - direct script execution
-    from ..geo.resolver import resolve_proxy_geo
-except ImportError:
-    from geo.resolver import resolve_proxy_geo  # type: ignore
-try:  # pragma: no cover - direct script execution
-    from ..proxy.edge_probe import CHATGPT_CHECKOUT_PATH, probe_openai_edge
-except ImportError:
-    from sms_tool.proxy.edge_probe import CHATGPT_CHECKOUT_PATH, probe_openai_edge  # type: ignore
-try:  # pragma: no cover - direct script execution
-    from ..proxy.entry import rotate_session
-except ImportError:
-    from sms_tool.proxy.entry import rotate_session  # type: ignore
+from ..checkout_contract import PLUS_TRIAL_CAMPAIGN_ID
+from ..payment.wire import CURRENCY_MAP, _new_session
+from ..phone_proxy import redact_proxy_text
+from ..pp_link_helpers import CHATGPT_TIMEOUT, DEFAULT_STRIPE_PK, DEFAULT_TIMEOUT, STRIPE_VERSION
+from ..payment import egress as payment_egress
+from ..geo.resolver import resolve_proxy_geo
+from ..proxy.edge_probe import CHATGPT_CHECKOUT_PATH, probe_openai_edge
+from ..proxy.entry import rotate_session
 from typing import Any
 from collections.abc import Mapping
 from types import SimpleNamespace
@@ -133,10 +106,7 @@ from .stage_config import (
     _upi_rounds,
 )
 
-try:  # pragma: no cover - direct script execution
-    from . import stages as _stages
-except ImportError:  # pragma: no cover
-    import stages as _stages  # type: ignore
+from . import stages as _stages
 
 
 def _resolve_upi_runtime(

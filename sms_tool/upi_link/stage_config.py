@@ -10,14 +10,9 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-try:  # pragma: no cover - direct script execution
-    from .config import _load_json, _method_cfg
-    from .constants import DEFAULT_CONFIG_PATH
-    from .env import _env_bool, _env_int
-except ImportError:  # pragma: no cover
-    from config import _load_json, _method_cfg  # type: ignore
-    from constants import DEFAULT_CONFIG_PATH  # type: ignore
-    from env import _env_bool, _env_int  # type: ignore
+from .config import _load_json, _method_cfg
+from .constants import DEFAULT_CONFIG_PATH
+from .env import _env_bool, _env_int
 
 
 def _upi_link_unverified_contract(verification_code: str, verification: str) -> dict[str, Any]:

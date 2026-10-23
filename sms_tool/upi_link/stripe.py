@@ -1,14 +1,8 @@
 from __future__ import annotations
 from .. import endpoints
 
-try:  # pragma: no cover - direct script execution
-    from ..endpoints import CHATGPT_ORIGIN
-except ImportError:
-    from endpoints import CHATGPT_ORIGIN  # type: ignore
-try:  # pragma: no cover - direct script execution
-    from ..pp_link_helpers import DEFAULT_TIMEOUT, STRIPE_VERSION
-except ImportError:
-    from pp_link_helpers import DEFAULT_TIMEOUT, STRIPE_VERSION  # type: ignore
+from ..endpoints import CHATGPT_ORIGIN
+from ..pp_link_helpers import DEFAULT_TIMEOUT, STRIPE_VERSION
 from typing import Any
 from collections.abc import Callable
 from collections.abc import Mapping

@@ -303,6 +303,18 @@ class ParseTokenTests(unittest.TestCase):
 
 class PayPalConfigTests(unittest.TestCase):
     def test_routes_through_payment_routing(self):
+        """The routing seam is the config resolver; there is no legacy back door.
+
+        ``_paypal_config`` imports ``method_payment_config`` inside the function
+        body because ``import_layer_ratchet`` freezes the ``paypal_link ->
+        payment`` direction (payment owns the router).  That lazy edge used to
+        carry an ``except ImportError`` branch that read the raw ``paypal``
+        block; the branch was unreachable in every execution mode (running a
+        module as a script puts *its own* directory on ``sys.path[0]``), so it
+        only hid real import failures.  Delete-the-fallback is pinned here, and
+        the repo-wide pattern is pinned by
+        ``tests/governance/test_import_fallback_guard.py``.
+        """
         cfg = {"paypal": {"target_country": "GB"}}
         with patch("sms_tool.payment.routing.method_payment_config", return_value={"target_country": "JP"}) as routed:
             out = gen_link._paypal_config(cfg)
@@ -314,15 +326,6 @@ class PayPalConfigTests(unittest.TestCase):
             with self.subTest(bad=bad):
                 out = gen_link._paypal_config(bad)
                 self.assertIsInstance(out, dict)
-
-    def test_falls_back_to_legacy_paypal_block_on_import_error(self):
-        cfg = {"paypal": {"target_country": "GB"}}
-        with patch("sms_tool.payment.routing.method_payment_config", side_effect=ImportError("no routing")):
-            self.assertEqual({"target_country": "GB"}, gen_link._paypal_config(cfg))
-
-    def test_legacy_fallback_ignores_non_mapping_paypal_block(self):
-        with patch("sms_tool.payment.routing.method_payment_config", side_effect=ImportError("no routing")):
-            self.assertEqual({}, gen_link._paypal_config({"paypal": "nope"}))
 
 
 class LoadJsonTests(unittest.TestCase):

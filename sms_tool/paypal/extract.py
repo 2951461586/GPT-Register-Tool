@@ -27,79 +27,40 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
-try:
-    from ..phone_proxy import normalize_proxy_url
-    from ..pp_link_helpers import (
-        DEFAULT_STRIPE_PK,
-        STRIPE_VERSION,
-        DEFAULT_TIMEOUT,
-        CHATGPT_TIMEOUT,
-        RETRY_ATTEMPTS,
-        _SIDE_EFFECT_STAGES,
-        stripe_confirm_error_diagnostics,
-        is_paypal_ba_approve_url,
-        extract_ba_token,
-        extract_redirect_url,
-        resolve_external_redirect,
-        billing_for_country,
-        reserve_billing_variant,
-        stripe_amount_details,
-    )
-except ImportError:  # pragma: no cover - direct script execution
-    from phone_proxy import normalize_proxy_url  # type: ignore
-    from pp_link_helpers import (  # type: ignore
-        DEFAULT_STRIPE_PK,
-        STRIPE_VERSION,
-        DEFAULT_TIMEOUT,
-        CHATGPT_TIMEOUT,
-        RETRY_ATTEMPTS,
-        _SIDE_EFFECT_STAGES,
-        stripe_confirm_error_diagnostics,
-        is_paypal_ba_approve_url,
-        extract_ba_token,
-        extract_redirect_url,
-        resolve_external_redirect,
-        billing_for_country,
-        reserve_billing_variant,
-        stripe_amount_details,
-    )
+from ..phone_proxy import normalize_proxy_url
+from ..pp_link_helpers import (
+    DEFAULT_STRIPE_PK,
+    STRIPE_VERSION,
+    DEFAULT_TIMEOUT,
+    CHATGPT_TIMEOUT,
+    RETRY_ATTEMPTS,
+    _SIDE_EFFECT_STAGES,
+    stripe_confirm_error_diagnostics,
+    is_paypal_ba_approve_url,
+    extract_ba_token,
+    extract_redirect_url,
+    resolve_external_redirect,
+    billing_for_country,
+    reserve_billing_variant,
+    stripe_amount_details,
+)
 
-try:
-    from ..checkout_contract import (
-        PLUS_TRIAL_CAMPAIGN_ID,
-        CheckoutRequestContract,
-        CheckoutSessionContract,
-        browser_profile_for_country,
-    )
-except ImportError:  # pragma: no cover - direct script execution
-    from checkout_contract import (  # type: ignore
-        PLUS_TRIAL_CAMPAIGN_ID,
-        CheckoutRequestContract,
-        CheckoutSessionContract,
-        browser_profile_for_country,
-    )
+from ..checkout_contract import (
+    PLUS_TRIAL_CAMPAIGN_ID,
+    CheckoutRequestContract,
+    CheckoutSessionContract,
+    browser_profile_for_country,
+)
 
-try:
-    from .proxy import (
-        PayPalProxyState,
-        is_retryable_network_error,
-        probe_proxy,
-        redact_proxy_url,
-        rotate_proxy_session as rotate_stage_proxy_session,
-    )
-except ImportError:  # pragma: no cover - direct script execution
-    from sms_tool.paypal.proxy import (  # type: ignore
-        PayPalProxyState,
-        is_retryable_network_error,
-        probe_proxy,
-        redact_proxy_url,
-        rotate_proxy_session as rotate_stage_proxy_session,
-    )
+from .proxy import (
+    PayPalProxyState,
+    is_retryable_network_error,
+    probe_proxy,
+    redact_proxy_url,
+    rotate_proxy_session as rotate_stage_proxy_session,
+)
 
-try:
-    from .. import endpoints
-except ImportError:  # pragma: no cover - direct script execution
-    import endpoints  # type: ignore
+from .. import endpoints
 
 # ─── 常量 ────────────────────────────────────────────────────────────────────
 
@@ -119,51 +80,29 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 # ``PPLinkExtractor`` 在本模块内以模块全局名调用下列名字，所以
 # ``patch.object(paypal_extract, "_new_session" | "_checkout_post", ...)``
 # 仍然生效 —— 补丁打在本模块的命名空间上就能被看见。
-try:
-    from ..payment.wire import (
-        CURRENCY_MAP,
-        CheckoutApprovalBlockedError,
-        CheckoutNotZeroDueError,
-        PaymentOutcomeUnknownError,
-        PayPalCapabilityError,
-        PayPalHttpError,
-        _PROVIDER_STAGES,
-        _checkout_post,
-        _compact_diagnostic,
-        _new_session,
-    )
-except ImportError:  # pragma: no cover - direct script execution
-    from sms_tool.payment.wire import (  # type: ignore
-        CURRENCY_MAP,
-        CheckoutApprovalBlockedError,
-        CheckoutNotZeroDueError,
-        PaymentOutcomeUnknownError,
-        PayPalCapabilityError,
-        PayPalHttpError,
-        _PROVIDER_STAGES,
-        _checkout_post,
-        _compact_diagnostic,
-        _new_session,
-    )
+from ..payment.wire import (
+    CURRENCY_MAP,
+    CheckoutApprovalBlockedError,
+    CheckoutNotZeroDueError,
+    PaymentOutcomeUnknownError,
+    PayPalCapabilityError,
+    PayPalHttpError,
+    _PROVIDER_STAGES,
+    _checkout_post,
+    _compact_diagnostic,
+    _new_session,
+)
 
 # 只为**外部**消费者保留的再导出（本模块自身不再引用它们）：
 # ``patch.object(paypal_extract.curl_requests, "post", ...)`` 打的是 curl_cffi
 # **模块对象**本身，与 ``payment_wire`` 看到的是同一个对象；
 # ``_checkout_device_id`` / ``_checkout_get`` 由测试直接调用。
-try:
-    from ..payment.wire import (  # noqa: F401
-        _checkout_device_id,
-        _checkout_get,
-        curl_requests,
-        requests,
-    )
-except ImportError:  # pragma: no cover - direct script execution
-    from sms_tool.payment.wire import (  # type: ignore # noqa: F401
-        _checkout_device_id,
-        _checkout_get,
-        curl_requests,
-        requests,
-    )
+from ..payment.wire import (  # noqa: F401
+    _checkout_device_id,
+    _checkout_get,
+    curl_requests,
+    requests,
+)
 
 
 # ─── 核心流程 ──────────────────────────────────────────────────────────────────

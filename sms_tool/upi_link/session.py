@@ -1,18 +1,10 @@
 from __future__ import annotations
 from .. import endpoints
 
-try:  # pragma: no cover - direct script execution
-    from ..checkout_contract import PLUS_TRIAL_CAMPAIGN_ID, browser_profile_for_country
-except ImportError:
-    from checkout_contract import PLUS_TRIAL_CAMPAIGN_ID, browser_profile_for_country  # type: ignore
-try:  # pragma: no cover - direct script execution
-    from ..payment.wire import _new_session
-except ImportError:
-    from sms_tool.payment.wire import _new_session  # type: ignore
-try:  # pragma: no cover - direct script execution
-    from ..pp_link_helpers import DEFAULT_TIMEOUT, STRIPE_VERSION
-except ImportError:
-    from pp_link_helpers import DEFAULT_TIMEOUT, STRIPE_VERSION  # type: ignore
+from ..checkout_contract import PLUS_TRIAL_CAMPAIGN_ID, browser_profile_for_country
+from ..payment.wire import _new_session
+from ..pp_link_helpers import DEFAULT_TIMEOUT, STRIPE_VERSION
+
 try:
     from curl_cffi import requests as _curl_requests
 except ImportError:  # pragma: no cover - curl_cffi is a project dependency

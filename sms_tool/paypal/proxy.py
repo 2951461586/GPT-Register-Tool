@@ -724,12 +724,14 @@ def _rank_stage_proxy(
 
 def _proxies_from_config(cfg: dict, checkout_country: str = "", target_country: str = "") -> dict:
     """Resolve payment stage proxies from the static ``paypal.stage_proxies`` config."""
-    try:
-        from ..payment.routing import method_payment_config
+    # Function-local on purpose: ``import_layer_ratchet`` forbids the paypal ->
+    # payment direction (payment is the outer layer), and ``payment.routing``
+    # imports ``proxy.entry``.  ``_proxies_from_config`` is called once per link,
+    # so the lazy edge costs nothing.  No ``except ImportError`` fallback: it was
+    # unreachable and merely hid the import's real failures.
+    from ..payment.routing import method_payment_config
 
-        paypal_cfg = method_payment_config(cfg, "paypal")
-    except (ImportError, TypeError, AttributeError):  # pragma: no cover - direct script execution
-        paypal_cfg = cfg.get("paypal") or {}
+    paypal_cfg = method_payment_config(cfg, "paypal")
     stage_proxies = paypal_cfg.get("stage_proxies") or {}
     proxy_default = (cfg.get("proxy") or {}).get("default") or ""
     state = _paypal_proxy_state(paypal_cfg)

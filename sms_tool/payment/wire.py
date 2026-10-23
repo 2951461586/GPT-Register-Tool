@@ -35,15 +35,9 @@ from urllib.parse import urlsplit
 
 import requests
 
-try:
-    from ..auth_headers import AUTH_FINGERPRINT_PROFILES
-except ImportError:  # pragma: no cover - direct script execution
-    from auth_headers import AUTH_FINGERPRINT_PROFILES  # type: ignore
+from ..auth_headers import AUTH_FINGERPRINT_PROFILES
 
-try:
-    from ..kernel.timeouts import CHATGPT_TIMEOUT
-except ImportError:  # pragma: no cover - direct script execution
-    from timeouts import CHATGPT_TIMEOUT  # type: ignore
+from ..kernel.timeouts import CHATGPT_TIMEOUT
 
 # curl_cffi functional API (preferred for checkout to avoid Session cookie conflicts)
 try:
