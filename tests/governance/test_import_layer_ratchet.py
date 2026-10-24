@@ -345,8 +345,24 @@ def test_summary_facts_are_pinned():
     # handlers' now-unused `_emit` import offsets one of the two, netting +1.
     # The target set is again unchanged — this is the decomposition cost, and it
     # is the last stage body that will move.
+    #
+    # 2026-10-25: 432 -> 434, **reviewed increase, one shared leaf constant.**
+    # The "code defect, not network" exception tuple was copy-pasted in three
+    # places (registration/handlers.py, registration/bootstrap_stages.py,
+    # payment/batch.py), each with a comment asking the next reader to keep it in
+    # sync with the other two. It now lives once, as
+    # `INTERNAL_EXCEPTION_TYPES` in kernel/error_classification.py — this
+    # ratchet's own failure text names exactly that remedy ("move the shared
+    # helper into a leaf module both sides may import"). The two registration
+    # stage executors import it at module scope (+2 on registration -> sms_tool);
+    # `payment/batch.py` reuses its existing function-local
+    # `kernel.error_classification` import, so the payment pair does not move.
+    # The alternative — a function-local import in the two executors as well —
+    # was rejected for the reason recorded on 2026-10-23 below: it hides the
+    # coupling (and puts a `sys.modules` lookup on the exception path) instead of
+    # recording a dependency on a leaf of exception types.
     assert totals == {
-        "total_module_edges": 432,
+        "total_module_edges": 434,
         "ordered_pairs": 64,
         "mutual_pairs": 17,
         "minority_edges": 46,

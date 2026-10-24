@@ -47,7 +47,7 @@
     "sms_tool/providers -> sms_tool/mailbox": 5,
     "sms_tool/providers -> sms_tool/proxy": 1,
     "sms_tool/proxy -> sms_tool": 5,
-    "sms_tool/registration -> sms_tool": 89,
+    "sms_tool/registration -> sms_tool": 91,
     "sms_tool/registration -> sms_tool/accounts": 3,
     "sms_tool/registration -> sms_tool/auth_flow": 2,
     "sms_tool/registration -> sms_tool/mailbox": 4,
@@ -69,6 +69,6 @@
     "sms_tool/upi_link -> sms_tool/paypal": 1,
     "sms_tool/upi_link -> sms_tool/proxy": 3
   },
-  "total_module_edges": 432,
+  "total_module_edges": 434,
   "type_only_edges": 1
 }

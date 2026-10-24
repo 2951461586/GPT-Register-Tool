@@ -689,22 +689,6 @@ def _build_report(
     }
 
 
-#: Exception types that mean "this row hit a code/contract defect", mirroring
-#: ``registration_handlers._run_stage``'s internal tuple. Re-running the account
-#: cannot fix them, so a worker row carrying one must not be requeued forever.
-_INTERNAL_WORKER_ERRORS = (
-    NameError,
-    AttributeError,
-    ImportError,
-    KeyError,
-    TypeError,
-    IndexError,
-    UnboundLocalError,
-    NotImplementedError,
-    RecursionError,
-)
-
-
 def _worker_exception_row(index: int, email: str, exc: BaseException) -> dict[str, Any]:
     """Per-row fallback for an exception that escaped ``run_one``.
 
@@ -721,11 +705,15 @@ def _worker_exception_row(index: int, email: str, exc: BaseException) -> dict[st
     transport/unknown failures stay retryable. ``failure_class`` records the
     branch so an operator does not have to re-derive it from the message.
     """
-    internal = isinstance(exc, _INTERNAL_WORKER_ERRORS)
     # Function-local: the shared classifier is a leaf utility and this is its
     # only call site in the payment lane, so a module-level edge would grow the
     # layer ratchet for one use. The delayed-import ratchet records the reason.
-    from ..kernel.error_classification import classify_error
+    from ..kernel.error_classification import INTERNAL_EXCEPTION_TYPES, classify_error
+
+    # ``INTERNAL_EXCEPTION_TYPES`` is the same object the registration stage
+    # executors use (owner: ``kernel.error_classification``); re-running the
+    # account cannot fix a code/contract defect, so such a row is not requeued.
+    internal = isinstance(exc, INTERNAL_EXCEPTION_TYPES)
 
     failure_class = "internal" if internal else classify_error(f"{type(exc).__name__}: {exc}")
     return {

@@ -15,6 +15,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from .. import endpoints
+from ..kernel.error_classification import INTERNAL_EXCEPTION_TYPES
 from ..mailbox import service as _mailbox_service
 from ..mailbox.errors import MailboxEndpointUnavailableError
 from ..operator_output import emit as _emit
@@ -67,18 +68,9 @@ def run_bootstrap(workflow: RegistrationWorkflow) -> None:
         workflow._bootstrap()
     except (RegistrationAbort, RegistrationCancelled):
         raise
-    except (
-        NameError,
-        AttributeError,
-        ImportError,
-        KeyError,
-        TypeError,
-        IndexError,
-        UnboundLocalError,
-        NotImplementedError,
-        RecursionError,
-    ) as exc:
-        # Same tuple as ``_run_stage``: programming/contract errors keep
+    except INTERNAL_EXCEPTION_TYPES as exc:
+        # Same tuple as ``_run_stage`` (one owner:
+        # ``kernel.error_classification``): programming/contract errors keep
         # the internal label (see the comment there for why IndexError
         # must not fall into the transport arm).
         raise RegistrationAbort(f"bootstrap_internal:{type(exc).__name__}:{exc}") from exc

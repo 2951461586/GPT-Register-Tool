@@ -1,17 +1,28 @@
 """Protocol (email/AT) registration stage orchestrator and workflow.
 
 Owns the ordered email-registration pipeline (``run()`` sequences the stages).
-Cohesive peripheral units were split into sibling modules on 2026-10-01 and are
-re-exported here so every historical import path keeps working:
+The stage *bodies* live in sibling modules and are re-exported here so every
+historical import path keeps working. Peripheral units were split out in two
+waves -- 2026-10-01 (``persistence`` / ``stage_runner`` / ``protocol_helpers`` /
+``otp_stages`` / ``account_stages`` / ``edge_challenge`` / ``resume`` /
+``sentinel_stages``) and 2026-10-24 (``bootstrap_stages`` / ``identity_stages`` /
+``auth_stages`` / ``register_stages``):
 
-* ``registration_persistence`` -- the checkpoint/account persistence seam
-* ``registration_stage_runner`` -- ``RegistrationAbort`` and the stage executor
-* ``registration_protocol_helpers`` -- pure predicates/formatters + safe int/float
-* ``registration_otp_stages`` -- the send/wait/validate email-OTP trio
-* ``registration_account_stages`` -- create_account, session fetch, and AT probe stages
-* ``registration_edge_challenge`` -- the in-flow edge-challenge hook and exit move
-* ``registration_resume`` -- checkpoint persistence and the post-create resume stage
-* ``registration_sentinel_stages`` -- Sentinel switch, password-page bundle and per-flow issuance
+* ``bootstrap_stages`` -- reference-lane overlay, bootstrap failure taxonomy, config/proxy/mailbox setup
+* ``identity_stages`` -- fingerprint/geo, sentinel extraction, device context, identity preparation
+* ``auth_stages`` -- the signin/authorize handshake plus the password-lane predicates
+* ``register_stages`` -- password/passwordless ``user/register`` handling and its failure taxonomy
+* ``otp_stages`` -- the send/wait/validate email-OTP trio
+* ``account_stages`` -- create_account, session fetch, and AT probe stages
+* ``edge_challenge`` -- the in-flow edge-challenge hook and exit move
+* ``resume`` -- checkpoint persistence and the post-create resume stage
+* ``sentinel_stages`` -- Sentinel switch, password-page bundle and per-flow issuance
+* ``persistence`` -- the checkpoint/account persistence seam
+* ``stage_runner`` -- ``RegistrationAbort`` and the stage executor
+* ``protocol_helpers`` -- pure predicates/formatters + safe int/float
+
+This module owns stage **ordering**, the lifecycle and the two-line delegates;
+the stage bodies are not here.
 """
 
 from __future__ import annotations
@@ -32,6 +43,7 @@ from . import resume as _resume
 from . import sentinel_stages as _sentinel_stages
 from . import warmup as _warmup
 from ..codex_oauth import collect_codex_oauth_tokens
+from ..kernel.error_classification import INTERNAL_EXCEPTION_TYPES
 from ..mailbox.errors import MailboxEndpointUnavailableError
 from ..providers.mailbox_graph import MailboxAuthInvalidError
 from .cancel import RegistrationCancelled, cancellable_sleep, ensure_not_cancelled
@@ -100,16 +112,20 @@ class RegistrationEmailWorkflow:
       checkpoint payload, never via return values (they all return ``None`` or
       a checkpoint dict). ``finalize()`` is the single place the terminal
       result is assembled.
-    - The file owns stage ordering; the *stages* themselves are not split into
-      per-stage modules (they share ``self.runtime``/``self.r`` too tightly for
-      that to be anything but an import cycle). What *is* extracted is the
-      cohesive periphery -- ``registration_otp_stages`` (the OTP trio),
-      ``registration_persistence`` (the storage seam),
-      ``registration_stage_runner`` (stage execution) and
-      ``registration_protocol_helpers`` (pure helpers) -- each re-exported here
-      with a thin delegate so no caller changes. The enforced seam remains
-      ``RegistrationOperations`` (workflow → provider) and ``store``
-      (persistence); see ``docs/architecture.md`` "Dependency Direction".
+    - This file owns stage ordering and the delegates; the stage *bodies* live
+      in the sibling modules (``bootstrap_stages`` / ``identity_stages`` /
+      ``auth_stages`` / ``register_stages`` since 2026-10-24, plus
+      ``otp_stages`` / ``account_stages`` / ``sentinel_stages`` / ``resume`` /
+      ``edge_challenge`` / ``warmup`` / ``finalize``). Every method below is a
+      two-line forwarder so ``patch.object(RegistrationEmailWorkflow, name,
+      ...)`` still intercepts the call;
+      ``tests/registration/test_handlers_module_ownership.py`` asserts each body
+      exists in exactly one module and that this file only forwards. Do not move
+      a body back here -- it trips that guard, and the shared
+      ``self.runtime``/``self.r`` coupling it was always claimed to need never
+      materialised. The enforced seam remains ``RegistrationOperations``
+      (workflow → provider) and ``store`` (persistence); see
+      ``docs/architecture.md`` "Dependency Direction".
     """
 
     def __init__(
@@ -292,23 +308,14 @@ class RegistrationEmailWorkflow:
             raise
         except RegistrationStageOverrun as exc:
             raise RegistrationAbort(f"{state.value}_stage_budget_exceeded:{exc}") from exc
-        except (
-            NameError,
-            AttributeError,
-            ImportError,
-            KeyError,
-            TypeError,
-            IndexError,
-            UnboundLocalError,
-            NotImplementedError,
-            RecursionError,
-        ) as exc:
+        except INTERNAL_EXCEPTION_TYPES as exc:
             # Programming/contract errors only. IndexError used to fall into the
             # transport catch-all below and get retried as a network failure --
             # the same "error name hides root cause" class as the RuntimeError
-            # demotion fixed in error_classification. Keep this tuple in sync
-            # with error_classification.INTERNAL_ERROR_MARKERS, which matches
-            # the `{state}_internal:<Type>:` label text.
+            # demotion fixed in error_classification. The tuple itself is owned
+            # by ``kernel.error_classification`` (INTERNAL_EXCEPTION_TYPES) and
+            # matches INTERNAL_ERROR_MARKERS' ``{state}_internal:<Type>:``
+            # label; do not re-inline it here.
             raise RegistrationAbort(f"{state.value}_internal:{type(exc).__name__}:{exc}") from exc
         except Exception as exc:
             # Transport/protocol failures keep their message so

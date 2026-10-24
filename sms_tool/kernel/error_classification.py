@@ -76,6 +76,36 @@ GENERIC_TRANSPORT_MARKERS = tuple(marker for marker in NETWORK_ERROR_MARKERS if 
 
 INTERNAL_ERROR_MARKERS = _INTERNAL_CLASS.markers
 
+#: Exception types that mean "code or contract defect", never "network".
+#:
+#: The stage executors label an escaping exception by its *type*: a type in this
+#: tuple becomes ``{stage}_internal:<Type>:<msg>`` (terminal, never retried),
+#: every other exception becomes ``{stage}_transport:<msg>`` and is handed to the
+#: marker vocabulary above. The tuple therefore has to agree with
+#: ``INTERNAL_ERROR_MARKERS`` in both directions -- a type listed here with no
+#: matching marker gets retried as transport, and a type missing here has its
+#: defect retried as network. Both were observed before 2026-09-12 (see the
+#: ``CURL_TRANSPORT_MARKERS`` note for the ``RuntimeError`` case).
+#:
+#: Owned here rather than in the three call sites --
+#: ``registration.handlers._run_stage``,
+#: ``registration.bootstrap_stages.run_bootstrap`` and
+#: ``payment.batch._worker_exception_row`` -- because three copies had already
+#: drifted apart in review, each with a comment telling the next reader to keep
+#: it in sync with the other two. ``tests/governance/test_internal_exception_owner.py``
+#: fails when a caller re-inlines the tuple.
+INTERNAL_EXCEPTION_TYPES: tuple[type[BaseException], ...] = (
+    NameError,
+    AttributeError,
+    ImportError,
+    KeyError,
+    TypeError,
+    IndexError,
+    UnboundLocalError,
+    NotImplementedError,
+    RecursionError,
+)
+
 CONFIGURATION_ERROR_MARKERS = _CONFIGURATION_CLASS.markers
 
 # Hard stops: retrying cannot change the outcome. Kept beside classify_error
