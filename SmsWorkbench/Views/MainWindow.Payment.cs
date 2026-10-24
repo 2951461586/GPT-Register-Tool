@@ -2,6 +2,8 @@
 // PaymentBatchService.cs for why the project-wide switch stays `annotations`.
 #nullable enable
 
+using SmsWorkbench.Localization;
+
 namespace SmsWorkbench
 {
     public partial class MainWindow
@@ -22,7 +24,7 @@ namespace SmsWorkbench
             if (row == null) return;
             if (string.IsNullOrWhiteSpace(row.PayPalUrl))
             {
-                MessageBox.Show("选中账号没有可打开的支付链接。", "无支付链接", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show(this, Loc.T("选中账号没有可打开的支付链接。"), Loc.T("无支付链接"), MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
             OpenPayPalUrl(row.PayPalUrl, row.Identifier);
@@ -53,8 +55,8 @@ namespace SmsWorkbench
             {
                 MessageBox.Show(
                     this,
-                    "已有后端任务正在运行，请先等待其完成或取消后再发起批量支付。",
-                    "任务进行中",
+                    Loc.T("已有后端任务正在运行，请先等待其完成或取消后再发起批量支付。"),
+                    Loc.T("任务进行中"),
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);
                 return;

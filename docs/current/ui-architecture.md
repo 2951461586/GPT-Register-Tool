@@ -14,7 +14,8 @@
 | 视图模型 | `ViewModels/`（`PoolViewModel`、`TaskListViewModel`、`LogViewModel`、`StatusBarViewModel`、`SettingsViewModel`、`PaymentBatchViewModel`、`ExportViewModel`、`RegisterViewModel`） | 可观察状态、展示格式化、输入校验 | 直接写配置或发 HTTP |
 | 服务 | `Services/`（`ConfigStore`、`SettingsService`、`PaymentBatchService`、`MailboxPoolFileStore`、`WindowThemeService`、`ApplicationPaths`、`FileLauncher`、`LegacyConfigMigration`、`BackendTaskCoordinator`、`TransientArtifactCleanup`） | 读写本地配置/池文件、组装后端任务、迁移旧配置、清理临时凭据 | 解析厂商协议 |
 | 后端边界 | `Interop/`（`PythonBackendClient`、`DesktopReadClient`、`BackendResultInterpreter`、`PythonPathResolver`、`SmsProviderCatalogClient`） | 启动 Python 进程、只读快照、把 JSON 结果翻译成领域对象 | 业务规则 |
-| 模型 | `Models/` | 桌面侧契约（`AccountBatchProgress`、`DesktopThemePreference`、`PaymentBatchModels`、`SettingsModels`、`SmsProviderCatalog`…） | 与 `SmsWorkbench.Contracts` 重复的定义 |
+| 模型 | `Models/` | 桌面侧契约（`AccountBatchProgress`、`DesktopThemePreference`、`PaymentBatchModels`、`SettingsModels`、`SmsProviderCatalog`…）**不含窗口**（窗口在 `Views/` 或 `Dialogs/`） | 与 `SmsWorkbench.Contracts` 重复的定义 |
+| 对话框 | `Dialogs/`（`DialogFactory`、`SettingsDialogService`、`PaymentBatchDialogService`、`ChangeEmailDialogService`、`AccountBatchProgressDialog`） | 代码构造的对话框：窗口外壳、表单行、动作行、异步信息/确认框 | 业务流程；对话框里不拼 CLI 参数 |
 
 硬边界：界面只**发起**命令并展示结果，注册/支付/邮箱改写全部在 `sms_tool`。
 `SmsWorkbench/` 不得内联协议端点、重试策略或代理串解析（Rule 03/05/13；
@@ -49,10 +50,11 @@ Wpf.Ui.xaml   ->   Themes/Palette.xaml   ->   Themes/Controls.xaml
 ## 3. `MainWindow` 的组合方式
 
 `MainWindow.xaml`（54 行）现在只剩窗口骨架与五个 UserControl 的摆放；
-`MainWindow.xaml.cs` 与 16 个 `MainWindow.*.cs` 分部类合计 5115 行（2026-10-24 实测），
+`MainWindow.xaml.cs` 与 16 个 `MainWindow.*.cs` 分部类合计 5040 行（2026-10-25 实测，
+注册选项对话框改走 `DialogFactory` 后从 5115 行降下来），
 按**功能**而不是按控件切分。五个控件（`TitleBar` 71、`Sidebar` 51、
 `AccountFilterBar` 22、`AccountGridView` 83、`WorkbenchConsole` 126 行 code-behind）
-与分部类合计 5468 行：
+与分部类合计 5396 行：
 
 | 分部类 | 行数 | 职责 |
 | --- | ---: | --- |
@@ -67,7 +69,7 @@ Wpf.Ui.xaml   ->   Themes/Palette.xaml   ->   Themes/Controls.xaml
 | `MainWindow.Navigation.cs` | 114 | 分页游标、筛选导航与选中行回退 |
 | `MainWindow.Payment.cs` | 68 | 批量支付窗口入场 |
 | `MainWindow.Pools.cs` | 513 | 池文件加载/切池/合并 |
-| `MainWindow.Register.cs` | 749 | 注册任务发起与进度消费 |
+| `MainWindow.Register.cs` | 668 | 注册任务发起与进度消费（两个选项对话框走 `DialogFactory`） |
 | `MainWindow.Sidebar.cs` | 74 | 侧栏列宽动画（视觉状态在 `Sidebar` 控件里） |
 | `MainWindow.SmsProvider.cs` | 481 | 一键接码供应商面板 |
 | `MainWindow.Tasks.cs` | 492 | 任务列表与取消 |
@@ -119,6 +121,8 @@ Wpf.Ui.xaml   ->   Themes/Palette.xaml   ->   Themes/Controls.xaml
 | --- | --- |
 | `tests/SmsWorkbench.Tests/DesktopWindowSmokeTests.cs` | 真实 `App` + `InitializeComponent()`，在 STA 线程打开设置/支付/主窗口，断言模板、`FindResource("SettingsSelectionBg")`、`PasswordBoxBinding` 往返；**这是资源字典与样式唯一的运行时证据** |
 | `tests/workbench/test_sms_workbench_layout.py` | 根目录只放应用壳；角色目录集合；`Themes/` 是纯资源目录；XAML `Source=` 相对路径必须可解析 |
+| `tests/workbench/test_localization_catalog.py` | 每个 `{loc:Tr}` / `Loc.T` / `Loc.F` 键都有英文；XAML 文本属性不得留中文；**`MessageBox.Show`、`Notify*`、`DialogFactory.Show*Async`、`Content`/`Text`/`Title` 等属性直接写字面中文即失败**（2026-10-25 新增，此前这类字符串静默漏了 25 条） |
+| `tests/SmsWorkbench.Tests/BackendCommandPlannerSurfaceTests.cs` | `BackendCommandPlanner` 中「无生产调用方」的 builder 集合被冻结：新增死代码、接线、删除都要显式改白名单，且每个条目必须在 doc comment 里写明 |
 | `scripts/dotnet_warning_ratchet.py` | C# 构建告警零基线（见 [`dotnet-gates.md`](dotnet-gates.md)） |
 | `dotnet test GPTRegisterTool.slnx -c Release` | 548 个测试（CI 必跑） |
 

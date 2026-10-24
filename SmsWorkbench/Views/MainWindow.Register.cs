@@ -42,7 +42,7 @@ namespace SmsWorkbench
             (int imported, int skipped) = MailboxPoolFileStore.ImportSupportedLines(targetFile, lines);
             Register.ChataiMailboxFilePath = targetFile;
             RefreshPools();
-            NotifySuccess($"导入完成：成功 {imported} 条，跳过 {skipped} 条。");
+            NotifySuccess(Loc.F("导入完成：成功 {0} 条，跳过 {1} 条。", imported, skipped));
         }
 
         private async void ViewInbox()
@@ -335,7 +335,7 @@ namespace SmsWorkbench
                 HorizontalAlignment = HorizontalAlignment.Right,
                 Margin = new Thickness(0, 8, 0, 0)
             };
-            var cancel = new Button { Content = "取消", Width = 82, Margin = new Thickness(0, 0, 10, 0), Style = (Style)FindResource("SecondaryButton") };
+            var cancel = new Button { Content = Loc.T("取消"), Width = 82, Margin = new Thickness(0, 0, 10, 0), Style = (Style)FindResource("SecondaryButton") };
             var ok = new Button { Content = Loc.T("开始测活"), Width = 98, Style = (Style)FindResource("PrimaryButton") };
             actions.Children.Add(cancel);
             actions.Children.Add(ok);
@@ -374,26 +374,10 @@ namespace SmsWorkbench
 
         private Window CreateSelectedRegisterOptionsDialog(int selectedCount, Action<RegisterOptions> accept, int checkedCount = 0)
         {
-            var dialog = new Window
-            {
-                Title = Loc.T("选中邮箱注册"),
-                Owner = this,
-                Width = 560,
-                Height = 278,
-                MinWidth = 480,
-                MinHeight = 260,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Background = (System.Windows.Media.Brush)FindResource("AppBg")
-            };
-
-            var root = new Grid { Margin = new Thickness(14) };
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
-            root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            Window dialog = DialogFactory.Create(this, Loc.T("选中邮箱注册"), 560, 278, 480, 260);
+            Grid root = DialogFactory.CreateRootGrid(margin: 14);
+            Grid form = DialogFactory.CreateFormGrid();
+            form.VerticalAlignment = VerticalAlignment.Top;
 
             int usable = Math.Max(1, selectedCount);
             // checkedCount > usable means the local unregistered filter already
@@ -403,57 +387,39 @@ namespace SmsWorkbench
             // "I checked N but the report says N-k" confusion measured on
             // 2026-09-19 (docs/audits/scans/scan-2026-09-19-selected-22-vs-reported-3of6.md).
             string hintText = checkedCount > usable
-                ? $"已选择 {usable} 个可注册邮箱（勾选 {checkedCount} 个，本地排除 {checkedCount - usable} 个已注册/半注册/记录不完整；后端还会剔除冷却/隔离/死路地址）"
-                : "已选择 " + usable.ToString() + " 个邮箱";
-            var hint = new TextBlock
+                ? Loc.F(
+                    "已选择 {0} 个可注册邮箱（勾选 {1} 个，本地排除 {2} 个已注册/半注册/记录不完整；后端还会剔除冷却/隔离/死路地址）",
+                    usable,
+                    checkedCount,
+                    checkedCount - usable)
+                : Loc.F("已选择 {0} 个邮箱", usable);
+            DialogFactory.AddSpanningRow(form, new TextBlock
             {
                 Text = hintText,
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 0, 0, 10),
-                Foreground = (System.Windows.Media.Brush)FindResource("TextSub")
-            };
-            Grid.SetRow(hint, 0);
-            Grid.SetColumnSpan(hint, 2);
-            root.Children.Add(hint);
+                Foreground = (Brush)FindResource("TextSub")
+            });
 
-            var workerLabel = new TextBlock { Text = Loc.T("并发"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 10), Foreground = (System.Windows.Media.Brush)FindResource("TextSub") };
             var workerBox = new TextBox { Text = Register.DefaultWorkerCount().ToString(), Margin = new Thickness(0, 0, 0, 10) };
-            Grid.SetRow(workerLabel, 1);
-            Grid.SetColumn(workerLabel, 0);
-            Grid.SetRow(workerBox, 1);
-            Grid.SetColumn(workerBox, 1);
-            root.Children.Add(workerLabel);
-            root.Children.Add(workerBox);
+            DialogFactory.AddFormRow(form, DialogFactory.CreateFormLabel(this, Loc.T("并发")), workerBox);
 
-            var no2faBox = new CheckBox
-            {
-                Content = Loc.T("关闭 2FA（不注册 TOTP）"),
-                IsChecked = true,
-                Margin = new Thickness(0, 0, 0, 10),
-                Foreground = (System.Windows.Media.Brush)FindResource("TextMain")
-            };
-            Grid.SetRow(no2faBox, 2);
-            Grid.SetColumn(no2faBox, 1);
-            root.Children.Add(no2faBox);
+            CheckBox no2faBox = DialogFactory.CreateCheckBox(this, Loc.T("关闭 2FA（不注册 TOTP）"));
+            DialogFactory.AddValueRow(form, no2faBox);
 
-            var promotionBox = new CheckBox
-            {
-                Content = Loc.T("注册完成后查询试用优惠"),
-                IsChecked = true,
-                Margin = new Thickness(0, 0, 0, 10),
-                Foreground = (System.Windows.Media.Brush)FindResource("TextMain")
-            };
-            Grid.SetRow(promotionBox, 3);
-            Grid.SetColumn(promotionBox, 1);
-            root.Children.Add(promotionBox);
+            CheckBox promotionBox = DialogFactory.CreateCheckBox(this, Loc.T("注册完成后查询试用优惠"));
+            DialogFactory.AddValueRow(form, promotionBox);
 
-            var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 10, 0, 0) };
-            var ok = new Button { Content = Loc.T("开始"), Width = 72, Style = (Style)FindResource("PrimaryButton") };
-            var cancel = new Button { Content = "取消", Width = 72 };
+            Grid.SetRow(form, 0);
+            root.Children.Add(form);
+
+            StackPanel actions = DialogFactory.CreateActionRow();
+            actions.Margin = new Thickness(0, 10, 0, 0);
+            Button ok = DialogFactory.CreatePrimaryButton(this, Loc.T("开始"), 72);
+            Button cancel = DialogFactory.CreateCancelButton(width: 72);
             actions.Children.Add(ok);
             actions.Children.Add(cancel);
-            Grid.SetRow(actions, 4);
-            Grid.SetColumnSpan(actions, 2);
+            Grid.SetRow(actions, 1);
             root.Children.Add(actions);
 
             ok.Click += (_, __) =>
@@ -485,29 +451,11 @@ namespace SmsWorkbench
 
         private Window CreateRegisterOptionsDialog(Action<RegisterOptions> accept)
         {
-            var dialog = new Window
-            {
-                Title = Loc.T("一键注册"),
-                Owner = this,
-                Width = 560,
-                Height = 332,
-                MinWidth = 480,
-                MinHeight = 312,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Background = (System.Windows.Media.Brush)FindResource("AppBg")
-            };
+            Window dialog = DialogFactory.Create(this, Loc.T("一键注册"), 560, 332, 480, 312);
+            Grid root = DialogFactory.CreateRootGrid(margin: 14);
+            Grid form = DialogFactory.CreateFormGrid();
+            form.VerticalAlignment = VerticalAlignment.Top;
 
-            var root = new Grid { Margin = new Thickness(14) };
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
-            root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-            var sourceLabel = new TextBlock { Text = Loc.T("注册方式"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 10), Foreground = (System.Windows.Media.Brush)FindResource("TextSub") };
             var sourceBox = new ComboBox { Margin = new Thickness(0, 0, 0, 10) };
             sourceBox.Items.Add(new ComboBoxItem { Content = Loc.T("ReMail 邮箱"), Tag = "remail_target" });
             sourceBox.Items.Add(new ComboBoxItem { Content = Loc.T("Smailr 邮箱"), Tag = "smailr" });
@@ -515,52 +463,20 @@ namespace SmsWorkbench
             sourceBox.Items.Add(new ComboBoxItem { Content = Loc.T("CF Worker 域名邮箱"), Tag = "cfworker" });
             sourceBox.Items.Add(new ComboBoxItem { Content = Loc.T("手机号注册"), Tag = "phone" });
             sourceBox.SelectedIndex = 0;
-            Grid.SetRow(sourceLabel, 0);
-            Grid.SetColumn(sourceLabel, 0);
-            Grid.SetRow(sourceBox, 0);
-            Grid.SetColumn(sourceBox, 1);
-            root.Children.Add(sourceLabel);
-            root.Children.Add(sourceBox);
+            DialogFactory.AddFormRow(form, DialogFactory.CreateFormLabel(this, Loc.T("注册方式")), sourceBox);
 
-            var countLabel = new TextBlock { Text = "数量", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 10), Foreground = (System.Windows.Media.Brush)FindResource("TextSub") };
+            var countLabel = DialogFactory.CreateFormLabel(this, Loc.T("数量"));
             var countBox = new TextBox { Text = Register.CountValue().ToString(), Margin = new Thickness(0, 0, 0, 10) };
-            Grid.SetRow(countLabel, 1);
-            Grid.SetColumn(countLabel, 0);
-            Grid.SetRow(countBox, 1);
-            Grid.SetColumn(countBox, 1);
-            root.Children.Add(countLabel);
-            root.Children.Add(countBox);
+            DialogFactory.AddFormRow(form, countLabel, countBox);
 
-            var workerLabel = new TextBlock { Text = Loc.T("并发"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 10), Foreground = (System.Windows.Media.Brush)FindResource("TextSub") };
             var workerBox = new TextBox { Text = Register.DefaultWorkerCount().ToString(), Margin = new Thickness(0, 0, 0, 10) };
-            Grid.SetRow(workerLabel, 2);
-            Grid.SetColumn(workerLabel, 0);
-            Grid.SetRow(workerBox, 2);
-            Grid.SetColumn(workerBox, 1);
-            root.Children.Add(workerLabel);
-            root.Children.Add(workerBox);
+            DialogFactory.AddFormRow(form, DialogFactory.CreateFormLabel(this, Loc.T("并发")), workerBox);
 
-            var no2faBox = new CheckBox
-            {
-                Content = Loc.T("关闭 2FA（不注册 TOTP）"),
-                IsChecked = true,
-                Margin = new Thickness(0, 0, 0, 10),
-                Foreground = (System.Windows.Media.Brush)FindResource("TextMain")
-            };
-            Grid.SetRow(no2faBox, 3);
-            Grid.SetColumn(no2faBox, 1);
-            root.Children.Add(no2faBox);
+            CheckBox no2faBox = DialogFactory.CreateCheckBox(this, Loc.T("关闭 2FA（不注册 TOTP）"));
+            DialogFactory.AddValueRow(form, no2faBox);
 
-            var promotionBox = new CheckBox
-            {
-                Content = Loc.T("注册完成后查询试用优惠"),
-                IsChecked = true,
-                Margin = new Thickness(0, 0, 0, 10),
-                Foreground = (System.Windows.Media.Brush)FindResource("TextMain")
-            };
-            Grid.SetRow(promotionBox, 4);
-            Grid.SetColumn(promotionBox, 1);
-            root.Children.Add(promotionBox);
+            CheckBox promotionBox = DialogFactory.CreateCheckBox(this, Loc.T("注册完成后查询试用优惠"));
+            DialogFactory.AddValueRow(form, promotionBox);
 
             void UpdateTargetControls()
             {
@@ -570,13 +486,16 @@ namespace SmsWorkbench
             sourceBox.SelectionChanged += (_, __) => UpdateTargetControls();
             UpdateTargetControls();
 
-            var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 10, 0, 0) };
-            var ok = new Button { Content = Loc.T("开始"), Width = 72, Style = (Style)FindResource("PrimaryButton") };
-            var cancel = new Button { Content = "取消", Width = 72 };
+            Grid.SetRow(form, 0);
+            root.Children.Add(form);
+
+            StackPanel actions = DialogFactory.CreateActionRow();
+            actions.Margin = new Thickness(0, 10, 0, 0);
+            Button ok = DialogFactory.CreatePrimaryButton(this, Loc.T("开始"), 72);
+            Button cancel = DialogFactory.CreateCancelButton(width: 72);
             actions.Children.Add(ok);
             actions.Children.Add(cancel);
-            Grid.SetRow(actions, 5);
-            Grid.SetColumnSpan(actions, 2);
+            Grid.SetRow(actions, 1);
             root.Children.Add(actions);
 
             ok.Click += (_, __) =>

@@ -63,7 +63,7 @@ internal static class ChangeEmailDialogService
         var root = new StackPanel { Margin = new Thickness(20) };
         root.Children.Add(new TextBlock
         {
-            Text = $"目标邮箱 provider（{count} 个账号）",
+            Text = Loc.F("目标邮箱 provider（{0} 个账号）", count),
             Margin = new Thickness(0, 0, 0, 6),
         });
         root.Children.Add(providerBox);

@@ -68,6 +68,82 @@ namespace SmsWorkbench
         }
 
         /// <summary>
+        /// Two-column form grid: fixed label column (default 110) and a star value
+        /// column. Rows are appended with <see cref="AddFormRow"/>,
+        /// <see cref="AddValueRow"/> or <see cref="AddSpanningRow"/>.
+        /// </summary>
+        public static Grid CreateFormGrid(double labelWidth = 110)
+        {
+            var grid = new Grid();
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(labelWidth) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            return grid;
+        }
+
+        /// <summary>Form label in the fixed column (sub-text colour, 10px right gap).</summary>
+        public static TextBlock CreateFormLabel(Window owner, string text)
+        {
+            return new TextBlock
+            {
+                Text = text,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 10, 10),
+                Foreground = (Brush)owner.FindResource("TextSub"),
+            };
+        }
+
+        /// <summary>Append a label/control row and return the row index.</summary>
+        public static int AddFormRow(Grid grid, UIElement label, UIElement control)
+        {
+            int row = AddRow(grid);
+            Grid.SetRow(label, row);
+            Grid.SetColumn(label, 0);
+            Grid.SetRow(control, row);
+            Grid.SetColumn(control, 1);
+            grid.Children.Add(label);
+            grid.Children.Add(control);
+            return row;
+        }
+
+        /// <summary>Append a row whose control sits in the value column; the label cell stays empty.</summary>
+        public static int AddValueRow(Grid grid, UIElement control)
+        {
+            int row = AddRow(grid);
+            Grid.SetRow(control, row);
+            Grid.SetColumn(control, 1);
+            grid.Children.Add(control);
+            return row;
+        }
+
+        /// <summary>Append a row spanning every column (hints, section headers).</summary>
+        public static int AddSpanningRow(Grid grid, UIElement element)
+        {
+            int row = AddRow(grid);
+            Grid.SetRow(element, row);
+            Grid.SetColumnSpan(element, Math.Max(1, grid.ColumnDefinitions.Count));
+            grid.Children.Add(element);
+            return row;
+        }
+
+        /// <summary>Standard dialog checkbox (main text colour, 10px bottom gap).</summary>
+        public static CheckBox CreateCheckBox(Window owner, string text, bool isChecked = true)
+        {
+            return new CheckBox
+            {
+                Content = text,
+                IsChecked = isChecked,
+                Margin = new Thickness(0, 0, 0, 10),
+                Foreground = (Brush)owner.FindResource("TextMain"),
+            };
+        }
+
+        private static int AddRow(Grid grid)
+        {
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            return grid.RowDefinitions.Count - 1;
+        }
+
+        /// <summary>
         /// Create a standard primary button with the PrimaryButton style.
         /// </summary>
         public static Button CreatePrimaryButton(Window owner, string text, double width = 88)

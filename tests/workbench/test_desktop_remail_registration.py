@@ -33,7 +33,10 @@ def test_long_term_remail_disables_phone_reuse_by_default():
     assert "BackendCommandPlanner.CreateRemailTargetRegistration(" in remail_branch
     assert "checkPromotion: options.CheckPromotion" in remail_branch
 
-    assert 'Content = Loc.T("注册完成后查询试用优惠")' in register
+    # The checkbox is built through DialogFactory since 2026-10-25 (the options
+    # dialog no longer hand-rolls its Window/Grid/CheckBox); the option itself and
+    # its default must still be offered on the one-click dialog.
+    assert 'DialogFactory.CreateCheckBox(this, Loc.T("注册完成后查询试用优惠"))' in register
     assert "--check-promotion-after-registration" in planner
 
     # The planner keeps ReMail on purchase mode with phone reuse disabled and

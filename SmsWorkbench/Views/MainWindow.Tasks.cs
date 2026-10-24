@@ -2,7 +2,6 @@
 // PaymentBatchService.cs for why the project-wide switch stays `annotations`.
 #nullable enable
 
-using System.Text.Json;
 
 using SmsWorkbench.Localization;
 
@@ -68,10 +67,11 @@ namespace SmsWorkbench
                 Log("[doctor] 环境自检发现 " + fails.Count + " 项缺失依赖");
                 MessageBox.Show(
                     this,
-                    $"环境自检发现 {fails.Count} 项必需依赖缺失:\n  - {detail}\n\n" +
-                    "可先运行: python -m pip install -r requirements.txt -c constraints.txt\n" +
-                    "或使用命令 python chatgpt_phone_reg.py --doctor 查看完整报告。",
-                    "环境自检",
+                    Loc.F(
+                        "环境自检发现 {0} 项必需依赖缺失:\n  - {1}\n\n可先运行: python -m pip install -r requirements.txt -c constraints.txt\n或使用命令 python chatgpt_phone_reg.py --doctor 查看完整报告。",
+                        fails.Count,
+                        detail),
+                    Loc.T("环境自检"),
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);
             }
@@ -80,9 +80,10 @@ namespace SmsWorkbench
                 Log("[doctor] 环境自检失败: " + ex.Message);
                 MessageBox.Show(
                     this,
-                    SensitiveDataSanitizer.Redact(ex.Message) + "\n\n桌面端依赖 Python 3.10+ 与 requirements.txt/constraints.txt 中的依赖包。" +
-                    "\n安装后在 设置 → 数据与文件 → 运行环境 配置解释器路径,再重启本程序。",
-                    "无法启动 Python 后端",
+                    Loc.F(
+                        "{0}\n\n桌面端依赖 Python 3.10+ 与 requirements.txt/constraints.txt 中的依赖包。\n安装后在 设置 → 数据与文件 → 运行环境 配置解释器路径,再重启本程序。",
+                        SensitiveDataSanitizer.Redact(ex.Message)),
+                    Loc.T("无法启动 Python 后端"),
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
             }
@@ -114,7 +115,7 @@ namespace SmsWorkbench
         {
             if (backendTasks.IsRunning)
             {
-                MessageBox.Show("已有批次正在运行，请先取消或等待完成。", "运行中", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show(Loc.T("已有批次正在运行，请先取消或等待完成。"), Loc.T("运行中"), MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
@@ -258,7 +259,7 @@ namespace SmsWorkbench
                 task.Status = "未启动";
                 task.DoneAt = SafeTime(DateTime.Now);
                 StatusBar.Text = taskName + " 未启动";
-                MessageBox.Show("已有批次正在运行，请先取消或等待完成。", "运行中", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show(Loc.T("已有批次正在运行，请先取消或等待完成。"), Loc.T("运行中"), MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)
             {

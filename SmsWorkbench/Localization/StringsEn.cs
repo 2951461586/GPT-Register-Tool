@@ -572,6 +572,46 @@ namespace SmsWorkbench.Localization
             ["删除选中的 {0} 条记录？"] = "Delete the selected {0} records?",
             ["将同步清理本地邮箱池、SQLite 索引和匹配的 session 文件。此操作不可撤销。"] = "This also removes the local mailbox pool entries, SQLite index rows and matching session files. It cannot be undone.",
             ["删除"] = "Delete",
+            // ── Operator dialogs / batch progress ────────────────────────────
+            // These used to be hard-coded at the call site or inside a code-built
+            // dialog, so the English UI showed Chinese. tests/workbench/
+            // test_localization_catalog.py now fails on any new literal that
+            // reaches MessageBox.Show / a Notify* helper / DialogFactory / a
+            // Content|Text|Title property.
+            ["无支付链接"] = "No payment link",
+            ["选中账号没有可打开的支付链接。"] = "The selected account has no payment link to open.",
+            ["任务进行中"] = "Task in progress",
+            ["已有后端任务正在运行，请先等待其完成或取消后再发起批量支付。"]
+                = "A backend task is already running. Wait for it to finish or cancel it before starting a batch payment.",
+            ["已有批次正在运行，请先取消或等待完成。"] = "A batch is already running. Cancel it or wait for it to finish.",
+            ["环境自检"] = "Environment check",
+            ["环境自检发现 {0} 项必需依赖缺失:\n  - {1}\n\n可先运行: python -m pip install -r requirements.txt -c constraints.txt\n或使用命令 python chatgpt_phone_reg.py --doctor 查看完整报告。"]
+                = "The environment check found {0} missing required dependencies:\n  - {1}\n\nTry: python -m pip install -r requirements.txt -c constraints.txt\nor run python chatgpt_phone_reg.py --doctor for the full report.",
+            ["无法启动 Python 后端"] = "Cannot start the Python backend",
+            ["{0}\n\n桌面端依赖 Python 3.10+ 与 requirements.txt/constraints.txt 中的依赖包。\n安装后在 设置 → 数据与文件 → 运行环境 配置解释器路径,再重启本程序。"]
+                = "{0}\n\nThe desktop app needs Python 3.10+ and the packages in requirements.txt/constraints.txt.\nAfter installing, set the interpreter path in Settings → Data & files → Runtime, then restart.",
+            ["正在准备账号..."] = "Preparing accounts...",
+            ["取消任务"] = "Cancel task",
+            ["正在取消..."] = "Cancelling...",
+            ["导入完成：成功 {0} 条，跳过 {1} 条。"] = "Import finished: {0} imported, {1} skipped.",
+            ["已选择 {0} 个邮箱"] = "Selected {0} mailbox(es)",
+            ["已选择 {0} 个可注册邮箱（勾选 {1} 个，本地排除 {2} 个已注册/半注册/记录不完整；后端还会剔除冷却/隔离/死路地址）"]
+                = "Selected {0} registerable mailbox(es): {1} checked, {2} excluded locally as registered / half-registered / incomplete. The backend may also drop cooling-down, OTP-quarantined and dead-end addresses.",
+            ["请先选择一个账号。"] = "Select an account first.",
+            ["请先选择要换绑的账号。"] = "Select the account to re-bind first.",
+            ["当前选中账号没有可复制的 AT。"] = "The selected account has no access token to copy.",
+            ["当前选中行无支付链接。"] = "The selected row has no payment link.",
+            ["AT 已复制。"] = "Access token copied.",
+            ["邮箱已复制："] = "Mailbox copied: ",
+            ["操作未完成，请查看运行日志。"] = "The operation did not finish. Check the run log.",
+            ["邮箱换绑完成。"] = "Mailbox re-bound.",
+            ["邮箱换绑部分失败，请查看任务结果。"] = "Mailbox re-bind partially failed. Check the task result.",
+            ["未收到有效结果，请查看运行日志。"] = "No valid result was received. Check the run log.",
+            ["该账号未获取 Access Token，无法测活。请先登录获取 AT。"]
+                = "This account has no access token, so liveness cannot be checked. Sign in to obtain one first.",
+            ["账号测活失败：未收到有效响应。"] = "Liveness check failed: no valid response.",
+            ["账号测活：{0}"] = "Liveness check: {0}",
+            ["测活异常：{0}"] = "Liveness check error: {0}",
             ["TXT"] = "TXT",
             ["JSON"] = "JSON",
         };

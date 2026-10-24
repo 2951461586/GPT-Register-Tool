@@ -3,6 +3,7 @@
 #nullable enable
 
 using System.Diagnostics.CodeAnalysis;
+using SmsWorkbench.Localization;
 
 namespace SmsWorkbench
 {
@@ -28,7 +29,7 @@ namespace SmsWorkbench
             catch (Exception ex)
             {
                 Log("界面异步操作失败：" + SensitiveDataSanitizer.Redact(ex.Message));
-                NotifyWarning("操作未完成，请查看运行日志。");
+                NotifyWarning(Loc.T("操作未完成，请查看运行日志。"));
             }
         }
 

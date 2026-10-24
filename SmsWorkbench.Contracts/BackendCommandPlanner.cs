@@ -34,6 +34,14 @@ namespace SmsWorkbench
     /// state; this class deliberately does not duplicate it. Settings
     /// resolution stays with the caller; this class only shapes already-resolved
     /// values into command-line arguments.
+    /// <para>
+    /// Two surfaces live in this class and they are not the same thing: builders a
+    /// window actually calls, and builders that exist only to pin a CLI contract the
+    /// Python backend still honours (each marked "no production caller" below). The
+    /// second set is frozen by <c>BackendCommandPlannerSurfaceTests</c> so a builder
+    /// cannot quietly become dead code, and so deleting one is a reviewed change
+    /// rather than a silent loss of the only C#-side record of a CLI flag.
+    /// </para>
     /// </summary>
     public static class BackendCommandPlanner
     {
@@ -49,6 +57,13 @@ namespace SmsWorkbench
 
         // ── Registration ────────────────────────────────────────────────
 
+        /// <summary>
+        /// CLI-contract surface: <b>no production caller</b>. Kept (and unit-tested)
+        /// because the backend still accepts <c>--count</c> / <c>--workers</c> /
+        /// <c>--no-phone-reuse</c> / <c>--proxy</c> without a mailbox file; the
+        /// pool-registration button that used it was removed. See
+        /// <c>BackendCommandPlannerSurfaceTests</c>.
+        /// </summary>
         public static BackendCommandPlan CreatePoolRegistration(
             int count,
             IReadOnlyList<string> proxyPool,
@@ -97,6 +112,12 @@ namespace SmsWorkbench
             return new BackendCommandPlan(taskName, args);
         }
 
+        /// <summary>
+        /// CLI-contract surface: <b>no production caller</b>. This is the
+        /// "re-run the failed rows" entry point; the window reruns through
+        /// <see cref="CreateMailboxFileRegistration"/> directly. Kept so the fixed
+        /// argument set (count 4, <c>registrationAtOnly: false</c>) stays pinned.
+        /// </summary>
         public static BackendCommandPlan CreateRerunFailedRegistration(
             string mailboxArgument,
             string mailboxFile,
@@ -388,6 +409,12 @@ namespace SmsWorkbench
 
         // ── Deletion ────────────────────────────────────────────────────
 
+        /// <summary>
+        /// CLI-contract surface: <b>no production caller</b>. The window deletes
+        /// through <see cref="CreateBatchDeleteAccounts"/> (one backend call for the
+        /// whole selection); this single-account form keeps the <c>--delete-account
+        /// --email</c> pairing (and its 120 s budget) recorded on the C# side.
+        /// </summary>
         public static BackendCommandPlan CreateDeleteAccount(string email)
         {
             var args = new List<string>
@@ -470,6 +497,12 @@ namespace SmsWorkbench
         /// Single-account import. For a single email, no temp file is needed;
         /// the email is passed directly via --email-file (the backend expects a file).
         /// </summary>
+        /// <remarks>
+        /// CLI-contract surface: <b>no production caller</b>. The window imports the
+        /// selection through <see cref="CreateAccountImport"/>, which writes one temp
+        /// file for all rows; this form pins the single-row file shape and the
+        /// <c>TemporaryFiles</c> contract the caller is expected to clean up.
+        /// </remarks>
         public static BackendCommandPlan CreateSingleAccountImport(
             string target,
             string email,
@@ -513,6 +546,12 @@ namespace SmsWorkbench
 
         // ── Refresh / maintenance ───────────────────────────────────────
 
+        /// <summary>
+        /// CLI-contract surface: <b>no production caller</b>. Account recovery
+        /// (401 → AT refresh) happens inside the backend command that needed it, not
+        /// through a standalone <c>--refresh-session</c> invocation; this builder
+        /// keeps that flag and its <c>--session-file</c> pairing recorded here.
+        /// </summary>
         public static BackendCommandPlan CreateRefreshSession(string email, string sessionFile)
         {
             var args = new List<string> { "--email", RequireEmail(email), "--refresh-session" };
@@ -520,6 +559,11 @@ namespace SmsWorkbench
             return new BackendCommandPlan("刷新Session", args);
         }
 
+        /// <summary>
+        /// CLI-contract surface: <b>no production caller</b>. Pins the bare
+        /// <c>--rebuild-sqlite</c> invocation; the desktop rebuild action was removed
+        /// with the other dead handlers (see <c>MainWindow.Tasks.cs</c>).
+        /// </summary>
         public static BackendCommandPlan CreateRebuildSqlite()
         {
             return new BackendCommandPlan("重建SQLite索引", new List<string> { "--rebuild-sqlite" });
