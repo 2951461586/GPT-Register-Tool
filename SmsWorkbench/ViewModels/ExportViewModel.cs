@@ -2,6 +2,8 @@
 // PaymentBatchService.cs for why the project-wide switch stays `annotations`.
 #nullable enable
 
+using SmsWorkbench.Localization;
+
 namespace SmsWorkbench
 {
     /// <summary>
@@ -72,7 +74,7 @@ namespace SmsWorkbench
             if (value == "codex") return "Codex auth.json";
             if (value == "axonhub") return "AxonHub JSON";
             if (value == "codexmanager") return "Codex-Manager JSON";
-            if (value == "json") return "原始 JSON";
+            if (value == "json") return Loc.T("原始 JSON");
             if (value == "txt") return "TXT";
             return "CPA JSON";
         }
@@ -80,13 +82,13 @@ namespace SmsWorkbench
         public static string FormatDescription(string format)
         {
             string value = (format ?? "").Trim().ToLowerInvariant();
-            if (value == "sub2api") return "由 session_converter.py 生成的 Sub2API accounts 文档";
-            if (value == "cockpit") return "由 session_converter.py 生成的 Cockpit/Codex 导入结构";
-            if (value == "9router") return "由 session_converter.py 生成的 9router provider 结构";
-            if (value == "codex") return "由 session_converter.py 生成的 Codex auth.json 结构";
-            if (value == "axonhub") return "由 session_converter.py 生成的 AxonHub 结构；缺少 RT 时会写入占位提示";
-            if (value == "codexmanager") return "由 session_converter.py 生成的 Codex-Manager 结构";
-            return "由 session_converter.py 生成的 CPA JSON；缺少 id_token 时会合成兼容字段";
+            if (value == "sub2api") return Loc.T("由 session_converter.py 生成的 Sub2API accounts 文档");
+            if (value == "cockpit") return Loc.T("由 session_converter.py 生成的 Cockpit/Codex 导入结构");
+            if (value == "9router") return Loc.T("由 session_converter.py 生成的 9router provider 结构");
+            if (value == "codex") return Loc.T("由 session_converter.py 生成的 Codex auth.json 结构");
+            if (value == "axonhub") return Loc.T("由 session_converter.py 生成的 AxonHub 结构；缺少 RT 时会写入占位提示");
+            if (value == "codexmanager") return Loc.T("由 session_converter.py 生成的 Codex-Manager 结构");
+            return Loc.T("由 session_converter.py 生成的 CPA JSON；缺少 id_token 时会合成兼容字段");
         }
 
         public static string FormatDirectProbeSummary(
@@ -108,16 +110,16 @@ namespace SmsWorkbench
                 NumberStyles.Integer,
                 CultureInfo.InvariantCulture,
                 out int reloginAttempted);
-            string directSummary = "总数：" + results.Count
-                + "    AT有效：" + directOk
-                + "    AT失效：" + direct401
-                + "    账号停用：" + directDeactivated
-                + "    其他失败：" + directFailed;
+            string directSummary = Loc.T("总数：") + results.Count
+                + "    " + Loc.T("AT有效：") + directOk
+                + "    " + Loc.T("AT失效：") + direct401
+                + "    " + Loc.T("账号停用：") + directDeactivated
+                + "    " + Loc.T("其他失败：") + directFailed;
             if (reloginAttempted > 0)
             {
-                directSummary += "    重登成功：" + BackendJson.GetString(summary, "relogin_success")
-                    + "    重登失败：" + BackendJson.GetString(summary, "relogin_failed")
-                    + "    确认停用：" + BackendJson.GetString(summary, "relogin_account_deactivated");
+                directSummary += "    " + Loc.T("重登成功：") + BackendJson.GetString(summary, "relogin_success")
+                    + "    " + Loc.T("重登失败：") + BackendJson.GetString(summary, "relogin_failed")
+                    + "    " + Loc.T("确认停用：") + BackendJson.GetString(summary, "relogin_account_deactivated");
             }
             return directSummary;
         }

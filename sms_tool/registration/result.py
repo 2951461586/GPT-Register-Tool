@@ -107,6 +107,12 @@ def safe_proxy_audit(metadata: Mapping[str, Any] | None) -> dict[str, Any]:
         "edge_challenge_unknown": _count("edge_challenge_unknown"),
         "edge_challenge_rotations": _count("edge_challenge_rotations"),
         "edge_challenge_rotate_failed": _count("edge_challenge_rotate_failed"),
+        # P1-1 follow-up (2026-10-24): how often the pooled fingerprint lookup
+        # failed and the run fell back to the proxy-country hint.  Counted for
+        # the same reason as the edge-challenge counters -- the fallback used to
+        # be silent, so "the pool worked" and "the pool failed every time"
+        # produced identical audits.
+        "fingerprint_pool_failures": _count("fingerprint_pool_failures"),
     }
 
 

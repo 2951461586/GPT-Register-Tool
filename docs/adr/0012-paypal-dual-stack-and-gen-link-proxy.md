@@ -33,8 +33,7 @@
   两者都不是 `gen_pp_link` 的所有物——壳只做再导出。
 - `tests/` 中对 `gen_pp_link` 的引用有 **140 行**，其中
   `patch.object(gen_pp_link, "_checkout_post" / "_checkout_get", ...)` 是活跃的 patch
-  目标（`tests/accounts/test_account_payment_eligibility.py:194`、
-  `tests/payment/test_checkout_sentinel.py:156` 等）。这些补丁今天能生效，正是因为
+  目标（`tests/payment/test_checkout_sentinel.py:156` 等）。这些补丁今天能生效，正是因为
   `_PlmProxy` 在**调用时**读取模块属性，而不是在 import 时绑定。
 - 两个壳是单向再导出：`gen_pp_link.py` → `paypal_link.*` 加 `upi_link` 遗留符号；
   `paypal/reconciliation.py` → `paypal_link.*`。

@@ -5,7 +5,6 @@ namespace SmsWorkbench
         None,
         Liveness,
         Promotion,
-        PaymentEligibility,
     }
 
     /// <summary>
@@ -30,13 +29,11 @@ namespace SmsWorkbench
     /// <summary>
     /// Window-independent planner for the desktop backend command families it
     /// owns (registration, SMS, liveness, deletion, import, export, refresh,
-    /// inbox). Protocol payment has a sibling planner in this same assembly,
-    /// <see cref="ProtocolPaymentExecutionPlanner"/>: it returns a different
-    /// result shape, so it is deliberately not folded in here. Because both
-    /// live in SmsWorkbench.Contracts, the CLI contract is shaped in one
-    /// window-independent, unit-testable assembly. Settings resolution stays
-    /// with the caller; this class only shapes already-resolved values into
-    /// command-line arguments.
+    /// inbox). Batch payment builds its own argument list in
+    /// `PaymentBatchService` because the request carries batch/checkpoint
+    /// state; this class deliberately does not duplicate it. Settings
+    /// resolution stays with the caller; this class only shapes already-resolved
+    /// values into command-line arguments.
     /// </summary>
     public static class BackendCommandPlanner
     {
@@ -372,37 +369,6 @@ namespace SmsWorkbench
                 args,
                 TemporaryFiles: tempFiles,
                 ResultKind: BackendAccountResultKind.Promotion);
-        }
-
-        public static BackendCommandPlan CreatePaymentEligibilityCheck(
-            IReadOnlyList<string> emails,
-            IReadOnlyList<string> proxyPool,
-            string? tempDirectory = null)
-        {
-            List<string> targets = RequireEmails(emails);
-            var args = new List<string>
-            {
-                "--check-payment-eligibility",
-                "--refresh-timeout", "45",
-                "--desktop-ipc",
-            };
-            var tempFiles = new List<string>();
-            if (targets.Count > 1)
-            {
-                string emailFile = WriteEmailFile(tempDirectory, "payment_eligibility_emails_", targets);
-                tempFiles.Add(emailFile);
-                args.AddRange(new[] { "--email-file", emailFile });
-            }
-            else
-            {
-                args.AddRange(new[] { "--email", targets[0] });
-            }
-            AppendProxyPool(args, proxyPool);
-            return new BackendCommandPlan(
-                "支付资格探测(" + Count(targets.Count) + ")",
-                args,
-                TemporaryFiles: tempFiles,
-                ResultKind: BackendAccountResultKind.PaymentEligibility);
         }
 
         public static BackendCommandPlan CreateQuotaUsageProbe(

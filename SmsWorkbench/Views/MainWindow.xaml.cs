@@ -2,6 +2,8 @@
 // PaymentBatchService.cs for why the project-wide switch stays `annotations`.
 #nullable enable
 
+using SmsWorkbench.Localization;
+
 namespace SmsWorkbench
 {
     [System.Diagnostics.CodeAnalysis.SuppressMessage(
@@ -18,10 +20,6 @@ namespace SmsWorkbench
         private readonly IDesktopReadClient desktopRead;
         private readonly Serilog.ILogger logger;
         private readonly IPaymentBatchDialogService paymentBatchDialogs;
-        // Optional: the internal constructor overload passes null, and
-        // MainWindow.Payment.cs null-checks it before showing the dialog. That
-        // was only implicit before - the type now says it.
-        private readonly IProtocolPaymentDialogService? protocolPaymentDialogs;
         private readonly Wpf.Ui.ISnackbarService snackbarService;
         private readonly ISettingsDialogService settingsDialogs;
         private readonly ISettingsService settingsService;
@@ -30,10 +28,14 @@ namespace SmsWorkbench
         private readonly string rootDir;
         private readonly string configDir;
         private readonly CancellationTokenSource _lifetimeCts = new();
+        // Resolved by name instead of using the XAML-generated fields. The
+        // generated fields only exist after the WPF markup compiler runs, which
+        // per-file analyzers (and a fresh LSP) do not see; `FindName` keeps
+        // these code-behind references resolvable.
+        private readonly AccountGridView accountGridControl;
+        private readonly WorkbenchConsole consoleControl;
         public LogViewModel LogPanel { get; } = new LogViewModel();
         private bool sidebarCollapsed;
-        private string sidebarToggleGlyph = "‹";
-        private Geometry sidebarToggleGeometry = Geometry.Parse("M5 4H19A1 1 0 0 1 20 5V19A1 1 0 0 1 19 20H5A1 1 0 0 1 4 19V5A1 1 0 0 1 5 4Z M10 4V20");
         // Non-null from the constructor (MainWindow.xaml.cs assigns it right
         // after InitializeComponent), but the compiler cannot see that through
         // the property setter, so give it a real empty geometry rather than
@@ -67,27 +69,6 @@ namespace SmsWorkbench
             }
         }
 
-        public string SidebarToggleGlyph
-        {
-            get => sidebarToggleGlyph;
-            set
-            {
-                if (sidebarToggleGlyph == value) return;
-                sidebarToggleGlyph = value ?? "";
-                OnPropertyChanged(nameof(SidebarToggleGlyph));
-            }
-        }
-
-        public Geometry SidebarToggleGeometry
-        {
-            get => sidebarToggleGeometry;
-            set
-            {
-                if (Equals(sidebarToggleGeometry, value)) return;
-                sidebarToggleGeometry = value;
-                OnPropertyChanged(nameof(SidebarToggleGeometry));
-            }
-        }
 
         public Geometry ThemeIconGeometry
         {
@@ -123,7 +104,6 @@ namespace SmsWorkbench
             IBackendTaskCoordinator backendTasks,
             IDesktopReadClient desktopRead,
             IPaymentBatchDialogService paymentBatchDialogs,
-            IProtocolPaymentDialogService? protocolPaymentDialogs,
             IPaymentBatchService paymentBatchService,
             Wpf.Ui.ISnackbarService snackbarService,
             ISettingsDialogService settingsDialogs,
@@ -135,7 +115,6 @@ namespace SmsWorkbench
             this.backendTasks = backendTasks;
             this.desktopRead = desktopRead;
             this.paymentBatchDialogs = paymentBatchDialogs;
-            this.protocolPaymentDialogs = protocolPaymentDialogs;
             this.paymentBatchService = paymentBatchService;
             this.snackbarService = snackbarService;
             this.settingsDialogs = settingsDialogs;
@@ -146,6 +125,12 @@ namespace SmsWorkbench
             configDir = paths.ConfigDirectory;
             Export = new ExportViewModel(Pool);
             InitializeComponent();
+            accountGridControl = (AccountGridView)(
+                FindName("AccountGridControl")
+                ?? throw new InvalidOperationException("MainWindow.xaml is missing x:Name=\"AccountGridControl\""));
+            consoleControl = (WorkbenchConsole)(
+                FindName("ConsoleControl")
+                ?? throw new InvalidOperationException("MainWindow.xaml is missing x:Name=\"ConsoleControl\""));
             snackbarService.SetSnackbarPresenter(SnackbarPresenter);
             DataContext = this;
             NavCommand = new RelayCommand<string>(OnNavigate);
@@ -155,18 +140,11 @@ namespace SmsWorkbench
             ApplyCustomThemeColors(_currentTheme);
             ThemeIconGeometry = _currentTheme == Wpf.Ui.Appearance.ApplicationTheme.Dark ? MoonIcon : SunIcon;
 
-            Pool.PropertyChanged += OnPoolPropertyChanged;
             Pool.SelectionCleared += OnPoolSelectionCleared;
-            LogPanel.Cleared += (_, _) => LogTextBox?.Clear();
             Pool.PageRefreshed += (_, _) => StatusBar.Text = Pool.SummaryText;
             RefreshPools();
             ApplySidebarCompact(false);
             Closing += OnWindowClosing;
-        }
-
-        private void OnPoolPropertyChanged(object? sender, PropertyChangedEventArgs e)
-        {
-            if (e.PropertyName == nameof(PoolViewModel.SearchText)) UpdateSearchClearVisibility();
         }
 
         private void OnWindowClosing(object? sender, System.ComponentModel.CancelEventArgs e)
@@ -175,34 +153,6 @@ namespace SmsWorkbench
             // to abort instead of touching the UI after the window is gone. We do not
             // cancel the close itself — the window still shuts down.
             _lifetimeCts.Cancel();
-        }
-
-        internal MainWindow(
-            IApplicationPaths paths,
-            IBackendClient backendClient,
-            IBackendTaskCoordinator backendTasks,
-            IDesktopReadClient desktopRead,
-            IPaymentBatchDialogService paymentBatchDialogs,
-            IPaymentBatchService paymentBatchService,
-            Wpf.Ui.ISnackbarService snackbarService,
-            ISettingsDialogService settingsDialogs,
-            ISettingsService settingsService,
-            Serilog.ILogger logger,
-            IFileLauncher? fileLauncher = null)
-            : this(
-                paths,
-                backendClient,
-                backendTasks,
-                desktopRead,
-                paymentBatchDialogs,
-                null,
-                paymentBatchService,
-                snackbarService,
-                settingsDialogs,
-                settingsService,
-                logger,
-                fileLauncher ?? new FileLauncher())
-        {
         }
 
         // Moved to MainWindow.Pools.cs: Pool/session loading, filtering, overview.
@@ -289,10 +239,10 @@ namespace SmsWorkbench
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
             string s = (value as string ?? "").Trim();
-            if (s.Equals("oauth_present", StringComparison.OrdinalIgnoreCase)) return "已获取";
-            if (s.Equals("legacy_present", StringComparison.OrdinalIgnoreCase)) return "旧Token";
-            if (s.Equals("no_rt", StringComparison.OrdinalIgnoreCase)) return "无RT";
-            if (s.Equals("missing", StringComparison.OrdinalIgnoreCase)) return "缺失";
+            if (s.Equals("oauth_present", StringComparison.OrdinalIgnoreCase)) return Loc.T("已获取");
+            if (s.Equals("legacy_present", StringComparison.OrdinalIgnoreCase)) return Loc.T("旧Token");
+            if (s.Equals("no_rt", StringComparison.OrdinalIgnoreCase)) return Loc.T("无RT");
+            if (s.Equals("missing", StringComparison.OrdinalIgnoreCase)) return Loc.T("缺失");
             return s.Length > 0 ? s : "—";
         }
 

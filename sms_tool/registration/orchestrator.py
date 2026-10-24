@@ -51,7 +51,6 @@ __all__ = [
     "resolve_runtime_config",
     "run_batch",
     "run_email",
-    "run_phone",
     "run_phone_register",
     "runtime_config_scope",
     "runtime_file",
@@ -368,21 +367,6 @@ def run_email(
     if isinstance(result, dict) and batch_id:
         result["batch_id"] = str(batch_id)
     return result
-
-
-def run_phone(*args, **kwargs):
-    """Compatibility wrapper; SMS/phone registration has been removed from the active flow."""
-    return run_email(
-        proxy=kwargs.get("proxy"),
-        password=kwargs.get("password"),
-        sentinel_data=kwargs.get("sentinel_data"),
-        mailbox=kwargs.get("mailbox"),
-        phone_pool=kwargs.get("phone_pool"),
-        codex_oauth=kwargs.get("codex_oauth", False),
-        registration_mode=kwargs.get("registration_mode"),
-        browser_headless=kwargs.get("browser_headless"),
-        runtime_config=kwargs.get("runtime_config"),
-    )
 
 
 def run_phone_register(

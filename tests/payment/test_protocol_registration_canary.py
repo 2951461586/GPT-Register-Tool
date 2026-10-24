@@ -51,8 +51,8 @@ def test_protocol_identity_initialization_uses_mock_persistence_and_network():
     workflow.runtime.sentinel_data = {"oai_did": "device-canary"}
 
     with (
-        patch("sms_tool.registration.handlers._new_registration_session", return_value=Mock()),
-        patch("sms_tool.registration.handlers._apply_protocol_fingerprint"),
+        patch("sms_tool.registration.identity_stages._new_registration_session", return_value=Mock()),
+        patch("sms_tool.registration.identity_stages._apply_protocol_fingerprint"),
     ):
         workflow.prepare_identity()
 
@@ -91,8 +91,8 @@ def test_protocol_identity_bootstrap_canary_is_offline():
     with (
         patch("sms_tool.sentinel.sentinel_backend", return_value="node_sdk"),
         patch("sms_tool.mailbox.service.MailboxService.create", return_value=Mock()),
-        patch("sms_tool.registration.handlers._new_registration_session", return_value=Mock()),
-        patch("sms_tool.registration.handlers._apply_protocol_fingerprint"),
+        patch("sms_tool.registration.identity_stages._new_registration_session", return_value=Mock()),
+        patch("sms_tool.registration.identity_stages._apply_protocol_fingerprint"),
     ):
         workflow._bootstrap()
 

@@ -2,6 +2,8 @@
 // PaymentBatchService.cs for why the project-wide switch stays `annotations`.
 #nullable enable
 
+using SmsWorkbench.Localization;
+
 namespace SmsWorkbench
 {
     /// <summary>
@@ -10,6 +12,9 @@ namespace SmsWorkbench
     /// so filtering and paging are xunit-testable (placement rule 8); loading
     /// rows from the backend and the grid's own selection widgets stay in the view.
     /// </summary>
+    /// <summary>Stable filter key plus the localized label the combo box shows.</summary>
+    public sealed record ScopeOption(string Key, string Label);
+
     public sealed class PoolViewModel : ObservableObject
     {
         public const int DefaultPageSize = 100;
@@ -17,7 +22,7 @@ namespace SmsWorkbench
 
         private string searchText = "";
         private string pageSizeText = DefaultPageSize.ToString(CultureInfo.InvariantCulture);
-        private object scopeFilter = "全部";
+        private object scopeFilter = "all";
         private string pageStatusText = "第 0/0 页";
         private string totalCountText = "0";
         private string trialCountText = "0";
@@ -64,8 +69,19 @@ namespace SmsWorkbench
         public string SearchText
         {
             get => searchText;
-            set { searchText = value ?? ""; OnPropertyChanged(); ResetToFirstPage(); }
+            set
+            {
+                searchText = value ?? "";
+                OnPropertyChanged();
+                // Drives the clear (×) button in AccountFilterBar; it used to be
+                // toggled by name from MainWindow's code-behind.
+                OnPropertyChanged(nameof(HasSearchText));
+                ResetToFirstPage();
+            }
         }
+
+        /// <summary>True when the search box contains anything; the clear button binds to this.</summary>
+        public bool HasSearchText => searchText.Length > 0;
 
         public string PageSizeText
         {
@@ -78,6 +94,18 @@ namespace SmsWorkbench
             get => scopeFilter;
             set { scopeFilter = value; OnPropertyChanged(); ResetToFirstPage(); }
         }
+
+        /// <summary>
+        /// Filter options carry a stable key (all/trial/attention) and a localized
+        /// label. The key is what <see cref="Matches"/> compares, so switching the
+        /// language can never change which rows a filter selects.
+        /// </summary>
+        public IReadOnlyList<ScopeOption> ScopeOptions => new[]
+        {
+            new ScopeOption("all", Loc.T("全部")),
+            new ScopeOption("trial", Loc.T("有试用")),
+            new ScopeOption("attention", Loc.T("待处理")),
+        };
 
         public string PageStatusText
         {
@@ -138,7 +166,14 @@ namespace SmsWorkbench
                 || row.Status.Contains("PayPal");
         }
 
-        public string SummaryText => $"共 {AllRows.Count} 条；当前筛选 {FilteredCount} 条";
+        public string SummaryText => Loc.F("共 {0} 条；当前筛选 {1} 条", AllRows.Count, FilteredCount);
+
+        /// <summary>Rebuilds the language-dependent composite strings after a switch.</summary>
+        public void RefreshLanguage()
+        {
+            OnPropertyChanged(string.Empty);
+            RefreshPagedRows();
+        }
 
         public int PageSizeValue()
         {
@@ -151,8 +186,8 @@ namespace SmsWorkbench
             string scope = ScopeText(ScopeFilter);
             string term = (SearchText ?? "").Trim().ToLowerInvariant();
 
-            if (scope == "有试用" && !PromotionStatusPresentation.IsTrialEligible(row.PromotionStatus, row.PromotionState)) return false;
-            if (scope == "待处理" && !RegistrationStatusPresentation.NeedsAttention(row)) return false;
+            if (scope == "trial" && !PromotionStatusPresentation.IsTrialEligible(row.PromotionStatus, row.PromotionState)) return false;
+            if (scope == "attention" && !RegistrationStatusPresentation.NeedsAttention(row)) return false;
             if (term.Length == 0) return true;
 
             string text = (row.Identifier + " " + row.AccountType + " " + row.Status + " " + row.Notes).ToLowerInvariant();

@@ -3,7 +3,6 @@
 from collections.abc import Mapping
 from pathlib import Path
 import json
-import re
 import time
 
 from ..config import ConfigInput
@@ -11,7 +10,6 @@ from ..promotion_states import PROMOTION_STATE_AUTH_INVALID
 
 from .connection import _connect, init_database
 from .normalize import _find_existing_account_email, _update_session_json
-from typing import Any
 
 
 def mark_quota_status(email, quota_status="", quota_result=None, *, runtime_config: ConfigInput = None):
@@ -172,119 +170,12 @@ def mark_account_health_result(
     return True
 
 
-# Never persist these into raw_json even if a caller hands them over: the
-# eligibility probe is designed to return an enumerable, token-free dict, and
-# this is the backstop that keeps it that way.
-_PAYMENT_CAPABILITY_METHODS = frozenset(
-    {
-        "payment_method_types",
-        "ordered_payment_method_types",
-        "custom_payment_methods",
-        "methods",
-    }
-)
-_PAYMENT_CAPABILITY_FACTS = frozenset(
-    {
-        "billing_country",
-        "carrier_method",
-        "currency",
-        "offer_state",
-        "error_code",
-        "error_stage",
-        "checkout_kind",
-    }
-)
-
-
-def _payment_capability_snapshot(value, *, updated_at: int):
-    """Normalize a payment-eligibility result for raw_json, or ``None`` to clear.
-
-    An empty/falsey ``value`` means the caller knows the stored answer is stale
-    (the access token died before the probe could run); returning ``None`` drops
-    the key instead of leaving a method list next to a fresh 401.
-    """
-    if not isinstance(value, dict) or not value:
-        return None
-    snapshot: dict[str, Any] = {
-        "ok": bool(value.get("ok")),
-        "retryable": bool(value.get("retryable")),
-    }
-    for key in _PAYMENT_CAPABILITY_METHODS | {"evidence_sources"}:
-        items = value.get(key)
-        if isinstance(items, (list, tuple)):
-            snapshot[key] = [
-                item for item in items[:16] if isinstance(item, str) and re.fullmatch(r"[a-z][a-z0-9_]{0,31}", item)
-            ]
-    for key in _PAYMENT_CAPABILITY_FACTS:
-        item = value.get(key)
-        if isinstance(item, str) and re.fullmatch(r"[a-zA-Z][a-zA-Z0-9_]{0,63}", item):
-            snapshot[key] = item
-    for key in ("amount", "http_status"):
-        item = value.get(key)
-        if isinstance(item, int) and not isinstance(item, bool):
-            snapshot[key] = item
-    snapshot["updated_at"] = int(updated_at)
-    return snapshot
-
-
-def mark_payment_capability(email, capability, *, runtime_config: ConfigInput = None):
-    """Persist a standalone capability observation without rewriting the plan marker."""
-    init_database(runtime_config=runtime_config)
-    now = int(time.time())
-    conn = _connect(runtime_config=runtime_config)
-    json_path = ""
-    data = {}
-    try:
-        lookup_email = _find_existing_account_email(conn, email)
-        if not lookup_email:
-            return False
-        row = conn.execute(
-            "SELECT raw_json,json_path FROM accounts WHERE email=?",
-            (lookup_email,),
-        ).fetchone()
-        if row is None:
-            return False
-        try:
-            data = json.loads(row["raw_json"] or "{}")
-        except Exception:
-            data = {}
-        json_path = str(row["json_path"] or "").strip()
-        if json_path:
-            try:
-                file_data = json.loads(Path(json_path).read_text(encoding="utf-8"))
-                if isinstance(file_data, dict):
-                    data = {**file_data, **data}
-            except Exception:
-                pass
-        snapshot = _payment_capability_snapshot(capability, updated_at=now)
-        promotion = data.get("promotion")
-        if snapshot is None:
-            data.pop("payment_capability", None)
-            if isinstance(promotion, dict):
-                promotion.pop("payment_capability", None)
-        else:
-            data["payment_capability"] = snapshot
-            if isinstance(promotion, dict):
-                promotion["payment_capability"] = snapshot
-        conn.execute(
-            "UPDATE accounts SET updated_at=?, raw_json=? WHERE email=?",
-            (now, json.dumps(data, ensure_ascii=False, separators=(",", ":")), lookup_email),
-        )
-        conn.commit()
-    finally:
-        conn.close()
-    if json_path:
-        _update_session_json(json_path, data)
-    return True
-
-
 def mark_promotion_status(
     email,
     promotion_status="",
     promotion_result=None,
     *,
     promotion_state: str = "",
-    payment_capability=None,
     runtime_config: ConfigInput = None,
 ):
     """Persist the account plan/promotion (优惠) probe result into raw_json + session.
@@ -292,23 +183,6 @@ def mark_promotion_status(
     Stored alongside the account without a dedicated DB column; ``desktop_read``
     surfaces ``promotion_status`` from raw_json for the 优惠状态 list column.
 
-    ``payment_capability`` carries the payment-method enumeration produced by
-    ``account_payment_eligibility.probe_account_payment_eligibility``.  Three
-    distinct meanings, because "no probe ran" and "the probe proved nothing is
-    left" must not collapse into one:
-
-    * ``None``  -- no probe ran (feature off, or the caller has nothing to say);
-                   the previously stored value is left untouched.
-    * ``{}``    -- the stored value is known to be stale (the access token died
-                   before the probe could run); clear it rather than leaving a
-                   method list next to a fresh 401.
-    * a dict    -- replace the stored value with it.
-
-    🔴 Anything written here must also be added to
-    ``AccountSessionModel.safe_snapshot()`` in ``account_models.py``.  That
-    whitelist is closed and ``upsert_account`` rebuilds raw_json from it, so a
-    missing entry means the field is silently dropped by the next relogin or
-    account-health pass (2026-09-21: three accounts lost 65 keys -> 16).
     """
     init_database(runtime_config=runtime_config)
     now = int(time.time())
@@ -350,14 +224,6 @@ def mark_promotion_status(
         data["promotion"] = promotion
         data["promotion_status"] = str(promotion_status or "")
         data["promotion_updated_at"] = now
-        if payment_capability is not None:
-            snapshot = _payment_capability_snapshot(payment_capability, updated_at=now)
-            if snapshot is None:
-                data.pop("payment_capability", None)
-                promotion.pop("payment_capability", None)
-            else:
-                data["payment_capability"] = snapshot
-                promotion["payment_capability"] = snapshot
         # Machine state next to the display label (sms_tool/promotion_states.py):
         # the desktop filter/sort keys off this, not off the Chinese copy.
         promotion_state = str(promotion_state or (promotion_result or {}).get("promotion_state") or "").strip()

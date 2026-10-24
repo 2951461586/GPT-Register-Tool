@@ -134,7 +134,6 @@
       "sms_tool/accounts/account_scan.py",
       "sms_tool/accounts/account_promotion.py",
       "sms_tool/accounts/promotion_batch.py",
-      "sms_tool/accounts/account_payment_eligibility.py",
       "sms_tool/accounts/account_terminal.py",
       "sms_tool/promotion_states.py"
     ],

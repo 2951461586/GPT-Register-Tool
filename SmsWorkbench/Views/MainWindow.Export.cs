@@ -2,6 +2,8 @@
 // PaymentBatchService.cs for why the project-wide switch stays `annotations`.
 #nullable enable
 
+using SmsWorkbench.Localization;
+
 namespace SmsWorkbench
 {
     public partial class MainWindow
@@ -14,14 +16,14 @@ namespace SmsWorkbench
 
         private void ImportPaidCpa()
         {
-            string target = ShowImportTargetDialog("一键导入");
+            string target = ShowImportTargetDialog(Loc.T("一键导入"));
             if (target.Length == 0) return;
 
             var rows = Export.ImportableRows(SelectedRowsOrCurrent());
 
             if (rows.Count == 0)
             {
-                MessageBox.Show("没有找到可导入账号。请先注册账号并获得 access_token/session。", "一键导入", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show(Loc.T("没有找到可导入账号。请先注册账号并获得 access_token/session。"), Loc.T("一键导入"), MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
@@ -70,7 +72,7 @@ namespace SmsWorkbench
 
             if (lines.Count == 0)
             {
-                ShowThemedInfoDialog("一键导出", "没有找到可导出的账号记录。仅支持包含邮箱、密码、客户端ID、刷新令牌的邮箱记录；CFWorker 或缺少密码/刷新令牌的记录会被跳过。");
+                ShowThemedInfoDialog(Loc.T("一键导出"), Loc.T("没有找到可导出的账号记录。仅支持包含邮箱、密码、客户端ID、刷新令牌的邮箱记录；CFWorker 或缺少密码/刷新令牌的记录会被跳过。"));
                 return;
             }
 
@@ -79,7 +81,7 @@ namespace SmsWorkbench
             string outputPath = Path.Combine(outputDir, "account-" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt");
             File.WriteAllLines(outputPath, lines, new UTF8Encoding(false));
             Log("One-click export wrote " + lines.Count + " account(s), skipped " + skipped + ": " + outputPath);
-            ShowExportCompleteDialog(outputPath, lines.Count, skipped, "TXT", "账号----密码----客户端ID----刷新令牌");
+            ShowExportCompleteDialog(outputPath, lines.Count, skipped, Loc.T("TXT"), Loc.T("账号----密码----客户端ID----刷新令牌"));
         }
 
         private void ExportAccountsJson(List<PoolRow> rows)
@@ -90,7 +92,7 @@ namespace SmsWorkbench
             var collected = await CollectAccountExportJsonAsync(rows, ct);
             if (collected.Items.Count == 0)
             {
-                ShowThemedInfoDialog("一键导出", "没有找到可导出的 JSON 账号记录。需要账号已生成 session/auth_session 或 SQLite 原始记录。");
+                ShowThemedInfoDialog(Loc.T("一键导出"), Loc.T("没有找到可导出的 JSON 账号记录。需要账号已生成 session/auth_session 或 SQLite 原始记录。"));
                 return;
             }
 
@@ -101,7 +103,7 @@ namespace SmsWorkbench
             var options = new JsonSerializerOptions { WriteIndented = true };
             await Task.Run(() => File.WriteAllText(outputPath, JsonSerializer.Serialize(payload, options), new UTF8Encoding(false)), ct);
             Log("One-click JSON export wrote " + collected.Items.Count + " account(s), skipped " + collected.Skipped + ": " + outputPath);
-            ShowExportCompleteDialog(outputPath, collected.Items.Count, collected.Skipped, "JSON", "原始账号 session JSON；保留 RT 字段，未获取 RT 的账号默认留空");
+            ShowExportCompleteDialog(outputPath, collected.Items.Count, collected.Skipped, Loc.T("JSON"), Loc.T("原始账号 session JSON；保留 RT 字段，未获取 RT 的账号默认留空"));
         }
 
         private sealed record CollectedAccountExport(List<Dictionary<string, object>> Items, int Skipped);
@@ -138,7 +140,7 @@ namespace SmsWorkbench
             var collected = await CollectAccountExportJsonAsync(rows, ct);
             if (collected.Items.Count == 0)
             {
-                ShowThemedInfoDialog("一键导出", "没有找到可转换的账号 session。需要账号已生成 access_token/session/auth_session 或 SQLite 原始记录。");
+                ShowThemedInfoDialog(Loc.T("一键导出"), Loc.T("没有找到可转换的账号 session。需要账号已生成 access_token/session/auth_session 或 SQLite 原始记录。"));
                 return;
             }
             List<Dictionary<string, object>> items = collected.Items;
@@ -162,7 +164,7 @@ namespace SmsWorkbench
             catch (Exception ex)
             {
                 Log("账号格式转换失败：" + ex.Message);
-                ShowThemedInfoDialog("一键导出", "账号格式转换失败：" + ex.Message);
+                ShowThemedInfoDialog(Loc.T("一键导出"), Loc.T("账号格式转换失败：") + ex.Message);
                 return;
             }
             finally
@@ -172,7 +174,7 @@ namespace SmsWorkbench
 
             if (!File.Exists(outputPath) || new FileInfo(outputPath).Length == 0)
             {
-                ShowThemedInfoDialog("一键导出", "账号格式转换没有生成输出文件，请查看下方日志确认 converter 结果。");
+                ShowThemedInfoDialog(Loc.T("一键导出"), Loc.T("账号格式转换没有生成输出文件，请查看下方日志确认 converter 结果。"));
                 return;
             }
 
@@ -185,7 +187,7 @@ namespace SmsWorkbench
             string selected = "";
             var dialog = new Window
             {
-                Title = "一键导出",
+                Title = Loc.T("一键导出"),
                 Owner = this,
                 Width = 560,
                 MinWidth = 520,
@@ -204,14 +206,14 @@ namespace SmsWorkbench
             var header = new StackPanel { Margin = new Thickness(0, 0, 0, 16) };
             header.Children.Add(new TextBlock
             {
-                Text = "选择导出格式",
+                Text = Loc.T("选择导出格式"),
                 FontSize = 18,
                 FontWeight = FontWeights.SemiBold,
                 Foreground = (Brush)FindResource("TextMain")
             });
             header.Children.Add(new TextBlock
             {
-                Text = "TXT 保持邮箱原格式；原始 JSON 保留 session；其它格式会调用 session_converter.py 转为 CPA/Sub2API/Cockpit/9router/Codex/AxonHub/Codex-Manager。",
+                Text = Loc.T("TXT 保持邮箱原格式；原始 JSON 保留 session；其它格式会调用 session_converter.py 转为 CPA/Sub2API/Cockpit/9router/Codex/AxonHub/Codex-Manager。"),
                 TextWrapping = TextWrapping.Wrap,
                 LineHeight = 20,
                 Margin = new Thickness(0, 6, 0, 0),
@@ -221,8 +223,8 @@ namespace SmsWorkbench
             root.Children.Add(header);
 
             var combo = new ComboBox { SelectedIndex = 2, Margin = new Thickness(0, 0, 0, 16) };
-            combo.Items.Add(new ComboBoxItem { Content = "TXT - 邮箱----密码----客户端ID----刷新令牌", Tag = "txt" });
-            combo.Items.Add(new ComboBoxItem { Content = "原始 JSON - session/auth_session", Tag = "json" });
+            combo.Items.Add(new ComboBoxItem { Content = Loc.T("TXT - 邮箱----密码----客户端ID----刷新令牌"), Tag = "txt" });
+            combo.Items.Add(new ComboBoxItem { Content = Loc.T("原始 JSON - session/auth_session"), Tag = "json" });
             combo.Items.Add(new ComboBoxItem { Content = "CPA JSON", Tag = "cpa" });
             combo.Items.Add(new ComboBoxItem { Content = "Sub2API JSON", Tag = "sub2api" });
             combo.Items.Add(new ComboBoxItem { Content = "Cockpit JSON", Tag = "cockpit" });
@@ -240,7 +242,7 @@ namespace SmsWorkbench
             };
             var exportButton = new Button
             {
-                Content = "导出",
+                Content = Loc.T("导出"),
                 Width = 88,
                 Style = (Style)FindResource("PrimaryButton")
             };
@@ -251,7 +253,7 @@ namespace SmsWorkbench
             };
             var cancelButton = new Button
             {
-                Content = "取消",
+                Content = Loc.T("取消"),
                 Width = 76,
                 Margin = new Thickness(8, 0, 0, 0)
             };
@@ -270,7 +272,7 @@ namespace SmsWorkbench
         {
             var dialog = new Window
             {
-                Title = "一键导出",
+                Title = Loc.T("一键导出"),
                 Owner = this,
                 Width = 520,
                 MinWidth = 460,
@@ -288,14 +290,14 @@ namespace SmsWorkbench
             var header = new StackPanel { Margin = new Thickness(0, 0, 0, 14) };
             header.Children.Add(new TextBlock
             {
-                Text = "导出完成",
+                Text = Loc.T("导出完成"),
                 FontSize = 18,
                 FontWeight = FontWeights.SemiBold,
                 Foreground = (Brush)FindResource("TextMain")
             });
             header.Children.Add(new TextBlock
             {
-                Text = "已生成账号 " + formatLabel + " 文件：" + formatDescription,
+                Text = Loc.F("已生成账号 {0} 文件：{1}", formatLabel, formatDescription),
                 TextWrapping = TextWrapping.Wrap,
                 LineHeight = 20,
                 Margin = new Thickness(0, 6, 0, 0),
@@ -316,7 +318,7 @@ namespace SmsWorkbench
             var summaryStack = new StackPanel();
             summaryStack.Children.Add(new TextBlock
             {
-                Text = "数量：" + exportedCount + "    跳过：" + skippedCount,
+                Text = Loc.F("数量：{0}    跳过：{1}", exportedCount, skippedCount),
                 FontWeight = FontWeights.SemiBold,
                 Foreground = (Brush)FindResource("TextMain")
             });
@@ -338,7 +340,7 @@ namespace SmsWorkbench
             };
             var openDirButton = new Button
             {
-                Content = "打开目录",
+                Content = Loc.T("打开目录"),
                 Width = 92,
                 Style = (Style)FindResource("PrimaryButton")
             };
@@ -350,7 +352,7 @@ namespace SmsWorkbench
             };
             var closeButton = new Button
             {
-                Content = "关闭",
+                Content = Loc.T("关闭"),
                 Width = 76,
                 Margin = new Thickness(8, 0, 0, 0)
             };
@@ -370,7 +372,7 @@ namespace SmsWorkbench
             var summary = BackendResultInterpreter.TryExtractScanSummary(backendOutput);
             if (summary == null)
             {
-                ShowThemedInfoDialog(title, title + "已结束，但未解析到结果汇总。请查看下方日志确认详情。");
+                ShowThemedInfoDialog(title, Loc.F("{0}已结束，但未解析到结果汇总。请查看下方日志确认详情。", title));
                 return;
             }
 
@@ -390,13 +392,12 @@ namespace SmsWorkbench
             // Promotion rows carry their own badge; without this the panel would
             // show "AT有效 / HTTP 200" and hide the actual 优惠 answer.
             bool isPromotion = BackendResultInterpreter.IsPromotionRows(results);
-            bool isPaymentEligibility = resultKind == BackendAccountResultKind.PaymentEligibility;
             var rtRows = directProbe ? new List<Dictionary<string, object>>() : results.Where(r => BackendJson.GetBool(r, "has_rt")).ToList();
             var noRtRows = directProbe ? results : results.Where(r => !BackendJson.GetBool(r, "has_rt")).ToList();
 
             var dialog = new Window
             {
-                Title = title + "结果",
+                Title = Loc.F("{0}结果", title),
                 Owner = this,
                 Width = 740,
                 MinWidth = 740,
@@ -415,7 +416,7 @@ namespace SmsWorkbench
             var header = new StackPanel { Margin = new Thickness(0, 0, 0, 14) };
             header.Children.Add(new TextBlock
             {
-                Text = title + "完成",
+                Text = Loc.F("{0}完成", title),
                 FontSize = 18,
                 FontWeight = FontWeights.SemiBold,
                 Foreground = (Brush)FindResource("TextMain")
@@ -424,11 +425,6 @@ namespace SmsWorkbench
             {
                 Text = isPromotion
                     ? BackendResultInterpreter.PromotionSummary(results)
-                    : isPaymentEligibility
-                    ? "总数：" + BackendJson.GetString(summary, "total")
-                        + "    明确方式：" + BackendJson.GetString(summary, "success")
-                        + "    未知：" + BackendJson.GetString(summary, "failed")
-                        + "    保存失败：" + BackendJson.GetString(summary, "persist_failed")
                     : directProbe
                     ? ExportViewModel.FormatDirectProbeSummary(results, summary)
                     : "总数：" + BackendJson.GetString(summary, "total")
@@ -459,7 +455,7 @@ namespace SmsWorkbench
             {
                 body.Children.Add(new TextBlock
                 {
-                    Text = "没有可展示的" + title + "明细。",
+                    Text = Loc.F("没有可展示的{0}明细。", title),
                     Foreground = (Brush)FindResource("TextSub")
                 });
             }
@@ -479,7 +475,7 @@ namespace SmsWorkbench
                 HorizontalAlignment = HorizontalAlignment.Right,
                 Margin = new Thickness(0, 16, 0, 0)
             };
-            var ok = new Button { Content = "关闭", Width = 82, Style = (Style)FindResource("PrimaryButton") };
+            var ok = new Button { Content = Loc.T("关闭"), Width = 82, Style = (Style)FindResource("PrimaryButton") };
             ok.Click += (_, __) => dialog.Close();
             actions.Children.Add(ok);
             Grid.SetRow(actions, 2);
@@ -515,13 +511,7 @@ namespace SmsWorkbench
                 string email = BackendJson.GetString(row, "email");
                 string status;
                 string error;
-                if (BackendJson.TryGetMap(row, "payment_capability", out var capability)
-                    && !BackendJson.TryGetMap(row, "probe", out _))
-                {
-                    status = BackendResultInterpreter.ResultRowStatus(row);
-                    error = BackendResultInterpreter.PaymentEligibilityReason(capability);
-                }
-                else if (BackendJson.TryGetMap(row, "probe", out var probe))
+                if (BackendJson.TryGetMap(row, "probe", out var probe))
                 {
                     status = BackendResultInterpreter.ResultRowStatus(row);
                     if (BackendJson.TryGetMap(row, "relogin", out var relogin)
@@ -669,7 +659,7 @@ namespace SmsWorkbench
 
             var label = new TextBlock
             {
-                Text = "选择导入目标",
+                Text = Loc.T("选择导入目标"),
                 Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
                 FontWeight = FontWeights.SemiBold,
                 Margin = new Thickness(0, 0, 0, 10)
@@ -688,13 +678,13 @@ namespace SmsWorkbench
                 Orientation = Orientation.Horizontal,
                 HorizontalAlignment = HorizontalAlignment.Right
             };
-            var ok = new Button { Content = "确定", Width = 76, Style = (Style)FindResource("PrimaryButton") };
+            var ok = new Button { Content = Loc.T("确定"), Width = 76, Style = (Style)FindResource("PrimaryButton") };
             ok.Click += (_, __) =>
             {
                 selected = ((combo.SelectedItem as ComboBoxItem)?.Tag as string) ?? "cpa";
                 dialog.Close();
             };
-            var cancel = new Button { Content = "取消", Width = 76, Margin = new Thickness(8, 0, 0, 0) };
+            var cancel = new Button { Content = Loc.T("取消"), Width = 76, Margin = new Thickness(8, 0, 0, 0) };
             cancel.Click += (_, __) =>
             {
                 selected = "";

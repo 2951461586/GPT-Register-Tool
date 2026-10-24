@@ -64,7 +64,7 @@ _READ_ACCESSORS = {"get", "pop", "setdefault"}
 #
 #   ``account_scan._has_verified_phone``  -> ``data.get("phone_number")``
 #       a field of the *session record*, not a config key
-#   ``registration.run_phone``            -> ``kwargs.get("phone_pool")``
+#   a registration request forwarder   -> ``kwargs.get("phone_pool")``
 #       a *parameter* carrying the pool object built by
 #       ``phone_reuse.create_phone_pool``; the name collision with the removed
 #       config key is coincidental
@@ -162,11 +162,11 @@ class TestRemovedConfigKeys:
         assert _config_reads(probe) == []
 
     def test_the_guard_ignores_a_forwarded_parameter(self, tmp_path):
-        """``registration.run_phone`` forwards ``kwargs["phone_pool"]`` -- the
+        """A registration helper forwarding ``kwargs["phone_pool"]`` -- the
         pool *object*, not the removed config key."""
         probe = tmp_path / "probe.py"
         probe.write_text(
-            "def run_phone(*args, **kwargs):\n    return run_email(phone_pool=kwargs.get('phone_pool'))\n",
+            "def forward_phone_pool(*args, **kwargs):\n    return run_email(phone_pool=kwargs.get('phone_pool'))\n",
             encoding="utf-8",
         )
         assert _config_reads(probe) == []

@@ -24,6 +24,7 @@ skips acquisition, silently disabling the cap. See
 from __future__ import annotations
 
 import json
+import logging
 import threading
 import time
 from typing import Any
@@ -31,6 +32,9 @@ from typing import Any
 from ..config import CFG
 from ..cross_process_gate import CrossProcessSemaphore, GateTimeoutError
 from ..kernel.paths import runtime_file
+
+
+_LOGGER = logging.getLogger(__name__)
 
 
 _STAGE_GROUPS = {
@@ -47,10 +51,19 @@ _STAGE_GROUPS = {
 }
 _DEFAULT_CAPS = {"auth": 1, "network": 4, "at_probe": 4, "payment": 2}
 _CROSS_GATE_TIMEOUT_SECONDS = 600.0
+#: How long a failed cross-process gate stays remembered before it is retried.
+#:
+#: The failure used to be cached as ``None`` for the rest of the process, which
+#: silently dropped the cross-process half of the cap (CLI + desktop running at
+#: once) after one transient lock-directory error.  Reusing the failure for a
+#: short window keeps a broken environment from paying a failed lock creation on
+#: every stage transition, without turning a transient error permanent.
+_CROSS_GATE_RETRY_SECONDS = 30.0
 
 _gate_lock = threading.Lock()
 _stage_gates: dict[tuple[str, int], threading.BoundedSemaphore] = {}
 _cross_gates: dict[tuple[str, int], CrossProcessSemaphore | None] = {}
+_cross_gate_retry_at: dict[tuple[str, int], float] = {}
 _metrics_lock = threading.Lock()
 _metrics: dict[str, dict[str, float]] = {}
 _rate_limit_lock = threading.Lock()
@@ -249,13 +262,28 @@ def _cross_gate_for(group: str) -> CrossProcessSemaphore | None:
         return None
     key = (group, _stage_cap(group))
     with _gate_lock:
-        if key not in _cross_gates:
-            try:
-                _cross_gates[key] = CrossProcessSemaphore(
-                    f"registration_{group}",
-                    key[1],
-                    base_dir=runtime_file(CFG, ""),
-                )
-            except OSError:
-                _cross_gates[key] = None
+        if key in _cross_gates:
+            return _cross_gates[key]
+        retry_at = _cross_gate_retry_at.get(key, 0.0)
+        if retry_at > time.time():
+            # A recent attempt failed; the in-process semaphore still applies,
+            # so return "no cross-process gate" without hammering the lock dir.
+            return None
+        try:
+            _cross_gates[key] = CrossProcessSemaphore(
+                f"registration_{group}",
+                key[1],
+                base_dir=runtime_file(CFG, ""),
+            )
+        except OSError as exc:
+            _cross_gate_retry_at[key] = time.time() + _CROSS_GATE_RETRY_SECONDS
+            _LOGGER.warning(
+                "registration stage gate %r has no cross-process lock (%s); "
+                "the in-process cap still applies, retrying in %.0fs",
+                group,
+                type(exc).__name__,
+                _CROSS_GATE_RETRY_SECONDS,
+            )
+            return None
+        _cross_gate_retry_at.pop(key, None)
         return _cross_gates[key]

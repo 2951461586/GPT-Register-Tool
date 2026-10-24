@@ -57,15 +57,20 @@ payment authentication and OAuth export still use phone/OAuth modules, so those
 modules must not be deleted as dead code.
 
 `registration_handlers.RegistrationEmailWorkflow` keeps thin delegates, and the
-extracted stage modules (`registration_otp_stages`, `registration_account_stages`,
-`registration_edge_challenge`, `registration_resume`,
-`registration_sentinel_stages`, `registration_warmup`,
+extracted stage modules (`registration_bootstrap_stages`,
+`registration_identity_stages`, `registration_auth_stages`,
+`registration_register_stages`, `registration_otp_stages`,
+`registration_account_stages`, `registration_edge_challenge`,
+`registration_resume`, `registration_sentinel_stages`, `registration_warmup`,
 `registration_reference_lane`, `registration_finalize`) take the workflow
 instance as a first positional parameter named `workflow`. It used to be named
 `self`, which read as a method on an object the module does not own; the
 parameter is annotated with `RegistrationEmailWorkflow` under `TYPE_CHECKING`,
 so a type-only import avoids the runtime cycle while the type checker still
-validates every attribute and delegate the stage touches.
+validates every attribute and delegate the stage touches. The bootstrap/identity/auth/register split (2026-10-24) moved their bodies —
+and `_apply_protocol_fingerprint` with them — into those four modules;
+`handlers.py` keeps the stage order, the lifecycle and thin delegates, plus a
+re-export of the fingerprint helper for its historical import path.
 
 ## Browser drivers
 

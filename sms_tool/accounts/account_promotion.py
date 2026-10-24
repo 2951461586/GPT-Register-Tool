@@ -7,10 +7,8 @@ project's curl_cffi + auth-header stack. The condensed ``promotion_status`` labe
 is what the desktop 优惠状态 column shows; the full parse is persisted for detail.
 
 This module owns the **probe only**. Running it across many saved accounts --
-proxy rotation, 429 throttling, the optional payment-eligibility pass,
-persistence and progress events -- lives in
-:mod:`sms_tool.accounts.promotion_batch`. The split keeps the payment catalog off
-the desktop read path, which imports this module.
+proxy rotation, 429 throttling, persistence and progress events -- lives in
+:mod:`sms_tool.accounts.promotion_batch`.
 """
 
 from __future__ import annotations

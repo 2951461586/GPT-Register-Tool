@@ -69,7 +69,7 @@ def test_pool_geo_is_applied_instead_of_the_template_guess():
             "sms_tool.fingerprint_pool.shared_fingerprint_pool",
             return_value=SimpleNamespace(size=1, next=lambda proxy: _profile()),
         ),
-        patch("sms_tool.registration.handlers.set_auth_fingerprint") as set_fp,
+        patch("sms_tool.registration.identity_stages.set_auth_fingerprint") as set_fp,
         patch("sms_tool.proxy.entry.infer_proxy_country", return_value="") as infer,
     ):
         _apply_protocol_fingerprint(ops, {}, "http://user:pass@host:8080")
@@ -107,7 +107,14 @@ def test_falls_back_when_the_pool_raises():
 
 
 class TestRegistrationSession:
-    """P1-8: an explicit proxy must not be overridden by the environment."""
+    """The session keeps an explicit proxy map, and pins ``trust_env`` defensively.
+
+    2026-10-24 re-check: ``curl_cffi==0.16.0`` stores ``trust_env`` and never
+    reads it, so the attribute protects nothing *today*; the explicit
+    ``session.proxies`` map is what keeps an environment proxy from winning.
+    These assertions pin the shape we want if the library starts honouring the
+    flag -- they do not prove the protection is live.
+    """
 
     def test_explicit_proxy_pins_the_session_and_disables_trust_env(self):
         session = _new_registration_session("http://user:pass@host:8080")
@@ -115,10 +122,12 @@ class TestRegistrationSession:
             "http": "http://user:pass@host:8080",
             "https": "http://user:pass@host:8080",
         }
+        # Defensive only -- see the class docstring; the proxies map is the part
+        # that actually decides the egress in curl_cffi 0.16.0.
         assert session.trust_env is False
 
     def test_no_proxy_leaves_trust_env_alone(self):
-        # With nothing configured an env-provided proxy still applies; the fix
+        # With nothing configured an env-provided proxy still applies; the rule
         # is only about protecting an explicit choice from being overridden.
         session = _new_registration_session("")
         assert session.trust_env is True

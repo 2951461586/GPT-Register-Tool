@@ -18,16 +18,17 @@ rate; see [Validation limits](#validation-limits).
 | Concern | Module |
 | --- | --- |
 | Protocol step functions (signin, authorize, continue, OTP, TOTP) | `sms_tool/auth_flow/` (`steps`, `signup`, `login`, `otp`, `totp`) |
-| Stage order, runtime state, persistence | `sms_tool/registration/handlers.py` |
+| Stage order, runtime state, persistence | `sms_tool/registration/handlers.py`; bootstrap, identity, auth and register stage bodies live in `registration/bootstrap_stages.py` / `identity_stages.py` / `auth_stages.py` / `register_stages.py` and are reached through thin delegates |
 | Persistence seam, stage executor, pure helpers, email-OTP stages, account/session/AT-probe stages, edge-challenge hook, resume stage, Sentinel stages | `sms_tool/registration/persistence.py`, `registration/stage_runner.py`, `registration/protocol_helpers.py`, `registration/otp_stages.py`, `registration/account_stages.py`, `registration/edge_challenge.py`, `registration/resume.py`, `registration/sentinel_stages.py` |
 | `registration.*` boolean toggle parsing (one `Mapping`-safe, two-sided owner) | `sms_tool/registration/flags.py` — `auth_flow.steps._registration_flag` keeps a deliberate copy, because importing the leaf module from `auth_flow` would grow the import-layer ratchet |
 | Account creation and OTP validate wire calls | `sms_tool/account_creation.py` |
 | Sentinel token issuance | `sms_tool/sentinel/` (facade `sms_tool/sentinel_tokens.py`) |
 | AT probe, result contract, funnel | `sms_tool/registration/outcome.py`, `registration/result.py`, `registration/funnel.py` |
-| `sms_tool/registration/orchestrator.py` | compatibility facade only — re-exports, no implementation |
+| Protocol entry points: `run_email` / `run_batch` dispatch, runtime-config and driver selection, and the per-invocation `RegistrationOperations` binding | `sms_tool/registration/orchestrator.py` (a module, not a package — stage order and stage bodies live in `registration/handlers.py` and the sibling stage modules) |
 
-`registration/handlers.py` owns stage order; the `auth_flow/` package owns only
-the step functions. A change to endpoint order belongs in the handler, not in a
+`registration/handlers.py` owns stage order (the bootstrap/identity/auth/register
+bodies sit in their own modules behind delegates); the `auth_flow/` package owns only the step
+functions. A change to endpoint order belongs in the handler, not in a
 step.
 
 ## Two lanes

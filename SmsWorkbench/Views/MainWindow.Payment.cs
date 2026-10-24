@@ -7,9 +7,9 @@ namespace SmsWorkbench
     public partial class MainWindow
     {
         // Payment-link actions and unified protocol extractor.
-        // CLI argument construction is delegated to BackendCommandPlanner;
-        // backend JSON interpretation is delegated to ProtocolPaymentResultPresenter
-        // and BackendResultInterpreter.
+        // CLI argument construction is delegated to BackendCommandPlanner and
+        // PaymentBatchService; backend JSON interpretation is delegated to
+        // BackendResultInterpreter.
 
         // OpenSessions_Click / OpenDatabase_Click / OpenMailboxPool_Click were
         // removed (2026-09-02, round 6): dead event handlers with no XAML
@@ -29,9 +29,11 @@ namespace SmsWorkbench
         }
 
         // AtExtractBaLink_Click / ShowProtocolPaymentDialog removed
-        // (2026-09-02, round 6): no XAML subscriber and no caller. The protocol
-        // payment window is opened through protocolPaymentDialogs from
-        // elsewhere; this wrapper duplicated that path with its own guard.
+        // (2026-09-02, round 6): no XAML subscriber and no caller.
+        // The single-account protocol payment window was retired on 2026-10-24:
+        // it had no entry point, so the window, its view model/service, the
+        // stage-matrix store and the dialog service were deleted. Batch protocol
+        // payment (the only supported entry) stays below.
 
         private void BatchProtocolPayment()
         {

@@ -18,19 +18,45 @@ namespace SmsWorkbench
             if (PromotionStatusPresentation.IsTrialEligible(status)
                 || status.Contains('✅') || status.Contains("完成") || status.Contains("已注册")
                 || status.Contains("已获取") || status.Contains("已导入") || status.Contains("K12已进入")
-                || status.Contains("PM已创建") || status.Contains("已设置"))
+                || status.Contains("PM已创建") || status.Contains("已设置")
+                // English display labels (language switch). The converter must
+                // key off what the grid actually shows, or every badge falls
+                // back to neutral and the colour never changes.
+                || status.Contains("Completed", StringComparison.OrdinalIgnoreCase)
+                || status.Contains("Registered", StringComparison.OrdinalIgnoreCase)
+                || status.Contains("Present", StringComparison.OrdinalIgnoreCase)
+                || status.Contains("Imported", StringComparison.OrdinalIgnoreCase)
+                || status.Contains("Enabled", StringComparison.OrdinalIgnoreCase)
+                || status.Contains("Success", StringComparison.OrdinalIgnoreCase)
+                || status.Contains("K12 joined", StringComparison.OrdinalIgnoreCase)
+                || status.Contains("AT valid", StringComparison.OrdinalIgnoreCase)
+                || status.Contains("Payment completed", StringComparison.OrdinalIgnoreCase))
                 return "success";
 
             if (status.Contains("失败") || status.Contains("失效") || status.Contains("掉号")
                 || status.Contains("异常") || status.Contains("无RT") || status.Contains("缺失")
-                || status.Contains("未获取") || status.Contains("K12未切换") || status.Contains("K12已退出"))
+                || status.Contains("未获取") || status.Contains("K12未切换") || status.Contains("K12已退出")
+                || status.Contains("Failed", StringComparison.OrdinalIgnoreCase)
+                || status.Contains("Invalid", StringComparison.OrdinalIgnoreCase)
+                || status.Contains("Dropped", StringComparison.OrdinalIgnoreCase)
+                || status.Contains("Missing", StringComparison.OrdinalIgnoreCase)
+                || status.Contains("No RT", StringComparison.OrdinalIgnoreCase)
+                || status.Contains("K12 left", StringComparison.OrdinalIgnoreCase)
+                || status.Contains("Not switched", StringComparison.OrdinalIgnoreCase))
                 return "danger";
 
             if (status.Contains('待') || status.Contains('缺') || status.Contains("OTP")
-                || status.Contains("K12已申请") || status.Contains("旧token"))
+                || status.Contains("K12已申请") || status.Contains("旧token")
+                || status.Contains("Pending", StringComparison.OrdinalIgnoreCase)
+                || status.Contains("Awaiting", StringComparison.OrdinalIgnoreCase)
+                || status.Contains("Legacy", StringComparison.OrdinalIgnoreCase)
+                || status.Contains("K12 requested", StringComparison.OrdinalIgnoreCase)
+                || status.Contains("Not set", StringComparison.OrdinalIgnoreCase))
                 return "warn";
 
-            if (status.Contains("已保存") || status.Contains("待刷新") || status.Contains("未知"))
+            if (status.Contains("已保存") || status.Contains("待刷新") || status.Contains("未知")
+                || status.Contains("Saved", StringComparison.OrdinalIgnoreCase)
+                || status.Contains("Unknown", StringComparison.OrdinalIgnoreCase))
                 return "info";
 
             return "neutral";
@@ -62,7 +88,8 @@ namespace SmsWorkbench
         {
             string value = (status ?? "").Trim();
             if (value.Length == 0) return false;
-            return value.Contains("可试用", StringComparison.OrdinalIgnoreCase)
+            return (value.Contains("可试用", StringComparison.OrdinalIgnoreCase)
+                    || value.Contains("plus trial", StringComparison.OrdinalIgnoreCase))
                 && value.Contains("plus", StringComparison.OrdinalIgnoreCase);
         }
 

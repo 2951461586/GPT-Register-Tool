@@ -2,6 +2,8 @@
 // PaymentBatchService.cs for why the project-wide switch stays `annotations`.
 #nullable enable
 
+using SmsWorkbench.Localization;
+
 namespace SmsWorkbench;
 
 /// <summary>
@@ -12,9 +14,8 @@ namespace SmsWorkbench;
 /// Every method returns a sealed record so the caller (MainWindow or a
 /// ViewModel) only formats the text for display — no ad-hoc JSON parsing.
 ///
-/// This generalizes the <see cref="ProtocolPaymentResultPresenter"/> pattern
-/// across all backend-command results so the JSON business logic lives in
-/// exactly one module that can be unit tested without WPF.
+/// This follows the presentation-module pattern: the JSON business logic
+/// lives in exactly one module that can be unit tested without WPF.
 /// </summary>
 public static class BackendResultInterpreter
 {
@@ -80,8 +81,7 @@ public static class BackendResultInterpreter
     public static bool HasAccountResults(BackendAccountResultKind resultKind)
     {
         return resultKind is BackendAccountResultKind.Liveness
-            or BackendAccountResultKind.Promotion
-            or BackendAccountResultKind.PaymentEligibility;
+            or BackendAccountResultKind.Promotion;
     }
 
     /// <summary>Dialog / heading title for the per-account result dialog.</summary>
@@ -89,9 +89,8 @@ public static class BackendResultInterpreter
     {
         return resultKind switch
         {
-            BackendAccountResultKind.Promotion => "账号优惠检测",
-            BackendAccountResultKind.PaymentEligibility => "支付资格探测",
-            BackendAccountResultKind.Liveness => "账号测活",
+            BackendAccountResultKind.Promotion => Loc.T("账号优惠检测"),
+            BackendAccountResultKind.Liveness => Loc.T("账号测活"),
             _ => throw new ArgumentOutOfRangeException(nameof(resultKind), resultKind, "Not an account result"),
         };
     }
@@ -166,14 +165,9 @@ public static class BackendResultInterpreter
     }
 
     /// <summary>
-    /// The 优惠状态 badge for one row: the promotion label with the account's
-    /// available payment rails appended ("可试用Plus-100% · card/upi/momo").
-    ///
-    /// The composition is owned by Python
-    /// (<c>sms_tool/promotion_states.promotion_status_with_eligibility</c>) and
-    /// arrives pre-joined as <c>promotion_display</c>, so the separator rule has
-    /// exactly one owner. Rows from an older backend carry only
-    /// <c>promotion_status</c>.
+    /// The 优惠状态 badge for one row. Python owns the display composition and
+    /// sends it as <c>promotion_display</c>; rows from an older backend carry
+    /// only <c>promotion_status</c>.
     /// </summary>
     private static string PromotionBadge(Dictionary<string, object> row)
     {
@@ -188,34 +182,14 @@ public static class BackendResultInterpreter
     /// </summary>
     public static string ResultRowStatus(Dictionary<string, object> row)
     {
-        if (row == null) return "未知";
+        if (row == null) return Loc.T("未知");
         string promotion = PromotionBadge(row);
         if (promotion.Length > 0) return promotion;
-        if (BackendJson.TryGetMap(row, "payment_capability", out _))
-        {
-            string methods = BackendJson.GetString(row, "payment_eligibility").Trim();
-            return methods.Length > 0 ? methods : "支付资格未知";
-        }
         if (BackendJson.TryGetMap(row, "probe", out var probe))
         {
-            return IsProbeDeactivated(row) ? "账号停用" : ProbeStatusLabel(probe);
+            return IsProbeDeactivated(row) ? Loc.T("账号停用") : ProbeStatusLabel(probe);
         }
         return ScanStatusLabel(BackendJson.GetString(row, "scan_status"));
-    }
-
-    /// <summary>Never echo vendor response text or arbitrary error codes in the desktop.</summary>
-    public static string PaymentEligibilityReason(Dictionary<string, object> capability)
-    {
-        string code = BackendJson.GetString(capability, "error_code");
-        string stage = BackendJson.GetString(capability, "error_stage");
-        if (code == "checkout_risk_blocked") return "Checkout 风控拒绝";
-        if (code == "checkout_creation_rate_limited") return "Checkout 限流";
-        if (code == "egress_country_mismatch") return "支付出口国家不符";
-        if (code == "egress_country_unverified" || code == "egress_probe_failed")
-            return "支付出口未验证";
-        if (stage == "checkout_create") return "Checkout 创建失败";
-        if (stage == "stripe_init" || stage == "stripe_elements") return "Stripe 读取失败";
-        return BackendJson.GetBool(capability, "ok") ? "" : "未取得明确支付方式";
     }
 
     /// <summary>
@@ -243,13 +217,13 @@ public static class BackendResultInterpreter
                 if (row.ContainsKey("persisted") && !BackendJson.GetBool(row, "persisted"))
                     persistFailed++;
                 string badge = PromotionBadge(row);
-                if (badge.Length == 0) badge = "未知";
+                if (badge.Length == 0) badge = Loc.T("未知");
                 badges.TryGetValue(badge, out int count);
                 badges[badge] = count + 1;
             }
         }
         var text = new System.Text.StringBuilder();
-        text.Append("总数：").Append(total)
+        text.Append(Loc.T("总数：")).Append(total)
             .Append("    检测成功：").Append(ok)
             .Append("    AT失效：").Append(tokenInvalid)
             .Append("    其他失败：").Append(failed);
@@ -267,22 +241,22 @@ public static class BackendResultInterpreter
     /// </summary>
     public static string ProbeStatusLabel(Dictionary<string, object> probe)
     {
-        if (IsDeactivatedMap(probe)) return "账号停用";
+        if (IsDeactivatedMap(probe)) return Loc.T("账号停用");
         if (BackendJson.GetString(probe, "status_code") == "401"
             || BackendJson.GetString(probe, "status").Equals("token_invalid", StringComparison.OrdinalIgnoreCase))
-            return "AT失效 / HTTP 401";
+            return Loc.T("AT失效 / HTTP 401");
         if (BackendJson.GetBool(probe, "ok"))
         {
             string statusCode = BackendJson.GetString(probe, "status_code");
-            return statusCode.Length > 0 ? "AT有效 / HTTP " + statusCode : "AT有效";
+            return statusCode.Length > 0 ? Loc.T("AT有效 / HTTP ") + statusCode : Loc.T("AT有效");
         }
         string error = BackendJson.GetString(probe, "error");
         if (error.Contains("mailbox_transport", StringComparison.OrdinalIgnoreCase)
             || error.Contains("RemoteDisconnected", StringComparison.OrdinalIgnoreCase)
             || error.Contains("ProxyError", StringComparison.OrdinalIgnoreCase))
-            return "邮箱代理/收信链路失败";
+            return Loc.T("邮箱代理/收信链路失败");
         string failedCode = BackendJson.GetString(probe, "status_code");
-        return failedCode.Length > 0 ? "测活失败 / HTTP " + failedCode : "测活失败";
+        return failedCode.Length > 0 ? Loc.T("测活失败 / HTTP ") + failedCode : Loc.T("测活失败");
     }
 
     /// <summary>
@@ -332,23 +306,23 @@ public static class BackendResultInterpreter
         string value = (status ?? "").Trim().ToLowerInvariant();
         return value switch
         {
-            "alive" => "正常",
-            "alive_probe_inconclusive" => "RT正常 / OAuth深度探测未完成",
-            "account_deactivated" => "账号掉号",
-            "secondary_phone_verification_required" => "手机验证",
-            "phone_verification_required" => "支付完成",
-            "scan_failed" => "扫描失败",
+            "alive" => Loc.T("正常"),
+            "alive_probe_inconclusive" => Loc.T("RT正常 / OAuth深度探测未完成"),
+            "account_deactivated" => Loc.T("账号掉号"),
+            "secondary_phone_verification_required" => Loc.T("手机验证"),
+            "phone_verification_required" => Loc.T("支付完成"),
+            "scan_failed" => Loc.T("扫描失败"),
             // account_scan now names the failure class explicitly instead of
             // collapsing every non-network failure into relogin/scan_failed.
-            "network_failed" => "网络失败",
-            "mailbox_failed" => "邮箱链路失败",
-            "auth_state_failed" => "登录态失效",
-            "rate_limited" => "触发限流",
+            "network_failed" => Loc.T("网络失败"),
+            "mailbox_failed" => Loc.T("邮箱链路失败"),
+            "auth_state_failed" => Loc.T("登录态失效"),
+            "rate_limited" => Loc.T("触发限流"),
             // A user-initiated cancel is not a failure; see the comment beside
             // ``_SCAN_STATUS_BY_FAILURE_CLASS`` in account_scan.py.
-            "scan_cancelled" => "扫描已取消",
-            "relogin_failed" => "重登失败",
-            _ => value.Length > 0 ? value : "未知"
+            "scan_cancelled" => Loc.T("扫描已取消"),
+            "relogin_failed" => Loc.T("重登失败"),
+            _ => value.Length > 0 ? value : Loc.T("未知")
         };
     }
 
@@ -404,7 +378,7 @@ public static class BackendResultInterpreter
         if (result.TimedOut)
             return new BackendExecutionResult(
                 false,
-                $"[已超时] 后端任务超时 ({(timeoutSeconds ?? 120)}s)",
+                Loc.F("[已超时] 后端任务超时 ({0}s)", timeoutSeconds ?? 120),
                 "timed_out",
                 null);
 
@@ -414,9 +388,9 @@ public static class BackendResultInterpreter
             // argument, 2 = precondition/preflight failure, 3 = runtime
             // failure. Keep the "failed" state (UI depends on it) but surface
             // the category in the message.
-            string prefix = result.ExitCode == 1 ? "[失败·参数]"
-                : result.ExitCode == 2 ? "[失败·前置检查]"
-                : "[失败·运行时]";
+            string prefix = result.ExitCode == 1 ? Loc.T("[失败·参数]")
+                : result.ExitCode == 2 ? Loc.T("[失败·前置检查]")
+                : Loc.T("[失败·运行时]");
             string errorText = SensitiveDataSanitizer.Redact(
                 string.IsNullOrEmpty(result.StandardError) ? result.StandardOutput : result.StandardError);
             return new BackendExecutionResult(
@@ -444,7 +418,7 @@ public static class BackendResultInterpreter
             output = SensitiveDataSanitizer.Redact(result.StandardError);
         return new BackendExecutionResult(
             output.Length > 0,
-            output.Length > 0 ? output : "[完成] 后端任务已结束",
+            output.Length > 0 ? output : Loc.T("[完成] 后端任务已结束"),
             "completed",
             null);
     }
@@ -454,7 +428,7 @@ public static class BackendResultInterpreter
     /// </summary>
     public static BackendExecutionResult Cancelled(string taskName)
     {
-        return new BackendExecutionResult(false, "[已取消]", "cancelled", null);
+        return new BackendExecutionResult(false, Loc.T("[已取消]"), "cancelled", null);
     }
 
     /// <summary>
@@ -462,7 +436,7 @@ public static class BackendResultInterpreter
     /// </summary>
     public static BackendExecutionResult StartupFailed(string taskName, string message)
     {
-        return new BackendExecutionResult(false, $"[启动失败] {message}", "failed", null);
+        return new BackendExecutionResult(false, Loc.F("[启动失败] {0}", message), "failed", null);
     }
 
     /// <summary>Returns a compact, sanitized summary for account batch payloads.</summary>
@@ -484,15 +458,15 @@ public static class BackendResultInterpreter
         int skipped = root.TryGetProperty("skipped", out JsonElement skippedElement) && skippedElement.TryGetInt32(out int skippedValue) ? skippedValue : 0;
         if (unauthorized == 0) unauthorized = liveness401;
         string label = timedOut > 0
-            ? $"完成 {success}/{totalValue}，失败 {failed}，超时 {timedOut}"
+            ? Loc.F("完成 {0}/{1}，失败 {2}，超时 {3}", success, totalValue, failed, timedOut)
             : mailboxAuthInvalid > 0
-                ? $"完成 {success}/{totalValue}，失败 {failed}，邮箱认证失败 {mailboxAuthInvalid}"
+                ? Loc.F("完成 {0}/{1}，失败 {2}，邮箱认证失败 {3}", success, totalValue, failed, mailboxAuthInvalid)
             : unauthorized > 0
-                ? $"完成 {success}/{totalValue}，失败 {failed}，401 {unauthorized}"
-                : $"完成 {success}/{totalValue}，失败 {failed}";
-        if (persistFailed > 0) label += $"，保存失败 {persistFailed}";
-        if (unknown > 0) label += $"，未知 {unknown}";
-        if (skipped > 0) label += $"，跳过 {skipped}";
+                ? Loc.F("完成 {0}/{1}，失败 {2}，401 {3}", success, totalValue, failed, unauthorized)
+                : Loc.F("完成 {0}/{1}，失败 {2}", success, totalValue, failed);
+        if (persistFailed > 0) label += Loc.F("，保存失败 {0}", persistFailed);
+        if (unknown > 0) label += Loc.F("，未知 {0}", unknown);
+        if (skipped > 0) label += Loc.F("，跳过 {0}", skipped);
         return label;
     }
 }

@@ -25,22 +25,15 @@ from __future__ import annotations
 import io
 import sys
 from contextlib import redirect_stdout
-from pathlib import Path
 from unittest.mock import patch
 
 from sms_tool import cli
 from sms_tool.cli import _registration_exit_code
 
-ROOT = Path(__file__).resolve().parents[2]
-
 
 class _Mailbox:
     def __init__(self, email):
         self.email = email
-
-
-def _source(relative):
-    return (ROOT / relative).read_text(encoding="utf-8")
 
 
 def _config():
@@ -203,7 +196,9 @@ def test_the_phone_lane_also_reports_a_failed_batch(tmp_path):
     the module that defines it, not the ``cli`` namespace.
     """
     buffer = io.StringIO()
-    argv = ["sms_tool", "--phone-register", "--count", "1"]
+    # ``--desktop-ipc`` is what makes the lane write the envelope; the ordering
+    # claim below is about that envelope reaching stdout before the exit.
+    argv = ["sms_tool", "--phone-register", "--count", "1", "--desktop-ipc"]
     with (
         patch.object(cli, "CFG", _config()),
         patch.object(sys, "argv", argv),
@@ -218,6 +213,7 @@ def test_the_phone_lane_also_reports_a_failed_batch(tmp_path):
         patch.object(cli, "upsert_account", return_value=True),
         patch.object(cli, "database_path", return_value=tmp_path / "accounts.sqlite3"),
         patch("sms_tool.storage.record_registration_audit"),
+        patch.object(cli, "emit_result") as emit,
         redirect_stdout(buffer),
     ):
         try:
@@ -229,6 +225,13 @@ def test_the_phone_lane_also_reports_a_failed_batch(tmp_path):
 
     assert "0/1 registered successfully" in buffer.getvalue()
     assert code == 3
+    # The envelope must carry the *computed* report, not a placeholder, and it
+    # has to be written before the process exits -- ``SystemExit`` above is the
+    # end of the story, so a called mock is the behavioural form of "before".
+    emit.assert_called_once()
+    emitted = emit.call_args.args[0]
+    assert emitted["ok"] is False
+    assert emitted["failed"] == 1
 
 
 def test_the_desktop_client_still_gets_the_payload_when_the_batch_fails(tmp_path):
@@ -275,25 +278,8 @@ def test_the_desktop_client_still_gets_the_payload_when_the_batch_fails(tmp_path
 # --------------------------------------------------------------------------
 
 
-def test_both_registration_tails_consult_the_report():
-    """The phone lane had the same shape, so it gets the same guard.
-
-    Without this, the fix is one deletion away from silently returning 0 again.
-    The ordering check is what matters: the envelope has to be written *after*
-    the report exists and *before* the process exits.
-    """
-    body = _source("sms_tool/cli.py").split("\ndef _registration_exit_code", 1)[0]
-    tails = [index for index in range(len(body)) if body.startswith("raise SystemExit(exit_code)", index)]
-    assert len(tails) == 2, "expected the phone lane and the mailbox lane to both exit on failure"
-    for at in tails:
-        emit_at = body.rindex("emit_result(report, enabled=True)", 0, at)
-        save_at = body.rindex("report = _save_registration_results(", 0, at)
-        assert save_at < emit_at < at, (
-            "a registration tail raised without first writing the IPC envelope for its own report"
-        )
-
-
 def test_the_registration_path_uses_the_same_code_as_the_bounded_path():
     """The defect was an asymmetry; this keeps the two paths aligned."""
-    assert "raise SystemExit(3)" in _source("sms_tool/commands/registration.py")
+    # Both lanes' end-to-end tests above assert the exit status through
+    # ``main()`` itself; this pins the shared mapping they both call.
     assert _registration_exit_code({"ok": False, "failed": 1}) == 3

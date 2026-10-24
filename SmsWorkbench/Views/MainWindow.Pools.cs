@@ -2,6 +2,8 @@
 // PaymentBatchService.cs for why the project-wide switch stays `annotations`.
 #nullable enable
 
+using SmsWorkbench.Localization;
+
 namespace SmsWorkbench
 {
     public partial class MainWindow
@@ -9,6 +11,8 @@ namespace SmsWorkbench
         // Row cache, filter, paging, sorting and selection live in PoolViewModel
         // (MainWindow.Pool); only the refresh-in-flight flag is view-level.
         private bool poolsRefreshRunning;
+        private bool poolsRefreshPending;
+        private bool poolsRefreshPendingFull;
 
         // Incremental accounts refresh: the cursor is the backend's max
         // `updated_at`, and every N delta reads forces a full rebuild so a lost
@@ -40,15 +44,21 @@ namespace SmsWorkbench
         /// liveness batch would otherwise yank the view back to page one and
         /// clear the selection two dozen times.
         /// </summary>
-        private void RefreshPoolsPreservingView()
+        private void RefreshPoolsPreservingView(bool forceFull = false)
         {
-            _ = RefreshPoolsAsync(preserveView: true, ct: _lifetimeCts.Token);
+            _ = RefreshPoolsAsync(preserveView: true, forceFull: forceFull, ct: _lifetimeCts.Token);
         }
 
-        private async Task RefreshPoolsAsync(bool preserveView = false, CancellationToken ct = default)
+        private async Task RefreshPoolsAsync(bool preserveView = false, bool forceFull = false, CancellationToken ct = default)
         {
             if (poolsRefreshRunning)
+            {
+                // Do not drop a language-switch reload because a periodic refresh
+                // happened to be in flight; run it immediately afterwards.
+                poolsRefreshPending = true;
+                poolsRefreshPendingFull |= forceFull;
                 return;
+            }
             poolsRefreshRunning = true;
             // Snapshot before the clear: rows are rebuilt from scratch below,
             // so identity has to be carried across by email.
@@ -61,7 +71,8 @@ namespace SmsWorkbench
             int restorePage = preserveView ? Pool.CurrentPage : 1;
             try
             {
-                if (preserveView && await TryApplyIncrementalAccountsAsync(ct).ConfigureAwait(true))
+                if (preserveView && !forceFull
+                    && await TryApplyIncrementalAccountsAsync(ct).ConfigureAwait(true))
                     return;
                 Pool.AllRows.Clear();
                 try
@@ -99,6 +110,13 @@ namespace SmsWorkbench
             finally
             {
                 poolsRefreshRunning = false;
+                if (poolsRefreshPending)
+                {
+                    bool full = poolsRefreshPendingFull;
+                    poolsRefreshPending = false;
+                    poolsRefreshPendingFull = false;
+                    _ = RefreshPoolsAsync(preserveView: true, forceFull: full, ct: ct);
+                }
             }
         }
 
@@ -447,11 +465,8 @@ namespace SmsWorkbench
                 RegistrationStatus = FirstNonEmpty(GetString(data, "registration_status"), GetString(data, "registration_state")),
                 PayPalStatus = paypalStatusDisplay,
                 PayPalAmount = paypalAmount,
-                // The Python side composes the payment-rail badge into
-                // `promotion_display` ("可试用Plus-100% · card/upi/momo") so the
-                // separator rule has a single owner
-                // (sms_tool/promotion_states.promotion_status_with_eligibility).
-                // Rows written before the eligibility probe existed carry only
+                // Python owns the display composition and sends it as
+                // `promotion_display`; rows from an older backend carry only
                 // `promotion_status`, hence the fallback.
                 PromotionStatus = AccountStatusInterpreter.DisplayPromotionStatus(
                     FirstNonEmpty(
@@ -461,7 +476,7 @@ namespace SmsWorkbench
                     paypalAmount),
                 PromotionState = GetString(data, "promotion_state"),
                 RefreshTokenStatus = AccountStatusInterpreter.DisplayRtStatus(refreshStatus),
-                TwoFactorStatus = AccountStatusInterpreter.HasTwoFactor(data) ? "已设置" : "未设置",
+                TwoFactorStatus = AccountStatusInterpreter.HasTwoFactor(data) ? Loc.T("已设置") : Loc.T("未设置"),
                 HasAccessToken = hasAccess,
                 AccessTokenProbeStatusCode = AccountStatusInterpreter.GetAccessTokenProbeStatusCode(data),
                 PayPalUrl = paypalUrl,

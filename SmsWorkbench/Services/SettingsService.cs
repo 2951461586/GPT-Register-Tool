@@ -5,6 +5,8 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
+using SmsWorkbench.Localization;
+
 namespace SmsWorkbench
 {
     public interface ISettingsService
@@ -65,7 +67,7 @@ namespace SmsWorkbench
             foreach (SettingFieldViewModel field in fields.Where(field => field.Kind == SettingFieldKind.Number))
             {
                 if (field.Value.Trim().Length > 0 && !int.TryParse(field.Value.Trim(), out _))
-                    return new SettingsSaveResult(false, field.Label + " 必须是整数。");
+                    return new SettingsSaveResult(false, field.Label + Loc.T(" 必须是整数。"));
             }
 
             // JsonNode.Parse returns null for the literal `null`, which the
@@ -75,11 +77,11 @@ namespace SmsWorkbench
             {
                 matrix = JsonNode.Parse(Find(fields, "protocol_payment_matrix").Value);
                 if (matrix is not JsonObject)
-                    return new SettingsSaveResult(false, "地区资格矩阵根节点必须是 JSON 对象。");
+                    return new SettingsSaveResult(false, Loc.T("地区资格矩阵根节点必须是 JSON 对象。"));
             }
             catch (Exception exception)
             {
-                return new SettingsSaveResult(false, "地区资格矩阵 JSON 无效：" + exception.Message);
+                return new SettingsSaveResult(false, Loc.T("地区资格矩阵 JSON 无效：") + exception.Message);
             }
 
             try
@@ -161,7 +163,7 @@ namespace SmsWorkbench
             }
             catch (Exception exception)
             {
-                return new SettingsSaveResult(false, "配置保存失败：" + exception.Message);
+                return new SettingsSaveResult(false, Loc.T("配置保存失败：") + exception.Message);
             }
         }
 

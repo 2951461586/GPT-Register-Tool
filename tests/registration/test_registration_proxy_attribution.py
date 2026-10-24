@@ -110,6 +110,7 @@ def test_protocol_result_carries_safe_proxy_audit():
         "edge_challenge_unknown": 0,
         "edge_challenge_rotations": 0,
         "edge_challenge_rotate_failed": 0,
+        "fingerprint_pool_failures": 0,
     }
     assert "secret" not in repr(results[0]["proxy_audit"])
 

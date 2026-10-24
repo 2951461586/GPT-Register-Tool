@@ -8,12 +8,14 @@ using System.Collections.ObjectModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 
+using SmsWorkbench.Localization;
+
 namespace SmsWorkbench
 {
     public sealed partial class PaymentBatchViewModel : ObservableObject
     {
         private static readonly PaymentProxyCountryOption AutomaticCheckoutCountryOption =
-            new("", "自动（跟随账单区）");
+            new("", Loc.T("自动（跟随账单区）"));
         private static readonly char[] ManualTokenSeparators = ['\r', '\n', ',', ';'];
 
         private readonly IPaymentBatchService _paymentBatchService;
@@ -49,7 +51,7 @@ namespace SmsWorkbench
         [ObservableProperty] private bool jitRefresh = true;
         [ObservableProperty] private bool probeOnly;
         [ObservableProperty] private bool requireZero = true;
-        [ObservableProperty] private string status = "就绪";
+        [ObservableProperty] private string status = Loc.T("就绪");
         [ObservableProperty] private string reportPath = "";
         [ObservableProperty] private bool isRunning;
         [ObservableProperty] private bool hasRun;
@@ -103,8 +105,8 @@ namespace SmsWorkbench
         public ObservableCollection<PaymentBatchResultRow> Results { get; } = new();
 
         public string AccountSummary => _accounts.Length > 0
-            ? $"账号 {_accounts.Length}  ·  AT 已获取 {_accounts.Count(account => account.HasAccessToken)}"
-            : $"手动 AT {ParseManualAccessTokens().Length} / 10";
+            ? Loc.F("账号 {0}  ·  AT 已获取 {1}", _accounts.Length, _accounts.Count(account => account.HasAccessToken))
+            : Loc.F("手动 AT {0} / 10", ParseManualAccessTokens().Length);
 
         public bool RequireZeroEnabled => !ProbeOnly;
         public bool IsPayPalSelected => string.Equals(SelectedMethod?.Id, "paypal", StringComparison.OrdinalIgnoreCase);
@@ -121,8 +123,8 @@ namespace SmsWorkbench
         }
 
         public string ExecutionModeSummary => ResumeCheckpoint
-            ? "断点恢复（复用当前批次 ID）"
-            : "新执行（每次生成新批次 ID）";
+            ? Loc.T("断点恢复（复用当前批次 ID）")
+            : Loc.T("新执行（每次生成新批次 ID）");
 
         partial void OnManualAccessTokensChanged(string value)
         {
@@ -172,11 +174,11 @@ namespace SmsWorkbench
             try
             {
                 Clipboard.SetText(row.ResultValue);
-                Status = $"已复制{row.ResultKind}：{row.AccountRef}";
+                Status = Loc.F("已复制{0}：{1}", row.ResultKind, row.AccountRef);
             }
             catch (Exception exception)
             {
-                Status = "复制失败：" + exception.Message;
+                Status = Loc.T("复制失败：") + exception.Message;
             }
         }
 
@@ -197,7 +199,7 @@ namespace SmsWorkbench
                     FullPool(_checkoutRegionPools, _checkoutRegionOrder),
                     FullPool(_approveRegionPools, _approveRegionOrder)));
             Status = result.Ok
-                ? $"{PaymentMethods.DisplayName(method)} Checkout / Approve 代理配置已保存。"
+                ? Loc.F("{0} Checkout / Approve 代理配置已保存。", PaymentMethods.DisplayName(method))
                 : result.Error;
         }
 
@@ -205,7 +207,7 @@ namespace SmsWorkbench
         private async Task TestProxiesAsync(CancellationToken cancellationToken)
         {
             string method = SelectedMethod?.Id ?? "paypal";
-            Status = "正在探测 Checkout / Approve 代理出口...";
+            Status = Loc.T("正在探测 Checkout / Approve 代理出口...");
             IsRunning = true;
             try
             {
@@ -220,15 +222,15 @@ namespace SmsWorkbench
             }
             catch (OperationCanceledException)
             {
-                Status = "代理探测已取消。";
+                Status = Loc.T("代理探测已取消。");
             }
             catch (TimeoutException)
             {
-                Status = "代理探测超时。";
+                Status = Loc.T("代理探测超时。");
             }
             catch (Exception exception)
             {
-                Status = "代理探测失败：" + exception.Message;
+                Status = Loc.T("代理探测失败：") + exception.Message;
             }
             finally
             {
@@ -259,8 +261,8 @@ namespace SmsWorkbench
                         : $"{stage.Name}✗ {error}".Trim());
                 }
             }
-            string prefix = ok ? "代理探测通过：" : "代理探测存在问题：";
-            return parts.Count > 0 ? prefix + string.Join("  |  ", parts) : prefix + "无可探测的代理";
+            string prefix = ok ? Loc.T("代理探测通过：") : Loc.T("代理探测存在问题：");
+            return parts.Count > 0 ? prefix + string.Join("  |  ", parts) : prefix + Loc.T("无可探测的代理");
         }
 
         [RelayCommand(IncludeCancelCommand = true, CanExecute = nameof(CanRun))]
@@ -275,15 +277,15 @@ namespace SmsWorkbench
                 Results.Add(new PaymentBatchResultRow
                 {
                     AccountRef = account.Email,
-                    CurrentStage = "等待",
+                    CurrentStage = Loc.T("等待"),
                     ProgressText = "0%",
-                    ResultStatus = "等待",
+                    ResultStatus = Loc.T("等待"),
                 });
             }
             ReportPath = "";
             Status = ProbeOnly
-                ? "正在执行 Checkout 与 Stripe init 支付能力探测..."
-                : "正在执行 JIT 探测与协议支付批次...";
+                ? Loc.T("正在执行 Checkout 与 Stripe init 支付能力探测...")
+                : Loc.T("正在执行 JIT 探测与协议支付批次...");
             IsRunning = true;
             try
             {
@@ -298,28 +300,28 @@ namespace SmsWorkbench
                 ReportPath = JsonString(report, "report_path");
                 string error = JsonString(report, "error");
                 string summary = error.Length > 0 && !report.TryGetProperty("counts", out _)
-                    ? "执行失败：" + error
+                    ? Loc.T("执行失败：") + error
                     : FormatSummary(report);
                 int resumed = JsonInt(report, "resumed");
                 Status = request.ResumeCheckpoint
-                    ? $"断点恢复 · 已恢复 {resumed} 个账号 · {summary}"
-                    : "新执行 · " + summary;
+                    ? Loc.F("断点恢复 · 已恢复 {0} 个账号 · {1}", resumed, summary)
+                    : Loc.T("新执行 · ") + summary;
             }
             catch (OperationCanceledException)
             {
                 Status = request.ProbeOnly
-                    ? "已取消。"
-                    : "结果未知，请先核对批次断点和支付服务状态，不要重试。";
+                    ? Loc.T("已取消。")
+                    : Loc.T("结果未知，请先核对批次断点和支付服务状态，不要重试。");
             }
             catch (TimeoutException)
             {
                 Status = request.ProbeOnly
-                    ? "能力探测已超时，可按策略重试。"
-                    : "结果未知，请先核对批次断点和支付服务状态，不要重试。";
+                    ? Loc.T("能力探测已超时，可按策略重试。")
+                    : Loc.T("结果未知，请先核对批次断点和支付服务状态，不要重试。");
             }
             catch (Exception exception)
             {
-                Status = "执行失败：" + exception.Message;
+                Status = Loc.T("执行失败：") + exception.Message;
             }
             finally
             {
@@ -333,7 +335,7 @@ namespace SmsWorkbench
             request = null;
             if (!int.TryParse(CanaryText.Trim(), out int canary) || canary < 0)
             {
-                Status = "Canary 数量必须是非负整数。";
+                Status = Loc.T("Canary 数量必须是非负整数。");
                 return false;
             }
             string normalizedBatchId = ResumeCheckpoint
@@ -345,7 +347,7 @@ namespace SmsWorkbench
             if (accounts.Length == 0)
             {
                 if (ParseManualAccessTokens().Length <= 10)
-                    Status = "请选择账号，或输入 1 至 10 个 Access Token。";
+                    Status = Loc.T("请选择账号，或输入 1 至 10 个 Access Token。");
                 return false;
             }
             request = new PaymentBatchRequest(
@@ -376,7 +378,7 @@ namespace SmsWorkbench
             string[] tokens = ParseManualAccessTokens();
             if (tokens.Length > 10)
             {
-                Status = "手动 Access Token 最多允许 10 个。";
+                Status = Loc.T("手动 Access Token 最多允许 10 个。");
                 return Array.Empty<PaymentBatchAccount>();
             }
             return tokens.Select((token, index) => new PaymentBatchAccount($"AT-{index + 1}", true, token)).ToArray();
@@ -417,8 +419,8 @@ namespace SmsWorkbench
                 row.ProgressText = "100%";
             }
             row.ResultStatus = accountTerminal
-                ? progress.Status.Equals("completed", StringComparison.OrdinalIgnoreCase) ? "成功" : "失败"
-                : "执行中";
+                ? progress.Status.Equals("completed", StringComparison.OrdinalIgnoreCase) ? Loc.T("成功") : Loc.T("失败")
+                : Loc.T("执行中");
             Status = $"{accountRef}  {row.CurrentStage}  {row.ProgressText}";
         }
 
@@ -458,15 +460,15 @@ namespace SmsWorkbench
 
         private static string PaymentStageLabel(string stage) => (stage ?? "").Trim().ToLowerInvariant() switch
         {
-            "routing" => "路由准备",
-            "auth_gate" => "AT 验证",
-            "checkout" or "checkout_create" => "创建 Checkout",
-            "stripe_init" or "capability_probe" => "能力探测",
-            "provider" or "payment_method" => "支付方式处理",
-            "approve" or "confirm" => "支付确认",
-            "redirect" or "promotion" => "结果确认",
-            "completed" => "完成",
-            _ => string.IsNullOrWhiteSpace(stage) ? "执行中" : stage,
+            "routing" => Loc.T("路由准备"),
+            "auth_gate" => Loc.T("AT 验证"),
+            "checkout" or "checkout_create" => Loc.T("创建 Checkout"),
+            "stripe_init" or "capability_probe" => Loc.T("能力探测"),
+            "provider" or "payment_method" => Loc.T("支付方式处理"),
+            "approve" or "confirm" => Loc.T("支付确认"),
+            "redirect" or "promotion" => Loc.T("结果确认"),
+            "completed" => Loc.T("完成"),
+            _ => string.IsNullOrWhiteSpace(stage) ? Loc.T("执行中") : stage,
         };
 
         /// <summary>
@@ -689,9 +691,9 @@ namespace SmsWorkbench
 
         private static string FormatRegionSummary(Dictionary<string, List<string>> buckets, List<string> order)
         {
-            if (buckets.Count == 0) return "（空）";
+            if (buckets.Count == 0) return Loc.T("（空）");
             return string.Join(" · ", order.Select(region =>
-                (region.Length == 0 ? "未知" : region) + "×" + buckets[region].Count));
+                (region.Length == 0 ? Loc.T("未知") : region) + "×" + buckets[region].Count));
         }
 
         private void RefreshRegionSummaries()
@@ -733,10 +735,10 @@ namespace SmsWorkbench
             if (!report.TryGetProperty("results", out JsonElement values) || values.ValueKind != JsonValueKind.Array) return;
             foreach (JsonElement row in values.EnumerateArray())
             {
-                string eligibility = "未知";
+                string eligibility = Loc.T("未知");
                 if (row.TryGetProperty("eligible", out JsonElement eligible)
                     && eligible.ValueKind is JsonValueKind.True or JsonValueKind.False)
-                    eligibility = eligible.GetBoolean() ? "符合" : "不符合";
+                    eligibility = eligible.GetBoolean() ? Loc.T("符合") : Loc.T("不符合");
                 string decision = JsonString(row, "decision");
                 string paymentUrl = FirstNonEmpty(JsonString(row, "url"), JsonString(row, "long_url"));
                 string qrData = JsonString(row, "qr_data");
@@ -753,17 +755,17 @@ namespace SmsWorkbench
                 if (terminalState.Equals("canceled", StringComparison.OrdinalIgnoreCase))
                     terminalState = "cancelled";
                 string resultKind = paymentUrlPresent
-                    ? "支付链接"
+                    ? Loc.T("支付链接")
                     : qrDataPresent
-                        ? "二维码内容"
-                        : qrPathPresent ? "二维码文件" : "";
+                        ? Loc.T("二维码内容")
+                        : qrPathPresent ? Loc.T("二维码文件") : "";
                 string resultValue = FirstNonEmpty(paymentUrl, qrData, qrPath);
                 Results.Add(new PaymentBatchResultRow
                 {
                     AccountRef = ResolveAccountDisplay(JsonString(row, "account_ref")),
                     MatrixCell = JsonString(row, "matrix_cell"),
-                    AuthStatus = JsonBool(row, "authenticated") ? "200" : "失败",
-                    RefreshStatus = JsonBool(row, "refreshed") ? "已刷新" : "未刷新",
+                    AuthStatus = JsonBool(row, "authenticated") ? "200" : Loc.T("失败"),
+                    RefreshStatus = JsonBool(row, "refreshed") ? Loc.T("已刷新") : Loc.T("未刷新"),
                     Eligibility = eligibility,
                     Decision = decision.Length > 0 ? decision : JsonString(row, "error"),
                     TerminalState = terminalState,
@@ -776,11 +778,11 @@ namespace SmsWorkbench
                     AuthorizationStatus = JsonString(row, "authorization_status"),
                     ProgressPercent = 100,
                     ProgressText = "100%",
-                    CurrentStage = "完成",
+                    CurrentStage = Loc.T("完成"),
                     ResultStatus = JsonBool(row, "ok")
                         || terminalState.Equals("completed", StringComparison.OrdinalIgnoreCase)
                         || paymentUrlPresent || qrDataPresent || qrPathPresent
-                        ? "成功"
+                        ? Loc.T("成功")
                         : "失败",
                     Attempts = JsonInt(row, "attempts")
                 });
@@ -790,14 +792,14 @@ namespace SmsWorkbench
         private static string FormatSummary(JsonElement report)
         {
             if (!report.TryGetProperty("counts", out JsonElement counts) || counts.ValueKind != JsonValueKind.Object)
-                return "批次已结束，但未返回计数。";
-            return $"请求 {JsonInt(counts, "requested")}  ·  AT 200 {JsonInt(counts, "authenticated")}"
-                + $"  ·  JIT {JsonInt(counts, "refreshed")}  ·  资格 {JsonInt(counts, "eligible")}"
-                + $"  ·  完成 {JsonInt(counts, "completed")}  ·  链接 {JsonInt(counts, "link_ready")}"
-                + $"  ·  二维码 {JsonInt(counts, "qr_ready")}  ·  取消 {JsonInt(counts, "cancelled")}"
-                + $"  ·  未知 {JsonInt(counts, "unknown")}  ·  超时 {JsonInt(counts, "timed_out")}"
-                + $"  ·  失败 {JsonInt(counts, "failed")}  ·  可重试 {JsonInt(counts, "retryable")}"
-                + $"  ·  断点恢复 {JsonInt(report, "resumed")}";
+                return Loc.T("批次已结束，但未返回计数。");
+            return Loc.F("请求 {0}  ·  AT 200 {1}", JsonInt(counts, "requested"), JsonInt(counts, "authenticated"))
+                + Loc.F("  ·  JIT {0}  ·  资格 {1}", JsonInt(counts, "refreshed"), JsonInt(counts, "eligible"))
+                + Loc.F("  ·  完成 {0}  ·  链接 {1}", JsonInt(counts, "completed"), JsonInt(counts, "link_ready"))
+                + Loc.F("  ·  二维码 {0}  ·  取消 {1}", JsonInt(counts, "qr_ready"), JsonInt(counts, "cancelled"))
+                + Loc.F("  ·  未知 {0}  ·  超时 {1}", JsonInt(counts, "unknown"), JsonInt(counts, "timed_out"))
+                + Loc.F("  ·  失败 {0}  ·  可重试 {1}", JsonInt(counts, "failed"), JsonInt(counts, "retryable"))
+                + Loc.F("  ·  断点恢复 {0}", JsonInt(report, "resumed"));
         }
 
         private static string JsonString(JsonElement element, string name)

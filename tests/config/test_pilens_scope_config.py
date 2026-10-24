@@ -197,10 +197,8 @@ def test_pi_lens_autoformat_is_disabled():
 
     On 2026-10-10 the auto-formatter did exactly that: four files *outside* the
     lane were reformatted to fix pre-existing drift the project had decided not
-    to touch (431 insertions / 180 deletions across
-    ``accounts/account_payment_eligibility.py``, ``pay_link/__init__.py``,
-    ``services/protocol-payment/momo/ac_paylink_core.py`` and
-    ``tests/accounts/test_account_payment_eligibility.py``).
+    to touch (431 insertions / 180 deletions across 4 unrelated files in the
+    accounts, pay_link and protocol-payment trees).
 
     ``format.enabled`` is a project-scoped mutation control, so this is the
     supported way to stop it -- not a global preference.  See

@@ -88,32 +88,41 @@ namespace SmsWorkbench
             int exitCode = process.HasExited ? process.ExitCode : -1;
             string output = stdout.Text;
             string error = SensitiveDataSanitizer.Redact(stderr.Text);
+            // The structural capture wins: it is the only copy that survives a
+            // large envelope (the diagnostic tail is capped at 256 K, and a
+            // ReMail inbox / bulk account result easily exceeds that). Re-parsing
+            // the tail and *overwriting* this value made every large IPC result
+            // look like "exited 0 with no payload" (measured 2026-10-24 on
+            // 查看收件箱 / 账号测活 / 账号优惠检测).
             JsonElement? payload = stdout.Payload;
-            try
+            if (!payload.HasValue)
             {
-                payload = BackendJsonProtocol.ExtractPayload(
-                    output,
-                    message => _logger.Warning(message));
-                // Some Python dependencies write warnings to stderr.  A
-                // desktop IPC envelope must remain discoverable even when a
-                // warning was emitted on that channel, so retry extraction on
-                // the combined sanitized streams before declaring no payload.
-                if (!payload.HasValue && !string.IsNullOrWhiteSpace(error))
+                try
+                {
                     payload = BackendJsonProtocol.ExtractPayload(
-                        output + Environment.NewLine + error,
+                        output,
                         message => _logger.Warning(message));
-            }
-            catch (JsonException exception)
-            {
-                // A malformed backend envelope is a *response parse* failure, not
-                // a startup failure (startup failures are the process-did-not-start
-                // InvalidOperationExceptions above). Classify it distinctly so the
-                // caller surfaces "响应解析失败" instead of blaming the interpreter.
-                _logger.Warning(
-                    exception,
-                    "Backend response parse failed for {CommandName}; returning no payload instead of classifying as startup failure",
-                    command.Name);
-                payload = null;
+                    // Some Python dependencies write warnings to stderr.  A
+                    // desktop IPC envelope must remain discoverable even when a
+                    // warning was emitted on that channel, so retry extraction on
+                    // the combined sanitized streams before declaring no payload.
+                    if (!payload.HasValue && !string.IsNullOrWhiteSpace(error))
+                        payload = BackendJsonProtocol.ExtractPayload(
+                            output + Environment.NewLine + error,
+                            message => _logger.Warning(message));
+                }
+                catch (JsonException exception)
+                {
+                    // A malformed backend envelope is a *response parse* failure, not
+                    // a startup failure (startup failures are the process-did-not-start
+                    // InvalidOperationExceptions above). Classify it distinctly so the
+                    // caller surfaces "响应解析失败" instead of blaming the interpreter.
+                    _logger.Warning(
+                        exception,
+                        "Backend response parse failed for {CommandName}; returning no payload instead of classifying as startup failure",
+                        command.Name);
+                    payload = null;
+                }
             }
             _logger.Write(
                 ExitLogLevel(exitCode, payload.HasValue, timedOut),

@@ -4,6 +4,8 @@
 
 using System.Windows.Media;
 
+using SmsWorkbench.Localization;
+
 namespace SmsWorkbench
 {
     /// <summary>
@@ -81,11 +83,11 @@ namespace SmsWorkbench
         /// <summary>
         /// Create a standard secondary (cancel) button.
         /// </summary>
-        public static Button CreateCancelButton(string text = "取消", double width = 76)
+        public static Button CreateCancelButton(string? text = null, double width = 76)
         {
             return new Button
             {
-                Content = text,
+                Content = text ?? Loc.T("取消"),
                 Width = width,
             };
         }
@@ -96,7 +98,7 @@ namespace SmsWorkbench
         /// Show a simple info dialog with a single OK button. Uses async/await
         /// instead of blocking ShowDialog().
         /// </summary>
-        public static async Task ShowInfoAsync(Window owner, string title, string message, string okText = "知道了")
+        public static async Task ShowInfoAsync(Window owner, string title, string message, string? okText = null)
         {
             var dialog = Create(owner, title, 420, 190, 380, 170);
             var root = CreateRootGrid();
@@ -118,7 +120,7 @@ namespace SmsWorkbench
             });
             root.Children.Add(body);
 
-            var okButton = CreatePrimaryButton(owner, okText);
+            var okButton = CreatePrimaryButton(owner, okText ?? Loc.T("知道了"));
             okButton.HorizontalAlignment = HorizontalAlignment.Right;
             okButton.Click += (_, __) => dialog.Close();
             Grid.SetRow(okButton, 1);
@@ -136,7 +138,7 @@ namespace SmsWorkbench
             Window owner,
             string title,
             string message,
-            string confirmText = "确认",
+            string? confirmText = null,
             bool isDanger = false)
         {
             bool confirmed = false;
@@ -165,7 +167,7 @@ namespace SmsWorkbench
             cancelButton.Click += (_, __) => dialog.Close();
             var confirmButton = new Button
             {
-                Content = confirmText,
+                Content = confirmText ?? Loc.T("确认"),
                 Width = 76,
                 Style = isDanger ? (Style)owner.FindResource("DangerButton") : (Style)owner.FindResource("PrimaryButton")
             };

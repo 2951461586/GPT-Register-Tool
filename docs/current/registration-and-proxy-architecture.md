@@ -22,7 +22,7 @@
 | 指纹 + 鉴权头 | `sms_tool/auth_headers.py` | 确定性指纹 + `oai-*` 头注入 |
 | 反爬 Token | `sms_tool/sentinel_tokens.py` + `sms_tool/sentinel/` | 真实 Node SDK 执行 + 缓存 + DID 一致性 |
 | 预检 + 协议纠正 | `sms_tool/registration/preflight.py` | 边界探活 + socks5↔http 纠错 |
-| 注册门面 | `sms_tool/registration/orchestrator.py` | 编排入口（对外暴露 helper，不含实现） |
+| 注册入口 | `sms_tool/registration/orchestrator.py` | 入口分派（`run_email` / `run_batch`）+ 驱动/配置选择 + 按调用绑定 `RegistrationOperations`；阶段顺序在 `handlers.py` |
 | 代理单一范式 | `sms_tool/proxy/entry.py` | 解析 / 重建凭据 / 地区重定 / 会话轮换 |
 | 代理路由 | `sms_tool/proxy/routing.py` | 按 lane 选池 + 单向回退 |
 | 指纹池（协议路径） | `sms_tool/fingerprint_pool.py` | `ProtocolEnvironmentProfile` + `FingerprintPool` 单例 |
@@ -62,7 +62,7 @@ class RegistrationDriver(str, Enum):
 
 **核心结论**：两条路径在「指纹 → 鉴权头 → Sentinel Token → AT 探活 → 持久化」这条主干上**完全共用**，差异只在最前端的 signup 执行方式。这意味着无论走哪条路，反关联与反爬强度是一致的，不存在「浏览器路径更稳」或「协议路径更弱」的本质区别——强弱由指纹/头/Sentinel 一致性决定，而非驱动选择。
 
-> 这也解释了为什么 `registration/orchestrator.py` 只是一个**门面**（`from .auth_flow import ...`、`from .account_creation import ...`、`from .sentinel_tokens import ...`），具体实现被拆到 `auth_flow / account_creation / otp_strategy / mailbox / session_builder / storage`，门面只负责对外暴露 helper 并禁止本地遮蔽。
+> 这也解释了为什么 `registration/orchestrator.py` 是**入口模块**（解析运行配置、选择驱动、`run_email` / `run_batch` 分派、按调用绑定 `RegistrationOperations`，并把 helper 对外暴露）：阶段顺序与阶段实现被拆到 `registration/handlers.py` 与同目录的 stage 模块（`otp_stages.py`、`account_stages.py`、`sentinel_stages.py`、`edge_challenge.py`、`resume.py`、`finalize.py`），以及更底层的 `auth_flow / account_creation / otp_strategy / mailbox / session_builder / storage`。不要把它理解为“纯 re-export 门面”——依赖绑定本身就在这里。
 
 ---
 

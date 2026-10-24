@@ -22,7 +22,7 @@ export remain separate workflows.
 | --- | --- | --- |
 | `SmsWorkbench/` | UI, command planning, task lifecycle, presentation | Provider protocol and registration state |
 | `sms_tool/commands/` | CLI argument adaptation | Provider implementation |
-| `registration/orchestrator.py` | Stable entry points and compatibility exports | Stage implementations |
+| `registration/orchestrator.py` | Protocol entry points: `run_email` / `run_batch` dispatch, runtime-config and driver selection, and the per-invocation `RegistrationOperations` binding | Stage ordering and stage bodies (owned by `handlers.py` and the sibling stage modules) |
 | `registration/handlers.py` | Protocol workflow and stage ordering | Payment or recovery orchestration |
 | `registration/persistence.py`, `registration/stage_runner.py`, `registration/protocol_helpers.py`, `registration/otp_stages.py`, `registration/account_stages.py`, `registration/edge_challenge.py`, `registration/resume.py`, `registration/sentinel_stages.py` | Persistence seam, stage executor + abort signal, pure transport/format helpers, the email-OTP stages, the account-creation / session / AT-probe stages, the in-flow edge-challenge hook (same-pool exit move + audit counters), checkpoint persistence + the post-create resume stage, and Sentinel issuance (switch / password-page bundle / per-flow); re-exported by `registration/handlers.py` | Stage ordering |
 | `registration_drivers/browser_flow/` | Browser page state and form workflow | Mailbox provider transport |
@@ -166,9 +166,8 @@ would buy the graph nothing while removing LSP diagnostics and symbol search fro
 **Auto-formatting is off** (`"format": {"enabled": false}`). `pi-lens` runs a
 deferred formatter over every file it edits. On 2026-10-10 that reformatted four
 files *outside* the protocol-registration lane the repository gated at the time
-(`accounts/account_payment_eligibility.py`, `pay_link/__init__.py`,
-`services/protocol-payment/momo/ac_paylink_core.py`,
-`tests/accounts/test_account_payment_eligibility.py`) to fix pre-existing
+(four unrelated files in the accounts, pay_link and protocol-payment trees)
+to fix pre-existing
 drift the project had decided not to touch -- 431 insertions / 180 deletions,
 against edits of one to three lines each. `format.enabled` is one of the
 project-scoped *mutation controls* `pi-lens` honours (the others are
@@ -209,13 +208,13 @@ above.
 <!-- ratchet-numbers:begin architecture -->
 | Measure | Value |
 | --- | --- |
-| Module-level cross-directory edges | 436 |
-| Directory pairs | 65 |
+| Module-level cross-directory edges | 432 |
+| Directory pairs | 64 |
 | Mutual pairs / minority-direction edges | 17 / 46 |
-| Delayed cross-directory edges | 257 |
-| Delayed imports in the package | 421 (baseline 421) |
+| Delayed cross-directory edges | 256 |
+| Delayed imports in the package | 420 (baseline 420) |
 | Functions at or above 150 lines | 63 (frozen, `scripts/function_length_ratchet.py`) |
-| Claimed tracked `sms_tool` modules | 311 of 311 (0 unclaimed, 41 directory-map groups) |
+| Claimed tracked `sms_tool` modules | 310 of 310 (0 unclaimed, 41 directory-map groups) |
 <!-- ratchet-numbers:end architecture -->
 
 `tests/config/test_pilens_scope_config.py` pins the scope and the formatting

@@ -2,6 +2,8 @@
 // PaymentBatchService.cs for why the project-wide switch stays `annotations`.
 #nullable enable
 
+using SmsWorkbench.Localization;
+
 namespace SmsWorkbench
 {
     public partial class MainWindow
@@ -19,7 +21,6 @@ namespace SmsWorkbench
             ["sms"] = OneClickSms,
             ["scan"] = OneClickScan,
             ["promotion"] = CheckPromotion,
-            ["payment_eligibility"] = CheckPaymentEligibility,
             ["paylink"] = OpenPayPalLink,
             ["batchpay"] = BatchProtocolPayment,
             ["importmail"] = ImportChataiMailbox,
@@ -31,6 +32,7 @@ namespace SmsWorkbench
             ["refresh"] = RefreshPools,
             ["settings"] = ShowConfigDialog,
             ["theme"] = ToggleTheme,
+            ["language"] = ToggleLanguage,
             ["cancelbatch"] = CancelBatch,
         };
 
@@ -67,7 +69,7 @@ namespace SmsWorkbench
 
         private PoolRow? SelectedEmailRowOrNotify(string action)
         {
-            PoolRow? row = Pool.SelectedRow ?? (AccountGrid.SelectedItem as PoolRow);
+            PoolRow? row = Pool.SelectedRow ?? accountGridControl.SelectedRow;
             if (row == null)
             {
                 ShowEmailSelectionRequired(action);
@@ -91,8 +93,8 @@ namespace SmsWorkbench
 
         private void ShowEmailSelectionRequired(string action)
         {
-            string detail = string.IsNullOrWhiteSpace(action) ? "执行此操作" : action.Trim();
-            ShowThemedInfoDialog("未选择邮箱", $"请先勾选或选择邮箱账号后再{detail}。");
+            string detail = string.IsNullOrWhiteSpace(action) ? Loc.T("执行此操作") : action.Trim();
+            ShowThemedInfoDialog(Loc.T("未选择邮箱"), Loc.F("请先勾选或选择邮箱账号后再{0}。", detail));
         }
 
         private List<PoolRow> SelectedRowsOrCurrent()
@@ -100,37 +102,13 @@ namespace SmsWorkbench
             var rows = Pool.CheckedRows();
             if (rows.Count == 0)
             {
-                PoolRow? row = Pool.SelectedRow ?? (AccountGrid.SelectedItem as PoolRow);
+                PoolRow? row = Pool.SelectedRow ?? accountGridControl.SelectedRow;
                 if (row != null) rows.Add(row);
             }
             return rows;
         }
 
-        private void AccountGrid_Sorting(object sender, DataGridSortingEventArgs e)
-        {
-            string member = (e.Column.SortMemberPath ?? "").Trim();
-            if (member.Length == 0) return;
-
-            e.Handled = true;
-            ListSortDirection next = e.Column.SortDirection == ListSortDirection.Ascending
-                ? ListSortDirection.Descending
-                : ListSortDirection.Ascending;
-            foreach (DataGridColumn column in AccountGrid.Columns)
-            {
-                column.SortDirection = null;
-            }
-            e.Column.SortDirection = next;
-            Pool.SortBy(member, next);
-        }
-
         private void OnPoolSelectionCleared(object? sender, EventArgs e)
-        {
-            if (AccountGrid != null)
-            {
-                AccountGrid.SelectedItem = null;
-                AccountGrid.SelectedIndex = -1;
-                AccountGrid.UnselectAll();
-            }
-        }
+            => accountGridControl?.ClearSelection();
     }
 }

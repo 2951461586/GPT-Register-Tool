@@ -53,8 +53,8 @@ def _workflow(email: str, stored: dict, fresh_did: str, registration: dict | Non
 
 def _prepare(workflow) -> None:
     with (
-        patch("sms_tool.registration.handlers._new_registration_session", return_value=Mock()),
-        patch("sms_tool.registration.handlers._apply_protocol_fingerprint"),
+        patch("sms_tool.registration.identity_stages._new_registration_session", return_value=Mock()),
+        patch("sms_tool.registration.identity_stages._apply_protocol_fingerprint"),
     ):
         workflow.prepare_identity()
 

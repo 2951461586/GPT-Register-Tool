@@ -5,13 +5,15 @@
 // goes unnoticed in it.
 #nullable enable
 
+using SmsWorkbench.Localization;
+
 namespace SmsWorkbench
 {
     /// <summary>
     /// Window-independent interpretation of backend account JSON: plan type,
     /// quota labels, payment status, deactivation detection, and import state.
     /// This is the single business-rule implementation that previously lived
-    /// inside MainWindow.Helpers in parallel with ProtocolPaymentResultPresenter.
+    /// inside MainWindow.Helpers.
     /// All methods operate on the generic dictionaries produced by
     /// <see cref="BackendJson"/>.
     /// </summary>
@@ -162,40 +164,40 @@ namespace SmsWorkbench
         public static string DisplayAccountStatus(string status, string paypalOk, string access, string error, string paypalStatus, string refreshTokenStatus, string importedStatus)
         {
             if (!string.IsNullOrWhiteSpace(importedStatus)) return importedStatus;
-            if (status.Equals("partial_registered", StringComparison.OrdinalIgnoreCase)) return RegistrationStatusPresentation.PartialLabel;
+            if (status.Equals("partial_registered", StringComparison.OrdinalIgnoreCase)) return RegistrationStatusPresentation.PartialDisplay;
             bool hasRt = refreshTokenStatus.Equals("oauth_present", StringComparison.OrdinalIgnoreCase)
                 || refreshTokenStatus.Equals("legacy_present", StringComparison.OrdinalIgnoreCase);
             if (status.Equals("account_deactivated", StringComparison.OrdinalIgnoreCase)
-                || LooksAccountDeactivatedError(error)) return "账号掉号";
-            if (hasRt && LooksPhoneVerificationError(error)) return "手机验证";
+                || LooksAccountDeactivatedError(error)) return Loc.T("账号掉号");
+            if (hasRt && LooksPhoneVerificationError(error)) return Loc.T("手机验证");
             if (status.Equals("at_invalid", StringComparison.OrdinalIgnoreCase)
                 || status.Equals("access_token_invalid", StringComparison.OrdinalIgnoreCase)
                 || status.Equals("token_invalidated", StringComparison.OrdinalIgnoreCase)
-                || LooksAtInvalidError(error)) return "AT失效";
-            if (status.Equals("k12_left", StringComparison.OrdinalIgnoreCase)) return "K12已退出";
-            if (status.Equals("k12_joined", StringComparison.OrdinalIgnoreCase)) return "K12已进入✅";
-            if (status.Equals("k12_requested", StringComparison.OrdinalIgnoreCase)) return "K12已申请";
-            if (status.Equals("k12_verify_failed", StringComparison.OrdinalIgnoreCase)) return "K12未切换";
-            if (paypalStatus.Equals("completed", StringComparison.OrdinalIgnoreCase)) return "支付完成✅";
+                || LooksAtInvalidError(error)) return Loc.T("AT失效");
+            if (status.Equals("k12_left", StringComparison.OrdinalIgnoreCase)) return Loc.T("K12已退出");
+            if (status.Equals("k12_joined", StringComparison.OrdinalIgnoreCase)) return Loc.T("K12已进入✅");
+            if (status.Equals("k12_requested", StringComparison.OrdinalIgnoreCase)) return Loc.T("K12已申请");
+            if (status.Equals("k12_verify_failed", StringComparison.OrdinalIgnoreCase)) return Loc.T("K12未切换");
+            if (paypalStatus.Equals("completed", StringComparison.OrdinalIgnoreCase)) return Loc.T("支付完成✅");
             if (paypalStatus.Equals("pm_created", StringComparison.OrdinalIgnoreCase)
-                || status.Equals("paypal_pm_created", StringComparison.OrdinalIgnoreCase)) return "PM已创建✅";
-            if (status.Equals("paypal_failed", StringComparison.OrdinalIgnoreCase) || paypalStatus.Equals("failed", StringComparison.OrdinalIgnoreCase)) return "支付链接失败";
+                || status.Equals("paypal_pm_created", StringComparison.OrdinalIgnoreCase)) return Loc.T("PM已创建✅");
+            if (status.Equals("paypal_failed", StringComparison.OrdinalIgnoreCase) || paypalStatus.Equals("failed", StringComparison.OrdinalIgnoreCase)) return Loc.T("支付链接失败");
             if (paypalStatus.Equals("manual_confirmation_required", StringComparison.OrdinalIgnoreCase)
                 || paypalStatus.Equals("link_ready", StringComparison.OrdinalIgnoreCase)
                 || paypalOk == "1"
-                || status.Equals("paypal_ready", StringComparison.OrdinalIgnoreCase)) return "待支付";
+                || status.Equals("paypal_ready", StringComparison.OrdinalIgnoreCase)) return Loc.T("待支付");
             // Probe-level failure vocabulary produced by Python
             // ``store/normalize._status``. These MUST come before the
             // "已注册" fallback below: a network/rate-limit failure still has
             // a refresh token and an access token, so without these branches
             // the row is displayed as a healthy account.
-            if (status.Equals("network_failed", StringComparison.OrdinalIgnoreCase)) return "网络失败";
-            if (status.Equals("mailbox_failed", StringComparison.OrdinalIgnoreCase)) return "邮箱失败";
-            if (status.Equals("auth_state_failed", StringComparison.OrdinalIgnoreCase)) return "会话失效";
-            if (status.Equals("rate_limited", StringComparison.OrdinalIgnoreCase)) return "限流";
-            if (hasRt && access.Length > 0) return "已注册";
-            if (!string.IsNullOrWhiteSpace(error) || status.Equals("failed", StringComparison.OrdinalIgnoreCase)) return "失败";
-            return access.Length > 0 ? "已注册" : "待处理";
+            if (status.Equals("network_failed", StringComparison.OrdinalIgnoreCase)) return Loc.T("网络失败");
+            if (status.Equals("mailbox_failed", StringComparison.OrdinalIgnoreCase)) return Loc.T("邮箱失败");
+            if (status.Equals("auth_state_failed", StringComparison.OrdinalIgnoreCase)) return Loc.T("会话失效");
+            if (status.Equals("rate_limited", StringComparison.OrdinalIgnoreCase)) return Loc.T("限流");
+            if (hasRt && access.Length > 0) return Loc.T("已注册");
+            if (!string.IsNullOrWhiteSpace(error) || status.Equals("failed", StringComparison.OrdinalIgnoreCase)) return Loc.T("失败");
+            return access.Length > 0 ? Loc.T("已注册") : Loc.T("待处理");
         }
 
         public static bool LooksAtInvalidError(string error)
@@ -228,10 +230,10 @@ namespace SmsWorkbench
         public static string DisplayPayPalStatus(string paypalStatus, string paypalOk, string paypalUrl, string paymentMethod = "")
         {
             string prefix = PaymentMethods.Normalize(paymentMethod) == "paypal" ? "" : PaymentMethods.DisplayName(paymentMethod) + " ";
-            if (paypalStatus.Equals("completed", StringComparison.OrdinalIgnoreCase)) return prefix + "支付完成✅";
-            if (paypalStatus.Equals("pm_created", StringComparison.OrdinalIgnoreCase)) return prefix + "PM已创建✅";
-            if (paypalStatus.Equals("failed", StringComparison.OrdinalIgnoreCase)) return prefix + "支付失败";
-            if (paypalStatus.Equals("otp_required", StringComparison.OrdinalIgnoreCase)) return prefix + "待输入OTP";
+            if (paypalStatus.Equals("completed", StringComparison.OrdinalIgnoreCase)) return prefix + Loc.T("支付完成✅");
+            if (paypalStatus.Equals("pm_created", StringComparison.OrdinalIgnoreCase)) return prefix + Loc.T("PM已创建✅");
+            if (paypalStatus.Equals("failed", StringComparison.OrdinalIgnoreCase)) return prefix + Loc.T("支付失败");
+            if (paypalStatus.Equals("otp_required", StringComparison.OrdinalIgnoreCase)) return prefix + Loc.T("待输入OTP");
             if (paypalStatus.Equals("manual_confirmation_required", StringComparison.OrdinalIgnoreCase)) return PaymentPendingStatus(paymentMethod);
             if (paypalStatus.Equals("link_ready", StringComparison.OrdinalIgnoreCase)) return PaymentPendingStatus(paymentMethod);
             if (paypalOk == "1" && !string.IsNullOrWhiteSpace(paypalUrl)) return PaymentPendingStatus(paymentMethod);
@@ -241,7 +243,7 @@ namespace SmsWorkbench
 
         public static string PaymentPendingStatus(string paymentMethod)
         {
-            return PaymentMethods.DisplayName(paymentMethod) + "待支付";
+            return Loc.F("{0} · 待支付", PaymentMethods.DisplayName(paymentMethod));
         }
 
         /// <summary>
@@ -253,7 +255,7 @@ namespace SmsWorkbench
         public static string DisplayPromotionStatus(string promotionStatus, string payPalStatus, string payPalAmount)
         {
             string promotion = (promotionStatus ?? "").Trim();
-            if (promotion.Length > 0) return promotion;
+            if (promotion.Length > 0) return LocalizedPromotionLabel(promotion);
             string status = (payPalStatus ?? "").Trim();
             string amount = (payPalAmount ?? "").Trim();
             if (status.Length > 0 && amount.Length > 0) return status + " · " + amount;
@@ -261,13 +263,24 @@ namespace SmsWorkbench
             return amount;
         }
 
+        /// <summary>Display-only translation of the backend promotion label (data stays Chinese).</summary>
+        private static string LocalizedPromotionLabel(string value)
+        {
+            if (!Loc.Instance.IsEnglish) return value;
+            return value
+                .Replace("检测失败", Loc.T("检测失败"))
+                .Replace("可试用Plus", Loc.T("可试用Plus"))
+                .Replace("已订阅", Loc.T("已订阅"))
+                .Replace("无优惠", Loc.T("无优惠"));
+        }
+
         public static string DisplayRtStatus(string refreshTokenStatus)
         {
             string value = (refreshTokenStatus ?? "").Trim();
             return value.Equals("oauth_present", StringComparison.OrdinalIgnoreCase)
                 || value.Equals("legacy_present", StringComparison.OrdinalIgnoreCase)
-                ? "已获取"
-                : "未获取";
+                ? Loc.T("已获取")
+                : Loc.T("未获取");
         }
 
         public static string GetImportedStatus(string rawJson)
@@ -287,9 +300,9 @@ namespace SmsWorkbench
         {
             bool cpaImported = IsImportOk(data, "cpa_import");
             bool sub2Imported = IsImportOk(data, "sub2api_import");
-            if (cpaImported && sub2Imported) return "已导入CPA/SUB2";
-            if (cpaImported) return "已导入CPA";
-            if (sub2Imported) return "已导入SUB2";
+            if (cpaImported && sub2Imported) return Loc.T("已导入CPA/SUB2");
+            if (cpaImported) return Loc.T("已导入CPA");
+            if (sub2Imported) return Loc.T("已导入SUB2");
             return "";
         }
 

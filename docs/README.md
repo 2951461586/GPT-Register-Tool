@@ -169,7 +169,10 @@ Directory layout (since 2026-09-06):
     `sms_tool/registration/state.py`、`sms_tool/otp_strategy.py`、
     `sms_tool/account_creation.py`、`sms_tool/auth_flow/`（自 2026-09 起
     是包，不是 `auth_flow.py`）、`sms_tool/auth_headers.py` 等 focused modules；
-    `sms_tool/registration/orchestrator.py` 是兼容门面，只加 re-export，不加实现。
+    `sms_tool/registration/orchestrator.py` 是入口模块（不是包）：负责运行配置解析、
+    驱动选择、`run_email` / `run_batch` 分派，以及按调用绑定
+    `RegistrationOperations`；阶段顺序与阶段实现分别在
+    `registration/handlers.py` 与同目录的 stage 模块。
   - 注册批次、并发与取消落在 `batch_runner.py`、`registration/pulse.py`、
     `registration/concurrency.py`、`registration/cancel.py`；结果装配统一走
     `registration.result.build_registration_result`。

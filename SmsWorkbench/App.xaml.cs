@@ -2,14 +2,6 @@
 // PaymentBatchService.cs for why the project-wide switch stays `annotations`.
 #nullable enable
 
-using System;
-using System.IO;
-using System.Text;
-using System.Threading.Tasks;
-using System.Windows;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Serilog;
 using Wpf.Ui.Appearance;
 using Wpf.Ui.Controls;
 
@@ -19,6 +11,7 @@ namespace SmsWorkbench
     {
         private IHost? _host;
         private Serilog.ILogger? _logger;
+        private string _rootDirectory = "";
 
         protected override void OnStartup(StartupEventArgs e)
         {
@@ -37,9 +30,22 @@ namespace SmsWorkbench
             var defaultTheme = (systemTheme == Wpf.Ui.Appearance.SystemTheme.Dark)
                 ? Wpf.Ui.Appearance.ApplicationTheme.Dark
                 : Wpf.Ui.Appearance.ApplicationTheme.Light;
-            var startTheme = DesktopThemePreference.Load(
-                _host.Services.GetRequiredService<IApplicationPaths>().RootDirectory,
-                defaultTheme);
+            string rootDirectory = _host.Services.GetRequiredService<IApplicationPaths>().RootDirectory;
+            _rootDirectory = rootDirectory;
+            // The retired single-account protocol payment window could leave a
+            // plaintext access-token file behind when the process was killed.
+            // Sweep it before anything can read the directory.
+            int staleAccessTokens = TransientArtifactCleanup.DeletePaymentAccessTokenFiles(rootDirectory);
+            if (staleAccessTokens > 0)
+            {
+                _logger?.Warning(
+                    "Removed {Count} stale protocol-payment access-token file(s) from runtime/tmp",
+                    staleAccessTokens);
+            }
+            var startTheme = DesktopThemePreference.Load(rootDirectory, defaultTheme);
+            // First launch follows the OS UI language; a saved choice wins afterwards.
+            SmsWorkbench.Localization.Loc.Instance.SetLanguage(
+                DesktopLanguagePreference.Load(rootDirectory, DesktopLanguagePreference.SystemDefault()));
             Wpf.Ui.Appearance.ApplicationThemeManager.Apply(startTheme, WindowBackdropType.Mica, true);
 
             var mainWindow = _host.Services.GetRequiredService<MainWindow>();
@@ -51,7 +57,7 @@ namespace SmsWorkbench
         private void OnDispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
         {
             LogCrash(e.Exception);
-            System.Windows.MessageBox.Show(SensitiveDataSanitizer.Redact(e.Exception.Message), "运行异常", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+            System.Windows.MessageBox.Show(SensitiveDataSanitizer.Redact(e.Exception.Message), SmsWorkbench.Localization.Loc.T("运行异常"), System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
             e.Handled = true;
         }
 
@@ -97,6 +103,15 @@ namespace SmsWorkbench
         {
             try
             {
+                // Backstop for a file that a crash (or an older build that still
+                // wrote one) left in runtime/tmp.
+                int staleAccessTokens = TransientArtifactCleanup.DeletePaymentAccessTokenFiles(_rootDirectory);
+                if (staleAccessTokens > 0)
+                {
+                    _logger?.Warning(
+                        "Removed {Count} protocol-payment access-token file(s) on shutdown",
+                        staleAccessTokens);
+                }
                 // Kill the resident desktop-read python process before the
                 // host tears down so it never outlives the workbench.
                 (_host?.Services.GetService(typeof(IDesktopReadClient)) as IDisposable)?.Dispose();

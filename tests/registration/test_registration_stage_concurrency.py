@@ -270,3 +270,67 @@ def test_track_registration_releases_gate_even_when_the_call_fails():
 
         assert captured and captured[0]._lease is None
         assert _gate_permits(gate) == capacity, "gate leaked when the tracked call failed"
+
+
+CROSS_CFG = {"registration": {"stage_concurrency": {"auth": 1}}}
+
+
+def test_a_cross_process_gate_failure_warns_and_is_retried_after_a_window(caplog):
+    """A transient lock error must not disable the cross-process cap forever.
+
+    The failure used to be cached as ``None`` for the rest of the process, so one
+    bad look at the lock directory silently dropped the desktop+CLI cap and left
+    no trace.  Now it warns, remembers the failure for a bounded window, and
+    tries again.
+    """
+    with (
+        patch.object(registration_concurrency, "CFG", CROSS_CFG),
+        patch.object(registration_concurrency, "_cross_gates", {}),
+        patch.object(registration_concurrency, "_cross_gate_retry_at", {}),
+        patch.object(registration_concurrency, "CrossProcessSemaphore", side_effect=OSError("no lock dir")) as ctor,
+        caplog.at_level("WARNING", logger="sms_tool.registration.concurrency"),
+    ):
+        assert registration_concurrency._cross_gate_for("auth") is None
+        assert registration_concurrency._cross_gate_for("auth") is None
+        assert ctor.call_count == 1, "a failed gate must not be rebuilt on every stage transition"
+        assert "cross-process lock" in caplog.text
+        assert "OSError" in caplog.text
+
+        registration_concurrency._cross_gate_retry_at[("auth", 1)] = 0.0  # window elapsed
+        assert registration_concurrency._cross_gate_for("auth") is None
+        assert ctor.call_count == 2, "the failure must expire instead of lasting the process lifetime"
+
+
+def test_a_later_success_clears_the_failure_window():
+    fake_gate = object()
+    with (
+        patch.object(registration_concurrency, "CFG", CROSS_CFG),
+        patch.object(registration_concurrency, "_cross_gates", {}),
+        patch.object(registration_concurrency, "_cross_gate_retry_at", {}),
+        patch.object(
+            registration_concurrency,
+            "CrossProcessSemaphore",
+            side_effect=[OSError("no lock dir"), fake_gate],
+        ) as ctor,
+    ):
+        assert registration_concurrency._cross_gate_for("auth") is None
+        registration_concurrency._cross_gate_retry_at[("auth", 1)] = 0.0
+        assert registration_concurrency._cross_gate_for("auth") is fake_gate
+        assert ("auth", 1) not in registration_concurrency._cross_gate_retry_at
+        assert ctor.call_count == 2
+
+
+def test_the_in_process_cap_still_applies_when_the_cross_process_gate_fails():
+    """Losing the outer layer must not lose the inner one."""
+    with (
+        patch.object(registration_concurrency, "CFG", CROSS_CFG),
+        patch.object(registration_concurrency, "_stage_gates", {}),
+        patch.object(registration_concurrency, "_cross_gates", {}),
+        patch.object(registration_concurrency, "_cross_gate_retry_at", {}),
+        patch.object(registration_concurrency, "CrossProcessSemaphore", side_effect=OSError("no lock dir")),
+    ):
+        lease = registration_concurrency.acquire_registration_stage("auth_flow")
+        assert isinstance(lease, RegistrationStageLease)
+        assert lease.released is False
+        lease.release()
+        assert lease.released is True

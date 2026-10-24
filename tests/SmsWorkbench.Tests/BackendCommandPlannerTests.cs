@@ -377,32 +377,18 @@ public sealed class BackendCommandPlannerTests
 
         Assert.Contains("--check-promotion", plan.Arguments);
         Assert.Contains("--desktop-ipc", plan.Arguments);
-        Assert.DoesNotContain("--payment-eligibility", plan.Arguments);
         Assert.Equal(BackendAccountResultKind.Promotion, plan.ResultKind);
-    }
-
-    [Fact]
-    public void CreatePaymentEligibilityCheck_UsesExplicitProbeFlag()
-    {
-        var plan = BackendCommandPlanner.CreatePaymentEligibilityCheck(
-            emails: new[] { "user@example.com" },
-            proxyPool: Array.Empty<string>());
-
-        Assert.Contains("--check-payment-eligibility", plan.Arguments);
-        Assert.DoesNotContain("--check-promotion", plan.Arguments);
-        Assert.Contains("--desktop-ipc", plan.Arguments);
-        Assert.Equal(BackendAccountResultKind.PaymentEligibility, plan.ResultKind);
     }
 
     [Fact]
     public void AccountResultKind_SurvivesALocalizedTaskLabelChange()
     {
-        var original = BackendCommandPlanner.CreatePaymentEligibilityCheck(
-            new[] { "user@example.com" }, Array.Empty<string>());
-        var renamed = original with { TaskName = "Payment methods (1)" };
+        var original = BackendCommandPlanner.CreatePromotionCheck(
+            new[] { "user@example.com" }, workers: 1, proxyPool: Array.Empty<string>());
+        var renamed = original with { TaskName = "Promotion (1)" };
 
         Assert.True(BackendResultInterpreter.HasAccountResults(renamed.ResultKind));
-        Assert.Equal("支付资格探测", BackendResultInterpreter.AccountResultTitle(renamed.ResultKind));
+        Assert.Equal("账号优惠检测", BackendResultInterpreter.AccountResultTitle(renamed.ResultKind));
     }
 
     [Fact]

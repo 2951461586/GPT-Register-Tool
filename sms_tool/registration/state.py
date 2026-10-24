@@ -30,7 +30,6 @@ class RegistrationState(str, Enum):
     EMAIL_OTP_VALIDATE = "email_otp_validate"
     CREATE_ACCOUNT = "create_account"
     AUTH_SESSION = "auth_session"
-    CODEX_OAUTH = "codex_oauth"
     ACCESS_TOKEN_PROBE = "access_token_probe"
     TOTP_ENROLL = "totp_enroll"
     FINALIZE = "finalize"
@@ -121,12 +120,32 @@ class RegistrationWorkflow(Protocol):
     proxy_metadata: dict[str, Any]
     enroll_2fa: bool
     input_mailbox: Any
+    input_proxy: Any
+    input_password: Any
+    input_sentinel: Mapping[str, Any] | None
+    input_registration_mode: Any
+    browser_headless: bool | None
+    device_identity: dict[str, Any]
+    fingerprint_country: str
     post_process_result: Callable[[dict[str, Any]], dict[str, Any]] | None
     _timing_open: bool
+    _device_seeded: bool
 
     def _run_stage(self, state: RegistrationState, label: str, handler: Callable[[], Any]) -> Any: ...
 
     def _abort(self, error: str) -> None: ...
+
+    def _bootstrap(self) -> None: ...
+
+    def extract_sentinel(self) -> None: ...
+
+    def prepare_identity(self) -> None: ...
+
+    def _device_context(self, email: Any) -> dict[str, Any]: ...
+
+    def _device_identity_seeded_by_email_enabled(self) -> bool: ...
+
+    def _prime_password_sentinel_bundle(self) -> None: ...
 
     def _persist_checkpoint(self, state: str) -> None: ...
 

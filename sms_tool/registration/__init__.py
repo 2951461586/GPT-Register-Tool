@@ -1,16 +1,21 @@
 """Public registration facade, split out of the package root on 2026-10-21.
 
-The implementation lives in :mod:`sms_tool.registration.orchestrator.orchestrator` (the
-former ``sms_tool/registration/orchestrator.py``); this package re-exports its whole
-surface so ``from sms_tool.registration.orchestrator import X`` and ``sms_tool.registration.orchestrator.X``
-keep working.
+The entry points live in :mod:`sms_tool.registration.orchestrator` (a **module**,
+not a package): ``run_email`` / ``run_batch`` dispatch, runtime-config and driver
+selection, and the per-invocation ``RegistrationOperations`` binding.  Stage order
+and the stage bodies live in :mod:`sms_tool.registration.handlers` and its sibling
+stage modules.  This package re-exports the orchestrator surface lazily, so
+``from sms_tool.registration.orchestrator import X`` and
+``sms_tool.registration.X`` both keep working without importing the workflow.
 
 **The seam is not here.** ``_email_registration_operations()`` builds its
-dependency mapping from *orchestrator module globals at call time*, which is
-what makes ``patch.object(registration, "<name>")`` effective. Once that
-function moved into the submodule, patching this package stopped reaching it,
-so every test patch targets ``sms_tool.registration.orchestrator.orchestrator`` instead.
-Adding a new seam name means patching the submodule, not this facade.
+dependency mapping from *orchestrator module globals at call time*, which is what
+makes ``patch.object(sms_tool.registration.orchestrator, "<name>")`` effective.
+Patching **this package** (``patch.object(sms_tool.registration, "<name>")``)
+only writes this facade's own namespace, which the seam never reads.  Tests
+therefore patch the defining module: ``...orchestrator`` for the binding,
+``...handlers`` / ``...finalize`` / ``...outcome`` for stage bodies.  Adding a new
+seam name means patching the module that defines it, not this facade.
 
 **Import laziness (2026-10-23).** This facade used to ``from .orchestrator import *``,
 so importing *any* submodule (Python runs this ``__init__`` first) pulled the whole
@@ -139,7 +144,6 @@ if TYPE_CHECKING:
         resolve_runtime_config,
         run_batch,
         run_email,
-        run_phone,
         run_phone_register,
         runtime_config_scope,
         runtime_file,
@@ -269,7 +273,6 @@ _LAZY: dict[str, str] = {
         "resolve_runtime_config",
         "run_batch",
         "run_email",
-        "run_phone",
         "run_phone_register",
         "runtime_config_scope",
         "runtime_file",
@@ -323,7 +326,6 @@ __all__ = [
     "resolve_runtime_config",
     "run_batch",
     "run_email",
-    "run_phone",
     "run_phone_register",
     "runtime_config_scope",
     "runtime_file",

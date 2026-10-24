@@ -22,11 +22,16 @@ Three things this file pins down:
 """
 
 import contextlib
+import importlib
 import unittest
-from pathlib import Path
+from types import SimpleNamespace
+from typing import cast
 from unittest.mock import Mock, patch
 
 from sms_tool import auth_flow
+from sms_tool.registration import account_stages
+from sms_tool.registration import finalize as registration_finalize
+from sms_tool.registration.state import RegistrationWorkflow
 
 
 #: Owner submodule for each seam patched in this file. The package was split
@@ -55,18 +60,21 @@ _SEAM_MODULE = {
 
 @contextlib.contextmanager
 def patch_auth_flow_seams(**seams):
-    """Patch each auth_flow seam on its defining submodule."""
+    """Patch each auth_flow seam on its defining submodule.
+
+    The package is a PEP 562 lazy facade, so ``auth_flow.login`` is only an
+    attribute once something imported the submodule.  Relying on that made this
+    file depend on import order (it failed when run alone); import the owner
+    explicitly instead.
+    """
     grouped: dict[str, dict] = {}
     for name, value in seams.items():
         grouped.setdefault(_SEAM_MODULE[name], {})[name] = value
     with contextlib.ExitStack() as stack:
         for module, values in grouped.items():
-            stack.enter_context(patch.multiple(getattr(auth_flow, module), **values))
+            owner = importlib.import_module(f".{module}", auth_flow.__name__)
+            stack.enter_context(patch.multiple(owner, **values))
         yield
-
-
-def _source(relative_path):
-    return (Path(__file__).resolve().parents[2] / relative_path).read_text(encoding="utf-8")
 
 
 class LoginPasswordStepSignalTests(unittest.TestCase):
@@ -687,58 +695,152 @@ class ProbePositionGuardTests(unittest.TestCase):
 
     Measured 2026-09-15: ``/log-in/password`` answers 400 until
     ``authorize/continue`` has run, so the probe's only usable position is after
-    that POST and before the OTP send.  Both ends are pinned: earlier would ask
-    a transaction that does not exist yet, later would restore the cost the
-    probe exists to avoid.
+    that POST and before the OTP send.  Earlier would ask a transaction that does
+    not exist yet; later would restore the cost the probe exists to avoid.
+
+    Both guards below used to scan source text.  They now drive the real
+    orchestration and read the arguments the real call sites pass: the order test
+    replaces the four phase functions with recorders, and the flag test calls the
+    two callers that own the decision.
     """
 
-    def _lane_body(self):
-        # 2026-09-19: the lane was split into four phase functions
-        # (``_existing_login_signin/_continue/_probe/_otp``) orchestrated by
-        # ``_login_existing_account_with_email_otp``.  The invariant this guard
-        # pins -- continue *before* probe *before* OTP send -- now lives across
-        # those phase bodies, so concatenate them in pipeline order rather than
-        # slicing a single function.
-        # 2026-09-25: ``auth_flow.py`` became the ``auth_flow/`` package.  The
-        # four phase bodies now live in ``login.py`` (signin/continue/probe) and
-        # ``otp.py`` (the OTP phase); concatenate them in pipeline order.
-        src = _source("sms_tool/auth_flow/login.py") + "\n" + _source("sms_tool/auth_flow/otp.py")
-        parts = []
-        for name in (
-            "_existing_login_signin",
-            "_existing_login_continue",
-            "_existing_login_probe",
-            "_existing_login_otp",
-        ):
-            start = src.index(f"def {name}(")
-            end = src.find("\ndef ", start)
-            parts.append(src[start:] if end == -1 else src[start:end])
-        return "\n".join(parts)
-
     def test_the_probe_runs_after_authorize_continue_and_before_the_otp_send(self):
-        body = self._lane_body()
+        order: list[str] = []
 
-        probe_at = body.index("_probe_login_password_step(")
-        self.assertLess(body.index("/api/accounts/authorize/continue"), probe_at)
-        self.assertLess(probe_at, body.index("_send_existing_login_otp("))
+        def _phase(name, *, state, terminal=None):
+            def _call(*_args, **_kwargs):
+                order.append(name)
+                return terminal, state
 
-    def test_both_registration_lane_callers_forbid_the_email_lane_for_a_registered_address(self):
-        """``allow_passwordless=not s.existing_account`` is what makes the refusals free.
+            return _call
 
-        The probe cannot answer in the recovery path (no transaction state), so
-        the caller's flag -- not the probe -- is what stops the code there.
+        signin_state = {"current_url": "https://auth.openai.com/log-in/password"}
+        continue_state = {
+            "current_url": "https://auth.openai.com/log-in/password",
+            "continue_payload": {},
+            "continue_next_url": "https://auth.openai.com/email-verification",
+            "fresh_token": "sentinel",
+            "fresh_so": "",
+        }
+
+        with (
+            patch.object(auth_flow.login, "_existing_login_signin", _phase("signin", state=signin_state)),
+            patch.object(auth_flow.login, "_existing_login_continue", _phase("continue", state=continue_state)),
+            patch.object(auth_flow.login, "_existing_login_probe", _phase("probe", state=None)),
+            patch.object(auth_flow.otp, "_existing_login_otp", _phase("otp", state=None)),
+        ):
+            result = auth_flow.login._login_existing_account_with_email_otp(
+                session=object(),
+                username="probe@example.test",
+                mailbox=object(),
+                did="did-1",
+                session_logging_id="log-1",
+                auth_base="https://auth.openai.com",
+                chat_base="https://chatgpt.com",
+                base_headers={},
+                csrf_token="csrf",
+            )
+
+        self.assertIsNone(result)
+        self.assertEqual(order, ["signin", "continue", "probe", "otp"])
+
+    def test_the_session_recovery_lane_forbids_the_email_lane_for_a_registered_address(self):
+        """``allow_passwordless=not existing_account`` is what makes the refusal free.
+
+        This caller is ``fetch_auth_session``'s existing-account fallback.  The
+        probe cannot answer in the recovery path (no transaction state), so the
+        caller's flag -- not the probe -- is what stops the code there.
         """
-        # 2026-09-19: one caller moved with ``enroll_totp`` into
-        # ``registration/finalize.py`` (the P1 finalize/totp split), so the two
-        # call sites now live in two files.  The invariant -- *both* lanes pass
-        # the flag -- is what matters, not which file each lives in.
-        src = (
-            _source("sms_tool/registration/handlers.py")
-            + _source("sms_tool/registration/account_stages.py")
-            + _source("sms_tool/registration/finalize.py")
+        seen: dict[str, object] = {}
+
+        def _login(**kwargs):
+            seen.update(kwargs)
+            return {"ok": False, "error": "existing_login_transport:probe unavailable"}
+
+        operations = Mock()
+        operations._fetch_auth_session.return_value = {"body": {}}
+        operations._auth_session_access_token.return_value = ""
+        operations._login_existing_account_with_email_otp.side_effect = _login
+        operations._sanitize_text.side_effect = str
+        operations._stored_registration_totp.return_value = ""
+        operations._set_oai_did_cookie = Mock()
+
+        workflow = SimpleNamespace(
+            r=operations,
+            runtime=SimpleNamespace(
+                session=object(),
+                auth_base="https://auth.openai.com",
+                chat_base="https://chatgpt.com",
+                base_headers={},
+                existing_account=True,
+                existing_account_password_known=False,
+                password_unknown=False,
+                access_token="",
+                proxy="",
+                username="recover@example.test",
+                mailbox=object(),
+                login_session=None,
+                device_id="did-1",
+                session_logging_id="log-1",
+                csrf_token="csrf",
+                sentinel_token="",
+                sentinel_so_token="",
+            ),
+            _persist_checkpoint=Mock(),
+            _install_edge_challenge_hook=Mock(),
         )
 
-        self.assertEqual(src.count("allow_passwordless=not s.existing_account"), 2)
+        account_stages.fetch_auth_session(cast("RegistrationWorkflow", workflow))
+
+        self.assertIs(seen["allow_passwordless"], False)
+
+    def test_the_totp_reauth_lane_forbids_the_email_lane_for_a_registered_address(self):
+        """The other caller: ``enroll_totp``'s re-auth after a password login fails."""
+        seen: dict[str, object] = {}
+
+        def _login(**kwargs):
+            seen.update(kwargs)
+            return {"ok": False, "error": "existing_login_no_password_step"}
+
+        operations = Mock()
+        operations._login_existing_account_with_email_otp.side_effect = _login
+        operations._sanitize_text.side_effect = str
+        operations.otp_poll.subject_keywords = "verification code"
+        operations._stored_registration_totp.return_value = ""
+
+        runtime = SimpleNamespace(
+            success=True,
+            access_token="at-live",
+            mailbox=object(),
+            mailbox_service=Mock(),
+            email_code="",
+            proxy="",
+            username="totp@example.test",
+            session=object(),
+            auth_base="https://auth.openai.com",
+            chat_base="https://chatgpt.com",
+            base_headers={},
+            device_id="did-1",
+            session_logging_id="log-1",
+            csrf_token="csrf",
+            sentinel_token="",
+            sentinel_so_token="",
+            password="",
+            totp_secret="",
+            existing_account=True,
+            existing_account_password_known=False,
+            twofa_result={},
+        )
+        workflow = SimpleNamespace(r=operations, runtime=runtime, enroll_2fa=True)
+
+        def _fake_setup(**_kwargs):
+            _kwargs["reauth_login_fn"]()
+            raise AssertionError("the re-auth failure must be swallowed by enroll_totp")
+
+        with patch("sms_tool.accounts.account_2fa.setup_totp_2fa", side_effect=_fake_setup):
+            registration_finalize.enroll_totp(cast("RegistrationWorkflow", workflow))
+
+        self.assertIs(seen["allow_passwordless"], False)
 
 
 if __name__ == "__main__":

@@ -54,12 +54,7 @@ def _refresh(monkeypatch, probe, **kwargs):
         return probe(account, calls)
 
     monkeypatch.setattr(promotion_batch, "check_account_promotion", fake)
-    # Throttle/status-coding subject: skip the payment-eligibility probe, which
-    # is a separate network boundary (Checkout + Stripe init) and would fire
-    # real requests from here.
-    result = promotion_batch.refresh_promotion_statuses(
-        ["a@example.com"], workers=1, timeout=5, payment_eligibility=False, **kwargs
-    )
+    result = promotion_batch.refresh_promotion_statuses(["a@example.com"], workers=1, timeout=5, **kwargs)
     return result, calls
 
 

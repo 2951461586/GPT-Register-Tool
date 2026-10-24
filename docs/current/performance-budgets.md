@@ -45,7 +45,7 @@ database -- but it is **not** a free win: it was implemented, tested, and
 reverted in the same change.
 
 `desktop_read._record_payload` derives six fields by parsing that blob:
-`promotion_status`, `promotion_state`, `payment_eligibility`, `imported_status`,
+`promotion_status`, `promotion_state`, `imported_status`,
 `paypal_amount` and `at_probe_status_code`.
 `tests/workbench/test_desktop_read.py::test_lightweight_account_read_skips_full_session_sanitization`
 failed immediately (`KeyError: 'imported_status'`), which is the test doing its

@@ -17,10 +17,10 @@ the *gate* (per-pair, only-down); this file is the *view*.
 
 | Measure | Value |
 | --- | ---: |
-| Modules | 308 |
-| Module-level import edges | 1019 |
-| Delayed (function-local) edges | 277 |
-| Type-only (`if TYPE_CHECKING`) edges | 43 |
+| Modules | 311 |
+| Module-level import edges | 1033 |
+| Delayed (function-local) edges | 276 |
+| Type-only (`if TYPE_CHECKING`) edges | 47 |
 | Strongly connected components (size > 1) | 0 |
 | Modules inside a cycle | 0 |
 | Mutually dependent directory pairs | 17 |
@@ -55,7 +55,7 @@ None.
 
 | Module | Importers |
 | --- | ---: |
-| `sms_tool.config` | 64 |
+| `sms_tool.config` | 63 |
 | `sms_tool` | 51 |
 | `sms_tool.endpoints` | 44 |
 | `sms_tool.kernel.sanitizer` | 35 |
@@ -63,10 +63,10 @@ None.
 | `sms_tool.phone_proxy` | 24 |
 | `sms_tool.auth_headers` | 22 |
 | `sms_tool.http_client` | 18 |
-| `sms_tool.operator_output` | 16 |
-| `sms_tool.storage` | 15 |
-| `sms_tool.checkout_contract` | 14 |
+| `sms_tool.operator_output` | 18 |
+| `sms_tool.storage` | 14 |
+| `sms_tool.checkout_contract` | 13 |
 | `sms_tool.providers` | 13 |
 | `sms_tool.registration_drivers.base` | 13 |
+| `sms_tool.registration.state` | 12 |
 | `sms_tool.payment.catalog` | 11 |
-| `sms_tool.proxy.entry` | 11 |

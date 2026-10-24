@@ -400,17 +400,11 @@ namespace SmsWorkbench
                 logger?.Debug("[backend] {Line}", safeText);
             else
                 logger?.Information("{Message}", safeText);
-            if (LogTextBox != null && LogTextBox.IsLoaded)
-            {
-                // Append into the control directly: whole-string reassignment of
-                // LogText re-rendered the entire buffer on every line (O(n²)).
-                LogTextBox.AppendText(line);
-                // Keep the bound property consistent without re-rendering;
-                // Append caps retained history (see LogViewModel).
-                if (LogPanel.Append(line))
-                    LogTextBox.Text = LogPanel.Text;
+            // A4: the console control owns the TextBox append path. It returns
+            // false while the window is not realised, so the view-model-only
+            // fallback (used during startup and by the tests) stays intact.
+            if (consoleControl.TryAppendLogLine(line))
                 return;
-            }
             LogPanel.Append(line);
         }
 

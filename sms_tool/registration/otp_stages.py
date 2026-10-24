@@ -401,6 +401,13 @@ def validate_email_otp(workflow: RegistrationWorkflow) -> None:
         )
         if retry_code and retry_code != s.email_code:
             s.email_code = retry_code
+            # The retry must be the *same shape* as the first request: the
+            # 2026-10-23 HAR baseline has every validate call carrying both a
+            # per-request ``x-access-flow-invocation-id`` and the page-level
+            # ``x-openai-document-navigation-id``.  Dropping them here made the
+            # recovery request the only non-faithful one in the lane, so a
+            # wrong-code retry could fail where the first attempt succeeded for
+            # a reason unrelated to the code.
             otp_ok, s.otp_data = r._validate_email_otp(
                 s.session,
                 s.auth_base,
@@ -408,6 +415,8 @@ def validate_email_otp(workflow: RegistrationWorkflow) -> None:
                 s.email_code,
                 sentinel_data=sentinel_data,
                 use_sentinel=use_sentinel,
+                flow_invocation_id=str(uuid.uuid4()),
+                document_navigation_id=s.document_navigation_id,
             )
     if not otp_ok:
         r._fetch_client_auth_session_dump(

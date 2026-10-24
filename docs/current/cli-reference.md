@@ -31,7 +31,6 @@ are omitted.
 | `--change-email` | — | Batch change ChatGPT protocol email addresses |
 | `--change-email-mailbox-file` | value | Credential pool for persistent target email providers |
 | `--chatai-mailbox-file` | value | Legacy mixed mailbox file: Chatai plus all unified mailbox formats |
-| `--check-payment-eligibility` | — | Explicitly enumerate payment methods via disposable Checkout and Stripe init; can trigger risk controls |
 | `--check-promotion` | — | Probe accounts/check plan and Plus-trial/discount (优惠) eligibility and persist promotion_status |
 | `--check-promotion-after-registration` | — | After registration, probe saved successful accounts for Plus trial/discount eligibility |
 | `--checkout-country`, `--billing-country` | value | Hosted/UPI checkout billing country/currency, e.g. US or JP |
@@ -78,7 +77,6 @@ are omitted.
 | `--max-reuse-count` | value | Max times a phone can be reused (0=config default or 1) |
 | `--no-2fa` | — | Skip TOTP 2FA enrollment after a successful registration |
 | `--no-jit-at-refresh` | — | Probe the saved AT but do not run email OTP OAuth on HTTP 401 |
-| `--no-payment-eligibility` | — | Legacy opt-out of --payment-eligibility; promotion-only is now the default. The Checkout probe creates a disposable session and may trigger risk controls. |
 | `--no-phone-reuse` | — | Disable phone verification even when smsbower is configured |
 | `--no-require-zero` | — | Allow non-zero amount (default: require 0) |
 | `--no-scan-workspace-status` | — | Deprecated compatibility flag; --one-click-scan no longer performs workspace checks |
@@ -111,7 +109,6 @@ are omitted.
 | `--payment-batch-id` | value | Batch ID; reused only together with --payment-resume-checkpoint |
 | `--payment-canary` | value | Limit a payment batch to the first N unique accounts |
 | `--payment-country` | value | UPI local payment-method country, e.g. IN |
-| `--payment-eligibility` | — | Also run the Checkout payment-method probe after a successful promotion check |
 | `--payment-matrix` | value | Payment eligibility matrix as JSON text/path; defaults to protocol_payments.matrix |
 | `--payment-method`, `--payment-link-method` | choices: `paypal`, `gopay`, `go_pay`, `go-pay`, `gcash`, `grabpay`, `grab_pay`, `grab-pay`, `upi`, `upiqr`, `upi_qr`, `upi-qr`, `ideal`, `pix`, `kakao`, `kakao_pay`, `kakao-pay`, `blik`, `twint`, `direct_card`, `direct-card`, `directcard`, `direct`, `zhika`, `card`, `checkout`, `momo`, `momo_qr`, `momo-qr`, `momoqr`, `qris`, `qris_id`, `bizum`, `bizum_es`, `naver_pay`, `naverpay`, `naver-pay` | Protocol payment-link method |
 | `--payment-method-proxy` | value | Explicit payment-method creation proxy |

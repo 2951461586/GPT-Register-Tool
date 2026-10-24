@@ -60,7 +60,6 @@
     ]
   ],
   "payment_importers_outside_lane": [
-    "sms_tool.accounts.account_payment_eligibility",
     "sms_tool.accounts.account_promotion",
     "sms_tool.accounts.account_recovery",
     "sms_tool.accounts.promotion_batch",

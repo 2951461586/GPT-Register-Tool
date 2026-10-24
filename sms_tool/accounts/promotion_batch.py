@@ -3,16 +3,16 @@
 Split out of :mod:`sms_tool.accounts.account_promotion` so that module owns only
 the probe: ``check_account_promotion`` and its parse/label/code helpers. This
 module owns everything about running that probe across many saved accounts --
-proxy rotation, 429 throttling, the optional payment-eligibility pass, result
-persistence, progress events, and the two whole-batch guards that stop a dead
+proxy rotation, 429 throttling, result persistence, progress events, and the
+two whole-batch guards that stop a dead
 egress pool from consuming the account list: a one-shot preflight and a
 consecutive-failure circuit breaker.
 
 The split is what keeps the probe module off the desktop read path's import
 cost: ``desktop_read`` reads ``promotion_states`` and ``account_promotion``;
 only the batch entry points (CLI / account-health queue) import this module, so
-``account_payment_eligibility`` and the payment catalog it pulls in stay out of
-a read-only desktop start.
+the provider handshake and the payment catalog stay out of a read-only desktop
+start.
 
 Callers import :func:`refresh_promotion_statuses` from here.
 """
@@ -28,20 +28,11 @@ from typing import Any
 
 from .account_identity import account_identity
 from .account_liveness import browser_fetch_for_account
-from .account_payment_eligibility import (
-    payment_eligibility_diagnostics,
-    probe_account_payment_eligibility,
-)
 from .account_promotion import check_account_promotion, promotion_status_code
 from ..batch_circuit_breaker import BatchCircuitBreaker
 from ..config import CFG
-from ..promotion_states import (
-    PROMOTION_STATE_AUTH_INVALID,
-    PROMOTION_STATE_PROBE_FAILED,
-    payment_eligibility_label,
-    payment_method_tokens,
-    promotion_status_with_eligibility,
-)
+from ..promotion_states import PROMOTION_STATE_PROBE_FAILED
+
 from ..proxy.edge_probe import DEAD, probe_openai_edge
 from ..proxy.routing import operation_proxy_candidates, parse_lane_proxy_pool
 
@@ -67,18 +58,8 @@ def refresh_promotion_statuses(
     proxy: str | None = None,
     timeout: int = 20,
     proxy_pool: str | list[str] | None = None,
-    payment_eligibility: bool = False,
 ) -> dict[str, Any]:
-    """Probe plan/promotion for saved accounts and persist ``promotion_status``.
-
-    When ``payment_eligibility`` is explicitly set, each account whose plan
-    probe succeeded also gets one disposable Checkout + Stripe init
-    probe that enumerates the payment methods Stripe offers it; the result is
-    persisted as ``raw_json.payment_capability`` and rendered next to the
-    promotion badge in the desktop 优惠状态 column.  See
-    :mod:`sms_tool.accounts.account_payment_eligibility` for why it is one probe
-    rather than one per method.
-    """
+    """Probe plan/promotion for saved accounts and persist ``promotion_status``."""
     from ..storage import get_account_record, list_paypal_accounts, mark_promotion_status
 
     requested = [str(e or "").strip().lower() for e in (emails or []) if str(e or "").strip()]
@@ -207,22 +188,7 @@ def refresh_promotion_statuses(
             label = str(probe.get("promotion_status") or "")
             if not str(probe.get("promotion_state") or "").strip():
                 probe["promotion_state"] = promotion_status_code(probe)
-            # A failed plan probe does not establish a trustworthy context for
-            # Checkout. In particular, a dead AT or failed exit must not incur
-            # an extra request or produce a payment-method verdict.
-            eligibility: dict[str, Any] = {}
-            if payment_eligibility and probe.get("ok"):
-                eligibility = _probe_payment_eligibility(account, proxy=used_proxy, timeout=timeout)
-            persisted = (
-                mark_promotion_status(
-                    email,
-                    label,
-                    promotion_result=probe,
-                    payment_capability={} if _promotion_probe_is_unauthorized(probe) else (eligibility or None),
-                )
-                if email
-                else False
-            )
+            persisted = mark_promotion_status(email, label, promotion_result=probe) if email else False
             result = {
                 "email": email,
                 "ok": bool(probe.get("ok")),
@@ -231,16 +197,10 @@ def refresh_promotion_statuses(
                 "persisted": bool(persisted),
                 "probe": probe,
             }
-            eligibility_label = ""
-            if eligibility:
-                result["payment_capability"] = eligibility
-                eligibility_label = payment_eligibility_label(eligibility)
-                if eligibility_label:
-                    result["payment_eligibility"] = eligibility_label
             # Pre-composed so every consumer (desktop grid, detail panel, task
             # result list) renders the same string instead of each re-deriving
             # the separator rule.
-            result["promotion_display"] = promotion_status_with_eligibility(label, eligibility_label)
+            result["promotion_display"] = label
         except Exception as exc:
             result = {
                 "email": email,
@@ -279,14 +239,6 @@ def refresh_promotion_statuses(
     trial_eligible = sum(
         1 for item in results if isinstance(item.get("probe"), dict) and bool(item["probe"].get("plus_trial_eligible"))
     )
-    eligibility_results = [
-        item["payment_capability"] for item in results if isinstance(item.get("payment_capability"), dict)
-    ]
-    eligibility_ok = sum(1 for item in eligibility_results if item.get("ok"))
-    # Distinct method tokens across the batch: the batch-level answer to "which
-    # payment rails do these accounts actually have".
-    methods_seen = sorted({token for item in eligibility_results for token in payment_method_tokens(item)})
-    diagnostics = payment_eligibility_diagnostics(eligibility_results)
     _emit_account_batch_event(
         run_id,
         "batch_completed",
@@ -294,8 +246,7 @@ def refresh_promotion_statuses(
         total=len(results),
         detail=(
             f"完成 {len(results)} 个账号，成功 {success}，401 {unauthorized}，"
-            f"传输失败 {transport_failed}，保存失败 {persist_failed}，"
-            f"支付资格 {eligibility_ok}/{len(eligibility_results)}"
+            f"传输失败 {transport_failed}，保存失败 {persist_failed}"
             + (f"；连续环境失败触发熔断（{breaker.tripped_class}），剩余账号已跳过" if breaker.tripped else "")
         ),
     )
@@ -309,10 +260,6 @@ def refresh_promotion_statuses(
         "transport_failed": transport_failed,
         "persist_failed": persist_failed,
         "trial_eligible": trial_eligible,
-        "payment_eligibility_ok": eligibility_ok,
-        "payment_eligibility_failed": len(eligibility_results) - eligibility_ok,
-        "payment_eligibility_diagnostics": diagnostics,
-        "payment_methods_seen": methods_seen,
         "results": results,
     }
 
@@ -371,43 +318,6 @@ def _promotion_status_code(item: dict[str, Any]) -> int:
         return int((item.get("probe") or {}).get("status_code") or 0)
     except (TypeError, ValueError, AttributeError):
         return 0
-
-
-def _promotion_probe_is_unauthorized(probe: Any) -> bool:
-    """True when the promotion probe proved the access token is dead."""
-    if not isinstance(probe, dict):
-        return False
-    try:
-        status_code = int(probe.get("status_code") or 0)
-    except (TypeError, ValueError):
-        status_code = 0
-    if status_code == 401:
-        return True
-    return str(probe.get("promotion_state") or "").strip() == PROMOTION_STATE_AUTH_INVALID
-
-
-def _probe_payment_eligibility(
-    account: dict[str, Any],
-    *,
-    proxy: str | None,
-    timeout: int,
-) -> dict[str, Any]:
-    """Enumerate the account's payment methods, never raising into the batch."""
-    try:
-        return probe_account_payment_eligibility(
-            account,
-            proxy=proxy,
-            timeout=max(5, int(timeout or 45)),
-        )
-    except Exception:  # noqa: BLE001 - eligibility is best-effort
-        logger.debug("payment eligibility probe failed")
-        return {
-            "ok": False,
-            "error": "eligibility_probe_exception",
-            "error_code": "eligibility_probe_exception",
-            "error_stage": "payment_eligibility",
-            "retryable": True,
-        }
 
 
 def _promotion_failure_class(item: dict[str, Any]) -> str:
@@ -498,10 +408,6 @@ def _preflight_failure_result(requested: int, preflight: dict[str, Any]) -> dict
         "transport_failed": requested,
         "persist_failed": 0,
         "trial_eligible": 0,
-        "payment_eligibility_ok": 0,
-        "payment_eligibility_failed": 0,
-        "payment_eligibility_diagnostics": {},
-        "payment_methods_seen": [],
         "results": [],
         "error": "出口池预检失败：候选代理全部无响应，已中止以免整批空转",
         "error_code": "egress_pool_unavailable",

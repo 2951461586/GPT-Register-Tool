@@ -2,6 +2,8 @@
 // PaymentBatchService.cs for why the project-wide switch stays `annotations`.
 #nullable enable
 
+using SmsWorkbench.Localization;
+
 namespace SmsWorkbench
 {
     public partial class MainWindow
@@ -14,7 +16,7 @@ namespace SmsWorkbench
         {
             var dialog = new Window
             {
-                Title = "收件箱 - " + row.Identifier,
+                Title = Loc.F("收件箱 - {0}", row.Identifier),
                 Owner = this,
                 Width = 860,
                 Height = 640,
@@ -35,7 +37,7 @@ namespace SmsWorkbench
             };
             var header = new TextBlock
             {
-                Text = "正在加载收件箱...",
+                Text = Loc.T("正在加载收件箱..."),
                 FontSize = 14,
                 FontWeight = FontWeights.SemiBold,
                 Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
@@ -57,9 +59,9 @@ namespace SmsWorkbench
                 Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
                 BorderThickness = new Thickness(0)
             };
-            mailGrid.Columns.Add(new DataGridTextColumn { Header = "时间", Binding = new System.Windows.Data.Binding("ReceivedAt"), Width = 150 });
-            mailGrid.Columns.Add(new DataGridTextColumn { Header = "发件人", Binding = new System.Windows.Data.Binding("From"), Width = 200 });
-            mailGrid.Columns.Add(new DataGridTextColumn { Header = "主题", Binding = new System.Windows.Data.Binding("Subject"), Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
+            mailGrid.Columns.Add(new DataGridTextColumn { Header = Loc.T("时间"), Binding = new System.Windows.Data.Binding("ReceivedAt"), Width = 150 });
+            mailGrid.Columns.Add(new DataGridTextColumn { Header = Loc.T("发件人"), Binding = new System.Windows.Data.Binding("From"), Width = 200 });
+            mailGrid.Columns.Add(new DataGridTextColumn { Header = Loc.T("主题"), Binding = new System.Windows.Data.Binding("Subject"), Width = new DataGridLength(1, DataGridLengthUnitType.Star) });
             Grid.SetRow(mailGrid, 1);
             root.Children.Add(mailGrid);
 
@@ -69,8 +71,8 @@ namespace SmsWorkbench
                 HorizontalAlignment = HorizontalAlignment.Right,
                 Margin = new Thickness(0, 8, 0, 0)
             };
-            var refreshBtn = new Button { Content = "刷新", Width = 72 };
-            var closeBtn = new Button { Content = "关闭", Width = 72 };
+            var refreshBtn = new Button { Content = Loc.T("刷新"), Width = 72 };
+            var closeBtn = new Button { Content = Loc.T("关闭"), Width = 72 };
             actions.Children.Add(refreshBtn);
             actions.Children.Add(closeBtn);
             Grid.SetRow(actions, 2);
@@ -85,7 +87,7 @@ namespace SmsWorkbench
             {
                 if (IsCfWorkerRow(row) || IsReMailRow(row) || IsSmailrRow(row))
                 {
-                    header.Text = IsReMailRow(row) ? "正在获取 ReMail 邮件..." : IsSmailrRow(row) ? "正在获取 Smailr 邮件..." : "正在获取 CFWorker 邮件...";
+                    header.Text = IsReMailRow(row) ? Loc.T("正在获取 ReMail 邮件...") : IsSmailrRow(row) ? Loc.T("正在获取 Smailr 邮件...") : Loc.T("正在获取 CFWorker 邮件...");
                     try
                     {
                         mailItems.Clear();
@@ -93,17 +95,17 @@ namespace SmsWorkbench
                         {
                             mailItems.Add(item);
                         }
-                        header.Text = row.Identifier + " - 最近 " + mailItems.Count + " 封邮件";
+                        header.Text = Loc.F("{0} - 最近 {1} 封邮件", row.Identifier, mailItems.Count);
                     }
                     catch (Exception ex)
                     {
-                        header.Text = "获取邮件失败：" + ex.Message;
-                        Log((IsReMailRow(row) ? "ReMail" : IsSmailrRow(row) ? "Smailr" : "CFWorker") + "收件箱获取失败：" + ex.Message);
+                        header.Text = Loc.T("获取邮件失败：") + ex.Message;
+                        Log((IsReMailRow(row) ? "ReMail" : IsSmailrRow(row) ? "Smailr" : "CFWorker") + Loc.T("收件箱获取失败：") + ex.Message);
                     }
                     return;
                 }
 
-                header.Text = "正在刷新令牌...";
+                header.Text = Loc.T("正在刷新令牌...");
                 try
                 {
                     mailItems.Clear();
@@ -115,8 +117,8 @@ namespace SmsWorkbench
                 }
                 catch (Exception ex)
                 {
-                    header.Text = "加载失败：" + ex.Message;
-                    Log("收件箱加载异常：" + ex.Message);
+                    header.Text = Loc.T("加载失败：") + ex.Message;
+                    Log(Loc.T("收件箱加载异常：") + ex.Message);
                 }
             }
 
@@ -238,11 +240,11 @@ namespace SmsWorkbench
         {
             if (item == null) return;
             string content = MailBodyFormatter.ToDisplayText(item.Body, item.BodyPreview);
-            if (content.Length == 0) content = "（邮件正文为空）";
+            if (content.Length == 0) content = Loc.T("（邮件正文为空）");
             string code = item.VerificationCode.Length > 0 ? item.VerificationCode : ExtractVerificationCode(content);
             var dialog = new Window
             {
-                Title = item.Subject.Length > 0 ? item.Subject : "邮件详情",
+                Title = item.Subject.Length > 0 ? item.Subject : Loc.T("邮件详情"),
                 Owner = this,
                 Width = 720,
                 Height = 460,
@@ -301,13 +303,13 @@ namespace SmsWorkbench
                 HorizontalAlignment = HorizontalAlignment.Right,
                 Margin = new Thickness(0, 10, 0, 0)
             };
-            var copyCodeBtn = new Button { Content = code.Length > 0 ? "复制验证码 " + code : "未识别验证码", MinWidth = 120, IsEnabled = code.Length > 0 };
-            var copyBodyBtn = new Button { Content = "复制正文", Width = 86 };
-            var closeBtn = new Button { Content = "关闭", Width = 72 };
+            var copyCodeBtn = new Button { Content = code.Length > 0 ? Loc.F("复制验证码 {0}", code) : Loc.T("未识别验证码"), MinWidth = 120, IsEnabled = code.Length > 0 };
+            var copyBodyBtn = new Button { Content = Loc.T("复制正文"), Width = 86 };
+            var closeBtn = new Button { Content = Loc.T("关闭"), Width = 72 };
             copyCodeBtn.Click += (_, __) =>
             {
                 Clipboard.SetText(code);
-                Log("验证码已复制：" + code);
+                Log(Loc.T("验证码已复制：") + code);
             };
             copyBodyBtn.Click += (_, __) => Clipboard.SetText(content);
             closeBtn.Click += (_, __) => dialog.Close();

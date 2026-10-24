@@ -235,7 +235,11 @@ def test_the_fix_is_pinned_in_both_directions():
     assert ("sms_tool.registration.finalize", "sms_tool.paypal.proxy") not in found
     assert ("sms_tool.registration_drivers.browser_flow.orchestrator", "sms_tool.paypal.proxy") not in found
     assert ("sms_tool.commands.registration", "sms_tool.payment.operation") not in found
-    assert ("sms_tool.registration.handlers", "sms_tool.proxy.entry") in found
+    # 2026-10-24: the bootstrap body moved to bootstrap_stages and the identity
+    # body to identity_stages; the definition-site edge moved with them. Both
+    # still import `proxy.entry`, never the `paypal_proxy` shell.
+    assert ("sms_tool.registration.bootstrap_stages", "sms_tool.proxy.entry") in found
+    assert ("sms_tool.registration.identity_stages", "sms_tool.proxy.entry") in found
     assert ("sms_tool.commands.registration", "sms_tool.operation_journal") in found
 
 

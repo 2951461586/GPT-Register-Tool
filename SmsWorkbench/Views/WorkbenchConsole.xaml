@@ -1,0 +1,70 @@
+<UserControl x:Class="SmsWorkbench.WorkbenchConsole"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="clr-namespace:SmsWorkbench.Localization">
+  <!-- Task list + log console. Bindings still walk the inherited MainWindow
+       DataContext; the two DPs exist only so the code-behind can reach the view
+       models it must drive (scroll to last row, append, clear). -->
+          <Grid Margin="0,10,0,0">
+            <Grid.RowDefinitions>
+              <RowDefinition Height="64" MinHeight="42"/>
+              <RowDefinition Height="5"/>
+              <RowDefinition Height="*" MinHeight="200"/>
+            </Grid.RowDefinitions>
+            <Border Grid.Row="0" Padding="0" CornerRadius="4" Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource Line}" BorderThickness="1">
+              <DataGrid x:Name="TaskGrid"
+                        ItemsSource="{Binding TaskList.Tasks}"
+                        AutoGenerateColumns="False"
+                        CanUserAddRows="False"
+                        HeadersVisibility="Column"
+                        IsReadOnly="True"
+                        Background="{DynamicResource PanelBg}"
+                        Foreground="{DynamicResource TextMain}"
+                        RowBackground="{DynamicResource PanelBg}"
+                        AlternatingRowBackground="{DynamicResource GridAltBg}"
+                        HorizontalGridLinesBrush="{DynamicResource Line}"
+                        VerticalGridLinesBrush="Transparent"
+                        RowStyle="{StaticResource {x:Type DataGridRow}}"
+                        CellStyle="{StaticResource {x:Type DataGridCell}}"
+                        ColumnHeaderStyle="{StaticResource {x:Type DataGridColumnHeader}}"
+                        RowHeight="26"
+                        BorderThickness="0"
+ScrollViewer.HorizontalScrollBarVisibility="Auto"
+ScrollViewer.VerticalScrollBarVisibility="Auto"
+VirtualizingPanel.IsVirtualizing="True"
+VirtualizingPanel.VirtualizationMode="Recycling"
+Loaded="TaskGrid_Loaded">
+                <DataGrid.Columns>
+                  <DataGridTextColumn Header="{loc:Tr Key='批次'}" Binding="{Binding Name}" Width="160"/>
+                  <DataGridTextColumn Header="{loc:Tr Key='任务'}" Binding="{Binding Task}" Width="160"/>
+                  <DataGridTextColumn Header="{loc:Tr Key='状态'}" Binding="{Binding Status}" Width="90"/>
+                  <DataGridTextColumn Header="{loc:Tr Key='参数'}" Binding="{Binding Info}" Width="520"/>
+                  <DataGridTextColumn Header="{loc:Tr Key='耗时(s)'}" Binding="{Binding Cost}" Width="80"/>
+                  <DataGridTextColumn Header="{loc:Tr Key='完成时间'}" Binding="{Binding DoneAt}" Width="150"/>
+                </DataGrid.Columns>
+              </DataGrid>
+            </Border>
+            <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{DynamicResource SplitterBg}" ShowsPreview="True"/>
+            <Border Grid.Row="2" Background="{DynamicResource LogBg}" BorderBrush="{DynamicResource LogBorder}" BorderThickness="1" CornerRadius="4">
+              <Grid>
+                <Grid.RowDefinitions>
+                  <RowDefinition Height="Auto"/>
+                  <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <Button Grid.Row="0" Width="74" Height="26" HorizontalAlignment="Right" VerticalAlignment="Top"
+                        Margin="0,4,8,2" Padding="8,0" Command="{Binding LogPanel.ClearCommand}">
+                  <StackPanel Orientation="Horizontal">
+                    <Path Style="{StaticResource IconPath}" Width="13" Height="13" StrokeThickness="1.7"
+                          Data="M3.5 5H12.5 M6 5V3.5H10V5 M5 6.5V13H11V6.5 M7 8V11.5 M9 8V11.5"/>
+                    <TextBlock Text="{loc:Tr Key='清空'}" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                  </StackPanel>
+                </Button>
+                <TextBox Grid.Row="1" x:Name="LogTextBox" Text="{Binding LogPanel.Text, Mode=OneWay}" Background="{DynamicResource LogBg}" Foreground="{DynamicResource LogText}" BorderThickness="0"
+                         FontFamily="Consolas" FontSize="12" IsReadOnly="True" AcceptsReturn="True"
+                         VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                         TextWrapping="Wrap"
+                         VerticalAlignment="Stretch" HorizontalAlignment="Stretch" MinHeight="220" Padding="8,8,8,8"/>
+              </Grid>
+            </Border>
+          </Grid>
+</UserControl>

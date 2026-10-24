@@ -46,7 +46,6 @@ payment requests are never part of the default suite.
 - `test_proxy_pool.py` covers the local SOCKS5 proxy pool.
 - `test_cpa_import.py` covers CPA payload normalization and import routing.
 - `SmsWorkbench.Tests/PaymentMethodsTests.cs` covers the desktop payment-method catalog, aliases, country defaults, and single/batch availability.
-- `SmsWorkbench.Tests/ProtocolPaymentExecutionTests.cs` covers deterministic single-account command planning and backend-result presentation without constructing a WPF window.
 - `SmsWorkbench.Tests/PaymentBatchServiceTests.cs` and `PaymentBatchViewModelTests.cs` cover method-owned Checkout/Approve proxy pools, country defaults, config persistence, and CLI argument mapping; the Settings tests verify legacy protocol pool fields remain hidden and preserved.
 
 ## Test ownership rules

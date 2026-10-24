@@ -4,7 +4,6 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Threading;
-using SmsWorkbench;
 
 namespace SmsWorkbench.Tests;
 
@@ -253,7 +252,17 @@ public sealed class DesktopWindowSmokeTests
             main.NavCommand.Execute("theme");
             Assert.Equal(originalTheme, DesktopThemePreference.Load(rootDirectory, toggledTheme));
 
-            var brandTitle = Assert.IsType<TextBlock>(main.FindName("SidebarBrandTitle"));
+            // A3 moved the sidebar into a UserControl; its namescope is the
+            // control's, not the window's.
+            var sidebar = Assert.Single(FindVisualChildren<Sidebar>(main));
+            Assert.True(sidebar.ActualWidth > 0, "the sidebar did not get laid out");
+            Assert.False(sidebar.IsCollapsed);
+            var sidebarToggle = Assert.IsType<Button>(sidebar.FindName("SidebarToggleButton"));
+            sidebarToggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.True(main.SidebarCollapsed, "the toggle must route through ToggleRequested");
+            sidebarToggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.False(main.SidebarCollapsed);
+            var brandTitle = Assert.IsType<TextBlock>(sidebar.FindName("SidebarBrandTitle"));
             Assert.Equal("GPT Register Tool", brandTitle.Text);
             var formattedBrandTitle = new FormattedText(
                 brandTitle.Text,
@@ -280,7 +289,16 @@ public sealed class DesktopWindowSmokeTests
             stage("verify account grid");
             VerifyAccountScanSummary();
 
-            var accountGrid = Assert.IsType<DataGrid>(main.FindName("AccountGrid"));
+            // A5 moved the table into a UserControl; FindName on the window no
+            // longer reaches its namescope.
+            var accountGridView = Assert.Single(FindVisualChildren<AccountGridView>(main));
+            Assert.True(accountGridView.ActualWidth > 0, "the account grid did not get laid out");
+            var accountGrid = Assert.IsType<DataGrid>(accountGridView.FindName("AccountGrid"));
+            // A4 moved the task list + log into their own control.
+            var console = Assert.Single(FindVisualChildren<WorkbenchConsole>(main));
+            Assert.True(console.ActualWidth > 0, "the workbench console did not get laid out");
+            Assert.NotNull(console.FindName("TaskGrid"));
+            Assert.NotNull(console.FindName("LogTextBox"));
             Assert.DoesNotContain(
                 FindVisualChildren<TextBlock>(main),
                 textBlock => textBlock.Text == "重新生成支付链接");
@@ -314,7 +332,33 @@ public sealed class DesktopWindowSmokeTests
             // Commands reach the window through the menu's PlacementTarget; a
             // wrong binding path leaves Command null and the item silently inert.
             Assert.All(menuItems, item => Assert.NotNull(item.Command));
-            Assert.NotNull(Assert.IsType<Button>(main.FindName("SearchClearButton")).Command);
+            // The filter bar is a UserControl now; MainWindow.FindName cannot see
+            // into it, so the clear button is located through the visual tree.
+            var filterBar = Assert.Single(FindVisualChildren<AccountFilterBar>(main));
+            Assert.True(filterBar.ActualWidth > 0, "the account filter bar did not get laid out");
+            var clearSearch = Assert.Single(
+                FindVisualChildren<Button>(filterBar),
+                button => ReferenceEquals(button.Command, main.Pool.ClearSearchCommand));
+            Assert.Equal(Visibility.Collapsed, clearSearch.Visibility);
+            main.Pool.SearchText = "abc";
+            filterBar.UpdateLayout();
+            Assert.Equal(Visibility.Visible, clearSearch.Visibility);
+            main.Pool.SearchText = "";
+            filterBar.UpdateLayout();
+            Assert.Equal(Visibility.Collapsed, clearSearch.Visibility);
+            // A0 moved the window resources into a merged dictionary; a broken
+            // Source or an unmerged dictionary only fails at load time.
+            // The sidebar styles now live in the Sidebar control's own dictionary.
+            Assert.NotNull(sidebar.FindResource("SidebarNavButtonStyle"));
+            Assert.NotNull(main.FindResource("ToolbarIconPath"));
+            Assert.NotNull(main.FindResource("BooleanToVisibilityConverter"));
+            // A2 moved the title bar into its own control; the three buttons live
+            // in the control's namescope, not the window's.
+            var titleBar = Assert.Single(FindVisualChildren<TitleBar>(main));
+            Assert.True(titleBar.ActualWidth > 0, "the title bar did not get laid out");
+            Assert.NotNull(titleBar.FindName("MinimizeButton"));
+            Assert.NotNull(titleBar.FindName("MaximizeButton"));
+            Assert.NotNull(titleBar.FindName("CloseButton"));
             var headerLeftEdges = new List<double>();
             foreach (MenuItem menuItem in menuItems)
             {

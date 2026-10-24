@@ -10,23 +10,15 @@ namespace SmsWorkbench
         private const double SidebarCollapsedWidth = 90;
         private const int SidebarAnimDurationMs = 100;
 
-        private void ToggleSidebar_Click(object sender, RoutedEventArgs e)
+        private void OnSidebarToggleRequested(object sender, RoutedEventArgs e)
         {
             SidebarCollapsed = !SidebarCollapsed;
         }
 
         private void ApplySidebarCompact(bool compact)
         {
-            if (SidebarToggleButton != null)
-            {
-                SidebarToggleButton.ToolTip = compact ? "展开侧边栏" : "收起侧边栏";
-            }
-
-            SidebarToggleGlyph = compact ? "展开" : "收起";
-            SidebarToggleGeometry = Geometry.Parse(compact
-                ? "M5 4H19A1 1 0 0 1 20 5V19A1 1 0 0 1 19 20H5A1 1 0 0 1 4 19V5A1 1 0 0 1 5 4Z M14 4V20"
-                : "M5 4H19A1 1 0 0 1 20 5V19A1 1 0 0 1 19 20H5A1 1 0 0 1 4 19V5A1 1 0 0 1 5 4Z M10 4V20");
-
+            // Visual state (tooltip, glyph) lives in the Sidebar control's
+            // triggers; the window only owns the column width animation.
             AnimateSidebar(compact);
         }
 

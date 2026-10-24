@@ -2,6 +2,8 @@
 // PaymentBatchService.cs for why the project-wide switch stays `annotations`.
 #nullable enable
 
+using SmsWorkbench.Localization;
+
 namespace SmsWorkbench
 {
     public static class AccessTokenState
@@ -25,10 +27,10 @@ namespace SmsWorkbench
 
         public static string Display(bool hasAccessToken, string probeStatusCode)
         {
-            if (!hasAccessToken) return "未获取";
+            if (!hasAccessToken) return Loc.T("未获取");
             return string.Equals((probeStatusCode ?? "").Trim(), "401", System.StringComparison.OrdinalIgnoreCase)
-                ? "401失效"
-                : "已获取";
+                ? Loc.T("401失效")
+                : Loc.T("已获取");
         }
     }
 }

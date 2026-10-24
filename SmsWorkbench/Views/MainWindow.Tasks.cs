@@ -4,6 +4,8 @@
 
 using System.Text.Json;
 
+using SmsWorkbench.Localization;
+
 namespace SmsWorkbench
 {
     public partial class MainWindow
@@ -92,14 +94,6 @@ namespace SmsWorkbench
         // builders they called (CreateRerunFailedRegistration /
         // CreateRebuildSqlite) are kept: the Contracts side is unit-tested and is
         // the piece to wire up if these actions ever return to the UI.
-
-        private void AccountGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            foreach (object item in e.AddedItems)
-            {
-                if (item is PoolRow row) row.IsChecked = true;
-            }
-        }
 
         private void RunBackend(string taskName, List<string> args)
             => RunUiTask(() => RunBackendAsync(taskName, args, ct: _lifetimeCts.Token));
@@ -396,26 +390,14 @@ namespace SmsWorkbench
                 RefreshPools();
         }
 
-        private void TaskGrid_Loaded(object sender, RoutedEventArgs e) => ScrollTaskGridToBottom();
-
-        private void ScrollTaskGridToBottom()
-        {
-            if (TaskGrid == null || TaskList.Last == null) return;
-            Dispatcher.BeginInvoke(new Action(() =>
-            {
-                object? last = TaskList.Last;
-                if (last == null) return;
-                TaskGrid.SelectedItem = last;
-                TaskGrid.ScrollIntoView(last);
-            }), DispatcherPriority.Background);
-        }
+        private void ScrollTaskGridToBottom() => consoleControl.ScrollToLast();
 
         private void DeleteSelected()
             => RunUiTask(() => DeleteSelectedAsync(_lifetimeCts.Token));
 
         private async Task DeleteSelectedAsync(CancellationToken ct = default)
         {
-            var selected = SelectedEmailRowsOrNotify("删除");
+            var selected = SelectedEmailRowsOrNotify(Loc.T("删除"));
             if (selected.Count == 0) return;
             if (!await ShowDeleteConfirmDialog(selected.Count)) return;
             BackendCommandPlan? plan = null;
@@ -432,14 +414,14 @@ namespace SmsWorkbench
                 {
                     await DialogFactory.ShowInfoAsync(
                         this,
-                        "删除未完成",
-                        failed + " 条记录未能完整删除。请查看运行日志。");
+                        Loc.T("删除未完成"),
+                        Loc.F("{0} 条记录未能完整删除。请查看运行日志。", failed));
                 }
             }
             catch (Exception ex)
             {
                 Log("批量删除失败：" + SensitiveDataSanitizer.Redact(ex.Message));
-                await DialogFactory.ShowInfoAsync(this, "删除失败", "批量删除未完成，请查看运行日志。");
+                await DialogFactory.ShowInfoAsync(this, Loc.T("删除失败"), Loc.T("批量删除未完成，请查看运行日志。"));
             }
             finally
             {
@@ -468,9 +450,9 @@ namespace SmsWorkbench
         {
             return await DialogFactory.ShowConfirmAsync(
                 this,
-                "删除选中的 " + count + " 条记录？",
-                "将同步清理本地邮箱池、SQLite 索引和匹配的 session 文件。此操作不可撤销。",
-                "删除",
+                Loc.F("删除选中的 {0} 条记录？", count),
+                Loc.T("将同步清理本地邮箱池、SQLite 索引和匹配的 session 文件。此操作不可撤销。"),
+                Loc.T("删除"),
                 isDanger: true);
         }
 

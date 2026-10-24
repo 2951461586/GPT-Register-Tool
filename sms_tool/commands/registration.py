@@ -279,17 +279,13 @@ def registration_phone_pool(args: Any):
     return phone_pool
 
 
-def check_registered_promotions(emails, workers=4, proxy=None, timeout=20, proxy_pool=None, payment_eligibility=False):
+def check_registered_promotions(emails, workers=4, proxy=None, timeout=20, proxy_pool=None):
     """Probe plan/promotion for saved accounts.
 
     ``proxy_pool`` is threaded through so this entry point accepts the same
     health-pool rotation as ``commands/accounts.py::check_promotion``. It
     previously had no such parameter, so a pool supplied by the caller was
     silently dropped on this path.
-
-    ``payment_eligibility`` (opt in) additionally enumerates each account's
-    available payment methods into ``raw_json.payment_capability``; see
-    ``accounts/account_payment_eligibility.py``.
     """
     from ..accounts.promotion_batch import refresh_promotion_statuses
     from ..kernel.sanitizer import sanitize
@@ -310,7 +306,6 @@ def check_registered_promotions(emails, workers=4, proxy=None, timeout=20, proxy
             proxy=proxy,
             proxy_pool=proxy_pool,
             timeout=max(5, int(timeout or 20)),
-            payment_eligibility=bool(payment_eligibility),
         )
     except Exception as exc:
         report = {
@@ -332,30 +327,22 @@ def check_registered_promotions(emails, workers=4, proxy=None, timeout=20, proxy
     # here, which left the other CLI entry point with no such key at all.
     trial_eligible = int(report.get("trial_eligible") or 0)
     report["trial_eligible"] = trial_eligible
-    eligibility_ok = int(report.get("payment_eligibility_ok") or 0)
-    eligibility_total = eligibility_ok + int(report.get("payment_eligibility_failed") or 0)
     safe_print(
         "[*] Promotion check: "
         f"success={int(report.get('success') or 0)}/{int(report.get('total') or 0)} "
-        f"trial_eligible={trial_eligible} "
-        f"payment_eligibility={eligibility_ok}/{eligibility_total}"
+        f"trial_eligible={trial_eligible}"
     )
     logger.info(
-        "promotion check finished: success=%s/%s trial_eligible=%s payment_eligibility=%s/%s",
+        "promotion check finished: success=%s/%s trial_eligible=%s",
         int(report.get("success") or 0),
         int(report.get("total") or 0),
         trial_eligible,
-        eligibility_ok,
-        eligibility_total,
     )
     for item in results:
         if not isinstance(item, dict):
             continue
         email = str(item.get("email") or "").strip()
         label = str(item.get("promotion_status") or "检测失败").strip()
-        eligibility = str(item.get("payment_eligibility") or "").strip()
-        if eligibility:
-            label = f"{label} · {eligibility}" if label else eligibility
         safe_print(f"    {mask_account(email)}: {label}")
     return report
 
@@ -368,8 +355,6 @@ _PROMOTION_SUM_KEYS = (
     "transport_failed",
     "persist_failed",
     "trial_eligible",
-    "payment_eligibility_ok",
-    "payment_eligibility_failed",
 )
 
 
@@ -385,9 +370,6 @@ def merge_promotion_reports(reports):
     merged: dict[str, Any] = {key: sum(int(item.get(key) or 0) for item in rows) for key in _PROMOTION_SUM_KEYS}
     merged["ok"] = all(bool(item.get("ok")) for item in rows)
     merged["circuit_breaker_tripped"] = any(bool(item.get("circuit_breaker_tripped")) for item in rows)
-    merged["payment_methods_seen"] = sorted(
-        {str(token) for item in rows for token in (item.get("payment_methods_seen") or [])}
-    )
     merged["results"] = [result for item in rows for result in (item.get("results") or []) if isinstance(result, dict)]
     return merged
 
@@ -407,7 +389,6 @@ def probe_promotion_now(args, ctx: RegistrationCommandContext, email: str):
             # Account-health lane: never reuse the signup exit (see the batch-end call).
             proxy=None,
             timeout=max(5, int(getattr(args, "refresh_timeout", 20) or 20)),
-            payment_eligibility=bool(getattr(args, "payment_eligibility", True)),
         )
     except Exception as exc:
         logger.warning("immediate promotion check failed: %s", type(exc).__name__)
@@ -812,7 +793,6 @@ def save_registration_results(
                 # immediately re-use a contaminated registration exit.
                 proxy=None,
                 timeout=max(5, int(getattr(args, "refresh_timeout", 20) or 20)),
-                payment_eligibility=bool(getattr(args, "payment_eligibility", True)),
             )
         promotion_report = merge_promotion_reports([*inline_promotion.values(), leftover_report])
         if inline_promotion and promotion_report is not None:

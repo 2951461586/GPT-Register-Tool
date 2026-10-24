@@ -2,6 +2,8 @@
 // PaymentBatchService.cs for why the project-wide switch stays `annotations`.
 #nullable enable
 
+using SmsWorkbench.Localization;
+
 namespace SmsWorkbench
 {
     /// <summary>
@@ -17,14 +19,20 @@ namespace SmsWorkbench
 
         public TaskRow? Last => Tasks.Count == 0 ? null : Tasks[Tasks.Count - 1];
 
+        /// <summary>Rows created before the switch keep their text; new rows use the new language.</summary>
+        public void RefreshLanguage()
+        {
+            OnPropertyChanged(string.Empty);
+        }
+
         /// <summary>Appends a running row named "批次 N" and returns it for later updates.</summary>
         public TaskRow StartBatch(string taskName, string info)
         {
             var row = new TaskRow
             {
-                Name = "批次 " + nextSequence++,
+                Name = Loc.F("批次 {0}", nextSequence++),
                 Task = taskName,
-                Status = "运行中",
+                Status = Loc.T("运行中"),
                 Info = info,
             };
             Tasks.Add(row);

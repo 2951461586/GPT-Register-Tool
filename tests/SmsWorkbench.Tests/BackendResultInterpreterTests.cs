@@ -5,19 +5,6 @@ namespace SmsWorkbench.Tests;
 
 public sealed class BackendResultInterpreterTests
 {
-    [Fact]
-    public void PaymentEligibilityResult_UsesSafeErrorReason()
-    {
-        Assert.True(BackendResultInterpreter.HasAccountResults(BackendAccountResultKind.PaymentEligibility));
-        Assert.Equal("支付资格探测", BackendResultInterpreter.AccountResultTitle(BackendAccountResultKind.PaymentEligibility));
-        var row = BackendJson.TextToObject(
-            """{"payment_capability":{"ok":false,"error_stage":"checkout_create","error_code":"checkout_risk_blocked","error":"Bearer secret"},"payment_eligibility":"支付资格未知"}""");
-        Assert.Equal("支付资格未知", BackendResultInterpreter.ResultRowStatus(row));
-        Assert.Equal("Checkout 风控拒绝",
-            BackendResultInterpreter.PaymentEligibilityReason(
-                (Dictionary<string, object>)row["payment_capability"]));
-    }
-
     // ── Scan summary extraction ─────────────────────────────────────────
 
     [Fact]
@@ -250,7 +237,6 @@ public sealed class BackendResultInterpreterTests
     [Theory]
     [InlineData(BackendAccountResultKind.Liveness, true)]
     [InlineData(BackendAccountResultKind.Promotion, true)]
-    [InlineData(BackendAccountResultKind.PaymentEligibility, true)]
     [InlineData(BackendAccountResultKind.None, false)]
     public void HasAccountResults_UsesStableKind(BackendAccountResultKind kind, bool expected)
     {
@@ -260,7 +246,6 @@ public sealed class BackendResultInterpreterTests
     [Theory]
     [InlineData(BackendAccountResultKind.Liveness, "账号测活")]
     [InlineData(BackendAccountResultKind.Promotion, "账号优惠检测")]
-    [InlineData(BackendAccountResultKind.PaymentEligibility, "支付资格探测")]
     public void AccountResultTitle_IsIndependentOfTaskLabel(BackendAccountResultKind kind, string expected)
     {
         Assert.Equal(expected, BackendResultInterpreter.AccountResultTitle(kind));

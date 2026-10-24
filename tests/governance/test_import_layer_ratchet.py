@@ -315,9 +315,39 @@ def test_summary_facts_are_pinned():
     #        `_stage_proxy_is_configured` from their owner `paypal.proxy` instead
     #        of relaying them through `gen_link`. Same pair, same direction, one
     #        more statement -- pairs and mutual pairs are unchanged.
+    #
+    # 2026-10-24: 436 -> 426, ordered pairs 65 -> 64, delayed 257 -> 256. The
+    # dead-code removal took out `accounts/account_payment_eligibility.py` (and
+    # its 1011-line test), the `run_phone` compatibility wrapper, the
+    # `RegistrationState.CODEX_OAUTH` member and the unused `store.markers`
+    # exports. The disappeared ordered pair is the module-level side of that
+    # module; the delayed edge was the matching function-local import. Nothing
+    # was replaced by a facade, so this is a real reduction, not a relocation.
+    #
+    # 2026-10-24 (later): 426 -> 431. **Reviewed increase, decomposition only.**
+    # `registration/handlers.py` lost its bootstrap and identity stage bodies to
+    # `bootstrap_stages.py` / `identity_stages.py`. Those two modules are new
+    # source modules, so the edges they declare are new (source, target) pairs
+    # even though the *target set* is unchanged: registration -> sms_tool +2
+    # (`bootstrap -> operator_output`, `identity -> operator_output`),
+    # -> mailbox +1 (`bootstrap -> mailbox.service`), -> providers +1
+    # (`bootstrap -> providers.mailbox_graph`), -> proxy +1
+    # (`identity -> proxy.entry`; bootstrap's duplicate was offset by deleting
+    # handlers' now-unused import). Handler-side imports that existed only for
+    # the moved bodies (endpoints, mailbox.service, proxy.entry, auth_headers,
+    # fingerprint_pool, checkpoint) were deleted in the same change. No new
+    # target module was introduced; splitting one module into three is simply
+    # counted three times.
+    #
+    # 2026-10-24 (auth/register, same reviewed class): 431 -> 432, no pair-count
+    # change beyond registration -> sms_tool +1. `auth_stages` and
+    # `register_stages` each declare their own `operator_output` edge; deleting
+    # handlers' now-unused `_emit` import offsets one of the two, netting +1.
+    # The target set is again unchanged — this is the decomposition cost, and it
+    # is the last stage body that will move.
     assert totals == {
-        "total_module_edges": 436,
-        "ordered_pairs": 65,
+        "total_module_edges": 432,
+        "ordered_pairs": 64,
         "mutual_pairs": 17,
         "minority_edges": 46,
         # 2026-10-21: 188 -> 190 when the provider ports seam (providers/ports.py)
@@ -328,7 +358,7 @@ def test_summary_facts_are_pinned():
         # `payment/routing.py -> proxy.routing` import that cut ~300 ms from
         # every `payment.routing` consumer (see its reason in
         # `delayed_import_reasons.json`).
-        "delayed_cross_dir_edges": 257,
+        "delayed_cross_dir_edges": 256,
         # Imports under `if TYPE_CHECKING:` never run, so they are not runtime
         # edges. 1 here since 2026-10-23: `payment/link_manager.py` declares its
         # `pay_link` re-exports type-only (the module is not a package, so the

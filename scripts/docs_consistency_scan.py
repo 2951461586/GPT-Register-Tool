@@ -347,7 +347,8 @@ def check_path_refs(failures: list[str]) -> None:
     every pointer written without a line number. ``check_csharp_file_refs``
     accepts a bare name if **any** project owns it, so it skipped
     ``docs/current/dotnet-gates.md``'s ``SmsWorkbench/StageMatrixStore.cs`` --
-    the file had moved to ``SmsWorkbench/Services/``. Measured 2026-10-22, seven
+    the file had moved to ``SmsWorkbench/Services/`` (it has since been deleted
+    with the retired single-account payment window). Measured 2026-10-22, seven
     such pointers were live and every gate was green: five module paths that had
     moved into subpackages (``kernel/``, ``proxy/``, ``registration/``), one
     desktop path missing its subdirectory, and two mermaid nodes naming modules

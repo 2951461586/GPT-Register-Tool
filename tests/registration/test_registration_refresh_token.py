@@ -327,23 +327,16 @@ class TheRefreshTokenActuallyReachesStorageTests(unittest.TestCase):
     """The exchange is worthless if the token stops at ``s.oauth_refresh_token``.
 
     ``obtain_oauth_refresh_token`` sets a runtime field; the column that the
-    recovery chain reads is filled by a different module.  These two tests pin
-    both halves of that hop, because a token that never lands is exactly the
-    failure this whole change exists to fix (measured 0/1245 accounts).
-    """
+    recovery chain reads is filled by a different module.  These tests pin both
+    halves of that hop, because a token that never lands is exactly the failure
+    this whole change exists to fix (measured 0/1245 accounts).
 
-    def test_finalize_publishes_the_field_into_the_payload(self):
-        # ``RegistrationEmailWorkflow.finalize`` is a one-line delegation to
-        # ``registration_finalize.finalize`` (a2349d7), so the payload is
-        # assembled there.  Inspecting the wrapper would assert against
-        # ``return _registration_finalize.finalize(self)`` and pass vacuously
-        # for the wrong reason.
-        source = inspect.getsource(registration_finalize.finalize)
-        self.assertIn('"oauth_refresh_token": s.oauth_refresh_token', source)
-        self.assertIn(
-            '"refresh_token_status": "oauth_present" if s.oauth_refresh_token else "no_rt"',
-            source,
-        )
+    The finalize half moved to ``tests/registration/test_registration_finalize_contract.py``
+    (2026-10-24): the old version asserted the literal source line with
+    ``inspect.getsource``, which reddens on a pure refactor and proves nothing
+    about the produced payload.  The behavioural test calls ``finalize`` and
+    reads ``oauth_refresh_token`` / ``refresh_token_status`` off the result.
+    """
 
     def test_the_storage_mapping_carries_the_token_and_the_status(self):
         mapping = AccountSessionModel.from_value(

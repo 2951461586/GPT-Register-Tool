@@ -92,9 +92,7 @@ def test_all_dead_pool_aborts_before_any_account(monkeypatch, one_account):
     )
     events = _events(monkeypatch)
 
-    result = promotion_batch.refresh_promotion_statuses(
-        ["a@example.com"], workers=1, proxy="http://dead.example:8080", payment_eligibility=False
-    )
+    result = promotion_batch.refresh_promotion_statuses(["a@example.com"], workers=1, proxy="http://dead.example:8080")
 
     assert result["ok"] is False
     assert result["error_code"] == "egress_pool_unavailable"
@@ -113,9 +111,7 @@ def test_blocked_edge_is_still_usable_and_the_batch_proceeds(monkeypatch, one_ac
         lambda account, **kwargs: {"ok": True, "promotion_status": "Free·无优惠"},
     )
 
-    result = promotion_batch.refresh_promotion_statuses(
-        ["a@example.com"], workers=1, proxy="http://edge.example:8080", payment_eligibility=False
-    )
+    result = promotion_batch.refresh_promotion_statuses(["a@example.com"], workers=1, proxy="http://edge.example:8080")
 
     assert result["success"] == 1
     assert "error_code" not in result
@@ -132,7 +128,7 @@ def test_direct_egress_never_probes(monkeypatch, one_account):
         lambda account, **kwargs: {"ok": True, "promotion_status": "Free·无优惠"},
     )
 
-    result = promotion_batch.refresh_promotion_statuses(["a@example.com"], workers=1, payment_eligibility=False)
+    result = promotion_batch.refresh_promotion_statuses(["a@example.com"], workers=1)
 
     assert result["success"] == 1
 
@@ -154,7 +150,6 @@ def test_preflight_samples_up_to_the_cap_and_stops_at_the_first_alive(monkeypatc
     result = promotion_batch.refresh_promotion_statuses(
         ["a@example.com"],
         workers=1,
-        payment_eligibility=False,
         proxy_pool="http://dead1.example:1\nhttp://dead2.example:1\nhttp://live.example:1\nhttp://dead3.example:1",
     )
 
@@ -170,9 +165,7 @@ def test_preflight_samples_up_to_the_cap_and_stops_at_the_first_alive(monkeypatc
 def test_consecutive_transport_failures_trip_and_park_the_rest(monkeypatch, five_accounts):
     monkeypatch.setattr(promotion_batch, "check_account_promotion", _transport_failure)
 
-    result = promotion_batch.refresh_promotion_statuses(
-        five_accounts, workers=1, proxy="http://only.example:8080", payment_eligibility=False
-    )
+    result = promotion_batch.refresh_promotion_statuses(five_accounts, workers=1, proxy="http://only.example:8080")
 
     assert result["circuit_breaker_tripped"] is True
     parked = [item for item in result["results"] if item.get("skipped")]
@@ -194,9 +187,7 @@ def test_unauthorized_failures_never_trip_the_breaker(monkeypatch, five_accounts
         },
     )
 
-    result = promotion_batch.refresh_promotion_statuses(
-        five_accounts, workers=1, proxy="http://only.example:8080", payment_eligibility=False
-    )
+    result = promotion_batch.refresh_promotion_statuses(five_accounts, workers=1, proxy="http://only.example:8080")
 
     assert result["circuit_breaker_tripped"] is False
     assert result["unauthorized"] == 5
@@ -216,9 +207,7 @@ def test_http_reply_failures_never_trip_the_breaker(monkeypatch, five_accounts):
         },
     )
 
-    result = promotion_batch.refresh_promotion_statuses(
-        five_accounts, workers=1, proxy="http://only.example:8080", payment_eligibility=False
-    )
+    result = promotion_batch.refresh_promotion_statuses(five_accounts, workers=1, proxy="http://only.example:8080")
 
     assert result["circuit_breaker_tripped"] is False
     assert not any(item.get("skipped") for item in result["results"])
@@ -237,9 +226,7 @@ def test_a_success_resets_the_consecutive_count(monkeypatch, five_accounts):
     )
     monkeypatch.setattr(promotion_batch, "check_account_promotion", lambda account, **kwargs: next(outcomes))
 
-    result = promotion_batch.refresh_promotion_statuses(
-        five_accounts, workers=1, proxy="http://only.example:8080", payment_eligibility=False
-    )
+    result = promotion_batch.refresh_promotion_statuses(five_accounts, workers=1, proxy="http://only.example:8080")
 
     assert result["circuit_breaker_tripped"] is False
     assert result["success"] == 1
@@ -249,9 +236,7 @@ def test_breaker_threshold_is_configurable(monkeypatch, five_accounts):
     monkeypatch.setattr(promotion_batch, "CFG", {"registration": {"batch_circuit_breaker_threshold": 2}})
     monkeypatch.setattr(promotion_batch, "check_account_promotion", _transport_failure)
 
-    result = promotion_batch.refresh_promotion_statuses(
-        five_accounts, workers=1, proxy="http://only.example:8080", payment_eligibility=False
-    )
+    result = promotion_batch.refresh_promotion_statuses(five_accounts, workers=1, proxy="http://only.example:8080")
 
     assert result["circuit_breaker_tripped"] is True
     assert sum(1 for item in result["results"] if item.get("skipped")) == 3
@@ -261,9 +246,7 @@ def test_breaker_can_be_disabled(monkeypatch, five_accounts):
     monkeypatch.setattr(promotion_batch, "CFG", {"registration": {"batch_circuit_breaker_enabled": False}})
     monkeypatch.setattr(promotion_batch, "check_account_promotion", _transport_failure)
 
-    result = promotion_batch.refresh_promotion_statuses(
-        five_accounts, workers=1, proxy="http://only.example:8080", payment_eligibility=False
-    )
+    result = promotion_batch.refresh_promotion_statuses(five_accounts, workers=1, proxy="http://only.example:8080")
 
     assert result["circuit_breaker_tripped"] is False
     assert not any(item.get("skipped") for item in result["results"])
@@ -272,9 +255,7 @@ def test_breaker_can_be_disabled(monkeypatch, five_accounts):
 def test_parked_accounts_are_not_counted_as_persist_failures(monkeypatch, five_accounts):
     monkeypatch.setattr(promotion_batch, "check_account_promotion", _transport_failure)
 
-    result = promotion_batch.refresh_promotion_statuses(
-        five_accounts, workers=1, proxy="http://only.example:8080", payment_eligibility=False
-    )
+    result = promotion_batch.refresh_promotion_statuses(five_accounts, workers=1, proxy="http://only.example:8080")
 
     assert result["persist_failed"] == 0, "a parked account never attempted a save"
 
@@ -291,7 +272,6 @@ def test_each_candidate_emits_a_progress_event(monkeypatch, one_account):
     promotion_batch.refresh_promotion_statuses(
         ["a@example.com"],
         workers=1,
-        payment_eligibility=False,
         proxy_pool="http://a.example:1\nhttp://b.example:1\nhttp://c.example:1",
     )
 

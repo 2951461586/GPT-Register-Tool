@@ -540,7 +540,7 @@
         <Setter Property="Background" Value="{DynamicResource PanelBg}"/>
         <Setter Property="Foreground" Value="{DynamicResource TextSub}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
-        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="FontWeight" Value="Bold"/>
         <Setter Property="Padding" Value="6,0"/>
         <Setter Property="Height" Value="28"/>
       </Style>
@@ -663,4 +663,28 @@
           </Setter.Value>
         </Setter>
       </Style>
+
+    <!-- Icon geometry shared by every stroke-drawn icon: context-menu icons at
+         14px / 1.4 and paging-control icons at 13px / 1.5. Each <Path> now only
+         carries its own Width/Height/Data. Declared first so every later
+         StaticResource and BasedOn lookup resolves. -->
+    <Style x:Key="MenuIconPath" TargetType="Path">
+      <Setter Property="Width" Value="14"/>
+      <Setter Property="Height" Value="14"/>
+      <Setter Property="Stretch" Value="Uniform"/>
+      <Setter Property="Stroke" Value="{DynamicResource TextSub}"/>
+      <Setter Property="StrokeThickness" Value="1.4"/>
+      <Setter Property="StrokeStartLineCap" Value="Round"/>
+      <Setter Property="StrokeEndLineCap" Value="Round"/>
+      <Setter Property="StrokeLineJoin" Value="Round"/>
+      <Setter Property="Fill" Value="Transparent"/>
+    </Style>
+    <Style x:Key="ToolbarIconPath" TargetType="Path" BasedOn="{StaticResource MenuIconPath}">
+      <Setter Property="Width" Value="13"/>
+      <Setter Property="Height" Value="13"/>
+      <Setter Property="StrokeThickness" Value="1.5"/>
+    </Style>
+  <!-- Shared by UserControls (the account filter bar) that cannot see
+       window-level resources while their own XAML is parsed. -->
+  <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
 </ResourceDictionary>

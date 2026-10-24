@@ -44,7 +44,9 @@ class RegistrationStateTests(unittest.TestCase):
 
         self.assertFalse(workflow.codex_oauth)
         states = [call.args[0] for call in workflow._run_stage.call_args_list]
-        self.assertNotIn(RegistrationState.CODEX_OAUTH, states)
+        # ``RegistrationState.CODEX_OAUTH`` was deleted 2026-10-24, so "the email
+        # lane never enters a codex stage" is now a property of the vocabulary
+        # rather than an assertion about this run.
         self.assertIn(RegistrationState.ACCESS_TOKEN_PROBE, states)
 
     def test_email_registration_ignores_legacy_codex_oauth_true_flag(self):
@@ -65,9 +67,10 @@ class RegistrationStateTests(unittest.TestCase):
 
         workflow.run()
 
+        # ``codex_oauth=True`` is deliberately normalised away: the email lane is
+        # AT-only and has no codex stage left in its vocabulary (the enum member
+        # was deleted 2026-10-24).
         self.assertFalse(workflow.codex_oauth)
-        states = [call.args[0] for call in workflow._run_stage.call_args_list]
-        self.assertNotIn(RegistrationState.CODEX_OAUTH, states)
 
     def test_stage_runner_uses_one_runtime_across_real_stage_seam(self):
         machine = RegistrationStateMachine(lambda *_: None)

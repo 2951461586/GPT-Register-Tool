@@ -2,6 +2,8 @@
 // PaymentBatchService.cs for why the project-wide switch stays `annotations`.
 #nullable enable
 
+using SmsWorkbench.Localization;
+
 namespace SmsWorkbench;
 
 internal sealed record ChangeEmailDialogOptions(
@@ -16,11 +18,11 @@ internal static class ChangeEmailDialogService
     private static readonly (string Label, string Value)[] Providers =
     {
         ("ReMail", "remail"),
-        ("CF Worker 域名邮箱", "cfworker"),
+        (Loc.T("CF Worker 域名邮箱"), "cfworker"),
         ("Smailr", "smailr"),
-        ("iCloud 邮箱池", "icloud"),
-        ("Outlook 邮箱池", "outlook"),
-        ("Hotmail 邮箱池", "hotmail"),
+        (Loc.T("iCloud 邮箱池"), "icloud"),
+        (Loc.T("Outlook 邮箱池"), "outlook"),
+        (Loc.T("Hotmail 邮箱池"), "hotmail"),
     };
 
     public static ChangeEmailDialogOptions? Show(
@@ -45,12 +47,12 @@ internal static class ChangeEmailDialogService
             Margin = new Thickness(0, 0, 0, 10),
         };
         var fileBox = new TextBox { Width = 210, Margin = new Thickness(0, 0, 8, 10) };
-        var browse = new Button { Content = "选择凭证文件", Margin = new Thickness(0, 0, 0, 10) };
+        var browse = new Button { Content = Loc.T("选择凭证文件"), Margin = new Thickness(0, 0, 0, 10) };
         browse.Click += (_, _) =>
         {
             var dialog = new Microsoft.Win32.OpenFileDialog
             {
-                Filter = "文本文件 (*.txt)|*.txt|所有文件 (*.*)|*.*",
+                Filter = Loc.T("文本文件 (*.txt)|*.txt|所有文件 (*.*)|*.*"),
             };
             if (dialog.ShowDialog() == true)
             {
@@ -65,9 +67,9 @@ internal static class ChangeEmailDialogService
             Margin = new Thickness(0, 0, 0, 6),
         });
         root.Children.Add(providerBox);
-        root.Children.Add(new TextBlock { Text = "并发数" });
+        root.Children.Add(new TextBlock { Text = Loc.T("并发数") });
         root.Children.Add(workerBox);
-        root.Children.Add(new TextBlock { Text = "iCloud/Outlook/Hotmail 需提供等量凭证文件" });
+        root.Children.Add(new TextBlock { Text = Loc.T("iCloud/Outlook/Hotmail 需提供等量凭证文件") });
 
         var fileRow = new StackPanel { Orientation = Orientation.Horizontal };
         fileRow.Children.Add(fileBox);
@@ -79,10 +81,10 @@ internal static class ChangeEmailDialogService
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right,
         };
-        var ok = new Button { Content = "开始", Width = 80, IsDefault = true };
+        var ok = new Button { Content = Loc.T("开始"), Width = 80, IsDefault = true };
         var cancel = new Button
         {
-            Content = "取消",
+            Content = Loc.T("取消"),
             Width = 80,
             IsCancel = true,
             Margin = new Thickness(8, 0, 0, 0),
@@ -93,7 +95,7 @@ internal static class ChangeEmailDialogService
 
         var dialogWindow = DialogFactory.Create(
             owner,
-            "邮箱换绑",
+            Loc.T("邮箱换绑"),
             460,
             360,
             minWidth: 440,

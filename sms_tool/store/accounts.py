@@ -71,8 +71,8 @@ def _terminal_state_from(status: str, error: str, raw_json: str) -> str:
 #       or ``mailbox_token`` makes ``account_recovery._has_relogin_material()``
 #       answer False, i.e. a recoverable account gets marked 掉号.
 #   registration_country   -- ``billing_country_for()`` silently falls back to
-#       "US" when it is empty, which would aim the payment-eligibility probe at
-#       the wrong catalog.
+#       "US" when it is empty, which would aim the billing-country catalog at
+#       the wrong country.
 #   batch_id / json_path   -- provenance, and the pointer to the session file.
 #
 # ``mailbox_refresh_token`` is NOT here: it is not an ``accounts`` column (it

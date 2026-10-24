@@ -6,40 +6,23 @@ namespace SmsWorkbench
 {
     public partial class MainWindow
     {
-        // ── Search clear button ──
-
-        /// <summary>
-        /// Toggle the visibility of the search clear (×) button based on
-        /// whether the search text is non-empty. Called when the pool
-        /// view model's SearchText changes.
-        /// </summary>
-        private void UpdateSearchClearVisibility()
-        {
-            if (SearchClearButton != null)
-            {
-                SearchClearButton.Visibility = string.IsNullOrEmpty(Pool.SearchText)
-                    ? Visibility.Collapsed
-                    : Visibility.Visible;
-            }
-        }
-
         // ── DataGrid context menu handlers ──
 
         private void CtxViewDetail()
         {
-            if (AccountGrid?.SelectedItem is PoolRow row)
+            if (accountGridControl.SelectedRow is PoolRow row)
                 ShowAccountDetail(row);
         }
 
         private void CtxViewInbox()
         {
-            if (AccountGrid?.SelectedItem is PoolRow row)
+            if (accountGridControl.SelectedRow is PoolRow row)
                 ShowInboxDialog(row);
         }
 
         private void CtxCopyEmail()
         {
-            if (AccountGrid?.SelectedItem is PoolRow row && !string.IsNullOrWhiteSpace(row.Identifier))
+            if (accountGridControl.SelectedRow is PoolRow row && !string.IsNullOrWhiteSpace(row.Identifier))
             {
                 try
                 {
@@ -58,7 +41,7 @@ namespace SmsWorkbench
 
         private async Task CtxCopyAccessTokenAsync(CancellationToken ct = default)
         {
-            if (AccountGrid?.SelectedItem is not PoolRow row)
+            if (accountGridControl.SelectedRow is not PoolRow row)
             {
                 NotifyWarning("请先选择一个账号。");
                 return;
@@ -82,7 +65,7 @@ namespace SmsWorkbench
 
         private void CtxCopyPayPal()
         {
-            if (AccountGrid?.SelectedItem is PoolRow row && !string.IsNullOrWhiteSpace(row.PayPalUrl))
+            if (accountGridControl.SelectedRow is PoolRow row && !string.IsNullOrWhiteSpace(row.PayPalUrl))
             {
                 CopyPayPalUrl(row.PayPalUrl, row.Identifier);
             }
@@ -94,7 +77,7 @@ namespace SmsWorkbench
 
         private void CtxOpenPayPal()
         {
-            if (AccountGrid?.SelectedItem is PoolRow row && !string.IsNullOrWhiteSpace(row.PayPalUrl))
+            if (accountGridControl.SelectedRow is PoolRow row && !string.IsNullOrWhiteSpace(row.PayPalUrl))
             {
                 OpenPayPalUrl(row.PayPalUrl, row.Identifier);
             }
@@ -106,7 +89,7 @@ namespace SmsWorkbench
 
         private void CtxOpenSource()
         {
-            if (AccountGrid?.SelectedItem is PoolRow row)
+            if (accountGridControl.SelectedRow is PoolRow row)
                 OpenAccountJson(row);
         }
 
@@ -115,7 +98,7 @@ namespace SmsWorkbench
 
         private async Task CtxCheckAccountAliveAsync(CancellationToken ct = default)
         {
-            if (AccountGrid?.SelectedItem is not PoolRow row || string.IsNullOrWhiteSpace(row.Identifier))
+            if (accountGridControl.SelectedRow is not PoolRow row || string.IsNullOrWhiteSpace(row.Identifier))
             {
                 NotifyWarning("请先选择一个账号。");
                 return;

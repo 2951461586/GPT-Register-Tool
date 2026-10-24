@@ -36,9 +36,11 @@
     "sms_tool/proxy/bridge.py": 5,
     "sms_tool/proxy/entry.py": 1,
     "sms_tool/regional_payment_adapter.py": 1,
+    "sms_tool/registration/auth_stages.py": 1,
     "sms_tool/registration/orchestrator.py": 26,
     "sms_tool/registration/outcome.py": 1,
     "sms_tool/registration/pulse.py": 1,
+    "sms_tool/registration/register_stages.py": 1,
     "sms_tool/registration_drivers/browser_flow/orchestrator.py": 1,
     "sms_tool/registration_drivers/external_sessions/__init__.py": 11,
     "sms_tool/registration_drivers/external_sessions/managed.py": 2,
@@ -74,5 +76,5 @@
     "tests/workbench/test_cli_registration_driver.py": 1,
     "tests/workbench/test_operator_output.py": 1
   },
-  "total": 281
+  "total": 283
 }

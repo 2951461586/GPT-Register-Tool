@@ -165,6 +165,7 @@ class RegistrationProgressTests(unittest.TestCase):
                     "edge_challenge_unknown": 0,
                     "edge_challenge_rotations": 0,
                     "edge_challenge_rotate_failed": 0,
+                    "fingerprint_pool_failures": 0,
                 },
             )
             self.assertTrue(stored["future_batch_eligible"])

@@ -1,6 +1,7 @@
 <Application x:Class="SmsWorkbench.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="clr-namespace:SmsWorkbench.Localization"
              >
   <Application.Resources>
     <ResourceDictionary>
@@ -11,6 +12,7 @@
         <ResourceDictionary Source="Themes/Palette.xaml"/>
         <ResourceDictionary Source="Themes/Controls.xaml"/>
       </ResourceDictionary.MergedDictionaries>
+      <loc:PoolSummaryConverter x:Key="PoolSummaryConverter"/>
     </ResourceDictionary>
   </Application.Resources>
 </Application>

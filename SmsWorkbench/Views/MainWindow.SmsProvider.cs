@@ -4,6 +4,8 @@
 
 using System.Text.Json.Nodes;
 
+using SmsWorkbench.Localization;
+
 namespace SmsWorkbench
 {
     public partial class MainWindow
@@ -74,9 +76,8 @@ namespace SmsWorkbench
             if (string.IsNullOrWhiteSpace(apiKey))
             {
                 ShowThemedInfoDialog(
-                    provider.Label + " 未配置",
-                    $"请先在设置的「接码供应商」分类中填写 {provider.Label} 的 API Key"
-                    + $"（配置键 {section}.api_key，或环境变量 {provider.ApiKeyEnv}）。");
+                    Loc.F("{0} 未配置", provider.Label),
+                    Loc.F("请先在设置的「接码供应商」分类中填写 {0} 的 API Key（配置键 {1}.api_key，或环境变量 {2}）。", provider.Label, section, provider.ApiKeyEnv));
                 return false;
             }
 
@@ -106,7 +107,7 @@ namespace SmsWorkbench
 
                 if (online.Count == 0)
                 {
-                    catalogError = "在线目录没有返回任何可用国家";
+                    catalogError = Loc.T("在线目录没有返回任何可用国家");
                     online = null;
                 }
                 else
@@ -160,11 +161,8 @@ namespace SmsWorkbench
             else
             {
                 ShowThemedInfoDialog(
-                    provider.Label + " 加载失败",
-                    $"无法读取 OpenAI 号码地区和价格档位：{catalogError}"
-                    + $"。配置里也没有可用的国家与档位，请先填写 {section}.country 与"
-                    + $" {section}.target_price（或 .max_price / .min_price），"
-                    + $"或改用命令行查询 {provider.Label} 的可用国家与价格。");
+                    Loc.F("{0} 加载失败", provider.Label),
+                    Loc.F("无法读取 OpenAI 号码地区和价格档位：{0}。配置里也没有可用的国家与档位，请先填写 {1}.country 与 {2}.target_price（或 .max_price / .min_price），或改用命令行查询 {0} 的可用国家与价格。", catalogError, section, section));
                 return false;
             }
 
@@ -188,7 +186,7 @@ namespace SmsWorkbench
 
             var dialog = new Window
             {
-                Title = "一键接码",
+                Title = Loc.T("一键接码"),
                 Owner = this,
                 Width = Math.Min(620, SystemParameters.WorkArea.Width - 60),
                 Height = 420,
@@ -213,7 +211,7 @@ namespace SmsWorkbench
             };
             var heading = new TextBlock
             {
-                Text = "选择 " + provider.Label + " 号码",
+                Text = Loc.F("选择 {0} 号码", provider.Label),
                 FontSize = 20,
                 FontWeight = FontWeights.SemiBold,
                 Foreground = (Brush)FindResource("TextMain"),
@@ -221,7 +219,7 @@ namespace SmsWorkbench
             };
             var balanceText = new TextBlock
             {
-                Text = "当前平台余额：$" + balance,
+                Text = Loc.F("当前平台余额：${0}", balance),
                 FontSize = 13,
                 Foreground = (Brush)FindResource("TextSub")
             };
@@ -230,7 +228,7 @@ namespace SmsWorkbench
             Grid.SetRow(headingPanel, 0);
             root.Children.Add(headingPanel);
 
-            var servicePanel = CreateSmsProviderDialogRow("服务商", out ContentControl serviceHost);
+            var servicePanel = CreateSmsProviderDialogRow(Loc.T("服务商"), out ContentControl serviceHost);
             serviceHost.Content = new TextBlock
             {
                 Text = "OpenAI (ChatGPT)",
@@ -242,7 +240,7 @@ namespace SmsWorkbench
             Grid.SetRow(servicePanel, 1);
             root.Children.Add(servicePanel);
 
-            var countryPanel = CreateSmsProviderDialogRow("国家或地区", out ContentControl countryHost);
+            var countryPanel = CreateSmsProviderDialogRow(Loc.T("国家或地区"), out ContentControl countryHost);
             var countryBox = new ComboBox
             {
                 ItemsSource = countries,
@@ -257,7 +255,7 @@ namespace SmsWorkbench
             Grid.SetRow(countryPanel, 2);
             root.Children.Add(countryPanel);
 
-            var tierPanel = CreateSmsProviderDialogRow("号码档位", out ContentControl tierHost);
+            var tierPanel = CreateSmsProviderDialogRow(Loc.T("号码档位"), out ContentControl tierHost);
             var tierBox = new ComboBox
             {
                 ItemsSource = selectedCountry.Tiers,
@@ -294,8 +292,8 @@ namespace SmsWorkbench
                 // price is printed -- an "(unqueried)" note next to it read as a
                 // caveat on the price itself, which it never was.
                 inventory.Text = tier.Count < 0
-                    ? $"价格 ${tier.Price} / 个"
-                    : $"当前库存 {tier.Count} 个，价格 ${tier.Price} / 个";
+                    ? Loc.F("价格 ${0} / 个", tier.Price)
+                    : Loc.F("当前库存 {0} 个，价格 ${1} / 个", tier.Count, tier.Price);
             }
 
             countryBox.SelectionChanged += (_, _) =>
@@ -316,7 +314,7 @@ namespace SmsWorkbench
             };
             var cancel = new Button
             {
-                Content = "取消",
+                Content = Loc.T("取消"),
                 MinWidth = 88,
                 Height = 36,
                 Margin = new Thickness(0, 0, 10, 0),
@@ -324,7 +322,7 @@ namespace SmsWorkbench
             };
             var start = new Button
             {
-                Content = "开始接码",
+                Content = Loc.T("开始接码"),
                 MinWidth = 104,
                 Height = 36,
                 IsDefault = true

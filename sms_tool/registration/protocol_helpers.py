@@ -141,14 +141,21 @@ def _safe_float(value: Any, default: float = 0.0) -> float:
 def _new_registration_session(proxy: str = "") -> Any:
     """Build the protocol session for one registration.
 
-    P1-8: curl_cffi honours ``trust_env`` by default, so a machine-wide
-    ``HTTP(S)_PROXY`` in the process environment silently *overrides* the
-    per-account proxy set here -- every account would then exit through one
-    shared IP, which defeats the whole proxy pool.  The preflight already pins
-    this (``registration_preflight``), as do the other transports
-    (``paypal_protocol``, ``gcash_transport``, ``phone_proxy``).  With no proxy
-    configured we leave the default alone so an env-provided proxy still
-    applies.
+    ``trust_env`` is set to ``False`` as a **defensive** measure, and it is
+    deliberately described that way since the 2026-10-24 re-check:
+
+    * ``curl_cffi==0.16.0`` only stores the flag (``requests/session.py``
+      assigns ``self.trust_env``) and **no code in the package reads it**. The
+      explicit ``session.proxies`` map is consumed by
+      ``utils.set_curl_options(proxies_list=[self.proxies, proxies])``, which is
+      why a machine-wide ``HTTP(S)_PROXY`` cannot override the per-account
+      proxy in this version.
+    * The attribute is still set: if the library starts honouring it, this call
+      is already on the right side. Do **not** cite it as a live protection in
+      a scan or a design note -- it protects nothing today.
+
+    With no proxy configured the default is left alone, so an env-provided proxy
+    still applies.
     """
     session = curl_requests.Session()
     if proxy:

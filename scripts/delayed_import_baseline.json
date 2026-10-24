@@ -92,7 +92,6 @@
     "sms_tool/codex_phone.py -> sms_tool.phone_reuse": "deferred",
     "sms_tool/commands/accounts.py -> sms_tool.accounts.account_health": "startup",
     "sms_tool/commands/accounts.py -> sms_tool.accounts.account_liveness": "startup",
-    "sms_tool/commands/accounts.py -> sms_tool.accounts.account_payment_eligibility": "startup",
     "sms_tool/commands/accounts.py -> sms_tool.accounts.promotion_batch": "startup",
     "sms_tool/commands/accounts.py -> sms_tool.accounts.recovery_batch": "startup",
     "sms_tool/commands/accounts.py -> sms_tool.codex_export": "startup",
@@ -262,7 +261,7 @@
     "sms_tool/registration/finalize.py -> sms_tool.accounts.account_identity": "deferred",
     "sms_tool/registration/finalize.py -> sms_tool.registration.handlers": "deferred",
     "sms_tool/registration/finalize.py -> sms_tool.sentinel.bundle": "provider",
-    "sms_tool/registration/handlers.py -> sms_tool.sentinel": "provider",
+    "sms_tool/registration/identity_stages.py -> sms_tool.sentinel": "provider",
     "sms_tool/registration/orchestrator.py -> sms_tool.batch_runner": "deferred",
     "sms_tool/registration/orchestrator.py -> sms_tool.registration.handlers": "deferred",
     "sms_tool/registration/orchestrator.py -> sms_tool.registration_drivers.playwright": "provider",
@@ -346,7 +345,7 @@
     "sms_tool/codex_export.py": 1,
     "sms_tool/codex_oauth.py": 4,
     "sms_tool/codex_phone.py": 2,
-    "sms_tool/commands/accounts.py": 15,
+    "sms_tool/commands/accounts.py": 14,
     "sms_tool/commands/helpers.py": 3,
     "sms_tool/commands/mailbox_ops.py": 8,
     "sms_tool/commands/omakse.py": 2,
@@ -406,7 +405,7 @@
     "sms_tool/registration/cancel.py": 1,
     "sms_tool/registration/concurrency.py": 1,
     "sms_tool/registration/finalize.py": 4,
-    "sms_tool/registration/handlers.py": 2,
+    "sms_tool/registration/identity_stages.py": 2,
     "sms_tool/registration/orchestrator.py": 3,
     "sms_tool/registration/persistence.py": 5,
     "sms_tool/registration/preflight.py": 1,
@@ -440,8 +439,8 @@
     "cycle": 8,
     "deferred": 182,
     "provider": 34,
-    "startup": 96,
+    "startup": 95,
     "test-seam": 0
   },
-  "total": 421
+  "total": 420
 }

@@ -131,12 +131,7 @@ def test_refresh_promotion_statuses_emits_terminal_event_per_account(monkeypatch
         lambda account, **kwargs: {"ok": True, "promotion_status": "Free·无优惠"},
     )
 
-    # Promotion-only subject: the payment-eligibility probe is a separate
-    # network boundary (Checkout + Stripe init) and would otherwise fire real
-    # requests from this test.
-    result = promotion_batch.refresh_promotion_statuses(
-        ["a@example.com", "b@example.com"], workers=2, payment_eligibility=False
-    )
+    result = promotion_batch.refresh_promotion_statuses(["a@example.com", "b@example.com"], workers=2)
 
     terminal = [event for event in events if event.get("stage") == "account_completed"]
     assert result["total"] == 2
@@ -197,7 +192,6 @@ def test_refresh_promotion_statuses_rotates_stateless_proxy_after_timeout(monkey
         proxy="http://dead.example:8080",
         proxy_pool="http://dead.example:8080\nhttp://healthy.example:8080",
         timeout=5,
-        payment_eligibility=False,
     )
 
     assert result["success"] == 1
@@ -274,47 +268,9 @@ def test_refresh_reports_trial_eligible_for_trial_accounts(monkeypatch):
         "check_account_promotion",
         lambda account, **kwargs: _trial_probe(),
     )
-    result = promotion_batch.refresh_promotion_statuses(["trial@example.com"], workers=1, payment_eligibility=False)
+    result = promotion_batch.refresh_promotion_statuses(["trial@example.com"], workers=1)
 
     assert result["trial_eligible"] == 1
-
-
-def test_payment_eligibility_diagnostics_only_groups_safe_failure_facts():
-    from sms_tool.accounts.account_payment_eligibility import payment_eligibility_diagnostics
-
-    observations = [
-        {
-            "ok": False,
-            "error_stage": "preparing_proxy",
-            "error_code": "egress_country_mismatch",
-            "billing_country": "IN",
-            "expected_country": "IN",
-            "observed_country": "US",
-        },
-        {
-            "ok": False,
-            "error_stage": "checkout_create",
-            "error_code": "checkout_risk_blocked",
-            "http_status": 400,
-            "error": "Bearer private-access-token",
-        },
-        {
-            "ok": False,
-            "error_stage": "checkout_create",
-            "error_code": "Bearer private-access-token",
-            "http_status": 400,
-        },
-        {"ok": True, "methods": ["card"]},
-    ]
-    diagnostics = payment_eligibility_diagnostics(observations)
-    assert diagnostics["by_stage"] == {"checkout_create": 2, "preparing_proxy": 1}
-    assert diagnostics["by_error_code"] == {
-        "checkout_risk_blocked": 1,
-        "egress_country_mismatch": 1,
-        "other": 1,
-    }
-    assert diagnostics["by_http_status"] == {"400": 2}
-    assert "private-access-token" not in json.dumps(diagnostics)
 
 
 def test_registration_save_invokes_optional_promotion_stage(tmp_path):

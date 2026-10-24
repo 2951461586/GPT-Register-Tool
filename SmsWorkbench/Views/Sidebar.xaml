@@ -1,0 +1,299 @@
+<UserControl x:Class="SmsWorkbench.Sidebar"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="clr-namespace:SmsWorkbench.Localization"
+             xmlns:local="clr-namespace:SmsWorkbench">
+  <!-- Sidebar visuals only: the column width (and its animation) stays on
+       MainWindow because `SidebarColumn` is a definition of the window grid.
+       `IsCollapsed` drives every visual trigger; `ToggleRequested` asks the
+       window to flip `SidebarCollapsed`. -->
+  <UserControl.Resources>
+    <Style x:Key="SidebarNavButtonStyle" TargetType="Button">
+      <!-- Self-contained: this dictionary is a UserControl's, so it cannot rely
+           on the application-level implicit Button style. These five setters are
+           what that style contributed before the split; the Template below
+           overrides the rest. -->
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+      <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
+      <Setter Property="FontWeight" Value="Medium"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
+      <Setter Property="HorizontalAlignment" Value="Stretch"/>
+      <Setter Property="Margin" Value="0,0,0,4"/>
+      <Setter Property="Height" Value="38"/>
+      <Setter Property="Padding" Value="10,0"/>
+      <Setter Property="HorizontalContentAlignment" Value="Left"/>
+      <Setter Property="Background" Value="{DynamicResource SidebarButtonBg}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Chrome"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="4">
+              <ContentPresenter Margin="{TemplateBinding Padding}"
+                                HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource PanelHover}"/>
+                <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource LineStrong}"/>
+              </Trigger>
+              <Trigger Property="IsPressed" Value="True">
+                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource PanelHover}"/>
+                <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource LineStrong}"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="IconNavButtonStyle" TargetType="local:IconNavButton">
+      <Setter Property="HorizontalAlignment" Value="Stretch"/>
+      <Setter Property="Margin" Value="0,0,0,4"/>
+      <Setter Property="Height" Value="38"/>
+      <Setter Property="Padding" Value="10,0"/>
+      <Setter Property="HorizontalContentAlignment" Value="Left"/>
+      <Setter Property="Background" Value="{DynamicResource SidebarButtonBg}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="local:IconNavButton">
+            <Border x:Name="Chrome"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="4">
+              <Grid Margin="{TemplateBinding Padding}">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="Auto"/>
+                  <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Border Width="32" Height="32" CornerRadius="4" Background="Transparent" BorderBrush="Transparent" BorderThickness="0" VerticalAlignment="Center">
+                  <Path Width="17" Height="17" Stretch="Uniform"
+                        Stroke="{DynamicResource TextSub}" StrokeThickness="1.4"
+                        StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                        Fill="Transparent" HorizontalAlignment="Center" VerticalAlignment="Center"
+                        Data="{TemplateBinding IconGeometry}"/>
+                </Border>
+                <TextBlock Grid.Column="1" Text="{TemplateBinding Text}"
+                           Style="{DynamicResource SidebarLabelStyle}" FontSize="15"
+                           Foreground="{DynamicResource TextMain}"
+                           VerticalAlignment="Center"/>
+              </Grid>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource PanelHover}"/>
+                <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource LineStrong}"/>
+              </Trigger>
+              <Trigger Property="IsPressed" Value="True">
+                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource PanelHover}"/>
+                <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource LineStrong}"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="SidebarPaneBorderStyle" TargetType="Border">
+      <Setter Property="Background" Value="{DynamicResource SidebarBg}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="4"/>
+      <Setter Property="Padding" Value="8"/>
+    </Style>
+    <Style x:Key="SidebarBrandLogoStyle" TargetType="Border">
+      <Setter Property="Width" Value="40"/>
+      <Setter Property="Height" Value="40"/>
+      <Setter Property="CornerRadius" Value="4"/>
+      <Setter Property="Background" Value="{DynamicResource SidebarBg}"/>
+      <Setter Property="BorderBrush" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+      <Style.Triggers>
+        <DataTrigger Binding="{Binding IsCollapsed, RelativeSource={RelativeSource AncestorType=local:Sidebar}, FallbackValue=False}" Value="True">
+          <Setter Property="Visibility" Value="Collapsed"/>
+        </DataTrigger>
+      </Style.Triggers>
+    </Style>
+    <Style x:Key="SidebarBrandTextPanelStyle" TargetType="StackPanel">
+      <Setter Property="Margin" Value="10,0,0,0"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+      <Style.Triggers>
+        <DataTrigger Binding="{Binding IsCollapsed, RelativeSource={RelativeSource AncestorType=local:Sidebar}, FallbackValue=False}" Value="True">
+          <Setter Property="Visibility" Value="Collapsed"/>
+        </DataTrigger>
+      </Style.Triggers>
+    </Style>
+    <Style x:Key="SidebarToggleButtonStyle" TargetType="Button" BasedOn="{StaticResource SidebarNavButtonStyle}">
+      <Setter Property="Width" Value="34"/>
+      <Setter Property="Height" Value="34"/>
+      <Setter Property="Padding" Value="0"/>
+      <Setter Property="Margin" Value="10,0,0,0"/>
+      <Setter Property="HorizontalAlignment" Value="Right"/>
+      <Setter Property="HorizontalContentAlignment" Value="Center"/>
+      <Setter Property="BorderBrush" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Chrome"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="Transparent"
+                    BorderThickness="0"
+                    CornerRadius="4">
+              <ContentPresenter Margin="{TemplateBinding Padding}"
+                                HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource PanelHover}"/>
+              </Trigger>
+              <Trigger Property="IsPressed" Value="True">
+                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource PanelHover}"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+      <Style.Triggers>
+        <DataTrigger Binding="{Binding IsCollapsed, RelativeSource={RelativeSource AncestorType=local:Sidebar}, FallbackValue=False}" Value="True">
+          <Setter Property="Margin" Value="0,0,9,0"/>
+        </DataTrigger>
+      </Style.Triggers>
+    </Style>
+    <Style x:Key="SidebarScrollBarStyle" TargetType="{x:Type ScrollBar}">
+      <Setter Property="Width" Value="0"/>
+      <Setter Property="MinWidth" Value="0"/>
+      <Setter Property="Opacity" Value="0"/>
+      <Setter Property="Visibility" Value="Collapsed"/>
+    </Style>
+    <Style x:Key="SidebarLabelStyle" TargetType="TextBlock">
+      <Setter Property="Margin" Value="10,0,0,0"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+      <Setter Property="FontWeight" Value="Normal"/>
+      <Style.Triggers>
+        <DataTrigger Binding="{Binding IsCollapsed, RelativeSource={RelativeSource AncestorType=local:Sidebar}, FallbackValue=False}" Value="True">
+          <Setter Property="Visibility" Value="Collapsed"/>
+        </DataTrigger>
+      </Style.Triggers>
+    </Style>
+    <Style x:Key="SidebarSectionHeaderStyle" TargetType="TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
+      <Setter Property="FontSize" Value="11"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Height" Value="13"/>
+      <Setter Property="Margin" Value="4,12,0,5"/>
+      <Setter Property="TextWrapping" Value="NoWrap"/>
+      <Setter Property="TextAlignment" Value="Left"/>
+      <Style.Triggers>
+        <DataTrigger Binding="{Binding IsCollapsed, RelativeSource={RelativeSource AncestorType=local:Sidebar}, FallbackValue=False}" Value="True">
+          <Setter Property="Margin" Value="4,12,4,5"/>
+          <Setter Property="HorizontalAlignment" Value="Stretch"/>
+          <Setter Property="TextAlignment" Value="Left"/>
+        </DataTrigger>
+      </Style.Triggers>
+    </Style>
+  </UserControl.Resources>
+        <Grid Margin="10,0,10,10" ClipToBounds="True" HorizontalAlignment="Stretch">
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+          </Grid.RowDefinitions>
+
+          <Border Height="58"
+                  Margin="0,0,0,10"
+                  Style="{StaticResource SidebarPaneBorderStyle}">
+            <Grid>
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+              </Grid.ColumnDefinitions>
+              <Border Style="{StaticResource SidebarBrandLogoStyle}">
+                <Image Source="/Assets/app-icon.ico" Width="22" Height="22" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+              </Border>
+              <StackPanel Grid.Column="1" Style="{StaticResource SidebarBrandTextPanelStyle}" Margin="10,0,8,0">
+                <TextBlock x:Name="SidebarBrandTitle"
+                           Text="GPT Register Tool"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           TextTrimming="CharacterEllipsis"/>
+              </StackPanel>
+              <Button x:Name="SidebarToggleButton" Grid.Column="2" Click="Toggle_Click">
+                <Button.Style>
+                  <Style TargetType="Button" BasedOn="{StaticResource SidebarToggleButtonStyle}">
+                    <Setter Property="ToolTip" Value="{loc:Tr Key='收起侧边栏'}"/>
+                    <Style.Triggers>
+                      <DataTrigger Binding="{Binding IsCollapsed, RelativeSource={RelativeSource AncestorType=local:Sidebar}}" Value="True">
+                        <Setter Property="ToolTip" Value="{loc:Tr Key='展开侧边栏'}"/>
+                      </DataTrigger>
+                    </Style.Triggers>
+                  </Style>
+                </Button.Style>
+                <Path Width="16" Height="16" Stretch="Uniform"
+                      Stroke="{DynamicResource TextSub}" StrokeThickness="1.25"
+                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                      Fill="Transparent" HorizontalAlignment="Center" VerticalAlignment="Center">
+                  <Path.Style>
+                    <Style TargetType="Path">
+                      <Setter Property="Data" Value="M5 4H19A1 1 0 0 1 20 5V19A1 1 0 0 1 19 20H5A1 1 0 0 1 4 19V5A1 1 0 0 1 5 4Z M10 4V20"/>
+                      <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsCollapsed, RelativeSource={RelativeSource AncestorType=local:Sidebar}}" Value="True">
+                          <Setter Property="Data" Value="M5 4H19A1 1 0 0 1 20 5V19A1 1 0 0 1 19 20H5A1 1 0 0 1 4 19V5A1 1 0 0 1 5 4Z M14 4V20"/>
+                        </DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </Path.Style>
+                </Path>
+              </Button>
+            </Grid>
+          </Border>
+
+          <Border Grid.Row="1"
+                  Style="{StaticResource SidebarPaneBorderStyle}">
+            <ScrollViewer VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled"
+                          CanContentScroll="False">
+              <ScrollViewer.Resources>
+                <Style TargetType="{x:Type ScrollBar}" BasedOn="{StaticResource SidebarScrollBarStyle}"/>
+              </ScrollViewer.Resources>
+              <StackPanel>
+                <TextBlock Text="{loc:Tr Key='一键操作'}" Style="{StaticResource SidebarSectionHeaderStyle}"/>
+                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="M16 16v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 8a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M22 16v-1 M19 13h6" Text="{loc:Tr Key='一键注册'}" Command="{Binding NavCommand}" CommandParameter="register"/>
+                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" Text="{loc:Tr Key='一键接码'}" Command="{Binding NavCommand}" CommandParameter="sms"/>
+                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="M3 3v18h18 M7 14l4-4 4 4 5-5" Text="{loc:Tr Key='账号测活'}" Command="{Binding NavCommand}" CommandParameter="scan"/>
+                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7 M15 3h6v6 M10 14L21 3" Text="{loc:Tr Key='查优惠'}" Command="{Binding NavCommand}" CommandParameter="promotion"/>
+
+                <TextBlock Text="{loc:Tr Key='支付管理'}" Style="{StaticResource SidebarSectionHeaderStyle}"/>
+                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71 M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" Text="{loc:Tr Key='打开支付链接'}" Command="{Binding NavCommand}" CommandParameter="paylink"/>
+                <local:IconNavButton AutomationProperties.Name="{loc:Tr Key='批量协议支付'}" Style="{StaticResource IconNavButtonStyle}" IconGeometry="M4 5h16 M4 12h16 M4 19h16 M8 3v4 M8 10v4 M8 17v4" Text="{loc:Tr Key='批量协议支付'}" Command="{Binding NavCommand}" CommandParameter="batchpay"/>
+                <TextBlock Text="{loc:Tr Key='邮箱管理'}" Style="{StaticResource SidebarSectionHeaderStyle}"/>
+                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z M22 6l-10 7L2 6" Text="{loc:Tr Key='导入邮箱'}" Command="{Binding NavCommand}" CommandParameter="importmail"/>
+                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z M22 6l-10 7L2 6 M2 18h20" Text="{loc:Tr Key='查看收件箱'}" Command="{Binding NavCommand}" CommandParameter="inbox"/>
+                <local:IconNavButton AutomationProperties.Name="{loc:Tr Key='邮箱换绑'}" Style="{StaticResource IconNavButtonStyle}" IconGeometry="M4 7h11m0 0-3-3m3 3-3 3M20 17H9m0 0 3-3m-3 3 3 3" Text="{loc:Tr Key='邮箱换绑'}" Command="{Binding NavCommand}" CommandParameter="changeemail"/>
+
+                <TextBlock Text="{loc:Tr Key='账号管理'}" Style="{StaticResource SidebarSectionHeaderStyle}"/>
+                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="M12 3v12 M8 11l4 4 4-4 M20 21H4" Text="{loc:Tr Key='一键导入'}" Command="{Binding NavCommand}" CommandParameter="importcpa"/>
+                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="M12 21V9 M16 13l-4-4-4 4 M4 3h16" Text="{loc:Tr Key='导出账号'}" Command="{Binding NavCommand}" CommandParameter="export"/>
+                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="M3 6h18 M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2 M10 11v6 M14 11v6" Text="{loc:Tr Key='删除选中'}" Command="{Binding NavCommand}" CommandParameter="delete"/>
+
+                <TextBlock Text="{loc:Tr Key='项目设置'}" Style="{StaticResource SidebarSectionHeaderStyle}"/>
+                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="M23 4v6h-6 M1 20v-6h6 M3.51 9a9 9 0 0 1 14.85-3.36L23 10 M1 14l4.64 4.36A9 9 0 0 0 20.49 15" Text="{loc:Tr Key='刷新'}" Command="{Binding NavCommand}" CommandParameter="refresh"/>
+                <local:IconNavButton AutomationProperties.Name="{loc:Tr Key='设置'}" Style="{StaticResource IconNavButtonStyle}" IconGeometry="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" Text="{loc:Tr Key='设置'}" Command="{Binding NavCommand}" CommandParameter="settings"/>
+                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="{Binding ThemeIconGeometry}" Text="{loc:Tr Key='切换主题'}" Command="{Binding NavCommand}" CommandParameter="theme"/>
+                <local:IconNavButton AutomationProperties.Name="{loc:Tr Key='切换语言'}" Style="{StaticResource IconNavButtonStyle}" IconGeometry="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z M2 12h20 M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" Text="{loc:Tr Key='切换EN/CN'}" ToolTip="{loc:Tr Key='切换语言'}" Command="{Binding NavCommand}" CommandParameter="language"/>
+                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z M15 9l-6 6 M9 9l6 6" Text="{loc:Tr Key='取消批次'}" Command="{Binding NavCommand}" CommandParameter="cancelbatch"/>
+              </StackPanel>
+            </ScrollViewer>
+          </Border>
+        </Grid>
+</UserControl>

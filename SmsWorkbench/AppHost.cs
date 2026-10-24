@@ -41,11 +41,8 @@ namespace SmsWorkbench
                     services.AddSingleton<IDesktopReadClient, DesktopReadClient>();
                     services.AddSingleton<Wpf.Ui.ISnackbarService, Wpf.Ui.SnackbarService>();
                     services.AddSingleton<IFileLauncher, FileLauncher>();
-                    services.AddSingleton<IStageMatrixStore, JsonlStageMatrixStore>();
                     services.AddSingleton<IPaymentBatchService, PaymentBatchService>();
                     services.AddSingleton<IPaymentBatchDialogService, PaymentBatchDialogService>();
-                    services.AddSingleton<IProtocolPaymentService, ProtocolPaymentService>();
-                    services.AddSingleton<IProtocolPaymentDialogService, ProtocolPaymentDialogService>();
                     services.AddSingleton<ISettingsService, SettingsService>();
                     services.AddSingleton<ISettingsDialogService, SettingsDialogService>();
                     services.AddSingleton<MainWindow>();

@@ -27,7 +27,8 @@ it is wrong for this gate in two independent ways, both measured:
    script is not a gate, it is a second compiler.
 2. **A single ``-p:ErrorLog`` is one file every project truncates**, so only the
    last-compiled project survives. Measured with a ``#warning`` planted in
-   ``SmsWorkbench/StageMatrixStore.cs``: the build reported 2 warnings while the
+   ``SmsWorkbench/StageMatrixStore.cs`` (since deleted with the retired
+   single-account payment window): the build reported 2 warnings while the
    shared SARIF had ``results: []`` -- the gate could not see production code at
    all.
 

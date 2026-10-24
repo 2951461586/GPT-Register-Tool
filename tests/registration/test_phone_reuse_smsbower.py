@@ -3,7 +3,6 @@ import contextlib
 import io
 import logging
 import unittest
-from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
@@ -1365,20 +1364,43 @@ class RentalProviderLifecycleTests(unittest.TestCase):
                 provider,
             )
 
-    def test_the_standalone_flow_never_names_a_concrete_client(self):
-        """Read the source: the defect *is* a hardcoded class name.
+    def test_the_standalone_flow_routes_through_the_rental_client_factory(self):
+        """Two entry points, one factory -- no concrete vendor class is named.
 
-        Exercising `run_phone_register` end to end needs a live registration, so
-        no behavioural test can reach the choice of client class. The invariant is
-        therefore pinned where it actually lives -- the module must route through
-        `rental_client`, and must not name a vendor's client at all.
+        A live registration is not needed to pin *which* client is chosen: the
+        choice is the single call to ``rental_client``.  The behavioural test
+        stops right after it (the fake raises on ``get_number``) and checks that
+        the configured provider, key and endpoint are the ones handed over.
         """
-        source = (Path(__file__).resolve().parents[2] / "sms_tool" / "phone_registration.py").read_text(
-            encoding="utf-8"
+        from sms_tool import phone_registration
+
+        cfg = {
+            "chatgpt": {},
+            "phone_reuse": {
+                "source": "herosms",
+                "smsbower": {"api_key": "smsbower-key", "country": "38"},
+                "herosms": {"api_key": "hero-key", "country": "33"},
+            },
+        }
+        client = Mock()
+        client.get_number.side_effect = RuntimeError("stop here")
+        with (
+            patch("sms_tool.phone_registration.current_config_data", return_value=cfg),
+            patch("sms_tool.phone_registration.select_auth_fingerprint"),
+            patch("sms_tool.phone_proxy.select_phone_proxy", return_value={"ok": True, "proxy": ""}),
+            patch("sms_tool.phone_reuse.rental_client", return_value=client) as factory,
+            contextlib.redirect_stdout(io.StringIO()),
+        ):
+            result = phone_registration.run_phone_register()
+
+        factory.assert_called_once_with(
+            "herosms",
+            "hero-key",
+            sms_providers.PROVIDERS["herosms"].default_endpoint,
         )
-        for name in ("SmsBowerClient", "NexSmsClient"):
-            self.assertNotIn(name, source)
-        self.assertIn("rental_client(provider, api_key, endpoint)", source)
+        client.get_number.assert_called_once_with(service="dr", country="33")
+        self.assertFalse(result["success"])
+        self.assertIn("herosms_get_number_failed", result["error"])
 
 
 class ProviderKeyStatusTests(unittest.TestCase):

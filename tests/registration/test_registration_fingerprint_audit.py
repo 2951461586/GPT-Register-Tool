@@ -56,3 +56,28 @@ def test_resumed_attempt_without_reselected_fingerprint_does_not_invent_alignmen
     result = workflow._abort_result("auth_session_pending")
     assert result["fingerprint_geo_audit"]["status"] == "unknown"
     assert result["fingerprint_geo_audit"]["fingerprint_country"] == ""
+
+
+def test_a_fingerprint_pool_failure_is_counted_and_visible_in_the_audit():
+    """The fallback must leave evidence; silence is what P1-1 was about.
+
+    The run still proceeds on the proxy-country hint -- a pool failure is not a
+    reason to abort -- but ``fingerprint_pool_failures`` has to move, otherwise a
+    batch that fell back on every attempt is indistinguishable from one where the
+    pool was never needed.
+    """
+    operations = Mock()
+    operations._sanitize_text.side_effect = lambda value: str(value)
+    metadata = {"actual_country": "DE"}
+    config = {"registration": {"fingerprint_pool": {"allowed_countries": ["DE"]}}}
+
+    with patch("sms_tool.fingerprint_pool.shared_fingerprint_pool", side_effect=RuntimeError("pool down")):
+        country = _apply_protocol_fingerprint(operations, config, "http://host:8080", metadata)
+
+    assert metadata["fingerprint_pool_failures"] == 1
+    assert country == ""  # no region token in this proxy -> hint cannot answer
+    operations.set_fingerprint_geo.assert_called_once_with("")
+    from sms_tool.registration.result import safe_proxy_audit
+
+    assert safe_proxy_audit({})["fingerprint_pool_failures"] == 0
+    assert safe_proxy_audit(metadata)["fingerprint_pool_failures"] == 1

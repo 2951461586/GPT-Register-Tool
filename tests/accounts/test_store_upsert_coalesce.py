@@ -121,8 +121,8 @@ def test_blank_round_keeps_the_mailbox_and_purchase_facts(tmp_path):
 
 def test_blank_round_keeps_the_registration_provenance(tmp_path):
     """``registration_country`` feeds ``billing_country_for()``, which falls back
-    to "US" when empty -- so erasing it aims the eligibility probe at the wrong
-    catalog.  ``json_path`` is the pointer to the session file."""
+    to "US" when empty -- so erasing it aims the billing-country catalog at the
+    wrong country.  ``json_path`` is the pointer to the session file."""
     config = _config(tmp_path)
     session = tmp_path / "session.json"
     assert upsert_account(_full_registration(tmp_path), json_path=str(session), runtime_config=config)
@@ -271,9 +271,8 @@ def test_raw_json_is_still_rebuilt_from_the_safe_snapshot_whitelist(tmp_path):
     easy to confuse, so this test pins the *actual* split: the column survives,
     the JSON does not.
 
-    The JSON side is guarded by
-    ``tests/accounts/test_account_payment_eligibility.py::test_safe_snapshot_keeps_payment_capability``
-    (add any new persisted key to the whitelist), not by this change.  Recorded
+    The JSON side is guarded by the closed ``AccountSessionModel.safe_snapshot()``
+    whitelist (add any new persisted key there), not by this change.  Recorded
     here so the gap is visible instead of being mistaken for coverage.
     """
     config = _config(tmp_path)
@@ -281,7 +280,6 @@ def test_raw_json_is_still_rebuilt_from_the_safe_snapshot_whitelist(tmp_path):
 
     stored = json.loads(get_account_record(EMAIL, runtime_config=config)["raw_json"])
     assert stored["mailbox"]["provider"] == "remail"
-    assert "payment_capability" in stored, "always emitted by safe_snapshot()"
 
     assert upsert_account(_token_only_round(), runtime_config=config)
     record = get_account_record(EMAIL, runtime_config=config)

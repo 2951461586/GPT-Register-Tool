@@ -13,6 +13,9 @@ The root exception list is deliberately tiny and named: the application shell.
 Everything else must live in one of the role folders, and a new folder needs a
 decision here plus a line in ``docs/directory-map.md``.
 
+2026-10-24: ``Localization/`` joined as a role folder (the EN/CN engine,
+the markup extension and the English catalog).
+
 2026-10-23: ``Themes/`` joined as a **resource-only** folder (no C#, no
 code-behind). It holds the two ``ResourceDictionary`` files ``App.xaml`` merges
 (``Palette.xaml`` colour tokens, ``Controls.xaml`` control styles), split out of
@@ -33,7 +36,7 @@ PROJECT = PROJECT_ROOT / "SmsWorkbench"
 #: and the implicit-usings file. Nothing feature-specific belongs here.
 ROOT_SHELL = {"App.xaml", "App.xaml.cs", "AppHost.cs", "AssemblyInfo.cs", "GlobalUsings.cs"}
 
-ROLE_FOLDERS = {"Views", "ViewModels", "Services", "Interop", "Models", "Dialogs"}
+ROLE_FOLDERS = {"Views", "ViewModels", "Services", "Interop", "Models", "Dialogs", "Localization"}
 
 #: Resource-only folders: XAML dictionaries, no C#. Kept apart from
 #: ``ROLE_FOLDERS`` so the "populated by ``.cs``" assertion stays meaningful.

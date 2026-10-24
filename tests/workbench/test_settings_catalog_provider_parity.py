@@ -140,9 +140,11 @@ def default_provider_constant(text=None):
     return matches[0]
 
 
-#: ``Options(key, label, path, <fallback>, ...)`` —— 只取第四个实参的原文。
+#: ``Options(key, label, path, <fallback>, ...)`` — 只取第四个实参的原文。
+#: 标签实参可能是裸字面量，也可能是本地化后的 ``Loc.T("…")``；两种都要能跳过。
+_LABEL_ARG = r'(?:Loc\.T\(\s*"(?:[^"\\]|\\.)*"\s*\)|"(?:[^"\\]|\\.)*")'
 _FALLBACK_PATTERN = re.compile(
-    r'Options\(\s*"phone_provider"\s*,\s*"(?:[^"\\]|\\.)*"\s*,\s*"(?:[^"\\]|\\.)*"\s*,\s*([^,\n]+)'
+    r'Options\(\s*"phone_provider"\s*,\s*' + _LABEL_ARG + r'\s*,\s*"(?:[^"\\]|\\.)*"\s*,\s*([^,\n]+)'
 )
 
 
@@ -347,7 +349,14 @@ class ProviderParityTests(unittest.TestCase):
 
         self.assertIn("catalogError = exc.Message;", code, "the catalog failure reason is no longer captured")
         # 无路可退时，原因必须被**插值**进弹窗正文，而不是只写一句通用的「读取失败」。
-        self.assertRegex(code, r"无法读取 OpenAI 号码地区和价格档位：\{catalogError\}")
+        # 本地化后模板是 ``Loc.F("…{0}…", catalogError, section, section)``，
+        # 所以钉模板 + 第一个实参，而不是钉插值后的字面量。
+        self.assertRegex(
+            code,
+            r'Loc\.F\("无法读取 OpenAI 号码地区和价格档位：\{0\}.*?"\s*,\s*catalogError'
+            r"\s*,\s*section\s*,\s*section\s*\)",
+            "the load failure reason must be interpolated into the dialog",
+        )
         # 有路可退时，原因必须进日志（含占位符 ``{Error}`` 与实参 ``catalogError``）。
         self.assertRegex(code, r"catalog unavailable \(\{Error\}\)")
         self.assertRegex(code, r"provider\.Label,\s*catalogError\)")
@@ -366,7 +375,7 @@ class ProviderParityTests(unittest.TestCase):
         """
         text = DIALOG.read_text(encoding="utf-8")
         code = strip_csharp_comments(text)
-        marker = 'provider.Label + " 加载失败"'
+        marker = 'Loc.F("{0} 加载失败", provider.Label)'
         self.assertIn(marker, code, "the load-failure dialog disappeared")
 
         # 加载失败弹窗必须落在「在线失败 且 配置回退不可用」这一支里。

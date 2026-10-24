@@ -35,6 +35,8 @@ from sms_tool.mailbox.types import MailboxAccount
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 _HANDLERS = PROJECT_ROOT / "sms_tool" / "registration/handlers.py"
+# 2026-10-24: the bootstrap body moved out; the guard follows the owner.
+_BOOTSTRAP_STAGES = PROJECT_ROOT / "sms_tool" / "registration/bootstrap_stages.py"
 # 浏览器 lane：同一语义的第二份实现。它**本来就写对了**（快照在 `_fill_email`
 # 之前），但没人看守 —— 将来有人"顺手改"就会踩和协议 lane 同一个坑。
 _ORCHESTRATOR = PROJECT_ROOT / "sms_tool" / "registration_drivers" / "browser_flow" / "orchestrator.py"
@@ -64,7 +66,7 @@ _SNAPSHOT_ATTR = "snapshot_mailbox_message"
 
 # 方法名 -> 期望是否调用快照。
 _EXPECTED = {
-    "_bootstrap": True,
+    "bootstrap": True,
     "send_email_otp": False,
     "auth_flow": False,
     "user_register": False,
@@ -111,8 +113,11 @@ def call_line_numbers(source: str, func_name: str, attr_name: str) -> list[int]:
 
 class SnapshotTimingGuardTests(unittest.TestCase):
     def setUp(self):
-        self.source = _HANDLERS.read_text(encoding="utf-8")
-        self.sites = snapshot_call_sites(self.source)
+        self.sources = [path.read_text(encoding="utf-8") for path in (_HANDLERS, _BOOTSTRAP_STAGES)]
+        self.sites: dict[str, bool] = {}
+        for source in self.sources:
+            for name, called in snapshot_call_sites(source).items():
+                self.sites[name] = self.sites.get(name, False) or called
 
     def test_extractor_sees_the_real_call_sites(self):
         """提取器非空断言：方法必须存在，否则守卫会静默变成恒真。"""
@@ -120,13 +125,13 @@ class SnapshotTimingGuardTests(unittest.TestCase):
             self.assertIn(
                 name,
                 self.sites,
-                f"{_HANDLERS.name} 里找不到方法 {name!r} —— 守卫的提取器失效了",
+                f"协议泳道源码里找不到方法 {name!r} —— 守卫的提取器失效了",
             )
 
     def test_bootstrap_takes_the_pre_otp_baseline(self):
         self.assertTrue(
-            self.sites["_bootstrap"],
-            "_bootstrap 必须在任何 OTP 阶段之前做一次邮箱快照，否则上一轮遗留的旧验证码会被当成候选",
+            self.sites["bootstrap"],
+            "bootstrap 必须在任何 OTP 阶段之前做一次邮箱快照，否则上一轮遗留的旧验证码会被当成候选",
         )
 
     def test_no_otp_stage_snapshots_the_mailbox(self):

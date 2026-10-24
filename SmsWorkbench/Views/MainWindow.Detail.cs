@@ -2,6 +2,8 @@
 // PaymentBatchService.cs for why the project-wide switch stays `annotations`.
 #nullable enable
 
+using SmsWorkbench.Localization;
+
 namespace SmsWorkbench
 {
     public partial class MainWindow
@@ -20,7 +22,7 @@ namespace SmsWorkbench
             bool hasAccessToken = !string.IsNullOrWhiteSpace(accessToken);
             var dialog = new Window
             {
-                Title = "账号详情 - " + row.Identifier,
+                Title = Loc.F("账号详情 - {0}", row.Identifier),
                 Owner = this,
                 Width = 960,
                 Height = 740,
@@ -76,14 +78,14 @@ namespace SmsWorkbench
 
             var infoItems = new (string label, string value)[]
             {
-                ("邮箱", row.Identifier),
-                ("类型", row.AccountType ?? ""),
-                ("状态", row.Status ?? ""),
-                ("支付状态", row.PayPalStatus ?? ""),
-                ("支付金额", row.PayPalAmount ?? ""),
+                (Loc.T("邮箱"), row.Identifier),
+                (Loc.T("类型"), row.AccountType ?? ""),
+                (Loc.T("状态"), row.Status ?? ""),
+                (Loc.T("支付状态"), row.PayPalStatus ?? ""),
+                (Loc.T("支付金额"), row.PayPalAmount ?? ""),
                 ("Refresh Token", row.RefreshTokenStatus ?? ""),
-                ("创建时间", row.CreatedAt ?? ""),
-                ("更新时间", row.CompletedAt ?? ""),
+                (Loc.T("创建时间"), row.CreatedAt ?? ""),
+                (Loc.T("更新时间"), row.CompletedAt ?? ""),
             };
 
             int idx = 0;
@@ -141,7 +143,7 @@ namespace SmsWorkbench
                 var urlStack = new StackPanel();
                 urlStack.Children.Add(new TextBlock
                 {
-                    Text = "支付订阅链接",
+                    Text = Loc.T("支付订阅链接"),
                     FontSize = 11,
                     Foreground = (System.Windows.Media.Brush)FindResource("TextMuted"),
                     Margin = new Thickness(0, 0, 0, 4)
@@ -201,22 +203,22 @@ namespace SmsWorkbench
 
             // Left: secondary actions
             var leftActions = new StackPanel { Orientation = Orientation.Horizontal };
-            var openButton = new Button { Content = "打开源文件", MinWidth = 100, Margin = new Thickness(0, 0, 8, 0) };
+            var openButton = new Button { Content = Loc.T("打开源文件"), MinWidth = 100, Margin = new Thickness(0, 0, 8, 0) };
             openButton.Click += (_, __) => OpenAccountJson(row);
             leftActions.Children.Add(openButton);
 
-            var copyAtButton = new Button { Content = "一键复制AT", MinWidth = 100, IsEnabled = hasAccessToken, Margin = new Thickness(0, 0, 8, 0) };
+            var copyAtButton = new Button { Content = Loc.T("一键复制AT"), MinWidth = 100, IsEnabled = hasAccessToken, Margin = new Thickness(0, 0, 8, 0) };
             copyAtButton.Click += (_, __) => RunUiTask(async () =>
             {
                 if (!hasAccessToken) return;
                 Clipboard.SetText(accessToken);
-                copyAtButton.Content = "已复制";
+                copyAtButton.Content = Loc.T("已复制");
                 await Task.Delay(1200);
-                copyAtButton.Content = "一键复制AT";
+                copyAtButton.Content = Loc.T("一键复制AT");
             });
             leftActions.Children.Add(copyAtButton);
 
-            var checkAliveButton = new Button { Content = "账号测活", MinWidth = 100, Margin = new Thickness(0, 0, 8, 0) };
+            var checkAliveButton = new Button { Content = Loc.T("账号测活"), MinWidth = 100, Margin = new Thickness(0, 0, 8, 0) };
             checkAliveButton.Click += (_, __) => RunUiTask(async () =>
             {
                 dialog.Close();
@@ -226,11 +228,11 @@ namespace SmsWorkbench
 
             // Right: primary actions
             var rightActions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
-            var openPayPalButton = new Button { Content = "打开支付链接", MinWidth = 120, IsEnabled = hasPayPal, Margin = new Thickness(0, 0, 8, 0) };
+            var openPayPalButton = new Button { Content = Loc.T("打开支付链接"), MinWidth = 120, IsEnabled = hasPayPal, Margin = new Thickness(0, 0, 8, 0) };
             openPayPalButton.Click += (_, __) => OpenPayPalUrl(paypalUrl, row.Identifier);
-            var copyPayPalButton = new Button { Content = "复制支付链接", MinWidth = 120, IsEnabled = hasPayPal, Margin = new Thickness(0, 0, 8, 0) };
+            var copyPayPalButton = new Button { Content = Loc.T("复制支付链接"), MinWidth = 120, IsEnabled = hasPayPal, Margin = new Thickness(0, 0, 8, 0) };
             copyPayPalButton.Click += (_, __) => CopyPayPalUrl(paypalUrl, row.Identifier);
-            var closeButton = new Button { Content = "关闭", MinWidth = 80 };
+            var closeButton = new Button { Content = Loc.T("关闭"), MinWidth = 80 };
             closeButton.Click += (_, __) => dialog.Close();
             rightActions.Children.Add(openPayPalButton);
             rightActions.Children.Add(copyPayPalButton);
@@ -272,7 +274,7 @@ namespace SmsWorkbench
             string path = await ResolveAccountJsonPathAsync(row, ct);
             if (string.IsNullOrWhiteSpace(path))
             {
-                MessageBox.Show("未找到该账号对应的 JSON 文件。", "打开源文件", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show(Loc.T("未找到该账号对应的 JSON 文件。"), Loc.T("打开源文件"), MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
             OpenPath(path);

@@ -521,9 +521,6 @@ def main():
     if getattr(args, "check_promotion", False):
         _check_promotion(args)
         return
-    if getattr(args, "check_payment_eligibility", False):
-        account_commands.check_payment_eligibility(args, _account_command_context())
-        return
     if args.export_codex_json:
         _export_codex_json(args)
         return
@@ -938,14 +935,13 @@ def _emit_registration_error(args, error: str, *, exit_code: int) -> dict:
     return payload
 
 
-def _check_registered_promotions(emails, workers=4, proxy=None, timeout=20, proxy_pool=None, payment_eligibility=False):
+def _check_registered_promotions(emails, workers=4, proxy=None, timeout=20, proxy_pool=None):
     return registration_commands.check_registered_promotions(
         emails,
         workers=workers,
         proxy=proxy,
         timeout=timeout,
         proxy_pool=proxy_pool,
-        payment_eligibility=payment_eligibility,
     )
 
 

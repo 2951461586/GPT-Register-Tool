@@ -105,8 +105,13 @@ def test_protocol_lane_files_carry_the_fix():
     ``protocol_helpers`` and is reached from the module that already imports it.
     """
     root = Path(__file__).resolve().parents[2] / "sms_tool"
+    bootstrap = (root / "registration" / "bootstrap_stages.py").read_text(encoding="utf-8")
     handlers = (root / "registration" / "handlers.py").read_text(encoding="utf-8")
     orchestrator = (root / "registration" / "orchestrator.py").read_text(encoding="utf-8")
-    assert 'tock_named(r._tl(), "0-Bootstrap")' in handlers
+    # 2026-10-24: the bootstrap body moved to bootstrap_stages.py; the module
+    # that *uses* the helper is where the fix must stay visible.
+    assert 'tock_named(r._tl(), "0-Bootstrap")' in bootstrap
+    assert "from .protocol_helpers import tock_named" in bootstrap
     assert "from ..utils import _tock_named" not in handlers
+    assert "from ..utils import _tock_named" not in bootstrap
     assert "_tock_named" not in orchestrator

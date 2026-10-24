@@ -46,8 +46,12 @@ def test_interface_covers_only_dependencies_the_workflow_uses():
     for module in (
         "registration/handlers.py",
         "registration/account_stages.py",
+        "registration/auth_stages.py",
+        "registration/bootstrap_stages.py",
         "registration/finalize.py",
+        "registration/identity_stages.py",
         "registration/otp_stages.py",
+        "registration/register_stages.py",
     ):
         tree = ast.parse((root / module).read_text(encoding="utf-8"))
         names |= {

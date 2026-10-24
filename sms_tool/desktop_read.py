@@ -18,11 +18,7 @@ from typing import Any
 from .config import ConfigInput, RuntimeConfig, resolve_runtime_config
 from .mailbox.parsers import parse_mailbox_pool_line
 from .kernel.paths import PROJECT_ROOT, config_dir, resolve_config_file
-from .promotion_states import (
-    payment_eligibility_label,
-    promotion_marker_is_stale,
-    promotion_status_with_eligibility,
-)
+from .promotion_states import promotion_marker_is_stale
 from .registration.retry_guard import RegistrationRetryGuard, mailbox_registration_status
 from .kernel.sanitizer import sanitize
 from .storage import (
@@ -203,34 +199,18 @@ def _record_payload(record: dict[str, Any], *, include_session: bool = True) -> 
             session = _parsed_session(raw_json)
             result["at_probe_status_code"] = result["at_probe_status_code"] or _access_token_probe_status_code(session)
             promotion_status, promotion_state = _promotion_presentation(session)
-            # Payment rails appended to the same 优惠状态 cell, e.g.
-            # ``可试用Plus-100% · card/upi/momo``.  Composed here (not stored in
-            # ``promotion_status``) so that field stays the pure promotion label
-            # -- see the ``｜可支付:`` strip in ``_promotion_presentation`` for
-            # why the two were separated in the first place.
-            # A probe that ran and enumerated nothing yields the explicit
-            # ``支付资格未知`` marker; an account that was never probed yields
-            # "" (the key is absent, or ``safe_snapshot`` wrote the empty
-            # mapping).  The two must not collapse into one blank suffix.
-            eligibility_label = payment_eligibility_label(session.get("payment_capability"))
             # A promotion probe that recorded an auth failure predates a later
             # verified relogin (quota/account-scan token probe HTTP 200). The
             # stale marker must not surface in the 优惠状态 column anymore.
-            # The payment-rail badge describes the same probe-time token, so a
-            # stale marker clears it too rather than pairing a fresh AT with a
-            # method list it never proved.
             if promotion_marker_is_stale(promotion_status, promotion_state, result.get("at_probe_status_code")):
                 promotion_status = ""
                 promotion_state = ""
-                eligibility_label = ""
             if promotion_status:
                 result["promotion_status"] = promotion_status
             if promotion_state:
                 result["promotion_state"] = promotion_state
-            if eligibility_label:
-                result["payment_eligibility"] = eligibility_label
-            if promotion_status or eligibility_label:
-                result["promotion_display"] = promotion_status_with_eligibility(promotion_status, eligibility_label)
+            if promotion_status:
+                result["promotion_display"] = promotion_status
             result["imported_status"] = _imported_status(session)
             result["paypal_amount"] = _paypal_amount(session)
             if include_session:

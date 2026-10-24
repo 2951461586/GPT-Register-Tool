@@ -93,7 +93,7 @@ namespace SmsWorkbench.Tests
             var pool = WithRows(3);
             pool.AllRows[1].Status = "待支付";
 
-            pool.ScopeFilter = "待处理";
+            pool.ScopeFilter = "attention";
 
             Assert.Equal(new[] { "user002@example.com" }, pool.PagedRows.Select(r => r.Identifier));
         }
