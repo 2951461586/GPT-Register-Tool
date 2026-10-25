@@ -228,6 +228,86 @@ public sealed class DesktopReadClientTests
         Assert.Contains("no payload", error.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// The one-shot fallback must not go through the shared task coordinator.
+    ///
+    /// <para>
+    /// Measured 2026-10-25: the coordinator admits exactly one long task, so a
+    /// registration batch made every pool refresh and mailbox-line lookup fail
+    /// with <see cref="BackendTaskAlreadyRunningException"/> for the whole run --
+    /// exactly when the account grid needs them (the "Saved session:" hot
+    /// refresh). Reads are short and read-only, and the resident lane already
+    /// runs beside the batch, so they get their own <see cref="IBackendClient"/>.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task OneShotFallbackBypassesTheSharedTaskSlot()
+    {
+        using var fixture = new TemporaryDirectory();
+        var paths = new TestApplicationPaths(fixture.Path); // no backend script: resident cannot start
+        var settings = new SettingsService(paths);
+        var busyCoordinator = new BusyTaskCoordinator();
+        var readBackend = new StubBackendClient
+        {
+            Handler = _ => new BackendCommandResult(
+                0, "", "", JsonElementOf("{\"ok\":true,\"accounts\":[]}"), false)
+        };
+        var client = new DesktopReadClient(
+            busyCoordinator, paths, settings, Serilog.Core.Logger.None, readBackend);
+
+        JsonElement payload = await client.ReadAccountsAsync();
+
+        Assert.True(payload.GetProperty("ok").GetBoolean());
+        // The read lane served it; the single-task slot was never asked.
+        Assert.Empty(busyCoordinator.Attempts);
+        Assert.Single(readBackend.Commands);
+        Assert.Equal(
+            new[] { "--desktop-read", "accounts", "--desktop-ipc" },
+            readBackend.Commands[0].Arguments.ToArray());
+    }
+
+    [Fact]
+    public async Task OneShotWithoutADedicatedClientStillUsesTheCoordinator()
+    {
+        var backend = new StubBackendClient
+        {
+            Handler = _ => new BackendCommandResult(
+                0, "", "", JsonElementOf("{\"ok\":true,\"files\":[]}"), false)
+        };
+        var client = new DesktopReadClient(new BackendTaskCoordinator(backend));
+
+        JsonElement payload = await client.ReadMailboxPoolAsync();
+
+        Assert.True(payload.GetProperty("ok").GetBoolean());
+        Assert.Single(backend.Commands);
+    }
+
+    /// <summary>A coordinator whose single slot is held by a running batch.</summary>
+    private sealed class BusyTaskCoordinator : IBackendTaskCoordinator
+    {
+        public List<string> Attempts { get; } = new();
+
+        public bool IsRunning => true;
+
+        public Task<BackendCommandResult> RunAsync(
+            BackendCommand command,
+            IProgress<BackendOutputLine>? progress = null,
+            CancellationToken cancellationToken = default)
+        {
+            lock (Attempts)
+                Attempts.Add(command.Name);
+            throw new BackendTaskAlreadyRunningException();
+        }
+
+        public Task<string> RunForResultAsync(
+            BackendCommand command,
+            IProgress<BackendOutputLine>? progress = null,
+            CancellationToken cancellationToken = default)
+            => throw new BackendTaskAlreadyRunningException();
+
+        public bool Cancel() => false;
+    }
+
     private static string TempFilePath(string prefix)
         => Path.Combine(Path.GetTempPath(), prefix + Guid.NewGuid().ToString("N") + ".tmp");
 

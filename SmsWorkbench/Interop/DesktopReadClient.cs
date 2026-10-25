@@ -25,13 +25,25 @@ namespace SmsWorkbench
     /// Desktop-read transport. Short reads go through a resident Python process
     /// (<c>--desktop-serve</c>, one JSONL request per line) so each call skips
     /// the ~0.6-1s interpreter/import cold start; any resident failure falls
-    /// back to the previous one-shot <c>--desktop-read --desktop-ipc</c> path
-    /// through the task coordinator, which long-running tasks still use.
+    /// back to the one-shot <c>--desktop-read --desktop-ipc</c> path.
+    ///
+    /// <para>
+    /// One-shot reads use <c>oneShotReadClient</c> (the plain
+    /// <see cref="IBackendClient"/>), <b>not</b> the shared
+    /// <see cref="IBackendTaskCoordinator"/>. The coordinator admits exactly one
+    /// long task at a time, so routing reads through it made every pool refresh
+    /// and mailbox-line lookup fail with <see cref="BackendTaskAlreadyRunningException"/>
+    /// for the whole duration of a registration batch -- precisely when the grid
+    /// needs those reads. Reads are short, read-only snapshots and the resident
+    /// lane already runs beside the batch, so they get their own lane; the
+    /// coordinator stays the owner of the long-running task slot.
+    /// </para>
     /// </summary>
     public sealed class DesktopReadClient : IDesktopReadClient, IDisposable
     {
         private static readonly string[] ReadAccountsArguments = ["--desktop-read", "accounts", "--desktop-ipc"];
         private readonly IBackendTaskCoordinator _backend;
+        private readonly IBackendClient? _oneShotReadClient;
         private readonly IApplicationPaths _paths;
         private readonly ISettingsService _settings;
         private readonly Serilog.ILogger _logger;
@@ -42,9 +54,11 @@ namespace SmsWorkbench
             IBackendTaskCoordinator backend,
             IApplicationPaths paths,
             ISettingsService settings,
-            Serilog.ILogger logger)
+            Serilog.ILogger logger,
+            IBackendClient? oneShotReadClient = null)
         {
             _backend = backend;
+            _oneShotReadClient = oneShotReadClient;
             _paths = paths;
             _settings = settings;
             _logger = logger;
@@ -237,8 +251,13 @@ namespace SmsWorkbench
 
         private async Task<JsonElement> RunOneShotAsync(string name, IEnumerable<string> args, CancellationToken cancellationToken)
         {
-            BackendCommandResult result = await _backend.RunAsync(
-                BackendCommand.Create(name, args, 120000), cancellationToken: cancellationToken).ConfigureAwait(false);
+            // The dedicated read client exists so this fallback keeps working while
+            // a registration/payment batch owns the coordinator's single task slot.
+            BackendCommandResult result = _oneShotReadClient is { } readClient
+                ? await readClient.RunAsync(
+                    BackendCommand.Create(name, args, 120000), cancellationToken: cancellationToken).ConfigureAwait(false)
+                : await _backend.RunAsync(
+                    BackendCommand.Create(name, args, 120000), cancellationToken: cancellationToken).ConfigureAwait(false);
             return ExtractPayload(result);
         }
 
