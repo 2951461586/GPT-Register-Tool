@@ -584,4 +584,41 @@ public sealed class SettingsServiceTests
         Assert.Equal("", Field(categories, "registration_proxy").Value);
         Assert.Equal("", Field(categories, "mailbox_proxy").Value);
     }
+
+    /// <summary>
+    /// PayPal is a different egress lane. The registration box used to fall back
+    /// to <c>paypal.proxies[0]</c> for display, and <c>Save</c> then persisted
+    /// that value into <c>proxy.registration</c>, <c>proxy.default</c>,
+    /// <c>proxy.pool</c> and <c>phone_reuse.proxy</c> -- so opening Settings and
+    /// pressing Save silently moved the signup lane onto the checkout exit.
+    /// </summary>
+    [Fact]
+    public void PayPalProxyIsNeverShownOrPromotedAsTheRegistrationProxy()
+    {
+        using var fixture = new TemporaryDirectory();
+        File.WriteAllText(
+            Path.Combine(fixture.Path, "config.json"),
+            """
+            {
+              "paypal": { "proxies": ["socks5h://paypal.example:1080"] }
+            }
+            """,
+            new UTF8Encoding(false));
+        var service = new SettingsService(new TestApplicationPaths(fixture.Path));
+
+        IReadOnlyList<SettingsCategoryViewModel> categories = service.Load();
+        Assert.Equal("", Field(categories, "registration_proxy").Value);
+
+        SettingsSaveResult result = service.Save(categories);
+
+        Assert.True(result.Ok, result.Error);
+        JsonObject root = ConfigTestHelpers.ReadMergedConfig(fixture.Path);
+        Assert.Equal("", root["proxy"]?["registration"]?.GetValue<string>() ?? "");
+        Assert.Equal("", root["proxy"]?["default"]?.GetValue<string>() ?? "");
+        Assert.Equal("", root["phone_reuse"]?["proxy"]?.GetValue<string>() ?? "");
+        // The PayPal lane keeps its own route untouched by the round trip.
+        Assert.Equal(
+            "socks5h://paypal.example:1080",
+            root["paypal"]!["proxies"]![0]!.GetValue<string>());
+    }
 }

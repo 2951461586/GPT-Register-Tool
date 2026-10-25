@@ -277,7 +277,13 @@ namespace SmsWorkbench
                 "registration_proxy" => First(
                     Text(root, "proxy.registration"),
                     Text(root, "registration_proxy"),
-                    FirstArray(root, "paypal.proxies"),
+                    // No `paypal.proxies` fallback: PayPal is a different egress
+                    // lane (paypal.stage_proxies / paypal.proxies). Showing its
+                    // first entry here made the box look configured, and Save
+                    // then promoted that PayPal exit into proxy.registration,
+                    // proxy.default, proxy.pool and phone_reuse.proxy -- so
+                    // merely opening Settings and pressing Save contaminated the
+                    // signup lane with the checkout lane's route.
                     Text(root, "proxy.default")),
                 "registration_proxy_pool" => First(ListText(root, "proxy.pool"), Text(root, "proxy.registration")),
                 "mailbox_proxy" => First(
