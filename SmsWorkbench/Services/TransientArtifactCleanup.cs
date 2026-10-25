@@ -22,6 +22,88 @@ namespace SmsWorkbench
         internal const string PaymentAccessTokenPattern = "protocol_payment_at_*.json";
 
         /// <summary>
+        /// File name for one run's temporary credential file (selected-mailbox
+        /// batch file, one-click SMS email list).
+        ///
+        /// <para>
+        /// A plain <c>yyyyMMdd_HHmmss</c> timestamp was reused when a second
+        /// action started in the same second: the new file overwrote the batch
+        /// file the in-flight backend was still reading, and the overwrite was
+        /// then deleted from under the running batch. A random suffix removes the
+        /// collision without depending on clock resolution.
+        /// </para>
+        /// </summary>
+        internal static string UniqueCredentialFileName(string prefix)
+            => prefix + Guid.NewGuid().ToString("N") + ".txt";
+
+        /// <summary>
+        /// Runs <paramref name="body"/> and deletes <paramref name="paths"/> on
+        /// <b>every</b> exit path: normal return, an early return inside the body,
+        /// cancellation and a throw.
+        ///
+        /// <para>
+        /// Callers write their temporary files <em>before</em> invoking the body
+        /// (a selected-mailbox batch file holds raw mailbox credentials), so a
+        /// cleanup placed inside the body leaks on exactly the paths that return
+        /// before it is reached. This wrapper exists so that ordering bug has one
+        /// owner and a unit-testable contract instead of living in WPF code.
+        /// </para>
+        ///
+        /// <para>
+        /// The continuation deliberately keeps the caller's context
+        /// (<c>ConfigureAwait(true)</c>): the desktop's deletion delegate logs a
+        /// failure through UI-bound state, and the body itself resumes on the
+        /// dispatcher, so cleanup must not be the one hop that lands on a pool
+        /// thread.
+        /// </para>
+        ///
+        /// <param name="delete">
+        /// Deletion strategy; defaults to <see cref="DeleteFiles"/>. The desktop
+        /// passes its logging implementation so a locked file is still reported.
+        /// </param>
+        /// </summary>
+        internal static async Task RunWithCleanupAsync(
+            IReadOnlyList<string>? paths,
+            Func<Task> body,
+            Action<IReadOnlyList<string>>? delete = null)
+        {
+            ArgumentNullException.ThrowIfNull(body);
+            try
+            {
+                await body().ConfigureAwait(true);
+            }
+            finally
+            {
+                (delete ?? DeleteFiles)(paths ?? Array.Empty<string>());
+            }
+        }
+
+        /// <summary>
+        /// Best-effort delete of <paramref name="paths"/>; missing, blank and
+        /// locked entries are skipped rather than thrown, because this runs on
+        /// the UI thread after a task that may already have failed.
+        /// </summary>
+        internal static void DeleteFiles(IReadOnlyList<string> paths)
+        {
+            foreach (string path in paths)
+            {
+                if (string.IsNullOrWhiteSpace(path)) continue;
+                try
+                {
+                    File.Delete(path);
+                }
+                catch (IOException)
+                {
+                    // Locked by the backend that is still shutting down.
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    // Read-only install.
+                }
+            }
+        }
+
+        /// <summary>
         /// Deletes matching files under <c>&lt;rootDirectory&gt;/runtime/tmp</c>.
         /// Best effort: an unreadable or locked file is skipped, never thrown,
         /// because this runs on the UI thread during startup/shutdown.

@@ -577,7 +577,12 @@ namespace SmsWorkbench
 
             // The legacy parser is the compatibility superset for mixed provider selections.
             string mailboxArg = RegisterViewModel.MailboxArgument(mailboxArgs);
-            string mailboxFile = Path.Combine(Path.GetTempPath(), "selected_mailbox_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt");
+            // Unique file name, not a bare second-granularity timestamp: a second
+            // click in the same second used to overwrite the file this batch was
+            // still reading (and then delete it from under the running backend).
+            string mailboxFile = Path.Combine(
+                Path.GetTempPath(),
+                TransientArtifactCleanup.UniqueCredentialFileName("selected_mailbox_"));
             File.WriteAllLines(mailboxFile, lines, new UTF8Encoding(false));
             return new MailboxFileSelection(mailboxArg, mailboxFile, lines.Count);
         }

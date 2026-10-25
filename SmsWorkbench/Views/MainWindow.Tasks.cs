@@ -121,7 +121,16 @@ namespace SmsWorkbench
                 plan.TaskName, plan.Arguments.ToList(), domain, total, plan.TimeoutMilliseconds,
                 resultKind: plan.ResultKind, temporaryFiles: plan.TempFiles, ct: _lifetimeCts.Token));
 
-        private async Task RunBackendAsync(
+        /// <summary>
+        /// Temp-file owning wrapper. Cleanup is delegated to
+        /// <see cref="TransientArtifactCleanup.RunWithCleanupAsync"/> because the
+        /// <c>try/finally</c> has to sit outside the whole body: callers write
+        /// their temporary files (a selected-mailbox batch file holds raw
+        /// mailbox credentials) *before* calling in, so every exit path must
+        /// delete them -- including the single-task guard below and a throw while
+        /// the progress dialog is being constructed.
+        /// </summary>
+        private Task RunBackendAsync(
             string taskName,
             List<string> args,
             string progressDomain = "",
@@ -130,6 +139,20 @@ namespace SmsWorkbench
             BackendAccountResultKind resultKind = BackendAccountResultKind.None,
             IReadOnlyList<string>? temporaryFiles = null,
             CancellationToken ct = default)
+            => TransientArtifactCleanup.RunWithCleanupAsync(
+                temporaryFiles,
+                () => RunBackendCoreAsync(
+                    taskName, args, progressDomain, progressTotal, timeoutMs, resultKind, ct),
+                DeleteTemporaryFiles);
+
+        private async Task RunBackendCoreAsync(
+            string taskName,
+            List<string> args,
+            string progressDomain,
+            int progressTotal,
+            int? timeoutMs,
+            BackendAccountResultKind resultKind,
+            CancellationToken ct)
         {
             if (backendTasks.IsRunning)
             {
@@ -286,11 +309,9 @@ namespace SmsWorkbench
             }
             finally
             {
+                // Temp-file deletion lives in RunBackendAsync's wrapper: it has to
+                // cover the early returns above this try block as well.
                 progressDialog?.Close();
-                // Declared temp files are deleted on every exit path, including
-                // cancellation and a startup failure -- the batch file exists from
-                // the moment the dialog was accepted, not from the first backend line.
-                DeleteTemporaryFiles(temporaryFiles);
             }
         }
 

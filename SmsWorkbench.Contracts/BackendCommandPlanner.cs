@@ -734,11 +734,29 @@ namespace SmsWorkbench
             if (checkPromotion) args.Add("--check-promotion-after-registration");
         }
 
+        /// <summary>
+        /// A temporary file name that cannot be reused by a second run.
+        ///
+        /// Second-granularity names (<c>yyyyMMdd_HHmmss</c>) collided when two
+        /// actions started in the same second: the new file overwrote the batch
+        /// file the in-flight backend was still reading. Milliseconds plus a
+        /// random suffix make the name unique per call.
+        ///
+        /// Private on purpose: this is the planner's own naming rule for the
+        /// files <em>it</em> writes. The window names its selected-mailbox batch
+        /// file through <c>TransientArtifactCleanup.UniqueCredentialFileName</c>
+        /// (same project as the caller), so the command-plan layer never grows a
+        /// public helper that exists only for one view to call.
+        /// </summary>
+        private static string UniqueTempFileName(string prefix)
+            => prefix
+                + DateTime.Now.ToString("yyyyMMdd_HHmmss_fff", CultureInfo.InvariantCulture)
+                + "_" + Guid.NewGuid().ToString("N")[..8]
+                + ".txt";
+
         private static string WriteEmailFile(string? tempDirectory, string prefix, IReadOnlyList<string> emails)
         {
-            string emailFile = Path.Combine(
-                TempDirectory(tempDirectory),
-                prefix + DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture) + ".txt");
+            string emailFile = Path.Combine(TempDirectory(tempDirectory), UniqueTempFileName(prefix));
             File.WriteAllLines(emailFile, emails.Select(email => email.Trim()), Utf8NoBom);
             return emailFile;
         }

@@ -731,4 +731,30 @@ public sealed class BackendCommandPlannerTests
         Assert.Equal(2, plan.TempFiles.Count);
         Assert.Contains("C:\\temp\\selected_mailbox.txt", plan.TempFiles);
     }
+
+    // ── Temp-file name uniqueness ───────────────────────────────────────
+    // Second-granularity names (yyyyMMdd_HHmmss) collided when two actions
+    // started in the same second: the new file overwrote the batch file the
+    // in-flight backend was still reading. The planner's email files and the
+    // window's selected-mailbox file each have one owner for that rule, and
+    // both are pinned here.
+
+    [Fact]
+    public void CreateAccountImport_WithSharedTempDirectory_WritesDistinctFiles()
+    {
+        using var fixture = new TemporaryDirectory();
+
+        var first = BackendCommandPlanner.CreateAccountImport(
+            "cpa", new[] { "a@example.com" }, tempDirectory: fixture.Path);
+        var second = BackendCommandPlanner.CreateAccountImport(
+            "cpa", new[] { "b@example.com" }, tempDirectory: fixture.Path);
+
+        Assert.Single(first.TempFiles);
+        Assert.Single(second.TempFiles);
+        Assert.NotEqual(first.TempFiles[0], second.TempFiles[0]);
+        Assert.True(File.Exists(first.TempFiles[0]));
+        Assert.True(File.Exists(second.TempFiles[0]));
+        Assert.All(first.TempFiles.Concat(second.TempFiles), path =>
+            Assert.Equal(fixture.Path, Path.GetDirectoryName(path)));
+    }
 }
