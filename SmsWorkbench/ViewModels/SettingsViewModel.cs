@@ -6,6 +6,8 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using System.Collections.ObjectModel;
 
+using SmsWorkbench.Localization;
+
 namespace SmsWorkbench
 {
     public sealed partial class SettingsViewModel : ObservableObject
@@ -21,9 +23,36 @@ namespace SmsWorkbench
             _settingsService = settingsService;
             _fileLauncher = fileLauncher;
             Categories = new ObservableCollection<SettingsCategoryViewModel>(settingsService.Load());
+            // Load() has just refreshed the lane snapshot, so read it afterwards.
+            ProxyLaneNotice = BuildProxyLaneNotice(settingsService.AuthoritativeProxyLanes);
             selectedCategory = Categories.FirstOrDefault();
             WatchProviderSelector();
         }
+
+        /// <summary>
+        /// Warning shown above the dialog's action row when <c>proxy.lanes</c>
+        /// owns the effective route. Empty when every lane resolves through the
+        /// legacy keys this page edits.
+        /// </summary>
+        public string ProxyLaneNotice { get; }
+
+        /// <summary>
+        /// Builds the notice from the lanes declared under <c>proxy.lanes</c>.
+        ///
+        /// <para>
+        /// The backend treats a non-empty <c>proxy.lanes.&lt;lane&gt;</c> as
+        /// authoritative, so editing <c>proxy.registration</c> / <c>mailbox_proxy</c>
+        /// here changes nothing for that lane. Saying so is the difference between
+        /// "the box is blank" and "this page is not the owner". Kept as a pure
+        /// function so the text is testable without constructing a window.
+        /// </para>
+        /// </summary>
+        internal static string BuildProxyLaneNotice(IReadOnlyList<string> lanes)
+            => lanes.Count == 0
+                ? ""
+                : Loc.F(
+                    "代理路线以配置文件 proxy.lanes 中的 {0} 为准；本页的注册代理与邮箱代理只写入旧键，不会覆盖 lanes。",
+                    string.Join(" / ", lanes));
 
         /// <summary>
         /// Keep the provider-scoped boxes in step with the 供应商 dropdown.

@@ -245,6 +245,7 @@ namespace SmsWorkbench.Localization
             ["网络与支付"] = "Network & payments",
             ["基础网络"] = "Base network",
             ["注册代理（主，支持 host:port:user:password / http / socks5 / socks5h）"] = "Registration proxy (primary; host:port:user:password / http / socks5 / socks5h)",
+            ["代理路线以配置文件 proxy.lanes 中的 {0} 为准；本页的注册代理与邮箱代理只写入旧键，不会覆盖 lanes。"] = "Proxy routes follow proxy.lanes in the config file ({0}); the registration and mailbox boxes here only write the legacy keys and never override lanes.",
             ["注册代理池（支持 host:port:user:password / http / socks5 / socks5h）"] = "Registration proxy pool (host:port:user:password / http / socks5 / socks5h)",
             ["邮箱收件代理"] = "Mailbox receive proxy",
             ["邮箱收件代理池（网络异常时自动切换）"] = "Mailbox receive proxy pool (auto-switch on network errors)",
