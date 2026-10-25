@@ -116,6 +116,46 @@ class RegistrationStateTests(unittest.TestCase):
         failed = [event for event in events if event[1] == "failed"][-1]
         self.assertIn("stage_budget_exceeded", failed[2])
 
+    def test_stage_budget_is_post_hoc_and_never_cancels_the_handler(self):
+        """The budget classifies an overrun *after* the stage returns.
+
+        ``RegistrationStage.run`` runs the handler to completion on the calling
+        thread and compares elapsed time afterwards, so cleanup happens where it
+        always did and no worker thread is orphaned. That makes
+        ``stage_timeouts`` a reporting/classification budget, not a preemptive
+        stop: callers must not read it as "the stage is cancelled at N seconds".
+        A future change to mid-stage cancellation has to move cleanup off the
+        calling thread and update this test deliberately.
+        """
+        events = []
+        completed = []
+        machine = RegistrationStateMachine(lambda state, status, detail: events.append((state, status, detail)))
+
+        def handler(_context):
+            time.sleep(0.03)
+            completed.append("ran")
+            return "ignored"
+
+        stage = RegistrationStage(RegistrationState.AUTH_FLOW, handler, timeout_seconds=0.001)
+        with self.assertRaises(RegistrationStageOverrun) as caught:
+            stage.run(object(), machine)
+
+        # The handler finished before the overrun was classified, and the
+        # exception carries both numbers so the operator sees how late it was.
+        self.assertEqual(completed, ["ran"])
+        self.assertEqual(machine.snapshot()["state"], "failed")
+        self.assertGreater(caught.exception.elapsed_seconds, caught.exception.budget_seconds)
+        self.assertEqual(caught.exception.state, RegistrationState.AUTH_FLOW)
+
+    def test_stage_under_budget_returns_the_value_without_failing(self):
+        events = []
+        machine = RegistrationStateMachine(lambda state, status, detail: events.append((state, status, detail)))
+        stage = RegistrationStage(RegistrationState.AUTH_FLOW, lambda _context: "value", timeout_seconds=5)
+
+        self.assertEqual(stage.run(object(), machine), "value")
+        self.assertEqual(machine.snapshot()["state"], "auth_flow")
+        self.assertEqual([event for event in events if event[1] == "failed"], [])
+
     def test_otp_poll_timeout_is_clamped_to_stage_budget(self):
         workflow = RegistrationEmailWorkflow(
             RegistrationStateMachine(lambda *_: None),

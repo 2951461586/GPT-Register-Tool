@@ -196,6 +196,19 @@ cooldown use shared bounds. Challenges, explicit credential failures, rate-limit
 circuits and exceeded stage budgets must not become transport retries merely
 because the error text also includes `timeout` or `proxy`.
 
+`registration.stage_timeouts.<state>` is a **post-hoc budget, not a preemptive
+cancel** (`registration/state.py::RegistrationStage.run`). The handler runs to
+completion on the calling thread, the elapsed time is compared afterwards, and
+only then does an overrun fail the state machine with
+`<state>_stage_budget_exceeded`. That ordering is deliberate: cleanup stays on the
+calling thread and no worker thread is orphaned. Read it as "this stage is
+reported as late", never as "this stage stops after N seconds". The stages that
+can legitimately block hand the smaller of their own operation timeout and the
+budget to the blocking call (`_otp_poll_timeout` for the email OTP wait); every
+other stage is bounded from outside by the desktop task timeout. Do not convert
+this into mid-stage cancellation without moving cleanup off the calling thread and
+re-pinning `tests/registration/test_registration_state.py`.
+
 iCloud inbox 404/410 stops the current OTP poll and opens a five-minute cooldown.
 The pre-OTP baseline propagates this error too, stopping before authorization or
 OTP dispatch. Explicit mailbox credential failures also stop at this boundary.
