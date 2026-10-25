@@ -164,9 +164,12 @@ namespace SmsWorkbench
 
             Category(Loc.T("网络与支付"),
                 Section(Loc.T("基础网络"),
-                    Text("registration_proxy", Loc.T("注册代理（主，支持 host:port:user:password / http / socks5 / socks5h）"), "", "http://127.0.0.1:7897"),
+                    // No prefilled proxy: a machine-specific localhost default in the box
+                    // used to be saved as if the operator had typed it. Blank now stays
+                    // blank and the backend resolves proxy.default / the lane pools.
+                    Text("registration_proxy", Loc.T("注册代理（主，支持 host:port:user:password / http / socks5 / socks5h）"), "", ""),
                     Multiline("registration_proxy_pool", Loc.T("注册代理池（支持 host:port:user:password / http / socks5 / socks5h）"), ""),
-                    Text("mailbox_proxy", Loc.T("邮箱收件代理"), "", "http://127.0.0.1:7897"),
+                    Text("mailbox_proxy", Loc.T("邮箱收件代理"), "", ""),
                     Multiline("mailbox_proxy_pool", Loc.T("邮箱收件代理池（网络异常时自动切换）"), "")),
                 Section(Loc.T("协议管理"),
                     Text("protocol_enabled_methods", Loc.T("启用方式"), "", "paypal,gopay,gcash,grabpay,upi,ideal,pix,kakao,blik,twint,direct_card,momo"),

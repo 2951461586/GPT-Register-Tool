@@ -444,6 +444,8 @@ namespace SmsWorkbench.Localization
             ["地区资格矩阵 JSON 无效："] = "Invalid regional eligibility matrix JSON: ",
             ["配置保存失败："] = "Failed to save settings: ",
             ["不支持的支付方式。"] = "Unsupported payment method.",
+            ["不支持的注册方式"] = "Unsupported registration source",
+            ["注册方式“{0}”没有对应的执行路径。"] = "Registration source \"{0}\" has no execution path.",
             ["代理出口国家必须为空或两位字母代码。"] = "Proxy exit country must be empty or a two-letter code.",
             ["代理配置保存失败："] = "Failed to save proxy settings: ",
             ["后端未返回 SMSWORKBENCH IPC v1 结果。"] = "The backend did not return an SMSWORKBENCH IPC v1 result.",

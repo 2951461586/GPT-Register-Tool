@@ -342,6 +342,21 @@ def test_cli_explicit_proxy_pool_does_not_inherit_configured_registration_proxy(
 
 
 def test_desktop_registration_proxy_resolver_has_no_payment_fallback():
+    """The desktop resolver reads configuration only.
+
+    Two invariants, both learned the hard way:
+
+    * order is ``proxy.registration`` -> legacy ``registration_proxy`` ->
+      ``proxy.default``; the PayPal list is a payment route and must never leak
+      into a registration proxy chain.
+    * it must NOT invent a fallback when everything is unset. It used to return a
+      hardcoded ``LocalNonPaymentProxy`` (``http://127.0.0.1:7897``), which made
+      the window always pass an explicit ``--proxy``. That suppressed the
+      backend's lane pools (``--proxy`` marks ``proxy_explicit``) and pointed
+      fresh installs at a localhost proxy that need not exist. An empty result
+      now travels through as no ``--proxy`` at all and the backend decides from
+      ``proxy.default`` plus ``registration_network_preflight``.
+    """
     source = (ROOT / "SmsWorkbench" / "Views" / "MainWindow.Helpers.cs").read_text(encoding="utf-8")
     method = source.split("private string GetRegistrationProxy()", 1)[1].split(
         "private List<string> GetRegistrationProxyPool()", 1
@@ -352,7 +367,8 @@ def test_desktop_registration_proxy_resolver_has_no_payment_fallback():
     default = method.index('settingsService.GetString("proxy.default")')
     assert registration < legacy < default
     assert "paypal" not in method.lower()
-    assert "LocalNonPaymentProxy" in method
+    assert "LocalNonPaymentProxy" not in method
+    assert "127.0.0.1" not in method
 
 
 def test_cli_registration_proxy_prefers_healthiest_via_tracker():

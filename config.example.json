@@ -3,33 +3,23 @@
     "auth_base_url": "https://auth.openai.com",
     "chat_base_url": "https://chatgpt.com"
   },
-  "mailbox_proxy": "http://127.0.0.1:7897",
+  "mailbox_proxy": "http://proxy.example:8080",
   "mailbox_proxy_pool": [],
   "proxy": {
-    "registration": "http://127.0.0.1:7897",
-    "browser_registration_pool": [
-      "http://127.0.0.1:7897"
-    ],
-    "protocol_registration_pool": [
-      "http://127.0.0.1:7897"
-    ],
-    "health": "http://127.0.0.1:7897",
-    "default": "http://127.0.0.1:7897",
+    "registration": "",
+    "browser_registration_pool": [],
+    "protocol_registration_pool": [],
+    "health": "",
+    "default": "",
     "pool": [
       "us.ipwo.net:7878:YOUR_USER_custom_zone_US:YOUR_PASSWORD",
       "as.ipwo.net:7878:YOUR_USER_custom_zone_JP:YOUR_PASSWORD",
       "eu.ipwo.net:7878:YOUR_USER_custom_zone_GB:YOUR_PASSWORD"
     ],
     "lanes": {
-      "protocol_registration": [
-        "http://127.0.0.1:7897"
-      ],
-      "browser_registration": [
-        "http://127.0.0.1:7897"
-      ],
-      "mailbox": [
-        "http://127.0.0.1:7897"
-      ],
+      "protocol_registration": [],
+      "browser_registration": [],
+      "mailbox": [],
       "payment": [
         "http://us.ipwo.net:7878:YOUR_USER_custom_zone_US:YOUR_PASSWORD"
       ]
@@ -290,15 +280,15 @@
       "US"
     ],
     "proxies": [
-      "socks5h://127.0.0.1:7897"
+      "socks5h://proxy.example:1080"
     ],
     "stage_proxies": {
-      "checkout": "socks5h://127.0.0.1:7897",
-      "provider": "socks5h://127.0.0.1:7897",
-      "approve": "socks5h://127.0.0.1:7897",
-      "stripe_init": "socks5h://127.0.0.1:7897",
-      "payment_method": "socks5h://127.0.0.1:7897",
-      "confirm": "socks5h://127.0.0.1:7897",
+      "checkout": "socks5h://proxy.example:1080",
+      "provider": "socks5h://proxy.example:1080",
+      "approve": "socks5h://proxy.example:1080",
+      "stripe_init": "socks5h://proxy.example:1080",
+      "payment_method": "socks5h://proxy.example:1080",
+      "confirm": "socks5h://proxy.example:1080",
       "promotion": ""
     },
     "stage_proxy_countries": {
@@ -602,7 +592,7 @@
     "send_retry_attempts": 3,
     "send_retry_delay_seconds": 45,
     "state_file": "runtime/phone_reuse_state.json",
-    "proxy": "http://127.0.0.1:7897",
+    "proxy": "http://proxy.example:8080",
     "proxy_match_phone_country": false,
     "proxy_random_sid": false,
     "smsbower": {
@@ -670,19 +660,11 @@
     "relogin_dead_end_permanent": true,
     "post_registration_enabled": true,
     "post_registration_deep_liveness": true,
-    "proxy_pool": [
-      "http://127.0.0.1:7897"
-    ],
+    "proxy_pool": [],
     "proxies": {
-      "liveness": [
-        "http://127.0.0.1:7897"
-      ],
-      "promotion": [
-        "http://127.0.0.1:7897"
-      ],
-      "browser": [
-        "http://127.0.0.1:7897"
-      ]
+      "liveness": [],
+      "promotion": [],
+      "browser": []
     },
     "workers": 2,
     "max_pending": 1000
@@ -703,10 +685,10 @@
     "max_checkout_retries": 3,
     "stage_proxies": {
       "checkout": "socks5h://user:pass-JP@gate:1000",
-      "provider": "http://127.0.0.1:7897",
-      "stripe_init": "http://127.0.0.1:7897",
-      "approve": "http://127.0.0.1:7897",
-      "confirm": "http://127.0.0.1:7897"
+      "provider": "http://proxy.example:8080",
+      "stripe_init": "http://proxy.example:8080",
+      "approve": "http://proxy.example:8080",
+      "confirm": "http://proxy.example:8080"
     },
     "target_country": "JP",
     "require_zero_due": true,

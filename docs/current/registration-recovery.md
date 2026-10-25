@@ -113,6 +113,29 @@ deadline by default (`account_health.batch_timeout_seconds` and
 `account_health.account_timeout_seconds`). Probe results are persisted before
 any optional relogin; relogin failures are reported separately as
 `relogin_otp_failed` or `relogin_failed` instead of blocking the entire scan.
+The split is evidence-based (`account_recovery._relogin_spent_email_code`):
+`relogin_otp_failed` only when an attempt's own error shows the email-code phase
+was actually reached (an OTP send/wait/validate error, or a mailbox-side
+blocker); a lane that stopped earlier -- notably
+`existing_login_password_verify_failed`, where no code was requested and the
+mailbox was never touched -- is `relogin_failed`. Naming the
+`chatgpt_email_otp` strategy is not evidence, and reading it as such sent the
+operator to the mailbox for a mailbox-independent failure (measured 2026-10-25).
+A passwordless-registered account is probed with an empty password for the same
+reason: it holds no server-side password, so submitting the locally generated
+one could only answer 401 and never reach the code it was meant to save.
+
+**Verified outcome (2026-10-25).** Two `registration_mode: passwordless`
+remail/Outlook accounts whose AT had been revoked (`401 unauthorized_unknown`)
+failed every 测活 run at `existing_login_password_verify_failed:401` and were
+reported as `relogin_otp_failed`. On the first run after both changes, relogin
+returned `mode=chatgpt_email_otp` with `ok=true` for both: probe
+`200 / active`, the `runtime/account_relogin_guard.json` entries were cleared,
+and the follow-up promotion check answered `trial_eligible` for both. Evidence:
+`runtime/account_liveness_batches/fe68c05010c34577a0e7ecb0108b0976.json`
+(failing run before the change:
+`7282036c011c4092a56816801385b2f0.json`); landing record:
+[landing-2026-10-25-desktop-hygiene-and-passwordless-relogin.md](../audits/landings/landing-2026-10-25-desktop-hygiene-and-passwordless-relogin.md).
 The desktop account-scan plan passes the same deadlines to the backend and uses
 a 15-minute process watchdog. Known OTP failures are held in
 `runtime/account_relogin_guard.json` for the configured cooldown before another

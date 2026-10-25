@@ -126,6 +126,30 @@ def relogin_refresh_token_account(
     )
 
 
+def _passwordless_registration(account: object) -> bool:
+    """True when the account was registered without a server-side password.
+
+    ``registration_mode == "passwordless"`` means signup never set a password, so
+    the ``password`` column only holds the value this tool generated locally. For
+    such an account the existing-login lane must not submit it: the login-method
+    probe reports ``password_form_present`` for *every* address (the sibling
+    ``/log-in/password`` shell carries a form; measured 2026-10-11), so the
+    password branch is chosen deterministically and
+    ``/api/accounts/password/verify`` can only answer 401. The lane then fails
+    before reaching the email code it was chosen to avoid spending.
+
+    An absent mode is deliberately **not** treated as passwordless: bare-row
+    callers (imports, older records) keep the previous behaviour, and only an
+    explicit passwordless registration takes the code path.
+    """
+    if not isinstance(account, dict):
+        return False
+    mode = str(account.get("registration_mode") or "").strip().lower().replace("-", "_")
+    if mode in {"passwordless", "passwordless_signup", "login_or_signup", "har"}:
+        return True
+    return bool(account.get("password_unknown"))
+
+
 def relogin_chatgpt_email_account(
     account: object,
     proxy: str | None = None,
@@ -207,7 +231,16 @@ def relogin_chatgpt_email_account(
             # real login instead of "the account has a password we cannot
             # submit".  ``_stored_registration_password`` already drops a value
             # whose stored error says the verify failed.
-            password=_stored_registration_password(email),
+            #
+            # A passwordless-registered account holds no server-side password, so
+            # it is handed an empty string on purpose: that is what makes the lane
+            # take its ``allow_passwordless`` branch (True on this entry point) and
+            # spend the email code instead of submitting a password the server
+            # never knew. Measured 2026-10-25: two ``registration_mode:
+            # passwordless`` remail accounts failed every 测活 run at
+            # ``existing_login_password_verify_failed:401`` without ever
+            # requesting a code.
+            password="" if _passwordless_registration(account) else _stored_registration_password(email),
             otp_timeout=max(30, int(timeout or 300)),
         )
         if not login.get("ok"):
@@ -1280,7 +1313,9 @@ def _record_relogin_failure(email: str, relogin: dict[str, Any]) -> None:
     repeated = bool(shape) and previous.get("last_shape") == shape
     cooldown = _relogin_repeat_cooldown_seconds() if repeated else _relogin_cooldown_seconds()
     entry: dict[str, Any] = {
-        "failure_class": "account" if dead_end else "relogin_otp_failed",
+        "failure_class": "account"
+        if dead_end
+        else ("relogin_otp_failed" if _relogin_spent_email_code(relogin) else "relogin_failed"),
         "last_error": str(relogin.get("error") or "relogin_failed")[:200],
         "cooldown_until": int(time.time() + cooldown),
         "updated_at": int(time.time()),
@@ -1299,6 +1334,54 @@ def _record_relogin_failure(email: str, relogin: dict[str, Any]) -> None:
     temp.replace(path)
 
 
+#: Attempt errors that prove the email-OTP strategy failed *before* it asked for a
+#: code. The strategy is listed in ``attempts`` either way, which is why the
+#: attempt's name cannot be the evidence.
+_NO_CODE_SPENT_MARKERS = (
+    "existing_login_password_verify_failed",
+    "existing_login_password_required",
+    "existing_login_password_step_unknown",
+)
+
+#: Markers that mean a verification code / mailbox was actually involved.
+_CODE_PHASE_MARKERS = ("otp", "email_code", "verification_code", "mailbox")
+
+
+def _relogin_spent_email_code(relogin: Any) -> bool:
+    """True only when a relogin attempt actually reached the email-code phase.
+
+    ``relogin_otp_failed`` used to be produced by substring-matching the whole
+    payload for ``"otp"`` / ``"mailbox"`` / ``"email"``, so any failure that merely
+    *listed* the ``chatgpt_email_otp`` strategy was reported as an OTP failure --
+    including the ones that stopped at ``password/verify`` and never requested a
+    code. That label sends the operator to the mailbox for a problem the mailbox
+    does not have (measured 2026-10-25: two passwordless remail/outlook accounts).
+
+    The per-attempt error is the only evidence that counts: an error naming the
+    password/lookup phase is excluded, and any other error mentioning the code
+    phase is accepted. Shapes without ``attempts`` fall back to the top-level
+    ``error``, so older records and hand-built dicts classify exactly as before.
+    """
+    if not isinstance(relogin, dict):
+        return False
+    attempts = relogin.get("attempts")
+    errors: list[str] = []
+    if isinstance(attempts, list) and attempts:
+        for attempt in attempts:
+            if isinstance(attempt, dict):
+                errors.append(str(attempt.get("error") or "").lower())
+    if not errors:
+        errors = [str(relogin.get("error") or "").lower()]
+    for error in errors:
+        if not error:
+            continue
+        if any(marker in error for marker in _NO_CODE_SPENT_MARKERS):
+            continue
+        if any(marker in error for marker in _CODE_PHASE_MARKERS):
+            return True
+    return False
+
+
 def _health_status_code(probe: dict[str, Any], relogin: dict[str, Any]) -> str:
     if _item_is_account_deactivated({"probe": probe, "relogin": relogin}):
         return "account_deactivated"
@@ -1314,7 +1397,7 @@ def _health_status_code(probe: dict[str, Any], relogin: dict[str, Any]) -> str:
         text = json.dumps(relogin, ensure_ascii=False).lower()
         if "mailbox_transport" in text or "mailbox_transport_unavailable" in text:
             return "relogin_mailbox_transport_failed"
-        if "otp" in text or "mailbox" in text:
+        if _relogin_spent_email_code(relogin):
             return "relogin_otp_failed"
         return "relogin_failed"
     if _probe_is_token_invalid(probe):
@@ -1349,7 +1432,7 @@ def _relogin_failure_quota_status(relogin: dict[str, Any]) -> str:
         return "relogin_mailbox_transport_failed"
     if "mailbox_auth_invalid" in text:
         return "mailbox_auth_invalid"
-    if "mailbox" in text or "email_otp" in text or "otp" in text:
+    if _relogin_spent_email_code(relogin):
         return "relogin_otp_failed"
     if "cooldown" in text:
         return "relogin_cooldown"

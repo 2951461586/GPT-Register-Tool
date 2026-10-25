@@ -124,7 +124,7 @@ Wpf.Ui.xaml   ->   Themes/Palette.xaml   ->   Themes/Controls.xaml
 | `tests/workbench/test_localization_catalog.py` | 每个 `{loc:Tr}` / `Loc.T` / `Loc.F` 键都有英文；XAML 文本属性不得留中文；**`MessageBox.Show`、`Notify*`、`DialogFactory.Show*Async`、`Content`/`Text`/`Title` 等属性直接写字面中文即失败**（2026-10-25 新增，此前这类字符串静默漏了 25 条） |
 | `tests/SmsWorkbench.Tests/BackendCommandPlannerSurfaceTests.cs` | `BackendCommandPlanner` 中「无生产调用方」的 builder 集合被冻结：新增死代码、接线、删除都要显式改白名单，且每个条目必须在 doc comment 里写明 |
 | `scripts/dotnet_warning_ratchet.py` | C# 构建告警零基线（见 [`dotnet-gates.md`](dotnet-gates.md)） |
-| `dotnet test GPTRegisterTool.slnx -c Release` | 548 个测试（CI 必跑） |
+| `dotnet test GPTRegisterTool.slnx -c Release` | 557 个测试（CI 必跑） |
 
 `SmsWorkbench.Tests` 里没有 UI 自动化：所有窗口级断言都在真实布局对象上做
 （`ActualWidth`、`Template.FindName`、`FindVisualChildren`），不做像素比较。

@@ -281,6 +281,82 @@ def test_each_candidate_emits_a_progress_event(monkeypatch, one_account):
 
 
 # --------------------------------------------------------------------------
+# Browser-context degradation
+# --------------------------------------------------------------------------
+
+
+def test_missing_browser_context_degrades_to_protocol_instead_of_failing(monkeypatch):
+    """A browser-registered account must still be probed when its browser is gone.
+
+    The batch used to answer ``browser_context_unavailable`` for every such
+    account. That is an *environment* error reported as a per-account verdict:
+    a machine without Playwright/Camoufox marked every browser-registered
+    account 检测失败. The probe now runs over the protocol transport (same AT,
+    same saved fingerprint via ``bind_account_identity``) and records the
+    degradation, matching what the liveness batch already does.
+    """
+    from contextlib import nullcontext
+
+    identity = {"browser_identity": {"driver": "camoufox"}}
+    monkeypatch.setattr(promotion_batch, "CFG", {})
+    monkeypatch.setattr(
+        "sms_tool.storage.get_account_record",
+        lambda email: {
+            "email": email,
+            "access_token": "at",
+            "raw_json": json.dumps({"access_token": "at", "identity_context": identity}),
+        },
+    )
+    monkeypatch.setattr("sms_tool.storage.mark_promotion_status", lambda *args, **kwargs: True)
+    monkeypatch.setattr(promotion_batch, "browser_fetch_for_account", lambda *a, **k: nullcontext(None))
+    seen = []
+
+    def fake_probe(account, **kwargs):
+        seen.append(kwargs.get("browser_fetch"))
+        return {"ok": True, "promotion_status": "Free·无优惠"}
+
+    monkeypatch.setattr(promotion_batch, "check_account_promotion", fake_probe)
+
+    result = promotion_batch.refresh_promotion_statuses(["a@example.com"], workers=1, proxy="http://edge.example:8080")
+
+    assert result["success"] == 1, "an unavailable browser must not fail the account"
+    assert seen == [None], "the probe falls back to the protocol transport"
+    assert result["results"][0]["probe"]["browser_fallback"] == "unavailable"
+
+
+def test_available_browser_context_is_still_used(monkeypatch):
+    """The fallback must not replace the browser path when it works."""
+    from contextlib import nullcontext
+
+    identity = {"browser_identity": {"driver": "camoufox"}}
+    monkeypatch.setattr(promotion_batch, "CFG", {})
+    monkeypatch.setattr(
+        "sms_tool.storage.get_account_record",
+        lambda email: {
+            "email": email,
+            "access_token": "at",
+            "raw_json": json.dumps({"access_token": "at", "identity_context": identity}),
+        },
+    )
+    monkeypatch.setattr("sms_tool.storage.mark_promotion_status", lambda *args, **kwargs: True)
+    sentinel_fetch = lambda *a, **k: {"status_code": 200, "body": {}}  # noqa: E731
+    monkeypatch.setattr(promotion_batch, "browser_fetch_for_account", lambda *a, **k: nullcontext(sentinel_fetch))
+    seen = []
+
+    def fake_probe(account, **kwargs):
+        seen.append(kwargs.get("browser_fetch"))
+        return {"ok": True, "promotion_status": "Free·无优惠"}
+
+    monkeypatch.setattr(promotion_batch, "check_account_promotion", fake_probe)
+
+    result = promotion_batch.refresh_promotion_statuses(["a@example.com"], workers=1, proxy="http://edge.example:8080")
+
+    assert result["success"] == 1
+    assert seen == [sentinel_fetch]
+    assert "browser_fallback" not in result["results"][0]["probe"]
+
+
+# --------------------------------------------------------------------------
 # Failure-class mapping
 # --------------------------------------------------------------------------
 

@@ -52,30 +52,35 @@ namespace SmsWorkbench
 
         /// <summary>
         /// The registration route in planner shape: the configured pool when one
-        /// exists, otherwise the single configured/fallback proxy. This is the
-        /// same list the old inline <c>--proxy</c> + <c>--proxy-pool</c> pair
-        /// produced, with the flag literals now owned by the planner.
+        /// exists, otherwise the single configured proxy. This is the same list the
+        /// old inline <c>--proxy</c> + <c>--proxy-pool</c> pair produced, with the
+        /// flag literals now owned by the planner.
+        ///
+        /// <para>
+        /// Empty means "nothing configured here", and that is deliberately passed
+        /// through as an empty list: <c>--proxy</c> is then omitted entirely and the
+        /// backend resolves the route itself (<c>proxy.default</c>, the lane pools and
+        /// <c>registration_network_preflight</c>'s reason codes). Inventing a value on
+        /// the desktop side made this argument always explicit, which suppressed every
+        /// backend lane pool and pointed fresh installs at a localhost proxy that need
+        /// not exist.
+        /// </para>
         /// </summary>
-        private List<string> GetRegistrationProxyRoute()
-        {
-            List<string> pool = GetRegistrationProxyPool();
-            if (pool.Count > 0) return pool;
-            string fallback = GetRegistrationProxy();
-            return fallback.Length > 0 ? new List<string> { fallback } : new List<string>();
-        }
+        private List<string> GetRegistrationProxyRoute() => GetRegistrationProxyPool();
 
         private void AddMailboxProxy(List<string> args)
         {
             BackendCommandPlanner.AppendProxy(args, GetMailboxProxy());
         }
 
+        /// <summary>Configured registration proxy, or <c>""</c> when none is set.
+        /// Never substitutes a localhost default -- see <see cref="GetRegistrationProxyRoute"/>.</summary>
         private string GetRegistrationProxy()
         {
-            string configured = FirstNonEmpty(
+            return FirstNonEmpty(
                 settingsService.GetString("proxy.registration"),
                 settingsService.GetString("registration_proxy"),
                 settingsService.GetString("proxy.default"));
-            return configured.Length > 0 ? configured : LocalNonPaymentProxy;
         }
 
         private List<string> GetRegistrationProxyPool()
@@ -91,24 +96,25 @@ namespace SmsWorkbench
                 .ToList();
         }
 
+        /// <summary>Configured mailbox (inbox-read) proxy, or <c>""</c> when none is set.</summary>
         private string GetMailboxProxy()
         {
-            string configured = FirstNonEmpty(
+            return FirstNonEmpty(
                 settingsService.GetString("mailbox_proxy"),
                 settingsService.GetString("email_registration.mailbox_proxy"),
                 settingsService.GetString("proxy.mailbox"));
-            return configured.Length > 0 ? configured : LocalNonPaymentProxy;
         }
 
+        /// <summary>
+        /// Access-token/session operations must preserve the registration proxy +
+        /// fingerprint identity. The backend rebinds each account's saved affinity;
+        /// this pool is only the legacy fallback for rows that predate
+        /// identity_context, so an empty result (no registration route configured)
+        /// stays empty and lets the backend choose.
+        /// </summary>
         private List<string> GetLivenessProxyPool()
         {
-            // Access-token/session operations must preserve the registration
-            // proxy + fingerprint identity. The backend rebinds each account's
-            // saved affinity; this pool is only the legacy fallback for rows
-            // that predate identity_context.
-            List<string> registration = GetRegistrationProxyPool();
-            if (registration.Count > 0) return registration;
-            return new List<string> { LocalNonPaymentProxy };
+            return GetRegistrationProxyPool();
         }
 
         private string GetConfiguredCfWorkerDomain()

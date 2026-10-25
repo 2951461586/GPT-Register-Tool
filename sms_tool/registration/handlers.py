@@ -183,46 +183,52 @@ class RegistrationEmailWorkflow:
         r._tl().clear()
         r.select_auth_fingerprint(rotate=True)
         self._apply_reference_lane()
-        config_scope = r.runtime_config_scope(self.config, workflow="registration")
-        config_scope.__enter__()
-        try:
-            ensure_not_cancelled()
-            self._run_bootstrap()
-            resumed = self._resume_post_create()
-            if resumed is not None:
-                return resumed
-            self._run_stage(RegistrationState.AUTH_FLOW, "2-Auth flow", self.auth_flow)
-            self._run_stage(RegistrationState.USER_REGISTER, "3-User register (email+password)", self.user_register)
-            self._run_stage(RegistrationState.EMAIL_OTP_SEND, "4-Trigger email OTP", self.send_email_otp)
-            self._run_stage(RegistrationState.EMAIL_OTP_WAIT, "5-Get email OTP", self.wait_email_otp)
-            self._run_stage(RegistrationState.EMAIL_OTP_VALIDATE, "6-Validate email OTP", self.validate_email_otp)
-            self._run_stage(RegistrationState.CREATE_ACCOUNT, "7-Create account", self.create_account)
-            self._run_stage(RegistrationState.AUTH_SESSION, "8-Fetch auth session", self.fetch_auth_session)
-            self._run_stage(RegistrationState.ACCESS_TOKEN_PROBE, "8d-Validate access token", self.probe_access_token)
-            self._set_outcome()
-            # Opt-in (``registration.chatgpt_bootstrap.enabled``) and, like the
-            # refresh token below, strictly after the verdict: decoration, never
-            # a gate.
-            self.post_signup_warmup()
-            # Opt-in, and deliberately *after* ``_set_outcome``: it must never be
-            # able to change the registration verdict (see the method docstring).
-            self.obtain_oauth_refresh_token()
-            self._run_stage(RegistrationState.TOTP_ENROLL, "9-Enroll TOTP", self.enroll_totp)
-            return self._run_stage(RegistrationState.FINALIZE, "10-Finalize registration", self.finalize)
-        except RegistrationAbort as exc:
-            return self._abort_result(str(exc))
-        except RegistrationCancelled:
-            # Cooperative cancellation: report the same cancelled contract the
-            # batch runner and the browser path use, not an internal error.
-            return self._abort_result("registration_cancelled", cancelled=True)
-        except (MailboxEndpointUnavailableError, MailboxAuthInvalidError) as exc:
-            return self._abort_result(str(exc))
-        except Exception as exc:
-            error = f"registration_internal_error:{type(exc).__name__}:{exc}"
-            return self._abort_result(error)
-        finally:
-            self._close_sessions()
-            config_scope.__exit__(None, None, None)
+        # A real ``with``, not a hand-wired ``__enter__``/``__exit__`` pair. The
+        # manual form had to pass ``(None, None, None)`` as the exit info, so the
+        # context manager could never observe the exception unwinding this frame.
+        # Nothing depends on that today (``runtime_config_scope`` only resets a
+        # ContextVar in ``finally``), but the next ``except``/``throw`` added
+        # inside it would silently never fire on the failure paths below.
+        with r.runtime_config_scope(self.config, workflow="registration"):
+            try:
+                ensure_not_cancelled()
+                self._run_bootstrap()
+                resumed = self._resume_post_create()
+                if resumed is not None:
+                    return resumed
+                self._run_stage(RegistrationState.AUTH_FLOW, "2-Auth flow", self.auth_flow)
+                self._run_stage(RegistrationState.USER_REGISTER, "3-User register (email+password)", self.user_register)
+                self._run_stage(RegistrationState.EMAIL_OTP_SEND, "4-Trigger email OTP", self.send_email_otp)
+                self._run_stage(RegistrationState.EMAIL_OTP_WAIT, "5-Get email OTP", self.wait_email_otp)
+                self._run_stage(RegistrationState.EMAIL_OTP_VALIDATE, "6-Validate email OTP", self.validate_email_otp)
+                self._run_stage(RegistrationState.CREATE_ACCOUNT, "7-Create account", self.create_account)
+                self._run_stage(RegistrationState.AUTH_SESSION, "8-Fetch auth session", self.fetch_auth_session)
+                self._run_stage(
+                    RegistrationState.ACCESS_TOKEN_PROBE, "8d-Validate access token", self.probe_access_token
+                )
+                self._set_outcome()
+                # Opt-in (``registration.chatgpt_bootstrap.enabled``) and, like the
+                # refresh token below, strictly after the verdict: decoration, never
+                # a gate.
+                self.post_signup_warmup()
+                # Opt-in, and deliberately *after* ``_set_outcome``: it must never be
+                # able to change the registration verdict (see the method docstring).
+                self.obtain_oauth_refresh_token()
+                self._run_stage(RegistrationState.TOTP_ENROLL, "9-Enroll TOTP", self.enroll_totp)
+                return self._run_stage(RegistrationState.FINALIZE, "10-Finalize registration", self.finalize)
+            except RegistrationAbort as exc:
+                return self._abort_result(str(exc))
+            except RegistrationCancelled:
+                # Cooperative cancellation: report the same cancelled contract the
+                # batch runner and the browser path use, not an internal error.
+                return self._abort_result("registration_cancelled", cancelled=True)
+            except (MailboxEndpointUnavailableError, MailboxAuthInvalidError) as exc:
+                return self._abort_result(str(exc))
+            except Exception as exc:
+                error = f"registration_internal_error:{type(exc).__name__}:{exc}"
+                return self._abort_result(error)
+            finally:
+                self._close_sessions()
 
     def _apply_reference_lane(self) -> None:
         return _bootstrap_stages.apply_reference_lane(self)

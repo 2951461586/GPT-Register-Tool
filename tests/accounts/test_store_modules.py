@@ -149,6 +149,36 @@ class StoreAccountsTests(unittest.TestCase):
         finally:
             conn.close()
 
+    def test_account_payload_merges_identity_context_from_raw_json(self):
+        """``identity_context`` has no column, so only the payload form sees it.
+
+        A probe built from ``get_account_record`` alone loses the fingerprint key,
+        device id, proxy affinity and browser identity -- which made the single-row
+        quota probe present the AT under a different identity than registration.
+        """
+        identity = {
+            "fingerprint_key": "chrome136-win10",
+            "device_id": "dev-123",
+            "proxy_affinity": {"host": "proxy.example", "port": 8080, "country": "US"},
+            "browser_identity": {"driver": "camoufox"},
+        }
+        accounts.upsert_account(
+            {
+                "email": "payload@example.com",
+                "access_token": "at_payload",
+                "identity_context": identity,
+                "success": True,
+            }
+        )
+
+        row = accounts.get_account_record("payload@example.com")
+        self.assertNotIn("identity_context", row, "identity must not become a column")
+
+        payload = accounts.get_account_payload("payload@example.com")
+        self.assertEqual(payload["access_token"], "at_payload")
+        self.assertEqual(payload["identity_context"], identity)
+        self.assertEqual(accounts.get_account_payload("missing@example.com"), {})
+
 
 class StoreMarkersTests(unittest.TestCase):
     def setUp(self):

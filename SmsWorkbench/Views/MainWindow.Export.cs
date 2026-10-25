@@ -30,7 +30,9 @@ namespace SmsWorkbench
             var plan = BackendCommandPlanner.CreateAccountImport(
                 target,
                 rows.Select(r => r.Identifier.Trim()).ToList());
-            RunBackend(plan.TaskName, plan.Arguments.ToList());
+            // CreateAccountImport writes the email list to a temp file and declares it;
+            // RunBackend(plan) is what actually deletes it afterwards.
+            RunBackend(plan);
         }
 
         private async void ExportAccounts()

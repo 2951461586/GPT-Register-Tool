@@ -84,6 +84,15 @@ namespace SmsWorkbench
         /// Mailbox-file registration shared by the selected-mailbox,
         /// unregistered-mailbox, one-click pool, and failed-rerun actions.
         /// </summary>
+        /// <param name="temporaryFiles">
+        /// Files the *caller* created for this run and expects deleted afterwards
+        /// (a selected-mailbox batch file). Declare them here rather than dropping
+        /// them: the window deletes <see cref="BackendCommandPlan.TempFiles"/> in a
+        /// <c>finally</c>, and an undeclared batch file is mailbox credentials left
+        /// in <c>%TEMP%</c> forever. The persistent pool file passed by the one-click
+        /// path is NOT a temporary file and must never be listed here -- doing so
+        /// deletes the operator's mailbox pool after the first run.
+        /// </param>
         public static BackendCommandPlan CreateMailboxFileRegistration(
             string taskName,
             string mailboxArgument,
@@ -93,7 +102,8 @@ namespace SmsWorkbench
             bool registrationAtOnly,
             IReadOnlyList<string> proxyPool,
             bool disable2fa = false,
-            bool checkPromotion = false)
+            bool checkPromotion = false,
+            IReadOnlyList<string>? temporaryFiles = null)
         {
             RequireArgument(mailboxArgument, nameof(mailboxArgument));
             RequireArgument(mailboxFile, nameof(mailboxFile));
@@ -109,7 +119,7 @@ namespace SmsWorkbench
             AppendNo2fa(args, disable2fa);
             AppendCheckPromotion(args, checkPromotion);
             AppendProxyPool(args, proxyPool);
-            return new BackendCommandPlan(taskName, args);
+            return new BackendCommandPlan(taskName, args, TemporaryFiles: temporaryFiles);
         }
 
         /// <summary>
@@ -226,7 +236,8 @@ namespace SmsWorkbench
             string sessionFile,
             IReadOnlyList<string> proxyPool,
             string? phoneSource = null,
-            string? tempDirectory = null)
+            string? tempDirectory = null,
+            IReadOnlyList<string>? callerTemporaryFiles = null)
         {
             RequireArgument(mailboxArgument, nameof(mailboxArgument));
             RequireArgument(mailboxFile, nameof(mailboxFile));
@@ -257,6 +268,11 @@ namespace SmsWorkbench
                 AppendSessionFile(args, sessionFile);
             }
             AppendProxyPool(args, proxyPool);
+            // The caller's selected-mailbox batch file is a temp file too; see
+            // CreateMailboxFileRegistration's parameter docs for why it has to be
+            // declared instead of inferred.
+            if (callerTemporaryFiles != null)
+                tempFiles.AddRange(callerTemporaryFiles.Where(path => !string.IsNullOrWhiteSpace(path)));
             return new BackendCommandPlan(
                 "一键接码(" + Count(targets.Count) + ")",
                 args,

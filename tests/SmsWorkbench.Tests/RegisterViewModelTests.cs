@@ -108,5 +108,18 @@ namespace SmsWorkbench.Tests
                 "--chatai-mailbox-file",
                 RegisterViewModel.MailboxArgument(new HashSet<string> { "--a", "--b" }));
         }
+
+        [Fact]
+        public void RegisterOptions_DefaultsToKeepingTwoFactorAndThePoolSource()
+        {
+            var options = new RegisterOptions();
+
+            // The dialog's "关闭 2FA" box starts unchecked. A `true` default meant
+            // any `new RegisterOptions()` silently skipped TOTP enrollment while the
+            // UI said the opposite.
+            Assert.False(options.Disable2fa);
+            Assert.Equal("pool", options.Source);
+            Assert.False(options.CheckPromotion);
+        }
     }
 }

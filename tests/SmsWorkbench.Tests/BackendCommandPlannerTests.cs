@@ -687,4 +687,48 @@ public sealed class BackendCommandPlannerTests
         BackendCommandPlanner.AppendSessionFile(args, "");
         Assert.Single(args);
     }
+
+    // ── Temp-file ownership ─────────────────────────────────────────────
+    // The window's runner deletes everything in `plan.TempFiles` in a finally.
+    // A batch file that is created but not declared is mailbox credentials left
+    // in %TEMP% forever; a persistent pool file that IS declared is deleted after
+    // the first run. Both directions are pinned here.
+
+    [Fact]
+    public void CreateMailboxFileRegistration_DeclaresCallerTemporaryFiles()
+    {
+        var plan = BackendCommandPlanner.CreateMailboxFileRegistration(
+            "测试", "--chatai-mailbox-file", "C:\\temp\\selected_mailbox_20260101_000000.txt", 2, 2,
+            registrationAtOnly: true,
+            proxyPool: Array.Empty<string>(),
+            temporaryFiles: new[] { "C:\\temp\\selected_mailbox_20260101_000000.txt" });
+
+        Assert.Single(plan.TempFiles);
+        Assert.Equal("C:\\temp\\selected_mailbox_20260101_000000.txt", plan.TempFiles[0]);
+    }
+
+    [Fact]
+    public void CreateMailboxFileRegistration_WithoutTemporaryFiles_NeverDeclaresThePoolFile()
+    {
+        var plan = BackendCommandPlanner.CreateMailboxFileRegistration(
+            "测试", "--chatai-mailbox-file", "C:\\pool.txt", 2, 2,
+            registrationAtOnly: true, proxyPool: Array.Empty<string>());
+
+        Assert.Empty(plan.TempFiles);
+    }
+
+    [Fact]
+    public void CreateOneClickSms_MergesCallerTemporaryFilesWithItsOwnEmailFile()
+    {
+        var plan = BackendCommandPlanner.CreateOneClickSms(
+            mailboxArgument: "--mailbox-file",
+            mailboxFile: "C:\\temp\\selected_mailbox.txt",
+            emails: new[] { "a@b.com", "c@d.com" },
+            sessionFile: "",
+            proxyPool: Array.Empty<string>(),
+            callerTemporaryFiles: new[] { "C:\\temp\\selected_mailbox.txt" });
+
+        Assert.Equal(2, plan.TempFiles.Count);
+        Assert.Contains("C:\\temp\\selected_mailbox.txt", plan.TempFiles);
+    }
 }

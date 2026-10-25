@@ -145,3 +145,52 @@ def test_registration_and_payment_use_the_canonical_liveness_seam():
         if "/backend-api/me" in path.read_text(encoding="utf-8")
     ]
     assert offenders == []
+
+
+def test_single_row_quota_probe_uses_the_merged_account_payload(monkeypatch):
+    """``--quota-usage`` must probe with identity, not just the DB row.
+
+    ``identity_context`` lives only inside ``raw_json``, so reading the bare row
+    made this probe run with a default fingerprint, no proxy affinity and no
+    browser identity -- i.e. a different identity than the one the account
+    registered with, while the batch scan used the bound one. Pinned against the
+    command adapter so a future "simplification" back to ``get_account_record``
+    fails here.
+    """
+    from sms_tool.commands import accounts as account_commands
+
+    identity = {
+        "fingerprint_key": "chrome136-win10",
+        "device_id": "dev-123",
+        "proxy_affinity": {"host": "proxy.example", "port": 8080, "country": "US"},
+        "browser_identity": {"driver": "camoufox"},
+    }
+    payload = {
+        "email": "single@example.com",
+        "access_token": "at_single",
+        "identity_context": identity,
+    }
+    monkeypatch.setattr("sms_tool.storage.get_account_payload", lambda email: dict(payload))
+    probed: list[dict] = []
+
+    def fake_probe(account, proxy=None, timeout=None):
+        probed.append(account)
+        return {
+            "ok": True,
+            "status": "active",
+            "quota_status": "3/5",
+            "wham_usage": {},
+            "proxy_source": "registration_affinity",
+        }
+
+    monkeypatch.setattr(account_liveness, "probe_account_liveness", fake_probe)
+
+    import argparse
+
+    account_commands.quota_usage(
+        argparse.Namespace(email="single@example.com", proxy=None, refresh_timeout=10, desktop_ipc=False)
+    )
+
+    assert len(probed) == 1
+    assert probed[0]["identity_context"] == identity
+    assert probed[0]["access_token"] == "at_single"

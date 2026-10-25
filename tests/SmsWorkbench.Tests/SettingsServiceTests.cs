@@ -543,4 +543,45 @@ public sealed class SettingsServiceTests
             .SelectMany(section => section.Fields)
             .Single(field => field.Key == key);
     }
+
+    /// <summary>
+    /// An empty proxy box must stay empty. It used to be normalised to a
+    /// hardcoded <c>http://127.0.0.1:7897</c>, which the window then forwarded as
+    /// an explicit <c>--proxy</c> -- suppressing the backend's lane pools and
+    /// pointing fresh installs at a proxy that need not exist.
+    /// </summary>
+    [Fact]
+    public void SaveWithBlankProxyFieldsDoesNotInventALoopbackProxy()
+    {
+        using var fixture = new TemporaryDirectory();
+        var service = new SettingsService(new TestApplicationPaths(fixture.Path));
+        IReadOnlyList<SettingsCategoryViewModel> categories = service.Load();
+        Field(categories, "registration_proxy").Value = "";
+        Field(categories, "registration_proxy_pool").Value = "";
+        Field(categories, "mailbox_proxy").Value = "";
+        Field(categories, "mailbox_proxy_pool").Value = "";
+
+        SettingsSaveResult result = service.Save(categories);
+
+        Assert.True(result.Ok, result.Error);
+        JsonObject root = ConfigTestHelpers.ReadMergedConfig(fixture.Path);
+        Assert.Equal("", root["proxy"]?["registration"]?.GetValue<string>() ?? "");
+        Assert.Equal("", root["proxy"]?["default"]?.GetValue<string>() ?? "");
+        Assert.Empty(root["proxy"]!["pool"]!.AsArray());
+        // Scope the loopback check to the proxy section: the merged config legitimately
+        // carries other local addresses (e.g. the mail OTP web service api_base).
+        Assert.DoesNotContain("127.0.0.1", root["proxy"]!.ToJsonString());
+    }
+
+    [Fact]
+    public void LoadWithoutAConfiguredProxyLeavesTheBoxEmpty()
+    {
+        using var fixture = new TemporaryDirectory();
+        var service = new SettingsService(new TestApplicationPaths(fixture.Path));
+
+        IReadOnlyList<SettingsCategoryViewModel> categories = service.Load();
+
+        Assert.Equal("", Field(categories, "registration_proxy").Value);
+        Assert.Equal("", Field(categories, "mailbox_proxy").Value);
+    }
 }

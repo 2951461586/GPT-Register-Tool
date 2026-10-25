@@ -29,7 +29,6 @@ namespace SmsWorkbench
 
     public sealed class SettingsService : ISettingsService
     {
-        private const string LocalProxy = "http://127.0.0.1:7897";
         private static readonly string[] ListSeparators = { "\r\n", "\n", "," };
         private static readonly JsonSerializerOptions IndentedJson = new() { WriteIndented = true };
         private readonly IApplicationPaths _paths;
@@ -102,24 +101,31 @@ namespace SmsWorkbench
                     SetPath(root, ResolveProviderPath(field.Definition.JsonPath, selectedProvider), ToJsonValue(field));
                 }
 
-                // Registration must never silently fall back to a direct
-                // connection when the settings box is left blank.
+                // Blank stays blank. Writing a hardcoded localhost proxy here turned
+                // "the operator left this empty" into a persisted route that the
+                // desktop then forwarded as an explicit --proxy, which suppressed the
+                // backend's lane pools and pointed fresh installs at a proxy that need
+                // not exist. An empty box now means "let proxy.default, the lane pools
+                // and registration_network_preflight decide".
                 string registrationProxy = ProxyInputNormalizer.Normalize(
-                    First(Find(fields, "registration_proxy").Value.Trim(), LocalProxy));
+                    Find(fields, "registration_proxy").Value.Trim());
                 string mailboxProxy = ProxyInputNormalizer.Normalize(
-                    First(Find(fields, "mailbox_proxy").Value.Trim(), LocalProxy));
+                    Find(fields, "mailbox_proxy").Value.Trim());
                 string[] mailboxPool = ProxyInputNormalizer.NormalizeList(
                         Find(fields, "mailbox_proxy_pool").Value)
                     .Where(value => !string.Equals(value, mailboxProxy, StringComparison.OrdinalIgnoreCase))
                     .ToArray();
-                var orderedMailboxPool = new List<string> { mailboxProxy };
+                var orderedMailboxPool = new List<string>();
+                if (mailboxProxy.Length > 0)
+                    orderedMailboxPool.Add(mailboxProxy);
                 orderedMailboxPool.AddRange(mailboxPool);
                 string[] registrationPool = ProxyInputNormalizer.NormalizeList(
                         Find(fields, "registration_proxy_pool").Value)
                     .Where(value => !string.Equals(value, registrationProxy, StringComparison.OrdinalIgnoreCase))
                     .ToArray();
                 var orderedRegistrationPool = new List<string>();
-                orderedRegistrationPool.Add(registrationProxy);
+                if (registrationProxy.Length > 0)
+                    orderedRegistrationPool.Add(registrationProxy);
                 orderedRegistrationPool.AddRange(registrationPool);
                 SetPath(root, "proxy.registration", registrationProxy);
                 SetPath(root, "proxy.default", registrationProxy);
@@ -272,18 +278,15 @@ namespace SmsWorkbench
                     Text(root, "proxy.registration"),
                     Text(root, "registration_proxy"),
                     FirstArray(root, "paypal.proxies"),
-                    Text(root, "proxy.default"),
-                    LocalProxy),
+                    Text(root, "proxy.default")),
                 "registration_proxy_pool" => First(ListText(root, "proxy.pool"), Text(root, "proxy.registration")),
                 "mailbox_proxy" => First(
                     Text(root, "mailbox_proxy"),
                     Text(root, "email_registration.mailbox_proxy"),
-                    Text(root, "proxy.mailbox"),
-                    LocalProxy),
+                    Text(root, "proxy.mailbox")),
                 "mailbox_proxy_pool" => First(
                     ListText(root, "mailbox_proxy_pool"),
-                    Text(root, "mailbox_proxy"),
-                    LocalProxy),
+                    Text(root, "mailbox_proxy")),
                 "smailr_api_key" => First(
                     Text(root, definition.JsonPath),
                     Environment.GetEnvironmentVariable("SMAILR_API_KEY")),

@@ -13,8 +13,12 @@ namespace SmsWorkbench
     public partial class MainWindow : FluentWindow, INotifyPropertyChanged
     {
         private Wpf.Ui.Appearance.ApplicationTheme _currentTheme = Wpf.Ui.Appearance.ApplicationTheme.Light;
+        // Shared instance for the one-click SMS provider catalog/balance reads in
+        // MainWindow.SmsProvider.cs (SmsProviderCatalogClient takes the HttpClient
+        // as a parameter). One static instance per window is deliberate: a
+        // per-call `new HttpClient()` leaks sockets, and these are a handful of
+        // small GETs against a provider API, not a long-lived backend channel.
         private static readonly HttpClient httpClient = new HttpClient();
-        private const string LocalNonPaymentProxy = "http://127.0.0.1:7897";
         private readonly IBackendClient backendClient;
         private readonly IBackendTaskCoordinator backendTasks;
         private readonly IDesktopReadClient desktopRead;
@@ -220,7 +224,10 @@ namespace SmsWorkbench
         public string Source { get; set; } = "pool";
         public int Count { get; set; } = 1;
         public int Workers { get; set; } = 4;
-        public bool Disable2fa { get; set; } = true;
+        // Matches the dialog default (the "关闭 2FA" box starts unchecked). The
+        // previous `= true` made every `new RegisterOptions()` silently disable
+        // TOTP enrollment while the UI said otherwise.
+        public bool Disable2fa { get; set; }
         public bool CheckPromotion { get; set; }
     }
 

@@ -196,7 +196,7 @@
    `api_key` 一律是**占位符**形式（默认走环境变量），把值填成自己的 key 即可：
 
    | 供应商 | 配置路径 | 环境变量 |
-   |---|---|---|
+   | --- | --- | --- |
    | `smsbower` | `phone_reuse.smsbower.api_key` | `SMSBOWER_API_KEY` |
    | `herosms` | `phone_reuse.herosms.api_key` | `HEROSMS_API_KEY` |
    | `grizzly` | `phone_reuse.grizzly.api_key` | `GRIZZLY_API_KEY` |
@@ -241,7 +241,7 @@
    上 `dr` 的最低价（按国）：
 
    | 国家 | id | 最低价 |
-   |---|---|---|
+   | --- | --- | --- |
    | Indonesia | 6 | **0.1207** |
    | Kazakhstan | 2 | 0.216 |
    | Chile | 151 | 0.2586 |
@@ -292,7 +292,7 @@
    三家的实测价（2026-09-23，零成本报价接口；`dr` / OpenAI）：
 
    | 供应商 | 余额 | 协议 | 报价接口 | 现配国家 | 现配价 |
-   |---|---|---|---|---|---|
+   | --- | --- | --- | --- | --- | --- |
    | `smsbower` | 1.109 | `sms_activate_handler` | `getPricesV3` ✅ | 151 智利 | 0.07（⚠️ 见上） |
    | `herosms` | 7.6232 | `sms_activate_handler` | **`getPricesV3` 404**，只有 `getPrices` | 4 越南 | 0.03 |
    | `grizzly` | 8.8000 | `sms_activate_handler` | `getPricesV3` ✅ | 3 斐济 | 0.013 |
@@ -446,7 +446,7 @@ Python 后端，协议细节全在 `sms_tool/`（`nexsms.py`）里 ⇒ 命令行
 1. **价格解析只认一种嵌套形态。** 旧代码把 `country → service` 的**子节点**当成 offer，于是：
 
    | 供应商 | `getPricesV3` | 层级 | 价格字段 |
-   |---|---|---|---|
+   | --- | --- | --- | --- |
    | `smsbower` | ✅ | `country → service → provider_id → {…}` | `price` |
    | `herosms` | **404**（只有 `getPrices`） | `country → service → {…}` | **`cost`** |
    | `grizzly` | ✅ | `country → service → {…}` | `price` |
@@ -495,7 +495,7 @@ Python 后端，协议细节全在 `sms_tool/`（`nexsms.py`）里 ⇒ 命令行
 **症状**（一次会话里出现其中几条，`smsbower` 却是好的）：
 
 | 供应商 | 桌面端弹窗原文 |
-|---|---|
+| --- | --- |
 | `herosms` | `无法读取 OpenAI 号码地区和价格档位：Responsestatus code does not indicate success: 401 (Unauthorized).` |
 | `grizzly` | `无法读取 OpenAI 号码地区和价格档位：NOKEY` |
 | `nexsms` | `… 403 (Forbidden).`（这是另一回事，见 §14） |
@@ -519,7 +519,7 @@ Python 后端，协议细节全在 `sms_tool/`（`nexsms.py`）里 ⇒ 命令行
 且每个值都等于 `smsbower` 的值：
 
 | 叶子 | 良好状态 | 被覆盖后 | 来源 |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `herosms` / `grizzly` / `nexsms`.api_key | 各自的 32/32/16 位 | 全部 = smsbower 的 32 位 | 输入框没刷新 |
 | 同三家 `.endpoint` | 各自的完整 URL | `""`（smsbower 没配 endpoint） | 同上 |
 | 同三家 `.sms_timeout` | `120` | `60`（smsbower 的值） | 同上 |
@@ -562,7 +562,7 @@ Python 后端，协议细节全在 `sms_tool/`（`nexsms.py`）里 ⇒ 命令行
 **症状**（这几条是同一个子系统的不同面）：
 
 | 症状 | 真实含义 |
-|---|---|
+| --- | --- |
 | 保存一次设置，`proxy.json` / `runtime.json` / `payment.json` 的 mtime **同时**变化 | 写入器**无条件重写三片** |
 | 清空全部设置后，之前删掉的旧配置**又回来了** | 空片被**删文件** ⇒ `AnyShardExists()` 为假 ⇒ 回落到 legacy 单文件分支 |
 | 桌面端保存过的分片里中文是 `"\u667A\u5229"`、`+` 是 `"\u002B"` | C# 默认 `JavaScriptEncoder` 转义非 ASCII 与 `+`，Python 的 `ensure_ascii=False` 不转 |

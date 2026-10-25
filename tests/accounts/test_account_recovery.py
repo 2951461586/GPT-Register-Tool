@@ -471,6 +471,75 @@ def test_health_status_codes_distinguish_relogin_otp_and_timeout(monkeypatch):
     assert account_recovery._health_status_code({"ok": True, "status": "active"}, {}) == "active"
 
 
+#: The real ``results[0].relogin`` from the 2026-10-25 测活 run: the email-OTP
+#: strategy failed at ``password/verify`` and never asked for a code.
+_PASSWORD_VERIFY_RELOGIN = {
+    "ok": False,
+    "mode": "auto",
+    "error": "all_relogin_methods_failed",
+    "attempts": [
+        {"ok": False, "mode": "oauth_refresh_token", "error": "missing_refresh_token", "skipped": True},
+        {"ok": False, "mode": "web_session", "error": "web_session_access_token_probe_failed:401"},
+        {"ok": False, "mode": "chatgpt_email_otp", "error": "existing_login_password_verify_failed:401"},
+        {
+            "ok": False,
+            "mode": "codex_oauth_pkce",
+            "error": "session_circuit_open:http_403:retry_after=899s:edge_challenge",
+        },
+        {"ok": False, "mode": "browser_session", "error": "page_state"},
+    ],
+}
+
+
+def test_a_password_verify_failure_is_not_reported_as_an_otp_failure(tmp_path, monkeypatch):
+    """Classifier must follow the attempts' errors, not the attempt's name.
+
+    ``relogin_otp_failed`` used to be produced by substring-matching the whole
+    payload for ``otp``/``mailbox``/``email``. The attempt *mode* is literally
+    ``chatgpt_email_otp``, so a lane that stopped at ``password/verify`` (no code
+    requested, mailbox never touched) was reported as an OTP failure -- which sent
+    the operator to the mailbox for a problem it did not have.
+    """
+    _patch_health_cfg(tmp_path, monkeypatch, relogin_cooldown_seconds=300)
+
+    assert (
+        account_recovery._health_status_code({"ok": False, "status": "token_invalid"}, _PASSWORD_VERIFY_RELOGIN)
+        == "relogin_failed"
+    )
+    assert account_recovery._relogin_failure_quota_status(_PASSWORD_VERIFY_RELOGIN) == "relogin_failed"
+
+    # Still recorded (a cooldown is desirable), but under the honest class.
+    account_recovery._record_relogin_failure("pwverify@example.com", _PASSWORD_VERIFY_RELOGIN)
+    entry = _guard_entry(tmp_path, "pwverify@example.com")
+    assert entry["failure_class"] == "relogin_failed"
+    assert entry["cooldown_until"] - entry["updated_at"] == 300
+
+
+def test_a_real_otp_failure_is_still_reported_as_one():
+    """Regression guard: a code that really failed keeps the OTP label."""
+    relogin = _relogin_all_methods_failed()
+
+    assert (
+        account_recovery._health_status_code({"ok": False, "status": "token_invalid"}, relogin) == "relogin_otp_failed"
+    )
+    assert account_recovery._relogin_failure_quota_status(relogin) == "relogin_otp_failed"
+
+
+def test_a_codex_otp_timeout_still_counts_as_an_otp_failure():
+    """The OAuth lane's own poll timeout spent a code, so it keeps the label."""
+    relogin = {
+        "ok": False,
+        "mode": "auto",
+        "error": "all_relogin_methods_failed",
+        "attempts": [
+            {"ok": False, "mode": "codex_oauth_pkce", "error": "passwordless_email_otp_poll_timeout"},
+            {"ok": False, "mode": "browser_session", "error": "page_state"},
+        ],
+    }
+
+    assert account_recovery._relogin_failure_quota_status(relogin) == "relogin_otp_failed"
+
+
 def test_liveness_result_distinguishes_401_and_blocks_relogin_when_mailbox_pool_is_quarantined(monkeypatch):
     account = {"email": "user@example.com", "access_token": "at"}
     monkeypatch.setattr(account_recovery, "get_account_record", lambda email: account)
@@ -1868,6 +1937,70 @@ def test_relogin_hands_the_stored_password_to_the_login_probe():
         account_recovery.relogin_chatgpt_email_account({"email": "ok@example.com"})
 
     assert captured["password"] == "StoredPass123"
+
+
+def _capturing_relogin(account: dict, stored_password: str):
+    """Run the email relogin lane with the HTTP/mailbox edges stubbed.
+
+    Returns the kwargs ``_login_existing_account_with_email_otp`` was called with.
+    """
+    captured = {}
+
+    def fake_login(**kwargs):
+        captured.update(kwargs)
+        return {"ok": False, "error": "existing_login_password_verify_failed:401"}
+
+    with (
+        patch("sms_tool.codex_oauth._mailbox_from_data", return_value=Mock()),
+        patch("sms_tool.auth_headers.select_auth_fingerprint"),
+        patch("sms_tool.sentinel_tokens._set_oai_did_cookie"),
+        patch("sms_tool.http_client.request_with_retry", return_value=Mock(status_code=200)),
+        patch("sms_tool.auth_flow._json_or_raw", return_value={"csrfToken": "csrf"}),
+        patch(
+            "sms_tool.accounts.account_recovery._stored_registration_password",
+            return_value=stored_password,
+        ),
+        patch("sms_tool.registration.orchestrator._login_existing_account_with_email_otp", side_effect=fake_login),
+    ):
+        account_recovery.relogin_chatgpt_email_account(account)
+    return captured
+
+
+def test_a_passwordless_registration_is_probed_without_a_password():
+    """No server-side password exists, so submitting ours can only answer 401.
+
+    Measured 2026-10-25: two ``registration_mode: passwordless`` remail/outlook
+    accounts failed every 测活 at ``existing_login_password_verify_failed:401``
+    and never requested an email code. The lane's own escape hatch
+    (``allow_passwordless``, true on this entry point) only opens when the password
+    argument is empty, which is what this pins.
+    """
+    captured = _capturing_relogin(
+        {"email": "ok@example.com", "registration_mode": "passwordless"},
+        stored_password="GeneratedLocally1!",
+    )
+
+    assert captured["password"] == ""
+
+
+def test_a_password_registration_still_hands_over_the_stored_password():
+    """Negative control: only an explicit passwordless mode empties the argument."""
+    captured = _capturing_relogin(
+        {"email": "ok@example.com", "registration_mode": "password"},
+        stored_password="StoredPass123",
+    )
+
+    assert captured["password"] == "StoredPass123"
+
+
+def test_passwordless_detection_is_explicit_only():
+    """An absent mode keeps the old behaviour for bare-row callers."""
+    assert account_recovery._passwordless_registration({"registration_mode": "passwordless"}) is True
+    assert account_recovery._passwordless_registration({"registration_mode": "Passwordless-Signup"}) is True
+    assert account_recovery._passwordless_registration({"password_unknown": True}) is True
+    assert account_recovery._passwordless_registration({"registration_mode": "password"}) is False
+    assert account_recovery._passwordless_registration({"email": "x@example.com"}) is False
+    assert account_recovery._passwordless_registration(None) is False
 
 
 # ---------------------------------------------------------------------------

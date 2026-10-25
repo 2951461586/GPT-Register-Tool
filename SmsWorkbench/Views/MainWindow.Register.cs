@@ -75,8 +75,9 @@ namespace SmsWorkbench
                     registrationAtOnly: true,
                     GetRegistrationProxyPool(),
                     disable2fa: selectedOptions.Disable2fa,
-                    checkPromotion: selectedOptions.CheckPromotion);
-                RunBackend(plan.TaskName, plan.Arguments.ToList());
+                    checkPromotion: selectedOptions.CheckPromotion,
+                    temporaryFiles: new[] { pendingSelection.File });
+                RunBackend(plan);
                 return;
             }
             if (pending.PendingRowCount > 0)
@@ -107,8 +108,9 @@ namespace SmsWorkbench
                     registrationAtOnly: true,
                     GetRegistrationProxyPool(),
                     disable2fa: selectedOptions.Disable2fa,
-                    checkPromotion: selectedOptions.CheckPromotion);
-                RunBackend(plan.TaskName, plan.Arguments.ToList());
+                    checkPromotion: selectedOptions.CheckPromotion,
+                    temporaryFiles: new[] { selectedSelection.File });
+                RunBackend(plan);
                 return;
             }
 
@@ -122,7 +124,7 @@ namespace SmsWorkbench
                     GetRegistrationProxyPool(),
                     disable2fa: options.Disable2fa,
                     checkPromotion: options.CheckPromotion);
-                RunBackend(plan.TaskName, plan.Arguments.ToList());
+                RunBackend(plan);
                 return;
             }
 
@@ -135,7 +137,7 @@ namespace SmsWorkbench
                     GetRegistrationProxyPool(),
                     disable2fa: options.Disable2fa,
                     checkPromotion: options.CheckPromotion);
-                RunBackend(plan.TaskName, plan.Arguments.ToList());
+                RunBackend(plan);
                 return;
             }
 
@@ -147,7 +149,7 @@ namespace SmsWorkbench
                     GetRegistrationProxyPool(),
                     disable2fa: options.Disable2fa,
                     checkPromotion: options.CheckPromotion);
-                RunBackend(plan.TaskName, plan.Arguments.ToList());
+                RunBackend(plan);
                 return;
             }
 
@@ -160,11 +162,25 @@ namespace SmsWorkbench
                     GetRegistrationProxyPool(),
                     disable2fa: options.Disable2fa,
                     checkPromotion: options.CheckPromotion);
-                RunBackend(plan.TaskName, plan.Arguments.ToList());
+                RunBackend(plan);
                 return;
             }
 
-            // Default: chatai mailbox file
+            if (options.Source != "pool")
+            {
+                // Every combo tag in CreateRegisterOptionsDialog must have a branch
+                // above. Falling through to the mailbox-file path used to mean a new
+                // tag silently ran a different source; say so instead.
+                Log("未知注册方式：" + SensitiveDataSanitizer.Redact(options.Source));
+                ShowThemedInfoDialog(
+                    Loc.T("不支持的注册方式"),
+                    Loc.F("注册方式“{0}”没有对应的执行路径。", options.Source));
+                return;
+            }
+
+            // "pool": the imported mailbox file (Outlook/Hotmail/iCloud 邮箱池).
+            // This is the operator's persistent pool, so it is deliberately NOT
+            // declared as a temporary file.
             string mailboxFile = GetChataiMailboxFilePath();
             if (string.IsNullOrWhiteSpace(mailboxFile) || !File.Exists(mailboxFile))
             {
@@ -181,7 +197,7 @@ namespace SmsWorkbench
                 GetRegistrationProxyPool(),
                 disable2fa: options.Disable2fa,
                 checkPromotion: options.CheckPromotion);
-            RunBackend(defaultPlan.TaskName, defaultPlan.Arguments.ToList());
+            RunBackend(defaultPlan);
         }
 
         // AddRegistrationAtOnlyArgs removed (2026-09-02, round 6): no caller.
@@ -215,9 +231,13 @@ namespace SmsWorkbench
                 rows.Select(r => r.Identifier.Trim()).ToList(),
                 rows.Count == 1 ? SessionFileFor(rows[0]) : "",
                 GetRegistrationProxyPool(),
-                SmsProviderCatalog.Resolve(settingsService.GetString("phone_reuse.source")).Key);
-            // Ensure temp files are cleaned up by the coordinator
-            RunBackend(plan.TaskName, plan.Arguments.ToList());
+                SmsProviderCatalog.Resolve(settingsService.GetString("phone_reuse.source")).Key,
+                callerTemporaryFiles: new[] { mailbox.File });
+            // RunBackend(plan) hands plan.TempFiles to the runner, which deletes the
+            // selected-mailbox batch file in its finally. The string-only overload
+            // cannot see those paths, and that is what left mailbox credentials in
+            // %TEMP% after every one-click batch.
+            RunBackend(plan);
         }
 
         private void OneClickScan()
@@ -528,6 +548,11 @@ namespace SmsWorkbench
 
         /// Result of building a temporary mailbox-file for a batch. Replaces the
         /// `out` parameters: an async method cannot declare them.
+        ///
+        /// <see cref="File"/> is a batch file this method created and it holds raw
+        /// mailbox credential lines. Every caller must pass it to the plan as
+        /// <c>temporaryFiles</c>; an undeclared batch file outlives the run in
+        /// <c>%TEMP%</c>.
         private sealed record MailboxFileSelection(string Arg, string File, int Count);
 
         private async Task<MailboxFileSelection?> TryCreateMailboxFileAsync(IEnumerable<PoolRow> rows, CancellationToken ct = default)

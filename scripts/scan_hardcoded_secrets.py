@@ -275,6 +275,27 @@ def iter_scannable_lines(text, suffix):
 #: 用**后缀**匹配，`CLIENT_ID_SECRET` / `CLIENT_ID_FILE` 这类仍会被抓。
 PUBLIC_IDENTIFIER_SUFFIX = re.compile(r"(^|_)(client|app|application|tenant|project|subscription)_id$", re.I)
 
+#: Python / argparse keyword arguments that are indistinguishable from a config
+#: key when only the leaf name is compared. ``example_placeholder_keys`` indexes
+#: blank example keys by leaf, so blanking ``proxy.default`` in
+#: ``config.example.json`` made every ``default="..."`` in an ``add_argument``
+#: call look like an undocumented hardcoded default. That is a match about a
+#: keyword, not about a value a config key should have documented.
+ARGUMENT_KEYWORDS = frozenset(
+    {
+        "default",
+        "type",
+        "help",
+        "action",
+        "choices",
+        "metavar",
+        "dest",
+        "required",
+        "nargs",
+        "const",
+    }
+)
+
 
 def is_public_identifier(name):
     """True for keys that are identifiers by spec, not secrets.
@@ -361,6 +382,8 @@ def scan_line(line, example_keys=None):
             key = match.group("key").lower()
             value = match.group("val")
             if key not in example_keys:
+                continue
+            if key in ARGUMENT_KEYWORDS:
                 continue
             if is_public_identifier(key) or is_documentation_sample(line, match):
                 continue

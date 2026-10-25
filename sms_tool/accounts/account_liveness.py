@@ -60,8 +60,10 @@ def browser_fetch_for_account(
     fingerprint and cookies instead of falling back to curl_cffi.
 
     Yields ``None`` when no ``browser_identity`` is present or when the browser
-    session cannot be opened. Browser callers fail closed in that case instead
-    of downgrading to a different fingerprint.
+    session cannot be opened. Every caller then degrades to the protocol
+    transport and records why (``browser_fallback: unavailable``): the access
+    token plus the saved fingerprint is still a valid probe, and refusing to
+    probe only hid real account state behind an environment error.
     """
     identity = account_identity(account)
     browser_identity = identity.get("browser_identity") or {}

@@ -475,14 +475,19 @@ def _relogin_panel_note(relogin: dict) -> str:
 def quota_usage(args: Any) -> None:
     """Fetch wham/usage 5h/7d quota for a single account and return structured JSON."""
     from ..accounts.account_liveness import probe_account_liveness
-    from ..storage import get_account_record
+    from ..storage import get_account_payload
 
     email = (getattr(args, "email", None) or "").strip()
     if not email:
         print(json.dumps({"ok": False, "error": "missing --email"}))
         raise SystemExit(1)
 
-    account = get_account_record(email)
+    # The probe needs the merged payload, not the bare row: ``identity_context``
+    # (fingerprint key, device id, proxy affinity, browser identity) lives inside
+    # ``raw_json`` and has no column. A bare ``get_account_record`` therefore made
+    # this single-row 测活 probe with a default fingerprint and no affinity, so it
+    # disagreed with the batch scan about the same account and ate Cloudflare 401s.
+    account = get_account_payload(email)
     if not account:
         print(json.dumps({"ok": False, "error": "account_not_found", "email": email}))
         raise SystemExit(1)

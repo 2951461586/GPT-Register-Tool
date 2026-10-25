@@ -22,12 +22,40 @@ accepts those side effects.
 may use refresh tokens, browser sessions, or email authentication according to
 `--scan-relogin-mode` and is not part of a normal liveness probe.
 
+**Transport follows the registration method, but never to the point of refusing
+to probe.** An account registered by a browser driver carries
+`identity_context.browser_identity`, so its promotion check prefers a browser
+session with the *same* driver and profile (rebuilt from the stored
+`geo_country`); liveness uses the fast protocol probe first and opens that
+browser only for a 401/403/status-0/Cloudflare answer. When the browser context
+cannot be opened (no Playwright/Camoufox, a crashed child) the probe degrades to
+the protocol transport with the same access token and saved fingerprint and the
+result records `browser_fallback: unavailable`. It is deliberately not a
+verdict: an unavailable browser is an environment condition, and reporting it as
+检测失败 hid real account state behind a local install problem.
+
+**Every probe reads the merged account payload.** `identity_context` (fingerprint
+key, device id, proxy affinity, browser identity) has no column and lives only
+inside `raw_json`, so `store.get_account_payload` — not a bare
+`get_account_record` row — is what the probe consumes. The single-row
+`--quota-usage` probe used the bare row and therefore ran with a default
+fingerprint and no affinity, disagreeing with the batch scan about the same
+account.
+
 ## Result semantics
 
 - `probe_ok` / `health_state` describe the remote account observation.
 - `persisted` describes whether the local marker was written.
 - A persistence failure must not turn a healthy remote probe into an unhealthy
   account result.
+- `browser_fallback` (`unavailable`) is diagnostic only: it says the probe had to
+  leave the browser transport. It never changes `promotion_state`,
+  `promotion_status` or the liveness verdict.
+- The liveness batch summary counts `AT失效` (`at_invalid`) from the **initial**
+  verdict, not the final one: an account whose relogin restored the token stays
+  counted there. `正常 2/2，AT失效 2` is therefore a correct line (both healthy
+  now, both entered the batch with a dead AT) — read `success` for health and
+  `at_invalid` for "how many needed recovery".
 
 Promotion checks (`--check-promotion`) inspect the account plan and trial offer
 only. They never create Checkout and never enumerate payment methods; the

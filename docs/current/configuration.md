@@ -205,13 +205,45 @@ OTP poller, and `PaymentRoutePlanner._named_pools` for payment region pools.
 "proxy": { "lanes": {
   "protocol_registration": ["http://..."],
   "browser_registration":  ["http://..."],
-  "mailbox":               ["http://127.0.0.1:7897"],
+  "mailbox":               ["http://proxy.example:8080"],
   "payment": { "pools": { "US": ["..."], "JP": ["..."] }, "default": ["..."] }
 }}
 ```
 
 `proxy.lanes.payment.pools` names are the ones referenced by
 `protocol_payments.methods.<m>.stage_routes` / `stage_proxy_pools`.
+
+## No invented proxy default (decision 2026-10-25)
+
+An empty proxy field means "nothing configured here", never "use a localhost
+proxy". Both sides used to substitute a hardcoded `http://127.0.0.1:7897`: the
+desktop read path (`MainWindow.Helpers`) and the settings writer
+(`SettingsService.Save`, which then persisted it into `proxy.registration`,
+`proxy.default` and `proxy.pool`), and the catalog prefilled the same value.
+
+That mattered because `cli.py` sets `args.proxy_explicit = bool(args.proxy)`, and
+an explicit scalar suppresses the lane pools. A desktop-invented value therefore
+made **every** desktop run "explicit", pointed fresh installs at a proxy that
+need not exist, and hid the configured `protocol_registration_pool` /
+`browser_registration_pool` behind it.
+
+Current behaviour:
+
+* Long `sms_tool/commands/accounts.py` probes, registration and mailbox reads
+take the configured value only. Blank means the desktop passes no `--proxy` and
+no `--proxy-pool`, and the backend resolves the route itself: `proxy.default`,
+then the lane pools, then `registration_network_preflight`'s named reason code
+(exit 2). A missing route now fails with a reason instead of dialling a local
+proxy.
+* `config.example.json` ships `proxy.registration`, `proxy.health`,
+`proxy.default`, the registration lane pools and
+`account_health.proxy_pool`/`account_health.proxies.*` **empty**. Only
+`proxy.pool` and `proxy.lanes.payment` keep placeholder entries (a non-loopback
+`proxy.example` host for the stage proxies), so copying the template cannot pin
+this machine's port.
+* Health lanes keep their own precedence: for `liveness`, `promotion` and
+`health_browser`, `account_health.proxies.<lane>` and `account_health.proxy_pool`
+outrank the registration-pool fallback (`proxy_routing.proxy_pool_for`).
 
 Inspect everything with the credential-free census:
 

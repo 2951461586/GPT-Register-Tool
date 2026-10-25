@@ -370,6 +370,43 @@ def get_account_record(email, *, runtime_config: ConfigInput = None):
     return dict(row) if row else {}
 
 
+def get_account_payload(email, *, runtime_config: ConfigInput = None) -> dict:
+    """Account row with its ``raw_json`` payload merged in.
+
+    ``identity_context`` has no column of its own -- it lives inside ``raw_json``
+    (see ``store/connection.py``'s ``accounts`` DDL and ``EXTRA_COLUMNS``). Any
+    caller that *probes* a saved account (liveness, promotion, recovery) must
+    read this form, because a bare :func:`get_account_record` row silently loses
+    the saved ``fingerprint_key``, ``device_id``, ``proxy_affinity`` and
+    ``browser_identity``. Probing with those missing presents the access token
+    under a different identity than the one registration used: no proxy affinity,
+    a default TLS fingerprint, and no browser fallback. That was measured as the
+    single-row 账号测活 (``--quota-usage``) disagreeing with the batch scan about
+    the same account.
+
+    Row columns win over the payload on conflict, and empty columns do not
+    overwrite a payload value -- the same merge order as
+    ``accounts.account_recovery._local_account_data`` and
+    ``accounts.promotion_batch.refresh_promotion_statuses``.
+    """
+    record = get_account_record(email, runtime_config=runtime_config)
+    if not record:
+        return {}
+    data: dict = {}
+    raw_json = str(record.get("raw_json") or "").strip()
+    if raw_json:
+        try:
+            parsed = json.loads(raw_json)
+        except ValueError:
+            parsed = None
+        if isinstance(parsed, dict):
+            data.update(parsed)
+    for key, value in record.items():
+        if value not in (None, ""):
+            data[key] = value
+    return data
+
+
 def get_account_record_by_id(account_id, *, runtime_config: ConfigInput = None):  # noqa: E302
     init_database(runtime_config=runtime_config)
     digits = str(account_id or "").strip()

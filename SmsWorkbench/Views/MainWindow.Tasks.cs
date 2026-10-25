@@ -99,10 +99,27 @@ namespace SmsWorkbench
         private void RunBackend(string taskName, List<string> args)
             => RunUiTask(() => RunBackendAsync(taskName, args, ct: _lifetimeCts.Token));
 
+        /// <summary>
+        /// Plan-based entry point. It differs from the string-only overload in one
+        /// respect: it carries <see cref="BackendCommandPlan.TempFiles"/> into the
+        /// runner, so the wrapper's <c>finally</c> deletes the batch files this run
+        /// created. Without it a plan's declared temp files are never touched --
+        /// which is exactly how the selected-mailbox batch files (mailbox
+        /// credentials) used to survive in <c>%TEMP%</c>.
+        /// </summary>
+        private void RunBackend(BackendCommandPlan plan)
+            => RunUiTask(() => RunBackendAsync(
+                plan.TaskName,
+                plan.Arguments.ToList(),
+                timeoutMs: plan.TimeoutMilliseconds,
+                resultKind: plan.ResultKind,
+                temporaryFiles: plan.TempFiles,
+                ct: _lifetimeCts.Token));
+
         private void RunAccountBatchBackend(BackendCommandPlan plan, string domain, int total)
             => RunUiTask(() => RunBackendAsync(
                 plan.TaskName, plan.Arguments.ToList(), domain, total, plan.TimeoutMilliseconds,
-                resultKind: plan.ResultKind, ct: _lifetimeCts.Token));
+                resultKind: plan.ResultKind, temporaryFiles: plan.TempFiles, ct: _lifetimeCts.Token));
 
         private async Task RunBackendAsync(
             string taskName,
@@ -111,6 +128,7 @@ namespace SmsWorkbench
             int progressTotal = 0,
             int? timeoutMs = null,
             BackendAccountResultKind resultKind = BackendAccountResultKind.None,
+            IReadOnlyList<string>? temporaryFiles = null,
             CancellationToken ct = default)
         {
             if (backendTasks.IsRunning)
@@ -269,6 +287,21 @@ namespace SmsWorkbench
             finally
             {
                 progressDialog?.Close();
+                // Declared temp files are deleted on every exit path, including
+                // cancellation and a startup failure -- the batch file exists from
+                // the moment the dialog was accepted, not from the first backend line.
+                DeleteTemporaryFiles(temporaryFiles);
+            }
+        }
+
+        private void DeleteTemporaryFiles(IReadOnlyList<string>? paths)
+        {
+            if (paths == null)
+                return;
+            foreach (string path in paths)
+            {
+                if (!string.IsNullOrWhiteSpace(path))
+                    TryDeleteFile(path);
             }
         }
 

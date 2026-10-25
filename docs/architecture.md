@@ -87,9 +87,9 @@ documented pairs above), `startup` (the CLI/command seam, or a heavy optional
 stack such as `playwright` / `curl_cffi` / `camoufox`), `provider` (a
 provider/browser subsystem), `test-seam` (a path that exists only so tests can
 redirect the store — currently none) and `deferred` (a sibling imported late to
-keep the module graph acyclic or the import light). Current baseline: 415
-delayed statements over 315 distinct edges — 8 `cycle`, 96 `startup`, 34
-`provider`, 177 `deferred`.
+keep the module graph acyclic or the import light). Current baseline: 420
+delayed statements over 319 distinct edges — 8 `cycle`, 95 `startup`, 34
+`provider`, 182 `deferred`.
 
 A **new `deferred` edge cannot be adopted without a written reason**: it needs an
 entry in `scripts/delayed_import_reasons.json` (`reason` + `why`), and

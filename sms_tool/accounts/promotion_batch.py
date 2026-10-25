@@ -127,64 +127,72 @@ def refresh_promotion_statuses(
         try:
             with browser_fetch_for_account(account, proxy=proxy, timeout=timeout) as browser_fetch:
                 browser_identity = account_identity(account).get("browser_identity") or {}
-                if browser_identity and browser_fetch is None:
-                    probe = {
-                        "ok": False,
-                        "promotion_status": "检测失败",
-                        "error": "browser_context_unavailable",
-                    }
-                else:
-                    # Stateless/imported accounts have no persisted identity
-                    # affinity. Rotate through the supplied health pool when a
-                    # proxy-only timeout occurs so one dead exit does not make
-                    # the same account fail on every run.
-                    candidates = _promotion_proxy_candidates(account, proxy, proxy_pool)
-                    probe = None
-                    for index, candidate in enumerate(candidates):
-                        _emit_account_batch_event(
-                            run_id,
-                            "proxy_attempt",
-                            "running",
-                            account_ref=email,
-                            total=len(accounts),
-                            detail=f"代理 {index + 1}/{len(candidates)}",
-                        )
-                        probe = check_account_promotion(
-                            account,
-                            proxy=candidate,
-                            timeout=timeout,
-                            browser_fetch=browser_fetch,
-                            coupon_probe=True,
-                        )
-                        used_proxy = candidate
-                        if probe.get("ok"):
+                # A browser-registered account *prefers* the browser context that
+                # registered it, but an unavailable context is a degradation, not a
+                # verdict. Failing closed here turned a missing Playwright/Camoufox
+                # install into a per-account "检测失败" that is indistinguishable from
+                # a broken account -- and it blocked every browser-registered account
+                # from being checked at all. The protocol transport still presents the
+                # same AT with the same saved fingerprint (``bind_account_identity``),
+                # and the liveness batch already degrades exactly this way, so the
+                # outcome is now a recorded ``browser_fallback`` marker instead of a
+                # refusal to probe.
+                browser_fallback = ""
+                if browser_identity:
+                    browser_fallback = "browser" if browser_fetch is not None else "unavailable"
+                # Stateless/imported accounts have no persisted identity
+                # affinity. Rotate through the supplied health pool when a
+                # proxy-only timeout occurs so one dead exit does not make
+                # the same account fail on every run.
+                candidates = _promotion_proxy_candidates(account, proxy, proxy_pool)
+                probe = None
+                for index, candidate in enumerate(candidates):
+                    _emit_account_batch_event(
+                        run_id,
+                        "proxy_attempt",
+                        "running",
+                        account_ref=email,
+                        total=len(accounts),
+                        detail=f"代理 {index + 1}/{len(candidates)}",
+                    )
+                    probe = check_account_promotion(
+                        account,
+                        proxy=candidate,
+                        timeout=timeout,
+                        browser_fetch=browser_fetch,
+                        coupon_probe=True,
+                    )
+                    used_proxy = candidate
+                    if probe.get("ok"):
+                        break
+                    # A 429 is per-exit *and* short-lived: sleep first, then
+                    # rotate to a fresh IP when the pool has one left, and
+                    # fall back to one delayed retry on the same exit once
+                    # the pool is exhausted. Total attempts are therefore
+                    # bounded at len(candidates) + 1, so a sustained 429
+                    # cannot multiply the batch duration.
+                    backoff = _promotion_throttle_backoff(probe)
+                    if backoff is not None:
+                        time.sleep(backoff)
+                        if index >= len(candidates) - 1:
+                            probe = check_account_promotion(
+                                account,
+                                proxy=candidate,
+                                timeout=timeout,
+                                browser_fetch=browser_fetch,
+                                coupon_probe=True,
+                            )
                             break
-                        # A 429 is per-exit *and* short-lived: sleep first, then
-                        # rotate to a fresh IP when the pool has one left, and
-                        # fall back to one delayed retry on the same exit once
-                        # the pool is exhausted. Total attempts are therefore
-                        # bounded at len(candidates) + 1, so a sustained 429
-                        # cannot multiply the batch duration.
-                        backoff = _promotion_throttle_backoff(probe)
-                        if backoff is not None:
-                            time.sleep(backoff)
-                            if index >= len(candidates) - 1:
-                                probe = check_account_promotion(
-                                    account,
-                                    proxy=candidate,
-                                    timeout=timeout,
-                                    browser_fetch=browser_fetch,
-                                    coupon_probe=True,
-                                )
-                                break
-                            continue
-                        if not _retryable_promotion_transport(probe) or index >= len(candidates) - 1:
-                            break
-                    probe = probe or {
-                        "ok": False,
-                        "promotion_status": "检测失败",
-                        "error": "no_promotion_proxy_available",
-                    }
+                        continue
+                    if not _retryable_promotion_transport(probe) or index >= len(candidates) - 1:
+                        break
+                probe = probe or {
+                    "ok": False,
+                    "promotion_status": "检测失败",
+                    "error": "no_promotion_proxy_available",
+                }
+                if browser_fallback == "unavailable":
+                    probe.setdefault("browser_fallback", "unavailable")
             label = str(probe.get("promotion_status") or "")
             if not str(probe.get("promotion_state") or "").strip():
                 probe["promotion_state"] = promotion_status_code(probe)
