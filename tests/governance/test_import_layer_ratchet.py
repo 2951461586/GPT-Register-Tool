@@ -361,8 +361,19 @@ def test_summary_facts_are_pinned():
     # was rejected for the reason recorded on 2026-10-23 below: it hides the
     # coupling (and puts a `sys.modules` lookup on the exception path) instead of
     # recording a dependency on a leaf of exception types.
+    #
+    # 2026-10-25 (second): 434 -> 435, same reviewed class as the entry above.
+    # `commands/registration.py` converted 18 unguarded `int()/float()` casts on
+    # journal/report/argparse values to the canonical tolerant helpers, and those
+    # helpers already have exactly one owner: `registration/protocol_helpers.py`
+    # (`_safe_int` / `_safe_float`, added there for the stage modules). The module
+    # already imports `registration/preflight.py` and `registration/funnel.py` at
+    # module scope, so this is +1 on the existing `sms_tool/commands ->
+    # sms_tool/registration` pair and no new pair. A function-local import was
+    # rejected for the same reason as above; the alternative -- a seventh private
+    # copy of a two-line cast -- is the duplication this batched fix removes.
     assert totals == {
-        "total_module_edges": 434,
+        "total_module_edges": 435,
         "ordered_pairs": 64,
         "mutual_pairs": 17,
         "minority_edges": 46,

@@ -26,6 +26,7 @@ from ..config import validate_registration_driver_config
 from ..operation_journal import PaymentOperationConflict, PaymentOperationStore
 from ..proxy.entry import parse_proxy
 from ..registration.preflight import CLOUDFLARE_CHALLENGE_MARKER
+from ..registration.protocol_helpers import _safe_float, _safe_int
 from ..registration.funnel import combine_registration_funnels, summarize_registration_funnel
 from ..kernel.sanitizer import mask_account, sanitize_log_text
 from ..diagnostics import safe_print
@@ -302,10 +303,10 @@ def check_registered_promotions(emails, workers=4, proxy=None, timeout=20, proxy
     try:
         report = refresh_promotion_statuses(
             emails=targets,
-            workers=max(1, int(workers or 1)),
+            workers=max(1, _safe_int(workers or 1, 1)),
             proxy=proxy,
             proxy_pool=proxy_pool,
-            timeout=max(5, int(timeout or 20)),
+            timeout=max(5, _safe_int(timeout or 20, 20)),
         )
     except Exception as exc:
         report = {
@@ -325,17 +326,21 @@ def check_registered_promotions(emails, workers=4, proxy=None, timeout=20, proxy
     results: list = _raw_results if isinstance(_raw_results, list) else []
     # refresh_promotion_statuses owns this count now. It used to be recounted
     # here, which left the other CLI entry point with no such key at all.
-    trial_eligible = int(report.get("trial_eligible") or 0)
+    # Report values come from a promotion batch that may be partially failed and
+    # from journal records replayed across processes, so they are not trusted to be
+    # numeric. ``protocol_helpers._safe_int`` is the canonical tolerant cast (the
+    # same one the registration stages use) instead of a bare ``int()`` here.
+    trial_eligible = _safe_int(report.get("trial_eligible"), 0)
     report["trial_eligible"] = trial_eligible
     safe_print(
         "[*] Promotion check: "
-        f"success={int(report.get('success') or 0)}/{int(report.get('total') or 0)} "
+        f"success={_safe_int(report.get('success'), 0)}/{_safe_int(report.get('total'), 0)} "
         f"trial_eligible={trial_eligible}"
     )
     logger.info(
         "promotion check finished: success=%s/%s trial_eligible=%s",
-        int(report.get("success") or 0),
-        int(report.get("total") or 0),
+        _safe_int(report.get("success"), 0),
+        _safe_int(report.get("total"), 0),
         trial_eligible,
     )
     for item in results:
@@ -367,7 +372,7 @@ def merge_promotion_reports(reports):
     rows = [item for item in reports if isinstance(item, Mapping)]
     if not rows:
         return None
-    merged: dict[str, Any] = {key: sum(int(item.get(key) or 0) for item in rows) for key in _PROMOTION_SUM_KEYS}
+    merged: dict[str, Any] = {key: sum(_safe_int(item.get(key), 0) for item in rows) for key in _PROMOTION_SUM_KEYS}
     merged["ok"] = all(bool(item.get("ok")) for item in rows)
     merged["circuit_breaker_tripped"] = any(bool(item.get("circuit_breaker_tripped")) for item in rows)
     merged["results"] = [result for item in rows for result in (item.get("results") or []) if isinstance(result, dict)]
@@ -388,7 +393,7 @@ def probe_promotion_now(args, ctx: RegistrationCommandContext, email: str):
             workers=1,
             # Account-health lane: never reuse the signup exit (see the batch-end call).
             proxy=None,
-            timeout=max(5, int(getattr(args, "refresh_timeout", 20) or 20)),
+            timeout=max(5, _safe_int(getattr(args, "refresh_timeout", 20) or 20, 20)),
         )
     except Exception as exc:
         logger.warning("immediate promotion check failed: %s", type(exc).__name__)
@@ -401,7 +406,7 @@ _PERSISTENCE_KEY = "_registration_persistence"
 def registration_pipeline_timing(pipeline_started, mailbox_seconds, register_started):
     now = time.time()
     return {
-        "mailbox_load_seconds": round(float(mailbox_seconds or 0), 2),
+        "mailbox_load_seconds": round(_safe_float(mailbox_seconds, 0.0), 2),
         "registration_batch_seconds": round(max(0.0, now - register_started), 2),
         "total_seconds": round(max(0.0, now - pipeline_started), 2),
     }
@@ -447,8 +452,8 @@ def persist_registration_result(
         previous = conflict.record
         return {
             "status": "complete",
-            "session_saved": int(previous.get("session_saved") or 0),
-            "db_saved": int(previous.get("db_saved") or 0),
+            "session_saved": _safe_int(previous.get("session_saved"), 0),
+            "db_saved": _safe_int(previous.get("db_saved"), 0),
             "import_email": str(data.get("email") or "") if isinstance(data, dict) else "",
             "durable_conflict": True,
         }
@@ -488,8 +493,8 @@ def persist_registration_result(
         # Carry the real side-effect counts onto the journal record so a later
         # durable-conflict replay (e.g. save_registration_results re-persisting the
         # same account, or a cross-process resume) reports accurate totals instead of 0.
-        op.record["session_saved"] = int(result.get("session_saved") or 0)
-        op.record["db_saved"] = int(result.get("db_saved") or 0)
+        op.record["session_saved"] = _safe_int(result.get("session_saved"), 0)
+        op.record["db_saved"] = _safe_int(result.get("db_saved"), 0)
         op.finish({"ok": True, "status": "completed", "side_effect_started": True})
     else:
         # Logical registration failures are terminal for this persistence
@@ -754,8 +759,8 @@ def save_registration_results(
             ctx,
             pipeline_timing=pipeline_timing,
         )
-        saved_count += int(outcome.get("session_saved") or 0)
-        db_saved_count += int(outcome.get("db_saved") or 0)
+        saved_count += _safe_int(outcome.get("session_saved"), 0)
+        db_saved_count += _safe_int(outcome.get("db_saved"), 0)
         if outcome.get("import_email"):
             import_emails.append(outcome["import_email"])
             if isinstance(outcome.get("promotion_report"), Mapping):
@@ -787,12 +792,12 @@ def save_registration_results(
         if leftover:
             leftover_report = ctx.check_registered_promotions(
                 leftover,
-                workers=max(1, int(getattr(args, "workers", 4) or 4)),
+                workers=max(1, _safe_int(getattr(args, "workers", 4) or 4, 4)),
                 # Post-registration promotion checks use the account-health lane.
                 # Passing the signup proxy here defeats that isolation and can
                 # immediately re-use a contaminated registration exit.
                 proxy=None,
-                timeout=max(5, int(getattr(args, "refresh_timeout", 20) or 20)),
+                timeout=max(5, _safe_int(getattr(args, "refresh_timeout", 20) or 20, 20)),
             )
         promotion_report = merge_promotion_reports([*inline_promotion.values(), leftover_report])
         if inline_promotion and promotion_report is not None:
@@ -807,9 +812,9 @@ def save_registration_results(
     return {
         "ok": success_count == effective_count,
         "batch_id": batch_id,
-        "total": int(effective_count),
+        "total": _safe_int(effective_count, 0),
         "success": success_count,
-        "failed": max(0, int(effective_count) - success_count),
+        "failed": max(0, _safe_int(effective_count, 0) - success_count),
         "session_saved": saved_count,
         "db_saved": db_saved_count,
         "quality": quality,
@@ -832,9 +837,9 @@ def run_target_at200(args, base_dir, ctx: RegistrationCommandContext):
     if not (getattr(args, "buy_remail_mailbox", False) or getattr(args, "remail_service_mode", None)):
         safe_print("[Error] --target-at200 requires --buy-remail-mailbox or --remail-service-mode")
         raise SystemExit(2)
-    target = max(1, int(args.target_at200 or 1))
-    max_purchases = max(target, int(args.max_mailbox_purchases or target * 2))
-    max_cost = max(0.0, float(args.max_remail_cost or 0.0))
+    target = max(1, _safe_int(args.target_at200 or 1, 1))
+    max_purchases = max(target, _safe_int(args.max_mailbox_purchases or target * 2, target * 2))
+    max_cost = max(0.0, _safe_float(args.max_remail_cost or 0.0, 0.0))
     if not getattr(args, "registration_batch_id", None):
         args.registration_batch_id = f"target_at200_{time.strftime('%Y%m%d_%H%M%S')}_{os.urandom(3).hex()}"
     original_count = args.count
