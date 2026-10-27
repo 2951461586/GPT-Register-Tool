@@ -23,9 +23,8 @@ namespace SmsWorkbench
         /// one endpoint, refreshed by the last <see cref="Load"/>.
         ///
         /// <para>
-        /// Non-empty on purpose: the backend treats those lanes as authoritative
-        /// over the legacy keys this page edits, so the dialog has to tell the
-        /// operator that the two proxy boxes are not the effective route.
+        /// The page now edits these lanes directly (and mirrors the legacy
+        /// keys); the list still drives the notice that names the lanes it owns.
         /// </para>
         /// </summary>
         IReadOnlyList<string> AuthoritativeProxyLanes { get; }
@@ -64,11 +63,9 @@ namespace SmsWorkbench
         {
             JsonObject root = ReadRoot();
             AuthoritativeProxyLanes = DetectAuthoritativeProxyLanes(root);
-            // The boxes stay blank while `proxy.lanes` owns the route -- "blank +
-            // notice" is the documented contract (a pre-filled box would look like
-            // an editable copy of a value this page does not own). What changed on
-            // 2026-10-27 is the SAVE side: a non-empty box now writes the declared
-            // lane instead of silently doing nothing. See Save().
+            // The registration/browser/mailbox boxes read their lane first, so
+            // opening Settings shows the effective route instead of a blank that
+            // merely warned the operator. See ReadValue()/Save().
             return SettingsCatalog.Categories.Select(category => new SettingsCategoryViewModel(
                 category.Title,
                 category.Sections.Select(section => new SettingsSectionViewModel(
@@ -148,28 +145,47 @@ namespace SmsWorkbench
                 if (registrationProxy.Length > 0)
                     orderedRegistrationPool.Add(registrationProxy);
                 orderedRegistrationPool.AddRange(registrationPool);
+                string browserProxy = ProxyInputNormalizer.Normalize(
+                    Find(fields, "browser_registration_proxy").Value.Trim());
+                string[] browserPool = ProxyInputNormalizer.NormalizeList(
+                        Find(fields, "browser_registration_proxy_pool").Value)
+                    .Where(value => !string.Equals(value, browserProxy, StringComparison.OrdinalIgnoreCase))
+                    .ToArray();
+                var orderedBrowserPool = new List<string>();
+                if (browserProxy.Length > 0)
+                    orderedBrowserPool.Add(browserProxy);
+                orderedBrowserPool.AddRange(browserPool);
+                string[] paymentQualificationPool = ProxyInputNormalizer.NormalizeList(
+                        Find(fields, "payment_qualification_proxy_pool").Value)
+                    .ToArray();
                 SetPath(root, "proxy.registration", registrationProxy);
                 SetPath(root, "proxy.default", registrationProxy);
                 SetPath(root, "proxy.pool", ToArray(orderedRegistrationPool));
-                // 2026-10-27: a non-empty box now writes the lane the backend
-                // actually reads (the old behaviour only wrote legacy keys while
-                // `proxy.lanes.*` shadowed them, so the operator's edit vanished).
-                // A BLANK box never touches a declared lane: "blank means leave the
-                // backend's route alone" is the contract the preservation test
+                // The boxes and the lanes are one route, not two: a non-empty
+                // box writes the lane (creating it when absent) and mirrors the
+                // legacy keys. A BLANK box never touches a lane -- "blank means
+                // leave the backend's route alone" is what the preservation test
                 // pins, and clearing a pool is not something this page can express.
-                // Legacy keys stay mirrored so older readers and a lanes-less
-                // config keep working.
-                if (orderedRegistrationPool.Count > 0
-                    && AuthoritativeProxyLanes.Contains("protocol_registration"))
+                if (orderedRegistrationPool.Count > 0)
                 {
                     SetPath(root, "proxy.lanes.protocol_registration.pool",
                         ToArray(orderedRegistrationPool));
                 }
-                if (orderedMailboxPool.Count > 0
-                    && AuthoritativeProxyLanes.Contains("mailbox"))
+                if (orderedMailboxPool.Count > 0)
                 {
                     SetPath(root, "proxy.lanes.mailbox.pool", ToArray(orderedMailboxPool));
                 }
+                if (orderedBrowserPool.Count > 0)
+                {
+                    SetPath(root, "proxy.lanes.browser_registration.pool", ToArray(orderedBrowserPool));
+                }
+                if (paymentQualificationPool.Length > 0)
+                {
+                    SetPath(root, "proxy.lanes.payment_qualification.pool", ToArray(paymentQualificationPool));
+                }
+                SetPath(root, "proxy.browser_registration", browserProxy);
+                SetPath(root, "proxy.browser_registration_pool", ToArray(orderedBrowserPool));
+                SetPath(root, "payment_qualification.proxy_pool", ToArray(paymentQualificationPool));
                 SetPath(root, "mailbox_proxy", mailboxProxy);
                 SetPath(root, "mailbox_proxy_pool", ToArray(orderedMailboxPool));
                 // Only mirror a *configured* registration route into the phone
@@ -178,7 +194,9 @@ namespace SmsWorkbench
                 // `proxy.default` when it is empty -- so blanking it because the
                 // box was left empty silently disabled the phone exit for an
                 // operator whose real route is declared under `proxy.lanes.*`.
-                if (registrationProxy.Length > 0)
+                if (registrationProxy.Length > 0
+                    && (Find(fields, "registration_proxy").IsDirty
+                        || Find(fields, "registration_proxy_pool").IsDirty))
                     SetPath(root, "phone_reuse.proxy", registrationProxy);
 
                 // The shared protocol proxy pool is intentionally no longer
@@ -322,6 +340,7 @@ namespace SmsWorkbench
             string value = definition.Key switch
             {
                 "registration_proxy" => First(
+                    LaneFirstText(root, "proxy.lanes.protocol_registration"),
                     Text(root, "proxy.registration"),
                     Text(root, "registration_proxy"),
                     // No `paypal.proxies` fallback: PayPal is a different egress
@@ -332,14 +351,30 @@ namespace SmsWorkbench
                     // merely opening Settings and pressing Save contaminated the
                     // signup lane with the checkout lane's route.
                     Text(root, "proxy.default")),
-                "registration_proxy_pool" => First(ListText(root, "proxy.pool"), Text(root, "proxy.registration")),
+                "registration_proxy_pool" => First(
+                    LaneListText(root, "proxy.lanes.protocol_registration"),
+                    ListText(root, "proxy.pool"),
+                    Text(root, "proxy.registration")),
                 "mailbox_proxy" => First(
+                    LaneFirstText(root, "proxy.lanes.mailbox"),
                     Text(root, "mailbox_proxy"),
                     Text(root, "email_registration.mailbox_proxy"),
                     Text(root, "proxy.mailbox")),
                 "mailbox_proxy_pool" => First(
+                    LaneListText(root, "proxy.lanes.mailbox"),
                     ListText(root, "mailbox_proxy_pool"),
                     Text(root, "mailbox_proxy")),
+                "browser_registration_proxy" => First(
+                    LaneFirstText(root, "proxy.lanes.browser_registration"),
+                    Text(root, "proxy.browser_registration"),
+                    Text(root, "proxy.browser_pool")),
+                "browser_registration_proxy_pool" => First(
+                    LaneListText(root, "proxy.lanes.browser_registration"),
+                    ListText(root, "proxy.browser_registration_pool"),
+                    ListText(root, "proxy.browser_pool")),
+                "payment_qualification_proxy_pool" => First(
+                    LaneListText(root, "proxy.lanes.payment_qualification"),
+                    ListText(root, "payment_qualification.proxy_pool")),
                 "smailr_api_key" => First(
                     Text(root, definition.JsonPath),
                     Environment.GetEnvironmentVariable("SMAILR_API_KEY")),
@@ -397,9 +432,8 @@ namespace SmsWorkbench
         /// Python treats a non-empty <c>proxy.lanes.&lt;lane&gt;</c> as
         /// <b>authoritative</b> -- <c>proxy/routing.py::canonical_lane_pool</c>
         /// short-circuits every legacy key, and <c>mailbox/router.py</c> does the
-        /// same for the mailbox lane. This page edits only the legacy keys, so it
-        /// must report when it is not the effective owner instead of showing two
-        /// blank boxes over a configured route.
+        /// same for the mailbox lane. The page now edits those canonical lanes
+        /// directly; this list still names which ones are declared for the notice.
         /// </para>
         /// </summary>
         internal static IReadOnlyList<string> DetectAuthoritativeProxyLanes(JsonObject root)
@@ -617,6 +651,48 @@ namespace SmsWorkbench
                 : ParseList(value?.ToString() ?? "");
             return string.Join(ProxyInputNormalizer.LineSeparator, entries.Where(item => item.Length > 0));
         }
+
+        /// <summary>
+        /// Read a <c>proxy.lanes.&lt;lane&gt;</c> value in every shape the Python
+        /// reader accepts: a bare list, a single string, or an object with
+        /// <c>pool</c>/<c>proxies</c>/<c>default</c>.
+        /// </summary>
+        private static string LaneListText(JsonObject root, string path)
+        {
+            JsonNode? value = GetPath(root, path);
+            switch (value)
+            {
+                case JsonArray array:
+                    return string.Join(
+                        ProxyInputNormalizer.LineSeparator,
+                        array.Select(item => item?.ToString() ?? "").Where(item => item.Length > 0));
+                case JsonObject map:
+                    foreach (string key in new[] { "pool", "proxies", "default" })
+                    {
+                        if (map[key] is JsonNode nested)
+                            return NodeListText(nested);
+                    }
+                    return "";
+                default:
+                    return string.Join(
+                        ProxyInputNormalizer.LineSeparator,
+                        ParseList(value?.ToString() ?? "").Where(item => item.Length > 0));
+            }
+        }
+
+        private static string NodeListText(JsonNode value)
+            => value is JsonArray array
+                ? string.Join(
+                    ProxyInputNormalizer.LineSeparator,
+                    array.Select(item => item?.ToString() ?? "").Where(item => item.Length > 0))
+                : string.Join(
+                    ProxyInputNormalizer.LineSeparator,
+                    ParseList(value.ToString()).Where(item => item.Length > 0));
+
+        private static string LaneFirstText(JsonObject root, string path)
+            => LaneListText(root, path)
+                .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .FirstOrDefault() ?? "";
 
         private static string FirstArray(JsonObject root, string path)
             => GetPath(root, path) is JsonArray array && array.Count > 0 ? array[0]?.ToString() ?? "" : "";

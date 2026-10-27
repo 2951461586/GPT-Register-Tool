@@ -40,10 +40,9 @@ namespace SmsWorkbench
         /// Builds the notice from the lanes declared under <c>proxy.lanes</c>.
         ///
         /// <para>
-        /// The backend treats a non-empty <c>proxy.lanes.&lt;lane&gt;</c> as
-        /// authoritative, so editing <c>proxy.registration</c> / <c>mailbox_proxy</c>
-        /// here changes nothing for that lane. Saying so is the difference between
-        /// "the box is blank" and "this page is not the owner". Kept as a pure
+        /// The fields now read and write those canonical lanes directly; the
+        /// notice names the lanes this page owns so an operator does not have to
+        /// infer the routing precedence from the config files. Kept as a pure
         /// function so the text is testable without constructing a window.
         /// </para>
         /// </summary>

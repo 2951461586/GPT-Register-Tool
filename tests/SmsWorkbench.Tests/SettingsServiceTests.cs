@@ -567,7 +567,7 @@ public sealed class SettingsServiceTests
     }
 
     [Fact]
-    public void SaveWithoutALaneNeverInventsTheLanesSection()
+    public void SaveWithoutALaneCreatesTheLaneFromTheBox()
     {
         using var fixture = new TemporaryDirectory();
         File.WriteAllText(Path.Combine(fixture.Path, "config.json"), """
@@ -582,7 +582,35 @@ public sealed class SettingsServiceTests
         Assert.True(result.Ok, result.Error);
         JsonObject root = ConfigTestHelpers.ReadMergedConfig(fixture.Path);
         Assert.Equal("http://primary", root["proxy"]!["registration"]!.GetValue<string>());
-        Assert.Null(root["proxy"]!["lanes"]);
+        string[] lane = root["proxy"]!["lanes"]!["protocol_registration"]!["pool"]!
+            .AsArray().Select(node => node!.GetValue<string>()).ToArray();
+        Assert.Contains("http://primary", lane, StringComparer.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void SaveBrowserAndPaymentQualificationPoolsWritesTheirLanes()
+    {
+        using var fixture = new TemporaryDirectory();
+        var service = new SettingsService(new TestApplicationPaths(fixture.Path));
+        IReadOnlyList<SettingsCategoryViewModel> categories = service.Load();
+        Field(categories, "browser_registration_proxy").Value = "http://browser:4";
+        Field(categories, "browser_registration_proxy_pool").Value = "http://browser:5";
+        Field(categories, "payment_qualification_proxy_pool").Value = "http://stripe:6";
+
+        SettingsSaveResult result = service.Save(categories);
+
+        Assert.True(result.Ok, result.Error);
+        JsonObject root = ConfigTestHelpers.ReadMergedConfig(fixture.Path);
+        string[] browserLane = root["proxy"]!["lanes"]!["browser_registration"]!["pool"]!
+            .AsArray().Select(node => node!.GetValue<string>()).ToArray();
+        Assert.Equal(new[] { "http://browser:4", "http://browser:5" }, browserLane);
+        string[] paymentLane = root["proxy"]!["lanes"]!["payment_qualification"]!["pool"]!
+            .AsArray().Select(node => node!.GetValue<string>()).ToArray();
+        Assert.Equal(new[] { "http://stripe:6" }, paymentLane);
+        Assert.Equal(
+            new[] { "http://stripe:6" },
+            root["payment_qualification"]!["proxy_pool"]!.AsArray()
+                .Select(node => node!.GetValue<string>()).ToArray());
     }
 
     private static SettingFieldViewModel Field(
@@ -704,7 +732,10 @@ public sealed class SettingsServiceTests
         Assert.Equal(
             new[] { "protocol_registration", "mailbox" },
             service.AuthoritativeProxyLanes);
-        Assert.Equal("", Field(categories, "registration_proxy").Value);
+        // The boxes now read the lane they own, so opening Settings shows the
+        // effective route instead of a misleading blank.
+        Assert.Equal("http://lane-reg:1", Field(categories, "registration_proxy").Value);
+        Assert.Equal("http://lane-mb:2", Field(categories, "mailbox_proxy").Value);
 
         SettingsSaveResult result = service.Save(categories);
 
@@ -712,12 +743,14 @@ public sealed class SettingsServiceTests
         JsonObject root = ConfigTestHelpers.ReadMergedConfig(fixture.Path);
         Assert.Equal(
             "http://lane-reg:1",
-            root["proxy"]!["lanes"]!["protocol_registration"]![0]!.GetValue<string>());
+            root["proxy"]!["lanes"]!["protocol_registration"]!["pool"]![0]!.GetValue<string>());
         Assert.Equal(
             "http://lane-mb:2",
-            root["proxy"]!["lanes"]!["mailbox"]![0]!.GetValue<string>());
+            root["proxy"]!["lanes"]!["mailbox"]!["pool"]![0]!.GetValue<string>());
         Assert.Equal("http://phone-exit:3", root["phone_reuse"]!["proxy"]!.GetValue<string>());
-        Assert.Equal("", root["proxy"]?["registration"]?.GetValue<string>() ?? "");
+        // The box now reads the lane, so a save mirrors that same value into the
+        // legacy key; the explicit, separate phone exit above is not overwritten.
+        Assert.Equal("http://lane-reg:1", root["proxy"]!["registration"]!.GetValue<string>());
     }
 
     [Fact]

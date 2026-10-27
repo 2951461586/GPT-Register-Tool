@@ -1,10 +1,10 @@
 namespace SmsWorkbench.Tests;
 
 /// <summary>
-/// The settings dialog edits only the legacy proxy keys, while
-/// <c>proxy.lanes.&lt;lane&gt;</c> is authoritative in the backend when declared.
-/// The notice is what tells the operator that, so its two states are pinned here
-/// instead of being checked by reading a window.
+/// The settings dialog now edits the canonical <c>proxy.lanes.&lt;lane&gt;</c>
+/// entries directly (and mirrors the legacy keys). The notice names the lanes it
+/// owns, so its two states are pinned here instead of being checked by reading a
+/// window.
 /// </summary>
 public sealed class SettingsViewModelTests
 {

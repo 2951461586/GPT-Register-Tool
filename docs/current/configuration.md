@@ -187,8 +187,10 @@ The three egress lanes resolve through three deliberately different modules
 
 | Lane | Resolver | Legacy declaration keys |
 | --- | --- | --- |
-| registration | `proxy_routing.proxy_pool_for` | `proxy.registration` / `proxy.pool` / `proxy.default` |
+| registration (protocol) | `proxy_routing.proxy_pool_for` | `proxy.registration` / `proxy.pool` / `proxy.default` |
+| registration (browser) | `proxy_routing.proxy_pool_for` | `proxy.browser_registration_pool` / `proxy.browser_pool` |
 | mailbox / OTP | `mailbox._mailbox_proxy_candidates` | `mailbox_proxy` / `mailbox_proxy_pool` |
+| payment qualification | `proxy_routing.operation_proxy_candidates` (`promotion` fallback) | `payment_qualification.proxy_pool` |
 | payment | `payment_routing` + per-method sections | `protocol_payments.proxy_pools`, `<method>.stage_proxies` |
 
 `sms_tool/proxy/registry.py` is the single read/manage surface over all three
@@ -212,6 +214,13 @@ OTP poller, and `PaymentRoutePlanner._named_pools` for payment region pools.
 
 `proxy.lanes.payment.pools` names are the ones referenced by
 `protocol_payments.methods.<m>.stage_routes` / `stage_proxy_pools`.
+
+The desktop **设置 → 基础网络** page edits the same canonical lanes directly:
+`protocol_registration`, `browser_registration`, `mailbox`, and
+`payment_qualification` each have their own box/pool field. A non-empty save
+writes the lane (creating the `proxy.lanes.<lane>.pool` object when absent) and
+mirrors the legacy keys; a blank save leaves the lane untouched. The payment
+lane remains owned by the protocol-payment dialog and has no field here.
 
 ## No invented proxy default (decision 2026-10-25)
 

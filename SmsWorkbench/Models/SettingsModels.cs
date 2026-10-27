@@ -32,10 +32,13 @@ namespace SmsWorkbench
         public SettingFieldViewModel(SettingDefinition definition, string initialValue)
         {
             Definition = definition;
-            value = initialValue ?? "";
+            OriginalValue = initialValue ?? "";
+            value = OriginalValue;
         }
 
         public SettingDefinition Definition { get; }
+        public string OriginalValue { get; }
+        public bool IsDirty => !string.Equals(Value, OriginalValue, StringComparison.Ordinal);
         public string Key => Definition.Key;
         public string Label => Definition.Label;
         public SettingFieldKind Kind => Definition.Kind;

@@ -264,8 +264,8 @@
       </Border>
     </Grid>
 
-    <!-- `proxy.lanes.<lane>` outranks the boxes above in the backend, so say so
-         instead of leaving the operator to wonder why an edit did nothing. -->
+    <!-- The page edits the canonical `proxy.lanes.<lane>` entries directly; the
+         notice names the lanes it owns and reminds that payment is elsewhere. -->
     <TextBlock Grid.Row="1"
                Text="{Binding ProxyLaneNotice}"
                Foreground="{DynamicResource TextSub}"
