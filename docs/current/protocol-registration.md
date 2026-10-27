@@ -47,6 +47,20 @@ signin → authorize handshake and diverge on the landing page.
   signup lane lands on `/log-in/password` (`_is_existing_login_redirect`) or
   the server answers `user_already_exists`.
 
+### Phone verification and refresh tokens belong to the one-click SMS lane
+
+The email lane does **not** rent a number when the server lands on `add-phone`.
+One-click SMS (`phone_registration` / `phone_reuse`) is a separate, decoupled
+channel; the email lane only reports the landing and leaves the account to that
+lane. This is why `registration_runtime` no longer carries a `phone_result`
+field or a `require_registration_phone_verification` switch: they had no
+producer on this path.
+
+Refresh tokens follow the same rule. A **fresh email account obtains an RT only
+through the add-phone flow**; the optional Codex OAuth collection after the AT
+probe (`registration.obtain_refresh_token`, default off) collects access/id
+tokens and must not be treated as an RT source for email-only signups.
+
 ## Endpoints
 
 `{auth_base}` is `auth.openai.com`; `{chat_base}` is `chatgpt.com`. All paths

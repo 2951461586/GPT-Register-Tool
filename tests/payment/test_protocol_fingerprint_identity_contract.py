@@ -62,8 +62,9 @@ def test_geo_profile_projection_matches_the_legacy_table():
     for country in MARKET_PROFILES:
         assert geo_profile(country) == ah._GEO_PROFILES[country]
     # Uncurated markets are ``None`` -- not the UTC default.  Returning the
-    # default here would hand a Brazilian exit a UTC clock.
-    assert geo_profile("BR") is None
+    # default here would hand a Peruvian exit a UTC clock.  (BR was this
+    # fixture until the market table grew from 15 to 50 on 2026-10-26.)
+    assert geo_profile("PE") is None
     assert geo_profile("ZZ") is None
     assert geo_profile("jp") == ah._GEO_PROFILES["JP"]
 

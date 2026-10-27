@@ -146,8 +146,8 @@ from .<其它模块> import  -> from ..<其它模块> import
 
 ```python
 # ast.ImportFrom(module='mailbox_cfworker', level=1)   ← 点数在 level，不在 module
-node.module.startswith(".mailbox_")                    # 永远 False
-node.level == 1 and node.module.startswith("mailbox_") # 正解
+node.module.startswith(".mailbox_")  # 永远 False
+node.level == 1 and node.module.startswith("mailbox_")  # 正解
 ```
 
 新架构门禁第一版因此**静默失效** —— 是**负向测试**发现的（临时插一行违规 import，

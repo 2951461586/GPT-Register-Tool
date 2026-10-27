@@ -394,6 +394,9 @@ namespace SmsWorkbench
             // Promotion rows carry their own badge; without this the panel would
             // show "AT有效 / HTTP 200" and hide the actual 优惠 answer.
             bool isPromotion = BackendResultInterpreter.IsPromotionRows(results);
+            // 支付资格 rows carry their own badge as well; the liveness rendering
+            // would otherwise label an "无可用方式" row as an AT success.
+            bool isQualification = !isPromotion && BackendResultInterpreter.IsPaymentQualificationRows(results);
             var rtRows = directProbe ? new List<Dictionary<string, object>>() : results.Where(r => BackendJson.GetBool(r, "has_rt")).ToList();
             var noRtRows = directProbe ? results : results.Where(r => !BackendJson.GetBool(r, "has_rt")).ToList();
 
@@ -425,7 +428,9 @@ namespace SmsWorkbench
             });
             header.Children.Add(new TextBlock
             {
-                Text = isPromotion
+                Text = isQualification
+                    ? BackendResultInterpreter.PaymentQualificationSummary(results)
+                    : isPromotion
                     ? BackendResultInterpreter.PromotionSummary(results)
                     : directProbe
                     ? ExportViewModel.FormatDirectProbeSummary(results, summary)

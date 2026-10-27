@@ -104,6 +104,15 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--port", type=int, default=None, help="SOCKS5 listen port (default: 18080)")
     p.add_argument("--stats-port", type=int, default=None, help="HTTP stats port (default: 18081)")
     p.add_argument(
+        "--stats-host",
+        default=None,
+        help=(
+            "HTTP stats listen host (default: 127.0.0.1). Deliberately independent of "
+            "--host: the endpoint is unauthenticated, so exposing the SOCKS5 listener "
+            "on a LAN address must not expose the upstream inventory with it."
+        ),
+    )
+    p.add_argument(
         "--upstreams",
         default=None,
         help="Comma-separated upstream URLs (socks5://, socks5h://, http://, https://)",
@@ -177,6 +186,7 @@ def main() -> None:
     host = args.host or "127.0.0.1"
     port = args.port or 18080
     stats_port = args.stats_port or 18081
+    stats_host = args.stats_host or "127.0.0.1"
     health_interval = args.health_interval or 30.0
     health_timeout = args.health_timeout or (15.0 if args.health_edge_probe else 5.0)
     edge_probe = edge_health if args.health_edge_probe else None
@@ -191,6 +201,7 @@ def main() -> None:
         listen_port=port,
         upstreams=upstreams,
         stats_port=stats_port,
+        stats_host=stats_host,
         health_check_interval=health_interval,
         health_check_timeout=health_timeout,
         connect_timeout=connect_timeout,
@@ -200,7 +211,14 @@ def main() -> None:
         edge_probe=edge_probe,
     )
 
-    logger.info("Proxy pool config: host=%s port=%d stats=%d upstreams=%d", host, port, stats_port, len(upstreams))
+    logger.info(
+        "Proxy pool config: host=%s port=%d stats=%s:%d upstreams=%d",
+        host,
+        port,
+        stats_host,
+        stats_port,
+        len(upstreams),
+    )
     for u in upstreams:
         logger.info("  upstream: %s [%s] user=%s", u.label, u.addr, "***" if u.username else "-")
 

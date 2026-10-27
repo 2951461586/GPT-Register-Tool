@@ -473,9 +473,11 @@ IPC 通道），但**日志化改造远未完成**。可观测性最弱的正是
 ```python
 # sms_tool/mailbox_graph.py
 """Compatibility facade for the Microsoft Graph mailbox provider."""
+
 from .providers import mailbox_graph as _impl
 import sys
-sys.modules[__name__] = _impl          # ← 把自己从 sys.modules 里替换掉
+
+sys.modules[__name__] = _impl  # ← 把自己从 sys.modules 里替换掉
 ```
 
 实测 6 个壳都能正常 import，`sys.modules["sms_tool.mailbox_graph"]` 确实指向

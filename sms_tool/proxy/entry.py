@@ -47,11 +47,19 @@ _SOCKS_SCHEMES = {"socks4", "socks4a", "socks5", "socks5h"}
 
 
 def _mask_credentials(value: str) -> str:
-    """Log-safe raw value with any inline credentials replaced by ``***``."""
+    """Log-safe raw value with any inline credentials replaced by ``***``.
+
+    The URL-form rule is greedy up to the **last** ``@`` that is still inside
+    the authority (``[^/\\s]*`` cannot cross a path or whitespace). A password
+    containing ``@`` -- accepted by every ``urlsplit``-based parser here, which
+    splits at the last ``@`` -- therefore masks completely instead of leaving
+    its tail visible: ``http://alice:p@ss@host:1`` used to render as
+    ``http://***:***@ss@host:1``.
+    """
     text = str(value or "")
     # scheme://user:pass@host -> scheme://***:***@host
     text = re.sub(
-        r"(?i)\b((?:https?|socks5h?|socks4a?)://)[^/@\s]+@",
+        r"(?i)\b((?:https?|socks5h?|socks4a?)://)[^/\s]*@",
         r"\1***:***@",
         text,
     )
@@ -59,6 +67,12 @@ def _mask_credentials(value: str) -> str:
     text = re.sub(
         r"(?i)\b([a-z0-9.\-\[\]]+:\d+):[^\s'\"]+:[^\s'\"]+",
         r"\1:***:***",
+        text,
+    )
+    # bare user:pass:host:port (the other provider paste order) -> ***:***:host:port
+    text = re.sub(
+        r"(?i)(?<![\w.:/-])([^\s:@/]+):([^\s:@/]+):([^\s:@/]+:\d{1,5})",
+        r"***:***:\3",
         text,
     )
     return text

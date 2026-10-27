@@ -40,7 +40,7 @@ from zoneinfo import ZoneInfo
 
 from . import geo as _geo
 from .geo import clock as _clock
-from .geo.profiles import MARKET_PROFILES
+from .geo.profiles import MARKET_PROFILES, WINDOWS_TIMEZONE_BY_IANA
 
 logger = logging.getLogger(__name__)
 
@@ -70,47 +70,24 @@ IP_GEO_ENDPOINTS = [
 
 # Country (ISO-3166 alpha-2) -> locale profile key.  每个市场一个独立档案
 # （CA/AU 不再别名到 us/gb，时区与出口严格一致），键即小写国家码。
-COUNTRY_LOCALE_PROFILE_MAP = {
-    "JP": "jp",
-    "CN": "cn",
-    "HK": "hk",
-    "TW": "tw",
-    "US": "us",
-    "CA": "ca",
-    "SG": "sg",
-    "GB": "gb",
-    "AU": "au",
-    "DE": "de",
-    "FR": "fr",
-    "NL": "nl",
-    "VN": "vn",
-    "PH": "ph",
-    # 2026-09-18：第二供应商（9http ``geo-IN``）接入时补。漏这一项会让
-    # ``locale_profile_key_from_geo`` 静默回退 ``'us'`` —— 印度出口配美国指纹。
-    "IN": "in",
-}
+#
+# 2026-10-26：改为从 ``geo/profiles.MARKET_PROFILES`` **生成**。手写表在
+# 原 15 个市场时还能靠 parity 测试兜住，扩到 50 个市场后漏一行就是「出口国家
+# 正确、指纹回退 us 档案」的静默降级（``locale_profile_key_from_geo`` 的
+# ``.get(country, DEFAULT_LOCALE_PROFILE)`` 不报错）。生成式表结构上不可能漏。
+COUNTRY_LOCALE_PROFILE_MAP = {country: country.lower() for country in MARKET_PROFILES}
 DEFAULT_LOCALE_PROFILE = "us"
 
 # 浏览器路径地理档案 = geo/profiles.MARKET_PROFILES 的渲染视图（单一事实源，
 # 与 auth_headers._GEO_PROFILES 同源派生）。timezone_offset_minutes 只是
 # _offset_minutes_for_timezone 的回退值（P1-4：运行时按 IANA 名重算）；用
 # zoneinfo 在导入时求当前偏移，避免 DST 硬编码半年错一小时。
-TIMEZONE_NAME_BY_IANA = {
-    "Asia/Tokyo": "Japan Standard Time",
-    "Asia/Shanghai": "China Standard Time",
-    "Asia/Singapore": "Singapore Standard Time",
-    "Asia/Hong_Kong": "Hong Kong Standard Time",
-    "Asia/Taipei": "Taipei Standard Time",
-    "America/Los_Angeles": "Pacific Daylight Time",
-    "America/New_York": "Eastern Daylight Time",
-    "America/Chicago": "Central Daylight Time",
-    "America/Denver": "Mountain Daylight Time",
-    "America/Toronto": "Eastern Standard Time",
-    "Australia/Sydney": "AUS Eastern Standard Time",
-    "Europe/London": "British Summer Time",
-    "Europe/Berlin": "Central European Summer Time",
-    "Europe/Paris": "Central European Summer Time",
-    "Europe/Amsterdam": "Central European Summer Time",
+TIMEZONE_NAME_BY_IANA = dict(WINDOWS_TIMEZONE_BY_IANA)
+
+# The three commentary blocks below are kept verbatim from the hand-written
+# table this dict replaced: they record *why* VN/PH/IN entries exist, which is
+# still the reason a new market must register every IANA it can return.
+_TIMEZONE_NAME_NOTES = {
     "Asia/Ho_Chi_Minh": "Indochina Time",
     # 2026-09-16 实测补充：VN 出口的 geo 库常把越南 IP 归到 ``Asia/Bangkok``
     # （rola 新池 10 条里 7 条、旧 9http 池也出现过）。CLDR 里
@@ -137,6 +114,12 @@ TIMEZONE_NAME_BY_IANA = {
     "Asia/Kolkata": "India Standard Time",
     "Asia/Calcutta": "India Standard Time",
 }
+# Old table declared three names the canonical CLDR map does not use as its
+# territory-001 answer (Hong Kong and the US DST names). They are display-only
+# values, so the canonical map wins; the retired ones stay documented above.
+# ``Asia/Calcutta`` is an IANA alias for ``Asia/Kolkata`` and geo libraries
+# still return it, so both keys must resolve.
+TIMEZONE_NAME_BY_IANA.setdefault("Asia/Calcutta", "India Standard Time")
 
 
 def _fallback_offset_minutes(tz_iana: str) -> int:
@@ -157,7 +140,12 @@ def _fallback_offset_minutes(tz_iana: str) -> int:
 BROWSER_LOCALE_PROFILES: dict[str, dict[str, Any]] = {
     country.lower(): {
         "navigator_language": profile["lang"],
-        "navigator_languages": [profile["lang"]],
+        # ``navigator.languages`` is the ordered preference list; a real
+        # browser reports more than one entry and the first must equal
+        # ``navigator.language`` (``validate_browser_profile`` enforces that).
+        # Using only ``[lang]`` made every profile look like a single-language
+        # install, which is itself a fingerprint signal.
+        "navigator_languages": list(profile["languages"]),
         "accept_language": profile["lang_full"],
         "timezone_iana": profile["timezone_iana"],
         "timezone_offset_minutes": _fallback_offset_minutes(profile["timezone_iana"]),

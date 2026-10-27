@@ -88,12 +88,33 @@ class ProxyGeo:
     timezone: str = ""
     org: str = ""
     source: str = "none"
+    # ── IP intelligence (2026-10-26) ────────────────────────────────────────
+    # Added for the proxy-screening layer (sms_tool/proxy/screening.py). They
+    # live on ProxyGeo rather than in a parallel struct because the geo probe
+    # already fetches the documents that carry them: throwing the ASN/ISP away
+    # used to force screening to re-probe every exit.
+    asn: str = ""
+    isp: str = ""
+    reverse_dns: str = ""
+    #: ``residential`` / ``mobile`` / ``datacenter`` / ``unknown``.
+    #: Computed by ``proxy.screening.classify_network_type`` (not here) so the
+    #: resolver stays free of classification policy.
+    network_type: str = "unknown"
+    is_proxy: bool = False
+    is_vpn: bool = False
+    is_hosting: bool = False
+    #: How many independent intel sources agreed on this answer (1 = primary).
+    intel_sources: int = 1
+    #: True when a second source disagreed on the exit identity.
+    intel_conflict: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         """Legacy dict shape consumed by ``build_browser_environment``.
 
         Kept byte-compatible with the old ``_normalize_geo_response`` output so
-        existing persisted identity contexts and callers keep working.
+        existing persisted identity contexts and callers keep working.  The
+        intelligence fields are additive: a consumer that only reads
+        ``country``/``timezone``/``org`` is unaffected.
         """
         return {
             "ip": self.ip,
@@ -102,6 +123,15 @@ class ProxyGeo:
             "city": self.city,
             "timezone": self.timezone,
             "org": self.org,
+            "asn": self.asn,
+            "isp": self.isp,
+            "reverse_dns": self.reverse_dns,
+            "network_type": self.network_type,
+            "is_proxy": self.is_proxy,
+            "is_vpn": self.is_vpn,
+            "is_hosting": self.is_hosting,
+            "intel_sources": self.intel_sources,
+            "intel_conflict": self.intel_conflict,
         }
 
     @property
@@ -109,18 +139,59 @@ class ProxyGeo:
         return bool(self.country or self.timezone)
 
     def with_source(self, source: str) -> "ProxyGeo":
-        return ProxyGeo(
-            ip=self.ip,
-            country=self.country,
-            region=self.region,
-            city=self.city,
-            timezone=self.timezone,
-            org=self.org,
-            source=source,
-        )
+        return replace(self, source=source)
 
 
 _EMPTY = ProxyGeo()
+
+
+#: ``AS`` prefix followed by digits, as it appears at the start of ipinfo's
+#: ``org`` field (``"AS15169 Google LLC"``) and as a bare number in ipwho's
+#: ``connection.asn``. Screening compares ASNs for stability, so the canonical
+#: shape is the ``AS<digits>`` string and never a bare number.
+_ASN_IN_ORG_RE = re.compile(r"^\s*(AS\d+)\b", re.IGNORECASE)
+_ASN_BARE_RE = re.compile(r"^\s*(\d+)\s*$")
+
+
+def _extract_asn(data: Mapping[str, Any]) -> str:
+    """Return ``AS<digits>`` from any of the three providers' field names."""
+    connection = data.get("connection")
+    candidates: list[Any] = []
+    if isinstance(connection, Mapping):
+        candidates.extend([connection.get("asn"), connection.get("as")])
+    candidates.extend([data.get("asn"), data.get("as"), data.get("org")])
+    for value in candidates:
+        text = str(value or "").strip()
+        if not text:
+            continue
+        match = _ASN_IN_ORG_RE.match(text)
+        if match:
+            return match.group(1).upper()
+        bare = _ASN_BARE_RE.match(text)
+        if bare:
+            return f"AS{bare.group(1)}"
+    return ""
+
+
+def _extract_privacy_flags(data: Mapping[str, Any]) -> tuple[bool, bool, bool]:
+    """Return ``(is_proxy, is_vpn, is_hosting)`` from provider privacy blocks.
+
+    ipapi.co nests them under ``security``; ipwho.is under ``security`` too but
+    only on paid plans; ipinfo uses ``privacy``. A top-level boolean is also
+    accepted because some mirrors inline them. Absence means *unknown*, which
+    is not the same as *clean* -- screening treats the two differently.
+    """
+    blocks = []
+    for key in ("privacy", "security"):
+        block = data.get(key)
+        if isinstance(block, Mapping):
+            blocks.append(block)
+    blocks.append(data)
+
+    def flag(name: str) -> bool:
+        return any(block.get(name) is True for block in blocks)
+
+    return flag("proxy"), flag("vpn"), flag("hosting")
 
 
 def _extract_country_code(data: Mapping[str, Any]) -> str:
@@ -194,6 +265,11 @@ def normalize_geo_response(data: Any) -> ProxyGeo:
     org = data.get("org") or data.get("isp")
     if not org and isinstance(data.get("connection"), Mapping):
         org = data["connection"].get("org")
+    connection = data.get("connection")
+    isp = data.get("isp")
+    if not isp and isinstance(connection, Mapping):
+        isp = connection.get("isp")
+    is_proxy, is_vpn, is_hosting = _extract_privacy_flags(data)
     return ProxyGeo(
         ip=str(data.get("ip") or data.get("query") or ""),
         country=country,
@@ -202,6 +278,12 @@ def normalize_geo_response(data: Any) -> ProxyGeo:
         timezone=str(timezone or "").strip(),
         org=str(org or ""),
         source="probe",
+        asn=_extract_asn(data),
+        isp=str(isp or ""),
+        reverse_dns=str(data.get("hostname") or "").strip().lower(),
+        is_proxy=is_proxy,
+        is_vpn=is_vpn,
+        is_hosting=is_hosting,
     )
 
 
@@ -385,7 +467,9 @@ class GeoResolver:
             geo = ProxyGeo(country=code, source="hint")
         if cached is not None and cached.known:
             # Re-probing to find a timezone must not drop fields the previous
-            # answer supplied; merge field-by-field.
+            # answer supplied; merge field-by-field.  The intelligence fields
+            # follow the same rule: a country-only re-probe must not erase the
+            # ASN that the first (richer) answer measured.
             geo = ProxyGeo(
                 ip=geo.ip or cached.ip,
                 country=geo.country or cached.country,
@@ -394,6 +478,15 @@ class GeoResolver:
                 timezone=geo.timezone or cached.timezone,
                 org=geo.org or cached.org,
                 source=geo.source,
+                asn=geo.asn or cached.asn,
+                isp=geo.isp or cached.isp,
+                reverse_dns=geo.reverse_dns or cached.reverse_dns,
+                network_type=(geo.network_type if geo.network_type != "unknown" else cached.network_type),
+                is_proxy=geo.is_proxy or cached.is_proxy,
+                is_vpn=geo.is_vpn or cached.is_vpn,
+                is_hosting=geo.is_hosting or cached.is_hosting,
+                intel_sources=max(geo.intel_sources, cached.intel_sources),
+                intel_conflict=geo.intel_conflict or cached.intel_conflict,
             )
         self._write(key, geo)
         return geo
@@ -458,6 +551,20 @@ class GeoResolver:
             timezone=(current.timezone if current else "") or geo.timezone,
             org=(current.org if current else "") or geo.org,
             source="probe",
+            asn=(current.asn if current else "") or geo.asn,
+            isp=(current.isp if current else "") or geo.isp,
+            reverse_dns=(current.reverse_dns if current else "") or geo.reverse_dns,
+            network_type=(
+                geo.network_type if geo.network_type != "unknown" else (current.network_type if current else "unknown")
+            ),
+            is_proxy=bool((current.is_proxy if current else False) or geo.is_proxy),
+            is_vpn=bool((current.is_vpn if current else False) or geo.is_vpn),
+            is_hosting=bool((current.is_hosting if current else False) or geo.is_hosting),
+            intel_sources=max(
+                (current.intel_sources if current else 1),
+                geo.intel_sources,
+            ),
+            intel_conflict=bool((current.intel_conflict if current else False) or geo.intel_conflict),
         )
         self._write(key, merged)
 

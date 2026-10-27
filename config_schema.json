@@ -13,6 +13,7 @@
     "account_health": "runtime",
     "registration": "runtime",
     "chatgpt": "runtime",
+    "payment_qualification": "runtime",
     "email_registration": "runtime",
     "codex_oauth": "runtime",
     "proxy": "proxy",

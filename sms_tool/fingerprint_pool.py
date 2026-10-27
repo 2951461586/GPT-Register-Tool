@@ -15,6 +15,7 @@ canonical fingerprint definitions remain in one place.  This module adds:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import random
@@ -23,9 +24,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from .auth_headers import fingerprint_profile_weights
+from .auth_headers import _device_seed, fingerprint_profile_weights
 from .geo import ProxyGeo
-from .geo.profiles import geo_profile
+from .geo.profiles import geo_profile, market_timezone
 
 logger = logging.getLogger(__name__)
 
@@ -134,6 +135,7 @@ class FingerprintPool:
         profiles: list[ProtocolEnvironmentProfile] | None = None,
         mode: str | None = None,
         verify_hint: bool = False,
+        measure_asn: bool = False,
     ) -> None:
         self._profiles = profiles or _build_profiles()
         self._index = 0
@@ -149,6 +151,11 @@ class FingerprintPool:
         # that silently ignores the retargeted country code would otherwise bind
         # a claimed-region fingerprint to a different real exit.
         self._verify_hint = bool(verify_hint)
+        # ASN allocation is opt-in; when it is on, a curated country hint is no
+        # longer enough -- the ledger needs the measured ASN, which only the geo
+        # probe returns. The shared resolver caches per proxy, so this is one
+        # probe per exit per process, not one per account.
+        self._measure_asn = bool(measure_asn)
         if self._mode == "round_robin" or not self._profiles:
             self._weights = None
         else:
@@ -169,7 +176,15 @@ class FingerprintPool:
         registration = config.get("registration", {}) if isinstance(config, Mapping) else {}
         fp_cfg = registration.get("fingerprint_pool", {}) if isinstance(registration, Mapping) else {}
         mode = fp_cfg.get("mode") if isinstance(fp_cfg, Mapping) else None
-        pool = cls(mode=mode, verify_hint=bool(fp_cfg.get("verify_hint")) if isinstance(fp_cfg, Mapping) else False)
+        proxy_cfg = config.get("proxy", {}) if isinstance(config, Mapping) else {}
+        allocation = proxy_cfg.get("asn_allocation") if isinstance(proxy_cfg, Mapping) else {}
+        measure_asn = bool(allocation.get("enabled")) if isinstance(allocation, Mapping) else False
+        # ``verify_hint`` defaults **on** for the config path: the measured exit
+        # is what the server compares against, and the shared resolver caches the
+        # answer per proxy. An operator who knows the provider honours its region
+        # token can turn it off explicitly to save one probe per exit.
+        verify_hint = bool(fp_cfg.get("verify_hint", True)) if isinstance(fp_cfg, Mapping) else True
+        pool = cls(mode=mode, verify_hint=verify_hint, measure_asn=measure_asn)
         if not isinstance(fp_cfg, Mapping):
             return pool
         # ``allowed_countries`` narrows the geo-bound selection in ``next``.
@@ -204,12 +219,16 @@ class FingerprintPool:
         # ``geo_profile`` covers a handful of markets wired up by hand; any
         # other country needs the measured clock, otherwise the profile keeps
         # its hard-coded US one.
-        resolved = self._resolve_geo(proxy, hint, need_timezone=geo_profile(hint) is None)
+        resolved = self._resolve_geo(
+            proxy,
+            hint,
+            need_timezone=geo_profile(hint) is None or self._verify_hint or self._measure_asn,
+        )
         country = resolved.country
         geo = geo_profile(country) if country else None
         if not geo:
             # The country is real but has no curated entry (``geo_profile`` only
-            # covers the handful of markets that were wired up by hand).
+            # covers the markets that were wired up by hand).
             # Falling through to the profile default here is the actual bug this
             # resolver was built to kill: it hands a Brazilian exit IP a
             # US Eastern clock. Use the measured timezone when we have one and
@@ -217,6 +236,17 @@ class FingerprintPool:
             if not resolved.timezone:
                 return profile
             geo = {"timezone": resolved.timezone}
+        # A measured timezone always wins. Without one, a multi-timezone market
+        # (US/CA/BR) used to always get the first entry -- every US account read
+        # as America/New_York. Pick by the same per-account device seed that
+        # drives the hardware profile, so one account stays stable across runs
+        # while the pool is not collapsed onto a single clock.
+        timezone = str(resolved.timezone or "").strip()
+        if not timezone:
+            seed = str(_device_seed() or profile.name or "fingerprint-pool")
+            digest = hashlib.sha256(seed.encode("utf-8")).digest()
+            rng = random.Random(int.from_bytes(digest[:8], "big"))
+            timezone = str(market_timezone(country, rng) or geo.get("timezone") or profile.timezone)
         return ProtocolEnvironmentProfile(
             name=profile.name,
             impersonate=profile.impersonate,
@@ -224,7 +254,7 @@ class FingerprintPool:
             sec_ch_ua=profile.sec_ch_ua,
             sec_ch_ua_mobile=profile.sec_ch_ua_mobile,
             sec_ch_ua_platform=profile.sec_ch_ua_platform,
-            timezone=str(geo.get("timezone") or profile.timezone),
+            timezone=timezone,
             lang=str(geo.get("lang") or profile.lang),
             lang_full=str(geo.get("lang_full") or profile.lang_full),
             country=country,
@@ -339,7 +369,13 @@ _SHARED_POOLS_LOCK = threading.Lock()
 def _pool_config_key(config: Mapping[str, Any] | None) -> str:
     registration = config.get("registration", {}) if isinstance(config, Mapping) else {}
     fp_cfg = registration.get("fingerprint_pool", {}) if isinstance(registration, Mapping) else {}
-    return json.dumps(fp_cfg if isinstance(fp_cfg, Mapping) else {}, sort_keys=True, default=str)
+    proxy_cfg = config.get("proxy", {}) if isinstance(config, Mapping) else {}
+    allocation = proxy_cfg.get("asn_allocation") if isinstance(proxy_cfg, Mapping) else {}
+    return json.dumps(
+        {"fingerprint_pool": fp_cfg, "asn_allocation": allocation},
+        sort_keys=True,
+        default=str,
+    )
 
 
 def shared_fingerprint_pool(config: Mapping[str, Any] | None = None) -> FingerprintPool:

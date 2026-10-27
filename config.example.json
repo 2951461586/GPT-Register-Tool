@@ -23,6 +23,19 @@
       "payment": [
         "http://us.ipwo.net:7878:YOUR_USER_custom_zone_US:YOUR_PASSWORD"
       ]
+    },
+    "asn_allocation": {
+      "enabled": false
+    },
+    "dynamic_generation": {
+      "enabled": false,
+      "base_proxy": "",
+      "country": "",
+      "asns": [],
+      "count": 1,
+      "session_minutes": 60,
+      "max_attempts": 30,
+      "quality_min": 80
     }
   },
   "registration": {
@@ -73,7 +86,7 @@
     "reject_cloud_proxy": false,
     "fingerprint_pool": {
       "mode": "random",
-      "verify_hint": false,
+      "verify_hint": true,
       "allowed_countries": []
     },
     "drivers": {
@@ -255,6 +268,11 @@
     "oauth_scope": "https://graph.microsoft.com/.default offline_access",
     "oauth_token_url": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
     "graph_messages_url": "https://graph.microsoft.com/v1.0/me/messages"
+  },
+  "payment_qualification": {
+    "method": "auto",
+    "country": "",
+    "probe_all_methods": false
   },
   "timeouts": {
     "request": 20,
@@ -581,9 +599,7 @@
     "allow_passwordless_takeover": false,
     "browser_style_send_otp": true,
     "password_first_relogin": false,
-    "auto_phone_verification": false,
-    "require_registration_refresh_token": true,
-    "require_registration_phone_verification": true
+    "auto_phone_verification": false
   },
   "phone_reuse": {
     "source": "smsbower",

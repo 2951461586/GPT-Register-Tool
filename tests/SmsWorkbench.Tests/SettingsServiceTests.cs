@@ -534,6 +534,57 @@ public sealed class SettingsServiceTests
             field => field.Definition.JsonPath == "phone_reuse.{provider}.api_key");
     }
 
+    [Fact]
+    public void SaveWritesTheEffectiveLaneAndMirrorsTheLegacyKeys()
+    {
+        using var fixture = new TemporaryDirectory();
+        File.WriteAllText(Path.Combine(fixture.Path, "config.json"), """
+            {
+              "proxy": {
+                "registration": "http://legacy",
+                "lanes": {
+                  "protocol_registration": { "pool": [ "http://legacy" ] }
+                }
+              }
+            }
+            """, new UTF8Encoding(false));
+        var service = new SettingsService(new TestApplicationPaths(fixture.Path));
+        IReadOnlyList<SettingsCategoryViewModel> categories = service.Load();
+        Field(categories, "registration_proxy").Value = "http://new";
+        Field(categories, "registration_proxy_pool").Value = "http://new2" + Environment.NewLine + "http://new";
+
+        SettingsSaveResult result = service.Save(categories);
+
+        Assert.True(result.Ok, result.Error);
+        JsonObject root = ConfigTestHelpers.ReadMergedConfig(fixture.Path);
+        string[] lane = root["proxy"]!["lanes"]!["protocol_registration"]!["pool"]!
+            .AsArray().Select(node => node!.GetValue<string>()).ToArray();
+        Assert.Equal(new[] { "http://new", "http://new2" }, lane, StringComparer.OrdinalIgnoreCase);
+        Assert.Equal("http://new", root["proxy"]!["registration"]!.GetValue<string>());
+        string[] legacyPool = root["proxy"]!["pool"]!.AsArray()
+            .Select(node => node!.GetValue<string>()).ToArray();
+        Assert.Equal(new[] { "http://new", "http://new2" }, legacyPool, StringComparer.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void SaveWithoutALaneNeverInventsTheLanesSection()
+    {
+        using var fixture = new TemporaryDirectory();
+        File.WriteAllText(Path.Combine(fixture.Path, "config.json"), """
+            { "proxy": { "pool": [ "http://old" ] } }
+            """, new UTF8Encoding(false));
+        var service = new SettingsService(new TestApplicationPaths(fixture.Path));
+        IReadOnlyList<SettingsCategoryViewModel> categories = service.Load();
+        Field(categories, "registration_proxy").Value = "http://primary";
+
+        SettingsSaveResult result = service.Save(categories);
+
+        Assert.True(result.Ok, result.Error);
+        JsonObject root = ConfigTestHelpers.ReadMergedConfig(fixture.Path);
+        Assert.Equal("http://primary", root["proxy"]!["registration"]!.GetValue<string>());
+        Assert.Null(root["proxy"]!["lanes"]);
+    }
+
     private static SettingFieldViewModel Field(
         IEnumerable<SettingsCategoryViewModel> categories,
         string key)

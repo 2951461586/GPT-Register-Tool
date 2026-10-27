@@ -193,9 +193,9 @@ proxy.json 单供应商 10 条（rola country-in）
 `sms_tool/failure_registry.py` 的 `FailureClass("network", (...))` 标记清单里追加：
 
 ```python
-"curl: (52)",   # Empty reply from server —— 传输中断
-"curl: (56)",   # Proxy CONNECT aborted —— 代理建连被中止（本轮实际命中）
-"curl: (18)",   # Partial file —— 传输中途截断
+("curl: (52)",)  # Empty reply from server —— 传输中断
+("curl: (56)",)  # Proxy CONNECT aborted —— 代理建连被中止（本轮实际命中）
+("curl: (18)",)  # Partial file —— 传输中途截断
 ```
 
 **无需改 `error_classification.py`**：`CURL_TRANSPORT_MARKERS` 从 network 标记自动派生，

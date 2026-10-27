@@ -247,6 +247,26 @@ namespace SmsWorkbench
         }
 
         /// <summary>
+        /// 支付资格 badge from the qualification probe. Python composes the
+        /// Chinese label (<c>可用·GCash</c> / <c>无0元优惠</c> / <c>AT失效</c> …); this
+        /// only translates the display copy for the English build. The machine
+        /// state rides a separate property and is never derived from this text.
+        /// </summary>
+        public static string DisplayPaymentQualification(string label)
+        {
+            string value = (label ?? "").Trim();
+            if (value.Length == 0 || !Loc.Instance.IsEnglish) return value;
+            return value
+                .Replace("可用·", Loc.T("可用") + "·")
+                .Replace("无0元优惠", Loc.T("无0元优惠"))
+                .Replace("无可用方式", Loc.T("无可用方式"))
+                .Replace("币种不符", Loc.T("币种不符"))
+                .Replace("AT失效", Loc.T("AT失效"))
+                .Replace("检测失败", Loc.T("检测失败"))
+                .Replace("未确定", Loc.T("未确定"));
+        }
+
+        /// <summary>
         /// Unified 优惠状态 shown after merging the former 支付状态 + 支付金额 columns.
         /// Prefers the account plan/promotion probe (accounts/check) result; when it
         /// has not been run, falls back to the payment link status combined with its

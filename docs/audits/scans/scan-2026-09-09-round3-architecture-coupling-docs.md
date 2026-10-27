@@ -40,7 +40,7 @@
 **[确证]** `sms_tool/registration.py:264`：
 
 ```python
-operations=RegistrationOperations.bind(globals()),
+operations = (RegistrationOperations.bind(globals()),)
 ```
 
 协议工作流的 55 个依赖全部从 `registration.py` 的 **globals 动态装配**。后果：
@@ -709,9 +709,9 @@ backoff = _promotion_throttle_backoff(probe)
 if backoff is not None:
     time.sleep(backoff)
     if index >= len(candidates) - 1:
-        probe = check_account_promotion(...)   # 池用尽：同一出口延迟重试一次
+        probe = check_account_promotion(...)  # 池用尽：同一出口延迟重试一次
         break
-    continue                                    # 否则换一个 IP（更强的修复）
+    continue  # 否则换一个 IP（更强的修复）
 if not _retryable_promotion_transport(probe) or index >= len(candidates) - 1:
     break
 ```
@@ -1002,8 +1002,8 @@ if os.path.abspath(path) == os.path.abspath(DEFAULT_CONFIG_PATH):
 `gen_link.py` 位于 `sms_tool/paypal_link/`，但只上了一层目录：
 
 ```python
-SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))   # sms_tool/paypal_link
-PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)                  # sms_tool   ← 少一层
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))  # sms_tool/paypal_link
+PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)  # sms_tool   ← 少一层
 ```
 
 于是 `DEFAULT_CONFIG_PATH` = `sms_tool/config.json`：1294 B、8-16 修改、
@@ -1634,9 +1634,9 @@ formatter 装饰（时间戳/级别），前缀匹配全部失效 → 这些行�
 
 ```python
 if 200 <= status < 400:
-    logger.debug(line.strip())   # 健康阶段 → 只进日志
+    logger.debug(line.strip())  # 健康阶段 → 只进日志
     return
-print(line)                      # 异常阶段 → 让运维看见
+print(line)  # 异常阶段 → 让运维看见
 ```
 
 注释明写理由："Keep healthy stages on the debug log; print only when the stage did not

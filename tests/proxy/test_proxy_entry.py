@@ -465,3 +465,10 @@ def test_csharp_normalized_pool_entries_round_trip_through_proxy_entry():
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_mask_credentials_handles_both_bare_paste_orders():
+    from sms_tool.proxy.entry import _mask_credentials
+
+    assert _mask_credentials("host:8080:user:secret") == "host:8080:***:***"
+    assert _mask_credentials("user:secret:host:8080") == "***:***:host:8080"

@@ -125,6 +125,51 @@ def test_bare_proxy_credentials_without_url_scheme_are_redacted():
     assert "pw123" not in sanitize({"proxy": "user:pw123@host.example.com:8080"})["proxy"]
 
 
+def test_proxy_passwords_containing_an_at_sign_are_fully_redacted():
+    """``urlsplit`` splits the authority at the **last** ``@``; the masker must too.
+
+    Measured 2026-10-26: the URL rule stopped at the first ``@``, so
+    ``http://alice:p@ssmarker@host:2000`` was rendered as
+    ``http://[REDACTED]@ssmarker@host:2000`` — the tail of the password survived
+    in every log line and every desktop panel that loads this policy. The bare
+    ``user:pass@host:port`` rule had the mirror defect: it excluded ``@`` from the
+    password class, so a credential containing one matched nothing at all and was
+    printed in full. ``proxy/entry._mask_credentials`` had already been fixed for
+    the URL form; these are the two copies that see arbitrary log text.
+    """
+    tail = "ssmarker"
+
+    url = f"http://alice:p@{tail}@gate.example:2000"
+    assert tail not in sanitize_text(url)
+    assert sanitize_text(url) == "http://[REDACTED]@gate.example:2000"
+
+    socks = f"socks5h://alice:p@{tail}@gate.example:2000"
+    assert tail not in sanitize_text(socks)
+    assert sanitize_text(socks) == "socks5h://[REDACTED]@gate.example:2000"
+
+    bare = f"alice:p@{tail}@gate.example:2000"
+    assert tail not in sanitize_text(bare)
+    assert sanitize_text(bare) == "[REDACTED]@gate.example:2000"
+
+
+def test_the_proxy_url_rule_does_not_cross_a_path():
+    # The greedy authority class is ``[^/\s]*``, so a path (or a query carrying
+    # an ``@``) stops it: over-matching a URL into the next token would corrupt
+    # otherwise harmless text.
+    url = "http://gate.example:2000/path?next=a@b"
+    assert sanitize_text(url) == url
+
+
+def test_phone_proxy_text_redaction_splits_at_the_last_at_sign():
+    """``redact_proxy_text`` carries the same rule for arbitrary message text."""
+    from sms_tool.phone_proxy import redact_proxy_text
+
+    assert redact_proxy_text("connect http://alice:p@ssmarker@gate.example:2000 failed") == (
+        "connect http://***:***@gate.example:2000 failed"
+    )
+    assert "ssmarker" not in redact_proxy_text("socks5h://alice:p@ssmarker@gate.example:2000")
+
+
 def test_path_exemption_is_surgical_not_global():
     # `session_id` means two different things in this codebase. Inside
     # `proxy_affinity` it is the sticky ID that `_restore_session()` splices

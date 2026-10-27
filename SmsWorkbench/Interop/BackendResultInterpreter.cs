@@ -81,7 +81,8 @@ public static class BackendResultInterpreter
     public static bool HasAccountResults(BackendAccountResultKind resultKind)
     {
         return resultKind is BackendAccountResultKind.Liveness
-            or BackendAccountResultKind.Promotion;
+            or BackendAccountResultKind.Promotion
+            or BackendAccountResultKind.PaymentQualification;
     }
 
     /// <summary>Dialog / heading title for the per-account result dialog.</summary>
@@ -90,6 +91,7 @@ public static class BackendResultInterpreter
         return resultKind switch
         {
             BackendAccountResultKind.Promotion => Loc.T("账号优惠检测"),
+            BackendAccountResultKind.PaymentQualification => Loc.T("支付资格检测"),
             BackendAccountResultKind.Liveness => Loc.T("账号测活"),
             _ => throw new ArgumentOutOfRangeException(nameof(resultKind), resultKind, "Not an account result"),
         };
@@ -177,12 +179,88 @@ public static class BackendResultInterpreter
     }
 
     /// <summary>
+    /// The 支付资格 badge for one row. Python owns the display composition and
+    /// sends it as <c>payment_qualification_display</c>.
+    /// </summary>
+    private static string PaymentQualificationBadge(Dictionary<string, object> row)
+    {
+        // ``payment_qualification_display`` is the name the account payload uses;
+        // the batch result row carries the same text as ``payment_qualification``
+        // (kept for older consumers). Reading both means a row can never fall
+        // through to the liveness labeler, which is how the first version showed
+        // "测活失败 · checkout returned HTTP 400".
+        string display = BackendJson.GetString(row, "payment_qualification_display").Trim();
+        if (display.Length > 0) return display;
+        return BackendJson.GetString(row, "payment_qualification").Trim();
+    }
+
+    /// <summary>
+    /// True when the rows come from 支付资格检测. Those rows carry a
+    /// <c>payment_qualification_display</c> badge; the liveness rendering path
+    /// would otherwise relabel them as "AT有效 / HTTP 200".
+    /// </summary>
+    public static bool IsPaymentQualificationRows(IEnumerable<Dictionary<string, object>> rows)
+    {
+        if (rows == null) return false;
+        foreach (Dictionary<string, object> row in rows)
+        {
+            if (row != null && PaymentQualificationBadge(row).Length > 0)
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Summary line for 支付资格 rows: "answered" (eligible or ineligible) is a
+    /// successful check, so it is reported separately from AT-invalid and
+    /// transport failures.
+    /// </summary>
+    public static string PaymentQualificationSummary(IEnumerable<Dictionary<string, object>> rows)
+    {
+        int total = 0;
+        int answered = 0;
+        int eligible = 0;
+        int ineligible = 0;
+        int tokenInvalid = 0;
+        int failed = 0;
+        int persistFailed = 0;
+        if (rows != null)
+        {
+            foreach (Dictionary<string, object> row in rows)
+            {
+                if (row == null) continue;
+                total++;
+                string state = BackendJson.GetString(row, "payment_qualification_state").Trim().ToLowerInvariant();
+                if (state is "eligible" or "ineligible") answered++;
+                if (state == "eligible") eligible++;
+                else if (state == "ineligible") ineligible++;
+                else if (state == "auth_invalid") tokenInvalid++;
+                else failed++;
+                if (row.ContainsKey("persisted") && !BackendJson.GetBool(row, "persisted"))
+                    persistFailed++;
+            }
+        }
+        var text = new System.Text.StringBuilder();
+        text.Append(Loc.T("总数：")).Append(total)
+            .Append("    已判定：").Append(answered)
+            .Append("    可用：").Append(eligible)
+            .Append("    无可用：").Append(ineligible)
+            .Append("    AT失效：").Append(tokenInvalid)
+            .Append("    其他失败：").Append(failed);
+        if (persistFailed > 0)
+            text.Append("    保存失败：").Append(persistFailed);
+        return text.ToString();
+    }
+
+    /// <summary>
     /// Human-readable status for one result row. Promotion rows lead with their
     /// own badge; everything else keeps the probe/scan labelling.
     /// </summary>
     public static string ResultRowStatus(Dictionary<string, object> row)
     {
         if (row == null) return Loc.T("未知");
+        string qualification = PaymentQualificationBadge(row);
+        if (qualification.Length > 0) return qualification;
         string promotion = PromotionBadge(row);
         if (promotion.Length > 0) return promotion;
         if (BackendJson.TryGetMap(row, "probe", out var probe))

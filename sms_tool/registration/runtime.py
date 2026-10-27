@@ -114,8 +114,6 @@ class RegistrationAccount:
     auth_body: dict[str, Any] = field(default_factory=dict)
     access_token: str = ""
     oauth_result: dict[str, Any] = field(default_factory=dict)
-    oauth_tokens: dict[str, Any] = field(default_factory=dict)
-    phone_result: dict[str, Any] = field(default_factory=dict)
     oauth_refresh_token: str = ""
     id_token: str = ""
     at_probe: dict[str, Any] = field(default_factory=dict)
@@ -199,8 +197,6 @@ class RegistrationRuntimeState:
         auth_body: dict[str, Any]
         access_token: str
         oauth_result: dict[str, Any]
-        oauth_tokens: dict[str, Any]
-        phone_result: dict[str, Any]
         oauth_refresh_token: str
         id_token: str
         at_probe: dict[str, Any]

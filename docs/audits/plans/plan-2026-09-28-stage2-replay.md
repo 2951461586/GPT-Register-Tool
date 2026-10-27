@@ -67,11 +67,16 @@ extractor 的所有网络 I/O 都经过两个工厂，且**没有**任何 `reque
 
 ```python
 record = {
-  "method": method, "url": resp.url or url,
-  "request_headers": dict(session.headers), "request_cookies": dict(session.cookies),
-  "request_body": normalize_body(kwargs), "timeout": kwargs.get("timeout"),
-  "status": resp.status_code, "response_headers": dict(resp.headers),
-  "response_body": resp.text, "response_url": resp.url,
+    "method": method,
+    "url": resp.url or url,
+    "request_headers": dict(session.headers),
+    "request_cookies": dict(session.cookies),
+    "request_body": normalize_body(kwargs),
+    "timeout": kwargs.get("timeout"),
+    "status": resp.status_code,
+    "response_headers": dict(resp.headers),
+    "response_body": resp.text,
+    "response_url": resp.url,
 }
 ```
 
@@ -113,10 +118,10 @@ fingerprint = (method, canonical_url(url), canonical_body(body))
 ```python
 R = load_recording(scenario)
 S_head, H = run(HEAD_snapshot, ReplaySession(R))
-S_new,  N = run(refactored,   ReplaySession(R))
-assert normalize(S_head) == normalize(S_new)   # 请求流（method+url+body）
-assert H == N                                  # (redirect_url, qr_urls)
-assert logs_head == logs_new                   # 去时间戳
+S_new, N = run(refactored, ReplaySession(R))
+assert normalize(S_head) == normalize(S_new)  # 请求流（method+url+body）
+assert H == N  # (redirect_url, qr_urls)
+assert logs_head == logs_new  # 去时间戳
 assert proxy_state_bytes_head == proxy_state_bytes_new
 ```
 

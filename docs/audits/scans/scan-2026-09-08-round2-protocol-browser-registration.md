@@ -139,7 +139,7 @@ sms_tool/paypal_link/gen_link.py:674-680,997  infer_proxy_country(...) × 8     
 # Apply timezone to the context when geoip is disabled (bridged proxy). ...
 if timezone and not geoip:
     try:
-        self.context.timezone_id = timezone   # ← 问题在这
+        self.context.timezone_id = timezone  # ← 问题在这
     except Exception:
         pass
 ```
@@ -239,8 +239,9 @@ if driver in {"camoufox", "cloak", "playwright"}:
 
    ```python
    if proxy and (not webrtc_ip or "timezone_id" not in context_kwargs):
-       geo = await _resolve_proxy_geo(proxy)      # 打 ip-api.com，timeout=10
-       if not webrtc_ip: webrtc_ip = geo["ip"]
+       geo = await _resolve_proxy_geo(proxy)  # 打 ip-api.com，timeout=10
+       if not webrtc_ip:
+           webrtc_ip = geo["ip"]
    ```
    项目传进去的 `proxy` 是 bridge 的 `127.0.0.1`，探测注定失败 —— **10 秒 + 一次无谓网络往返，每个账号一次**。
 3. **WebRTC 无防护**：探测失败 → `webrtc_ip = None` → camoufox 不 spoof ICE 候选。走 bridge 时（即绝大多数场景）**本机/真实出口 IP 可能经 WebRTC 泄漏**。全仓 `grep -rn webrtc registration_drivers/` 无任何自有防护。
@@ -251,9 +252,9 @@ if driver in {"camoufox", "cloak", "playwright"}:
 
 ```python
 if timezone:
-    options["timezone_id"] = timezone          # 走 Camoufox 的 context_kwargs，不是事后赋值
-if measured_exit_ip:                            # orchestrator 已测到的出口 IP
-    options["webrtc_ip"] = measured_exit_ip    # 顺带让上面那次探测短路掉
+    options["timezone_id"] = timezone  # 走 Camoufox 的 context_kwargs，不是事后赋值
+if measured_exit_ip:  # orchestrator 已测到的出口 IP
+    options["webrtc_ip"] = measured_exit_ip  # 顺带让上面那次探测短路掉
 ```
 
 `measured_exit_ip` 来源现成：`orchestrator.py:195` 的 `detect_proxy_exit_geo()` 已返回 `geo_ip`，且已写进 `identity_context`（`orchestrator.py:526-538`）。
@@ -269,7 +270,7 @@ if measured_exit_ip:                            # orchestrator 已测到的出�
 kwargs = {
     "headers": headers,
     # Registration preflight validates that the configured profile is ...
-    "impersonate": AUTH_IMPERSONATE,     # auth_headers.py:16 → "firefox144"
+    "impersonate": AUTH_IMPERSONATE,  # auth_headers.py:16 → "firefox144"
 }
 ```
 
@@ -326,8 +327,8 @@ kwargs = {
 
 ```python
 # registration_handlers.py:499-507
-profile = pool.next(s.proxy)          # ← _with_geo 内部已算好 timezone/lang/lang_full
-set_auth_fingerprint(profile.name)    # ← 只用 .name，geo 全丢
+profile = pool.next(s.proxy)  # ← _with_geo 内部已算好 timezone/lang/lang_full
+set_auth_fingerprint(profile.name)  # ← 只用 .name，geo 全丢
 ```
 
 `fingerprint_pool._with_geo`（`:212-235`）：`need_timezone = hint not in _GEO_PROFILES`，而 `_GEO_PROFILES` 只有 8 国 → **非 8 国代理必然真发一次测量，测完丢弃**。
@@ -356,7 +357,7 @@ set_auth_fingerprint(profile.name)    # ← 只用 .name，geo 全丢
 # otp_strategy.py:119-127
 provider = str(getattr(mailbox, "provider", "") or "").strip().lower()
 if provider != "remail" or resend_callback is None:
-    return poll_otp_fn(...)     # ← 单次轮询，无两段式、无 resend
+    return poll_otp_fn(...)  # ← 单次轮询，无两段式、无 resend
 ```
 
 `resend_after_seconds` / `resend_callback` 对 gmail / imap / icloud / smailr **全是死参数**。
@@ -376,9 +377,9 @@ if provider != "remail" or resend_callback is None:
 
 ```python
 # proxy_bridge.py:366-378
-r, w = await asyncio.open_connection(upstream.host, port)   # 无 timeout
+r, w = await asyncio.open_connection(upstream.host, port)  # 无 timeout
 ...
-status_line = await r.readline()                            # 无 wait_for
+status_line = await r.readline()  # 无 wait_for
 ```
 
 `self.connect_timeout`（默认 10s）**只作用于 SOCKS 分支**（`:310-312, 349-358`）。上游 HTTP 代理僵死 → 协程永久挂住，句柄累积。

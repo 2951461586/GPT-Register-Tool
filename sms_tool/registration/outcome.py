@@ -169,25 +169,6 @@ def _probe_status(probe: Mapping[str, Any]) -> str:
     return str(probe.get("status") or "").strip()
 
 
-def _registration_requires_refresh_token(runtime_cfg=None):
-    """协议注册链路是否要求最终产出的 session 必须包含 refresh_token。"""
-    source = runtime_cfg if isinstance(runtime_cfg, Mapping) else CFG
-    value = source.get("codex_oauth")
-    _raw_cfg: object = value
-    cfg: Mapping = _raw_cfg if isinstance(_raw_cfg, Mapping) else {}
-    return bool(cfg.get("require_registration_refresh_token", True))
-
-
-def _registration_requires_phone_verification(phone_pool=None, runtime_cfg=None):
-    """协议注册链路是否要求手机二次校验（默认：有 phone_pool 则开启）。"""
-    source = runtime_cfg if isinstance(runtime_cfg, Mapping) else CFG
-    value = source.get("codex_oauth")
-    _raw_cfg: object = value
-    cfg: Mapping = _raw_cfg if isinstance(_raw_cfg, Mapping) else {}
-    default = bool(phone_pool)
-    return bool(cfg.get("require_registration_phone_verification", default))
-
-
 def _mailbox_snapshot(mailbox):
     if not mailbox:
         return {}

@@ -37,6 +37,10 @@ namespace SmsWorkbench
                 || status.Contains("异常") || status.Contains("无RT") || status.Contains("缺失")
                 || status.Contains("未获取") || status.Contains("K12未切换") || status.Contains("K12已退出")
                 || status.Contains("Failed", StringComparison.OrdinalIgnoreCase)
+                // "Network failure" / "Mailbox failure": the probe-failure statuses
+                // are translated with "failure", not "Failed", so without this the
+                // English badge went neutral while the Chinese one was danger.
+                || status.Contains("failure", StringComparison.OrdinalIgnoreCase)
                 || status.Contains("Invalid", StringComparison.OrdinalIgnoreCase)
                 || status.Contains("Dropped", StringComparison.OrdinalIgnoreCase)
                 || status.Contains("Missing", StringComparison.OrdinalIgnoreCase)

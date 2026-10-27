@@ -2,6 +2,8 @@
 // PaymentBatchService.cs for why the project-wide switch stays `annotations`.
 #nullable enable
 
+using SmsWorkbench.Localization;
+
 namespace SmsWorkbench
 {
     /// <summary>
@@ -49,10 +51,15 @@ namespace SmsWorkbench
         public static bool HasRegisteredAccountState(PoolRow row)
         {
             string status = row.Status ?? "";
-            return status.Contains("已注册")
-                || status.Contains("PayPal")
-                || status.Contains("支付完成")
-                || status.Contains("已导入");
+            // ``Loc.DisplayContains``, not ``status.Contains("已注册")``: the row's
+            // text is rendered through ``Loc.T``, so comparing the Chinese
+            // literal made this predicate return false for every row once the
+            // UI language was English -- and the caller then offered an
+            // already-registered mailbox for registration again.
+            return Loc.DisplayContains(status, "已注册")
+                || Loc.DisplayContains(status, "支付完成")
+                || Loc.DisplayContains(status, "已导入")
+                || status.Contains("PayPal", StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>

@@ -88,7 +88,7 @@ sms_tool/geo/
 
 ```python
 for browser_name, browser_cfg in AUTH_FINGERPRINT_PROFILES.items():
-    if browser_name not in supported:   # supported = curl_cffi BrowserType
+    if browser_name not in supported:  # supported = curl_cffi BrowserType
         continue
 ```
 
@@ -138,13 +138,13 @@ _FAMILY_WEIGHTS = {"chrome": 35, "firefox": 20, "safari_macos": 30, "safari_ios"
 test_host = "connectivity-check.gstatic.com"
 test_port = 80
 # :558 / :568
-upstream.fail_count = 0          # 成功即清零
-if upstream.fail_count >= 1:     # 单次失败即判死
+upstream.fail_count = 0  # 成功即清零
+if upstream.fail_count >= 1:  # 单次失败即判死
     upstream.healthy = False
 # :398-403  fail-open
 if not healthy:
     for upstream in self._upstreams:
-        upstream.healthy = True   # 全量复活，一刀切
+        upstream.healthy = True  # 全量复活，一刀切
 ```
 
 **三个问题**
@@ -183,9 +183,9 @@ if not healthy:
 # :285-292
 using_bridge = needs_bridge(raw_proxy)
 browser_proxy, closer = proxy_for_browser(raw_proxy)
-geoip = configured_geoip and not using_bridge     # bridge 场景强制关 geoip
+geoip = configured_geoip and not using_bridge  # bridge 场景强制关 geoip
 # :320-321
-locale   = configured_locale or ("" if geoip else self.locale)      # 全局 en-US
+locale = configured_locale or ("" if geoip else self.locale)  # 全局 en-US
 timezone = configured_timezone or ("" if geoip else self.timezone_id)  # America/New_York
 ```
 
@@ -209,7 +209,7 @@ locale, timezone_id = decisions.aligned_locale_timezone(_browser_profile, locale
 
 ```python
 # geoip=False 时，优先用调用方（指纹池）给的对齐值，其次才是全局默认
-locale   = configured_locale or ("" if geoip else (self.locale or ""))
+locale = configured_locale or ("" if geoip else (self.locale or ""))
 # 且 self.locale 应由 orchestrator 注入对齐后的值
 ```
 

@@ -79,6 +79,21 @@ def _registration_proxy_candidates(proxy_pool, fallback=None):
 
 def select_registration_proxy_pool(proxy_pool, fallback=None):
     candidates = _registration_proxy_candidates(proxy_pool, fallback)
+    # Opt-in dynamic generation: rotate a provider session, screen it and require
+    # the configured ASN before the batch uses it. Off by default; a generation
+    # failure falls back to the static pool instead of consuming mailboxes.
+    try:
+        from .proxy.dynamic import DynamicProxyFactory
+
+        factory = DynamicProxyFactory.from_config(CFG)
+        if factory is not None:
+            generated = factory.generate(count=len(candidates) or None)
+            if generated:
+                safe_print(f"[*] Dynamic proxy generation: {len(generated)} screened exit(s)")
+                return RegistrationProxyPool(generated)
+            safe_print("[!] Dynamic proxy generation produced no eligible exit; using the static pool")
+    except Exception as exc:
+        safe_print(f"[!] Dynamic proxy generation unavailable ({type(exc).__name__}); using the static pool")
     if len(candidates) <= 1:
         return RegistrationProxyPool(candidates)
 
@@ -107,6 +122,17 @@ def select_registration_proxy_pool(proxy_pool, fallback=None):
                 actual_countries[base] = actual
     ranked = tracker.rank(healthy or candidates)
     selected = _interleave_proxy_endpoints(ranked)
+    # Opt-in ASN round-robin (proxy.asn_allocation.enabled, default off). It only
+    # reorders what the health ranking already produced and passes the list
+    # through untouched when no ASN was measured, so an existing pool's
+    # behaviour is unchanged until an operator turns the ledger on.
+    #
+    # Imported here, not at module scope: ``scripts/import_layer_ratchet.py``
+    # freezes the root -> proxy edge count and this module already carries the
+    # health tracker's edge.
+    from .proxy.asn_registry import order_candidates
+
+    selected = order_candidates(selected, config=CFG)
     return RegistrationProxyPool(
         selected,
         actual_countries={base: actual_countries[base] for base in selected if base in actual_countries},
@@ -116,6 +142,36 @@ def select_registration_proxy_pool(proxy_pool, fallback=None):
 def select_registration_proxy_base(proxy_pool, fallback=None):
     candidates = select_registration_proxy_pool(proxy_pool, fallback)
     return candidates[0] if candidates else str(fallback or "").strip()
+
+
+def _record_attempt_proxy_outcome(
+    worker_proxy: str | None,
+    result: dict[str, Any],
+    failure_class: str,
+    proxy_attributed: bool,
+) -> None:
+    """Record one attempt against the egress health journal and the ASN ledger.
+
+    Only transport failures are evidence about the selected proxy.
+    Internal/configuration/account/mailbox failures must not poison the shared
+    proxy-health journal (or the ASN hit rate, which uses the same attribution
+    rule). Extracted from the attempt body so the batch function does not grow
+    an extra branch per bookkeeping destination.
+    """
+    success = bool(result.get("success"))
+    if not worker_proxy or not (success or proxy_attributed):
+        return
+    from .proxy.asn_registry import record_registration_outcome
+
+    tracker = ProxyHealthTracker(CFG)
+    tracker.record(
+        worker_proxy,
+        ok=success,
+        error=str(result.get("error") or failure_class or "")[:120],
+    )
+    # No-op when no geo probe ever measured this exit (cached_asn_of reads the
+    # shared geo cache only).
+    record_registration_outcome(worker_proxy, ok=success, config=CFG)
 
 
 def _registration_proxy_metadata(
@@ -799,13 +855,7 @@ def run_batch_impl(
                 failure_class = classify_error(result)
                 result["failure_class"] = failure_class
             proxy_attributed = bool(result.get("proxy_attributed")) or failure_class == "network"
-            if worker_proxy and (bool(result.get("success")) or proxy_attributed):
-                tracker = ProxyHealthTracker(CFG)
-                tracker.record(
-                    worker_proxy,
-                    ok=bool(result.get("success")),
-                    error=str(result.get("error") or failure_class or "")[:120],
-                )
+            _record_attempt_proxy_outcome(worker_proxy, result, failure_class, proxy_attributed)
             result["registration_attempts"] = attempt
             result["proxy_rotation_count"] = account_rotation_generation
             result["proxy_session_refresh_count"] = attempt

@@ -146,6 +146,14 @@ namespace SmsWorkbench
 
         private ProcessStartInfo CreateStartInfo(BackendCommand command)
         {
+            // Proxy routes never enter argv: a residential proxy URL carries
+            // user:pass, and every same-user process can read another process's
+            // command line on Windows. The transport swap happens here because
+            // this is the only place argv becomes a process.
+            ProxyArgumentTransport.Split routed = ProxyArgumentTransport.Extract(
+                command.Arguments,
+                command.EnvironmentVariables);
+
             var startInfo = new ProcessStartInfo
             {
                 FileName = PythonExecutable,
@@ -158,10 +166,10 @@ namespace SmsWorkbench
                 StandardErrorEncoding = Encoding.UTF8
             };
             startInfo.ArgumentList.Add(_paths.BackendScriptPath);
-            foreach (string argument in command.Arguments)
+            foreach (string argument in routed.Arguments)
                 startInfo.ArgumentList.Add(argument ?? "");
             startInfo.Environment[ApplicationPaths.ConfigDirectoryEnvironmentVariable] = _paths.ConfigDirectory;
-            foreach (KeyValuePair<string, string> variable in command.EnvironmentVariables)
+            foreach (KeyValuePair<string, string> variable in routed.Environment)
                 startInfo.Environment[variable.Key] = variable.Value ?? "";
             return startInfo;
         }

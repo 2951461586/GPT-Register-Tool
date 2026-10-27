@@ -5,6 +5,19 @@ import argparse
 from ..registration_drivers.base import driver_choices
 from ..sms_providers import available_provider_keys
 
+#: Read-only desktop projections. Kept beside the parser instead of inline so
+#: the frozen function-length ratchet does not grow every time a new read op
+#: lands (``fs_guard`` counts lines, and a 7-item list is 9 lines).
+DESKTOP_READ_CHOICES = (
+    "accounts",
+    "account",
+    "mailbox-file",
+    "account-file",
+    "payment-url-file",
+    "mailbox-pool",
+    "proxy-pool",
+)
+
 
 def register(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--desktop-ipc", action="store_true", help=argparse.SUPPRESS)
@@ -27,7 +40,7 @@ def register(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "--desktop-read",
-        choices=["accounts", "account", "mailbox-file", "account-file", "payment-url-file", "mailbox-pool"],
+        choices=list(DESKTOP_READ_CHOICES),
         default=None,
         help=argparse.SUPPRESS,
     )

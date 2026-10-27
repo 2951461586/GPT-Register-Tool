@@ -81,7 +81,9 @@ def test_example_config_documents_fingerprint_pool():
     # The shipped default must be the pool's own no-op behaviour, not an
     # accidental restriction: no country filter, random selection.
     assert fp_cfg["mode"] == "random"
-    assert fp_cfg["verify_hint"] is False
+    # Measured exit beats a credential hint by default (2026-10-27); an operator
+    # who trusts the provider's region token can set it false explicitly.
+    assert fp_cfg["verify_hint"] is True
     assert fp_cfg["allowed_countries"] == []
     validate_config(example)
 

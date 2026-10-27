@@ -24,11 +24,15 @@
 ### 关于第 1 条的实测（本轮唯一动用运行时验证的结论）
 
 ```python
-cv = contextvars.ContextVar('x', default=None)
+cv = contextvars.ContextVar("x", default=None)
+
+
 def task(i):
-    prev = cv.get()      # 读上一个任务残留
+    prev = cv.get()  # 读上一个任务残留
     cv.set(i)
     return (i, prev)
+
+
 # 单 worker: [(0, None), (1, 0), (2, 1), (3, 2)]
 # 双 worker: [(0, None), (1, 0), (2, 1), (3, 2)]   ← 两个 worker 也残留
 ```

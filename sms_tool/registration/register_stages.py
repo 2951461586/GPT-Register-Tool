@@ -161,9 +161,9 @@ def abort_user_register_failure(workflow) -> None:
         # ✅ 2026-09-16 收尾（老板拍板）：该标志 ``resume_email_verification``
         # **已整体删除** —— 状态字段、两处读点、以及 ``_email_otp_send_url``
         # 里那个回落分支和它唯一的消费者 ``auth_base`` 参数。此前它挂在
-        # ``READ_BUT_NEVER_WRITTEN`` 里「待拍板」，现在白名单只剩
-        # ``phone_result`` 一条。要复活它，先推翻 ``account_creation``
-        # 那句「缺 ``continue_url`` 必须报错，不许猜端点」。
+        # ``READ_BUT_NEVER_WRITTEN`` 里「待拍板」；该白名单现在已清空。
+        # 要复活它，先推翻 ``account_creation`` 那句「缺 ``continue_url``
+        # 必须报错，不许猜端点」。
         #
         # ``err_code`` 在这里**必然**等于 ``"invalid_auth_step"``（上面那个
         # ``if`` 的条件），所以不要写成 ``err_code or f"http_{...}"`` ——

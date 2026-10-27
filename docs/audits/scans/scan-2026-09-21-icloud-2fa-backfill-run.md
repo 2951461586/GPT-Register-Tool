@@ -64,10 +64,13 @@ for endpoint, method in (
     ("/api/accounts/email-otp/resend", "post"),
 ):
     response = request_with_retry(
-        session, method, _absolute_url(auth_base, endpoint),
+        session,
+        method,
+        _absolute_url(auth_base, endpoint),
         label=f"Existing account OTP send {endpoint}",
         **({} if method == "get" else {"json": {}}),
-        headers=headers, impersonate=auth_impersonate(),
+        headers=headers,
+        impersonate=auth_impersonate(),
     )
 ```
 
@@ -432,12 +435,12 @@ rows.sort(key=lambda a: (not str(a.get("access_token") or "").strip(), a["email"
 
 ```python
 TERMINAL_ERROR_MARKERS = (
-    "mailbox_auth_invalid",              # 应用专用密码失效
-    "mailbox_endpoint_unavailable",      # 收件端点 404
-    "has been deleted or deactivated",   # OpenAI 侧账号已删/停用
+    "mailbox_auth_invalid",  # 应用专用密码失效
+    "mailbox_endpoint_unavailable",  # 收件端点 404
+    "has been deleted or deactivated",  # OpenAI 侧账号已删/停用
     "existing_login_password_required",  # 需要密码但我们没存（实测两例列与 JSON 都空）
-    "existing_login_no_password_step",   # passwordless 但落到注册 profile 步，拿不到会话
-    "existing_login_totp_secret_missing",# 已开 2FA 但 secret 未知
+    "existing_login_no_password_step",  # passwordless 但落到注册 profile 步，拿不到会话
+    "existing_login_totp_secret_missing",  # 已开 2FA 但 secret 未知
 )
 ```
 
@@ -514,8 +517,10 @@ rola 池 05:18 起**永久失效**（10/10 sid 407），旧凭据 3.5 小时后�
 
 ```python
 operation_proxy_candidates(
-    account, operation="liveness", config=CFG,
-    explicit=explicit_proxy or None,      # explicit 排在候选列表【第一位】
+    account,
+    operation="liveness",
+    config=CFG,
+    explicit=explicit_proxy or None,  # explicit 排在候选列表【第一位】
 )
 ```
 

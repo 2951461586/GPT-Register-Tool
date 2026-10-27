@@ -30,6 +30,11 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, TYPE_CHECKING
 
+# ``entry`` is stdlib-only and imports nothing from this package, so the
+# single-authority parser/masker can be imported eagerly: a function-level
+# import here would be one more edge for the delayed-import ratchet to carry.
+from .entry import _mask_credentials, parse_proxy
+
 if TYPE_CHECKING:
     from .health import ProxyHealthTracker
 
@@ -62,7 +67,38 @@ HTTP_UPSTREAM_SCHEMES = ("http", "https")
 SOCKS5_UPSTREAM_SCHEMES = ("socks5", "socks5h")
 UPSTREAM_SCHEMES = SOCKS5_UPSTREAM_SCHEMES + HTTP_UPSTREAM_SCHEMES
 
+
+# ──────────────────── Credential-safe display ────────────────────
+
+
+def _redact_label(value: str) -> str:
+    """Mask any inline credentials in a human-facing upstream label.
+
+    ``from_url`` defaults the label to the caller's raw URL, and a residential
+    provider hands out ``scheme://user:pass@host:port``. That label is printed
+    by the health/relay logs, returned by :meth:`UpstreamProxy.to_dict` and
+    served verbatim by the HTTP stats endpoint -- so keeping the raw URL there
+    published the password to every one of those sinks. Measured 2026-10-25: a
+    pool entry written in URL form produced a label carrying the password in
+    full, and that label reached ``/stats`` and the log sinks unchanged.
+
+    The masking rules are the single-authority ones from ``proxy.entry``
+    (``_mask_credentials``); re-implementing the regexes here is how the two
+    drift apart. Called at construction *and* at serialisation so an explicit
+    label that carries a URL is masked too.
+    """
+    text = str(value or "")
+    if not text:
+        return ""
+    return _mask_credentials(text)
+
+
 # ──────────────────── Data classes ────────────────────
+
+
+#: One dialled route: ``(scheme, host, port, username, password)``.
+#: Used as the failover exclusion key -- see ``UpstreamProxy.identity``.
+UpstreamIdentity = tuple[str, str, int, str, str]
 
 
 @dataclass
@@ -86,6 +122,25 @@ class UpstreamProxy:
     @property
     def addr(self) -> str:
         return f"{self.host}:{self.port}"
+
+    @property
+    def identity(self) -> UpstreamIdentity:
+        """Exclusion key for the failover loop — the whole dialled route.
+
+        Deliberately **not** ``addr``. A rotating provider exposes many sticky
+        sessions through one ``host:port``: the live registration pool is ten
+        lajiao ``region-VN`` entries on ``us.lajiaohttp.net:2000`` that differ
+        only in the sid suffix. Excluding by address therefore made the *first*
+        failed session exclude all ten, so ``_pick_upstream`` returned ``None``
+        on the first retry and the pool refused the connection instead of
+        moving to the next sid. Measured 2026-10-26: with that pool shape the
+        retry loop tried exactly one upstream.
+
+        The password is part of the key because two sessions on one account
+        can differ only in the Kookeey-style ``BASE-CC-SESSION-TTL`` password.
+        The tuple is process-local and never printed.
+        """
+        return (self.scheme, self.host.lower(), self.port, self.username, self.password)
 
     @property
     def proxy_url(self) -> str:
@@ -117,28 +172,37 @@ class UpstreamProxy:
         ``127.0.0.1:1080`` upstream, which is exactly the failure a pool
         server must refuse loudly instead of serving.
         """
-        from .entry import parse_proxy
-
         entry = parse_proxy(url, default_scheme="socks5")
         if entry is None:
-            raise ValueError(f"unparseable proxy url: {url!r}")
+            # The raw URL is part of the message, and the caller logs it
+            # (``start_proxy_pool`` does), so it is masked here as well.
+            raise ValueError(f"unparseable proxy url: {_redact_label(url)!r}")
         if not label:
             # Keep the legacy label convention: URL form -> raw URL;
-            # bare 4-segment form -> user@host:port.
+            # bare 4-segment form -> user@host:port. Both are masked before
+            # they can reach a log line or the stats payload.
             label = url if "://" in url else f"{entry.username}@{entry.host}:{entry.port}"
         return cls(
             host=entry.host,
             port=entry.port,
             username=entry.username,
             password=entry.password,
-            label=label,
+            label=_redact_label(label),
             priority=priority,
             scheme=entry.scheme or "socks5",
         )
 
+    def __repr__(self) -> str:  # dataclass repr would print the password
+        return (
+            f"UpstreamProxy(label={self.label!r}, addr={self.addr!r}, scheme={self.scheme!r}, "
+            f"priority={self.priority}, healthy={self.healthy})"
+        )
+
     def to_dict(self) -> dict[str, Any]:
         return {
-            "label": self.label,
+            # Serialisation is a second gate on purpose: an UpstreamProxy built
+            # directly (tests, a future loader) never went through ``from_url``.
+            "label": _redact_label(self.label),
             "addr": self.addr,
             "scheme": self.scheme,
             "priority": self.priority,
@@ -349,6 +413,7 @@ class Socks5Server:
         listen_port: int = 18080,
         upstreams: list[UpstreamProxy] | None = None,
         stats_port: int = 18081,
+        stats_host: str = "",
         health_check_interval: float = 30.0,
         health_check_timeout: float = 5.0,
         connect_timeout: float = 10.0,
@@ -365,6 +430,12 @@ class Socks5Server:
         self._listen_port = listen_port
         self._upstreams: list[UpstreamProxy] = upstreams or []
         self._stats_port = stats_port
+        # The stats endpoint is read-only but still operator-facing inventory
+        # (every upstream address and its health), so it does not follow
+        # ``listen_host``: binding the SOCKS5 listener to 0.0.0.0 used to drag
+        # ``/stats`` along with it and publish the pool to the LAN. Loopback
+        # unless the operator names a different host explicitly.
+        self._stats_host = str(stats_host or "").strip()
         self._health_check_interval = health_check_interval
         self._health_check_timeout = health_check_timeout
         # P0-3: the health probe used to hit connectivity-check.gstatic.com, which
@@ -420,6 +491,15 @@ class Socks5Server:
 
     # ── lifecycle ──
 
+    def _stats_bind_host(self) -> str:
+        """Host the HTTP stats endpoint binds to (loopback unless overridden).
+
+        Small on purpose: it is the single expression the lifecycle and the
+        tests both read, so "the stats endpoint does not follow ``--host``" is
+        a property of this method rather than of a line buried in ``start``.
+        """
+        return self._stats_host or "127.0.0.1"
+
     async def run(self) -> None:
         await self.start()
         try:
@@ -444,8 +524,17 @@ class Socks5Server:
                 )
 
         if self._stats_port > 0:
-            self._stats_server = await asyncio.start_server(self._on_stats, self._listen_host, self._stats_port)
-            logger.info("Stats endpoint on %s:%d", self._listen_host, self._stats_port)
+            stats_host = self._stats_bind_host()
+            self._stats_server = await asyncio.start_server(self._on_stats, stats_host, self._stats_port)
+            logger.info("Stats endpoint on %s:%d", stats_host, self._stats_port)
+            if not _is_loopback(stats_host):
+                logger.warning(
+                    "stats endpoint is bound to non-loopback %s and has no authentication; "
+                    "anyone who can reach %s:%d can read the upstream inventory",
+                    stats_host,
+                    stats_host,
+                    self._stats_port,
+                )
 
         if self._upstreams:
             self._health_task = asyncio.create_task(self._health_check_loop())
@@ -541,7 +630,11 @@ class Socks5Server:
             return
 
         # Phase 3: pick upstream and connect (with retry across upstreams)
-        tried: set[str] = set()
+        # ``tried`` holds upstream *identities*, not addresses: a provider pool
+        # usually holds several sticky sessions on one host:port, and excluding
+        # by address would collapse them into a single attempt (see
+        # ``UpstreamProxy.identity``).
+        tried: set[UpstreamIdentity] = set()
         up_r = up_w = None
         upstream = None
         max_attempts = len(self._upstreams) + 1
@@ -565,7 +658,7 @@ class Socks5Server:
                 await self._apply_health_async(upstream, False, error=str(exc)[:120])
                 upstream.total_connections += 1
                 self._stats.total_errors += 1
-                tried.add(upstream.addr)
+                tried.add(upstream.identity)
                 # A failed sticky binding is stale: drop it so the retry (and the
                 # next connection with this session name) re-binds instead of
                 # retrying the same dead exit.
@@ -691,7 +784,7 @@ class Socks5Server:
 
     def _pick_upstream(
         self,
-        exclude: set[str] | None = None,
+        exclude: set[UpstreamIdentity] | None = None,
         sticky_key: str = "",
     ) -> UpstreamProxy | None:
         if not self._upstreams:
@@ -703,7 +796,7 @@ class Socks5Server:
             bound = self._sticky_sessions.get(sticky_key)
             if bound is not None:
                 upstream, expires = bound
-                if expires > now and upstream.healthy and upstream.addr not in exclude:
+                if expires > now and upstream.healthy and upstream.identity not in exclude:
                     # Sliding TTL: keep the account pinned while it is active.
                     self._sticky_sessions[sticky_key] = (upstream, now + self._sticky_session_ttl)
                     return upstream
@@ -711,7 +804,7 @@ class Socks5Server:
                 # binding is stale, so drop it and re-pick below.
                 self._sticky_sessions.pop(sticky_key, None)
         selected: UpstreamProxy | None = None
-        healthy = [u for u in self._upstreams if u.healthy and u.addr not in exclude]
+        healthy = [u for u in self._upstreams if u.healthy and u.identity not in exclude]
         if healthy:
             # priority-based selection: pick from the lowest priority number tier,
             # round-robin within that tier.
@@ -727,7 +820,7 @@ class Socks5Server:
             # ties -- so a recovery is discovered incrementally rather than by
             # mass-resurrecting.
             candidates = sorted(
-                (u for u in self._upstreams if u.addr not in exclude),
+                (u for u in self._upstreams if u.identity not in exclude),
                 key=lambda u: (u.fail_count, u.priority),
             )
             if candidates:

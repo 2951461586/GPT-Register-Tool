@@ -117,10 +117,10 @@ The HTML email-verification page is only a generic shell.  The
 ``continue_url`` for the password form; navigating to
 ``/log-in/password`` without that state returns HTTP 400.
 """
+
 response = self.session.post(
     OPENAI_API_ENDPOINTS["signup"],
-    json={"username": {"value": email, "kind": "email"},
-          "screen_hint": "login"},          # ← 我们两条泳道都没有这个字段
+    json={"username": {"value": email, "kind": "email"}, "screen_hint": "login"},  # ← 我们两条泳道都没有这个字段
     headers=headers,
 )
 ```
@@ -145,7 +145,7 @@ abai 的 `login()` 流程（`:1597`）**无条件**先调 `_submit_login_email` 
 ### 差距 3：abai 的 fallback target 不为空
 
 ```python
-target = str(continue_url or "/log-in/password").strip()   # abai:1195
+target = str(continue_url or "/log-in/password").strip()  # abai:1195
 ```
 abai 在 `continue_url` 为空时**默认打 `/log-in/password`**，我们直接放弃。
 （注：abai 的这个 fallback 实际很少生效，因为差距 1 保证它总有 state。）

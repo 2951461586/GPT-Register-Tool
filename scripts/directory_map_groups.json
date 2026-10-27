@@ -32,7 +32,8 @@
       "sms_tool/commands/email_change.py",
       "sms_tool/commands/mailbox_ops.py",
       "sms_tool/commands/one_click.py",
-      "sms_tool/commands/omakse.py"
+      "sms_tool/commands/omakse.py",
+      "sms_tool/commands/proxy_admin.py"
     ],
     "Mailbox and phone inventory": [
       "sms_tool/providers/mailbox_*.py",

@@ -25,6 +25,35 @@ def register(parser: argparse.ArgumentParser) -> None:
         help="Probe accounts/check plan and Plus-trial/discount (优惠) eligibility and persist promotion_status",
     )
     parser.add_argument(
+        "--check-payment-qualification",
+        action="store_true",
+        help="Probe each account's zero-due checkout capability (支付资格) and persist payment_qualification",
+    )
+    parser.add_argument(
+        "--payment-qualification-method",
+        default="",
+        help=(
+            "Payment method(s) for --check-payment-qualification: 'auto' (methods for the exit country, "
+            "default) or a comma list such as 'gcash,momo'"
+        ),
+    )
+    parser.add_argument(
+        "--payment-qualification-country",
+        default="",
+        help=(
+            "Force the ISO country used as billing/request country (default: measure the exit, "
+            "then fall back to the account's registration_country)"
+        ),
+    )
+    parser.add_argument(
+        "--payment-qualification-all-methods",
+        action="store_true",
+        help=(
+            "Probe every candidate method instead of stopping at the first eligible one. "
+            "Each candidate is its own Checkout create, so this is a diagnostic mode."
+        ),
+    )
+    parser.add_argument(
         "--check-promotion-after-registration",
         action="store_true",
         help="After registration, probe saved successful accounts for Plus trial/discount eligibility",

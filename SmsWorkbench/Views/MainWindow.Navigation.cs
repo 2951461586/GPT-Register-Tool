@@ -21,6 +21,9 @@ namespace SmsWorkbench
             ["sms"] = OneClickSms,
             ["scan"] = OneClickScan,
             ["promotion"] = CheckPromotion,
+            // 支付资格 (2026-10-26): batch checkout-capability probe. Keyed on the
+            // badge's stable machine state (sms_tool/payment/qualification_states.py).
+            ["paymentqualification"] = CheckPaymentQualification,
             ["paylink"] = OpenPayPalLink,
             ["batchpay"] = BatchProtocolPayment,
             ["importmail"] = ImportChataiMailbox,
@@ -30,6 +33,7 @@ namespace SmsWorkbench
             ["export"] = ExportAccounts,
             ["delete"] = DeleteSelected,
             ["refresh"] = RefreshPools,
+            ["proxypool"] = ShowProxyPool,
             ["settings"] = ShowConfigDialog,
             ["theme"] = ToggleTheme,
             ["language"] = ToggleLanguage,
@@ -39,6 +43,27 @@ namespace SmsWorkbench
         private void OnNavigate(string? key)
         {
             if (key != null && NavActions.TryGetValue(key, out Action? action)) action();
+        }
+
+        /// <summary>
+        /// Sidebar entry point for the read-only proxy-pool admin window.
+        /// <para>
+        /// Only one backend task may run at a time (the coordinator enforces it),
+        /// and every command in that window is a backend run. Refuse to open it
+        /// while a batch is live instead of letting "加载配置池" fail with
+        /// <see cref="BackendTaskAlreadyRunningException"/>.
+        /// </para>
+        /// </summary>
+        private void ShowProxyPool()
+        {
+            if (backendTasks.IsRunning)
+            {
+                ShowThemedInfoDialog(Loc.T("代理池管理"), Loc.T("已有批次正在运行，请先取消或等待完成。"));
+                return;
+            }
+
+            proxyPoolDialogs.ShowDialog(this);
+            RefreshPools();
         }
 
         // NOTE (2026-09-02): a "refresh session for one account" handler used to

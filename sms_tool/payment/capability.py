@@ -932,6 +932,6 @@ def _amount_from_init(init: Mapping[str, Any]) -> dict[str, Any]:
 
 def _safe_error(exc: BaseException) -> str:
     text = str(exc or type(exc).__name__)
-    text = re.sub(r"(?i)(https?://)[^/@\s]+:[^/@\s]+@", r"\1***:***@", text)
+    text = re.sub(r"(?i)((?:https?|socks5h?|socks4a?)://)[^/@\s]+:[^/@\s]+@", r"\1***:***@", text)
     text = re.sub(r"(?i)bearer\s+[A-Za-z0-9._~+/-]+", "Bearer [REDACTED]", text)
     return text[:500]

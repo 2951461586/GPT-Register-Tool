@@ -211,6 +211,11 @@ def _record_payload(record: dict[str, Any], *, include_session: bool = True) -> 
                 result["promotion_state"] = promotion_state
             if promotion_status:
                 result["promotion_display"] = promotion_status
+            qualification, qualification_state = _payment_qualification_presentation(session)
+            if qualification:
+                result["payment_qualification_display"] = qualification
+            if qualification_state:
+                result["payment_qualification_state"] = qualification_state
             result["imported_status"] = _imported_status(session)
             result["paypal_amount"] = _paypal_amount(session)
             if include_session:
@@ -237,6 +242,23 @@ def _promotion_presentation(session: dict[str, Any]) -> tuple[str, str]:
     state = str(session.get("promotion_state") or promotion.get("state") or "").strip()
     status = status.split("｜可支付:", 1)[0].strip()
     return status, state
+
+
+def _payment_qualification_presentation(session: dict[str, Any]) -> tuple[str, str]:
+    """Return the 支付资格 badge and its machine state.
+
+    The persisted shape is ``payment_qualification: {status, state, ...}`` (see
+    ``store/markers.mark_payment_qualification_status``); the payload exposes
+    the label as ``payment_qualification_display`` so it cannot be confused with
+    that session block. A pre-2026-10-26 record has no block at all and yields
+    two empty strings, which the grid renders as a blank cell.
+    """
+    _raw: object = session.get("payment_qualification")
+    qualification = _raw if isinstance(_raw, dict) else {}
+    return (
+        str(qualification.get("status") or "").strip(),
+        str(qualification.get("state") or "").strip(),
+    )
 
 
 # raw_json strings repeat verbatim between refreshes; sanitize is deterministic
@@ -290,7 +312,15 @@ def _parsed_session(raw_json: str) -> Any:
     key = _session_cache_key(raw_json)
     cached = _cache_lookup(_SESSION_PARSE_CACHE, _SESSION_PARSE_LOCK, key)
     if cached is _MISS:
-        cached = json.loads(raw_json)
+        # Tolerated locally rather than left to the caller's ``except``: the
+        # cache must not be skipped on a malformed session (it would re-parse
+        # the same garbage on every refresh), and "no session" is the same
+        # outcome the caller already produces. ``raw_json`` comes from SQLite,
+        # so a truncated blob is a real (if rare) possibility.
+        try:
+            cached = json.loads(raw_json)
+        except (TypeError, ValueError):
+            cached = {}
         _cache_store(_SESSION_PARSE_CACHE, _SESSION_PARSE_LOCK, key, cached)
     return cached
 
@@ -420,6 +450,26 @@ def read_account(account_id: str = "", email: str = "", runtime_config: ConfigIn
 
 
 _MAILBOX_POOL_CANDIDATE_NAMES = ("hotmail.txt", "chatai_mailbox.txt", "chatai.txt")
+
+
+def read_proxy_pool(
+    runtime_config: ConfigInput = None,
+    *,
+    lane: str = "protocol_registration",
+) -> dict[str, Any]:
+    """Return the configured pool for the desktop ProxyPool window.
+
+    Delegates to :mod:`sms_tool.proxy.admin` (one owner for masking, cached geo
+    and the health rank). Imported inside the function because the read path is
+    the desktop's hot start path and must not pull the proxy admin stack in at
+    module scope for the account-only reads.
+    """
+    config = resolve_runtime_config(runtime_config, workflow="storage")
+    from .proxy.admin import list_pool
+
+    return list_pool(config.data, lane=lane)
+
+
 _MAILBOX_POOL_GLOB = "*chatai*.txt"
 
 

@@ -25,7 +25,7 @@ from typing import Any
 import logging
 import re
 
-from ..kernel.sanitizer import sanitize_text
+from ..kernel.sanitizer import mask_account, sanitize_text
 from .policy import registration_retry_decision
 
 logger = logging.getLogger(__name__)
@@ -202,6 +202,50 @@ def attach_fingerprint_geo_audit(result: dict[str, Any], metadata: Mapping[str, 
     return result
 
 
+def record_failed_mailbox_purchase(workflow: Any, result: Mapping[str, Any] | None = None) -> str:
+    """Keep a failed run's **purchased** mailbox reusable (see ``mailbox.reclaim``).
+
+    A ReMail order is charged before registration starts, so a run that dies
+    after claiming the mailbox (``create_account`` 409 ``invalid_state``, a
+    proxy drop during OTP, an internal abort) used to leave the credential only
+    in memory and in the supplier panel -- re-running bought a second mailbox
+    for the same slot. Measured 2026-10-26: 3 bought, 2 accounts, and the third
+    could not be retried for free.
+
+    Called from both terminal paths (``_abort_result`` and ``finalize``) because
+    either can be the last word on a run.
+
+    The mailbox comes from the **workflow runtime**, not from ``result``: the
+    failure result is sanitized by ``outcome._failure_result``, so its
+    ``mailbox.token`` is already ``[REDACTED]`` and a record built from it would
+    carry a placeholder credential. Reading the runtime object is what makes the
+    line replayable.
+
+    Never raises: losing a bookkeeping line must not fail the run.
+    """
+    try:
+        runtime = getattr(workflow, "runtime", None)
+        mailbox = getattr(runtime, "mailbox", None)
+        payload = result if isinstance(result, Mapping) else {}
+        from ..mailbox.reclaim import STATUS_RECORDED, record_reclaimable_mailbox
+
+        status = record_reclaimable_mailbox(
+            mailbox,
+            failure_class=str(payload.get("failure_class") or ""),
+            error=str(payload.get("error") or ""),
+            config=getattr(workflow, "config", None),
+        )
+        if status == STATUS_RECORDED:
+            logger.warning(
+                "kept purchased mailbox for a free retry: %s (ledger=runtime/mailbox_reclaim.txt)",
+                mask_account(str(getattr(mailbox, "email", "") or "")),
+            )
+        return status
+    except Exception as exc:  # pragma: no cover - bookkeeping only
+        logger.warning("failed to record the purchased mailbox: %s", type(exc).__name__)
+        return "error"
+
+
 def build_registration_result(
     *,
     success: bool,
@@ -327,6 +371,7 @@ __all__ = [
     "COMMON_RESULT_KEYS",
     "build_registration_result",
     "build_registration_failure_result",
+    "record_failed_mailbox_purchase",
     "safe_proxy_audit",
     "safe_device_identity",
     "safe_fingerprint_geo_audit",

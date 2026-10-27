@@ -164,13 +164,14 @@ pay_link/core.py:221  pay_link/normalize.py:244                 (2)
 **应定义的 `MailboxProvider` Protocol**：
 ```python
 class MailboxProvider(Protocol):
-    key: str                                    # "cfworker"
-    aliases: tuple[str, ...]                    # ("icloud_url",)
+    key: str  # "cfworker"
+    aliases: tuple[str, ...]  # ("icloud_url",)
+
     def match(self, mailbox: MailboxAccount) -> bool: ...
     def parse_pool_line(self, line, source_path, line_no) -> MailboxAccount | None: ...
     def fetch_messages(self, mailbox, *, limit, proxy, include_body=False, **kw) -> list: ...
     def poll_otp(self, mailbox, *, subject_keyword, timeout, issued_after_unix, proxy, excluded_otps, **kw): ...
-    def create_mailboxes(self, args, count) -> list[MailboxAccount]: ...   # 可选
+    def create_mailboxes(self, args, count) -> list[MailboxAccount]: ...  # 可选
 ```
 配套：`mailbox_strategies` 加 `register_provider(p: MailboxProvider)`；#3/#4 两条链合并为「按注册顺序遍历 provider.parse_pool_line」；#5 的排除集改为「注册的 key 集合之差」自动推导。
 

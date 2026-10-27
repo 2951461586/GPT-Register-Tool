@@ -251,7 +251,8 @@ SentinelBundleError: sentinel_runtime_hash_mismatch:sentinel-runner.js
 ```python
 # 常量登记为「LF 归一化后」的摘要（与 .gitattributes 的 eol=lf 策略一致）
 RUNNER_SHA256 = "b388b2e2cca9511bfa0cf06689407142cd790136c44020d1c4fc321c0ea9eece"
-SDK_SHA256    = "de9ae60f5bcd3b8f57f5f86628630e28022f72b47056a87f37d4d8a0b5b88537"  # 不变
+SDK_SHA256 = "de9ae60f5bcd3b8f57f5f86628630e28022f72b47056a87f37d4d8a0b5b88537"  # 不变
+
 
 def _digest(path: Path) -> str:
     # 换行符归一化后再摘要：CRLF 与 LF 视为同一内容。
@@ -269,9 +270,10 @@ def _digest(path: Path) -> str:
 ```python
 def test_vendored_runtime_bundle_matches_pinned_hashes():
     from sms_tool.sentinel.bundle import SDK_SHA256, RUNNER_SHA256, _digest, SDK_PATH, RUNNER_PATH
-    assert _digest(SDK_PATH) == SDK_SHA256          # 显式断言，不再只查文件名
+
+    assert _digest(SDK_PATH) == SDK_SHA256  # 显式断言，不再只查文件名
     assert _digest(RUNNER_PATH) == RUNNER_SHA256
-    assert validate_runtime_bundle()                 # 端到端仍通过
+    assert validate_runtime_bundle()  # 端到端仍通过
 ```
 
 ### P1 — 加固（消除「静默降级」这个伪装层）

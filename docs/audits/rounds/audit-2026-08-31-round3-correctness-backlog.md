@@ -57,7 +57,7 @@
 
 ```python
 if any(path.exists() for _, path in shard_paths):
-    ...            # 只合并三个分片
+    ...  # 只合并三个分片
     return merged  # ← 永不落到下面的 legacy 分支
 legacy = _CONFIG_DIR / "config.json"
 ```
@@ -106,7 +106,7 @@ try:
     Path(json_path).write_text(json.dumps(updated, ...), encoding="utf-8")
 except Exception as exc:
     print(f"[!] Failed to update session JSON {json_path}: {exc}")
-upsert_account(updated, json_path=json_path)   # ← 无条件执行
+upsert_account(updated, json_path=json_path)  # ← 无条件执行
 ```
 
 磁盘 session JSON 还是旧 refresh_token，SQLite 已写入新值，且 DB 里的 `json_path` **指向那个过期文件**。同构：`sms_tool/commands/one_click.py:182-187`。

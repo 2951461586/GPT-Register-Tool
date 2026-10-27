@@ -276,6 +276,7 @@ python scripts/bare_print_ratchet.py
 # 1) XAML：x:Name、Click、Command、区块行号
 import re, xml.parsers.expat
 from pathlib import Path
+
 x = Path("SmsWorkbench/Views/MainWindow.xaml").read_text(encoding="utf-8")
 print(len(x.splitlines()))
 print(re.findall(r'x:Name="([^"]+)"', x))
@@ -285,7 +286,9 @@ print(len(re.findall(r'Command="\{Binding ', x)))
 
 # 2) handlers.py：方法体量（代码行 = 去掉注释与空行）
 import ast, io, tokenize
-p = Path("sms_tool/registration/handlers.py"); src = p.read_text(encoding="utf-8")
+
+p = Path("sms_tool/registration/handlers.py")
+src = p.read_text(encoding="utf-8")
 cls = [n for n in ast.parse(src).body if isinstance(n, ast.ClassDef)][0]
 for fn in cls.body:
     if isinstance(fn, ast.FunctionDef):
@@ -293,7 +296,9 @@ for fn in cls.body:
 
 # 3) code-behind 对 x:Name 的引用
 for name in set(re.findall(r'x:Name="([^"]+)"', x)):
-    hits = [(p.name, len(re.findall(rf"\b{name}\b", p.read_text(encoding='utf-8-sig'))))
-            for p in Path("SmsWorkbench/Views").glob("MainWindow*.cs")]
+    hits = [
+        (p.name, len(re.findall(rf"\b{name}\b", p.read_text(encoding="utf-8-sig"))))
+        for p in Path("SmsWorkbench/Views").glob("MainWindow*.cs")
+    ]
     print(name, [h for h in hits if h[1]])
 ```

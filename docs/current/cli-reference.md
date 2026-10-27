@@ -31,6 +31,7 @@ are omitted.
 | `--change-email` | — | Batch change ChatGPT protocol email addresses |
 | `--change-email-mailbox-file` | value | Credential pool for persistent target email providers |
 | `--chatai-mailbox-file` | value | Legacy mixed mailbox file: Chatai plus all unified mailbox formats |
+| `--check-payment-qualification` | — | Probe each account's zero-due checkout capability (支付资格) and persist payment_qualification |
 | `--check-promotion` | — | Probe accounts/check plan and Plus-trial/discount (优惠) eligibility and persist promotion_status |
 | `--check-promotion-after-registration` | — | After registration, probe saved successful accounts for Plus trial/discount eligibility |
 | `--checkout-country`, `--billing-country` | value | Hosted/UPI checkout billing country/currency, e.g. US or JP |
@@ -113,6 +114,9 @@ are omitted.
 | `--payment-method`, `--payment-link-method` | choices: `paypal`, `gopay`, `go_pay`, `go-pay`, `gcash`, `grabpay`, `grab_pay`, `grab-pay`, `upi`, `upiqr`, `upi_qr`, `upi-qr`, `ideal`, `pix`, `kakao`, `kakao_pay`, `kakao-pay`, `blik`, `twint`, `direct_card`, `direct-card`, `directcard`, `direct`, `zhika`, `card`, `checkout`, `momo`, `momo_qr`, `momo-qr`, `momoqr`, `qris`, `qris_id`, `bizum`, `bizum_es`, `naver_pay`, `naverpay`, `naver-pay` | Protocol payment-link method |
 | `--payment-method-proxy` | value | Explicit payment-method creation proxy |
 | `--payment-probe-only` | — | Create Checkout and run Stripe capability detection without creating a payment method |
+| `--payment-qualification-all-methods` | — | Probe every candidate method instead of stopping at the first eligible one. Each candidate is its own Checkout create, so this is a diagnostic mode. |
+| `--payment-qualification-country` | value | Force the ISO country used as billing/request country (default: measure the exit, then fall back to the account's registration_country) |
+| `--payment-qualification-method` | value | Payment method(s) for --check-payment-qualification: 'auto' (methods for the exit country, default) or a comma list such as 'gcash,momo' |
 | `--payment-relogin-mode` | choices: `auto`, `web_session`, `chatgpt_email_otp`, `codex_oauth`, `browser_session` | AT recovery strategy on HTTP 401: auto (default), web_session (session-cookie replay, fastest, no OTP/mail), chatgpt_email_otp, codex_oauth, browser_session |
 | `--payment-resume-checkpoint` | — | Explicitly resume matching accounts from an existing payment batch checkpoint |
 | `--payment-retries` | value | Retries for classified transient payment failures |
@@ -126,7 +130,15 @@ are omitted.
 | `--promotion-proxy` | value | Promotion-update proxy (promo-eligible region exit, e.g. VN/TH) for /checkout/update to make the checkout 0-due |
 | `--promotion-proxy-country`, `--update-proxy-country` | choices: `US`, `GB`, `DE`, `JP`, `BR`, `TR`, `TH`, `VN`, `ID`, `IN`, `NL`, `KR`, `PL`, `CH`, `PH` | Rotate checkout/update proxy credentials to this exit country |
 | `--provider-proxy` | value | Stage 2 proxy for Stripe init/PM/confirm (target country exit) |
+| `--proxy-country` | value | Target ISO country for --proxy-test/--proxy-screen |
+| `--proxy-list` | — | List the configured proxy pool (credentials masked) with cached geo/health |
 | `--proxy-pool` | value | Ordered registration proxy fallbacks, one per line or comma separated |
+| `--proxy-quality-min` | value | Minimum residential quality score (0-100) for --proxy-screen |
+| `--proxy-read-lane` | value | Config lane to list/probe when --proxy-pool is not given |
+| `--proxy-screen` | — | Dual-pass residential screening (stability/country/ASN) with an ASN ranking |
+| `--proxy-test` | — | Probe each pool entry against the ChatGPT edge and measure its exit country |
+| `--proxy-timeout` | value | Per-probe timeout seconds |
+| `--proxy-workers` | value | Concurrent probes for --proxy-test/--proxy-screen |
 | `--qr-path` | value | Output PNG path for --generate-upi-qr |
 | `--quota-account-timeout` | value | Maximum seconds allowed per local quota account (defaults to account_health config) |
 | `--quota-auto-relogin` | — | When local quota probe returns 401/token_invalidated, retry login with saved mailbox credentials and persist the new AT |

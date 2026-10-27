@@ -162,8 +162,11 @@ namespace SmsWorkbench
                 || RegistrationStatusPresentation.IsPartial(row.Status)) return false;
             return row.AccountType.Contains("Session")
                 || row.SourcePath.EndsWith(".sqlite3", StringComparison.OrdinalIgnoreCase)
-                || row.Status.Contains("已注册")
-                || row.Status.Contains("PayPal");
+                // Display-form agnostic: the grid's label follows the UI
+                // language, so a decision keyed on the Chinese literal made the
+                // registered counter drop to zero in the English build.
+                || Loc.DisplayContains(row.Status, "已注册")
+                || row.Status.Contains("PayPal", StringComparison.OrdinalIgnoreCase);
         }
 
         public string SummaryText => Loc.F("共 {0} 条；当前筛选 {1} 条", AllRows.Count, FilteredCount);

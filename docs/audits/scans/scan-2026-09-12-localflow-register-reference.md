@@ -92,9 +92,9 @@ rola        10           0             0             0  ['VN']
 **根因**（`proxy_entry.py:331-342`）：
 
 ```python
-_REGION_TAG    = r"(?P<tag>region|geo)"
-_USER_REGION_RE = re.compile(rf"(^|-){_REGION_TAG}-[A-Za-z]{{2}}(?=-|$)")   # 只认 region|geo
-_USER_SID_RE    = re.compile(r"(?:(?<=-sid-)|(?<=_sid_))[A-Za-z0-9]+(?=[_-]|$)")  # 只认 -sid-/_sid_
+_REGION_TAG = r"(?P<tag>region|geo)"
+_USER_REGION_RE = re.compile(rf"(^|-){_REGION_TAG}-[A-Za-z]{{2}}(?=-|$)")  # 只认 region|geo
+_USER_SID_RE = re.compile(r"(?:(?<=-sid-)|(?<=_sid_))[A-Za-z0-9]+(?=[_-]|$)")  # 只认 -sid-/_sid_
 ```
 
 rola 的用户名是 `SYS433954tbr_N-country-vn` —— 地区标签是 `country` 不是 `region`/`geo`，且**没有** `-sid-`/`_sid_` 标记 ⇒ 两个正则都不命中 ⇒ `changed = False` ⇒ 原样返回。

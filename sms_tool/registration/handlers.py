@@ -58,7 +58,12 @@ from .protocol_helpers import (
     _safe_float,
     _safe_int,
 )
-from .result import attach_fingerprint_geo_audit, safe_device_identity, safe_proxy_audit
+from .result import (
+    attach_fingerprint_geo_audit,
+    record_failed_mailbox_purchase,
+    safe_device_identity,
+    safe_proxy_audit,
+)
 from .retry_guard import RegistrationRetryGuard
 from .runtime import RegistrationRuntimeState
 from .stage_runner import RegistrationAbort, RegistrationStageRunner
@@ -274,6 +279,12 @@ class RegistrationEmailWorkflow:
             # "did this cost a code?" question stays answerable.
             result["existing_login_error"] = self.runtime.existing_login_error
         result["registration_machine"] = self.machine.snapshot()
+        # Keep the purchased mailbox replayable (see ``registration.result`` and
+        # ``mailbox.reclaim``): the sanitized result can no longer carry its
+        # token, so the record has to be taken here while the raw mailbox lives
+        # on ``self.runtime``. Deduplicated by email, so the ``finalize`` call
+        # for a non-exception failure cannot write a second line.
+        record_failed_mailbox_purchase(self, result)
         return result
 
     def _with_password_claim(self, error: str) -> str:

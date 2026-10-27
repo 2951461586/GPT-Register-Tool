@@ -60,3 +60,45 @@ plus `stripe_elements_session_params` in BLIK (requires every ctx key). Rule 19 
 not be converged. A full parameterized engine is still gated on the differential
 replay required by
 `docs/audits/plans/plan-2026-09-17-protocol-payment-extractor-consolidation.md`.
+
+## 4. 支付资格查询（read-only）
+
+`payment/qualification.py` answers “can this account reach a zero-due Checkout
+for a method its **exit country** supports?”. It creates a Checkout and calls
+Stripe init, then stops; it never creates a payment method, confirms, or
+approves. The batch wrapper is `payment/qualification_batch.py`; persistence is
+`store/markers.mark_payment_qualification_status` and the desktop reads
+`payment_qualification_display` / `_state`.
+
+Load-bearing rules:
+
+* **Country comes from a measurement, not a hint.** `_measured_country` calls
+  the shared resolver with `hint=""` and `need_timezone=True`; a hint-only
+  answer is rejected. The server compares `billing_details.country` with the
+  request's egress, so trusting `region-XX` is exactly the
+  `Billing country must match request country` failure this probe exists to
+  prevent.
+* **One Checkout per probed method, stopped at the first eligible one.**
+  `payment_qualification.probe_all_methods` (CLI
+  `--payment-qualification-all-methods`) restores the full diagnostic grid.
+  Every candidate is a separate create, so the default is bounded.
+* **Unknown method ids are rows, not exceptions.** `_select_candidates` emits
+  an `unknown_method` row and the probe continues.
+* **Country-agnostic methods use the exit currency.** `direct_card` / `paypal`
+  take `payment.wire.CURRENCY_MAP[country]` (falling back to the catalogue
+  currency only when the country is unmapped).
+* **Per-method errors are proxy-redacted before persistence.**
+  `_safe_error` masks `http(s)` and `socks5` URL credentials; `_run_method`
+  scrubs the exact candidate proxy as a second gate.
+* **Egress attribution is retained.** Batch rows carry
+  `proxy_fingerprint` / `proxy_host` / `proxy_attempts` (credential-free) for
+  “which exit produced this verdict” diagnosis.
+* **The batch breaker uses the shared vocabulary.** `_env_failure_class`
+  returns `network` for transport/risk blocks and `account` for an invalid AT;
+  `BatchCircuitBreaker` only trips on `network` / `auth_state`.
+
+There is deliberately no separate durable job queue. Each account's verdict is
+persisted the moment it finishes (`mark_payment_qualification_status`), so a
+restart loses only the in-flight accounts; rerunning with the same email list is
+the resume path. This keeps the desktop task model (one IPC run, per-account
+progress events) without a second source of truth.

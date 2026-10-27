@@ -92,7 +92,7 @@ if (typeof rotated === 'string' && rotated.trim() && rotated !== account.refresh
 **本仓现状（已取证）**：`sms_tool/providers/mailbox_graph.py:47-48`
 ```python
 if body.get("refresh_token"):
-    mailbox.refresh_token = body["refresh_token"]   # 只改内存对象
+    mailbox.refresh_token = body["refresh_token"]  # 只改内存对象
 mailbox.access_token = access_token
 ```
 - 全仓搜索"refresh_token + 落盘动词（`write_text` / `open(` / `json.dump` / `_save` / `persist`）"⇒ **命中 0 条**。

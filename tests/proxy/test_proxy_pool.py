@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import struct
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -13,7 +14,7 @@ from sms_tool.proxy.pool import (
     _ATYP_IPV6,
     _CMD_CONNECT,
     _NO_AUTH,
-    _NO_ACCEPTABLE,
+    _REP_GENERAL_FAILURE,
     _SOCKS5_VER,
     _USERPASS,
     UpstreamProxy,
@@ -99,6 +100,100 @@ class TestUpstreamProxy(unittest.TestCase):
     def test_to_dict_includes_priority(self):
         u = UpstreamProxy(host="1.1.1.1", port=1080, label="x", priority=3)
         self.assertEqual(u.to_dict()["priority"], 3)
+
+
+class TestUpstreamCredentialRedaction(unittest.TestCase):
+    """The label is a log/stats payload, so it must never carry a password.
+
+    ``from_url`` defaults the label to the caller's raw URL. For a residential
+    provider that URL is ``scheme://user:pass@host:port``, and the label is
+    consumed by the health/relay log lines, by ``to_dict`` and by the
+    (unauthenticated) stats endpoint -- three sinks that must stay
+    credential-free. Measured 2026-10-25: the password appeared in all three.
+    """
+
+    PASSWORD = "s3cret-marker"
+    # Separately: a password that itself contains '@'. ``urlsplit`` splits on the
+    # LAST '@', so the masker has to mask up to that one, not the first.
+    AT_PASSWORD = "p@ss-marker"
+
+    def test_url_form_label_masks_credentials(self):
+        u = UpstreamProxy.from_url(f"http://alice:{self.PASSWORD}@us.ipwo.net:7878")
+        self.assertNotIn(self.PASSWORD, u.label)
+        self.assertIn("us.ipwo.net:7878", u.label)
+        self.assertEqual(u.label, "http://***:***@us.ipwo.net:7878")
+
+    def test_url_form_label_masks_a_password_containing_an_at_sign(self):
+        u = UpstreamProxy.from_url(f"http://alice:{self.AT_PASSWORD}@us.ipwo.net:7878")
+        self.assertNotIn("ss-marker", u.label)
+        self.assertEqual(u.label, "http://***:***@us.ipwo.net:7878")
+
+    def test_four_segment_label_masks_password(self):
+        u = UpstreamProxy.from_url(f"us.ipwo.net:7878:alice_custom_zone_US:{self.PASSWORD}")
+        self.assertNotIn(self.PASSWORD, u.label)
+        self.assertIn("us.ipwo.net:7878", u.label)
+
+    def test_explicit_label_carrying_a_url_is_masked(self):
+        u = UpstreamProxy.from_url(
+            "socks5://1.2.3.4:1080",
+            label=f"http://alice:{self.PASSWORD}@us.ipwo.net:7878",
+        )
+        self.assertNotIn(self.PASSWORD, u.label)
+
+    def test_to_dict_masks_a_directly_constructed_label(self):
+        # ``from_url`` is not the only constructor: a loader or a test can build
+        # the dataclass directly, so serialisation is the second gate.
+        u = UpstreamProxy(host="1.2.3.4", port=1080, label=f"http://alice:{self.PASSWORD}@h:1")
+        self.assertNotIn(self.PASSWORD, u.to_dict()["label"])
+
+    def test_repr_does_not_leak_the_password(self):
+        u = UpstreamProxy(host="1.2.3.4", port=1080, username="alice", password=self.PASSWORD)
+        self.assertNotIn(self.PASSWORD, repr(u))
+
+    def test_stats_payload_never_carries_the_password(self):
+        u = UpstreamProxy.from_url(f"http://alice:{self.PASSWORD}@us.ipwo.net:7878")
+        payload = json.dumps(Socks5Server("127.0.0.1", 0, [u], stats_port=0)._stats_json())
+        self.assertNotIn(self.PASSWORD, payload)
+
+    def test_unparseable_url_error_message_is_masked(self):
+        # start_proxy_pool logs this message verbatim when it refuses an entry.
+        with self.assertRaises(ValueError) as caught:
+            UpstreamProxy.from_url(f"http://alice:{self.PASSWORD}@us.ipwo.net")
+        self.assertNotIn(self.PASSWORD, str(caught.exception))
+
+
+class TestStatsEndpointBinding(unittest.TestCase):
+    """The stats endpoint must not follow the SOCKS5 listener off loopback."""
+
+    def test_default_stats_host_is_loopback(self):
+        server = Socks5Server("0.0.0.0", 18080, [UpstreamProxy(host="1.2.3.4", port=1080)], stats_port=18081)
+        self.assertEqual(server._stats_bind_host(), "127.0.0.1")
+
+    def test_explicit_stats_host_wins(self):
+        server = Socks5Server("127.0.0.1", 18080, [], stats_port=18081, stats_host="127.0.0.2")
+        self.assertEqual(server._stats_bind_host(), "127.0.0.2")
+
+    def test_start_binds_stats_on_loopback_even_when_listening_on_all_interfaces(self):
+        async def _run():
+            server = Socks5Server("0.0.0.0", 18080, [UpstreamProxy(host="1.2.3.4", port=1080)], stats_port=18081)
+            bound: list[tuple[str, int]] = []
+
+            def _fake_start_server(handler, host, port):
+                bound.append((host, port))
+                fake = MagicMock()
+                fake.sockets = []
+                fake.close = MagicMock()
+                fake.wait_closed = AsyncMock()
+                return fake
+
+            with patch("sms_tool.proxy.pool.asyncio.start_server", side_effect=_fake_start_server):
+                await server.start()
+                await server.stop()
+            return bound
+
+        bound = asyncio.run(_run())
+        self.assertEqual(bound[0], ("0.0.0.0", 18080))  # SOCKS5 listener: as asked
+        self.assertEqual(bound[1], ("127.0.0.1", 18081))  # stats: loopback
 
 
 class TestSocks5AddrEncoding(unittest.TestCase):
@@ -210,13 +305,90 @@ class TestPickUpstream(unittest.TestCase):
         self.assertEqual(picks, ["a", "b", "a", "b"])
 
     def test_priority_fallback_to_lower_tier(self):
-        """When all higher-priority upstreams are unhealthy, fall back to lower tier."""
-        u0 = UpstreamProxy(host="1.1.1.1", port=1080, label="hi", priority=0, healthy=False)
-        u1 = UpstreamProxy(host="2.2.2.2", port=1080, label="lo", priority=1)
-        server = self._make_server([u0, u1])
-
-        pick = _pick(server)
+        """A dead higher-priority tier must not shadow a live lower one."""
+        dead = UpstreamProxy(host="1.1.1.1", port=1080, label="hi", priority=0, healthy=False)
+        live = UpstreamProxy(host="2.2.2.2", port=1080, label="lo", priority=1)
+        pick = _pick(self._make_server([dead, live]))
         self.assertEqual(pick.label, "lo")
+
+
+class TestFailoverAcrossOneEndpoint(unittest.TestCase):
+    """A rotating provider pool is many sessions on **one** ``host:port``.
+
+    The live registration pool is ten lajiao ``region-VN`` entries on
+    ``us.lajiaohttp.net:2000`` that differ only in the sticky-session suffix.
+    ``tried`` used to be keyed by ``addr``, so the first failed session excluded
+    all ten: ``_pick_upstream`` returned ``None`` on the very next attempt and
+    the listener answered ``GENERAL_FAILURE`` without ever trying a sibling
+    session. Measured 2026-10-26. The exclusion key is now
+    ``UpstreamProxy.identity`` (the whole dialled route).
+    """
+
+    @staticmethod
+    def _sessions(count: int = 3) -> list[UpstreamProxy]:
+        return [
+            UpstreamProxy(
+                host="us.lajiaohttp.net",
+                port=2000,
+                username=f"acct-region-VN-sid-{index}",
+                password="pw",
+                label=f"sid-{index}",
+            )
+            for index in range(1, count + 1)
+        ]
+
+    def test_excluding_one_session_does_not_exclude_its_siblings(self):
+        sessions = self._sessions()
+        server = Socks5Server("127.0.0.1", 0, sessions, stats_port=0)
+
+        first = _pick(server)
+        second = _pick(server, exclude={first.identity})
+
+        self.assertIsNot(first, second)
+        self.assertEqual(second.addr, first.addr)
+        self.assertNotEqual(second.username, first.username)
+
+    def test_identity_separates_sessions_sharing_an_address(self):
+        a, b, c = self._sessions()
+        self.assertEqual(len({u.addr for u in (a, b, c)}), 1)
+        self.assertEqual(len({u.identity for u in (a, b, c)}), 3)
+
+    def test_a_failing_session_falls_through_to_the_next_one(self):
+        async def _run():
+            sessions = self._sessions()
+            server = Socks5Server("127.0.0.1", 0, sessions, stats_port=0)
+            attempted: list[str] = []
+
+            async def _fail(upstream, *_args, **_kwargs):
+                attempted.append(upstream.label)
+                raise ConnectionError("upstream blocked")
+
+            client_r = asyncio.StreamReader()
+            client_r.feed_data(bytes([_SOCKS5_VER, 0x01, _NO_AUTH]))
+            domain = b"cloudflare.com"
+            client_r.feed_data(
+                bytes([_SOCKS5_VER, _CMD_CONNECT, 0x00, _ATYP_DOMAIN, len(domain)]) + domain + struct.pack("!H", 443)
+            )
+            client_r.feed_eof()
+
+            client_w = AsyncMock()
+            client_w.write = MagicMock()
+            client_w.drain = AsyncMock()
+            client_w.close = MagicMock()
+            client_w.wait_closed = AsyncMock()
+
+            with patch.object(server, "_connect_through_upstream", side_effect=_fail):
+                await server._handle_client(client_r, client_w)
+
+            # Every session is tried, not just the first: the old addr-keyed
+            # exclusion stopped after one attempt. The *order* is the pool's
+            # round-robin (`_rr_idx` keeps advancing), so only the set is pinned.
+            self.assertEqual(sorted(attempted), ["sid-1", "sid-2", "sid-3"])
+            self.assertEqual(len(set(attempted)), 3)
+            writes = [call.args[0] for call in client_w.write.call_args_list]
+            self.assertEqual(writes[-1][1], _REP_GENERAL_FAILURE)
+
+        asyncio.run(_run())
 
 
 class TestHealthStrategy(unittest.TestCase):
@@ -794,7 +966,7 @@ class TestStickySessions(unittest.TestCase):
     def test_excluded_binding_is_dropped_for_the_retry(self):
         server, a, b = self._pair(ttl=300.0)
         self.assertEqual(_pick(server, sticky_key="acct-1").label, "a")
-        picked = server._pick_upstream(sticky_key="acct-1", exclude={a.addr})
+        picked = server._pick_upstream(sticky_key="acct-1", exclude={a.identity})
         self.assertIs(picked, b)
 
     def test_prune_drops_only_expired_bindings(self):

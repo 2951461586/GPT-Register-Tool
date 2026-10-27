@@ -5,6 +5,8 @@ namespace SmsWorkbench
         None,
         Liveness,
         Promotion,
+        PaymentQualification,
+        ProxyPool,
     }
 
     /// <summary>
@@ -423,6 +425,109 @@ namespace SmsWorkbench
             return new BackendCommandPlan("账号测活", args);
         }
 
+        public static BackendCommandPlan CreatePaymentQualificationCheck(
+            IReadOnlyList<string> emails,
+            int workers,
+            IReadOnlyList<string> proxyPool,
+            string paymentMethod = "",
+            string? tempDirectory = null)
+        {
+            List<string> targets = RequireEmails(emails);
+            var args = new List<string>
+            {
+                "--check-payment-qualification",
+                "--quota-workers", Count(workers),
+                "--refresh-timeout", "45",
+                "--desktop-ipc",
+            };
+            if (!string.IsNullOrWhiteSpace(paymentMethod))
+                args.AddRange(new[] { "--payment-qualification-method", paymentMethod.Trim() });
+            var tempFiles = new List<string>();
+            if (targets.Count > 1)
+            {
+                string emailFile = WriteEmailFile(tempDirectory, "payment_qualification_emails_", targets);
+                tempFiles.Add(emailFile);
+                args.AddRange(new[] { "--email-file", emailFile });
+            }
+            else
+            {
+                args.AddRange(new[] { "--email", targets[0] });
+            }
+            AppendProxyPool(args, proxyPool);
+            return new BackendCommandPlan(
+                "支付资格检测(" + Count(targets.Count) + ")",
+                args,
+                TemporaryFiles: tempFiles,
+                ResultKind: BackendAccountResultKind.PaymentQualification);
+        }
+
+        // ── Proxy pool administration ──────────────────────────────────
+
+        /// <summary>Read the configured pool (masked) for one lane.</summary>
+        public static BackendCommandPlan CreateProxyPoolList(string lane)
+        {
+            var args = new List<string>
+            {
+                "--desktop-ipc",
+                "--desktop-read", "proxy-pool",
+                "--proxy-read-lane", LaneOrDefault(lane),
+            };
+            return new BackendCommandPlan("代理池列表", args, ResultKind: BackendAccountResultKind.ProxyPool);
+        }
+
+        /// <summary>Edge + geo reachability probe for the whole pool.</summary>
+        public static BackendCommandPlan CreateProxyPoolTest(
+            string? poolText,
+            string lane,
+            string country,
+            int workers,
+            double timeoutSeconds)
+        {
+            var args = new List<string> { "--desktop-ipc", "--proxy-test" };
+            AppendProxyPoolAdminArgs(args, poolText, lane, country, workers, timeoutSeconds);
+            return new BackendCommandPlan("代理连通性测试", args, ResultKind: BackendAccountResultKind.ProxyPool);
+        }
+
+        /// <summary>Dual-pass residential screening plus the ASN ranking.</summary>
+        public static BackendCommandPlan CreateProxyPoolScreen(
+            string? poolText,
+            string lane,
+            string country,
+            int qualityMin,
+            int workers,
+            double timeoutSeconds)
+        {
+            var args = new List<string>
+            {
+                "--desktop-ipc",
+                "--proxy-screen",
+                "--proxy-quality-min", Count(qualityMin),
+            };
+            AppendProxyPoolAdminArgs(args, poolText, lane, country, workers, timeoutSeconds);
+            return new BackendCommandPlan("代理住宅筛选", args, ResultKind: BackendAccountResultKind.ProxyPool);
+        }
+
+        private static void AppendProxyPoolAdminArgs(
+            List<string> args,
+            string? poolText,
+            string lane,
+            string country,
+            int workers,
+            double timeoutSeconds)
+        {
+            args.AddRange(new[] { "--proxy-read-lane", LaneOrDefault(lane) });
+            args.AddRange(new[] { "--proxy-workers", Count(workers) });
+            // One decimal is enough and avoids locale-dependent formatting.
+            args.AddRange(new[] { "--proxy-timeout", timeoutSeconds.ToString("0.0", CultureInfo.InvariantCulture) });
+            string isoCountry = CountryOrEmpty(country);
+            if (isoCountry.Length > 0)
+                args.AddRange(new[] { "--proxy-country", isoCountry });
+            // The pasted pool is one argv element; the backend splits commas and
+            // newlines itself (proxy.routing.parse_lane_proxy_pool).
+            if (!string.IsNullOrWhiteSpace(poolText))
+                args.AddRange(new[] { "--proxy-pool", poolText!.Trim() });
+        }
+
         // ── Deletion ────────────────────────────────────────────────────
 
         /// <summary>
@@ -799,6 +904,23 @@ namespace SmsWorkbench
         private static string Count(int value)
         {
             return value.ToString(CultureInfo.InvariantCulture);
+        }
+
+        private static string LaneOrDefault(string? lane)
+        {
+            return string.IsNullOrWhiteSpace(lane) ? "protocol_registration" : lane!.Trim();
+        }
+
+        /// <summary>ISO alpha-2 or empty; the backend rejects anything else.</summary>
+        private static string CountryOrEmpty(string? country)
+        {
+            string value = (country ?? "").Trim().ToUpperInvariant();
+            if (value.Length != 2) return "";
+            foreach (char character in value)
+            {
+                if (!char.IsLetter(character)) return "";
+            }
+            return value;
         }
     }
 }

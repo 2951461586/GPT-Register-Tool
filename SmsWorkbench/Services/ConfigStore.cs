@@ -41,6 +41,7 @@ namespace SmsWorkbench
             ["chatgpt"] = RuntimeShard,
             ["email_registration"] = RuntimeShard,
             ["codex_oauth"] = RuntimeShard,
+            ["payment_qualification"] = RuntimeShard,
             // proxy.json
             ["proxy"] = ProxyShard,
             ["mailbox_proxy"] = ProxyShard,

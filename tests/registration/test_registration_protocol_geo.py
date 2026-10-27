@@ -25,10 +25,12 @@ from sms_tool.registration.handlers import (
 )
 
 # Not in auth_headers._GEO_PROFILES (which mirrors geo/profiles.MARKET_PROFILES:
-# US/CA/GB/DE/FR/NL/JP/SG/AU/VN/PH/IN/CN/HK/TW), so resolving it used to land on the
+# 50 markets as of 2026-10-26), so resolving it used to land on the
 # UTC/en-US default even when measured. Keep this off the curated list -- the
 # "uncurated" half of the contract needs a country that really is uncurated.
-_UNCURATED = "BR"
+# (BR used to be the example here; it became curated when the market table grew
+# from 15 to 50, so the fixture moved to Peru.)
+_UNCURATED = "PE"
 
 
 @pytest.fixture(autouse=True)

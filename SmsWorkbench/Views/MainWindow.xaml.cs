@@ -24,6 +24,7 @@ namespace SmsWorkbench
         private readonly IDesktopReadClient desktopRead;
         private readonly Serilog.ILogger logger;
         private readonly IPaymentBatchDialogService paymentBatchDialogs;
+        private readonly IProxyPoolDialogService proxyPoolDialogs;
         private readonly Wpf.Ui.ISnackbarService snackbarService;
         private readonly ISettingsDialogService settingsDialogs;
         private readonly ISettingsService settingsService;
@@ -108,6 +109,7 @@ namespace SmsWorkbench
             IBackendTaskCoordinator backendTasks,
             IDesktopReadClient desktopRead,
             IPaymentBatchDialogService paymentBatchDialogs,
+            IProxyPoolDialogService proxyPoolDialogs,
             IPaymentBatchService paymentBatchService,
             Wpf.Ui.ISnackbarService snackbarService,
             ISettingsDialogService settingsDialogs,
@@ -119,6 +121,7 @@ namespace SmsWorkbench
             this.backendTasks = backendTasks;
             this.desktopRead = desktopRead;
             this.paymentBatchDialogs = paymentBatchDialogs;
+            this.proxyPoolDialogs = proxyPoolDialogs;
             this.paymentBatchService = paymentBatchService;
             this.snackbarService = snackbarService;
             this.settingsDialogs = settingsDialogs;
@@ -200,6 +203,10 @@ namespace SmsWorkbench
         // Machine promotion state from the desktop read payload
         // (sms_tool/promotion_states.py); the label above is display copy.
         public string PromotionState { get; set; } = "";
+        // 支付资格 (sms_tool/payment/qualification_states.py): the label is display
+        // copy, the state is what filters/sorts key off.
+        public string PaymentQualification { get; set; } = "";
+        public string PaymentQualificationState { get; set; } = "";
         public string RefreshTokenStatus { get; set; } = "";
         public string TwoFactorStatus { get; set; } = "未设置";
         public string Phone { get; set; } = "";

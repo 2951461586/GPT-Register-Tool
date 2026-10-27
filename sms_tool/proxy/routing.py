@@ -270,7 +270,18 @@ def select_operation_proxy(
     explicit: str | None = None,
     config: Mapping[str, Any] | None = None,
 ) -> str | None:
-    """Choose the first candidate from the canonical operation proxy order."""
+    """Choose the first candidate from the canonical operation proxy order.
+
+    The deterministic spread inside a pool already happened in
+    :func:`operation_proxy_candidates` (the pool is rotated by
+    ``sha256(account email or operation)``). Rotating a *second* time here
+    applied the same hash to the rotated list — ``2h mod n`` — which is not a
+    bijection when ``n`` is even: measured 2026-10-26, a four-entry pool only
+    ever reached two entries and a six-entry pool three, so half the egress
+    addresses took double the traffic while this function also disagreed with
+    :func:`select_operation_proxy_candidate` on the same account. One rotation,
+    one answer.
+    """
     selected = select_operation_proxy_candidate(
         account,
         operation=operation,
@@ -279,20 +290,10 @@ def select_operation_proxy(
     )
     if selected is None:
         return None
-    # Preserve deterministic distribution inside the operation pool while
-    # never moving it ahead of explicit input or registration affinity.
-    candidates = operation_proxy_candidates(
-        account,
-        operation=operation,
-        explicit=explicit,
-        config=config,
-    )
-    same_source = [item for item in candidates if item.source == selected.source]
-    if len(same_source) <= 1:
-        return selected.proxy
-    seed = str((account or {}).get("email") or operation)
-    index = int(hashlib.sha256(seed.encode("utf-8")).hexdigest()[:8], 16) % len(same_source)
-    return same_source[index].proxy
+    # ``candidates[0]`` is the head of the highest-precedence source, so explicit
+    # input and enabled registration affinity still win — they are placed first
+    # by ``operation_proxy_candidates`` and have a single member.
+    return selected.proxy
 
 
 __all__ = [

@@ -23,5 +23,12 @@ public static class RegistrationStatusPresentation
 
     public static bool NeedsAttention(PoolRow row) =>
         IsPartial(row.RegistrationStatus) || IsPartial(row.Status)
-        || row.Status.Contains('待') || row.Status.Contains('缺') || row.Status.Contains("失败", StringComparison.Ordinal);
+        // The attention markers are display text, so they are matched against
+        // every language's form: "待/缺/失败" in the Chinese build, "Pending /
+        // Missing / Failed" in the English one. Keying on the Chinese
+        // characters alone made the attention counter and the "needs
+        // attention" filter silently empty out after a language switch.
+        || Loc.DisplayContains(row.Status, "待")
+        || Loc.DisplayContains(row.Status, "缺")
+        || Loc.DisplayContains(row.Status, "失败");
 }

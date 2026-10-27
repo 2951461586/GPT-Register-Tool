@@ -6,7 +6,6 @@ import unittest
 from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
-from sms_tool.registration import orchestrator as registration
 from sms_tool import phone_config, phone_pool, phone_provider_lifecycle, phone_reuse
 from sms_tool import sms_providers
 from sms_tool.phone_reuse import (
@@ -943,11 +942,6 @@ class SmsBowerPhoneReuseTests(unittest.TestCase):
         self.assertEqual(pool.phones[0].phone, "+233555123456")
         self.assertEqual(pool.phones[0].activation_id, "act-1")
         self.assertEqual(pool.phones[0].max_reuse_count, 1)
-
-    def test_registration_requires_phone_when_pool_is_enabled(self):
-        with patch.dict(registration.CFG, {"codex_oauth": {}}, clear=False):
-            self.assertFalse(registration._registration_requires_phone_verification(None))
-            self.assertTrue(registration._registration_requires_phone_verification(object()))
 
 
 class _Capture(logging.Handler):

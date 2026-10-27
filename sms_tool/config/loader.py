@@ -44,6 +44,7 @@ SHARD_OWNERSHIP: dict[str, str] = {
     "chatgpt": "runtime",
     "email_registration": "runtime",
     "codex_oauth": "runtime",
+    "payment_qualification": "runtime",
     # proxy.json
     "proxy": "proxy",
     "mailbox_proxy": "proxy",

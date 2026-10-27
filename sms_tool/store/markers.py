@@ -255,6 +255,85 @@ def mark_promotion_status(
     return True
 
 
+def mark_payment_qualification_status(
+    email,
+    label="",
+    *,
+    state: str = "",
+    result=None,
+    runtime_config: ConfigInput = None,
+):
+    """Persist one account's 支付资格 probe result into ``raw_json`` + session.
+
+    Stored under ``payment_qualification`` (a dict: status/state/last_result)
+    without a dedicated DB column, exactly like ``promotion``. The desktop grid
+    reads the label and state from ``desktop_read``, which derives them from
+    this block — adding a column must not need a schema migration.
+
+    ``last_result`` is scrubbed of token-bearing keys before it is written: the
+    probe result carries checkout diagnostics, and a support bundle must never
+    contain an access token because a qualification run ran.
+    """
+    init_database(runtime_config=runtime_config)
+    now = int(time.time())
+    conn = _connect(runtime_config=runtime_config)
+    json_path = ""
+    data: dict = {}
+    try:
+        lookup_email = _find_existing_account_email(conn, email)
+        if not lookup_email:
+            return False
+        row = conn.execute(
+            "SELECT raw_json,json_path FROM accounts WHERE email=?",
+            (lookup_email,),
+        ).fetchone()
+        if row is None:
+            return False
+        try:
+            data = json.loads(row["raw_json"] or "{}")
+        except Exception:
+            data = {}
+        json_path = str(row["json_path"] or "").strip()
+        if json_path:
+            try:
+                file_data = json.loads(Path(json_path).read_text(encoding="utf-8"))
+                if isinstance(file_data, dict):
+                    data = {**file_data, **data}
+            except Exception:
+                pass
+        _raw: object = data.get("payment_qualification")
+        qualification: dict = _raw if isinstance(_raw, dict) else {}
+        qualification["status"] = str(label or "")
+        qualification["state"] = str(state or "")
+        qualification["updated_at"] = now
+        if isinstance(result, dict):
+            qualification["last_result"] = {
+                key: value
+                for key, value in result.items()
+                if key
+                not in {
+                    "access_token",
+                    "authorization",
+                    "cookie",
+                    "cookie_header",
+                    "auth_context",
+                    "probe",
+                }
+            }
+        data["payment_qualification"] = qualification
+        raw_json = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+        conn.execute(
+            "UPDATE accounts SET updated_at=?, raw_json=? WHERE email=?",
+            (now, raw_json, lookup_email),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    if json_path:
+        _update_session_json(json_path, data)
+    return True
+
+
 def clear_stale_promotion_at_marker(email, *, verified_at: int | None = None, runtime_config: ConfigInput = None):
     """Clear an older ``AT失效`` promotion marker after a verified liveness probe.
 

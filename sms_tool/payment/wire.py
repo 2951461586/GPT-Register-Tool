@@ -210,6 +210,16 @@ CURRENCY_MAP = {
     "BR": "BRL",
     "KR": "KRW",
     "TR": "TRY",
+    # Country-agnostic qualification probes (direct_card) need the exit country's
+    # currency, not the catalogue's home-country default. These six are the
+    # catalog markets that were missing and are also valid PayPal/UPI billing
+    # currencies.
+    "PH": "PHP",
+    "VN": "VND",
+    "CH": "CHF",
+    "ES": "EUR",
+    "NL": "EUR",
+    "PL": "PLN",
 }
 
 # ─── Session 工厂 ─────────────────────────────────────────────────────────────

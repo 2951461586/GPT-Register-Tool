@@ -147,3 +147,61 @@ def test_supplied_candidate_pool_uses_same_precedence_and_source():
     assert candidates[0].source == "explicit"
     assert candidates[0].proxy == "http://explicit.example:8000"
     assert {item.source for item in candidates[1:]} == {"operation_pool"}
+
+
+def test_select_operation_proxy_agrees_with_the_candidate_head():
+    """One rotation, one answer.
+
+    ``operation_proxy_candidates`` already rotates the pool by the account seed;
+    ``select_operation_proxy`` used to rotate the rotated list a second time
+    (``2h mod n``), so the two public entry points returned different exits for
+    the same account — and callers that log the candidate's provenance while
+    dialling ``select_operation_proxy`` recorded the wrong route.
+    """
+    pool = [
+        "http://a.example:8000",
+        "http://b.example:8000",
+        "http://c.example:8000",
+        "http://d.example:8000",
+    ]
+    config = {"proxy": {"lanes": {"liveness": pool}}}
+
+    for index in range(12):
+        account = {"email": f"user{index}@example.com"}
+        candidate = select_operation_proxy_candidate(account, operation="liveness", config=config)
+        selected = select_operation_proxy(account, operation="liveness", config=config)
+        assert candidate is not None
+        assert selected == candidate.proxy
+
+
+def test_even_sized_operation_pools_reach_every_entry():
+    """A double rotation is not a bijection for even ``n``.
+
+    Measured 2026-10-26: with four entries only two were ever selected and with
+    six only three, so half the egress addresses took double the traffic — the
+    opposite of what an operation pool exists for (and undetected because every
+    existing test used a one- or two-entry pool).
+    """
+    for size in (3, 4, 5, 6):
+        pool = [f"http://u{index}.example:8000" for index in range(size)]
+        config = {"proxy": {"lanes": {"liveness": pool}}}
+        chosen = {
+            select_operation_proxy({"email": f"user{index}@example.com"}, operation="liveness", config=config)
+            for index in range(200)
+        }
+        assert chosen == set(pool), f"pool of {size} never reached {sorted(set(pool) - chosen)}"
+
+
+def test_select_operation_proxy_still_puts_explicit_input_first():
+    pool = ["http://pool-a.example:8000", "http://pool-b.example:8000"]
+    config = {"proxy": {"lanes": {"liveness": pool}}}
+
+    assert (
+        select_operation_proxy(
+            {"email": "user@example.com"},
+            operation="liveness",
+            explicit="http://explicit.example:8000",
+            config=config,
+        )
+        == "http://explicit.example:8000"
+    )

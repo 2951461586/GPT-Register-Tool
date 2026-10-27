@@ -64,6 +64,11 @@ namespace SmsWorkbench
         {
             JsonObject root = ReadRoot();
             AuthoritativeProxyLanes = DetectAuthoritativeProxyLanes(root);
+            // The boxes stay blank while `proxy.lanes` owns the route -- "blank +
+            // notice" is the documented contract (a pre-filled box would look like
+            // an editable copy of a value this page does not own). What changed on
+            // 2026-10-27 is the SAVE side: a non-empty box now writes the declared
+            // lane instead of silently doing nothing. See Save().
             return SettingsCatalog.Categories.Select(category => new SettingsCategoryViewModel(
                 category.Title,
                 category.Sections.Select(section => new SettingsSectionViewModel(
@@ -146,6 +151,25 @@ namespace SmsWorkbench
                 SetPath(root, "proxy.registration", registrationProxy);
                 SetPath(root, "proxy.default", registrationProxy);
                 SetPath(root, "proxy.pool", ToArray(orderedRegistrationPool));
+                // 2026-10-27: a non-empty box now writes the lane the backend
+                // actually reads (the old behaviour only wrote legacy keys while
+                // `proxy.lanes.*` shadowed them, so the operator's edit vanished).
+                // A BLANK box never touches a declared lane: "blank means leave the
+                // backend's route alone" is the contract the preservation test
+                // pins, and clearing a pool is not something this page can express.
+                // Legacy keys stay mirrored so older readers and a lanes-less
+                // config keep working.
+                if (orderedRegistrationPool.Count > 0
+                    && AuthoritativeProxyLanes.Contains("protocol_registration"))
+                {
+                    SetPath(root, "proxy.lanes.protocol_registration.pool",
+                        ToArray(orderedRegistrationPool));
+                }
+                if (orderedMailboxPool.Count > 0
+                    && AuthoritativeProxyLanes.Contains("mailbox"))
+                {
+                    SetPath(root, "proxy.lanes.mailbox.pool", ToArray(orderedMailboxPool));
+                }
                 SetPath(root, "mailbox_proxy", mailboxProxy);
                 SetPath(root, "mailbox_proxy_pool", ToArray(orderedMailboxPool));
                 // Only mirror a *configured* registration route into the phone

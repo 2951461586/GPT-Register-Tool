@@ -18,17 +18,18 @@
     "--at", "--access-token", "--refresh-token", "--api-key", "--api-token",
     "--admin-token", "--client-secret", "--password", "--service-token",
     "--proxy", "--proxy-pool", "--checkout-proxy", "--provider-proxy", "--approve-proxy",
+    "--checkout-proxy-pool", "--approve-proxy-pool",
     "--promotion-proxy", "--stripe-init-proxy", "--payment-method-proxy",
     "--confirm-proxy", "--redirect-proxy", "--blik-code", "--mailbox-line"
   ],
   "text_patterns": [
-    {"name":"proxy_credentials","pattern":"(?i)(\\b(?:https?|socks5h?)://)[^\\s/@]+@","replacement":"$1[REDACTED]@"},
+    {"name":"proxy_credentials","pattern":"(?i)(\\b(?:https?|socks5h?)://)[^/\\s]*@","replacement":"$1[REDACTED]@"},
     {"name":"bearer","pattern":"(?i)(\\bBearer\\s+)[A-Za-z0-9._~+/=-]+","replacement":"$1[REDACTED]"},
     {"name":"jwt","pattern":"\\beyJ[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{8,}\\.[A-Za-z0-9_-]{4,}\\b","replacement":"[REDACTED]"},
     {"name":"ba_token","pattern":"\\bBA-[A-Za-z0-9_.-]+\\b","replacement":"[REDACTED]"},
     {"name":"refresh_token","pattern":"(?i)\\brt_[A-Za-z0-9._~-]+\\b","replacement":"[REDACTED]"},
     {"name":"stripe_key","pattern":"(?i)\\b(?:sk|pk)_(?:live|test)_[A-Za-z0-9_-]+\\b","replacement":"[REDACTED]"},
-    {"name":"bare_proxy_credentials","pattern":"(?i)\\b([A-Za-z0-9_.\\-]+):([^@\\s:/]+)@([A-Za-z0-9_.\\-]+):(\\d{2,5})\\b","replacement":"[REDACTED]@$3:$4"},
+    {"name":"bare_proxy_credentials","pattern":"(?i)\\b([A-Za-z0-9_.\\-]+):([^:\\s/]+)@([A-Za-z0-9_.\\-]+):(\\d{2,5})\\b","replacement":"[REDACTED]@$3:$4"},
     {"name":"named_secret","pattern":"(?i)(access[_-]?token|refresh[_-]?token|id[_-]?token|oauth[_-]?refresh[_-]?token|totp(?:[_-]?secret)?|client[_-]?secret|api[_-]?key|service[_-]?token|session[_-]?token|session[_-]?id|ba[_-]?token|blik[_-]?code|password|card(?:[_-]?(?:number|cvv|cvc|last4))?|authorization|cookie|token)(\\s*[=:]\\s*)[\"']?([^\\s,}\"']+)[\"']?","replacement":"$1$2[REDACTED]"}
   ],
   "log_text_patterns": [

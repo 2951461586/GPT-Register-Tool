@@ -27,5 +27,7 @@
     <None Include="..\fixtures\proxy_input_cases.json" CopyToOutputDirectory="PreserveNewest" Link="proxy_input_cases.json" />
     <!-- Shared cross-language OAuth client id fixture (see OAuthClientIdContractTests / test_mailbox_graph_pure). -->
     <None Include="..\fixtures\oauth_client_id.json" CopyToOutputDirectory="PreserveNewest" Link="oauth_client_id.json" />
+    <!-- Shared cross-language proxy-transport contract (see ProxyArgumentTransportTests / test_proxy_cli_env_transport). -->
+    <None Include="..\fixtures\proxy_env_transport.json" CopyToOutputDirectory="PreserveNewest" Link="proxy_env_transport.json" />
   </ItemGroup>
 </Project>

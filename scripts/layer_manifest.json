@@ -62,7 +62,10 @@
     "paypal/reconciliation": 3,
     "paypal/reverse": 3,
     "registration_drivers/browser_flow": 3,
-    "registration_drivers/browser_flow/decisions": 4
+    "registration_drivers/browser_flow/decisions": 4,
+    "payment/qualification": 4,
+    "payment/qualification_batch": 3,
+    "payment/qualification_states": 5
   },
   "root_modules": {
     "account_creation.py": 3,
@@ -131,6 +134,7 @@
     "payment/operation.py": 5,
     "payment/routing.py": 4,
     "payment/wire.py": 5,
+    "payment_qualification_states.py": 5,
     "paypal/authorization.py": 3,
     "paypal/authorization_queue.py": 3,
     "paypal/auto.py": 3,
@@ -212,6 +216,10 @@
     "sms_tool.registration_drivers.playwright -> sms_tool.registration_drivers.browser_flow": {
       "reason": "the playwright driver shell drives the browser_flow workflow; the shell is a registration_drivers member, so the package layer is one below the flow it owns",
       "owner": "sms_tool/registration_drivers/playwright.py"
+    },
+    "sms_tool.payment.qualification_batch -> sms_tool.batch_circuit_breaker": {
+      "reason": "支付资格 batch (2026-10-26): the whole-batch circuit breaker is a leaf policy object shared by the registration batch and promotion_batch; a payment-lane batch runner needs the same guard, and the shared-batch-policy keys live on that object. Inverting the call would mean every caller passing a breaker factory into the batch.",
+      "owner": "sms_tool/payment/qualification_batch.py"
     }
   }
 }

@@ -155,9 +155,12 @@ safe_print(f"\n[*] Done. {success_count}/{effective_count} registered successful
 其中一种**带时钟**：
 
 ```python
-if row.get("dead_end"):                        result[n] = "dead_end"                # 永久
-elif self._quarantine_active(row, now):        result[n] = "otp_pending_quarantine"   # 有 TTL
-elif float(row.get("cooldown_until") or 0)>now: result[n] = "cooldown"                # 300s 时钟
+if row.get("dead_end"):
+    result[n] = "dead_end"  # 永久
+elif self._quarantine_active(row, now):
+    result[n] = "otp_pending_quarantine"  # 有 TTL
+elif float(row.get("cooldown_until") or 0) > now:
+    result[n] = "cooldown"  # 300s 时钟
 ```
 
 - `dead_end` 永久 ⇒ 永远被跳

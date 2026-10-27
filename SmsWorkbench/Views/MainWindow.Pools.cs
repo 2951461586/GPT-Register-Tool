@@ -475,6 +475,12 @@ namespace SmsWorkbench
                     paypalStatusDisplay,
                     paypalAmount),
                 PromotionState = GetString(data, "promotion_state"),
+                // Python composes the 支付资格 badge (payment_qualification_display);
+                // the state literal is the stable machine value. An older backend
+                // or a never-probed account leaves both blank.
+                PaymentQualification = AccountStatusInterpreter.DisplayPaymentQualification(
+                    GetString(data, "payment_qualification_display")),
+                PaymentQualificationState = GetString(data, "payment_qualification_state"),
                 RefreshTokenStatus = AccountStatusInterpreter.DisplayRtStatus(refreshStatus),
                 TwoFactorStatus = AccountStatusInterpreter.HasTwoFactor(data) ? Loc.T("已设置") : Loc.T("未设置"),
                 HasAccessToken = hasAccess,

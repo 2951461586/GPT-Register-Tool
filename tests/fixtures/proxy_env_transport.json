@@ -1,0 +1,11 @@
+{
+  "proxy_flag": "--proxy",
+  "proxy_pool_flag": "--proxy-pool",
+  "proxy_variable": "SMS_TOOL_PROXY",
+  "proxy_pool_variable": "SMS_TOOL_PROXY_POOL",
+  "checkout_pool_flag": "--checkout-proxy-pool",
+  "checkout_pool_variable": "SMS_TOOL_CHECKOUT_PROXY_POOL",
+  "approve_pool_flag": "--approve-proxy-pool",
+  "approve_pool_variable": "SMS_TOOL_APPROVE_PROXY_POOL",
+  "note": "Desktop -> backend proxy transport. Both sides pin these names (ProxyArgumentTransport on the C# side, sms_tool/cli.py on the Python side), so renaming one without the other fails a test instead of silently dropping the operator's proxy route. All four routes carry scheme://user:pass@host:port values: the registration pair and the two payment-lane pools."
+}

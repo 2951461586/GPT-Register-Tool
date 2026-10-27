@@ -10,7 +10,7 @@ rola ``country-vn``），出口地区单一 —— 一家供应商或一个地�
    保持档案原语言），浏览器路径 ``locale_profile_key_from_geo`` 直接回退
    ``DEFAULT_LOCALE_PROFILE``（``'us'``）—— 美国指纹配菲律宾出口。
 2. 供应商若不认重定后的地区码，指纹会照着**声明**地区走而毫无提示。
-   ``verify_hint`` 就是那个开关，默认关（开着要给每次选择付一次探测）。
+   ``verify_hint`` 就是那个开关；配置路径默认**开**（每个出口一次探测，共享缓存），显式 false 才关闭。
 
 用例 E 是主守卫，用例 F 是它的负向对照 —— 缺了 F，E 可能只是因为
 ``locale_profile_key_from_geo`` 恒不返回 ``'us'`` 而"恒真"。
@@ -139,10 +139,13 @@ def test_second_egress_does_not_alias_to_the_default_locale():
 
 
 def test_an_uncurated_region_still_degrades_so_the_guard_above_is_not_vacuous():
-    """负向对照：未接线地区**仍然**降级，证明上一条不是恒真。"""
-    assert "BR" not in MARKET_PROFILES
-    assert locale_profile_key_from_geo({"country": "BR"}) == DEFAULT_LOCALE_PROFILE
-    assert set_fingerprint_geo("BR")["timezone"] == "UTC"
+    """负向对照：未接线地区**仍然**降级，证明上一条不是恒真。
+
+    2026-10-26：BR 已随市场表 15 → 50 接线，故负向样例改为 PE（秘鲁）。
+    """
+    assert "PE" not in MARKET_PROFILES
+    assert locale_profile_key_from_geo({"country": "PE"}) == DEFAULT_LOCALE_PROFILE
+    assert set_fingerprint_geo("PE")["timezone"] == "UTC"
 
 
 # ─────────────────── C. 两条 lane 的端到端绑定 ───────────────────
@@ -197,8 +200,10 @@ def test_without_verify_hint_the_claim_is_trusted_and_no_probe_happens(fresh_res
 
 def test_verify_hint_is_read_from_config():
     on = FingerprintPool.from_config({"registration": {"fingerprint_pool": {"verify_hint": True}}})
-    off = FingerprintPool.from_config({"registration": {"fingerprint_pool": {}}})
+    default = FingerprintPool.from_config({"registration": {"fingerprint_pool": {}}})
+    off = FingerprintPool.from_config({"registration": {"fingerprint_pool": {"verify_hint": False}}})
     assert on._verify_hint is True
+    assert default._verify_hint is True
     assert off._verify_hint is False
 
 
@@ -207,7 +212,7 @@ def test_verify_hint_is_read_from_config():
 # `detect_proxy_exit_geo` 调 `resolve(key, need_timezone=True, probe=...)` 时**不传 hint**
 # ⇒ 解析器里 `not code` 恒真 ⇒ **永远探测**。所以浏览器 lane 与协议 lane 的取值来源不同：
 #
-#   协议 lane ：默认采信凭据里的地区标签（零成本，`verify_hint` 才验证）
+#   协议 lane ：配置路径默认实测（`verify_hint` 默认 true）；显式 false 才采信凭据标签
 #   浏览器 lane：永远实测（每次多一次往返，但天然免疫"供应商不认地区码"）
 #
 # 这个差异有两条后果，下面三个用例分别钉住。

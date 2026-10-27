@@ -12,7 +12,8 @@ Measured 2026-09-14, this is not hypothetical.  Five instances were found by
 hand around the Codex OAuth plumbing (``oauth_result``, ``oauth_refresh_token``,
 the ``codex_oauth`` constructor argument, ``RegistrationState.CODEX_OAUTH``,
 ``_oauth_result_summary``), and a sixth -- ``phone_result`` -- was only found by
-writing this scan.  ``oauth_refresh_token`` was the expensive one: 0 of 1245
+writing this scan (it was deleted on 2026-10-27 together with ``oauth_tokens``).
+``oauth_refresh_token`` was the expensive one: 0 of 1245
 accounts held a refresh token, so the recovery chain skipped its only free
 strategy on every account and paid an email code instead.
 
@@ -75,40 +76,18 @@ from sms_tool.registration.runtime import _FIELD_GROUPS  # noqa: E402
 
 #: Fields that are read but never written, with the reason each one is tolerated.
 #:
-#: ``phone_result`` -- **a real, unfixed gap.**  ``finalize`` reads it twice to
-#: fill ``response["phone_verification"]`` and ``extra["phone"]``, but no code
-#: path assigns it, so both are permanently ``{}`` and ``""``.  The lane also
-#: accepts a ``phone_pool`` constructor argument and stores it without ever
-#: using it (``registration/handlers.py:290``/``:305``), and ``accounts`` has no
-#: ``phone`` column at all -- so wiring it up is a product decision (does this
-#: lane do phone verification?) rather than a mechanical fix.  Remove this entry
-#: when that decision lands either way.
-#: ``resume_email_verification`` used to be the second entry here.  It was
-#: **deleted outright on 2026-09-16** (owner decision) instead of being wired
-#: back up: the state field, both of its reads, and the ``_email_otp_send_url``
-#: fallback it drove -- along with the ``auth_base`` parameter that only that
-#: fallback consumed.  There is nothing left to tolerate, so nothing is
-#: registered.
-#:
-#: 🔴 Do not "helpfully" re-add it to silence a future guard failure.  A field
-#: reappearing in this whitelist means someone resurrected a producer, and that
-#: argument has to be won again (see the deletion-site comment in
-#: ``registration_handlers.user_register`` and the docstring of
-#: ``account_creation._email_otp_send_url``).
-READ_BUT_NEVER_WRITTEN = {
-    "phone_result": "finalize reads it; the lane has no phone step to write it (see module docstring)",
-}
+#: The list is empty since 2026-10-27: ``phone_result`` was the last entry and
+#: was deleted together with its two reads.  One-click SMS is a **separate,
+#: decoupled channel** (``phone_registration`` / ``phone_reuse``), not a stage of
+#: the email registration lane, so the email state no longer carries a phone
+#: field it can never populate.
+READ_BUT_NEVER_WRITTEN: dict[str, str] = {}
 
 #: Fields that are neither read nor written, with the reason each one survives.
 #:
-#: ``oauth_tokens`` -- dead.  Nothing reads it, nothing writes it, it is absent
-#: from the checkpoint payload, and ``RegistrationRuntimeState`` is constructed
-#: without keyword arguments in production.  Kept only because it is part of the
-#: published state schema; deleting it is a one-line change once someone
-#: confirms no downstream integration passes it.
-NEVER_READ_NEVER_WRITTEN = {
-    "oauth_tokens": "dead field; removal proposed, pending confirmation nobody writes it downstream",
-}
+#: ``oauth_tokens`` was deleted on 2026-10-27: nothing read it, nothing wrote it,
+#: and ``RegistrationRuntimeState`` is never constructed with keyword arguments.
+NEVER_READ_NEVER_WRITTEN: dict[str, str] = {}
 
 
 def _attribute_counts(source: str) -> tuple[dict[str, int], dict[str, int]]:
@@ -176,8 +155,8 @@ class TheScannerItselfTests(unittest.TestCase):
         self.assertEqual(writes.get("registration_warning"), 1)
 
     def test_a_read_is_not_mistaken_for_a_write(self):
-        _reads, writes = _attribute_counts("print(s.phone_result)")
-        self.assertEqual(writes.get("phone_result", 0), 0)
+        _reads, writes = _attribute_counts("print(s.at_probe)")
+        self.assertEqual(writes.get("at_probe", 0), 0)
 
     def test_augmented_assignment_counts_as_a_write(self):
         _reads, writes = _attribute_counts("s.auth_flow_started += 1")
@@ -187,10 +166,11 @@ class TheScannerItselfTests(unittest.TestCase):
 class TheVerdictsThemselvesTests(unittest.TestCase):
     """Each verdict gets a case where *only* it can fire.
 
-    The real tree today has exactly one read-but-never-written field and exactly
-    one dead field, both allowlisted.  So a verdict function that silently
-    stopped flagging anything would still make the real-tree tests pass -- the
-    allowlists would cover for it.  These synthetic inputs remove that cover.
+    The real-tree allowlists are empty since 2026-10-27 (the last two entries,
+    ``phone_result`` and ``oauth_tokens``, were deleted).  A verdict function
+    that silently stopped flagging anything could therefore still pass the
+    real-tree tests.  These synthetic inputs are the cover that keeps the
+    verdict itself honest.
     """
 
     def test_a_read_without_a_write_is_flagged(self):

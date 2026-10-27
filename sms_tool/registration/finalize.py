@@ -26,7 +26,7 @@ from ..auth_headers import current_auth_fingerprint
 from ..codex_oauth import collect_codex_oauth_tokens
 from ..operator_output import emit as _emit
 from .outcome import needs_manual_session_recovery
-from .result import build_registration_result
+from .result import build_registration_result, record_failed_mailbox_purchase
 from .retry_guard import RegistrationRetryGuard
 from .state import RegistrationState
 from ..kernel.sanitizer import describe_exception
@@ -38,22 +38,24 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def obtain_oauth_refresh_token(workflow: RegistrationWorkflow) -> None:
-    """Exchange an OAuth refresh token while this run's session is still live.
+    """Collect OAuth tokens while this run's session is still live (opt-in).
+
+    **Refresh tokens are not produced here for a fresh email account.** The
+    only supported RT path for an account created by this lane is the
+    **add-phone** flow, which lives in the separate one-click SMS lane
+    (``phone_registration`` / ``phone_reuse``). This helper collects Codex
+    OAuth access/id tokens for recovery and eagerly exchanges a callback
+    ``code`` when the redirect already carries one; it does not turn an
+    email-only signup into an RT holder. Keep it default-off and do not flip
+    it expecting RT coverage -- measure whatever the exchange actually
+    returns.
 
     **Opt-in** (``registration.obtain_refresh_token``, default off) because
     the email lane is deliberately AT-only: OAuth recovery has its own entry
     points, and pulling it in here used to add hidden dependencies.
 
-    Why it is worth having at all: ``oauth_refresh_token`` is declared
-    (``registration_runtime``), persisted (``finalize``) and summarised
-    (``_oauth_result_summary``) but has **no assignment anywhere in the
-    package**, so every account this lane registers is stored
-    ``refresh_token_status="no_rt"``.  The recovery chain then skips its only
-    free strategy (``oauth_refresh_token``) for that account and pays an
-    email code or a browser instead -- measured 0/1245 accounts hold an RT.
-
-    Cost is near zero **when the session is live**, which is the whole point
-    of doing it here: ``collect_codex_oauth_tokens`` follows the OAuth
+    Cost is near zero **when the session is live**, which is why the helper
+    is placed here: ``collect_codex_oauth_tokens`` follows the OAuth
     authorize URL first and, when the redirect already carries a callback
     ``code``, exchanges it immediately -- no login stage, no email code
     (pinned by ``tests/registration/test_codex_oauth.py::LiveSessionShortCircuitTests``;
@@ -257,7 +259,6 @@ def finalize(workflow: RegistrationWorkflow) -> dict[str, Any]:
             "email_otp": s.otp_data,
             "create_account": s.create_data,
             "auth_session": s.auth_body,
-            "phone_verification": s.phone_result,
             "codex_oauth": r._oauth_result_summary(s.oauth_result),
             "access_token_probe": s.at_probe,
         },
@@ -273,7 +274,6 @@ def finalize(workflow: RegistrationWorkflow) -> dict[str, Any]:
         fingerprint_geo_audit=workflow._fingerprint_geo_metadata(),
         device_identity=getattr(workflow, "device_identity", {}),
         extra={
-            "phone": s.phone_result.get("phone", "") if s.phone_result.get("ok") else "",
             "oauth_refresh_token": s.oauth_refresh_token,
             "refresh_token_status": "oauth_present" if s.oauth_refresh_token else "no_rt",
             "quota": {
@@ -318,5 +318,10 @@ def finalize(workflow: RegistrationWorkflow) -> dict[str, Any]:
             workflow.persistence.clear_checkpoint(s.username, runtime_config=workflow.config)
         except Exception:
             pass
+    if not s.success:
+        # A failed run must not cost a second mailbox: keep the purchased one in
+        # ``runtime/mailbox_reclaim.txt`` so the retry is
+        # ``--mailbox-file runtime/mailbox_reclaim.txt`` and buys nothing.
+        record_failed_mailbox_purchase(workflow, result)
     result["registration_machine"] = workflow.machine.snapshot()
     return result

@@ -54,3 +54,23 @@ def test_without_allowed_countries_single_draw_unchanged(monkeypatch):
     for _ in range(2):
         draws.append(pool.next())
     assert all(p.country == "US" for p in draws)
+
+
+def test_a_multi_timezone_market_is_seeded_by_the_device():
+    from sms_tool.auth_headers import set_fingerprint_device
+    from sms_tool.geo.profiles import MARKET_PROFILES
+
+    pool = FingerprintPool(mode="round_robin", verify_hint=False)
+    proxy = "http://user-region-US-sid-a:pass@us.example:8080"
+    valid = {iana for iana, _ in MARKET_PROFILES["US"]["timezones"]}
+
+    set_fingerprint_device("device-a")
+    first = pool.next(proxy)
+    set_fingerprint_device("device-a")
+    again = pool.next(proxy)
+    assert first.timezone == again.timezone
+    assert first.timezone in valid
+
+    set_fingerprint_device("device-b")
+    other = pool.next(proxy)
+    assert other.timezone in valid

@@ -181,6 +181,7 @@ if any(isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) f
 ```python
 from ..accounts.account_creation import _validate_email_otp
 from ..mailbox import _poll_email_otp
+
 ...
 ```
 
@@ -227,6 +228,8 @@ def _directory_of(module: str, is_package: bool) -> str:
     if len(parts) >= 2 and parts[1] in SUBPACKAGES:
         return f"{PKG}/{parts[1]}"
     return PKG
+
+
 # is_package 必须由 path.name == "__init__.py" 提供，不能靠段数推断
 ```
 

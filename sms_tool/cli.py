@@ -237,6 +237,80 @@ def _configured_registration_proxy(registration_driver: object = None, tracker=N
     return str(proxy_cfg.get("default") or "").strip()
 
 
+#: Desktop -> backend proxy transport. The matching constants live in
+#: ``SmsWorkbench.Contracts/ProxyArgumentTransport.cs``; both sides are pinned to
+#: ``tests/fixtures/proxy_env_transport.json`` so renaming one without the other
+#: fails a test instead of silently dropping the operator's proxy route.
+#:
+#: Why the transport exists at all: a residential proxy URL carries ``user:pass``,
+#: and on Windows every same-user process can read another process's command line.
+_PROXY_ENV = "SMS_TOOL_PROXY"
+_PROXY_POOL_ENV = "SMS_TOOL_PROXY_POOL"
+#: Payment lane. ``--checkout-proxy-pool`` / ``--approve-proxy-pool`` carry whole
+#: pools of credential-bearing URLs, so they travel the same way. Kept as two
+#: named constants (not just a tuple literal) because the cross-language fixture
+#: pins them by name.
+_CHECKOUT_PROXY_POOL_ENV = "SMS_TOOL_CHECKOUT_PROXY_POOL"
+_APPROVE_PROXY_POOL_ENV = "SMS_TOOL_APPROVE_PROXY_POOL"
+
+#: ``(environment variable, argparse attribute)`` for every credential-bearing
+#: proxy route the desktop may emit. One list, read by the loop below and by the
+#: guard that keeps every entry in ``sensitive_policy.json``.
+_PROXY_TRANSPORT_ROUTES = (
+    (_PROXY_ENV, "proxy"),
+    (_PROXY_POOL_ENV, "proxy_pool"),
+    (_CHECKOUT_PROXY_POOL_ENV, "checkout_proxy_pool"),
+    (_APPROVE_PROXY_POOL_ENV, "approve_proxy_pool"),
+)
+
+
+def _apply_proxy_argument_transport(args) -> None:
+    """Fill the proxy flags from the environment when the command line has none.
+
+    The WPF host moves these values out of argv before starting this process
+    (``PythonBackendClient`` -> ``ProxyArgumentTransport``); the flags stay
+    supported for the CLI, for scripts and for every existing caller.
+
+    Precedence is *flag over environment*: a value typed on the command line is
+    more specific than one transported by the desktop. Each variable is popped
+    after it is consumed so the route is not inherited by the child processes
+    this backend starts (the Sentinel node runner, browser drivers): only this
+    process needs it, and an inherited copy is one more place a credential can
+    leak from.
+    """
+    for env_name, attribute in _PROXY_TRANSPORT_ROUTES:
+        value = str(os.environ.pop(env_name, "") or "").strip()
+        if not value:
+            continue
+        # Only fill a slot the parser actually defines. ``--proxy*`` live on the
+        # root parser, but keeping the check makes adding a route harmless for a
+        # future subcommand-specific parser.
+        if not hasattr(args, attribute):
+            continue
+        if str(getattr(args, attribute, "") or "").strip():
+            continue
+        setattr(args, attribute, value)
+
+
+def _normalize_proxy_args(args) -> None:
+    """Settle the proxy route: transport first, then explicitness, then default.
+
+    Order matters. The desktop transports ``--proxy``/``--proxy-pool`` through
+    the environment (see ``_apply_proxy_argument_transport``), and a transported
+    route must count as *explicit* -- otherwise the configured
+    ``proxy.default`` silently replaces the proxy the operator picked in the UI.
+
+    ``proxy_explicit`` itself is kept because some commands (notably
+    ``--generate-ba-link``) need an omitted single proxy to mean "use the
+    configured stage proxies", while the rest of the CLI wants
+    ``proxy.default`` as its normal default.
+    """
+    _apply_proxy_argument_transport(args)
+    args.proxy_explicit = bool(args.proxy)
+    if not args.proxy:
+        args.proxy = ((CFG.get("proxy") or {}).get("default") or "").strip() or None
+
+
 def _apply_registration_proxy_defaults(args) -> None:
     if bool(getattr(args, "proxy_explicit", False)):
         return
@@ -355,6 +429,7 @@ def build_parser():
         one_click,
         payment,
         paypal,
+        proxy,
         quota,
         session,
         sub2api,
@@ -372,6 +447,7 @@ def build_parser():
     codex.register(parser)
     one_click.register(parser)
     email_change.register(parser)
+    proxy.register(parser)
 
     return parser
 
@@ -435,13 +511,7 @@ def main():
     args = parser.parse_args()
     if args.register_and_import:
         args.import_cpa = True
-    # Keep whether --proxy came from the operator.  Some commands (notably
-    # --generate-ba-link) need an omitted single proxy to mean "use the
-    # configured stage proxies", even though the rest of the CLI still wants
-    # CFG.proxy.default as its normal default proxy.
-    args.proxy_explicit = bool(args.proxy)
-    if not args.proxy:
-        args.proxy = ((CFG.get("proxy") or {}).get("default") or "").strip() or None
+    _normalize_proxy_args(args)
 
     base_dir = args.output_dir or str(output_dir(CFG))
     if _main_early_commands(args):
@@ -521,6 +591,9 @@ def main():
     if getattr(args, "check_promotion", False):
         _check_promotion(args)
         return
+    if getattr(args, "check_payment_qualification", False):
+        _check_payment_qualification(args)
+        return
     if args.export_codex_json:
         _export_codex_json(args)
         return
@@ -596,6 +669,11 @@ def _main_early_commands(args) -> bool:
         from .desktop_serve import serve_forever
 
         raise SystemExit(serve_forever())
+    if getattr(args, "proxy_list", False) or getattr(args, "proxy_test", False) or getattr(args, "proxy_screen", False):
+        from .commands.proxy_admin import run_proxy_command
+
+        run_proxy_command(args)
+        raise SystemExit(0)
     if getattr(args, "doctor", False):
         from .config import default_config_dir
         from .doctor import print_doctor_report, run_doctor
@@ -624,6 +702,7 @@ def _main_early_commands(args) -> bool:
             read_account,
             read_accounts,
             read_mailbox_pool,
+            read_proxy_pool,
         )
 
         if args.desktop_read == "accounts":
@@ -633,6 +712,11 @@ def _main_early_commands(args) -> bool:
         elif args.desktop_read == "mailbox-pool":
             extra_files = (args.chatai_mailbox_file,) if args.chatai_mailbox_file else ()
             payload = {"ok": True, **read_mailbox_pool(CFG, extra_files=extra_files)}
+        elif args.desktop_read == "proxy-pool":
+            payload = read_proxy_pool(
+                CFG,
+                lane=str(getattr(args, "proxy_read_lane", "") or "protocol_registration"),
+            )
         elif args.desktop_read == "mailbox-file":
             payload = create_mailbox_file(args.account_id or "", args.email or "", CFG)
         elif args.desktop_read == "account-file":
@@ -996,6 +1080,13 @@ def _import_cpa(args):
 
 def _check_promotion(args):
     return account_commands.check_promotion(args, _account_command_context())
+
+
+def _check_payment_qualification(args):
+    # Payment-lane command boundary: the probe calls the shared checkout
+    # capability code, so it is dispatched alongside the other payment commands
+    # (lane-coupling ratchet keeps the inventory of payment importers frozen).
+    return payment_commands.check_payment_qualification(args, _payment_command_context())
 
 
 def _refresh_cpa_quota(args):

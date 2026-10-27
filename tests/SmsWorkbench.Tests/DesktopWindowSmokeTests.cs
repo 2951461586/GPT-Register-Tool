@@ -226,6 +226,7 @@ public sealed class DesktopWindowSmokeTests
             new BackendTaskCoordinator(backendClient),
             new DesktopReadClient(new BackendTaskCoordinator(backendClient)),
             new WindowPaymentBatchDialogService(),
+            new WindowProxyPoolDialogService(),
             new PaymentBatchService(new TestApplicationPaths(rootDirectory), new BackendTaskCoordinator(backendClient)),
             new Wpf.Ui.SnackbarService(),
             new WindowSettingsDialogService(),
@@ -782,6 +783,13 @@ public sealed class DesktopWindowSmokeTests
     private sealed class WindowPaymentBatchDialogService : IPaymentBatchDialogService
     {
         public bool ShowDialog(Window owner, IEnumerable<PaymentBatchAccount> accounts) => false;
+    }
+
+    private sealed class WindowProxyPoolDialogService : IProxyPoolDialogService
+    {
+        public void ShowDialog(Window owner)
+        {
+        }
     }
 
     private sealed class WindowSettingsDialogService : ISettingsDialogService

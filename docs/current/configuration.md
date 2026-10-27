@@ -265,14 +265,14 @@ The **protocol** registration path selects from
 | Key | Type | Default | Effect |
 | --- | --- | --- | --- |
 | `mode` | `"random"` \| `"round_robin"` | `"random"` | weighted-random family selection vs deterministic order (tests/operators) |
-| `verify_hint` | bool | `false` | measure the exit even when the credential advertises a region; a disagreement is logged and the measurement wins. Costs one probe per selection — use it to validate a newly added egress |
+| `verify_hint` | bool | `true` | measure the exit even when the credential advertises a region; a disagreement is logged and the measurement wins. The shared resolver caches per proxy, so it costs one probe per exit (not per account). Set `false` only for a provider proven to honour its region token |
 | `allowed_countries` | array of ISO-3166 alpha-2 | `[]` | narrow the geo-bound selection; empty means no filter. Non-matching draws fall back to the closest profile with a one-time warning |
 
 ```jsonc
 "registration": {
   "fingerprint_pool": {
     "mode": "random",
-    "verify_hint": false,
+    "verify_hint": true,
     "allowed_countries": []
   }
 }
@@ -283,6 +283,55 @@ Owned by the `runtime` shard (`SHARD_OWNERSHIP`), so it lives in `runtime.json`.
 `allowed_countries` entry instead of silently falling back to the default pool.
 The pool is a process-lifetime singleton keyed by this section, so changing it
 mid-process does not rebuild an already-created pool.
+
+## Payment qualification (`payment_qualification`)
+
+The read-only 支付资格 probe (`sms_tool/payment/qualification.py`) reads one
+optional section. `--payment-qualification-method` / `-country` on the CLI
+override these values per run.
+
+| Key | Type | Default | Effect |
+| --- | --- | --- | --- |
+| `method` | string or array | `"auto"` | `auto` derives candidates from the measured exit country; a comma list / array forces methods. Unknown ids become an `unknown_method` row, not a crash |
+| `country` | ISO-3166 alpha-2 or `""` | `""` | Force the billing/request country. Empty measures the exit first, then falls back to `registration_country` / `identity_context.country` |
+| `probe_all_methods` | bool | `false` | `false` stops after the first eligible method (each candidate is its own Checkout create). `true` restores the full diagnostic grid; the CLI equivalent is `--payment-qualification-all-methods` |
+
+Owned by the `runtime` shard. The persisted badge lives in
+`raw_json.payment_qualification` (`store/markers.py`) and is surfaced by
+`desktop_read` as `payment_qualification_display` / `_state`.
+
+## ASN allocation and dynamic generation (`proxy.*`)
+
+Both features are **opt-in and off by default**. They never change an existing
+pool until an operator enables them.
+
+```jsonc
+"proxy": {
+  "asn_allocation": { "enabled": false },
+  "dynamic_generation": {
+    "enabled": false,
+    "base_proxy": "",
+    "country": "",
+    "asns": [],
+    "count": 1,
+    "session_minutes": 60,
+    "max_attempts": 30,
+    "quality_min": 80
+  }
+}
+```
+
+* `asn_allocation.enabled` makes the registration batch read the persisted
+  `proxy_asn` mapping, order candidates by the ASN round-robin ledger, and
+  record each attempt's hit rate. The mapping is written by
+  `--proxy-screen` / the desktop screening action (`AsnRegistry.configure`), or
+  measured in-process when the fingerprint pool probes the exit. With nothing
+  measured the feature is inert (the pool order is unchanged).
+* `dynamic_generation.enabled` rotates a fresh sticky session from
+  `base_proxy`, dual-pass screens it with the same gates as `--proxy-screen`,
+  and requires its ASN to be in `asns` (empty = any residential/mobile). It
+  retries up to `max_attempts`; a generation failure falls back to the static
+  pool rather than consuming mailboxes.
 
 ## Examples and credentials
 

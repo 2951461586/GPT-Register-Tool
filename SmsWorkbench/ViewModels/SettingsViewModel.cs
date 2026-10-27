@@ -48,11 +48,29 @@ namespace SmsWorkbench
         /// </para>
         /// </summary>
         internal static string BuildProxyLaneNotice(IReadOnlyList<string> lanes)
-            => lanes.Count == 0
-                ? ""
-                : Loc.F(
-                    "代理路线以配置文件 proxy.lanes 中的 {0} 为准；本页的注册代理与邮箱代理只写入旧键，不会覆盖 lanes。",
-                    string.Join(" / ", lanes));
+        {
+            if (lanes.Count == 0) return "";
+            string joined = string.Join(" / ", lanes);
+            if (lanes.Contains("protocol_registration"))
+            {
+                // The registration boxes are wired now: Load shows the lane's
+                // endpoints and Save writes them back to the lane (dual-writing the
+                // legacy keys). Only the lanes without a field here still shadow
+                // the page, and that has to stay visible.
+                IReadOnlyList<string> others = lanes.Where(lane => lane != "protocol_registration").ToArray();
+                return others.Count == 0
+                    ? Loc.F(
+                        "注册代理已接入 proxy.lanes（{0}）：填写后保存会直接写入该 lane（留空保存不改动 lanes），并同步旧键 proxy.registration / proxy.pool。",
+                        joined)
+                    : Loc.F(
+                        "注册代理已接入 proxy.lanes（{0}）：填写后保存会直接写入该 lane（留空保存不改动 lanes）并同步旧键；{1} 在本页没有字段，仍以 proxy.lanes 为准。",
+                        joined,
+                        string.Join(" / ", others));
+            }
+            return Loc.F(
+                "代理路线以 proxy.lanes 中的 {0} 为准；本页的邮箱代理只写旧键，不会覆盖 lanes。",
+                joined);
+        }
 
         /// <summary>
         /// Keep the provider-scoped boxes in step with the 供应商 dropdown.

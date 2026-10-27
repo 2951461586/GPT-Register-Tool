@@ -61,16 +61,17 @@ SmsWorkbench/ProtocolPaymentExecution.cs:29  ProtocolPaymentExecutionPlanner
 
 ```python
 {
-  "operation": "payment_method_capability_probe",
-  "classification": "eligible" | "ineligible" | "unknown",
-  "eligible": True | False | None,
-  "method_available": bool,
-  "payment_method_types": [...],           # ← 全量可用方式（Stripe 原始）
-  "ordered_payment_method_types": [...],   # ← 有序（前端展示顺序）
-  "custom_payment_methods": [...],
-  "currency": "USD", "amount": 0,
-  "offer_state": "zero_due",
-  "checkout_country": "US",
+    "operation": "payment_method_capability_probe",
+    "classification": "eligible" | "ineligible" | "unknown",
+    "eligible": True | False | None,
+    "method_available": bool,
+    "payment_method_types": [...],  # ← 全量可用方式（Stripe 原始）
+    "ordered_payment_method_types": [...],  # ← 有序（前端展示顺序）
+    "custom_payment_methods": [...],
+    "currency": "USD",
+    "amount": 0,
+    "offer_state": "zero_due",
+    "checkout_country": "US",
 }
 ```
 
@@ -82,8 +83,10 @@ SmsWorkbench/ProtocolPaymentExecution.cs:29  ProtocolPaymentExecutionPlanner
 `classification_for`（`checkout_contract.py:281-287`）只判断**被请求的那一个**方式在不在列表里：
 
 ```python
-if expected in self.payment_method_types: return "eligible", True
-if self.payment_method_types:             return "ineligible", False
+if expected in self.payment_method_types:
+    return "eligible", True
+if self.payment_method_types:
+    return "ineligible", False
 return "unknown", None
 ```
 

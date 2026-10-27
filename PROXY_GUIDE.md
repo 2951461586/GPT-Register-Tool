@@ -72,6 +72,18 @@ rotation, so the flag is purely additive. The default is `0` (off). Because any
 username is accepted, the server logs a warning when sticky mode is enabled on a
 non-loopback listen address.
 
+### Failover across sessions on one endpoint
+
+A rotating provider hands out many sticky sessions through **one** `host:port`
+(the live registration pool is ten lajiao `region-VN` entries on
+`us.lajiaohttp.net:2000` that differ only in the sid). The retry loop therefore
+excludes upstreams by their whole identity — `scheme://user:pass@host:port` —
+and not by address, so one blocked session falls through to its siblings. Until
+2026-10-26 it keyed on the address, which made the first failure exclude all ten
+and answer `general failure` after a single attempt. Two upstreams on the same
+endpoint with the same credentials are the same route; two sessions that differ
+only in the sid are not.
+
 ### Edge-aware health check
 
 By default an upstream is "healthy" once the pool can complete a SOCKS5/HTTP
@@ -88,6 +100,66 @@ python start_proxy_pool.py --health-edge-probe
 Off by default: the tunnel-only probe is unchanged. Each probe costs one HTTP
 request per upstream, and `--health-timeout` defaults to 15s in this mode
 instead of 5s.
+
+### Stats endpoint (HTTP, loopback only)
+
+`--stats-port` (default `18081`) serves `/health` (200/503) and a JSON inventory
+of every upstream — address, scheme, health counters, sticky-session count.
+
+Two rules are enforced by the server, not by convention:
+
+* **It binds to `127.0.0.1` regardless of `--host`.** The endpoint has no
+authentication, so exposing the SOCKS5 listener on a LAN address must not
+publish the upstream inventory with it. `--stats-host` is the explicit opt-in,
+and it logs a warning when it is non-loopback.
+* **Labels are credential-free.** A `proxy.pool` entry written in URL form is
+`scheme://user:pass@host:port`; its label (used by the stats payload *and* the
+health/relay log lines) is masked to `scheme://***:***@host:port`. Nothing that
+carries a password reaches `/stats`, the log sinks, or `repr(upstream)`.
+
+```powershell
+# default: http://127.0.0.1:18081/health
+curl.exe http://127.0.0.1:18081/health
+```
+
+### Desktop transport: no proxy credentials in argv
+
+The WPF host calls the Python backend with an argument list, and a residential
+pool entry is `scheme://user:pass@host:port`. On Windows every same-user process
+can read another process's command line (Task Manager, WMI `Win32_Process`, ETW),
+so the launcher moves the two proxy routes out of argv immediately before the
+process starts:
+
+| planner emits | launcher sends | backend reads |
+| --- | --- | --- |
+| `--proxy <url>` | `SMS_TOOL_PROXY=<url>` | env, then flag |
+| `--proxy-pool <a\nb>` | `SMS_TOOL_PROXY_POOL=<a\nb>` | env, then flag |
+| `--checkout-proxy-pool <a\nb>` | `SMS_TOOL_CHECKOUT_PROXY_POOL=<a\nb>` | env, then flag |
+| `--approve-proxy-pool <a\nb>` | `SMS_TOOL_APPROVE_PROXY_POOL=<a\nb>` | env, then flag |
+
+The two payment-lane pools are in the table because they carry the **same**
+secret in a bigger carrier: the protocol-payment batch is planned with
+`--checkout-proxy-pool` / `--approve-proxy-pool`, whose value is the whole
+region-mixed IPWO pool — dozens of `scheme://user:pass@host:port` lines joined
+by newlines. Leaving them on argv kept exactly the leak the transport exists to
+close, and that payload is also the one most likely to approach the 32K Windows
+command-line limit that the environment carrier does not have. Both flags are
+also declared in `sensitive_policy.json`'s `sensitive_options`, so the desktop's
+redacted argument log masks them instead of printing them.
+
+The plan stays pure and the flags keep working (the CLI, scripts and every
+existing caller are unchanged); only the process boundary changed. Precedence is
+**flag over environment**, and the backend pops each variable after reading it so
+it is not inherited by the child processes it starts (the Sentinel node runner,
+browser drivers). The names are pinned on both sides by
+`tests/fixtures/proxy_env_transport.json`, and `ProxyArgumentTransport.Routes`
+(C#) / `cli._PROXY_TRANSPORT_ROUTES` (Python) are the single lists a new
+credential-bearing flag must join.
+
+`--proxy-pool` is still one newline-joined value. That is what made the argv
+route attractive in the first place (one token for the whole pool), and it is
+also why a large pool could approach the 32K command-line limit — a limit the
+environment carrier does not have.
 
 ## Verification
 
@@ -132,6 +204,48 @@ curl.exe --proxy socks5h://127.0.0.1:7897 https://ipinfo.io/json
 
 If a local listener is not reachable, fix the proxy client first. Retrying the
 registration or PayPal flow will not repair a missing local listener.
+
+## Pool Diagnostics, ASN Ledger, Dynamic Generation
+
+Three read-only commands share one owner (`sms_tool/proxy/admin.py`); each
+prints one JSON document and masks credentials in every line and payload:
+
+| Command | Question it answers |
+| --- | --- |
+| `--proxy-list [--proxy-read-lane <lane>]` | What is configured, with cached geo/health only (no network) |
+| `--proxy-test --proxy-country PH` | Does each exit reach the ChatGPT edge, and where does it exit from |
+| `--proxy-screen --proxy-country PH --proxy-quality-min 70` | Dual-pass residential screening (stability/country/ASN/quality) plus the ASN ranking |
+
+The same three actions are available in the desktop **代理池** window (read-only).
+The desktop deliberately does not write config: materialise a usable pool with
+`python scripts/proxy_screen.py --country PH --quality-min 70 --out runtime/pool_clean.txt`
+and point the lane at that file (the `--out` file contains credentials and is
+gitignored under `runtime/`).
+
+### ASN ledger (`proxy.asn_allocation`)
+
+`--proxy-screen` and the desktop screening action write every residential/mobile
+sample into `runtime/asn_performance.sqlite3` (`AsnRegistry.configure`): the ASN
+row plus a **credential-free** `proxy_key -> ASN` mapping (endpoint + session
+hash, never the password). With `proxy.asn_allocation.enabled: true` the batch
+then:
+
+* orders registration candidates by the persisted ASN round-robin cursor;
+* records each attempt's hit rate / transport outcome against the measured ASN.
+
+It is off by default and fail-open: with no measured ASN the pool order is
+unchanged. The mapping also survives a process restart, unlike the in-memory geo
+cache.
+
+### Dynamic generation (`proxy.dynamic_generation`)
+
+Off by default. When enabled, the batch rotates a fresh sticky session from
+`base_proxy` with `proxy.entry.rotate_session`, screens it with the same
+dual-pass gate as `--proxy-screen`, and requires the measured ASN to be in
+`asns` (empty = any residential/mobile). `max_attempts` bounds the loop; a
+generation failure falls back to the static pool instead of consuming mailboxes.
+`base_proxy` must use a provider template that `proxy.entry` already understands
+(`region-XX` / `geo-XX` / `custom_zone_XX` / rola `country-XX` / Kookeey).
 
 ## Clash Verge Notes
 

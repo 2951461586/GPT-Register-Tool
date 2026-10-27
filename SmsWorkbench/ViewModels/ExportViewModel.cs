@@ -55,14 +55,17 @@ namespace SmsWorkbench
             if (row == null) return false;
             if (string.IsNullOrWhiteSpace(row.Identifier)) return false;
             if (row.HasAccessToken) return true;
+            // The status/payment labels are localized display copy, so the
+            // decision goes through the language-agnostic matcher instead of a
+            // hand-maintained pair of literal lists. The hand-written English
+            // half that used to live here is what the matcher now derives from
+            // the same catalog, so the two can no longer drift.
             string status = (row.Status + " " + row.PayPalStatus).Trim();
-            return status.Contains("已注册")
-                || status.Contains("待支付")
-                || status.Contains("支付完成")
-                || status.Contains("PM已创建")
-                || status.Contains("已导入")
-                || status.Contains("Registered")
-                || status.Contains("Payment completed");
+            return Loc.DisplayContains(status, "已注册")
+                || Loc.DisplayContains(status, "待支付")
+                || Loc.DisplayContains(status, "支付完成")
+                || Loc.DisplayContains(status, "PM已创建")
+                || Loc.DisplayContains(status, "已导入");
         }
 
         public static string FormatLabel(string format)

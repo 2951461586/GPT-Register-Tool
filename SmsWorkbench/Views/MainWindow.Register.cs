@@ -294,6 +294,29 @@ namespace SmsWorkbench
             RunAccountBatchBackend(plan, "account_promotion", rows.Count);
         }
 
+        private void CheckPaymentQualification()
+        {
+            var rows = SelectedRowsOrCurrent()
+                .Where(r => r != null && !string.IsNullOrWhiteSpace(r.Identifier))
+                .GroupBy(r => r.Identifier.Trim(), StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.First())
+                .ToList();
+            if (rows.Count == 0)
+            {
+                ShowThemedInfoDialog(Loc.T("支付资格检测"), Loc.T("没有找到可检测的账号。请先勾选账号，或切换到包含账号的筛选范围。"));
+                return;
+            }
+
+            // The method comes from the backend's payment_qualification.method
+            // config (default auto: methods for the exit country); leaving it blank here keeps one authority
+            // for the default instead of duplicating it in the UI.
+            var plan = BackendCommandPlanner.CreatePaymentQualificationCheck(
+                rows.Select(r => r.Identifier.Trim()).ToList(),
+                Register.DefaultWorkerCount(),
+                GetLivenessProxyPool());
+            RunAccountBatchBackend(plan, "account_payment_qualification", rows.Count);
+        }
+
         // Returns null when the operator cancels the dialog.
         private ScanOptions? ShowScanOptionsDialog(int accountCount)
         {

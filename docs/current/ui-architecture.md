@@ -106,6 +106,41 @@ Wpf.Ui.xaml   ->   Themes/Palette.xaml   ->   Themes/Controls.xaml
   （Rule 09：IPC writer 在 Python 侧）。
 * 进度是事件，不是轮询：`BackendTaskCoordinator` 把 stdout 的 JSON 行转成
   `AccountBatchProgress`，`TaskListViewModel` 消费（Rule 11：进度与并发分离）。
+* **代理不进 argv**：计划里仍然拼 `--proxy` / `--proxy-pool` / `--checkout-proxy-pool`
+  / `--approve-proxy-pool`（CLI 契约不变、`BackendCommandPlanner` 保持纯函数），但
+  `PythonBackendClient` 启动子进程前把这四个值换成
+  `SMS_TOOL_PROXY` / `SMS_TOOL_PROXY_POOL` / `SMS_TOOL_CHECKOUT_PROXY_POOL` /
+  `SMS_TOOL_APPROVE_PROXY_POOL` 环境变量并从 argv 移除 —— 住宅代理串带
+  `user:pass`，而 Windows 上同用户进程可读彼此的命令行。四个 flag 全部登记在
+  `sensitive_policy.json` 的 `sensitive_options`，所以任务日志里的参数展示也是脱敏的。
+  详见 `PROXY_GUIDE.md` 的 *Desktop transport*。
+
+## 4.1 状态判定与展示的分界
+
+账号行的文字是**展示**：`Loc.T` 在英文界面返回英文标签。因此：
+
+* 判定（是否已注册 / 是否需要关注 / 能否导出）**不得**比较展示串的字面量，
+  否则切换语言会改变行为（实测：英文下注册计数归零、已注册邮箱被重新排进批次）。
+  判定统一走 `Loc.DisplayContains(text, marker)`：它对**每种已投放语言**的形态
+  都匹配，且与当前语言设置无关；守卫在
+  `tests/governance/test_wpf_localized_decision_guard.py`。
+  它的词表按 **marker 与词条的两个方向**展开（`StartsWith` 覆盖标签族，如 `已导入`
+  → `已导入CPA`；`EndsWith` 覆盖限定词，如 `失败` → `网络失败`）。只做单向曾经
+  又造出同形的语言不对称：中文 `网络失败` 命中 `失败` 而需要关注，英文
+  `Network failure` 里没有 `Failed`，于是同一行在英文界面下**静默漏出**关注筛选
+  与关注计数（`network_failed` / `mailbox_failed` 两个机器码，2026-10-26 实测）。
+  同一根因也体现在徽章颜色上：`StatusSeverityConverter` 的英文危险词表原只有
+  `Failed`，现补 `failure`。
+* **已 pin 的分类缺口（非语言问题）**：`auth_state_failed` 渲染成 `会话失效` /
+  `Session invalid`，两种语言都不含关注 marker，所以它**不在**关注筛选/计数里，
+  尽管徽章把它画成危险色。是否让“会话失效”计入关注属于**产品决定**，
+  `LocalizedStatusDecisionTests.A_session_invalid_row_is_a_pinned_attention_gap`
+  显式钉住现状，避免被误当成已覆盖。
+* 已迁移的点：`RegistrationStatusPresentation.cs`、`RegisterViewModel`、
+  `PoolViewModel`、`ExportViewModel`；`Views/AccountGridPresentation.cs` 只做
+  徽章配色（不是业务判定），仍保留手写的中英双清单。
+* 彻底的做法是判定只读机器态（`registration_status` / `at_probe_status`），
+  已作为 `docs/audits/plans/plan-2026-10-25-wpf-row-status-decoupling.md` 立项。
 
 ## 5. 主题与配色
 

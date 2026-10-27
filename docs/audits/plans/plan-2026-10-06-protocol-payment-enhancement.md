@@ -95,8 +95,8 @@ class ProxyEntry:
     port: int
     username: str
     password: str
-    scheme: str        # "http" | "https" | "socks5" | "socks5h"
-    label: str = ""    # 原始输入（脱敏展示用）
+    scheme: str  # "http" | "https" | "socks5" | "socks5h"
+    label: str = ""  # 原始输入（脱敏展示用）
 ```
 
 **核心函数**：

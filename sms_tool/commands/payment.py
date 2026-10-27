@@ -43,6 +43,14 @@ class PaymentCommandContext:
     runtime_config: Mapping[str, Any] | None = None
 
 
+def _safe_int(value: Any, default: int = 0) -> int:
+    """Tolerant int cast for argparse/config values (never raises)."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def protocol_proxy_pool(config: Mapping[str, Any]) -> list[str]:
     _raw_protocol: object = config.get("protocol_payments")
     protocol: dict = _raw_protocol if isinstance(_raw_protocol, dict) else {}
@@ -601,6 +609,73 @@ def test_payment_proxies(args: Any, context: PaymentCommandContext) -> None:
     # plain CLI path signals it through a non-zero exit for scripting.
     if not ok and not desktop_ipc:
         raise SystemExit(3)
+
+
+def check_payment_qualification(args: Any, context: PaymentCommandContext) -> None:
+    """批次检测支付资格（只读 checkout 能力探测），并把结果写回账号。
+
+    Lives in the payment command boundary, not in ``commands/accounts.py``:
+    the probe is payment-lane code and ``scripts/lane_coupling_ratchet.py``
+    freezes which modules may import it. Success means "the probe answered"
+    (including a conclusive 无可用); ``eligible`` is counted separately.
+    """
+    from ..diagnostics import safe_print
+    from ..payment.qualification_batch import refresh_payment_qualification
+    from ..storage import list_paypal_accounts
+
+    emails = context.read_email_file(getattr(args, "email_file", ""))
+    if getattr(args, "email", None):
+        emails = [(args.email or "").strip()]
+    emails = [email for email in dict.fromkeys(str(item or "").strip().lower() for item in emails) if email]
+    if not emails:
+        emails = [str(row.get("email") or "").strip() for row in list_paypal_accounts()]
+    result = refresh_payment_qualification(
+        emails=emails,
+        workers=max(1, _safe_int(getattr(args, "quota_workers", 4) or getattr(args, "workers", 4) or 4, 4)),
+        proxy=getattr(args, "proxy", None),
+        proxy_pool=getattr(args, "proxy_pool", None),
+        timeout=max(5, _safe_int(getattr(args, "refresh_timeout", 45) or 45, 45)),
+        method=getattr(args, "payment_qualification_method", "") or "",
+        country=getattr(args, "payment_qualification_country", "") or "",
+        probe_all_methods=bool(getattr(args, "payment_qualification_all_methods", False)) or None,
+    )
+    _print_payment_qualification_summary(result)
+    desktop_ipc = bool(getattr(args, "desktop_ipc", False))
+    if desktop_ipc:
+        from ..desktop_ipc import emit_result
+
+        emit_result(result, enabled=True)
+    else:
+        safe_print(json.dumps(result, ensure_ascii=False, indent=2))
+    if not result.get("ok"):
+        raise SystemExit(3)
+
+
+def _print_payment_qualification_summary(result: Mapping[str, Any]) -> None:
+    """Staged operator lines: one summary + per-state failures.
+
+    A failed account shows the badge *and* the raw reason, because 检测失败 alone
+    cannot tell an operator whether to rotate the exit or refresh the token.
+    """
+    from ..diagnostics import safe_print
+
+    _raw_results: object = result.get("results")
+    rows = [item for item in (_raw_results if isinstance(_raw_results, list) else []) if isinstance(item, dict)]
+    answered = sum(1 for item in rows if item.get("ok"))
+    safe_print(
+        f"[*] 支付资格检测完成：共 {len(rows)} 个账号，已判定 {answered}，"
+        f"可用 {_safe_int(result.get('eligible'))}，无可用 {_safe_int(result.get('ineligible'))}，"
+        f"AT失效 {_safe_int(result.get('auth_invalid'))}，检测失败 {_safe_int(result.get('probe_failed'))}"
+    )
+    for item in rows:
+        if item.get("ok"):
+            continue
+        _raw_probe: object = item.get("probe")
+        probe = _raw_probe if isinstance(_raw_probe, dict) else {}
+        badge = str(item.get("payment_qualification") or "检测失败")
+        reason = str(probe.get("error") or probe.get("error_code") or item.get("error") or "")
+        detail = f" ({reason[:120]})" if reason else ""
+        safe_print(f"[!] {item.get('email') or ''}: {badge}{detail}")
 
 
 def extract_payment_link(args: Any, context: PaymentCommandContext) -> None:

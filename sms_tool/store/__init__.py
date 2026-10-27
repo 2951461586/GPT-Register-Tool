@@ -64,6 +64,7 @@ from .markers import (
     mark_quota_status,
     mark_account_health_result,
     mark_promotion_status,
+    mark_payment_qualification_status,
     clear_stale_promotion_at_marker,
 )
 from .environment_ledger import (
@@ -138,6 +139,7 @@ __all__ = [
     "mark_quota_status",
     "mark_account_health_result",
     "mark_promotion_status",
+    "mark_payment_qualification_status",
     "clear_stale_promotion_at_marker",
     "EMAIL_RE",
     "EXTRA_COLUMNS",

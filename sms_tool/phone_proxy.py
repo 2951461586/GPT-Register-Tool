@@ -170,9 +170,14 @@ def redact_proxy_text(value: Any, proxy: str | None = None) -> str:
         if normalized.endswith("/"):
             text = text.replace(normalized[:-1], redacted_canonical)
     # Embedded ``protocol://user:pass@host`` patterns — keep scheme so the
-    # result is still recognisable as a proxy URL.
+    # result is still recognisable as a proxy URL. The character class is greedy
+    # up to the **last** ``@`` inside the authority (``[^/\s]*`` cannot cross a
+    # path or whitespace), matching ``urlsplit`` — which splits at the last
+    # ``@`` — and ``proxy.entry._mask_credentials``. Keying on the first ``@``
+    # (``[^/@\s]+``) left the tail of a password containing ``@`` visible:
+    # ``http://alice:p@ss@host:1`` rendered as ``http://***:***@ss@host:1``.
     text = re.sub(
-        r"(?i)\b((?:https?|socks5h?)://)[^/@\s]+@",
+        r"(?i)\b((?:https?|socks5h?)://)[^/\s]*@",
         r"\1***:***@",
         text,
     )

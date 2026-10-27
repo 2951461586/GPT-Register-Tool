@@ -158,8 +158,6 @@ from .outcome import (
     _oauth_result_summary,
     _probe_registration_access_token as _probe_registration_access_token_impl,
     _registration_outcome,
-    _registration_requires_phone_verification,
-    _registration_requires_refresh_token,
     _retain_registration_checkpoint as _retain_registration_checkpoint_impl,
 )
 from .preflight import _resolve_proxy_scheme, registration_network_preflight

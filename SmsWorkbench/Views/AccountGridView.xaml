@@ -231,6 +231,15 @@
                     </DataTemplate>
                   </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="{loc:Tr Key='支付资格'}" Width="140" IsReadOnly="True" SortMemberPath="PaymentQualification" CanUserSort="True">
+                  <DataGridTemplateColumn.CellTemplate>
+                    <DataTemplate>
+                      <Border Style="{StaticResource StatusBadge}" Tag="{Binding PaymentQualification, Converter={StaticResource StatusSeverityConverter}}" ToolTip="{Binding PaymentQualification}">
+                        <TextBlock Style="{StaticResource StatusBadgeText}" Text="{Binding PaymentQualification}" TextTrimming="CharacterEllipsis"/>
+                      </Border>
+                    </DataTemplate>
+                  </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
                 <DataGridTemplateColumn Header="{loc:Tr Key='详情'}" Width="80">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate>
