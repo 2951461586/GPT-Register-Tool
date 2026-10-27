@@ -17,6 +17,7 @@ from typing import Any
 QUALIFICATION_ELIGIBLE = "eligible"
 QUALIFICATION_INELIGIBLE = "ineligible"
 QUALIFICATION_AUTH_INVALID = "auth_invalid"
+QUALIFICATION_EGRESS_DENIED = "egress_denied"
 QUALIFICATION_PROBE_FAILED = "probe_failed"
 QUALIFICATION_UNKNOWN = "unknown"
 
@@ -84,6 +85,33 @@ def is_country_mismatch(*texts: Any) -> bool:
 #: "风控拦截" instead of the generic "检测失败".
 _RISK_MARKERS = ("unusual activity",)
 
+
+def is_risk_blocked(*texts: Any) -> bool:
+    """True when any of the given strings carries OpenAI's risk refusal.
+
+    Public because the **aggregate** badge needs the same judgement as the
+    per-method one: measured 2026-10-27, an account whose only failure was
+    ``checkout HTTP 400 unusual activity`` rendered as 检测失败 because
+    ``_aggregate_label`` only looked at the state, not at the error.
+    """
+    combined = " ".join(_text(value) for value in texts)
+    return any(marker in combined for marker in _RISK_MARKERS)
+
+
+#: The proxy refused the *target host* (not the method, not the token). The pool
+#: answered ``chatgpt.com`` but the tunnel denied ``api.stripe.com``:
+#: measured 2026-10-27, every proxylane exit returned
+#: ``Tunnel connection failed: 503 Target host denied``. Kept distinct from
+#: ``probe_failed`` because the operator's action is "change the exit", not
+#: "refresh the token" or "pick another method".
+_EGRESS_DENIED_MARKERS = (
+    "target host denied",
+    "tunnel connection failed",
+    "unable to connect to proxy",
+    "forbidden ip",
+    "proxy authentication",
+)
+
 #: Error markers that mean "we never got an answer", so nothing was learned
 #: about the account. Distinguished from ``unknown`` (an answer arrived but was
 #: inconclusive) because only this class is worth retrying on a new exit.
@@ -126,6 +154,11 @@ def qualification_state(result: Any) -> str:
         return QUALIFICATION_INELIGIBLE
     if any(marker in error_text for marker in _AUTH_INVALID_MARKERS):
         return QUALIFICATION_AUTH_INVALID
+    # Checked before the generic transport class: an ACL denial text contains
+    # "connection" (``Tunnel connection failed``), so the order decides whether
+    # the badge says 出口被拒 or the generic 检测失败.
+    if any(marker in error_text for marker in _EGRESS_DENIED_MARKERS):
+        return QUALIFICATION_EGRESS_DENIED
     status = _text(result.get("status"))
     if status == "failed" or any(marker in error_text for marker in _TRANSPORT_MARKERS):
         return QUALIFICATION_PROBE_FAILED
@@ -159,9 +192,11 @@ def qualification_label(result: Any, method: str = "") -> str:
         return "无可用方式"
     if state == QUALIFICATION_AUTH_INVALID:
         return "AT失效"
+    if state == QUALIFICATION_EGRESS_DENIED:
+        return "出口被拒"
     if state == QUALIFICATION_PROBE_FAILED:
         error_text = f"{_text((result or {}).get('error'))} {_text((result or {}).get('error_code'))}"
-        if any(marker in error_text for marker in _RISK_MARKERS):
+        if is_risk_blocked(error_text):
             return "风控拦截"
         return "检测失败"
     return "未确定"
@@ -174,6 +209,8 @@ def qualification_state_group(state: str) -> str:
         return "qualified"
     if value in {QUALIFICATION_INELIGIBLE, QUALIFICATION_AUTH_INVALID}:
         return "blocked"
+    # ``egress_denied`` lands here on purpose: nothing was learned about the
+    # account, so it belongs with "unknown", not with the account-level blocks.
     return "unknown"
 
 
@@ -181,11 +218,13 @@ __all__ = [
     "COUNTRY_MISMATCH_DECISION",
     "METHOD_LABELS",
     "QUALIFICATION_AUTH_INVALID",
+    "QUALIFICATION_EGRESS_DENIED",
     "QUALIFICATION_ELIGIBLE",
     "QUALIFICATION_INELIGIBLE",
     "QUALIFICATION_PROBE_FAILED",
     "QUALIFICATION_UNKNOWN",
     "is_country_mismatch",
+    "is_risk_blocked",
     "method_label",
     "qualification_label",
     "qualification_state",

@@ -664,10 +664,21 @@ def _print_payment_qualification_summary(result: Mapping[str, Any]) -> None:
     answered = sum(1 for item in rows if item.get("ok"))
     if result.get("abort_reason"):
         safe_print(f"[!] 批次已中止：{result.get('abort_reason')}")
+    _raw_warnings: object = result.get("warnings")
+    for warning in _raw_warnings if isinstance(_raw_warnings, list) else []:
+        if not isinstance(warning, dict):
+            continue
+        # Non-fatal environment findings (a Stripe-denied egress pool) still
+        # belong in the operator's terminal, not only in the JSON payload.
+        detail = str(warning.get("detail") or warning.get("code") or "").strip()
+        if detail:
+            safe_print(f"[!] {detail}")
     safe_print(
         f"[*] 支付资格检测完成：共 {len(rows)} 个账号，已判定 {answered}，"
         f"可用 {_safe_int(result.get('eligible'))}，无可用 {_safe_int(result.get('ineligible'))}，"
-        f"AT失效 {_safe_int(result.get('auth_invalid'))}，检测失败 {_safe_int(result.get('probe_failed'))}"
+        f"AT失效 {_safe_int(result.get('auth_invalid'))}，"
+        f"出口被拒 {_safe_int(result.get('egress_denied'))}，"
+        f"检测失败 {_safe_int(result.get('probe_failed'))}"
     )
     for item in rows:
         if item.get("ok"):

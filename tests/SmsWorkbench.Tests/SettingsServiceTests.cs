@@ -1,6 +1,6 @@
+// Settings dialog service contract tests.
 using System.Text;
 using System.Text.Json.Nodes;
-using SmsWorkbench;
 
 namespace SmsWorkbench.Tests;
 
@@ -704,9 +704,10 @@ public sealed class SettingsServiceTests
     /// <summary>
     /// <c>proxy.lanes.&lt;lane&gt;</c> is authoritative in the backend whenever it is
     /// non-empty (<c>proxy/routing.py::canonical_lane_pool</c>, and the same rule
-    /// for <c>mailbox/router.py</c>). This page cannot edit it, so saving with an
-    /// empty box must neither invent a legacy route nor clear the phone exit that
-    /// has no field of its own.
+    /// for <c>mailbox/router.py</c>). The boxes now read the lane they own, but a
+    /// blank box still means "leave the backend's route alone": saving must
+    /// neither invent a legacy route nor clear the phone exit that has no field
+    /// of its own.
     /// </summary>
     [Fact]
     public void SaveWithBlankProxyBoxesPreservesDeclaredLanesAndThePhoneExit()
@@ -729,10 +730,7 @@ public sealed class SettingsServiceTests
         var service = new SettingsService(new TestApplicationPaths(fixture.Path));
 
         IReadOnlyList<SettingsCategoryViewModel> categories = service.Load();
-        Assert.Equal(
-            new[] { "protocol_registration", "mailbox" },
-            service.AuthoritativeProxyLanes);
-        // The boxes now read the lane they own, so opening Settings shows the
+        // The boxes read the lane they own, so opening Settings shows the
         // effective route instead of a misleading blank.
         Assert.Equal("http://lane-reg:1", Field(categories, "registration_proxy").Value);
         Assert.Equal("http://lane-mb:2", Field(categories, "mailbox_proxy").Value);
@@ -751,44 +749,5 @@ public sealed class SettingsServiceTests
         // The box now reads the lane, so a save mirrors that same value into the
         // legacy key; the explicit, separate phone exit above is not overwritten.
         Assert.Equal("http://lane-reg:1", root["proxy"]!["registration"]!.GetValue<string>());
-    }
-
-    [Fact]
-    public void DetectAuthoritativeProxyLanes_MatchesTheBackendShapeRules()
-    {
-        JsonObject root = JsonNode.Parse("""
-            {
-              "proxy": { "lanes": {
-                "protocol_registration": ["http://a:1"],
-                "browser_registration": { "pool": ["http://b:2"] },
-                "mailbox": { "default": "http://c:3" },
-                "payment": ["http://ignored:4"]
-              } }
-            }
-            """)!.AsObject();
-
-        IReadOnlyList<string> lanes = SettingsService.DetectAuthoritativeProxyLanes(root);
-
-        Assert.Equal(
-            new[] { "protocol_registration", "browser_registration", "mailbox" },
-            lanes);
-    }
-
-    [Fact]
-    public void DetectAuthoritativeProxyLanes_IgnoresBlankAndAbsentEntries()
-    {
-        JsonObject blank = JsonNode.Parse("""
-            {
-              "proxy": { "lanes": {
-                "protocol_registration": [],
-                "browser_registration": { "pool": [] },
-                "mailbox": "   "
-              } }
-            }
-            """)!.AsObject();
-        JsonObject absent = JsonNode.Parse("""{ "proxy": { "registration": "http://legacy:1" } }""")!.AsObject();
-
-        Assert.Empty(SettingsService.DetectAuthoritativeProxyLanes(blank));
-        Assert.Empty(SettingsService.DetectAuthoritativeProxyLanes(absent));
     }
 }

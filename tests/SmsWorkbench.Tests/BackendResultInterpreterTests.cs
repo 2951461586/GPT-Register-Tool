@@ -1,5 +1,6 @@
 using System.Text.Json;
 using SmsWorkbench;
+using SmsWorkbench.Localization;
 
 namespace SmsWorkbench.Tests;
 
@@ -675,5 +676,52 @@ public sealed class BackendResultInterpreterTests
         Assert.False(failed.IsSuccess);
         Assert.Equal("failed", failed.State);
         Assert.Contains("cannot find python", failed.DisplayText);
+    }
+
+    // 支付资格 summary: an exit that refuses the target host is not "another
+    // failure". Measured 2026-10-27, every row from a ChatGPT-only pool landed in
+    // 其他失败 with "503 Target host denied", which reads like an account problem.
+
+    [Fact]
+    public void PaymentQualificationSummary_CountsEgressDenialsSeparately()
+    {
+        var rows = new List<Dictionary<string, object>>
+        {
+            new() { ["payment_qualification_state"] = "eligible" },
+            new() { ["payment_qualification_state"] = "egress_denied" },
+            new() { ["payment_qualification_state"] = "probe_failed" },
+        };
+
+        string text = BackendResultInterpreter.PaymentQualificationSummary(rows);
+
+        Assert.Contains("已判定：1", text, StringComparison.Ordinal);
+        Assert.Contains("出口被拒：1", text, StringComparison.Ordinal);
+        Assert.Contains("其他失败：1", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void PaymentQualificationSummary_OmitsTheEgressCounterWhenThereIsNone()
+    {
+        var rows = new List<Dictionary<string, object>>
+        {
+            new() { ["payment_qualification_state"] = "eligible" },
+        };
+
+        Assert.DoesNotContain("出口被拒", BackendResultInterpreter.PaymentQualificationSummary(rows), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DisplayPaymentQualification_TranslatesTheEgressDenialBadge()
+    {
+        Assert.Equal("出口被拒", AccountStatusInterpreter.DisplayPaymentQualification("出口被拒"));
+        try
+        {
+            Loc.Instance.SetLanguage(AppLanguage.En);
+            Assert.Equal("Egress denied", AccountStatusInterpreter.DisplayPaymentQualification("出口被拒"));
+        }
+        finally
+        {
+            Loc.Instance.SetLanguage(AppLanguage.Zh);
+        }
     }
 }

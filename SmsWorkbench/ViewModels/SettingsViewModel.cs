@@ -6,8 +6,6 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using System.Collections.ObjectModel;
 
-using SmsWorkbench.Localization;
-
 namespace SmsWorkbench
 {
     public sealed partial class SettingsViewModel : ObservableObject
@@ -23,52 +21,8 @@ namespace SmsWorkbench
             _settingsService = settingsService;
             _fileLauncher = fileLauncher;
             Categories = new ObservableCollection<SettingsCategoryViewModel>(settingsService.Load());
-            // Load() has just refreshed the lane snapshot, so read it afterwards.
-            ProxyLaneNotice = BuildProxyLaneNotice(settingsService.AuthoritativeProxyLanes);
             selectedCategory = Categories.FirstOrDefault();
             WatchProviderSelector();
-        }
-
-        /// <summary>
-        /// Warning shown above the dialog's action row when <c>proxy.lanes</c>
-        /// owns the effective route. Empty when every lane resolves through the
-        /// legacy keys this page edits.
-        /// </summary>
-        public string ProxyLaneNotice { get; }
-
-        /// <summary>
-        /// Builds the notice from the lanes declared under <c>proxy.lanes</c>.
-        ///
-        /// <para>
-        /// The fields now read and write those canonical lanes directly; the
-        /// notice names the lanes this page owns so an operator does not have to
-        /// infer the routing precedence from the config files. Kept as a pure
-        /// function so the text is testable without constructing a window.
-        /// </para>
-        /// </summary>
-        internal static string BuildProxyLaneNotice(IReadOnlyList<string> lanes)
-        {
-            if (lanes.Count == 0) return "";
-            string joined = string.Join(" / ", lanes);
-            if (lanes.Contains("protocol_registration"))
-            {
-                // The registration boxes are wired now: Load shows the lane's
-                // endpoints and Save writes them back to the lane (dual-writing the
-                // legacy keys). Only the lanes without a field here still shadow
-                // the page, and that has to stay visible.
-                IReadOnlyList<string> others = lanes.Where(lane => lane != "protocol_registration").ToArray();
-                return others.Count == 0
-                    ? Loc.F(
-                        "注册代理已接入 proxy.lanes（{0}）：填写后保存会直接写入该 lane（留空保存不改动 lanes），并同步旧键 proxy.registration / proxy.pool。",
-                        joined)
-                    : Loc.F(
-                        "注册代理已接入 proxy.lanes（{0}）：填写后保存会直接写入该 lane（留空保存不改动 lanes）并同步旧键；{1} 在本页没有字段，仍以 proxy.lanes 为准。",
-                        joined,
-                        string.Join(" / ", others));
-            }
-            return Loc.F(
-                "代理路线以 proxy.lanes 中的 {0} 为准；本页的邮箱代理只写旧键，不会覆盖 lanes。",
-                joined);
         }
 
         /// <summary>

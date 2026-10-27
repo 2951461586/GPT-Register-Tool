@@ -6,9 +6,9 @@ When a pool is swapped to a new provider the old rows stay behind forever --
 they are never queried, but they make the file (and any census) misleading.
 
 This tool keeps only the endpoints that the **active** pools resolve to
-(``proxy_registry.census``), i.e. registration + mailbox + payment.  Dry-run by
-default; pass ``--apply`` to rewrite under the same OS file lock the tracker
-uses.
+(``proxy_registry.census``), i.e. registration + mailbox + payment +
+the payment-qualification exit.  Dry-run by default; pass ``--apply`` to
+rewrite under the same OS file lock the tracker uses.
 
     python scripts/proxy_health_prune.py
     python scripts/proxy_health_prune.py --apply

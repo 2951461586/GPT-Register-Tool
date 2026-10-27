@@ -20,6 +20,7 @@
       "protocol_registration": [],
       "browser_registration": [],
       "mailbox": [],
+      "payment_qualification": [],
       "payment": [
         "http://us.ipwo.net:7878:YOUR_USER_custom_zone_US:YOUR_PASSWORD"
       ]
@@ -275,7 +276,8 @@
     "probe_all_methods": false,
     "proxy_pool": [],
     "max_proxy_attempts": 3,
-    "stripe_preflight": true
+    "stripe_preflight": "warn",
+    "stripe_preflight_cache_seconds": 300
   },
   "timeouts": {
     "request": 20,

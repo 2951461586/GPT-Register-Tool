@@ -10,6 +10,7 @@ lane          resolver
 registration  ``proxy_routing.proxy_pool_for`` (lanes + one-way fallbacks)
 mailbox       ``mailbox.mailbox_proxy_candidates``
 payment       ``payment_routing.payment_proxy_pools`` / ``PaymentRoutePlanner``
+qualification ``payment.qualification.configured_qualification_proxy_pool``
 ============  ==========================================================
 
 Their differences are deliberate and pinned by tests (Rule 19), so this module
@@ -28,6 +29,7 @@ lives in :mod:`proxy_routing` so both this facade and
       "lanes": {
         "protocol_registration": ["http://...", ...],
         "mailbox": ["http://...", ...],
+        "payment_qualification": ["http://...", ...],
         "payment": {"pools": {"US": [...], "JP": [...]}, "default": [...]}
       }
     }
@@ -48,6 +50,7 @@ __all__ = [
     "LANES",
     "MAILBOX",
     "PAYMENT",
+    "QUALIFICATION",
     "REGISTRATION",
     "census",
     "endpoints_of",
@@ -55,6 +58,7 @@ __all__ = [
     "resolve",
     "resolve_mailbox",
     "resolve_payment",
+    "resolve_payment_qualification",
     "resolve_registration",
 ]
 
@@ -62,6 +66,13 @@ REGISTRATION = "registration"
 MAILBOX = "mailbox"
 PAYMENT = "payment"
 LANES = (REGISTRATION, MAILBOX, PAYMENT)
+
+#: The payment-qualification probe's dedicated exit. Deliberately outside
+#: ``LANES``: it is not a general egress lane and has no ``resolve()`` branch,
+#: but the census must show it. Without it ``proxy_census.py`` hid the one pool
+#: the qualification batch aborts on (``abort_reason=stripe_unreachable``), so
+#: the operator's first diagnostic step read as "no exit configured".
+QUALIFICATION = "payment_qualification"
 
 #: Registration resolution order: the protocol lane is the canonical one; the
 #: browser lane is offered for callers that explicitly register with a browser
@@ -128,6 +139,27 @@ def resolve_mailbox(config: Mapping[str, Any] | None, *, operation_proxy: str | 
         return parse_lane_proxy_pool(mailbox_proxy_candidates(operation_proxy, config))
     except Exception:
         return []
+
+
+def resolve_payment_qualification(config: Mapping[str, Any] | None) -> list[str]:
+    """Dedicated egress for the read-only payment-qualification probe.
+
+    Mirrors ``payment.qualification.configured_qualification_proxy_pool`` in
+    key order -- ``payment_qualification.proxy_pool`` first, then the canonical
+    ``proxy.lanes.payment_qualification`` -- without importing it: ``proxy`` must
+    not depend on ``payment`` (lane-coupling ratchet), and the rule is one line
+    of ``canonical_lane_pool`` either way.
+
+    Empty means "no dedicated exit", which is a real state: the batch then falls
+    back to the promotion lane and, because such exits are typically
+    ChatGPT-only, aborts with ``stripe_unreachable`` before creating a Checkout.
+    """
+    section = config.get("payment_qualification") if isinstance(config, Mapping) else None
+    if isinstance(section, Mapping):
+        dedicated = parse_lane_proxy_pool(section.get("proxy_pool"))
+        if dedicated:
+            return dedicated
+    return canonical_lane_pool(config, QUALIFICATION) or []
 
 
 def _method_local_pools(cfg: Mapping[str, Any], method: str) -> dict[str, list[str]]:
@@ -218,6 +250,7 @@ def census(config: Mapping[str, Any] | None, *, methods: Sequence[str] = ("paypa
     """One structured view of every pool, for operators and health dashboards."""
     registration = resolve_registration(config)
     mailbox = resolve_mailbox(config)
+    qualification = resolve_payment_qualification(config)
     report: dict[str, Any] = {
         REGISTRATION: {
             "count": len(registration),
@@ -229,12 +262,24 @@ def census(config: Mapping[str, Any] | None, *, methods: Sequence[str] = ("paypa
             "endpoints": endpoints_of(mailbox),
             "source": "proxy.lanes" if _canonical(config, MAILBOX) else "mailbox_proxy(_pool)",
         },
+        QUALIFICATION: {
+            "count": len(qualification),
+            "endpoints": endpoints_of(qualification),
+            "source": (
+                "proxy.lanes"
+                if _canonical(config, QUALIFICATION)
+                else ("payment_qualification.proxy_pool" if qualification else "unset (promotion fallback)")
+            ),
+        },
     }
     payment: dict[str, Any] = {"methods": {}, "endpoints": set()}
     payment_pools: list[list[str]] = []
     union: set[str] = set()
     union.update(report[REGISTRATION]["endpoints"])
     union.update(report[MAILBOX]["endpoints"])
+    # The qualification exit is a configured route, so health records for it must
+    # not be pruned as "unused" (scripts/proxy_health_prune.py reads this union).
+    union.update(report[QUALIFICATION]["endpoints"])
     for method in methods:
         resolved = resolve_payment(config, method=method)
         method_view: dict[str, Any] = {"regions_source": resolved["regions_source"], "regions": {}, "stages": {}}
@@ -263,27 +308,29 @@ def census(config: Mapping[str, Any] | None, *, methods: Sequence[str] = ("paypa
     # exits); report endpoints, never the credential itself.
     registration_creds = _credentials(registration)
     mailbox_shared = registration_creds & _credentials(mailbox)
+    qualification_shared = registration_creds & _credentials(qualification)
     payment_shared: set[str] = set()
     for pool in payment_pools:
         payment_shared |= registration_creds & _credentials(pool)
     report["cross_lane_overlaps"] = {
         MAILBOX: endpoints_of(sorted(mailbox_shared)),
         PAYMENT: endpoints_of(sorted(payment_shared)),
+        QUALIFICATION: endpoints_of(sorted(qualification_shared)),
     }
-    report["lane_isolation_ok"] = not mailbox_shared and not payment_shared
+    report["lane_isolation_ok"] = not (mailbox_shared or payment_shared or qualification_shared)
     return report
 
 
 def format_census(report: Mapping[str, Any]) -> str:
     """Human-readable, credential-free rendering of :func:`census`."""
     lines: list[str] = []
-    for lane in (REGISTRATION, MAILBOX):
+    for lane in (REGISTRATION, MAILBOX, QUALIFICATION):
         section = report.get(lane) or {}
-        lines.append(f"{lane:13s} count={section.get('count', 0):3d} source={section.get('source', '')}")
+        lines.append(f"{lane:21s} count={section.get('count', 0):3d} source={section.get('source', '')}")
         for endpoint in section.get("endpoints", []):
             lines.append(f"    {endpoint}")
     payment = report.get(PAYMENT) or {}
-    lines.append(f"{'payment':13s} endpoints={len(payment.get('endpoints', []))} source={payment.get('source', '')}")
+    lines.append(f"{'payment':21s} endpoints={len(payment.get('endpoints', []))} source={payment.get('source', '')}")
     for method, view in (payment.get("methods") or {}).items():
         lines.append(f"  [{method}] regions_source={view.get('regions_source', '')}")
         for name, info in view.get("regions", {}).items():
@@ -291,9 +338,9 @@ def format_census(report: Mapping[str, Any]) -> str:
         for name, info in view.get("stages", {}).items():
             lines.append(f"    stage  {name:16s} count={info['count']:3d} endpoints={info['endpoints']}")
     overlaps = report.get("cross_lane_overlaps") or {}
-    if overlaps.get(MAILBOX) or overlaps.get(PAYMENT):
+    if overlaps.get(MAILBOX) or overlaps.get(PAYMENT) or overlaps.get(QUALIFICATION):
         lines.append("CROSS-LANE OVERLAP (registration credential reused):")
-        for lane in (MAILBOX, PAYMENT):
+        for lane in (MAILBOX, PAYMENT, QUALIFICATION):
             for endpoint in overlaps.get(lane, []):
                 lines.append(f"    {lane}: {endpoint}")
     else:

@@ -65,11 +65,13 @@ from .catalog import PAYMENT_METHODS
 from .qualification_states import (
     COUNTRY_MISMATCH_DECISION,
     QUALIFICATION_AUTH_INVALID,
+    QUALIFICATION_EGRESS_DENIED,
     QUALIFICATION_ELIGIBLE,
     QUALIFICATION_INELIGIBLE,
     QUALIFICATION_PROBE_FAILED,
     QUALIFICATION_UNKNOWN,
     is_country_mismatch,
+    is_risk_blocked,
     method_label,
     qualification_label,
     qualification_state,
@@ -96,6 +98,22 @@ _REASON_COUNTRY_MISMATCH = "method_country_mismatch"
 _REASON_NO_METHOD = "no_method_for_country"
 _REASON_COUNTRY_UNKNOWN = "country_unknown"
 _REASON_UNKNOWN_METHOD = "unknown_method"
+_REASON_CURRENCY_UNKNOWN = "currency_unknown"
+
+#: Which transport answers a method. Only methods with the same kind can share
+#: one Checkout: PayPal and GCash each own a probe (``_paypal_capability_probe`` /
+#: ``run_gcash_provider``), every other method goes through the generic
+#: Stripe-capability transport.
+_PROBE_KIND_PAYPAL = "paypal"
+_PROBE_KIND_GCASH = "gcash"
+_PROBE_KIND_STRIPE = "stripe"
+
+
+def _as_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
 
 
 # ── configuration ────────────────────────────────────────────────────────────
@@ -300,10 +318,49 @@ def _auth_context(account: Mapping[str, Any]) -> dict[str, str]:
 
 
 # ── one method ───────────────────────────────────────────────────────────────
+def _probe_kind(method: str) -> str:
+    """Transport that would answer ``method`` (see the ``_PROBE_KIND_*`` notes)."""
+    if method == "paypal":
+        return _PROBE_KIND_PAYPAL
+    if method == "gcash":
+        return _PROBE_KIND_GCASH
+    return _PROBE_KIND_STRIPE
+
+
+def _contract_currency(method: str, country: str) -> str:
+    """Currency the Checkout for ``method`` from ``country`` must bill in.
+
+    Empty means "we do not know", and that is a real answer: ``direct_card`` /
+    ``paypal`` are country-agnostic, so their currency follows the exit country
+    through :data:`payment.wire.CURRENCY_MAP`. That map covers the catalog
+    markets, not every country a residential pool can leave from, and the old
+    code silently billed the catalogue default (``PHP`` for ``direct_card``)
+    against, say, a ``MX`` billing country -- a guaranteed rejection reported as
+    a generic probe failure. Callers skip (``currency_unknown``) instead.
+    """
+    spec = PAYMENT_METHODS[method]
+    if method in COUNTRY_AGNOSTIC_METHODS:
+        from .wire import CURRENCY_MAP
+
+        return str(CURRENCY_MAP.get(str(country or "").strip().upper()) or "").upper()
+    return str(getattr(spec, "currency", "") or "").upper()
+
+
+def _contract_key(method: str, country: str) -> tuple[str, str, str]:
+    """Identity of the Checkout request: same key ⇒ the same create payload.
+
+    ``CheckoutRequestContract.checkout_payload()`` carries the billing
+    country/currency, plan, entry point and promo campaign -- **not** the payment
+    method (that only selects how the answer is classified, plus the Stripe
+    locale). So two methods with the same kind, country and currency send the
+    same create, and one answer serves both (see ``_derive_row``).
+    """
+    return (_probe_kind(method), str(country or "").strip().upper(), _contract_currency(method, country))
+
+
 def _probe_kwargs(method: str, country: str) -> dict[str, Any]:
     """Contract fields for one method, sourced from the canonical catalogues."""
     from ..checkout_contract import browser_profile_for_country, PAYMENT_METHOD_PROFILES
-    from .wire import CURRENCY_MAP
 
     spec = PAYMENT_METHOD_PROFILES[method]
     browser = browser_profile_for_country(country)
@@ -311,7 +368,9 @@ def _probe_kwargs(method: str, country: str) -> dict[str, Any]:
     # country's currency, not the catalogue's home-country default (direct_card
     # is PH/PHP; sending PHP with billing JP/GB/VN is a guaranteed mismatch).
     # PayPal's dedicated probe already derives currency from ``checkout_country``.
-    currency = CURRENCY_MAP.get(country, spec.currency) if method in COUNTRY_AGNOSTIC_METHODS else spec.currency
+    # ``_select_candidates`` refuses an agnostic method whose currency is unknown,
+    # so the ``or spec.currency`` arm is only reached by non-agnostic methods.
+    currency = _contract_currency(method, country) or spec.currency
     return {
         "payment_method": method,
         "billing_country": country,
@@ -357,7 +416,82 @@ def _method_row(method: str, result: Mapping[str, Any]) -> dict[str, Any]:
         # ``oaics`` custom checkout never calls Stripe init; a Stripe
         # ``cs_*`` checkout does. The badge must not conflate the two.
         "checkout_kind": str(result.get("checkout_kind") or result.get("probe_checkout_kind") or ""),
+        # ``http_status`` used to be dropped here, which left the batch's
+        # "an HTTP answer proves the exit worked, so do not rotate" rule
+        # (``_retryable_transport``) with no status to read -- it only ever saw a
+        # missing key. ``retryable`` is the probe's own verdict and is what the
+        # operator needs to tell "try another exit" from "this method is done".
+        "http_status": _as_int(result.get("http_status")),
+        "retryable": bool(result.get("retryable")),
+        # ``checkout`` = this row cost its own Checkout; ``shared_checkout`` = the
+        # row was derived from another method's identical request.
+        "evidence_source": "checkout",
     }
+    return row
+
+
+def _method_token(value: Any) -> str:
+    """Canonical comparison token for one method name/id (``Kakao-Pay`` → ``kakao_pay``)."""
+    return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+
+
+def _method_inventory(result: Mapping[str, Any]) -> frozenset[str]:
+    """Payment methods a completed probe proved the Checkout *publishes*.
+
+    Empty means the answer carries no method list (a failure, or an ``oaics``
+    custom checkout that only returns channel ids we cannot name), so nothing can
+    be inferred from it and the next candidate must be probed for real.
+    """
+    tokens: set[str] = set()
+    for key in ("payment_method_types", "custom_payment_methods"):
+        for item in result.get(key) or []:
+            # ``checkout_contract`` already normalised these tokens with its alias
+            # table when it built the evidence, so the same rewrite is enough here
+            # and this module needs no extra import edge for it.
+            token = _method_token(item)
+            if token:
+                tokens.add(token)
+    return frozenset(tokens)
+
+
+def _derive_row(method: str, base: Mapping[str, Any], base_method: str) -> dict[str, Any] | None:
+    """Answer ``method`` from the Checkout that already answered ``base_method``.
+
+    The create payload is method-independent (``_contract_key``), so the second
+    create a per-method loop would send is byte-identical to the first: measured
+    2026-10-27, a PH account probed ``grabpay`` and ``direct_card`` with the same
+    ``billing_details {country: PH, currency: PHP}`` body. ``build_capability_probe_result``
+    already reduced the verdict to two parts -- *contract-level* (currency, zero
+    due) and *method availability* (is the method in the published list) -- and
+    only the second differs between methods. So: copy the contract verdict, then
+    replace the availability.
+
+    ``None`` means "no inventory in the evidence, probe it yourself".
+    """
+    inventory = _method_inventory(base)
+    if not inventory:
+        return None
+    stripe_type = _method_token(getattr(PAYMENT_METHODS[method], "stripe_type", method))
+    row = _method_row(method, base)
+    row["evidence_source"] = "shared_checkout"
+    row["derived_from"] = base_method
+    if stripe_type in inventory:
+        return row
+    row.update(
+        {
+            "state": QUALIFICATION_INELIGIBLE,
+            "label": "无可用方式",
+            "eligible": False,
+            # The published list is an answer: the method is not offered, which is
+            # a conclusive "no" for this account, not a transport failure.
+            "conclusive": True,
+            "decision": "payment_method_unavailable",
+            "error": f"该出口的 Checkout 未发布 {method_label(method)}",
+            "error_code": "payment_method_unavailable",
+            "error_stage": "method_selection",
+            "retryable": False,
+        }
+    )
     return row
 
 
@@ -402,12 +536,38 @@ def _unknown_method_row(method: str) -> dict[str, Any]:
 
 
 # ── aggregate ────────────────────────────────────────────────────────────────
+def _currency_unknown_row(method: str, country: str) -> dict[str, Any]:
+    """A method we cannot bill from this exit: no contract, so nothing learned."""
+    return {
+        "method": method,
+        "method_label": method_label(method),
+        "state": QUALIFICATION_UNKNOWN,
+        "label": "币种未知",
+        "eligible": False,
+        "conclusive": False,
+        "decision": _REASON_CURRENCY_UNKNOWN,
+        "error": f"{country} 不在货币映射表内，无法构造合法的 billing 币种",
+        "error_code": _REASON_CURRENCY_UNKNOWN,
+        "error_stage": "country_selection",
+        "amount": None,
+        "currency": "",
+        "payment_method_types": [],
+        "checkout_kind": "",
+        "http_status": 0,
+        "retryable": False,
+        "evidence_source": "country_selection",
+    }
+
+
 def _aggregate_state(rows: Sequence[Mapping[str, Any]]) -> str:
     states = [str(row.get("state") or "") for row in rows]
     for candidate in (
         QUALIFICATION_ELIGIBLE,
         QUALIFICATION_INELIGIBLE,
         QUALIFICATION_AUTH_INVALID,
+        # Ahead of ``probe_failed``: an egress denial is the more specific
+        # explanation when the batch also carries generic failures.
+        QUALIFICATION_EGRESS_DENIED,
         QUALIFICATION_PROBE_FAILED,
     ):
         if candidate in states:
@@ -437,7 +597,14 @@ def _aggregate_label(state: str, rows: Sequence[Mapping[str, Any]]) -> str:
         return "无可用方式"
     if state == QUALIFICATION_AUTH_INVALID:
         return "AT失效"
+    if state == QUALIFICATION_EGRESS_DENIED:
+        return "出口被拒"
     if state == QUALIFICATION_PROBE_FAILED:
+        # Mirror the per-method label: a risk refusal is not "检测失败". Measured
+        # 2026-10-27, bo***@icloud.com failed only with ``400 unusual activity``
+        # and the account badge still read 检测失败.
+        if any(is_risk_blocked(row.get("error"), row.get("error_code")) for row in rows):
+            return "风控拦截"
         return "检测失败"
     return "未确定"
 
@@ -448,6 +615,17 @@ def _first_error(rows: Sequence[Mapping[str, Any]]) -> str:
         if error and not row.get("eligible"):
             return error
     return ""
+
+
+def _first_status(rows: Sequence[Mapping[str, Any]]) -> int:
+    """HTTP status of the first non-eligible row that carries one (0 = none)."""
+    for row in rows:
+        if row.get("eligible"):
+            continue
+        status = _as_int(row.get("http_status"))
+        if status:
+            return status
+    return 0
 
 
 # ── public probe ─────────────────────────────────────────────────────────────
@@ -462,6 +640,7 @@ def check_payment_qualification(
     probe: Any = None,
     last_eligible_only: bool | None = None,
     probe_all_methods: bool | None = None,
+    pinned_proxy: bool = False,
 ) -> dict[str, Any]:
     """Probe one account's checkout capability, country-aware, and aggregate.
 
@@ -475,6 +654,14 @@ def check_payment_qualification(
     and the create budget is finite. ``probe_all_methods`` (config
     ``payment_qualification.probe_all_methods`` or the explicit argument)
     restores the full grid for diagnosis.
+
+    ``pinned_proxy`` says "``proxy`` is already the head of a caller-resolved
+    egress order, do not re-rank it". The batch sets it: it resolves the order
+    once (``qualification_batch._routing_inputs``) and then rotates through that
+    list, handing one candidate per attempt. Without it the dedicated pool —
+    promoted to ``explicit`` below — outranked the candidate, so every rotation
+    re-dialled ``dedicated[0]``: ``max_proxy_attempts`` became a no-op and the
+    batch row attributed the failure to an exit it never used.
     """
     data = dict(account) if isinstance(account, Mapping) else {}
     selection = parse_method_selection(method)
@@ -482,9 +669,24 @@ def check_payment_qualification(
         if probe_all_methods is None:
             probe_all_methods = bool(_config_section().get("probe_all_methods", False))
         last_eligible_only = not probe_all_methods
-    if not proxy and not proxy_pool:
-        proxy_pool = configured_qualification_proxy_pool() or None
-    resolved_proxy, normalized_proxy, proxy_source = _select_proxy(data, proxy, proxy_pool)
+    # 🔴 The dedicated qualification exit goes in as *explicit*, exactly like the
+    # batch path (``qualification_batch._routing_inputs``): every CLI/desktop
+    # caller also passes the registration proxy, and explicit input outranks the
+    # pool in ``operation_proxy_candidates``. Treating the dedicated pool as the
+    # `pool` argument demoted it behind the ChatGPT-only registration exit, so
+    # the operator's Stripe-capable exit was tried last instead of first.
+    dedicated = configured_qualification_proxy_pool()
+    pool_input: Any
+    if pinned_proxy and proxy:
+        # The caller already ordered the candidates and handed this one, so it
+        # belongs at the head; the dedicated pool stays behind it as a fallback.
+        # ``_select_proxy`` only reads the head, so no operation pool is needed.
+        explicit_input: Any = [str(proxy), *dedicated]
+        pool_input = []
+    else:
+        explicit_input = dedicated if dedicated else proxy
+        pool_input = (proxy_pool or proxy) if dedicated else proxy_pool
+    resolved_proxy, normalized_proxy, proxy_source = _select_proxy(data, explicit_input, pool_input)
     resolved_country, country_source = resolve_qualification_country(data, normalized_proxy, country)
     token = str(data.get("access_token") or "").strip()
 
@@ -509,10 +711,43 @@ def check_payment_qualification(
 
     probe_fn = probe or payment_method_capability_probe
     rows: list[dict[str, Any]] = list(skipped)
+    # One Checkout per *contract*, not per method (see ``_derive_row``). The
+    # evidence is keyed by ``_contract_key``; ``probe_all_methods`` is the
+    # diagnostic grid, so there every method pays for its own create.
+    allow_shared = not probe_all_methods
+    evidence: dict[tuple[str, str, str], tuple[str, Mapping[str, Any]]] = {}
+    derived_methods: set[str] = set()
     for candidate in candidates:
-        result = _run_method(probe_fn, token, data, candidate, resolved_country, normalized_proxy, timeout)
-        rows.append(_method_row(candidate, result))
-        if last_eligible_only and rows[-1]["eligible"]:
+        if candidate in derived_methods:
+            # Already answered from another method's identical Checkout.
+            continue
+        key = _contract_key(candidate, resolved_country)
+        shared = evidence.get(key) if allow_shared else None
+        derived = _derive_row(candidate, shared[1], shared[0]) if shared else None
+        if derived is not None:
+            rows.append(derived)
+            stop = bool(derived["eligible"])
+        else:
+            result = _run_method(probe_fn, token, data, candidate, resolved_country, normalized_proxy, timeout)
+            row = _method_row(candidate, result)
+            rows.append(row)
+            stop = bool(row["eligible"])
+            if allow_shared and isinstance(result, Mapping) and _method_inventory(result):
+                # One Checkout answers every method that shares its contract, so
+                # derive those rows now -- before the first-eligible stop, otherwise
+                # an eligible method would hide the sibling channels the same
+                # create already published.
+                evidence[key] = (candidate, dict(result))
+                for later in candidates:
+                    if later == candidate or later in derived_methods:
+                        continue
+                    if _contract_key(later, resolved_country) != key:
+                        continue
+                    sibling = _derive_row(later, result, candidate)
+                    if sibling is not None:
+                        rows.append(sibling)
+                        derived_methods.add(later)
+        if last_eligible_only and stop:
             break
 
     state = _aggregate_state(rows)
@@ -529,7 +764,16 @@ def check_payment_qualification(
         "country": resolved_country,
         "country_source": country_source,
         "proxy_source": proxy_source,
-        "error": _scrub(_first_error(rows), str(proxy or ""), str(resolved_proxy or ""), normalized_proxy),
+        # ``status_code`` feeds the batch's "an HTTP answer proves the exit was
+        # fine, so do not rotate" rule. An eligible account has nothing to
+        # explain, so it reports no error (a derived ``method_unavailable`` row
+        # would otherwise look like the reason the account failed).
+        "status_code": 0 if state == QUALIFICATION_ELIGIBLE else _first_status(rows),
+        "error": (
+            ""
+            if state == QUALIFICATION_ELIGIBLE
+            else _scrub(_first_error(rows), str(proxy or ""), str(resolved_proxy or ""), normalized_proxy)
+        ),
     }
 
 
@@ -546,12 +790,11 @@ def _select_candidates(
             skipped.append(_unknown_method_row(method))
             continue
         method_country = _catalog_country(method)
-        if method in COUNTRY_AGNOSTIC_METHODS:
-            # Probed with ``billing_country = country`` (see ``_probe_kwargs``),
-            # so the request cannot trip the server's country check.
-            candidates.append(method)
-            continue
-        if method_country and method_country != country:
+        # A country-agnostic method is billed *into the exit country* (see
+        # ``_probe_kwargs``), so its catalogue country must not skip it -- a JP
+        # exit with no local wallet still gets a real PayPal/card answer.
+        agnostic = method in COUNTRY_AGNOSTIC_METHODS
+        if not agnostic and method_country and method_country != country:
             skipped.append(
                 _skip_row(
                     method,
@@ -559,6 +802,13 @@ def _select_candidates(
                     f"该方法只支持 {method_country} 出口（当前 {country}）",
                 )
             )
+            continue
+        # An agnostic method bills the exit country's currency; when the exit
+        # country is not in ``CURRENCY_MAP`` there is no valid contract to send
+        # (the old code billed the catalogue default and paid for a guaranteed
+        # rejection, reported as 检测失败). Report the gap instead.
+        if not _contract_currency(method, country):
+            skipped.append(_currency_unknown_row(method, country))
             continue
         candidates.append(method)
     return candidates, skipped
@@ -610,7 +860,7 @@ def _run_method(
 
 def _select_proxy(
     account: Mapping[str, Any],
-    explicit: str | None,
+    explicit: str | list[str] | None,
     pool: str | list[str] | None = None,
 ) -> tuple[str | None, str, str]:
     """Return ``(resolved_proxy, normalized_proxy, source)``.

@@ -262,6 +262,7 @@ namespace SmsWorkbench
                 .Replace("无可用方式", Loc.T("无可用方式"))
                 .Replace("币种不符", Loc.T("币种不符"))
                 .Replace("AT失效", Loc.T("AT失效"))
+                .Replace("出口被拒", Loc.T("出口被拒"))
                 .Replace("检测失败", Loc.T("检测失败"))
                 .Replace("未确定", Loc.T("未确定"));
         }

@@ -222,6 +222,7 @@ public static class BackendResultInterpreter
         int eligible = 0;
         int ineligible = 0;
         int tokenInvalid = 0;
+        int egressDenied = 0;
         int failed = 0;
         int persistFailed = 0;
         if (rows != null)
@@ -235,6 +236,10 @@ public static class BackendResultInterpreter
                 if (state == "eligible") eligible++;
                 else if (state == "ineligible") ineligible++;
                 else if (state == "auth_invalid") tokenInvalid++;
+                // Kept out of "其他失败": the operator's fix is a different exit, not
+                // a different account or method. Measured 2026-10-27, every row of a
+                // ChatGPT-only pool landed here with "503 Target host denied".
+                else if (state == "egress_denied") egressDenied++;
                 else failed++;
                 if (row.ContainsKey("persisted") && !BackendJson.GetBool(row, "persisted"))
                     persistFailed++;
@@ -245,8 +250,10 @@ public static class BackendResultInterpreter
             .Append("    已判定：").Append(answered)
             .Append("    可用：").Append(eligible)
             .Append("    无可用：").Append(ineligible)
-            .Append("    AT失效：").Append(tokenInvalid)
-            .Append("    其他失败：").Append(failed);
+            .Append("    AT失效：").Append(tokenInvalid);
+        if (egressDenied > 0)
+            text.Append("    出口被拒：").Append(egressDenied);
+        text.Append("    其他失败：").Append(failed);
         if (persistFailed > 0)
             text.Append("    保存失败：").Append(persistFailed);
         return text.ToString();

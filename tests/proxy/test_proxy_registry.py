@@ -112,7 +112,56 @@ def test_census_reports_lane_isolation_ok_when_pools_are_disjoint():
     }
     report = pr.census(config, methods=("paypal",))
     assert report["lane_isolation_ok"] is True
-    assert report["cross_lane_overlaps"] == {pr.MAILBOX: [], pr.PAYMENT: []}
+    assert report["cross_lane_overlaps"] == {pr.MAILBOX: [], pr.PAYMENT: [], pr.QUALIFICATION: []}
+
+
+def test_census_reports_the_payment_qualification_lane():
+    """The qualification pool must be visible, or the batch aborts unexplained.
+
+    ``qualification_batch`` aborts with ``abort_reason=stripe_unreachable`` when
+    no candidate exit reaches ``api.stripe.com``; before this the census -- the
+    operator's first diagnostic step -- did not list the pool at all, so an
+    unset dedicated exit looked identical to a broken one.
+    """
+    config = {
+        "proxy": {
+            "pool": ["http://u:p@reg.example:1"],
+            "lanes": {"payment_qualification": {"pool": ["http://u:p@stripe.example:9"]}},
+        }
+    }
+    report = pr.census(config, methods=())
+
+    assert report[pr.QUALIFICATION]["endpoints"] == ["stripe.example:9"]
+    assert report[pr.QUALIFICATION]["source"] == "proxy.lanes"
+    assert "stripe.example:9" in report["union_endpoints"]
+    assert "payment_qualification" in pr.format_census(report)
+
+
+def test_census_falls_back_to_the_legacy_qualification_key():
+    config = {"payment_qualification": {"proxy_pool": ["http://u:p@legacy-stripe.example:7"]}}
+    report = pr.census(config, methods=())
+
+    assert report[pr.QUALIFICATION]["endpoints"] == ["legacy-stripe.example:7"]
+    assert report[pr.QUALIFICATION]["source"] == "payment_qualification.proxy_pool"
+
+
+def test_census_marks_an_unset_qualification_lane_as_a_fallback():
+    report = pr.census({"proxy": {"pool": ["http://u:p@reg.example:1"]}}, methods=())
+
+    assert report[pr.QUALIFICATION]["count"] == 0
+    assert report[pr.QUALIFICATION]["source"] == "unset (promotion fallback)"
+
+
+def test_census_flags_a_qualification_pool_that_reuses_the_registration_exit():
+    """The documented trap: qualification pointed at the ChatGPT-only signup pool."""
+    cred = "http://u:p@shared.example:1"
+    config = {
+        "proxy": {"pool": [cred], "lanes": {"payment_qualification": [cred]}},
+    }
+    report = pr.census(config, methods=())
+
+    assert report["lane_isolation_ok"] is False
+    assert report["cross_lane_overlaps"][pr.QUALIFICATION] == ["shared.example:1"]
 
 
 def test_census_reports_registration_payment_overlap():

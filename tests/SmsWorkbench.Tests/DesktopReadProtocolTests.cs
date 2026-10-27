@@ -39,8 +39,6 @@ public sealed class DesktopReadProtocolTests
 
         public string ConfigPath => "";
 
-        public IReadOnlyList<string> AuthoritativeProxyLanes => Array.Empty<string>();
-
         public IReadOnlyList<SettingsCategoryViewModel> Load() => Array.Empty<SettingsCategoryViewModel>();
 
         public SettingsSaveResult Save(IEnumerable<SettingsCategoryViewModel> categories) => new(true);

@@ -13,6 +13,9 @@ These tests pin the behaviour:
 
 * a well-formed ``proxy.lanes`` block (bare list, string, mapping and the
   payment ``{pools, default}`` shape) validates;
+* the lanes the desktop's 基础网络 page writes -- including
+  ``payment_qualification`` -- validate, because a desktop save must never
+  produce a config the backend then refuses to load;
 * an unknown lane name is rejected instead of ignored;
 * malformed lane / payment shapes are rejected with a path-prefixed message;
 * the shipped example still validates, so the guard does not break the template.
@@ -50,6 +53,18 @@ def _config(lanes: object) -> dict[str, object]:
         {"browser_registration": "http://browser.example:2"},
         {"mailbox": {"pool": ["http://mail.example:3"]}},
         {"mailbox": {"proxies": "http://mail.example:3", "default": ["http://mail.example:4"]}},
+        # The four lanes 设置 → 基础网络 writes, in the shape SettingsService.Save
+        # produces (``proxy.lanes.<lane>.pool``). payment_qualification used to be
+        # missing from supported_lanes, so a desktop save made every backend
+        # command fail validation with "unsupported proxy lane".
+        {
+            "protocol_registration": {"pool": ["http://reg.example:1"]},
+            "browser_registration": {"pool": ["http://browser.example:2"]},
+            "mailbox": {"pool": ["http://mail.example:3"]},
+            "payment_qualification": {"pool": ["http://stripe.example:4"]},
+        },
+        {"payment_qualification": ["http://stripe.example:4"]},
+        {"payment_qualification": "http://stripe.example:4"},
         # payment: bare pool, named region pools, and an optional default.
         {"payment": ["http://pay.example:5"]},
         {"payment": {"pools": {"US": ["http://us.example:6"], "JP": "http://jp.example:7"}}},
@@ -91,6 +106,10 @@ def test_unknown_proxy_lane_is_rejected():
         ({"payment": {"pools": {"": ["http://x:1"]}}}, "proxy.lanes.payment.pools names must not be blank"),
         ({"payment": {"default": 123}}, "proxy.lanes.payment.default must be a proxy list"),
         ({"mailbox": {"pool": 123}}, "proxy.lanes.mailbox.pool must be a proxy list"),
+        (
+            {"payment_qualification": {"pool": 123}},
+            "proxy.lanes.payment_qualification.pool must be a proxy list",
+        ),
     ],
 )
 def test_malformed_proxy_lanes_are_rejected(lanes, message):
@@ -106,6 +125,7 @@ def test_example_config_documents_and_validates_proxy_lanes():
         "protocol_registration",
         "browser_registration",
         "mailbox",
+        "payment_qualification",
         "payment",
     }
     validate_config(example)

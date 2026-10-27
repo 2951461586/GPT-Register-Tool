@@ -242,10 +242,32 @@ cache.
 A residential pool can return HTTP 200 on `chatgpt.com` and still deny
 `api.stripe.com` at the proxy tunnel (measured 2026-10-27 on all nine proxylane
 ports). Payment qualification therefore has two gates: the ChatGPT edge probe
-and a Stripe preflight (`payment_qualification.stripe_preflight`, default on).
-Configure a Stripe-capable dedicated pool with
-`payment_qualification.proxy_pool` (or `proxy.lanes.payment_qualification`)
-before running qualification. A quick manual check:
+and a Stripe preflight (`payment_qualification.stripe_preflight`).
+
+Since 2026-10-27 the Stripe gate **warns by default instead of aborting**: a
+checkout served as an `oaics_` custom session is answered without Stripe, so a
+Stripe-denied pool can still produce verdicts (measured the same day). The run
+emits a `batch_warning` naming the first denial (host / status / reason) and
+keeps going. Opt into the old fast failure with:
+
+```jsonc
+"payment_qualification": {
+  "proxy_pool": ["http://stripe-reachable.example:8080"],
+  "stripe_preflight": "strict"   // "warn" (default) | "strict" | false
+}
+```
+
+`payment_qualification.proxy_pool` (or `proxy.lanes.payment_qualification`) is
+tried **before** the registration proxy the desktop also passes; put a
+Stripe-capable exit here. When every selected account's last verdict came from
+an `oaics_` checkout the preflight is skipped automatically, and the verdict is
+cached for the same exit set (`stripe_preflight_cache_seconds`, default 300) so
+re-running does not hammer a denying pool.
+
+When the exit itself refuses the target host (`503 Target host denied`), the
+account badge is **出口被拒 / egress denied** — not 检测失败. The desktop summary
+counts it separately because the fix is a different exit, not a different
+account. A quick manual check:
 
 ```powershell
 curl.exe --proxy "http://user:pass@host:port" https://api.stripe.com/
@@ -314,7 +336,10 @@ Three egress lanes used to resolve independently:
 `sms_tool/proxy/registry.py` is the single surface over all three. It does not
 replace the resolvers (their differences are deliberate, Rule 19) — it fronts
 them with one vocabulary (`registration` / `mailbox` / `payment`), one resolve
-call, and one credential-free census:
+call, and one credential-free census. The census also reports
+`payment_qualification` (its own resolve, outside `LANES`), so the exit that
+gates the read-only qualification batch is visible without reading
+`payment_qualification.proxy_pool` by hand.
 
 ```powershell
 python scripts/proxy_census.py                       # text table
@@ -334,6 +359,7 @@ existing shards keep working byte-for-byte.
     "protocol_registration": ["http://user:pass@host:port", ...],
     "browser_registration":  ["..."],
     "mailbox":               ["http://127.0.0.1:7897"],
+    "payment_qualification": ["http://stripe-reachable.example:8080"],
     "payment": {
       "pools":   { "US": ["..."], "JP": ["..."] },
       "default": ["..."]
@@ -348,6 +374,9 @@ existing shards keep working byte-for-byte.
 - `payment_qualification` is the dedicated pool for the read-only payment
   qualification probe (`payment_qualification.proxy_pool` is accepted as the
   scalar/list form). It must be Stripe-reachable, not merely ChatGPT-reachable.
+  `validate_config` accepts this lane; before 2026-10-27 it did not, so the
+  desktop's 支付资格专用代理池 field wrote a lane the backend then rejected at
+  load time.
 - `payment` region pools are honoured by `PaymentRoutePlanner._named_pools`.
 - `proxy.lanes.payment.pools` keys match the names referenced by
   `protocol_payments.methods.<m>.stage_routes` / `stage_proxy_pools`.

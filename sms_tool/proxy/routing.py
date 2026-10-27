@@ -186,7 +186,7 @@ def operation_proxy_candidates(
     account: Mapping[str, Any] | None,
     *,
     operation: str,
-    explicit: str | None = None,
+    explicit: str | Sequence[str] | None = None,
     pool: Any = None,
     config: Mapping[str, Any] | None = None,
 ) -> tuple[OperationProxyCandidate, ...]:
@@ -196,6 +196,12 @@ def operation_proxy_candidates(
     operator enables it, then the operation pool (including its documented
     one-way compatibility fallback).  The source label is safe to persist in
     diagnostics; proxy credentials are not.
+
+    ``explicit`` accepts a pool as well as a scalar, and that is load-bearing:
+    a *dedicated* egress (the payment-qualification pool) is passed as
+    ``explicit`` precisely so it outranks the desktop's registration proxy,
+    which every desktop-launched command also sends as ``explicit``.  Ordering
+    here is the only place that decision is made -- callers must not re-sort.
     """
     ordered: list[OperationProxyCandidate] = []
 
@@ -249,7 +255,7 @@ def select_operation_proxy_candidate(
     account: Mapping[str, Any] | None,
     *,
     operation: str,
-    explicit: str | None = None,
+    explicit: str | Sequence[str] | None = None,
     pool: Any = None,
     config: Mapping[str, Any] | None = None,
 ) -> OperationProxyCandidate | None:

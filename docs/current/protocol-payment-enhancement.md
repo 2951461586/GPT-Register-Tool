@@ -1,7 +1,7 @@
 # Protocol Payment Architecture
 
 > **Scope.** 现行契约。设计提案与改动前的 recon 已归档到
-> [`docs/audits/plans/plan-2026-10-06-protocol-payment-enhancement.md`](../../audits/plans/plan-2026-10-06-protocol-payment-enhancement.md)。
+> [`docs/audits/plans/plan-2026-10-06-protocol-payment-enhancement.md`](../audits/plans/plan-2026-10-06-protocol-payment-enhancement.md)。
 > 本文只描述当前代码实际如何路由、执行与归一提链结果。
 
 ## 1. Shared Flow Executor And Routing
@@ -78,15 +78,31 @@ Load-bearing rules:
   request's egress, so trusting `region-XX` is exactly the
   `Billing country must match request country` failure this probe exists to
   prevent.
-* **One Checkout per probed method, stopped at the first eligible one.**
-  `payment_qualification.probe_all_methods` (CLI
-  `--payment-qualification-all-methods`) restores the full diagnostic grid.
-  Every candidate is a separate create, so the default is bounded.
+* **One Checkout per probed *contract*, not per method.**
+  `CheckoutRequestContract.checkout_payload()` carries only
+  `billing_details.country/currency`, plan, entry point and the promo campaign —
+  **not** the payment method — so a per-method loop bought the same answer twice
+  (measured 2026-10-27: `grabpay` and `direct_card` from a PH exit send byte-identical
+  creates). `_contract_key` groups candidates by (probe transport, country, currency);
+  the first probe's published-method inventory answers the rest, and those rows are
+  marked `evidence_source=shared_checkout` + `derived_from`. Only the *availability*
+  differs between them — the currency/zero-due verdict is contract-level, which is
+  exactly the split `build_capability_probe_result` already makes. A method that is
+  not in the published list is a conclusive `payment_method_unavailable`, not a
+  failure. PayPal and GCash own separate probes, so they never share a checkout;
+  evidence without a method list (a failure, an unnamed `oaics` channel id) is
+  never used to derive. `payment_qualification.probe_all_methods` (CLI
+  `--payment-qualification-all-methods`) is the diagnostic grid: every method pays
+  for its own create. The default still stops at the first eligible *probe*; the
+  siblings of that same contract are reported from the one answer it already got.
 * **Unknown method ids are rows, not exceptions.** `_select_candidates` emits
   an `unknown_method` row and the probe continues.
-* **Country-agnostic methods use the exit currency.** `direct_card` / `paypal`
-  take `payment.wire.CURRENCY_MAP[country]` (falling back to the catalogue
-  currency only when the country is unmapped).
+* **Country-agnostic methods use the exit currency, and refuse an unknown one.**
+  `direct_card` / `paypal` take `payment.wire.CURRENCY_MAP[country]`. When the exit
+  country is not in that map there is no valid billing currency, so the method is
+  skipped as `currency_unknown` (badge 币种未知, state `unknown`) instead of being
+  billed in the catalogue default (PH/PHP) and paying for a guaranteed rejection
+  reported as 检测失败.
 * **Per-method errors are proxy-redacted before persistence.**
   `_safe_error` masks `http(s)` and `socks5` URL credentials; `_run_method`
   scrubs the exact candidate proxy as a second gate.
@@ -96,18 +112,67 @@ Load-bearing rules:
 * **The batch breaker uses the shared vocabulary.** `_env_failure_class`
   returns `network` for transport/risk blocks and `account` for an invalid AT;
   `BatchCircuitBreaker` only trips on `network` / `auth_state`.
-* **Stripe is a separate egress gate.** `_stripe_preflight` probes
-  `https://api.stripe.com/` through the candidate pool before any account. A
-  proxy can answer `chatgpt.com` with 200 and still deny Stripe at the tunnel
-  (measured 2026-10-27: all nine proxylane exits returned `503 Target host
-  denied`). No Stripe-reachable candidate aborts the batch with
-  `stripe_unreachable` instead of spending Checkout creates.
-  `payment_qualification.stripe_preflight: false` is diagnostic-only.
-* **A dedicated pool wins over the registration pool.**
+* **Stripe is a separate egress gate, and no longer a hard one.**
+  `_stripe_preflight` probes `https://api.stripe.com/` through the candidate
+  pool before any account. A proxy can answer `chatgpt.com` with 200 and still
+  deny Stripe at the tunnel (measured 2026-10-27: all nine proxylane exits
+  returned `503 Target host denied`). A failed preflight now **warns and keeps
+  going** (`batch_warning` + `summary.warnings` + first denial host/status),
+  because the `oaics_` custom checkout answers without Stripe — measured the
+  same day, one account returned `可用·PayPal` that way through the very pool
+  that denied Stripe. `stripe_preflight: "strict"` restores the hard abort
+  (`abort_reason=stripe_unreachable`), `false` skips the probe, and a selection
+  whose previous verdicts were all `oaics_` skips it automatically
+  (`reason=oaics_only`).
+* **A dedicated pool is tried first.**
   `payment_qualification.proxy_pool` (or `proxy.lanes.payment_qualification`)
-  is used for qualification; when empty it falls back to the promotion lane.
-  This exists because the registration pool is a ChatGPT edge, not a Stripe
-  edge.
+  is passed as *explicit* egress input, so it outranks the registration proxy
+  that the desktop always also passes; the desktop pool stays as a fallback.
+  When empty, the promotion lane is used unchanged. This exists because the
+  registration pool is a ChatGPT edge, not a Stripe edge.
+* **Rotation moves exactly one step per attempt.** The batch resolves the whole
+  egress order once (`_routing_inputs`: dedicated pool, then the desktop route)
+  and hands one candidate per attempt with `pinned_proxy=True`, which puts that
+  candidate at the head instead of letting the dedicated pool demote it. Without
+  the flag the single-account probe's dedicated-pool promotion (the rule above)
+  made every rotation re-dial `dedicated[0]`: `max_proxy_attempts` was a no-op
+  and `proxy_host` named an exit that was never used. The single-account/CLI path
+  keeps the promotion, because there the caller hands the *desktop* proxy.
+* **An exit refusal has its own state.** `egress_denied` (markers: `Target host
+  denied` / `Tunnel connection failed` / `403 forbidden ip` / `407`) sits between
+  `auth_invalid` and the generic `probe_failed`, both in `qualification_state`
+  and in `_aggregate_state`. The badge reads 出口被拒, `_summary` and the
+  completion line carry an `出口被拒 N` counter (so the counters add up to
+  `total`), the desktop result dialog counts it separately, and the batch
+  breaker treats it as `network`. Before this it was indistinguishable from a
+  dead token or an unavailable method.
+* **A proven-dead pool is not re-dialled.** `_retryable_transport` treats
+  `egress_denied` as exit-level (another exit may differ in a mixed pool), but
+  `_probe_with_rotation` stops after the first denial when the batch preflight
+  already found 0/N Stripe-reachable candidates. Measured 2026-10-27: two
+  accounts burnt 3 attempts each (54 s + 43 s) against a pool the preflight had
+  just proven dead. A risk refusal (`400 unusual activity`) keeps rotating: it
+  happens on `chatgpt.com` and *is* exit-dependent. The rule "an HTTP answer
+  proves the exit worked, so do not rotate" reads `status_code`, which
+  `check_payment_qualification` now carries from the first non-eligible row
+  (`_method_row` keeps `http_status` / `retryable`) — before that the field was
+  dropped and the rule could never see a status.
+* **The egress preflight probes the head first.** `_stripe_preflight` dials
+  `candidates[0]` alone; only a denial widens to the rest in parallel, so a
+  healthy pool costs **one** request instead of nine. The `chatgpt.com` preflight
+  samples `PREFLIGHT_SAMPLE` and reports `sampled` / `pool` separately, so the
+  abort line says "抽样的 3 条（池内共 9 条）" instead of implying all nine died.
+* **The account badge keeps the failure's flavour.** `_aggregate_label` consults
+  `is_risk_blocked()` for `probe_failed`, so a risk refusal renders 风控拦截
+  instead of the generic 检测失败 (measured: bo***@icloud.com, 2026-10-27 17:45).
+* **The preflight verdict is cached per candidate set.** `_stripe_preflight`
+  keys a 5-minute (configurable, `0` disables) cache on a credential-free hash of
+  the sorted exits + their source, so an operator retry does not re-probe a pool
+  that already answered. Changing the pool invalidates the key.
+* **The account budget is derived, not configured.** `--refresh-timeout` stays
+  the per-request HTTP timeout; each attempt is additionally capped by the time
+  left of `timeout × max_proxy_attempts`, and an exhausted budget returns
+  `error_code=account_budget_exhausted` instead of starting another request.
 * **`max_proxy_attempts` is configurable.** Default 3, clamped 1..32; a
   proxy-level failure may need the full pool, but raising it only helps when
   the pool actually contains reachable exits.

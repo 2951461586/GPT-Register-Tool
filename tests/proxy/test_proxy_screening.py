@@ -307,6 +307,25 @@ def test_sanitize_proxy_text_masks_url_and_bare_credentials():
     assert sanitize_proxy_text("host:8080:user:secret") == "host:8080:***:***"
 
 
+def test_schemeless_userinfo_is_masked_too():
+    """``user:pass@host:port`` (no scheme) is a configured value, not free text.
+
+    ``normalize_proxy_url`` turns it into ``http://user:pass@host:port``, so the
+    pool accepts it -- but the redactors only knew the ``scheme://`` form and the
+    ``user:pass:host:port`` order, so this standard curl/SOCKS spelling printed
+    the password into the screening table and into support-bundle text
+    (measured 2026-10-27).
+    """
+    assert sanitize_proxy_text("u:secret@h.example:8080") == "***:***@h.example:8080"
+    assert sanitize_proxy_text("connect to user:pw@1.2.3.4:8080 failed") == ("connect to ***:***@1.2.3.4:8080 failed")
+    assert mask_proxy("u:secret@h.example:8080") == "***:***@h.example:8080"
+    # ``user:pass@host`` without a port is a mailbox, not a proxy: leave it alone.
+    assert sanitize_proxy_text("user:pass@example.com") == "user:pass@example.com"
+    # Masking is idempotent: the already-masked form must not lose a star.
+    masked = sanitize_proxy_text("http://u:secret@h.example:8080")
+    assert sanitize_proxy_text(masked) == masked
+
+
 def test_mask_proxy_keeps_scheme_host_port_only():
     assert mask_proxy("socks5h://user:pw@geo.example:1080") == "socks5h://***:***@geo.example:1080"
     assert mask_proxy("http://geo.example:8080") == "http://geo.example:8080"

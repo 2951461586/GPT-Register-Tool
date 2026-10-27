@@ -116,6 +116,23 @@ def validate_registration_driver_config(
     return selected
 
 
+#: Lanes accepted under ``proxy.lanes``. ``payment_qualification`` is the lane
+#: the desktop's 支付资格专用代理池 field writes and the one
+#: ``qualification.configured_qualification_proxy_pool`` reads through
+#: ``canonical_lane_pool``; omitting it rejected the desktop's own save, so the
+#: operator filled the box, the write landed, and every later backend command
+#: died in ``load_runtime_config`` with "unsupported proxy lane".
+_SUPPORTED_PROXY_LANES = frozenset(
+    {
+        "protocol_registration",
+        "browser_registration",
+        "mailbox",
+        "payment_qualification",
+        "payment",
+    }
+)
+
+
 def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -> None:
     """Validate static workflow inputs before network or subprocess execution."""
     errors: list[str] = []
@@ -155,12 +172,7 @@ def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -
             if not isinstance(lanes, Mapping):
                 errors.append("proxy.lanes must be an object")
             else:
-                supported_lanes = {
-                    "protocol_registration",
-                    "browser_registration",
-                    "mailbox",
-                    "payment",
-                }
+                supported_lanes = _SUPPORTED_PROXY_LANES
                 unknown_lanes = sorted(set(lanes) - supported_lanes)
                 if unknown_lanes:
                     errors.append("unsupported proxy lane: " + ", ".join(unknown_lanes))

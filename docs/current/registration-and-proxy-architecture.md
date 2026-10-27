@@ -113,7 +113,7 @@ Sentinel 不是纯 Python PoW，而是调用**真实 Node SDK**：
 | ③ 协议支付代理 | Checkout/Approve | **随用户选择的 checkout/approve 出口动态选择**：取 `protocol_payments.methods.<method>.checkout_proxy_pool` / `approve_proxy_pool` 持有的候选池（如 IPWO US/JP/GB），**非固定 JP/US/GB 混用** |
 
 - **按 lane 选池**：`proxy_pool_for()`（`proxy/routing.py:85`）返回 lane 专属池 + 单向回退。已知 lane：`browser_registration`、`protocol_registration`、`liveness`、`promotion`、`health_browser`。
-- **统一操作代理候选**：`select_operation_proxy()`（`proxy/routing.py:266`）按显式输入、可选 registration affinity、operation pool 和文档化回退取首项，并保留非敏感来源标签。
+- **统一操作代理候选**：`select_operation_proxy()`（`proxy/routing.py:272`）按显式输入、可选 registration affinity、operation pool 和文档化回退取首项，并保留非敏感来源标签。
 - **统一读面 / 可选单一声明点**：`proxy/registry.py` 是三条 lane 的唯一 façade（`resolve` / `census`，凭据永不输出），提供 `scripts/proxy_census.py` 一键普查。可选段 `proxy.lanes` 存在时对匹配 lane **权威**，缺省则完全走旧键；三条实路径（`proxy_pool_for`、`mailbox._mailbox_proxy_candidates`、`PaymentRoutePlanner._named_pools`）均已接通。详见 `PROXY_GUIDE.md` 的 *Unified Proxy Registry*。
 
 > 实战含义：本地用 Clash/代理软件把 `127.0.0.1:7897` 作为 OTP 收件专用出口，注册与支付各走独立上游；不要把同一个 session 出口同时喂给注册和健康探测。
@@ -185,9 +185,9 @@ Sentinel 不是纯 Python PoW，而是调用**真实 Node SDK**：
 | 路径 | 指纹池类型 | 单例入口 | 内容 | 地理对齐 |
 | --- | --- | --- | --- | --- |
 | `protocol` | `FingerprintPool`（`fingerprint_pool.py:121`） | `shared_fingerprint_pool(config)`（`fingerprint_pool.py:328`） | TLS/UA 档案 `ProtocolEnvironmentProfile`（`fingerprint_pool.py:37`） | `next(proxy)`（`fingerprint_pool.py:249`）按 `_GEO_PROFILES`（`auth_headers.py:313`）覆盖 locale/timezone |
-| `browser_*`（4 个） | `BrowserProfilePool`（`browser_fingerprint_pool.py:198`） | `shared_browser_profile_pool(config)`（`browser_fingerprint_pool.py:234`），经 `select_browser_profile(...)`（`browser_fingerprint_pool.py:537`）取档 | 7 个内置桌面硬件档案 `BROWSER_PROFILE_POOL`（`browser_fingerprint_pool.py:148`） | `detect_proxy_exit_geo(proxy)`（`browser_fingerprint_pool.py:317`）经共享 `geo.resolver`（Cloudflare trace 优先）→ `BROWSER_LOCALE_PROFILES`（`browser_fingerprint_pool.py:79`，经 `COUNTRY_LOCALE_PROFILE_MAP` 把 `VN` 映射到 `vn`） |
+| `browser_*`（4 个） | `BrowserProfilePool`（`browser_fingerprint_pool.py:258`） | `shared_browser_profile_pool(config)`（`browser_fingerprint_pool.py:297`），经 `select_browser_profile(...)`（`browser_fingerprint_pool.py:611`）取档 | 7 个内置桌面硬件档案 `BROWSER_PROFILE_POOL`（`browser_fingerprint_pool.py:159`） | `detect_proxy_exit_geo(proxy)`（`browser_fingerprint_pool.py:373`）经共享 `geo.resolver`（Cloudflare trace 优先）→ `BROWSER_LOCALE_PROFILES`（`browser_fingerprint_pool.py:140`，经 `COUNTRY_LOCALE_PROFILE_MAP` 把 `VN` 映射到 `vn`） |
 
-**核心结论**：浏览器路径的 7 个硬件档案是**进程级单例、被全部 4 个浏览器驱动共享**——playwright / camoufox / cloak / roxy 都走 `run_browser_registration`（`registration_drivers/browser_flow/orchestrator.py:69`）→ `_browser_session_scope`（`registration_drivers/browser_flow/flow_steps.py:160`）→ `select_browser_profile(_browser_geo, seed=device_id, config=config)`（`browser_fingerprint_pool.py:537`）取同一池。协议路径用独立的 `FingerprintPool`，两者**互不复用**。硬件档案只来自内置池；已退休的 `registration.browser_profile_pool` 会在配置校验时报错，不再制造“配置已生效”的假 Interface。
+**核心结论**：浏览器路径的 7 个硬件档案是**进程级单例、被全部 4 个浏览器驱动共享**——playwright / camoufox / cloak / roxy 都走 `run_browser_registration`（`registration_drivers/browser_flow/orchestrator.py:69`）→ `_browser_session_scope`（`registration_drivers/browser_flow/flow_steps.py:160`）→ `select_browser_profile(_browser_geo, seed=device_id, config=config)`（`browser_fingerprint_pool.py:611`）取同一池。协议路径用独立的 `FingerprintPool`，两者**互不复用**。硬件档案只来自内置池；已退休的 `registration.browser_profile_pool` 会在配置校验时报错，不再制造“配置已生效”的假 Interface。
 
 > **地区覆盖（2026-09-11）**：两侧都已收录 `VN`——协议路径 `_GEO_PROFILES["VN"]` = `Asia/Ho_Chi_Minh` / `vi-VN`；浏览器路径 `BROWSER_LOCALE_PROFILES["vn"]` + `COUNTRY_LOCALE_PROFILE_MAP["VN"] = "vn"`，并在 `TIMEZONE_NAME_BY_IANA` 补了 `Asia/Ho_Chi_Minh`。**未收录的国家不会报错，而是静默回退**：协议路径回退到"实测时区 + 档案原语言"，浏览器路径 `locale_profile_key_from_geo` 直接回退 `"us"`。因此**新增出口地区时必须同步补这三张表**，否则会出现"出口在 A 国、语言是 en-US"的隐性矛盾。
 
@@ -264,7 +264,7 @@ WPF 桌面端（`SmsWorkbench/`）通过 `PythonBackendClient` 启动 `python -m
 | `_get_cached_sentinel` / `_save_sentinel_cache` | `sentinel_tokens.py:79` / `:97` | 线程安全缓存 |
 | `_sentinel_device_id` / `assert_sentinel_device_id` | `sentinel_tokens.py:136` / `:148` | DID 一致性 |
 | `proxy_pool_for` | `proxy/routing.py:85` | 按 lane 选池 + 单向回退 |
-| `select_operation_proxy` | `proxy/routing.py:266` | 从统一候选序列选择操作代理 |
+| `select_operation_proxy` | `proxy/routing.py:272` | 从统一候选序列选择操作代理 |
 | `ProxyEntry` | `proxy/entry.py:82` | 规范代理模型 |
 | `parse_proxy` | `proxy/entry.py:143` | 6 形式解析 |
 | `rebuild_proxy_credentials` | `proxy/entry.py:399` | 凭据重建 |

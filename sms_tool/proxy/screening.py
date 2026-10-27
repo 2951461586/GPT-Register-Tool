@@ -144,6 +144,19 @@ MOBILE_KEYWORDS: tuple[str, ...] = (
 #: provider paste boxes and in probe error strings. Redaction runs before any
 #: text reaches a log line or a UI table.
 _URL_CREDENTIALS_RE = re.compile(r"(?P<scheme>[a-z][a-z0-9+.-]*://)(?P<userinfo>[^/@\s]+)@", re.IGNORECASE)
+#: ``user:pass@host:port`` with **no scheme**, i.e. the curl/SOCKS paste form.
+#: ``normalize_proxy_url`` accepts it (it becomes ``http://user:pass@host:port``),
+#: so it is a real configured value -- but ``_URL_CREDENTIALS_RE`` above requires
+#: the ``scheme://`` prefix, so the userinfo passed both redactors untouched.
+#: Measured 2026-10-27: ``mask_proxy("user:secret@h.example:8080")`` echoed the
+#: password into the screening table and into support-bundle text. The lookbehind
+#: excludes ``/`` and the mask characters (``*``) so the already-masked
+#: ``scheme://***:***@host`` output of the previous rule cannot be re-matched
+#: (without ``*`` it ate one star and produced ``****:***@``), and the port
+#: lookahead keeps ``user:pass@host`` (a mailbox, not a proxy) out of scope.
+_SCHEMELESS_CREDENTIALS_RE = re.compile(
+    r"(?<![\w:/@.*-])(?P<user>[^\s:@/\\]+):(?P<password>[^\s:@/\\]+)@(?=[^\s@/\\]+:\d{1,5})"
+)
 _BARE_CREDENTIALS_RE = re.compile(
     r"(?<![\w.:/-])(?P<user>[^\s:@/\\]+):(?P<password>[^\s:@/\\]+):(?P<host>[^\s:@/\\]+:\d{1,5})"
 )
@@ -169,8 +182,12 @@ def sanitize_proxy_text(text: Any) -> str:
     def _mask_host_first(match: re.Match[str]) -> str:
         return f"{match.group('host')}:***:***"
 
+    def _mask_schemeless(match: re.Match[str]) -> str:
+        return "***:***@"
+
     value = str(text or "")
     value = _URL_CREDENTIALS_RE.sub(_mask_url, value)
+    value = _SCHEMELESS_CREDENTIALS_RE.sub(_mask_schemeless, value)
     value = _HOST_FIRST_CREDENTIALS_RE.sub(_mask_host_first, value)
     return _BARE_CREDENTIALS_RE.sub(_mask_bare, value)
 

@@ -23,6 +23,8 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import threading
+import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import TYPE_CHECKING, Any
@@ -31,6 +33,7 @@ if TYPE_CHECKING:  # annotation only: the import itself is function-local
     from ..batch_circuit_breaker import BatchCircuitBreaker
 
 from .qualification import (
+    _scrub,
     check_payment_qualification,
     configured_max_proxy_attempts,
     configured_qualification_country,
@@ -39,6 +42,7 @@ from .qualification import (
 )
 from .qualification_states import (
     QUALIFICATION_AUTH_INVALID,
+    QUALIFICATION_EGRESS_DENIED,
     QUALIFICATION_ELIGIBLE,
     QUALIFICATION_INELIGIBLE,
     QUALIFICATION_PROBE_FAILED,
@@ -60,6 +64,23 @@ PREFLIGHT_TIMEOUT_SECONDS = 6.0
 #: (measured 2026-10-27: 9/9 proxylane exits returned 503 Target host denied).
 STRIPE_PREFLIGHT_TIMEOUT_SECONDS = 8.0
 
+#: How much of the first failing reply is quoted back to the operator. Long
+#: enough to carry ``503 Target host denied``, short enough for a task row.
+_REASON_CHARS = 120
+
+#: Phrases that identify *why* a tunnel refused the target. ``requests`` wraps the
+#: real cause at the end of a long exception string, so a plain prefix cut showed
+#: the wrapper and dropped the actionable part (measured 2026-10-27: the warning
+#: read ``... Max retries exceeded with url: / (Caused by ProxyError`` and never
+#: reached ``Tunnel connection failed: 503 Target host denied``).
+_ACL_REASON_MARKERS = (
+    "target host denied",
+    "tunnel connection failed",
+    "unable to connect to proxy",
+    "forbidden ip",
+    "proxy authentication",
+)
+
 #: Probe failures per account are bounded: an account walks at most this many
 #: egress candidates, so a wholly dead pool cannot multiply the batch duration.
 MAX_PROXY_ATTEMPTS = 3
@@ -73,6 +94,42 @@ _TRANSPORT_MARKERS = ("transport", "timeout", "timed out", "curl: (", "connectio
 #: the reference flow retries it the same way. It is not a "the method cannot be
 #: used" verdict, so it must not be short-circuited by the HTTP-status check.
 _RISK_MARKERS = ("unusual activity", "risk_blocked")
+
+
+def _last_checkouts_are_custom(accounts: list[dict[str, Any]]) -> bool:
+    """True when **every** account's last verdict came from an ``oaics_`` checkout.
+
+    ``oaics_`` checkouts are read through the custom-checkout reader instead of
+    ``stripe_init`` (``capability.py``), so that probe never dials
+    ``api.stripe.com``. When the whole selection answered that way last time, a
+    Stripe preflight would gate the run on a host the next run does not need --
+    the "oaics 路径放行" case.
+
+    One account without that evidence (new account, older record, a previous
+    Stripe-path verdict, or a method row whose ``checkout_kind`` was never
+    recorded) keeps the gate on, because a single ``cs_*`` checkout would touch
+    Stripe again.
+    """
+    seen = False
+    for account in accounts:
+        block = account.get("payment_qualification")
+        last = block.get("last_result") if isinstance(block, dict) else None
+        if not isinstance(last, dict):
+            return False
+        kinds = set()
+        for row in last.get("payment_methods") or []:
+            if not isinstance(row, dict):
+                continue
+            kind = str(row.get("checkout_kind") or "").strip()
+            if kind:
+                kinds.add(kind)
+        top = str(last.get("checkout_kind") or "").strip()
+        if top:
+            kinds.add(top)
+        if kinds != {"oaics"}:
+            return False
+        seen = True
+    return seen
 
 
 def refresh_payment_qualification(
@@ -101,29 +158,44 @@ def refresh_payment_qualification(
     egress_candidates = _egress_candidates(proxy, proxy_pool)
     preflight = _preflight(egress_candidates)
     if not preflight["ok"]:
-        _emit(
-            run_id,
-            "batch_aborted",
-            "failed",
-            total=len(accounts),
-            detail=f"出口池预检失败：{preflight['checked']} 个候选均无响应，已中止以免整批空转",
-        )
-        return _summary([], method=selected_method, aborted=True, abort_reason="egress_unreachable")
+        return _abort_egress_unreachable(run_id, accounts, preflight, selected_method)
 
-    stripe = _stripe_preflight(egress_candidates)
+    stripe_mode = _stripe_preflight_mode()
+    oaics_only = _last_checkouts_are_custom(accounts)
+    if stripe_mode != "off" and oaics_only:
+        # The previous verdict for *every* account came from a custom checkout
+        # (``oaics_``), which never calls ``api.stripe.com``. Gating such a run on
+        # Stripe would refuse to repeat a probe the system can complete.
+        stripe: dict[str, Any] = {
+            "ok": True,
+            "checked": 0,
+            "reachable": 0,
+            "skipped": True,
+            "reason": "oaics_only",
+            "source": _egress_source(),
+            "first_failure": None,
+        }
+    else:
+        stripe = _stripe_preflight(egress_candidates, source=_egress_source())
+    warnings: list[dict[str, Any]] = []
     if not stripe["ok"]:
-        _emit(
-            run_id,
-            "batch_aborted",
-            "failed",
-            total=len(accounts),
-            detail=(
-                "Stripe 出口预检失败："
-                f"{stripe['checked']} 个候选均无法访问 api.stripe.com，已中止；"
-                "请改用允许 Stripe 的支付出口（payment_qualification.proxy_pool）"
-            ),
-        )
-        return _summary([], method=selected_method, aborted=True, abort_reason="stripe_unreachable")
+        detail = _stripe_detail(stripe, strict=stripe_mode == "strict")
+        if stripe_mode == "strict":
+            _emit(run_id, "batch_aborted", "failed", total=len(accounts), detail=detail)
+            return _summary(
+                [],
+                method=selected_method,
+                aborted=True,
+                abort_reason="stripe_unreachable",
+                stripe_preflight=stripe,
+                warnings=[{"code": "stripe_unreachable", "detail": detail}],
+            )
+        # Default: warn and keep going. A Stripe-denied pool still answers
+        # through the server's ``oaics_`` custom checkout -- measured
+        # 2026-10-27, an account returned ``可用·PayPal`` that way while the same
+        # pool denied Stripe at CONNECT. Aborting suppressed that evidence.
+        warnings.append({"code": "stripe_unreachable", "detail": detail})
+        _emit(run_id, "batch_warning", "warning", total=len(accounts), detail=detail)
 
     max_workers = max(1, min(_as_int(workers, 4), 16, len(accounts)))
 
@@ -139,6 +211,11 @@ def refresh_payment_qualification(
                 detail="批次已熔断，跳过",
             )
             return _row(email, {"ok": False, "payment_qualification_state": QUALIFICATION_PROBE_FAILED}, skipped=True)
+        # Per-account budget: ``--refresh-timeout`` is a per-request timeout, so the
+        # account-level bound is that value times the rotation limit. Without this
+        # an account could hold a worker for methods × attempts × timeout while the
+        # operator read the field as a run budget (measured 72 s on 13:09).
+        budget_seconds = max(1, _as_int(timeout, 45)) * max(1, configured_max_proxy_attempts())
         probe = _probe_with_rotation(
             run_id,
             account,
@@ -149,6 +226,8 @@ def refresh_payment_qualification(
             selected_country,
             len(accounts),
             probe_all_methods,
+            deadline=time.monotonic() + budget_seconds,
+            stripe_unreachable=not stripe["ok"],
         )
         persisted = _persist(email, probe)
         row = _row(email, probe, persisted=persisted)
@@ -172,7 +251,13 @@ def refresh_payment_qualification(
         for future in as_completed(futures):
             results.append(future.result())
 
-    summary = _summary(results, method=selected_method, breaker=breaker)
+    summary = _summary(
+        results,
+        method=selected_method,
+        breaker=breaker,
+        stripe_preflight=stripe,
+        warnings=warnings,
+    )
     _emit(
         run_id,
         "batch_completed",
@@ -181,11 +266,38 @@ def refresh_payment_qualification(
         detail=(
             f"完成 {summary['total']} 个账号，已判定 {summary['success']}，"
             f"可用 {summary['eligible']}，无可用 {summary['ineligible']}，"
-            f"AT失效 {summary['auth_invalid']}，检测失败 {summary['probe_failed']}，"
+            f"AT失效 {summary['auth_invalid']}，"
+            f"出口被拒 {summary['egress_denied']}，检测失败 {summary['probe_failed']}，"
             f"保存失败 {summary['persist_failed']}"
         ),
     )
     return summary
+
+
+def _abort_egress_unreachable(
+    run_id: str,
+    accounts: list[dict[str, Any]],
+    preflight: dict[str, Any],
+    method: str,
+) -> dict[str, Any]:
+    """Stop before any account when not one sampled exit answered the edge.
+
+    ``sampled``/``pool`` are reported separately: the old line said "N 个候选均无响应"
+    with N = the sample size, so an operator read "3 of 9 dead" as "all 9 dead".
+    """
+    checked = _as_int(preflight.get("checked"), 0)
+    _emit(
+        run_id,
+        "batch_aborted",
+        "failed",
+        total=len(accounts),
+        detail=(
+            f"出口池预检失败：抽样的 {_as_int(preflight.get('sampled'), checked)} 条候选"
+            f"（池内共 {_as_int(preflight.get('pool'), checked)} 条）均无响应，"
+            "已中止以免整批空转"
+        ),
+    )
+    return _summary([], method=method, aborted=True, abort_reason="egress_unreachable")
 
 
 # ── account/probe plumbing ───────────────────────────────────────────────────
@@ -214,21 +326,51 @@ def _load_accounts(emails, *, get_account_record, list_accounts) -> list[dict[st
     return accounts
 
 
-def _effective_pool(proxy_pool: str | list[str] | None) -> str | list[str] | None:
-    """Dedicated qualification pool wins over the desktop registration pool."""
-    dedicated = configured_qualification_proxy_pool()
-    return dedicated or proxy_pool
+def _dedicated_pool() -> list[str]:
+    """The operator's dedicated qualification exit (empty when unconfigured)."""
+    try:
+        return list(configured_qualification_proxy_pool() or [])
+    except Exception:
+        return []
+
+
+def _routing_inputs(proxy: str | None, proxy_pool: str | list[str] | None) -> tuple[Any, Any]:
+    """Return ``(explicit, pool)`` for :func:`operation_proxy_candidates`.
+
+    🔴 The dedicated pool goes in as **explicit**, not as ``pool``. Every
+    desktop-launched command also passes the registration proxy as ``--proxy``,
+    and ``operation_proxy_candidates`` places explicit input first
+    (``proxy/routing.py``). Passing the dedicated pool as ``pool`` therefore
+    demoted it behind the ChatGPT-only registration exit: measured 2026-10-27,
+    the marker recorded ``proxy_source=explicit`` and the first attempt of every
+    account went to the registration exit regardless of what the operator had
+    configured. With the dedicated pool first, the desktop pool still follows as
+    a fallback, so nothing that worked before is lost.
+
+    When no dedicated pool is configured the inputs are returned untouched, so
+    the legacy path (explicit proxy, then the desktop/promotion pool) is
+    byte-for-byte what it was.
+    """
+    dedicated = _dedicated_pool()
+    if dedicated:
+        return dedicated, (proxy_pool or proxy)
+    return proxy, proxy_pool
+
+
+def _egress_source() -> str:
+    """Where the batch's candidates come from, for the operator-facing detail."""
+    return "dedicated" if _dedicated_pool() else "fallback"
 
 
 def _egress_candidates(proxy: str | None, proxy_pool: str | list[str] | None) -> list[str]:
     from ..proxy.routing import operation_proxy_candidates, parse_lane_proxy_pool
 
-    effective = _effective_pool(proxy_pool)
+    explicit, pool = _routing_inputs(proxy, proxy_pool)
     candidates = operation_proxy_candidates(
         {"email": "batch-preflight"},
         operation="promotion",
-        explicit=proxy,
-        pool=effective if parse_lane_proxy_pool(effective) else None,
+        explicit=explicit,
+        pool=pool if parse_lane_proxy_pool(pool) else None,
         config=_runtime_config(),
     )
     return [item.proxy for item in candidates if item.proxy]
@@ -244,16 +386,38 @@ def _probe_with_rotation(
     country: str,
     total: int,
     probe_all_methods: bool | None = None,
+    deadline: float | None = None,
+    clock: Any = None,
+    stripe_unreachable: bool = False,
 ) -> dict[str, Any]:
-    """Probe one account, rotating to a fresh exit only on a transport failure."""
+    """Probe one account, rotating to a fresh exit only on a transport failure.
+
+    ``timeout`` is the **per-request** HTTP timeout. ``deadline`` (a
+    ``time.monotonic()`` value) is the per-account budget; each attempt's request
+    timeout is capped by the time left, and when the budget is gone the loop stops
+    with ``error_code=account_budget_exhausted`` instead of silently starting
+    another request. Before 2026-10-27 there was no account-level bound at all, so
+    ``--refresh-timeout 45`` with ``max_proxy_attempts=3`` could occupy an account
+    for 2-3 minutes while the operator read the field as a run budget
+    (measured 72 s on 13:09).
+
+    ``stripe_unreachable`` is the batch-level preflight verdict. It only affects
+    *one* transition: an ``egress_denied`` result stops the rotation, because the
+    preflight already proved every candidate in this pool denies the host, so the
+    next exit cannot change a host-level ACL. Measured 2026-10-27: the pool
+    denied 9/9 while two accounts burnt 3 attempts each (54 s + 43 s) on it. A
+    risk block (``400 unusual activity``) still rotates, because that failure
+    happens on ``chatgpt.com`` and *is* exit-dependent.
+    """
     from ..proxy.routing import operation_proxy_candidates, parse_lane_proxy_pool
 
-    effective = _effective_pool(proxy_pool)
+    now = clock or time.monotonic
+    explicit, pool = _routing_inputs(proxy, proxy_pool)
     candidates = operation_proxy_candidates(
         account,
         operation="promotion",
-        explicit=proxy,
-        pool=effective if parse_lane_proxy_pool(effective) else None,
+        explicit=explicit,
+        pool=pool if parse_lane_proxy_pool(pool) else None,
         config=_runtime_config(),
     )
     ordered = [item.proxy for item in candidates] or [None]
@@ -261,6 +425,13 @@ def _probe_with_rotation(
     email = str(account.get("email") or "").strip().lower()
     probe: dict[str, Any] = {}
     for index, candidate in enumerate(ordered[:limit]):
+        remaining = None if deadline is None else deadline - now()
+        if remaining is not None and remaining <= 1.0:
+            # Nothing left for another request: report the exhausted budget as the
+            # reason instead of a fabricated transport error.
+            probe = _budget_exhausted(index, limit, timeout)
+            break
+        attempt_timeout = timeout if remaining is None else max(2, min(_as_int(timeout, 45), _as_int(remaining, 0)))
         _emit(
             run_id,
             "proxy_attempt",
@@ -272,18 +443,52 @@ def _probe_with_rotation(
         probe = check_payment_qualification(
             account,
             proxy=candidate,
-            timeout=timeout,
+            timeout=attempt_timeout,
             method=method,
             country=country,
             probe_all_methods=probe_all_methods,
+            # ``ordered`` above is the resolved egress order for this attempt
+            # (dedicated pool first, then the desktop/promotion lane), so this
+            # candidate is its head. Without the flag the probe re-promoted the
+            # dedicated pool and re-dialled ``dedicated[0]`` on every attempt.
+            pinned_proxy=True,
         )
         if isinstance(probe, dict):
             probe["proxy_index"] = index
             probe["proxy_attempts"] = index + 1
+            probe.setdefault("request_timeout", attempt_timeout)
             probe.update(_proxy_fingerprint(candidate))
         if not _retryable_transport(probe):
             break
+        if stripe_unreachable and str(probe.get("payment_qualification_state") or "") == (QUALIFICATION_EGRESS_DENIED):
+            # The preflight already dialled every candidate and none reached
+            # Stripe: another exit in this pool cannot flip a host-level ACL.
+            probe["rotation_stopped"] = "stripe_unreachable"
+            break
     return probe or {"ok": False, "payment_qualification_state": QUALIFICATION_PROBE_FAILED, "error": "no_proxy"}
+
+
+def _budget_exhausted(index: int, limit: int, timeout: int) -> dict[str, Any]:
+    """Result for an account whose egress budget ran out before another attempt.
+
+    ``status=failed`` + the ``timeout`` marker keep the existing classification
+    (``probe_failed`` — nothing was learned about the account), while the distinct
+    ``error_code`` tells the operator the bound, not the pool, stopped it.
+    """
+    return {
+        "ok": False,
+        "status": "failed",
+        "conclusive": False,
+        "payment_qualification_state": QUALIFICATION_PROBE_FAILED,
+        "payment_qualification": "检测失败",
+        "error": (
+            f"timeout: 单账号代理预算耗尽（--refresh-timeout {timeout}s × 最多 {limit} 次），已完成 {index} 次尝试"
+        ),
+        "error_code": "account_budget_exhausted",
+        "error_stage": "proxy_rotation",
+        "proxy_index": index,
+        "proxy_attempts": index,
+    }
 
 
 def _proxy_fingerprint(proxy: str | None) -> dict[str, str]:
@@ -321,6 +526,11 @@ def _retryable_transport(probe: dict[str, Any]) -> bool:
     """
     if not isinstance(probe, dict) or probe.get("ok"):
         return False
+    if str(probe.get("payment_qualification_state") or "") == QUALIFICATION_EGRESS_DENIED:
+        # Exit-level refusal, not a method verdict: a *different* exit can still
+        # work (a mixed pool), so rotation is allowed here. ``_probe_with_rotation``
+        # stops it when the batch preflight already proved the whole pool dead.
+        return True
     error = str(probe.get("error") or "").lower()
     if any(marker in error for marker in _RISK_MARKERS):
         return True
@@ -415,15 +625,21 @@ def _preflight(candidates: list[str]) -> dict[str, Any]:
     from ..proxy.edge_probe import DEAD, probe_openai_edge
 
     sample = candidates[:PREFLIGHT_SAMPLE]
+    pool = len(candidates)
     if not sample:
         # No configured pool is not a preflight failure: the account's own
         # affinity or a direct connection is still a legitimate path.
-        return {"ok": True, "checked": 0}
+        return {"ok": True, "checked": 0, "sampled": 0, "pool": 0}
+    checked = 0
     for candidate in sample:
+        checked += 1
         verdict = probe_openai_edge(candidate, timeout=PREFLIGHT_TIMEOUT_SECONDS)
         if verdict.status != DEAD:
-            return {"ok": True, "checked": len(sample)}
-    return {"ok": False, "checked": len(sample)}
+            return {"ok": True, "checked": checked, "sampled": len(sample), "pool": pool}
+    # ``sampled``/``pool`` are separate on purpose: the abort used to say "N 个候选
+    # 均无响应" with N = the sample size, so an operator read "3 of 9 dead" as
+    # "all 9 dead" and never checked the other six.
+    return {"ok": False, "checked": checked, "sampled": len(sample), "pool": pool}
 
 
 def _stripe_preflight_url() -> str:
@@ -440,7 +656,7 @@ def _stripe_probe(proxy: str, timeout: float) -> tuple[int, str]:
     session = requests.Session()
     try:
         session.trust_env = False
-    except Exception:
+    except Exception:  # a Session always carries the flag; keep the probe non-fatal
         pass
     session.proxies = {"http": proxy, "https": proxy}
     try:
@@ -457,6 +673,16 @@ def _stripe_reachable(proxy: str, timeout: float = STRIPE_PREFLIGHT_TIMEOUT_SECO
     if not proxy:
         return True
     status, text = (probe or _stripe_probe)(proxy, timeout)
+    return _stripe_verdict(status, text)
+
+
+def _stripe_verdict(status: int, text: str) -> bool:
+    """Classify one Stripe probe reply (pure, so it can be unit-tested directly).
+
+    Reachable means "a real Stripe answer came back". ``5xx`` and 407 are the
+    proxy's own refusals; the body markers catch the tunnel-level denials that
+    arrive as a proxied 403 (``Target host denied``).
+    """
     if not status or status >= 500 or status == 407:
         return False
     lowered = str(text or "").lower()
@@ -466,12 +692,120 @@ def _stripe_reachable(proxy: str, timeout: float = STRIPE_PREFLIGHT_TIMEOUT_SECO
     )
 
 
-def _stripe_preflight_enabled() -> bool:
+def _stripe_reason_text(text: str) -> str:
+    """One-line evidence string for a failed Stripe probe.
+
+    Prefers the phrase that says *why* the tunnel refused (``Target host denied``
+    / ``Tunnel connection failed`` …) and only falls back to a boundary-cut
+    prefix. Two defects motivated this (measured 2026-10-27 on the live pool):
+
+    * the reason was cut at a fixed 120 chars, mid-token, producing
+      ``… (Caused by ProxyError`` followed by the next clause;
+    * the actionable cause sits at the *end* of requests' exception chain, so the
+      cut removed exactly the part the operator needed.
+    """
+    collapsed = " ".join(str(text or "").split())
+    if not collapsed:
+        return ""
+    lowered = collapsed.lower()
+    hits = [position for position in (lowered.find(marker) for marker in _ACL_REASON_MARKERS) if position >= 0]
+    if hits:
+        # Start at the *earliest* marker so a preceding one (``Tunnel connection
+        # failed`` before ``Target host denied``) is not cut in half by a lookback.
+        index = min(hits)
+        end = min(len(collapsed), index + 88)
+        snippet = collapsed[index:end].strip().rstrip("'\"()")
+        return ("…" if index else "") + snippet + ("…" if end < len(collapsed) else "")
+    if len(collapsed) <= _REASON_CHARS:
+        return collapsed
+    cut = collapsed.rfind(" ", 0, _REASON_CHARS)
+    if cut < 40:
+        cut = _REASON_CHARS
+    return collapsed[:cut].rstrip(" ,;(:") + "…"
+
+
+#: Last Stripe-preflight verdict per candidate-set. Three operator retries in two
+#: minutes used to send 9×3 requests through a pool that had already denied the
+#: host (measured 2026-10-27: 27 requests in 84 s, identical answer). The key is a
+#: salted SHA-256 of the sorted candidates, so credentials are never stored.
+_STRIPE_PREFLIGHT_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+_STRIPE_PREFLIGHT_CACHE_LOCK = threading.Lock()
+_STRIPE_PREFLIGHT_CACHE_LIMIT = 32
+
+
+def _stripe_preflight_cache_seconds() -> float:
+    """``payment_qualification.stripe_preflight_cache_seconds`` (default 300, 0=off)."""
+    section = _runtime_config().get("payment_qualification")
+    value = section.get("stripe_preflight_cache_seconds", 300) if isinstance(section, dict) else 300
+    try:
+        return max(0.0, float(value))
+    except (TypeError, ValueError):
+        return 300.0
+
+
+def _stripe_preflight_cache_key(candidates: list[str], source: str) -> str:
+    joined = "\n".join(sorted(str(item) for item in candidates))
+    return hashlib.sha256(f"{source}\n{joined}".encode("utf-8")).hexdigest()
+
+
+def _stripe_preflight_cache_get(key: str) -> dict[str, Any] | None:
+    with _STRIPE_PREFLIGHT_CACHE_LOCK:
+        entry = _STRIPE_PREFLIGHT_CACHE.get(key)
+        if entry is None:
+            return None
+        expires, result = entry
+        if expires <= time.monotonic():
+            _STRIPE_PREFLIGHT_CACHE.pop(key, None)
+            return None
+        return dict(result)
+
+
+def _stripe_preflight_cache_put(key: str, ttl: float, result: dict[str, Any]) -> None:
+    if ttl <= 0:
+        return
+    now = time.monotonic()
+    with _STRIPE_PREFLIGHT_CACHE_LOCK:
+        if len(_STRIPE_PREFLIGHT_CACHE) >= _STRIPE_PREFLIGHT_CACHE_LIMIT:
+            for stale_key, (expires, _payload) in list(_STRIPE_PREFLIGHT_CACHE.items()):
+                if expires <= now:
+                    _STRIPE_PREFLIGHT_CACHE.pop(stale_key, None)
+            while len(_STRIPE_PREFLIGHT_CACHE) >= _STRIPE_PREFLIGHT_CACHE_LIMIT:
+                _STRIPE_PREFLIGHT_CACHE.pop(next(iter(_STRIPE_PREFLIGHT_CACHE)))
+        _STRIPE_PREFLIGHT_CACHE[key] = (now + ttl, dict(result))
+
+
+def _stripe_preflight_cache_clear() -> None:
+    """Drop every cached verdict (tests, and after a settings save)."""
+    with _STRIPE_PREFLIGHT_CACHE_LOCK:
+        _STRIPE_PREFLIGHT_CACHE.clear()
+
+
+def _stripe_preflight_mode() -> str:
+    """``payment_qualification.stripe_preflight`` → ``"off"`` / ``"warn"`` / ``"strict"``.
+
+    ``warn`` is the default and the deliberate change of 2026-10-27: a failed
+    preflight used to abort the batch, but every probe method *can* still be
+    answered through the server's ``oaics_`` custom checkout, which never calls
+    ``api.stripe.com`` (``capability.py``). Measured the same day: one account
+    returned ``可用·PayPal`` through that path while the identical exit pool
+    denied Stripe at CONNECT. Aborting therefore suppressed evidence the
+    system was still able to collect.
+
+    ``strict`` restores the old fast-abort for operators who only accept
+    Stripe-verified conclusions; ``off`` skips the probe entirely. A typo cannot
+    make the batch *stricter*, because anything unrecognised falls back to
+    ``warn``.
+    """
     section = _runtime_config().get("payment_qualification")
     value = section.get("stripe_preflight", True) if isinstance(section, dict) else True
     if isinstance(value, str):
-        return value.strip().lower() not in {"0", "false", "no", "off"}
-    return bool(value)
+        text = value.strip().lower()
+        if text in {"0", "false", "no", "off", "never", "disabled"}:
+            return "off"
+        if text in {"strict", "abort", "enforce", "required"}:
+            return "strict"
+        return "warn"
+    return "warn" if value else "off"
 
 
 def _stripe_preflight(
@@ -479,21 +813,117 @@ def _stripe_preflight(
     *,
     timeout: float = STRIPE_PREFLIGHT_TIMEOUT_SECONDS,
     probe: Any = None,
+    source: str = "",
 ) -> dict[str, Any]:
-    """Check the whole candidate list, not a sample: one Stripe-capable exit is enough."""
+    """Check the whole candidate list: one Stripe-capable exit is enough.
+
+    The result carries the *evidence* (``first_failure``) and the pool's
+    ``source`` so the caller can say what actually failed instead of telling the
+    operator to configure a field that is already configured -- the message
+    they saw on 2026-10-27 pointed at ``payment_qualification.proxy_pool``
+    while that field held the very nine exits that were being denied.
+    """
     if not candidates:
-        return {"ok": True, "checked": 0, "reachable": 0, "skipped": True}
-    if not _stripe_preflight_enabled():
-        return {"ok": True, "checked": 0, "reachable": 0, "skipped": True}
-    worker_count = max(1, min(8, len(candidates)))
-    with ThreadPoolExecutor(max_workers=worker_count) as executor:
-        results = list(executor.map(lambda item: _stripe_reachable(item, timeout, probe), candidates))
-    return {
-        "ok": any(results),
-        "checked": len(results),
-        "reachable": sum(1 for item in results if item),
+        return {
+            "ok": True,
+            "checked": 0,
+            "reachable": 0,
+            "skipped": True,
+            "reason": "no_candidates",
+            "source": source,
+            "first_failure": None,
+        }
+    mode = _stripe_preflight_mode()
+    if mode == "off":
+        return {
+            "ok": True,
+            "checked": 0,
+            "reachable": 0,
+            "skipped": True,
+            "reason": "disabled",
+            "source": source,
+            "first_failure": None,
+        }
+    ttl = _stripe_preflight_cache_seconds()
+    key = _stripe_preflight_cache_key(candidates, source)
+    if ttl > 0:
+        cached = _stripe_preflight_cache_get(key)
+        if cached is not None:
+            cached["cached"] = True
+            return cached
+
+    def evaluate(item: str) -> tuple[str, bool, int, str]:
+        # One probe per candidate, reused for both the verdict and the evidence:
+        # a second pass would double the requests sent through a denying pool.
+        status, text = (probe or _stripe_probe)(item, timeout)
+        return item, _stripe_verdict(status, text), _as_int(status, 0), str(text or "")
+
+    # Head first, then the rest in parallel. A healthy pool answers with ONE
+    # request to the operator's preferred exit; probing all nine used to send
+    # nine requests even when the first one already succeeded. A wholly denying
+    # pool now costs one extra round-trip, not nine requests.
+    probed: list[tuple[str, bool, int, str]] = [evaluate(candidates[0])]
+    if not probed[0][1] and len(candidates) > 1:
+        rest = candidates[1:]
+        with ThreadPoolExecutor(max_workers=max(1, min(8, len(rest)))) as executor:
+            probed.extend(executor.map(evaluate, rest))
+    ok = any(reachable for _candidate, reachable, _status, _text in probed)
+    first_failure = None
+    if not ok:
+        # Evidence is only collected for a failed preflight: reporting the first
+        # denial of a pool that still has a reachable exit would be noise.
+        for candidate, reachable, status, text in probed:
+            if reachable:
+                continue
+            first_failure = {
+                "host": _proxy_fingerprint(candidate).get("proxy_host", ""),
+                "status": status,
+                "reason": _stripe_reason_text(_scrub(text, candidate)),
+            }
+            break
+    result = {
+        "ok": ok,
+        "checked": len(probed),
+        "reachable": sum(1 for _candidate, reachable, _status, _text in probed if reachable),
         "skipped": False,
+        "reason": "" if ok else "unreachable",
+        "source": source,
+        "first_failure": first_failure,
+        "cached": False,
     }
+    _stripe_preflight_cache_put(key, ttl, result)
+    return result
+
+
+def _stripe_detail(preflight: dict[str, Any], *, strict: bool) -> str:
+    """Operator-facing sentence for a failed Stripe preflight.
+
+    Three states, and the old text got the third one wrong:
+
+    1. no candidate at all → "no exit configured";
+    2. candidates from the *fallback* pool → say the dedicated field is unset;
+    3. candidates from the *dedicated* pool → name the exits and the denial,
+       and never tell the operator to set the field they just set.
+    """
+    checked = _as_int(preflight.get("checked"), 0)
+    source = str(preflight.get("source") or "")
+    failure = preflight.get("first_failure") or {}
+    host = str(failure.get("host") or "")
+    status = _as_int(failure.get("status"), 0)
+    reason = str(failure.get("reason") or "").strip()
+    evidence = ""
+    if host or status or reason:
+        parts = [part for part in (host, f"HTTP {status}" if status else "", reason) if part]
+        evidence = "，首个失败：" + " → ".join(parts)
+    if source == "dedicated":
+        head = f"已配置的 {checked} 条支付资格专用出口均无法访问 api.stripe.com"
+    else:
+        head = f"{checked} 条候选出口（来自注册 / promotion 池，未配置支付资格专用出口）均无法访问 api.stripe.com"
+    if strict:
+        tail = "；已中止（payment_qualification.stripe_preflight=strict）"
+    else:
+        tail = "；继续检测：只有自定义 Checkout（oaics）路径可能给出结论，需要 Stripe 的方法会记检测失败"
+    return f"Stripe 出口预检失败：{head}{evidence}{tail}"
 
 
 def _env_failure_class(probe: dict[str, Any]) -> str:
@@ -508,6 +938,10 @@ def _env_failure_class(probe: dict[str, Any]) -> str:
     """
     state = str(probe.get("payment_qualification_state") or "")
     error = str(probe.get("error") or "").lower()
+    if state == QUALIFICATION_EGRESS_DENIED:
+        # The exit refused the target host. Never an account verdict, always worth
+        # another egress and always an environment signal for the breaker.
+        return "network"
     if state == QUALIFICATION_PROBE_FAILED:
         if any(marker in error for marker in _RISK_MARKERS) or any(marker in error for marker in _TRANSPORT_MARKERS):
             return "network"
@@ -524,6 +958,8 @@ def _summary(
     breaker: "BatchCircuitBreaker | None" = None,
     aborted: bool = False,
     abort_reason: str = "",
+    stripe_preflight: dict[str, Any] | None = None,
+    warnings: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     states = [str(item.get("payment_qualification_state") or "") for item in results]
     total = len(results)
@@ -542,10 +978,16 @@ def _summary(
         "eligible": states.count(QUALIFICATION_ELIGIBLE),
         "ineligible": states.count(QUALIFICATION_INELIGIBLE),
         "auth_invalid": states.count(QUALIFICATION_AUTH_INVALID),
+        # Counted separately since 2026-10-27: without it the counters did not add
+        # up to ``total``, so the batch line reported "完成 3 个账号…检测失败 1"
+        # while two accounts had failed (one of them 出口被拒).
+        "egress_denied": states.count(QUALIFICATION_EGRESS_DENIED),
         "probe_failed": states.count(QUALIFICATION_PROBE_FAILED),
         "unknown": states.count(QUALIFICATION_UNKNOWN),
         "persist_failed": persist_failed,
         "results": results,
+        "stripe_preflight": dict(stripe_preflight or {}),
+        "warnings": list(warnings or []),
     }
 
 

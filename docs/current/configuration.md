@@ -190,7 +190,7 @@ The three egress lanes resolve through three deliberately different modules
 | registration (protocol) | `proxy_routing.proxy_pool_for` | `proxy.registration` / `proxy.pool` / `proxy.default` |
 | registration (browser) | `proxy_routing.proxy_pool_for` | `proxy.browser_registration_pool` / `proxy.browser_pool` |
 | mailbox / OTP | `mailbox._mailbox_proxy_candidates` | `mailbox_proxy` / `mailbox_proxy_pool` |
-| payment qualification | `proxy_routing.operation_proxy_candidates` (`promotion` fallback) | `payment_qualification.proxy_pool` |
+| payment qualification | `proxy_routing.canonical_lane_pool` (`payment_qualification` lane), `promotion` fallback | `payment_qualification.proxy_pool` |
 | payment | `payment_routing` + per-method sections | `protocol_payments.proxy_pools`, `<method>.stage_proxies` |
 
 `sms_tool/proxy/registry.py` is the single read/manage surface over all three
@@ -208,9 +208,22 @@ OTP poller, and `PaymentRoutePlanner._named_pools` for payment region pools.
   "protocol_registration": ["http://..."],
   "browser_registration":  ["http://..."],
   "mailbox":               ["http://proxy.example:8080"],
+  "payment_qualification": ["http://stripe-reachable.example:8080"],
   "payment": { "pools": { "US": ["..."], "JP": ["..."] }, "default": ["..."] }
 }}
 ```
+
+`payment_qualification` should be **Stripe-reachable** (`GET https://api.stripe.com/`),
+not merely ChatGPT-reachable. Since 2026-10-27 a failed Stripe preflight no
+longer aborts the batch by default: it emits a `batch_warning` with the first
+denial (host + status + reason) and the run continues, because the server's
+`oaics_` custom-checkout path never calls Stripe and can still answer. Set
+`payment_qualification.stripe_preflight: "strict"` to abort instead, or `false`
+to skip the probe. When the previous verdict for **every** selected account came
+from an `oaics_` checkout, the preflight is skipped entirely
+(`stripe_preflight.reason=oaics_only`). All five `proxy.lanes` keys above are
+accepted by `validate_config` (`sms_tool/config/schema.py`), so a desktop save
+cannot produce a config the backend then refuses to load.
 
 `proxy.lanes.payment.pools` names are the ones referenced by
 `protocol_payments.methods.<m>.stage_routes` / `stage_proxy_pools`.
@@ -261,6 +274,13 @@ python scripts/proxy_census.py
 python scripts/proxy_census.py --json --methods paypal,upi,kakao,momo
 ```
 
+The census reports `registration`, `mailbox`, `payment_qualification` and
+`payment`, each with its `source` key, and flags any pool whose credentials it
+shares with registration (`lane_isolation_ok`). The qualification row is the one
+to read first when a batch aborts with `abort_reason=stripe_unreachable`:
+`source=unset (promotion fallback)` means no dedicated exit is configured, not
+that the configured one failed.
+
 `proxy` remains owned by the `proxy` shard (`SHARD_OWNERSHIP`), so `lanes`
 routes to `proxy.json` and needs no schema change.
 
@@ -304,9 +324,29 @@ override these values per run.
 | `method` | string or array | `"auto"` | `auto` derives candidates from the measured exit country; a comma list / array forces methods. Unknown ids become an `unknown_method` row, not a crash |
 | `country` | ISO-3166 alpha-2 or `""` | `""` | Force the billing/request country. Empty measures the exit first, then falls back to `registration_country` / `identity_context.country` |
 | `probe_all_methods` | bool | `false` | `false` stops after the first eligible method (each candidate is its own Checkout create). `true` restores the full diagnostic grid; the CLI equivalent is `--payment-qualification-all-methods` |
-| `proxy_pool` | array of proxy URLs | `[]` | Dedicated egress for the probe (also accepted as `proxy.lanes.payment_qualification`). When set it wins over the desktop's registration pool. Empty falls back to the promotion lane |
+| `proxy_pool` | array of proxy URLs | `[]` | Dedicated egress for the probe (also accepted as `proxy.lanes.payment_qualification`). When set it is placed **ahead** of the desktop's registration proxy, which every desktop/CLI run also passes; it is no longer appended behind it. Empty falls back to the promotion lane |
 | `max_proxy_attempts` | int | `3` | Per-account egress attempts on transport/risk failures, clamped 1..32. Raise it only after the pool is known to contain reachable exits |
-| `stripe_preflight` | bool | `true` | Probe `https://api.stripe.com/` through the candidate pool before any account. A proxy that answers `chatgpt.com` with 200 can still deny Stripe at the tunnel; when no candidate reaches Stripe the batch aborts with `stripe_unreachable` instead of creating Checkouts |
+| `stripe_preflight` | bool or `"warn"` / `"strict"` | `true` (= `warn`) | Probe `https://api.stripe.com/` through the candidate pool before any account. `warn` (default) emits a `batch_warning` naming the first denial and keeps probing — an `oaics_` custom checkout can still produce a verdict; `strict` aborts with `abort_reason=stripe_unreachable`; `false` skips the probe. Skipped as well when every selected account's last verdict came from an `oaics_` checkout. Any unrecognised value degrades to `warn` |
+| `stripe_preflight_cache_seconds` | number | `300` | Reuse the last Stripe-preflight verdict for the same candidate set (credential-free hash of the exits + source) instead of re-probing it. Three retries in two minutes used to send 9×3 requests through a pool that had already answered (measured 2026-10-27). `0` disables the cache; changing the pool changes the key, so a fixed pool takes effect immediately |
+
+`--refresh-timeout` is the **per-request** HTTP timeout. The per-account bound is
+that value × `max_proxy_attempts` (45 × 3 = 135 s by default): each attempt's
+request timeout is capped by the time left, and when the budget is gone the probe
+stops with `error_code=account_budget_exhausted` instead of dialling another exit.
+Measured 2026-10-27, one account occupied 72 s while the operator read the field
+as a run budget.
+
+States (`payment_qualification_state`) are `eligible` / `ineligible` /
+`auth_invalid` / `egress_denied` / `probe_failed` / `unknown`. `egress_denied`
+means the **exit** refused the target host (`503 Target host denied`,
+`Tunnel connection failed`); it is not an account verdict and not a method
+verdict, so the badge reads 出口被拒 and the batch counts it as an environment
+failure (breaker + rotation) rather than 其他失败. The completion line reports it
+in its own `出口被拒 N` field, so the per-state counters add up to the account
+count. When the preflight already proved every candidate denies Stripe, an
+`egress_denied` result stops the rotation for that account (another exit in a
+proven-dead pool cannot flip a host-level ACL); a risk refusal still rotates,
+because it happens on `chatgpt.com` and is exit-dependent.
 
 Owned by the `runtime` shard. The persisted badge lives in
 `raw_json.payment_qualification` (`store/markers.py`) and is surfaced by

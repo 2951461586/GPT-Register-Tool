@@ -19,17 +19,6 @@ namespace SmsWorkbench
         void UpdateConfig(Action<JsonObject> mutate);
 
         /// <summary>
-        /// Canonical egress lanes that <c>proxy.lanes</c> declares with at least
-        /// one endpoint, refreshed by the last <see cref="Load"/>.
-        ///
-        /// <para>
-        /// The page now edits these lanes directly (and mirrors the legacy
-        /// keys); the list still drives the notice that names the lanes it owns.
-        /// </para>
-        /// </summary>
-        IReadOnlyList<string> AuthoritativeProxyLanes { get; }
-
-        /// <summary>
         /// Re-resolve the provider-scoped fields in place for an explicit
         /// 供应商 selection. Called when the dropdown changes, so the API Key
         /// box cannot keep displaying another provider's key. See
@@ -56,16 +45,12 @@ namespace SmsWorkbench
 
         public string ConfigPath { get; }
 
-        /// <inheritdoc />
-        public IReadOnlyList<string> AuthoritativeProxyLanes { get; private set; } = Array.Empty<string>();
-
         public IReadOnlyList<SettingsCategoryViewModel> Load()
         {
             JsonObject root = ReadRoot();
-            AuthoritativeProxyLanes = DetectAuthoritativeProxyLanes(root);
-            // The registration/browser/mailbox boxes read their lane first, so
-            // opening Settings shows the effective route instead of a blank that
-            // merely warned the operator. See ReadValue()/Save().
+            // The registration/browser/mailbox/qualification boxes read their
+            // lane first, so opening Settings shows the effective route instead
+            // of a blank box. See ReadValue()/Save().
             return SettingsCatalog.Categories.Select(category => new SettingsCategoryViewModel(
                 category.Title,
                 category.Sections.Select(section => new SettingsSectionViewModel(
@@ -411,65 +396,6 @@ namespace SmsWorkbench
         /// </summary>
         internal static bool IsProviderScoped(SettingDefinition definition)
             => definition.JsonPath.Contains(ProviderToken, StringComparison.Ordinal);
-
-        /// <summary>
-        /// Canonical lanes this page can shadow. <c>payment</c> is deliberately
-        /// absent: batch protocol payment owns those pools and the settings page
-        /// has no field for them, so there is nothing to warn about.
-        /// </summary>
-        private static readonly string[] CanonicalLaneNames =
-        {
-            "protocol_registration",
-            "browser_registration",
-            "mailbox",
-        };
-
-        /// <summary>
-        /// Canonical egress lanes that <c>proxy.lanes</c> declares with at least
-        /// one endpoint.
-        ///
-        /// <para>
-        /// Python treats a non-empty <c>proxy.lanes.&lt;lane&gt;</c> as
-        /// <b>authoritative</b> -- <c>proxy/routing.py::canonical_lane_pool</c>
-        /// short-circuits every legacy key, and <c>mailbox/router.py</c> does the
-        /// same for the mailbox lane. The page now edits those canonical lanes
-        /// directly; this list still names which ones are declared for the notice.
-        /// </para>
-        /// </summary>
-        internal static IReadOnlyList<string> DetectAuthoritativeProxyLanes(JsonObject root)
-        {
-            if (root["proxy"] is not JsonObject proxy || proxy["lanes"] is not JsonObject lanes)
-                return Array.Empty<string>();
-            var declared = new List<string>();
-            foreach (string lane in CanonicalLaneNames)
-            {
-                if (LaneHasEndpoints(lanes[lane]))
-                    declared.Add(lane);
-            }
-            return declared;
-        }
-
-        /// <summary>
-        /// Shape-accepts what Python's <c>parse_lane_proxy_pool</c> accepts: a
-        /// list, a single string, or an object with <c>pool</c>/<c>proxies</c>/
-        /// <c>default</c>. Blank entries do not make a lane authoritative.
-        /// </summary>
-        private static bool LaneHasEndpoints(JsonNode? entry)
-        {
-            switch (entry)
-            {
-                case JsonArray array:
-                    return array.Any(item => !string.IsNullOrWhiteSpace(item?.ToString()));
-                case JsonObject map:
-                    return (map["pool"] is JsonNode pool && LaneHasEndpoints(pool))
-                        || (map["proxies"] is JsonNode proxies && LaneHasEndpoints(proxies))
-                        || (map["default"] is JsonNode fallback && LaneHasEndpoints(fallback));
-                case JsonValue value:
-                    return !string.IsNullOrWhiteSpace(value.ToString());
-                default:
-                    return false;
-            }
-        }
 
         /// <summary>
         /// Re-resolve every provider-scoped field against an explicit provider
