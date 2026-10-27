@@ -37,7 +37,7 @@ Directory layout (since 2026-09-06):
 - [Architecture Decisions](adr/README.md) - 已接受的架构决策。
 - [Registration Recovery & Cancellation](current/registration-recovery.md) -
   注册恢复、邮箱验证卡死重试与协作取消的当前行为。
-- [Desktop UI Architecture](current/ui-architecture.md) - WPF 桌面端的层次与所有权、资源字典拆分（`Palette.xaml` / `Controls.xaml`）、`MainWindow` 分部类职责、命令→后端结果路径与 UI 门禁。
+- [Desktop UI Architecture](current/ui-architecture.md) - WPF 桌面端的层次与所有权、资源字典拆分（`Tokens` / `Glyphs` / `Colors.Light|Dark` / `Controls`）、`MainWindow` 分部类职责、命令→后端结果路径与 UI 门禁。
 - [Protocol Registration](current/protocol-registration.md) - 协议注册的端点、
   两条泳道、Sentinel 与落地页词汇契约。
 - [Registration & Proxy Architecture](current/registration-and-proxy-architecture.md) -

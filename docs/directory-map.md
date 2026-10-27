@@ -8,7 +8,7 @@ physical placement; `docs/architecture.md` defines the behavioral boundaries.
 | Path | Classification | Owner / responsibility | Notes |
 | --- | --- | --- | --- |
 | `sms_tool/` | Python application core | CLI orchestration, mailbox handling, registration, payment links, payment adapters, storage, account scans, and terminal account cleanup rules | Keep command-specific imports lazy in `sms_tool.cli`. |
-| `SmsWorkbench/` | Desktop UI | WPF launcher, account grid, themed dialogs, selected-email seam, account liveness, mailbox-change dialog, batch protocol-payment dialog, fixed non-payment proxy launcher, read-only SMS provider catalog adapter, local command planning/result presentation, the `Themes/` resource dictionaries (`Palette.xaml` colour tokens, `Controls.xaml` control styles) that `App.xaml` merges, desktop publish scripts | UI starts CLI commands; payment and mailbox-change protocol logic stays in `sms_tool`. |
+| `SmsWorkbench/` | Desktop UI | WPF launcher, account grid, themed dialogs, selected-email seam, account liveness, mailbox-change dialog, batch protocol-payment dialog, fixed non-payment proxy launcher, read-only SMS provider catalog adapter, local command planning/result presentation, the `Themes/` resource dictionaries that `App.xaml` merges (theme-independent `Tokens.xaml` + `Glyphs.xaml`, the swappable `Colors.Light/Dark.xaml` schemes, and the `Controls.xaml` overrides), desktop publish scripts | UI starts CLI commands; payment and mailbox-change protocol logic stays in `sms_tool`. |
 | `SmsWorkbench.Contracts/` | Desktop contracts | Window-independent backend command plans, JSON/protocol contracts, progress events, result types, and the embedded `sensitive_policy.json` redaction policy | Referenced by the WPF app and desktop tests; keep WPF controls and protocol implementation out. **The backend CLI flag vocabulary belongs here** (`BackendCommandPlanner`): window partials resolve settings and call `CreateXxx` / `AppendProxy` / `AppendSessionFile` instead of adding `"--flag"` literals, and `tests/workbench/test_backend_cli_contract.py` only checks C#→Python drift — it cannot see a flag that moved into the window. `SmsWorkbench.Contracts.csproj` is the **sole** embedder of `sensitive_policy.json` (as `SmsWorkbench.sensitive_policy.json`): `SensitiveDataSanitizer` reads it via `Assembly.GetExecutingAssembly()` (its own manifest), so the embed must live in the project that compiles that file. `scripts/sensitive_field_scan.py` resolves the pair rather than hard-coding a path. |
 | `services/` | Local provider services | Optional mailbox and payment-protocol helpers used by CLI/UI | Services expose explicit process/API boundaries and should not write account SQLite directly. |
 | `tests/` | Offline verification | Unit tests for module seams and persistence semantics, grouped by domain: `registration/`, `payment/` (incl. PayPal/UPI/wallet), `accounts/`, `mailbox/`, `proxy/` (incl. geo/http), `config/` (incl. paths/logging/sanitizer), `workbench/` (desktop IPC/CLI contracts), `governance/` (ratchets, guards, docs gates). `tests/` itself keeps only `conftest.py`, the shared replay/fake helper modules and `fixtures/`. | Live vendor/browser tests must be opt-in. A new test file belongs in the domain directory of the module it pins; paths to the repo root are `Path(__file__).resolve().parents[2]`. |
@@ -304,10 +304,12 @@ them and only apply the returned view state.
    partials, presentation), `ViewModels/`, `Services/` (workflow + persistence
    adapters), `Interop/` (the Python process boundary), `Models/`, or `Dialogs/`.
    A new **resource dictionary** goes into `Themes/` (XAML only, no
-   code-behind): `Palette.xaml` owns the colour tokens and `Controls.xaml` owns
-   the implicit/keyed control styles, merged in that order by `App.xaml`. Keep
-   every `StaticResource` inside one dictionary -- it is resolved while that
-   dictionary loads -- and reach the palette with `DynamicResource`.
+   code-behind). Five dictionaries, merged in this order by `App.xaml`:
+   `Tokens.xaml` (spacing/radius/type/motion), `Glyphs.xaml` (`Glyph.*`
+   geometries), `Colors.Light.xaml` (swapped for `Colors.Dark.xaml` at runtime,
+   same key set) and `Controls.xaml` (implicit/keyed styles). Reach colours with
+   `DynamicResource` (a theme switch replaces the dictionary); tokens and glyphs
+   are merged before it and never change, so `StaticResource` is correct there.
    Only the application shell (`App.xaml(.cs)`, `AppHost.cs`, `AssemblyInfo.cs`,
    `GlobalUsings.cs`) lives at `SmsWorkbench/` root;
    `tests/workbench/test_sms_workbench_layout.py` pins both the folder set and

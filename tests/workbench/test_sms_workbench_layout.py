@@ -17,11 +17,15 @@ decision here plus a line in ``docs/directory-map.md``.
 the markup extension and the English catalog).
 
 2026-10-23: ``Themes/`` joined as a **resource-only** folder (no C#, no
-code-behind). It holds the two ``ResourceDictionary`` files ``App.xaml`` merges
-(``Palette.xaml`` colour tokens, ``Controls.xaml`` control styles), split out of
-a 719-line ``App.xaml``. A ``ResourceDictionary`` is not a window, so the
-"xaml and its code-behind stay together" rule below applies only to XAML whose
-root element is a ``Window``/``UserControl``.
+code-behind). It holds the ``ResourceDictionary`` files ``App.xaml`` merges,
+split out of a 719-line ``App.xaml``. Since 2026-10-28 there are five of them --
+``Tokens.xaml`` (spacing/radius/type), ``Glyphs.xaml`` (``Glyph.*`` geometries),
+``Colors.Light.xaml`` / ``Colors.Dark.xaml`` (one key set, swapped at runtime by
+``MainWindow.SwapColorScheme``) and ``Controls.xaml`` (styles) -- so the check
+below is "every ``*.xaml`` in the folder is a ``ResourceDictionary``", not a
+fixed file list. A ``ResourceDictionary`` is not a window, so the "xaml and its
+code-behind stay together" rule below applies only to XAML whose root element is
+a ``Window``/``UserControl``.
 """
 
 from __future__ import annotations

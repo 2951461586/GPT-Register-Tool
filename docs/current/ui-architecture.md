@@ -9,7 +9,7 @@
 
 | 层 | 位置 | 拥有 | 不拥有 |
 | --- | --- | --- | --- |
-| 应用壳 | `SmsWorkbench/App.xaml(.cs)`、`AppHost.cs` | 依赖注入容器、启动窗口、全局资源字典合并 | 任何业务流程 |
+| 应用壳 | `SmsWorkbench/App.xaml(.cs)`、`AppHost.cs`、`Themes/` | 依赖注入容器、启动窗口、全局资源字典合并（令牌 / 字形 / 光暗色板 / 控件样式） | 任何业务流程 |
 | 窗口与呈现 | `Views/`（`MainWindow.*` 分部类、`TitleBar`、`Sidebar`、`AccountFilterBar`、`AccountGridView`、`WorkbenchConsole`、`SettingsWindow`、`PaymentBatchWindow`） | 布局、绑定、交互反馈、窗口级状态（主题、侧栏折叠、分页游标） | 命令语义、HTTP、持久化 |
 | 视图模型 | `ViewModels/`（`PoolViewModel`、`TaskListViewModel`、`LogViewModel`、`StatusBarViewModel`、`SettingsViewModel`、`PaymentBatchViewModel`、`ExportViewModel`、`RegisterViewModel`） | 可观察状态、展示格式化、输入校验 | 直接写配置或发 HTTP |
 | 服务 | `Services/`（`ConfigStore`、`SettingsService`、`PaymentBatchService`、`MailboxPoolFileStore`、`WindowThemeService`、`ApplicationPaths`、`FileLauncher`、`LegacyConfigMigration`、`BackendTaskCoordinator`、`TransientArtifactCleanup`） | 读写本地配置/池文件、组装后端任务、迁移旧配置、清理临时凭据 | 解析厂商协议 |
@@ -23,38 +23,44 @@
 
 ## 2. 启动与资源
 
-`App.xaml` 现在只有 18 行：合并三个字典，顺序即优先级。
+`App.xaml` 合并五个字典，顺序即优先级。
 
 ```text
-Wpf.Ui.xaml   ->   Themes/Palette.xaml   ->   Themes/Controls.xaml
-基础模板与控件        颜色令牌（不可被覆盖）      工作台覆盖样式
+Wpf.Ui.xaml -> Themes/Tokens.xaml -> Themes/Glyphs.xaml -> Themes/Colors.Light.xaml -> Themes/Controls.xaml
+基础模板        间距/圆角/字阶/动效     字形几何            颜色（运行时整体替换）        工作台覆盖样式
 ```
 
 | 文件 | 行数 | 内容 |
 | --- | ---: | --- |
-| `SmsWorkbench/App.xaml` | 18 | `ResourceDictionary.MergedDictionaries`，无内联样式 |
-| `SmsWorkbench/Themes/Palette.xaml` | 67 | 48 个 `SolidColorBrush`：语义色板、`Badge*` 状态徽章、`Accent*` 卡片强调色 |
-| `SmsWorkbench/Themes/Controls.xaml` | 690 | 隐式/具名控件样式、三个 `ControlTemplate`、滚动条重模板、`DialogWindow`、`MenuIconPath`/`ToolbarIconPath`/`BooleanToVisibilityConverter` |
+| `SmsWorkbench/App.xaml` | 23 | `ResourceDictionary.MergedDictionaries`，无内联样式 |
+| `SmsWorkbench/Themes/Tokens.xaml` | 81 | 与主题无关的刻度：`Space.*`（4px 网格）、`Radius.*`/`Corner.*`、`Type.*`、`Motion.*` |
+| `SmsWorkbench/Themes/Glyphs.xaml` | 47 | 32 个 `PathGeometry` 字形（`Glyph.*`）；同义几何复用同一个键 |
+| `SmsWorkbench/Themes/Colors.Light.xaml` | 108 | 光色：5 级表面 `Surface.*`、3 级文字、状态徽章、`Divider`、ComboBox 弹层键 |
+| `SmsWorkbench/Themes/Colors.Dark.xaml` | 82 | 暗色，**与光色同一套键**（缺一个键就会在暗色下回落到 WPF 默认笔刷） |
+| `SmsWorkbench/Themes/Controls.xaml` | 794 | 隐式/具名控件样式、`ControlTemplate`、滚动条重模板、`DialogWindow`、`FocusRingStyle` |
 
-两条规则，来自 WPF 的解析时机而不是口味：
+三条规则，来自 WPF 的解析时机与类型而不是口味：
 
-1. **`StaticResource` 只在自己那个字典里查。** 它在该字典加载时解析，跨字典引用
-   只能靠合并顺序碰巧成功。因此 `Controls.xaml` 内部的 `BasedOn="{StaticResource
-   {x:Type Button}}"` 等引用全部指向本文件里的键。
-2. **读色板必须用 `DynamicResource`。** 主题切换（浅/深）在运行时替换颜色，只有
-   `DynamicResource` 会跟着刷新；`Palette.xaml` 因此不含任何 `StaticResource`。
+1. **颜色一律 `DynamicResource`，令牌一律 `StaticResource`。** 换主题是替换整个
+   `Colors.*` 字典（`MainWindow.SwapColorScheme`），只有 `DynamicResource` 会跟着
+   重解析；`Tokens.xaml` / `Glyphs.xaml` 合并在色板之前且不随主题变化，所以
+   `Corner.*` / `Type.*` / `Glyph.*` 用 `StaticResource` 是确定性的 —— 顺序写错会在
+   首次解析时**硬失败**，而不是静默降级成默认笔刷。
+2. **`CornerRadius` 用 `Corner.*`，`RadiusX/Y` 用 `Radius.*`。** 同名不同型
+   （`CornerRadius` vs `double`），拿错会在模板加载时抛 `XamlParseException`；
+   2026-10-28 实际踩过一次，被 `DesktopWindowSmokeTests` 抓到。
+3. **色板键名是对外契约。** `WindowThemeService` 从 `PanelBg`/`TextMain` 取 DWM
+   标题栏色，`DesktopWindowSmokeTests` 断言 `SettingsSelectionBg`/`…Border`，所以旧
+   键在 `Colors.*` 里保留为别名，不删。
 
 `tests/workbench/test_sms_workbench_layout.py` 钉住「根目录只有应用壳」「`Themes/`
 是纯资源目录（无 code-behind）」「`Source=` 相对路径必须从 XAML 自身目录可解析」。
 
 ## 3. `MainWindow` 的组合方式
 
-`MainWindow.xaml`（54 行）现在只剩窗口骨架与五个 UserControl 的摆放；
-`MainWindow.xaml.cs` 与 16 个 `MainWindow.*.cs` 分部类合计 5040 行（2026-10-25 实测，
-注册选项对话框改走 `DialogFactory` 后从 5115 行降下来），
-按**功能**而不是按控件切分。五个控件（`TitleBar` 71、`Sidebar` 51、
-`AccountFilterBar` 22、`AccountGridView` 83、`WorkbenchConsole` 126 行 code-behind）
-与分部类合计 5396 行：
+`MainWindow.xaml`（73 行）现在只剩窗口骨架与五个 UserControl 的摆放；
+`MainWindow.xaml.cs` 与 16 个 `MainWindow.*.cs` 分部类合计 5201 行（2026-10-28 实测），
+按**功能**而不是按控件切分。五个控件的 code-behind 合计 958 行。
 
 | 分部类 | 行数 | 职责 |
 | --- | ---: | --- |
@@ -73,7 +79,8 @@ Wpf.Ui.xaml   ->   Themes/Palette.xaml   ->   Themes/Controls.xaml
 | `MainWindow.Sidebar.cs` | 74 | 侧栏列宽动画（视觉状态在 `Sidebar` 控件里） |
 | `MainWindow.SmsProvider.cs` | 481 | 一键接码供应商面板 |
 | `MainWindow.Tasks.cs` | 492 | 任务列表与取消 |
-| `MainWindow.Theme.cs` | 186 | 浅/深主题切换与 `DesktopThemePreference` 落盘 |
+| `MainWindow.Theme.cs` | 113 | 浅/深主题切换：换色板字典 + DWM 标题栏 + `DesktopThemePreference` 落盘 |
+| `MainWindow.NavigationState.cs` | 56 | 侧栏「运行中」状态：`ActiveNavKey` DP、pending key 的交接与清除 |
 
 三条阅读要点：
 
@@ -82,9 +89,12 @@ Wpf.Ui.xaml   ->   Themes/Palette.xaml   ->   Themes/Controls.xaml
   单独的中介 ViewModel。五个 UserControl **都不设置自己的 DataContext**，直接继承
   窗口的，所以抽取没有改动任何绑定路径；窗口只通过 DP 传状态（`Sidebar.IsCollapsed`、
   `AccountGridView.Pool`、`WorkbenchConsole.TaskList/LogPanel`）和方法收回操作。
-* **代码后置按名字抓控件。** XAML 里有 23 个 `x:Name`（`AccountGrid`、
-  `TaskGrid`、`LogTextBox`、`SidebarColumn`、`SearchClearButton`…），13 个分部类
-  跨文件读写它们 —— 分部类里「本文件没有引用」不代表没人用。
+* **代码后置按名字抓控件。** XAML 里有 34 个 `x:Name`（`AccountGrid`、
+  `AccountCardList`、`CompactColumnsToggle`、`TaskGrid`、`LogTextBox`、
+  `SidebarColumn`、`SearchClearButton`…），分部类跨文件读写它们 —— 分部类里「本文件
+  没有引用」不代表没人用。**新增的控件名一律不直接用生成的字段**：`AccountGridView`
+  已把这个约定写在文件头（「per-file analyzers do not see AccountGridView.g.cs」），
+  用 `FindName` 装进自己声明的只读字段。
 * **副作用都在服务里。** 界面只调用 `IPaymentBatchService` /
   `IConfigStore` / `IFileLauncher` 等接口，
   `AppHost` 负责注入具体实现；视图模型的构造参数因此可测试
@@ -144,11 +154,18 @@ Wpf.Ui.xaml   ->   Themes/Palette.xaml   ->   Themes/Controls.xaml
 
 ## 5. 主题与配色
 
-`WindowThemeService` 读 `DesktopThemePreference`（`Models/`），切换
-`Wpf.Ui.Appearance.ApplicationTheme`；因为 `Palette.xaml` 全用
-`DynamicResource`，一次切换就能覆盖所有窗口、徽章与日志面板。
-`SidebarBrandTitle` 旁的图标几何与 `IconNavButton` 的自绘模板都用
-`StaticResource` 指向本窗口资源里的 `MenuIconPath` / `ToolbarIconPath`。
+光/暗是**两个字典**（`Colors.Light.xaml` / `Colors.Dark.xaml`，同一套键）。
+`MainWindow.SwapColorScheme` 用 **pack URI**（显式命名 assembly）替换合并列表里的
+色板条目 —— 相对 URI 在 `dotnet test` 宿主里会「找不到资源」，2026-10-28 实际踩过。
+所有 `DynamicResource` 随之重解析，**已打开的窗口不必逐个刷**；换成字典之前这里有
+约 120 行 `SetBrush("#hex")`，且必须靠 `ApplyToOpenWindows` 追着刷。
+`WindowThemeService` 现在只剩 DWM 标题栏属性（读 `PanelBg`/`TextMain`），切换后调一次。
+`ApplicationThemeManager.Apply` 仍然要调，那是 Wpf.Ui 自有控件的主题；
+`DesktopThemePreference`（`Models/`）负责落盘。
+
+配色的判定规则（结构用明度分层、颜色只给状态）与逐阶段证据见
+[`plan-2026-10-28-wpf-visual-system.md`](../audits/plans/plan-2026-10-28-wpf-visual-system.md)；
+源码里的事实归属是 `Themes/Controls.xaml` 的样式与 `Themes/Colors.*.xaml` 的键。
 
 ## 6. 测试与门禁
 
@@ -159,7 +176,7 @@ Wpf.Ui.xaml   ->   Themes/Palette.xaml   ->   Themes/Controls.xaml
 | `tests/workbench/test_localization_catalog.py` | 每个 `{loc:Tr}` / `Loc.T` / `Loc.F` 键都有英文；XAML 文本属性不得留中文；**`MessageBox.Show`、`Notify*`、`DialogFactory.Show*Async`、`Content`/`Text`/`Title` 等属性直接写字面中文即失败**（2026-10-25 新增，此前这类字符串静默漏了 25 条） |
 | `tests/SmsWorkbench.Tests/BackendCommandPlannerSurfaceTests.cs` | `BackendCommandPlanner` 中「无生产调用方」的 builder 集合被冻结：新增死代码、接线、删除都要显式改白名单，且每个条目必须在 doc comment 里写明 |
 | `scripts/dotnet_warning_ratchet.py` | C# 构建告警零基线（见 [`dotnet-gates.md`](dotnet-gates.md)） |
-| `dotnet test GPTRegisterTool.slnx -c Release` | 557 个测试（CI 必跑） |
+| `dotnet test GPTRegisterTool.slnx -c Release` | 622 个测试（CI 必跑） |
 
 `SmsWorkbench.Tests` 里没有 UI 自动化：所有窗口级断言都在真实布局对象上做
 （`ActualWidth`、`Template.FindName`、`FindVisualChildren`），不做像素比较。
@@ -187,7 +204,9 @@ Wpf.Ui.xaml   ->   Themes/Palette.xaml   ->   Themes/Controls.xaml
 
 | 事实 | 权威位置 |
 | --- | --- |
-| 颜色令牌与控件样式 | `SmsWorkbench/Themes/Palette.xaml` / `Controls.xaml` |
+| 颜色令牌与控件样式 | `SmsWorkbench/Themes/Colors.{Light,Dark}.xaml` / `Controls.xaml` |
+| 刻度与字形 | `SmsWorkbench/Themes/Tokens.xaml` / `Glyphs.xaml` |
+| 侧栏运行中状态 | `Views/MainWindow.NavigationState.cs` + `Sidebar.ActiveKey` |
 | 资源合并顺序 | `SmsWorkbench/App.xaml` |
 | 窗口布局与绑定 | `SmsWorkbench/Views/MainWindow.xaml` |
 | 命令规划 | `SmsWorkbench/Views/MainWindow.Commands.cs` + `Services/` |
