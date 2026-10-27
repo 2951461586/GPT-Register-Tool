@@ -345,10 +345,21 @@ existing shards keep working byte-for-byte.
 - `protocol_registration` / `browser_registration` are honoured by
   `proxy_pool_for` (registration batch, health and promotion probes).
 - `mailbox` is honoured by `mailbox._mailbox_proxy_candidates` (the OTP poller).
+- `payment_qualification` is the dedicated pool for the read-only payment
+  qualification probe (`payment_qualification.proxy_pool` is accepted as the
+  scalar/list form). It must be Stripe-reachable, not merely ChatGPT-reachable.
 - `payment` region pools are honoured by `PaymentRoutePlanner._named_pools`.
 - `proxy.lanes.payment.pools` keys match the names referenced by
   `protocol_payments.methods.<m>.stage_routes` / `stage_proxy_pools`.
 - Credentials are never printed by the census or the registry.
+
+**Desktop alignment (2026-10-27).** 设置 → 基础网络 now edits
+`protocol_registration`, `browser_registration`, `mailbox` and
+`payment_qualification` directly. Opening the page reads the lane first; a
+non-empty save writes `proxy.lanes.<lane>.pool` (creating the object when
+absent) and mirrors the legacy keys; a blank save leaves the lane untouched.
+`payment` remains owned by the protocol-payment dialog and has no field on this
+page.
 
 ### Lane isolation
 

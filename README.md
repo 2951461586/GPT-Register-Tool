@@ -137,7 +137,7 @@ flowchart TB
 - **Node.js 18+**（`node` 需在 PATH）：Sentinel Token 的 quickjs 提取器用 `node` 运行 OpenAI 真实 `sdk.js`，缺失会导致注册阶段 OTP 静默丢失。
 - **Playwright Chromium**：MoMo/直卡等协议支付的 Stripe init 走 Chromium 网络栈完成 TLS，需执行 `python -m playwright install chromium`。
 - 可正常访问目标邮箱、ChatGPT 和支付服务的网络环境。
-- 注册代理、邮箱收件代理和协议支付代理彼此独立；邮箱收件默认使用本地 `http://127.0.0.1:7897`。
+- 注册代理、浏览器注册代理、邮箱收件代理、支付资格专用代理和协议支付代理彼此独立；代理字段留空时不注入本机默认值，由 `proxy.lanes` / 旧键 / 预检决定。
 
 安装依赖后，可运行环境预检确认 Node.js、Playwright Chromium 和关键 Python 包就绪：
 
@@ -203,7 +203,7 @@ powershell -ExecutionPolicy Bypass -File .\SmsWorkbench\build_dotnet.ps1
 
 打开桌面端的 **设置** 页面，至少完成以下配置：
 
-1. 在 **网络与支付** 中配置注册代理池和邮箱收件代理；协议支付的 Checkout / Approve 两个代理池在“批量协议支付”窗口中按支付方式保存。
+1. 在 **网络与支付 → 基础网络** 中配置注册代理、浏览器注册代理、邮箱收件代理和支付资格专用代理；非空保存会写入对应的 `proxy.lanes.<lane>` 并同步旧键，留空不改动 lane。协议支付的 Checkout / Approve 两个代理池仍在“批量协议支付”窗口中按支付方式保存。
 2. 在 **邮箱与收信** 中配置 ReMail、CFWorker 或其他邮箱源。
 3. 按需配置 SMSBower、CPA、SUB2API 和各协议支付参数。
 4. 保存后重新打开对应功能即可使用新配置。
