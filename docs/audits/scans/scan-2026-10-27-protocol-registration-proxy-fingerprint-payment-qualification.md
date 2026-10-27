@@ -200,3 +200,51 @@
 | 支付资格单账号 / 批量 | `sms_tool/payment/qualification.py`、`qualification_batch.py` |
 | 支付资格状态词表 | `sms_tool/payment/qualification_states.py` |
 | 持久化 / 桌面读面 | `sms_tool/store/markers.py`、`sms_tool/desktop_read.py` |
+
+## 9. 2026-10-27 追加落地（1 → 6）
+
+按扫描建议顺序补齐了支付资格的 egress 与观测链路：
+
+1. **专用出口**：`payment_qualification.proxy_pool`（也接受
+   `proxy.lanes.payment_qualification`）。设置后优先于桌面默认的注册池；
+   为空才回落 promotion lane。代码侧已提供入口，但当前机器没有
+   Stripe-reachable 出口，因此尚未填入可用池。
+2. **Stripe 预检**：`_stripe_preflight()` 在任何账号之前对候选池逐条只读
+   `GET https://api.stripe.com/`；无候选可达时批次以
+   `abort_reason=stripe_unreachable` 中止，不再创建 Checkout。当前配置的
+   9 条 ProxyLane 出口**全部** `503 Target host denied`，所以资格检测现在
+   会明确中止，而不是留下“检测失败”的账号行。
+3. **保留上次 conclusive 结果**：`payment_qualification.last_conclusive`
+   由 `store/markers.py` 维护；传输失败不再擦掉上次“可用”结论，桌面显示
+   `检测失败（上次：可用·PayPal）`。
+4. **区分 Checkout 路径**：方法行和 badge 保留 `checkout_kind` /
+   `probe_checkout_kind`：`oaics_` 自定义 Checkout 显示
+   `可用·PayPal（自定义）`，Stripe `cs_*` 路径显示
+   `可用·PayPal（Stripe）`。自定义路径成功不再被当成 Stripe 路径可用。
+5. **PayPal 失败阶段**：Checkout create 与 Stripe init 的异常被包装为
+   `CapabilityProbeError`，行记录 `checkout_create` /
+   `checkout_transport_failed` 或 `stripe_init` /
+   `stripe_init_transport_failed`，不再统一成 `capability_probe`。
+6. **可配置重试上限**：`payment_qualification.max_proxy_attempts`
+   （默认 3，clamp 1..32）。提高上限只对“部分出口可达”的池有意义；当前
+   全池拒绝 Stripe，增大上限不会改变结果。
+
+### 追加落地后的当前阻塞（环境，不是代码）
+
+本次只读探测结果：
+
+| 目标 | 当前 9 条 promotion 代理 |
+| --- | --- |
+| `https://chatgpt.com/` | 9/9 HTTP 200 |
+| `https://api.stripe.com/` | 9/9 `503 Target host denied` |
+| 本机直连 `https://api.stripe.com/` | HTTP 404（可达） |
+
+结论：ProxyLane 这批出口是 **ChatGPT-only ACL**。要让支付资格恢复完整
+探测，必须二选一：
+
+- 在 ProxyLane 侧放行 `api.stripe.com`；或
+- 在 `payment_qualification.proxy_pool` 填入一条 Stripe-reachable
+  的支付专用出口。
+
+在此之前，`stripe_preflight=true` 会让批次在创建 Checkout 前中止，这是
+预期行为；`stripe_preflight=false` 仅用于诊断，不应作为常规运行配置。

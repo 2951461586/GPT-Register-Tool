@@ -125,6 +125,37 @@ def configured_qualification_country(config: Any = None) -> str:
     return str(_config_section(config).get("country") or "").strip().upper()
 
 
+def configured_qualification_proxy_pool(config: Any = None) -> list[str]:
+    """Dedicated egress for the qualification probe (empty = promotion fallback).
+
+    Accepted keys, in order:
+
+    * ``payment_qualification.proxy_pool``
+    * ``proxy.lanes.payment_qualification``
+
+    An explicitly configured pool wins over the desktop's registration-pool
+    argument because a ChatGPT-only exit can reach ``chatgpt.com`` but still
+    deny ``api.stripe.com`` at the proxy tunnel (measured 2026-10-27).
+    """
+    from ..config import CFG
+    from ..proxy.routing import canonical_lane_pool, parse_lane_proxy_pool
+
+    source = config if isinstance(config, Mapping) else CFG
+    dedicated = parse_lane_proxy_pool(_config_section(source).get("proxy_pool"))
+    if dedicated:
+        return dedicated
+    return canonical_lane_pool(source, "payment_qualification") or []
+
+
+def configured_max_proxy_attempts(config: Any = None) -> int:
+    """``payment_qualification.max_proxy_attempts`` (default 3, clamped 1..32)."""
+    try:
+        value = int(_config_section(config).get("max_proxy_attempts", 3))
+    except (TypeError, ValueError):
+        value = 3
+    return max(1, min(value, 32))
+
+
 def parse_method_selection(value: Any) -> list[str]:
     """Normalise ``"gcash,momo"`` / ``["gcash", "momo"]`` / ``""`` to a list.
 
@@ -323,6 +354,9 @@ def _method_row(method: str, result: Mapping[str, Any]) -> dict[str, Any]:
         "amount": result.get("amount"),
         "currency": str(result.get("currency") or ""),
         "payment_method_types": list(result.get("payment_method_types") or []),
+        # ``oaics`` custom checkout never calls Stripe init; a Stripe
+        # ``cs_*`` checkout does. The badge must not conflate the two.
+        "checkout_kind": str(result.get("checkout_kind") or result.get("probe_checkout_kind") or ""),
     }
     return row
 
@@ -383,8 +417,17 @@ def _aggregate_state(rows: Sequence[Mapping[str, Any]]) -> str:
 
 def _aggregate_label(state: str, rows: Sequence[Mapping[str, Any]]) -> str:
     if state == QUALIFICATION_ELIGIBLE:
-        names = [str(row.get("method_label") or "") for row in rows if row.get("eligible")]
-        return "可用·" + ", ".join(name for name in names if name)
+        eligible_rows = [row for row in rows if row.get("eligible")]
+        names = [str(row.get("method_label") or "") for row in eligible_rows]
+        label = "可用·" + ", ".join(name for name in names if name)
+        kinds = {str(row.get("checkout_kind") or "") for row in eligible_rows if row.get("checkout_kind")}
+        if len(kinds) == 1:
+            kind = next(iter(kinds))
+            if kind == "oaics":
+                label += "（自定义）"
+            elif kind == "stripe":
+                label += "（Stripe）"
+        return label
     if state == QUALIFICATION_INELIGIBLE:
         decisions = {
             str(row.get("decision") or "") for row in rows if str(row.get("state") or "") == QUALIFICATION_INELIGIBLE
@@ -439,6 +482,8 @@ def check_payment_qualification(
         if probe_all_methods is None:
             probe_all_methods = bool(_config_section().get("probe_all_methods", False))
         last_eligible_only = not probe_all_methods
+    if not proxy and not proxy_pool:
+        proxy_pool = configured_qualification_proxy_pool() or None
     resolved_proxy, normalized_proxy, proxy_source = _select_proxy(data, proxy, proxy_pool)
     resolved_country, country_source = resolve_qualification_country(data, normalized_proxy, country)
     token = str(data.get("access_token") or "").strip()

@@ -255,10 +255,16 @@ def _payment_qualification_presentation(session: dict[str, Any]) -> tuple[str, s
     """
     _raw: object = session.get("payment_qualification")
     qualification = _raw if isinstance(_raw, dict) else {}
-    return (
-        str(qualification.get("status") or "").strip(),
-        str(qualification.get("state") or "").strip(),
-    )
+    status = str(qualification.get("status") or "").strip()
+    state = str(qualification.get("state") or "").strip()
+    _last: object = qualification.get("last_conclusive")
+    last = _last if isinstance(_last, dict) else {}
+    last_status = str(last.get("status") or "").strip()
+    if status and state not in {"eligible", "ineligible"} and last_status:
+        # A transport failure is not an eligibility verdict; keep the operator
+        # oriented with the last conclusive answer.
+        return f"{status}（上次：{last_status}）", state
+    return status, state
 
 
 # raw_json strings repeat verbatim between refreshes; sanitize is deterministic

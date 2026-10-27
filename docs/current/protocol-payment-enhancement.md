@@ -96,6 +96,35 @@ Load-bearing rules:
 * **The batch breaker uses the shared vocabulary.** `_env_failure_class`
   returns `network` for transport/risk blocks and `account` for an invalid AT;
   `BatchCircuitBreaker` only trips on `network` / `auth_state`.
+* **Stripe is a separate egress gate.** `_stripe_preflight` probes
+  `https://api.stripe.com/` through the candidate pool before any account. A
+  proxy can answer `chatgpt.com` with 200 and still deny Stripe at the tunnel
+  (measured 2026-10-27: all nine proxylane exits returned `503 Target host
+  denied`). No Stripe-reachable candidate aborts the batch with
+  `stripe_unreachable` instead of spending Checkout creates.
+  `payment_qualification.stripe_preflight: false` is diagnostic-only.
+* **A dedicated pool wins over the registration pool.**
+  `payment_qualification.proxy_pool` (or `proxy.lanes.payment_qualification`)
+  is used for qualification; when empty it falls back to the promotion lane.
+  This exists because the registration pool is a ChatGPT edge, not a Stripe
+  edge.
+* **`max_proxy_attempts` is configurable.** Default 3, clamped 1..32; a
+  proxy-level failure may need the full pool, but raising it only helps when
+  the pool actually contains reachable exits.
+* **A transient failure preserves the last conclusive verdict.**
+  `payment_qualification.last_conclusive` is written by the store marker; the
+  desktop renders `检测失败（上次：可用·PayPal）` instead of erasing a good
+  badge.
+* **The badge names the checkout kind.** `checkout_kind` / `probe_checkout_kind`
+  is retained on every method row: `可用·PayPal（自定义）` for an `oaics_`
+  custom checkout and `可用·PayPal（Stripe）` for a `cs_*` path that passed
+  Stripe init. A custom-checkout success is not evidence that the Stripe path
+  works through the same exit.
+* **PayPal failures keep their real stage.** `_paypal_capability_probe` wraps
+  checkout-create and Stripe-init exceptions in `CapabilityProbeError`, so the
+  row reports `checkout_create` / `checkout_transport_failed` or
+  `stripe_init` / `stripe_init_transport_failed` instead of a generic
+  `capability_probe`.
 
 There is deliberately no separate durable job queue. Each account's verdict is
 persisted the moment it finishes (`mark_payment_qualification_status`), so a

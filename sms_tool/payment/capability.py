@@ -850,7 +850,16 @@ def _paypal_capability_probe(
             cookie_header=str(auth_context.get("cookie_header") or ""),
             device_id=str(auth_context.get("oai_did") or auth_context.get("device_id") or ""),
         )
-        checkout = extractor._create_checkout()
+        try:
+            checkout = extractor._create_checkout()
+        except Exception as exc:
+            raise CapabilityProbeError(
+                _safe_error(exc),
+                error_code="checkout_transport_failed",
+                error_stage="checkout_create",
+                retryable=True,
+                status="unknown",
+            ) from exc
         cs_id = str(checkout.get("cs_id") or "")
         entity = str(checkout.get("processor_entity") or "")
         if cs_id.startswith("oaics_"):
@@ -882,9 +891,19 @@ def _paypal_capability_probe(
                 "conclusive": True,
                 "checkout_country": extractor.checkout_country,
                 "checkout_session_present": True,
+                "probe_checkout_kind": "stripe",
                 "retryable": False,
             }
-        init = extractor._stripe_init(cs_id, enforce_zero=True)
+        try:
+            init = extractor._stripe_init(cs_id, enforce_zero=True)
+        except Exception as exc:
+            raise CapabilityProbeError(
+                _safe_error(exc),
+                error_code="stripe_init_transport_failed",
+                error_stage="stripe_init",
+                retryable=True,
+                status="unknown",
+            ) from exc
         methods = [str(item).lower() for item in (init.get("payment_method_types") or [])]
         if methods and "paypal" not in methods:
             return {
@@ -900,6 +919,7 @@ def _paypal_capability_probe(
                 "payment_method_types": methods,
                 "checkout_country": extractor.checkout_country,
                 "checkout_session_present": True,
+                "probe_checkout_kind": "stripe",
                 "retryable": False,
             }
         amount_info = _amount_from_init(init)
@@ -918,6 +938,7 @@ def _paypal_capability_probe(
             "payment_method_types": methods,
             "checkout_country": extractor.checkout_country,
             "checkout_session_present": True,
+            "probe_checkout_kind": "stripe",
             "retryable": False,
         }
     except Exception as exc:

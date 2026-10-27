@@ -228,9 +228,11 @@
     "sms_tool/payment/qualification.py -> sms_tool.payment.wire": "deferred",
     "sms_tool/payment/qualification.py -> sms_tool.phone_proxy": "deferred",
     "sms_tool/payment/qualification.py -> sms_tool.proxy.routing": "deferred",
+    "sms_tool/payment/qualification_batch.py -> requests": "startup",
     "sms_tool/payment/qualification_batch.py -> sms_tool.batch_circuit_breaker": "deferred",
     "sms_tool/payment/qualification_batch.py -> sms_tool.config": "deferred",
     "sms_tool/payment/qualification_batch.py -> sms_tool.desktop_ipc": "deferred",
+    "sms_tool/payment/qualification_batch.py -> sms_tool.endpoints": "deferred",
     "sms_tool/payment/qualification_batch.py -> sms_tool.proxy.edge_probe": "deferred",
     "sms_tool/payment/qualification_batch.py -> sms_tool.proxy.routing": "deferred",
     "sms_tool/payment/qualification_batch.py -> sms_tool.storage": "deferred",
@@ -417,8 +419,8 @@
     "sms_tool/payment/capability.py": 9,
     "sms_tool/payment/catalog.py": 2,
     "sms_tool/payment/egress.py": 2,
-    "sms_tool/payment/qualification.py": 8,
-    "sms_tool/payment/qualification_batch.py": 9,
+    "sms_tool/payment/qualification.py": 10,
+    "sms_tool/payment/qualification_batch.py": 11,
     "sms_tool/payment/routing.py": 5,
     "sms_tool/payment/wire.py": 1,
     "sms_tool/paypal/extract.py": 1,
@@ -479,10 +481,10 @@
   },
   "reasons": {
     "cycle": 8,
-    "deferred": 209,
+    "deferred": 210,
     "provider": 34,
-    "startup": 103,
+    "startup": 104,
     "test-seam": 0
   },
-  "total": 462
+  "total": 466
 }

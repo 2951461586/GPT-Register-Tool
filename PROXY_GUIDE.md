@@ -237,6 +237,23 @@ It is off by default and fail-open: with no measured ASN the pool order is
 unchanged. The mapping also survives a process restart, unlike the in-memory geo
 cache.
 
+### Stripe reachability is not ChatGPT reachability
+
+A residential pool can return HTTP 200 on `chatgpt.com` and still deny
+`api.stripe.com` at the proxy tunnel (measured 2026-10-27 on all nine proxylane
+ports). Payment qualification therefore has two gates: the ChatGPT edge probe
+and a Stripe preflight (`payment_qualification.stripe_preflight`, default on).
+Configure a Stripe-capable dedicated pool with
+`payment_qualification.proxy_pool` (or `proxy.lanes.payment_qualification`)
+before running qualification. A quick manual check:
+
+```powershell
+curl.exe --proxy "http://user:pass@host:port" https://api.stripe.com/
+```
+
+`503 Target host denied` / `Tunnel connection failed` means the exit is not
+usable for Stripe even though it can reach ChatGPT.
+
 ### Dynamic generation (`proxy.dynamic_generation`)
 
 Off by default. When enabled, the batch rotates a fresh sticky session from

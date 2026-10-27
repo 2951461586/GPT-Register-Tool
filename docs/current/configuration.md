@@ -295,6 +295,9 @@ override these values per run.
 | `method` | string or array | `"auto"` | `auto` derives candidates from the measured exit country; a comma list / array forces methods. Unknown ids become an `unknown_method` row, not a crash |
 | `country` | ISO-3166 alpha-2 or `""` | `""` | Force the billing/request country. Empty measures the exit first, then falls back to `registration_country` / `identity_context.country` |
 | `probe_all_methods` | bool | `false` | `false` stops after the first eligible method (each candidate is its own Checkout create). `true` restores the full diagnostic grid; the CLI equivalent is `--payment-qualification-all-methods` |
+| `proxy_pool` | array of proxy URLs | `[]` | Dedicated egress for the probe (also accepted as `proxy.lanes.payment_qualification`). When set it wins over the desktop's registration pool. Empty falls back to the promotion lane |
+| `max_proxy_attempts` | int | `3` | Per-account egress attempts on transport/risk failures, clamped 1..32. Raise it only after the pool is known to contain reachable exits |
+| `stripe_preflight` | bool | `true` | Probe `https://api.stripe.com/` through the candidate pool before any account. A proxy that answers `chatgpt.com` with 200 can still deny Stripe at the tunnel; when no candidate reaches Stripe the batch aborts with `stripe_unreachable` instead of creating Checkouts |
 
 Owned by the `runtime` shard. The persisted badge lives in
 `raw_json.payment_qualification` (`store/markers.py`) and is surfaced by

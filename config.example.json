@@ -272,7 +272,10 @@
   "payment_qualification": {
     "method": "auto",
     "country": "",
-    "probe_all_methods": false
+    "probe_all_methods": false,
+    "proxy_pool": [],
+    "max_proxy_attempts": 3,
+    "stripe_preflight": true
   },
   "timeouts": {
     "request": 20,

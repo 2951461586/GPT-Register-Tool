@@ -140,7 +140,13 @@ def qualification_label(result: Any, method: str = "") -> str:
     source = result if isinstance(result, dict) else {}
     name = method_label(method or source.get("payment_method") or "")
     if state == QUALIFICATION_ELIGIBLE:
-        return f"可用·{name}" if name else "可用"
+        label = f"可用·{name}" if name else "可用"
+        kind = _text(source.get("checkout_kind") or source.get("probe_checkout_kind"))
+        if kind == "oaics":
+            label += "（自定义）"
+        elif kind == "stripe":
+            label += "（Stripe）"
+        return label
     if state == QUALIFICATION_INELIGIBLE:
         decision = _text((result or {}).get("decision"))
         error_text = f"{_text((result or {}).get('error'))} {_text((result or {}).get('error_code'))}"

@@ -420,7 +420,14 @@ def test_summary_facts_are_pinned():
         # proxy.asn_registry` imported at its two call sites to keep
         # `sms_tool -> sms_tool/proxy` at 2. Same trade this ratchet prescribes,
         # same reasoned entries.
-        "delayed_cross_dir_edges": 294,
+        #
+        # 2026-10-27 (支付资格 egress hardening): 294 -> 297 (+3). Reviewed
+        # increase: `batch_runner -> proxy.dynamic`, `payment/qualification_batch
+        # -> endpoints` (Stripe preflight host resolved at call time) and
+        # `payment/qualification -> payment.wire` (country -> currency map) are
+        # function-local, each with a reasoned entry in
+        # `delayed_import_reasons.json`.
+        "delayed_cross_dir_edges": 297,
         # Imports under `if TYPE_CHECKING:` never run, so they are not runtime
         # edges. 1 here since 2026-10-23: `payment/link_manager.py` declares its
         # `pay_link` re-exports type-only (the module is not a package, so the

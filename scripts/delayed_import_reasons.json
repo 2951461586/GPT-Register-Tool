@@ -195,6 +195,10 @@
     "sms_tool/proxy/asn_registry.py -> sms_tool.proxy.health": {
       "reason": "deferred",
       "why": "ProxyHealthTracker.key is imported inside _proxy_key to keep the two journals on one credential-free key without a module-level proxy->health edge"
+    },
+    "sms_tool/payment/qualification_batch.py -> sms_tool.endpoints": {
+      "reason": "deferred",
+      "why": "the Stripe preflight root is resolved through endpoints.STRIPE_API_BASE at call time: the host literal is forbidden by endpoints_literal_ratchet and a module-level import would grow the frozen payment->root edge count"
     }
   }
 }

@@ -469,3 +469,160 @@ def test_a_socks5_proxy_in_a_probe_error_is_redacted(monkeypatch):
 
     row = pq._run_method(raising, "AT", {}, "paypal", "US", "socks5://alice:secret@host:1080", 5)
     assert "secret" not in row["error"]
+
+
+# ── dedicated egress / stripe preflight / badge provenance ──────────────────
+def test_dedicated_qualification_pool_reads_config_and_lane():
+    assert pq.configured_qualification_proxy_pool({"payment_qualification": {"proxy_pool": ["http://u:p@h:1"]}}) == [
+        "http://u:p@h:1"
+    ]
+    assert pq.configured_qualification_proxy_pool(
+        {"proxy": {"lanes": {"payment_qualification": ["http://u:p@h:2"]}}}
+    ) == ["http://u:p@h:2"]
+
+
+def test_max_proxy_attempts_is_clamped():
+    assert pq.configured_max_proxy_attempts({"payment_qualification": {"max_proxy_attempts": 0}}) == 1
+    assert pq.configured_max_proxy_attempts({"payment_qualification": {"max_proxy_attempts": 99}}) == 32
+    assert pq.configured_max_proxy_attempts({"payment_qualification": {"max_proxy_attempts": "bad"}}) == 3
+
+
+def test_checkout_kind_reaches_the_badge_and_the_row():
+    result = dict(ELIGIBLE_RESULT, checkout_kind="oaics")
+    assert qualification_label(result, "paypal") == "可用·PayPal（自定义）"
+    row = pq._method_row("paypal", result)
+    assert row["checkout_kind"] == "oaics"
+    assert pq._aggregate_label(QUALIFICATION_ELIGIBLE, [row]) == "可用·PayPal（自定义）"
+
+
+def test_a_transient_failure_keeps_the_last_conclusive_badge():
+    from sms_tool import desktop_read
+    from sms_tool.store.markers import _update_last_conclusive
+
+    qualification = {"status": "可用·PayPal", "state": "eligible", "updated_at": 1}
+    _update_last_conclusive(qualification, "检测失败", "probe_failed", 2)
+    qualification["status"] = "检测失败"
+    qualification["state"] = "probe_failed"
+    assert desktop_read._payment_qualification_presentation({"payment_qualification": qualification}) == (
+        "检测失败（上次：可用·PayPal）",
+        "probe_failed",
+    )
+
+
+def test_stripe_reachability_rejects_proxy_acl_denials():
+    from sms_tool.payment import qualification_batch as pqb
+
+    assert pqb._stripe_reachable("http://p:1", probe=lambda proxy, timeout: (404, "")) is True
+    assert pqb._stripe_reachable("http://p:1", probe=lambda proxy, timeout: (200, "")) is True
+    assert (
+        pqb._stripe_reachable(
+            "http://p:1", probe=lambda proxy, timeout: (503, "Tunnel connection failed: 503 Target host denied")
+        )
+        is False
+    )
+    assert pqb._stripe_reachable("http://p:1", probe=lambda proxy, timeout: (0, "timeout")) is False
+
+
+def test_stripe_preflight_needs_one_reachable_candidate(monkeypatch):
+    from sms_tool.payment import qualification_batch as pqb
+
+    monkeypatch.setattr(pqb, "_stripe_preflight_enabled", lambda: True)
+    result = pqb._stripe_preflight(
+        ["http://a:1", "http://b:2"],
+        probe=lambda proxy, timeout: (404, "") if proxy.endswith("a:1") else (503, "Target host denied"),
+    )
+    assert result == {"ok": True, "checked": 2, "reachable": 1, "skipped": False}
+    assert pqb._stripe_preflight([], probe=lambda proxy, timeout: (404, ""))["ok"] is True
+
+
+def test_paypal_stripe_init_failure_keeps_its_stage(monkeypatch):
+    from sms_tool.payment import capability
+
+    class FakeExtractor:
+        enable_promotion = True
+        checkout_country = "US"
+        checkout_currency = "USD"
+
+        def __init__(self, **kwargs):
+            pass
+
+        def _create_checkout(self):
+            return {"cs_id": "cs_test", "processor_entity": "openai_ie"}
+
+        def checkout_update_promotion(self, *args, **kwargs):
+            return True
+
+        def _stripe_init(self, *args, **kwargs):
+            raise RuntimeError("Tunnel connection failed: 503 Target host denied")
+
+    monkeypatch.setattr("sms_tool.paypal.extract.PPLinkExtractor", FakeExtractor)
+    result = capability._paypal_capability_probe(
+        access_token="AT",
+        auth_context={},
+        checkout_proxy="",
+        provider_proxy="",
+        stripe_init_proxy="",
+        payment_method_proxy="",
+        confirm_proxy="",
+        approve_proxy="",
+        promotion_proxy="",
+        target_country="US",
+        checkout_country="US",
+        promo_campaign_id="",
+        require_zero=True,
+        stage_proxy_countries=None,
+        timeout=5,
+    )
+    assert result["error_code"] == "stripe_init_transport_failed"
+    assert result["error_stage"] == "stripe_init"
+    assert result["retryable"] is True
+
+
+def test_summary_carries_the_abort_reason():
+    summary = pqb._summary([], method="auto", aborted=True, abort_reason="stripe_unreachable")
+    assert summary["aborted"] is True
+    assert summary["abort_reason"] == "stripe_unreachable"
+
+
+def test_dedicated_qualification_pool_wins_over_the_desktop_pool(monkeypatch):
+    from sms_tool.payment import qualification_batch as pqb
+
+    monkeypatch.setattr(pqb, "configured_qualification_proxy_pool", lambda: ["http://dedicated:1"])
+    assert pqb._effective_pool(["http://desktop:1"]) == ["http://dedicated:1"]
+
+
+def test_single_account_probe_passes_the_dedicated_pool_to_the_selector(monkeypatch):
+    captured = {}
+
+    def fake_select(account, explicit, pool=None):
+        captured["pool"] = pool
+        return None, "", "test"
+
+    monkeypatch.setattr(pq, "_select_proxy", fake_select)
+    monkeypatch.setattr(pq, "configured_qualification_proxy_pool", lambda: ["http://dedicated:1"])
+    pq.check_payment_qualification(
+        {"access_token": "AT"},
+        country="US",
+        probe=lambda **kwargs: dict(ELIGIBLE_RESULT, checkout_kind="oaics"),
+    )
+    assert captured["pool"] == ["http://dedicated:1"]
+
+
+def test_batch_aborts_before_accounts_when_stripe_is_unreachable(monkeypatch):
+    from sms_tool.payment import qualification_batch as pqb
+
+    events: list[dict] = []
+    monkeypatch.setattr(pqb, "_load_accounts", lambda *args, **kwargs: [{"email": "a@example.com"}])
+    monkeypatch.setattr(pqb, "_egress_candidates", lambda *args, **kwargs: ["http://p:1"])
+    monkeypatch.setattr(pqb, "_preflight", lambda candidates: {"ok": True, "checked": 1})
+    monkeypatch.setattr(
+        pqb,
+        "_stripe_preflight",
+        lambda candidates: {"ok": False, "checked": 1, "reachable": 0, "skipped": False},
+    )
+    monkeypatch.setattr(pqb, "_emit", lambda *args, **kwargs: events.append({"args": args, "kwargs": kwargs}))
+
+    result = pqb.refresh_payment_qualification(emails=["a@example.com"])
+    assert result["aborted"] is True
+    assert result["abort_reason"] == "stripe_unreachable"
+    assert any(event["args"][1] == "batch_aborted" for event in events)

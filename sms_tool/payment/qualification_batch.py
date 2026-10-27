@@ -32,8 +32,10 @@ if TYPE_CHECKING:  # annotation only: the import itself is function-local
 
 from .qualification import (
     check_payment_qualification,
+    configured_max_proxy_attempts,
     configured_qualification_country,
     configured_qualification_method,
+    configured_qualification_proxy_pool,
 )
 from .qualification_states import (
     QUALIFICATION_AUTH_INVALID,
@@ -52,6 +54,11 @@ DOMAIN = "account_payment_qualification"
 #: resolves". Same signal ``promotion_batch`` uses.
 PREFLIGHT_SAMPLE = 3
 PREFLIGHT_TIMEOUT_SECONDS = 6.0
+
+#: Stripe's edge is the second, independent gate. A proxy can answer
+#: ``chatgpt.com`` with 200 and still deny ``api.stripe.com`` at the tunnel
+#: (measured 2026-10-27: 9/9 proxylane exits returned 503 Target host denied).
+STRIPE_PREFLIGHT_TIMEOUT_SECONDS = 8.0
 
 #: Probe failures per account are bounded: an account walks at most this many
 #: egress candidates, so a wholly dead pool cannot multiply the batch duration.
@@ -91,7 +98,8 @@ def refresh_payment_qualification(
         return _summary([], method=selected_method)
 
     breaker = _breaker()
-    preflight = _preflight(_egress_candidates(proxy, proxy_pool))
+    egress_candidates = _egress_candidates(proxy, proxy_pool)
+    preflight = _preflight(egress_candidates)
     if not preflight["ok"]:
         _emit(
             run_id,
@@ -100,7 +108,22 @@ def refresh_payment_qualification(
             total=len(accounts),
             detail=f"出口池预检失败：{preflight['checked']} 个候选均无响应，已中止以免整批空转",
         )
-        return _summary([], method=selected_method, aborted=True)
+        return _summary([], method=selected_method, aborted=True, abort_reason="egress_unreachable")
+
+    stripe = _stripe_preflight(egress_candidates)
+    if not stripe["ok"]:
+        _emit(
+            run_id,
+            "batch_aborted",
+            "failed",
+            total=len(accounts),
+            detail=(
+                "Stripe 出口预检失败："
+                f"{stripe['checked']} 个候选均无法访问 api.stripe.com，已中止；"
+                "请改用允许 Stripe 的支付出口（payment_qualification.proxy_pool）"
+            ),
+        )
+        return _summary([], method=selected_method, aborted=True, abort_reason="stripe_unreachable")
 
     max_workers = max(1, min(_as_int(workers, 4), 16, len(accounts)))
 
@@ -191,14 +214,21 @@ def _load_accounts(emails, *, get_account_record, list_accounts) -> list[dict[st
     return accounts
 
 
+def _effective_pool(proxy_pool: str | list[str] | None) -> str | list[str] | None:
+    """Dedicated qualification pool wins over the desktop registration pool."""
+    dedicated = configured_qualification_proxy_pool()
+    return dedicated or proxy_pool
+
+
 def _egress_candidates(proxy: str | None, proxy_pool: str | list[str] | None) -> list[str]:
     from ..proxy.routing import operation_proxy_candidates, parse_lane_proxy_pool
 
+    effective = _effective_pool(proxy_pool)
     candidates = operation_proxy_candidates(
         {"email": "batch-preflight"},
         operation="promotion",
         explicit=proxy,
-        pool=proxy_pool if parse_lane_proxy_pool(proxy_pool) else None,
+        pool=effective if parse_lane_proxy_pool(effective) else None,
         config=_runtime_config(),
     )
     return [item.proxy for item in candidates if item.proxy]
@@ -218,24 +248,26 @@ def _probe_with_rotation(
     """Probe one account, rotating to a fresh exit only on a transport failure."""
     from ..proxy.routing import operation_proxy_candidates, parse_lane_proxy_pool
 
+    effective = _effective_pool(proxy_pool)
     candidates = operation_proxy_candidates(
         account,
         operation="promotion",
         explicit=proxy,
-        pool=proxy_pool if parse_lane_proxy_pool(proxy_pool) else None,
+        pool=effective if parse_lane_proxy_pool(effective) else None,
         config=_runtime_config(),
     )
     ordered = [item.proxy for item in candidates] or [None]
+    limit = min(len(ordered), configured_max_proxy_attempts())
     email = str(account.get("email") or "").strip().lower()
     probe: dict[str, Any] = {}
-    for index, candidate in enumerate(ordered[:MAX_PROXY_ATTEMPTS]):
+    for index, candidate in enumerate(ordered[:limit]):
         _emit(
             run_id,
             "proxy_attempt",
             "running",
             account_ref=email,
             total=total,
-            detail=f"代理 {index + 1}/{min(len(ordered), MAX_PROXY_ATTEMPTS)}",
+            detail=f"代理 {index + 1}/{limit}",
         )
         probe = check_payment_qualification(
             account,
@@ -394,6 +426,76 @@ def _preflight(candidates: list[str]) -> dict[str, Any]:
     return {"ok": False, "checked": len(sample)}
 
 
+def _stripe_preflight_url() -> str:
+    """Resolve the Stripe host through the endpoint authority at call time."""
+    from .. import endpoints
+
+    return endpoints.STRIPE_API_BASE + "/"
+
+
+def _stripe_probe(proxy: str, timeout: float) -> tuple[int, str]:
+    """One read-only GET to Stripe's root through ``proxy`` (no account, no body)."""
+    import requests
+
+    session = requests.Session()
+    try:
+        session.trust_env = False
+    except Exception:
+        pass
+    session.proxies = {"http": proxy, "https": proxy}
+    try:
+        response = session.get(_stripe_preflight_url(), timeout=timeout, allow_redirects=False)
+        return int(getattr(response, "status_code", 0) or 0), str(getattr(response, "text", "") or "")[:500]
+    except Exception as exc:
+        return 0, f"{type(exc).__name__}: {exc}"
+    finally:
+        session.close()
+
+
+def _stripe_reachable(proxy: str, timeout: float = STRIPE_PREFLIGHT_TIMEOUT_SECONDS, probe: Any = None) -> bool:
+    """True when the tunnel reaches Stripe; proxy ACL denials are not reachable."""
+    if not proxy:
+        return True
+    status, text = (probe or _stripe_probe)(proxy, timeout)
+    if not status or status >= 500 or status == 407:
+        return False
+    lowered = str(text or "").lower()
+    return not any(
+        marker in lowered
+        for marker in ("target host denied", "tunnel connection failed", "forbidden ip", "proxy authentication")
+    )
+
+
+def _stripe_preflight_enabled() -> bool:
+    section = _runtime_config().get("payment_qualification")
+    value = section.get("stripe_preflight", True) if isinstance(section, dict) else True
+    if isinstance(value, str):
+        return value.strip().lower() not in {"0", "false", "no", "off"}
+    return bool(value)
+
+
+def _stripe_preflight(
+    candidates: list[str],
+    *,
+    timeout: float = STRIPE_PREFLIGHT_TIMEOUT_SECONDS,
+    probe: Any = None,
+) -> dict[str, Any]:
+    """Check the whole candidate list, not a sample: one Stripe-capable exit is enough."""
+    if not candidates:
+        return {"ok": True, "checked": 0, "reachable": 0, "skipped": True}
+    if not _stripe_preflight_enabled():
+        return {"ok": True, "checked": 0, "reachable": 0, "skipped": True}
+    worker_count = max(1, min(8, len(candidates)))
+    with ThreadPoolExecutor(max_workers=worker_count) as executor:
+        results = list(executor.map(lambda item: _stripe_reachable(item, timeout, probe), candidates))
+    return {
+        "ok": any(results),
+        "checked": len(results),
+        "reachable": sum(1 for item in results if item),
+        "skipped": False,
+    }
+
+
 def _env_failure_class(probe: dict[str, Any]) -> str:
     """Map one account outcome onto the **shared** breaker vocabulary.
 
@@ -421,6 +523,7 @@ def _summary(
     method: str,
     breaker: "BatchCircuitBreaker | None" = None,
     aborted: bool = False,
+    abort_reason: str = "",
 ) -> dict[str, Any]:
     states = [str(item.get("payment_qualification_state") or "") for item in results]
     total = len(results)
@@ -430,6 +533,7 @@ def _summary(
     return {
         "ok": bool(results) and success == total and not persist_failed and not tripped and not aborted,
         "aborted": aborted,
+        "abort_reason": abort_reason,
         "circuit_breaker_tripped": tripped,
         "payment_method": method,
         "total": total,

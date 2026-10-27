@@ -255,6 +255,31 @@ def mark_promotion_status(
     return True
 
 
+#: States that answered the operator's question. A transient transport failure
+#: must not erase the last one.
+_CONCLUSIVE_QUALIFICATION_STATES = frozenset({"eligible", "ineligible"})
+
+
+def _update_last_conclusive(qualification: dict, label: str, state: str, now: int) -> None:
+    """Preserve the last conclusive verdict before the current fields are overwritten."""
+    previous_state = str(qualification.get("state") or "")
+    previous_status = str(qualification.get("status") or "")
+    if state in _CONCLUSIVE_QUALIFICATION_STATES:
+        qualification["last_conclusive"] = {
+            "status": str(label or ""),
+            "state": state,
+            "updated_at": now,
+        }
+    elif previous_state in _CONCLUSIVE_QUALIFICATION_STATES and not isinstance(
+        qualification.get("last_conclusive"), dict
+    ):
+        qualification["last_conclusive"] = {
+            "status": previous_status,
+            "state": previous_state,
+            "updated_at": qualification.get("updated_at") or now,
+        }
+
+
 def mark_payment_qualification_status(
     email,
     label="",
@@ -303,6 +328,7 @@ def mark_payment_qualification_status(
                 pass
         _raw: object = data.get("payment_qualification")
         qualification: dict = _raw if isinstance(_raw, dict) else {}
+        _update_last_conclusive(qualification, str(label or ""), str(state or ""), now)
         qualification["status"] = str(label or "")
         qualification["state"] = str(state or "")
         qualification["updated_at"] = now

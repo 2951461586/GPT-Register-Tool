@@ -662,6 +662,8 @@ def _print_payment_qualification_summary(result: Mapping[str, Any]) -> None:
     _raw_results: object = result.get("results")
     rows = [item for item in (_raw_results if isinstance(_raw_results, list) else []) if isinstance(item, dict)]
     answered = sum(1 for item in rows if item.get("ok"))
+    if result.get("abort_reason"):
+        safe_print(f"[!] 批次已中止：{result.get('abort_reason')}")
     safe_print(
         f"[*] 支付资格检测完成：共 {len(rows)} 个账号，已判定 {answered}，"
         f"可用 {_safe_int(result.get('eligible'))}，无可用 {_safe_int(result.get('ineligible'))}，"
