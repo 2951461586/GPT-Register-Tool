@@ -82,6 +82,11 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 PROTOCOL_ROOT = SCRIPT_DIR.parent
 if str(PROTOCOL_ROOT) not in sys.path:
     sys.path.insert(0, str(PROTOCOL_ROOT))
+from common.checkout_session import (
+    CheckoutHooks as SharedCheckoutHooks,
+    create_checkout as shared_create_checkout,
+    warmup_approve_context as shared_warmup_approve_context,
+)
 from common.extractor_runtime import (
     PROXY_COUNTRY_SELECTOR_RE as _PROXY_COUNTRY_SELECTOR_RE,
     normalize_pre_proxy_url,
@@ -1291,108 +1296,30 @@ def checkout_response_has_trial(payload: Any) -> bool:
     return shared_checkout_response_has_trial(payload)
 
 
+def _checkout_hooks() -> SharedCheckoutHooks:
+    """Seams for ``common/checkout_session.py`` -- rebuilt per call, not cached.
+
+    Before stage 2 batch 9 both bodies below read these names as module globals on
+    every invocation. A module-level constant would freeze the binding at import
+    time, so a later rebind of ``log`` / ``dump_http`` / the redaction registry
+    would be silently ignored -- a behaviour change, not a refactor.
+    """
+    return SharedCheckoutHooks(
+        normalize_country=normalize_country,
+        currency_for_country=currency_for_country,
+        env_bool=env_bool,
+        env_int=env_int,
+        log=log,
+        dump_http=dump_http,
+        default_stripe_pk=DEFAULT_STRIPE_PK,
+        coupon_fallback_flag="IDEAL_COUPON_FALLBACK_PROMO_CAMPAIGN",
+        warmup_dump_flag="IDEAL_DUMP_WARMUP",
+    )
+
+
 def create_checkout(chatgpt: requests.Session, country: str) -> dict[str, str]:
-    country = normalize_country(country)
-    promo_mode = os.environ.get("PP_PROMO_MODE", "campaign").strip().lower() or "campaign"
-    promo_id = os.environ.get("PP_PROMO_ID", "plus-1-month-free").strip()
-    body: dict[str, Any] = {
-        "entry_point": os.environ.get("PP_ENTRY_POINT", "all_plans_pricing_modal"),
-        "plan_name": "chatgptplusplan",
-        "billing_details": {"country": country, "currency": currency_for_country(country)},
-        "checkout_ui_mode": "custom",
-    }
-    if promo_mode in ("trial", "free_trial"):
-        trial_days = env_int("PP_TRIAL_DAYS", 30)
-        body["subscription_data"] = {"trial_period_days": trial_days}
-    elif promo_mode in ("campaign", "query"):
-        body["promo_campaign"] = {
-            "promo_campaign_id": promo_id,
-            "is_coupon_from_query_param": promo_mode == "query",
-        }
-    elif promo_mode == "coupon":
-        body["coupon"] = promo_id
-    elif promo_mode == "code":
-        body["promotion_code"] = promo_id
-    elif promo_mode != "off":
-        log(f"未知 PP_PROMO_MODE={promo_mode!r}，已忽略", "[WARN] ")
-    log(f"Checkout promo: mode={promo_mode}, id={promo_id}")
-
-    headers = {
-        "Referer": endpoints.CHATGPT_BASE + "/",
-        "x-openai-target-path": "/backend-api/payments/checkout",
-        "x-openai-target-route": "/backend-api/payments/checkout",
-    }
-    resp = chatgpt.post(
-        endpoints.CHATGPT_CHECKOUT_API,
-        json=body,
-        headers=headers,
-        timeout=CHATGPT_TIMEOUT,
-    )
-    dump_http(resp, "checkout", body, "POST", endpoints.CHATGPT_CHECKOUT_API, force=resp.status_code >= 400)
-    if resp.status_code >= 400:
-        if is_user_already_paid_error(resp.text):
-            raise RuntimeError("用户已支付: User is already paid")
-        raise RuntimeError(f"checkout 创建失败 HTTP {resp.status_code}: {resp.text[:500]}")
-
-    data = resp.json() or {}
-    if (
-        promo_mode == "coupon"
-        and promo_id == "plus-1-month-free"
-        and not checkout_response_has_promo(data)
-        and env_bool("IDEAL_COUPON_FALLBACK_PROMO_CAMPAIGN", True)
-    ):
-        log("coupon 响应未显示优惠，按 promo_campaign 字符串重试", "[PROMO] ")
-        fallback_body = dict(body)
-        fallback_body.pop("coupon", None)
-        fallback_body["promo_campaign"] = promo_id
-        resp = chatgpt.post(
-            endpoints.CHATGPT_CHECKOUT_API,
-            json=fallback_body,
-            headers=headers,
-            timeout=CHATGPT_TIMEOUT,
-        )
-        dump_http(
-            resp,
-            "checkout_promo_campaign",
-            fallback_body,
-            "POST",
-            endpoints.CHATGPT_CHECKOUT_API,
-            force=True,
-        )
-        if resp.status_code >= 400:
-            if is_user_already_paid_error(resp.text):
-                raise RuntimeError("用户已支付: User is already paid")
-            raise RuntimeError(f"checkout promo_campaign 重试失败 HTTP {resp.status_code}: {resp.text[:500]}")
-        data = resp.json() or {}
-        log(f"promo_campaign 重试后 promo={checkout_response_has_promo(data)}", "[PROMO] ")
-
-    cs_id = data.get("checkout_session_id") or data.get("session_id") or data.get("id")
-    if not cs_id or not str(cs_id).startswith("cs_"):
-        raise RuntimeError(f"checkout 响应缺少 cs_id: {str(data)[:500]}")
-
-    raw_pk = (
-        data.get("stripe_publishable_key")
-        or data.get("publishable_key")
-        or data.get("publishableKey")
-        or data.get("stripePublishableKey")
-        or data.get("key")
-        or ""
-    )
-    match = re.search(r"pk_live_[A-Za-z0-9]+", str(raw_pk))
-    stripe_pk = match.group(0) if match else DEFAULT_STRIPE_PK
-    processor_entity = str(data.get("processor_entity") or data.get("processorEntity") or "")
-    log(
-        f"Checkout 创建成功: {cs_id} / {country} / {currency_for_country(country)} / "
-        f"mode={promo_mode} / promo={checkout_response_has_promo(data)} / "
-        f"trial={checkout_response_has_trial(data)}"
-    )
-    return {
-        "cs_id": str(cs_id),
-        "processor_entity": processor_entity,
-        "stripe_pk": stripe_pk,
-        "billing_country": country,
-        "currency": currency_for_country(country),
-    }
+    """Delegate to ``common/checkout_session.py`` (stage 2, batch 9)."""
+    return shared_create_checkout(chatgpt, country, hooks=_checkout_hooks())
 
 
 def stripe_init(cs_id: str, stripe_pk: str, proxy: str) -> dict[str, Any]:
@@ -1919,27 +1846,12 @@ def log_payment_page_summary(stage: str, payload: Any) -> None:
 
 
 def warmup_approve_context(chatgpt: requests.Session, checkout_page_url: str) -> None:
-    try:
-        resp = chatgpt.post(
-            endpoints.CHATGPT_SENTINEL_PING,
-            json={},
-            headers={
-                "Referer": endpoints.CHATGPT_BASE + "/",
-                "x-openai-target-path": "/backend-api/sentinel/ping",
-                "x-openai-target-route": "/backend-api/sentinel/ping",
-            },
-            timeout=CHATGPT_TIMEOUT,
-        )
-        dump_http(
-            resp,
-            "sentinel_ping",
-            {},
-            "POST",
-            endpoints.CHATGPT_SENTINEL_PING,
-            force=env_bool("IDEAL_DUMP_WARMUP", False),
-        )
-    except Exception as exc:
-        log(f"approve sentinel 请求异常: {exc}", "[WARN] ")
+    """Delegate to ``common/checkout_session.py`` (stage 2, batch 9).
+
+    ``checkout_page_url`` is unused here -- and was already unused before the
+    move; it stays because every call site passes it positionally.
+    """
+    return shared_warmup_approve_context(chatgpt, checkout_page_url, hooks=_checkout_hooks())
 
 
 def chatgpt_approve(chatgpt: requests.Session, checkout: dict[str, str]) -> None:

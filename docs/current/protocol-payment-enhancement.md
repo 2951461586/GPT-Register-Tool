@@ -37,16 +37,25 @@ that duplication and a shared layer absorbs the parts proven provider-neutral:
   piece is a parameter — the env prefix, the locale callables, the session
   factory and the `dump_http` wrapper — so each extractor keeps a same-named
   thin wrapper and its own patch targets.
+- `common/checkout_session.py` (batch 9, 2026-10-28) owns `create_checkout` and
+  `warmup_approve_context`. Its seams are the two country/currency callables
+  (blik resolves unknown countries through its own `COUNTRY_CURRENCY` +
+  `default_payment_country()`, iDEAL/TWINT go through `provider_profile`), the
+  module's `DEFAULT_STRIPE_PK`, and the **env-var names** of the coupon-fallback
+  and warm-up-dump switches (`IDEAL_*` for ideal *and* blik, `TWINT_*` for
+  twint). The hooks are rebuilt per call rather than cached in a module
+  constant, so a rebind of `log` / `dump_http` / the redaction registry still
+  takes effect exactly as it did before the move.
 
 <!-- ratchet-numbers:begin payment -->
 | Extractor pair | AST-identical functions |
 | --- | ---: |
-| `ideal:blik` | 13 |
-| `ideal:twint` | 26 |
+| `ideal:blik` | 12 |
+| `ideal:twint` | 25 |
 | `momo:kakao` (negative control) | 0 |
-| `twint:blik` | 10 |
+| `twint:blik` | 9 |
 
-Same-named definitions against `common/`: **231 delegating**, **0 verbatim copies**, **32 deliberate forks**.
+Same-named definitions against `common/`: **237 delegating**, **0 verbatim copies**, **34 deliberate forks**.
 <!-- ratchet-numbers:end payment -->
 
 What deliberately stays per-extractor: anything whose *values* are provider
@@ -57,7 +66,11 @@ and ko-KR payload) and in MoMo (delegates to `paylink.stripe_init_payment_page`)
 plus `stripe_elements_session_params` in BLIK (requires every ctx key). Rule 19 in
 `docs/architecture.md` records the same-name forks, including kakao's
 `proxy_chain_key`, which strips a trailing country code from the sid and must
-not be converged. A full parameterized engine is still gated on the differential
+not be converged. Batch 9 recorded two more of the same kind: `create_checkout`
+in **kakao** (`(session, token)` → a three-value return, KRW / ko-KR) and in
+**momo** (an eight-parameter proxy-rotating variant returning a six-tuple) share
+the name but not the function, so they stay deliberate forks. That is the same
+call batch 7 made for `stripe_init`, not a migration backlog item. A full parameterized engine is still gated on the differential
 replay required by
 `docs/audits/plans/plan-2026-09-17-protocol-payment-extractor-consolidation.md`.
 

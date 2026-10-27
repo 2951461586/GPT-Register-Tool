@@ -120,7 +120,12 @@ EXPECTED_DIVERGENCES: dict[tuple[str, str], tuple[str, str]] = {
         "provider_io",
         "iDEAL dump naming/format is provider-owned",
     ),
-    # Kakao (8)
+    # Kakao (9)
+    ("kakao/kakao_extract.py", "create_checkout"): (
+        "provider_wire",
+        "takes (session, token) instead of a prepared ChatGPT session and returns (cs_id, processor, data) "
+        "with a KRW / ko-KR payload plus a cancel_url, so it cannot delegate to common/checkout_session.py",
+    ),
     ("kakao/kakao_extract.py", "register_proxy_for_redaction"): (
         "provider_state",
         "Kakao registers into its own redaction registry so its proxy lines stay redacted",
@@ -153,7 +158,12 @@ EXPECTED_DIVERGENCES: dict[tuple[str, str], tuple[str, str]] = {
         "provider_wire",
         "different signature and body: ko-KR init payload returning (payload, stripe_js_id)",
     ),
-    # MoMo (4)
+    # MoMo (5)
+    ("momo/momo_qr_extract.py", "create_checkout"): (
+        "provider_wire",
+        "eight-parameter proxy-rotating variant that returns a six-tuple and encodes the failure in slot 3, "
+        "so the shared one-session create_checkout cannot serve it",
+    ),
     ("momo/ac_paylink_core.py", "to_openai_pay_url"): (
         "provider_wire",
         "maps Stripe hosted checkout URLs onto pay.openai.com for the MoMo redirect",
@@ -192,7 +202,7 @@ EXPECTED_CATEGORIES = {
     "provider_data": 6,
     "provider_state": 8,
     "provider_io": 7,
-    "provider_wire": 11,
+    "provider_wire": 13,
 }
 
 

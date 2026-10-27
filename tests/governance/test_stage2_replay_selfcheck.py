@@ -365,3 +365,341 @@ def test_pre_proxy_differential_is_sensitive_to_the_environment(monkeypatch):
     assert proxied == "socks5h://127.0.0.1:7890"
     assert disabled == ""
     assert proxied != disabled
+
+
+# ── Stage 2, batch "checkout session" (2026-10-28) ─────────────────────────
+#
+# ``create_checkout`` (109 / 109 / 102 lines -- blik's gap is one ``dump_http``
+# call collapsed onto a single line) and ``warmup_approve_context`` (22 lines
+# each, down to the unused ``checkout_page_url`` parameter) were AST-identical in
+# ideal / twint / blik once the provider token was normalised away, and moved
+# into ``common/checkout_session.py``. The plan requires "HEAD vs parameterised"
+# evidence before such a move is accepted; a live recording is still missing, so
+# the "before" side is the mechanically captured body in
+# ``tests/payment/stage2_checkout_session_head.py`` (``git show HEAD:...``, only
+# ambient names rewritten to ``seams.*``). Both sides run under the same
+# environ, the same replay transport and the same injected seams, so the only
+# thing under test is the body that moved.
+
+CHECKOUT_PROVIDERS = {"blik": "blik_qr_extract", "ideal": "ideal_qr_extract", "twint": "twint_extract"}
+
+#: ``(coupon-fallback flag, warm-up dump flag)`` per provider. blik runs the
+#: *ideal* runtime env (``pay_link/adapters.py::_build_blik_env`` passes the
+#: ``IDEAL`` prefix), which is why it reads ``IDEAL_*``; twint has its own pair.
+CHECKOUT_FLAGS = {
+    "blik": ("IDEAL_COUPON_FALLBACK_PROMO_CAMPAIGN", "IDEAL_DUMP_WARMUP"),
+    "ideal": ("IDEAL_COUPON_FALLBACK_PROMO_CAMPAIGN", "IDEAL_DUMP_WARMUP"),
+    "twint": ("TWINT_COUPON_FALLBACK_PROMO_CAMPAIGN", "TWINT_DUMP_WARMUP"),
+}
+
+CHECKOUT_ENV_NAMES = (
+    "PP_PROMO_MODE",
+    "PP_PROMO_ID",
+    "PP_ENTRY_POINT",
+    "PP_TRIAL_DAYS",
+    "IDEAL_COUPON_FALLBACK_PROMO_CAMPAIGN",
+    "IDEAL_DUMP_WARMUP",
+    "TWINT_COUPON_FALLBACK_PROMO_CAMPAIGN",
+    "TWINT_DUMP_WARMUP",
+)
+
+CHECKOUT_URL = "https://chatgpt.com/backend-api/payments/checkout"
+SENTINEL_PING_URL = "https://chatgpt.com/backend-api/sentinel/ping"
+
+CS_OK = {
+    "checkout_session_id": "cs_test_1",
+    "stripe_publishable_key": "pk_live_ABC123",
+    "processor_entity": "openai_ie",
+}
+PROMO_SEEN = {"promo_campaign": {"promo_campaign_id": "plus-1-month-free"}}
+
+
+def _ok(body: dict, url: str = CHECKOUT_URL) -> dict:
+    return {
+        "request": {"method": "POST", "url": url},
+        "response": {"status_code": 200, "body": json.dumps(body), "url": url},
+    }
+
+
+def _err(status: int, text: str, url: str = CHECKOUT_URL) -> dict:
+    return {
+        "request": {"method": "POST", "url": url},
+        "response": {"status_code": status, "body": text, "url": url},
+    }
+
+
+#: scenario -> (environ overrides, recorded exchanges, requested country)
+CHECKOUT_SCENARIOS: dict[str, tuple[dict[str, str], list[dict], str]] = {
+    "campaign_default": ({}, [_ok(CS_OK)], "NL"),
+    "query_promo": ({"PP_PROMO_MODE": "query"}, [_ok(CS_OK)], "NL"),
+    "trial_days": ({"PP_PROMO_MODE": "trial", "PP_TRIAL_DAYS": "7"}, [_ok(CS_OK)], "NL"),
+    "promotion_code": ({"PP_PROMO_MODE": "code", "PP_PROMO_ID": "XMAS-1"}, [_ok(CS_OK)], "NL"),
+    "coupon_falls_back": ({"PP_PROMO_MODE": "coupon"}, [_ok({}), _ok(PROMO_SEEN)], "NL"),
+    "coupon_no_fallback_when_promo_seen": ({"PP_PROMO_MODE": "coupon"}, [_ok(PROMO_SEEN)], "NL"),
+    "coupon_fallback_disabled": (
+        {
+            "PP_PROMO_MODE": "coupon",
+            "IDEAL_COUPON_FALLBACK_PROMO_CAMPAIGN": "0",
+            "TWINT_COUPON_FALLBACK_PROMO_CAMPAIGN": "0",
+        },
+        [_ok({})],
+        "NL",
+    ),
+    "promo_off": ({"PP_PROMO_MODE": "off"}, [_ok(CS_OK)], "NL"),
+    "promo_unknown": ({"PP_PROMO_MODE": "bogus"}, [_ok(CS_OK)], "NL"),
+    "already_paid": ({}, [_err(400, '{"detail": "User is already paid"}')], "NL"),
+    "http_error": ({}, [_err(503, "upstream unavailable")], "NL"),
+    "missing_cs_id": ({}, [_ok({"id": "not_a_session"})], "NL"),
+    "pk_from_module_default": ({}, [_ok({"checkout_session_id": "cs_test_2"})], "NL"),
+    "fallback_second_fails": ({"PP_PROMO_MODE": "coupon"}, [_ok({}), _err(400, "User is already paid")], "NL"),
+    "country_ch": ({}, [_ok(CS_OK)], "CH"),
+    "country_unknown": ({}, [_ok(CS_OK)], "ZZ"),
+}
+
+#: scenario -> (environ overrides, recorded exchanges)
+WARMUP_SCENARIOS: dict[str, tuple[dict[str, str], list[dict]]] = {
+    "ping_ok": ({}, [_ok({}, SENTINEL_PING_URL)]),
+    "ping_ok_dump_on": ({"IDEAL_DUMP_WARMUP": "1", "TWINT_DUMP_WARMUP": "1"}, [_ok({}, SENTINEL_PING_URL)]),
+    "ping_500": ({}, [_err(500, "boom", SENTINEL_PING_URL)]),
+    # An exhausted cursor makes the session raise, which is the pre-merge
+    # ``except Exception`` arm: the warm-up must swallow it and log.
+    "session_raises": ({}, []),
+}
+
+
+def _load_frozen_checkout_head():
+    path = ROOT / "tests" / "payment" / "stage2_checkout_session_head.py"
+    spec = importlib.util.spec_from_file_location("stage2_checkout_session_head", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _checkout_seams(module, provider: str):
+    """Build the pre-merge seam bundle from the extractor under test.
+
+    ``endpoints`` / ``CHATGPT_TIMEOUT`` / the predicates are read off the
+    extractor rather than imported here: the frozen head deliberately avoids a
+    ``common`` import (pyright cannot resolve that package from ``tests/``), and
+    the extractor has already resolved all of them.
+    """
+    head = _load_frozen_checkout_head()
+    coupon_flag, dump_flag = CHECKOUT_FLAGS[provider]
+    return head.Seams(
+        normalize_country=module.normalize_country,
+        currency_for_country=module.currency_for_country,
+        env_bool=module.env_bool,
+        env_int=module.env_int,
+        log=module.log,
+        dump_http=module.dump_http,
+        default_stripe_pk=module.DEFAULT_STRIPE_PK,
+        coupon_fallback_flag=coupon_flag,
+        warmup_dump_flag=dump_flag,
+        chatgpt_base=module.endpoints.CHATGPT_BASE,
+        checkout_api=module.endpoints.CHATGPT_CHECKOUT_API,
+        sentinel_ping=module.endpoints.CHATGPT_SENTINEL_PING,
+        timeout=module.CHATGPT_TIMEOUT,
+        is_user_already_paid_error=module.is_user_already_paid_error,
+        checkout_response_has_promo=module.checkout_response_has_promo,
+        checkout_response_has_trial=module.checkout_response_has_trial,
+    )
+
+
+def _isolate_dumps(monkeypatch, module, provider: str, tmp_path) -> None:
+    """Point the extractor's dumper at a throw-away dir.
+
+    ``force=True`` writes a dump even with ``IDEAL_DUMP`` unset, and ideal/twint
+    only ``mkdir`` their dump directory **at import time** -- so redirecting
+    ``DUMP_DIR`` without creating it turns the diagnostic writer into a
+    ``FileNotFoundError`` that both sides would raise differently (the file name
+    carries an incrementing counter). blik creates the dir per call, so this
+    helper is what makes the two shapes comparable.
+    """
+    target = tmp_path / provider
+    target.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(module, "DUMP_DIR", target, raising=False)
+
+
+def _apply_checkout_env(monkeypatch, environ: dict[str, str]) -> None:
+    for name in CHECKOUT_ENV_NAMES:
+        monkeypatch.delenv(name, raising=False)
+    for name, value in environ.items():
+        monkeypatch.setenv(name, value)
+
+
+def _cursor_of(records: list[dict]) -> PR.ReplayCursor:
+    return PR.ReplayCursor([PR.RecordedExchange.from_dict(record) for record in records])
+
+
+def _call(func, *args, **kwargs):
+    """Run ``func`` and return ``(result, (exception type, message) | None)``.
+
+    Both sides of the differential must fail *identically*: same type, same
+    message. Comparing only successful runs would let an error-path change slip
+    through, and the checkout error strings are operator-facing.
+    """
+    try:
+        return func(*args, **kwargs), None
+    except Exception as exc:  # the raised value is the observation, not a test bug
+        return None, (type(exc).__name__, str(exc))
+
+
+@pytest.mark.parametrize("provider", sorted(CHECKOUT_PROVIDERS))
+@pytest.mark.parametrize("scenario", sorted(CHECKOUT_SCENARIOS))
+def test_shared_create_checkout_matches_the_frozen_pre_merge_body(provider, scenario, monkeypatch, tmp_path):
+    """The moved body must produce the same request bytes, result and error."""
+    module = _load(provider, CHECKOUT_PROVIDERS[provider])
+    head = _load_frozen_checkout_head()
+    environ, records, country = CHECKOUT_SCENARIOS[scenario]
+    _apply_checkout_env(monkeypatch, environ)
+    _isolate_dumps(monkeypatch, module, provider, tmp_path)
+    seams = _checkout_seams(module, provider)
+
+    expected_cursor = _cursor_of(records)
+    with PR.freeze_determinism():
+        expected, expected_error = _call(head.create_checkout, PR.ReplaySession(expected_cursor), country, seams=seams)
+
+    actual_cursor = _cursor_of(records)
+    with PR.freeze_determinism():
+        actual, actual_error = _call(module.create_checkout, PR.ReplaySession(actual_cursor), country)
+
+    assert actual_cursor.served == expected_cursor.served, (
+        f"request stream diverged from the pre-merge body ({scenario})"
+    )
+    assert actual == expected, f"return value diverged from the pre-merge body ({scenario})"
+    assert actual_error == expected_error, f"error diverged from the pre-merge body ({scenario})"
+
+
+@pytest.mark.parametrize("provider", sorted(CHECKOUT_PROVIDERS))
+@pytest.mark.parametrize("scenario", sorted(WARMUP_SCENARIOS))
+def test_shared_warmup_matches_the_frozen_pre_merge_body(provider, scenario, monkeypatch, tmp_path):
+    module = _load(provider, CHECKOUT_PROVIDERS[provider])
+    head = _load_frozen_checkout_head()
+    environ, records = WARMUP_SCENARIOS[scenario]
+    _apply_checkout_env(monkeypatch, environ)
+    _isolate_dumps(monkeypatch, module, provider, tmp_path)
+    seams = _checkout_seams(module, provider)
+    page_url = "https://chatgpt.com/checkout/cs_test_1"
+
+    expected_cursor = _cursor_of(records)
+    with PR.freeze_determinism():
+        expected, expected_error = _call(
+            head.warmup_approve_context, PR.ReplaySession(expected_cursor), page_url, seams=seams
+        )
+
+    actual_cursor = _cursor_of(records)
+    with PR.freeze_determinism():
+        actual, actual_error = _call(module.warmup_approve_context, PR.ReplaySession(actual_cursor), page_url)
+
+    assert actual_cursor.served == expected_cursor.served, f"request stream diverged ({scenario})"
+    assert actual is None and expected is None
+    assert actual_error is None and expected_error is None, "warm-up must swallow transport errors"
+
+
+def test_checkout_differential_is_sensitive_to_the_request_body():
+    """Guard against a vacuous comparison: another promo mode must change the bytes."""
+    module = _load("ideal", CHECKOUT_PROVIDERS["ideal"])
+    bodies = {}
+    for scenario in ("campaign_default", "trial_days", "promotion_code"):
+        environ, records, country = CHECKOUT_SCENARIOS[scenario]
+        saved = {name: os.environ.get(name) for name in CHECKOUT_ENV_NAMES}
+        try:
+            for name in CHECKOUT_ENV_NAMES:
+                os.environ.pop(name, None)
+            os.environ.update(environ)
+            cursor = _cursor_of(records)
+            with PR.freeze_determinism():
+                _call(module.create_checkout, PR.ReplaySession(cursor), country)
+            bodies[scenario] = cursor.served
+        finally:
+            for name, value in saved.items():
+                if value is None:
+                    os.environ.pop(name, None)
+                else:
+                    os.environ[name] = value
+    assert len({json.dumps(served) for served in bodies.values()}) == len(bodies)
+
+
+@pytest.mark.parametrize("provider", sorted(CHECKOUT_PROVIDERS))
+def test_coupon_fallback_flag_name_is_the_providers_own(provider, monkeypatch):
+    """A hardcoded prefix would make one extractor read another's switch.
+
+    ``common/checkout_session.py`` takes the env-var *name* for this reason; if a
+    future edit baked ``IDEAL_COUPON_FALLBACK_PROMO_CAMPAIGN`` in, twint would
+    silently follow ideal's switch and nothing else in the suite would notice.
+    """
+    module = _load(provider, CHECKOUT_PROVIDERS[provider])
+    coupon_flag, _dump_flag = CHECKOUT_FLAGS[provider]
+    seen: list[str] = []
+
+    def record(name, default=False):
+        seen.append(name)
+        return default
+
+    monkeypatch.setattr(module, "env_bool", record)
+    _apply_checkout_env(monkeypatch, {"PP_PROMO_MODE": "coupon"})
+    cursor = _cursor_of([_ok({}), _ok(PROMO_SEEN)])
+    with PR.freeze_determinism():
+        _call(module.create_checkout, PR.ReplaySession(cursor), "NL")
+
+    assert coupon_flag in seen, seen
+    other = "TWINT_COUPON_FALLBACK_PROMO_CAMPAIGN" if provider != "twint" else "IDEAL_COUPON_FALLBACK_PROMO_CAMPAIGN"
+    assert other not in seen, seen
+
+
+@pytest.mark.parametrize("provider", sorted(CHECKOUT_PROVIDERS))
+def test_warmup_dump_flag_name_is_the_providers_own(provider, monkeypatch):
+    module = _load(provider, CHECKOUT_PROVIDERS[provider])
+    _coupon_flag, dump_flag = CHECKOUT_FLAGS[provider]
+    seen: list[str] = []
+
+    def record(name, default=False):
+        seen.append(name)
+        return default
+
+    monkeypatch.setattr(module, "env_bool", record)
+    _apply_checkout_env(monkeypatch, {})
+    cursor = _cursor_of([_ok({}, SENTINEL_PING_URL)])
+    with PR.freeze_determinism():
+        _call(module.warmup_approve_context, PR.ReplaySession(cursor), "https://chatgpt.com/checkout/cs_test_1")
+
+    assert dump_flag in seen, seen
+
+
+@pytest.mark.parametrize("provider", sorted(CHECKOUT_PROVIDERS))
+def test_default_stripe_pk_seam_reaches_the_returned_mapping(provider, monkeypatch, tmp_path):
+    """The fallback key is each extractor's own module constant, read per call."""
+    module = _load(provider, CHECKOUT_PROVIDERS[provider])
+    monkeypatch.setattr(module, "DEFAULT_STRIPE_PK", f"pk_live_default_{provider}")
+    _isolate_dumps(monkeypatch, module, provider, tmp_path)
+    _apply_checkout_env(monkeypatch, {})
+    cursor = _cursor_of([_ok({"checkout_session_id": "cs_test_9"})])
+    with PR.freeze_determinism():
+        checkout, error = _call(module.create_checkout, PR.ReplaySession(cursor), "NL")
+    assert error is None
+    assert checkout is not None and checkout["stripe_pk"] == f"pk_live_default_{provider}"
+
+
+def test_country_and_currency_seams_stay_per_provider(monkeypatch, tmp_path):
+    """A shared ``normalize_country`` / ``currency_for_country`` would change blik.
+
+    ideal maps ``CH`` to its NL fallback (EUR), twint maps it to CHF, and blik
+    resolves an unknown country through its own table and
+    ``default_payment_country()``. One shared import cannot serve all three,
+    which is why both functions are injected rather than imported.
+    """
+    currencies: dict[str, str] = {}
+    for provider, module_file in sorted(CHECKOUT_PROVIDERS.items()):
+        module = _load(provider, module_file)
+        _isolate_dumps(monkeypatch, module, provider, tmp_path)
+        _apply_checkout_env(monkeypatch, {})
+        cursor = _cursor_of([_ok(CS_OK)])
+        with PR.freeze_determinism():
+            checkout, error = _call(module.create_checkout, PR.ReplaySession(cursor), "CH")
+        assert error is None and checkout is not None
+        assert checkout["billing_country"] == module.normalize_country("CH")
+        assert checkout["currency"] == module.currency_for_country(checkout["billing_country"])
+        currencies[provider] = checkout["currency"]
+    assert len(set(currencies.values())) > 1, f"every provider resolved CH identically: {currencies}"

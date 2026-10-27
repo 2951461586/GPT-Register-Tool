@@ -1,5 +1,34 @@
 # 立项：协议支付提取器公共骨架抽取（ideal / twint / blik）
 
+> **状态（2026-10-28 复核）**：**阶段 2 第三个小批次（batch 9）已落地**。三边逐字节等价的
+> `create_checkout`（109 / 109 / 102 行，blik 的 7 行差只是一处 `dump_http` 折成单行）与
+> `warmup_approve_context`（22×3，连那个**从未被使用**的 `checkout_page_url` 参数都一样）
+> 下沉到新模块 `common/checkout_session.py`，三份同签名薄封装保留、调用点零改动。
+> 注入的是「调用方上下文」而不是格式：`normalize_country` / `currency_for_country`
+> （ideal·twint 走 `provider_profile`，**blik 不走**——它按自己的 `COUNTRY_CURRENCY` +
+> `default_payment_country()` 解析，共享一份会改掉 blik 的计费币种）、模块自己的
+> `DEFAULT_STRIPE_PK`、以及两个环境变量**名字**（`IDEAL_COUPON_FALLBACK_PROMO_CAMPAIGN` /
+> `IDEAL_DUMP_WARMUP` 被 ideal 与 blik 共用、twint 读 `TWINT_*`），外加各自的
+> `log` / `dump_http` / `env_bool` / `env_int`。hooks 在**每次调用时重建**而不是存成模块常量，
+> 因为迁移前这些名字是按全局名在调用时解析的，常量会把绑定冻结在 import 时刻。
+> 仍无真实链路录制，因此按 `plan-2026-09-28-stage2-replay.md` 用**冻结的迁移前函数体**做差分：
+> `tests/payment/stage2_checkout_session_head.py` 由 `git show HEAD:...` 机械生成（只把
+> 环境名改写成 `seams.*`，无一处语句改写，且刻意不 import `common` 以绕开 pyright 的
+> `reportMissingImports`），`tests/governance/test_stage2_replay_selfcheck.py` 让两侧跑同一
+> `environ`、同一 replay 传输、同一注入，覆盖 **3 provider × 16 个 checkout 场景**（promo
+> 五档 + coupon 回退三态 + 400/503/缺 `cs_id`/`pk` 回退 + `CH`/`ZZ` 两档国家）**× 4 个
+> warm-up 场景**（200 / 200+dump / 500 / 会话抛错），逐项比对**请求指纹、返回值、异常类型
+> 与消息**。差分非空洞已用两次变异反证：改 `plan_name` 字面量 → 48 例失败；把 coupon 开关写死成
+> `IDEAL_` → twint 的开关名守卫失败。parity 基线同步收紧：`ideal:twint 26→25`、
+> `ideal:blik 13→12`、`twint:blik 10→9`（`momo:kakao=0` 不变）；provider 解耦 231 delegating /
+> 0 identical / 32 divergent → **237 / 0 / 34**，新增的两个 divergent 是 kakao 与 momo 各自的
+> `create_checkout`（**同名不同物**：kakao 是 `(session, token)` → 三元组、KRW/ko-KR，momo 是
+> 八参数轮换代理、返回六元组），按 batch 7 对 `stripe_init` 的同一处置登记进
+> `tests/payment/test_extractor_divergence_contract.py` 并写明理由。三个文件净减 **280 行**
+> （+98 / −378：三份 578 行的副本变成 1 份 234 行内核 + 3 个 hooks 工厂 + 6 个薄封装）。顺带清掉 ideal / twint 因迁移而失活的
+> `import re`（`unused_import` 棘轮本来会拦），`services_import_resolution` 11 extractor →
+> 22 common 模块 / 0 unresolved。
+>
 > **状态（2026-10-23 复核）**：**阶段 2 第二个小批次已落地**。`pre_proxy_url`（ideal / twint
 > 逐字节相同、blik 仅少两行死代码 `raw = ""`）下沉到 `common/extractor_runtime.py` 的
 > `resolve_pre_proxy_url`，三份薄封装保留、调用点零改动；`normalize` / `register` 由调用方注入

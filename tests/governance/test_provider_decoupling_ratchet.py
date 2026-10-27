@@ -172,18 +172,27 @@ def test_ratchet_holds_for_the_current_tree():
 
 
 def test_summary_facts_are_pinned():
-    """263 same-named defs: 231 already migrated, 0 verbatim copies, 32 forks.
+    """271 same-named defs: 237 already migrated, 0 verbatim copies, 34 forks.
 
     2026-10-22 (stage-2 batch "stripe page writers"): six more delegations
     (``stripe_update_customer_data`` / ``stripe_update_tax_region`` in ideal,
     twint and blik moved into ``common/stripe_flow.py``) and one new registered
     fork (pix's ``stripe_update_tax_region``, which posts a different body).
+
+    2026-10-28 (stage-2 batch "checkout session"): six more delegations
+    (``create_checkout`` / ``warmup_approve_context`` in ideal, twint and blik
+    moved into ``common/checkout_session.py``) and **two new registered forks** --
+    kakao's and momo's own ``create_checkout``. Those two are name collisions,
+    not un-migrated copies: kakao takes ``(session, token)`` and posts a KRW /
+    ko-KR payload, momo's is an eight-parameter proxy-rotating variant. Same
+    call batch 7 made for their ``stripe_init``; both are pinned with a
+    category and a reason in ``tests/payment/test_extractor_divergence_contract.py``.
     """
     assert pdr.analyze(ROOT).summary() == {
-        "same_named_total": 263,
-        pdr.DELEGATING: 231,
+        "same_named_total": 271,
+        pdr.DELEGATING: 237,
         pdr.IDENTICAL: 0,
-        pdr.DIVERGENT: 32,
+        pdr.DIVERGENT: 34,
         "files_with_frozen_pairs": 8,
     }
 
@@ -192,9 +201,9 @@ def test_the_migrated_extractors_have_no_verbatim_copies_left():
     """Pin the three migrated extractors so an inlining regression fails."""
     analysis = pdr.analyze(ROOT)
     expected_delegating = {
-        "ideal/ideal_qr_extract.py": 74,
-        "twint/twint_extract.py": 74,
-        "blik/blik_qr_extract.py": 72,
+        "ideal/ideal_qr_extract.py": 76,
+        "twint/twint_extract.py": 76,
+        "blik/blik_qr_extract.py": 74,
     }
     expected_divergent = {
         "ideal/ideal_qr_extract.py": 2,
@@ -221,13 +230,16 @@ def test_blik_carries_the_documented_divergent_bulk():
     made its ``stripe_init`` / ``stripe_elements_session_params`` visible as
     forks, leaving 69 delegating / 0 identical / 14 divergent. The 2026-10-22
     stage-2 batch moved ``stripe_update_customer_data`` and
-    ``stripe_update_tax_region`` onto ``common/stripe_flow.py`` too, so blik is
-    now 72 delegating / 0 identical / 14 divergent -- its fork count is
-    unchanged, which is the point: this batch converged copies, not forks.
+    ``stripe_update_tax_region`` onto ``common/stripe_flow.py`` too, so blik went
+    to 72 delegating / 0 identical / 14 divergent -- its fork count unchanged,
+    which is the point: that batch converged copies, not forks. Batch 9
+    (2026-10-28) moved ``create_checkout`` and ``warmup_approve_context`` onto
+    ``common/checkout_session.py``: 74 delegating / 0 identical / 14 divergent,
+    again with the fork count untouched.
     """
     analysis = pdr.analyze(ROOT)
     counts = analysis.counts_for("blik/blik_qr_extract.py")
-    assert counts == {pdr.DELEGATING: 72, pdr.IDENTICAL: 0, pdr.DIVERGENT: 14}
+    assert counts == {pdr.DELEGATING: 74, pdr.IDENTICAL: 0, pdr.DIVERGENT: 14}
 
 
 def test_momo_shares_the_pure_primitives_and_keeps_its_forks():
@@ -237,16 +249,19 @@ def test_momo_shares_the_pure_primitives_and_keeps_its_forks():
     converging without fresh evidence. Batch 7 (2026-10-20) added ``stripe_init``
     to the fork list when it moved to ``common/stripe_setup.py``: momo's version
     delegates to ``paylink.stripe_init_payment_page`` and returns a 3-tuple.
+    Batch 9 (2026-10-28) added ``create_checkout`` the same way: the shared
+    kernel is one session + one body, while momo's is an eight-parameter
+    proxy-rotating variant returning a six-tuple.
     """
     analysis = pdr.analyze(ROOT)
     counts = analysis.counts_for("momo/momo_qr_extract.py")
     assert counts[pdr.IDENTICAL] == 0
     assert counts[pdr.DELEGATING] == 2
-    assert counts[pdr.DIVERGENT] == 3
+    assert counts[pdr.DIVERGENT] == 4
     forked = {
         p.name for p in analysis.pairs if p.provider_file == "momo/momo_qr_extract.py" and p.kind == pdr.DIVERGENT
     }
-    assert forked == {"is_user_already_paid_error", "normalize_proxy_url", "stripe_init"}
+    assert forked == {"is_user_already_paid_error", "normalize_proxy_url", "stripe_init", "create_checkout"}
 
 
 def test_blik_build_email_stays_divergent():
