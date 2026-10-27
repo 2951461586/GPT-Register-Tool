@@ -9,6 +9,7 @@
        window to flip `SidebarCollapsed`. -->
   <UserControl.Resources>
     <local:NavKeyEqualsConverter x:Key="NavKeyEqualsConverter"/>
+    <local:NavCancelAlertConverter x:Key="NavCancelAlertConverter"/>
     <Style x:Key="SidebarNavButtonStyle" TargetType="Button">
       <!-- Self-contained: this dictionary is a UserControl's, so it cannot rely
            on the application-level implicit Button style. These five setters are
@@ -78,6 +79,14 @@
           </MultiBinding>
         </Setter.Value>
       </Setter>
+      <Setter Property="IsAlert">
+        <Setter.Value>
+          <MultiBinding Converter="{StaticResource NavCancelAlertConverter}">
+            <Binding Path="CommandParameter" RelativeSource="{RelativeSource Self}"/>
+            <Binding Path="ActiveKey" RelativeSource="{RelativeSource AncestorType=local:Sidebar}"/>
+          </MultiBinding>
+        </Setter.Value>
+      </Setter>
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="local:IconNavButton">
@@ -130,6 +139,13 @@
                 <Setter TargetName="SelectionBar" Property="Visibility" Value="Visible"/>
                 <Setter TargetName="Glyph" Property="Stroke" Value="{DynamicResource Primary}"/>
                 <Setter TargetName="Label" Property="Foreground" Value="{DynamicResource TextMain}"/>
+                <Setter TargetName="Label" Property="FontWeight" Value="SemiBold"/>
+              </Trigger>
+              <!-- Cancel is tinted only while something is running: colour marks
+                   state, and "nothing to cancel" is not a state worth colouring. -->
+              <Trigger Property="IsAlert" Value="True">
+                <Setter TargetName="Glyph" Property="Stroke" Value="{DynamicResource Danger}"/>
+                <Setter TargetName="Label" Property="Foreground" Value="{DynamicResource Danger}"/>
                 <Setter TargetName="Label" Property="FontWeight" Value="SemiBold"/>
               </Trigger>
               <Trigger Property="IsEnabled" Value="False">

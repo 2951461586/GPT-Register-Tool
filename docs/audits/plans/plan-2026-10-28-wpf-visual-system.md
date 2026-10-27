@@ -1,7 +1,7 @@
 # 立项：WPF 视觉系统重构（对齐 FlClash 的表面/状态/刻度原则）
 
 - **日期**：2026-10-28
-- **状态**：**Phase 0–4 落地、Phase 5 部分落地**（见 §6 的落地记录与 §3.5 的实际范围）
+- **状态**：**Phase 0–5 全部落地**（§6 是带实测证据的落地记录）
 - **范围**：`SmsWorkbench/Themes/`、`SmsWorkbench/Views/*.xaml`、`MainWindow.Theme.cs`、`IconNavButton.cs`、`Sidebar.xaml(.cs)`
 - **不在范围**：任何后端契约、ViewModel 业务逻辑、Python 侧、`SmsWorkbench.Contracts`
 - **参考**：https://github.com/chen08209/FlClash —— 只取它的**设计准则**（`.agents/surfaces.md`、`.agents/skills/ui-work/SKILL.md` 的圆角刻度与字阶），不移植 Material 3 控件
@@ -141,7 +141,10 @@ FlClash 的刻度以 40dp 行高为基准；WPF 控件高 28–40px，等比缩�
 #### 改动
 - 行高 36→40，cell padding 6→10，表头 28→32 且用 `Type.Caption`；关掉斑马纹与单元格下边框，改 hover 填充。
 - 列分层：B 级列（创建/更新时间、注册区、优惠、支付资格）收进「精简列」开关（XAML 内切换 `Visibility`，不动 ViewModel）。
-- 冻结邮箱列、开启列重排、列宽最小 80。
+- 开启列重排、锁定行高、去掉本地 `RowHeight`/`GridLinesVisibility` 覆盖（它们会让样式失效）。
+- **窄窗卡片视图**：内容区 < 960px 时表格换成两行卡片（邮箱 + 状态徽章 / 类型 + AT·RT·2FA·优惠），
+  两个视图共享 `Pool.PagedRows` 与 `Pool.SelectedRow`，选区切换复用同一个 `SelectionChanged` 处理器，
+  因此勾选与选中语义完全一致。
 
 #### 验收
 1. 1220px（最小窗宽）下不出现横向滚动即可完成"A 级判定"（状态/邮箱/AT/RT/2FA 全可见）。
@@ -168,13 +171,14 @@ FlClash 的刻度以 40dp 行高为基准；WPF 控件高 28–40px，等比缩�
 - 交互态统一：hover 填充 120ms、press 透明度 0.9；侧栏折叠沿用既有动画曲线。
 - 图标：19 处内联几何收敛到 `Themes/Glyphs.xaml`（`Geometry` 资源键），视图只引用键。
 
-#### 验收（实际范围，2026-10-28）
-1. 焦点环：`FocusRingStyle`（2px `FocusRing`）已接入 Button 与侧栏行；输入框改为 hover/focus 换描边色。
-2. 图标字表：**侧栏 18 个字形已收敛**到 `Themes/Glyphs.xaml`（`Glyph.<Name>`），
-   `grep -c 'IconGeometry="M' Views/Sidebar.xaml` = **0**。
-3. 未完成（诚实记账，不计入本次交付）：右键菜单与标题栏 11 个内联 `Data="M…"` 仍在调用点，
-   收敛它们需要为每个 glyph 定语义名（`Glyph.CtxViewDetail` 之类），留作后续独立小批；
-   WPF 无隐式过渡，"统一缓动"降级为统一交互态（hover 填充 / press 0.9 / 焦点环）。
+#### 验收（实测）
+1. 焦点环：`FocusRingStyle`（2px `FocusRing`）接入 Button、侧栏行与卡片项；输入框改为 hover/focus 换描边色。
+2. 图标字表：**23 个内联字形全部收敛**到 `Themes/Glyphs.xaml`（32 个键；同一几何复用同一个键，
+   例如侧栏与右键菜单共用 `Glyph.BatchPay`/`Glyph.ChangeEmail`/`Glyph.ImportMail`/`Glyph.PayLink`）。
+   `grep -rc 'Data="M' Views/*.xaml` = **0**（AccountFilterBar / AccountGridView / TitleBar / WorkbenchConsole 各 0）。
+3. 取消行状态染色：`IconNavButton.IsAlert` ← `NavCancelAlertConverter`（`CommandParameter == cancelbatch`
+   **且** `ActiveKey` 非空）→ 文字与字形转 `Danger`。空闲时不染色（颜色只表状态）。
+4. WPF 无隐式过渡，"统一缓动"降级为统一交互态（hover 填充 / press 0.9 / 焦点环），已在 §4 记录原因。
 
 ---
 
@@ -202,15 +206,16 @@ FlClash 的刻度以 40dp 行高为基准；WPF 控件高 28–40px，等比缩�
 | Phase 0 | `Themes/Tokens.xaml`（间距/圆角/字阶/动效）+ `Colors.Light.xaml` + `Colors.Dark.xaml`（同键集，含 5 级表面与 3 级文字）；删除 `Palette.xaml`；`MainWindow.Theme.cs` 120 行 `SetBrush` → 一次字典替换（pack URI，测试宿主也能解析） |
 | Phase 1 | 表面阶梯落地（`Surface.Page/Card/Block/Inset/Chrome`、`Divider` = onSurface 14%）；按钮/输入框/表格/徽章的结构性描边清零，只留输入框、焦点环、chrome 分界；侧栏行透明→hover 填充→**运行中 Card + 3px primary 竖条**（`IconNavButton.IsActive` ← `Sidebar.ActiveKey` ← `ActiveNavKey`，由 `RunBackendCoreAsync` 的 finally 清除）；表格选中由灰块改为行内竖条 |
 | Phase 2 | `PrimaryButton` 填充 primary + `OnPrimary`；`DangerButton` 只染文字与描边；5 组徽章颜色落到文字（容器低彩度同色、`BorderThickness=0`）；控制台改用 `Surface.Inset` |
-| Phase 3 | 行高 40 / 表头 32（`Type.Caption`）/ cell padding 10；**去掉斑马纹、单元格边框、网格线**；新增「精简列」开关隐藏 5 个 B 级列（按 `SortMemberPath`/绑定路径定位，因 `DataGridColumn` 不在名字域内、`x:Name` 不生成字段）；开列重排、行高锁定 |
+| Phase 3 | 行高 40 / 表头 32（`Type.Caption`）/ cell padding 10；**去掉斑马纹、单元格边框、网格线**；新增「精简列」开关隐藏 5 个 B 级列（按 `SortMemberPath`/绑定路径定位，因 `DataGridColumn` 不在名字域内、`x:Name` 不生成字段）；开列重排、行高锁定；**窄窗卡片视图**（内容区 < 960px 自动切换，`NarrowWidthConverter`，两视图共用同一数据源/选区/勾选语义） |
 | Phase 4 | 侧栏 `Surface.Chrome` + 与内容之间的 1px `Divider`；标题栏底边同一条线；控制台 320px 固定 → `GridSplitter` 可拖（160–560） |
-| Phase 5 | 焦点环接入；侧栏 18 个字形收敛到 `Themes/Glyphs.xaml`；菜单/标题栏字形与"运行中取消批次染色"未做，见 §3.5 |
+| Phase 5 | 焦点环接入；**23 个内联字形全部收敛**到 `Themes/Glyphs.xaml`（32 键）；取消行在批次运行中染 `Danger`（`NavCancelAlertConverter`） |
 
-实测：`dotnet build` 0 warning / 0 error，`dotnet test` **622 passed / 0 failed**（含 `DesktopWindowSmokeTests`）。
+实测：`dotnet build`（Debug / Release / Release-win-x64）0 warning / 0 error，`dotnet test` **622 passed / 0 failed**（含 `DesktopWindowSmokeTests`）。
 两个由本阶段引入并当场修掉的缺陷，记在此处以免重犯：
 ① `CornerRadius` 用了 `Radius.*`（`double`）而非 `Corner.*`（`CornerRadius`）令牌 → 模板加载抛
 `XamlParseException`，被 `SettingsPaymentAndSharedControlsLoadOnStaThread` 抓到；
-② 颜色字典用相对 URI 加载，在 `dotnet test` 宿主里解析失败，改为显式命名 assembly 的 pack URI。
+② 颜色字典用相对 URI 加载，在 `dotnet test` 宿主里解析失败，改为显式命名 assembly 的 pack URI；
+③ `NarrowWidthConverter` 误用 `IMultiValueConverter` 的 `ConvertBack` 签名（`object[]`），编译器直接拦下。
 
 验证命令见 §7。
 

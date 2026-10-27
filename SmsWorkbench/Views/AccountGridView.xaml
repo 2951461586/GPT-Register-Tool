@@ -8,6 +8,7 @@
        window-level StaticResource would not be visible while this XAML parses. -->
   <UserControl.Resources>
     <local:StatusSeverityConverter x:Key="StatusSeverityConverter"/>
+    <local:NarrowWidthConverter x:Key="NarrowWidth"/>
     <local:RtDisplayConverter x:Key="RtDisplayConverter"/>
     <Style x:Key="AccountContextMenuStyle" TargetType="ContextMenu">
       <Setter Property="Background" Value="{DynamicResource PanelBg}"/>
@@ -128,68 +129,78 @@
                       EnableColumnVirtualization="True"
                       Sorting="AccountGrid_Sorting"
                       SelectionChanged="AccountGrid_SelectionChanged">
+              <DataGrid.Style>
+                <Style TargetType="DataGrid" BasedOn="{StaticResource {x:Type DataGrid}}">
+                  <Style.Triggers>
+                    <DataTrigger Binding="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=local:AccountGridView}, Converter={StaticResource NarrowWidth}}"
+                                 Value="True">
+                      <Setter Property="Visibility" Value="Collapsed"/>
+                    </DataTrigger>
+                  </Style.Triggers>
+                </Style>
+              </DataGrid.Style>
               <DataGrid.ContextMenu>
                 <ContextMenu Style="{StaticResource AccountContextMenuStyle}">
                   <MenuItem Header="{loc:Tr Key='查看账号详情'}" Command="{Binding PlacementTarget.DataContext.CtxViewDetailCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Style="{StaticResource AccountContextMenuItemStyle}">
                     <MenuItem.Icon>
                       <Path Style="{StaticResource MenuIconPath}"
-                            Data="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/>
+                            Data="{StaticResource Glyph.View}"/>
                     </MenuItem.Icon>
                   </MenuItem>
                   <MenuItem Header="{loc:Tr Key='查看邮箱收件箱'}" Command="{Binding PlacementTarget.DataContext.CtxViewInboxCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Style="{StaticResource AccountContextMenuItemStyle}">
                     <MenuItem.Icon>
                       <Path Style="{StaticResource MenuIconPath}"
-                            Data="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z M22 6l-10 7L2 6"/>
+                            Data="{StaticResource Glyph.ImportMail}"/>
                     </MenuItem.Icon>
                   </MenuItem>
                   <Separator/>
                   <MenuItem Header="{loc:Tr Key='复制邮箱地址'}" Command="{Binding PlacementTarget.DataContext.CtxCopyEmailCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Style="{StaticResource AccountContextMenuItemStyle}">
                     <MenuItem.Icon>
                       <Path Style="{StaticResource MenuIconPath}"
-                            Data="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71 M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                            Data="{StaticResource Glyph.PayLink}"/>
                     </MenuItem.Icon>
                   </MenuItem>
                   <MenuItem Header="{loc:Tr Key='复制 AT'}" Command="{Binding PlacementTarget.DataContext.CtxCopyAccessTokenCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Style="{StaticResource AccountContextMenuItemStyle}">
                     <MenuItem.Icon>
                       <Path Style="{StaticResource MenuIconPath}"
-                            Data="M15 7a5 5 0 1 0-4.9 6H13l2 2 2-2 2 2 3-3-4-4h-3z"/>
+                            Data="{StaticResource Glyph.Key}"/>
                     </MenuItem.Icon>
                   </MenuItem>
                   <MenuItem Header="{loc:Tr Key='复制支付链接'}" Command="{Binding PlacementTarget.DataContext.CtxCopyPayPalCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Style="{StaticResource AccountContextMenuItemStyle}">
                     <MenuItem.Icon>
                       <Path Style="{StaticResource MenuIconPath}"
-                            Data="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71 M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                            Data="{StaticResource Glyph.PayLink}"/>
                     </MenuItem.Icon>
                   </MenuItem>
                   <MenuItem Header="{loc:Tr Key='打开支付链接'}" Command="{Binding PlacementTarget.DataContext.CtxOpenPayPalCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Style="{StaticResource AccountContextMenuItemStyle}">
                     <MenuItem.Icon>
                       <Path Style="{StaticResource MenuIconPath}"
-                            Data="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6 M15 3h6v6 M10 14L21 3"/>
+                            Data="{StaticResource Glyph.OpenExternal}"/>
                     </MenuItem.Icon>
                   </MenuItem>
                   <MenuItem Header="{loc:Tr Key='批量协议支付'}" Command="{Binding PlacementTarget.DataContext.CtxBatchProtocolPaymentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Style="{StaticResource AccountContextMenuItemStyle}">
                     <MenuItem.Icon>
                       <Path Style="{StaticResource MenuIconPath}"
-                            Data="M4 5h16 M4 12h16 M4 19h16 M8 3v4 M8 10v4 M8 17v4"/>
+                            Data="{StaticResource Glyph.BatchPay}"/>
                     </MenuItem.Icon>
                   </MenuItem>
                   <MenuItem Header="{loc:Tr Key='批量邮箱换绑'}" Command="{Binding PlacementTarget.DataContext.CtxChangeEmailCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Style="{StaticResource AccountContextMenuItemStyle}">
                     <MenuItem.Icon>
-                      <Path Width="14" Height="14" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" Fill="Transparent" Data="M4 7h11m0 0-3-3m3 3-3 3M20 17H9m0 0 3-3m-3 3 3 3"/>
+                      <Path Width="14" Height="14" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" Fill="Transparent" Data="{StaticResource Glyph.ChangeEmail}"/>
                     </MenuItem.Icon>
                   </MenuItem>
                   <Separator/>
                   <MenuItem Header="{loc:Tr Key='测活当前账号'}" Command="{Binding PlacementTarget.DataContext.CtxCheckAccountAliveCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Style="{StaticResource AccountContextMenuItemStyle}">
                     <MenuItem.Icon>
                       <Path Style="{StaticResource MenuIconPath}"
-                            Data="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8 M21 3v5h-5"/>
+                            Data="{StaticResource Glyph.ProbeAlive}"/>
                     </MenuItem.Icon>
                   </MenuItem>
                   <Separator/>
                   <MenuItem Header="{loc:Tr Key='打开 Session 源文件'}" Command="{Binding PlacementTarget.DataContext.CtxOpenSourceCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Style="{StaticResource AccountContextMenuItemStyle}">
                     <MenuItem.Icon>
                       <Path Style="{StaticResource MenuIconPath}"
-                            Data="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                            Data="{StaticResource Glyph.Folder}"/>
                     </MenuItem.Icon>
                   </MenuItem>
                 </ContextMenu>
@@ -262,7 +273,7 @@
                       <Button Height="24" Padding="6,0" Command="{Binding DataContext.AccountDetailCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}" CommandParameter="{Binding}" ToolTip="{loc:Tr Key='查看详情'}">
                         <StackPanel Orientation="Horizontal">
                           <Path Width="12" Height="12" Stretch="Uniform" Stroke="{DynamicResource TextSub}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
-                                Data="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/>
+                                Data="{StaticResource Glyph.View}"/>
                           <TextBlock Text="{loc:Tr Key='查看'}" Margin="4,0,0,0" VerticalAlignment="Center" FontSize="11"/>
                         </StackPanel>
                       </Button>
@@ -271,6 +282,90 @@
                 </DataGridTemplateColumn>
               </DataGrid.Columns>
             </DataGrid>
+
+              <!-- Narrow window: the same rows as a two-line card list. Both views bind
+                   Pool.PagedRows and Pool.SelectedRow, so selection and the tick-box
+                   behave identically; only the presentation switches. -->
+              <ListBox x:Name="AccountCardList"
+                       Grid.Row="1"
+                       Margin="8,0,8,8"
+                       ItemsSource="{Binding Pool.PagedRows}"
+                       SelectedItem="{Binding Pool.SelectedRow, Mode=TwoWay}"
+                       SelectionChanged="AccountGrid_SelectionChanged"
+                       Background="Transparent"
+                       BorderThickness="0"
+                       Visibility="Collapsed"
+                       ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                       VirtualizingPanel.IsVirtualizing="True"
+                       VirtualizingPanel.VirtualizationMode="Recycling">
+                <ListBox.Style>
+                  <Style TargetType="ListBox">
+                    <Style.Triggers>
+                      <DataTrigger Binding="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=local:AccountGridView}, Converter={StaticResource NarrowWidth}}"
+                                   Value="True">
+                        <Setter Property="Visibility" Value="Visible"/>
+                      </DataTrigger>
+                    </Style.Triggers>
+                  </Style>
+                </ListBox.Style>
+                <ListBox.ItemContainerStyle>
+                  <Style TargetType="ListBoxItem">
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                    <Setter Property="Padding" Value="0"/>
+                    <Setter Property="Margin" Value="0,0,0,6"/>
+                    <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRingStyle}"/>
+                    <Setter Property="Template">
+                      <Setter.Value>
+                        <ControlTemplate TargetType="ListBoxItem">
+                          <Border x:Name="CardChrome" Background="Transparent" CornerRadius="{StaticResource Corner.Xl}">
+                            <ContentPresenter/>
+                          </Border>
+                          <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                              <Setter TargetName="CardChrome" Property="Background" Value="{DynamicResource Surface.Block}"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                              <Setter TargetName="CardChrome" Property="Background" Value="{DynamicResource Surface.Block}"/>
+                            </Trigger>
+                          </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                      </Setter.Value>
+                    </Setter>
+                  </Style>
+                </ListBox.ItemContainerStyle>
+                <ListBox.ItemTemplate>
+                  <DataTemplate>
+                    <Border Background="{DynamicResource Surface.Card}" CornerRadius="{StaticResource Corner.Xl}" Padding="12,10">
+                      <Grid>
+                        <Grid.RowDefinitions>
+                          <RowDefinition Height="Auto"/>
+                          <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Grid Grid.Row="0">
+                          <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                          </Grid.ColumnDefinitions>
+                          <CheckBox Grid.Column="0" IsChecked="{Binding IsChecked, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                          <TextBlock Grid.Column="1" Text="{Binding Identifier}" Style="{StaticResource Text.Subtitle}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                          <Border Grid.Column="2" Style="{StaticResource StatusBadge}" Tag="{Binding Status, Converter={StaticResource StatusSeverityConverter}}">
+                            <TextBlock Style="{StaticResource StatusBadgeText}" Text="{Binding Status}" TextTrimming="CharacterEllipsis"/>
+                          </Border>
+                        </Grid>
+                        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="26,6,0,0">
+                          <TextBlock Style="{StaticResource Text.Caption}" Text="{Binding AccountPlanType}"/>
+                          <TextBlock Style="{StaticResource Text.Caption}" Margin="10,0,0,0" Text="{Binding AccessTokenStatus, StringFormat='AT {0}'}"/>
+                          <TextBlock Style="{StaticResource Text.Caption}" Margin="8,0,0,0" Text="{Binding RefreshTokenStatus, StringFormat='RT {0}'}"/>
+                          <TextBlock Style="{StaticResource Text.Caption}" Margin="8,0,0,0" Text="{Binding TwoFactorStatus, StringFormat='2FA {0}'}"/>
+                          <TextBlock Style="{StaticResource Text.Caption}" Margin="8,0,0,0" Text="{Binding PromotionStatus, StringFormat='优惠 {0}'}"/>
+                        </StackPanel>
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+
             </Grid>
           </Border>
 </UserControl>

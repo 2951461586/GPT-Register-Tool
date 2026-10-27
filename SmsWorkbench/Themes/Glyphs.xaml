@@ -29,4 +29,19 @@
   <PathGeometry x:Key="Glyph.Settings" Figures="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
   <PathGeometry x:Key="Glyph.Sms" Figures="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
   <PathGeometry x:Key="Glyph.Language" Figures="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z M2 12h20 M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+  <PathGeometry x:Key="Glyph.NextPage" Figures="M9 18l6-6-6-6"/>
+  <PathGeometry x:Key="Glyph.PrevPage" Figures="M15 18l-6-6 6-6"/>
+  <PathGeometry x:Key="Glyph.FirstPage" Figures="M11 19l-7-7 7-7 M19 19l-7-7 7-7"/>
+  <PathGeometry x:Key="Glyph.LastPage" Figures="M13 5l7 7-7 7 M5 5l7 7-7 7"/>
+  <PathGeometry x:Key="Glyph.Search" Figures="M11 3a8 8 0 1 0 0 16 8 8 0 0 0 0-16z M21 21l-4.35-4.35"/>
+  <PathGeometry x:Key="Glyph.Close" Figures="M 0,0 L 10,10 M 10,0 L 0,10"/>
+  <PathGeometry x:Key="Glyph.WindowMinimize" Figures="M 0,0.5 L 12,0.5"/>
+  <PathGeometry x:Key="Glyph.WindowMaximize" Figures="M 1,3 L 1,1 L 9,1 L 9,3 M 1,1 L 1,9 L 9,9 L 9,1"/>
+  <PathGeometry x:Key="Glyph.SelectAllFiltered" Figures="M9 11l3 3l8-8 M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+  <PathGeometry x:Key="Glyph.ProbeAlive" Figures="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8 M21 3v5h-5"/>
+  <PathGeometry x:Key="Glyph.ClearLog" Figures="M3.5 5H12.5 M6 5V3.5H10V5 M5 6.5V13H11V6.5 M7 8V11.5 M9 8V11.5"/>
+  <PathGeometry x:Key="Glyph.Folder" Figures="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+  <PathGeometry x:Key="Glyph.OpenExternal" Figures="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6 M15 3h6v6 M10 14L21 3"/>
+  <PathGeometry x:Key="Glyph.View" Figures="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/>
+  <PathGeometry x:Key="Glyph.Key" Figures="M15 7a5 5 0 1 0-4.9 6H13l2 2 2-2 2 2 3-3-4-4h-3z"/>
 </ResourceDictionary>

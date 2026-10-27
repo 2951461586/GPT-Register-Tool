@@ -55,7 +55,7 @@ Loaded="TaskGrid_Loaded">
                         Margin="0,4,8,2" Padding="8,0" Command="{Binding LogPanel.ClearCommand}">
                   <StackPanel Orientation="Horizontal">
                     <Path Style="{StaticResource IconPath}" Width="13" Height="13" StrokeThickness="1.7"
-                          Data="M3.5 5H12.5 M6 5V3.5H10V5 M5 6.5V13H11V6.5 M7 8V11.5 M9 8V11.5"/>
+                          Data="{StaticResource Glyph.ClearLog}"/>
                     <TextBlock Text="{loc:Tr Key='清空'}" Margin="6,0,0,0" VerticalAlignment="Center"/>
                   </StackPanel>
                 </Button>

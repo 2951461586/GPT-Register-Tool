@@ -2,10 +2,6 @@
 // PaymentBatchService.cs for why the project-wide switch stays `annotations`.
 #nullable enable
 
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Media;
-
 namespace SmsWorkbench
 {
     /// <summary>
@@ -61,6 +57,24 @@ namespace SmsWorkbench
         {
             get => (bool)GetValue(IsActiveProperty);
             set => SetValue(IsActiveProperty, value);
+        }
+
+        /// <summary>
+        /// True while this row's action is the destructive one that can interrupt
+        /// running work ("取消批次"). Fed from <c>Sidebar.ActiveKey</c> like
+        /// <see cref="IsActive"/>; never set at a call site.
+        /// </summary>
+        public static readonly DependencyProperty IsAlertProperty =
+            DependencyProperty.Register(
+                nameof(IsAlert),
+                typeof(bool),
+                typeof(IconNavButton),
+                new PropertyMetadata(false));
+
+        public bool IsAlert
+        {
+            get => (bool)GetValue(IsAlertProperty);
+            set => SetValue(IsAlertProperty, value);
         }
     }
 }

@@ -68,7 +68,7 @@
                 <Grid Grid.Column="0">
                   <TextBox Style="{StaticResource SearchTextBox}" Text="{Binding Pool.SearchText, UpdateSourceTrigger=PropertyChanged}" ToolTip="{loc:Tr Key='搜索邮箱、session、token、备注'}"/>
                   <Path Width="14" Height="14" Stretch="Uniform" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="8,0,0,0"
-                        Data="M11 3a8 8 0 1 0 0 16 8 8 0 0 0 0-16z M21 21l-4.35-4.35"
+                        Data="{StaticResource Glyph.Search}"
                         Stroke="{DynamicResource TextMuted}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
                         IsHitTestVisible="False"/>
                   <Button Width="22" Height="22" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,2,0"
@@ -78,7 +78,7 @@
                     <Button.Template>
                       <ControlTemplate TargetType="Button">
                         <Border x:Name="ClearBg" Background="Transparent" CornerRadius="4">
-                          <Path Width="10" Height="10" Stretch="Uniform" Data="M 0,0 L 10,10 M 10,0 L 0,10"
+                          <Path Width="10" Height="10" Stretch="Uniform" Data="{StaticResource Glyph.Close}"
                                 Stroke="{DynamicResource TextMuted}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
                                 HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
@@ -103,31 +103,31 @@
               <WrapPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
                 <Button Style="{StaticResource IconButton}" Margin="2,0" Command="{Binding Pool.FirstPageCommand}" ToolTip="{loc:Tr Key='首页'}">
                   <Path Style="{StaticResource ToolbarIconPath}"
-                        Data="M11 19l-7-7 7-7 M19 19l-7-7 7-7"/>
+                        Data="{StaticResource Glyph.FirstPage}"/>
                 </Button>
                 <Button Style="{StaticResource IconButton}" Margin="2,0" Command="{Binding Pool.PreviousPageCommand}" ToolTip="{loc:Tr Key='上一页'}">
                   <Path Style="{StaticResource ToolbarIconPath}"
-                        Data="M15 18l-6-6 6-6"/>
+                        Data="{StaticResource Glyph.PrevPage}"/>
                 </Button>
                 <Button Style="{StaticResource IconButton}" Margin="2,0" Command="{Binding Pool.ClearSelectionCommand}" ToolTip="{loc:Tr Key='清空选择'}">
                   <StackPanel Orientation="Horizontal">
                     <Path Style="{StaticResource ToolbarIconPath}"
-                          Data="M9 11l3 3l8-8 M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                          Data="{StaticResource Glyph.SelectAllFiltered}"/>
                     <TextBlock Text="{loc:Tr Key='清空'}" Margin="4,0,0,0" VerticalAlignment="Center" FontSize="12"/>
                   </StackPanel>
                 </Button>
                 <Button Style="{StaticResource IconButton}" Margin="2,0" Command="{Binding Pool.NextPageCommand}" ToolTip="{loc:Tr Key='下一页'}">
                   <Path Style="{StaticResource ToolbarIconPath}"
-                        Data="M9 18l6-6-6-6"/>
+                        Data="{StaticResource Glyph.NextPage}"/>
                 </Button>
                 <Button Style="{StaticResource IconButton}" Margin="2,0" Command="{Binding Pool.LastPageCommand}" ToolTip="{loc:Tr Key='末页'}">
                   <Path Style="{StaticResource ToolbarIconPath}"
-                        Data="M13 5l7 7-7 7 M5 5l7 7-7 7"/>
+                        Data="{StaticResource Glyph.LastPage}"/>
                 </Button>
                 <Button Style="{StaticResource IconButton}" Margin="6,0,2,0" Command="{Binding Pool.SelectAllFilteredCommand}" ToolTip="{loc:Tr Key='选中当前筛选结果'}">
                   <StackPanel Orientation="Horizontal">
                     <Path Style="{StaticResource ToolbarIconPath}"
-                          Data="M9 11l3 3l8-8 M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                          Data="{StaticResource Glyph.SelectAllFiltered}"/>
                     <TextBlock Text="{loc:Tr Key='全选'}" Margin="4,0,0,0" VerticalAlignment="Center" FontSize="12"/>
                   </StackPanel>
                 </Button>
