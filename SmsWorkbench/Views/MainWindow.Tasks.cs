@@ -236,8 +236,14 @@ namespace SmsWorkbench
                     UiLog(display);
                 RefreshPoolsAfterHotPersistence(line.Text);
             });
+            string activeKey = string.Empty;
             try
             {
+                // Promote the navigation key parked by OnNavigate: the sidebar marks
+                // this row until the finally below clears it. Dialog-only actions
+                // never reach this funnel, so they leave no highlight behind.
+                activeKey = TakePendingNavKey();
+                if (activeKey.Length > 0) ActiveNavKey = activeKey;
                 logger?.Information("启动后端任务 task={TaskName} command_id={CommandId} args={Args}", taskName, commandId, safeArgs);
                 Log(BackendLogPresenter.TaskStartLine(taskName));
                 StatusBar.Text = taskName + " 运行中";
@@ -309,6 +315,7 @@ namespace SmsWorkbench
             }
             finally
             {
+                ClearActiveNavKey(activeKey);
                 // Temp-file deletion lives in RunBackendAsync's wrapper: it has to
                 // cover the early returns above this try block as well.
                 progressDialog?.Close();

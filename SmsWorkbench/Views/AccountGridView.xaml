@@ -92,16 +92,32 @@
       </Setter>
     </Style>
   </UserControl.Resources>
-          <Border Margin="0,0,0,8" Padding="0" CornerRadius="4" Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource Line}" BorderThickness="1">
+          <!-- The table is a card on the page: fill, no stroke. -->
+          <Border Margin="0,0,0,8" Padding="0" CornerRadius="{StaticResource Corner.Xl}" Background="{DynamicResource Surface.Card}" BorderThickness="0">
+            <Grid>
+              <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+              </Grid.RowDefinitions>
+
+              <!-- Density switch. The B-tier columns are hidden, not removed, so
+                   sorting, the ViewModel and the context menu stay untouched. -->
+              <Grid Grid.Row="0" Margin="12,8,12,2">
+                <CheckBox x:Name="CompactColumnsToggle"
+                          Content="{loc:Tr Key='精简列：隐藏时间 / 注册区 / 优惠 / 支付资格'}"
+                          VerticalAlignment="Center"
+                          Foreground="{DynamicResource TextSub}"
+                          Checked="CompactColumnsToggle_Changed"
+                          Unchecked="CompactColumnsToggle_Changed"/>
+              </Grid>
+
             <DataGrid x:Name="AccountGrid"
+                      Grid.Row="1"
                       ItemsSource="{Binding Pool.PagedRows}"
                       SelectedItem="{Binding Pool.SelectedRow}"
                       AutoGenerateColumns="False"
                       CanUserAddRows="False"
                       HeadersVisibility="Column"
-                      GridLinesVisibility="Horizontal"
-                      RowHeight="26"
-                      BorderThickness="0"
                       SelectionMode="Extended"
                       SelectionUnit="FullRow"
                       ScrollViewer.HorizontalScrollBarVisibility="Auto"
@@ -255,5 +271,6 @@
                 </DataGridTemplateColumn>
               </DataGrid.Columns>
             </DataGrid>
+            </Grid>
           </Border>
 </UserControl>

@@ -8,6 +8,7 @@
        `IsCollapsed` drives every visual trigger; `ToggleRequested` asks the
        window to flip `SidebarCollapsed`. -->
   <UserControl.Resources>
+    <local:NavKeyEqualsConverter x:Key="NavKeyEqualsConverter"/>
     <Style x:Key="SidebarNavButtonStyle" TargetType="Button">
       <!-- Self-contained: this dictionary is a UserControl's, so it cannot rely
            on the application-level implicit Button style. These five setters are
@@ -33,7 +34,7 @@
                     Background="{TemplateBinding Background}"
                     BorderBrush="{TemplateBinding BorderBrush}"
                     BorderThickness="{TemplateBinding BorderThickness}"
-                    CornerRadius="4">
+                    CornerRadius="{StaticResource Corner.Lg}">
               <ContentPresenter Margin="{TemplateBinding Padding}"
                                 HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                 VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
@@ -53,49 +54,86 @@
       </Setter>
     </Style>
     <Style x:Key="IconNavButtonStyle" TargetType="local:IconNavButton">
+      <!--
+        A row separates from the chrome by a step in lightness, not by a stroke:
+        transparent at rest, Surface.Block on hover, Surface.Card plus a primary
+        bar while its action runs (IsActive). The bar is the only colour the row
+        ever spends, and only on real state.
+      -->
       <Setter Property="HorizontalAlignment" Value="Stretch"/>
-      <Setter Property="Margin" Value="0,0,0,4"/>
-      <Setter Property="Height" Value="38"/>
-      <Setter Property="Padding" Value="10,0"/>
+      <Setter Property="Margin" Value="0,0,0,2"/>
+      <Setter Property="Height" Value="40"/>
+      <Setter Property="Padding" Value="14,0,12,0"/>
       <Setter Property="HorizontalContentAlignment" Value="Left"/>
-      <Setter Property="Background" Value="{DynamicResource SidebarButtonBg}"/>
-      <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
-      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
       <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRingStyle}"/>
+      <Setter Property="IsActive">
+        <Setter.Value>
+          <MultiBinding Converter="{StaticResource NavKeyEqualsConverter}">
+            <Binding Path="CommandParameter" RelativeSource="{RelativeSource Self}"/>
+            <Binding Path="ActiveKey" RelativeSource="{RelativeSource AncestorType=local:Sidebar}"/>
+          </MultiBinding>
+        </Setter.Value>
+      </Setter>
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="local:IconNavButton">
             <Border x:Name="Chrome"
                     Background="{TemplateBinding Background}"
-                    BorderBrush="{TemplateBinding BorderBrush}"
-                    BorderThickness="{TemplateBinding BorderThickness}"
-                    CornerRadius="4">
-              <Grid Margin="{TemplateBinding Padding}">
-                <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="Auto"/>
-                  <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-                <Border Width="32" Height="32" CornerRadius="4" Background="Transparent" BorderBrush="Transparent" BorderThickness="0" VerticalAlignment="Center">
-                  <Path Width="17" Height="17" Stretch="Uniform"
-                        Stroke="{DynamicResource TextSub}" StrokeThickness="1.4"
+                    BorderThickness="0"
+                    CornerRadius="{StaticResource Corner.Lg}">
+              <Grid>
+                <Border x:Name="SelectionBar"
+                        Width="3"
+                        Margin="0,8"
+                        HorizontalAlignment="Left"
+                        CornerRadius="{StaticResource Corner.Xs}"
+                        Background="{DynamicResource Primary}"
+                        Visibility="Collapsed"/>
+                <Grid Margin="{TemplateBinding Padding}">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                  </Grid.ColumnDefinitions>
+                  <Path x:Name="Glyph"
+                        Grid.Column="0"
+                        Width="17" Height="17"
+                        Stretch="Uniform"
+                        Stroke="{DynamicResource TextSub}"
+                        StrokeThickness="1.4"
                         StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
-                        Fill="Transparent" HorizontalAlignment="Center" VerticalAlignment="Center"
+                        Fill="Transparent"
+                        HorizontalAlignment="Center" VerticalAlignment="Center"
                         Data="{TemplateBinding IconGeometry}"/>
-                </Border>
-                <TextBlock Grid.Column="1" Text="{TemplateBinding Text}"
-                           Style="{DynamicResource SidebarLabelStyle}" FontSize="15"
-                           Foreground="{DynamicResource TextMain}"
-                           VerticalAlignment="Center"/>
+                  <TextBlock x:Name="Label"
+                             Grid.Column="1"
+                             Text="{TemplateBinding Text}"
+                             Style="{DynamicResource SidebarLabelStyle}"
+                             FontSize="{StaticResource Type.Subtitle.Size}"
+                             Foreground="{DynamicResource TextMain}"
+                             VerticalAlignment="Center"/>
+                </Grid>
               </Grid>
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource PanelHover}"/>
-                <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource LineStrong}"/>
+                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource Surface.Block}"/>
               </Trigger>
               <Trigger Property="IsPressed" Value="True">
-                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource PanelHover}"/>
-                <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource LineStrong}"/>
+                <Setter TargetName="Chrome" Property="Opacity" Value="0.9"/>
+              </Trigger>
+              <Trigger Property="IsActive" Value="True">
+                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource Surface.Card}"/>
+                <Setter TargetName="SelectionBar" Property="Visibility" Value="Visible"/>
+                <Setter TargetName="Glyph" Property="Stroke" Value="{DynamicResource Primary}"/>
+                <Setter TargetName="Label" Property="Foreground" Value="{DynamicResource TextMain}"/>
+                <Setter TargetName="Label" Property="FontWeight" Value="SemiBold"/>
+              </Trigger>
+              <Trigger Property="IsEnabled" Value="False">
+                <Setter TargetName="Chrome" Property="Opacity" Value="0.45"/>
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -103,10 +141,11 @@
       </Setter>
     </Style>
     <Style x:Key="SidebarPaneBorderStyle" TargetType="Border">
-      <Setter Property="Background" Value="{DynamicResource SidebarBg}"/>
-      <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
-      <Setter Property="BorderThickness" Value="1"/>
-      <Setter Property="CornerRadius" Value="4"/>
+      <!-- The chrome is its own surface; the divider against the content is drawn
+           once by MainWindow, so the pane adds no second edge. -->
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="CornerRadius" Value="{StaticResource Corner.Xl}"/>
       <Setter Property="Padding" Value="8"/>
     </Style>
     <Style x:Key="SidebarBrandLogoStyle" TargetType="Border">
@@ -148,7 +187,7 @@
                     Background="{TemplateBinding Background}"
                     BorderBrush="Transparent"
                     BorderThickness="0"
-                    CornerRadius="4">
+                    CornerRadius="{StaticResource Corner.Md}">
               <ContentPresenter Margin="{TemplateBinding Padding}"
                                 HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                 VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
@@ -268,32 +307,32 @@
               </ScrollViewer.Resources>
               <StackPanel>
                 <TextBlock Text="{loc:Tr Key='一键操作'}" Style="{StaticResource SidebarSectionHeaderStyle}"/>
-                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="M16 16v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 8a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M22 16v-1 M19 13h6" Text="{loc:Tr Key='一键注册'}" Command="{Binding NavCommand}" CommandParameter="register"/>
-                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" Text="{loc:Tr Key='一键接码'}" Command="{Binding NavCommand}" CommandParameter="sms"/>
-                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="M3 3v18h18 M7 14l4-4 4 4 5-5" Text="{loc:Tr Key='账号测活'}" Command="{Binding NavCommand}" CommandParameter="scan"/>
-                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7 M15 3h6v6 M10 14L21 3" Text="{loc:Tr Key='查优惠'}" Command="{Binding NavCommand}" CommandParameter="promotion"/>
-                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="M3 10h18 M3 6h18 M3 14h18 M3 18h18 M7 10v8 M17 10v8" Text="{loc:Tr Key='查支付资格'}" Command="{Binding NavCommand}" CommandParameter="paymentqualification"/>
+                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="{StaticResource Glyph.Register}" Text="{loc:Tr Key='一键注册'}" Command="{Binding NavCommand}" CommandParameter="register"/>
+                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="{StaticResource Glyph.Sms}" Text="{loc:Tr Key='一键接码'}" Command="{Binding NavCommand}" CommandParameter="sms"/>
+                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="{StaticResource Glyph.Scan}" Text="{loc:Tr Key='账号测活'}" Command="{Binding NavCommand}" CommandParameter="scan"/>
+                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="{StaticResource Glyph.Promotion}" Text="{loc:Tr Key='查优惠'}" Command="{Binding NavCommand}" CommandParameter="promotion"/>
+                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="{StaticResource Glyph.PaymentQualification}" Text="{loc:Tr Key='查支付资格'}" Command="{Binding NavCommand}" CommandParameter="paymentqualification"/>
 
                 <TextBlock Text="{loc:Tr Key='支付管理'}" Style="{StaticResource SidebarSectionHeaderStyle}"/>
-                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71 M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" Text="{loc:Tr Key='打开支付链接'}" Command="{Binding NavCommand}" CommandParameter="paylink"/>
-                <local:IconNavButton AutomationProperties.Name="{loc:Tr Key='批量协议支付'}" Style="{StaticResource IconNavButtonStyle}" IconGeometry="M4 5h16 M4 12h16 M4 19h16 M8 3v4 M8 10v4 M8 17v4" Text="{loc:Tr Key='批量协议支付'}" Command="{Binding NavCommand}" CommandParameter="batchpay"/>
+                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="{StaticResource Glyph.PayLink}" Text="{loc:Tr Key='打开支付链接'}" Command="{Binding NavCommand}" CommandParameter="paylink"/>
+                <local:IconNavButton AutomationProperties.Name="{loc:Tr Key='批量协议支付'}" Style="{StaticResource IconNavButtonStyle}" IconGeometry="{StaticResource Glyph.BatchPay}" Text="{loc:Tr Key='批量协议支付'}" Command="{Binding NavCommand}" CommandParameter="batchpay"/>
                 <TextBlock Text="{loc:Tr Key='邮箱管理'}" Style="{StaticResource SidebarSectionHeaderStyle}"/>
-                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z M22 6l-10 7L2 6" Text="{loc:Tr Key='导入邮箱'}" Command="{Binding NavCommand}" CommandParameter="importmail"/>
-                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z M22 6l-10 7L2 6 M2 18h20" Text="{loc:Tr Key='查看收件箱'}" Command="{Binding NavCommand}" CommandParameter="inbox"/>
-                <local:IconNavButton AutomationProperties.Name="{loc:Tr Key='邮箱换绑'}" Style="{StaticResource IconNavButtonStyle}" IconGeometry="M4 7h11m0 0-3-3m3 3-3 3M20 17H9m0 0 3-3m-3 3 3 3" Text="{loc:Tr Key='邮箱换绑'}" Command="{Binding NavCommand}" CommandParameter="changeemail"/>
+                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="{StaticResource Glyph.ImportMail}" Text="{loc:Tr Key='导入邮箱'}" Command="{Binding NavCommand}" CommandParameter="importmail"/>
+                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="{StaticResource Glyph.Inbox}" Text="{loc:Tr Key='查看收件箱'}" Command="{Binding NavCommand}" CommandParameter="inbox"/>
+                <local:IconNavButton AutomationProperties.Name="{loc:Tr Key='邮箱换绑'}" Style="{StaticResource IconNavButtonStyle}" IconGeometry="{StaticResource Glyph.ChangeEmail}" Text="{loc:Tr Key='邮箱换绑'}" Command="{Binding NavCommand}" CommandParameter="changeemail"/>
 
                 <TextBlock Text="{loc:Tr Key='账号管理'}" Style="{StaticResource SidebarSectionHeaderStyle}"/>
-                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="M12 3v12 M8 11l4 4 4-4 M20 21H4" Text="{loc:Tr Key='一键导入'}" Command="{Binding NavCommand}" CommandParameter="importcpa"/>
-                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="M12 21V9 M16 13l-4-4-4 4 M4 3h16" Text="{loc:Tr Key='导出账号'}" Command="{Binding NavCommand}" CommandParameter="export"/>
-                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="M3 6h18 M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2 M10 11v6 M14 11v6" Text="{loc:Tr Key='删除选中'}" Command="{Binding NavCommand}" CommandParameter="delete"/>
+                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="{StaticResource Glyph.ImportCpa}" Text="{loc:Tr Key='一键导入'}" Command="{Binding NavCommand}" CommandParameter="importcpa"/>
+                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="{StaticResource Glyph.Export}" Text="{loc:Tr Key='导出账号'}" Command="{Binding NavCommand}" CommandParameter="export"/>
+                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="{StaticResource Glyph.Delete}" Text="{loc:Tr Key='删除选中'}" Command="{Binding NavCommand}" CommandParameter="delete"/>
 
                 <TextBlock Text="{loc:Tr Key='项目设置'}" Style="{StaticResource SidebarSectionHeaderStyle}"/>
-                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="M4 6h16 M4 12h16 M4 18h16 M9 3v6 M15 9v6 M9 15v6" Text="{loc:Tr Key='代理池管理'}" Command="{Binding NavCommand}" CommandParameter="proxypool"/>
-                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="M23 4v6h-6 M1 20v-6h6 M3.51 9a9 9 0 0 1 14.85-3.36L23 10 M1 14l4.64 4.36A9 9 0 0 0 20.49 15" Text="{loc:Tr Key='刷新'}" Command="{Binding NavCommand}" CommandParameter="refresh"/>
-                <local:IconNavButton AutomationProperties.Name="{loc:Tr Key='设置'}" Style="{StaticResource IconNavButtonStyle}" IconGeometry="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" Text="{loc:Tr Key='设置'}" Command="{Binding NavCommand}" CommandParameter="settings"/>
+                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="{StaticResource Glyph.ProxyPool}" Text="{loc:Tr Key='代理池管理'}" Command="{Binding NavCommand}" CommandParameter="proxypool"/>
+                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="{StaticResource Glyph.Refresh}" Text="{loc:Tr Key='刷新'}" Command="{Binding NavCommand}" CommandParameter="refresh"/>
+                <local:IconNavButton AutomationProperties.Name="{loc:Tr Key='设置'}" Style="{StaticResource IconNavButtonStyle}" IconGeometry="{StaticResource Glyph.Settings}" Text="{loc:Tr Key='设置'}" Command="{Binding NavCommand}" CommandParameter="settings"/>
                 <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="{Binding ThemeIconGeometry}" Text="{loc:Tr Key='切换主题'}" Command="{Binding NavCommand}" CommandParameter="theme"/>
-                <local:IconNavButton AutomationProperties.Name="{loc:Tr Key='切换语言'}" Style="{StaticResource IconNavButtonStyle}" IconGeometry="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z M2 12h20 M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" Text="{loc:Tr Key='切换EN/CN'}" ToolTip="{loc:Tr Key='切换语言'}" Command="{Binding NavCommand}" CommandParameter="language"/>
-                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z M15 9l-6 6 M9 9l6 6" Text="{loc:Tr Key='取消批次'}" Command="{Binding NavCommand}" CommandParameter="cancelbatch"/>
+                <local:IconNavButton AutomationProperties.Name="{loc:Tr Key='切换语言'}" Style="{StaticResource IconNavButtonStyle}" IconGeometry="{StaticResource Glyph.Language}" Text="{loc:Tr Key='切换EN/CN'}" ToolTip="{loc:Tr Key='切换语言'}" Command="{Binding NavCommand}" CommandParameter="language"/>
+                <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="{StaticResource Glyph.CancelBatch}" Text="{loc:Tr Key='取消批次'}" Command="{Binding NavCommand}" CommandParameter="cancelbatch"/>
               </StackPanel>
             </ScrollViewer>
           </Border>

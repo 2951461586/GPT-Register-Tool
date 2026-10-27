@@ -29,18 +29,37 @@
           <ColumnDefinition x:Name="SidebarColumn" Width="248"/>
           <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
-        <local:Sidebar Grid.Column="0" IsCollapsed="{Binding SidebarCollapsed}" ToggleRequested="OnSidebarToggleRequested"/>
+        <!-- The chrome is its own surface and the divider against the content is
+             drawn once, here: window chrome and the title bar are the only places
+             besides inputs and the focus ring that keep a stroke. -->
+        <Grid Grid.Column="0">
+          <local:Sidebar IsCollapsed="{Binding SidebarCollapsed}"
+                         ActiveKey="{Binding ActiveNavKey, RelativeSource={RelativeSource AncestorType=Window}}"
+                         ToggleRequested="OnSidebarToggleRequested"/>
+          <Border Width="1" HorizontalAlignment="Right" Background="{DynamicResource Divider}"/>
+        </Grid>
         <Grid Grid.Column="1" Margin="14,0,14,10">
           <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="6"/>
-            <RowDefinition Height="320" MinHeight="240"/>
+            <RowDefinition Height="320" MinHeight="160" MaxHeight="560"/>
             <RowDefinition Height="24"/>
           </Grid.RowDefinitions>
 
           <local:AccountFilterBar Grid.Row="0"/>
           <local:AccountGridView x:Name="AccountGridControl" Grid.Row="1" Pool="{Binding Pool}"/>
+
+          <GridSplitter Grid.Row="2"
+                        Height="6"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Center"
+                        Background="Transparent"
+                        ShowsPreview="False"
+                        ResizeDirection="Rows"
+                        ResizeBehavior="PreviousAndNext"
+                        Cursor="SizeNS"
+                        ToolTip="{loc:Tr Key='拖动调整控制台高度'}"/>
 
           <local:WorkbenchConsole x:Name="ConsoleControl" Grid.Row="3" TaskList="{Binding TaskList}" LogPanel="{Binding LogPanel}"/>
 

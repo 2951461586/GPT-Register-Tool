@@ -1,0 +1,32 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!--
+    Glyph geometries, one key per meaning.
+
+    These used to be inline Data="M..." literals at the call site, which made
+    "what does the refresh icon look like" a search through nineteen rows and
+    left two glyphs that mean the same thing free to drift apart. A view now
+    references Glyph.<Name>; a new glyph gets a key here instead of a literal.
+
+    PathGeometry (not Geometry) because Geometry has no content property:
+    its mini-language is what the Figures converter accepts.
+  -->
+  <PathGeometry x:Key="Glyph.BatchPay" Figures="M4 5h16 M4 12h16 M4 19h16 M8 3v4 M8 10v4 M8 17v4"/>
+  <PathGeometry x:Key="Glyph.CancelBatch" Figures="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z M15 9l-6 6 M9 9l6 6"/>
+  <PathGeometry x:Key="Glyph.ChangeEmail" Figures="M4 7h11m0 0-3-3m3 3-3 3M20 17H9m0 0 3-3m-3 3 3 3"/>
+  <PathGeometry x:Key="Glyph.Delete" Figures="M3 6h18 M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2 M10 11v6 M14 11v6"/>
+  <PathGeometry x:Key="Glyph.Export" Figures="M12 21V9 M16 13l-4-4-4 4 M4 3h16"/>
+  <PathGeometry x:Key="Glyph.ImportCpa" Figures="M12 3v12 M8 11l4 4 4-4 M20 21H4"/>
+  <PathGeometry x:Key="Glyph.ImportMail" Figures="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z M22 6l-10 7L2 6"/>
+  <PathGeometry x:Key="Glyph.Inbox" Figures="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z M22 6l-10 7L2 6 M2 18h20"/>
+  <PathGeometry x:Key="Glyph.PayLink" Figures="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71 M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+  <PathGeometry x:Key="Glyph.PaymentQualification" Figures="M3 10h18 M3 6h18 M3 14h18 M3 18h18 M7 10v8 M17 10v8"/>
+  <PathGeometry x:Key="Glyph.Promotion" Figures="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7 M15 3h6v6 M10 14L21 3"/>
+  <PathGeometry x:Key="Glyph.ProxyPool" Figures="M4 6h16 M4 12h16 M4 18h16 M9 3v6 M15 9v6 M9 15v6"/>
+  <PathGeometry x:Key="Glyph.Refresh" Figures="M23 4v6h-6 M1 20v-6h6 M3.51 9a9 9 0 0 1 14.85-3.36L23 10 M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+  <PathGeometry x:Key="Glyph.Register" Figures="M16 16v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 8a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M22 16v-1 M19 13h6"/>
+  <PathGeometry x:Key="Glyph.Scan" Figures="M3 3v18h18 M7 14l4-4 4 4 5-5"/>
+  <PathGeometry x:Key="Glyph.Settings" Figures="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+  <PathGeometry x:Key="Glyph.Sms" Figures="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+  <PathGeometry x:Key="Glyph.Language" Figures="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z M2 12h20 M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+</ResourceDictionary>

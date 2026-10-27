@@ -1,0 +1,81 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+  <!--
+    Theme-independent tokens: spacing, corner radius, type ramp.
+
+    Nothing here carries a colour, so this dictionary is merged ONCE and is never
+    swapped when the theme changes. Colour tokens live in Colors.Light.xaml /
+    Colors.Dark.xaml (same key set) and are swapped as a unit.
+
+    Merge order is fixed by App.xaml: Wpf.Ui -> Tokens -> Colors.* -> Controls.
+    A StaticResource into this file therefore resolves before any control style
+    is built; reordering App.xaml would make the first parse fail loudly rather
+    than silently fall back, which is the failure mode we want.
+
+    One condition for the type ramp: WPF has no Dynamic Type, so a token is a
+    size, not a size+leading pair. Line height is left to layout (TextBlock
+    measures from FontSize); the numbers below are the sizes only.
+  -->
+
+  <!-- ═══ Corner radius ═══════════════════════════════════════════════════
+       Picked by the control's SHORTEST side, never per call site:
+       Xs=4   inset marks, badges
+       Sm=6   chips, small square buttons
+       Md=8   inputs, buttons, menus
+       Lg=10  sidebar rows, toolbars
+       Xl=12  cards, panels, console
+       Full   pills (pagers, status dots)
+       Derived radii are computed (outer = inner + inset), never added here. -->
+  <sys:Double x:Key="Radius.Xs">4</sys:Double>
+  <sys:Double x:Key="Radius.Sm">6</sys:Double>
+  <sys:Double x:Key="Radius.Md">8</sys:Double>
+  <sys:Double x:Key="Radius.Lg">10</sys:Double>
+  <sys:Double x:Key="Radius.Xl">12</sys:Double>
+  <sys:Double x:Key="Radius.Full">999</sys:Double>
+
+  <CornerRadius x:Key="Corner.Xs">4</CornerRadius>
+  <CornerRadius x:Key="Corner.Sm">6</CornerRadius>
+  <CornerRadius x:Key="Corner.Md">8</CornerRadius>
+  <CornerRadius x:Key="Corner.Lg">10</CornerRadius>
+  <CornerRadius x:Key="Corner.Xl">12</CornerRadius>
+  <CornerRadius x:Key="Corner.Full">999</CornerRadius>
+  <!-- Field wells inside a rounded card keep the card's curve minus the inset. -->
+  <CornerRadius x:Key="Corner.Inset">6</CornerRadius>
+
+  <!-- ═══ Spacing (4px grid) ══════════════════════════════════════════════ -->
+  <sys:Double x:Key="Space.1">4</sys:Double>
+  <sys:Double x:Key="Space.2">8</sys:Double>
+  <sys:Double x:Key="Space.3">12</sys:Double>
+  <sys:Double x:Key="Space.4">16</sys:Double>
+  <sys:Double x:Key="Space.5">24</sys:Double>
+  <sys:Double x:Key="Space.6">32</sys:Double>
+
+  <Thickness x:Key="Space.All1">4</Thickness>
+  <Thickness x:Key="Space.All2">8</Thickness>
+  <Thickness x:Key="Space.All3">12</Thickness>
+  <Thickness x:Key="Space.All4">16</Thickness>
+  <Thickness x:Key="Space.Right2">0,0,8,0</Thickness>
+  <Thickness x:Key="Space.Left2">8,0,0,0</Thickness>
+  <Thickness x:Key="Space.Bottom1">0,0,0,4</Thickness>
+  <Thickness x:Key="Space.Bottom2">0,0,0,8</Thickness>
+  <Thickness x:Key="Space.Bottom3">0,0,0,12</Thickness>
+  <Thickness x:Key="Space.Row2">0,0,0,8</Thickness>
+
+  <!-- ═══ Type ramp ═══════════════════════════════════════════════════════
+       Display 28 / Title 20 / Subtitle 15 / Body 13 / Caption 11.
+       Views must not write a bare FontSize; a new size means a new token (and a
+       reason), not a literal at the call site. -->
+  <sys:Double x:Key="Type.Display.Size">28</sys:Double>
+  <sys:Double x:Key="Type.Title.Size">20</sys:Double>
+  <sys:Double x:Key="Type.Subtitle.Size">15</sys:Double>
+  <sys:Double x:Key="Type.Body.Size">13</sys:Double>
+  <sys:Double x:Key="Type.Caption.Size">11</sys:Double>
+
+  <!-- ═══ Motion ══════════════════════════════════════════════════════════
+       WPF has no implicit transitions: a Setter trigger is instantaneous. These
+       durations are for the explicit Storyboards (sidebar collapse) and document
+       the intended feel for anything added later. -->
+  <Duration x:Key="Motion.Fast">0:0:0.12</Duration>
+  <Duration x:Key="Motion.Normal">0:0:0.18</Duration>
+</ResourceDictionary>

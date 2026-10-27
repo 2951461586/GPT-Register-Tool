@@ -22,6 +22,17 @@ namespace SmsWorkbench
             typeof(Sidebar),
             new PropertyMetadata(false));
 
+        /// <summary>
+        /// <c>CommandParameter</c> of the row whose action is running, or empty.
+        /// Each row compares it against its own parameter (see
+        /// <c>IconNavButtonStyle</c>); the sidebar owns no state of its own.
+        /// </summary>
+        public static readonly DependencyProperty ActiveKeyProperty = DependencyProperty.Register(
+            nameof(ActiveKey),
+            typeof(string),
+            typeof(Sidebar),
+            new PropertyMetadata(string.Empty));
+
         public static readonly RoutedEvent ToggleRequestedEvent = EventManager.RegisterRoutedEvent(
             nameof(ToggleRequested),
             RoutingStrategy.Bubble,
@@ -37,6 +48,12 @@ namespace SmsWorkbench
         {
             get => (bool)GetValue(IsCollapsedProperty);
             set => SetValue(IsCollapsedProperty, value);
+        }
+
+        public string ActiveKey
+        {
+            get => (string)GetValue(ActiveKeyProperty);
+            set => SetValue(ActiveKeyProperty, value);
         }
 
         public event RoutedEventHandler ToggleRequested

@@ -22,6 +22,7 @@ namespace SmsWorkbench
 
         // Resolved by name: per-file analyzers do not see AccountGridView.g.cs.
         private readonly System.Windows.Controls.DataGrid accountGrid;
+        private readonly CheckBox compactColumnsToggle;
 
         public AccountGridView()
         {
@@ -30,6 +31,10 @@ namespace SmsWorkbench
             accountGrid = (System.Windows.Controls.DataGrid)(
                 FindName("AccountGrid")
                 ?? throw new InvalidOperationException("AccountGridView.xaml is missing x:Name=\"AccountGrid\""));
+            compactColumnsToggle = (CheckBox)(
+                FindName("CompactColumnsToggle")
+                ?? throw new InvalidOperationException(
+                    "AccountGridView.xaml is missing x:Name=\"CompactColumnsToggle\""));
         }
 
         public PoolViewModel? Pool
@@ -82,5 +87,50 @@ namespace SmsWorkbench
                 }
             }
         }
+
+        /// <summary>
+        /// B-tier columns hidden by the 精简列 switch: the two timestamps, the
+        /// registration country and the two payment-state columns. A-tier
+        /// (email / type / status / AT / RT / 2FA) always stays visible, which is
+        /// what makes the table readable at the 1220 px minimum window width.
+        /// Hiding beats removing: sorting, the ViewModel and the context menu are
+        /// untouched, so nothing downstream can observe the switch.
+        /// </summary>
+        private static readonly string[] CompactColumnKeys =
+        {
+            "CreatedAt",
+            "CompletedAt",
+            "RegistrationCountry",
+            "PromotionStatus",
+            "PaymentQualification",
+        };
+
+        private void CompactColumnsToggle_Changed(object sender, RoutedEventArgs e)
+        {
+            Visibility visibility = compactColumnsToggle.IsChecked == true
+                ? Visibility.Collapsed
+                : Visibility.Visible;
+            foreach (DataGridColumn column in accountGrid.Columns)
+            {
+                if (Array.IndexOf(CompactColumnKeys, ColumnKey(column)) >= 0)
+                {
+                    column.Visibility = visibility;
+                }
+            }
+        }
+
+        /// <summary>
+        /// A column's stable identity: <c>SortMemberPath</c> where the grid sorts the
+        /// column explicitly (the two template columns), otherwise the bound path.
+        /// <see cref="DataGridColumn"/> is a <see cref="DependencyObject"/>, not a
+        /// <see cref="FrameworkElement"/>, so <c>x:Name</c> on a column generates no
+        /// field and <c>FindName</c> cannot see it.
+        /// </summary>
+        private static string ColumnKey(DataGridColumn column)
+            => !string.IsNullOrEmpty(column.SortMemberPath)
+                ? column.SortMemberPath
+                : column is DataGridBoundColumn bound && bound.Binding is Binding binding
+                    ? binding.Path.Path
+                    : string.Empty;
     }
 }

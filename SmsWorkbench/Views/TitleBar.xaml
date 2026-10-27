@@ -107,5 +107,11 @@
             </Button.Template>
           </Button>
         </StackPanel>
+
+        <!-- The one stroke the chrome keeps: its edge against the content. -->
+        <Border Grid.ColumnSpan="2"
+                Height="1"
+                VerticalAlignment="Bottom"
+                Background="{DynamicResource Divider}"/>
       </Grid>
 </UserControl>

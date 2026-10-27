@@ -6,10 +6,15 @@
   <Application.Resources>
     <ResourceDictionary>
       <ResourceDictionary.MergedDictionaries>
-        <!-- Order matters: Wpf.Ui supplies the base templates, Palette.xaml the colour
-             tokens, and Controls.xaml the overrides that read those tokens. -->
+        <!-- Order matters and is load-bearing: Wpf.Ui supplies the base templates,
+             Tokens.xaml the theme-independent spacing/radius/type scale, Colors.Light.xaml
+             the colour keys every control style reads, and Controls.xaml the overrides.
+             Colors.Light.xaml is swapped for Colors.Dark.xaml at runtime (same key set)
+             by MainWindow.SwapColorScheme. -->
         <ResourceDictionary Source="pack://application:,,,/Wpf.Ui;component/Resources/Wpf.Ui.xaml"/>
-        <ResourceDictionary Source="Themes/Palette.xaml"/>
+        <ResourceDictionary Source="Themes/Tokens.xaml"/>
+        <ResourceDictionary Source="Themes/Glyphs.xaml"/>
+        <ResourceDictionary Source="Themes/Colors.Light.xaml"/>
         <ResourceDictionary Source="Themes/Controls.xaml"/>
       </ResourceDictionary.MergedDictionaries>
       <loc:PoolSummaryConverter x:Key="PoolSummaryConverter"/>

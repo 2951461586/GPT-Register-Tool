@@ -2,13 +2,16 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
   <!--
     Implicit and keyed control styles/templates for the workbench shell. Split out of
-    App.xaml on 2026-10-23 (the palette lives in Palette.xaml, merged before this
-    file). Every colour reference here is DynamicResource so a theme swap still
-    reaches it.
+    App.xaml on 2026-10-23; colours moved to Themes/Colors.{Light,Dark}.xaml and the
+    spacing/radius/type scale to Themes/Tokens.xaml on 2026-10-28.
 
-    Keep every StaticResource inside this one file: a StaticResource is resolved
-    while its own dictionary loads, so reaching sideways into Palette.xaml would
-    only work by accident of merge order.
+    Every colour reference here is DynamicResource so the runtime dictionary swap
+    reaches it. StaticResource into Tokens.xaml is deliberate and safe: App.xaml
+    merges Tokens before this file, and a reorder fails loudly at first parse rather
+    than silently falling back to a WPF default.
+
+    Radii come from the Radius/Corner tokens (chosen by the control's shortest side);
+    no bare CornerRadius literal belongs in this file.
   -->
 
       <Style TargetType="TextBlock">
@@ -16,27 +19,78 @@
         <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
       </Style>
 
+      <!-- ═══ Type ramp ════════════════════════════════════════════════════
+           Five steps, each a token. A view that needs another size adds a token
+           (and a reason) instead of writing FontSize="13" at the call site. -->
+      <Style x:Key="Text.Display" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontSize" Value="{StaticResource Type.Display.Size}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
+      </Style>
+
+      <Style x:Key="Text.Title" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontSize" Value="{StaticResource Type.Title.Size}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
+      </Style>
+
+      <Style x:Key="Text.Subtitle" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontSize" Value="{StaticResource Type.Subtitle.Size}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
+      </Style>
+
+      <Style x:Key="Text.Body" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontSize" Value="{StaticResource Type.Body.Size}"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
+      </Style>
+
+      <Style x:Key="Text.Caption" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+        <Setter Property="FontSize" Value="{StaticResource Type.Caption.Size}"/>
+        <Setter Property="FontWeight" Value="Medium"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextSub}"/>
+      </Style>
+
+      <!-- ═══ Keyboard focus ═══════════════════════════════════════════════
+           The one border a surface may add besides inputs and the chrome edge.
+           Buttons used to set FocusVisualStyle={x:Null}, which left keyboard
+           users with no landing point at all. -->
+      <Style x:Key="FocusRingStyle">
+        <Setter Property="Control.Template">
+          <Setter.Value>
+            <ControlTemplate>
+              <Rectangle Margin="-2"
+                         RadiusX="{StaticResource Radius.Sm}"
+                         RadiusY="{StaticResource Radius.Sm}"
+                         SnapsToDevicePixels="True"
+                         Stroke="{DynamicResource FocusRing}"
+                         StrokeThickness="2"/>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
+      </Style>
+
       <Style x:Key="SectionLabel" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
         <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
-        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="FontSize" Value="{StaticResource Type.Caption.Size}"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Margin" Value="4,12,0,6"/>
       </Style>
 
       <Style x:Key="FieldLabel" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
-        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontSize" Value="{StaticResource Type.Caption.Size}"/>
         <Setter Property="Foreground" Value="{DynamicResource TextSub}"/>
-        <Setter Property="Margin" Value="0,0,0,4"/>
+        <Setter Property="Margin" Value="{StaticResource Space.Bottom1}"/>
       </Style>
 
       <!-- Modernized Button Style -->
       <Style TargetType="Button">
-        <Setter Property="Height" Value="30"/>
-        <Setter Property="Padding" Value="10,0"/>
+        <Setter Property="Height" Value="32"/>
+        <Setter Property="Padding" Value="12,0"/>
         <Setter Property="Margin" Value="3,0"/>
         <Setter Property="Cursor" Value="Hand"/>
-        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
-        <Setter Property="Background" Value="{DynamicResource PanelBg}"/>
+        <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRingStyle}"/>
+        <Setter Property="Background" Value="Transparent"/>
         <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
@@ -50,17 +104,17 @@
                        Background="{TemplateBinding Background}"
                        BorderBrush="{TemplateBinding BorderBrush}"
                        BorderThickness="{TemplateBinding BorderThickness}"
-                       CornerRadius="4">
+                       CornerRadius="{StaticResource Corner.Md}">
                 <ContentPresenter Margin="{TemplateBinding Padding}"
                                   HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                   VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
               </Border>
               <ControlTemplate.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                  <Setter TargetName="ButtonChrome" Property="BorderBrush" Value="{DynamicResource LineStrong}"/>
+                  <Setter TargetName="ButtonChrome" Property="Background" Value="{DynamicResource Surface.Block}"/>
                 </Trigger>
                 <Trigger Property="IsPressed" Value="True">
-                  <Setter TargetName="ButtonChrome" Property="Opacity" Value="0.82"/>
+                  <Setter TargetName="ButtonChrome" Property="Opacity" Value="0.9"/>
                 </Trigger>
                 <Trigger Property="IsEnabled" Value="False">
                   <Setter Property="Opacity" Value="0.45"/>
@@ -71,24 +125,29 @@
         </Setter>
       </Style>
 
-      <!-- PrimaryButton keeps dialog actions neutral across light and dark themes. -->
+      <!--
+        PrimaryButton is the ONE filled action a screen is for (FlClash's rule: colour
+        marks the action, not the structure). It used to be neutral on purpose, which
+        left every dialog with no visual answer to "which button confirms this".
+      -->
       <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-        <Setter Property="Background" Value="{DynamicResource PanelBg}"/>
-        <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
-        <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
-        <Setter Property="FontWeight" Value="Normal"/>
+        <Setter Property="Background" Value="{DynamicResource Primary}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Primary}"/>
+        <Setter Property="Foreground" Value="{DynamicResource OnPrimary}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
       </Style>
 
       <!-- SecondaryButton Style for neutral dialog actions -->
       <Style x:Key="SecondaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-        <Setter Property="Background" Value="{DynamicResource PanelBg2}"/>
+        <Setter Property="Background" Value="Transparent"/>
         <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
         <Setter Property="Foreground" Value="{DynamicResource TextSub}"/>
       </Style>
 
-      <!-- DangerButton Style with customized Red layout -->
+      <!-- DangerButton: tint the text and the outline, not the fill. A solid red
+           block competes with the primary action it sits next to. -->
       <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-        <Setter Property="Background" Value="{DynamicResource DangerSoft}"/>
+        <Setter Property="Background" Value="Transparent"/>
         <Setter Property="BorderBrush" Value="{DynamicResource DangerBorder}"/>
         <Setter Property="Foreground" Value="{DynamicResource Danger}"/>
       </Style>
@@ -123,11 +182,13 @@
         <Setter Property="Fill" Value="Transparent"/>
       </Style>
 
-      <!-- Modernized TextBox -->
+      <!-- Modernized TextBox: an input is one of the three things allowed to keep a
+           stroke, and it only fully states it on focus (the other two are the focus
+           ring and the chrome edge). -->
       <Style TargetType="TextBox">
         <Setter Property="Height" Value="32"/>
-        <Setter Property="Padding" Value="9,0"/>
-        <Setter Property="Background" Value="{DynamicResource PanelBg}"/>
+        <Setter Property="Padding" Value="10,0"/>
+        <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
         <Setter Property="CaretBrush" Value="{DynamicResource TextMain}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
@@ -139,7 +200,7 @@
               <Border x:Name="BoxChrome" Background="{TemplateBinding Background}"
                        BorderBrush="{TemplateBinding BorderBrush}"
                        BorderThickness="{TemplateBinding BorderThickness}"
-                       CornerRadius="4">
+                       CornerRadius="{StaticResource Corner.Md}">
                 <ScrollViewer x:Name="PART_ContentHost"
                                Margin="{TemplateBinding Padding}"
                                VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
@@ -147,8 +208,11 @@
                                VerticalScrollBarVisibility="{TemplateBinding ScrollViewer.VerticalScrollBarVisibility}"/>
               </Border>
               <ControlTemplate.Triggers>
-                <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                <Trigger Property="IsMouseOver" Value="True">
                   <Setter TargetName="BoxChrome" Property="BorderBrush" Value="{DynamicResource LineStrong}"/>
+                </Trigger>
+                <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                  <Setter TargetName="BoxChrome" Property="BorderBrush" Value="{DynamicResource FocusRing}"/>
                 </Trigger>
               </ControlTemplate.Triggers>
             </ControlTemplate>
@@ -227,7 +291,7 @@
               <Border x:Name="ThumbChrome"
                       Margin="2"
                       Background="{TemplateBinding Background}"
-                      CornerRadius="3"/>
+                      CornerRadius="{StaticResource Corner.Full}"/>
               <ControlTemplate.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
                   <Setter TargetName="ThumbChrome" Property="Background" Value="{DynamicResource TextMuted}"/>
@@ -262,8 +326,8 @@
 
       <Style TargetType="PasswordBox">
         <Setter Property="Height" Value="32"/>
-        <Setter Property="Padding" Value="9,0"/>
-        <Setter Property="Background" Value="{DynamicResource PanelBg}"/>
+        <Setter Property="Padding" Value="10,0"/>
+        <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
         <Setter Property="CaretBrush" Value="{DynamicResource TextMain}"/>
         <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
@@ -276,14 +340,17 @@
                       Background="{TemplateBinding Background}"
                       BorderBrush="{TemplateBinding BorderBrush}"
                       BorderThickness="{TemplateBinding BorderThickness}"
-                      CornerRadius="4">
+                      CornerRadius="{StaticResource Corner.Md}">
                 <ScrollViewer x:Name="PART_ContentHost"
                               Margin="{TemplateBinding Padding}"
                               VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
               </Border>
               <ControlTemplate.Triggers>
-                <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                <Trigger Property="IsMouseOver" Value="True">
                   <Setter TargetName="PasswordChrome" Property="BorderBrush" Value="{DynamicResource LineStrong}"/>
+                </Trigger>
+                <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                  <Setter TargetName="PasswordChrome" Property="BorderBrush" Value="{DynamicResource FocusRing}"/>
                 </Trigger>
                 <Trigger Property="IsEnabled" Value="False">
                   <Setter Property="Opacity" Value="0.45"/>
@@ -486,63 +553,100 @@
         </Setter>
       </Style>
 
-      <!-- Modernized DataGrid -->
+      <!-- Modernized DataGrid: a table is read as rows of text, so structure is the
+           hover/selection fill; no zebra, no cell borders, no column rules. -->
       <Style TargetType="DataGrid">
-        <Setter Property="Background" Value="{DynamicResource PanelBg}"/>
+        <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
-        <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
-        <Setter Property="RowBackground" Value="{DynamicResource PanelBg}"/>
-        <Setter Property="AlternatingRowBackground" Value="{DynamicResource GridAltBg}"/>
-        <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource Line}"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="RowBackground" Value="Transparent"/>
+        <Setter Property="AlternatingRowBackground" Value="Transparent"/>
+        <Setter Property="HorizontalGridLinesBrush" Value="Transparent"/>
         <Setter Property="VerticalGridLinesBrush" Value="Transparent"/>
+        <Setter Property="GridLinesVisibility" Value="None"/>
+        <Setter Property="RowHeight" Value="40"/>
+        <Setter Property="ColumnHeaderHeight" Value="32"/>
         <Setter Property="SelectionMode" Value="Extended"/>
         <Setter Property="CanUserResizeRows" Value="False"/>
+        <Setter Property="CanUserReorderColumns" Value="True"/>
       </Style>
 
+      <!--
+        Selection keeps the row's own surface and adds a primary bar at its edge.
+        A filled grey block (GridSelectionBg #C8C8C8) read as "disabled", and a
+        primary wash competed with the status badges sitting in the same row.
+      -->
       <Style TargetType="DataGridRow">
-        <Setter Property="Background" Value="{DynamicResource PanelBg}"/>
+        <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
-        <Style.Triggers>
-          <Trigger Property="IsMouseOver" Value="True">
-            <Setter Property="Background" Value="{DynamicResource PanelHover}"/>
-          </Trigger>
-          <Trigger Property="IsSelected" Value="True">
-            <Setter Property="Background" Value="{DynamicResource GridSelectionBg}"/>
-            <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
-          </Trigger>
-        </Style.Triggers>
+        <Setter Property="Template">
+          <Setter.Value>
+            <ControlTemplate TargetType="DataGridRow">
+              <Border x:Name="RowChrome"
+                      Background="{TemplateBinding Background}"
+                      CornerRadius="{StaticResource Corner.Xs}"
+                      SnapsToDevicePixels="True">
+                <Grid>
+                  <Border x:Name="SelectionBar"
+                          Width="3"
+                          HorizontalAlignment="Left"
+                          CornerRadius="{StaticResource Corner.Xs}"
+                          Background="{DynamicResource Primary}"
+                          Visibility="Collapsed"/>
+                  <DataGridCellsPresenter ItemsPanel="{TemplateBinding ItemsPanel}"
+                                          SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"/>
+                </Grid>
+              </Border>
+              <ControlTemplate.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                  <Setter TargetName="RowChrome" Property="Background" Value="{DynamicResource Surface.Block}"/>
+                </Trigger>
+                <Trigger Property="IsSelected" Value="True">
+                  <Setter TargetName="RowChrome" Property="Background" Value="{DynamicResource Surface.Block}"/>
+                  <Setter TargetName="SelectionBar" Property="Visibility" Value="Visible"/>
+                </Trigger>
+              </ControlTemplate.Triggers>
+            </ControlTemplate>
+          </Setter.Value>
+        </Setter>
       </Style>
 
       <Style TargetType="DataGridCell">
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
         <Setter Property="BorderBrush" Value="Transparent"/>
-        <Setter Property="Padding" Value="6,0"/>
+        <Setter Property="Padding" Value="10,0"/>
         <Setter Property="Template">
           <Setter.Value>
             <ControlTemplate TargetType="DataGridCell">
-              <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
-                       BorderThickness="0,0,0,1" Padding="{TemplateBinding Padding}">
+              <Border Background="{TemplateBinding Background}"
+                      BorderThickness="0"
+                      Padding="{TemplateBinding Padding}">
                 <ContentPresenter VerticalAlignment="Center"/>
               </Border>
             </ControlTemplate>
           </Setter.Value>
         </Setter>
         <Style.Triggers>
+          <!-- Selection lives on the row (fill + primary bar); the cell adds nothing,
+               otherwise a selected row paints two different greys per column. -->
           <Trigger Property="IsSelected" Value="True">
-            <Setter Property="Background" Value="{DynamicResource GridSelectionBg}"/>
+            <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
           </Trigger>
         </Style.Triggers>
       </Style>
 
       <Style TargetType="DataGridColumnHeader">
-        <Setter Property="Background" Value="{DynamicResource PanelBg}"/>
+        <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Foreground" Value="{DynamicResource TextSub}"/>
-        <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
-        <Setter Property="FontWeight" Value="Bold"/>
-        <Setter Property="Padding" Value="6,0"/>
-        <Setter Property="Height" Value="28"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Divider}"/>
+        <Setter Property="BorderThickness" Value="0,0,0,1"/>
+        <Setter Property="FontSize" Value="{StaticResource Type.Caption.Size}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Padding" Value="10,0"/>
+        <Setter Property="Height" Value="32"/>
       </Style>
 
       <Style TargetType="CheckBox">
@@ -552,12 +656,12 @@
 
       <!-- ── Status Badge Style (for DataGrid cells) ── -->
       <Style x:Key="StatusBadge" TargetType="Border">
-        <Setter Property="CornerRadius" Value="4"/>
-        <Setter Property="Padding" Value="5,1"/>
+        <Setter Property="CornerRadius" Value="{StaticResource Corner.Xs}"/>
+        <Setter Property="Padding" Value="6,2"/>
         <Setter Property="HorizontalAlignment" Value="Left"/>
         <Setter Property="VerticalAlignment" Value="Center"/>
         <Setter Property="Background" Value="{DynamicResource BadgeNeutralBg}"/>
-        <Setter Property="BorderBrush" Value="{DynamicResource BadgeNeutralBd}"/>
+        <Setter Property="BorderBrush" Value="Transparent"/>
         <Setter Property="BorderThickness" Value="0"/>
         <Style.Triggers>
           <DataTrigger Binding="{Binding RelativeSource={RelativeSource Self}, Path=Tag}" Value="success">
@@ -579,8 +683,8 @@
         </Style.Triggers>
       </Style>
       <Style x:Key="StatusBadgeText" TargetType="TextBlock">
-        <Setter Property="FontSize" Value="11"/>
-        <Setter Property="FontWeight" Value="Medium"/>
+        <Setter Property="FontSize" Value="{StaticResource Type.Caption.Size}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Foreground" Value="{DynamicResource BadgeNeutralFg}"/>
         <Setter Property="VerticalAlignment" Value="Center"/>
         <Setter Property="HorizontalAlignment" Value="Left"/>
@@ -623,11 +727,11 @@
         <Setter Property="Template">
           <Setter.Value>
             <ControlTemplate TargetType="Window">
-              <Border Margin="12" CornerRadius="4">
+              <Border Margin="12" CornerRadius="{StaticResource Corner.Xl}">
                 <Border.Effect>
                   <DropShadowEffect Color="#22000000" BlurRadius="16" ShadowDepth="3" Opacity="0.5" Direction="270"/>
                 </Border.Effect>
-                <Border Background="{DynamicResource AppBg}" CornerRadius="4" BorderBrush="{DynamicResource LineStrong}" BorderThickness="1">
+                <Border Background="{DynamicResource Surface.Card}" CornerRadius="{StaticResource Corner.Xl}" BorderBrush="{DynamicResource Line}" BorderThickness="1">
                   <Grid>
                     <Grid.RowDefinitions>
                       <RowDefinition Height="36"/>

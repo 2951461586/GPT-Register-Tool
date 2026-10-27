@@ -42,6 +42,12 @@ namespace SmsWorkbench
 
         private void OnNavigate(string? key)
         {
+            // Every row here is an action, not a destination (see
+            // MainWindow.NavigationState): park the key so the backend funnel can
+            // light the row while its batch runs. The highlight is cleared first, so
+            // a dialog-only action can never inherit the previous batch's mark.
+            ActiveNavKey = string.Empty;
+            pendingNavKey = key ?? string.Empty;
             if (key != null && NavActions.TryGetValue(key, out Action? action)) action();
         }
 
