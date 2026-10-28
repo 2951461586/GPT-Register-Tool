@@ -122,10 +122,22 @@ def test_an_unproven_host_is_capped_before_the_window_is_spent(monkeypatch):
     """
     pool = _one_host_pool(10)
     meter = _Concurrency()
+    # The three admitted probes have to *provably* be in flight at once. A bare
+    # sleep measured the machine, not the code: on a loaded CI runner the worker
+    # threads start more than 20 ms apart, so peak read 2 and the test failed with
+    # nothing wrong in the cap (2026-10-28, two consecutive release runs). The
+    # barrier makes the overlap a precondition instead of a hope.
+    barrier = threading.Barrier(3, timeout=10)
 
     def probe(proxy, **_kwargs):
         with meter:
-            time.sleep(0.02)
+            try:
+                barrier.wait()
+            except threading.BrokenBarrierError:
+                # Fewer than three were admitted: the peak assertion below is the
+                # signal, and this must still raise the same failure the cap path
+                # expects.
+                pass
             raise RuntimeError("connection_reset")
 
     try:
@@ -142,23 +154,28 @@ def test_an_unproven_host_is_capped_before_the_window_is_spent(monkeypatch):
 def test_a_proven_healthy_host_gets_the_whole_window(monkeypatch):
     """先按 cap 探一轮，证明健康后剩下的并发探完 —— 这才是提速的来源。
 
-    10 个候选、cap=3、窗口 8 ⇒ 第一轮 3 个、第二轮 7 个 ⇒ **峰值并发 7**。
-    若实现把已验证健康的出口也压在 cap 上，峰值只会是 3（要 4 轮才探完），
-    这条断言就会红。
+    10 个候选、cap=3、窗口 8 ⇒ 第一轮 3 个、第二轮 7 个 ⇒ 峰值并发超过 cap。
+    若实现把已验证健康的出口也压在 cap 上，四轮下来峰值只会是 3，这条断言就会红。
+
+    断言的是「超过 cap」而不是精确的 7：精确值要求第 2 轮的 7 个线程同时在场，
+    那是调度巧合而非契约（2026-10-28 的 CI 抖动就来自这类断言）。契约本身——
+    已证明健康的主机不再受每主机上限约束——用 `> cap` 就能钉住。
     """
     pool = _one_host_pool(10)
     meter = _Concurrency()
 
     def probe(proxy, **_kwargs):
         with meter:
-            time.sleep(0.05)
+            # Wider than the 20 ms used elsewhere: this test needs the round's probes
+            # to overlap, and the window is the round itself, not a barrier.
+            time.sleep(0.15)
         return {"ok": True, "proxy": proxy}
 
     result = _run(pool, probe, _config(preflight_max_consecutive_failures_per_host=3), monkeypatch)
 
     assert result["ok"] is True
     assert meter.entered == 10
-    assert meter.peak == 7, meter.peak
+    assert meter.peak > 3, meter.peak
 
 
 def test_successful_routes_follow_candidate_order_not_completion_order(monkeypatch):
