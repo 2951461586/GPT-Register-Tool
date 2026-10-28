@@ -73,20 +73,20 @@
        The colour lives on the TEXT (Fg); the container is a soft same-hue wash
        and draws no border. Five containers with one grey foreground — the old
        shape — made all five states read identically at a glance. -->
-  <SolidColorBrush x:Key="BadgeSuccessBg" Color="#EAF7F0"/>
-  <SolidColorBrush x:Key="BadgeSuccessFg" Color="#16794C"/>
+  <SolidColorBrush x:Key="BadgeSuccessBg" Color="#EFF2F0"/>
+  <SolidColorBrush x:Key="BadgeSuccessFg" Color="#2B644A"/>
   <SolidColorBrush x:Key="BadgeSuccessBd" Color="Transparent"/>
-  <SolidColorBrush x:Key="BadgeWarnBg" Color="#FFF4E0"/>
-  <SolidColorBrush x:Key="BadgeWarnFg" Color="#8A5A00"/>
+  <SolidColorBrush x:Key="BadgeWarnBg" Color="#F4F1EB"/>
+  <SolidColorBrush x:Key="BadgeWarnFg" Color="#6D511D"/>
   <SolidColorBrush x:Key="BadgeWarnBd" Color="Transparent"/>
-  <SolidColorBrush x:Key="BadgeDangerBg" Color="#FEF0EE"/>
-  <SolidColorBrush x:Key="BadgeDangerFg" Color="#B42318"/>
+  <SolidColorBrush x:Key="BadgeDangerBg" Color="#F8F4F4"/>
+  <SolidColorBrush x:Key="BadgeDangerFg" Color="#933F39"/>
   <SolidColorBrush x:Key="BadgeDangerBd" Color="Transparent"/>
-  <SolidColorBrush x:Key="BadgeInfoBg" Color="#EAF2FF"/>
-  <SolidColorBrush x:Key="BadgeInfoFg" Color="#1D4ED8"/>
+  <SolidColorBrush x:Key="BadgeInfoBg" Color="#F1F4F8"/>
+  <SolidColorBrush x:Key="BadgeInfoFg" Color="#4461B1"/>
   <SolidColorBrush x:Key="BadgeInfoBd" Color="Transparent"/>
-  <SolidColorBrush x:Key="BadgeNeutralBg" Color="#F1F3F5"/>
-  <SolidColorBrush x:Key="BadgeNeutralFg" Color="#57606A"/>
+  <SolidColorBrush x:Key="BadgeNeutralBg" Color="#F2F3F4"/>
+  <SolidColorBrush x:Key="BadgeNeutralFg" Color="#5B6066"/>
   <SolidColorBrush x:Key="BadgeNeutralBd" Color="Transparent"/>
 
   <!-- ═══ Card accents ════════════════════════════════════════════════════ -->

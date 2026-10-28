@@ -53,20 +53,20 @@
   <SolidColorBrush x:Key="LogBorder" Color="#3A3A3A"/>
   <SolidColorBrush x:Key="LogText" Color="#E6E6E6"/>
 
-  <SolidColorBrush x:Key="BadgeSuccessBg" Color="#123524"/>
-  <SolidColorBrush x:Key="BadgeSuccessFg" Color="#51CF66"/>
+  <SolidColorBrush x:Key="BadgeSuccessBg" Color="#1C2B24"/>
+  <SolidColorBrush x:Key="BadgeSuccessFg" Color="#69B776"/>
   <SolidColorBrush x:Key="BadgeSuccessBd" Color="Transparent"/>
-  <SolidColorBrush x:Key="BadgeWarnBg" Color="#3A2B0B"/>
-  <SolidColorBrush x:Key="BadgeWarnFg" Color="#FBBF24"/>
+  <SolidColorBrush x:Key="BadgeWarnBg" Color="#2D2618"/>
+  <SolidColorBrush x:Key="BadgeWarnFg" Color="#D2AD4D"/>
   <SolidColorBrush x:Key="BadgeWarnBd" Color="Transparent"/>
-  <SolidColorBrush x:Key="BadgeDangerBg" Color="#3B1717"/>
-  <SolidColorBrush x:Key="BadgeDangerFg" Color="#FA5252"/>
+  <SolidColorBrush x:Key="BadgeDangerBg" Color="#312121"/>
+  <SolidColorBrush x:Key="BadgeDangerFg" Color="#DA7272"/>
   <SolidColorBrush x:Key="BadgeDangerBd" Color="Transparent"/>
-  <SolidColorBrush x:Key="BadgeInfoBg" Color="#172554"/>
-  <SolidColorBrush x:Key="BadgeInfoFg" Color="#60A5FA"/>
+  <SolidColorBrush x:Key="BadgeInfoBg" Color="#282E43"/>
+  <SolidColorBrush x:Key="BadgeInfoFg" Color="#7DA8DD"/>
   <SolidColorBrush x:Key="BadgeInfoBd" Color="Transparent"/>
   <SolidColorBrush x:Key="BadgeNeutralBg" Color="#2B2B2B"/>
-  <SolidColorBrush x:Key="BadgeNeutralFg" Color="#A8B0B8"/>
+  <SolidColorBrush x:Key="BadgeNeutralFg" Color="#ABB0B5"/>
   <SolidColorBrush x:Key="BadgeNeutralBd" Color="Transparent"/>
 
   <SolidColorBrush x:Key="AccentBlue" Color="#60A5FA"/>

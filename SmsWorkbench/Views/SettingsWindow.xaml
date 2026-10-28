@@ -36,10 +36,13 @@
                                       ContentTemplate="{TemplateBinding ContentTemplate}"
                                       ContentStringFormat="{TemplateBinding ContentStringFormat}"
                                       SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"/>
+              <!-- No local Width/Height: StableScrollBarStyle owns the size
+                   (Size.ScrollBar.Track), and a local value would beat the style —
+                   which is exactly how this dialog ended up with a 10px track while
+                   every other surface used the token. -->
               <ScrollBar x:Name="PART_VerticalScrollBar"
                          Grid.Row="0"
                          Grid.Column="1"
-                         Width="10"
                          Maximum="{TemplateBinding ScrollableHeight}"
                          ViewportSize="{TemplateBinding ViewportHeight}"
                          Value="{Binding VerticalOffset, Mode=OneWay, RelativeSource={RelativeSource TemplatedParent}}"
@@ -49,7 +52,6 @@
               <ScrollBar x:Name="PART_HorizontalScrollBar"
                          Grid.Row="1"
                          Grid.Column="0"
-                         Height="10"
                          Maximum="{TemplateBinding ScrollableWidth}"
                          ViewportSize="{TemplateBinding ViewportWidth}"
                          Value="{Binding HorizontalOffset, Mode=OneWay, RelativeSource={RelativeSource TemplatedParent}}"

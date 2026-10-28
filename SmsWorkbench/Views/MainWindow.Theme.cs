@@ -39,7 +39,7 @@ namespace SmsWorkbench
                 // DWM caption colours are per-window native attributes, so they
                 // still need one call per window even though the brushes swapped.
                 WindowThemeService.ApplyToOpenWindows();
-                ThemeIconGeometry = _currentTheme == Wpf.Ui.Appearance.ApplicationTheme.Dark ? MoonIcon : SunIcon;
+                ThemeIconGeometry = _currentTheme == Wpf.Ui.Appearance.ApplicationTheme.Dark ? moonIcon : sunIcon;
                 Log("主题更新应用成功。");
             }
             catch (Exception ex)
@@ -56,6 +56,34 @@ namespace SmsWorkbench
             {
                 Log($"保存主题偏好失败: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// Apply the theme that was persisted for this install.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Called by <c>App.OnStartup</c> before the window is shown, with the
+        /// value read from <c>runtime/desktop_theme.txt</c>. It exists because the
+        /// only other source — <c>ApplicationThemeManager.GetAppTheme()</c> — is
+        /// documented to answer <c>Unknown</c> when it fails, and a caller that
+        /// treats "not Dark" as "Light" then silently resets a dark install on
+        /// every start. The preference file is the authority; WPF-UI is asked only
+        /// for the fallback in the constructor.
+        /// </para>
+        /// <para>
+        /// Idempotent: the constructor already applied one of the two palettes, and
+        /// <see cref="SwapColorScheme"/> replaces the merged dictionary in place.
+        /// </para>
+        /// </remarks>
+        public void ApplyStartupTheme(Wpf.Ui.Appearance.ApplicationTheme theme)
+        {
+            _currentTheme = theme == Wpf.Ui.Appearance.ApplicationTheme.Dark
+                ? Wpf.Ui.Appearance.ApplicationTheme.Dark
+                : Wpf.Ui.Appearance.ApplicationTheme.Light;
+            ApplyCustomThemeColors(_currentTheme);
+            ThemeIconGeometry = _currentTheme == Wpf.Ui.Appearance.ApplicationTheme.Dark ? moonIcon : sunIcon;
+            Log($"启动主题已应用: {_currentTheme}");
         }
 
         /// <summary>

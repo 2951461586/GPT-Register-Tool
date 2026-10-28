@@ -8,6 +8,14 @@
        window-level StaticResource would not be visible while this XAML parses. -->
   <UserControl.Resources>
     <local:StatusSeverityConverter x:Key="StatusSeverityConverter"/>
+    <local:PaymentQualificationSeverityConverter x:Key="QualificationSeverity"/>
+    <!-- The stock DataGrid ScrollViewer template fills the square between the
+         two scroll bars with SystemColors.ControlBrushKey — an opaque light grey
+         that ignores the palette. In a small window the horizontal bar appears and
+         that patch lands right where the vertical bar ends, so the slider looked
+         cut off at the bottom. Transparent lets the card surface show through;
+         the bars themselves keep their themed style. -->
+    <SolidColorBrush x:Key="{x:Static SystemColors.ControlBrushKey}" Color="Transparent"/>
     <local:NarrowWidthConverter x:Key="NarrowWidth"/>
     <local:RtDisplayConverter x:Key="RtDisplayConverter"/>
     <Style x:Key="AccountContextMenuStyle" TargetType="ContextMenu">
@@ -17,7 +25,7 @@
       <Setter Property="BorderThickness" Value="1"/>
       <Setter Property="Padding" Value="5"/>
       <Setter Property="FontFamily" Value="Segoe UI, Microsoft YaHei UI"/>
-      <Setter Property="FontSize" Value="13.5"/>
+      <Setter Property="FontSize" Value="{StaticResource Type.Data.Size}"/>
       <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
       <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
       <Setter Property="Template">
@@ -40,7 +48,7 @@
       <Setter Property="MinWidth" Value="232"/>
       <Setter Property="Height" Value="38"/>
       <Setter Property="FontFamily" Value="Segoe UI, Microsoft YaHei UI"/>
-      <Setter Property="FontSize" Value="13.5"/>
+      <Setter Property="FontSize" Value="{StaticResource Type.Data.Size}"/>
       <Setter Property="FontWeight" Value="Medium"/>
       <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
       <Setter Property="Cursor" Value="Hand"/>
@@ -261,7 +269,15 @@
                 <DataGridTemplateColumn Header="{loc:Tr Key='支付资格'}" Width="140" IsReadOnly="True" SortMemberPath="PaymentQualification" CanUserSort="True">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate>
-                      <Border Style="{StaticResource StatusBadge}" Tag="{Binding PaymentQualification, Converter={StaticResource StatusSeverityConverter}}" ToolTip="{Binding PaymentQualification}">
+                      <!-- Severity from the machine state, with the composed label as
+                           the fallback for rows written before the state existed. -->
+                      <Border Style="{StaticResource StatusBadge}" ToolTip="{Binding PaymentQualification}">
+                        <Border.Tag>
+                          <MultiBinding Converter="{StaticResource QualificationSeverity}">
+                            <Binding Path="PaymentQualificationState"/>
+                            <Binding Path="PaymentQualification"/>
+                          </MultiBinding>
+                        </Border.Tag>
                         <TextBlock Style="{StaticResource StatusBadgeText}" Text="{Binding PaymentQualification}" TextTrimming="CharacterEllipsis"/>
                       </Border>
                     </DataTemplate>

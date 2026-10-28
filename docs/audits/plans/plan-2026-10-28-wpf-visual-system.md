@@ -92,6 +92,7 @@ FlClash 的刻度以 40dp 行高为基准；WPF 控件高 28–40px，等比缩�
 | `Type.Display` | 28 / 34 | SemiBold | 空态数字、品牌 |
 | `Type.Title` | 20 / 26 | SemiBold | 窗口/区块标题 |
 | `Type.Subtitle` | 15 / 20 | SemiBold | 卡片标题、段落头 |
+| `Type.Data` | 14 / 19 | Normal | 账号表格的行数据与右键菜单（2026-10-28 追加：13 在 1220px 最小窗宽下偏小，15 又要牺牲行数） |
 | `Type.Body` | 13 / 18 | Normal | 正文、表格 |
 | `Type.Caption` | 11 / 15 | Medium | 分组标题、表头、徽章 |
 

@@ -99,7 +99,7 @@
                         Width="3"
                         Margin="0,8"
                         HorizontalAlignment="Left"
-                        CornerRadius="{StaticResource Corner.Xs}"
+                        CornerRadius="{StaticResource Corner.Hairline}"
                         Background="{DynamicResource Primary}"
                         Visibility="Collapsed"/>
                 <Grid Margin="{TemplateBinding Padding}">
@@ -274,7 +274,16 @@
                 <ColumnDefinition Width="Auto"/>
               </Grid.ColumnDefinitions>
               <Border Style="{StaticResource SidebarBrandLogoStyle}">
-                <Image Source="/Assets/app-icon.ico" Width="22" Height="22" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                <!-- The PNG (1024x1024) instead of app-icon.ico: an ICO's frame
+                     choice is unrelated to the 22px being drawn, and the default
+                     bilinear downscale of a 46x reduction is why this mark looked
+                     soft. HighQuality (Fant) plus an even 24px inside the 40px tile
+                     keeps the strokes crisp. -->
+                <Image Source="/Assets/black-kitten.png"
+                       Width="24" Height="24"
+                       Stretch="Uniform"
+                       RenderOptions.BitmapScalingMode="HighQuality"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
               </Border>
               <StackPanel Grid.Column="1" Style="{StaticResource SidebarBrandTextPanelStyle}" Margin="10,0,8,0">
                 <TextBlock x:Name="SidebarBrandTitle"

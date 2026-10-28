@@ -64,11 +64,29 @@ Loaded="TaskGrid_Loaded">
                     <TextBlock Text="{loc:Tr Key='清空'}" Margin="6,0,0,0" VerticalAlignment="Center"/>
                   </StackPanel>
                 </Button>
-                <TextBox Grid.Row="1" x:Name="LogTextBox" Text="{Binding LogPanel.Text, Mode=OneWay}" Background="{DynamicResource Surface.Inset}" Foreground="{DynamicResource LogText}" BorderThickness="0"
-                         FontFamily="Consolas" FontSize="{StaticResource Type.Body.Size}" IsReadOnly="True" AcceptsReturn="True"
+                <!-- Font.Mono, not "Consolas": every log line here is Chinese or
+                     mixed, and Consolas has no CJK glyphs, so WPF fell back
+                     per-character and mixed two sets of metrics inside one line.
+                     TextBox has no LineHeight (that property is TextBlock's), so the
+                     rhythm comes from FontSize + the 8px padding below. -->
+                <!-- Style, not MinHeight: MinHeight cannot cancel the implicit
+                     TextBox Height=32, it only raised it to 220 — so the box
+                     overflowed a shorter console row and its scroll bar was clipped
+                     at the bottom. MultilineTextBox restores Height=Auto. -->
+                <TextBox Grid.Row="1" x:Name="LogTextBox" Text="{Binding LogPanel.Text, Mode=OneWay}"
+                         Style="{StaticResource MultilineTextBox}"
+                         Background="{DynamicResource Surface.Inset}"
+                         Foreground="{DynamicResource LogText}"
+                         BorderThickness="0"
+                         FontFamily="{StaticResource Font.Mono}"
+                         FontSize="{StaticResource Type.Body.Size}"
+                         TextOptions.TextFormattingMode="Display"
+                         TextOptions.TextRenderingMode="ClearType"
+                         IsReadOnly="True"
                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                          TextWrapping="Wrap"
-                         VerticalAlignment="Stretch" HorizontalAlignment="Stretch" MinHeight="220" Padding="8,8,8,8"/>
+                         VerticalAlignment="Stretch" HorizontalAlignment="Stretch"
+                         Padding="8,8,8,12"/>
               </Grid>
             </Border>
           </Grid>

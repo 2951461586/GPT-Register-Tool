@@ -83,7 +83,10 @@
                     <Button.Template>
                       <ControlTemplate TargetType="Button">
                         <Border x:Name="ClearBg" Background="Transparent" CornerRadius="{StaticResource Corner.Sm}">
-                          <Path Width="10" Height="10" Stretch="Uniform" Data="{StaticResource Glyph.Close}"
+                          <!-- Tabler `x` spans 12 of 24 units, so the box is larger
+                               than the drawn mark: 13px box -> ~6.5px X, the same optical
+                               size the old 10px full-bleed cross had. -->
+                          <Path Width="13" Height="13" Stretch="Uniform" Data="{StaticResource Glyph.Close}"
                                 Stroke="{DynamicResource TextMuted}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
                                 HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
@@ -117,7 +120,7 @@
                 <Button Style="{StaticResource IconButton}" Margin="2,0" Command="{Binding Pool.ClearSelectionCommand}" ToolTip="{loc:Tr Key='清空选择'}">
                   <StackPanel Orientation="Horizontal">
                     <Path Style="{StaticResource ToolbarIconPath}"
-                          Data="{StaticResource Glyph.SelectAllFiltered}"/>
+                          Data="{StaticResource Glyph.ClearSelection}"/>
                     <TextBlock Text="{loc:Tr Key='清空'}" Margin="4,0,0,0" VerticalAlignment="Center" FontSize="{StaticResource Type.Body.Size}"/>
                   </StackPanel>
                 </Button>

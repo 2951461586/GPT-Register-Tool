@@ -8,40 +8,98 @@
     left two glyphs that mean the same thing free to drift apart. A view now
     references Glyph.<Name>; a new glyph gets a key here instead of a literal.
 
+    Source: https://github.com/tabler/tabler-icons v3.50.0 (MIT), outline set,
+    `icons/outline/<name>.svg`. Every entry is the upstream `d` attributes of
+    that file concatenated verbatim (nothing is redrawn by hand), and the
+    comment above each key names the icon it came from, so a reviewer can diff
+    an entry against the library instead of eyeballing it. The set is a single
+    family on purpose: the previous registry mixed Feather-style 24x24 outlines
+    with hand-drawn small-viewBox marks, which is why some rows in the sidebar
+    read heavier than others at the same StrokeThickness.
+
+    Two keys are deliberately NOT from the library: Glyph.WindowMinimize and
+    Glyph.WindowMaximize. They are OS window chrome, drawn on a 0..12 grid so a
+    1px stroke lands on the pixel grid at every DPI; the Tabler equivalents
+    (minus / square) carry a 2-unit stroke that renders chunky in a 46x32 title
+    bar button. Everything that is a *feature* icon comes from the library.
+
     PathGeometry (not Geometry) because Geometry has no content property:
     its mini-language is what the Figures converter accepts.
   -->
-  <PathGeometry x:Key="Glyph.BatchPay" Figures="M4 5h16 M4 12h16 M4 19h16 M8 3v4 M8 10v4 M8 17v4"/>
-  <PathGeometry x:Key="Glyph.CancelBatch" Figures="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z M15 9l-6 6 M9 9l6 6"/>
-  <PathGeometry x:Key="Glyph.ChangeEmail" Figures="M4 7h11m0 0-3-3m3 3-3 3M20 17H9m0 0 3-3m-3 3 3 3"/>
-  <PathGeometry x:Key="Glyph.Delete" Figures="M3 6h18 M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2 M10 11v6 M14 11v6"/>
-  <PathGeometry x:Key="Glyph.Export" Figures="M12 21V9 M16 13l-4-4-4 4 M4 3h16"/>
-  <PathGeometry x:Key="Glyph.ImportCpa" Figures="M12 3v12 M8 11l4 4 4-4 M20 21H4"/>
-  <PathGeometry x:Key="Glyph.ImportMail" Figures="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z M22 6l-10 7L2 6"/>
-  <PathGeometry x:Key="Glyph.Inbox" Figures="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z M22 6l-10 7L2 6 M2 18h20"/>
-  <PathGeometry x:Key="Glyph.PayLink" Figures="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71 M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
-  <PathGeometry x:Key="Glyph.PaymentQualification" Figures="M3 10h18 M3 6h18 M3 14h18 M3 18h18 M7 10v8 M17 10v8"/>
-  <PathGeometry x:Key="Glyph.Promotion" Figures="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7 M15 3h6v6 M10 14L21 3"/>
-  <PathGeometry x:Key="Glyph.ProxyPool" Figures="M4 6h16 M4 12h16 M4 18h16 M9 3v6 M15 9v6 M9 15v6"/>
-  <PathGeometry x:Key="Glyph.Refresh" Figures="M23 4v6h-6 M1 20v-6h6 M3.51 9a9 9 0 0 1 14.85-3.36L23 10 M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-  <PathGeometry x:Key="Glyph.Register" Figures="M16 16v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 8a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M22 16v-1 M19 13h6"/>
-  <PathGeometry x:Key="Glyph.Scan" Figures="M3 3v18h18 M7 14l4-4 4 4 5-5"/>
-  <PathGeometry x:Key="Glyph.Settings" Figures="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-  <PathGeometry x:Key="Glyph.Sms" Figures="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-  <PathGeometry x:Key="Glyph.Language" Figures="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z M2 12h20 M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-  <PathGeometry x:Key="Glyph.NextPage" Figures="M9 18l6-6-6-6"/>
-  <PathGeometry x:Key="Glyph.PrevPage" Figures="M15 18l-6-6 6-6"/>
-  <PathGeometry x:Key="Glyph.FirstPage" Figures="M11 19l-7-7 7-7 M19 19l-7-7 7-7"/>
-  <PathGeometry x:Key="Glyph.LastPage" Figures="M13 5l7 7-7 7 M5 5l7 7-7 7"/>
-  <PathGeometry x:Key="Glyph.Search" Figures="M11 3a8 8 0 1 0 0 16 8 8 0 0 0 0-16z M21 21l-4.35-4.35"/>
-  <PathGeometry x:Key="Glyph.Close" Figures="M 0,0 L 10,10 M 10,0 L 0,10"/>
+
+  <!-- tabler:credit-card-pay -->
+  <PathGeometry x:Key="Glyph.BatchPay" Figures="M12 19h-6a3 3 0 0 1 -3 -3v-8a3 3 0 0 1 3 -3h12a3 3 0 0 1 3 3v4.5 M3 10h18 M16 19h6 M19 16l3 3l-3 3 M7.005 15h.005 M11 15h2"/>
+  <!-- tabler:circle-x -->
+  <PathGeometry x:Key="Glyph.CancelBatch" Figures="M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0 M10 10l4 4m0 -4l-4 4"/>
+  <!-- tabler:arrows-exchange -->
+  <PathGeometry x:Key="Glyph.ChangeEmail" Figures="M7 10h14l-4 -4 M17 14h-14l4 4"/>
+  <!-- tabler:eraser -->
+  <PathGeometry x:Key="Glyph.ClearLog" Figures="M19 20h-10.5l-4.21 -4.3a1 1 0 0 1 0 -1.41l10 -10a1 1 0 0 1 1.41 0l5 5a1 1 0 0 1 0 1.41l-9.2 9.3 M18 13.3l-6.3 -6.3"/>
+  <!-- tabler:trash -->
+  <PathGeometry x:Key="Glyph.Delete" Figures="M4 7l16 0 M10 11l0 6 M14 11l0 6 M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12 M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3"/>
+  <!-- tabler:upload -->
+  <PathGeometry x:Key="Glyph.Export" Figures="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2 M7 9l5 -5l5 5 M12 4l0 12"/>
+  <!-- tabler:download -->
+  <PathGeometry x:Key="Glyph.ImportCpa" Figures="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2 M7 11l5 5l5 -5 M12 4l0 12"/>
+  <!-- tabler:mail-plus -->
+  <PathGeometry x:Key="Glyph.ImportMail" Figures="M12 19h-7a2 2 0 0 1 -2 -2v-10a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v5.5 M16 19h6 M19 16v6 M3 7l9 6l9 -6"/>
+  <!-- tabler:inbox -->
+  <PathGeometry x:Key="Glyph.Inbox" Figures="M4 6a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2l0 -12 M4 13h3l3 3h4l3 -3h3"/>
+  <!-- tabler:language -->
+  <PathGeometry x:Key="Glyph.Language" Figures="M9 6.371c0 4.418 -2.239 6.629 -5 6.629 M4 6.371h7 M5 9c0 2.144 2.252 3.908 6 4 M12 20l4 -9l4 9 M19.1 18h-6.2 M6.694 3l.793 .582"/>
+  <!-- tabler:moon -->
+  <PathGeometry x:Key="Glyph.Moon" Figures="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454l0 .008"/>
+  <!-- tabler:external-link -->
+  <PathGeometry x:Key="Glyph.OpenExternal" Figures="M12 6h-6a2 2 0 0 0 -2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-6 M11 13l9 -9 M15 4h5v5"/>
+  <!-- tabler:link -->
+  <PathGeometry x:Key="Glyph.PayLink" Figures="M9 15l6 -6 M11 6l.463 -.536a5 5 0 0 1 7.071 7.072l-.534 .464 M13 18l-.397 .534a5.068 5.068 0 0 1 -7.127 0a4.972 4.972 0 0 1 0 -7.071l.524 -.463"/>
+  <!-- tabler:credit-card -->
+  <PathGeometry x:Key="Glyph.PaymentQualification" Figures="M3 8a3 3 0 0 1 3 -3h12a3 3 0 0 1 3 3v8a3 3 0 0 1 -3 3h-12a3 3 0 0 1 -3 -3l0 -8 M3 10l18 0 M7 15l.01 0 M11 15l2 0"/>
+  <!-- tabler:heartbeat -->
+  <PathGeometry x:Key="Glyph.ProbeAlive" Figures="M19.5 13.572l-7.5 7.428l-2.896 -2.868m-6.117 -8.104a5 5 0 0 1 9.013 -3.022a5 5 0 1 1 7.5 6.572 M3 13h2l2 3l2 -6l1 3h3"/>
+  <!-- tabler:ticket -->
+  <PathGeometry x:Key="Glyph.Promotion" Figures="M15 5l0 2 M15 11l0 2 M15 17l0 2 M5 5h14a2 2 0 0 1 2 2v3a2 2 0 0 0 0 4v3a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-3a2 2 0 0 0 0 -4v-3a2 2 0 0 1 2 -2"/>
+  <!-- tabler:route -->
+  <PathGeometry x:Key="Glyph.ProxyPool" Figures="M3 19a2 2 0 1 0 4 0a2 2 0 0 0 -4 0 M19 7a2 2 0 1 0 0 -4a2 2 0 0 0 0 4 M11 19h5.5a3.5 3.5 0 0 0 0 -7h-8a3.5 3.5 0 0 1 0 -7h4.5"/>
+  <!-- tabler:refresh -->
+  <PathGeometry x:Key="Glyph.Refresh" Figures="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4 M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4"/>
+  <!-- tabler:user-plus -->
+  <PathGeometry x:Key="Glyph.Register" Figures="M8 7a4 4 0 1 0 8 0a4 4 0 0 0 -8 0 M16 19h6 M19 16v6 M6 21v-2a4 4 0 0 1 4 -4h4"/>
+  <!-- tabler:activity-heartbeat -->
+  <PathGeometry x:Key="Glyph.Scan" Figures="M3 12h4.5l1.5 -6l4 12l2 -9l1.5 3h4.5"/>
+  <!-- tabler:search -->
+  <PathGeometry x:Key="Glyph.Search" Figures="M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0 M21 21l-6 -6"/>
+  <!-- tabler:checks -->
+  <PathGeometry x:Key="Glyph.SelectAllFiltered" Figures="M7 12l5 5l10 -10 M2 12l5 5m5 -5l5 -5"/>
+  <!-- tabler:settings -->
+  <PathGeometry x:Key="Glyph.Settings" Figures="M10.325 4.317c.426 -1.756 2.924 -1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543 -.94 3.31 .826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c1.756 .426 1.756 2.924 0 3.35a1.724 1.724 0 0 0 -1.066 2.573c.94 1.543 -.826 3.31 -2.37 2.37a1.724 1.724 0 0 0 -2.572 1.065c-.426 1.756 -2.924 1.756 -3.35 0a1.724 1.724 0 0 0 -2.573 -1.066c-1.543 .94 -3.31 -.826 -2.37 -2.37a1.724 1.724 0 0 0 -1.065 -2.572c-1.756 -.426 -1.756 -2.924 0 -3.35a1.724 1.724 0 0 0 1.066 -2.573c-.94 -1.543 .826 -3.31 2.37 -2.37c1 .608 2.296 .07 2.572 -1.065 M9 12a3 3 0 1 0 6 0a3 3 0 0 0 -6 0"/>
+  <!-- tabler:message-2 -->
+  <PathGeometry x:Key="Glyph.Sms" Figures="M8 9h8 M8 13h6 M9 18h-3a3 3 0 0 1 -3 -3v-8a3 3 0 0 1 3 -3h12a3 3 0 0 1 3 3v8a3 3 0 0 1 -3 3h-3l-3 3l-3 -3"/>
+  <!-- tabler:sun -->
+  <PathGeometry x:Key="Glyph.Sun" Figures="M8 12a4 4 0 1 0 8 0a4 4 0 1 0 -8 0 M3 12h1m8 -9v1m8 8h1m-9 8v1m-6.4 -15.4l.7 .7m12.1 -.7l-.7 .7m0 11.4l.7 .7m-12.1 -.7l-.7 .7"/>
+  <!-- tabler:eye -->
+  <PathGeometry x:Key="Glyph.View" Figures="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0 M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6"/>
+  <!-- tabler:key -->
+  <PathGeometry x:Key="Glyph.Key" Figures="M16.555 3.843l3.602 3.602a2.877 2.877 0 0 1 0 4.069l-2.643 2.643a2.877 2.877 0 0 1 -4.069 0l-.301 -.301l-6.558 6.558a2 2 0 0 1 -1.239 .578l-.175 .008h-1.172a1 1 0 0 1 -.993 -.883l-.007 -.117v-1.172a2 2 0 0 1 .467 -1.284l.119 -.13l.414 -.414h2v-2h2v-2l2.144 -2.144l-.301 -.301a2.877 2.877 0 0 1 0 -4.069l2.643 -2.643a2.877 2.877 0 0 1 4.069 0 M15 9h.01"/>
+  <!-- tabler:folder -->
+  <PathGeometry x:Key="Glyph.Folder" Figures="M5 4h4l3 3h7a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-11a2 2 0 0 1 2 -2"/>
+  <!-- tabler:square-x -->
+  <!-- "Clear selection": a boxed cross, deliberately not the same glyph as
+       Glyph.SelectAllFiltered (checks). Both buttons sit side by side in the
+       filter bar and used to render identically. -->
+  <PathGeometry x:Key="Glyph.ClearSelection" Figures="M3 5a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14 M9 9l6 6m0 -6l-6 6"/>
+  <!-- tabler:x -->
+  <PathGeometry x:Key="Glyph.Close" Figures="M18 6l-12 12 M6 6l12 12"/>
+  <!-- tabler:chevron-right -->
+  <PathGeometry x:Key="Glyph.NextPage" Figures="M9 6l6 6l-6 6"/>
+  <!-- tabler:chevron-left -->
+  <PathGeometry x:Key="Glyph.PrevPage" Figures="M15 6l-6 6l6 6"/>
+  <!-- tabler:chevrons-left -->
+  <PathGeometry x:Key="Glyph.FirstPage" Figures="M11 7l-5 5l5 5 M17 7l-5 5l5 5"/>
+  <!-- tabler:chevrons-right -->
+  <PathGeometry x:Key="Glyph.LastPage" Figures="M7 7l5 5l-5 5 M13 7l5 5l-5 5"/>
+  <!-- Hand-drawn: OS window chrome, see the header for why these two are the
+       exception. -->
   <PathGeometry x:Key="Glyph.WindowMinimize" Figures="M 0,0.5 L 12,0.5"/>
   <PathGeometry x:Key="Glyph.WindowMaximize" Figures="M 1,3 L 1,1 L 9,1 L 9,3 M 1,1 L 1,9 L 9,9 L 9,1"/>
-  <PathGeometry x:Key="Glyph.SelectAllFiltered" Figures="M9 11l3 3l8-8 M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
-  <PathGeometry x:Key="Glyph.ProbeAlive" Figures="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8 M21 3v5h-5"/>
-  <PathGeometry x:Key="Glyph.ClearLog" Figures="M3.5 5H12.5 M6 5V3.5H10V5 M5 6.5V13H11V6.5 M7 8V11.5 M9 8V11.5"/>
-  <PathGeometry x:Key="Glyph.Folder" Figures="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-  <PathGeometry x:Key="Glyph.OpenExternal" Figures="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6 M15 3h6v6 M10 14L21 3"/>
-  <PathGeometry x:Key="Glyph.View" Figures="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/>
-  <PathGeometry x:Key="Glyph.Key" Figures="M15 7a5 5 0 1 0-4.9 6H13l2 2 2-2 2 2 3-3-4-4h-3z"/>
 </ResourceDictionary>

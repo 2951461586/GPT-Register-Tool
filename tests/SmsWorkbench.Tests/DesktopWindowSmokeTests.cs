@@ -232,7 +232,9 @@ public sealed class DesktopWindowSmokeTests
             new WindowSettingsDialogService(),
             new SettingsService(new TestApplicationPaths(rootDirectory)),
             logger,
-            new FileLauncher());
+            new FileLauncher(),
+            // Never hits the network; MainWindow kicks one check off on load.
+            new StubUpdateChecker());
         try
         {
             stage("show main window");
@@ -647,6 +649,7 @@ public sealed class DesktopWindowSmokeTests
             stage("complete");
         });
     }
+
 
     private static App CreateApplication()
     {

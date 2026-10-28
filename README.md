@@ -231,4 +231,7 @@ $env:REMAIL_API_KEY = "rk-your-key"
 
 本项目以 **MIT License** 发布，全文见 [LICENSE](LICENSE)。
 
+界面图标取自 [tabler-icons](https://github.com/tabler/tabler-icons) v3.50.0（MIT License），
+路径数据逐条照抄上游 outline SVG 并在 `SmsWorkbench/Themes/Glyphs.xaml` 标注来源图标名。
+
 请仅在获得授权并符合相关服务条款、地区法规及组织政策的场景中使用本项目。使用者需要自行承担第三方邮箱、代理、接码与支付服务的费用、账号安全和数据合规责任；示例配置不包含任何真实凭据。

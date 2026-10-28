@@ -6,8 +6,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Serilog;
 using Serilog.Events;
-using System.IO;
-using System.Text;
 
 namespace SmsWorkbench
 {
@@ -47,6 +45,13 @@ namespace SmsWorkbench
                     services.AddSingleton<IProxyPoolDialogService, ProxyPoolDialogService>();
                     services.AddSingleton<ISettingsService, SettingsService>();
                     services.AddSingleton<ISettingsDialogService, SettingsDialogService>();
+                    // Factory, not AddSingleton<IUpdateChecker, GitHubReleaseUpdateChecker>():
+                    // the concrete type takes optional feed/throttle parameters that
+                    // the container would have to leave to defaults, and spelling the
+                    // wiring out keeps the one default that matters (the GitHub feed)
+                    // visible at the composition root.
+                    services.AddSingleton<IUpdateChecker>(provider =>
+                        new GitHubReleaseUpdateChecker(provider.GetRequiredService<IApplicationPaths>()));
                     services.AddSingleton<MainWindow>();
                 })
                 .Build();

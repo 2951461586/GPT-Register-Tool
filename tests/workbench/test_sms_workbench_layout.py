@@ -150,3 +150,113 @@ def test_xaml_resource_references_resolve_from_the_xaml_files_own_folder():
                 f'(prefix it with "/" to anchor it at the project root)'
             )
     assert not failures, "\n".join(failures)
+
+
+#: A ``<ScrollBar>`` *element* with a numeric size is the bug this guards: a local
+#: value beats the style setter, so that one surface silently keeps an old size
+#: after the token changes. Measured 2026-10-28: ``SettingsWindow``'s custom
+#: ScrollViewer template pinned ``Width="10"`` / ``Height="10"`` on its two bars,
+#: so the settings dialog kept a 10px track (6px thumb) while the account grid,
+#: the log panel and the ComboBox drop-downs rendered the tokenised 12px one.
+_SCROLLBAR_ELEMENT = re.compile(r"<ScrollBar\b(?P<attrs>[^>]*)>", re.S)
+_SIZE_ATTRIBUTE = re.compile(r'\b(?P<name>Width|Height|MinWidth|MinHeight)="\s*[\d.]+"')
+
+
+def test_scrollbar_sizes_come_from_tokens_not_call_sites():
+    """Every ScrollBar takes its size from ``Size.ScrollBar.*`` via the style.
+
+    A template may position a scroll bar; it must not size it. Sizes live in
+    ``Themes/Tokens.xaml`` so one edit reaches the account grid, the log panel and
+    the settings dialog at once.
+    """
+    offenders = []
+    for path in sorted(PROJECT.rglob("*.xaml")):
+        if "obj" in path.parts or "bin" in path.parts:
+            continue
+        source = path.read_text(encoding="utf-8-sig")
+        for element in _SCROLLBAR_ELEMENT.finditer(source):
+            for attribute in _SIZE_ATTRIBUTE.finditer(element.group("attrs")):
+                offenders.append(f"{path.relative_to(PROJECT_ROOT)}: {attribute.group('name')}")
+    assert offenders == [], "a <ScrollBar> element pins its own size, which beats the style token: " + ", ".join(
+        offenders
+    )
+
+
+def test_one_implicit_scrollbar_style_covers_the_app():
+    """The app-wide ScrollBar style must be the one the tokens feed."""
+    controls = (PROJECT / "Themes" / "Controls.xaml").read_text(encoding="utf-8")
+    assert '<Style TargetType="{x:Type ScrollBar}" BasedOn="{StaticResource StableScrollBarStyle}"/>' in controls
+    tokens = (PROJECT / "Themes" / "Tokens.xaml").read_text(encoding="utf-8")
+    for key in ("Size.ScrollBar.Track", "Size.ScrollBar.Thumb", "Size.ScrollBar.ThumbMinLength"):
+        assert key in tokens, key
+
+
+#: The three panel-layout regressions reported on 2026-10-28. All three were
+#: geometry/rendering facts that the compiler cannot see, and all three had a
+#: single cause each, so the guard is a structural one rather than a screenshot.
+_LOG_BOX = re.compile(r"<TextBox\b[^>]*x:Name=\"LogTextBox\"(?P<attrs>[^>]*)>", re.S)
+
+
+def _xaml(relative: str) -> str:
+    return (PROJECT / relative).read_text(encoding="utf-8")
+
+
+def test_the_log_box_sizes_to_its_row():
+    """`MinHeight` cannot cancel the implicit TextBox Height=32 — it only raises it.
+
+    The log box was therefore a fixed 220px inside a shorter console row and its
+    scroll bar was clipped at the bottom. The fix is the ``MultilineTextBox`` style,
+    which re-applies Height=Auto (NaN).
+    """
+    console = _xaml("Views/WorkbenchConsole.xaml")
+    element = _LOG_BOX.search(console)
+    assert element is not None, "LogTextBox not found"
+    attrs = element.group("attrs")
+    assert 'Style="{StaticResource MultilineTextBox}"' in attrs, "LogTextBox must use MultilineTextBox"
+    assert "MinHeight=" not in attrs, "a MinHeight here only raises the pinned Height=32"
+    controls = _xaml("Themes/Controls.xaml")
+    assert 'x:Key="MultilineTextBox"' in controls
+    assert "<sys:Double>NaN</sys:Double>" in controls, "Height=Auto is spelled NaN in WPF"
+
+
+def test_the_account_grid_hides_the_stock_scrollbar_corner():
+    """That square is painted from SystemColors.ControlBrushKey, ignoring the palette."""
+    grid = _xaml("Views/AccountGridView.xaml")
+    assert 'x:Key="{x:Static SystemColors.ControlBrushKey}" Color="Transparent"' in grid
+
+
+def test_the_sidebar_logo_is_a_sharp_png():
+    """22px from an ICO with default bilinear filtering is what looked blurred."""
+    sidebar = _xaml("Views/Sidebar.xaml")
+    image = re.search(r"<Image\b[^>]*black-kitten\.png(?P<attrs>[^>]*)/>", sidebar, re.S)
+    assert image is not None, "the brand mark must come from the large PNG, not app-icon.ico"
+    attrs = image.group("attrs")
+    assert 'RenderOptions.BitmapScalingMode="HighQuality"' in attrs
+    assert 'Width="24"' in attrs and 'Height="24"' in attrs
+
+
+def test_scrollbar_metrics_are_pinned_for_framework_templates():
+    """Framework templates size their bars from SystemParameters, not from a style.
+
+    Measured 2026-10-28: the DataGrid's vertical bar was 17px (the stock value)
+    while the app's own bars are 12px, so inside the grid the themed thumb sat in a
+    wider stock track and the end of the bar looked cut off. Both metrics are now
+    declared at application scope.
+    """
+    controls = _xaml("Themes/Controls.xaml")
+    assert 'x:Key="{x:Static SystemParameters.VerticalScrollBarWidthKey}"' in controls
+    assert 'x:Key="{x:Static SystemParameters.HorizontalScrollBarHeightKey}"' in controls
+
+
+def test_tooltips_follow_the_palette():
+    """WPF paints tooltips from SystemColors.Info*, which no palette swap reaches.
+
+    Dark mode therefore showed near-white text inherited from the control on the
+    system cream box — unreadable.
+    """
+    controls = _xaml("Themes/Controls.xaml")
+    tooltip = re.search(r'<Style TargetType="ToolTip">(?P<body>.*?)</Style>', controls, re.S)
+    assert tooltip is not None, "no implicit ToolTip style"
+    body = tooltip.group("body")
+    assert '"{DynamicResource Surface.Card}"' in body
+    assert '"{DynamicResource TextMain}"' in body

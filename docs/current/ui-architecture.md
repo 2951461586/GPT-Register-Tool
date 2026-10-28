@@ -12,7 +12,7 @@
 | 应用壳 | `SmsWorkbench/App.xaml(.cs)`、`AppHost.cs`、`Themes/` | 依赖注入容器、启动窗口、全局资源字典合并（令牌 / 字形 / 光暗色板 / 控件样式） | 任何业务流程 |
 | 窗口与呈现 | `Views/`（`MainWindow.*` 分部类、`TitleBar`、`Sidebar`、`AccountFilterBar`、`AccountGridView`、`WorkbenchConsole`、`SettingsWindow`、`PaymentBatchWindow`、`ProxyPoolWindow`） | 布局、绑定、交互反馈、窗口级状态（主题、侧栏折叠、分页游标） | 命令语义、HTTP、持久化 |
 | 视图模型 | `ViewModels/`（`PoolViewModel`、`TaskListViewModel`、`LogViewModel`、`StatusBarViewModel`、`SettingsViewModel`、`PaymentBatchViewModel`、`ExportViewModel`、`RegisterViewModel`） | 可观察状态、展示格式化、输入校验 | 直接写配置或发 HTTP |
-| 服务 | `Services/`（`ConfigStore`、`SettingsService`、`PaymentBatchService`、`MailboxPoolFileStore`、`WindowThemeService`、`ApplicationPaths`、`FileLauncher`、`LegacyConfigMigration`、`BackendTaskCoordinator`、`TransientArtifactCleanup`） | 读写本地配置/池文件、组装后端任务、迁移旧配置、清理临时凭据 | 解析厂商协议 |
+| 服务 | `Services/`（`ConfigStore`、`SettingsService`、`PaymentBatchService`、`MailboxPoolFileStore`、`WindowThemeService`、`ApplicationPaths`、`FileLauncher`、`LegacyConfigMigration`、`BackendTaskCoordinator`、`TransientArtifactCleanup`、`AppVersion`、`VersionComparer`、`UpdateChecker`） | 读写本地配置/池文件、组装后端任务、迁移旧配置、清理临时凭据 | 解析厂商协议 |
 | 后端边界 | `Interop/`（`PythonBackendClient`、`DesktopReadClient`、`BackendResultInterpreter`、`PythonPathResolver`、`SmsProviderCatalogClient`） | 启动 Python 进程、只读快照、把 JSON 结果翻译成领域对象 | 业务规则 |
 | 模型 | `Models/` | 桌面侧契约（`AccountBatchProgress`、`DesktopThemePreference`、`PaymentBatchModels`、`SettingsModels`、`SmsProviderCatalog`…）**不含窗口**（窗口在 `Views/` 或 `Dialogs/`） | 与 `SmsWorkbench.Contracts` 重复的定义 |
 | 对话框 | `Dialogs/`（`DialogFactory`、`SettingsDialogService`、`PaymentBatchDialogService`、`ChangeEmailDialogService`、`AccountBatchProgressDialog`） | 代码构造的对话框：窗口外壳、表单行、动作行、异步信息/确认框 | 业务流程；对话框里不拼 CLI 参数 |
@@ -33,11 +33,11 @@ Wpf.Ui.xaml -> Themes/Tokens.xaml -> Themes/Glyphs.xaml -> Themes/Colors.Light.x
 | 文件 | 行数 | 内容 |
 | --- | ---: | --- |
 | `SmsWorkbench/App.xaml` | 23 | `ResourceDictionary.MergedDictionaries`，无内联样式 |
-| `SmsWorkbench/Themes/Tokens.xaml` | 87 | 与主题无关的刻度：`Space.*`（4px 网格）、`Radius.*`/`Corner.*`、`Type.*`、`Motion.*` |
-| `SmsWorkbench/Themes/Glyphs.xaml` | 47 | 32 个 `PathGeometry` 字形（`Glyph.*`）；同义几何复用同一个键 |
+| `SmsWorkbench/Themes/Tokens.xaml` | 122 | 与主题无关的刻度：`Space.*`（4px 网格）、`Radius.*`/`Corner.*`、`Type.*`、`Font.Mono`、`Size.ScrollBar.*`/`Size.Splitter.*`、`Motion.*` |
+| `SmsWorkbench/Themes/Glyphs.xaml` | 105 | 34 个 Tabler v3.50.0 字形（`Glyph.*`，MIT）+ 2 个手绘窗口 chrome 字形；同义几何复用同一个键，每个键上方注明来源图标名 |
 | `SmsWorkbench/Themes/Colors.Light.xaml` | 108 | 光色：5 级表面 `Surface.*`、3 级文字、状态徽章、`Divider`、ComboBox 弹层键 |
 | `SmsWorkbench/Themes/Colors.Dark.xaml` | 86 | 暗色，**与光色同一套键**（缺一个键就会在暗色下回落到 WPF 默认笔刷） |
-| `SmsWorkbench/Themes/Controls.xaml` | 794 | 隐式/具名控件样式、`ControlTemplate`、滚动条重模板、`DialogWindow`、`FocusRingStyle` |
+| `SmsWorkbench/Themes/Controls.xaml` | 911 | 隐式/具名控件样式、`ControlTemplate`、滚动条与分隔条重模板、`DialogWindow`、`FocusRingStyle` |
 
 三条规则，来自 WPF 的解析时机与类型而不是口味：
 
@@ -125,6 +125,93 @@ Wpf.Ui.xaml -> Themes/Tokens.xaml -> Themes/Glyphs.xaml -> Themes/Colors.Light.x
   `sensitive_policy.json` 的 `sensitive_options`，所以任务日志里的参数展示也是脱敏的。
   详见 `PROXY_GUIDE.md` 的 *Desktop transport*。
 
+## 3.1 标题栏的版本号与更新检查
+
+标题栏左侧是一个簇：`GRT` 标记 → 版本号（可点，等于「立即检查」）→
+有更新时出现的胶囊（点开下载页）。版本号是**唯一**说明当前构建的地方，
+所以它同时是触发检查的入口。
+
+| 关注点 | 归属 |
+| --- | --- |
+| 版本号来源 | `Directory.Build.props` 的 `Version`（默认 `0.0.0`），发布时由 `build_dotnet.ps1 -Version` 盖戳；运行时读 `AssemblyInformationalVersion` → `Services/AppVersion.cs` |
+| 昵称 | 未盖戳的构建显示 `dev` 而不是 `v0.0.0`：没人盖的号不是发布 |
+| 比较 | `Services/VersionComparer.cs`，按段数值比较（日历版本 `2026.10.28` 用 `System.Version` 会抛或错序） |
+| 数据源 | `Services/UpdateChecker.cs`，GitHub Releases API；仓库默认 `2951461586/GPT-Register-Tool`，可用 `GRT_UPDATE_REPO` 覆盖（fork 或测试夹具） |
+| 节流 | 6 小时，缓存写在 `runtime/update_check.json`；未认证 API 每小时 60 次，重启几次就能打光 |
+| 失败 | 一律返回结果对象，不抛异常（离线 / 限流 / JSON 畸形）；手动检查才弹提示，自动检查静默 |
+| 手动检查 | `MainWindow.Update.cs` 的 `CheckUpdatesCommand`（点版本号）；启动时 `Loaded` 跑一次自动检查 |
+| 打开下载页 | `OpenReleaseCommand` → 既有的 `OpenUrl`（只放行 http/https） |
+
+三条不变量：**自动检查不打扰**（无更新或失败都不弹 snackbar）、**缓存答案要标注是缓存**
+（`UpdateCheckResult.FromCache`，UI 才能区分"昨天是最新"和"现在是最新"）、
+**绝不自动下载或替换文件**——桌面端是"exe + Python 核心"的形态，更新只能是跳转下载页。
+
+图标来源：`Themes/Glyphs.xaml` 的 34 个功能图标取自
+[tabler-icons](https://github.com/tabler/tabler-icons) v3.50.0（MIT），逐条照抄上游
+`icons/outline/<name>.svg` 的 `d` 属性，键上方注明来源图标名，便于对库复核；
+窗口最小化/最大化两个字形仍是手绘（OS chrome，1px 描边对齐像素栅格）。
+
+### 启动时主题的唯一来源（2026-10-28）
+
+亮/暗由 `runtime/desktop_theme.txt` 决定：`App.OnStartup` 读它 →
+`ApplicationThemeManager.Apply(theme)` → `MainWindow.ApplyStartupTheme(theme)`
+（后者负责换色板字典与主题图标）。**不要**改用
+`ApplicationThemeManager.GetAppTheme()` 作为启动依据 —— WPF-UI 的文档写明它在失败时
+返回 `ApplicationTheme.Unknown`，而 Unknown 不等于 Dark，于是暗色安装每次启动都会被
+悄悄刷回浅色板（实测日志：`启动主题已应用: Light` 紧跟着 `启动主题已应用: Dark`）。
+构造函数的 `GetAppTheme()` 只作为测试/设计时的兜底。语言同理：`desktop_language.txt`
+在 `MainWindow` 构造之前由 `Loc.SetLanguage` 应用。
+
+### 三条面板布局约束（2026-10-28，均由界面实报倒查）
+
+- **多行文本必须用 `MultilineTextBox` 样式**。隐式 `TextBox` 样式为了单行输入把
+  `Height` 定成 32；本地 `MinHeight` **不能取消**样式里的 `Height`，只会把它抬高。
+  日志区因此长期是固定 220px，行高不足时底部（连同滑块末端）被裁掉。多行区域一律
+  套 `MultilineTextBox`（把 `Height` 重新设为 `NaN` = Auto），高度交给 Grid 行。
+- **`SystemColors.ControlBrushKey` 是 WPF 的漏网之鱼**。`DataGrid` 自带模板用它在两条
+  滚动条之间画一个不透明方块，且不理会主题色板；小窗口出现横向滚动条时，那块浅灰正好
+  落在纵向滑块的末端，看起来像"滑块底部被遮挡"。`AccountGridView` 在自己的资源里把它
+  覆盖为 `Transparent`。
+- **位图缩放到小尺寸必须显式指定采样模式**。侧栏 Logo 曾在 22px 上用默认双线性缩放
+  1024×1024 的 PNG（更早还是从 `app-icon.ico` 取帧，帧选择与 22px 无关）。现在用 PNG +
+  `RenderOptions.BitmapScalingMode="HighQuality"` + 40px 底板内取偶数 24px。
+
+这三条都有 XAML 结构守卫（`tests/workbench/test_sms_workbench_layout.py`），因为编译器
+看不到任何一条。
+
+### 徽章与圆角的两条硬约束（2026-10-28）
+
+- **徽章底色/字色是"低饱和"的**：`Badge*Bg` 为同色相淡洗、`Badge*Fg` 为同色相中等
+  饱和，五态靠**色相**区分而不是靠鲜艳度。改动后需验证徽章内文字对比度 ≥ 4.5:1
+  （当前最差 4.84:1，暗色 Danger）。
+- **`CornerRadius` 不得超过短边的一半**：WPF 不像 CSS 那样夹取半径，半径超过短边一半时
+  四角弧线互相重叠，矩形会被画成**透镜（两头细中间粗）**。因此 3px 细条（选中竖条、
+  分隔条手柄）用 `Corner.Hairline`(1.5)，8px 滚动条滑块用 `Corner.Xs`(4)；
+  `Corner.Full`(999) 只允许用在短边足够大的场景。
+
+### 徽章配色只读机器态（支付资格，2026-10-28）
+
+其余徽章仍把**展示文案**喂给 `StatusSeverityConverter` 做子串匹配，因此每加一个
+标签都要在两种语言里各加一条规则 —— 支付资格列就是这种做法的受害者：实测 2026-10-28，
+只有 `AT失效` / `检测失败` 能命中，`可用` / `无可用方式` / `无0元优惠` / `币种不符` /
+`出口被拒` / `未确定` 全部落回中性灰 `BadgeNeutralFg`(#57606A)。
+
+该列改为由 `payment_qualification_state`（`sms_tool/payment/qualification_states.py`
+的六态机器码）决定颜色，`PaymentQualificationSeverityConverter` 采用 MultiBinding：
+`state`（权威）+ `label`（仅用于 state 字段出现之前写入的旧行回退）。映射：
+
+| state | 徽章 |
+| --- | --- |
+| `eligible` | success（可用·方法） |
+| `ineligible` | warn（无可用方式 / 无0元优惠 / 币种不符 / 地区不符） |
+| `egress_denied` | warn（出口被拒：什么都没学到，换出口重试） |
+| `auth_invalid` | danger（AT失效） |
+| `probe_failed` | danger（检测失败 / 风控拦截） |
+| `unknown` | info（未确定） |
+
+这与 §4.1 的方向一致：判定读机器态，展示文案只是展示。守卫在
+`tests/SmsWorkbench.Tests/AccountGridPresentationTests.cs`。
+
 ## 4.1 状态判定与展示的分界
 
 账号行的文字是**展示**：`Loc.T` 在英文界面返回英文标签。因此：
@@ -197,8 +284,10 @@ Wpf.Ui.xaml -> Themes/Tokens.xaml -> Themes/Glyphs.xaml -> Themes/Colors.Light.x
    侧栏折叠路由、账号表列/上下文菜单、控制台布局）。
 2. **`MainWindow.Commands.cs` 等分部类没有单测**：它们能测的部分（参数规划）应
    沉进 `Services/`，界面只保留「取值 → 调用」。
-3. **`Themes/Controls.xaml` 的滚动条模板仍绑着具体像素**：换字号或换 DPI 时最容易
-   出问题的一段，改动需要同时看 `MainWindow.xaml` 里的 `ScrollViewer` 设置。
+3. ~~**`Themes/Controls.xaml` 的滚动条模板仍绑着具体像素**~~ —— 2026-10-28 已收口：
+   轨道 12 / 滑块 6（最小长度 18）与分隔条手柄改为 `Size.ScrollBar.*` /
+   `Size.Splitter.*` 令牌；滑块 hover 时变粗 1px 并用 `TextMuted`，拖拽时 `TextSub`，
+   分隔条手柄 `Opacity=0`，仅 hover/拖拽时显形（拖拽染 `Primary`）。
 
 ## 8. 事实归属
 

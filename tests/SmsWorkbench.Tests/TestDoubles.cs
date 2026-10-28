@@ -66,3 +66,29 @@ internal sealed class StubFileLauncher : IFileLauncher
 
     public void Open(string path) => OpenedPath = path;
 }
+
+/// <summary>
+/// Update checker that never touches the network.
+/// </summary>
+/// <remarks>
+/// <see cref="MainWindow"/> starts one check on load, so the smoke test needs a
+/// stand-in that returns immediately: the real checker would open a socket to
+/// GitHub from a unit test run and make the suite depend on the network.
+/// </remarks>
+internal sealed class StubUpdateChecker : IUpdateChecker
+{
+    public Func<CancellationToken, bool, Task<UpdateCheckResult>> Handler { get; set; } =
+        (_, _) => Task.FromResult(new UpdateCheckResult { LatestVersion = AppVersion.Current });
+
+    public int Calls { get; private set; }
+
+    public bool LastForce { get; private set; }
+
+    public Task<UpdateCheckResult> CheckAsync(CancellationToken cancellationToken, bool force = false)
+    {
+        Calls++;
+        LastForce = force;
+        cancellationToken.ThrowIfCancellationRequested();
+        return Handler(cancellationToken, force);
+    }
+}

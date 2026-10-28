@@ -72,6 +72,93 @@ namespace SmsWorkbench
         }
     }
 
+    /// <summary>
+    /// Badge severity for 支付资格, keyed off the machine state.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every other badge feeds translated display copy into
+    /// <see cref="StatusSeverityConverter"/> and matches substrings of it, so each
+    /// new label needs a rule per language. This column already has a stable
+    /// vocabulary (<c>sms_tool/payment/qualification_states.py</c>, persisted as
+    /// <c>payment_qualification_state</c>), so it keys off the state: a reworded
+    /// label cannot change the colour, and the English UI cannot silently fall back
+    /// to the neutral grey badge.
+    /// </para>
+    /// <para>
+    /// Measured 2026-10-28: only "AT失效" and "检测失败" matched the old rules, so
+    /// 可用 / 无可用方式 / 无0元优惠 / 币种不符 / 出口被拒 / 未确定 all rendered as
+    /// <c>BadgeNeutralFg</c> (#57606A) — the "everything is grey" report.
+    /// </para>
+    /// <para>
+    /// The label is read as the second value only for rows written before the state
+    /// field existed; those still get a colour instead of grey.
+    /// </para>
+    /// </remarks>
+    public sealed class PaymentQualificationSeverityConverter : IMultiValueConverter
+    {
+        public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
+            => SeverityFor(
+                values.Length > 0 ? values[0] as string : null,
+                values.Length > 1 ? values[1] as string : null);
+
+        public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)
+            => throw new NotSupportedException();
+
+        /// <summary>Pure mapping, so the colour rule is testable without WPF.</summary>
+        public static string SeverityFor(string? state, string? label)
+        {
+            switch ((state ?? "").Trim().ToLowerInvariant())
+            {
+                case "eligible": return "success";
+                // A verdict, not a failure: the method is genuinely unavailable here.
+                case "ineligible": return "warn";
+                case "auth_invalid": return "danger";
+                // Nothing was learned about the account; the fix is another exit.
+                case "egress_denied": return "warn";
+                case "probe_failed": return "danger";
+                case "unknown": return "info";
+                default: return LegacySeverity(label);
+            }
+        }
+
+        /// <summary>
+        /// Pre-state rows only: the same judgement over the composed label, in both
+        /// languages. Ordered so the negative verdicts beat the "可用" positive.
+        /// </summary>
+        private static string LegacySeverity(string? label)
+        {
+            string text = (label ?? "").Trim();
+            if (text.Length == 0)
+                return "neutral";
+
+            if (Contains(text, "无可用方式", "No payment method")
+                || Contains(text, "无0元优惠", "No zero-due offer")
+                || Contains(text, "币种不符", "Currency mismatch")
+                || Contains(text, "地区不符", "Region mismatch")
+                || Contains(text, "出口被拒", "Egress denied"))
+                return "warn";
+
+            if (Contains(text, "AT失效", "AT invalid")
+                || Contains(text, "检测失败", "Check failed")
+                || Contains(text, "风控拦截", "Risk blocked"))
+                return "danger";
+
+            if (Contains(text, "未确定", "Undetermined"))
+                return "info";
+
+            if (text.StartsWith("可用", StringComparison.Ordinal)
+                || text.StartsWith("Available", StringComparison.OrdinalIgnoreCase))
+                return "success";
+
+            return "neutral";
+        }
+
+        private static bool Contains(string text, string chinese, string english)
+            => text.Contains(chinese, StringComparison.Ordinal)
+               || text.Contains(english, StringComparison.OrdinalIgnoreCase);
+    }
+
     public static class PromotionStatusPresentation
     {
         // Machine promotion state emitted by the Python backend

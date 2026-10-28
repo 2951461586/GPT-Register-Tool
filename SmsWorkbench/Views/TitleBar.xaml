@@ -4,20 +4,108 @@
              xmlns:loc="clr-namespace:SmsWorkbench.Localization">
   <!-- Custom title bar with SVG icon buttons. The window handlers live in
        TitleBar.xaml.cs and resolve the host through Window.GetWindow(this),
-       so this control owns no state of its own. -->
+       so this control owns no state of its own.
+
+       Left cluster: the product mark, the running version, and — when the
+       update check found a newer release — a chip that opens the download page.
+       The version label doubles as the manual "check now" button, so the one
+       piece of text that says which build you are on is also the place you act
+       on it. Bindings walk the inherited MainWindow DataContext (see
+       MainWindow.Update.cs). -->
+  <UserControl.Resources>
+    <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
+    <!-- Flat chrome button: no fill at rest, Surface.Block on hover, the
+         standard focus ring for keyboard users. 22px tall so two of them fit
+         inside the 48px bar without competing with the 32px window buttons. -->
+    <Style x:Key="TitleChipButton" TargetType="Button">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Height" Value="22"/>
+      <Setter Property="Padding" Value="6,0"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRingStyle}"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Chip"
+                    Background="{TemplateBinding Background}"
+                    Padding="{TemplateBinding Padding}"
+                    CornerRadius="{StaticResource Corner.Sm}">
+              <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Chip" Property="Background" Value="{DynamicResource Surface.Block}"/>
+              </Trigger>
+              <Trigger Property="IsPressed" Value="True">
+                <Setter TargetName="Chip" Property="Opacity" Value="0.9"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <!-- The update chip is the only coloured thing in the chrome: it is a real
+         state ("you are behind"), not decoration. -->
+    <Style x:Key="UpdateChipButton" TargetType="Button" BasedOn="{StaticResource TitleChipButton}">
+      <Setter Property="Background" Value="{DynamicResource PrimarySoft}"/>
+      <Setter Property="ToolTip" Value="{Binding UpdateTooltip}"/>
+    </Style>
+  </UserControl.Resources>
+
       <Grid Height="48" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown" Background="Transparent">
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="*"/>
           <ColumnDefinition Width="Auto"/>
         </Grid.ColumnDefinitions>
 
-        <!-- App title (left side, optional) -->
-        <TextBlock Grid.Column="0"
-                   VerticalAlignment="Center"
-                   Margin="16,0,0,0"
-                   FontSize="{StaticResource Type.Body.Size}"
-                   Foreground="{DynamicResource TextMuted}"
-                   Text="GRT"/>
+        <!-- App mark + version + update chip (one left cluster) -->
+        <StackPanel Grid.Column="0"
+                    Orientation="Horizontal"
+                    VerticalAlignment="Center"
+                    Margin="16,0,0,0">
+          <TextBlock VerticalAlignment="Center"
+                     FontSize="{StaticResource Type.Body.Size}"
+                     Foreground="{DynamicResource TextMuted}"
+                     Text="GRT"/>
+
+          <Button x:Name="VersionButton"
+                  Style="{StaticResource TitleChipButton}"
+                  Command="{Binding CheckUpdatesCommand}"
+                  ToolTip="{Binding VersionTooltip}"
+                  ToolTipService.Placement="Bottom"
+                  WindowChrome.IsHitTestVisibleInChrome="True"
+                  Margin="2,0,0,0"
+                  AutomationProperties.Name="{Binding VersionText}">
+            <TextBlock Text="{Binding VersionText}"
+                       FontSize="{StaticResource Type.Caption.Size}"
+                       Foreground="{DynamicResource TextMuted}"
+                       VerticalAlignment="Center"/>
+          </Button>
+
+          <Button x:Name="UpdateButton"
+                  Style="{StaticResource UpdateChipButton}"
+                  Command="{Binding OpenReleaseCommand}"
+                  Visibility="{Binding UpdateAvailable, Converter={StaticResource BoolToVisibility}}"
+                  ToolTipService.Placement="Bottom"
+                  WindowChrome.IsHitTestVisibleInChrome="True"
+                  Margin="4,0,0,0">
+            <StackPanel Orientation="Horizontal">
+              <Path Width="11" Height="11" Stretch="Uniform"
+                    Data="{StaticResource Glyph.OpenExternal}"
+                    Stroke="{DynamicResource Primary}"
+                    StrokeThickness="1.6"
+                    StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                    VerticalAlignment="Center"/>
+              <TextBlock Text="{Binding UpdateText}"
+                         FontSize="{StaticResource Type.Caption.Size}"
+                         Foreground="{DynamicResource Primary}"
+                         Margin="4,0,0,0"
+                         VerticalAlignment="Center"/>
+            </StackPanel>
+          </Button>
+        </StackPanel>
 
         <!-- Window control buttons -->
         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Stretch">
@@ -89,7 +177,7 @@
             <Button.Template>
               <ControlTemplate TargetType="Button">
                 <Border x:Name="BtnBg" Background="Transparent">
-                  <Path x:Name="CloseIcon" Width="10" Height="10" Stretch="Uniform"
+                  <Path x:Name="CloseIcon" Width="16" Height="16" Stretch="Uniform"
                         Data="{StaticResource Glyph.Close}"
                         Stroke="{DynamicResource TextSub}"
                         StrokeThickness="1.5"

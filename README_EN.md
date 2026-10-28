@@ -165,6 +165,10 @@ contain credentials and must stay ignored. See
 [configuration ownership](docs/current/configuration.md).
 
 
+Desktop icons come from [tabler-icons](https://github.com/tabler/tabler-icons) v3.50.0
+(MIT License). The path data is copied verbatim from the upstream outline SVGs, and each
+key in `SmsWorkbench/Themes/Glyphs.xaml` names the icon it came from.
+
 ## License And Responsible Use
 
 Released under the **MIT License**; the full text is in [LICENSE](LICENSE).

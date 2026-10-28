@@ -139,7 +139,7 @@
                AcceptsReturn="True"
                TextWrapping="NoWrap"
                VerticalScrollBarVisibility="Auto"
-               FontFamily="Consolas"
+               FontFamily="{StaticResource Font.Mono}"
                FontSize="{StaticResource Type.Body.Size}"
                Text="{Binding PoolText, UpdateSourceTrigger=PropertyChanged}"/>
     </StackPanel>

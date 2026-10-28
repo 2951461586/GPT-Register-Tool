@@ -54,13 +54,14 @@ namespace SmsWorkbench
         private Stopwatch? sidebarAnimStopwatch;
 
         // Sun icon (light mode): circle + rays
-        private static readonly Geometry SunIcon = Geometry.Parse(
-            "M12 3V1m0 22v-2M4.22 4.22l1.42 1.42m12.73 12.73l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42 " +
-            "M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10z");
+        // Theme row icons come from the shared glyph registry (Themes/Glyphs.xaml)
+        // like every other icon. They used to be inline Feather-style paths here,
+        // which is exactly how a second copy of an icon family starts drifting away
+        // from the first; the registry now holds the whole set.
+        private Geometry sunIcon = Geometry.Empty;
 
         // Moon icon (dark mode): crescent
-        private static readonly Geometry MoonIcon = Geometry.Parse(
-            "M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z");
+        private Geometry moonIcon = Geometry.Empty;
 
         public bool SidebarCollapsed
         {
@@ -115,7 +116,8 @@ namespace SmsWorkbench
             ISettingsDialogService settingsDialogs,
             ISettingsService settingsService,
             Serilog.ILogger logger,
-            IFileLauncher fileLauncher)
+            IFileLauncher fileLauncher,
+            IUpdateChecker updateChecker)
         {
             this.backendClient = backendClient;
             this.backendTasks = backendTasks;
@@ -128,6 +130,7 @@ namespace SmsWorkbench
             this.settingsService = settingsService;
             this.logger = logger;
             this.fileLauncher = fileLauncher;
+            this.updateChecker = updateChecker;
             rootDir = paths.RootDirectory;
             configDir = paths.ConfigDirectory;
             Export = new ExportViewModel(Pool);
@@ -139,13 +142,27 @@ namespace SmsWorkbench
                 FindName("ConsoleControl")
                 ?? throw new InvalidOperationException("MainWindow.xaml is missing x:Name=\"ConsoleControl\""));
             snackbarService.SetSnackbarPresenter(SnackbarPresenter);
+            // Before DataContext: the header binds VersionText and the two update
+            // commands, and assigning them first lets those bindings take their
+            // first value without an extra notification round-trip.
+            InitializeUpdateCheck();
             DataContext = this;
             NavCommand = new RelayCommand<string>(OnNavigate);
 
-            // Initialize theme colors on startup
-            _currentTheme = Wpf.Ui.Appearance.ApplicationThemeManager.GetAppTheme();
-            ApplyCustomThemeColors(_currentTheme);
-            ThemeIconGeometry = _currentTheme == Wpf.Ui.Appearance.ApplicationTheme.Dark ? MoonIcon : SunIcon;
+            // Theme colours on startup. `GetAppTheme()` is only the fallback: its own
+            // documentation says it returns ApplicationTheme.Unknown "if something
+            // goes wrong", and Unknown is not Dark, so a failed read silently
+            // installed the light palette over a dark shell — the "theme resets on
+            // every start" report. App.OnStartup calls ApplyStartupTheme with the
+            // value it read from runtime/desktop_theme.txt before showing the
+            // window, and that call wins.
+            _currentTheme = Wpf.Ui.Appearance.ApplicationThemeManager.GetAppTheme()
+                == Wpf.Ui.Appearance.ApplicationTheme.Dark
+                ? Wpf.Ui.Appearance.ApplicationTheme.Dark
+                : Wpf.Ui.Appearance.ApplicationTheme.Light;
+            sunIcon = (Geometry)FindResource("Glyph.Sun");
+            moonIcon = (Geometry)FindResource("Glyph.Moon");
+            ApplyStartupTheme(_currentTheme);
 
             Pool.SelectionCleared += OnPoolSelectionCleared;
             Pool.PageRefreshed += (_, _) => StatusBar.Text = Pool.SummaryText;

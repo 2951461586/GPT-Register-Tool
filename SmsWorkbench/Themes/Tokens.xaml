@@ -39,7 +39,15 @@
   <CornerRadius x:Key="Corner.Md">8</CornerRadius>
   <CornerRadius x:Key="Corner.Lg">10</CornerRadius>
   <CornerRadius x:Key="Corner.Xl">12</CornerRadius>
+  <!-- Capsule radius, but only for shapes whose short side is at least
+       ``2 * radius``. WPF does not clamp a corner radius the way CSS does: when it
+       exceeds half the short side the corner arcs overlap and the rectangle is
+       drawn as a lens (thin at both ends, thick in the middle). Every rounded bar
+       thinner than 8px therefore uses ``Corner.Hairline``. -->
   <CornerRadius x:Key="Corner.Full">999</CornerRadius>
+  <!-- Half of a 3px mark (selection bars, splitter grip): the largest radius that
+       still draws a rectangle with rounded ends instead of a lens. -->
+  <CornerRadius x:Key="Corner.Hairline">1.5</CornerRadius>
   <!-- Field wells inside a rounded card keep the card's curve minus the inset. -->
   <CornerRadius x:Key="Corner.Inset">6</CornerRadius>
   <!-- Top-only variant for a dialog's title strip. The strip is flush with the
@@ -68,15 +76,42 @@
   <Thickness x:Key="Space.Bottom3">0,0,0,12</Thickness>
   <Thickness x:Key="Space.Row2">0,0,0,8</Thickness>
 
+  <!-- ═══ Scrollbar / splitter ═══════════════════════════════════════════
+       These numbers used to be literals inside the ControlTemplates, which is why
+       the scrollbars were the last place a size could only be changed by editing a
+       template (docs/current/ui-architecture.md §7). 12/6 gives an 8px pill inside
+       a 12px track, and the thumb thickens to 10px on hover so the control reacts
+       without spending a colour. -->
+  <sys:Double x:Key="Size.ScrollBar.Track">12</sys:Double>
+  <sys:Double x:Key="Size.ScrollBar.Thumb">6</sys:Double>
+  <sys:Double x:Key="Size.ScrollBar.ThumbMinLength">18</sys:Double>
+  <sys:Double x:Key="Size.Splitter.GripLength">32</sys:Double>
+  <sys:Double x:Key="Size.Splitter.GripThickness">3</sys:Double>
+
   <!-- ═══ Type ramp ═══════════════════════════════════════════════════════
-       Display 28 / Title 20 / Subtitle 15 / Body 13 / Caption 11.
+       Display 28 / Title 20 / Subtitle 15 / Data 14 / Body 13 / Caption 11.
        Views must not write a bare FontSize; a new size means a new token (and a
-       reason), not a literal at the call site. -->
+       reason), not a literal at the call site.
+
+       Data is the one step added after the first sweep: the account grid is a
+       dense read-across table, and at the 1220px minimum window width Body (13)
+       read small in every column while Subtitle (15) would have cost rows. 14 is
+       the size the grid renders at; the context menu that acts on those rows uses
+       it too, so a row and its menu agree. -->
   <sys:Double x:Key="Type.Display.Size">28</sys:Double>
   <sys:Double x:Key="Type.Title.Size">20</sys:Double>
   <sys:Double x:Key="Type.Subtitle.Size">15</sys:Double>
+  <sys:Double x:Key="Type.Data.Size">14</sys:Double>
   <sys:Double x:Key="Type.Body.Size">13</sys:Double>
   <sys:Double x:Key="Type.Caption.Size">11</sys:Double>
+
+  <!-- ═══ Fonts ═══════════════════════════════════════════════════════════
+       Monospace for logs and pasted proxy lists. The CJK fallback is load-bearing:
+       Consolas has no Chinese glyphs, so every log line WPF drew in it fell back
+       per-character to another family and mixed two sets of metrics mid-line.
+       Cascadia Mono is present on Windows 11/10 21H2+; Consolas and YaHei UI cover
+       the rest. -->
+  <FontFamily x:Key="Font.Mono">Cascadia Mono, Consolas, Microsoft YaHei UI</FontFamily>
 
   <!-- ═══ Motion ══════════════════════════════════════════════════════════
        WPF has no implicit transitions: a Setter trigger is instantaneous. These

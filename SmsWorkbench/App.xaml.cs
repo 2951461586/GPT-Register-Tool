@@ -2,7 +2,6 @@
 // PaymentBatchService.cs for why the project-wide switch stays `annotations`.
 #nullable enable
 
-using Wpf.Ui.Appearance;
 using Wpf.Ui.Controls;
 
 namespace SmsWorkbench
@@ -50,6 +49,14 @@ namespace SmsWorkbench
 
             var mainWindow = _host.Services.GetRequiredService<MainWindow>();
             MainWindow = mainWindow;
+            // The window's own palette follows the preference file, not whatever
+            // GetAppTheme() reports (it answers Unknown on failure, which used to
+            // fall back to the light palette on every start).
+            mainWindow.ApplyStartupTheme(startTheme);
+            _logger?.Information(
+                "启动偏好: theme={Theme} language={Language}",
+                startTheme,
+                SmsWorkbench.Localization.Loc.Instance.Language);
             mainWindow.Show();
             _ = mainWindow.RunStartupDoctorProbeAsync();
         }

@@ -24,6 +24,19 @@
 - **代理池窗口的 lane 隔离摘要** —— `admin.list_pool` 现在携带 `lane_isolation`
   （仅配置解析，无网络、无支付方法目录），桌面端不必再跑 `proxy_census.py` 才能看到。
 
+- **标题栏版本号与自动检查更新** —— 标题栏左侧新增 `GRT → 版本号 → 更新胶囊`：
+  版本号可点（立即检查），有上游新版本时出现胶囊（点开 GitHub release 页）。
+  版本号读 `AssemblyInformationalVersion`（`Directory.Build.props` 的 `Version`，
+  发布时由 `build_dotnet.ps1 -Version` 盖戳），未盖戳构建显示 `dev` 而非 `v0.0.0`。
+  检查走 GitHub Releases API，6 小时节流并缓存到 `runtime/update_check.json`
+  （未认证配额 60 次/小时）；失败一律返回结果对象，自动检查静默、手动检查才提示；
+  永不自动替换文件。仓库可用 `GRT_UPDATE_REPO` 覆盖。
+- **侧栏与全站图标换用 Tabler** —— `Themes/Glyphs.xaml` 的 34 个功能图标改为
+  [tabler-icons](https://github.com/tabler/tabler-icons) v3.50.0（MIT）outline 集的真实
+  路径数据，逐条照抄 `d` 属性并在键上方标注来源图标名。此前注册表混用 Feather 风格
+  24×24 轮廓与手绘小 viewBox 图形，同一 `StrokeThickness` 下粗细不一；现在整站同一字形
+  家族（窗口最小化/最大化两个 OS chrome 字形仍手绘，1px 描边对齐像素栅格）。
+
 ## 修复问题
 
 - **Phase 1 的验收标准当时并未成立** —— `plan-2026-10-28-wpf-visual-system` 写「任一视图
@@ -55,6 +68,54 @@
   `IDENTITY_READY` 被幂等空 handler 驱动的路径是合法的（时序测试就这么跑），
   为一个 stub 没建 context 而杀掉真实注册是更坏的交换。
 
+- **支付资格徽章不再恒为灰色** —— 该列原先把展示文案交给 `StatusSeverityConverter`
+  做子串匹配，实测只有 `AT失效` / `检测失败` 命中，`可用` / `无可用方式` / `无0元优惠` /
+  `币种不符` / `出口被拒` / `未确定` 全部落回中性灰 `#57606A`。现改由
+  `payment_qualification_state` 六态机器码决定（`eligible`→success、`ineligible`/
+  `egress_denied`→warn、`auth_invalid`/`probe_failed`→danger、`unknown`→info），
+  旧行用文案回退；顺带补上 `风控拦截` / `地区不符` 的英文词条（英文界面此前显示中文）。
+- **滚动条与分隔条主题化** —— 滚动条轨道/滑块尺寸进入令牌（`Size.ScrollBar.*`），
+  滑块 hover 变粗 1px 且加深，拖拽再加深；账户表与控制台之间的 `GridSplitter`
+  原先是一条不可见的 6px 条纹（只有光标提示），现改为 hover 才显形的 32×3 药丸手柄，
+  拖拽时染 `Primary`。
+- **日志区字体** —— 日志几乎全是中文而 `Consolas` 无中文字形，WPF 逐字回退导致一行内
+  混用两套字宽；改用 `Font.Mono`（`Cascadia Mono → Consolas → Microsoft YaHei UI`）
+  并开启 Display/ClearType。
+- **账号表格字号** —— 行数据 13→14（新令牌 `Type.Data`）、行高 40→44、列头 11→13、
+  列头高 32→36、行内徽章 11→13，另修两处逃过扫描的 `13.5` 字面量。
+
+- **主题/语言选择现在真的持久化** —— 之前偏好确实写进了
+  `runtime/desktop_theme.txt`，但启动时 `MainWindow` 用
+  `ApplicationThemeManager.GetAppTheme()` 决定色板，而该 API 文档写明失败时返回
+  `ApplicationTheme.Unknown`；Unknown 不等于 Dark，于是暗色安装**每次启动都被刷回浅色板**。
+  现在 `App.OnStartup` 读偏好 → `Apply(theme)` → `ApplyStartupTheme(theme)` 覆盖构造函数，
+  并在日志里记录 `启动偏好: theme=… language=…`（实测 Dark/EN 均可恢复）。
+- **滚动条/分隔条不再是透镜形** —— `CornerRadius=999` 在 8px 宽的滑块上会让 WPF 的四角
+  弧线重叠，画成"两头细中间粗"的透镜。滑块改 `Corner.Xs`(4)、3px 细条改新增的
+  `Corner.Hairline`(1.5)，并在 `Tokens.xaml` 写明"半径不得超过短边一半"这条约束。
+- **状态徽章降饱和** —— AT / RT / 2FA / 优惠状态 / 支付资格 / 状态六列的 `Badge*Bg/Fg`
+  统一下调饱和度（底色为同色相淡洗、字色为中等饱和），五态靠色相区分；徽章内文字对比度
+  最差 4.84:1，仍满足 ≥4.5。设置弹窗两个 `ScrollBar` 上写死的 `Width/Height="10"` 也已移除，
+  三处滚动条现在共用同一组令牌。
+
+- **日志区滑块底部被裁** —— 隐式 `TextBox` 样式为单行输入写死 `Height=32`，而日志框只设了
+  `MinHeight="220"`；`MinHeight` 不能取消样式高度、只会抬高它，所以日志框其实是**固定
+  220px**。控制台行被拖小时它就溢出，底部连同滑块一起被裁。新增 `MultilineTextBox` 样式
+  把 `Height` 复位为 `NaN`（=Auto），高度交给 Grid 行。
+- **邮箱列表滑块底部"被遮挡"** —— 两个叠加原因，都是实测出来的：
+  ① 框架模板用 `SystemParameters` 决定滚动条宽度，`DataGrid` 内部是 **17px**（WPF 默认），
+  而全站样式是 12px，8px 的圆角滑块被迫坐在更宽的轨道里，末端看起来像被切；
+  ② 两条滚动条之间的方块取自 `SystemColors.ControlBrushKey`（不透明、不理色板），小窗口
+  出现横向滚动条时正好压在纵向滑块末端。现在应用级把
+  `SystemParameters.VerticalScrollBarWidthKey` / `HorizontalScrollBarHeightKey` 钉为 12px
+  （实测 17 → 12），`AccountGridView` 再把角落键覆盖为 `Transparent`。
+- **暗色模式 Tooltip 不可读** —— WPF 的提示框底色来自 `SystemColors.Info*`（米色），色板
+  替换碰不到它，而文字颜色从被悬停控件继承 `TextMain`（暗色下 `#E6E6E6`）——浅灰字压米色底。
+  新增隐式 `ToolTip` 样式（`Surface.Card` 底 / `TextMain` 字 / `LineStrong` 边 / 圆角 + 轻投影）。
+- **侧栏 Logo 模糊** —— 原先是 22px 目标尺寸上缩放 `app-icon.ico`（ICO 帧选择与 22px 无关）
+  且用默认双线性采样；现改为 1024×1024 的 `black-kitten.png` +
+  `RenderOptions.BitmapScalingMode="HighQuality"` + 40px 底板内取偶数 24px。
+
 ## 工程收口
 
 - **令牌纪律延伸到代码构建的那一半 UI** —— 3,499 行（`Dialogs/` + 6 个 `MainWindow.*`
@@ -71,9 +132,8 @@
 
 ## 验证
 
-- `pytest tests/{workbench,proxy,config,registration}`：3457 passed，4 skipped，427 subtests。
-- `pytest tests/governance`：774 passed，5 skipped，252 subtests。
-- `dotnet build`（Debug / Release）0 warning / 0 error；`dotnet test` **622 passed**。
+- `pytest tests/workbench`：233 passed，2 skipped；`pytest tests/governance`：774 passed，5 skipped。
+- `dotnet build`（Debug / Release）0 warning / 0 error；`dotnet test` **676 passed**。
 - `SmsWorkbench/build_dotnet.ps1` 发布成功 → `dist/net10/SmsWorkbench.exe`。
 - `architecture_scan` / `function_length` / `import_layer` / `delayed_import` / `config_key` /
   `dotnet_warning` / `format_guard` / `line_ending_guard` / `docs_consistency` /

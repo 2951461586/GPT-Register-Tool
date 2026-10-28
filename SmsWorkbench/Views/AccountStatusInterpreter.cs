@@ -261,6 +261,8 @@ namespace SmsWorkbench
                 .Replace("无0元优惠", Loc.T("无0元优惠"))
                 .Replace("无可用方式", Loc.T("无可用方式"))
                 .Replace("币种不符", Loc.T("币种不符"))
+                .Replace("地区不符", Loc.T("地区不符"))
+                .Replace("风控拦截", Loc.T("风控拦截"))
                 .Replace("AT失效", Loc.T("AT失效"))
                 .Replace("出口被拒", Loc.T("出口被拒"))
                 .Replace("检测失败", Loc.T("检测失败"))
