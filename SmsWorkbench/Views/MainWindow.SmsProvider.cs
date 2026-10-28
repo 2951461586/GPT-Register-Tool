@@ -212,7 +212,7 @@ namespace SmsWorkbench
             var heading = new TextBlock
             {
                 Text = Loc.F("选择 {0} 号码", provider.Label),
-                FontSize = 20,
+                FontSize = (double)FindResource("Type.Title.Size"),
                 FontWeight = FontWeights.SemiBold,
                 Foreground = (Brush)FindResource("TextMain"),
                 Margin = new Thickness(0, 0, 0, 4)
@@ -220,7 +220,7 @@ namespace SmsWorkbench
             var balanceText = new TextBlock
             {
                 Text = Loc.F("当前平台余额：${0}", balance),
-                FontSize = 13,
+                FontSize = (double)FindResource("Type.Body.Size"),
                 Foreground = (Brush)FindResource("TextSub")
             };
             headingPanel.Children.Add(heading);
@@ -232,7 +232,7 @@ namespace SmsWorkbench
             serviceHost.Content = new TextBlock
             {
                 Text = "OpenAI (ChatGPT)",
-                FontSize = 14,
+                FontSize = (double)FindResource("Type.Subtitle.Size"),
                 FontWeight = FontWeights.SemiBold,
                 Foreground = (Brush)FindResource("TextMain"),
                 VerticalAlignment = VerticalAlignment.Center
@@ -273,7 +273,7 @@ namespace SmsWorkbench
             {
                 Text = "",
                 Foreground = (Brush)FindResource("TextMuted"),
-                FontSize = 12,
+                FontSize = (double)FindResource("Type.Body.Size"),
                 Margin = new Thickness(142, 8, 0, 0)
             };
             Grid.SetRow(inventory, 4);
@@ -439,7 +439,7 @@ namespace SmsWorkbench
             row.Children.Add(new TextBlock
             {
                 Text = label,
-                FontSize = 13,
+                FontSize = (double)FindResource("Type.Body.Size"),
                 Foreground = (Brush)FindResource("TextSub"),
                 VerticalAlignment = VerticalAlignment.Center
             });

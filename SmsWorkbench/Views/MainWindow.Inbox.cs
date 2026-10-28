@@ -38,7 +38,7 @@ namespace SmsWorkbench
             var header = new TextBlock
             {
                 Text = Loc.T("正在加载收件箱..."),
-                FontSize = 14,
+                FontSize = (double)FindResource("Type.Subtitle.Size"),
                 FontWeight = FontWeights.SemiBold,
                 Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
             };
@@ -263,7 +263,7 @@ namespace SmsWorkbench
             var title = new TextBlock
             {
                 Text = item.Subject,
-                FontSize = 16,
+                FontSize = (double)FindResource("Type.Subtitle.Size"),
                 FontWeight = FontWeights.SemiBold,
                 TextWrapping = TextWrapping.Wrap,
                 Foreground = (System.Windows.Media.Brush)FindResource("TextMain")

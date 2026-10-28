@@ -184,9 +184,13 @@
         <ColumnDefinition Width="16"/>
         <ColumnDefinition Width="*"/>
       </Grid.ColumnDefinitions>
-      <Border Background="{DynamicResource SidebarBg}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="6" Padding="12">
+      <!-- Category rail: a block inside the dialog, distinct from the content card
+           by one rung. Surface.Chrome is the window chrome (sidebar/title bar), not
+           a level for a control inside a dialog, and the stroke it used to carry is
+           the structural border Phase 1 removed elsewhere. -->
+      <Border Background="{DynamicResource Surface.Block}" CornerRadius="{StaticResource Corner.Lg}" Padding="12">
         <DockPanel>
-          <TextBlock DockPanel.Dock="Top" Text="{loc:Tr Key='设置分类'}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextMuted}" Margin="4,0,0,12"/>
+          <TextBlock DockPanel.Dock="Top" Text="{loc:Tr Key='设置分类'}" FontSize="{StaticResource Type.Body.Size}" FontWeight="SemiBold" Foreground="{DynamicResource TextMuted}" Margin="4,0,0,12"/>
           <ListBox ItemsSource="{Binding Categories}" SelectedItem="{Binding SelectedCategory}" Background="Transparent" BorderThickness="0">
             <ListBox.ItemTemplate>
               <DataTemplate>
@@ -211,7 +215,7 @@
                               Background="{TemplateBinding Background}"
                               BorderBrush="{TemplateBinding BorderBrush}"
                               BorderThickness="{TemplateBinding BorderThickness}"
-                              CornerRadius="4"
+                              CornerRadius="{StaticResource Corner.Sm}"
                               Padding="{TemplateBinding Padding}">
                         <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                           VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
@@ -237,7 +241,7 @@
         </DockPanel>
       </Border>
 
-      <Border Grid.Column="2" Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="6" Padding="22">
+      <Border Grid.Column="2" Background="{DynamicResource Surface.Card}" CornerRadius="{StaticResource Corner.Lg}" Padding="22">
         <ScrollViewer x:Name="SettingsContentScrollViewer"
                       Style="{StaticResource SettingsScrollViewerStyle}"
                       Padding="0,0,12,0"
@@ -249,7 +253,7 @@
             <ItemsControl.ItemTemplate>
               <DataTemplate>
                 <StackPanel Margin="0,0,0,18">
-                  <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                  <TextBlock Text="{Binding Title}" FontSize="{StaticResource Type.Subtitle.Size}" FontWeight="SemiBold" Margin="0,0,0,8"/>
                   <Border Height="1" Background="{DynamicResource Line}" Margin="0,0,0,12"/>
                   <ItemsControl ItemsSource="{Binding Fields}"
                                 ItemTemplate="{StaticResource SettingFieldTemplate}"

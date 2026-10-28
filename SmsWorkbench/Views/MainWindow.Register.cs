@@ -343,7 +343,7 @@ namespace SmsWorkbench
             var title = new TextBlock
             {
                 Text = Loc.F("测活 {0} 个账号。HTTP 200 表示 AT 有效，HTTP 401 表示 AT 已失效；可勾选 401 自动重登。", Math.Max(1, accountCount)),
-                FontSize = 14,
+                FontSize = (double)FindResource("Type.Subtitle.Size"),
                 TextWrapping = TextWrapping.Wrap,
                 Foreground = (Brush)FindResource("TextSub"),
                 Margin = new Thickness(0, 0, 0, 14)

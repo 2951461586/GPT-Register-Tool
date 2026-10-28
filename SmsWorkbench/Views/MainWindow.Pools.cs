@@ -448,6 +448,7 @@ namespace SmsWorkbench
             // Pure function of its arguments, but it was evaluated twice with
             // identical arguments (PayPalStatus member and PromotionStatus member).
             string paypalStatusDisplay = AccountStatusInterpreter.DisplayPayPalStatus(paypalStatus, paypalOk, paypalUrl, paymentMethod);
+            (string fingerprintProfile, string egressEndpoint, string egressCountry, bool identityBound) = ReadIdentity(data);
             var row = new PoolRow
             {
                 Id = "DB" + GetString(data, "id"),
@@ -461,6 +462,10 @@ namespace SmsWorkbench
                 SessionType = GetString(data, "session_type"),
                 PlanType = FirstNonEmpty(GetString(data, "plan_type"), GetString(data, "account_type")),
                 RegistrationCountry = GetString(data, "registration_country"),
+                FingerprintProfile = fingerprintProfile,
+                EgressEndpoint = egressEndpoint,
+                EgressCountry = egressCountry,
+                IdentityBound = identityBound,
                 Status = AccountStatusInterpreter.DisplayAccountStatus(status, paypalOk, accessState, GetString(data, "error"), paypalStatus, refreshStatus, importedStatus),
                 RegistrationStatus = FirstNonEmpty(GetString(data, "registration_status"), GetString(data, "registration_state")),
                 PayPalStatus = paypalStatusDisplay,
@@ -494,6 +499,35 @@ namespace SmsWorkbench
                 MailboxProvider = provider
             };
             return row;
+        }
+
+        /// <summary>
+        /// Unpack the backend's <c>identity</c> block (egress + fingerprint provenance).
+        /// <para>
+        /// Rendered as one <c>host:port</c> string rather than five fields: the
+        /// detail panel has a single row for it, and the scheme/port split is of no
+        /// use to an operator. <c>bound</c> distinguishes "no recorded exit" from an
+        /// exit whose host was empty, which the panel renders as an em dash.
+        /// </para>
+        /// </summary>
+        private static (string FingerprintProfile, string Egress, string Country, bool Bound) ReadIdentity(
+            Dictionary<string, object> data)
+        {
+            if (!BackendJson.TryGetMap(data, "identity", out Dictionary<string, object>? identity))
+                return ("", "", "", false);
+
+            string scheme = BackendJson.GetString(identity, "proxy_scheme");
+            string host = BackendJson.GetString(identity, "proxy_host");
+            string port = BackendJson.GetString(identity, "proxy_port");
+            bool hasPort = port.Length > 0 && port != "0";
+            string egress = host.Length == 0
+                ? ""
+                : (scheme.Length > 0 ? scheme + "://" : "") + host + (hasPort ? ":" + port : "");
+            return (
+                BackendJson.GetString(identity, "fingerprint_profile"),
+                egress,
+                BackendJson.GetString(identity, "proxy_country"),
+                ParseBoolean(BackendJson.GetString(identity, "bound")));
         }
 
         internal static string MailboxTypeDisplay(string provider, string email = "")

@@ -132,6 +132,17 @@ _SUPPORTED_PROXY_LANES = frozenset(
     }
 )
 
+#: Lanes that may be named in ``proxy.allow_lane_overlap`` -- exactly the lanes
+#: ``proxy.registry.acknowledged_lane_overlaps`` accepts, minus registration.
+#: Registration owns the exits the others are compared *against*, so "registration
+#: overlaps registration" is not a declaration, it is a no-op.
+#:
+#: Restated rather than imported: ``config`` sits below ``proxy`` in the layer
+#: manifest, and importing the registry here would invert that edge. The two sets
+#: are pinned against each other by ``tests/config/test_config_proxy_lanes_validation.py``
+#: so a lane added on one side cannot be silently ignored by the other.
+_OVERLAPPABLE_PROXY_LANES = frozenset({"mailbox", "payment", "payment_qualification"})
+
 
 def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -> None:
     """Validate static workflow inputs before network or subprocess execution."""
@@ -201,6 +212,7 @@ def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -
                         for key in ("pool", "proxies", "default"):
                             if key in value and not isinstance(value.get(key), (str, list, tuple)):
                                 errors.append(f"proxy.lanes.{lane}.{key} must be a proxy list")
+        _validate_allow_lane_overlap(proxy, errors)
     if "mailbox_proxy_pool" in config and not isinstance(config.get("mailbox_proxy_pool"), (str, list, tuple)):
         errors.append("mailbox_proxy_pool must be a proxy list")
 
@@ -495,6 +507,44 @@ def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -
         errors.append(f"unknown workflow: {workflow}")
     if errors:
         raise ConfigError("; ".join(errors))
+
+
+def _validate_allow_lane_overlap(proxy: Mapping[str, Any], errors: list[str]) -> None:
+    """Validate ``proxy.allow_lane_overlap`` (lane names only, no unknown names).
+
+    The key records that a lane may reuse a registration exit on purpose:
+    ``proxy.registry.lane_isolation`` turns such an overlap from a *conflict* into
+    a *declared decision*, so the census stops warning without the overlap itself
+    disappearing.
+
+    Validated with the same reasoning as ``proxy.lanes`` above: the reader ignores
+    names it does not recognise, so a typo would leave the operator believing an
+    overlap was acknowledged while the census kept flagging it — and that warning
+    is the only thing standing between a reused ChatGPT exit and a Stripe
+    preflight that cannot pass. Unknown names are refused here rather than
+    silently dropped.
+
+    Split out of ``validate_config`` to keep that function inside its
+    function-length budget (``scripts/function_length_ratchet.py``); the block is
+    self-contained and has one caller.
+    """
+    allowed_overlap = proxy.get("allow_lane_overlap")
+    if allowed_overlap is None:
+        return
+    if isinstance(allowed_overlap, Mapping):
+        declared = list(allowed_overlap)
+    elif isinstance(allowed_overlap, str):
+        declared = [item for item in re.split(r"[,;]", allowed_overlap)]
+    elif isinstance(allowed_overlap, (list, tuple)):
+        declared = list(allowed_overlap)
+    else:
+        errors.append("proxy.allow_lane_overlap must be an array of lane names")
+        declared = []
+    unknown_overlaps = sorted(
+        {str(name).strip().lower() for name in declared if str(name).strip().lower() not in _OVERLAPPABLE_PROXY_LANES}
+    )
+    if unknown_overlaps:
+        errors.append("unsupported proxy.allow_lane_overlap lane: " + ", ".join(unknown_overlaps))
 
 
 def _log_config_warnings(config: Mapping[str, Any]) -> None:

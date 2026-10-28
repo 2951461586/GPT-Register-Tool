@@ -129,3 +129,76 @@ def test_example_config_documents_and_validates_proxy_lanes():
         "payment",
     }
     validate_config(example)
+
+
+# ── proxy.allow_lane_overlap ─────────────────────────────────────────────────
+#
+# The key records "this lane may reuse a registration exit on purpose". It is
+# validated for the same reason the lane names are: the reader
+# (``proxy.registry.acknowledged_lane_overlaps``) ignores names it does not
+# recognise, so a typo would leave the operator believing an overlap was
+# acknowledged while the census kept flagging it. A missed flag here is not
+# cosmetic -- a shared exit that cannot reach Stripe is what
+# ``abort_reason=stripe_unreachable`` looks like from the outside.
+
+
+def _overlap_config(value: object) -> dict[str, object]:
+    config: dict[str, object] = dict(_BASE)
+    config["proxy"] = {"pool": ["http://u:p@reg.example:1"], "allow_lane_overlap": value}
+    return config
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        [],
+        ["mailbox"],
+        ["payment_qualification", "payment"],
+        "mailbox,payment_qualification",
+        {"payment_qualification": "same residential pool by design"},
+    ],
+)
+def test_allow_lane_overlap_accepts_every_documented_shape(value):
+    validate_config(_overlap_config(value))
+
+
+@pytest.mark.parametrize("value", [["protocol_registration_typo"], ["protocol_registration"], ["nonsense"]])
+def test_allow_lane_overlap_rejects_an_unknown_lane(value):
+    """Registration is not overlappable: it owns the exits the others compare against."""
+    with pytest.raises(ConfigError) as excinfo:
+        validate_config(_overlap_config(value))
+    assert "unsupported proxy.allow_lane_overlap lane" in str(excinfo.value)
+
+
+def test_allow_lane_overlap_must_be_a_lane_name_container():
+    with pytest.raises(ConfigError) as excinfo:
+        validate_config(_overlap_config(7))
+    assert "proxy.allow_lane_overlap must be an array of lane names" in str(excinfo.value)
+
+
+def test_overlappable_lanes_match_the_registry_reader():
+    """The schema's deny-list and the registry's allow-list must be one set.
+
+    They are declared twice on purpose (``config`` sits below ``proxy`` in the
+    layer manifest, so importing the registry from the schema would invert that
+    edge). This is the pin that keeps the duplication honest: a lane the reader
+    honours but the schema rejects -- or the other way round -- fails here.
+    """
+    from sms_tool.proxy import registry as proxy_registry
+    from sms_tool.config import schema
+
+    for lane in ("mailbox", "payment", "payment_qualification"):
+        assert lane in schema._OVERLAPPABLE_PROXY_LANES
+        assert lane in proxy_registry.acknowledged_lane_overlaps({"proxy": {"allow_lane_overlap": [lane]}})
+    assert "protocol_registration" not in schema._OVERLAPPABLE_PROXY_LANES
+    assert (
+        proxy_registry.acknowledged_lane_overlaps({"proxy": {"allow_lane_overlap": ["protocol_registration"]}})
+        == frozenset()
+    )
+
+
+def test_example_config_ships_an_empty_allow_lane_overlap():
+    """The template must not acknowledge an overlap it does not have."""
+    example = json.loads((ROOT / "config.example.json").read_text(encoding="utf-8"))
+    assert example["proxy"]["allow_lane_overlap"] == []
+    validate_config(example)

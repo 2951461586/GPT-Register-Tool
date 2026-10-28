@@ -45,7 +45,7 @@ namespace SmsWorkbench
             titlePanel.Children.Add(new TextBlock
             {
                 Text = row.Identifier,
-                FontSize = 18,
+                FontSize = (double)FindResource("Type.Title.Size"),
                 FontWeight = FontWeights.SemiBold,
                 Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
                 VerticalAlignment = VerticalAlignment.Center
@@ -55,14 +55,14 @@ namespace SmsWorkbench
                 titlePanel.Children.Add(new Border
                 {
                     Background = (System.Windows.Media.Brush)FindResource("PrimarySoft"),
-                    CornerRadius = new CornerRadius(4),
+                    CornerRadius = (CornerRadius)FindResource("Corner.Xs"),
                     Padding = new Thickness(8, 2, 8, 2),
                     Margin = new Thickness(12, 0, 0, 0),
                     VerticalAlignment = VerticalAlignment.Center,
                     Child = new TextBlock
                     {
                         Text = row.Status,
-                        FontSize = 11,
+                        FontSize = (double)FindResource("Type.Caption.Size"),
                         Foreground = (System.Windows.Media.Brush)FindResource("TextSub")
                     }
                 });
@@ -74,9 +74,8 @@ namespace SmsWorkbench
             var summaryGrid = new Grid { Margin = new Thickness(0, 0, 0, 12) };
             summaryGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             summaryGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            for (int i = 0; i < 4; i++) summaryGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-            var infoItems = new (string label, string value)[]
+            var infoItems = new List<(string label, string value)>
             {
                 (Loc.T("邮箱"), row.Identifier),
                 (Loc.T("类型"), row.AccountType ?? ""),
@@ -87,19 +86,35 @@ namespace SmsWorkbench
                 (Loc.T("创建时间"), row.CreatedAt ?? ""),
                 (Loc.T("更新时间"), row.CompletedAt ?? ""),
             };
+            // Provenance: the exit the account was registered through and the
+            // fingerprint it was bound to. Both were already persisted per account
+            // (identity_context) but never reached the panel, so two accounts looked
+            // identical here. An account registered without a proxy has no affinity,
+            // and the egress row is omitted rather than shown as an em dash -- that
+            // is a real state, not missing data.
+            if (row.IdentityBound)
+            {
+                if (!string.IsNullOrWhiteSpace(row.EgressEndpoint))
+                    infoItems.Add((Loc.T("出口"), row.EgressEndpoint));
+                if (!string.IsNullOrWhiteSpace(row.EgressCountry))
+                    infoItems.Add((Loc.T("出口国家"), row.EgressCountry));
+            }
+            if (!string.IsNullOrWhiteSpace(row.FingerprintProfile))
+                infoItems.Add((Loc.T("指纹"), row.FingerprintProfile));
+
+            int summaryRows = (infoItems.Count + 1) / 2;
+            for (int i = 0; i < summaryRows; i++) summaryGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
             int idx = 0;
-            for (int r = 0; r < 4; r++)
+            for (int r = 0; r < summaryRows; r++)
             {
-                for (int c = 0; c < 2 && idx < infoItems.Length; c++, idx++)
+                for (int c = 0; c < 2 && idx < infoItems.Count; c++, idx++)
                 {
                     var (label, value) = infoItems[idx];
                     var card = new Border
                     {
-                        Background = (System.Windows.Media.Brush)FindResource("PanelBg"),
-                        BorderBrush = (System.Windows.Media.Brush)FindResource("Line"),
-                        BorderThickness = new Thickness(1),
-                        CornerRadius = new CornerRadius(8),
+                        Background = (System.Windows.Media.Brush)FindResource("Surface.Card"),
+                        CornerRadius = (CornerRadius)FindResource("Corner.Xl"),
                         Padding = new Thickness(12, 8, 12, 8),
                         Margin = new Thickness(c == 0 ? 0 : 6, r == 0 ? 0 : 6, c == 1 ? 0 : 6, 0)
                     };
@@ -107,14 +122,14 @@ namespace SmsWorkbench
                     cardStack.Children.Add(new TextBlock
                     {
                         Text = label,
-                        FontSize = 11,
+                        FontSize = (double)FindResource("Type.Caption.Size"),
                         Foreground = (System.Windows.Media.Brush)FindResource("TextMuted"),
                         Margin = new Thickness(0, 0, 0, 4)
                     });
                     cardStack.Children.Add(new TextBlock
                     {
                         Text = string.IsNullOrWhiteSpace(value) ? "—" : value,
-                        FontSize = 13,
+                        FontSize = (double)FindResource("Type.Body.Size"),
                         FontWeight = FontWeights.Medium,
                         Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
                         TextTrimming = TextTrimming.CharacterEllipsis
@@ -133,10 +148,8 @@ namespace SmsWorkbench
             {
                 var urlPanel = new Border
                 {
-                    Background = (System.Windows.Media.Brush)FindResource("PanelBg"),
-                    BorderBrush = (System.Windows.Media.Brush)FindResource("Line"),
-                    BorderThickness = new Thickness(1),
-                    CornerRadius = new CornerRadius(8),
+                    Background = (System.Windows.Media.Brush)FindResource("Surface.Card"),
+                    CornerRadius = (CornerRadius)FindResource("Corner.Xl"),
                     Padding = new Thickness(12, 6, 12, 6),
                     Margin = new Thickness(0, 0, 0, 10)
                 };
@@ -144,7 +157,7 @@ namespace SmsWorkbench
                 urlStack.Children.Add(new TextBlock
                 {
                     Text = Loc.T("支付订阅链接"),
-                    FontSize = 11,
+                    FontSize = (double)FindResource("Type.Caption.Size"),
                     Foreground = (System.Windows.Media.Brush)FindResource("TextMuted"),
                     Margin = new Thickness(0, 0, 0, 4)
                 });
@@ -156,7 +169,7 @@ namespace SmsWorkbench
                     BorderThickness = new Thickness(0),
                     Background = Brushes.Transparent,
                     Foreground = (System.Windows.Media.Brush)FindResource("TextSub"),
-                    FontSize = 12,
+                    FontSize = (double)FindResource("Type.Body.Size"),
                     Padding = new Thickness(0)
                 });
                 urlPanel.Child = urlStack;
@@ -167,10 +180,8 @@ namespace SmsWorkbench
             // Raw detail text
             var detailBorder = new Border
             {
-                Background = (System.Windows.Media.Brush)FindResource("PanelBg"),
-                BorderBrush = (System.Windows.Media.Brush)FindResource("Line"),
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(8),
+                Background = (System.Windows.Media.Brush)FindResource("Surface.Inset"),
+                CornerRadius = (CornerRadius)FindResource("Corner.Xl"),
                 Margin = new Thickness(0, 0, 0, 10)
             };
             var text = new TextBox
@@ -180,7 +191,7 @@ namespace SmsWorkbench
                 AcceptsReturn = true,
                 TextWrapping = TextWrapping.NoWrap,
                 FontFamily = new System.Windows.Media.FontFamily("Consolas"),
-                FontSize = 12,
+                FontSize = (double)FindResource("Type.Body.Size"),
                 Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,

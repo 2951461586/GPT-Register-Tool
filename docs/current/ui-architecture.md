@@ -10,7 +10,7 @@
 | 层 | 位置 | 拥有 | 不拥有 |
 | --- | --- | --- | --- |
 | 应用壳 | `SmsWorkbench/App.xaml(.cs)`、`AppHost.cs`、`Themes/` | 依赖注入容器、启动窗口、全局资源字典合并（令牌 / 字形 / 光暗色板 / 控件样式） | 任何业务流程 |
-| 窗口与呈现 | `Views/`（`MainWindow.*` 分部类、`TitleBar`、`Sidebar`、`AccountFilterBar`、`AccountGridView`、`WorkbenchConsole`、`SettingsWindow`、`PaymentBatchWindow`） | 布局、绑定、交互反馈、窗口级状态（主题、侧栏折叠、分页游标） | 命令语义、HTTP、持久化 |
+| 窗口与呈现 | `Views/`（`MainWindow.*` 分部类、`TitleBar`、`Sidebar`、`AccountFilterBar`、`AccountGridView`、`WorkbenchConsole`、`SettingsWindow`、`PaymentBatchWindow`、`ProxyPoolWindow`） | 布局、绑定、交互反馈、窗口级状态（主题、侧栏折叠、分页游标） | 命令语义、HTTP、持久化 |
 | 视图模型 | `ViewModels/`（`PoolViewModel`、`TaskListViewModel`、`LogViewModel`、`StatusBarViewModel`、`SettingsViewModel`、`PaymentBatchViewModel`、`ExportViewModel`、`RegisterViewModel`） | 可观察状态、展示格式化、输入校验 | 直接写配置或发 HTTP |
 | 服务 | `Services/`（`ConfigStore`、`SettingsService`、`PaymentBatchService`、`MailboxPoolFileStore`、`WindowThemeService`、`ApplicationPaths`、`FileLauncher`、`LegacyConfigMigration`、`BackendTaskCoordinator`、`TransientArtifactCleanup`） | 读写本地配置/池文件、组装后端任务、迁移旧配置、清理临时凭据 | 解析厂商协议 |
 | 后端边界 | `Interop/`（`PythonBackendClient`、`DesktopReadClient`、`BackendResultInterpreter`、`PythonPathResolver`、`SmsProviderCatalogClient`） | 启动 Python 进程、只读快照、把 JSON 结果翻译成领域对象 | 业务规则 |
@@ -33,10 +33,10 @@ Wpf.Ui.xaml -> Themes/Tokens.xaml -> Themes/Glyphs.xaml -> Themes/Colors.Light.x
 | 文件 | 行数 | 内容 |
 | --- | ---: | --- |
 | `SmsWorkbench/App.xaml` | 23 | `ResourceDictionary.MergedDictionaries`，无内联样式 |
-| `SmsWorkbench/Themes/Tokens.xaml` | 81 | 与主题无关的刻度：`Space.*`（4px 网格）、`Radius.*`/`Corner.*`、`Type.*`、`Motion.*` |
+| `SmsWorkbench/Themes/Tokens.xaml` | 87 | 与主题无关的刻度：`Space.*`（4px 网格）、`Radius.*`/`Corner.*`、`Type.*`、`Motion.*` |
 | `SmsWorkbench/Themes/Glyphs.xaml` | 47 | 32 个 `PathGeometry` 字形（`Glyph.*`）；同义几何复用同一个键 |
 | `SmsWorkbench/Themes/Colors.Light.xaml` | 108 | 光色：5 级表面 `Surface.*`、3 级文字、状态徽章、`Divider`、ComboBox 弹层键 |
-| `SmsWorkbench/Themes/Colors.Dark.xaml` | 82 | 暗色，**与光色同一套键**（缺一个键就会在暗色下回落到 WPF 默认笔刷） |
+| `SmsWorkbench/Themes/Colors.Dark.xaml` | 86 | 暗色，**与光色同一套键**（缺一个键就会在暗色下回落到 WPF 默认笔刷） |
 | `SmsWorkbench/Themes/Controls.xaml` | 794 | 隐式/具名控件样式、`ControlTemplate`、滚动条重模板、`DialogWindow`、`FocusRingStyle` |
 
 三条规则，来自 WPF 的解析时机与类型而不是口味：

@@ -192,7 +192,6 @@ def main() -> None:
     edge_probe = edge_health if args.health_edge_probe else None
     connect_timeout = args.connect_timeout or 10.0
     sticky_ttl = args.sticky_session_ttl or 0.0
-    max_retries = 2
 
     health_tracker = ProxyHealthTracker(health_cfg)
 
@@ -205,7 +204,6 @@ def main() -> None:
         health_check_interval=health_interval,
         health_check_timeout=health_timeout,
         connect_timeout=connect_timeout,
-        max_retries=max_retries,
         health_tracker=health_tracker,
         sticky_session_ttl=sticky_ttl,
         edge_probe=edge_probe,

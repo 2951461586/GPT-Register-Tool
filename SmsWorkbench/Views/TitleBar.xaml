@@ -15,7 +15,7 @@
         <TextBlock Grid.Column="0"
                    VerticalAlignment="Center"
                    Margin="16,0,0,0"
-                   FontSize="12"
+                   FontSize="{StaticResource Type.Body.Size}"
                    Foreground="{DynamicResource TextMuted}"
                    Text="GRT"/>
 
@@ -100,7 +100,10 @@
                 <ControlTemplate.Triggers>
                   <Trigger Property="IsMouseOver" Value="True">
                     <Setter TargetName="BtnBg" Property="Background" Value="{DynamicResource Danger}"/>
-                    <Setter TargetName="CloseIcon" Property="Stroke" Value="#FFFFFF"/>
+                    <!-- OnPrimary, not a literal: the glyph sits on a filled action,
+                         which is exactly what that token names, and it re-resolves on a
+                         theme switch. The only remaining hard-coded colour in Views/. -->
+                    <Setter TargetName="CloseIcon" Property="Stroke" Value="{DynamicResource OnPrimary}"/>
                   </Trigger>
                 </ControlTemplate.Triggers>
               </ControlTemplate>

@@ -56,7 +56,7 @@ namespace SmsWorkbench
             countText = new TextBlock
             {
                 Text = $"0 / {Math.Max(0, total)}",
-                FontSize = 18,
+                FontSize = (double)owner.FindResource("Type.Title.Size"),
                 FontWeight = FontWeights.SemiBold,
                 Foreground = (Brush)owner.FindResource("TextMain"),
             };

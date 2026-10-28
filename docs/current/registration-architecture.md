@@ -216,6 +216,31 @@ An explicit credential failure remains quarantined until repaired. An empty
 inbox or HTTP 503 is not treated as invalid credentials. Reads check quarantine
 before contacting a provider.
 
+### Identity-context post-condition (`IDENTITY_READY`)
+
+`prepare_identity` is the only writer of `runtime.context`. From that stage on,
+`_run_stage` hands the `RegistrationContext` to every handler; before it — and on
+a post-create resume, which skips identity entirely — handlers receive the
+mutable `RegistrationRuntimeState` instead. Every stage body currently closes
+over `self` and ignores the parameter, so the distinction is unobservable until
+the first handler that actually reads its context.
+
+`identity_stages.verify_identity_context` (called by `_run_stage` after
+`IDENTITY_READY`) makes the drift visible. It logs, and does not abort:
+
+| Marker | Meaning |
+| --- | --- |
+| `registration_identity_context_missing` | the stage finished without creating a context; every later stage gets the mutable runtime |
+| `registration_identity_context_without_device_id` | the context carries no `device_id`, so the `oai-did` / header / cookie trio cannot be verified consistent |
+
+A hard failure was rejected on purpose: `IDENTITY_READY` is legitimately driven
+with a no-op handler by `tests/registration/test_registration_bootstrap_timing.py`
+to pin the timing rows, and killing a live registration because a stub did not
+build a context is a worse trade than a greppable operator-log line. The markers
+are stable so they can be grepped and alerted on; the delegate stays two lines in
+`handlers.py` and the body lives in `identity_stages.py`
+(`tests/registration/test_handlers_module_ownership.py` enforces both).
+
 ## Validation limits
 
 Offline regressions cover disabled/read-only email selection, bounded fill

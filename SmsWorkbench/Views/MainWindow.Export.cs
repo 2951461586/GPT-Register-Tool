@@ -209,7 +209,7 @@ namespace SmsWorkbench
             header.Children.Add(new TextBlock
             {
                 Text = Loc.T("选择导出格式"),
-                FontSize = 18,
+                FontSize = (double)FindResource("Type.Title.Size"),
                 FontWeight = FontWeights.SemiBold,
                 Foreground = (Brush)FindResource("TextMain")
             });
@@ -293,7 +293,7 @@ namespace SmsWorkbench
             header.Children.Add(new TextBlock
             {
                 Text = Loc.T("导出完成"),
-                FontSize = 18,
+                FontSize = (double)FindResource("Type.Title.Size"),
                 FontWeight = FontWeights.SemiBold,
                 Foreground = (Brush)FindResource("TextMain")
             });
@@ -313,7 +313,7 @@ namespace SmsWorkbench
                 Background = (Brush)FindResource("PanelBg"),
                 BorderBrush = (Brush)FindResource("Line"),
                 BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(10),
+                CornerRadius = (CornerRadius)FindResource("Corner.Lg"),
                 Padding = new Thickness(12),
                 Margin = new Thickness(0, 0, 0, 16)
             };
@@ -422,7 +422,7 @@ namespace SmsWorkbench
             header.Children.Add(new TextBlock
             {
                 Text = Loc.F("{0}完成", title),
-                FontSize = 18,
+                FontSize = (double)FindResource("Type.Title.Size"),
                 FontWeight = FontWeights.SemiBold,
                 Foreground = (Brush)FindResource("TextMain")
             });
@@ -497,7 +497,7 @@ namespace SmsWorkbench
             parent.Children.Add(new TextBlock
             {
                 Text = title + "（" + rows.Count + "）",
-                FontSize = 15,
+                FontSize = (double)FindResource("Type.Subtitle.Size"),
                 FontWeight = FontWeights.SemiBold,
                 Foreground = (Brush)FindResource("TextMain"),
                 Margin = new Thickness(0, parent.Children.Count == 0 ? 0 : 12, 0, 8)
@@ -508,7 +508,7 @@ namespace SmsWorkbench
                 Background = (Brush)FindResource("PanelBg"),
                 BorderBrush = (Brush)FindResource("Line"),
                 BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(10),
+                CornerRadius = (CornerRadius)FindResource("Corner.Lg"),
                 Padding = new Thickness(10),
                 Margin = new Thickness(0, 0, 0, 4)
             };

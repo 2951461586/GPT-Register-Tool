@@ -154,6 +154,7 @@
     "sms_tool/config/schema.py -> sms_tool.payment.flow": "deferred",
     "sms_tool/config/schema.py -> sms_tool.registration_drivers.base": "provider",
     "sms_tool/desktop_read.py -> decimal": "deferred",
+    "sms_tool/desktop_read.py -> sms_tool.accounts.account_identity": "deferred",
     "sms_tool/desktop_read.py -> sms_tool.proxy.admin": "deferred",
     "sms_tool/desktop_read.py -> sms_tool.storage": "deferred",
     "sms_tool/desktop_serve.py -> sms_tool.diagnostics": "deferred",
@@ -392,7 +393,7 @@
     "sms_tool/commands/proxy_admin.py": 4,
     "sms_tool/commands/registration.py": 9,
     "sms_tool/config/schema.py": 5,
-    "sms_tool/desktop_read.py": 4,
+    "sms_tool/desktop_read.py": 5,
     "sms_tool/desktop_serve.py": 1,
     "sms_tool/doctor.py": 5,
     "sms_tool/fingerprint_pool.py": 4,
@@ -481,10 +482,10 @@
   },
   "reasons": {
     "cycle": 8,
-    "deferred": 210,
+    "deferred": 211,
     "provider": 34,
     "startup": 104,
     "test-seam": 0
   },
-  "total": 466
+  "total": 467
 }

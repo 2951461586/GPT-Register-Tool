@@ -514,3 +514,102 @@ def test_session_state_cache_stays_bounded(tmp_path, monkeypatch):
     last = tmp_path / "session_bound_4.json"
     assert desktop_read._session_file_state({"json_path": str(last)})["has_access_token"] is True
     desktop_read._SESSION_STATE_CACHE.clear()
+
+
+# ── identity provenance ──────────────────────────────────────────────────────
+#
+# The detail panel now shows the exit an account was registered through and the
+# fingerprint it was bound to. Both were already in `identity_context`; the point
+# of these tests is that the *new* payload keeps them credential-free and never
+# becomes a pass-through for whatever the registration lane writes next.
+
+
+_IDENTITY_SESSION = {
+    "email": "identity@example.test",
+    "success": True,
+    "status": "registered",
+    "registration_country": "IN",
+    "identity_context": {
+        "version": 1,
+        "proxy_affinity": {
+            "pool_index": 8,
+            "scheme": "http",
+            "host": "proxysg.example.test",
+            "port": 2000,
+            "country": "IN",
+            "session_kind": "username_sid",
+            "session_id": "SID-MUST-NOT-LEAK",
+        },
+        "fingerprint_key": "firefox133",
+        "device_id": "device-fixture",
+        "auth_session_logging_id": "logging-fixture",
+        # A field added by a future lane: the payload must not relay it.
+        "unexpected_secret": "future-secret-value",
+    },
+}
+
+
+def _seed_identity(tmp_path: Path) -> dict:
+    session = json.loads(json.dumps(_IDENTITY_SESSION))
+    session_path = tmp_path / "session_identity.json"
+    session_path.write_text(json.dumps(session), encoding="utf-8")
+    assert upsert_account(session, json_path=str(session_path), runtime_config=_config(tmp_path))
+    return session
+
+
+def test_identity_payload_exposes_egress_and_fingerprint(tmp_path):
+    _seed_identity(tmp_path)
+
+    detail = read_account(email=_IDENTITY_SESSION["email"], runtime_config=_config(tmp_path))
+    identity = detail["identity"]
+
+    assert identity["fingerprint_profile"] == "firefox133"
+    assert identity["registration_country"] == "IN"
+    assert identity["proxy_scheme"] == "http"
+    assert identity["proxy_host"] == "proxysg.example.test"
+    assert identity["proxy_port"] == 2000
+    assert identity["proxy_country"] == "IN"
+    assert identity["proxy_pool_index"] == 8
+    assert identity["bound"] is True
+    assert identity["device_id"] == "device-fixture"
+    assert identity["auth_session_logging_id"] == "logging-fixture"
+
+
+def test_identity_payload_is_whitelisted_not_a_pass_through(tmp_path):
+    """A field the registration lane adds later must not reach the desktop by accident."""
+    _seed_identity(tmp_path)
+
+    detail = read_account(email=_IDENTITY_SESSION["email"], runtime_config=_config(tmp_path))
+    identity = detail["identity"]
+
+    assert set(identity) == {
+        "fingerprint_profile",
+        "device_id",
+        "auth_session_logging_id",
+        "registration_country",
+        "proxy_scheme",
+        "proxy_host",
+        "proxy_port",
+        "proxy_country",
+        "proxy_pool_index",
+        "bound",
+    }
+    # session_id names a live sticky session; the panel has no use for it.
+    rendered = json.dumps(identity)
+    assert "SID-MUST-NOT-LEAK" not in rendered
+    assert "future-secret-value" not in rendered
+
+
+def test_identity_payload_reports_unbound_without_a_recorded_exit(tmp_path):
+    """No proxy affinity is a real state, not missing data: `bound` says which."""
+    session = {"email": "direct@example.test", "success": True, "status": "registered"}
+    session_path = tmp_path / "session_direct.json"
+    session_path.write_text(json.dumps(session), encoding="utf-8")
+    assert upsert_account(session, json_path=str(session_path), runtime_config=_config(tmp_path))
+
+    detail = read_account(email="direct@example.test", runtime_config=_config(tmp_path))
+    identity = detail["identity"]
+
+    assert identity["bound"] is False
+    assert identity["proxy_host"] == ""
+    assert identity["proxy_pool_index"] == -1

@@ -12,6 +12,7 @@ import json
 import tempfile
 import threading
 from collections import OrderedDict
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -218,6 +219,7 @@ def _record_payload(record: dict[str, Any], *, include_session: bool = True) -> 
                 result["payment_qualification_state"] = qualification_state
             result["imported_status"] = _imported_status(session)
             result["paypal_amount"] = _paypal_amount(session)
+            result["identity"] = _identity_payload(record, session)
             if include_session:
                 public_session = _sanitized_session(raw_json, session)
                 if isinstance(public_session, dict):
@@ -231,7 +233,66 @@ def _record_payload(record: dict[str, Any], *, include_session: bool = True) -> 
                 result["session"] = {}
     elif include_session:
         result["session"] = {}
+    result.setdefault("identity", _identity_payload(record, None))
     return result
+
+
+def _identity_payload(record: Mapping[str, Any], session: Any) -> dict[str, Any]:
+    """Egress + fingerprint provenance for the desktop detail panel.
+
+    Every account already stores this -- ``identity_context`` in its session JSON
+    carries ``proxy_affinity`` (the exact exit it was registered through) and
+    ``fingerprint_key`` -- but the desktop could not show it, so the one property
+    that separates two accounts (a distinct device fingerprint on a distinct
+    exit) was invisible in the UI that manages them.
+
+    **Whitelisted, never a pass-through.** ``identity_context`` is written by the
+    registration lane, and a field added there must not reach the desktop by
+    accident. ``session_id`` is deliberately absent: it is not a credential, but
+    it names a live sticky session and a detail panel has no use for it.
+
+    Values only; no proxy URL is rebuilt here. ``resolve_account_proxy`` is the
+    owner of "configured entry -> dialable URL" and it needs the config, which a
+    read-only row does not carry.
+    """
+    merged: dict[str, Any] = dict(record)
+    if isinstance(session, Mapping):
+        for key in (
+            "identity_context",
+            "auth_fingerprint_profile",
+            "fingerprint_key",
+            "device_id",
+            "auth_session_logging_id",
+        ):
+            if session.get(key) is not None:
+                merged[key] = session[key]
+    try:
+        # Function-local: ``account_identity`` pulls the fingerprint pool and the
+        # proxy entry parser, and this is the desktop's hot start path.
+        from .accounts.account_identity import account_identity
+
+        identity = account_identity(merged)
+    except Exception:
+        identity = {}
+    affinity = identity.get("proxy_affinity")
+    affinity = affinity if isinstance(affinity, Mapping) else {}
+    return {
+        "fingerprint_profile": str(identity.get("fingerprint_key") or ""),
+        "device_id": str(identity.get("device_id") or ""),
+        "auth_session_logging_id": str(identity.get("auth_session_logging_id") or ""),
+        # The column wins over the affinity country: an account can be re-probed
+        # through another exit, and the column records where registration itself
+        # happened.
+        "registration_country": str(record.get("registration_country") or affinity.get("country") or ""),
+        "proxy_scheme": str(affinity.get("scheme") or ""),
+        "proxy_host": str(affinity.get("host") or ""),
+        "proxy_port": _as_int(affinity.get("port"), 0),
+        "proxy_country": str(affinity.get("country") or ""),
+        "proxy_pool_index": _as_int(affinity.get("pool_index"), -1),
+        # ``bound`` answers "is there a recorded exit at all?" without the caller
+        # having to interpret four empty strings.
+        "bound": bool(affinity),
+    }
 
 
 def _promotion_presentation(session: dict[str, Any]) -> tuple[str, str]:
@@ -405,11 +466,20 @@ def read_accounts(runtime_config: ConfigInput = None, *, include_session: bool =
     ]
 
 
-def _as_epoch(value: Any) -> int:
+def _as_int(value: Any, default: int = 0) -> int:
+    """Tolerant int cast for values crossing the read boundary.
+
+    ``pool_index`` uses -1 as "unset", so the default has to be a parameter
+    rather than the zero ``_as_epoch`` hard-codes.
+    """
     try:
-        return int(value or 0)
+        return int(value)
     except (TypeError, ValueError):
-        return 0
+        return default
+
+
+def _as_epoch(value: Any) -> int:
+    return _as_int(value or 0, 0)
 
 
 def read_accounts_delta(

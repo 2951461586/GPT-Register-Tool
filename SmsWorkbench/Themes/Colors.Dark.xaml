@@ -45,7 +45,11 @@
   <SolidColorBrush x:Key="SettingsSelectionBorder" Color="#3B82F6"/>
   <SolidColorBrush x:Key="SplitterBg" Color="#333333"/>
   <SolidColorBrush x:Key="StatusBg" Color="#181818"/>
-  <SolidColorBrush x:Key="LogBg" Color="#2B2B2B"/>
+  <!-- Log well: Surface.Inset, the same rung the light theme's #EAEAEA sits on.
+       It was #2B2B2B (= Surface.Block) here, one step shallower than light, so the
+       alias pointed at a different rung per theme; tests/workbench/
+       test_theme_palette_consistency.py now fails on that class of drift. -->
+  <SolidColorBrush x:Key="LogBg" Color="#333333"/>
   <SolidColorBrush x:Key="LogBorder" Color="#3A3A3A"/>
   <SolidColorBrush x:Key="LogText" Color="#E6E6E6"/>
 

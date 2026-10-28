@@ -427,7 +427,15 @@ def test_summary_facts_are_pinned():
         # `payment/qualification -> payment.wire` (country -> currency map) are
         # function-local, each with a reasoned entry in
         # `delayed_import_reasons.json`.
-        "delayed_cross_dir_edges": 297,
+        #
+        # 2026-10-28 (account identity provenance): 297 -> 298 (+1).
+        # `desktop_read -> accounts.account_identity` is function-local inside
+        # `_identity_payload`: the desktop read is the hot start path and
+        # `account_identity` pulls the fingerprint pool plus `phone_proxy`
+        # (requests). The reader is used so the `fingerprint_key`/`proxy_affinity`
+        # field names keep one owner instead of a second copy in the payload
+        # builder. Reasoned entry added to `delayed_import_reasons.json`.
+        "delayed_cross_dir_edges": 298,
         # Imports under `if TYPE_CHECKING:` never run, so they are not runtime
         # edges. 1 here since 2026-10-23: `payment/link_manager.py` declares its
         # `pay_link` re-exports type-only (the module is not a package, so the

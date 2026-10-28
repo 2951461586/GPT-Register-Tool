@@ -23,7 +23,7 @@
         <ColumnDefinition Width="*"/>
         <ColumnDefinition Width="Auto"/>
       </Grid.ColumnDefinitions>
-        <TextBlock Text="{loc:Tr Key='批量协议支付提取'}" FontSize="20" FontWeight="SemiBold" VerticalAlignment="Center"/>
+        <TextBlock Text="{loc:Tr Key='批量协议支付提取'}" FontSize="{StaticResource Type.Title.Size}" FontWeight="SemiBold" VerticalAlignment="Center"/>
       <TextBlock Grid.Column="1" Text="{Binding AccountSummary}" Foreground="{DynamicResource TextSub}" VerticalAlignment="Center"/>
     </Grid>
 
@@ -69,7 +69,7 @@
                  TextWrapping="NoWrap"
                  Height="62"
                  VerticalScrollBarVisibility="Auto"/>
-        <TextBlock Text="{Binding CheckoutRegionSummary, Converter={StaticResource PoolSummaryConverter}}" Foreground="{DynamicResource TextSub}" FontSize="11" Margin="0,3,0,0"/>
+        <TextBlock Text="{Binding CheckoutRegionSummary, Converter={StaticResource PoolSummaryConverter}}" Foreground="{DynamicResource TextSub}" FontSize="{StaticResource Type.Caption.Size}" Margin="0,3,0,0"/>
       </StackPanel>
       <StackPanel Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" Margin="7,0,0,10">
         <TextBlock Text="{loc:Tr Key='Approve / Update 代理池（host:port:user:password；支持 http/https/socks5/socks5h）'}" Style="{StaticResource FieldLabel}" TextWrapping="Wrap"/>
@@ -79,7 +79,7 @@
                  TextWrapping="NoWrap"
                  Height="62"
                  VerticalScrollBarVisibility="Auto"/>
-        <TextBlock Text="{Binding ApproveRegionSummary, Converter={StaticResource PoolSummaryConverter}}" Foreground="{DynamicResource TextSub}" FontSize="11" Margin="0,3,0,0"/>
+        <TextBlock Text="{Binding ApproveRegionSummary, Converter={StaticResource PoolSummaryConverter}}" Foreground="{DynamicResource TextSub}" FontSize="{StaticResource Type.Caption.Size}" Margin="0,3,0,0"/>
       </StackPanel>
 
       <StackPanel Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,0,7,10">
@@ -174,7 +174,7 @@
                           CommandParameter="{Binding}"
                           IsEnabled="{Binding HasCopyableResult}"
                           ToolTip="{Binding CopyToolTip}">
-                    <TextBlock Text="&#xE8C8;" FontFamily="Segoe MDL2 Assets" FontSize="13"/>
+                    <TextBlock Text="&#xE8C8;" FontFamily="Segoe MDL2 Assets" FontSize="{StaticResource Type.Body.Size}"/>
                   </Button>
                 </Grid>
               </DataTemplate>

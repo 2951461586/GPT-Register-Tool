@@ -1130,3 +1130,73 @@ class TestEdgeHealthProbe(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestHealthLoopOrdering(unittest.TestCase):
+    """The first health round must run before the first interval, not after it.
+
+    ``UpstreamProxy.healthy`` defaults to ``True`` and ``start()`` launches this
+    loop as a task.  With the loop's sleep first in the body, a pool that came up
+    holding dead exits served live traffic for a full ``health_check_interval``
+    (30s by default) on a "healthy" verdict nothing had measured.  The hysteresis
+    below is careful never to kill an upstream on one blip; it should not also
+    have to compensate for a first round that never ran.
+    """
+
+    def _server(self, interval=3600.0):
+        upstream = UpstreamProxy(host="1.1.1.1", port=1080, label="a", healthy=True)
+        server = Socks5Server(
+            "127.0.0.1",
+            0,
+            upstreams=[upstream],
+            stats_port=0,
+            health_check_interval=interval,
+        )
+        return server, upstream
+
+    def test_first_probe_happens_before_any_interval_elapses(self):
+        async def _run():
+            server, upstream = self._server(interval=3600.0)
+            server._check_upstream = AsyncMock(return_value=(False, "dead"))
+            task = asyncio.create_task(server._health_check_loop())
+            # The interval is an hour, so any probe seen now can only come from a
+            # round that ran ahead of the sleep.
+            for _ in range(10):
+                await asyncio.sleep(0)
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+            return server._check_upstream.await_count, upstream
+
+        probes, upstream = asyncio.run(_run())
+        self.assertGreaterEqual(probes, 1, "the loop slept before its first health round")
+        self.assertEqual(upstream.fail_count, 1)
+
+    def test_shutdown_while_sleeping_stops_the_loop(self):
+        """Cancellation now lands in the sleep arm, which catches it and breaks.
+
+        The loop therefore *returns* rather than propagating ``CancelledError`` --
+        the same contract the pre-move-``sleep`` version had, because its single
+        ``except asyncio.CancelledError`` wrapped the sleep too. The assertion is
+        on the loop stopping, not on an exception escaping.
+        """
+
+        async def _run():
+            server, _upstream = self._server(interval=3600.0)
+            server._check_upstream = AsyncMock(return_value=(True, ""))
+            task = asyncio.create_task(server._health_check_loop())
+            for _ in range(10):
+                await asyncio.sleep(0)
+            probes_before = server._check_upstream.await_count
+            task.cancel()
+            await asyncio.wait_for(task, timeout=5)
+            for _ in range(5):
+                await asyncio.sleep(0)
+            return task.done(), probes_before, server._check_upstream.await_count
+
+        done, probes_before, probes_after = asyncio.run(_run())
+        self.assertTrue(done, "the loop did not stop after cancellation")
+        self.assertGreaterEqual(probes_before, 1)
+        self.assertEqual(probes_after, probes_before, "the loop kept probing after cancellation")

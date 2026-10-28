@@ -32,7 +32,7 @@ from urllib.parse import urlsplit
 
 from .edge_probe import probe_openai_edge
 from .health import ProxyHealthTracker
-from .registry import resolve_registration
+from .registry import lane_isolation, resolve_registration
 from .routing import parse_lane_proxy_pool
 from .screening import (
     NETWORK_DATACENTER,
@@ -131,7 +131,15 @@ def _row(proxy: str, *, rank: int | None = None) -> dict[str, Any]:
 
 
 def list_pool(config: Mapping[str, Any] | None = None, *, lane: str = DEFAULT_LANE) -> dict[str, Any]:
-    """Describe the configured pool for the given lane (no network)."""
+    """Describe the configured pool for the given lane (no network).
+
+    Carries ``lane_isolation`` for the *whole configuration*, not just ``lane``:
+    the question "does this signup exit also carry the qualification probe?" is
+    about the config, and the desktop window that shows this list is the only
+    place an operator can see it without running ``scripts/proxy_census.py``.
+    It is cheap by construction (config resolution only, no payment-method
+    catalogue) because a list must not pay for a diagnostic.
+    """
     proxies = _entries(resolve_registration(config or {}, lane=lane))
     rank = _health_rank(config or {})
     rows = [_row(proxy, rank=rank.get(proxy)) for proxy in proxies]
@@ -142,7 +150,22 @@ def list_pool(config: Mapping[str, Any] | None = None, *, lane: str = DEFAULT_LA
         "measured": sum(1 for row in rows if row["measured"]),
         "proxies": rows,
         "asns": _asn_rows(rows),
+        "lane_isolation": _lane_isolation_payload(config),
     }
+
+
+def _lane_isolation_payload(config: Mapping[str, Any] | None) -> dict[str, Any]:
+    """``registry.lane_isolation`` as a JSON-safe payload (never raises).
+
+    A census failure must not take the pool listing with it: the list is the
+    operator's inventory, and one bad lane entry should degrade the *warning*
+    rather than empty the grid.
+    """
+    try:
+        return lane_isolation(config)
+    except Exception as exc:
+        logger.warning("lane isolation check failed: %s", type(exc).__name__)
+        return {"ok": True, "overlaps": {}, "conflicts": {}, "acknowledged": [], "error": type(exc).__name__}
 
 
 def _asn_rows(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:

@@ -86,6 +86,8 @@ namespace SmsWorkbench.Localization
             ["邮箱"] = "Email",
             ["账号类型"] = "Account type",
             ["注册区"] = "Region",
+            ["指纹"] = "Fingerprint",
+            ["出口"] = "Egress",
             ["类型"] = "Type",
             ["状态"] = "Status",
             ["优惠状态"] = "Promotion",
@@ -94,12 +96,18 @@ namespace SmsWorkbench.Localization
             ["详情"] = "Details",
             ["查看详情"] = "View details",
             ["查看"] = "View",
-            // ── Task panel ──────────────────────────────────────────────────
+            ["精简列：隐藏时间 / 注册区 / 优惠 / 支付资格"] = "Compact columns: hide time / region / promotion / payment eligibility",
+            // ── Proxy pool admin window ───────────────────────────────────────
+            ["出口隔离：OK（无 lane 复用注册出口）"] = "Lane isolation: OK (no lane reuses a registration exit)",
+            ["出口隔离：已声明复用 {0}"] = "Lane isolation: reuse declared for {0}",
+            ["出口隔离：冲突 — {0} 复用注册出口"] = "Lane isolation: conflict - {0} reuses a registration exit",
+            // ── Task panel ────────────────���─────────────────────────────────
             ["批次"] = "Batch",
             ["任务"] = "Task",
             ["参数"] = "Parameters",
             ["耗时(s)"] = "Duration (s)",
             ["完成时间"] = "Completed",
+            ["拖动调整控制台高度"] = "Drag to resize the console",
             // ── Filters (stable option values are keys, not this copy) ─────
             ["全部"] = "All",
             ["待处理"] = "Pending",

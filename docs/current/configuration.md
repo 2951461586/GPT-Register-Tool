@@ -228,6 +228,34 @@ cannot produce a config the backend then refuses to load.
 `proxy.lanes.payment.pools` names are the ones referenced by
 `protocol_payments.methods.<m>.stage_routes` / `stage_proxy_pools`.
 
+### Lane isolation is a checked invariant, not a convention
+
+`proxy/registry.census` compares lane pools by **full credential** (two sticky
+sessions on one `host:port` are two different exits) and reports
+`cross_lane_overlaps` + `lane_isolation_ok`. `proxy/registry.lane_isolation` is
+the narrow version of the same check: it covers `mailbox` and
+`payment_qualification`, needs no payment-method catalogue and no network, so
+the desktop ProxyPool window can run it as part of a plain listing.
+
+A shared exit is a real hazard, not a style issue: a qualification exit that is
+the ChatGPT signup pool cannot be trusted to reach `api.stripe.com`, and a
+reused mailbox exit ties the OTP lane's fate to the registration lane's.
+Because the reuse is sometimes a deliberate capacity decision, `proxy` accepts
+a declaration:
+
+```jsonc
+"proxy": {
+  "lanes": { "payment_qualification": ["http://same-pool.example:8080"] },
+  "allow_lane_overlap": ["payment_qualification"]
+}
+```
+
+An acknowledged lane stops counting as a **conflict** (`lane_isolation.ok`
+becomes true) but stays in `overlaps` and still prints in the census with a
+`[declared in proxy.allow_lane_overlap]` marker, so the decision remains
+reviewable. Unknown lane names are ignored; the key only accepts `mailbox`,
+`payment` and `payment_qualification`.
+
 The desktop **设置 → 基础网络** page edits the same canonical lanes directly:
 `protocol_registration`, `browser_registration`, `mailbox`, and
 `payment_qualification` each have their own box/pool field. A non-empty save

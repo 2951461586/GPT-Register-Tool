@@ -1,0 +1,174 @@
+<Window x:Class="SmsWorkbench.ProxyPoolWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:loc="clr-namespace:SmsWorkbench.Localization"
+        Title="{loc:Tr Key='代理池管理'}"
+        Width="1120" Height="780" MinWidth="900" MinHeight="600"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResize"
+        Background="{DynamicResource AppBg}"
+        FontFamily="Segoe UI, Microsoft YaHei UI"
+        FontSize="{StaticResource Type.Body.Size}"
+        TextOptions.TextFormattingMode="Display">
+  <!--
+    Read-only proxy-pool diagnostics: one grid, three backends (list /
+    connectivity test / residential screening).
+
+    This was a code-built window until 2026-10-28. Two things it lost by not being
+    XAML: the implicit DataGrid style in Themes/Controls.xaml never applied (so it
+    re-declared Background/BorderBrush/RowHeight by hand), and every FontSize was a
+    literal. The original argument for code ("a window opened from a menu and
+    disposed immediately gains nothing from a .xaml file") does not hold — WPF
+    builds InitializeComponent at compile time, and the implicit styles are exactly
+    what this window was missing.
+
+    Layering: AppBg page → Surface.Card panels → Surface.Inset log/well, no
+    structural strokes (plan-2026-10-28-wpf-visual-system Phase 1). Exactly one
+    primary action: loading the configured pool is what the window is for.
+  -->
+  <Window.Resources>
+    <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
+    <!--
+      Lane-isolation verdict. Hidden until a list payload carries one: a test or
+      screen result says nothing about lane isolation, and a permanently visible
+      blank line would read as "checked, all clear".
+    -->
+    <Style x:Key="LaneIsolationBanner" TargetType="TextBlock">
+      <Setter Property="TextWrapping" Value="Wrap"/>
+      <Setter Property="Margin" Value="0,0,0,10"/>
+      <Setter Property="Foreground" Value="{DynamicResource TextSub}"/>
+      <Style.Triggers>
+        <DataTrigger Binding="{Binding LaneIsolationWarn}" Value="True">
+          <Setter Property="Foreground" Value="{DynamicResource Danger}"/>
+        </DataTrigger>
+      </Style.Triggers>
+    </Style>
+    <!-- The field label style is NOT redeclared here: ``FieldLabel`` already
+         lives in Themes/Controls.xaml, and
+         ``test_theme_palette_consistency.py`` fails when an app-wide x:Key is
+         declared twice (whichever dictionary wins silently is the bug). -->
+    <Style x:Key="FieldBox" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+      <Setter Property="Height" Value="30"/>
+    </Style>
+  </Window.Resources>
+
+  <Grid Margin="20">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="*"/>
+      <RowDefinition Height="Auto"/>
+    </Grid.RowDefinitions>
+
+    <!-- Header -->
+    <Grid Grid.Row="0" Margin="0,0,0,12">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*"/>
+        <ColumnDefinition Width="Auto"/>
+      </Grid.ColumnDefinitions>
+      <TextBlock Text="{loc:Tr Key='代理池管理'}"
+                 FontSize="{StaticResource Type.Title.Size}"
+                 FontWeight="SemiBold"
+                 Foreground="{DynamicResource TextMain}"
+                 VerticalAlignment="Center"/>
+      <TextBlock Grid.Column="1"
+                 Text="{loc:Tr Key='只读诊断：不上号、不改配置'}"
+                 Foreground="{DynamicResource TextSub}"
+                 VerticalAlignment="Center"/>
+    </Grid>
+
+    <!-- Lane isolation (config-wide, from the backend's lane_isolation block) -->
+    <TextBlock Grid.Row="1"
+               Style="{StaticResource LaneIsolationBanner}"
+               Text="{Binding LaneIsolationText}"
+               Visibility="{Binding LaneIsolationVisible, Converter={StaticResource BoolToVisibility}}"/>
+
+    <!-- Controls: lane / target country / concurrency / quality floor -->
+    <Grid Grid.Row="2" Margin="0,0,0,10">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*"/>
+        <ColumnDefinition Width="*"/>
+        <ColumnDefinition Width="*"/>
+        <ColumnDefinition Width="*"/>
+        <ColumnDefinition Width="Auto"/>
+      </Grid.ColumnDefinitions>
+
+      <StackPanel Grid.Column="0" Margin="0,0,8,0">
+        <TextBlock Text="{loc:Tr Key='配置 lane'}" Style="{StaticResource FieldLabel}"/>        <TextBox Style="{StaticResource FieldBox}"
+                 Text="{Binding Lane, UpdateSourceTrigger=PropertyChanged}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="1" Margin="0,0,8,0">
+        <TextBlock Text="{loc:Tr Key='目标国家'}" Style="{StaticResource FieldLabel}"/>
+        <TextBox Style="{StaticResource FieldBox}"
+                 Text="{Binding Country, UpdateSourceTrigger=PropertyChanged}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2" Margin="0,0,8,0">
+        <TextBlock Text="{loc:Tr Key='并发'}" Style="{StaticResource FieldLabel}"/>
+        <TextBox Style="{StaticResource FieldBox}"
+                 Text="{Binding Workers, UpdateSourceTrigger=PropertyChanged}"/>
+      </StackPanel>
+      <StackPanel Grid.Column="3" Margin="0,0,8,0">
+        <TextBlock Text="{loc:Tr Key='质量下限'}" Style="{StaticResource FieldLabel}"/>
+        <TextBox Style="{StaticResource FieldBox}"
+                 Text="{Binding QualityMin, UpdateSourceTrigger=PropertyChanged}"/>
+      </StackPanel>
+
+      <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Bottom">
+        <Button Content="{loc:Tr Key='加载配置池'}"
+                Style="{StaticResource PrimaryButton}"
+                Command="{Binding LoadCommand}"
+                Height="30" Padding="12,0" Margin="0,0,8,0"/>
+        <Button Content="{loc:Tr Key='连通性测试'}"
+                Style="{StaticResource SecondaryButton}"
+                Command="{Binding TestCommand}"
+                Height="30" Padding="12,0" Margin="0,0,8,0"/>
+        <Button Content="{loc:Tr Key='住宅筛选'}"
+                Style="{StaticResource SecondaryButton}"
+                Command="{Binding ScreenCommand}"
+                Height="30" Padding="12,0"/>
+      </StackPanel>
+    </Grid>
+
+    <!-- Optional ad-hoc pool (one entry per line; blank means the configured lane) -->
+    <StackPanel Grid.Row="3" Margin="0,0,0,10">
+      <TextBlock Text="{loc:Tr Key='临时代理池（可选；每行一个，留空则用配置池）'}"
+                 Style="{StaticResource FieldLabel}"/>
+      <TextBox Height="64"
+               AcceptsReturn="True"
+               TextWrapping="NoWrap"
+               VerticalScrollBarVisibility="Auto"
+               FontFamily="Consolas"
+               FontSize="{StaticResource Type.Body.Size}"
+               Text="{Binding PoolText, UpdateSourceTrigger=PropertyChanged}"/>
+    </StackPanel>
+
+    <!-- Result grid: chrome comes from the implicit DataGrid style -->
+    <Border Grid.Row="4" Background="{DynamicResource Surface.Card}" CornerRadius="{StaticResource Corner.Xl}">
+      <DataGrid ItemsSource="{Binding Rows}"
+                AutoGenerateColumns="False"
+                IsReadOnly="True"
+                CanUserAddRows="False"
+                HeadersVisibility="Column">
+        <DataGrid.Columns>
+          <DataGridTextColumn Header="{loc:Tr Key='代理'}" Binding="{Binding Proxy}" Width="*"/>
+          <DataGridTextColumn Header="{loc:Tr Key='出口国家'}" Binding="{Binding Country}" Width="80"/>
+          <DataGridTextColumn Header="ASN" Binding="{Binding Asn}" Width="90"/>
+          <DataGridTextColumn Header="ISP" Binding="{Binding Isp}" Width="160"/>
+          <DataGridTextColumn Header="{loc:Tr Key='网络类型'}" Binding="{Binding NetworkType}" Width="100"/>
+          <DataGridTextColumn Header="{loc:Tr Key='边缘'}" Binding="{Binding Edge}" Width="90"/>
+          <DataGridTextColumn Header="{loc:Tr Key='延迟(ms)'}" Binding="{Binding Latency}" Width="90"/>
+          <DataGridTextColumn Header="{loc:Tr Key='质量分'}" Binding="{Binding Quality}" Width="80"/>
+          <DataGridTextColumn Header="{loc:Tr Key='结论'}" Binding="{Binding Result}" Width="140"/>
+        </DataGrid.Columns>
+      </DataGrid>
+    </Border>
+
+    <TextBlock Grid.Row="5"
+               Margin="0,10,0,0"
+               TextWrapping="Wrap"
+               Foreground="{DynamicResource TextSub}"
+               Text="{Binding StatusText}"/>
+  </Grid>
+</Window>

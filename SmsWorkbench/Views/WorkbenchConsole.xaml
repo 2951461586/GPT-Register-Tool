@@ -11,7 +11,10 @@
               <RowDefinition Height="5"/>
               <RowDefinition Height="*" MinHeight="200"/>
             </Grid.RowDefinitions>
-            <Border Grid.Row="0" Padding="0" CornerRadius="4" Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource Line}" BorderThickness="1">
+            <!-- Task table: a card on the page, separated by lightness only. The
+                 DataGrid's implicit style owns the rest of its chrome (row fills,
+                 grid lines), so this border is just the rounded card. -->
+            <Border Grid.Row="0" CornerRadius="{StaticResource Corner.Xl}" Background="{DynamicResource Surface.Card}">
               <DataGrid x:Name="TaskGrid"
                         ItemsSource="{Binding TaskList.Tasks}"
                         AutoGenerateColumns="False"
@@ -45,7 +48,9 @@ Loaded="TaskGrid_Loaded">
               </DataGrid>
             </Border>
             <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{DynamicResource SplitterBg}" ShowsPreview="True"/>
-            <Border Grid.Row="2" Background="{DynamicResource LogBg}" BorderBrush="{DynamicResource LogBorder}" BorderThickness="1" CornerRadius="4">
+            <!-- Log well: Surface.Inset, the deepest rung. No stroke: Phase 2 moved
+                 the console onto Surface.Inset and this outer border was left behind. -->
+            <Border Grid.Row="2" Background="{DynamicResource Surface.Inset}" CornerRadius="{StaticResource Corner.Xl}">
               <Grid>
                 <Grid.RowDefinitions>
                   <RowDefinition Height="Auto"/>
@@ -59,8 +64,8 @@ Loaded="TaskGrid_Loaded">
                     <TextBlock Text="{loc:Tr Key='清空'}" Margin="6,0,0,0" VerticalAlignment="Center"/>
                   </StackPanel>
                 </Button>
-                <TextBox Grid.Row="1" x:Name="LogTextBox" Text="{Binding LogPanel.Text, Mode=OneWay}" Background="{DynamicResource LogBg}" Foreground="{DynamicResource LogText}" BorderThickness="0"
-                         FontFamily="Consolas" FontSize="12" IsReadOnly="True" AcceptsReturn="True"
+                <TextBox Grid.Row="1" x:Name="LogTextBox" Text="{Binding LogPanel.Text, Mode=OneWay}" Background="{DynamicResource Surface.Inset}" Foreground="{DynamicResource LogText}" BorderThickness="0"
+                         FontFamily="Consolas" FontSize="{StaticResource Type.Body.Size}" IsReadOnly="True" AcceptsReturn="True"
                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                          TextWrapping="Wrap"
                          VerticalAlignment="Stretch" HorizontalAlignment="Stretch" MinHeight="220" Padding="8,8,8,8"/>

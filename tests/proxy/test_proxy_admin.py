@@ -67,7 +67,35 @@ def test_list_pool_uses_the_cached_geo_without_probing(monkeypatch):
 
 def test_list_pool_with_an_empty_lane_is_not_an_error():
     payload = admin.list_pool({"proxy": {"lanes": {}}}, lane="missing")
-    assert payload == {"ok": True, "lane": "missing", "count": 0, "measured": 0, "proxies": [], "asns": []}
+    assert payload == {
+        "ok": True,
+        "lane": "missing",
+        "count": 0,
+        "measured": 0,
+        "proxies": [],
+        "asns": [],
+        # The list carries the config-wide lane-isolation verdict so the desktop
+        # window can show it without a second command; an empty lane must not
+        # change that (see proxy/registry.lane_isolation).
+        "lane_isolation": {
+            "ok": True,
+            "overlaps": {"mailbox": [], "payment_qualification": []},
+            "conflicts": {},
+            "acknowledged": [],
+        },
+    }
+
+
+def test_list_pool_reports_a_lane_overlap_without_failing():
+    """A shared exit is a warning on the listing, never an error that empties it."""
+    cred = "http://u:p@shared.example:1"
+    config = {"proxy": {"pool": [cred], "lanes": {"payment_qualification": [cred]}}}
+    payload = admin.list_pool(config)
+
+    assert payload["ok"] is True
+    assert payload["count"] == 1
+    assert payload["lane_isolation"]["ok"] is False
+    assert payload["lane_isolation"]["conflicts"] == {"payment_qualification": ["shared.example:1"]}
 
 
 def test_resolve_pool_explicit_input_wins_over_the_lane():

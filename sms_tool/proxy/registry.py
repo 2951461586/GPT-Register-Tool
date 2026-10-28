@@ -34,6 +34,13 @@ lives in :mod:`proxy_routing` so both this facade and
       }
     }
 
+Declaring the same credential in two lanes is reported by :func:`lane_isolation`
+(and by ``census``).  When the reuse is deliberate, name the lane in
+``proxy.allow_lane_overlap`` so the conflict becomes a recorded decision rather
+than a warning somebody learns to ignore::
+
+    "proxy": {"allow_lane_overlap": ["payment_qualification"]}
+
 Rule 10/13: host-side only; proxy strings are parsed by ``proxy_entry`` through
 the existing resolvers, never re-implemented here.
 """
@@ -52,9 +59,11 @@ __all__ = [
     "PAYMENT",
     "QUALIFICATION",
     "REGISTRATION",
+    "acknowledged_lane_overlaps",
     "census",
     "endpoints_of",
     "format_census",
+    "lane_isolation",
     "resolve",
     "resolve_mailbox",
     "resolve_payment",
@@ -107,6 +116,69 @@ def _credentials(pool: Sequence[Any]) -> set[str]:
         if entry and entry.host and entry.port:
             out.add(proxy_to_url(entry))
     return out
+
+
+def acknowledged_lane_overlaps(config: Mapping[str, Any] | None) -> frozenset[str]:
+    """Lanes whose reuse of a registration exit the operator has declared intentional.
+
+    ``proxy.allow_lane_overlap`` (a list of lane names, or a mapping of lane ->
+    reason). Empty by default, because the overlap is a real hazard: a
+    qualification exit that is the ChatGPT signup pool cannot be probed for
+    Stripe reachability, and a reused mailbox exit ties the OTP lane's fate to
+    the registration lane's.
+
+    The key exists so the *decision* can be recorded instead of the check being
+    quietly disabled. An acknowledged overlap still shows up in the census (the
+    operator must still be able to see what was declared); it only stops being
+    counted as a conflict, so ``lane_isolation["ok"]`` can be true for a
+    configuration somebody deliberately chose.
+    """
+    proxy_section = config.get("proxy") if isinstance(config, Mapping) else None
+    if not isinstance(proxy_section, Mapping):
+        return frozenset()
+    declared = proxy_section.get("allow_lane_overlap")
+    if isinstance(declared, Mapping):
+        names = list(declared)
+    elif isinstance(declared, (list, tuple, set, frozenset)):
+        names = list(declared)
+    elif isinstance(declared, str):
+        names = [item for item in declared.replace(";", ",").split(",")]
+    else:
+        return frozenset()
+    valid = {MAILBOX, PAYMENT, QUALIFICATION}
+    return frozenset(str(name).strip().lower() for name in names if str(name).strip().lower() in valid)
+
+
+def lane_isolation(config: Mapping[str, Any] | None) -> dict[str, Any]:
+    """Registration-vs-mailbox/qualification overlap, conflicts separated from declared.
+
+    Narrow on purpose: this is the check the desktop ProxyPool window and
+    :func:`census` both need, and it must stay cheap enough to run inside a
+    "list" command (no payment-method catalogue, no network).
+
+    ``overlaps`` is everything actually shared; ``conflicts`` is the subset that
+    nobody declared in ``proxy.allow_lane_overlap``. Only ``conflicts`` decides
+    ``ok``, so an operator who has consciously pointed the qualification lane at
+    the signup pool stops seeing a warning -- but the overlap stays visible, so
+    the declaration can still be reviewed later.
+    """
+    registration = resolve_registration(config)
+    mailbox = resolve_mailbox(config)
+    qualification = resolve_payment_qualification(config)
+    registration_credentials = _credentials(registration)
+    shared = {
+        MAILBOX: endpoints_of(sorted(registration_credentials & _credentials(mailbox))),
+        QUALIFICATION: endpoints_of(sorted(registration_credentials & _credentials(qualification))),
+    }
+    acknowledged = acknowledged_lane_overlaps(config)
+    overlapping = {lane for lane, endpoints in shared.items() if endpoints}
+    conflicts = {lane: endpoints for lane, endpoints in shared.items() if endpoints and lane not in acknowledged}
+    return {
+        "ok": not conflicts,
+        "overlaps": shared,
+        "conflicts": conflicts,
+        "acknowledged": sorted(overlapping & acknowledged),
+    }
 
 
 def _canonical(config: Mapping[str, Any] | None, lane: str) -> list[str] | None:
@@ -306,18 +378,25 @@ def census(config: Mapping[str, Any] | None, *, methods: Sequence[str] = ("paypa
     # Lane isolation: payment/mailbox must not reuse a registration exit. Compare
     # full credentials (distinct sticky sessions on one endpoint are distinct
     # exits); report endpoints, never the credential itself.
+    isolation = lane_isolation(config)
     registration_creds = _credentials(registration)
-    mailbox_shared = registration_creds & _credentials(mailbox)
-    qualification_shared = registration_creds & _credentials(qualification)
     payment_shared: set[str] = set()
     for pool in payment_pools:
         payment_shared |= registration_creds & _credentials(pool)
-    report["cross_lane_overlaps"] = {
-        MAILBOX: endpoints_of(sorted(mailbox_shared)),
-        PAYMENT: endpoints_of(sorted(payment_shared)),
-        QUALIFICATION: endpoints_of(sorted(qualification_shared)),
+    acknowledged = acknowledged_lane_overlaps(config)
+    payment_overlap = endpoints_of(sorted(payment_shared))
+    overlaps = dict(isolation["overlaps"])
+    overlaps[PAYMENT] = payment_overlap
+    conflicts = dict(isolation["conflicts"])
+    if payment_overlap and PAYMENT not in acknowledged:
+        conflicts[PAYMENT] = payment_overlap
+    report["cross_lane_overlaps"] = {lane: overlaps.get(lane, []) for lane in (MAILBOX, PAYMENT, QUALIFICATION)}
+    report["lane_isolation"] = {
+        "ok": not conflicts,
+        "conflicts": {lane: overlaps[lane] for lane in conflicts},
+        "acknowledged": sorted({lane for lane, endpoints in overlaps.items() if endpoints} & acknowledged),
     }
-    report["lane_isolation_ok"] = not (mailbox_shared or payment_shared or qualification_shared)
+    report["lane_isolation_ok"] = not conflicts
     return report
 
 
@@ -338,11 +417,13 @@ def format_census(report: Mapping[str, Any]) -> str:
         for name, info in view.get("stages", {}).items():
             lines.append(f"    stage  {name:16s} count={info['count']:3d} endpoints={info['endpoints']}")
     overlaps = report.get("cross_lane_overlaps") or {}
+    acknowledged = set((report.get("lane_isolation") or {}).get("acknowledged") or ())
     if overlaps.get(MAILBOX) or overlaps.get(PAYMENT) or overlaps.get(QUALIFICATION):
         lines.append("CROSS-LANE OVERLAP (registration credential reused):")
         for lane in (MAILBOX, PAYMENT, QUALIFICATION):
             for endpoint in overlaps.get(lane, []):
-                lines.append(f"    {lane}: {endpoint}")
+                note = " [declared in proxy.allow_lane_overlap]" if lane in acknowledged else ""
+                lines.append(f"    {lane}: {endpoint}{note}")
     else:
         lines.append("lane isolation: OK (no credential shared with registration)")
     lines.append(

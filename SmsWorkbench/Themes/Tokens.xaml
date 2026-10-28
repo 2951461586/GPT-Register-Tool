@@ -42,6 +42,12 @@
   <CornerRadius x:Key="Corner.Full">999</CornerRadius>
   <!-- Field wells inside a rounded card keep the card's curve minus the inset. -->
   <CornerRadius x:Key="Corner.Inset">6</CornerRadius>
+  <!-- Top-only variant for a dialog's title strip. The strip is flush with the
+       window card (inset 0), so its radius must equal the card's Xl. It used to be a
+       literal `10,10,0,0` under a `Corner.Xl` card, which left a 2px card-coloured
+       sliver in each top corner. Outer radius = inner radius + inset, so the token
+       is derived from Xl rather than being a new step on the scale. -->
+  <CornerRadius x:Key="Corner.TopXl">12,12,0,0</CornerRadius>
 
   <!-- ═══ Spacing (4px grid) ══════════════════════════════════════════════ -->
   <sys:Double x:Key="Space.1">4</sys:Double>

@@ -182,3 +182,74 @@ def test_census_reports_registration_mailbox_overlap():
     report = pr.census(config, methods=())
     assert report["lane_isolation_ok"] is False
     assert report["cross_lane_overlaps"][pr.MAILBOX] == ["shared.example:1"]
+
+
+def test_lane_isolation_separates_conflicts_from_declared_overlaps():
+    """``proxy.allow_lane_overlap`` records a decision; it does not hide it.
+
+    The live configuration reuses one residential pool for registration and for
+    the qualification probe. Whether that is a mistake or a deliberate choice is
+    the operator's call, so the key exists to record the call -- and the overlap
+    stays in the payload either way, because the next person to read the config
+    needs to know the two lanes share an exit.
+    """
+    cred = "http://u:p@shared.example:1"
+    base = {"proxy": {"pool": [cred], "lanes": {"payment_qualification": [cred]}}}
+
+    undeclared = pr.lane_isolation(base)
+    assert undeclared["ok"] is False
+    assert undeclared["conflicts"] == {pr.QUALIFICATION: ["shared.example:1"]}
+    assert undeclared["overlaps"][pr.QUALIFICATION] == ["shared.example:1"]
+    assert undeclared["acknowledged"] == []
+
+    declared = pr.lane_isolation({**base, "proxy": {**base["proxy"], "allow_lane_overlap": ["payment_qualification"]}})
+    assert declared["ok"] is True
+    assert declared["conflicts"] == {}
+    assert declared["acknowledged"] == [pr.QUALIFICATION]
+    assert declared["overlaps"][pr.QUALIFICATION] == ["shared.example:1"]
+
+
+def test_acknowledging_one_lane_does_not_excuse_another():
+    cred = "http://u:p@shared.example:1"
+    config = {
+        "proxy": {
+            "pool": [cred],
+            "lanes": {"mailbox": [cred], "payment_qualification": [cred]},
+            "allow_lane_overlap": ["mailbox"],
+        }
+    }
+    report = pr.lane_isolation(config)
+
+    assert report["ok"] is False
+    assert set(report["conflicts"]) == {pr.QUALIFICATION}
+    assert report["acknowledged"] == [pr.MAILBOX]
+
+
+def test_census_keeps_a_declared_overlap_visible_but_not_fatal():
+    cred = "http://u:p@shared.example:1"
+    config = {
+        "proxy": {
+            "pool": [cred],
+            "lanes": {"payment_qualification": [cred]},
+            "allow_lane_overlap": ["payment_qualification"],
+        },
+    }
+    report = pr.census(config, methods=())
+
+    assert report["lane_isolation_ok"] is True
+    assert report["lane_isolation"]["acknowledged"] == [pr.QUALIFICATION]
+    assert report["cross_lane_overlaps"][pr.QUALIFICATION] == ["shared.example:1"]
+    rendered = pr.format_census(report)
+    assert "CROSS-LANE OVERLAP" in rendered
+    assert "[declared in proxy.allow_lane_overlap]" in rendered
+
+
+def test_acknowledged_lane_names_are_validated_and_normalised():
+    assert pr.acknowledged_lane_overlaps({}) == frozenset()
+    assert pr.acknowledged_lane_overlaps({"proxy": {"allow_lane_overlap": "Mailbox, nonsense"}}) == frozenset(
+        {pr.MAILBOX}
+    )
+    assert pr.acknowledged_lane_overlaps({"proxy": {"allow_lane_overlap": {"payment": "deliberate"}}}) == frozenset(
+        {pr.PAYMENT}
+    )
+    assert pr.acknowledged_lane_overlaps({"proxy": {"allow_lane_overlap": 7}}) == frozenset()

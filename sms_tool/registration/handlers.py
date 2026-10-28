@@ -95,6 +95,12 @@ __all__ = [
 
 from .identity_stages import _apply_protocol_fingerprint
 
+# Bound by name rather than reached through the module alias: the identity stage's
+# post-condition is a plain function, and a named import keeps the call site free of
+# attribute resolution (the module-object form is what static analysers report as an
+# unresolved attribute on a module imported under an alias).
+from .identity_stages import verify_identity_context as _verify_identity_context_stage
+
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -317,6 +323,7 @@ class RegistrationEmailWorkflow:
                 handler,
                 timeout_seconds=self._stage_timeout(state),
             )
+            self._verify_identity_context(state)
         except RegistrationAbort:
             raise
         except RegistrationCancelled:
@@ -346,6 +353,9 @@ class RegistrationEmailWorkflow:
             value["timing"] = r._timing_summary()
             r._print_timings()
         return value
+
+    def _verify_identity_context(self, state: RegistrationState) -> None:
+        return _verify_identity_context_stage(self, state)
 
     def _stage_timeout(self, state: RegistrationState) -> float | None:
         if self.config is None:

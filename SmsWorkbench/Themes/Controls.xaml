@@ -233,7 +233,7 @@
                 Background="{DynamicResource PanelBg}"
                 BorderBrush="{DynamicResource Line}"
                 BorderThickness="1"
-                CornerRadius="4">
+                CornerRadius="{StaticResource Corner.Xs}">
           <Grid>
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="*"/>
@@ -468,7 +468,7 @@
                   <Border Background="{DynamicResource PanelBg}"
                           BorderBrush="{DynamicResource LineStrong}"
                           BorderThickness="1"
-                          CornerRadius="4"
+                          CornerRadius="{StaticResource Corner.Xs}"
                           Width="{Binding ActualWidth, ElementName=TemplateRoot}"
                           MaxHeight="{TemplateBinding MaxDropDownHeight}"
                           Padding="0,4">
@@ -512,7 +512,7 @@
             <ControlTemplate TargetType="ComboBoxItem">
               <Border x:Name="ItemBg"
                       Background="{TemplateBinding Background}"
-                      CornerRadius="4"
+                      CornerRadius="{StaticResource Corner.Xs}"
                       Margin="3,1"
                       Padding="{TemplateBinding Padding}">
                 <Grid>
@@ -737,13 +737,13 @@
                       <RowDefinition Height="36"/>
                       <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
-                    <Border Grid.Row="0" Background="{DynamicResource PanelBg}" CornerRadius="10,10,0,0" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1">
+                    <Border Grid.Row="0" Background="{DynamicResource PanelBg}" CornerRadius="{StaticResource Corner.TopXl}" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,0,1">
                       <Grid>
-                        <TextBlock Text="{TemplateBinding Title}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextMain}" VerticalAlignment="Center" Margin="16,0,40,0" TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Text="{TemplateBinding Title}" FontSize="{StaticResource Type.Body.Size}" FontWeight="SemiBold" Foreground="{DynamicResource TextMain}" VerticalAlignment="Center" Margin="16,0,40,0" TextTrimming="CharacterEllipsis"/>
                         <Button Width="36" Height="28" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,4,0" Padding="0" Background="Transparent" BorderThickness="0" ToolTip="关闭" IsCancel="True">
                           <Button.Template>
                             <ControlTemplate TargetType="Button">
-                              <Border x:Name="CloseBg" Background="Transparent" CornerRadius="4">
+                              <Border x:Name="CloseBg" Background="Transparent" CornerRadius="{StaticResource Corner.Xs}">
                                 <Path Width="10" Height="10" Stretch="Uniform" Data="M 0,0 L 10,10 M 10,0 L 0,10" Stroke="{DynamicResource TextSub}" StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                               </Border>
                               <ControlTemplate.Triggers>

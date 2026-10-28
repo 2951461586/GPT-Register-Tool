@@ -25,6 +25,7 @@
         "http://us.ipwo.net:7878:YOUR_USER_custom_zone_US:YOUR_PASSWORD"
       ]
     },
+    "allow_lane_overlap": [],
     "asn_allocation": {
       "enabled": false
     },

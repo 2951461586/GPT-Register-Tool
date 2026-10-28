@@ -195,6 +195,15 @@ namespace SmsWorkbench
         public string SessionType { get; set; } = "";
         public string PlanType { get; set; } = "";
         public string RegistrationCountry { get; set; } = "";
+        // Provenance from the backend's `identity` block: the exit this account was
+        // registered through and the fingerprint it was bound to. Both are already
+        // persisted per account (`identity_context` in the session JSON); before
+        // this the detail panel had no way to show them, so the one property that
+        // distinguishes two accounts was invisible in the UI that manages them.
+        public string FingerprintProfile { get; set; } = "";
+        public string EgressEndpoint { get; set; } = "";
+        public string EgressCountry { get; set; } = "";
+        public bool IdentityBound { get; set; }
         public string RegistrationStatus { get; set; } = "";
         public string Status { get; set; } = "";
         public string PayPalStatus { get; set; } = "";

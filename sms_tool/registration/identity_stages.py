@@ -25,7 +25,7 @@ from ..operator_output import emit as _emit
 from ..proxy import entry as _proxy_entry
 from .flags import registration_flag
 from .protocol_helpers import _new_registration_session, _safe_int
-from .state import prepare_registration_context, seeded_device_identity
+from .state import RegistrationState, prepare_registration_context, seeded_device_identity
 
 if TYPE_CHECKING:
     from .state import RegistrationWorkflow
@@ -44,6 +44,7 @@ __all__ = [
     "extract_sentinel",
     "fingerprint_geo_metadata",
     "prepare_identity",
+    "verify_identity_context",
     "_apply_protocol_fingerprint",
 ]
 
@@ -270,3 +271,47 @@ def fingerprint_geo_metadata(workflow: RegistrationWorkflow) -> dict[str, Any]:
         "source": "preflight",
         "allowed_countries": allowed,
     }
+
+
+def verify_identity_context(workflow: "RegistrationWorkflow", state: Any) -> None:
+    """Post-condition for ``IDENTITY_READY``: the stage created exactly one context.
+
+    ``prepare_identity`` is the only writer of ``runtime.context``, and
+    ``handlers._run_stage`` hands that object to every later handler -- before it
+    (and on a post-create resume, which skips identity entirely) handlers receive
+    the mutable ``RegistrationRuntimeState`` instead.  Every current stage body
+    closes over ``self`` and ignores the parameter, so a drift here is invisible
+    today: the first handler that actually *reads* its context would meet a
+    runtime where its annotation promised a ``RegistrationContext``.
+
+    Lives here rather than in ``handlers`` because it is the identity stage's own
+    post-condition -- ``tests/registration/test_handlers_module_ownership.py``
+    freezes that file's line budget and requires every stage body to sit in its
+    owning module, with only a delegate left behind.
+
+    Deliberately a warning, not an abort.  A hard failure would also fire on
+    legitimate paths that run the stage idempotently with a no-op handler
+    (``tests/registration/test_registration_bootstrap_timing.py`` drives
+    ``IDENTITY_READY`` that way to pin the timing rows), and killing a live
+    registration because a stub did not build a context is a worse trade than a
+    greppable line in the operator log.  The marker is stable so it can be
+    asserted and alerted on.
+    """
+    if state is not RegistrationState.IDENTITY_READY:
+        return
+    context = getattr(workflow.runtime, "context", None)
+    if context is None:
+        _LOGGER.warning(
+            "registration_identity_context_missing: the identity stage finished "
+            "without creating a RegistrationContext; every later stage will be "
+            "handed the mutable runtime",
+            extra={"event": "registration_identity_context_missing"},
+        )
+        return
+    if not getattr(context, "device_id", ""):
+        _LOGGER.warning(
+            "registration_identity_context_without_device_id: identity context "
+            "carries no device_id; the oai-did/header/cookie trio cannot be "
+            "verified consistent for this run",
+            extra={"event": "registration_identity_context_without_device_id"},
+        )

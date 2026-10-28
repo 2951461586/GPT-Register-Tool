@@ -1,23 +1,29 @@
-"""Guard against palette drift between App.xaml and MainWindow.Theme.cs (round 6).
+"""Guard the colour contract the two palette dictionaries share.
 
-The same brush keys are declared twice:
+Before 2026-10-28 the same brush keys were declared twice: ``Themes/Palette.xaml``
+for the first frame and ``MainWindow.Theme.cs`` via ~120 ``SetBrush("Key", "#Hex")``
+calls for both palettes.  This module compared the two sides so an edit to one
+could not ship half-applied.
 
-* the XAML side declares ~48 ``SolidColorBrush`` resources (the first-frame
-  values, resolved before any code runs). Since 2026-10-23 they live in
-  ``Themes/Palette.xaml``, merged into ``App.xaml`` before ``Themes/Controls.xaml``;
-  this test reads both XAML files so the split cannot hide a brush from the
-  check.
-* ``MainWindow.Theme.cs`` re-declares them with ``SetBrush("Key", "#Hex")`` for
-  both the light and dark palettes, and ``MainWindow.xaml.cs`` calls
-  ``ApplyCustomThemeColors`` from the constructor -- so the C# values win from
-  the very first frame.
+Phase 0 of ``plan-2026-10-28-wpf-visual-system`` deleted ``Palette.xaml`` **and**
+the ``SetBrush`` code: a theme switch now swaps one dictionary
+(``Colors.Light.xaml`` <-> ``Colors.Dark.xaml``) and nothing re-declares a brush
+in C#.  The old comparison therefore had nothing left to compare and failed on a
+file that no longer exists -- which is what it did on HEAD until this rewrite.
 
-That makes App.xaml look authoritative while being inert for every key the theme
-code also sets: editing the XAML appears to do nothing. This module does not
-pick a winner (the XAML is still needed for keys the theme never touches and for
-design-time rendering); it only asserts the two agree wherever they overlap, so
-the next person who edits one side finds out instead of shipping a half-applied
-colour change.
+What is still a real, unguarded invariant is the **pair** itself:
+
+* the two files must declare exactly the same key set, because a key missing from
+  one side silently falls back to a WPF default brush in that theme (there is no
+  error, the control just goes white/black);
+* the ``Surface.*`` ladder must keep the direction its own header documents --
+  light alternates paper and grey, dark only ever climbs -- because that ordering
+  *is* the replacement for structural borders;
+* the legacy aliases (``PanelBg`` / ``Line`` / ``SidebarBg`` ...) must keep
+  resolving to the ladder they were folded onto, since ``WindowThemeService`` and
+  ``DesktopWindowSmokeTests`` read them by name;
+* every ``{DynamicResource X}`` a view asks for must be declared somewhere, or
+  the view silently renders with a default brush.
 
 Output is ASCII-only: CI runs on a Windows runner whose stdout is cp1252.
 """
@@ -27,16 +33,30 @@ import unittest
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-APP_XAML = PROJECT_ROOT / "SmsWorkbench" / "App.xaml"
-PALETTE_XAML = PROJECT_ROOT / "SmsWorkbench" / "Themes" / "Palette.xaml"
-#: Every XAML file that may declare a brush. ``Palette.xaml`` owns them since the
-#: 2026-10-23 split; ``App.xaml`` stays in the list so a brush added back to the
-#: application file is still compared against the theme code.
-BRUSH_XAML_FILES = (PALETTE_XAML, APP_XAML)
-THEME_CS = PROJECT_ROOT / "SmsWorkbench" / "Views" / "MainWindow.Theme.cs"
+WORKBENCH = PROJECT_ROOT / "SmsWorkbench"
+THEMES = WORKBENCH / "Themes"
+LIGHT_XAML = THEMES / "Colors.Light.xaml"
+DARK_XAML = THEMES / "Colors.Dark.xaml"
+
+#: The legacy aliases, folded onto the ladder by Phase 0. Each must keep the
+#: value of the rung it was folded onto; ``WindowThemeService`` reads
+#: ``PanelBg``/``TextMain`` for the DWM caption and the smoke tests resolve
+#: ``SettingsSelectionBg`` by name.
+ALIAS_TO_RUNG = {
+    "AppBg": "Surface.Page",
+    "PanelBg": "Surface.Card",
+    "PanelBg2": "Surface.Block",
+    "SidebarBg": "Surface.Chrome",
+    "LogBg": "Surface.Inset",
+}
+
+#: The ladder, outermost first. Light alternates and dark climbs, so only the
+#: *direction between neighbours* is asserted (see ``test_surface_ladder_*``).
+LADDER = ("Surface.Page", "Surface.Card", "Surface.Block", "Surface.Inset")
 
 XAML_BRUSH = re.compile(r'<SolidColorBrush\s+x:Key="(?P<key>[^"]+)"\s+Color="(?P<color>#[0-9A-Fa-f]{6,8})"')
-CS_BRUSH = re.compile(r'SetBrush\(\s*"(?P<key>[^"]+)"\s*,\s*"(?P<color>#[0-9A-Fa-f]{6,8})"\s*\)')
+XAML_KEY = re.compile(r'x:Key="([^"]+)"')
+DYNAMIC_RESOURCE = re.compile(r"\{DynamicResource\s+([A-Za-z0-9_.]+)\}")
 
 
 def _normalise(value):
@@ -47,87 +67,176 @@ def _normalise(value):
     return value
 
 
-def _xaml_brushes():
-    found = {}
-    for path in BRUSH_XAML_FILES:
-        for key, color in XAML_BRUSH.findall(path.read_text(encoding="utf-8-sig")):
-            found[key] = _normalise(color)
-    return found
+def _brushes(path):
+    return {key: _normalise(color) for key, color in XAML_BRUSH.findall(path.read_text(encoding="utf-8-sig"))}
 
 
-def _csharp_brushes():
-    """Collect every SetBrush call; a key set twice (light + dark) keeps both."""
-    found = {}
-    for key, color in CS_BRUSH.findall(THEME_CS.read_text(encoding="utf-8-sig")):
-        found.setdefault(key, []).append(_normalise(color))
-    return found
+def _declared_keys(path):
+    return XAML_KEY.findall(path.read_text(encoding="utf-8-sig"))
 
 
-class PaletteDriftTests(unittest.TestCase):
-    def test_both_sides_parse(self):
-        for path in BRUSH_XAML_FILES:
-            self.assertTrue(path.is_file(), path)
-        self.assertTrue(THEME_CS.is_file())
-        self.assertGreater(len(_xaml_brushes()), 20)
-        self.assertGreater(len(_csharp_brushes()), 20)
+def _luminance(color):
+    """WCAG relative luminance of ``#RRGGBB`` (alpha ignored)."""
+    raw = color.lstrip("#")
+    if len(raw) == 8:
+        raw = raw[2:]
+    channels = [int(raw[index : index + 2], 16) / 255.0 for index in (0, 2, 4)]
+    linear = [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in channels]
+    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
 
-    def test_overlapping_keys_have_at_least_one_matching_value(self):
-        """A key the theme also sets must agree with XAML in one of the palettes.
 
-        The theme sets each key twice (light + dark), so an exact match with the
-        XAML is only expected for the active palette. What must never happen is a
-        key whose XAML value appears in neither palette -- that is a colour
-        somebody changed on one side only.
+def _xaml_files():
+    for path in sorted(WORKBENCH.rglob("*.xaml")):
+        if "obj" in path.parts or "bin" in path.parts:
+            continue
+        yield path
+
+
+def _relative(path):
+    return str(path.relative_to(PROJECT_ROOT)).replace("\\", "/")
+
+
+class PalettePairTests(unittest.TestCase):
+    """Light and dark are one contract: same keys, both sides parse."""
+
+    def test_both_palettes_parse(self):
+        for path in (LIGHT_XAML, DARK_XAML):
+            self.assertTrue(path.is_file(), _relative(path))
+            self.assertGreater(len(_brushes(path)), 40, _relative(path))
+
+    def test_palettes_declare_the_same_key_set(self):
+        """A key in one file only falls back to a WPF default brush in the other.
+
+        That fallback is silent -- there is no parse error and no warning, the
+        control just paints white on the dark theme. So the key sets are compared
+        as sets, not as "dark covers everything light has".
         """
-        xaml = _xaml_brushes()
-        cs = _csharp_brushes()
-        shared = sorted(set(xaml) & set(cs))
-        self.assertGreater(len(shared), 10, "expected a meaningful overlap to check")
-        mismatched = {key: (xaml[key], cs[key]) for key in shared if xaml[key] not in cs[key]}
+        light = set(_declared_keys(LIGHT_XAML))
+        dark = set(_declared_keys(DARK_XAML))
         self.assertEqual(
-            mismatched,
-            {},
-            "palette drift: these keys differ between App.xaml and "
-            "MainWindow.Theme.cs in BOTH palettes (xaml -> csharp values)",
+            sorted(light - dark),
+            [],
+            "declared in Colors.Light.xaml but missing from Colors.Dark.xaml "
+            "(falls back to a WPF default brush in dark)",
+        )
+        self.assertEqual(
+            sorted(dark - light),
+            [],
+            "declared in Colors.Dark.xaml but missing from Colors.Light.xaml "
+            "(falls back to a WPF default brush in light)",
         )
 
-    def test_every_key_the_theme_sets_exists_in_xaml(self):
-        """The theme can only override brushes that are actually declared.
-
-        A SetBrush on an undeclared key silently injects a resource at runtime,
-        so nothing can reference it before the first theme pass resolves.
-        """
-        xaml = _xaml_brushes()
-        cs = _csharp_brushes()
-        undeclared = sorted(set(cs) - set(xaml))
-        self.assertEqual(undeclared, [], "SetBrush targets keys the XAML side never declares")
-
     def test_no_duplicate_brush_key(self):
-        """A repeated x:Key is legal XAML but only the last one wins.
+        """A repeated x:Key is legal XAML but only the last one wins."""
+        for path in (LIGHT_XAML, DARK_XAML):
+            keys = _declared_keys(path)
+            duplicates = sorted({key for key in keys if keys.count(key) > 1})
+            self.assertEqual(duplicates, [], "%s declares a key twice" % _relative(path))
 
-        Duplicates are checked across the two dictionaries as well: merging
-        ``Palette.xaml`` and ``App.xaml`` means a key declared in both silently
-        resolves to whichever dictionary wins, which is exactly the half-applied
-        colour change this module exists to prevent.
+
+class SurfaceLadderTests(unittest.TestCase):
+    """The ladder replaces structural borders, so its direction is load-bearing.
+
+    ``Colors.Light.xaml`` states: page -> card is lighter, card -> block is
+    darker, block -> inset is darker again (light alternates paper and grey).
+    ``Colors.Dark.xaml`` states the opposite rule for a different reason: dark
+    only ever gets lighter, because a darker step inside a lighter surface reads
+    as a hole rather than a layer.
+    """
+
+    def test_light_alternates_paper_and_grey(self):
+        light = _brushes(LIGHT_XAML)
+        page, card, block, inset = (_luminance(light[key]) for key in LADDER)
+        self.assertGreater(card, page, "light: card must be lighter than the page")
+        self.assertLess(block, card, "light: a block must be darker than the card")
+        self.assertLess(inset, block, "light: an inset must be darker than the block")
+
+    def test_dark_only_climbs(self):
+        dark = _brushes(DARK_XAML)
+        levels = [_luminance(dark[key]) for key in LADDER]
+        for index in range(1, len(levels)):
+            self.assertGreater(
+                levels[index],
+                levels[index - 1],
+                "dark: %s must be lighter than %s (dark only climbs)" % (LADDER[index], LADDER[index - 1]),
+            )
+
+    def test_chrome_sits_off_the_page_in_the_documented_direction(self):
+        """Chrome is the sidebar/title bar fill: 4 tones away from the page.
+
+        Light steps down from the page, dark steps up from it; either way it must
+        not equal the page, or the chrome divider becomes the only separation and
+        the sidebar merges with the content.
         """
-        keys = []
-        for path in BRUSH_XAML_FILES:
-            keys.extend(re.findall(r'<SolidColorBrush\s+x:Key="([^"]+)"', path.read_text(encoding="utf-8-sig")))
-        duplicates = sorted({key for key in keys if keys.count(key) > 1})
-        self.assertEqual(duplicates, [])
+        for path, expect_darker in ((LIGHT_XAML, True), (DARK_XAML, False)):
+            brushes = _brushes(path)
+            page = _luminance(brushes["Surface.Page"])
+            chrome = _luminance(brushes["Surface.Chrome"])
+            self.assertNotAlmostEqual(page, chrome, places=4, msg=_relative(path))
+            if expect_darker:
+                self.assertLess(chrome, page, "light: chrome sits below the page")
+            else:
+                self.assertGreater(chrome, page, "dark: chrome sits above the page")
+
+    def test_legacy_aliases_still_resolve_to_their_rung(self):
+        """Phase 0 folded the old semantic names onto the ladder, by name.
+
+        ``WindowThemeService`` reads ``PanelBg`` + ``TextMain`` for the DWM
+        caption and the desktop smoke tests resolve ``SettingsSelectionBg`` as a
+        literal key, so an alias may not drift away from its rung even though the
+        ladder is now the authority.
+        """
+        for path in (LIGHT_XAML, DARK_XAML):
+            brushes = _brushes(path)
+            for alias, rung in ALIAS_TO_RUNG.items():
+                if alias not in brushes:
+                    self.fail("%s no longer declares the legacy alias %s" % (_relative(path), alias))
+                self.assertEqual(
+                    brushes[alias],
+                    brushes[rung],
+                    "%s: %s must stay equal to %s" % (_relative(path), alias, rung),
+                )
+
+    def test_text_ladder_keeps_three_distinct_levels(self):
+        """Three levels, three values -- in both themes.
+
+        The palette this system replaced had ``TextMain == TextSub == TextMuted``,
+        which collapsed titles, labels and metadata into one weight. Equality is
+        the regression, so the assertion is on distinctness, not on a ratio.
+        """
+        for path in (LIGHT_XAML, DARK_XAML):
+            brushes = _brushes(path)
+            values = [brushes["TextMain"], brushes["TextSub"], brushes["TextMuted"]]
+            self.assertEqual(len(set(values)), 3, "%s collapsed a text level" % _relative(path))
+
+
+class DynamicResourceResolutionTests(unittest.TestCase):
+    """Every ``{DynamicResource X}`` a view asks for must be declared somewhere."""
+
+    def test_every_dynamic_resource_target_is_declared(self):
+        declared = set()
+        for path in _xaml_files():
+            declared.update(_declared_keys(path))
+        missing = {}
+        for path in _xaml_files():
+            for key in DYNAMIC_RESOURCE.findall(path.read_text(encoding="utf-8-sig")):
+                if key not in declared:
+                    missing.setdefault(key, set()).add(_relative(path))
+        self.assertEqual(
+            missing,
+            {},
+            "DynamicResource targets that no dictionary declares (renders with a WPF default brush, silently)",
+        )
 
 
 class FieldLabelStyleTests(unittest.TestCase):
     """`FieldLabel` is the one x:Key defined in two different files."""
 
     def test_field_label_is_declared_exactly_once_app_wide(self):
-        xaml_files = sorted((PROJECT_ROOT / "SmsWorkbench").rglob("*.xaml"))
         declarations = []
-        for path in xaml_files:
-            if "obj" in path.parts or "bin" in path.parts:
-                continue
-            for match in re.finditer(r'x:Key="FieldLabel"', path.read_text(encoding="utf-8-sig")):
-                declarations.append(str(path.relative_to(PROJECT_ROOT)).replace("\\", "/"))
+        for path in _xaml_files():
+            for _match in re.finditer(r'x:Key="FieldLabel"', path.read_text(encoding="utf-8-sig")):
+                declarations.append(_relative(path))
         self.assertLessEqual(
             len(declarations),
             1,

@@ -279,7 +279,7 @@
               <StackPanel Grid.Column="1" Style="{StaticResource SidebarBrandTextPanelStyle}" Margin="10,0,8,0">
                 <TextBlock x:Name="SidebarBrandTitle"
                            Text="GPT Register Tool"
-                           FontSize="13"
+                           FontSize="{StaticResource Type.Body.Size}"
                            FontWeight="SemiBold"
                            TextTrimming="CharacterEllipsis"/>
               </StackPanel>

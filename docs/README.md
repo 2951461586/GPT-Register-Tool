@@ -63,6 +63,9 @@ Directory layout (since 2026-09-06):
 
 ## Release notes（docs/releases/，一个发布标签一份，不回写）
 
+- [v2026.10.28 发布说明](releases/release-v2026.10.28.md) - 上一轮扫描的 P0–P3 落地：
+  账号详情页「身份」分组、lane 隔离可见可声明、结构性描边清零、设计令牌覆盖代码构建的 UI、
+  `max_retries` 死参数与首轮健康探针缺失的修复。
 - [v2026.10.27 发布说明](releases/release-v2026.10.27.md) - 自 v2026.10.24 以来的收口：
   三模块（协议注册 / 代理池与指纹库 / 支付资格检测）专项扫描与落地、支付资格按契约复用 Checkout、
   出口轮换与脱敏修复，以及品牌 Logo 更换。

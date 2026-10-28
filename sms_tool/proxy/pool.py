@@ -417,7 +417,6 @@ class Socks5Server:
         health_check_interval: float = 30.0,
         health_check_timeout: float = 5.0,
         connect_timeout: float = 10.0,
-        max_retries: int = 2,
         pipe_buf_size: int = 65536,
         health_check_target_host: str = "cloudflare.com",
         health_check_target_port: int = 443,
@@ -479,7 +478,6 @@ class Socks5Server:
         # probe.  Signature: ``(proxy_url, timeout) -> (healthy, error)``.
         self._edge_probe = edge_probe
         self._connect_timeout = connect_timeout
-        self._max_retries = max_retries
         self._pipe_buf_size = pipe_buf_size
         self._rr_idx = 0
         self._stats = PoolStats()
@@ -634,6 +632,16 @@ class Socks5Server:
         # usually holds several sticky sessions on one host:port, and excluding
         # by address would collapse them into a single attempt (see
         # ``UpstreamProxy.identity``).
+        #
+        # There is deliberately **no** ``max_retries`` knob. ``tried`` grows by one
+        # identity per failure and ``_pick_upstream`` excludes it, so this loop
+        # already terminates after at most ``len(upstreams)`` attempts; a separate
+        # cap could only make it stop while healthy exits remain. The old
+        # ``max_retries`` argument did exactly nothing (stored, never read) while
+        # reading like a working knob, which is worse than having none: the pool
+        # shapes we actually buy -- several sessions behind one ``host:port`` --
+        # depend on every session being tried, so an operator "lowering retries"
+        # would have had no observable effect either way.
         tried: set[UpstreamIdentity] = set()
         up_r = up_w = None
         upstream = None
@@ -966,8 +974,14 @@ class Socks5Server:
         test_host = self._health_check_target_host
         test_port = self._health_check_target_port
         while True:
+            # Probe BEFORE the first sleep. ``UpstreamProxy.healthy`` defaults to
+            # True and ``start()`` launches this loop as a task, so the old
+            # ``sleep``-first order meant a pool that came up with dead exits
+            # served live traffic for a full interval (30s by default) with no
+            # evidence behind a single "healthy" verdict. The hysteresis below is
+            # careful to never kill an upstream on one blip; it should not have to
+            # compensate for a first round that never ran either.
             try:
-                await asyncio.sleep(self._health_check_interval)
                 for upstream in self._upstreams:
                     was_healthy = upstream.healthy
                     success, probe_error = await self._check_upstream(upstream, test_host, test_port)
@@ -994,6 +1008,12 @@ class Socks5Server:
                 break
             except Exception as exc:
                 logger.debug("health check error: %s", exc)
+            # The sleep has its own cancellation arm: with the probe moved ahead of
+            # it, a shutdown now arrives here rather than inside the try above.
+            try:
+                await asyncio.sleep(self._health_check_interval)
+            except asyncio.CancelledError:
+                break
 
     # ── stats HTTP endpoint ──
 

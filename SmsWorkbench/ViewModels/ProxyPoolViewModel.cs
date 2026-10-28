@@ -39,6 +39,28 @@ namespace SmsWorkbench
         [ObservableProperty]
         private string statusText = "";
 
+        /// <summary>
+        /// Config-wide egress-separation verdict: which lanes reuse a registration exit.
+        /// <para>
+        /// Comes from the backend's <c>lane_isolation</c> block, which is computed
+        /// over the whole configuration rather than over <see cref="Lane"/>: the
+        /// question "does this signup exit also carry the qualification probe?" is
+        /// about the config, and this window is the only place an operator sees it
+        /// without running <c>scripts/proxy_census.py</c>. A declared overlap
+        /// (<c>proxy.allow_lane_overlap</c>) reports as declared, not as a conflict.
+        /// </para>
+        /// </summary>
+        [ObservableProperty]
+        private string laneIsolationText = "";
+
+        /// <summary>True when the isolation text describes a real conflict (renders in Danger).</summary>
+        [ObservableProperty]
+        private bool laneIsolationWarn;
+
+        /// <summary>False until a payload has actually carried an isolation verdict.</summary>
+        [ObservableProperty]
+        private bool laneIsolationVisible;
+
         [ObservableProperty]
         [NotifyCanExecuteChangedFor(nameof(LoadCommand))]
         [NotifyCanExecuteChangedFor(nameof(TestCommand))]
@@ -121,6 +143,7 @@ namespace SmsWorkbench
         {
             Rows.Clear();
             if (payload.ValueKind != JsonValueKind.Object) return;
+            ApplyLaneIsolation(payload);
             if (payload.TryGetProperty("proxies", out JsonElement proxies))
             {
                 foreach (JsonElement item in Enumerate(proxies))
@@ -148,6 +171,58 @@ namespace SmsWorkbench
                 if (item.ValueKind == JsonValueKind.Object) yield return item;
             }
         }
+
+        /// <summary>
+        /// Render the backend's <c>lane_isolation</c> block, if this payload has one.
+        /// <para>
+        /// Only the list command carries it. A test/screen payload therefore leaves
+        /// the banner at its previous value instead of blanking it: the two commands
+        /// say nothing about lane isolation, and clearing the line would read as
+        /// "checked, all clear" when nothing was checked.
+        /// </para>
+        /// </summary>
+        private void ApplyLaneIsolation(JsonElement payload)
+        {
+            if (!payload.TryGetProperty("lane_isolation", out JsonElement isolation)
+                || isolation.ValueKind != JsonValueKind.Object)
+                return;
+
+            bool ok = Bool(isolation, "ok");
+            string acknowledged = Names(Conflicts(isolation, "acknowledged"));
+            string conflicts = Names(Conflicts(isolation, "conflicts"));
+            LaneIsolationVisible = true;
+            LaneIsolationWarn = !ok;
+            LaneIsolationText = !ok
+                ? Loc.F("出口隔离：冲突 — {0} 复用注册出口", conflicts)
+                : acknowledged.Length > 0
+                    ? Loc.F("出口隔离：已声明复用 {0}", acknowledged)
+                    : Loc.T("出口隔离：OK（无 lane 复用注册出口）");
+        }
+
+        /// <summary>
+        /// Lane names from either the <c>conflicts</c> map (lane -> endpoints) or the
+        /// <c>acknowledged</c> list, joined for display. The endpoints themselves are
+        /// deliberately not shown: the grid below already lists them.
+        /// </summary>
+        private static List<string> Conflicts(JsonElement isolation, string name)
+        {
+            var lanes = new List<string>();
+            if (!isolation.TryGetProperty(name, out JsonElement value)) return lanes;
+            if (value.ValueKind == JsonValueKind.Object)
+            {
+                foreach (JsonProperty property in value.EnumerateObject())
+                    lanes.Add(property.Name);
+            }
+            else if (value.ValueKind == JsonValueKind.Array)
+            {
+                foreach (JsonElement item in value.EnumerateArray())
+                    lanes.Add(item.ToString() ?? "");
+            }
+            return lanes;
+        }
+
+        private static string Names(List<string> lanes)
+            => string.Join(", ", lanes.Where(lane => lane.Length > 0));
 
         private static ProxyPoolRow FromListRow(JsonElement item)
         {

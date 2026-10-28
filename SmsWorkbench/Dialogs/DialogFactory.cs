@@ -183,7 +183,7 @@ namespace SmsWorkbench
             body.Children.Add(new TextBlock
             {
                 Text = title,
-                FontSize = 18,
+                FontSize = (double)owner.FindResource("Type.Title.Size"),
                 FontWeight = FontWeights.SemiBold,
                 Foreground = (Brush)owner.FindResource("TextMain"),
                 Margin = new Thickness(0, 0, 0, 8)
@@ -225,7 +225,7 @@ namespace SmsWorkbench
             body.Children.Add(new TextBlock
             {
                 Text = title,
-                FontSize = 18,
+                FontSize = (double)owner.FindResource("Type.Title.Size"),
                 FontWeight = FontWeights.SemiBold,
                 Foreground = (Brush)owner.FindResource("TextMain"),
                 Margin = new Thickness(0, 0, 0, 8)

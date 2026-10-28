@@ -52,9 +52,11 @@
 | `Surface.Card` | `#FFFFFF` (98) | `#232323` (15) | 卡片、面板、表格行 |
 | `Surface.Block` | `#F3F3F3` | `#2B2B2B` (21) | 卡片内的块：工具条、未选中段 |
 | `Surface.Inset` | `#EAEAEA` | `#333333` (27) | 块内小块：徽章、轨道、日志井 |
-| `Surface.Chrome` | `#EDEDED` | `#1E1E1E` | 侧栏/标题栏（离页面 4 档） |
+| `Surface.Chrome` | `#E9E9E9` | `#1E1E1E` | 侧栏/标题栏（离页面 4 档） |
 
 > 光色交替（卡比页亮、块比卡暗），暗色单调变亮。原 `PanelBg/PanelBg2/PanelHover/GridAltBg/SidebarBg/StatusBg/LogBg` 全部映射到这四个别名上，**旧键保留**（`WindowThemeService` 与测试都按 `PanelBg`/`TextMain` 取色）。
+>
+> 2026-10-28 复核：`Surface.Chrome` 光色上表曾写作 `#EDEDED`，代码是 `#E9E9E9`（与 `SidebarBg` 同值）—— 以代码为准，表格已改。同一轮复核发现 `LogBg` 在暗色是 `#2B2B2B`（= `Surface.Block`）而光色是 `#EAEAEA`（= `Surface.Inset`），同一个别名指向两个档位；已把暗色改为 `#333333`，并由 `tests/workbench/test_theme_palette_consistency.py` 钉住「每个别名必须等于它所在档位」。
 
 ### 2.2 文字阶梯（修复"三级同值"）
 
@@ -209,6 +211,10 @@ FlClash 的刻度以 40dp 行高为基准；WPF 控件高 28–40px，等比缩�
 | Phase 3 | 行高 40 / 表头 32（`Type.Caption`）/ cell padding 10；**去掉斑马纹、单元格边框、网格线**；新增「精简列」开关隐藏 5 个 B 级列（按 `SortMemberPath`/绑定路径定位，因 `DataGridColumn` 不在名字域内、`x:Name` 不生成字段）；开列重排、行高锁定；**窄窗卡片视图**（内容区 < 960px 自动切换，`NarrowWidthConverter`，两视图共用同一数据源/选区/勾选语义） |
 | Phase 4 | 侧栏 `Surface.Chrome` + 与内容之间的 1px `Divider`；标题栏底边同一条线；控制台 320px 固定 → `GridSplitter` 可拖（160–560） |
 | Phase 5 | 焦点环接入；**23 个内联字形全部收敛**到 `Themes/Glyphs.xaml`（32 键）；取消行在批次运行中染 `Danger`（`NavCancelAlertConverter`） |
+| **补完**（2026-10-28） | Phase 1 的验收标准当时**并未真正成立**：`grep BorderThickness="1"` 在 `Views/` 里还剩 9 处结构性描边（`AccountFilterBar` 4 个统计卡 + 筛选条、`WorkbenchConsole` 任务表与日志井、`SettingsWindow` 分类栏与内容卡）。现已全部改为 `Surface.Card`/`Block`/`Inset` 明度差，`Views/` 里结构性描边为 0（剩余 1px 只在输入框、按钮、焦点环、`DataGrid` 选中标记与 chrome 分界）。 |
+| **补完**（2026-10-28） | 令牌纪律从 XAML 延伸到**代码构建的那一半 UI**（3,499 行：`Dialogs/` + 6 个 `MainWindow.*` 分部类 + `ProxyPoolWindow`）：22 处 XAML `FontSize` + 16 处 C# `FontSize`、17 处 XAML `CornerRadius` + 6 处 C# `new CornerRadius()`、1 处 `#FFFFFF` 全部换成令牌；新增 `Corner.TopXl`（= 12,12,0,0），因为对话框标题条压在 `Corner.Xl` 卡片上却写着 `10,10,0,0`，每边留下 2px 卡片色残边。现在 `Views/` + `Themes/` 的裸 `FontSize`/`CornerRadius` 字面量与硬编码色值均为 **0**。 |
+| **补完**（2026-10-28） | `ProxyPoolWindow` 从 217 行代码建窗改为 `Views/ProxyPoolWindow.xaml` + 6 行 code-behind：它此前拿不到 `Controls.xaml` 的隐式 `DataGrid` 样式（自行重设 Background/BorderBrush/RowHeight），且字号是字面量。现在隐式样式生效，布局/绑定全在 XAML，并接入新的 lane 隔离告警条。 |
+| **新钉住的不变量**（2026-10-28） | `tests/workbench/test_theme_palette_consistency.py` 重写：光源两字典**键集必须相同**、`Surface.*` 阶梯方向（光交替/暗只变亮）、每个别名必须等于它所在档位、三级文字必须互异、每个 `{DynamicResource}` 目标必须有声明、`FieldLabel` 全应用只声明一次。重写当场抓到一处真实漂移：暗色 `LogBg` 是 `#2B2B2B`（Block）而光色是 `#EAEAEA`（Inset），同一别名指向两个档位。 |
 
 实测：`dotnet build`（Debug / Release / Release-win-x64）0 warning / 0 error，`dotnet test` **622 passed / 0 failed**（含 `DesktopWindowSmokeTests`）。
 两个由本阶段引入并当场修掉的缺陷，记在此处以免重犯：

@@ -199,6 +199,10 @@
     "sms_tool/payment/qualification_batch.py -> sms_tool.endpoints": {
       "reason": "deferred",
       "why": "the Stripe preflight root is resolved through endpoints.STRIPE_API_BASE at call time: the host literal is forbidden by endpoints_literal_ratchet and a module-level import would grow the frozen payment->root edge count"
+    },
+    "sms_tool/desktop_read.py -> sms_tool.accounts.account_identity": {
+      "reason": "deferred",
+      "why": "Account identity provenance (2026-10-28): _identity_payload reads identity_context through the canonical account_identity() reader so the fingerprint_key/proxy_affinity field names have one owner instead of a second copy here. account_identity pulls the fingerprint pool and phone_proxy (requests), and the account read is the desktop's hot start path, so the import runs inside the payload builder."
     }
   }
 }

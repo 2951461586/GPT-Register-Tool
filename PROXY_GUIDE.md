@@ -399,6 +399,26 @@ Reusing a registration exit for payment/OTP is a documented violation, not a
 style point — `payment.json`'s UPI stage proxies were pointed at a registration
 pool entry until 2026-09-28 and now use the payment lane (`global.9http.com`).
 
+`proxy/registry.lane_isolation()` is the narrow form of the same check (mailbox
+and `payment_qualification` only, no payment-method catalogue, no network), so
+the desktop ProxyPool window shows it as part of a plain listing instead of
+requiring `scripts/proxy_census.py`. It separates **conflicts** from **declared
+overlaps**:
+
+```jsonc
+"proxy": {
+  "lanes": { "payment_qualification": ["http://same-pool.example:8080"] },
+  "allow_lane_overlap": ["payment_qualification"]
+}
+```
+
+An acknowledged lane stops counting as a conflict (`lane_isolation.ok` becomes
+true) but stays in `overlaps` and still prints in the census with a
+`[declared in proxy.allow_lane_overlap]` marker, so the decision remains
+reviewable. Unknown lane names are rejected by `validate_config` — the reader
+ignores names it does not recognise, so a typo would look like a declaration
+while the census kept warning.
+
 **UPI egress verified (2026-09-28)**: `upi.checkout_country` / `payment_country`
 / `target_country` are all `IN` and `billing_regions=["IN"]` (fallback only), so
 `_upi_retarget_region` rewrites the payment credential to `geo-IN`. Probed
