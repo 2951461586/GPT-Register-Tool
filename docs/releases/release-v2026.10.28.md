@@ -130,10 +130,77 @@
 - **补齐两条英文词条** —— `精简列：…`（Phase 3 新增）与 `拖动调整控制台高度`（Phase 4 新增）
   之前没有 `StringsEn` 条目，英文界面会静默回落中文。
 
+## 第二轮：桌面外壳（主题三态 / 托盘 / 仪表盘 / 备份 / 门禁）
+
+第一轮收口了扫描留下的 P0–P3；这一轮把「窗口的外面」补齐——长跑批次能不能活着，
+取决于这些开关和反馈是否可见、可关、可测。
+
+### 主题：不再"应用两次"，也不再只会亮暗两态
+
+- **两次启动日志的根因** —— 每次启动都会打印 `启动主题已应用: Light` 再打印
+  `…: Dark`：`MainWindow` 构造函数按 `GetAppTheme()` 猜一次，`App.OnStartup` 再按
+  `runtime/desktop_theme.txt` 应用一次。而那次"猜"永远只能得到 Light，因为
+  Wpf.Ui 4.3.0 的 `Wpf.Ui.xaml` **不合并** `Resources/Theme/*.xaml`，于是
+  `ApplicationThemeManager.Apply()` 在写缓存前就 `return`，`GetAppTheme()` 恒为
+  `Unknown`、`Changed` 从不触发。
+- **修法** —— `App.xaml` 在模板字典与工作台色板之间插入 Wpf.Ui 自己的
+  `Theme/Light.xaml`（位置是承重的：既要在 `Wpf.Ui.xaml` 之后才能解析
+  `SystemAccentColorPrimary`，又要在 `Colors.Light.xaml` 之前，否则两套字典共有的
+  `ComboBoxDropDown*` 键会被 Wpf.Ui 的浅色弹层赢走）；构造函数改为静默播种
+  （`log: false`），唯一写日志的地方是 `App.OnStartup`。
+- **三态** —— 持久化的是**模式**（`System` / `Light` / `Dark`），不是解析后的色板：
+  存色板会在系统第一次转深色时把"跟随系统"钉死。`SystemThemeWatcher` 让
+  System 模式持续跟随，`ApplicationThemeManager.Changed` 再把工作台色板一起换掉。
+  侧栏按钮循环 浅→深→跟随系统，图标是太阳 / 月亮 / `brightness-auto`。
+
+### 托盘、关闭到托盘、全局热键
+
+- `Shell_NotifyIcon` + 隐藏工具窗口实现托盘（**不用 WinForms `NotifyIcon`**：一个
+  16×16 图标不值得在 WPF 进程里再引入一套 UI 栈，而且 message-only 窗口收不到
+  `TaskbarCreated`，Explorer 重启后图标不会回来）。关闭窗口 = 隐藏；只有托盘菜单
+  「退出」才真关，`CloseToTrayPolicy` 把真值表抽成纯函数并被单测钉住。
+- `Ctrl+Alt+R` 显示/隐藏；注册失败只警告，绝不阻塞启动。
+- 两个开关都写 `runtime/desktop_shell.json`，从侧栏「外壳设置」改；关掉托盘后
+  关闭即退出（不会留下"隐藏了又没有入口"的窗口），关掉热键即释放注册。
+
+### 仪表盘：吞吐 / 成功率 / 失败分类
+
+- `MetricsViewModel` 复用既有的 `BackendProgressEvent` 流（每账号一个 terminal 事件），
+  10 分钟滚动窗口、10 秒一格；`cancelled` 不计入分母。
+- 失败按事件自带的 `FailureClass` 分桶，机器名原样展示（与日志可 grep 的词汇一致），
+  无分类的并入本地化「未知」桶；没有失败时整段隐藏。
+- `Sparkline` 直接画折线，不引入图表依赖。
+
+### 代理池：内联测速
+
+- 每行一个「测速」按钮，走**同一条**单代理测试通道，结果写回该行；不重建表格
+  （重建会丢选中、滚动位置和其它行已有的筛查结论）。
+
+### 工作区备份 / 恢复
+
+- 显式白名单：三个配置 shard + 账号库 + 两个 UI 偏好，**加上**配置里
+  `email_registration.token_file` 指向的邮箱池文件（读配置时不调用
+  `ConfigStore.ReadMerged`——它首次调用会把 legacy `config.json` 迁移成 shard，
+  备份不该改写被备份的配置）。
+- manifest 同时充当恢复时的允许名单，因此池文件路径改过也能恢复回去；恢复前把现有
+  文件复制到 `runtime/restore-<ts>/`，并对每个条目做白名单 + 路径归属双重校验
+  （zip-slip）。
+
+### 门禁：宽泛 `except` 白名单化
+
+- `scripts/broad_except_ratchet.py`：逐文件冻结宽泛 `except Exception` 与"只写 `pass`"
+  的处理器（当前 962 / 155），并加两层约束——`policy` 全局预算（堵住"A 文件删一个、
+  B 文件加一个"）与 `whitelist`（4 条，每条必须写 `reason`；文件已无宽泛处理器仍留在
+  名单里也算失败，因为过期许可和没有许可一样错）。
+- `tests/governance/test_broad_except_ratchet.py` 钉住三条规则本身，而不只是结果。
+
 ## 验证
 
 - `pytest tests/workbench`：233 passed，2 skipped；`pytest tests/governance`：774 passed，5 skipped。
 - `dotnet build`（Debug / Release）0 warning / 0 error；`dotnet test` **676 passed**。
+- 第二轮：`pytest tests/workbench tests/governance` **1022 passed / 7 skipped**；
+  `dotnet build -t:Rebuild` 0 warning / 0 error；`dotnet test` **708 passed**；
+  行尾 / 格式 / 宽泛-except 三套守卫 49 passed；`docs_consistency_scan` 通过。
 - `SmsWorkbench/build_dotnet.ps1` 发布成功 → `dist/net10/SmsWorkbench.exe`。
 - `architecture_scan` / `function_length` / `import_layer` / `delayed_import` / `config_key` /
   `dotnet_warning` / `format_guard` / `line_ending_guard` / `docs_consistency` /
