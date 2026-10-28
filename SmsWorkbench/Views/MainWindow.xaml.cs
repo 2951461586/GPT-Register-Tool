@@ -13,6 +13,16 @@ namespace SmsWorkbench
     public partial class MainWindow : FluentWindow, INotifyPropertyChanged
     {
         private Wpf.Ui.Appearance.ApplicationTheme _currentTheme = Wpf.Ui.Appearance.ApplicationTheme.Light;
+
+        // The operator's mode, not a palette: System keeps following the OS (see
+        // MainWindow.Theme.cs). Persisted in runtime/desktop_theme.txt. Named with the
+        // underscore prefix on purpose: .NET 9+ puts a `ThemeMode` on Window for its own
+        // system-theme support, and an unqualified member of that name would shadow it.
+        private DesktopThemeMode _themeMode = DesktopThemeMode.System;
+
+        // Mirrors SystemThemeWatcher's own bookkeeping so arming/disarming is
+        // idempotent; a second Watch() for the same window would double the hooks.
+        private bool systemThemeWatcherArmed;
         // Shared instance for the one-click SMS provider catalog/balance reads in
         // MainWindow.SmsProvider.cs (SmsProviderCatalogClient takes the HttpClient
         // as a parameter). One static instance per window is deliberate: a
@@ -30,6 +40,11 @@ namespace SmsWorkbench
         private readonly ISettingsService settingsService;
         private readonly IPaymentBatchService paymentBatchService;
         private readonly IFileLauncher fileLauncher;
+        // Shell chrome handed in by the composition root. Both hold OS handles and
+        // outlive a Hide (that is the point of close-to-tray); see OnWindowClosing.
+        private readonly ITrayIconService trayIcon;
+        private readonly IWorkspaceBackupService workspaceBackup;
+        private readonly IGlobalHotkeyService globalHotkey;
         private readonly string rootDir;
         private readonly string configDir;
         private readonly CancellationTokenSource _lifetimeCts = new();
@@ -52,6 +67,7 @@ namespace SmsWorkbench
         // is a partial class, so "no references" in this file means nothing.
         private EventHandler? sidebarRenderingHandler;
         private Stopwatch? sidebarAnimStopwatch;
+        private readonly DispatcherTimer metricsTimer;
 
         // Sun icon (light mode): circle + rays
         // Theme row icons come from the shared glyph registry (Themes/Glyphs.xaml)
@@ -62,6 +78,10 @@ namespace SmsWorkbench
 
         // Moon icon (dark mode): crescent
         private Geometry moonIcon = Geometry.Empty;
+
+        // "Auto" icon (follow the OS): the mode has no palette of its own, so it gets
+        // its own glyph rather than borrowing whichever palette happens to be active.
+        private Geometry systemIcon = Geometry.Empty;
 
         public bool SidebarCollapsed
         {
@@ -99,6 +119,9 @@ namespace SmsWorkbench
 
         public RegisterViewModel Register { get; } = new RegisterViewModel();
 
+        /// <summary>Rolling throughput / success strip in the status bar.</summary>
+        public MetricsViewModel Metrics { get; } = new MetricsViewModel();
+
         public StatusBarViewModel StatusBar { get; } = new StatusBarViewModel();
 
         // SelectedTabIndex removed (2026-09-02, round 6): no binding and no
@@ -117,7 +140,10 @@ namespace SmsWorkbench
             ISettingsService settingsService,
             Serilog.ILogger logger,
             IFileLauncher fileLauncher,
-            IUpdateChecker updateChecker)
+            IUpdateChecker updateChecker,
+            IWorkspaceBackupService workspaceBackupService,
+            ITrayIconService trayIconService,
+            IGlobalHotkeyService globalHotkeyService)
         {
             this.backendClient = backendClient;
             this.backendTasks = backendTasks;
@@ -131,6 +157,9 @@ namespace SmsWorkbench
             this.logger = logger;
             this.fileLauncher = fileLauncher;
             this.updateChecker = updateChecker;
+            this.workspaceBackup = workspaceBackupService;
+            this.trayIcon = trayIconService;
+            this.globalHotkey = globalHotkeyService;
             rootDir = paths.RootDirectory;
             configDir = paths.ConfigDirectory;
             Export = new ExportViewModel(Pool);
@@ -149,20 +178,28 @@ namespace SmsWorkbench
             DataContext = this;
             NavCommand = new RelayCommand<string>(OnNavigate);
 
-            // Theme colours on startup. `GetAppTheme()` is only the fallback: its own
-            // documentation says it returns ApplicationTheme.Unknown "if something
-            // goes wrong", and Unknown is not Dark, so a failed read silently
-            // installed the light palette over a dark shell — the "theme resets on
-            // every start" report. App.OnStartup calls ApplyStartupTheme with the
-            // value it read from runtime/desktop_theme.txt before showing the
-            // window, and that call wins.
-            _currentTheme = Wpf.Ui.Appearance.ApplicationThemeManager.GetAppTheme()
-                == Wpf.Ui.Appearance.ApplicationTheme.Dark
-                ? Wpf.Ui.Appearance.ApplicationTheme.Dark
-                : Wpf.Ui.Appearance.ApplicationTheme.Light;
+            // The strip is a rolling window, so it has to advance even when nothing
+            // finishes: a stalled batch must visibly decay instead of looking busy.
+            metricsTimer = new DispatcherTimer(
+                TimeSpan.FromSeconds(2),
+                DispatcherPriority.Background,
+                (_, _) => Metrics.Sample(),
+                Dispatcher);
+            metricsTimer.Start();
+
+            // Seed the persisted mode for a window built outside App.OnStartup (the
+            // smoke tests) — deliberately silent. App.OnStartup applies the same mode
+            // and that is the one call that logs; when this one logged too, every start
+            // printed two lines (the guess, then the truth).
             sunIcon = (Geometry)FindResource("Glyph.Sun");
             moonIcon = (Geometry)FindResource("Glyph.Moon");
-            ApplyStartupTheme(_currentTheme);
+            systemIcon = (Geometry)FindResource("Glyph.ThemeSystem");
+            // A System-mode shell has to keep following the OS after startup: the
+            // watcher re-applies the Wpf.Ui half, and this handler brings our palette
+            // along. Registered before the first apply so a watcher-driven change during
+            // startup is not missed.
+            Wpf.Ui.Appearance.ApplicationThemeManager.Changed += OnApplicationThemeChanged;
+            ApplyStartupTheme(DesktopThemePreference.LoadMode(rootDir), log: false);
 
             Pool.SelectionCleared += OnPoolSelectionCleared;
             Pool.PageRefreshed += (_, _) => StatusBar.Text = Pool.SummaryText;
@@ -173,10 +210,56 @@ namespace SmsWorkbench
 
         private void OnWindowClosing(object? sender, System.ComponentModel.CancelEventArgs e)
         {
+            // A stray click on the X must not abort a batch: while a tray icon is up,
+            // closing hides instead. CloseToTrayPolicy owns the truth table (no tray ->
+            // close, because hiding then leaves no way back; quit from the tray menu ->
+            // close, that is what quit means). The cancellation below is deliberately
+            // *after* this branch: it aborts in-flight work, which a hide must not do.
+            if (CloseToTrayPolicy.ShouldHideToTray(trayIcon.IsAvailable, trayIcon.ExitRequested))
+            {
+                e.Cancel = true;
+                Hide();
+                trayIcon.NotifyHiddenToTray();
+                return;
+            }
+
             // Signal in-flight async operations (refresh / export / detail / payment …)
             // to abort instead of touching the UI after the window is gone. We do not
             // cancel the close itself — the window still shuts down.
             _lifetimeCts.Cancel();
+            // Static event: a closed window must not stay reachable through it (and
+            // must not answer an OS theme change by repainting a dead visual tree).
+            Wpf.Ui.Appearance.ApplicationThemeManager.Changed -= OnApplicationThemeChanged;
+            metricsTimer.Stop();
+            globalHotkey.Dispose();
+            trayIcon.Dispose();
+        }
+
+        /// <summary>
+        /// Bring the shell back from the tray. Also the hotkey's target, so the two
+        /// entry points cannot drift apart.
+        /// </summary>
+        public void ShowFromTray()
+        {
+            Show();
+            if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+            Activate();
+            // Activate() alone does not pull focus from another application; the
+            // Topmost flip is the documented WPF workaround and is reverted at once.
+            Topmost = true;
+            Topmost = false;
+        }
+
+        /// <summary>Show when hidden or minimised, hide when it is the visible window.</summary>
+        public void ToggleFromHotkey()
+        {
+            if (IsVisible && WindowState != WindowState.Minimized)
+            {
+                Hide();
+                return;
+            }
+
+            ShowFromTray();
         }
 
         // Moved to MainWindow.Pools.cs: Pool/session loading, filtering, overview.

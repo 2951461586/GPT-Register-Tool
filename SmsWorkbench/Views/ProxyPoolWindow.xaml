@@ -161,6 +161,21 @@
           <DataGridTextColumn Header="{loc:Tr Key='延迟(ms)'}" Binding="{Binding Latency}" Width="90"/>
           <DataGridTextColumn Header="{loc:Tr Key='质量分'}" Binding="{Binding Quality}" Width="80"/>
           <DataGridTextColumn Header="{loc:Tr Key='结论'}" Binding="{Binding Result}" Width="140"/>
+          <!-- Per-row measurement. Deliberately not a second toolbar command: the
+               operator's question is "is THIS exit still alive", and a whole-pool
+               re-test throws away the grid state that answers it for the others. -->
+          <DataGridTemplateColumn Header="{loc:Tr Key='测速'}" Width="80" CanUserSort="False">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate>
+                <Button Style="{StaticResource SecondaryButton}"
+                        Height="24" Padding="8,0" HorizontalAlignment="Center"
+                        Content="{loc:Tr Key='测速'}"
+                        ToolTip="{loc:Tr Key='测速中…'}"
+                        Command="{Binding DataContext.TestRowCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                        CommandParameter="{Binding}"/>
+              </DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
         </DataGrid.Columns>
       </DataGrid>
     </Border>

@@ -1,5 +1,4 @@
 using System.Text.Json.Nodes;
-using SmsWorkbench;
 
 namespace SmsWorkbench.Tests;
 
@@ -91,4 +90,64 @@ internal sealed class StubUpdateChecker : IUpdateChecker
         cancellationToken.ThrowIfCancellationRequested();
         return Handler(cancellationToken, force);
     }
+}
+
+/// <summary>
+/// Tray icon double. <see cref="IsAvailable"/> and <see cref="ExitRequested"/> are
+/// settable so a test can walk the close-to-tray truth table without a shell.
+/// </summary>
+internal sealed class StubTrayIconService : ITrayIconService
+{
+    public bool IsAvailable { get; set; }
+
+    public bool ExitRequested { get; set; }
+
+    public int HiddenNotifications { get; private set; }
+
+    public event EventHandler? ShowRequested;
+
+    public event EventHandler? QuitRequested;
+
+    public void Initialize()
+    {
+    }
+
+    public void NotifyHiddenToTray() => HiddenNotifications++;
+
+    public void RaiseShowRequested() => ShowRequested?.Invoke(this, EventArgs.Empty);
+
+    public void RaiseQuitRequested()
+    {
+        ExitRequested = true;
+        QuitRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void Dispose()
+    {
+    }
+}
+
+/// <summary>Global hotkey double: records what was asked for, never touches user32.</summary>
+internal sealed class StubGlobalHotkeyService : IGlobalHotkeyService
+{
+    public bool IsRegistered { get; private set; }
+
+    public (System.Windows.Input.ModifierKeys Modifiers, System.Windows.Input.Key Key)? Requested { get; private set; }
+
+    public bool RegisterResult { get; set; }
+
+    public bool Disposed { get; private set; }
+
+    public event EventHandler? Pressed;
+
+    public bool TryRegister(System.Windows.Window window, System.Windows.Input.ModifierKeys modifiers, System.Windows.Input.Key key)
+    {
+        Requested = (modifiers, key);
+        IsRegistered = RegisterResult;
+        return RegisterResult;
+    }
+
+    public void RaisePressed() => Pressed?.Invoke(this, EventArgs.Empty);
+
+    public void Dispose() => Disposed = true;
 }

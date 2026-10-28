@@ -23,16 +23,18 @@
 
 ## 2. 启动与资源
 
-`App.xaml` 合并五个字典，顺序即优先级。
+`App.xaml` 合并六个字典，顺序即优先级。其中**两套**主题字典各自换：Wpf.Ui 的
+`Resources/Theme/*.xaml` 归 `ApplicationThemeManager`，`Themes/Colors.*.xaml` 归
+`MainWindow.SwapColorScheme`。
 
 ```text
-Wpf.Ui.xaml -> Themes/Tokens.xaml -> Themes/Glyphs.xaml -> Themes/Colors.Light.xaml -> Themes/Controls.xaml
-基础模板        间距/圆角/字阶/动效     字形几何            颜色（运行时整体替换）        工作台覆盖样式
+Wpf.Ui.xaml -> Wpf.Ui Theme/Light.xaml -> Themes/Tokens.xaml -> Themes/Glyphs.xaml -> Themes/Colors.Light.xaml -> Themes/Controls.xaml
+基础模板        WPF-UI 主题键（换主题）      间距/圆角/字阶/动效     字形几何            颜色（运行时整体替换）        工作台覆盖样式
 ```
 
 | 文件 | 行数 | 内容 |
 | --- | ---: | --- |
-| `SmsWorkbench/App.xaml` | 23 | `ResourceDictionary.MergedDictionaries`，无内联样式 |
+| `SmsWorkbench/App.xaml` | 35 | `ResourceDictionary.MergedDictionaries`，无内联样式 |
 | `SmsWorkbench/Themes/Tokens.xaml` | 122 | 与主题无关的刻度：`Space.*`（4px 网格）、`Radius.*`/`Corner.*`、`Type.*`、`Font.Mono`、`Size.ScrollBar.*`/`Size.Splitter.*`、`Motion.*` |
 | `SmsWorkbench/Themes/Glyphs.xaml` | 105 | 34 个 Tabler v3.50.0 字形（`Glyph.*`，MIT）+ 2 个手绘窗口 chrome 字形；同义几何复用同一个键，每个键上方注明来源图标名 |
 | `SmsWorkbench/Themes/Colors.Light.xaml` | 108 | 光色：5 级表面 `Surface.*`、3 级文字、状态徽章、`Divider`、ComboBox 弹层键 |
@@ -52,9 +54,26 @@ Wpf.Ui.xaml -> Themes/Tokens.xaml -> Themes/Glyphs.xaml -> Themes/Colors.Light.x
 3. **色板键名是对外契约。** `WindowThemeService` 从 `PanelBg`/`TextMain` 取 DWM
    标题栏色，`DesktopWindowSmokeTests` 断言 `SettingsSelectionBg`/`…Border`，所以旧
    键在 `Colors.*` 里保留为别名，不删。
+4. **Wpf.Ui 的主题字典必须出现在合并列表里，而且位置有讲究。** Wpf.Ui 4.3.0 的
+   `Wpf.Ui.xaml` 只合并控件模板与静态色表，**不含** `Resources/Theme/{Light,Dark}.xaml`；
+   而 `ApplicationThemeManager.Apply` 只会替换「Source 同时含 `wpf.ui;` 与 `theme`」
+   的那个合并字典，找不到就在写缓存前 `return`。缺这一行时 `Apply` 是**静默 no-op**：
+   `GetAppTheme()` 永远 `Unknown`、`Changed` 不触发、未被 `Controls.xaml` 覆盖的
+   WPF-UI 模板键（`TextFillColor*Brush`、`MenuItem`/`DataGrid` 禁用态…）全部悬空。
+   位置必须在 `Wpf.Ui.xaml` 之后（主题键通过它解析 `SystemAccentColorPrimary`）、
+   `Themes/Colors.Light.xaml` 之前（两套字典共有的 `ComboBoxDropDown*` 键由工作台
+   色板胜出，否则深色模式会继承 Wpf.Ui 的浅色弹层）。
+5. **启动主题只有一条日志。** `MainWindow` 构造函数用 `ApplyStartupTheme(theme, log: false)`
+   静默播种色板（供 `DesktopWindowSmokeTests` 这类不走 `App.OnStartup` 的场景），
+   `App.OnStartup` 是**唯一**写「启动主题已应用」的调用点。两处都写时，每次启动会先
+   打印构造函数的猜测（`Unknown` 不是 `Dark`，于是 `Light`）再打印偏好值（`Dark`）。
 
 `tests/workbench/test_sms_workbench_layout.py` 钉住「根目录只有应用壳」「`Themes/`
-是纯资源目录（无 code-behind）」「`Source=` 相对路径必须从 XAML 自身目录可解析」。
+是纯资源目录（无 code-behind）」「`Source=` 相对路径必须从 XAML 自身目录可解析」；
+`tests/workbench/test_theme_palette_consistency.py` 钉住两套色板的键集与阶梯；
+`tests/workbench/test_startup_theme_contract.py` 钉住上面第 4、5 条（合并项及其位置、
+日志调用点唯一），行为面由 `DesktopWindowSmokeTests` 兜底（字典真的换、构造函数真的
+不打日志）。
 
 ## 3. `MainWindow` 的组合方式
 
@@ -302,3 +321,33 @@ Wpf.Ui.xaml -> Themes/Tokens.xaml -> Themes/Glyphs.xaml -> Themes/Colors.Light.x
 | 后端 JSON → 领域对象 | `SmsWorkbench/Interop/BackendResultInterpreter.cs` |
 | 只读桌面契约 | `SmsWorkbench/Interop/DesktopReadClient.cs` + Python `desktop_ipc` |
 | C# 构建告警基线 | `scripts/dotnet_warning_ratchet.py` |
+
+## 6. 外壳能力：主题三态 / 托盘 / 仪表盘 / 工作区
+
+这一层是「窗口的外面」——它不属于任何业务面板，但决定长跑批次能不能活着。
+
+| 能力 | 文件 | 契约 |
+| --- | --- | --- |
+| 主题三态 | `Models/DesktopThemeMode.cs`、`DesktopThemePreference.cs`、`Views/MainWindow.Theme.cs` | 持久化的是**模式**（`System`/`Light`/`Dark`），不是解析后的色板；`System` 由 `SystemThemeWatcher` 持续跟随，回调经 `ApplicationThemeManager.Changed` 把工作台色板一起换掉。侧栏按钮循环 `Light -> Dark -> System` |
+| 托盘 + 关闭到托盘 | `Services/TrayIconService.cs`、`Services/CloseToTrayPolicy.cs` | `Shell_NotifyIcon` + 隐藏工具窗口（不引入 WinForms：一个 16px 图标不值得第二套 UI 栈，且消息窗口收不到 `TaskbarCreated`）；关闭时隐藏，只有托盘「退出」才真关 |
+| 全局热键 | `Services/GlobalHotkeyService.cs` | `Ctrl+Alt+R` 显示/隐藏；注册失败只警告（组合可能已被占用），绝不阻塞启动 |
+| 吞吐/成功率仪表盘 | `ViewModels/MetricsViewModel.cs`、`Views/Sparkline.cs` | 数据源是同一条 `BackendProgressEvent` 流（每个账号一个 terminal 事件），滚动窗口 10 分钟 / 10 秒一格；`cancelled` 不计入分母。**失败分类**按事件自带的 `FailureClass` 分桶（机器名原样显示，与日志可 grep 的词汇一致），无分类的归入本地化「未知」桶；没有失败时整段隐藏 |
+| 池页内联测速 | `ViewModels/ProxyPoolViewModel.cs::MeasureRowAsync` | 复用单代理测试通道写回**该行**，不重建表格（保住选中、滚动与其它行的筛查结论） |
+| 外壳开关（可关） | `Models/DesktopShellPreference.cs`、`Views/MainWindow.Shell.cs` | `runtime/desktop_shell.json` 存 `{tray, hotkey}`，默认都开；关掉托盘后「关闭」即退出（`CloseToTrayPolicy` 自然返回 false），关掉热键后 `Dispose` 释放注册 |
+| 工作区备份/恢复 | `Services/WorkspaceBackupService.cs` | 显式白名单（配置 shard + 账号库 + 两个 UI 偏好）**加上配置里 `email_registration.token_file` 指向的邮箱池文件**；manifest 同时充当恢复时的允许名单；恢复前把现有文件复制到 `runtime/restore-<ts>/`，并做 zip-slip 双重校验 |
+
+三条不变式，各有守卫：
+
+1. **关闭 ≠ 退出。** `CloseToTrayPolicy` 的真值表是纯函数并被单测钉住；窗口级行为由 `DesktopWindowSmokeTests` 覆盖（有图标 → 隐藏且不销毁；托盘退出 → 真关且释放热键）。
+2. **仪表盘只读事件，不猜日志。** 指标全部来自结构化 `BackendProgressEvent`；窗口算术显式接受 `nowUtc`，因此可以在不睡眠的情况下测过去。
+3. **备份是白名单，不是目录复制。** `WorkspaceBackupServiceTests` 断言日志/缓存不会进包、恢复不会写出到根目录之外。
+
+`scripts/broad_except_ratchet.py` + `scripts/broad_except_baseline.json` 是新增的 Python 侧闸门（
+`tests/governance/test_broad_except_ratchet.py` 保护它），按三层判定：
+
+* `whitelist`——**设计上就需要**宽泛处理的文件，每条必须写 `reason`（目前 4 条：代理桥接清理、浏览器进程回收、
+  desktop-serve 请求隔离、日志初始化）；理由为空即失败，文件已没有宽泛处理器仍留在名单里也失败（那是过期许可）。
+* `policy`——全局预算（`max_broad`/`max_silent`）。只冻结单文件，等于允许"A 文件删一个、B 文件加一个"；预算堵住这条路。
+* `files`——其余文件的冻结额度，是债务不是背书，只应下降。
+
+和 `dotnet_warning_ratchet.py` / `pyright_ratchet.py` 同一套思路：先冻结、再加预算、最后逐条白名单化。

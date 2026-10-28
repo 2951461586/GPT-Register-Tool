@@ -192,6 +192,9 @@ namespace SmsWorkbench
                 if (BackendProgressEventParser.TryParse(line.Text, out BackendProgressEvent? progressEvent))
                 {
                     LogBackendProgress(taskName, progressEvent);
+                    // One terminal event per finished account is the throughput sample;
+                    // the strip's window arithmetic lives in MetricsViewModel.
+                    Metrics.Record(progressEvent);
                     if (progressEvent.Domain == "registration" && progressEvent.Stage == "registration_status_changed")
                         RefreshPoolsThrottled(preserveView: true);
                     // The backend drops cooling/quarantined/dead-end mailboxes

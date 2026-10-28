@@ -63,8 +63,37 @@
 
           <local:WorkbenchConsole x:Name="ConsoleControl" Grid.Row="3" TaskList="{Binding TaskList}" LogPanel="{Binding LogPanel}"/>
 
+          <!-- Status bar: the rolling throughput strip on the left, the operator
+               message on the right. The strip lives here rather than in its own row
+               because it is ambient information, not a panel: it must cost no vertical
+               space that the account grid could use. -->
           <Border Grid.Row="4" Background="{DynamicResource StatusBg}" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0">
-            <TextBlock Margin="8,3" Text="{Binding StatusBar.Text}" Foreground="{DynamicResource TextSub}"/>
+            <Grid Margin="8,2">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+              </Grid.ColumnDefinitions>
+              <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                <local:Sparkline Width="72" Height="12" Margin="0,0,8,0"
+                                 VerticalAlignment="Center"
+                                 Values="{Binding Metrics.Throughput}"
+                                 Stroke="{DynamicResource Primary}"/>
+                <TextBlock VerticalAlignment="Center"
+                           FontSize="{StaticResource Type.Caption.Size}"
+                           Foreground="{DynamicResource TextSub}"
+                           Text="{Binding Metrics.SummaryText}"/>
+                <!-- Failure split: hidden while nothing fails, so the strip does not
+                     permanently reserve space for an empty slot. -->
+                <TextBlock Margin="10,0,0,0"
+                           VerticalAlignment="Center"
+                           FontSize="{StaticResource Type.Caption.Size}"
+                           Foreground="{DynamicResource Danger}"
+                           Visibility="{Binding Metrics.FailureVisible, Converter={StaticResource BooleanToVisibilityConverter}}"
+                           Text="{Binding Metrics.FailureText}"/>
+              </StackPanel>
+              <TextBlock Grid.Column="2" VerticalAlignment="Center" Text="{Binding StatusBar.Text}" Foreground="{DynamicResource TextSub}"/>
+            </Grid>
           </Border>
         </Grid>
       </Grid>

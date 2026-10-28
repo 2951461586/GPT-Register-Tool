@@ -103,6 +103,84 @@ namespace SmsWorkbench
                 cancellationToken).ConfigureAwait(true);
         }
 
+        /// <summary>
+        /// Measure one row through the same single-proxy path the whole-pool command
+        /// uses, and write the answer back into that row.
+        /// </summary>
+        /// <remarks>
+        /// The grid is not rebuilt: a measurement is one row's business, and replacing
+        /// the collection would drop the operator's selection, scroll position, and any
+        /// screening verdict the other rows already carry. The service is asked with a
+        /// one-entry pool, so this needs no new backend operation and is not a second
+        /// code path to keep in sync with <see cref="TestAsync"/>.
+        /// </remarks>
+        /// <remarks>
+        /// The command is a thin wrapper so the behaviour is callable without a command
+        /// instance: a test does not need the toolkit's generated surface, and neither
+        /// does a future call site that measures a row without a click.
+        /// </remarks>
+        [RelayCommand]
+        private Task TestRowAsync(ProxyPoolRow? row, CancellationToken cancellationToken)
+            => MeasureRowAsync(row, cancellationToken);
+
+        /// <summary>Measures one row in place. Public so callers other than the button can reuse it.</summary>
+        public async Task MeasureRowAsync(ProxyPoolRow? row, CancellationToken cancellationToken = default)
+        {
+            if (row is null || row.IsTesting || string.IsNullOrWhiteSpace(row.Proxy)) return;
+
+            row.IsTesting = true;
+            row.Latency = Loc.T("测速中…");
+            try
+            {
+                JsonElement payload = await _proxyPoolService.TestAsync(
+                    new ProxyPoolRequest(Lane, row.Proxy, Country, 1, 6.0, ParseInt(QualityMin, 70)),
+                    cancellationToken).ConfigureAwait(true);
+
+                ProxyPoolRow? measured = FirstResultRow(payload);
+                if (measured is null)
+                {
+                    row.Latency = "-";
+                    row.Result = Loc.T("无结果");
+                    return;
+                }
+
+                row.Latency = string.IsNullOrWhiteSpace(measured.Latency) ? "-" : measured.Latency;
+                row.Result = measured.Result;
+                row.Edge = measured.Edge;
+                row.NetworkType = measured.NetworkType;
+            }
+            catch (OperationCanceledException)
+            {
+                row.Latency = "-";
+                row.Result = Loc.T("已取消");
+            }
+            catch (Exception ex)
+            {
+                row.Latency = "-";
+                row.Result = Loc.T("失败：") + ex.Message;
+            }
+            finally
+            {
+                row.IsTesting = false;
+            }
+        }
+
+        private static ProxyPoolRow? FirstResultRow(JsonElement payload)
+        {
+            if (payload.ValueKind != JsonValueKind.Object
+                || !payload.TryGetProperty("results", out JsonElement results))
+            {
+                return null;
+            }
+
+            foreach (JsonElement item in Enumerate(results))
+            {
+                return FromTestRow(item);
+            }
+
+            return null;
+        }
+
         private ProxyPoolRequest Request()
             => new(Lane, PoolText, Country, ParseInt(Workers, 8), 6.0, ParseInt(QualityMin, 70));
 

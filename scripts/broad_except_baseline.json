@@ -1,0 +1,803 @@
+{
+  "_comment": "Broad-except gate state (see scripts/broad_except_ratchet.py). 'files' is frozen debt with a hard ceiling in 'policy'; 'whitelist' is the reviewed set where a broad handler is the design. A file absent from both has an allowance of 0.",
+  "files": {
+    "services/mail-otp-web/app.py": {
+      "broad": 5,
+      "silent": 0
+    },
+    "services/protocol-payment/blik/blik_qr_extract.py": {
+      "broad": 14,
+      "silent": 0
+    },
+    "services/protocol-payment/common/checkout_session.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "services/protocol-payment/common/geo.py": {
+      "broad": 3,
+      "silent": 0
+    },
+    "services/protocol-payment/common/payload_helpers.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "services/protocol-payment/common/protocol_core.py": {
+      "broad": 2,
+      "silent": 0
+    },
+    "services/protocol-payment/common/proxy_state.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "services/protocol-payment/common/stripe_flow.py": {
+      "broad": 2,
+      "silent": 0
+    },
+    "services/protocol-payment/direct_card/direct_card_extract.py": {
+      "broad": 5,
+      "silent": 0
+    },
+    "services/protocol-payment/ideal/ideal_qr_extract.py": {
+      "broad": 16,
+      "silent": 0
+    },
+    "services/protocol-payment/kakao/kakao_extract.py": {
+      "broad": 6,
+      "silent": 0
+    },
+    "services/protocol-payment/momo/ac_paylink_core.py": {
+      "broad": 7,
+      "silent": 0
+    },
+    "services/protocol-payment/momo/momo_qr_extract.py": {
+      "broad": 12,
+      "silent": 0
+    },
+    "services/protocol-payment/momo/run_momo.py": {
+      "broad": 2,
+      "silent": 0
+    },
+    "services/protocol-payment/pix/pix_core.py": {
+      "broad": 9,
+      "silent": 0
+    },
+    "services/protocol-payment/pix/pix_extract.py": {
+      "broad": 9,
+      "silent": 0
+    },
+    "services/protocol-payment/twint/twint_extract.py": {
+      "broad": 16,
+      "silent": 0
+    },
+    "sms_tool/account_creation.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/account_seed.py": {
+      "broad": 2,
+      "silent": 1
+    },
+    "sms_tool/accounts/account_2fa.py": {
+      "broad": 5,
+      "silent": 0
+    },
+    "sms_tool/accounts/account_email_change.py": {
+      "broad": 4,
+      "silent": 0
+    },
+    "sms_tool/accounts/account_events.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/accounts/account_health_queue.py": {
+      "broad": 3,
+      "silent": 1
+    },
+    "sms_tool/accounts/account_identity.py": {
+      "broad": 2,
+      "silent": 0
+    },
+    "sms_tool/accounts/account_lifecycle.py": {
+      "broad": 2,
+      "silent": 0
+    },
+    "sms_tool/accounts/account_liveness.py": {
+      "broad": 9,
+      "silent": 4
+    },
+    "sms_tool/accounts/account_promotion.py": {
+      "broad": 6,
+      "silent": 0
+    },
+    "sms_tool/accounts/account_recovery.py": {
+      "broad": 10,
+      "silent": 5
+    },
+    "sms_tool/accounts/account_scan.py": {
+      "broad": 5,
+      "silent": 0
+    },
+    "sms_tool/accounts/promotion_batch.py": {
+      "broad": 3,
+      "silent": 2
+    },
+    "sms_tool/accounts/recovery_batch.py": {
+      "broad": 8,
+      "silent": 7
+    },
+    "sms_tool/accounts/wham_usage.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/agent_identity.py": {
+      "broad": 16,
+      "silent": 1
+    },
+    "sms_tool/auth_flow/login.py": {
+      "broad": 4,
+      "silent": 0
+    },
+    "sms_tool/auth_flow/otp.py": {
+      "broad": 4,
+      "silent": 0
+    },
+    "sms_tool/auth_flow/password_step.py": {
+      "broad": 3,
+      "silent": 0
+    },
+    "sms_tool/auth_flow/signup.py": {
+      "broad": 3,
+      "silent": 0
+    },
+    "sms_tool/auth_flow/steps.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/auth_flow/totp.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/auth_headers.py": {
+      "broad": 8,
+      "silent": 2
+    },
+    "sms_tool/auth_state.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/batch_runner.py": {
+      "broad": 19,
+      "silent": 7
+    },
+    "sms_tool/browser_fingerprint_pool.py": {
+      "broad": 2,
+      "silent": 0
+    },
+    "sms_tool/browser_pool.py": {
+      "broad": 10,
+      "silent": 0
+    },
+    "sms_tool/capability_browser.py": {
+      "broad": 5,
+      "silent": 0
+    },
+    "sms_tool/captcha_solver.py": {
+      "broad": 16,
+      "silent": 13
+    },
+    "sms_tool/chatgpt_bootstrap.py": {
+      "broad": 6,
+      "silent": 0
+    },
+    "sms_tool/cli.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/codex_export.py": {
+      "broad": 6,
+      "silent": 0
+    },
+    "sms_tool/codex_oauth.py": {
+      "broad": 17,
+      "silent": 0
+    },
+    "sms_tool/codex_sentinel.py": {
+      "broad": 2,
+      "silent": 1
+    },
+    "sms_tool/commands/accounts.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/commands/email_change.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/commands/mailbox_ops.py": {
+      "broad": 2,
+      "silent": 0
+    },
+    "sms_tool/commands/one_click.py": {
+      "broad": 3,
+      "silent": 0
+    },
+    "sms_tool/commands/registration.py": {
+      "broad": 7,
+      "silent": 1
+    },
+    "sms_tool/config/loader.py": {
+      "broad": 3,
+      "silent": 0
+    },
+    "sms_tool/config/schema.py": {
+      "broad": 2,
+      "silent": 1
+    },
+    "sms_tool/cpa_import.py": {
+      "broad": 9,
+      "silent": 1
+    },
+    "sms_tool/desktop_read.py": {
+      "broad": 2,
+      "silent": 0
+    },
+    "sms_tool/desktop_serve.py": {
+      "broad": 2,
+      "silent": 1
+    },
+    "sms_tool/diagnostics.py": {
+      "broad": 2,
+      "silent": 2
+    },
+    "sms_tool/doctor.py": {
+      "broad": 9,
+      "silent": 0
+    },
+    "sms_tool/fingerprint_pool.py": {
+      "broad": 5,
+      "silent": 0
+    },
+    "sms_tool/gcash_provider.py": {
+      "broad": 4,
+      "silent": 0
+    },
+    "sms_tool/gcash_transport.py": {
+      "broad": 6,
+      "silent": 0
+    },
+    "sms_tool/geo/clock.py": {
+      "broad": 6,
+      "silent": 0
+    },
+    "sms_tool/geo/resolver.py": {
+      "broad": 5,
+      "silent": 0
+    },
+    "sms_tool/http_client.py": {
+      "broad": 11,
+      "silent": 2
+    },
+    "sms_tool/http_utils.py": {
+      "broad": 3,
+      "silent": 0
+    },
+    "sms_tool/k12_client.py": {
+      "broad": 2,
+      "silent": 0
+    },
+    "sms_tool/k12_identity.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/kernel/error_classification.py": {
+      "broad": 1,
+      "silent": 1
+    },
+    "sms_tool/logging_setup.py": {
+      "broad": 5,
+      "silent": 2
+    },
+    "sms_tool/mail_otp.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/mailbox/poll.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/mailbox/quarantine.py": {
+      "broad": 1,
+      "silent": 1
+    },
+    "sms_tool/mailbox/reclaim.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/mailbox/router.py": {
+      "broad": 9,
+      "silent": 0
+    },
+    "sms_tool/mailbox/service.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/mailbox/strategies.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/nexsms.py": {
+      "broad": 3,
+      "silent": 0
+    },
+    "sms_tool/nodriver_captcha.py": {
+      "broad": 10,
+      "silent": 1
+    },
+    "sms_tool/nodriver_paypal.py": {
+      "broad": 7,
+      "silent": 0
+    },
+    "sms_tool/omakse_client.py": {
+      "broad": 5,
+      "silent": 2
+    },
+    "sms_tool/operation_journal.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/otp_strategy.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/page_truth.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/pay_link/adapters.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/pay_link/core.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/payment/batch.py": {
+      "broad": 3,
+      "silent": 0
+    },
+    "sms_tool/payment/capability.py": {
+      "broad": 13,
+      "silent": 0
+    },
+    "sms_tool/payment/executor.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/payment/qualification.py": {
+      "broad": 3,
+      "silent": 0
+    },
+    "sms_tool/payment/qualification_batch.py": {
+      "broad": 6,
+      "silent": 2
+    },
+    "sms_tool/payment/wire.py": {
+      "broad": 2,
+      "silent": 0
+    },
+    "sms_tool/paypal/authorization_queue.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/paypal/config_picker.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/paypal/dom_fields.py": {
+      "broad": 14,
+      "silent": 0
+    },
+    "sms_tool/paypal/extract.py": {
+      "broad": 11,
+      "silent": 0
+    },
+    "sms_tool/paypal/flow_steps.py": {
+      "broad": 5,
+      "silent": 0
+    },
+    "sms_tool/paypal/form_steps.py": {
+      "broad": 3,
+      "silent": 0
+    },
+    "sms_tool/paypal/orchestrator.py": {
+      "broad": 2,
+      "silent": 0
+    },
+    "sms_tool/paypal/protocol.py": {
+      "broad": 4,
+      "silent": 0
+    },
+    "sms_tool/paypal/proxy.py": {
+      "broad": 5,
+      "silent": 0
+    },
+    "sms_tool/paypal/reverse.py": {
+      "broad": 8,
+      "silent": 0
+    },
+    "sms_tool/paypal/session.py": {
+      "broad": 4,
+      "silent": 0
+    },
+    "sms_tool/paypal_link/gen_link.py": {
+      "broad": 6,
+      "silent": 0
+    },
+    "sms_tool/paypal_link/reconciliation.py": {
+      "broad": 3,
+      "silent": 0
+    },
+    "sms_tool/phone_config.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/phone_pool.py": {
+      "broad": 2,
+      "silent": 0
+    },
+    "sms_tool/phone_provider_lifecycle.py": {
+      "broad": 3,
+      "silent": 0
+    },
+    "sms_tool/phone_proxy.py": {
+      "broad": 9,
+      "silent": 3
+    },
+    "sms_tool/phone_registration.py": {
+      "broad": 7,
+      "silent": 2
+    },
+    "sms_tool/phone_reuse.py": {
+      "broad": 6,
+      "silent": 1
+    },
+    "sms_tool/pp_link_helpers.py": {
+      "broad": 4,
+      "silent": 0
+    },
+    "sms_tool/providers/cfworker_client.py": {
+      "broad": 12,
+      "silent": 0
+    },
+    "sms_tool/providers/mailbox_cfworker.py": {
+      "broad": 2,
+      "silent": 0
+    },
+    "sms_tool/providers/mailbox_gmail.py": {
+      "broad": 8,
+      "silent": 4
+    },
+    "sms_tool/providers/mailbox_graph.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/providers/mailbox_icloud_url.py": {
+      "broad": 7,
+      "silent": 0
+    },
+    "sms_tool/providers/mailbox_remail.py": {
+      "broad": 16,
+      "silent": 1
+    },
+    "sms_tool/providers/mailbox_smailr.py": {
+      "broad": 2,
+      "silent": 1
+    },
+    "sms_tool/providers/outlook_imap_client.py": {
+      "broad": 10,
+      "silent": 2
+    },
+    "sms_tool/providers/smailr_client.py": {
+      "broad": 5,
+      "silent": 1
+    },
+    "sms_tool/proxy/admin.py": {
+      "broad": 6,
+      "silent": 0
+    },
+    "sms_tool/proxy/asn_registry.py": {
+      "broad": 5,
+      "silent": 1
+    },
+    "sms_tool/proxy/bridge.py": {
+      "broad": 13,
+      "silent": 6
+    },
+    "sms_tool/proxy/edge_probe.py": {
+      "broad": 6,
+      "silent": 1
+    },
+    "sms_tool/proxy/entry.py": {
+      "broad": 3,
+      "silent": 0
+    },
+    "sms_tool/proxy/pool.py": {
+      "broad": 10,
+      "silent": 4
+    },
+    "sms_tool/proxy/registry.py": {
+      "broad": 2,
+      "silent": 0
+    },
+    "sms_tool/proxy/routing.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/proxy/screening.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/regional_payment_adapter.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/registration/account_stages.py": {
+      "broad": 5,
+      "silent": 0
+    },
+    "sms_tool/registration/bootstrap_stages.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/registration/checkpoint.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/registration/concurrency.py": {
+      "broad": 2,
+      "silent": 0
+    },
+    "sms_tool/registration/edge_challenge.py": {
+      "broad": 2,
+      "silent": 0
+    },
+    "sms_tool/registration/finalize.py": {
+      "broad": 3,
+      "silent": 1
+    },
+    "sms_tool/registration/handlers.py": {
+      "broad": 3,
+      "silent": 1
+    },
+    "sms_tool/registration/identity_stages.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/registration/otp_stages.py": {
+      "broad": 3,
+      "silent": 0
+    },
+    "sms_tool/registration/preflight.py": {
+      "broad": 6,
+      "silent": 4
+    },
+    "sms_tool/registration/probe.py": {
+      "broad": 4,
+      "silent": 1
+    },
+    "sms_tool/registration/progress.py": {
+      "broad": 2,
+      "silent": 0
+    },
+    "sms_tool/registration/reference_lane.py": {
+      "broad": 2,
+      "silent": 0
+    },
+    "sms_tool/registration/result.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/registration/resume.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/registration/sentinel_stages.py": {
+      "broad": 2,
+      "silent": 0
+    },
+    "sms_tool/registration/state.py": {
+      "broad": 3,
+      "silent": 0
+    },
+    "sms_tool/registration/warmup.py": {
+      "broad": 2,
+      "silent": 0
+    },
+    "sms_tool/registration_drivers/browser_flow/dom_fields.py": {
+      "broad": 15,
+      "silent": 4
+    },
+    "sms_tool/registration_drivers/browser_flow/flow_steps.py": {
+      "broad": 5,
+      "silent": 2
+    },
+    "sms_tool/registration_drivers/browser_flow/form_steps.py": {
+      "broad": 12,
+      "silent": 3
+    },
+    "sms_tool/registration_drivers/browser_flow/orchestrator.py": {
+      "broad": 10,
+      "silent": 2
+    },
+    "sms_tool/registration_drivers/browser_flow/page_state.py": {
+      "broad": 14,
+      "silent": 7
+    },
+    "sms_tool/registration_drivers/browser_flow/session.py": {
+      "broad": 9,
+      "silent": 5
+    },
+    "sms_tool/registration_drivers/browser_session.py": {
+      "broad": 14,
+      "silent": 5
+    },
+    "sms_tool/registration_drivers/external_sessions/managed.py": {
+      "broad": 17,
+      "silent": 9
+    },
+    "sms_tool/registration_drivers/external_sessions/probe.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/registration_drivers/stealth.py": {
+      "broad": 4,
+      "silent": 1
+    },
+    "sms_tool/sentinel/bundle.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/sentinel/client.py": {
+      "broad": 9,
+      "silent": 4
+    },
+    "sms_tool/sentinel/runner.py": {
+      "broad": 1,
+      "silent": 1
+    },
+    "sms_tool/sentinel_tokens.py": {
+      "broad": 13,
+      "silent": 1
+    },
+    "sms_tool/session_converter.py": {
+      "broad": 6,
+      "silent": 1
+    },
+    "sms_tool/session_refresh.py": {
+      "broad": 5,
+      "silent": 2
+    },
+    "sms_tool/sms_utils.py": {
+      "broad": 2,
+      "silent": 1
+    },
+    "sms_tool/smsbower.py": {
+      "broad": 5,
+      "silent": 0
+    },
+    "sms_tool/stdout_mirror.py": {
+      "broad": 2,
+      "silent": 2
+    },
+    "sms_tool/store/accounts.py": {
+      "broad": 7,
+      "silent": 3
+    },
+    "sms_tool/store/markers.py": {
+      "broad": 10,
+      "silent": 5
+    },
+    "sms_tool/store/normalize.py": {
+      "broad": 5,
+      "silent": 1
+    },
+    "sms_tool/sub2api_import.py": {
+      "broad": 8,
+      "silent": 1
+    },
+    "sms_tool/upi_link/_extract.py": {
+      "broad": 2,
+      "silent": 0
+    },
+    "sms_tool/upi_link/_vendor/upi_sentinel.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/upi_link/browser.py": {
+      "broad": 11,
+      "silent": 0
+    },
+    "sms_tool/upi_link/config.py": {
+      "broad": 2,
+      "silent": 0
+    },
+    "sms_tool/upi_link/dump.py": {
+      "broad": 3,
+      "silent": 0
+    },
+    "sms_tool/upi_link/extract.py": {
+      "broad": 2,
+      "silent": 0
+    },
+    "sms_tool/upi_link/flows.py": {
+      "broad": 2,
+      "silent": 0
+    },
+    "sms_tool/upi_link/india_exit.py": {
+      "broad": 2,
+      "silent": 0
+    },
+    "sms_tool/upi_link/sentinel.py": {
+      "broad": 7,
+      "silent": 0
+    },
+    "sms_tool/upi_link/session.py": {
+      "broad": 6,
+      "silent": 0
+    },
+    "sms_tool/upi_link/stages.py": {
+      "broad": 11,
+      "silent": 0
+    },
+    "sms_tool/upi_link/stripe.py": {
+      "broad": 9,
+      "silent": 0
+    },
+    "sms_tool/upi_link/verify.py": {
+      "broad": 2,
+      "silent": 0
+    },
+    "sms_tool/wallet_provider.py": {
+      "broad": 2,
+      "silent": 0
+    },
+    "sms_tool/wallet_transport.py": {
+      "broad": 5,
+      "silent": 0
+    },
+    "sms_tool/workspace_scan.py": {
+      "broad": 3,
+      "silent": 0
+    }
+  },
+  "policy": {
+    "max_broad": 962,
+    "max_silent": 155
+  },
+  "totals": {
+    "broad": 962,
+    "silent": 155
+  },
+  "whitelist": {
+    "sms_tool/browser_pool.py": {
+      "broad": 10,
+      "reason": "Browser/process teardown shared by four drivers: killing a wedged child, closing a context, or recycling a slot is best effort by definition.",
+      "silent": 0
+    },
+    "sms_tool/desktop_serve.py": {
+      "broad": 2,
+      "reason": "Request isolation in the resident desktop-read server: one malformed request must answer with an error code, not kill the process the shell depends on.",
+      "silent": 1
+    },
+    "sms_tool/logging_setup.py": {
+      "broad": 5,
+      "reason": "Logging configuration is best effort: a missing log directory, a locked file or an unavailable sink must not stop the run that was being logged.",
+      "silent": 2
+    },
+    "sms_tool/proxy/pool.py": {
+      "broad": 10,
+      "reason": "SOCKS5 bridge teardown: a broken client socket, a half-open upstream or a stats-write failure must never take the listener down for every other session.",
+      "silent": 4
+    }
+  }
+}

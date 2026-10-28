@@ -89,6 +89,19 @@ sms_tool.config.schema.ConfigError: chatgpt must be an object
 把「读者看到半个分片集」的窗口从两次 `fsync` 压到三次 rename。彻底消除需要跨进程锁，
 所以**测试侧隔离才是主修复** —— 不要因为写入侧变窄了就把这条隔离去掉。
 
+## 门禁脚本
+
+三套 ratchet 共用一套做法（先冻结、再加预算或逐条白名单化、只许降不许升）：
+
+| 脚本 | 管什么 | 配套守卫 |
+| --- | --- | --- |
+| `scripts/pyright_ratchet.py` | 类型错误（逐文件） | `tests/governance/test_pyright_ratchet.py` |
+| `scripts/dotnet_warning_ratchet.py` | C# 构建告警（逐文件，零基线） | CI 调用 + `docs/current/dotnet-gates.md` |
+| `scripts/broad_except_ratchet.py` | 宽泛 `except` 与静默 `pass`（逐文件 + 全局预算 + 白名单） | `tests/governance/test_broad_except_ratchet.py` |
+
+宽泛 `except` 的门禁多两条规则：白名单条目必须写 `reason`，且文件已经不再有宽泛处理器时
+条目也要删（过期许可和没有许可一样是错的）。
+
 ## 依赖与门禁
 
 `pytest-xdist` 在 `requirements-dev.txt`（测试工具，不是运行时依赖），装法与

@@ -47,6 +47,8 @@
   <PathGeometry x:Key="Glyph.Inbox" Figures="M4 6a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2l0 -12 M4 13h3l3 3h4l3 -3h3"/>
   <!-- tabler:language -->
   <PathGeometry x:Key="Glyph.Language" Figures="M9 6.371c0 4.418 -2.239 6.629 -5 6.629 M4 6.371h7 M5 9c0 2.144 2.252 3.908 6 4 M12 20l4 -9l4 9 M19.1 18h-6.2 M6.694 3l.793 .582"/>
+  <!-- tabler:brightness-auto -->
+  <PathGeometry x:Key="Glyph.ThemeSystem" Figures="M6 6h3.5l2.5 -2.5l2.5 2.5h3.5v3.5l2.5 2.5l-2.5 2.5v3.5h-3.5l-2.5 2.5l-2.5 -2.5h-3.5v-3.5l-2.5 -2.5l2.5 -2.5l0 -3.5 M10 14.5v-3.5a2 2 0 1 1 4 0v3.5 M10 13h4"/>
   <!-- tabler:moon -->
   <PathGeometry x:Key="Glyph.Moon" Figures="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454l0 .008"/>
   <!-- tabler:external-link -->

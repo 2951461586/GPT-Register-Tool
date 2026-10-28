@@ -6,12 +6,24 @@
   <Application.Resources>
     <ResourceDictionary>
       <ResourceDictionary.MergedDictionaries>
-        <!-- Order matters and is load-bearing: Wpf.Ui supplies the base templates,
-             Tokens.xaml the theme-independent spacing/radius/type scale, Colors.Light.xaml
-             the colour keys every control style reads, and Controls.xaml the overrides.
-             Colors.Light.xaml is swapped for Colors.Dark.xaml at runtime (same key set)
-             by MainWindow.SwapColorScheme. -->
+        <!-- Order matters and is load-bearing: Wpf.Ui supplies the base templates and
+             the static WinUI colour tables, its Theme/Light.xaml the per-theme keys those
+             templates read, Tokens.xaml the theme-independent spacing/radius/type scale,
+             Colors.Light.xaml the colour keys every workbench style reads, and
+             Controls.xaml the overrides. Two dictionaries are swapped at runtime, each by
+             its owner: Colors.Light.xaml -> Colors.Dark.xaml by MainWindow.SwapColorScheme,
+             Theme/Light.xaml -> Theme/Dark.xaml by Wpf.Ui's ApplicationThemeManager. -->
         <ResourceDictionary Source="pack://application:,,,/Wpf.Ui;component/Resources/Wpf.Ui.xaml"/>
+        <!-- Not optional, and not implied by the line above. Wpf.Ui 4.3.0's Wpf.Ui.xaml
+             merges the control templates and the static colour tables but NOT
+             Resources/Theme/*.xaml, while ApplicationThemeManager.Apply() only swaps the
+             dictionary it finds by matching "wpf.ui;" + "theme" in a merged Source (see
+             Wpf.Ui.Appearance.ResourceDictionaryManager.UpdateDictionary). Without this
+             entry Apply() returns before caching anything: GetAppTheme() answers Unknown
+             forever, Changed never fires, and every WPF-UI template key this app does not
+             override (TextFillColor*Brush, the disabled MenuItem/DataGrid states, ...)
+             resolves to nothing. tests/workbench/test_startup_theme_contract.py pins it. -->
+        <ResourceDictionary Source="pack://application:,,,/Wpf.Ui;component/Resources/Theme/Light.xaml"/>
         <ResourceDictionary Source="Themes/Tokens.xaml"/>
         <ResourceDictionary Source="Themes/Glyphs.xaml"/>
         <ResourceDictionary Source="Themes/Colors.Light.xaml"/>

@@ -220,6 +220,8 @@ public sealed class DesktopWindowSmokeTests
         stage("construct main window");
         using var logger = new Serilog.LoggerConfiguration().CreateLogger();
         var backendClient = new StubBackendClient();
+        var trayIcon = new StubTrayIconService();
+        var hotkey = new StubGlobalHotkeyService();
         var main = new MainWindow(
             new TestApplicationPaths(rootDirectory),
             backendClient,
@@ -234,26 +236,36 @@ public sealed class DesktopWindowSmokeTests
             logger,
             new FileLauncher(),
             // Never hits the network; MainWindow kicks one check off on load.
-            new StubUpdateChecker());
+            new StubUpdateChecker(),
+            new WorkspaceBackupService(new TestApplicationPaths(rootDirectory)),
+            trayIcon,
+            hotkey);
         try
         {
+            // The constructor seeds the palette but must stay silent: App.OnStartup owns
+            // the one "theme applied" line. When both logged, each start printed the
+            // constructor's guess ("Light", because GetAppTheme() could not answer)
+            // followed by the persisted value ("Dark").
+            stage("assert the constructor seeds the theme silently");
+            Assert.Equal(0, CountOccurrences(main.LogPanel.Text, StartupThemeLogMarker));
+            stage("assert an explicit apply logs once");
+            Assert.Equal(DesktopThemeMode.System, DesktopThemePreference.LoadMode(rootDirectory));
+            main.ApplyStartupTheme(DesktopThemePreference.LoadMode(rootDirectory));
+            Assert.Equal(1, CountOccurrences(main.LogPanel.Text, StartupThemeLogMarker));
+
             stage("show main window");
             main.Show();
             main.UpdateLayout();
-            stage("toggle and save theme");
-            // This smoke test constructs MainWindow without App.OnStartup;
-            // GetAppTheme may still be Unknown, which the toggle treats as Light.
-            var originalTheme = Wpf.Ui.Appearance.ApplicationThemeManager.GetAppTheme()
-                == Wpf.Ui.Appearance.ApplicationTheme.Dark
-                ? Wpf.Ui.Appearance.ApplicationTheme.Dark
-                : Wpf.Ui.Appearance.ApplicationTheme.Light;
-            var toggledTheme = originalTheme == Wpf.Ui.Appearance.ApplicationTheme.Dark
-                ? Wpf.Ui.Appearance.ApplicationTheme.Light
-                : Wpf.Ui.Appearance.ApplicationTheme.Dark;
+            stage("cycle and persist the theme mode");
+            // System -> Light -> Dark -> System. The MODE is what the file stores, not
+            // the resolved palette: writing the palette would pin a "follow system"
+            // install the first time the OS went dark.
             main.NavCommand.Execute("theme");
-            Assert.Equal(toggledTheme, DesktopThemePreference.Load(rootDirectory, originalTheme));
+            Assert.Equal(DesktopThemeMode.Light, DesktopThemePreference.LoadMode(rootDirectory));
             main.NavCommand.Execute("theme");
-            Assert.Equal(originalTheme, DesktopThemePreference.Load(rootDirectory, toggledTheme));
+            Assert.Equal(DesktopThemeMode.Dark, DesktopThemePreference.LoadMode(rootDirectory));
+            main.NavCommand.Execute("theme");
+            Assert.Equal(DesktopThemeMode.System, DesktopThemePreference.LoadMode(rootDirectory));
 
             // A3 moved the sidebar into a UserControl; its namescope is the
             // control's, not the window's.
@@ -460,6 +472,22 @@ public sealed class DesktopWindowSmokeTests
             Assert.Contains(selectedDialogTexts, text => text.Contains("本地排除 2 个", StringComparison.Ordinal));
             stage("verify mailbox selection routing");
             VerifyMailboxSelectionFileRouting(main);
+
+            // Close-to-tray: with an icon available, X hides instead of shutting down, so
+            // a stray click cannot abort a running batch. The quit request (tray menu) is
+            // what actually closes -- and a session without an icon (headless CI, failed
+            // registration) keeps the plain close path.
+            stage("close hides to the tray");
+            trayIcon.IsAvailable = true;
+            main.Close();
+            Assert.False(main.IsVisible, "closing with a tray icon must hide the window");
+            Assert.True(main.IsLoaded, "closing with a tray icon must not tear the window down");
+            Assert.Equal(1, trayIcon.HiddenNotifications);
+
+            stage("tray quit closes for real");
+            trayIcon.RaiseQuitRequested();
+            main.Close();
+            Assert.True(hotkey.Disposed, "the hotkey must be released when the shell really closes");
         }
         finally
         {
@@ -582,6 +610,9 @@ public sealed class DesktopWindowSmokeTests
             var application = CreateApplication();
             var launcher = new StubFileLauncher();
 
+            stage("verify wpf-ui theme dictionary");
+            VerifyWpfUiThemeDictionary();
+
             stage("verify combo box popup");
             VerifyComboBoxPopup();
             stage("verify scrollable controls");
@@ -657,6 +688,79 @@ public sealed class DesktopWindowSmokeTests
         application.InitializeComponent();
         application.ShutdownMode = ShutdownMode.OnExplicitShutdown;
         return application;
+    }
+
+    /// <summary>Fragment every "启动主题已应用" line starts with.</summary>
+    private const string StartupThemeLogMarker = "启动主题已应用";
+
+    private static int CountOccurrences(string haystack, string needle)
+    {
+        int count = 0;
+        for (int index = haystack.IndexOf(needle, StringComparison.Ordinal);
+             index >= 0;
+             index = haystack.IndexOf(needle, index + needle.Length, StringComparison.Ordinal))
+        {
+            count++;
+        }
+        return count;
+    }
+
+    /// <summary>
+    /// App.xaml must merge Wpf.Ui's own <c>Resources/Theme/Light.xaml</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>ApplicationThemeManager.Apply</c> swaps only the merged dictionary whose
+    /// Source carries both "wpf.ui;" and "theme" (see
+    /// <c>Wpf.Ui.Appearance.ResourceDictionaryManager.UpdateDictionary</c>). Wpf.Ui
+    /// 4.3.0's <c>Wpf.Ui.xaml</c> does not merge that pair, so before the App.xaml
+    /// entry existed <c>Apply</c> returned before caching anything: <c>GetAppTheme()</c>
+    /// answered <c>Unknown</c> forever, <c>Changed</c> never fired, and every WPF-UI
+    /// template key this app does not override resolved to nothing.
+    /// </para>
+    /// <para>
+    /// That is also the root of the duplicate startup log: the window constructor
+    /// fell back to Light because the question could not be answered, then
+    /// <c>App.OnStartup</c> applied the persisted Dark.
+    /// </para>
+    /// </remarks>
+    private static void VerifyWpfUiThemeDictionary()
+    {
+        static string[] MergedSources() => Application.Current.Resources.MergedDictionaries
+            .Select(dictionary => dictionary.Source?.OriginalString ?? "")
+            .ToArray();
+
+        Assert.Contains(
+            MergedSources(),
+            source => source.Contains("wpf.ui;", StringComparison.OrdinalIgnoreCase)
+                && source.Contains("theme", StringComparison.OrdinalIgnoreCase)
+                && source.EndsWith("Theme/Light.xaml", StringComparison.OrdinalIgnoreCase));
+
+        // GetAppTheme() has to infer Light from the merged Source, which only works
+        // when the dictionary the App merges is the one Wpf.Ui looks for.
+        Assert.Equal(
+            Wpf.Ui.Appearance.ApplicationTheme.Light,
+            Wpf.Ui.Appearance.ApplicationThemeManager.GetAppTheme());
+
+        try
+        {
+            Wpf.Ui.Appearance.ApplicationThemeManager.Apply(Wpf.Ui.Appearance.ApplicationTheme.Dark);
+            Assert.Equal(
+                Wpf.Ui.Appearance.ApplicationTheme.Dark,
+                Wpf.Ui.Appearance.ApplicationThemeManager.GetAppTheme());
+            Assert.Contains(
+                MergedSources(),
+                source => source.EndsWith("Theme/Dark.xaml", StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            // Leave the process on the theme the rest of the suite expects.
+            Wpf.Ui.Appearance.ApplicationThemeManager.Apply(Wpf.Ui.Appearance.ApplicationTheme.Light);
+        }
+
+        Assert.Equal(
+            Wpf.Ui.Appearance.ApplicationTheme.Light,
+            Wpf.Ui.Appearance.ApplicationThemeManager.GetAppTheme());
     }
 
     private static void FlushDispatcher()

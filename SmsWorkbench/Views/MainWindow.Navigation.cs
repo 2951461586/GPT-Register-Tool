@@ -35,9 +35,14 @@ namespace SmsWorkbench
             ["refresh"] = RefreshPools,
             ["proxypool"] = ShowProxyPool,
             ["settings"] = ShowConfigDialog,
+            ["shell"] = ShowShellSettings,
             ["theme"] = ToggleTheme,
             ["language"] = ToggleLanguage,
             ["cancelbatch"] = CancelBatch,
+            // Workspace archive: the state that cannot be regenerated (account rows,
+            // config shards, UI preferences). Restore keeps pre-restore copies.
+            ["backup"] = BackupWorkspace,
+            ["restore"] = RestoreWorkspace,
         };
 
         private void OnNavigate(string? key)

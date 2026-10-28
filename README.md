@@ -43,6 +43,7 @@ GPT-Register-Tool 采用 **WPF 桌面端 + Python 业务核心**，提供邮箱 
 | **协议支付提链** | 15 种方式：PayPal、GoPay、GCash、GrabPay、UPI、iDEAL、PIX、Kakao Pay、BLIK、TWINT、直卡 Checkout、MoMo、QRIS、Bizum、Naver Pay（后三者为 CLI canary）；Checkout 与 Approve 使用彼此独立的出口池，按支付方法改写国家与 Session；严格区分 Checkout / Promotion / PM / Confirm / Poll / Provider Redirect 阶段；统一五态终态并附 `retryable` 与 `error_stage`，`unknown` 须先对账 |
 | **批量协议支付** | JIT AT 门禁、HTTP 401 分层恢复（RT → Cookie → 隔离浏览器邮箱 OTP → Codex OAuth）、Canary 暂停、方法级并发、原子断点与显式续跑；报告分开统计 AT 200、资格、支付方式可见性、Approve 与最终链接/二维码产物 |
 | **账号与数据管理** | Session JSON + SQLite 双层索引；账号测活与 401 恢复；优惠状态徽章（只查套餐/试用，不创建 Checkout）；Codex / CPA / SUB2API 导入导出；本地数据在 `sessions/` 与 `runtime/`，均被 Git 忽略 |
+| **桌面外壳** | 主题三态（跟随系统 / 浅色 / 深色，`System` 持续跟随 OS）；关闭窗口=隐藏到托盘，托盘菜单或 `Ctrl+Alt+R` 唤回，两个开关都可关；状态条实时显示吞吐/成功率/失败分类；代理池每行内联测速；工作区一键备份/恢复（配置 shard + 账号库 + 邮箱池 + UI 偏好，恢复前自动留旧副本） |
 | **桌面端操作** | 勾选账号后走「批量协议支付」窗口（并发、重试、Canary、两个出口池、断点续跑）；注册批次每输出一次 `Saved session:` 即防抖刷新账号池；多选删除合并为一次后端批量命令 |
 | **手机接码** | SMSBower、HeroSMS、Grizzly、NexSMS 的供应商选择与在线目录查询（可用性依供应商协议），支持发送重试、超时与轮询间隔配置；详见 [当前接码契约](docs/current/one-click-sms.md) |
 

@@ -25,10 +25,9 @@ namespace SmsWorkbench
             _host.Start();
             _logger = _host.Services.GetRequiredService<Serilog.ILogger>();
 
-            var systemTheme = Wpf.Ui.Appearance.ApplicationThemeManager.GetSystemTheme();
-            var defaultTheme = (systemTheme == Wpf.Ui.Appearance.SystemTheme.Dark)
-                ? Wpf.Ui.Appearance.ApplicationTheme.Dark
-                : Wpf.Ui.Appearance.ApplicationTheme.Light;
+            // The file stores the operator's MODE (System/Light/Dark), not a palette, so
+            // "follow the system" survives a restart. Resolve() asks the OS only for the
+            // System mode; an explicit Light/Dark never depends on the machine.
             string rootDirectory = _host.Services.GetRequiredService<IApplicationPaths>().RootDirectory;
             _rootDirectory = rootDirectory;
             // The retired single-account protocol payment window could leave a
@@ -41,7 +40,8 @@ namespace SmsWorkbench
                     "Removed {Count} stale protocol-payment access-token file(s) from runtime/tmp",
                     staleAccessTokens);
             }
-            var startTheme = DesktopThemePreference.Load(rootDirectory, defaultTheme);
+            DesktopThemeMode themeMode = DesktopThemePreference.LoadMode(rootDirectory);
+            var startTheme = DesktopThemePreference.Resolve(themeMode, themeMode.Resolve());
             // First launch follows the OS UI language; a saved choice wins afterwards.
             SmsWorkbench.Localization.Loc.Instance.SetLanguage(
                 DesktopLanguagePreference.Load(rootDirectory, DesktopLanguagePreference.SystemDefault()));
@@ -50,14 +50,43 @@ namespace SmsWorkbench
             var mainWindow = _host.Services.GetRequiredService<MainWindow>();
             MainWindow = mainWindow;
             // The window's own palette follows the preference file, not whatever
-            // GetAppTheme() reports (it answers Unknown on failure, which used to
-            // fall back to the light palette on every start).
-            mainWindow.ApplyStartupTheme(startTheme);
+            // GetAppTheme() reports. The constructor seeds the same mode silently; this is
+            // the only call site that logs "启动主题已应用", so a start prints one line
+            // rather than the old guess-then-truth pair (see ApplyStartupTheme's log).
+            mainWindow.ApplyStartupTheme(themeMode);
             _logger?.Information(
-                "启动偏好: theme={Theme} language={Language}",
+                "启动偏好: mode={Mode} theme={Theme} language={Language}",
+                themeMode,
                 startTheme,
                 SmsWorkbench.Localization.Loc.Instance.Language);
+            // Tray + hotkey: resolved from the same container the window got, so both
+            // hold the one OS handle each. Initialisation is deliberately after Show():
+            // the hotkey needs a window handle, and a failed registration must not keep
+            // the shell from starting.
+            var trayIcon = _host.Services.GetRequiredService<ITrayIconService>();
+            var globalHotkey = _host.Services.GetRequiredService<IGlobalHotkeyService>();
+            trayIcon.ShowRequested += (_, _) => mainWindow.ShowFromTray();
+            trayIcon.QuitRequested += (_, _) => mainWindow.Close();
+            globalHotkey.Pressed += (_, _) => mainWindow.ToggleFromHotkey();
             mainWindow.Show();
+            // The switches are read before anything is created: an install that turned the
+            // tray off must not flash an icon on every start.
+            DesktopShellPreferences shellPreferences = DesktopShellPreference.Load(rootDirectory);
+            if (shellPreferences.Tray)
+            {
+                trayIcon.Initialize();
+            }
+
+            if (shellPreferences.Hotkey
+                && !globalHotkey.TryRegister(
+                    mainWindow,
+                    GlobalHotkeyService.DefaultModifiers,
+                    GlobalHotkeyService.DefaultKey))
+            {
+                _logger?.Warning(
+                    "全局热键 {Hotkey} 注册失败（可能已被其它程序占用）",
+                    GlobalHotkeyService.DefaultLabel);
+            }
             _ = mainWindow.RunStartupDoctorProbeAsync();
         }
 
@@ -122,6 +151,10 @@ namespace SmsWorkbench
                 // Kill the resident desktop-read python process before the
                 // host tears down so it never outlives the workbench.
                 (_host?.Services.GetService(typeof(IDesktopReadClient)) as IDisposable)?.Dispose();
+                // The window's Closing handler normally releases these; this is the
+                // backstop for an exit path that never raises it (test hosts, crash).
+                (_host?.Services.GetService(typeof(IGlobalHotkeyService)) as IDisposable)?.Dispose();
+                (_host?.Services.GetService(typeof(ITrayIconService)) as IDisposable)?.Dispose();
                 _host?.StopAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
                 _host?.Dispose();
             }

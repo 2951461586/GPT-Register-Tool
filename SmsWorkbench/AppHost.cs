@@ -2,9 +2,6 @@
 // PaymentBatchService.cs for why the project-wide switch stays `annotations`.
 #nullable enable
 
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Serilog;
 using Serilog.Events;
 
 namespace SmsWorkbench
@@ -52,6 +49,11 @@ namespace SmsWorkbench
                     // visible at the composition root.
                     services.AddSingleton<IUpdateChecker>(provider =>
                         new GitHubReleaseUpdateChecker(provider.GetRequiredService<IApplicationPaths>()));
+                    // Shell chrome that outlives the window: the tray icon and the
+                    // global hotkey are singletons because both hold an OS handle.
+                    services.AddSingleton<IWorkspaceBackupService, WorkspaceBackupService>();
+                    services.AddSingleton<ITrayIconService, TrayIconService>();
+                    services.AddSingleton<IGlobalHotkeyService, GlobalHotkeyService>();
                     services.AddSingleton<MainWindow>();
                 })
                 .Build();
