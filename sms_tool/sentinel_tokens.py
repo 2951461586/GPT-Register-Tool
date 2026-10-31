@@ -268,7 +268,11 @@ def _extract_sentinel_http(proxy=None, persist=True, device_id=None):
     # module's ``_extract_sentinel`` on its legacy fallback path, so a
     # module-level import here would close the cycle those local imports exist to
     # avoid (same convention as ``client.issue_sentinel_flow``).
-    from .sentinel.client import EMAIL_OTP_VALIDATE_FLOW
+    # Bound to a local name so the optional flow reads as data below, not as a
+    # free variable that appears to be defined somewhere else.
+    from .sentinel import client as _sentinel_client
+
+    email_flow_name = _sentinel_client.EMAIL_OTP_VALIDATE_FLOW
 
     session = curl_requests.Session()
     if proxy:
@@ -317,9 +321,9 @@ def _extract_sentinel_http(proxy=None, persist=True, device_id=None):
     # the registration lane needs to reach ``create_account``. Letting an
     # unavailable newer flow fail the whole call would turn an optional A/B arm
     # into a batch-wide failure of the fallback path.
-    email_flow = _request_flow(EMAIL_OTP_VALIDATE_FLOW)
+    email_flow = _request_flow(email_flow_name)
     if email_flow:
-        results[EMAIL_OTP_VALIDATE_FLOW] = email_flow
+        results[email_flow_name] = email_flow
 
     upc = results.get("username_password_create", {})
     authorize = results.get("authorize_continue", {})
@@ -383,17 +387,15 @@ def _extract_sentinel_http(proxy=None, persist=True, device_id=None):
         "cookie_str": cookie_str,
         "oai_did": did,
     }
-    email_flow_data = results.get(EMAIL_OTP_VALIDATE_FLOW) or {}
+    email_flow_data = results.get(email_flow_name) or {}
     if email_flow_data.get("token"):
-        result["sentinel_email_otp_validate_token"] = _build_sentinel_pow_token(
-            email_flow_data, did, EMAIL_OTP_VALIDATE_FLOW
-        )
+        result["sentinel_email_otp_validate_token"] = _build_sentinel_pow_token(email_flow_data, did, email_flow_name)
         result["sentinel_email_otp_validate_so_token"] = json.dumps(
             {
                 "so": email_flow_data.get("so", email_flow_data.get("token", "")),
                 "c": email_flow_data.get("token", ""),
                 "id": did,
-                "flow": EMAIL_OTP_VALIDATE_FLOW,
+                "flow": email_flow_name,
             }
         )
     assert_sentinel_device_id(result, did)
