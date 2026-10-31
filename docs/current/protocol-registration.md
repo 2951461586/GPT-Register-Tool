@@ -519,6 +519,16 @@ swap; the token and SO are stored under their own bundle keys
 reuse the other's pair. Evidence:
 `docs/audits/scans/scan-2026-10-31-har-passwordless-codex-webview.md`.
 
+**A/B result (2026-10-31, 30 attempted per arm, powered).** 29/30 with
+`authorize_continue` versus 30/30 with `email_otp_validate` on the same mailbox
+source (remail iCloud), the same ten IN exits, an adjacent window and
+`otp_validate_sentinel=true` in both arms; the only failure in either arm was one
+`network` (stage `unknown`), and neither arm had an `auth_state` failure. The
+delta 0.0333 is inside the pre-registered 0.05, so `compare` returns
+`inconclusive` with the reason "the flow name is not enforced on this endpoint":
+the switch buys nothing and stays off. Note what this did **not** test -- the
+`otp_validate_sentinel` default (`false`, no pair at all) is unchanged.
+
 ## Reference lane (default off)
 
 `registration.reference_lane` (default `false`, `sms_tool/registration/reference_lane.py`)

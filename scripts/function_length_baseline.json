@@ -1,6 +1,6 @@
 {
   "threshold": 150,
-  "total": 63,
+  "total": 64,
   "functions": {
     "scripts/batch_enable_2fa.py::main": 288,
     "scripts/batch_enable_2fa.py::run_one": 160,
@@ -54,6 +54,7 @@
     "sms_tool/providers/mailbox_remail.py::_poll_remail_otp": 188,
     "sms_tool/regional_payment_adapter.py::RegionalPaymentAdapter.run": 167,
     "sms_tool/registration_drivers/browser_flow/orchestrator.py::run_browser_registration": 615,
+    "sms_tool/sentinel_tokens.py::_extract_sentinel_http": 150,
     "sms_tool/session_builder.py::build_session_file": 152,
     "sms_tool/session_converter.py::convert_session": 278,
     "sms_tool/upi_link/browser.py::_upi_browser_capture": 218,
@@ -120,6 +121,7 @@
     "sms_tool/providers/mailbox_remail.py::_poll_remail_otp:": "",
     "sms_tool/regional_payment_adapter.py::RegionalPaymentAdapter.run:": "",
     "sms_tool/registration_drivers/browser_flow/orchestrator.py::run_browser_registration:": "",
+    "sms_tool/sentinel_tokens.py::_extract_sentinel_http": "P1-18 marker + the _request_flow closure (one handler instead of two) pushed _extract_sentinel_http past the 150-line threshold; the function is a linear four-flow issuer with no branchable logic worth splitting at this size, and the added block is what keeps the optional flow non-fatal.",
     "sms_tool/session_builder.py::build_session_file:": "",
     "sms_tool/session_converter.py::convert_session:": "",
     "sms_tool/upi_link/browser.py::_upi_browser_capture:": "",

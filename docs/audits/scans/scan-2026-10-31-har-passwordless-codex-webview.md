@@ -130,3 +130,32 @@ sentinel 三个 challenge 的响应都是 `persona=chatgpt-noauth`、`proofofwor
   `test_turb_protocol_diff_toggles.py`（72，31 subtests）单独复跑全绿。
 - `ruff check`、`scripts/format_guard.py`、`scripts/config_key_ratchet.py`（baseline 78 → 79 键，
   `--update-baseline` 后 OK）。
+
+## 8. P1-18 A/B 实测（2026-10-31，30/臂，已 powered）
+
+设计：`scripts/registration_ab.py::EXPERIMENTS["p1-18-otp-validate-flow"]`；两臂都开
+`registration.otp_validate_sentinel=true`（它决定是否带 pair，是载体不是变量），`pulse.enabled=false`，
+`registration_mode=passwordless`，同邮箱源（remail iCloud，60 单位/个）、同 10 个 IN 出口、相邻时间窗。
+唯一差异是 `registration.otp_validate_email_otp_validate_flow`。
+
+| 臂 | attempted | registered | rate | 失败类 | 机制行 |
+| --- | ---: | ---: | ---: | --- | --- |
+| `authorize_continue`（默认） | 30 | 29 | 0.9667 | `network` 1（stage `unknown`） | 未见（符合预期） |
+| `email_otp_validate`（新） | 30 | 30 | 1.0000 | — | 30/30 出现 |
+
+`compare`：**`powered: true`，`verdict: inconclusive`** —— 两臂差值 0.0333 < 预注册的 0.05，
+理由串原话是「the flow name is not enforced on this endpoint」。两臂的操纵检查均通过
+（`toggle_verified` 由配置快照确认；`mechanism_ok` 治疗臂 true、对照臂 true=未见）。
+
+结论与动作：**flow 名在该端点上不被服务端校验**，换名不买任何东西 —— 开关保持默认 `false`，
+`authorize_continue` 继续是默认臂；`otp_validate_sentinel` 的默认值（`false`）也不因此改变，
+本实验没有测「带不带 pair」。
+
+代价与附带观察：60 个 iCloud 邮箱（约 3600 单位）、两臂共 1042 s 墙钟（workers=5）。
+臂 A 唯一失败是传输类 `network`（stage `unknown`），**两臂都没有 `auth_state` 失败**，
+所以不仅没有「换名更好」的证据，连「换名会扰动事务」的迹象也没有。
+出口侧：10 个 IN 出口探测为 5 clean / 5 Cloudflare-403，预检按设计逐账号剔除被挑战出口。
+另记一条与本实验无关的既有噪声：批次结束时会打印
+`uncaught exception in thread account-health-coordinator: cannot schedule new futures after interpreter shutdown`
+（后台健康巡检线程未 join 即退出，不影响批次结果）。
+

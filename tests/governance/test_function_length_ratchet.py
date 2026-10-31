@@ -64,13 +64,13 @@ def test_script_reports_ok_on_the_current_tree(capsys):
     assert ratchet.main([]) == 0
     out = capsys.readouterr().out
     assert "ratchet OK" in out
-    assert "63 frozen function(s)" in out
+    assert "64 frozen function(s)" in out
 
 
 def test_baseline_is_populated_and_self_consistent():
     payload = _payload()
     assert payload["threshold"] == ratchet.THRESHOLD
-    assert payload["total"] == len(payload["functions"]) == 63
+    assert payload["total"] == len(payload["functions"]) == 64
     assert all(length >= ratchet.THRESHOLD for length in payload["functions"].values())
     assert set(payload["functions"]) == set(_REAL), "the baseline no longer matches the tree"
 

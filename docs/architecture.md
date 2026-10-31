@@ -213,7 +213,7 @@ above.
 | Mutual pairs / minority-direction edges | 17 / 46 |
 | Delayed cross-directory edges | 300 |
 | Delayed imports in the package | 469 (baseline 469) |
-| Functions at or above 150 lines | 63 (frozen, `scripts/function_length_ratchet.py`) |
+| Functions at or above 150 lines | 64 (frozen, `scripts/function_length_ratchet.py`) |
 | Claimed tracked `sms_tool` modules | 324 of 324 (0 unclaimed, 41 directory-map groups) |
 <!-- ratchet-numbers:end architecture -->
 

@@ -342,6 +342,7 @@
     "sms_tool/sentinel_tokens.py -> base64": "deferred",
     "sms_tool/sentinel_tokens.py -> cloakbrowser": "startup",
     "sms_tool/sentinel_tokens.py -> hashlib": "deferred",
+    "sms_tool/sentinel_tokens.py -> sms_tool.sentinel": "provider",
     "sms_tool/sentinel_tokens.py -> sms_tool.sentinel.bundle": "provider",
     "sms_tool/sentinel_tokens.py -> sms_tool.sentinel.client": "cycle",
     "sms_tool/sentinel_tokens.py -> struct": "deferred",
@@ -485,7 +486,7 @@
   "reasons": {
     "cycle": 8,
     "deferred": 211,
-    "provider": 35,
+    "provider": 36,
     "startup": 104,
     "test-seam": 0
   },
