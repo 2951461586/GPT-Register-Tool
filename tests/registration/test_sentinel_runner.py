@@ -753,6 +753,66 @@ def test_chatgpt_checkout_flow_is_registered():
     assert client.FLOW_PAGE_URLS[client.CHECKOUT_SENTINEL_FLOW]
 
 
+def test_email_otp_validate_flow_is_registered():
+    """``email_otp_validate`` must be mintable, not just a string in a toggle.
+
+    2026-10-28 HAR: ``email-otp/validate`` carries ``token.flow`` **and**
+    ``so.flow`` = ``email_otp_validate``. ``issue_sentinel_token`` refuses any
+    flow missing from ``FLOW_PAGE_URLS`` (``sentinel_flow_unsupported``), so
+    registering the page URL is what makes the A/B arm reachable at all.
+    """
+    assert client.EMAIL_OTP_VALIDATE_FLOW == "email_otp_validate"
+    assert client.FLOW_PAGE_URLS[client.EMAIL_OTP_VALIDATE_FLOW]
+    # Not an alias for the flow the lane used before: both stay registered.
+    assert client.EMAIL_OTP_VALIDATE_FLOW != "authorize_continue"
+    assert client.FLOW_PAGE_URLS["authorize_continue"]
+
+
+def test_email_otp_validate_flow_round_trips_through_a_supplied_bundle():
+    """A pre-minted bundle token for the new flow is reused, not re-minted."""
+    bundle = {
+        "sentinel_email_otp_validate_token": json.dumps(
+            {"p": "proof", "t": "", "c": "challenge", "id": DEVICE_ID, "flow": "email_otp_validate"}
+        ),
+        "sentinel_email_otp_validate_so_token": json.dumps(
+            {"so": "so", "c": "challenge", "id": DEVICE_ID, "flow": "email_otp_validate"}
+        ),
+    }
+    issued = client._token_from_bundle(bundle, flow=client.EMAIL_OTP_VALIDATE_FLOW, device_id=DEVICE_ID)
+    assert issued is not None
+    assert issued.flow == client.EMAIL_OTP_VALIDATE_FLOW
+    assert json.loads(issued.token)["flow"] == "email_otp_validate"
+    assert json.loads(issued.so_token)["flow"] == "email_otp_validate"
+
+
+def test_authorize_continue_bundle_cannot_satisfy_the_email_otp_validate_flow():
+    """The two flows use different bundle keys *and* the name is checked.
+
+    This is the property that keeps the A/B single-variable: switching the toggle
+    must never silently reuse the ``authorize_continue`` pair, whose flow name
+    inside the token would then disagree with the requested flow.
+    """
+    bundle = {
+        "sentinel_authorize_continue_token": json.dumps(
+            {"p": "proof", "t": "", "c": "challenge", "id": DEVICE_ID, "flow": "authorize_continue"}
+        ),
+        "sentinel_authorize_continue_so_token": json.dumps(
+            {"so": "so", "c": "challenge", "id": DEVICE_ID, "flow": "authorize_continue"}
+        ),
+    }
+    assert client._token_from_bundle(bundle, flow=client.EMAIL_OTP_VALIDATE_FLOW, device_id=DEVICE_ID) is None
+
+    # And a persisted bundle whose oauth slot holds an authorize_continue
+    # payload (written before the split) is rejected rather than reused.
+    stale = {
+        "sentinel_oauth_token": json.dumps(
+            {"p": "proof", "t": "", "c": "challenge", "id": DEVICE_ID, "flow": "authorize_continue"}
+        )
+    }
+    with pytest.raises(client.SentinelIssueError, match="sentinel_supplied_flow_mismatch"):
+        client._token_from_bundle(stale, flow="oauth_create_account", device_id=DEVICE_ID)
+
+
 def test_checkout_sentinel_never_uses_the_legacy_issuer():
     """The legacy issuer cannot mint ``chatgpt_checkout``; it must raise instead."""
     with (

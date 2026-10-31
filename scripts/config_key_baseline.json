@@ -27,6 +27,7 @@
     "obtain_refresh_token",
     "otp_external_url_branch",
     "otp_navigation_headers",
+    "otp_validate_email_otp_validate_flow",
     "otp_validate_sentinel",
     "password_charset",
     "password_random_length",

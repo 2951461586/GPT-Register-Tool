@@ -435,7 +435,17 @@ def test_summary_facts_are_pinned():
         # (requests). The reader is used so the `fingerprint_key`/`proxy_affinity`
         # field names keep one owner instead of a second copy in the payload
         # builder. Reasoned entry added to `delayed_import_reasons.json`.
-        "delayed_cross_dir_edges": 298,
+        #
+        # 2026-10-31 (HAR 2026-10-28: `email_otp_validate` flow): 298 -> 300
+        # (+2). `registration/otp_stages.py -> sms_tool.sentinel` resolves the
+        # flow name for the `otp_validate_email_otp_validate_flow` A/B arm, and
+        # `sentinel_tokens -> sms_tool.sentinel` names it inside the legacy
+        # issuer. Both are `provider`-classified (self-evident: the Sentinel
+        # package is imported on the path that needs it). A module-level import
+        # would have raised the frozen `registration -> sentinel` module pair AND
+        # pulled the Node runner (`subprocess`, `tempfile`) into every
+        # `sms_tool` startup, which is the trade this ratchet prescribes.
+        "delayed_cross_dir_edges": 300,
         # Imports under `if TYPE_CHECKING:` never run, so they are not runtime
         # edges. 1 here since 2026-10-23: `payment/link_manager.py` declares its
         # `pay_link` re-exports type-only (the module is not a package, so the

@@ -147,10 +147,31 @@ path: enable it for a controlled live comparison before making it the default.
 
 `FLOW_PAGE_URLS` in `sms_tool/sentinel/client.py` is the **single** flow-to-page
 map shared by the registration and payment lanes; `issue_sentinel_flow` resolves
-through it at call time. Registered there are both checkout flows, and they are
+through it at call time. `issue_sentinel_token` refuses any flow missing from it
+(`sentinel_flow_unsupported`), so "a name exists in the codebase" and "a name
+can be minted" are different claims.
+
+Registration flows registered there are `username_password_create`
+(`AUTH_CREATE_ACCOUNT_PASSWORD`), `authorize_continue` and `email_otp_validate`
+(both `AUTH_EMAIL_VERIFICATION`) and `oauth_create_account` (`AUTH_ABOUT_YOU`).
+
+- **`email_otp_validate`** (`EMAIL_OTP_VALIDATE_FLOW`) is what the current web
+  client binds to `POST /api/accounts/email-otp/validate`: the 2026-10-28 HAR has
+  that request's `openai-sentinel-token` **and** `openai-sentinel-so-token`
+  carrying `flow=email_otp_validate`, while `passwordless/send-otp` in the same
+  transaction carries `authorize_continue` and `create_account` carries
+  `oauth_create_account`. It is therefore **not** a rename of the lane. This repo
+  still sends `authorize_continue` on validate by default
+  (`registration.otp_validate_email_otp_validate_flow`, default `false`); the
+  name previously appeared only as a *challenge probe* in
+  `PASSWORD_PAGE_BUNDLE_FLOWS`, which mints nothing and so never needed the map
+  entry. Evidence and the A/B that would settle it:
+  `docs/audits/scans/scan-2026-10-31-har-passwordless-codex-webview.md`.
+
+Registered there are both checkout flows, and they are
 **not** interchangeable:
 
-- **Checkout create** mints `chatgpt_checkout` — `CHECKOUT_SENTINEL_FLOW` at `sms_tool/sentinel/client.py:44`, issued by `issue_checkout_sentinel` at `sms_tool/sentinel/client.py:596`.
+- **Checkout create** mints `chatgpt_checkout` — `CHECKOUT_SENTINEL_FLOW` at `sms_tool/sentinel/client.py:44`, issued by `issue_checkout_sentinel` at `sms_tool/sentinel/client.py:618`.
 - **Checkout approve** mints `checkout_session_approval` — its own constant `UPI_SENTINEL_APPROVAL_FLOW` at `sms_tool/upi_link/constants.py:43`. Two rails request it explicitly: the UPI approve stage passes `sentinel_flow=UPI_SENTINEL_APPROVAL_FLOW` at `sms_tool/upi_link/stages.py:712`, and `PPLinkExtractor._fresh_approval_sentinel` mints it at `sms_tool/paypal/extract.py:245`.
 
   🔴 **How to write a guardable pointer here** — two rules, both learned the hard
@@ -481,6 +502,24 @@ A Sentinel failure fails the arm rather than degrading to the assumed pre-send.
 The password lane ignores the toggle. Evidence and unknowns:
 `docs/audits/scans/scan-2026-10-11-har-passwordless-signup.md`; design:
 `registration-ab-runbook.md` (P3-1).
+
+## OTP validate Sentinel flow (default off, 2026-10-31)
+
+`registration.otp_validate_email_otp_validate_flow` (default `false`) decides which
+Sentinel flow the `email-otp/validate` request carries. `false` keeps
+`authorize_continue` (turb's 2026-09-14 observation, unchanged behaviour); `true`
+mints `email_otp_validate`, the flow the current web client binds to that request
+(2026-10-28 HAR: `token.flow` and `so.flow` both `email_otp_validate`). The switch is
+only reachable through `registration.otp_validate_sentinel`, which decides *whether*
+a pair is sent at all, and it is scoped to validate: `passwordless/send-otp` keeps
+`authorize_continue` and `create_account` keeps `oauth_create_account`. Both arms
+pass today, which is why this is a pre-registered single-variable A/B rather than a
+swap; the token and SO are stored under their own bundle keys
+(`sentinel_email_otp_validate_token` / `…_so_token`) so neither arm can silently
+reuse the other's pair. Evidence:
+`docs/audits/scans/scan-2026-10-31-har-passwordless-codex-webview.md`.
+
+## Reference lane (default off)
 
 `registration.reference_lane` (default `false`, `sms_tool/registration/reference_lane.py`)
 runs the reference project's `main.py` password stage order as one lane:

@@ -2,6 +2,7 @@
 
 from .client import (
     CHECKOUT_SENTINEL_FLOW,
+    EMAIL_OTP_VALIDATE_FLOW,
     FLOW_PAGE_URLS,
     SentinelIssueError,
     SentinelToken,
@@ -16,6 +17,7 @@ from .client import (
 
 __all__ = [
     "CHECKOUT_SENTINEL_FLOW",
+    "EMAIL_OTP_VALIDATE_FLOW",
     "FLOW_PAGE_URLS",
     "SentinelIssueError",
     "SentinelToken",

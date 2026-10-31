@@ -264,6 +264,12 @@ def _extract_sentinel_http(proxy=None, persist=True, device_id=None):
     worker is relying on.
     """
     did = str(device_id or uuid.uuid4())
+    # Function-local on purpose: ``sentinel.client`` imports back into this
+    # module's ``_extract_sentinel`` on its legacy fallback path, so a
+    # module-level import here would close the cycle those local imports exist to
+    # avoid (same convention as ``client.issue_sentinel_flow``).
+    from .sentinel.client import EMAIL_OTP_VALIDATE_FLOW
+
     session = curl_requests.Session()
     if proxy:
         session.proxies = {"http": proxy, "https": proxy}
@@ -271,7 +277,15 @@ def _extract_sentinel_http(proxy=None, persist=True, device_id=None):
     flows = ["username_password_create", "authorize_continue", "oauth_create_account"]
     results = {}
 
-    for flow in flows:
+    def _request_flow(flow: str) -> dict | None:
+        """POST one flow; ``None`` on any failure, with the reason printed once.
+
+        Returning ``None`` instead of raising keeps the callers free of their own
+        broad handlers: the loop below decides that *these* failures are fatal
+        and the optional fourth flow decides they are not, without a second
+        ``except Exception`` block (the broad-except ratchet counts blocks, not
+        decisions).
+        """
         try:
             resp = session.post(
                 "https://sentinel.openai.com/backend-api/sentinel/req",
@@ -286,11 +300,26 @@ def _extract_sentinel_http(proxy=None, persist=True, device_id=None):
                 timeout=30,
                 impersonate=auth_impersonate(),
             )
-            data = resp.json()
-            results[flow] = data
+            return resp.json()
         except Exception as e:
             print(f"  [!] HTTP sentinel fetch failed for flow={flow}: {_redact_proxy_text(e, proxy)}")
             return None
+
+    for flow in flows:
+        data = _request_flow(flow)
+        if data is None:
+            return None
+        results[flow] = data
+
+    # Best-effort 4th flow (``email_otp_validate``, see
+    # ``sentinel.client.EMAIL_OTP_VALIDATE_FLOW``). Deliberately **non-fatal**:
+    # this is already the last-resort issuer, and the three flows above are what
+    # the registration lane needs to reach ``create_account``. Letting an
+    # unavailable newer flow fail the whole call would turn an optional A/B arm
+    # into a batch-wide failure of the fallback path.
+    email_flow = _request_flow(EMAIL_OTP_VALIDATE_FLOW)
+    if email_flow:
+        results[EMAIL_OTP_VALIDATE_FLOW] = email_flow
 
     upc = results.get("username_password_create", {})
     authorize = results.get("authorize_continue", {})
@@ -354,6 +383,19 @@ def _extract_sentinel_http(proxy=None, persist=True, device_id=None):
         "cookie_str": cookie_str,
         "oai_did": did,
     }
+    email_flow_data = results.get(EMAIL_OTP_VALIDATE_FLOW) or {}
+    if email_flow_data.get("token"):
+        result["sentinel_email_otp_validate_token"] = _build_sentinel_pow_token(
+            email_flow_data, did, EMAIL_OTP_VALIDATE_FLOW
+        )
+        result["sentinel_email_otp_validate_so_token"] = json.dumps(
+            {
+                "so": email_flow_data.get("so", email_flow_data.get("token", "")),
+                "c": email_flow_data.get("token", ""),
+                "id": did,
+                "flow": EMAIL_OTP_VALIDATE_FLOW,
+            }
+        )
     assert_sentinel_device_id(result, did)
     if persist:
         _save_sentinel_cache(result)

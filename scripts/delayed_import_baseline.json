@@ -302,6 +302,7 @@
     "sms_tool/registration/orchestrator.py -> sms_tool.batch_runner": "deferred",
     "sms_tool/registration/orchestrator.py -> sms_tool.registration.handlers": "deferred",
     "sms_tool/registration/orchestrator.py -> sms_tool.registration_drivers.playwright": "provider",
+    "sms_tool/registration/otp_stages.py -> sms_tool.sentinel": "provider",
     "sms_tool/registration/persistence.py -> sms_tool.storage": "deferred",
     "sms_tool/registration/preflight.py -> sms_tool.proxy.entry": "deferred",
     "sms_tool/registration/probe.py -> sms_tool.registration.handlers": "deferred",
@@ -451,6 +452,7 @@
     "sms_tool/registration/finalize.py": 4,
     "sms_tool/registration/identity_stages.py": 2,
     "sms_tool/registration/orchestrator.py": 3,
+    "sms_tool/registration/otp_stages.py": 1,
     "sms_tool/registration/persistence.py": 5,
     "sms_tool/registration/preflight.py": 1,
     "sms_tool/registration/probe.py": 1,
@@ -469,7 +471,7 @@
     "sms_tool/registration_drivers/stealth.py": 2,
     "sms_tool/sentinel/bundle.py": 1,
     "sms_tool/sentinel/client.py": 4,
-    "sms_tool/sentinel_tokens.py": 6,
+    "sms_tool/sentinel_tokens.py": 7,
     "sms_tool/store/accounts.py": 1,
     "sms_tool/store/markers.py": 1,
     "sms_tool/store/normalize.py": 2,
@@ -483,9 +485,9 @@
   "reasons": {
     "cycle": 8,
     "deferred": 211,
-    "provider": 34,
+    "provider": 35,
     "startup": 104,
     "test-seam": 0
   },
-  "total": 467
+  "total": 469
 }

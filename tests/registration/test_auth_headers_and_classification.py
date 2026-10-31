@@ -109,6 +109,76 @@ class AuthHeadersAndClassificationTests(unittest.TestCase):
             "19.0.0",
         )
 
+    def test_high_entropy_client_hints_are_not_sent_on_the_wire(self):
+        """Only the three low-entropy ``Sec-CH-UA-*`` hints may be emitted.
+
+        Evidence: the 2026-10-28 HAR (827 entries, full passwordless
+        registration) contains **zero** high-entropy hint headers --
+        chatgpt.com and auth.openai.com never send ``Accept-CH`` for them, and
+        Chrome only releases a high-entropy hint after the origin asks. The
+        only ``Accept-CH`` in that capture comes from bat.bing.com, a third
+        party we never call. Emitting them was a self-inflicted fingerprint
+        difference (see scan-2026-10-31-har-passwordless-codex-webview.md).
+
+        The values must stay available to the Sentinel SDK: they travel as
+        ``navigator.userAgentData`` readings, not as HTTP headers.
+        """
+        high_entropy = (
+            "sec-ch-ua-full-version-list",
+            "sec-ch-ua-arch",
+            "sec-ch-ua-bitness",
+            "sec-ch-ua-model",
+            "sec-ch-ua-platform-version",
+        )
+        with patch.object(
+            auth_headers,
+            "current_auth_fingerprint",
+            return_value={
+                "name": "chrome146",
+                "impersonate": "chrome146",
+                "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/146.0.0.0 Safari/537.36",
+                "sec_ch_ua": '"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"',
+                "sec_ch_ua_mobile": "?0",
+                "sec_ch_ua_platform": '"Windows"',
+            },
+        ):
+            for family in ("auth", "chatgpt", "nextauth"):
+                with self.subTest(family=family):
+                    headers = openai_auth_headers("did-1", family=family)
+                    for key in high_entropy:
+                        self.assertNotIn(key, headers)
+                    # The low-entropy trio is still there for a Chrome profile.
+                    self.assertIn("sec-ch-ua", headers)
+                    self.assertEqual(headers["sec-ch-ua-platform"], '"Windows"')
+            # The SDK-side environment keeps producing them.
+            environment = sentinel_fingerprint()
+            self.assertIn('"Not(A:Brand";v="24.0.0.0"', str(environment["sec_ch_ua_full_version_list"]))
+            self.assertEqual(environment["sec_ch_ua_arch"], "x86")
+            self.assertEqual(environment["sec_ch_ua_bitness"], "64")
+
+        # Firefox-family profiles emit no client hints at all, as before.
+        with patch.object(
+            auth_headers,
+            "current_auth_fingerprint",
+            return_value={
+                "name": "firefox144",
+                "impersonate": "firefox144",
+                "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0",
+                "sec_ch_ua": "",
+                "sec_ch_ua_mobile": "?0",
+                "sec_ch_ua_platform": '"Windows"',
+            },
+        ):
+            headers = openai_auth_headers("did-1")
+            self.assertNotIn("sec-ch-ua", headers)
+            for key in high_entropy:
+                self.assertNotIn(key, headers)
+
+    def test_extra_cannot_smuggle_a_high_entropy_hint_onto_nextauth(self):
+        """``extra`` is merged before the NextAuth strip, so the strip matters."""
+        headers = nextauth_headers("did-1", extra={"sec-ch-ua-full-version-list": '"x";v="1"'})
+        self.assertNotIn("sec-ch-ua-full-version-list", headers)
+
     def test_rotated_fingerprint_keeps_tls_and_client_hints_coherent(self):
         cfg = {"mode": "rotate", "profiles": ["chrome124", "chrome131"]}
         with patch.object(auth_headers, "_auth_fingerprint_config", return_value=cfg):

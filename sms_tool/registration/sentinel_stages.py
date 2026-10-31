@@ -120,7 +120,7 @@ def issue_sentinel(workflow: RegistrationWorkflow, flow: str, *, force_fresh: bo
     "refreshing the proof" wording is a lie and the retry replays the exact
     token the server just rejected.
     """
-    from ..sentinel import issue_sentinel_flow, sentinel_backend
+    from ..sentinel import EMAIL_OTP_VALIDATE_FLOW, issue_sentinel_flow, sentinel_backend
 
     s = workflow.runtime
     issued = issue_sentinel_flow(
@@ -139,6 +139,13 @@ def issue_sentinel(workflow: RegistrationWorkflow, flow: str, *, force_fresh: bo
         data["sentinel_authorize_continue_token"] = issued.token
         data["sentinel_authorize_continue_so_token"] = issued.so_token
         s.sentinel_authorize_token = issued.token
+    elif flow == EMAIL_OTP_VALIDATE_FLOW:
+        # Keyed separately from ``authorize_continue`` so the two arms of the
+        # ``otp_validate_email_otp_validate_flow`` A/B never overwrite each
+        # other's token in the persisted bundle (the flow name inside the token
+        # is what ``sentinel.client._token_from_bundle`` checks on reuse).
+        data["sentinel_email_otp_validate_token"] = issued.token
+        data["sentinel_email_otp_validate_so_token"] = issued.so_token
     elif flow == "oauth_create_account":
         data["sentinel_oauth_token"] = issued.token
         data["sentinel_so_token"] = issued.so_token

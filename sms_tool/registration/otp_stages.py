@@ -67,6 +67,40 @@ def _otp_validate_sentinel_enabled(workflow: RegistrationWorkflow) -> bool:
     return registration_flag(workflow.config, "otp_validate_sentinel", False)
 
 
+def _otp_validate_sentinel_flow(workflow: RegistrationWorkflow) -> str:
+    """Which Sentinel flow ``email-otp/validate`` should carry.
+
+    ``registration.otp_validate_email_otp_validate_flow`` (default **False**).
+
+    **False** (default, unchanged): ``authorize_continue`` -- turb's
+    2026-09-14 observation, the pair this repo has sent since then.
+
+    **True**: ``email_otp_validate`` -- the flow name the current web client
+    binds to this endpoint. The 2026-10-28 HAR of a complete passwordless
+    registration shows ``token.flow`` **and** ``so.flow`` set to
+    ``email_otp_validate`` on ``POST /api/accounts/email-otp/validate``, while
+    ``passwordless/send-otp`` (``authorize_continue``) and ``create_account``
+    (``oauth_create_account``) in the same transaction keep their own flows. So
+    this is not a rename of the whole lane: it is one endpoint's flow that
+    changed.
+
+    Why a toggle and not a straight swap: both readings currently pass, which is
+    exactly the signature of a server-side flow name that is informational --
+    or of a gate that ignores the difference on one path and enforces it on
+    another. Only a same-exit A/B separates them. See
+    ``docs/audits/scans/scan-2026-10-31-har-passwordless-codex-webview.md``.
+    """
+    if registration_flag(workflow.config, "otp_validate_email_otp_validate_flow", False):
+        # The name's owner is ``sentinel.client``; importing it locally keeps the
+        # ``registration -> sms_tool.sentinel`` import-layer pair at one
+        # module-level edge (the same reason ``sentinel_stages.issue_sentinel``
+        # imports its issuer inside the function). Reached only on the A/B arm.
+        from ..sentinel import EMAIL_OTP_VALIDATE_FLOW
+
+        return EMAIL_OTP_VALIDATE_FLOW
+    return "authorize_continue"
+
+
 def _otp_external_url_branch_enabled(workflow: RegistrationWorkflow) -> bool:
     """``registration.otp_external_url_branch`` (default **False**).
 
@@ -372,7 +406,7 @@ def validate_email_otp(workflow: RegistrationWorkflow) -> None:
         # inside the toggle's branch.
         _emit(_LOGGER, "  OTP validate sentinel")
         try:
-            issued = workflow._issue_sentinel("authorize_continue", force_fresh=True)
+            issued = workflow._issue_sentinel(_otp_validate_sentinel_flow(workflow), force_fresh=True)
             sentinel_data = {"sentinel_token": issued.token, "sentinel_so_token": issued.so_token}
             use_sentinel = True
         except Exception as exc:

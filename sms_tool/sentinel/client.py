@@ -42,9 +42,29 @@ SENTINEL_REQ_URL = "https://sentinel.openai.com/backend-api/sentinel/req"
 #: different flow (``checkout_session_approval``). Until one is ruled out, treat
 #: the main token as sufficient-not-necessary and the SO as unproven either way.
 CHECKOUT_SENTINEL_FLOW = "chatgpt_checkout"
+
+#: Sentinel flow the web client binds to ``POST /api/accounts/email-otp/validate``.
+#:
+#: Evidence (2026-10-28 HAR, passwordless registration, 827 entries): the
+#: validate request's ``openai-sentinel-token`` carries ``"flow":
+#: "email_otp_validate"`` and its ``openai-sentinel-so-token`` repeats the same
+#: flow, while ``send-otp`` / ``create_account`` in the same transaction carry
+#: ``authorize_continue`` / ``oauth_create_account``. The same capture mints all
+#: three flows from one ``p``, so this is a *named* flow on the server side, not
+#: a client-side alias.
+#:
+#: This repo binds ``authorize_continue`` to validate (turb's 2026-09-14
+#: observation, still passing today). Both readings cannot be right, and which
+#: one the server enforces is an **open question** -- a flow name that is only
+#: informational keeps working under either, which is exactly why an A/B is the
+#: only way to tell. ``registration.otp_validate_email_otp_validate_flow``
+#: (default off) selects this flow; see ``registration/otp_stages.py``.
+EMAIL_OTP_VALIDATE_FLOW = "email_otp_validate"
+
 FLOW_PAGE_URLS = {
     "username_password_create": endpoints.AUTH_CREATE_ACCOUNT_PASSWORD,
     "authorize_continue": endpoints.AUTH_EMAIL_VERIFICATION,
+    EMAIL_OTP_VALIDATE_FLOW: endpoints.AUTH_EMAIL_VERIFICATION,
     "oauth_create_account": endpoints.AUTH_ABOUT_YOU,
     "checkout_session_approval": endpoints.CHATGPT_ORIGIN,
     CHECKOUT_SENTINEL_FLOW: endpoints.CHATGPT_ORIGIN,
@@ -162,10 +182,12 @@ def _token_from_bundle(
     token_key = {
         "username_password_create": "sentinel_token",
         "authorize_continue": "sentinel_authorize_continue_token",
+        EMAIL_OTP_VALIDATE_FLOW: "sentinel_email_otp_validate_token",
         "oauth_create_account": "sentinel_oauth_token",
     }.get(flow, "")
     so_key = {
         "authorize_continue": "sentinel_authorize_continue_so_token",
+        EMAIL_OTP_VALIDATE_FLOW: "sentinel_email_otp_validate_so_token",
         "oauth_create_account": "sentinel_so_token",
     }.get(flow, "")
     token = str(values.get(token_key) or "").strip() if token_key else ""
@@ -725,6 +747,7 @@ def issue_sentinel_bundle(
 __all__ = [
     "CHECKOUT_SENTINEL_CACHE_TTL_SECONDS",
     "CHECKOUT_SENTINEL_FLOW",
+    "EMAIL_OTP_VALIDATE_FLOW",
     "FLOW_PAGE_URLS",
     "SentinelIssueError",
     "SentinelToken",

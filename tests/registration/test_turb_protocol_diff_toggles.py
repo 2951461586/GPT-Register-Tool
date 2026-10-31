@@ -288,12 +288,13 @@ class OtpNavigationHeadersTests(unittest.TestCase):
         self.assertNotIn("sec-fetch-site", stage.runtime.base_headers)
 
 
-def _validate_stage(*, sentinel_enabled: bool, branch_enabled: bool, otp_data: dict):
+def _validate_stage(*, sentinel_enabled: bool, branch_enabled: bool, otp_data: dict, flow_enabled: bool = False):
     stage: Any = _OtpStage(
         {
             "registration": {
                 "otp_validate_sentinel": sentinel_enabled,
                 "otp_external_url_branch": branch_enabled,
+                "otp_validate_email_otp_validate_flow": flow_enabled,
             }
         },
         session=Mock(),
@@ -352,6 +353,65 @@ class OtpValidateSentinelTests(unittest.TestCase):
         stage._issue_sentinel = Mock(side_effect=RuntimeError("mint down"))
         otp_stages.validate_email_otp(stage)
         self.assertFalse(stage.r._validate_email_otp.call_args.kwargs["use_sentinel"])
+
+
+class OtpValidateSentinelFlowTests(unittest.TestCase):
+    """``registration.otp_validate_email_otp_validate_flow`` (D5, default off).
+
+    The 2026-10-28 HAR binds ``email_otp_validate`` -- not
+    ``authorize_continue`` -- to ``email-otp/validate``. Both readings pass
+    today, so this is a one-variable A/B: the flow name is the only difference
+    between the arms, and the arm is unreachable unless ``otp_validate_sentinel``
+    is also on (that toggle decides *whether* a pair is sent at all).
+    """
+
+    def test_default_arm_still_uses_authorize_continue(self):
+        stage = _validate_stage(sentinel_enabled=True, branch_enabled=False, otp_data={"page": {"type": "about_you"}})
+        self.assertEqual(stage.issued, ("authorize_continue", True))
+
+    def test_flag_switches_the_validate_flow_only(self):
+        stage = _validate_stage(
+            sentinel_enabled=True,
+            branch_enabled=False,
+            otp_data={"page": {"type": "about_you"}},
+            flow_enabled=True,
+        )
+        self.assertEqual(stage.issued, ("email_otp_validate", True))
+        kwargs = stage.r._validate_email_otp.call_args.kwargs
+        self.assertTrue(kwargs["use_sentinel"])
+        self.assertEqual(kwargs["sentinel_data"], {"sentinel_token": "tok-1", "sentinel_so_token": "so-1"})
+
+    def test_flag_without_the_sentinel_toggle_sends_nothing(self):
+        stage = _validate_stage(
+            sentinel_enabled=False,
+            branch_enabled=False,
+            otp_data={"page": {"type": "about_you"}},
+            flow_enabled=True,
+        )
+        self.assertFalse(hasattr(stage, "issued"))
+        self.assertFalse(stage.r._validate_email_otp.call_args.kwargs["use_sentinel"])
+
+    def test_send_otp_keeps_authorize_continue_under_the_new_flow(self):
+        """The toggle is scoped to validate; ``passwordless/send-otp`` is unchanged.
+
+        Driven directly so the assertion is about the send stage's own flow, not
+        about the shared helper: a "rename the lane" implementation would change
+        this call site too, and nothing else in the suite would notice.
+        """
+        stage: Any = _OtpStage(
+            {"registration": {"otp_validate_email_otp_validate_flow": True}},
+            session=Mock(),
+            base_headers={},
+            auth_base="https://auth.openai.com",
+            device_id="did-1",
+            session_logging_id="sess-1",
+        )
+        stage.r.openai_auth_headers = lambda *a, **k: {}
+        stage.r.auth_impersonate = lambda: "chrome146"
+        stage.r.request_with_retry = Mock(return_value=Mock(status_code=200))
+        stage.r._json_or_raw = lambda *a, **k: {}
+        otp_stages._explicit_passwordless_send(stage)
+        self.assertEqual(stage.issued, ("authorize_continue", True))
 
 
 class OtpExternalUrlBranchTests(unittest.TestCase):

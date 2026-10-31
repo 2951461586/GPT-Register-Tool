@@ -766,17 +766,26 @@ def openai_auth_headers(
     }
     # Sec-CH-UA-* client hints are Chromium-only. Firefox emits none, so only
     # attach them when the active fingerprint is Chrome-family.
+    #
+    # 🔴 Only the three **low-entropy** hints below go on the wire. The
+    # high-entropy ones (``full-version-list`` / ``arch`` / ``bitness`` /
+    # ``model`` / ``platform-version``) used to be sent too and that was wrong:
+    # Chrome releases a high-entropy hint only after the **origin itself** asked
+    # for it with ``Accept-CH`` (or shipped ``ch-ua-*=()`` in Permissions-Policy
+    # to suppress it). The 2026-10-28 HAR of a full passwordless registration
+    # has 827 entries and **zero** high-entropy hint headers: chatgpt.com and
+    # auth.openai.com never send ``Accept-CH`` for them (the only ``Accept-CH``
+    # in the whole capture comes from bat.bing.com, a third party we never call).
+    #
+    # ``sentinel_fingerprint()`` keeps producing the same values: those feed the
+    # Sentinel SDK's ``navigator.userAgentData`` (JS-side, always available to
+    # the page), not an HTTP header. Deleting them there would change the proof.
     if browser_family == "chrome":
         headers.update(
             {
                 "sec-ch-ua": fingerprint["sec_ch_ua"],
                 "sec-ch-ua-mobile": fingerprint["sec_ch_ua_mobile"],
                 "sec-ch-ua-platform": fingerprint["sec_ch_ua_platform"],
-                "sec-ch-ua-full-version-list": str(environment["sec_ch_ua_full_version_list"]),
-                "sec-ch-ua-arch": str(environment["sec_ch_ua_arch"]),
-                "sec-ch-ua-bitness": str(environment["sec_ch_ua_bitness"]),
-                "sec-ch-ua-model": str(environment["sec_ch_ua_model"]),
-                "sec-ch-ua-platform-version": str(environment["sec_ch_ua_platform_version"]),
             }
         )
     if referer:
@@ -810,6 +819,10 @@ def openai_auth_headers(
     if extra:
         headers.update({str(k): str(v) for k, v in extra.items() if v is not None})
     if str(family or "").strip().lower() == "nextauth":
+        # The five high-entropy hint names are no longer emitted by the chrome
+        # branch above; they stay in this strip list because ``extra`` is merged
+        # before this point, so a caller that passes one through ``extra`` still
+        # cannot smuggle it onto a NextAuth request.
         for key in (
             "sec-ch-ua-full-version-list",
             "sec-ch-ua-arch",

@@ -64,6 +64,7 @@
     "prime_password_page_fatal": false,
     "otp_navigation_headers": false,
     "otp_validate_sentinel": false,
+    "otp_validate_email_otp_validate_flow": false,
     "otp_external_url_branch": false,
     "device_identity_seeded_by_email": false,
     "passwordless_explicit_send_otp": true,
