@@ -159,3 +159,30 @@ sentinel 三个 challenge 的响应都是 `persona=chatgpt-noauth`、`proofofwor
 `uncaught exception in thread account-health-coordinator: cannot schedule new futures after interpreter shutdown`
 （后台健康巡检线程未 join 即退出，不影响批次结果）。
 
+
+## 9. 删高熵 hints 之后的 AT 存活（59 个新号，2026-10-31 17:21-19:05）
+
+`scripts/at_survival_watch.py` 对 §8 两臂的全部 **59** 个账号（A 29 / B 30，全部 `registered`/`free`/
+`active`）按 `created_at` 作 t0 逐点探测 `wham/usage`，只读、不重登、不落敏感字段。
+探测覆盖 60 / 90 / 120 / 145 分钟四个检查点（每个点每账号一次）：
+
+| 检查点 | 存活 / 已探测 | 传输失败（未计入） | 真实年龄 |
+| --- | ---: | ---: | --- |
+| +60 min | 57 / 57 | 2 | 60 min |
+| +90 min | 59 / 59 | 0 | 90-92 min |
+| +120 min | 59 / 59 | 0 | 120 min |
+| +145 min | 43 / 43 | 1 | 145-152 min（窗口尚未覆盖最后一批） |
+
+全部 236 行记录里 **401/403 为 0 行**：没有一次 AT 撤销。两次 `status_code=0` 是 curl 传输错误
+（`(56) Proxy CONNECT aborted` / `Connection closed`），且都在下一个检查点用 200 恢复。
+
+**这能说明什么、不能说明什么。** 能说明：删掉 5 个高熵 `Sec-CH-UA-*` 头之后，59 个新号在 2.5 小时内
+没有出现任何 AT 失效，量级上显著强于 2026-10-11 旧栈（5 min 19/21、15 min 2/17、30 min 0/18），
+也与 2026-10-23 新栈（3/3 在 60 min 与 135-142 min 仍 200）一致。**不能**说明的是因果：这批账号全部
+建于改动之后，没有「带高熵 hints」的对照臂，且它与 10-23 的差异不止这一项（邮箱源、出口国家、时间窗都不同）。
+要把它变成因果结论，需要一臂带 hint 的对照批次；在那之前，本节的读法是「无回归信号」，
+与 §3 的 P0-2 论证（真浏览器本来就不发这些头）方向一致。
+
+旁证（机制侧）：59 个号全部走的是改动后的 `auth_headers`，也就是每个 `chatgpt.com`/`auth.openai.com`
+请求都不再带 `sec-ch-ua-full-version-list` / `-arch` / `-bitness` / `-model` / `-platform-version`，
+而注册、`email-otp/validate`、`create_account`、`/backend-api/me` 探活全部 200。
