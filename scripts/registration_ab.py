@@ -694,6 +694,49 @@ EXPERIMENTS: dict[str, dict[str, Any]] = {
             "decision rule reports as not_judgeable rather than as no-effect."
         ),
     },
+    "p1-18-otp-validate-flow": {
+        "hypothesis": (
+            "The current web client binds the Sentinel flow `email_otp_validate` -- "
+            "not `authorize_continue` -- to POST /api/accounts/email-otp/validate: "
+            "in the 2026-10-28 passwordless HAR both openai-sentinel-token.flow and "
+            "openai-sentinel-so-token.flow are `email_otp_validate`, while "
+            "passwordless/send-otp in the same transaction keeps "
+            "`authorize_continue` and create_account keeps `oauth_create_account`. "
+            "Sending the flow the endpoint now names is not worse; if the server "
+            "checks it, the authorize_continue arm fails at validate "
+            "(wrong_email_otp_code / 409) where the email_otp_validate arm passes."
+        ),
+        "toggle": "registration.otp_validate_email_otp_validate_flow",
+        "arms": {"authorize_continue": False, "email_otp_validate": True},
+        "hold_constant": (
+            "registration.otp_validate_sentinel=true in BOTH arms (it decides whether "
+            "a pair is sent at all, so it is the carrier of the variable, not the variable)",
+            "same mailbox batch and provider",
+            "same exit pool (same proxy seeds, same order)",
+            "same registration mode/driver/concurrency/stage timeouts",
+            "registration.pulse.enabled false in BOTH arms",
+            "same time-of-day window (Cloudflare load is diurnal)",
+        ),
+        "metrics": (
+            "funnel.registered_per_attempted",
+            "funnel.registration_failures_by_class (auth_state = validate/409 family)",
+            "OTP validate sentinel flow=email_otp_validate present in the treatment log "
+            "(manipulation check; the marker is emitted only on that arm)",
+        ),
+        "mechanism": "OTP validate sentinel flow=email_otp_validate",
+        # The marker needs otp_validate_sentinel to be on, and that toggle is off in
+        # the shipped default; a window where no account reaches validate therefore
+        # has no marker in EITHER arm -- ``not_judgeable``, not "the code never ran".
+        "conditional": True,
+        "decision": (
+            "favor_email_otp_validate when that arm's success rate exceeds the "
+            f"authorize_continue arm's by more than {RATE_DELTA:.2f}; keep_default_off "
+            "when the new flow is worse by the same delta OR an auth_state failure "
+            "grows (the name disturbed the transaction); otherwise inconclusive. "
+            "Both arms passing at the same rate means the flow name is not enforced "
+            "on this endpoint -- the switch then buys nothing and stays off."
+        ),
+    },
     "p2-1-device-identity-seeded": {
         "hypothesis": (
             "H1 of plan-2026-10-10-fingerprint-device-layer: the wire-shape family "
@@ -1477,6 +1520,9 @@ def _rule(experiment: str, metrics: Mapping[str, Mapping[str, Any]], powered: bo
             return "keep_default_off", f"backoff {b_rate} < default {d_rate} - {RATE_DELTA}"
         return "inconclusive", f"success rates within {RATE_DELTA}: default={d_rate} backoff={b_rate}"
 
+    if experiment == "p1-18-otp-validate-flow":
+        return _rule_otp_validate_flow(metrics)
+
     if experiment == "p0-2b-inflow-challenge-handoff":
         return _rule_inflow_challenge_handoff(metrics)
 
@@ -1489,6 +1535,43 @@ def _rule(experiment: str, metrics: Mapping[str, Mapping[str, Any]], powered: bo
         )
 
     return "inconclusive", "no decision rule registered for this experiment"
+
+
+def _rule_otp_validate_flow(metrics: Mapping[str, Mapping[str, Any]]) -> tuple[str, str]:
+    """P1-18: does the flow name the web client binds to ``email-otp/validate`` matter?
+
+    Split out of :func:`_rule` because that chain is at the function-length
+    ratchet's ceiling; every arm here is already gated by ``powered`` upstream, so
+    this only has to pick between the pre-registered outcomes.
+
+    ``auth_state`` growth wins over a rate win on purpose: a flow name the endpoint
+    does not expect can move the transaction into a rejection path that happens to
+    still land some accounts, and that is a regression to keep off by default, not
+    a close call to average away.
+    """
+    baseline = metrics.get("authorize_continue") or {}
+    candidate = metrics.get("email_otp_validate") or {}
+    b_rate = baseline.get("registered_per_attempted")
+    c_rate = candidate.get("registered_per_attempted")
+    if b_rate is None or c_rate is None:
+        return "inconclusive", "registered_per_attempted unavailable (no batch funnel provided)"
+    auth_growth = _failure_class_growth(baseline.get("failure_classes"), candidate.get("failure_classes"), "auth_state")
+    if auth_growth:
+        return (
+            "keep_default_off",
+            "the flow name disturbed the transaction; auth_state failures grew: " + str(auth_growth),
+        )
+    if c_rate > b_rate + RATE_DELTA:
+        return (
+            "favor_email_otp_validate",
+            f"email_otp_validate {c_rate} > authorize_continue {b_rate} + {RATE_DELTA}",
+        )
+    if b_rate > c_rate + RATE_DELTA:
+        return "keep_default_off", f"email_otp_validate {c_rate} < authorize_continue {b_rate} - {RATE_DELTA}"
+    return "inconclusive", (
+        f"success rates within {RATE_DELTA}: authorize_continue={b_rate} "
+        f"email_otp_validate={c_rate} -- the flow name is not enforced on this endpoint"
+    )
 
 
 def _class_count(mapping: Mapping[str, Any] | None, key: str) -> int:

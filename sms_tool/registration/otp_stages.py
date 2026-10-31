@@ -405,8 +405,16 @@ def validate_email_otp(workflow: RegistrationWorkflow) -> None:
         # Mechanism line for ``p1-16-otp-validate-sentinel``: unconditional
         # inside the toggle's branch.
         _emit(_LOGGER, "  OTP validate sentinel")
+        flow = _otp_validate_sentinel_flow(workflow)
+        if flow != "authorize_continue":
+            # Mechanism line for ``p1-18-otp-validate-flow`` (P1-18 A/B). Emitted
+            # only on the treatment arm, so the marker's *presence* identifies the
+            # arm -- ``registration_ab.build_record`` can only test presence, not
+            # which value a line carries. Goes through ``operator_output.emit`` so
+            # it reaches both the log and the stdout mirror the collector reads.
+            _emit(_LOGGER, "  OTP validate sentinel flow=%s", flow)
         try:
-            issued = workflow._issue_sentinel(_otp_validate_sentinel_flow(workflow), force_fresh=True)
+            issued = workflow._issue_sentinel(flow, force_fresh=True)
             sentinel_data = {"sentinel_token": issued.token, "sentinel_so_token": issued.so_token}
             use_sentinel = True
         except Exception as exc:

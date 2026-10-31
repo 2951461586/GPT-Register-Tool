@@ -134,6 +134,64 @@ class PrimePasswordPageExperimentTests(unittest.TestCase):
         self.assertEqual(report["verdict"], "unverified")
 
 
+class OtpValidateFlowExperimentTests(unittest.TestCase):
+    """P1-18 判定规则：validate 用哪个 Sentinel flow 的预注册语义。"""
+
+    EXPERIMENT = "p1-18-otp-validate-flow"
+
+    def test_favor_new_flow_when_the_rate_improves(self):
+        rows = [
+            _record(self.EXPERIMENT, "authorize_continue", False, attempted=30, registered=8),
+            _record(self.EXPERIMENT, "email_otp_validate", True, attempted=30, registered=15),
+        ]
+        report = ab.compare_records(rows)
+        self.assertEqual(report["verdict"], "favor_email_otp_validate")
+        self.assertTrue(report["powered"])
+
+    def test_worse_new_flow_keeps_the_default_off(self):
+        rows = [
+            _record(self.EXPERIMENT, "authorize_continue", False, attempted=30, registered=14),
+            _record(self.EXPERIMENT, "email_otp_validate", True, attempted=30, registered=6),
+        ]
+        self.assertEqual(ab.compare_records(rows)["verdict"], "keep_default_off")
+
+    def test_auth_state_growth_keeps_the_default_even_when_the_rate_improves(self):
+        """flow 名把事务打乱时必须优先报 auth_state 增长，而不是报「赢了」。"""
+        rows = [
+            _record(
+                self.EXPERIMENT, "authorize_continue", False, attempted=30, registered=5, failures={"auth_state": 6}
+            ),
+            _record(
+                self.EXPERIMENT, "email_otp_validate", True, attempted=30, registered=15, failures={"auth_state": 12}
+            ),
+        ]
+        self.assertEqual(ab.compare_records(rows)["verdict"], "keep_default_off")
+
+    def test_both_arms_equal_is_inconclusive_not_a_win(self):
+        """两臂同率 = 服务端不校验 flow 名：开关不买任何东西，保持关闭。"""
+        rows = [
+            _record(self.EXPERIMENT, "authorize_continue", False, attempted=30, registered=12),
+            _record(self.EXPERIMENT, "email_otp_validate", True, attempted=30, registered=12),
+        ]
+        report = ab.compare_records(rows)
+        self.assertEqual(report["verdict"], "inconclusive")
+        self.assertIn("not enforced", report["reason"])
+
+    def test_the_marker_names_the_flow_the_code_actually_mints(self):
+        """设计表的机制行必须与 otp_stages 实际发出的行、与 flow 常量三者一致。"""
+        from sms_tool.sentinel import EMAIL_OTP_VALIDATE_FLOW
+
+        marker = ab.EXPERIMENTS[self.EXPERIMENT]["mechanism"]
+        self.assertEqual(marker, f"OTP validate sentinel flow={EMAIL_OTP_VALIDATE_FLOW}")
+        source = (ROOT / "sms_tool" / "registration" / "otp_stages.py").read_text(encoding="utf-8")
+        self.assertIn('"  OTP validate sentinel flow=%s"', source)
+
+    def test_the_carrier_toggle_must_not_be_the_variable(self):
+        """两臂都必须开 `otp_validate_sentinel`，否则对照组根本不带 token。"""
+        held = " ".join(ab.EXPERIMENTS[self.EXPERIMENT]["hold_constant"])
+        self.assertIn("otp_validate_sentinel=true in BOTH arms", held)
+
+
 class SignupContinueScreenHintExperimentTests(unittest.TestCase):
     """P1-5 判定规则：signup continue 声明 screen_hint 的预注册语义。"""
 
