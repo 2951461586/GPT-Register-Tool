@@ -218,6 +218,21 @@ sentinel 三个 challenge 的响应都是 `persona=chatgpt-noauth`、`proofofwor
 | `originator` / `oai-client-version` 的取舍 | 未落地，需网页版 HAR | 这份 HAR 是 Codex webview，它本来就不发 `oai-client-version`，不能据此判断网页端 |
 | IN 档加 `hi-IN` 少数派语言 | 未落地 | HAR 是印地语浏览器，我们给 `en-IN` 同样真实；这是分布取舍，不是缺陷 |
 
-### 控制臂（P0-2 的对照）：`email_registration.auth_fingerprint.restore_high_entropy_hints`（默认 false）
-恢复那 5 个头，其余一字不改；2026-10-31 19:46 用同池同源（remail iCloud + 同 10 个 IN 出口）跑了
-10/10 成功的一批作为对照，AT 存活按同样脚本在 +60 min 读取。
+### 控制臂（P0-2 的对照）
+
+`email_registration.auth_fingerprint.restore_high_entropy_hints`（默认 false）恢复那 5 个头，其余一字不改。
+2026-10-31 19:44-19:48 用同池同源（remail iCloud、同 10 个 IN 出口、同 5 workers、同 passwordless lane、
+同 `otp_validate_sentinel=true`）跑出 **10/10**；机制核对：在该臂的冻结配置下
+`openai_auth_headers(family="chatgpt")` 确实发出全部 8 条 `sec-ch-ua*` 头（3 低熵 + 5 高熵）。
+
+`scripts/at_survival_watch.py --t0 created --schedule-minutes 60`：
+
+| 臂 | +60 min 存活 / 已探测 | 传输失败 | 真实年龄 |
+| --- | ---: | ---: | --- |
+| 无高熵 hints（59 个号，§9） | 57 / 57 | 2 | 60 min |
+| **有高熵 hints（对照，10 个号）** | **10 / 10** | 0 | 60 min |
+
+两臂都是 100%，本窗口内**测不出差异**。这正是预期形状：删头的依据是「真浏览器不发这些头」（可检测性），
+不是「发了会掉号」。对照臂的价值在于排除「删头把存活率改坏了」这一反向解释——现在该解释被排除，
+而「删头带来存活收益」同样不成立。要把它做成有统计意义的对照，需要在 +6h/+24h 重复，且两臂各 30+ 个号
+（本对照 10 个，比例型指标的分辨率约 0.1）。
