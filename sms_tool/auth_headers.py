@@ -73,21 +73,24 @@ AUTH_FINGERPRINT_PROFILES = {
         "sec_ch_ua_platform": '"Windows"',
     },
     # ── Chrome family (CF-edge fallback, minority weight) ─────────────────────
-    "chrome150": {
-        # Newest impersonation curl_cffi 0.16.0 exposes (the 2026-10-23 HAR is
-        # Chrome 155, which curl_cffi cannot mimic yet). Closest supported
-        # version, and the only profile whose client hints match the current
-        # Not(A:Brand grease token.
-        "name": "chrome150",
-        "impersonate": "chrome150",
-        "user_agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
-        ),
-        "sec_ch_ua": '"Google Chrome";v="150", "Chromium";v="150", "Not(A:Brand";v="24"',
-        "sec_ch_ua_mobile": "?0",
-        "sec_ch_ua_platform": '"Windows"',
-    },
+    #
+    # 🔴 `sec_ch_ua` is **measured, not written**: every literal below is what the
+    # installed curl_cffi sends for that same impersonate (captured 2026-10-31
+    # with curl_cffi 0.16.0 against a local echo server). Chrome rotates both the
+    # GREASE brand (`Not(A:Brand` / `Not-A.Brand` / `Not_A Brand` / `Not:A-Brand`)
+    # and the brand ORDER every few majors, so a hand-written list goes stale
+    # silently -- the pre-2026-10-31 table had `"Google Chrome"` first with
+    # `Not(A:Brand";v="24"` for every version, which matches no Chrome at all.
+    # The test `test_every_chrome_hint_literal_matches_curl_cffi` re-measures this,
+    # so a curl_cffi upgrade that changes the emissions fails the suite instead of
+    # leaving the UA and the hints disagreeing.
+    #
+    # There is deliberately **no `chrome150` entry**: curl_cffi 0.16.0's
+    # `BrowserType` stops at `chrome146`, so a chrome150 profile could only ever
+    # be selected and then fail closed (`auth_fingerprint_unavailable`) in the
+    # preflight, or fall back silently and send Chrome/150 hints over a 146 TLS
+    # fingerprint. `chrome146` is the newest real option; bump this table when
+    # curl_cffi ships a newer one.
     "chrome146": {
         "name": "chrome146",
         "impersonate": "chrome146",
@@ -95,7 +98,7 @@ AUTH_FINGERPRINT_PROFILES = {
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
         ),
-        "sec_ch_ua": '"Google Chrome";v="146", "Chromium";v="146", "Not(A:Brand";v="24"',
+        "sec_ch_ua": '"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"',
         "sec_ch_ua_mobile": "?0",
         "sec_ch_ua_platform": '"Windows"',
     },
@@ -106,7 +109,7 @@ AUTH_FINGERPRINT_PROFILES = {
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
         ),
-        "sec_ch_ua": '"Google Chrome";v="145", "Chromium";v="145", "Not(A:Brand";v="24"',
+        "sec_ch_ua": '"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"',
         "sec_ch_ua_mobile": "?0",
         "sec_ch_ua_platform": '"Windows"',
     },
@@ -117,7 +120,7 @@ AUTH_FINGERPRINT_PROFILES = {
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
         ),
-        "sec_ch_ua": '"Google Chrome";v="142", "Chromium";v="142", "Not(A:Brand";v="24"',
+        "sec_ch_ua": '"Chromium";v="142", "Google Chrome";v="142", "Not_A Brand";v="99"',
         "sec_ch_ua_mobile": "?0",
         "sec_ch_ua_platform": '"Windows"',
     },
@@ -128,7 +131,7 @@ AUTH_FINGERPRINT_PROFILES = {
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
         ),
-        "sec_ch_ua": '"Google Chrome";v="136", "Chromium";v="136", "Not(A:Brand";v="24"',
+        "sec_ch_ua": '"Chromium";v="136", "Google Chrome";v="136", "Not.A/Brand";v="99"',
         "sec_ch_ua_mobile": "?0",
         "sec_ch_ua_platform": '"Windows"',
     },
@@ -139,7 +142,7 @@ AUTH_FINGERPRINT_PROFILES = {
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
         ),
-        "sec_ch_ua": '"Google Chrome";v="131", "Chromium";v="131", "Not(A:Brand";v="24"',
+        "sec_ch_ua": '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
         "sec_ch_ua_mobile": "?0",
         "sec_ch_ua_platform": '"Windows"',
     },
@@ -150,7 +153,7 @@ AUTH_FINGERPRINT_PROFILES = {
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         ),
-        "sec_ch_ua": '"Google Chrome";v="124", "Chromium";v="124", "Not(A:Brand";v="24"',
+        "sec_ch_ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
         "sec_ch_ua_mobile": "?0",
         "sec_ch_ua_platform": '"Windows"',
     },
@@ -674,12 +677,41 @@ def _timezone_offset_minutes(tz_name: str) -> int:
         return 0
 
 
+def _full_version_list(sec_ch_ua: str) -> str:
+    """Expand a ``Sec-CH-UA`` brand list into the ``Sec-CH-UA-Full-Version-List`` form.
+
+    Chrome emits both hints from the same GREASE seed: identical brand names, the
+    same order, the same grease version, and only the version *widened* to four
+    components (``"Chromium";v="146"`` -> ``"Chromium";v="146.0.0.0"``).
+    Synthesising this list from a constant instead (the pre-2026-10-31
+    ``"Google Chrome";v=.., "Chromium";v=.., "Not(A:Brand";v="24.0.0.0"``)
+    made the JS-side ``navigator.userAgentData`` disagree with the ``sec-ch-ua``
+    header the same account sent -- a contradiction the SDK reports and a real
+    Chrome never has. Deriving it keeps the two halves in lockstep for every
+    profile.
+
+    Returns ``""`` for an empty input (Firefox/Safari emit no client hints).
+    """
+    text = str(sec_ch_ua or "").strip()
+    if not text:
+        return ""
+    parts = []
+    for chunk in text.split(","):
+        brand, _, version = chunk.partition(";v=")
+        brand = brand.strip()
+        major = version.strip().strip('"')
+        if not brand or not major:
+            continue
+        full = major if major.count(".") == 3 else f"{major}.0.0.0"
+        parts.append(f'{brand};v="{full}"')
+    return ", ".join(parts)
+
+
 def sentinel_fingerprint() -> dict[str, object]:
     """Return the browser environment shared by auth headers and Sentinel SDK."""
     fingerprint = current_auth_fingerprint()
     impersonate = str(fingerprint.get("impersonate") or "")
     family = _browser_family(impersonate)
-    version = _browser_version(impersonate) or "144"
     geo = getattr(_AUTH_FINGERPRINT_LOCAL, "geo_profile", None) or set_fingerprint_geo("")
     session_id = str(getattr(_AUTH_FINGERPRINT_LOCAL, "session_id", "") or uuid.uuid4())
     _AUTH_FINGERPRINT_LOCAL.session_id = session_id
@@ -714,7 +746,7 @@ def sentinel_fingerprint() -> dict[str, object]:
         "performance_now": device["performance_now"],
         # Sec-CH-UA-* client hints are Chromium-only; Firefox emits none of them.
         "sec_ch_ua_full_version_list": (
-            f'"Google Chrome";v="{version}", "Chromium";v="{version}", "Not(A:Brand";v="24.0.0.0"' if is_chrome else ""
+            _full_version_list(str(fingerprint.get("sec_ch_ua") or "")) if is_chrome else ""
         ),
         "sec_ch_ua_arch": "x86" if is_chrome else "",
         "sec_ch_ua_bitness": "64" if is_chrome else "",
@@ -884,6 +916,14 @@ def openai_auth_headers(
                 "oai-client-version": CHATGPT_CLIENT_VERSION,
             }
         )
+        # The 2026-10-28 HAR sends `oai-language` on every chatgpt.com
+        # backend-api request (`me`, `accounts/check`, sentinel prepare and
+        # finalize alike), valued with the short locale tag (`hi-IN`), not the
+        # weighted `Accept-Language` string. Same source as the Accept-Language
+        # first component, so the two cannot disagree.
+        locale_tag = str(environment.get("lang") or "").strip()
+        if locale_tag:
+            headers["oai-language"] = locale_tag
     return headers
 
 

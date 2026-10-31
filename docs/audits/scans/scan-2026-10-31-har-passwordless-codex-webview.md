@@ -186,3 +186,38 @@ sentinel 三个 challenge 的响应都是 `persona=chatgpt-noauth`、`proofofwor
 旁证（机制侧）：59 个号全部走的是改动后的 `auth_headers`，也就是每个 `chatgpt.com`/`auth.openai.com`
 请求都不再带 `sec-ch-ua-full-version-list` / `-arch` / `-bitness` / `-model` / `-platform-version`，
 而注册、`email-otp/validate`、`create_account`、`/backend-api/me` 探活全部 200。
+
+## 10. P1 落地（2026-10-31 晚）与 P2 的取舍
+
+§6 的清单按「有没有独立证据」重新排了一遍，本轮落地三项，其余保持观察：
+
+### 已落地（P1）
+
+1. **chrome 档的 `sec_ch_ua` 改为实测值**。此前每个版本都是手写的
+   `"Google Chrome";v="N", "Chromium";v="N", "Not(A:Brand";v="24"`，与任何一个真实 Chrome 都不匹配——
+   Chrome 每几个大版本就轮换 GREASE 品牌（`Not(A:Brand` / `Not-A.Brand` / `Not_A Brand` / `Not:A-Brand`）
+   和品牌顺序。现在每个档的值都是**当前 curl_cffi 对同一 impression 实际发出**的串
+   （2026-10-31 用本地回显服务抓取），并由 `test_every_chrome_hint_literal_matches_curl_cffi` 在每次
+   测试里重新测量一次——curl_cffi 升级改变输出时测试会红，而不是让 UA 与 hints 悄悄不一致。
+2. **删掉 `chrome150` 档**。curl_cffi 0.16.0 的 `BrowserType` 到 `chrome146` 为止，chrome150 只可能被
+   选中后在预检里失败关闭（`auth_fingerprint_unavailable:chrome150`），或静默回落到别的 TLS 指纹却仍发
+   Chrome/150 的 hints。`fingerprint_pool` 的无 profile 兜底也从 chrome150 改到 chrome146。
+3. **`oai-language` 补到 chatgpt 家族**（值取 geo 的短标签，如 `hi-IN`）。HAR 在 `me`、`accounts/check`
+   与两次 sentinel chat-requirements 上都带它；auth 家族不加（那是 chatgpt.com 的头）。
+4. 顺带：`sec-ch-ua-full-version-list` 不再用常量合成，而是从该档自己的 `sec_ch_ua` 派生（同品牌、同顺序、
+   同 grease，仅版本补成 `x.0.0.0`）。此前常量里的 `Not(A:Brand";v="24.0.0.0"` 会让 JS 侧
+   `navigator.userAgentData` 与同一账号发出的 `sec-ch-ua` 互相矛盾。
+
+### 未落地（P2）与理由
+
+| 项 | 状态 | 理由 |
+| --- | --- | --- |
+| signin query 收敛（只留 4 个参数，`ext-oai-did` 移到 Referer） | 已有开关，不再新增 | `registration.turb_signin_authorize_context` 产出的正是 HAR 形状；要验证它就得走 A/B，而不是直接换默认 |
+| `oai-session-id` 与 `auth_session_logging_id` 分离 | 未落地 | 两者都是随机 UUID，改的是「同一个值用了两次」这种审美问题；没有任何证据说明它可检测，且改它会动每个请求的关联性 |
+| `passwordless/send-otp` 的 `{"e": …}` token 形态 | 未落地，待 A/B | cookie 被剥离，无法排除导出脱敏；与 P1-18 不同，这里没有第二个独立证据 |
+| `originator` / `oai-client-version` 的取舍 | 未落地，需网页版 HAR | 这份 HAR 是 Codex webview，它本来就不发 `oai-client-version`，不能据此判断网页端 |
+| IN 档加 `hi-IN` 少数派语言 | 未落地 | HAR 是印地语浏览器，我们给 `en-IN` 同样真实；这是分布取舍，不是缺陷 |
+
+### 控制臂（P0-2 的对照）：`email_registration.auth_fingerprint.restore_high_entropy_hints`（默认 false）
+恢复那 5 个头，其余一字不改；2026-10-31 19:46 用同池同源（remail iCloud + 同 10 个 IN 出口）跑了
+10/10 成功的一批作为对照，AT 存活按同样脚本在 +60 min 读取。

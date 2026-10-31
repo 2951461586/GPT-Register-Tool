@@ -86,28 +86,102 @@ class AuthHeadersAndClassificationTests(unittest.TestCase):
         self.assertEqual(headers["x-access-flow-invocation-id"], "inv-1")
         self.assertEqual(headers["x-openai-document-navigation-id"], "nav-1")
 
-    def test_chrome_client_hints_use_the_current_brand_token(self):
-        """Chrome 155 (HAR 2026-10-23) puts Google Chrome first and uses
-        ``Not(A:Brand";v="24"``; the old ``Not.A/Brand";v="99"`` is stale."""
+    def test_every_chrome_hint_literal_matches_curl_cffi(self):
+        """Each chrome profile's ``sec_ch_ua`` must equal what curl_cffi sends.
+
+        Chrome rotates the GREASE brand (`Not(A:Brand` / `Not-A.Brand` /
+        `Not_A Brand` / `Not:A-Brand`) and the brand order every few majors, so a
+        hand-written table goes stale silently. Until 2026-10-31 this table said
+        `"Google Chrome"` first with `Not(A:Brand";v="24"` for *every* version,
+        which matches no Chrome the impersonation actually emulates. Measuring it
+        here means a curl_cffi upgrade that changes the emissions fails the suite
+        instead of shipping a UA that disagrees with its own hints.
+        """
+        import http.server
+        import threading
+
+        from curl_cffi import requests as curl_requests
+        from curl_cffi.requests.impersonate import BrowserType
+
+        installed = {item.value for item in BrowserType}
         for name, profile in auth_headers.AUTH_FINGERPRINT_PROFILES.items():
             if not name.startswith("chrome"):
                 continue
             with self.subTest(profile=name):
-                self.assertTrue(profile["sec_ch_ua"].startswith('"Google Chrome";v="'), profile["sec_ch_ua"])
-                self.assertIn('"Not(A:Brand";v="24"', profile["sec_ch_ua"])
-                self.assertNotIn("Not.A/Brand", profile["sec_ch_ua"])
+                self.assertIn(name, installed, "profile is not exposed by the installed curl_cffi")
+                captured: dict[str, str] = {}
 
-    def test_chrome150_is_the_newest_supported_profile(self):
-        profile = auth_headers.AUTH_FINGERPRINT_PROFILES["chrome150"]
-        self.assertEqual(profile["impersonate"], "chrome150")
-        self.assertIn("Chrome/150.", profile["user_agent"])
-        self.assertIn('v="150"', profile["sec_ch_ua"])
+                class _Echo(http.server.BaseHTTPRequestHandler):
+                    def do_GET(self):  # noqa: N802 - stdlib handler name
+                        captured.update({k.lower(): v for k, v in self.headers.items()})
+                        self.send_response(200)
+                        self.send_header("Content-Length", "2")
+                        self.end_headers()
+                        self.wfile.write(b"ok")
+
+                    def log_message(self, *args):  # keep the test output clean
+                        return
+
+                server = http.server.HTTPServer(("127.0.0.1", 0), _Echo)
+                threading.Thread(target=server.handle_request, daemon=True).start()
+                try:
+                    curl_requests.Session(impersonate=name).get(f"http://127.0.0.1:{server.server_port}/", timeout=10)
+                finally:
+                    server.server_close()
+                self.assertEqual(profile["sec_ch_ua"], captured.get("sec-ch-ua", ""), name)
+
+    def test_the_newest_chrome_profile_is_one_curl_cffi_can_impersonate(self):
+        """No profile may name an impersonation the installed curl_cffi lacks.
+
+        A `chrome150` entry used to sit here; curl_cffi 0.16.0 stops at
+        `chrome146`, so it could only be selected and then fail closed in the
+        preflight or fall back silently to a different TLS fingerprint.
+        """
+        from curl_cffi.requests.impersonate import BrowserType
+
+        installed = {item.value for item in BrowserType}
+        chrome = [name for name in auth_headers.AUTH_FINGERPRINT_PROFILES if name.startswith("chrome")]
+        self.assertTrue(chrome)
+        for name in chrome:
+            with self.subTest(profile=name):
+                self.assertIn(name, installed)
+        newest = max(chrome, key=lambda n: int(auth_headers._browser_version(n) or 0))
+        self.assertEqual(newest, "chrome146")
+        self.assertIn("Chrome/146.", auth_headers.AUTH_FINGERPRINT_PROFILES[newest]["user_agent"])
 
     def test_windows_platform_version_matches_the_har(self):
         self.assertEqual(
-            hardware_profile_for_family("chrome150")["sec_ch_ua_platform_version"],
+            hardware_profile_for_family("chrome146")["sec_ch_ua_platform_version"],
             "19.0.0",
         )
+
+    def test_the_full_version_list_is_derived_from_the_low_entropy_hints(self):
+        """Both hints come from one GREASE seed: same brands, same order, widened."""
+        profile = auth_headers.AUTH_FINGERPRINT_PROFILES["chrome146"]
+        with patch.object(auth_headers, "current_auth_fingerprint", return_value=dict(profile)):
+            environment = sentinel_fingerprint()
+        self.assertEqual(
+            environment["sec_ch_ua_full_version_list"],
+            '"Chromium";v="146.0.0.0", "Not-A.Brand";v="24.0.0.0", "Google Chrome";v="146.0.0.0"',
+        )
+        # The JS-side list must agree with the header on brand order and grease.
+        derived = str(environment["sec_ch_ua_full_version_list"])
+        self.assertEqual(
+            [chunk.split(";v=")[0] for chunk in derived.split(", ")],
+            [chunk.split(";v=")[0] for chunk in profile["sec_ch_ua"].split(", ")],
+        )
+        self.assertEqual(auth_headers._full_version_list(""), "")
+
+    def test_chatgpt_family_carries_oai_language(self):
+        """The 2026-10-28 HAR sends `oai-language` on every chatgpt.com backend call."""
+        set_fingerprint_geo("IN")
+        try:
+            headers = chatgpt_headers("did-1")
+            self.assertEqual(headers["oai-language"], "en-IN")
+            # The auth family is unchanged: the header is a chatgpt.com one.
+            self.assertNotIn("oai-language", openai_auth_headers("did-1"))
+        finally:
+            set_fingerprint_geo("")
 
     def test_high_entropy_client_hints_are_not_sent_on_the_wire(self):
         """Only the three low-entropy ``Sec-CH-UA-*`` hints may be emitted.
@@ -152,7 +226,12 @@ class AuthHeadersAndClassificationTests(unittest.TestCase):
                     self.assertEqual(headers["sec-ch-ua-platform"], '"Windows"')
             # The SDK-side environment keeps producing them.
             environment = sentinel_fingerprint()
-            self.assertIn('"Not(A:Brand";v="24.0.0.0"', str(environment["sec_ch_ua_full_version_list"]))
+            # Derived from the profile's low-entropy list: same brands, order and
+            # grease, versions widened. The pre-2026-10-31 constant is gone.
+            self.assertEqual(
+                str(environment["sec_ch_ua_full_version_list"]),
+                '"Chromium";v="146.0.0.0", "Not-A.Brand";v="24.0.0.0", "Google Chrome";v="146.0.0.0"',
+            )
             self.assertEqual(environment["sec_ch_ua_arch"], "x86")
             self.assertEqual(environment["sec_ch_ua_bitness"], "64")
 
@@ -516,10 +595,11 @@ class FingerprintPoolVersionMatrixTests(unittest.TestCase):
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0",
         )
         # The profile *name* is the persisted-account key and stays chrome146;
-        # its client hints follow the current Chrome format (HAR 2026-10-23).
+        # its client hints are what curl_cffi's chrome146 actually emits
+        # (measured 2026-10-31; the old hand-written literal matched no Chrome).
         self.assertEqual(
             auth_headers.AUTH_FINGERPRINT_PROFILES["chrome146"]["sec_ch_ua"],
-            '"Google Chrome";v="146", "Chromium";v="146", "Not(A:Brand";v="24"',
+            '"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"',
         )
 
     def test_matrix_spans_firefox_chrome_safari_with_ios(self):

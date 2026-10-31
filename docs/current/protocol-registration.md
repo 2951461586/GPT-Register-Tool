@@ -643,17 +643,22 @@ sync (`sms_tool/auth_headers.py`, `sms_tool/fingerprint_pool.py`):
 
 | Field | Current value | Note |
 | --- | --- | --- |
-| `sec-ch-ua` | `"Google Chrome";v="…", "Chromium";v="…", "Not(A:Brand";v="24"` | Google Chrome first; the old `Not.A/Brand";v="99"` token is stale |
-| `sec-ch-ua-full-version-list` | same order/token, `"Not(A:Brand";v="24.0.0.0"` | built from the profile's major version |
-| `sec-ch-ua-platform-version` | `19.0.0` | Windows 11 24H2+; the UA still says `Windows NT 10.0` |
+| `sec-ch-ua` | measured per impression: `"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"` | **not hand-written**: every chrome profile's literal is what the installed curl_cffi sends for that same impression (Chrome rotates the GREASE brand and the brand order every few majors) |
+| `sec-ch-ua-full-version-list` | derived: same brands / order / grease, versions widened to `x.0.0.0` | built from the profile's own `sec_ch_ua`, so the header and the SDK's `navigator.userAgentData` cannot disagree |
+| `sec-ch-ua-arch` / `-bitness` / `-model` / `-platform-version` | **not sent by default** | a real Chrome emits these only after the origin asks with `Accept-CH`; the 2026-10-28 HAR has zero of them on chatgpt.com/auth.openai.com. `email_registration.auth_fingerprint.restore_high_entropy_hints` restores all five for the control arm |
+| `sec-ch-ua-platform-version` | `19.0.0` | Windows 11 24H2+; the UA still says `Windows NT 10.0` (sent only in the control arm) |
 | `oai-client-version` | `26.1022.91109` | chatgpt.com backend requests; the web client no longer sends `oai-client-build-number` |
+| `oai-language` | the profile's short locale tag (`hi-IN`) | chatgpt.com backend requests; the 2026-10-28 HAR sends it on `me`, `accounts/check` and both sentinel chat-requirements calls |
 | `x-openai-document-navigation-id` | one page-level value | sent on `passwordless/send-otp`, `email-otp/validate` and `create_account` |
 | `x-access-flow-invocation-id` | one value **per request** | the three auth POSTs differ; the run-level value in `base_headers` is overridden |
 
-The profile matrix keeps `chrome146` as a persisted-account key and adds
-`chrome150` — the newest impersonation `curl_cffi` 0.16.0 exposes. The HAR's
-Chrome 155 cannot be mimicked by `curl_cffi`, so 150 is the closest supported
-version.
+The profile matrix keeps `chrome146` as a persisted-account key and stops there:
+`chrome146` is the newest impersonation `curl_cffi` 0.16.0 exposes (the 2026-10-28
+HAR is Chrome 156, which `curl_cffi` cannot mimic). The `chrome150` entry that
+shipped on 2026-10-23 was removed on 2026-10-31 — it could never be selected as an
+impersonation, so it could only fail closed in the preflight
+(`auth_fingerprint_unavailable:chrome150`) or fall back silently and send
+Chrome/150 hints over a 146 TLS fingerprint.
 
 Sentinel SDK: the HAR was served `20260219f9f6`; the repo pins the newer
 `20260810913b` (both are still served). No endpoint or request-body change was

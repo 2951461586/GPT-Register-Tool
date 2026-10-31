@@ -302,13 +302,17 @@ class FingerprintPool:
         one-time warning instead of silently degrading to the default profile.
         """
         if not self._profiles:
-            # Fallback to a default profile
+            # Fallback to a default profile. `chrome146` is the newest
+            # impersonation this curl_cffi actually exposes; the previous
+            # `chrome150` here was never reachable as an impersonation (see the
+            # note on the profile table in auth_headers), so it could only send
+            # Chrome/150 hints over a different TLS fingerprint.
             return self._with_geo(
                 ProtocolEnvironmentProfile(
                     name="default",
-                    impersonate="chrome150",
-                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
-                    sec_ch_ua='"Google Chrome";v="150", "Chromium";v="150", "Not(A:Brand";v="24"',
+                    impersonate="chrome146",
+                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
+                    sec_ch_ua='"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"',
                 ),
                 proxy,
             )
