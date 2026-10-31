@@ -179,6 +179,63 @@ class AuthHeadersAndClassificationTests(unittest.TestCase):
         headers = nextauth_headers("did-1", extra={"sec-ch-ua-full-version-list": '"x";v="1"'})
         self.assertNotIn("sec-ch-ua-full-version-list", headers)
 
+    def test_the_control_switch_restores_exactly_the_five_headers(self):
+        """``auth_fingerprint.restore_high_entropy_hints`` is the A/B control arm.
+
+        It exists so the 2026-10-31 removal can be compared against a batch that
+        still sends the hints, with nothing else different. The switch must
+        restore all five values and nothing else -- a partial restore would make
+        the arm differ from the pre-removal build in a second way.
+        """
+        profile = {
+            "name": "chrome146",
+            "impersonate": "chrome146",
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/146.0.0.0 Safari/537.36",
+            "sec_ch_ua": '"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"',
+            "sec_ch_ua_mobile": "?0",
+            "sec_ch_ua_platform": '"Windows"',
+        }
+        high_entropy = (
+            "sec-ch-ua-full-version-list",
+            "sec-ch-ua-arch",
+            "sec-ch-ua-bitness",
+            "sec-ch-ua-model",
+            "sec-ch-ua-platform-version",
+        )
+        with patch.object(auth_headers, "current_auth_fingerprint", return_value=profile):
+            with patch.object(auth_headers, "_auth_fingerprint_config", return_value={}):
+                off = openai_auth_headers("did-1")
+            self.assertFalse(auth_headers.high_entropy_client_hints_enabled())
+            for key in high_entropy:
+                self.assertNotIn(key, off)
+
+            with patch.object(
+                auth_headers, "_auth_fingerprint_config", return_value={"restore_high_entropy_hints": True}
+            ):
+                self.assertTrue(auth_headers.high_entropy_client_hints_enabled())
+                on = openai_auth_headers("did-1")
+                environment = sentinel_fingerprint()
+        self.assertEqual(on["sec-ch-ua-full-version-list"], str(environment["sec_ch_ua_full_version_list"]))
+        self.assertEqual(on["sec-ch-ua-arch"], "x86")
+        self.assertEqual(on["sec-ch-ua-bitness"], "64")
+        self.assertEqual(on["sec-ch-ua-platform-version"], str(environment["sec_ch_ua_platform_version"]))
+        self.assertIn("sec-ch-ua-model", on)
+        # Only the five, never a second difference: the low-entropy trio and the
+        # UA are byte-identical to the off arm.
+        added = {key for key in on if key not in off}
+        self.assertEqual(added, set(high_entropy))
+        self.assertEqual(on["User-Agent"], off["User-Agent"])
+        self.assertEqual(on["sec-ch-ua"], off["sec-ch-ua"])
+
+    def test_a_string_false_does_not_enable_the_control_switch(self):
+        """The frozen config hands back whatever JSON held; ``"false"`` is false."""
+        for value, expected in ((False, False), ("false", False), ("0", False), (0, False), (True, True), ("on", True)):
+            with self.subTest(value=value):
+                with patch.object(
+                    auth_headers, "_auth_fingerprint_config", return_value={"restore_high_entropy_hints": value}
+                ):
+                    self.assertIs(auth_headers.high_entropy_client_hints_enabled(), expected)
+
     def test_rotated_fingerprint_keeps_tls_and_client_hints_coherent(self):
         cfg = {"mode": "rotate", "profiles": ["chrome124", "chrome131"]}
         with patch.object(auth_headers, "_auth_fingerprint_config", return_value=cfg):

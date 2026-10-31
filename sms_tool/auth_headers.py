@@ -468,6 +468,29 @@ def _auth_fingerprint_config():
         return {}
 
 
+def high_entropy_client_hints_enabled() -> bool:
+    """``email_registration.auth_fingerprint.restore_high_entropy_hints`` (default **False**).
+
+    The five high-entropy ``Sec-CH-UA-*`` headers were removed on 2026-10-31
+    because the 2026-10-28 HAR shows a real Chrome sends none of them to
+    chatgpt.com / auth.openai.com (neither origin ever sends ``Accept-CH`` for
+    them; the only ``Accept-CH`` in that capture came from bat.bing.com). That is
+    evidence from one HAR in one browser, so the removal shipped with this
+    switch: restoring the headers is the control arm that turns "59/59 accounts
+    alive at 120 min" from a no-regression signal into a comparison. See
+    ``docs/audits/scans/scan-2026-10-31-har-passwordless-codex-webview.md`` §3/§9.
+
+    Read through the same mapping as the profile selection so an A/B can flip it
+    per batch without touching code. Strings are parsed here rather than with
+    ``bool()`` because the frozen production config hands back whatever JSON held
+    (``"false"`` must not read as true).
+    """
+    value = _auth_fingerprint_config().get("restore_high_entropy_hints")
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _configured_auth_profiles():
     cfg = _auth_fingerprint_config()
     configured = cfg.get("profiles")
@@ -788,6 +811,19 @@ def openai_auth_headers(
                 "sec-ch-ua-platform": fingerprint["sec_ch_ua_platform"],
             }
         )
+        if high_entropy_client_hints_enabled():
+            # Control arm only (default off). Restores exactly what the 2026-10-31
+            # landing removed, so an A/B differs in nothing else: same UA, same
+            # TLS impersonation, same Sentinel proof, same five values.
+            headers.update(
+                {
+                    "sec-ch-ua-full-version-list": str(environment["sec_ch_ua_full_version_list"]),
+                    "sec-ch-ua-arch": str(environment["sec_ch_ua_arch"]),
+                    "sec-ch-ua-bitness": str(environment["sec_ch_ua_bitness"]),
+                    "sec-ch-ua-model": str(environment["sec_ch_ua_model"]),
+                    "sec-ch-ua-platform-version": str(environment["sec_ch_ua_platform_version"]),
+                }
+            )
     if referer:
         headers["Referer"] = str(referer)
     resolved_origin = str(origin or "").strip() or origin_from_referer(referer)

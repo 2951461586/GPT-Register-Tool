@@ -192,7 +192,8 @@
       "profile": "chrome146",
       "profiles": [
         "chrome146"
-      ]
+      ],
+      "restore_high_entropy_hints": false
     },
     "remail": {
       "enabled": false,
