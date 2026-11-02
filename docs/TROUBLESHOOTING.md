@@ -352,7 +352,7 @@ self.assertIn(key.rsplit(".", 1)[-1], writes, "counter-example moved")
 1. 弹窗要先用**在线目录**（国家 + 价格档位）让操作员选，再把选择回写进配置；
 2. 它读目录用的是 sms-activate handler 协议 —— `{endpoint}?api_key=…&action=getCountries`、
    `…&action=getPricesV3&service=dr`，余额还要求响应以 `ACCESS_BALANCE:` 开头
-   （`SmsWorkbench/Interop/SmsProviderCatalogClient.cs`）；
+   （`sms_tool/providers/sms_vendor_api.py`）；
 3. `nexsms` 是 REST（`/api/` 路径 + `{code,message,data}` 信封），**上面三个 URL 全部 403**。
    实测：`openresty` 的 403 页；同机打它的合法路由 `/api/getCountryByService` 正常返回
    ⇒ 这是**路由级**拒绝，不是网络 / 主机 / 凭据问题，换代理也没用；
@@ -364,7 +364,7 @@ self.assertIn(key.rsplit(".", 1)[-1], writes, "counter-example moved")
 Python 后端，协议细节全在 `sms_tool/`（`nexsms.py`）里 ⇒ 命令行与批量跑批一直是好的。
 
 **现在的行为**（2026-09-23 第二次修订）：弹窗按 `SmsProviderCatalog.SmsProvider.Protocol`
-分派到**两个在线读取器**，两者都在 `SmsWorkbench/Interop/SmsProviderCatalogClient.cs` 里：
+分派到**两个在线读取器**，两者都在 `sms_tool/providers/sms_vendor_api.py` 里：
 
 | 协议族 | 目录 | 余额 | 供应商 |
 | --- | --- | --- | --- |
@@ -411,7 +411,7 @@ Python 后端，协议细节全在 `sms_tool/`（`nexsms.py`）里 ⇒ 命令行
 - `test_a_failed_online_lookup_reports_why_before_falling_back` / `test_a_failed_online_lookup_does_not_end_the_flow`
   —— 见 §15。前者现在钉**两处**：无路可退时原因插值进弹窗、有路可退时原因进日志。
 
-**NeXSMS 解析器的形状测试**：`tests/SmsWorkbench.Tests/SmsProviderNexsmsCatalogTests.cs`
+**NeXSMS 解析器的形状测试**：`tests/workbench/test_sms_vendor_api.py`
 （12 条），覆盖 `{code,message,data}` 信封、`code` 为字符串 `"0"` 仍算成功、`priceMap` 的价格
 **字符串原样保留**（`0.12070` 不能变成 `0.1207` 之外的东西 —— 回写进配置后后端要拿它比价）、
 档位升序由**本地排序**保证而不是相信载荷顺序、`/api/countries` 与 `/api/getCountryByService`
@@ -479,7 +479,7 @@ Python 后端，协议细节全在 `sms_tool/`（`nexsms.py`）里 ⇒ 命令行
 厂商可能短暂宕机、代理可能在做过滤。把它当前置条件，等于让任何一个偶发故障都升级成
 「这家供应商完全不可用」。
 
-**回归守卫**（`tests/SmsWorkbench.Tests/SmsProviderCatalogClientTests.cs`，用假 `HttpMessageHandler`
+**回归守卫**（`tests/SmsWorkbench.Tests/SmsVendorPayloadMapperTests.cs`，用假 `HttpMessageHandler`
 做**真行为**测试而不是源码守卫）：
 
 - 三种形态各一条（`NestedShapeKeepsEveryProviderAsItsOwnOffer` / `FlatShapeWithPriceFieldIsRead` /

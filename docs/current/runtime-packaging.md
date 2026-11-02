@@ -21,6 +21,14 @@ SHA-256 in the manifest; the staging script refuses to extract on a mismatch,
 and the release payload gate refuses to ship a runtime whose stamp disagrees
 with the manifest.
 
+The manifest is also the **single source of the minimum version** the project
+claims: `pyproject.toml` (`requires-python`), `.github/workflows/ci.yml`,
+`pyrightconfig.json`, the ruff `target-version`, both READMEs and the runtime
+check in `scripts/preflight_env.py` all state the same minor version, and
+`tests/governance/test_python_version_floor.py` fails on any one that drifts.
+The floor is 3.12 because that is what is tested; 3.10/3.11 were previously
+promised with no job behind them.
+
 ## Interpreter resolution
 
 `PythonPathResolver` uses this order:

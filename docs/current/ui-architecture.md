@@ -12,10 +12,10 @@
 | 应用壳 | `SmsWorkbench/App.xaml(.cs)`、`AppHost.cs`、`Themes/` | 依赖注入容器、启动窗口、全局资源字典合并（令牌 / 字形 / 光暗色板 / 控件样式） | 任何业务流程 |
 | 窗口与呈现 | `Views/`（`MainWindow.*` 分部类、`TitleBar`、`Sidebar`、`AccountFilterBar`、`AccountGridView`、`WorkbenchConsole`、`SettingsWindow`、`PaymentBatchWindow`、`ProxyPoolWindow`） | 布局、绑定、交互反馈、窗口级状态（主题、侧栏折叠、分页游标） | 命令语义、HTTP、持久化 |
 | 视图模型 | `ViewModels/`（`PoolViewModel`、`TaskListViewModel`、`LogViewModel`、`StatusBarViewModel`、`SettingsViewModel`、`PaymentBatchViewModel`、`ExportViewModel`、`RegisterViewModel`） | 可观察状态、展示格式化、输入校验 | 直接写配置或发 HTTP |
-| 服务 | `Services/`（`ConfigStore`、`SettingsService`、`PaymentBatchService`、`MailboxPoolFileStore`、`WindowThemeService`、`ApplicationPaths`、`FileLauncher`、`LegacyConfigMigration`、`BackendTaskCoordinator`、`TransientArtifactCleanup`、`AppVersion`、`VersionComparer`、`UpdateChecker`） | 读写本地配置/池文件、组装后端任务、迁移旧配置、清理临时凭据 | 解析厂商协议 |
-| 后端边界 | `Interop/`（`PythonBackendClient`、`DesktopReadClient`、`BackendResultInterpreter`、`PythonPathResolver`、`SmsProviderCatalogClient`） | 启动 Python 进程、只读快照、把 JSON 结果翻译成领域对象 | 业务规则 |
-| 模型 | `Models/` | 桌面侧契约（`AccountBatchProgress`、`DesktopThemePreference`、`PaymentBatchModels`、`SettingsModels`、`SmsProviderCatalog`…）**不含窗口**（窗口在 `Views/` 或 `Dialogs/`） | 与 `SmsWorkbench.Contracts` 重复的定义 |
-| 对话框 | `Dialogs/`（`DialogFactory`、`SettingsDialogService`、`PaymentBatchDialogService`、`ChangeEmailDialogService`、`AccountBatchProgressDialog`） | 代码构造的对话框：窗口外壳、表单行、动作行、异步信息/确认框 | 业务流程；对话框里不拼 CLI 参数 |
+| 服务 | `Services/`（`ConfigStore`、`SettingsService`、`PaymentBatchService`、`MailboxPoolFileStore`、`WindowThemeService`、`ApplicationPaths`、`FileLauncher`、`LegacyConfigMigration`、`BackendTaskCoordinator`、`RegistrationRequestBuilder`、`AccountExportAssembler`、`AccountDeleteService`、`AccountRowFactory`、`TransientArtifactCleanup`、`AppVersion`、`VersionComparer`、`UpdateChecker`） | 读写本地配置/池文件、组装后端任务、迁移旧配置、清理临时凭据 | 解析厂商协议 |
+| 后端边界 | `Interop/`（`PythonBackendClient`、`DesktopReadClient`、`BackendResultInterpreter`、`PythonPathResolver`、`SmsVendorPayloadMapper`） | 启动 Python 进程、只读快照、把 JSON 结果翻译成领域对象 | 业务规则 |
+| 模型 | `Models/` | 桌面侧契约（`AccountBatchProgress`、`DesktopThemePreference`、`PaymentBatchModels`、`RegistrationModels`、`SettingsModels`、`SmsProviderCatalog`…）**不含窗口**（窗口在 `Views/` 或 `Dialogs/`） | 与 `SmsWorkbench.Contracts` 重复的定义 |
+| 对话框 | `Dialogs/`（`DialogFactory`、`SettingsDialogService`、`RegisterDialogService`、`ExportDialogService`、`SmsProviderDialogService`、`PaymentBatchDialogService`、`ChangeEmailDialogService`、`AccountBatchProgressDialog`） | 代码构造的对话框：窗口外壳、表单行、动作行、异步信息/确认框 | 业务流程；对话框里不拼 CLI 参数 |
 
 硬边界：界面只**发起**命令并展示结果，注册/支付/邮箱改写全部在 `sms_tool`。
 `SmsWorkbench/` 不得内联协议端点、重试策略或代理串解析（Rule 03/05/13；
@@ -86,18 +86,36 @@ Wpf.Ui.xaml -> Wpf.Ui Theme/Light.xaml -> Themes/Tokens.xaml -> Themes/Glyphs.xa
 | `MainWindow.xaml.cs` | 255 | 字段/依赖注入、`INotifyPropertyChanged`、窗口生命周期、主题与图标几何 |
 | `MainWindow.Commands.cs` | 49 | 工具栏命令（注册、支付、导出、体检）到 `IPaymentBatchService` / 后端的编排 |
 | `MainWindow.ContextMenu.cs` | 223 | 账户右键菜单与批量操作 |
-| `MainWindow.Detail.cs` | 379 | 详情面板：选中账户的只读渲染 |
-| `MainWindow.Export.cs` | 703 | 导出流程与文件落地 |
-| `MainWindow.Helpers.cs` | 450 | 剪贴板、对话框、日志落盘与共用小工具 |
-| `MainWindow.Inbox.cs` | 342 | 收件箱/验证码读取 |
+| `MainWindow.Detail.cs` | 287 | 详情面板外壳与按钮（数据在 `AccountDetailAssembler`） |
+| `MainWindow.Export.cs` | 190 | 导入/导出流程：选格式 → 收集 → 落盘 → 调用 converter（2026-11-01 拆分前 710 行） |
+| `Services/AccountExportAssembler.cs` | 173 | 行 → TXT 凭据行 / 原始 session JSON；不引用任何 WPF 类型（`ModuleSizeTests` 钉住） |
+| `Dialogs/ExportDialogService.cs` | 504 | 导出格式、导出完成、账号批结果面板、导入目标四个对话框 |
+| `Dialogs/SmsProviderDialogService.cs` | 514 | 一键接码对话框：供应商目录、国家/档位、选择写回配置 |
+| `Services/AccountRowFactory.cs` | 178 | 后端账号 JSON → `PoolRow`（含 identity 块渲染）；不引用任何 WPF 类型 |
+| `Services/BackendRunService.cs` | 129 | 后端运行的**非窗口**部分：捕获流、进度信封折叠、任务行结果 |
+| `Services/AccountRefreshPlan.cs` | 122 | accounts 载荷分类（全量/增量/形状漂移）与增量游标预算 |
+| `Services/DesktopEgress.cs` | 118 | 桌面进程唯一的直连 HTTP 入口：host 白名单（P7-B 后只剩 GitHub Release）、mailbox lane 代理、每请求一行日志 |
+| `SmsWorkbench.Contracts/DesktopEgressAllowlist.cs` | 32 | 允许直连的 host 集合（**仅 GitHub Release**；厂商目录已走 Python 通道），仅 HTTPS |
+| `Services/AccountDetailAssembler.cs` | 185 | 详情面板的数据：AT 解析、JSON 路径、脱敏明细 |
+| `Services/InboxReader.cs` | 43 | 收件箱失败文案与 OTP 提取 |
+| `Services/MailboxRowClassifier.cs` | 45 | CFWorker / ReMail / Smailr 行判别（注册与收件箱共用） |
+| `Interop/SmsVendorPayloadMapper.cs` | 96 | 后端 `provider-catalog`/`provider-balance` 载荷 → 对话框视图类型（P7-B） |
+| `Models/SmsProviderChoices.cs` | 84 | `SmsProviderCountryChoice` / `SmsProviderPriceTier`（从被删除的 wire 客户端搬出） |
+| `Models/MailItem.cs` | 25 | 收件箱消息模型（原 `MainWindow.Inbox.cs` 私有嵌套类） |
+| `Services/AccountDeleteService.cs` | 88 | 批量删除命令、失败计数与临时文件清理；不引用任何 WPF 类型 |
+| `MainWindow.Helpers.cs` | 455 | 剪贴板、对话框、日志落盘与共用小工具 |
+| `MainWindow.Inbox.cs` | 301 | 收件箱与邮件详情对话框（供应商判别在 `MailboxRowClassifier`） |
 | `MainWindow.Language.cs` | 37 | EN/CN 切换：`Loc` 切换、偏好落盘、刷新缓存的展示串 |
 | `MainWindow.Navigation.cs` | 114 | 分页游标、筛选导航与选中行回退 |
 | `MainWindow.Payment.cs` | 68 | 批量支付窗口入场 |
-| `MainWindow.Pools.cs` | 513 | 池文件加载/切池/合并 |
-| `MainWindow.Register.cs` | 668 | 注册任务发起与进度消费（两个选项对话框走 `DialogFactory`） |
+| `MainWindow.Pools.cs` | 385 | 池文件加载/切池/合并与增量应用（行映射在 `AccountRowFactory`） |
+| `MainWindow.Register.cs` | 403 | 注册/接码/测活动作的接线：CLI 参数交给 `BackendCommandPlanner`，批次邮箱文件交给 `RegistrationRequestBuilder`，三个选项对话框交给 `RegisterDialogService`（2026-11-01 拆分前 721 行） |
+| `Services/RegistrationRequestBuilder.cs` | 115 | 选中行 → 临时邮箱批次文件；不引用任何 WPF 类型（`ModuleSizeTests` 钉住） |
+| `Models/RegistrationModels.cs` | 58 | `RegisterOptions` / `ScanOptions` / `MailboxFileSelection` / `PendingMailboxSelection` |
+| `Dialogs/RegisterDialogService.cs` | 323 | 一键注册 / 选中邮箱注册 / 账号测活三个选项对话框；默认并发数与初始数量由调用方传入 |
 | `MainWindow.Sidebar.cs` | 74 | 侧栏列宽动画（视觉状态在 `Sidebar` 控件里） |
-| `MainWindow.SmsProvider.cs` | 481 | 一键接码供应商面板 |
-| `MainWindow.Tasks.cs` | 492 | 任务列表与取消 |
+| `MainWindow.SmsProvider.cs` | 22 | 一进入口委托：对话框在 `SmsProviderDialogService`（拆分前 481 行） |
+| `MainWindow.Tasks.cs` | 533 | 任务列表、后端运行与取消（批量删除在 `AccountDeleteService`） |
 | `MainWindow.Theme.cs` | 113 | 浅/深主题切换：换色板字典 + DWM 标题栏 + `DesktopThemePreference` 落盘 |
 | `MainWindow.NavigationState.cs` | 56 | 侧栏「运行中」状态：`ActiveNavKey` DP、pending key 的交接与清除 |
 
@@ -282,7 +300,7 @@ Wpf.Ui.xaml -> Wpf.Ui Theme/Light.xaml -> Themes/Tokens.xaml -> Themes/Glyphs.xa
 | `tests/workbench/test_localization_catalog.py` | 每个 `{loc:Tr}` / `Loc.T` / `Loc.F` 键都有英文；XAML 文本属性不得留中文；**`MessageBox.Show`、`Notify*`、`DialogFactory.Show*Async`、`Content`/`Text`/`Title` 等属性直接写字面中文即失败**（2026-10-25 新增，此前这类字符串静默漏了 25 条） |
 | `tests/SmsWorkbench.Tests/BackendCommandPlannerSurfaceTests.cs` | `BackendCommandPlanner` 中「无生产调用方」的 builder 集合被冻结：新增死代码、接线、删除都要显式改白名单，且每个条目必须在 doc comment 里写明 |
 | `scripts/dotnet_warning_ratchet.py` | C# 构建告警零基线（见 [`dotnet-gates.md`](dotnet-gates.md)） |
-| `dotnet test GPTRegisterTool.slnx -c Release` | 622 个测试（CI 必跑） |
+| `dotnet test GPTRegisterTool.slnx -c Release` | 731 个测试（CI 必跑；含 `ModuleSizeTests` 的分部类行数上限） |
 
 `SmsWorkbench.Tests` 里没有 UI 自动化：所有窗口级断言都在真实布局对象上做
 （`ActualWidth`、`Template.FindName`、`FindVisualChildren`），不做像素比较。

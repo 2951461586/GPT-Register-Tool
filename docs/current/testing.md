@@ -91,16 +91,24 @@ sms_tool.config.schema.ConfigError: chatgpt must be an object
 
 ## 门禁脚本
 
-三套 ratchet 共用一套做法（先冻结、再加预算或逐条白名单化、只许降不许升）：
+前三套 ratchet 共用一套做法（先冻结、再加预算或逐条白名单化、只许降不许升）；第四套不冻结计数，而是要求每个开关带一个决定：
 
 | 脚本 | 管什么 | 配套守卫 |
 | --- | --- | --- |
 | `scripts/pyright_ratchet.py` | 类型错误（逐文件） | `tests/governance/test_pyright_ratchet.py` |
 | `scripts/dotnet_warning_ratchet.py` | C# 构建告警（逐文件，零基线） | CI 调用 + `docs/current/dotnet-gates.md` |
-| `scripts/broad_except_ratchet.py` | 宽泛 `except` 与静默 `pass`（逐文件 + 全局预算 + 白名单） | `tests/governance/test_broad_except_ratchet.py` |
+| `scripts/broad_except_ratchet.py` | 宽泛 `except` 与静默 `pass`（逐文件 + 全局预算 + 白名单 + **按 lane 的预算**） | `tests/governance/test_broad_except_ratchet.py`、`tests/registration/test_abort_not_swallowed.py` |
+| `scripts/experiment_ratchet.py` | `registration.*` A/B 开关的决定台账（kind / default / status / runbook id / keep 理由 / 到期） | `tests/governance/test_experiment_ratchet.py` + `scripts/experiment_ledger.json` |
 
 宽泛 `except` 的门禁多两条规则：白名单条目必须写 `reason`，且文件已经不再有宽泛处理器时
 条目也要删（过期许可和没有许可一样是错的）。
+
+2026-11-01 起多了一条 **lane 预算**：`policy.lanes.protocol_registration` 把 `sms_tool/auth_flow/`
+与 `sms_tool/registration/` 圈起来，`silent` 硬性为 **0**，`broad` 冻结在当时实测的 44 个（只许降）。
+理由是这条 lane 里被吞掉的异常与协议失败在下游无法区分：它落进 funnel 的 `unknown`，
+而批次继续烧邮箱。7 个静默处理器全部是资源清理（session close / checkpoint clear），
+已连同理由进入白名单。`tests/registration/test_abort_not_swallowed.py` 另外钉住
+`RegistrationAbort` / `RegistrationCancelled` 不会被 stage runner 之外的宽泛处理器吞掉。
 
 ## 依赖与门禁
 

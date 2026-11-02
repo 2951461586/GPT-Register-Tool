@@ -8,7 +8,7 @@
   <p>
     <img src="https://img.shields.io/badge/Windows-10%2F11-0078D4?logo=windows&logoColor=white" alt="Windows 10/11" />
     <img src="https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white" alt=".NET 10" />
-    <img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white" alt="Python 3.10+" />
+    <img src="https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white" alt="Python 3.12+" />
   </p>
 </div>
 
@@ -132,7 +132,7 @@ See [architecture](docs/architecture.md) for boundaries and [directory map](docs
 ### Requirements
 
 - Windows 10/11 x64.
-- Python 3.10 or later.
+- Python 3.12 or later (matches the interpreter pinned in `scripts/runtime_manifest.json`; 3.10/3.11 were never verified by any gate).
 - .NET 10 Desktop Runtime; the .NET 10 SDK is required when building from source.
 - Node.js 18 or later available on `PATH`.
 - Playwright Chromium for browser-assisted payment workflows and browser registration.

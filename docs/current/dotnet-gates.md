@@ -123,3 +123,22 @@ unreviewable build break.
   project doubling every diagnostic; `dotnet` writing UTF-8 or the OEM code page
   depending on the console (the reason output is captured as bytes and decoded
   once).
+
+## Record (2026-11-01): nullable is on project-wide
+
+`SmsWorkbench/SmsWorkbench.csproj` flipped `<Nullable>annotations</Nullable>` to `enable`.
+The 2026-09-02 measurement behind `annotations` (147 findings across ~25 files)
+had already been paid off one file at a time by the `#nullable enable`
+directives on 95 of 97 files; re-measuring with the setting flipped reported
+**0 warnings** on `dotnet build -t:Rebuild`.
+
+What this changes:
+
+- New files need no directive to be null-checked. The retained per-file
+  directives are provenance for the migration, not exemptions — do not delete
+  them in bulk, and do not read their absence as "unchecked".
+- Nullable findings are now enforced by the same zero-warning baseline as every
+  other diagnostic (`scripts/dotnet_warning_baseline.json`). A file absent from the
+  baseline has an allowance of `0`, so the next `CS86xx` anywhere fails CI.
+- `WarningsAsErrors` still covers NuGet codes only. Widening it to `CS*`/`CA*`
+  remains off the table (see "Fixing a warning").

@@ -4,6 +4,11 @@
 > [registration-architecture.md](registration-architecture.md) 与
 > [protocol-registration.md](protocol-registration.md)，本篇不复述。
 
+**机器可读台账。** 每个开关的决定（`kind` / `default` / `status` / 判读结论 / 到期日）记录在
+`scripts/experiment_ledger.json`；`scripts/experiment_ratchet.py` 在本表与本台账之间做交叉校验——
+每个 `ab` 条目的 id 与 `registration.<key>` 必须同时出现在两处，代码里读到的开关必须在台账里。
+新增开关而不登记，或台账引用了本表不存在的 id，pre-commit 与 CI 都会失败。
+
 本 runbook 描述**如何受控地执行**并**如何判读**三项"已落地但尚未线上对照"的改动：
 
 | # | 假设 | 开关 | 参考 |

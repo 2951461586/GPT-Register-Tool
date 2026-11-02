@@ -208,11 +208,11 @@ above.
 <!-- ratchet-numbers:begin architecture -->
 | Measure | Value |
 | --- | --- |
-| Module-level cross-directory edges | 435 |
-| Directory pairs | 64 |
+| Module-level cross-directory edges | 473 |
+| Directory pairs | 78 |
 | Mutual pairs / minority-direction edges | 17 / 46 |
-| Delayed cross-directory edges | 300 |
-| Delayed imports in the package | 469 (baseline 469) |
+| Delayed cross-directory edges | 307 |
+| Delayed imports in the package | 473 (baseline 473) |
 | Functions at or above 150 lines | 64 (frozen, `scripts/function_length_ratchet.py`) |
 | Claimed tracked `sms_tool` modules | 324 of 324 (0 unclaimed, 41 directory-map groups) |
 <!-- ratchet-numbers:end architecture -->

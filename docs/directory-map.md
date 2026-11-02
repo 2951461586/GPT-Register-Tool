@@ -15,7 +15,7 @@ physical placement; `docs/architecture.md` defines the behavioral boundaries.
 | `docs/` | Source-owned documentation | Architecture, boundaries, directory map, and operating notes | Do not place runtime logs or screenshots here unless deliberately curated. |
 | `scripts/` | Operator scripts | Small launch/setup helpers that call source modules or local services | Keep scripts idempotent and repository-relative. `scripts/at_survival_watch.py` is the read-only access-token liveness-curve recorder (`--ids --label --schedule-minutes`); its raw `runtime/at_survival_*.jsonl` output is ignored scratch and is summarised in `docs/audits/`, never committed. One-off probes belong in ignored `runtime/tmp/` and are deleted when the round ends. |
 | `local/` | Local operator notes | Machine-local notes deliberately kept in-tree (currently only `local/README.md`) | **Tracked**, so it must stay secret-free; personal scratch state belongs under ignored `runtime/` instead. |
-| `.githooks/` | Commit gates | `pre-commit` runs five gates, in this order: `precommit_guard.py` (credentials and runtime-state dumps), `line_ending_guard.py` (a file that mixes CRLF and LF internally), `mailbox_private_import_ratchet.py` (hub private-surface consumers), `sentinel_asset_guard.py` (vendored Sentinel asset digest pin), `format_guard.py` (the protocol-registration lane stays `ruff format`-clean) | Installed by `scripts/install_git_hooks.py` (sets `core.hooksPath`). Stdlib-only on purpose — it must run before dependencies are installed. The set and order above are pinned by `tests/governance/test_gate_list_consistency.py`, which also records which gates have no CI or test coverage. |
+| `.githooks/` | Commit gates | `pre-commit` runs seven gates, in this order: `precommit_guard.py` (credentials and runtime-state dumps), `line_ending_guard.py` (a file that mixes CRLF and LF internally), `mailbox_private_import_ratchet.py` (hub private-surface consumers), `sentinel_asset_guard.py` (vendored Sentinel asset digest pin), `format_guard.py` (the protocol-registration lane stays `ruff format`-clean), `result_schema_check.py` (a builder's result keys and every declared C# reader's claimed reads match `result_schema.json`), `experiment_ratchet.py` (every `registration.*` A/B toggle has a recorded decision in `scripts/experiment_ledger.json`) | Installed by `scripts/install_git_hooks.py` (sets `core.hooksPath`). Stdlib-only on purpose — it must run before dependencies are installed. The set and order above are pinned by `tests/governance/test_gate_list_consistency.py`, which also records which gates have no CI or test coverage. |
 | `.github/` | CI | `workflows/ci.yml` holds the authoritative gate list for the Python, .NET and schema checks. It includes an **order-dependence shard** (`pytest -q tests/registration tests/workbench`) because the full-suite order cannot see a lazy-dependency latch that an earlier test already populated. | Keep in sync with `.githooks/pre-commit` and [architecture.md](architecture.md#boundary-rule-checks). |
 
 ## Root-level files
@@ -30,6 +30,7 @@ physical placement; `docs/architecture.md` defines the behavioral boundaries.
 | `pytest.ini` | Test discovery compatibility | Keeps repository-wide pytest discovery and markers. |
 | `config_schema.json` | Cross-language config manifest | Shard ownership checked against Python and C# stores. |
 | `ipc_schema.json` | Resident desktop-read manifest | Protocol version and operation set checked against Python and C# sources. |
+| `result_schema.json` | Cross-language result-payload manifest | The keys a Python builder returns, and the reads each declared C# reader claims; checked by `scripts/result_schema_check.py` in the hook and in CI. |
 | `start_proxy_pool.py` | Operator utility | Standalone proxy-pool server entrypoint: a SOCKS5 listener rotating over SOCKS5 **or** HTTP-CONNECT upstreams. |
 | `verify_proxy.py` | Operator utility | Proxy configuration verification; reads merged proxy/runtime/payment shards. |
 
@@ -53,7 +54,7 @@ These directories are runtime state and are ignored by Git:
 
 | Group | Files | Boundary |
 | --- | --- | --- |
-| Kernel | `kernel/` (`__init__.py`, `paths.py`, `sanitizer.py`, `timeouts.py`, `env_loader.py`, `driver_env.py`, `failure_registry.py`, `error_classification.py`) | Modules that may import only the stdlib and each other; no application module may be imported here (module-level or function-local). `config/` is deliberately **not** in the kernel until `validate_config`'s driver vocabulary is extracted. Check: `python scripts/kernel_boundary_ratchet.py`. |
+| Kernel | `kernel/` (`__init__.py`, `paths.py`, `sanitizer.py`, `timeouts.py`, `env_loader.py`, `driver_env.py`, `failure_registry.py`, `error_classification.py`, `transport.py`) | Modules that may import only the stdlib and each other; no application module may be imported here (module-level or function-local). `config/` is deliberately **not** in the kernel until `validate_config`'s driver vocabulary is extracted. Check: `python scripts/kernel_boundary_ratchet.py`. |
 | Entrypoints/config | `__main__.py`, `cli.py`, `config/`, `paths.py`, `commands/helpers.py` | Parse global options and resolve config/paths; no vendor protocol implementation. |
 | Package entrypoints | `__init__.py`, `commands/__init__.py`, `providers/__init__.py` | Package markers for the application, CLI adapters, and provider implementations; keep workflow and wire-protocol behavior in their named modules. |
 | Configuration and environment inspection | `env_loader.py`, `config_usage.py` | Load optional environment values without overriding exported variables, and report configuration keys not referenced by source; neither owns provider credentials or persistence. |
@@ -261,6 +262,7 @@ them and only apply the returned view state.
 | `SmsWorkbench.Contracts/BackendCommandPlanner.cs` | Build `BackendCommandPlan` argument lists and stable account-result kinds for registration/payment/scan tasks from primitive inputs; no WPF access. |
 | `SmsWorkbench.Contracts/PaymentMethods.cs` | Canonical desktop payment-method catalog, aliases, countries and single/batch availability; reads the embedded `payment_methods.json`. |
 | `SmsWorkbench.Contracts/ProxyInputNormalizer.cs` | `host:port:user:pass` to proxy-URL normalization and country inference, shared by the command planners. |
+| `SmsWorkbench.Contracts/RegistrationBatchSummary.cs` | Typed wire record for the `registration.batch` payload family; every `[JsonPropertyName]` is pinned against `result_schema.json`, and nullable counters are what make "a key is missing" distinguishable from a real `0`. |
 | `SmsWorkbench.Contracts/SensitiveDataSanitizer.cs` | C# consumer of the repository `sensitive_policy.json`; log-strength redaction for operator-visible output. |
 | `SmsWorkbench/Interop/BackendResultInterpreter.cs` | Interpret backend execution results and proxy-test JSON into typed outcomes (success/timeout/cancelled). Owns account-result routing (`HasAccountResults` / `AccountResultTitle` / `ScanResultError`); presentation lives in `Views/MainWindow.Export.cs::ShowAccountScanResultDialog`. |
 | `SmsWorkbench.Contracts/BackendJson.cs`, `SmsWorkbench.Contracts/BackendJsonProtocol.cs` | Canonical JSON-to-dictionary projection and protocol framing shared by interpreters; keep WPF out of JSON plumbing. |
@@ -281,7 +283,7 @@ them and only apply the returned view state.
 2. If it is a desktop button/dialog, put UI code in `SmsWorkbench/` and call the
    CLI/backend rather than duplicating protocol logic in C#.
    Read-only provider metadata needed before launch belongs in a focused catalog
-   module such as `SmsProviderCatalogClient.cs`, not in a `MainWindow` handler.
+   module such as `SmsVendorPayloadMapper.cs`, not in a `MainWindow` handler.
 3. If it talks to a provider, isolate it under `sms_tool/providers/` or
    `services/<provider>/` and expose a small public method.
 4. If it extends mailbox/registration/K12 behavior, prefer adding a focused

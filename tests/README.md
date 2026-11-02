@@ -9,6 +9,8 @@ python -m compileall -q sms_tool services/protocol-payment
 dotnet test GPTRegisterTool.slnx -c Release --nologo
 python scripts/config_schema_check.py
 python scripts/ipc_schema_check.py
+python scripts/result_schema_check.py
+python scripts/experiment_ratchet.py
 python scripts/docs_consistency_scan.py
 ```
 
@@ -30,6 +32,8 @@ payment requests are never part of the default suite.
 - `test_cfworker_client.py` covers the `sms_tool.providers.mailbox_cfworker` implementation and OTP extraction.
 - `test_account_events.py` covers storage fact dispatch without provider coupling.
 - `test_config_schema_check.py` and `test_ipc_schema_check.py` guard cross-language manifests.
+- `test_result_schema_check.py` guards `result_schema.json`: a builder's result keys and every declared C# reader's reads are checked against it in both directions.
+- `test_experiment_ratchet.py` guards `scripts/experiment_ledger.json`: every `registration.*` A/B toggle has a kind, default, status and runbook id, and the ledger still matches the code and `config.example.json`.
 - `test_docs_consistency.py` guards current release pointers and documented provider paths.
 - `test_email_otp_filtering.py` covers message recipient, subject, and body OTP filtering.
 - `test_storage_dedup.py` covers SQLite account upsert and email normalization behavior.
