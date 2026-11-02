@@ -771,6 +771,16 @@
     }
   },
   "policy": {
+    "budget_history": [
+      {
+        "axis": "max_silent",
+        "date": "2026-11-02",
+        "from": 155,
+        "reason": "The SMS vendor adapter arrived as a new provider module (SmsProviderCatalogClient.cs deleted, providers/sms_vendor_api.py added) and its three cleanup/capability-probe handlers are silent by design. The raise is scoped to that module: it is whitelisted with a per-entry reason, and the protocol lane's own max_silent stays 0. Broad went 962 -> 960 over the same change, so the trade was net negative on the dangerous axis only because a file arrived, not because a handler was loosened.",
+        "record": "docs/audits/landings/landing-2026-11-02-broad-except-budget-and-transport-narrowing.md",
+        "to": 158
+      }
+    ],
     "lanes": {
       "protocol_registration": {
         "max_broad": 37,
@@ -806,9 +816,9 @@
       "silent": 2
     },
     "sms_tool/providers/sms_vendor_api.py": {
-      "broad": 4,
-      "reason": "Vendor boundary: the caller is an interactive dialog, so every failure (transport, envelope shape, missing field) must degrade to a reported error instead of an exception in the UI. The narrowings would only move the report.",
-      "silent": 0
+      "broad": 5,
+      "reason": "Vendor boundary: the caller is an interactive dialog, so every failure (transport, envelope shape, missing field) must degrade to a reported error instead of an exception in the UI. The narrowings would only move the report. The 3 silent handlers are not swallowed failures: two are `session.close()` in a `finally` (a cleanup error must not replace the real result, which the `except` above already reported) and one is the `session.trust_env = False` capability probe that older curl_cffi builds do not implement.",
+      "silent": 3
     },
     "sms_tool/proxy/pool.py": {
       "broad": 10,
@@ -826,7 +836,7 @@
       "silent": 1
     },
     "sms_tool/registration/preflight.py": {
-      "broad": 6,
+      "broad": 5,
       "reason": "Preflight probe teardown (curl_cffi session close, trust_env toggle). A probe that cannot clean up has already produced its verdict; raising here would replace a classified preflight failure with an unclassified one.",
       "silent": 4
     },

@@ -121,6 +121,41 @@ def test_stale_whitelist_entry_fails():
     assert any("no longer has a broad handler" in problem for problem in problems)
 
 
+def test_whitelist_counts_that_disagree_with_the_tree_fail():
+    """The numbers in an entry are the evidence a reviewer saw, so they are checked.
+
+    Measured 2026-11-02: two shipped entries carried counts from a different
+    revision (``providers/sms_vendor_api.py`` declared broad 4/silent 0 against a
+    measured 5/3). The gate passed for a day because only the *reason* was
+    verified -- a yes/no that cannot notice a file changing after the review.
+    """
+    counts = {"pkg/c.py": {"broad": 3, "silent": 2}}
+    baseline = {
+        "files": {"pkg/c.py": {"broad": 3, "silent": 2}},
+        "policy": {"max_broad": 3, "max_silent": 2},
+        # Someone accepted broad 2/silent 0 and the file later gained a handler.
+        "whitelist": {"pkg/c.py": {"broad": 2, "silent": 0, "reason": "dialog boundary"}},
+    }
+
+    problems = ratchet.check(counts, baseline)
+
+    assert any("whitelist counts are stale" in problem for problem in problems), problems
+    assert any("declared broad 2/silent 0" in problem for problem in problems), problems
+    assert any("measured broad 3/silent 2" in problem for problem in problems), problems
+
+
+def test_a_matching_whitelist_entry_passes():
+    """The counter above must not fire on an entry that was re-measured honestly."""
+    counts = {"pkg/c.py": {"broad": 3, "silent": 2}}
+    baseline = {
+        "files": {"pkg/c.py": {"broad": 3, "silent": 2}},
+        "policy": {"max_broad": 3, "max_silent": 2},
+        "whitelist": {"pkg/c.py": {"broad": 3, "silent": 2, "reason": "dialog boundary"}},
+    }
+
+    assert ratchet.check(counts, baseline) == []
+
+
 def test_shipped_whitelist_has_reasons():
     """Every reviewed entry in the real baseline states why it is accepted."""
     baseline = ratchet.load_baseline()
@@ -192,3 +227,59 @@ def test_a_refreeze_cannot_drop_a_lane_budget():
 
     assert refrozen["policy"]["lanes"] == lane
     assert refrozen["policy"]["max_broad"] == 2  # the global budget is still re-measured
+
+
+def test_a_refreeze_cannot_drop_the_budget_history():
+    """The record of *why* a cap moved must outlive the next ``--write``.
+
+    ``--write`` re-measures the tree, and the budget history is not a measurement --
+    it is the audit trail that justifies the number being written. Dropping it would
+    leave a raised cap with nothing saying who raised it or what was traded, which is
+    how ``max_silent`` reached 158 on 2026-11-02 with no review record anywhere.
+    """
+    counts = {"pkg/a.py": {"broad": 2, "silent": 1}}
+    history = [
+        {
+            "date": "2026-11-02",
+            "axis": "max_silent",
+            "from": 0,
+            "to": 1,
+            "reason": "a new whitelisted adapter whose cleanup handlers are silent by design",
+            "record": "docs/audits/landings/example.md",
+        }
+    ]
+    previous = {
+        "files": {name: dict(value) for name, value in counts.items()},
+        "whitelist": {},
+        "policy": {"max_broad": 2, "max_silent": 1, "budget_history": history},
+        "totals": {"broad": 2, "silent": 1},
+    }
+
+    refrozen = ratchet.build_baseline(counts, previous=previous)
+
+    assert refrozen["policy"]["budget_history"] == history
+    assert refrozen["policy"]["max_silent"] == 1
+
+
+def test_shipped_budget_history_is_well_formed_and_cited():
+    """A raise without a reachable record is not a reviewed decision."""
+    baseline = ratchet.load_baseline()
+    history = baseline.get("policy", {}).get("budget_history", [])
+    assert history, "a deliberately raised cap must say why; an empty history is a stub"
+    for entry in history:
+        assert entry["axis"] in {"max_broad", "max_silent"}, entry
+        assert entry["to"] > entry["from"], entry
+        assert entry["reason"].strip(), entry
+        assert (ROOT / entry["record"]).is_file(), "missing review record: %s" % entry["record"]
+
+
+def test_the_shipped_budget_history_matches_a_cap_that_actually_moved():
+    """Every recorded raise must be reflected in the cap it describes."""
+    policy = ratchet.load_baseline().get("policy", {})
+    for entry in policy.get("budget_history", []):
+        assert policy[entry["axis"]] == entry["to"], "%s records %s -> %s but the cap is %s" % (
+            entry["date"],
+            entry["from"],
+            entry["to"],
+            policy[entry["axis"]],
+        )

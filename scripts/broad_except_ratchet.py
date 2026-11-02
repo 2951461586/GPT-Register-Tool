@@ -144,6 +144,7 @@ def build_baseline(
     whitelist = (previous or {}).get("whitelist", {})
     previous_policy = (previous or {}).get("policy", {})
     lanes = previous_policy.get("lanes", {}) if isinstance(previous_policy, Mapping) else {}
+    history = previous_policy.get("budget_history", []) if isinstance(previous_policy, Mapping) else []
     totals = _totals(counts)
     policy: dict[str, Any] = {"max_broad": totals["broad"], "max_silent": totals["silent"]}
     if lanes:
@@ -151,6 +152,11 @@ def build_baseline(
         # debt table must not be able to drop it, or the gate silently becomes
         # decorative on the next --write (measured 2026-11-01: it did).
         policy["lanes"] = lanes
+    if history:
+        # Same rule: the budget history is the reviewed record of *why* a cap moved.
+        # Re-freezing measures the tree; it must not erase the audit trail that
+        # justifies the number it just wrote.
+        policy["budget_history"] = history
     return {
         "_comment": (
             "Broad-except gate state (see scripts/broad_except_ratchet.py). 'files' is frozen "
@@ -198,8 +204,14 @@ def check(counts: Mapping[str, Mapping[str, int]], baseline: Mapping[str, Any]) 
       indistinguishable from a protocol failure (it lands in the funnel as
       ``unknown`` while the batch keeps spending mailboxes), so it carries
       ``silent = 0``;
-    * whitelist integrity: every reviewed entry needs a reason, and still has to
-      describe a file that has a broad handler at all.
+    * whitelist integrity: every reviewed entry needs a reason, has to describe a
+      file that still has a broad handler at all, and its declared ``broad`` /
+      ``silent`` counts must equal what the tree measures -- the numbers are the
+      evidence a reviewer saw, so a drift means the acceptance is stale even when
+      the prose reason still reads true;
+    * ``policy.budget_history``: the reviewed record of every deliberate cap move.
+      It is preserved across ``--write`` for the same reason ``lanes`` is a budget
+      and not a measurement.
     """
     problems = violations(counts, baseline)
 
@@ -239,6 +251,24 @@ def check(counts: Mapping[str, Mapping[str, int]], baseline: Mapping[str, Any]) 
             problems.append("%s: whitelisted without a reason (the list is a review record, not a mute button)" % name)
         if name not in counts:
             problems.append("%s: whitelisted but no longer has a broad handler; drop the entry (--write)" % name)
+            continue
+        # The numbers in a whitelist entry are the review evidence: they say what a
+        # reviewer saw when they accepted the handlers. A drift between them and the
+        # tree means the file changed after review, so the acceptance is stale even
+        # when the reason still reads true (measured 2026-11-02: two entries were
+        # carrying counts from a different revision). --write does not refresh them
+        # on purpose -- re-measure and re-review, do not re-freeze.
+        measured = (int(counts[name].get("broad", 0)), int(counts[name].get("silent", 0)))
+        declared = (
+            int(entry.get("broad", -1)) if isinstance(entry, Mapping) else -1,
+            int(entry.get("silent", -1)) if isinstance(entry, Mapping) else -1,
+        )
+        if declared != measured:
+            problems.append(
+                "%s: whitelist counts are stale -- declared broad %d/silent %d, measured broad %d/silent %d "
+                "(re-measure the entry, do not re-freeze it)"
+                % (name, declared[0], declared[1], measured[0], measured[1])
+            )
 
     return problems
 
