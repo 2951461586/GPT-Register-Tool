@@ -1,5 +1,5 @@
 // Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
 #nullable enable
 
 using SmsWorkbench.Localization;
@@ -165,12 +165,12 @@ namespace SmsWorkbench
                         plan.Environment),
                     cancellationToken: ct);
                 if (!result.Payload.HasValue)
-                    throw new InvalidOperationException(BackendFailureMessage(result));
+                    throw new InvalidOperationException(InboxReader.FailureMessage(result));
                 JsonElement payload = result.Payload.Value;
                 if (!payload.TryGetProperty("ok", out JsonElement ok) || !ok.GetBoolean())
                 {
                     string error = JsonString(payload, "error");
-                    throw new InvalidOperationException(error.Length > 0 ? error : BackendFailureMessage(result));
+                    throw new InvalidOperationException(error.Length > 0 ? error : InboxReader.FailureMessage(result));
                 }
                 var items = new List<MailItem>();
                 if (payload.TryGetProperty("messages", out JsonElement messages) && messages.ValueKind == JsonValueKind.Array)
@@ -199,49 +199,23 @@ namespace SmsWorkbench
             }
         }
 
-        private static string BackendFailureMessage(BackendCommandResult result)
-        {
-            string message = string.IsNullOrWhiteSpace(result.StandardError)
-                ? SensitiveDataSanitizer.Redact(result.StandardOutput)
-                : result.StandardError;
-            message = (message ?? "").Trim();
-            if (message.Length > 800) message = string.Concat(message.AsSpan(0, 800), "...");
-            return message.Length > 0
-                ? message
-                : $"backend exited with code {result.ExitCode}, but produced no IPC result";
-        }
+        // The three provider predicates live in MailboxRowClassifier: the
+        // registration request builder takes IsCfWorker as its decision, so they were
+        // never page-local, and `RegisterViewModel.LocalUnregisteredVerdict` needs them
+        // too. These three wrappers keep the partial's own names so call sites did not
+        // move with the implementation.
+        private bool IsCfWorkerRow(PoolRow row) => MailboxRowClassifier.IsCfWorker(row);
 
-        private bool IsCfWorkerRow(PoolRow row)
-        {
-            if (row == null) return false;
-            return row.MailboxProvider.Equals("cfworker", StringComparison.OrdinalIgnoreCase)
-                || row.AccountType.Contains("CFWorker")
-                || row.Identifier.EndsWith("@edu.liziai.cloud", StringComparison.OrdinalIgnoreCase)
-                || row.Identifier.EndsWith("@liziai.cloud", StringComparison.OrdinalIgnoreCase)
-                || row.RawLine.StartsWith("cfworker://", StringComparison.OrdinalIgnoreCase);
-        }
+        private bool IsReMailRow(PoolRow row) => MailboxRowClassifier.IsReMail(row);
 
-        private bool IsReMailRow(PoolRow row)
-        {
-            if (row == null) return false;
-            return row.MailboxProvider.Equals("remail", StringComparison.OrdinalIgnoreCase)
-                || row.AccountType.Contains("ReMail", StringComparison.OrdinalIgnoreCase);
-        }
-
-        private bool IsSmailrRow(PoolRow row)
-        {
-            if (row == null) return false;
-            return row.MailboxProvider.Equals("smailr", StringComparison.OrdinalIgnoreCase)
-                || row.AccountType.Contains("Smailr", StringComparison.OrdinalIgnoreCase)
-                || row.RawLine.StartsWith("smailr://", StringComparison.OrdinalIgnoreCase);
-        }
+        private bool IsSmailrRow(PoolRow row) => MailboxRowClassifier.IsSmailr(row);
 
         private void ShowMailDetailDialog(MailItem item)
         {
             if (item == null) return;
             string content = MailBodyFormatter.ToDisplayText(item.Body, item.BodyPreview);
             if (content.Length == 0) content = Loc.T("（邮件正文为空）");
-            string code = item.VerificationCode.Length > 0 ? item.VerificationCode : ExtractVerificationCode(content);
+            string code = item.VerificationCode.Length > 0 ? item.VerificationCode : InboxReader.ExtractCode(content);
             var dialog = new Window
             {
                 Title = item.Subject.Length > 0 ? item.Subject : Loc.T("邮件详情"),
@@ -323,20 +297,5 @@ namespace SmsWorkbench
             dialog.ShowDialog();
         }
 
-        private string ExtractVerificationCode(string text)
-        {
-            Match match = Regex.Match(text ?? "", @"(?<!\d)\d{5,8}(?!\d)");
-            return match.Success ? match.Value : "";
-        }
-
-        private sealed class MailItem
-        {
-            public string ReceivedAt { get; set; } = "";
-            public string From { get; set; } = "";
-            public string Subject { get; set; } = "";
-            public string BodyPreview { get; set; } = "";
-            public string Body { get; set; } = "";
-            public string VerificationCode { get; set; } = "";
-        }
     }
 }

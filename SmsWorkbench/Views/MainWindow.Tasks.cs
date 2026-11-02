@@ -1,5 +1,5 @@
 // Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
 #nullable enable
 
 
@@ -16,6 +16,10 @@ namespace SmsWorkbench
         // BackendResultInterpreter.
 
         private bool doctorProbeStarted;
+
+        // Built in the constructor from the shared task coordinator and this
+        // window's log sink.
+        private readonly AccountDeleteService accountDelete;
 
         // Long-running backend tasks (registration / payment batches) share one
         // timeout budget; keep it a named constant instead of inline math.
@@ -172,48 +176,36 @@ namespace SmsWorkbench
                 : new AccountBatchProgressDialog(this, taskName, progressTotal, () => backendTasks.Cancel());
             progressDialog?.Show();
 
-            var backendOutput = new StringBuilder();
-            object backendOutputLock = new object();
-            void CaptureBackendLine(string line)
-            {
-                lock (backendOutputLock)
-                {
-                    backendOutput.AppendLine(line);
-                }
-            }
-
-            // Machine consumers read the raw stream (backendOutput above); the
-            // panel gets the folded operator story instead of envelopes, JSON
-            // blocks and banner bars.
-            var logFolder = new BackendLogFolder();
+            // One run owns one service instance: the capture buffer and the log
+            // folder are per-run state, and a finished batch must not bleed into the
+            // next one.
+            var backendRun = new BackendRunService();
             string commandId = Guid.NewGuid().ToString("N");
-            var progress = new Progress<BackendOutputLine>(line =>
+            // The folding rules (envelope vs. operator line) live in the service; this
+            // is the window's share: counters, the throttled pool refresh, the progress
+            // dialog and the task-row detail.
+            void HandleProgressEvent(BackendProgressEvent progressEvent)
             {
-                if (BackendProgressEventParser.TryParse(line.Text, out BackendProgressEvent? progressEvent))
+                LogBackendProgress(taskName, progressEvent);
+                // One terminal event per finished account is the throughput sample;
+                // the strip's window arithmetic lives in MetricsViewModel.
+                Metrics.Record(progressEvent);
+                if (progressEvent.Domain == "registration"
+                    && (progressEvent.Stage == "registration_status_changed"
+                        || progressEvent.Stage == "mailboxes_skipped"))
                 {
-                    LogBackendProgress(taskName, progressEvent);
-                    // One terminal event per finished account is the throughput sample;
-                    // the strip's window arithmetic lives in MetricsViewModel.
-                    Metrics.Record(progressEvent);
-                    if (progressEvent.Domain == "registration" && progressEvent.Stage == "registration_status_changed")
-                        RefreshPoolsThrottled(preserveView: true);
                     // The backend drops cooling/quarantined/dead-end mailboxes
-                    // before attempting them; the event carries the masked list
-                    // so the grid can refresh those rows out of their stale
-                    // pre-batch state instead of leaving the operator to find
-                    // the skip in the backend log.
-                    if (progressEvent.Domain == "registration" && progressEvent.Stage == "mailboxes_skipped")
-                        RefreshPoolsThrottled(preserveView: true);
+                    // before attempting them; refreshing here takes those rows out
+                    // of their stale pre-batch state instead of leaving the
+                    // operator to find the skip in the backend log.
+                    RefreshPoolsThrottled(preserveView: true);
+                    }
                     if (accountProgress != null
                         && string.Equals(progressEvent.Domain, accountProgress.Domain, StringComparison.OrdinalIgnoreCase))
                     {
-                        // Update only returns true for a terminal per-account
-                        // event, i.e. one account really finished and was
-                        // persisted backend-side. That is the moment its grid
-                        // row goes stale, so reload it instead of waiting for
-                        // the whole batch -- this is what the scan commands
-                        // were missing versus registration's "Saved session:"
-                        // marker.
+                        // Update only returns true for a terminal per-account event,
+                        // i.e. one account really finished and was persisted
+                        // backend-side. That is the moment its grid row goes stale.
                         if (accountProgress.Update(progressEvent))
                             RefreshPoolsThrottled(preserveView: true);
                         progressDialog?.Update(
@@ -222,23 +214,14 @@ namespace SmsWorkbench
                             progressEvent.AccountRef,
                             progressEvent.Detail);
                     }
-                    task.Info = progressEvent.Detail.Length > 0
-                        ? $"{progressEvent.Stage}: {progressEvent.Detail}"
-                        : progressEvent.Stage;
-                    // The event itself never reaches the panel (we return
-                    // below); emit its operator-facing stage line here so the
-                    // scan commands read as staged output instead of a wall of
-                    // raw backend lines.
-                    string? stageLine = BackendLogPresenter.ProgressEventLine(progressEvent);
-                    if (stageLine != null)
-                        UiLog(stageLine);
-                    return;
-                }
-                CaptureBackendLine(line.Text);
-                foreach (string display in logFolder.Feed(line.Text))
-                    UiLog(display);
-                RefreshPoolsAfterHotPersistence(line.Text);
-            });
+                task.Info = progressEvent.Detail.Length > 0
+                    ? $"{progressEvent.Stage}: {progressEvent.Detail}"
+                    : progressEvent.Stage;
+            }
+
+            // WPF marshals to the UI thread; the service keeps the folding rules.
+            var progress = new Progress<BackendOutputLine>(
+                line => backendRun.Feed(line, HandleProgressEvent, UiLog, RefreshPoolsAfterHotPersistence));
             string activeKey = string.Empty;
             try
             {
@@ -276,26 +259,34 @@ namespace SmsWorkbench
                 {
                     string snapshot = TryReadLatestLivenessSnapshot();
                     if (snapshot.Length > 0)
-                        CaptureBackendLine(snapshot);
+                        backendRun.Capture(snapshot);
                 }
 
-                task.Status = interpreted.IsSuccess ? "完成" : "失败";
-                string batchSummary = BackendResultInterpreter.BatchSummaryLabel(interpreted.Payload);
-                if (batchSummary.Length > 0)
-                    task.Info = batchSummary;
-                task.Cost = ((int)(DateTime.Now - started).TotalSeconds).ToString(CultureInfo.InvariantCulture);
-                task.DoneAt = SafeTime(DateTime.Now);
+                string batchSummary = BackendResultInterpreter.BatchSummaryLabel(
+                    interpreted.Payload,
+                    // A registration payload that lost a counter key used to read as
+                    // 0 in the task row with nothing in the log. The manifest gate
+                    // catches the rename at commit time; this catches an older
+                    // binary meeting a newer backend at run time.
+                    //
+                    // ``Serilog.Log`` fully qualified: this class has its own
+                    // ``Log(string)`` panel method, and the static sink avoids the
+                    // maybe-null capture the compiler reports for the injected field
+                    // inside a lambda (CS8600/CS8602) while the build-warning
+                    // ratchet holds a zero baseline.
+                    missingKey => Serilog.Log.Warning(
+                        "Registration batch summary is missing required key {Key}", missingKey));
+                BackendRunOutcome outcome = BackendRunService.Describe(interpreted, batchSummary, started, DateTime.Now);
+                task.Status = outcome.Status;
+                if (outcome.Info != null) task.Info = outcome.Info;
+                task.Cost = outcome.CostSeconds;
+                task.DoneAt = outcome.DoneAt;
                 StatusBar.Text = taskName + " 已结束";
                 RefreshPools();
                 ScrollTaskGridToBottom();
                 if (BackendResultInterpreter.HasAccountResults(resultKind))
                 {
-                    string output;
-                    lock (backendOutputLock)
-                    {
-                        output = backendOutput.ToString();
-                    }
-                    ShowAccountScanResultDialog(output, resultKind);
+                    ShowAccountScanResultDialog(backendRun.CapturedOutput, resultKind);
                 }
             }
             catch (OperationCanceledException)
@@ -465,22 +456,19 @@ namespace SmsWorkbench
             var selected = SelectedEmailRowsOrNotify(Loc.T("删除"));
             if (selected.Count == 0) return;
             if (!await ShowDeleteConfirmDialog(selected.Count)) return;
-            BackendCommandPlan? plan = null;
             try
             {
-                plan = BackendCommandPlanner.CreateBatchDeleteAccounts(
-                    selected.Select(row => NormalizeEmailKey(row.Identifier)).ToArray(),
-                    workers: Math.Min(8, Math.Max(1, selected.Count)));
-                BackendCommandResult backend = await backendTasks.RunAsync(
-                    BackendCommand.Create(plan.TaskName, plan.Arguments.ToList(), plan.TimeoutMilliseconds ?? 120000),
-                    cancellationToken: ct);
-                int failed = CountBatchDeleteFailures(backend, selected.Count);
-                if (failed > 0)
+                // The invocation, the failure count and the temp-file cleanup live in
+                // AccountDeleteService; asking, reporting and refreshing stay here.
+                AccountDeleteResult result = await accountDelete
+                    .DeleteAsync(selected.Select(row => NormalizeEmailKey(row.Identifier)).ToList(), ct)
+                    .ConfigureAwait(true);
+                if (result.Failed > 0)
                 {
                     await DialogFactory.ShowInfoAsync(
                         this,
                         Loc.T("删除未完成"),
-                        Loc.F("{0} 条记录未能完整删除。请查看运行日志。", failed));
+                        Loc.F("{0} 条记录未能完整删除。请查看运行日志。", result.Failed));
                 }
             }
             catch (Exception ex)
@@ -490,25 +478,8 @@ namespace SmsWorkbench
             }
             finally
             {
-                if (plan != null)
-                {
-                    foreach (string path in plan.TempFiles)
-                        TryDeleteFile(path);
-                }
                 RefreshPools();
             }
-        }
-
-        private static int CountBatchDeleteFailures(BackendCommandResult backend, int expected)
-        {
-            if (backend.ExitCode != 0 || !backend.Payload.HasValue)
-                return expected;
-            JsonElement payload = backend.Payload.Value;
-            if (payload.TryGetProperty("failed", out JsonElement failed) && failed.ValueKind == JsonValueKind.Number)
-                return Math.Max(0, failed.GetInt32());
-            return payload.TryGetProperty("ok", out JsonElement ok) && ok.ValueKind == JsonValueKind.True
-                ? 0
-                : expected;
         }
 
         private async Task<bool> ShowDeleteConfirmDialog(int count)
@@ -521,6 +492,11 @@ namespace SmsWorkbench
                 isDanger: true);
         }
 
+        /// <summary>
+        /// Delete one file, logging a sanitized failure. Shared by the batch delete,
+        /// the context menu, the inbox and the temp-file cleanup, which is why it did
+        /// not move into <see cref="AccountDeleteService"/>.
+        /// </summary>
         private bool TryDeleteFile(string path)
         {
             try

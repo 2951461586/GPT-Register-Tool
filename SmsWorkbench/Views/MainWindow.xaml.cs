@@ -1,5 +1,5 @@
 // Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
 #nullable enable
 
 using SmsWorkbench.Localization;
@@ -23,12 +23,11 @@ namespace SmsWorkbench
         // Mirrors SystemThemeWatcher's own bookkeeping so arming/disarming is
         // idempotent; a second Watch() for the same window would double the hooks.
         private bool systemThemeWatcherArmed;
-        // Shared instance for the one-click SMS provider catalog/balance reads in
-        // MainWindow.SmsProvider.cs (SmsProviderCatalogClient takes the HttpClient
-        // as a parameter). One static instance per window is deliberate: a
-        // per-call `new HttpClient()` leaks sockets, and these are a handful of
-        // small GETs against a provider API, not a long-lived backend channel.
-        private static readonly HttpClient httpClient = new HttpClient();
+        // Shared instance for the one-click SMS provider catalog/balance reads
+        // (the SMS dialog now reads the catalog over the backend channel). It comes
+        // from DesktopEgress, which is the process's only direct-HTTP entry point:
+        // one host allowlist, one proxy decision, one log line per request.
+        private readonly HttpClient httpClient;
         private readonly IBackendClient backendClient;
         private readonly IBackendTaskCoordinator backendTasks;
         private readonly IDesktopReadClient desktopRead;
@@ -137,7 +136,9 @@ namespace SmsWorkbench
             IPaymentBatchService paymentBatchService,
             Wpf.Ui.ISnackbarService snackbarService,
             ISettingsDialogService settingsDialogs,
+            IRegisterDialogService registerDialogs,
             ISettingsService settingsService,
+            IDesktopEgress egress,
             Serilog.ILogger logger,
             IFileLauncher fileLauncher,
             IUpdateChecker updateChecker,
@@ -154,6 +155,7 @@ namespace SmsWorkbench
             this.snackbarService = snackbarService;
             this.settingsDialogs = settingsDialogs;
             this.settingsService = settingsService;
+            httpClient = egress.CreateClient();
             this.logger = logger;
             this.fileLauncher = fileLauncher;
             this.updateChecker = updateChecker;
@@ -162,6 +164,27 @@ namespace SmsWorkbench
             this.globalHotkey = globalHotkeyService;
             rootDir = paths.RootDirectory;
             configDir = paths.ConfigDirectory;
+            // Window-bound collaborators: the registration builder needs this window's
+            // mailbox lookup and CFWorker predicate, the export services need its log
+            // sink, root directory and open-path action. Built after rootDir/configDir
+            // exist; the lambdas read them lazily.
+            this.registerDialogs = registerDialogs;
+            registrationRequests = new RegistrationRequestBuilder(FindMailboxLineForRowAsync, IsCfWorkerRow);
+            exportDialogs = new ExportDialogService(OpenPath, () => Path.Combine(rootDir, "runtime"));
+            accountExport = new AccountExportAssembler(
+                desktopRead,
+                row => OnlyDigits(row.RawLine),
+                row => FindMailboxLineForRowAsync(row),
+                DefaultMailboxClientId,
+                Log);
+            smsDialogs = new SmsProviderDialogService(settingsService, desktopRead, logger, ShowThemedInfoDialog);
+            accountDelete = new AccountDeleteService(backendTasks, TryDeleteFile, Log);
+            accountDetail = new AccountDetailAssembler(
+                desktopRead,
+                row => OnlyDigits(row.RawLine),
+                () => Path.Combine(rootDir, "runtime"),
+                Mask,
+                Log);
             Export = new ExportViewModel(Pool);
             InitializeComponent();
             accountGridControl = (AccountGridView)(
@@ -333,24 +356,6 @@ namespace SmsWorkbench
         public string RawRefreshToken { get; set; } = "";
         public string MailboxProvider { get; set; } = "";
         public string MailboxToken { get; set; } = "";
-    }
-
-    public sealed class RegisterOptions
-    {
-        public string Source { get; set; } = "pool";
-        public int Count { get; set; } = 1;
-        public int Workers { get; set; } = 4;
-        // Matches the dialog default (the "关闭 2FA" box starts unchecked). The
-        // previous `= true` made every `new RegisterOptions()` silently disable
-        // TOTP enrollment while the UI said otherwise.
-        public bool Disable2fa { get; set; }
-        public bool CheckPromotion { get; set; }
-    }
-
-    public sealed class ScanOptions
-    {
-        public int Workers { get; set; } = 4;
-        public bool AutoRelogin { get; set; }
     }
 
     /// <summary>

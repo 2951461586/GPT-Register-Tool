@@ -1,5 +1,5 @@
 // Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
 #nullable enable
 
 using SmsWorkbench.Localization;
@@ -9,16 +9,21 @@ namespace SmsWorkbench
     public partial class MainWindow
     {
         // Account detail dialog and detail formatting
+        // The panel stays here: its buttons call window commands (open path, copy,
+        // check alive, open PayPal). The data it shows comes from
+        // AccountDetailAssembler, which is window-independent and unit-tested.
+        private readonly AccountDetailAssembler accountDetail;
+
         private void ShowAccountDetail(PoolRow row)
             => RunUiTask(() => ShowAccountDetailAsync(row, _lifetimeCts.Token));
 
         private async Task ShowAccountDetailAsync(PoolRow row, CancellationToken ct = default)
         {
             if (row == null) return;
-            string detail = await BuildAccountDetailAsync(row, ct);
+            string detail = await accountDetail.BuildDetailAsync(row, ct);
             string paypalUrl = row.PayPalUrl ?? "";
             bool hasPayPal = !string.IsNullOrWhiteSpace(paypalUrl);
-            string accessToken = await ResolveAccountAccessTokenAsync(row, ct);
+            string accessToken = await accountDetail.ResolveAccessTokenAsync(row, ct);
             bool hasAccessToken = !string.IsNullOrWhiteSpace(accessToken);
             var dialog = new Window
             {
@@ -260,29 +265,12 @@ namespace SmsWorkbench
             dialog.ShowDialog();
         }
 
-        private async Task<string> ResolveAccountAccessTokenAsync(PoolRow row, CancellationToken ct = default)
-        {
-            var data = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
-            if (!await TryLoadAccountDataForRowAsync(row, data, ct) || data.Count == 0)
-            {
-                return "";
-            }
-            return FirstNonEmpty(
-                GetString(data, "access_token"),
-                GetString(data, "accessToken"),
-                NestedString(data, "auth_session", "access_token"),
-                NestedString(data, "auth_session", "accessToken"),
-                NestedString(data, "session", "access_token"),
-                NestedString(data, "session", "accessToken")
-            );
-        }
-
         private void OpenAccountJson(PoolRow row)
             => RunUiTask(() => OpenAccountJsonAsync(row, _lifetimeCts.Token));
 
         private async Task OpenAccountJsonAsync(PoolRow row, CancellationToken ct = default)
         {
-            string path = await ResolveAccountJsonPathAsync(row, ct);
+            string path = await accountDetail.ResolveJsonPathAsync(row, ct);
             if (string.IsNullOrWhiteSpace(path))
             {
                 MessageBox.Show(Loc.T("未找到该账号对应的 JSON 文件。"), Loc.T("打开源文件"), MessageBoxButton.OK, MessageBoxImage.Information);
@@ -291,100 +279,9 @@ namespace SmsWorkbench
             OpenPath(path);
         }
 
-        private async Task<string> ResolveAccountJsonPathAsync(PoolRow row, CancellationToken ct = default)
-        {
-            if (row == null) return "";
-            string notes = (row.Notes ?? "").Trim();
-            if (File.Exists(notes) && notes.EndsWith(".json", StringComparison.OrdinalIgnoreCase)) return notes;
-            string source = (row.SourcePath ?? "").Trim();
-            if (File.Exists(source) && source.EndsWith(".json", StringComparison.OrdinalIgnoreCase)) return source;
-            if (!File.Exists(source) || !source.EndsWith(".sqlite3", StringComparison.OrdinalIgnoreCase)) return "";
-
-            try
-            {
-                JsonElement payload = await desktopRead.ReadAccountAsync(OnlyDigits(row.RawLine), row.Identifier, ct);
-                if (!payload.TryGetProperty("account", out JsonElement account)) return "";
-                Dictionary<string, object> data = JsonElementToDictionary(account);
-                string jsonPath = GetString(data, "json_path");
-                if (File.Exists(jsonPath) && jsonPath.EndsWith(".json", StringComparison.OrdinalIgnoreCase)) return jsonPath;
-                string rawJson = data.TryGetValue("session", out object? session) ? JsonSerializer.Serialize(session) : "";
-                if (string.IsNullOrWhiteSpace(rawJson)) return "";
-                string email = GetString(data, "email");
-                string safeEmail = Regex.Replace((email ?? "unknown").Trim(), @"[^a-zA-Z0-9_.@+-]+", "_");
-                string dir = Path.Combine(rootDir, "runtime", "account_json");
-                Directory.CreateDirectory(dir);
-                string outPath = Path.Combine(dir, "account_" + safeEmail + ".json");
-                File.WriteAllText(outPath, PrettyJson(rawJson), new UTF8Encoding(false));
-                return outPath;
-            }
-            catch (Exception ex)
-            {
-                Log("打开账号JSON失败：" + ex.Message);
-                return "";
-            }
-        }
-
-        private string PrettyJson(string rawJson)
-        {
-            try
-            {
-                using JsonDocument document = JsonDocument.Parse(rawJson);
-                return JsonSerializer.Serialize(document.RootElement, new JsonSerializerOptions { WriteIndented = true });
-            }
-            catch
-            {
-                return rawJson;
-            }
-        }
-
         // AddDetailRow removed (2026-09-02, round 6): no caller. The account
         // detail panel is built from XAML bindings now; this was the last
         // code-behind row builder.
-
-        private async Task<string> BuildAccountDetailAsync(PoolRow row, CancellationToken ct = default)
-        {
-            var lines = new List<string>
-            {
-                "email: " + row.Identifier,
-                "type: " + row.AccountType,
-                "status: " + row.Status,
-                "created_at: " + row.CreatedAt,
-                "updated_at: " + row.CompletedAt,
-                "source: " + row.Notes,
-                ""
-            };
-
-            try
-            {
-                if (row.SourcePath.EndsWith(".sqlite3", StringComparison.OrdinalIgnoreCase))
-                {
-                    JsonElement payload = await desktopRead.ReadAccountAsync(OnlyDigits(row.RawLine), row.Identifier, ct);
-                    if (payload.TryGetProperty("account", out JsonElement account))
-                    {
-                        foreach (KeyValuePair<string, object> item in JsonElementToDictionary(account))
-                        {
-                            lines.Add(item.Key + ": " + MaskSensitiveField(item.Key, Convert.ToString(item.Value) ?? ""));
-                        }
-                    }
-                    return string.Join(Environment.NewLine, lines);
-                }
-            }
-            catch (Exception ex)
-            {
-                lines.Add("detail_error: " + ex.Message);
-            }
-            return string.Join(Environment.NewLine, lines);
-        }
-
-        private string MaskSensitiveField(string key, string value)
-        {
-            string lower = (key ?? "").ToLowerInvariant();
-            if (lower.Contains("token") || lower.Contains("cookie") || lower.Contains("password") || lower.Contains("api_key"))
-            {
-                return Mask(value);
-            }
-            return value ?? "";
-        }
 
     }
 }

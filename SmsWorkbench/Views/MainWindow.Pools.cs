@@ -1,5 +1,5 @@
 // Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
 #nullable enable
 
 using SmsWorkbench.Localization;
@@ -18,8 +18,7 @@ namespace SmsWorkbench
         // `updated_at`, and every N delta reads forces a full rebuild so a lost
         // row or a missed deletion cannot stay stale forever.
         private const int MaxIncrementalAccountRefreshes = 10;
-        private long accountsCursor;
-        private int incrementalAccountRefreshes;
+        private readonly AccountRefreshCursor accountCursor = new();
 
         // Pool/session loading, filtering, overview
         private bool IsMailboxPoolLikeRow(PoolRow row)
@@ -312,72 +311,46 @@ namespace SmsWorkbench
                 Log("读取账号 backend 失败：响应缺少 accounts 数组。");
                 return;
             }
-            RememberAccountsCursor(payload);
+            AccountRefreshPlan plan = AccountRefreshPlanReader.Read(payload);
+            accountCursor.Record(plan);
             // Per-refresh values hoisted out of the row loop; each used to
             // re-read and re-parse config.json once (or twice) per account.
             string databasePath = GetDatabasePath();
-            foreach (JsonElement account in accounts.EnumerateArray())
+            foreach (JsonElement account in plan.Accounts)
             {
-                Dictionary<string, object> data = JsonElementToDictionary(account);
-                string rawJson = account.TryGetProperty("session", out JsonElement sessionElement)
-                    && sessionElement.ValueKind == JsonValueKind.Object
-                    ? sessionElement.GetRawText()
-                    : "{}";
-                Pool.AllRows.Add(BuildBackendAccountRow(data, databasePath, rawJson));
+                Pool.AllRows.Add(BuildRowFromPayload(account, databasePath));
             }
         }
 
         /// <summary>
-        /// Applies an incremental accounts payload: only changed rows arrive,
-        /// but `ids` is the complete current id set so deletions are visible.
+        /// Applies an incremental accounts payload: only changed rows arrive, but
+        /// `ids` is the complete current id set so deletions are visible. The shape
+        /// rules live in <see cref="AccountRefreshPlanReader"/>; a drifted payload
+        /// (plain list shape) degrades to a full apply so the caller stays coherent.
         /// </summary>
         private void ApplyAccountsDelta(JsonElement payload)
         {
-            if (!payload.TryGetProperty("accounts", out JsonElement accounts)
-                || accounts.ValueKind != JsonValueKind.Array
-                || !payload.TryGetProperty("ids", out JsonElement idsElement)
-                || idsElement.ValueKind != JsonValueKind.Array)
+            AccountRefreshPlan plan = AccountRefreshPlanReader.Read(payload);
+            if (!plan.IsDelta)
             {
-                // Shape drift: fall back to the full apply so the caller still
-                // ends up coherent (the backend may have answered with the
-                // plain list shape).
                 ApplyAccountsPayload(payload);
                 return;
             }
-            var currentIds = new HashSet<string>(StringComparer.Ordinal);
-            foreach (JsonElement id in idsElement.EnumerateArray())
-            {
-                currentIds.Add(id.ValueKind == JsonValueKind.Number
-                    ? id.GetInt64().ToString(CultureInfo.InvariantCulture)
-                    : (id.GetString() ?? ""));
-            }
+
             string databasePath = GetDatabasePath();
-            var changed = new List<PoolRow>();
-            foreach (JsonElement account in accounts.EnumerateArray())
-            {
-                Dictionary<string, object> data = JsonElementToDictionary(account);
-                string rawJson = account.TryGetProperty("session", out JsonElement sessionElement)
-                    && sessionElement.ValueKind == JsonValueKind.Object
-                    ? sessionElement.GetRawText()
-                    : "{}";
-                changed.Add(BuildBackendAccountRow(data, databasePath, rawJson));
-            }
-            Pool.MergeDatabaseRows(changed, currentIds, databasePath);
-            RememberAccountsCursor(payload);
+            var changed = plan.Accounts.Select(account => BuildRowFromPayload(account, databasePath)).ToList();
+            Pool.MergeDatabaseRows(changed, plan.CurrentIds!, databasePath);
+            accountCursor.Record(plan);
         }
 
-        private void RememberAccountsCursor(JsonElement payload)
+        private PoolRow BuildRowFromPayload(JsonElement account, string databasePath)
         {
-            if (payload.TryGetProperty("cursor", out JsonElement cursor)
-                && cursor.ValueKind == JsonValueKind.Number
-                && cursor.TryGetInt64(out long value))
-            {
-                accountsCursor = value;
-                // A full payload is the anti-drift anchor: restart the delta
-                // budget from it.
-                if (payload.TryGetProperty("full", out JsonElement full) && full.ValueKind == JsonValueKind.True)
-                    incrementalAccountRefreshes = 0;
-            }
+            Dictionary<string, object> data = JsonElementToDictionary(account);
+            string rawJson = account.TryGetProperty("session", out JsonElement sessionElement)
+                && sessionElement.ValueKind == JsonValueKind.Object
+                ? sessionElement.GetRawText()
+                : "{}";
+            return AccountRowFactory.BuildBackendAccountRow(data, databasePath, rawJson);
         }
 
         /// <summary>
@@ -387,167 +360,26 @@ namespace SmsWorkbench
         /// </summary>
         private async Task<bool> TryApplyIncrementalAccountsAsync(CancellationToken ct)
         {
-            if (accountsCursor <= 0 || incrementalAccountRefreshes >= MaxIncrementalAccountRefreshes)
+            if (!accountCursor.CanRefreshIncrementally(MaxIncrementalAccountRefreshes))
                 return false;
             try
             {
                 JsonElement delta = await desktopRead
-                    .ReadAccountsDeltaAsync(accountsCursor, ct)
+                    .ReadAccountsDeltaAsync(accountCursor.Cursor, ct)
                     .ConfigureAwait(true);
                 ApplyAccountsDelta(delta);
             }
             catch (Exception ex)
             {
                 Log("增量刷新账号失败，改用全量刷新：" + SensitiveDataSanitizer.Redact(ex.Message));
-                incrementalAccountRefreshes = MaxIncrementalAccountRefreshes;
+                accountCursor.ForceFull(MaxIncrementalAccountRefreshes);
                 return false;
             }
-            incrementalAccountRefreshes++;
+            accountCursor.RecordIncremental();
             Pool.UpdateOverview();
             Pool.RefreshPagedRows();
             StatusBar.Text = Pool.SummaryText;
             return true;
-        }
-
-        private PoolRow BuildBackendAccountRow(Dictionary<string, object> data, string databasePath, string rawJson)
-        {
-            string status = GetString(data, "status");
-            bool hasAccess = ParseBoolean(FirstNonEmpty(
-                GetString(data, "access_token_present"),
-                GetString(data, "has_access_token")));
-            bool hasPaymentUrl = ParseBoolean(FirstNonEmpty(
-                GetString(data, "payment_url_present"),
-                GetString(data, "has_payment_url")));
-            string accessState = hasAccess ? "present" : "";
-            string paymentMethod = GetString(data, "payment_method");
-            string paypalUrl = hasPaymentUrl ? "backend://payment-url" : "";
-            string paypalStatus = GetString(data, "paypal_status");
-            string paypalOk = GetString(data, "paypal_ok");
-            string refreshStatus = GetString(data, "refresh_token_status");
-            if (ParseBoolean(FirstNonEmpty(
-                    GetString(data, "refresh_token_present"),
-                    GetString(data, "has_refresh_token")))
-                && (refreshStatus.Length == 0 || refreshStatus.Equals("no_rt", StringComparison.OrdinalIgnoreCase)))
-            {
-                refreshStatus = "oauth_present";
-            }
-            string provider = GetString(data, "mailbox_provider");
-            // `rawJson` is the full session blob (tens of KB per account) and both
-            // GetImportedStatus / GetPaypalAmount parse it from scratch via
-            // BackendJson.TextToObject. They used to be called twice each in the
-            // initialiser below (GetPaypalAmount at both the PayPalAmount and the
-            // PromotionStatus member, DisplayPayPalStatus likewise), i.e. 3 full
-            // JSON parses per row where 1 suffices - and this runs once per
-            // account on every pool refresh. Hoisted here so each is parsed once.
-            string importedStatus = FirstNonEmpty(
-                GetString(data, "imported_status"),
-                AccountStatusInterpreter.GetImportedStatus(rawJson));
-            string paypalAmount = FirstNonEmpty(
-                GetString(data, "paypal_amount"),
-                AccountStatusInterpreter.GetPaypalAmount(rawJson));
-            // Pure function of its arguments, but it was evaluated twice with
-            // identical arguments (PayPalStatus member and PromotionStatus member).
-            string paypalStatusDisplay = AccountStatusInterpreter.DisplayPayPalStatus(paypalStatus, paypalOk, paypalUrl, paymentMethod);
-            (string fingerprintProfile, string egressEndpoint, string egressCountry, bool identityBound) = ReadIdentity(data);
-            var row = new PoolRow
-            {
-                Id = "DB" + GetString(data, "id"),
-                CreatedAt = UnixTimeText(GetString(data, "created_at")),
-                CompletedAt = UnixTimeText(GetString(data, "updated_at")),
-                Identifier = GetString(data, "email"),
-                AccountType = MailboxTypeDisplay(provider, GetString(data, "email")),
-                AccountPlanType = AccountStatusInterpreter.GetAccountPlanType(data),
-                Source = GetString(data, "source"),
-                RegisterMethod = GetString(data, "register_method"),
-                SessionType = GetString(data, "session_type"),
-                PlanType = FirstNonEmpty(GetString(data, "plan_type"), GetString(data, "account_type")),
-                RegistrationCountry = GetString(data, "registration_country"),
-                FingerprintProfile = fingerprintProfile,
-                EgressEndpoint = egressEndpoint,
-                EgressCountry = egressCountry,
-                IdentityBound = identityBound,
-                Status = AccountStatusInterpreter.DisplayAccountStatus(status, paypalOk, accessState, GetString(data, "error"), paypalStatus, refreshStatus, importedStatus),
-                RegistrationStatus = FirstNonEmpty(GetString(data, "registration_status"), GetString(data, "registration_state")),
-                PayPalStatus = paypalStatusDisplay,
-                PayPalAmount = paypalAmount,
-                // Python owns the display composition and sends it as
-                // `promotion_display`; rows from an older backend carry only
-                // `promotion_status`, hence the fallback.
-                PromotionStatus = AccountStatusInterpreter.DisplayPromotionStatus(
-                    FirstNonEmpty(
-                        GetString(data, "promotion_display"),
-                        GetString(data, "promotion_status")),
-                    paypalStatusDisplay,
-                    paypalAmount),
-                PromotionState = GetString(data, "promotion_state"),
-                // Python composes the 支付资格 badge (payment_qualification_display);
-                // the state literal is the stable machine value. An older backend
-                // or a never-probed account leaves both blank.
-                PaymentQualification = AccountStatusInterpreter.DisplayPaymentQualification(
-                    GetString(data, "payment_qualification_display")),
-                PaymentQualificationState = GetString(data, "payment_qualification_state"),
-                RefreshTokenStatus = AccountStatusInterpreter.DisplayRtStatus(refreshStatus),
-                TwoFactorStatus = AccountStatusInterpreter.HasTwoFactor(data) ? Loc.T("已设置") : Loc.T("未设置"),
-                HasAccessToken = hasAccess,
-                AccessTokenProbeStatusCode = AccountStatusInterpreter.GetAccessTokenProbeStatusCode(data),
-                PayPalUrl = paypalUrl,
-                RefreshToken = provider == "remail" ? "ReMail" : hasAccess ? "AT" : "",
-                Proxy = DbTimingText(new Dictionary<string, string>(data.ToDictionary(pair => pair.Key, pair => Convert.ToString(pair.Value) ?? ""))),
-                Notes = GetString(data, "json_path").Length > 0 ? GetString(data, "json_path") : databasePath,
-                SourcePath = databasePath,
-                RawLine = GetString(data, "id"),
-                MailboxProvider = provider
-            };
-            return row;
-        }
-
-        /// <summary>
-        /// Unpack the backend's <c>identity</c> block (egress + fingerprint provenance).
-        /// <para>
-        /// Rendered as one <c>host:port</c> string rather than five fields: the
-        /// detail panel has a single row for it, and the scheme/port split is of no
-        /// use to an operator. <c>bound</c> distinguishes "no recorded exit" from an
-        /// exit whose host was empty, which the panel renders as an em dash.
-        /// </para>
-        /// </summary>
-        private static (string FingerprintProfile, string Egress, string Country, bool Bound) ReadIdentity(
-            Dictionary<string, object> data)
-        {
-            if (!BackendJson.TryGetMap(data, "identity", out Dictionary<string, object>? identity))
-                return ("", "", "", false);
-
-            string scheme = BackendJson.GetString(identity, "proxy_scheme");
-            string host = BackendJson.GetString(identity, "proxy_host");
-            string port = BackendJson.GetString(identity, "proxy_port");
-            bool hasPort = port.Length > 0 && port != "0";
-            string egress = host.Length == 0
-                ? ""
-                : (scheme.Length > 0 ? scheme + "://" : "") + host + (hasPort ? ":" + port : "");
-            return (
-                BackendJson.GetString(identity, "fingerprint_profile"),
-                egress,
-                BackendJson.GetString(identity, "proxy_country"),
-                ParseBoolean(BackendJson.GetString(identity, "bound")));
-        }
-
-        internal static string MailboxTypeDisplay(string provider, string email = "")
-        {
-            string normalized = (provider ?? "").Trim().ToLowerInvariant().Replace("-", "_");
-            string domain = (email ?? "").Split('@').LastOrDefault()?.ToLowerInvariant() ?? "";
-            return normalized switch
-            {
-                "remail" when domain is "outlook.com" or "hotmail.com" or "live.com" or "msn.com" => "remail/outlook",
-                "remail" when domain == "icloud.com" => "remail/icloud",
-                "remail" => "remail",
-                "icloud_url" or "icloud" => "icloud",
-                "cf_worker" or "cfworker" => "cfworker",
-                "microsoft" or "graph" or "outlook" => "outlook",
-                "gmail" => "gmail",
-                "smailr" => "smailr",
-                "chatai" => "chatai",
-                "" => "unknown",
-                _ => normalized,
-            };
         }
     }
 }

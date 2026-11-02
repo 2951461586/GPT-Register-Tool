@@ -1,5 +1,5 @@
 // Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
 #nullable enable
 
 using System.Diagnostics.CodeAnalysis;
@@ -189,22 +189,20 @@ namespace SmsWorkbench
         private string FirstNonEmpty(params string[] values)
             => BackendJson.FirstNonEmpty(values);
 
+        // Moved here from MainWindow.Register.cs when the registration partial lost
+        // its helpers: the inbox and pool partials are the only callers, so the
+        // "register" home was where it stopped being discoverable. Not deleted --
+        // an earlier cleanup pass mistook it for dead code because a grep was
+        // truncated by `head`.
+        private string JsonString(JsonElement obj, string property)
+        {
+            return obj.TryGetProperty(property, out JsonElement value) && value.ValueKind == JsonValueKind.String
+                ? value.GetString() ?? ""
+                : "";
+        }
+
         private static bool ParseBoolean(string value)
             => BackendJson.ParseBoolean(value);
-
-        private string DbTimingText(Dictionary<string, string> data)
-        {
-            string pipeline = data.TryGetValue("pipeline_total_seconds", out string? pipelineSeconds) ? pipelineSeconds : "";
-            if (!string.IsNullOrWhiteSpace(pipeline) && pipeline != "0.0" && pipeline != "0") return pipeline + "s";
-            string timing = data.TryGetValue("timing_total_seconds", out string? timingSeconds) ? timingSeconds : "";
-            return string.IsNullOrWhiteSpace(timing) || timing == "0.0" || timing == "0" ? "" : timing + "s";
-        }
-
-        private string UnixTimeText(string raw)
-        {
-            if (!long.TryParse(raw, out long seconds) || seconds <= 0) return "";
-            return DateTimeOffset.FromUnixTimeSeconds(seconds).LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss");
-        }
 
         private string OnlyDigits(string raw)
         {

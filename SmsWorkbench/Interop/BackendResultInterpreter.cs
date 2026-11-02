@@ -1,5 +1,5 @@
 // Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
 #nullable enable
 
 using SmsWorkbench.Localization;
@@ -525,11 +525,56 @@ public static class BackendResultInterpreter
     }
 
     /// <summary>Returns a compact, sanitized summary for account batch payloads.</summary>
-    public static string BatchSummaryLabel(JsonElement? payload)
+    /// <param name="onMissingRegistrationKey">
+    /// Invoked once per required key a registration-batch payload did not carry.
+    /// The caller logs it; the interpreter stays a pure function so this is
+    /// testable without Serilog. Without it a missing key reads as 0.
+    /// </param>
+    /// <remarks>
+    /// Two paths, because four payload families share this label. A registration
+    /// batch goes through the typed <see cref="RegistrationBatchSummary"/>;
+    /// the liveness scan, promotion batch and account-health reports still go
+    /// through the union read below, because none of them has a pinned Python
+    /// family in <c>result_schema.json</c> yet. Do not add a registration-family
+    /// key to the union path -- the typed path owns it, and the manifest checker
+    /// compares the type's properties, not this file.
+    /// </remarks>
+    public static string BatchSummaryLabel(JsonElement? payload, Action<string>? onMissingRegistrationKey = null)
     {
         if (!payload.HasValue || payload.Value.ValueKind != JsonValueKind.Object)
             return "";
-        JsonElement root = payload.Value;
+
+        if (RegistrationBatchSummary.TryParse(payload.Value, out RegistrationBatchSummary? registration)
+            && registration is { IsRegistrationBatch: true })
+        {
+            return RegistrationBatchLabel(registration, onMissingRegistrationKey);
+        }
+
+        return UnionBatchLabel(payload.Value);
+    }
+
+    /// <summary>Label for the pinned registration family (typed, missing keys reported).</summary>
+    private static string RegistrationBatchLabel(RegistrationBatchSummary batch, Action<string>? onMissingKey)
+    {
+        foreach (string missing in batch.MissingCounters())
+            onMissingKey?.Invoke(missing);
+
+        // No total, no label: the previous behaviour, kept because a payload
+        // without it is not a batch report at all.
+        if (batch.Total is not int total) return "";
+        int success = batch.Success ?? 0;
+        int failed = batch.Failed ?? Math.Max(0, total - success);
+        return Loc.F("完成 {0}/{1}，失败 {2}", success, total, failed);
+    }
+
+    /// <summary>
+    /// The pre-DTO union read, still serving the three account-batch families that
+    /// have no pinned producer yet (liveness scan, promotion batch, account
+    /// health). Each moves to its own typed record and manifest family when its
+    /// Python builder is pinned.
+    /// </summary>
+    private static string UnionBatchLabel(JsonElement root)
+    {
         if (!root.TryGetProperty("total", out JsonElement total) || !total.TryGetInt32(out int totalValue))
             return "";
         int success = root.TryGetProperty("success", out JsonElement successElement) && successElement.TryGetInt32(out int successValue) ? successValue : 0;

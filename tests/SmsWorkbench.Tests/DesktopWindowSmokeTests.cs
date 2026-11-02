@@ -232,7 +232,11 @@ public sealed class DesktopWindowSmokeTests
             new PaymentBatchService(new TestApplicationPaths(rootDirectory), new BackendTaskCoordinator(backendClient)),
             new Wpf.Ui.SnackbarService(),
             new WindowSettingsDialogService(),
+            new RegisterDialogService(),
             new SettingsService(new TestApplicationPaths(rootDirectory)),
+            // The egress is the window's only direct-HTTP entry point; constructing
+            // it sends nothing, so the smoke test stays offline.
+            new DesktopEgress(new SettingsService(new TestApplicationPaths(rootDirectory)), logger),
             logger,
             new FileLauncher(),
             // Never hits the network; MainWindow kicks one check off on load.
@@ -393,13 +397,15 @@ public sealed class DesktopWindowSmokeTests
             string[] fieldLabels = Array.Empty<string>();
             string[] checkBoxLabels = Array.Empty<string>();
             int comboBoxCount = 0;
-            var method = typeof(MainWindow).GetMethod(
-                "CreateRegisterOptionsDialog",
-                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-            Assert.NotNull(method);
-            var registerDialog = Assert.IsType<Window>(method.Invoke(
+            // The dialog now lives in RegisterDialogService; `InternalsVisibleTo`
+            // lets the test build it without showing it.
+            var registerDialogs = new RegisterDialogService();
+            var registerDialog = Assert.IsType<Window>(registerDialogs.CreateRegisterOptionsDialog(
                 main,
-                new object[] { new Action<RegisterOptions>(_ => { }) }));
+                initialCount: 1,
+                defaultWorkers: 4,
+                accept: _ => { },
+                onCountChosen: null));
             InspectWindow(
                 registerDialog,
                 dialog =>
@@ -445,15 +451,12 @@ public sealed class DesktopWindowSmokeTests
             int selectedComboBoxCount = -1;
             int selectedCheckBoxCount = -1;
             string[] selectedDialogTexts = Array.Empty<string>();
-            method = typeof(MainWindow).GetMethod(
-                "CreateSelectedRegisterOptionsDialog",
-                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-            Assert.NotNull(method);
-            // Reflection.Invoke does NOT honour optional parameter defaults, so all
-            // three parameters must be supplied even though checkedCount defaults to 0.
-            var selectedRegisterDialog = Assert.IsType<Window>(method.Invoke(
+            var selectedRegisterDialog = Assert.IsType<Window>(registerDialogs.CreateSelectedRegisterOptionsDialog(
                 main,
-                new object[] { 1, new Action<RegisterOptions>(_ => { }), 3 }));
+                selectedCount: 1,
+                defaultWorkers: 4,
+                checkedCount: 3,
+                accept: _ => { }));
             InspectWindow(
                 selectedRegisterDialog,
                 dialog =>
@@ -471,7 +474,7 @@ public sealed class DesktopWindowSmokeTests
             // (added 2026-09-19; see docs/audits/scans/scan-2026-09-19-selected-22-vs-reported-3of6.md).
             Assert.Contains(selectedDialogTexts, text => text.Contains("本地排除 2 个", StringComparison.Ordinal));
             stage("verify mailbox selection routing");
-            VerifyMailboxSelectionFileRouting(main);
+            VerifyMailboxSelectionFileRouting();
 
             // Close-to-tray: with an icon available, X hides instead of shutting down, so
             // a stray click cannot abort a running batch. The quit request (tray menu) is
@@ -554,46 +557,42 @@ public sealed class DesktopWindowSmokeTests
         Assert.Contains("确认停用：1", formatted);
     }
 
-    private static void VerifyMailboxSelectionFileRouting(MainWindow main)
+    private static void VerifyMailboxSelectionFileRouting()
     {
-        var method = typeof(MainWindow).GetMethod(
-            "TryCreateMailboxFileAsync",
-            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-        Assert.NotNull(method);
+        // The batch-file assembly moved to RegistrationRequestBuilder, which is
+        // window-independent: build it the way the window does, with a lookup that
+        // never touches the resident backend. No reflection needed any more -- the
+        // record is public, so the test reads it by name.
+        var requests = new RegistrationRequestBuilder(
+            (row, _) => Task.FromResult(row?.RawLine ?? ""),
+            _ => false);
 
         string icloudLine = "target@icloud.com----https://mail.example/messages/AbCd_0123-credential/target%40icloud.com";
         string chataiLine = "other@example.com----password----client-id----refresh-token";
-        AssertSelectionFile(method, main, new[] { icloudLine }, "--mailbox-file");
-        AssertSelectionFile(method, main, new[] { icloudLine, chataiLine }, "--chatai-mailbox-file");
+        AssertSelectionFile(requests, new[] { icloudLine }, "--mailbox-file");
+        AssertSelectionFile(requests, new[] { icloudLine, chataiLine }, "--chatai-mailbox-file");
     }
 
     private static void AssertSelectionFile(
-        System.Reflection.MethodInfo method,
-        MainWindow main,
+        RegistrationRequestBuilder requests,
         string[] lines,
         string expectedArgument)
     {
         var rows = lines.Select(line => new PoolRow { RawLine = line }).ToArray();
-        // TryCreateMailboxFileAsync is async and returns a MailboxFileSelection
-        // record (Arg/File/Count) instead of the old out-params. Invoke, await
-        // on the STA thread, then read the record fields via reflection because
-        // the record is private to MainWindow.
-        var task = (System.Threading.Tasks.Task)method.Invoke(
-            main, new object[] { rows, System.Threading.CancellationToken.None })!;
-        task.GetAwaiter().GetResult();
-        var selection = task.GetType().GetProperty("Result")!.GetValue(task)!;
-        var arg = Assert.IsType<string>(selection.GetType().GetProperty("Arg")!.GetValue(selection));
-        var path = Assert.IsType<string>(selection.GetType().GetProperty("File")!.GetValue(selection));
-        var count = Assert.IsType<int>(selection.GetType().GetProperty("Count")!.GetValue(selection));
-        Assert.Equal(expectedArgument, arg);
+        MailboxFileSelection? selection = requests
+            .CreateBatchFileAsync(rows, CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+        Assert.NotNull(selection);
+        Assert.Equal(expectedArgument, selection.Arg);
         try
         {
-            Assert.Equal(lines.Length, count);
-            Assert.Equal(lines, File.ReadAllLines(path, System.Text.Encoding.UTF8));
+            Assert.Equal(lines.Length, selection.Count);
+            Assert.Equal(lines, File.ReadAllLines(selection.File, System.Text.Encoding.UTF8));
         }
         finally
         {
-            if (File.Exists(path)) File.Delete(path);
+            if (File.Exists(selection.File)) File.Delete(selection.File);
         }
     }
 

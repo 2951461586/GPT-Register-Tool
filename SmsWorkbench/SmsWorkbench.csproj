@@ -4,14 +4,15 @@
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
-    <!-- <Nullable> stays at `annotations` for now. Measured 2026-09-02: flipping
-         it to `enable` reports 147 distinct nullability findings across ~25
-         files, and most of them need a signature change plus a read of the
-         surrounding code - not a mechanical edit. Leaving it half-fixed would
-         add ~380 warnings of noise, which is worse than not checking at all.
-         SmsWorkbench.Contracts is already `enable` with zero warnings; migrate
-         this project file-by-file with `#nullable enable` directives. -->
-    <Nullable>annotations</Nullable>
+    <!-- Nullable is on project-wide since 2026-11. The historical note said a
+         wholesale flip reported 147 findings across ~25 files (measured
+         2026-09-02); those were paid off file-by-file with `#nullable enable`
+         directives, and re-measuring with this setting flipped reported
+         0 warnings on `dotnet build -t:Rebuild`. New files need no directive;
+         the retained per-file directives are provenance, not exemptions.
+         `scripts/dotnet_warning_ratchet.py` keeps the build at a zero-warning
+         baseline, so a nullable regression fails CI. -->
+    <Nullable>enable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
     <AssemblyName>SmsWorkbench</AssemblyName>
     <RootNamespace>SmsWorkbench</RootNamespace>

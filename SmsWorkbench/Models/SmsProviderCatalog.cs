@@ -1,5 +1,5 @@
 // Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
 #nullable enable
 
 using System.Collections.Generic;
@@ -49,6 +49,12 @@ namespace SmsWorkbench
     /// </summary>
     internal static class SmsProviderCatalog
     {
+        /// <summary>
+        /// Vendor service id for OpenAI/ChatGPT rentals. Moved here from the deleted
+        /// wire client (P7-B): the vocabulary belongs with the provider table.
+        /// </summary>
+        internal const string OpenAiService = "dr";
+
         internal sealed record SmsProvider(
             string Key, string Label, string DefaultEndpoint, string ApiKeyEnv, string Protocol)
         {

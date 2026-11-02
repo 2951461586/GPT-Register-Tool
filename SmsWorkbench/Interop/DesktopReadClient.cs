@@ -1,5 +1,5 @@
 // Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
 #nullable enable
 
 using Serilog;
@@ -19,6 +19,12 @@ namespace SmsWorkbench
         Task<JsonElement> ReadAccountExportAsync(string accountId, string email = "", CancellationToken cancellationToken = default);
         Task<string> ReadMailboxLineAsync(string accountId, string email = "", CancellationToken cancellationToken = default);
         Task<string> ReadPaymentUrlAsync(string accountId, string email = "", CancellationToken cancellationToken = default);
+
+        /// <summary>Vendor balance for one SMS provider, read by the backend (P7-B).</summary>
+        Task<JsonElement> ReadProviderBalanceAsync(string provider, string service = "", CancellationToken cancellationToken = default);
+
+        /// <summary>Vendor country/tier catalog for one SMS provider, read by the backend (P7-B).</summary>
+        Task<JsonElement> ReadProviderCatalogAsync(string provider, string service = "", CancellationToken cancellationToken = default);
     }
 
     /// <summary>
@@ -216,6 +222,42 @@ namespace SmsWorkbench
             {
                 try { File.Delete(fullPath); } catch { }
             }
+        }
+
+        /// <summary>
+        /// Read the vendor balance through the backend (P7-B).
+        /// </summary>
+        /// <remarks>
+        /// Deliberately **no** one-shot fallback, for the same reason
+        /// <see cref="ReadAccountsDeltaAsync"/> has none: the one-shot CLI has no
+        /// such operation, and degrading would hand the dialog an empty balance it
+        /// renders as a real "--". A throw means "vendor stack unavailable", which
+        /// the dialog already shows as the missing-balance state.
+        /// </remarks>
+        public async Task<JsonElement> ReadProviderBalanceAsync(
+            string provider,
+            string service = "",
+            CancellationToken cancellationToken = default)
+        {
+            return await ResidentRequestAsync(
+                BuildProviderRequest("provider-balance", provider, service), cancellationToken).ConfigureAwait(false);
+        }
+
+        /// <summary>Read the vendor country/tier catalog through the backend (P7-B).</summary>
+        public async Task<JsonElement> ReadProviderCatalogAsync(
+            string provider,
+            string service = "",
+            CancellationToken cancellationToken = default)
+        {
+            return await ResidentRequestAsync(
+                BuildProviderRequest("provider-catalog", provider, service), cancellationToken).ConfigureAwait(false);
+        }
+
+        private static Dictionary<string, object> BuildProviderRequest(string op, string provider, string service)
+        {
+            var request = new Dictionary<string, object> { ["op"] = op, ["provider"] = provider ?? "" };
+            if (!string.IsNullOrWhiteSpace(service)) request["service"] = service;
+            return request;
         }
 
         private static Dictionary<string, object> BuildResidentRequest(

@@ -1,5 +1,5 @@
 // Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
 #nullable enable
 
 using SmsWorkbench.Localization;
@@ -48,7 +48,7 @@ namespace SmsWorkbench
                 NotifyWarning(Loc.T("请先选择一个账号。"));
                 return;
             }
-            string accessToken = await ResolveAccountAccessTokenAsync(row, ct);
+            string accessToken = await accountDetail.ResolveAccessTokenAsync(row, ct);
             if (string.IsNullOrWhiteSpace(accessToken))
             {
                 NotifyWarning(Loc.T("当前选中账号没有可复制的 AT。"));

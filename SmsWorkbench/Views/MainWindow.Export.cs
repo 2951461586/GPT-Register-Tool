@@ -1,5 +1,5 @@
 // Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
 #nullable enable
 
 using SmsWorkbench.Localization;
@@ -8,15 +8,20 @@ namespace SmsWorkbench
 {
     public partial class MainWindow
     {
-        // Account import/export, scan result and export JSON helpers.
-        //
-        // CLI argument construction is delegated to BackendCommandPlanner;
-        // backend JSON business interpretation is delegated to
-        // BackendResultInterpreter.
+        // Account import/export flow. Dialogs live in ExportDialogService and the
+        // "row -> exportable record" rules live in AccountExportAssembler, so this
+        // partial only owns the flow: pick a format, collect, write, convert.
+        // CLI argument construction is delegated to BackendCommandPlanner.
+
+        // Built in the constructor from window state (the log sink, the root
+        // directory, the "open path" action), which is why they are not injected --
+        // RegisterDialogService, which needs nothing from the window, is.
+        private readonly IExportDialogService exportDialogs;
+        private readonly AccountExportAssembler accountExport;
 
         private void ImportPaidCpa()
         {
-            string target = ShowImportTargetDialog(Loc.T("一键导入"));
+            string target = exportDialogs.ShowImportTarget(this, Loc.T("一键导入"));
             if (target.Length == 0) return;
 
             var rows = Export.ImportableRows(SelectedRowsOrCurrent());
@@ -37,7 +42,7 @@ namespace SmsWorkbench
 
         private async void ExportAccounts()
         {
-            string format = ShowExportFormatDialog();
+            string format = exportDialogs.ShowExportFormat(this);
             if (format.Length == 0) return;
 
             var rows = Export.CandidateRows(SelectedRowsOrCurrent());
@@ -61,7 +66,7 @@ namespace SmsWorkbench
             int skipped = 0;
             foreach (PoolRow row in rows)
             {
-                string? line = await TryBuildAccountExportLineAsync(row).ConfigureAwait(true);
+                string? line = await accountExport.BuildExportLineAsync(row).ConfigureAwait(true);
                 if (line is null)
                 {
                     skipped++;
@@ -83,7 +88,7 @@ namespace SmsWorkbench
             string outputPath = Path.Combine(outputDir, "account-" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".txt");
             File.WriteAllLines(outputPath, lines, new UTF8Encoding(false));
             Log("One-click export wrote " + lines.Count + " account(s), skipped " + skipped + ": " + outputPath);
-            ShowExportCompleteDialog(outputPath, lines.Count, skipped, Loc.T("TXT"), Loc.T("账号----密码----客户端ID----刷新令牌"));
+            exportDialogs.ShowExportComplete(this, outputPath, lines.Count, skipped, Loc.T("TXT"), Loc.T("账号----密码----客户端ID----刷新令牌"));
         }
 
         private void ExportAccountsJson(List<PoolRow> rows)
@@ -91,7 +96,7 @@ namespace SmsWorkbench
 
         private async Task ExportAccountsJsonAsync(List<PoolRow> rows, CancellationToken ct = default)
         {
-            var collected = await CollectAccountExportJsonAsync(rows, ct);
+            var collected = await accountExport.CollectJsonAsync(rows, ct).ConfigureAwait(true);
             if (collected.Items.Count == 0)
             {
                 ShowThemedInfoDialog(Loc.T("一键导出"), Loc.T("没有找到可导出的 JSON 账号记录。需要账号已生成 session/auth_session 或 SQLite 原始记录。"));
@@ -105,33 +110,7 @@ namespace SmsWorkbench
             var options = new JsonSerializerOptions { WriteIndented = true };
             await Task.Run(() => File.WriteAllText(outputPath, JsonSerializer.Serialize(payload, options), new UTF8Encoding(false)), ct);
             Log("One-click JSON export wrote " + collected.Items.Count + " account(s), skipped " + collected.Skipped + ": " + outputPath);
-            ShowExportCompleteDialog(outputPath, collected.Items.Count, collected.Skipped, Loc.T("JSON"), Loc.T("原始账号 session JSON；保留 RT 字段，未获取 RT 的账号默认留空"));
-        }
-
-        private sealed record CollectedAccountExport(List<Dictionary<string, object>> Items, int Skipped);
-
-        private async Task<CollectedAccountExport> CollectAccountExportJsonAsync(List<PoolRow> rows, CancellationToken ct = default)
-        {
-            var items = new List<Dictionary<string, object>>();
-            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            int skipped = 0;
-            foreach (PoolRow row in rows)
-            {
-                Dictionary<string, object>? item = await BuildAccountExportJsonAsync(row, ct);
-                if (item != null)
-                {
-                    string key = AccountExportJson.DedupKey(item, row.Identifier);
-                    if (seen.Add(key))
-                    {
-                        items.Add(item);
-                    }
-                }
-                else
-                {
-                    skipped++;
-                }
-            }
-            return new CollectedAccountExport(items, skipped);
+            exportDialogs.ShowExportComplete(this, outputPath, collected.Items.Count, collected.Skipped, Loc.T("JSON"), Loc.T("原始账号 session JSON；保留 RT 字段，未获取 RT 的账号默认留空"));
         }
 
         private void ExportAccountsConvertedJson(List<PoolRow> rows, string format)
@@ -139,13 +118,13 @@ namespace SmsWorkbench
 
         private async Task ExportAccountsConvertedJsonAsync(List<PoolRow> rows, string format, CancellationToken ct = default)
         {
-            var collected = await CollectAccountExportJsonAsync(rows, ct);
+            var collected = await accountExport.CollectJsonAsync(rows, ct).ConfigureAwait(true);
             if (collected.Items.Count == 0)
             {
                 ShowThemedInfoDialog(Loc.T("一键导出"), Loc.T("没有找到可转换的账号 session。需要账号已生成 access_token/session/auth_session 或 SQLite 原始记录。"));
                 return;
             }
-            List<Dictionary<string, object>> items = collected.Items;
+            IReadOnlyList<Dictionary<string, object>> items = collected.Items;
             int skipped = collected.Skipped;
 
             string normalized = (format ?? "cpa").Trim().ToLowerInvariant();
@@ -181,458 +160,21 @@ namespace SmsWorkbench
             }
 
             Log("One-click converted export wrote " + items.Count + " account(s), skipped " + skipped + ", format=" + normalized + ": " + outputPath);
-            ShowExportCompleteDialog(outputPath, items.Count, skipped, ExportViewModel.FormatLabel(normalized), ExportViewModel.FormatDescription(normalized));
+            exportDialogs.ShowExportComplete(this, outputPath, items.Count, skipped, ExportViewModel.FormatLabel(normalized), ExportViewModel.FormatDescription(normalized));
         }
 
-        private string ShowExportFormatDialog()
-        {
-            string selected = "";
-            var dialog = new Window
-            {
-                Title = Loc.T("一键导出"),
-                Owner = this,
-                Width = 560,
-                MinWidth = 520,
-                SizeToContent = SizeToContent.Height,
-                ResizeMode = ResizeMode.NoResize,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Background = (Brush)FindResource("AppBg")
-            };
-
-            var root = new Grid { Margin = new Thickness(18) };
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-            var header = new StackPanel { Margin = new Thickness(0, 0, 0, 16) };
-            header.Children.Add(new TextBlock
-            {
-                Text = Loc.T("选择导出格式"),
-                FontSize = (double)FindResource("Type.Title.Size"),
-                FontWeight = FontWeights.SemiBold,
-                Foreground = (Brush)FindResource("TextMain")
-            });
-            header.Children.Add(new TextBlock
-            {
-                Text = Loc.T("TXT 保持邮箱原格式；原始 JSON 保留 session；其它格式会调用 session_converter.py 转为 CPA/Sub2API/Cockpit/9router/Codex/AxonHub/Codex-Manager。"),
-                TextWrapping = TextWrapping.Wrap,
-                LineHeight = 20,
-                Margin = new Thickness(0, 6, 0, 0),
-                Foreground = (Brush)FindResource("TextSub")
-            });
-            Grid.SetRow(header, 0);
-            root.Children.Add(header);
-
-            var combo = new ComboBox { SelectedIndex = 2, Margin = new Thickness(0, 0, 0, 16) };
-            combo.Items.Add(new ComboBoxItem { Content = Loc.T("TXT - 邮箱----密码----客户端ID----刷新令牌"), Tag = "txt" });
-            combo.Items.Add(new ComboBoxItem { Content = Loc.T("原始 JSON - session/auth_session"), Tag = "json" });
-            combo.Items.Add(new ComboBoxItem { Content = "CPA JSON", Tag = "cpa" });
-            combo.Items.Add(new ComboBoxItem { Content = "Sub2API JSON", Tag = "sub2api" });
-            combo.Items.Add(new ComboBoxItem { Content = "Cockpit JSON", Tag = "cockpit" });
-            combo.Items.Add(new ComboBoxItem { Content = "9router JSON", Tag = "9router" });
-            combo.Items.Add(new ComboBoxItem { Content = "Codex auth.json", Tag = "codex" });
-            combo.Items.Add(new ComboBoxItem { Content = "AxonHub JSON", Tag = "axonhub" });
-            combo.Items.Add(new ComboBoxItem { Content = "Codex-Manager JSON", Tag = "codexmanager" });
-            Grid.SetRow(combo, 1);
-            root.Children.Add(combo);
-
-            var actions = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Right
-            };
-            var exportButton = new Button
-            {
-                Content = Loc.T("导出"),
-                Width = 88,
-                Style = (Style)FindResource("PrimaryButton")
-            };
-            exportButton.Click += (_, __) =>
-            {
-                selected = ((combo.SelectedItem as ComboBoxItem)?.Tag as string) ?? "cpa";
-                dialog.Close();
-            };
-            var cancelButton = new Button
-            {
-                Content = Loc.T("取消"),
-                Width = 76,
-                Margin = new Thickness(8, 0, 0, 0)
-            };
-            cancelButton.Click += (_, __) => dialog.Close();
-            actions.Children.Add(exportButton);
-            actions.Children.Add(cancelButton);
-            Grid.SetRow(actions, 2);
-            root.Children.Add(actions);
-
-            dialog.Content = root;
-            dialog.ShowDialog();
-            return selected;
-        }
-
-        private void ShowExportCompleteDialog(string outputPath, int exportedCount, int skippedCount, string formatLabel, string formatDescription)
-        {
-            var dialog = new Window
-            {
-                Title = Loc.T("一键导出"),
-                Owner = this,
-                Width = 520,
-                MinWidth = 460,
-                SizeToContent = SizeToContent.Height,
-                ResizeMode = ResizeMode.NoResize,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Background = (Brush)FindResource("AppBg")
-            };
-
-            var root = new Grid { Margin = new Thickness(18) };
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-            var header = new StackPanel { Margin = new Thickness(0, 0, 0, 14) };
-            header.Children.Add(new TextBlock
-            {
-                Text = Loc.T("导出完成"),
-                FontSize = (double)FindResource("Type.Title.Size"),
-                FontWeight = FontWeights.SemiBold,
-                Foreground = (Brush)FindResource("TextMain")
-            });
-            header.Children.Add(new TextBlock
-            {
-                Text = Loc.F("已生成账号 {0} 文件：{1}", formatLabel, formatDescription),
-                TextWrapping = TextWrapping.Wrap,
-                LineHeight = 20,
-                Margin = new Thickness(0, 6, 0, 0),
-                Foreground = (Brush)FindResource("TextSub")
-            });
-            Grid.SetRow(header, 0);
-            root.Children.Add(header);
-
-            var summary = new Border
-            {
-                Background = (Brush)FindResource("PanelBg"),
-                BorderBrush = (Brush)FindResource("Line"),
-                BorderThickness = new Thickness(1),
-                CornerRadius = (CornerRadius)FindResource("Corner.Lg"),
-                Padding = new Thickness(12),
-                Margin = new Thickness(0, 0, 0, 16)
-            };
-            var summaryStack = new StackPanel();
-            summaryStack.Children.Add(new TextBlock
-            {
-                Text = Loc.F("数量：{0}    跳过：{1}", exportedCount, skippedCount),
-                FontWeight = FontWeights.SemiBold,
-                Foreground = (Brush)FindResource("TextMain")
-            });
-            summaryStack.Children.Add(new TextBlock
-            {
-                Text = outputPath,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 8, 0, 0),
-                Foreground = (Brush)FindResource("TextSub")
-            });
-            summary.Child = summaryStack;
-            Grid.SetRow(summary, 1);
-            root.Children.Add(summary);
-
-            var actions = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Right
-            };
-            var openDirButton = new Button
-            {
-                Content = Loc.T("打开目录"),
-                Width = 92,
-                Style = (Style)FindResource("PrimaryButton")
-            };
-            openDirButton.Click += (_, __) =>
-            {
-                string directory = Path.GetDirectoryName(outputPath) ?? Path.Combine(rootDir, "runtime");
-                OpenPath(directory);
-                dialog.Close();
-            };
-            var closeButton = new Button
-            {
-                Content = Loc.T("关闭"),
-                Width = 76,
-                Margin = new Thickness(8, 0, 0, 0)
-            };
-            closeButton.Click += (_, __) => dialog.Close();
-            actions.Children.Add(openDirButton);
-            actions.Children.Add(closeButton);
-            Grid.SetRow(actions, 2);
-            root.Children.Add(actions);
-
-            dialog.Content = root;
-            dialog.ShowDialog();
-        }
-
+        /// <summary>
+        /// Account-batch result panel. The panel itself lives in
+        /// <see cref="ExportDialogService"/>; when the backend emitted no summary
+        /// there is nothing to show, and that is reported here with the same copy as
+        /// before.
+        /// </summary>
         private void ShowAccountScanResultDialog(string backendOutput, BackendAccountResultKind resultKind)
         {
+            if (exportDialogs.ShowAccountScanResult(this, backendOutput, resultKind)) return;
+
             string title = BackendResultInterpreter.AccountResultTitle(resultKind);
-            var summary = BackendResultInterpreter.TryExtractScanSummary(backendOutput);
-            if (summary == null)
-            {
-                ShowThemedInfoDialog(title, Loc.F("{0}已结束，但未解析到结果汇总。请查看下方日志确认详情。", title));
-                return;
-            }
-
-            var results = new List<Dictionary<string, object>>();
-            if (summary.TryGetValue("results", out object? rawResults) && rawResults is List<object> items)
-            {
-                foreach (object item in items)
-                {
-                    if (item is Dictionary<string, object> map)
-                    {
-                        results.Add(map);
-                    }
-                }
-            }
-
-            bool directProbe = results.Any(r => BackendJson.TryGetMap(r, "probe", out _));
-            // Promotion rows carry their own badge; without this the panel would
-            // show "AT有效 / HTTP 200" and hide the actual 优惠 answer.
-            bool isPromotion = BackendResultInterpreter.IsPromotionRows(results);
-            // 支付资格 rows carry their own badge as well; the liveness rendering
-            // would otherwise label an "无可用方式" row as an AT success.
-            bool isQualification = !isPromotion && BackendResultInterpreter.IsPaymentQualificationRows(results);
-            var rtRows = directProbe ? new List<Dictionary<string, object>>() : results.Where(r => BackendJson.GetBool(r, "has_rt")).ToList();
-            var noRtRows = directProbe ? results : results.Where(r => !BackendJson.GetBool(r, "has_rt")).ToList();
-
-            var dialog = new Window
-            {
-                Title = Loc.F("{0}结果", title),
-                Owner = this,
-                Width = 740,
-                MinWidth = 740,
-                SizeToContent = SizeToContent.Height,
-                MaxHeight = 760,
-                ResizeMode = ResizeMode.CanResize,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Background = (Brush)FindResource("AppBg")
-            };
-
-            var root = new Grid { Margin = new Thickness(18) };
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-            var header = new StackPanel { Margin = new Thickness(0, 0, 0, 14) };
-            header.Children.Add(new TextBlock
-            {
-                Text = Loc.F("{0}完成", title),
-                FontSize = (double)FindResource("Type.Title.Size"),
-                FontWeight = FontWeights.SemiBold,
-                Foreground = (Brush)FindResource("TextMain")
-            });
-            header.Children.Add(new TextBlock
-            {
-                Text = isQualification
-                    ? BackendResultInterpreter.PaymentQualificationSummary(results)
-                    : isPromotion
-                    ? BackendResultInterpreter.PromotionSummary(results)
-                    : directProbe
-                    ? ExportViewModel.FormatDirectProbeSummary(results, summary)
-                    : "总数：" + BackendJson.GetString(summary, "total")
-                        + "    正常：" + BackendJson.GetString(summary, "alive")
-                        + "    掉号：" + BackendJson.GetString(summary, "account_deactivated")
-                        + "    401/AT失效：" + BackendJson.GetString(summary, "at_invalid")
-                        + "    手机验证：" + BackendJson.GetString(summary, "secondary_phone_verification_required")
-                        + "    失败：" + BackendJson.GetString(summary, "failed"),
-                Margin = new Thickness(0, 6, 0, 0),
-                Foreground = (Brush)FindResource("TextSub")
-            });
-            Grid.SetRow(header, 0);
-            root.Children.Add(header);
-
-            var body = new StackPanel();
-            if (noRtRows.Count > 0)
-            {
-                AddScanResultSection(
-                    body,
-                    isPromotion ? title + "结果" : (directProbe ? "AT 测活结果" : "未接码号结果"),
-                    noRtRows);
-            }
-            if (rtRows.Count > 0)
-            {
-                AddScanResultSection(body, "已接码号结果", rtRows);
-            }
-            if (body.Children.Count == 0)
-            {
-                body.Children.Add(new TextBlock
-                {
-                    Text = Loc.F("没有可展示的{0}明细。", title),
-                    Foreground = (Brush)FindResource("TextSub")
-                });
-            }
-
-            var scroll = new ScrollViewer
-            {
-                Content = body,
-                MaxHeight = 520,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto
-            };
-            Grid.SetRow(scroll, 1);
-            root.Children.Add(scroll);
-
-            var actions = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Right,
-                Margin = new Thickness(0, 16, 0, 0)
-            };
-            var ok = new Button { Content = Loc.T("关闭"), Width = 82, Style = (Style)FindResource("PrimaryButton") };
-            ok.Click += (_, __) => dialog.Close();
-            actions.Children.Add(ok);
-            Grid.SetRow(actions, 2);
-            root.Children.Add(actions);
-
-            dialog.Content = root;
-            dialog.ShowDialog();
-        }
-
-        private void AddScanResultSection(StackPanel parent, string title, List<Dictionary<string, object>> rows)
-        {
-            parent.Children.Add(new TextBlock
-            {
-                Text = title + "（" + rows.Count + "）",
-                FontSize = (double)FindResource("Type.Subtitle.Size"),
-                FontWeight = FontWeights.SemiBold,
-                Foreground = (Brush)FindResource("TextMain"),
-                Margin = new Thickness(0, parent.Children.Count == 0 ? 0 : 12, 0, 8)
-            });
-
-            var card = new Border
-            {
-                Background = (Brush)FindResource("PanelBg"),
-                BorderBrush = (Brush)FindResource("Line"),
-                BorderThickness = new Thickness(1),
-                CornerRadius = (CornerRadius)FindResource("Corner.Lg"),
-                Padding = new Thickness(10),
-                Margin = new Thickness(0, 0, 0, 4)
-            };
-            var stack = new StackPanel();
-            foreach (Dictionary<string, object> row in rows)
-            {
-                string email = BackendJson.GetString(row, "email");
-                string status;
-                string error;
-                if (BackendJson.TryGetMap(row, "probe", out var probe))
-                {
-                    status = BackendResultInterpreter.ResultRowStatus(row);
-                    if (BackendJson.TryGetMap(row, "relogin", out var relogin)
-                        && !BackendJson.GetBool(relogin, "ok"))
-                    {
-                        error = BackendJson.GetString(relogin, "error");
-                    }
-                    else
-                    {
-                        error = BackendJson.GetString(probe, "error");
-                    }
-                }
-                else if (BackendJson.GetString(row, "error_code") == "account_not_found")
-                {
-                    status = "支付资格未知";
-                    error = "本地账号不存在";
-                }
-                else
-                {
-                    status = BackendResultInterpreter.ScanStatusLabel(BackendJson.GetString(row, "scan_status"));
-                    error = BackendResultInterpreter.ScanResultError(row);
-                }
-                string line = error.Length > 0 ? email + "  ·  " + status + "  ·  " + error : email + "  ·  " + status;
-                stack.Children.Add(new TextBlock
-                {
-                    Text = line,
-                    TextWrapping = TextWrapping.Wrap,
-                    LineHeight = 20,
-                    Margin = new Thickness(0, 0, 0, 6),
-                    Foreground = (Brush)FindResource("TextSub")
-                });
-            }
-            card.Child = stack;
-            parent.Children.Add(card);
-        }
-
-        /// Returns null when the row has no exportable account data (no session
-        /// file, or an empty/unusable payload) - the caller skips it.
-        private async Task<Dictionary<string, object>?> BuildAccountExportJsonAsync(PoolRow? row, CancellationToken ct = default)
-        {
-            if (row == null) return null;
-            var data = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
-            if (!await TryLoadAccountDataForRowAsync(row, data, ct) || data.Count == 0)
-            {
-                return null;
-            }
-
-            Dictionary<string, object> source = data;
-            if (BackendJson.TryGetMap(data, "auth_session", out var authSession) && authSession.Count > 0)
-            {
-                source = authSession;
-            }
-
-            if (AccountExportJson.Clone(source) is not Dictionary<string, object> clean || clean.Count == 0)
-            {
-                return null;
-            }
-
-            AccountExportJson.EnsureEmail(clean, row.Identifier);
-            AccountExportJson.EnsureRefreshToken(clean, data);
-
-            return clean;
-        }
-
-        private async Task<bool> TryLoadAccountDataForRowAsync(PoolRow row, Dictionary<string, object> data, CancellationToken ct = default)
-        {
-            if (row == null) return false;
-
-            string source = (row.SourcePath ?? "").Trim();
-            if (!source.EndsWith(".sqlite3", StringComparison.OrdinalIgnoreCase) || !File.Exists(source)) return false;
-            try
-            {
-                JsonElement account = await desktopRead.ReadAccountExportAsync(
-                    OnlyDigits(row.RawLine), row.Identifier, ct);
-                foreach (KeyValuePair<string, object> item in BackendJson.ElementToDictionary(account))
-                {
-                    data[item.Key] = item.Value;
-                }
-                return data.Count > 0;
-            }
-            catch (Exception ex)
-            {
-                Log("读取账号导出 backend 失败：" + SensitiveDataSanitizer.Redact(row.Identifier) + " " + SensitiveDataSanitizer.Redact(ex.Message));
-                return false;
-            }
-        }
-
-        /// Returns the export line, or null when the row cannot be exported.
-        /// Async because the last-resort path asks the backend for the mailbox
-        /// credential line over IPC.
-        private async Task<string?> TryBuildAccountExportLineAsync(PoolRow row)
-        {
-            if (row == null) return null;
-
-            string source = await FindMailboxLineForRowAsync(row).ConfigureAwait(true);
-            if (source.Length == 0 && !string.IsNullOrWhiteSpace(row.RawLine))
-            {
-                source = row.RawLine;
-            }
-
-            if (!MailboxCredentialLineParser.TryParseMailboxExportParts(
-                    source,
-                    () => !string.IsNullOrWhiteSpace(row.ClientId) ? row.ClientId.Trim() : DefaultMailboxClientId(),
-                    out string email, out string password, out string clientId, out string refreshToken))
-            {
-                return null;
-            }
-
-            if (email.Length == 0 || password.Length == 0 || clientId.Length == 0 || refreshToken.Length == 0)
-            {
-                return null;
-            }
-
-            return email + "----" + password + "----" + clientId + "----" + refreshToken;
+            ShowThemedInfoDialog(title, Loc.F("{0}已结束，但未解析到结果汇总。请查看下方日志确认详情。", title));
         }
 
         // TryParseMailboxExportParts / LooksMicrosoftClientId migrated to
@@ -643,68 +185,6 @@ namespace SmsWorkbench
         {
             string configured = settingsService.GetString("email_registration.oauth_client_id").Trim();
             return configured.Length > 0 ? configured : "9e5f94bc-e8a4-4e73-b8be-63364c29d753";
-        }
-
-        private string ShowImportTargetDialog(string title)
-        {
-            string selected = "";
-            var dialog = new Window
-            {
-                Title = title,
-                Owner = this,
-                Width = 360,
-                Height = 190,
-                ResizeMode = ResizeMode.NoResize,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Background = (System.Windows.Media.Brush)FindResource("AppBg")
-            };
-
-            var root = new Grid { Margin = new Thickness(18) };
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-            var label = new TextBlock
-            {
-                Text = Loc.T("选择导入目标"),
-                Foreground = (System.Windows.Media.Brush)FindResource("TextMain"),
-                FontWeight = FontWeights.SemiBold,
-                Margin = new Thickness(0, 0, 0, 10)
-            };
-            Grid.SetRow(label, 0);
-            root.Children.Add(label);
-
-            var combo = new ComboBox { SelectedIndex = 0, Margin = new Thickness(0, 0, 0, 18) };
-            combo.Items.Add(new ComboBoxItem { Content = "CPA", Tag = "cpa" });
-            combo.Items.Add(new ComboBoxItem { Content = "SUB2API", Tag = "sub2api" });
-            Grid.SetRow(combo, 1);
-            root.Children.Add(combo);
-
-            var actions = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Right
-            };
-            var ok = new Button { Content = Loc.T("确定"), Width = 76, Style = (Style)FindResource("PrimaryButton") };
-            ok.Click += (_, __) =>
-            {
-                selected = ((combo.SelectedItem as ComboBoxItem)?.Tag as string) ?? "cpa";
-                dialog.Close();
-            };
-            var cancel = new Button { Content = Loc.T("取消"), Width = 76, Margin = new Thickness(8, 0, 0, 0) };
-            cancel.Click += (_, __) =>
-            {
-                selected = "";
-                dialog.Close();
-            };
-            actions.Children.Add(ok);
-            actions.Children.Add(cancel);
-            Grid.SetRow(actions, 2);
-            root.Children.Add(actions);
-
-            dialog.Content = root;
-            dialog.ShowDialog();
-            return selected;
         }
     }
 }

@@ -1,5 +1,5 @@
 // Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
 #nullable enable
 
 using Serilog.Events;
@@ -42,13 +42,19 @@ namespace SmsWorkbench
                     services.AddSingleton<IProxyPoolDialogService, ProxyPoolDialogService>();
                     services.AddSingleton<ISettingsService, SettingsService>();
                     services.AddSingleton<ISettingsDialogService, SettingsDialogService>();
+                    services.AddSingleton<IRegisterDialogService, RegisterDialogService>();
+                    // The desktop's only direct-HTTP entry point (vendor catalog +
+                    // release feed): one allowlist, one proxy decision, one log line.
+                    services.AddSingleton<IDesktopEgress, DesktopEgress>();
                     // Factory, not AddSingleton<IUpdateChecker, GitHubReleaseUpdateChecker>():
                     // the concrete type takes optional feed/throttle parameters that
                     // the container would have to leave to defaults, and spelling the
                     // wiring out keeps the one default that matters (the GitHub feed)
                     // visible at the composition root.
                     services.AddSingleton<IUpdateChecker>(provider =>
-                        new GitHubReleaseUpdateChecker(provider.GetRequiredService<IApplicationPaths>()));
+                        new GitHubReleaseUpdateChecker(
+                            provider.GetRequiredService<IApplicationPaths>(),
+                            egress: provider.GetRequiredService<IDesktopEgress>()));
                     // Shell chrome that outlives the window: the tray icon and the
                     // global hotkey are singletons because both hold an OS handle.
                     services.AddSingleton<IWorkspaceBackupService, WorkspaceBackupService>();

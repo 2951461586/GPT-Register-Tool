@@ -21,18 +21,13 @@ indent_size = 4
 indent_style = space
 indent_size = 2
 
-# Baseline the pre-MVVM code-behind. New services and view models keep the full analyzer set.
-[**/MainWindow*.cs]
-dotnet_diagnostic.CA1305.severity = none
-dotnet_diagnostic.CA1310.severity = none
-dotnet_diagnostic.CA1805.severity = none
-dotnet_diagnostic.CA1806.severity = none
-dotnet_diagnostic.CA1822.severity = none
-dotnet_diagnostic.CA1845.severity = none
-dotnet_diagnostic.CA1847.severity = none
-dotnet_diagnostic.CA1861.severity = none
-dotnet_diagnostic.CA1866.severity = none
-dotnet_diagnostic.CA1869.severity = none
+# The pre-MVVM code-behind used to carry a ten-rule CA baseline here
+# (CA1305/1310/1805/1806/1822/1845/1847/1861/1866/1869). The 2026-11-01 split
+# moved the dialogs, the batch-file builders and the row mappers out of the
+# partials; re-measuring with the whole block removed reported 0 warnings on
+# `dotnet build -t:Rebuild`, so the baseline is gone rather than narrowed.
+# Do not re-add it: fix the call site or suppress the one diagnostic in place,
+# with a comment saying why the analyzer cannot model the runtime shape.
 
 [**/DialogFactory.cs]
 dotnet_diagnostic.CA1859.severity = none

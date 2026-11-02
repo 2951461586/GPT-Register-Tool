@@ -1,5 +1,5 @@
 // Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
+// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
 #nullable enable
 
 using System.Net;
@@ -74,13 +74,14 @@ namespace SmsWorkbench
         public const string DefaultRepository = "2951461586/GPT-Register-Tool";
         public const string RepositoryEnvironmentVariable = "GRT_UPDATE_REPO";
 
-        /// <summary>One client for the process: the check runs at most a few times a day.</summary>
-        private static readonly HttpClient Client = CreateClient();
-
+        // The client comes from the desktop egress: one allowlist, one proxy
+        // decision and one log line per request, shared with the SMS catalog reads.
+        private readonly HttpClient client;
         private readonly string repository;
 
-        public GitHubReleaseFeed(string? repository = null)
+        public GitHubReleaseFeed(IDesktopEgress egress, string? repository = null)
         {
+            client = egress.CreateClient();
             this.repository = ResolveRepository(repository);
         }
 
@@ -95,7 +96,7 @@ namespace SmsWorkbench
             request.Headers.UserAgent.ParseAdd($"GPT-Register-Tool/{AppVersion.Current}");
             request.Headers.Accept.ParseAdd("application/vnd.github+json");
 
-            using HttpResponseMessage response = await Client
+            using HttpResponseMessage response = await client
                 .SendAsync(request, HttpCompletionOption.ResponseContentRead, cancellationToken)
                 .ConfigureAwait(false);
 
@@ -109,9 +110,6 @@ namespace SmsWorkbench
 
             return await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         }
-
-        private static HttpClient CreateClient()
-            => new() { Timeout = TimeSpan.FromSeconds(10) };
 
         private static string ResolveRepository(string? explicitRepository)
         {
@@ -153,10 +151,21 @@ namespace SmsWorkbench
         private readonly IReleaseFeed feed;
         private readonly TimeSpan throttle;
 
-        public GitHubReleaseUpdateChecker(IApplicationPaths paths, IReleaseFeed? feed = null, TimeSpan? throttle = null)
+        /// <param name="egress">
+        /// Required only when no <paramref name="feed"/> is supplied: it builds the
+        /// real GitHub feed on the shared, allowlist-guarded client. Tests pass a fake
+        /// feed and omit it.
+        /// </param>
+        public GitHubReleaseUpdateChecker(
+            IApplicationPaths paths,
+            IReleaseFeed? feed = null,
+            TimeSpan? throttle = null,
+            IDesktopEgress? egress = null)
         {
             cachePath = Path.Combine(paths.RootDirectory, "runtime", "update_check.json");
-            this.feed = feed ?? new GitHubReleaseFeed();
+            this.feed = feed ?? new GitHubReleaseFeed(
+                egress ?? throw new ArgumentNullException(
+                    nameof(egress), "an egress is required to build the default release feed"));
             this.throttle = throttle ?? DefaultThrottle;
         }
 
