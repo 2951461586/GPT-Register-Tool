@@ -173,15 +173,18 @@ Wpf.Ui.xaml -> Wpf.Ui Theme/Light.xaml -> Themes/Tokens.xaml -> Themes/Glyphs.xa
 | 版本号来源 | `Directory.Build.props` 的 `Version`（默认 `0.0.0`），发布时由 `build_dotnet.ps1 -Version` 盖戳；运行时读 `AssemblyInformationalVersion` → `Services/AppVersion.cs` |
 | 昵称 | 未盖戳的构建显示 `dev` 而不是 `v0.0.0`：没人盖的号不是发布 |
 | 比较 | `Services/VersionComparer.cs`，按段数值比较（日历版本 `2026.10.28` 用 `System.Version` 会抛或错序） |
-| 数据源 | `Services/UpdateChecker.cs`，GitHub Releases API；仓库默认 `2951461586/GPT-Register-Tool`，可用 `GRT_UPDATE_REPO` 覆盖（fork 或测试夹具） |
-| 节流 | 6 小时，缓存写在 `runtime/update_check.json`；未认证 API 每小时 60 次，重启几次就能打光 |
-| 失败 | 一律返回结果对象，不抛异常（离线 / 限流 / JSON 畸形）；手动检查才弹提示，自动检查静默 |
-| 手动检查 | `MainWindow.Update.cs` 的 `CheckUpdatesCommand`（点版本号）；启动时 `Loaded` 跑一次自动检查 |
+| 数据源 | `Services/UpdateChecker.cs`，GitHub Releases API；仓库默认 `2951461586/GPT-Register-Tool`，可用 `GRT_UPDATE_REPO` 覆盖（fork 或测试夹具）；`GRT_UPDATE_TOKEN` 可选，把未认证的 60 次/时提到 5000 次/时 |
+| 节流 | 6 小时，缓存写在 `runtime/update_check.json`（含 `etag`）；请求带 `If-None-Match`，`304` 不计配额，只把 `checked_at` 前移 |
+| 限流窗口 | `403` 且 `X-RateLimit-Remaining: 0`（或 `429`）→ 读 `X-RateLimit-Reset` / `Retry-After` 写 `retry_after_unix`；窗口内启动和手动点击都**不再发请求**，直接返回 `FromCache` + `rate_limited` + 剩余分钟。单次上限 65 分钟，防时钟偏差把检查钉死 |
+| `403` 的两种含义 | `X-RateLimit-Remaining` 仍 > 0（或缺失）记 `forbidden`——secondary limit 或出口地址被封，**等待治不了它**，所以文案是「请求被 GitHub 拒绝」而不是「稍后再试」 |
+| 失败 | 一律返回结果对象，不抛异常（离线 / 限流 / JSON 畸形）；手动检查才弹提示，自动检查静默。纯网络失败**不写窗口**（重试零成本），只有带窗口的拒绝才落盘 |
+| 手动检查 | `MainWindow.Update.cs` 的 `CheckUpdatesCommand`（点版本号）；启动时 `Loaded` 跑一次自动检查。`force` 只跳过 6 小时节流，跳不过限流窗口 |
 | 打开下载页 | `OpenReleaseCommand` → 既有的 `OpenUrl`（只放行 http/https） |
 
-三条不变量：**自动检查不打扰**（无更新或失败都不弹 snackbar）、**缓存答案要标注是缓存**
+四条不变量：**自动检查不打扰**（无更新或失败都不弹 snackbar）、**缓存答案要标注是缓存**
 （`UpdateCheckResult.FromCache`，UI 才能区分"昨天是最新"和"现在是最新"）、
-**绝不自动下载或替换文件**——桌面端是"exe + Python 核心"的形态，更新只能是跳转下载页。
+**绝不自动下载或替换文件**——桌面端是"exe + Python 核心"的形态，更新只能是跳转下载页，
+**已声明的限流窗口优先于任何点击**（host 已经说了什么时候才答，再问只会花掉下一个窗口的第一次请求）。
 
 图标来源：`Themes/Glyphs.xaml` 的 34 个功能图标取自
 [tabler-icons](https://github.com/tabler/tabler-icons) v3.50.0（MIT），逐条照抄上游

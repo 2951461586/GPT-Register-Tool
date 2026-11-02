@@ -55,6 +55,12 @@ namespace SmsWorkbench.Localization
             ["当前构建 {0} 高于上游最近发布 {1}（尚未发布）"] = "This build ({0}) is ahead of the latest upstream release ({1}); it has not been published yet",
             ["检查更新失败：{0}"] = "Update check failed: {0}",
             ["请求过于频繁，请稍后再试"] = "GitHub rate limit reached, try again later",
+            // The quota case names the wait; the blocked-egress case must not
+            // borrow that wording, because waiting does not fix it.
+            ["请求过于频繁，约 {0} 分钟后可重试"] = "GitHub rate limit reached; retry in about {0} min",
+            ["请求被 GitHub 拒绝，可能是当前网络出口被限制"] = "GitHub refused the request; the network egress may be blocked",
+            ["当前版本 {0} · 更新检查受限，约 {1} 分钟后可重试"] = "Current {0} · update check limited, retry in about {1} min",
+            ["（检查受限，约 {0} 分钟后可重试）"] = " (check limited; retry in about {0} min)",
             ["网络超时"] = "network timeout",
             ["网络不可用"] = "network unavailable",
             ["关闭"] = "Close",

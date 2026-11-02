@@ -31,14 +31,22 @@ namespace SmsWorkbench
         private string updateText = "";
         private string updateTooltip = "";
         private string updateReleaseUrl = "";
+        private string versionTooltipOverride = "";
         private bool updateAvailable;
         private bool updateCheckRunning;
 
         /// <summary>Bare version for the header, e.g. <c>v2026.10.28</c> (or <c>dev</c>).</summary>
         public string VersionText => AppVersion.Display;
 
-        /// <summary>Tooltip on the version label; the label doubles as the manual check button.</summary>
-        public string VersionTooltip => Loc.F("当前版本 {0} · 点击检查更新", AppVersion.Display);
+        /// <summary>
+        /// Tooltip on the version label; the label doubles as the manual check
+        /// button. While a rate-limit window is open this carries the retry
+        /// instant, because the label is the one surface that is always visible —
+        /// the update chip hides itself while no newer release is known.
+        /// </summary>
+        public string VersionTooltip => versionTooltipOverride.Length > 0
+            ? versionTooltipOverride
+            : Loc.F("当前版本 {0} · 点击检查更新", AppVersion.Display);
 
         /// <summary>Chip text; empty while no newer release is known.</summary>
         public string UpdateText
@@ -134,20 +142,38 @@ namespace SmsWorkbench
         {
             if (!result.Succeeded)
             {
+                int retryMinutes = result.RetryAfterMinutes;
                 if (announce)
                 {
                     NotifyWarning(Loc.F("检查更新失败：{0}", Loc.T(result.Error switch
                     {
-                        "rate_limited" => "请求过于频繁，请稍后再试",
+                        // A quota can be waited out, and naming the wait turns a
+                        // dead end into an instruction.
+                        "rate_limited" => retryMinutes > 0
+                            ? Loc.F("请求过于频繁，约 {0} 分钟后可重试", retryMinutes)
+                            : "请求过于频繁，请稍后再试",
+                        // 403 with quota left is not a rate limit; advice to wait
+                        // would be wrong and the cure is the network egress.
+                        "forbidden" => "请求被 GitHub 拒绝，可能是当前网络出口被限制",
                         "timeout" => "网络超时",
                         _ => "网络不可用",
                     })));
                 }
 
-                Log("更新检查失败：" + result.Error);
+                SetVersionTooltip(retryMinutes > 0
+                    ? Loc.F("当前版本 {0} · 更新检查受限，约 {1} 分钟后可重试", AppVersion.Display, retryMinutes)
+                    : "");
+                if (retryMinutes > 0 && UpdateAvailable)
+                    UpdateTooltip += Loc.F("（检查受限，约 {0} 分钟后可重试）", retryMinutes);
+
+                Log("更新检查失败：" + result.Error
+                    + (retryMinutes > 0 ? $"（约 {retryMinutes} 分钟后可重试）" : ""));
                 return;
             }
 
+            // A verdict replaces the cooldown hint, including one recorded by an
+            // earlier run that this check has now outgrown.
+            SetVersionTooltip("");
             updateReleaseUrl = result.ReleaseUrl;
             UpdateAvailable = result.UpdateAvailable;
             // Three relations, not two. "No update" covers both "you are on the
@@ -194,6 +220,13 @@ namespace SmsWorkbench
             {
                 NotifyInfo(Loc.F("当前构建 {0} 高于上游最近发布 {1}（尚未发布）", AppVersion.Display, latestTag));
             }
+        }
+
+        private void SetVersionTooltip(string value)
+        {
+            if (versionTooltipOverride == value) return;
+            versionTooltipOverride = value;
+            OnPropertyChanged(nameof(VersionTooltip));
         }
 
         private void OpenReleasePage()
