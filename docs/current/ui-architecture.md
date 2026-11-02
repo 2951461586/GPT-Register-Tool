@@ -94,7 +94,7 @@ Wpf.Ui.xaml -> Wpf.Ui Theme/Light.xaml -> Themes/Tokens.xaml -> Themes/Glyphs.xa
 | `Services/AccountRowFactory.cs` | 178 | 后端账号 JSON → `PoolRow`（含 identity 块渲染）；不引用任何 WPF 类型 |
 | `Services/BackendRunService.cs` | 129 | 后端运行的**非窗口**部分：捕获流、进度信封折叠、任务行结果 |
 | `Services/AccountRefreshPlan.cs` | 122 | accounts 载荷分类（全量/增量/形状漂移）与增量游标预算 |
-| `Services/DesktopEgress.cs` | 118 | 桌面进程唯一的直连 HTTP 入口：host 白名单（P7-B 后只剩 GitHub Release）、mailbox lane 代理、每请求一行日志 |
+| `Services/DesktopEgress.cs` | 160 | 桌面进程唯一的直连 HTTP 入口：host 白名单（P7-B 后只剩 GitHub Release）、mailbox lane 代理（读 `proxy.lanes.mailbox.pool`，经 `ProxyInputNormalizer` 归一；坏值只丢代理不丢启动）、每请求一行日志 |
 | `SmsWorkbench.Contracts/DesktopEgressAllowlist.cs` | 32 | 允许直连的 host 集合（**仅 GitHub Release**；厂商目录已走 Python 通道），仅 HTTPS |
 | `Services/AccountDetailAssembler.cs` | 185 | 详情面板的数据：AT 解析、JSON 路径、脱敏明细 |
 | `Services/InboxReader.cs` | 43 | 收件箱失败文案与 OTP 提取 |

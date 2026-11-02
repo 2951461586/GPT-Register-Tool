@@ -37,7 +37,7 @@ namespace SmsWorkbench
             // expects the vendor API to leave the same way). No new config key: the
             // lane already exists, and a second knob would only invite the two to
             // disagree.
-            string proxy = FirstMailboxLaneProxy(settings);
+            string proxy = ResolveMailboxLaneProxy(settings, logger);
             viaProxy = proxy.Length > 0;
 
             var transport = new SocketsHttpHandler
@@ -60,10 +60,63 @@ namespace SmsWorkbench
 
         public void Dispose() => client.Dispose();
 
-        private static string FirstMailboxLaneProxy(ISettingsService settings)
+        /// <summary>
+        /// The mailbox lane's first proxy as an endpoint <see cref="WebProxy"/> can
+        /// parse, or "" when the lane declares nothing usable.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The canonical lane shape is an <b>object</b> — `proxy.lanes.mailbox.pool`
+        /// (written by <see cref="SettingsService"/>'s own save path). Reading the
+        /// object itself is what shipped on 2026-11-02: `GetStringList` stringifies
+        /// a <c>JsonObject</c> to its JSON text, `new WebProxy("{...}")` threw
+        /// <see cref="UriFormatException"/> in the constructor, and the window never
+        /// opened. Hence the `.pool` first, the legacy plain-string/array form
+        /// second, then the pre-lane keys.
+        /// </para>
+        /// <para>
+        /// Every candidate goes through <see cref="ProxyInputNormalizer"/> (the same
+        /// authority the settings page uses), so `host:port` and
+        /// `host:port:user:password` are accepted exactly as an operator may type
+        /// them. A malformed entry degrades to "no proxy" with one warning: a bad
+        /// config value must never be able to stop the desktop from starting.
+        /// </para>
+        /// </remarks>
+        internal static string ResolveMailboxLaneProxy(ISettingsService settings, Serilog.ILogger logger)
         {
-            IReadOnlyList<string> lane = settings.GetStringList("proxy.lanes.mailbox");
-            return lane.Count > 0 ? (lane[0] ?? "").Trim() : "";
+            foreach (string path in new[]
+                     {
+                         "proxy.lanes.mailbox.pool",
+                         "proxy.lanes.mailbox",
+                         "mailbox_proxy_pool",
+                         "mailbox_proxy",
+                     })
+            {
+                foreach (string? candidate in settings.GetStringList(path))
+                {
+                    string raw = (candidate ?? "").Trim();
+                    if (raw.Length == 0)
+                        continue;
+
+                    try
+                    {
+                        string normalized = ProxyInputNormalizer.Normalize(raw);
+                        if (normalized.Length > 0)
+                            return normalized;
+                    }
+                    catch (FormatException ex)
+                    {
+                        // Host only: the failure reason carries no credentials, and
+                        // the path says which key the operator has to look at.
+                        logger.Warning(
+                            "Mailbox lane proxy at {Path} is not a usable proxy ({Reason}); the request goes out directly",
+                            path,
+                            ex.Message);
+                    }
+                }
+            }
+
+            return "";
         }
 
         /// <summary>Refuses a non-allow-listed host and records one line per request.</summary>
