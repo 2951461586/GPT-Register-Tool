@@ -41,6 +41,7 @@
       "sms_tool/providers/smailr_client.py",
       "sms_tool/providers/outlook_imap_client.py",
       "sms_tool/providers/ports.py",
+      "sms_tool/providers/sms_vendor_api.py",
       "sms_tool/mail_otp.py",
       "sms_tool/smsbower.py",
       "sms_tool/nexsms.py",

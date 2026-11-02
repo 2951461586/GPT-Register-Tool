@@ -214,7 +214,7 @@ above.
 | Delayed cross-directory edges | 307 |
 | Delayed imports in the package | 473 (baseline 473) |
 | Functions at or above 150 lines | 64 (frozen, `scripts/function_length_ratchet.py`) |
-| Claimed tracked `sms_tool` modules | 324 of 324 (0 unclaimed, 41 directory-map groups) |
+| Claimed tracked `sms_tool` modules | 327 of 327 (0 unclaimed, 41 directory-map groups) |
 <!-- ratchet-numbers:end architecture -->
 
 `tests/config/test_pilens_scope_config.py` pins the scope and the formatting
