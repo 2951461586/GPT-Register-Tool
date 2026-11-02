@@ -42,6 +42,11 @@ SOURCE_CARD_FRAGMENT = re.compile(r"(?i)(?:card(?:_?number|_?last4)?|pan)[^\n]{0
 #     attribute chain; both are code, not data.
 #   * empty values -- ``""`` / ``''`` are placeholders in every artifact writer
 #     here.
+#   * container starts -- ``"obtain_refresh_token": {`` is a **key** opening a
+#     JSON object (``scripts/experiment_ledger.json`` declares each toggle that
+#     way). A credential value never starts with ``{`` or ``[``, so accepting
+#     them here would exempt nothing real. Measured 2026-11-02: this shape
+#     blocked the whole v2026.11.02 release payload build.
 #
 # The optional closing quote after the key (and the optional opening quote before
 # the value) are what make JSON artifacts match at all.  Without them
@@ -58,7 +63,8 @@ ARTIFACT_SECRET = re.compile(
     r"(?i)(?P<artifact_key>access[_-]?token|refresh[_-]?token|totp[_-]?secret|ba[_-]?token|"
     r"card[_-]?(?:number|cvv))"
     r'"?\s*[=:]\s*"?'
-    r"(?!\[REDACTED\]|\*{3,}|null|None|missing_|true|false|''|\")"
+    r"(?!\[REDACTED\]|\*{3,}|null|None|missing_|true|false|''|\""
+    r"|\{|\[)"
     r"(?!(?P=artifact_key)(?![A-Za-z0-9_]))"
     r"(?!(?:[A-Za-z_][A-Za-z0-9_]*\.)+[A-Za-z0-9_]*(?P=artifact_key)(?![A-Za-z0-9_]))"
     r"[^\s,}]+"

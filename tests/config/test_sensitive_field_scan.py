@@ -141,6 +141,11 @@ def test_real_credential_values_are_still_detected(line: str, expected_key: str)
         '"ba_token": false',
         '"refresh_token": true',
         '"refresh_token": null',
+        # JSON 容器的开始：``"obtain_refresh_token": {`` 是**键**，不是值。
+        # 实测 2026-11-02：``scripts/experiment_ledger.json`` 的这一条让发布载荷闸门
+        # 在打包时把 v2026.11.02 的 release 整个拦下来。
+        '"obtain_refresh_token": {',
+        '"refresh_token": [',
         # 既有占位符形态，防止本次改动把它们弄丢。
         "access_token=[REDACTED]",
         'access_token="[REDACTED]"',
