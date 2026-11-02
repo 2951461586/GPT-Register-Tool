@@ -32,7 +32,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -103,12 +103,77 @@ PAT_CONST_HEX = re.compile(
 )
 # "api_key": "value" -- key name must be declared sensitive in the shared policy.
 PAT_JSON_TEMPLATE = r"""["'](?P<name>{names})["']\s*:\s*["'](?P<val>[A-Za-z0-9_\-\.]{{16,}})["']"""
-# http://user:pass@host
-PAT_PROXY = re.compile(r"(?i)\b(?:https?|socks5h?)://[^\s/@]+:[^\s/@]+@")
+# http://user:pass@host — also the shape that leaked. Before 2026-11-02 this rule
+# ran only outside docs/tests and only for the URL form: both real provider
+# credentials found that day were in the skipped trees, and one used the
+# four-segment form below.
+PAT_PROXY_URL = re.compile(
+    r"(?i)\b(?:https?|socks(?:4|5|5h)?)://(?P<user>[^\s/:@\"'<>]+):(?P<pw>[^\s/@\"'<>]+)@(?P<host>[^\s/\"'<>]+)"
+)
+# ``gate:1000:user:pass`` — the provider's four-segment form. A bare
+# ``host:port:user`` stays valid config and is not matched (no password).
+PAT_PROXY_FOUR = re.compile(
+    r"(?<![\w.@:/-])(?P<host>[A-Za-z0-9][A-Za-z0-9.-]{3,}):(?P<port>\d{2,5}):"
+    r"(?P<user>[A-Za-z0-9_.%^-]{3,}):(?P<pw>[A-Za-z0-9_.%^#!-]{3,})(?![\w.-])"
+)
 PAT_EXAMPLE_URL = re.compile(r"""(?i)\b(?:https?|socks[45]h?)://[^\s"'<>]+""")
-# Documented placeholders, not real credentials.  The password part is allowed
-# to carry a suffix -- config.example.json uses socks5h://user:pass-JP@gate:1000.
-PAT_PROXY_PLACEHOLDER = re.compile(r"(?i)://(?:user|username|your[_-]?user|login|account|name|u):[^@]*@")
+# A fixture is a credential that *says* it is one. This repo's own conventions:
+# ``SYNTHACCT10-geo-VN-sid-...``, ``user1_custom_zone_VN_sid_..._time_5``, ``user:pass``.
+SYNTHETIC_CRED = re.compile(
+    r"(?i)(synth|yours?[_-]?|example|placeholder|redacted|sample|dummy|fake|changeme|"
+    r"notareal|custom[_-]zone|(?:^|[_.-])(?:sid|time)(?:[_.-]|$))"
+)
+SYNTHETIC_WORDS = frozenset(
+    {
+        "user",
+        "usr",
+        "username",
+        "login",
+        "account",
+        "acct",
+        "acc",
+        "admin",
+        "alice",
+        "bob",
+        "foo",
+        "bar",
+        "pass",
+        "passwd",
+        "password",
+        "pwd",
+        "pw",
+        "secret",
+        "token",
+        "cred",
+        "auth",
+        "key",
+        "apikey",
+        "u",
+        "p",
+        "us",
+        "test",
+        "demo",
+        "name",
+        "proxy",
+        "upstream",
+        "gate",
+        "host",
+        "exit",
+        "lane",
+        "first",
+        "second",
+        "third",
+        "primary",
+        "secondary",
+        "plain",
+        "checkout",
+        "promotion",
+        "provider-a",
+        "provider-b",
+        "static-a",
+        "static-b",
+    }
+)
 
 PLACEHOLDER = re.compile(
     r"^(your|xxx|placeholder|example|sample|test_|dummy|fake|changeme|redacted|"
@@ -188,6 +253,89 @@ def scan_alias_mailboxes(rel: str, text: str) -> list[tuple[str, int, str, int, 
 
 # Directories where a credential-looking string is an example by definition.
 DOC_OR_TEST = re.compile(r"(?i)(^|/)(docs?|tests?)/|(\.(md|html|rst))$")
+
+
+def _is_template_credential(value: str) -> bool:
+    """True for a URL built at runtime, e.g. ``f"http://{u}:{p}@{host}"``."""
+    return any(token in value for token in ("{", "}", "%(", "$(", "<", ">"))
+
+
+def _is_synthetic_credential(*values: str) -> bool:
+    for value in values:
+        lowered = unquote(value).lower()
+        # An already-masked value (`***:***@host`) is the opposite of a leak: the
+        # log/UI redaction helper produced it. Exempting it also keeps this gate
+        # from demanding that tests stop asserting on redacted output.
+        if re.fullmatch(r"\*+|x{3,}|\u2026+|<[^>]*>|\{[^}]*\}", lowered):
+            return True
+        if SYNTHETIC_CRED.search(lowered):
+            return True
+        if lowered in SYNTHETIC_WORDS:
+            return True
+        # ``u-cru`` / ``u-z``: role-suffixed placeholders used by the pool tests.
+        if re.fullmatch(r"[a-z]{1,2}(?:-[a-z]{1,4})?", lowered):
+            return True
+    return False
+
+
+def _is_fake_host(host: str) -> bool:
+    """True when the host cannot be a live provider exit."""
+    name = host.split("@")[-1].split("://")[-1]
+    name = name.split("/")[0].strip("[]").lower()
+    if not name:
+        return True
+    labels = name.split(":")[0].split(".")
+    if any(label in {"example", "test", "invalid", "localhost", "local"} for label in labels):
+        return True
+    if len(labels) == 1:
+        # Bare host: ``host``, ``gate``, ``h1``, ``exit2``.
+        return True
+    try:
+        address = ipaddress.ip_address(labels[0] if len(labels) == 1 else name.split(":")[0])
+    except ValueError:
+        return False
+    # Documentation / private / loopback ranges, plus the reserved test IPs this
+    # repo uses in fixtures (they are globally routable numbers, so ``is_private``
+    # cannot see them).
+    return (
+        address.is_private
+        or address.is_loopback
+        or address.is_reserved
+        or str(address) in {"1.2.3.4", "5.6.7.8", "9.9.9.9", "2.2.2.2", "10.0.0.2"}
+    )
+
+
+def scan_proxy_endpoints(rel: str, text: str) -> list[tuple[str, int, str, int, str]]:
+    """Flag provider-shaped proxy credentials anywhere, docs and tests included.
+
+    Why this is a separate gate: the value patterns in :func:`scan_file` return
+    early for ``docs/`` and ``tests/`` — fake credentials are that tree's normal
+    content. That exemption is exactly how a real rola pool entry lived in two
+    test files for 2.5 months in a public repository, and how a kookeey entry
+    survived in a parsing test since 2026-08-06. Fixtures stay welcome; what is
+    forbidden is a *provider-shaped* pair with no synthetic marker.
+
+    Neither the username nor the password is echoed — only the host.
+    """
+    findings: list[tuple[str, int, str, int, str]] = []
+    for number, line in enumerate(text.splitlines(), 1):
+        for match in PAT_PROXY_URL.finditer(line):
+            user, password, host = match.group("user"), match.group("pw"), match.group("host")
+            if _is_template_credential(user) or _is_template_credential(password):
+                continue
+            if _is_synthetic_credential(user, password) or _is_fake_host(host):
+                continue
+            findings.append((rel, number, "proxy-url-credentials", len(user) + len(password), host))
+        for match in PAT_PROXY_FOUR.finditer(line):
+            user, password, host = match.group("user"), match.group("pw"), match.group("host")
+            # Require a dotted host: ``gate.kookeey.info:1000:u:p`` yes, a bare
+            # ``switch:1080:a:b`` is not a proxy credential we can judge.
+            if "." not in host or _is_template_credential(user) or _is_template_credential(password):
+                continue
+            if _is_synthetic_credential(user, password) or _is_fake_host(host):
+                continue
+            findings.append((rel, number, "proxy-endpoint-credentials", len(user) + len(password), host))
+    return findings
 
 
 def load_sensitive_keys() -> set[str]:
@@ -309,9 +457,11 @@ def scan_file(path: Path, sensitive_keys: set[str], *, text: str | None = None) 
         # 仓库外路径无法判定 docs/tests 归属，按源码处理。
         rel = path.as_posix()
     # Test fixtures and docs are full of deliberately fake credentials; they
-    # are expected content, not a leak.  Only the filename gate applies there.
+    # are expected content, not a leak.  Only the filename gate applies there —
+    # plus the provider-endpoint gate, which is the one that was missing.
+    endpoint_findings = scan_proxy_endpoints(rel, text)
     if DOC_OR_TEST.search(rel):
-        return []
+        return endpoint_findings
 
     patterns: list[re.Pattern[str]] = [PAT_CONST_HEX]
     if sensitive_keys:
@@ -335,14 +485,6 @@ def scan_file(path: Path, sensitive_keys: set[str], *, text: str | None = None) 
         # below would never see it.
         for match in VENDOR_PREFIX.finditer(line):
             findings.append((rel, number, "vendor-token-prefix", len(match.group(0)), match.group(0)[:8]))
-        for match in PAT_PROXY.finditer(line):
-            url = match.group(0)
-            # f-strings that *build* a proxy URL (f"http://{u}:{p}@{host}") are
-            # code, not a hardcoded credential.
-            if "{" in url or "}" in url:
-                continue
-            if not PAT_PROXY_PLACEHOLDER.search(url):
-                findings.append((rel, number, "proxy-url-with-credentials", 0, ""))
         for pattern in patterns:
             for match in pattern.finditer(line):
                 name = match.group("name")
@@ -351,7 +493,7 @@ def scan_file(path: Path, sensitive_keys: set[str], *, text: str | None = None) 
                 value = match.group("val")
                 if looks_like_secret(value):
                     findings.append((rel, number, name, len(value), value[:3]))
-    return findings
+    return endpoint_findings + findings
 
 
 def staged_files() -> list[Path]:
@@ -428,6 +570,13 @@ def main(argv: list[str]) -> int:
             if alias_text:
                 findings += scan_alias_mailboxes(rel, alias_text)
         for rel_path, lineno, var, length, prefix in findings:
+            if var.startswith("proxy-"):
+                # The host is public information; the credential never is.
+                failures.append(
+                    f"{rel_path}:{lineno}: provider-credential-shaped proxy endpoint "
+                    f"({var}) -> host {prefix} (credentials omitted)"
+                )
+                continue
             shown = f"{prefix}... (len={length})" if prefix else f"(value omitted, len={length})"
             failures.append(f"{rel_path}:{lineno}: hardcoded secret in '{var}' -> {shown}")
 

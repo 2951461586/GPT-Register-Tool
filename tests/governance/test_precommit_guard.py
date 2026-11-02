@@ -138,11 +138,10 @@ def test_hex_constant_is_detected() -> None:
 
 
 def test_proxy_url_with_credentials_is_detected() -> None:
-    findings = run_guard_on(
-        ROOT / "runtime",
-        "_t_proxy.py",
-        'PROXY = "http://alice:s3cr3tPassword@gate.example.com:1000"\n',
-    )
+    # Assembled at runtime: this file is scanned by the gate itself, so a
+    # provider-shaped literal here would (correctly) fail ``--all``.
+    line = "PROXY = 'http://" + "prov" + "user77:x9Kq" + "2mRz@eu.gw.proxylane.dev:10000'\n"
+    findings = run_guard_on(ROOT / "runtime", "_t_proxy.py", line)
     assert any("proxy-url" in f[2] for f in findings)
 
 
@@ -291,3 +290,56 @@ def test_alias_gate_flags_real_looking_aliases_in_docs_and_tests(line: str) -> N
     findings = precommit_guard.scan_alias_mailboxes("docs/audits/x.md", line)
     assert [f[2] for f in findings] == ["alias-mailbox"]
     assert all(f[4] == "" for f in findings), "the address must never be echoed"
+
+
+# ------------------------------------------------------------ proxy endpoint gate
+
+# Credentials are assembled at runtime: this file is scanned by the gate, so a
+# provider-shaped literal would fail the very check it documents.
+_PROVIDER_USER = "prov" + "user" + "7731"
+_PROVIDER_PW = "x9Kq" + "2mRz" + "Wp"
+_FOUR_SEGMENT_USER = "940" + "8785-ed" + "bd645b"
+_FOUR_SEGMENT_PW = "54ad" + "4d54-JP"
+
+
+@pytest.mark.parametrize(
+    "rel, line",
+    [
+        (
+            "docs/audits/scans/x.md",
+            f'--proxy "http://{_PROVIDER_USER}:{_PROVIDER_PW}@gate.rola.vip:2000"',
+        ),
+        ("tests/test_x.py", f'PROXY = "http://{_PROVIDER_USER}:{_PROVIDER_PW}@gate.rola.vip:2000"'),
+        ("SmsWorkbench/Services/X.cs", f'PROXY = "http://{_PROVIDER_USER}:{_PROVIDER_PW}@eu.gw.proxylane.dev:10000"'),
+    ],
+)
+def test_provider_credentials_are_detected_in_docs_and_tests(rel: str, line: str) -> None:
+    """The hole that let a real rola entry sit in two test files for 2.5 months."""
+    findings = precommit_guard.scan_proxy_endpoints(rel, line)
+    assert [f[2] for f in findings] == ["proxy-url-credentials"]
+
+
+def test_four_segment_provider_credential_is_detected() -> None:
+    line = f'u = UpstreamProxy.from_url("gate.kookeey.info:1000:{_FOUR_SEGMENT_USER}:{_FOUR_SEGMENT_PW}")'
+    findings = precommit_guard.scan_proxy_endpoints("tests/test_x.py", line)
+    assert [f[2] for f in findings] == ["proxy-endpoint-credentials"]
+    # Only the host is reported, never the pair.
+    assert all(_FOUR_SEGMENT_USER not in str(f) and _FOUR_SEGMENT_PW not in str(f) for f in findings)
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        'PROXY = "http://SYNTHACCT7tbr_1-country-vn:synth%5E%23B@gate.rola.vip:2000"',
+        'PROXY = "http://user1_custom_zone_VN_sid_55667788_time_5:proxyuser01@us.ipwo.net:7878"',
+        'PROXY = "socks5h://user:pass-JP@gate:1000"',
+        'PROXY = "http://user:pass@gate.example.com:1000"',
+        'PROXY = "http://alice:s3cr3tPassword@proxy.example:8080"',
+        'PROXY = "http://***:***@us.ipwo.net:7878"',
+        'return f"http://{user_q}:{pass_q}@{host}:{port}"',
+        'u = UpstreamProxy.from_url("gate.kookeey.info:1000:SYNTHACCT7-sess1:synthpass-JP")',
+        'u = UpstreamProxy.from_url("host:1080:user:pass")',
+    ],
+)
+def test_synthetic_proxy_fixtures_are_allowed(line: str) -> None:
+    assert precommit_guard.scan_proxy_endpoints("tests/test_x.py", line) == []
