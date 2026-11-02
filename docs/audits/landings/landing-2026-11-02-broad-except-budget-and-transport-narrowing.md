@@ -65,6 +65,6 @@
 
 ## 遗留与后续
 
-1. **`# broad-except: compat` 这个约定本身仍无文档。** 51 处用法、零 `docs/` 说明、零工具读取。下一个人无法判断它是约定还是噪音。建议补进 `docs/rules/`（本轮未做，因为规则号需要与现有 25 条编号体例对齐后再插入）。
+1. **`# broad-except: compat` 这个约定现在有文档了：** [`docs/rules/rule-26-broad-except-marker.md`](../../rules/rule-26-broad-except-marker.md)（本轮补上，规则号接在现有 25 条之后，编号连续性与索引由 `tests/governance/test_architecture_rules.py` 钉住）。规则里写清了三件此前只能靠口传的事：先收窄（`kernel/transport.TRANSPORT_ERRORS`）再考虑保留；标记是给人看的、**不是许可**，许可全部在 `broad_except_baseline.json`；以及 `--write` 可以重新测量但不可以重新决策（`lanes` 与 `budget_history` 必须存活、whitelist 数字必须重测）。
 2. **`broad_except` 的全局 `max_silent` 只剩 0 余量**（158/158）。下一次任何静默 handler 都会失败 —— 这是有意的压力，但也意味着下一个合法的清理点必须连同一次有记录的放宽一起提交，请照本文件的样子留痕。
 3. 本次复核未覆盖 `services/`：`broad_except_ratchet` 的 `TREES` 是 `("sms_tool", "services")`，但 `services/protocol-payment/` 的 5 个 handler 全部落在既有 `files` 冻结值内，本轮无变化。

@@ -361,11 +361,23 @@ Wpf.Ui.xaml -> Wpf.Ui Theme/Light.xaml -> Themes/Tokens.xaml -> Themes/Glyphs.xa
 3. **备份是白名单，不是目录复制。** `WorkspaceBackupServiceTests` 断言日志/缓存不会进包、恢复不会写出到根目录之外。
 
 `scripts/broad_except_ratchet.py` + `scripts/broad_except_baseline.json` 是新增的 Python 侧闸门（
-`tests/governance/test_broad_except_ratchet.py` 保护它），按三层判定：
+`tests/governance/test_broad_except_ratchet.py` 保护它），按三层判定（约束本身见
+[Rule 26](../rules/rule-26-broad-except-marker.md)）：
 
-* `whitelist`——**设计上就需要**宽泛处理的文件，每条必须写 `reason`（目前 4 条：代理桥接清理、浏览器进程回收、
-  desktop-serve 请求隔离、日志初始化）；理由为空即失败，文件已没有宽泛处理器仍留在名单里也失败（那是过期许可）。
-* `policy`——全局预算（`max_broad`/`max_silent`）。只冻结单文件，等于允许"A 文件删一个、B 文件加一个"；预算堵住这条路。
+* `whitelist`——**设计上就需要**宽泛处理的文件，每条必须写 `reason`，且声明的 `broad`/`silent` 数字
+  必须等于实测值（目前 9 条：代理桥接清理、浏览器进程回收、desktop-serve 请求隔离、日志初始化、
+  注册阶段的 finalize/handlers/preflight/probe，以及厂商适配器的清理点）。理由为空即失败，
+  文件已没有宽泛处理器仍留在名单里也失败（那是过期许可），理由是旧的但计数变了同样失败——
+  条目里的数字是复核者当时看到的证据，对不上说明文件在批准之后又动过。`--write` **不会**刷新这两个
+  数字：只能重新测量、重新复核。
+* `policy`——全局预算（`max_broad`/`max_silent`）与按 lane 的预算（协议注册 lane 的 `max_silent` 钉在 0）。
+  只冻结单文件，等于允许“A 文件删一个、B 文件加一个”；预算堵住这条路。
+  每次**刻意提高**上限都要在 `policy.budget_history` 留一条，并引用 `docs/audits/landings/` 下的复核记录
+  （记录文件不存在则测试失败）。`--write` 会重新测量预算，但保故 `lanes` 与 `budget_history`——脚本可以重新测量，
+  不可以重新决策。
 * `files`——其余文件的冻结额度，是债务不是背书，只应下降。
+
+宽泛处理器若确实要保留，写 `# broad-except: compat`（必要时补一句为什么此处不能失败）。这个标记是**给人看的**，
+ratchet 用 AST 计数、**不读任何注释**；所以注释买不到额度，删注释也降不下计数。
 
 和 `dotnet_warning_ratchet.py` / `pyright_ratchet.py` 同一套思路：先冻结、再加预算、最后逐条白名单化。

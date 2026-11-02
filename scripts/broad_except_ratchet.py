@@ -10,6 +10,18 @@ silently ignored", and the count only ever grew. This gate freezes the current
 per-file numbers so the next broad handler is a deliberate act rather than a
 default.
 
+The reviewable convention for the handlers that have to stay broad is
+[Rule 26](../docs/rules/rule-26-broad-except-marker.md): narrow to
+``kernel/transport.TRANSPORT_ERRORS`` or a concrete exception tuple when the
+handler only guards a transport call, and otherwise mark it
+``# broad-except: compat`` with a reason where one is not obvious.
+
+**The marker is documentation; this script never reads it.** ``grep -r
+broad-except scripts/`` matches only a ``print`` format string. Permission lives
+in ``broad_except_baseline.json`` (``policy`` ceilings, ``policy.lanes``,
+``whitelist``, ``policy.budget_history``) and nowhere else, so a comment can
+never buy an allowance and deleting one can never lower a count.
+
 What counts
 -----------
 * **broad**: ``except Exception:`` / ``except BaseException:``, or a tuple that

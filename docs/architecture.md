@@ -295,6 +295,7 @@ no file behind it.
 | 23 | Lazily imported CLI dependencies must self-heal; a one-shot latch must not outlive a patched symbol | [`rule-23-lazily-imported-cli-dependencies.md`](rules/rule-23-lazily-imported-cli-dependencies.md) |
 | 24 | An early command that emitted its result must stop dispatch | [`rule-24-early-command-emitted-result.md`](rules/rule-24-early-command-emitted-result.md) |
 | 25 | The desktop account list refreshes incrementally; the full payload is the anti-drift anchor | [`rule-25-desktop-account-list-refreshes.md`](rules/rule-25-desktop-account-list-refreshes.md) |
+| 26 | A kept broad `except` is narrowed or marked, and the mark is not the permission | [`rule-26-broad-except-marker.md`](rules/rule-26-broad-except-marker.md) |
 
 ### Current Violations
 
@@ -323,7 +324,7 @@ no file behind it.
   rules; any new persistence site in `sms_tool/paypal/` needs a rule change
   first.
 
-Rules 2–5, 7–13 and 15–22 currently hold.
+Rules 2–5, 7–13 and 15–26 currently hold.
 
 ## Email Change Flow
 
