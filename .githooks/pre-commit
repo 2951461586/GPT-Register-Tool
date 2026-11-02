@@ -36,7 +36,7 @@ if [ -z "$PYTHON_BIN" ]; then
     exit 1
 fi
 
-# Five gates, all must pass:
+# Seven gates, all must pass:
 #   1. precommit_guard   -- credentials / runtime state dumps (content-based)
 #   2. line_ending_guard -- a file that mixes CRLF and LF internally.
 #      Added 2026-09-17: 18 of 499 .py files were mixed, which made `git diff`
@@ -62,9 +62,22 @@ fi
 #      F82), compileall and the whole pytest suite were all blind to it. Scope
 #      is the lane (auth_flow/ + registration_*.py), not the whole package, so
 #      the diff stays reviewable. Requires ruff (pinned in constraints-tools.txt).
+#   6. result_schema_check -- the cross-language result-payload contract: the
+#      keys a Python builder returns must equal `result_schema.json`, and every
+#      key a declared C# reader claims must still be read. Added 2026-11-01:
+#      `BackendResultInterpreter` defaults a missing key to 0, so a rename on
+#      the Python side reached the operator as "完成 0/0", not as an error.
+#      Stdlib only, so it runs before dependencies are installed.
+#   7. experiment_ratchet -- every `registration.*` A/B toggle has a recorded
+#      decision in `scripts/experiment_ledger.json`: kind, default, status,
+#      runbook id, and (while it is still read) a keep reason. Added 2026-11-01
+#      because the only record used to be a prose table nothing verified, so a
+#      switch could be added without a hypothesis and removed without a verdict.
 "$PYTHON_BIN" scripts/precommit_guard.py || exit 1
 "$PYTHON_BIN" scripts/line_ending_guard.py || exit 1
 "$PYTHON_BIN" scripts/mailbox_private_import_ratchet.py || exit 1
 "$PYTHON_BIN" scripts/sentinel_asset_guard.py || exit 1
 "$PYTHON_BIN" scripts/format_guard.py || exit 1
+"$PYTHON_BIN" scripts/result_schema_check.py || exit 1
+"$PYTHON_BIN" scripts/experiment_ratchet.py || exit 1
 exit 0

@@ -19,9 +19,9 @@ from pathlib import Path
 
 def check_python_version() -> tuple[bool, str, str]:
     major, minor = sys.version_info[:2]
-    if (major, minor) >= (3, 10):
+    if (major, minor) >= (3, 12):
         return True, f"Python {major}.{minor}", ""
-    return False, f"Python {major}.{minor}", "安装 Python 3.10+（https://www.python.org/downloads/）"
+    return False, f"Python {major}.{minor}", "安装 Python 3.12+（https://www.python.org/downloads/）"
 
 
 def check_node() -> tuple[bool, str, str]:

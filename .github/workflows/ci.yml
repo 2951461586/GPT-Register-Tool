@@ -129,6 +129,16 @@ jobs:
       - run: python scripts/dependency_graph.py
       - run: python scripts/config_schema_check.py
       - run: python scripts/ipc_schema_check.py
+      # Cross-language result-payload contract (same script the pre-commit hook
+      # runs). ``BackendResultInterpreter`` defaults a missing key to 0, so a
+      # Python rename used to surface as "完成 0/0" rather than an error; the
+      # manifest also pins which keys each declared C# reader still reads.
+      - run: python scripts/result_schema_check.py
+      # Every `registration.*` A/B toggle must have a recorded decision (kind,
+      # default, status, runbook id, keep reason). The prose runbook table is
+      # now cross-checked against `scripts/experiment_ledger.json` instead of
+      # being the only record.
+      - run: python scripts/experiment_ratchet.py
       - run: python scripts/docs_consistency_scan.py
       - run: python scripts/module_coverage_check.py
       # new modules must land in a domain subpackage, not the package root

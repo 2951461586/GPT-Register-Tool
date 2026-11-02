@@ -505,7 +505,7 @@ internal static class Program
                     MessageBox.Show(this,
                         "GPT-Register-Tool 已安装到:\n" + result.InstallDir + "\n\n" +
                         "⚠ 未检测到可用的 Python 解释器。\n" +
-                        "桌面端依赖 Python 3.10+:请从 python.org 安装(勾选 Add to PATH),\n" +
+                        "桌面端依赖 Python 3.12+:请从 python.org 安装(勾选 Add to PATH),\n" +
                         "再运行 python -m pip install -r requirements.txt -c constraints.txt,然后重新打开 SmsWorkbench。\n\n" +
                         configNote,
                         Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);

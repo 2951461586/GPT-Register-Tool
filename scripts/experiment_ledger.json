@@ -1,0 +1,131 @@
+{
+  "schema": "experiment_ledger.v1",
+  "_comment": [
+    "Every `registration.<key>` boolean toggle read through `registration.flags.registration_flag`",
+    "or `auth_flow.steps._registration_flag`, with the decision attached to it.",
+    "",
+    "Why: these toggles are the registration lane's experiment surface. Before this file the only",
+    "record was the prose table in docs/current/registration-ab-runbook.md, which nothing verified,",
+    "so a switch could be added without a hypothesis and removed without a verdict.",
+    "",
+    "kind: ab      -- a controlled comparison, identified by its runbook id (P0-1 ... P3-1).",
+    "kind: feature -- a product switch, not an experiment; no runbook id, no expiry.",
+    "",
+    "status: open       -- awaiting a decision; uses its own `expires`, else the ledger-wide",
+    "                      `review_date`. An expired entry means 'decide or retire'.",
+    "        concluded  -- REQUIRES verdict; if the key is still read, REQUIRES keep.reason.",
+    "        retired    -- the key must no longer be read by code.",
+    "",
+    "`review_date` is a batch review date. All open entries share it on purpose: the backlog is",
+    "reviewed together twice a year, and a per-switch date nobody measured would be invented.",
+    "String-valued switches (registration.preflight_login_page) are out of scope here: they are",
+    "not read through the boolean flag helpers, so this file could not prove anything about them."
+  ],
+  "review_date": "2027-01-31",
+  "dynamic_call_sites": [
+    {
+      "file": "sms_tool/registration/warmup.py",
+      "function": "_leaf_flag",
+      "reason": "reads registration.chatgpt_bootstrap.<key> one level deeper; enabled/authenticated are a feature pair, not registration.<key> toggles"
+    }
+  ],
+  "toggles": {
+    "sentinel_password_bundle": {
+      "kind": "ab", "id": "P1-3", "default": false, "status": "open",
+      "doc": "docs/current/registration-ab-runbook.md"
+    },
+    "prime_create_account_password": {
+      "kind": "ab", "id": "P1-4", "default": false, "status": "open",
+      "doc": "docs/current/registration-ab-runbook.md"
+    },
+    "signup_continue_screen_hint": {
+      "kind": "ab", "id": "P1-5", "default": false, "status": "open",
+      "doc": "docs/current/registration-ab-runbook.md"
+    },
+    "prime_about_you_page": {
+      "kind": "ab", "id": "P1-6", "default": false, "status": "open",
+      "doc": "docs/current/registration-ab-runbook.md"
+    },
+    "create_account_disallowed_backoff": {
+      "kind": "ab", "id": "P1-7", "default": false, "status": "open",
+      "doc": "docs/current/registration-ab-runbook.md"
+    },
+    "signup_email_verification_continue_hint": {
+      "kind": "ab", "id": "P1-8", "default": false, "status": "open",
+      "doc": "docs/current/registration-ab-runbook.md"
+    },
+    "edge_challenge_rotate_exit": {
+      "kind": "ab", "id": "P0-2b", "default": false, "status": "open",
+      "doc": "docs/current/registration-ab-runbook.md"
+    },
+    "prime_navigation_headers": {
+      "kind": "ab", "id": "P1-9", "default": false, "status": "open",
+      "doc": "docs/current/registration-ab-runbook.md"
+    },
+    "signin_screen_hint_login_or_signup": {
+      "kind": "ab", "id": "P1-10", "default": false, "status": "open",
+      "doc": "docs/current/registration-ab-runbook.md"
+    },
+    "signin_prompt_login": {
+      "kind": "ab", "id": "P1-11", "default": false, "status": "open",
+      "doc": "docs/current/registration-ab-runbook.md"
+    },
+    "signin_locale_ja_jp": {
+      "kind": "ab", "id": "P1-12", "default": false, "status": "open",
+      "doc": "docs/current/registration-ab-runbook.md"
+    },
+    "turb_signin_authorize_context": {
+      "kind": "ab", "id": "P1-13", "default": false, "status": "open",
+      "doc": "docs/current/registration-ab-runbook.md"
+    },
+    "prime_password_page_fatal": {
+      "kind": "ab", "id": "P1-14", "default": false, "status": "open",
+      "doc": "docs/current/registration-ab-runbook.md"
+    },
+    "otp_navigation_headers": {
+      "kind": "ab", "id": "P1-15", "default": false, "status": "open",
+      "doc": "docs/current/registration-ab-runbook.md"
+    },
+    "otp_validate_sentinel": {
+      "kind": "ab", "id": "P1-16", "default": false, "status": "open",
+      "doc": "docs/current/registration-ab-runbook.md"
+    },
+    "otp_external_url_branch": {
+      "kind": "ab", "id": "P1-17", "default": false, "status": "open",
+      "doc": "docs/current/registration-ab-runbook.md"
+    },
+    "device_identity_seeded_by_email": {
+      "kind": "ab", "id": "P2-1", "default": false, "status": "open",
+      "doc": "docs/current/registration-ab-runbook.md"
+    },
+    "passwordless_explicit_send_otp": {
+      "kind": "ab", "id": "P3-1", "default": true, "status": "concluded", "verdict": "adopted",
+      "keep": {
+        "reason": "kept as an explicit false arm: the runbook requires A/B baselines to write it out, and the default flipped to true on 2026-10-11 after the HAR showed the verification page sends this POST itself"
+      },
+      "doc": "docs/current/registration-ab-runbook.md"
+    },
+    "otp_validate_email_otp_validate_flow": {
+      "kind": "ab", "id": "P1-18", "default": false, "status": "concluded", "verdict": "inconclusive",
+      "keep": {
+        "reason": "29/30 vs 30/30 at 30 per arm (delta 0.0333 < 0.05): the endpoint does not validate the flow name, so the treatment arm buys nothing and the default stays false"
+      },
+      "doc": "docs/current/registration-ab-runbook.md"
+    },
+    "existing_login_continue_on_verified_page": {
+      "kind": "feature", "default": true, "status": "concluded", "verdict": "adopted",
+      "keep": {
+        "reason": "the POST is what the server expects on the OTP page; the switch exists so a regression can be backed out without a code revert"
+      },
+      "doc": "docs/current/protocol-registration.md"
+    },
+    "obtain_refresh_token": {
+      "kind": "feature", "default": false, "status": "open", "expires": "2027-01-31",
+      "doc": "docs/current/protocol-registration.md"
+    },
+    "reference_lane": {
+      "kind": "feature", "default": false, "status": "open", "expires": "2027-01-31",
+      "doc": "docs/current/registration-ab-runbook.md"
+    }
+  }
+}

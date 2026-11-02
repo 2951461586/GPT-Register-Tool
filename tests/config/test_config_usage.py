@@ -223,6 +223,22 @@ def csharp_literals(relative_path):
     return found
 
 
+def csharp_literals_in_tree(relative_root="SmsWorkbench"):
+    """Every C# string literal under ``relative_root``, ``obj``/``bin`` excluded.
+
+    Use this instead of naming one file when the property under test is "the
+    desktop writes this key". A path pin turns that property into a move
+    detector: the 2026-11 dialog split moved the vendor-section writes out of
+    ``Views/MainWindow.SmsProvider.cs`` and a correct codebase failed the test.
+    """
+    found = set()
+    for path in sorted((REPO_ROOT / relative_root).rglob("*.cs")):
+        if {"obj", "bin"} & set(path.parts):
+            continue
+        found |= csharp_literals(path.relative_to(REPO_ROOT).as_posix())
+    return found
+
+
 class CSharpConsumerTests(unittest.TestCase):
     """``CSHARP_CONSUMED_KEYS`` is an exception list, so it must not rot.
 
@@ -289,10 +305,10 @@ class CSharpConsumerTests(unittest.TestCase):
     def test_write_only_keys_are_still_reported(self):
         """The counter-example that justifies keeping the scan Python-only.
 
-        ``SmsWorkbench/Views/MainWindow.SmsProvider.cs`` **writes** these two keys and
-        nothing reads them back. If C# were scanned wholesale they would leave
-        the dead set -- 1 fixed false positive traded for 2 new false negatives.
-        They must stay reported.
+        The desktop **writes** these two keys while ``CSHARP_CONSUMED_KEYS`` does
+        not list them. If C# were scanned wholesale they would leave the dead set
+        -- 1 fixed false positive traded for 2 new false negatives. They must stay
+        reported.
 
         The config is **built here** rather than read from the operator's shards.
         CI's ``config.json`` is a copy of ``config.example.json`` and carries
@@ -304,7 +320,10 @@ class CSharpConsumerTests(unittest.TestCase):
             "phone_reuse.smsbower.service_name",
             "phone_reuse.smsbower.country_name_zh",
         )
-        writes = csharp_literals("SmsWorkbench/Views/MainWindow.SmsProvider.cs")
+        # Whole tree, not one file: the writes live in
+        # ``Dialogs/SmsProviderDialogService.cs`` since the 2026-11 dialog split and
+        # a path pin would only track file moves from here on.
+        writes = csharp_literals_in_tree("SmsWorkbench")
         for key in keys:
             with self.subTest(key=key):
                 self.assertIn(key.rsplit(".", 1)[-1], writes, "counter-example moved")

@@ -1,3 +1,16 @@
+# Runtime-floor declaration only. This project is run from the checkout (and
+# shipped with its own bundled interpreter), it is not installed as a package:
+# dependencies live in requirements.txt / constraints.txt, and the Windows
+# version is stamped by Directory.Build.props. `requires-python` exists so the
+# floor is stated where pip and tooling can read it, and
+# tests/governance/test_python_version_floor.py keeps it equal to every other
+# claim (CI, ruff, pyright, README, preflight, installer).
+[project]
+name = "gpt-register-tool"
+version = "0.0.0"
+description = "Windows desktop workbench for ChatGPT account registration, mailbox OTP and protocol payment links"
+requires-python = ">=3.12"
+
 [tool.ruff]
 # Only the lint gate is configured here for now; pytest still reads pytest.ini.
 line-length = 120

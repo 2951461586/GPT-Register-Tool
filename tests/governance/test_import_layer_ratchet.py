@@ -372,6 +372,33 @@ def test_summary_facts_are_pinned():
     # sms_tool/registration` pair and no new pair. A function-local import was
     # rejected for the same reason as above; the alternative -- a seventh private
     # copy of a two-line cast -- is the duplication this batched fix removes.
+    # 2026-11-01 (P4): 437 -> 433. ``registration/orchestrator.py`` became a
+    # hybrid PEP 562 facade: the 45 compatibility re-exports nothing in the module
+    # reads are resolved on demand, so their 21 import statements became one
+    # ``importlib.import_module`` call plus a literal map. Four module-scope edges
+    # left the graph; the 74 names the entry points do read stay eager, which is
+    # why this is a reduction rather than a relocation (a pure facade would have
+    # moved them into ``TYPE_CHECKING`` and broken the patch seams).
+    #
+    # 2026-11-01: 435 -> 437, **reviewed increase, one deleted duplicate.**
+    # The `registration.*` boolean-flag parse existed twice -- `registration/flags.py`
+    # and, verbatim, `auth_flow/steps.py::_registration_flag` -- and both docstrings
+    # said the second was a deliberate copy because `auth_flow` could not import
+    # the first without growing a minority-direction edge. The parse now lives in
+    # `kernel/flags.py`, a leaf that imports nothing from `sms_tool`, so both sides
+    # import it: `auth_flow -> sms_tool` 8 -> 9 and `registration -> sms_tool`
+    # 91 -> 92. This is the remedy the 2026-10-17 entry above names, paid in two
+    # leaf edges for one deleted duplicate -- and unlike a function-local import it
+    # records the dependency instead of hiding a `sys.modules` lookup.
+    # 2026-11-01 (P6-PR-B, step 1): 433 -> 434. ``kernel/transport.py`` is a new
+    # leaf that owns ``TRANSPORT_ERRORS``, and ``registration/preflight.py`` imports
+    # it so ``_proxy_scheme_reachable`` can stop swallowing logic errors. This
+    # ratchet's own failure text names the remedy (a leaf both sides may import);
+    # the alternative -- a second copy of the curl exception tuple in the lane --
+    # is the duplication the narrowing exists to remove.
+    # 2026-11-01 (P6-PR-B, site 4): +1 auth_flow -> sms_tool. `login.py` imports
+    # `kernel/transport.py` for the narrowed prime GET -- the same leaf both the
+    # protocol lane and the auth lane may import, so the edge is the remedy, not a leak.
     assert totals == {
         # 2026-10-26 (支付资格 / 代理池管理): 438 -> 435 (-3). The payment
         # qualification feature moved into the payment lane (payment/qualification*)
@@ -388,8 +415,32 @@ def test_summary_facts_are_pinned():
         # importing a shared leaf both sides may use; the alternative (three
         # function-local imports repeated across five helpers) would hide the
         # dependency and put a ``sys.modules`` lookup on every summary row.
-        "total_module_edges": 435,
-        "ordered_pairs": 64,
+        #
+        # 2026-11-02 (ratchet modelling correction): 437 -> 473 (+36;
+        # ordered_pairs 64 -> 78). ``kernel`` joined ``SUBPACKAGES`` in
+        # ``scripts/import_layer_ratchet.py``. Until then every
+        # ``..kernel.<leaf>`` import collapsed into the ``sms_tool`` node -- correct
+        # for a *subpackage* source (``registration -> sms_tool`` already counted
+        # it) but wrong for a *root-module* source, where importer and target both
+        # mapped to ``sms_tool`` and the edge was invisible. 35 root -> kernel
+        # edges (``config``, ``storage``, ``http_client``, ``desktop_read`` ...
+        # importing the leaf layer) existed all along and were simply not counted.
+        #
+        # This is not new coupling: a root module importing the kernel leaf is the
+        # inward direction. It is a one-time visibility correction, so the number
+        # may only go down from here like every other pair. The side effect is that
+        # pairs previously inflated by kernel imports now read their real value
+        # (``registration -> sms_tool`` 91 -> 56, ``accounts -> sms_tool`` 44 -> 36)
+        # and 14 new ``X -> sms_tool/kernel`` pairs are frozen.
+        #
+        # Why it was forced: ``auth_flow``'s P6-PR-B narrowing imported
+        # ``kernel.transport.TRANSPORT_ERRORS`` -- the exact leaf this gate's
+        # failure text prescribes -- yet the edge landed on ``auth_flow ->
+        # sms_tool`` and tripped a cap the leaf never earned. Adding the node is
+        # the fix; making that import function-local to dodge the counter would
+        # have been the workaround.
+        "total_module_edges": 473,
+        "ordered_pairs": 78,
         "mutual_pairs": 17,
         "minority_edges": 46,
         # 2026-10-21: 188 -> 190 when the provider ports seam (providers/ports.py)
@@ -445,7 +496,15 @@ def test_summary_facts_are_pinned():
         # would have raised the frozen `registration -> sentinel` module pair AND
         # pulled the Node runner (`subprocess`, `tempfile`) into every
         # `sms_tool` startup, which is the trade this ratchet prescribes.
-        "delayed_cross_dir_edges": 300,
+        # 2026-11-02: 300 -> 307 (+7). Two are this session's reviewed seams: the
+        # `providers/ports.py -> http_client` deferred edge that removed the last
+        # module-scope `providers -> sms_tool` request import (``sms_vendor_api``
+        # was the only provider reaching for the retry transport directly), and the
+        # delayed imports that replaced redundant function-local `os` / `CFG` /
+        # `sms_providers` lookups in `desktop_read`. The rest came with the
+        # in-flight desktop/registration refactor; every one carries an entry in
+        # `delayed_import_reasons.json` where its reason is not rule-derived.
+        "delayed_cross_dir_edges": 307,
         # Imports under `if TYPE_CHECKING:` never run, so they are not runtime
         # edges. 1 here since 2026-10-23: `payment/link_manager.py` declares its
         # `pay_link` re-exports type-only (the module is not a package, so the
@@ -455,7 +514,11 @@ def test_summary_facts_are_pinned():
         # annotations only — the screening module duck-types the geo object and
         # deliberately never imports the geo stack at module scope (see the note
         # at the top of that module).
-        "type_only_edges": 3,
+        # 2026-11-01 (P4): 3 -> 15. ``registration/orchestrator.py`` now declares
+        # its 45 lazy re-exports to pyright in 16 grouped ``TYPE_CHECKING`` imports.
+        # Declaring them is what keeps those names typed for consumers; the cost is
+        # recorded here rather than hidden by dropping the declaration.
+        "type_only_edges": 15,
     }
 
 

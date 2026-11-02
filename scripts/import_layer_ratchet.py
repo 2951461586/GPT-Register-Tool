@@ -99,6 +99,7 @@ SUBPACKAGES = (
     "cli_parsers",
     "commands",
     "geo",
+    "kernel",
     "pay_link",
     "paypal",
     "paypal_link",
