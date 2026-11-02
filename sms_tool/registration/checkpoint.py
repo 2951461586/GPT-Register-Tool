@@ -99,7 +99,7 @@ def load_resumable_checkpoint(
     try:
         checkpoint = persistence.get_checkpoint(mailbox_email, runtime_config=config)
         payload = checkpoint.get("payload") if isinstance(checkpoint, dict) else {}
-    except Exception:
+    except Exception:  # broad-except: compat
         return None
     if not isinstance(payload, dict):
         return None

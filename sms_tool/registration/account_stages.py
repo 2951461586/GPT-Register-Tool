@@ -98,7 +98,7 @@ def prime_about_you_page(workflow: RegistrationWorkflow) -> None:
         final_url = str(getattr(response, "url", "") or "")
         if "/about-you" not in final_url:
             _emit(_LOGGER, "  About you page prime landed off the profile step: %s", final_url[:120])
-    except Exception as exc:
+    except Exception as exc:  # broad-except: compat
         _emit(_LOGGER, "  About you page prime warning: %s", describe_exception(exc))
 
 
@@ -165,7 +165,7 @@ def create_account(workflow: RegistrationWorkflow) -> None:
             referer=f"{s.auth_base}/about-you",
             label="Create account continue",
         )
-    except Exception as exc:
+    except Exception as exc:  # broad-except: compat - the stage must not fail here
         _emit(_LOGGER, "  Create account continue transport warning: %s", describe_exception(exc))
 
 
@@ -209,7 +209,7 @@ def post_create_account_with_backoff(
         body = ""
         try:
             body = json.dumps(r._json_or_raw(response, limit=600), ensure_ascii=False)
-        except Exception:
+        except Exception:  # broad-except: compat
             body = str(getattr(response, "text", "") or "")[:600]
         if "registration_disallowed" not in body:
             break
@@ -387,7 +387,7 @@ def fetch_auth_session(
             # must not fall back to it either.
             allow_passwordless=not s.existing_account,
         )
-    except Exception as exc:
+    except Exception as exc:  # broad-except: compat
         existing_login = {"ok": False, "error": f"existing_login_transport:{exc}"}
     if not existing_login.get("ok"):
         s.existing_login_error = r._sanitize_text(existing_login.get("error") or "unknown")
@@ -399,7 +399,7 @@ def fetch_auth_session(
                     reason="user_already_exists",
                     error=str(s.existing_login_error),
                 )
-            except Exception as exc:
+            except Exception as exc:  # broad-except: compat
                 _emit(_LOGGER, "  Dead-end bookkeeping warning: %s", describe_exception(exc))
         return
     s.auth_session = r._fetch_auth_session(s.login_session, s.chat_base, s.base_headers)

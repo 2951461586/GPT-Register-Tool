@@ -134,19 +134,15 @@
       "silent": 1
     },
     "sms_tool/auth_flow/login.py": {
-      "broad": 4,
+      "broad": 3,
       "silent": 0
     },
     "sms_tool/auth_flow/otp.py": {
-      "broad": 4,
-      "silent": 0
-    },
-    "sms_tool/auth_flow/password_step.py": {
       "broad": 3,
       "silent": 0
     },
     "sms_tool/auth_flow/signup.py": {
-      "broad": 3,
+      "broad": 2,
       "silent": 0
     },
     "sms_tool/auth_flow/steps.py": {
@@ -501,6 +497,10 @@
       "broad": 5,
       "silent": 1
     },
+    "sms_tool/providers/sms_vendor_api.py": {
+      "broad": 5,
+      "silent": 3
+    },
     "sms_tool/proxy/admin.py": {
       "broad": 6,
       "silent": 0
@@ -578,7 +578,7 @@
       "silent": 0
     },
     "sms_tool/registration/preflight.py": {
-      "broad": 6,
+      "broad": 5,
       "silent": 4
     },
     "sms_tool/registration/probe.py": {
@@ -771,12 +771,23 @@
     }
   },
   "policy": {
-    "max_broad": 962,
-    "max_silent": 155
+    "lanes": {
+      "protocol_registration": {
+        "max_broad": 37,
+        "max_silent": 0,
+        "paths": [
+          "sms_tool/auth_flow/",
+          "sms_tool/registration/"
+        ],
+        "reason": "The protocol lane is where a swallowed exception is indistinguishable from a protocol failure: it lands in the funnel as 'unknown' while the batch keeps spending mailboxes. Silent handlers are 0 here and the broad count may only shrink."
+      }
+    },
+    "max_broad": 960,
+    "max_silent": 158
   },
   "totals": {
-    "broad": 962,
-    "silent": 155
+    "broad": 960,
+    "silent": 158
   },
   "whitelist": {
     "sms_tool/browser_pool.py": {
@@ -794,10 +805,35 @@
       "reason": "Logging configuration is best effort: a missing log directory, a locked file or an unavailable sink must not stop the run that was being logged.",
       "silent": 2
     },
+    "sms_tool/providers/sms_vendor_api.py": {
+      "broad": 4,
+      "reason": "Vendor boundary: the caller is an interactive dialog, so every failure (transport, envelope shape, missing field) must degrade to a reported error instead of an exception in the UI. The narrowings would only move the report.",
+      "silent": 0
+    },
     "sms_tool/proxy/pool.py": {
       "broad": 10,
       "reason": "SOCKS5 bridge teardown: a broken client socket, a half-open upstream or a stats-write failure must never take the listener down for every other session.",
       "silent": 4
+    },
+    "sms_tool/registration/finalize.py": {
+      "broad": 3,
+      "reason": "Checkpoint retention and pre-existing-state cleanup at the end of a run: a failed clear must not turn a finished registration into a failure.",
+      "silent": 1
+    },
+    "sms_tool/registration/handlers.py": {
+      "broad": 3,
+      "reason": "Session teardown in the workflow's finally path: closing a session that the backend already dropped is best effort by definition.",
+      "silent": 1
+    },
+    "sms_tool/registration/preflight.py": {
+      "broad": 6,
+      "reason": "Preflight probe teardown (curl_cffi session close, trust_env toggle). A probe that cannot clean up has already produced its verdict; raising here would replace a classified preflight failure with an unclassified one.",
+      "silent": 4
+    },
+    "sms_tool/registration/probe.py": {
+      "broad": 4,
+      "reason": "AT-probe session ownership teardown: the probe's answer is already recorded, and a close failure must not rewrite it.",
+      "silent": 1
     }
   }
 }

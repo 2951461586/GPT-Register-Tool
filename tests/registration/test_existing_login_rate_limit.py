@@ -32,6 +32,8 @@ it used to.
 
 from __future__ import annotations
 
+from curl_cffi.requests.errors import RequestsError
+
 import json
 import unittest
 from unittest.mock import patch
@@ -122,7 +124,9 @@ def _drive(*, otp_status, otp_headers=None, otp_body=None):
                 headers={} if otp_headers is None else otp_headers,
                 body={} if otp_body is None else otp_body,
             )
-        raise AssertionError(f"unexpected call: {record['method']} {url}")
+        # A transport-level answer, not an AssertionError: a transport fake speaks for
+        # the wire, and the probe is about to stop swallowing logic errors (P6-PR-B).
+        raise RequestsError(f"unexpected call: {record['method']} {url}")
 
     recorder = _Recorder(handler)
     with (

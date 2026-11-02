@@ -6,6 +6,7 @@ import re
 from urllib.parse import urlparse
 
 from . import deps, steps, totp
+from ..kernel.transport import TRANSPORT_ERRORS
 
 LOGIN_PASSWORD_STEP_TYPES = frozenset({"password", "login_password", "create_account_password"})
 
@@ -134,7 +135,10 @@ def _probe_login_password_step(
             },
             impersonate=deps.auth_impersonate(),
         )
-    except Exception as exc:
+    except TRANSPORT_ERRORS as exc:
+        # Only the GET is in this try, so only a transport failure may read as
+        # "transport:". A defect in the probe must surface instead of becoming an
+        # "unknown, not a verdict" answer (fixtures audited first: P6-PR-B step 0).
         result["signal"] = f"transport:{exc}"
         return result
     result["status"] = int(getattr(response, "status_code", 0) or 0)
@@ -216,7 +220,7 @@ def _password_login_existing_account(
                 referer=current_url or f"{auth_base}/log-in/password",
                 label="Existing account password continue",
             )
-        except Exception as exc:
+        except TRANSPORT_ERRORS as exc:
             print(f"  Existing account password continue transport warning: {exc}")
         else:
             followed_body = deps._json_or_raw(followed, limit=1000)
@@ -256,6 +260,6 @@ def _password_login_existing_account(
                 referer=f"{auth_base}/log-in/password",
                 label="Existing account password landing",
             )
-        except Exception as exc:
+        except TRANSPORT_ERRORS as exc:
             print(f"  Existing account password landing transport warning: {exc}")
     return {"ok": True, "login_method": "password"}

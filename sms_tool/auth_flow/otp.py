@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import time
 
+from ..kernel.transport import TRANSPORT_ERRORS
 from . import deps, steps, totp
 from ..registration.protocol_helpers import _safe_int
 
@@ -131,12 +132,17 @@ def _send_existing_login_otp(
         body = None
         try:
             body = response.json()
-        except Exception:
+        except Exception:  # broad-except: compat
+            # Parsing the response body for a *preview line*. A malformed body is a
+            # shape surprise from the vendor, not a transport failure, and it must
+            # not end the lane before the status check below.
             body = None
         body_preview = ""
         try:
             body_preview = json.dumps(body, ensure_ascii=False)[:200]
-        except Exception:
+        except Exception:  # broad-except: compat
+            # ``body`` is whatever the vendor sent (bytes, a cycle, a non-serializable
+            # object); falling back to the raw text keeps the operator line intact.
             body_preview = (response.text or "")[:200]
         print(f"  Existing account OTP send: {endpoint} {response.status_code} {body_preview}")
         if response.status_code in (200, 202, 204):
@@ -272,7 +278,9 @@ def _existing_login_otp(
             deps._fetch_client_auth_session_dump(
                 session, auth_base, base_headers, "existing_login_after_otp_validate_failed"
             )
-        except Exception as exc:
+        except Exception as exc:  # broad-except: compat
+            # A diagnostic dump: it exists so a 401 can be told apart from a plain
+            # wrong-code rejection. Its own failure must never fail the stage.
             print(f"  Existing account otp-validate dump warning: {exc}")
         # 🔴 2026-09-16: ``identity_provider_mismatch`` is deliberately **not**
         # checked here.  It is a real server verdict, but not one this endpoint
@@ -335,6 +343,6 @@ def _existing_login_otp(
             referer=f"{auth_base}/email-verification",
             label="Existing account OTP continue",
         )
-    except Exception as e:
+    except TRANSPORT_ERRORS as e:
         print(f"  Existing account OTP continue transport warning: {e}")
     return ({"ok": True}, None)

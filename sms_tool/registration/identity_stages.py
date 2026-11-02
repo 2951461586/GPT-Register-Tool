@@ -73,7 +73,7 @@ def _apply_protocol_fingerprint(ops: Any, config: Any, proxy: str, metadata: dic
         pool = _fingerprint_pool.shared_fingerprint_pool(config)
         if pool.size > 0:
             profile = pool.next(proxy)
-    except Exception as exc:
+    except Exception as exc:  # broad-except: compat
         profile = None
         sanitize = getattr(ops, "_sanitize_text", None)
         detail = sanitize(exc) if callable(sanitize) else type(exc).__name__

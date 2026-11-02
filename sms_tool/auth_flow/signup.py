@@ -6,6 +6,7 @@ import logging
 from urllib.parse import urlencode, urlparse
 
 from . import deps, sentinel_flow, steps
+from ..kernel.transport import TRANSPORT_ERRORS
 
 # New operator-facing lines must go through ``operator_output.emit`` (stdout AND
 # the structured log from one source).  The 5 bare ``print`` calls this module
@@ -157,7 +158,7 @@ def _continue_signup_username(
                 label=f"{label} follow",
             )
             final_url = str(getattr(follow, "url", "") or next_url)
-        except Exception as exc:
+        except Exception as exc:  # broad-except: compat
             return {
                 "ok": False,
                 "status": response.status_code,
@@ -201,7 +202,11 @@ def _prime_email_verification_page(session, auth_base, base_headers, current_url
             return {"ok": True, "status": response.status_code, "url": url}
         print(f"  Email verification page: {response.status_code} {next_url}")
         return {"ok": False, "status": response.status_code, "url": next_url}
-    except Exception as exc:
+    except TRANSPORT_ERRORS as exc:
+        # Only the GET can fail this way. ``_response_next_url`` runs inside the
+        # same ``try`` on purpose: a malformed response is a defect to surface, not
+        # an "email verification page unavailable" warning that silently degrades
+        # the lane to the caller's URL.
         print(f"  Email verification page warning: {exc}")
         return {"ok": False, "error": str(exc), "url": current_url}
 
@@ -256,7 +261,7 @@ def _prime_create_account_password_page(session, auth_base, base_headers, curren
             referer=referer,
             label="Create account password page",
         )
-    except Exception as exc:
+    except TRANSPORT_ERRORS as exc:
         _emit_operator_line(_LOGGER, "  Create account password page warning: %s", exc)
         return {"ok": False, "error": str(exc), "url": current_url, "fatal": _fatal_landing()}
     if response is None:

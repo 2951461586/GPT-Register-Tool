@@ -385,7 +385,7 @@ def track_registration(func: Callable[..., dict[str, Any]]) -> Callable[..., dic
         try:
             config = resolve_runtime_config(kwargs.get("runtime_config"), workflow="registration")
             driver = normalize_registration_driver(kwargs.get("registration_driver"), config.data)
-        except Exception:
+        except Exception:  # broad-except: compat
             # An invalid driver/config must still be recorded: let func raise
             # inside the tracked block so the failure is persisted as a row
             # instead of vanishing before any progress object exists.
@@ -405,7 +405,7 @@ def track_registration(func: Callable[..., dict[str, Any]]) -> Callable[..., dic
         try:
             result = func(*args, **kwargs)
             return result
-        except Exception as exc:
+        except Exception as exc:  # broad-except: compat
             error = str(exc)
             raise
         finally:

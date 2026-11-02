@@ -9,6 +9,8 @@ Sentinel, flow + navigation ids) and the answer carries
 
 from __future__ import annotations
 
+from curl_cffi.requests.errors import RequestsError
+
 from typing import Any
 
 from types import SimpleNamespace
@@ -207,7 +209,7 @@ def test_a_non_200_send_aborts_with_the_status():
 
 
 def test_a_sentinel_failure_fails_the_arm_instead_of_degrading_to_the_default():
-    stage = _Stage(enabled=True, sentinel_error=RuntimeError("runner down"))
+    stage = _Stage(enabled=True, sentinel_error=RequestsError("runner down"))
     with pytest.raises(AssertionError):
         _send(stage)
     assert stage.aborted and stage.aborted[0].startswith("email_otp_send_failed:sentinel_unavailable")

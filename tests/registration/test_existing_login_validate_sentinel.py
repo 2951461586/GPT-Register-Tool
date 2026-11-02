@@ -50,6 +50,7 @@ back to the skip instead of failing the lane.  If a run shows
 that is what it is for.
 """
 
+from curl_cffi.requests.errors import RequestsError
 from unittest.mock import Mock, patch
 
 from sms_tool import auth_flow
@@ -108,7 +109,8 @@ def _drive(*, validate_result, validate_calls, dumps, calls=None, bodies=None, a
                     },
                 }
             )
-        raise AssertionError(f"unexpected call: {method} {url}")
+        # A transport-level answer, not an AssertionError (P6-PR-B fixture audit).
+        raise RequestsError(f"unexpected call: {method} {url}")
 
     def fake_validate(session, auth_base, base_headers, code, **kwargs):
         validate_calls.append({"code": code, **kwargs})

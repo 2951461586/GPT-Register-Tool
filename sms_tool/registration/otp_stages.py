@@ -142,7 +142,7 @@ def _explicit_passwordless_send(workflow: RegistrationWorkflow) -> Any:
     _emit(_LOGGER, "  Passwordless explicit send-otp")
     try:
         issued = workflow._issue_sentinel("authorize_continue", force_fresh=True)
-    except Exception as exc:
+    except Exception as exc:  # broad-except: compat
         # Falling back to the assumed pre-send would silently turn this arm into
         # the default one, so the arm fails instead.
         workflow._abort(f"email_otp_send_failed:sentinel_unavailable:{describe_exception(exc)}")
@@ -417,7 +417,7 @@ def validate_email_otp(workflow: RegistrationWorkflow) -> None:
             issued = workflow._issue_sentinel(flow, force_fresh=True)
             sentinel_data = {"sentinel_token": issued.token, "sentinel_so_token": issued.so_token}
             use_sentinel = True
-        except Exception as exc:
+        except Exception as exc:  # broad-except: compat
             # Non-fatal by contract: the toggle adds a header to a request that
             # already works without it, so a mint failure must not fail the run.
             _emit(_LOGGER, "  OTP validate sentinel unavailable: %s", describe_exception(exc))
@@ -487,7 +487,7 @@ def validate_email_otp(workflow: RegistrationWorkflow) -> None:
             referer=f"{s.auth_base}/verify-email",
             label="Email OTP continue",
         )
-    except Exception as exc:
+    except Exception as exc:  # broad-except: compat
         _emit(_LOGGER, "  Email OTP continue transport warning: %s", describe_exception(exc))
 
 

@@ -21,6 +21,7 @@ Three things this file pins down:
    on ``login_method``, so the outcome reporter can name how a session was won.
 """
 
+from curl_cffi.requests.errors import RequestsError
 import contextlib
 import importlib
 import unittest
@@ -236,7 +237,7 @@ class ProbeLoginPasswordStepTests(unittest.TestCase):
         self.assertEqual(result["signal"], "http_400")
 
     def test_a_transport_failure_is_not_a_verdict(self):
-        result, _ = self._probe(error=RuntimeError("boom"))
+        result, _ = self._probe(error=RequestsError("boom"))
 
         self.assertIsNone(result["password_step"])
         self.assertIn("transport:", result["signal"])
@@ -598,7 +599,7 @@ class VerifiedPageContinueTests(unittest.TestCase):
             transport=[
                 Mock(status_code=200, url=self._SIGNIN_URL, headers={}),
                 Mock(status_code=200, url=self._VERIFIED_URL, headers={}),
-                RuntimeError("curl: (28) Operation timed out"),
+                RequestsError("curl: (28) Operation timed out"),
             ],
         )
         self.assertTrue(result["ok"])

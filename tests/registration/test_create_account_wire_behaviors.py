@@ -40,6 +40,8 @@ Two fixture conventions, both load-bearing:
 
 from __future__ import annotations
 
+from curl_cffi.requests.errors import RequestsError
+
 import json
 import unittest
 from types import SimpleNamespace
@@ -168,7 +170,7 @@ class PrimeAboutYouPageTests(unittest.TestCase):
         w, ops, mint = _workflow(
             state, responses=[_response(200)], config={"registration": {"prime_about_you_page": True}}
         )
-        ops._follow_continue_url = Mock(side_effect=RuntimeError("proxy reset"))
+        ops._follow_continue_url = Mock(side_effect=RequestsError("proxy reset"))
 
         w.create_account()  # must not raise
 

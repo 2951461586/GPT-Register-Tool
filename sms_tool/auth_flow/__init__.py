@@ -233,7 +233,33 @@ __all__ = [
 ]
 
 
+#: Submodules the facade exposes as attributes. ``patch.object(auth_flow.deps, ...)``
+#: and ``auth_flow.sentinel_flow`` read the attribute *on the package*, which
+#: otherwise exists only if some module already ran ``from . import <sub>`` -- so
+#: those accesses were import-order dependent, and moving one unrelated import line
+#: flipped three tests (measured 2026-11-01). Resolving them here keeps the facade
+#: lazy: nothing is imported until the attribute is actually used.
+_SUBMODULES = frozenset(
+    {
+        "auth_wire",
+        "deps",
+        "login",
+        "otp",
+        "password_step",
+        "sentinel_flow",
+        "signup",
+        "steps",
+        "totp",
+    }
+)
+
+
 def __getattr__(name: str) -> Any:
+    if name in _SUBMODULES:
+        # `name` comes from the `_SUBMODULES` whitelist above, never from caller input.
+        value = importlib.import_module(f".{name}", __name__)
+        globals()[name] = value
+        return value
     module_name = _LAZY.get(name)
     if module_name is None:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

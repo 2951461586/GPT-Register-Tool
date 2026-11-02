@@ -73,7 +73,7 @@ def prime_password_sentinel_bundle(workflow: RegistrationWorkflow, *, reference_
     if lane:
         try:
             issued = issue_password_page_bundle(device_id=s.device_id, session=s.session, proxy=s.proxy)
-        except Exception as exc:
+        except Exception as exc:  # broad-except: compat
             _LOGGER.warning(
                 "Password page Sentinel bundle unavailable; per-flow issuance applies: %s", describe_exception(exc)
             )
@@ -89,7 +89,7 @@ def prime_password_sentinel_bundle(workflow: RegistrationWorkflow, *, reference_
             session=s.session,
             proxy=s.proxy,
         )
-    except Exception as exc:
+    except Exception as exc:  # broad-except: compat
         _LOGGER.warning(
             "Sentinel bundle for the credential flow unavailable; falling back to per-flow issuance: %s",
             describe_exception(exc),

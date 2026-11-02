@@ -35,6 +35,7 @@ Four things this file pins down:
 4. The authorize URL carries the context the signup lane fills in.
 """
 
+from curl_cffi.requests.errors import RequestsError
 import json
 import unittest
 from unittest.mock import patch
@@ -113,7 +114,7 @@ def _drive(
         url = record["url"]
         if url == f"{CHAT_BASE}/api/auth/csrf":
             if mint_token is None:
-                raise RuntimeError("csrf endpoint down")
+                raise RequestsError("csrf endpoint down")
             return _Response(body={"csrfToken": mint_token})
         if url.startswith(f"{CHAT_BASE}/api/auth/signin/openai"):
             signin_payloads.append(parse_qs(record["kwargs"]["data"]))
@@ -121,7 +122,8 @@ def _drive(
         if url.startswith(f"{AUTH_BASE}/api/accounts/authorize"):
             authorize_urls.append(url)
             return _Response(url=authorize_landing)
-        raise AssertionError(f"unexpected call: {record['method']} {url}")
+        # A transport-level answer, not an AssertionError (P6-PR-B fixture audit).
+        raise RequestsError(f"unexpected call: {record['method']} {url}")
 
     recorder = _Recorder(handler)
     with (
@@ -163,7 +165,7 @@ class CsrfMintingTests(unittest.TestCase):
 
     def test_a_transport_failure_yields_no_token(self):
         def handler(record):
-            raise RuntimeError("connection reset")
+            raise RequestsError("connection reset")
 
         with patch.object(auth_flow.deps, "request_with_retry", _Recorder(handler)):
             token = auth_flow._fetch_session_csrf_token(object(), CHAT_BASE, {}, "did-1", "slog-1")

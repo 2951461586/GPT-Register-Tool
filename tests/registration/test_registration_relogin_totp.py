@@ -73,10 +73,17 @@ def test_existing_login_uses_fresh_authorize_sentinel_for_otp_steps():
     authorize = Mock(status_code=200, headers={}, url="https://auth.openai.com/email-verification")
     continued = Mock(status_code=200, headers={}, url="https://auth.openai.com/email-verification")
     follow = Mock(status_code=200, headers={}, url="https://auth.openai.com/email-verification")
+    # The lane probes `/log-in/password` before spending an email code. Without the
+    # transaction's own state that endpoint answers 400, which the probe reports as
+    # "unknown" -- so this is the realistic answer, not a filler. It has to be in
+    # the script: the probe used to swallow the StopIteration this raised.
+    probe = Mock(status_code=400, text="")
     mailbox = Mock(provider="remail")
 
     with (
-        patch.object(auth_flow.deps, "request_with_retry", side_effect=[prime, csrf, signin, authorize, continued]),
+        patch.object(
+            auth_flow.deps, "request_with_retry", side_effect=[prime, csrf, signin, authorize, continued, probe]
+        ),
         patch.object(auth_flow.deps, "_json_or_raw", return_value={"url": authorize.url}),
         patch.object(
             auth_flow.sentinel_flow, "_authorize_continue_sentinel", return_value=({}, "fresh-token", "fresh-so")

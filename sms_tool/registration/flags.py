@@ -1,76 +1,39 @@
-"""Single owner for reading ``registration.*`` boolean toggles from a config.
+"""``registration.<key>`` boolean toggles: the name callers know, one parse.
 
-Why this module exists
-----------------------
-Every ``registration.*`` A/B switch has to read a boolean out of the **frozen**
-config.  The sharded production config turns every section into a
-``MappingProxyType`` (``_freeze`` in ``sms_tool/config.py``), which is a
-``Mapping`` but **not** a ``dict``; a ``dict`` guard reads as "section missing"
-in production while plain-``dict`` test fixtures stay green.  That is the
-2026-10-07 P1-D class: three registration toggles silently read their default in
-every production run.
+The parse itself lives in :mod:`sms_tool.kernel.flags`. It used to live here
+**and** in ``auth_flow.steps``, as two textually identical copies, because the
+``auth_flow`` package could not import this module without growing an edge
+``scripts/import_layer_ratchet.py`` forbids. Moving the four shared lines to the
+``kernel`` leaf removed the reason for the copy: both names now delegate to one
+implementation.
 
-The parser is deliberately **two-sided**: ``default`` answers both a missing key
-and an unrecognised value.  A default-**on** toggle therefore stays truthy for an
-unreadable value and a default-**off** toggle stays falsy -- what the hand-written
-bodies did before consolidation, and what a naive ``bool(value)`` rewrite breaks.
-
-Owner
------
-This module is a leaf: it imports nothing from ``sms_tool`` (only ``typing``), so
-every registration module may import it without adding a cross-directory edge to
-``scripts/import_layer_ratchet.py``.  It lives at the top level rather than inside
-``auth_flow.steps`` because the callers below sit directly in ``sms_tool/`` and
-must not depend on the ``auth_flow`` package.
-``auth_flow.steps._registration_flag`` keeps its own copy on purpose: importing
-this module from there would add an ``sms_tool/auth_flow -> sms_tool`` module-level
-edge, and the ratchet forbids that growth.  The two bodies are kept textually
-identical so their semantics cannot diverge.
-
-Consumers (2026-10-10 scan P1-C′ consolidation)
------------------------------------------------
-``registration_protocol_helpers`` (re-export, for existing callers),
-``registration_otp_stages``, ``registration_sentinel_stages``,
-``registration_edge_challenge`` and ``registration_handlers``.  Before this
-module the four non-``auth_flow`` A/B toggles each hand-rolled the parse with
-three different unknown-value semantics; ``sentinel_password_bundle`` even
-failed **open** (an unrecognised value turned a default-off switch on).
+This module keeps its name and signature so existing importers
+(``registration_otp_stages``, ``registration_sentinel_stages``,
+``registration_edge_challenge``, ``registration_handlers``,
+``registration_protocol_helpers``) and patch targets keep working.
 """
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any
 
-#: Values that mean False / True when a config leaf arrives as a string.  Shared
-#: by the registration flag readers so a YAML/JSON string never changes meaning
-#: per call site.
-_FALSY_FLAG_VALUES = (False, 0, "0", "false", "False", "no", "No", "off")
-_TRUTHY_FLAG_VALUES = (True, 1, "1", "true", "True", "yes", "Yes", "on")
+from ..kernel.flags import section_flag
 
 
 def registration_flag(config: Any, key: str, default: bool) -> bool:
     """Read one ``registration.<key>`` boolean toggle from a frozen config.
 
-    Pure, and ``Mapping``-safe: the sharded production config freezes every
-    section into a ``mappingproxy`` (``_freeze`` in ``sms_tool/config.py``),
-    which is **not** a ``dict``.  A ``dict`` check made three of these toggles
-    read their default in every production run while the tests, which pass plain
-    dicts, stayed green (2026-10-07 scan P1-D).
+    ``Mapping``-safe and two-sided: ``default`` answers both a missing key and an
+    unrecognised value, so a default-on toggle stays truthy and a default-off
+    toggle stays falsy for anything unreadable. See
+    :func:`sms_tool.kernel.flags.coerce_flag` for why that matters (the frozen
+    ``mappingproxy`` and the 2026-10-10 fail-open fix).
 
-    ``default`` answers both a missing key and an unrecognised value, which is
-    the two-sided contract ``auth_flow.steps._registration_flag`` states: a
-    default-**on** toggle stays truthy for an unreadable value, a default-**off**
-    toggle stays falsy.  Returning ``default`` here reproduces that exactly.
+    Every key read through here is pinned to ``scripts/experiment_ledger.json``
+    by ``scripts/experiment_ratchet.py``: a flag nobody registered is a decision
+    nobody recorded.
     """
-    section = config.get("registration") if isinstance(config, Mapping) else None
-    if not isinstance(section, Mapping):
-        return default
-    value = section.get(key, default)
-    if value in _FALSY_FLAG_VALUES:
-        return False
-    if value in _TRUTHY_FLAG_VALUES:
-        return True
-    return default
+    return section_flag(config, "registration", key, default)
 
 
 __all__ = ["registration_flag"]

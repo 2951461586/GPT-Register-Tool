@@ -62,7 +62,7 @@ def persist_checkpoint(workflow: RegistrationWorkflow, state: str) -> None:
             checkpoint_payload(workflow),
             state,
         )
-    except Exception as exc:
+    except Exception as exc:  # broad-except: compat
         # ``emit`` rather than a bare ``print``: the line must reach both the
         # operator's stdout and the log file, and it is the documented seam for
         # every operator-visible line (the move out of ``registration_handlers``

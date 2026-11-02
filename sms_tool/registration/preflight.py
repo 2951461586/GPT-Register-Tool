@@ -16,6 +16,7 @@ from ..auth_headers import (
 from ..config import CFG
 from .. import endpoints
 from ..http_client import request_with_retry
+from ..kernel.transport import TRANSPORT_ERRORS
 from ..accounts.account_liveness import CODEX_USAGE_URL
 from ..phone_proxy import normalize_proxy_url, redact_proxy_url, refresh_proxy_sid
 from ..proxy.edge_probe import BLOCKED, classify_edge_response
@@ -84,7 +85,7 @@ def _proxy_scheme_reachable(candidate: str, url: str) -> bool:
     session = curl_requests.Session()
     try:
         session.trust_env = False
-    except Exception:
+    except Exception:  # broad-except: compat
         pass
     session.proxies = {"http": candidate, "https": candidate}
     try:
@@ -93,12 +94,15 @@ def _proxy_scheme_reachable(candidate: str, url: str) -> bool:
         # whole run.  Retry the transport before declaring the scheme wrong.
         request_with_retry(session, "get", url, timeout=15, impersonate=auth_impersonate(), label="proxy scheme probe")
         return True
-    except Exception:
+    except TRANSPORT_ERRORS:
+        # Only a transport failure means "this scheme cannot reach the endpoint".
+        # A defect in the probe itself must propagate: it is not evidence about the
+        # proxy, and the previous broad handler turned it into a scheme downgrade.
         return False
     finally:
         try:
             session.close()
-        except Exception:
+        except Exception:  # broad-except: compat
             pass
 
 
@@ -176,7 +180,7 @@ def registration_network_preflight(proxy=None, *, proxy_attempts: int = 2):
         session = curl_requests.Session()
         try:
             session.trust_env = False
-        except Exception:
+        except Exception:  # broad-except: compat
             pass
         session.proxies = {"http": candidate, "https": candidate} if candidate else {"http": "", "https": ""}
         try:
@@ -223,7 +227,7 @@ def registration_network_preflight(proxy=None, *, proxy_attempts: int = 2):
             if candidate and candidate != original:
                 result["proxy"] = candidate
             return result
-        except Exception as exc:
+        except Exception as exc:  # broad-except: compat
             last_error = exc
             if attempt + 1 >= max(1, min(int(proxy_attempts or 1), 3)) or not candidate:
                 break
@@ -231,6 +235,6 @@ def registration_network_preflight(proxy=None, *, proxy_attempts: int = 2):
         finally:
             try:
                 session.close()
-            except Exception:
+            except Exception:  # broad-except: compat
                 pass
     raise RuntimeError(str(last_error or "registration_preflight_failed"))

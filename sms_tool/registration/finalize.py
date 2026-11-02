@@ -99,7 +99,7 @@ def obtain_oauth_refresh_token(workflow: RegistrationWorkflow) -> None:
             )
             or {}
         )
-    except Exception as exc:
+    except Exception as exc:  # broad-except: compat
         s.oauth_result = {
             "ok": False,
             "mode": "codex_oauth_pkce",
@@ -316,7 +316,7 @@ def finalize(workflow: RegistrationWorkflow) -> dict[str, Any]:
     else:
         try:
             workflow.persistence.clear_checkpoint(s.username, runtime_config=workflow.config)
-        except Exception:
+        except Exception:  # broad-except: compat
             pass
     if not s.success:
         # A failed run must not cost a second mailbox: keep the purchased one in

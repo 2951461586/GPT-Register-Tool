@@ -93,7 +93,7 @@ def _seed_device_cookie(session: Any, device_id: str) -> None:
     for domain in (".openai.com", "chatgpt.com"):
         try:
             session.cookies.set("oai-did", device_id, domain=domain, path="/")
-        except Exception:
+        except Exception:  # broad-except: compat
             continue
 
 
@@ -107,7 +107,7 @@ def _extract_page_signals(response: object) -> tuple[str, str]:
     """Best-effort ``(page_type, verification_mode)`` from an authorize response."""
     try:
         payload = deps._json_or_raw(response, limit=4000)
-    except Exception:
+    except Exception:  # broad-except: compat
         return "", ""
     if not isinstance(payload, dict):
         return "", ""
@@ -284,7 +284,7 @@ def probe_registration(
             verification_mode=landing.get("verification_mode") or "",
             elapsed_ms=int((time.perf_counter() - started) * 1000),
         )
-    except Exception as exc:
+    except Exception as exc:  # broad-except: compat
         return _result(
             address,
             STATUS_UNKNOWN,
@@ -295,7 +295,7 @@ def probe_registration(
         if owned_session and active_session is not None:
             try:
                 active_session.close()
-            except Exception:
+            except Exception:  # broad-except: compat
                 pass
 
 

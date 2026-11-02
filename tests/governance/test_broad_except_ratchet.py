@@ -135,3 +135,60 @@ def test_baseline_file_is_present_and_parsable():
     assert isinstance(baseline.get("files"), dict)
     assert baseline["files"], "the frozen baseline must not be empty"
     assert baseline["totals"]["broad"] >= baseline["totals"]["silent"]
+
+
+def test_a_lane_budget_is_enforced():
+    """``policy.lanes`` must actually fail a lane that exceeds it (not be decorative)."""
+    counts = {
+        "sms_tool/registration/a.py": {"broad": 3, "silent": 1},
+        "elsewhere/b.py": {"broad": 1, "silent": 0},
+    }
+    lane = {
+        "protocol_registration": {
+            "paths": ["sms_tool/registration/"],
+            "max_broad": 1,
+            "max_silent": 0,
+            "reason": "test lane",
+        }
+    }
+    baseline = {
+        "files": {name: dict(value) for name, value in counts.items()},
+        "whitelist": {},
+        "policy": {"max_broad": 10, "max_silent": 10, "lanes": lane},
+        "totals": {"broad": 4, "silent": 1},
+    }
+
+    problems = ratchet.check(counts, baseline)
+
+    assert any("lane protocol_registration" in item and "broad" in item for item in problems), problems
+    assert any("lane protocol_registration" in item and "silent" in item for item in problems), problems
+
+
+def test_a_refreeze_cannot_drop_a_lane_budget():
+    """``--write`` re-measures the debt table; a reviewed lane budget must survive it.
+
+    Measured 2026-11-01: ``build_baseline`` rebuilt ``policy`` from the totals and
+    dropped ``lanes``, so the next ``--write`` turned the lane gate off while the
+    script kept reporting OK -- the same "decorative field" failure the IPC schema
+    documented for ``error_codes``.
+    """
+    counts = {"sms_tool/registration/a.py": {"broad": 2, "silent": 0}}
+    lane = {
+        "protocol_registration": {
+            "paths": ["sms_tool/registration/"],
+            "max_broad": 2,
+            "max_silent": 0,
+            "reason": "test lane",
+        }
+    }
+    previous = {
+        "files": {name: dict(value) for name, value in counts.items()},
+        "whitelist": {},
+        "policy": {"max_broad": 962, "max_silent": 155, "lanes": lane},
+        "totals": {"broad": 2, "silent": 0},
+    }
+
+    refrozen = ratchet.build_baseline(counts, previous=previous)
+
+    assert refrozen["policy"]["lanes"] == lane
+    assert refrozen["policy"]["max_broad"] == 2  # the global budget is still re-measured

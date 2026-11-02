@@ -374,7 +374,7 @@ def _stored_registration_record(email):
         from ..storage import get_account_record
 
         return get_account_record(email) or {}
-    except Exception:
+    except Exception:  # broad-except: compat
         return {}
 
 
@@ -390,7 +390,7 @@ def _stored_registration_password(email):
         return password
     try:
         raw = json.loads(row.get("raw_json") or "{}")
-    except Exception:
+    except Exception:  # broad-except: compat
         raw = {}
     return str(raw.get("password") or "").strip()
 
@@ -410,6 +410,6 @@ def _stored_registration_totp(email):
         return secret
     try:
         raw = json.loads(row.get("raw_json") or "{}")
-    except Exception:
+    except Exception:  # broad-except: compat
         raw = {}
     return str(raw.get("totp_secret") or "").strip()

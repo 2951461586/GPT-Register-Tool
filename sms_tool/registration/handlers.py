@@ -536,5 +536,5 @@ class RegistrationEmailWorkflow:
             seen.add(id(session))
             try:
                 session.close()
-            except Exception:
+            except Exception:  # broad-except: compat
                 pass

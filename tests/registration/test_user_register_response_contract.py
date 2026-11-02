@@ -50,6 +50,8 @@ r"""S0 契约锁：``user/register`` 的 200 **必须被跟**，且跟的是响�
 
 from __future__ import annotations
 
+from curl_cffi.requests.errors import RequestsError
+
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -919,7 +921,7 @@ def test_the_password_page_prime_survives_a_transport_failure(monkeypatch):
     from sms_tool.auth_flow import deps as auth_deps
 
     def _boom(*a, **kw):
-        raise RuntimeError("curl: (28) Operation timed out")
+        raise RequestsError("curl: (28) Operation timed out")
 
     monkeypatch.setattr(auth_deps, "_follow_continue_url", _boom)
     result = auth_flow._prime_create_account_password_page(

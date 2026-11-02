@@ -26,6 +26,7 @@ default path is unchanged.
 
 from __future__ import annotations
 
+from curl_cffi.requests.errors import RequestsError
 import unittest
 from types import MappingProxyType, SimpleNamespace
 from typing import Any, cast
@@ -350,7 +351,7 @@ class OtpValidateSentinelTests(unittest.TestCase):
         stage.r._is_wrong_email_otp_code = lambda data: False
         stage.r._fetch_client_auth_session_dump = lambda *a, **k: {}
         stage.r._follow_continue_url = Mock(return_value=Mock(status_code=200))
-        stage._issue_sentinel = Mock(side_effect=RuntimeError("mint down"))
+        stage._issue_sentinel = Mock(side_effect=RequestsError("mint down"))
         otp_stages.validate_email_otp(stage)
         self.assertFalse(stage.r._validate_email_otp.call_args.kwargs["use_sentinel"])
 

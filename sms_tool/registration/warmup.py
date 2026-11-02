@@ -133,7 +133,7 @@ def run_post_signup_warmup(
                     allow_redirects=False,
                 )
                 status = int(getattr(response, "status_code", 0) or 0)
-            except Exception:
+            except Exception:  # broad-except: compat
                 status = 0
             statuses.append(status)
             failures_in_row = 0 if 200 <= status < 400 else failures_in_row + 1
@@ -144,7 +144,7 @@ def run_post_signup_warmup(
         dwell = min(_MAX_DWELL_SECONDS, uniform_fn(lo, hi) if hi > lo else lo)
         if dwell > 0:
             sleep_fn(dwell)
-    except Exception:
+    except Exception:  # broad-except: compat
         dwell = 0.0
     result = {
         "ok": bool(statuses) and all(200 <= code < 400 for code in statuses),

@@ -31,7 +31,7 @@ def _complete_existing_login_totp(
         import pyotp
 
         code = pyotp.TOTP(secret).now()
-    except Exception:
+    except Exception:  # broad-except: compat
         return {"ok": False, "error": "existing_login_totp_code_failed"}
 
     referer = _response_next_url_from_data(payload, auth_base) or f"{auth_base}/mfa-challenge/{factor_id}"

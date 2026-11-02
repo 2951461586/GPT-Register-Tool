@@ -136,7 +136,7 @@ def anonymous_bootstrap(workflow: RegistrationWorkflow) -> list[int]:
                 url, headers=headers, timeout=20, impersonate=auth_impersonate(), allow_redirects=False
             )
             status = int(getattr(response, "status_code", 0) or 0)
-        except Exception as exc:
+        except Exception as exc:  # broad-except: compat
             _LOGGER.debug("anonymous bootstrap read failed: %s", describe_exception(exc))
         statuses.append(status)
     _emit(_LOGGER, "  Anonymous bootstrap: statuses=%s", ",".join(str(code) for code in statuses))
@@ -156,7 +156,7 @@ def read_providers(workflow: RegistrationWorkflow) -> int:
             allow_redirects=False,
         )
         status = int(getattr(response, "status_code", 0) or 0)
-    except Exception as exc:
+    except Exception as exc:  # broad-except: compat
         _LOGGER.debug("providers read failed: %s", describe_exception(exc))
     _emit(_LOGGER, "  Auth providers: status=%s", status)
     return status

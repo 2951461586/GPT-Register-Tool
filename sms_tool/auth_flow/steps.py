@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Mapping
 from urllib.parse import parse_qs, urlencode, urlparse
 
 # Deliberate re-exports (ADR-0009 facade pattern): ``steps`` stays the public
@@ -26,6 +25,7 @@ from ..auth_wire import (  # noqa: F401
     _with_query_param,
 )
 from . import deps
+from ..kernel.flags import section_flag
 
 logger = logging.getLogger(__name__)
 
@@ -84,47 +84,42 @@ def _is_email_verification_step(url):
 
 # ─── registration toggles ─────────────────────────────────────────────────────
 #
-# The eight ``registration.*`` switches below are A/B levers.  Each keeps its own
-# long docstring -- that is where the measurement that earned it is recorded --
-# and shares only the four lines that read a boolean out of the frozen config.
+# The ``registration.*`` switches below are A/B levers.  Each keeps its own long
+# docstring -- that is where the measurement that earned it is recorded -- and
+# delegates the boolean read to :func:`sms_tool.kernel.flags.section_flag`.
 #
-# The parser is deliberately two-sided.  ``_existing_login_continue_enabled``
-# predates this helper and is default-**on**, so an unrecognised value has to
-# stay truthy for it; every later toggle is default-**off** and treats an
-# unrecognised value as falsy.  Returning ``default`` for an unknown value
-# reproduces both exactly, and keeps "an unreadable config fails to the toggle's
-# own default" in one place instead of eight.
-_FALSY_FLAG_VALUES = (False, 0, "0", "false", "False", "no", "No", "off")
-_TRUTHY_FLAG_VALUES = (True, 1, "1", "true", "True", "yes", "Yes", "on")
+# The parse used to be a verbatim copy in this file, because importing
+# ``sms_tool.registration`` (or its ``flags`` module) from here would have grown an
+# edge ``scripts/import_layer_ratchet.py`` forbids.  The parse now lives in the
+# ``kernel`` leaf, so both sides share one implementation and the "kept textually
+# identical" promise is no longer what keeps them honest.
+#
+# It is deliberately two-sided: ``_existing_login_continue_enabled`` is
+# default-**on**, so an unrecognised value stays truthy for it; every later toggle
+# is default-**off** and treats an unrecognised value as falsy.  Returning the
+# toggle's own default for an unknown value is what reproduces both exactly.
 
 
 def _registration_flag(key: str, default: bool) -> bool:
     """Read one ``registration.<key>`` boolean toggle from the frozen config.
 
-    ``default`` answers both a missing key and an unrecognised value, which is
-    what the eight hand-written bodies did before they were converged here.
-
-    The ``Mapping`` guard is load bearing, and it is the reason this helper
-    exists rather than eight copies of itself: the sharded production config
+    ``default`` answers both a missing key and an unrecognised value (see the
+    module note above).  The ``Mapping`` guard is load bearing and lives in
+    :func:`sms_tool.kernel.flags.section_flag`: the sharded production config
     freezes every section into a ``mappingproxy`` (``_freeze`` in
-    ``sms_tool/config.py``), which is **not** a ``dict``.  A ``dict`` check made
+    ``sms_tool/config.py``), which is **not** a ``dict``, and a ``dict`` check made
     these toggles read their default in every production run while the tests,
     which pass plain dicts, stayed green (2026-10-07; see
-    ``docs/audits/scans/scan-2026-10-07-protocol-registration.md`` P1-D).  One copy of
-    the guard cannot drift from itself.
+    ``docs/audits/scans/scan-2026-10-07-protocol-registration.md`` P1-D).
+
+    Every key read through here is pinned to ``scripts/experiment_ledger.json``
+    by ``scripts/experiment_ratchet.py``.
     """
     try:
-        cfg = deps.current_config_data().get("registration", {})
-    except Exception:
+        config = deps.current_config_data()
+    except Exception:  # broad-except: compat
         return default
-    if not isinstance(cfg, Mapping):
-        return default
-    value = cfg.get(key, default)
-    if value in _FALSY_FLAG_VALUES:
-        return False
-    if value in _TRUTHY_FLAG_VALUES:
-        return True
-    return default
+    return section_flag(config, "registration", key, default)
 
 
 def _existing_login_continue_enabled():

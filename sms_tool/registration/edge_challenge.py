@@ -70,7 +70,7 @@ def install_edge_challenge_hook(workflow: RegistrationWorkflow, session: Any) ->
         return
     try:
         setattr(session, EDGE_CHALLENGE_HOOK_ATTR, workflow._on_edge_challenge)
-    except Exception:
+    except Exception:  # broad-except: compat
         return
 
 
@@ -103,7 +103,7 @@ def on_edge_challenge(workflow: RegistrationWorkflow, session: Any, verdict: str
         return False
     try:
         session.proxies = {"http": rotated, "https": rotated}
-    except Exception as exc:
+    except Exception as exc:  # broad-except: compat
         workflow._count_edge_challenge_rotate_failure("rebind_failed")
         _LOGGER.warning("Edge-challenge exit rotation could not rebind the session: %s", describe_exception(exc))
         return False

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from curl_cffi.requests.errors import RequestsError
+
 from unittest.mock import patch
 
 from sms_tool.registration import probe as rp
@@ -100,7 +102,7 @@ def test_probe_reports_registered_on_login_landing():
 
 
 def test_probe_transport_failure_is_unknown_not_registered():
-    with patch("sms_tool.auth_flow.deps.request_with_retry", side_effect=RuntimeError("proxy down")):
+    with patch("sms_tool.auth_flow.deps.request_with_retry", side_effect=RequestsError("proxy down")):
         result = rp.probe_registration("user@example.com", session=_FakeSession())
 
     assert result["status"] == rp.STATUS_UNKNOWN

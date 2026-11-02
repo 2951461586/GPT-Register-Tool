@@ -241,7 +241,7 @@ def record_failed_mailbox_purchase(workflow: Any, result: Mapping[str, Any] | No
                 mask_account(str(getattr(mailbox, "email", "") or "")),
             )
         return status
-    except Exception as exc:  # pragma: no cover - bookkeeping only
+    except Exception as exc:  # broad-except: compat  # pragma: no cover - bookkeeping only
         logger.warning("failed to record the purchased mailbox: %s", type(exc).__name__)
         return "error"
 

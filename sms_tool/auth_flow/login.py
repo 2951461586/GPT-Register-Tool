@@ -7,6 +7,7 @@ from typing import Any
 from urllib.parse import quote, urlencode
 
 from . import deps, otp, password_step, sentinel_flow, steps
+from ..kernel.transport import TRANSPORT_ERRORS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -44,7 +45,9 @@ def _fetch_session_csrf_token(session, chat_base, base_headers, did, session_log
             },
             impersonate=deps.auth_impersonate(),
         )
-    except Exception as exc:
+    except TRANSPORT_ERRORS as exc:
+        # The try body is one priming GET. A defect (a bad header, a broken helper)
+        # must surface instead of being printed as a transport warning.
         print(f"  Existing account prime transport warning: {exc}")
     try:
         response = deps.request_with_retry(
@@ -64,7 +67,7 @@ def _fetch_session_csrf_token(session, chat_base, base_headers, did, session_log
         if not isinstance(body, dict):
             return ""
         return str(body.get("csrfToken") or "").strip()
-    except Exception as exc:
+    except Exception as exc:  # broad-except: compat
         print(f"  Existing account csrf transport warning: {exc}")
         return ""
 
@@ -243,7 +246,7 @@ def _existing_login_continue(session, username, did, auth_base, base_headers, pr
                 ),
                 impersonate=deps.auth_impersonate(),
             )
-        except Exception as exc:
+        except Exception as exc:  # broad-except: compat
             # On the verified page this POST is an *addition* to the old
             # behaviour, so it must never be able to fail the lane: fall back
             # to the skip -- no transaction state, probe answers

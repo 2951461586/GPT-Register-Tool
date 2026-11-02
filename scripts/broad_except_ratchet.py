@@ -140,16 +140,24 @@ def build_baseline(
     counts: Mapping[str, Mapping[str, int]],
     previous: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Re-freeze ``files``/``policy`` while keeping the reviewed ``whitelist``."""
+    """Re-freeze ``files``/``policy`` while keeping the reviewed ``whitelist`` and lanes."""
     whitelist = (previous or {}).get("whitelist", {})
+    previous_policy = (previous or {}).get("policy", {})
+    lanes = previous_policy.get("lanes", {}) if isinstance(previous_policy, Mapping) else {}
     totals = _totals(counts)
+    policy: dict[str, Any] = {"max_broad": totals["broad"], "max_silent": totals["silent"]}
+    if lanes:
+        # A lane budget is a reviewed decision, not a measurement: re-freezing the
+        # debt table must not be able to drop it, or the gate silently becomes
+        # decorative on the next --write (measured 2026-11-01: it did).
+        policy["lanes"] = lanes
     return {
         "_comment": (
             "Broad-except gate state (see scripts/broad_except_ratchet.py). 'files' is frozen "
             "debt with a hard ceiling in 'policy'; 'whitelist' is the reviewed set where a "
             "broad handler is the design. A file absent from both has an allowance of 0."
         ),
-        "policy": {"max_broad": totals["broad"], "max_silent": totals["silent"]},
+        "policy": policy,
         "whitelist": whitelist,
         "files": {name: dict(entry) for name, entry in sorted(counts.items())},
         "totals": totals,
@@ -180,11 +188,16 @@ def violations(
 def check(counts: Mapping[str, Mapping[str, int]], baseline: Mapping[str, Any]) -> list[str]:
     """Every reason the tree may not ship as-is, in one list.
 
-    Three independent tests, deliberately not folded into one:
+    Four independent tests, deliberately not folded into one:
 
     * per file: the count may not exceed the frozen allowance;
     * globally: the totals may not exceed ``policy``, so no module can pay for
       another module's growth;
+    * per lane: ``policy.lanes`` scopes a budget to a set of directories. The
+      protocol registration lane is the one where a swallowed exception is
+      indistinguishable from a protocol failure (it lands in the funnel as
+      ``unknown`` while the batch keeps spending mailboxes), so it carries
+      ``silent = 0``;
     * whitelist integrity: every reviewed entry needs a reason, and still has to
       describe a file that has a broad handler at all.
     """
@@ -201,6 +214,24 @@ def check(counts: Mapping[str, Mapping[str, int]], baseline: Mapping[str, Any]) 
             )
 
     whitelist = baseline.get("whitelist", {}) if isinstance(baseline, Mapping) else {}
+    lanes = policy.get("lanes", {}) if isinstance(policy, Mapping) else {}
+    for lane_name in sorted(lanes):
+        lane = lanes[lane_name] if isinstance(lanes[lane_name], Mapping) else {}
+        prefixes = tuple(str(item) for item in (lane.get("paths") or ()))
+        scoped = {
+            name: value
+            for name, value in counts.items()
+            if prefixes and name.startswith(prefixes) and name not in whitelist
+        }
+        for kind, key in (("broad", "max_broad"), ("silent", "max_silent")):
+            used = sum(int(value.get(kind, 0)) for value in scoped.values())
+            cap = int(lane.get(key, 0))
+            if used > cap:
+                problems.append(
+                    "lane %s: %s handlers %d > budget %d (%s)"
+                    % (lane_name, kind, used, cap, lane.get("reason", "no reason recorded"))
+                )
+
     for name in sorted(whitelist):
         entry = whitelist[name]
         reason = str(entry.get("reason", "")).strip() if isinstance(entry, Mapping) else ""

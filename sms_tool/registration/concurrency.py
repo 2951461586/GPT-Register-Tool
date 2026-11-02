@@ -197,7 +197,7 @@ def acquire_registration_stage(stage: str) -> RegistrationStageLease | None:
     gate.acquire()
     try:
         _raise_if_registration_rate_limited(group)
-    except Exception:
+    except Exception:  # broad-except: compat
         gate.release()
         raise
     if cross is not None:

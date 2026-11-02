@@ -1,16 +1,37 @@
 """Public registration facade and compatibility exports.
 
-The long import block below re-exports symbols -- including underscore-prefixed
-internals -- from eight sibling modules, so callers (``cli``,
-``account_recovery`` and the test suite) can import one stable module instead of
-reaching into private modules. Those imports are intentionally "unused" inside
-this file; without ``__all__`` every static analyser counts them as dead imports
-(89 of the repo-wide 325 unused-import findings come from this single file).
+This module is the stable import surface for the registration lane: callers
+(``cli``, ``account_recovery``, the test suite) import one module instead of
+reaching into private siblings, including underscore-prefixed internals.
 
-``__all__`` lists the **public** contract. Underscore-prefixed names are internal
-re-exports kept for existing callers and are deliberately excluded from it.
-Adding or removing a name here is a compatibility statement -- keep it honest.
+The re-exports are split in two on purpose (2026-11-01):
+
+* **eager** -- the names this module's own functions read. They are module
+  globals, and two of them are documented patch seams that tests replace on this
+  module object (``run_email``, ``_login_existing_account_with_email_otp``). A
+  PEP 562 ``__getattr__`` only answers *external* attribute access; module code
+  resolves globals from the module dict, so hiding these would turn every
+  function body into a ``NameError``.
+* **lazy** -- the compatibility re-exports nothing here reads. They live in
+  ``_MODULE_EXPORTS`` and are imported on first attribute access, which is what
+  keeps their static imports out of this file (they were the largest single
+  source of the unused-import baseline). The pattern matches
+  ``sms_tool.auth_flow``, ``sms_tool.registration``, ``sms_tool.pay_link`` and
+  ``sms_tool.upi_link``; the difference is only that this module still has code.
+
+``__all__`` lists the **public** contract and covers both halves. Underscore-
+prefixed names are internal re-exports kept for existing callers and are
+deliberately excluded from it. Adding or removing a name here is a compatibility
+statement -- keep it honest: re-export by adding a ``_MODULE_EXPORTS`` row (or an
+eager import when this module's own code needs it), never by widening ``__all__``
+alone.
 """
+
+from __future__ import annotations
+
+import importlib
+import time
+from typing import TYPE_CHECKING, Any
 
 __all__ = [
     "CFG",
@@ -64,95 +85,198 @@ __all__ = [
     "with_sentinel",
 ]
 
-import time
 
-from curl_cffi import requests as curl_requests
+#: name -> (owning module, attribute name). Compatibility re-exports that no code in
+#: this module reads; resolved on first attribute access.
+_MODULE_EXPORTS: dict[str, tuple[str, str]] = {
+    "CFG": ("sms_tool.config", "CFG"),
+    "RegistrationCancelled": ("sms_tool.registration.cancel", "RegistrationCancelled"),
+    "RegistrationStage": ("sms_tool.registration.state", "RegistrationStage"),
+    "RegistrationState": ("sms_tool.registration.state", "RegistrationState"),
+    "_absolute_url": ("sms_tool.auth_flow", "_absolute_url"),
+    "_complete_existing_login_totp": ("sms_tool.auth_flow", "_complete_existing_login_totp"),
+    "_continue_signup_username": ("sms_tool.auth_flow", "_continue_signup_username"),
+    "_cookie_header": ("sms_tool.account_creation", "_cookie_header"),
+    "_cookie_jar_header": ("sms_tool.sentinel_tokens", "_cookie_jar_header"),
+    "_create_account_error": ("sms_tool.registration.outcome", "_create_account_error"),
+    "_create_account_sentinel_token": ("sms_tool.account_creation", "_create_account_sentinel_token"),
+    "_extract_sentinel_http": ("sms_tool.sentinel_tokens", "_extract_sentinel_http"),
+    "_invalid_state_auth_response": ("sms_tool.auth_flow", "_invalid_state_auth_response"),
+    "_is_email_verification_step": ("sms_tool.auth_flow", "_is_email_verification_step"),
+    "_is_mfa_challenge_payload": ("sms_tool.auth_flow", "_is_mfa_challenge_payload"),
+    "_minimal_chatgpt_cookie_header": ("sms_tool.account_creation", "_minimal_chatgpt_cookie_header"),
+    "_openai_signin_url": ("sms_tool.auth_flow", "_openai_signin_url"),
+    "_prime_email_verification_page": ("sms_tool.auth_flow", "_prime_email_verification_page"),
+    "_response_next_url": ("sms_tool.auth_flow", "_response_next_url"),
+    "_response_next_url_from_data": ("sms_tool.auth_flow", "_response_next_url_from_data"),
+    "_sanitize": ("sms_tool.kernel.sanitizer", "sanitize"),
+    "_send_existing_login_otp": ("sms_tool.auth_flow", "_send_existing_login_otp"),
+    "_sentinel_frame_version": ("sms_tool.sentinel_tokens", "_sentinel_frame_version"),
+    "_tock": ("sms_tool.utils", "_tock"),
+    "_totp_factor_id": ("sms_tool.auth_flow", "_totp_factor_id"),
+    "_with_query_param": ("sms_tool.auth_flow", "_with_query_param"),
+    "auth_fingerprint_capabilities": ("sms_tool.auth_headers", "auth_fingerprint_capabilities"),
+    "cancel_scope": ("sms_tool.registration.cancel", "cancel_scope"),
+    "cancellable_sleep": ("sms_tool.registration.cancel", "cancellable_sleep"),
+    "classify_error": ("sms_tool.kernel.error_classification", "classify_error"),
+    "clear_registration_cancel": ("sms_tool.registration.cancel", "clear_registration_cancel"),
+    "curl_cffi_capabilities": ("sms_tool.auth_headers", "curl_cffi_capabilities"),
+    "curl_requests": ("curl_cffi", "requests"),
+    "current_auth_fingerprint": ("sms_tool.auth_headers", "current_auth_fingerprint"),
+    "ensure_not_cancelled": ("sms_tool.registration.cancel", "ensure_not_cancelled"),
+    "import_cookie_header": ("sms_tool.codex_sentinel", "import_cookie_header"),
+    "load_cached_sentinel": ("sms_tool.codex_sentinel", "load_cached_sentinel"),
+    "normalize_proxy_url": ("sms_tool.phone_proxy", "normalize_proxy_url"),
+    "poll_email_otp": ("sms_tool.mailbox.router", "poll_email_otp"),
+    "prepare_registration_context": ("sms_tool.registration.state", "prepare_registration_context"),
+    "refresh_proxy_sid": ("sms_tool.phone_proxy", "refresh_proxy_sid"),
+    "registration_cancel_requested": ("sms_tool.registration.cancel", "registration_cancel_requested"),
+    "request_registration_cancel": ("sms_tool.registration.cancel", "request_registration_cancel"),
+    "runtime_file": ("sms_tool.kernel.paths", "runtime_file"),
+    "with_sentinel": ("sms_tool.codex_sentinel", "with_sentinel"),
+}
 
-from ..codex_sentinel import import_cookie_header, load_cached_sentinel, with_sentinel
-from ..auth_headers import (
-    auth_fingerprint_capabilities,
+if TYPE_CHECKING:  # pragma: no cover - static checkers only
+    # Only the lazy re-exports: the eager ones are real runtime imports above, so
+    # pyright already sees them. Grouped per module -- one statement per name would
+    # add one type-only edge each to the dependency graph for no extra precision.
+    from curl_cffi import requests as curl_requests  # noqa: F401
+    from sms_tool.account_creation import (  # noqa: F401
+        _cookie_header,
+        _create_account_sentinel_token,
+        _minimal_chatgpt_cookie_header,
+    )
+    from sms_tool.auth_flow import (  # noqa: F401
+        _absolute_url,
+        _complete_existing_login_totp,
+        _continue_signup_username,
+        _invalid_state_auth_response,
+        _is_email_verification_step,
+        _is_mfa_challenge_payload,
+        _openai_signin_url,
+        _prime_email_verification_page,
+        _response_next_url,
+        _response_next_url_from_data,
+        _send_existing_login_otp,
+        _totp_factor_id,
+        _with_query_param,
+    )
+    from sms_tool.auth_headers import (  # noqa: F401
+        auth_fingerprint_capabilities,
+        curl_cffi_capabilities,
+        current_auth_fingerprint,
+    )
+    from sms_tool.codex_sentinel import (  # noqa: F401
+        import_cookie_header,
+        load_cached_sentinel,
+        with_sentinel,
+    )
+    from sms_tool.config import CFG  # noqa: F401
+    from sms_tool.kernel.error_classification import classify_error  # noqa: F401
+    from sms_tool.kernel.paths import runtime_file  # noqa: F401
+    from sms_tool.kernel.sanitizer import sanitize as _sanitize  # noqa: F401
+    from sms_tool.mailbox.router import poll_email_otp  # noqa: F401
+    from sms_tool.phone_proxy import (  # noqa: F401
+        normalize_proxy_url,
+        refresh_proxy_sid,
+    )
+    from sms_tool.registration.cancel import (  # noqa: F401
+        RegistrationCancelled,
+        cancel_scope,
+        cancellable_sleep,
+        clear_registration_cancel,
+        ensure_not_cancelled,
+        registration_cancel_requested,
+        request_registration_cancel,
+    )
+    from sms_tool.registration.outcome import _create_account_error  # noqa: F401
+    from sms_tool.registration.state import (  # noqa: F401
+        RegistrationStage,
+        RegistrationState,
+        prepare_registration_context,
+    )
+    from sms_tool.sentinel_tokens import (  # noqa: F401
+        _cookie_jar_header,
+        _extract_sentinel_http,
+        _sentinel_frame_version,
+    )
+    from sms_tool.utils import _tock  # noqa: F401
+
+
+def __getattr__(name: str) -> Any:
+    """Import and cache one lazy re-export on first access (PEP 562)."""
+    try:
+        module_name, attribute = _MODULE_EXPORTS[name]
+    except KeyError:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}") from None
+    value = getattr(importlib.import_module(module_name), attribute)
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    return sorted(__all__)
+
+
+from sms_tool.account_creation import (
+    _auth_session_access_token,
+    _create_account_continue_url,
+    _email_otp_send_url,
+    _fetch_auth_session,
+    _is_user_already_exists,
+    _is_wrong_email_otp_code,
+    _validate_email_otp,
+)
+from sms_tool.accounts import account_liveness
+from sms_tool.auth_flow import (
+    LOGIN_EMAIL_OTP_SUBJECT_KEYWORD,
+    _auth_request_headers,
+    _is_chatgpt_auth_login_landing,
+    _is_existing_login_redirect,
+    _is_signup_password_step,
+    _json_or_raw,
+    _login_existing_account_with_email_otp,
+    _passwordless_signin_attempts,
+    _prepare_signup_auth_state,
+    _prime_create_account_password_page,
+    _prime_create_account_password_page_enabled,
+    _signup_signin_attempts,
+)
+from sms_tool.auth_headers import (
     auth_impersonate,
     chatgpt_headers,
-    curl_cffi_capabilities,
-    current_auth_fingerprint,
-    openai_auth_headers,
     nextauth_headers,
+    openai_auth_headers,
+    select_auth_fingerprint,
     set_fingerprint_device,
     set_fingerprint_geo,
-    select_auth_fingerprint,
 )
-from ..kernel.error_classification import classify_error
-from ..config import (
-    CFG,
+from sms_tool.auth_state import fetch_client_auth_session_dump as _fetch_client_auth_session_dump
+from sms_tool.config import (
     current_config_data,
     resolve_runtime_config,
     runtime_config_scope,
     validate_config,
     validate_registration_driver_config,
 )
-from ..http_client import request_with_retry
-from ..phone_proxy import normalize_proxy_url, refresh_proxy_sid
-from ..sentinel_tokens import (
-    _cookie_jar_header,
-    _extract_sentinel,
-    _extract_sentinel_http,
-    assert_sentinel_device_id,
-    _import_sentinel_cookies,
-    _sentinel_device_id,
-    _sentinel_frame_version,
-    _set_oai_did_cookie,
+from sms_tool.http_client import request_with_retry
+from sms_tool.http_utils import _follow_continue_url
+from sms_tool.kernel.sanitizer import sanitize_text as _sanitize_text
+from sms_tool.mailbox.router import (
+    ensure_mailbox_account,
+    snapshot_mailbox_message,
 )
-from ..auth_flow import (
-    LOGIN_EMAIL_OTP_SUBJECT_KEYWORD,
-    _absolute_url,
-    _auth_request_headers,
-    _complete_existing_login_totp,
-    _continue_signup_username,
-    _invalid_state_auth_response,
-    _is_chatgpt_auth_login_landing,
-    _is_email_verification_step,
-    _is_existing_login_redirect,
-    _is_mfa_challenge_payload,
-    _is_signup_password_step,
-    _json_or_raw,
-    _login_existing_account_with_email_otp,
-    _openai_signin_url,
-    _passwordless_signin_attempts,
-    _prepare_signup_auth_state,
-    _prime_email_verification_page,
-    _prime_create_account_password_page,
-    _prime_create_account_password_page_enabled,
-    _response_next_url,
-    _response_next_url_from_data,
-    _send_existing_login_otp,
-    _signup_signin_attempts,
-    _totp_factor_id,
-    _with_query_param,
-)
-from ..account_creation import (
-    _auth_session_access_token,
-    _cookie_header,
-    _create_account_continue_url,
-    _create_account_sentinel_token,
-    _email_otp_send_url,
-    _fetch_auth_session,
-    _is_user_already_exists,
-    _is_wrong_email_otp_code,
-    _minimal_chatgpt_cookie_header,
-    _validate_email_otp,
-)
-from ..http_utils import _follow_continue_url
-from ..auth_state import fetch_client_auth_session_dump as _fetch_client_auth_session_dump
-from ..otp_strategy import (
+from sms_tool.otp_strategy import (
     SyntheticResponse,
     _poll_registration_email_otp,
     send_registration_email_otp as _send_registration_email_otp,
 )
-from ..mailbox.router import ensure_mailbox_account, poll_email_otp, snapshot_mailbox_message
-from ..kernel.paths import runtime_file
-from ..phone_registration import run_phone_register as _run_phone_register_impl
-from .outcome import (
-    _create_account_error,
+from sms_tool.phone_registration import run_phone_register as _run_phone_register_impl
+from sms_tool.registration.operations import (
+    RegistrationOperations,
+    RegistrationOtpPollingOperations,
+)
+from sms_tool.registration.outcome import (
     _failure_result,
     _mailbox_snapshot,
     _oauth_result_summary,
@@ -160,30 +284,30 @@ from .outcome import (
     _registration_outcome,
     _retain_registration_checkpoint as _retain_registration_checkpoint_impl,
 )
-from .preflight import _resolve_proxy_scheme, registration_network_preflight
-from .progress import registration_stage, track_registration
-from .cancel import (
-    RegistrationCancelled,
-    cancellable_sleep,
-    cancel_scope,
-    clear_registration_cancel,
-    ensure_not_cancelled,
-    registration_cancel_requested,
-    request_registration_cancel,
+from sms_tool.registration.preflight import (
+    _resolve_proxy_scheme,
+    registration_network_preflight,
 )
-from .state import (
-    RegistrationStage,
-    RegistrationState,
+from sms_tool.registration.progress import (
+    registration_stage,
+    track_registration,
+)
+from sms_tool.registration.state import (
     RegistrationStateMachine,
     _normalize_registration_mode,
     _stored_registration_password,
     _stored_registration_totp,
-    prepare_registration_context,
 )
-from ..kernel.sanitizer import sanitize as _sanitize, sanitize_text as _sanitize_text
-from ..session_builder import build_session_file
-from ..accounts import account_liveness
-from ..utils import (
+from sms_tool.registration_drivers.base import normalize_registration_driver
+from sms_tool.sentinel_tokens import (
+    _extract_sentinel,
+    _import_sentinel_cookies,
+    _sentinel_device_id,
+    _set_oai_did_cookie,
+    assert_sentinel_device_id,
+)
+from sms_tool.session_builder import build_session_file
+from sms_tool.utils import (
     _generate_password,
     _print_timings,
     _random_birthdate,
@@ -191,12 +315,9 @@ from ..utils import (
     _safe_tock,
     _tick,
     _timing_summary,
-    _tock,
     _tl,
     think_stage,
 )
-from ..registration_drivers.base import normalize_registration_driver
-from .operations import RegistrationOperations, RegistrationOtpPollingOperations
 
 REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORD = "verification code"
 REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORDS = f"{REGISTRATION_EMAIL_OTP_SUBJECT_KEYWORD}|{LOGIN_EMAIL_OTP_SUBJECT_KEYWORD}"
