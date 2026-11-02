@@ -14,7 +14,7 @@ import logging
 import os
 import re
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
@@ -726,6 +726,58 @@ def _persist_registration_result_core(
         return marker
 
 
+def build_registration_batch_summary(
+    *,
+    effective_count: Any,
+    success_count: int,
+    batch_id: str,
+    saved_count: int,
+    db_saved_count: int,
+    quality: Mapping[str, Any] | None,
+    promotion_report: Mapping[str, Any] | None,
+    health_job_ids: Iterable[str],
+    results: Iterable[Mapping[str, Any] | None],
+) -> dict[str, Any]:
+    """Assemble the batch summary that both the CLI and the desktop host read.
+
+    Pure on purpose: no persistence, no prints, no provider calls.  The caller
+    (``save_registration_results``) owns the I/O and hands the already-computed
+    numbers in; that keeps the payload shaped by one readable function instead
+    of being the tail of a 90-line procedure.
+
+    This dict is a **cross-language contract**, not an internal return value:
+    ``SmsWorkbench.Interop.BackendResultInterpreter.BatchSummaryLabel`` reads
+    ``total``/``success``/``failed`` off it and defaults every key it cannot
+    find to ``0``, so a rename here degrades silently in the WPF label instead
+    of failing loudly.  That reader also serves the liveness / promotion /
+    qualification summaries (``unauthorized``, ``liveness_401``,
+    ``persist_failed``, ...), which is why it is defensive at all.  Keep this
+    key set stable -- additive changes only; ``test_registration_batch_summary_contract.py``
+    pins it.
+    """
+    return {
+        "ok": success_count == effective_count,
+        "batch_id": batch_id,
+        "total": _safe_int(effective_count, 0),
+        "success": success_count,
+        "failed": max(0, _safe_int(effective_count, 0) - success_count),
+        "session_saved": saved_count,
+        "db_saved": db_saved_count,
+        "quality": quality,
+        "promotion": promotion_report,
+        "funnel": summarize_registration_funnel(
+            results,
+            attempted=effective_count,
+            promotion=promotion_report,
+        ),
+        "health": {
+            "queued": len(dict.fromkeys(health_job_ids)),
+            "promotion_completed": promotion_report is not None,
+            "promotion_ok": (bool(promotion_report.get("ok")) if isinstance(promotion_report, dict) else None),
+        },
+    }
+
+
 def save_registration_results(
     args,
     results,
@@ -809,27 +861,17 @@ def save_registration_results(
 
     if getattr(args, "import_cpa", False):
         ctx.import_registered_accounts(args, import_emails)
-    return {
-        "ok": success_count == effective_count,
-        "batch_id": batch_id,
-        "total": _safe_int(effective_count, 0),
-        "success": success_count,
-        "failed": max(0, _safe_int(effective_count, 0) - success_count),
-        "session_saved": saved_count,
-        "db_saved": db_saved_count,
-        "quality": quality,
-        "promotion": promotion_report,
-        "funnel": summarize_registration_funnel(
-            results,
-            attempted=effective_count,
-            promotion=promotion_report,
-        ),
-        "health": {
-            "queued": len(dict.fromkeys(health_job_ids)),
-            "promotion_completed": promotion_report is not None,
-            "promotion_ok": (bool(promotion_report.get("ok")) if isinstance(promotion_report, dict) else None),
-        },
-    }
+    return build_registration_batch_summary(
+        effective_count=effective_count,
+        success_count=success_count,
+        batch_id=batch_id,
+        saved_count=saved_count,
+        db_saved_count=db_saved_count,
+        quality=quality,
+        promotion_report=promotion_report,
+        health_job_ids=health_job_ids,
+        results=results,
+    )
 
 
 def run_target_at200(args, base_dir, ctx: RegistrationCommandContext):

@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "families": {
+    "registration.batch": {
+      "python": {
+        "module": "sms_tool.commands.registration",
+        "builder": "build_registration_batch_summary"
+      },
+      "cs_readers": [
+        {
+          "file": "SmsWorkbench.Contracts/RegistrationBatchSummary.cs",
+          "type": "RegistrationBatchSummary",
+          "reads": ["total", "success", "failed"]
+        }
+      ],
+      "keys": {
+        "ok": {"type": "bool", "required": true},
+        "batch_id": {"type": "string", "required": true},
+        "total": {"type": "int", "required": true},
+        "success": {"type": "int", "required": true},
+        "failed": {"type": "int", "required": true},
+        "session_saved": {"type": "int", "required": true},
+        "db_saved": {"type": "int", "required": true},
+        "quality": {"type": "object", "required": true, "nullable": true},
+        "promotion": {"type": "object", "required": true, "nullable": true},
+        "funnel": {"type": "object", "required": true},
+        "health": {"type": "object", "required": true}
+      }
+    }
+  }
+}
