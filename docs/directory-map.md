@@ -117,7 +117,7 @@ shell), and fails on two different defects:
   with no JSON entry -- so the table cannot grow a category the gate never
   measures.
 
-```
+```bash
 python scripts/module_coverage_check.py --detail
 ```
 
