@@ -63,6 +63,9 @@ Directory layout (since 2026-09-06):
 
 ## Release notes（docs/releases/，一个发布标签一份，不回写）
 
+- [v2026.11.02 发布说明](releases/release-v2026.11.02.md) - 自 v2026.10.28 以来的收口：
+  修掉「声明了 mailbox lane 就开不了窗」与「更新检查被限流后永久刷屏」两个阻断缺陷、
+  客户端指纹对齐 10-31 HAR、两个注册 A/B 开关，以及一次凭据暴露面清理。
 - [v2026.10.28 发布说明](releases/release-v2026.10.28.md) - 上一轮扫描的 P0–P3 落地：
   账号详情页「身份」分组、lane 隔离可见可声明、结构性描边清零、设计令牌覆盖代码构建的 UI、
   `max_retries` 死参数与首轮健康探针缺失的修复。
