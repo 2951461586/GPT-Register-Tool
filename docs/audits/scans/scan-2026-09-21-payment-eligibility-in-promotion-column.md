@@ -260,7 +260,7 @@ catalog 有严格的 `validate_catalog_consistency()`（`payment_catalog.py:200`
 ```
 .venv/Scripts/python.exe chatgpt_phone_reg.py --check-promotion \
   --email "sample-198104+oai01@icloud.com" \
-  --proxy "http://SYS438038sos_1-country-in:***@proxysg.rola.vip:2000" --refresh-timeout 45
+  --proxy "http://SYNTHACCT7sos_1-country-in:***@proxysg.rola.vip:2000" --refresh-timeout 45
 ```
 
 （注意：`--check-promotion` 是**顶层 flag**，不是 `accounts` 子命令。）

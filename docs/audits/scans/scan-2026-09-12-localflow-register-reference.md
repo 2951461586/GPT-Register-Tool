@@ -50,7 +50,7 @@
 
 **配置真源 = 三个 shard**（`config.py:64-68`：`proxy.json` / `runtime.json` / `payment.json`），`load_merged_config()`（`:157-181`）只要任一 shard 存在就 deep-merge 并返回；根 `config.json` 已降级为 legacy 死文件（仍留着 100 条 ipwo US 条目，且 `proxy.registration` 在 legacy 里是**数组**、在 shard 里是**标量** —— 类型不一致）。
 
-当前池 30 条，**三家供应商混编**，全部 VN 出口：9http `geo-VN-sid-…-ttl-5`（10）、ipwo `custom_zone_VN_sid-…_time_5`（10）、rola `SYS433954tbr_N-country-vn`（10）。
+当前池 30 条，**三家供应商混编**，全部 VN 出口：9http `geo-VN-sid-…-ttl-5`（10）、ipwo `custom_zone_VN_sid-…_time_5`（10）、rola `SYNTHACCT7tbr_N-country-vn`（10）。
 
 | 维度 | 实现 | 位置 |
 |------|------|------|
@@ -97,7 +97,7 @@ _USER_REGION_RE = re.compile(rf"(^|-){_REGION_TAG}-[A-Za-z]{{2}}(?=-|$)")  # 只
 _USER_SID_RE = re.compile(r"(?:(?<=-sid-)|(?<=_sid_))[A-Za-z0-9]+(?=[_-]|$)")  # 只认 -sid-/_sid_
 ```
 
-rola 的用户名是 `SYS433954tbr_N-country-vn` —— 地区标签是 `country` 不是 `region`/`geo`，且**没有** `-sid-`/`_sid_` 标记 ⇒ 两个正则都不命中 ⇒ `changed = False` ⇒ 原样返回。
+rola 的用户名是 `SYNTHACCT7tbr_N-country-vn` —— 地区标签是 `country` 不是 `region`/`geo`，且**没有** `-sid-`/`_sid_` 标记 ⇒ 两个正则都不命中 ⇒ `changed = False` ⇒ 原样返回。
 
 **为什么这条是 P1**：`batch_runner.py:274` 在 `attempt >= 2` 时执行 `refresh_proxy_sid(base_proxy)` → `proxy_entry.rotate_session(proxy, "")`。对 rola 条目这是**空操作**，`worker_proxy` 与 `base_proxy` 完全相同 ⇒ 整个重试生命周期复用同一个粘性会话 id。设计意图是"保持出口、只换会话以规避粘性封禁"，实际效果是"出口和会话都不变"。
 

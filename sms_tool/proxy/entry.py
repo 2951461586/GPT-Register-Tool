@@ -350,7 +350,7 @@ _REGION_TAG = r"(?P<tag>region|geo|country)"
 _USER_REGION_RE = re.compile(rf"(^|-){_REGION_TAG}-[A-Za-z]{{2}}(?=-|$)")
 _USER_SID_RE = re.compile(r"(?:(?<=-sid-)|(?<=_sid_))[A-Za-z0-9]+(?=[_-]|$)")
 # rola puts its sticky session id between the final ``_`` and the region tag
-# (``SYS433954tbr_1-country-vn``).  Probed 2026-09-12 against the live gateway:
+# (``SYNTHACCT7tbr_1-country-vn``).  Probed 2026-09-12 against the live gateway:
 # the provider accepts an *arbitrary* token there -- a random 4-char id
 # (``aZ3q``) and an out-of-range ``_99`` both returned 200 with a fresh VN egress
 # IP.  So this is a session id, not a pre-provisioned 1..N slot index, and

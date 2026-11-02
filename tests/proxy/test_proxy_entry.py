@@ -305,7 +305,7 @@ class TestRolaCountryTemplate(unittest.TestCase):
     ``retarget_region`` were silent no-ops on all 10 rola pool entries.
     """
 
-    PROXY = "http://SYS433954tbr_1-country-vn:tWL%5E%23B@gate.rola.vip:2000"
+    PROXY = "http://SYNTHACCT7tbr_1-country-vn:synth%5E%23B@gate.rola.vip:2000"
 
     def test_infers_country_from_the_tag_not_the_tail(self):
         # The tag *name* must not leak into the result -- the 9http lesson: a
@@ -335,7 +335,7 @@ class TestRolaCountryTemplate(unittest.TestCase):
         # parsing, so this pins the ``ProxyEntry.url`` round trip.
         entry = _parsed(rotate_session(self.PROXY))
         self.assertIsNotNone(entry)
-        self.assertEqual(entry.password, "tWL^#B")
+        self.assertEqual(entry.password, "synth^#B")
         self.assertEqual(entry.host, "gate.rola.vip")
         self.assertEqual(entry.port, 2000)
 
@@ -352,7 +352,7 @@ class TestUnknownTemplateIsLeftAlone(unittest.TestCase):
         "http://plainuser:plainpass@host:8080",
         "http://user-country-vietnam:pw@host:8080",  # tag present, not ISO-2
         "http://user-cc-vn:pw@host:8080",  # tag name not in the set
-        "http://SYS433954tbr_1:pw@host:2000",  # rola shape minus the region
+        "http://SYNTHACCT7tbr_1:pw@host:2000",  # rola shape minus the region
     )
 
     def test_retarget_is_a_noop(self):
@@ -376,21 +376,21 @@ class TestShortSessionIdNeverRotatesToItself(unittest.TestCase):
 
     def test_one_char_rola_sid_always_changes(self):
         for _ in range(200):
-            rotated = rotate_session("http://SYS433954tbr_1-country-vn:pw@gate.rola.vip:2000")
+            rotated = rotate_session("http://SYNTHACCT7tbr_1-country-vn:pw@gate.rola.vip:2000")
             self.assertNotIn("tbr_1-", rotated)
 
     def test_two_char_rola_sid_always_changes(self):
         # `_10` is digits-only and two characters -- a re-roll-free
         # implementation collides 1 time in 100, too often to ignore.
         for _ in range(300):
-            rotated = rotate_session("http://SYS433954tbr_10-country-vn:pw@gate.rola.vip:2000")
+            rotated = rotate_session("http://SYNTHACCT7tbr_10-country-vn:pw@gate.rola.vip:2000")
             self.assertNotIn("tbr_10-", rotated)
 
     def test_one_char_rola_sid_stays_numeric(self):
         # The original slot is a digit; keep the alphabet so the credential keeps
         # looking like the provider's own format.
         for _ in range(50):
-            rotated = rotate_session("http://SYS433954tbr_1-country-vn:pw@gate.rola.vip:2000")
+            rotated = rotate_session("http://SYNTHACCT7tbr_1-country-vn:pw@gate.rola.vip:2000")
             sid = rotated.split("://", 1)[1].split("@", 1)[0].split("_", 1)[1].split("-", 1)[0]
             self.assertTrue(sid.isdigit(), sid)
 

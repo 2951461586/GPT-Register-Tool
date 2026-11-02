@@ -71,7 +71,7 @@ class TestUpstreamProxy(unittest.TestCase):
                 UpstreamProxy.from_url(bad)
 
     def test_from_url_four_segment(self):
-        u = UpstreamProxy.from_url("gate.kookeey.info:1000:9408785-edbd645b:54ad4d54-JP")
+        u = UpstreamProxy.from_url("gate.kookeey.info:1000:SYNTHACCT7-sess1:synthpass-JP")
         self.assertEqual(u.host, "gate.kookeey.info")
         self.assertEqual(u.port, 1000)
         self.assertTrue(u.username)

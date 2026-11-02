@@ -36,10 +36,12 @@ from sms_tool.geo.profiles import MARKET_PROFILES
 from sms_tool.proxy.entry import infer_region, parse_proxy, retarget_region
 
 # 三条**真实池模板**（照抄 proxy.json 的拼写，含各自的地区标签与密码形态）。
+# 只有形态是真的：凭据一律用合成值（真实池的 user/pass 不入库，见
+# docs/audits/scans/scan-2026-11-02-proxy-pool-exposure.md）。
 NINEHTTP_VN = "http://SYNTHACCT10-geo-VN-sid-mwT3-ttl-5:SYNTHETIC_PASSWORD_1@global.9http.com:9091"
 IPWO_VN = "http://user1_custom_zone_VN_sid_55667788_time_5:proxyuser01@us.ipwo.net:7878"
 # rola 的密码含 ``^`` 与 ``#``（原文即已百分号编码），专门用来打"手拼 URL"的坑。
-ROLA_VN = "http://SYS433954tbr_1-country-vn:tWL%5E%23B@gate.rola.vip:2000"
+ROLA_VN = "http://SYNTHACCT7tbr_1-country-vn:synth%5E%23B@gate.rola.vip:2000"
 
 _SECOND_EGRESS = "PH"
 
@@ -95,7 +97,7 @@ def test_rola_retag_survives_the_urlsplit_path():
     """
     retargeted = retarget_region(ROLA_VN, _SECOND_EGRESS)
     parsed = urlsplit(retargeted)
-    assert unquote(parsed.password or "") == "tWL^#B"
+    assert unquote(parsed.password or "") == "synth^#B"
     assert parsed.hostname == "gate.rola.vip"
     assert parsed.port == 2000
 
@@ -217,7 +219,7 @@ def test_verify_hint_is_read_from_config():
 #
 # 这个差异有两条后果，下面三个用例分别钉住。
 
-PH_PROXY = "http://SYS433954tbr_1-country-PH:tWL%5E%23B@gate.rola.vip:2000"
+PH_PROXY = "http://SYNTHACCT7tbr_1-country-PH:synth%5E%23B@gate.rola.vip:2000"
 
 
 @pytest.fixture
