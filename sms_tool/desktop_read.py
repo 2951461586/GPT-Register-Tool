@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import tempfile
 import threading
 from collections import OrderedDict
@@ -16,7 +17,8 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from .config import ConfigInput, RuntimeConfig, resolve_runtime_config
+from . import sms_providers
+from .config import CFG, ConfigInput, RuntimeConfig, resolve_runtime_config
 from .mailbox.parsers import parse_mailbox_pool_line
 from .kernel.paths import PROJECT_ROOT, config_dir, resolve_config_file
 from .promotion_states import promotion_marker_is_stale
@@ -526,6 +528,47 @@ def read_account(account_id: str = "", email: str = "", runtime_config: ConfigIn
 
 
 _MAILBOX_POOL_CANDIDATE_NAMES = ("hotmail.txt", "chatai_mailbox.txt", "chatai.txt")
+
+
+def _vendor_credentials(provider: str, runtime_config: ConfigInput = None) -> tuple[str, str, str]:
+    """``(provider_key, api_key, endpoint)`` resolved from the config, not the caller.
+
+    The desktop asks for a provider name; the key and endpoint stay on this side so
+    no secret travels over the IPC channel and there is one place that reads them.
+
+    ``sms_providers`` (pure vocabulary, ``dataclasses`` only) and ``CFG`` are imported
+    at module scope: ``.config`` was already loaded by the module-scope import above,
+    so the function-local form paid nothing back, and a stdlib ``os`` has no cost to
+    defer either. Only :func:`read_provider_balance` / :func:`read_provider_catalog`
+    stay lazy -- they are the two calls that actually reach the vendor stack.
+    """
+    key = sms_providers.normalize_provider(provider)
+    config = runtime_config if isinstance(runtime_config, Mapping) else CFG
+    reuse = config.get("phone_reuse") if isinstance(config, Mapping) else None
+    section = reuse.get(key) if isinstance(reuse, Mapping) else None
+    section = section if isinstance(section, Mapping) else {}
+    api_key = str(section.get("api_key") or "").strip()
+    if not api_key:
+        env_name = sms_providers.api_key_env(key)
+        api_key = str(os.environ.get(env_name, "")).strip() if env_name else ""
+    endpoint = str(section.get("endpoint") or "").strip() or sms_providers.default_endpoint(key)
+    return key, api_key, endpoint
+
+
+def read_provider_balance(provider: Any = "", service: str = "", runtime_config: ConfigInput = None) -> dict[str, Any]:
+    """The vendor's balance for one provider (``{"ok", "balance"}`` or an error)."""
+    from .providers.sms_vendor_api import read_balance
+
+    key, api_key, endpoint = _vendor_credentials(str(provider or ""), runtime_config)
+    return read_balance(key, api_key, endpoint)
+
+
+def read_provider_catalog(provider: Any = "", service: str = "", runtime_config: ConfigInput = None) -> dict[str, Any]:
+    """Country/tier catalog for one provider (``{"ok", "countries"}`` or an error)."""
+    from .providers.sms_vendor_api import read_catalog
+
+    key, api_key, endpoint = _vendor_credentials(str(provider or ""), runtime_config)
+    return read_catalog(key, api_key, endpoint, service)
 
 
 def read_proxy_pool(

@@ -3,9 +3,15 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
+#: The one-click options dialog moved to its own service on 2026-11-01; the
+#: partial keeps only the source dispatch, so the two halves are read separately.
+REGISTER_DIALOG = ROOT / "SmsWorkbench" / "Dialogs" / "RegisterDialogService.cs"
+REGISTER_PARTIAL = ROOT / "SmsWorkbench" / "Views" / "MainWindow.Register.cs"
+REGISTER_BUILDER = ROOT / "SmsWorkbench" / "Services" / "RegistrationRequestBuilder.cs"
+
 
 def test_one_click_registration_uses_requested_provider_labels_and_defaults_to_remail():
-    source = (ROOT / "SmsWorkbench" / "Views" / "MainWindow.Register.cs").read_text(encoding="utf-8-sig")
+    source = REGISTER_DIALOG.read_text(encoding="utf-8-sig")
 
     expected = [
         'Content = Loc.T("ReMail 邮箱"), Tag = "remail_target"',
@@ -23,7 +29,8 @@ def test_one_click_registration_uses_requested_provider_labels_and_defaults_to_r
 
 
 def test_long_term_remail_disables_phone_reuse_by_default():
-    register = (ROOT / "SmsWorkbench" / "Views" / "MainWindow.Register.cs").read_text(encoding="utf-8-sig")
+    register = REGISTER_PARTIAL.read_text(encoding="utf-8-sig")
+    dialog = REGISTER_DIALOG.read_text(encoding="utf-8-sig")
     planner = (ROOT / "SmsWorkbench.Contracts" / "BackendCommandPlanner.cs").read_text(encoding="utf-8-sig")
 
     # One-click ReMail long-term routes to the purchase-mode planner factory.
@@ -36,7 +43,7 @@ def test_long_term_remail_disables_phone_reuse_by_default():
     # The checkbox is built through DialogFactory since 2026-10-25 (the options
     # dialog no longer hand-rolls its Window/Grid/CheckBox); the option itself and
     # its default must still be offered on the one-click dialog.
-    assert 'DialogFactory.CreateCheckBox(this, Loc.T("注册完成后查询试用优惠"))' in register
+    assert 'DialogFactory.CreateCheckBox(owner, Loc.T("注册完成后查询试用优惠"))' in dialog
     assert "--check-promotion-after-registration" in planner
 
     # The planner keeps ReMail on purchase mode with phone reuse disabled and
@@ -99,7 +106,7 @@ def test_registered_remail_rows_can_build_one_click_sms_mailbox_files():
 
 
 def test_icloud_registration_and_rerun_use_format_aware_mailbox_arguments():
-    register_source = (ROOT / "SmsWorkbench" / "Views" / "MainWindow.Register.cs").read_text(encoding="utf-8-sig")
+    register_source = REGISTER_BUILDER.read_text(encoding="utf-8-sig")
     planner = (ROOT / "SmsWorkbench.Contracts" / "BackendCommandPlanner.cs").read_text(encoding="utf-8-sig")
 
     # Matched on the method name only, not on `private bool ...`: these helpers
@@ -108,12 +115,12 @@ def test_icloud_registration_and_rerun_use_format_aware_mailbox_arguments():
     # dispatch shape, not the signature.
     # Anchor on the *definition*, not the call site: the name also appears in
     # OneClickRegister_Click, and slicing from there picked up the wrong block.
-    start = register_source.index("TryCreateSelectedUnregisteredMailboxFileAsync(CancellationToken")
+    start = register_source.index("public async Task<PendingMailboxSelection> CreateUnregisteredBatchFileAsync")
     # `(PoolRow` identifies the definition; the bare name also appears as a call
     # inside the block above, which would cut the slice short.
-    end = register_source.index("IsUnregisteredMailboxRowAsync(PoolRow", start)
+    end = register_source.index("private async Task<bool> IsUnregisteredMailboxRowAsync", start)
     selected_block = register_source[start:end]
-    assert "TryCreateMailboxFileAsync(pending, ct)" in selected_block
+    assert "CreateBatchFileAsync(pending, ct)" in selected_block
     assert 'mailboxArg = "--chatai-mailbox-file"' not in selected_block
     assert '= "--chatai-mailbox-file"' not in selected_block
 

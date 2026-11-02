@@ -31,7 +31,7 @@ from test_settings_catalog_driver_parity import _call_slice
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PROVIDER_CATALOG = REPO_ROOT / "SmsWorkbench" / "Models" / "SmsProviderCatalog.cs"
 SETTINGS_CATALOG = REPO_ROOT / "SmsWorkbench" / "Services" / "SettingsCatalog.cs"
-DIALOG = REPO_ROOT / "SmsWorkbench" / "Views" / "MainWindow.SmsProvider.cs"
+DIALOG = REPO_ROOT / "SmsWorkbench" / "Dialogs" / "SmsProviderDialogService.cs"
 
 #: C# 供应商表的行锚点。用 ``new SmsProvider(`` 而不是裸字符串。
 #: 第五个实参是**协议族**（`SmsActivateProtocol` / `NexsmsProtocol` 标识符，不是字面量），
@@ -230,49 +230,26 @@ class ProviderParityTests(unittest.TestCase):
         self.assertEqual(protocol_constant("SmsActivateProtocol"), sms_providers.PROTOCOL_SMS_ACTIVATE)
         self.assertEqual(protocol_constant("NexsmsProtocol"), sms_providers.PROTOCOL_NEXSMS)
 
-    def test_the_dialog_gates_the_online_catalog_on_the_protocol(self):
-        """🔴 这条是本次缺口的**回归守卫**：它把「读在线目录」这一步钉在协议判断**之内**。
+    def test_the_provider_family_gate_lives_with_the_python_readers(self):
+        """P7-B：读取厂商目录的协议分派移到了 ``sms_tool``，守卫跟着搬家。
 
-        只断言 ``assertIn("CatalogIsSmsActivate", text)`` 是没用的 —— 判断可以写
-        在文件里却包不住那次调用。所以这里改钉**三元表达式**的形状：两个协议族
-        各有一个读取器，条件写反（把 nexsms 交给 sms-activate 读取器）的症状与本次
-        缺陷一模一样 —— 一次 403，弹窗里什么都读不出来。
-
-        2026-09-23 更新：对话框从 ``if (provider.CatalogIsSmsActivate) { ... } else { 离线 }``
-        改成了 ``provider.CatalogIsSmsActivate ? A : B`` 的三元分派，因为 nexsms 现在
-        也读在线目录了（它有 ``/api/countries`` + ``/api/getCountryByService``）。
-        契约没变 —— 仍按协议选读取器 —— 但**锚点变了**，所以守卫跟着换。
+        旧守卫钉的是 C# 对话框里的 ``provider.CatalogIsSmsActivate ? A : B`` 三元式。
+        现在对话框只问后端要 ``provider-catalog``，由 ``sms_vendor_api.family_of``
+        决定走哪一族。判据仍必须**按供应商**而不是按 endpoint 字符串猜——所以这里
+        钉住的是那张表 + 分派处，而不是 C# 的表达式形状。
         """
-        text = DIALOG.read_text(encoding="utf-8")
-        code = strip_csharp_comments(text)
+        module = (REPO_ROOT / "sms_tool" / "providers" / "sms_vendor_api.py").read_text(encoding="utf-8")
+        self.assertIn("SMS_ACTIVATE_PROVIDERS", module)
+        self.assertIn("NEXSMS_PROVIDERS", module)
+        # 分派必须调用 family_of()，不能从 endpoint 推断。
+        self.assertRegex(module, r"family\s*=\s*family_of\(")
+        # 两个族都要有自己的读取器，且都由 family 分支选中。
+        self.assertIn('if family == "sms-activate"', module)
+        self.assertIn("_nexsms_catalog(", module)
 
-        # 目录读取：两个读取器都必须出现，且都挂在同一个协议判断上。
-        # 参数列表不展开匹配（它会跨行、且与这里要钉的契约无关），只要求
-        # 「条件 → 吗 / 冒号 → 两个已知读取器名」这个形状。
-        ternary = (
-            r"provider\.CatalogIsSmsActivate\s*\?\s*await\s+SmsProviderCatalogClient\.(\w+)"
-            r".{0,200}?:\s*await\s+SmsProviderCatalogClient\.(\w+)"
-        )
-        matches = re.findall(ternary, code, re.S)
-        self.assertTrue(matches, "the dialog no longer dispatches the catalog read on the protocol")
-        # 三元分派有两处：目录与余额，各自的读取器都必须是「激活族 / nexsms 族」这一对。
-        self.assertIn(
-            ("LoadOpenAiCatalogAsync", "LoadNexsmsCatalogAsync"),
-            matches,
-            "the catalog dispatch does not pair the sms-activate reader with the nexsms one",
-        )
-        self.assertIn(
-            ("LoadBalanceAsync", "LoadNexsmsBalanceAsync"),
-            matches,
-            "the balance dispatch does not pair the sms-activate reader with the nexsms one",
-        )
-
-        # 不得有第二个、脱离协议判断的读取调用。
-        for reader in ("LoadOpenAiCatalogAsync", "LoadNexsmsCatalogAsync"):
-            with self.subTest(reader=reader):
-                self.assertEqual(
-                    code.count(reader), 1, "%s must be called from exactly one place (the protocol dispatch)" % reader
-                )
+        dialog = (REPO_ROOT / "SmsWorkbench" / "Dialogs" / "SmsProviderDialogService.cs").read_text(encoding="utf-8")
+        self.assertIn("ReadProviderCatalogAsync", dialog)
+        self.assertNotIn("CatalogIsSmsActivate ?", dialog)  # 分派不该再出现在 UI 里
 
     def test_the_fallback_path_reads_the_saved_choice(self):
         """回退路径必须真的从配置读国家与档位 —— 写死一个默认国会让「切到
@@ -386,7 +363,7 @@ class ProviderParityTests(unittest.TestCase):
         )
         self.assertRegex(
             code,
-            r"else\s*\{\s*ShowThemedInfoDialog\(\s*" + re.escape(marker),
+            r"else\s*\{\s*showInfo\(\s*" + re.escape(marker),
             "the load-failure dialog must fire only when the config has no country/tier",
         )
 
@@ -482,7 +459,7 @@ class DialogUsesTheSelectedProviderTests(unittest.TestCase):
 
     def test_the_dialog_resolves_the_provider_from_the_config(self):
         text = DIALOG.read_text(encoding="utf-8")
-        self.assertIn('SmsProviderCatalog.Resolve(settingsService.GetString("phone_reuse.source"))', text)
+        self.assertIn('SmsProviderCatalog.Resolve(settings.GetString("phone_reuse.source"))', text)
 
 
 #: 允许出现供应商键字面量的**生产**文件，只有目录本身：表与下拉框。

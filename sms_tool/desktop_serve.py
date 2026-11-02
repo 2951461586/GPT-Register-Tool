@@ -52,6 +52,8 @@ from .desktop_read import (
     read_account,
     read_accounts_delta,
     read_mailbox_pool,
+    read_provider_balance,
+    read_provider_catalog,
 )
 
 #: Bump together with ``DesktopReadProtocol.Version`` on the C# side. Any
@@ -70,6 +72,8 @@ SUPPORTED_OPS = (
     "account-file",
     "mailbox-file",
     "payment-url-file",
+    "provider-balance",
+    "provider-catalog",
 )
 
 #: How long a single request may run before the watchdog kills the process.
@@ -231,6 +235,14 @@ def _payload_for(op: str, request: dict[str, Any]) -> dict[str, Any]:
         return dict(create_mailbox_file(account_id, email, config))
     if op == "payment-url-file":
         return dict(create_payment_url_file(account_id, email, config))
+    if op == "provider-balance":
+        provider = str(request.get("provider") or "")
+        service = str(request.get("service") or "")
+        return {"ok": True, "provider": provider, **read_provider_balance(provider, service, config)}
+    if op == "provider-catalog":
+        provider = str(request.get("provider") or "")
+        service = str(request.get("service") or "")
+        return {"ok": True, "provider": provider, **read_provider_catalog(provider, service, config)}
     raise _OpError(CODE_UNKNOWN_OP, f"unknown desktop-serve op: {op}")
 
 

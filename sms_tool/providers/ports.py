@@ -14,7 +14,9 @@ provider imported without that wiring still behaves predictably:
 * ``progress_dots_enabled`` answers for a terminal (the pre-IPC default);
 * ``apply_rotation`` raises a named error instead of silently skipping the
   persistence half of a rotation, which would leave the pool file and the
-  in-memory account disagreeing.
+  in-memory account disagreeing;
+* ``request`` resolves the shared retry transport on first use, because a vendor
+  adapter needs the policy but must not import ``http_client`` at module scope.
 
 The names are module-level callables rather than a class instance so a test can
 replace one with ``monkeypatch.setattr(ports, "apply_rotation", fake)`` -- the
@@ -55,6 +57,7 @@ def _unwired_apply_rotation(
 
 _apply_rotation: ApplyRotation = _unwired_apply_rotation
 _progress_dots: Callable[[], bool] = lambda: True
+_request: Callable[..., Any] | None = None
 _wired = False
 
 
@@ -94,19 +97,39 @@ def progress_dots_enabled() -> bool:
     return _progress_dots()
 
 
+def request(*args: Any, **kwargs: Any) -> Any:
+    """Issue an HTTP request through the application-side retry transport.
+
+    A vendor adapter gets the retry/classification policy it would otherwise
+    reach for with ``from ..http_client import request_with_retry`` -- the module
+    scope edge this port exists to remove. Resolved on its own rather than
+    through :func:`_ensure_wired`, because the vendor catalog path must not pull
+    pool persistence and the IPC channel in alongside it.
+    """
+    global _request
+    if _request is None:
+        from ..http_client import request_with_retry
+
+        _request = request_with_retry
+    return _request(*args, **kwargs)
+
+
 def install(
     *,
     apply_rotation_impl: ApplyRotation | None = None,
     progress_dots_impl: Callable[[], bool] | None = None,
+    request_impl: Callable[..., Any] | None = None,
 ) -> None:
     """Install the application-side implementations.
 
     Called once from ``sms_tool/mailbox/router.py``. Keyword-only and partial on
     purpose: a test that needs only one port can install that one.
     """
-    global _apply_rotation, _progress_dots, _wired
+    global _apply_rotation, _progress_dots, _request, _wired
     if apply_rotation_impl is not None:
         _apply_rotation = apply_rotation_impl
     if progress_dots_impl is not None:
         _progress_dots = progress_dots_impl
+    if request_impl is not None:
+        _request = request_impl
     _wired = True
