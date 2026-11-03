@@ -143,3 +143,68 @@ def test_coupon_probe_is_off_by_default(monkeypatch):
     assert result["ok"] is True
     assert "coupon_state" not in result
     assert get.call_count == 1
+
+
+def test_not_eligible_coupon_overrides_the_campaign_hint(monkeypatch):
+    """A hint-only "可试用" is not reproducible; ``not_eligible`` is the answer.
+
+    Measured 2026-11-05 on the iCloud pool: 11 accounts reported
+    ``可试用Plus -100% ×1month`` from ``eligible_promo_campaigns`` alone, and all
+    11 answered ``not_eligible`` (``redeemed: False``) on re-probe through nine
+    IN exits plus the identical batch path.  Before this, only a *redeemed*
+    coupon demoted the hint, so those accounts kept advertising a trial.
+    """
+
+    def fake_get(url, **_kwargs):
+        if "check_coupon" in url:
+            return SimpleNamespace(
+                status_code=200,
+                json=lambda: {"state": "not_eligible", "redemption": {"redeemed": False}},
+            )
+        return SimpleNamespace(
+            status_code=200,
+            json=lambda: _accounts_body(
+                campaign={
+                    "metadata": {"discount": {"percentage": 100}, "duration": {"num_periods": 1, "period": "month"}}
+                }
+            ),
+        )
+
+    account = {"access_token": "at", "chatgpt_account_id": "acc"}
+    with patch.object(account_promotion.curl_requests, "get", side_effect=fake_get):
+        result = account_promotion.check_account_promotion(account, proxy="http://exit.example:8080", coupon_probe=True)
+
+    assert result["ok"] is True
+    assert result["coupon_state"] == "not_eligible"
+    assert result["plus_trial_eligible"] is False
+    assert "可试用" not in result["promotion_status"]
+
+
+def test_unconfirmed_coupon_never_advertises_a_trial(monkeypatch):
+    """A hint the coupon did not confirm must not reach the badge.
+
+    Two measured false-positive classes are pinned here: an unrecognised/empty
+    coupon state, and a coupon probe that never completes (``curl: (35)`` through
+    residential exits is common).  Both leave ``plus_trial_hint`` set for
+    diagnostics and ``plus_trial_eligible`` False.
+    """
+
+    def fake_get(url, **_kwargs):
+        if "check_coupon" in url:
+            return SimpleNamespace(status_code=200, json=lambda: {})
+        return SimpleNamespace(
+            status_code=200,
+            json=lambda: _accounts_body(campaign={"metadata": {"discount": {"percentage": 100}}}),
+        )
+
+    with patch.object(account_promotion.curl_requests, "get", side_effect=fake_get):
+        result = account_promotion.check_account_promotion(
+            {"access_token": "at", "chatgpt_account_id": "acc"},
+            proxy="http://exit.example:8080",
+            coupon_probe=True,
+        )
+
+    assert result["coupon_state"] == ""
+    assert result["plus_trial_eligible"] is False
+    assert result["plus_trial_hint"] is True
+    assert "可试用" not in result["promotion_status"]

@@ -139,10 +139,20 @@ def _merge_coupon_evidence(parsed: dict[str, Any], coupon: dict[str, Any]) -> No
     for key in ("coupon_redeemed_at", "coupon_expires_at"):
         if coupon.get(key):
             parsed[key] = coupon[key]
-    if coupon.get("coupon_trial_eligible"):
-        parsed["plus_trial_eligible"] = True
-    elif coupon.get("coupon_redeemed"):
-        parsed["plus_trial_eligible"] = False
+    # When the authoritative probe has actually run, **only its affirmative
+    # answer** may advertise a trial.  A hint that is not confirmed -- because
+    # the coupon answered ``not_eligible``, or because the probe itself failed --
+    # is recorded as ``plus_trial_hint`` for diagnostics and never as
+    # ``plus_trial_eligible``.
+    #
+    # Measured 2026-11-05 on the iCloud pool: two full passes (270 probes)
+    # reported 11 + 1 accounts as ``可试用Plus -100% ×1month`` from
+    # ``eligible_promo_campaigns`` alone; re-probing every one of them through
+    # nine IN exits (plus three US exits, plus the identical batch path) answered
+    # ``not_eligible`` / no campaign every time.  A hint-only verdict is simply
+    # not reproducible, so it must not reach the 优惠状态 badge.
+    parsed["plus_trial_hint"] = bool(parsed.get("plus_trial_eligible"))
+    parsed["plus_trial_eligible"] = bool(coupon.get("coupon_trial_eligible"))
 
 
 def _coupon_probe_worth_running(parsed: dict[str, Any]) -> bool:
