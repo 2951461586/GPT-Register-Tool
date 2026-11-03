@@ -44,6 +44,14 @@ def test_unknown_flow_has_no_fallback():
 
 
 def test_headers_use_the_fallback_flow_when_the_primary_mints_empty(monkeypatch):
+    """The fallback is still the last resort -- after one retry of the primary.
+
+    ``UPI_SENTINEL_MINT_RETRY`` (default on) spends one extra mint on the
+    primary flow before accepting a fallback-flow token, because the fallback
+    token is the one the risk engine answers with ``400 unusual activity``
+    (measured 2026-11-03; see ``test_upi_sentinel_mint_retry.py``).
+    """
+    monkeypatch.delenv("UPI_SENTINEL_MINT_RETRY", raising=False)
     seen: list[str] = []
 
     def fake_mint(*, flow, **kwargs):
@@ -58,7 +66,7 @@ def test_headers_use_the_fallback_flow_when_the_primary_mints_empty(monkeypatch)
 
     headers = S._upi_sentinel_headers(object(), "did", "proxy", flow=UPI_SENTINEL_CHECKOUT_FLOW)
 
-    assert seen == [UPI_SENTINEL_CHECKOUT_FLOW, "checkout_pay"]
+    assert seen == [UPI_SENTINEL_CHECKOUT_FLOW, "checkout_pay", UPI_SENTINEL_CHECKOUT_FLOW]
     assert headers["OpenAI-Sentinel-Token"] == "MAIN"
     assert headers["OpenAI-Sentinel-SO-Token"] == "SO"
 

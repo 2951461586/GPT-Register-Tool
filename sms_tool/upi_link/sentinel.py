@@ -21,7 +21,7 @@ from .constants import (
     UPI_SENTINEL_PING_URL,
     UPI_WARMUP_TIMEOUT,
 )
-from .env import _emit
+from .env import _emit, _env_bool
 from .session import (
     _upi_account_id_from_token,
     _upi_apply_fingerprint,
@@ -314,6 +314,23 @@ UPI_SENTINEL_FALLBACK_FLOWS: dict[str, tuple[str, ...]] = {
 }
 
 
+def _upi_sentinel_mint_retry_enabled() -> bool:
+    """``UPI_SENTINEL_MINT_RETRY`` (default on) -- retry the primary flow once.
+
+    Measured 2026-11-03 (3 runs, same account/exit): when the primary flow mints
+    nothing and the header falls back to ``authorize_continue``, the very next
+    ``POST /backend-api/payments/checkout`` answers ``400 unusual activity``;
+    when the primary flow mints, checkout succeeds.  The fallback token is what
+    the risk engine rejects, so the primary flow gets one more chance before we
+    accept it.
+
+    Switch off (``UPI_SENTINEL_MINT_RETRY=0``) to reproduce the pre-change
+    behaviour for an A/B.  Costs one extra mint (~0.2-1s) and only on the path
+    that would otherwise use a token we measured to be rejected.
+    """
+    return _env_bool("UPI_SENTINEL_MINT_RETRY", True)
+
+
 def _upi_sentinel_flow_candidates(flow: str) -> tuple[str, ...]:
     """Flow spellings to try for ``flow``, primary first."""
     primary = str(flow or "").strip() or UPI_SENTINEL_CHECKOUT_FLOW
@@ -398,10 +415,11 @@ def _upi_sentinel_headers(
 
     cookie_header = _upi_session_cookie_header(session, device_id)
     page = str(page_url or endpoints.CHATGPT_ORIGIN)
-    minted: dict[str, Any] = {}
-    for candidate_flow in _upi_sentinel_flow_candidates(flow):
+    retry_primary = _upi_sentinel_mint_retry_enabled()
+
+    def _mint(candidate_flow: str) -> dict[str, Any]:
         try:
-            minted = _upi_mint_sentinel_cached(
+            return _upi_mint_sentinel_cached(
                 flow=candidate_flow,
                 device_id=device_id,
                 proxy=proxy,
@@ -410,10 +428,25 @@ def _upi_sentinel_headers(
                 page_url=page,
             )
         except Exception as exc:
-            minted = {"error": type(exc).__name__}
+            return {"error": type(exc).__name__}
+
+    minted: dict[str, Any] = {}
+    for candidate_flow in _upi_sentinel_flow_candidates(flow):
+        minted = _mint(candidate_flow)
         if minted.get("main"):
             if candidate_flow != flow:
-                _emit("sentinel", f"{flow} mint empty; used fallback flow {candidate_flow}")
+                if retry_primary:
+                    # The fallback-flow token is the one the risk engine rejects,
+                    # so spend one more mint on the primary flow first.
+                    _emit("sentinel", f"{flow} mint empty; retrying the primary flow once")
+                    retried = _mint(flow)
+                    if retried.get("main"):
+                        minted = retried
+                        _emit("sentinel", f"{flow} primary-flow retry succeeded; fallback not used")
+                    else:
+                        _emit("sentinel", f"{flow} primary-flow retry empty; used fallback flow {candidate_flow}")
+                else:
+                    _emit("sentinel", f"{flow} mint empty; used fallback flow {candidate_flow}")
             break
 
     if minted.get("error") or not minted.get("main"):
