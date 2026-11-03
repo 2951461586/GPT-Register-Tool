@@ -1,5 +1,5 @@
 {
-  "delayed_cross_dir_edges": 307,
+  "delayed_cross_dir_edges": 310,
   "minority_edges": 46,
   "mutual_pairs": 17,
   "ordered_pairs": 78,
@@ -79,10 +79,10 @@
     "sms_tool/store -> sms_tool/kernel": 2,
     "sms_tool/upi_link -> sms_tool": 21,
     "sms_tool/upi_link -> sms_tool/geo": 1,
-    "sms_tool/upi_link -> sms_tool/payment": 5,
+    "sms_tool/upi_link -> sms_tool/payment": 18,
     "sms_tool/upi_link -> sms_tool/paypal": 1,
     "sms_tool/upi_link -> sms_tool/proxy": 3
   },
-  "total_module_edges": 473,
+  "total_module_edges": 486,
   "type_only_edges": 15
 }

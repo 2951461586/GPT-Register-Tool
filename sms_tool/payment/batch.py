@@ -330,11 +330,21 @@ def _run_one_row(
     seed_context, _ = load_account_seed(email=email)
     seed_country = _registration_country(seed_context)
     cell = _matrix_cell_for(index, cells, method, seed_country)
-    kwargs = _cell_payment_kwargs(base_kwargs, cell, proxy, payment_method=method, pool_index=index)
+    # P1-4: the UPI lane takes an exclusive per-exit lease for this cell, so two
+    # workers (or two processes) cannot dial the same credential at once.
+    lease_owner = _lease_owner_for(method, account_ref)
+    kwargs = _cell_payment_kwargs(
+        base_kwargs,
+        cell,
+        proxy,
+        payment_method=method,
+        pool_index=index,
+        lease_owner=lease_owner,
+    )
     kwargs.pop("proxy", None)
     plan = kwargs.get("payment_route_plan")
     if plan is None:
-        plan = PaymentRoutePlanner(CFG).plan(
+        plan = PaymentRoutePlanner(CFG, lease_owner=lease_owner).plan(
             method,
             options=kwargs,
             default_proxy=proxy,
@@ -597,6 +607,9 @@ def _run_one_row(
         )
         if last.get("ok") or not _is_transient(last) or attempt > retry_count:
             break
+    # Release whatever this cell took, whatever the verdict (a crashed cell is
+    # covered by the lease TTL).
+    _release_leases(lease_owner)
     authorization_queue: dict[str, Any] = {}
     if method == "paypal" and last.get("ok") and last.get("url"):
         try:
@@ -814,6 +827,25 @@ def _matrix_summary(results: list[dict[str, Any]], cells: list[dict[str, Any]]) 
     return output
 
 
+def _lease_owner_for(method: str, account_ref: str) -> str:
+    """Owner id for the exit lease; empty for methods that do not take one."""
+    if str(method or "").strip().lower() != "upi":
+        return ""
+    return f"upi-batch:{account_ref}"
+
+
+def _release_leases(owner: str) -> None:
+    """Best-effort release of this cell's exit lease (never raises)."""
+    if not owner:
+        return
+    try:
+        from . import upi_exit_lease
+
+        upi_exit_lease.release_all(owner=owner, cfg=CFG)
+    except Exception:
+        return
+
+
 def _cell_payment_kwargs(
     base: dict[str, Any],
     cell: dict[str, Any],
@@ -821,6 +853,7 @@ def _cell_payment_kwargs(
     *,
     payment_method: str = "",
     pool_index: int = 0,
+    lease_owner: str = "",
 ) -> dict[str, Any]:
     """Overlay matrix values and compile the cell's reusable route plan."""
     values = dict(base)
@@ -851,7 +884,7 @@ def _cell_payment_kwargs(
         values["proxy"] = proxy
     elif values.get("checkout_proxy") and not parse_proxy_pool(values.get("checkout_proxy_pool")):
         values["proxy"] = values["checkout_proxy"]
-    plan = PaymentRoutePlanner(CFG).plan(
+    plan = PaymentRoutePlanner(CFG, lease_owner=lease_owner).plan(
         method,
         options=values,
         default_proxy=proxy,

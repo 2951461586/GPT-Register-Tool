@@ -166,6 +166,11 @@ def generate_upi_qr(args: Any, ctx: PaymentLinkCommandContext) -> None:
     )
     proxy, checkout_proxy, provider_proxy, approve_proxy = ctx.payment_stage_args(args, "upi")
     require_zero = not getattr(args, "no_require_zero", False)
+    # 账号身份：``--session-token`` / ``--device-id`` 可选，但一旦给了就必须进流程。
+    # 历史上 CLI 只传 ``--at``，于是 UPI 每次都用 ``uuid4()`` 当设备 ID，并用
+    # 合成的 ``Cookie: oai-did=<uuid>`` 覆盖账号会话 Cookie（见 identity.py）。
+    session_token = str(getattr(args, "session_token", None) or "").strip()
+    device_id = str(getattr(args, "device_id", None) or "").strip()
     result = generate_upi_qr_link(
         **upi_invocation(
             at,
@@ -179,6 +184,8 @@ def generate_upi_qr(args: Any, ctx: PaymentLinkCommandContext) -> None:
             payment_country=payment_country,
             require_zero=require_zero,
             qr_path=getattr(args, "qr_path", None),
+            device_id=device_id or None,
+            session_token=session_token or None,
             wait_paid=bool(getattr(args, "wait_paid", False)),
             paid_timeout=getattr(args, "paid_timeout", 900.0) or 900.0,
             require_server_upi_mandate=bool(getattr(args, "require_server_upi_mandate", False)),

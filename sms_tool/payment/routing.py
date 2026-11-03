@@ -229,6 +229,21 @@ class PaymentRoutePlan:
         }
 
 
+def _exit_lease():
+    """Lazily resolve the UPI exit-lease module (``None`` when unavailable).
+
+    Kept function-local: this module is imported by the payment kernel long
+    before ``upi_link``, and a module-level edge would put a UPI module on the
+    payment import path. A missing module simply disables the feature.
+    """
+    try:
+        from . import upi_exit_lease
+
+        return upi_exit_lease
+    except Exception:
+        return None
+
+
 class PaymentRoutePlanner:
     def __init__(
         self,
@@ -237,8 +252,13 @@ class PaymentRoutePlanner:
         proxy_state: Any = None,
         selector: Callable[[list[str], str, str], tuple[str, list[dict[str, Any]]]] | None = None,
         rotator: Callable[[str, str], str] | None = None,
+        lease_owner: Any = "",
     ) -> None:
         self.config = config
+        # P1-4: identity used to take an exclusive per-exit lease (batch cell id).
+        # Empty means "this process/thread"; only consulted when the lease switch
+        # is on (``payment.proxy_lease.enabled`` / ``UPI_PROXY_LEASE``).
+        self.lease_owner = str(lease_owner or "").strip()
         _protocol_raw: object = config.get("protocol_payments")
         self.protocol: Mapping[str, Any] = _protocol_raw if isinstance(_protocol_raw, Mapping) else {}
         if proxy_state is None:
@@ -255,11 +275,27 @@ class PaymentRoutePlanner:
         self._rotator = rotator
 
     def _select_proxy(self, pool: list[str], expected: str, stage: str) -> tuple[str, list[dict[str, Any]]]:
+        # ``pool_offset`` rotates the pool by cell index, so two lanes (and two
+        # processes) can land on the same credential. Take an exclusive lease
+        # when the operator enables it: a collision is worse than a busy pool,
+        # but a busy pool must still run -- ``filter_available`` is fail-open.
+        candidates = list(pool)
+        lease = _exit_lease()
+        # An owner id is what makes a lease meaningful: it is the per-cell
+        # identity the planner was constructed with. Without one this is a
+        # single-shot run that has nothing to collide with.
+        leases_on = lease is not None and bool(self.lease_owner) and lease.enabled(self.config)
+        if leases_on and lease is not None:
+            candidates = lease.filter_available(candidates, owner=self.lease_owner, cfg=self.config)
         if self._selector is not None:
-            return self._selector(pool, expected, stage)
-        from ..paypal.proxy import select_proxy_from_pool
+            chosen, attempts = self._selector(candidates, expected, stage)
+        else:
+            from ..paypal.proxy import select_proxy_from_pool
 
-        return select_proxy_from_pool(pool, expected, stage, state=self.proxy_state)
+            chosen, attempts = select_proxy_from_pool(candidates, expected, stage, state=self.proxy_state)
+        if leases_on and lease is not None and chosen:
+            lease.acquire(chosen, owner=self.lease_owner, cfg=self.config)
+        return chosen, attempts
 
     def _rotate_proxy(self, proxy: str, expected: str) -> str:
         if self._rotator is not None:

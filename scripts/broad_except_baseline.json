@@ -142,7 +142,7 @@
       "silent": 0
     },
     "sms_tool/auth_flow/signup.py": {
-      "broad": 2,
+      "broad": 1,
       "silent": 0
     },
     "sms_tool/auth_flow/steps.py": {
@@ -358,7 +358,7 @@
       "silent": 0
     },
     "sms_tool/payment/batch.py": {
-      "broad": 3,
+      "broad": 4,
       "silent": 0
     },
     "sms_tool/payment/capability.py": {
@@ -376,6 +376,22 @@
     "sms_tool/payment/qualification_batch.py": {
       "broad": 6,
       "silent": 2
+    },
+    "sms_tool/payment/routing.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/payment/upi_billing.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/payment/upi_exit_health.py": {
+      "broad": 4,
+      "silent": 0
+    },
+    "sms_tool/payment/upi_fingerprint.py": {
+      "broad": 4,
+      "silent": 0
     },
     "sms_tool/payment/wire.py": {
       "broad": 2,
@@ -742,11 +758,11 @@
       "silent": 0
     },
     "sms_tool/upi_link/session.py": {
-      "broad": 6,
+      "broad": 5,
       "silent": 0
     },
     "sms_tool/upi_link/stages.py": {
-      "broad": 11,
+      "broad": 12,
       "silent": 0
     },
     "sms_tool/upi_link/stripe.py": {
@@ -792,11 +808,11 @@
         "reason": "The protocol lane is where a swallowed exception is indistinguishable from a protocol failure: it lands in the funnel as 'unknown' while the batch keeps spending mailboxes. Silent handlers are 0 here and the broad count may only shrink."
       }
     },
-    "max_broad": 960,
+    "max_broad": 970,
     "max_silent": 158
   },
   "totals": {
-    "broad": 960,
+    "broad": 970,
     "silent": 158
   },
   "whitelist": {

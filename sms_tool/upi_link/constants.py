@@ -156,30 +156,15 @@ UPI_FINGERPRINT_TEMPLATES: tuple[dict[str, str], ...] = (
     },
 )
 UPI_DEFAULT_FINGERPRINT = UPI_FINGERPRINT_TEMPLATES[0]
-UPI_BILLING_NAMES: tuple[tuple[str, str], ...] = (
-    ("Aisha", "Sharma"),
-    ("Arjun", "Mehta"),
-    ("Kavya", "Gupta"),
-    ("Rohan", "Kapoor"),
-    ("Priya", "Nair"),
-)
-UPI_BILLING_ADDRESSES: tuple[tuple[str, str, str, str], ...] = (
-    ("24 Park Street", "Kolkata", "700016", "WB"),
-    ("14 MG Road", "Bengaluru", "560001", "KA"),
-    ("18 Marine Drive", "Mumbai", "400020", "MH"),
-    ("32 Connaught Place", "New Delhi", "110001", "DL"),
-)
-UPI_EMAIL_DOMAINS: tuple[str, ...] = ("gmail.com", "outlook.com", "icloud.com", "hotmail.com")
-UPI_BILLING_IN = {
-    "name": "Rahul Sharma",
-    "email": "upi-scanner@example.com",
-    "line1": "Flat 302, Sai Residency",
-    "line2": "MG Road, Andheri East",
-    "city": "Mumbai",
-    "state": "Maharashtra",
-    "postal": "400069",
-    "country": "IN",
-}
+# The billing name/address pools moved to ``upi_link/billing.py`` when the
+# 5-name × 4-address pool turned out to be the source of duplicate addresses
+# across accounts (P0-2).  They are still exported as ``UPI_BILLING_NAMES`` /
+# ``UPI_BILLING_ADDRESSES``; only the defining module changed.
+# The billing data moved to the payment kernel (``upi_billing``) when the file set
+# of this directory was frozen (scripts/payment_legacy_manifest.py); the public
+# names stay here so ``sms_tool.upi_link.UPI_BILLING_IN`` keeps resolving.
+from ..payment.upi_billing import UPI_BILLING_ADDRESSES, UPI_BILLING_IN, UPI_BILLING_NAMES, UPI_EMAIL_DOMAINS  # noqa: E402,F401
+
 UPI_SECOND_CONFIRM_MARKERS = (
     "checkout_upcoming_invoice_mismatch",
     "redirect url resolution timeout",

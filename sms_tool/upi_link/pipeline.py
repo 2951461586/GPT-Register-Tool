@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from ..checkout_contract import PLUS_TRIAL_CAMPAIGN_ID
 from ..payment.wire import CURRENCY_MAP, _new_session
 from ..phone_proxy import redact_proxy_text
@@ -39,6 +40,16 @@ from .constants import (
     UPI_SENTINEL_APPROVAL_FLOW,
 )
 from .env import _emit, _env_bool, _env_int, _env_str, _float_env
+from ..payment.upi_identity import AccountIdentity as IdentityLike
+from ..payment.upi_identity import resolve_account_identity
+from ..payment.upi_identity_store import account_key as _identity_account_key
+from ..payment.upi_fingerprint import (
+    cooldown_status as _fingerprint_cooldown,
+    record_outcome as _record_fingerprint_outcome,
+)
+from ..payment import upi_exit_health as exit_health
+from ..payment.upi_zero import clear_zero_ineligible as _clear_zero_ineligible
+from ..payment.upi_zero import mark_zero_ineligible as _mark_zero_ineligible
 from .dump import _approve_backoff, _upi_dump_http
 from .config import _load_json, _method_cfg, _payment_stage_proxies_from_config, _upi_retarget_region
 from .session import (
@@ -109,6 +120,85 @@ from .stage_config import (
 from . import stages as _stages
 
 
+def _upi_resolve_identity(
+    *,
+    access_token: Any,
+    auth_context: Any,
+    device_id: Any,
+    session_token: Any,
+    payment_country: str,
+    fingerprint_index: Any,
+    upi_cfg: Any,
+    cfg: Any,
+    rotate_fingerprint: bool,
+) -> SimpleNamespace:
+    """Account identity + browser fingerprint + billing identity for one run.
+
+    Split out of :func:`_resolve_upi_runtime` (P0-1/P0-2/P0-3): that function had
+    grown past its frozen length, and this block is a self-contained policy --
+    *who* is running -- as opposed to the switches that decide *how*.
+    """
+    # 账号身份：``auth_context`` 从 UPI_CALL_OPTIONS 第一天就声明、每个入口也都
+    # 传下来了，但历史上没有任何 stage 读过它 —— 于是每轮都拿 ``uuid4()`` 当设备
+    # ID，并用合成的 ``Cookie: oai-did=<uuid>`` 覆盖掉账号真实会话 Cookie。
+    # 见 ``identity.py`` 与 ``payment/qualification.py:_device_id_and_cookie`` 记录的
+    # 2026-10-27 实测：只带 ``oai-did`` 而没有 AT 签发时的会话 Cookie，Checkout 回
+    # ``400 Our systems have detected unusual activity``。
+    identity = resolve_account_identity(
+        auth_context,
+        device_id=device_id,
+        session_token=session_token,
+    )
+    # 设备身份：调用方可传账号真实 device_id（session 文件里有），
+    # 不传则生成一个自洽的 UUID——风控看的是头的存在性与一致性。
+    device_id = identity.device_id or str(uuid.uuid4())
+    session_token = str(identity.session_token or "").strip()
+    cookie_header = identity.cookie_header
+    account_id = identity.account_id
+
+    # 一套自洽的浏览器身份贯穿全流程（旧实现每个 session 各随机一个 UA ⇒ 指纹自相矛盾）
+    # locale/timezone 从契约层按 payment_country 取，不在这里硬编码。
+    #
+    # P0-3：指纹改为**按账号粘性**（落 ``runtime/upi_identity.json``），只在重试
+    # （``rotate_fingerprint``）时推进到下一个模板。旧实现无论什么情况都是
+    # ``secrets.randbelow``，于是同一账号重试一次就换 UA/sec-ch-ua/时区，而
+    # device id 与 Sentinel 对不变 —— 「固定设备 ID 但 UA 变了」是最廉价的矛盾特征。
+    # 配置里显式写了 ``upi.fingerprint`` 时仍然以它为准（运维可钉死单个模板）。
+    account_key = _upi_account_key(access_token, auth_context, identity=identity)
+    fingerprint_index = upi_cfg.get("fingerprint")
+    try:
+        fingerprint = _upi_fingerprint(
+            int(fingerprint_index) if fingerprint_index is not None else None,
+            payment_country,
+            account_key=account_key,
+            rotate=bool(rotate_fingerprint),
+            cfg=cfg,
+        )
+    except (TypeError, ValueError):
+        fingerprint = _upi_fingerprint(
+            country=payment_country,
+            account_key=account_key,
+            rotate=bool(rotate_fingerprint),
+            cfg=cfg,
+        )
+    # 账单同理：按账号粘性 + 全局去重（旧实现 5 人名 × 4 地址 = 20 种组合，
+    # 4 并发批次必然撞地址，且同一账号重试一次就换姓名与地址）。
+    billing = _upi_billing_profile(
+        upi_cfg if "fixed_billing" in upi_cfg else None,
+        account_key=account_key,
+    )
+    return SimpleNamespace(
+        device_id=device_id,
+        session_token=session_token,
+        cookie_header=cookie_header,
+        account_id=account_id,
+        account_key=account_key,
+        fingerprint_index=fingerprint_index,
+        fingerprint=fingerprint,
+        billing=billing,
+    )
+
+
 def _resolve_upi_runtime(
     access_token,
     proxy,
@@ -122,6 +212,8 @@ def _resolve_upi_runtime(
     runtime_config,
     device_id,
     session_token,
+    auth_context=None,
+    rotate_fingerprint=False,
 ):
     """Resolve every config/env/proxy input generate_upi_qr_link reads.
 
@@ -197,6 +289,9 @@ def _resolve_upi_runtime(
         else _env_bool("UPI_UPDATE_CUSTOMER_DATA", False)
     )
     max_approve_attempts = _env_int("UPI_APPROVAL_MAX_ATTEMPTS", UPI_APPROVAL_MAX_ATTEMPTS)
+    # P1-2：approve 分轮。总尝试数不变（``max_approve_attempts``），轮数只决定
+    # 这些尝试被切成几个**新 session**（新 Sentinel）。默认 1 轮 = 改动前行为。
+    approve_cycles = _env_int("UPI_APPROVE_CYCLES", 1, minimum=1)
     poll_max_attempts = _env_int("UPI_QR_POLL_MAX_ATTEMPTS", UPI_QR_POLL_MAX_ATTEMPTS)
     # 无头浏览器 rail：曾经是唯一能签发 approve 阶段校验用的
     # x-oai-is-client-observation 的路径，但 2026-09-30 实测它已不可用 ——
@@ -225,26 +320,22 @@ def _resolve_upi_runtime(
         else _env_bool("UPI_LOCAL_MANDATE_ENABLED", UPI_LOCAL_MANDATE_ENABLED)
     )
 
-    # 一套自洽的浏览器身份贯穿全流程（旧实现每个 session 各随机一个 UA ⇒ 指纹自相矛盾）
-    # locale/timezone 从契约层按 payment_country 取，不在这里硬编码。
-    fingerprint_index = upi_cfg.get("fingerprint")
-    try:
-        fingerprint = _upi_fingerprint(
-            int(fingerprint_index) if fingerprint_index is not None else None,
-            payment_country,
-        )
-    except (TypeError, ValueError):
-        fingerprint = _upi_fingerprint(country=payment_country)
-    billing = _upi_billing_profile(upi_cfg if "fixed_billing" in upi_cfg else None)
-    # 设备身份：调用方可传账号真实 device_id（session 文件里有），
-    # 不传则生成一个自洽的 UUID——风控看的是头的存在性与一致性。
-    device_id = str(device_id or "").strip() or str(uuid.uuid4())
+    _ident = _upi_resolve_identity(
+        access_token=access_token,
+        auth_context=auth_context,
+        device_id=device_id,
+        session_token=session_token,
+        payment_country=payment_country,
+        fingerprint_index=upi_cfg.get("fingerprint"),
+        upi_cfg=upi_cfg,
+        cfg=cfg,
+        rotate_fingerprint=bool(rotate_fingerprint),
+    )
     # UPI 建单/记账/审批都必须走账单国出口；已知 region/geo/country 模板重定向
     # 到该国家，不动粘性会话。未知格式原样保留（真实出口门禁由上层负责）。
     checkout_proxy = _upi_retarget_region(checkout_proxy, checkout_country)
     provider_proxy = _upi_retarget_region(provider_proxy, checkout_country)
     approve_proxy = _upi_retarget_region(approve_proxy, checkout_country)
-    session_token = str(session_token or "").strip()
     return SimpleNamespace(
         cfg=cfg,
         upi_cfg=upi_cfg,
@@ -266,15 +357,19 @@ def _resolve_upi_runtime(
         update_tax_region=update_tax_region,
         update_customer_data=update_customer_data,
         max_approve_attempts=max_approve_attempts,
+        approve_cycles=approve_cycles,
         poll_max_attempts=poll_max_attempts,
         approve_backoff_cap=approve_backoff_cap,
         local_mandate_enabled=local_mandate_enabled,
         browser_rail=browser_rail,
-        fingerprint_index=fingerprint_index,
-        fingerprint=fingerprint,
-        billing=billing,
-        device_id=device_id,
-        session_token=session_token,
+        fingerprint_index=_ident.fingerprint_index,
+        fingerprint=_ident.fingerprint,
+        billing=_ident.billing,
+        device_id=_ident.device_id,
+        session_token=_ident.session_token,
+        cookie_header=_ident.cookie_header,
+        account_id=_ident.account_id,
+        account_key=_ident.account_key,
     )
 
 
@@ -326,6 +421,73 @@ def upi_invocation(
         "paid_timeout": paid_timeout,
         "require_server_upi_mandate": require_server_upi_mandate,
     }
+
+
+def _upi_account_key(
+    access_token: str,
+    auth_context: Mapping[str, Any] | None = None,
+    *,
+    identity: Any = None,
+) -> str:
+    """Stable per-account key for the identity ledger (``""`` when unknowable).
+
+    One implementation shared by ``_resolve_upi_runtime`` (allocation) and
+    ``generate_upi_qr_link`` (outcome recording), so a run can never allocate an
+    identity under one key and record its verdict under another.  The caller may
+    pass its already-resolved ``identity`` to avoid resolving it twice; both
+    paths produce the same key from the same inputs.
+    """
+    resolved = identity if isinstance(identity, IdentityLike) else resolve_account_identity(auth_context)
+    return _identity_account_key(
+        account_id=resolved.account_id,
+        access_token=access_token,
+        session_token=resolved.session_token,
+    )
+
+
+def _upi_record_attempt_outcome(
+    account_key: str,
+    result: Any,
+    runtime_config: Any = None,
+    checkout_proxy: Any = "",
+) -> None:
+    """Record this attempt's verdict on the account **and** on the exit.
+
+    Best-effort telemetry: a failure here must never change the extraction
+    result, so every path suppresses.
+
+    * account → ``fingerprint_identity`` (30-minute cooldown on ``blocked``);
+    * exit → ``exit_health`` (the reference's ``record_exit_risk_block``).
+      A ``blocked`` verdict is a property of the exit; before P1-3 the next
+      account handed the same exit started from zero and re-learned it.
+    """
+    if not isinstance(result, Mapping):
+        return
+    cfg = runtime_config if isinstance(runtime_config, Mapping) else None
+    code = str(result.get("error_code") or "")
+    text = f"{code} {result.get('error') or ''}".lower()
+    ok = bool(result.get("ok"))
+    blocked = (not ok) and ("blocked" in text or code == "upi_provider_declined")
+    reason = code or str(result.get("error") or "")
+    if account_key:
+        with contextlib.suppress(Exception):
+            _record_fingerprint_outcome(account_key, success=ok, blocked=blocked, reason=reason, cfg=cfg)
+    # P2：0 元资格负缓存。``no_free_trial``（require_zero 下实付非 0）是**账号级**
+    # 结论，记一天；成功出链则把标记清掉。失败一律吞（纯调度优化）。
+    require_zero = bool(result.get("require_zero", True))
+    if account_key and require_zero and code == "no_free_trial":
+        with contextlib.suppress(Exception):
+            _mark_zero_ineligible(account_key, cfg=cfg)
+    elif account_key and ok:
+        with contextlib.suppress(Exception):
+            _clear_zero_ineligible(account_key, cfg=cfg)
+    exit_text = str(checkout_proxy or "").strip()
+    if exit_text:
+        with contextlib.suppress(Exception):
+            if blocked:
+                exit_health.record_block(exit_text, reason, cfg=cfg)
+            elif ok:
+                exit_health.clear(exit_text, cfg=cfg)
 
 
 def _upi_assert_egress_contract(rt: Any) -> dict[str, Any] | None:
@@ -443,6 +605,7 @@ def _generate_upi_qr_link_once(
     wait_paid: bool = False,
     paid_timeout: float = 900.0,
     require_server_upi_mandate: bool = False,
+    rotate_fingerprint: bool = False,
 ) -> dict[str, Any]:
     """Thin seam: assemble the dependency bundle and run the stage body.
 
@@ -470,6 +633,7 @@ def _generate_upi_qr_link_once(
         wait_paid,
         paid_timeout,
         require_server_upi_mandate,
+        rotate_fingerprint,
     )
 
 
@@ -516,6 +680,16 @@ def generate_upi_qr_link(
     current = (proxy, checkout_proxy, provider_proxy, approve_proxy)
     result: dict[str, Any] | None = None
     attempt = 0
+    # 账号身份：与 ``_resolve_upi_runtime`` 共用 ``_upi_account_key``，保证分配与
+    # 记账落在同一个键上。``""``（无可识别账号）时不读写 ledger。
+    account_key = _upi_account_key(access_token, auth_context)
+    _ledger_cfg = runtime_config if isinstance(runtime_config, Mapping) else None
+    cooling, cooling_left = _fingerprint_cooldown(account_key, _ledger_cfg) if account_key else (False, 0.0)
+    if cooling:
+        _emit(
+            "identity",
+            f"fingerprint in cooldown ({max(0.0, cooling_left):.0f}s left); rotating to the next template",
+        )
     while attempt < total_rounds:
         attempt += 1
         if attempt > 1:
@@ -525,6 +699,25 @@ def generate_upi_qr_link(
                 f"round {attempt}/{total_rounds}: fresh exit "
                 f"{redact_proxy_text(current[1] or current[0] or 'DIRECT', current[1] or current[0])}",
             )
+        # ── P1-3：出口风控记忆 ──────────────────────────────────────
+        # 上一次在这个出口上被判 blocked 之后仍在冷却窗口内。这里只**告知**；
+        # 除非运维显式打开 ``UPI_EXIT_HEALTH_SKIP``（调用方拥有出口池时才有意义），
+        # 否则不据此改变控制流 —— 本链路拿到的是单个凭据，无权替调用方换池。
+        _exit = str(current[1] or current[0] or "").strip()
+        _exit_reason = exit_health.block_reason(_exit, cfg=_ledger_cfg) if _exit else ""
+        if _exit_reason:
+            _emit("exit", f"exit still cooling from an earlier block: {_exit_reason}")
+            if exit_health.skip_enabled(_ledger_cfg):
+                result = {
+                    "ok": False,
+                    "error": f"exit_health_blocked: {_exit_reason}",
+                    "error_code": "exit_health_blocked",
+                    "payment_method": "upi",
+                }
+                _upi_record_attempt_outcome(account_key, result, _ledger_cfg, _exit)
+                if attempt >= total_rounds:
+                    return result
+                continue
         result = _generate_upi_qr_link_once(
             access_token=access_token,
             proxy=current[0],
@@ -544,7 +737,12 @@ def generate_upi_qr_link(
             wait_paid=wait_paid,
             paid_timeout=paid_timeout,
             require_server_upi_mandate=require_server_upi_mandate,
+            # 重试（或指纹正处冷却）才换模板；首轮必须是粘性的那一套。
+            rotate_fingerprint=bool(attempt > 1 or cooling),
         )
+        # P1-3：blocked 是**出口**的属性 —— 记下来，下一个用同一出口的账号
+        # 就不必再花一次 Checkout + Sentinel + 5 次 approve 重新学一遍。
+        _upi_record_attempt_outcome(account_key, result, _ledger_cfg, current[1] or current[0])
         if result.get("ok") or not _upi_round_retryable(result):
             break
         if attempt >= total_rounds:

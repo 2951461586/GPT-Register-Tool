@@ -207,6 +207,26 @@
     "sms_tool/providers/ports.py -> sms_tool.http_client": {
       "reason": "deferred",
       "why": "the vendor adapter receives the shared retry transport through the port so providers never import http_client at module scope; same seam as the desktop_ipc and mailbox_pool_writer entries above (Rule 3)"
+    },
+    "sms_tool/payment/batch.py -> sms_tool.upi_link": {
+      "reason": "deferred",
+      "why": "P1-4: the exit lease is released inside _run_one_row's finally-equivalent point. A module-level edge would put upi_link on the payment import path, so the import runs in _release_leases for the one call that needs it."
+    },
+    "sms_tool/payment/routing.py -> sms_tool.upi_link": {
+      "reason": "deferred",
+      "why": "P1-4: _select_proxy asks the lease module which candidates are already taken. Resolved through the _exit_lease() helper so the payment kernel does not import the UPI lane at module scope (and a missing module simply disables the feature)."
+    },
+    "sms_tool/upi_link/exit_lease.py -> sms_tool.kernel.paths": {
+      "reason": "deferred",
+      "why": "the lease directory comes from kernel.paths.runtime_file; the import sits in _runtime_file so the new module adds no module-level upi_link -> kernel edge."
+    },
+    "sms_tool/upi_link/identity_store.py -> sms_tool.cross_process_gate": {
+      "reason": "deferred",
+      "why": "the ledger write lock reuses cross_process_write_lock; the import sits inside ledger_transaction so a module that every identity lookup imports stays free of the gate module at import time."
+    },
+    "sms_tool/upi_link/identity_store.py -> sms_tool.kernel.paths": {
+      "reason": "deferred",
+      "why": "the ledger path comes from kernel.paths.runtime_file; imported inside _runtime_file for the same reason as the cross_process_gate edge."
     }
   }
 }

@@ -12,7 +12,7 @@ from typing import Any
 
 from .config import _load_json, _method_cfg
 from .constants import DEFAULT_CONFIG_PATH
-from .env import _env_bool, _env_int
+from .env import _env_bool, _env_int, _env_str
 
 
 def _upi_link_unverified_contract(verification_code: str, verification: str) -> dict[str, Any]:
@@ -74,6 +74,12 @@ _UPI_PRECONFIRM_RETRY_CODES: frozenset[str] = frozenset(
         "upi_checkout_not_active",
         "oaics_prerequisites_missing",
         "oaics_elements_failed",
+        # P1-1: a known-bad 0-元 exit is refused *before* a Checkout exists, so
+        # reopening on a fresh exit is exactly what the round loop is for.
+        "zero_cache_bad_exit",
+        # P1-3: the assigned exit is still inside a risk-block window. Retryable
+        # so a caller that owns a pool can hand a different exit.
+        "exit_health_blocked",
     }
 )
 
@@ -94,3 +100,64 @@ def _upi_round_retryable(result: Any) -> bool:
     if not isinstance(result, Mapping) or result.get("ok"):
         return False
     return str(result.get("error_code") or "") in _UPI_PRECONFIRM_RETRY_CODES
+
+
+def _upi_zero_mode(upi_cfg: Any) -> str:
+    """``upi.zero_mode`` / ``UPI_ZERO_MODE`` -- how a Checkout is made to bill 0.
+
+    ``campaign`` (default) keeps the historical behaviour: only the
+    ``plus-1-month-free`` promo campaign is injected.  ``trial`` adds a real
+    ``subscription_data.trial_period_days``; ``momo`` also mirrors the MoMologic
+    flow (trial + full billing profile).  Reference: ``upi_extract.py:3732
+    zero_mode``.
+    """
+    if isinstance(upi_cfg, Mapping) and upi_cfg.get("zero_mode"):
+        value = str(upi_cfg.get("zero_mode") or "").strip().lower()
+    else:
+        value = _env_str("UPI_ZERO_MODE", "campaign").strip().lower()
+    return value if value in {"campaign", "trial", "momo"} else "campaign"
+
+
+def _upi_trial_period_days() -> int:
+    """``UPI_TRIAL_DAYS`` (default 30, clamped to 1..90)."""
+    return max(1, min(90, _env_int("UPI_TRIAL_DAYS", 30, minimum=1)))
+
+
+def _upi_zero_eligibility_precheck(upi_cfg: Any) -> bool:
+    """``upi.zero_eligibility_precheck`` / ``UPI_ZERO_ELIGIBILITY_PRECHECK``."""
+    if isinstance(upi_cfg, Mapping) and "zero_eligibility_precheck" in upi_cfg:
+        return bool(upi_cfg.get("zero_eligibility_precheck"))
+    return _env_bool("UPI_ZERO_ELIGIBILITY_PRECHECK", True)
+
+
+def _upi_zero_negative_cache(upi_cfg: Any) -> bool:
+    """``upi.zero_negative_cache`` / ``UPI_ZERO_NEGATIVE_CACHE``."""
+    if isinstance(upi_cfg, Mapping) and "zero_negative_cache" in upi_cfg:
+        return bool(upi_cfg.get("zero_negative_cache"))
+    return _env_bool("UPI_ZERO_NEGATIVE_CACHE", True)
+
+
+def _upi_zero_cache_scheduling(upi_cfg: Any) -> bool:
+    """``upi.zero_cache_scheduling`` / ``UPI_ZERO_CACHE_SCHEDULING``.
+
+    **Opt-in, default off** -- same default as the reference
+    (``upi_extract.py:1955 zero_cache_scheduling_enabled``).  The cache is read
+    and reported on every run either way; only *acting* on it needs the switch,
+    because a 30-minute-old sample can be wrong about a rotating residential
+    exit and skipping on it would waste a good exit.
+    """
+    if isinstance(upi_cfg, Mapping) and "zero_cache_scheduling" in upi_cfg:
+        return bool(upi_cfg.get("zero_cache_scheduling"))
+    return _env_bool("UPI_ZERO_CACHE_SCHEDULING", False)
+
+
+def _upi_zero_cache_skip_bad(upi_cfg: Any) -> bool:
+    """``upi.zero_cache_skip_bad`` / ``UPI_ZERO_CACHE_SKIP_BAD`` (default on).
+
+    Only consulted when :func:`_upi_zero_cache_scheduling` is enabled: then an
+    exit whose last sample produced a non-zero amount for this country is
+    refused before a Checkout is created.
+    """
+    if isinstance(upi_cfg, Mapping) and "zero_cache_skip_bad" in upi_cfg:
+        return bool(upi_cfg.get("zero_cache_skip_bad"))
+    return _env_bool("UPI_ZERO_CACHE_SKIP_BAD", True)

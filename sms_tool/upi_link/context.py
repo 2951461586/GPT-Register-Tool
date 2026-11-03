@@ -21,13 +21,17 @@ UPI_STAGE_FIELDS: tuple[str, ...] = (
     "_oaics_state",
     "_rc",
     "access_token",
+    "account_id",
+    "account_key",
     "amount",
     "approval_blocked",
     "approval_data",
     "approval_ok",
     "approve_backoff_cap",
+    "approve_cycles",
     "approve_proxy",
     "approve_shape",
+    "auth_context",
     "billing",
     "browser_rail",
     "checkout_country",
@@ -36,6 +40,7 @@ UPI_STAGE_FIELDS: tuple[str, ...] = (
     "checkout_sentinel_headers",
     "checkout_ui_mode",
     "confirm_data",
+    "cookie_header",
     "cs",
     "cs_id",
     "ctx",
@@ -102,13 +107,17 @@ class UpiStageContext:
     _oaics_state: Any
     _rc: Any
     access_token: Any
+    account_id: Any
+    account_key: Any
     amount: Any
     approval_blocked: Any
     approval_data: Any
     approval_ok: Any
     approve_backoff_cap: Any
+    approve_cycles: Any
     approve_proxy: Any
     approve_shape: Any
+    auth_context: Any
     billing: Any
     browser_rail: Any
     checkout_country: Any
@@ -117,6 +126,7 @@ class UpiStageContext:
     checkout_sentinel_headers: Any
     checkout_ui_mode: Any
     confirm_data: Any
+    cookie_header: Any
     cs: Any
     cs_id: Any
     ctx: Any

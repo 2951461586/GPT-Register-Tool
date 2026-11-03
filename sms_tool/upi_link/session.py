@@ -13,8 +13,6 @@ import contextlib
 from typing import Any
 from collections.abc import Mapping
 from pathlib import Path
-import base64
-import json
 import os
 from urllib.parse import quote
 import re
@@ -26,15 +24,18 @@ from ._extract import (
     _upi_int_value,
     _upi_is_provider_decline_text,
 )
+from ..payment.upi_identity import (
+    COOKIE_DEVICE_ID,
+    COOKIE_SESSION_TOKEN,
+    cookie_carries_session_token,
+    with_cookie,
+)
+from ..payment.upi_identity import token_account_id as account_id_from_token
 from .constants import (
     PROJECT_ROOT,
     UPI_ATTESTATION_ENV_KEYS,
-    UPI_BILLING_ADDRESSES,
-    UPI_BILLING_IN,
-    UPI_BILLING_NAMES,
     UPI_CHATGPT_CLIENT_BUILD_NUMBER,
     UPI_CHATGPT_CLIENT_VERSION,
-    UPI_EMAIL_DOMAINS,
     UPI_FINGERPRINT_TEMPLATES,
     UPI_SENTINEL_CHECKOUT_FLOW,
     UPI_WARMUP_TIMEOUT,
@@ -46,66 +47,52 @@ from .constants import (
     _UPI_PAGE_SEQ_JSON_RE,
     _UPI_PAGE_SEQ_RE,
 )
-from .env import _emit, _env_bool, _env_str
+from .env import _emit, _env_str
+from ..payment.upi_billing import billing_profile
+from ..payment.upi_fingerprint import fingerprint_index as _sticky_fingerprint_index
 
 
-def _upi_billing_profile(cfg: Mapping[str, Any] | None = None) -> dict[str, str]:
+def _upi_billing_profile(
+    cfg: Mapping[str, Any] | None = None,
+    *,
+    account_key: str = "",
+    use_store: bool = True,
+) -> dict[str, str]:
     """构造印度账单资料。
 
     优先级（后者覆盖前者）:
-      随机池 → ``upi.fixed_billing`` / ``UPI_USE_FIXED_BILLING`` → 逐字段环境变量。
+      池子（有 ``account_key`` 时按账号粘性、全局去重；否则随机）
+      → ``upi.fixed_billing`` / ``UPI_USE_FIXED_BILLING`` → 逐字段环境变量。
 
     参考实现 ``upi_billing_profile()`` 只有「随机池 → 固定 → 环境变量」三级,
     这里多一级「配置段」, 因为本项目配置是 JSON 而非环境变量驱动。
+
+    🔴 ``account_key`` 为空时行为与历史完全一致（每次随机）。池子、去重、粘性与
+    ``fixed_billing`` 覆盖链都在 :mod:`sms_tool.upi_link.billing` 里，这里只做转发，
+    避免出现第二份账单事实来源。
     """
-    _raw_section: object = cfg
-    section: Mapping = _raw_section if isinstance(_raw_section, Mapping) else {}
-    first_name, last_name = UPI_BILLING_NAMES[secrets.randbelow(len(UPI_BILLING_NAMES))]
-    line1, city, postal_code, state = UPI_BILLING_ADDRESSES[secrets.randbelow(len(UPI_BILLING_ADDRESSES))]
-    domain = UPI_EMAIL_DOMAINS[secrets.randbelow(len(UPI_EMAIL_DOMAINS))]
-    profile = {
-        "email": f"{first_name.lower()}.{last_name.lower()}{secrets.randbelow(9000) + 1000}@{domain}",
-        "name": f"{first_name} {last_name}",
-        "country": "IN",
-        "line1": line1,
-        "line2": "",
-        "city": city,
-        "postal_code": postal_code,
-        "state": state,
-    }
-
-    fixed = section.get("fixed_billing")
-    use_fixed = _env_bool("UPI_USE_FIXED_BILLING", False) or bool(fixed)
-    if use_fixed:
-        baseline = dict(UPI_BILLING_IN)
-        if isinstance(fixed, Mapping):
-            baseline.update({str(k): str(v) for k, v in fixed.items() if v is not None})
-        # 固定资料的键名是 ``postal``, 内部统一用 ``postal_code``。
-        if baseline.get("postal") and not baseline.get("postal_code"):
-            baseline["postal_code"] = baseline["postal"]
-        profile.update({k: str(v) for k, v in baseline.items() if k in profile})
-
-    env_map = {
-        "email": "UPI_EMAIL",
-        "name": "UPI_NAME",
-        "country": "UPI_BILLING_COUNTRY",
-        "line1": "UPI_LINE1",
-        "line2": "UPI_LINE2",
-        "city": "UPI_CITY",
-        "postal_code": "UPI_POSTAL_CODE",
-        "state": "UPI_STATE",
-    }
-    for key, env_name in env_map.items():
-        value = _env_str(env_name, "")
-        if value:
-            profile[key] = value
-
-    profile["country"] = str(profile.get("country") or "IN").strip().upper()
-    return profile
+    return billing_profile(cfg, account_key=account_key, use_store=use_store)
 
 
-def _upi_fingerprint(index: int | None = None, country: str | None = None) -> dict[str, str]:
-    """按索引（缺省随机）取一套自洽的浏览器身份模板。
+def _upi_fingerprint(
+    index: int | None = None,
+    country: str | None = None,
+    *,
+    account_key: str = "",
+    rotate: bool = False,
+    cfg: Mapping[str, Any] | None = None,
+) -> dict[str, str]:
+    """按索引取一套自洽的浏览器身份模板。
+
+    ``index`` 显式给出时用它（配置 ``upi.fingerprint`` = 0/1/2）；否则：
+
+    * ``account_key`` 非空 → **按账号粘性**从 ``runtime/upi_identity.json`` 取，
+      ``rotate=True``（重试）时推进到下一个模板；
+    * 否则历史行为：每次随机。
+
+    旧实现无论什么情况都是 ``secrets.randbelow``，于是同一账号重试一次就换
+    UA / ``sec-ch-ua`` / 时区，而 device id 与 Sentinel 对不变 —— “固定设备 ID
+    但 UA 变了” 是最容易被识别的矛盾，也把指纹唯一的价值（一致性）丢了。
 
     ``locale`` / ``timezone`` / ``accept_language`` 从契约层
     （``checkout_contract.browser_profile_for_country``）取，模板里只保留
@@ -115,9 +102,18 @@ def _upi_fingerprint(index: int | None = None, country: str | None = None) -> di
     平行的事实来源，改一处漏一处就会出现「UA 说印度、时区说加尔各答、
     但契约层要求越南」这种自相矛盾。契约层是唯一真源。
     """
+    total = len(UPI_FINGERPRINT_TEMPLATES)
     if index is None:
-        index = secrets.randbelow(len(UPI_FINGERPRINT_TEMPLATES))
-    template = UPI_FINGERPRINT_TEMPLATES[index % len(UPI_FINGERPRINT_TEMPLATES)]
+        index = _sticky_fingerprint_index(
+            account_key,
+            total,
+            cfg,
+            rotate=rotate,
+            names=[template.get("name", "") for template in UPI_FINGERPRINT_TEMPLATES],
+        )
+    if index is None:
+        index = secrets.randbelow(total)
+    template = UPI_FINGERPRINT_TEMPLATES[index % total]
     result = dict(template)
 
     profile = browser_profile_for_country(country) if country else None
@@ -198,6 +194,7 @@ def _upi_apply_chatgpt_identity(
     session: Any,
     fingerprint: Mapping[str, str],
     device_id: str,
+    cookie_header: str = "",
 ) -> None:
     """给 ChatGPT 端点的 session 补齐客户端身份头（对齐参考实现）。
 
@@ -206,10 +203,20 @@ def _upi_apply_chatgpt_identity(
     ``oai-client-version`` / ``oai-client-build-number`` /
     ``sec-fetch-*`` / ``Cookie: oai-did=...`` / ``Origin``。
     2026-09-18 实测：缺这组头时 IN 区 checkout 全部 400 unusual activity。
+
+    ``cookie_header`` 是**账号自己的** Cookie（由 ``identity.resolve_account_identity``
+    从 ``auth_context`` 归一化）。给了就原样发送，只强制 ``oai-did`` 与
+    ``device_id`` 一致；没给才退回合成的 ``oai-did=<uuid>``。
+    后者正是 ``payment/qualification.py:_device_id_and_cookie`` 记录的 2026-10-27
+    实测失败形态：只有 ``oai-did`` 而没有 AT 签发时的会话 Cookie 时，Checkout
+    回 ``400 unusual activity``——Checkout 是同站动作，必须带上签发该 token 的
+    Cookie。Sentinel 对又是 device-bound 的，所以 Cookie 与 ``oai-device-id``
+    只能来自同一个 device id。
     """
     if session is None:
         return
     locale = str(fingerprint.get("locale", "") or "en-US") if fingerprint else "en-US"
+    cookie = with_cookie(cookie_header, COOKIE_DEVICE_ID, device_id) if cookie_header else ""
     headers = {
         "Origin": endpoints.CHATGPT_BASE,
         "oai-device-id": device_id,
@@ -220,7 +227,7 @@ def _upi_apply_chatgpt_identity(
         "sec-fetch-dest": "empty",
         "sec-fetch-mode": "cors",
         "sec-fetch-site": "same-origin",
-        "Cookie": "oai-did=%s" % device_id,
+        "Cookie": cookie or "%s=%s" % (COOKIE_DEVICE_ID, device_id),
     }
     with contextlib.suppress(Exception):
         session.headers.update(headers)
@@ -231,6 +238,7 @@ def _upi_new_chatgpt_session(
     fingerprint: Mapping[str, str],
     device_id: str,
     session_token: str = "",
+    cookie_header: str = "",
 ) -> Any:
     """创建面向 ChatGPT 端点的 session（checkout / approve）。
 
@@ -244,6 +252,8 @@ def _upi_new_chatgpt_session(
        / ``Cookie``。这些由 ``_upi_apply_chatgpt_identity`` 补齐。
     3. **session_token cookie**：``__Secure-next-auth.session-token`` 是
        ChatGPT 的会话凭据，缺失时 checkout 会被判为未登录态。
+    4. **账号 Cookie**：``cookie_header`` 非空时整份原样发送（见
+       ``_upi_apply_chatgpt_identity``），不再用合成的 ``oai-did`` 覆盖。
 
     ``trust_env=False`` 是刻意的——不继承系统环境变量里的代理配置，
     避免与显式传入的 proxy 冲突（参考实现同样这么做）。
@@ -268,13 +278,16 @@ def _upi_new_chatgpt_session(
         if hasattr(session, "trust_env"):
             session.trust_env = False
     _upi_apply_fingerprint(session, fingerprint)
-    _upi_apply_chatgpt_identity(session, fingerprint, device_id)
+    _upi_apply_chatgpt_identity(session, fingerprint, device_id, cookie_header)
     if session_token:
         existing_cookie = str(session.headers.get("Cookie") or "")
-        if existing_cookie:
-            session.headers["Cookie"] = f"{existing_cookie}; __Secure-next-auth.session-token={session_token}"
-        else:
-            session.headers["Cookie"] = f"__Secure-next-auth.session-token={session_token}"
+        # A cookie that already carries the token (plain **or** chunked) must not
+        # gain a second copy: next-auth splits >4096-byte tokens into
+        # ``...session-token.0`` / ``.1``, and adding the joined value next to
+        # them presents a duplicate credential.
+        if not cookie_carries_session_token(existing_cookie):
+            merged = with_cookie(existing_cookie, COOKIE_SESSION_TOKEN, session_token)
+            session.headers["Cookie"] = merged or f"{COOKIE_SESSION_TOKEN}={session_token}"
     return session
 
 
@@ -298,16 +311,7 @@ def _upi_session_is_live(session: Any) -> bool:
 
 def _upi_account_id_from_token(token: str) -> str:
     """Read the ChatGPT account id from an access token without verifying it."""
-    try:
-        parts = str(token or "").split(".")
-        if len(parts) < 2:
-            return ""
-        padded = parts[1] + "=" * (-len(parts[1]) % 4)
-        payload = json.loads(base64.urlsafe_b64decode(padded))
-        auth = payload.get("https://api.openai.com/auth") or {}
-        return str(auth.get("chatgpt_account_id") or payload.get("chatgpt_account_id") or "")
-    except Exception:
-        return ""
+    return account_id_from_token(token)
 
 
 def _upi_promo_page_url(campaign: str = PLUS_TRIAL_CAMPAIGN_ID) -> str:

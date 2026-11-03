@@ -47,6 +47,7 @@ are omitted.
 | `--cpa-api-url` | value | CPA API base URL, defaults to cpa/cpa_mode.api_url in config.json |
 | `--cpa-domain-filter` | value | Only process CPA accounts under this email domain |
 | `--delete-account` | — | Delete/archive one or more accounts through the lifecycle adapter |
+| `--device-id` | value | oai-did (device UUID) for the UPI lane; derived from --session-token's account when omitted |
 | `--doctor` | — | Offline environment self-check (python/node/playwright/curl_cffi/config), then exit |
 | `--email` | value | Mailbox email address |
 | `--email-access-token` | value | Mailbox access token |
@@ -171,6 +172,7 @@ are omitted.
 | `--scan-relogin-mode` | choices: `auto`, `web_session`, `codex_oauth` | Relogin mode for --one-click-scan --quota-auto-relogin; auto tries RT, web session, protocol email-OTP, then Codex OAuth |
 | `--scan-switch-workspace-id` | value | Deprecated compatibility flag; no longer used |
 | `--session-file` | value | Session JSON path for account and payment operations |
+| `--session-token` | value | ChatGPT __Secure-next-auth.session-token for the UPI lane. The Checkout is a same-site action: without the session cookies the access token was issued with it answers 400 unusual activity |
 | `--smailr-domain` | value | Smailr mailbox domain, default smailr.default_domain in config.json |
 | `--smsbower-country` | value | SMSBower country ID for phone registration (default: from config) |
 | `--stripe-init-proxy` | value | Explicit Stripe init proxy (falls back to provider proxy) |

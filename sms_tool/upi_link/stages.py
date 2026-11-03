@@ -32,9 +32,25 @@ from .constants import (
     UPI_SENTINEL_APPROVAL_FLOW,
 )
 from .operations import UpiOperations
+from .stage_config import (
+    _upi_trial_period_days,
+    _upi_zero_cache_scheduling,
+    _upi_zero_cache_skip_bad,
+    _upi_zero_eligibility_precheck,
+    _upi_zero_mode,
+)
+from ..payment.upi_zero import in_cooldown as _zero_ineligible_cooldown
 from .verify import INCONCLUSIVE as UPI_VERIFY_INCONCLUSIVE
 
 from .context import UpiStageContext
+
+
+def _int_or(value: Any, default: int) -> int:
+    """Parse an int defensively (config values arrive as strings too)."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def _absorb_mandate(ops: UpiOperations, state: UpiStageContext, *sources: Any) -> bool:
@@ -112,12 +128,105 @@ def _stage_pre_exit(ops: UpiOperations, state: UpiStageContext) -> Any:
         state.approve_proxy = str(state._rc.approve_proxy or "")
 
     # First point at which the retargeted stage proxies are known, and before
-    # Stage 1 creates a Checkout session -- the last moment a mis-routed exit
+    # Stage 1 creates a Checkout session -- the last moment a misrouted exit
     # can be rejected for the price of one probe instead of a disposable
     # session.
     _egress_failure = ops._upi_assert_egress_contract(state._rc)
     if _egress_failure is not None:
         return _egress_failure
+    return None
+
+
+def _upi_read_zero_cache(state: "UpiStageContext") -> tuple[str, Any]:
+    """Read the 0-元 sample for this exit, if the caller provided a proxy state.
+
+    ``proxy_state`` is the shared ``PayPalProxyState``; ``zero_status`` is
+    already implemented there (and already *used* by the paypal lane).  The UPI
+    lane only ever wrote it.  Errors are swallowed: a cache lookup must never be
+    the reason a link is not generated.
+    """
+    proxy_state = getattr(state, "proxy_state", None)
+    reader = getattr(proxy_state, "zero_status", None)
+    if reader is None or not state.checkout_proxy:
+        return "", None
+    try:
+        status, amount = reader(state.checkout_proxy, state.checkout_country)
+    except Exception:  # noqa: BLE001 - proxy_state is caller-supplied and duck-typed
+        # Deliberately broad: ``proxy_state`` is any object the caller injected
+        # (``PayPalProxyState`` in production, a fake in tests), and a cache read
+        # must never be the reason a link is not generated.
+        return "", None
+    return str(status or ""), amount
+
+
+def _upi_precheckout_gate(state: "UpiStageContext") -> Any:
+    """Refuse this exit/account *before* a Checkout session is created.
+
+    Two persisted facts can save the whole session:
+
+    * **P1-1** -- the 0-元 sample this exit produced last time. Read on every run
+      and reported; acted on only when ``zero_cache_scheduling`` is enabled (a
+      30-minute-old sample can be wrong about a rotating exit).
+    * **P2** -- the account was already proven unable to produce a 0-元 link
+      (``no_free_trial`` under ``require_zero``), for a day.
+
+    Returns the failure dict, or ``None`` when the run may proceed.
+    """
+    # ── P1-1：0 元缓存以前只写不读 ─────────────────────────────────
+    # ``_upi_record_zero_result``（Stage 3 开头）会把「这个出口本轮出的实付金额」
+    # 写进 ``PayPalProxyState``，但 UPI 链路从来没有读回来过 —— 同一出口的下一个
+    # 账号还得再建一次 Checkout 才能得知它出非 0。
+    #
+    # 现在每次运行都读并上报；**只有**在本轮要求 0 元且显式开启调度时才据此早退
+    # （默认关，与参考实现一致：30 分钟前的样本对一个轮换出口可能是错的）。
+    _zero_status, _zero_amount = _upi_read_zero_cache(state)
+    if _zero_status:
+        state.emit(
+            "checkout",
+            "0 元缓存: 该出口上次 amount=%s (%s)"
+            % (_zero_amount, "出过 0 元" if _zero_status == "ok" else "出的是非 0"),
+        )
+    if (
+        _zero_status == "bad"
+        and bool(state.require_zero)
+        and _upi_zero_cache_scheduling(state.upi_cfg)
+        and _upi_zero_cache_skip_bad(state.upi_cfg)
+    ):
+        return {
+            "ok": False,
+            "error": f"zero_cache_bad_exit: exit produced amount={_zero_amount} within the cache TTL",
+            "error_code": "zero_cache_bad_exit",
+            "payment_method": "upi",
+            "amount": _zero_amount,
+            "currency": state.payment_currency.upper(),
+            "target_country": state.target_country,
+            "checkout_country": state.checkout_country,
+            "billing_country": state.checkout_country,
+            "payment_country": state.payment_country,
+        }
+
+    # ── P2：账号级 0 元资格预检 ──────────────────────────────────────
+    # 上一轮已经证明这个账号在 ``require_zero`` 下出的是非 0（见
+    # ``pipeline._upi_record_attempt_outcome``），就没有必要再为它建一个 Checkout。
+    # 参考实现：``upi_extract.py:9011`` / ``fingerprint_store.mark_zero_ineligible``。
+    if bool(state.require_zero) and _upi_zero_eligibility_precheck(state.upi_cfg) and state.account_key:
+        _cooling, _left = _zero_ineligible_cooldown(state.account_key)
+        if _cooling:
+            state.emit(
+                "checkout",
+                f"account marked 0-元 ineligible ({_left:.0f}s left); skipping the Checkout",
+            )
+            return {
+                "ok": False,
+                "error": f"zero_ineligible_cached: account cannot produce a zero-amount link ({_left:.0f}s left)",
+                "error_code": "zero_ineligible_cached",
+                "payment_method": "upi",
+                "currency": state.payment_currency.upper(),
+                "target_country": state.target_country,
+                "checkout_country": state.checkout_country,
+                "billing_country": state.checkout_country,
+                "payment_country": state.payment_country,
+            }
     return None
 
 
@@ -127,8 +236,15 @@ def _stage_checkout(ops: UpiOperations, state: UpiStageContext) -> Any:
         "checkout",
         f"Stage 1: using {ops.redact_proxy_text(state.checkout_proxy or 'DIRECT', state.checkout_proxy)} for UPI checkout (ui_mode={state.checkout_ui_mode})",
     )
+    _gate = _upi_precheckout_gate(state)
+    if _gate is not None:
+        return _gate
     state.cs = ops._upi_new_chatgpt_session(
-        state.checkout_proxy, state.fingerprint, state.device_id, state.session_token
+        state.checkout_proxy,
+        state.fingerprint,
+        state.device_id,
+        state.session_token,
+        state.cookie_header,
     )
     state.cs.headers.update(
         {
@@ -172,6 +288,19 @@ def _stage_checkout(ops: UpiOperations, state: UpiStageContext) -> Any:
         "promo_campaign": {"promo_campaign_id": PLUS_TRIAL_CAMPAIGN_ID, "is_coupon_from_query_param": False},
         "checkout_ui_mode": state.checkout_ui_mode,
     }
+    # P2 ``zero_mode``：优惠 campaign 只是把金额压到 0 的一种办法。
+    # ``trial`` 追加真实试用期；``momo`` 再补一份完整账单资料（MoMologic 流程）。
+    _zero_mode = _upi_zero_mode(state.upi_cfg)
+    if _zero_mode in {"trial", "momo"}:
+        checkout_body["subscription_data"] = {"trial_period_days": _upi_trial_period_days()}
+        state.emit("checkout", f"zero_mode={_zero_mode}: trial_period_days={_upi_trial_period_days()}")
+    if _zero_mode == "momo":
+        checkout_body["billing_details"].update(
+            {
+                "name": str(state.billing.get("name") or ""),
+                "email": str(state.billing.get("email") or ""),
+            }
+        )
     r = state.cs.post(UPI_CHECKOUT_URL, json=checkout_body, timeout=CHATGPT_TIMEOUT)
     ops._upi_dump_http(r, "chatgpt_checkout", checkout_body, "POST", UPI_CHECKOUT_URL, force=r.status_code >= 400)
     if r.status_code == 401:
@@ -691,78 +820,109 @@ def _stage_approve(ops: UpiOperations, state: UpiStageContext) -> Any:
             if browser_approve["ok"]:
                 state.approval_ok = True
                 state.approval_data = {"result": "approved", "via": "headless_browser"}
-        approve_session = ops._upi_new_chatgpt_session(
-            state.approve_proxy, state.fingerprint, state.device_id, state.session_token
-        )
-        approve_session.headers.update(
-            {
-                "Authorization": f"Bearer {state.access_token}",
-                "Accept": "application/json",
-                "Content-Type": "application/json",
-                "Referer": f"{endpoints.CHATGPT_BASE}/checkout/{state.processor_entity}/{state.cs_id}",
-            }
-        )
-        # The approval endpoint is risk-gated: it needs the same deployment
-        # attestation, signed observation and frontend markers as Checkout,
-        # plus a fresh checkout_session_approval Sentinel. Attach the full
-        # The approval endpoint is risk-gated: re-capture the browser-issued
-        # observation on the Checkout page so approve does not replay the
-        # create-stage context (which the risk engine rejects).
-        if state.browser_rail and not state.approval_ok:
-            state.risk = ops._upi_capture_risk_context(
-                approve_session,
-                access_token=state.access_token,
-                device_id=state.device_id,
-                page_url=f"{endpoints.CHATGPT_BASE}/checkout/{state.processor_entity}/{state.cs_id}",
-                fingerprint=state.fingerprint,
-                proxy=state.approve_proxy,
-                session_token=state.session_token,
-                use_browser=True,
-                sentinel_flow=UPI_SENTINEL_APPROVAL_FLOW,
+        # ── P1-2：approve 分轮（cycle），每轮重建 session 并重签 Sentinel ────
+        #
+        # 旧实现用**同一个** session 打完全部尝试。``reference`` 形态下 approve
+        # 复用 checkout 阶段的 SEN/SO 对，于是 blocked 之后调
+        # ``_upi_apply_approve_risk`` 只是把同一份风控上下文原样重贴（该函数在
+        # reference 形态下**不再 mint**），等于把同一个请求重放 N 次 —— 而本函数
+        # 在 blocked 分支的注释里已经写明「只换 UA 而沿用同一份风控上下文……
+        # 必然继续 blocked」，控制流却没有据此改变。参考实现
+        # ``approve_with_retry``（upi_extract.py:6791）是按 cycles × per_cycle
+        # 计划、每轮重建会话的。
+        #
+        # 默认 ``approve_cycles=1`` ⇒ 尝试总数仍是 ``max_approve_attempts``，
+        # 与改动前逐条一致。唯一行为差异：reference 形态下 blocked 会提前结束
+        # 本轮 —— 剩余尝试只会拿到同样的 blocked，只会白烧请求与审批窗口。
+        cycles = max(1, _int_or(getattr(state, "approve_cycles", 1), 1))
+        per_cycle = max(1, -(-state.max_approve_attempts // cycles))
+        attempt_no = 0
+        for cycle in range(1, cycles + 1):
+            if state.approval_ok:
+                break
+            if cycle > 1:
+                state.emit(
+                    "approve",
+                    f"cycle {cycle}/{cycles}: fresh session + fresh Sentinel for the same Checkout",
+                )
+            approve_session = ops._upi_new_chatgpt_session(
+                state.approve_proxy,
+                state.fingerprint,
+                state.device_id,
+                state.session_token,
+                state.cookie_header,
             )
-        ops._upi_apply_approve_risk(
-            approve_session,
-            state.risk,
-            state.access_token,
-            state.device_id,
-            state.approve_proxy,
-            state.fingerprint,
-            state.payment_country,
-            checkout_sentinel=state.checkout_sentinel_headers,
-            approve_shape=state.approve_shape,
-        )
-        # The reference rail never calls /checkout/confirm (it answers 400
-        # "This endpoint is only for internal checkout sessions"); skip it in
-        # reference shape so the approve session is not primed by a 4xx.
-        if state.approve_shape != "reference":
-            # Try confirm endpoint first
-            try:
-                confirm_chatgpt = approve_session.post(
-                    UPI_CHECKOUT_CONFIRM_URL,
-                    json={"checkout_session_id": state.cs_id, "selected_payment_method_type": "upi"},
-                    timeout=CHATGPT_TIMEOUT,
+            approve_session.headers.update(
+                {
+                    "Authorization": f"Bearer {state.access_token}",
+                    "Accept": "application/json",
+                    "Content-Type": "application/json",
+                    "Referer": f"{endpoints.CHATGPT_BASE}/checkout/{state.processor_entity}/{state.cs_id}",
+                }
+            )
+            # The approval endpoint is risk-gated: it needs the same deployment
+            # attestation, signed observation and frontend markers as Checkout,
+            # plus a fresh checkout_session_approval Sentinel. Attach the full
+            # The approval endpoint is risk-gated: re-capture the browser-issued
+            # observation on the Checkout page so approve does not replay the
+            # create-stage context (which the risk engine rejects).
+            if state.browser_rail and not state.approval_ok:
+                state.risk = ops._upi_capture_risk_context(
+                    approve_session,
+                    access_token=state.access_token,
+                    device_id=state.device_id,
+                    page_url=f"{endpoints.CHATGPT_BASE}/checkout/{state.processor_entity}/{state.cs_id}",
+                    fingerprint=state.fingerprint,
+                    proxy=state.approve_proxy,
+                    session_token=state.session_token,
+                    use_browser=True,
+                    sentinel_flow=UPI_SENTINEL_APPROVAL_FLOW,
                 )
-                confirm_json = confirm_chatgpt.json() or {} if confirm_chatgpt.status_code < 400 else {}
-                ops._upi_dump_http(
-                    confirm_chatgpt,
-                    "chatgpt_approve_confirm",
-                    {"checkout_session_id": state.cs_id, "selected_payment_method_type": "upi"},
-                    "POST",
-                    UPI_CHECKOUT_CONFIRM_URL,
-                    force=confirm_chatgpt.status_code >= 400,
-                )
-                if str(confirm_json.get("result", "")).lower() == "approved":
-                    state.emit("approve", "approved via confirm endpoint")
-                    state.approval_data = confirm_json
-                    state.approval_ok = True
-                else:
-                    state.approval_data = confirm_json
-            except Exception as exc:
-                state.emit("approve", f"confirm endpoint error (non-fatal): {type(exc).__name__}: {exc}")
+            ops._upi_apply_approve_risk(
+                approve_session,
+                state.risk,
+                state.access_token,
+                state.device_id,
+                state.approve_proxy,
+                state.fingerprint,
+                state.payment_country,
+                checkout_sentinel=state.checkout_sentinel_headers,
+                approve_shape=state.approve_shape,
+            )
+            # The reference rail never calls /checkout/confirm (it answers 400
+            # "This endpoint is only for internal checkout sessions"); skip it in
+            # reference shape so the approve session is not primed by a 4xx.
+            if state.approve_shape != "reference":
+                try:
+                    confirm_chatgpt = approve_session.post(
+                        UPI_CHECKOUT_CONFIRM_URL,
+                        json={"checkout_session_id": state.cs_id, "selected_payment_method_type": "upi"},
+                        timeout=CHATGPT_TIMEOUT,
+                    )
+                    confirm_json = {}
+                    if confirm_chatgpt.status_code < 400:
+                        confirm_json = confirm_chatgpt.json() or {}
+                    ops._upi_dump_http(
+                        confirm_chatgpt,
+                        "chatgpt_approve_confirm",
+                        {"checkout_session_id": state.cs_id, "selected_payment_method_type": "upi"},
+                        "POST",
+                        UPI_CHECKOUT_CONFIRM_URL,
+                        force=confirm_chatgpt.status_code >= 400,
+                    )
+                    if str(confirm_json.get("result", "")).lower() == "approved":
+                        state.emit("approve", "approved via confirm endpoint")
+                        state.approval_data = confirm_json
+                        state.approval_ok = True
+                    else:
+                        state.approval_data = confirm_json
+                except Exception as exc:
+                    state.emit("approve", f"confirm endpoint error (non-fatal): {type(exc).__name__}: {exc}")
 
-        # If confirm didn't approve, try approve endpoint with retries
-        if not state.approval_ok:
-            for attempt in range(1, state.max_approve_attempts + 1):
+            for _slice in range(1, per_cycle + 1):
+                if state.approval_ok:
+                    break
+                attempt_no += 1
                 try:
                     approve_resp = approve_session.post(
                         UPI_CHECKOUT_APPROVE_URL,
@@ -775,7 +935,7 @@ def _stage_approve(ops: UpiOperations, state: UpiStageContext) -> Any:
                     )
                     ops._upi_dump_http(
                         approve_resp,
-                        f"chatgpt_approve_{attempt:02d}",
+                        f"chatgpt_approve_{attempt_no:02d}",
                         {"checkout_session_id": state.cs_id, "processor_entity": state.processor_entity},
                         "POST",
                         UPI_CHECKOUT_APPROVE_URL,
@@ -785,16 +945,16 @@ def _stage_approve(ops: UpiOperations, state: UpiStageContext) -> Any:
                         approve_json = approve_resp.json() or {}
                         result = str(approve_json.get("result", "")).lower()
                         if result == "approved":
-                            state.emit("approve", f"approved on attempt {attempt}")
+                            state.emit(
+                                "approve",
+                                f"approved on attempt {attempt_no} (cycle {cycle}/{cycles})",
+                            )
                             state.approval_ok = True
                             state.approval_data = approve_json
                             break
                         if result == "blocked":
-                            # 参考实现: blocked 时保留当前线路重领 SEN/SO 并轮换
-                            # 观察证明重试（文档 5.3）；只换 UA 而沿用同一份
-                            # 风控上下文等于原样重放，必然继续 blocked。
                             blocked_count += 1
-                            state.emit("approve", f"attempt {attempt}: blocked, rotating risk context")
+                            state.emit("approve", f"attempt {attempt_no}: blocked, rotating risk context")
                             ops._upi_apply_approve_risk(
                                 approve_session,
                                 state.risk,
@@ -806,29 +966,39 @@ def _stage_approve(ops: UpiOperations, state: UpiStageContext) -> Any:
                                 checkout_sentinel=state.checkout_sentinel_headers,
                                 approve_shape=state.approve_shape,
                             )
-                            if attempt < state.max_approve_attempts:
-                                time.sleep(ops._approve_backoff(attempt, state.approve_backoff_cap))
+                            if state.approve_shape == "reference":
+                                # 复用 checkout Sentinel 时重试是空操作：同一份
+                                # 上下文只会再拿到一个 blocked。把预算留给下一轮
+                                # 的新会话（有 cycles 时）或直接收尾。
+                                state.emit(
+                                    "approve",
+                                    f"cycle {cycle}/{cycles}: blocked under the reused Sentinel; "
+                                    "no fresh context left in this cycle",
+                                )
+                                break
+                            if _slice < per_cycle:
+                                time.sleep(ops._approve_backoff(attempt_no, state.approve_backoff_cap))
                             continue
                         state.approval_data = approve_json
-                    elif attempt % 10 == 0:
+                    elif attempt_no % 10 == 0:
                         state.emit(
                             "approve",
-                            f"attempt {attempt}/{state.max_approve_attempts}: status={approve_resp.status_code}",
+                            f"attempt {attempt_no}/{state.max_approve_attempts}: status={approve_resp.status_code}",
                         )
                 except Exception as ex:
-                    if attempt % 10 == 0:
-                        state.emit("approve", f"attempt {attempt} exception: {type(ex).__name__}: {ex}")
-                if attempt < state.max_approve_attempts:
-                    time.sleep(ops._approve_backoff(attempt, state.approve_backoff_cap))
+                    if attempt_no % 10 == 0:
+                        state.emit("approve", f"attempt {attempt_no} exception: {type(ex).__name__}: {ex}")
+                if _slice < per_cycle:
+                    time.sleep(ops._approve_backoff(attempt_no, state.approve_backoff_cap))
 
         if not state.approval_ok:
             # 参考实现的判据：全部尝试都 blocked ⇒ 这是 provider 侧风控，
             # 不是「再等等就好」，必须让上层能区分出来。
-            if blocked_count and blocked_count == state.max_approve_attempts:
+            if blocked_count and blocked_count >= max(attempt_no, 1):
                 state.approval_blocked = True
                 state.emit(
                     "approve",
-                    f"all {state.max_approve_attempts} attempts blocked (provider risk control)",
+                    f"all {attempt_no} attempts blocked across {cycles} cycle(s) (provider risk control)",
                 )
             else:
                 state.emit("approve", "approval failed after all attempts, continuing to extraction")
@@ -1200,6 +1370,7 @@ def run_upi_qr_link_once(
     wait_paid: bool = False,
     paid_timeout: float = 900.0,
     require_server_upi_mandate: bool = False,
+    rotate_fingerprint: bool = False,
 ) -> dict[str, Any]:
     """Generate a UPI payment link with full Stripe Confirm + Approve flow.
 
@@ -1227,6 +1398,7 @@ def run_upi_qr_link_once(
     state = UpiStageContext()
     state.access_token = access_token
     state.proxy = proxy
+    state.auth_context = auth_context
     state.checkout_proxy = checkout_proxy
     state.provider_proxy = provider_proxy
     state.approve_proxy = approve_proxy
@@ -1255,6 +1427,8 @@ def run_upi_qr_link_once(
         runtime_config=state.runtime_config,
         device_id=state.device_id,
         session_token=state.session_token,
+        auth_context=state.auth_context,
+        rotate_fingerprint=rotate_fingerprint,
     )
     cfg = state._rc.cfg
     state.upi_cfg = state._rc.upi_cfg
@@ -1276,6 +1450,7 @@ def run_upi_qr_link_once(
     state.update_tax_region = state._rc.update_tax_region
     state.update_customer_data = state._rc.update_customer_data
     state.max_approve_attempts = state._rc.max_approve_attempts
+    state.approve_cycles = state._rc.approve_cycles
     state.poll_max_attempts = state._rc.poll_max_attempts
     state.approve_backoff_cap = state._rc.approve_backoff_cap
     state.local_mandate_enabled = state._rc.local_mandate_enabled
@@ -1285,6 +1460,9 @@ def run_upi_qr_link_once(
     state.billing = state._rc.billing
     state.device_id = str(state._rc.device_id or "")
     state.session_token = str(state._rc.session_token or "")
+    state.cookie_header = str(state._rc.cookie_header or "")
+    state.account_id = str(state._rc.account_id or "")
+    state.account_key = str(getattr(state._rc, "account_key", "") or "")
 
     state.emit = ops._emit
     _out = _stage_pre_exit(ops, state)

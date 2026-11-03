@@ -115,6 +115,19 @@ def register(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument("--no-require-zero", action="store_true", help="Allow non-zero amount (default: require 0)")
     parser.add_argument(
+        "--session-token",
+        default=None,
+        help=(
+            "ChatGPT __Secure-next-auth.session-token for the UPI lane. The Checkout is a same-site action: "
+            "without the session cookies the access token was issued with it answers 400 unusual activity"
+        ),
+    )
+    parser.add_argument(
+        "--device-id",
+        default=None,
+        help="oai-did (device UUID) for the UPI lane; derived from --session-token's account when omitted",
+    )
+    parser.add_argument(
         "--require-ba-token",
         action="store_true",
         help="Require a PayPal BA approve URL/token; fail instead of returning hosted fallback",

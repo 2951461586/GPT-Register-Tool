@@ -289,6 +289,12 @@ def build_state(
     state.approve_proxy = "http://approve.example:8080"
     state.device_id = "did_replay"
     state.session_token = ""
+    # P0-1: the account's own cookie + the auth_context it came from.
+    state.cookie_header = ""
+    state.auth_context = None
+    state.account_id = ""
+    # P2: the resolved identity-ledger key (empty ⇒ no ledger I/O).
+    state.account_key = ""
     state.fingerprint = {
         "name": "replay",
         "user_agent": "UA/1.0",
@@ -310,6 +316,17 @@ def build_state(
     state.currency = "inr"
     state.payment_currency = "INR"
     state.require_zero = True
+    # P2 ``zero_mode=momo`` embeds the billing identity in the Checkout body.
+    state.billing = {
+        "name": "Replay Person",
+        "email": "replay@example.com",
+        "country": "IN",
+        "line1": "1 Replay Road",
+        "line2": "",
+        "city": "Mumbai",
+        "postal_code": "400001",
+        "state": "MH",
+    }
     state.runtime_config = {}
     state.qr_path = ""
     state.proxy_state = None
@@ -352,6 +369,12 @@ def build_state(
     }
     state.approval_ok = False
     state.approval_blocked = False
+    state.approval_data = {}
+    state.checkout_sentinel_headers = {}
+    state.approve_shape = "reference"
+    state.max_approve_attempts = 5
+    state.approve_cycles = 1
+    state.approve_backoff_cap = 0.0
     state.paid_state = {"paid": False, "payment_status": "not_requested"}
     state.checkout_ui_mode = "custom"
     for key, value in overrides.items():

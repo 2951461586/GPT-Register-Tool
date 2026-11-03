@@ -439,7 +439,16 @@ def test_summary_facts_are_pinned():
         # sms_tool`` and tripped a cap the leaf never earned. Adding the node is
         # the fix; making that import function-local to dodge the counter would
         # have been the workaround.
-        "total_module_edges": 473,
+        # 2026-11-03 (UPI lane state modules): 473 -> 486 (+13). The seven new
+        # state modules (identity / ledger / billing / fingerprint / exit health /
+        # exit lease / zero eligibility) live in ``sms_tool/payment`` because the
+        # file set of ``sms_tool/upi_link`` is frozen
+        # (scripts/payment_legacy_manifest.py), and the legacy lane imports them
+        # at module scope. This is the inward direction the gate wants -- a legacy
+        # lane consuming the shared kernel instead of growing its own copy -- and
+        # the alternative (13 function-local imports) would hide the dependency
+        # and put a ``sys.modules`` lookup on every identity/billing resolution.
+        "total_module_edges": 486,
         "ordered_pairs": 78,
         "mutual_pairs": 17,
         "minority_edges": 46,
@@ -504,7 +513,15 @@ def test_summary_facts_are_pinned():
         # `sms_providers` lookups in `desktop_read`. The rest came with the
         # in-flight desktop/registration refactor; every one carries an entry in
         # `delayed_import_reasons.json` where its reason is not rule-derived.
-        "delayed_cross_dir_edges": 307,
+        # 2026-11-03: 307 -> 310. Three reviewed seams came with the same work:
+        # ``payment/routing.py`` and ``payment/batch.py`` resolve the exit lease
+        # inside the function that needs it (so the payment kernel does not import
+        # the UPI state modules on the hot path), and
+        # ``payment/upi_identity_store.py`` defers ``kernel.paths`` /
+        # ``cross_process_gate`` so a module every identity lookup imports stays
+        # free of them at import time. All three carry an entry in
+        # ``delayed_import_reasons.json``.
+        "delayed_cross_dir_edges": 310,
         # Imports under `if TYPE_CHECKING:` never run, so they are not runtime
         # edges. 1 here since 2026-10-23: `payment/link_manager.py` declares its
         # `pay_link` re-exports type-only (the module is not a package, so the
