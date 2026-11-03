@@ -252,3 +252,69 @@ def test_http_level_failures_are_not_capped_like_connection_failures():
 
     assert len(calls) > 3, "HTTP-level failures must not be cut off by the connection cap"
     assert detail["last_status"] == "403"
+
+
+def _jwt(exp_offset: float) -> str:
+    """A syntactically valid token whose ``exp`` is ``exp_offset`` from now."""
+    import base64
+    import time as _time
+
+    payload = {"exp": _time.time() + exp_offset, "https://api.openai.com/auth": {"chatgpt_account_id": "acc"}}
+
+    def part(value) -> str:
+        return base64.urlsafe_b64encode(json.dumps(value).encode()).decode().rstrip("=")
+
+    return f"{part({'alg': 'none'})}.{part(payload)}.sig"
+
+
+def test_a_dead_session_cookie_that_echoes_the_expired_token_is_not_a_success():
+    """Measured 2026-11-05: the auth-session hop answers 200 with the *old* token.
+
+    38 iCloud accounts were reported as a successful ``web_session`` refresh
+    while the token was byte-identical and 35 days past ``exp``; the next probe
+    said ``401 invalid_jwt`` and ``auto`` mode skipped the escalation that could
+    have helped.
+    """
+    stale = _jwt(-35 * 86400)
+    data = {
+        "email": "dead@example.com",
+        "cookie_header": "__Secure-next-auth.session-token=cookie",
+        "access_token": stale,
+    }
+    with patch.object(session_refresh, "_fetch_protocol_auth_session", return_value={"accessToken": stale}):
+        result = session_refresh._refresh_session_protocol(data, "session.json", "dead@example.com", 30, persist=False)
+
+    assert result["ok"] is False
+    assert result["error"] == "session_cookie_expired"
+
+
+def test_an_unchanged_but_still_valid_token_is_still_a_success():
+    live = _jwt(3600)
+    data = {
+        "email": "ok@example.com",
+        "cookie_header": "__Secure-next-auth.session-token=cookie",
+        "access_token": live,
+    }
+    with patch.object(session_refresh, "_fetch_protocol_auth_session", return_value={"accessToken": live}):
+        result = session_refresh._refresh_session_protocol(data, "session.json", "ok@example.com", 30, persist=False)
+
+    assert result["ok"] is True
+
+
+def test_a_different_but_already_expired_token_is_not_a_success():
+    """Measured 2026-11-05: the hop can mint a *different* token that is 50 days past ``exp``.
+
+    The first guard only caught an echoed token, so these accounts still looked
+    refreshed while every downstream probe answered ``401 invalid_jwt``.
+    """
+    stale_mint = _jwt(-50 * 86400)
+    data = {
+        "email": "dead2@example.com",
+        "cookie_header": "__Secure-next-auth.session-token=cookie",
+        "access_token": _jwt(-1 * 86400),
+    }
+    with patch.object(session_refresh, "_fetch_protocol_auth_session", return_value={"accessToken": stale_mint}):
+        result = session_refresh._refresh_session_protocol(data, "session.json", "dead2@example.com", 30, persist=False)
+
+    assert result["ok"] is False
+    assert result["error"] == "session_cookie_expired"

@@ -40,6 +40,36 @@ def refresh_session(
     )
 
 
+def _jwt_is_expired(token, *, skew_seconds: float = 60.0) -> bool:
+    """True when ``token`` carries an ``exp`` at or before ``now + skew``.
+
+    Dependency-free on purpose (``session_refresh`` is imported by the recovery
+    chain before the account helpers exist) and conservative: a token without a
+    readable ``exp`` is treated as *not* expired, because guessing the other way
+    would fail accounts whose tokens the server still honours.
+    """
+    import base64
+    import json as _json
+    import time as _time
+
+    try:
+        part = str(token or "").split(".")[1]
+        padded = part + "=" * (-len(part) % 4)
+        claims = _json.loads(base64.urlsafe_b64decode(padded))
+    except Exception:
+        return False
+    exp = claims.get("exp") if isinstance(claims, dict) else None
+    # ``float(None)`` is a TypeError at runtime and a type error to the checker;
+    # guard the type first so both agree (same shape as
+    # ``agent_identity._token_expired``).
+    if not isinstance(exp, (int, float, str)):
+        return False
+    try:
+        return float(exp) <= _time.time() + float(skew_seconds)
+    except (TypeError, ValueError):
+        return False
+
+
 def _refresh_session_protocol(data, json_path, target_email, timeout, proxy=None, persist=True):
     cookie_header = _minimal_chatgpt_cookie_header(data.get("cookie_header") or "")
     cookie_header = _ensure_session_cookie(cookie_header, data)
@@ -70,6 +100,29 @@ def _refresh_session_protocol(data, json_path, target_email, timeout, proxy=None
         if retry_after:
             failure["retry_after"] = retry_after
         return failure
+
+    # A dead session cookie still answers 200 -- with the token we already had.
+    # Reporting ``ok: True`` for that made the recovery chain believe
+    # ``web_session`` had worked while the next probe answered
+    # ``401 invalid_jwt``; ``auto`` mode then skipped the escalation that could
+    # actually have helped.  Measured 2026-11-05 on 38 iCloud accounts: the
+    # "refreshed" token was byte-identical to the old one and 35 days past
+    # ``exp``.
+    if _jwt_is_expired(access_token):
+        # Either shape means the same thing: this session cookie cannot mint a
+        # live token.  It may echo the old token, or hand back a *different* one
+        # that is already past ``exp`` (measured: 50 days past on the accounts
+        # that were still failing).  Both must be failures -- an expired AT is
+        # not a refresh, and reporting success made the chain skip the
+        # escalation that could actually have helped.
+        return {
+            "ok": False,
+            "email": target_email,
+            "mode": "protocol",
+            "error": "session_cookie_expired",
+            "last_status": str(detail.get("last_status") or ""),
+            "http_statuses": list(detail.get("http_statuses") or []),
+        }
 
     refreshed = _merge_refreshed_session(
         data=data,
