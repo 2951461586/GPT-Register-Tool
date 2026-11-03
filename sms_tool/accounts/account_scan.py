@@ -520,10 +520,11 @@ def _persist_scan(data: dict[str, Any] | None, json_path: str, result: dict[str,
             updated["status"] = "registered"
     elif result.get("ok"):
         updated["success"] = True
-        if updated.get("error") in {
+        if str(updated.get("error") or "").strip().lower() in {
             "account_deactivated",
             "add_phone_required",
             "secondary_phone_verification_required:add_phone_required",
+            *_PROBE_SKIP_ERRORS,
         }:
             updated.pop("error", None)
         if str(updated.get("status") or "").strip().lower() in {
@@ -963,11 +964,25 @@ def _normalize_relogin_mode(value):
     return "auto"
 
 
+#: Outcomes that mean "the optional step did not run", not "the account is
+#: broken".  ``deep_probe_disabled`` is what the default (probe-only) scan
+#: records for the OAuth/OTP step it deliberately skips; persisting it as the
+#: account's ``error`` made a healthy account read 失败 in the 状态 column
+#: (measured 2026-11-03 on one recovered iCloud account: status=registered,
+#: success=1, account_scan_status=alive, account_health=healthy, error=
+#: deep_probe_disabled).
+_PROBE_SKIP_ERRORS = frozenset({"deep_probe_disabled", "probe_only", "deep_probe_skipped"})
+
+
 def _oauth_error(result):
     if not isinstance(result, dict):
         return str(result or "unknown")
+    if str(result.get("mode") or "").strip().lower() == "probe_only":
+        # The whole result is "we chose not to try", so it carries no verdict.
+        return ""
     _raw_phone_attempt: object = result.get("phone_attempt")
     phone_attempt: dict = _raw_phone_attempt if isinstance(_raw_phone_attempt, dict) else {}
+    saw_probe_skip = False
     for value in (
         result.get("error"),
         phone_attempt.get("error"),
@@ -976,8 +991,15 @@ def _oauth_error(result):
         result.get("last_url"),
     ):
         text = str(value or "").strip()
-        if text:
-            return text[:300]
+        if not text:
+            continue
+        if text.lower() in _PROBE_SKIP_ERRORS:
+            saw_probe_skip = True
+            continue
+        return text[:300]
+    if saw_probe_skip:
+        # The only thing this result said is that the optional step did not run.
+        return ""
     body = result.get("body")
     if isinstance(body, dict):
         return json.dumps(body, ensure_ascii=False)[:300]

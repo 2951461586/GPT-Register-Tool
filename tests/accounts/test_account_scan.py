@@ -472,6 +472,22 @@ class ScanFailureStatusTests(unittest.TestCase):
         self.assertEqual(classify_error(payload), "network")
         self.assertEqual(account_scan._scan_failure_status(classify_error(payload), payload), "network_failed")
 
+    def test_a_skipped_optional_probe_is_not_an_account_error(self):
+        """``deep_probe_disabled`` means "we chose not to try", not "the account is broken".
+
+        Measured 2026-11-03: one recovered iCloud account read 失败 in the 状态
+        column while every real signal said healthy -- ``status=registered``,
+        ``success=1``, ``account_scan_status=alive``, ``account_health=healthy``.
+        The default probe-only scan had persisted its own skip marker as the
+        account ``error``, and the "recovered" branch never cleared it.
+        """
+        from sms_tool.accounts import account_scan
+
+        assert account_scan._oauth_error({"mode": "probe_only", "error": "deep_probe_disabled"}) == ""
+        assert account_scan._oauth_error({"error": "deep_probe_disabled"}) == ""
+        # A real failure still reports its reason.
+        assert account_scan._oauth_error({"error": "token_invalid"}) == "token_invalid"
+
 
 if __name__ == "__main__":
     unittest.main()
