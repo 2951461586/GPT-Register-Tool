@@ -91,9 +91,8 @@ def _is_mfa_challenge_payload(payload):
 
 
 def _totp_factor_id(payload):
-    auth_session = payload.get("oai-client-auth-session") if isinstance(payload, dict) else {}
-    if not isinstance(auth_session, dict):
-        return ""
+    _raw_auth_session: object = payload.get("oai-client-auth-session") if isinstance(payload, dict) else {}
+    auth_session: dict = _raw_auth_session if isinstance(_raw_auth_session, dict) else {}
     factors = []
     for key in ("mfa_challenge_factors", "mfa_factors"):
         values = auth_session.get(key)
@@ -104,6 +103,18 @@ def _totp_factor_id(payload):
             factor_id = str(factor.get("id") or "").strip()
             if factor_id:
                 return factor_id
+    # The transaction can hand us an ``/mfa-challenge/<id>`` URL *without* the
+    # factor array (measured 2026-11-05 on a password-step account: verify 200 ->
+    # mfa-challenge URL, and the followed body carried no
+    # ``oai-client-auth-session``).  That path is the same id this module already
+    # uses as its referer default, so reading it here is consistent rather than
+    # inventing one -- without it the login stops at the challenge.
+    marker = "/mfa-challenge/"
+    url = str(_response_next_url_from_data(payload, "") or "").lower()
+    if marker in url:
+        tail = url.split(marker, 1)[1].split("?", 1)[0].split("/", 1)[0].strip()
+        if tail:
+            return tail
     return ""
 
 

@@ -227,6 +227,12 @@ def _password_login_existing_account(
             if isinstance(followed_body, dict) and followed_body:
                 payload = followed_body
 
+    # A followed ``/mfa-challenge/<id>`` body is an HTML shell, not JSON, so the
+    # payload keeps the *pre-challenge* dict and the TOTP step silently skipped
+    # (``_is_mfa_challenge_payload`` only looks at ``continue_url`` /
+    # ``page.payload.url``).  Carry the URL across explicitly.
+    if next_url and isinstance(payload, dict) and "/mfa-challenge/" in str(next_url).lower():
+        payload = {**payload, "continue_url": str(next_url)}
     mfa_result = totp._complete_existing_login_totp(
         session,
         auth_base,
