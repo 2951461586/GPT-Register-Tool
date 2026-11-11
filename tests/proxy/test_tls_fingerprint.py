@@ -10,9 +10,28 @@ from sms_tool import tls_fingerprint as tls
 
 @pytest.fixture(autouse=True)
 def _clean_binding():
-    tls.clear_tls_fingerprint()
+    """Reset both the explicit binding *and* the ambient auth-headers state.
+
+    ``apply_to_session`` deliberately falls back to the thread's device seed and
+    selected profile, which is how ``_new_registration_session`` gets the right
+    order without an explicit bind. A test that wants "no binding" therefore has
+    to clear that ambient state too: under ``-n 4 --dist loadfile`` a worker
+    reuses one thread across files, so a registration test that left
+    ``device_seed`` + ``firefox144`` behind made
+    ``test_no_binding_leaves_the_session_untouched`` fail on CI (it passed when
+    the file ran first). ``chrome146`` is the neutral profile because this module
+    does not permute the Chrome family, so the derivation stays inactive.
+    """
+    from sms_tool.auth_headers import set_auth_fingerprint, set_fingerprint_device
+
+    def _reset() -> None:
+        tls.clear_tls_fingerprint()
+        set_fingerprint_device("")
+        set_auth_fingerprint("chrome146")
+
+    _reset()
     yield
-    tls.clear_tls_fingerprint()
+    _reset()
 
 
 def _config(**overrides):
@@ -125,7 +144,8 @@ class TestApplyToSession:
 
     def test_no_binding_leaves_the_session_untouched(self):
         session = _FakeSession()
-        tls.apply_to_session(session)
+        fingerprint = tls.apply_to_session(session)
+        assert not fingerprint.active
         assert session.curl_options == {}
 
     def test_a_session_that_rejects_the_option_is_not_fatal(self):
