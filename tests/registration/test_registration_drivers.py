@@ -372,17 +372,41 @@ class BrowserWorkerLimitTests(unittest.TestCase):
     positive value still clamps. Regression guard for the old hardcoded 2.
     """
 
-    def _run_batch(self, registration_cfg, *, workers=4, count=4):
+    def _run_batch(self, registration_cfg, *, workers=4, count=4, parties=None, hold=0.5):
+        """Run one batch and measure *guaranteed* concurrency, not observed timing.
+
+        ``peak`` alone is a race: the batch threads each do real work before
+        ``run_email`` is reached, so on a loaded runner (CI runs the suite with
+        ``-n 4 --dist loadfile``) four workers with a 0.05 s body peaked at 2-3
+        and the assertion ``peak == 4`` failed for reasons that have nothing to
+        do with ``browser_worker_limit``. A barrier makes the claim deterministic
+        in both directions: the first ``parties`` calls must be alive at the same
+        moment (barrier satisfied ⇒ at least N concurrent), and the hold keeps
+        them alive long enough for ``peak`` to be the real ceiling.
+        """
+        parties = workers if parties is None else parties
+        barrier = threading.Barrier(parties, timeout=20.0)
+        state = {"entered": 0, "satisfied": False, "broken": False}
+        lock = threading.Lock()
         active = 0
         peak = 0
-        lock = threading.Lock()
 
         def run_email(**kwargs):
             nonlocal active, peak
             with lock:
+                state["entered"] += 1
+                index = state["entered"]
                 active += 1
                 peak = max(peak, active)
-            time.sleep(0.05)
+            if index <= parties:
+                try:
+                    barrier.wait()
+                    with lock:
+                        state["satisfied"] = True
+                except threading.BrokenBarrierError:
+                    with lock:
+                        state["broken"] = True
+            time.sleep(hold)
             with lock:
                 active -= 1
             return {"success": True, "email": kwargs["mailbox"].email}
@@ -404,21 +428,26 @@ class BrowserWorkerLimitTests(unittest.TestCase):
                     registration_driver="camoufox",
                     run_email_func=run_email,
                 )
-        return result, peak, stdout.getvalue()
+        return result, peak, stdout.getvalue(), state
 
     def test_unset_limit_follows_the_requested_worker_count(self):
-        result, peak, out = self._run_batch({"driver": "camoufox"})
+        result, peak, out, state = self._run_batch({"driver": "camoufox"})
+        self.assertTrue(state["satisfied"], "four workers were never concurrent")
         self.assertEqual(peak, 4)
         self.assertTrue(all(item["success"] for item in result))
         self.assertNotIn("Browser worker limit", out)
 
     def test_zero_limit_follows_the_requested_worker_count(self):
-        _, peak, out = self._run_batch({"driver": "camoufox", "browser_worker_limit": 0})
+        _, peak, out, state = self._run_batch({"driver": "camoufox", "browser_worker_limit": 0})
+        self.assertTrue(state["satisfied"], "four workers were never concurrent")
         self.assertEqual(peak, 4)
         self.assertNotIn("Browser worker limit", out)
 
     def test_explicit_limit_still_caps_workers(self):
-        _, peak, out = self._run_batch({"driver": "camoufox", "browser_worker_limit": 3})
+        _, peak, out, state = self._run_batch({"driver": "camoufox", "browser_worker_limit": 3}, parties=3)
+        self.assertTrue(state["satisfied"], "the three allowed workers were never concurrent")
+        # ≥3 is proven by the satisfied barrier; ≤3 by the peak, because the hold
+        # keeps every live worker inside ``run_email`` at the same time.
         self.assertEqual(peak, 3)
         self.assertIn("Browser worker limit: 4 -> 3", out)
 
