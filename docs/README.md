@@ -63,6 +63,9 @@ Directory layout (since 2026-09-06):
 
 ## Release notes（docs/releases/，一个发布标签一份，不回写）
 
+- [v2026.11.11 发布说明](releases/release-v2026.11.11.md) - 自 v2026.11.02 以来的收口：
+  协议注册每账号一套 TLS 指纹、指纹档位随平台走、Sentinel 离线自检，账号恢复链的三个
+  假成功，以及 ReMail 取件降速与批量下单不重试。
 - [v2026.11.02 发布说明](releases/release-v2026.11.02.md) - 自 v2026.10.28 以来的收口：
   修掉「声明了 mailbox lane 就开不了窗」与「更新检查被限流后永久刷屏」两个阻断缺陷、
   客户端指纹对齐 10-31 HAR、两个注册 A/B 开关，以及一次凭据暴露面清理。
