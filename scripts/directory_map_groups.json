@@ -86,7 +86,8 @@
       "sms_tool/sentinel/__init__.py",
       "sms_tool/sentinel/bundle.py",
       "sms_tool/sentinel/client.py",
-      "sms_tool/sentinel/runner.py"
+      "sms_tool/sentinel/runner.py",
+      "sms_tool/sentinel/selfcheck.py"
     ],
     "OAuth and auth HTTP helpers": [
       "sms_tool/codex_oauth.py",
@@ -117,7 +118,8 @@
       "sms_tool/codex_phone.py",
       "sms_tool/phone_registration.py",
       "sms_tool/session_refresh.py",
-      "sms_tool/registration/*.py"
+      "sms_tool/registration/*.py",
+      "sms_tool/tls_fingerprint.py"
     ],
     "Agent Identity / explicit import": [
       "sms_tool/agent_identity.py",

@@ -42,7 +42,7 @@
   "sms_tool/phone_reuse.py": 21,
   "sms_tool/providers/mailbox_cfworker.py": 3,
   "sms_tool/providers/mailbox_gmail.py": 2,
-  "sms_tool/providers/mailbox_remail.py": 12,
+  "sms_tool/providers/mailbox_remail.py": 16,
   "sms_tool/providers/outlook_imap_client.py": 3,
   "sms_tool/registration/cancel.py": 1,
   "sms_tool/registration/preflight.py": 3,

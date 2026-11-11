@@ -155,8 +155,45 @@ def _remail_preflight_enabled():
 
 
 def _remail_preflight(proxy=None):
-    """Check the public ReMail edge before spending the OTP wait budget."""
-    return _remail_request("GET", "/docs", proxy=proxy, timeout=10)
+    """Check the ReMail edge before spending the OTP wait budget.
+
+    ``GET /v1/open/apikey/profile`` is the documented authenticated probe: it
+    returns the key's ``balance`` / ``remainingQuota`` / ``expireAt`` and costs
+    no credits ("查询接口不消耗积分"), so a dead key or an empty wallet is caught
+    before an OTP wait is spent.  ``/docs`` stays as the fallback for a supplier
+    build that predates that endpoint — it proves reachability only.
+    """
+    # A preflight must never be the thing that breaks a poll: only a transport
+    # error is allowed out of here (the caller rotates proxies on it).  A missing
+    # or rejected key degrades to the unauthenticated reachability probe, and the
+    # real pickup call reports the credential problem with its own error class.
+    if not _remail_api_key():
+        return _remail_request("GET", "/docs", proxy=proxy, timeout=10)
+    try:
+        profile = _remail_request("GET", "/v1/open/apikey/profile", auth=True, proxy=proxy, timeout=10)
+    except ReMailHttpError as exc:
+        print(f"  [remail preflight] apikey/profile HTTP {exc.status_code}; falling back to /docs")
+        return _remail_request("GET", "/docs", proxy=proxy, timeout=10)
+    if isinstance(profile, dict):
+        _log_remail_profile(profile)
+    return profile
+
+
+def _log_remail_profile(profile):
+    """One line of key status; a zero balance is the actionable part."""
+    key = (profile or {}).get("apiKey")
+    key = key if isinstance(key, dict) else {}
+    balance = str(key.get("balance") or "").strip()
+    quota = str(key.get("remainingQuota") or "").strip()
+    expire = str(key.get("expireAt") or "").strip()
+    try:
+        empty = float(balance or 0) <= 0
+    except ValueError:
+        empty = False
+    if empty:
+        print(f"  [remail] API key balance is {balance or '0'} — orders will fail with insufficient_balance")
+    elif balance or quota or expire:
+        print(f"  [remail] key balance={balance or '-'} remainingQuota={quota or '-'} expireAt={expire or '-'}")
 
 
 def _remail_api_key():
@@ -611,13 +648,16 @@ def _create_remail_mailboxes(args=None, service_mode="purchase"):
     idempotency_key = _remail_idempotency_key(mode, supply, payload, batch_id=batch_id)
     started_at = time.time()
     try:
-        results = _remail_request(
-            "POST",
+        # The batch POST goes through the same idempotent-retry helper as the
+        # single order.  The OpenAPI contract makes that safe — "相同幂等键重试会
+        # 收敛到相同的完整批次结果" — and it is what the 2026-11-11 run needed:
+        # a Cloudflare 502 on this call aborted a 5-mailbox batch before any
+        # mailbox existed, because only the single-order path retried.
+        results = _post_remail_order(
             "/v1/open/orders/batch",
-            auth=True,
-            headers={"Idempotency-Key": idempotency_key},
             params={"serviceMode": mode, "supply": supply},
-            json=payload,
+            payload=payload,
+            idempotency_key=idempotency_key,
             timeout=max(30, int(_remail_cfg().get("batch_timeout") or quantity * 2)),
         )
     except Exception as exc:
@@ -639,13 +679,62 @@ def _create_remail_mailboxes(args=None, service_mode="purchase"):
         if str(item.get("status") or "").lower() == "succeeded" and item.get("order"):
             accounts.append(_mailbox_from_order(item["order"], service_mode=mode))
         else:
-            failures.append(_redact(item.get("error") or {"index": item.get("index")}))
+            failures.append(_batch_item_failure(item))
     if failures:
-        logger.warning("ReMail batch returned %s failed item(s): %s", len(failures), failures)
+        logger.warning("ReMail batch returned %s failed item(s): %s", len(failures), _summarize_item_failures(failures))
     accounts = filter_dead_remail_mailboxes(accounts)
     if not accounts:
-        raise RuntimeError("ReMail batch returned no usable mailboxes")
+        raise RuntimeError(_batch_failure_reason(failures))
     return accounts
+
+
+#: ``OrderBatchItemErrorResponse.code`` enum from the live OpenAPI document
+#: (2026-11-11).  Each one names a different operator action, so they are not
+#: collapsed into "the batch returned nothing".
+_REMAIL_ITEM_ERROR_HINTS = {
+    "insufficient_balance": "ReMail wallet balance is exhausted — recharge it",
+    "insufficient_inventory": "the requested suffix has no stock right now",
+    "idempotency_conflict": "the batch Idempotency-Key was reused with a different payload",
+    "temporarily_unavailable": "supplier-side transient outage — safe to retry the same batch",
+}
+
+
+def _batch_item_failure(item):
+    """``{index, code, message}`` for one failed batch item (never a credential)."""
+    item = item if isinstance(item, dict) else {}
+    _raw_error: object = item.get("error")
+    error: dict = _raw_error if isinstance(_raw_error, dict) else {}
+    return {
+        "index": item.get("index"),
+        "code": str(error.get("code") or "").strip() or "unknown",
+        "message": str(error.get("message") or "").strip()[:160],
+    }
+
+
+def _summarize_item_failures(failures: list[dict]) -> str:
+    counts = {}
+    for failure in failures:
+        counts[failure["code"]] = counts.get(failure["code"], 0) + 1
+    summary = ", ".join(f"{code}={count}" for code, count in sorted(counts.items()))
+    first = failures[0] if failures else {}
+    detail = f"; first: {first.get('message')}" if first.get("message") else ""
+    return f"codes[{summary}]{detail}"
+
+
+def _batch_failure_reason(failures: list[dict]) -> str:
+    """Stable, actionable error for a batch that produced no mailbox."""
+    codes = {str(failure.get("code") or "") for failure in failures}
+    if codes and codes <= {"insufficient_balance"}:
+        return "remail_insufficient_balance: " + _REMAIL_ITEM_ERROR_HINTS["insufficient_balance"]
+    if codes and codes <= {"idempotency_conflict"}:
+        return "remail_idempotency_conflict: " + _REMAIL_ITEM_ERROR_HINTS["idempotency_conflict"]
+    if "temporarily_unavailable" in codes:
+        return "remail_temporarily_unavailable: " + _REMAIL_ITEM_ERROR_HINTS["temporarily_unavailable"]
+    if codes and codes <= {"insufficient_inventory"}:
+        return "remail_insufficient_inventory: " + _REMAIL_ITEM_ERROR_HINTS["insufficient_inventory"]
+    return "ReMail batch returned no usable mailboxes" + (
+        f" ({_summarize_item_failures(failures)})" if failures else ""
+    )
 
 
 def _normalize_remail_message(message):
@@ -900,30 +989,53 @@ def _remail_parse_fetch_next_allowed(response):
         return 0.0
 
 
+#: ``fetch.lastStatus`` values from the live OpenAPI document
+#: (``GET https://remail.best/openapi.json`` -> ``FetchState.lastStatus``,
+#: captured 2026-11-11): ``pending`` / ``processing`` / ``normal`` /
+#: ``abnormal``.  The pre-2026-11 deployments answered ``succeeded`` / ``failed``;
+#: both spellings are accepted so an older supplier build does not silently turn
+#: the 1s OTP poll into a 2s one.
+_FETCH_STATUS_READY = frozenset({"normal", "succeeded"})
+_FETCH_STATUS_SETTLING = frozenset({"pending", "processing"})
+_FETCH_STATUS_FAILING = frozenset({"abnormal", "failed"})
+
+
 def _remail_fetch_state(response):
     """Parse the fetch state from /v1/pickup response.
 
     ReMail's /v1/pickup returns a ``fetch`` object describing the server-side
-    mail-fetch job state.  Key fields (per API docs):
+    mail-fetch job state.  Key fields (per the OpenAPI document):
 
-    - lastStatus:      "succeeded" / "pending" / "failed" etc.
+    - lastStatus:      "normal" / "pending" / "processing" / "abnormal"
     - lastReceivedAt:  ISO timestamp of the most recently received email
     - nextFetchAllowedAt: earliest time the next pickup is allowed
     - lastSafeError:   non-fatal error from the last fetch attempt
 
     Returns a dict with ``last_status``, ``last_received_at``,
-    ``next_allowed_delay`` and ``last_safe_error``.
+    ``next_allowed_delay``, ``last_safe_error`` and ``ready`` — ``ready`` is what
+    the poll loop keys its backoff off, so the enum lives here and not at the
+    call site.
     """
     try:
         fetch_info = (response or {}).get("fetch") or {}
+        last_status = str(fetch_info.get("lastStatus") or "").strip().lower()
         return {
-            "last_status": str(fetch_info.get("lastStatus") or "").strip().lower(),
+            "last_status": last_status,
+            # Empty (unknown) counts as ready: an absent ``fetch`` block must not
+            # slow the poll down, it just carries no information.
+            "ready": last_status not in _FETCH_STATUS_SETTLING | _FETCH_STATUS_FAILING,
             "last_received_at": str(fetch_info.get("lastReceivedAt") or "").strip(),
             "next_allowed_delay": _remail_parse_fetch_next_allowed(response),
             "last_safe_error": str(fetch_info.get("lastSafeError") or "").strip(),
         }
     except Exception:
-        return {"last_status": "", "last_received_at": "", "next_allowed_delay": 0.0, "last_safe_error": ""}
+        return {
+            "last_status": "",
+            "ready": True,
+            "last_received_at": "",
+            "next_allowed_delay": 0.0,
+            "last_safe_error": "",
+        }
 
 
 def _remail_item_received_ts(item):
@@ -944,6 +1056,26 @@ def _trusted_structured_remail_code(mailbox, item):
     if not _OPENAI_REMAIL_SENDERS.search(sender):
         return ""
     return code
+
+
+def _fetch_state_interval(interval, fetch_state, prev_safe_error):
+    """Apply the documented ``fetch.lastStatus`` to the poll interval.
+
+    ``normal`` is the healthy state and must NOT back off — the pre-2026-11 check
+    looked for "succeeded", which version 1.0.0 never sends, so every poll was
+    slowed to 2s.  ``abnormal`` means the supplier's fetch failed and deserves the
+    longest wait; ``pending``/``processing`` means "not yet".
+    """
+    last_status = str((fetch_state or {}).get("last_status") or "")
+    if last_status in _FETCH_STATUS_FAILING:
+        safe_error = str((fetch_state or {}).get("last_safe_error") or "").strip()
+        if safe_error and safe_error != prev_safe_error:
+            print(f"  [remail fetch abnormal: {safe_error[:80]}]")
+            prev_safe_error = safe_error
+        return max(interval, 3.0), prev_safe_error
+    if last_status in _FETCH_STATUS_SETTLING:
+        return max(interval, 2.0), prev_safe_error
+    return interval, prev_safe_error
 
 
 def _poll_remail_otp(
@@ -1018,6 +1150,7 @@ def _poll_remail_otp(
     time.sleep(min(base_interval, 1.0))
 
     prev_last_received_at = ""
+    prev_safe_error = ""
 
     while time.time() < deadline:
         # Graduated adaptive interval
@@ -1089,11 +1222,7 @@ def _poll_remail_otp(
             if server_delay > 0:
                 interval = max(interval, min(server_delay, 5.0))
 
-            # If mailbox fetch hasn't succeeded yet, wait longer before
-            # next poll — the mailbox may not be connected.
-            last_status = fetch_state.get("last_status", "")
-            if last_status and last_status not in ("succeeded", ""):
-                interval = max(interval, 2.0)
+            interval, prev_safe_error = _fetch_state_interval(interval, fetch_state, prev_safe_error)
 
             # If lastReceivedAt is unchanged, no new email has arrived —
             # gradually back off to reduce unnecessary API calls.

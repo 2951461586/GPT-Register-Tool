@@ -36,7 +36,9 @@ failure disposition:
 
 Provider-specific polling remains intentionally different where the remote
 protocol differs. ReMail keeps adaptive server-directed polling; Graph,
-iCloud and other compatible providers use the shared settle loop.
+iCloud and other compatible providers use the shared settle loop. ReMail's wire
+contract (orders, batch idempotency, pickup and the `fetch` state machine) is
+[remail-api.md](remail-api.md); this file stays about capability and disposition.
 
 ## Proxy candidates
 

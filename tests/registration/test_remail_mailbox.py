@@ -278,8 +278,12 @@ class ReMailOrderTests(unittest.TestCase):
             return details[path.rsplit("/", 1)[-1]]
 
         args = argparse.Namespace(count=2)
+        # Recovery is the *fallback*: the batch now retries under one
+        # Idempotency-Key first (see the retry test below), so this scenario sets
+        # that budget to zero and measures the path that runs after it is spent.
+        cfg = dict(self.cfg, order_retry_attempts=0)
         with (
-            patch.object(mailbox_remail, "_remail_cfg", return_value=self.cfg),
+            patch.object(mailbox_remail, "_remail_cfg", return_value=cfg),
             patch.object(mailbox_remail, "_remail_request", side_effect=request) as call,
             patch.object(mailbox_remail.time, "time", return_value=1_000),
             redirect_stdout(io.StringIO()),
@@ -288,6 +292,77 @@ class ReMailOrderTests(unittest.TestCase):
 
         self.assertEqual([account.order_no for account in accounts], ["R1", "R2"])
         self.assertEqual(call.call_count, 4)
+
+    def test_purchase_batch_retries_a_502_under_one_idempotency_key(self):
+        """The OpenAPI contract promises a retried batch converges on the same result.
+
+        ``POST /v1/open/orders/batch`` requires an ``Idempotency-Key`` and the
+        document states that reusing it returns the same complete batch result, so
+        a transient Cloudflare 5xx must be retried instead of aborting the run --
+        which is exactly what happened to a 5-mailbox batch on 2026-11-11.
+        """
+        batch = [
+            {"index": 0, "status": "succeeded", "order": order_payload(1, "purchase")},
+            {"index": 1, "status": "succeeded", "order": order_payload(2, "purchase")},
+        ]
+        keys = []
+
+        def request(method, path, **kwargs):
+            if method == "POST":
+                keys.append(dict(kwargs.get("headers") or {}).get("Idempotency-Key"))
+                if len(keys) == 1:
+                    raise mailbox_remail.ReMailHttpError(502, {"retryable": True})
+                return batch
+            raise AssertionError(f"unexpected call: {method} {path}")
+
+        args = argparse.Namespace(count=2)
+        cfg = dict(self.cfg, order_retry_attempts=1, order_retry_backoff_seconds=1)
+        with (
+            patch.object(mailbox_remail, "_remail_cfg", return_value=cfg),
+            patch.object(mailbox_remail, "_remail_request", side_effect=request) as call,
+            patch.object(mailbox_remail.time, "sleep", return_value=None),
+            redirect_stdout(io.StringIO()),
+        ):
+            accounts = mailbox_remail._create_remail_mailboxes(args, service_mode="purchase")
+
+        self.assertEqual([account.order_no for account in accounts], ["R1", "R2"])
+        self.assertEqual(call.call_count, 2)
+        self.assertEqual(len(set(keys)), 1, keys)
+        self.assertTrue(keys[0])
+
+    def test_batch_item_error_codes_survive_into_the_failure_reason(self):
+        batch = [
+            {"index": 0, "status": "failed", "error": {"code": "insufficient_balance", "message": "no credit"}},
+            {"index": 1, "status": "failed", "error": {"code": "insufficient_balance", "message": "no credit"}},
+        ]
+        args = argparse.Namespace(count=2)
+        cfg = dict(self.cfg, order_retry_attempts=0)
+        with (
+            patch.object(mailbox_remail, "_remail_cfg", return_value=cfg),
+            patch.object(mailbox_remail, "_remail_request", return_value=batch),
+            redirect_stdout(io.StringIO()),
+        ):
+            with self.assertRaises(RuntimeError) as caught:
+                mailbox_remail._create_remail_mailboxes(args, service_mode="purchase")
+
+        self.assertIn("remail_insufficient_balance", str(caught.exception))
+
+    def test_batch_item_temporarily_unavailable_is_reported_as_retryable(self):
+        batch = [
+            {"index": 0, "status": "failed", "error": {"code": "temporarily_unavailable", "message": "busy"}},
+            {"index": 1, "status": "failed", "error": {"code": "temporarily_unavailable", "message": "busy"}},
+        ]
+        args = argparse.Namespace(count=2)
+        cfg = dict(self.cfg, order_retry_attempts=0)
+        with (
+            patch.object(mailbox_remail, "_remail_cfg", return_value=cfg),
+            patch.object(mailbox_remail, "_remail_request", return_value=batch),
+            redirect_stdout(io.StringIO()),
+        ):
+            with self.assertRaises(RuntimeError) as caught:
+                mailbox_remail._create_remail_mailboxes(args, service_mode="purchase")
+
+        self.assertIn("remail_temporarily_unavailable", str(caught.exception))
 
     def test_purchase_batch_does_not_recover_non_ambiguous_400(self):
         args = argparse.Namespace(count=2)

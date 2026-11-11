@@ -14,6 +14,7 @@
 | 账号健康 / 优惠检查 / 恢复的副作用与代理优先级 | [account-health.md](account-health.md) | 注册成功判定 |
 | 谁 import 谁、哪些模块成环、哪些目录互指 | [dependency-graph.md](dependency-graph.md) | 单模块职责与边界（看 [architecture.md](../architecture.md)）；它只给测量，不给处置 |
 | 邮箱 provider 能力、轮询与终止错误 | [mailbox.md](mailbox.md) | 注册流程 |
+| ReMail 供应商的 HTTP 契约（下单/批量幂等/取件/`fetch` 状态机） | [remail-api.md](remail-api.md) | provider 能力与错误处置（看 `mailbox.md`） |
 | 一键接码的供应商与租号 | [one-click-sms.md](one-click-sms.md) | 注册流程 |
 
 **事实的唯一归属**（改一处就别改第二处）：
@@ -22,6 +23,7 @@
 | --- | --- | --- |
 | 阶段顺序 / 状态组 / 重试与错误分类 | `registration-architecture.md` | `registration/handlers.py`、`registration/policy.py`、`failure_registry.py` |
 | 端点、请求体、Sentinel 契约 | `protocol-registration.md` | `auth_flow/`、`sentinel/` |
+| ReMail 供应商端点、幂等键、取件与错误码 | `remail-api.md` | `providers/mailbox_remail.py` |
 | 代理串解析、车道选择、驱动→池映射 | `registration-and-proxy-architecture.md` | `proxy/entry.py`、`proxy/routing.py` |
 | 取消 / 并发 / 恢复流程 | `registration-recovery.md` | `registration/cancel.py`、`registration/concurrency.py` |
 | A/B 开关与判定口径 | `registration-ab-runbook.md` | `config.example.json` 中对应开关 |
@@ -49,6 +51,7 @@ below so existing links do not break:
 - [`randomness.md`](randomness.md) - `random` 与 `secrets` 的人工分类判据与已复核调用点
 - [`account-health.md`](account-health.md) - 测活、恢复、优惠检查的副作用与代理契约
 - [`mailbox.md`](mailbox.md) - 邮箱 provider 能力、配置注入、轮询和终止错误契约
+- [`remail-api.md`](remail-api.md) - ReMail 开放 API 契约（下单、批量幂等、取件、`fetch` 状态、错误模型）
 - [`one-click-sms.md`](one-click-sms.md) - 一键接码供应商、租号与持久化当前契约
 - [`registration-and-proxy-architecture.md`](registration-and-proxy-architecture.md) - runtime control flow and code locations for registration and the proxy lanes
 - [`protocol-payment-enhancement.md`](protocol-payment-enhancement.md) - protocol payment architecture (routing/executor/normalisation); design proposal archived under `docs/audits/plans/`
