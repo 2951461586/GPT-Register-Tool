@@ -233,6 +233,23 @@ The durable account-health queue owns claim, lease, heartbeat and scheduling
 only. It delegates plan and liveness work to the same workflows used by
 foreground commands.
 
+## Root Module Set
+
+`sms_tool/` freezes the **names** of its top-level modules
+(`scripts/root_module_ratchet.py` + `scripts/root_module_baseline.json`): "one
+more file" adds no edge on day one, only a place where the next edge can be born,
+so a new root module needs a decision recorded here before the baseline grows.
+
+**2026-11-11 — `tls_fingerprint.py` accepted as a root module.** It is the peer
+of `auth_headers.py`: per-account TLS ClientHello primitives (extension-order
+permutation, `CurlOpt` installation) consumed by `registration/`, `sentinel/` and
+the preflight. It cannot live in `kernel/` — kernel is layer 4 and the module
+imports `auth_headers` (layer 5), so that move would be an upward import — and it
+is not a `proxy/` concern (no proxy-string parsing). A future `tls/` package would
+be the home if a second module joins it; until then the root set carries it
+exactly like `auth_headers.py`, `fingerprint_pool.py` and
+`browser_fingerprint_pool.py`.
+
 ## Boundary Rules
 
 Prose form. The enforceable form of the same rules is
