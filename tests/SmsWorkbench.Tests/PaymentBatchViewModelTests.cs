@@ -487,7 +487,11 @@ public sealed class PaymentBatchViewModelTests
 
         public Task<JsonElement> RunAsync(PaymentBatchRequest request, IProgress<BackendOutputLine> progress, CancellationToken cancellationToken)
         {
-            string line = "@@SMSWORKBENCH_V2@@{\"schema\":\"smsworkbench.ipc.v2\",\"version\":2,\"type\":\"event\",\"terminal\":true,\"payload\":{\"domain\":\"payment\",\"account_ref\":\"b4c9a289323b21a0\",\"stage\":\"completed\",\"status\":\"completed\"}}";
+            // ``account_terminal`` is what the VM keys its terminal branch off, and
+            // the backend always sets it on the final per-account event
+            // (payment/batch.py). A stub without it only worked while the results
+            // frame happened to land after the progress event.
+            string line = "@@SMSWORKBENCH_V2@@{\"schema\":\"smsworkbench.ipc.v2\",\"version\":2,\"type\":\"event\",\"terminal\":true,\"payload\":{\"domain\":\"payment\",\"account_ref\":\"b4c9a289323b21a0\",\"stage\":\"completed\",\"status\":\"completed\",\"account_terminal\":true}}";
             progress.Report(new BackendOutputLine(BackendOutputChannel.StandardOutput, line));
             using JsonDocument document = JsonDocument.Parse("{\"ok\":true,\"counts\":{\"requested\":1},\"results\":[{\"account_ref\":\"b4c9a289323b21a0\",\"ok\":true,\"terminal_state\":\"completed\"}]}");
             return Task.FromResult(document.RootElement.Clone());

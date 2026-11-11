@@ -760,9 +760,10 @@ namespace SmsWorkbench
                         ? Loc.T("二维码内容")
                         : qrPathPresent ? Loc.T("二维码文件") : "";
                 string resultValue = FirstNonEmpty(paymentUrl, qrData, qrPath);
-                Results.Add(new PaymentBatchResultRow
+                string accountDisplay = ResolveAccountDisplay(JsonString(row, "account_ref"));
+                PaymentBatchResultRow resultRow = new()
                 {
-                    AccountRef = ResolveAccountDisplay(JsonString(row, "account_ref")),
+                    AccountRef = accountDisplay,
                     MatrixCell = JsonString(row, "matrix_cell"),
                     AuthStatus = JsonBool(row, "authenticated") ? "200" : Loc.T("失败"),
                     RefreshStatus = JsonBool(row, "refreshed") ? Loc.T("已刷新") : Loc.T("未刷新"),
@@ -785,7 +786,17 @@ namespace SmsWorkbench
                         ? Loc.T("成功")
                         : "失败",
                     Attempts = JsonInt(row, "attempts")
-                });
+                };
+                Results.Add(resultRow);
+                // The results frame is this account's final word, so register it
+                // with the same guard ApplyProgress uses for a terminal progress
+                // event. Adapter callbacks and the executor's terminal event share
+                // stdout, and IProgress delivery can be posted through a
+                // SynchronizationContext, so a "running" event may arrive after
+                // the results are applied; without this the row regressed from
+                // 成功 back to 执行中 (observed on CI, where the posted callback
+                // lands last, while a local run applied the progress first).
+                _terminalProgressAccounts.Add(accountDisplay);
             }
         }
 
