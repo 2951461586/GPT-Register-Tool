@@ -59,6 +59,31 @@ def _probe_node() -> dict[str, str]:
     return _check("node", "ok", f"{version} ({binary})")
 
 
+def _probe_sentinel_runtime() -> dict[str, str]:
+    """Node + vendored bundle + one offline mint (``sentinel.selfcheck``).
+
+    ``_probe_node`` answers "is there a node binary"; this answers "can it mint a
+    token".  The two failures that cost real accounts — a corrupted vendored
+    asset and a runner that loads but cannot produce ``p``/``t`` — are invisible
+    to a version string and only surface at ``create_account``, after the mailbox
+    and its OTP are spent.  The mint is offline (synthetic challenge), so this
+    stays a no-network probe.
+    """
+    from .sentinel.selfcheck import run_selfcheck
+
+    report = run_selfcheck()
+    detail = "bundle=%s node=%s mint=%s" % (report["bundle"], report["node"], report["mint"])
+    if report["ok"]:
+        return _check("sentinel_runtime", "ok", detail)
+    return _check(
+        "sentinel_runtime",
+        "fail",
+        detail,
+        "re-vendor sms_tool/sentinel/runtime (hash mismatch) or install Node.js >= 18; "
+        "run `python -m sms_tool.sentinel.selfcheck` for the full reason",
+    )
+
+
 def _probe_playwright() -> dict[str, str]:
     """Presence + version, plus the browser cache, without importing the package.
 
@@ -411,6 +436,9 @@ def run_doctor(
     default_probes: list[tuple[str, Callable[[], dict[str, str]]]] = [
         ("python", _probe_python),
         ("node", _probe_node),
+        # Kept next to "node" because the two answer different questions, and the
+        # difference only shows up at create_account (see the probe's docstring).
+        ("sentinel_runtime", _probe_sentinel_runtime),
         ("playwright", _probe_playwright),
         ("curl_cffi", _probe_curl_cffi),
         ("requests", _probe_requests),
@@ -434,11 +462,17 @@ def run_doctor(
         except Exception as exc:  # noqa: BLE001 - one broken probe must not kill the report
             return _check(name, "warn", f"probe failed: {type(exc).__name__}")
 
+    # An injected ``probes`` mapping is the *whole* set, not a patch on top of the
+    # defaults: callers use it to run the report hermetically (the offline tests),
+    # and a probe they did not name would otherwise reach the real filesystem or
+    # spawn node behind their back.
+    selected = [(name, probe) for name, probe in default_probes if probes is None or name in probes]
+
     # Probes are independent and dominated by I/O (subprocess, filesystem,
     # metadata), so run them concurrently. ``map`` preserves the declaration
     # order, which the console report and the tests rely on.
-    with ThreadPoolExecutor(max_workers=min(8, len(default_probes))) as pool:
-        checks.extend(pool.map(run_probe, default_probes))
+    with ThreadPoolExecutor(max_workers=max(1, min(8, len(selected)))) as pool:
+        checks.extend(pool.map(run_probe, selected))
     checks.extend(_probe_config(config or {}, config_source))
     failed = sum(1 for item in checks if item["status"] == "fail")
     warned = sum(1 for item in checks if item["status"] == "warn")

@@ -13,6 +13,7 @@ from typing import Any, Mapping
 from curl_cffi import requests as curl_requests
 
 from .. import endpoints
+from ..tls_fingerprint import apply_to_session as _apply_tls_fingerprint
 from ..auth_headers import auth_impersonate, auth_user_agent, sentinel_fingerprint
 from ..http_client import request_with_retry
 from ..phone_proxy import normalize_proxy_url, redact_proxy_text
@@ -212,13 +213,28 @@ def _token_from_bundle(
     )
 
 
+def _safe_screen_dimension(value: str, default: int) -> int:
+    """``int(value)`` that never raises; a malformed profile keeps the default."""
+    try:
+        return int(str(value or "").strip())
+    except (TypeError, ValueError):
+        return default
+
+
 def _requirements_token(device_id: str, profile: Mapping[str, Any]) -> str:
     """Generate the SDK-compatible initial requirements proof."""
     import base64
 
     screen = str(profile.get("screen") or "1920x1080")
     width, _, height = screen.partition("x")
-    timezone_name = str(profile.get("timezone") or "UTC")
+    tz_name = str(profile.get("timezone") or "UTC")
+    # ``Date.prototype.toString()`` ends in the OS-style zone label, never ``%Z``:
+    # "... GMT+0900 (Japan Standard Time)".  ``%Z`` yields "JST", and the JS-side
+    # ``Date`` mock (``sentinel/runtime/sentinel-runner.js``) rewrites that same
+    # suffix from ``timezoneName`` — so formatting ``%Z`` here made the two
+    # proofs of one registration disagree with each other *and* with a real
+    # browser.  ``auth_headers.sentinel_fingerprint`` now supplies the label.
+    tz_label = str(profile.get("timezone_name") or tz_name)
     # Single authority (P1-4).  The old inline ``ZoneInfo`` here raised
     # ZoneInfoNotFoundError on any host without the IANA database -- Windows
     # included -- and the except branch then fell back to
@@ -227,10 +243,13 @@ def _requirements_token(device_id: str, profile: Mapping[str, Any]) -> str:
     # but it now goes through the module that logs the root cause once.
     from ..geo.clock import now_in_timezone
 
-    now = now_in_timezone(timezone_name)
+    now = now_in_timezone(tz_name)
+    date_string = now.strftime("%a %b %d %Y %H:%M:%S GMT%z")
+    if tz_label:
+        date_string = f"{date_string} ({tz_label})"
     config = [
-        int(width or 1920) + int(height or 1080),
-        now.strftime("%a %b %d %Y %H:%M:%S GMT%z (%Z)"),
+        _safe_screen_dimension(width, 1920) + _safe_screen_dimension(height, 1080),
+        date_string,
         int(profile.get("js_heap_size_limit") or 4_395_630_592),
         1,
         str(profile.get("user_agent") or "Mozilla/5.0"),
@@ -355,6 +374,10 @@ def issue_sentinel_token(
         raise SentinelIssueError(f"sentinel_flow_unsupported:{flow}")
     owned_session = session is None
     active_session = session or curl_requests.Session()
+    if owned_session:
+        # The challenge request must present the same ClientHello as the auth
+        # calls it will mint a token for; a shared session already carries it.
+        _apply_tls_fingerprint(active_session)
     normalized_proxy = normalize_proxy_url(proxy or "")
     if normalized_proxy and owned_session:
         active_session.proxies = {"http": normalized_proxy, "https": normalized_proxy}
@@ -704,6 +727,8 @@ def issue_sentinel_bundle(
     did = str(device_id or "").strip() or str(uuid.uuid4())
     owned_session = session is None
     active_session = session or curl_requests.Session()
+    if owned_session:
+        _apply_tls_fingerprint(active_session)
     normalized_proxy = normalize_proxy_url(proxy or "")
     if normalized_proxy and owned_session:
         active_session.proxies = {"http": normalized_proxy, "https": normalized_proxy}

@@ -166,6 +166,10 @@ class RegistrationProgressTests(unittest.TestCase):
                     "edge_challenge_rotations": 0,
                     "edge_challenge_rotate_failed": 0,
                     "fingerprint_pool_failures": 0,
+                    # P2 (2026-11-11): whether the opt-in dynamic generator
+                    # supplied this batch's exits.  Defaults to "disabled", so a
+                    # finished batch can tell it apart from "ran and found nothing".
+                    "dynamic_generation": {"used": False, "count": 0, "reason": ""},
                 },
             )
             self.assertTrue(stored["future_batch_eligible"])

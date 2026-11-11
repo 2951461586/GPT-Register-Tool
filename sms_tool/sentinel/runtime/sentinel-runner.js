@@ -797,6 +797,20 @@ function createBrowserContext(options) {
     for (const observer of [...performanceObservers]) observer._notify?.(entry);
   }
 
+  // Platform class is resolved before the environment objects are built: the
+  // Chromium-only globals below (``performance.memory``, ``navigator.deviceMemory``,
+  // ``navigator.gpu``, ``window.chrome``) must be absent on Gecko/WebKit, and
+  // ``performance.memory`` is constructed earlier than the navigator.  A real
+  // Firefox or Safari has no ``performance.memory`` at all.
+  const browserFamily = String(options.browserFamily || "chrome").toLowerCase();
+  const isSafari = browserFamily === "safari" || /Version\/[^ ]+ Safari\//.test(String(options.userAgent || ""));
+  // Gecko is a third platform class, not a Chrome variant.  Firefox exposes
+  // none of the Chromium-only globals guarded below (``navigator.userAgentData``,
+  // ``navigator.gpu``, ``navigator.deviceMemory``, ``navigator.login``,
+  // ``window.chrome``), so attaching them to a Firefox UA is a free
+  // contradiction.  The profile pool weights Firefox first (see
+  // ``auth_headers._FAMILY_WEIGHTS``), so this is the common case, not an edge.
+  const isFirefox = browserFamily === "firefox" || /Firefox\//.test(String(options.userAgent || ""));
   const browserIntl = createIntlObject(options);
   const browserDate = createDateConstructor(options);
   const browserScreen = createScreen(options.screen);
@@ -804,11 +818,19 @@ function createBrowserContext(options) {
   const browserPerformance = {
     now: () => performance.now(),
     timeOrigin: performance.timeOrigin || Date.now() - performance.now(),
-    memory: {
-      jsHeapSizeLimit: options.jsHeapSizeLimit,
-      totalJSHeapSize: Math.floor(options.jsHeapSizeLimit / 3),
-      usedJSHeapSize: Math.floor(options.jsHeapSizeLimit / 8),
-    },
+    // ``performance.memory`` is a Chromium extension to the Performance API.
+    // Exposing it on a Gecko/WebKit profile was the last platform-blind field in
+    // this environment; the descriptor is simply absent there, exactly as on a
+    // real Firefox or Safari.
+    ...(isSafari || isFirefox
+      ? {}
+      : {
+          memory: {
+            jsHeapSizeLimit: options.jsHeapSizeLimit,
+            totalJSHeapSize: Math.floor(options.jsHeapSizeLimit / 3),
+            usedJSHeapSize: Math.floor(options.jsHeapSizeLimit / 8),
+          },
+        }),
     getEntries() { return perfEntries.slice(); },
     getEntriesByType(type) { return perfEntries.filter((entry) => entry.entryType === String(type)); },
     getEntriesByName(name) { return perfEntries.filter((entry) => entry.name === String(name)); },
@@ -1016,15 +1038,6 @@ function createBrowserContext(options) {
   document.body.ownerDocument = document;
   document.head = createElementNode("head", document);
 
-  const browserFamily = String(options.browserFamily || "chrome").toLowerCase();
-  const isSafari = browserFamily === "safari" || /Version\/[^ ]+ Safari\//.test(String(options.userAgent || ""));
-  // Gecko is a third platform class, not a Chrome variant.  Firefox exposes
-  // none of the Chromium-only globals guarded below (``navigator.userAgentData``,
-  // ``navigator.gpu``, ``navigator.deviceMemory``, ``navigator.login``,
-  // ``window.chrome``), so attaching them to a Firefox UA is a free
-  // contradiction.  The profile pool weights Firefox first (see
-  // ``auth_headers._FAMILY_WEIGHTS``), so this is the common case, not an edge.
-  const isFirefox = browserFamily === "firefox" || /Firefox\//.test(String(options.userAgent || ""));
   const exposeRequestIdleCallback = !isSafari && options.requestIdleCallback !== false;
   const navigatorProto = isSafari ? {
     javaEnabled: makeNativeFunction("javaEnabled", () => false),

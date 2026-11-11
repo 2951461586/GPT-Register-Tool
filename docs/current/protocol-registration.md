@@ -171,7 +171,7 @@ Registration flows registered there are `username_password_create`
 Registered there are both checkout flows, and they are
 **not** interchangeable:
 
-- **Checkout create** mints `chatgpt_checkout` — `CHECKOUT_SENTINEL_FLOW` at `sms_tool/sentinel/client.py:44`, issued by `issue_checkout_sentinel` at `sms_tool/sentinel/client.py:618`.
+- **Checkout create** mints `chatgpt_checkout` — `CHECKOUT_SENTINEL_FLOW` at `sms_tool/sentinel/client.py:45`, issued by `issue_checkout_sentinel` at `sms_tool/sentinel/client.py:641`.
 - **Checkout approve** mints `checkout_session_approval` — its own constant `UPI_SENTINEL_APPROVAL_FLOW` at `sms_tool/upi_link/constants.py:43`. Two rails request it explicitly: the UPI approve stage passes `sentinel_flow=UPI_SENTINEL_APPROVAL_FLOW` at `sms_tool/upi_link/stages.py:712`, and `PPLinkExtractor._fresh_approval_sentinel` mints it at `sms_tool/paypal/extract.py:245`.
 
   🔴 **How to write a guardable pointer here** — two rules, both learned the hard
@@ -664,6 +664,79 @@ Sentinel SDK: the HAR was served `20260219f9f6`; the repo pins the newer
 `20260810913b` (both are still served). No endpoint or request-body change was
 observed: `passwordless/send-otp` is body-less, `email-otp/validate` sends
 `{"code"}`, and `create_account` sends `{"name","birthdate"}`.
+
+## Device fingerprint consistency (2026-11-11)
+
+Three cross-layer contradictions were closed in one pass; each one is a value the
+server receives in the Sentinel proof, so none of them needed a live A/B to
+establish that it *could* be checked.
+
+### 1. Platform-aware device measurements
+
+`auth_headers._device_profile()` used one Windows-desktop table for every
+profile, so `safari18_0_ios` reported `screen=2560x1080, dpr=1.25` next to
+`navigator.platform="iPhone"` and `maxTouchPoints=5`, and macOS Safari reported a
+Windows ultrawide panel. Measured over 3000 pool draws: **9.4 % iOS + 9.7 %
+macOS** of protocol registrations carried that contradiction.
+
+The tables are now keyed by platform class (`_SCREEN_CHOICES_BY_PLATFORM` and the
+DPR / CPU / memory / heap siblings), and the cache key includes the class so a
+profile swap cannot reuse the previous platform's measurements.
+`auth_headers.validate_protocol_fingerprint()` asserts the invariants (platform ↔
+UA, touch points ↔ platform, screen ↔ platform bounds, DPR ↔ platform, locale ↔
+Accept-Language, zone ↔ offset) and `identity_stages` logs any violation —
+diagnostic only, never fatal.
+
+The reference implementation (`sentinel-rs/src/fingerprint.rs`) uses the same
+shape (`WINDOWS_SCREENS` / `MAC_SCREENS` / `_IPHONE_SCREENS` plus a
+`validate_fingerprint` that rejects `is_mobile`/`max_touch_points` mismatches).
+
+### 2. `timezoneName` is an OS label, not an IANA id
+
+`Intl.DateTimeFormat().resolvedOptions().timeZoneName` reports
+`Japan Standard Time`, never `Asia/Tokyo`. The protocol profile never set it, so
+`sentinel/runner.py` fell back to the IANA string while
+`client._requirements_token` formatted `%Z` (`JST`) — the two halves of one
+registration disagreed with each other *and* with a real browser. The profile now
+carries `timezone_name` from `geo.profiles.WINDOWS_TIMEZONE_BY_IANA` (the same
+table the browser lane uses) and both producers format that label.
+
+### 3. Per-account TLS ClientHello order
+
+`curl_cffi` impersonation presets are shared by every client; measured against
+`tls.peet.ws`, all four Firefox profiles (`firefox144/147/135/133`) produced the
+**same** `ja3_hash` (`6f7889b9fb1a62a9577e685c1fcfa919`), i.e. 50 % of the pool's
+weight sat behind one value a WAF can blacklist in a single line. Chrome presets
+already permute their extension order per handshake; Safari's order is fixed too.
+
+`sms_tool/tls_fingerprint.py` permutes the **order** of the profile's own
+extension list (never the set) deterministically from the account's device seed
+and installs it as a `CurlOpt.TLS_EXTENSION_ORDER` session option. Verified
+2026-11-11 through the configured residential exit: three seeds → three distinct
+`ja3_hash` values, all answering HTTP 200 at `auth.openai.com` with this project's
+own header set.
+
+| Family | JA3 before | After | Notes |
+| --- | --- | --- | --- |
+| Firefox (50 % weight) | one shared value | per account | extension order permuted |
+| Chrome (25 %) | already permuted | unchanged | preset permutes per handshake; explicit order would *remove* that |
+| Safari (18 %) | one per version | unchanged | permuting its list is rejected by BoringSSL (`curl: (35) Invalid TLS extensions`) |
+
+HTTP/2 (Akamai) is deliberately untouched: the presets are `curl-impersonate`
+native targets, `extra_fp` cannot rewrite their SETTINGS, and
+`Session(akamai=...)` needs the exact base string, which curl_cffi 0.16.0 does not
+expose — a guessed base produced a hash matching no real Chrome.
+
+Config: `registration.tls_fingerprint` (`enabled`, `rotate_extensions`,
+`seed_salt`). Evidence: `scripts/tls_fingerprint_probe.py` (`--seeds` offline,
+`--capture` / `--live` need network).
+
+### 4. `performance.memory` is Chromium-only
+
+The vendored runner exposed `performance.memory` on every profile. It is now
+built only for Chromium, matching Gecko/WebKit. This is the one local patch to
+`runtime/sentinel-runner.js`; `bundle.py:RUNNER_SHA256` pins the patched bytes and
+`THIRD_PARTY_NOTICES.md` records the patch.
 
 ## Validation limits
 

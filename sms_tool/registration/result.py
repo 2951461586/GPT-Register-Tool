@@ -69,6 +69,18 @@ COMMON_RESULT_KEYS = frozenset(
 )
 
 
+def _dynamic_generation(value: object) -> dict[str, object]:
+    """Sanitize the dynamic-generation status: ``used`` / ``count`` / ``reason``."""
+    _raw: object = value
+    section = _raw if isinstance(_raw, Mapping) else {}
+    try:
+        count = max(0, int(section.get("count", 0) or 0))
+    except (TypeError, ValueError):
+        count = 0
+    reason = str(section.get("reason") or "")[:60]
+    return {"used": bool(section.get("used")), "count": count, "reason": reason}
+
+
 def safe_proxy_audit(metadata: Mapping[str, Any] | None) -> dict[str, Any]:
     """Allow-list non-sensitive registration egress facts.
 
@@ -113,6 +125,11 @@ def safe_proxy_audit(metadata: Mapping[str, Any] | None) -> dict[str, Any]:
         # be silent, so "the pool worked" and "the pool failed every time"
         # produced identical audits.
         "fingerprint_pool_failures": _count("fingerprint_pool_failures"),
+        # P2 (2026-11-11): did the opt-in dynamic generator actually supply this
+        # batch's exits, or did it fall back?  Three primitives only -- the proxy
+        # strings it produced are never part of the audit (same rule as the
+        # before/after exits above).
+        "dynamic_generation": _dynamic_generation(value.get("dynamic_generation")),
     }
 
 

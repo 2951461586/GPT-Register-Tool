@@ -20,7 +20,8 @@ import uuid
 from typing import TYPE_CHECKING, Any, Mapping
 
 from .. import fingerprint_pool as _fingerprint_pool
-from ..auth_headers import set_auth_fingerprint
+from ..tls_fingerprint import apply_to_session as _apply_tls_fingerprint
+from ..auth_headers import sentinel_fingerprint, set_auth_fingerprint, validate_protocol_fingerprint
 from ..operator_output import emit as _emit
 from ..proxy import entry as _proxy_entry
 from .flags import registration_flag
@@ -97,6 +98,26 @@ def _apply_protocol_fingerprint(ops: Any, config: Any, proxy: str, metadata: dic
         country = str(_proxy_entry.infer_proxy_country(proxy) or "")
         ops.set_fingerprint_geo(country)
         return country
+
+
+def _report_fingerprint_consistency() -> None:
+    """Log any cross-layer contradiction in the account's protocol fingerprint.
+
+    Diagnostic only, never fatal: a cosmetic mismatch must not cost a mailbox.
+    The checks live in :func:`sms_tool.auth_headers.validate_protocol_fingerprint`
+    so the browser lane and the tests assert the same contract.
+    """
+    try:
+        issues = validate_protocol_fingerprint(sentinel_fingerprint())
+    except (ImportError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        _LOGGER.debug("[Fingerprint] consistency check skipped (%s)", type(exc).__name__)
+        return
+    if issues:
+        _emit(
+            _LOGGER,
+            "  [Fingerprint] internal contradiction(s): %s",
+            "; ".join(issues[:4]),
+        )
 
 
 def device_identity_seeded_by_email_enabled(workflow: RegistrationWorkflow) -> bool:
@@ -245,6 +266,13 @@ def prepare_identity(workflow: RegistrationWorkflow) -> None:
         r._import_sentinel_cookies(s.session, s.sentinel_data, s.device_id)
     r.set_fingerprint_device(s.device_id)
     workflow.fingerprint_country = _apply_protocol_fingerprint(r, workflow.config, s.proxy, workflow.proxy_metadata)
+    # The session was created before the pooled profile was picked, so its TLS
+    # override still describes the *previous* thread state.  Re-install it now
+    # that both inputs (device seed, profile family) are final: a Firefox order
+    # on a Safari profile would be a cross-family ClientHello.
+    tls_override = _apply_tls_fingerprint(s.session, workflow.config)
+    _emit(_LOGGER, "  [TLS] %s", tls_override.summary())
+    _report_fingerprint_consistency()
     s.base_headers = r.openai_auth_headers(
         s.device_id,
         accept="application/json",

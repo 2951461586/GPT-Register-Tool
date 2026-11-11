@@ -455,6 +455,7 @@ def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -
                             "registration.fingerprint_pool.allowed_countries entries must be "
                             "two-letter ISO country codes: " + ", ".join(invalid_countries)
                         )
+        _validate_tls_fingerprint_block(registration, errors)
 
     email = config.get("email_registration", {})
     if email is not None and not isinstance(email, Mapping):
@@ -507,6 +508,25 @@ def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -
         errors.append(f"unknown workflow: {workflow}")
     if errors:
         raise ConfigError("; ".join(errors))
+
+
+def _validate_tls_fingerprint_block(registration: Mapping[str, Any], errors: list[str]) -> None:
+    """Validate ``registration.tls_fingerprint`` (``sms_tool/tls_fingerprint.py``).
+
+    Validated because a mistyped key would silently leave every account on the
+    shared preset JA3, which is the exact defect the module removes.
+    """
+    section = registration.get("tls_fingerprint", {})
+    if section is not None and not isinstance(section, Mapping):
+        errors.append("registration.tls_fingerprint must be an object")
+        return
+    if not isinstance(section, Mapping):
+        return
+    for key in ("enabled", "rotate_extensions"):
+        if key in section and not isinstance(section.get(key), bool):
+            errors.append(f"registration.tls_fingerprint.{key} must be a boolean")
+    if "seed_salt" in section and not isinstance(section.get("seed_salt"), str):
+        errors.append("registration.tls_fingerprint.seed_salt must be a string")
 
 
 def _validate_allow_lane_overlap(proxy: Mapping[str, Any], errors: list[str]) -> None:

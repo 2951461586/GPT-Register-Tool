@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING, Any, Callable
 from curl_cffi import requests as curl_requests
 
 from . import checkpoint as registration_checkpoint
+from ..tls_fingerprint import apply_to_session as _apply_tls_fingerprint
 from ..desktop_ipc import emit_event
 from ..kernel.failure_registry import PASSWORDLESS_SIGNUP_CODE, is_passwordless_signup_mismatch
 from ..operator_output import emit as _emit
@@ -355,6 +356,7 @@ def fetch_auth_session(
     s.login_session = curl_requests.Session()
     if s.proxy:
         s.login_session.proxies = {"http": s.proxy, "https": s.proxy}
+    _apply_tls_fingerprint(s.login_session)
     workflow._install_edge_challenge_hook(s.login_session)
     r._set_oai_did_cookie(s.login_session, s.device_id)
     try:

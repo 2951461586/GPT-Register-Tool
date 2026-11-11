@@ -20,6 +20,7 @@ from urllib.parse import urlsplit
 
 from curl_cffi import requests as curl_requests
 
+from ..tls_fingerprint import apply_to_session as _apply_tls_fingerprint
 from .flags import registration_flag
 
 # ``registration_flag`` is re-exported, not re-implemented: it moved to
@@ -143,7 +144,6 @@ def _new_registration_session(proxy: str = "") -> Any:
 
     ``trust_env`` is set to ``False`` as a **defensive** measure, and it is
     deliberately described that way since the 2026-10-24 re-check:
-
     * ``curl_cffi==0.16.0`` only stores the flag (``requests/session.py``
       assigns ``self.trust_env``) and **no code in the package reads it**. The
       explicit ``session.proxies`` map is consumed by
@@ -156,11 +156,17 @@ def _new_registration_session(proxy: str = "") -> Any:
 
     With no proxy configured the default is left alone, so an env-provided proxy
     still applies.
+
+    The per-account TLS ClientHello override is installed here as well, so every
+    caller of this factory (the stage runner, the resume path, ``probe``) gets
+    the same JA3 rather than only the ones that remember to ask for it.  See
+    :mod:`sms_tool.tls_fingerprint`.
     """
     session = curl_requests.Session()
     if proxy:
         session.proxies = {"http": proxy, "https": proxy}
         session.trust_env = False
+    _apply_tls_fingerprint(session)
     return session
 
 

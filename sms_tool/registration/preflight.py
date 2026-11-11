@@ -15,6 +15,7 @@ from ..auth_headers import (
 )
 from ..config import CFG
 from .. import endpoints
+from ..tls_fingerprint import apply_to_session as _apply_tls_fingerprint
 from ..http_client import request_with_retry
 from ..kernel.transport import TRANSPORT_ERRORS
 from ..accounts.account_liveness import CODEX_USAGE_URL
@@ -83,6 +84,7 @@ def _with_proxy_scheme(proxy: str, scheme: str) -> str:
 
 def _proxy_scheme_reachable(candidate: str, url: str) -> bool:
     session = curl_requests.Session()
+    _apply_tls_fingerprint(session)
     try:
         session.trust_env = False
     except Exception:  # broad-except: compat
@@ -178,6 +180,10 @@ def registration_network_preflight(proxy=None, *, proxy_attempts: int = 2):
     last_error = None
     for attempt in range(max(1, min(int(proxy_attempts or 1), 3))):
         session = curl_requests.Session()
+        # The preflight is the first thing the auth edge sees; it must present the
+        # same ClientHello as the run that follows, otherwise a pass here means
+        # nothing about the account's own session.
+        _apply_tls_fingerprint(session, CFG)
         try:
             session.trust_env = False
         except Exception:  # broad-except: compat

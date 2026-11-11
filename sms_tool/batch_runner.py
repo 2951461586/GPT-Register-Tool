@@ -33,12 +33,28 @@ from .storage import (
 )
 
 
+#: What opt-in dynamic generation did for the batch currently being selected.
+#:
+#: Batch-scoped on purpose: ``select_registration_proxy_pool`` runs once, before
+#: any worker starts, so a module-level value cannot race.  It exists instead of
+#: a parameter because both call sites live in functions frozen by
+#: ``scripts/function_length_ratchet.py`` (552/233 lines) and a new parameter adds
+#: lines to each of them.
+_DYNAMIC_GENERATION_STATUS: dict[str, Any] = {"used": False, "count": 0, "reason": "disabled"}
+
+
 class RegistrationProxyPool(list):
     """Selected registration proxies plus sanitized preflight observations."""
 
     def __init__(self, values=(), *, actual_countries=None):
         super().__init__(values)
         self.actual_countries = dict(actual_countries or {})
+        #: What opt-in dynamic generation did for this batch
+        #: (``{"used": bool, "count": int, "reason": str}``).  Declared here so the
+        #: attribute is part of the type, and defaulted to "disabled" so a caller
+        #: that builds a pool directly (``select_registration_proxy_base``,
+        #: tests) still reads a complete status instead of an AttributeError.
+        self.dynamic_generation: dict[str, Any] = {"used": False, "count": 0, "reason": "disabled"}
 
 
 def _proxy_endpoint_group(proxy: str) -> str:
@@ -82,18 +98,49 @@ def select_registration_proxy_pool(proxy_pool, fallback=None):
     # Opt-in dynamic generation: rotate a provider session, screen it and require
     # the configured ASN before the batch uses it. Off by default; a generation
     # failure falls back to the static pool instead of consuming mailboxes.
+    #
+    # The outcome is attached to the returned pool so the per-account audit record
+    # can say whether generation ran: a switch that is on but generated nothing
+    # used to be indistinguishable from a switch that is off (both printed one
+    # line and both fell back), which is the one thing an operator cannot see
+    # from a finished batch.
+    generation_status: dict[str, Any] = {"used": False, "count": 0, "reason": "disabled"}
     try:
-        from .proxy.dynamic import DynamicProxyFactory
+        from .proxy.dynamic import generate_pool_report
 
-        factory = DynamicProxyFactory.from_config(CFG)
-        if factory is not None:
-            generated = factory.generate(count=len(candidates) or None)
-            if generated:
-                safe_print(f"[*] Dynamic proxy generation: {len(generated)} screened exit(s)")
-                return RegistrationProxyPool(generated)
-            safe_print("[!] Dynamic proxy generation produced no eligible exit; using the static pool")
+        outcome = generate_pool_report(CFG)
+        generation_status = outcome.status.to_dict()
+        if outcome:
+            safe_print(f"[*] Dynamic proxy generation: {len(outcome)} screened exit(s)")
+            generated_pool = RegistrationProxyPool(outcome)
+            generated_pool.dynamic_generation = generation_status
+            _set_dynamic_generation_status(generation_status)
+            return generated_pool
+        safe_print(
+            "[!] Dynamic proxy generation produced no eligible exit "
+            f"({generation_status.get('reason') or 'no_eligible_exit'}); using the static pool"
+        )
     except Exception as exc:
+        generation_status = {"used": False, "count": 0, "reason": f"error:{type(exc).__name__}"}
         safe_print(f"[!] Dynamic proxy generation unavailable ({type(exc).__name__}); using the static pool")
+    selected = _select_static_registration_pool(candidates)
+    selected.dynamic_generation = generation_status
+    _set_dynamic_generation_status(generation_status)
+    return selected
+
+
+def _set_dynamic_generation_status(status: Mapping[str, Any]) -> None:
+    """Publish the batch's generation status for ``_registration_proxy_metadata``."""
+    global _DYNAMIC_GENERATION_STATUS
+    _DYNAMIC_GENERATION_STATUS = {
+        "used": bool(status.get("used")),
+        "count": int(status.get("count") or 0),
+        "reason": str(status.get("reason") or "")[:60],
+    }
+
+
+def _select_static_registration_pool(candidates: list[str]) -> RegistrationProxyPool:
+    """Health-rank and preflight-probe the configured pool (the pre-existing path)."""
     if len(candidates) <= 1:
         return RegistrationProxyPool(candidates)
 
@@ -189,6 +236,10 @@ def _registration_proxy_metadata(
         "actual_country": str(actual_country or "").strip().upper(),
         "scheme": str(parsed.scheme or "").strip().lower(),
         "rotation_generation": 0,
+        # Batch-scoped, set once before the workers start (see
+        # ``select_registration_proxy_pool``); ``safe_proxy_audit`` re-sanitizes it
+        # to three primitives so no proxy string can reach the audit record.
+        "dynamic_generation": dict(_DYNAMIC_GENERATION_STATUS),
     }
 
 

@@ -41,6 +41,24 @@ class ProxyGenerationError(RuntimeError):
 
 
 @dataclass(frozen=True)
+class DynamicGeneration:
+    """What :meth:`DynamicProxyFactory.generate_with_status` actually did.
+
+    The silent ``[]`` return made "the switch is on but nothing was generated"
+    indistinguishable from "the switch is off": both printed nothing and both
+    fell back to the static pool.  The batch report now carries these three
+    fields so a run can be told apart without reading the log.
+    """
+
+    used: bool = False
+    count: int = 0
+    reason: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"used": bool(self.used), "count": int(self.count), "reason": str(self.reason or "")}
+
+
+@dataclass(frozen=True)
 class DynamicProxyConfig:
     base_proxy: str
     country: str
@@ -164,16 +182,50 @@ class DynamicProxyFactory:
 
     def generate(self, count: int | None = None) -> list[str]:
         """Generate up to ``count`` distinct eligible proxies (stops on exhaustion)."""
+        return list(self.generate_with_status(count))
+
+    def generate_with_status(self, count: int | None = None) -> "GenerationOutcome":
+        """Like :meth:`generate`, but also reports *why* it came back short."""
         wanted = max(1, _as_int(count, self.config.count))
         generated: list[str] = []
+        reason = ""
         for _ in range(wanted):
             try:
                 proxy = self.next_proxy()
-            except ProxyGenerationError:
+            except ProxyGenerationError as exc:
+                reason = _reason_token(str(exc))
                 break
             if proxy not in generated:
                 generated.append(proxy)
-        return generated
+        if not generated:
+            reason = reason or "no_eligible_exit"
+        return GenerationOutcome(generated, reason)
+
+
+class GenerationOutcome(list):
+    """The generated proxies plus the status the caller reports.
+
+    Subclasses ``list`` so every existing caller (``generate`` returned a list,
+    and ``if generated:`` / ``len(generated)`` are the only uses) keeps working
+    unchanged while the batch can read ``outcome.status``.
+    """
+
+    def __init__(self, values: list[str], reason: str = "") -> None:
+        super().__init__(values)
+        self.status = DynamicGeneration(used=bool(values), count=len(values), reason=reason)
+
+
+def _reason_token(text: str) -> str:
+    """Bound a generation failure message to one log/JSON token.
+
+    The message carries the last screening reason code (``asn_mismatch``,
+    ``datacenter_detected`` …); it never carries a proxy URL, but the bound keeps
+    a future change from smuggling one into the audit record.
+    """
+    cleaned = " ".join(str(text or "").split())
+    if ": " in cleaned:
+        cleaned = cleaned.rsplit(": ", 1)[-1]
+    return cleaned[:60]
 
 
 def generate_pool(
@@ -183,25 +235,38 @@ def generate_pool(
     rotate: Callable[[str, str], str] | None = None,
 ) -> list[str]:
     """Convenience entry point: ``[]`` when the feature is off or generation fails."""
+    return list(generate_pool_report(config, screen=screen, rotate=rotate))
+
+
+def generate_pool_report(
+    config: Mapping[str, Any] | None = None,
+    *,
+    screen: Callable[..., ScreeningSample] | None = None,
+    rotate: Callable[[str, str], str] | None = None,
+) -> GenerationOutcome:
+    """Same as :func:`generate_pool`, carrying the status for the batch report."""
     parsed = DynamicProxyConfig.from_config(config)
     if parsed is None:
-        return []
+        return GenerationOutcome([], "disabled")
     factory = DynamicProxyFactory(
         parsed,
         screen=screen or screen_proxy,
         rotate=rotate or rotate_session,
     )
     try:
-        return factory.generate()
-    except ProxyGenerationError:
-        return []
+        return factory.generate_with_status()
+    except ProxyGenerationError as exc:
+        return GenerationOutcome([], _reason_token(str(exc)))
 
 
 __all__ = [
     "DEFAULT_MAX_ATTEMPTS",
     "DEFAULT_QUALITY_MIN",
+    "DynamicGeneration",
     "DynamicProxyConfig",
     "DynamicProxyFactory",
+    "GenerationOutcome",
     "ProxyGenerationError",
     "generate_pool",
+    "generate_pool_report",
 ]

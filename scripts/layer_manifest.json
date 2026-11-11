@@ -68,6 +68,7 @@
     "payment/qualification_states": 5
   },
   "root_modules": {
+    "__main__.py": 2,
     "account_creation.py": 3,
     "account_seed.py": 3,
     "agent_identity.py": 3,
@@ -160,7 +161,6 @@
     "proxy/registry.py": 5,
     "proxy/routing.py": 5,
     "regional_payment_adapter.py": 4,
-    "registration/orchestrator.py": 3,
     "registration/account_stages.py": 3,
     "registration/cancel.py": 3,
     "registration/checkpoint.py": 3,
@@ -171,6 +171,7 @@
     "registration/funnel.py": 3,
     "registration/handlers.py": 3,
     "registration/operations.py": 3,
+    "registration/orchestrator.py": 3,
     "registration/otp_stages.py": 3,
     "registration/outcome.py": 3,
     "registration/persistence.py": 3,
@@ -201,12 +202,12 @@
     "storage.py": 4,
     "sub2api_import.py": 3,
     "telemetry.py": 5,
+    "tls_fingerprint.py": 5,
     "token_telemetry.py": 5,
     "utils.py": 5,
     "wallet_provider.py": 4,
     "wallet_transport.py": 4,
-    "workspace_scan.py": 3,
-    "__main__.py": 2
+    "workspace_scan.py": 3
   },
   "allow": {
     "sms_tool.paypal -> sms_tool.paypal.orchestrator": {

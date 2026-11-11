@@ -10,10 +10,11 @@ import threading
 import time
 import uuid
 from collections import Counter
+from collections.abc import Mapping
 from importlib.metadata import PackageNotFoundError, version as package_version
 from urllib.parse import urlparse
 
-from .geo.profiles import MARKET_PROFILES
+from .geo.profiles import MARKET_PROFILES, WINDOWS_TIMEZONE_BY_IANA
 
 
 AUTH_IMPERSONATE = "firefox144"
@@ -381,6 +382,14 @@ def set_fingerprint_geo(
 # always reports the same device, but different accounts differ. Values stay
 # within realistic Windows-desktop Chrome ranges (deviceMemory is capped at 8 as
 # Chrome does; touch points stay 0 for a desktop profile).
+#
+# P0-2 (2026-11-11): the tables are now **per platform class**. Before this,
+# every profile — including `safari18_0_ios` — drew from the Windows desktop
+# list, so an iPhone UA reported `screen=2560x1080, dpr=1.25, maxTouchPoints=5`
+# and a macOS Safari reported a Windows ultrawide screen. That contradiction
+# travels inside the Sentinel proof (`p[0]` is width+height; the profile block
+# carries platform + touch points), so it was checkable server-side for free.
+# Measured: 9.4 % of pool draws were iOS and 9.7 % macOS before the fix.
 _SCREEN_CHOICES = (
     "1920x1080",
     "1536x864",
@@ -397,6 +406,69 @@ _DPR_CHOICES = (1.0, 1.0, 1.25, 1.5)
 _CPU_CHOICES = (4, 6, 8, 8, 12, 16)
 _MEM_CHOICES = (4, 8, 8)
 _HEAP_CHOICES = (2172649472, 3221225472, 4294705152, 4395630592)
+
+#: macOS Safari/Chrome: Retina panels, DPR 2.0 dominates, no 1080p ultrawide.
+_SCREEN_CHOICES_MACOS = (
+    "1440x900",
+    "1512x982",
+    "1680x1050",
+    "1728x1117",
+    "1920x1200",
+    "2560x1440",
+    "2560x1600",
+)
+_DPR_CHOICES_MACOS = (2.0, 2.0, 1.0)
+_CPU_CHOICES_MACOS = (8, 10, 12)
+_MEM_CHOICES_MACOS = (8, 8, 16)
+
+#: iPhone Safari: CSS-pixel viewports of the models still in the wild.
+_SCREEN_CHOICES_IOS = (
+    "390x844",
+    "393x852",
+    "428x926",
+    "430x932",
+    "375x812",
+    "414x896",
+)
+_DPR_CHOICES_IOS = (3.0, 3.0, 2.0)
+_CPU_CHOICES_IOS = (4, 6)
+_MEM_CHOICES_IOS = (4, 4, 8)
+
+_SCREEN_CHOICES_BY_PLATFORM = {
+    "windows": _SCREEN_CHOICES,
+    "macos": _SCREEN_CHOICES_MACOS,
+    "ios": _SCREEN_CHOICES_IOS,
+    # No Android profile ships today; the desktop list is the least surprising
+    # placeholder and `validate_protocol_fingerprint` flags the mismatch.
+    "android": _SCREEN_CHOICES_IOS,
+}
+_DPR_CHOICES_BY_PLATFORM = {
+    "windows": _DPR_CHOICES,
+    "macos": _DPR_CHOICES_MACOS,
+    "ios": _DPR_CHOICES_IOS,
+    "android": _DPR_CHOICES_IOS,
+}
+_CPU_CHOICES_BY_PLATFORM = {
+    "windows": _CPU_CHOICES,
+    "macos": _CPU_CHOICES_MACOS,
+    "ios": _CPU_CHOICES_IOS,
+    "android": _CPU_CHOICES_IOS,
+}
+_MEM_CHOICES_BY_PLATFORM = {
+    "windows": _MEM_CHOICES,
+    "macos": _MEM_CHOICES_MACOS,
+    "ios": _MEM_CHOICES_IOS,
+    "android": _MEM_CHOICES_IOS,
+}
+
+#: ``performance.memory`` is Chromium-only; the vendored runner gates it by
+#: family, so this value is inert for Firefox/Safari profiles.
+_HEAP_CHOICES_BY_PLATFORM = {
+    "windows": _HEAP_CHOICES,
+    "macos": (2172649472, 3221225472, 4294705152),
+    "ios": (1073741824, 2147483648),
+    "android": (1073741824, 2147483648),
+}
 
 
 def set_fingerprint_device(device_id: str = "") -> str:
@@ -422,30 +494,37 @@ def _device_seed() -> str:
     return ""
 
 
-def _device_profile(seed: str) -> dict[str, object]:
+def _device_profile(seed: str, platform_class: str = "windows") -> dict[str, object]:
     """Deterministically derive a device profile from ``seed`` (device id).
 
-    The profile is memoized per seed on the thread. A real browsing context has a
-    single ``performance.timeOrigin``; recomputing it on every header build would
-    both drift the value per request and call ``time.time`` repeatedly, so the
-    first build anchors it and later builds for the same account reuse it.
+    ``platform_class`` comes from :func:`_platform_class` and selects the screen /
+    DPR / CPU / memory tables, so an iOS or macOS profile can no longer report a
+    Windows desktop measurement.  The profile is memoized per ``(seed, class)`` on
+    the thread — a real browsing context has a single ``performance.timeOrigin``,
+    and recomputing it on every header build would both drift the value per
+    request and call ``time.time`` repeatedly, so the first build anchors it.
     """
+    cls = str(platform_class or "windows").strip().lower()
+    if cls not in _SCREEN_CHOICES_BY_PLATFORM:
+        cls = "windows"
     cache = getattr(_AUTH_FINGERPRINT_LOCAL, "device_profiles", None)
     if not isinstance(cache, dict):
         cache = {}
         _AUTH_FINGERPRINT_LOCAL.device_profiles = cache
-    cached = cache.get(seed)
+    cache_key = f"{seed}|{cls}"
+    cached = cache.get(cache_key)
     if isinstance(cached, dict):
         return cached
     digest = hashlib.sha256(seed.encode("utf-8")).digest() if seed else b"\x00" * 8
     rng = random.Random(int.from_bytes(digest[:8], "big"))
-    screen = rng.choice(_SCREEN_CHOICES)
+    screen = rng.choice(_SCREEN_CHOICES_BY_PLATFORM[cls])
     profile = {
         "screen": screen,
-        "device_pixel_ratio": rng.choice(_DPR_CHOICES),
-        "hardware_concurrency": rng.choice(_CPU_CHOICES),
-        "device_memory": rng.choice(_MEM_CHOICES),
-        "js_heap_size_limit": rng.choice(_HEAP_CHOICES),
+        "device_pixel_ratio": rng.choice(_DPR_CHOICES_BY_PLATFORM[cls]),
+        "hardware_concurrency": rng.choice(_CPU_CHOICES_BY_PLATFORM[cls]),
+        "device_memory": rng.choice(_MEM_CHOICES_BY_PLATFORM[cls]),
+        "js_heap_size_limit": rng.choice(_HEAP_CHOICES_BY_PLATFORM[cls]),
+        "platform_class": cls,
     }
     # performance.timeOrigin is "when this page/context was created": a static
     # 2024 constant across every account is itself a tell, so anchor it to now
@@ -455,7 +534,7 @@ def _device_profile(seed: str) -> dict[str, object]:
     # performance.now() is ms elapsed since time_origin; a shared 12345.67 across
     # every account is another constant tell, so jitter it per account too.
     profile["performance_now"] = round(rng.uniform(500.0, 60_000.0), 3)
-    cache[seed] = profile
+    cache[cache_key] = profile
     return profile
 
 
@@ -707,6 +786,22 @@ def _full_version_list(sec_ch_ua: str) -> str:
     return ", ".join(parts)
 
 
+def _timezone_display_name(tz_name: str) -> str:
+    """OS-style timezone label for a IANA id (``Asia/Tokyo`` → ``Japan Standard Time``).
+
+    Single authority: :data:`sms_tool.geo.profiles.WINDOWS_TIMEZONE_BY_IANA`, the
+    same table the browser path uses for
+    ``Intl.DateTimeFormat().resolvedOptions().timeZoneName``.  An unknown zone
+    degrades to the IANA id, which is what every profile did before this helper
+    existed — never to an empty string, because a missing label is more
+    conspicuous than a slightly unusual one.
+    """
+    value = str(tz_name or "").strip()
+    if not value:
+        return ""
+    return str(WINDOWS_TIMEZONE_BY_IANA.get(value) or value)
+
+
 def sentinel_fingerprint() -> dict[str, object]:
     """Return the browser environment shared by auth headers and Sentinel SDK."""
     fingerprint = current_auth_fingerprint()
@@ -715,7 +810,8 @@ def sentinel_fingerprint() -> dict[str, object]:
     geo = getattr(_AUTH_FINGERPRINT_LOCAL, "geo_profile", None) or set_fingerprint_geo("")
     session_id = str(getattr(_AUTH_FINGERPRINT_LOCAL, "session_id", "") or uuid.uuid4())
     _AUTH_FINGERPRINT_LOCAL.session_id = session_id
-    device = _device_profile(_device_seed() or session_id)
+    platform_class = _platform_class(impersonate)
+    device = _device_profile(_device_seed() or session_id, platform_class)
     is_chrome = family == "chrome"
     # Platform-class constants come from the family table, not a hardcoded
     # "Win32". This keeps the UA (which names the OS) and the reported platform
@@ -733,6 +829,14 @@ def sentinel_fingerprint() -> dict[str, object]:
         "max_touch_points": hw["max_touch_points"],
         "device_pixel_ratio": device["device_pixel_ratio"],
         "timezone": geo["timezone"],
+        # ``Intl.DateTimeFormat().resolvedOptions().timeZoneName`` is an OS-style
+        # name ("Japan Standard Time"), never the IANA id.  The protocol path
+        # never set it, so ``sentinel/runner.py`` fell back to the IANA string —
+        # and ``_requirements_token`` formatted ``%Z`` instead, i.e. the two
+        # halves of one registration disagreed ("(Asia/Tokyo)" vs "(JST)") and
+        # neither matched a real browser.  One table, shared with the browser
+        # lane (`geo.profiles.WINDOWS_TIMEZONE_BY_IANA`).
+        "timezone_name": _timezone_display_name(geo["timezone"]),
         # The Sentinel PoW payload carries ``timezoneOffsetMinutes`` next to the
         # declared IANA zone (``sentinel/runner.py``).  The protocol profile
         # never set it, so every registration sent ``0`` — a UTC offset on a
@@ -791,6 +895,106 @@ def _extra_header_value(extra: dict | None, name: str) -> str:
         if str(key).lower() == target:
             return str(value or "").strip()
     return ""
+
+
+#: Plausible screen bounds per platform class.  Deliberately wide: this is a
+#: contradiction detector, not a device catalog.
+_SCREEN_BOUNDS_BY_PLATFORM = {
+    "windows": ((1024, 5120), (600, 2880)),
+    "macos": ((1280, 3840), (720, 2400)),
+    "ios": ((320, 500), (480, 1000)),
+    "android": ((320, 520), (480, 1000)),
+}
+
+
+def _validate_platform_block(fingerprint: Mapping[str, object], platform_class: str) -> list[str]:
+    """Platform string and touch points must agree with the profile's OS."""
+    issues: list[str] = []
+    platform = str(fingerprint.get("navigator_platform") or "")
+    expected = {"windows": "Win32", "macos": "MacIntel", "ios": "iPhone"}.get(platform_class, "")
+    if expected and platform != expected:
+        issues.append(f"navigator_platform {platform!r} does not match {platform_class!r} profile")
+    try:
+        touch = int(str(fingerprint.get("max_touch_points") or 0))
+    except (TypeError, ValueError):
+        return issues + ["max_touch_points must be an integer"]
+    if platform_class == "ios" and touch <= 0:
+        issues.append("iOS profile reports max_touch_points=0")
+    elif platform_class in {"windows", "macos"} and touch != 0:
+        issues.append(f"desktop profile reports max_touch_points={touch}")
+    return issues
+
+
+def _validate_screen_block(fingerprint: Mapping[str, object], platform_class: str) -> list[str]:
+    """Screen geometry and DPR must be plausible *for this platform*."""
+    issues: list[str] = []
+    screen = str(fingerprint.get("screen") or "")
+    width_text, _, height_text = screen.partition("x")
+    try:
+        width, height = int(width_text), int(height_text)
+    except (TypeError, ValueError):
+        issues.append(f"screen {screen!r} is not WxH")
+    else:
+        bounds = _SCREEN_BOUNDS_BY_PLATFORM.get(platform_class)
+        if bounds is not None:
+            (width_low, width_high), (height_low, height_high) = bounds
+            if not width_low <= width <= width_high or not height_low <= height <= height_high:
+                issues.append(f"screen {screen} is implausible for a {platform_class} profile")
+    try:
+        dpr = float(str(fingerprint.get("device_pixel_ratio") or 0))
+    except (TypeError, ValueError):
+        dpr = 0.0
+    if dpr <= 0:
+        issues.append("device_pixel_ratio must be positive")
+    elif platform_class == "ios" and dpr < 2.0:
+        issues.append(f"iOS profile reports device_pixel_ratio={dpr}")
+    return issues
+
+
+def _validate_locale_block(fingerprint: Mapping[str, object]) -> list[str]:
+    """Locale, Accept-Language and clock must describe one place."""
+    issues: list[str] = []
+    lang = str(fingerprint.get("lang") or "").strip()
+    lang_full = str(fingerprint.get("lang_full") or "").strip()
+    if not lang:
+        issues.append("lang must not be blank")
+    elif lang_full and not lang_full.lower().startswith(lang.lower()):
+        issues.append(f"lang_full {lang_full!r} does not start with lang {lang!r}")
+    timezone = str(fingerprint.get("timezone") or "").strip()
+    if not timezone:
+        issues.append("timezone must not be blank")
+    elif "/" not in timezone and timezone.upper() != "UTC":
+        issues.append(f"timezone {timezone!r} is not an IANA name")
+    try:
+        offset = int(str(fingerprint.get("timezone_offset_minutes") or 0))
+    except (TypeError, ValueError):
+        offset = 0
+    if not -720 <= offset <= 840:
+        issues.append(f"timezone_offset_minutes={offset} is out of range")
+    return issues
+
+
+def validate_protocol_fingerprint(fingerprint: Mapping[str, object]) -> list[str]:
+    """Return the internal contradictions of a protocol fingerprint (empty = ok).
+
+    The protocol twin of ``browser_fingerprint_pool.validate_browser_profile``:
+    it checks the invariants that cross the layers — platform vs touch points,
+    platform vs screen/DPR, locale vs Accept-Language, zone vs offset.  The
+    reference implementation (``sentinel-rs``) enforces the same set in
+    ``DeviceFingerprint`` / ``validate_fingerprint``, because each one is a value
+    the server receives in the Sentinel proof and can check for free.
+
+    Diagnostic only: callers log the result and never abort.  A hard failure here
+    would turn a cosmetic mismatch into a lost mailbox.
+    """
+    if not isinstance(fingerprint, Mapping):
+        return [f"fingerprint must be a mapping, got {type(fingerprint).__name__}"]
+    platform_class = _platform_class(str(fingerprint.get("impersonate") or ""))
+    return [
+        *_validate_platform_block(fingerprint, platform_class),
+        *_validate_screen_block(fingerprint, platform_class),
+        *_validate_locale_block(fingerprint),
+    ]
 
 
 def openai_auth_headers(

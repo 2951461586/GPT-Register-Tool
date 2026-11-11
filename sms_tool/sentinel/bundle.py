@@ -14,7 +14,14 @@ RUNNER_PATH = RUNTIME_DIR / "sentinel-runner.js"
 # Digests are computed over newline-normalised bytes (see ``_digest``), so the
 # pinned values below are stable regardless of the working tree's line endings.
 SDK_SHA256 = "49d0284bf3eea8a59ebcad0e6b5dd8a53edd4c72606f15bbf51ebe5610a88efd"
-RUNNER_SHA256 = "afb15ecfd0c40490fd8e26913a8e61b27e615464235954afdddf087264e7e31f"
+RUNNER_SHA256 = "bd59abf8e9829c59d82c8bf34191d2cff313f11850140dca55d7ad4a3cde1ea6"
+# ``sentinel-runner.js`` carries one local patch (2026-11-11): the Chromium-only
+# ``performance.memory`` object is no longer exposed on Gecko/WebKit profiles
+# (see THIRD_PARTY_NOTICES.md).  The digest below is the patched file, so an
+# upstream re-vendor must re-apply the patch *and* update this constant; the
+# ``sentinel_runtime_hash_mismatch`` guard is what turns a silent drift into a
+# loud failure.
+#
 # Must name the build ``runtime/sdk.js`` was copied from: the version feeds the
 # frame URL, the ``Referer`` and ``p[5]``, and the browser derives all three from
 # the same script.  2026-10-12: bumped from 20260219f9f6 to the build the user's

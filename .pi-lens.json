@@ -21,6 +21,7 @@
   },
   "ignore": [
     "sms_tool/upi_link/_vendor/**",
+    "sms_tool/sentinel/runtime/**",
     "scripts/**",
     "dist/**",
     "runtime/**",

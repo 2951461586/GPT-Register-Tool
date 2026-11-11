@@ -111,18 +111,53 @@ def test_generate_pool_returns_empty_when_the_feature_is_off_or_generation_fails
 
 
 def test_select_registration_proxy_pool_uses_generated_exits(monkeypatch):
-    class FakeFactory:
-        @classmethod
-        def from_config(cls, config):
-            return cls()
-
-        def generate(self, count=None):
-            return ["http://dynamic:1"]
-
     import sms_tool.proxy.dynamic as dynamic
 
-    monkeypatch.setattr(dynamic, "DynamicProxyFactory", FakeFactory)
+    monkeypatch.setattr(
+        dynamic,
+        "generate_pool_report",
+        lambda config=None, **kwargs: dynamic.GenerationOutcome(["http://dynamic:1"]),
+    )
     from sms_tool.batch_runner import select_registration_proxy_pool
 
     selected = select_registration_proxy_pool(["http://static:1"])
     assert list(selected) == ["http://dynamic:1"]
+    assert selected.dynamic_generation == {"used": True, "count": 1, "reason": ""}
+
+
+def test_select_registration_proxy_pool_records_why_generation_fell_back(monkeypatch):
+    """A switch that is on but generated nothing must be visible in the audit.
+
+    Before 2026-11-11 both outcomes printed one line and returned the static pool,
+    so a finished batch could not tell "generation ran and every candidate was
+    ineligible" from "generation is off".
+    """
+    import sms_tool.proxy.dynamic as dynamic
+
+    monkeypatch.setattr(
+        dynamic,
+        "generate_pool_report",
+        lambda config=None, **kwargs: dynamic.GenerationOutcome([], "asn_mismatch"),
+    )
+    from sms_tool.batch_runner import select_registration_proxy_pool
+
+    selected = select_registration_proxy_pool(["http://static:1"])
+    assert list(selected) == ["http://static:1"]
+    assert selected.dynamic_generation == {"used": False, "count": 0, "reason": "asn_mismatch"}
+
+
+def test_generate_pool_report_carries_the_reason():
+    from sms_tool.proxy.dynamic import generate_pool_report
+
+    disabled = generate_pool_report({})
+    assert list(disabled) == []
+    assert disabled.status.to_dict() == {"used": False, "count": 0, "reason": "disabled"}
+
+    failed = generate_pool_report(
+        _config(),
+        screen=lambda proxy, **kwargs: _sample(proxy, eligible=False, reason="datacenter"),
+    )
+    assert list(failed) == []
+    assert failed.status.used is False
+    assert failed.status.reason  # the screening reason code, never a proxy URL
+    assert "http" not in failed.status.reason

@@ -573,8 +573,11 @@ class FamilyHardwareProfileTests(unittest.TestCase):
         self.assertEqual(fp["navigator_platform"], "MacIntel")
         self.assertEqual(fp["navigator_vendor"], "Apple Computer, Inc.")
         self.assertEqual(fp["sec_ch_ua_platform_version"], "14.5.0")
-        # The per-account device silhouette is still derived independently.
-        self.assertIn(fp["screen"], auth_headers._SCREEN_CHOICES)
+        # The per-account device silhouette is still derived independently — and
+        # since 2026-11-11 it is derived from the *platform's* table, so a macOS
+        # profile can no longer report a Windows ultrawide screen.
+        self.assertIn(fp["screen"], auth_headers._SCREEN_CHOICES_BY_PLATFORM["macos"])
+        self.assertIn(fp["device_pixel_ratio"], (1.0, 2.0))
 
 
 class FingerprintPoolVersionMatrixTests(unittest.TestCase):

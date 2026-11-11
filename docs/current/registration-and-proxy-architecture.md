@@ -70,10 +70,14 @@ class RegistrationDriver(str, Enum):
 
 `sms_tool/auth_headers.py` 是「每个账号看起来像同一台稳定设备」的事实来源。
 
-- **设备档案**：`AUTH_FINGERPRINT_PROFILES`（`auth_headers.py:41`）覆盖 Chrome 124–150、Firefox 133–147、Safari 17/18（含 iOS）的 UA / 平台 / 渲染器组合。
-- **确定性指纹**：`sentinel_fingerprint()`（`auth_headers.py:710`）按账号 `device_id` **确定性派生** screen / CPU / 内存 / `time_origin`，使得同一账号每次注册拿到一致指纹，不同账号彼此不关联（防关联）。
-- **鉴权头注入**：`openai_auth_headers()`（`auth_headers.py:796`）注入 `oai-device-id`、`oai-session-id`、`sec-ch-ua*`、`sec-ch-ua-platform`、`Datadog` trace 等；`family` 分为 `nextauth` / `auth` / `chatgpt` 三族，三族**共享**同一 DID、稳定的 session logging id、flow invocation id、UA、client hints、GeoIP 派生的 locale/timezone。
+- **设备档案**：`AUTH_FINGERPRINT_PROFILES`（`auth_headers.py:42`）覆盖 Chrome 124–150、Firefox 133–147、Safari 17/18（含 iOS）的 UA / 平台 / 渲染器组合。
+- **确定性指纹**：`sentinel_fingerprint()`（`auth_headers.py:805`）按账号 `device_id` **确定性派生** screen / CPU / 内存 / `time_origin`，使得同一账号每次注册拿到一致指纹，不同账号彼此不关联（防关联）。
+- **鉴权头注入**：`openai_auth_headers()`（`auth_headers.py:1000`）注入 `oai-device-id`、`oai-session-id`、`sec-ch-ua*`、`sec-ch-ua-platform`、`Datadog` trace 等；`family` 分为 `nextauth` / `auth` / `chatgpt` 三族，三族**共享**同一 DID、稳定的 session logging id、flow invocation id、UA、client hints、GeoIP 派生的 locale/timezone。
 - **一致性强约束**（见 `architecture.md` 的 *Registration Protocol Consistency*）：Sentinel QuickJS 消费**同一指纹**，为 `username_password_create` / `authorize_continue` / `oauth_create_account` 分别产出 token；token payload id、`oai-did` cookie、auth header **必须匹配**。提取失败**fail closed**——绝不使用纯 HTTP 的 PoW fallback。
+
+- **TLS ClientHello 每账号唯一化**（2026-11-11）：`sms_tool/tls_fingerprint.py` 按账号 device seed **确定性打乱** profile 自己那份扩展**顺序**（不改集合），经 `CurlOpt.TLS_EXTENSION_ORDER` 装到 session 上。此前 4 个 Firefox profile 共用同一个 `ja3_hash`（`6f7889b9…`），占指纹池 50% 权重；Chrome preset 本就逐握手打乱，Safari 的列表重排会被 BoringSSL 拒绝（`curl: (35) Invalid TLS extensions`），因此只有 Firefox 家族走这条覆盖。HTTP/2（Akamai）**故意不动**：preset 是 curl-impersonate native target，`extra_fp` 改不了它的 SETTINGS。配置：`registration.tls_fingerprint`；证据：`scripts/tls_fingerprint_probe.py`。
+- **平台化硬件档位 + 一致性校验**（2026-11-11）：`_device_profile(seed, platform_class)` 改为按平台类查表（Windows / macOS / iOS），缓存键含平台类，iOS 不再报 1920×1080 桌面屏；`auth_headers.validate_protocol_fingerprint()` 断言平台↔UA、触点↔平台、屏幕↔平台区间、locale↔Accept-Language、时区↔偏移，`identity_stages` 只记日志不中断。详见 [protocol-registration.md](protocol-registration.md) 的 *Device fingerprint consistency*。
+- **`timezoneName` 走 OS 标签**：Sentinel profile 带 `timezone_name`（`geo.profiles.WINDOWS_TIMEZONE_BY_IANA`，与浏览器 lane 同源），`_requirements_token` 也用同一标签，两个 token 生成器不再各说各话（`(JST)` vs `(Asia/Tokyo)`）。
 
 > 实战含义：调注册相关代码时，**不要**单独改某一处 `oai-*` 头或指纹，必须走 `auth_headers` 统一出口，否则 DID/Header/Cookie 三者错位会直接被风控。
 
@@ -200,6 +204,11 @@ Sentinel 不是纯 Python PoW，而是调用**真实 Node SDK**：
 | 协议支付 | 方法配置 `protocol_payments.methods.<method>.checkout_proxy_pool` / `approve_proxy_pool`（`config.json:650` 起） | **随用户选择的 checkout/approve 出口动态选择**，候选池形如 IPWO US/JP/GB | **不是固定 JP/US/GB 混用**（见 §6 池形态约束更正） |
 | 活体/推广/健康 | `operation_proxy_candidates(...)` / `select_operation_proxy(...)` | 显式输入 → 可选 registration affinity → operation pool → 文档化回退 | 候选来源随诊断记录；调用方不得自行重排 |
 
+`proxy.dynamic_generation`（默认关）开启时，`select_registration_proxy_pool()` 把生成结果记成
+`{"used", "count", "reason"}`：`reason` 取 `disabled` / `asn_mismatch` / `datacenter_detected` /
+`error:<Type>` 之一，随每次尝试的 `proxy_metadata` 落进 `result.proxy_audit.dynamic_generation`。
+在此之前「开关开了但一条也没生出来」和「开关没开」都只打一行日志、都回落静态池，跑完的批次看不出区别。
+
 ### 7.3 浏览器进程池：跨驱动共享
 
 全部 4 个浏览器驱动共享同一个**常驻进程池**（`browser_pool.py`），非每驱动各开各的：
@@ -229,8 +238,8 @@ Sentinel 不是纯 Python PoW，而是调用**真实 Node SDK**：
 
 注册真正开始前，先跑网络边界预检（在认领邮箱之前）：
 
-- `registration_network_preflight()`（`registration/preflight.py:143`）探测 chatgpt / auth / sentinel 边界，使用 `impersonate` 模拟。
-- `_resolve_proxy_scheme()`（`registration/preflight.py:109`）纠正被标错的 socks5↔http；并可用 `proxy_scheme_fallback=off` **钉死** scheme，避免运行时被自动回退到错误协议。
+- `registration_network_preflight()`（`registration/preflight.py:145`）探测 chatgpt / auth / sentinel 边界，使用 `impersonate` 模拟。
+- `_resolve_proxy_scheme()`（`registration/preflight.py:111`）纠正被标错的 socks5↔http；并可用 `proxy_scheme_fallback=off` **钉死** scheme，避免运行时被自动回退到错误协议。
 
 ---
 
@@ -257,9 +266,9 @@ WPF 桌面端（`SmsWorkbench/`）通过 `PythonBackendClient` 启动 `python -m
 | `BROWSER_REGISTRATION_DRIVERS` | `registration_drivers/base.py:95` | browser vs protocol 切分 |
 | `normalize_registration_driver` | `registration_drivers/base.py:104` | 归一化，默认 protocol |
 | `BrowserRegistrationError` | `registration_drivers/base.py:140` | 浏览器层错误封装 |
-| `AUTH_FINGERPRINT_PROFILES` | `auth_headers.py:41` | Chrome 124–150 / Firefox / Safari 设备档案 |
-| `sentinel_fingerprint` | `auth_headers.py:710` | 确定性指纹派生 |
-| `openai_auth_headers` | `auth_headers.py:796` | `oai-*` 头注入 |
+| `AUTH_FINGERPRINT_PROFILES` | `auth_headers.py:42` | Chrome 124–150 / Firefox / Safari 设备档案 |
+| `sentinel_fingerprint` | `auth_headers.py:805` | 确定性指纹派生 |
+| `openai_auth_headers` | `auth_headers.py:1000` | `oai-*` 头注入 |
 | `OPENAI_SENTINEL_BACKEND` | `sentinel/client.py:59`（默认 `node_runner`） | Sentinel 后端选择 |
 | `_get_cached_sentinel` / `_save_sentinel_cache` | `sentinel_tokens.py:79` / `:97` | 线程安全缓存 |
 | `_sentinel_device_id` / `assert_sentinel_device_id` | `sentinel_tokens.py:136` / `:148` | DID 一致性 |
@@ -271,8 +280,8 @@ WPF 桌面端（`SmsWorkbench/`）通过 `PythonBackendClient` 启动 `python -m
 | `retarget_region` | `proxy/entry.py:420` | 地区重定 |
 | `rotate_session` | `proxy/entry.py:455` | 会话轮换 |
 | `load_proxy_pool` / `choose_proxy_entry` | `proxy/entry.py:562` / `:628` | 选池 |
-| `registration_network_preflight` | `registration/preflight.py:143` | 边界探活 |
-| `_resolve_proxy_scheme` | `registration/preflight.py:109` | socks5↔http 纠错 |
+| `registration_network_preflight` | `registration/preflight.py:145` | 边界探活 |
+| `_resolve_proxy_scheme` | `registration/preflight.py:111` | socks5↔http 纠错 |
 | `shared_fingerprint_pool` | `fingerprint_pool.py:385` | 协议路径指纹池单例 |
 | `FingerprintPool` / `ProtocolEnvironmentProfile` | `fingerprint_pool.py:123` / `:39` | 协议路径 TLS/UA 档案 |
 | `shared_browser_profile_pool` | `browser_fingerprint_pool.py:297` | 浏览器路径内置指纹池单例 |

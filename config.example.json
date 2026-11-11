@@ -92,6 +92,11 @@
       "verify_hint": true,
       "allowed_countries": []
     },
+    "tls_fingerprint": {
+      "enabled": true,
+      "rotate_extensions": true,
+      "seed_salt": ""
+    },
     "drivers": {
       "playwright": {
         "start_url": "https://chatgpt.com/auth/login"

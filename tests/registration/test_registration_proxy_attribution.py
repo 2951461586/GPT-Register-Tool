@@ -111,6 +111,9 @@ def test_protocol_result_carries_safe_proxy_audit():
         "edge_challenge_rotations": 0,
         "edge_challenge_rotate_failed": 0,
         "fingerprint_pool_failures": 0,
+        # The batch always builds a RegistrationProxyPool, whose default status is
+        # "disabled" (opt-in feature off), not the empty status of a bare mapping.
+        "dynamic_generation": {"used": False, "count": 0, "reason": "disabled"},
     }
     assert "secret" not in repr(results[0]["proxy_audit"])
 
