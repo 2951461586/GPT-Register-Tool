@@ -33,6 +33,12 @@ updates:
         patterns: ["*"]
         update-types: ["minor", "patch"]
     labels: ["dependencies", "python"]
+    # `camoufox` (0.5.x) caps `playwright<1.63`, so a playwright bump beyond
+    # 1.62 can never resolve while that cap stands -- the grouped PR #18 did
+    # exactly that and failed at `pip install` with ResolutionImpossible.
+    # Remove this ignore when camoufox ships a version requiring >=1.63.
+    ignore:
+      - dependency-name: playwright
 
   - package-ecosystem: nuget
     directory: "/SmsWorkbench"
