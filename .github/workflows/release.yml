@@ -121,7 +121,7 @@ jobs:
       # Always keep the bytes, even for a dry run: the desktop host is built for
       # win-x64 and nobody can rebuild an installer from a log.
       # v5; Dependabot moves the digest and keeps this comment.
-      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: package-${{ inputs.tag || github.ref_name }}
           path: dist/release/
