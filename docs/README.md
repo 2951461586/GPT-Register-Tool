@@ -63,6 +63,9 @@ Directory layout (since 2026-09-06):
 
 ## Release notes（docs/releases/，一个发布标签一份，不回写）
 
+- [v2026.11.12 发布说明](releases/release-v2026.11.12.md) - requirements token 与真实
+  `sdk.js` 逐槽对齐（随机环境探针、平台门控、页面时钟、Safari 编码），
+  以及一次 10 账号线上验证（10/10 成功、AT 200、2FA、查优惠）。
 - [v2026.11.11 发布说明](releases/release-v2026.11.11.md) - 自 v2026.11.02 以来的收口：
   协议注册每账号一套 TLS 指纹、指纹档位随平台走、Sentinel 离线自检，账号恢复链的三个
   假成功，以及 ReMail 取件降速与批量下单不重试。

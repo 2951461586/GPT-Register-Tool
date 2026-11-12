@@ -171,7 +171,7 @@ Registration flows registered there are `username_password_create`
 Registered there are both checkout flows, and they are
 **not** interchangeable:
 
-- **Checkout create** mints `chatgpt_checkout` — `CHECKOUT_SENTINEL_FLOW` at `sms_tool/sentinel/client.py:45`, issued by `issue_checkout_sentinel` at `sms_tool/sentinel/client.py:641`.
+- **Checkout create** mints `chatgpt_checkout` — `CHECKOUT_SENTINEL_FLOW` at `sms_tool/sentinel/client.py:46`, issued by `issue_checkout_sentinel` at `sms_tool/sentinel/client.py:710`.
 - **Checkout approve** mints `checkout_session_approval` — its own constant `UPI_SENTINEL_APPROVAL_FLOW` at `sms_tool/upi_link/constants.py:43`. Two rails request it explicitly: the UPI approve stage passes `sentinel_flow=UPI_SENTINEL_APPROVAL_FLOW` at `sms_tool/upi_link/stages.py:712`, and `PPLinkExtractor._fresh_approval_sentinel` mints it at `sms_tool/paypal/extract.py:245`.
 
   🔴 **How to write a guardable pointer here** — two rules, both learned the hard
@@ -737,6 +737,42 @@ The vendored runner exposed `performance.memory` on every profile. It is now
 built only for Chromium, matching Gecko/WebKit. This is the one local patch to
 `runtime/sentinel-runner.js`; `bundle.py:RUNNER_SHA256` pins the patched bytes and
 `THIRD_PARTY_NOTICES.md` records the patch.
+
+## Requirements-token parity (2026-11-12)
+
+The requirements token (`p`) is the one proof this repo builds in Python instead
+of letting the SDK build it — it is what the challenge is *fetched with*, so the
+SDK cannot produce it. `client._requirements_token` therefore has to be a
+byte-faithful copy of `sdk.js getConfig()`, and five divergences were closed:
+
+| Slot | Real SDK (`getConfig()`) | Was | Now |
+| --- | --- | --- | --- |
+| `p[2]` | `performance.memory.jsHeapSizeLimit` — **`null`** on Gecko/WebKit | always an integer | family-gated (`_CHROMIUM_FAMILIES`) |
+| `p[10]` | random `Object.keys(Object.getPrototypeOf(navigator))` key + `"−"` + `String(value)` | constant `userAgent−function userAgent() { [native code] }` | `sentinel/surface.py`, per-account sample |
+| `p[11]` | random `Object.keys(document)` key | constant `body` | `sentinel/surface.py` |
+| `p[12]` | random `Object.keys(window)` key | constant `crypto` | `sentinel/surface.py` |
+| `p[24]` | `Number("InstallTrigger" in window)` — 1 on Gecko only | constant `1` (wrong for Chrome/Safari = 46.4 % of the pool) | family-gated + `window.InstallTrigger` added to the shim for Firefox |
+
+`p[13]`/`p[17]` (`performance.now()` / `performance.timeOrigin`) used to be two
+independent randoms, so `Date.now() ≈ timeOrigin + now()` failed on **98.8 %** of
+500 measured device seeds (largest gap 887 s). Both are now derived from one
+`performance.timeOrigin` (page age 25 s – 15 min, floor chosen against the
+reference HAR's `p[13]=27894.9`), and the runner receives that same origin as
+`pageTimeOrigin`, so the VM's own proof describes the same page instead of a
+node process that started 30 ms ago.
+
+`Accept-Encoding` is family-gated too (`accept_encoding_for`): `zstd` is
+Chrome 123+/Firefox 126+, but WebKit only from **Safari 26.3**, so the six Safari
+profiles (19.2 % of the pool) no longer advertise a coding their engine cannot
+decode.
+
+The gate is `tests/registration/test_sentinel_proof_parity.py`: it runs the real
+runner against a synthetic PoW challenge (`difficulty="f"` always passes, no
+network), decodes both proofs and compares them slot by slot — exact equality on
+every deterministic slot, candidate-membership checks on the three random ones,
+and the clock identity on both halves. `sentinel/surface.py`'s candidate sets are
+asserted against the live VM (key exists, rendering byte-equal), which is what
+keeps the tables from drifting away from the shim.
 
 ## Validation limits
 

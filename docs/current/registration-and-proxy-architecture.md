@@ -71,13 +71,14 @@ class RegistrationDriver(str, Enum):
 `sms_tool/auth_headers.py` 是「每个账号看起来像同一台稳定设备」的事实来源。
 
 - **设备档案**：`AUTH_FINGERPRINT_PROFILES`（`auth_headers.py:42`）覆盖 Chrome 124–150、Firefox 133–147、Safari 17/18（含 iOS）的 UA / 平台 / 渲染器组合。
-- **确定性指纹**：`sentinel_fingerprint()`（`auth_headers.py:805`）按账号 `device_id` **确定性派生** screen / CPU / 内存 / `time_origin`，使得同一账号每次注册拿到一致指纹，不同账号彼此不关联（防关联）。
-- **鉴权头注入**：`openai_auth_headers()`（`auth_headers.py:1000`）注入 `oai-device-id`、`oai-session-id`、`sec-ch-ua*`、`sec-ch-ua-platform`、`Datadog` trace 等；`family` 分为 `nextauth` / `auth` / `chatgpt` 三族，三族**共享**同一 DID、稳定的 session logging id、flow invocation id、UA、client hints、GeoIP 派生的 locale/timezone。
+- **确定性指纹**：`sentinel_fingerprint()`（`auth_headers.py:824`）按账号 `device_id` **确定性派生** screen / CPU / 内存 / `time_origin`，使得同一账号每次注册拿到一致指纹，不同账号彼此不关联（防关联）。
+- **鉴权头注入**：`openai_auth_headers()`（`auth_headers.py:1049`）注入 `oai-device-id`、`oai-session-id`、`sec-ch-ua*`、`sec-ch-ua-platform`、`Datadog` trace 等；`family` 分为 `nextauth` / `auth` / `chatgpt` 三族，三族**共享**同一 DID、稳定的 session logging id、flow invocation id、UA、client hints、GeoIP 派生的 locale/timezone。
 - **一致性强约束**（见 `architecture.md` 的 *Registration Protocol Consistency*）：Sentinel QuickJS 消费**同一指纹**，为 `username_password_create` / `authorize_continue` / `oauth_create_account` 分别产出 token；token payload id、`oai-did` cookie、auth header **必须匹配**。提取失败**fail closed**——绝不使用纯 HTTP 的 PoW fallback。
 
 - **TLS ClientHello 每账号唯一化**（2026-11-11）：`sms_tool/tls_fingerprint.py` 按账号 device seed **确定性打乱** profile 自己那份扩展**顺序**（不改集合），经 `CurlOpt.TLS_EXTENSION_ORDER` 装到 session 上。此前 4 个 Firefox profile 共用同一个 `ja3_hash`（`6f7889b9…`），占指纹池 50% 权重；Chrome preset 本就逐握手打乱，Safari 的列表重排会被 BoringSSL 拒绝（`curl: (35) Invalid TLS extensions`），因此只有 Firefox 家族走这条覆盖。HTTP/2（Akamai）**故意不动**：preset 是 curl-impersonate native target，`extra_fp` 改不了它的 SETTINGS。配置：`registration.tls_fingerprint`；证据：`scripts/tls_fingerprint_probe.py`。
 - **平台化硬件档位 + 一致性校验**（2026-11-11）：`_device_profile(seed, platform_class)` 改为按平台类查表（Windows / macOS / iOS），缓存键含平台类，iOS 不再报 1920×1080 桌面屏；`auth_headers.validate_protocol_fingerprint()` 断言平台↔UA、触点↔平台、屏幕↔平台区间、locale↔Accept-Language、时区↔偏移，`identity_stages` 只记日志不中断。详见 [protocol-registration.md](protocol-registration.md) 的 *Device fingerprint consistency*。
 - **`timezoneName` 走 OS 标签**：Sentinel profile 带 `timezone_name`（`geo.profiles.WINDOWS_TIMEZONE_BY_IANA`，与浏览器 lane 同源），`_requirements_token` 也用同一标签，两个 token 生成器不再各说各话（`(JST)` vs `(Asia/Tokyo)`）。
+- **requirements token 与 SDK 逐字段对齐**（2026-11-12）：`client._requirements_token` 手写 `sdk.js getConfig()` 的 25 元组，其中 `[10]/[11]/[12]` 是 SDK **每次页面加载随机抽**的 navigator 原型键 / document 键 / window 键 ⇒ 候选集合与渲染值放进 `sentinel/surface.py`，按 device seed 抽样（候选 = shim 与真机抓取的交集，渲染值逐字节钉住）；`[2]`/`[24]` 按家族门控（`performance.memory` 只有 Chromium 有，`InstallTrigger` 只有 Gecko 有）；`[13]/[17]` 由同一个 `performance.timeOrigin` 推导（页面年龄 25 s–15 min），并作为 `pageTimeOrigin` 传给 runner，使 VM 侧与 Python 侧描述同一个页面。`Accept-Encoding` 同步按引擎门控（`zstd`：Chrome 123+/Firefox 126+，Safari 26.3 起）。门禁：`tests/registration/test_sentinel_proof_parity.py`（离线 PoW 跑真 runner，逐槽对比 + 候选集对照真 VM）。
 
 > 实战含义：调注册相关代码时，**不要**单独改某一处 `oai-*` 头或指纹，必须走 `auth_headers` 统一出口，否则 DID/Header/Cookie 三者错位会直接被风控。
 
@@ -267,8 +268,8 @@ WPF 桌面端（`SmsWorkbench/`）通过 `PythonBackendClient` 启动 `python -m
 | `normalize_registration_driver` | `registration_drivers/base.py:104` | 归一化，默认 protocol |
 | `BrowserRegistrationError` | `registration_drivers/base.py:140` | 浏览器层错误封装 |
 | `AUTH_FINGERPRINT_PROFILES` | `auth_headers.py:42` | Chrome 124–150 / Firefox / Safari 设备档案 |
-| `sentinel_fingerprint` | `auth_headers.py:805` | 确定性指纹派生 |
-| `openai_auth_headers` | `auth_headers.py:1000` | `oai-*` 头注入 |
+| `sentinel_fingerprint` | `auth_headers.py:824` | 确定性指纹派生 |
+| `openai_auth_headers` | `auth_headers.py:1049` | `oai-*` 头注入 |
 | `OPENAI_SENTINEL_BACKEND` | `sentinel/client.py:59`（默认 `node_runner`） | Sentinel 后端选择 |
 | `_get_cached_sentinel` / `_save_sentinel_cache` | `sentinel_tokens.py:79` / `:97` | 线程安全缓存 |
 | `_sentinel_device_id` / `assert_sentinel_device_id` | `sentinel_tokens.py:136` / `:148` | DID 一致性 |
