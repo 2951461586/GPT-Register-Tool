@@ -1,0 +1,86 @@
+name: Bug report
+description: 报告一个缺陷（注册 / 支付 / 桌面端 / 文档）
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        先看两处，多半能省一轮往返：
+
+        - 文档总索引（排障手册 / 当前模块契约 / 边界规则）：
+          https://github.com/2951461586/GPT-Register-Tool/tree/main/docs
+
+        **不要贴凭据**：代理口令、API key、邮箱密码、refresh token、
+        cookie、TOTP secret 都请先替换成 `***`，日志也请过一遍再粘。
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 发生了什么
+      description: 期望结果 vs 实际结果；报错原文照贴（凭据仍要打码）。
+      placeholder: |
+        期望：10 个账号全部 registered
+        实际：第 4 个停在 email_otp_send_stuck，其余成功
+    validations:
+      required: true
+
+  - type: dropdown
+    id: lane
+    attributes:
+      label: 涉及哪条链路
+      options:
+        - 协议注册（protocol 驱动）
+        - 浏览器注册（playwright / camoufox / cloak / roxy）
+        - 邮箱 / OTP（ReMail / iCloud / CFWorker / Graph / IMAP）
+        - 协议支付 / 支付链接提取
+        - 账号管理与测活
+        - WPF 桌面端（界面 / IPC / 托盘）
+        - 代理池 / 指纹
+        - 构建、打包、发布产物
+        - 文档
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: 版本
+      description: 发布标签（`v2026.11.12`）或 `git describe --tags` 的输出
+      placeholder: v2026.11.12
+    validations:
+      required: true
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: "`python -m sms_tool --doctor --json` 输出"
+      description: |
+        这一条最省时间：它包含 python/node/playwright/curl_cffi 版本、Sentinel bundle 哈希与
+        一次离线铸 token、配置分片来源、邮箱与接码供应商就绪情况。
+        **贴之前请删掉其中的路径里的用户名**（如 `C:\Users\<you>\...`）。
+      render: json
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志片段
+      description: |
+        `runtime/logs/` 下的运行日志，或桌面端「打开日志」里对应的行。
+        账号级失败请看那一行的 `error` / `failure_class` / `retry_disposition` 三个字段。
+      render: text
+
+  - type: input
+    id: environment
+    attributes:
+      label: 环境
+      placeholder: Windows 11 24H2 / Python 3.12.15 / Node 22.20.0
+
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: 确认
+      options:
+        - label: 日志与配置片段里没有凭据、cookie、token 或可用的邮箱地址
+          required: true
+        - label: 这是缺陷而不是上游服务的行为变化（账号被停用、库存售罄等）
+          required: false

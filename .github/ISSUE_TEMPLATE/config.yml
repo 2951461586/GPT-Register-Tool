@@ -1,0 +1,14 @@
+# 让 issue 入口指向"先自查"的文档，而不是空白框。
+#
+# blank_issues_enabled: false —— 两个模板都强制带版本/环境/doctor 输出，
+# 这是这个仓库最省往返的三样东西。空白 issue 会把它们全丢掉，所以关闭。
+# 两个 contact link 都控制在 80 列以内：`url` 必须是单行绝对地址，而仓库的
+# TROUBLESHOOTING / current 索引都从 docs/README.md 一跳可达。
+blank_issues_enabled: false
+contact_links:
+  - name: 文档总索引（含排障手册）
+    url: https://github.com/2951461586/GPT-Register-Tool/tree/main/docs
+    about: 排障手册、当前模块契约、边界规则与发布说明都从这里进。
+  - name: 安全漏洞（私密通道）
+    url: https://github.com/2951461586/GPT-Register-Tool/security/advisories/new
+    about: 不要用公开 issue 报告漏洞；见 SECURITY.md。

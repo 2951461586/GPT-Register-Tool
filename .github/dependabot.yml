@@ -1,0 +1,114 @@
+# Dependabot: weekly, grouped, and quiet.
+#
+# Why this exists: the repository ships a bundled CPython plus a WPF host, so
+# every shipped binary is a copy of whatever `requirements.txt` / the four
+# `packages.lock.json` files said on release day. Before this file nothing
+# watched them — `security_and_analysis.dependabot_security_updates` was
+# disabled as well, so a CVE in `curl_cffi` (the TLS impersonation layer) or in
+# `Microsoft.Extensions.*` reached a published installer with no signal at all.
+#
+# Grouping is deliberate: minor+patch bumps arrive as one PR per ecosystem,
+# so the gate stays readable, while a major bump still gets its own PR --
+# those are the ones where a human must decide whether a `curl_cffi`
+# impersonation change is worth re-running the protocol suite for.
+
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Asia/Shanghai
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+    groups:
+      pip-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    labels: ["dependencies", "python"]
+
+  - package-ecosystem: nuget
+    directory: "/SmsWorkbench"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Asia/Shanghai
+    open-pull-requests-limit: 3
+    cooldown:
+      default-days: 7
+    groups:
+      nuget-desktop-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    labels: ["dependencies", "dotnet"]
+
+  - package-ecosystem: nuget
+    directory: "/SmsWorkbench.Contracts"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Asia/Shanghai
+    open-pull-requests-limit: 3
+    cooldown:
+      default-days: 7
+    groups:
+      nuget-contracts-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    labels: ["dependencies", "dotnet"]
+
+  - package-ecosystem: nuget
+    directory: "/tests/SmsWorkbench.Tests"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Asia/Shanghai
+    open-pull-requests-limit: 3
+    cooldown:
+      default-days: 7
+    groups:
+      nuget-tests-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    labels: ["dependencies", "dotnet"]
+
+  - package-ecosystem: nuget
+    directory: "/scripts/installer"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Asia/Shanghai
+    open-pull-requests-limit: 3
+    cooldown:
+      default-days: 7
+    groups:
+      nuget-installer-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    labels: ["dependencies", "dotnet"]
+
+  # The three workflow actions are pinned by commit SHA (see ci.yml) because
+  # `sha_pinning_required` is on; only Dependabot may move them, and it keeps
+  # `# v5` comment in place when it does.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Asia/Shanghai
+    open-pull-requests-limit: 3
+    cooldown:
+      default-days: 7
+    groups:
+      actions-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    labels: ["dependencies", "ci"]

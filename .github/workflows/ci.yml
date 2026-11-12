@@ -9,6 +9,11 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Least privilege: the job only reads the repo. Without this block the token
+# defaults to the repository's (broad) default and zizmor flags it.
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: windows-latest
@@ -16,8 +21,12 @@ jobs:
     # limit.
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-dotnet@v5
+      # Pinned by commit SHA (repo setting `sha_pinning_required`);
+      # Dependabot moves it and keeps the trailing tag comment.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
         with:
           global-json-file: global.json
           # No NuGet package caching.
@@ -36,7 +45,7 @@ jobs:
           # (that was the NU1004 break). Restore here costs ~18s, so caching is
           # not worth reintroducing that class of failure.
           cache: false
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
           cache: pip

@@ -1,0 +1,57 @@
+name: Feature request
+description: 提一个新能力或改造建议（请先说清它属于哪一层）
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        这个仓库按五层组织（UI → CLI/命令适配 → 应用工作流 → 领域契约 → provider/持久化），
+        改动的落点比"实现方式"更重要：同一件事放在错误的层，会被
+        `scripts/import_layer_ratchet.py` 与 `docs/rules/` 的边界规则挡回来。
+        动手前建议先读 [架构总览](https://github.com/2951461586/
+        GPT-Register-Tool/blob/main/docs/architecture.md)。
+
+  - type: dropdown
+    id: layer
+    attributes:
+      label: 属于哪一层
+      options:
+        - 桌面端 UI（SmsWorkbench，WPF）
+        - CLI / 命令适配（cli.py、commands/、cli_parsers/）
+        - 应用工作流（registration/、batch_runner、accounts/）
+        - 领域契约（result.py、wire.py、desktop_ipc）
+        - provider / 持久化（auth_flow、sentinel、mailbox、pay_link、store、geo）
+        - 构建、门禁、文档
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 现在的问题
+      description: 谁在什么场景下遇到什么；有实测数据就贴（时间、成功率、错误码）。
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 建议怎么做
+      description: |
+        如果涉及协议行为（新增/改写请求、指纹、Sentinel flow），请说明它是否需要一次
+        受控 A/B；本仓库对这类改动的规矩是"先把判据写进
+        docs/current/registration-ab-runbook.md，再动代码"。
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 考虑过的替代方案
+      description: 以及为什么没选它。
+
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: 确认
+      options:
+        - label: 这不是"凭证/代理/邮箱供应商不可用"的问题（那属于运行环境，不是功能缺口）
+          required: true

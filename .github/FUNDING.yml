@@ -1,0 +1,8 @@
+# 赞助商入口。
+#
+# 本仓库的赞助方是住宅代理供应商（见 README 的「赞助商」段），它们提供的是
+# 产品/资源支持而不是捐赠通道，所以这里用 custom 链接，不用 github: 用户赞助。
+# 一个链接一行；顺序与 README 一致（IPWO 在前）。
+custom:
+  - "https://www.ipwo.net/?ref=githubGPT"
+  - "https://proxylane.dev/?utm_source=gpt-register-tool&utm_medium=partnership&utm_campaign=gpt-register-tool_sponsor_202610&utm_content=github_readme"
