@@ -11,6 +11,10 @@
 # so the gate stays readable, while a major bump still gets its own PR --
 # those are the ones where a human must decide whether a `curl_cffi`
 # impersonation change is worth re-running the protocol suite for.
+#
+# `open-pull-requests-limit: 1` per ecosystem is deliberate: every open
+# dependency PR costs a full Windows CI run, so a queue of six at once is
+# how the lane looks stuck. One at a time keeps review honest.
 
 version: 2
 updates:
@@ -21,7 +25,7 @@ updates:
       day: monday
       time: "06:00"
       timezone: Asia/Shanghai
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 1
     cooldown:
       default-days: 7
     groups:
@@ -33,11 +37,11 @@ updates:
   - package-ecosystem: nuget
     directory: "/SmsWorkbench"
     schedule:
-      interval: weekly
+      interval: monthly
       day: monday
       time: "06:00"
       timezone: Asia/Shanghai
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 1
     cooldown:
       default-days: 7
     groups:
@@ -49,11 +53,11 @@ updates:
   - package-ecosystem: nuget
     directory: "/SmsWorkbench.Contracts"
     schedule:
-      interval: weekly
+      interval: monthly
       day: monday
       time: "06:00"
       timezone: Asia/Shanghai
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 1
     cooldown:
       default-days: 7
     groups:
@@ -65,11 +69,11 @@ updates:
   - package-ecosystem: nuget
     directory: "/tests/SmsWorkbench.Tests"
     schedule:
-      interval: weekly
+      interval: monthly
       day: monday
       time: "06:00"
       timezone: Asia/Shanghai
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 1
     cooldown:
       default-days: 7
     groups:
@@ -81,11 +85,11 @@ updates:
   - package-ecosystem: nuget
     directory: "/scripts/installer"
     schedule:
-      interval: weekly
+      interval: monthly
       day: monday
       time: "06:00"
       timezone: Asia/Shanghai
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 1
     cooldown:
       default-days: 7
     groups:
@@ -104,7 +108,7 @@ updates:
       day: monday
       time: "06:00"
       timezone: Asia/Shanghai
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 1
     cooldown:
       default-days: 7
     groups:

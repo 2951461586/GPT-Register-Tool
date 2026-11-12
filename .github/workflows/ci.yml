@@ -1,7 +1,12 @@
 name: ci
 
 on:
+  # `push` is narrowed to main on purpose. Bare `push:` also fires for every
+  # branch, so a Dependabot/feature branch ran the full Windows suite twice --
+  # once for the push and once for its pull_request -- on identical commits.
+  # Measured 2026-11-12: five Dependabot PRs produced twelve queued runs.
   push:
+    branches: [main]
   pull_request:
 
 # Cancel superseded runs on the same ref to avoid queueing the runner.
@@ -49,6 +54,15 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+          # Both files feed the cache key: the job installs dev requirements
+          # (which include requirements.txt) and then ruff from
+          # constraints-tools.txt. Hashing only one leaves the other free to
+          # change under a warm cache.
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+            constraints.txt
+            constraints-tools.txt
       - run: python -m pip install -r requirements-dev.txt -c constraints.txt
       - shell: powershell
         run: Copy-Item config.example.json config.json
