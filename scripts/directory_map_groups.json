@@ -87,7 +87,8 @@
       "sms_tool/sentinel/bundle.py",
       "sms_tool/sentinel/client.py",
       "sms_tool/sentinel/runner.py",
-      "sms_tool/sentinel/selfcheck.py"
+      "sms_tool/sentinel/selfcheck.py",
+      "sms_tool/sentinel/surface.py"
     ],
     "OAuth and auth HTTP helpers": [
       "sms_tool/codex_oauth.py",
