@@ -815,9 +815,19 @@ function createBrowserContext(options) {
   const browserDate = createDateConstructor(options);
   const browserScreen = createScreen(options.screen);
 
+  // The page's clock.  A real browser fixes ``timeOrigin`` when the document is
+  // created and derives ``performance.now()`` from it, so the two always satisfy
+  // ``Date.now() ≈ timeOrigin + now()``.  Using node's own process clock here
+  // made the SDK's proof (``p[17]``/``p[13]``) disagree with the Python
+  // requirements proof for the same registration by up to 15 minutes, and made a
+  // long-lived worker look like a page that had been open for hours.
+  const pageTimeOrigin = Number(options.pageTimeOrigin);
+  const browserTimeOrigin =
+    Number.isFinite(pageTimeOrigin) && pageTimeOrigin > 0 ? pageTimeOrigin : performance.timeOrigin;
+
   const browserPerformance = {
-    now: () => performance.now(),
-    timeOrigin: performance.timeOrigin || Date.now() - performance.now(),
+    now: () => Math.max(0, Date.now() - browserTimeOrigin),
+    timeOrigin: browserTimeOrigin,
     // ``performance.memory`` is a Chromium extension to the Performance API.
     // Exposing it on a Gecko/WebKit profile was the last platform-blind field in
     // this environment; the descriptor is simply absent there, exactly as on a
@@ -1066,6 +1076,16 @@ function createBrowserContext(options) {
     userAgent: options.userAgent,
     language: options.language,
     languages: options.languages,
+    // The four "what browser is this" strings every engine reports.  They were
+    // simply absent, so ``navigator.appName``/``appVersion``/``product`` read
+    // ``undefined`` -- one line for any script that looks.  Values are the real
+    // ones (Chrome, Firefox and Safari agree on all five except ``appVersion``,
+    // which is the UA without its ``Mozilla/`` prefix).
+    appCodeName: "Mozilla",
+    appName: "Netscape",
+    appVersion: String(options.userAgent || "").replace(/^Mozilla\//, ""),
+    product: "Gecko",
+    productSub: "20030107",
     cookieEnabled: true,
     onLine: true,
     pdfViewerEnabled: true,
@@ -1087,17 +1107,23 @@ function createBrowserContext(options) {
     bluetooth: { toString: () => "[object Bluetooth]" },
     ...(isSafari || isFirefox ? {} : { gpu: { toString: () => "[object GPU]" } }),
     connection: createNetworkInformation(),
-    permissions: { query: async () => ({ state: "prompt", onchange: null }) },
+    // ``sdk.js`` samples one navigator prototype key per page load and embeds
+    // ``String(navigator[key])``.  Without a ``Symbol.toStringTag`` these four
+    // rendered ``"[object Object]"`` -- a value no browser produces -- so ~12 %
+    // of SDK proofs (4 of the 33 sampled keys) carried an impossible reading.
+    permissions: { query: async () => ({ state: "prompt", onchange: null }), [Symbol.toStringTag]: "Permissions" },
     geolocation: {
       getCurrentPosition(success, error) { if (typeof error === "function") error({ code: 1, message: "User denied Geolocation" }); },
       watchPosition() { return 1; },
       clearWatch() {},
+      [Symbol.toStringTag]: "Geolocation",
     },
     mediaDevices: {
       enumerateDevices: async () => [],
       getUserMedia: async () => { throw new Error("Permission denied"); },
+      [Symbol.toStringTag]: "MediaDevices",
     },
-    storage: { estimate: async () => ({ quota: 10737418240, usage: 0 }) },
+    storage: { estimate: async () => ({ quota: 10737418240, usage: 0 }), [Symbol.toStringTag]: "StorageManager" },
     ...(isSafari || isFirefox ? {} : {
       login: { toString: () => "[object NavigatorLogin]" },
       userAgentData: {
@@ -1280,6 +1306,11 @@ function createBrowserContext(options) {
     pageYOffset: 0,
     devicePixelRatio: options.devicePixelRatio,
     ...(isSafari ? { safari: { pushNotification: {} } } : isFirefox ? {} : { chrome: { runtime: {}, app: {} } }),
+    // ``window.InstallTrigger`` is Gecko-only and ``sdk.js`` reports it as one of
+    // the seven ``Number("…" in window)`` flags in ``p[24]``.  Absent here, a
+    // Firefox profile's own proof said ``0`` while the hand-built requirements
+    // proof said ``1`` -- two answers for the same observable in one transaction.
+    ...(isFirefox ? { InstallTrigger: { install: makeNativeFunction("install") } } : {}),
     performance: browserPerformance,
     crypto: browserCrypto,
     TextEncoder,
@@ -1326,7 +1357,7 @@ function createBrowserContext(options) {
       },
     } : {}),
     requestAnimationFrame(callback) {
-      return managedSetTimeout(() => callback(performance.now()), 16);
+      return managedSetTimeout(() => callback(browserPerformance.now()), 16);
     },
     cancelAnimationFrame(id) {
       managedClearTimeout(id);
@@ -1524,6 +1555,9 @@ async function main(argv = process.argv.slice(2), writeOutput = true) {
     language: pick(args.language, cfg("language"), process.env.SENTINEL_LANGUAGE, "ja-JP"),
     languages: normalizeList(pick(args.languages, cfg("languages")), process.env.SENTINEL_LANGUAGES || "ja-JP"),
     timeZone: pick(args["time-zone"], args.timezone, cfg("timeZone", "time_zone", "timezone"), process.env.SENTINEL_TIME_ZONE, "Asia/Tokyo"),
+    pageTimeOrigin: Number(
+      pick(args["page-time-origin"], cfg("pageTimeOrigin", "page_time_origin"), process.env.SENTINEL_PAGE_TIME_ORIGIN, 0)
+    ),
     timezoneName: pick(args["timezone-name"], cfg("timezoneName", "timezone_name"), process.env.SENTINEL_TIMEZONE_NAME, "Japan Standard Time"),
     timezoneOffsetMinutes: Number(pick(args["timezone-offset-minutes"], cfg("timezoneOffsetMinutes", "timezone_offset_minutes"), process.env.SENTINEL_TIMEZONE_OFFSET_MINUTES, 540)),
     hardwareConcurrency: Number(pick(args.cores, cfg("cores", "hardwareConcurrency"), process.env.SENTINEL_CORES, 4)),

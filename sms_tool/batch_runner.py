@@ -33,16 +33,6 @@ from .storage import (
 )
 
 
-#: What opt-in dynamic generation did for the batch currently being selected.
-#:
-#: Batch-scoped on purpose: ``select_registration_proxy_pool`` runs once, before
-#: any worker starts, so a module-level value cannot race.  It exists instead of
-#: a parameter because both call sites live in functions frozen by
-#: ``scripts/function_length_ratchet.py`` (552/233 lines) and a new parameter adds
-#: lines to each of them.
-_DYNAMIC_GENERATION_STATUS: dict[str, Any] = {"used": False, "count": 0, "reason": "disabled"}
-
-
 class RegistrationProxyPool(list):
     """Selected registration proxies plus sanitized preflight observations."""
 
@@ -114,7 +104,6 @@ def select_registration_proxy_pool(proxy_pool, fallback=None):
             safe_print(f"[*] Dynamic proxy generation: {len(outcome)} screened exit(s)")
             generated_pool = RegistrationProxyPool(outcome)
             generated_pool.dynamic_generation = generation_status
-            _set_dynamic_generation_status(generation_status)
             return generated_pool
         safe_print(
             "[!] Dynamic proxy generation produced no eligible exit "
@@ -125,18 +114,7 @@ def select_registration_proxy_pool(proxy_pool, fallback=None):
         safe_print(f"[!] Dynamic proxy generation unavailable ({type(exc).__name__}); using the static pool")
     selected = _select_static_registration_pool(candidates)
     selected.dynamic_generation = generation_status
-    _set_dynamic_generation_status(generation_status)
     return selected
-
-
-def _set_dynamic_generation_status(status: Mapping[str, Any]) -> None:
-    """Publish the batch's generation status for ``_registration_proxy_metadata``."""
-    global _DYNAMIC_GENERATION_STATUS
-    _DYNAMIC_GENERATION_STATUS = {
-        "used": bool(status.get("used")),
-        "count": int(status.get("count") or 0),
-        "reason": str(status.get("reason") or "")[:60],
-    }
 
 
 def _select_static_registration_pool(candidates: list[str]) -> RegistrationProxyPool:
@@ -227,19 +205,33 @@ def _registration_proxy_metadata(
     pool_index: int,
     expected_country: str = "",
     actual_country: str = "",
+    dynamic_generation: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Return audit-safe proxy selection metadata without URL credentials."""
+    """Return audit-safe proxy selection metadata without URL credentials.
+
+    ``dynamic_generation`` is the *pool's* own status (``RegistrationProxyPool
+    .dynamic_generation``), passed in by the caller.  It used to be a
+    module-level global written by ``select_registration_proxy_pool``: one
+    process holding two batches would attribute one batch's
+    ``used/count/reason`` to the other's accounts, and the value was invisible
+    from the call site that read it.
+    """
     parsed = urlsplit(str(proxy or ""))
+    status = dynamic_generation if isinstance(dynamic_generation, Mapping) else None
     return {
         "pool_index": int(pool_index) if int(pool_index) >= 0 else -1,
         "expected_country": str(expected_country or "").strip().upper(),
         "actual_country": str(actual_country or "").strip().upper(),
         "scheme": str(parsed.scheme or "").strip().lower(),
         "rotation_generation": 0,
-        # Batch-scoped, set once before the workers start (see
+        # Pool-scoped, set once before the workers start (see
         # ``select_registration_proxy_pool``); ``safe_proxy_audit`` re-sanitizes it
         # to three primitives so no proxy string can reach the audit record.
-        "dynamic_generation": dict(_DYNAMIC_GENERATION_STATUS),
+        "dynamic_generation": {
+            "used": bool((status or {}).get("used")),
+            "count": int((status or {}).get("count") or 0),
+            "reason": str((status or {}).get("reason") or "disabled")[:60],
+        },
     }
 
 
@@ -850,14 +842,14 @@ def run_batch_impl(
                 pool_index=pool_indices.get(base_proxy or "", i % len(proxy_pool) if proxy_pool else -1),
                 expected_country=expected_country,
                 actual_country=preflight_actual_countries.get(base_proxy, ""),
+                dynamic_generation=getattr(proxy_pool, "dynamic_generation", None),
             )
             proxy_metadata["attempt"] = attempt
             proxy_metadata["rotation_generation"] = account_rotation_generation
             sentinel_data = _prewarmed_sentinel(i) if use_prewarm else None
-            # Hold this attempt's egress for as long as it is on the wire.  The
-            # pool is round-robined, so two live accounts would otherwise leave
-            # through the same address and nothing recorded it
-            # (store/environment_ledger.py).
+            # Hold this attempt's egress for as long as it is on the wire: the pool
+            # is round-robined, so two live accounts would otherwise share an address
+            # invisibly (``store/environment_ledger.py`` records the lease).
             environment_lease = _hold_environment_lease(worker_proxy, account_ref=mailbox_email, batch_id=batch_id)
             try:
                 # Annotated: the literal infers a narrow value union, and the

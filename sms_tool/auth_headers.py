@@ -243,6 +243,18 @@ def _browser_family(impersonate: str) -> str:
     return "chrome"
 
 
+def browser_family(impersonate: str) -> str:
+    """Public view of :func:`_browser_family` for other layers.
+
+    ``sentinel/client`` has to know whether a profile is Chromium (does it have
+    ``performance.memory`` and ``window.InstallTrigger``?) and
+    ``openai_auth_headers`` has to know whether it may advertise ``zstd``.  Both
+    used to re-derive the answer locally or not ask at all; one exported
+    classifier keeps a single definition of "which engine is this".
+    """
+    return _browser_family(impersonate)
+
+
 def _browser_version(impersonate: str) -> str:
     """Extract the numeric major version from an impersonate token (e.g. '144')."""
     match = re.match(r"^[a-z]+(\d+)", str(impersonate or "").lower())
@@ -528,12 +540,19 @@ def _device_profile(seed: str, platform_class: str = "windows") -> dict[str, obj
     }
     # performance.timeOrigin is "when this page/context was created": a static
     # 2024 constant across every account is itself a tell, so anchor it to now
-    # minus a seeded jitter (a few seconds to ~15 min of prior browsing).
+    # minus a seeded jitter.  The lower bound is 25 s because ``p[13]``
+    # (``performance.now()``) below ~8 s reads as "this page was opened just
+    # now" and the reference project's HAR measurement (``p[13]=27894.9``)
+    # records the server answering such a page with a short ``dx``.
     now_ms = int(time.time() * 1000)
-    profile["time_origin"] = now_ms - rng.randint(2_000, 900_000)
-    # performance.now() is ms elapsed since time_origin; a shared 12345.67 across
-    # every account is another constant tell, so jitter it per account too.
-    profile["performance_now"] = round(rng.uniform(500.0, 60_000.0), 3)
+    browsing_ms = rng.randint(25_000, 900_000)
+    profile["time_origin"] = now_ms - browsing_ms
+    # performance.now() is ms elapsed since time_origin.  Derived from the SAME
+    # draw, never sampled independently: a real browser satisfies
+    # ``Date.now() ≈ timeOrigin + performance.now()``, and the two values travel
+    # in the same proof (``p[17]`` / ``p[13]``), so two independent randoms made
+    # the identity false on 98.8 % of measured accounts (largest gap 887 s).
+    profile["performance_now"] = round(float(browsing_ms), 3)
     cache[cache_key] = profile
     return profile
 
@@ -859,6 +878,36 @@ def sentinel_fingerprint() -> dict[str, object]:
     }
 
 
+#: First major version of each engine that advertises ``zstd`` in
+#: ``Accept-Encoding``.  Chrome/Edge 123 (2024-03), Firefox 126 (2024-05);
+#: WebKit only from **Safari 26.3** (2026-02), so every Safari profile this repo
+#: ships (17.0 / 18.0 / 18.4) must not advertise it.  Sending one shared list to
+#: every family made 19.2 % of the fingerprint pool (all six Safari profiles, 3
+#: macOS + 3 iOS) claim a coding their engine cannot decode.
+_ZSTD_SINCE = {"chrome": 123, "edge": 123, "firefox": 126}
+_ACCEPT_ENCODING_ZSTD = "gzip, deflate, br, zstd"
+_ACCEPT_ENCODING_NO_ZSTD = "gzip, deflate, br"
+
+
+def accept_encoding_for(impersonate: str) -> str:
+    """``Accept-Encoding`` matching the impersonated engine, not the newest one.
+
+    An unknown version token keeps ``zstd`` for the browsers that have had it
+    for two years (every profile in the table is above its floor) and drops it
+    for WebKit, whose support landed in Safari 26.3.
+    """
+    family = _browser_family(impersonate)
+    floor = _ZSTD_SINCE.get(family)
+    if floor is None:
+        return _ACCEPT_ENCODING_NO_ZSTD
+    major = _browser_version(impersonate)
+    try:
+        supported = int(major) >= floor
+    except (TypeError, ValueError):
+        supported = True
+    return _ACCEPT_ENCODING_ZSTD if supported else _ACCEPT_ENCODING_NO_ZSTD
+
+
 def datadog_trace_headers() -> dict[str, str]:
     # Trace ids ride in every request as ``traceparent``; a predictable value
     # lets a third party join or forge this client's traces, so they come from
@@ -1020,7 +1069,7 @@ def openai_auth_headers(
     headers = {
         "Accept": accept,
         "Accept-Language": str(environment["lang_full"]),
-        "Accept-Encoding": "gzip, deflate, br, zstd",
+        "Accept-Encoding": accept_encoding_for(str(fingerprint["impersonate"])),
         "User-Agent": fingerprint["user_agent"],
     }
     # Sec-CH-UA-* client hints are Chromium-only. Firefox emits none, so only

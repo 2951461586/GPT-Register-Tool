@@ -14,11 +14,12 @@ from curl_cffi import requests as curl_requests
 
 from .. import endpoints
 from ..tls_fingerprint import apply_to_session as _apply_tls_fingerprint
-from ..auth_headers import auth_impersonate, auth_user_agent, sentinel_fingerprint
+from ..auth_headers import auth_impersonate, auth_user_agent, browser_family, sentinel_fingerprint
 from ..http_client import request_with_retry
 from ..phone_proxy import normalize_proxy_url, redact_proxy_text
 from .bundle import sentinel_version
 from .runner import SentinelRunnerError, run_sentinel_sdk
+from .surface import random_probes
 
 
 SENTINEL_REQ_URL = "https://sentinel.openai.com/backend-api/sentinel/req"
@@ -221,8 +222,78 @@ def _safe_screen_dimension(value: str, default: int) -> int:
         return default
 
 
+#: Families where ``performance.memory`` exists.  ``p[2]`` is
+#: ``performance.memory.jsHeapSizeLimit`` in the real SDK, i.e. ``undefined`` --
+#: serialised as JSON ``null`` -- on Gecko and WebKit.  Emitting a heap number
+#: for a Firefox or Safari profile claimed an API the engine does not implement.
+_CHROMIUM_FAMILIES = frozenset({"chrome", "edge"})
+
+#: Families that expose ``window.InstallTrigger`` (Gecko only).  ``p[24]`` is
+#: ``Number("InstallTrigger" in window)``, so a constant 1 claimed Firefox for
+#: every Chrome and Safari account (46.4 % of the pool) and contradicted the
+#: VM's own proof for the same registration.
+_INSTALL_TRIGGER_FAMILIES = frozenset({"firefox"})
+
+
+def _requirements_date_string(tz_name: str, tz_label: str) -> str:
+    """``p[1]``: ``Date.prototype.toString()`` in the profile's own zone.
+
+    Single authority for the clock (P1-4): the old inline ``ZoneInfo`` here raised
+    ``ZoneInfoNotFoundError`` on any host without the IANA database -- Windows
+    included -- and the ``except`` branch then stamped the *local machine's*
+    clock into a proof claiming New York.  ``geo.clock`` logs the root cause once
+    instead of silently substituting a different timezone.
+    """
+    from ..geo.clock import now_in_timezone
+
+    now = now_in_timezone(tz_name)
+    text = now.strftime("%a %b %d %Y %H:%M:%S GMT%z")
+    return f"{text} ({tz_label})" if tz_label else text
+
+
+def _requirements_languages(profile: Mapping[str, Any]) -> str:
+    """``p[8]``: ``navigator.languages.join(",")`` without the ``;q=`` weights."""
+    raw = str(profile.get("lang_full") or profile.get("lang") or "en-US")
+    parts = [item.split(";", 1)[0].strip() for item in raw.split(",")]
+    return ",".join(part for part in parts if part)
+
+
+def _page_age_ms(profile: Mapping[str, Any]) -> float:
+    """``performance.now()`` for ``p[13]``, derived from the page's own origin.
+
+    A real browser satisfies ``Date.now() ≈ performance.timeOrigin +
+    performance.now()`` to the millisecond, and the proof carries all three
+    (``p[1]`` wall clock, ``p[13]`` now, ``p[17]`` origin).  The two values used
+    to be sampled independently, which made the identity fail on 98.8 % of 500
+    measured device seeds (largest gap 887 s).  Derived here, never sampled, so
+    the identity holds at proof-build time however long the profile has been
+    cached; the floor keeps it out of the "page opened milliseconds ago" band a
+    freshly-spawned process reports.
+    """
+    try:
+        origin = float(profile.get("time_origin") or 0.0)
+    except (TypeError, ValueError):
+        origin = 0.0
+    if origin > 0:
+        return max(1000.0, round(time.time() * 1000 - origin, 3))
+    try:
+        return float(profile.get("performance_now") or 12345.67)
+    except (TypeError, ValueError):
+        return 12345.67
+
+
 def _requirements_token(device_id: str, profile: Mapping[str, Any]) -> str:
-    """Generate the SDK-compatible initial requirements proof."""
+    """Generate the SDK-compatible initial requirements proof.
+
+    Field-for-field this is ``sdk.js getConfig()`` with the two
+    ``_generateRequirementsTokenAnswerBlocking`` overwrites (``[3]`` = 1, ``[9]``
+    = elapsed).  Three of the slots are *random per page load* in the SDK, so
+    they come from :mod:`sms_tool.sentinel.surface` rather than from literals;
+    ``p[2]``/``p[24]`` are family-gated because the SDK derives them from APIs
+    and globals that only some engines have.  ``tests/registration/
+    test_sentinel_proof_parity.py`` compares this tuple against the real SDK's
+    output for the same profile.
+    """
     import base64
 
     screen = str(profile.get("screen") or "1920x1080")
@@ -235,48 +306,46 @@ def _requirements_token(device_id: str, profile: Mapping[str, Any]) -> str:
     # proofs of one registration disagree with each other *and* with a real
     # browser.  ``auth_headers.sentinel_fingerprint`` now supplies the label.
     tz_label = str(profile.get("timezone_name") or tz_name)
-    # Single authority (P1-4).  The old inline ``ZoneInfo`` here raised
-    # ZoneInfoNotFoundError on any host without the IANA database -- Windows
-    # included -- and the except branch then fell back to
-    # ``datetime.now().astimezone()``: the *local machine's* clock stamped into
-    # a proof that claims New York.  The fallback still has to be something,
-    # but it now goes through the module that logs the root cause once.
-    from ..geo.clock import now_in_timezone
-
-    now = now_in_timezone(tz_name)
-    date_string = now.strftime("%a %b %d %Y %H:%M:%S GMT%z")
-    if tz_label:
-        date_string = f"{date_string} ({tz_label})"
+    family = browser_family(str(profile.get("impersonate") or ""))
+    # Seeded from the *account's* device id, never from ``session_id``: the
+    # session id is a thread-local uuid, so a batch worker reuses one value for
+    # every account it handles and all of them would draw the same triplet —
+    # the constant this module exists to remove, in a less obvious place.
+    seed = str(device_id or profile.get("session_id") or "").strip()
+    nav_probe, doc_probe, win_probe = random_probes(seed, profile)
+    time_origin = float(profile.get("time_origin") or (time.time() * 1000 - 12345.67))
+    heap_limit = int(profile.get("js_heap_size_limit") or 4_395_630_592)
     config = [
         _safe_screen_dimension(width, 1920) + _safe_screen_dimension(height, 1080),
-        date_string,
-        int(profile.get("js_heap_size_limit") or 4_395_630_592),
+        _requirements_date_string(tz_name, tz_label),
+        # [2] performance.memory.jsHeapSizeLimit — Chromium only.  ``None``
+        # serialises to the ``null`` a real Firefox/Safari produces.
+        heap_limit if family in _CHROMIUM_FAMILIES else None,
         1,
         str(profile.get("user_agent") or "Mozilla/5.0"),
         str(profile.get("script_src") or f"https://sentinel.openai.com/sentinel/{sentinel_version()}/sdk.js"),
         None,
         str(profile.get("lang") or "en-US"),
-        ",".join(
-            item.split(";", 1)[0].strip()
-            for item in str(profile.get("lang_full") or profile.get("lang") or "en-US").split(",")
-            if item.split(";", 1)[0].strip()
-        ),
+        _requirements_languages(profile),
         1,
-        "userAgent−function userAgent() { [native code] }",
-        "body",
-        "crypto",
-        float(profile.get("performance_now") or 12345.67),
+        # [10..12] sampled per account (see ``sentinel/surface.py``): the SDK
+        # randomises all three on every page load, so constants here were a
+        # free server-side cluster signal.
+        nav_probe,
+        doc_probe,
+        win_probe,
+        _page_age_ms(profile),
         str(profile.get("session_id") or device_id),
         "",
         int(profile.get("hardware_concurrency") or 8),
-        float(profile.get("time_origin") or (time.time() * 1000 - 12345.67)),
+        time_origin,
         0,
         0,
         0,
         0,
         0,
         0,
-        1,
+        1 if family in _INSTALL_TRIGGER_FAMILIES else 0,
     ]
     encoded = base64.b64encode(json.dumps(config, ensure_ascii=False, separators=(",", ":")).encode("utf-8")).decode(
         "ascii"

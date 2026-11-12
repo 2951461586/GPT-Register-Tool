@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .entry import parse_proxy, rotate_session
-from .screening import ScreeningSample, screen_proxy
+from .screening import ScreeningSample, mask_proxy, screen_proxy
 
 #: Quality floor used by the reference's dynamic path. Kept as a default rather
 #: than a hard-coded 80 so a pool with thinner evidence can opt down explicitly.
@@ -157,7 +157,11 @@ class DynamicProxyFactory:
             matched = eligible and (not self.config.asns or asn in self.config.asns)
             self.last_screening = {
                 "accepted": matched,
-                "proxy": candidate,
+                # Masked, never the raw URL: this field is diagnostic state that a
+                # future report may serialise, and the raw entry carries the
+                # provider's username/password.  ``mask_proxy`` is the same helper
+                # the desktop pool table and CLI report use.
+                "proxy": mask_proxy(candidate),
                 "asn": asn,
                 "country": str(getattr(sample, "country", "") or ""),
                 "network_type": str(getattr(sample, "network_type", "") or "unknown"),

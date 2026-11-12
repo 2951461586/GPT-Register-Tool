@@ -19,3 +19,17 @@ this project, review the upstream asset's applicable terms.
    re-vendor must re-apply this patch and update that constant, otherwise
    `validate_runtime_bundle()` fails loudly with
    `sentinel_runtime_hash_mismatch`.
+2. **2026-11-12 — page clock.** `performance.timeOrigin` / `performance.now()`
+   were node's own process clock, so the SDK proof (`p[17]`/`p[13]`) and the
+   Python requirements proof for the same registration disagreed by up to 15
+   minutes. Both now derive from the profile's page origin
+   (`options.pageTimeOrigin`), which is what a real browser fixes when the
+   document is created; `Date.now() ≈ timeOrigin + now()` therefore holds
+   inside the VM as well.
+3. **2026-11-12 — navigator identity + Gecko `InstallTrigger`.**
+   `Navigator.prototype` was missing `appCodeName` / `appName` / `appVersion` /
+   `product` / `productSub`, so a script reading `navigator.appName` got
+   `undefined` on every profile. `window.InstallTrigger` (Gecko-only) was also
+   missing, so a Firefox profile's own proof reported `p[24]=0` while the
+   requirements proof claimed `1`. Both are now present (identity values are the
+   real ones; `InstallTrigger` only on Firefox).

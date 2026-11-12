@@ -418,6 +418,10 @@ def run_sentinel_sdk(
         "language": language,
         "languages": languages or [language],
         "timeZone": str(profile.get("timezone") or "UTC"),
+        # The page's own clock (``p[17]``).  The VM used node's process clock, so
+        # the SDK's proof said "page opened 30 ms ago" while the Python
+        # requirements proof said "2-15 min ago" for the same registration.
+        "pageTimeOrigin": _as_float(profile.get("time_origin"), 0.0),
         "timezoneName": str(profile.get("timezone_name") or profile.get("timezone") or "UTC"),
         "timezoneOffsetMinutes": _as_int(profile.get("timezone_offset_minutes"), 0),
         "hardwareConcurrency": _as_int(profile.get("hardware_concurrency"), 8),
