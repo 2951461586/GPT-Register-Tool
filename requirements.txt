@@ -1,13 +1,13 @@
 # Core dependencies
-curl_cffi==0.16.0
+curl_cffi==0.17.0
 # IANA timezone database.  Windows ships none, so ``zoneinfo.TZPATH`` is empty
 # and every ``ZoneInfo("America/New_York")`` raises.  That silently broke:
 #   - browser_fingerprint_pool: offset fell back to the hardcoded DST value
 #   - sentinel/client.py: the requirements token fell back to the *local
 #     machine's* clock while claiming the profile's timezone
 #   - sentinel/runner.py: ``timezoneOffsetMinutes`` was 0 for every registration
-tzdata>=2024.1
-cryptography>=41.0.0
+tzdata>=2026.6
+cryptography>=50.0.2
 PyNaCl>=1.5.0
 httpx[http2,socks]>=0.28.0
 requests>=2.31.0
@@ -17,14 +17,14 @@ pyotp>=2.9.0
 psutil>=7.0,<8
 
 # Anti-detect browser (preferred)
-camoufox[geoip]>=0.4.0
+camoufox[geoip]>=0.5.9
 browserforge>=0.1.0
 
 # Browser automation fallback
-cloakbrowser>=0.5.3,<0.6
+cloakbrowser>=0.7.0,<0.8
 
 # CAPTCHA solving (Playwright-based)
-playwright>=1.40.0
+playwright>=1.64.1
 playwright-stealth>=2.0.3
 qrcode[pil]>=7.4.2
 
@@ -33,4 +33,4 @@ qrcode[pil]>=7.4.2
 # (called from paypal/orchestrator.py strategy selection).
 # Was previously undeclared while being imported at both sites, so the whole
 # fallback silently degraded to "not installed" on every fresh install.
-nodriver>=0.45
+nodriver>=0.50.99

@@ -17,4 +17,4 @@
 #
 # Bump deliberately, then re-run the gate the pin protects:
 #     python -m ruff check sms_tool services scripts
-ruff==0.16.6
+ruff==0.17.3

@@ -24,22 +24,22 @@
 # (the command in README.md and ci.yml) fail with "ERROR: Constraints cannot
 # have extras" before it installs anything. Extras are declared once, in
 # requirements.txt; this file only narrows the version. See pip issue #8210.
-curl_cffi==0.16.0
-cryptography==50.0.1
+curl_cffi==0.17.0
+cryptography==50.0.2
 PyNaCl==1.6.2
 httpx==0.28.1
 requests==2.34.2
 PyOTP==2.10.0
 psutil==7.2.2
-tzdata==2026.3
-camoufox==0.5.4
+tzdata==2026.6
+camoufox==0.5.9
 browserforge==1.2.4
-cloakbrowser==0.5.9
-playwright==1.60.0
+cloakbrowser==0.7.0
+playwright==1.64.1
 playwright-stealth==2.0.3
 qrcode==8.2
-nodriver==0.50.3
-pytest==9.1.1
+nodriver==0.50.99
+pytest==9.2.0
 pytest-cov==7.1.0
 # Type checker for scripts/pyright_ratchet.py. Declared in requirements-dev.txt
 # (never imported by source), pinned here so the gate cannot drift when a new

@@ -3,7 +3,7 @@
 -r requirements.txt
 
 # Test runner used by CI and the documented validation command
-pytest>=8.0
+pytest>=9.2.0
 pytest-cov>=5.0
 # Parallel runner. CI and the documented command use `-n 4 --dist loadfile`;
 # the ordering-sensitive shard stays serial in its own process. Measurements and
