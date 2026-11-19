@@ -223,6 +223,41 @@ def import_cpa(args: Any, ctx: AccountCommandContext) -> None:
         print(f"[*] CPA quota refresh after import skipped: {exc}")
 
 
+def import_account_json(args: Any) -> None:
+    """Import exported ``account-cpa-*.json`` file(s) into the local store.
+
+    Offline by design: no provider is called, so the only things that can fail
+    are the document (``AccountImportError``) and an individual account (which
+    is reported, not raised). Exit 3 on any failure so a wrapper script can gate.
+    """
+    from ..accounts.account_import import DEFAULT_FILENAME_PATTERN, AccountImportError
+    from ..accounts.account_import import import_account_json as run_import
+    from ..diagnostics import safe_print
+
+    paths = [str(item).strip() for item in (getattr(args, "import_account_json", None) or []) if str(item).strip()]
+    if not paths:
+        safe_print("[Error] --import-account-json needs at least one file", file=sys.stderr)
+        raise SystemExit(2)
+    pattern = DEFAULT_FILENAME_PATTERN
+    reports: list[dict[str, Any]] = []
+    for path in paths:
+        try:
+            reports.append(run_import(path, filename_pattern=pattern))
+        except AccountImportError as exc:
+            reports.append({"ok": False, "source": path, "error": str(exc), "imported": 0, "skipped": [], "failed": []})
+    summary = {
+        "ok": all(report.get("ok") for report in reports),
+        "files": len(reports),
+        "total": sum(int(report.get("total") or 0) for report in reports),
+        "imported": sum(int(report.get("imported") or 0) for report in reports),
+        "db_saved": sum(int(report.get("db_saved") or 0) for report in reports),
+        "reports": reports,
+    }
+    safe_print(json.dumps(summary, ensure_ascii=False, indent=2))
+    if not summary["ok"]:
+        raise SystemExit(3)
+
+
 def check_promotion(args: Any, ctx: AccountCommandContext) -> None:
     from ..accounts.promotion_batch import refresh_promotion_statuses
 

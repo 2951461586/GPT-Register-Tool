@@ -64,6 +64,7 @@ are omitted.
 | `--gmail-send-self` | — | Send --gmail-send to the Gmail mailbox itself |
 | `--gmail-send-subject` | value | Subject for --gmail-send |
 | `--gmail-send-to` | value | Recipient list for --gmail-send, separated by comma/newline |
+| `--import-account-json` | `FILE` | Import an exported account-cpa-*.json back into the local account store (repeatable) |
 | `--import-cpa` | — | Import an existing AT-only session JSON into CPA/SUB2API |
 | `--import-target` | choices: `cpa`, `sub2api`, `cliproxyapi` | Target for --import-cpa and 401 re-import |
 | `--inbox-limit` | value | Max messages for --view-inbox |

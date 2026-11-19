@@ -35,3 +35,10 @@ def register(parser: argparse.ArgumentParser) -> None:
         help="Output format for --convert-session-json",
     )
     parser.add_argument("--convert-output", default=None, help="Optional output path for --convert-session-json")
+    parser.add_argument(
+        "--import-account-json",
+        action="append",
+        default=[],
+        metavar="FILE",
+        help="Import an exported account-cpa-*.json back into the local account store (repeatable)",
+    )

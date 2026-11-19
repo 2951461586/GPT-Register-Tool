@@ -540,6 +540,17 @@ def test_summary_facts_are_pinned():
         # ``cross_process_gate`` so a module every identity lookup imports stays
         # free of them at import time. All three carry an entry in
         # ``delayed_import_reasons.json``.
+        # 2026-11-19 (CPA 导出导入器): 318 -> 326 (+8). The new
+        # ``accounts/account_import.py`` reaches ``session_builder``,
+        # ``session_converter``, ``store.accounts``, ``storage`` and
+        # ``kernel.paths`` from inside its functions, and the CLI seam
+        # (``commands/accounts.py``) imports the importer plus ``diagnostics``
+        # lazily. All of it is deliberate: the module-level counts
+        # (``accounts -> sms_tool`` etc.) stay at their frozen values, which is
+        # exactly the trade this gate's failure text prescribes for a leaf
+        # reached only by ``--import-account-json``. Each edge carries a reason
+        # in ``scripts/delayed_import_reasons.json``.
+        #
         # 2026-11-19: 311 -> 318 (+7) for the protocol transport seam
         # (``http_backend``) plus the Sentinel SDK refresh: the selector is
         # imported locally by ``registration/preflight.py``,
@@ -547,7 +558,7 @@ def test_summary_facts_are_pinned():
         # refresh path imports ``endpoints``, ``auth_headers``, ``kernel.paths``
         # and the transport itself. Each is reasoned in
         # ``scripts/delayed_import_reasons.json``.
-        "delayed_cross_dir_edges": 318,
+        "delayed_cross_dir_edges": 326,
         # Imports under `if TYPE_CHECKING:` never run, so they are not runtime
         # edges. 1 here since 2026-10-23: `payment/link_manager.py` declares its
         # `pay_link` re-exports type-only (the module is not a package, so the

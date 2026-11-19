@@ -731,6 +731,12 @@ def _main_early_commands(args) -> bool:
         # preflight, printed error frames and exited 2).  The docstring above
         # already promised this contract.
         return True
+    if getattr(args, "import_account_json", None):
+        # Handled here, not in the dispatcher: importing an export needs neither
+        # the config-heavy startup nor the registration pipeline, and `main`'s
+        # length is pinned by scripts/function_length_ratchet.py.
+        _import_account_json(args)
+        return True
     return False
 
 
@@ -1076,6 +1082,10 @@ def _export_codex_json(args):
 
 def _import_cpa(args):
     return account_commands.import_cpa(args, _account_command_context())
+
+
+def _import_account_json(args):
+    return account_commands.import_account_json(args)
 
 
 def _check_promotion(args):

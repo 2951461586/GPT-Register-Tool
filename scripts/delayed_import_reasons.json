@@ -1,5 +1,25 @@
 {
   "edges": {
+    "sms_tool/accounts/account_import.py -> sms_tool.kernel.paths": {
+      "reason": "deferred",
+      "why": "CPA 导出导入器 (2026-11-19): the sessions directory is resolved from the runtime config only when an import actually runs, so `kernel.paths` (and the config it reads for the default output directory) is not part of importing this module. Deferring also keeps the frozen `accounts -> sms_tool/kernel` pair count unchanged."
+    },
+    "sms_tool/accounts/account_import.py -> sms_tool.session_builder": {
+      "reason": "deferred",
+      "why": "CPA 导出导入器 (2026-11-19): the importer is a leaf reached only from `--import-account-json`, and `accounts -> sms_tool` is a frozen module-level pair count (scripts/import_layer_ratchet.py). Importing build_session_file inside the function keeps that count intact and keeps `import sms_tool.accounts.account_import` free of the session/converter/storage stack."
+    },
+    "sms_tool/accounts/account_import.py -> sms_tool.session_converter": {
+      "reason": "deferred",
+      "why": "CPA 导出导入器 (2026-11-19): the importer is a leaf reached only from `--import-account-json`, and `accounts -> sms_tool` is a frozen module-level pair count (scripts/import_layer_ratchet.py). Importing parse_jwt_payload inside the function keeps that count intact and keeps `import sms_tool.accounts.account_import` free of the session/converter/storage stack."
+    },
+    "sms_tool/accounts/account_import.py -> sms_tool.storage": {
+      "reason": "deferred",
+      "why": "CPA 导出导入器 (2026-11-19): the importer is a leaf reached only from `--import-account-json`, and `accounts -> sms_tool` is a frozen module-level pair count (scripts/import_layer_ratchet.py). Importing get_account_record inside the function keeps that count intact and keeps `import sms_tool.accounts.account_import` free of the session/converter/storage stack."
+    },
+    "sms_tool/accounts/account_import.py -> sms_tool.store.accounts": {
+      "reason": "deferred",
+      "why": "CPA 导出导入器 (2026-11-19): the importer is a leaf reached only from `--import-account-json`, and `accounts -> sms_tool` is a frozen module-level pair count (scripts/import_layer_ratchet.py). Importing upsert_account inside the function keeps that count intact and keeps `import sms_tool.accounts.account_import` free of the session/converter/storage stack."
+    },
     "sms_tool/accounts/payment_qualification.py -> sms_tool.config": {
       "reason": "deferred",
       "why": "支付资格 (2026-10-26): the single-account probe is a leaf reached only by the qualification batch, the CLI command and the desktop task. Deferring its config/proxy/payment imports keeps the frozen accounts -> root and accounts -> proxy module-level counts untouched, and keeps `import sms_tool.accounts.payment_qualification` free of the payment stack."
