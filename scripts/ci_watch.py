@@ -41,7 +41,29 @@ class WatchError(RuntimeError):
     """A usage or tooling problem -- never a CI verdict."""
 
 
+#: GitHub's API drops a connection now and then (`EOF`, 502/503). Retrying is
+#: the difference between "CI is red" and "the reporter could not ask", and the
+#: second one must not look like the first.
+TRANSIENT_GH_MARKERS = ("EOF", "connection reset", "502", "503", "504", "timeout")
+GH_ATTEMPTS = 3
+GH_RETRY_SECONDS = 3
+
+
 def _gh(*args: str, timeout: int = 120) -> str:
+    last: WatchError | None = None
+    for attempt in range(1, GH_ATTEMPTS + 1):
+        try:
+            return _gh_once(*args, timeout=timeout)
+        except WatchError as exc:
+            last = exc
+            transient = any(marker in str(exc) for marker in TRANSIENT_GH_MARKERS)
+            if not transient or attempt == GH_ATTEMPTS:
+                raise
+            time.sleep(GH_RETRY_SECONDS)
+    raise last or WatchError("gh failed")  # pragma: no cover - loop always returns or raises
+
+
+def _gh_once(*args: str, timeout: int = 120) -> str:
     try:
         result = subprocess.run(
             ["gh", *args],
