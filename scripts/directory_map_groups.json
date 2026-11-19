@@ -223,7 +223,8 @@
       "sms_tool/accounts/account_events.py",
       "sms_tool/accounts/account_health.py",
       "sms_tool/accounts/account_health_queue.py",
-      "sms_tool/accounts/account_lifecycle.py"
+      "sms_tool/accounts/account_lifecycle.py",
+      "sms_tool/accounts/account_import.py"
     ],
     "Payment contracts, catalog and stage gates": [
       "sms_tool/operation_journal.py",
