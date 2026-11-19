@@ -57,6 +57,26 @@ AUTH_FINGERPRINT_PROFILES = {
         "sec_ch_ua_mobile": "?0",
         "sec_ch_ua_platform": '"Windows"',
     },
+    # 2026-11-19 (curl_cffi 0.17.0): the two newest Gecko editions.  Their
+    # ClientHello is byte-identical to firefox144/147 -- ``--capture`` measured
+    # the same extension list on 0.17.0 -- so ``tls_fingerprint``'s per-account
+    # permutation stays valid without a re-capture.
+    "firefox155": {
+        "name": "firefox155",
+        "impersonate": "firefox155",
+        "user_agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:155.0) Gecko/20100101 Firefox/155.0"),
+        "sec_ch_ua": "",
+        "sec_ch_ua_mobile": "?0",
+        "sec_ch_ua_platform": '"Windows"',
+    },
+    "firefox153": {
+        "name": "firefox153",
+        "impersonate": "firefox153",
+        "user_agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:153.0) Gecko/20100101 Firefox/153.0"),
+        "sec_ch_ua": "",
+        "sec_ch_ua_mobile": "?0",
+        "sec_ch_ua_platform": '"Windows"',
+    },
     "firefox135": {
         "name": "firefox135",
         "impersonate": "firefox135",
@@ -77,7 +97,8 @@ AUTH_FINGERPRINT_PROFILES = {
     #
     # 🔴 `sec_ch_ua` is **measured, not written**: every literal below is what the
     # installed curl_cffi sends for that same impersonate (captured 2026-10-31
-    # with curl_cffi 0.16.0 against a local echo server). Chrome rotates both the
+    # with curl_cffi 0.16.0 and re-measured 2026-11-19 on 0.17.0, where every
+    # pre-existing literal still matched byte for byte). Chrome rotates both the
     # GREASE brand (`Not(A:Brand` / `Not-A.Brand` / `Not_A Brand` / `Not:A-Brand`)
     # and the brand ORDER every few majors, so a hand-written list goes stale
     # silently -- the pre-2026-10-31 table had `"Google Chrome"` first with
@@ -86,12 +107,34 @@ AUTH_FINGERPRINT_PROFILES = {
     # so a curl_cffi upgrade that changes the emissions fails the suite instead of
     # leaving the UA and the hints disagreeing.
     #
-    # There is deliberately **no `chrome150` entry**: curl_cffi 0.16.0's
-    # `BrowserType` stops at `chrome146`, so a chrome150 profile could only ever
-    # be selected and then fail closed (`auth_fingerprint_unavailable`) in the
-    # preflight, or fall back silently and send Chrome/150 hints over a 146 TLS
-    # fingerprint. `chrome146` is the newest real option; bump this table when
-    # curl_cffi ships a newer one.
+    # 2026-11-19 (curl_cffi 0.17.0): the table now reaches `chrome152`. There is
+    # deliberately **no `chrome150` on Windows** -- upstream ships that preset as
+    # a *macOS* build (measured: UA `Macintosh`, hints `"macOS"`), so it lives in
+    # the macOS group below; `chrome151`/`chrome152` are the Windows editions.
+    # This is the newest major 0.17.0 exposes; bump the table when the library
+    # ships a newer one.
+    "chrome152": {
+        "name": "chrome152",
+        "impersonate": "chrome152",
+        "user_agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36"
+        ),
+        "sec_ch_ua": '"Chromium";v="152", "Not?A_Brand";v="24", "Google Chrome";v="152"',
+        "sec_ch_ua_mobile": "?0",
+        "sec_ch_ua_platform": '"Windows"',
+    },
+    "chrome151": {
+        "name": "chrome151",
+        "impersonate": "chrome151",
+        "user_agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36"
+        ),
+        "sec_ch_ua": '"Not=A?Brand";v="99", "Google Chrome";v="151", "Chromium";v="151"',
+        "sec_ch_ua_mobile": "?0",
+        "sec_ch_ua_platform": '"Windows"',
+    },
     "chrome146": {
         "name": "chrome146",
         "impersonate": "chrome146",
@@ -158,7 +201,45 @@ AUTH_FINGERPRINT_PROFILES = {
         "sec_ch_ua_mobile": "?0",
         "sec_ch_ua_platform": '"Windows"',
     },
+    # ── Chrome on macOS (only place this preset exists upstream) ──────────────
+    #
+    # ``chrome150`` is macOS-only in curl_cffi 0.17.0, so its UA and hints must
+    # say so -- see ``_MACOS_IMPERSONATE`` for the platform class that keeps
+    # navigator.platform / sec-ch-ua-platform in step with it.
+    "chrome150": {
+        "name": "chrome150",
+        "impersonate": "chrome150",
+        "user_agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
+        ),
+        "sec_ch_ua": '"Not;A=Brand";v="8", "Chromium";v="150", "Google Chrome";v="150"',
+        "sec_ch_ua_mobile": "?0",
+        "sec_ch_ua_platform": '"macOS"',
+    },
     # ── Safari family, macOS (WebKit, no Sec-CH-UA client hints) ──────────────
+    "safari270": {
+        "name": "safari270",
+        "impersonate": "safari270",
+        "user_agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0 Safari/605.1.15"
+        ),
+        "sec_ch_ua": "",
+        "sec_ch_ua_mobile": "?0",
+        "sec_ch_ua_platform": '"macOS"',
+    },
+    "safari260": {
+        "name": "safari260",
+        "impersonate": "safari260",
+        "user_agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15"
+        ),
+        "sec_ch_ua": "",
+        "sec_ch_ua_mobile": "?0",
+        "sec_ch_ua_platform": '"macOS"',
+    },
     "safari18_0": {
         "name": "safari18_0",
         "impersonate": "safari18_0",
@@ -312,6 +393,13 @@ _VENDOR_BY_FAMILY = {
 }
 
 
+#: Presets curl_cffi ships as **macOS** builds even though the name carries no
+#: platform suffix.  ``chrome150`` is the case that matters today: its UA and
+#: ``sec-ch-ua-platform`` say macOS, so classifying it as Windows would put
+#: ``navigator.platform = "Win32"`` in the same proof as a Macintosh UA.
+_MACOS_IMPERSONATE = frozenset({"chrome150", "chrome150_macos", "chrome151_macos", "chrome152_macos"})
+
+
 def _platform_class(impersonate: str) -> str:
     """Map an impersonate token to its platform class (windows/macos/ios)."""
     token = str(impersonate or "").lower()
@@ -319,6 +407,8 @@ def _platform_class(impersonate: str) -> str:
         return "ios"
     if token.endswith("_android"):
         return "android"
+    if token.endswith("_macos") or token in _MACOS_IMPERSONATE:
+        return "macos"
     if _browser_family(token) == "safari":
         return "macos"
     return "windows"
@@ -592,6 +682,32 @@ def high_entropy_client_hints_enabled() -> bool:
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
+def supported_profile_names() -> set[str]:
+    """Profile names the **active transport** can actually impersonate.
+
+    Single definition for the three call sites that used to import curl_cffi's
+    ``BrowserType`` directly (profile configuration, ``current_auth_fingerprint``
+    and ``auth_impersonate``).  With ``wreq`` selected those must filter on
+    wreq's preset list instead, or a profile the backend cannot run would stay
+    selectable and either fail closed late or silently send a different
+    ClientHello under the same UA.  See :mod:`sms_tool.http_backend`.
+    """
+    try:
+        from .http_backend import supported_impersonations
+
+        supported = supported_impersonations()
+    except Exception:  # broad-except: capability probing must never break selection
+        supported = set()
+    if supported:
+        return supported
+    try:
+        from curl_cffi.requests.impersonate import BrowserType
+
+        return {item.value for item in BrowserType}
+    except Exception:  # broad-except: no curl_cffi means "no evidence", not a crash
+        return {AUTH_IMPERSONATE}
+
+
 def _configured_auth_profiles():
     cfg = _auth_fingerprint_config()
     configured = cfg.get("profiles")
@@ -600,12 +716,7 @@ def _configured_auth_profiles():
     if not isinstance(configured, (list, tuple)):
         configured = []
     names = [str(item or "").strip().lower() for item in configured]
-    try:
-        from curl_cffi.requests.impersonate import BrowserType
-
-        supported = {item.value for item in BrowserType}
-    except Exception:
-        supported = {AUTH_IMPERSONATE}
+    supported = supported_profile_names()
     names = [name for name in names if name in AUTH_FINGERPRINT_PROFILES and name in supported]
     defaults = [name for name in AUTH_FINGERPRINT_PROFILES if name in supported]
     return names or defaults or [AUTH_IMPERSONATE]
@@ -672,12 +783,7 @@ def set_auth_fingerprint(name: str) -> None:
 
 def current_auth_fingerprint():
     name = getattr(_AUTH_FINGERPRINT_LOCAL, "profile_name", "")
-    try:
-        from curl_cffi.requests.impersonate import BrowserType
-
-        supported = {item.value for item in BrowserType}
-    except Exception:
-        supported = set(AUTH_FINGERPRINT_PROFILES)
+    supported = supported_profile_names()
     if name in AUTH_FINGERPRINT_PROFILES and name in supported:
         return dict(AUTH_FINGERPRINT_PROFILES[name])
     # Keep the configured browser identity visible to all protocol layers even
@@ -698,12 +804,7 @@ def current_auth_fingerprint():
 
 def auth_impersonate():
     requested = str(current_auth_fingerprint()["impersonate"])
-    try:
-        from curl_cffi.requests.impersonate import BrowserType
-
-        supported = {item.value for item in BrowserType}
-    except Exception:
-        supported = {requested}
+    supported = supported_profile_names()
     if requested in supported:
         return requested
     # Non-registration callers (for example stored-session workspace checks)
@@ -722,7 +823,7 @@ def auth_user_agent():
 
 
 def auth_fingerprint_capabilities() -> dict[str, list[str]]:
-    """Return configured profiles that the installed curl_cffi can provide."""
+    """Return configured profiles the **active backend** can provide."""
     cfg = _auth_fingerprint_config()
     raw = cfg.get("profiles")
     if isinstance(raw, str):
@@ -732,16 +833,22 @@ def auth_fingerprint_capabilities() -> dict[str, list[str]]:
     else:
         profile = str(cfg.get("profile") or "").strip().lower()
         configured = [profile] if profile else [AUTH_IMPERSONATE]
-    try:
-        from curl_cffi.requests.impersonate import BrowserType
-
-        installed = {item.value for item in BrowserType}
-    except Exception:
-        installed = set()
+    installed = supported_profile_names()
     known = set(AUTH_FINGERPRINT_PROFILES)
     available = sorted(name for name in configured if name in known and name in installed)
     missing = sorted(name for name in configured if name not in known or name not in installed)
     return {"configured": configured, "available": available, "missing": missing}
+
+
+#: ``(major, minor)`` range of curl_cffi this fingerprint table is measured
+#: against.  The upper bound is not decoration: every Chrome ``sec_ch_ua``
+#: literal below is a *measurement* of what the installed library emits, so a
+#: bracket that admits a version nobody re-measured is a silent UA/hint split.
+#: 2026-11-19: widened 0.16 → 0.17 together with the dependency bump; the
+#: ``test_every_chrome_hint_literal_matches_curl_cffi`` suite re-measures every
+#: literal against the installed build, which is what makes the widening safe.
+CURL_CFFI_MIN_MINOR = 15
+CURL_CFFI_MAX_MINOR = 17
 
 
 def curl_cffi_capabilities() -> dict[str, object]:
@@ -755,7 +862,7 @@ def curl_cffi_capabilities() -> dict[str, object]:
         parts = tuple(int(part) for part in installed_version.split(".")[:2])
     except (TypeError, ValueError):
         parts = ()
-    version_ok = bool(parts and (parts[0] == 0 and 15 <= parts[1] < 17))
+    version_ok = bool(parts and parts[0] == 0 and CURL_CFFI_MIN_MINOR <= parts[1] <= CURL_CFFI_MAX_MINOR)
     return {"version": installed_version, "version_ok": version_ok, **profiles}
 
 

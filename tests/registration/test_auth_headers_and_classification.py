@@ -130,24 +130,48 @@ class AuthHeadersAndClassificationTests(unittest.TestCase):
                     server.server_close()
                 self.assertEqual(profile["sec_ch_ua"], captured.get("sec-ch-ua", ""), name)
 
-    def test_the_newest_chrome_profile_is_one_curl_cffi_can_impersonate(self):
+    def test_every_profile_names_an_impersonation_curl_cffi_can_run(self):
         """No profile may name an impersonation the installed curl_cffi lacks.
 
-        A `chrome150` entry used to sit here; curl_cffi 0.16.0 stops at
-        `chrome146`, so it could only be selected and then fail closed in the
-        preflight or fall back silently to a different TLS fingerprint.
+        A missing preset is not a cosmetic gap: the entry can still be *selected*
+        (``select_auth_fingerprint`` walks the table) and then either fails closed
+        in the preflight or falls back to a different TLS fingerprint while the
+        UA keeps claiming the missing one.
+
+        The newest-entry assertion used to be the literal ``"chrome146"``, which
+        made every dependency bump a test edit and told a reader nothing. It now
+        derives the expected value from the installed library, so the gate keeps
+        biting when the table falls *behind* curl_cffi -- which is the failure
+        that actually matters.
         """
         from curl_cffi.requests.impersonate import BrowserType
 
         installed = {item.value for item in BrowserType}
-        chrome = [name for name in auth_headers.AUTH_FINGERPRINT_PROFILES if name.startswith("chrome")]
-        self.assertTrue(chrome)
-        for name in chrome:
-            with self.subTest(profile=name):
-                self.assertIn(name, installed)
-        newest = max(chrome, key=lambda n: int(auth_headers._browser_version(n) or 0))
-        self.assertEqual(newest, "chrome146")
-        self.assertIn("Chrome/146.", auth_headers.AUTH_FINGERPRINT_PROFILES[newest]["user_agent"])
+        for family in ("chrome", "firefox", "safari"):
+            names = [name for name in auth_headers.AUTH_FINGERPRINT_PROFILES if name.startswith(family)]
+            self.assertTrue(names, f"the table lost its {family} family")
+            for name in names:
+                with self.subTest(profile=name):
+                    self.assertIn(name, installed)
+
+        desktop_chrome = [
+            name
+            for name in installed
+            if name.startswith("chrome")
+            and "_" not in name.removeprefix("chrome")
+            and name.removeprefix("chrome").isdigit()
+        ]
+        newest_installed = max(int(name.removeprefix("chrome")) for name in desktop_chrome)
+        newest_mine = max(
+            int(auth_headers._browser_version(name) or 0)
+            for name in auth_headers.AUTH_FINGERPRINT_PROFILES
+            if name.startswith("chrome")
+        )
+        self.assertEqual(
+            newest_mine,
+            newest_installed,
+            "the table must reach the newest Chrome preset the installed curl_cffi ships",
+        )
 
     def test_windows_platform_version_matches_the_har(self):
         self.assertEqual(

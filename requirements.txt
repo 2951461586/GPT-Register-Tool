@@ -1,5 +1,11 @@
 # Core dependencies
-curl_cffi==0.16.0
+curl_cffi==0.17.0
+# Optional second protocol transport (``PROTOCOL_HTTP_CLIENT=wreq`` /
+# ``email_registration.protocol_http_backend``). Rust stack, so its ClientHello
+# family is independent of curl-impersonate; declared (not optional) because
+# ``sms_tool.http_backend`` must be able to answer "installed?" honestly instead
+# of relying on an ad-hoc import. Requires CPython >= 3.11 by wheel tag.
+wreq>=0.13.0,<0.14
 # IANA timezone database.  Windows ships none, so ``zoneinfo.TZPATH`` is empty
 # and every ``ZoneInfo("America/New_York")`` raises.  That silently broke:
 #   - browser_fingerprint_pool: offset fell back to the hardcoded DST value

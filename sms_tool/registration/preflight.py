@@ -4,9 +4,9 @@ import logging
 from dataclasses import replace
 from typing import Mapping
 
-from curl_cffi import requests as curl_requests
-
 from ..auth_headers import (
+    CURL_CFFI_MAX_MINOR,
+    CURL_CFFI_MIN_MINOR,
     auth_fingerprint_capabilities,
     auth_impersonate,
     curl_cffi_capabilities,
@@ -82,8 +82,20 @@ def _with_proxy_scheme(proxy: str, scheme: str) -> str:
     return proxy_to_url(replace(entry, scheme=scheme)) if entry is not None else ""
 
 
+def _transport_session():
+    """The configured protocol transport (``curl_cffi`` by default).
+
+    Function-local import on purpose: ``registration -> sms_tool`` is a
+    frozen module-level pair count (``scripts/import_layer_ratchet.py``), and
+    the preflight is the only registration module that needs the selector.
+    """
+    from .. import http_backend
+
+    return http_backend.new_session()
+
+
 def _proxy_scheme_reachable(candidate: str, url: str) -> bool:
-    session = curl_requests.Session()
+    session = _transport_session()
     _apply_tls_fingerprint(session)
     try:
         session.trust_env = False
@@ -142,6 +154,15 @@ def _resolve_proxy_scheme(proxy, *, cfg=None):
     return candidate
 
 
+def _proxy_attempts_bounded(value, default=1, ceiling=3):
+    """Clamp the probe attempt count without trusting the config type."""
+    try:
+        attempts = int(value or default)
+    except (TypeError, ValueError):
+        attempts = default
+    return max(1, min(attempts, ceiling))
+
+
 def registration_network_preflight(proxy=None, *, proxy_attempts: int = 2):
     """Validate the auth edge nodes before claiming a mailbox.
 
@@ -153,7 +174,12 @@ def registration_network_preflight(proxy=None, *, proxy_attempts: int = 2):
     capabilities = curl_cffi_capabilities()
     profile_capabilities = auth_fingerprint_capabilities()
     if not capabilities["version_ok"] and profile_capabilities["missing"]:
-        raise RuntimeError("auth_fingerprint_unavailable:curl_cffi_requires_0.15.x_or_0.16.x")
+        # Derive the range from the constants the capability check actually
+        # uses: the previous hand-written "0.15.x_or_0.16.x" string went stale
+        # the moment the bracket moved (2026-11-19).
+        raise RuntimeError(
+            f"auth_fingerprint_unavailable:curl_cffi_requires_0.{CURL_CFFI_MIN_MINOR}.x_to_0.{CURL_CFFI_MAX_MINOR}.x"
+        )
     if profile_capabilities["missing"]:
         raise RuntimeError("auth_fingerprint_unavailable:" + ",".join(profile_capabilities["missing"]))
     chat_base = str((CFG.get("chatgpt") or {}).get("chat_base_url") or endpoints.CHATGPT_BASE).rstrip("/")
@@ -178,8 +204,8 @@ def registration_network_preflight(proxy=None, *, proxy_attempts: int = 2):
     )
     candidate = normalize_proxy_url(proxy or "") or None
     last_error = None
-    for attempt in range(max(1, min(int(proxy_attempts or 1), 3))):
-        session = curl_requests.Session()
+    for attempt in range(_proxy_attempts_bounded(proxy_attempts)):
+        session = _transport_session()
         # The preflight is the first thing the auth edge sees; it must present the
         # same ClientHello as the run that follows, otherwise a pass here means
         # nothing about the account's own session.
@@ -235,7 +261,7 @@ def registration_network_preflight(proxy=None, *, proxy_attempts: int = 2):
             return result
         except Exception as exc:  # broad-except: compat
             last_error = exc
-            if attempt + 1 >= max(1, min(int(proxy_attempts or 1), 3)) or not candidate:
+            if attempt + 1 >= _proxy_attempts_bounded(proxy_attempts) or not candidate:
                 break
             candidate = refresh_proxy_sid(candidate)
         finally:

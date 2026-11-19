@@ -135,11 +135,12 @@ def _distribution_version(distribution: str) -> str:
 
 
 def _probe_curl_cffi() -> dict[str, str]:
-    """Version gate only: 0.15/0.16 are the releases that carry the profile API.
+    """Version gate only: the bracket ``curl_cffi_capabilities`` accepts.
 
     The old probe additionally imported ``BrowserType``; that import (~180 ms)
     proved only what the version already states, so the pin is the evidence.
     """
+    lo, hi = _curl_cffi_bounds()
     try:
         spec = importlib.util.find_spec("curl_cffi")
     except (ImportError, ValueError):
@@ -149,17 +150,56 @@ def _probe_curl_cffi() -> dict[str, str]:
             "curl_cffi",
             "fail",
             "package not installed",
-            "python -m pip install 'curl_cffi>=0.15.0,<0.17'",
+            f"python -m pip install 'curl_cffi>=0.{lo}.0,<0.{hi + 1}'",
         )
     version = _distribution_version("curl_cffi")
-    if not version.startswith(("0.15.", "0.16.")):
+    if not _curl_cffi_version_ok(version):
         return _check(
             "curl_cffi",
             "fail",
             f"version {version or 'unknown'}",
-            "registration requires curl_cffi 0.15.x or 0.16.x (chrome146 TLS profile)",
+            f"registration requires curl_cffi 0.{lo}.x to 0.{hi}.x ({_newest_chrome_profile()} TLS profile)",
         )
     return _check("curl_cffi", "ok", f"{version} (impersonation profiles available)")
+
+
+def _curl_cffi_bounds() -> tuple[int, int]:
+    """The accepted minor range, read from the module that enforces it.
+
+    Duplicated literals were the bug: ``doctor`` still said "0.15.x or 0.16.x"
+    after ``curl_cffi_capabilities`` widened, so a healthy 0.17 install was
+    reported as failed.  A function-level import keeps ``doctor --help`` cheap.
+    """
+    from .auth_headers import CURL_CFFI_MAX_MINOR, CURL_CFFI_MIN_MINOR
+
+    return CURL_CFFI_MIN_MINOR, CURL_CFFI_MAX_MINOR
+
+
+def _curl_cffi_version_ok(version: str) -> bool:
+    lo, hi = _curl_cffi_bounds()
+    parts = str(version or "").split(".")[:2]
+    try:
+        major, minor = int(parts[0]), int(parts[1])
+    except (IndexError, ValueError):
+        return False
+    return major == 0 and lo <= minor <= hi
+
+
+def _newest_chrome_profile() -> str:
+    """The newest Chrome entry, for the failure hint only."""
+    from .auth_headers import AUTH_FINGERPRINT_PROFILES
+
+    newest, newest_major = "chrome", -1
+    for name in AUTH_FINGERPRINT_PROFILES:
+        if not name.startswith("chrome"):
+            continue
+        try:
+            major = int(name.removeprefix("chrome"))
+        except ValueError:
+            continue
+        if major > newest_major:
+            newest, newest_major = name, major
+    return newest
 
 
 def _probe_import(

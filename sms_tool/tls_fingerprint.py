@@ -73,13 +73,16 @@ from .auth_headers import _device_seed, current_auth_fingerprint
 logger = logging.getLogger(__name__)
 
 #: Extension id lists captured from the live ``curl_cffi`` presets
-#: (``scripts/tls_fingerprint_probe.py --capture``, curl_cffi 0.16.0).
+#: (``scripts/tls_fingerprint_probe.py --capture``, curl_cffi 0.16.0; re-captured
+#: 2026-11-19 on 0.17.0 -- the Firefox list is byte-identical on firefox133/
+#: 135/144/147/153/154/155, so the 0.17 bump needed no re-pin).
 #:
 #: Only families listed here are permuted.  A family is added only after the
 #: probe proves the permuted order still completes a handshake **and** passes
 #: the auth edge with this project's header set.
 VERIFIED_EXTENSION_ORDERS: dict[str, str] = {
-    # curl-impersonate firefox144/147/135 (identical list).
+    # curl-impersonate firefox133/135/144/147/153/154/155 (133 differs by one
+    # entry, 34 -> 51 position, hence the list below rather than 133's).
     "firefox": "0-23-65281-10-11-35-16-5-34-18-51-43-13-45-28-27-65037",
 }
 
@@ -298,10 +301,22 @@ def apply_to_session(session: Any, config: Mapping[str, Any] | None = None) -> T
     it after construction is equivalent to passing it to the constructor.  A
     failure is never fatal: the account simply keeps the preset order, which is
     what every account had before this module existed.
+
+    A session from another backend (``sms_tool.http_backend.WreqSession``) has
+    no ``curl_options`` at all. Assigning one anyway would *look* like success --
+    Python happily grows an attribute nobody reads -- and the run would report a
+    rotated ClientHello it never sent. The presence check below is therefore the
+    guard, and the summary says what actually happened.
     """
     fingerprint = current_tls_fingerprint(config)
     if not fingerprint.active:
         return fingerprint
+    if not hasattr(session, "curl_options"):
+        return TlsFingerprint(
+            profile=fingerprint.profile,
+            family=fingerprint.family,
+            reason=f"backend-without-curl-options:{getattr(session, '_sms_http_backend', 'unknown')}",
+        )
     try:
         existing = getattr(session, "curl_options", None)
         options = dict(existing) if isinstance(existing, dict) else {}

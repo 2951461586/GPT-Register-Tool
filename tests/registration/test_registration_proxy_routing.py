@@ -199,7 +199,7 @@ def test_registration_preflight_checks_chatgpt_auth_and_sentinel_before_mailbox(
             return SimpleNamespace(status_code=200)
 
     with (
-        patch.object(registration_preflight.curl_requests, "Session", Session),
+        patch.object(registration_preflight, "_transport_session", lambda: Session()),
         patch.object(
             registration_preflight,
             "auth_fingerprint_capabilities",
@@ -233,7 +233,7 @@ def test_registration_preflight_accepts_unauthorized_backend_probe_response():
             return SimpleNamespace(status_code=status)
 
     with (
-        patch.object(registration_preflight.curl_requests, "Session", Session),
+        patch.object(registration_preflight, "_transport_session", lambda: Session()),
         patch.object(
             registration_preflight,
             "auth_fingerprint_capabilities",
@@ -268,7 +268,7 @@ def test_registration_preflight_uses_one_http_attempt_per_route_probe():
         return SimpleNamespace(status_code=200)
 
     with (
-        patch.object(registration_preflight.curl_requests, "Session", Session),
+        patch.object(registration_preflight, "_transport_session", lambda: Session()),
         patch.object(registration_preflight, "request_with_retry", side_effect=request),
         patch.object(
             registration_preflight,

@@ -18,8 +18,6 @@ import time
 from typing import Any, Callable
 from urllib.parse import urlsplit
 
-from curl_cffi import requests as curl_requests
-
 from ..tls_fingerprint import apply_to_session as _apply_tls_fingerprint
 from .flags import registration_flag
 
@@ -144,12 +142,12 @@ def _new_registration_session(proxy: str = "") -> Any:
 
     ``trust_env`` is set to ``False`` as a **defensive** measure, and it is
     deliberately described that way since the 2026-10-24 re-check:
-    * ``curl_cffi==0.16.0`` only stores the flag (``requests/session.py``
+    * ``curl_cffi`` 0.16.0/0.17.0 only stores the flag (``requests/session.py``
       assigns ``self.trust_env``) and **no code in the package reads it**. The
       explicit ``session.proxies`` map is consumed by
       ``utils.set_curl_options(proxies_list=[self.proxies, proxies])``, which is
       why a machine-wide ``HTTP(S)_PROXY`` cannot override the per-account
-      proxy in this version.
+      proxy in these versions.
     * The attribute is still set: if the library starts honouring it, this call
       is already on the right side. Do **not** cite it as a live protection in
       a scan or a design note -- it protects nothing today.
@@ -160,12 +158,19 @@ def _new_registration_session(proxy: str = "") -> Any:
     The per-account TLS ClientHello override is installed here as well, so every
     caller of this factory (the stage runner, the resume path, ``probe``) gets
     the same JA3 rather than only the ones that remember to ask for it.  See
-    :mod:`sms_tool.tls_fingerprint`.
+    :mod:`sms_tool.tls_fingerprint`; a ``wreq`` session reports
+    ``backend-without-curl-options`` there because the permutation is a libcurl
+    option, not a transport-independent idea.
+
+    The transport itself comes from :mod:`sms_tool.http_backend`, which is
+    ``curl_cffi`` unless ``PROTOCOL_HTTP_CLIENT`` / ``protocol_http_backend``
+    selects ``wreq``.  Selecting a backend this machine cannot run raises a
+    stable ``ProtocolBackendError`` token here -- before a mailbox is claimed --
+    instead of downgrading to the other stack mid-run.
     """
-    session = curl_requests.Session()
-    if proxy:
-        session.proxies = {"http": proxy, "https": proxy}
-        session.trust_env = False
+    from .. import http_backend  # function-local: registration -> root is a frozen pair count
+
+    session = http_backend.new_session(proxy=proxy)
     _apply_tls_fingerprint(session)
     return session
 

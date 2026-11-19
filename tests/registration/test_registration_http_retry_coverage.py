@@ -18,6 +18,7 @@ from __future__ import annotations
 import ast
 import pathlib
 import unittest
+from unittest.mock import patch
 
 from sms_tool import http_client
 from sms_tool.accounts import account_2fa
@@ -183,7 +184,6 @@ class TestProxySchemeProbeSurvivesATransientBlip(unittest.TestCase):
     """
 
     def test_one_reset_does_not_declare_the_scheme_broken(self):
-        original_session = registration_preflight.curl_requests.Session
         attempts = []
 
         class _ProbeSession:
@@ -199,14 +199,10 @@ class TestProxySchemeProbeSurvivesATransientBlip(unittest.TestCase):
             def close(self):
                 pass
 
-        with _zero_retry_delay():
-            registration_preflight.curl_requests.Session = lambda: _ProbeSession()
-            try:
-                reachable = registration_preflight._proxy_scheme_reachable(
-                    "socks5h://user:pw@127.0.0.1:1080", "https://chatgpt.com/robots.txt"
-                )
-            finally:
-                registration_preflight.curl_requests.Session = original_session
+        with _zero_retry_delay(), patch.object(registration_preflight, "_transport_session", lambda: _ProbeSession()):
+            reachable = registration_preflight._proxy_scheme_reachable(
+                "socks5h://user:pw@127.0.0.1:1080", "https://chatgpt.com/robots.txt"
+            )
 
         self.assertTrue(reachable)
         self.assertEqual(len(attempts), 2)
