@@ -893,3 +893,59 @@ class ReMailRouterTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReMailICloudTokenRecoveryTests(unittest.TestCase):
+    """An iCloud purchase order's ``serviceToken`` lives on the detail endpoint.
+
+    Measured 2026-11-19 against ``remail.best``: ``POST /v1/open/orders`` returns
+    an iCloud purchase order without ``serviceToken``, ``GET
+    /v1/open/orders/{orderNo}`` carries it, and ``/v1/pickup?email&token`` then
+    answers with the real OpenAI mail.  Rejecting the order before that lookup
+    spent 36 credits per attempt and produced nothing.
+    """
+
+    def _order(self, **overrides):
+        order = {
+            "id": 1063043,
+            "orderNo": "OR-ICLOUD-1",
+            "deliveryEmail": "user@icloud.com",
+            "productType": "icloud",
+            "serviceToken": None,
+            "serviceMode": "purchase",
+            "payAmount": "36.00",
+        }
+        order.update(overrides)
+        return order
+
+    def test_detail_token_is_merged_before_the_order_is_judged(self):
+        detail = {"data": dict(self._order(), serviceToken="st_recovered")}
+        with patch.object(mailbox_remail, "_remail_request", return_value=detail) as fetch:
+            order = mailbox_remail._order_with_service_token(self._order())
+        self.assertEqual(order["serviceToken"], "st_recovered")
+        self.assertEqual(fetch.call_args.args[:2], ("GET", "/v1/open/orders/OR-ICLOUD-1"))
+
+    def test_a_token_that_is_already_present_costs_no_extra_request(self):
+        with patch.object(mailbox_remail, "_remail_request") as fetch:
+            order = mailbox_remail._order_with_service_token(self._order(serviceToken="st_present"))
+        self.assertEqual(order["serviceToken"], "st_present")
+        fetch.assert_not_called()
+
+    def test_a_detail_without_a_token_still_fails_closed(self):
+        detail = {"data": self._order()}
+        with patch.object(mailbox_remail, "_remail_request", return_value=detail):
+            order = mailbox_remail._order_with_service_token(self._order())
+        with self.assertRaisesRegex(RuntimeError, "iCloud order has no serviceToken"):
+            mailbox_remail._mailbox_from_order(order, service_mode="purchase")
+
+    def test_a_failed_detail_lookup_degrades_to_the_original_order(self):
+        for error in (
+            mailbox_remail.ReMailHttpError(404, {"code": "not_found"}),
+            mailbox_remail.ReMailTransportError(detail="boom"),
+        ):
+            with (
+                self.subTest(error=type(error).__name__),
+                patch.object(mailbox_remail, "_remail_request", side_effect=error),
+            ):
+                order = mailbox_remail._order_with_service_token(self._order())
+            self.assertIsNone(order["serviceToken"])

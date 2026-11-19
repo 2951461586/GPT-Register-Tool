@@ -57,7 +57,14 @@ def _remail_idempotency_key(
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
-DEFAULT_BASE_URL = "https://remail.aishop6.com"
+#: ReMail's own Q&A announced the migration on 2026-11-16: "启用新域名
+#: remail.best，旧域名 11月16日作废，不再续期".  Measured 2026-11-19:
+#: ``remail.aishop6.com`` answers **NXDOMAIN** (DoH Status 3, SOA only), so every
+#: request to the old host failed at TLS (``UNEXPECTED_EOF_WHILE_READING``) long
+#: before any order could be placed.  ``remail.best`` resolves (Cloudflare) and
+#: serves the same Open API 1.0.0 (``/docs`` -> 200).  Keep this value and
+#: ``email_registration.remail.base_url`` in step; the shard wins at runtime.
+DEFAULT_BASE_URL = "https://remail.best"
 DEFAULT_PROJECT_ID = 2
 _DEAD_REMAIL_LOCK = threading.Lock()
 _OPENAI_REMAIL_SENDERS = re.compile(r"(?i)(?:otp@tm1\.openai\.com|noreply@tm\.openai\.com|(?:otp|noreply)@openai\.com)")
@@ -532,15 +539,52 @@ def _mailbox_from_order(order, service_mode=None):
     )
 
 
+def _order_with_service_token(order):
+    """Fill in a ``serviceToken`` the create response did not carry.
+
+    Measured 2026-11-19 against ``remail.best``: a **purchase** order on the
+    ``icloud`` product comes back from ``POST /v1/open/orders`` **without**
+    ``serviceToken``, while ``GET /v1/open/orders/{orderNo}`` carries it -- and
+    ``/v1/pickup?email&token`` then answers with the real OpenAI verification
+    mail (checked on a completed iCloud order: ``noreply@tm.openai.com``,
+    subject "Your temporary ChatGPT verification code").  Without this lookup the
+    old guard rejected the order *after* the credits were spent (36 paid per
+    iCloud mailbox in the operator's own history), so every iCloud attempt burned
+    money and produced nothing.
+
+    The guard itself stays: if the detail response has no token either, the
+    order really cannot be polled and `_mailbox_from_order` still says so.
+    """
+    if not isinstance(order, dict) or str(order.get("serviceToken") or "").strip():
+        return order
+    order_no = str(order.get("orderNo") or "").strip()
+    if not order_no:
+        return order
+    try:
+        detail = _remail_request("GET", f"/v1/open/orders/{order_no}", auth=True)
+    except (ReMailHttpError, ReMailTransportError, ValueError):
+        return order
+    data = detail.get("data") if isinstance(detail, dict) and "data" in detail else detail
+    if not isinstance(data, dict):
+        return order
+    merged = dict(order)
+    for key in ("serviceToken", "verificationCode", "receiveUntil", "hasDelivery"):
+        if not merged.get(key) and data.get(key):
+            merged[key] = data[key]
+    return merged
+
+
 def _create_remail_order(args=None, service_mode=None):
     mode, supply, payload = _order_options(args, service_mode=service_mode)
     # Route the single-order POST through the idempotent-retry helper so a
     # transient Cloudflare 5xx/429 no longer aborts a one-off acquisition, and
     # a retry reuses the same Idempotency-Key rather than double-charging.
-    order = _post_remail_order(
-        "/v1/open/orders",
-        params={"serviceMode": mode, "supply": supply},
-        payload=payload,
+    order = _order_with_service_token(
+        _post_remail_order(
+            "/v1/open/orders",
+            params={"serviceMode": mode, "supply": supply},
+            payload=payload,
+        )
     )
     mailbox = _mailbox_from_order(order, service_mode=mode)
     filtered = filter_dead_remail_mailboxes([mailbox])
@@ -677,7 +721,7 @@ def _create_remail_mailboxes(args=None, service_mode="purchase"):
     failures = []
     for item in results if isinstance(results, list) else []:
         if str(item.get("status") or "").lower() == "succeeded" and item.get("order"):
-            accounts.append(_mailbox_from_order(item["order"], service_mode=mode))
+            accounts.append(_mailbox_from_order(_order_with_service_token(item["order"]), service_mode=mode))
         else:
             failures.append(_batch_item_failure(item))
     if failures:

@@ -202,7 +202,7 @@
     },
     "remail": {
       "enabled": false,
-      "base_url": "https://remail.aishop6.com",
+      "base_url": "https://remail.best",
       "api_key": "",
       "project_id": 2,
       "service_mode": "purchase",

@@ -22,10 +22,19 @@ scraped; `/openapi.json` is the authoritative artifact and is what this file
 transcribes. `https://remail.best/llms.txt` and `/docs.json` are not documents —
 they answer with the SPA shell.
 
-The base URL is **configurable** (`email_registration.remail.base_url`); the
-deployment this repo runs against is `https://remail.aishop6.com`, not
-`remail.best`. Paths and payloads are identical (both serve version 1.0.0);
-anything that changes below must be re-verified against the configured host,
+The base URL is **configurable** (`email_registration.remail.base_url`) and the
+default in `providers/mailbox_remail.py` is `https://remail.best`.
+
+**2026-11-19 — the old host is gone, and this is not a network problem.**
+Remail's own Q&A announced it: 「启用新域名 remail.best，旧域名 11月16日作废，
+不再续期」. Measured the same day: `remail.aishop6.com` answers **NXDOMAIN**
+(DoH `Status: 3`, SOA only), which is why every call failed at the TLS handshake
+(`UNEXPECTED_EOF_WHILE_READING`) rather than with an HTTP error. `remail.best`
+resolves (Cloudflare) and serves the same Open API 1.0.0 (`/docs` -> 200). A
+shard still holding the old host fails closed with
+`mailbox_transport_unavailable` before any credit is spent.
+
+Anything that changes below must be re-verified against the configured host,
 because a mirror can lag.
 
 ## Authentication
