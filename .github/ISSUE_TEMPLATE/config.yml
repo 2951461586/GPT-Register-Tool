@@ -1,3 +1,4 @@
+---
 # 让 issue 入口指向"先自查"的文档，而不是空白框。
 #
 # blank_issues_enabled: false —— 两个模板都强制带版本/环境/doctor 输出，
