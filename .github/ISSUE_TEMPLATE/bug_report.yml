@@ -1,3 +1,4 @@
+---
 name: Bug report
 description: 报告一个缺陷（注册 / 支付 / 桌面端 / 文档）
 labels: ["bug"]
@@ -7,11 +8,15 @@ body:
       value: |
         先看两处，多半能省一轮往返：
 
-        - 文档总索引（排障手册 / 当前模块契约 / 边界规则）：
-          https://github.com/2951461586/GPT-Register-Tool/tree/main/docs
+        - `docs/current/faq.md`（FAQ / 已知限制）：无试用、iCloud 收不到码、
+          passwordless 不设密码、2FA 无 UI 入口、提链 `unusual activity`、
+          导出文件导入 —— 都已经给过结论。
+        - [文档索引](https://github.com/2951461586/GPT-Register-Tool/tree/main/docs)
+          （排障手册 / 当前模块契约 / 边界规则）
 
-        **不要贴凭据**：代理口令、API key、邮箱密码、refresh token、
-        cookie、TOTP secret 都请先替换成 `***`，日志也请过一遍再粘。
+        **不要贴凭据**：代理口令、API key、邮箱密码、refresh token、access/session token、
+        cookie、TOTP secret 都请先替换成 `***`。日志里的代理串请把 `user:pass@` 换成
+        `***:***@`，粘之前过一遍。
 
   - type: textarea
     id: what-happened
@@ -45,7 +50,7 @@ body:
     id: version
     attributes:
       label: 版本
-      description: 发布标签（`v2026.11.12`）或 `git describe --tags` 的输出
+      description: 发布标签（`v2026.11.12`）、`git describe --tags`，或桌面端「关于」里的版本号
       placeholder: v2026.11.12
     validations:
       required: true
@@ -59,15 +64,47 @@ body:
         一次离线铸 token、配置分片来源、邮箱与接码供应商就绪情况。
         **贴之前请删掉其中的路径里的用户名**（如 `C:\Users\<you>\...`）。
       render: json
+    validations:
+      required: true
 
   - type: textarea
     id: logs
     attributes:
-      label: 日志片段
+      label: 完整日志
       description: |
-        `runtime/logs/` 下的运行日志，或桌面端「打开日志」里对应的行。
+        **从启动那行到失败点的全部输出**（不要只截头部或尾部），含 `[Error]` / 错误码 /
+        HTTP 状态码的行必须保留。桌面端用「打开日志」复制；CLI 请把 stdout+stderr 一起重定向到文件。
         账号级失败请看那一行的 `error` / `failure_class` / `retry_disposition` 三个字段。
       render: text
+    validations:
+      required: true
+
+  - type: input
+    id: proxy
+    attributes:
+      label: 出口
+      description: |
+        国家 / 类型（住宅 or 机房）/ 是否每号换 IP / 池内第几个出口。
+        只写会话名或端口即可，**不要贴账号密码**。
+      placeholder: US 住宅 · 每号独立 IP · 池内第 3 个出口
+    validations:
+      required: true
+
+  - type: dropdown
+    id: mailbox
+    attributes:
+      label: 邮箱来源
+      options:
+        - ReMail（长效购买 / 接码）
+        - iCloud 接码链接
+        - CFWorker 临时邮箱
+        - Smailr
+        - 邮箱池（Outlook / Hotmail / Graph）
+        - 通用 IMAP
+        - 自建域名邮箱
+        - 不涉及邮箱
+    validations:
+      required: true
 
   - type: input
     id: environment
@@ -82,5 +119,5 @@ body:
       options:
         - label: 日志与配置片段里没有凭据、cookie、token 或可用的邮箱地址
           required: true
-        - label: 这是缺陷而不是上游服务的行为变化（账号被停用、库存售罄等）
-          required: false
+        - label: 这是缺陷而不是上游服务的行为变化（账号被停用、库存售罄等），且 FAQ 里没有现成结论
+          required: true

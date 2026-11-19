@@ -8,6 +8,8 @@ body:
         这个仓库按五层组织（UI → CLI/命令适配 → 应用工作流 → 领域契约 → provider/持久化），
         改动的落点比"实现方式"更重要：同一件事放在错误的层，会被
         `scripts/import_layer_ratchet.py` 与 `docs/rules/` 的边界规则挡回来。
+        先确认它不是已知限制（`docs/current/faq.md`：无试用、iCloud 取码、
+        passwordless 不设密码、2FA 无 UI 入口、提链风控）。
         动手前建议先读 [架构总览](https://github.com/2951461586/
         GPT-Register-Tool/blob/main/docs/architecture.md)。
 
