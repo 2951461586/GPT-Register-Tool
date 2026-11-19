@@ -208,13 +208,13 @@ above.
 <!-- ratchet-numbers:begin architecture -->
 | Measure | Value |
 | --- | --- |
-| Module-level cross-directory edges | 493 |
+| Module-level cross-directory edges | 494 |
 | Directory pairs | 78 |
 | Mutual pairs / minority-direction edges | 17 / 46 |
-| Delayed cross-directory edges | 311 |
-| Delayed imports in the package | 484 (baseline 484) |
+| Delayed cross-directory edges | 318 |
+| Delayed imports in the package | 508 (baseline 508) |
 | Functions at or above 150 lines | 64 (frozen, `scripts/function_length_ratchet.py`) |
-| Claimed tracked `sms_tool` modules | 337 of 337 (0 unclaimed, 41 directory-map groups) |
+| Claimed tracked `sms_tool` modules | 338 of 338 (0 unclaimed, 41 directory-map groups) |
 <!-- ratchet-numbers:end architecture -->
 
 `tests/config/test_pilens_scope_config.py` pins the scope and the formatting
@@ -249,6 +249,16 @@ is not a `proxy/` concern (no proxy-string parsing). A future `tls/` package wou
 be the home if a second module joins it; until then the root set carries it
 exactly like `auth_headers.py`, `fingerprint_pool.py` and
 `browser_fingerprint_pool.py`.
+
+**2026-11-19 — `http_backend.py` accepted as a root module.** It answers one
+cross-layer question — *which transport is this process using, and can it run
+this profile?* — for the same reason `auth_headers.py` and `tls_fingerprint.py`
+are root peers: `registration/preflight.py`, `registration/protocol_helpers.py`
+and `auth_headers.py` all need the answer, and each of those lives in a different
+layer. Putting it in `proxy/` would misplace it (no proxy-string parsing) and in
+`kernel/` would invert the layer (it reads `auth_headers`, layer 5). Every
+ordinary consumer edge is function-local, so the module-level `registration ->
+sms_tool` pair count does not grow; see `scripts/delayed_import_ratchet.py`.
 
 ## Boundary Rules
 

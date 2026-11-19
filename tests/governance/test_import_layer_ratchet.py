@@ -453,7 +453,17 @@ def test_summary_facts_are_pinned():
         # lane consuming the shared kernel instead of growing its own copy -- and
         # the alternative (13 function-local imports) would hide the dependency
         # and put a ``sys.modules`` lookup on every identity/billing resolution.
-        "total_module_edges": 493,
+        # 2026-11-19 (protocol transport seam): 493 -> 494 (+1 module-level edge,
+        # +7 delayed). ``sms_tool/http_backend.py`` is a new layer-5 root leaf
+        # (accepted in docs/architecture.md §Root Module Set) and imports
+        # ``kernel.error_classification`` for INTERNAL_EXCEPTION_TYPES instead of
+        # re-inlining that tuple. Everything else is function-local on purpose:
+        # the selector is consulted once per session, so ``registration`` and
+        # ``auth_headers`` reach it through a local import rather than growing the
+        # frozen ``registration -> sms_tool`` / root pair counts -- the trade the
+        # failure text of this gate prescribes. All seven carry a reasoned entry
+        # in ``scripts/delayed_import_reasons.json``.
+        "total_module_edges": 494,
         "ordered_pairs": 78,
         "mutual_pairs": 17,
         "minority_edges": 46,
@@ -530,7 +540,14 @@ def test_summary_facts_are_pinned():
         # ``cross_process_gate`` so a module every identity lookup imports stays
         # free of them at import time. All three carry an entry in
         # ``delayed_import_reasons.json``.
-        "delayed_cross_dir_edges": 311,
+        # 2026-11-19: 311 -> 318 (+7) for the protocol transport seam
+        # (``http_backend``) plus the Sentinel SDK refresh: the selector is
+        # imported locally by ``registration/preflight.py``,
+        # ``registration/protocol_helpers.py`` and ``auth_headers.py``; the
+        # refresh path imports ``endpoints``, ``auth_headers``, ``kernel.paths``
+        # and the transport itself. Each is reasoned in
+        # ``scripts/delayed_import_reasons.json``.
+        "delayed_cross_dir_edges": 318,
         # Imports under `if TYPE_CHECKING:` never run, so they are not runtime
         # edges. 1 here since 2026-10-23: `payment/link_manager.py` declares its
         # `pay_link` re-exports type-only (the module is not a package, so the

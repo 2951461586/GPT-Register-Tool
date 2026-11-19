@@ -103,6 +103,7 @@
     "gcash_provider.py": 4,
     "gcash_transport.py": 4,
     "gen_pp_link.py": 3,
+    "http_backend.py": 5,
     "http_client.py": 5,
     "http_utils.py": 5,
     "humanize.py": 5,

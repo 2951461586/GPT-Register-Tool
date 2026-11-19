@@ -1,12 +1,12 @@
 {
-  "delayed_cross_dir_edges": 313,
+  "delayed_cross_dir_edges": 318,
   "minority_edges": 46,
   "mutual_pairs": 17,
   "ordered_pairs": 78,
   "pairs": {
     "sms_tool -> sms_tool/accounts": 2,
     "sms_tool -> sms_tool/geo": 6,
-    "sms_tool -> sms_tool/kernel": 35,
+    "sms_tool -> sms_tool/kernel": 36,
     "sms_tool -> sms_tool/mailbox": 3,
     "sms_tool -> sms_tool/payment": 5,
     "sms_tool -> sms_tool/paypal": 2,
@@ -83,6 +83,6 @@
     "sms_tool/upi_link -> sms_tool/paypal": 1,
     "sms_tool/upi_link -> sms_tool/proxy": 3
   },
-  "total_module_edges": 493,
+  "total_module_edges": 494,
   "type_only_edges": 15
 }

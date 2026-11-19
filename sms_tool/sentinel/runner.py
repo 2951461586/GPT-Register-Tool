@@ -17,7 +17,7 @@ from collections import deque
 from pathlib import Path
 from typing import Any, Mapping
 
-from .bundle import SentinelBundleError, sentinel_version, validate_runtime_bundle
+from .bundle import SentinelBundleError, resolve_sdk_path, sentinel_version, validate_runtime_bundle
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -381,7 +381,8 @@ def run_sentinel_sdk(
     # 重新采样的另一份 p 去 dx 解码 —— 与服务器加密用的密钥不一致。
     challenge_proof = str(challenge_proof or "").strip()
 
-    sdk_path, runner_path = validate_runtime_bundle(verify_hash=verify_bundle_hash)
+    sdk_path = resolve_sdk_path(verify_vendored=verify_bundle_hash)
+    runner_path = validate_runtime_bundle(verify_hash=verify_bundle_hash)[1]
     screen = str(profile.get("screen") or "1920x1080")
     width, _, height = screen.partition("x")
     language = str(profile.get("lang") or "en-US")

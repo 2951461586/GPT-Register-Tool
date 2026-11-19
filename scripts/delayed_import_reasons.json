@@ -40,6 +40,10 @@
       "reason": "deferred",
       "why": "支付资格 batch (2026-10-26): the persistence marker is imported at the write point rather than through the `storage` star facade, which also keeps the write path explicit."
     },
+    "sms_tool/auth_headers.py -> sms_tool.http_backend": {
+      "reason": "deferred",
+      "why": "Protocol transport seam (2026-11-19): the profile table must filter on whichever transport is active, and http_backend imports auth_headers back for the profile names. A module-level import either way closes the cycle; auth_headers is on the CLI help path and must stay transport-agnostic."
+    },
     "sms_tool/batch_runner.py -> sms_tool.proxy.asn_registry": {
       "reason": "deferred",
       "why": "P1 (2026-10-26): the batch attempt path records the ASN outcome and the pool selector applies the opt-in ASN rotation. Imported at the two call sites because scripts/import_layer_ratchet.py freezes the root -> proxy count and batch_runner already carries the health tracker's edge."
@@ -63,6 +67,22 @@
     "sms_tool/desktop_read.py -> sms_tool.proxy.admin": {
       "reason": "deferred",
       "why": "Proxy-pool admin (2026-10-26): `--desktop-read proxy-pool` calls proxy.admin.list_pool. The account read path is the desktop's hot start path, so the proxy admin stack (registry/health/screening) is imported inside read_proxy_pool instead of at module scope."
+    },
+    "sms_tool/doctor.py -> sms_tool.auth_headers": {
+      "reason": "deferred",
+      "why": "curl_cffi capability probe (2026-11-19): the accepted version bracket now lives in auth_headers (CURL_CFFI_MIN/MINOR), so doctor reads it instead of repeating the literals that drifted. Deferred because doctor's own import surface is deliberately light."
+    },
+    "sms_tool/http_backend.py -> sms_tool.auth_headers": {
+      "reason": "deferred",
+      "why": "Protocol transport seam (2026-11-19): the backend needs the profile table and the current impersonation, and auth_headers needs this module to answer 'which profiles can the ACTIVE backend run'. Importing at module scope would close that cycle: auth_headers is imported everywhere (including the CLI's help path) and must not pull the transport selector with it."
+    },
+    "sms_tool/http_backend.py -> sms_tool.config": {
+      "reason": "deferred",
+      "why": "Protocol transport seam (2026-11-19): the selected backend is read from email_registration.protocol_http_backend at call time, so a hot-reloaded shard changes the next session instead of requiring a restart. Deferred to keep the module importable by tests and by doctor before any config exists."
+    },
+    "sms_tool/http_backend.py -> wreq": {
+      "reason": "deferred",
+      "why": "Protocol transport seam (2026-11-19): wreq is the OPTIONAL backend. It must be importable only when the operator selects it -- a module-level import would make the whole package depend on a Rust wheel for the default curl_cffi path."
     },
     "sms_tool/mailbox/reclaim.py -> sms_tool.cross_process_gate": {
       "reason": "deferred",
@@ -232,9 +252,29 @@
       "reason": "deferred",
       "why": "P0 proxy screening (2026-10-26): the dual-pass intel probe needs geo.resolver on every call, but scripts/import_layer_ratchet.py has no proxy -> geo module-level edge and the transport layer must not pull the geo probe stack in at import time. The import runs inside probe_once()/secondary_endpoints(), so only the screen command and the batch runner pay for it."
     },
+    "sms_tool/registration/preflight.py -> sms_tool.http_backend": {
+      "reason": "deferred",
+      "why": "Protocol transport seam (2026-11-19): function-local so the frozen module-level `registration -> sms_tool` pair count (import_layer_ratchet) does not grow for a selector that is consulted once per session. The preflight must probe with the SAME transport the run will use, otherwise a pass here says nothing about the account's own ClientHello."
+    },
+    "sms_tool/registration/protocol_helpers.py -> sms_tool.http_backend": {
+      "reason": "deferred",
+      "why": "Protocol transport seam (2026-11-19): function-local so the frozen module-level `registration -> sms_tool` pair count (import_layer_ratchet) does not grow for a selector that is consulted once per session. The preflight must probe with the SAME transport the run will use, otherwise a pass here says nothing about the account's own ClientHello."
+    },
     "sms_tool/registration/result.py -> sms_tool.mailbox.reclaim": {
       "reason": "deferred",
       "why": "Result assembly records a failed run's purchased mailbox on demand. A module-level registration->mailbox edge would widen the frozen import-layer count for a failure-only path."
+    },
+    "sms_tool/sentinel/bundle.py -> sms_tool.auth_headers": {
+      "reason": "deferred",
+      "why": "Sentinel SDK 在线刷新 (2026-11-19): the refresh downloads sdk.js under the registration profile's own TLS identity, which lives in auth_headers. Importing it at module scope would give the hash-pinned bundle an edge into the fingerprint stack for every caller that only wants sentinel_version(), and auth_headers imports geo.profiles -- a root-module weight the sentinel package should not carry at import time."
+    },
+    "sms_tool/sentinel/bundle.py -> sms_tool.endpoints": {
+      "reason": "deferred",
+      "why": "SDK refresh headers (2026-11-19): the Referer host is owned by endpoints.py, and the endpoints-literal ratchet counts an inline auth.openai.com literal as a defeat. Deferred because only the refresh path builds that header and the pinned-bundle guard must stay importable without the endpoint table."
+    },
+    "sms_tool/sentinel/bundle.py -> sms_tool.kernel.paths": {
+      "reason": "deferred",
+      "why": "Sentinel SDK 在线刷新 (2026-11-19): the download cache lives under the configured runtime directory, which only the refresh path needs. Deferring keeps `import sms_tool.sentinel.bundle` free of the config/kernel stack so the offline selfcheck and the pinned-hash guard stay cheap."
     },
     "sms_tool/session_refresh.py -> base64": {
       "reason": "deferred",

@@ -133,7 +133,8 @@ flowchart TB
 
 - Windows 10/11 x64。
 - Python 3.12 或更高版本（与 `scripts/runtime_manifest.json` 里打包的解释器一致；3.10/3.11 从未被任何门禁验证过）。
-- `curl_cffi==0.16.0`。注册预检会校验安装版本和 `chrome146` profile；旧版本不会进入邮箱采购或注册阶段。
+- `curl_cffi==0.17.0`。注册预检会校验安装版本（0.15–0.17）和 `chrome152` profile；旧版本不会进入邮箱采购或注册阶段。
+- 可选第二传输后端 `wreq>=0.13.0,<0.14`（`PROTOCOL_HTTP_CLIENT=wreq` / `email_registration.protocol_http_backend`，默认 `curl_cffi`）；未安装或无法运行所选指纹时**直接失败**，不静默回退。
 - .NET 10 Desktop Runtime；从源码编译时需要 .NET 10 SDK。
 - **Node.js 18+**（`node` 需在 PATH）：Sentinel Token 的 quickjs 提取器用 `node` 运行 OpenAI 真实 `sdk.js`，缺失会导致注册阶段 OTP 静默丢失。
 - **Playwright Chromium**：MoMo/直卡等协议支付的 Stripe init 走 Chromium 网络栈完成 TLS，需执行 `python -m playwright install chromium`。

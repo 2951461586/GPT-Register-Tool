@@ -652,18 +652,89 @@ sync (`sms_tool/auth_headers.py`, `sms_tool/fingerprint_pool.py`):
 | `x-openai-document-navigation-id` | one page-level value | sent on `passwordless/send-otp`, `email-otp/validate` and `create_account` |
 | `x-access-flow-invocation-id` | one value **per request** | the three auth POSTs differ; the run-level value in `base_headers` is overridden |
 
-The profile matrix keeps `chrome146` as a persisted-account key and stops there:
-`chrome146` is the newest impersonation `curl_cffi` 0.16.0 exposes (the 2026-10-28
-HAR is Chrome 156, which `curl_cffi` cannot mimic). The `chrome150` entry that
-shipped on 2026-10-23 was removed on 2026-10-31 — it could never be selected as an
-impersonation, so it could only fail closed in the preflight
+The profile matrix now reaches `chrome152` (curl_cffi 0.17.0, 2026-11-19):
+`chrome151`/`chrome152` are the Windows editions and `chrome150` is the macOS
+build upstream actually ships under that name (UA `Macintosh`, hints `"macOS"`),
+which is why it is the one Chrome entry whose platform class is not Windows. The
+2026-10-28 HAR is Chrome 156, which curl_cffi cannot mimic yet; the newest preset
+the library exposes is the ceiling. An entry above that ceiling is worse than
+absent: it can only fail closed in the preflight
 (`auth_fingerprint_unavailable:chrome150`) or fall back silently and send
-Chrome/150 hints over a 146 TLS fingerprint.
+Chrome/152 hints over a 146 TLS fingerprint.
 
 Sentinel SDK: the HAR was served `20260219f9f6`; the repo pins the newer
 `20260810913b` (both are still served). No endpoint or request-body change was
 observed: `passwordless/send-otp` is body-less, `email-otp/validate` sends
 `{"code"}`, and `create_account` sends `{"name","birthdate"}`.
+
+### Sentinel SDK version and optional live refresh (2026-11-19)
+
+The version string is **not** decoration: it builds the
+`sentinel.openai.com/backend-api/sentinel/frame.html?sv=` URL, the Sentinel
+`Referer`, and `p[5]` inside the proof. So the bytes executed and the version
+claimed must be the same build, and `sms_tool/sentinel/bundle.py` is the one
+place that enforces it:
+
+- `runtime/sdk.js` is hash-pinned (`SDK_SHA256`); `DEFAULT_SENTINEL_VERSION`
+  names the build it came from. `config.example.json` carries the same literal,
+  and `tests/governance/test_sentinel_version_pin.py` fails when the two drift —
+  the example shipped `20260219f9f6` while the bundle was the 2026-08-10 build
+  until 2026-11-19.
+- `email_registration.sentinel_sdk_auto_update` (default **false**, env
+  `OPENAI_SENTINEL_SDK_AUTO_UPDATE`) makes `resolve_sdk_path()` fetch
+  `/sentinel/<version>/sdk.js` under the profile's own impersonation, verify it
+  (status, 5 MiB cap, `SentinelSDK` marker, not HTML) and cache it at
+  `<runtime>/sentinel-sdk/<version>/<sha256>.js` with a `current.json` manifest.
+  `email_registration.sentinel_sdk_refresh_seconds` (default 86400, floor 60)
+  bounds how often it is re-fetched.
+- Degradation order is cache → download → last verified cache entry (even stale)
+  → vendored file (only when the configured version *is* the vendored one) →
+  `sentinel_sdk_unavailable:<version>`. An HTML captive-portal page can never be
+  cached as a script.
+- With auto-update **off** and a version that does not match the vendored build,
+  the run keeps the vendored bytes and logs `sentinel_sdk_version_drift` once:
+  every account registered under that combination worked, so turning drift into
+  an outage would be the wrong trade.
+
+### Protocol transport backend: `curl_cffi` or `wreq` (2026-11-19)
+
+`sms_tool/http_backend.py` selects the HTTP/TLS stack for the protocol lane.
+Default is `curl_cffi` (`email_registration.protocol_http_backend`, env
+`PROTOCOL_HTTP_CLIENT`, same name as the reference project). Selecting `wreq`
+uses a Rust stack whose ClientHello family is independent of
+curl-impersonate — that is the whole point of having it — and it is
+**fail-closed**:
+
+- not installed → `protocol_http_backend_missing:wreq`;
+- profile the backend cannot run (no version aliasing: `firefox155` is never
+  served by wreq's `Firefox152`) → `protocol_http_backend_profile_unsupported:<name>`;
+- unknown value → `protocol_http_backend_unknown:<value>` instead of silently
+  keeping the default.
+
+`auth_headers.supported_profile_names()` filters the profile table through
+the active backend, so selection never offers a preset the transport cannot
+send. The per-account extension permutation in `tls_fingerprint.py` is a libcurl
+option and therefore curl-only; a `wreq` session reports
+`backend-without-curl-options:wreq` in its fingerprint summary rather than
+claiming a rotation it did not perform. Request kwargs the adapter cannot
+express raise `TypeError` instead of being ignored.
+
+Measured caveats (wreq 0.13.0, 2026-11-19, offline against a local HTTP server):
+
+- **`wreq.Client` is the asyncio client.** `wreq.blocking.Client` is the one
+  this adapter uses; the wrong import fails at the first request with
+  `'wreq.Coroutine' object does not support the context manager protocol`.
+- **wreq's presets are macOS captures.** `Profile.Firefox144`'s own default UA is
+  `Macintosh; Intel Mac OS X 10.15`, while our `firefox144` profile claims
+  Windows. The request stays self-consistent (this lane sends its own UA and
+  client hints, and Firefox's ClientHello does not vary by OS), but a `wreq` run
+  is not "the same browser" as a `curl_cffi` run of the same profile name --
+  `http_backend` logs one `[transport] ... macOS capture` line per profile so an
+  A/B cannot attribute that difference to the wrong variable.
+- **Profile coverage differs.** Of the 23 profiles in the table, wreq 0.13.0 can
+  run 17; `firefox153`/`firefox155`/`safari17_0`/`safari17_2_ios`/
+  `safari184_ios`/`safari270` are dropped from selection in that mode instead of
+  silently mapping to an older preset.
 
 ## Device fingerprint consistency (2026-11-11)
 

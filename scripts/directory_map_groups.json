@@ -239,6 +239,7 @@
     "Shared utilities": [
       "sms_tool/endpoints.py",
       "sms_tool/http_client.py",
+      "sms_tool/http_backend.py",
       "sms_tool/captcha_solver.py",
       "sms_tool/nodriver_captcha.py",
       "sms_tool/promotion_states.py",

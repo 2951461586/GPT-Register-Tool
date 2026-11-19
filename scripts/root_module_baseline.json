@@ -36,6 +36,7 @@
     "gcash_provider.py",
     "gcash_transport.py",
     "gen_pp_link.py",
+    "http_backend.py",
     "http_client.py",
     "http_utils.py",
     "humanize.py",
