@@ -16,6 +16,7 @@
 | 邮箱 provider 能力、轮询与终止错误 | [mailbox.md](mailbox.md) | 注册流程 |
 | ReMail 供应商的 HTTP 契约（下单/批量幂等/取件/`fetch` 状态机） | [remail-api.md](remail-api.md) | provider 能力与错误处置（看 `mailbox.md`） |
 | 一键接码的供应商与租号 | [one-click-sms.md](one-click-sms.md) | 注册流程 |
+| 反复出现的疑问（无试用 / iCloud 取码 / 密码与 2FA / 提链风控 / 导出导入） | [faq.md](faq.md) | 新功能设计与阶段细节（看对应专题文档） |
 
 **事实的唯一归属**（改一处就别改第二处）：
 
