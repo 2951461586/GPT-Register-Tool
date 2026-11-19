@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import threading
 import time
@@ -21,6 +22,7 @@ from .account_health import (
 from ..config import CFG
 from ..kernel.paths import runtime_file
 
+logger = logging.getLogger(__name__)
 
 _LOCK = threading.Lock()
 _WORKER_LOCK = threading.Lock()
@@ -305,11 +307,33 @@ def recover_account_health_queue(*, pending_ttl_seconds: int = _PENDING_TTL_SECO
     return {"recovered": recovered, "expired": expired}
 
 
+#: ``ThreadPoolExecutor.submit`` raises this once the interpreter starts tearing
+#: down; the message is the only stable marker CPython offers, so it is matched
+#: rather than swallowing every ``RuntimeError`` from the queue.
+SHUTDOWN_SUBMIT_ERROR = "cannot schedule new futures after interpreter shutdown"
+
+
 def _background_loop(*, workers: int) -> None:
+    """Drain the queue on a daemon thread until it is empty -- or unloadable.
+
+    The daemon is reclaimed at interpreter shutdown, which can land *inside*
+    ``process_account_health_jobs`` after it has created its executor. CPython
+    then raises ``RuntimeError(SHUTDOWN_SUBMIT_ERROR)`` on ``submit``, and an
+    unhandled daemon exception printed a traceback to stderr **after** the batch
+    summary -- observed on a 5/5-successful run (2026-11-19), where it reads like
+    a failure to anyone scanning the log for errors. Nothing is lost by stopping:
+    the pending jobs are already persisted for the next run.
+    """
     global _WORKER
     try:
         while True:
-            summary = process_account_health_jobs(workers=workers)
+            try:
+                summary = process_account_health_jobs(workers=workers)
+            except RuntimeError as exc:
+                if SHUTDOWN_SUBMIT_ERROR not in str(exc):
+                    raise
+                logger.debug("account-health worker stopped at interpreter shutdown")
+                return
             if not summary.get("processed"):
                 return
     finally:

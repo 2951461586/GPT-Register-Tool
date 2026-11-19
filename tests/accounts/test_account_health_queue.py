@@ -6,6 +6,8 @@ import time
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from sms_tool import storage
 from sms_tool.store import connection
 
@@ -382,3 +384,35 @@ def test_deep_liveness_runs_light_probe_recovery_and_final_probe():
         account_timeout=360,
     )
     persist.assert_called_once()
+
+
+def test_background_loop_stops_quietly_at_interpreter_shutdown():
+    """A daemon thread must not print a traceback while the process exits.
+
+    ``ThreadPoolExecutor.submit`` raises ``RuntimeError`` once the interpreter is
+    tearing down. That is not a queue defect -- the process is exiting and the
+    pending jobs are already on disk -- but an unhandled daemon exception landed
+    on stderr *after* a 5/5-successful batch summary (2026-11-19), where it reads
+    like a failure.
+    """
+    shutdown = RuntimeError(account_health_queue.SHUTDOWN_SUBMIT_ERROR)
+    with patch.object(account_health_queue, "process_account_health_jobs", side_effect=shutdown):
+        account_health_queue._background_loop(workers=1)  # must return, not raise
+
+
+def test_background_loop_still_surfaces_a_real_runtime_error():
+    """Only the shutdown message is swallowed; every other RuntimeError propagates."""
+    with patch.object(account_health_queue, "process_account_health_jobs", side_effect=RuntimeError("queue corrupt")):
+        with pytest.raises(RuntimeError, match="queue corrupt"):
+            account_health_queue._background_loop(workers=1)
+
+
+def test_background_loop_clears_the_worker_slot_on_the_shutdown_path():
+    """The ``finally`` still releases ``_WORKER`` so a later start can spawn again."""
+    shutdown = RuntimeError(account_health_queue.SHUTDOWN_SUBMIT_ERROR)
+    with (
+        patch.object(account_health_queue, "process_account_health_jobs", side_effect=shutdown),
+        patch.object(account_health_queue, "_WORKER", new=threading.current_thread()),
+    ):
+        account_health_queue._background_loop(workers=1)
+        assert account_health_queue._WORKER is None
