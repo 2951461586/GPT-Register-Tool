@@ -37,8 +37,19 @@ updates:
     # 1.62 can never resolve while that cap stands -- the grouped PR #18 did
     # exactly that and failed at `pip install` with ResolutionImpossible.
     # Remove this ignore when camoufox ships a version requiring >=1.63.
+    #
+    # `cloakbrowser` 0.7.x is a **breaking** change, not a minor bump: from 0.7
+    # on, `ensure_binary()` calls `_claim_free_key()` and raises
+    # `CloakBrowserLicenseError` when no key is configured, so the free binary
+    # the docs promise (`CLOAK_LICENSE_KEY=""` -> free build) needs a claimed
+    # license key (env `CLOAKBROWSER_LICENSE_KEY` or `cloakbrowser login`).
+    # Measured 2026-11-19 on 0.7.2 against a cached free binary: launch fails
+    # with `No CloakBrowser license key` before any page opens; 0.5.9 has no
+    # such gate. Grouped PR #23 had widened the floor to `>=0.7.2,<0.8`.
+    # Bump deliberately, with the license step documented, then drop this line.
     ignore:
       - dependency-name: playwright
+      - dependency-name: cloakbrowser
 
   - package-ecosystem: nuget
     directory: "/SmsWorkbench"

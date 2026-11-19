@@ -26,7 +26,18 @@ psutil>=7.0,<8
 camoufox[geoip]>=0.4.0
 browserforge>=0.1.0
 
-# Browser automation fallback
+# Browser automation fallback.
+# 🔴 `<0.6` is a ceiling on a *behaviour* change, not on style: from 0.7 on,
+# `ensure_binary()` calls `_claim_free_key()` and raises
+# `CloakBrowserLicenseError` when no key is configured, so the free binary these
+# docs promise (`CLOAK_LICENSE_KEY=""` -> free build, no account) would need a
+# claimed license key (env `CLOAKBROWSER_LICENSE_KEY` or `cloakbrowser login`).
+# Measured 2026-11-19 on 0.7.2 with the free binary already cached on disk:
+# launch dies with "No CloakBrowser license key" before a page opens. 0.5.9 only
+# gates its *newer* binary that way and runs its bundled v146 archive keylessly,
+# which is exactly what our cloak driver smoke-tested (webdriver=False, 2.3 s).
+# Delete the ceiling only together with the license step in the docs,
+# `config.example.json` and `.github/dependabot.yml`'s ignore list.
 cloakbrowser>=0.5.3,<0.6
 
 # CAPTCHA solving (Playwright-based)
