@@ -62,7 +62,7 @@ if ($LASTEXITCODE -ne 0 -or $curlProbe.Count -lt 2) {
 $curlVersion = [string]$curlProbe[0]
 $profiles = [string]$curlProbe[1] -split ','
 
-# 🔴 The accepted minor range and the required profile are NOT repeated here.
+# The accepted minor range and the required profile are NOT repeated here.
 # They live in ``sms_tool/auth_headers.py`` (``CURL_CFFI_MIN/MAX_MINOR`` and the
 # newest entry of ``AUTH_FINGERPRINT_PROFILES``) because a local copy is what
 # let this gate reject a healthy ``curl_cffi 0.17.0`` install on 2026-11-19 --

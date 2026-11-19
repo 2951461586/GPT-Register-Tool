@@ -43,7 +43,15 @@ class WatchError(RuntimeError):
 
 def _gh(*args: str, timeout: int = 120) -> str:
     try:
-        result = subprocess.run(["gh", *args], capture_output=True, text=True, timeout=timeout)
+        result = subprocess.run(
+            ["gh", *args],
+            capture_output=True,
+            # gh prints UTF-8; the default locale codec (cp936 here) raises
+            # UnicodeDecodeError on an em dash inside a commit subject.
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+        )
     except FileNotFoundError as exc:  # pragma: no cover - environment guard
         raise WatchError("the GitHub CLI (gh) is not installed") from exc
     except subprocess.TimeoutExpired as exc:  # pragma: no cover - slow network
@@ -54,12 +62,20 @@ def _gh(*args: str, timeout: int = 120) -> str:
 
 
 def resolve_commit(value: str) -> str:
-    commit = str(value or "").strip()
-    if commit:
-        return commit
-    out = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True)
+    """The full commit sha for ``value`` (or HEAD).
+
+    ``gh run list --commit`` matches the *full* sha: a short sha silently
+    returns ``[]``, which would look exactly like "CI never started".
+    """
+    ref = str(value or "").strip() or "HEAD"
+    out = subprocess.run(
+        ["git", "rev-parse", "--verify", f"{ref}^{{commit}}"],
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+    )
     if out.returncode != 0:
-        raise WatchError("cannot read HEAD; pass --commit")
+        raise WatchError(f"cannot resolve {ref!r} to a commit")
     return out.stdout.strip()
 
 
@@ -87,25 +103,36 @@ def find_run(workflow: str, commit: str, *, wait_seconds: int = RUN_APPEAR_TIMEO
         time.sleep(POLL_SECONDS)
 
 
+GREEN = {"success", "skipped", "neutral"}
+
+
 def report(run: dict) -> int:
-    """Print the job table and return the exit code the caller should use."""
+    """Print the job table and return the exit code the caller should use.
+
+    The verdict comes from the **run**, not from counting jobs: a queued run has
+    no per-job conclusion yet, and a job that is merely ``skipped`` is not a
+    failure. An unfinished run is reported as such (exit 2) rather than being
+    silently counted as green.
+    """
     run_id = str(run["databaseId"])
-    jobs = json.loads(_gh("run", "view", run_id, "--json", "jobs,conclusion,status,url") or "{}")
-    print(f"[ci_watch] {run_id} {jobs.get('status')}/{jobs.get('conclusion')} {jobs.get('url') or run.get('url', '')}")
-    failed = []
-    for job in jobs.get("jobs") or []:
-        conclusion = str(job.get("conclusion") or job.get("status") or "")
-        print(f"  {conclusion:<12} {job.get('name')}")
-        if conclusion not in {"success", "skipped", "neutral"}:
-            failed.append(str(job.get("name")))
-    if failed:
-        print(f"[ci_watch] FAILED job(s): {', '.join(failed)}")
-        return 1
-    return 0
+    details = json.loads(_gh("run", "view", run_id, "--json", "jobs,conclusion,status,url") or "{}")
+    status = str(details.get("status") or run.get("status") or "")
+    conclusion = str(details.get("conclusion") or run.get("conclusion") or "")
+    print(f"[ci_watch] {run_id} {status}/{conclusion} {details.get('url') or run.get('url', '')}")
+    for job in details.get("jobs") or []:
+        state = str(job.get("conclusion") or job.get("status") or "")
+        print(f"  {state:<12} {job.get('name')}")
+    if status != "completed":
+        print("[ci_watch] run is not finished yet; re-run without --no-wait to wait for it")
+        return 2
+    if conclusion in GREEN:
+        return 0
+    print(f"[ci_watch] FAILED run ({conclusion}); inspect with: gh run view {run_id} --log-failed")
+    return 1
 
 
 def watch(workflow: str, commit: str, *, wait: bool) -> int:
-    run = find_run(workflow, commit)
+    run = find_run(workflow, commit, wait_seconds=RUN_APPEAR_TIMEOUT_SECONDS if wait else 0)
     run_id = str(run["databaseId"])
     if wait and str(run.get("status")) != "completed":
         print(f"[ci_watch] watching {run_id} ({run.get('displayTitle', '')[:60]})")
