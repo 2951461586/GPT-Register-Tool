@@ -10,7 +10,7 @@ from sms_tool import cli
 from sms_tool.accounts import account_promotion, promotion_batch
 from sms_tool.accounts.account_promotion import parse_accounts_check, promotion_status_label
 from sms_tool.accounts.account_identity import create_registration_identity
-from sms_tool.desktop_read import read_account
+from sms_tool.desktop.read import read_account
 from sms_tool.storage import get_account_record, mark_promotion_status, mark_quota_status, upsert_account
 
 
@@ -122,7 +122,7 @@ def test_promotion_uses_dedicated_health_proxy_with_account_fingerprint_and_devi
 def test_refresh_promotion_statuses_emits_terminal_event_per_account(monkeypatch):
     events = []
     monkeypatch.setenv("SMSWORKBENCH_EVENTS", "1")
-    monkeypatch.setattr("sms_tool.desktop_ipc.emit_event", lambda payload, enabled=None: events.append(payload) or True)
+    monkeypatch.setattr("sms_tool.desktop.ipc.emit_event", lambda payload, enabled=None: events.append(payload) or True)
     monkeypatch.setattr("sms_tool.storage.get_account_record", lambda email: {"email": email, "access_token": "at"})
     monkeypatch.setattr("sms_tool.storage.mark_promotion_status", lambda *args, **kwargs: True)
     monkeypatch.setattr(

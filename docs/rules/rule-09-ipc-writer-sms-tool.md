@@ -1,4 +1,4 @@
-# Rule 09 — One IPC writer: `sms_tool/desktop_ipc.py` is the sole writer of the `@@SMSWORKBENCH_V2@@` envelope
+# Rule 09 — One IPC writer: `sms_tool/desktop/ipc.py` is the sole writer of the `@@SMSWORKBENCH_V2@@` envelope
 
 > Part of [Boundary Rule Checks](../../architecture.md#boundary-rule-checks).
 > The **number is a contract**: tests, scripts and other docs cite `Rule 9`,
@@ -9,4 +9,4 @@
 
 ## Rule
 
-One IPC writer: `sms_tool/desktop_ipc.py` is the sole writer of the `@@SMSWORKBENCH_V2@@` envelope.
+One IPC writer: `sms_tool/desktop/ipc.py` is the sole writer of the `@@SMSWORKBENCH_V2@@` envelope.

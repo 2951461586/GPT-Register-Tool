@@ -1,6 +1,6 @@
 import json
 
-from sms_tool import desktop_ipc
+from sms_tool.desktop import ipc as desktop_ipc
 from sms_tool.registration.progress import RegistrationProgress
 from sms_tool.kernel.sanitizer import account_reference
 from sms_tool.commands.one_click import _emit_one_click_event

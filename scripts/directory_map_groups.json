@@ -193,12 +193,11 @@
       "sms_tool/storage.py"
     ],
     "Desktop read transport": [
-      "sms_tool/desktop_read.py",
-      "sms_tool/desktop_serve.py",
-      "SmsWorkbench/Interop/DesktopReadClient.cs"
+      "SmsWorkbench/Interop/DesktopReadClient.cs",
+      "sms_tool/desktop/*.py"
     ],
     "Desktop event transport": [
-      "sms_tool/desktop_ipc.py"
+      "sms_tool/desktop/*.py"
     ],
     "Mailbox credential writeback": [
       "sms_tool/mailbox/*.py"

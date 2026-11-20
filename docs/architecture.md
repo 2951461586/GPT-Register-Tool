@@ -305,7 +305,7 @@ no file behind it.
 | 6 | PayPal execution must not regenerate links: no `gen_pp_link` import inside `sms_tool/paypal/` | [`rule-06-paypal-execution-regenerate-links.md`](rules/rule-06-paypal-execution-regenerate-links.md) |
 | 7 | One liveness owner | [`rule-07-liveness-owner.md`](rules/rule-07-liveness-owner.md) |
 | 8 | Agent Identity is explicit-import only; the registration pipeline must not reach it | [`rule-08-agent-identity-explicit-import.md`](rules/rule-08-agent-identity-explicit-import.md) |
-| 9 | One IPC writer: `sms_tool/desktop_ipc.py` is the sole writer of the `@@SMSWORKBENCH_V2@@` envelope | [`rule-09-ipc-writer-sms-tool.md`](rules/rule-09-ipc-writer-sms-tool.md) |
+| 9 | One IPC writer: `sms_tool/desktop/ipc.py` is the sole writer of the `@@SMSWORKBENCH_V2@@` envelope | [`rule-09-ipc-writer-sms-tool.md`](rules/rule-09-ipc-writer-sms-tool.md) |
 | 10 | `services/protocol-payment/` is a process boundary with zero import-level coupling to `sms_tool`; the only permitted reference is the documented lazy import in `kakao/kakao_extract.py` | [`rule-10-services-protocol-payment-process.md`](rules/rule-10-services-protocol-payment-process.md) |
 | 11 | Progress and concurrency are separate | [`rule-11-progress-concurrency-separate.md`](rules/rule-11-progress-concurrency-separate.md) |
 | 12 | Command adapters call public workflow functions; they must not import private provider helpers or write SQLite/session files | [`rule-12-command-adapters-call-public.md`](rules/rule-12-command-adapters-call-public.md) |

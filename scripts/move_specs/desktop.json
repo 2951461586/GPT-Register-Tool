@@ -1,0 +1,10 @@
+{
+  "package": "desktop",
+  "layer": 1,
+  "root_package_init": false,
+  "modules": {
+    "desktop_ipc": "ipc",
+    "desktop_read": "read",
+    "desktop_serve": "serve"
+  }
+}

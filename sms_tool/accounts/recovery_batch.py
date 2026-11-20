@@ -609,7 +609,7 @@ def _emit_account_batch_event(
     detail: str = "",
 ) -> None:
     try:
-        from ..desktop_ipc import emit_event
+        from ..desktop.ipc import emit_event
 
         emit_event(
             {

@@ -1,4 +1,4 @@
-from sms_tool.desktop_ipc import normalize_stage_event
+from sms_tool.desktop.ipc import normalize_stage_event
 
 
 def test_stage_event_normalizer_fills_uniform_contract():

@@ -40,7 +40,7 @@
       "reason": "deferred",
       "why": "支付资格 (2026-10-26): the single-account probe is a leaf reached only by the qualification batch, the CLI command and the desktop task. Deferring its config/proxy/payment imports keeps the frozen accounts -> root and accounts -> proxy module-level counts untouched, and keeps `import sms_tool.accounts.payment_qualification` free of the payment stack. The egress candidate order is resolved per account inside the probe."
     },
-    "sms_tool/accounts/payment_qualification_batch.py -> sms_tool.desktop_ipc": {
+    "sms_tool/accounts/payment_qualification_batch.py -> sms_tool.desktop.ipc": {
       "reason": "deferred",
       "why": "支付资格 batch (2026-10-26): progress events are the only IPC use and must stay inert for plain CLI runs (emit_event is already env-gated); importing the channel at module scope would grow accounts -> root for an optional sink."
     },
@@ -80,11 +80,11 @@
       "reason": "deferred",
       "why": "validate_config imports the stage vocabulary inside the function for the same reason as payment_catalog: the config hub must stay above the payment lane at import time"
     },
-    "sms_tool/desktop_read.py -> sms_tool.accounts.account_identity": {
+    "sms_tool/desktop/read.py -> sms_tool.accounts.account_identity": {
       "reason": "deferred",
       "why": "Account identity provenance (2026-10-28): _identity_payload reads identity_context through the canonical account_identity() reader so the fingerprint_key/proxy_affinity field names have one owner instead of a second copy here. account_identity pulls the fingerprint pool and phone_proxy (requests), and the account read is the desktop's hot start path, so the import runs inside the payload builder."
     },
-    "sms_tool/desktop_read.py -> sms_tool.proxy.admin": {
+    "sms_tool/desktop/read.py -> sms_tool.proxy.admin": {
       "reason": "deferred",
       "why": "Proxy-pool admin (2026-10-26): `--desktop-read proxy-pool` calls proxy.admin.list_pool. The account read path is the desktop's hot start path, so the proxy admin stack (registry/health/screening) is imported inside read_proxy_pool instead of at module scope."
     },
@@ -172,7 +172,7 @@
       "reason": "deferred",
       "why": "支付资格 batch (2026-10-26): _runtime_config() resolves CFG at call time so the payment lane does not add a module-level payment -> sms_tool edge for a value only used by the runner/preflight."
     },
-    "sms_tool/payment/qualification_batch.py -> sms_tool.desktop_ipc": {
+    "sms_tool/payment/qualification_batch.py -> sms_tool.desktop.ipc": {
       "reason": "deferred",
       "why": "支付资格 batch (2026-10-26, payment lane): mirrors promotion_batch's deferred imports (account store, persistence marker, progress sink, egress routing). Deferring them keeps a desktop read-only start from loading the account store through this module. Progress events are the only IPC use and emit_event is already env-gated."
     },
@@ -236,7 +236,7 @@
       "reason": "deferred",
       "why": "the account-record lookup is imported inside the function for the same reason as the remail adapter"
     },
-    "sms_tool/providers/ports.py -> sms_tool.desktop_ipc": {
+    "sms_tool/providers/ports.py -> sms_tool.desktop.ipc": {
       "reason": "deferred",
       "why": "provider port wires lazily so provider adapters never import the IPC channel at module scope (Rule 3)"
     },

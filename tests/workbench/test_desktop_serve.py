@@ -8,7 +8,7 @@ import time
 import unittest
 from unittest.mock import patch
 
-from sms_tool import desktop_serve
+from sms_tool.desktop import serve as desktop_serve
 
 
 def _fake_payload(op, request):
@@ -141,7 +141,7 @@ class DesktopServeProtocolTests(unittest.TestCase):
         self.assertEqual(
             desktop_serve.PROTOCOL_VERSION,
             version,
-            "sms_tool/desktop_serve.py PROTOCOL_VERSION must match "
+            "sms_tool/desktop/serve.py PROTOCOL_VERSION must match "
             "SmsWorkbench.Contracts/DesktopReadProtocol.cs Version",
         )
 

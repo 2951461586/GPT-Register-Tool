@@ -92,7 +92,7 @@ def _run_extract(args):
 
     with (
         patch.object(payment_commands, "resolve_payment_route", return_value={"ok": False, "error": "stop"}),
-        patch("sms_tool.desktop_ipc.emit_result"),
+        patch("sms_tool.desktop.ipc.emit_result"),
     ):
         with pytest.raises(SystemExit):
             # ``_Context`` is a deliberately partial stub: the patched

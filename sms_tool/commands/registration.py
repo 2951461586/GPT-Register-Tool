@@ -1023,7 +1023,7 @@ def run_target_at200(args, base_dir, ctx: RegistrationCommandContext):
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     report["report_path"] = str(report_path)
-    from ..desktop_ipc import emit_result
+    from ..desktop.ipc import emit_result
 
     emit_result(report, enabled=bool(getattr(args, "desktop_ipc", False)))
     if not report["ok"]:

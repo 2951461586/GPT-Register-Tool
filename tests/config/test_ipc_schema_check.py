@@ -2,7 +2,7 @@
 
 Round-3 audit P1-7 said ``error_codes`` was a dead field and recommended
 deleting it to "remove the false sense of security". That is backwards: the five
-codes are real on **both** sides (``desktop_serve.py`` ``CODE_*`` constants and
+codes are real on **both** sides (``desktop/serve.py`` ``CODE_*`` constants and
 ``DesktopReadProtocol.cs`` ``DesktopReadErrorCodes``). What was missing is the
 *check*. Deleting the field would have removed the only place the contract is
 written down and left the drift invisible.
@@ -159,8 +159,8 @@ def test_real_tree_passes():
 def test_extractors_are_not_empty_on_the_real_tree():
     """Guard against a vacuous pass: every extractor must find something."""
     root = Path(__file__).resolve().parents[2]
-    py = (root / "sms_tool" / "desktop_serve.py").read_text(encoding="utf-8")
-    py_ipc = (root / "sms_tool" / "desktop_ipc.py").read_text(encoding="utf-8")
+    py = (root / "sms_tool" / "desktop/serve.py").read_text(encoding="utf-8")
+    py_ipc = (root / "sms_tool" / "desktop/ipc.py").read_text(encoding="utf-8")
     cs = (root / "SmsWorkbench.Contracts" / "DesktopReadProtocol.cs").read_text(encoding="utf-8")
     cs_events = (root / "SmsWorkbench.Contracts" / "BackendProgressEvents.cs").read_text(encoding="utf-8")
 

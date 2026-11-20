@@ -44,8 +44,8 @@ import threading
 import time
 from typing import Any
 
-from .config import load_runtime_config
-from .desktop_read import (
+from ..config import load_runtime_config
+from .read import (
     create_account_file,
     create_mailbox_file,
     create_payment_url_file,
@@ -284,7 +284,7 @@ def _unsanitized_stream(stream):
     here are assembled from already-sanitized field data, and re-scanning one
     multi-megabyte response line costs seconds per refresh.
     """
-    from .diagnostics import SanitizingTextIO
+    from ..diagnostics import SanitizingTextIO
 
     if isinstance(stream, SanitizingTextIO):
         return getattr(stream, "_wrapped", stream)

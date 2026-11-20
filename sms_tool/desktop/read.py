@@ -17,14 +17,14 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from . import sms_providers
-from .config import CFG, ConfigInput, RuntimeConfig, resolve_runtime_config
-from .mailbox.parsers import parse_mailbox_pool_line
-from .kernel.paths import PROJECT_ROOT, config_dir, resolve_config_file
-from .promotion_states import promotion_marker_is_stale
-from .registration.retry_guard import RegistrationRetryGuard, mailbox_registration_status
-from .kernel.sanitizer import sanitize
-from .storage import (
+from .. import sms_providers
+from ..config import CFG, ConfigInput, RuntimeConfig, resolve_runtime_config
+from ..mailbox.parsers import parse_mailbox_pool_line
+from ..kernel.paths import PROJECT_ROOT, config_dir, resolve_config_file
+from ..promotion_states import promotion_marker_is_stale
+from ..registration.retry_guard import RegistrationRetryGuard, mailbox_registration_status
+from ..kernel.sanitizer import sanitize
+from ..storage import (
     _account_type,
     _looks_codex_refresh_token,
     get_account_record_by_id,
@@ -271,7 +271,7 @@ def _identity_payload(record: Mapping[str, Any], session: Any) -> dict[str, Any]
     try:
         # Function-local: ``account_identity`` pulls the fingerprint pool and the
         # proxy entry parser, and this is the desktop's hot start path.
-        from .accounts.account_identity import account_identity
+        from ..accounts.account_identity import account_identity
 
         identity = account_identity(merged)
     except Exception:
@@ -521,7 +521,7 @@ def read_account(account_id: str = "", email: str = "", runtime_config: ConfigIn
     config = resolve_runtime_config(runtime_config, workflow="storage")
     row = get_account_record_by_id(account_id, runtime_config=config) if str(account_id or "").strip() else {}
     if not row and email:
-        from .storage import get_account_record
+        from ..storage import get_account_record
 
         row = get_account_record(email, runtime_config=config)
     return _record_payload(row) if row else {}
@@ -557,7 +557,7 @@ def _vendor_credentials(provider: str, runtime_config: ConfigInput = None) -> tu
 
 def read_provider_balance(provider: Any = "", service: str = "", runtime_config: ConfigInput = None) -> dict[str, Any]:
     """The vendor's balance for one provider (``{"ok", "balance"}`` or an error)."""
-    from .providers.sms_vendor_api import read_balance
+    from ..providers.sms_vendor_api import read_balance
 
     key, api_key, endpoint = _vendor_credentials(str(provider or ""), runtime_config)
     return read_balance(key, api_key, endpoint)
@@ -565,7 +565,7 @@ def read_provider_balance(provider: Any = "", service: str = "", runtime_config:
 
 def read_provider_catalog(provider: Any = "", service: str = "", runtime_config: ConfigInput = None) -> dict[str, Any]:
     """Country/tier catalog for one provider (``{"ok", "countries"}`` or an error)."""
-    from .providers.sms_vendor_api import read_catalog
+    from ..providers.sms_vendor_api import read_catalog
 
     key, api_key, endpoint = _vendor_credentials(str(provider or ""), runtime_config)
     return read_catalog(key, api_key, endpoint, service)
@@ -584,7 +584,7 @@ def read_proxy_pool(
     module scope for the account-only reads.
     """
     config = resolve_runtime_config(runtime_config, workflow="storage")
-    from .proxy.admin import list_pool
+    from ..proxy.admin import list_pool
 
     return list_pool(config.data, lane=lane)
 
@@ -756,7 +756,7 @@ def _find_record(account_id: str, email: str, runtime_config: ConfigInput) -> di
     config = resolve_runtime_config(runtime_config, workflow="storage")
     row = get_account_record_by_id(account_id, runtime_config=config) if str(account_id or "").strip() else {}
     if not row and email:
-        from .storage import get_account_record
+        from ..storage import get_account_record
 
         row = get_account_record(email, runtime_config=config)
     return row

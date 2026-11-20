@@ -9,7 +9,7 @@
    `astral-sh/python-build-standalone` 的一个 Windows 归档（URL + SHA-256），
    `scripts/stage_python_runtime.ps1` 校验后解包到 `runtime/python` 并把依赖装进去。
    `PythonPathResolver` 的优先级是**显式 `runtime.python_path` > 内置解释器 > PATH**。
-2. **只读常驻通道保留，命令 RPC 暂不实现。** `desktop_serve.py` 继续只服务读操作；
+2. **只读常驻通道保留，命令 RPC 暂不实现。** `desktop/serve.py` 继续只服务读操作；
    注册/支付等长任务维持一次性进程。
 3. **Sentinel 常驻 worker 默认关闭。** `SMS_SENTINEL_WORKER=1` 才启用；它只换传输，
    runner 判定与 token 校验完全复用，传输失败才回退一次性 node。

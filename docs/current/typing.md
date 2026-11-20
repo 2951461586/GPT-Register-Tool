@@ -87,7 +87,7 @@ go through `_as_int` / `_as_float`, which `cast` to `float | int | str` so an
 unexpected type still raises exactly as before), and
 `tests/registration/test_registration_hot_persistence.py` (38 → 0 — the recursive
 `thaw` fixture now annotates its boundary as `dict[str, Any]`), and
-`sms_tool/desktop_read.py` (1 → 0 — the pool-line parser now receives a `str`
+`sms_tool/desktop/read.py` (1 → 0 — the pool-line parser now receives a `str`
 path). Baseline after that round: **862**.
 
 Retired 2026-10-22 (batches 1 and a one-line neighbour):

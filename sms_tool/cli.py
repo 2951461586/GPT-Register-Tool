@@ -9,7 +9,7 @@ from typing import Any
 
 from .config import CFG, ConfigError, default_config_dir, initialize_config_shards, initialize_runtime_config
 from .diagnostics import install_safe_stdio, safe_print
-from .desktop_ipc import emit_result
+from .desktop.ipc import emit_result
 from .kernel.paths import output_dir, runtime_file
 from .registration_drivers.base import driver_choices
 from .kernel.sanitizer import sanitize_text
@@ -666,7 +666,7 @@ def _main_early_commands(args) -> bool:
     body.
     """
     if getattr(args, "desktop_serve", False):
-        from .desktop_serve import serve_forever
+        from .desktop.serve import serve_forever
 
         raise SystemExit(serve_forever())
     if getattr(args, "proxy_list", False) or getattr(args, "proxy_test", False) or getattr(args, "proxy_screen", False):
@@ -695,7 +695,7 @@ def _main_early_commands(args) -> bool:
             print_doctor_report(report)
         raise SystemExit(0 if getattr(args, "desktop_ipc", False) else report["failed"])
     if args.desktop_read:
-        from .desktop_read import (
+        from .desktop.read import (
             create_account_file,
             create_mailbox_file,
             create_payment_url_file,

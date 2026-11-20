@@ -14,8 +14,8 @@ import sqlite3
 from pathlib import Path
 from unittest.mock import patch
 
-from sms_tool import desktop_serve
-from sms_tool.desktop_read import read_accounts_delta
+from sms_tool.desktop import serve as desktop_serve
+from sms_tool.desktop.read import read_accounts_delta
 from sms_tool.storage import upsert_account
 
 

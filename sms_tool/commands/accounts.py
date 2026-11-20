@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from .helpers import read_email_file, unique_emails
-from ..desktop_ipc import emit_result
+from ..desktop.ipc import emit_result
 
 logger = logging.getLogger(__name__)
 

@@ -32,7 +32,7 @@ from curl_cffi import requests as curl_requests
 
 from . import checkpoint as registration_checkpoint
 from ..tls_fingerprint import apply_to_session as _apply_tls_fingerprint
-from ..desktop_ipc import emit_event
+from ..desktop.ipc import emit_event
 from ..kernel.failure_registry import PASSWORDLESS_SIGNUP_CODE, is_passwordless_signup_mismatch
 from ..operator_output import emit as _emit
 from .cancel import RegistrationCancelled, cancellable_sleep

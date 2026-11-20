@@ -495,7 +495,7 @@ def test_checkout_kind_reaches_the_badge_and_the_row():
 
 
 def test_a_transient_failure_keeps_the_last_conclusive_badge():
-    from sms_tool import desktop_read
+    from sms_tool.desktop import read as desktop_read
     from sms_tool.store.markers import _update_last_conclusive
 
     qualification = {"status": "可用·PayPal", "state": "eligible", "updated_at": 1}

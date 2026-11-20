@@ -2,7 +2,7 @@ import base64
 import json
 from pathlib import Path
 
-from sms_tool.desktop_read import (
+from sms_tool.desktop.read import (
     _mailbox_line,
     create_account_file,
     create_mailbox_file,
@@ -128,7 +128,7 @@ def test_public_read_prefers_current_token_plan_over_stale_database(tmp_path):
 
 def test_lightweight_account_read_skips_full_session_sanitization(tmp_path, monkeypatch):
     session, _ = _seed(tmp_path)
-    from sms_tool import desktop_read
+    from sms_tool.desktop import read as desktop_read
 
     def fail_sanitize(*args, **kwargs):
         raise AssertionError("list reads must not sanitize the full session")
@@ -486,7 +486,7 @@ def test_desktop_read_is_reported_as_handled(monkeypatch):
         chatai_mailbox_file=None,
         json_output=False,
     )
-    monkeypatch.setattr("sms_tool.desktop_read.read_accounts", lambda *_a, **_k: [])
+    monkeypatch.setattr("sms_tool.desktop.read.read_accounts", lambda *_a, **_k: [])
 
     assert cli._main_early_commands(args) is True
 
@@ -500,7 +500,7 @@ def test_session_state_cache_stays_bounded(tmp_path, monkeypatch):
     parse/sanitize caches above: on overflow the cache is cleared, and the only
     cost is one re-read per file.
     """
-    from sms_tool import desktop_read
+    from sms_tool.desktop import read as desktop_read
 
     monkeypatch.setattr(desktop_read, "_SESSION_STATE_CACHE_LIMIT", 3)
     desktop_read._SESSION_STATE_CACHE.clear()

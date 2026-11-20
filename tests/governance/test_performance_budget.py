@@ -81,5 +81,5 @@ def test_resident_desktop_read_stays_within_its_memory_budget(tmp_path) -> None:
     rss_mb = int(stdout.strip().splitlines()[-1])
     assert rss_mb < RESIDENT_RSS_MB, (
         f"resident read kept {rss_mb} MB after 795 rows + 10 deltas "
-        f"(budget {RESIDENT_RSS_MB} MB); check the row caches in sms_tool/desktop_read.py"
+        f"(budget {RESIDENT_RSS_MB} MB); check the row caches in sms_tool/desktop/read.py"
     )

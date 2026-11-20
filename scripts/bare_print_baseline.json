@@ -19,7 +19,7 @@
   "sms_tool/commands/payment.py": 5,
   "sms_tool/commands/payment_links.py": 30,
   "sms_tool/config/runtime.py": 1,
-  "sms_tool/desktop_ipc.py": 3,
+  "sms_tool/desktop/ipc.py": 3,
   "sms_tool/diagnostics.py": 1,
   "sms_tool/doctor.py": 5,
   "sms_tool/http_client.py": 1,

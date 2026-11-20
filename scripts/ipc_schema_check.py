@@ -35,7 +35,7 @@ EVENTS_CS = ROOT / "SmsWorkbench.Contracts" / "BackendProgressEvents.cs"
 
 
 def _py_error_codes(py_source: str) -> list[str]:
-    """``CODE_*`` module constants in ``desktop_serve.py``."""
+    """``CODE_*`` module constants in ``desktop/serve.py``."""
     return sorted(set(re.findall(r'^CODE_[A-Z_]+\s*=\s*"([a-z_]+)"', py_source, re.M)))
 
 
@@ -145,8 +145,8 @@ def check_manifest(manifest, py, py_ipc, cs, cs_events="") -> list[str]:
 
 def main() -> int:
     manifest = json.loads((ROOT / "ipc_schema.json").read_text(encoding="utf-8"))
-    py = (ROOT / "sms_tool" / "desktop_serve.py").read_text(encoding="utf-8")
-    py_ipc = (ROOT / "sms_tool" / "desktop_ipc.py").read_text(encoding="utf-8")
+    py = (ROOT / "sms_tool" / "desktop/serve.py").read_text(encoding="utf-8")
+    py_ipc = (ROOT / "sms_tool" / "desktop/ipc.py").read_text(encoding="utf-8")
     cs = (ROOT / "SmsWorkbench.Contracts" / "DesktopReadProtocol.cs").read_text(encoding="utf-8")
     cs_events = EVENTS_CS.read_text(encoding="utf-8") if EVENTS_CS.exists() else ""
     failures = check_manifest(manifest, py, py_ipc, cs, cs_events)

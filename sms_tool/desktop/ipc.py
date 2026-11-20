@@ -25,7 +25,7 @@ import threading
 import time
 import uuid
 
-from .kernel.sanitizer import sanitize
+from ..kernel.sanitizer import sanitize
 
 
 IPC_PREFIX = "@@SMSWORKBENCH_V2@@"

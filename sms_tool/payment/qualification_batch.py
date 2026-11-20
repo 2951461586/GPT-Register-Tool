@@ -993,7 +993,7 @@ def _summary(
 
 def _emit(run_id: str, stage: str, status: str, *, account_ref: str = "", total: int = 0, detail: str = "") -> None:
     try:
-        from ..desktop_ipc import emit_event
+        from ..desktop.ipc import emit_event
 
         emit_event(
             {

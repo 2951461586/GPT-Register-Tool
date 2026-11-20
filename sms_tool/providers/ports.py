@@ -72,7 +72,7 @@ def _ensure_wired() -> None:
     global _wired
     if _wired:
         return
-    from ..desktop_ipc import progress_dots_enabled as dots
+    from ..desktop.ipc import progress_dots_enabled as dots
     from ..mailbox.pool_writer import apply_rotation as rotate
 
     install(apply_rotation_impl=rotate, progress_dots_impl=dots)

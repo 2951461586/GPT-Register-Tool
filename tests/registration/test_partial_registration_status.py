@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import Mock
 
-from sms_tool import desktop_read
+from sms_tool.desktop import read as desktop_read
 from sms_tool.registration import retry_guard as registration_retry_guard
 from sms_tool.registration.handlers import RegistrationEmailWorkflow
 from sms_tool.registration.retry_guard import RegistrationRetryGuard

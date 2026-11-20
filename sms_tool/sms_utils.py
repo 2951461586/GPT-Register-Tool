@@ -13,7 +13,7 @@ import time
 
 import requests as _requests
 
-from .desktop_ipc import progress_dots_enabled
+from .desktop.ipc import progress_dots_enabled
 
 # ─── SMS code extraction ──────────────────────────────────────────────────────
 

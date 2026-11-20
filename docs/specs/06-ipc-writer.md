@@ -2,7 +2,7 @@
 id: spec-06-ipc-writer
 type: architecture-design
 status: accepted
-owner: sms_tool/desktop_ipc.py
+owner: sms_tool/desktop/ipc.py
 implements:
   - rule-09
 depends-on:

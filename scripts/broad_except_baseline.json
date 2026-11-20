@@ -233,11 +233,11 @@
       "broad": 9,
       "silent": 1
     },
-    "sms_tool/desktop_read.py": {
+    "sms_tool/desktop/read.py": {
       "broad": 2,
       "silent": 0
     },
-    "sms_tool/desktop_serve.py": {
+    "sms_tool/desktop/serve.py": {
       "broad": 2,
       "silent": 1
     },
@@ -821,7 +821,7 @@
       "reason": "Browser/process teardown shared by four drivers: killing a wedged child, closing a context, or recycling a slot is best effort by definition.",
       "silent": 0
     },
-    "sms_tool/desktop_serve.py": {
+    "sms_tool/desktop/serve.py": {
       "broad": 2,
       "reason": "Request isolation in the resident desktop-read server: one malformed request must answer with an error code, not kill the process the shell depends on.",
       "silent": 1

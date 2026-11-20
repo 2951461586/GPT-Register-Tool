@@ -36,7 +36,7 @@ def _emit_one_click_event(
 ) -> None:
     """Publish desktop-only one-click progress without changing CLI output."""
     try:
-        from ..desktop_ipc import emit_event
+        from ..desktop.ipc import emit_event
 
         payload = {
             "domain": "one_click_sms",

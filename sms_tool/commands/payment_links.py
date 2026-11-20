@@ -311,7 +311,7 @@ def batch_auto_pay(args: Any) -> None:
 
 
 def list_paypal_ba_queue(args: Any) -> None:
-    from ..desktop_ipc import emit_result
+    from ..desktop.ipc import emit_result
     from ..paypal.authorization_queue import list_paypal_ba_authorizations
 
     items = list_paypal_ba_authorizations(limit=_clamped_int(getattr(args, "paypal_ba_queue_limit", 0)))
@@ -322,7 +322,7 @@ def list_paypal_ba_queue(args: Any) -> None:
 
 
 def process_paypal_ba_queue(args: Any) -> None:
-    from ..desktop_ipc import emit_event, emit_result
+    from ..desktop.ipc import emit_event, emit_result
     from ..paypal.authorization_queue import process_paypal_ba_authorizations
     from ..paypal.auto import auto_pay as run_auto_pay
 

@@ -174,7 +174,7 @@ def test_refresh_local_quota_keeps_probe_health_when_persistence_fails():
 def test_refresh_local_quota_statuses_emits_terminal_event_per_account(monkeypatch):
     events = []
     monkeypatch.setenv("SMSWORKBENCH_EVENTS", "1")
-    monkeypatch.setattr("sms_tool.desktop_ipc.emit_event", lambda payload, enabled=None: events.append(payload) or True)
+    monkeypatch.setattr("sms_tool.desktop.ipc.emit_event", lambda payload, enabled=None: events.append(payload) or True)
     monkeypatch.setattr(
         account_recovery,
         "_local_quota_accounts",
@@ -1471,7 +1471,7 @@ def test_liveness_transport_failure_retries_configured_pool(monkeypatch):
 
 def test_desktop_read_hides_stale_promotion_at_marker_after_verified_200():
     import json as json_mod
-    from sms_tool.desktop_read import _record_payload
+    from sms_tool.desktop.read import _record_payload
 
     stale_label = "AT" + chr(0x5931) + chr(0x6548)
 

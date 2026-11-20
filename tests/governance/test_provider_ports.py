@@ -54,7 +54,7 @@ def test_an_absolute_import_of_a_forbidden_module_is_reported(tmp_path):
         tmp_path,
         {
             "providers/__init__.py": "",
-            "providers/mailbox_remail.py": "from sms_tool.desktop_ipc import progress_dots_enabled\n",
+            "providers/mailbox_remail.py": "from sms_tool.desktop.ipc import progress_dots_enabled\n",
         },
     )
     assert architecture_scan.provider_port_violations(root)

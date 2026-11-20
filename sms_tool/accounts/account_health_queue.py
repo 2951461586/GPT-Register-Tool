@@ -524,7 +524,7 @@ def _heartbeat_claimed_jobs(
 
 def _emit(item: Mapping[str, Any], status: str) -> None:
     try:
-        from ..desktop_ipc import emit_event
+        from ..desktop.ipc import emit_event
 
         emit_event(
             {

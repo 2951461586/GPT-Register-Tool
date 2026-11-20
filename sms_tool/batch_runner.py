@@ -490,7 +490,7 @@ def _emit_mailboxes_skipped(skipped, *, reason: str) -> None:
     run has ``desktop_events_enabled()`` off so nothing is printed twice.
     """
     try:
-        from .desktop_ipc import desktop_events_enabled, emit_event
+        from .desktop.ipc import desktop_events_enabled, emit_event
 
         if not desktop_events_enabled():
             return
@@ -623,7 +623,7 @@ def run_batch_impl(
         proxy_pool = [proxy]
     batch_id = uuid.uuid4().hex
     try:
-        from .desktop_ipc import emit_event
+        from .desktop.ipc import emit_event
 
         emit_event(
             {

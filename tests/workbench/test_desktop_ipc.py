@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from sms_tool.desktop_ipc import IPC_PREFIX, emit_result
+from sms_tool.desktop.ipc import IPC_PREFIX, emit_result
 from sms_tool import cli
 
 

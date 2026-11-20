@@ -21,7 +21,7 @@ import json
 
 import pytest
 
-from sms_tool import desktop_read
+from sms_tool.desktop import read as desktop_read
 
 
 @pytest.fixture(autouse=True)

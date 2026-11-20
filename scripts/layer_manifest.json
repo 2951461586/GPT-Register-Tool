@@ -31,7 +31,8 @@
     "importers": 3,
     "codex": 3,
     "session": 4,
-    "phone": 4
+    "phone": 4,
+    "desktop": 1
   },
   "module_overrides": {
     "accounts/account_models": 5,
@@ -72,7 +73,8 @@
     "payment/qualification_batch": 3,
     "payment/qualification_states": 5,
     "codex/sentinel": 4,
-    "phone/registration": 3
+    "phone/registration": 3,
+    "desktop/ipc": 5
   },
   "root_modules": {
     "__main__.py": 2,
@@ -100,9 +102,9 @@
     "config_usage.py": 2,
     "importers/cpa.py": 3,
     "cross_process_gate.py": 5,
-    "desktop_ipc.py": 5,
-    "desktop_read.py": 1,
-    "desktop_serve.py": 1,
+    "desktop/ipc.py": 5,
+    "desktop/read.py": 1,
+    "desktop/serve.py": 1,
     "diagnostics.py": 5,
     "doctor.py": 2,
     "endpoints.py": 5,

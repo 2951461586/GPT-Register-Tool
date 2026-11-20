@@ -153,7 +153,7 @@ namespace SmsWorkbench
         /// frame rather than a progress `event` frame.
         ///
         /// The Python side emits exactly two frame kinds
-        /// (`sms_tool/desktop_ipc.py`): one terminal `result` per invocation,
+        /// (`sms_tool/desktop/ipc.py`): one terminal `result` per invocation,
         /// and any number of progress `event` frames. An `event` frame that
         /// reaches <see cref="FormatLine"/> already failed event parsing, so it
         /// is a real diagnostic; a `result` frame is routine. Anything that

@@ -21,7 +21,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from sms_tool import desktop_read  # noqa: E402
+from sms_tool.desktop import read as desktop_read  # noqa: E402
 from sms_tool.store import connection  # noqa: E402
 
 #: ~3.5 KB of session JSON per row; production sessions measure 5-20 KB, so this
