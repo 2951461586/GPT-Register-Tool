@@ -273,11 +273,29 @@ Wpf.Ui.xaml -> Wpf.Ui Theme/Light.xaml -> Themes/Tokens.xaml -> Themes/Glyphs.xa
   尽管徽章把它画成危险色。是否让“会话失效”计入关注属于**产品决定**，
   `LocalizedStatusDecisionTests.A_session_invalid_row_is_a_pinned_attention_gap`
   显式钉住现状，避免被误当成已覆盖。
-* 已迁移的点：`RegistrationStatusPresentation.cs`、`RegisterViewModel`、
-  `PoolViewModel`、`ExportViewModel`；`Views/AccountGridPresentation.cs` 只做
-  徽章配色（不是业务判定），仍保留手写的中英双清单。
-* 彻底的做法是判定只读机器态（`registration_status` / `at_probe_status`），
-  已作为 `docs/audits/plans/plan-2026-10-25-wpf-row-status-decoupling.md` 立项。
+* **2026-11-20 起判定改读机器态。** `Models/AccountMachineState.cs` 是唯一归属：
+  `StatusSaysRegistered` / `NeedsRegistration` / `NeedsAttention` / `CanExport`
+  与五个徽章色（`StatusSeverity` / `AccessTokenSeverity` / `RefreshTokenSeverity` /
+  `TwoFactorSeverity` / `PromotionSeverity`）都从 `registration_status`、
+  `refresh_token_status`、`at_probe_status_code`、`promotion_state`、
+  `payment_qualification_state` 与 TOTP 布尔取值。
+  * `PoolRow` 暴露 `StatusSeverity` 等计算属性，XAML 直接绑定，不再路过
+    `StatusSeverityConverter`；该 converter 只剩**遗留行回退**（没有机器字段的
+    旧 session），规则与 `PaymentQualificationSeverityConverter.SeverityFor`
+    同形。`PoolRow` 同时从 `MainWindow.xaml.cs` 搬到 `Models/PoolRow.cs`。
+  * 四个谓词（`RegistrationStatusPresentation.NeedsAttention`、
+    `PoolViewModel.IsRegistered`、`RegisterViewModel.HasRegisteredAccountState`、
+    `ExportViewModel.IsImportable`）改为委托机器态；`Loc.DisplayContains` 只出现在
+    回退分支里。
+  * 机器值优先于文案，且方向是双向的：`registration_status=pending` 的行即使文案
+    仍是 `已注册` 也**不**计入已注册（陈旧文案不再掩盖未完成的行）；反之
+    `registration_status=registered` 的行即使文案被改写成任何语言目录里都不存在
+    的形态也照常计入。由 `tests/SmsWorkbench.Tests/AccountMachineStateTests.cs` 钉住。
+  * 顺带修掉一个实测缺陷：RT 徽章此前拿**原始码**（`no_rt` / `oauth_present`）去匹配
+    中英文展示串，一个都匹配不上，缺 RT 的行渲染成中性灰；现在按码取色，
+    `no_rt` / `missing` → danger。
+  * 立项文档 `docs/audits/plans/plan-2026-10-25-wpf-row-status-decoupling.md` 状态改为
+    已落地，落地记录见其文末。
 
 ## 5. 主题与配色
 
@@ -341,6 +359,7 @@ Wpf.Ui.xaml -> Wpf.Ui Theme/Light.xaml -> Themes/Tokens.xaml -> Themes/Glyphs.xa
 | 命令规划 | `SmsWorkbench/Views/MainWindow.Commands.cs` + `Services/` |
 | 后端 JSON → 领域对象 | `SmsWorkbench/Interop/BackendResultInterpreter.cs` |
 | 只读桌面契约 | `SmsWorkbench/Interop/DesktopReadClient.cs` + Python `desktop_ipc` |
+| 行状态判定（已注册 / 需注册 / 需关注 / 可导出 / 徽章色） | `SmsWorkbench/Models/AccountMachineState.cs`（机器态优先，遗留行回退到 `Loc.DisplayContains`） |
 | C# 构建告警基线 | `scripts/dotnet_warning_ratchet.py` |
 
 ## 6. 外壳能力：主题三态 / 托盘 / 仪表盘 / 工作区

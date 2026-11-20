@@ -48,19 +48,13 @@ namespace SmsWorkbench
             return Math.Max(min, Math.Min(max, value));
         }
 
+        /// <summary>
+        /// True when the row is already registered. Machine state
+        /// (<c>registration_status</c>) wins over the display label; the label is
+        /// read only for legacy rows that predate that field.
+        /// </summary>
         public static bool HasRegisteredAccountState(PoolRow row)
-        {
-            string status = row.Status ?? "";
-            // ``Loc.DisplayContains``, not ``status.Contains("已注册")``: the row's
-            // text is rendered through ``Loc.T``, so comparing the Chinese
-            // literal made this predicate return false for every row once the
-            // UI language was English -- and the caller then offered an
-            // already-registered mailbox for registration again.
-            return Loc.DisplayContains(status, "已注册")
-                || Loc.DisplayContains(status, "支付完成")
-                || Loc.DisplayContains(status, "已导入")
-                || status.Contains("PayPal", StringComparison.OrdinalIgnoreCase);
-        }
+            => AccountMachineState.StatusSaysRegistered(row);
 
         /// <summary>
         /// Decides from local fields alone whether a row still needs registering.

@@ -58,6 +58,8 @@ namespace SmsWorkbench
             // identical arguments (PayPalStatus member and PromotionStatus member).
             string paypalStatusDisplay = AccountStatusInterpreter.DisplayPayPalStatus(paypalStatus, paypalOk, paypalUrl, paymentMethod);
             (string fingerprintProfile, string egressEndpoint, string egressCountry, bool identityBound) = ReadIdentity(data);
+            // One read, two consumers (the machine flag and the display label).
+            bool hasTwoFactor = AccountStatusInterpreter.HasTwoFactor(data);
             var row = new PoolRow
             {
                 Id = "DB" + BackendJson.GetString(data, "id"),
@@ -96,7 +98,8 @@ namespace SmsWorkbench
                     BackendJson.GetString(data, "payment_qualification_display")),
                 PaymentQualificationState = BackendJson.GetString(data, "payment_qualification_state"),
                 RefreshTokenStatus = AccountStatusInterpreter.DisplayRtStatus(refreshStatus),
-                TwoFactorStatus = AccountStatusInterpreter.HasTwoFactor(data) ? Loc.T("已设置") : Loc.T("未设置"),
+                TwoFactorEnabled = hasTwoFactor,
+                TwoFactorStatus = hasTwoFactor ? Loc.T("已设置") : Loc.T("未设置"),
                 HasAccessToken = hasAccess,
                 AccessTokenProbeStatusCode = AccountStatusInterpreter.GetAccessTokenProbeStatusCode(data),
                 PayPalUrl = paypalUrl,

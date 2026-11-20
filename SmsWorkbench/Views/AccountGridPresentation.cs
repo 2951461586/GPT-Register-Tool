@@ -10,8 +10,18 @@ namespace SmsWorkbench
     public sealed class StatusSeverityConverter : IValueConverter
     {
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+            => SeverityFor(value as string);
+
+        /// <summary>
+        /// Legacy label rule. Since 2026-11-20 this is only the fallback for rows
+        /// written before the backend emitted machine state: the badges and the
+        /// row predicates go through <see cref="AccountMachineState"/>, which
+        /// ignores the label whenever a machine value is present. Kept public so
+        /// that fallback is testable without WPF.
+        /// </summary>
+        public static string SeverityFor(string? label)
         {
-            string status = (value as string ?? "").Trim();
+            string status = (label ?? "").Trim();
             if (status.Length == 0) return "neutral";
             if (RegistrationStatusPresentation.IsPartial(status)) return "warn";
 

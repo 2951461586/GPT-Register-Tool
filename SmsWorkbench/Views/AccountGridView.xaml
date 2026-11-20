@@ -7,7 +7,6 @@
        this control's dictionary because the templates that use them do; a
        window-level StaticResource would not be visible while this XAML parses. -->
   <UserControl.Resources>
-    <local:StatusSeverityConverter x:Key="StatusSeverityConverter"/>
     <local:PaymentQualificationSeverityConverter x:Key="QualificationSeverity"/>
     <!-- The stock DataGrid ScrollViewer template fills the square between the
          two scroll bars with SystemColors.ControlBrushKey — an opaque light grey
@@ -224,7 +223,7 @@
                 <DataGridTemplateColumn Header="{loc:Tr Key='状态'}" Width="96" IsReadOnly="True" SortMemberPath="Status" CanUserSort="True">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate>
-                      <Border Style="{StaticResource StatusBadge}" Tag="{Binding Status, Converter={StaticResource StatusSeverityConverter}}">
+                      <Border Style="{StaticResource StatusBadge}" Tag="{Binding StatusSeverity}">
                         <TextBlock Style="{StaticResource StatusBadgeText}" Text="{Binding Status}" TextTrimming="CharacterEllipsis"/>
                       </Border>
                     </DataTemplate>
@@ -233,7 +232,7 @@
                 <DataGridTemplateColumn Header="AT" Width="96" IsReadOnly="True" SortMemberPath="AccessTokenStatus" CanUserSort="True">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate>
-                      <Border Style="{StaticResource StatusBadge}" Tag="{Binding AccessTokenStatus, Converter={StaticResource StatusSeverityConverter}}">
+                      <Border Style="{StaticResource StatusBadge}" Tag="{Binding AccessTokenSeverity}">
                         <TextBlock Style="{StaticResource StatusBadgeText}" Text="{Binding AccessTokenStatus}" TextTrimming="CharacterEllipsis"/>
                       </Border>
                     </DataTemplate>
@@ -242,7 +241,7 @@
                 <DataGridTemplateColumn Header="RT" Width="96" IsReadOnly="True">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate>
-                      <Border Style="{StaticResource StatusBadge}" Tag="{Binding RefreshTokenStatus, Converter={StaticResource StatusSeverityConverter}}">
+                      <Border Style="{StaticResource StatusBadge}" Tag="{Binding RefreshTokenSeverity}">
                         <TextBlock Style="{StaticResource StatusBadgeText}" Text="{Binding RefreshTokenStatus, Converter={StaticResource RtDisplayConverter}}" TextTrimming="CharacterEllipsis"/>
                       </Border>
                     </DataTemplate>
@@ -251,7 +250,7 @@
                 <DataGridTemplateColumn Header="2FA" Width="96" IsReadOnly="True" SortMemberPath="TwoFactorStatus" CanUserSort="True">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate>
-                      <Border Style="{StaticResource StatusBadge}" Tag="{Binding TwoFactorStatus, Converter={StaticResource StatusSeverityConverter}}">
+                      <Border Style="{StaticResource StatusBadge}" Tag="{Binding TwoFactorSeverity}">
                         <TextBlock Style="{StaticResource StatusBadgeText}" Text="{Binding TwoFactorStatus}" TextTrimming="CharacterEllipsis"/>
                       </Border>
                     </DataTemplate>
@@ -260,7 +259,7 @@
                 <DataGridTemplateColumn Header="{loc:Tr Key='优惠状态'}" Width="150" IsReadOnly="True" SortMemberPath="PromotionStatus" CanUserSort="True">
                   <DataGridTemplateColumn.CellTemplate>
                     <DataTemplate>
-                      <Border Style="{StaticResource StatusBadge}" Tag="{Binding PromotionStatus, Converter={StaticResource StatusSeverityConverter}}" ToolTip="{Binding PromotionStatus}">
+                      <Border Style="{StaticResource StatusBadge}" Tag="{Binding PromotionSeverity}" ToolTip="{Binding PromotionStatus}">
                         <TextBlock Style="{StaticResource StatusBadgeText}" Text="{Binding PromotionStatus}" TextTrimming="CharacterEllipsis"/>
                       </Border>
                     </DataTemplate>
@@ -365,7 +364,7 @@
                           </Grid.ColumnDefinitions>
                           <CheckBox Grid.Column="0" IsChecked="{Binding IsChecked, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,0,10,0"/>
                           <TextBlock Grid.Column="1" Text="{Binding Identifier}" Style="{StaticResource Text.Subtitle}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                          <Border Grid.Column="2" Style="{StaticResource StatusBadge}" Tag="{Binding Status, Converter={StaticResource StatusSeverityConverter}}">
+                          <Border Grid.Column="2" Style="{StaticResource StatusBadge}" Tag="{Binding StatusSeverity}">
                             <TextBlock Style="{StaticResource StatusBadgeText}" Text="{Binding Status}" TextTrimming="CharacterEllipsis"/>
                           </Border>
                         </Grid>

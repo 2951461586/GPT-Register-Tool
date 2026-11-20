@@ -2,7 +2,7 @@
 
 | 项 | 内容 |
 | --- | --- |
-| 状态 | **未落地**（提案；本文只定义范围、判据与验收，不含实现） |
+| 状态 | **已落地（2026-11-20）**；落地记录见文末「落地」一节 |
 | 立项日期 | 2026-10-25 |
 | 来源 | 2026-10-25 扫描 §P2-3（协议注册 / 代理池 / WPF 三模块扫描） |
 | 相邻已落地项 | P1-2 状态判定去本地化（同批落地，见 `landing` 段落与 `docs/current/ui-architecture.md`） |
@@ -98,3 +98,40 @@
   `AccountType` 子串判断来源，属另一类"展示串判定"；S2 应改为显式的
   `source_kind` 字段。待答：`AccountType` 是否有跨语言契约（当前是硬编码中文）。
 * **工作量**：S1–S5 约 2–3 个工作日 + 1 天回归；S4 的前置是补徽章快照测试。
+
+---
+
+## 落地（2026-11-20）
+
+判定整体搬到 `SmsWorkbench/Models/AccountMachineState.cs`，输入是后端已持久化的
+机器字段（`registration_status`、`refresh_token_status`、
+`at_probe_status_code`、`promotion_state`、`payment_qualification_state`、TOTP
+布尔），输出是四个谓词加五个徽章色。逐步对照本文 §1 的判定点：
+
+| 原位置 | 现在 |
+| --- | --- |
+| `Views/AccountStatusInterpreter.cs`（机器码 → 展示串） | 不变，仍只做展示翻译 |
+| `Views/AccountGridPresentation.cs`（状态串 → 徽章色） | `AccountMachineState.*Severity`；`StatusSeverityConverter` 降级为**遗留行回退**（`SeverityFor` 公开以便单测） |
+| `Views/RegistrationStatusPresentation.cs`（"需要关注"） | `NeedsAttention` 委托机器态 |
+| `ViewModels/RegisterViewModel.cs`（"这行还要不要注册"） | `StatusSaysRegistered` |
+| `ViewModels/ExportViewModel.cs`（"这行能不能导出"） | `CanExport`（AT / 机器 registered / 有资格判定），标签只保留 `待支付`/`PM已创建` 两个遗留分支 |
+| `ViewModels/PoolViewModel.cs`（计数与筛选） | `IsRegistered` / `NeedsAttention` |
+
+验收（本文 §3 的判据）：
+
+1. **机器值优先，双向**：`registration_status=pending` + 文案 `已注册` → 不计入已注册；
+   `registration_status=registered` + 一段任何语言目录里都不存在的文案 → 照常计入。
+   这是"改文案不再改行为"的负向证据。
+2. **遗留行仍可判定**：没有机器字段的行走原来的 `Loc.DisplayContains` 回退；
+   `LocalizedStatusDecisionTests` 与 `RegistrationStatusPresentationTests` 一行未改
+   仍全绿。
+3. **顺带修掉的实测缺陷**：RT 徽章拿原始码（`no_rt` / `oauth_present`）去匹配中英文
+   展示串，一个都匹配不到 ⇒ 缺 RT 的行渲染中性灰。现在按码取色。
+4. **结构**：`PoolRow` 从 `MainWindow.xaml.cs`（395 行，已到 383 行上限）搬到
+   `Models/PoolRow.cs`；`MainWindow.xaml.cs` 329 行。
+5. 测试：`dotnet test` **787 passed**（新增 `AccountMachineStateTests` 42 例）；
+   Python 侧 `tests/workbench` 293 passed / 2 skipped。
+
+**没做**：`AccountGridPresentation.AccountGridOrdering` 的排序键仍来自 DataGrid 列的
+`SortMemberPath`（`PromotionStatus` 展示串），虽然 `PromotionStatusPresentation.SortRank`
+内部已优先读 `PromotionState`；换成机器键要动 XAML 排序契约与分页，属独立改动。

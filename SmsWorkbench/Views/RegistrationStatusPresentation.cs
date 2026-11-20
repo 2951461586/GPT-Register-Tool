@@ -21,14 +21,15 @@ public static class RegistrationStatusPresentation
     public static string MailboxStatus(string? state, string fallback) =>
         IsPartial(state) ? PartialDisplay : state == "registered" ? Loc.T("已注册") : fallback;
 
-    public static bool NeedsAttention(PoolRow row) =>
-        IsPartial(row.RegistrationStatus) || IsPartial(row.Status)
-        // The attention markers are display text, so they are matched against
-        // every language's form: "待/缺/失败" in the Chinese build, "Pending /
-        // Missing / Failed" in the English one. Keying on the Chinese
-        // characters alone made the attention counter and the "needs
-        // attention" filter silently empty out after a language switch.
-        || Loc.DisplayContains(row.Status, "待")
-        || Loc.DisplayContains(row.Status, "缺")
-        || Loc.DisplayContains(row.Status, "失败");
+    /// <summary>
+    /// True when the row belongs in the "needs attention" filter and counter.
+    /// </summary>
+    /// <remarks>
+    /// Delegates to <see cref="AccountMachineState.NeedsAttention"/> since
+    /// 2026-11-20: the predicate now reads <c>registration_status</c> (and the
+    /// refresh-token code) and only falls back to the display text for rows
+    /// written before those fields existed. The language-agnostic label matcher
+    /// this used to call lives on in that fallback.
+    /// </remarks>
+    public static bool NeedsAttention(PoolRow row) => AccountMachineState.NeedsAttention(row);
 }
