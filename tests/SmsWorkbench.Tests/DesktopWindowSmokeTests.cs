@@ -599,6 +599,42 @@ public sealed class DesktopWindowSmokeTests
     }
 
     /// <summary>
+    /// Batch progress is now a XAML window; cancellation still fires once and a
+    /// programmatic close does not masquerade as an operator cancellation.
+    /// </summary>
+    private static void VerifyBatchProgressDialog(Action<string> stage)
+    {
+        int cancellations = 0;
+        var owner = new Window { AllowsTransparency = true, WindowStyle = WindowStyle.None };
+        owner.Show();
+        var dialog = new AccountBatchProgressWindow(owner, "Batch", 3, () => cancellations++);
+        dialog.Show();
+        dialog.UpdateLayout();
+
+        Assert.Equal("0 / 3", Assert.IsType<TextBlock>(dialog.FindName("CountText")).Text);
+        dialog.UpdateProgress(2, 3, "account@example.com", "step 2");
+        Assert.Equal("2 / 3", Assert.IsType<TextBlock>(dialog.FindName("CountText")).Text);
+        Assert.Equal(2, Assert.IsType<ProgressBar>(dialog.FindName("ProgressIndicator")).Value);
+        Assert.Equal("account@example.com  step 2", Assert.IsType<TextBlock>(dialog.FindName("DetailText")).Text);
+
+        stage("batch progress: cancel callback is once-only and window remains open");
+        Assert.True(dialog.IsVisible);
+        Assert.True(dialog.CancellationRequested is false);
+        Button cancel = Assert.IsType<Button>(dialog.FindName("CancelButton"));
+        cancel.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+        Assert.Equal(1, cancellations);
+        Assert.False(cancel.IsEnabled);
+        Assert.True(dialog.IsVisible, "cancel requests work but must not close the progress window");
+        Assert.True(dialog.CancellationRequested);
+
+        stage("batch progress: programmatic close does not request cancellation again");
+        dialog.ForceClose();
+        Assert.False(dialog.IsVisible);
+        Assert.Equal(1, cancellations);
+        owner.Close();
+    }
+
+    /// <summary>
     /// The export-format picker is XAML since 2026-11-20. This is the test the
     /// conversion bought: the structure (9 formats, CPA preselected) and the
     /// click -> tag wiring are asserted on the real template, which the
@@ -769,6 +805,8 @@ public sealed class DesktopWindowSmokeTests
             VerifyExportFormatDialog(stage);
             stage("verify account detail dialog");
             VerifyAccountDetailDialog(stage);
+            stage("verify batch progress dialog");
+            VerifyBatchProgressDialog(stage);
 
             stage("show settings window");
             var settingsViewModel = new SettingsViewModel(

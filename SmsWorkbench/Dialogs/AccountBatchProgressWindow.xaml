@@ -1,0 +1,53 @@
+<Window x:Class="SmsWorkbench.AccountBatchProgressWindow"
+        x:ClassModifier="internal"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:loc="clr-namespace:SmsWorkbench.Localization"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Width="560"
+        Height="240"
+        MinWidth="520"
+        MinHeight="220"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        Background="{DynamicResource AppBg}">
+  <Grid Margin="24,20,24,24">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+    </Grid.RowDefinitions>
+
+    <TextBlock x:Name="CountText"
+               Text="0 / 0"
+               FontSize="{StaticResource Type.Title.Size}"
+               FontWeight="SemiBold"
+               Foreground="{DynamicResource TextMain}"/>
+
+    <ProgressBar x:Name="ProgressIndicator"
+                 Grid.Row="1"
+                 Minimum="0"
+                 Maximum="1"
+                 Value="0"
+                 Height="16"
+                 Margin="0,14,0,10"/>
+
+    <TextBlock x:Name="DetailText"
+               Grid.Row="2"
+               Text="{loc:Tr Key='正在准备账号...'}"
+               TextWrapping="Wrap"
+               Foreground="{DynamicResource TextSub}"
+               MinHeight="40"/>
+
+    <Button x:Name="CancelButton"
+            Grid.Row="3"
+            Content="{loc:Tr Key='取消任务'}"
+            Width="92"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Center"
+            Margin="0,10,0,0"
+            Style="{StaticResource SecondaryButton}"
+            Click="Cancel_Click"/>
+  </Grid>
+</Window>
