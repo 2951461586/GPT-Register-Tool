@@ -2,7 +2,7 @@ import json
 import unittest
 from pathlib import Path
 
-from sms_tool.gcash_provider import (
+from sms_tool.wallet.gcash_provider import (
     GCashProviderError,
     GCashTransportRequest,
     run_gcash_provider,

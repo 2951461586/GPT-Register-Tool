@@ -33,8 +33,6 @@
     "doctor.py",
     "endpoints.py",
     "fingerprint_pool.py",
-    "gcash_provider.py",
-    "gcash_transport.py",
     "gen_pp_link.py",
     "http_backend.py",
     "http_client.py",
@@ -78,8 +76,6 @@
     "tls_fingerprint.py",
     "token_telemetry.py",
     "utils.py",
-    "wallet_provider.py",
-    "wallet_transport.py",
     "workspace_scan.py"
   ]
 }

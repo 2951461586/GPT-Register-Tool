@@ -9,9 +9,9 @@ import uuid
 from typing import Any, Mapping
 
 from .gcash_provider import GCashProviderError, GCashTransportRequest
-from .proxy.entry import normalize_proxy_url
-from .kernel.sanitizer import sanitize_text
-from . import endpoints
+from ..proxy.entry import normalize_proxy_url
+from ..kernel.sanitizer import sanitize_text
+from .. import endpoints
 
 
 _BASE = endpoints.CHATGPT_BASE + "/backend-api/payments"
@@ -59,7 +59,7 @@ class ChatGPTGCashTransport:
         return self._json_response(response, "resolve")
 
     def probe_custom_payment(self, request: GCashTransportRequest) -> Mapping[str, Any]:
-        from .pp_link_helpers import DEFAULT_STRIPE_PK, STRIPE_VERSION
+        from ..pp_link_helpers import DEFAULT_STRIPE_PK, STRIPE_VERSION
 
         checkout = request.payload.get("checkout")
         if not isinstance(checkout, Mapping):
@@ -137,7 +137,7 @@ class ChatGPTGCashTransport:
         return self._post(request, f"{_BASE}/checkout/custom_payment_method/start", _ROUTES["start"])
 
     def _post(self, request: GCashTransportRequest, url: str, route: str) -> Mapping[str, Any]:
-        from . import gen_pp_link
+        from .. import gen_pp_link
 
         try:
             response = gen_pp_link._checkout_post(

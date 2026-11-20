@@ -4,8 +4,8 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from sms_tool.checkout_contract import CheckoutRequestContract
-from sms_tool.wallet_provider import WalletTransportRequest
-from sms_tool.wallet_transport import ChatGPTStripeWalletTransport
+from sms_tool.wallet.provider import WalletTransportRequest
+from sms_tool.wallet.transport import ChatGPTStripeWalletTransport
 
 
 class FakeResponse:

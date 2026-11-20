@@ -26,7 +26,8 @@
     "proxy": 5,
     "mailbox": 3,
     "payment": 5,
-    "registration": 3
+    "registration": 3,
+    "wallet": 4
   },
   "module_overrides": {
     "accounts/account_models": 5,
@@ -100,8 +101,8 @@
     "doctor.py": 2,
     "endpoints.py": 5,
     "fingerprint_pool.py": 5,
-    "gcash_provider.py": 4,
-    "gcash_transport.py": 4,
+    "wallet/gcash_provider.py": 4,
+    "wallet/gcash_transport.py": 4,
     "gen_pp_link.py": 3,
     "http_backend.py": 5,
     "http_client.py": 5,
@@ -206,8 +207,8 @@
     "tls_fingerprint.py": 5,
     "token_telemetry.py": 5,
     "utils.py": 5,
-    "wallet_provider.py": 4,
-    "wallet_transport.py": 4,
+    "wallet/provider.py": 4,
+    "wallet/transport.py": 4,
     "workspace_scan.py": 3
   },
   "allow": {

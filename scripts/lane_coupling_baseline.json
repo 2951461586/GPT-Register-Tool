@@ -48,7 +48,11 @@
     "sms_tool.operation_journal",
     "sms_tool.proxy.registry",
     "sms_tool.store.markers",
-    "sms_tool.store.normalize"
+    "sms_tool.store.normalize",
+    "sms_tool.wallet.gcash_provider",
+    "sms_tool.wallet.gcash_transport",
+    "sms_tool.wallet.provider",
+    "sms_tool.wallet.transport"
   ],
   "root_to_adapter_layers": [
     [

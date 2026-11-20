@@ -45,7 +45,7 @@
     "sms_tool/registration_drivers/external_sessions/managed.py": 2,
     "sms_tool/registration_drivers/external_sessions/profiles.py": 1,
     "sms_tool/upi_link/pipeline.py": 72,
-    "sms_tool/wallet_transport.py": 1,
+    "sms_tool/wallet/transport.py": 1,
     "tests/accounts/test_account_email_change.py": 2,
     "tests/accounts/test_account_promotion.py": 1,
     "tests/accounts/test_failure_registry.py": 1,

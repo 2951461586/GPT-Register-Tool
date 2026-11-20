@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping, Protocol
 from urllib.parse import urlsplit
 
-from .checkout_contract import (
+from ..checkout_contract import (
     CheckoutContractError,
     CheckoutRequestContract,
     CheckoutSessionContract,
@@ -25,9 +25,9 @@ from .checkout_contract import (
     PAYMENT_METHOD_PROFILES,
     StripeCapabilityEvidence,
 )
-from .payment.capability import build_capability_probe_result
-from .kernel.sanitizer import sanitize_text as _canonical_sanitize_text
-from . import endpoints
+from ..payment.capability import build_capability_probe_result
+from ..kernel.sanitizer import sanitize_text as _canonical_sanitize_text
+from .. import endpoints
 
 
 _RUNTIME_VERSION = "6f8494a281"

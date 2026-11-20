@@ -253,11 +253,11 @@
       "broad": 5,
       "silent": 0
     },
-    "sms_tool/gcash_provider.py": {
+    "sms_tool/wallet/gcash_provider.py": {
       "broad": 4,
       "silent": 0
     },
-    "sms_tool/gcash_transport.py": {
+    "sms_tool/wallet/gcash_transport.py": {
       "broad": 6,
       "silent": 0
     },
@@ -773,11 +773,11 @@
       "broad": 2,
       "silent": 0
     },
-    "sms_tool/wallet_provider.py": {
+    "sms_tool/wallet/provider.py": {
       "broad": 2,
       "silent": 0
     },
-    "sms_tool/wallet_transport.py": {
+    "sms_tool/wallet/transport.py": {
       "broad": 5,
       "silent": 0
     },

@@ -8,9 +8,9 @@ import threading
 from typing import Any, Mapping
 from urllib.parse import urljoin, urlsplit
 
-from .checkout_contract import CHECKOUT_PATH, CHECKOUT_URL, STRIPE_INIT_URL
-from .wallet_provider import WALLET_METHODS, WalletProviderError, WalletTransportRequest
-from . import endpoints
+from ..checkout_contract import CHECKOUT_PATH, CHECKOUT_URL, STRIPE_INIT_URL
+from .provider import WALLET_METHODS, WalletProviderError, WalletTransportRequest
+from .. import endpoints
 
 
 PAYMENT_METHOD_URL = endpoints.STRIPE_API_BASE + "/v1/payment_methods"
@@ -70,7 +70,7 @@ class ChatGPTStripeWalletTransport:
         self._lock = threading.Lock()
 
     def create_checkout(self, request: WalletTransportRequest) -> Mapping[str, Any]:
-        from . import gen_pp_link
+        from .. import gen_pp_link
 
         proxy = self._stage_proxy(request)
         cookie_header = str(request.auth_context.get("cookie_header") or "")
@@ -100,7 +100,7 @@ class ChatGPTStripeWalletTransport:
         return self._json_response(response, request.stage)
 
     def update_checkout(self, request: WalletTransportRequest) -> Mapping[str, Any]:
-        from . import gen_pp_link
+        from .. import gen_pp_link
 
         cookie_header = str(request.auth_context.get("cookie_header") or "")
         proxy = self._stage_proxy(request)
@@ -151,7 +151,7 @@ class ChatGPTStripeWalletTransport:
         return self._json_response(response, request.stage)
 
     def approve_checkout(self, request: WalletTransportRequest) -> Mapping[str, Any]:
-        from . import gen_pp_link
+        from .. import gen_pp_link
 
         cookie_header = str(request.auth_context.get("cookie_header") or "")
         proxy = self._stage_proxy(request)
@@ -238,7 +238,7 @@ class ChatGPTStripeWalletTransport:
         )
 
     def _session(self, request: WalletTransportRequest) -> Any:
-        from . import gen_pp_link
+        from .. import gen_pp_link
 
         proxy = self._stage_proxy(request)
         key = (request.flow_id, proxy)
@@ -306,7 +306,7 @@ class ChatGPTStripeWalletTransport:
             countries = {}
         country_key = "approve" if request.stage == "final_review" else request.stage
         country = str(countries.get(country_key) or countries.get("provider") or "").strip().upper()
-        from .paypal.proxy import rotate_proxy_session
+        from ..paypal.proxy import rotate_proxy_session
 
         return rotate_proxy_session(proxy, country)
 

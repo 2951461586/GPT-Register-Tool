@@ -130,7 +130,7 @@ def test_missing_baseline_is_a_hard_error(tmp_path, monkeypatch):
 def test_detail_mode_lists_every_frozen_function(capsys):
     assert ratchet.main(["--detail"]) == 0
     out = capsys.readouterr().out
-    assert "sms_tool/wallet_provider.py::run_wallet_provider" in out
+    assert "sms_tool/wallet/provider.py::run_wallet_provider" in out
 
 
 def test_updating_a_shrink_needs_no_reason(tmp_path, monkeypatch):

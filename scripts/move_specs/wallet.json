@@ -1,0 +1,11 @@
+{
+  "package": "wallet",
+  "layer": 4,
+  "root_package_init": false,
+  "modules": {
+    "wallet_provider": "provider",
+    "wallet_transport": "transport",
+    "gcash_provider": "gcash_provider",
+    "gcash_transport": "gcash_transport"
+  }
+}

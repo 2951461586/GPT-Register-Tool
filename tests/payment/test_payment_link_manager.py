@@ -343,7 +343,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
         with (
             tempfile.TemporaryDirectory() as tmp,
             patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"),
-            patch("sms_tool.wallet_provider.run_wallet_provider", return_value=adapter_result),
+            patch("sms_tool.wallet.provider.run_wallet_provider", return_value=adapter_result),
         ):
             with self.assertLogs("sms_tool.payment.link_manager", level="WARNING"):
                 result = manager.generate_payment_link(
@@ -369,7 +369,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
         with (
             tempfile.TemporaryDirectory() as tmp,
             patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"),
-            patch("sms_tool.wallet_provider.run_wallet_provider", return_value=adapter_result),
+            patch("sms_tool.wallet.provider.run_wallet_provider", return_value=adapter_result),
         ):
             result = manager.generate_payment_link(
                 "token",
@@ -843,7 +843,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
             tempfile.TemporaryDirectory() as tmp,
             patch("sms_tool.pay_link.core.PaymentOperationStore", _FakeStore),
             patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"),
-            patch("sms_tool.wallet_provider.run_wallet_provider", return_value=adapter_result),
+            patch("sms_tool.wallet.provider.run_wallet_provider", return_value=adapter_result),
         ):
             try:
                 manager.generate_payment_link(

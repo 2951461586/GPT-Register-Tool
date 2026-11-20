@@ -37,7 +37,7 @@
     "sms_tool/commands/registration.py::_persist_registration_result_core": 210,
     "sms_tool/commands/registration.py::run_target_at200": 155,
     "sms_tool/config/schema.py::validate_config": 364,
-    "sms_tool/gcash_provider.py::run_gcash_provider": 198,
+    "sms_tool/wallet/gcash_provider.py::run_gcash_provider": 198,
     "sms_tool/nodriver_paypal.py::_do_pay": 285,
     "sms_tool/pay_link/core.py::generate_payment_link": 157,
     "sms_tool/payment/batch.py::_run_one_row": 361,
@@ -64,7 +64,7 @@
     "sms_tool/upi_link/stages.py::_stage_approve": 240,
     "sms_tool/upi_link/stages.py::_stage_redirect": 234,
     "sms_tool/upi_link/stripe.py::_upi_build_confirm_body": 157,
-    "sms_tool/wallet_provider.py::run_wallet_provider": 304,
+    "sms_tool/wallet/provider.py::run_wallet_provider": 304,
     "sms_tool/workspace_scan.py::inspect_workspace": 157
   },
   "reasons": {
@@ -106,7 +106,7 @@
     "sms_tool/commands/registration.py::run_target_at200:": "",
     "sms_tool/config/schema.py::validate_config": "validate_config: one call line for the extracted _validate_tls_fingerprint_block helper (P0-1 tls_fingerprint config surface)",
     "sms_tool/config/schema.py::validate_config:": "",
-    "sms_tool/gcash_provider.py::run_gcash_provider:": "",
+    "sms_tool/wallet/gcash_provider.py::run_gcash_provider:": "",
     "sms_tool/nodriver_paypal.py::_do_pay:": "",
     "sms_tool/pay_link/core.py::generate_payment_link:": "",
     "sms_tool/payment/batch.py::_run_one_row": "P0-1/P0-2/P0-3/P1-2/P2: the approve stage now runs cycles (each with a fresh session/Sentinel) and the runtime resolver delegates identity policy to _upi_resolve_identity; both grew by the switch/counter plumbing the reference implementation also carries",
@@ -136,7 +136,7 @@
     "sms_tool/upi_link/stages.py::_stage_approve:": "",
     "sms_tool/upi_link/stages.py::_stage_redirect:": "",
     "sms_tool/upi_link/stripe.py::_upi_build_confirm_body:": "",
-    "sms_tool/wallet_provider.py::run_wallet_provider:": "",
+    "sms_tool/wallet/provider.py::run_wallet_provider:": "",
     "sms_tool/workspace_scan.py::inspect_workspace:": ""
   }
 }

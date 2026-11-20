@@ -155,13 +155,10 @@
       "sms_tool/checkout_contract.py",
       "sms_tool/capability_browser.py",
       "sms_tool/gen_pp_link.py",
-      "sms_tool/wallet_provider.py",
-      "sms_tool/wallet_transport.py",
-      "sms_tool/gcash_provider.py",
-      "sms_tool/gcash_transport.py",
       "sms_tool/regional_payment_adapter.py",
       "sms_tool/paypal/*.py",
-      "sms_tool/payment/*.py"
+      "sms_tool/payment/*.py",
+      "sms_tool/wallet/*.py"
     ],
     "Payment-link state machine": [
       "sms_tool/pay_link/*.py",

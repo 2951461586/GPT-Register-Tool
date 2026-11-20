@@ -168,7 +168,9 @@ def _new_registration_session(proxy: str = "") -> Any:
     stable ``ProtocolBackendError`` token here -- before a mailbox is claimed --
     instead of downgrading to the other stack mid-run.
     """
-    from .. import http_backend  # function-local: registration -> root is a frozen pair count
+    from .. import (
+        http_backend,
+    )  # function-local: registration -> root is a frozen pair count  # function-local: registration -> root is a frozen pair count
 
     session = http_backend.new_session(proxy=proxy)
     _apply_tls_fingerprint(session)

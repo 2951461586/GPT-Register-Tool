@@ -5,7 +5,7 @@ from pathlib import Path
 from collections.abc import Mapping
 from typing import Any
 
-from sms_tool.wallet_provider import (
+from sms_tool.wallet.provider import (
     WALLET_METHODS,
     WalletCancelledError,
     WalletProviderError,

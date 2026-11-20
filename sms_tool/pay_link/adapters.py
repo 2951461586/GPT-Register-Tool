@@ -566,8 +566,8 @@ def _run_wallet_adapter(
     auth_context: dict[str, Any] | None = None,
     **kwargs: Any,
 ) -> dict[str, Any]:
-    from ..wallet_provider import run_wallet_provider
-    from ..wallet_transport import ChatGPTStripeWalletTransport
+    from ..wallet.provider import run_wallet_provider
+    from ..wallet.transport import ChatGPTStripeWalletTransport
 
     runtime_config = kwargs.pop("runtime_config", None)
     cfg = _protocol_cfg(runtime_config)
@@ -706,8 +706,8 @@ def _run_gcash_adapter(
     auth_context: dict[str, Any] | None = None,
     **kwargs: Any,
 ) -> dict[str, Any]:
-    from ..gcash_provider import DEFAULT_GCASH_CUSTOM_PAYMENT_METHOD_ID, run_gcash_provider
-    from ..gcash_transport import ChatGPTGCashTransport
+    from ..wallet.gcash_provider import DEFAULT_GCASH_CUSTOM_PAYMENT_METHOD_ID, run_gcash_provider
+    from ..wallet.gcash_transport import ChatGPTGCashTransport
 
     runtime_config = kwargs.pop("runtime_config", None)
     cfg = _protocol_cfg(runtime_config)

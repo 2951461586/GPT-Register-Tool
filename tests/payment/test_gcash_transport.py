@@ -2,8 +2,8 @@ import unittest
 from unittest.mock import patch
 
 from sms_tool.checkout_contract import CheckoutRequestContract
-from sms_tool.gcash_provider import GCashProviderError, GCashTransportRequest
-from sms_tool.gcash_transport import ChatGPTGCashTransport
+from sms_tool.wallet.gcash_provider import GCashProviderError, GCashTransportRequest
+from sms_tool.wallet.gcash_transport import ChatGPTGCashTransport
 
 
 class FakeResponse:
@@ -45,7 +45,7 @@ def request(stage, payload=None):
 
 class GCashTransportTests(unittest.TestCase):
     def test_transport_diagnostic_is_sanitized(self):
-        with patch("sms_tool.gcash_transport._new_http_session", return_value=FailingSession()):
+        with patch("sms_tool.wallet.gcash_transport._new_http_session", return_value=FailingSession()):
             with self.assertRaises(GCashProviderError) as caught:
                 ChatGPTGCashTransport().resolve_checkout(request("resolve"))
 
@@ -69,7 +69,7 @@ class GCashTransportTests(unittest.TestCase):
                 },
             }
         )
-        with patch("sms_tool.gcash_transport._new_http_session", return_value=session):
+        with patch("sms_tool.wallet.gcash_transport._new_http_session", return_value=session):
             ChatGPTGCashTransport().probe_custom_payment(capability_request)
 
         url, kwargs = session.calls[0]
@@ -114,7 +114,7 @@ class GCashTransportTests(unittest.TestCase):
 
     def test_resolve_uses_checkout_identity_headers(self):
         session = FakeSession(FakeResponse(payload={"payment_status": "unpaid"}))
-        with patch("sms_tool.gcash_transport._new_http_session", return_value=session):
+        with patch("sms_tool.wallet.gcash_transport._new_http_session", return_value=session):
             result = ChatGPTGCashTransport().resolve_checkout(request("resolve"))
 
         self.assertEqual(result["payment_status"], "unpaid")

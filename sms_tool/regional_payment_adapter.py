@@ -17,13 +17,13 @@ from .checkout_contract import (
     CheckoutSessionContract,
     StripeCapabilityEvidence,
 )
-from .wallet_provider import (
+from .wallet.provider import (
     WalletFlowIdentifiers,
     WalletTransportRequest,
     build_confirm_payload,
     build_payment_method_payload,
 )
-from .wallet_transport import ChatGPTStripeWalletTransport
+from .wallet.transport import ChatGPTStripeWalletTransport
 from .payment.catalog import PAYMENT_METHODS as CATALOG_PAYMENT_METHODS
 
 

@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     # Pyright resolves `__all__` names statically, so it needs to see the symbols;
     # a module `__getattr__` alone does not satisfy `reportUnsupportedDunderAll`.
     # This block never runs -- the same idiom `registration/__init__.py` uses.
-    from . import (  # noqa: F401
+    from . import (
         mailbox_cfworker,
         mailbox_gmail,
         mailbox_graph,

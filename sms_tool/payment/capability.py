@@ -457,8 +457,8 @@ def payment_method_capability_probe(
             timeout=timeout,
         )
     if method == "gcash" and transport is None:
-        from ..gcash_provider import DEFAULT_GCASH_CUSTOM_PAYMENT_METHOD_ID, run_gcash_provider
-        from ..gcash_transport import ChatGPTGCashTransport
+        from ..wallet.gcash_provider import DEFAULT_GCASH_CUSTOM_PAYMENT_METHOD_ID, run_gcash_provider
+        from ..wallet.gcash_transport import ChatGPTGCashTransport
 
         return run_gcash_provider(
             str(access_token).strip(),
