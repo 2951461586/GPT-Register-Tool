@@ -1,0 +1,56 @@
+<Window x:Class="SmsWorkbench.ExportFormatDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:loc="clr-namespace:SmsWorkbench.Localization"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="{loc:Tr Key='一键导出'}"
+        Width="560"
+        MinWidth="520"
+        SizeToContent="Height"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource AppBg}">
+  <!-- Converted from the hand-built Grid in `ExportDialogService.ShowExportFormat`
+       on 2026-11-20. The structure is unchanged: header, format list, actions. -->
+  <Grid Margin="18">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+    </Grid.RowDefinitions>
+
+    <StackPanel Margin="0,0,0,16">
+      <TextBlock Text="{loc:Tr Key='选择导出格式'}"
+                 FontSize="{StaticResource Type.Title.Size}"
+                 FontWeight="SemiBold"
+                 Foreground="{DynamicResource TextMain}"/>
+      <TextBlock Text="{loc:Tr Key='TXT 保持邮箱原格式；原始 JSON 保留 session；其它格式会调用 session_converter.py 转为 CPA/Sub2API/Cockpit/9router/Codex/AxonHub/Codex-Manager。'}"
+                 TextWrapping="Wrap"
+                 LineHeight="20"
+                 Margin="0,6,0,0"
+                 Foreground="{DynamicResource TextSub}"/>
+    </StackPanel>
+
+    <ComboBox x:Name="FormatBox" Grid.Row="1" SelectedIndex="2" Margin="0,0,0,16">
+      <ComboBoxItem Tag="txt" Content="{loc:Tr Key='TXT - 邮箱----密码----客户端ID----刷新令牌'}"/>
+      <ComboBoxItem Tag="json" Content="{loc:Tr Key='原始 JSON - session/auth_session'}"/>
+      <ComboBoxItem Tag="cpa" Content="CPA JSON"/>
+      <ComboBoxItem Tag="sub2api" Content="Sub2API JSON"/>
+      <ComboBoxItem Tag="cockpit" Content="Cockpit JSON"/>
+      <ComboBoxItem Tag="9router" Content="9router JSON"/>
+      <ComboBoxItem Tag="codex" Content="Codex auth.json"/>
+      <ComboBoxItem Tag="axonhub" Content="AxonHub JSON"/>
+      <ComboBoxItem Tag="codexmanager" Content="Codex-Manager JSON"/>
+    </ComboBox>
+
+    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+      <Button Content="{loc:Tr Key='导出'}"
+              Width="88"
+              Style="{StaticResource PrimaryButton}"
+              Click="Export_Click"/>
+      <Button Content="{loc:Tr Key='取消'}"
+              Width="76"
+              Margin="8,0,0,0"
+              Click="Cancel_Click"/>
+    </StackPanel>
+  </Grid>
+</Window>

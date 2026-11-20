@@ -40,7 +40,9 @@ public sealed class PartialSizeTests
         ("SmsWorkbench/Views/MainWindow.SmsProvider.cs", 22),
         ("SmsWorkbench/Views/MainWindow.Helpers.cs", 455),
         ("SmsWorkbench/Views/MainWindow.Inbox.cs", 301),
-        ("SmsWorkbench/Views/MainWindow.Detail.cs", 287),
+        // 287 -> 116 on 2026-11-20: the panel became
+        // Dialogs/AccountDetailDialog.xaml; only assembly is left here.
+        ("SmsWorkbench/Views/MainWindow.Detail.cs", 116),
     };
 
     /// <summary>What each split wave produced.</summary>
@@ -65,6 +67,10 @@ public sealed class PartialSizeTests
         "SmsWorkbench/Services/InboxReader.cs",
         "SmsWorkbench/Services/MailboxRowClassifier.cs",
         "SmsWorkbench/Models/MailItem.cs",
+        // W8 (2026-11-20): the two hand-built dialogs became XAML.
+        "SmsWorkbench/Models/AccountDetailView.cs",
+        "SmsWorkbench/Dialogs/AccountDetailDialog.xaml.cs",
+        "SmsWorkbench/Dialogs/ExportFormatDialog.xaml.cs",
     };
 
     public static TheoryData<string, int> PartialCeilings()
@@ -115,6 +121,7 @@ public sealed class PartialSizeTests
     [InlineData("SmsWorkbench/Services/AccountDetailAssembler.cs")]
     [InlineData("SmsWorkbench/Services/InboxReader.cs")]
     [InlineData("SmsWorkbench/Services/MailboxRowClassifier.cs")]
+    [InlineData("SmsWorkbench/Models/AccountDetailView.cs")]
     public void TheExtractedServicesStayWindowIndependent(string relativePath)
     {
         // Only *code* counts: the XML docs of these files link back to the partial

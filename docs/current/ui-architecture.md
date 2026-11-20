@@ -321,12 +321,24 @@ Wpf.Ui.xaml -> Wpf.Ui Theme/Light.xaml -> Themes/Tokens.xaml -> Themes/Glyphs.xa
 | `tests/workbench/test_localization_catalog.py` | 每个 `{loc:Tr}` / `Loc.T` / `Loc.F` 键都有英文；XAML 文本属性不得留中文；**`MessageBox.Show`、`Notify*`、`DialogFactory.Show*Async`、`Content`/`Text`/`Title` 等属性直接写字面中文即失败**（2026-10-25 新增，此前这类字符串静默漏了 25 条） |
 | `tests/SmsWorkbench.Tests/BackendCommandPlannerSurfaceTests.cs` | `BackendCommandPlanner` 中「无生产调用方」的 builder 集合被冻结：新增死代码、接线、删除都要显式改白名单，且每个条目必须在 doc comment 里写明。**白名单自 2026-11-20 起为空白**——最后 6 个 test-only builder 已删除（它们声称唯一记录着 CLI 契约，但 `docs/current/cli-reference.md` 由 parser 生成，已单一权威） |
 | `scripts/dotnet_warning_ratchet.py` | C# 构建告警零基线（见 [`dotnet-gates.md`](dotnet-gates.md)） |
-| `dotnet test GPTRegisterTool.slnx -c Release` | 731 个测试（CI 必跑；含 `ModuleSizeTests` 的分部类行数上限） |
+| `dotnet test GPTRegisterTool.slnx -c Release` | 798 个测试（CI 必跑；含 `ModuleSizeTests` / `PartialSizeTests` 的行数上限） |
 
 `SmsWorkbench.Tests` 里没有 UI 自动化：所有窗口级断言都在真实布局对象上做
 （`ActualWidth`、`Template.FindName`、`FindVisualChildren`），不做像素比较。
 
 ## 7. 已知缺口与下一步
+
+0. **对话框已开始 XAML 化（2026-11-20）。** `ExportFormatDialog`、`AccountDetailDialog`、
+   `SmsProviderDialog` 三个从代码建 UI 改成 XAML + 可测 VM：
+   `ExportDialogService` 504→429 行、`SmsProviderDialogService` 515→345 行、
+   `MainWindow.Detail.cs` 287→116 行（面板整体搬进 `Dialogs/AccountDetailDialog.xaml`，
+   `PartialSizeTests` 的上限同步下调到 116）。行为经 `DesktopWindowSmokeTests`
+   在真实模板上断言：格式选择器 9 个 tag 与 CPA 预选、详情面板 4 个按钮各自只到一个
+   command、`CanStart=false` 时「开始接码」不可确认。
+   **仍留在代码里**：`AccountBatchProgressDialog`、`ChangeEmailDialogService`、
+   `RegisterDialogService`、`DialogFactory` 的辅助方法（`DialogFactory` 本身是共享
+   工厂，保留）。
+
 
 1. **`MainWindow.xaml` 已从 874 行降到 54 行（A0–A5 全部落地，2026-10-24）。**
    五个控件：`TitleBar`、`Sidebar`、`AccountFilterBar`、`AccountGridView`、

@@ -1,0 +1,113 @@
+<Window x:Class="SmsWorkbench.SmsProviderDialog"
+        x:ClassModifier="internal"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:loc="clr-namespace:SmsWorkbench.Localization"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="{loc:Tr Key='一键接码'}"
+        Height="420"
+        MinWidth="520"
+        MinHeight="380"
+        ResizeMode="CanResize"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource AppBg}">
+  <!-- Converted from the hand-built Grid in
+       `SmsProviderDialogService.ShowOneClickDialogAsync` on 2026-11-20. The three
+       label/field rows keep their 126px label column. -->
+  <Grid Margin="24">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="*"/>
+      <RowDefinition Height="Auto"/>
+    </Grid.RowDefinitions>
+
+    <StackPanel Margin="0,0,0,18">
+      <TextBlock Text="{Binding Heading}"
+                 FontSize="{StaticResource Type.Title.Size}"
+                 FontWeight="SemiBold"
+                 Foreground="{DynamicResource TextMain}"
+                 Margin="0,0,0,4"/>
+      <TextBlock Text="{Binding BalanceText}"
+                 FontSize="{StaticResource Type.Body.Size}"
+                 Foreground="{DynamicResource TextSub}"/>
+    </StackPanel>
+
+    <Grid Grid.Row="1" Margin="0,0,0,14">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="126"/>
+        <ColumnDefinition Width="*"/>
+      </Grid.ColumnDefinitions>
+      <TextBlock Text="{loc:Tr Key='服务商'}"
+                 FontSize="{StaticResource Type.Body.Size}"
+                 Foreground="{DynamicResource TextMuted}"
+                 VerticalAlignment="Center"/>
+      <TextBlock Grid.Column="1"
+                 Text="OpenAI (ChatGPT)"
+                 FontSize="{StaticResource Type.Subtitle.Size}"
+                 FontWeight="SemiBold"
+                 Foreground="{DynamicResource TextMain}"
+                 VerticalAlignment="Center"/>
+    </Grid>
+
+    <Grid Grid.Row="2" Margin="0,0,0,14">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="126"/>
+        <ColumnDefinition Width="*"/>
+      </Grid.ColumnDefinitions>
+      <TextBlock Text="{loc:Tr Key='国家或地区'}"
+                 FontSize="{StaticResource Type.Body.Size}"
+                 Foreground="{DynamicResource TextMuted}"
+                 VerticalAlignment="Center"/>
+      <ComboBox x:Name="CountryBox"
+                Grid.Column="1"
+                ItemsSource="{Binding Countries}"
+                DisplayMemberPath="DisplayName"
+                SelectedItem="{Binding SelectedCountry, Mode=TwoWay}"
+                IsTextSearchEnabled="True"
+                MaxDropDownHeight="280"
+                MinHeight="36"
+                Padding="8,4"/>
+    </Grid>
+
+    <Grid Grid.Row="3" Margin="0,0,0,14">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="126"/>
+        <ColumnDefinition Width="*"/>
+      </Grid.ColumnDefinitions>
+      <TextBlock Text="{loc:Tr Key='号码档位'}"
+                 FontSize="{StaticResource Type.Body.Size}"
+                 Foreground="{DynamicResource TextMuted}"
+                 VerticalAlignment="Center"/>
+      <ComboBox x:Name="TierBox"
+                Grid.Column="1"
+                ItemsSource="{Binding Tiers}"
+                DisplayMemberPath="DisplayName"
+                SelectedItem="{Binding SelectedTier, Mode=TwoWay}"
+                MaxDropDownHeight="260"
+                MinHeight="36"
+                Padding="8,4"/>
+    </Grid>
+
+    <TextBlock Grid.Row="4"
+               Text="{Binding InventoryText}"
+               Foreground="{DynamicResource TextMuted}"
+               FontSize="{StaticResource Type.Body.Size}"
+               Margin="142,8,0,0"/>
+
+    <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
+      <Button Content="{loc:Tr Key='取消'}"
+              MinWidth="88"
+              Height="36"
+              Margin="0,0,10,0"
+              IsCancel="True"/>
+      <Button Content="{loc:Tr Key='开始接码'}"
+              MinWidth="104"
+              Height="36"
+              IsDefault="True"
+              IsEnabled="{Binding CanStart}"
+              Click="Start_Click"/>
+    </StackPanel>
+  </Grid>
+</Window>

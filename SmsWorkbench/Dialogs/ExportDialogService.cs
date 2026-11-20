@@ -50,90 +50,15 @@ namespace SmsWorkbench
             this.runtimeDirectory = runtimeDirectory;
         }
 
+        /// <summary>
+        /// Format picker. The dialog itself is <see cref="ExportFormatDialog"/>
+        /// (XAML since 2026-11-20); this method only owns ownership and the
+        /// "cancel means empty string" contract.
+        /// </summary>
         public string ShowExportFormat(Window owner)
         {
-            string selected = "";
-            var dialog = new Window
-            {
-                Title = Loc.T("一键导出"),
-                Owner = owner,
-                Width = 560,
-                MinWidth = 520,
-                SizeToContent = SizeToContent.Height,
-                ResizeMode = ResizeMode.NoResize,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Background = (Brush)owner.FindResource("AppBg")
-            };
-
-            var root = new Grid { Margin = new Thickness(18) };
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-            var header = new StackPanel { Margin = new Thickness(0, 0, 0, 16) };
-            header.Children.Add(new TextBlock
-            {
-                Text = Loc.T("选择导出格式"),
-                FontSize = (double)owner.FindResource("Type.Title.Size"),
-                FontWeight = FontWeights.SemiBold,
-                Foreground = (Brush)owner.FindResource("TextMain")
-            });
-            header.Children.Add(new TextBlock
-            {
-                Text = Loc.T("TXT 保持邮箱原格式；原始 JSON 保留 session；其它格式会调用 session_converter.py 转为 CPA/Sub2API/Cockpit/9router/Codex/AxonHub/Codex-Manager。"),
-                TextWrapping = TextWrapping.Wrap,
-                LineHeight = 20,
-                Margin = new Thickness(0, 6, 0, 0),
-                Foreground = (Brush)owner.FindResource("TextSub")
-            });
-            Grid.SetRow(header, 0);
-            root.Children.Add(header);
-
-            var combo = new ComboBox { SelectedIndex = 2, Margin = new Thickness(0, 0, 0, 16) };
-            combo.Items.Add(new ComboBoxItem { Content = Loc.T("TXT - 邮箱----密码----客户端ID----刷新令牌"), Tag = "txt" });
-            combo.Items.Add(new ComboBoxItem { Content = Loc.T("原始 JSON - session/auth_session"), Tag = "json" });
-            combo.Items.Add(new ComboBoxItem { Content = "CPA JSON", Tag = "cpa" });
-            combo.Items.Add(new ComboBoxItem { Content = "Sub2API JSON", Tag = "sub2api" });
-            combo.Items.Add(new ComboBoxItem { Content = "Cockpit JSON", Tag = "cockpit" });
-            combo.Items.Add(new ComboBoxItem { Content = "9router JSON", Tag = "9router" });
-            combo.Items.Add(new ComboBoxItem { Content = "Codex auth.json", Tag = "codex" });
-            combo.Items.Add(new ComboBoxItem { Content = "AxonHub JSON", Tag = "axonhub" });
-            combo.Items.Add(new ComboBoxItem { Content = "Codex-Manager JSON", Tag = "codexmanager" });
-            Grid.SetRow(combo, 1);
-            root.Children.Add(combo);
-
-            var actions = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Right
-            };
-            var exportButton = new Button
-            {
-                Content = Loc.T("导出"),
-                Width = 88,
-                Style = (Style)owner.FindResource("PrimaryButton")
-            };
-            exportButton.Click += (_, __) =>
-            {
-                selected = ((combo.SelectedItem as ComboBoxItem)?.Tag as string) ?? "cpa";
-                dialog.Close();
-            };
-            var cancelButton = new Button
-            {
-                Content = Loc.T("取消"),
-                Width = 76,
-                Margin = new Thickness(8, 0, 0, 0)
-            };
-            cancelButton.Click += (_, __) => dialog.Close();
-            actions.Children.Add(exportButton);
-            actions.Children.Add(cancelButton);
-            Grid.SetRow(actions, 2);
-            root.Children.Add(actions);
-
-            dialog.Content = root;
-            dialog.ShowDialog();
-            return selected;
+            var dialog = new ExportFormatDialog { Owner = owner };
+            return dialog.ShowDialog() == true ? dialog.SelectedFormat : "";
         }
 
         public void ShowExportComplete(

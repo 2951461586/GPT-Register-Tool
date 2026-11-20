@@ -219,159 +219,16 @@ namespace SmsWorkbench
             var selectedTier = selectedCountry.Tiers.FirstOrDefault(item => PriceEquals(item.Price, savedPrice))
                 ?? selectedCountry.Tiers[0];
 
-            var dialog = new Window
-            {
-                Title = Loc.T("一键接码"),
-                Owner = owner,
-                Width = Math.Min(620, SystemParameters.WorkArea.Width - 60),
-                Height = 420,
-                MinWidth = 520,
-                MinHeight = 380,
-                ResizeMode = ResizeMode.CanResize,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner,
-                Background = (Brush)owner.FindResource("AppBg")
-            };
-
-            var root = new Grid { Margin = new Thickness(24) };
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-            var headingPanel = new StackPanel
-            {
-                Margin = new Thickness(0, 0, 0, 18)
-            };
-            var heading = new TextBlock
-            {
-                Text = Loc.F("选择 {0} 号码", provider.Label),
-                FontSize = (double)owner.FindResource("Type.Title.Size"),
-                FontWeight = FontWeights.SemiBold,
-                Foreground = (Brush)owner.FindResource("TextMain"),
-                Margin = new Thickness(0, 0, 0, 4)
-            };
-            var balanceText = new TextBlock
-            {
-                Text = Loc.F("当前平台余额：${0}", balance),
-                FontSize = (double)owner.FindResource("Type.Body.Size"),
-                Foreground = (Brush)owner.FindResource("TextSub")
-            };
-            headingPanel.Children.Add(heading);
-            headingPanel.Children.Add(balanceText);
-            Grid.SetRow(headingPanel, 0);
-            root.Children.Add(headingPanel);
-
-            var servicePanel = CreateSmsProviderDialogRow(owner, Loc.T("服务商"), out ContentControl serviceHost);
-            serviceHost.Content = new TextBlock
-            {
-                Text = "OpenAI (ChatGPT)",
-                FontSize = (double)owner.FindResource("Type.Subtitle.Size"),
-                FontWeight = FontWeights.SemiBold,
-                Foreground = (Brush)owner.FindResource("TextMain"),
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            Grid.SetRow(servicePanel, 1);
-            root.Children.Add(servicePanel);
-
-            var countryPanel = CreateSmsProviderDialogRow(owner, Loc.T("国家或地区"), out ContentControl countryHost);
-            var countryBox = new ComboBox
-            {
-                ItemsSource = countries,
-                DisplayMemberPath = nameof(SmsProviderCountryChoice.DisplayName),
-                SelectedItem = selectedCountry,
-                IsTextSearchEnabled = true,
-                MaxDropDownHeight = 280,
-                MinHeight = 36,
-                Padding = new Thickness(8, 4, 8, 4)
-            };
-            countryHost.Content = countryBox;
-            Grid.SetRow(countryPanel, 2);
-            root.Children.Add(countryPanel);
-
-            var tierPanel = CreateSmsProviderDialogRow(owner, Loc.T("号码档位"), out ContentControl tierHost);
-            var tierBox = new ComboBox
-            {
-                ItemsSource = selectedCountry.Tiers,
-                DisplayMemberPath = nameof(SmsProviderPriceTier.DisplayName),
-                SelectedItem = selectedTier,
-                MaxDropDownHeight = 260,
-                MinHeight = 36,
-                Padding = new Thickness(8, 4, 8, 4)
-            };
-            tierHost.Content = tierBox;
-            Grid.SetRow(tierPanel, 3);
-            root.Children.Add(tierPanel);
-
-            var inventory = new TextBlock
-            {
-                Text = "",
-                Foreground = (Brush)owner.FindResource("TextMuted"),
-                FontSize = (double)owner.FindResource("Type.Body.Size"),
-                Margin = new Thickness(142, 8, 0, 0)
-            };
-            Grid.SetRow(inventory, 4);
-            root.Children.Add(inventory);
-
-            void RefreshInventory()
-            {
-                if (tierBox.SelectedItem is not SmsProviderPriceTier tier)
-                {
-                    inventory.Text = "";
-                    return;
-                }
-
-                // `Count < 0` is `SmsProviderPriceTier.UnknownCount`: the tier came
-                // from the config, so there is no stock figure to show. Only the
-                // price is printed -- an "(unqueried)" note next to it read as a
-                // caveat on the price itself, which it never was.
-                inventory.Text = tier.Count < 0
-                    ? Loc.F("价格 ${0} / 个", tier.Price)
-                    : Loc.F("当前库存 {0} 个，价格 ${1} / 个", tier.Count, tier.Price);
-            }
-
-            countryBox.SelectionChanged += (_, _) =>
-            {
-                if (countryBox.SelectedItem is not SmsProviderCountryChoice country) return;
-                tierBox.ItemsSource = country.Tiers;
-                tierBox.SelectedItem = country.Tiers[0];
-                RefreshInventory();
-            };
-            tierBox.SelectionChanged += (_, _) => RefreshInventory();
-            RefreshInventory();
-
-            var buttons = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Right,
-                Margin = new Thickness(0, 20, 0, 0)
-            };
-            var cancel = new Button
-            {
-                Content = Loc.T("取消"),
-                MinWidth = 88,
-                Height = 36,
-                Margin = new Thickness(0, 0, 10, 0),
-                IsCancel = true
-            };
-            var start = new Button
-            {
-                Content = Loc.T("开始接码"),
-                MinWidth = 104,
-                Height = 36,
-                IsDefault = true
-            };
-            start.Click += (_, _) => dialog.DialogResult = true;
-            buttons.Children.Add(cancel);
-            buttons.Children.Add(start);
-            Grid.SetRow(buttons, 5);
-            root.Children.Add(buttons);
-
-            dialog.Content = root;
+            var viewModel = new SmsProviderDialogViewModel(
+                provider.Label,
+                balance,
+                countries,
+                selectedCountry,
+                selectedTier);
+            var dialog = new SmsProviderDialog(owner, viewModel);
             if (dialog.ShowDialog() != true
-                || countryBox.SelectedItem is not SmsProviderCountryChoice chosenCountry
-                || tierBox.SelectedItem is not SmsProviderPriceTier chosenTier)
+                || viewModel.ChosenCountry is not { } chosenCountry
+                || viewModel.ChosenTier is not { } chosenTier)
             {
                 return false;
             }
@@ -466,33 +323,6 @@ namespace SmsWorkbench
             return child;
         }
 
-        private static Grid CreateSmsProviderDialogRow(Window owner, string label, out ContentControl host)
-        {
-            var row = new Grid { Margin = new Thickness(0, 0, 0, 14) };
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(126) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            row.Children.Add(new TextBlock
-            {
-                Text = label,
-                FontSize = (double)owner.FindResource("Type.Body.Size"),
-                Foreground = (Brush)owner.FindResource("TextSub"),
-                VerticalAlignment = VerticalAlignment.Center
-            });
-            host = new ContentControl { VerticalContentAlignment = VerticalAlignment.Center };
-            Grid.SetColumn(host, 1);
-            row.Children.Add(host);
-            return row;
-        }
-
-        /// <summary>
-        /// Resolve the configured key, falling back to the provider's own
-        /// environment variable.
-        ///
-        /// The two placeholder shapes mirror `phone_reuse._resolve_secret` on the
-        /// Python side, so a value the desktop accepts is a value the backend
-        /// also accepts -- and an operator who writes `$HEROSMS_API_KEY` into
-        /// the config gets the same behaviour from both ends.
-        /// </summary>
         private static string ResolveSmsProviderApiKey(string configured, SmsProviderCatalog.SmsProvider provider)
         {
             string value = (configured ?? "").Trim();
