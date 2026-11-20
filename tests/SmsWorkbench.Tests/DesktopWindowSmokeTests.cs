@@ -619,6 +619,9 @@ public sealed class DesktopWindowSmokeTests
             new[] { "txt", "json", "cpa", "sub2api", "cockpit", "9router", "codex", "axonhub", "codexmanager" },
             tags);
         Assert.Equal("CPA JSON", ((ComboBoxItem)box.Items[2]!).Content);
+        TextBlock description = FindVisualChildren<TextBlock>(dialog)
+            .Single(block => block.TextWrapping == TextWrapping.Wrap);
+        Assert.True(description.Text.Length > 0, "the multi-format caveat must still be rendered");
         Assert.Equal(2, FindVisualChildren<Button>(dialog).Count());
         dialog.Close();
 

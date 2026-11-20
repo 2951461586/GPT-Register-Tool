@@ -235,7 +235,7 @@ def _phone_provider_rows(config: Mapping[str, Any]) -> list[dict[str, object]]:
     precisely the machine it exists to diagnose.
     """
     try:
-        from .phone_reuse import provider_key_status
+        from .phone.reuse import provider_key_status
     except Exception:  # pragma: no cover - advisory only
         return []
     section = config.get("phone_reuse")
@@ -253,7 +253,7 @@ def _missing_key_hint(provider: str) -> str:
     hint is written for, so a failed import must not cost the message.
     """
     try:
-        from .phone_reuse import missing_key_hint
+        from .phone.reuse import missing_key_hint
 
         return missing_key_hint(provider)
     except Exception:  # pragma: no cover - advisory only
@@ -268,7 +268,7 @@ def _phone_key_collisions(config: Mapping[str, Any]) -> list[str]:
     not installed yet.
     """
     try:
-        from .phone_reuse import provider_key_collisions
+        from .phone.reuse import provider_key_collisions
     except Exception:  # pragma: no cover - advisory only
         return []
     section = config.get("phone_reuse")

@@ -26,7 +26,7 @@ from pathlib import Path
 from unittest import mock
 
 from sms_tool.codex import phone as codex_phone
-from sms_tool import phone_reuse
+from sms_tool.phone import reuse as phone_reuse
 
 POOL_SUCCESS_KEYS = {
     "ok",
@@ -76,7 +76,7 @@ class CodexPhoneTestBase(unittest.TestCase):
 
         self._start(mock.patch.object(codex_phone, "load_cached_sentinel", return_value=self.sentinel))
         # 函数内 import → 打在源模块上，调用时才重新读属性。
-        self._start(mock.patch("sms_tool.phone_reuse.complete_phone_verification_with_reuse", side_effect=self._pool))
+        self._start(mock.patch("sms_tool.phone.reuse.complete_phone_verification_with_reuse", side_effect=self._pool))
 
     def _start(self, patcher):
         started = patcher.start()

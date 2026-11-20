@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 
-from sms_tool.session_builder import _session_token_from_cookie_header, build_session_file
+from sms_tool.session.builder import _session_token_from_cookie_header, build_session_file
 
 
 class SessionTokenFromCookieTests(unittest.TestCase):

@@ -689,6 +689,6 @@ def run_playwright_registration(**kwargs: Any) -> dict[str, Any]:
 
 def build_browser_session_file(result: Mapping[str, Any]) -> dict[str, Any]:
     """Convert a browser result through the same canonical session builder."""
-    from ...session_builder import build_session_file
+    from ...session.builder import build_session_file
 
     return build_session_file(dict(result or {}))

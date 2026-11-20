@@ -80,13 +80,13 @@ namespace SmsWorkbench
         public static string FormatDescription(string format)
         {
             string value = (format ?? "").Trim().ToLowerInvariant();
-            if (value == "sub2api") return Loc.T("由 session_converter.py 生成的 Sub2API accounts 文档");
-            if (value == "cockpit") return Loc.T("由 session_converter.py 生成的 Cockpit/Codex 导入结构");
-            if (value == "9router") return Loc.T("由 session_converter.py 生成的 9router provider 结构");
-            if (value == "codex") return Loc.T("由 session_converter.py 生成的 Codex auth.json 结构");
-            if (value == "axonhub") return Loc.T("由 session_converter.py 生成的 AxonHub 结构；缺少 RT 时会写入占位提示");
-            if (value == "codexmanager") return Loc.T("由 session_converter.py 生成的 Codex-Manager 结构");
-            return Loc.T("由 session_converter.py 生成的 CPA JSON；缺少 id_token 时会合成兼容字段");
+            if (value == "sub2api") return Loc.T("由 session/converter.py 生成的 Sub2API accounts 文档");
+            if (value == "cockpit") return Loc.T("由 session/converter.py 生成的 Cockpit/Codex 导入结构");
+            if (value == "9router") return Loc.T("由 session/converter.py 生成的 9router provider 结构");
+            if (value == "codex") return Loc.T("由 session/converter.py 生成的 Codex auth.json 结构");
+            if (value == "axonhub") return Loc.T("由 session/converter.py 生成的 AxonHub 结构；缺少 RT 时会写入占位提示");
+            if (value == "codexmanager") return Loc.T("由 session/converter.py 生成的 Codex-Manager 结构");
+            return Loc.T("由 session/converter.py 生成的 CPA JSON；缺少 id_token 时会合成兼容字段");
         }
 
         public static string FormatDirectProbeSummary(

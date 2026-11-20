@@ -14,7 +14,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-from . import endpoints
+from .. import endpoints
 
 
 FORMATS = {"cpa", "sub2api", "cockpit", "9router", "codex", "axonhub", "codexmanager"}

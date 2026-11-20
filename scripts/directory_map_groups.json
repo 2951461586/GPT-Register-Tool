@@ -45,14 +45,11 @@
       "sms_tool/mail_otp.py",
       "sms_tool/smsbower.py",
       "sms_tool/nexsms.py",
-      "sms_tool/phone_reuse.py",
-      "sms_tool/phone_config.py",
-      "sms_tool/phone_pool.py",
-      "sms_tool/phone_provider_lifecycle.py",
       "sms_tool/phone_proxy.py",
       "sms_tool/sms_provider_adapter.py",
       "sms_tool/sms_providers.py",
-      "sms_tool/mailbox/*.py"
+      "sms_tool/mailbox/*.py",
+      "sms_tool/phone/*.py"
     ],
     "Mailbox facades and polling primitives": [
       "sms_tool/outlook_imap.py",
@@ -96,7 +93,6 @@
     ],
     "Registration/auth": [
       "sms_tool/cross_process_gate.py",
-      "sms_tool/session_builder.py",
       "sms_tool/accounts/account_2fa.py",
       "sms_tool/auth_flow/__init__.py",
       "sms_tool/auth_flow/deps.py",
@@ -115,11 +111,11 @@
       "sms_tool/otp_strategy.py",
       "sms_tool/auth_state.py",
       "sms_tool/error_classification.py",
-      "sms_tool/phone_registration.py",
-      "sms_tool/session_refresh.py",
       "sms_tool/registration/*.py",
       "sms_tool/tls_fingerprint.py",
-      "sms_tool/codex/*.py"
+      "sms_tool/codex/*.py",
+      "sms_tool/session/*.py",
+      "sms_tool/phone/*.py"
     ],
     "Agent Identity / explicit import": [
       "sms_tool/agent_identity.py",
@@ -187,9 +183,9 @@
       "sms_tool/account_seed.py",
       "sms_tool/storage.py",
       "sms_tool/importers/sub2api.py",
-      "sms_tool/session_converter.py",
       "sms_tool/importers/*.py",
-      "sms_tool/codex/*.py"
+      "sms_tool/codex/*.py",
+      "sms_tool/session/*.py"
     ],
     "Email change workflow": [
       "sms_tool/accounts/account_email_change.py",

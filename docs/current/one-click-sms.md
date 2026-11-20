@@ -1,7 +1,7 @@
 # 一键接码当前契约
 
 入口：桌面命令规划 → `sms_tool/commands/one_click.py` → `codex/oauth.py`
-（授权与结果保存）→ `phone_reuse.py`（租号生命周期）。命令适配层只选账号、
+（授权与结果保存）→ `phone/reuse.py`（租号生命周期）。命令适配层只选账号、
 调度与汇总，不写 session 文件或 SQLite。
 
 供应商名称、端点、协议族与环境变量名的真源在 `sms_tool/sms_providers.py`，

@@ -1,10 +1,10 @@
 """Phone-reuse pool state and persistence.
 
-Split out of :mod:`sms_tool.phone_reuse`: :class:`PhoneSlot` (one rentable
+Split out of :mod:`sms_tool.phone.reuse`: :class:`PhoneSlot` (one rentable
 number), :class:`PhonePool` (the rotation cursor over them) and the atomic,
 cross-process-safe state file. The vendor calls live in
-:mod:`sms_tool.phone_provider_lifecycle`; the OpenAI OTP exchange and retry
-orchestration stay in :mod:`sms_tool.phone_reuse`.
+:mod:`sms_tool.phone.provider_lifecycle`; the OpenAI OTP exchange and retry
+orchestration stay in :mod:`sms_tool.phone.reuse`.
 
 ``rental_handle_for`` lives here because it is a property of the *slot* (how a
 vendor addresses its rental) rather than of any one vendor call, and because
@@ -22,11 +22,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterator, Optional
 
-from . import sms_providers
-from .cross_process_gate import cross_process_write_lock
-from .operator_output import emit
-from .phone_provider_lifecycle import _complete_provider_activation, _reset_provider_slot
-from .smsbower import DEFAULT_ENDPOINT, GHANA_COUNTRY_CODE, OPENAI_SERVICE_CODE, normalize_country, normalize_service
+from .. import sms_providers
+from ..cross_process_gate import cross_process_write_lock
+from ..operator_output import emit
+from .provider_lifecycle import _complete_provider_activation, _reset_provider_slot
+from ..smsbower import DEFAULT_ENDPOINT, GHANA_COUNTRY_CODE, OPENAI_SERVICE_CODE, normalize_country, normalize_service
 from contextlib import contextmanager
 
 _LOGGER = logging.getLogger(__name__)

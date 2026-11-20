@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from sms_tool.phone_reuse import PhonePool  # noqa: E402
+from sms_tool.phone.reuse import PhonePool  # noqa: E402
 from sms_tool.cross_process_gate import cross_process_write_lock, GateTimeoutError  # noqa: E402
 
 
@@ -70,7 +70,7 @@ class PhoneReuseAtomicWriteTests(unittest.TestCase):
 def phone_reuse_os():
     # _atomic_write_text calls os.replace on the os module imported by phone_pool
     # (the pool persistence module), so patching that module's replace is enough.
-    import sms_tool.phone_pool as pp
+    import sms_tool.phone.pool as pp
 
     return pp.os
 

@@ -1,5 +1,5 @@
 from sms_tool.registration.progress import registration_quality_metrics
-from sms_tool.session_builder import build_session_file
+from sms_tool.session.builder import build_session_file
 
 
 def test_quality_metrics_reports_auth_session_and_retries():

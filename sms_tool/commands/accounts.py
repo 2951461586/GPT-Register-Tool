@@ -106,7 +106,7 @@ def open_paypal_link(email: str, ctx: AccountCommandContext) -> None:
 
 
 def refresh_session(args: Any) -> None:
-    from ..session_refresh import refresh_session as refresh_auth_session
+    from ..session.refresh import refresh_session as refresh_auth_session
 
     result = refresh_auth_session(
         email=args.email or "",
@@ -546,7 +546,7 @@ def quota_usage(args: Any) -> None:
 
 
 def convert_session_json(args: Any) -> None:
-    from ..session_converter import convert_json_file
+    from ..session.converter import convert_json_file
 
     result = convert_json_file(args.convert_session_json, fmt=args.convert_format)
     output_text = result.get("outputText") or ""

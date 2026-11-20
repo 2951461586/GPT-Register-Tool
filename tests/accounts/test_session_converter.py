@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from sms_tool import cli
-from sms_tool import session_converter as conv
+from sms_tool.session import converter as conv
 
 
 def _jwt(payload):

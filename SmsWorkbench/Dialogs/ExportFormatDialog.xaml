@@ -23,7 +23,7 @@
                  FontSize="{StaticResource Type.Title.Size}"
                  FontWeight="SemiBold"
                  Foreground="{DynamicResource TextMain}"/>
-      <TextBlock Text="{loc:Tr Key='TXT 保持邮箱原格式；原始 JSON 保留 session；其它格式会调用 session_converter.py 转为 CPA/Sub2API/Cockpit/9router/Codex/AxonHub/Codex-Manager。'}"
+      <TextBlock Text="{loc:Tr Key='TXT 保持邮箱原格式；原始 JSON 保留 session；其它格式会调用 session/converter.py 转为 CPA/Sub2API/Cockpit/9router/Codex/AxonHub/Codex-Manager。'}"
                  TextWrapping="Wrap"
                  LineHeight="20"
                  Margin="0,6,0,0"

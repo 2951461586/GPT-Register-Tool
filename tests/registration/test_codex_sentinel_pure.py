@@ -7,7 +7,7 @@
 - ``account_creation.py:66``  注册校验头
 - ``codex/oauth.py``          OAuth 全流程（7 处 ``with_sentinel`` / ``attach_sentinel``）
 - ``codex/phone.py:87,113``   接码平台登录
-- ``phone_reuse.py:755,803``  手机号复用判定
+- ``phone/reuse.py:755,803``  手机号复用判定
 - ``sentinel_tokens.py:148``  Cloudflare cookie 回灌
 - ``registration/orchestrator.py:66``      主注册流程
 

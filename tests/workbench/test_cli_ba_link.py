@@ -74,7 +74,7 @@ class GenerateBaLinkCliProxyTests(unittest.TestCase):
         with patch.object(cli, "CFG", cfg):
             with patch("sys.argv", argv):
                 with patch(
-                    "sms_tool.session_refresh._load_seed_session",
+                    "sms_tool.session.refresh._load_seed_session",
                     return_value=(
                         {
                             "email": "selected@example.com",

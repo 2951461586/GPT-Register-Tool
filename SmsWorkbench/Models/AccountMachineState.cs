@@ -31,9 +31,9 @@ namespace SmsWorkbench
     /// <c>registration_status</c> (<see cref="PoolRow.RegistrationStatus"/>),
     /// <c>refresh_token_status</c>, <c>at_probe_status_code</c>,
     /// <c>promotion_state</c>, <c>payment_qualification_state</c> and the TOTP
-    /// booleans. Those are the inputs here. A row **with** a machine value ignores
-    /// its label entirely — that is the property the tests pin, and it is the one a
-    /// reword breaks today.
+    /// booleans. Those are the inputs here. A row that carries a machine value
+    /// **ignores its label entirely** — that is the property the tests pin, and it
+    /// is the one a reword breaks today.
     /// </para>
     /// <para>
     /// The label fallback is deliberately retained for legacy rows: session JSON

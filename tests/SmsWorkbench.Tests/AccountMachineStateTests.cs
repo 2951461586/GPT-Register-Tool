@@ -76,6 +76,18 @@ public sealed class AccountMachineStateTests
         Assert.Equal(AccountMachineState.Warn, AccountMachineState.StatusSeverity(row));
     }
 
+    [Fact]
+    public void An_unrecognised_machine_state_falls_back_to_the_label_and_still_needs_attention()
+    {
+        // The `default:` branch exists so a state a future backend adds cannot
+        // render neutral (invisible) and drop out of the attention counter.
+        var row = Row(registrationStatus: "some_future_state", status: "已注册");
+
+        Assert.True(AccountMachineState.StatusSaysRegistered(row));
+        Assert.Equal(AccountMachineState.Success, AccountMachineState.StatusSeverity(row));
+        Assert.True(AccountMachineState.NeedsAttention(row));
+    }
+
     [Theory]
     [InlineData("registered", "success")]
     [InlineData("partial_registered", "warn")]

@@ -170,7 +170,7 @@ def rebuild_agent_identity(email="", source_data=None, export_dir="", proxy="", 
     json_path = str(data.get("json_path") or "").strip()
     target_email = str(email or data.get("email") or "").strip().lower()
     if not data and target_email:
-        from .session_refresh import _load_seed_session
+        from .session.refresh import _load_seed_session
 
         data, json_path = _load_seed_session(email=target_email)
     if not target_email:
@@ -279,7 +279,7 @@ def _refresh_agent_identity_chatgpt_session(data, email, json_path="", proxy="",
     if not _has_chatgpt_session(source):
         return None, json_path, ""
     try:
-        from .session_refresh import _load_seed_session, refresh_session
+        from .session.refresh import _load_seed_session, refresh_session
 
         refreshed = refresh_session(
             email=email,
@@ -299,7 +299,7 @@ def _refresh_agent_identity_chatgpt_session(data, email, json_path="", proxy="",
 
 
 def _persist_agent_identity_source(data, json_path=""):
-    from .session_refresh import _save_refreshed
+    from .session.refresh import _save_refreshed
 
     return _save_refreshed(dict(data or {}), json_path)
 

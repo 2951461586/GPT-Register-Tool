@@ -14,7 +14,7 @@ from sms_tool.commands.registration import (
     persist_registration_result,
     save_registration_results,
 )
-from sms_tool.session_builder import build_session_file
+from sms_tool.session.builder import build_session_file
 from sms_tool.config import current_config_data
 
 

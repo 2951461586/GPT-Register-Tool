@@ -7,7 +7,7 @@
 
 `registration/orchestrator.py` 从 ~1600 行瘦身到 ~1470 行，作为纯粹编排入口：
 
-- **`sms_tool/session_builder.py`**（新增）：从注册最终态拼装 canonical session JSON（35 字段 + 嵌套 `mailbox` dict）。token 优先级链、profile/device_id/paypal 字段、`created_at` 时间戳都在这里收敛。
+- **`sms_tool/session/builder.py`**（新增）：从注册最终态拼装 canonical session JSON（35 字段 + 嵌套 `mailbox` dict）。token 优先级链、profile/device_id/paypal 字段、`created_at` 时间戳都在这里收敛。
 - **`sms_tool/registration/outcome.py`**（新增）：注册结果归一化 —— 账号创建错误提炼 / 多轮 AT 稳定性探测 / `codex_oauth.require_registration_refresh_token`、`require_registration_phone_verification` 开关。
 - **`sms_tool/account_2fa.py`**（新增）：TOTP 2FA 自动 enrollment（密钥生成 / totp URI 校验 / 激活轮询 / secret 入库）。
 - **`registration/orchestrator.py`** 通过 `from .session_builder import ...` 与 `from .registration_outcome import ...` 暴露 helper；不再允许本地定义遮蔽其他模块的实现。

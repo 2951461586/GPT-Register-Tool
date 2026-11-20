@@ -72,8 +72,8 @@ class OneClickCommandContext:
 def one_click_sms(args: Any, ctx: OneClickCommandContext) -> None:
     """Refresh selected account(s) through Codex OAuth and phone SMS, then store RT."""
     from ..codex.oauth import refresh_codex_oauth_session
-    from ..phone_reuse import create_phone_pool, print_phone_pool_status
-    from ..session_refresh import _load_seed_session
+    from ..phone.reuse import create_phone_pool, print_phone_pool_status
+    from ..session.refresh import _load_seed_session
 
     emails = read_email_file(args.email_file)
     if args.email:
@@ -353,7 +353,7 @@ def one_click_sms(args: Any, ctx: OneClickCommandContext) -> None:
 def one_click_scan(args: Any) -> None:
     """Batch OAuth probe accounts without sending SMS."""
     from ..accounts.account_scan import scan_accounts
-    from ..session_refresh import _load_seed_session
+    from ..session.refresh import _load_seed_session
     from ..storage import list_paypal_accounts
 
     emails = read_email_file(args.email_file)

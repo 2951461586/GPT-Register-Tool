@@ -145,7 +145,7 @@ The static phone-pool mode was removed across all three lanes it existed in:
 
 | Lane | What it fed | Where the reader was |
 | --- | --- | --- |
-| Registration SMS | `phone_reuse.phone_pool` | `sms_tool/phone_reuse.py` |
+| Registration SMS | `phone_reuse.phone_pool` | `sms_tool/phone/reuse.py` |
 | Registration SMS fallback | `paypal_auto.phone_number` + `sms_api_url` | `sms_tool/codex/phone.py` |
 | PayPal checkout SMS | `paypal_auto.phone_numbers` / `phone_number` | `sms_tool/paypal/config_picker.py` |
 

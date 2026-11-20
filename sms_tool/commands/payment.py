@@ -426,7 +426,7 @@ def resolve_access_token(args: Any, *, stderr: Any = None) -> tuple[str, Any]:
     if not email and not session_file:
         return "", None
 
-    from ..session_refresh import _load_seed_session
+    from ..session.refresh import _load_seed_session
 
     with contextlib.redirect_stdout(stderr or sys.stderr):
         data, _ = _load_seed_session(email=email, session_file=session_file)

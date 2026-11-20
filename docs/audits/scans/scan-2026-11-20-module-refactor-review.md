@@ -46,17 +46,40 @@
 `SmsProviderDialogService`（最长、最常改、最缺测试的三个）。每个转换配一个
 `DesktopWindowSmokeTests` 式断言（`Template.FindName` + `FindResource`）。
 
-### P2-3 根模块收拢（81 个平铺模块 / 31K 行）
+### P2-3 根模块收拢（**已落地 5 簇：81 → 62**）
 
-可继续按前缀成簇迁移（`root_module_ratchet` 只允许减）：`session_*`(4) ·
-`phone_*`(6) · `codex_*`(5) · `wallet_*`+`gcash_*`(4) · `*_import`(3)。用
-`scripts/module_move.py` 的既有流程，每簇单独提交。
+`scripts/module_move.py --spec scripts/move_specs/<cluster>.json --apply`，每簇一次
+提交，工具在落地后自动跑 8 个门禁：
 
-### P1-3b 测试框架统一（176 个 `unittest` 文件 vs 261 个 pytest 文件）
+| 簇 | 目标包 | 模块 | 备注 |
+| --- | --- | --- | --- |
+| wallet | `sms_tool/wallet/` | `wallet_provider` · `wallet_transport` · `gcash_provider` · `gcash_transport` | 四者同为 layer 4，包即 4，零方向变化 |
+| importers | `sms_tool/importers/` | `cpa_import` · `sub2api_import` · `import_targets` | 同为 layer 3 |
+| codex | `sms_tool/codex/` | `codex_export` · `codex_oauth` · `codex_phone` · `codex_sentinel` | 包 3 + **模块级 override**：`codex/sentinel` 留 4（`sentinel_tokens` 是 layer 4 的消费者）；整包取 4 反而会让 `codex/oauth -> mailbox.router` / `account_creation` 越界 |
+| session | `sms_tool/session/` | `session_builder` · `session_converter` · `session_refresh` | 包 4；`session_builder` 原名 layer 3，上移后无越界边 |
+| phone | `sms_tool/phone/` | `phone_config` · `phone_pool` · `phone_provider_lifecycle` · `phone_registration` · `phone_reuse` | 包 4 + override：`phone/registration` 留 3（导入 `registration.outcome`）。**`phone_proxy` 故意不搬**：它是 Rule 13 / ADR-0011 的包装壳，名字本身是文档事实 |
 
-`unittest.TestCase` 拿不到 pytest 的 fixture/parametrize，且 `self.assertEqual`
-在 xdist 下的失败输出更差。建议按目录迁移（`tests/accounts` → `tests/payment`
-→ `tests/registration`），每目录一个提交；`pytest.ini` 已是权威配置，无需其它改动。
+顺带修的两处“搬家后遗症”，都值得记：
+* `mailbox_private_import_ratchet` 按**模块名**追踪私有 hub，`session_refresh` 变成
+  `session.refresh` 后它的最后一段不再等于 hub 名 ⇒ 新增 `PACKAGED_HUB_PATHS`
+  （按最后两段匹配）。**不能用 `session` 当 hub 名**：`upi_link/session.py` 与
+  `paypal/session.py` 的相对导入会被误记成同一个 hub（实测 8 条误报）。
+* `test_registration_refresh_token` 原本断言 `ImportFrom.module == "codex_oauth"`，
+  搬家后应写成 `*.codex.oauth` —— 否则这种“按路径钉死”的测试每次搬模块都会红。
+
+**剩余**：62 个根模块（`auth_headers` / `phone_proxy` / `checkout_contract` /
+`operator_output` / `endpoints` 等共享叶子）。再往下收拢需要先定层与命名
+（例如 `sms_tool/contracts/`、`sms_tool/output/`），属于独立决策，不在本轮。
+
+### P1-3b 测试框架统一（**已落地：棘轮 + 一个样板文件**，175 个待逐目录迁移）
+
+`unittest.TestCase` 拿不到 pytest 的 fixture/parametrize，且 `setUp` 自己抛错时
+teardown 不执行。175 个文件一次性 codemod 属于本仓明确视为不可验证的改动（丢掉
+`setUp` 会让测试空转通过），所以：`scripts/unittest_style_ratchet.py` 逐目录冻结、
+只许下降；`tests/config/test_logging_crash_hooks.py` 是样板（shared `setUp` →
+一个 `hooks` fixture + `yield`/`finally` 恢复，测试数 8 → 8）；迁移配方写在
+`docs/current/testing.md`（含“测试数必须不变”）。逐目录顺序建议
+`config → proxy → workbench → accounts → mailbox → governance → payment → registration`。
 
 ### P2-1 治理层公共骨架（原估 600–900 行，复测后**降级**）
 

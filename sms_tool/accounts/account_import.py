@@ -87,7 +87,7 @@ def token_expiry(token: str) -> int:
     The import compares this, never ``last_refresh``: the exporter's timestamp is
     when the *file* was written, which says nothing about which token is newer.
     """
-    from ..session_converter import parse_jwt_payload
+    from ..session.converter import parse_jwt_payload
 
     payload = parse_jwt_payload(token)
     try:
@@ -194,7 +194,7 @@ def import_sessions(
     failed: list[dict[str, str]] = []
     superseded: list[dict[str, str]] = []
     db_saved = 0
-    from ..session_builder import build_session_file
+    from ..session.builder import build_session_file
     from ..store.accounts import upsert_account
 
     for email, record in kept.items():

@@ -23,7 +23,7 @@ answered ``409 invalid_state`` -- which read as an OTP problem.
 
 The same function has a second call site (``reauth_existing_account``) that
 passes ``s.session`` -- self-consistent, and that one works. The phone lane
-(``phone_registration.py:121-124``) has always minted the token on the session
+(``phone/registration.py:121-124``) has always minted the token on the session
 it posts with. This lane was the odd one out.
 
 Four things this file pins down:

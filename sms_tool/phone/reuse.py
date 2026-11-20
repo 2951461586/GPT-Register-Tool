@@ -14,10 +14,10 @@ the code had arrived. Every slot is now a rental with an activation id.
 
 This module is the facade and the OpenAI-OTP orchestration. The pieces live in:
 
-* :mod:`sms_tool.phone_config` -- provider key resolution and diagnostics;
-* :mod:`sms_tool.phone_pool` -- :class:`PhoneSlot` / :class:`PhonePool` and the
+* :mod:`sms_tool.phone.config` -- provider key resolution and diagnostics;
+* :mod:`sms_tool.phone.pool` -- :class:`PhoneSlot` / :class:`PhonePool` and the
   atomic cross-process state file;
-* :mod:`sms_tool.phone_provider_lifecycle` -- vendor acquire / prepare /
+* :mod:`sms_tool.phone.provider_lifecycle` -- vendor acquire / prepare /
   complete / cancel.
 
 Every name those modules expose is re-exported here, so existing importers keep
@@ -28,10 +28,10 @@ from __future__ import annotations
 
 import time
 
-from . import sms_providers
-from .auth_headers import openai_auth_headers_lower
-from .config import CFG  # noqa: F401 - re-exported for tests that patch phone_reuse.CFG
-from .phone_config import (
+from .. import sms_providers
+from ..auth_headers import openai_auth_headers_lower
+from ..config import CFG  # noqa: F401 - re-exported for tests that patch phone_reuse.CFG
+from .config import (
     KEY_ORIGIN_CONFIG,  # noqa: F401
     KEY_ORIGIN_ENV,  # noqa: F401
     KEY_ORIGIN_MISSING,  # noqa: F401
@@ -53,7 +53,7 @@ from .phone_config import (
     provider_key_collisions,  # noqa: F401
     provider_key_status,  # noqa: F401
 )
-from .phone_pool import (
+from .pool import (
     PhonePool,
     PhoneSlot,
     _atomic_write_text,  # noqa: F401
@@ -61,7 +61,7 @@ from .phone_pool import (
     _state_for_phone,  # noqa: F401
     rental_handle_for,
 )
-from .phone_provider_lifecycle import (
+from .provider_lifecycle import (
     RENTAL_NO_NUMBERS_MAX_ATTEMPTS,  # noqa: F401
     _acquire_nexsms_number,  # noqa: F401
     _acquire_rental_number,  # noqa: F401
@@ -87,14 +87,14 @@ from .phone_provider_lifecycle import (
     rental_client,  # noqa: F401
     rental_protocol,  # noqa: F401
 )
-from .smsbower import (
+from ..smsbower import (
     DEFAULT_ENDPOINT,
     GHANA_COUNTRY_CODE,
     OPENAI_SERVICE_CODE,
     normalize_phone,
     normalize_service,
 )
-from . import endpoints
+from .. import endpoints
 
 #: Shared by both protocol families. Renamed off the vendor name when the second
 #: family landed: they are per-rental, not per-vendor.
@@ -156,7 +156,7 @@ def _send_phone_otp_with_retries(
             result = send_phone_otp(session, did, current_url, phone, sentinel=sentinel, proxy=proxy)
         except Exception as exc:
             try:
-                from .phone_proxy import looks_like_proxy_error
+                from ..phone_proxy import looks_like_proxy_error
             except Exception:
                 looks_like_proxy_error = lambda value: False
             if looks_like_proxy_error(exc):
@@ -180,7 +180,7 @@ def _send_phone_otp_with_retries(
 
 
 def send_phone_otp(session, did, current_url, phone: str, sentinel=None, proxy=None) -> dict:
-    from .codex.sentinel import load_cached_sentinel
+    from ..codex.sentinel import load_cached_sentinel
 
     if sentinel is None:
         sentinel = load_cached_sentinel()
@@ -219,7 +219,7 @@ def send_phone_otp(session, did, current_url, phone: str, sentinel=None, proxy=N
 
 
 def validate_phone_otp(session, did, code: str, sentinel=None, proxy=None) -> dict:
-    from .codex.sentinel import load_cached_sentinel
+    from ..codex.sentinel import load_cached_sentinel
 
     if sentinel is None:
         sentinel = load_cached_sentinel()
@@ -408,7 +408,7 @@ def _complete_phone_verification_once_locked(
     selected_proxy = proxy
     if _is_rental_slot(phone_slot):
         try:
-            from .phone_proxy import apply_proxy_to_session, phone_proxy_cfg, select_phone_proxy
+            from ..phone_proxy import apply_proxy_to_session, phone_proxy_cfg, select_phone_proxy
 
             proxy_cfg = phone_proxy_cfg()
         except Exception:

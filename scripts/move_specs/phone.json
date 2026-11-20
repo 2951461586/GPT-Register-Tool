@@ -1,0 +1,12 @@
+{
+  "package": "phone",
+  "layer": 4,
+  "root_package_init": false,
+  "modules": {
+    "phone_config": "config",
+    "phone_pool": "pool",
+    "phone_provider_lifecycle": "provider_lifecycle",
+    "phone_registration": "registration",
+    "phone_reuse": "reuse"
+  }
+}

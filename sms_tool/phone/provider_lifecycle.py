@@ -1,16 +1,16 @@
 """Rental lifecycle for phone-reuse providers (acquire / prepare / complete / cancel).
 
-Split out of :mod:`sms_tool.phone_reuse`. Everything here speaks to a vendor:
+Split out of :mod:`sms_tool.phone.reuse`. Everything here speaks to a vendor:
 choosing the protocol-appropriate client, buying a number, preparing a rental
 for another code, and completing or cancelling it. The pool state lives in
-:mod:`sms_tool.phone_pool`; the OpenAI OTP exchange and the retry orchestration
-stay in :mod:`sms_tool.phone_reuse`.
+:mod:`sms_tool.phone.pool`; the OpenAI OTP exchange and the retry orchestration
+stay in :mod:`sms_tool.phone.reuse`.
 
 Two protocol families share this surface. ``smsbower``/``herosms``/``grizzly``
 speak the sms-activate handler family and address a rental by activation id;
 ``nexsms`` speaks a JSON REST family and addresses it by phone number. The
 family is decided once by :func:`rental_protocol` and once by
-:func:`sms_tool.phone_pool.rental_handle_for`; no call site re-derives it.
+:func:`sms_tool.phone.pool.rental_handle_for`; no call site re-derives it.
 """
 
 from __future__ import annotations
@@ -20,12 +20,12 @@ import time
 from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING, Optional
 
-from . import sms_providers
-from .nexsms import NexSmsClient
-from .operator_output import emit
-from .phone_config import _int_value
-from .sms_provider_adapter import SmsProviderAdapter, provider_name
-from .smsbower import (
+from .. import sms_providers
+from ..nexsms import NexSmsClient
+from ..operator_output import emit
+from .config import _int_value
+from ..sms_provider_adapter import SmsProviderAdapter, provider_name
+from ..smsbower import (
     SmsBowerClient,
     normalize_country,
     normalize_phone,
@@ -33,7 +33,7 @@ from .smsbower import (
 )
 
 if TYPE_CHECKING:  # pragma: no cover - typing only, avoids a runtime cycle
-    from .phone_pool import PhoneSlot
+    from .pool import PhoneSlot
 
 #: Retry budgets shared by both protocol families. Renamed off the vendor name
 #: when the second family landed: they are per-rental, not per-vendor, and a

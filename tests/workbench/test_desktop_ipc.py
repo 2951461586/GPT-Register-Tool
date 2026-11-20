@@ -67,7 +67,7 @@ def test_emit_result_keeps_at_probe_status_code(capsys):
 def test_view_inbox_failure_uses_desktop_ipc_envelope(monkeypatch, capsys):
     import sms_tool.codex.oauth as codex_oauth
     import sms_tool.mailbox.router as mailbox
-    import sms_tool.session_refresh as session_refresh
+    import sms_tool.session.refresh as session_refresh
 
     monkeypatch.setattr(session_refresh, "_load_seed_session", lambda **_: ({}, ""))
     monkeypatch.setattr(codex_oauth, "_mailbox_from_data", lambda _: None)

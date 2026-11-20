@@ -52,9 +52,9 @@ class RegistrationPhonePoolTests(unittest.TestCase):
         )
 
         with (
-            patch("sms_tool.phone_reuse.has_phone_reuse_config", return_value=True),
-            patch("sms_tool.phone_reuse.create_phone_pool", return_value=phone_pool) as create,
-            patch("sms_tool.phone_reuse.print_phone_pool_status") as print_status,
+            patch("sms_tool.phone.reuse.has_phone_reuse_config", return_value=True),
+            patch("sms_tool.phone.reuse.create_phone_pool", return_value=phone_pool) as create,
+            patch("sms_tool.phone.reuse.print_phone_pool_status") as print_status,
         ):
             result = cli._registration_phone_pool(args)
 
@@ -826,7 +826,7 @@ class ReMailPickupTests(unittest.TestCase):
             session_path = Path(tmp) / "session.json"
             session_path.write_text(json.dumps(data), encoding="utf-8")
             with (
-                patch("sms_tool.session_refresh._load_seed_session", return_value=(data, str(session_path))),
+                patch("sms_tool.session.refresh._load_seed_session", return_value=(data, str(session_path))),
                 patch("sms_tool.mailbox.router.fetch_mailbox_messages", side_effect=fetch),
                 patch.object(cli, "upsert_account", return_value=True) as upsert,
                 redirect_stdout(io.StringIO()),

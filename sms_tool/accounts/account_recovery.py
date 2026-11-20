@@ -55,7 +55,7 @@ def relogin_web_session_account(
     if not email:
         return {"ok": False, "mode": "web_session", "error": "missing_email"}
     try:
-        from ..session_refresh import _refresh_session_protocol
+        from ..session.refresh import _refresh_session_protocol
 
         data = dict(account)
         data["email"] = email
@@ -175,7 +175,7 @@ def relogin_chatgpt_email_account(
         from ..http_client import request_with_retry
         from ..registration.orchestrator import _login_existing_account_with_email_otp
         from ..sentinel_tokens import _set_oai_did_cookie
-        from ..session_refresh import _auth_session_email
+        from ..session.refresh import _auth_session_email
 
         mailbox = _mailbox_from_data(account)
         if mailbox is None:
@@ -637,7 +637,7 @@ def _verify_and_persist_candidate(
     verified.update(candidate)
     verified["email"] = email
     if mode == "web_session":
-        from ..session_refresh import _auth_session_email
+        from ..session.refresh import _auth_session_email
 
         _raw_auth_session: object = verified.get("auth_session")
         auth_session: dict = _raw_auth_session if isinstance(_raw_auth_session, dict) else {}
@@ -667,7 +667,7 @@ def _verify_and_persist_candidate(
     json_path = str(verified.get("json_path") or account.get("json_path") or "").strip()
     saved_path = json_path
     if persist:
-        from ..session_refresh import _save_refreshed
+        from ..session.refresh import _save_refreshed
 
         saved_path = _save_refreshed(verified, json_path)
     return {

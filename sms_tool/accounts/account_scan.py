@@ -24,7 +24,7 @@ from .account_recovery import (
 )
 from .recovery_batch import refresh_local_quota_statuses
 from ..http_client import is_transient_transport_error
-from ..session_refresh import _load_seed_session
+from ..session.refresh import _load_seed_session
 from ..storage import upsert_account
 from ..workspace_scan import inspect_workspace, parse_workspace_fallback_ids
 from ..kernel.error_classification import classify_error

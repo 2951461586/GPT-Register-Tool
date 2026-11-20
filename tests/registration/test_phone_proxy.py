@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from sms_tool import phone_proxy
-from sms_tool.phone_reuse import PhonePool, PhoneSlot, complete_phone_verification_with_reuse
+from sms_tool.phone.reuse import PhonePool, PhoneSlot, complete_phone_verification_with_reuse
 
 
 class PhoneProxyTests(unittest.TestCase):
@@ -160,7 +160,7 @@ class PhoneReuseProxyGateTests(unittest.TestCase):
         pool = PhonePool(phones=[PhoneSlot(provider="smsbower", api_key="k", country="16", phone="", activation_id="")])
         session = Mock()
         with (
-            patch("sms_tool.phone_provider_lifecycle._acquire_smsbower_number") as acquire,
+            patch("sms_tool.phone.provider_lifecycle._acquire_smsbower_number") as acquire,
             patch("sms_tool.phone_proxy.select_phone_proxy", return_value={"ok": False, "error": "forbidden ip"}),
         ):
             result = complete_phone_verification_with_reuse(

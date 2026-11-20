@@ -30,7 +30,7 @@ def view_inbox(args: Any, ctx: MailboxCommandContext) -> None:
     from ..codex.oauth import _mailbox_from_data
     from ..desktop_ipc import emit_result
     from ..mailbox.router import fetch_mailbox_messages, mailbox_from_config
-    from ..session_refresh import _load_seed_session
+    from ..session.refresh import _load_seed_session
 
     def output(payload):
         emit_result(payload, enabled=bool(getattr(args, "desktop_ipc", False)))
@@ -107,7 +107,7 @@ def gmail_send(args: Any) -> None:
     from ..codex.oauth import _mailbox_from_data
     from ..mailbox.router import mailbox_from_config
     from ..providers.mailbox_gmail import is_gmail_mailbox, send_gmail_message
-    from ..session_refresh import _load_seed_session
+    from ..session.refresh import _load_seed_session
 
     with contextlib.redirect_stdout(sys.stderr):
         data, _ = _load_seed_session(email=args.email or "", session_file=args.session_file or "")

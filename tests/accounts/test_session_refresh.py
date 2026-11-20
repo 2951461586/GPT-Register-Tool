@@ -1,7 +1,7 @@
 import json
 from unittest.mock import patch
 
-from sms_tool import session_refresh
+from sms_tool.session import refresh as session_refresh
 
 
 def test_protocol_candidate_can_be_returned_without_persistence():

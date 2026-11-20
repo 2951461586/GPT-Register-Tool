@@ -8,15 +8,15 @@ from urllib.parse import quote, urlencode
 
 from curl_cffi import requests as curl_requests
 
-from .auth_wire import _auth_request_headers, _is_existing_login_redirect, _with_query_param
-from .http_utils import _json_or_raw
-from .auth_headers import auth_impersonate, openai_auth_headers, select_auth_fingerprint
-from .config import current_config_data
-from .http_client import request_with_retry
-from .registration.outcome import _failure_result
-from .sentinel import issue_sentinel_flow
-from .sentinel_tokens import _import_sentinel_cookies, _sentinel_device_id
-from .utils import (
+from ..auth_wire import _auth_request_headers, _is_existing_login_redirect, _with_query_param
+from ..http_utils import _json_or_raw
+from ..auth_headers import auth_impersonate, openai_auth_headers, select_auth_fingerprint
+from ..config import current_config_data
+from ..http_client import request_with_retry
+from ..registration.outcome import _failure_result
+from ..sentinel import issue_sentinel_flow
+from ..sentinel_tokens import _import_sentinel_cookies, _sentinel_device_id
+from ..utils import (
     _generate_password,
     _print_timings,
     _random_birthdate,
@@ -27,7 +27,7 @@ from .utils import (
     _tl,
     _tock,
 )
-from . import endpoints
+from .. import endpoints
 
 
 def _provider_selection(phone_reuse_cfg: Mapping, api_key_override=None) -> tuple[str, dict, str, str]:
@@ -38,14 +38,14 @@ def _provider_selection(phone_reuse_cfg: Mapping, api_key_override=None) -> tupl
     ``phone_reuse.smsbower`` unconditionally, so a config switched to HeroSMS or
     Grizzly still rented -- and paid for -- an SMSBower number.
 
-    Imported lazily: :mod:`sms_tool.phone_reuse` pulls in the sms-activate
+    Imported lazily: :mod:`sms_tool.phone.reuse` pulls in the sms-activate
     client, while this module is itself imported by the ``registration`` shim at
     import time. The key resolution is reused rather than reimplemented, so the
     ``$ENV`` / ``YOUR_<VENDOR>_API_KEY`` indirection cannot drift between the two
     entry points.
     """
-    from . import sms_providers
-    from .phone_reuse import _phone_source, _provider_api_key, _provider_cfg
+    from .. import sms_providers
+    from .reuse import _phone_source, _provider_api_key, _provider_cfg
 
     cfg = dict(phone_reuse_cfg)
     provider = _phone_source(cfg)
@@ -81,7 +81,7 @@ def run_phone_register(
     country = smsbower_country or provider_cfg.get("country", "38")
 
     try:
-        from .phone_proxy import select_phone_proxy
+        from ..phone_proxy import select_phone_proxy
 
         proxy_result = select_phone_proxy(proxy, country=country, provider=provider, country_cfg=provider_cfg)
     except Exception as exc:
@@ -99,8 +99,8 @@ def run_phone_register(
 
     # Step 0: Acquire phone number from the selected provider
     _tick("0-Acquire phone number")
-    from .phone_reuse import rental_client, rental_handle_for
-    from .smsbower import normalize_phone
+    from .reuse import rental_client, rental_handle_for
+    from ..smsbower import normalize_phone
 
     sms_client = rental_client(provider, api_key, endpoint)
     try:
@@ -407,7 +407,7 @@ def run_phone_register(
     if codex_oauth:
         _tick("8-Codex OAuth")
         try:
-            from .codex.oauth import collect_codex_oauth_tokens
+            from ..codex.oauth import collect_codex_oauth_tokens
 
             oauth_result = collect_codex_oauth_tokens(
                 data={

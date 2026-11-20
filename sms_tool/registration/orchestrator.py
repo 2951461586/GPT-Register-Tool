@@ -271,7 +271,7 @@ from sms_tool.otp_strategy import (
     _poll_registration_email_otp,
     send_registration_email_otp as _send_registration_email_otp,
 )
-from sms_tool.phone_registration import run_phone_register as _run_phone_register_impl
+from sms_tool.phone.registration import run_phone_register as _run_phone_register_impl
 from sms_tool.registration.operations import (
     RegistrationOperations,
     RegistrationOtpPollingOperations,
@@ -306,7 +306,7 @@ from sms_tool.sentinel_tokens import (
     _set_oai_did_cookie,
     assert_sentinel_device_id,
 )
-from sms_tool.session_builder import build_session_file
+from sms_tool.session.builder import build_session_file
 from sms_tool.utils import (
     _generate_password,
     _print_timings,

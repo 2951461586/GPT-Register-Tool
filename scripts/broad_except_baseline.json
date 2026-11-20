@@ -449,15 +449,15 @@
       "broad": 3,
       "silent": 0
     },
-    "sms_tool/phone_config.py": {
+    "sms_tool/phone/config.py": {
       "broad": 1,
       "silent": 0
     },
-    "sms_tool/phone_pool.py": {
+    "sms_tool/phone/pool.py": {
       "broad": 2,
       "silent": 0
     },
-    "sms_tool/phone_provider_lifecycle.py": {
+    "sms_tool/phone/provider_lifecycle.py": {
       "broad": 3,
       "silent": 0
     },
@@ -465,11 +465,11 @@
       "broad": 8,
       "silent": 3
     },
-    "sms_tool/phone_registration.py": {
+    "sms_tool/phone/registration.py": {
       "broad": 7,
       "silent": 2
     },
-    "sms_tool/phone_reuse.py": {
+    "sms_tool/phone/reuse.py": {
       "broad": 6,
       "silent": 1
     },
@@ -685,11 +685,11 @@
       "broad": 13,
       "silent": 1
     },
-    "sms_tool/session_converter.py": {
+    "sms_tool/session/converter.py": {
       "broad": 6,
       "silent": 1
     },
-    "sms_tool/session_refresh.py": {
+    "sms_tool/session/refresh.py": {
       "broad": 6,
       "silent": 2
     },

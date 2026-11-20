@@ -129,6 +129,16 @@ WATCHED_QUALIFIERS: dict[str, tuple[str, ...]] = {
 #: ``from .mailbox.types import _x`` stays out of the mailbox baseline.
 PACKAGED_HUB_MODULES: dict[str, tuple[str, ...]] = {"mailbox": ("router",)}
 
+#: A watched hub that moved into a package **and** whose hub name is not the
+#: package name. ``sms_tool/session_refresh.py`` became
+#: ``sms_tool/session/refresh.py`` on 2026-11-20, so consumers spell
+#: ``.session.refresh``: the last segment is ``refresh`` (not a watched name) and
+#: the package is ``session`` (not the hub's name either). Matching on the last
+#: two segments keeps ``upi_link.session`` / ``paypal.session`` -- genuinely
+#: different modules that a bare ``session`` entry would have swept in -- out of
+#: this hub's count.
+PACKAGED_HUB_PATHS: dict[tuple[str, str], str] = {("session", "refresh"): "session_refresh"}
+
 _PACKAGED_HUB_BY_STEM: dict[str, str] = {stem: hub for hub, stems in PACKAGED_HUB_MODULES.items() for stem in stems}
 
 
@@ -162,6 +172,9 @@ def _watched_module_of(node: ast.ImportFrom) -> str | None:
     last = parts[-1]
     if last in WATCHED_MODULES:
         watched, qualifier = last, parts[:-1]
+    elif len(parts) >= 2 and (parts[-2], parts[-1]) in PACKAGED_HUB_PATHS:
+        # ``.session.refresh`` / ``sms_tool.session.refresh``
+        watched, qualifier = PACKAGED_HUB_PATHS[(parts[-2], parts[-1])], parts[:-2]
     elif len(parts) >= 2 and _PACKAGED_HUB_BY_STEM.get(last) == parts[-2]:
         # ``.mailbox.router`` / ``sms_tool.mailbox.router``
         watched, qualifier = parts[-2], parts[:-2]

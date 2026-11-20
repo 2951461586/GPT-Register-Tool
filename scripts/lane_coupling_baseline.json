@@ -140,8 +140,9 @@
     "sms_tool.mailbox",
     "sms_tool.mailbox.router",
     "sms_tool.otp_strategy",
+    "sms_tool.phone",
+    "sms_tool.phone.registration",
     "sms_tool.phone_proxy",
-    "sms_tool.phone_registration",
     "sms_tool.registration",
     "sms_tool.registration.cancel",
     "sms_tool.registration.handlers",
@@ -154,7 +155,8 @@
     "sms_tool.registration_drivers.base",
     "sms_tool.registration_drivers.playwright",
     "sms_tool.sentinel_tokens",
-    "sms_tool.session_builder",
+    "sms_tool.session",
+    "sms_tool.session.builder",
     "sms_tool.utils"
   ]
 }

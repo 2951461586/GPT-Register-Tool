@@ -9,7 +9,7 @@ from sms_tool.accounts.account_identity import (
     resolve_account_proxy,
 )
 from sms_tool.registration.handlers import RegistrationEmailWorkflow
-from sms_tool.session_builder import build_session_file
+from sms_tool.session.builder import build_session_file
 
 
 def test_account_identity_reuses_registration_proxy_session_and_fingerprint():

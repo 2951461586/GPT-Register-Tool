@@ -29,7 +29,9 @@
     "registration": 3,
     "wallet": 4,
     "importers": 3,
-    "codex": 3
+    "codex": 3,
+    "session": 4,
+    "phone": 4
   },
   "module_overrides": {
     "accounts/account_models": 5,
@@ -69,7 +71,8 @@
     "payment/qualification": 4,
     "payment/qualification_batch": 3,
     "payment/qualification_states": 5,
-    "codex/sentinel": 4
+    "codex/sentinel": 4,
+    "phone/registration": 3
   },
   "root_modules": {
     "__main__.py": 2,
@@ -150,12 +153,12 @@
     "paypal/proxy.py": 5,
     "paypal/reconciliation.py": 3,
     "paypal/reverse.py": 3,
-    "phone_config.py": 4,
-    "phone_pool.py": 4,
-    "phone_provider_lifecycle.py": 4,
+    "phone/config.py": 4,
+    "phone/pool.py": 4,
+    "phone/provider_lifecycle.py": 4,
     "phone_proxy.py": 5,
-    "phone_registration.py": 3,
-    "phone_reuse.py": 4,
+    "phone/registration.py": 3,
+    "phone/reuse.py": 4,
     "pp_link_helpers.py": 5,
     "promotion_states.py": 5,
     "proxy/bridge.py": 5,
@@ -196,9 +199,9 @@
     "registration/state.py": 3,
     "registration/warmup.py": 3,
     "sentinel_tokens.py": 4,
-    "session_builder.py": 3,
-    "session_converter.py": 4,
-    "session_refresh.py": 4,
+    "session/builder.py": 3,
+    "session/converter.py": 4,
+    "session/refresh.py": 4,
     "sms_provider_adapter.py": 4,
     "sms_providers.py": 4,
     "sms_utils.py": 5,

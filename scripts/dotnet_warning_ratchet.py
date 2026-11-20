@@ -101,6 +101,7 @@ import locale
 import os
 import re
 import subprocess
+import tempfile
 import sys
 from collections import Counter
 from pathlib import Path
@@ -220,6 +221,25 @@ def run_build(targets: str = SOLUTION) -> tuple[list[tuple[str, str, int, int]],
             timeout=BUILD_TIMEOUT_SECONDS,
             env=env,
         )
+        # A local run can lose the NuGet global cache to another process holding
+        # the analyzer DLLs (measured 2026-11-20: a design-time build kept
+        # `*.SourceGeneration.dll` open, so every `-t:Rebuild` died with
+        # "Access to the path ... is denied" while the tree was fine). That is a
+        # lock, not a warning, so retry once against a private packages folder:
+        # the build is still a full Rebuild and the warning count is unchanged.
+        # A second failure still raises, so a genuinely broken build never looks
+        # clean.
+        if proc.returncode != 0 and b"is denied" in (proc.stdout + proc.stderr):
+            private_packages = Path(tempfile.gettempdir()) / "sms-workbench-nuget-verify"
+            retry = subprocess.run(
+                [*command, f"-p:RestorePackagesPath={private_packages}"],
+                cwd=str(ROOT),
+                capture_output=True,
+                timeout=BUILD_TIMEOUT_SECONDS,
+                env=env,
+            )
+            if retry.returncode == 0 or b"is denied" not in (retry.stdout + retry.stderr):
+                proc = retry
     except FileNotFoundError as exc:
         raise RuntimeError(f"dotnet is not installed or not on PATH: {exc}") from exc
     except subprocess.TimeoutExpired as exc:

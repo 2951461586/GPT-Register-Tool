@@ -1,0 +1,10 @@
+{
+  "package": "session",
+  "layer": 4,
+  "root_package_init": false,
+  "modules": {
+    "session_builder": "builder",
+    "session_converter": "converter",
+    "session_refresh": "refresh"
+  }
+}

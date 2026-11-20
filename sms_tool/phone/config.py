@@ -1,6 +1,6 @@
 """Configuration and API-key resolution for the phone-reuse provider registry.
 
-Split out of :mod:`sms_tool.phone_reuse` so the pool/lifecycle modules do not
+Split out of :mod:`sms_tool.phone.reuse` so the pool/lifecycle modules do not
 have to know how a provider key is spelled. Everything here is pure config
 reading: no network, no pool state.
 
@@ -16,8 +16,8 @@ from __future__ import annotations
 
 import os
 
-from . import sms_providers
-from .config import CFG
+from .. import sms_providers
+from ..config import CFG
 
 
 def _phone_reuse_cfg():

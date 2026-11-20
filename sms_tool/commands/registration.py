@@ -252,7 +252,7 @@ def registration_phone_pool(args: Any):
     if getattr(args, "no_phone_reuse", False) or getattr(args, "registration_at_only", False):
         return None
 
-    from ..phone_reuse import create_phone_pool, has_phone_reuse_config, print_phone_pool_status
+    from ..phone.reuse import create_phone_pool, has_phone_reuse_config, print_phone_pool_status
 
     explicit = bool(getattr(args, "phone_reuse", False))
     auto_enable = has_phone_reuse_config()

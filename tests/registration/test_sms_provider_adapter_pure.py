@@ -239,12 +239,12 @@ class DispatcherTests(unittest.TestCase):
     """
 
     def _adapter(self, provider):
-        from sms_tool import phone_reuse
+        from sms_tool.phone import reuse as phone_reuse
 
         return phone_reuse._sms_provider_adapter(phone_reuse.PhoneSlot(phone="+10000000000", provider=provider))
 
     def test_every_available_provider_routes_to_the_rental_adapter(self):
-        from sms_tool import phone_reuse
+        from sms_tool.phone import reuse as phone_reuse
 
         for key in sms_providers.available_provider_keys():
             with self.subTest(provider=key):
@@ -290,7 +290,7 @@ class DispatcherTests(unittest.TestCase):
         self.assertFalse(synthetic.is_rental)
 
     def test_a_bare_slot_routes_to_the_default_provider(self):
-        from sms_tool import phone_reuse
+        from sms_tool.phone import reuse as phone_reuse
 
         adapter = phone_reuse._sms_provider_adapter(phone_reuse.PhoneSlot(phone="+10000000000"))
         self.assertIsInstance(adapter, phone_reuse._RentalSmsProviderAdapter)

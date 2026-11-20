@@ -4,11 +4,11 @@
       "reason": "deferred",
       "why": "CPA 导出导入器 (2026-11-19): the sessions directory is resolved from the runtime config only when an import actually runs, so `kernel.paths` (and the config it reads for the default output directory) is not part of importing this module. Deferring also keeps the frozen `accounts -> sms_tool/kernel` pair count unchanged."
     },
-    "sms_tool/accounts/account_import.py -> sms_tool.session_builder": {
+    "sms_tool/accounts/account_import.py -> sms_tool.session.builder": {
       "reason": "deferred",
       "why": "CPA 导出导入器 (2026-11-19): the importer is a leaf reached only from `--import-account-json`, and `accounts -> sms_tool` is a frozen module-level pair count (scripts/import_layer_ratchet.py). Importing build_session_file inside the function keeps that count intact and keeps `import sms_tool.accounts.account_import` free of the session/converter/storage stack."
     },
-    "sms_tool/accounts/account_import.py -> sms_tool.session_converter": {
+    "sms_tool/accounts/account_import.py -> sms_tool.session.converter": {
       "reason": "deferred",
       "why": "CPA 导出导入器 (2026-11-19): the importer is a leaf reached only from `--import-account-json`, and `accounts -> sms_tool` is a frozen module-level pair count (scripts/import_layer_ratchet.py). Importing parse_jwt_payload inside the function keeps that count intact and keeps `import sms_tool.accounts.account_import` free of the session/converter/storage stack."
     },
@@ -300,15 +300,15 @@
       "reason": "deferred",
       "why": "Sentinel SDK 在线刷新 (2026-11-19): the download cache lives under the configured runtime directory, which only the refresh path needs. Deferring keeps `import sms_tool.sentinel.bundle` free of the config/kernel stack so the offline selfcheck and the pinned-hash guard stay cheap."
     },
-    "sms_tool/session_refresh.py -> base64": {
+    "sms_tool/session/refresh.py -> base64": {
       "reason": "deferred",
       "why": "the refresh/decode helpers import the stdlib helper where the token body is parsed, so account-health callers that only probe a token never pay for the decode path"
     },
-    "sms_tool/session_refresh.py -> json": {
+    "sms_tool/session/refresh.py -> json": {
       "reason": "deferred",
       "why": "the refresh/decode helpers import the stdlib helper where the token body is parsed, so account-health callers that only probe a token never pay for the decode path"
     },
-    "sms_tool/session_refresh.py -> time": {
+    "sms_tool/session/refresh.py -> time": {
       "reason": "deferred",
       "why": "the refresh/decode helpers import the stdlib helper where the token body is parsed, so account-health callers that only probe a token never pay for the decode path"
     },

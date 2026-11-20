@@ -499,7 +499,7 @@ class NoHardcodedProviderOutsideTheCatalogTests(unittest.TestCase):
     """供应商键只能来自注册表，不能出现在业务逻辑里。
 
     2026-09-22 实测出三处同源缺陷，形态各不相同但根因一致 —— 把厂商名当成
-    逻辑里的取值：``phone_reuse.py`` 的 12 个 ``provider == "smsbower"`` 守卫、
+    逻辑里的取值：``phone/reuse.py`` 的 12 个 ``provider == "smsbower"`` 守卫、
     ``_should_retry_with_new_provider_number`` 把 ``"smsbower_prepare_failed"``
     写进错误集合、以及 ``BackendCommandPlanner`` 的 ``"--phone-source", "smsbower"``。
 

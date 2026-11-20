@@ -1294,7 +1294,7 @@ def test_refresh_token_recovery_verifies_before_persisting():
             "probe_account_liveness",
             return_value={"ok": True, "status": "active", "status_code": 200},
         ) as probe,
-        patch("sms_tool.session_refresh._save_refreshed", return_value="session.json") as save,
+        patch("sms_tool.session.refresh._save_refreshed", return_value="session.json") as save,
     ):
         result = account_recovery.relogin_refresh_token_account(account)
 
@@ -1325,7 +1325,7 @@ def test_refresh_token_recovery_rejects_unverified_candidate():
             "probe_account_liveness",
             return_value={"ok": False, "status": "token_invalid", "status_code": 401},
         ),
-        patch("sms_tool.session_refresh._save_refreshed") as save,
+        patch("sms_tool.session.refresh._save_refreshed") as save,
     ):
         result = account_recovery.relogin_refresh_token_account(account)
 
@@ -1341,9 +1341,9 @@ def test_web_session_rejects_a_cookie_for_another_account():
         "auth_session": {"user": {"email": "other@example.com"}},
     }
     with (
-        patch("sms_tool.session_refresh._refresh_session_protocol", return_value={"ok": True, "data": candidate}),
+        patch("sms_tool.session.refresh._refresh_session_protocol", return_value={"ok": True, "data": candidate}),
         patch.object(account_recovery, "probe_account_liveness") as probe,
-        patch("sms_tool.session_refresh._save_refreshed") as save,
+        patch("sms_tool.session.refresh._save_refreshed") as save,
     ):
         result = account_recovery.relogin_web_session_account({"email": "ok@example.com"})
 
@@ -1551,7 +1551,7 @@ def test_browser_recovery_uses_driver_from_browser_identity():
             "probe_account_liveness",
             return_value={"ok": True, "status": "active", "status_code": 200},
         ),
-        patch("sms_tool.session_refresh._save_refreshed", return_value="session.json"),
+        patch("sms_tool.session.refresh._save_refreshed", return_value="session.json"),
     ):
         result = account_recovery.relogin_browser_session_account(account)
 
