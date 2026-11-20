@@ -1,0 +1,10 @@
+{
+  "package": "importers",
+  "layer": 3,
+  "root_package_init": false,
+  "modules": {
+    "cpa_import": "cpa",
+    "sub2api_import": "sub2api",
+    "import_targets": "targets"
+  }
+}

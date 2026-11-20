@@ -124,7 +124,7 @@
     ],
     "Agent Identity / explicit import": [
       "sms_tool/agent_identity.py",
-      "sms_tool/sub2api_import.py"
+      "sms_tool/importers/sub2api.py"
     ],
     "Workspace compatibility": [
       "sms_tool/k12_client.py",
@@ -188,10 +188,9 @@
       "sms_tool/account_seed.py",
       "sms_tool/storage.py",
       "sms_tool/codex_export.py",
-      "sms_tool/cpa_import.py",
-      "sms_tool/sub2api_import.py",
+      "sms_tool/importers/sub2api.py",
       "sms_tool/session_converter.py",
-      "sms_tool/import_targets.py"
+      "sms_tool/importers/*.py"
     ],
     "Email change workflow": [
       "sms_tool/accounts/account_email_change.py",

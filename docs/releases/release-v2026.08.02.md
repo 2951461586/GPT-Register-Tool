@@ -18,7 +18,7 @@ account health, registration concurrency, and desktop payment-method metadata.
   `/backend-api/wham/usage` probe, response classification, and quota parsing.
 - Added `sms_tool.account_recovery` for local quota refresh persistence,
   explicit HTTP-401 OAuth recovery, and permanent-deactivation handling.
-- Reduced `sms_tool.cpa_import` to CPA listing, remote quota proxying, payload
+- Reduced `sms_tool.importers.cpa` to CPA listing, remote quota proxying, payload
   conversion, and upload responsibilities.
 - Added `sms_tool.registration.concurrency` so resource admission and wait
   metrics are independent from registration progress persistence.

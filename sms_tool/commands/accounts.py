@@ -59,7 +59,7 @@ def import_sessions_kwargs(args: Any, *, include_workers: bool = True) -> dict[s
 
 
 def import_registered_accounts(args: Any, emails: list[str]) -> None:
-    from ..import_targets import import_account_sessions
+    from ..importers.targets import import_account_sessions
 
     emails = [str(email or "").strip() for email in emails if str(email or "").strip()]
     if not emails:
@@ -171,7 +171,7 @@ def importable_account_rows(ctx: AccountCommandContext) -> list[dict[str, Any]]:
 
 
 def import_cpa(args: Any, ctx: AccountCommandContext) -> None:
-    from ..import_targets import import_account_session, import_account_sessions
+    from ..importers.targets import import_account_session, import_account_sessions
 
     emails = read_email_file(args.email_file)
     if args.email:
@@ -200,7 +200,7 @@ def import_cpa(args: Any, ctx: AccountCommandContext) -> None:
     if not result.get("ok"):
         raise SystemExit(3)
     try:
-        from ..cpa_import import refresh_cpa_quota_statuses
+        from ..importers.cpa import refresh_cpa_quota_statuses
 
         quota_emails = (
             emails
@@ -291,7 +291,7 @@ def check_promotion(args: Any, ctx: AccountCommandContext) -> None:
 
 def refresh_cpa_quota(args: Any, ctx: AccountCommandContext) -> None:
     from ..accounts.recovery_batch import refresh_local_quota_statuses
-    from ..cpa_import import refresh_cpa_quota_statuses
+    from ..importers.cpa import refresh_cpa_quota_statuses
 
     if bool(getattr(args, "mailbox_pool_repaired", False)):
         from ..mailbox.quarantine import mark_mailbox_pool_repaired

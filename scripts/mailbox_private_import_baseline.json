@@ -94,7 +94,7 @@
         "sms_tool/commands/mailbox_ops.py:session_refresh._load_seed_session",
         "sms_tool/commands/one_click.py:session_refresh._load_seed_session",
         "sms_tool/commands/payment.py:session_refresh._load_seed_session",
-        "sms_tool/cpa_import.py:session_refresh._load_seed_session",
+        "sms_tool/importers/cpa.py:session_refresh._load_seed_session",
         "sms_tool/paypal/flow_steps.py:session_refresh._poll_auth_session",
         "sms_tool/paypal/flow_steps.py:session_refresh._session_token"
       ],
@@ -107,7 +107,7 @@
         "sms_tool/commands/mailbox_ops.py": 1,
         "sms_tool/commands/one_click.py": 1,
         "sms_tool/commands/payment.py": 1,
-        "sms_tool/cpa_import.py": 1,
+        "sms_tool/importers/cpa.py": 1,
         "sms_tool/paypal/flow_steps.py": 2
       },
       "total": 15

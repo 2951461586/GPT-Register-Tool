@@ -8,17 +8,17 @@ from pathlib import Path
 from curl_cffi import CurlMime
 from curl_cffi import requests as curl_requests
 
-from .accounts.account_liveness import (
+from ..accounts.account_liveness import (
     CODEX_QUOTA_HEADERS,
     CODEX_USAGE_URL,
     chatgpt_id_from_token as _extract_chatgpt_account_id_from_token,
     quota_result_from_payload,
 )
-from .codex_export import build_codex_json
-from .config import CFG
-from .kernel.paths import output_dir
-from .session_refresh import _load_seed_session
-from .storage import get_account_record, list_paypal_accounts, mark_quota_status, upsert_account
+from ..codex_export import build_codex_json
+from ..config import CFG
+from ..kernel.paths import output_dir
+from ..session_refresh import _load_seed_session
+from ..storage import get_account_record, list_paypal_accounts, mark_quota_status, upsert_account
 from typing import Any
 
 
@@ -146,7 +146,7 @@ def import_cpa_sessions(
     # one, so it could never run. It referenced `import_result`, `skipped` and
     # `auth_files_result`, none of which exist in this function - clearly copied
     # from the auth-files path. No caller reads `emails` / `skipped` / `source`
-    # off this result (`import_targets.py` forwards it wholesale), so dropping it
+    # off this result (`importers/targets.py` forwards it wholesale), so dropping it
     # changes nothing at runtime and stops those names reading as live code.
     return {
         "ok": ok_count == len(emails),

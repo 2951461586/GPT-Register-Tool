@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from sms_tool import cpa_import
+from sms_tool.importers import cpa as cpa_import
 
 
 class CpaImportTests(unittest.TestCase):

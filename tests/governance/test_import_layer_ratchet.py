@@ -473,10 +473,10 @@ def test_summary_facts_are_pinned():
         # the package that owns the dependency instead of the phone lane it was
         # borrowed through, and ``lane_coupling_ratchet`` shows the payoff:
         # payment -> registration fell from 15 edges to 7.
-        "total_module_edges": 504,
-        "ordered_pairs": 85,
+        "total_module_edges": 512,
+        "ordered_pairs": 88,
         "mutual_pairs": 18,
-        "minority_edges": 48,
+        "minority_edges": 47,
         # 2026-10-21: 188 -> 190 when the provider ports seam (providers/ports.py)
         # took over the mailbox_pool_writer and desktop_ipc imports as delayed
         # ones. Before that, 190 -> 188 when store/connection.py stopped

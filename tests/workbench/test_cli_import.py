@@ -3,7 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from sms_tool import cli
-from sms_tool.import_targets import normalize_import_target, target_label
+from sms_tool.importers.targets import normalize_import_target, target_label
 
 
 def _args(target="cpa"):
@@ -43,7 +43,7 @@ class CliImportTests(unittest.TestCase):
 
         with patch.object(cli, "list_paypal_accounts", return_value=rows):
             with patch(
-                "sms_tool.import_targets.import_account_sessions",
+                "sms_tool.importers.targets.import_account_sessions",
                 return_value={
                     "ok": True,
                     "total": 3,
@@ -70,7 +70,7 @@ class CliImportTests(unittest.TestCase):
 
         with patch.object(cli, "list_paypal_accounts", return_value=rows):
             with patch(
-                "sms_tool.import_targets.import_account_sessions",
+                "sms_tool.importers.targets.import_account_sessions",
                 return_value={
                     "ok": True,
                     "total": 1,

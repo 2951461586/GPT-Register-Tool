@@ -229,7 +229,7 @@
       "broad": 2,
       "silent": 1
     },
-    "sms_tool/cpa_import.py": {
+    "sms_tool/importers/cpa.py": {
       "broad": 9,
       "silent": 1
     },
@@ -717,7 +717,7 @@
       "broad": 5,
       "silent": 1
     },
-    "sms_tool/sub2api_import.py": {
+    "sms_tool/importers/sub2api.py": {
       "broad": 8,
       "silent": 1
     },

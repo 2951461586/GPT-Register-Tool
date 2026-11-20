@@ -134,6 +134,30 @@ python -m pytest -q -n 4 --dist loadfile --cov=sms_tool --cov=services --cov-rep
 `external_sessions/managed.py` 是这个形状的正面例：`close` 保持静默（幂等），而
 `delete` 三次重试后仍然失败时 `logger.warning` 留痕，因为孤儿 profile 会占满额度。
 
+## 测试风格：`unittest` 只减不增（2026-11-20）
+
+套件里两种风格并存：**175 个文件**声明 `unittest.TestCase`，261 个用 pytest 函数。
+pytest 两种都跑，所以没有任何门禁看见这个分裂——代价只在失败时显现：
+`unittest` 类**拿不到 pytest fixture**（`monkeypatch` / `tmp_path` / `caplog` /
+`request.addfinalizer` 全无），共享 setUp 只能手写，而且 `setUp` 自己抛错时 teardown
+**不会执行**；`self.assertEqual` 也不享受 pytest 的断言重写。
+
+一次性转换 175 个文件是本仓明确视为「不可验证」的那类改动：一个丢掉 `setUp` 的
+codemod 会让测试**空转通过**。所以 `scripts/unittest_style_ratchet.py` 把**每个目录**
+的数量冻结，只允许下降；每个目录各自迁移。
+
+**迁移配方**（以 `tests/config/test_logging_crash_hooks.py` 为样板，2026-11-20）：
+
+1. 类的 `setUp` + `addCleanup` → 一个 `@pytest.fixture`，用 `try/finally`（或 `yield`）
+   把恢复路径写在 `finally` 里，这样**测试失败时也会恢复**全局状态；
+2. `self.assertX(...)` → 裸 `assert`（pytest 会重写它，失败时打印中间值）；
+3. `assertRaises` → `pytest.raises`；`params` 化的用例 → `@pytest.mark.parametrize`；
+4. 原类继承共享基类的情况：基类里的状态放进 fixture，子类退化成同文件里的两组测试；
+5. **测试数必须不变**（迁移前后跑同一个文件，数量对得上才算完成）。
+
+迁移完一个目录，跑 `python scripts/unittest_style_ratchet.py --update-baseline` 把该目录
+的数字下调（`--detail` 看逐目录表）。新增目录没有基线条目会直接失败。
+
 ## 门禁脚本
 
 前三套 ratchet 共用一套做法（先冻结、再加预算或逐条白名单化、只许降不许升）；第四套不冻结计数，而是要求每个开关带一个决定：

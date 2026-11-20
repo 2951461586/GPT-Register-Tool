@@ -27,7 +27,8 @@
     "mailbox": 3,
     "payment": 5,
     "registration": 3,
-    "wallet": 4
+    "wallet": 4,
+    "importers": 3
   },
   "module_overrides": {
     "accounts/account_models": 5,
@@ -92,7 +93,7 @@
     "codex_phone.py": 3,
     "codex_sentinel.py": 4,
     "config_usage.py": 2,
-    "cpa_import.py": 3,
+    "importers/cpa.py": 3,
     "cross_process_gate.py": 5,
     "desktop_ipc.py": 5,
     "desktop_read.py": 1,
@@ -108,7 +109,7 @@
     "http_client.py": 5,
     "http_utils.py": 5,
     "humanize.py": 5,
-    "import_targets.py": 3,
+    "importers/targets.py": 3,
     "k12_client.py": 4,
     "k12_identity.py": 4,
     "logging_setup.py": 5,
@@ -202,7 +203,7 @@
     "smsbower.py": 4,
     "stdout_mirror.py": 1,
     "storage.py": 4,
-    "sub2api_import.py": 3,
+    "importers/sub2api.py": 3,
     "telemetry.py": 5,
     "tls_fingerprint.py": 5,
     "token_telemetry.py": 5,

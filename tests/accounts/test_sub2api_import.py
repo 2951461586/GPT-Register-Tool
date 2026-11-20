@@ -2,8 +2,8 @@ import json
 import unittest
 from unittest.mock import patch
 
-from sms_tool import sub2api_import
-from sms_tool import import_targets
+from sms_tool.importers import sub2api as sub2api_import
+from sms_tool.importers import targets as import_targets
 
 
 class Sub2ApiImportTests(unittest.TestCase):

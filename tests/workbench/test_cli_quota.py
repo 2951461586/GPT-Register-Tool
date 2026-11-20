@@ -96,7 +96,7 @@ class CliQuotaTests(unittest.TestCase):
         }
         with (
             patch("sms_tool.accounts.recovery_batch.refresh_local_quota_statuses", return_value=local),
-            patch("sms_tool.cpa_import.refresh_cpa_quota_statuses") as fallback,
+            patch("sms_tool.importers.cpa.refresh_cpa_quota_statuses") as fallback,
             redirect_stdout(io.StringIO()),
         ):
             with self.assertRaises(SystemExit) as raised:
@@ -120,7 +120,7 @@ class CliQuotaTests(unittest.TestCase):
         fallback_result = {"ok": False, "success": 1, "failed": 1, "results": []}
         with (
             patch("sms_tool.accounts.recovery_batch.refresh_local_quota_statuses", return_value=local),
-            patch("sms_tool.cpa_import.refresh_cpa_quota_statuses", return_value=fallback_result) as fallback,
+            patch("sms_tool.importers.cpa.refresh_cpa_quota_statuses", return_value=fallback_result) as fallback,
             redirect_stdout(io.StringIO()),
         ):
             with self.assertRaises(SystemExit) as raised:

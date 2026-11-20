@@ -9,7 +9,8 @@ from unittest.mock import patch
 from nacl.public import SealedBox
 from nacl.signing import SigningKey
 
-from sms_tool import agent_identity, sub2api_import
+from sms_tool import agent_identity
+from sms_tool.importers import sub2api as sub2api_import
 
 
 def _jwt(claims):

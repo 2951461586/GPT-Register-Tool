@@ -17,6 +17,10 @@ Two properties matter and are both pinned below:
 
 ``KeyboardInterrupt`` is excluded on purpose: Ctrl-C is a normal stop, and
 logging it as a crash would make every cancelled run look like a fault.
+
+pytest style since 2026-11-20 (`unittest.TestCase` -> fixture): the shared setUp
+became the ``hooks`` fixture, so the two former classes are simply two groups of
+tests over the same state, and the restore path runs even when a test fails.
 """
 
 from __future__ import annotations
@@ -24,7 +28,10 @@ from __future__ import annotations
 import logging
 import sys
 import threading
-import unittest
+from dataclasses import dataclass, field
+from unittest import mock
+
+import pytest
 
 from sms_tool import logging_setup
 
@@ -41,40 +48,23 @@ class _Capture(logging.Handler):
         return [getattr(record, "event", "") for record in self.records]
 
 
-class ExceptionHookTests(unittest.TestCase):
-    def setUp(self):
-        # The hooks are global; leaving them installed would leak into every
-        # later test in the session.
-        self._saved_excepthook = sys.excepthook
-        self._saved_thread_hook = threading.excepthook
-        self._saved_installed_flag = logging_setup._HOOKS_INSTALLED[0]
-        self.addCleanup(self._restore_globals)
+@dataclass
+class HookState:
+    """What the former ``setUp`` installed, plus the spies the tests assert on."""
 
-        self.capture = _Capture()
-        crash_logger = logging.getLogger("sms_tool.crash")
-        crash_logger.addHandler(self.capture)
-        self.addCleanup(crash_logger.removeHandler, self.capture)
+    saved_excepthook: object
+    saved_thread_hook: object
+    saved_installed_flag: bool
+    capture: _Capture
+    previous_calls: list[tuple] = field(default_factory=list)
+    previous_thread_calls: list[object] = field(default_factory=list)
 
-        # Spy on the "previous" handlers so we can prove they still run.  Both
-        # are replaced, not just the main-thread one: leaving the default thread
-        # hook in place would print a traceback and make pytest raise its own
-        # PytestUnhandledThreadExceptionWarning.
-        self.previous_calls = []
-        self.previous_thread_calls = []
-        sys.excepthook = lambda *args: self.previous_calls.append(args)
-        threading.excepthook = lambda args: self.previous_thread_calls.append(args)
-
-    def _restore_globals(self):
-        sys.excepthook = self._saved_excepthook
-        threading.excepthook = self._saved_thread_hook
-        logging_setup._HOOKS_INSTALLED[0] = self._saved_installed_flag
-
-    def _install(self):
+    def install(self):
         logging_setup._HOOKS_INSTALLED[0] = False
         logging_setup._install_exception_hooks()
         return sys.excepthook
 
-    def _fire(self, exc: BaseException):
+    def fire(self, exc: BaseException) -> None:
         try:
             raise exc
         except type(exc):
@@ -83,62 +73,98 @@ class ExceptionHookTests(unittest.TestCase):
             sys.excepthook(exc_type, exc_value, exc_tb)
 
 
-class InstallationTests(ExceptionHookTests):
-    def test_the_hook_is_installed(self):
-        hook = self._install()
-        self.assertIsNot(hook, self._saved_excepthook)
+@pytest.fixture
+def hooks():
+    """Install the crash hooks over spies and restore every global on teardown.
 
-    def test_installing_twice_does_not_double_wrap(self):
-        first = self._install()
-        logging_setup._install_exception_hooks()
-        self.assertIs(sys.excepthook, first, "the hook must be idempotent")
-
-    def test_configure_logging_installs_the_hooks_even_when_already_configured(self):
-        """A process that configured logging elsewhere still needs the hooks."""
-        from unittest import mock
-
-        logging_setup._HOOKS_INSTALLED[0] = False
-        with mock.patch.object(logging_setup, "_CONFIGURED", True):
-            logging_setup.configure_logging()
-        self.assertTrue(logging_setup._HOOKS_INSTALLED[0])
-        self.assertIsNot(sys.excepthook, self._saved_excepthook)
-
-
-class CrashRecordTests(ExceptionHookTests):
-    def test_an_uncaught_exception_is_logged_as_a_critical_record(self):
-        self._install()
-        self._fire(ValueError("boom"))
-
-        crashes = [r for r in self.capture.records if getattr(r, "event", "") == "uncaught_exception"]
-        self.assertEqual(len(crashes), 1)
-        self.assertEqual(crashes[0].levelno, logging.CRITICAL)
-        self.assertIn("boom", crashes[0].getMessage())
-        self.assertIsNotNone(crashes[0].exc_info, "the traceback must travel with the record")
-
-    def test_the_previous_hook_still_runs(self):
-        self._install()
-        self._fire(KeyError("kept"))
-        self.assertEqual(len(self.previous_calls), 1, "the stderr channel must survive")
-
-    def test_keyboard_interrupt_is_not_logged_as_a_crash(self):
-        self._install()
-        self._fire(KeyboardInterrupt())
-
-        self.assertNotIn("uncaught_exception", self.capture.events())
-        self.assertEqual(len(self.previous_calls), 1, "Ctrl-C must still reach the original hook")
-
-    def test_a_thread_exception_is_logged(self):
-        self._install()
-        thread = threading.Thread(target=lambda: None, name="worker-7")
-        threading.excepthook(threading.ExceptHookArgs((ValueError, ValueError("thread boom"), None, thread)))
-        self.assertIn("uncaught_thread_exception", self.capture.events())
-
-    def test_the_original_thread_hook_still_runs(self):
-        self._install()
-        thread = threading.Thread(target=lambda: None, name="worker-8")
-        threading.excepthook(threading.ExceptHookArgs((ValueError, ValueError("x"), None, thread)))
-        self.assertEqual(len(self.previous_thread_calls), 1, "the original thread channel must survive")
+    The hooks are process-global; leaving them installed would leak into every
+    later test in the session. Both the main-thread and the thread hook are
+    replaced: leaving the default thread hook in place would print a traceback
+    and make pytest raise its own ``PytestUnhandledThreadExceptionWarning``.
+    """
+    state = HookState(
+        saved_excepthook=sys.excepthook,
+        saved_thread_hook=threading.excepthook,
+        saved_installed_flag=logging_setup._HOOKS_INSTALLED[0],
+        capture=_Capture(),
+    )
+    crash_logger = logging.getLogger("sms_tool.crash")
+    crash_logger.addHandler(state.capture)
+    sys.excepthook = lambda *args: state.previous_calls.append(args)
+    threading.excepthook = lambda args: state.previous_thread_calls.append(args)
+    try:
+        yield state
+    finally:
+        sys.excepthook = state.saved_excepthook
+        threading.excepthook = state.saved_thread_hook
+        logging_setup._HOOKS_INSTALLED[0] = state.saved_installed_flag
+        crash_logger.removeHandler(state.capture)
 
 
-if __name__ == "__main__":
-    unittest.main()
+# ---------------------------------------------------------------------------
+# Installation
+# ---------------------------------------------------------------------------
+
+
+def test_the_hook_is_installed(hooks):
+    hook = hooks.install()
+    assert hook is not hooks.saved_excepthook
+
+
+def test_installing_twice_does_not_double_wrap(hooks):
+    first = hooks.install()
+    logging_setup._install_exception_hooks()
+    assert sys.excepthook is first, "the hook must be idempotent"
+
+
+def test_configure_logging_installs_the_hooks_even_when_already_configured(hooks):
+    """A process that configured logging elsewhere still needs the hooks."""
+    logging_setup._HOOKS_INSTALLED[0] = False
+    with mock.patch.object(logging_setup, "_CONFIGURED", True):
+        logging_setup.configure_logging()
+    assert logging_setup._HOOKS_INSTALLED[0]
+    assert sys.excepthook is not hooks.saved_excepthook
+
+
+# ---------------------------------------------------------------------------
+# The crash record itself
+# ---------------------------------------------------------------------------
+
+
+def test_an_uncaught_exception_is_logged_as_a_critical_record(hooks):
+    hooks.install()
+    hooks.fire(ValueError("boom"))
+
+    crashes = [record for record in hooks.capture.records if getattr(record, "event", "") == "uncaught_exception"]
+    assert len(crashes) == 1
+    assert crashes[0].levelno == logging.CRITICAL
+    assert "boom" in crashes[0].getMessage()
+    assert crashes[0].exc_info is not None, "the traceback must travel with the record"
+
+
+def test_the_previous_hook_still_runs(hooks):
+    hooks.install()
+    hooks.fire(KeyError("kept"))
+    assert len(hooks.previous_calls) == 1, "the stderr channel must survive"
+
+
+def test_keyboard_interrupt_is_not_logged_as_a_crash(hooks):
+    hooks.install()
+    hooks.fire(KeyboardInterrupt())
+
+    assert "uncaught_exception" not in hooks.capture.events()
+    assert len(hooks.previous_calls) == 1, "Ctrl-C must still reach the original hook"
+
+
+def test_a_thread_exception_is_logged(hooks):
+    hooks.install()
+    thread = threading.Thread(target=lambda: None, name="worker-7")
+    threading.excepthook(threading.ExceptHookArgs((ValueError, ValueError("thread boom"), None, thread)))
+    assert "uncaught_thread_exception" in hooks.capture.events()
+
+
+def test_the_original_thread_hook_still_runs(hooks):
+    hooks.install()
+    thread = threading.Thread(target=lambda: None, name="worker-8")
+    threading.excepthook(threading.ExceptHookArgs((ValueError, ValueError("x"), None, thread)))
+    assert len(hooks.previous_thread_calls) == 1, "the original thread channel must survive"
