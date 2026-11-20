@@ -120,7 +120,7 @@ EXPECTED_DIVERGENCES: dict[tuple[str, str], tuple[str, str]] = {
         "provider_io",
         "iDEAL dump naming/format is provider-owned",
     ),
-    # Kakao (9)
+    # Kakao (10)
     ("kakao/kakao_extract.py", "create_checkout"): (
         "provider_wire",
         "takes (session, token) instead of a prepared ChatGPT session and returns (cs_id, processor, data) "
@@ -157,6 +157,11 @@ EXPECTED_DIVERGENCES: dict[tuple[str, str], tuple[str, str]] = {
     ("kakao/kakao_extract.py", "stripe_init"): (
         "provider_wire",
         "different signature and body: ko-KR init payload returning (payload, stripe_js_id)",
+    ),
+    ("kakao/kakao_extract.py", "new_session"): (
+        "provider_io",
+        "no pre-proxy support and assigns session.proxies directly, bypassing the shared "
+        "normalize_proxy_url; delegating would change the proxy string Kakao sends",
     ),
     # MoMo (5)
     ("momo/momo_qr_extract.py", "create_checkout"): (
@@ -201,7 +206,7 @@ EXPECTED_DIVERGENCES: dict[tuple[str, str], tuple[str, str]] = {
 EXPECTED_CATEGORIES = {
     "provider_data": 6,
     "provider_state": 8,
-    "provider_io": 7,
+    "provider_io": 8,
     "provider_wire": 13,
 }
 

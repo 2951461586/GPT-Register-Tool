@@ -50,12 +50,12 @@ that duplication and a shared layer absorbs the parts proven provider-neutral:
 <!-- ratchet-numbers:begin payment -->
 | Extractor pair | AST-identical functions |
 | --- | ---: |
-| `ideal:blik` | 12 |
-| `ideal:twint` | 25 |
+| `ideal:blik` | 11 |
+| `ideal:twint` | 24 |
 | `momo:kakao` (negative control) | 0 |
-| `twint:blik` | 9 |
+| `twint:blik` | 8 |
 
-Same-named definitions against `common/`: **237 delegating**, **0 verbatim copies**, **34 deliberate forks**.
+Same-named definitions against `common/`: **243 delegating**, **0 verbatim copies**, **35 deliberate forks**.
 <!-- ratchet-numbers:end payment -->
 
 What deliberately stays per-extractor: anything whose *values* are provider

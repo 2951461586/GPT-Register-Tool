@@ -1,5 +1,7 @@
 # 立项：协议支付提取器公共骨架抽取（ideal / twint / blik）
 
+> **状态（2026-11-20 复核）**：阶段 1 已补 batch 10（会话/跳转簇，见 §11）；阶段 2 仍停在「需真机回放」——见 §11 末尾的「有意没做」。
+>
 > **状态（2026-10-28 复核）**：**阶段 2 第三个小批次（batch 9）已落地**。三边逐字节等价的
 > `create_checkout`（109 / 109 / 102 行，blik 的 7 行差只是一处 `dump_http` 折成单行）与
 > `warmup_approve_context`（22×3，连那个**从未被使用**的 `checkout_page_url` 参数都一样）
@@ -539,3 +541,49 @@ AST 相同（`stripe_init` 甚至逐字节相同），`blik` 有 3 个是纯参�
   `run_*` 仍属阶段 2。
 - 测试：`tests/payment` 1974 例（含 532 subtests）全过；两个 ratchet 的
   pinned-facts 测试与 `test_extractor_divergence_contract.py` 已同步更新。
+
+## 11. 阶段 1 补充批（✅ 已落地 2026-11-20，batch 10 — 会话/跳转簇）
+
+阶段 1 剩下的**纯传输层**部分：`new_session`（19 行，ideal/twint 相同、blik 只差
+一行）与 `fetch_redirect_page`（14 行，三个 provider 完全相同）。
+
+- 新建 `services/protocol-payment/common/session.py`：`new_session` 拥有
+  curl_cffi → `requests` 回退、`trust_env` 复位与前置代理的两条错误契约；
+  `fetch_redirect_page` 拥有 5 跳 `Location` 游走 + QR 候选收集。两个函数都不
+  分支于 provider。
+- **此前被刻意跳过的 blik `new_session` 这次一并收口**：batch 7 的记录写的是
+  「额外读 `IDEAL_USE_LOCAL_PROXY_ONLY`，迁移需要改变行为」。当时的注入形态是
+  **布尔**，所以确实会改变行为；本批注入的是**解析结果**
+  （`resolve_pre_proxy(use_pre_proxy)`），blik 的 `_resolve_pre_proxy` 原样保留
+  那道 env 闸门 ⇒ 行为零变化，闸门位置仍留在 blik 文件里供运维阅读。
+- **留在调用方的东西**（不是遗漏，是 Rule 19 的判据）：`set_proxy` /
+  `register_proxy_for_redaction`（每个 provider 拥有**自己的**脱敏注册表）、
+  `env_bool` / `dump_http` / `extract_qr_candidates`（各自的日志、dump 目录与
+  正则）、`*_FOLLOW_REDIRECT` 的**名字**（`IDEAL_` / `TWINT_`，blik 用 `IDEAL_`）。
+  hooks **每次调用重建**，不缓存成模块常量（Rule 23：缓存会把绑定冻结在 import
+  时刻，令 `monkeypatch.setattr(module, "dump_http", ...)` 静默失效）。
+- **差分验证**（`tests/payment/test_session_batch10_parity.py` +
+  冻结体 `tests/payment/stage1_batch10_head.py`，与 batch 9 的
+  `stage2_checkout_session_head.py` 同一手法）：3 provider × （代理空/非空 ×
+  pre-proxy 两条错误路径 × 跳转链 3 页）共 **22 例通过 / 2 例 skip**，比对
+  session 的 `proxies` / `trust_env` / 注册与 `set_proxy` 的**调用顺序**、
+  错误**文案**、返回的 URL 列表、`hop` 次数与 `dump_http` 的 stage 名。
+  变异证明：`test_the_blik_gate_is_still_live` 断言闸门开/关产生**不同** session
+  （`curl_options` 有无），闸门被删则本文件与大差分同时失效。
+- **ratchet 结果**：parity `ideal:twint 25→24`、`ideal:blik 12→11`、
+  `twint:blik 9→8`；decoupling `237→243 delegating`、`0 identical`、
+  `34→35 divergent`。
+- **为什么 divergent 又涨 1**：`common/` 拥有 `new_session` 这个名字之后，
+  **kakao 的** `new_session` 第一次可见——它不支持前置代理、并且直接写
+  `session.proxies`（绕过 `normalize_proxy_url`）。按 Rule 19 保留本地，登记在
+  `tests/payment/test_extractor_divergence_contract.py`（`provider_io`）并写明
+  收敛会改变发出的代理串；基线同 commit 上调。
+- **有意没做**：`build_chatgpt_session`（header 表正是三个 provider 的差异处：
+  ideal/twint 的 Safari/macOS + `oai-client-*` 对 blik 的 Chrome/Windows，抽出去
+  只是搬数据并改变线上 header 顺序）、`log`（每个模块自己的日志文件、锁与
+  durable logger）、`approve_*` / `stripe_*` / `build_ctx` / `update_checkout_promotion`
+  （阶段 2，需真机回放）、`print_*`（2–3 行的 IPC 契约薄封装，抽出来只是把名字
+  挪个地方）。
+- 测试：`tests/payment` **2298 passed / 3 skipped / 544 subtests**；`pyright`
+  0 error；`format_guard` / `architecture_scan` / `services_import_resolution`
+  （11 extractor → 23 common）/ `unused_import_ratchet` / `function_length` 全绿。

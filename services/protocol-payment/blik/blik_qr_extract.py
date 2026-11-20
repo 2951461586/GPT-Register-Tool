@@ -70,18 +70,16 @@ from urllib.parse import urljoin, urlparse
 
 import requests
 
-try:
-    from curl_cffi import CurlOpt
-    from curl_cffi.requests import Session as CurlCffiSession
-except ImportError:
-    CurlOpt = None
-    CurlCffiSession = None
-
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROTOCOL_ROOT = SCRIPT_DIR.parent
 if str(PROTOCOL_ROOT) not in sys.path:
     sys.path.insert(0, str(PROTOCOL_ROOT))
+from common.session import (
+    RedirectHooks as SharedRedirectHooks,
+    fetch_redirect_page as shared_fetch_redirect_page,
+    new_session as shared_new_session,
+)
 from common.checkout_session import (
     CheckoutHooks as SharedCheckoutHooks,
     create_checkout as shared_create_checkout,
@@ -1160,24 +1158,21 @@ def load_proxy_groups() -> tuple[list[str], list[str]]:
 
 
 def new_session(proxy: str = "", use_pre_proxy: bool = True) -> Any:
-    pre_proxy = "" if env_bool("IDEAL_USE_LOCAL_PROXY_ONLY", False) else (pre_proxy_url() if use_pre_proxy else "")
-    register_proxy_for_redaction(pre_proxy)
-    if CurlCffiSession is not None:
-        kwargs: dict[str, Any] = {"impersonate": "chrome136"}
-        if pre_proxy:
-            if CurlOpt is None:
-                raise RuntimeError("本机前置代理需要 curl_cffi 支持")
-            kwargs["curl_options"] = {CurlOpt.PRE_PROXY: pre_proxy}
-        session = CurlCffiSession(**kwargs)
-    else:
-        if pre_proxy:
-            raise RuntimeError("本机前置代理需要 curl_cffi：python3 -m pip install curl_cffi")
-        session = requests.Session()
-    if hasattr(session, "trust_env"):
-        session.trust_env = False
-    if proxy:
-        set_proxy(session, proxy)
-    return session
+    """Build a session through ``common/session.py`` (stage 1, batch 10)."""
+    return shared_new_session(
+        proxy,
+        use_pre_proxy,
+        resolve_pre_proxy=_resolve_pre_proxy,
+        set_proxy=set_proxy,
+        register_proxy_for_redaction=register_proxy_for_redaction,
+    )
+
+
+def _resolve_pre_proxy(use_pre_proxy: bool) -> str:
+    """blik may force a direct run: ``IDEAL_USE_LOCAL_PROXY_ONLY`` wins over the pre-proxy."""
+    if env_bool("IDEAL_USE_LOCAL_PROXY_ONLY", False):
+        return ""
+    return pre_proxy_url() if use_pre_proxy else ""
 
 
 def _redact_text(text: str, limit: int | None = None) -> str:
@@ -2142,19 +2137,17 @@ def poll_blik_status(
 
 
 def fetch_redirect_page(stripe: requests.Session, start_url: str) -> list[str]:
-    if not start_url or not env_bool("IDEAL_FOLLOW_REDIRECT", True):
-        return []
-    current = start_url
-    qr_urls: list[str] = []
-    for hop in range(1, 6):
-        resp = stripe.get(current, timeout=DEFAULT_TIMEOUT, allow_redirects=False)
-        dump_http(resp, f"redirect_hop_{hop}", None, "GET", current, force=True)
-        qr_urls.extend(extract_qr_candidates(resp.text))
-        location = resp.headers.get("location") or resp.headers.get("Location") or ""
-        if not location:
-            break
-        current = urljoin(current, location)
-    return list(dict.fromkeys(qr_urls))
+    """Follow redirects through ``common/session.py`` (stage 1, batch 10)."""
+    return shared_fetch_redirect_page(
+        stripe,
+        start_url,
+        SharedRedirectHooks(
+            env_bool=env_bool,
+            dump_http=dump_http,
+            extract_qr_candidates=extract_qr_candidates,
+            follow_flag="IDEAL_FOLLOW_REDIRECT",
+        ),
+    )
 
 
 def resolve_external_redirect(stripe: requests.Session, start_url: str) -> str:

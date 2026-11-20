@@ -187,12 +187,20 @@ def test_summary_facts_are_pinned():
     ko-KR payload, momo's is an eight-parameter proxy-rotating variant. Same
     call batch 7 made for their ``stripe_init``; both are pinned with a
     category and a reason in ``tests/payment/test_extractor_divergence_contract.py``.
+
+    2026-11-20 (stage-1 batch 10 "session cluster"): seven more delegations
+    (``new_session`` in ideal / twint / blik and ``fetch_redirect_page`` in the
+    same three onto ``common/session.py``, plus ``new_session`` in blik counted
+    here rather than there) and **one new registered fork** -- kakao's own
+    ``new_session``, which takes a required ``proxy``, has no pre-proxy support
+    and writes ``session.proxies`` directly, bypassing ``normalize_proxy_url``.
+    Same treatment: category + reason in the divergence contract.
     """
     assert pdr.analyze(ROOT).summary() == {
-        "same_named_total": 271,
-        pdr.DELEGATING: 237,
+        "same_named_total": 278,
+        pdr.DELEGATING: 243,
         pdr.IDENTICAL: 0,
-        pdr.DIVERGENT: 34,
+        pdr.DIVERGENT: 35,
         "files_with_frozen_pairs": 8,
     }
 
@@ -201,9 +209,9 @@ def test_the_migrated_extractors_have_no_verbatim_copies_left():
     """Pin the three migrated extractors so an inlining regression fails."""
     analysis = pdr.analyze(ROOT)
     expected_delegating = {
-        "ideal/ideal_qr_extract.py": 76,
-        "twint/twint_extract.py": 76,
-        "blik/blik_qr_extract.py": 74,
+        "ideal/ideal_qr_extract.py": 78,
+        "twint/twint_extract.py": 78,
+        "blik/blik_qr_extract.py": 76,
     }
     expected_divergent = {
         "ideal/ideal_qr_extract.py": 2,
@@ -235,11 +243,17 @@ def test_blik_carries_the_documented_divergent_bulk():
     which is the point: that batch converged copies, not forks. Batch 9
     (2026-10-28) moved ``create_checkout`` and ``warmup_approve_context`` onto
     ``common/checkout_session.py``: 74 delegating / 0 identical / 14 divergent,
-    again with the fork count untouched.
+    again with the fork count untouched. Batch 10 (2026-11-20) moved
+    ``new_session`` and ``fetch_redirect_page`` onto ``common/session.py``: 76
+    delegating / 0 identical / 14 divergent. ``new_session`` is the one function
+    batch 7 recorded as "deliberately not done" because blik gates its pre-proxy
+    behind ``IDEAL_USE_LOCAL_PROXY_ONLY``; batch 10 injects the *resolution*
+    rather than a boolean, so the gate survives (pinned by
+    ``tests/payment/test_session_batch10_parity.py``).
     """
     analysis = pdr.analyze(ROOT)
     counts = analysis.counts_for("blik/blik_qr_extract.py")
-    assert counts == {pdr.DELEGATING: 74, pdr.IDENTICAL: 0, pdr.DIVERGENT: 14}
+    assert counts == {pdr.DELEGATING: 76, pdr.IDENTICAL: 0, pdr.DIVERGENT: 14}
 
 
 def test_momo_shares_the_pure_primitives_and_keeps_its_forks():

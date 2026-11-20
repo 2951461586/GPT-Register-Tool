@@ -1,9 +1,9 @@
 {
-  "delegating": 237,
-  "divergent": 34,
+  "delegating": 243,
+  "divergent": 35,
   "files": {
     "blik/blik_qr_extract.py": {
-      "delegating": 74,
+      "delegating": 76,
       "divergent": 14,
       "identical": 0
     },
@@ -13,13 +13,13 @@
       "identical": 0
     },
     "ideal/ideal_qr_extract.py": {
-      "delegating": 76,
+      "delegating": 78,
       "divergent": 2,
       "identical": 0
     },
     "kakao/kakao_extract.py": {
       "delegating": 6,
-      "divergent": 9,
+      "divergent": 10,
       "identical": 0
     },
     "momo/ac_paylink_core.py": {
@@ -53,12 +53,12 @@
       "identical": 0
     },
     "twint/twint_extract.py": {
-      "delegating": 76,
+      "delegating": 78,
       "divergent": 2,
       "identical": 0
     }
   },
   "files_with_frozen_pairs": 8,
   "identical": 0,
-  "same_named_total": 271
+  "same_named_total": 278
 }
