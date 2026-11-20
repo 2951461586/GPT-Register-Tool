@@ -60,6 +60,17 @@ def mark_quota_status(email, quota_status="", quota_result=None, *, runtime_conf
         data["quota_status"] = str(quota_status or "")
         data["quota_updated_at"] = now
         verified_active = False
+        # No derived caches here. ``quota.last_result`` (written just above) is
+        # this lane's probe record and is refreshed on *every* verdict; the old
+        # writes of ``at_probe_status_code`` and a top-level ``token_probe`` were
+        # a second copy of the same fact that only moved on a 200 -- measured
+        # 2026-09-04, five rows kept ``token_probe.status_code=401`` /
+        # ``at_probe_status_code='401'`` long after a scan had verified the same
+        # AT with a 200, because a scan heals an account without going through
+        # this function. The payload field the grid reads is projected from the
+        # probe records at read time by
+        # ``desktop.read._access_token_probe_status_code``, which ranks them by
+        # timestamp, so nothing needs the stored copy.
         if isinstance(quota_result, dict):
             try:
                 verified_active = (
@@ -67,12 +78,6 @@ def mark_quota_status(email, quota_status="", quota_result=None, *, runtime_conf
                 )
             except (TypeError, ValueError):
                 verified_active = False
-            if verified_active:
-                data["at_probe_status_code"] = "200"
-                _raw_token_probe: object = data.get("token_probe")
-                token_probe: dict = _raw_token_probe if isinstance(_raw_token_probe, dict) else {}
-                token_probe.update({"ok": True, "status": "active", "status_code": 200, "updated_at": now})
-                data["token_probe"] = token_probe
         # A probe that just answered HTTP 200 answered for *this* account, so any
         # ``error`` the record still carries describes an attempt that is over.
         # Clearing it only when ``status='at_invalid'`` (the old rule) missed the

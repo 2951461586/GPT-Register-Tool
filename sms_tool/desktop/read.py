@@ -91,6 +91,14 @@ def _access_token_probe_status_code(data: dict[str, Any]) -> str:
     # Both account scans and quota refreshes persist probe results. Pick the
     # newest result so a successful relogin (quota HTTP 200) is not hidden by
     # an older account-scan HTTP 401.
+    #
+    # The top-level ``token_probe`` and ``scan.token_probe`` sources are legacy
+    # only: ``store.markers.mark_quota_status`` used to write the former as a
+    # second copy of its own ``quota.last_result``, refreshing it on a 200
+    # alone, which is how a 401 outlived the 200 that healed the account. Both
+    # writes are gone and ``scripts/repair_stale_probe_markers.py`` retired the
+    # stored copies; the sources stay so rows exported by an older build still
+    # resolve.
     sources = (
         (("account_scan", "token_probe"), ("account_scan_updated_at",), ("account_scan", "updated_at"), 4),
         (("token_probe",), ("token_probe", "updated_at"), (), 3),
