@@ -63,6 +63,10 @@ Directory layout (since 2026-09-06):
 
 ## Release notes（docs/releases/，一个发布标签一份，不回写）
 
+- [v2026.11.20 发布说明](releases/release-v2026.11.20.md) - 测活的两处状态不更新
+  （摘要说正常 / AT失效仍显示已注册）连带清掉 160 份重复机器字段，
+  协议传输可选后端与 curl_cffi 0.17.0 档位、Sentinel 版本对齐 + 可选刷新、
+  CPA 导出回导，以及发布改由 tag 触发。
 - [v2026.11.12 发布说明](releases/release-v2026.11.12.md) - requirements token 与真实
   `sdk.js` 逐槽对齐（随机环境探针、平台门控、页面时钟、Safari 编码），
   以及一次 10 账号线上验证（10/10 成功、AT 200、2FA、查优惠）。

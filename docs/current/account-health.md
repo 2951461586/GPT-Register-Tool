@@ -56,6 +56,30 @@ account.
   counted there. `正常 2/2，AT失效 2` is therefore a correct line (both healthy
   now, both entered the batch with a dead AT) — read `success` for health and
   `at_invalid` for "how many needed recovery".
+- **A verdict is written back to the row, in both directions.** A probe that
+  answers HTTP 200 retires the row's recorded `error` and turns a stored
+  `at_invalid` back into `registered`; a definitive 401 (or the `token_invalid`
+  label the probe produces) turns the row into `at_invalid`. One writer
+  (`store.markers.mark_quota_status`) and one definition of “definitive”
+  (`store.normalize._probe_is_token_invalid`): a transport failure
+  (`status: unknown`, `status_code: 0`) is neither, so a blocked exit never
+  marks an account dead, and a confirmed deactivation
+  (`account_deactivated` / `token_revoked`) is never downgraded by a later probe.
+  Both halves were missing until 2026-11-20 — the store only wrote
+  `quota_status`, which no grid column reads — so a batch could print
+  `正常 2，掉号 0，其他失败 0` while both rows showed `失败` (a stale
+  `web_session_access_token_probe_failed:unknown` left by a dead exit), and a
+  row whose AT had been revoked kept displaying `已注册`.
+- **`at_probe_status_code` is derived, not stored.** The row payload ranks the
+  probe records by timestamp (`desktop.read._access_token_probe_status_code`:
+  `account_scan.token_probe` → `token_probe` → `scan.token_probe` →
+  `quota.last_result`), so the AT badge always follows the newest observation.
+  Nothing reads a stored copy, and `mark_quota_status` no longer writes one:
+  the 2026-09-04 drift left five rows claiming 401 long after a scan had
+  verified the same token with a 200. `scripts/repair_stale_probe_markers.py`
+  (dry-run by default) retires such copies from `raw_json` and the session JSON
+  and refuses any row whose derived verdict would change — the cleanup may not
+  move a single badge.
 
 Promotion checks (`--check-promotion`) inspect the account plan and trial offer
 only. They never create Checkout and never enumerate payment methods; the

@@ -16,7 +16,7 @@
 
 GPT-Register-Tool combines a **WPF desktop client with a Python core** for email OTP registration, account and Session management, proxy configuration, payment-link extraction, and account export. Runtime data is stored locally by default and is not committed to Git.
 
-Current release notes: [v2026.11.12](./docs/releases/release-v2026.11.12.md).
+Current release notes: [v2026.11.20](./docs/releases/release-v2026.11.20.md).
 
 
 ## Sponsor

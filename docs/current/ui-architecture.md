@@ -296,6 +296,14 @@ Wpf.Ui.xaml -> Wpf.Ui Theme/Light.xaml -> Themes/Tokens.xaml -> Themes/Glyphs.xa
     `no_rt` / `missing` → danger。
   * 立项文档 `docs/audits/plans/plan-2026-10-25-wpf-row-status-decoupling.md` 状态改为
     已落地，落地记录见其文末。
+  * `at_probe_status_code` 是**读时推导**的字段，不是存储值：payload 由
+    `desktop.read._access_token_probe_status_code` 按时间戳在
+    `account_scan.token_probe` / `token_probe` / `scan.token_probe` /
+    `quota.last_result` 之间取最新的一条。2026-11-20 起 `mark_quota_status`
+    不再写任何拷贝（此前它只存 200，扫描治活账号不经它，于是 5 行的 401 拷贝
+    比 200 活得久）；`scripts/repair_stale_probe_markers.py` 清掉了存量拷贝，
+    且拒绝任何会让推导结果改变的行。状态列的同一轮修复见
+    [`current/account-health.md`](account-health.md) 的 Result semantics。
 
 ## 5. 主题与配色
 
