@@ -107,12 +107,19 @@ namespace SmsWorkbench
                     Integer("phone_send_retry_attempts", Loc.T("发码重试次数"), "phone_reuse.send_retry_attempts"),
                     Integer("phone_send_retry_delay_seconds", Loc.T("发码重试延迟秒"), "phone_reuse.send_retry_delay_seconds"),
                     Text("phone_state_file", Loc.T("状态文件"), "phone_reuse.state_file")),
+                // Three fields were removed here on 2026-11-20:
+                // `codex_oauth.registration_timeout`,
+                // `codex_oauth.require_registration_refresh_token` and
+                // `codex_oauth.require_registration_phone_verification`. No Python
+                // reader exists for any of them (`codex_oauth` only reads
+                // `allow_passwordless_takeover` / `auto_phone_verification`), and
+                // they were absent from `config.example.json`, so the dialog wrote
+                // settings that could not take effect. `test_settings_catalog_paths_parity.py`
+                // now fails when a field points at a path the example config does
+                // not declare.
                 Section("Codex OAuth",
-                    Integer("codex_registration_timeout", Loc.T("OAuth超时秒"), "codex_oauth.registration_timeout"),
                     Boolean("codex_allow_passwordless_takeover", Loc.T("允许邮箱OTP兜底"), "codex_oauth.allow_passwordless_takeover", false),
-                    Boolean("codex_auto_phone_verification", Loc.T("自动手机验证"), "codex_oauth.auto_phone_verification", false),
-                    Boolean("codex_require_registration_refresh_token", Loc.T("注册要求RT"), "codex_oauth.require_registration_refresh_token", true),
-                    Boolean("codex_require_registration_phone_verification", Loc.T("注册要求手机号"), "codex_oauth.require_registration_phone_verification", true)),
+                    Boolean("codex_auto_phone_verification", Loc.T("自动手机验证"), "codex_oauth.auto_phone_verification", false)),
                 Section(Loc.T("AT 稳定入库"),
                     Integer("registration_at_stability_probe_count", Loc.T("AT探测次数"), "registration.at_stability_probe_count", "2"),
                     Integer("registration_at_stability_probe_delay", Loc.T("探测间隔秒"), "registration.at_stability_probe_delay_seconds", "10"),

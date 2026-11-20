@@ -18,7 +18,7 @@ the *gate* (per-pair, only-down); this file is the *view*.
 | Measure | Value |
 | --- | ---: |
 | Modules | 336 |
-| Module-level import edges | 1083 |
+| Module-level import edges | 1082 |
 | Delayed (function-local) edges | 348 |
 | Type-only (`if TYPE_CHECKING`) edges | 71 |
 | Strongly connected components (size > 1) | 0 |
@@ -61,12 +61,12 @@ None.
 | `sms_tool.kernel.sanitizer` | 35 |
 | `sms_tool.kernel.paths` | 31 |
 | `sms_tool.auth_headers` | 24 |
-| `sms_tool.phone_proxy` | 23 |
+| `sms_tool.proxy.entry` | 19 |
 | `sms_tool.http_client` | 18 |
 | `sms_tool.operator_output` | 18 |
+| `sms_tool.phone_proxy` | 16 |
 | `sms_tool.providers` | 14 |
 | `sms_tool.storage` | 14 |
 | `sms_tool.checkout_contract` | 13 |
-| `sms_tool.proxy.entry` | 13 |
 | `sms_tool.registration_drivers.base` | 13 |
 | `sms_tool.payment.catalog` | 12 |

@@ -9,7 +9,7 @@ import uuid
 from typing import Any, Mapping
 
 from .gcash_provider import GCashProviderError, GCashTransportRequest
-from .phone_proxy import normalize_proxy_url
+from .proxy.entry import normalize_proxy_url
 from .kernel.sanitizer import sanitize_text
 from . import endpoints
 

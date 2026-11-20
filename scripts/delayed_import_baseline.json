@@ -249,7 +249,7 @@
     "sms_tool/payment/qualification.py -> sms_tool.config": "deferred",
     "sms_tool/payment/qualification.py -> sms_tool.geo": "deferred",
     "sms_tool/payment/qualification.py -> sms_tool.payment.wire": "deferred",
-    "sms_tool/payment/qualification.py -> sms_tool.phone_proxy": "deferred",
+    "sms_tool/payment/qualification.py -> sms_tool.proxy.entry": "deferred",
     "sms_tool/payment/qualification.py -> sms_tool.proxy.routing": "deferred",
     "sms_tool/payment/qualification_batch.py -> requests": "startup",
     "sms_tool/payment/qualification_batch.py -> sms_tool.batch_circuit_breaker": "deferred",
@@ -476,7 +476,7 @@
     "sms_tool/paypal/reverse.py": 2,
     "sms_tool/paypal_link/gen_link.py": 3,
     "sms_tool/phone_pool.py": 1,
-    "sms_tool/phone_proxy.py": 4,
+    "sms_tool/phone_proxy.py": 6,
     "sms_tool/phone_registration.py": 6,
     "sms_tool/phone_reuse.py": 4,
     "sms_tool/providers/mailbox_cfworker.py": 1,
@@ -537,5 +537,5 @@
     "startup": 115,
     "test-seam": 0
   },
-  "total": 517
+  "total": 519
 }

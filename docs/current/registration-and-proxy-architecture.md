@@ -132,16 +132,16 @@ Sentinel 不是纯 Python PoW，而是调用**真实 Node SDK**：
 - **单一模型**：`ProxyEntry` frozen dataclass（`proxy/entry.py:82`）—— 全项目的规范代理表示。
 - **六形式解析**：`parse_proxy()`（`proxy/entry.py:143`）处理 6 种代理 URL 写法。
 - **重建 / 重定 / 轮换**：
-  - `rebuild_proxy_credentials()`（`proxy/entry.py:399`）
-  - `retarget_region()`（`proxy/entry.py:420`）—— 重定出口地区
-  - `rotate_session()`（`proxy/entry.py:455`）—— 刷新 sticky session id
+  - `rebuild_proxy_credentials()`（`proxy/entry.py:496`）
+  - `retarget_region()`（`proxy/entry.py:517`）—— 重定出口地区
+  - `rotate_session()`（`proxy/entry.py:552`）—— 刷新 sticky session id
 - **供应商模板**：
   - **Cliproxy**：username `region-XX` + `-sid-<id>-t-<n>`
   - **9http / 9proxy**：username `geo-XX` + `-sid-<id>-ttl-<n>`。地区标签是 `geo` 而非 `region`，`_INFER_USER_REGION_RE` / `_USER_REGION_RE` 同时接受两种拼写；**重定地区时保留原标签**，否则 `geo-VN` 会被改写成供应商不认的 `region-US`。
   - **IPWO**：`custom_zone_XX`
   - **rola**：username `..._<sid>-country-XX`。地区标签是 `country`，`_REGION_TAG` 必须包含它，否则重定与会话轮换对它**静默 no-op**；`_ROLA_SID_RE` 用 lookbehind 取 `_` 与 `-country-XX` 之间的 sid。国家码**大小写不敏感**（实测 `country-US` 拿到 US 出口），重定后会被规范成大写。
   - **Kookeey**：password `BASE-CC-SESSION-TTL`，TTL 单位 `\d+[smhd]` 超集
-- **选池**：`load_proxy_pool()`（`proxy/entry.py:562`）/ `choose_proxy_entry()`（`proxy/entry.py:628`）。
+- **选池**：`load_proxy_pool()`（`proxy/entry.py:659`）/ `choose_proxy_entry()`（`proxy/entry.py:725`）。
 - **脱敏**：`masked` 去除凭据，日志/报告只显示脱敏串。
 - **池形态约束（以 `proxy.json` 为准）**：
   🔴 **2026-09-22 现状：单地区 VN、lajiao 10 条。** `proxy.registration` /
@@ -277,10 +277,10 @@ WPF 桌面端（`SmsWorkbench/`）通过 `PythonBackendClient` 启动 `python -m
 | `select_operation_proxy` | `proxy/routing.py:272` | 从统一候选序列选择操作代理 |
 | `ProxyEntry` | `proxy/entry.py:82` | 规范代理模型 |
 | `parse_proxy` | `proxy/entry.py:143` | 6 形式解析 |
-| `rebuild_proxy_credentials` | `proxy/entry.py:399` | 凭据重建 |
-| `retarget_region` | `proxy/entry.py:420` | 地区重定 |
-| `rotate_session` | `proxy/entry.py:455` | 会话轮换 |
-| `load_proxy_pool` / `choose_proxy_entry` | `proxy/entry.py:562` / `:628` | 选池 |
+| `rebuild_proxy_credentials` | `proxy/entry.py:496` | 凭据重建 |
+| `retarget_region` | `proxy/entry.py:517` | 地区重定 |
+| `rotate_session` | `proxy/entry.py:552` | 会话轮换 |
+| `load_proxy_pool` / `choose_proxy_entry` | `proxy/entry.py:659` / `:725` | 选池 |
 | `registration_network_preflight` | `registration/preflight.py:166` | 边界探活 |
 | `_resolve_proxy_scheme` | `registration/preflight.py:123` | socks5↔http 纠错 |
 | `shared_fingerprint_pool` | `fingerprint_pool.py:385` | 协议路径指纹池单例 |

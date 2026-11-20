@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ..phone_proxy import redact_proxy_text
+from ..proxy.entry import redact_proxy_text
 import contextlib
 from typing import Any
 from pathlib import Path

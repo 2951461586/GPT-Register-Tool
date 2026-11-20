@@ -3,16 +3,8 @@
   "registration_to_payment": [],
   "payment_to_registration": [
     [
-      "sms_tool.gcash_transport",
-      "sms_tool.phone_proxy"
-    ],
-    [
       "sms_tool.pay_link.adapters",
       "sms_tool.sentinel"
-    ],
-    [
-      "sms_tool.payment.qualification",
-      "sms_tool.phone_proxy"
     ],
     [
       "sms_tool.payment.wire",
@@ -24,31 +16,7 @@
     ],
     [
       "sms_tool.paypal.extract",
-      "sms_tool.phone_proxy"
-    ],
-    [
-      "sms_tool.paypal.extract",
       "sms_tool.sentinel"
-    ],
-    [
-      "sms_tool.paypal.proxy",
-      "sms_tool.phone_proxy"
-    ],
-    [
-      "sms_tool.paypal_link.gen_link",
-      "sms_tool.phone_proxy"
-    ],
-    [
-      "sms_tool.pp_link_helpers",
-      "sms_tool.phone_proxy"
-    ],
-    [
-      "sms_tool.upi_link.dump",
-      "sms_tool.phone_proxy"
-    ],
-    [
-      "sms_tool.upi_link.pipeline",
-      "sms_tool.phone_proxy"
     ],
     [
       "sms_tool.upi_link.sentinel",

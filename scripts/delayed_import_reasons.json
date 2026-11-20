@@ -158,7 +158,7 @@
     },
     "sms_tool/payment/qualification.py -> sms_tool.proxy.entry": {
       "reason": "deferred",
-      "why": "支付资格 country-aware probe (2026-10-26): the probe resolves the effective country from the measured exit and builds the checkout contract from the canonical catalogues. Both lookups run inside the probe so a payment-module import does not pull the geo/proxy/contract stack in, and the frozen payment -> sms_tool and payment -> proxy pairs stay flat."
+      "why": "Proxy authority (2026-11-20): the qualification probe imports the proxy string helpers inside its two use sites, so the payment lane gains no module-level edge to the proxy package and `import sms_tool.payment.qualification` stays free of the proxy stack. The names now come from proxy/entry (the single authority) instead of phone_proxy."
     },
     "sms_tool/payment/qualification.py -> sms_tool.proxy.routing": {
       "reason": "deferred",

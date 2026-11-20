@@ -1,6 +1,6 @@
 # ADR-0011: 代理脱敏 helper 的归属，与 `paypal_proxy` 包装链的取舍
 
-- Status: Accepted
+- Status: **Superseded in part (2026-11-20)** — the precondition it named has been met; see the amendment at the end.
 - Date: 2026-10-08
 
 ## 决定
@@ -103,3 +103,44 @@ Rule 19 已把 `redact_proxy_url` 记为**有意分叉**：
 - `docs/audits/plans/plan-2026-10-08-paypal-family-boundaries.md` P2（本 ADR 驳回其结论）
 - `sms_tool/phone_proxy.py:103,130,154`（定义）· `sms_tool/paypal/proxy.py:17,59,63,69`（包装）
 - `sms_tool/accounts/account_liveness.py:41`（另一条泳道的 1 元壳）
+
+---
+
+## Amendment (2026-11-20): the precondition is met, the definitions moved
+
+This ADR rejected "collapse the wrapper chain" because doing so would have
+silently *relocated* three definitions. It also named the correct precondition:
+
+> ① 把三个 helper 的定义迁入 `proxy_entry`（Rule 13 扩张）；
+> ② 重新评估 `account_liveness` / `paypal_proxy` 两个 1 元壳的默认值分叉（Rule 19）；
+> ③ 顺带统一 `paypal_extract` 的取用路径。三者必须同一批完成
+
+All three landed in one batch:
+
+1. **Definitions moved.** `normalize_proxy_url` / `redact_proxy_url` /
+   `redact_proxy_text` now live in `sms_tool/proxy/entry.py`. Rule 13's authority
+   list grew from five helpers to eight.
+2. **The 1-arg shells kept their defaults.** `phone_proxy.redact_proxy_url` keeps
+   `empty_placeholder="DIRECT"` and both lane shells (`paypal/proxy.py`,
+   `accounts/account_liveness.py`) still pin their own value. Nothing about the
+   Rule 19 divergences changed; they are now divergences *over a shared
+   definition* instead of over a definition plus two copies.
+3. **One take path.** `paypal/extract.py` no longer reaches `redact_proxy_url`
+   through `paypal_proxy`; every payment-lane module imports the authority.
+
+Consequences, measured:
+
+| Measure | Before | After |
+| --- | ---: | ---: |
+| `payment -> registration` lane edges | 15 | **7** (the documented `sentinel` / `auth_headers` allowances) |
+| `sms_tool/paypal -> sms_tool` module edges | 21 | 19 |
+| `sms_tool/paypal -> sms_tool/proxy` module edges | 0 | 2 |
+| `delayed_import` statements | 517 | 519 (2, reasoned) |
+
+`phone_proxy` keeps same-signature shells with **function-local** imports (the
+delayed-import shape it already had), so no import cycle appears and no caller
+or `patch.object(phone_proxy, ...)` target moved. The two 1-arg shells
+(`paypal/proxy.py:65,69`) are untouched.
+
+**Not part of this amendment:** the transport-stack question (`paypal/proxy.py`
+keeping a plain `requests` fallback) stays as ADR-0011 recorded it.

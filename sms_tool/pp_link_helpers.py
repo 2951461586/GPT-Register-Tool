@@ -24,7 +24,7 @@ import requests
 from .checkout_contract import CheckoutRequestContract, CheckoutSessionContract
 from .cross_process_gate import cross_process_write_lock
 from .kernel.paths import runtime_file
-from .phone_proxy import match_proxy_region, normalize_proxy_url
+from .proxy.entry import normalize_proxy_url, retarget_region
 
 from .paypal.proxy import (
     PayPalProxyState,
@@ -735,7 +735,7 @@ def proxy_for_country_template(template: str, country: str) -> str:
     """Replace a proxy template's region with the requested country.
 
     Region rewriting is delegated to the single-authority
-    :func:`phone_proxy.match_proxy_region` (→ ``proxy_entry.retarget_region``)
+    :func:`proxy_entry.retarget_region` (via ``proxy_entry.normalize_proxy_url``)
     so this helper inherits every provider template the canonical parser knows
     — ``region-XX`` (Cliproxy), ``geo-XX`` (9http), IPWO ``custom_zone_XX`` and
     the Kookeey ``BASE-CC-SESSION-TTL`` password shape.  It used to hard-code
@@ -759,7 +759,7 @@ def proxy_for_country_template(template: str, country: str) -> str:
     if not separator:
         return proxy
 
-    rewritten = match_proxy_region(proxy, country)
+    rewritten = retarget_region(normalize_proxy_url(proxy), country)
     if rewritten == proxy:
         # No provider template matched.  The ``-XX`` fallback can only fire for
         # a password-less proxy: ``rpartition("@")`` leaves ``:password`` at the

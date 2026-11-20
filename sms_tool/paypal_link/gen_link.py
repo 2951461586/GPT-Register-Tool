@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import Any
 
 from ..checkout_contract import PLUS_TRIAL_CAMPAIGN_ID, CheckoutRequestContract, CheckoutSessionContract
-from ..phone_proxy import normalize_proxy_url
+from ..proxy.entry import normalize_proxy_url
 from ..pp_link_helpers import (
     DEFAULT_STRIPE_PK,
     STRIPE_VERSION,

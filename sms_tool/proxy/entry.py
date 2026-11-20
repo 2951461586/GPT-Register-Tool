@@ -369,6 +369,103 @@ _IPWO_CUSTOM_ZONE_RE = re.compile(
 )
 
 
+# ── Proxy string helpers (moved here from ``phone_proxy`` on 2026-11-20) ─────
+#
+# ADR-0011 established that these three were *defined* in ``phone_proxy`` while
+# the parse/rewrite authority lives here, and that collapsing the wrapper chain
+# would require moving the definitions first. That precondition is now met: the
+# definitions live here, ``phone_proxy`` keeps same-signature delegating shells
+# (including ``empty_placeholder``'s two lane-specific defaults), and the payment
+# lane imports this module directly instead of borrowing the phone lane's name.
+# Rule 13 therefore covers six helpers, not five.
+
+
+def normalize_proxy_url(proxy: str | None, default_scheme: str = "http") -> str:
+    # ``None`` is accepted because every caller passes an optional configured
+    # value and the body already normalises it through ``str(proxy or "")``.
+    value = str(proxy or "").strip()
+    if not value:
+        return ""
+    # The unified single-authority parser first; fall back to the historical
+    # permissive logic (e.g. http proxy without a port) when the strict parser
+    # refuses (returns None) so behaviour stays backward-compatible.
+    entry = parse_proxy(value, default_scheme=default_scheme)
+    if entry is not None:
+        return proxy_to_url(entry)
+    scheme = ""
+    rest = value
+    if "://" in value:
+        scheme, rest = value.split("://", 1)
+    parts = rest.split(":")
+    # Provider UI often emits host:port:user:pass.  Convert it to the standard
+    # URL form expected by requests/curl_cffi/Playwright.
+    if "@" not in rest and len(parts) == 4 and "." in parts[0] and parts[1].isdigit():
+        host, port, user, password = parts
+        return f"{scheme or default_scheme}://{quote(user, safe='-._~')}:{quote(password, safe='-._~')}@{host}:{port}"
+    if not scheme:
+        return f"{default_scheme}://{rest}"
+    return value
+
+
+def redact_proxy_url(proxy: str | None, empty_placeholder: str = "DIRECT") -> str:
+    """Return a log-safe proxy URL with credentials replaced by ``***:***``.
+
+    ``empty_placeholder`` lets callers signal a missing proxy (``"DIRECT"`` for
+    paypal-proxy paths, ``""`` for phone-registration paths).
+    """
+    value = normalize_proxy_url(proxy or "")
+    if not value:
+        return empty_placeholder
+    try:
+        parsed = urlsplit(value)
+        host = parsed.hostname or ""
+        if not host:
+            return "***"
+        if ":" in host and not host.startswith("["):
+            host = f"[{host}]"
+        if parsed.port:
+            host = f"{host}:{parsed.port}"
+        auth = "***:***@" if parsed.username is not None else ""
+        return urlunsplit((parsed.scheme or "http", f"{auth}{host}", parsed.path, parsed.query, parsed.fragment))
+    except Exception:
+        return "***"
+
+
+def redact_proxy_text(value: Any, proxy: str | None = None) -> str:
+    """Redact proxy-credential substrings from an arbitrary text."""
+    text = str(value or "")
+    raw = str(proxy or "").strip()
+    normalized = normalize_proxy_url(proxy or "")
+    if normalized:
+        redacted_canonical = redact_proxy_url(normalized, empty_placeholder="")
+        if raw:
+            text = text.replace(raw, redacted_canonical)
+        # Replace both the exact normalized form and common suffix variants
+        # (trailing slash / ?query) that log paths usually carry.
+        text = text.replace(normalized, redacted_canonical)
+        if normalized.endswith("/"):
+            text = text.replace(normalized[:-1], redacted_canonical)
+    # Embedded ``protocol://user:pass@host`` patterns — keep scheme so the
+    # result is still recognisable as a proxy URL. The character class is greedy
+    # up to the **last** ``@`` inside the authority (``[^/\s]*`` cannot cross a
+    # path or whitespace), matching ``urlsplit`` — which splits at the last
+    # ``@`` — and ``proxy.entry._mask_credentials``. Keying on the first ``@``
+    # (``[^/@\s]+``) left the tail of a password containing ``@`` visible:
+    # ``http://alice:p@ss@host:1`` rendered as ``http://***:***@ss@host:1``.
+    text = re.sub(
+        r"(?i)\b((?:https?|socks5h?)://)[^/\s]*@",
+        r"\1***:***@",
+        text,
+    )
+    # ``host:port:user:pass`` form (4 colon-separated fields) — keep ``host:port``.
+    text = re.sub(
+        r"(?i)\b([a-z0-9.\-]+:\d+):[^\s'\"]+:[^\s'\"]+",
+        r"\1:***:***",
+        text,
+    )
+    return text
+
+
 def _random_session_id(length: int, *, digits_only: bool = False, avoid: str = "") -> str:
     """Random replacement id preserving the original length (min 1).
 

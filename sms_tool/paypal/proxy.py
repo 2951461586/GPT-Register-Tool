@@ -16,7 +16,7 @@ from urllib.parse import unquote, urlsplit
 import requests
 
 from ..cross_process_gate import cross_process_write_lock
-from ..phone_proxy import (
+from ..proxy.entry import (
     normalize_proxy_url as _normalize_proxy_url,
     redact_proxy_url as _canon_redact_proxy_url,
     redact_proxy_text as _canon_redact_proxy_text,
@@ -67,12 +67,12 @@ def normalize_proxy_url(proxy: str) -> str:
 
 
 def redact_proxy_url(proxy: str) -> str:
-    """Canonical (phone_proxy); preserved here for historical importers."""
+    """Canonical (``proxy/entry.py``); preserved here for historical importers."""
     return _canon_redact_proxy_url(proxy, empty_placeholder="DIRECT")
 
 
 def _redact_proxy_auth_text(value: Any) -> str:
-    """Redact inline proxy auth embedded in free-form log / error text (uses phone_proxy)."""
+    """Redact inline proxy auth embedded in free-form log / error text (``proxy/entry.py``)."""
     return _canon_redact_proxy_text(value)
 
 

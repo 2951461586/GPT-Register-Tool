@@ -3,7 +3,7 @@ from __future__ import annotations
 import contextlib
 from ..checkout_contract import PLUS_TRIAL_CAMPAIGN_ID
 from ..payment.wire import CURRENCY_MAP, _new_session
-from ..phone_proxy import redact_proxy_text
+from ..proxy.entry import redact_proxy_text
 from ..pp_link_helpers import CHATGPT_TIMEOUT, DEFAULT_STRIPE_PK, DEFAULT_TIMEOUT, STRIPE_VERSION
 from ..payment import egress as payment_egress
 from ..geo.resolver import resolve_proxy_geo

@@ -383,7 +383,7 @@ def _probe_kwargs(method: str, country: str) -> dict[str, Any]:
 
 
 def _scrub(error: Any, *proxies: str) -> str:
-    from ..phone_proxy import redact_proxy_url
+    from ..proxy.entry import redact_proxy_url
 
     text = str(error or "")[:300]
     for candidate in proxies:
@@ -870,7 +870,7 @@ def _select_proxy(
     signup egress" decision (``account_health.use_registration_affinity``).
     """
     from ..config import CFG
-    from ..phone_proxy import normalize_proxy_url
+    from ..proxy.entry import normalize_proxy_url
     from ..proxy.routing import select_operation_proxy_candidate
 
     selected = select_operation_proxy_candidate(

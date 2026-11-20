@@ -463,10 +463,20 @@ def test_summary_facts_are_pinned():
         # frozen ``registration -> sms_tool`` / root pair counts -- the trade the
         # failure text of this gate prescribes. All seven carry a reasoned entry
         # in ``scripts/delayed_import_reasons.json``.
-        "total_module_edges": 494,
-        "ordered_pairs": 78,
+        # 2026-11-20 (proxy authority): 494 -> 496 edges, 78 -> 80 pairs, 46 -> 48
+        # minority. ADR-0011's precondition was met: the three proxy string helpers
+        # moved from ``phone_proxy`` to ``proxy/entry.py`` (Rule 13 now covers six
+        # helpers, not five) and the payment lane imports the authority directly.
+        # ``paypal -> proxy`` gains 2, ``paypal_link -> proxy`` 1,
+        # ``upi_link -> proxy`` 2; ``paypal -> sms_tool`` drops 2 and
+        # ``paypal_link -> sms_tool`` drops 1. The directory-pair view now names
+        # the package that owns the dependency instead of the phone lane it was
+        # borrowed through, and ``lane_coupling_ratchet`` shows the payoff:
+        # payment -> registration fell from 15 edges to 7.
+        "total_module_edges": 496,
+        "ordered_pairs": 80,
         "mutual_pairs": 17,
-        "minority_edges": 46,
+        "minority_edges": 48,
         # 2026-10-21: 188 -> 190 when the provider ports seam (providers/ports.py)
         # took over the mailbox_pool_writer and desktop_ipc imports as delayed
         # ones. Before that, 190 -> 188 when store/connection.py stopped
@@ -565,7 +575,15 @@ def test_summary_facts_are_pinned():
         # ``PP_CAPABILITY_BROWSER_FALLBACK``, imported inside the switch branch so a
         # default probe never loads the browser stack. Reason recorded in
         # ``scripts/delayed_import_reasons.json``.
-        "delayed_cross_dir_edges": 327,
+        #
+        # 2026-11-20 (proxy authority): 327 -> 329 (+2). The three proxy string
+        # helpers moved from ``phone_proxy`` to ``proxy/entry.py`` (ADR-0011's
+        # precondition), so ``payment/qualification.py`` now names
+        # ``proxy.entry`` in its two function-local imports and the payment lane
+        # imports the authority directly instead of borrowing the phone lane's
+        # name. Same reason entry as above; the module-level counts are unchanged
+        # because those two imports stay function-local on purpose.
+        "delayed_cross_dir_edges": 329,
         # Imports under `if TYPE_CHECKING:` never run, so they are not runtime
         # edges. 1 here since 2026-10-23: `payment/link_manager.py` declares its
         # `pay_link` re-exports type-only (the module is not a package, so the
