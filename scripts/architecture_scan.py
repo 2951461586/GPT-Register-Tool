@@ -30,11 +30,49 @@ def _imports(path: Path) -> set[str]:
 #: ``providers/ports.py`` instead of importing. Rule 3 forbade the registration and
 #: payment workflow; the 2026-10-21 audit found two more: pool persistence and the
 #: stdout/IPC channel. Both are things the routing owner knows, not the adapter.
-PROVIDER_FORBIDDEN_APP_MODULES = ("desktop_ipc", "mailbox_pool_writer")
+#:
+#: Entries are package-relative **paths**, not bare module names. The bare-name
+#: form silently emptied this half of the gate on 2026-11-19: ``desktop_ipc.py``
+#: and ``mailbox_pool_writer.py`` moved to ``desktop/ipc.py`` and
+#: ``mailbox/pool_writer.py``, the absolute branch kept comparing
+#: ``sms_tool.desktop`` against ``"desktop_ipc"``, and the check went green while
+#: covering neither module. ``tests/governance/test_provider_ports.py`` pins every
+#: entry to a module that still exists, so the next move fails a test instead of
+#: emptying the gate.
+PACKAGE_ROOT = "sms_tool"
+
+PROVIDER_FORBIDDEN_APP_MODULES = ("desktop.ipc", "mailbox.pool_writer")
 
 #: The one provider module allowed to name those modules: it is the seam that
 #: receives them, and it imports them lazily so the module-level graph stays clean.
 PROVIDER_PORTS_MODULE = "ports.py"
+
+PROVIDER_PACKAGE = "providers"
+
+
+def _package_relative_import(node: ast.ImportFrom) -> str | None:
+    """The imported module as a path relative to the ``sms_tool`` package root.
+
+    ``None`` means the import resolves outside the package (or above it), which is
+    never one of the forbidden application modules.
+    """
+    module = node.module or ""
+    if node.level == 0:
+        if module == PACKAGE_ROOT:
+            return ""
+        prefix = PACKAGE_ROOT + "."
+        return module[len(prefix) :] if module.startswith(prefix) else module
+    # ``node.level`` counts from the *importing module*, so a file in
+    # ``providers/`` is level 1 for ``providers`` and level 2 for the package root.
+    if node.level == 1:
+        return f"{PROVIDER_PACKAGE}.{module}" if module else PROVIDER_PACKAGE
+    if node.level == 2:
+        return module
+    return None
+
+
+def _covers(forbidden: str, candidate: str) -> bool:
+    return candidate == forbidden or candidate.startswith(forbidden + ".")
 
 
 def provider_port_violations(py_root: Path) -> list[str]:
@@ -54,18 +92,15 @@ def provider_port_violations(py_root: Path) -> list[str]:
         for node in ast.walk(tree):
             if not isinstance(node, ast.ImportFrom):
                 continue
-            name = node.module or ""
-            if node.level == 2:
-                target = name.split(".")[0]
-            elif name.startswith("sms_tool."):
-                target = name[len("sms_tool.") :].split(".")[0]
-            else:
+            candidate = _package_relative_import(node)
+            if candidate is None:
                 continue
-            if target in PROVIDER_FORBIDDEN_APP_MODULES:
-                failures.append(
-                    f"providers/{path.name}:{node.lineno} imports the application module {target!r}; "
-                    "receive it through providers/ports.py (Rule 3)"
-                )
+            if not any(_covers(entry, candidate) for entry in PROVIDER_FORBIDDEN_APP_MODULES):
+                continue
+            failures.append(
+                f"providers/{path.name}:{node.lineno} imports the application module "
+                f"{PACKAGE_ROOT}.{candidate}; receive it through providers/ports.py (Rule 3)"
+            )
     return failures
 
 

@@ -11,6 +11,13 @@ decisions the routing owner makes, so the adapter was reaching up for them.
 ``sms_tool/providers/ports.py`` is the seam. These tests pin both halves: the
 scan rejects a provider that imports the application modules again, and the port
 fails loudly rather than silently skipping the write-back when nothing wired it.
+
+The two application modules moved on 2026-11-19 -- ``desktop_ipc`` became
+``sms_tool/desktop/ipc.py`` and ``mailbox_pool_writer`` became
+``sms_tool/mailbox/pool_writer.py`` -- and the scan kept comparing the old bare
+names, so it went green while covering neither. The fixtures below therefore
+name the real paths, and :func:`test_every_forbidden_module_path_names_a_real_module`
+fails if the authority list ever names a module that does not exist again.
 """
 
 from __future__ import annotations
@@ -40,13 +47,13 @@ def test_a_relative_import_of_a_forbidden_module_is_reported(tmp_path):
         tmp_path,
         {
             "providers/__init__.py": "",
-            "providers/mailbox_gmail.py": "from ..mailbox_pool_writer import apply_rotation\n",
+            "providers/mailbox_gmail.py": "from ..mailbox.pool_writer import apply_rotation\n",
         },
     )
     failures = architecture_scan.provider_port_violations(root)
     assert len(failures) == 1
     assert "mailbox_gmail.py" in failures[0]
-    assert "mailbox_pool_writer" in failures[0]
+    assert "mailbox.pool_writer" in failures[0]
 
 
 def test_an_absolute_import_of_a_forbidden_module_is_reported(tmp_path):
@@ -77,10 +84,22 @@ def test_the_ports_module_itself_is_the_exception(tmp_path):
         tmp_path,
         {
             "providers/__init__.py": "",
-            "providers/ports.py": "def wire():\n    from ..desktop_ipc import progress_dots_enabled\n",
+            "providers/ports.py": "def wire():\n    from ..desktop.ipc import progress_dots_enabled\n",
         },
     )
     assert architecture_scan.provider_port_violations(root) == []
+
+
+def test_every_forbidden_module_path_names_a_real_module():
+    """The authority list is a claim about this tree; a move must break it loudly."""
+
+    for entry in architecture_scan.PROVIDER_FORBIDDEN_APP_MODULES:
+        module_path = PROJECT_ROOT / "sms_tool" / Path(entry.replace(".", "/"))
+        assert module_path.with_suffix(".py").exists() or (module_path / "__init__.py").exists(), (
+            f"PROVIDER_FORBIDDEN_APP_MODULES names {entry!r}, but "
+            f"{module_path.relative_to(PROJECT_ROOT)} no longer exists; update the "
+            "entry instead of leaving the Rule 3 check covering nothing"
+        )
 
 
 def test_the_committed_tree_has_no_provider_port_violation():
