@@ -61,10 +61,13 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
-          # No cache: this job's output is what users download, and a
-          # poisoned pip cache would change the shipped bytes
-          # (zizmor:cache-poisoning). ~40 s is not worth that.
-          cache: false
+          # No cache input at all: this job's output is what users download and
+          # a poisoned pip cache would change the shipped bytes
+          # (zizmor:cache-poisoning). ~40 s is not worth that. `cache: false` is
+          # NOT the spelling for "no cache" -- setup-python rejects it at
+          # runtime ("Caching for 'false' is not supported") and kills the job
+          # in 40 s, which is how the first tag-driven release died on
+          # 2026-11-20. Omitting the input is what disables it.
 
       - name: Resolve version and release note
         shell: pwsh
