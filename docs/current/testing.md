@@ -160,6 +160,15 @@ codemod 会让测试**空转通过**。所以 `scripts/unittest_style_ratchet.py
 
 ## 门禁脚本
 
+**新门禁从 `scripts/_baseline.py` 起手**（2026-11-20）：`read_json` / `write_json`
+（LF、2 空格、`ensure_ascii=False`、保留调用方键序）、`add_update_flag` /
+`update_requested`、`print_failures`（ASCII 安全，cp1252 控制台不会在报错时再抛
+`UnicodeEncodeError`）。二十多个门禁各自重写过这四件事，副本已经漂移（有的写 CRLF、
+有的转义中文键、有的漏尾换行），所以共享版自带 `tests/governance/test_baseline_helpers.py`
+作为钉子。**旧门禁不要为“统一”而专项重构**：它们的失败文案被各自测试逐字钉住，
+adoption 只在因为别的原因碰到该文件时顺带做。
+
+
 前三套 ratchet 共用一套做法（先冻结、再加预算或逐条白名单化、只许降不许升）；第四套不冻结计数，而是要求每个开关带一个决定：
 
 | 脚本 | 管什么 | 配套守卫 |

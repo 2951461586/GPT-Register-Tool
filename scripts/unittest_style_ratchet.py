@@ -41,9 +41,9 @@ from __future__ import annotations
 
 import argparse
 import ast
-import json
-import sys
 from pathlib import Path
+
+from _baseline import add_update_flag, print_failures, read_json, update_requested, write_json
 
 ROOT = Path(__file__).resolve().parents[1]
 TESTS = ROOT / "tests"
@@ -78,7 +78,7 @@ def scan(tests: Path = TESTS) -> dict[str, list[str]]:
 
 
 def load_baseline(path: Path = BASELINE) -> dict[str, int]:
-    raw = json.loads(path.read_text(encoding="utf-8"))
+    raw = read_json(path)
     if raw.get("schema") != "unittest_style.v1":
         raise SystemExit(f"{path.name}: unexpected schema {raw.get('schema')!r}")
     return {str(key): int(value) for key, value in raw["files"].items()}
@@ -133,16 +133,12 @@ def render(found: dict[str, list[str]]) -> str:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Freeze the unittest.TestCase file count per test directory.")
     parser.add_argument("--detail", action="store_true", help="print the per-directory table")
-    parser.add_argument("--update-baseline", action="store_true", help="rewrite the baseline from the tree")
+    add_update_flag(parser)
     args = parser.parse_args(argv)
 
     found = scan()
-    if args.update_baseline:
-        BASELINE.write_text(
-            json.dumps(build_baseline(found), indent=2, ensure_ascii=False) + "\n",
-            encoding="utf-8",
-            newline="\n",
-        )
+    if update_requested(args):
+        write_json(BASELINE, build_baseline(found))
         print(f"baseline updated: unittest_style_baseline.json ({sum(len(n) for n in found.values())} files)")
         return 0
 
@@ -153,10 +149,7 @@ def main(argv: list[str] | None = None) -> int:
 
     problems = violations(found, baseline)
     if problems:
-        print("unittest-style ratchet FAILED:", file=sys.stderr)
-        for problem in problems:
-            print(f"  {problem}", file=sys.stderr)
-        return 1
+        return print_failures("unittest-style ratchet FAILED:", problems)
 
     for note in stale_entries(found, baseline):
         print(f"note: {note}")
