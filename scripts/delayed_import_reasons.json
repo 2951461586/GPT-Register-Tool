@@ -288,6 +288,10 @@
       "reason": "deferred",
       "why": "Result assembly records a failed run's purchased mailbox on demand. A module-level registration->mailbox edge would widen the frozen import-layer count for a failure-only path."
     },
+    "sms_tool/registration_drivers/external_sessions/managed.py -> sms_tool.browser": {
+      "reason": "deferred",
+      "why": "Browser process-pool adapter (2026-11-20): the managed external-session driver imports BrowserProcessPool only when the configured browser pool is requested. Keeping it local prevents an ordinary external-session import from pulling the browser process/driver stack; the package move changes only the owning path."
+    },
     "sms_tool/sentinel/bundle.py -> sms_tool.auth_headers": {
       "reason": "deferred",
       "why": "Sentinel SDK 在线刷新 (2026-11-19): the refresh downloads sdk.js under the registration profile's own TLS identity, which lives in auth_headers. Importing it at module scope would give the hash-pinned bundle an edge into the fingerprint stack for every caller that only wants sentinel_version(), and auth_headers imports geo.profiles -- a root-module weight the sentinel package should not carry at import time."

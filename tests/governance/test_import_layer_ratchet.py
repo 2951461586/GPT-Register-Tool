@@ -473,9 +473,9 @@ def test_summary_facts_are_pinned():
         # the package that owns the dependency instead of the phone lane it was
         # borrowed through, and ``lane_coupling_ratchet`` shows the payoff:
         # payment -> registration fell from 15 edges to 7.
-        "total_module_edges": 569,
-        "ordered_pairs": 116,
-        "mutual_pairs": 23,
+        "total_module_edges": 572,
+        "ordered_pairs": 120,
+        "mutual_pairs": 24,
         "minority_edges": 49,
         # 2026-10-21: 188 -> 190 when the provider ports seam (providers/ports.py)
         # took over the mailbox_pool_writer and desktop_ipc imports as delayed
@@ -583,7 +583,7 @@ def test_summary_facts_are_pinned():
         # imports the authority directly instead of borrowing the phone lane's
         # name. Same reason entry as above; the module-level counts are unchanged
         # because those two imports stay function-local on purpose.
-        "delayed_cross_dir_edges": 361,
+        "delayed_cross_dir_edges": 362,
         # Imports under `if TYPE_CHECKING:` never run, so they are not runtime
         # edges. 1 here since 2026-10-23: `payment/link_manager.py` declares its
         # `pay_link` re-exports type-only (the module is not a package, so the

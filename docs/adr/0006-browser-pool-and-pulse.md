@@ -5,7 +5,7 @@
 
 ## 浏览器进程池
 
-`sms_tool/browser_pool.py` 的 `BrowserProcessPool` 以进程为单位复用本地
+`sms_tool/browser/pool.py` 的 `BrowserProcessPool` 以进程为单位复用本地
 Playwright 浏览器：账号级值（代理、locale、时区、identity、viewport）每次
 会话传入，昂贵的浏览器进程按 `registration.browser_process_pool.*` 配置
 （enabled / max_concurrent / max_uses_per_process / recycle_on_error）跨账号

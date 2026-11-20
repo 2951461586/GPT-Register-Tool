@@ -30,7 +30,7 @@ from sms_tool.geo.resolver import (
     probe_exit_geo,
     reset_shared_geo_resolver,
 )
-from sms_tool.browser_fingerprint_pool import (
+from sms_tool.browser.fingerprint_pool import (
     build_browser_environment,
     detect_proxy_exit_geo,
 )
@@ -439,7 +439,7 @@ class CrossCallerIntegrationTests(unittest.TestCase):
         geo.remember_proxy_geo(proxy, ProxyGeo(country="JP", timezone="Asia/Tokyo"))
         # The probe seam raising proves the answer came from the shared cache.
         with patch(
-            "sms_tool.browser_fingerprint_pool._query_geo_endpoints",
+            "sms_tool.browser.fingerprint_pool._query_geo_endpoints",
             side_effect=AssertionError("must not probe"),
         ):
             out = detect_proxy_exit_geo(proxy)
@@ -450,7 +450,7 @@ class CrossCallerIntegrationTests(unittest.TestCase):
         # ``browser_fingerprint_pool._GEO_CACHE`` is a write-only compatibility
         # mirror, so without a bound it kept one dict per proxy the process had
         # ever measured.
-        from sms_tool import browser_fingerprint_pool as bfp
+        from sms_tool.browser import fingerprint_pool as bfp
 
         with patch.object(bfp, "_GEO_CACHE_LIMIT", 3):
             bfp._GEO_CACHE.clear()
@@ -512,7 +512,7 @@ class ProtocolPathGeoTests(unittest.TestCase):
         proxy = "socks5h://user:pw@br.example.net:1080"
         geo.remember_proxy_geo(proxy, ProxyGeo(country="BR", timezone="America/Sao_Paulo"))
         with patch(
-            "sms_tool.browser_fingerprint_pool._query_geo_endpoints",
+            "sms_tool.browser.fingerprint_pool._query_geo_endpoints",
             side_effect=AssertionError("must not probe"),
         ):
             out = self._profile(proxy)

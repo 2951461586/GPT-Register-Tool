@@ -8,7 +8,7 @@ from typing import Any, Mapping
 from urllib.parse import unquote, urlsplit
 
 from .. import endpoints
-from ..browser_profile_reclaim import describe_contention
+from ..browser.profile_reclaim import describe_contention
 from ..phone_proxy import normalize_proxy_url
 from .browser_flow.decisions import DEFAULT_VIEWPORT_HEIGHT, DEFAULT_VIEWPORT_WIDTH
 from .stealth import apply_playwright_stealth

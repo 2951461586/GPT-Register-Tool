@@ -38,9 +38,9 @@ from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from . import geo as _geo
-from .geo import clock as _clock
-from .geo.profiles import MARKET_PROFILES, WINDOWS_TIMEZONE_BY_IANA
+from .. import geo as _geo
+from ..geo import clock as _clock
+from ..geo.profiles import MARKET_PROFILES, WINDOWS_TIMEZONE_BY_IANA
 
 logger = logging.getLogger(__name__)
 
@@ -365,7 +365,7 @@ def _proxy_cache_key(proxy: str) -> str:
     fails and the fingerprint falls back to the default US locale, defeating
     the whole geo-alignment optimization.
     """
-    from .phone_proxy import normalize_proxy_url
+    from ..phone_proxy import normalize_proxy_url
 
     return normalize_proxy_url(proxy) or str(proxy or "")
 

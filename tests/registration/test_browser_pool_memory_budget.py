@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import logging
 
-from sms_tool.browser_pool import BrowserProcessPool, PoolConfig
+from sms_tool.browser.pool import BrowserProcessPool, PoolConfig
 
 
 def config(concurrent: int = 4, cap: int | None = None) -> dict:
@@ -66,7 +66,7 @@ def test_the_example_config_leaves_the_valve_off_but_keeps_the_number_visible():
 
 
 def test_a_disabled_watchdog_warns_once_with_the_number(caplog):
-    caplog.set_level(logging.WARNING, logger="sms_tool.browser_pool")
+    caplog.set_level(logging.WARNING, logger="sms_tool.browser.pool")
     pool = BrowserProcessPool(config(concurrent=4), rss_sampler=lambda: 0.0)
     pool.stats
     pool.stats
@@ -78,13 +78,13 @@ def test_a_disabled_watchdog_warns_once_with_the_number(caplog):
 
 
 def test_an_enabled_watchdog_does_not_warn(caplog):
-    caplog.set_level(logging.WARNING, logger="sms_tool.browser_pool")
+    caplog.set_level(logging.WARNING, logger="sms_tool.browser.pool")
     BrowserProcessPool(config(concurrent=4, cap=2048), rss_sampler=lambda: 0.0)
     assert not [record for record in caplog.records if record.levelno == logging.WARNING]
 
 
 def test_a_single_browser_pool_does_not_warn(caplog):
-    caplog.set_level(logging.WARNING, logger="sms_tool.browser_pool")
+    caplog.set_level(logging.WARNING, logger="sms_tool.browser.pool")
     BrowserProcessPool(config(concurrent=1), rss_sampler=lambda: 0.0)
     assert not [record for record in caplog.records if record.levelno == logging.WARNING]
 

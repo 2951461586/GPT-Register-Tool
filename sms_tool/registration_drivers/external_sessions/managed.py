@@ -433,7 +433,7 @@ class CamoufoxBrowserSession(ConnectedPlaywrightSession):
         the caller's values stand.
         """
         try:
-            from ... import browser_fingerprint_pool as bfp
+            from ...browser import fingerprint_pool as bfp
             from ...geo import shared_geo_resolver
 
             measured = shared_geo_resolver().cached(raw_proxy)

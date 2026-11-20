@@ -79,7 +79,7 @@ def browser_fetch_for_account(
     locale = "en-US"
     timezone_id = "America/New_York"
     try:
-        from ..browser_fingerprint_pool import select_browser_profile
+        from ..browser.fingerprint_pool import select_browser_profile
 
         stored_geo = {
             "country": str(identity.get("geo_country") or "").strip().upper(),

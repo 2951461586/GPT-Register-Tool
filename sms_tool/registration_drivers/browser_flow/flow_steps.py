@@ -183,7 +183,7 @@ def _browser_session_scope(
       identity, viewport) are still passed per session; only the expensive
       browser process is shared.
     """
-    from ...browser_pool import BrowserProcessPool, PoolConfig
+    from ...browser.pool import BrowserProcessPool, PoolConfig
 
     pool_config = PoolConfig.from_config(config)
     if not pool_config.enabled:

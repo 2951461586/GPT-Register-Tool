@@ -22,8 +22,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, ClassVar
 
-from .registration_drivers.base import BrowserRegistrationError
-from .registration_drivers.external_sessions import create_browser_session
+from ..registration_drivers.base import BrowserRegistrationError
+from ..registration_drivers.external_sessions import create_browser_session
 
 try:  # Declared in requirements.txt; the watchdog stays advisory if an install is broken.
     import psutil as _psutil

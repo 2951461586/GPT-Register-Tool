@@ -42,7 +42,7 @@ name-unique fields -- a 40% false-positive rate.  The inference "no attribute
 write anywhere means nothing can produce a value" is only valid for a flat
 property bag.  Four construction shapes break it, each verified in the tree:
 
-* **factory ``cls(...)``** -- ``account_models.py:128``, ``browser_pool.py:69``.
+* **factory ``cls(...)``** -- ``account_models.py:128``, ``browser/pool.py:69``.
   The callee is ``cls``, so constructor keyword arguments are invisible.
 * **declaration-only interface** -- ``registration/operations.py:104``.  Its
   attributes are satisfied by the implementing object at runtime; there is no
@@ -50,7 +50,7 @@ property bag.  Four construction shapes break it, each verified in the tree:
 * **declared default / injection seam** -- ``geo/resolver.py:319-328``.  Relying
   on ``verify_hint: bool = False`` is correct; ``probe`` is documented as a seam
   a caller or test swaps.
-* **``**mapping`` / ``from_config``** -- ``browser_pool.py:119``,
+* **``**mapping`` / ``from_config``** -- ``browser/pool.py:119``,
   ``mailbox/service.py:46``.  Field names arrive as dict keys, not keywords.
 
 ``RegistrationRuntimeState`` avoids all four: it is written by attribute

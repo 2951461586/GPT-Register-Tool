@@ -29,7 +29,7 @@ import os
 import unittest
 from unittest import mock
 
-from sms_tool import browser_profile_reclaim as reclaim
+from sms_tool.browser import profile_reclaim as reclaim
 
 
 def _processes(*rows):

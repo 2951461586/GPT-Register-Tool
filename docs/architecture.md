@@ -208,13 +208,13 @@ above.
 <!-- ratchet-numbers:begin architecture -->
 | Measure | Value |
 | --- | --- |
-| Module-level cross-directory edges | 562 |
-| Directory pairs | 108 |
-| Mutual pairs / minority-direction edges | 20 / 47 |
-| Delayed cross-directory edges | 354 |
+| Module-level cross-directory edges | 572 |
+| Directory pairs | 120 |
+| Mutual pairs / minority-direction edges | 24 / 49 |
+| Delayed cross-directory edges | 362 |
 | Delayed imports in the package | 519 (baseline 519) |
 | Functions at or above 150 lines | 64 (frozen, `scripts/function_length_ratchet.py`) |
-| Claimed tracked `sms_tool` modules | 342 of 342 (0 unclaimed, 41 directory-map groups) |
+| Claimed tracked `sms_tool` modules | 345 of 345 (0 unclaimed, 41 directory-map groups) |
 <!-- ratchet-numbers:end architecture -->
 
 `tests/config/test_pilens_scope_config.py` pins the scope and the formatting
@@ -248,7 +248,7 @@ imports `auth_headers` (layer 5), so that move would be an upward import — and
 is not a `proxy/` concern (no proxy-string parsing). A future `tls/` package would
 be the home if a second module joins it; until then the root set carries it
 exactly like `auth_headers.py`, `fingerprint_pool.py` and
-`browser_fingerprint_pool.py`.
+`browser/fingerprint_pool.py`.
 
 **2026-11-19 — `http_backend.py` accepted as a root module.** It answers one
 cross-layer question — *which transport is this process using, and can it run

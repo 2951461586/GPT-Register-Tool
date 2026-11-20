@@ -35,7 +35,7 @@ from unittest import mock
 
 import pytest
 
-from sms_tool import nodriver_paypal
+from sms_tool.browser import nodriver_paypal as nodriver_paypal
 from sms_tool.paypal import reverse as paypal_reverse
 from sms_tool.paypal import config_picker, flow_steps
 from sms_tool.paypal.errors import _PayPalStepError

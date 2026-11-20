@@ -1,4 +1,4 @@
-"""Tests for the browser process pool (``sms_tool/browser_pool.py``)."""
+"""Tests for the browser process pool (``sms_tool/browser/pool.py``)."""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ import threading
 
 import pytest
 
-from sms_tool import browser_pool as pool_module
-from sms_tool.browser_pool import (
+from sms_tool.browser import pool as pool_module
+from sms_tool.browser.pool import (
     BrowserHealth,
     BrowserProcessPool,
     BrowserSlot,

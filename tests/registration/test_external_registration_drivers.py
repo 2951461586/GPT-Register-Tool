@@ -1435,7 +1435,7 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
         self.assertEqual(stage_calls.count("create_account_retry"), 2)
 
     @patch(
-        "sms_tool.browser_fingerprint_pool.detect_proxy_exit_geo",
+        "sms_tool.browser.fingerprint_pool.detect_proxy_exit_geo",
         return_value={"country": "JP", "timezone": "Asia/Tokyo", "ip": "1.2.3.4"},
     )
     @patch("sms_tool.registration.outcome._browser_mailbox_snapshot", return_value={})

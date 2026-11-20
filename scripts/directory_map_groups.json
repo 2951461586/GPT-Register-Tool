@@ -58,9 +58,8 @@
     "Browser registration drivers": [
       "sms_tool/registration_drivers/*.py",
       "sms_tool/registration_drivers/**/*.py",
-      "sms_tool/browser_pool.py",
-      "sms_tool/browser_fingerprint_pool.py",
-      "sms_tool/fingerprint_pool.py"
+      "sms_tool/fingerprint_pool.py",
+      "sms_tool/browser/*.py"
     ],
     "Registration state and policy": [
       "sms_tool/telemetry.py",
@@ -77,7 +76,7 @@
       "sms_tool/chatgpt_bootstrap.py",
       "sms_tool/humanize.py",
       "sms_tool/page_truth.py",
-      "sms_tool/browser_profile_reclaim.py"
+      "sms_tool/browser/*.py"
     ],
     "Sentinel issuance": [
       "sms_tool/sentinel/__init__.py",
@@ -173,8 +172,8 @@
     ],
     "Payment execution and reconciliation": [
       "sms_tool/paypal/*.py",
-      "sms_tool/nodriver_paypal.py",
-      "sms_tool/omakse_client.py"
+      "sms_tool/omakse_client.py",
+      "sms_tool/browser/*.py"
     ],
     "Payment SMS helpers": [
       "sms_tool/sms_utils.py"
@@ -231,8 +230,6 @@
       "sms_tool/endpoints.py",
       "sms_tool/http_client.py",
       "sms_tool/http_backend.py",
-      "sms_tool/captcha_solver.py",
-      "sms_tool/nodriver_captcha.py",
       "sms_tool/promotion_states.py",
       "sms_tool/doctor.py",
       "sms_tool/utils.py",
@@ -240,7 +237,8 @@
       "sms_tool/driver_env.py",
       "sms_tool/operator_output.py",
       "sms_tool/stdout_mirror.py",
-      "sms_tool/proxy/*.py"
+      "sms_tool/proxy/*.py",
+      "sms_tool/browser/*.py"
     ],
     "Transport retry primitives": [
       "sms_tool/backoff.py"

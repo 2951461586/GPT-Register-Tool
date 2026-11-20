@@ -23,7 +23,7 @@ from urllib.parse import unquote, urlsplit
 import pytest
 
 from sms_tool.auth_headers import _AUTH_FINGERPRINT_LOCAL, _GEO_PROFILES, set_fingerprint_geo
-from sms_tool.browser_fingerprint_pool import (
+from sms_tool.browser.fingerprint_pool import (
     BROWSER_LOCALE_PROFILES,
     COUNTRY_LOCALE_PROFILE_MAP,
     DEFAULT_LOCALE_PROFILE,
@@ -229,7 +229,7 @@ def browser_geo(monkeypatch):
     只清 `_GEO_CACHE` 是不够的 —— 共享 resolver 自带 30min 正向缓存，
     上一条用例测到的国家会被下一条读到（实测踩过，第二行结果直接是错的）。
     """
-    from sms_tool import browser_fingerprint_pool as bfp
+    from sms_tool.browser import fingerprint_pool as bfp
     from sms_tool.geo import reset_shared_geo_resolver
 
     monkeypatch.setattr(bfp, "_GEO_CACHE", {})

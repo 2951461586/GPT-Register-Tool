@@ -110,7 +110,7 @@ class BrowserEnvironmentOffsetTests(unittest.TestCase):
     """``build_browser_environment`` must never emit the table's stale value."""
 
     def test_offset_is_recomputed_even_without_geo(self):
-        from sms_tool.browser_fingerprint_pool import (
+        from sms_tool.browser.fingerprint_pool import (
             BROWSER_LOCALE_PROFILES,
             build_browser_environment,
         )
@@ -131,7 +131,7 @@ class BrowserEnvironmentOffsetTests(unittest.TestCase):
 
     @unittest.skipUnless(_REAL_TZDB, "requires the IANA tz database (tzdata)")
     def test_geo_timezone_drives_the_offset(self):
-        from sms_tool.browser_fingerprint_pool import build_browser_environment
+        from sms_tool.browser.fingerprint_pool import build_browser_environment
 
         env = build_browser_environment({"country": "JP", "timezone": "Asia/Tokyo"})
         self.assertEqual(env["timezone_iana"], "Asia/Tokyo")

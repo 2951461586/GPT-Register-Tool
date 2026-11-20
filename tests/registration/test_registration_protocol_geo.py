@@ -14,7 +14,7 @@ from unittest.mock import patch
 import pytest
 
 from sms_tool.auth_headers import _AUTH_FINGERPRINT_LOCAL, set_fingerprint_geo
-from sms_tool.browser_fingerprint_pool import (
+from sms_tool.browser.fingerprint_pool import (
     COUNTRY_LOCALE_PROFILE_MAP,
     TIMEZONE_NAME_BY_IANA,
     build_browser_environment,

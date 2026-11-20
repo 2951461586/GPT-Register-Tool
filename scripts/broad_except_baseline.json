@@ -165,11 +165,11 @@
       "broad": 19,
       "silent": 7
     },
-    "sms_tool/browser_fingerprint_pool.py": {
+    "sms_tool/browser/fingerprint_pool.py": {
       "broad": 2,
       "silent": 0
     },
-    "sms_tool/browser_pool.py": {
+    "sms_tool/browser/pool.py": {
       "broad": 10,
       "silent": 0
     },
@@ -177,7 +177,7 @@
       "broad": 5,
       "silent": 0
     },
-    "sms_tool/captcha_solver.py": {
+    "sms_tool/browser/captcha_solver.py": {
       "broad": 16,
       "silent": 13
     },
@@ -325,11 +325,11 @@
       "broad": 3,
       "silent": 0
     },
-    "sms_tool/nodriver_captcha.py": {
+    "sms_tool/browser/nodriver_captcha.py": {
       "broad": 10,
       "silent": 1
     },
-    "sms_tool/nodriver_paypal.py": {
+    "sms_tool/browser/nodriver_paypal.py": {
       "broad": 7,
       "silent": 0
     },
@@ -816,7 +816,7 @@
     "silent": 158
   },
   "whitelist": {
-    "sms_tool/browser_pool.py": {
+    "sms_tool/browser/pool.py": {
       "broad": 10,
       "reason": "Browser/process teardown shared by four drivers: killing a wedged child, closing a context, or recycling a slot is best effort by definition.",
       "silent": 0

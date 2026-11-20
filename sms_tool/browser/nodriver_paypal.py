@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from .sms_utils import NO_NUMBER_SOURCE_MESSAGE, _number_source_or_none
+from ..sms_utils import NO_NUMBER_SOURCE_MESSAGE, _number_source_or_none
 
 _DEBUG_DIR = "runtime/nd_pay_debug"
 
@@ -98,7 +98,7 @@ async def _run(
     # Bridge the upstream proxy to a local socks5h endpoint when the browser
     # cannot consume it directly (embedded credentials, or http(s)). This also
     # restores socks5h remote-DNS semantics that Chromium drops.
-    from .proxy.bridge import async_proxy_for_browser
+    from ..proxy.bridge import async_proxy_for_browser
 
     browser_proxy, close_bridge = await async_proxy_for_browser(proxy)
     browser = None

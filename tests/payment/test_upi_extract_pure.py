@@ -549,14 +549,14 @@ class PassiveCaptchaTests(unittest.TestCase):
             self.assertIsNone(upi_link._upi_passive_captcha_fields({"site_key": "sk"}))
 
     def test_solver_success_returns_token_and_ekey(self):
-        with mock.patch("sms_tool.captcha_solver._solve_hcaptcha", return_value=("P1_abc", "ek")) as solver:
+        with mock.patch("sms_tool.browser.captcha_solver._solve_hcaptcha", return_value=("P1_abc", "ek")) as solver:
             out = upi_link._upi_passive_captcha_fields({"site_key": "sk", "rqdata": "rq"}, proxy="http://p")
         self.assertEqual(out, {"passive_captcha_token": "P1_abc", "passive_captcha_ekey": "ek"})
         self.assertEqual(solver.call_args.kwargs["site_key"], "sk")
         self.assertEqual(solver.call_args.kwargs["rqdata"], "rq")
 
     def test_solver_failure_degrades_to_empty_attempt(self):
-        with mock.patch("sms_tool.captcha_solver._solve_hcaptcha", side_effect=RuntimeError("boom")):
+        with mock.patch("sms_tool.browser.captcha_solver._solve_hcaptcha", side_effect=RuntimeError("boom")):
             out = upi_link._upi_passive_captcha_fields({"site_key": "sk"})
         self.assertEqual(out, {})
 

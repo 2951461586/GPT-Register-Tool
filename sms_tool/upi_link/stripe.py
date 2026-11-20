@@ -137,7 +137,7 @@ def _upi_passive_captcha_fields(
         _emit("captcha", "init 无 passive site_key，confirm 将缺 passive_captcha_token")
         return {}
     try:
-        from ..captcha_solver import _solve_hcaptcha
+        from ..browser.captcha_solver import _solve_hcaptcha
     except Exception as exc:
         _emit("captcha", f"求解器不可用（非致命）: {type(exc).__name__}")
         return {}

@@ -6,7 +6,7 @@
 """
 
 from sms_tool.auth_headers import _GEO_PROFILES
-from sms_tool.browser_fingerprint_pool import (
+from sms_tool.browser.fingerprint_pool import (
     BROWSER_LOCALE_PROFILES,
     COUNTRY_LOCALE_PROFILE_MAP,
     TIMEZONE_NAME_BY_IANA,

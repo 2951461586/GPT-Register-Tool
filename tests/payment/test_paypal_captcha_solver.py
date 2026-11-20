@@ -1,4 +1,4 @@
-"""Behaviour tests for ``sms_tool/captcha_solver.py`` (round-5 audit target).
+"""Behaviour tests for ``sms_tool/browser/captcha_solver.py`` (round-5 audit target).
 
 Why this file exists
 --------------------
@@ -30,8 +30,8 @@ import json
 
 import pytest
 
-from sms_tool import captcha_solver
-from sms_tool.captcha_solver import (
+from sms_tool.browser import captcha_solver as captcha_solver
+from sms_tool.browser.captcha_solver import (
     CaptchaError,
     _accept_language_for_locale,
     _build_hcaptcha_bridge_html,

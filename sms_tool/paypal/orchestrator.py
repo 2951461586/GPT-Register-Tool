@@ -281,7 +281,7 @@ def _try_nodriver_pay(
     # only when this line ran, i.e. only once the reverse protocol had already
     # failed. That escaped `auto_pay`'s fallback chain and killed the Camoufox /
     # CloakBrowser attempt that comes after it.
-    from ..nodriver_paypal import run_nodriver_pay
+    from ..browser.nodriver_paypal import run_nodriver_pay
 
     sms_cfg = {
         "api_url": sms_api_url,

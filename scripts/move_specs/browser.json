@@ -1,0 +1,13 @@
+{
+  "package": "browser",
+  "layer": 4,
+  "root_package_init": false,
+  "modules": {
+    "browser_pool": "pool",
+    "browser_profile_reclaim": "profile_reclaim",
+    "browser_fingerprint_pool": "fingerprint_pool",
+    "captcha_solver": "captcha_solver",
+    "nodriver_captcha": "nodriver_captcha",
+    "nodriver_paypal": "nodriver_paypal"
+  }
+}

@@ -962,7 +962,7 @@ class PayPalReverseClient:
         2. If that fails, load the real PayPal page in browser and solve v2
         """
         try:
-            from ..captcha_solver import (
+            from ..browser.captcha_solver import (
                 CaptchaError,
                 _PAYPAL_RECAPTCHA_SITE_KEY,
                 _solve_hcaptcha,
@@ -1050,7 +1050,7 @@ class PayPalReverseClient:
         # Step 3: nodriver fallback (undetected Chrome)
         print(f"[re] Trying nodriver for CAPTCHA at {step}...")
         try:
-            from ..nodriver_captcha import solve_captcha_with_nodriver
+            from ..browser.nodriver_captcha import solve_captcha_with_nodriver
 
             nd_result = solve_captcha_with_nodriver(
                 page_url=self._current_url,

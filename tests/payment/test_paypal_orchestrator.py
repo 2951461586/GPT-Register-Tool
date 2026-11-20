@@ -490,7 +490,7 @@ def test_try_nodriver_pay_closes_the_proxy_bridge_even_on_success(monkeypatch):
     monkeypatch.setitem(sys.modules, "sms_tool.proxy.bridge", fake_mod)
 
     nodriver = types.SimpleNamespace(run_nodriver_pay=lambda **k: {"ok": True})
-    monkeypatch.setitem(sys.modules, "sms_tool.nodriver_paypal", nodriver)
+    monkeypatch.setitem(sys.modules, "sms_tool.browser.nodriver_paypal", nodriver)
 
     out = orchestrator._try_nodriver_pay(
         paypal_url="u",
@@ -520,7 +520,7 @@ def test_try_nodriver_pay_closes_the_proxy_bridge_even_when_the_run_raises(monke
     def _boom(**k):
         raise RuntimeError("nodriver exploded")
 
-    monkeypatch.setitem(sys.modules, "sms_tool.nodriver_paypal", types.SimpleNamespace(run_nodriver_pay=_boom))
+    monkeypatch.setitem(sys.modules, "sms_tool.browser.nodriver_paypal", types.SimpleNamespace(run_nodriver_pay=_boom))
 
     with pytest.raises(RuntimeError):
         orchestrator._try_nodriver_pay(

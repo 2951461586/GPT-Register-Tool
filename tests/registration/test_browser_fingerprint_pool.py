@@ -7,7 +7,7 @@ profile rotation, exit-geo locale/timezone alignment, and graceful fallback.
 import unittest
 from unittest.mock import patch
 
-from sms_tool.browser_fingerprint_pool import (
+from sms_tool.browser.fingerprint_pool import (
     BROWSER_LOCALE_PROFILES,
     BROWSER_PROFILE_POOL,
     COUNTRY_LOCALE_PROFILE_MAP,
@@ -79,7 +79,7 @@ class BrowserFingerprintPoolTests(unittest.TestCase):
     def test_detect_proxy_exit_geo_graceful_on_failure(self):
         # Any network failure must degrade to {} without raising.
         with patch(
-            "sms_tool.browser_fingerprint_pool._query_geo_endpoints",
+            "sms_tool.browser.fingerprint_pool._query_geo_endpoints",
             side_effect=RuntimeError("network down"),
         ):
             self.assertEqual(detect_proxy_exit_geo("http://proxy.example:8080"), {})

@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from sms_tool.browser_pool import BrowserProcessPool
+from sms_tool.browser.pool import BrowserProcessPool
 from sms_tool.proxy.entry import rotate_session
 from sms_tool.registration_drivers import external_sessions as es
 from sms_tool.registration_drivers.external_sessions import managed
