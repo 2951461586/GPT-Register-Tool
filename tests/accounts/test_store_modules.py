@@ -7,6 +7,7 @@ shape, plan type and PayPal status) and the SQLite persistence path
 silently change account-identity matching or drop a persisted field.
 """
 
+import json
 import sys
 import tempfile
 import unittest
@@ -215,6 +216,74 @@ class StoreMarkersTests(unittest.TestCase):
         finally:
             conn.close()
         self.assertNotIn("secret", row["raw_json"])
+
+    def _set_stored_state(self, status, error):
+        conn = connection._connect()
+        try:
+            conn.execute(
+                "UPDATE accounts SET status=?, error=? WHERE lower(email)=lower(?)",
+                (status, error, "a@b.com"),
+            )
+            conn.commit()
+            row = conn.execute(
+                "SELECT status, error, raw_json FROM accounts WHERE lower(email)=lower(?)", ("a@b.com",)
+            ).fetchone()
+        finally:
+            conn.close()
+        return row
+
+    def test_verified_probe_clears_stale_error_on_registered_row(self):
+        """A 200 probe retires an earlier failure, whatever its wording.
+
+        Field report (2026-11-20): 账号测活 printed 正常 2，掉号 0，其他失败 0 while
+        both rows still showed 失败 in the 状态 column. The rows carried
+        ``status='registered'`` (``normalize._status`` derives that from the AT
+        alone) plus a stale ``web_session_access_token_probe_failed:unknown``
+        left by an earlier transient scan/relogin failure. The old SQL cleared
+        ``error`` only when ``status='at_invalid'``, so nothing ever retired it.
+        """
+        row = self._set_stored_state("registered", "web_session_access_token_probe_failed:unknown")
+        self.assertEqual(row["error"], "web_session_access_token_probe_failed:unknown")
+
+        self.assertTrue(
+            markers.mark_quota_status("a@b.com", "可用", {"ok": True, "status": "active", "status_code": 200})
+        )
+
+        conn = connection._connect()
+        try:
+            saved = conn.execute(
+                "SELECT status, error, raw_json FROM accounts WHERE lower(email)=lower(?)", ("a@b.com",)
+            ).fetchone()
+        finally:
+            conn.close()
+        self.assertEqual(saved["status"], "registered")
+        self.assertEqual(saved["error"], "")
+        self.assertNotIn("error", json.loads(saved["raw_json"]), "raw_json must not keep the stale error")
+
+    def test_failed_probe_keeps_recorded_error(self):
+        self._set_stored_state("registered", "web_session_access_token_probe_failed:unknown")
+        self.assertTrue(
+            markers.mark_quota_status(
+                "a@b.com", "401失效", {"ok": False, "status": "token_invalid", "status_code": 401}
+            )
+        )
+        conn = connection._connect()
+        try:
+            saved = conn.execute("SELECT error FROM accounts WHERE lower(email)=lower(?)", ("a@b.com",)).fetchone()
+        finally:
+            conn.close()
+        self.assertEqual(saved["error"], "web_session_access_token_probe_failed:unknown")
+
+    def test_verified_probe_keeps_confirmed_deactivation(self):
+        """A deactivation verdict outranks a later probe and must stay visible."""
+        self._set_stored_state("account_deactivated", "account_deactivated")
+        markers.mark_quota_status("a@b.com", "可用", {"ok": True, "status": "active", "status_code": 200})
+        conn = connection._connect()
+        try:
+            saved = conn.execute("SELECT error FROM accounts WHERE lower(email)=lower(?)", ("a@b.com",)).fetchone()
+        finally:
+            conn.close()
+        self.assertEqual(saved["error"], "account_deactivated")
 
 
 if __name__ == "__main__":

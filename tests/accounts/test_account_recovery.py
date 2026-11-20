@@ -1249,6 +1249,28 @@ def test_successful_relogin_replaces_stale_quota_401_metadata():
     assert "access_token" not in data["quota"]["last_result"]
 
 
+def test_successful_relogin_clears_transport_error_without_a_401_marker():
+    """A verified 200 retires the failure, whatever the error's wording.
+
+    Field report (2026-11-20): a ``web_session`` attempt killed by a dead exit
+    records ``web_session_access_token_probe_failed:unknown`` -- no ``401``, no
+    ``token_invalid`` -- so the old marker whitelist kept it through the OTP
+    relogin that followed. The account then read 失败 in the WPF 状态 column
+    while 账号测活 reported it 正常.
+    """
+    data = {
+        "status": "registered",
+        "error": "web_session_access_token_probe_failed:unknown",
+        "refresh_token_status": "no_rt",
+    }
+    probe = {"ok": True, "status": "active", "status_code": 200, "quota_status": "可用"}
+
+    account_recovery._mark_successful_relogin(data, probe, now=123)
+
+    assert "error" not in data
+    assert data["status"] == "registered"
+
+
 def test_successful_relogin_clears_stale_promotion_at_marker():
     data = {
         "status": "at_invalid",

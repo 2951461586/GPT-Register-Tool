@@ -9,7 +9,7 @@ from ..config import ConfigInput
 from ..promotion_states import PROMOTION_STATE_AUTH_INVALID
 
 from .connection import _connect, init_database
-from .normalize import _find_existing_account_email, _update_session_json
+from .normalize import _find_existing_account_email, _looks_account_deactivated, _update_session_json
 
 
 def mark_quota_status(email, quota_status="", quota_result=None, *, runtime_config: ConfigInput = None):
@@ -23,7 +23,7 @@ def mark_quota_status(email, quota_status="", quota_result=None, *, runtime_conf
         if not lookup_email:
             return False
         row = conn.execute(
-            "SELECT raw_json,json_path FROM accounts WHERE email=?",
+            "SELECT raw_json,json_path,status,error FROM accounts WHERE email=?",
             (lookup_email,),
         ).fetchone()
         if row is None:
@@ -68,17 +68,37 @@ def mark_quota_status(email, quota_status="", quota_result=None, *, runtime_conf
                 token_probe: dict = _raw_token_probe if isinstance(_raw_token_probe, dict) else {}
                 token_probe.update({"ok": True, "status": "active", "status_code": 200, "updated_at": now})
                 data["token_probe"] = token_probe
+        # A probe that just answered HTTP 200 answered for *this* account, so any
+        # ``error`` the record still carries describes an attempt that is over.
+        # Clearing it only when ``status='at_invalid'`` (the old rule) missed the
+        # far more common shape: a transient scan/relogin failure writes
+        # ``web_session_access_token_probe_failed:unknown`` and leaves
+        # ``status='registered'`` (``normalize._status`` derives that from the AT
+        # alone), so the error column was never cleared again and the WPF 状态
+        # column rendered 失败 for a healthy account. Measured 2026-11-20: a
+        # 2-account 账号测活 round printed 正常 2，掉号 0，其他失败 0 while both
+        # rows showed 失败. A confirmed deactivation is the one verdict a probe
+        # cannot retract, so it survives -- the row's own columns count as
+        # evidence there, because that verdict is stored in them.
+        stored = {
+            "status": row["status"] or data.get("status"),
+            "error": row["error"] or data.get("error"),
+            "account_scan_status": data.get("account_scan_status"),
+        }
+        stale_error = verified_active and not _looks_account_deactivated(stored, {})
+        if stale_error:
+            data.pop("error", None)
         raw_json = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
         conn.execute(
             """
             UPDATE accounts
             SET quota_status=?,
                 status=CASE WHEN status='at_invalid' AND ? THEN 'registered' ELSE status END,
-                error=CASE WHEN status='at_invalid' AND ? THEN '' ELSE error END,
+                error=CASE WHEN ? THEN '' ELSE error END,
                 updated_at=?, raw_json=?
             WHERE email=?
             """,
-            (str(quota_status or ""), int(verified_active), int(verified_active), now, raw_json, lookup_email),
+            (str(quota_status or ""), int(verified_active), int(stale_error), now, raw_json, lookup_email),
         )
         conn.commit()
     finally:

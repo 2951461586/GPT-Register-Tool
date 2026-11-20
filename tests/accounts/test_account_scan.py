@@ -119,6 +119,56 @@ class AccountScanTests(unittest.TestCase):
         self.assertEqual(saved["status"], "registered")
         self.assertNotIn("error", saved)
 
+    def test_persist_scan_clears_stale_relogin_error_after_active_probe(self):
+        """A 200 probe retires an earlier failure, whatever its wording.
+
+        Field report (2026-11-20): 账号测活 printed 正常 2，掉号 0，其他失败 0 while
+        both rows showed 失败 in the 状态 column. The rows carried a stale
+        ``web_session_access_token_probe_failed:unknown`` left by a transient
+        relogin attempt; the alive branch only dropped a fixed whitelist, so a
+        later alive scan never retired it.
+        """
+        result = {
+            "email": "a@example.com",
+            "ok": True,
+            "scan_status": "alive",
+            "token_probe": {"status": "active", "status_code": 200},
+        }
+        with patch("sms_tool.accounts.account_scan.upsert_account") as upsert:
+            account_scan._persist_scan(
+                {
+                    "email": "a@example.com",
+                    "success": True,
+                    "status": "registered",
+                    "error": "web_session_access_token_probe_failed:unknown",
+                },
+                "",
+                result,
+            )
+        saved = upsert.call_args.args[0]
+        self.assertNotIn("error", saved)
+
+    def test_persist_scan_keeps_stale_error_when_probe_is_inconclusive(self):
+        """An inconclusive probe learned nothing, so it must not retire an error."""
+        result = {
+            "email": "a@example.com",
+            "ok": True,
+            "scan_status": "alive_probe_inconclusive",
+            "token_probe": {"status": "unknown", "status_code": 0},
+        }
+        with patch("sms_tool.accounts.account_scan.upsert_account") as upsert:
+            account_scan._persist_scan(
+                {
+                    "email": "a@example.com",
+                    "success": True,
+                    "error": "web_session_access_token_probe_failed:unknown",
+                },
+                "",
+                result,
+            )
+        saved = upsert.call_args.args[0]
+        self.assertEqual(saved["error"], "web_session_access_token_probe_failed:unknown")
+
     def test_overview_marks_at_refreshed_when_oauth_succeeds_without_rt(self):
         overview = account_scan._scan_overview(
             {

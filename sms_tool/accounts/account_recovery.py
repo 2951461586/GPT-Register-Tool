@@ -717,19 +717,17 @@ def _mark_successful_relogin(data: dict[str, Any], probe: dict[str, Any], *, now
         "token_invalidated",
     }:
         data["status"] = "registered"
-    error = str(data.get("error") or "").strip().lower()
-    if any(
-        marker in error
-        for marker in (
-            "401",
-            "unauthorized",
-            "token_invalid",
-            "token_expired",
-            "could not validate your token",
-            "oauth_refresh_http_401",
-        )
-    ):
-        data.pop("error", None)
+    # Both callers gate on a verified HTTP 200 for the token just acquired, so
+    # whatever ``error`` the record still carries describes an attempt that is
+    # over. Matching a 401-worded whitelist (the old rule) missed the transport
+    # shapes: a ``web_session`` attempt killed by a dead exit records
+    # ``web_session_access_token_probe_failed:unknown`` -- no ``401``, no
+    # ``token_invalid`` -- and survived the OTP relogin that later succeeded.
+    # The account then kept ``status='registered'`` (``store.normalize._status``
+    # derives it from the AT alone) with a non-empty error, which the WPF 状态
+    # column renders as 失败: measured 2026-11-20, a 2-account 账号测活 round
+    # printed 正常 2，掉号 0，其他失败 0 while both rows showed 失败.
+    data.pop("error", None)
     # A previous promotion probe can persist an auth-failure marker. A verified
     # replacement AT makes that marker stale; keep its detailed result for
     # later inspection but stop surfacing the authentication failure in the
