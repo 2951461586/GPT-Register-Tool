@@ -27,6 +27,7 @@ from ..proxy.routing import proxy_pool_for
 from ..kernel.paths import runtime_file
 from ..registration.state import _stored_registration_password
 from ..storage import (
+    _probe_is_token_invalid,
     clear_stale_promotion_at_marker,
     get_account_record,
     list_paypal_accounts,
@@ -1055,16 +1056,6 @@ def _redact_recovery_error(value: Any) -> str:
 
 def _looks_account_deactivated(value: Any) -> bool:
     return text_has_account_deactivated(json.dumps(value or {}, ensure_ascii=False))
-
-
-def _probe_is_token_invalid(value: Any) -> bool:
-    if not isinstance(value, dict):
-        return False
-    try:
-        status_code = int(value.get("status_code") or 0)
-    except (TypeError, ValueError):
-        status_code = 0
-    return status_code == 401 or str(value.get("status") or "").strip().lower() == "token_invalid"
 
 
 def _item_is_account_deactivated(value: Any) -> bool:

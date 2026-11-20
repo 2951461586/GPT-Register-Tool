@@ -9,7 +9,12 @@ from ..config import ConfigInput
 from ..promotion_states import PROMOTION_STATE_AUTH_INVALID
 
 from .connection import _connect, init_database
-from .normalize import _find_existing_account_email, _looks_account_deactivated, _update_session_json
+from .normalize import (
+    _find_existing_account_email,
+    _looks_account_deactivated,
+    _probe_is_token_invalid,
+    _update_session_json,
+)
 
 
 def mark_quota_status(email, quota_status="", quota_result=None, *, runtime_config: ConfigInput = None):
@@ -88,17 +93,41 @@ def mark_quota_status(email, quota_status="", quota_result=None, *, runtime_conf
         stale_error = verified_active and not _looks_account_deactivated(stored, {})
         if stale_error:
             data.pop("error", None)
+        # The mirror verdict. Nothing in this path ever wrote ``status``, so a
+        # 401 could only land in ``quota_status``/``quota.last_result`` -- keys
+        # no grid column reads -- while the row kept ``status='registered'``
+        # (``normalize._status`` derives it from the AT's mere presence) and the
+        # WPF 状态 column rendered 已注册 for a dead token. Measured 2026-11-20:
+        # avawhite155379@outlook.com held a 401 ``invalid_jwt`` probe with
+        # ``status='registered'``, ``error=''``. The inverse transition
+        # (at_invalid -> registered on a verified 200) already lived in this
+        # SQL; this is the missing half that gives it something to undo. A
+        # confirmed deactivation outranks both.
+        invalid_at = (
+            not verified_active and not _looks_account_deactivated(stored, {}) and _probe_is_token_invalid(quota_result)
+        )
         raw_json = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
         conn.execute(
             """
             UPDATE accounts
             SET quota_status=?,
-                status=CASE WHEN status='at_invalid' AND ? THEN 'registered' ELSE status END,
+                status=CASE
+                    WHEN ? THEN 'at_invalid'
+                    WHEN status='at_invalid' AND ? THEN 'registered'
+                    ELSE status END,
                 error=CASE WHEN ? THEN '' ELSE error END,
                 updated_at=?, raw_json=?
             WHERE email=?
             """,
-            (str(quota_status or ""), int(verified_active), int(stale_error), now, raw_json, lookup_email),
+            (
+                str(quota_status or ""),
+                int(invalid_at),
+                int(verified_active),
+                int(stale_error),
+                now,
+                raw_json,
+                lookup_email,
+            ),
         )
         conn.commit()
     finally:

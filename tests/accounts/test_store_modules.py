@@ -77,6 +77,21 @@ class StoreNormalizeTests(unittest.TestCase):
         self.assertFalse(normalize._is_http_url("ftp://example.com"))
         self.assertFalse(normalize._is_http_url("not a url"))
 
+    def test_probe_is_token_invalid_only_accepts_definitive_verdicts(self):
+        """``unknown`` is a transport failure, not a dead AT.
+
+        A single owner for the rule: an over-eager ``True`` here would persist
+        AT失效 for an account whose probe merely could not reach the exit.
+        """
+        self.assertTrue(normalize._probe_is_token_invalid({"status_code": 401}))
+        self.assertTrue(normalize._probe_is_token_invalid({"status": "token_invalid"}))
+        self.assertTrue(normalize._probe_is_token_invalid({"status": "Token_Invalid", "status_code": 0}))
+        self.assertFalse(normalize._probe_is_token_invalid({"status": "unknown", "status_code": 0}))
+        self.assertFalse(normalize._probe_is_token_invalid({"ok": True, "status": "active", "status_code": 200}))
+        self.assertFalse(normalize._probe_is_token_invalid({"status_code": "401abc"}))
+        self.assertFalse(normalize._probe_is_token_invalid(None))
+        self.assertFalse(normalize._probe_is_token_invalid("token_invalid"))
+
 
 class StoreConnectionTests(unittest.TestCase):
     def test_init_database_creates_tables(self):
@@ -284,6 +299,72 @@ class StoreMarkersTests(unittest.TestCase):
         finally:
             conn.close()
         self.assertEqual(saved["error"], "account_deactivated")
+
+    def test_definitive_401_probe_demotes_the_status_column(self):
+        """The mirror of the stale-error bug: 401 must reach the 状态 column.
+
+        Field report (2026-11-20): avawhite155379@outlook.com held a 401
+        ``invalid_jwt`` probe while the row stayed ``status='registered'``,
+        ``error=''`` -- so the grid rendered 已注册 for a dead AT. The 401 only
+        ever reached ``quota_status``/``quota.last_result``, which no grid column
+        reads, and nothing in this path wrote ``status`` at all.
+        """
+        self._set_stored_state("registered", "")
+        self.assertTrue(
+            markers.mark_quota_status(
+                "a@b.com",
+                "relogin_failed",
+                {"ok": False, "status": "token_invalid", "status_code": 401, "error": "invalid_jwt"},
+            )
+        )
+        conn = connection._connect()
+        try:
+            saved = conn.execute("SELECT status FROM accounts WHERE lower(email)=lower(?)", ("a@b.com",)).fetchone()
+        finally:
+            conn.close()
+        self.assertEqual(saved["status"], "at_invalid")
+
+    def test_transport_unknown_probe_leaves_status_alone(self):
+        """A probe that never got an answer must not mark the AT invalid."""
+        self._set_stored_state("registered", "")
+        markers.mark_quota_status(
+            "a@b.com",
+            "检测失败",
+            {"ok": False, "status": "unknown", "status_code": 0, "error": "curl: (7) CONNECT tunnel failed"},
+        )
+        conn = connection._connect()
+        try:
+            saved = conn.execute("SELECT status FROM accounts WHERE lower(email)=lower(?)", ("a@b.com",)).fetchone()
+        finally:
+            conn.close()
+        self.assertEqual(saved["status"], "registered")
+
+    def test_401_probe_does_not_downgrade_a_confirmed_deactivation(self):
+        self._set_stored_state("account_deactivated", "account_deactivated")
+        markers.mark_quota_status("a@b.com", "401失效", {"ok": False, "status": "token_invalid", "status_code": 401})
+        conn = connection._connect()
+        try:
+            saved = conn.execute(
+                "SELECT status, error FROM accounts WHERE lower(email)=lower(?)", ("a@b.com",)
+            ).fetchone()
+        finally:
+            conn.close()
+        self.assertEqual(saved["status"], "account_deactivated")
+        self.assertEqual(saved["error"], "account_deactivated")
+
+    def test_verified_probe_after_401_restores_registered(self):
+        """The at_invalid -> registered half of the same rule (a relogin healed)."""
+        self._set_stored_state("at_invalid", "invalid_jwt")
+        markers.mark_quota_status("a@b.com", "可用", {"ok": True, "status": "active", "status_code": 200})
+        conn = connection._connect()
+        try:
+            saved = conn.execute(
+                "SELECT status, error FROM accounts WHERE lower(email)=lower(?)", ("a@b.com",)
+            ).fetchone()
+        finally:
+            conn.close()
+        self.assertEqual(saved["status"], "registered")
+        self.assertEqual(saved["error"], "")
 
 
 if __name__ == "__main__":

@@ -344,6 +344,29 @@ def _looks_at_invalid(data, paypal):
     return any(marker in text for marker in AT_INVALID_MARKERS)
 
 
+def _probe_is_token_invalid(value) -> bool:
+    """Whether a liveness probe returned a *definitive* AT-invalid verdict.
+
+    Single definition on purpose: ``store.markers.mark_quota_status`` persists
+    this verdict as ``status='at_invalid'`` and ``accounts.account_recovery``
+    routes recovery on it, so two copies would let a row read red in one place
+    and healthy in another.
+
+    The probe vocabulary is written by ``accounts.account_liveness``:
+    ``status`` is ``active``/``token_invalid``/``unknown`` and ``status_code``
+    is the HTTP code, ``0`` when the request never completed. Only 401 (or the
+    ``token_invalid`` label it produces) is definitive -- ``unknown`` is a
+    transport failure, and persisting that as AT失效 would be a lie.
+    """
+    if not isinstance(value, Mapping):
+        return False
+    try:
+        status_code = int(value.get("status_code") or 0)
+    except (TypeError, ValueError):
+        status_code = 0
+    return status_code == 401 or str(value.get("status") or "").strip().lower() == "token_invalid"
+
+
 def _looks_account_deactivated(data, paypal):
     text = " ".join(
         str(value or "")
