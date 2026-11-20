@@ -534,7 +534,32 @@ public sealed class DesktopWindowSmokeTests
         dialog.Show();
         dialog.UpdateLayout();
 
-        Assert.Equal("账号详情 - detail@example.com", dialog.Title);
+        // Expected through the translation point, never as the Chinese literal: the
+        // active language follows the operator's preference (first launch follows the
+        // OS UI language), so a literal pin asserts what the *machine* says. It did --
+        // CI's en-US runner rendered "Account details - detail@example.com" and this
+        // line was the only failure of the run, while the button assertions below
+        // stayed green because they already go through `Loc.T`.
+        Assert.Equal(Localization.Loc.F("账号详情 - {0}", row.Identifier), dialog.Title);
+
+        stage("account detail dialog: the title follows the language");
+        // Both shipped languages, so neither this machine's culture nor a switch
+        // earlier in the run can decide the result.
+        try
+        {
+            foreach (Localization.AppLanguage language in new[] { Localization.AppLanguage.En, Localization.AppLanguage.Zh })
+            {
+                Localization.Loc.Instance.SetLanguage(language);
+                var localized = new AccountDetailDialog(null!, row, view, actions);
+                Assert.Equal(Localization.Loc.F("账号详情 - {0}", row.Identifier), localized.Title);
+                localized.Close();
+            }
+        }
+        finally
+        {
+            Localization.Loc.Instance.SetLanguage(Localization.AppLanguage.Zh);
+        }
+
         Assert.Same(view, dialog.DataContext);
         var summary = FindVisualChildren<ItemsControl>(dialog).First();
         Assert.Equal(2, summary.Items.Count);
