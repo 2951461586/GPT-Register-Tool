@@ -9,6 +9,24 @@
     <ApplicationIcon>..\..\SmsWorkbench\Assets\app-icon.ico</ApplicationIcon>
     <AssemblyTitle>GPT-Register-Tool Setup</AssemblyTitle>
     <Product>GPT-Register-Tool</Product>
+    <!--
+      No lock file for this project.
+
+      The only package it resolves is the SDK's implicit
+      Microsoft.NET.ILLink.Tasks (single-file publish links the payload
+      extractor), and the SDK already pins that version per feature band. A
+      lock here re-states a fact its owner owns, one band behind.
+
+      Measured cost of keeping it: the local `.dotnet` 10.0.300 downgrades the
+      entry (10.0.11 -> 10.0.8) and CI's resolved band raises it (10.0.15 on
+      2026-11-20), so the first tag-driven release died at NU1004 with the lock
+      recording 10.0.8 while the runner asked for [10.0.15, ), and the
+      maintainer ritual for years has been "revert packages.lock.json before
+      publishing". Restore here is one implicit pack; there is nothing to
+      reproduce.
+    -->
+    <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
+    <RestoreLockedMode>false</RestoreLockedMode>
   </PropertyGroup>
   <ItemGroup>
     <EmbeddedResource Include="payload.zip" LogicalName="payload.zip" />
