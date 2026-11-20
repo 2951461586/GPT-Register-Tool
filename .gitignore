@@ -51,6 +51,13 @@ _*.py
 # could not import ``sms_tool.config`` at all. Caught 2026-10-22 by diffing the
 # tracked module list against the working tree.
 !/sms_tool/config/_state.py
+# The shared baseline plumber for the ratchets (2026-11-20). It was written and
+# imported but never committed, so CI died at collection with
+# ``ModuleNotFoundError: No module named '_baseline'`` while the full local
+# suite was green -- the file was on disk here. Held down by
+# ``tests/governance/test_tracked_module_completeness.py``, which diffs every
+# tracked module's imports against ``git ls-files``.
+!/scripts/_baseline.py
 build_log.txt
 *~
 *.bak
