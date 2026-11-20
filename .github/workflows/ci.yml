@@ -87,9 +87,15 @@ jobs:
       # on one worker so module-level monkeypatching stays ordered; 2026-10-20
       # measurement: 620 s serial -> 221 s parallel, identical result set.
       # The ordering guard below deliberately stays a separate serial process.
+      # `--cov-fail-under` makes the number a gate instead of a printout: it
+      # was measured and never compared, so 72% and 41% were both "green".
+      # The floor sits two points under the measured 72% (2026-11-20) to absorb
+      # churn; raise it in the same commit as the measurement that justifies it,
+      # and keep `docs/current/testing.md` equal to this number (pinned by
+      # tests/governance/test_coverage_gate.py).
       - run: >-
           python -m pytest -q -n 4 --dist loadfile --cov=sms_tool --cov=services
-          --cov-report=term-missing
+          --cov-report=term-missing --cov-fail-under=70
       # Order-dependence guard. This shard order reproduced a real defect on
       # 2026-10-18: `cli._heavy_deps_loaded` was a one-shot latch set while a
       # test had `_load_mailbox_pool` patched, so `patch.object` restored the

@@ -89,6 +89,51 @@ sms_tool.config.schema.ConfigError: chatgpt must be an object
 把「读者看到半个分片集」的窗口从两次 `fsync` 压到三次 rename。彻底消除需要跨进程锁，
 所以**测试侧隔离才是主修复** —— 不要因为写入侧变窄了就把这条隔离去掉。
 
+## 覆盖率下限（2026-11-20 起的门禁）
+
+CI 的并行分片跑 `--cov=sms_tool --cov=services`，并且带 `--cov-fail-under=70`。
+
+**为什么要加**：在 2026-11-20 之前覆盖率只被**测量**、从不被**比较**——72% 和 41%
+都是绿色，`term-missing` 那段输出没有人读。这与进程内的其余门禁（棘轮、契约测试）
+形成反差：那些数字都被钉住了，只有这一个可以一路下滑而无人发现。
+
+**下限怎么定**：实测 `57721 statements / 16107 missing = 72%`（2026-11-20，全量
+`-n 4 --dist loadfile`）。下限取 **70**，留两点缓冲吸收重构期的抖动；上调时必须在
+同一提交里给出新的实测值，并同步本节与
+`tests/governance/test_coverage_gate.py`（它钉住 CI 参数与本节的数字一致）。
+
+**它不替代什么**：覆盖率是"有没有执行过"的信号，不是"行为对不对"的判据。本仓的
+行为证据仍然是各泳道的契约测试与回放差分（`stage2_replay_selfcheck`、
+`extractor_parity_report`、`lane_coupling_ratchet` 等）。下限的作用只有一个：阻止
+新增的大块未执行代码静默进来。
+
+**本地怎么复现**：
+
+```bash
+python -m pytest -q -n 4 --dist loadfile --cov=sms_tool --cov=services --cov-report=term-missing --cov-fail-under=70
+```
+
+## 静默异常：为什么冻结而不清零（2026-11-20 复核）
+
+`scripts/broad_except_ratchet.py` 冻结的是「每个文件的 broad handler 数」与
+「静默（body 只有 `pass`/`...`）数」，加上 `whitelist`（每条必须带 reason）与全局预算
+`max_broad` / `max_silent`。2026-11-20 的复核对 6 个静默最多的文件（41 个静默 handler）
+逐处读了 try 体，结论是：
+
+| 类别 | 例 | 数量 |
+| --- | --- | ---: |
+| 拆除/清理（`close` / `write_eof` / 幂等 `close` 后再删 profile） | `proxy/pool.py` 的 pipe teardown、`external_sessions/managed.py` 的关窗 | 主导 |
+| JS/DOM 探测回退（元素不存在即跳过） | `paypal/dom_fields.py`、`browser_flow/page_state.py` | 次之 |
+| **吞掉逻辑错误** | — | **0** |
+
+因此这条不按「清零」处理：拆除路径里抛异常本身是错的，DOM 探测回退是判定语义的
+一部分。门禁的职责只有两条 —— ①**不许增长**（新静默点必须落在该文件的冻结额度内，
+或让文件进 `whitelist` 并写明 reason）；②一旦某个静默点被证明确实吞掉了逻辑错误，
+把它改成显式分类（`kernel/error_classification`）并**同步下调**该文件额度。
+
+`external_sessions/managed.py` 是这个形状的正面例：`close` 保持静默（幂等），而
+`delete` 三次重试后仍然失败时 `logger.warning` 留痕，因为孤儿 profile 会占满额度。
+
 ## 门禁脚本
 
 前三套 ratchet 共用一套做法（先冻结、再加预算或逐条白名单化、只许降不许升）；第四套不冻结计数，而是要求每个开关带一个决定：
