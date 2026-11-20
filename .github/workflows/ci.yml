@@ -31,9 +31,17 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
-      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6
         with:
           global-json-file: global.json
+          # v6.1.0 documents `check-latest` as defaulting to true: it would go
+          # online and install the newest SDK that satisfies global.json instead
+          # of the 10.0.300 named there. That is the difference between "the
+          # pinned toolkit builds this" and "whatever the runner image shipped
+          # today" (the SDK feature band also decides the bundled ILLink
+          # version, which is how the first tag-driven release failed). Keep it
+          # offline on both workflows.
+          check-latest: false
           # No NuGet package caching.
           #
           # `cache: true` requires a packages.lock.json at the *repository root*
@@ -50,7 +58,7 @@ jobs:
           # (that was the NU1004 break). Restore here costs ~18s, so caching is
           # not worth reintroducing that class of failure.
           cache: false
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: "3.12"
           cache: pip
