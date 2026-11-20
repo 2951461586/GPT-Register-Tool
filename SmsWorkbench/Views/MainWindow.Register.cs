@@ -16,9 +16,9 @@ namespace SmsWorkbench
         // RegisterDialogService. The mailbox-line lookup stays here because the
         // inbox and export partials use it too.
         //
-        // RegisterFromPool_Click removed (2026-09-02, round 6): dead event
-        // handler, no XAML subscriber. BackendCommandPlanner.CreatePoolRegistration
-        // stays -- it is unit-tested on the Contracts side.
+        // RegisterFromPool_Click removed (2026-09-02, round 6): dead event handler,
+        // no XAML subscriber. Its builder (CreatePoolRegistration) was deleted on
+        // 2026-11-20 with the other test-only ones -- see the surface test.
 
         // `registerDialogs` is injected; `registrationRequests` is built in the
         // constructor from this window's mailbox-line lookup and CFWorker predicate.

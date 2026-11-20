@@ -95,10 +95,9 @@ namespace SmsWorkbench
 
         // RerunFailed_Click / RebuildSqlite_Click removed (2026-09-02, round 6):
         // dead event handlers -- no XAML element subscribes to either. They were
-        // also the only `async void` in this file. The BackendCommandPlanner
-        // builders they called (CreateRerunFailedRegistration /
-        // CreateRebuildSqlite) are kept: the Contracts side is unit-tested and is
-        // the piece to wire up if these actions ever return to the UI.
+        // also the only `async void` in this file. Their builders were deleted on
+        // 2026-11-20: the CLI still accepts the flags, docs/current/cli-reference.md
+        // is generated from the parser, and the C# copies had no caller.
 
         private void RunBackend(string taskName, List<string> args)
             => RunUiTask(() => RunBackendAsync(taskName, args, ct: _lifetimeCts.Token));

@@ -112,7 +112,6 @@ def register(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--smsbower-country", default=None, help="SMSBower country ID for phone registration (default: from config)"
     )
-    parser.add_argument("--skip-paypal-link", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument(
         "--registration-mode",
         choices=["passwordless", "password", "har", "legacy"],

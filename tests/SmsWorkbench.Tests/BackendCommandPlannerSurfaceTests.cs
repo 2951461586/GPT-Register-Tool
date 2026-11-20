@@ -16,12 +16,11 @@ namespace SmsWorkbench.Tests;
 /// </para>
 ///
 /// <para>
-/// The six are kept on purpose rather than deleted: each one is the only place a
-/// still-supported CLI contract (<c>--delete-account --email</c>,
-/// <c>--refresh-session</c>, <c>--rebuild-sqlite</c>, the single-row
-/// <c>--email-file</c> shape, the mailbox-free <c>--count/--workers</c> form and
-/// the fixed failed-rerun argument set) is recorded on this side. They now carry
-/// a "no production caller" doc comment, and this file freezes the set:
+/// Those six were deleted on 2026-11-20. Their stated justification was "each is
+/// the only place a still-supported CLI contract is recorded on this side", but
+/// that was no longer true: <c>docs/current/cli-reference.md</c> is generated
+/// from the Python parser and pins every flag, so the C# copies were a second
+/// copy of a fact with no reader. The set is now <b>empty</b> and stays frozen:
 /// <list type="bullet">
 ///   <item>a <b>new</b> unreferenced builder fails — dead code has to be a decision;</item>
 ///   <item><b>wiring</b> one up fails until it is removed from the allowlist — the
@@ -37,15 +36,7 @@ public sealed class BackendCommandPlannerSurfaceTests
     /// Builders with no production caller. Every entry must carry a "no production
     /// caller" doc comment in <c>BackendCommandPlanner.cs</c> (asserted below).
     /// </summary>
-    private static readonly string[] TestOnlyBuilders =
-    [
-        "CreateDeleteAccount",
-        "CreatePoolRegistration",
-        "CreateRebuildSqlite",
-        "CreateRefreshSession",
-        "CreateRerunFailedRegistration",
-        "CreateSingleAccountImport",
-    ];
+    private static readonly string[] TestOnlyBuilders = [];
 
     private const string PlannerRelativePath = "SmsWorkbench.Contracts/BackendCommandPlanner.cs";
 

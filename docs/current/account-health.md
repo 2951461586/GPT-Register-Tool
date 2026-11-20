@@ -131,6 +131,16 @@ transport. Build it with `browser_fallback_transport()`, which returns `None`
 when Playwright is unavailable; the result's `fallback_used` records whether it
 ran.
 
+**Reachability (2026-11-20).** Until this date nothing passed that transport:
+the seam was documented here and had zero production readers
+(`docs/audits/scans/scan-2026-11-02-unused-module-inventory.md` measured
+"0 production / 1 test"). `pay_link/core.py` now fills it from an explicit
+opt-in switch — `PP_CAPABILITY_BROWSER_FALLBACK=1` — and the import is lazy, so
+a default probe neither pays for Playwright nor loads the browser driver stack.
+Default `off` means the network shape of a normal probe is unchanged; turning it
+on is a behaviour change (one real browser session per risk-blocked create) and
+belongs to whoever runs the canary.
+
 The probe classifies only known, non-sensitive response signals: HTTP 400
 `checkout_risk_blocked`, HTTP 429 `checkout_creation_rate_limited`, or a generic
 HTTP failure with `http_status`. It never persists the raw response body or an

@@ -19,7 +19,6 @@ def register(parser: argparse.ArgumentParser) -> None:
         default="cpa",
         help="Target for --import-cpa and 401 re-import",
     )
-    parser.add_argument("--cpa-domain-filter", default=None, help="Only process CPA accounts under this email domain")
     parser.add_argument("--codex-export-dir", default=None, help="Directory for Codex JSON exports")
     parser.add_argument(
         "--cpa-api-url", default=None, help="CPA API base URL, defaults to cpa/cpa_mode.api_url in config.json"

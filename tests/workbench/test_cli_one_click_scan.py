@@ -14,10 +14,6 @@ class OneClickScanCliTests(unittest.TestCase):
             workers=3,
             proxy="socks5h://127.0.0.1:7897",
             refresh_timeout=90,
-            no_scan_workspace_status=False,
-            scan_switch_workspace_id="workspace-should-be-ignored",
-            scan_fallback_workspace_ids="fallback-should-be-ignored",
-            scan_auto_switch_workspace=True,
             scan_relogin_mode="web_session",
             quota_auto_relogin=True,
         )
@@ -58,3 +54,29 @@ class OneClickScanCliTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class OneClickScanFlagSurfaceTests(unittest.TestCase):
+    """The four ``--scan-*workspace*`` flags were accepted and ignored.
+
+    ``_one_click_scan`` hard-codes "no workspace probing" (asserted above), so
+    the flags were removed on 2026-11-20 as a dead CLI contract: parsing a flag
+    nobody reads is a promise the tool cannot keep. Re-adding one is now a
+    decision that shows up here.
+    """
+
+    def test_deprecated_scan_workspace_flags_are_gone(self) -> None:
+        parser = cli.build_parser()
+        option_strings = {option for action in parser._actions for option in action.option_strings}
+        removed = {
+            "--no-scan-workspace-status",
+            "--scan-switch-workspace-id",
+            "--scan-fallback-workspace-ids",
+            "--scan-auto-switch-workspace",
+        }
+        self.assertEqual(option_strings & removed, set())
+
+    def test_removed_flags_are_rejected_instead_of_silently_ignored(self) -> None:
+        parser = cli.build_parser()
+        with self.assertRaises(SystemExit):
+            parser.parse_args(["--one-click-scan", "--scan-switch-workspace-id", "ws-1"])

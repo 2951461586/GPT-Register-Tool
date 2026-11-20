@@ -15,20 +15,6 @@ def register(parser: argparse.ArgumentParser) -> None:
         help="Batch OAuth scan accounts for account_deactivated and add-phone/secondary phone verification",
     )
     parser.add_argument(
-        "--no-scan-workspace-status",
-        action="store_true",
-        help="Deprecated compatibility flag; --one-click-scan no longer performs workspace checks",
-    )
-    parser.add_argument(
-        "--scan-switch-workspace-id", default=None, help="Deprecated compatibility flag; no longer used"
-    )
-    parser.add_argument(
-        "--scan-fallback-workspace-ids", default=None, help="Deprecated compatibility flag; no longer used"
-    )
-    parser.add_argument(
-        "--scan-auto-switch-workspace", action="store_true", help="Deprecated compatibility flag; no longer used"
-    )
-    parser.add_argument(
         "--scan-relogin-mode",
         choices=["auto", "web_session", "codex_oauth"],
         default="auto",

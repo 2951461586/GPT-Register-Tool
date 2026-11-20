@@ -45,7 +45,6 @@ are omitted.
 | `--convert-session-json` | value | Convert ChatGPT/Codex session JSON file to another import format |
 | `--cpa-api-token` | value | CPA API token, defaults to cpa/cpa_mode.api_token in config.json |
 | `--cpa-api-url` | value | CPA API base URL, defaults to cpa/cpa_mode.api_url in config.json |
-| `--cpa-domain-filter` | value | Only process CPA accounts under this email domain |
 | `--delete-account` | — | Delete/archive one or more accounts through the lifecycle adapter |
 | `--device-id` | value | oai-did (device UUID) for the UPI lane; derived from --session-token's account when omitted |
 | `--doctor` | — | Offline environment self-check (python/node/playwright/curl_cffi/config), then exit |
@@ -82,7 +81,6 @@ are omitted.
 | `--no-jit-at-refresh` | — | Probe the saved AT but do not run email OTP OAuth on HTTP 401 |
 | `--no-phone-reuse` | — | Disable phone verification even when smsbower is configured |
 | `--no-require-zero` | — | Allow non-zero amount (default: require 0) |
-| `--no-scan-workspace-status` | — | Deprecated compatibility flag; --one-click-scan no longer performs workspace checks |
 | `--no-session-refresh` | — | Do not refresh session before Codex JSON export |
 | `--omakse-base-url` | value | Omakse server base URL (default: http://oai.omakse.xyz) |
 | `--omakse-client-id` | value | Client ID for US protocol payment (auto-generated if omitted) |
@@ -167,11 +165,8 @@ are omitted.
 | `--remail-token` | value | ReMail service token; requires --email |
 | `--require-ba-token` | — | Require a PayPal BA approve URL/token; fail instead of returning hosted fallback |
 | `--require-server-upi-mandate` | — | Verify the server returned the expected UPI mandate_options before continuing |
-| `--scan-auto-switch-workspace` | — | Deprecated compatibility flag; no longer used |
 | `--scan-deep-probe` | — | Allow --one-click-scan to run OAuth/email-OTP deep probing; default is AT probe-only |
-| `--scan-fallback-workspace-ids` | value | Deprecated compatibility flag; no longer used |
 | `--scan-relogin-mode` | choices: `auto`, `web_session`, `codex_oauth` | Relogin mode for --one-click-scan --quota-auto-relogin; auto tries RT, web session, protocol email-OTP, then Codex OAuth |
-| `--scan-switch-workspace-id` | value | Deprecated compatibility flag; no longer used |
 | `--session-file` | value | Session JSON path for account and payment operations |
 | `--session-token` | value | ChatGPT __Secure-next-auth.session-token for the UPI lane. The Checkout is a same-site action: without the session cookies the access token was issued with it answers 400 unusual activity |
 | `--smailr-domain` | value | Smailr mailbox domain, default smailr.default_domain in config.json |

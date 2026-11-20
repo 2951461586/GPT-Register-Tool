@@ -225,6 +225,7 @@
     "sms_tool/pay_link/adapters.py -> sms_tool.wallet_provider": "deferred",
     "sms_tool/pay_link/adapters.py -> sms_tool.wallet_transport": "deferred",
     "sms_tool/pay_link/base.py -> sms_tool.payment.contracts": "deferred",
+    "sms_tool/pay_link/core.py -> sms_tool.capability_browser": "deferred",
     "sms_tool/pay_link/core.py -> sms_tool.payment.capability": "deferred",
     "sms_tool/pay_link/registry.py -> sms_tool.gen_pp_link": "deferred",
     "sms_tool/pay_link/registry.py -> sms_tool.upi_link": "deferred",
@@ -455,7 +456,7 @@
     "sms_tool/otp_strategy.py": 1,
     "sms_tool/pay_link/adapters.py": 7,
     "sms_tool/pay_link/base.py": 1,
-    "sms_tool/pay_link/core.py": 2,
+    "sms_tool/pay_link/core.py": 3,
     "sms_tool/pay_link/registry.py": 2,
     "sms_tool/payment/auth.py": 2,
     "sms_tool/payment/batch.py": 6,
@@ -531,10 +532,10 @@
   },
   "reasons": {
     "cycle": 8,
-    "deferred": 236,
+    "deferred": 237,
     "provider": 38,
     "startup": 115,
     "test-seam": 0
   },
-  "total": 516
+  "total": 517
 }

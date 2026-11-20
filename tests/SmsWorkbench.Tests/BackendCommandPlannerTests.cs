@@ -7,34 +7,6 @@ public sealed class BackendCommandPlannerTests
     // ── Registration ────────────────────────────────────────────────────
 
     [Fact]
-    public void CreatePoolRegistration_IncludesCountWorkersAndProxy()
-    {
-        var plan = BackendCommandPlanner.CreatePoolRegistration(
-            count: 5,
-            proxyPool: new[] { "http://proxy1:8080", "http://proxy2:8080" },
-            workers: 3);
-
-        Assert.Equal("邮箱池注册", plan.TaskName);
-        Assert.Equal(BackendAccountResultKind.None, plan.ResultKind);
-        Assert.Contains("--count", plan.Arguments);
-        Assert.Contains("5", plan.Arguments);
-        Assert.Contains("--workers", plan.Arguments);
-        Assert.Contains("3", plan.Arguments);
-        Assert.Contains("--no-phone-reuse", plan.Arguments);
-        Assert.Contains("--desktop-ipc", plan.Arguments);
-        Assert.Contains("--proxy", plan.Arguments);
-        Assert.Contains("http://proxy1:8080", plan.Arguments);
-    }
-
-    [Fact]
-    public void CreatePoolRegistration_WithoutProxyPool_OmitsProxyArgs()
-    {
-        var plan = BackendCommandPlanner.CreatePoolRegistration(count: 1, proxyPool: Array.Empty<string>());
-        Assert.DoesNotContain("--proxy", plan.Arguments);
-        Assert.DoesNotContain("--proxy-pool", plan.Arguments);
-    }
-
-    [Fact]
     public void CreateMailboxFileRegistration_IncludesRegistrationAtOnly()
     {
         var plan = BackendCommandPlanner.CreateMailboxFileRegistration(
@@ -179,20 +151,6 @@ public sealed class BackendCommandPlannerTests
         Assert.Contains("--desktop-ipc", plan.Arguments);
         Assert.Contains("--smailr-domain", plan.Arguments);
         Assert.Contains("smailr.com", plan.Arguments);
-    }
-
-    [Fact]
-    public void CreateRerunFailedRegistration_DelegatesToMailboxFileRegistration()
-    {
-        var plan = BackendCommandPlanner.CreateRerunFailedRegistration(
-            mailboxArgument: "--chatai-mailbox-file",
-            mailboxFile: "C:\\failed.txt",
-            count: 5,
-            proxyPool: Array.Empty<string>());
-
-        Assert.Contains("重新注册失败账号", plan.TaskName);
-        Assert.Contains("5", plan.TaskName);
-        Assert.Contains("--chatai-mailbox-file", plan.Arguments);
     }
 
     // ── One-click SMS ───────────────────────────────────────────────────
@@ -409,17 +367,6 @@ public sealed class BackendCommandPlannerTests
     // ── Deletion ────────────────────────────────────────────────────────
 
     [Fact]
-    public void CreateDeleteAccount_IncludesDesktopIpc()
-    {
-        var plan = BackendCommandPlanner.CreateDeleteAccount("user@example.com");
-        Assert.Contains("--delete-account", plan.Arguments);
-        Assert.Contains("--email", plan.Arguments);
-        Assert.Contains("user@example.com", plan.Arguments);
-        Assert.Contains("--desktop-ipc", plan.Arguments);
-        Assert.Equal(120000, plan.TimeoutMilliseconds);
-    }
-
-    [Fact]
     public void CreateBatchDeleteAccounts_WritesTempFile()
     {
         var plan = BackendCommandPlanner.CreateBatchDeleteAccounts(
@@ -452,16 +399,6 @@ public sealed class BackendCommandPlannerTests
         Assert.Contains("cpa", plan.Arguments);
     }
 
-    [Fact]
-    public void CreateSingleAccountImport_WritesTempFile()
-    {
-        var plan = BackendCommandPlanner.CreateSingleAccountImport(
-            "cpa",
-            "user@example.com");
-        Assert.Contains("--email-file", plan.Arguments);
-        Assert.Single(plan.TempFiles);
-    }
-
     // ── Export conversion ───────────────────────────────────────────────
 
     [Fact]
@@ -481,25 +418,6 @@ public sealed class BackendCommandPlannerTests
     }
 
     // ── Refresh / maintenance ───────────────────────────────────────────
-
-    [Fact]
-    public void CreateRefreshSession_IncludesEmailAndSessionFile()
-    {
-        var plan = BackendCommandPlanner.CreateRefreshSession(
-            "user@example.com",
-            "C:\\session.json");
-        Assert.Contains("--refresh-session", plan.Arguments);
-        Assert.Contains("--session-file", plan.Arguments);
-    }
-
-    [Fact]
-    public void CreateRebuildSqlite_HasMinimalArgs()
-    {
-        var plan = BackendCommandPlanner.CreateRebuildSqlite();
-        Assert.Equal("重建SQLite索引", plan.TaskName);
-        Assert.Contains("--rebuild-sqlite", plan.Arguments);
-        Assert.Single(plan.Arguments);
-    }
 
     // ── Inbox ───────────────────────────────────────────────────────────
 

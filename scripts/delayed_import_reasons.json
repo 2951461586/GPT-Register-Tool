@@ -120,6 +120,10 @@
       "reason": "deferred",
       "why": "P2-4: the tolerant boolean parser has one owner (payment.contracts.as_bool). pay_link -> payment is already a frozen facade edge, so importing one more payment module at module scope would grow the layer ratchet for a one-line delegation; the import runs inside _as_bool instead."
     },
+    "sms_tool/pay_link/core.py -> sms_tool.capability_browser": {
+      "reason": "deferred",
+      "why": "Capability browser fallback (2026-11-20): the seam existed since 2026-10-21 with zero production readers. It is wired here behind PP_CAPABILITY_BROWSER_FALLBACK and imported inside the branch so a default probe neither pays for playwright nor pulls the browser driver stack into every `import sms_tool.pay_link.core`."
+    },
     "sms_tool/payment/batch.py -> sms_tool.kernel.error_classification": {
       "reason": "deferred",
       "why": "P2-3: the shared failure classifier is a leaf utility with one call site in this module (_worker_exception_row). A module-level edge would grow the layer ratchet for one use, so the import runs inside the per-row fallback."

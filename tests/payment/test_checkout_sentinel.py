@@ -315,6 +315,51 @@ def test_browser_fallback_transport_is_none_without_a_browser():
         assert cb.browser_fallback_transport() is None
 
 
+# ---------------------------------------------------------------------------
+# The seam is reachable from the production probe (2026-11-20)
+# ---------------------------------------------------------------------------
+def test_browser_fallback_is_not_wired_unless_the_operator_opts_in(monkeypatch):
+    """Default probes must not build a browser transport (or import playwright)."""
+    from sms_tool.pay_link import core as pay_link_core
+
+    monkeypatch.delenv(pay_link_core.CAPABILITY_BROWSER_FALLBACK_ENV, raising=False)
+    with patch.object(cb, "browser_fallback_transport", side_effect=AssertionError("must stay off")) as factory:
+        assert pay_link_core._browser_fallback_transport() is None
+    factory.assert_not_called()
+
+
+def test_browser_fallback_is_wired_when_the_switch_is_on(monkeypatch):
+    from sms_tool.pay_link import core as pay_link_core
+
+    monkeypatch.setenv(pay_link_core.CAPABILITY_BROWSER_FALLBACK_ENV, "1")
+    sentinel = object()
+    with patch.object(cb, "browser_fallback_transport", return_value=sentinel):
+        assert pay_link_core._browser_fallback_transport() is sentinel
+
+
+def test_probe_payment_method_passes_the_fallback_only_when_switched_on(monkeypatch):
+    """``fallback_transport`` reaches the probe only through the opt-in switch."""
+    from sms_tool.pay_link import core as pay_link_core
+    from sms_tool.payment.routing import PaymentRoutePlan
+
+    calls: list[dict] = []
+    monkeypatch.setattr(
+        "sms_tool.payment.capability.payment_method_capability_probe",
+        lambda **kwargs: calls.append(kwargs) or {"ok": True},
+    )
+    plan = PaymentRoutePlan.empty("upi")
+
+    monkeypatch.delenv(pay_link_core.CAPABILITY_BROWSER_FALLBACK_ENV, raising=False)
+    pay_link_core.probe_payment_method("at", "upi", payment_route_plan=plan)
+    assert "fallback_transport" not in calls[-1]
+
+    monkeypatch.setenv(pay_link_core.CAPABILITY_BROWSER_FALLBACK_ENV, "1")
+    sentinel = object()
+    monkeypatch.setattr("sms_tool.capability_browser.browser_fallback_transport", lambda: sentinel)
+    pay_link_core.probe_payment_method("at", "upi", payment_route_plan=plan)
+    assert calls[-1]["fallback_transport"] is sentinel
+
+
 def test_browser_transport_delegates_later_stages_to_protocol():
     transport = cb.BrowserCapabilityTransport()
     with patch.object(cb.ChatGPTStripeCapabilityTransport, "stripe_init", return_value={"delegated": True}) as mint:

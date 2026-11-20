@@ -61,21 +61,20 @@ def test_long_term_remail_disables_phone_reuse_by_default():
 def test_only_phone_registration_selects_phone_flow():
     planner = (ROOT / "SmsWorkbench.Contracts" / "BackendCommandPlanner.cs").read_text(encoding="utf-8-sig")
 
-    # The two WPF entry points this test used to pin (MainWindow.Register.cs ->
-    # RegisterFromPool_Click, MainWindow.Tasks.cs -> RerunFailed_Click) were
-    # dead event handlers with no XAML subscriber and were removed on
-    # 2026-09-02 (round 6). The invariant worth keeping is the planner side:
-    # pool registration and failed-rerun both route through no-phone-reuse.
-    pool_reg_start = planner.index("public static BackendCommandPlan CreatePoolRegistration")
-    pool_reg_end = planner.index("public static BackendCommandPlan CreateMailboxFileRegistration", pool_reg_start)
-    assert "AppendNoPhoneReuse(args);" in planner[pool_reg_start:pool_reg_end]
-
-    # Not AppendNoPhoneReuse: the rerun plan expresses "do not reduce this run
-    # to phone-only" through the registrationAtOnly flag instead.
-    rerun_start = planner.index("public static BackendCommandPlan CreateRerunFailedRegistration")
-    rerun_end = planner.index("public static BackendCommandPlan Create", rerun_start + 40)
-    rerun_block = planner[rerun_start:rerun_end]
-    assert "registrationAtOnly: false" in rerun_block
+    # What this pins, and what it used to pin. The WPF entry points
+    # (RegisterFromPool_Click, RerunFailed_Click) were dead event handlers with
+    # no XAML subscriber and were removed on 2026-09-02 (round 6); their planner
+    # builders (CreatePoolRegistration / CreateRerunFailedRegistration) were
+    # deleted on 2026-11-20 as test-only surface. So the pool/rerun argument
+    # shapes are no longer facts this repository holds -- pinning them here would
+    # be pinning deleted code.
+    #
+    # The invariant that still has a production owner is the mailbox-file
+    # registration path: it disables phone reuse, and phone registration is the
+    # one flow that must not.
+    mailbox_start = planner.index("public static BackendCommandPlan CreateMailboxFileRegistration")
+    mailbox_end = planner.index("public static BackendCommandPlan Create", mailbox_start + 40)
+    assert "AppendNoPhoneReuse(args);" in planner[mailbox_start:mailbox_end]
 
     # Phone registration uses --phone-register and must NOT disable phone reuse.
     phone_start = planner.index("public static BackendCommandPlan CreatePhoneRegistration")
@@ -125,11 +124,12 @@ def test_icloud_registration_and_rerun_use_format_aware_mailbox_arguments():
     assert '= "--chatai-mailbox-file"' not in selected_block
 
     # RerunFailed_Click was a dead event handler (no XAML subscriber) and was
-    # removed with the rest on 2026-09-02 (round 6). What survives is the
-    # planner contract: the rerun plan takes the *resolved* mailbox argument and
-    # file rather than hardcoding a chatai mailbox file argument inline.
-    rerun_start = planner.index("public static BackendCommandPlan CreateRerunFailedRegistration")
-    rerun_end = planner.index("public static BackendCommandPlan Create", rerun_start + 40)
-    rerun_block = planner[rerun_start:rerun_end]
-    assert "--chatai-mailbox-file" not in rerun_block
-    assert "mailboxArg" in rerun_block
+    # removed with the rest on 2026-09-02 (round 6); its planner builder
+    # (CreateRerunFailedRegistration) was deleted on 2026-11-20. The surviving
+    # contract is the shared mailbox-file form below: every registration path
+    # takes the *resolved* mailbox argument and file, and none writes a
+    # `--chatai-mailbox-file` literal of its own.
+    assert "mailboxArgument" in planner
+    assert "--chatai-mailbox-file" not in (
+        ROOT / "SmsWorkbench" / "Services" / "RegistrationRequestBuilder.cs"
+    ).read_text(encoding="utf-8-sig")

@@ -1,6 +1,7 @@
 """core submodule of the former payment/link_manager.py (mechanical split, bodies unchanged)."""
 
 from __future__ import annotations
+import os
 import uuid
 from typing import Any, Callable, Mapping
 from ..config import ConfigError, current_config_data, validate_config
@@ -25,6 +26,36 @@ from .registry import PAYMENT_ADAPTERS, _enabled_methods, normalize_payment_meth
 #: letting escape. Both public entry points share this tuple so a pool outage
 #: cannot be a normalised result in one and a raw exception in the other.
 _PLANNING_FAILURES = (ConfigError, ValueError, TypeError, OSError, RuntimeError)
+
+#: Opt-in switch for the page-context checkout fallback. See
+#: :func:`_browser_fallback_transport`.
+CAPABILITY_BROWSER_FALLBACK_ENV = "PP_CAPABILITY_BROWSER_FALLBACK"
+
+_TRUTHY = frozenset({"1", "true", "yes", "on"})
+
+
+def _browser_fallback_transport() -> Any:
+    """The opt-in browser fallback for the checkout create gate, else ``None``.
+
+    ``sms_tool/capability_browser.py`` implements a page-context fallback for
+    accounts the protocol ``payments/checkout`` create gate rejects with
+    ``400 unusual activity``, but until 2026-11-20 **nothing passed it** into
+    ``payment_method_capability_probe(fallback_transport=...)``: the seam was
+    documented in ``docs/current/account-health.md`` and unreachable from any
+    production path (``docs/audits/scans/scan-2026-11-02-unused-module-inventory.md``
+    measured 0 production readers).
+
+    It stays **off by default**: a real browser session is a behaviour change
+    plus a network probe, so the operator opts in with
+    ``PP_CAPABILITY_BROWSER_FALLBACK=1``. The import is lazy for the same
+    reason — a default probe must not pay for playwright, and
+    ``delayed_import_ratchet`` records the edge with that reason.
+    """
+    if str(os.environ.get(CAPABILITY_BROWSER_FALLBACK_ENV, "")).strip().lower() not in _TRUTHY:
+        return None
+    from ..capability_browser import browser_fallback_transport
+
+    return browser_fallback_transport()
 
 
 def _annotate_planning_failure(exc: Exception) -> Exception:
@@ -272,6 +303,10 @@ def probe_payment_method(
         )
 
     from ..payment.capability import payment_method_capability_probe
+
+    fallback = _browser_fallback_transport()
+    if fallback is not None:
+        options.setdefault("fallback_transport", fallback)
 
     return payment_method_capability_probe(
         access_token=access_token,
