@@ -91,8 +91,8 @@
       "sms_tool/sentinel/surface.py"
     ],
     "OAuth and auth HTTP helpers": [
-      "sms_tool/codex_oauth.py",
-      "sms_tool/http_utils.py"
+      "sms_tool/http_utils.py",
+      "sms_tool/codex/*.py"
     ],
     "Registration/auth": [
       "sms_tool/cross_process_gate.py",
@@ -115,12 +115,11 @@
       "sms_tool/otp_strategy.py",
       "sms_tool/auth_state.py",
       "sms_tool/error_classification.py",
-      "sms_tool/codex_sentinel.py",
-      "sms_tool/codex_phone.py",
       "sms_tool/phone_registration.py",
       "sms_tool/session_refresh.py",
       "sms_tool/registration/*.py",
-      "sms_tool/tls_fingerprint.py"
+      "sms_tool/tls_fingerprint.py",
+      "sms_tool/codex/*.py"
     ],
     "Agent Identity / explicit import": [
       "sms_tool/agent_identity.py",
@@ -187,10 +186,10 @@
     "Account data/import/export": [
       "sms_tool/account_seed.py",
       "sms_tool/storage.py",
-      "sms_tool/codex_export.py",
       "sms_tool/importers/sub2api.py",
       "sms_tool/session_converter.py",
-      "sms_tool/importers/*.py"
+      "sms_tool/importers/*.py",
+      "sms_tool/codex/*.py"
     ],
     "Email change workflow": [
       "sms_tool/accounts/account_email_change.py",

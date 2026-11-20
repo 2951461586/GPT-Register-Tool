@@ -118,7 +118,7 @@ def refresh_session(args: Any) -> None:
 
 
 def export_codex_json(args: Any, ctx: AccountCommandContext) -> None:
-    from ..codex_export import export_codex_session, export_codex_sessions
+    from ..codex.export import export_codex_session, export_codex_sessions
 
     emails = read_email_file(args.email_file)
     if args.email:

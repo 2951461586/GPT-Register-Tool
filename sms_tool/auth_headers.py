@@ -1234,7 +1234,7 @@ def openai_auth_headers(
         headers.update(datadog_trace_headers())
     if sentinel or sentinel_token or sentinel_so_token:
         try:
-            from .codex_sentinel import attach_sentinel
+            from .codex.sentinel import attach_sentinel
 
             sentinel_data = dict(sentinel or {})
             if sentinel_token:

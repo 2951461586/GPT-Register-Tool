@@ -12,7 +12,7 @@
         "sms_tool/auth_flow/deps.py:http_utils._follow_continue_url",
         "sms_tool/auth_flow/deps.py:http_utils._json_or_raw",
         "sms_tool/auth_state.py:http_utils._json_or_raw",
-        "sms_tool/codex_oauth.py:http_utils._absolute_url",
+        "sms_tool/codex/oauth.py:http_utils._absolute_url",
         "sms_tool/otp_strategy.py:http_utils._absolute_url",
         "sms_tool/otp_strategy.py:http_utils._json_or_raw",
         "sms_tool/phone_registration.py:http_utils._json_or_raw",
@@ -22,7 +22,7 @@
         "sms_tool/account_creation.py": 5,
         "sms_tool/auth_flow/deps.py": 4,
         "sms_tool/auth_state.py": 1,
-        "sms_tool/codex_oauth.py": 1,
+        "sms_tool/codex/oauth.py": 1,
         "sms_tool/otp_strategy.py": 2,
         "sms_tool/phone_registration.py": 1,
         "sms_tool/registration/orchestrator.py": 1
@@ -89,8 +89,8 @@
         "sms_tool/accounts/account_scan.py:session_refresh._load_seed_session",
         "sms_tool/agent_identity.py:session_refresh._load_seed_session",
         "sms_tool/agent_identity.py:session_refresh._save_refreshed",
-        "sms_tool/codex_export.py:session_refresh._load_seed_session",
-        "sms_tool/codex_export.py:session_refresh._session_token",
+        "sms_tool/codex/export.py:session_refresh._load_seed_session",
+        "sms_tool/codex/export.py:session_refresh._session_token",
         "sms_tool/commands/mailbox_ops.py:session_refresh._load_seed_session",
         "sms_tool/commands/one_click.py:session_refresh._load_seed_session",
         "sms_tool/commands/payment.py:session_refresh._load_seed_session",
@@ -103,7 +103,7 @@
         "sms_tool/accounts/account_recovery.py": 3,
         "sms_tool/accounts/account_scan.py": 1,
         "sms_tool/agent_identity.py": 2,
-        "sms_tool/codex_export.py": 2,
+        "sms_tool/codex/export.py": 2,
         "sms_tool/commands/mailbox_ops.py": 1,
         "sms_tool/commands/one_click.py": 1,
         "sms_tool/commands/payment.py": 1,
@@ -114,8 +114,8 @@
     },
     "utils": {
       "pairs": [
-        "sms_tool/codex_oauth.py:utils._random_birthdate",
-        "sms_tool/codex_oauth.py:utils._random_name",
+        "sms_tool/codex/oauth.py:utils._random_birthdate",
+        "sms_tool/codex/oauth.py:utils._random_name",
         "sms_tool/paypal/orchestrator.py:utils._generate_password",
         "sms_tool/paypal/orchestrator.py:utils._random_name",
         "sms_tool/phone_registration.py:utils._generate_password",
@@ -142,7 +142,7 @@
         "sms_tool/registration_drivers/browser_flow/orchestrator.py:utils._random_name"
       ],
       "per_file": {
-        "sms_tool/codex_oauth.py": 2,
+        "sms_tool/codex/oauth.py": 2,
         "sms_tool/paypal/orchestrator.py": 2,
         "sms_tool/phone_registration.py": 9,
         "sms_tool/registration/orchestrator.py": 9,

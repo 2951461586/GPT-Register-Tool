@@ -269,8 +269,8 @@ def iter_scannable_lines(text, suffix):
 
 
 #: OAuth 里**设计上就公开**的标识符。PKCE 公开客户端没有 secret，`client_id`
-#: 必须随源码分发（本仓 `codex_oauth.py:35` 是 Codex CLI 的公开 client id，
-#: `codex_export.py:333` 还拿它当 fallback）。跨文件检查看到「示例留空、源码填值」
+#: 必须随源码分发（本仓 `codex/oauth.py:35` 是 Codex CLI 的公开 client id，
+#: `codex/export.py:333` 还拿它当 fallback）。跨文件检查看到「示例留空、源码填值」
 #: 会把它判成泄漏，而它恰恰是唯一正确的写法。
 #: 用**后缀**匹配，`CLIENT_ID_SECRET` / `CLIENT_ID_FILE` 这类仍会被抓。
 PUBLIC_IDENTIFIER_SUFFIX = re.compile(r"(^|_)(client|app|application|tenant|project|subscription)_id$", re.I)

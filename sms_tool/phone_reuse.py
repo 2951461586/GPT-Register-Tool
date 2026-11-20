@@ -180,7 +180,7 @@ def _send_phone_otp_with_retries(
 
 
 def send_phone_otp(session, did, current_url, phone: str, sentinel=None, proxy=None) -> dict:
-    from .codex_sentinel import load_cached_sentinel
+    from .codex.sentinel import load_cached_sentinel
 
     if sentinel is None:
         sentinel = load_cached_sentinel()
@@ -219,7 +219,7 @@ def send_phone_otp(session, did, current_url, phone: str, sentinel=None, proxy=N
 
 
 def validate_phone_otp(session, did, code: str, sentinel=None, proxy=None) -> dict:
-    from .codex_sentinel import load_cached_sentinel
+    from .codex.sentinel import load_cached_sentinel
 
     if sentinel is None:
         sentinel = load_cached_sentinel()

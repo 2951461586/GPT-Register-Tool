@@ -257,9 +257,9 @@ class TheExchangeIsImportedAtModuleScopeTests(unittest.TestCase):
     delayed-import ratchet counts, and adding one here pushed the tree's total
     to 407 against a 406 baseline.  Importing it at module scope also matches how
     the rest of the package already reaches this symbol
-    (``accounts/account_scan.py``, ``codex_export.py``, ``workspace_scan.py``).
+    (``accounts/account_scan.py``, ``codex/export.py``, ``workspace_scan.py``).
 
-    The consequence is that patching ``sms_tool.codex_oauth.collect_codex_oauth_tokens``
+    The consequence is that patching ``sms_tool.codex.oauth.collect_codex_oauth_tokens``
     does not reach this call site -- ``registration_finalize`` holds its own
     binding.  That is why every test above patches
     ``sms_tool.registration.finalize.collect_codex_oauth_tokens``.  Without this
@@ -291,11 +291,15 @@ class TheExchangeIsImportedAtModuleScopeTests(unittest.TestCase):
         import ast
 
         tree = ast.parse(inspect.getsource(registration_finalize))
+        # `codex_oauth` became `codex.oauth` on 2026-11-20 (P2-3 cluster move).
+        # Both spellings are accepted so the premise this test asserts -- "the
+        # symbol is bound at module scope of finalize" -- survives the next
+        # module move instead of failing on the path.
         module_scope = {
-            node.asname or node.name
+            alias.asname or alias.name
             for node in tree.body
-            if isinstance(node, ast.ImportFrom) and node.module == "codex_oauth"
-            for node in node.names
+            if isinstance(node, ast.ImportFrom) and (node.module or "").endswith("codex.oauth")
+            for alias in node.names
         }
         self.assertIn("collect_codex_oauth_tokens", module_scope)
 

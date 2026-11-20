@@ -83,7 +83,7 @@ class OneClickSmsCliTests(unittest.TestCase):
                 patch("sms_tool.phone_reuse.create_phone_pool", return_value=FakePhonePool()),
                 patch("sms_tool.phone_reuse.print_phone_pool_status"),
                 patch("sms_tool.session_refresh._load_seed_session", return_value=({"email": "user@example.com"}, "")),
-                patch("sms_tool.codex_oauth.refresh_codex_oauth_session", side_effect=fake_refresh),
+                patch("sms_tool.codex.oauth.refresh_codex_oauth_session", side_effect=fake_refresh),
             ):
                 cli._one_click_sms(args)
 

@@ -10,7 +10,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from sms_tool import codex_oauth
+from sms_tool.codex import oauth as codex_oauth
 
 SEND = "https://auth.openai.com/api/accounts/passwordless/send-otp"
 

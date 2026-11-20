@@ -8,7 +8,7 @@ so nothing ever completed or cancelled an activation, and the number kept
 billing after the registration had moved on.
 """
 
-from .codex_sentinel import load_cached_sentinel
+from .sentinel import load_cached_sentinel
 
 
 def complete_phone_verification(session, did, current_url, proxy=None, enabled=False, phone_pool=None):
@@ -34,7 +34,7 @@ def complete_phone_verification(session, did, current_url, proxy=None, enabled=F
     # which pointed anyone who had selected another vendor at the wrong key --
     # and contradicted the desktop settings comment that promises this message
     # names the key to set.
-    from .phone_reuse import missing_key_hint
+    from ..phone_reuse import missing_key_hint
 
     return {
         "ok": False,
@@ -48,7 +48,7 @@ def complete_phone_verification(session, did, current_url, proxy=None, enabled=F
 
 def _verify_with_reuse_pool(session, did, current_url, phone_pool, proxy=None):
     """Phone verification using the reuse pool from phone_reuse.py."""
-    from .phone_reuse import complete_phone_verification_with_reuse
+    from ..phone_reuse import complete_phone_verification_with_reuse
 
     sentinel = load_cached_sentinel()
     result = complete_phone_verification_with_reuse(

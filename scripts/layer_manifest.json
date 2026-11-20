@@ -28,7 +28,8 @@
     "payment": 5,
     "registration": 3,
     "wallet": 4,
-    "importers": 3
+    "importers": 3,
+    "codex": 3
   },
   "module_overrides": {
     "accounts/account_models": 5,
@@ -67,7 +68,8 @@
     "registration_drivers/browser_flow/decisions": 4,
     "payment/qualification": 4,
     "payment/qualification_batch": 3,
-    "payment/qualification_states": 5
+    "payment/qualification_states": 5,
+    "codex/sentinel": 4
   },
   "root_modules": {
     "__main__.py": 2,
@@ -88,10 +90,10 @@
     "chatgpt_bootstrap.py": 3,
     "checkout_contract.py": 5,
     "cli.py": 2,
-    "codex_export.py": 3,
-    "codex_oauth.py": 3,
-    "codex_phone.py": 3,
-    "codex_sentinel.py": 4,
+    "codex/export.py": 3,
+    "codex/oauth.py": 3,
+    "codex/phone.py": 3,
+    "codex/sentinel.py": 4,
     "config_usage.py": 2,
     "importers/cpa.py": 3,
     "cross_process_gate.py": 5,

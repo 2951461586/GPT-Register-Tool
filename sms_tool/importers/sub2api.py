@@ -19,7 +19,7 @@ from ..agent_identity import (
     validate_agent_identity,
     write_agent_identity,
 )
-from ..codex_export import build_codex_json
+from ..codex.export import build_codex_json
 from ..config import CFG
 from .cpa import _load_cpa_source, _write_cpa_json
 from ..storage import get_account_record, upsert_account

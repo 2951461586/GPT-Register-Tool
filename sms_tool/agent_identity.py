@@ -11,7 +11,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from curl_cffi import requests as curl_requests
 
-from .codex_export import build_codex_json
+from .codex.export import build_codex_json
 from .config import CFG
 from .kernel.paths import output_dir
 from .phone_proxy import normalize_proxy_url
@@ -258,7 +258,7 @@ def _refresh_agent_identity_codex_rt(data, json_path="", proxy=""):
     _raw_auth_session: object = source.get("auth_session")
     auth_session: dict = _raw_auth_session if isinstance(_raw_auth_session, dict) else {}
     try:
-        from .codex_export import _openai_refresh_token, _refresh_with_openai_oauth
+        from .codex.export import _openai_refresh_token, _refresh_with_openai_oauth
 
         refresh_token = _openai_refresh_token(source, auth_session)
         if not refresh_token:

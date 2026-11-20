@@ -27,7 +27,7 @@ class MailboxCommandContext:
 
 
 def view_inbox(args: Any, ctx: MailboxCommandContext) -> None:
-    from ..codex_oauth import _mailbox_from_data
+    from ..codex.oauth import _mailbox_from_data
     from ..desktop_ipc import emit_result
     from ..mailbox.router import fetch_mailbox_messages, mailbox_from_config
     from ..session_refresh import _load_seed_session
@@ -104,7 +104,7 @@ def view_inbox(args: Any, ctx: MailboxCommandContext) -> None:
 
 
 def gmail_send(args: Any) -> None:
-    from ..codex_oauth import _mailbox_from_data
+    from ..codex.oauth import _mailbox_from_data
     from ..mailbox.router import mailbox_from_config
     from ..providers.mailbox_gmail import is_gmail_mailbox, send_gmail_message
     from ..session_refresh import _load_seed_session

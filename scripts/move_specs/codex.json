@@ -1,0 +1,11 @@
+{
+  "package": "codex",
+  "layer": 3,
+  "root_package_init": false,
+  "modules": {
+    "codex_export": "export",
+    "codex_oauth": "oauth",
+    "codex_phone": "phone",
+    "codex_sentinel": "sentinel"
+  }
+}

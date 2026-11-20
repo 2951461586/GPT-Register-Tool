@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
-from sms_tool import codex_oauth
+from sms_tool.codex import oauth as codex_oauth
 from sms_tool.commands import one_click
 
 
@@ -65,7 +65,7 @@ def test_failed_session_write_reports_partial_success_and_preserves_existing_fil
     session.write_text(original, encoding="utf-8")
     writes = []
 
-    with patch("sms_tool.codex_oauth.atomic_write_text", side_effect=OSError("permission denied")):
+    with patch("sms_tool.codex.oauth.atomic_write_text", side_effect=OSError("permission denied")):
         result = codex_oauth.persist_one_click_sms_failure(
             {"access_token": "at"},
             str(session),

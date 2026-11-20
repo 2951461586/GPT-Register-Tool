@@ -1,8 +1,8 @@
 import json
 from pathlib import Path
 
-from .config import CFG
-from .kernel.paths import runtime_file
+from ..config import CFG
+from ..kernel.paths import runtime_file
 
 
 def load_cached_sentinel():

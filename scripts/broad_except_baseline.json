@@ -189,15 +189,15 @@
       "broad": 1,
       "silent": 0
     },
-    "sms_tool/codex_export.py": {
+    "sms_tool/codex/export.py": {
       "broad": 6,
       "silent": 0
     },
-    "sms_tool/codex_oauth.py": {
+    "sms_tool/codex/oauth.py": {
       "broad": 17,
       "silent": 0
     },
-    "sms_tool/codex_sentinel.py": {
+    "sms_tool/codex/sentinel.py": {
       "broad": 2,
       "silent": 1
     },

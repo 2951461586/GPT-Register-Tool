@@ -2,7 +2,7 @@ import unittest
 from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
-from sms_tool import codex_oauth
+from sms_tool.codex import oauth as codex_oauth
 from sms_tool.kernel.error_classification import classify_error
 from sms_tool.kernel.failure_registry import BATCH_DROPPED_CLASSES
 from sms_tool.registration.outcome import _oauth_result_summary
@@ -23,7 +23,7 @@ def tearDownModule():
 
 class CodexOauthTests(unittest.TestCase):
     def test_refresh_skips_terminal_account_without_network(self):
-        with patch("sms_tool.codex_oauth.collect_codex_oauth_tokens") as collect:
+        with patch("sms_tool.codex.oauth.collect_codex_oauth_tokens") as collect:
             result = codex_oauth.refresh_codex_oauth_session(
                 {
                     "email": "user@example.com",
@@ -38,8 +38,8 @@ class CodexOauthTests(unittest.TestCase):
     def test_refresh_can_collect_without_persisting(self):
         collected = {"ok": True, "tokens": {"access_token": "at_new", "refresh_token": "rt_new"}}
         with (
-            patch("sms_tool.codex_oauth.collect_codex_oauth_tokens", return_value=collected),
-            patch("sms_tool.codex_oauth._save_oauth_tokens") as save,
+            patch("sms_tool.codex.oauth.collect_codex_oauth_tokens", return_value=collected),
+            patch("sms_tool.codex.oauth._save_oauth_tokens") as save,
         ):
             result = codex_oauth.refresh_codex_oauth_session(
                 {"email": "user@example.com"},
@@ -59,7 +59,7 @@ class CodexOauthTests(unittest.TestCase):
             source="config",
         )
         with (
-            patch("sms_tool.codex_oauth.mailbox_has_inbox_credentials", side_effect=[False, True]),
+            patch("sms_tool.codex.oauth.mailbox_has_inbox_credentials", side_effect=[False, True]),
             patch("sms_tool.mailbox.router.mailbox_from_config", return_value=fallback) as from_config,
         ):
             result = codex_oauth._mailbox_from_data({"email": "samplegmail01@gmail.com"})
@@ -69,7 +69,7 @@ class CodexOauthTests(unittest.TestCase):
 
     def test_mailbox_from_data_does_not_fallback_to_config_for_non_gmail(self):
         with (
-            patch("sms_tool.codex_oauth.mailbox_has_inbox_credentials", return_value=False),
+            patch("sms_tool.codex.oauth.mailbox_has_inbox_credentials", return_value=False),
             patch("sms_tool.mailbox.router.mailbox_from_config") as from_config,
         ):
             result = codex_oauth._mailbox_from_data({"email": "user@example.com"})
@@ -103,7 +103,7 @@ class CodexOauthTests(unittest.TestCase):
                 "source": "https://worker.example",
             },
         }
-        with patch("sms_tool.codex_oauth.mailbox_has_inbox_credentials", return_value=True):
+        with patch("sms_tool.codex.oauth.mailbox_has_inbox_credentials", return_value=True):
             result = codex_oauth._mailbox_from_data(data)
 
         assert result is not None
@@ -123,7 +123,7 @@ class CodexOauthTests(unittest.TestCase):
         self.assertFalse(codex_oauth._needs_phone_verification("https://auth.openai.com/consent"))
 
     def test_phone_probe_only_does_not_complete_sms(self):
-        with patch("sms_tool.codex_oauth.complete_phone_verification") as complete:
+        with patch("sms_tool.codex.oauth.complete_phone_verification") as complete:
             result = codex_oauth._finish_authorization(
                 Mock(),
                 {"state": "s", "code_verifier": "v", "redirect_uri": "http://localhost"},
@@ -153,13 +153,13 @@ class CodexOauthTests(unittest.TestCase):
         session.post.return_value = response
 
         with (
-            patch("sms_tool.codex_oauth.load_cached_sentinel", return_value={}),
-            patch("sms_tool.codex_oauth.attach_sentinel"),
-            patch("sms_tool.codex_oauth._next_url", return_value="https://auth.openai.com/consent"),
-            patch("sms_tool.codex_oauth._follow_redirects", return_value=(None, "https://auth.openai.com/consent")),
-            patch("sms_tool.codex_oauth._passwordless_login_and_exchange") as passwordless,
+            patch("sms_tool.codex.oauth.load_cached_sentinel", return_value={}),
+            patch("sms_tool.codex.oauth.attach_sentinel"),
+            patch("sms_tool.codex.oauth._next_url", return_value="https://auth.openai.com/consent"),
+            patch("sms_tool.codex.oauth._follow_redirects", return_value=(None, "https://auth.openai.com/consent")),
+            patch("sms_tool.codex.oauth._passwordless_login_and_exchange") as passwordless,
             patch(
-                "sms_tool.codex_oauth._finish_authorization",
+                "sms_tool.codex.oauth._finish_authorization",
                 return_value={"ok": True, "tokens": {"access_token": "at", "refresh_token": "rt_1"}},
             ) as finish,
         ):
@@ -196,15 +196,15 @@ class CodexOauthTests(unittest.TestCase):
         }
 
         with (
-            patch("sms_tool.codex_oauth._new_oauth_request", return_value=fresh_oauth) as new_oauth,
-            patch("sms_tool.codex_oauth.load_cached_sentinel", return_value={}),
-            patch("sms_tool.codex_oauth.attach_sentinel"),
-            patch("sms_tool.codex_oauth._next_url", return_value="https://auth.openai.com/consent"),
+            patch("sms_tool.codex.oauth._new_oauth_request", return_value=fresh_oauth) as new_oauth,
+            patch("sms_tool.codex.oauth.load_cached_sentinel", return_value={}),
+            patch("sms_tool.codex.oauth.attach_sentinel"),
+            patch("sms_tool.codex.oauth._next_url", return_value="https://auth.openai.com/consent"),
             patch(
-                "sms_tool.codex_oauth._follow_redirects", return_value=(None, "https://auth.openai.com/consent")
+                "sms_tool.codex.oauth._follow_redirects", return_value=(None, "https://auth.openai.com/consent")
             ) as follow,
             patch(
-                "sms_tool.codex_oauth._finish_authorization",
+                "sms_tool.codex.oauth._finish_authorization",
                 return_value={"ok": True, "tokens": {"access_token": "at"}},
             ),
         ):
@@ -227,11 +227,11 @@ class CodexOauthTests(unittest.TestCase):
         session.post.return_value = response
 
         with (
-            patch("sms_tool.codex_oauth.load_cached_sentinel", return_value={}),
-            patch("sms_tool.codex_oauth._next_url", return_value="https://auth.openai.com/consent"),
-            patch("sms_tool.codex_oauth._follow_redirects", return_value=(None, "https://auth.openai.com/consent")),
+            patch("sms_tool.codex.oauth.load_cached_sentinel", return_value={}),
+            patch("sms_tool.codex.oauth._next_url", return_value="https://auth.openai.com/consent"),
+            patch("sms_tool.codex.oauth._follow_redirects", return_value=(None, "https://auth.openai.com/consent")),
             patch(
-                "sms_tool.codex_oauth._finish_authorization",
+                "sms_tool.codex.oauth._finish_authorization",
                 return_value={"ok": True, "tokens": {"access_token": "at", "refresh_token": "rt_1"}},
             ),
         ):
@@ -252,13 +252,13 @@ class CodexOauthTests(unittest.TestCase):
         session = Mock()
 
         with (
-            patch("sms_tool.codex_oauth._detect_protocol_stage", return_value="password"),
+            patch("sms_tool.codex.oauth._detect_protocol_stage", return_value="password"),
             patch(
-                "sms_tool.codex_oauth._password_login_and_exchange",
+                "sms_tool.codex.oauth._password_login_and_exchange",
                 return_value={"ok": False, "error": "password_verify_failed:400"},
             ),
             patch(
-                "sms_tool.codex_oauth._passwordless_login_and_exchange",
+                "sms_tool.codex.oauth._passwordless_login_and_exchange",
                 return_value={"ok": False, "error": "passwordless_email_otp_poll_timeout"},
             ),
         ):
@@ -286,9 +286,9 @@ class CodexOauthTests(unittest.TestCase):
         }
 
         with (
-            patch("sms_tool.codex_oauth._detect_protocol_stage", return_value="password"),
+            patch("sms_tool.codex.oauth._detect_protocol_stage", return_value="password"),
             patch(
-                "sms_tool.codex_oauth._passwordless_login_and_exchange",
+                "sms_tool.codex.oauth._passwordless_login_and_exchange",
                 return_value={
                     "ok": False,
                     "error": "phone_pool_exhausted",
@@ -316,7 +316,7 @@ class CodexOauthTests(unittest.TestCase):
         session = Mock()
         session.post.return_value = response
 
-        with patch("sms_tool.codex_oauth.load_cached_sentinel", return_value={}):
+        with patch("sms_tool.codex.oauth.load_cached_sentinel", return_value={}):
             result = codex_oauth._send_passwordless_otp(session, "did", "https://auth.openai.com/email-verification")
 
         self.assertTrue(result["ok"])
@@ -348,9 +348,9 @@ class CodexOauthTests(unittest.TestCase):
 
         with (
             patch.dict(codex_oauth.CFG, {"email_registration": {"max_otp_retries": 2}}, clear=False),
-            patch("sms_tool.codex_oauth.time.time", side_effect=fake_time),
-            patch("sms_tool.codex_oauth.poll_email_otp", side_effect=poll),
-            patch("sms_tool.codex_oauth.load_cached_sentinel", return_value={}),
+            patch("sms_tool.codex.oauth.time.time", side_effect=fake_time),
+            patch("sms_tool.codex.oauth.poll_email_otp", side_effect=poll),
+            patch("sms_tool.codex.oauth.load_cached_sentinel", return_value={}),
         ):
             result = codex_oauth._passwordless_login_and_exchange(
                 session=session,
@@ -382,12 +382,12 @@ class CodexOauthTests(unittest.TestCase):
 
         with (
             patch.dict(codex_oauth.CFG, {"email_registration": {"max_otp_retries": 2}}, clear=False),
-            patch("sms_tool.codex_oauth.poll_email_otp", side_effect=poll),
-            patch("sms_tool.codex_oauth.load_cached_sentinel", return_value={}),
-            patch("sms_tool.codex_oauth._next_url", return_value="https://auth.openai.com/consent"),
-            patch("sms_tool.codex_oauth._follow_redirects", return_value=(None, "https://auth.openai.com/consent")),
+            patch("sms_tool.codex.oauth.poll_email_otp", side_effect=poll),
+            patch("sms_tool.codex.oauth.load_cached_sentinel", return_value={}),
+            patch("sms_tool.codex.oauth._next_url", return_value="https://auth.openai.com/consent"),
+            patch("sms_tool.codex.oauth._follow_redirects", return_value=(None, "https://auth.openai.com/consent")),
             patch(
-                "sms_tool.codex_oauth._finish_authorization",
+                "sms_tool.codex.oauth._finish_authorization",
                 return_value={"ok": True, "tokens": {"access_token": "at", "refresh_token": "rt"}},
             ),
         ):
@@ -433,11 +433,11 @@ class CodexOauthTests(unittest.TestCase):
 
         with (
             patch(
-                "sms_tool.codex_oauth.complete_phone_verification",
+                "sms_tool.codex.oauth.complete_phone_verification",
                 return_value={"ok": True, "next_url": "https://auth.openai.com/continue"},
             ),
-            patch("sms_tool.codex_oauth._follow_redirects", side_effect=follow_redirects),
-            patch("sms_tool.codex_oauth._exchange_callback", side_effect=exchange_callback),
+            patch("sms_tool.codex.oauth._follow_redirects", side_effect=follow_redirects),
+            patch("sms_tool.codex.oauth._exchange_callback", side_effect=exchange_callback),
         ):
             result = codex_oauth._finish_authorization(
                 session=Mock(),
@@ -453,8 +453,8 @@ class CodexOauthTests(unittest.TestCase):
     def test_phone_verified_redirect_failure_preserves_phone_attempt(self):
         phone_attempt = {"ok": True, "phone": "+233555123456", "next_url": "https://auth.openai.com/continue"}
         with (
-            patch("sms_tool.codex_oauth.complete_phone_verification", return_value=phone_attempt),
-            patch("sms_tool.codex_oauth._follow_redirects", side_effect=RuntimeError("curl52")),
+            patch("sms_tool.codex.oauth.complete_phone_verification", return_value=phone_attempt),
+            patch("sms_tool.codex.oauth._follow_redirects", side_effect=RuntimeError("curl52")),
         ):
             result = codex_oauth._finish_phone_authorization_locked(
                 session=Mock(),
@@ -470,7 +470,7 @@ class CodexOauthTests(unittest.TestCase):
 
     def test_saved_oauth_result_exposes_phone_for_batch_mapping(self):
         phone_attempt = {"ok": True, "phone": "+233555123456", "provider": "smsbower"}
-        with TemporaryDirectory() as tmp, patch("sms_tool.codex_oauth.upsert_account") as upsert:
+        with TemporaryDirectory() as tmp, patch("sms_tool.codex.oauth.upsert_account") as upsert:
             json_path = f"{tmp}/session.json"
             result = codex_oauth._save_oauth_tokens(
                 {"email": "user@example.com"},
@@ -511,14 +511,14 @@ class CompleteAboutYouTests(unittest.TestCase):
         sentinel = Mock(token="tok", so_token="so")
         response = self._response(body={"continue_url": "https://auth.openai.com/oauth/authorize?x=1"})
         with (
-            patch("sms_tool.codex_oauth.issue_sentinel_flow", return_value=sentinel) as issue,
-            patch("sms_tool.codex_oauth.request_with_retry", return_value=response) as request,
+            patch("sms_tool.codex.oauth.issue_sentinel_flow", return_value=sentinel) as issue,
+            patch("sms_tool.codex.oauth.request_with_retry", return_value=response) as request,
             patch(
-                "sms_tool.codex_oauth._follow_redirects",
+                "sms_tool.codex.oauth._follow_redirects",
                 return_value=(None, "https://chatgpt.com/api/auth/callback/openai?code=abc"),
             ) as follow,
-            patch("sms_tool.codex_oauth._random_name", return_value=("James", "Smith")),
-            patch("sms_tool.codex_oauth._random_birthdate", return_value="1990-01-02"),
+            patch("sms_tool.codex.oauth._random_name", return_value=("James", "Smith")),
+            patch("sms_tool.codex.oauth._random_birthdate", return_value="1990-01-02"),
         ):
             result = codex_oauth._complete_about_you(Mock(), "did-1", "https://auth.openai.com/about-you")
 
@@ -545,9 +545,9 @@ class CompleteAboutYouTests(unittest.TestCase):
         }
         response = self._response(status_code=400, body=body)
         with (
-            patch("sms_tool.codex_oauth.issue_sentinel_flow", return_value=Mock(token="t", so_token="s")),
-            patch("sms_tool.codex_oauth.request_with_retry", return_value=response),
-            patch("sms_tool.codex_oauth._follow_redirects") as follow,
+            patch("sms_tool.codex.oauth.issue_sentinel_flow", return_value=Mock(token="t", so_token="s")),
+            patch("sms_tool.codex.oauth.request_with_retry", return_value=response),
+            patch("sms_tool.codex.oauth._follow_redirects") as follow,
         ):
             result = codex_oauth._complete_about_you(Mock(), "did-1", "https://auth.openai.com/about-you")
 
@@ -576,9 +576,9 @@ class CompleteAboutYouTests(unittest.TestCase):
         }
         response = self._response(status_code=400, body=body)
         with (
-            patch("sms_tool.codex_oauth.issue_sentinel_flow", return_value=Mock(token="t", so_token="s")),
-            patch("sms_tool.codex_oauth.request_with_retry", return_value=response),
-            patch("sms_tool.codex_oauth._follow_redirects"),
+            patch("sms_tool.codex.oauth.issue_sentinel_flow", return_value=Mock(token="t", so_token="s")),
+            patch("sms_tool.codex.oauth.request_with_retry", return_value=response),
+            patch("sms_tool.codex.oauth._follow_redirects"),
         ):
             result = codex_oauth._complete_about_you(Mock(), "did-1", "https://auth.openai.com/about-you")
 
@@ -599,9 +599,9 @@ class CompleteAboutYouTests(unittest.TestCase):
         }
         response = self._response(status_code=400, body=body)
         with (
-            patch("sms_tool.codex_oauth.issue_sentinel_flow", return_value=Mock(token="t", so_token="s")),
-            patch("sms_tool.codex_oauth.request_with_retry", return_value=response),
-            patch("sms_tool.codex_oauth._follow_redirects") as follow,
+            patch("sms_tool.codex.oauth.issue_sentinel_flow", return_value=Mock(token="t", so_token="s")),
+            patch("sms_tool.codex.oauth.request_with_retry", return_value=response),
+            patch("sms_tool.codex.oauth._follow_redirects") as follow,
         ):
             result = codex_oauth._complete_about_you(Mock(), "did-1", "https://auth.openai.com/about-you")
 
@@ -611,9 +611,9 @@ class CompleteAboutYouTests(unittest.TestCase):
     def test_missing_continue_url_is_reported_with_the_status(self):
         response = self._response(status_code=500, body={"error": {"message": "boom"}})
         with (
-            patch("sms_tool.codex_oauth.issue_sentinel_flow", return_value=Mock(token="t", so_token="s")),
-            patch("sms_tool.codex_oauth.request_with_retry", return_value=response),
-            patch("sms_tool.codex_oauth._follow_redirects") as follow,
+            patch("sms_tool.codex.oauth.issue_sentinel_flow", return_value=Mock(token="t", so_token="s")),
+            patch("sms_tool.codex.oauth.request_with_retry", return_value=response),
+            patch("sms_tool.codex.oauth._follow_redirects") as follow,
         ):
             result = codex_oauth._complete_about_you(Mock(), "did-1", "https://auth.openai.com/about-you")
 
@@ -624,8 +624,8 @@ class CompleteAboutYouTests(unittest.TestCase):
 
     def test_a_sentinel_failure_stops_before_posting(self):
         with (
-            patch("sms_tool.codex_oauth.issue_sentinel_flow", side_effect=RuntimeError("no sdk")),
-            patch("sms_tool.codex_oauth.request_with_retry") as request,
+            patch("sms_tool.codex.oauth.issue_sentinel_flow", side_effect=RuntimeError("no sdk")),
+            patch("sms_tool.codex.oauth.request_with_retry") as request,
         ):
             result = codex_oauth._complete_about_you(Mock(), "did-1", "https://auth.openai.com/about-you")
 
@@ -662,19 +662,19 @@ class PasswordlessAboutYouIntegrationTests(unittest.TestCase):
         session = self._session()
         with (
             patch.dict(codex_oauth.CFG, {"email_registration": {"max_otp_retries": 1}}, clear=False),
-            patch("sms_tool.codex_oauth.poll_email_otp", return_value="123456"),
-            patch("sms_tool.codex_oauth.load_cached_sentinel", return_value={}),
-            patch("sms_tool.codex_oauth._next_url", return_value="https://auth.openai.com/about-you"),
+            patch("sms_tool.codex.oauth.poll_email_otp", return_value="123456"),
+            patch("sms_tool.codex.oauth.load_cached_sentinel", return_value={}),
+            patch("sms_tool.codex.oauth._next_url", return_value="https://auth.openai.com/about-you"),
             patch(
-                "sms_tool.codex_oauth._follow_redirects",
+                "sms_tool.codex.oauth._follow_redirects",
                 return_value=(None, "https://auth.openai.com/about-you"),
             ),
             patch(
-                "sms_tool.codex_oauth._complete_about_you",
+                "sms_tool.codex.oauth._complete_about_you",
                 return_value={"ok": True, "url": "https://auth.openai.com/consent", "continued": True},
             ) as about,
             patch(
-                "sms_tool.codex_oauth._finish_authorization",
+                "sms_tool.codex.oauth._finish_authorization",
                 return_value={"ok": True, "tokens": {"access_token": "at", "refresh_token": "rt"}},
             ) as finish,
         ):
@@ -698,15 +698,15 @@ class PasswordlessAboutYouIntegrationTests(unittest.TestCase):
         }
         with (
             patch.dict(codex_oauth.CFG, {"email_registration": {"max_otp_retries": 1}}, clear=False),
-            patch("sms_tool.codex_oauth.poll_email_otp", return_value="123456"),
-            patch("sms_tool.codex_oauth.load_cached_sentinel", return_value={}),
-            patch("sms_tool.codex_oauth._next_url", return_value="https://auth.openai.com/about-you"),
+            patch("sms_tool.codex.oauth.poll_email_otp", return_value="123456"),
+            patch("sms_tool.codex.oauth.load_cached_sentinel", return_value={}),
+            patch("sms_tool.codex.oauth._next_url", return_value="https://auth.openai.com/about-you"),
             patch(
-                "sms_tool.codex_oauth._follow_redirects",
+                "sms_tool.codex.oauth._follow_redirects",
                 return_value=(None, "https://auth.openai.com/about-you"),
             ),
-            patch("sms_tool.codex_oauth._complete_about_you", return_value=attempt),
-            patch("sms_tool.codex_oauth._finish_authorization") as finish,
+            patch("sms_tool.codex.oauth._complete_about_you", return_value=attempt),
+            patch("sms_tool.codex.oauth._finish_authorization") as finish,
         ):
             result = self._call(session)
 
@@ -721,16 +721,16 @@ class PasswordlessAboutYouIntegrationTests(unittest.TestCase):
         session = self._session()
         with (
             patch.dict(codex_oauth.CFG, {"email_registration": {"max_otp_retries": 1}}, clear=False),
-            patch("sms_tool.codex_oauth.poll_email_otp", return_value="123456"),
-            patch("sms_tool.codex_oauth.load_cached_sentinel", return_value={}),
-            patch("sms_tool.codex_oauth._next_url", return_value="https://auth.openai.com/consent"),
+            patch("sms_tool.codex.oauth.poll_email_otp", return_value="123456"),
+            patch("sms_tool.codex.oauth.load_cached_sentinel", return_value={}),
+            patch("sms_tool.codex.oauth._next_url", return_value="https://auth.openai.com/consent"),
             patch(
-                "sms_tool.codex_oauth._follow_redirects",
+                "sms_tool.codex.oauth._follow_redirects",
                 return_value=(None, "https://auth.openai.com/consent"),
             ),
-            patch("sms_tool.codex_oauth._complete_about_you") as about,
+            patch("sms_tool.codex.oauth._complete_about_you") as about,
             patch(
-                "sms_tool.codex_oauth._finish_authorization",
+                "sms_tool.codex.oauth._finish_authorization",
                 return_value={"ok": True, "tokens": {"access_token": "at", "refresh_token": "rt"}},
             ),
         ):
@@ -762,15 +762,15 @@ class LiveSessionShortCircuitTests(unittest.TestCase):
 
     def test_a_live_session_exchanges_without_entering_the_login_stages(self):
         with (
-            patch("sms_tool.codex_oauth.select_auth_fingerprint"),
-            patch("sms_tool.codex_oauth._follow_redirects", return_value=(None, self.CALLBACK_URL)),
+            patch("sms_tool.codex.oauth.select_auth_fingerprint"),
+            patch("sms_tool.codex.oauth._follow_redirects", return_value=(None, self.CALLBACK_URL)),
             patch(
-                "sms_tool.codex_oauth._exchange_callback",
+                "sms_tool.codex.oauth._exchange_callback",
                 return_value={"access_token": "at", "refresh_token": "rt"},
             ) as exchange,
-            patch("sms_tool.codex_oauth._login_and_exchange") as login,
-            patch("sms_tool.codex_oauth._run_protocol_login_stages") as stages,
-            patch("sms_tool.codex_oauth._passwordless_login_and_exchange") as passwordless,
+            patch("sms_tool.codex.oauth._login_and_exchange") as login,
+            patch("sms_tool.codex.oauth._run_protocol_login_stages") as stages,
+            patch("sms_tool.codex.oauth._passwordless_login_and_exchange") as passwordless,
         ):
             result = codex_oauth.collect_codex_oauth_tokens(
                 data={"email": "user@example.com", "cookie_header": "c"},
@@ -792,16 +792,16 @@ class LiveSessionShortCircuitTests(unittest.TestCase):
         # The negative case.  Without it the test above cannot distinguish "the
         # short circuit fired" from "nothing in that area runs from here".
         with (
-            patch("sms_tool.codex_oauth.select_auth_fingerprint"),
+            patch("sms_tool.codex.oauth.select_auth_fingerprint"),
             patch(
-                "sms_tool.codex_oauth._follow_redirects",
+                "sms_tool.codex.oauth._follow_redirects",
                 return_value=(None, "https://auth.openai.com/log-in"),
             ),
             patch(
-                "sms_tool.codex_oauth._login_and_exchange",
+                "sms_tool.codex.oauth._login_and_exchange",
                 return_value={"ok": True, "tokens": {"refresh_token": "rt2"}},
             ) as login,
-            patch("sms_tool.codex_oauth._exchange_callback") as exchange,
+            patch("sms_tool.codex.oauth._exchange_callback") as exchange,
         ):
             result = codex_oauth.collect_codex_oauth_tokens(
                 data={"email": "user@example.com"},
@@ -830,13 +830,13 @@ class LiveSessionShortCircuitTests(unittest.TestCase):
         # argues hardest against turning the switch on would be the one case
         # the log cannot show.
         with (
-            patch("sms_tool.codex_oauth.select_auth_fingerprint"),
+            patch("sms_tool.codex.oauth.select_auth_fingerprint"),
             patch(
-                "sms_tool.codex_oauth._follow_redirects",
+                "sms_tool.codex.oauth._follow_redirects",
                 return_value=(None, "https://auth.openai.com/log-in"),
             ),
             patch(
-                "sms_tool.codex_oauth._login_and_exchange",
+                "sms_tool.codex.oauth._login_and_exchange",
                 return_value={"ok": False, "error": "email_otp_poll_timeout"},
             ),
         ):
@@ -873,8 +873,8 @@ class LiveSessionShortCircuitTests(unittest.TestCase):
 
     def test_a_missing_email_never_touches_the_network(self):
         with (
-            patch("sms_tool.codex_oauth.select_auth_fingerprint"),
-            patch("sms_tool.codex_oauth._follow_redirects") as follow,
+            patch("sms_tool.codex.oauth.select_auth_fingerprint"),
+            patch("sms_tool.codex.oauth._follow_redirects") as follow,
         ):
             result = codex_oauth.collect_codex_oauth_tokens(data={}, session=Mock())
 
@@ -887,7 +887,7 @@ class AboutYouResponseSurfaceTests(unittest.TestCase):
     """The no-continue-url branch reports the answer's *shape*, not the answer.
 
     ``_complete_about_you``'s failure dict is folded into the caller's result
-    under ``about_you`` (``codex_oauth.py:504`` / ``:544``), and
+    under ``about_you`` (``codex/oauth.py:504`` / ``:544``), and
     ``_oauth_result_summary`` keeps every key except ``tokens`` -- so whatever
     that branch returns lands on the ``obtain_oauth_refresh_token`` log line and
     in the ``finalize`` payload.  Returning the raw response body therefore put
@@ -900,8 +900,8 @@ class AboutYouResponseSurfaceTests(unittest.TestCase):
 
     def _about_you(self, response):
         with (
-            patch("sms_tool.codex_oauth.issue_sentinel_flow") as sentinel,
-            patch("sms_tool.codex_oauth.request_with_retry", return_value=response),
+            patch("sms_tool.codex.oauth.issue_sentinel_flow") as sentinel,
+            patch("sms_tool.codex.oauth.request_with_retry", return_value=response),
         ):
             sentinel.return_value = Mock(token="t", so_token="s")
             return codex_oauth._complete_about_you(Mock(), "did", self.URL)

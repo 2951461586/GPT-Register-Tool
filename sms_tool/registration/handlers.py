@@ -42,7 +42,7 @@ from . import reference_lane as _reference_lane
 from . import resume as _resume
 from . import sentinel_stages as _sentinel_stages
 from . import warmup as _warmup
-from ..codex_oauth import collect_codex_oauth_tokens
+from ..codex.oauth import collect_codex_oauth_tokens
 from ..kernel.error_classification import INTERNAL_EXCEPTION_TYPES
 from ..mailbox.errors import MailboxEndpointUnavailableError
 from ..providers.mailbox_graph import MailboxAuthInvalidError

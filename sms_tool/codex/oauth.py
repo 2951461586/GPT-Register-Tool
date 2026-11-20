@@ -13,25 +13,25 @@ from datetime import timezone, datetime
 
 from curl_cffi import requests as curl_requests
 
-from .config import CFG
-from . import endpoints
-from .endpoints import AUTH_BASE
-from .operator_output import emit as _emit
-from .codex_phone import complete_phone_verification
-from .codex_sentinel import (
+from ..config import CFG
+from .. import endpoints
+from ..endpoints import AUTH_BASE
+from ..operator_output import emit as _emit
+from .phone import complete_phone_verification
+from .sentinel import (
     attach_sentinel,
     import_cached_auth_cookies,
     import_cookie_header,
     load_cached_sentinel,
     with_sentinel,
 )
-from .auth_headers import auth_impersonate, openai_auth_headers_lower, select_auth_fingerprint
-from .http_client import request_with_retry
-from .http_utils import _absolute_url
-from .mailbox.router import MailboxAccount, MailboxTokenExpiredError, poll_email_otp, mailbox_has_inbox_credentials
-from .providers import mailbox_gmail
-from .kernel.sanitizer import sanitize_text
-from .storage import upsert_account
+from ..auth_headers import auth_impersonate, openai_auth_headers_lower, select_auth_fingerprint
+from ..http_client import request_with_retry
+from ..http_utils import _absolute_url
+from ..mailbox.router import MailboxAccount, MailboxTokenExpiredError, poll_email_otp, mailbox_has_inbox_credentials
+from ..providers import mailbox_gmail
+from ..kernel.sanitizer import sanitize_text
+from ..storage import upsert_account
 
 # ``/about-you`` completion reuses the signup lane's own primitives instead of
 # re-deriving them: ``_create_account_continue_url`` already knows that an
@@ -39,10 +39,10 @@ from .storage import upsert_account
 # ``error.redirect_uri``, and ``issue_sentinel_flow`` is the only supported way
 # to mint an ``oauth_create_account`` token (the recovery lane's cached sentinel
 # is bound to a different flow).
-from .account_creation import _create_account_continue_url, _is_user_already_exists
-from .sentinel.client import issue_sentinel_flow
-from .utils import atomic_write_text
-from .utils import _random_birthdate, _random_name
+from ..account_creation import _create_account_continue_url, _is_user_already_exists
+from ..sentinel.client import issue_sentinel_flow
+from ..utils import atomic_write_text
+from ..utils import _random_birthdate, _random_name
 from typing import Any
 
 
@@ -640,7 +640,7 @@ def _password_login_and_exchange(
             "body": response.text[:300],
         }
 
-    from .auth_flow import totp as _auth_totp
+    from ..auth_flow import totp as _auth_totp
 
     next_url = _next_url(response)
     try:
@@ -1423,7 +1423,7 @@ def _mailbox_from_data(data):
         purchase_total_cost=str(mailbox.get("purchase_total_cost") or "").strip(),
         balance_after=str(mailbox.get("balance_after") or "").strip(),
     )
-    from .mailbox.quarantine import is_mailbox_quarantined
+    from ..mailbox.quarantine import is_mailbox_quarantined
 
     if is_mailbox_quarantined(result):
         return None
@@ -1442,7 +1442,7 @@ def _mailbox_from_data(data):
             if fallback is not None and mailbox_has_inbox_credentials(fallback):
                 return fallback
         if mailbox_gmail.is_gmail_mailbox(result):
-            from .mailbox.router import mailbox_from_config
+            from ..mailbox.router import mailbox_from_config
 
             fallback = mailbox_from_config(argparse.Namespace(email=email))
             if fallback is not None and mailbox_has_inbox_credentials(fallback):
@@ -1463,7 +1463,7 @@ def _mailbox_from_configured_pool(email):
 def _configured_mailbox_index():
     """Load the configured mailbox pool once per recovery process."""
     try:
-        from .mailbox.router import load_mailbox_pool
+        from ..mailbox.router import load_mailbox_pool
 
         return {
             str(getattr(candidate, "email", "") or "").strip().lower(): candidate

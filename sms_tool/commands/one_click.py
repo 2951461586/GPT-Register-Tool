@@ -71,7 +71,7 @@ class OneClickCommandContext:
 
 def one_click_sms(args: Any, ctx: OneClickCommandContext) -> None:
     """Refresh selected account(s) through Codex OAuth and phone SMS, then store RT."""
-    from ..codex_oauth import refresh_codex_oauth_session
+    from ..codex.oauth import refresh_codex_oauth_session
     from ..phone_reuse import create_phone_pool, print_phone_pool_status
     from ..session_refresh import _load_seed_session
 

@@ -1201,7 +1201,7 @@ def _one_click_scan(args):
 
 
 def _persist_one_click_sms_failure(data, json_path, email, result):
-    from .codex_oauth import persist_one_click_sms_failure
+    from .codex.oauth import persist_one_click_sms_failure
 
     _load_storage_deps()
     return persist_one_click_sms_failure(data, json_path, email, result, upsert=upsert_account)

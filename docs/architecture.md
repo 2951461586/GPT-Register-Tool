@@ -30,7 +30,7 @@ export remain separate workflows.
 | `mailbox/service.py`, `mailbox/strategies.py`, `providers/` | Mailbox routing, capability resolution, polling policy and provider transport | Registration success |
 | `registration/result.py` | Shared result assembly | Success decisions |
 | `store/` | Persistence and domain facts | Provider side effects |
-| `accounts/account_recovery.py`, `codex_oauth.py` | Existing-account recovery and OAuth | Automatic new signup |
+| `accounts/account_recovery.py`, `codex/oauth.py` | Existing-account recovery and OAuth | Automatic new signup |
 | `payment_*`, `pay_link/`, `paypal/` | Payment planning and explicit execution | Mailbox purchasing or account signup |
 | `pay_link/` vs `paypal_link/` + `upi_link/` | `pay_link/` is the **registry** and the shared extraction state machine: a new payment method goes there, and `scripts/payment_legacy_manifest.py` fails the build if a file is added under either legacy lane. `paypal_link/` and `upi_link/` are frozen legacy lanes that still take bug fixes. A method that lives in a legacy lane bypasses the registry, `payment_catalog` and the desktop method picker -- the exact drift the manifest gate exists to stop. | A new method implemented in a legacy lane |
 
@@ -208,10 +208,10 @@ above.
 <!-- ratchet-numbers:begin architecture -->
 | Measure | Value |
 | --- | --- |
-| Module-level cross-directory edges | 512 |
-| Directory pairs | 88 |
-| Mutual pairs / minority-direction edges | 18 / 47 |
-| Delayed cross-directory edges | 335 |
+| Module-level cross-directory edges | 532 |
+| Directory pairs | 97 |
+| Mutual pairs / minority-direction edges | 19 / 48 |
+| Delayed cross-directory edges | 343 |
 | Delayed imports in the package | 519 (baseline 519) |
 | Functions at or above 150 lines | 64 (frozen, `scripts/function_length_ratchet.py`) |
 | Claimed tracked `sms_tool` modules | 341 of 341 (0 unclaimed, 41 directory-map groups) |

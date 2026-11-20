@@ -1,7 +1,7 @@
 import unittest
 from typing import TypeVar
 from unittest import mock
-from sms_tool import codex_oauth
+from sms_tool.codex import oauth as codex_oauth
 from sms_tool.mailbox import router as mailbox_module
 from sms_tool.mailbox.router import (
     MailboxAccount,

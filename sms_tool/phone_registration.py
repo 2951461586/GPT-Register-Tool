@@ -407,7 +407,7 @@ def run_phone_register(
     if codex_oauth:
         _tick("8-Codex OAuth")
         try:
-            from .codex_oauth import collect_codex_oauth_tokens
+            from .codex.oauth import collect_codex_oauth_tokens
 
             oauth_result = collect_codex_oauth_tokens(
                 data={

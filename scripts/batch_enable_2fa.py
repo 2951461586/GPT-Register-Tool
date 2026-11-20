@@ -417,7 +417,7 @@ def run_one(
         openai_auth_headers,
         select_auth_fingerprint,
     )
-    from sms_tool.codex_oauth import _mailbox_from_data
+    from sms_tool.codex.oauth import _mailbox_from_data
     from sms_tool.config import CFG
     from sms_tool.proxy.routing import operation_proxy_candidates
     from sms_tool.session_refresh import _auth_session_email

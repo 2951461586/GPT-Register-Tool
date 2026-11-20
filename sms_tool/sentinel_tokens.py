@@ -9,7 +9,7 @@ import uuid
 from curl_cffi import requests as curl_requests
 
 from . import endpoints
-from .codex_sentinel import import_cookie_header
+from .codex.sentinel import import_cookie_header
 from .auth_headers import auth_impersonate, auth_user_agent
 from .config import CFG
 from .kernel.paths import runtime_file

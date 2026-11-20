@@ -3,7 +3,7 @@
 import json
 import time
 
-from .codex_oauth import select_workspace_by_cookie
+from .codex.oauth import select_workspace_by_cookie
 from .http_client import is_transient_transport_error
 from .k12_client import _fetch_auth_session_from_cookie
 from .k12_identity import _extract_account_id_from_data, _extract_access_token, _token_account_id

@@ -14,8 +14,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Iterable
 
-from ..codex_export import _openai_refresh_token, _refresh_with_openai_oauth
-from ..codex_oauth import collect_codex_oauth_tokens
+from ..codex.export import _openai_refresh_token, _refresh_with_openai_oauth
+from ..codex.oauth import collect_codex_oauth_tokens
 from .account_terminal import text_has_account_deactivated
 from .account_liveness import probe_account_liveness
 from .account_recovery import (

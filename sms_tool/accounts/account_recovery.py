@@ -97,7 +97,7 @@ def relogin_refresh_token_account(
     email = str(account.get("email") or "").strip().lower()
     if not email:
         return {"ok": False, "mode": "oauth_refresh_token", "error": "missing_email"}
-    from ..codex_export import _openai_refresh_token, _refresh_with_openai_oauth
+    from ..codex.export import _openai_refresh_token, _refresh_with_openai_oauth
 
     _raw_auth_session: object = account.get("auth_session")
     auth_session: dict = _raw_auth_session if isinstance(_raw_auth_session, dict) else {}
@@ -171,7 +171,7 @@ def relogin_chatgpt_email_account(
         from ..account_creation import _auth_session_access_token, _fetch_auth_session
         from ..auth_flow import _json_or_raw
         from ..auth_headers import auth_impersonate, openai_auth_headers, select_auth_fingerprint
-        from ..codex_oauth import _mailbox_from_data
+        from ..codex.oauth import _mailbox_from_data
         from ..http_client import request_with_retry
         from ..registration.orchestrator import _login_existing_account_with_email_otp
         from ..sentinel_tokens import _set_oai_did_cookie
@@ -444,7 +444,7 @@ def relogin_local_codex_account(
             "skipped": True,
         }
     try:
-        from ..codex_oauth import _save_oauth_tokens, refresh_codex_oauth_session
+        from ..codex.oauth import _save_oauth_tokens, refresh_codex_oauth_session
 
         data = dict(account)
         data["email"] = email

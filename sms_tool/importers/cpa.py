@@ -14,7 +14,7 @@ from ..accounts.account_liveness import (
     chatgpt_id_from_token as _extract_chatgpt_account_id_from_token,
     quota_result_from_payload,
 )
-from ..codex_export import build_codex_json
+from ..codex.export import build_codex_json
 from ..config import CFG
 from ..kernel.paths import output_dir
 from ..session_refresh import _load_seed_session

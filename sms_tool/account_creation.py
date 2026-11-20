@@ -2,7 +2,7 @@ import json
 import logging
 import time
 
-from .codex_sentinel import load_cached_sentinel, with_sentinel
+from .codex.sentinel import load_cached_sentinel, with_sentinel
 from .auth_headers import auth_impersonate, openai_auth_headers
 from .config import CFG
 from .http_client import request_with_retry

@@ -1,12 +1,12 @@
-"""Behaviour tests for :mod:`sms_tool.codex_sentinel`.
+"""Behaviour tests for :mod:`sms_tool.codex.sentinel`.
 
 为什么写这个模块
 ================
-``codex_sentinel.py`` 只有 67 行，却是**注册 / 鉴权链路上所有 HTTP 出口的公共前缀**：
+``codex/sentinel.py`` 只有 67 行，却是**注册 / 鉴权链路上所有 HTTP 出口的公共前缀**：
 
 - ``account_creation.py:66``  注册校验头
-- ``codex_oauth.py``          OAuth 全流程（7 处 ``with_sentinel`` / ``attach_sentinel``）
-- ``codex_phone.py:87,113``   接码平台登录
+- ``codex/oauth.py``          OAuth 全流程（7 处 ``with_sentinel`` / ``attach_sentinel``）
+- ``codex/phone.py:87,113``   接码平台登录
 - ``phone_reuse.py:755,803``  手机号复用判定
 - ``sentinel_tokens.py:148``  Cloudflare cookie 回灌
 - ``registration/orchestrator.py:66``      主注册流程
@@ -17,7 +17,7 @@
 
 ``oai-did`` 是 OpenAI 的设备指纹 cookie。跨账号复用会让一批注册账号被判定为同一设备，
 后果是整个批次的账号一起被风控。这条契约目前**没有任何测试守着**——
-``tests/registration/test_codex_oauth.py`` 里 7 处全是 ``patch("sms_tool.codex_oauth.load_cached_sentinel", return_value={})``，
+``tests/registration/test_codex_oauth.py`` 里 7 处全是 ``patch("sms_tool.codex.oauth.load_cached_sentinel", return_value={})``，
 把整个模块 stub 成了空字典，属于典型的伪覆盖。
 
 已钉住的行为（改之前先读）
@@ -37,7 +37,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from sms_tool import codex_sentinel
+from sms_tool.codex import sentinel as codex_sentinel
 
 SENTINEL_FILE = "sentinel_cache.json"
 

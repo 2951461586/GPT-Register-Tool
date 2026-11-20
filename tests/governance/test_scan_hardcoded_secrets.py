@@ -306,7 +306,7 @@ class PrecommitGuardParityTests(unittest.TestCase):
 class PublicIdentifierTests(unittest.TestCase):
     """PKCE 公开客户端的 ``client_id`` 设计上就该在源码里。
 
-    本仓 ``codex_oauth.py:35`` 是 Codex CLI 的公开 client id，``codex_export.py:333``
+    本仓 ``codex/oauth.py:35`` 是 Codex CLI 的公开 client id，``codex/export.py:333``
     还拿它当 fallback；``config.example.json`` 的同名键留空 —— 跨文件检查会把它判成
     泄漏，而它恰恰是唯一正确的写法。
     """
