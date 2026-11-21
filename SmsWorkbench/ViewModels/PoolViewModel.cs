@@ -1,10 +1,6 @@
-// Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
-#nullable enable
-
 using SmsWorkbench.Localization;
 
-namespace SmsWorkbench
+namespace SmsWorkbench.ViewModels
 {
     /// <summary>
     /// The account pool grid's state: every loaded row, the search / scope
@@ -43,9 +39,18 @@ namespace SmsWorkbench
             ClearSelectionCommand = new RelayCommand(ClearSelection);
         }
 
-        public ObservableCollection<PoolRow> AllRows { get; } = new ObservableCollection<PoolRow>();
+        public List<PoolRow> AllRows { get; } = new List<PoolRow>();
 
         public ObservableCollection<PoolRow> PagedRows { get; } = new ObservableCollection<PoolRow>();
+
+        private AppLanguage? cachedScopeLanguage;
+        private IReadOnlyList<ScopeOption> cachedScopeOptions = Array.Empty<ScopeOption>();
+
+        public void ReplaceAll(IEnumerable<PoolRow> rows)
+        {
+            AllRows.Clear();
+            AllRows.AddRange(rows);
+        }
 
         public RelayCommand FirstPageCommand { get; }
         public RelayCommand PreviousPageCommand { get; }
@@ -71,7 +76,9 @@ namespace SmsWorkbench
             get => searchText;
             set
             {
-                searchText = value ?? "";
+                string next = value ?? "";
+                if (string.Equals(searchText, next, StringComparison.Ordinal)) return;
+                searchText = next;
                 OnPropertyChanged();
                 // Drives the clear (×) button in AccountFilterBar; it used to be
                 // toggled by name from MainWindow's code-behind.
@@ -86,13 +93,26 @@ namespace SmsWorkbench
         public string PageSizeText
         {
             get => pageSizeText;
-            set { pageSizeText = value ?? "100"; OnPropertyChanged(); ResetToFirstPage(); }
+            set
+            {
+                string next = value ?? "100";
+                if (string.Equals(pageSizeText, next, StringComparison.Ordinal)) return;
+                pageSizeText = next;
+                OnPropertyChanged();
+                ResetToFirstPage();
+            }
         }
 
         public object ScopeFilter
         {
             get => scopeFilter;
-            set { scopeFilter = value; OnPropertyChanged(); ResetToFirstPage(); }
+            set
+            {
+                if (Equals(scopeFilter, value)) return;
+                scopeFilter = value;
+                OnPropertyChanged();
+                ResetToFirstPage();
+            }
         }
 
         /// <summary>
@@ -100,12 +120,24 @@ namespace SmsWorkbench
         /// label. The key is what <see cref="Matches"/> compares, so switching the
         /// language can never change which rows a filter selects.
         /// </summary>
-        public IReadOnlyList<ScopeOption> ScopeOptions => new[]
+        public IReadOnlyList<ScopeOption> ScopeOptions
         {
-            new ScopeOption("all", Loc.T("全部")),
-            new ScopeOption("trial", Loc.T("有试用")),
-            new ScopeOption("attention", Loc.T("待处理")),
-        };
+            get
+            {
+                AppLanguage current = Loc.Instance.Language;
+                if (cachedScopeLanguage != current || cachedScopeOptions.Count == 0)
+                {
+                    cachedScopeLanguage = current;
+                    cachedScopeOptions = new[]
+                    {
+                        new ScopeOption("all", Loc.T("全部")),
+                        new ScopeOption("trial", Loc.T("有试用")),
+                        new ScopeOption("attention", Loc.T("待处理")),
+                    };
+                }
+                return cachedScopeOptions;
+            }
+        }
 
         public string PageStatusText
         {

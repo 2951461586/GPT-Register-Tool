@@ -15,7 +15,7 @@ from urllib.parse import parse_qsl, unquote_to_bytes, urlencode, urljoin, urlspl
 
 from curl_cffi import requests as curl_requests
 
-from ..mail_otp import _extract_otp_from_text, _message_received_ts
+from ..mailbox.mail_otp import _extract_otp_from_text, _message_received_ts
 from ..mailbox.errors import MailboxEndpointUnavailableError
 from ..mailbox.quarantine import (
     TRANSIENT_AUTH_INVALID_COOLDOWN_SECONDS,
@@ -172,7 +172,13 @@ def fetch_icloud_url_messages(mailbox, limit: int = 25, proxy: str | None = None
             proxy=proxy,
         )
     else:
-        messages = _parse_card_messages(text, email=email, limit=limit)
+        spa_messages = _fetch_spa_pickup_messages(page_url, text, email=email, limit=limit, proxy=proxy)
+        if spa_messages is not None:
+            messages = spa_messages
+        else:
+            messages = _parse_card_messages(text, email=email, limit=limit)
+            if not messages:
+                messages = _parse_generic_html_messages(text, email=email, limit=limit)
     return sorted(messages, key=_message_received_ts, reverse=True)
 
 
@@ -187,7 +193,12 @@ def snapshot_icloud_url_messages(mailbox, limit: int = 25, proxy: str | None = N
         return latest_messages
     api_paths = _yangyang_api_paths(text)
     if not api_paths:
+        spa_messages = _fetch_spa_pickup_messages(page_url, text, email=email, limit=limit, proxy=proxy)
+        if spa_messages is not None:
+            return sorted(spa_messages, key=_message_received_ts, reverse=True)
         messages = _parse_card_messages(text, email=email, limit=limit)
+        if not messages:
+            messages = _parse_generic_html_messages(text, email=email, limit=limit)
         return sorted(messages, key=_message_received_ts, reverse=True)
 
     items = _fetch_yangyang_items(page_url, api_paths, limit=limit, proxy=proxy)
@@ -255,14 +266,17 @@ def _fetch_icloud_url_page(mailbox, *, limit: int, proxy: str | None) -> tuple[s
     return page_url, email, text
 
 
-def _request(url: str, *, proxy: str | None = None):
+def _request(url: str, *, proxy: str | None = None, headers: dict[str, str] | None = None):
     # ``ProxySpec`` is a TypedDict; a plain mapping is what every call site passes
     # and what curl_cffi accepts at runtime.
     proxies: Any = {"http": proxy, "https": proxy} if proxy else None
+    merged_headers = dict(_NO_CACHE_HEADERS)
+    if headers:
+        merged_headers.update(headers)
     try:
         return curl_requests.get(
             url,
-            headers=dict(_NO_CACHE_HEADERS),
+            headers=merged_headers,
             proxies=proxies,
             impersonate="chrome124",
             timeout=35,
@@ -649,6 +663,290 @@ def _parse_card_messages(text: str, *, email: str, limit: int) -> list[dict[str,
             )
         )
     return messages
+
+
+_SPA_CREDENTIAL_KEYS: tuple[str, ...] = ("key", "token", "auth_code", "auth", "secret", "password")
+_SPA_ENDPOINT_RE = re.compile(
+    r"""['"](/api/(?:pickup|inbox|mailbox|mail)/[a-z0-9/_-]*messages[a-z0-9/_-]*)['"]""",
+    re.IGNORECASE,
+)
+_HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
+_HTML_NOISE_BLOCK_RE = re.compile(
+    r"<(?:head|style|script|noscript|svg)\b[^>]*>.*?</(?:head|style|script|noscript|svg)>",
+    re.IGNORECASE | re.DOTALL,
+)
+_HTML_BLOCK_BREAK_RE = re.compile(
+    r"(?:</(?:p|div|tr|li|h[1-6]|section|article|blockquote|pre|td|th)>|<br\s*/?>|<hr\s*/?>)",
+    re.IGNORECASE,
+)
+_HTML_TAG_RE = re.compile(r"<[^>]+>")
+_GENERIC_TIMESTAMP_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})\b"),
+    re.compile(
+        r"\b(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s+\d{1,2}\s+"
+        r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+"
+        r"\d{4}\s+\d{2}:\d{2}:\d{2}\s+[+-]\d{4}\b",
+        re.IGNORECASE,
+    ),
+    re.compile(r"\b\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\b"),
+    _CN_TIME_RE,
+)
+_GENERIC_SENDER_RE = re.compile(r"\b[a-z0-9._%+\-]+@(?:[a-z0-9\-]+\.)*(?:openai|chatgpt)\.com\b", re.IGNORECASE)
+
+
+def _same_origin(base_url: str, candidate_url: str) -> bool:
+    left = urlsplit(str(base_url or ""))
+    right = urlsplit(str(candidate_url or ""))
+    if left.scheme.lower() != right.scheme.lower():
+        return False
+    if (left.hostname or "").lower() != (right.hostname or "").lower():
+        return False
+    default_port = {"http": 80, "https": 443}.get(left.scheme.lower())
+    return (left.port or default_port) == (right.port or default_port)
+
+
+def _parse_url_params(raw: str) -> dict[str, str]:
+    text = str(raw or "").strip()
+    if "?" in text:
+        text = text.split("?", 1)[1]
+    elif text.startswith("/"):
+        return {}
+    return {str(k).strip().lower(): str(v).strip() for k, v in parse_qsl(text, keep_blank_values=True) if k}
+
+
+def _extract_url_credentials(url: str, fallback_email: str) -> tuple[str, str, bool]:
+    parsed = urlsplit(str(url or ""))
+    frag_params = _parse_url_params(parsed.fragment)
+    query_params = _parse_url_params(parsed.query)
+    email = frag_params.get("email") or query_params.get("email") or str(fallback_email or "").strip().lower()
+    for field in _SPA_CREDENTIAL_KEYS:
+        if frag_params.get(field):
+            return email.lower(), frag_params[field], True
+    for field in _SPA_CREDENTIAL_KEYS:
+        if query_params.get(field):
+            return email.lower(), query_params[field], False
+    return email.lower(), "", False
+
+
+def _discover_spa_pickup_urls(
+    page_url: str,
+    html_text: str,
+    *,
+    key: str,
+    from_fragment: bool,
+    limit: int,
+) -> list[str]:
+    if not key:
+        return []
+    clamped = max(1, min(int(limit or 25), 50))
+    paths: list[str] = []
+    for match in _SPA_ENDPOINT_RE.finditer(str(html_text or "")):
+        path = match.group(1).strip()
+        if path and path not in paths:
+            paths.append(path)
+    if from_fragment and "/api/pickup/messages" not in paths:
+        paths.append("/api/pickup/messages")
+    urls: list[str] = []
+    for path in paths:
+        resolved = urljoin(page_url, path)
+        if not _same_origin(page_url, resolved):
+            continue
+        parsed = urlsplit(resolved)
+        query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+        query.setdefault("limit", str(clamped))
+        candidate = urlunsplit((parsed.scheme, parsed.netloc, parsed.path, urlencode(query), ""))
+        if candidate not in urls:
+            urls.append(candidate)
+    return urls
+
+
+def _spa_sender_text(item: dict[str, Any]) -> str:
+    for field in ("from", "sender", "from_address", "fromAddress"):
+        value = item.get(field)
+        if isinstance(value, dict):
+            address = str(value.get("address") or value.get("email") or "").strip()
+            name = str(value.get("name") or "").strip()
+            if address:
+                return f"{name} <{address}>".strip() if name else address
+        elif value not in (None, ""):
+            return str(value).strip()
+    return ""
+
+
+def _spa_received_at_text(item: dict[str, Any]) -> str:
+    for field in ("date", "received_at", "receivedAt", "receivedDateTime", "created_at", "createdAt", "timestamp"):
+        value = item.get(field)
+        if value in (None, ""):
+            continue
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            ts = float(value) / 1000.0 if float(value) > 1e12 else float(value)
+            try:
+                return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
+            except (OverflowError, OSError, ValueError):
+                continue
+        text = str(value).strip()
+        if text:
+            return text
+    return ""
+
+
+def _spa_body_text(item: dict[str, Any]) -> str:
+    parts: list[str] = []
+    for field in ("body", "text", "plain", "content", "html", "preview", "bodyPreview"):
+        value = item.get(field)
+        if isinstance(value, dict):
+            value = value.get("content") or value.get("text") or value.get("html") or ""
+        if not isinstance(value, str) or not value.strip():
+            continue
+        decoded = _decode_mail_body(value)
+        cleaned = _strip_html_to_visible_text(decoded) if "<" in decoded else decoded.strip()
+        if cleaned and cleaned not in parts:
+            parts.append(cleaned)
+    return "\n".join(parts)
+
+
+def _spa_items_from_payload(payload: Any) -> list[dict[str, Any]] | None:
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, dict)]
+    if not isinstance(payload, dict):
+        return None
+    for key in ("messages", "items", "data", "emails", "list"):
+        candidate = payload.get(key)
+        if isinstance(candidate, list):
+            return [item for item in candidate if isinstance(item, dict)]
+        if isinstance(candidate, dict):
+            nested = _spa_items_from_payload(candidate)
+            if nested is not None:
+                return nested
+    return None
+
+
+def _fetch_spa_pickup_messages(
+    page_url: str,
+    html_text: str,
+    *,
+    email: str,
+    limit: int,
+    proxy: str | None,
+) -> list[dict[str, Any]] | None:
+    cred_email, cred_key, from_fragment = _extract_url_credentials(page_url, email)
+    candidate_urls = _discover_spa_pickup_urls(
+        page_url,
+        html_text,
+        key=cred_key,
+        from_fragment=from_fragment,
+        limit=limit,
+    )
+    if not candidate_urls:
+        return None
+    headers = {
+        "Accept": "application/json",
+        "Authorization": f"Bearer {cred_key}",
+        "X-Mailbox-Email": cred_email,
+    }
+    clamped = max(1, min(int(limit or 25), 50))
+    for endpoint_url in candidate_urls:
+        try:
+            response = _request(endpoint_url, proxy=proxy, headers=headers)
+        except RuntimeError:
+            continue
+        if response.status_code == 401:
+            raise MailboxAuthInvalidError(detail="iCloud SPA pickup HTTP 401")
+        if response.status_code < 200 or response.status_code >= 300:
+            continue
+        payload = None
+        try:
+            payload = response.json()
+        except (ValueError, TypeError, AttributeError):
+            payload = _load_json_payload(getattr(response, "text", ""))
+        items = _spa_items_from_payload(payload)
+        if items is None:
+            continue
+        messages: list[dict[str, Any]] = []
+        for item in items:
+            subject = str(item.get("subject") or item.get("title") or "").strip()
+            sender = _spa_sender_text(item)
+            received_at = _spa_received_at_text(item)
+            body = _spa_body_text(item)
+            raw_id = item.get("id") or item.get("uid") or item.get("message_id") or item.get("messageId")
+            message_id = (
+                str(raw_id).strip()
+                if raw_id not in (None, "")
+                else hashlib.sha256(
+                    f"spa:{subject}\n{received_at}\n{body}".encode("utf-8", errors="ignore")
+                ).hexdigest()[:24]
+            )
+            messages.append(
+                _message(
+                    email=email,
+                    message_id=message_id,
+                    subject=subject,
+                    sender=sender,
+                    received_at=received_at,
+                    body=body,
+                )
+            )
+        messages.sort(key=_message_received_ts, reverse=True)
+        return messages[:clamped]
+    return None
+
+
+def _strip_html_to_visible_text(raw_html: str) -> str:
+    text = _HTML_COMMENT_RE.sub(" ", str(raw_html or ""))
+    text = _HTML_NOISE_BLOCK_RE.sub(" ", text)
+    text = _HTML_BLOCK_BREAK_RE.sub("\n", text)
+    text = _HTML_TAG_RE.sub(" ", text)
+    text = html.unescape(text)
+    lines = [_clean_text(line) for line in text.splitlines()]
+    return "\n".join(line for line in lines if line)
+
+
+def _extract_generic_timestamp(visible_text: str) -> str:
+    best_ts = 0
+    best_iso = ""
+    for pattern in _GENERIC_TIMESTAMP_PATTERNS:
+        for match in pattern.finditer(visible_text):
+            raw = match.group(0)
+            iso = _latest_mail_received_at(raw) if pattern is _CN_TIME_RE else _iso_datetime(raw)
+            if not iso:
+                continue
+            ts = _message_received_ts({"receivedDateTime": iso})
+            if ts >= best_ts:
+                best_ts = ts
+                best_iso = iso
+    return best_iso
+
+
+def _parse_generic_html_messages(text: str, *, email: str, limit: int) -> list[dict[str, Any]]:
+    """Template-independent HTML fallback when structured card markup is absent."""
+    del limit
+    visible = _strip_html_to_visible_text(text)
+    if not visible or not _OTP_CONTEXT_RE.search(visible):
+        return []
+    code = _extract_otp_from_text(visible)
+    if not code:
+        return []
+    received_at = _extract_generic_timestamp(visible)
+    subject = _API_OTP_SUBJECT
+    for line in visible.splitlines():
+        if _OTP_CONTEXT_RE.search(line):
+            subject = line[:160]
+            break
+    sender_match = _GENERIC_SENDER_RE.search(visible)
+    sender = sender_match.group(0) if sender_match else ""
+    digest = hashlib.sha256(
+        f"generic-html:{code}\n{received_at}\n{subject}".encode("utf-8", errors="ignore")
+    ).hexdigest()[:24]
+    return [
+        _message(
+            email=email,
+            message_id=digest,
+            subject=subject,
+            sender=sender,
+            received_at=received_at,
+            body=visible[:4000],
+        )
+    ]
 
 
 def _message(*, email: str, message_id: str, subject: str, sender: str, received_at: str, body: str) -> dict[str, Any]:

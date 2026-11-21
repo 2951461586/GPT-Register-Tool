@@ -1,11 +1,11 @@
-"""Per-account TLS ClientHello override (``sms_tool/tls_fingerprint.py``)."""
+"""Per-account TLS ClientHello override (``sms_tool/transport/tls_fingerprint.py``)."""
 
 from __future__ import annotations
 
 import pytest
 from curl_cffi.const import CurlOpt
 
-from sms_tool import tls_fingerprint as tls
+from sms_tool.transport import tls_fingerprint as tls
 
 
 @pytest.fixture(autouse=True)
@@ -22,7 +22,7 @@ def _clean_binding():
     the file ran first). ``chrome146`` is the neutral profile because this module
     does not permute the Chrome family, so the derivation stays inactive.
     """
-    from sms_tool.auth_headers import set_auth_fingerprint, set_fingerprint_device
+    from sms_tool.transport.auth_headers import set_auth_fingerprint, set_fingerprint_device
 
     def _reset() -> None:
         tls.clear_tls_fingerprint()
@@ -155,7 +155,7 @@ class TestApplyToSession:
         assert fingerprint.reason.startswith("install-failed:")
 
     def test_current_fingerprint_rebuilds_when_the_profile_changes(self):
-        from sms_tool.auth_headers import set_auth_fingerprint, set_fingerprint_device
+        from sms_tool.transport.auth_headers import set_auth_fingerprint, set_fingerprint_device
 
         set_fingerprint_device("acct-1")
         set_auth_fingerprint("firefox144")

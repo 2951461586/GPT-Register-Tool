@@ -12,7 +12,7 @@ from sms_tool.mailbox import router as mailbox_module
 # same module object at runtime).
 from sms_tool.providers import mailbox_icloud_url
 from sms_tool.mailbox import parsers as mailbox_parsers
-from sms_tool.mail_otp import _email_otp_candidate, _extract_otp_from_text, _message_received_ts
+from sms_tool.mailbox.mail_otp import _email_otp_candidate, _extract_otp_from_text, _message_received_ts
 from sms_tool.mailbox.types import MailboxAccount
 from typing import TypeVar
 from sms_tool.providers.mailbox_graph import MailboxAuthInvalidError
@@ -723,6 +723,119 @@ class LatestMailJsChannelTests(unittest.TestCase):
 
         self.assertEqual(len(_required(messages)), 1)
         self.assertIn("654321", _required(messages)[0]["body"]["content"])
+
+
+class ICloudUrlSpaAndGenericFallbackTests(unittest.TestCase):
+    def test_spa_fragment_credentials_fetch_same_origin_pickup_and_sort_by_timestamp(self):
+        spa_shell = "<html><body><div id='app'>Loading inbox...</div><script>window.__APP__=1;</script></body></html>"
+        api_payload = {
+            "messages": [
+                {
+                    "uid": 999,
+                    "subject": "Your temporary ChatGPT verification code",
+                    "from": "OpenAI <noreply@openai.com>",
+                    "date": "2026-08-04T14:10:00Z",
+                    "preview": "Your verification code is 111111",
+                },
+                {
+                    "uid": 12,
+                    "subject": "Your temporary ChatGPT verification code",
+                    "from": "OpenAI <noreply@openai.com>",
+                    "date": "2026-08-04T14:15:00Z",
+                    "preview": "Your verification code is 842913",
+                },
+            ]
+        }
+        mailbox = MailboxAccount(
+            email="sample-spa@icloud.com",
+            provider="icloud_url",
+            token="https://pickup.example/view/#email=sample-spa@icloud.com&key=tok_secret_99",
+        )
+        calls: list[tuple[str, dict]] = []
+
+        def fake_get(url, **kwargs):
+            calls.append((url, dict(kwargs.get("headers") or {})))
+            if len(calls) == 1:
+                return _Response(text=spa_shell)
+            return _Response(payload=api_payload)
+
+        with patch.object(mailbox_icloud_url.curl_requests, "get", side_effect=fake_get):
+            messages = mailbox_icloud_url.fetch_icloud_url_messages(mailbox, limit=5)
+
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(calls[1][0], "https://pickup.example/api/pickup/messages?limit=5")
+        self.assertEqual(calls[1][1].get("Authorization"), "Bearer tok_secret_99")
+        self.assertEqual(calls[1][1].get("X-Mailbox-Email"), "sample-spa@icloud.com")
+        self.assertEqual(len(messages), 2)
+        # Newer timestamp (uid=12) MUST come before older timestamp (uid=999).
+        self.assertEqual(messages[0]["id"], "12")
+        candidate = _email_otp_candidate(mailbox, messages[0], keyword="verification code")
+        self.assertEqual(_required(candidate)["otp"], "842913")
+
+    def test_spa_endpoint_discovery_rejects_cross_origin_urls(self):
+        self.assertTrue(
+            mailbox_icloud_url._same_origin("https://pickup.example/app", "https://pickup.example/api/pickup/messages")
+        )
+        self.assertFalse(
+            mailbox_icloud_url._same_origin("https://pickup.example/app", "https://evil.example/api/pickup/messages")
+        )
+        self.assertFalse(
+            mailbox_icloud_url._same_origin("https://pickup.example/app", "http://pickup.example/api/pickup/messages")
+        )
+
+    def test_generic_html_fallback_extracts_otp_from_unfamiliar_markup_and_strips_noise(self):
+        page = """
+        <!doctype html>
+        <html>
+          <head>
+            <title>ChatGPT verification code 000001</title>
+            <style>.banner { z-index: 999999; color: #123456; }</style>
+            <script>const buildCode = "222222"; const label = "OpenAI verification code";</script>
+          </head>
+          <body>
+            <!-- OpenAI login code 333333 -->
+            <section class="msg-item">
+              <h2>Your temporary ChatGPT verification code</h2>
+              <p>From: noreply@openai.com</p>
+              <time>2026-08-04 14:12:35</time>
+              <p>Enter this code to continue: 739204</p>
+            </section>
+          </body>
+        </html>
+        """
+        mailbox = MailboxAccount(
+            email="target@icloud.com",
+            provider="icloud_url",
+            token="https://custom-forward.example/u/secret",
+        )
+        with patch.object(mailbox_icloud_url.curl_requests, "get", return_value=_Response(text=page)):
+            messages = mailbox_icloud_url.fetch_icloud_url_messages(mailbox, limit=10)
+
+        self.assertEqual(len(messages), 1)
+        self.assertEqual(messages[0]["receivedDateTime"], "2026-08-04T14:12:35")
+        candidate = _email_otp_candidate(mailbox, messages[0], keyword="verification code|login code")
+        self.assertEqual(_required(candidate)["otp"], "739204")
+
+    def test_generic_html_fallback_returns_empty_for_non_otp_page(self):
+        page = "<html><body><div>Inbox empty. Build 456789. Refreshing...</div></body></html>"
+        mailbox = MailboxAccount(
+            email="sample-empty@icloud.com",
+            provider="icloud_url",
+            token="https://custom-forward.example/u/secret",
+        )
+        with patch.object(mailbox_icloud_url.curl_requests, "get", return_value=_Response(text=page)):
+            messages = mailbox_icloud_url.fetch_icloud_url_messages(mailbox, limit=10)
+
+        self.assertEqual(messages, [])
+
+    def test_mail_otp_extractor_ignores_style_script_and_comment_blocks(self):
+        html_body = (
+            "<style>.otp { z-index: 888888; }</style>"
+            "<script>var code = 777777;</script>"
+            "<!-- OpenAI code 666666 -->"
+            "<p>Your ChatGPT verification code is 519204.</p>"
+        )
+        self.assertEqual(_extract_otp_from_text(html_body), "519204")
 
 
 if __name__ == "__main__":

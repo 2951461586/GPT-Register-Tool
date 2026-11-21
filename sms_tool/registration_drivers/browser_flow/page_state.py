@@ -6,7 +6,7 @@ import time
 
 from . import dom_fields
 
-from ...humanize import delay as humanize_delay
+from ...registration.humanize import delay as humanize_delay
 from ..base import BrowserRegistrationError
 from collections.abc import Mapping
 from typing import Any

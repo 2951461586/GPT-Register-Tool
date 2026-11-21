@@ -6,7 +6,7 @@ import json
 import time
 
 from ..config import ConfigInput
-from ..promotion_states import PROMOTION_STATE_AUTH_INVALID
+from ..payment.promotion_states import PROMOTION_STATE_AUTH_INVALID
 
 from .connection import _connect, init_database
 from .normalize import (
@@ -278,7 +278,7 @@ def mark_promotion_status(
         data["promotion"] = promotion
         data["promotion_status"] = str(promotion_status or "")
         data["promotion_updated_at"] = now
-        # Machine state next to the display label (sms_tool/promotion_states.py):
+        # Machine state next to the display label (sms_tool/payment/promotion_states.py):
         # the desktop filter/sort keys off this, not off the Chinese copy.
         promotion_state = str(promotion_state or (promotion_result or {}).get("promotion_state") or "").strip()
         promotion["state"] = promotion_state

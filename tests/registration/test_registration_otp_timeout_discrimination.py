@@ -37,7 +37,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from sms_tool.auth_state import otp_dispatch_verdict, signup_lane_verdict
+from sms_tool.transport.auth_state import otp_dispatch_verdict, signup_lane_verdict
 from sms_tool.kernel.failure_registry import (
     BATCH_RETRY_CLASSES,
     OTP_MAILBOX_SIDE_MARKER,

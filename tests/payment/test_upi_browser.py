@@ -32,7 +32,7 @@ from typing import Any
 
 import pytest
 
-from sms_tool import endpoints
+from sms_tool.transport import endpoints
 from sms_tool.upi_link import browser as b
 
 

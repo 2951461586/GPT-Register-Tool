@@ -17,9 +17,9 @@ import logging
 import time
 from typing import TYPE_CHECKING
 
-from ..auth_state import signup_lane_verdict
+from ..transport.auth_state import signup_lane_verdict
 from ..kernel.failure_registry import PASSWORD_CLAIMED_MARKER
-from ..operator_output import emit as _emit
+from ..observability.operator_output import emit as _emit
 from . import concurrency as _registration_concurrency
 from . import reference_lane as _reference_lane
 from .protocol_helpers import _safe_float, _safe_int

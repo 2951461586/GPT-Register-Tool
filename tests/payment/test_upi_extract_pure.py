@@ -1381,7 +1381,7 @@ class FingerprintContractTests(unittest.TestCase):
 
     def test_locale_follows_contract_layer(self):
         """入参国家决定 locale / timezone / Accept-Language 三者同步变化。"""
-        from sms_tool import checkout_contract
+        from sms_tool.payment import checkout_contract
 
         for country in ("IN", "VN", "US", "GB"):
             with self.subTest(country=country):

@@ -27,7 +27,7 @@
 - **协议注册阶段拆分与输出通道统一** —— 从 `sms_tool/registration/handlers.py` 抽离 `sms_tool/registration/account_stages.py`
   承载 `create_account` 与 `user_register` 阶段；`registration/handlers.py`、`registration/otp_stages.py`、`registration/finalize.py`
   中的 32 处裸 `print` 统一迁至 `operator_output.emit`，并消除 8 处函数内延迟导入。
-- **支付提取器 URL 全面单源化与公共助手复用** —— 清理 PayPal 与 `services/protocol-payment/` 共 94 处内联 URL 字面量并统一由 `endpoints.py`
+- **支付提取器 URL 全面单源化与公共助手复用** —— 清理 PayPal 与 `services/protocol-payment/` 共 94 处内联 URL 字面量并统一由 `transport/endpoints.py`
   导出（`endpoints_literal_baseline.json` 归零）；iDEAL / TWINT / BLIK / Kakao 共用 `services/protocol-payment/common/payload_helpers.py`
   及公共模块，消除 BLIK 20 个重复辅助函数与 21 处未用导入。
 - **WPF 桌面端 MVVM 化与零警告构建** —— 从 `MainWindow` 抽离 `TaskListViewModel`、`LogViewModel`、`PoolViewModel`、`ExportViewModel`、

@@ -119,7 +119,7 @@ def test_per_account_breaker_only_blocks_matching_email():
     ]
     with (
         patch("sms_tool.mailbox.quarantine._read", return_value={}),
-        patch("sms_tool.mailbox.remail._read_dead_remail_registry", return_value=dead_entries),
+        patch("sms_tool.providers.mailbox_remail._read_dead_remail_registry", return_value=dead_entries),
     ):
         # The account whose mailbox is bad is blocked.
         assert not mailbox_relogin_allowed("bad@outlook.com")
@@ -137,7 +137,7 @@ def test_per_account_breaker_ignores_non_matching_reason():
     ]
     with (
         patch("sms_tool.mailbox.quarantine._read", return_value={}),
-        patch("sms_tool.mailbox.remail._read_dead_remail_registry", return_value=dead_entries),
+        patch("sms_tool.providers.mailbox_remail._read_dead_remail_registry", return_value=dead_entries),
     ):
         assert mailbox_relogin_allowed("deactivated@outlook.com")
         assert mailbox_relogin_allowed()

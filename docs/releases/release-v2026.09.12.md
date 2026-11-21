@@ -40,7 +40,7 @@
 
 ## 优惠状态（查优惠）
 
-- **跨语言机器契约（候选4）**：新增 `sms_tool/promotion_states.py` 机器状态词汇
+- **跨语言机器契约（候选4）**：新增 `sms_tool/payment/promotion_states.py` 机器状态词汇
   （trial_eligible/subscribed/free/auth_invalid/probe_failed/unknown）。此前 C#
   靠 `Contains("可试用")+Contains("plus")` 子串猜语义，改一个词就碎。现：
   Python 探针结果统一携带 `promotion_state` 并随 `mark_promotion_status` 持久化、

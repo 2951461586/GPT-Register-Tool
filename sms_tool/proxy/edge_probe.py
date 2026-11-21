@@ -41,8 +41,8 @@ import time
 from dataclasses import dataclass
 from typing import Any, Mapping, Sequence
 
-from ..phone_proxy import normalize_proxy_url, redact_proxy_url
-from .. import endpoints
+from ..phone.phone_proxy import normalize_proxy_url, redact_proxy_url
+from ..transport import endpoints
 
 CLEAN = "clean"
 BLOCKED = "blocked"

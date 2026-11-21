@@ -30,8 +30,9 @@ namespace SmsWorkbench.Tests
             string expected = doc.RootElement.GetProperty("client_id").GetString() ?? "";
 
             string source = File.ReadAllText(
-                Path.Combine(RepoRoot(), "SmsWorkbench", "Views", "MainWindow.Export.cs"));
+                Path.Combine(RepoRoot(), "SmsWorkbench", "Services", "AccountExportCoordinator.cs"));
             Assert.Contains(expected, source);
+            Assert.Equal(AccountExportCoordinator.DefaultMicrosoftOAuthClientId, expected);
         }
     }
 }

@@ -25,11 +25,8 @@
   <SolidColorBrush x:Key="PrimarySoft" Color="#172554"/>
   <SolidColorBrush x:Key="OnPrimary" Color="#FFFFFF"/>
   <SolidColorBrush x:Key="Danger" Color="#FA5252"/>
-  <SolidColorBrush x:Key="DangerSoft" Color="#2B1D1D"/>
   <SolidColorBrush x:Key="DangerBorder" Color="#8C2A2A"/>
   <SolidColorBrush x:Key="Success" Color="#51CF66"/>
-  <SolidColorBrush x:Key="SuccessSoft" Color="#1A2E1F"/>
-  <SolidColorBrush x:Key="SuccessBorder" Color="#2B6B3A"/>
 
   <SolidColorBrush x:Key="AppBg" Color="#181818"/>
   <SolidColorBrush x:Key="PanelBg" Color="#232323"/>
@@ -50,7 +47,6 @@
        alias pointed at a different rung per theme; tests/workbench/
        test_theme_palette_consistency.py now fails on that class of drift. -->
   <SolidColorBrush x:Key="LogBg" Color="#333333"/>
-  <SolidColorBrush x:Key="LogBorder" Color="#3A3A3A"/>
   <SolidColorBrush x:Key="LogText" Color="#E6E6E6"/>
 
   <SolidColorBrush x:Key="BadgeSuccessBg" Color="#1C2B24"/>
@@ -67,13 +63,6 @@
   <SolidColorBrush x:Key="BadgeInfoBd" Color="Transparent"/>
   <SolidColorBrush x:Key="BadgeNeutralBg" Color="#2B2B2B"/>
   <SolidColorBrush x:Key="BadgeNeutralFg" Color="#ABB0B5"/>
-  <SolidColorBrush x:Key="BadgeNeutralBd" Color="Transparent"/>
-
-  <SolidColorBrush x:Key="AccentBlue" Color="#60A5FA"/>
-  <SolidColorBrush x:Key="AccentGreen" Color="#4ADE80"/>
-  <SolidColorBrush x:Key="AccentOrange" Color="#FBBF24"/>
-  <SolidColorBrush x:Key="AccentPurple" Color="#A78BFA"/>
-  <SolidColorBrush x:Key="AccentRed" Color="#F87171"/>
 
   <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="#232323"/>
   <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush" Color="#333333"/>

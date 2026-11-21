@@ -16,7 +16,7 @@ from collections.abc import Mapping
 from typing import Any
 from urllib.parse import urlsplit
 
-from ..checkout_contract import PLUS_TRIAL_CAMPAIGN_ID
+from ..payment.checkout_contract import PLUS_TRIAL_CAMPAIGN_ID
 
 
 # ─── UPI 辅助函数 ──────────────────────────────────────────────────────────────

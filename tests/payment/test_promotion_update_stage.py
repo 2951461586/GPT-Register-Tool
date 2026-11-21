@@ -10,7 +10,7 @@ then runs the Stripe init (which gates on amount==0 AND paypal availability).
 import unittest
 from unittest.mock import patch
 
-from sms_tool import gen_pp_link as g
+from sms_tool.paypal_link import gen_link as g
 from sms_tool.paypal import extract as paypal_extract
 
 

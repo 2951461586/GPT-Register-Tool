@@ -26,7 +26,7 @@ r"""中性支付内核 —— Checkout 原语、会话工厂与共享失败词�
 """
 
 from __future__ import annotations
-from .. import endpoints
+from ..transport import endpoints
 
 import json
 import re
@@ -35,7 +35,7 @@ from urllib.parse import urlsplit
 
 import requests
 
-from ..auth_headers import AUTH_FINGERPRINT_PROFILES
+from ..transport.auth_headers import AUTH_FINGERPRINT_PROFILES
 
 from ..kernel.timeouts import CHATGPT_TIMEOUT
 

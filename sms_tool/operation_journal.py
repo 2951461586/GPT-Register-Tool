@@ -21,9 +21,6 @@ Two boundaries this module keeps:
 * **On-disk location.**  The ledger directory keeps its historical name
   (``payment_operations``).  Renaming it would orphan the replay guard of an
   in-flight batch on upgrade -- the exact restart the guard exists for.
-
-``payment/operation.py`` is a thin re-export shim so existing importers (and
-``patch("sms_tool.payment.operation....")`` targets) keep working.
 """
 
 from __future__ import annotations

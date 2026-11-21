@@ -53,14 +53,14 @@
   而被宽松标记顺带命中，`(18)` 不会）。
 
   **此处有意不合并**：两张表服务不同层，合并会把批次策略耦合进传输层，
-  与 `http_client` 已有的「不反向依赖 policy」原则冲突（见 `http_client.py:154-157`
+  与 `http_client` 已有的「不反向依赖 policy」原则冲突（见 `transport/http_client.py:154-157`
   的注释）。但**差异本身必须被知道** —— 改任何一张表时都要回头看另一张。
 
 ## 相关
 
 - `docs/audits/scans/scan-2026-09-18-latest-protocol-batch-diagnosis.md` §3「已确认为有意变更」
   与 §5④
-- `sms_tool/http_client.py:65-114`（`TRANSIENT_MARKERS` / `is_transient_transport_error`）
-- `sms_tool/backoff.py:12-17`（`transport_backoff`）
+- `sms_tool/transport/http_client.py:65-114`（`TRANSIENT_MARKERS` / `is_transient_transport_error`）
+- `sms_tool/transport/backoff.py:12-17`（`transport_backoff`）
 - `sms_tool/registration/preflight.py:104-171`（外层 `proxy_attempts` 换出口循环）
 - `sms_tool/registration/handlers.py:725-745`（两个 prime 调用）

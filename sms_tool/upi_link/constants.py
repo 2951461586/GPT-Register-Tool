@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import re
-from .. import endpoints
+from ..transport import endpoints
 
 
 UPI_DUMP_DEFAULT_DIR = "runtime/upi_dumps"

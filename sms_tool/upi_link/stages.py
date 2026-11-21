@@ -17,11 +17,11 @@ from typing import Any
 import json
 import time
 import uuid
-from .. import endpoints
+from ..transport import endpoints
 
-from ..checkout_contract import PLUS_TRIAL_CAMPAIGN_ID
+from ..payment.checkout_contract import PLUS_TRIAL_CAMPAIGN_ID
 
-from ..pp_link_helpers import CHATGPT_TIMEOUT, DEFAULT_STRIPE_PK, DEFAULT_TIMEOUT, STRIPE_VERSION
+from ..payment.pp_link_helpers import CHATGPT_TIMEOUT, DEFAULT_STRIPE_PK, DEFAULT_TIMEOUT, STRIPE_VERSION
 
 from .constants import (
     STRIPE_PAYMENT_PAGE_CONFIRM_URL_T,

@@ -6,7 +6,7 @@ from sms_tool import cli
 
 
 class OneClickScanCliTests(unittest.TestCase):
-    def test_one_click_scan_disables_workspace_controls(self):
+    def test_one_click_scan_forwards_relogin_options_without_workspace_controls(self):
         args = types.SimpleNamespace(
             email="user@gmail.com",
             email_file="",
@@ -22,10 +22,10 @@ class OneClickScanCliTests(unittest.TestCase):
             cli._one_click_scan(args)
 
         kwargs = scan.call_args.kwargs
-        self.assertFalse(kwargs["workspace_check"])
-        self.assertEqual(kwargs["switch_workspace_id"], "")
-        self.assertEqual(kwargs["fallback_workspace_ids"], [])
-        self.assertFalse(kwargs["auto_switch_workspace"])
+        self.assertNotIn("workspace_check", kwargs)
+        self.assertNotIn("switch_workspace_id", kwargs)
+        self.assertNotIn("fallback_workspace_ids", kwargs)
+        self.assertNotIn("auto_switch_workspace", kwargs)
         self.assertTrue(kwargs["quota_relogin_on_401"])
         self.assertEqual(kwargs["relogin_mode"], "web_session")
 

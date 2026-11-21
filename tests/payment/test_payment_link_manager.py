@@ -86,7 +86,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
                 with patch(
-                    "sms_tool.gen_pp_link.generate_pp_link",
+                    "sms_tool.paypal_link.gen_link.generate_pp_link",
                     return_value={"ok": True, "url": "https://example.test/pay"},
                 ):
                     result = manager.generate_payment_link("token", payment_method="paypal")
@@ -129,7 +129,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
             tempfile.TemporaryDirectory() as tmp,
             patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"),
             patch("sms_tool.paypal.proxy.select_proxy_from_pool", side_effect=choose),
-            patch("sms_tool.gen_pp_link.generate_pp_link", side_effect=fake_generate),
+            patch("sms_tool.paypal_link.gen_link.generate_pp_link", side_effect=fake_generate),
         ):
             result = manager.generate_payment_link(
                 "token",
@@ -655,7 +655,9 @@ class PaymentLinkManagerTests(unittest.TestCase):
     def test_completed_status_does_not_bypass_artifact_validation_for_other_methods(self):
         with tempfile.TemporaryDirectory() as tmp:
             with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
-                with patch("sms_tool.gen_pp_link.generate_pp_link", return_value={"ok": True, "status": "completed"}):
+                with patch(
+                    "sms_tool.paypal_link.gen_link.generate_pp_link", return_value={"ok": True, "status": "completed"}
+                ):
                     result = manager.generate_payment_link("token", payment_method="paypal")
         self.assertFalse(result["ok"])
         self.assertIn("no link or QR data", result["error"])
@@ -734,7 +736,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
             runs = Path(tmp) / "runs.jsonl"
             with patch("sms_tool.pay_link.persistence._state_path", return_value=runs):
                 with patch(
-                    "sms_tool.gen_pp_link.generate_pp_link",
+                    "sms_tool.paypal_link.gen_link.generate_pp_link",
                     return_value={
                         "ok": True,
                         "url": approve_url,
@@ -799,7 +801,8 @@ class PaymentLinkManagerTests(unittest.TestCase):
 
     def test_persistence_failure_is_reported_without_raising(self):
         with patch(
-            "sms_tool.gen_pp_link.generate_pp_link", return_value={"ok": True, "url": "https://example.test/pay"}
+            "sms_tool.paypal_link.gen_link.generate_pp_link",
+            return_value={"ok": True, "url": "https://example.test/pay"},
         ):
             with patch("sms_tool.pay_link.persistence._persist_run", side_effect=OSError("disk blocked")):
                 result = manager.generate_payment_link("token", payment_method="paypal")

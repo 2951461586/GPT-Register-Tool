@@ -16,8 +16,8 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from sms_tool import batch_runner
-from sms_tool.batch_runner import _drop_already_registered
+from sms_tool.registration import batch_runner
+from sms_tool.registration.batch_runner import _drop_already_registered
 
 
 class _Mailbox:
@@ -56,8 +56,8 @@ class _Records:
         else:
             self._bases = Mock(return_value=[{"email": email} for email in bases])
         self._patches = [
-            patch("sms_tool.batch_runner.get_account_records", self._lookup),
-            patch("sms_tool.batch_runner.list_account_records", self._bases),
+            patch("sms_tool.registration.batch_runner.get_account_records", self._lookup),
+            patch("sms_tool.registration.batch_runner.list_account_records", self._bases),
         ]
 
     def __enter__(self):
@@ -184,7 +184,7 @@ def test_case_and_surrounding_space_do_not_hide_a_registered_row():
 def test_a_lookup_failure_keeps_every_mailbox():
     """An unreadable account database must not silently empty a batch."""
     pool = _pool("a@example.com", "b@example.com")
-    with patch("sms_tool.batch_runner.get_account_records", side_effect=RuntimeError("db is gone")):
+    with patch("sms_tool.registration.batch_runner.get_account_records", side_effect=RuntimeError("db is gone")):
         kept, skipped = _drop(pool)
 
     assert kept == pool

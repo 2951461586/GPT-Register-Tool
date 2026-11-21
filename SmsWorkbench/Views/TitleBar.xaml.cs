@@ -1,10 +1,6 @@
-// Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
-#nullable enable
-
 using System.Windows.Input;
 
-namespace SmsWorkbench
+namespace SmsWorkbench.Views
 {
     /// <summary>
     /// Custom title bar (drag surface + minimize / maximize / close).

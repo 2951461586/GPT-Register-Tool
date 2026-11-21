@@ -7,10 +7,11 @@ import time
 from typing import Any, Mapping
 from urllib.parse import unquote, urlsplit
 
-from .. import endpoints
+from ..transport import endpoints
 from ..browser.profile_reclaim import describe_contention
-from ..phone_proxy import normalize_proxy_url
+from ..phone.phone_proxy import normalize_proxy_url
 from .browser_flow.decisions import DEFAULT_VIEWPORT_HEIGHT, DEFAULT_VIEWPORT_WIDTH
+from .data_saver import BrowserDataSaverConfig, BrowserDataSaverHandle, install_playwright_data_saver
 from .stealth import apply_playwright_stealth
 
 _LOGGER = logging.getLogger(__name__)
@@ -51,6 +52,7 @@ class PlaywrightBrowserSession:
         timezone_id: str = "America/New_York",
         user_data_dir: str = "",
         viewport: tuple[int, int] | None = None,
+        data_saver_config: BrowserDataSaverConfig | Mapping[str, Any] | None = None,
     ) -> None:
         self.proxy = proxy
         self.headless = bool(headless)
@@ -58,6 +60,11 @@ class PlaywrightBrowserSession:
         self.locale = str(locale or "en-US")
         self.timezone_id = str(timezone_id or "America/New_York")
         self.user_data_dir = str(user_data_dir or "").strip()
+        if isinstance(data_saver_config, BrowserDataSaverConfig):
+            self.data_saver_config = data_saver_config
+        else:
+            self.data_saver_config = BrowserDataSaverConfig.from_config(data_saver_config)
+        self._data_saver_handle: BrowserDataSaverHandle | None = None
         # Rotated screen profile (browser fingerprint pool).  Defaults to the
         # shared constants so the fallback is defined in exactly one place
         # (P2-10: was hardcoded 1440x900 duplicated from decisions.py).
@@ -119,6 +126,7 @@ class PlaywrightBrowserSession:
                 label="playwright",
                 provider_prefix="playwright",
             )
+            self._attach_data_saver()
             return self
         except Exception:
             self.close()
@@ -142,7 +150,22 @@ class PlaywrightBrowserSession:
     def __exit__(self, exc_type, exc, tb) -> None:
         self.close()
 
+    def _attach_data_saver(self, *, bridge: Any = None) -> None:
+        self._data_saver_handle = install_playwright_data_saver(
+            self.context,
+            self.data_saver_config,
+            bridge=bridge,
+        )
+
+    def data_saver_snapshot(self) -> dict[str, Any] | None:
+        if self._data_saver_handle is None:
+            return None
+        return self._data_saver_handle.snapshot()
+
     def close(self) -> None:
+        if self._data_saver_handle is not None:
+            _LOGGER.info("%s", self._data_saver_handle.summary_line())
+            self._data_saver_handle = None
         for item in (self.context, self.browser, self._playwright):
             if item is None:
                 continue
@@ -214,6 +237,7 @@ class PlaywrightBrowserSession:
             label="playwright",
             provider_prefix="playwright",
         )
+        self._attach_data_saver()
         return self
 
     def cookie_header(self) -> str:

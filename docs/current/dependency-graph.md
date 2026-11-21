@@ -17,13 +17,13 @@ the *gate* (per-pair, only-down); this file is the *view*.
 
 | Measure | Value |
 | --- | ---: |
-| Modules | 343 |
-| Module-level import edges | 1083 |
-| Delayed (function-local) edges | 348 |
+| Modules | 330 |
+| Module-level import edges | 1056 |
+| Delayed (function-local) edges | 342 |
 | Type-only (`if TYPE_CHECKING`) edges | 71 |
 | Strongly connected components (size > 1) | 0 |
 | Modules inside a cycle | 0 |
-| Mutually dependent directory pairs | 24 |
+| Mutually dependent directory pairs | 19 |
 
 ## Cycles
 
@@ -33,47 +33,42 @@ None.
 
 | Pair |
 | --- |
-| `sms_tool` ↔ `sms_tool/accounts` |
-| `sms_tool` ↔ `sms_tool/codex` |
 | `sms_tool` ↔ `sms_tool/desktop` |
-| `sms_tool` ↔ `sms_tool/mailbox` |
 | `sms_tool` ↔ `sms_tool/payment` |
-| `sms_tool` ↔ `sms_tool/paypal` |
-| `sms_tool` ↔ `sms_tool/paypal_link` |
-| `sms_tool` ↔ `sms_tool/providers` |
-| `sms_tool` ↔ `sms_tool/proxy` |
 | `sms_tool` ↔ `sms_tool/registration` |
 | `sms_tool` ↔ `sms_tool/registration_drivers` |
-| `sms_tool` ↔ `sms_tool/sentinel` |
 | `sms_tool` ↔ `sms_tool/store` |
-| `sms_tool` ↔ `sms_tool/upi_link` |
-| `sms_tool` ↔ `sms_tool/wallet` |
 | `sms_tool/accounts` ↔ `sms_tool/registration` |
 | `sms_tool/auth_flow` ↔ `sms_tool/registration` |
 | `sms_tool/browser` ↔ `sms_tool/registration_drivers` |
+| `sms_tool/codex` ↔ `sms_tool/registration` |
 | `sms_tool/desktop` ↔ `sms_tool/mailbox` |
+| `sms_tool/desktop` ↔ `sms_tool/phone` |
 | `sms_tool/desktop` ↔ `sms_tool/registration` |
 | `sms_tool/mailbox` ↔ `sms_tool/providers` |
-| `sms_tool/paypal` ↔ `sms_tool/paypal_link` |
+| `sms_tool/payment` ↔ `sms_tool/paypal` |
+| `sms_tool/payment` ↔ `sms_tool/wallet` |
 | `sms_tool/phone` ↔ `sms_tool/registration` |
+| `sms_tool/phone` ↔ `sms_tool/sentinel` |
+| `sms_tool/proxy` ↔ `sms_tool/transport` |
 | `sms_tool/registration` ↔ `sms_tool/registration_drivers` |
 
 ## Most imported modules
 
 | Module | Importers |
 | --- | ---: |
-| `sms_tool.config` | 63 |
-| `sms_tool` | 52 |
-| `sms_tool.endpoints` | 45 |
+| `sms_tool.config` | 62 |
+| `sms_tool.transport` | 43 |
+| `sms_tool.transport.endpoints` | 43 |
 | `sms_tool.kernel.sanitizer` | 35 |
 | `sms_tool.kernel.paths` | 31 |
-| `sms_tool.auth_headers` | 24 |
-| `sms_tool.proxy.entry` | 19 |
-| `sms_tool.http_client` | 18 |
-| `sms_tool.operator_output` | 18 |
-| `sms_tool.phone_proxy` | 16 |
-| `sms_tool.providers` | 14 |
+| `sms_tool.transport.auth_headers` | 24 |
+| `sms_tool.proxy.entry` | 20 |
+| `sms_tool.observability.operator_output` | 18 |
+| `sms_tool.phone.phone_proxy` | 16 |
+| `sms_tool.transport.http_client` | 15 |
 | `sms_tool.storage` | 14 |
-| `sms_tool.checkout_contract` | 13 |
 | `sms_tool.registration_drivers.base` | 13 |
 | `sms_tool.payment.catalog` | 12 |
+| `sms_tool.payment.checkout_contract` | 12 |
+| `sms_tool.registration.state` | 12 |

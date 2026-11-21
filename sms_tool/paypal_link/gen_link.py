@@ -1,41 +1,16 @@
-"""gen_link submodule of the former sms_tool/gen_pp_link.py (mechanical split, bodies unchanged)."""
+"""PayPal Checkout link generation (zero-due BA links, hosted URLs, and matrices)."""
 
 from __future__ import annotations
-import importlib
-import sys
-
-
-class _PlmProxy:
-    """Lazy alias for sms_tool.gen_pp_link.
-
-    Resolved at attribute-access time (not import time) so this submodule
-    loads without an import cycle against the thin shell sms_tool.gen_pp_link.
-    Monkeypatches applied via patch.object(sms_tool.gen_pp_link, ...) are
-    still honored because we read the live module attribute at call time.
-    """
-
-    def __getattr__(self, name):
-        mod = sys.modules.get("sms_tool.gen_pp_link")
-        if mod is None:
-            mod = importlib.import_module("sms_tool.gen_pp_link")
-        return getattr(mod, name)
-
-
-_plm = _PlmProxy()
 
 import json
-
 import os
-
+import sys
 from collections.abc import Mapping
-
-from pathlib import Path
-
 from typing import Any
 
-from ..checkout_contract import PLUS_TRIAL_CAMPAIGN_ID, CheckoutRequestContract, CheckoutSessionContract
+from ..payment.checkout_contract import PLUS_TRIAL_CAMPAIGN_ID, CheckoutRequestContract, CheckoutSessionContract
 from ..proxy.entry import normalize_proxy_url
-from ..pp_link_helpers import (
+from ..payment.pp_link_helpers import (
     DEFAULT_STRIPE_PK,
     STRIPE_VERSION,
     DEFAULT_TIMEOUT,
@@ -56,8 +31,6 @@ from ..pp_link_helpers import (
     billing_for_country,
     stripe_amount_details,
     BILLING_DATA,
-    PM_REDIRECT_RE,
-    PAYPAL_BA_RE,
 )
 
 
@@ -202,7 +175,7 @@ def run_batch(
       同时拿到 0元 + PayPal BA 直链。返回结果附带 ``matrix`` 明细。
     """
     log = emit or (lambda step, msg, **kw: print(f"[{step}] {msg}", file=sys.stderr))
-    cfg = _plm._load_json(DEFAULT_CONFIG_PATH)
+    cfg = _load_json(DEFAULT_CONFIG_PATH)
     paypal_cfg = _paypal_config(cfg)
     state = _paypal_proxy_state(paypal_cfg)
     preflight = bool(paypal_cfg.get("preflight_proxy_check", False))
@@ -240,7 +213,7 @@ def run_batch(
                 "error": "",
             }
             try:
-                extractor = _plm.PPLinkExtractor(
+                extractor = PPLinkExtractor(
                     access_token=access_token,
                     checkout_proxy=region_proxy,
                     provider_proxy=region_proxy,
@@ -324,7 +297,7 @@ def run_batch(
         promotion_proxy = proxy_for_country_template(proxy_template, promotion_country) if promotion_country else ""
 
         try:
-            extractor = _plm.PPLinkExtractor(
+            extractor = PPLinkExtractor(
                 access_token=access_token,
                 checkout_proxy=checkout_proxy,
                 provider_proxy=target_proxy,
@@ -437,7 +410,7 @@ def main():
         promotion_proxy = args.promotion_proxy or ""
         if not checkout_proxy and not provider_proxy:
             parser.error("请提供代理 (--proxy 或 --checkout-proxy + --provider-proxy)")
-        extractor = _plm.PPLinkExtractor(
+        extractor = PPLinkExtractor(
             access_token=token,
             checkout_proxy=checkout_proxy,
             provider_proxy=provider_proxy,
@@ -516,7 +489,7 @@ def generate_pp_link(
     Returns:
         {"ok": bool, "url": str, "ba_token": str, "cs_id": str, ...}
     """
-    cfg = dict(runtime_config) if isinstance(runtime_config, Mapping) else _plm._load_json(DEFAULT_CONFIG_PATH)
+    cfg = dict(runtime_config) if isinstance(runtime_config, Mapping) else _load_json(DEFAULT_CONFIG_PATH)
     paypal_cfg = _paypal_config(cfg)
     target_country = str(target_country or paypal_cfg.get("target_country") or "GB").upper()
     _raw_regions: object = paypal_cfg.get("billing_regions")
@@ -533,11 +506,11 @@ def generate_pp_link(
         .upper()
     )
     # ``from_mapping`` on the way in: the resolver returns a ``StageProxies``
-    # already, but tests (and the ``_plm`` lazy proxy) may hand back a partial
+    # already, but tests may hand back a partial
     # ``{"checkout": ..., "provider": ..., "approve": ...}`` mapping, and the
     # per-stage reads below assume all seven keys exist.
     configured_stage_proxies = StageProxies.from_mapping(
-        _plm._proxies_from_config(cfg, checkout_country=checkout_country, target_country=target_country)
+        _proxies_from_config(cfg, checkout_country=checkout_country, target_country=target_country)
     )
     # Two ways in, one value out: the legacy per-stage keywords and the aggregate
     # ``stage_proxies`` argument are folded into one object before resolution.
@@ -674,7 +647,7 @@ def generate_pp_link(
             device_id = str(
                 auth_context.get("oai_did") or auth_context.get("oai-device-id") or auth_context.get("device_id") or ""
             ).strip()
-        extractor = _plm.PPLinkExtractor(
+        extractor = PPLinkExtractor(
             access_token=access_token,
             checkout_proxy=checkout_proxy,
             provider_proxy=provider_proxy,
@@ -1000,7 +973,7 @@ def generate_chatgpt_checkout_link(
     stage_proxy_countries: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Create a ChatGPT checkout session and return chatgpt.com/checkout/{entity}/{cs_id}."""
-    cfg = _plm._load_json(DEFAULT_CONFIG_PATH)
+    cfg = _load_json(DEFAULT_CONFIG_PATH)
     paypal_cfg = _paypal_config(cfg)
     _raw_regions: object = paypal_cfg.get("billing_regions")
     regions: list = _raw_regions if isinstance(_raw_regions, list) else []
@@ -1028,7 +1001,7 @@ def generate_chatgpt_checkout_link(
         .upper()
     )
     currency = CURRENCY_MAP.get(checkout_country, "USD")
-    stage_proxies = _plm._proxies_from_config(cfg, checkout_country=checkout_country, target_country=target_country)
+    stage_proxies = _proxies_from_config(cfg, checkout_country=checkout_country, target_country=target_country)
     checkout_proxy = str(checkout_proxy or proxy or stage_proxies["checkout"] or "").strip()
     state = _paypal_proxy_state(paypal_cfg)
 
@@ -1068,7 +1041,7 @@ def generate_chatgpt_checkout_link(
             browser_timezone="Asia/Shanghai",
         )
         checkout_body = contract.checkout_payload()
-        r = _plm._checkout_post(
+        r = _checkout_post(
             endpoints.CHATGPT_CHECKOUT_API,
             checkout_body,
             access_token,
@@ -1145,7 +1118,7 @@ def generate_hosted_long_url(
     stage_proxy_countries: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Generate a ChatGPT/Stripe hosted checkout URL without entering BA/approve flow."""
-    cfg = _plm._load_json(DEFAULT_CONFIG_PATH)
+    cfg = _load_json(DEFAULT_CONFIG_PATH)
     paypal_cfg = _paypal_config(cfg)
     _raw_regions: object = paypal_cfg.get("billing_regions")
     regions: list = _raw_regions if isinstance(_raw_regions, list) else []
@@ -1173,7 +1146,7 @@ def generate_hosted_long_url(
         .upper()
     )
     currency = CURRENCY_MAP.get(checkout_country, "USD")
-    stage_proxies = _plm._proxies_from_config(cfg, checkout_country=checkout_country, target_country=target_country)
+    stage_proxies = _proxies_from_config(cfg, checkout_country=checkout_country, target_country=target_country)
     checkout_proxy = str(checkout_proxy or proxy or stage_proxies["checkout"] or "").strip()
     provider_proxy = str(provider_proxy or proxy or stage_proxies["provider"] or "").strip()
     stripe_init_proxy = str(stripe_init_proxy or stage_proxies.get("stripe_init") or provider_proxy).strip()
@@ -1213,7 +1186,7 @@ def generate_hosted_long_url(
             browser_timezone="Asia/Shanghai",
         )
         checkout_body = contract.checkout_payload()
-        r = _plm._checkout_post(
+        r = _checkout_post(
             endpoints.CHATGPT_CHECKOUT_API,
             checkout_body,
             access_token,
@@ -1261,7 +1234,7 @@ def generate_hosted_long_url(
             emit,
         )
         emit("stripe_init", f"Stage 2: proxy={redact_proxy_url(stripe_init_proxy)} for Stripe init")
-        stripe = _plm._new_session(stripe_init_proxy)
+        stripe = _new_session(stripe_init_proxy)
         init_body = contract.stripe_init_payload(stripe_pk, stripe_version=STRIPE_VERSION)
         init_resp = stripe.post(endpoints.stripe_payment_page(cs_id, "init"), data=init_body, timeout=DEFAULT_TIMEOUT)
         if init_resp.status_code >= 400:
@@ -1371,7 +1344,6 @@ DEFAULT_CHECKOUT_COUNTRIES = ("JP", "TH")
 
 
 if __name__ == "__main__":
-    # docs/current/paypal-zero-due-link.md documents `python -m sms_tool.gen_pp_link`
-    # as the operator entry; that shim re-exports this main(). Without this
-    # guard the documented command imported the module and exited silently.
+    # docs/current/paypal-zero-due-link.md documents `python -m sms_tool.paypal_link.gen_link`
+    # as the operator entry.
     main()

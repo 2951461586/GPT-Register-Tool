@@ -20,15 +20,15 @@ from .account_identity import (
     chatgpt_account_id_from_token,
 )
 from .wham_usage import format_wham_usage_label, parse_wham_usage
-from ..auth_headers import auth_impersonate, chatgpt_headers
+from ..transport.auth_headers import auth_impersonate, chatgpt_headers
 from ..config import CFG
-from ..phone_proxy import normalize_proxy_url, redact_proxy_url as _redact_proxy_url
+from ..phone.phone_proxy import normalize_proxy_url, redact_proxy_url as _redact_proxy_url
 from ..proxy.routing import (
     proxy_pool_for,
     select_operation_proxy,
     select_operation_proxy_candidate,
 )
-from .. import endpoints
+from ..transport import endpoints
 
 
 CODEX_USAGE_URL = endpoints.CHATGPT_BASE + "/backend-api/wham/usage"

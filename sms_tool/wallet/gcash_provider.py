@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping, Protocol
 from urllib.parse import urlsplit
 
-from ..checkout_contract import CheckoutRequestContract, CheckoutSessionContract, StripeCapabilityEvidence
+from ..payment.checkout_contract import CheckoutRequestContract, CheckoutSessionContract, StripeCapabilityEvidence
 from ..kernel.sanitizer import sanitize_text
 
 

@@ -70,5 +70,5 @@ def test_recovery_batch_browser_fallback_uses_remaining_budget():
 
     from sms_tool.accounts import recovery_batch
 
-    source = inspect.getsource(recovery_batch.refresh_local_quota_statuses)
+    source = inspect.getsource(recovery_batch._probe_account_with_browser_fallback)
     assert "browser_slots.acquire(timeout=remaining)" in source

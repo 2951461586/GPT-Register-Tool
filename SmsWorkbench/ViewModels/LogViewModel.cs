@@ -1,8 +1,4 @@
-// Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
-#nullable enable
-
-namespace SmsWorkbench
+namespace SmsWorkbench.ViewModels
 {
     /// <summary>
     /// Retained text of the main window's log panel.
@@ -19,6 +15,10 @@ namespace SmsWorkbench
     public sealed class LogViewModel : ObservableObject
     {
         internal const int MaxBufferChars = 1_000_000;
+        // Trim down to 80% capacity when the ceiling is crossed so subsequent
+        // lines remain O(1) appends instead of re-trimming and re-rendering the
+        // entire TextBox on every single line after 1 MB.
+        internal const int TrimTargetChars = 800_000;
 
         private readonly StringBuilder buffer = new();
 
@@ -42,15 +42,29 @@ namespace SmsWorkbench
 
         /// <summary>
         /// Appends one already-formatted log line and keeps the retained history
-        /// bounded. Callers still push into the TextBox directly, so appending
-        /// here raises no change notification (and triggers no re-render).
+        /// bounded with hysteresis headroom. Callers still push into the TextBox
+        /// directly, so appending here raises no change notification.
         /// Returns true when the oldest text was dropped, so the view can resync.
         /// </summary>
         public bool Append(string line)
         {
             buffer.Append(line);
             if (buffer.Length <= MaxBufferChars) return false;
-            buffer.Remove(0, buffer.Length - MaxBufferChars);
+            int removeCount = Math.Max(buffer.Length - TrimTargetChars, buffer.Length - MaxBufferChars);
+            int maxScan = Math.Min(buffer.Length, removeCount + 2048);
+            for (int i = removeCount; i < maxScan; i++)
+            {
+                if (buffer[i] == '\n')
+                {
+                    removeCount = i + 1;
+                    break;
+                }
+            }
+            if (removeCount >= buffer.Length)
+            {
+                removeCount = buffer.Length - TrimTargetChars;
+            }
+            buffer.Remove(0, Math.Max(0, removeCount));
             return true;
         }
 

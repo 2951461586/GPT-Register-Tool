@@ -1,11 +1,7 @@
-// Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
-#nullable enable
-
 using System.IO.Compression;
 using System.Text.Json.Nodes;
 
-namespace SmsWorkbench
+namespace SmsWorkbench.Services
 {
     /// <summary>One archive operation's outcome, in the words the UI shows.</summary>
     public sealed record WorkspaceBackupResult(string ArchivePath, int Entries, long Bytes);

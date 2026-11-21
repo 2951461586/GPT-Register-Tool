@@ -1,8 +1,4 @@
-// Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
-#nullable enable
-
-namespace SmsWorkbench
+namespace SmsWorkbench.Views
 {
     /// <summary>
     /// The two shell conveniences that change what "close" and "focus" do.
@@ -20,48 +16,11 @@ namespace SmsWorkbench
         /// <summary>Sidebar entry point: show the current switches and apply the new ones.</summary>
         private void ShowShellSettings()
         {
-            Window dialog = DialogFactory.Create(
-                this,
-                SmsWorkbench.Localization.Loc.T("外壳设置"),
-                width: 480,
-                height: 236,
-                minWidth: 420,
-                minHeight: 220);
-
-            Grid root = DialogFactory.CreateRootGrid();
-            var body = new StackPanel();
-            CheckBox trayBox = DialogFactory.CreateCheckBox(
-                dialog,
-                SmsWorkbench.Localization.Loc.T("关闭窗口时隐藏到托盘"),
-                shellPreferences.Tray);
-            CheckBox hotkeyBox = DialogFactory.CreateCheckBox(
-                dialog,
-                SmsWorkbench.Localization.Loc.F("启用全局热键 {0}", GlobalHotkeyService.DefaultLabel),
-                shellPreferences.Hotkey);
-            body.Children.Add(DialogFactory.CreateFormLabel(dialog, SmsWorkbench.Localization.Loc.T("窗口关闭与唤起")));
-            body.Children.Add(trayBox);
-            body.Children.Add(hotkeyBox);
-            Grid.SetRow(body, 0);
-            root.Children.Add(body);
-
-            StackPanel actions = DialogFactory.CreateActionRow();
-            Button cancel = DialogFactory.CreateCancelButton();
-            cancel.Click += (_, _) => dialog.Close();
-            Button save = DialogFactory.CreatePrimaryButton(dialog, SmsWorkbench.Localization.Loc.T("保存"));
-            save.Click += (_, _) =>
+            var dialog = new ShellSettingsDialog(this, shellPreferences, GlobalHotkeyService.DefaultLabel);
+            if (dialog.ShowDialog() == true && dialog.SelectedPreferences is { } next)
             {
-                ApplyShellPreferences(new DesktopShellPreferences(
-                    Tray: trayBox.IsChecked == true,
-                    Hotkey: hotkeyBox.IsChecked == true));
-                dialog.Close();
-            };
-            actions.Children.Add(cancel);
-            actions.Children.Add(save);
-            Grid.SetRow(actions, 1);
-            root.Children.Add(actions);
-
-            dialog.Content = root;
-            dialog.ShowDialog();
+                ApplyShellPreferences(next);
+            }
         }
 
         /// <summary>

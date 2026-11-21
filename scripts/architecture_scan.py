@@ -127,40 +127,26 @@ def main() -> int:
             failures.append("sms_tool/store/accounts.py imports a concrete mailbox provider")
     except OSError:
         failures.append("cannot read sms_tool/store/accounts.py")
-    # Provider implementations have one physical home. Top-level mailbox_* and
-    # outlook_imap modules are compatibility facades and must not grow logic.
+    # Provider implementations have one physical home under sms_tool/providers/.
+    # The legacy compatibility facades (sms_tool/mailbox/{cfworker..smailr}.py and
+    # sms_tool/outlook_imap.py) were retired once zero production importers remained.
     for name in ("cfworker", "gmail", "graph", "icloud_url", "remail", "smailr"):
-        # The facades moved into sms_tool/mailbox/ on 2026-10-21; keep resolving
-        # the flat layout so the check still reads a checkout mid-migration.
-        candidates = (ROOT / "sms_tool" / "mailbox" / f"{name}.py", ROOT / "sms_tool" / f"mailbox_{name}.py")
-        facade = next((path for path in candidates if path.is_file()), candidates[1])
         implementation = ROOT / "sms_tool" / "providers" / f"mailbox_{name}.py"
         if not implementation.is_file():
             failures.append(f"missing provider implementation: {implementation.relative_to(ROOT)}")
-        try:
-            tree = ast.parse(facade.read_text(encoding="utf-8"))
-            if any(isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) for node in tree.body):
-                failures.append(
-                    f"{facade.relative_to(ROOT)} is a compatibility facade but defines implementation symbols"
-                )
-        except (OSError, SyntaxError):
-            failures.append(f"cannot parse provider facade: {facade.relative_to(ROOT)}")
-    outlook_facade = ROOT / "sms_tool" / "outlook_imap.py"
+        for stale in (ROOT / "sms_tool" / "mailbox" / f"{name}.py", ROOT / "sms_tool" / f"mailbox_{name}.py"):
+            if stale.is_file():
+                failures.append(f"retired provider facade still present: {stale.relative_to(ROOT)}")
     if not (ROOT / "sms_tool" / "providers" / "outlook_imap_client.py").is_file():
         failures.append("missing provider implementation: sms_tool/providers/outlook_imap_client.py")
-    else:
-        try:
-            tree = ast.parse(outlook_facade.read_text(encoding="utf-8"))
-            if any(isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) for node in tree.body):
-                failures.append("sms_tool/outlook_imap.py is a compatibility facade but defines implementation symbols")
-        except (OSError, SyntaxError):
-            failures.append("cannot parse provider facade: sms_tool/outlook_imap.py")
+    if (ROOT / "sms_tool" / "outlook_imap.py").is_file():
+        failures.append("retired provider facade still present: sms_tool/outlook_imap.py")
     # Account workflows have one physical home: sms_tool/accounts/.
     # No forwarding shell is kept at sms_tool/account_*.py on purpose -- a
     # shell would silently absorb the 50+ `patch("sms_tool.accounts.*")`
     # targets without production code ever reading it.
     #
-    # account_creation.py and account_seed.py are exempt: both were relocated
+    # registration/account_creation.py and account_seed.py are exempt: both were relocated
     # to the package root on 2026-10-17 because every internal dependency
     # (http_utils, auth_headers, codex_sentinel, config, http_client, storage)
     # lives at the top level, and accounts/ itself only consumed 2 symbols from
@@ -168,7 +154,7 @@ def main() -> int:
     # helpers that registration and payments reach inward toward, not account
     # lifecycle workflows.  Relocation cut the sms_tool->accounts minority edge
     # set 9 -> 5 and the total module edge count 287 -> 277.
-    _ALLOWED_TOP_LEVEL_ACCOUNT_HELPERS = {"account_creation.py", "account_seed.py"}
+    _ALLOWED_TOP_LEVEL_ACCOUNT_HELPERS = {"registration/account_creation.py", "account_seed.py"}
     stray_accounts = sorted(
         p.name for p in PY_ROOT.glob("account_*.py") if p.name not in _ALLOWED_TOP_LEVEL_ACCOUNT_HELPERS
     )
@@ -179,6 +165,32 @@ def main() -> int:
         )
     if not (PY_ROOT / "accounts" / "__init__.py").is_file():
         failures.append("missing sms_tool/accounts/__init__.py")
+    _LEGACY_ACCOUNTS_PREFIXED_MODULES = {
+        "account_2fa.py",
+        "account_cleanup.py",
+        "account_email_change.py",
+        "account_events.py",
+        "account_health.py",
+        "account_health_queue.py",
+        "account_identity.py",
+        "account_import.py",
+        "account_inspection.py",
+        "account_lifecycle.py",
+        "account_liveness.py",
+        "account_models.py",
+        "account_promotion.py",
+        "account_recovery.py",
+        "account_scan.py",
+        "account_terminal.py",
+    }
+    new_prefixed_accounts = sorted(
+        p.name for p in (PY_ROOT / "accounts").glob("account_*.py") if p.name not in _LEGACY_ACCOUNTS_PREFIXED_MODULES
+    )
+    if new_prefixed_accounts:
+        failures.append(
+            "new modules in sms_tool/accounts/ must not use the redundant 'account_' prefix "
+            f"(follow recovery_batch.py / recovery_policy.py naming): {', '.join(new_prefixed_accounts)}"
+        )
     failures.extend(provider_port_violations(PY_ROOT))
     # providers/ naming contract: low-level `_client` modules must never
     # import the registration-facing `mailbox_*` flows that compose them.

@@ -33,3 +33,11 @@ this project, review the upstream asset's applicable terms.
    missing, so a Firefox profile's own proof reported `p[24]=0` while the
    requirements proof claimed `1`. Both are now present (identity values are the
    real ones; `InstallTrigger` only on Firefox).
+4. **2026-11-21 — ICU timezone canonicalization + host-locale isolation.**
+   `Intl.DateTimeFormat().resolvedOptions().timeZone` now returns the ICU
+   canonical zone (e.g. `Asia/Calcutta` for `Asia/Kolkata`, `Asia/Saigon` for
+   `Asia/Ho_Chi_Minh`) matching Chromium/Node ICU instead of echoing raw aliases.
+   `Date.prototype.toTimeString` / `toLocale*`, `Intl.NumberFormat`, and the VM
+   realm's own `Number`/`BigInt`/`Array`/`String` locale prototypes now default
+   to `options.language` + `options.timeZone` instead of leaking the Windows
+   host OS locale (e.g. `zh-CN` date formats or Chinese timezone names).

@@ -5,6 +5,7 @@
     "at_stability_probe_delay_seconds",
     "batch_circuit_breaker_enabled",
     "batch_circuit_breaker_threshold",
+    "browser_data_saver",
     "browser_headless",
     "browser_locale",
     "browser_process_pool",

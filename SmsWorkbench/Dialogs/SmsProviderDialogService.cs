@@ -1,12 +1,8 @@
-// Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
-#nullable enable
-
 using System.Text.Json.Nodes;
 
 using SmsWorkbench.Localization;
 
-namespace SmsWorkbench
+namespace SmsWorkbench.Dialogs
 {
     /// <summary>
     /// The one-click SMS rental dialog: provider catalog, country/tier choice and
@@ -252,7 +248,7 @@ namespace SmsWorkbench
             // when the tier has none -- the two protocols disagree about whether
             // the field means anything. On an sms-activate tier it names the
             // sub-provider to buy from; nexsms has no operator dimension at all
-            // (`sms_tool/nexsms.py::get_number` logs and ignores it). Writing an
+            // (`sms_tool/phone/nexsms.py::get_number` logs and ignores it). Writing an
             // empty string would hand the backend a field it would read, find
             // blank, and have to re-derive -- leaving the key absent is the
             // state both ends already agree means "no preference".

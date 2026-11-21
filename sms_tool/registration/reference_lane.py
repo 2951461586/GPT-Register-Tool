@@ -33,9 +33,9 @@ import logging
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
-from .. import endpoints
-from ..auth_headers import auth_impersonate, chatgpt_headers, nextauth_headers
-from ..operator_output import emit as _emit
+from ..transport import endpoints
+from ..transport.auth_headers import auth_impersonate, chatgpt_headers, nextauth_headers
+from ..observability.operator_output import emit as _emit
 from . import sentinel_stages as _sentinel_stages
 from .flags import registration_flag
 from .warmup import tz_offset_minutes

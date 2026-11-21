@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import os
 
-from .. import sms_providers
+from . import sms_providers
 from ..config import CFG
 
 

@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from sms_tool import http_client
+from sms_tool.transport import http_client
 
 
 class HttpClientRetryTests(unittest.TestCase):

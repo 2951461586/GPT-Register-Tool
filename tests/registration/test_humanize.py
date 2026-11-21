@@ -8,7 +8,7 @@ today.  Enabled must stay inside the declared jitter band around that baseline.
 import unittest
 from unittest.mock import patch
 
-from sms_tool.humanize import (
+from sms_tool.registration.humanize import (
     HUMANIZE_DELAYS,
     delay,
     humanize_config,
@@ -40,7 +40,7 @@ class HumanizeConfigTests(unittest.TestCase):
 class HumanizeDelayTests(unittest.TestCase):
     def _recorded(self, kind="default", config=None, times=40):
         sleeps: list[float] = []
-        with patch("sms_tool.humanize.time.sleep", side_effect=lambda s: sleeps.append(s)):
+        with patch("sms_tool.registration.humanize.time.sleep", side_effect=lambda s: sleeps.append(s)):
             for _ in range(times):
                 delay(kind, config=config)
         return sleeps
@@ -84,7 +84,7 @@ class HumanizeDelayTests(unittest.TestCase):
         )
         self.assertTrue(sleeps)
         # Explicit override wins over the table.
-        with patch("sms_tool.humanize.time.sleep") as sleeper:
+        with patch("sms_tool.registration.humanize.time.sleep") as sleeper:
             delay("default", config=_enabled(), baseline=0.01, jitter=0.0)
         sleeper.assert_called_once()
         self.assertAlmostEqual(sleeper.call_args[0][0], 0.01, places=6)
@@ -94,7 +94,7 @@ class HumanizeDelayTests(unittest.TestCase):
             self.assertGreaterEqual(value, 0.0)
 
     def test_returns_seconds_slept(self):
-        with patch("sms_tool.humanize.time.sleep"):
+        with patch("sms_tool.registration.humanize.time.sleep"):
             self.assertEqual(delay("click", config={}), HUMANIZE_DELAYS["click"][0])
 
 

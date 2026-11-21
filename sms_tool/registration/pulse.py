@@ -186,6 +186,7 @@ def run_pulse_batch(
     workers: int = 4,
     pulse_config: PulseConfig | None = None,
     cancel_event=None,
+    stop_event=None,
     on_dispatch_block: Callable[[], bool] | None = None,
     on_wave_complete: Callable[[list[int], list[dict[str, Any]]], None] | None = None,
 ) -> list[dict[str, Any]]:
@@ -212,6 +213,8 @@ def run_pulse_batch(
         return (cancel_event is not None and cancel_event.is_set()) or registration_cancel_requested()
 
     while remaining:
+        if stop_event is not None and stop_event.is_set():
+            break
         if cancelled():
             for idx in remaining:
                 skipped = {
@@ -259,6 +262,8 @@ def run_pulse_batch(
         wave_results: list[dict[str, Any]] = []
         if workers <= 1 or len(wave_indices) <= 1:
             for idx in wave_indices:
+                if stop_event is not None and stop_event.is_set():
+                    break
                 _, result = run_one_fn(idx)
                 results[idx] = result
                 wave_results.append(result)
@@ -276,6 +281,9 @@ def run_pulse_batch(
 
         if on_wave_complete:
             on_wave_complete(list(wave_indices), list(wave_results))
+
+        if stop_event is not None and stop_event.is_set():
+            break
 
         # A one-account canary exists precisely to stop a blocked route before
         # a full wave spends more mailboxes, so its single dispatch-side

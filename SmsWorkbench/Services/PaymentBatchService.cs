@@ -1,15 +1,9 @@
-// Nullable warnings are enabled project-wide since 2026-11 (SmsWorkbench.csproj).
-// The directive below is provenance for the 2026-09 file-by-file migration: while
-// the project switch was still `annotations`, this file was the largest single
-// cluster (all of it `as JsonObject` on a possibly-missing config branch).
-#nullable enable
-
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
 using SmsWorkbench.Localization;
 
-namespace SmsWorkbench
+namespace SmsWorkbench.Services
 {
     public interface IPaymentBatchService
     {

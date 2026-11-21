@@ -30,7 +30,7 @@ class RegistrationProgressTests(unittest.TestCase):
 
         class Capture(logging.Handler):
             def emit(self, record):
-                from sms_tool.logging_setup import CorrelatedJsonFormatter
+                from sms_tool.observability.logging_setup import CorrelatedJsonFormatter
 
                 records.append(json.loads(CorrelatedJsonFormatter().format(record)))
 

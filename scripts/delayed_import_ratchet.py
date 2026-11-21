@@ -136,12 +136,12 @@ PROVIDER_PREFIXES: tuple[str, ...] = (
     "sms_tool.sentinel.",
     "sms_tool.browser.pool",
     "sms_tool.browser.fingerprint_pool",
-    "sms_tool.fingerprint_pool",
+    "sms_tool.transport.fingerprint_pool",
     "sms_tool.browser.captcha_solver",
     "sms_tool.browser.nodriver_captcha",
-    "sms_tool.chatgpt_bootstrap",
-    "sms_tool.page_truth",
-    "sms_tool.humanize",
+    "sms_tool.registration.chatgpt_bootstrap",
+    "sms_tool.transport.page_truth",
+    "sms_tool.registration.humanize",
 )
 
 CLI_SEAM_PREFIXES: tuple[str, ...] = ("sms_tool/cli.py", "sms_tool/commands/", "sms_tool/cli_parsers/")
@@ -190,7 +190,7 @@ def resolve_target(importer: str, node: ast.Import | ast.ImportFrom, root: Path 
     """Resolve one import statement to a dotted module, relative ones included.
 
     ``from . import endpoints`` inside ``sms_tool/delayed.py`` becomes
-    ``sms_tool.endpoints``; a third-party import keeps its own name.
+    ``sms_tool.transport.endpoints``; a third-party import keeps its own name.
     """
     if isinstance(node, ast.Import):
         return node.names[0].name if node.names else ""

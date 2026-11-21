@@ -275,5 +275,17 @@ namespace SmsWorkbench.Tests
 
             Assert.Single(pool.AllRows);
         }
+
+        [Fact]
+        public void ReplaceAll_ReplacesStagedRowsAndCachesScopeOptionsPerLanguage()
+        {
+            var pool = new PoolViewModel();
+            pool.ReplaceAll(new[] { DbRow("1", "a@example.test"), DbRow("2", "b@example.test") });
+            Assert.Equal(2, pool.AllRows.Count);
+
+            var first = pool.ScopeOptions;
+            var second = pool.ScopeOptions;
+            Assert.Same(first, second);
+        }
     }
 }

@@ -1,6 +1,6 @@
 """Machine-readable 支付资格 (payment qualification) vocabulary.
 
-Same split as ``sms_tool/promotion_states.py``: the Chinese badge text is display
+Same split as ``sms_tool/payment/promotion_states.py``: the Chinese badge text is display
 copy owned by one composer, and everything that filters, sorts, branches or
 persists keys off the stable ASCII states defined here. A label reword must not
 change behaviour — the desktop column filter reads ``payment_qualification_state``,

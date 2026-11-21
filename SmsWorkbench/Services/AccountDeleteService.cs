@@ -1,8 +1,4 @@
-// Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
-#nullable enable
-
-namespace SmsWorkbench
+namespace SmsWorkbench.Services
 {
     /// <summary>Outcome of one batch delete: how many rows the backend could not remove.</summary>
     public sealed record AccountDeleteResult(int Requested, int Failed);

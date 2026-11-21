@@ -197,37 +197,6 @@ class AccountScanTests(unittest.TestCase):
         self.assertEqual(account_scan._subscription_type({"subscription_type": "team"}), "team")
         self.assertEqual(account_scan._subscription_type({"planType": "free"}), "free")
 
-    def test_workspace_probe_transport_error_is_inconclusive(self):
-        with patch(
-            "sms_tool.accounts.account_scan.inspect_workspace",
-            side_effect=RuntimeError("Failed to perform, curl: (56) Recv failure: Connection was reset"),
-        ):
-            result = account_scan._workspace_probe(
-                {"email": "a@example.com", "cookie_header": "s=1"},
-                enabled=True,
-            )
-        self.assertEqual(result["status"], "workspace_check_inconclusive")
-        self.assertIn("curl: (56)", result["error"])
-
-    def test_scan_one_disables_workspace_by_default(self):
-        with (
-            patch("sms_tool.accounts.account_scan._load_seed_session", return_value=({"email": "a@example.com"}, "")),
-            patch(
-                "sms_tool.accounts.account_scan._workspace_probe",
-                return_value={"ok": True, "status": "workspace_check_disabled"},
-            ) as workspace_probe,
-            patch("sms_tool.accounts.account_scan._openai_refresh_token", return_value=""),
-            patch(
-                "sms_tool.accounts.account_scan.collect_codex_oauth_tokens",
-                return_value={"ok": True, "tokens": {"access_token": "at_123"}},
-            ),
-            patch("sms_tool.accounts.account_scan._persist_scan"),
-        ):
-            result = account_scan._scan_one(0, 1, "a@example.com", deep_probe=True)
-
-        self.assertTrue(result["ok"])
-        self.assertFalse(workspace_probe.call_args.kwargs["enabled"])
-
     def test_gmail_scan_lane_key_keeps_exact_address(self):
         self.assertEqual(
             account_scan._gmail_scan_lane_key("S.a.m.p.LE.M.A.iler236+qrzzsw@gmail.com"),
@@ -251,26 +220,6 @@ class AccountScanTests(unittest.TestCase):
         self.assertEqual(saved["workspace_id"], "")
         self.assertEqual(saved["workspace_name"], "")
         self.assertEqual(saved["account_type"], "free")
-
-    def test_scan_one_keeps_alive_when_workspace_check_is_inconclusive(self):
-        with (
-            patch("sms_tool.accounts.account_scan._load_seed_session", return_value=({"email": "a@example.com"}, "")),
-            patch(
-                "sms_tool.accounts.account_scan._workspace_probe",
-                return_value={"ok": False, "status": "workspace_check_inconclusive", "error": "curl: (56)"},
-            ),
-            patch("sms_tool.accounts.account_scan._openai_refresh_token", return_value=""),
-            patch(
-                "sms_tool.accounts.account_scan.collect_codex_oauth_tokens",
-                return_value={"ok": True, "tokens": {"access_token": "at_123"}},
-            ),
-            patch("sms_tool.accounts.account_scan._persist_scan"),
-        ):
-            result = account_scan._scan_one(0, 1, "a@example.com", deep_probe=True)
-
-        self.assertTrue(result["ok"])
-        self.assertEqual(result["scan_status"], "alive")
-        self.assertEqual(result["workspace"]["status"], "workspace_check_inconclusive")
 
     def test_scan_one_relogin_recovers_token_invalid_before_scan_failure(self):
         with (
@@ -299,10 +248,6 @@ class AccountScanTests(unittest.TestCase):
                     "probe": {"ok": True, "status": "active", "status_code": 200, "quota_status": "3/5"},
                 },
             ) as relogin,
-            patch(
-                "sms_tool.accounts.account_scan._workspace_probe",
-                return_value={"ok": True, "status": "workspace_check_disabled"},
-            ),
             patch("sms_tool.accounts.account_scan._openai_refresh_token", return_value=""),
             patch("sms_tool.accounts.account_scan.collect_codex_oauth_tokens") as collect,
             patch("sms_tool.accounts.account_scan._persist_scan"),
@@ -326,10 +271,6 @@ class AccountScanTests(unittest.TestCase):
             patch(
                 "sms_tool.accounts.account_scan.probe_account_liveness",
                 return_value={"ok": True, "status": "active", "quota_status": "3/5"},
-            ),
-            patch(
-                "sms_tool.accounts.account_scan._workspace_probe",
-                return_value={"ok": False, "status": "workspace_check_inconclusive", "error": "curl: (56)"},
             ),
             patch("sms_tool.accounts.account_scan._openai_refresh_token", return_value=""),
             patch(
@@ -357,10 +298,6 @@ class AccountScanTests(unittest.TestCase):
                 "sms_tool.accounts.account_scan.probe_account_liveness",
                 return_value={"ok": True, "status": "active", "quota_status": "3/5"},
             ),
-            patch(
-                "sms_tool.accounts.account_scan._workspace_probe",
-                return_value={"ok": True, "status": "workspace_check_disabled"},
-            ),
             patch("sms_tool.accounts.account_scan.collect_codex_oauth_tokens") as collect,
             patch("sms_tool.payment.capability.payment_method_capability_probe") as checkout,
             patch("sms_tool.accounts.account_scan._persist_scan"),
@@ -385,10 +322,6 @@ class AccountScanTests(unittest.TestCase):
             patch(
                 "sms_tool.accounts.account_scan.relogin_codex_account",
                 return_value={"ok": False, "error": "passwordless_missing_mailbox"},
-            ),
-            patch(
-                "sms_tool.accounts.account_scan._workspace_probe",
-                return_value={"ok": True, "status": "workspace_check_disabled"},
             ),
             patch("sms_tool.accounts.account_scan._openai_refresh_token", return_value=""),
             patch("sms_tool.accounts.account_scan.collect_codex_oauth_tokens") as collect,
@@ -421,10 +354,6 @@ class AccountScanTests(unittest.TestCase):
                 "sms_tool.accounts.account_scan.relogin_codex_account",
                 return_value={"ok": True, "mode": "codex_oauth_pkce"},
             ) as relogin,
-            patch(
-                "sms_tool.accounts.account_scan._workspace_probe",
-                return_value={"ok": True, "status": "workspace_check_disabled"},
-            ),
             patch("sms_tool.accounts.account_scan._openai_refresh_token", return_value=""),
             patch("sms_tool.accounts.account_scan.collect_codex_oauth_tokens") as collect,
             patch("sms_tool.accounts.account_scan._persist_scan"),
@@ -500,10 +429,6 @@ class ScanFailureStatusTests(unittest.TestCase):
             patch(
                 "sms_tool.accounts.account_scan.relogin_codex_account",
                 return_value={"ok": False, "error": "invalid_auth_step"},
-            ),
-            patch(
-                "sms_tool.accounts.account_scan._workspace_probe",
-                return_value={"ok": True, "status": "workspace_check_disabled"},
             ),
             patch("sms_tool.accounts.account_scan._openai_refresh_token", return_value=""),
             patch("sms_tool.accounts.account_scan.collect_codex_oauth_tokens") as collect,

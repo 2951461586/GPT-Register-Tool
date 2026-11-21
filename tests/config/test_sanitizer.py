@@ -1,4 +1,4 @@
-from sms_tool.diagnostics import SanitizingTextIO, safe_print
+from sms_tool.observability.diagnostics import SanitizingTextIO, safe_print
 from sms_tool.kernel.sanitizer import (
     POLICY_SCHEMA,
     SENSITIVE_POLICY,
@@ -162,7 +162,7 @@ def test_the_proxy_url_rule_does_not_cross_a_path():
 
 def test_phone_proxy_text_redaction_splits_at_the_last_at_sign():
     """``redact_proxy_text`` carries the same rule for arbitrary message text."""
-    from sms_tool.phone_proxy import redact_proxy_text
+    from sms_tool.phone.phone_proxy import redact_proxy_text
 
     assert redact_proxy_text("connect http://alice:p@ssmarker@gate.example:2000 failed") == (
         "connect http://***:***@gate.example:2000 failed"

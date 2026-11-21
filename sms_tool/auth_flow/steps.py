@@ -17,7 +17,7 @@ from urllib.parse import parse_qs, urlencode, urlparse
 # Deliberate re-exports (ADR-0009 facade pattern): ``steps`` stays the public
 # surface for these names while ``auth_wire`` owns the implementation, so F401
 # is suppressed here rather than deleting imports that other modules read.
-from ..auth_wire import (  # noqa: F401
+from ..transport.auth_wire import (  # noqa: F401
     LOGIN_EMAIL_OTP_SUBJECT_KEYWORD,
     _auth_request_headers,
     _invalid_state_auth_response,

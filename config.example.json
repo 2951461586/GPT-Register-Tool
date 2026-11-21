@@ -70,6 +70,20 @@
     "passwordless_explicit_send_otp": true,
     "reference_lane": false,
     "browser_headless": true,
+    "browser_data_saver": {
+      "enabled": false,
+      "blocked_proxy_hosts": [
+        "dl.google.com",
+        "gvt1.com"
+      ],
+      "blocked_resource_types": [
+        "image",
+        "media"
+      ],
+      "asset_cache_enabled": true,
+      "asset_cache_max_age_seconds": 86400,
+      "proxy_connect_retries": 3
+    },
     "browser_timeout_seconds": 90,
     "browser_worker_limit": 0,
     "browser_locale": "en-US",

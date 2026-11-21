@@ -1,4 +1,4 @@
-"""Tests for sms_tool/operator_output.py and scripts/bare_print_ratchet.py.
+"""Tests for sms_tool/observability/operator_output.py and scripts/bare_print_ratchet.py.
 
 Two halves, matching the ratchet pattern already used by
 test_mailbox_private_import_ratchet.py:
@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "scripts"))
 import bare_print_ratchet as ratchet  # noqa: E402
 
-from sms_tool.operator_output import emit  # noqa: E402
+from sms_tool.observability.operator_output import emit  # noqa: E402
 
 
 class _Sink(logging.Handler):

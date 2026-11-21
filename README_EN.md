@@ -38,25 +38,25 @@ Chinese interface, USDT payments supported, and 30% off your first purchase with
 
 | Area | Capability |
 | --- | --- |
-| **Registration** | Mailbox pools / ReMail long-lived mailboxes / CFWorker domains / iCloud relay links plus multi-vendor SMS; single and concurrent batches; each account mints its own Sentinel token and `oai-did`; success means the AT probe answered HTTP 200; registration only stores the AT/Session and never builds payment links |
+| **Registration** | Mailbox pools / ReMail long-lived mailboxes / CFWorker domains / iCloud relay links plus multi-vendor SMS; single, concurrent, and target-success (`--target-success` + `--max-attempts`) batches; each account mints its own Sentinel token and `oai-did`; success means the AT probe answered HTTP 200; registration only stores the AT/Session and never builds payment links |
 | **Protocol consistency and recovery** | Preflight of the ChatGPT / Auth / Sentinel hops before a mailbox is spent; one proxy session per account, rotated only on failure; NextAuth / Auth / ChatGPT share a stable `oai-did`, UA and client hints with GeoIP-derived locale and timezone; 403/429 opens a circuit with no plain-HTTP PoW fallback; the checkpoint is persisted before the AT probe so a resume never re-spends an OTP |
 | **Mailbox and OTP** | One mailbox seam: ReMail, Smailr, CFWorker, Microsoft Graph/OAuth, Outlook/Hotmail IMAP, Gmail, iCloud relay links and legacy pool formats; OTP parsing filters by subject, sender, exact recipient and server timestamp, then ranks candidates; ReMail adds adaptive polling, detail-body fetch and a 30s resend |
 | **Protocol payment links** | 15 methods: PayPal, GoPay, GCash, GrabPay, UPI, iDEAL, PIX, Kakao Pay, BLIK, TWINT, direct card Checkout, MoMo, QRIS, Bizum, Naver Pay (the last three are CLI canaries); Checkout and Approve use separate exit pools and rewrite country and Session per method; Checkout / Promotion / PM / Confirm / Poll / Provider Redirect stay distinct stages; five terminal states with `retryable` and `error_stage`, and `unknown` must be reconciled first |
 | **Batch payment** | JIT AT gate, layered HTTP 401 recovery (RT -> Cookie -> isolated browser mailbox OTP -> Codex OAuth), eligibility matrix, Canary pause, per-method concurrency, atomic checkpoints and explicit resume; the report separates AT 200, eligibility, visible payment methods, approve and final link/QR artifacts |
-| **Accounts and data** | Session JSON plus SQLite dual index; liveness probe and 401 recovery; the promotion badge (plan/trial only; no Checkout is created); Codex / CPA / SUB2API import-export; local data lives in `sessions/` and `runtime/`, both Git-ignored |
-| **Desktop operations** | Selected accounts drive the "batch protocol payment" window (concurrency, retries, Canary, two exit pools, checkpoint resume); each `Saved session:` debounces an account-pool refresh; multi-select delete is one backend batch command |
+| **Accounts and data** | Session JSON plus SQLite dual index; liveness probe, offline JWT lightweight inspection (`--inspect-accounts`) and 401 recovery; the promotion badge (plan/trial only; no Checkout is created); Codex / CPA / SUB2API import-export; local data lives in `sessions/` and `runtime/`, both Git-ignored |
+| **Desktop operations** | Role-folder namespace isolation (`Models` / `Services` / `ViewModels` / `Views` / `Dialogs` / `Interop`) + window-independent Coordinators; selected accounts drive the "batch protocol payment" window (concurrency, retries, Canary, two exit pools, checkpoint resume); each `Saved session:` debounces an account-pool refresh; multi-select delete is one backend batch command; browser drivers support `--block-assets` traffic saving |
 | **SMS** | SMSBower, HeroSMS, Grizzly and NexSMS provider selection with online catalog lookup (availability depends on each vendor), plus send retry, timeout and poll-interval settings; see the [one-click SMS contract](docs/current/one-click-sms.md) |
 
 
 ### Architecture
 
-Five layers — **① UI → ② CLI / command adapters → ③ application workflows → ④ domain contracts → ⑤ provider / persistence adapters**. Imports point inward only; a lower layer never imports a higher one. Configuration and runtime data live outside the repository (Git-ignored). Registration has two lanes — protocol (the built-in default) and browser drivers — sharing one mailbox-OTP, session-extraction and AT-probe boundary.
+Five layers — **① UI → ② CLI / command adapters → ③ application workflows → ④ domain contracts → ⑤ provider / persistence / transport adapters**. Imports point inward only; a lower layer never imports a higher one. Configuration and runtime data live outside the repository (Git-ignored). Registration has two lanes — protocol (the built-in default) and browser drivers — sharing one mailbox-OTP, session-extraction and AT-probe boundary.
 
 ```mermaid
 flowchart TB
     subgraph L1["① Desktop UI · SmsWorkbench/ (WPF · .NET 10)"]
         direction LR
-        PANEL["Generic Host / DI<br/>MVVM pages · settings"]
+        PANEL["Generic Host / DI<br/>Views · Dialogs · ViewModels · Coordinators"]
         IPC["IBackendClient<br/>versioned envelope"]
     end
 
@@ -69,8 +69,7 @@ flowchart TB
 
     subgraph L3["③ Application workflows"]
         direction LR
-        REG["registration"]
-        BATCH["batch_runner"]
+        REG["registration/"]
         DRV["registration_drivers/"]
         REC["accounts/"]
     end
@@ -79,18 +78,18 @@ flowchart TB
         direction LR
         RESULT["registration/result.py"]
         WIRE["payment/wire.py"]
-        CHECKOUT["checkout_contract"]
-        DIPC["desktop_ipc"]
+        CHECKOUT["payment/checkout_contract.py"]
+        DIPC["desktop/ipc.py"]
     end
 
-    subgraph L5["⑤ Provider / persistence adapters"]
+    subgraph L5["⑤ Provider / persistence / transport & observability adapters"]
         direction LR
-        AF["auth_flow/"]
-        SEN["sentinel/"]
-        MB["mailbox_*"]
-        PAY["pay_link/ · paypal/"]
-        STO["store/"]
-        GEO["geo/"]
+        AF["auth_flow/ · transport/"]
+        SEN["sentinel/ · phone/"]
+        MB["mailbox/ · providers/"]
+        PAY["payment/ · pay_link/ · paypal/"]
+        STO["store/ · observability/"]
+        GEO["geo/ · proxy/"]
     end
 
     PANEL --> IPC
@@ -108,21 +107,21 @@ Module ownership and responsibility per layer:
 
 | Layer | Modules | Responsibility |
 | ---------------------------------------- | --- | --- |
-| ① Desktop UI | `SmsWorkbench/` | Generic Host / DI, MVVM pages, settings, batch-payment window, account pool; calls the backend through `IBackendClient` with argument lists plus cancel / timeout / process-tree kill |
+| ① Desktop UI | `SmsWorkbench/` (`Views` · `Dialogs` · `ViewModels` · `Services` · `Models` · `Interop`) | Generic Host / DI, MVVM pages & XAML dialogs, window-independent Coordinators, settings, batch-payment window, account pool; calls the backend through `IBackendClient` with argument lists plus cancel / timeout / process-tree kill |
 | ② CLI / command adapters | `cli.py`, `commands/`, `cli_parsers/` | Argument parsing, task orchestration, batches, exit status; owns no provider implementation |
 | ③ Application workflows | `registration/orchestrator.py`, `registration/handlers.py` | Registration entry points (dispatch + `RegistrationOperations` binding) and the protocol lane: stage order, Sentinel issuance, OTP, AT probe |
-| ③ Application workflows | `batch_runner.py`, `registration/pulse.py` | Concurrency and pulse scheduling, JIT AT gate, atomic checkpoints and resume |
-| ③ Application workflows | `registration_drivers/` | Browser drivers (playwright · camoufox · roxy · cloak) plus `browser_flow/` and `external_sessions/` |
-| ③ Application workflows | `accounts/`, `codex/oauth.py` | Existing-account recovery and Codex OAuth; never new signup |
-| ④ Domain contracts | `registration/result.py`, `registration/flags.py`, `checkout_contract.py`, `payment/wire.py`, `desktop/ipc.py` | Immutable seams bound once per invocation; `RegistrationOperations` is a fixed interface, not a live module passed into the workflow |
-| ⑤ Provider / persistence adapters&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `auth_flow/` | Step functions: signin / authorize / continue / OTP / TOTP |
-| ⑤ Provider / persistence adapters&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `sentinel/` | Sentinel token issuance (Node `sdk.js` runner) |
-| ⑤ Provider / persistence adapters&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `mailbox/service.py`, `mailbox/strategies.py`, `providers/` | Mailbox routing, capability resolution, polling policy, provider transport |
-| ⑤ Provider / persistence adapters&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `pay_link/`, `paypal/`, `paypal_link/`, `upi_link/` | Checkout contract, capability probe, wallets / GCash |
-| ⑤ Provider / persistence adapters&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `store/` | SQLite + Session JSON persistence and domain facts |
-| ⑤ Provider / persistence adapters&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `geo/`, `proxy/routing.py`, `fingerprint_pool.py` | Exit GeoIP and fingerprint binding |
+| ③ Application workflows | `registration/batch_runner.py`, `registration/pulse.py` | Concurrency and pulse scheduling, target-success (`target_success`) early stop, JIT AT gate, atomic checkpoints and resume |
+| ③ Application workflows | `registration_drivers/` | Browser drivers (playwright · camoufox · roxy · cloak), static-asset blocking (`data_saver.py`), plus `browser_flow/` and `external_sessions/` |
+| ③ Application workflows | `accounts/`, `codex/oauth.py`, `importers/` | Existing-account liveness/recovery, offline JWT inspection (`account_inspection.py`), Codex OAuth and import/export; never new signup |
+| ④ Domain contracts | `registration/result.py`, `registration/flags.py`, `payment/checkout_contract.py`, `payment/wire.py`, `desktop/ipc.py` | Immutable seams bound once per invocation; `RegistrationOperations` is a fixed interface, not a live module passed into the workflow |
+| ⑤ Provider / persistence adapters&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `auth_flow/`, `transport/` | Step functions (signin / authorize / continue / OTP / TOTP) and HTTP/TLS/fingerprint/endpoint transport foundation |
+| ⑤ Provider / persistence adapters&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `sentinel/`, `registration/sentinel_tokens.py` | Sentinel token issuance (Node `sdk.js` runner + ICU timezone/locale realm isolation) |
+| ⑤ Provider / persistence adapters&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `mailbox/`, `phone/`, `providers/` | Mailbox & phone routing, capability resolution, polling policy, provider transport |
+| ⑤ Provider / persistence adapters&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `payment/`, `pay_link/`, `paypal/`, `paypal_link/`, `upi_link/` | Checkout contract, capability probe, wallets / GCash and regional payment adapters |
+| ⑤ Provider / persistence adapters&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `store/`, `observability/` | SQLite + Session JSON persistence, domain facts, sanitized logging and telemetry |
+| ⑤ Provider / persistence adapters&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `geo/`, `proxy/routing.py`, `transport/fingerprint_pool.py` | Exit GeoIP and fingerprint binding |
 
-`services/` holds optional local protocol services behind a subprocess boundary (`mail-otp-web` and `protocol-payment`); it is not one of the five layers.
+`services/` holds optional local protocol services behind a subprocess boundary (`protocol-payment`); it is not one of the five layers.
 
 See [architecture](docs/architecture.md) for boundaries and [directory map](docs/directory-map.md) for ownership.
 

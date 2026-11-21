@@ -424,7 +424,7 @@ def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -
                 "registration.browser_process_pool",
                 errors,
             )
-        # Protocol fingerprint pool (``sms_tool/fingerprint_pool.py``). This
+        # Protocol fingerprint pool (``sms_tool/transport/fingerprint_pool.py``). This
         # key was read by ``FingerprintPool.from_config`` but absent from the
         # template, the shard manifest and this validator, so the pool's
         # ``allowed_countries``/``verify_hint`` knobs existed without a
@@ -511,7 +511,7 @@ def validate_config(config: Mapping[str, Any], *, workflow: str | None = None) -
 
 
 def _validate_tls_fingerprint_block(registration: Mapping[str, Any], errors: list[str]) -> None:
-    """Validate ``registration.tls_fingerprint`` (``sms_tool/tls_fingerprint.py``).
+    """Validate ``registration.tls_fingerprint`` (``sms_tool/transport/tls_fingerprint.py``).
 
     Validated because a mistyped key would silently leave every account on the
     shared preset JA3, which is the exact defect the module removes.

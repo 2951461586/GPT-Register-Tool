@@ -8,7 +8,7 @@ feature is disabled (the shipping default).
 
 import unittest
 
-from sms_tool.chatgpt_bootstrap import (
+from sms_tool.registration.chatgpt_bootstrap import (
     ANON_BASE,
     API_BASE,
     anonymous_bootstrap,

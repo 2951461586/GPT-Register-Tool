@@ -96,40 +96,40 @@ _MODULE_EXPORTS: dict[str, tuple[str, str]] = {
     "_absolute_url": ("sms_tool.auth_flow", "_absolute_url"),
     "_complete_existing_login_totp": ("sms_tool.auth_flow", "_complete_existing_login_totp"),
     "_continue_signup_username": ("sms_tool.auth_flow", "_continue_signup_username"),
-    "_cookie_header": ("sms_tool.account_creation", "_cookie_header"),
-    "_cookie_jar_header": ("sms_tool.sentinel_tokens", "_cookie_jar_header"),
+    "_cookie_header": ("sms_tool.registration.account_creation", "_cookie_header"),
+    "_cookie_jar_header": ("sms_tool.registration.sentinel_tokens", "_cookie_jar_header"),
     "_create_account_error": ("sms_tool.registration.outcome", "_create_account_error"),
-    "_create_account_sentinel_token": ("sms_tool.account_creation", "_create_account_sentinel_token"),
-    "_extract_sentinel_http": ("sms_tool.sentinel_tokens", "_extract_sentinel_http"),
+    "_create_account_sentinel_token": ("sms_tool.registration.account_creation", "_create_account_sentinel_token"),
+    "_extract_sentinel_http": ("sms_tool.registration.sentinel_tokens", "_extract_sentinel_http"),
     "_invalid_state_auth_response": ("sms_tool.auth_flow", "_invalid_state_auth_response"),
     "_is_email_verification_step": ("sms_tool.auth_flow", "_is_email_verification_step"),
     "_is_mfa_challenge_payload": ("sms_tool.auth_flow", "_is_mfa_challenge_payload"),
-    "_minimal_chatgpt_cookie_header": ("sms_tool.account_creation", "_minimal_chatgpt_cookie_header"),
+    "_minimal_chatgpt_cookie_header": ("sms_tool.registration.account_creation", "_minimal_chatgpt_cookie_header"),
     "_openai_signin_url": ("sms_tool.auth_flow", "_openai_signin_url"),
     "_prime_email_verification_page": ("sms_tool.auth_flow", "_prime_email_verification_page"),
     "_response_next_url": ("sms_tool.auth_flow", "_response_next_url"),
     "_response_next_url_from_data": ("sms_tool.auth_flow", "_response_next_url_from_data"),
     "_sanitize": ("sms_tool.kernel.sanitizer", "sanitize"),
     "_send_existing_login_otp": ("sms_tool.auth_flow", "_send_existing_login_otp"),
-    "_sentinel_frame_version": ("sms_tool.sentinel_tokens", "_sentinel_frame_version"),
+    "_sentinel_frame_version": ("sms_tool.registration.sentinel_tokens", "_sentinel_frame_version"),
     "_tock": ("sms_tool.utils", "_tock"),
     "_totp_factor_id": ("sms_tool.auth_flow", "_totp_factor_id"),
     "_with_query_param": ("sms_tool.auth_flow", "_with_query_param"),
-    "auth_fingerprint_capabilities": ("sms_tool.auth_headers", "auth_fingerprint_capabilities"),
+    "auth_fingerprint_capabilities": ("sms_tool.transport.auth_headers", "auth_fingerprint_capabilities"),
     "cancel_scope": ("sms_tool.registration.cancel", "cancel_scope"),
     "cancellable_sleep": ("sms_tool.registration.cancel", "cancellable_sleep"),
     "classify_error": ("sms_tool.kernel.error_classification", "classify_error"),
     "clear_registration_cancel": ("sms_tool.registration.cancel", "clear_registration_cancel"),
-    "curl_cffi_capabilities": ("sms_tool.auth_headers", "curl_cffi_capabilities"),
+    "curl_cffi_capabilities": ("sms_tool.transport.auth_headers", "curl_cffi_capabilities"),
     "curl_requests": ("curl_cffi", "requests"),
-    "current_auth_fingerprint": ("sms_tool.auth_headers", "current_auth_fingerprint"),
+    "current_auth_fingerprint": ("sms_tool.transport.auth_headers", "current_auth_fingerprint"),
     "ensure_not_cancelled": ("sms_tool.registration.cancel", "ensure_not_cancelled"),
     "import_cookie_header": ("sms_tool.codex.sentinel", "import_cookie_header"),
     "load_cached_sentinel": ("sms_tool.codex.sentinel", "load_cached_sentinel"),
-    "normalize_proxy_url": ("sms_tool.phone_proxy", "normalize_proxy_url"),
+    "normalize_proxy_url": ("sms_tool.phone.phone_proxy", "normalize_proxy_url"),
     "poll_email_otp": ("sms_tool.mailbox.router", "poll_email_otp"),
     "prepare_registration_context": ("sms_tool.registration.state", "prepare_registration_context"),
-    "refresh_proxy_sid": ("sms_tool.phone_proxy", "refresh_proxy_sid"),
+    "refresh_proxy_sid": ("sms_tool.phone.phone_proxy", "refresh_proxy_sid"),
     "registration_cancel_requested": ("sms_tool.registration.cancel", "registration_cancel_requested"),
     "request_registration_cancel": ("sms_tool.registration.cancel", "request_registration_cancel"),
     "runtime_file": ("sms_tool.kernel.paths", "runtime_file"),
@@ -141,7 +141,7 @@ if TYPE_CHECKING:  # pragma: no cover - static checkers only
     # pyright already sees them. Grouped per module -- one statement per name would
     # add one type-only edge each to the dependency graph for no extra precision.
     from curl_cffi import requests as curl_requests  # noqa: F401
-    from sms_tool.account_creation import (  # noqa: F401
+    from sms_tool.registration.account_creation import (  # noqa: F401
         _cookie_header,
         _create_account_sentinel_token,
         _minimal_chatgpt_cookie_header,
@@ -161,7 +161,7 @@ if TYPE_CHECKING:  # pragma: no cover - static checkers only
         _totp_factor_id,
         _with_query_param,
     )
-    from sms_tool.auth_headers import (  # noqa: F401
+    from sms_tool.transport.auth_headers import (  # noqa: F401
         auth_fingerprint_capabilities,
         curl_cffi_capabilities,
         current_auth_fingerprint,
@@ -176,7 +176,7 @@ if TYPE_CHECKING:  # pragma: no cover - static checkers only
     from sms_tool.kernel.paths import runtime_file  # noqa: F401
     from sms_tool.kernel.sanitizer import sanitize as _sanitize  # noqa: F401
     from sms_tool.mailbox.router import poll_email_otp  # noqa: F401
-    from sms_tool.phone_proxy import (  # noqa: F401
+    from sms_tool.phone.phone_proxy import (  # noqa: F401
         normalize_proxy_url,
         refresh_proxy_sid,
     )
@@ -195,7 +195,7 @@ if TYPE_CHECKING:  # pragma: no cover - static checkers only
         RegistrationState,
         prepare_registration_context,
     )
-    from sms_tool.sentinel_tokens import (  # noqa: F401
+    from sms_tool.registration.sentinel_tokens import (  # noqa: F401
         _cookie_jar_header,
         _extract_sentinel_http,
         _sentinel_frame_version,
@@ -218,7 +218,7 @@ def __dir__() -> list[str]:
     return sorted(__all__)
 
 
-from sms_tool.account_creation import (
+from sms_tool.registration.account_creation import (
     _auth_session_access_token,
     _create_account_continue_url,
     _email_otp_send_url,
@@ -242,7 +242,7 @@ from sms_tool.auth_flow import (
     _prime_create_account_password_page_enabled,
     _signup_signin_attempts,
 )
-from sms_tool.auth_headers import (
+from sms_tool.transport.auth_headers import (
     auth_impersonate,
     chatgpt_headers,
     nextauth_headers,
@@ -251,7 +251,7 @@ from sms_tool.auth_headers import (
     set_fingerprint_device,
     set_fingerprint_geo,
 )
-from sms_tool.auth_state import fetch_client_auth_session_dump as _fetch_client_auth_session_dump
+from sms_tool.transport.auth_state import fetch_client_auth_session_dump as _fetch_client_auth_session_dump
 from sms_tool.config import (
     current_config_data,
     resolve_runtime_config,
@@ -259,14 +259,14 @@ from sms_tool.config import (
     validate_config,
     validate_registration_driver_config,
 )
-from sms_tool.http_client import request_with_retry
-from sms_tool.http_utils import _follow_continue_url
+from sms_tool.transport.http_client import request_with_retry
+from sms_tool.transport.http_utils import _follow_continue_url
 from sms_tool.kernel.sanitizer import sanitize_text as _sanitize_text
 from sms_tool.mailbox.router import (
     ensure_mailbox_account,
     snapshot_mailbox_message,
 )
-from sms_tool.otp_strategy import (
+from sms_tool.registration.otp_strategy import (
     SyntheticResponse,
     _poll_registration_email_otp,
     send_registration_email_otp as _send_registration_email_otp,
@@ -299,7 +299,7 @@ from sms_tool.registration.state import (
     _stored_registration_totp,
 )
 from sms_tool.registration_drivers.base import normalize_registration_driver
-from sms_tool.sentinel_tokens import (
+from sms_tool.registration.sentinel_tokens import (
     _extract_sentinel,
     _import_sentinel_cookies,
     _sentinel_device_id,
@@ -541,9 +541,10 @@ def run_batch(
     on_result=None,
     registration_driver=None,
     cancel_event=None,
+    target_success=None,
 ):
     """Compatibility entry point for callers importing ``registration.run_batch``."""
-    from ..batch_runner import run_batch_impl
+    from .batch_runner import run_batch_impl
 
     return run_batch_impl(
         count=count,
@@ -561,6 +562,7 @@ def run_batch(
         enroll_2fa=enroll_2fa,
         registration_driver=registration_driver,
         cancel_event=cancel_event,
+        target_success=target_success,
         run_email_func=run_email,
     )
 

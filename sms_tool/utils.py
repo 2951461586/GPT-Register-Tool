@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from .config import CFG
-from .humanize import humanize_config
+from .registration.humanize import humanize_config
 
 _tls = threading.local()
 
@@ -130,7 +130,7 @@ def think_stage(stage_label: str = "", cfg: Mapping | None = None):
 
     🔴 ``registration.humanize`` is the object ``{"enabled": bool, "factor":
     float}`` documented in ``config.example.json`` and read by
-    ``sms_tool.humanize``.  It used to be read here as a bare truthiness test,
+    ``sms_tool.registration.humanize``.  It used to be read here as a bare truthiness test,
     and a non-empty object is **always truthy** -- so the documented
     ``"enabled": false`` could not turn the built-in ranges off, and
     ``humanize.factor`` was ignored in favour of an undocumented flat

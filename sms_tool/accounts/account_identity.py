@@ -14,8 +14,8 @@ from collections.abc import Mapping
 from typing import Any
 from urllib.parse import unquote, urlsplit
 
-from ..fingerprint_pool import shared_fingerprint_pool
-from ..phone_proxy import normalize_proxy_url
+from ..transport.fingerprint_pool import shared_fingerprint_pool
+from ..phone.phone_proxy import normalize_proxy_url
 from ..proxy.entry import infer_region, rebuild_proxy_credentials
 
 
@@ -98,7 +98,7 @@ def account_identity(account: Mapping[str, Any] | None) -> dict[str, Any]:
 
 def bind_account_identity(identity_or_account: Mapping[str, Any] | None) -> dict[str, Any]:
     """Bind an account identity to the current worker thread."""
-    from ..auth_headers import (
+    from ..transport.auth_headers import (
         set_auth_fingerprint,
         set_fingerprint_device,
         set_fingerprint_geo,
@@ -259,7 +259,7 @@ def _restore_session(base_proxy: str, affinity: Mapping[str, Any]) -> str:
 def _canonical_fingerprint_key(value: Any) -> str:
     key = str(value or "").strip().lower().split("_", 1)[0]
     try:
-        from ..auth_headers import AUTH_FINGERPRINT_PROFILES
+        from ..transport.auth_headers import AUTH_FINGERPRINT_PROFILES
 
         return key if key in AUTH_FINGERPRINT_PROFILES else ""
     except Exception:

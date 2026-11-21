@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from sms_tool.checkout_contract import CheckoutRequestContract
+from sms_tool.payment.checkout_contract import CheckoutRequestContract
 from sms_tool.wallet.gcash_provider import GCashProviderError, GCashTransportRequest
 from sms_tool.wallet.gcash_transport import ChatGPTGCashTransport
 
@@ -103,7 +103,7 @@ class GCashTransportTests(unittest.TestCase):
             "type": "custom_payment_method",
             "selected_payment_method_type": "cpmt_fixture_gcash",
         }
-        with patch("sms_tool.gen_pp_link._checkout_post", side_effect=fake_post):
+        with patch("sms_tool.payment.wire._checkout_post", side_effect=fake_post):
             result = ChatGPTGCashTransport().confirm_custom_payment(request("confirm", body))
 
         self.assertEqual(result["status"], "confirmed")
@@ -123,7 +123,7 @@ class GCashTransportTests(unittest.TestCase):
         self.assertEqual(kwargs["headers"]["OAI-Device-Id"], "device-fixture")
 
     def test_confirm_409_has_explicit_not_confirmed_classification(self):
-        with patch("sms_tool.gen_pp_link._checkout_post", return_value=FakeResponse(409, {"detail": "conflict"})):
+        with patch("sms_tool.payment.wire._checkout_post", return_value=FakeResponse(409, {"detail": "conflict"})):
             with self.assertRaises(GCashProviderError) as caught:
                 ChatGPTGCashTransport().confirm_custom_payment(request("confirm"))
 
@@ -133,7 +133,7 @@ class GCashTransportTests(unittest.TestCase):
 
     def test_confirm_unsupported_custom_method_is_terminal_contract_failure(self):
         with patch(
-            "sms_tool.gen_pp_link._checkout_post",
+            "sms_tool.payment.wire._checkout_post",
             return_value=FakeResponse(
                 400, {"detail": "Unsupported custom payment method type for this checkout session"}
             ),

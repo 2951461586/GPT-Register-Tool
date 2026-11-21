@@ -63,7 +63,7 @@ elif os.environ.get(_CONFIG_DIR_OWNER_ENV) == "1" and os.environ.get("PYTEST_XDI
     # One directory per process makes the migration single-process again.
     os.environ[_CONFIG_DIR_ENV] = str(_seed_test_config_dir())
 
-from sms_tool import logging_setup
+from sms_tool.observability import logging_setup
 
 
 @pytest.fixture(autouse=True)
@@ -429,7 +429,7 @@ def isolated_payment_operations(tmp_path, monkeypatch):
 
     Yields the isolated root.
     """
-    from sms_tool.payment.operation import PaymentOperationStore
+    from sms_tool.operation_journal import PaymentOperationStore
 
     root = tmp_path / "payment_operations"
 

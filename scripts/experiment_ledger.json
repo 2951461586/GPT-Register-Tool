@@ -63,15 +63,24 @@
       "doc": "docs/current/registration-ab-runbook.md"
     },
     "signin_screen_hint_login_or_signup": {
-      "kind": "ab", "id": "P1-10", "default": false, "status": "open",
+      "kind": "ab", "id": "P1-10", "default": false, "status": "concluded", "verdict": "rejected",
+      "keep": {
+        "reason": "2026-10-08 online verdict: POST /api/oauth/oauth2/auth with screen_hint=login_or_signup returns HTTP 400 Invalid screen_hint; kept default=false for reproducible negative-arm audit"
+      },
       "doc": "docs/current/registration-ab-runbook.md"
     },
     "signin_prompt_login": {
-      "kind": "ab", "id": "P1-11", "default": false, "status": "open",
+      "kind": "ab", "id": "P1-11", "default": false, "status": "concluded", "verdict": "rejected",
+      "keep": {
+        "reason": "2026-10-08 online verdict: adding prompt=login to POST /api/oauth/oauth2/auth still redirects straight to /log-in/password without advancing past password stage; default stays false"
+      },
       "doc": "docs/current/registration-ab-runbook.md"
     },
     "signin_locale_ja_jp": {
-      "kind": "ab", "id": "P1-12", "default": false, "status": "open",
+      "kind": "ab", "id": "P1-12", "default": false, "status": "concluded", "verdict": "rejected",
+      "keep": {
+        "reason": "2026-10-08 online verdict: sending locale=ja-JP on POST /api/oauth/oauth2/auth still lands on /log-in/password and does not alter auth routing; default stays false"
+      },
       "doc": "docs/current/registration-ab-runbook.md"
     },
     "turb_signin_authorize_context": {

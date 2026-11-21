@@ -2,7 +2,7 @@ from unittest.mock import patch
 
 from unittest.mock import Mock
 
-from sms_tool import auth_headers
+from sms_tool.transport import auth_headers
 from sms_tool.accounts.account_identity import (
     bind_account_identity,
     create_registration_identity,
@@ -130,7 +130,7 @@ def test_session_file_forwards_register_method_session_type_plan_type():
 
 
 def test_registration_identity_allocates_canonical_profile_from_shared_pool():
-    from sms_tool.auth_headers import AUTH_FINGERPRINT_PROFILES
+    from sms_tool.transport.auth_headers import AUTH_FINGERPRINT_PROFILES
 
     # Use a profile that exists in the canonical table so the canonicalization
     # step accepts the pool-allocated name regardless of which versions the

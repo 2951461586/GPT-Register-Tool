@@ -31,13 +31,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from ...sentinel.bundle import DEFAULT_SENTINEL_VERSION
+
 ASSETS_DIR = Path(__file__).resolve().parent / "sentinel"
 BRIDGE_JS = ASSETS_DIR / "sentinel_bridge.js"
-
-#: Sentinel SDK version baked into the vendored ``sentinel_sdk.js``. Overridable
-#: via ``UPI_SENTINEL_VERSION`` so a stale SDK can be refreshed without a code
-#: change (the bridge uses it for the SDK/frame URL).
-DEFAULT_SENTINEL_VERSION = "20260810913b"
 
 
 def sentinel_version() -> str:

@@ -57,8 +57,9 @@ from unittest.mock import Mock
 
 import pytest
 
-from sms_tool import auth_flow, http_utils
-from sms_tool.account_creation import _email_otp_send_url
+from sms_tool import auth_flow
+from sms_tool.transport import http_utils
+from sms_tool.registration.account_creation import _email_otp_send_url
 from sms_tool.kernel.error_classification import classify_error
 from sms_tool.kernel.failure_registry import BATCH_DROPPED_CLASSES, BATCH_RETRY_CLASSES
 from sms_tool.registration.handlers import RegistrationAbort, RegistrationEmailWorkflow

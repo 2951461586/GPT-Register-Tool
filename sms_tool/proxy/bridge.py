@@ -52,6 +52,46 @@ from .pool import (
 logger = logging.getLogger("proxy_bridge")
 
 _HTTP_SCHEMES = {"http", "https"}
+#: RFC 1928 reply code: connection not allowed by ruleset.
+_REP_NOT_ALLOWED = 0x02
+
+
+def _normalize_blocked_hosts(hosts: Any) -> tuple[str, ...]:
+    if not hosts:
+        return ()
+    if isinstance(hosts, str):
+        raw = [part.strip() for part in hosts.replace(",", "\n").splitlines()]
+    else:
+        raw = [str(part or "").strip() for part in hosts]
+    cleaned: list[str] = []
+    for item in raw:
+        host = item.lower().strip(".")
+        if host and host not in cleaned:
+            cleaned.append(host)
+    return tuple(cleaned)
+
+
+def _host_matches_blocked(host: str, rules: tuple[str, ...]) -> bool:
+    """Exact domain or subdomain-boundary match (never partial label prefix)."""
+    candidate = str(host or "").strip().lower().rstrip(".")
+    if not candidate or not rules:
+        return False
+    return any(candidate == rule or candidate.endswith("." + rule) for rule in rules)
+
+
+@dataclass
+class _DestinationStats:
+    upload_bytes: int = 0
+    download_bytes: int = 0
+    connections: int = 0
+    failed_connections: int = 0
+    blocked_connections: int = 0
+    retries: int = 0
+    recovered_connections: int = 0
+
+    @property
+    def total_bytes(self) -> int:
+        return self.upload_bytes + self.download_bytes
 
 
 async def _close_writer(w: asyncio.StreamWriter) -> None:
@@ -86,11 +126,58 @@ class LocalProxyBridge:
     listen_port: int = 0  # 0 => pick a free port
     connect_timeout: float = 10.0
     pipe_buf_size: int = 65536
+    blocked_hosts: tuple[str, ...] = ()
+    connect_retries: int = 0
 
     _server: asyncio.Server | None = field(default=None, init=False, repr=False)
     _port: int = field(default=0, init=False, repr=False)
     _loop: asyncio.AbstractEventLoop | None = field(default=None, init=False, repr=False)
     _thread: threading.Thread | None = field(default=None, init=False, repr=False)
+    _stats_lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
+    _dest_stats: dict[str, _DestinationStats] = field(default_factory=dict, init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self.blocked_hosts = _normalize_blocked_hosts(self.blocked_hosts)
+        self.connect_retries = max(0, min(int(self.connect_retries or 0), 3))
+
+    def _dest_entry(self, target: str) -> _DestinationStats:
+        entry = self._dest_stats.get(target)
+        if entry is None:
+            entry = _DestinationStats()
+            self._dest_stats[target] = entry
+        return entry
+
+    def traffic_snapshot(self) -> dict[str, Any]:
+        """Credential-free per-destination transport bytes and block/retry counters."""
+        with self._stats_lock:
+            items = [
+                {
+                    "target": target,
+                    "upload_bytes": stat.upload_bytes,
+                    "download_bytes": stat.download_bytes,
+                    "total_bytes": stat.total_bytes,
+                    "connections": stat.connections,
+                    "failed_connections": stat.failed_connections,
+                    "blocked_connections": stat.blocked_connections,
+                    "retries": stat.retries,
+                    "recovered_connections": stat.recovered_connections,
+                }
+                for target, stat in self._dest_stats.items()
+            ]
+        items.sort(key=lambda row: (row["total_bytes"], row["blocked_connections"], row["connections"]), reverse=True)
+        upload = sum(row["upload_bytes"] for row in items)
+        download = sum(row["download_bytes"] for row in items)
+        return {
+            "upload_bytes": upload,
+            "download_bytes": download,
+            "total_bytes": upload + download,
+            "connections": sum(row["connections"] for row in items),
+            "failed_connections": sum(row["failed_connections"] for row in items),
+            "blocked_connections": sum(row["blocked_connections"] for row in items),
+            "connect_retry_count": sum(row["retries"] for row in items),
+            "recovered_connection_count": sum(row["recovered_connections"] for row in items),
+            "destinations": items,
+        }
 
     # ── async lifecycle (run on the caller's loop) ─────────────────────────
 
@@ -311,18 +398,52 @@ class LocalProxyBridge:
             await writer.drain()
             return
 
-        # connect upstream
-        try:
-            up_r, up_w = await asyncio.wait_for(
-                self._connect_upstream(dest_host, dest_port, atyp),
-                timeout=self.connect_timeout,
-            )
-        except Exception as exc:
+        target = f"{dest_host}:{dest_port}"
+        if self.blocked_hosts and _host_matches_blocked(dest_host, self.blocked_hosts):
+            with self._stats_lock:
+                self._dest_entry(target).blocked_connections += 1
+            logger.debug("proxy_bridge blocked host %s before upstream connect", target)
+            writer.write(_build_socks5_reply(_REP_NOT_ALLOWED))
+            await writer.drain()
+            return
+
+        with self._stats_lock:
+            self._dest_entry(target).connections += 1
+
+        # connect upstream (bounded retry before forwarding any client data)
+        up_r: asyncio.StreamReader | None = None
+        up_w: asyncio.StreamWriter | None = None
+        last_exc: Exception | None = None
+        max_attempts = 1 + self.connect_retries
+        for attempt in range(max_attempts):
+            try:
+                up_r, up_w = await asyncio.wait_for(
+                    self._connect_upstream(dest_host, dest_port, atyp),
+                    timeout=self.connect_timeout,
+                )
+                if attempt > 0:
+                    with self._stats_lock:
+                        self._dest_entry(target).recovered_connections += 1
+                break
+            except (asyncio.TimeoutError, ConnectionError, OSError) as exc:
+                last_exc = exc
+                if attempt + 1 < max_attempts:
+                    with self._stats_lock:
+                        self._dest_entry(target).retries += 1
+                    await asyncio.sleep(0.25 * (attempt + 1))
+                    continue
+                break
+            except Exception as exc:
+                last_exc = exc
+                break
+
+        if up_r is None or up_w is None:
+            with self._stats_lock:
+                self._dest_entry(target).failed_connections += 1
             logger.debug(
-                "proxy_bridge upstream connect failed for %s:%s: %s",
-                dest_host,
-                dest_port,
-                exc,
+                "proxy_bridge upstream connect failed for %s: %s",
+                target,
+                last_exc,
             )
             writer.write(_build_socks5_reply(_REP_CONN_REFUSED))
             await writer.drain()
@@ -332,7 +453,7 @@ class LocalProxyBridge:
         await writer.drain()
 
         try:
-            await self._relay(reader, writer, up_r, up_w)
+            await self._relay(reader, writer, up_r, up_w, target=target)
         finally:
             try:
                 up_w.close()
@@ -416,8 +537,10 @@ class LocalProxyBridge:
         client_w: asyncio.StreamWriter,
         up_r: asyncio.StreamReader,
         up_w: asyncio.StreamWriter,
+        *,
+        target: str = "",
     ) -> None:
-        async def _pipe(src, dst) -> None:
+        async def _pipe(src, dst, direction: str) -> None:
             try:
                 while True:
                     data = await src.read(self.pipe_buf_size)
@@ -425,6 +548,14 @@ class LocalProxyBridge:
                         break
                     dst.write(data)
                     await dst.drain()
+                    if target:
+                        nbytes = len(data)
+                        with self._stats_lock:
+                            stat = self._dest_entry(target)
+                            if direction == "up":
+                                stat.upload_bytes += nbytes
+                            else:
+                                stat.download_bytes += nbytes
             except (asyncio.CancelledError, ConnectionError, OSError):
                 pass
             finally:
@@ -434,8 +565,8 @@ class LocalProxyBridge:
                 except Exception:
                     pass
 
-        t1 = asyncio.create_task(_pipe(client_r, up_w))
-        t2 = asyncio.create_task(_pipe(up_r, client_w))
+        t1 = asyncio.create_task(_pipe(client_r, up_w, "up"))
+        t2 = asyncio.create_task(_pipe(up_r, client_w, "down"))
         await asyncio.gather(t1, t2, return_exceptions=True)
         for t in (t1, t2):
             if not t.done():
@@ -475,29 +606,61 @@ def needs_bridge(proxy: Any) -> bool:
     return entry.scheme in {"http", "https"}
 
 
-def proxy_for_browser(proxy: Any, *, env_prefix: str = "PROXY") -> tuple[str, Any]:
-    """Return ``(browser_proxy_url, closer)`` for a synchronous caller.
+def open_browser_proxy_bridge(
+    proxy: Any,
+    *,
+    blocked_hosts: tuple[str, ...] | list[str] = (),
+    connect_retries: int = 0,
+    force_bridge: bool = False,
+) -> tuple[str, Any, LocalProxyBridge | None]:
+    """Return ``(browser_proxy_url, closer, bridge)`` for synchronous callers.
 
-    ``closer()`` stops any bridge that was started (no-op if none).  The caller
-    must invoke ``closer()`` when the browser session is finished.
+    When ``force_bridge`` is True (for example when browser data-saver host
+    blocking or proxy-level traffic accounting is active), even credential-free
+    SOCKS5 proxies are routed through :class:`LocalProxyBridge`.
     """
     from .entry import parse_proxy
 
     value = str(proxy or "").strip()
     if not value:
-        return "", _noop
+        return "", _noop, None
     entry = parse_proxy(value)
-    if entry is None or not entry.username and entry.scheme in {"socks5", "socks5h"}:
-        # Directly usable: no credentials and already socks -> keep, just
-        # normalize socks5h so the browser gets remote-DNS friendly semantics.
-        if entry is not None and entry.scheme == "socks5":
-            return entry.url, _noop
-        return value, _noop
-
-    # Needs bridging (has credentials, or is http(s), or socks4a).
-    bridge = LocalProxyBridge(upstream=entry)
+    if entry is None:
+        return value, _noop, None
+    if not force_bridge and not entry.username and entry.scheme in {"socks5", "socks5h"}:
+        if entry.scheme == "socks5":
+            return entry.url, _noop, None
+        return value, _noop, None
+    bridge = LocalProxyBridge(
+        upstream=entry,
+        blocked_hosts=_normalize_blocked_hosts(blocked_hosts),
+        connect_retries=connect_retries,
+    )
     bridge.start()
-    return bridge.local_url, bridge.stop
+    return bridge.local_url, bridge.stop, bridge
+
+
+def proxy_for_browser(
+    proxy: Any,
+    *,
+    env_prefix: str = "PROXY",
+    blocked_hosts: tuple[str, ...] | list[str] = (),
+    connect_retries: int = 0,
+    force_bridge: bool = False,
+) -> tuple[str, Any]:
+    """Return ``(browser_proxy_url, closer)`` for a synchronous caller.
+
+    ``closer()`` stops any bridge that was started (no-op if none).  The caller
+    must invoke ``closer()`` when the browser session is finished.
+    """
+    del env_prefix
+    url, closer, _bridge = open_browser_proxy_bridge(
+        proxy,
+        blocked_hosts=blocked_hosts,
+        connect_retries=connect_retries,
+        force_bridge=force_bridge,
+    )
+    return url, closer
 
 
 async def async_proxy_for_browser(proxy: Any, *, env_prefix: str = "PROXY") -> tuple[str, Any]:

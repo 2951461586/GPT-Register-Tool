@@ -503,7 +503,7 @@ class ProtocolPathGeoTests(unittest.TestCase):
         reset_shared_geo_resolver()
 
     def _profile(self, proxy):
-        from sms_tool.fingerprint_pool import FingerprintPool
+        from sms_tool.transport.fingerprint_pool import FingerprintPool
 
         return FingerprintPool.from_config({}).next(proxy)
 

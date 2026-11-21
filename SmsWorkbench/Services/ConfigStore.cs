@@ -1,13 +1,9 @@
-// Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
-#nullable enable
-
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
-namespace SmsWorkbench
+namespace SmsWorkbench.Services
 {
     /// <summary>
     /// Sharded configuration store. The historical single config.json is split
@@ -52,7 +48,6 @@ namespace SmsWorkbench
             ["paypal"] = PaymentShard,
             ["paypal_nocard"] = PaymentShard,
             ["upi"] = PaymentShard,
-            ["omakse"] = PaymentShard,
             ["protocol_payments"] = PaymentShard,
             ["kakao"] = PaymentShard,
             ["momo"] = PaymentShard,

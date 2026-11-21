@@ -105,10 +105,8 @@ def test_paypal_link_facade_drops_the_upi_surface():
     assert not (set(UPI_NAMES) & exported), "paypal_link.__all__ still lists UPI names"
 
 
-def test_gen_pp_link_keeps_a_single_compat_shim():
-    from sms_tool import gen_pp_link, upi_link
-
-    assert gen_pp_link.generate_upi_qr_link is upi_link.generate_upi_qr_link
+def test_gen_pp_link_compat_shim_is_retired():
+    assert not (ROOT / "sms_tool" / "gen_pp_link.py").exists()
 
 
 def test_public_option_set_matches_the_pipeline_signature():

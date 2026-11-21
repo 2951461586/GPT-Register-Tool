@@ -1,10 +1,6 @@
-// Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
-#nullable enable
-
 using System.Reflection;
 
-namespace SmsWorkbench
+namespace SmsWorkbench.Services
 {
     /// <summary>
     /// The running build's version, read from the assembly that actually shipped.

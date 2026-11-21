@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 import pytest
 
-from sms_tool import batch_runner
+from sms_tool.registration import batch_runner
 from sms_tool.sentinel.runner import SentinelRunnerError
 
 

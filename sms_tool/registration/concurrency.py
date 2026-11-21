@@ -136,7 +136,7 @@ class RegistrationStageLease:
 def mark_registration_rate_limited(retry_after_seconds: float = 300.0) -> float:
     """Pause new auth-flow admissions after an upstream HTTP 429."""
     global _rate_limit_blocked_until
-    from ..backoff import bounded_cooldown
+    from ..transport.backoff import bounded_cooldown
 
     delay = bounded_cooldown(retry_after_seconds or 300.0)
     with _rate_limit_lock:

@@ -14,11 +14,11 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from .. import endpoints
+from ..transport import endpoints
 from ..kernel.error_classification import INTERNAL_EXCEPTION_TYPES
 from ..mailbox import service as _mailbox_service
 from ..mailbox.errors import MailboxEndpointUnavailableError
-from ..operator_output import emit as _emit
+from ..observability.operator_output import emit as _emit
 from ..providers.mailbox_graph import MailboxAuthInvalidError
 from ..proxy import entry as _proxy_entry
 from . import checkpoint as registration_checkpoint

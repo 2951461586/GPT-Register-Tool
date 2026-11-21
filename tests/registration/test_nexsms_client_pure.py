@@ -1,4 +1,4 @@
-"""Behaviour tests for ``sms_tool/nexsms.py`` -- the ``nexsms_json`` family.
+"""Behaviour tests for ``sms_tool/phone/nexsms.py`` -- the ``nexsms_json`` family.
 
 Why this file exists
 --------------------
@@ -22,7 +22,7 @@ pinned directly rather than through the registration flow:
    the caller cancel a number that had already been paid for and had already
    delivered its code.
 
-There is **no network here**: ``sms_tool.nexsms._requests`` is patched in every
+There is **no network here**: ``sms_tool.phone.nexsms._requests`` is patched in every
 test, which is also what the sms-activate client's tests do.
 """
 
@@ -33,7 +33,7 @@ from unittest.mock import Mock, patch
 
 import requests
 
-from sms_tool.nexsms import (
+from sms_tool.phone.nexsms import (
     DEFAULT_ENDPOINT,
     NexSmsActivation,
     NexSmsClient,
@@ -71,7 +71,7 @@ class EnvelopeTests(unittest.TestCase):
     def test_a_zero_code_yields_the_data(self):
         client = NexSmsClient(api_key="k")
         with patch(
-            "sms_tool.nexsms._requests.get",
+            "sms_tool.phone.nexsms._requests.get",
             return_value=_reply({"code": 0, "data": {"balance": "12.5", "username": "u"}}),
         ):
             self.assertEqual(12.5, client.get_balance()["balance"])
@@ -82,7 +82,7 @@ class EnvelopeTests(unittest.TestCase):
         failure and report a vendor error for a successful call."""
         client = NexSmsClient(api_key="k")
         with patch(
-            "sms_tool.nexsms._requests.get",
+            "sms_tool.phone.nexsms._requests.get",
             return_value=_reply({"code": "0", "data": {"balance": "1"}}),
         ):
             self.assertEqual(1.0, client.get_balance()["balance"])
@@ -90,7 +90,7 @@ class EnvelopeTests(unittest.TestCase):
     def test_a_non_zero_code_raises_with_the_vendor_message(self):
         client = NexSmsClient(api_key="k")
         with patch(
-            "sms_tool.nexsms._requests.get",
+            "sms_tool.phone.nexsms._requests.get",
             return_value=_reply({"code": 12, "message": "号码不足"}),
         ):
             with self.assertRaises(NexSmsError) as caught:
@@ -103,13 +103,13 @@ class EnvelopeTests(unittest.TestCase):
         bare ``TypeError`` out of the client -- callers classify on
         ``NexSmsError``, and anything else escapes their handler."""
         client = NexSmsClient(api_key="k")
-        with patch("sms_tool.nexsms._requests.get", return_value=_reply({"data": {}})):
+        with patch("sms_tool.phone.nexsms._requests.get", return_value=_reply({"data": {}})):
             with self.assertRaises(NexSmsError):
                 client.get_balance()
 
     def test_a_non_dict_payload_raises(self):
         client = NexSmsClient(api_key="k")
-        with patch("sms_tool.nexsms._requests.get", return_value=_reply(["nope"])):
+        with patch("sms_tool.phone.nexsms._requests.get", return_value=_reply(["nope"])):
             with self.assertRaises(NexSmsError) as caught:
                 client.get_balance()
         self.assertIn("unexpected reply", str(caught.exception))
@@ -119,7 +119,7 @@ class EnvelopeTests(unittest.TestCase):
         same answer."""
         client = NexSmsClient(api_key="k")
         with patch(
-            "sms_tool.nexsms._requests.get",
+            "sms_tool.phone.nexsms._requests.get",
             return_value=_reply({"code": 1001, "message": "API Key 无效"}),
         ):
             with self.assertRaises(NexSmsError) as caught:
@@ -129,7 +129,7 @@ class EnvelopeTests(unittest.TestCase):
     def test_a_balance_failure_is_not_retryable(self):
         client = NexSmsClient(api_key="k")
         with patch(
-            "sms_tool.nexsms._requests.get",
+            "sms_tool.phone.nexsms._requests.get",
             return_value=_reply({"code": 1002, "message": "余额不足"}),
         ):
             with self.assertRaises(NexSmsError) as caught:
@@ -142,7 +142,7 @@ class EnvelopeTests(unittest.TestCase):
         the one that loses attempts rather than the one that loses money."""
         client = NexSmsClient(api_key="k")
         with patch(
-            "sms_tool.nexsms._requests.get",
+            "sms_tool.phone.nexsms._requests.get",
             return_value=_reply({"code": 77, "message": "暂时没有可用号码"}),
         ):
             with self.assertRaises(NexSmsError) as caught:
@@ -155,7 +155,7 @@ class TransportTests(unittest.TestCase):
 
     def test_the_key_travels_in_the_query_string_on_get(self):
         client = NexSmsClient(api_key="secret")
-        with patch("sms_tool.nexsms._requests.get", return_value=_reply({"code": 0, "data": {}})) as get:
+        with patch("sms_tool.phone.nexsms._requests.get", return_value=_reply({"code": 0, "data": {}})) as get:
             client.get_balance()
         self.assertEqual("secret", get.call_args.kwargs["params"]["apiKey"])
 
@@ -165,7 +165,7 @@ class TransportTests(unittest.TestCase):
         ``code != 0`` for a correctly-formed request."""
         client = NexSmsClient(api_key="secret")
         with patch(
-            "sms_tool.nexsms._requests.post",
+            "sms_tool.phone.nexsms._requests.post",
             return_value=_reply({"code": 0, "data": True}),
         ) as post:
             client.cancel("+233555123456")
@@ -174,7 +174,7 @@ class TransportTests(unittest.TestCase):
 
     def test_the_endpoint_is_a_base_host_with_paths_appended(self):
         client = NexSmsClient(api_key="k")
-        with patch("sms_tool.nexsms._requests.get", return_value=_reply({"code": 0, "data": {}})) as get:
+        with patch("sms_tool.phone.nexsms._requests.get", return_value=_reply({"code": 0, "data": {}})) as get:
             client.get_balance()
         url = get.call_args[0][0]
         self.assertTrue(url.startswith(DEFAULT_ENDPOINT), url)
@@ -182,13 +182,13 @@ class TransportTests(unittest.TestCase):
 
     def test_a_trailing_slash_on_the_endpoint_does_not_double_up(self):
         client = NexSmsClient(api_key="k", endpoint="https://api.nexsms.net/")
-        with patch("sms_tool.nexsms._requests.get", return_value=_reply({"code": 0, "data": {}})) as get:
+        with patch("sms_tool.phone.nexsms._requests.get", return_value=_reply({"code": 0, "data": {}})) as get:
             client.get_balance()
         self.assertNotIn("//api/", get.call_args[0][0])
 
     def test_http_401_is_not_retryable(self):
         client = NexSmsClient(api_key="k")
-        with patch("sms_tool.nexsms._requests.get", side_effect=_http_error(401)):
+        with patch("sms_tool.phone.nexsms._requests.get", side_effect=_http_error(401)):
             with self.assertRaises(NexSmsError) as caught:
                 client.get_balance()
         self.assertFalse(caught.exception.retryable)
@@ -196,21 +196,21 @@ class TransportTests(unittest.TestCase):
 
     def test_http_403_is_not_retryable(self):
         client = NexSmsClient(api_key="k")
-        with patch("sms_tool.nexsms._requests.get", side_effect=_http_error(403)):
+        with patch("sms_tool.phone.nexsms._requests.get", side_effect=_http_error(403)):
             with self.assertRaises(NexSmsError) as caught:
                 client.get_balance()
         self.assertFalse(caught.exception.retryable)
 
     def test_http_500_stays_retryable(self):
         client = NexSmsClient(api_key="k")
-        with patch("sms_tool.nexsms._requests.get", side_effect=_http_error(500)):
+        with patch("sms_tool.phone.nexsms._requests.get", side_effect=_http_error(500)):
             with self.assertRaises(NexSmsError) as caught:
                 client.get_balance()
         self.assertTrue(caught.exception.retryable)
 
     def test_a_connection_error_stays_retryable(self):
         client = NexSmsClient(api_key="k")
-        with patch("sms_tool.nexsms._requests.get", side_effect=requests.ConnectionError("boom")):
+        with patch("sms_tool.phone.nexsms._requests.get", side_effect=requests.ConnectionError("boom")):
             with self.assertRaises(NexSmsError) as caught:
                 client.get_balance()
         self.assertTrue(caught.exception.retryable)
@@ -238,19 +238,19 @@ class ReadEndpointTests(unittest.TestCase):
     def test_get_countries_skips_entries_without_an_id(self):
         client = NexSmsClient(api_key="k")
         payload = {"code": 0, "data": [{"id": 38, "name": "加纳"}, {"name": "no id"}, "junk"]}
-        with patch("sms_tool.nexsms._requests.get", return_value=_reply(payload)):
+        with patch("sms_tool.phone.nexsms._requests.get", return_value=_reply(payload)):
             rows = client.get_countries()
         self.assertEqual([{"id": "38", "name": "加纳"}], rows)
 
     def test_get_countries_returns_empty_for_a_non_list(self):
         client = NexSmsClient(api_key="k")
-        with patch("sms_tool.nexsms._requests.get", return_value=_reply({"code": 0, "data": None})):
+        with patch("sms_tool.phone.nexsms._requests.get", return_value=_reply({"code": 0, "data": None})):
             self.assertEqual([], client.get_countries())
 
     def test_get_services_returns_code_and_name(self):
         client = NexSmsClient(api_key="k")
         payload = {"code": 0, "data": [{"code": "dr", "name": "OpenAI"}, {"name": "no code"}]}
-        with patch("sms_tool.nexsms._requests.get", return_value=_reply(payload)):
+        with patch("sms_tool.phone.nexsms._requests.get", return_value=_reply(payload)):
             self.assertEqual([{"code": "dr", "name": "OpenAI"}], client.get_services())
 
     def test_a_quote_for_one_country_comes_back_as_an_object(self):
@@ -267,7 +267,7 @@ class ReadEndpointTests(unittest.TestCase):
                 "priceMap": {"0.05": 4},
             },
         }
-        with patch("sms_tool.nexsms._requests.get", return_value=_reply(payload)) as get:
+        with patch("sms_tool.phone.nexsms._requests.get", return_value=_reply(payload)) as get:
             quote = client.get_country_quote("dr", "38")
         assert quote is not None
         self.assertEqual(0.05, quote["min_price"])
@@ -282,14 +282,14 @@ class ReadEndpointTests(unittest.TestCase):
         Both shapes reach this method, so both must be accepted."""
         client = NexSmsClient(api_key="k")
         payload = {"code": 0, "data": [{"countryId": 16, "minPrice": 0.09}]}
-        with patch("sms_tool.nexsms._requests.get", return_value=_reply(payload)):
+        with patch("sms_tool.phone.nexsms._requests.get", return_value=_reply(payload)):
             quote = client.get_country_quote("dr", "")
         assert quote is not None
         self.assertEqual(0.09, quote["min_price"])
 
     def test_a_quote_without_a_price_is_reported_as_missing(self):
         client = NexSmsClient(api_key="k")
-        with patch("sms_tool.nexsms._requests.get", return_value=_reply({"code": 0, "data": None})):
+        with patch("sms_tool.phone.nexsms._requests.get", return_value=_reply({"code": 0, "data": None})):
             self.assertIsNone(client.get_country_quote("dr", "38"))
 
 
@@ -327,8 +327,8 @@ class PurchaseTests(unittest.TestCase):
     def test_a_purchase_buys_one_number_at_the_quoted_price(self):
         client = NexSmsClient(api_key="k")
         with (
-            patch("sms_tool.nexsms._requests.get", return_value=self._quote_reply()),
-            patch("sms_tool.nexsms._requests.post", return_value=self._order_reply()) as post,
+            patch("sms_tool.phone.nexsms._requests.get", return_value=self._quote_reply()),
+            patch("sms_tool.phone.nexsms._requests.post", return_value=self._order_reply()) as post,
         ):
             activation = client.get_number(service="dr", country="38", max_price="0.06")
         self.assertIsInstance(activation, NexSmsActivation)
@@ -348,8 +348,8 @@ class PurchaseTests(unittest.TestCase):
         for this vendor, and this is where that starts."""
         client = NexSmsClient(api_key="k")
         with (
-            patch("sms_tool.nexsms._requests.get", return_value=self._quote_reply()),
-            patch("sms_tool.nexsms._requests.post", return_value=self._order_reply()),
+            patch("sms_tool.phone.nexsms._requests.get", return_value=self._quote_reply()),
+            patch("sms_tool.phone.nexsms._requests.post", return_value=self._order_reply()),
         ):
             activation = client.get_number(service="dr", country="38", max_price="0.06")
         self.assertEqual("", activation.activation_id)
@@ -357,8 +357,8 @@ class PurchaseTests(unittest.TestCase):
     def test_a_number_is_returned_with_the_plus_prefix(self):
         client = NexSmsClient(api_key="k")
         with (
-            patch("sms_tool.nexsms._requests.get", return_value=self._quote_reply()),
-            patch("sms_tool.nexsms._requests.post", return_value=self._order_reply(phones=("254711408024",))),
+            patch("sms_tool.phone.nexsms._requests.get", return_value=self._quote_reply()),
+            patch("sms_tool.phone.nexsms._requests.post", return_value=self._order_reply(phones=("254711408024",))),
         ):
             activation = client.get_number(service="dr", country="38", max_price="0.06")
         self.assertEqual("+254711408024", activation.phone)
@@ -369,8 +369,8 @@ class PurchaseTests(unittest.TestCase):
         vendor."""
         client = NexSmsClient(api_key="k")
         with (
-            patch("sms_tool.nexsms._requests.get", return_value=self._quote_reply(min_price=0.20)),
-            patch("sms_tool.nexsms._requests.post") as post,
+            patch("sms_tool.phone.nexsms._requests.get", return_value=self._quote_reply(min_price=0.20)),
+            patch("sms_tool.phone.nexsms._requests.post") as post,
         ):
             with self.assertRaises(NexSmsError) as caught:
                 client.get_number(service="dr", country="38", max_price="0.06")
@@ -381,8 +381,8 @@ class PurchaseTests(unittest.TestCase):
     def test_a_price_below_the_configured_floor_is_refused_without_buying(self):
         client = NexSmsClient(api_key="k")
         with (
-            patch("sms_tool.nexsms._requests.get", return_value=self._quote_reply(min_price=0.01)),
-            patch("sms_tool.nexsms._requests.post") as post,
+            patch("sms_tool.phone.nexsms._requests.get", return_value=self._quote_reply(min_price=0.01)),
+            patch("sms_tool.phone.nexsms._requests.post") as post,
         ):
             with self.assertRaises(NexSmsError) as caught:
                 client.get_number(service="dr", country="38", min_price="0.05")
@@ -392,8 +392,8 @@ class PurchaseTests(unittest.TestCase):
     def test_an_empty_ceiling_is_not_a_ceiling(self):
         client = NexSmsClient(api_key="k")
         with (
-            patch("sms_tool.nexsms._requests.get", return_value=self._quote_reply(min_price=9.99)),
-            patch("sms_tool.nexsms._requests.post", return_value=self._order_reply(total=9.99)),
+            patch("sms_tool.phone.nexsms._requests.get", return_value=self._quote_reply(min_price=9.99)),
+            patch("sms_tool.phone.nexsms._requests.post", return_value=self._order_reply(total=9.99)),
         ):
             activation = client.get_number(service="dr", country="38", max_price="")
         self.assertEqual("+233555123456", activation.phone)
@@ -404,16 +404,16 @@ class PurchaseTests(unittest.TestCase):
         "this vendor ignores it" and "the setting silently stopped working"."""
         client = NexSmsClient(api_key="k")
         with (
-            patch("sms_tool.nexsms._requests.get", return_value=self._quote_reply()),
-            patch("sms_tool.nexsms._requests.post", return_value=self._order_reply()),
+            patch("sms_tool.phone.nexsms._requests.get", return_value=self._quote_reply()),
+            patch("sms_tool.phone.nexsms._requests.post", return_value=self._order_reply()),
         ):
-            with self.assertLogs("sms_tool.nexsms", level="INFO") as captured:
+            with self.assertLogs("sms_tool.phone.nexsms", level="INFO") as captured:
                 client.get_number(service="dr", country="38", provider_ids="42")
         self.assertIn("provider_ids", "\n".join(captured.output))
 
     def test_a_country_without_a_quote_is_an_error(self):
         client = NexSmsClient(api_key="k")
-        with patch("sms_tool.nexsms._requests.get", return_value=_reply({"code": 0, "data": None})):
+        with patch("sms_tool.phone.nexsms._requests.get", return_value=_reply({"code": 0, "data": None})):
             with self.assertRaises(NexSmsError) as caught:
                 client.get_number(service="dr", country="38")
         self.assertIn("no quote", str(caught.exception))
@@ -421,8 +421,8 @@ class PurchaseTests(unittest.TestCase):
     def test_a_purchase_without_a_phone_number_is_an_error(self):
         client = NexSmsClient(api_key="k")
         with (
-            patch("sms_tool.nexsms._requests.get", return_value=self._quote_reply()),
-            patch("sms_tool.nexsms._requests.post", return_value=self._order_reply(phones=())),
+            patch("sms_tool.phone.nexsms._requests.get", return_value=self._quote_reply()),
+            patch("sms_tool.phone.nexsms._requests.post", return_value=self._order_reply(phones=())),
         ):
             with self.assertRaises(NexSmsError) as caught:
                 client.get_number(service="dr", country="38")
@@ -435,7 +435,7 @@ class LifecycleTests(unittest.TestCase):
     def test_get_status_asks_for_the_latest_message(self):
         client = NexSmsClient(api_key="k")
         payload = {"code": 0, "data": {"code": "654321", "text": "your code", "expiresTime": "t"}}
-        with patch("sms_tool.nexsms._requests.get", return_value=_reply(payload)) as get:
+        with patch("sms_tool.phone.nexsms._requests.get", return_value=_reply(payload)) as get:
             status = client.get_status("+233555123456")
         self.assertEqual("OK", status["status"])
         self.assertEqual("654321", status["code"])
@@ -446,12 +446,14 @@ class LifecycleTests(unittest.TestCase):
 
     def test_get_status_without_a_code_is_a_wait(self):
         client = NexSmsClient(api_key="k")
-        with patch("sms_tool.nexsms._requests.get", return_value=_reply({"code": 0, "data": {"text": "no code yet"}})):
+        with patch(
+            "sms_tool.phone.nexsms._requests.get", return_value=_reply({"code": 0, "data": {"text": "no code yet"}})
+        ):
             self.assertEqual("WAIT_CODE", client.get_status("+233555123456")["status"])
 
     def test_get_status_without_a_handle_does_not_call_the_vendor(self):
         client = NexSmsClient(api_key="k")
-        with patch("sms_tool.nexsms._requests.get") as get:
+        with patch("sms_tool.phone.nexsms._requests.get") as get:
             self.assertEqual("WAIT_CODE", client.get_status("")["status"])
         get.assert_not_called()
 
@@ -466,7 +468,7 @@ class LifecycleTests(unittest.TestCase):
                     {"status": "OK", "code": "111111"},
                 ],
             ),
-            patch("sms_tool.nexsms.time.sleep"),
+            patch("sms_tool.phone.nexsms.time.sleep"),
         ):
             self.assertEqual("111111", client.wait_for_code("+233555123456", timeout=30, poll_interval=1))
 
@@ -484,7 +486,7 @@ class LifecycleTests(unittest.TestCase):
                     {"status": "OK", "code": "222222"},
                 ],
             ),
-            patch("sms_tool.nexsms.time.sleep"),
+            patch("sms_tool.phone.nexsms.time.sleep"),
         ):
             code = client.wait_for_code("+233555123456", timeout=30, poll_interval=1, previous_code="111111")
         self.assertEqual("222222", code)
@@ -493,7 +495,7 @@ class LifecycleTests(unittest.TestCase):
         client = NexSmsClient(api_key="k")
         with (
             patch.object(client, "get_status", return_value={"status": "WAIT_CODE"}),
-            patch("sms_tool.nexsms.time.sleep"),
+            patch("sms_tool.phone.nexsms.time.sleep"),
         ):
             self.assertIsNone(client.wait_for_code("+233555123456", timeout=0, poll_interval=1))
 
@@ -510,7 +512,7 @@ class LifecycleTests(unittest.TestCase):
                     {"status": "OK", "code": "999999"},
                 ],
             ),
-            patch("sms_tool.nexsms.time.sleep"),
+            patch("sms_tool.phone.nexsms.time.sleep"),
         ):
             self.assertEqual("999999", client.wait_for_code("+233555123456", timeout=30, poll_interval=1))
 
@@ -519,14 +521,14 @@ class LifecycleTests(unittest.TestCase):
         the caller, whose reaction is to cancel -- which would discard a number
         that had already delivered its code."""
         client = NexSmsClient(api_key="k")
-        with patch("sms_tool.nexsms._requests") as transport:
+        with patch("sms_tool.phone.nexsms._requests") as transport:
             self.assertTrue(client.complete("+233555123456"))
         transport.get.assert_not_called()
         transport.post.assert_not_called()
 
     def test_request_additional_is_a_no_op_that_reports_ready(self):
         client = NexSmsClient(api_key="k")
-        with patch("sms_tool.nexsms._requests") as transport:
+        with patch("sms_tool.phone.nexsms._requests") as transport:
             self.assertTrue(client.request_additional("+233555123456"))
         transport.get.assert_not_called()
         transport.post.assert_not_called()
@@ -537,7 +539,7 @@ class LifecycleTests(unittest.TestCase):
 
     def test_cancel_posts_the_digits_only_number(self):
         client = NexSmsClient(api_key="k")
-        with patch("sms_tool.nexsms._requests.post", return_value=_reply({"code": 0, "data": True})) as post:
+        with patch("sms_tool.phone.nexsms._requests.post", return_value=_reply({"code": 0, "data": True})) as post:
             self.assertTrue(client.cancel("+233555123456"))
         self.assertTrue(post.call_args[0][0].endswith("/api/close/activation"))
         self.assertEqual({"phoneNumber": "233555123456"}, post.call_args.kwargs["json"])
@@ -548,18 +550,18 @@ class LifecycleTests(unittest.TestCase):
         non-blocking, and an exception would abort the whole round."""
         client = NexSmsClient(api_key="k")
         with patch(
-            "sms_tool.nexsms._requests.post", return_value=_reply({"code": 7, "message": "号码创建时间小于2分钟"})
+            "sms_tool.phone.nexsms._requests.post", return_value=_reply({"code": 7, "message": "号码创建时间小于2分钟"})
         ):
             self.assertFalse(client.cancel("+233555123456"))
 
     def test_cancel_reports_failure_on_a_transport_error(self):
         client = NexSmsClient(api_key="k")
-        with patch("sms_tool.nexsms._requests.post", side_effect=requests.ConnectionError("boom")):
+        with patch("sms_tool.phone.nexsms._requests.post", side_effect=requests.ConnectionError("boom")):
             self.assertFalse(client.cancel("+233555123456"))
 
     def test_cancel_without_a_handle_does_not_call_the_vendor(self):
         client = NexSmsClient(api_key="k")
-        with patch("sms_tool.nexsms._requests.post") as post:
+        with patch("sms_tool.phone.nexsms._requests.post") as post:
             self.assertFalse(client.cancel(""))
         post.assert_not_called()
 

@@ -70,7 +70,6 @@ REGISTRATION_PREFIXES = (
     "sms_provider",
     "smsbower",
     "nexsms",
-    "omakse",
 )
 
 #: Second path component -> payment lane.
@@ -90,7 +89,6 @@ PAYMENT_PREFIXES = (
     "gcash_",
     "wallet_",
     "pp_link_helpers",
-    "gen_pp_link",
     "checkout_contract",
     "promotion_states",
     "regional_payment_adapter",

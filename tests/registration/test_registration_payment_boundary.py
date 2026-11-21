@@ -9,7 +9,7 @@ REGISTRATION_MODULES = (
     "sms_tool/registration/state.py",
     "sms_tool/registration/progress.py",
     "sms_tool/registration/concurrency.py",
-    "sms_tool/account_creation.py",
+    "sms_tool/registration/account_creation.py",
 )
 FORBIDDEN_PAYMENT_MODULES = {
     "payment_batch",

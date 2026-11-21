@@ -1,6 +1,6 @@
-"""Behaviour tests for ``sms_tool/sms_provider_adapter.py`` (2026-09-03, round 7).
+"""Behaviour tests for ``sms_tool/phone/sms_provider_adapter.py`` (2026-09-03, round 7).
 
-``sms_provider_adapter.py`` is the **adapter dispatch key** for the phone-verification
+``phone/sms_provider_adapter.py`` is the **adapter dispatch key** for the phone-verification
 path: ``phone_reuse._sms_provider_adapter`` calls :func:`provider_name` to decide
 which adapter owns a slot. Until 2026-09-22 that dispatch had two branches -- a
 rental adapter and a static-URL adapter whose ``complete``/``cancel`` were
@@ -19,7 +19,7 @@ of :func:`provider_name` still matter, all pinned below:
 3. Its fallback is the **default provider**, not a mode marker. A slot with no
    provider is an ordinary rental for the default vendor.
 
-There is **no network and no I/O** in ``sms_provider_adapter.py`` -- everything in
+There is **no network and no I/O** in ``phone/sms_provider_adapter.py`` -- everything in
 ``ProviderNameTests``, ``AdapterProviderPropertyTests`` and ``LifecycleTests``
 is pure. ``DispatcherTests`` imports ``phone_reuse`` and therefore touches the
 config singleton, but still performs no I/O.
@@ -29,7 +29,8 @@ from __future__ import annotations
 
 import unittest
 
-from sms_tool import sms_provider_adapter, sms_providers
+from sms_tool.phone import sms_provider_adapter
+from sms_tool.phone import sms_providers
 
 
 class _Slot:

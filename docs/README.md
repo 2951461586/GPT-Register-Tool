@@ -187,19 +187,19 @@ Directory layout (since 2026-09-06):
     驱动接入在 `sms_tool/registration_drivers/`（`base.py` 注册表 +
     `external_sessions/` 子包）；`playwright.py` 只是公共 API 薄壳。
   - 协议（HTTP 直连）注册流程改动落在 `sms_tool/registration/handlers.py`、
-    `sms_tool/registration/state.py`、`sms_tool/otp_strategy.py`、
-    `sms_tool/account_creation.py`、`sms_tool/auth_flow/`（自 2026-09 起
-    是包，不是 `auth_flow.py`）、`sms_tool/auth_headers.py` 等 focused modules；
+    `sms_tool/registration/state.py`、`sms_tool/registration/otp_strategy.py`、
+    `sms_tool/registration/account_creation.py`、`sms_tool/auth_flow/`（自 2026-09 起
+    是包，不是 `auth_flow.py`）、`sms_tool/transport/auth_headers.py` 等 focused modules；
     `sms_tool/registration/orchestrator.py` 是入口模块（不是包）：负责运行配置解析、
     驱动选择、`run_email` / `run_batch` 分派，以及按调用绑定
     `RegistrationOperations`；阶段顺序与阶段实现分别在
     `registration/handlers.py` 与同目录的 stage 模块。
-  - 注册批次、并发与取消落在 `batch_runner.py`、`registration/pulse.py`、
+  - 注册批次、并发与取消落在 `registration/batch_runner.py`、`registration/pulse.py`、
     `registration/concurrency.py`、`registration/cancel.py`；结果装配统一走
     `registration.result.build_registration_result`。
   - 邮箱逻辑仍在 `mailbox/router.py`、`providers/`、`mailbox/service.py` 等模块；
-    `k12_*`、`agent_identity.py`、`importers/sub2api.py` 保持原有归属。
-- 新增 Agent Identity、SUB2API、导入导出逻辑时，在 `agent_identity.py`、
+    `k12_*`、`importers/agent_identity.py`、`importers/sub2api.py` 保持原有归属。
+- 新增 Agent Identity、SUB2API、导入导出逻辑时，在 `importers/agent_identity.py`、
   `importers/sub2api.py`、`session/converter.py` 中落实现，不侵入注册或支付模块。
 
 当前专题：[注册架构](current/registration-architecture.md)、

@@ -1,4 +1,4 @@
-"""Behaviour tests for ``sms_tool/pp_link_helpers.py`` (round-5 audit target).
+"""Behaviour tests for ``sms_tool/payment/pp_link_helpers.py`` (round-5 audit target).
 
 Why this file exists
 --------------------
@@ -18,7 +18,7 @@ import re
 
 import pytest
 
-from sms_tool.pp_link_helpers import (
+from sms_tool.payment.pp_link_helpers import (
     BILLING_ADDRESS_POOLS,
     BILLING_DATA,
     PAYPAL_BA_RE,

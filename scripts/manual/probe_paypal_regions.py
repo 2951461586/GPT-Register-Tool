@@ -33,7 +33,7 @@ import uuid
 from typing import Any
 
 from sms_tool.account_seed import extract_access_token, load_account_seed
-from sms_tool.gen_pp_link import (
+from sms_tool.paypal_link.gen_link import (
     CHATGPT_TIMEOUT,
     CURRENCY_MAP,
     DEFAULT_CONFIG_PATH,
@@ -50,7 +50,7 @@ from sms_tool.gen_pp_link import (
 )
 from sms_tool.storage import list_paypal_accounts
 
-# Regions that have both billing data and a currency mapping in gen_pp_link.
+# Regions that have both billing data and a currency mapping in paypal_link.gen_link.
 DEFAULT_REGIONS = ("US", "JP", "TR", "GB", "DE", "AU", "SG", "TH", "CA", "NZ", "IE", "FR")
 
 

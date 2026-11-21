@@ -1,0 +1,60 @@
+<Window x:Class="SmsWorkbench.Dialogs.ExportCompleteDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:loc="clr-namespace:SmsWorkbench.Localization"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="{loc:Tr Key='一键导出'}"
+        Width="520"
+        MinWidth="460"
+        SizeToContent="Height"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource AppBg}">
+  <Grid Margin="18">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+    </Grid.RowDefinitions>
+
+    <StackPanel Grid.Row="0" Margin="0,0,0,14">
+      <TextBlock Text="{loc:Tr Key='导出完成'}"
+                 FontSize="{StaticResource Type.Title.Size}"
+                 FontWeight="SemiBold"
+                 Foreground="{DynamicResource TextMain}"/>
+      <TextBlock x:Name="DescriptionTextBlock"
+                 TextWrapping="Wrap"
+                 LineHeight="20"
+                 Margin="0,6,0,0"
+                 Foreground="{DynamicResource TextSub}"/>
+    </StackPanel>
+
+    <Border Grid.Row="1"
+            Background="{DynamicResource PanelBg}"
+            BorderBrush="{DynamicResource Line}"
+            BorderThickness="1"
+            CornerRadius="{StaticResource Corner.Lg}"
+            Padding="12"
+            Margin="0,0,0,16">
+      <StackPanel>
+        <TextBlock x:Name="CountsTextBlock"
+                   FontWeight="SemiBold"
+                   Foreground="{DynamicResource TextMain}"/>
+        <TextBlock x:Name="PathTextBlock"
+                   TextWrapping="Wrap"
+                   Margin="0,8,0,0"
+                   Foreground="{DynamicResource TextSub}"/>
+      </StackPanel>
+    </Border>
+
+    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+      <Button Content="{loc:Tr Key='打开目录'}"
+              Width="92"
+              Style="{StaticResource PrimaryButton}"
+              Click="OpenDir_Click"/>
+      <Button Content="{loc:Tr Key='关闭'}"
+              Width="76"
+              Margin="8,0,0,0"
+              Click="Close_Click"/>
+    </StackPanel>
+  </Grid>
+</Window>

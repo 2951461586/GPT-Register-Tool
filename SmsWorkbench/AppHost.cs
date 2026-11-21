@@ -1,7 +1,3 @@
-// Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
-#nullable enable
-
 using Serilog.Events;
 
 namespace SmsWorkbench
@@ -60,6 +56,12 @@ namespace SmsWorkbench
                     services.AddSingleton<IWorkspaceBackupService, WorkspaceBackupService>();
                     services.AddSingleton<ITrayIconService, TrayIconService>();
                     services.AddSingleton<IGlobalHotkeyService, GlobalHotkeyService>();
+                    services.AddSingleton<ShellViewModel>();
+                    services.AddSingleton<PoolRefreshCoordinator>();
+                    services.AddSingleton<ThemeCoordinator>();
+                    services.AddSingleton<BackendBatchCoordinator>();
+                    services.AddSingleton<RegistrationWorkflowCoordinator>();
+                    services.AddSingleton<AccountExportCoordinator>();
                     services.AddSingleton<MainWindow>();
                 })
                 .Build();

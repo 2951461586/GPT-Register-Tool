@@ -1,0 +1,12 @@
+{
+  "package": "observability",
+  "layer": 5,
+  "modules": {
+    "diagnostics": "diagnostics",
+    "logging_setup": "logging_setup",
+    "operator_output": "operator_output",
+    "stdout_mirror": "stdout_mirror",
+    "telemetry": "telemetry",
+    "token_telemetry": "token_telemetry"
+  }
+}

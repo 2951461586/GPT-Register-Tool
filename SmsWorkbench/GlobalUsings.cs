@@ -1,7 +1,3 @@
-// Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
-#nullable enable
-
 // Global using directives — shared across all MainWindow partial class files.
 global using System;
 global using System.Collections.Generic;
@@ -28,3 +24,9 @@ global using FluentWindow = Wpf.Ui.Controls.FluentWindow;
 global using Microsoft.Extensions.DependencyInjection;
 global using Microsoft.Extensions.Hosting;
 global using Serilog;
+global using SmsWorkbench.Dialogs;
+global using SmsWorkbench.Interop;
+global using SmsWorkbench.Models;
+global using SmsWorkbench.Services;
+global using SmsWorkbench.ViewModels;
+global using SmsWorkbench.Views;

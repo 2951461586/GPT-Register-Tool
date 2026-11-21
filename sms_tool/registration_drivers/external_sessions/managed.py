@@ -14,7 +14,7 @@ from urllib.parse import unquote, urlencode, urljoin, urlsplit
 from curl_cffi import requests as curl_requests
 
 from ...kernel.driver_env import driver_config as _driver_config
-from ...phone_proxy import normalize_proxy_url
+from ...phone.phone_proxy import normalize_proxy_url
 from ..base import BrowserRegistrationError
 from ..browser_flow.decisions import DEFAULT_VIEWPORT_HEIGHT, DEFAULT_VIEWPORT_WIDTH
 from ..browser_session import PlaywrightBrowserSession
@@ -123,6 +123,7 @@ class ConnectedPlaywrightSession(PlaywrightBrowserSession):
             label="connected-browser",
             provider_prefix=self.__class__.__name__.replace("BrowserSession", "").lower(),
         )
+        self._attach_data_saver()
 
     def _close_connection(self, *, keep_browser_open: bool = False) -> None:
         if not keep_browser_open:
@@ -146,7 +147,7 @@ class ConnectedPlaywrightSession(PlaywrightBrowserSession):
 
 class CloakBrowserSession(ConnectedPlaywrightSession):
     def __init__(self, *, config: Mapping[str, Any], **kwargs: Any) -> None:
-        super().__init__(**kwargs)
+        super().__init__(data_saver_config=config, **kwargs)
         self.driver_config = _driver_config(config, "cloak")
         self._persistent = False
 
@@ -206,6 +207,7 @@ class CloakBrowserSession(ConnectedPlaywrightSession):
                 label="cloak",
                 provider_prefix="cloak",
             )
+            self._attach_data_saver()
             return self
         except BrowserRegistrationError:
             self.close()
@@ -277,7 +279,7 @@ class CamoufoxBrowserSession(ConnectedPlaywrightSession):
     renew_account_context = None  # type: ignore[assignment]
 
     def __init__(self, *, config: Mapping[str, Any], **kwargs: Any) -> None:
-        super().__init__(**kwargs)
+        super().__init__(data_saver_config=config, **kwargs)
         self.driver_config = _driver_config(config, "camoufox")
         self._persistent = False
         self._camoufox_ctx = None
@@ -298,12 +300,23 @@ class CamoufoxBrowserSession(ConnectedPlaywrightSession):
         # pattern in paypal_auto._try_browser_pay_camoufox.
         browser_proxy = ""
         closer = None
+        proxy_bridge = None
         using_bridge = False
         if raw_proxy:
-            from ...proxy.bridge import proxy_for_browser, needs_bridge
+            from ...proxy.bridge import needs_bridge, open_browser_proxy_bridge, proxy_for_browser
 
-            using_bridge = needs_bridge(raw_proxy)
-            browser_proxy, closer = proxy_for_browser(raw_proxy)
+            if self.data_saver_config.enabled:
+                force_bridge = bool(self.data_saver_config.blocked_proxy_hosts)
+                browser_proxy, closer, proxy_bridge = open_browser_proxy_bridge(
+                    raw_proxy,
+                    blocked_hosts=self.data_saver_config.blocked_proxy_hosts,
+                    connect_retries=self.data_saver_config.proxy_connect_retries,
+                    force_bridge=force_bridge,
+                )
+                using_bridge = proxy_bridge is not None
+            else:
+                using_bridge = needs_bridge(raw_proxy)
+                browser_proxy, closer = proxy_for_browser(raw_proxy)
         self._proxy_bridge_closer = closer
         # Camoufox's GeoIP detection cannot work through a local SOCKS5 bridge
         # (it fails with "InvalidIP: Failed to get IP address").  When bridging,
@@ -403,6 +416,7 @@ class CamoufoxBrowserSession(ConnectedPlaywrightSession):
                 label="camoufox",
                 provider_prefix="camoufox",
             )
+            self._attach_data_saver(bridge=proxy_bridge)
             self._launch_succeeded = True
             return self
         except BrowserRegistrationError:
@@ -500,7 +514,7 @@ class CamoufoxBrowserSession(ConnectedPlaywrightSession):
 
 class RoxyBrowserSession(ConnectedPlaywrightSession):
     def __init__(self, *, config: Mapping[str, Any], **kwargs: Any) -> None:
-        super().__init__(**kwargs)
+        super().__init__(data_saver_config=config, **kwargs)
         self.driver_config = _driver_config(config, "roxy")
         self.api_base = ""
         self.profile_id = ""

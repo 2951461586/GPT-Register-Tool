@@ -10,7 +10,7 @@ import unittest
 from typing import Any, cast
 from unittest.mock import patch
 
-from sms_tool import gen_pp_link
+from sms_tool.paypal_link import gen_link as gen_pp_link
 from sms_tool.paypal import extract as paypal_extract
 from sms_tool.payment.contracts import payment_retry_allowed
 
@@ -154,7 +154,7 @@ class ApproveUnknownContractTests(unittest.TestCase):
 
         config = {"chatgpt": {}, "protocol_payments": {"enabled_methods": ["paypal"]}}
         with patch.object(payment_link_manager, "_safe_persist_run", lambda result: None):
-            with patch("sms_tool.gen_pp_link.generate_pp_link", side_effect=boom):
+            with patch("sms_tool.paypal_link.gen_link.generate_pp_link", side_effect=boom):
                 return payment_link_manager.generate_payment_link(
                     access_token="at",
                     payment_method="paypal",

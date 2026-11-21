@@ -11,7 +11,7 @@ from ..payment.catalog import (
     validate_catalog_consistency,
 )
 from ..payment.adapters import FunctionPaymentAdapter, PaymentAdapterRegistry
-from ..payment.operation import (
+from ..operation_journal import (
     PaymentOperationConflict,
     PaymentOperationStore,
     conflict_result as payment_operation_conflict_result,
@@ -82,7 +82,7 @@ def build_default_payment_registry() -> PaymentAdapterRegistry:
     def paypal_runner(
         *, access_token: str, proxy: Any = None, auth_context: dict[str, Any] | None = None, **kwargs: Any
     ) -> dict[str, Any]:
-        from ..gen_pp_link import generate_pp_link
+        from ..paypal_link.gen_link import generate_pp_link
 
         failure = _assert_function_adapter_egress(
             str(kwargs.get("payment_method") or "paypal"), kwargs, kwargs.get("runtime_config")

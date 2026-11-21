@@ -1,10 +1,6 @@
-// Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
-#nullable enable
-
 using SmsWorkbench.Localization;
 
-namespace SmsWorkbench
+namespace SmsWorkbench.Views
 {
     public partial class MainWindow
     {
@@ -103,7 +99,7 @@ namespace SmsWorkbench
             string path = await accountDetail.ResolveJsonPathAsync(row, ct);
             if (string.IsNullOrWhiteSpace(path))
             {
-                MessageBox.Show(Loc.T("未找到该账号对应的 JSON 文件。"), Loc.T("打开源文件"), MessageBoxButton.OK, MessageBoxImage.Information);
+                ShowThemedInfoDialog(Loc.T("打开源文件"), Loc.T("未找到该账号对应的 JSON 文件。"));
                 return;
             }
             OpenPath(path);

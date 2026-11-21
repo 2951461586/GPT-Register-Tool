@@ -446,19 +446,58 @@ function createElementNode(tagName, ownerDocument, rect = createDomRect()) {
 }
 
 
+function canonicalTimeZone(timeZone, NativeDateTimeFormat = Intl.DateTimeFormat) {
+  const target = String(timeZone || "").trim();
+  if (!target) return "";
+  try {
+    return new NativeDateTimeFormat("en-US", { timeZone: target }).resolvedOptions().timeZone || target;
+  } catch {
+    return target;
+  }
+}
+
+function resolveTimezoneParen(options, NativeDateTimeFormat = Intl.DateTimeFormat) {
+  const explicit = String(options.timezoneName || "").trim();
+  if (explicit) return explicit;
+  const target = String(options.timeZone || "").trim();
+  if (!target) return "";
+  const locale = String(options.language || "en-US").trim() || "en-US";
+  try {
+    const part = new NativeDateTimeFormat(locale, {
+      timeZone: target,
+      timeZoneName: "long",
+    })
+      .formatToParts(new Date())
+      .find((entry) => entry.type === "timeZoneName");
+    return part && part.value ? part.value : "";
+  } catch {
+    return "";
+  }
+}
+
 function createIntlObject(options) {
   const intlObject = Object.create(Intl);
   const NativeDateTimeFormat = Intl.DateTimeFormat;
+  const NativeNumberFormat = Intl.NumberFormat;
+  const defaultLocales =
+    Array.isArray(options.languages) && options.languages.length
+      ? options.languages.slice()
+      : options.language || "en-US";
+  const resolvedLocale = String(options.language || "en-US").trim() || "en-US";
+  const canonicalTz = canonicalTimeZone(options.timeZone, NativeDateTimeFormat);
+
   function DateTimeFormatMock(locales, formatOptions = {}) {
     const mergedOptions = { ...(formatOptions || {}) };
-    if (options.timeZone) mergedOptions.timeZone = options.timeZone;
-    const fmt = new NativeDateTimeFormat(locales || options.languages || options.language, mergedOptions);
+    if (options.timeZone && !mergedOptions.timeZone) mergedOptions.timeZone = options.timeZone;
+    const fmt = new NativeDateTimeFormat(locales != null ? locales : defaultLocales, mergedOptions);
     const nativeResolvedOptions = fmt.resolvedOptions.bind(fmt);
     Object.defineProperty(fmt, "resolvedOptions", {
       value: () => {
         const resolved = nativeResolvedOptions();
-        if (options.timeZone) resolved.timeZone = options.timeZone;
-        if (options.language) resolved.locale = options.language;
+        if (canonicalTz && !(formatOptions && formatOptions.timeZone)) {
+          resolved.timeZone = canonicalTz;
+        }
+        if (options.language && locales == null) resolved.locale = resolvedLocale;
         return resolved;
       },
     });
@@ -466,16 +505,47 @@ function createIntlObject(options) {
   }
   DateTimeFormatMock.prototype = NativeDateTimeFormat.prototype;
   Object.setPrototypeOf(DateTimeFormatMock, NativeDateTimeFormat);
+  if (typeof NativeDateTimeFormat.supportedLocalesOf === "function") {
+    DateTimeFormatMock.supportedLocalesOf = NativeDateTimeFormat.supportedLocalesOf.bind(NativeDateTimeFormat);
+  }
   intlObject.DateTimeFormat = DateTimeFormatMock;
+
+  function NumberFormatMock(locales, formatOptions = {}) {
+    const fmt = new NativeNumberFormat(locales != null ? locales : defaultLocales, formatOptions);
+    const nativeResolvedOptions = fmt.resolvedOptions.bind(fmt);
+    Object.defineProperty(fmt, "resolvedOptions", {
+      value: () => {
+        const resolved = nativeResolvedOptions();
+        if (options.language && locales == null) resolved.locale = resolvedLocale;
+        return resolved;
+      },
+    });
+    return fmt;
+  }
+  NumberFormatMock.prototype = NativeNumberFormat.prototype;
+  Object.setPrototypeOf(NumberFormatMock, NativeNumberFormat);
+  if (typeof NativeNumberFormat.supportedLocalesOf === "function") {
+    NumberFormatMock.supportedLocalesOf = NativeNumberFormat.supportedLocalesOf.bind(NativeNumberFormat);
+  }
+  intlObject.NumberFormat = NumberFormatMock;
   return intlObject;
 }
 
 function createDateConstructor(options) {
   const NativeDate = Date;
-  const format = (date) => {
-    const text = NativeDate.prototype.toString.call(date);
-    const name = String(options.timezoneName || "").trim();
-    return name ? text.replace(/\s*\([^)]*\)$/, ` (${name})`) : text;
+  const tzParen = resolveTimezoneParen(options);
+  const defaultLocale = String(options.language || "en-US").trim() || "en-US";
+  const targetTimeZone = String(options.timeZone || "").trim();
+  const patchZoneParen = (text) => (tzParen ? text.replace(/\s*\([^)]*\)$/, ` (${tzParen})`) : text);
+  const format = (date) => patchZoneParen(NativeDate.prototype.toString.call(date));
+  const formatTime = (date) => patchZoneParen(NativeDate.prototype.toTimeString.call(date));
+  const withLocaleAndZone = (args) => {
+    const locale = args.length > 0 && args[0] != null ? args[0] : defaultLocale;
+    const rawOpts = args.length > 1 && args[1] != null ? args[1] : undefined;
+    if (!targetTimeZone) return rawOpts !== undefined ? [locale, rawOpts] : [locale];
+    const mergedOpts = { ...(rawOpts || {}) };
+    if (!mergedOpts.timeZone) mergedOpts.timeZone = targetTimeZone;
+    return [locale, mergedOpts];
   };
   function BrowserDate(...args) {
     if (!new.target) return format(new NativeDate());
@@ -486,9 +556,57 @@ function createDateConstructor(options) {
   BrowserDate.prototype = Object.create(NativeDate.prototype, {
     constructor: { value: BrowserDate, configurable: true, writable: true },
     toString: { value() { return format(this); }, configurable: true, writable: true },
+    toTimeString: { value() { return formatTime(this); }, configurable: true, writable: true },
+    toLocaleString: {
+      value(...args) {
+        return NativeDate.prototype.toLocaleString.apply(this, withLocaleAndZone(args));
+      },
+      configurable: true,
+      writable: true,
+    },
+    toLocaleDateString: {
+      value(...args) {
+        return NativeDate.prototype.toLocaleDateString.apply(this, withLocaleAndZone(args));
+      },
+      configurable: true,
+      writable: true,
+    },
+    toLocaleTimeString: {
+      value(...args) {
+        return NativeDate.prototype.toLocaleTimeString.apply(this, withLocaleAndZone(args));
+      },
+      configurable: true,
+      writable: true,
+    },
   });
   Object.setPrototypeOf(BrowserDate, NativeDate);
   return BrowserDate;
+}
+
+function applyVmLocaleDefaults(vmContext, options) {
+  const defaultLocale = String(options.language || "en-US").trim() || "en-US";
+  const script = `(() => {
+    const defaultLocale = ${JSON.stringify(defaultLocale)};
+    const withLocale = (args) => (args.length && args[0] != null) ? args : [defaultLocale, ...args.slice(1)];
+    const patch = (proto, name) => {
+      if (!proto || typeof proto[name] !== "function") return;
+      const orig = proto[name];
+      Object.defineProperty(proto, name, {
+        configurable: true,
+        writable: true,
+        value: function (...args) { return orig.apply(this, withLocale(args)); },
+      });
+    };
+    // Patch the VM realm's own intrinsic prototypes via __proto__ on
+    // literals, NOT Object.getPrototypeOf(0) -- Object in this context
+    // is the host realm's Object, so Object.getPrototypeOf(0) would box 0
+    // in the host realm instead of the VM realm.
+    patch((0).__proto__, "toLocaleString");
+    try { patch((BigInt(0)).__proto__, "toLocaleString"); } catch {}
+    patch(([]).__proto__, "toLocaleString");
+    try { patch(("").__proto__, "localeCompare"); } catch {}
+  })();`;
+  vm.runInContext(script, vmContext, { filename: "sentinel-locale-defaults.js" });
 }
 
 function createPerformanceObserver(observerSet) {
@@ -1382,9 +1500,7 @@ function createBrowserContext(options) {
   window.frames = window;
   document.defaultView = window;
 
-  return {
-    iframeNode: () => iframeNode,
-    context: vm.createContext({
+  const vmContext = vm.createContext({
       window,
       self: window,
       globalThis: window,
@@ -1449,7 +1565,12 @@ function createBrowserContext(options) {
       webkitRequestAnimationFrame: window.webkitRequestAnimationFrame,
       __privateStripeFrame8094: window.__privateStripeFrame8094,
       onpageswap: window.onpageswap,
-    }),
+    });
+  applyVmLocaleDefaults(vmContext, options);
+
+  return {
+    iframeNode: () => iframeNode,
+    context: vmContext,
     clearTimers() {
       for (const id of [...managedTimers]) managedClearTimeout(id);
     },

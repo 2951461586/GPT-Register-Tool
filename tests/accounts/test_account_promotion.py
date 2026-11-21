@@ -504,7 +504,7 @@ def test_promotion_explicit_proxy_wins_over_pool():
 from pathlib import Path as _Path
 
 from sms_tool.accounts.account_promotion import promotion_status_code
-from sms_tool.promotion_states import promotion_marker_is_stale
+from sms_tool.payment.promotion_states import promotion_marker_is_stale
 
 _PROMOTION_FIXTURE = _Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "promotion_status_cases.json"
 

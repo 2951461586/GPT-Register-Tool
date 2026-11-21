@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import cast
 from unittest import mock
 
-from sms_tool.mailbox import icloud_url as mailbox_icloud_url
+from sms_tool.providers import mailbox_icloud_url
 from sms_tool.mailbox import router as mailbox
 from sms_tool.mailbox.types import MailboxAccount
 

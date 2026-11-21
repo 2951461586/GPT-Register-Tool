@@ -8,9 +8,9 @@ import threading
 from typing import Any, Mapping
 from urllib.parse import urljoin, urlsplit
 
-from ..checkout_contract import CHECKOUT_PATH, CHECKOUT_URL, STRIPE_INIT_URL
+from ..payment.checkout_contract import CHECKOUT_PATH, CHECKOUT_URL, STRIPE_INIT_URL
 from .provider import WALLET_METHODS, WalletProviderError, WalletTransportRequest
-from .. import endpoints
+from ..transport import endpoints
 
 
 PAYMENT_METHOD_URL = endpoints.STRIPE_API_BASE + "/v1/payment_methods"
@@ -70,7 +70,7 @@ class ChatGPTStripeWalletTransport:
         self._lock = threading.Lock()
 
     def create_checkout(self, request: WalletTransportRequest) -> Mapping[str, Any]:
-        from .. import gen_pp_link
+        from ..payment import wire as payment_wire
 
         proxy = self._stage_proxy(request)
         cookie_header = str(request.auth_context.get("cookie_header") or "")
@@ -86,7 +86,7 @@ class ChatGPTStripeWalletTransport:
         if device_id:
             extra_headers["OAI-Device-Id"] = device_id
         try:
-            response = gen_pp_link._checkout_post(
+            response = payment_wire._checkout_post(
                 CHECKOUT_URL,
                 dict(request.payload),
                 request.access_token,
@@ -100,13 +100,13 @@ class ChatGPTStripeWalletTransport:
         return self._json_response(response, request.stage)
 
     def update_checkout(self, request: WalletTransportRequest) -> Mapping[str, Any]:
-        from .. import gen_pp_link
+        from ..payment import wire as payment_wire
 
         cookie_header = str(request.auth_context.get("cookie_header") or "")
         proxy = self._stage_proxy(request)
         referer = f"{endpoints.CHATGPT_BASE}/checkout/{request.processor_entity}/{request.checkout_session_id}"
         try:
-            response = gen_pp_link._checkout_post(
+            response = payment_wire._checkout_post(
                 UPDATE_URL,
                 dict(request.payload),
                 request.access_token,
@@ -151,13 +151,13 @@ class ChatGPTStripeWalletTransport:
         return self._json_response(response, request.stage)
 
     def approve_checkout(self, request: WalletTransportRequest) -> Mapping[str, Any]:
-        from .. import gen_pp_link
+        from ..payment import wire as payment_wire
 
         cookie_header = str(request.auth_context.get("cookie_header") or "")
         proxy = self._stage_proxy(request)
         referer = f"{endpoints.CHATGPT_BASE}/checkout/{request.processor_entity}/{request.checkout_session_id}"
         try:
-            response = gen_pp_link._checkout_post(
+            response = payment_wire._checkout_post(
                 APPROVE_URL,
                 dict(request.payload),
                 request.access_token,
@@ -238,14 +238,14 @@ class ChatGPTStripeWalletTransport:
         )
 
     def _session(self, request: WalletTransportRequest) -> Any:
-        from .. import gen_pp_link
+        from ..payment import wire as payment_wire
 
         proxy = self._stage_proxy(request)
         key = (request.flow_id, proxy)
         with self._lock:
             session = self._sessions.get(key)
             if session is None:
-                session = gen_pp_link._new_session(proxy)
+                session = payment_wire._new_session(proxy)
                 self._sessions[key] = session
         return session
 

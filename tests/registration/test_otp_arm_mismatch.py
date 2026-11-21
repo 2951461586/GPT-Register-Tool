@@ -21,7 +21,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from sms_tool.auth_state import passwordless_arm_armed
+from sms_tool.transport.auth_state import passwordless_arm_armed
 from sms_tool.kernel.error_classification import classify_error
 from sms_tool.kernel.failure_registry import OTP_ARM_MISMATCH_MARKER, OTP_UNDISPATCHED_MARKER
 from sms_tool.registration.handlers import RegistrationAbort, RegistrationEmailWorkflow

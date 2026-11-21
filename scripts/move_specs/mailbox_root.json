@@ -1,0 +1,7 @@
+{
+  "package": "mailbox",
+  "layer": 3,
+  "modules": {
+    "mail_otp": "mail_otp"
+  }
+}

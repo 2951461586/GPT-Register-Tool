@@ -1,19 +1,15 @@
 from __future__ import annotations
 
 import contextlib
-from ..checkout_contract import PLUS_TRIAL_CAMPAIGN_ID
 from ..payment.wire import CURRENCY_MAP, _new_session
 from ..proxy.entry import redact_proxy_text
-from ..pp_link_helpers import CHATGPT_TIMEOUT, DEFAULT_STRIPE_PK, DEFAULT_TIMEOUT, STRIPE_VERSION
 from ..payment import egress as payment_egress
 from ..geo.resolver import resolve_proxy_geo
-from ..proxy.edge_probe import CHATGPT_CHECKOUT_PATH, probe_openai_edge
+from ..proxy.edge_probe import probe_openai_edge
 from ..proxy.entry import rotate_session
 from typing import Any
 from collections.abc import Mapping
 from types import SimpleNamespace
-import json
-import time
 import uuid
 from ._extract import (
     _upi_custom_payment_method_id,
@@ -29,15 +25,9 @@ from ._extract import (
 )
 from .constants import (
     DEFAULT_CONFIG_PATH,
-    STRIPE_PAYMENT_PAGE_CONFIRM_URL_T,
-    STRIPE_PAYMENT_PAGE_GET_URL_T,
     UPI_APPROVAL_MAX_ATTEMPTS,
-    UPI_CHECKOUT_APPROVE_URL,
-    UPI_CHECKOUT_CONFIRM_URL,
-    UPI_CHECKOUT_URL,
     UPI_LOCAL_MANDATE_ENABLED,
     UPI_QR_POLL_MAX_ATTEMPTS,
-    UPI_SENTINEL_APPROVAL_FLOW,
 )
 from .env import _emit, _env_bool, _env_int, _env_str, _float_env
 from ..payment.upi_identity import AccountIdentity as IdentityLike
@@ -95,7 +85,6 @@ from .sentinel import (
 from .extract import _upi_hydrate_qr_data, _upi_resolve_external_redirect
 from .flows import _upi_run_cpmt_flow, _upi_run_oaics_flow
 from .verify import (
-    INCONCLUSIVE as UPI_VERIFY_INCONCLUSIVE,
     verify_instructions_verdict as _upi_verify_instructions_verdict,
 )
 
@@ -103,14 +92,12 @@ from .verify import (
 from . import india_exit
 from .india_exit import (
     ExitOps,
-    _UPI_ADMISSION_PATHS,
     _upi_india_exit_attempts,
     _upi_india_exit_probe_enabled,
     _upi_india_exit_timeout,
 )
 from .operations import UpiOperations, build_upi_operations
 from .stage_config import (
-    _UPI_PRECONFIRM_RETRY_CODES,
     _upi_link_unverified_contract,
     _upi_repeat_tax_region,
     _upi_round_retryable,

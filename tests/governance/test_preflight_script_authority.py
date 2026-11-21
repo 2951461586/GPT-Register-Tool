@@ -24,7 +24,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from sms_tool.auth_headers import (
+from sms_tool.transport.auth_headers import (
     AUTH_FINGERPRINT_PROFILES,
     CURL_CFFI_MAX_MINOR,
     CURL_CFFI_MIN_MINOR,

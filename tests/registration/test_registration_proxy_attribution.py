@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from sms_tool.batch_runner import RegistrationProxyPool, run_batch_impl
+from sms_tool.registration.batch_runner import RegistrationProxyPool, run_batch_impl
 
 
 class _NoopGuard:
@@ -31,11 +31,11 @@ def test_internal_failure_does_not_write_proxy_health():
         }
 
     with (
-        patch("sms_tool.batch_runner.CFG", {"email_registration": {}, "registration": {}}),
-        patch("sms_tool.batch_runner.ProxyHealthTracker") as tracker,
-        patch("sms_tool.batch_runner.RegistrationRetryGuard", _NoopGuard),
-        patch("sms_tool.batch_runner.get_account_records", return_value={}),
-        patch("sms_tool.batch_runner.get_registration_checkpoints", return_value={}),
+        patch("sms_tool.registration.batch_runner.CFG", {"email_registration": {}, "registration": {}}),
+        patch("sms_tool.registration.batch_runner.ProxyHealthTracker") as tracker,
+        patch("sms_tool.registration.batch_runner.RegistrationRetryGuard", _NoopGuard),
+        patch("sms_tool.registration.batch_runner.get_account_records", return_value={}),
+        patch("sms_tool.registration.batch_runner.get_registration_checkpoints", return_value={}),
     ):
         results = run_batch_impl(
             count=1,
@@ -66,26 +66,26 @@ def test_protocol_result_carries_safe_proxy_audit():
 
     with (
         patch(
-            "sms_tool.batch_runner.CFG",
+            "sms_tool.registration.batch_runner.CFG",
             {"email_registration": {}, "registration": {"driver": "protocol"}},
         ),
         patch(
-            "sms_tool.batch_runner.select_registration_proxy_pool",
+            "sms_tool.registration.batch_runner.select_registration_proxy_pool",
             return_value=RegistrationProxyPool(
                 ["http://user:secret@proxy.invalid:8080"],
                 actual_countries={"http://user:secret@proxy.invalid:8080": "IN"},
             ),
         ),
         patch(
-            "sms_tool.batch_runner.RegistrationRetryGuard",
+            "sms_tool.registration.batch_runner.RegistrationRetryGuard",
             _NoopGuard,
         ),
         patch(
-            "sms_tool.batch_runner.get_account_records",
+            "sms_tool.registration.batch_runner.get_account_records",
             return_value={},
         ),
         patch(
-            "sms_tool.batch_runner.get_registration_checkpoints",
+            "sms_tool.registration.batch_runner.get_registration_checkpoints",
             return_value={},
         ),
     ):
@@ -147,21 +147,21 @@ def test_blocked_canary_rotates_the_pool_cursor_for_future_accounts():
         },
     }
     with (
-        patch("sms_tool.batch_runner.CFG", config),
+        patch("sms_tool.registration.batch_runner.CFG", config),
         patch(
-            "sms_tool.batch_runner.select_registration_proxy_pool",
+            "sms_tool.registration.batch_runner.select_registration_proxy_pool",
             side_effect=lambda pool, _fallback: pool,
         ),
         patch(
-            "sms_tool.batch_runner.RegistrationRetryGuard",
+            "sms_tool.registration.batch_runner.RegistrationRetryGuard",
             _NoopGuard,
         ),
         patch(
-            "sms_tool.batch_runner.get_account_records",
+            "sms_tool.registration.batch_runner.get_account_records",
             return_value={},
         ),
         patch(
-            "sms_tool.batch_runner.get_registration_checkpoints",
+            "sms_tool.registration.batch_runner.get_registration_checkpoints",
             return_value={},
         ),
     ):
@@ -217,17 +217,19 @@ def test_prewarmed_future_account_uses_rotated_proxy_after_blocked_canary():
     }
     pool = ["http://proxy-a.invalid:8080", "http://proxy-b.invalid:8080", "http://proxy-c.invalid:8080"]
     with (
-        patch("sms_tool.batch_runner.CFG", config),
-        patch("sms_tool.batch_runner.select_registration_proxy_pool", side_effect=lambda values, _: values),
-        patch("sms_tool.batch_runner.refresh_proxy_sid", side_effect=refresh),
+        patch("sms_tool.registration.batch_runner.CFG", config),
         patch(
-            "sms_tool.sentinel_tokens._extract_sentinel",
+            "sms_tool.registration.batch_runner.select_registration_proxy_pool", side_effect=lambda values, _: values
+        ),
+        patch("sms_tool.registration.batch_runner.refresh_proxy_sid", side_effect=refresh),
+        patch(
+            "sms_tool.registration.sentinel_tokens._extract_sentinel",
             side_effect=lambda **kwargs: {"prewarmed_for": kwargs["proxy"]},
         ),
-        patch("sms_tool.batch_runner.ProxyHealthTracker"),
-        patch("sms_tool.batch_runner.RegistrationRetryGuard", _NoopGuard),
-        patch("sms_tool.batch_runner.get_account_records", return_value={}),
-        patch("sms_tool.batch_runner.get_registration_checkpoints", return_value={}),
+        patch("sms_tool.registration.batch_runner.ProxyHealthTracker"),
+        patch("sms_tool.registration.batch_runner.RegistrationRetryGuard", _NoopGuard),
+        patch("sms_tool.registration.batch_runner.get_account_records", return_value={}),
+        patch("sms_tool.registration.batch_runner.get_registration_checkpoints", return_value={}),
     ):
         results = run_batch_impl(
             count=3,

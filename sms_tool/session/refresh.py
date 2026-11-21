@@ -8,9 +8,9 @@ from curl_cffi import requests as curl_requests
 from ..config import CFG
 from ..kernel.paths import output_dir
 from ..storage import get_account_record, list_paypal_accounts, upsert_account
-from ..http_client import _retry_after_seconds
-from ..http_utils import _minimal_chatgpt_cookie_header
-from .. import endpoints
+from ..transport.http_client import _retry_after_seconds
+from ..transport.http_utils import _minimal_chatgpt_cookie_header
+from ..transport import endpoints
 
 
 def refresh_session(

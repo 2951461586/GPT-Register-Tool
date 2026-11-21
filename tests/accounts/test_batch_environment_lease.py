@@ -19,7 +19,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from sms_tool.store import connection
-from sms_tool.batch_runner import (
+from sms_tool.registration.batch_runner import (
     _cached_exit_ip,
     _hold_environment_lease,
     _release_environment_lease,
@@ -125,7 +125,7 @@ def test_a_ledger_failure_never_breaks_the_attempt():
     symbols at import time, so patching the shell would silently leave the real
     function in place and the test would pass without testing anything.
     """
-    with patch("sms_tool.batch_runner.acquire_environment_lease", side_effect=RuntimeError("db gone")):
+    with patch("sms_tool.registration.batch_runner.acquire_environment_lease", side_effect=RuntimeError("db gone")):
         assert _hold_environment_lease(POOL_A, account_ref="a@x.test", batch_id="b1") == {}
 
 
@@ -210,8 +210,11 @@ def test_release_survives_a_ledger_failure():
     with _TempDb():
         lease = _hold_environment_lease(POOL_A, account_ref="a@x.test", batch_id="b1")
         with (
-            patch("sms_tool.batch_runner.record_environment_observations", side_effect=RuntimeError("db gone")),
-            patch("sms_tool.batch_runner.release_environment_lease", side_effect=RuntimeError("db gone")),
+            patch(
+                "sms_tool.registration.batch_runner.record_environment_observations",
+                side_effect=RuntimeError("db gone"),
+            ),
+            patch("sms_tool.registration.batch_runner.release_environment_lease", side_effect=RuntimeError("db gone")),
         ):
             _release_environment_lease(lease, {"success": True}, POOL_A)
 
@@ -258,15 +261,17 @@ class _NoopGuard:
 
 
 def _run_batch_over(*, proxy_pool, mailboxes, run_email, workers, count):
-    from sms_tool.batch_runner import run_batch_impl
+    from sms_tool.registration.batch_runner import run_batch_impl
 
     with (
-        patch("sms_tool.batch_runner.CFG", {"email_registration": {}, "registration": {"driver": "protocol"}}),
-        patch("sms_tool.batch_runner.RegistrationRetryGuard", _NoopGuard),
-        patch("sms_tool.batch_runner.ProxyHealthTracker"),
-        patch("sms_tool.batch_runner.get_account_records", return_value={}),
-        patch("sms_tool.batch_runner.list_account_records", return_value=[]),
-        patch("sms_tool.batch_runner.get_registration_checkpoints", return_value={}),
+        patch(
+            "sms_tool.registration.batch_runner.CFG", {"email_registration": {}, "registration": {"driver": "protocol"}}
+        ),
+        patch("sms_tool.registration.batch_runner.RegistrationRetryGuard", _NoopGuard),
+        patch("sms_tool.registration.batch_runner.ProxyHealthTracker"),
+        patch("sms_tool.registration.batch_runner.get_account_records", return_value={}),
+        patch("sms_tool.registration.batch_runner.list_account_records", return_value=[]),
+        patch("sms_tool.registration.batch_runner.get_registration_checkpoints", return_value={}),
     ):
         return run_batch_impl(
             count=count,

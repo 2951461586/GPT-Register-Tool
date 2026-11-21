@@ -15,7 +15,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from ..sms_utils import NO_NUMBER_SOURCE_MESSAGE, _number_source_or_none
+from ..phone.sms_utils import NO_NUMBER_SOURCE_MESSAGE, _number_source_or_none
 
 _DEBUG_DIR = "runtime/nd_pay_debug"
 

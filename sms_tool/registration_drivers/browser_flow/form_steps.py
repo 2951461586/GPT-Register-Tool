@@ -7,13 +7,13 @@ import uuid
 
 from . import dom_fields, page_state
 
-from ...humanize import delay as humanize_delay
+from ...registration.humanize import delay as humanize_delay
 from ..base import BrowserRegistrationError
 from collections.abc import Mapping
 from datetime import date
 from typing import Any
 from urllib.parse import urlsplit
-from ... import endpoints
+from ...transport import endpoints
 
 
 def _safe_submit_email_form(page, email: str) -> bool:

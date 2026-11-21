@@ -14,7 +14,7 @@ from ._extract import (
     _upi_int_value,
 )
 from .session import _upi_find_attestation
-from .. import endpoints
+from ..transport import endpoints
 
 
 #: Chromium flags for the headless risk-context rail. ``--ignore-certificate-errors``

@@ -33,8 +33,8 @@ from typing import Any
 
 import pytest
 
-from sms_tool import auth_headers
-from sms_tool.endpoints import AUTH_EMAIL_VERIFICATION
+from sms_tool.transport import auth_headers
+from sms_tool.transport.endpoints import AUTH_EMAIL_VERIFICATION
 from sms_tool.sentinel import surface
 from sms_tool.sentinel.bundle import RUNNER_PATH
 from sms_tool.sentinel.client import _requirements_token
@@ -304,3 +304,74 @@ def test_the_outgoing_headers_carry_the_family_specific_encoding():
     chrome = auth_headers.openai_auth_headers("did", family="auth")
     assert safari["Accept-Encoding"] == "gzip, deflate, br"
     assert chrome["Accept-Encoding"] == "gzip, deflate, br, zstd"
+
+
+def test_vm_canonicalizes_icu_timezone_and_isolates_default_locale(tmp_path):
+    """P0-1: VM timezone matches Chromium ICU canonicalization and never leaks host locale."""
+    script = tmp_path / "probe_locale_tz.js"
+    script.write_text(
+        "\n".join(
+            [
+                "const vm = require('vm');",
+                "const { createBrowserContext } = require(process.argv[2]);",
+                "const cases = JSON.parse(process.argv[3]);",
+                "const out = cases.map((cfg) => {",
+                "  const { context, clearTimers } = createBrowserContext({",
+                "    pageUrl: 'https://auth.openai.com/email-verification',",
+                "    browserFamily: 'chrome',",
+                "    userAgent: 'Mozilla/5.0 Chrome/152.0.0.0 Safari/537.36',",
+                "    language: cfg.language,",
+                "    languages: [cfg.language, 'en'],",
+                "    timeZone: cfg.timeZone,",
+                "    timezoneName: cfg.timezoneName || '',",
+                "    scriptSrc: 'https://sentinel.openai.com/sentinel/20260810913b/sdk.js',",
+                "    screen: { width: 1920, height: 1080, availWidth: 1920, availHeight: 1040, colorDepth: 24 },",
+                "  });",
+                "  const res = vm.runInContext(`(() => {",
+                "    const d = new Date(Date.UTC(2026, 8, 22, 13, 38, 26));",
+                "    return {",
+                "      dtfTz: new Intl.DateTimeFormat().resolvedOptions().timeZone,",
+                "      dtfLocale: new Intl.DateTimeFormat().resolvedOptions().locale,",
+                "      nfLocale: new Intl.NumberFormat().resolvedOptions().locale,",
+                "      dateStr: d.toString(),",
+                "      timeStr: d.toTimeString(),",
+                "      localeDate: d.toLocaleDateString(),",
+                "      localeNum: (1234.5).toLocaleString(),",
+                "      expectedLocaleDate: new Intl.DateTimeFormat(navigator.language, { timeZone: ${JSON.stringify(cfg.timeZone)} }).format(d),",
+                "      expectedLocaleNum: new Intl.NumberFormat(navigator.language).format(1234.5),",
+                "      expectedCanonicalTz: new Intl.DateTimeFormat('en-US', { timeZone: ${JSON.stringify(cfg.timeZone)} }).resolvedOptions().timeZone,",
+                "    };",
+                "  })()`, context);",
+                "  clearTimers();",
+                "  return res;",
+                "});",
+                "process.stdout.write(JSON.stringify(out));",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    cases = [
+        {"language": "vi-VN", "timeZone": "Asia/Ho_Chi_Minh", "timezoneName": ""},
+        {"language": "en-IN", "timeZone": "Asia/Kolkata", "timezoneName": "India Standard Time"},
+        {"language": "de-DE", "timeZone": "Europe/Berlin", "timezoneName": "Central European Standard Time"},
+    ]
+    completed = subprocess.run(
+        [shutil.which("node") or "node", str(script), str(RUNNER_PATH), json.dumps(cases)],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=60,
+    )
+    assert completed.returncode == 0, completed.stderr[-2000:]
+    results = json.loads(completed.stdout)
+    for cfg, res in zip(cases, results, strict=True):
+        assert res["dtfTz"] == res["expectedCanonicalTz"], (cfg, res)
+        assert res["dtfLocale"] == cfg["language"], (cfg, res)
+        assert res["nfLocale"] == cfg["language"], (cfg, res)
+        # Neither toString nor toTimeString may leak CJK Windows host timezone names.
+        assert not re.search(r"[\u4e00-\u9fff]", res["dateStr"]), (cfg, res["dateStr"])
+        assert not re.search(r"[\u4e00-\u9fff]", res["timeStr"]), (cfg, res["timeStr"])
+        if cfg["timezoneName"]:
+            assert f"({cfg['timezoneName']})" in res["timeStr"], (cfg, res["timeStr"])
+        assert res["localeDate"] == res["expectedLocaleDate"], (cfg, res)
+        assert res["localeNum"] == res["expectedLocaleNum"], (cfg, res)

@@ -1,4 +1,4 @@
-"""``sms_tool/token_telemetry.py`` 的行为测试（零覆盖 → 全覆盖 + 变异验证）。
+"""``sms_tool/observability/token_telemetry.py`` 的行为测试（零覆盖 → 全覆盖 + 变异验证）。
 
 为什么值得测：``access_token_telemetry(...)["token_hash"]`` 是 **令牌是否被真正轮换**
 的判据。``payment/auth.py:48`` 先取一次 ``original_hash``，最多 3 次稳定探测，
@@ -20,8 +20,8 @@ import json
 import unittest
 from unittest import mock
 
-from sms_tool import token_telemetry
-from sms_tool.token_telemetry import access_token_telemetry
+from sms_tool.observability import token_telemetry
+from sms_tool.observability.token_telemetry import access_token_telemetry
 
 NOW = 1_700_000_500
 

@@ -26,8 +26,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from ..http_client import EDGE_CHALLENGE_HOOK_ATTR, clear_session_circuit
-from ..operator_output import emit as _emit
+from ..transport.http_client import EDGE_CHALLENGE_HOOK_ATTR, clear_session_circuit
+from ..observability.operator_output import emit as _emit
 from ..proxy.edge_probe import EDGE_UNKNOWN
 from ..proxy.entry import rotate_session
 from .flags import registration_flag

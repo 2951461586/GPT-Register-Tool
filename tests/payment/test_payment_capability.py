@@ -5,11 +5,10 @@ from unittest.mock import patch
 
 from curl_cffi.requests.impersonate import BrowserType
 
-from sms_tool import gen_pp_link
 from sms_tool.payment import wire as payment_wire
 from sms_tool.paypal import extract as paypal_extract
-from sms_tool.auth_headers import AUTH_FINGERPRINT_PROFILES
-from sms_tool.checkout_contract import CheckoutSessionContract
+from sms_tool.transport.auth_headers import AUTH_FINGERPRINT_PROFILES
+from sms_tool.payment.checkout_contract import CheckoutSessionContract
 from sms_tool.payment.capability import CapabilityProbeError, _response_json, payment_method_capability_probe
 
 
@@ -86,9 +85,9 @@ class PaymentCapabilityProbeTests(unittest.TestCase):
             "cookie_header": "oai-did=persisted-device; session=fixture",
         }
         with (
-            patch.object(gen_pp_link, "_checkout_post", return_value=checkout_response) as post,
-            patch.object(gen_pp_link, "_checkout_get", return_value=custom_response) as get,
-            patch.object(gen_pp_link, "_new_session", side_effect=AssertionError("unexpected network session")),
+            patch.object(payment_wire, "_checkout_post", return_value=checkout_response) as post,
+            patch.object(payment_wire, "_checkout_get", return_value=custom_response) as get,
+            patch.object(payment_wire, "_new_session", side_effect=AssertionError("unexpected network session")),
         ):
             result = payment_method_capability_probe(
                 "access-token",
@@ -123,7 +122,7 @@ class PaymentCapabilityProbeTests(unittest.TestCase):
         self.assertEqual(kwargs["headers"]["OAI-Device-Id"], "device-1")
 
     def test_conflicting_cookie_device_does_not_start_checkout(self):
-        with patch.object(gen_pp_link, "_checkout_post", side_effect=AssertionError("checkout must not start")):
+        with patch.object(payment_wire, "_checkout_post", side_effect=AssertionError("checkout must not start")):
             result = payment_method_capability_probe(
                 "access-token",
                 "direct_card",

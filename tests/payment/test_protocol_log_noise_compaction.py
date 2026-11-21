@@ -27,7 +27,7 @@ import unittest
 from contextlib import redirect_stdout
 from unittest.mock import Mock, patch
 
-from sms_tool import auth_state
+from sms_tool.transport import auth_state
 from sms_tool.registration import handlers as registration_handlers
 
 _CALLBACK = "https://chatgpt.com/api/auth/callback/openai"

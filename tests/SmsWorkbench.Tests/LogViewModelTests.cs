@@ -21,7 +21,7 @@ namespace SmsWorkbench.Tests
         }
 
         [Fact]
-        public void Append_DropsTheOldestTextOnceTheCapIsExceeded()
+        public void Append_DropsTheOldestTextWithHeadroomOnceTheCapIsExceeded()
         {
             var log = new LogViewModel();
             string chunk = new string('x', LogViewModel.MaxBufferChars);
@@ -30,8 +30,13 @@ namespace SmsWorkbench.Tests
             bool trimmed = log.Append("tail");
 
             Assert.True(trimmed);
-            Assert.Equal(LogViewModel.MaxBufferChars, log.Text.Length);
+            Assert.True(log.Text.Length <= LogViewModel.TrimTargetChars);
             Assert.EndsWith("tail", log.Text);
+
+            // Subsequent lines stay within the headroom without re-trimming
+            // on every single append.
+            Assert.False(log.Append("next-line\n"));
+            Assert.EndsWith("next-line\n", log.Text);
         }
 
         [Fact]

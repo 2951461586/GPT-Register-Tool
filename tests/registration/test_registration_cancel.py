@@ -17,7 +17,7 @@ from typing import cast
 from unittest.mock import Mock, patch
 
 from sms_tool.registration import cancel as registration_cancel
-from sms_tool.batch_runner import run_batch_impl
+from sms_tool.registration.batch_runner import run_batch_impl
 from sms_tool.registration.cancel import (
     RegistrationCancelled,
     cancellable_sleep,

@@ -14,6 +14,7 @@ proxy rotation, 429 throttling, persistence and progress events -- lives in
 from __future__ import annotations
 
 from typing import Any, cast
+from urllib.parse import quote
 
 from curl_cffi import requests as curl_requests
 
@@ -23,11 +24,11 @@ from .account_identity import (
     bind_account_identity,
     chatgpt_account_id_from_token,
 )
-from ..auth_headers import auth_impersonate, chatgpt_headers
-from .. import endpoints
+from ..transport.auth_headers import auth_impersonate, chatgpt_headers
+from ..transport import endpoints
 from ..config import CFG
-from ..phone_proxy import normalize_proxy_url, redact_proxy_url as _redact_proxy_url
-from ..promotion_states import (
+from ..phone.phone_proxy import normalize_proxy_url, redact_proxy_url as _redact_proxy_url
+from ..payment.promotion_states import (
     PROMOTION_STATE_AUTH_INVALID,
     PROMOTION_STATE_FREE,
     PROMOTION_STATE_PROBE_FAILED,
@@ -40,12 +41,24 @@ from ..proxy.routing import select_operation_proxy_candidate
 ACCOUNTS_CHECK_PATH = "/backend-api/accounts/check/v4-2023-04-27"
 ACCOUNTS_CHECK_URL = f"{endpoints.CHATGPT_BASE}{ACCOUNTS_CHECK_PATH}"
 
-#: Read-only Plus-trial coupon probe.  It answers "is the one-month trial still
-#: redeemable for this account?" directly, where ``accounts/check`` only exposes
-#: an indirect ``eligible_promo_campaigns`` hint.  Never redeems anything.
+#: Read-only Plus-trial coupon probe.  It answers "is the trial still redeemable
+#: for this account?" directly, where ``accounts/check`` only exposes an
+#: indirect ``eligible_promo_campaigns`` hint.  Never redeems anything.
+DEFAULT_COUPON_CAMPAIGN_ID = "plus-1-month-free"
 COUPON_PATH = "/backend-api/promo_campaign/check_coupon"
-COUPON_QUERY = "coupon=plus-1-month-free&is_coupon_from_query_param=true"
+COUPON_QUERY = f"coupon={DEFAULT_COUPON_CAMPAIGN_ID}&is_coupon_from_query_param=true"
 COUPON_URL = f"{endpoints.CHATGPT_BASE}{COUPON_PATH}?{COUPON_QUERY}"
+
+
+def coupon_url_for_campaign(campaign_id: str = "") -> str:
+    """Build the read-only ``check_coupon`` URL for a specific campaign id.
+
+    Falls back to :data:`DEFAULT_COUPON_CAMPAIGN_ID` when ``accounts/check``
+    omits a campaign id, while preserving non-default campaigns such as
+    ``plus-2-months-50-pct-off`` instead of probing the wrong coupon.
+    """
+    resolved = str(campaign_id or "").strip() or DEFAULT_COUPON_CAMPAIGN_ID
+    return f"{endpoints.CHATGPT_BASE}{COUPON_PATH}?coupon={quote(resolved, safe='')}&is_coupon_from_query_param=true"
 
 
 def _account_token(account: Any) -> str:
@@ -81,6 +94,11 @@ def parse_accounts_check(body: Any, *, account_id: str = "") -> dict[str, Any]:
     has_active = bool(entitlement.get("has_active_subscription"))
     is_free = plan_type.lower() == "free" or subscription_plan.lower() == "chatgptfreeplan"
     plus_trial_eligible = bool(is_free and plus_campaign)
+    promo_campaigns = (
+        {str(key): value for key, value in promo.items() if isinstance(value, dict)}
+        if is_free and isinstance(promo, dict)
+        else {}
+    )
     offers = (item.get("eligible_offers") or {}).get("offers") or []
     eligible_offer_ids = [o.get("id") for o in offers if isinstance(o, dict) and o.get("id")]
 
@@ -94,9 +112,12 @@ def parse_accounts_check(body: Any, *, account_id: str = "") -> dict[str, Any]:
         "plus_trial_eligible": plus_trial_eligible,
         "plus_trial_campaign_id": (plus_campaign or {}).get("id"),
         "plus_trial_title": plus_meta.get("title"),
+        "plus_trial_summary": plus_meta.get("summary"),
+        "plus_trial_promotion_type_label": plus_meta.get("promotion_type_label"),
         "plus_trial_discount_percentage": discount.get("percentage"),
         "plus_trial_duration_num_periods": duration.get("num_periods"),
         "plus_trial_duration_period": duration.get("period"),
+        "eligible_promo_campaigns": promo_campaigns,
         "eligible_offer_ids": eligible_offer_ids,
     }
 
@@ -136,7 +157,7 @@ def _merge_coupon_evidence(parsed: dict[str, Any], coupon: dict[str, Any]) -> No
     parsed["coupon_state"] = str(coupon.get("coupon_state") or "")
     parsed["coupon_redeemed"] = bool(coupon.get("coupon_redeemed"))
     parsed["coupon_trial_eligible"] = bool(coupon.get("coupon_trial_eligible"))
-    for key in ("coupon_redeemed_at", "coupon_expires_at"):
+    for key in ("coupon_redeemed_at", "coupon_expires_at", "coupon_campaign_id"):
         if coupon.get(key):
             parsed[key] = coupon[key]
     # When the authoritative probe has actually run, **only its affirmative
@@ -162,24 +183,31 @@ def _coupon_probe_worth_running(parsed: dict[str, Any]) -> bool:
     return str(parsed.get("current_plan_type") or "").strip().lower() in {"", "free"}
 
 
-def _probe_plus_coupon(*, headers, timeout, browser_fetch, proxies) -> dict[str, Any]:
+def _probe_plus_coupon(*, headers, timeout, browser_fetch, proxies, campaign_id: str = "") -> dict[str, Any]:
     """Read-only coupon probe on the same transport/fingerprint as the plan check.
 
     Never raises: a coupon failure is a diagnostic, not a promotion verdict, so
     the caller keeps the accounts/check answer and records the shortfall.
     """
+    resolved_campaign = str(campaign_id or "").strip() or DEFAULT_COUPON_CAMPAIGN_ID
+    url = coupon_url_for_campaign(resolved_campaign)
     try:
         if browser_fetch is not None:
-            result = browser_fetch(COUPON_URL, headers=headers, timeout_ms=int(timeout * 1000))
+            result = browser_fetch(url, headers=headers, timeout_ms=int(timeout * 1000))
             if isinstance(result, dict) and "status_code" not in result and "status" in result:
                 result = {**result, "status_code": result.get("status")}
             status_code = int(result.get("status_code") or 0) if isinstance(result, dict) else 0
             body = result.get("body") if isinstance(result, dict) else result
             if status_code != 200 or not isinstance(body, dict):
-                return {"ok": False, "status_code": status_code, "error": "plus_coupon_unavailable"}
-            return {"ok": True, **parse_coupon_check(body)}
+                return {
+                    "ok": False,
+                    "status_code": status_code,
+                    "coupon_campaign_id": resolved_campaign,
+                    "error": "plus_coupon_unavailable",
+                }
+            return {"ok": True, "coupon_campaign_id": resolved_campaign, **parse_coupon_check(body)}
         response = curl_requests.get(
-            COUPON_URL,
+            url,
             headers=headers,
             proxies=proxies,
             timeout=timeout,
@@ -190,12 +218,40 @@ def _probe_plus_coupon(*, headers, timeout, browser_fetch, proxies) -> dict[str,
         try:
             body = response.json()
         except Exception:
-            return {"ok": False, "status_code": status_code, "error": "plus_coupon_invalid_json"}
+            return {
+                "ok": False,
+                "status_code": status_code,
+                "coupon_campaign_id": resolved_campaign,
+                "error": "plus_coupon_invalid_json",
+            }
         if status_code != 200 or not isinstance(body, dict):
-            return {"ok": False, "status_code": status_code, "error": "plus_coupon_unavailable"}
-        return {"ok": True, **parse_coupon_check(body)}
+            return {
+                "ok": False,
+                "status_code": status_code,
+                "coupon_campaign_id": resolved_campaign,
+                "error": "plus_coupon_unavailable",
+            }
+        return {"ok": True, "coupon_campaign_id": resolved_campaign, **parse_coupon_check(body)}
     except Exception as exc:
-        return {"ok": False, "error": f"plus_coupon_transport:{str(exc)[:200]}"}
+        return {
+            "ok": False,
+            "coupon_campaign_id": resolved_campaign,
+            "error": f"plus_coupon_transport:{str(exc)[:200]}",
+        }
+
+
+def _apply_coupon_probe(parsed: dict[str, Any], *, headers, timeout, browser_fetch, proxies) -> None:
+    """Run the dynamic-campaign coupon probe and fold its verdict into ``parsed``."""
+    coupon = _probe_plus_coupon(
+        headers=headers,
+        timeout=timeout,
+        browser_fetch=browser_fetch,
+        proxies=proxies,
+        campaign_id=str(parsed.get("plus_trial_campaign_id") or ""),
+    )
+    parsed["coupon"] = coupon
+    if coupon.get("ok"):
+        _merge_coupon_evidence(parsed, coupon)
 
 
 def promotion_status_label(result: dict[str, Any]) -> str:
@@ -230,7 +286,7 @@ def promotion_status_code(result: Any) -> str:
     :func:`promotion_status_label`.
 
     Persisted as ``promotion_state`` next to the display label so the desktop
-    filter/sort consumes a stable enum (see ``sms_tool/promotion_states.py``)
+    filter/sort consumes a stable enum (see ``sms_tool/payment/promotion_states.py``)
     instead of substring-matching Chinese copy.
     """
     if not isinstance(result, dict) or not result:
@@ -400,10 +456,7 @@ def check_account_promotion(
     parsed = parse_accounts_check(body, account_id=account_id)
     parsed["status_code"] = status_code
     if coupon_probe and _coupon_probe_worth_running(parsed):
-        coupon = _probe_plus_coupon(headers=headers, timeout=timeout, browser_fetch=browser_fetch, proxies=proxies)
-        parsed["coupon"] = coupon
-        if coupon.get("ok"):
-            _merge_coupon_evidence(parsed, coupon)
+        _apply_coupon_probe(parsed, headers=headers, timeout=timeout, browser_fetch=browser_fetch, proxies=proxies)
     parsed["promotion_status"] = promotion_status_label(parsed)
     parsed["promotion_state"] = promotion_status_code(parsed)
     parsed["proxy_source"] = proxy_source
@@ -415,7 +468,9 @@ __all__ = [
     "ACCOUNTS_CHECK_URL",
     "COUPON_PATH",
     "COUPON_URL",
+    "DEFAULT_COUPON_CAMPAIGN_ID",
     "check_account_promotion",
+    "coupon_url_for_campaign",
     "parse_accounts_check",
     "parse_coupon_check",
     "promotion_status_code",

@@ -10,14 +10,14 @@ same defect ``docs/CONTEXT.md`` records for the payment-capability seam).
 
 from __future__ import annotations
 
-from ..account_creation import _validate_email_otp
-from ..auth_headers import auth_impersonate, nextauth_headers, openai_auth_headers
-from ..auth_state import fetch_client_auth_session_dump as _fetch_client_auth_session_dump
+from ..registration.account_creation import _validate_email_otp
+from ..transport.auth_headers import auth_impersonate, nextauth_headers, openai_auth_headers
+from ..transport.auth_state import fetch_client_auth_session_dump as _fetch_client_auth_session_dump
 from ..config import current_config_data
-from ..http_client import _retry_after_seconds, request_with_retry
-from ..http_utils import _absolute_url, _cookie_presence, _follow_continue_url, _json_or_raw
+from ..transport.http_client import _retry_after_seconds, request_with_retry
+from ..transport.http_utils import _absolute_url, _cookie_presence, _follow_continue_url, _json_or_raw
 from ..mailbox.router import poll_email_otp
-from ..phone_proxy import redact_proxy_url
+from ..phone.phone_proxy import redact_proxy_url
 from ..registration.concurrency import mark_registration_rate_limited
 
 __all__ = [

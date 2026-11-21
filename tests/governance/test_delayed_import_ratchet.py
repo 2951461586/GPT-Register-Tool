@@ -86,8 +86,8 @@ def test_ratchet_holds_for_the_current_tree():
 
 def test_reason_is_derived_for_documented_cycles():
     classify = delayed_import_ratchet.classify
-    assert classify("sms_tool/payment/catalog.py", "sms_tool.checkout_contract") == "cycle"
-    assert classify("sms_tool/sentinel/client.py", "sms_tool.sentinel_tokens") == "cycle"
+    assert classify("sms_tool/payment/catalog.py", "sms_tool.payment.checkout_contract") == "cycle"
+    assert classify("sms_tool/sentinel/client.py", "sms_tool.registration.sentinel_tokens") == "cycle"
     # The five-module cycle's lazy edge.
     assert classify("sms_tool/proxy/routing.py", "sms_tool.accounts.account_identity") == "cycle"
 
@@ -96,7 +96,7 @@ def test_reason_is_startup_for_the_cli_seam():
     classify = delayed_import_ratchet.classify
     assert classify("sms_tool/cli.py", "sms_tool.mailbox.router") == "startup"
     assert classify("sms_tool/commands/payment.py", "sms_tool.payment.batch") == "startup"
-    assert classify("sms_tool/cli_parsers/payment.py", "sms_tool.gen_pp_link") == "startup"
+    assert classify("sms_tool/cli_parsers/payment.py", "sms_tool.paypal_link.gen_link") == "startup"
 
 
 def test_reason_is_startup_for_a_heavy_target():
@@ -119,7 +119,7 @@ def test_reason_is_test_seam_for_the_store_shell_edge():
 
 def test_reason_defaults_to_deferred_and_that_needs_a_why():
     classify = delayed_import_ratchet.classify
-    assert classify("sms_tool/accounts/account_2fa.py", "sms_tool.auth_headers") == "deferred"
+    assert classify("sms_tool/accounts/account_2fa.py", "sms_tool.transport.auth_headers") == "deferred"
     assert classify("sms_tool/mailbox/router.py", "sms_tool.mailbox.parsers") == "deferred"
 
 

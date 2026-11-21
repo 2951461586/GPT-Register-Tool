@@ -41,7 +41,7 @@ from typing import Any
 
 from curl_cffi import requests as curl_requests
 
-from ..phone_proxy import normalize_proxy_url, redact_proxy_text as _redact_proxy_text
+from ..phone.phone_proxy import normalize_proxy_url, redact_proxy_text as _redact_proxy_text
 from ..kernel.timeouts import DEFAULT_TIMEOUT
 
 
@@ -374,7 +374,7 @@ def poll_otp(
 ) -> str | None:
     """Settle-stability OTP polling."""
     from ..mailbox.poll import _poll_otp_with_settle
-    from ..mail_otp import _email_otp_candidate
+    from ..mailbox.mail_otp import _email_otp_candidate
 
     keyword = (subject_keyword or "").lower()
     excluded = {str(value or "").strip() for value in (excluded_otps or ())}

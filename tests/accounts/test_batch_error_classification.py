@@ -5,7 +5,11 @@ from contextlib import redirect_stdout
 from io import StringIO
 from unittest.mock import patch
 
-from sms_tool.batch_runner import run_batch_impl, select_registration_proxy_base, select_registration_proxy_pool
+from sms_tool.registration.batch_runner import (
+    run_batch_impl,
+    select_registration_proxy_base,
+    select_registration_proxy_pool,
+)
 from sms_tool.storage import _status
 
 
@@ -15,7 +19,7 @@ class BatchErrorClassificationTests(unittest.TestCase):
             raise RuntimeError("proxy=http://user:pass@proxy.example:8080 access_token=sk-live_secret")
 
         output = StringIO()
-        with redirect_stdout(output), patch("sms_tool.batch_runner.CFG", {"email_registration": {}}):
+        with redirect_stdout(output), patch("sms_tool.registration.batch_runner.CFG", {"email_registration": {}}):
             result = run_batch_impl(
                 count=1,
                 workers=1,
@@ -38,7 +42,9 @@ class BatchErrorClassificationTests(unittest.TestCase):
                 return {"success": False, "error": "sentinel_extract_failed", "failure_class": "network"}
             return {"success": True, "email": "retry@example.com"}
 
-        with patch("sms_tool.batch_runner.refresh_proxy_sid", side_effect=["proxy-attempt-1", "proxy-attempt-2"]):
+        with patch(
+            "sms_tool.registration.batch_runner.refresh_proxy_sid", side_effect=["proxy-attempt-1", "proxy-attempt-2"]
+        ):
             results = run_batch_impl(
                 count=1,
                 proxy="proxy-base",
@@ -62,7 +68,7 @@ class BatchErrorClassificationTests(unittest.TestCase):
         def fake_probe(proxy, *_args, **_kwargs):
             return {"ok": "sg.cliproxy.io" in proxy}
 
-        with patch("sms_tool.batch_runner.probe_proxy_with_scheme_detection", side_effect=fake_probe):
+        with patch("sms_tool.registration.batch_runner.probe_proxy_with_scheme_detection", side_effect=fake_probe):
             selected = select_registration_proxy_base(pool)
 
         self.assertEqual(selected, pool[1])
@@ -76,7 +82,7 @@ class BatchErrorClassificationTests(unittest.TestCase):
         def fake_probe(proxy, *_args, **_kwargs):
             return {"ok": "as.zooproxy.com" in proxy}
 
-        with patch("sms_tool.batch_runner.probe_proxy_with_scheme_detection", side_effect=fake_probe):
+        with patch("sms_tool.registration.batch_runner.probe_proxy_with_scheme_detection", side_effect=fake_probe):
             selected = select_registration_proxy_base(pool)
 
         self.assertEqual(selected, pool[1])
@@ -91,7 +97,7 @@ class BatchErrorClassificationTests(unittest.TestCase):
         def fake_probe(proxy, *_args, **_kwargs):
             return {"ok": "static-b" not in proxy}
 
-        with patch("sms_tool.batch_runner.probe_proxy_with_scheme_detection", side_effect=fake_probe):
+        with patch("sms_tool.registration.batch_runner.probe_proxy_with_scheme_detection", side_effect=fake_probe):
             selected = select_registration_proxy_pool(pool)
 
         self.assertEqual(selected, [pool[0], pool[2]])
@@ -115,10 +121,10 @@ class BatchErrorClassificationTests(unittest.TestCase):
                 pass
 
         with (
-            patch("sms_tool.batch_runner.ProxyHealthTracker", FlatteningTracker),
-            patch("sms_tool.batch_runner.refresh_proxy_sid", side_effect=lambda value: value),
+            patch("sms_tool.registration.batch_runner.ProxyHealthTracker", FlatteningTracker),
+            patch("sms_tool.registration.batch_runner.refresh_proxy_sid", side_effect=lambda value: value),
             patch(
-                "sms_tool.batch_runner.probe_proxy_with_scheme_detection",
+                "sms_tool.registration.batch_runner.probe_proxy_with_scheme_detection",
                 return_value={"ok": True, "country_code": "IN"},
             ),
         ):
@@ -150,9 +156,9 @@ class BatchErrorClassificationTests(unittest.TestCase):
             return {"success": True}
 
         with (
-            patch("sms_tool.batch_runner.select_registration_proxy_pool", return_value=pool),
-            patch("sms_tool.batch_runner.refresh_proxy_sid", side_effect=lambda value: value + "-sid"),
-            patch("sms_tool.batch_runner.CFG", {"email_registration": {}}),
+            patch("sms_tool.registration.batch_runner.select_registration_proxy_pool", return_value=pool),
+            patch("sms_tool.registration.batch_runner.refresh_proxy_sid", side_effect=lambda value: value + "-sid"),
+            patch("sms_tool.registration.batch_runner.CFG", {"email_registration": {}}),
         ):
             results = run_batch_impl(
                 count=2,
@@ -196,7 +202,7 @@ class BatchErrorClassificationTests(unittest.TestCase):
             barrier.wait()
             return {"success": True}
 
-        with patch("sms_tool.batch_runner.CFG", {"email_registration": {}}):
+        with patch("sms_tool.registration.batch_runner.CFG", {"email_registration": {}}):
             results = run_batch_impl(
                 count=10,
                 workers=10,

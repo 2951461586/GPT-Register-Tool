@@ -131,7 +131,7 @@ python scripts/registration_ab.py collect `
 > （见下表）。开了开关但日志里没有那行 ⇒ 记 `mechanism_ok=false`，`compare` 一律返回
 > `manipulation_failed`（**优先于** `underpowered`），**不进速率判定**。这正是 P1-5 那一轮的
 > 教训：`signup_continue_screen_hint` 开着但早返回让它根本没执行，5/5 的失败被误读成
-> "开关无效"。🔴 **机制行必须走 `sms_tool.operator_output.emit`**：它一次调用同时喂
+> "开关无效"。🔴 **机制行必须走 `sms_tool.observability.operator_output.emit`**：它一次调用同时喂
 > `sms_tool.log`（logging）与 `backend_stdout.jsonl`（stdout 镜像）两条通道。裸 `print`
 > **只**进 `backend_stdout.jsonl`，而本节的 `collect` 示例传的是 `sms_tool.log` —— 那样
 > 登记机制行的实验在结构上不可判定（2026-10-10 扫描 P1-A′；P1-6 / P1-7 已改为 `emit`）。

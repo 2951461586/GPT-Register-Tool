@@ -576,7 +576,7 @@ class GeoResolver:
         state. Sharing the key shape is what lets them share the answer.
         """
         try:
-            from ..phone_proxy import normalize_proxy_url
+            from ..phone.phone_proxy import normalize_proxy_url
         except Exception:
             return str(proxy or "")
         return normalize_proxy_url(proxy) or str(proxy or "")

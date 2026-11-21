@@ -3,7 +3,8 @@ from contextlib import ExitStack
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from sms_tool import gen_pp_link
+from sms_tool import upi_link
+from sms_tool.paypal_link import gen_link as gen_pp_link
 from sms_tool.payment import egress as payment_egress
 from sms_tool.paypal import extract as paypal_extract
 
@@ -729,7 +730,7 @@ class GeneratePpLinkContractTests(unittest.TestCase):
                 new_session=fake_new_session,
                 write_qr=lambda data, path="": (Path(path).write_bytes(b"qr"), str(path))[1],
             ):
-                result = gen_pp_link.generate_upi_qr_link(
+                result = upi_link.generate_upi_qr_link(
                     "at",
                     checkout_proxy="socks5h://jp-checkout",
                     provider_proxy="http://in-provider:11001",
@@ -790,7 +791,7 @@ class GeneratePpLinkContractTests(unittest.TestCase):
 
         cfg = {"upi": {"checkout_country": "JP", "payment_country": "IN", "require_zero_due": True}}
         with _patch_upi(load_json=cfg, new_session=lambda proxy="": FakeSession(proxy)):
-            result = gen_pp_link.generate_upi_qr_link("at", checkout_proxy="jp", provider_proxy="in")
+            result = upi_link.generate_upi_qr_link("at", checkout_proxy="jp", provider_proxy="in")
 
         self.assertFalse(result["ok"])
         self.assertEqual(result["error_code"], "upi_not_available")

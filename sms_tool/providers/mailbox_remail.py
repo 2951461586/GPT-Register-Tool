@@ -15,11 +15,11 @@ from urllib.parse import quote
 import requests as http_requests
 
 from ..config import current_config_data
-from ..mail_otp import candidate_is_newer, _email_otp_candidate, _extract_otp_from_text, _message_received_ts
+from ..mailbox.mail_otp import candidate_is_newer, _email_otp_candidate, _extract_otp_from_text, _message_received_ts
 from ..mailbox.types import MailboxAccount
 from ..kernel.paths import project_path, runtime_file
 from ..kernel.sanitizer import mask_otp
-from ..phone_proxy import redact_proxy_url
+from ..phone.phone_proxy import redact_proxy_url
 from ..proxy.health import ProxyHealthTracker
 from . import ports
 from typing import Any

@@ -1,6 +1,6 @@
 # ADR-0012: PayPal 双栈边界与 `paypal_link.gen_link` 的 `_PlmProxy`
 
-- Status: Accepted
+- Status: Superseded (2026-11-21 — 两个退出条件均已满足：`sms_tool/gen_pp_link.py` 根壳与 `_PlmProxy` 已退役，全部调用方与测试直接绑定 `sms_tool.paypal_link.gen_link` 或 `sms_tool.payment.wire`；第 1 条“双栈不合并”继续有效)
 - Date: 2026-10-18
 
 ## 决定

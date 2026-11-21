@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit
 
-from ..phone_proxy import normalize_proxy_url
+from ..phone.phone_proxy import normalize_proxy_url
 
 
 def parse_lane_proxy_pool(value: Any) -> list[str]:

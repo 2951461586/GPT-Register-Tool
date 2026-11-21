@@ -5,9 +5,10 @@ from __future__ import annotations
 import re
 from typing import Any, Mapping, Protocol
 
-from .. import endpoints
+from ..transport import endpoints
+from . import wire as _payment_wire
 from .errors import error_code_of, error_stage_of, retryable_flag
-from ..checkout_contract import (
+from .checkout_contract import (
     CHECKOUT_PATH,
     CHECKOUT_URL,
     PLUS_TRIAL_CAMPAIGN_ID,
@@ -75,7 +76,7 @@ class ChatGPTStripeCapabilityTransport:
         proxy: str,
         timeout: int,
     ) -> CheckoutSessionContract:
-        from .. import gen_pp_link
+        from .pp_link_helpers import DEFAULT_STRIPE_PK
 
         cookie_header = str((auth_context or {}).get("cookie_header") or "")
         device_id = str((auth_context or {}).get("device_id") or (auth_context or {}).get("oai_did") or "").strip()
@@ -86,7 +87,7 @@ class ChatGPTStripeCapabilityTransport:
         if device_id:
             headers["OAI-Device-Id"] = device_id
         try:
-            response = gen_pp_link._checkout_post(
+            response = _payment_wire._checkout_post(
                 CHECKOUT_URL,
                 contract.checkout_payload(),
                 access_token,
@@ -113,7 +114,7 @@ class ChatGPTStripeCapabilityTransport:
             return CheckoutSessionContract.from_payload(
                 payload,
                 billing_country=contract.billing_country,
-                fallback_publishable_key=str(getattr(gen_pp_link, "DEFAULT_STRIPE_PK", "") or ""),
+                fallback_publishable_key=str(DEFAULT_STRIPE_PK or ""),
             )
         except CheckoutContractError as exc:
             raise CapabilityProbeError(
@@ -132,10 +133,8 @@ class ChatGPTStripeCapabilityTransport:
         proxy: str,
         timeout: int,
     ) -> dict[str, Any]:
-        from .. import gen_pp_link
-
         try:
-            session = gen_pp_link._new_session(proxy)
+            session = _payment_wire._new_session(proxy)
             response = session.post(
                 STRIPE_INIT_URL.format(checkout_session_id=checkout.checkout_session_id),
                 data=contract.stripe_init_payload(checkout.publishable_key),
@@ -174,8 +173,6 @@ class ChatGPTStripeCapabilityTransport:
         proxy: str,
         timeout: int,
     ) -> dict[str, Any]:
-        from .. import gen_pp_link
-
         processor = checkout.processor_entity
         if not processor or not processor.replace("_", "").isalpha():
             raise CapabilityProbeError(
@@ -187,7 +184,7 @@ class ChatGPTStripeCapabilityTransport:
         try:
             cookie_header = str(auth_context.get("cookie_header") or "")
             device_id = str(auth_context.get("device_id") or auth_context.get("oai_did") or "").strip()
-            response = gen_pp_link._checkout_get(
+            response = _payment_wire._checkout_get(
                 f"{endpoints.CHATGPT_BASE}/backend-api/payments/checkout/{processor}/{checkout.checkout_session_id}",
                 access_token,
                 cookie_header,
@@ -242,12 +239,10 @@ class ChatGPTStripeCapabilityTransport:
         proxy: str,
         timeout: int,
     ) -> dict[str, Any]:
-        from .. import gen_pp_link
-
         evidence = StripeCapabilityEvidence.from_payload(init_payload)
         if evidence.amount_minor is None or not evidence.currency_present:
             return {}
-        session = gen_pp_link._new_session(proxy)
+        session = _payment_wire._new_session(proxy)
         try:
             params = {
                 "checkout_session_id": checkout.checkout_session_id,
@@ -734,8 +729,6 @@ def _read_payment_methods_signal(
     creates, confirms or charges anything. Every failure degrades to ``{}`` so
     it can only add evidence, never change a probe outcome.
     """
-    from .. import gen_pp_link
-
     token = str(access_token or "").strip()
     if not token:
         return {}
@@ -750,7 +743,7 @@ def _read_payment_methods_signal(
     if device_id:
         extra_headers["OAI-Device-Id"] = device_id
     try:
-        response = gen_pp_link._checkout_get(
+        response = _payment_wire._checkout_get(
             endpoints.CHATGPT_PAYMENT_METHODS,
             token,
             cookie_header,
@@ -946,7 +939,7 @@ def _paypal_capability_probe(
 
 
 def _amount_from_init(init: Mapping[str, Any]) -> dict[str, Any]:
-    from ..pp_link_helpers import stripe_amount_details
+    from .pp_link_helpers import stripe_amount_details
 
     return stripe_amount_details(dict(init or {}))
 

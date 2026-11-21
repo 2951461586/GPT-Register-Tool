@@ -8,41 +8,24 @@ namespace SmsWorkbench.Tests;
 /// Line ceilings for the window partials, plus the structural pins each split wave
 /// produced.
 /// </summary>
-/// <remarks>
-/// <para>
-/// The C# side has no ratchet script like the Python tree's
-/// <c>scripts/*_ratchet.py</c>, so the ceiling lives here, where <c>dotnet test</c>
-/// already runs it. Each number is the file's size when its wave landed; it may only
-/// go down. When a partial shrinks, lower its number in the same commit -- that is
-/// what stops <c>MainWindow.Register.cs</c> from quietly regrowing to the 721 lines
-/// it had before the dialogs and the batch-file builder moved out.
-/// </para>
-/// <para>
-/// A line count is a blunt instrument: it cannot say "this file does too much". It is
-/// used deliberately, only for the partials already known to be too big, and it is
-/// cheap enough that nobody will want to disable it. There is deliberately no "sum of
-/// all partials" test: every partial already has its own ceiling, so the sum could
-/// only fail through a new file, and a new partial is a review question.
-/// </para>
-/// </remarks>
 public sealed class PartialSizeTests
 {
     private static readonly (string Path, int MaxLines)[] Partials =
     {
-        // 367 -> 374 -> 376: the composition root wires each extracted
-        // collaborator. It is allowed to grow with the services it builds; the
-        // ceiling still stops anything else from doing so.
-        ("SmsWorkbench/Views/MainWindow.xaml.cs", 383),
-        ("SmsWorkbench/Views/MainWindow.Register.cs", 402),
-        ("SmsWorkbench/Views/MainWindow.Export.cs", 190),
-        ("SmsWorkbench/Views/MainWindow.Tasks.cs", 533),
-        ("SmsWorkbench/Views/MainWindow.Pools.cs", 385),
+        // W9 (2026-11-21): ShellViewModel + 5 Coordinators + 11 XAML dialog pairs
+        // dropped the MainWindow partials by >1,250 lines.
+        ("SmsWorkbench/Views/MainWindow.xaml.cs", 245),
+        ("SmsWorkbench/Views/MainWindow.Register.cs", 235),
+        ("SmsWorkbench/Views/MainWindow.Export.cs", 128),
+        ("SmsWorkbench/Views/MainWindow.Tasks.cs", 332),
+        ("SmsWorkbench/Views/MainWindow.Pools.cs", 55),
         ("SmsWorkbench/Views/MainWindow.SmsProvider.cs", 22),
         ("SmsWorkbench/Views/MainWindow.Helpers.cs", 455),
-        ("SmsWorkbench/Views/MainWindow.Inbox.cs", 301),
-        // 287 -> 116 on 2026-11-20: the panel became
-        // Dialogs/AccountDetailDialog.xaml; only assembly is left here.
+        ("SmsWorkbench/Views/MainWindow.Inbox.cs", 152),
         ("SmsWorkbench/Views/MainWindow.Detail.cs", 116),
+        ("SmsWorkbench/Views/MainWindow.Theme.cs", 142),
+        ("SmsWorkbench/Views/MainWindow.Shell.cs", 78),
+        ("SmsWorkbench/Views/MainWindow.NavigationState.cs", 36),
     };
 
     /// <summary>What each split wave produced.</summary>
@@ -71,6 +54,24 @@ public sealed class PartialSizeTests
         "SmsWorkbench/Models/AccountDetailView.cs",
         "SmsWorkbench/Dialogs/AccountDetailDialog.xaml.cs",
         "SmsWorkbench/Dialogs/ExportFormatDialog.xaml.cs",
+        // W9 (2026-11-21): ShellViewModel, 5 Coordinators, and all remaining dialogs in XAML.
+        "SmsWorkbench/ViewModels/ShellViewModel.cs",
+        "SmsWorkbench/Services/PoolRefreshCoordinator.cs",
+        "SmsWorkbench/Services/ThemeCoordinator.cs",
+        "SmsWorkbench/Services/BackendBatchCoordinator.cs",
+        "SmsWorkbench/Services/RegistrationWorkflowCoordinator.cs",
+        "SmsWorkbench/Services/AccountExportCoordinator.cs",
+        "SmsWorkbench/Dialogs/InfoConfirmDialogWindow.xaml.cs",
+        "SmsWorkbench/Dialogs/RegisterOptionsDialog.xaml.cs",
+        "SmsWorkbench/Dialogs/SelectedRegisterOptionsDialog.xaml.cs",
+        "SmsWorkbench/Dialogs/ScanOptionsDialog.xaml.cs",
+        "SmsWorkbench/Dialogs/ExportCompleteDialog.xaml.cs",
+        "SmsWorkbench/Dialogs/AccountScanResultDialog.xaml.cs",
+        "SmsWorkbench/Dialogs/ImportTargetDialog.xaml.cs",
+        "SmsWorkbench/Dialogs/InboxDialogWindow.xaml.cs",
+        "SmsWorkbench/Dialogs/MailDetailDialogWindow.xaml.cs",
+        "SmsWorkbench/Dialogs/ChangeEmailDialog.xaml.cs",
+        "SmsWorkbench/Dialogs/ShellSettingsDialog.xaml.cs",
     };
 
     public static TheoryData<string, int> PartialCeilings()
@@ -122,11 +123,14 @@ public sealed class PartialSizeTests
     [InlineData("SmsWorkbench/Services/InboxReader.cs")]
     [InlineData("SmsWorkbench/Services/MailboxRowClassifier.cs")]
     [InlineData("SmsWorkbench/Models/AccountDetailView.cs")]
+    [InlineData("SmsWorkbench/ViewModels/ShellViewModel.cs")]
+    [InlineData("SmsWorkbench/Services/PoolRefreshCoordinator.cs")]
+    [InlineData("SmsWorkbench/Services/ThemeCoordinator.cs")]
+    [InlineData("SmsWorkbench/Services/BackendBatchCoordinator.cs")]
+    [InlineData("SmsWorkbench/Services/RegistrationWorkflowCoordinator.cs")]
+    [InlineData("SmsWorkbench/Services/AccountExportCoordinator.cs")]
     public void TheExtractedServicesStayWindowIndependent(string relativePath)
     {
-        // Only *code* counts: the XML docs of these files link back to the partial
-        // they came from, and a `MainWindow` mention in prose is the opposite of a
-        // leak -- it is the sentence that tells the next reader where the code lives.
         string code = RepoFile.CodeOnly(relativePath);
 
         Assert.DoesNotContain("System.Windows", code, StringComparison.Ordinal);

@@ -68,7 +68,7 @@ def test_mailboxes_skipped_event_is_emitted_with_masked_list(monkeypatch, capsys
     backend never attempted kept its stale pre-batch state in the grid.  The
     event carries the masked list so the WPF side can refresh those rows.
     """
-    from sms_tool import batch_runner
+    from sms_tool.registration import batch_runner
 
     monkeypatch.setenv(desktop_ipc.EVENT_ENV, "1")
     batch_runner._emit_mailboxes_skipped(
@@ -87,7 +87,7 @@ def test_mailboxes_skipped_event_is_emitted_with_masked_list(monkeypatch, capsys
 
 
 def test_mailboxes_skipped_is_silent_without_desktop_events(monkeypatch, capsys):
-    from sms_tool import batch_runner
+    from sms_tool.registration import batch_runner
 
     monkeypatch.delenv(desktop_ipc.EVENT_ENV, raising=False)
     batch_runner._emit_mailboxes_skipped(["a@b.com"], reason="already_registered")

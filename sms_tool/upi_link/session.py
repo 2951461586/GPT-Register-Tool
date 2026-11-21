@@ -1,9 +1,9 @@
 from __future__ import annotations
-from .. import endpoints
+from ..transport import endpoints
 
-from ..checkout_contract import PLUS_TRIAL_CAMPAIGN_ID, browser_profile_for_country
+from ..payment.checkout_contract import PLUS_TRIAL_CAMPAIGN_ID, browser_profile_for_country
 from ..payment.wire import _new_session
-from ..pp_link_helpers import DEFAULT_TIMEOUT, STRIPE_VERSION
+from ..payment.pp_link_helpers import DEFAULT_TIMEOUT, STRIPE_VERSION
 
 try:
     from curl_cffi import requests as _curl_requests

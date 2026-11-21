@@ -82,7 +82,7 @@ def _run_registration(tmp_path, results, *, count, extra_args=()):
         patch.object(cli, "upsert_account", return_value=True),
         patch.object(cli, "database_path", return_value=tmp_path / "accounts.sqlite3"),
         patch("sms_tool.storage.record_registration_audit"),
-        patch("sms_tool.batch_runner.get_account_records", return_value={}),
+        patch("sms_tool.registration.batch_runner.get_account_records", return_value={}),
         health_queue,
         redirect_stdout(buffer),
     ):
@@ -259,7 +259,7 @@ def test_the_desktop_client_still_gets_the_payload_when_the_batch_fails(tmp_path
         patch.object(cli, "_proxy_pool_values", return_value=[]),
         patch.object(cli, "run_batch", return_value=[_failed("pool0@example.com")]),
         patch.object(cli, "_save_registration_results", return_value=report),
-        patch("sms_tool.batch_runner.get_account_records", return_value={}),
+        patch("sms_tool.registration.batch_runner.get_account_records", return_value={}),
         patch.object(cli, "emit_result") as emit,
         redirect_stdout(io.StringIO()),
     ):

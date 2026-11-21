@@ -28,7 +28,7 @@ from typing import Any
 from urllib.parse import quote
 
 from ..proxy.entry import normalize_proxy_url
-from ..pp_link_helpers import (
+from ..payment.pp_link_helpers import (
     DEFAULT_STRIPE_PK,
     STRIPE_VERSION,
     DEFAULT_TIMEOUT,
@@ -45,7 +45,7 @@ from ..pp_link_helpers import (
     stripe_amount_details,
 )
 
-from ..checkout_contract import (
+from ..payment.checkout_contract import (
     PLUS_TRIAL_CAMPAIGN_ID,
     CheckoutRequestContract,
     CheckoutSessionContract,
@@ -60,7 +60,7 @@ from .proxy import (
     rotate_proxy_session as rotate_stage_proxy_session,
 )
 
-from .. import endpoints
+from ..transport import endpoints
 
 # ─── 常量 ────────────────────────────────────────────────────────────────────
 

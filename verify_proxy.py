@@ -22,7 +22,7 @@ import sys
 import requests
 
 from sms_tool.config import load_merged_config
-from sms_tool.phone_proxy import redact_proxy_url
+from sms_tool.phone.phone_proxy import redact_proxy_url
 from sms_tool.proxy.edge_probe import CLEAN, DEFAULT_CHAT_BASE, probe_openai_edge
 
 

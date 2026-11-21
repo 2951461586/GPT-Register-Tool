@@ -18,7 +18,6 @@ are omitted.
 | `--auto-pay-reverse-only` | — | Use reverse protocol only, no browser fallback |
 | `--auto-pay-timeout` | value | Seconds to wait for auto-pay completion |
 | `--auto-proxy-country` | — | Let the payment router probe each proxy and match the backend-required exit country |
-| `--ba-token` | value | PayPal BA token for --omakse-us-pay |
 | `--batch-auto-pay` | — | Run auto-pay for all pending accounts in SQLite |
 | `--batch-auto-pay-limit` | value | Max accounts to process in batch (0=all) |
 | `--blik-code` | value | Six-digit BLIK code; supplying it explicitly executes the BLIK payment |
@@ -68,6 +67,9 @@ are omitted.
 | `--import-target` | choices: `cpa`, `sub2api`, `cliproxyapi` | Target for --import-cpa and 401 re-import |
 | `--inbox-limit` | value | Max messages for --view-inbox |
 | `--init-config` | — | Create the proxy/runtime/payment config shards from config.example.json, skipping any that already exist, then exit |
+| `--inspect-accounts` | — | Lightweight account inspection: skip non-expired valid JWTs and permanently deactivated accounts offline, probe/recover only accounts needing attention, and refresh promotions for recovered accounts |
+| `--inspect-no-promotion` | — | Skip post-recovery promotion refresh during --inspect-accounts |
+| `--inspect-skew-seconds` | value | Seconds before JWT exp to treat an access token as expiring soon during --inspect-accounts |
 | `--json` | — | Machine-readable JSON output for --doctor |
 | `--list-payment-methods` | — | List protocol payment methods and adapter availability |
 | `--list-paypal-ba-queue` | — | List durable PayPal BA authorization queue |
@@ -82,26 +84,6 @@ are omitted.
 | `--no-phone-reuse` | — | Disable phone verification even when smsbower is configured |
 | `--no-require-zero` | — | Allow non-zero amount (default: require 0) |
 | `--no-session-refresh` | — | Do not refresh session before Codex JSON export |
-| `--omakse-base-url` | value | Omakse server base URL (default: http://oai.omakse.xyz) |
-| `--omakse-client-id` | value | Client ID for US protocol payment (auto-generated if omitted) |
-| `--omakse-concurrency` | value | Concurrency for link extraction |
-| `--omakse-extract` | — | Extract PayPal links via omakse server (POST /api/link-extract/jobs) |
-| `--omakse-load-return-url` | — | Load return URL in US payment flow |
-| `--omakse-local-proxy` | value | Local proxy to reach the omakse server |
-| `--omakse-max-attempts` | value | Max attempts per credential for link extraction |
-| `--omakse-max-poll-seconds` | value | Max seconds to poll for job completion |
-| `--omakse-phone-cc` | value | Phone country code for US protocol payment |
-| `--omakse-phone-country` | value | Phone country for US protocol payment |
-| `--omakse-poll-interval` | value | Seconds between status polls |
-| `--omakse-preconfirm-phone` | — | Pre-confirm phone in US payment flow |
-| `--omakse-promo-country` | value | Promotion region country for link extraction |
-| `--omakse-promo-proxies` | value | Promotion-region proxy list for link extraction (newline-separated) |
-| `--omakse-provider-country` | value | PayPal provider country for link extraction |
-| `--omakse-proxy-region` | value | Proxy region for US protocol payment |
-| `--omakse-randomize-device` | — | Randomize device fingerprint for US payment |
-| `--omakse-send-otp` | — | Send phone OTP in US payment flow |
-| `--omakse-us-pay` | — | Run US PayPal protocol payment via omakse server |
-| `--omakse-us-proxies` | value | US proxy list for link extraction (newline-separated) |
 | `--one-click-scan` | — | Batch OAuth scan accounts for account_deactivated and add-phone/secondary phone verification |
 | `--one-click-sms` | — | Run Codex OAuth login for selected account(s), complete phone SMS verification, and store RT |
 | `--open-paypal-link` | — | Open saved PayPal payment link for --email |
@@ -186,6 +168,7 @@ are omitted.
 | `--sub2api-url` | value | SUB2API base URL, defaults to sub2api.api_url in config.json |
 | `--target-at200` | value | Replenish ReMail registrations until this many stable HTTP-200 AT accounts are saved |
 | `--target-country` | value | Target/order country for PayPal generation; legacy checkout-country alias for UPI |
+| `--target-success` | value | Stop batch registration once N accounts succeed (works with any mailbox source; unconsumed mailboxes stay untouched) |
 | `--test-payment-proxies` | — | Probe checkout/approve/update proxy exits and print JSON |
 | `--view-inbox` | — | Fetch recent mailbox messages for --email/--session-file and print JSON |
 | `--wait-paid` | — | Keep the UPI checkout session open and poll until the QR is paid or timed out |

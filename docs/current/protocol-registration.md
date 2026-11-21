@@ -21,8 +21,8 @@ rate; see [Validation limits](#validation-limits).
 | Stage order, runtime state, persistence | `sms_tool/registration/handlers.py`; bootstrap, identity, auth and register stage bodies live in `registration/bootstrap_stages.py` / `identity_stages.py` / `auth_stages.py` / `register_stages.py` and are reached through thin delegates |
 | Persistence seam, stage executor, pure helpers, email-OTP stages, account/session/AT-probe stages, edge-challenge hook, resume stage, Sentinel stages | `sms_tool/registration/persistence.py`, `registration/stage_runner.py`, `registration/protocol_helpers.py`, `registration/otp_stages.py`, `registration/account_stages.py`, `registration/edge_challenge.py`, `registration/resume.py`, `registration/sentinel_stages.py` |
 | `registration.*` boolean toggle parsing (one `Mapping`-safe, two-sided owner) | `sms_tool/registration/flags.py` — `auth_flow.steps._registration_flag` keeps a deliberate copy, because importing the leaf module from `auth_flow` would grow the import-layer ratchet |
-| Account creation and OTP validate wire calls | `sms_tool/account_creation.py` |
-| Sentinel token issuance | `sms_tool/sentinel/` (facade `sms_tool/sentinel_tokens.py`) |
+| Account creation and OTP validate wire calls | `sms_tool/registration/account_creation.py` |
+| Sentinel token issuance | `sms_tool/sentinel/` (facade `sms_tool/registration/sentinel_tokens.py`) |
 | AT probe, result contract, funnel | `sms_tool/registration/outcome.py`, `registration/result.py`, `registration/funnel.py` |
 | Protocol entry points: `run_email` / `run_batch` dispatch, runtime-config and driver selection, and the per-invocation `RegistrationOperations` binding | `sms_tool/registration/orchestrator.py` (a module, not a package — stage order and stage bodies live in `registration/handlers.py` and the sibling stage modules) |
 
@@ -341,7 +341,7 @@ path test inline.
 
 Until 2026-10-07 the protocol lane had **no** exit-level challenge judgement after
 preflight: every in-flow `403`/`429` collapsed into `session_circuit_open`
-(`sms_tool/http_client.py`), with no way to tell "this exit was challenged" from
+(`sms_tool/transport/http_client.py`), with no way to tell "this exit was challenged" from
 "the request was refused". The gap is expensive because it opens *after* a
 mailbox and its OTP were already spent, so a missed challenge loses a mailbox
 slot permanently while a false positive costs one extra request.
@@ -375,8 +375,8 @@ suffix can ship on by default (the A/B in
 `plan-2026-10-05-inflow-challenge-handoff.md` §4 has no other data source for
 "did a challenge happen at all").
 
-🔴 **Where it lives, and why not in `auth_state.py`.**
-`plan-2026-10-05` suggested `auth_state.py`; that is a cycle, because
+🔴 **Where it lives, and why not in `transport/auth_state.py`.**
+`plan-2026-10-05` suggested `transport/auth_state.py`; that is a cycle, because
 `auth_state` already imports `http_client`, and `http_client` is the owner of the
 `session_circuit_open` name the suffix rides on. The judgement therefore sits
 next to `classify_edge_response`, and `auth_state` will re-export it when the
@@ -560,7 +560,7 @@ output into `token()`; the runner calls `sessionObserverToken(flow)` and emits i
 `OpenAI-Sentinel-SO-Token`. The previous stack never sent an SO header although the
 challenge reported `so.required=true` for `authorize_continue` / `oauth_create_account`.
 `chatgpt`-family requests now claim the live web build (`CHATGPT_CLIENT_*` in
-`auth_headers.py`).
+`transport/auth_headers.py`).
 
 `registration.chatgpt_bootstrap.enabled` (default `false`) now also drives a
 protocol-lane warm-up (`sms_tool/registration/warmup.py`): right after the
@@ -639,7 +639,7 @@ therefore usually a deactivated account, not a refreshable session: 0 of 43 rece
 
 The 2026-10-23 `chatgpt.com` HAR (Chrome 155 / Windows 11 24H2) is the current
 reference for the protocol lane's client hints. Values the code must keep in
-sync (`sms_tool/auth_headers.py`, `sms_tool/fingerprint_pool.py`):
+sync (`sms_tool/transport/auth_headers.py`, `sms_tool/transport/fingerprint_pool.py`):
 
 | Field | Current value | Note |
 | --- | --- | --- |
@@ -698,7 +698,7 @@ place that enforces it:
 
 ### Protocol transport backend: `curl_cffi` or `wreq` (2026-11-19)
 
-`sms_tool/http_backend.py` selects the HTTP/TLS stack for the protocol lane.
+`sms_tool/transport/http_backend.py` selects the HTTP/TLS stack for the protocol lane.
 Default is `curl_cffi` (`email_registration.protocol_http_backend`, env
 `PROTOCOL_HTTP_CLIENT`, same name as the reference project). Selecting `wreq`
 uses a Rust stack whose ClientHello family is independent of
@@ -713,7 +713,7 @@ curl-impersonate — that is the whole point of having it — and it is
 
 `auth_headers.supported_profile_names()` filters the profile table through
 the active backend, so selection never offers a preset the transport cannot
-send. The per-account extension permutation in `tls_fingerprint.py` is a libcurl
+send. The per-account extension permutation in `transport/tls_fingerprint.py` is a libcurl
 option and therefore curl-only; a `wreq` session reports
 `backend-without-curl-options:wreq` in its fingerprint summary rather than
 claiming a rotation it did not perform. Request kwargs the adapter cannot
@@ -780,7 +780,7 @@ table the browser lane uses) and both producers format that label.
 weight sat behind one value a WAF can blacklist in a single line. Chrome presets
 already permute their extension order per handshake; Safari's order is fixed too.
 
-`sms_tool/tls_fingerprint.py` permutes the **order** of the profile's own
+`sms_tool/transport/tls_fingerprint.py` permutes the **order** of the profile's own
 extension list (never the set) deterministically from the account's device seed
 and installs it as a `CurlOpt.TLS_EXTENSION_ORDER` session option. Verified
 2026-11-11 through the configured residential exit: three seeds → three distinct
@@ -870,7 +870,7 @@ unreachable, so the arm measured nothing and its 5/5 failure was almost read as
 **log** shows the toggle's own line (`mechanism_ok`), and `compare` returns
 `manipulation_failed` -- ahead of `underpowered` -- when it does not. New
 toggles must register a mechanism line emitted through
-`sms_tool.operator_output.emit` in `scripts/registration_ab.py` (a bare `print`
+`sms_tool.observability.operator_output.emit` in `scripts/registration_ab.py` (a bare `print`
 reaches only the stdout mirror, so a `collect --log .../sms_tool.log` run cannot
 see it, and a marker whose trigger is conditional must declare
 `"conditional": true` so its absence is `not_judgeable`, not

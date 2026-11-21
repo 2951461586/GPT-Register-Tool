@@ -108,7 +108,7 @@ def request(*args: Any, **kwargs: Any) -> Any:
     """
     global _request
     if _request is None:
-        from ..http_client import request_with_retry
+        from ..transport.http_client import request_with_retry
 
         _request = request_with_retry
     return _request(*args, **kwargs)

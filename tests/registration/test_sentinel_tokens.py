@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from sms_tool import sentinel_tokens
+from sms_tool.registration import sentinel_tokens
 
 
 class _Cookies:
@@ -50,8 +50,8 @@ class SentinelTokenTests(unittest.TestCase):
 
     def test_http_extract_persist_false_does_not_write_shared_cache(self):
         with (
-            patch("sms_tool.sentinel_tokens.curl_requests.Session", _Session),
-            patch("sms_tool.sentinel_tokens._save_sentinel_cache") as save,
+            patch("sms_tool.registration.sentinel_tokens.curl_requests.Session", _Session),
+            patch("sms_tool.registration.sentinel_tokens._save_sentinel_cache") as save,
         ):
             result = sentinel_tokens._extract_sentinel_http(persist=False, device_id="did-fixed")
 
@@ -71,7 +71,7 @@ class SentinelTokenTests(unittest.TestCase):
                     response.json.return_value = {"token": "", "so": ""}
                 return response
 
-        with patch("sms_tool.sentinel_tokens.curl_requests.Session", MissingAuthorize):
+        with patch("sms_tool.registration.sentinel_tokens.curl_requests.Session", MissingAuthorize):
             self.assertIsNone(sentinel_tokens._extract_sentinel_http(persist=False, device_id="did-fixed"))
 
     def test_quickjs_extract_persist_false_does_not_write_shared_cache(self):
@@ -88,7 +88,7 @@ class SentinelTokenTests(unittest.TestCase):
 
         with (
             patch("sms_tool.sentinel.client.issue_sentinel_bundle", return_value=expected) as issue,
-            patch("sms_tool.sentinel_tokens._save_sentinel_cache") as save,
+            patch("sms_tool.registration.sentinel_tokens._save_sentinel_cache") as save,
         ):
             result = sentinel_tokens._extract_sentinel_quickjs(persist=False, device_id="did-fixed")
 
@@ -121,7 +121,7 @@ class SentinelTokenTests(unittest.TestCase):
 
         ctx = Mock()
         ctx.cookies.return_value = [{"name": "oai-did", "value": "did-fixed"}]
-        with patch("sms_tool.sentinel_tokens._save_sentinel_cache"):
+        with patch("sms_tool.registration.sentinel_tokens._save_sentinel_cache"):
             result = sentinel_tokens._collect_sentinel_tokens(Page(), ctx, persist=False)
         assert result is not None
         self.assertEqual(json.loads(result["sentinel_authorize_continue_token"])["flow"], "authorize_continue")
@@ -131,8 +131,8 @@ class SentinelTokenTests(unittest.TestCase):
         expected = {"sentinel_token": "token", "oai_did": "did"}
         with (
             patch.object(sentinel_tokens, "CFG", {"email_registration": {"sentinel_allow_http_fallback": True}}),
-            patch("sms_tool.sentinel_tokens._sentinel_mode", return_value="http"),
-            patch("sms_tool.sentinel_tokens._extract_sentinel_http", return_value=expected) as extract,
+            patch("sms_tool.registration.sentinel_tokens._sentinel_mode", return_value="http"),
+            patch("sms_tool.registration.sentinel_tokens._extract_sentinel_http", return_value=expected) as extract,
         ):
             result = sentinel_tokens._extract_sentinel(force_fresh=True, persist=False)
 
@@ -141,10 +141,10 @@ class SentinelTokenTests(unittest.TestCase):
 
     def test_auto_mode_does_not_fall_back_to_synthetic_http_pow(self):
         with (
-            patch("sms_tool.sentinel_tokens._sentinel_mode", return_value="auto"),
-            patch("sms_tool.sentinel_tokens._extract_sentinel_quickjs", return_value=None) as quickjs,
-            patch("sms_tool.sentinel_tokens._extract_sentinel_http") as http,
-            patch("sms_tool.sentinel_tokens._extract_sentinel_cloakbrowser") as browser,
+            patch("sms_tool.registration.sentinel_tokens._sentinel_mode", return_value="auto"),
+            patch("sms_tool.registration.sentinel_tokens._extract_sentinel_quickjs", return_value=None) as quickjs,
+            patch("sms_tool.registration.sentinel_tokens._extract_sentinel_http") as http,
+            patch("sms_tool.registration.sentinel_tokens._extract_sentinel_cloakbrowser") as browser,
         ):
             result = sentinel_tokens._extract_sentinel(
                 proxy="socks5h://127.0.0.1:7897",
@@ -180,8 +180,8 @@ class SentinelTokenTests(unittest.TestCase):
         with (
             patch.object(sentinel_tokens, "CFG", {"email_registration": {"sentinel_allow_http_fallback": True}}),
             patch.object(sentinel_tokens, "_sentinel_extraction_gate", gate),
-            patch("sms_tool.sentinel_tokens._sentinel_mode", return_value="http"),
-            patch("sms_tool.sentinel_tokens._extract_sentinel_http", side_effect=extract),
+            patch("sms_tool.registration.sentinel_tokens._sentinel_mode", return_value="http"),
+            patch("sms_tool.registration.sentinel_tokens._extract_sentinel_http", side_effect=extract),
         ):
             with ThreadPoolExecutor(max_workers=4) as executor:
                 futures = [

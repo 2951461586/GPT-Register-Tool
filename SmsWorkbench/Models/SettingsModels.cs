@@ -1,11 +1,7 @@
-// Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
-#nullable enable
-
 using CommunityToolkit.Mvvm.ComponentModel;
 using System.Collections.ObjectModel;
 
-namespace SmsWorkbench
+namespace SmsWorkbench.Models
 {
     public enum SettingFieldKind
     {

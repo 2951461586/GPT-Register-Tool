@@ -118,7 +118,7 @@ def test_select_registration_proxy_pool_uses_generated_exits(monkeypatch):
         "generate_pool_report",
         lambda config=None, **kwargs: dynamic.GenerationOutcome(["http://dynamic:1"]),
     )
-    from sms_tool.batch_runner import select_registration_proxy_pool
+    from sms_tool.registration.batch_runner import select_registration_proxy_pool
 
     selected = select_registration_proxy_pool(["http://static:1"])
     assert list(selected) == ["http://dynamic:1"]
@@ -139,7 +139,7 @@ def test_select_registration_proxy_pool_records_why_generation_fell_back(monkeyp
         "generate_pool_report",
         lambda config=None, **kwargs: dynamic.GenerationOutcome([], "asn_mismatch"),
     )
-    from sms_tool.batch_runner import select_registration_proxy_pool
+    from sms_tool.registration.batch_runner import select_registration_proxy_pool
 
     selected = select_registration_proxy_pool(["http://static:1"])
     assert list(selected) == ["http://static:1"]

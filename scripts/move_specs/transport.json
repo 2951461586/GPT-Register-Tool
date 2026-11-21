@@ -1,0 +1,17 @@
+{
+  "package": "transport",
+  "layer": 5,
+  "modules": {
+    "auth_headers": "auth_headers",
+    "auth_state": "auth_state",
+    "auth_wire": "auth_wire",
+    "backoff": "backoff",
+    "endpoints": "endpoints",
+    "fingerprint_pool": "fingerprint_pool",
+    "http_backend": "http_backend",
+    "http_client": "http_client",
+    "http_utils": "http_utils",
+    "page_truth": "page_truth",
+    "tls_fingerprint": "tls_fingerprint"
+  }
+}

@@ -1,14 +1,10 @@
-// Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
-#nullable enable
-
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
 
-namespace SmsWorkbench
+namespace SmsWorkbench.Services
 {
     internal static class MailboxPoolFileStore
     {

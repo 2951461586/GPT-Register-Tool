@@ -26,8 +26,8 @@ import time
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any
 
-from ..auth_headers import auth_impersonate, chatgpt_headers
-from ..operator_output import emit as _emit
+from ..transport.auth_headers import auth_impersonate, chatgpt_headers
+from ..observability.operator_output import emit as _emit
 from .flags import registration_flag
 
 if TYPE_CHECKING:  # pragma: no cover - import cycle guard for type checkers only

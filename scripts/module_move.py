@@ -184,7 +184,7 @@ def rewrite_relative(source: str, old_module: str, new_module: str, is_package: 
         # `from . import a, b as c` -- each alias may name a module of its own,
         # and the *level* has to be recomputed even when nothing in the list
         # moved: the file itself is one directory deeper now. Missing that is
-        # how ``from . import endpoints`` (``sms_tool.endpoints`` before the
+        # how ``from . import endpoints`` (``sms_tool.transport.endpoints`` before the
         # move) started resolving to ``sms_tool.paypal.endpoints``.
         target = resolve_relative(old_module, is_package, node.level, None)
         level, module = relative_from(new_module, is_package, target)
@@ -198,7 +198,8 @@ def rewrite_relative(source: str, old_module: str, new_module: str, is_package: 
                 continue
             parent, leaf = moves[child].rsplit(".", 1)
             child_level, parent_rel = relative_from(new_module, is_package, parent)
-            extra.append(f"from {'.' * child_level}{parent_rel} import {leaf} as {binding}")
+            as_clause = f" as {binding}" if leaf != binding else ""
+            extra.append(f"from {'.' * child_level}{parent_rel} import {leaf}{as_clause}")
         statements: list[str] = []
         indent = " " * node.col_offset
         if kept:
@@ -206,16 +207,6 @@ def rewrite_relative(source: str, old_module: str, new_module: str, is_package: 
         statements.extend(extra)
         if not statements:
             continue
-        # The statement is rebuilt from its names, so anything the AST does not
-        # model -- the trailing ``noqa`` marker on a deliberate re-export, for
-        # one -- would be dropped. Measured on the payment cluster:
-        # ``paypal/auto.py`` lost its marker and the unused-import ratchet went
-        # 0 -> 2 on a line that is *deliberately* an unused re-export.
-        tail = source[end:]
-        stripped = tail.lstrip(" \t")
-        if stripped.startswith("#"):
-            comment = stripped.split("\n", 1)[0].rstrip()
-            statements[-1] = f"{statements[-1]}  {comment}"
         replacement = ("\n" + indent).join(statements)
         if replacement != source[start:end]:
             edits.append((start, end, replacement))
@@ -248,7 +239,8 @@ def rewrite_root_package_imports(source: str, moves: dict[str, str]) -> str:
                 kept.append(alias.name + (f" as {alias.asname}" if alias.asname else ""))
                 continue
             parent, leaf = moves[full].rsplit(".", 1)
-            extra.append(f"from {parent} import {leaf} as {binding}")
+            as_clause = f" as {binding}" if leaf != binding else ""
+            extra.append(f"from {parent} import {leaf}{as_clause}")
         if not extra:
             continue
         start = starts[node.lineno - 1] + node.col_offset
@@ -262,6 +254,17 @@ def rewrite_root_package_imports(source: str, moves: dict[str, str]) -> str:
     for start, end, replacement in sorted(edits, reverse=True):
         source = source[:start] + replacement + source[end:]
     return source
+
+
+def _write_text_retry(path: pathlib.Path, content: str) -> None:
+    for attempt in range(8):
+        try:
+            path.write_text(content, encoding="utf-8", newline="\n")
+            return
+        except OSError:
+            if attempt == 7:
+                raise
+            time.sleep(0.05 * (attempt + 1))
 
 
 def rewrite_python_file(path: pathlib.Path, spec: Spec) -> bool:
@@ -279,7 +282,7 @@ def rewrite_python_file(path: pathlib.Path, spec: Spec) -> bool:
     updated = rewrite_relative(original, old_module, new_module, is_package, spec.moves)
     updated = rewrite_root_package_imports(updated, spec.moves)
     if updated != original:
-        path.write_text(updated, encoding="utf-8", newline="\n")
+        _write_text_retry(path, updated)
         return True
     return False
 
@@ -358,7 +361,7 @@ def rewrite_names_and_paths(spec: Spec) -> list[str]:
         for pattern, new in path_pairs:
             updated = pattern.sub(new, updated)
         if updated != text:
-            path.write_text(updated, encoding="utf-8", newline="\n")
+            _write_text_retry(path, updated)
             changed.append(path.relative_to(ROOT).as_posix())
     return changed
 
@@ -376,7 +379,7 @@ def rename_json_keys(spec: Spec) -> list[str]:
             updated = updated.replace(f'"{old}"', f'"{new}"')
         if updated != text:
             json.loads(updated)  # a rename that breaks JSON must fail here, not later
-            path.write_text(updated, encoding="utf-8", newline="\n")
+            _write_text_retry(path, updated)
             changed.append(rel)
     return changed
 
@@ -390,9 +393,14 @@ def sync_layer_manifest(spec: Spec) -> None:
     path = ROOT / "scripts" / "layer_manifest.json"
     data = json.loads(path.read_text(encoding="utf-8"))
     data["packages"][spec.package] = spec.layer
-    for old in spec.modules:
-        data["root_modules"].pop(f"{old}.py", None)
-    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
+    overrides = data.setdefault("module_overrides", {})
+    for old, new in spec.modules.items():
+        old_layer = data["root_modules"].pop(f"{old}.py", None)
+        rewritten_layer = data["root_modules"].pop(f"{spec.package}/{new}.py", None)
+        effective_layer = old_layer if old_layer is not None else rewritten_layer
+        if effective_layer is not None and effective_layer != spec.layer:
+            overrides[f"{spec.package}/{new}"] = effective_layer
+    _write_text_retry(path, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
 
 
 def sync_subpackages(spec: Spec) -> None:
@@ -401,7 +409,7 @@ def sync_subpackages(spec: Spec) -> None:
     if f'"{spec.package}",' in text.split("SUBPACKAGES = (")[1].split(")")[0]:
         return
     text = text.replace("SUBPACKAGES = (\n", f'SUBPACKAGES = (\n    "{spec.package}",\n', 1)
-    path.write_text(text, encoding="utf-8", newline="\n")
+    _write_text_retry(path, text)
 
 
 def sync_documented_cycles(spec: Spec) -> None:
@@ -412,7 +420,7 @@ def sync_documented_cycles(spec: Spec) -> None:
     anchor = "        # The five-module cycle:"
     lines = "\n".join(f'        ("{a}", "{b}"),' for a, b in spec.documented_cycles)
     text = text.replace(anchor, f"{lines}\n{anchor}", 1)
-    path.write_text(text, encoding="utf-8", newline="\n")
+    _write_text_retry(path, text)
 
 
 def sync_directory_map(spec: Spec) -> None:
@@ -428,14 +436,51 @@ def sync_directory_map(spec: Spec) -> None:
         if glob not in kept:
             kept.append(glob)
         data["groups"][name] = kept
-    groups.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
+    _write_text_retry(groups, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
 
     if spec.doc_row_old and spec.doc_row_new:
         doc = ROOT / "docs" / "directory-map.md"
         text = doc.read_text(encoding="utf-8")
         if spec.doc_row_old not in text:
             raise SystemExit("doc_row_old not found in docs/directory-map.md")
-        doc.write_text(text.replace(spec.doc_row_old, spec.doc_row_new, 1), encoding="utf-8", newline="\n")
+        _write_text_retry(doc, text.replace(spec.doc_row_old, spec.doc_row_new, 1))
+
+
+def sync_delayed_import_reasons(spec: Spec) -> None:
+    """Propagate reason entries when ``from .. import X`` becomes ``from ..<pkg> import X``.
+
+    ``delayed_import_ratchet.resolve_target`` resolves ``from ..<pkg> import X``
+    to ``sms_tool.<pkg>`` (the package), whereas ``rewrite_names_and_paths``
+    rewrote ``sms_tool.<old>`` in ``delayed_import_reasons.json`` to
+    ``sms_tool.<pkg>.<new>``. Copy the existing reason entry onto the package-
+    level key so ``delayed_import_ratchet.py --update-baseline`` succeeds.
+    """
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import delayed_import_ratchet as dir_mod  # noqa: PLC0415
+
+    reasons_path = ROOT / "scripts" / "delayed_import_reasons.json"
+    data = json.loads(reasons_path.read_text(encoding="utf-8"))
+    edges_map: dict[str, dict[str, str]] = data.get("edges", {})
+    live_edges = dir_mod.collect_delayed_edges()
+    changed = False
+    pkg_target = f"sms_tool.{spec.package}"
+    for edge in live_edges:
+        if edge.reason == "deferred" and edge.key not in edges_map and edge.target == pkg_target:
+            for new_name in spec.modules.values():
+                candidate = f"{edge.importer} -> {pkg_target}.{new_name}"
+                if candidate in edges_map:
+                    edges_map[edge.key] = dict(edges_map[candidate])
+                    changed = True
+                    break
+            if edge.key not in edges_map:
+                edges_map[edge.key] = {
+                    "reason": "deferred",
+                    "why": f"Root domain relocation (2026-11-21): relative submodule import into sms_tool.{spec.package} resolved at package level after moving root modules into {spec.package}/.",
+                }
+                changed = True
+    if changed:
+        data["edges"] = dict(sorted(edges_map.items()))
+        _write_text_retry(reasons_path, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
 
 
 def sync_pinned_totals() -> None:
@@ -459,9 +504,16 @@ def sync_pinned_totals() -> None:
     end = text.find("\ndef ", start + len(anchor))
     end = len(text) if end < 0 else end
     body = text[start:end]
-    for key in ("total_module_edges", "ordered_pairs", "mutual_pairs", "minority_edges", "delayed_cross_dir_edges"):
+    for key in (
+        "total_module_edges",
+        "ordered_pairs",
+        "mutual_pairs",
+        "minority_edges",
+        "delayed_cross_dir_edges",
+        "type_only_edges",
+    ):
         body = re.sub(rf'("{key}": )\d+', rf"\g<1>{totals[key]}", body)
-    path.write_text(text[:start] + body + text[end:], encoding="utf-8", newline="\n")
+    _write_text_retry(path, text[:start] + body + text[end:])
 
 
 # --------------------------------------------------------------------------
@@ -474,13 +526,12 @@ def run(command: list[str], *, check: bool = True) -> subprocess.CompletedProces
 
 
 def validate(spec: Spec) -> None:
-    for old in spec.modules:
+    for old, new in spec.modules.items():
         source = ROOT / "sms_tool" / f"{old}.py"
-        if not source.is_file():
-            raise SystemExit(f"missing source module: sms_tool/{old}.py")
-    for new in spec.modules.values():
         target = ROOT / "sms_tool" / spec.package / f"{new}.py"
-        if target.exists():
+        if not source.is_file() and not target.is_file():
+            raise SystemExit(f"missing source module: sms_tool/{old}.py")
+        if source.is_file() and target.exists():
             raise SystemExit(f"target already exists: {target.relative_to(ROOT)}")
     if (ROOT / "sms_tool" / spec.package).exists() and not spec.root_package_init:
         if not (ROOT / "sms_tool" / spec.package / "__init__.py").exists():
@@ -491,14 +542,16 @@ def apply(spec: Spec) -> int:
     package_dir = ROOT / "sms_tool" / spec.package
     package_dir.mkdir(parents=True, exist_ok=True)
     if not (package_dir / "__init__.py").exists():
-        (package_dir / "__init__.py").write_text(
+        _write_text_retry(
+            package_dir / "__init__.py",
             f'"""{spec.package.capitalize()} helpers, split out of the package root on 2026-10-21."""\n\n'
             "from __future__ import annotations\n",
-            encoding="utf-8",
-            newline="\n",
         )
+        run(["git", "add", f"sms_tool/{spec.package}/__init__.py"])
     for old, new in spec.modules.items():
-        run(["git", "mv", f"sms_tool/{old}.py", f"sms_tool/{spec.package}/{new}.py"])
+        source = ROOT / "sms_tool" / f"{old}.py"
+        if source.is_file():
+            run(["git", "mv", f"sms_tool/{old}.py", f"sms_tool/{spec.package}/{new}.py"])
 
     touched = 0
     for base in PY_ROOTS:
@@ -520,6 +573,7 @@ def apply(spec: Spec) -> int:
     sync_layer_manifest(spec)
     sync_documented_cycles(spec)
     sync_directory_map(spec)
+    sync_delayed_import_reasons(spec)
 
     run([sys.executable, "-m", "ruff", "format", "sms_tool", "tests", "scripts", *EXTRA_PY])
     run([sys.executable, "scripts/dependency_graph.py", "--write"])

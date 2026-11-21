@@ -12,7 +12,7 @@ from typing import Any, Iterable
 
 from curl_cffi import requests as curl_requests
 
-from ..agent_identity import (
+from .agent_identity import (
     create_agent_identity,
     is_agent_identity,
     load_agent_identity,

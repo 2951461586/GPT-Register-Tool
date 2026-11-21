@@ -11,7 +11,7 @@ from growing.
 
 This ratchet records the per-file bare-print count and fails if any file's
 count grows.  New operator-facing lines should go through
-``sms_tool.operator_output.emit`` (one call feeds stdout AND the log).  Lower
+``sms_tool.observability.operator_output.emit`` (one call feeds stdout AND the log).  Lower
 a baseline only after *removing* prints:
 
     python scripts/bare_print_ratchet.py --update-baseline

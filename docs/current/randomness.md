@@ -27,9 +27,9 @@ Use `random` when the value only needs to be *varied*, not *unguessable*:
 
 | Site | Value | Decision |
 | --- | --- | --- |
-| `sms_tool/auth_headers.py` `datadog_trace_headers` | `traceparent` / parent id | **`secrets.randbits(64)`** — echoed to OpenAI telemetry |
-| `sms_tool/auth_headers.py` `_device_profile_for` | screen/DPR/CPU choices | `random.Random(sha256(seed))` — deterministic fingerprint |
-| `sms_tool/auth_headers.py` `_auth_fingerprint` | profile pick | already `random.SystemRandom` |
+| `sms_tool/transport/auth_headers.py` `datadog_trace_headers` | `traceparent` / parent id | **`secrets.randbits(64)`** — echoed to OpenAI telemetry |
+| `sms_tool/transport/auth_headers.py` `_device_profile_for` | screen/DPR/CPU choices | `random.Random(sha256(seed))` — deterministic fingerprint |
+| `sms_tool/transport/auth_headers.py` `_auth_fingerprint` | profile pick | already `random.SystemRandom` |
 | `sms_tool/proxy/entry.py` `_random_session_id` | sticky proxy session id | **`secrets.choice`** — egress selection |
 | `services/protocol-payment/pix/pix_core.py` `random_proxy_sid` | sticky proxy session id | **`secrets.choice`** |
 | `services/protocol-payment/direct_card/direct_card_extract.py` `new_proxy_session_id` | sticky proxy session id | **`secrets.randbelow`** |
@@ -37,8 +37,8 @@ Use `random` when the value only needs to be *varied*, not *unguessable*:
 | `services/protocol-payment/*/…_extract.py` billing helpers | name / address / postal / phone | `random` |
 | `services/protocol-payment/kakao/kakao_extract.py` `random_kakao_billing` | billing identity | `random.Random(sha256(token + uuid4))` — already CSPRNG-seeded |
 | `sms_tool/utils.py` name/birthday/jitter helpers | fake persona, delays | `random` |
-| `sms_tool/humanize.py`, `sms_tool/registration/warmup.py` | delay jitter | `random` |
-| `sms_tool/fingerprint_pool.py` | weighted profile pick | `random.choices` |
+| `sms_tool/registration/humanize.py`, `sms_tool/registration/warmup.py` | delay jitter | `random` |
+| `sms_tool/transport/fingerprint_pool.py` | weighted profile pick | `random.choices` |
 | `sms_tool/paypal/*`, `sms_tool/upi_link/*` | click/typing cadence | `random` |
 | `services/protocol-payment/*` proxy `shuffle` / `sample` | candidate order | `random` — every candidate is trusted |
 

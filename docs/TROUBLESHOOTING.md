@@ -90,7 +90,7 @@
 
 按顺序检查：
 
-1. **403 / 429 不重试**，改为在 session 上记一条 `blocked_until` 熔断（`sms_tool/http_client.py:140`）。
+1. **403 / 429 不重试**，改为在 session 上记一条 `blocked_until` 熔断（`sms_tool/transport/http_client.py:140`）。
    所以「没有重试日志」是预期行为，不是重试被吃掉。
 2. 冷却时长：403 默认 **900s**，429 默认 **300s**（取 `Retry-After` 优先）。
 3. 429 是**出口 IP 级短窗口限流**，不是并发上限 —— 调低并发不会解决它。
@@ -190,7 +190,7 @@
 1. 看到 `phone_pool_unavailable`（注册链路）⇒ 池子没建起来。配置里要同时有
    `phone_reuse.source`（供应商 key，默认 `smsbower`）与**该供应商自己的** `api_key`，
    例如 `phone_reuse.smsbower.api_key`，或环境变量 `SMSBOWER_API_KEY`。
-   供应商清单见 `sms_tool/sms_providers.py`（唯一真源）。
+   供应商清单见 `sms_tool/phone/sms_providers.py`（唯一真源）。
 
    四家供应商的配置骨架已在 `proxy.json` 和 `config.example.json` 里给出，
    `api_key` 一律是**占位符**形式（默认走环境变量），把值填成自己的 key 即可：
@@ -219,14 +219,14 @@
    `sms_tool/paypal/orchestrator.py`，要么关掉 PayPal 结账短信（见第 4 条）。
 3. 🔴 报错里出现 `phone_pool` / `static` / `legacy` / `sms_link` / `link` 被拒 ⇒
    这些是**已删除的 source 取值**，不是打错字。把 `phone_reuse.source` 改成供应商 key。
-   `sms_tool/sms_providers.py` 的 `REMOVED_SOURCE_VALUES` 会给出逐值的替换建议。
+   `sms_tool/phone/sms_providers.py` 的 `REMOVED_SOURCE_VALUES` 会给出逐值的替换建议。
 4. 三种泳道的失败**故意不同**，别当成不一致：
    - `flow_steps` / `paypal_reverse` 会先看页面有没有验证码输入框，**有**才失败 ⇒ 直接抛错；
    - `nodriver_paypal` 是盲点「Send Code」，分不清「没有闸门」和「有闸门但接不了」，
      所以只打日志继续跑 —— 抛错会让**每一次**支付都失败，包括绝大多数根本不要短信的。
 5. `no_number_source` **不再**等价于「等 120 秒然后 `sms_code_timeout`」。
    后者是在轮询一个空 URL，报的是错的原因。判据现在落在轮询**之前**
-   （`sms_tool/sms_utils.py` 的 `NO_NUMBER_SOURCE_MESSAGE`）。
+   （`sms_tool/phone/sms_utils.py` 的 `NO_NUMBER_SOURCE_MESSAGE`）。
 6. 老配置里残留的 `paypal_browser.phone_pool` / `paypal_nocard.phone_pool` /
    `phone_index_file` 都是**死键**，没有任何读取方。示例模板里的已删；
    本机未跟踪的分片（`config.json` / `payment.json` / `proxy.json`）里可能还在，
@@ -234,7 +234,7 @@
 7. 🔴 **配置写对了、`--doctor` 也是绿的，但一个号都买不到** ⇒ 先查**价格窗口**。
 
    `phone_reuse` 会把 `max_price` **全局兜底成 `0.06`**（`phone/reuse.py:555` 的 `or "0.06"`），
-   而 `_price_window_refusal()`（`sms_tool/nexsms.py:500`）会拒掉任何高于它的报价。
+   而 `_price_window_refusal()`（`sms_tool/phone/nexsms.py:500`）会拒掉任何高于它的报价。
    **「空值不是边界」** —— 空 `min_price` 确实无下界，但 `max_price` 有默认上界。
 
    ⇒ **换一家供应商时必须重估价格窗口，不能沿用 0.06。** 各家的价差极大，实测 nexsms
@@ -254,7 +254,7 @@
    ```bash
    PYTHONPATH=. python -c "
    from sms_tool import phone_reuse as pr, sms_providers as sp
-   from sms_tool.nexsms import NexSmsClient
+   from sms_tool.phone.nexsms import NexSmsClient
    cfg = pr._phone_reuse_cfg()
    c = NexSmsClient(api_key=pr._provider_api_key(cfg,'nexsms'), endpoint=sp.default_endpoint('nexsms'))
    print(c.get_country_quote(service='dr', country='6'))"
@@ -276,7 +276,7 @@
    **已实测到的实例（2026-09-23，未改动，仅记录）**：`smsbower`（当前**活跃**供应商）
    配的是 `country=151`（智利）+ 三价钉 `0.07`，而 `0.07` 这一档**在 122 个有号国家里
    出现 0 次** —— 智利的档位是 `0.045 / 0.047 / 0.087 / 0.100 / …`。`get_number` 会把
-   `minPrice=0.07&maxPrice=0.07` **逐字**发给 `getNumberV2`（`smsbower.py:112-115`），
+   `minPrice=0.07&maxPrice=0.07` **逐字**发给 `getNumberV2`（`phone/smsbower.py:112-115`），
    且 `_country_candidates("151")` 只有 `["151"]`（没有回退国）。
 
    ⚠️ **这里有一个尚未验证的前提**：厂商是否**严格按 `minPrice` 过滤**。
@@ -361,7 +361,7 @@ self.assertIn(key.rsplit(".", 1)[-1], writes, "counter-example moved")
    ⇒ 整个「一键接码」不可用。
 
 **为什么只有桌面端中招**：`CreateOneClickSms` 那条路只把供应商 key 当**命令行参数**传给
-Python 后端，协议细节全在 `sms_tool/`（`nexsms.py`）里 ⇒ 命令行与批量跑批一直是好的。
+Python 后端，协议细节全在 `sms_tool/`（`phone/nexsms.py`）里 ⇒ 命令行与批量跑批一直是好的。
 
 **现在的行为**（2026-09-23 第二次修订）：弹窗按 `SmsProviderCatalog.SmsProvider.Protocol`
 分派到**两个在线读取器**，两者都在 `sms_tool/providers/sms_vendor_api.py` 里：
@@ -631,7 +631,7 @@ Python 后端，协议细节全在 `sms_tool/`（`nexsms.py`）里 ⇒ 命令行
 ```text
 _________ ERROR collecting tests/mailbox/test_email_otp_filtering.py _________
   sms_tool\registration\__init__.py:346: in __getattr__
-  sms_tool\sentinel_tokens.py:25: in <module>
+  sms_tool/registration/sentinel_tokens.py:25: in <module>
       SENTINEL_CACHE_FILE = runtime_file(CFG, "sentinel_cache.json")
   sms_tool\config\schema.py:485: in validate_config
 E   sms_tool.config.schema.ConfigError: chatgpt must be an object

@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from sms_tool import gen_pp_link
+from sms_tool.paypal_link import gen_link as gen_pp_link
 from sms_tool.paypal import proxy as paypal_proxy
 
 

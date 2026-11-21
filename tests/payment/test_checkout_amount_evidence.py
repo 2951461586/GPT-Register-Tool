@@ -8,7 +8,7 @@ authoritative-path ordering and the new discount/observation evidence.
 
 from __future__ import annotations
 
-from sms_tool.checkout_contract import (
+from sms_tool.payment.checkout_contract import (
     CheckoutRequestContract,
     StripeCapabilityEvidence,
     amount_observations,

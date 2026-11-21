@@ -12,11 +12,11 @@ from typing import Any, Mapping
 
 from curl_cffi import requests as curl_requests
 
-from .. import endpoints
-from ..tls_fingerprint import apply_to_session as _apply_tls_fingerprint
-from ..auth_headers import auth_impersonate, auth_user_agent, browser_family, sentinel_fingerprint
-from ..http_client import request_with_retry
-from ..phone_proxy import normalize_proxy_url, redact_proxy_text
+from ..transport import endpoints
+from ..transport.tls_fingerprint import apply_to_session as _apply_tls_fingerprint
+from ..transport.auth_headers import auth_impersonate, auth_user_agent, browser_family, sentinel_fingerprint
+from ..transport.http_client import request_with_retry
+from ..phone.phone_proxy import normalize_proxy_url, redact_proxy_text
 from .bundle import sentinel_version
 from .runner import SentinelRunnerError, run_sentinel_sdk
 from .surface import random_probes
@@ -635,7 +635,7 @@ def issue_sentinel_flow(
                 f"for {flow}: {_root_reason(runner_error, proxy)}"
             )
 
-    from ..sentinel_tokens import _extract_sentinel
+    from ..registration.sentinel_tokens import _extract_sentinel
 
     data = _extract_sentinel(
         proxy=proxy,

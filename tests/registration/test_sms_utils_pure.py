@@ -1,4 +1,4 @@
-"""Behaviour tests for ``sms_tool/sms_utils.py`` (2026-09-03, round 7).
+"""Behaviour tests for ``sms_tool/phone/sms_utils.py`` (2026-09-03, round 7).
 
 102 lines, **zero test files import it** (AST audit). It was extracted from
 ``paypal/auto.py`` purely to break a circular import, so it has no test of its
@@ -32,7 +32,7 @@ from __future__ import annotations
 import unittest
 from unittest import mock
 
-from sms_tool import sms_utils
+from sms_tool.phone import sms_utils
 
 
 class _FakeResponse:

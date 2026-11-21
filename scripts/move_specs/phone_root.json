@@ -1,0 +1,12 @@
+{
+  "package": "phone",
+  "layer": 4,
+  "modules": {
+    "nexsms": "nexsms",
+    "phone_proxy": "phone_proxy",
+    "sms_provider_adapter": "sms_provider_adapter",
+    "sms_providers": "sms_providers",
+    "sms_utils": "sms_utils",
+    "smsbower": "smsbower"
+  }
+}

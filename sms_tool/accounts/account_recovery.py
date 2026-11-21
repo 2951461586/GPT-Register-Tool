@@ -22,7 +22,7 @@ from .account_identity import account_identity, resolve_account_proxy
 from .account_liveness import browser_fetch_for_account, probe_account_liveness
 from .account_terminal import text_has_account_deactivated
 from ..config import CFG
-from ..http_client import is_transient_transport_error
+from ..transport.http_client import is_transient_transport_error
 from ..proxy.routing import proxy_pool_for
 from ..kernel.paths import runtime_file
 from ..registration.state import _stored_registration_password
@@ -35,13 +35,13 @@ from ..storage import (
     upsert_account,
 )
 from ..mailbox.quarantine import mailbox_relogin_allowed
-from ..promotion_states import (
+from ..payment.promotion_states import (
     AUTH_INVALID_LABEL,
     PROMOTION_STATE_AUTH_INVALID,
 )
 from ..providers.mailbox_graph import MailboxAuthInvalidError
 from ..utils import atomic_write_text
-from .. import endpoints
+from ..transport import endpoints
 
 logger = logging.getLogger(__name__)
 
@@ -169,13 +169,13 @@ def relogin_chatgpt_email_account(
 
         from curl_cffi import requests as curl_requests
 
-        from ..account_creation import _auth_session_access_token, _fetch_auth_session
+        from ..registration.account_creation import _auth_session_access_token, _fetch_auth_session
         from ..auth_flow import _json_or_raw
-        from ..auth_headers import auth_impersonate, openai_auth_headers, select_auth_fingerprint
+        from ..transport.auth_headers import auth_impersonate, openai_auth_headers, select_auth_fingerprint
         from ..codex.oauth import _mailbox_from_data
-        from ..http_client import request_with_retry
+        from ..transport.http_client import request_with_retry
         from ..registration.orchestrator import _login_existing_account_with_email_otp
-        from ..sentinel_tokens import _set_oai_did_cookie
+        from ..registration.sentinel_tokens import _set_oai_did_cookie
         from ..session.refresh import _auth_session_email
 
         mailbox = _mailbox_from_data(account)
@@ -687,7 +687,7 @@ def _promotion_auth_failure(data: Any) -> bool:
     """True when a persisted promotion probe recorded a dead access token.
 
     ``store/markers.mark_promotion_status`` persists a machine-readable
-    ``promotion_state`` (``sms_tool/promotion_states.py``) plus a HTTP
+    ``promotion_state`` (``sms_tool/payment/promotion_states.py``) plus a HTTP
     ``promotion.status_code`` next to the Chinese display label. Key off the
     machine fields, not the label: the label is a UI string, and behaviour
     that reads it breaks silently the moment the wording changes. The label

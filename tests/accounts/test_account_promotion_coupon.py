@@ -208,3 +208,54 @@ def test_unconfirmed_coupon_never_advertises_a_trial(monkeypatch):
     assert result["plus_trial_eligible"] is False
     assert result["plus_trial_hint"] is True
     assert "可试用" not in result["promotion_status"]
+
+
+def test_coupon_probe_uses_dynamic_campaign_id_from_accounts_check(monkeypatch):
+    """P0-2: non-default campaigns (e.g. plus-2-months-50-pct-off) must probe their own id."""
+    seen_urls: list[str] = []
+
+    def fake_get(url, **_kwargs):
+        seen_urls.append(url)
+        if "check_coupon" in url:
+            if "coupon=plus-2-months-50-pct-off" in url:
+                return SimpleNamespace(status_code=200, json=lambda: {"state": "eligible"})
+            return SimpleNamespace(status_code=200, json=lambda: {"state": "not_eligible"})
+        return SimpleNamespace(
+            status_code=200,
+            json=lambda: {
+                "accounts": {
+                    "default": {
+                        "account": {"plan_type": "free", "account_id": "acc"},
+                        "entitlement": {"has_active_subscription": False},
+                        "eligible_promo_campaigns": {
+                            "plus": {
+                                "id": "plus-2-months-50-pct-off",
+                                "metadata": {
+                                    "title": "Plus 50% off",
+                                    "summary": "2 months at 50% off",
+                                    "promotion_type_label": "discount",
+                                    "discount": {"percentage": 50},
+                                    "duration": {"num_periods": 2, "period": "month"},
+                                },
+                            },
+                            "go": {"id": "go-1-month-free", "metadata": {"title": "Go Trial"}},
+                        },
+                    }
+                }
+            },
+        )
+
+    monkeypatch.setattr(account_promotion, "CFG", {})
+    with patch.object(account_promotion.curl_requests, "get", side_effect=fake_get):
+        result = account_promotion.check_account_promotion(
+            _account(), proxy="http://exit.example:8080", coupon_probe=True
+        )
+
+    assert result["ok"] is True
+    assert result["plus_trial_eligible"] is True
+    assert result["coupon_campaign_id"] == "plus-2-months-50-pct-off"
+    assert result["plus_trial_summary"] == "2 months at 50% off"
+    assert result["plus_trial_promotion_type_label"] == "discount"
+    assert set(result["eligible_promo_campaigns"]) == {"plus", "go"}
+    assert any("coupon=plus-2-months-50-pct-off" in url for url in seen_urls)
+    assert "可试用Plus·-50%·×2month" == result["promotion_status"]

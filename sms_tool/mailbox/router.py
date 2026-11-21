@@ -46,7 +46,7 @@ from ..config import ConfigInput, current_config_data, resolve_runtime_config
 from ..kernel.paths import resolve_config_file
 from ..providers import outlook_imap_client
 from ..providers import mailbox_gmail
-from ..mail_otp import (
+from .mail_otp import (
     candidate_is_newer,
     _email_otp_candidate,
     _extract_otp_from_text,
@@ -694,7 +694,7 @@ def email_otp_settle_seconds():
         return 3.0
 
 
-# OTP candidate ordering moved to sms_tool.mail_otp.
+# OTP candidate ordering moved to sms_tool.mailbox.mail_otp.
 
 
 def _outlook_imap_enabled():
@@ -821,7 +821,7 @@ def fetch_mailbox_messages(
     raise RuntimeError("no mailbox message fetcher resolved")
 
 
-# Message recipient extraction moved to sms_tool.mail_otp.
+# Message recipient extraction moved to sms_tool.mailbox.mail_otp.
 
 
 def poll_email_otp(

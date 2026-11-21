@@ -3,47 +3,47 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
-#: The one-click options dialog moved to its own service on 2026-11-01; the
-#: partial keeps only the source dispatch, so the two halves are read separately.
-REGISTER_DIALOG = ROOT / "SmsWorkbench" / "Dialogs" / "RegisterDialogService.cs"
+#: The one-click options dialog is a XAML window (`RegisterOptionsDialog.xaml`),
+#: while source-to-plan dispatch and mailbox-line resolution live in
+#: `RegistrationWorkflowCoordinator.cs` behind `MainWindow.Register.cs`.
+REGISTER_DIALOG_XAML = ROOT / "SmsWorkbench" / "Dialogs" / "RegisterOptionsDialog.xaml"
 REGISTER_PARTIAL = ROOT / "SmsWorkbench" / "Views" / "MainWindow.Register.cs"
+REGISTER_WORKFLOW = ROOT / "SmsWorkbench" / "Services" / "RegistrationWorkflowCoordinator.cs"
 REGISTER_BUILDER = ROOT / "SmsWorkbench" / "Services" / "RegistrationRequestBuilder.cs"
 
 
 def test_one_click_registration_uses_requested_provider_labels_and_defaults_to_remail():
-    source = REGISTER_DIALOG.read_text(encoding="utf-8-sig")
+    source = REGISTER_DIALOG_XAML.read_text(encoding="utf-8-sig")
 
     expected = [
-        'Content = Loc.T("ReMail 邮箱"), Tag = "remail_target"',
-        'Content = Loc.T("Smailr 邮箱"), Tag = "smailr"',
-        'Content = Loc.T("Outlook/Hotmail/iCloud 邮箱池"), Tag = "pool"',
-        'Content = Loc.T("CF Worker 域名邮箱"), Tag = "cfworker"',
-        'Content = Loc.T("手机号注册"), Tag = "phone"',
+        '<ComboBoxItem Content="{loc:Tr Key=\'ReMail 邮箱\'}" Tag="remail_target"/>',
+        '<ComboBoxItem Content="{loc:Tr Key=\'Smailr 邮箱\'}" Tag="smailr"/>',
+        '<ComboBoxItem Content="{loc:Tr Key=\'Outlook/Hotmail/iCloud 邮箱池\'}" Tag="pool"/>',
+        '<ComboBoxItem Content="{loc:Tr Key=\'CF Worker 域名邮箱\'}" Tag="cfworker"/>',
+        '<ComboBoxItem Content="{loc:Tr Key=\'手机号注册\'}" Tag="phone"/>',
     ]
     positions = [source.index(item) for item in expected]
     assert positions == sorted(positions)
-    assert "sourceBox.SelectedIndex = 0" in source
+    assert 'SelectedIndex="0"' in source
     assert '"--remail-service-mode", "purchase"' in (
         ROOT / "SmsWorkbench.Contracts" / "BackendCommandPlanner.cs"
     ).read_text(encoding="utf-8-sig")
 
 
 def test_long_term_remail_disables_phone_reuse_by_default():
-    register = REGISTER_PARTIAL.read_text(encoding="utf-8-sig")
-    dialog = REGISTER_DIALOG.read_text(encoding="utf-8-sig")
+    workflow = REGISTER_WORKFLOW.read_text(encoding="utf-8-sig")
+    dialog_xaml = REGISTER_DIALOG_XAML.read_text(encoding="utf-8-sig")
     planner = (ROOT / "SmsWorkbench.Contracts" / "BackendCommandPlanner.cs").read_text(encoding="utf-8-sig")
 
     # One-click ReMail long-term routes to the purchase-mode planner factory.
-    start = register.index('if (options.Source == "remail_target")')
-    end = register.index('if (options.Source == "smailr")', start)
-    remail_branch = register[start:end]
+    start = workflow.index('if (options.Source == "remail_target")')
+    end = workflow.index('if (options.Source == "smailr")', start)
+    remail_branch = workflow[start:end]
     assert "BackendCommandPlanner.CreateRemailTargetRegistration(" in remail_branch
     assert "checkPromotion: options.CheckPromotion" in remail_branch
 
-    # The checkbox is built through DialogFactory since 2026-10-25 (the options
-    # dialog no longer hand-rolls its Window/Grid/CheckBox); the option itself and
-    # its default must still be offered on the one-click dialog.
-    assert 'DialogFactory.CreateCheckBox(owner, Loc.T("注册完成后查询试用优惠"))' in dialog
+    # The promotion checkbox is declared in RegisterOptionsDialog.xaml with IsChecked="True".
+    assert "Content=\"{loc:Tr Key='注册完成后查询试用优惠'}\"" in dialog_xaml
     assert "--check-promotion-after-registration" in planner
 
     # The planner keeps ReMail on purchase mode with phone reuse disabled and
@@ -61,17 +61,6 @@ def test_long_term_remail_disables_phone_reuse_by_default():
 def test_only_phone_registration_selects_phone_flow():
     planner = (ROOT / "SmsWorkbench.Contracts" / "BackendCommandPlanner.cs").read_text(encoding="utf-8-sig")
 
-    # What this pins, and what it used to pin. The WPF entry points
-    # (RegisterFromPool_Click, RerunFailed_Click) were dead event handlers with
-    # no XAML subscriber and were removed on 2026-09-02 (round 6); their planner
-    # builders (CreatePoolRegistration / CreateRerunFailedRegistration) were
-    # deleted on 2026-11-20 as test-only surface. So the pool/rerun argument
-    # shapes are no longer facts this repository holds -- pinning them here would
-    # be pinning deleted code.
-    #
-    # The invariant that still has a production owner is the mailbox-file
-    # registration path: it disables phone reuse, and phone registration is the
-    # one flow that must not.
     mailbox_start = planner.index("public static BackendCommandPlan CreateMailboxFileRegistration")
     mailbox_end = planner.index("public static BackendCommandPlan Create", mailbox_start + 40)
     assert "AppendNoPhoneReuse(args);" in planner[mailbox_start:mailbox_end]
@@ -85,50 +74,34 @@ def test_only_phone_registration_selects_phone_flow():
 
 
 def test_registered_remail_rows_can_build_one_click_sms_mailbox_files():
-    # Mailbox-line classification now lives in BackendCommandPlanner -- the single
-    # home for CLI argument construction. MainWindow.Register.cs used to carry a
-    # private copy of it (MailboxArgForLine) that had drifted in form and had no
-    # tests; it was removed on 2026-09-02 (round 6) and callers now delegate.
     planner = (ROOT / "SmsWorkbench.Contracts" / "BackendCommandPlanner.cs").read_text(encoding="utf-8-sig")
-    source = (ROOT / "SmsWorkbench" / "Views" / "MainWindow.Register.cs").read_text(encoding="utf-8-sig")
+    partial_source = REGISTER_PARTIAL.read_text(encoding="utf-8-sig")
+    workflow_source = REGISTER_WORKFLOW.read_text(encoding="utf-8-sig")
+    combined = partial_source + "\n" + workflow_source
 
     # remail:// lines are still passed to the backend as mailbox files.
     assert 'value.StartsWith("remail://"' in planner
     # No private duplicate left behind in the WPF host.
-    assert "private string MailboxArgForLine" not in source
-    assert "BackendCommandPlanner.MailboxArgumentForLine" in source
+    assert "private string MailboxArgForLine" not in combined
+    assert "BackendCommandPlanner.MailboxArgumentForLine" in combined
     # Registered rows resolve mailbox credentials through the backend read
     # (desktop_read "mailbox-file"), which owns the canonical remail:// line
     # format; the behavioral coverage lives in tests/workbench/test_desktop_read.py.
-    assert "FindMailboxLineFromBackend" in source
-    assert "ReadMailboxLineAsync" in source
+    assert "FindMailboxLineFromBackend" in workflow_source
+    assert "ReadMailboxLineAsync" in workflow_source
 
 
 def test_icloud_registration_and_rerun_use_format_aware_mailbox_arguments():
     register_source = REGISTER_BUILDER.read_text(encoding="utf-8-sig")
     planner = (ROOT / "SmsWorkbench.Contracts" / "BackendCommandPlanner.cs").read_text(encoding="utf-8-sig")
 
-    # Matched on the method name only, not on `private bool ...`: these helpers
-    # became async (2026-09-02) because the backend read they depend on used to
-    # block the UI thread for up to 120s. The point of this test is the
-    # dispatch shape, not the signature.
-    # Anchor on the *definition*, not the call site: the name also appears in
-    # OneClickRegister_Click, and slicing from there picked up the wrong block.
     start = register_source.index("public async Task<PendingMailboxSelection> CreateUnregisteredBatchFileAsync")
-    # `(PoolRow` identifies the definition; the bare name also appears as a call
-    # inside the block above, which would cut the slice short.
     end = register_source.index("private async Task<bool> IsUnregisteredMailboxRowAsync", start)
     selected_block = register_source[start:end]
     assert "CreateBatchFileAsync(pending, ct)" in selected_block
     assert 'mailboxArg = "--chatai-mailbox-file"' not in selected_block
     assert '= "--chatai-mailbox-file"' not in selected_block
 
-    # RerunFailed_Click was a dead event handler (no XAML subscriber) and was
-    # removed with the rest on 2026-09-02 (round 6); its planner builder
-    # (CreateRerunFailedRegistration) was deleted on 2026-11-20. The surviving
-    # contract is the shared mailbox-file form below: every registration path
-    # takes the *resolved* mailbox argument and file, and none writes a
-    # `--chatai-mailbox-file` literal of its own.
     assert "mailboxArgument" in planner
     assert "--chatai-mailbox-file" not in (
         ROOT / "SmsWorkbench" / "Services" / "RegistrationRequestBuilder.cs"

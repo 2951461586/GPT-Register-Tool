@@ -168,16 +168,13 @@ def test_json_pointers_are_tracked_but_not_policed(tmp_path, monkeypatch):
     assert failures == []
 
 
-def test_provider_compatibility_facades_alias_the_implementation_modules():
+def test_provider_implementations_live_directly_under_providers():
     import importlib
 
     for name in ("cfworker", "gmail", "graph", "icloud_url", "remail", "smailr"):
-        facade = importlib.import_module(f"sms_tool.mailbox.{name}")
         implementation = importlib.import_module(f"sms_tool.providers.mailbox_{name}")
-        assert facade is implementation
-    assert importlib.import_module("sms_tool.outlook_imap") is importlib.import_module(
-        "sms_tool.providers.outlook_imap_client"
-    )
+        assert implementation is not None
+    assert importlib.import_module("sms_tool.providers.outlook_imap_client") is not None
 
 
 # --------------------------------------------------------------------------- #

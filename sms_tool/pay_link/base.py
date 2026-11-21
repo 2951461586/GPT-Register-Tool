@@ -17,7 +17,7 @@ from ..payment.catalog import (
     offline_method_error,
     validate_catalog_consistency,
 )
-from ..payment.operation import (
+from ..operation_journal import (
     PaymentOperationConflict,
     PaymentOperationStore,
     conflict_result as payment_operation_conflict_result,

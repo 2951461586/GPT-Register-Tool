@@ -1946,9 +1946,9 @@ def test_relogin_hands_the_stored_password_to_the_login_probe():
 
     with (
         patch("sms_tool.codex.oauth._mailbox_from_data", return_value=Mock()),
-        patch("sms_tool.auth_headers.select_auth_fingerprint"),
-        patch("sms_tool.sentinel_tokens._set_oai_did_cookie"),
-        patch("sms_tool.http_client.request_with_retry", return_value=Mock(status_code=200)),
+        patch("sms_tool.transport.auth_headers.select_auth_fingerprint"),
+        patch("sms_tool.registration.sentinel_tokens._set_oai_did_cookie"),
+        patch("sms_tool.transport.http_client.request_with_retry", return_value=Mock(status_code=200)),
         patch("sms_tool.auth_flow._json_or_raw", return_value={"csrfToken": "csrf"}),
         patch(
             "sms_tool.accounts.account_recovery._stored_registration_password",
@@ -1974,9 +1974,9 @@ def _capturing_relogin(account: dict, stored_password: str):
 
     with (
         patch("sms_tool.codex.oauth._mailbox_from_data", return_value=Mock()),
-        patch("sms_tool.auth_headers.select_auth_fingerprint"),
-        patch("sms_tool.sentinel_tokens._set_oai_did_cookie"),
-        patch("sms_tool.http_client.request_with_retry", return_value=Mock(status_code=200)),
+        patch("sms_tool.transport.auth_headers.select_auth_fingerprint"),
+        patch("sms_tool.registration.sentinel_tokens._set_oai_did_cookie"),
+        patch("sms_tool.transport.http_client.request_with_retry", return_value=Mock(status_code=200)),
         patch("sms_tool.auth_flow._json_or_raw", return_value={"csrfToken": "csrf"}),
         patch(
             "sms_tool.accounts.account_recovery._stored_registration_password",

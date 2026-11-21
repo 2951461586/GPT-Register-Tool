@@ -1,0 +1,11 @@
+{
+  "package": "payment",
+  "layer": 5,
+  "modules": {
+    "capability_browser": "capability_browser",
+    "checkout_contract": "checkout_contract",
+    "pp_link_helpers": "pp_link_helpers",
+    "promotion_states": "promotion_states",
+    "regional_payment_adapter": "regional_payment_adapter"
+  }
+}

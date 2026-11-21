@@ -21,14 +21,16 @@ RUNNER_PATH = RUNTIME_DIR / "sentinel-runner.js"
 # Digests are computed over newline-normalised bytes (see ``_digest``), so the
 # pinned values below are stable regardless of the working tree's line endings.
 SDK_SHA256 = "49d0284bf3eea8a59ebcad0e6b5dd8a53edd4c72606f15bbf51ebe5610a88efd"
-RUNNER_SHA256 = "e7e68ab1269f6bce6194e4d2106944bd266b66d4c5666af995b1ead03edd45b4"
-# ``sentinel-runner.js`` carries three local patches (2026-11-11
+RUNNER_SHA256 = "37c674e72e15de02c13fb55b709996de8fc684f633400978f487e4442e64af49"
+# ``sentinel-runner.js`` carries four local patches (2026-11-11
 # ``performance.memory`` gating; 2026-11-12 the missing navigator identity
 # properties + Gecko ``window.InstallTrigger``, and the page clock behind
-# ``performance.timeOrigin``).  See THIRD_PARTY_NOTICES.md.  The digest below is
-# the patched file, so an upstream re-vendor must re-apply the patches *and*
-# update this constant; the ``sentinel_runtime_hash_mismatch`` guard is what
-# turns a silent drift into a loud failure.
+# ``performance.timeOrigin``; 2026-11-21 ICU timezone canonicalization and
+# VM-realm default locale isolation for Date/Intl/Number toLocale*).  See
+# THIRD_PARTY_NOTICES.md.  The digest below is the patched file, so an upstream
+# re-vendor must re-apply the patches *and* update this constant; the
+# ``sentinel_runtime_hash_mismatch`` guard is what turns a silent drift into a
+# loud failure.
 #
 # Must name the build ``runtime/sdk.js`` was copied from: the version feeds the
 # frame URL, the ``Referer`` and ``p[5]``, and the browser derives all three from
@@ -234,8 +236,8 @@ def _cached_sdk(version: str, *, require_fresh: bool = True) -> Path | None:
 
 def _sdk_request_headers() -> dict[str, str]:
     """Headers a browser sends for the ``sdk.js`` script tag."""
-    from .. import endpoints
-    from ..auth_headers import auth_user_agent
+    from ..transport import endpoints
+    from ..transport.auth_headers import auth_user_agent
 
     return {
         "accept": "*/*",
@@ -272,7 +274,7 @@ def fetch_sdk(version: str, *, session: Any = None, timeout: float = 30.0) -> by
         return _verified_sdk_content(_get(session, url, {}, timeout))
     from curl_cffi import requests as curl_requests
 
-    from ..auth_headers import auth_impersonate
+    from ..transport.auth_headers import auth_impersonate
 
     own = curl_requests.Session(impersonate=auth_impersonate())
     try:

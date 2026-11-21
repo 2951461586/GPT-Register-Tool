@@ -391,7 +391,7 @@ def test_fallback_failure_reports_the_original_cause():
             "sms_tool.sentinel.client.issue_sentinel_token",
             side_effect=RuntimeError("asset is broken"),
         ),
-        patch("sms_tool.sentinel_tokens._extract_sentinel", return_value=None),
+        patch("sms_tool.registration.sentinel_tokens._extract_sentinel", return_value=None),
     ):
         with pytest.raises(client.SentinelIssueError) as caught:
             client.issue_sentinel_flow(
@@ -428,7 +428,7 @@ def test_fallback_failure_surfaces_the_root_cause_behind_a_wrapper():
             "sms_tool.sentinel.client.issue_sentinel_token",
             side_effect=_wrapped,
         ),
-        patch("sms_tool.sentinel_tokens._extract_sentinel", return_value=None),
+        patch("sms_tool.registration.sentinel_tokens._extract_sentinel", return_value=None),
     ):
         with pytest.raises(client.SentinelIssueError) as caught:
             client.issue_sentinel_flow(
@@ -459,7 +459,7 @@ def test_root_reason_is_bounded_and_redacted():
 
 def test_pure_legacy_shortfall_keeps_its_original_wording():
     """With no runner failure to blame, the legacy wording must be unchanged."""
-    with patch("sms_tool.sentinel_tokens._extract_sentinel", return_value=None):
+    with patch("sms_tool.registration.sentinel_tokens._extract_sentinel", return_value=None):
         with pytest.raises(
             client.SentinelIssueError,
             match="sentinel_legacy_incomplete:oauth_create_account",
@@ -820,7 +820,7 @@ def test_checkout_sentinel_never_uses_the_legacy_issuer():
             "sms_tool.sentinel.client.issue_sentinel_token",
             side_effect=RuntimeError("runner failed"),
         ),
-        patch("sms_tool.sentinel_tokens._extract_sentinel", return_value={}) as legacy,
+        patch("sms_tool.registration.sentinel_tokens._extract_sentinel", return_value={}) as legacy,
     ):
         with pytest.raises(client.SentinelIssueError, match="sentinel_fallback_incomplete:chatgpt_checkout"):
             client.issue_sentinel_flow(

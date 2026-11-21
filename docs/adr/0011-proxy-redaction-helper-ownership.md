@@ -37,9 +37,9 @@ Rule 13 的权威名单是 `parse_proxy` / `rebuild_proxy_credentials` /
 
 | helper | 定义处 | `proxy_entry` 是否定义 |
 | --- | --- | --- |
-| `normalize_proxy_url` | `sms_tool/phone_proxy.py:103` | ✗ |
-| `redact_proxy_url` | `sms_tool/phone_proxy.py:130` | ✗ |
-| `redact_proxy_text` | `sms_tool/phone_proxy.py:154` | ✗ |
+| `normalize_proxy_url` | `sms_tool/phone/phone_proxy.py:103` | ✗ |
+| `redact_proxy_url` | `sms_tool/phone/phone_proxy.py:130` | ✗ |
+| `redact_proxy_text` | `sms_tool/phone/phone_proxy.py:154` | ✗ |
 
 ⇒ 「收一跳」不是删一行 import，而是**把三个定义搬进 `proxy_entry`**。这是
 Rule 13 权威名单的扩张，不是一次清理。
@@ -50,7 +50,7 @@ Rule 19 已把 `redact_proxy_url` 记为**有意分叉**：
 
 | 定义处 | 元数 | `empty_placeholder` |
 | --- | --- | --- |
-| `phone_proxy.py:130` | 2（含默认参数） | `"DIRECT"` |
+| `phone/phone_proxy.py:130` | 2（含默认参数） | `"DIRECT"` |
 | `paypal/proxy.py:63` | 1 | 显式传 `"DIRECT"` |
 | `accounts/account_liveness.py:41` | 1 | 显式传 `""` |
 
@@ -101,7 +101,7 @@ Rule 19 已把 `redact_proxy_url` 记为**有意分叉**：
 - `docs/architecture.md` Boundary Rule 13（代理字符串单一权威）、Rule 19（同名函数非重复）
 - `docs/directory-map.md` 的「Proxy authority, lanes, health and bridge」行
 - `docs/audits/plans/plan-2026-10-08-paypal-family-boundaries.md` P2（本 ADR 驳回其结论）
-- `sms_tool/phone_proxy.py:103,130,154`（定义）· `sms_tool/paypal/proxy.py:17,59,63,69`（包装）
+- `sms_tool/phone/phone_proxy.py:103,130,154`（定义）· `sms_tool/paypal/proxy.py:17,59,63,69`（包装）
 - `sms_tool/accounts/account_liveness.py:41`（另一条泳道的 1 元壳）
 
 ---

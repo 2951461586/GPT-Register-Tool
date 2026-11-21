@@ -1,4 +1,4 @@
-"""Tests for ``sms_tool/sms_providers.py`` -- the provider registry.
+"""Tests for ``sms_tool/phone/sms_providers.py`` -- the provider registry.
 
 Why this exists
 ---------------
@@ -29,8 +29,8 @@ import re
 import unittest
 from dataclasses import fields
 
-from sms_tool import sms_providers as registry
-from sms_tool.smsbower import DEFAULT_ENDPOINT
+from sms_tool.phone import sms_providers as registry
+from sms_tool.phone.smsbower import DEFAULT_ENDPOINT
 
 
 class TestRegistryInvariants(unittest.TestCase):
@@ -247,7 +247,7 @@ class TestNoCredentialsInRegistry(unittest.TestCase):
             match = re.search(r"[A-Za-z0-9]{24,}", literal)
             if match:
                 offenders.append((node.lineno, match.group(0)))
-        self.assertEqual(offenders, [], f"key-like literal in sms_providers.py: {offenders}")
+        self.assertEqual(offenders, [], f"key-like literal in phone/sms_providers.py: {offenders}")
 
 
 class TestSmsBowerEndpointDerivation(unittest.TestCase):

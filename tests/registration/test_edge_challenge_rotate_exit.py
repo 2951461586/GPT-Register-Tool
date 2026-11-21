@@ -34,7 +34,7 @@ import time
 import unittest
 from unittest.mock import Mock
 
-from sms_tool import http_client
+from sms_tool.transport import http_client
 from sms_tool.registration.handlers import RegistrationEmailWorkflow
 from sms_tool.registration.result import safe_proxy_audit
 

@@ -55,7 +55,6 @@ SHARD_OWNERSHIP: dict[str, str] = {
     "paypal": "payment",
     "paypal_nocard": "payment",
     "upi": "payment",
-    "omakse": "payment",
     "protocol_payments": "payment",
     "kakao": "payment",
     "momo": "payment",

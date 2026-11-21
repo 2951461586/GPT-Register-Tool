@@ -27,7 +27,7 @@ def _emit_operator_line(level, message, *args):
     ``scripts/delayed_import_ratchet.py`` counts **one** function-level import
     for this module no matter how many lines are emitted.
     """
-    from ..operator_output import emit as _emit
+    from ..observability.operator_output import emit as _emit
 
     _emit(level, message, *args)
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Measure and verify the per-account TLS ClientHello (JA3) override.
 
-The override lives in :mod:`sms_tool.tls_fingerprint`; this script is the
+The override lives in :mod:`sms_tool.transport.tls_fingerprint`; this script is the
 *evidence* half.  It answers three questions the module cannot answer by itself:
 
 1. **What do the presets actually send?**  ``--capture`` prints the live
@@ -35,7 +35,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from sms_tool.tls_fingerprint import (  # noqa: E402
+from sms_tool.transport.tls_fingerprint import (  # noqa: E402
     VERIFIED_EXTENSION_ORDERS,
     build,
     permute_extension_order,
@@ -46,7 +46,7 @@ PEET = "https://tls.peet.ws/api/all"
 
 
 def profiles() -> list[str]:
-    from sms_tool.auth_headers import AUTH_FINGERPRINT_PROFILES
+    from sms_tool.transport.auth_headers import AUTH_FINGERPRINT_PROFILES
 
     return list(AUTH_FINGERPRINT_PROFILES)
 
@@ -73,7 +73,7 @@ def _auth_edge_headers(impersonate: str) -> dict[str, str]:
     ``openai_auth_headers`` the same profiles answer 200.  Probing without them
     would therefore report a false failure and, worse, blame the TLS override.
     """
-    from sms_tool.auth_headers import openai_auth_headers, set_auth_fingerprint
+    from sms_tool.transport.auth_headers import openai_auth_headers, set_auth_fingerprint
 
     set_auth_fingerprint(impersonate)
     return openai_auth_headers(

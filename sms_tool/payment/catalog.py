@@ -222,7 +222,7 @@ def offline_method_error(method: str, *, probe_only: bool = False) -> ValueError
 
 def validate_catalog_consistency(*, adapter_methods: set[str] | None = None) -> None:
     """Fail fast when the canonical catalog drifts from executable contracts."""
-    from ..checkout_contract import PAYMENT_METHOD_PROFILES
+    from .checkout_contract import PAYMENT_METHOD_PROFILES
     from .flow import FLOW_PROFILES
 
     errors: list[str] = []

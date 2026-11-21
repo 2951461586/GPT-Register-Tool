@@ -1,0 +1,44 @@
+<Window x:Class="SmsWorkbench.Dialogs.ShellSettingsDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:loc="clr-namespace:SmsWorkbench.Localization"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="{loc:Tr Key='外壳设置'}"
+        Width="480"
+        Height="236"
+        MinWidth="420"
+        MinHeight="220"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource AppBg}">
+  <Grid Margin="18">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="*"/>
+      <RowDefinition Height="Auto"/>
+    </Grid.RowDefinitions>
+
+    <StackPanel Grid.Row="0">
+      <TextBlock Text="{loc:Tr Key='窗口关闭与唤起'}"
+                 VerticalAlignment="Center"
+                 Margin="0,0,10,10"
+                 Foreground="{DynamicResource TextSub}"/>
+      <CheckBox x:Name="TrayCheckBox"
+                Content="{loc:Tr Key='关闭窗口时隐藏到托盘'}"
+                Margin="0,0,0,10"
+                Foreground="{DynamicResource TextMain}"/>
+      <CheckBox x:Name="HotkeyCheckBox"
+                Margin="0,0,0,10"
+                Foreground="{DynamicResource TextMain}"/>
+    </StackPanel>
+
+    <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right">
+      <Button Content="{loc:Tr Key='取消'}"
+              Width="76"
+              Click="CancelButton_Click"/>
+      <Button Content="{loc:Tr Key='保存'}"
+              Width="88"
+              Margin="8,0,0,0"
+              Style="{StaticResource PrimaryButton}"
+              Click="SaveButton_Click"/>
+    </StackPanel>
+  </Grid>
+</Window>

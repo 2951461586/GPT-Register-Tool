@@ -52,10 +52,10 @@
 
 ## 命令行用法
 
-单次模式（`sms_tool/gen_pp_link.py`）：
+单次模式（`sms_tool/paypal_link/gen_link.py`）：
 
 ```bash
-python -m sms_tool.gen_pp_link <ACCESS_TOKEN> \
+python -m sms_tool.paypal_link.gen_link <ACCESS_TOKEN> \
   --checkout-proxy "<US 代理>" --provider-proxy "<US 代理>" --approve-proxy "<US 代理>" \
   --promotion-proxy "<JP/TH/VN 代理>" \
   --target US --checkout-country US --json
@@ -64,7 +64,7 @@ python -m sms_tool.gen_pp_link <ACCESS_TOKEN> \
 促销矩阵搜索（`PayPal 区 × promotion 区`，对齐参考实现的 zero-amount matrix，成功即停）：
 
 ```bash
-python -m sms_tool.gen_pp_link <ACCESS_TOKEN> \
+python -m sms_tool.paypal_link.gen_link <ACCESS_TOKEN> \
   --proxy-template "user-region-XX-sid-XXXX-t-5:pass@gate:443" \
   --target-countries US,DE,GB,AU,CA \
   --promotion-countries JP,TH,VN --json

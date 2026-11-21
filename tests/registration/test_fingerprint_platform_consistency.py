@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from sms_tool.auth_headers import (
+from sms_tool.transport.auth_headers import (
     AUTH_FINGERPRINT_PROFILES,
     _platform_class,
     _timezone_display_name,

@@ -113,7 +113,7 @@ def clean_proxies(verdicts: list[EdgeVerdict], pool: list[str]) -> list[str]:
     """Raw (credential-bearing) URLs whose verdict is ``clean``, in input order."""
     by_redacted = {v.proxy: v.status for v in verdicts}
     out: list[str] = []
-    from sms_tool.phone_proxy import redact_proxy_url
+    from sms_tool.phone.phone_proxy import redact_proxy_url
 
     for proxy in pool:
         if by_redacted.get(redact_proxy_url(proxy)) == CLEAN:

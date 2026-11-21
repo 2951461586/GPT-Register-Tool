@@ -8,10 +8,6 @@
     ],
     [
       "sms_tool.payment.wire",
-      "sms_tool.auth_headers"
-    ],
-    [
-      "sms_tool.payment.wire",
       "sms_tool.sentinel"
     ],
     [
@@ -35,8 +31,6 @@
     "sms_tool.accounts.account_promotion",
     "sms_tool.accounts.account_recovery",
     "sms_tool.accounts.promotion_batch",
-    "sms_tool.batch_runner",
-    "sms_tool.capability_browser",
     "sms_tool.cli",
     "sms_tool.cli_parsers.payment",
     "sms_tool.commands.helpers",
@@ -44,11 +38,11 @@
     "sms_tool.commands.payment_links",
     "sms_tool.config.schema",
     "sms_tool.desktop.read",
-    "sms_tool.fingerprint_pool",
     "sms_tool.operation_journal",
     "sms_tool.proxy.registry",
     "sms_tool.store.markers",
     "sms_tool.store.normalize",
+    "sms_tool.transport.fingerprint_pool",
     "sms_tool.wallet.gcash_provider",
     "sms_tool.wallet.gcash_transport",
     "sms_tool.wallet.provider",
@@ -70,10 +64,6 @@
     [
       "sms_tool.cli",
       "sms_tool.cli_parsers.email_change"
-    ],
-    [
-      "sms_tool.cli",
-      "sms_tool.cli_parsers.omakse"
     ],
     [
       "sms_tool.cli",
@@ -121,42 +111,43 @@
     ]
   ],
   "registration_facade_fanout": [
-    "sms_tool.account_creation",
     "sms_tool.accounts",
     "sms_tool.accounts.account_liveness",
     "sms_tool.auth_flow",
-    "sms_tool.auth_headers",
-    "sms_tool.auth_state",
-    "sms_tool.batch_runner",
     "sms_tool.codex",
     "sms_tool.codex.sentinel",
     "sms_tool.config",
-    "sms_tool.http_client",
-    "sms_tool.http_utils",
     "sms_tool.kernel",
     "sms_tool.kernel.error_classification",
     "sms_tool.kernel.paths",
     "sms_tool.kernel.sanitizer",
     "sms_tool.mailbox",
     "sms_tool.mailbox.router",
-    "sms_tool.otp_strategy",
     "sms_tool.phone",
+    "sms_tool.phone.phone_proxy",
     "sms_tool.phone.registration",
-    "sms_tool.phone_proxy",
     "sms_tool.registration",
+    "sms_tool.registration.account_creation",
+    "sms_tool.registration.batch_runner",
     "sms_tool.registration.cancel",
     "sms_tool.registration.handlers",
     "sms_tool.registration.operations",
+    "sms_tool.registration.otp_strategy",
     "sms_tool.registration.outcome",
     "sms_tool.registration.preflight",
     "sms_tool.registration.progress",
+    "sms_tool.registration.sentinel_tokens",
     "sms_tool.registration.state",
     "sms_tool.registration_drivers",
     "sms_tool.registration_drivers.base",
     "sms_tool.registration_drivers.playwright",
-    "sms_tool.sentinel_tokens",
     "sms_tool.session",
     "sms_tool.session.builder",
+    "sms_tool.transport",
+    "sms_tool.transport.auth_headers",
+    "sms_tool.transport.auth_state",
+    "sms_tool.transport.http_client",
+    "sms_tool.transport.http_utils",
     "sms_tool.utils"
   ]
 }

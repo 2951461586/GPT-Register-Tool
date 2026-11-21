@@ -1,6 +1,6 @@
 import pytest
 
-from sms_tool.backoff import transport_backoff
+from sms_tool.transport.backoff import transport_backoff
 from sms_tool.registration.policy import registration_retry_decision
 from sms_tool.registration.retry_guard import RegistrationRetryGuard
 

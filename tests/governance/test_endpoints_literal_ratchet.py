@@ -43,7 +43,7 @@ def _load_authority(rel_path: str, module_name: str):
 
 
 ENDPOINTS = _load_authority("services/protocol-payment/common/endpoints.py", "ratchet_endpoints_probe")
-SMS_ENDPOINTS = _load_authority("sms_tool/endpoints.py", "ratchet_sms_endpoints_probe")
+SMS_ENDPOINTS = _load_authority("sms_tool/transport/endpoints.py", "ratchet_sms_endpoints_probe")
 
 WIRED = (
     "services/protocol-payment/ideal/ideal_qr_extract.py",
@@ -62,7 +62,7 @@ WIRED_SMS_TOOL = (
     "sms_tool/registration/handlers.py",
     "sms_tool/registration/account_stages.py",
     "sms_tool/registration/preflight.py",
-    "sms_tool/chatgpt_bootstrap.py",
+    "sms_tool/registration/chatgpt_bootstrap.py",
     "sms_tool/sentinel/client.py",
     "sms_tool/registration_drivers/browser_flow/context.py",
     "sms_tool/registration_drivers/browser_session.py",
@@ -176,7 +176,7 @@ def test_authority_module_is_excluded_from_the_scan():
     """Both authorities define the hosts; scanning one would score its constants."""
     counts = eps.collect()
     assert not any(path.endswith("endpoints.py") for path in counts), (
-        "an endpoints.py authority leaked into its own ratchet"
+        "an transport/endpoints.py authority leaked into its own ratchet"
     )
 
 
@@ -303,5 +303,5 @@ def test_wired_sms_tool_files_have_zero_inline_literals():
     counts = eps.collect()
     residual = {path: counts.get(path, 0) for path in WIRED_SMS_TOOL if counts.get(path, 0)}
     assert not residual, (
-        f"a wired sms_tool caller re-inlined a managed host instead of importing sms_tool/endpoints.py: {residual}"
+        f"a wired sms_tool caller re-inlined a managed host instead of importing sms_tool/transport/endpoints.py: {residual}"
     )

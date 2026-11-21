@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from collections.abc import Mapping
 from typing import Any
 
-from ... import endpoints
+from ...transport import endpoints
 from ..external_sessions import _driver_config
 from .dom_fields import _config_value
 

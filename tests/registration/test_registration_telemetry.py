@@ -1,9 +1,9 @@
 import json
 import logging
 
-from sms_tool.logging_setup import CorrelatedJsonFormatter
+from sms_tool.observability.logging_setup import CorrelatedJsonFormatter
 from sms_tool.registration.progress import RegistrationProgress, registration_quality_metrics
-from sms_tool.telemetry import current_run_id
+from sms_tool.observability.telemetry import current_run_id
 
 
 def test_logs_carry_command_and_run_ids_without_proxy_credentials(monkeypatch):

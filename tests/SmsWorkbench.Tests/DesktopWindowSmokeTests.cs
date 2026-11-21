@@ -400,7 +400,7 @@ public sealed class DesktopWindowSmokeTests
             // The dialog now lives in RegisterDialogService; `InternalsVisibleTo`
             // lets the test build it without showing it.
             var registerDialogs = new RegisterDialogService();
-            var registerDialog = Assert.IsType<Window>(registerDialogs.CreateRegisterOptionsDialog(
+            var registerDialog = Assert.IsAssignableFrom<Window>(registerDialogs.CreateRegisterOptionsDialog(
                 main,
                 initialCount: 1,
                 defaultWorkers: 4,
@@ -451,7 +451,7 @@ public sealed class DesktopWindowSmokeTests
             int selectedComboBoxCount = -1;
             int selectedCheckBoxCount = -1;
             string[] selectedDialogTexts = Array.Empty<string>();
-            var selectedRegisterDialog = Assert.IsType<Window>(registerDialogs.CreateSelectedRegisterOptionsDialog(
+            var selectedRegisterDialog = Assert.IsAssignableFrom<Window>(registerDialogs.CreateSelectedRegisterOptionsDialog(
                 main,
                 selectedCount: 1,
                 defaultWorkers: 4,

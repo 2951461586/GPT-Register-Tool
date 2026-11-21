@@ -17,7 +17,8 @@ logger = logging.getLogger(__name__)
 from . import decisions, dom_fields, flow_steps, form_steps, page_state, recovery, session
 from .context import prepare_browser_context
 
-from ... import chatgpt_bootstrap, storage
+from ... import storage
+from ...registration import chatgpt_bootstrap
 from ...browser import fingerprint_pool as browser_fingerprint_pool
 from ...registration import outcome as registration_outcome
 from ...registration import progress as registration_progress
@@ -26,7 +27,7 @@ from ...mailbox import router as mailbox_pkg
 from ...proxy import entry as proxy_entry
 from ...accounts import account_identity
 from ...mailbox.service import MailboxService
-from ...phone_proxy import redact_proxy_text
+from ...phone.phone_proxy import redact_proxy_text
 from ...registration.state import RegistrationState, RegistrationStateMachine
 from ...utils import _generate_password, _random_birthdate, _random_name
 from .. import external_sessions
@@ -83,62 +84,15 @@ def run_browser_registration(
     """Run one browser registration; result matches the protocol result contract."""
     if session_factory is None:
         session_factory = external_sessions.create_browser_session
-    try:
-        driver_name = normalize_registration_driver(driver_name)
-    except ValueError as exc:
-        return registration_result.build_registration_failure_result(
-            error=dom_fields._safe_text(str(exc)),
-            failure_class="configuration",
-            extra={"registration_driver": str(driver_name or "")},
-        )
-    if driver_name == "protocol":
-        return registration_result.build_registration_failure_result(
-            error="unsupported_registration_driver:protocol",
-            failure_class="configuration",
-            extra={"registration_driver": driver_name},
-        )
-    try:
-        mailbox = mailbox_pkg.ensure_mailbox_account(mailbox)
-    except Exception as exc:
-        return registration_result.build_registration_failure_result(
-            error="browser_mailbox_setup_failed",
-            failure_class="mailbox",
-            extra={
-                "registration_driver": driver_name,
-                "mailbox": registration_outcome._browser_mailbox_snapshot(mailbox),
-            },
-        )
-    email = str(getattr(mailbox, "email", "") or "").strip()
-    if not email:
-        return registration_result.build_registration_failure_result(
-            error="mailbox_required",
-            extra={"registration_driver": driver_name},
-        )
-    password = str(password or "").strip()
-    if not password:
-        password = _generate_password()
+    pre = _validate_browser_registration_inputs(driver_name=driver_name, mailbox=mailbox, config=config)
+    if isinstance(pre, dict):
+        return pre
+    driver_name, mailbox, email, mailbox_service = pre
+    password = str(password or "").strip() or _generate_password()
     full_name = " ".join(_random_name())
     birthdate = _random_birthdate()
     context = prepare_browser_context(config, driver_name, browser_headless)
-    selected_cfg = context.driver_config
-    headless = context.headless
-    timeout = context.timeout
-    locale = context.locale
-    timezone_id = context.timezone_id
-    otp_timeout = context.otp_timeout
-    try:
-        mailbox_service = MailboxService.create(config)
-    except Exception as exc:
-        return registration_result.build_registration_failure_result(
-            error="browser_mailbox_service_unavailable",
-            failure_class="network",
-            email=email,
-            extra={
-                "registration_driver": driver_name,
-                "mailbox": registration_outcome._browser_mailbox_snapshot(mailbox),
-            },
-        )
-    started = int(time.time())
+    headless, timeout, otp_timeout = context.headless, context.timeout, context.otp_timeout
     machine = RegistrationStateMachine(registration_progress.registration_stage)
     machine.transition(RegistrationState.MAILBOX_READY)
     from ...storage import get_device_context
@@ -146,44 +100,27 @@ def run_browser_registration(
     device_context = get_device_context(email, runtime_config=config)
     device_id = str((device_context or {}).get("device_id") or uuid.uuid4())
     machine.transition(RegistrationState.IDENTITY_READY)
-    chat_base = context.chat_base
-    auth_base = context.auth_base
-    start_url = context.start_url
+    chat_base, auth_base, start_url = context.chat_base, context.auth_base, context.start_url
     page = None
     diagnostics = {"driver": driver_name, "url_host": "", "title": ""}
     account_key = email
-    attempt_number = decisions.attempt_number(proxy_metadata)
-    profile_key = decisions.browser_profile_key(account_key, attempt_number)
     browser_identity: dict[str, Any] = {
         "driver": driver_name,
-        # Failed attempts get an isolated on-disk profile so stale auth pages
-        # cannot make the next retry miss the signup email field.
-        "profile_id": profile_key,
+        "profile_id": decisions.browser_profile_key(account_key, decisions.attempt_number(proxy_metadata)),
     }
-    # --- Browser fingerprint pool + exit-geo alignment -----------------------
-    # Mirror turb-gpt-free-register's BROWSER_PROFILE_POOL + _detect_exit_geo:
-    # draw a per-account browser profile (seed-stable by device_id) and align
-    # its locale/timezone to the proxy's real egress.  Geo detection degrades
-    # to {} on any failure, in which case we keep the configured locale/tz so
-    # registration never blocks on the network probe.
     _browser_geo_enabled = bool(dom_fields._config_value(config, "browser_geo_alignment", True))
-    _browser_geo = browser_fingerprint_pool.detect_proxy_exit_geo(proxy, enabled=_browser_geo_enabled)
-    _browser_profile = browser_fingerprint_pool.select_browser_profile(_browser_geo, seed=device_id, config=config)
-    locale, timezone_id = decisions.aligned_locale_timezone(_browser_profile, locale, timezone_id)
-    # When geo detection fails, aligned_locale_timezone keeps the configured
-    # locale instead of the pool's US fallback. Report what we requested, not
-    # that unapplied fallback. Provider-managed drivers own their own locale.
-    locale_parts = str(locale or "").replace("_", "-").split("-")
-    locale_country = locale_parts[-1] if len(locale_parts) > 1 else ""
-    geo_audit = {
-        "fingerprint_country": (locale_country if driver_name in decisions.SCREEN_MANAGED_DRIVERS else ""),
-        "exit_country": str((_browser_geo or {}).get("country") or (proxy_metadata or {}).get("actual_country") or ""),
-        "source": ("geo_probe" if (_browser_geo or {}).get("country") else "preflight"),
-    }
-    # P1-3: playwright consumes this as its viewport; camoufox consumes it as
-    # Screen(max_width, max_height) (previously hardcoded 1280x900, so the pool
-    # never reached it). Provider-owned drivers get None -- see decisions.py.
-    _browser_viewport = decisions.browser_screen_size(_browser_profile, driver_name)
+    _browser_geo, _browser_profile, locale, timezone_id, geo_audit, _browser_viewport = (
+        _resolve_browser_geo_and_profile(
+            driver_name=driver_name,
+            proxy=proxy,
+            proxy_metadata=proxy_metadata,
+            device_id=device_id,
+            locale=context.locale,
+            timezone_id=context.timezone_id,
+            browser_geo_enabled=_browser_geo_enabled,
+            config=config,
+        )
+    )
     try:
         # Admission must happen before a browser process/context is allocated.
         # Acquiring at the later AUTH_FLOW transition let queued workers hold
@@ -201,487 +138,778 @@ def run_browser_registration(
             viewport=_browser_viewport,
             session_factory=session_factory,
         ) as browser:
-            # P2-3: every browser driver probes its egress now. Provider
-            # drivers keep failing on a mismatch; the local ones only record
-            # and warn -- a wrong country is evidence, not a gate.
             _country_check = decisions.proxy_country_check_mode(driver_name, config)
             if _country_check != "off":
-                verification = external_sessions.verify_browser_proxy_country(
+                proxy_metadata = _verify_browser_egress_country(
                     browser,
-                    expected_country=str((proxy_metadata or {}).get("expected_country") or ""),
-                    timeout_seconds=min(20, timeout),
+                    driver_name=driver_name,
+                    country_check=_country_check,
+                    timeout=timeout,
+                    proxy_metadata=proxy_metadata,
+                    geo_audit=geo_audit,
                 )
-                if proxy_metadata is not None:
-                    proxy_metadata = dict(proxy_metadata)
-                    proxy_metadata["actual_country"] = verification.get("actual_country", "")
-                geo_audit["exit_country"] = str(verification.get("actual_country") or "")
-                geo_audit["source"] = "browser_probe"
-                if not verification.get("ok"):
-                    _country_error = str(verification.get("error") or "unknown")
-                    if _country_check == "blocking":
-                        raise BrowserRegistrationError(f"{driver_name}_proxy_country_mismatch", _country_error)
-                    logger.warning(
-                        "egress country probe (%s, non-fatal): %s (expected=%s actual=%s)",
-                        driver_name,
-                        _country_error,
-                        str((proxy_metadata or {}).get("expected_country") or ""),
-                        str(verification.get("actual_country") or ""),
-                    )
             page = browser.page
             browser.add_device_cookie(device_id, chat_base, auth_base)
             machine.transition(RegistrationState.AUTH_FLOW)
             _goto_with_retry(page, start_url, timeout_ms=timeout * 1_000)
             form_steps._maybe_accept_cookies(page)
-            # P1 risk-control: replay a real browser's ChatGPT first-screen
-            # request sequence (mirrors turb-gpt-free-register's
-            # core/chatgpt_bootstrap.py).  Config-gated (default off) and
-            # non-fatal by construction, so it can never gate registration.
-            _anon_bootstrap = chatgpt_bootstrap.run_anonymous_bootstrap(page, config)
-            try:
-                page_state._ensure_signup_page_ready(
-                    page,
-                    timeout_seconds=recovery.stage_timeout(config, "auth_flow", min(45, timeout), maximum=120),
-                    config=config,
-                )
-            except BrowserRegistrationError as exc:
-                # A committed SPA document can miss the email field while its
-                # auth shell is still mounting. Reuse the same proxy once, but
-                # reload the document before allowing the batch retry policy to
-                # consume another mailbox attempt.
-                if exc.code != "browser_email_field_missing":
-                    raise
-                registration_progress.registration_stage("auth_flow_retry", detail="signup_ready_reload")
-                try:
-                    page.reload(wait_until="commit", timeout=max(5_000, timeout * 1_000))
-                except Exception:
-                    pass
-                page_state._ensure_signup_page_ready(
-                    page,
-                    timeout_seconds=recovery.stage_timeout(config, "auth_flow", min(30, timeout), maximum=120),
-                    config=config,
-                )
+            chatgpt_bootstrap.run_anonymous_bootstrap(page, config)
+            _ensure_signup_ready_with_reload(page, timeout=timeout, config=config)
             mailbox_pkg.snapshot_mailbox_message(mailbox, proxy=proxy)
             started = int(time.time())
             form_steps._fill_email(page, email, config=config)
-            machine.transition(RegistrationState.USER_REGISTER)
-            state = page_state._wait_for_registration_state(
-                page,
-                recovery.stage_timeout(config, "user_register", min(timeout, 30), maximum=120),
+            return _execute_post_email_browser_stages(
+                page=page,
                 browser=browser,
-                config=config,
-            )
-            if state == "challenge":
-                if not page_state._wait_for_challenge_clear(page, max_wait_seconds=30):
-                    raise BrowserRegistrationError("manual_challenge_required")
-                state = page_state._wait_for_registration_state(
-                    page,
-                    recovery.stage_timeout(config, "user_register", min(timeout, 30), maximum=120),
-                    browser=browser,
-                    config=config,
-                )
-                if state == "challenge":
-                    raise BrowserRegistrationError("manual_challenge_required")
-            if state == "identity_provider":
-                raise BrowserRegistrationError("browser_unexpected_identity_provider")
-            if state == "login_password":
-                raise BrowserRegistrationError("browser_existing_account")
-            if state == "unknown":
-                raise BrowserRegistrationError("browser_registration_state_unknown")
-            if state == "otp":
-                password_used = False
-            elif state == "password":
-                password_used = form_steps._fill_password_if_present(page, password or "", config=config)
-            else:
-                password_used = False
-            machine.transition(RegistrationState.EMAIL_OTP_SEND)
-            if password_used:
-                state = page_state._wait_for_registration_state(
-                    page,
-                    recovery.stage_timeout(config, "user_register", min(timeout, 30), maximum=120),
-                    browser=browser,
-                    config=config,
-                )
-                if state == "challenge":
-                    if not page_state._wait_for_challenge_clear(page, max_wait_seconds=30):
-                        raise BrowserRegistrationError("manual_challenge_required")
-                    state = page_state._wait_for_registration_state(
-                        page,
-                        recovery.stage_timeout(config, "user_register", min(timeout, 30), maximum=120),
-                        browser=browser,
-                        config=config,
-                    )
-                    if state == "challenge":
-                        raise BrowserRegistrationError("manual_challenge_required")
-                if state == "login_password":
-                    raise BrowserRegistrationError("browser_existing_account")
-                if state == "identity_provider":
-                    raise BrowserRegistrationError("browser_unexpected_identity_provider")
-                if state == "unknown":
-                    raise BrowserRegistrationError("browser_registration_state_unknown")
-            fields = dom_fields._otp_fields(page)
-            if fields is not None:
-                machine.transition(RegistrationState.EMAIL_OTP_WAIT)
-                excluded_otps: set[str] = set()
-                for otp_attempt in range(3):
-                    otp = flow_steps._poll_browser_otp(
-                        mailbox_service,
-                        mailbox,
-                        browser=browser,
-                        page=page,
-                        driver_name=driver_name,
-                        subject_keyword="verification code|login code",
-                        timeout=otp_timeout,
-                        issued_after_unix=started,
-                        proxy=proxy,
-                        excluded_otps=excluded_otps,
-                    )
-                    if not otp:
-                        # Roxy reference flow retries the latest message without the
-                        # send-time/code filters because OpenAI may update or reuse the
-                        # same mailbox item after a resend.
-                        if otp_attempt > 0:
-                            otp = mailbox_service.poll_otp(
-                                mailbox,
-                                subject_keyword="verification code|login code",
-                                timeout=min(15, otp_timeout),
-                                issued_after_unix=0,
-                                proxy=proxy,
-                                excluded_otps=set(),
-                            )
-                        if not otp:
-                            if otp_attempt < 2:
-                                restarted = False
-                                if not dom_fields._page_is_alive(page):
-                                    try:
-                                        page, _ = flow_steps._restart_email_otp_flow(
-                                            browser,
-                                            page,
-                                            start_url=start_url,
-                                            email=email,
-                                            password=password or "",
-                                            timeout_seconds=timeout,
-                                            config=config,
-                                        )
-                                        restarted = True
-                                    except Exception:
-                                        restarted = False
-                                if restarted or dom_fields._click_resend(page):
-                                    started = int(time.time())
-                                    continue
-                            raise BrowserRegistrationError("browser_email_otp_timeout")
-                    page = getattr(browser, "page", None) or page
-                    excluded_otps.add(str(otp))
-                    machine.transition(RegistrationState.EMAIL_OTP_VALIDATE)
-                    form_steps._fill_otp(page, str(otp))
-                    outcome = page_state._wait_after_otp_submit(
-                        page,
-                        timeout_seconds=recovery.stage_timeout(
-                            config, "email_otp_validate", min(30, timeout), maximum=120
-                        ),
-                        require_transition=True,
-                    )
-                    # Match the reference Roxy state machine: absence of an explicit
-                    # validation error is accepted even when the old OTP DOM remains
-                    # mounted during a slow SPA navigation.
-                    if outcome in {"accepted", "pending"}:
-                        break
-                    if outcome == "invalid" and otp_attempt < 2:
-                        restarted = False
-                        if not dom_fields._page_is_alive(page):
-                            try:
-                                page, _ = flow_steps._restart_email_otp_flow(
-                                    browser,
-                                    page,
-                                    start_url=start_url,
-                                    email=email,
-                                    password=password or "",
-                                    timeout_seconds=timeout,
-                                    config=config,
-                                )
-                                restarted = True
-                            except Exception:
-                                restarted = False
-                        if restarted or dom_fields._click_resend(page):
-                            started = int(time.time())
-                else:
-                    raise BrowserRegistrationError("browser_email_otp_rejected")
-            state = page_state._post_otp_registration_state(
-                page,
-                browser=browser,
-                timeout_seconds=recovery.stage_timeout(config, "create_account", min(30, max(5, timeout)), maximum=180),
-                config=config,
-            )
-            # Slow signups can sit on the post-OTP email-verification route for
-            # minutes before routing on (observed ~200s on healthy runs). Run
-            # two reload/reprobe rounds instead of one before declaring the
-            # run stuck.
-            for retry_round in range(2):
-                if state not in {"unknown", "email_verification_stuck"}:
-                    break
-                registration_progress.registration_stage(
-                    "create_account_retry",
-                    detail=("email_verification_reload" if state == "email_verification_stuck" else "state_probe_retry")
-                    + (f"_round{retry_round + 1}" if retry_round else ""),
-                )
-                if state == "email_verification_stuck":
-                    try:
-                        page.reload(wait_until="commit", timeout=max(5_000, timeout * 1_000))
-                    except Exception:
-                        pass
-                page = getattr(browser, "page", None) or page
-                state = page_state._post_otp_registration_state(
-                    page,
-                    browser=browser,
-                    timeout_seconds=recovery.stage_timeout(
-                        config, "create_account", min(45, max(10, timeout)), maximum=180
-                    ),
-                    config=config,
-                )
-            page = getattr(browser, "page", None) or page
-            machine.transition(RegistrationState.CREATE_ACCOUNT)
-            profile_required = page_state._profile_completion_required(state)
-            if profile_required:
-                form_steps._complete_profile(page, full_name, birthdate)
-                profile_done = page_state._wait_for_profile_completion(
-                    page,
-                    timeout_seconds=recovery.stage_timeout(
-                        config, "create_account", min(30, max(5, timeout)), maximum=120
-                    ),
-                    config=config,
-                )
-                if not profile_done:
-                    registration_progress.registration_stage("create_account_retry", detail="profile_completion_retry")
-                    profile_done = page_state._wait_for_profile_completion(
-                        page,
-                        timeout_seconds=recovery.stage_timeout(
-                            config, "create_account", min(20, max(5, timeout)), maximum=120
-                        ),
-                        config=config,
-                    )
-                if not profile_done:
-                    raise BrowserRegistrationError("browser_profile_submit_timeout")
-                page.wait_for_timeout(2_000)
-            if page_state._manual_challenge(page):
-                if not page_state._wait_for_challenge_clear(page, max_wait_seconds=30):
-                    raise BrowserRegistrationError("manual_challenge_required")
-            if hasattr(browser, "ensure_chatgpt_context"):
-                page = dom_fields._prepare_session_page(browser, page, timeout)
-            elif decisions.needs_chat_base_navigation(chat_base, str(page.url or "")):
-                _goto_with_retry(page, chat_base, timeout_ms=timeout * 1_000)
-            form_steps._maybe_dismiss_chatgpt_onboarding(page, config=config)
-            machine.transition(RegistrationState.AUTH_SESSION)
-            session_info = session._session_payload(
-                browser,
-                chat_base,
-                email,
-                timeout_seconds=recovery.stage_timeout(config, "auth_session", timeout, minimum=15, maximum=120),
-            )
-            auth_body = session_info["body"]
-            access_token = session_info["access_token"]
-            machine.transition(RegistrationState.ACCESS_TOKEN_PROBE)
-            effective_probe_fn = probe_fn
-            if effective_probe_fn is None:
-                # Route the post-registration AT probe through the browser
-                # context for ALL browser drivers, not just cloud ones.  This
-                # keeps the probe on the same fingerprint and cookies used
-                # during registration, preventing the identity drift that
-                # causes immediate token revocation when curl_cffi switches
-                # to a generic fingerprint.
-                effective_probe_fn = lambda account, **kwargs: session._browser_access_token_probe(
-                    browser,
-                    account,
-                    timeout=int(kwargs.get("timeout") or timeout),
-                )
-            probe = registration_outcome._probe_registration_access_token(
-                access_token,
-                auth_body,
-                # The browser context owns the egress and fingerprint for the
-                # probe.  Passing proxy=None would break local drivers that
-                # need the proxy for the curl fallback, so only suppress it
-                # when the browser probe is active.
-                proxy=(None if effective_probe_fn is not None else proxy),
-                cfg=config,
-                probe_fn=effective_probe_fn,
-                stage_fn=registration_progress.registration_stage,
-                sleep_fn=time.sleep,
-            )
-            success, error, warning = registration_outcome._registration_outcome(True, {}, access_token, probe)
-            # A token plus a transport-unknown probe means the account was
-            # created but the final check could not reach the endpoint. Keep a
-            # resumable persistence state instead of discarding the account.
-            at_probe_pending = recovery.probe_pending(access_token, probe, success)
-            if success:
-                session._post_registration_dwell(config)
-            machine.transition(RegistrationState.TOTP_ENROLL)
-            # Attempt browser-based TOTP 2FA enrollment when requested and
-            # registration succeeded.  Routes MFA API calls through the
-            # browser's fetch to carry real cookies and Cloudflare clearance.
-            twofa_result: dict[str, Any] = {"ok": False, "reason": "disabled"}
-            totp_secret = ""
-            if success and enroll_2fa:
-                try:
-                    twofa_result = session._bind_totp_in_browser(
-                        page,
-                        access_token,
-                        device_id,
-                        chat_base=chat_base,
-                    )
-                    if twofa_result.get("ok"):
-                        totp_secret = str(twofa_result.get("totp_secret") or "")
-                    elif not twofa_result.get("error"):
-                        twofa_result = {"ok": False, "reason": "browser_driver_deferred"}
-                except Exception as exc:
-                    twofa_result = {"ok": False, "reason": f"browser_totp_exception: {type(exc).__name__}"}
-            elif enroll_2fa:
-                twofa_result = {"ok": False, "reason": "registration_not_successful"}
-            # P1: logged-in first-screen warm-up.  Deliberately placed *after*
-            # 2FA enrollment — that enrollment protects the account, so it must
-            # never be delayed by decorative warm-up traffic.
-            if success:
-                _auth_bootstrap = chatgpt_bootstrap.run_authenticated_bootstrap(
-                    page, access_token, device_id=device_id, config=config
-                )
-            machine.transition(RegistrationState.FINALIZE)
-            identity_context = account_identity.create_registration_identity(
-                proxy,
-                pool_index=int((proxy_metadata or {}).get("pool_index", -1) or -1),
-                device_id=str(device_id),
+                machine=machine,
+                mailbox_service=mailbox_service,
+                mailbox=mailbox,
+                driver_name=driver_name,
+                start_url=start_url,
+                email=email,
+                password=password,
+                full_name=full_name,
+                birthdate=birthdate,
+                device_id=device_id,
                 account_key=account_key,
                 browser_identity=browser_identity,
+                browser_profile=_browser_profile,
+                browser_geo=_browser_geo,
+                browser_geo_enabled=_browser_geo_enabled,
+                geo_audit=geo_audit,
+                chat_base=chat_base,
+                timeout=timeout,
+                otp_timeout=otp_timeout,
+                started=started,
+                proxy=proxy,
+                proxy_metadata=proxy_metadata,
                 config=config,
+                enroll_2fa=enroll_2fa,
+                probe_fn=probe_fn,
             )
-            # Augment the persisted identity with the browser fingerprint-pool
-            # selection + exit-geo.  Recorded as free-form identity_context keys
-            # (persisted as-is) rather than overriding ``fingerprint_key`` (that
-            # key is canonicalized against the protocol pool and would drop a
-            # browser label).  Updating proxy_affinity.country to the detected
-            # egress keeps fingerprint geo consistent with the browser locale.
-            identity_context = dict(identity_context)
-            identity_context["browser_fingerprint_profile"] = str(
-                _browser_profile.get("browser_fingerprint_profile") or ""
-            )
-            identity_context["browser_profile_index"] = int(_browser_profile.get("browser_profile_index", 0))
-            identity_context["fingerprint_seed"] = str(_browser_profile.get("fingerprint_seed") or device_id)
-            identity_context["geo_country"] = str((_browser_geo or {}).get("country") or "")
-            identity_context["geo_timezone"] = str((_browser_geo or {}).get("timezone") or "")
-            identity_context["geo_ip"] = str((_browser_geo or {}).get("ip") or "")
-            _geo_cc = decisions.geo_affinity_country(_browser_geo, _browser_geo_enabled)
-            if _geo_cc:
-                _affinity = dict(identity_context.get("proxy_affinity") or {})
-                _affinity["country"] = _geo_cc
-                identity_context["proxy_affinity"] = _affinity
-            # The protocol path records the registration country from the exit
-            # proxy credential (registration_handlers.finalize ->
-            # infer_proxy_country(s.proxy)).  The browser path previously omitted
-            # it, so headless-registered sessions stored registration_country=""
-            # and were impossible to attribute to a region for payment-matrix
-            # routing / liveness geo checks.  Mirror the protocol path here.
-            # The browser identity binds to the shared fingerprint pool via
-            # create_registration_identity, so its fingerprint_key is the
-            # canonical per-account fingerprint label (the protocol path stores
-            # the curl impersonate label under the same key).
-            auth_fingerprint_profile = str(
-                identity_context.get("browser_fingerprint_profile") or identity_context.get("fingerprint_key") or ""
-            )
-            registration_state, registration_success_basis = decisions.registration_state_and_basis(
-                success, at_probe_pending
-            )
-            result = registration_result.build_registration_result(
-                success=success,
-                registration_mode="browser",
-                registration_state=registration_state,
-                email=email,
-                error=dom_fields._safe_text(error),
-                password=(password or "") if password_used else "",
-                name=full_name,
-                birthdate=birthdate,
-                access_token=access_token,
-                id_token=session_info.get("id_token", ""),
-                auth_session=auth_body,
-                cookie_header=browser.cookie_header(),
-                device_id=device_id,
-                identity_context=identity_context,
-                auth_fingerprint_profile=auth_fingerprint_profile,
-                response={"auth_session": auth_body, "access_token_probe": probe},
-                quota_status=probe.get("quota_status", "") if isinstance(probe, dict) else "",
-                totp_secret=totp_secret,
-                twofa_enrollment=twofa_result,
-                registration_success_basis=registration_success_basis,
-                registration_country=proxy_entry.infer_proxy_country(proxy or ""),
-                registration_warning=dom_fields._safe_text(warning),
-                post_registration_ready=success,
-                mailbox_snapshot=registration_outcome._mailbox_snapshot(mailbox),
-                fingerprint_geo_audit=geo_audit,
-                extra={
-                    "registration_driver": driver_name,
-                    "access_token_probe": probe,
-                    "browser_diagnostics": session._browser_diagnostics(page, driver_name),
-                    "proxy_audit": session._safe_proxy_audit(proxy_metadata),
-                    "driver_capabilities": driver_capabilities(driver_name),
-                },
-            )
-            machine.transition(RegistrationState.COMPLETED)
-            result["registration_machine"] = machine.snapshot()
-            return result
     except BrowserRegistrationError as exc:
-        if machine.state is not RegistrationState.FAILED:
-            machine.fail(exc.code)
-        if page is not None:
-            diagnostics = session._browser_diagnostics(page, driver_name)
-        cancelled = exc.code == "registration_cancelled"
-        # Expected business failure: log the classified code (not the raw
-        # details) so batch audits can count outcomes without leaking page
-        # content into logs.
-        logger.warning(
-            "browser registration failed driver=%s code=%s cancelled=%s",
-            driver_name,
-            exc.code,
-            cancelled,
-        )
-        return registration_result.build_registration_failure_result(
-            error=dom_fields._safe_text(exc),
-            failure_class="cancelled" if cancelled else session._browser_failure_class(exc.code),
-            registration_state="cancelled" if cancelled else "failed",
+        return _handle_browser_registration_error(
+            exc,
+            machine=machine,
+            page=page,
+            driver_name=driver_name,
             email=email,
-            extra={
-                "registration_driver": driver_name,
-                "mailbox": registration_outcome._browser_mailbox_snapshot(mailbox),
-                "registration_machine": machine.snapshot(),
-                "browser_diagnostics": diagnostics,
-                "proxy_audit": session._safe_proxy_audit(proxy_metadata),
-                "fingerprint_geo_audit": geo_audit,
-                "driver_capabilities": driver_capabilities(driver_name),
-            },
+            mailbox=mailbox,
+            proxy_metadata=proxy_metadata,
+            geo_audit=geo_audit,
+            diagnostics=diagnostics,
         )
     except Exception as exc:
-        if machine.state is not RegistrationState.FAILED:
-            machine.fail(type(exc).__name__)
-        if page is not None:
-            diagnostics = session._browser_diagnostics(page, driver_name)
-        error = redact_proxy_text(f"{type(exc).__name__}: {exc}", proxy)
-        # This catch-all used to swallow the traceback entirely, leaving only
-        # "SomeError: ..." in the result dict. Keep the operator-facing text
-        # redacted, but put the full traceback into the log for diagnosis.
-        logger.error(
-            "browser registration crashed driver=%s: %s",
-            driver_name,
-            error,
-            exc_info=exc,
+        return _handle_unexpected_browser_crash(
+            exc,
+            machine=machine,
+            page=page,
+            driver_name=driver_name,
+            email=email,
+            mailbox=mailbox,
+            proxy=proxy,
+            proxy_metadata=proxy_metadata,
+            geo_audit=geo_audit,
+            diagnostics=diagnostics,
         )
+
+
+def _execute_post_email_browser_stages(
+    *,
+    page: Any,
+    browser: Any,
+    machine: RegistrationStateMachine,
+    mailbox_service: Any,
+    mailbox: Any,
+    driver_name: str,
+    start_url: str,
+    email: str,
+    password: str | None,
+    full_name: str,
+    birthdate: str,
+    device_id: str,
+    account_key: str,
+    browser_identity: dict[str, Any],
+    browser_profile: Mapping[str, Any],
+    browser_geo: Mapping[str, Any] | None,
+    browser_geo_enabled: bool,
+    geo_audit: dict[str, Any],
+    chat_base: str,
+    timeout: int,
+    otp_timeout: int,
+    started: int,
+    proxy: str | None,
+    proxy_metadata: Mapping[str, Any] | None,
+    config: Mapping[str, Any],
+    enroll_2fa: bool,
+    probe_fn: Any,
+) -> dict[str, Any]:
+    password_used = _advance_to_otp_or_post_password_state(
+        page,
+        browser=browser,
+        machine=machine,
+        password=password,
+        timeout=timeout,
+        config=config,
+    )
+    page = _poll_and_submit_browser_otp(
+        page,
+        browser=browser,
+        machine=machine,
+        mailbox_service=mailbox_service,
+        mailbox=mailbox,
+        driver_name=driver_name,
+        start_url=start_url,
+        email=email,
+        password=password,
+        timeout=timeout,
+        otp_timeout=otp_timeout,
+        started=started,
+        proxy=proxy,
+        config=config,
+    )
+    page = _complete_post_otp_profile_and_navigate(
+        page,
+        browser=browser,
+        machine=machine,
+        full_name=full_name,
+        birthdate=birthdate,
+        chat_base=chat_base,
+        timeout=timeout,
+        config=config,
+    )
+    return _finalize_browser_registration(
+        page=page,
+        browser=browser,
+        machine=machine,
+        driver_name=driver_name,
+        email=email,
+        password=password,
+        password_used=password_used,
+        full_name=full_name,
+        birthdate=birthdate,
+        device_id=device_id,
+        account_key=account_key,
+        browser_identity=browser_identity,
+        browser_profile=browser_profile,
+        browser_geo=browser_geo,
+        browser_geo_enabled=browser_geo_enabled,
+        geo_audit=geo_audit,
+        chat_base=chat_base,
+        timeout=timeout,
+        proxy=proxy,
+        proxy_metadata=proxy_metadata,
+        config=config,
+        enroll_2fa=enroll_2fa,
+        probe_fn=probe_fn,
+        mailbox=mailbox,
+    )
+
+
+def _validate_browser_registration_inputs(
+    *,
+    driver_name: str,
+    mailbox: Any,
+    config: Mapping[str, Any],
+) -> tuple[str, Any, str, Any] | dict[str, Any]:
+    try:
+        driver_name = normalize_registration_driver(driver_name)
+    except ValueError as exc:
         return registration_result.build_registration_failure_result(
-            error=dom_fields._safe_text(error),
-            failure_class=session._browser_failure_class(str(exc)),
+            error=dom_fields._safe_text(str(exc)),
+            failure_class="configuration",
+            extra={"registration_driver": str(driver_name or "")},
+        )
+    if driver_name == "protocol":
+        return registration_result.build_registration_failure_result(
+            error="unsupported_registration_driver:protocol",
+            failure_class="configuration",
+            extra={"registration_driver": driver_name},
+        )
+    try:
+        mailbox = mailbox_pkg.ensure_mailbox_account(mailbox)
+    except Exception:
+        return registration_result.build_registration_failure_result(
+            error="browser_mailbox_setup_failed",
+            failure_class="mailbox",
+            extra={
+                "registration_driver": driver_name,
+                "mailbox": registration_outcome._browser_mailbox_snapshot(mailbox),
+            },
+        )
+    email = str(getattr(mailbox, "email", "") or "").strip()
+    if not email:
+        return registration_result.build_registration_failure_result(
+            error="mailbox_required",
+            extra={"registration_driver": driver_name},
+        )
+    try:
+        mailbox_service = MailboxService.create(config)
+    except Exception:
+        return registration_result.build_registration_failure_result(
+            error="browser_mailbox_service_unavailable",
+            failure_class="network",
             email=email,
             extra={
                 "registration_driver": driver_name,
                 "mailbox": registration_outcome._browser_mailbox_snapshot(mailbox),
-                "registration_machine": machine.snapshot(),
-                "browser_diagnostics": diagnostics,
-                "proxy_audit": session._safe_proxy_audit(proxy_metadata),
-                "fingerprint_geo_audit": geo_audit,
-                "driver_capabilities": driver_capabilities(driver_name),
             },
         )
+    return driver_name, mailbox, email, mailbox_service
+
+
+def _resolve_browser_geo_and_profile(
+    *,
+    driver_name: str,
+    proxy: str | None,
+    proxy_metadata: Mapping[str, Any] | None,
+    device_id: str,
+    locale: str,
+    timezone_id: str,
+    browser_geo_enabled: bool,
+    config: Mapping[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any], str, str, dict[str, str], Any]:
+    browser_geo = browser_fingerprint_pool.detect_proxy_exit_geo(proxy, enabled=browser_geo_enabled)
+    browser_profile = browser_fingerprint_pool.select_browser_profile(browser_geo, seed=device_id, config=config)
+    locale, timezone_id = decisions.aligned_locale_timezone(browser_profile, locale, timezone_id)
+    locale_parts = str(locale or "").replace("_", "-").split("-")
+    locale_country = locale_parts[-1] if len(locale_parts) > 1 else ""
+    geo_audit = {
+        "fingerprint_country": (locale_country if driver_name in decisions.SCREEN_MANAGED_DRIVERS else ""),
+        "exit_country": str((browser_geo or {}).get("country") or (proxy_metadata or {}).get("actual_country") or ""),
+        "source": ("geo_probe" if (browser_geo or {}).get("country") else "preflight"),
+    }
+    viewport = decisions.browser_screen_size(browser_profile, driver_name)
+    return browser_geo, browser_profile, locale, timezone_id, geo_audit, viewport
+
+
+def _verify_browser_egress_country(
+    browser: Any,
+    *,
+    driver_name: str,
+    country_check: str,
+    timeout: int,
+    proxy_metadata: Mapping[str, Any] | None,
+    geo_audit: dict[str, Any],
+) -> Mapping[str, Any] | None:
+    verification = external_sessions.verify_browser_proxy_country(
+        browser,
+        expected_country=str((proxy_metadata or {}).get("expected_country") or ""),
+        timeout_seconds=min(20, timeout),
+    )
+    if proxy_metadata is not None:
+        updated = dict(proxy_metadata)
+        updated["actual_country"] = verification.get("actual_country", "")
+        proxy_metadata = updated
+    geo_audit["exit_country"] = str(verification.get("actual_country") or "")
+    geo_audit["source"] = "browser_probe"
+    if not verification.get("ok"):
+        country_error = str(verification.get("error") or "unknown")
+        if country_check == "blocking":
+            raise BrowserRegistrationError(f"{driver_name}_proxy_country_mismatch", country_error)
+        logger.warning(
+            "egress country probe (%s, non-fatal): %s (expected=%s actual=%s)",
+            driver_name,
+            country_error,
+            str((proxy_metadata or {}).get("expected_country") or ""),
+            str(verification.get("actual_country") or ""),
+        )
+    return proxy_metadata
+
+
+def _ensure_signup_ready_with_reload(page: Any, *, timeout: int, config: Mapping[str, Any]) -> None:
+    try:
+        page_state._ensure_signup_page_ready(
+            page,
+            timeout_seconds=recovery.stage_timeout(config, "auth_flow", min(45, timeout), maximum=120),
+            config=config,
+        )
+    except BrowserRegistrationError as exc:
+        if exc.code != "browser_email_field_missing":
+            raise
+        registration_progress.registration_stage("auth_flow_retry", detail="signup_ready_reload")
+        try:
+            page.reload(wait_until="commit", timeout=max(5_000, timeout * 1_000))
+        except Exception:
+            pass
+        page_state._ensure_signup_page_ready(
+            page,
+            timeout_seconds=recovery.stage_timeout(config, "auth_flow", min(30, timeout), maximum=120),
+            config=config,
+        )
+
+
+def _wait_and_validate_user_register_state(
+    page: Any,
+    *,
+    browser: Any,
+    timeout: int,
+    config: Mapping[str, Any],
+) -> str:
+    state = page_state._wait_for_registration_state(
+        page,
+        recovery.stage_timeout(config, "user_register", min(timeout, 30), maximum=120),
+        browser=browser,
+        config=config,
+    )
+    if state == "challenge":
+        if not page_state._wait_for_challenge_clear(page, max_wait_seconds=30):
+            raise BrowserRegistrationError("manual_challenge_required")
+        state = page_state._wait_for_registration_state(
+            page,
+            recovery.stage_timeout(config, "user_register", min(timeout, 30), maximum=120),
+            browser=browser,
+            config=config,
+        )
+        if state == "challenge":
+            raise BrowserRegistrationError("manual_challenge_required")
+    if state == "identity_provider":
+        raise BrowserRegistrationError("browser_unexpected_identity_provider")
+    if state == "login_password":
+        raise BrowserRegistrationError("browser_existing_account")
+    if state == "unknown":
+        raise BrowserRegistrationError("browser_registration_state_unknown")
+    return state
+
+
+def _advance_to_otp_or_post_password_state(
+    page: Any,
+    *,
+    browser: Any,
+    machine: RegistrationStateMachine,
+    password: str | None,
+    timeout: int,
+    config: Mapping[str, Any],
+) -> bool:
+    machine.transition(RegistrationState.USER_REGISTER)
+    state = _wait_and_validate_user_register_state(page, browser=browser, timeout=timeout, config=config)
+    if state == "password":
+        password_used = form_steps._fill_password_if_present(page, password or "", config=config)
+    else:
+        password_used = False
+    machine.transition(RegistrationState.EMAIL_OTP_SEND)
+    if password_used:
+        _wait_and_validate_user_register_state(page, browser=browser, timeout=timeout, config=config)
+    return password_used
+
+
+def _try_restart_or_resend_otp(
+    browser: Any,
+    page: Any,
+    *,
+    start_url: str,
+    email: str,
+    password: str | None,
+    timeout: int,
+    config: Mapping[str, Any],
+) -> tuple[Any, bool]:
+    restarted = False
+    if not dom_fields._page_is_alive(page):
+        try:
+            page, _ = flow_steps._restart_email_otp_flow(
+                browser,
+                page,
+                start_url=start_url,
+                email=email,
+                password=password or "",
+                timeout_seconds=timeout,
+                config=config,
+            )
+            restarted = True
+        except Exception:
+            restarted = False
+    return page, (restarted or bool(dom_fields._click_resend(page)))
+
+
+def _poll_and_submit_browser_otp(
+    page: Any,
+    *,
+    browser: Any,
+    machine: RegistrationStateMachine,
+    mailbox_service: Any,
+    mailbox: Any,
+    driver_name: str,
+    start_url: str,
+    email: str,
+    password: str | None,
+    timeout: int,
+    otp_timeout: int,
+    started: int,
+    proxy: str | None,
+    config: Mapping[str, Any],
+) -> Any:
+    if dom_fields._otp_fields(page) is None:
+        return page
+    machine.transition(RegistrationState.EMAIL_OTP_WAIT)
+    excluded_otps: set[str] = set()
+    for otp_attempt in range(3):
+        otp = flow_steps._poll_browser_otp(
+            mailbox_service,
+            mailbox,
+            browser=browser,
+            page=page,
+            driver_name=driver_name,
+            subject_keyword="verification code|login code",
+            timeout=otp_timeout,
+            issued_after_unix=started,
+            proxy=proxy,
+            excluded_otps=excluded_otps,
+        )
+        if not otp and otp_attempt > 0:
+            otp = mailbox_service.poll_otp(
+                mailbox,
+                subject_keyword="verification code|login code",
+                timeout=min(15, otp_timeout),
+                issued_after_unix=0,
+                proxy=proxy,
+                excluded_otps=set(),
+            )
+        if not otp:
+            if otp_attempt < 2:
+                page, resent = _try_restart_or_resend_otp(
+                    browser,
+                    page,
+                    start_url=start_url,
+                    email=email,
+                    password=password,
+                    timeout=timeout,
+                    config=config,
+                )
+                if resent:
+                    started = int(time.time())
+                    continue
+            raise BrowserRegistrationError("browser_email_otp_timeout")
+        page = getattr(browser, "page", None) or page
+        excluded_otps.add(str(otp))
+        machine.transition(RegistrationState.EMAIL_OTP_VALIDATE)
+        form_steps._fill_otp(page, str(otp))
+        outcome = page_state._wait_after_otp_submit(
+            page,
+            timeout_seconds=recovery.stage_timeout(config, "email_otp_validate", min(30, timeout), maximum=120),
+            require_transition=True,
+        )
+        if outcome in {"accepted", "pending"}:
+            return page
+        if outcome == "invalid" and otp_attempt < 2:
+            page, resent = _try_restart_or_resend_otp(
+                browser,
+                page,
+                start_url=start_url,
+                email=email,
+                password=password,
+                timeout=timeout,
+                config=config,
+            )
+            if resent:
+                started = int(time.time())
+    raise BrowserRegistrationError("browser_email_otp_rejected")
+
+
+def _complete_post_otp_profile_and_navigate(
+    page: Any,
+    *,
+    browser: Any,
+    machine: RegistrationStateMachine,
+    full_name: str,
+    birthdate: str,
+    chat_base: str,
+    timeout: int,
+    config: Mapping[str, Any],
+) -> Any:
+    state = page_state._post_otp_registration_state(
+        page,
+        browser=browser,
+        timeout_seconds=recovery.stage_timeout(config, "create_account", min(30, max(5, timeout)), maximum=180),
+        config=config,
+    )
+    for retry_round in range(2):
+        if state not in {"unknown", "email_verification_stuck"}:
+            break
+        registration_progress.registration_stage(
+            "create_account_retry",
+            detail=("email_verification_reload" if state == "email_verification_stuck" else "state_probe_retry")
+            + (f"_round{retry_round + 1}" if retry_round else ""),
+        )
+        if state == "email_verification_stuck":
+            try:
+                page.reload(wait_until="commit", timeout=max(5_000, timeout * 1_000))
+            except Exception:
+                pass
+        page = getattr(browser, "page", None) or page
+        state = page_state._post_otp_registration_state(
+            page,
+            browser=browser,
+            timeout_seconds=recovery.stage_timeout(config, "create_account", min(45, max(10, timeout)), maximum=180),
+            config=config,
+        )
+    page = getattr(browser, "page", None) or page
+    machine.transition(RegistrationState.CREATE_ACCOUNT)
+    if page_state._profile_completion_required(state):
+        form_steps._complete_profile(page, full_name, birthdate)
+        profile_done = page_state._wait_for_profile_completion(
+            page,
+            timeout_seconds=recovery.stage_timeout(config, "create_account", min(30, max(5, timeout)), maximum=120),
+            config=config,
+        )
+        if not profile_done:
+            registration_progress.registration_stage("create_account_retry", detail="profile_completion_retry")
+            profile_done = page_state._wait_for_profile_completion(
+                page,
+                timeout_seconds=recovery.stage_timeout(config, "create_account", min(20, max(5, timeout)), maximum=120),
+                config=config,
+            )
+        if not profile_done:
+            raise BrowserRegistrationError("browser_profile_submit_timeout")
+        page.wait_for_timeout(2_000)
+    if page_state._manual_challenge(page):
+        if not page_state._wait_for_challenge_clear(page, max_wait_seconds=30):
+            raise BrowserRegistrationError("manual_challenge_required")
+    if hasattr(browser, "ensure_chatgpt_context"):
+        page = dom_fields._prepare_session_page(browser, page, timeout)
+    elif decisions.needs_chat_base_navigation(chat_base, str(page.url or "")):
+        _goto_with_retry(page, chat_base, timeout_ms=timeout * 1_000)
+    form_steps._maybe_dismiss_chatgpt_onboarding(page, config=config)
+    return page
+
+
+def _enroll_browser_totp_and_warmup(
+    page: Any,
+    *,
+    access_token: str,
+    device_id: str,
+    chat_base: str,
+    success: bool,
+    enroll_2fa: bool,
+    config: Mapping[str, Any],
+) -> tuple[dict[str, Any], str]:
+    twofa_result: dict[str, Any] = {"ok": False, "reason": "disabled"}
+    totp_secret = ""
+    if success and enroll_2fa:
+        try:
+            twofa_result = session._bind_totp_in_browser(page, access_token, device_id, chat_base=chat_base)
+            if twofa_result.get("ok"):
+                totp_secret = str(twofa_result.get("totp_secret") or "")
+            elif not twofa_result.get("error"):
+                twofa_result = {"ok": False, "reason": "browser_driver_deferred"}
+        except Exception as exc:
+            twofa_result = {"ok": False, "reason": f"browser_totp_exception: {type(exc).__name__}"}
+    elif enroll_2fa:
+        twofa_result = {"ok": False, "reason": "registration_not_successful"}
+    if success:
+        chatgpt_bootstrap.run_authenticated_bootstrap(page, access_token, device_id=device_id, config=config)
+    return twofa_result, totp_secret
+
+
+def _finalize_browser_registration(
+    *,
+    page: Any,
+    browser: Any,
+    machine: RegistrationStateMachine,
+    driver_name: str,
+    email: str,
+    password: str | None,
+    password_used: bool,
+    full_name: str,
+    birthdate: str,
+    device_id: str,
+    account_key: str,
+    browser_identity: dict[str, Any],
+    browser_profile: Mapping[str, Any],
+    browser_geo: Mapping[str, Any] | None,
+    browser_geo_enabled: bool,
+    geo_audit: dict[str, Any],
+    chat_base: str,
+    timeout: int,
+    proxy: str | None,
+    proxy_metadata: Mapping[str, Any] | None,
+    config: Mapping[str, Any],
+    enroll_2fa: bool,
+    probe_fn: Any,
+    mailbox: Any,
+) -> dict[str, Any]:
+    machine.transition(RegistrationState.AUTH_SESSION)
+    session_info = session._session_payload(
+        browser,
+        chat_base,
+        email,
+        timeout_seconds=recovery.stage_timeout(config, "auth_session", timeout, minimum=15, maximum=120),
+    )
+    auth_body = session_info["body"]
+    access_token = session_info["access_token"]
+    machine.transition(RegistrationState.ACCESS_TOKEN_PROBE)
+    effective_probe_fn = probe_fn
+    if effective_probe_fn is None:
+        effective_probe_fn = lambda account, **kwargs: session._browser_access_token_probe(
+            browser,
+            account,
+            timeout=int(kwargs.get("timeout") or timeout),
+        )
+    probe = registration_outcome._probe_registration_access_token(
+        access_token,
+        auth_body,
+        proxy=(None if effective_probe_fn is not None else proxy),
+        cfg=config,
+        probe_fn=effective_probe_fn,
+        stage_fn=registration_progress.registration_stage,
+        sleep_fn=time.sleep,
+    )
+    success, error, warning = registration_outcome._registration_outcome(True, {}, access_token, probe)
+    at_probe_pending = recovery.probe_pending(access_token, probe, success)
+    if success:
+        session._post_registration_dwell(config)
+    machine.transition(RegistrationState.TOTP_ENROLL)
+    twofa_result, totp_secret = _enroll_browser_totp_and_warmup(
+        page,
+        access_token=access_token,
+        device_id=device_id,
+        chat_base=chat_base,
+        success=success,
+        enroll_2fa=enroll_2fa,
+        config=config,
+    )
+    machine.transition(RegistrationState.FINALIZE)
+    identity_context = dict(
+        account_identity.create_registration_identity(
+            proxy,
+            pool_index=int((proxy_metadata or {}).get("pool_index", -1) or -1),
+            device_id=str(device_id),
+            account_key=account_key,
+            browser_identity=browser_identity,
+            config=config,
+        )
+    )
+    identity_context["browser_fingerprint_profile"] = str(browser_profile.get("browser_fingerprint_profile") or "")
+    identity_context["browser_profile_index"] = int(browser_profile.get("browser_profile_index", 0))
+    identity_context["fingerprint_seed"] = str(browser_profile.get("fingerprint_seed") or device_id)
+    identity_context["geo_country"] = str((browser_geo or {}).get("country") or "")
+    identity_context["geo_timezone"] = str((browser_geo or {}).get("timezone") or "")
+    identity_context["geo_ip"] = str((browser_geo or {}).get("ip") or "")
+    geo_cc = decisions.geo_affinity_country(browser_geo, browser_geo_enabled)
+    if geo_cc:
+        affinity = dict(identity_context.get("proxy_affinity") or {})
+        affinity["country"] = geo_cc
+        identity_context["proxy_affinity"] = affinity
+    auth_fingerprint_profile = str(
+        identity_context.get("browser_fingerprint_profile") or identity_context.get("fingerprint_key") or ""
+    )
+    registration_state, registration_success_basis = decisions.registration_state_and_basis(success, at_probe_pending)
+    result = registration_result.build_registration_result(
+        success=success,
+        registration_mode="browser",
+        registration_state=registration_state,
+        email=email,
+        error=dom_fields._safe_text(error),
+        password=(password or "") if password_used else "",
+        name=full_name,
+        birthdate=birthdate,
+        access_token=access_token,
+        id_token=session_info.get("id_token", ""),
+        auth_session=auth_body,
+        cookie_header=browser.cookie_header(),
+        device_id=device_id,
+        identity_context=identity_context,
+        auth_fingerprint_profile=auth_fingerprint_profile,
+        response={"auth_session": auth_body, "access_token_probe": probe},
+        quota_status=probe.get("quota_status", "") if isinstance(probe, dict) else "",
+        totp_secret=totp_secret,
+        twofa_enrollment=twofa_result,
+        registration_success_basis=registration_success_basis,
+        registration_country=proxy_entry.infer_proxy_country(proxy or ""),
+        registration_warning=dom_fields._safe_text(warning),
+        post_registration_ready=success,
+        mailbox_snapshot=registration_outcome._mailbox_snapshot(mailbox),
+        fingerprint_geo_audit=geo_audit,
+        extra={
+            "registration_driver": driver_name,
+            "access_token_probe": probe,
+            "browser_diagnostics": session._browser_diagnostics(page, driver_name),
+            "proxy_audit": session._safe_proxy_audit(proxy_metadata),
+            "driver_capabilities": driver_capabilities(driver_name),
+        },
+    )
+    machine.transition(RegistrationState.COMPLETED)
+    result["registration_machine"] = machine.snapshot()
+    return result
+
+
+def _handle_browser_registration_error(
+    exc: BrowserRegistrationError,
+    *,
+    machine: RegistrationStateMachine,
+    page: Any,
+    driver_name: str,
+    email: str,
+    mailbox: Any,
+    proxy_metadata: Mapping[str, Any] | None,
+    geo_audit: dict[str, Any],
+    diagnostics: dict[str, Any],
+) -> dict[str, Any]:
+    if machine.state is not RegistrationState.FAILED:
+        machine.fail(exc.code)
+    if page is not None:
+        diagnostics = session._browser_diagnostics(page, driver_name)
+    cancelled = exc.code == "registration_cancelled"
+    logger.warning(
+        "browser registration failed driver=%s code=%s cancelled=%s",
+        driver_name,
+        exc.code,
+        cancelled,
+    )
+    return registration_result.build_registration_failure_result(
+        error=dom_fields._safe_text(exc),
+        failure_class="cancelled" if cancelled else session._browser_failure_class(exc.code),
+        registration_state="cancelled" if cancelled else "failed",
+        email=email,
+        extra={
+            "registration_driver": driver_name,
+            "mailbox": registration_outcome._browser_mailbox_snapshot(mailbox),
+            "registration_machine": machine.snapshot(),
+            "browser_diagnostics": diagnostics,
+            "proxy_audit": session._safe_proxy_audit(proxy_metadata),
+            "fingerprint_geo_audit": geo_audit,
+            "driver_capabilities": driver_capabilities(driver_name),
+        },
+    )
+
+
+def _handle_unexpected_browser_crash(
+    exc: Exception,
+    *,
+    machine: RegistrationStateMachine,
+    page: Any,
+    driver_name: str,
+    email: str,
+    mailbox: Any,
+    proxy: str | None,
+    proxy_metadata: Mapping[str, Any] | None,
+    geo_audit: dict[str, Any],
+    diagnostics: dict[str, Any],
+) -> dict[str, Any]:
+    if machine.state is not RegistrationState.FAILED:
+        machine.fail(type(exc).__name__)
+    if page is not None:
+        diagnostics = session._browser_diagnostics(page, driver_name)
+    error = redact_proxy_text(f"{type(exc).__name__}: {exc}", proxy)
+    logger.error(
+        "browser registration crashed driver=%s: %s",
+        driver_name,
+        error,
+        exc_info=exc,
+    )
+    return registration_result.build_registration_failure_result(
+        error=dom_fields._safe_text(error),
+        failure_class=session._browser_failure_class(str(exc)),
+        email=email,
+        extra={
+            "registration_driver": driver_name,
+            "mailbox": registration_outcome._browser_mailbox_snapshot(mailbox),
+            "registration_machine": machine.snapshot(),
+            "browser_diagnostics": diagnostics,
+            "proxy_audit": session._safe_proxy_audit(proxy_metadata),
+            "fingerprint_geo_audit": geo_audit,
+            "driver_capabilities": driver_capabilities(driver_name),
+        },
+    )
 
 
 def run_playwright_registration(**kwargs: Any) -> dict[str, Any]:

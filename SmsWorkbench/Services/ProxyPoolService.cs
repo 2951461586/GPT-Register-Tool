@@ -1,12 +1,8 @@
-// Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
-#nullable enable
-
 using System.Text.Json;
 
 using SmsWorkbench.Localization;
 
-namespace SmsWorkbench
+namespace SmsWorkbench.Services
 {
     /// <summary>
     /// Runs the three read-only proxy-pool commands and returns the backend's

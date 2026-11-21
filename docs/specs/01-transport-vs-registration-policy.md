@@ -2,7 +2,7 @@
 id: spec-01-transport-vs-registration-policy
 type: architecture-design
 status: accepted
-owner: sms_tool/http_client.py
+owner: sms_tool/transport/http_client.py
 implements:
   - rule-01
 depends-on:

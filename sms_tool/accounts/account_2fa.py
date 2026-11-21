@@ -20,15 +20,15 @@ import logging
 import time
 from typing import Any
 
-from ..http_client import request_with_retry
-from .. import endpoints
+from ..transport.http_client import request_with_retry
+from ..transport import endpoints
 
 logger = logging.getLogger(__name__)
 
 
 def _impersonate() -> str:
     try:
-        from ..auth_headers import auth_impersonate
+        from ..transport.auth_headers import auth_impersonate
 
         return auth_impersonate()
     except Exception:

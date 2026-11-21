@@ -1,8 +1,4 @@
-// Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
-#nullable enable
-
-namespace SmsWorkbench
+namespace SmsWorkbench.Dialogs
 {
     /// <summary>
     /// One-click SMS dialog. XAML since 2026-11-20; the country → tier cascade and

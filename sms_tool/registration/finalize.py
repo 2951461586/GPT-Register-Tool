@@ -21,10 +21,10 @@ from typing import TYPE_CHECKING, Any
 
 from ..proxy import entry as _proxy_entry
 from . import checkpoint as registration_checkpoint
-from .. import token_telemetry as _token_telemetry
-from ..auth_headers import current_auth_fingerprint
+from ..observability import token_telemetry as _token_telemetry
+from ..transport.auth_headers import current_auth_fingerprint
 from ..codex.oauth import collect_codex_oauth_tokens
-from ..operator_output import emit as _emit
+from ..observability.operator_output import emit as _emit
 from .outcome import needs_manual_session_recovery
 from .result import build_registration_result, record_failed_mailbox_purchase
 from .retry_guard import RegistrationRetryGuard

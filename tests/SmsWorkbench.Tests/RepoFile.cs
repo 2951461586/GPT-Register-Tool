@@ -34,7 +34,7 @@ internal static class RepoFile
             ReadLines(relativePath).Where(line => !line.TrimStart().StartsWith("//", StringComparison.Ordinal)));
     }
 
-    private static string Root()
+    public static string Root()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory != null && !File.Exists(Path.Combine(directory.FullName, "GPTRegisterTool.slnx")))

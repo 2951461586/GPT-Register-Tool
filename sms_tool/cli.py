@@ -8,7 +8,7 @@ import time
 from typing import Any
 
 from .config import CFG, ConfigError, default_config_dir, initialize_config_shards, initialize_runtime_config
-from .diagnostics import install_safe_stdio, safe_print
+from .observability.diagnostics import install_safe_stdio, safe_print
 from .desktop.ipc import emit_result
 from .kernel.paths import output_dir, runtime_file
 from .registration_drivers.base import driver_choices
@@ -42,7 +42,6 @@ class _LazyModule:
 account_commands = _LazyModule(".commands.accounts")
 mailbox_commands = _LazyModule(".commands.mailbox_ops")
 one_click_commands = _LazyModule(".commands.one_click")
-omakse_commands = _LazyModule(".commands.omakse")
 payment_commands = _LazyModule(".commands.payment")
 payment_link_commands = _LazyModule(".commands.payment_links")
 registration_commands = _LazyModule(".commands.registration")
@@ -88,7 +87,7 @@ def _load_batch_deps() -> None:
     global run_batch, filter_registered_mailboxes
     if run_batch is not None and filter_registered_mailboxes is not None:
         return
-    from .batch_runner import (
+    from .registration.batch_runner import (
         filter_registered_mailboxes as _filter,
         run_batch_impl as _run,
     )
@@ -425,7 +424,6 @@ def build_parser():
         codex,
         core,
         email_change,
-        omakse,
         one_click,
         payment,
         paypal,
@@ -439,7 +437,6 @@ def build_parser():
     # any ordering-sensitive parsing behaviour are unchanged.
     core.register(parser)
     payment.register(parser)
-    omakse.register(parser)
     session.register(parser)
     paypal.register(parser)
     sub2api.register(parser)
@@ -493,7 +490,7 @@ def main():
     # IPC pipe -- so a run that failed before its first progress record left no
     # evidence on disk at all. The mirror is passive: it copies complete lines
     # without rerouting or decorating the stream the host parses.
-    from .stdout_mirror import install_stdout_mirror
+    from .observability.stdout_mirror import install_stdout_mirror
 
     install_stdout_mirror()
     # Wire the rotating file logger (`runtime/logs/sms_tool.log`). Without this
@@ -503,7 +500,7 @@ def main():
     # IPC channel (the `@@SMSWORKBENCH_V2@@` envelope plus the "Saved session:"
     # marker), and a StreamHandler would inject formatter-decorated lines into
     # that contract.
-    from .logging_setup import configure_logging
+    from .observability.logging_setup import configure_logging
 
     configure_logging(to_console=False)
 
@@ -611,12 +608,6 @@ def main():
         return
     if args.generate_upi_qr:
         _generate_upi_qr(args)
-        return
-    if args.omakse_extract:
-        _omakse_extract(args)
-        return
-    if args.omakse_us_pay:
-        _omakse_us_pay(args)
         return
     if args.refresh_session:
         _refresh_session(args)
@@ -737,7 +728,84 @@ def _main_early_commands(args) -> bool:
         # length is pinned by scripts/function_length_ratchet.py.
         _import_account_json(args)
         return True
+    if getattr(args, "inspect_accounts", False):
+        _inspect_accounts(args)
+        return True
     return False
+
+
+def _resolve_target_success_plan(args, mailboxes, effective_count: int) -> tuple[int, int]:
+    """Expand attempt pool to loaded mailboxes when ``--target-success`` is requested."""
+    target = max(0, int(getattr(args, "target_success", 0) or 0))
+    if target <= 0:
+        return effective_count, 0
+    if mailboxes and effective_count < len(mailboxes) and int(getattr(args, "count", 1) or 1) <= target:
+        effective_count = len(mailboxes)
+    return effective_count, target
+
+
+def _run_email_registration_batch(
+    args,
+    mailboxes,
+    *,
+    effective_count: int,
+    target_success: int,
+    phone_pool,
+    base_dir,
+    pipeline_started: float,
+    mailbox_seconds: float,
+    register_started: float,
+):
+    proxy_pool = _proxy_pool_values(args)
+    if effective_count > 1:
+
+        def persist_completed_result(_index, result):
+            registration_commands.persist_registration_result(
+                args,
+                result,
+                base_dir,
+                _registration_command_context(),
+                pipeline_timing=registration_commands.registration_pipeline_timing(
+                    pipeline_started,
+                    mailbox_seconds,
+                    register_started,
+                ),
+            )
+
+        batch_kwargs = {
+            "count": effective_count,
+            "proxy": args.proxy,
+            "proxy_pool": proxy_pool,
+            "mailboxes": mailboxes,
+            "workers": args.workers,
+            "phone_pool": phone_pool,
+            "codex_oauth": False,
+            "registration_mode": args.registration_mode,
+            "registration_driver": getattr(args, "registration_driver", None),
+            "browser_headless": getattr(args, "browser_headless", None),
+            "enroll_2fa": not getattr(args, "no_2fa", False),
+            "run_email_func": run_email,
+            "on_result": persist_completed_result,
+        }
+        if target_success > 0:
+            batch_kwargs["target_success"] = target_success
+        return run_batch(**batch_kwargs)
+
+    mailbox = mailboxes[0] if mailboxes else None
+    return run_batch(
+        count=1,
+        proxy=args.proxy,
+        proxy_pool=proxy_pool,
+        mailboxes=[mailbox] if mailbox else [],
+        workers=1,
+        phone_pool=phone_pool,
+        codex_oauth=False,
+        registration_mode=args.registration_mode,
+        registration_driver=getattr(args, "registration_driver", None),
+        browser_headless=getattr(args, "browser_headless", None),
+        enroll_2fa=not getattr(args, "no_2fa", False),
+        run_email_func=run_email,
+    )
 
 
 def _main_registration_pipeline(args, base_dir) -> None:
@@ -837,7 +905,7 @@ def _main_registration_pipeline(args, base_dir) -> None:
 
         proxy_pool = _proxy_pool_values(args)
         if len(proxy_pool) > 1:
-            from .batch_runner import select_registration_proxy_base
+            from .registration.batch_runner import select_registration_proxy_base
 
             selected_proxy = select_registration_proxy_base(proxy_pool, args.proxy)
             proxy_pool = [selected_proxy] if selected_proxy else []
@@ -886,55 +954,19 @@ def _main_registration_pipeline(args, base_dir) -> None:
             raise SystemExit(exit_code)
         return
 
+    effective_count, target_success = _resolve_target_success_plan(args, mailboxes, effective_count)
     register_started = time.time()
-    if effective_count > 1:
-        proxy_pool = _proxy_pool_values(args)
-
-        def persist_completed_result(_index, result):
-            registration_commands.persist_registration_result(
-                args,
-                result,
-                base_dir,
-                _registration_command_context(),
-                pipeline_timing=registration_commands.registration_pipeline_timing(
-                    pipeline_started,
-                    mailbox_seconds,
-                    register_started,
-                ),
-            )
-
-        results = run_batch(
-            count=effective_count,
-            proxy=args.proxy,
-            proxy_pool=proxy_pool,
-            mailboxes=mailboxes,
-            workers=args.workers,
-            phone_pool=phone_pool,
-            codex_oauth=False,
-            registration_mode=args.registration_mode,
-            registration_driver=getattr(args, "registration_driver", None),
-            browser_headless=getattr(args, "browser_headless", None),
-            enroll_2fa=not getattr(args, "no_2fa", False),
-            run_email_func=run_email,
-            on_result=persist_completed_result,
-        )
-    else:
-        mailbox = mailboxes[0] if mailboxes else None
-        proxy_pool = _proxy_pool_values(args)
-        results = run_batch(
-            count=1,
-            proxy=args.proxy,
-            proxy_pool=proxy_pool,
-            mailboxes=[mailbox] if mailbox else [],
-            workers=1,
-            phone_pool=phone_pool,
-            codex_oauth=False,
-            registration_mode=args.registration_mode,
-            registration_driver=getattr(args, "registration_driver", None),
-            browser_headless=getattr(args, "browser_headless", None),
-            enroll_2fa=not getattr(args, "no_2fa", False),
-            run_email_func=run_email,
-        )
+    results = _run_email_registration_batch(
+        args,
+        mailboxes,
+        effective_count=effective_count,
+        target_success=target_success,
+        phone_pool=phone_pool,
+        base_dir=base_dir,
+        pipeline_started=pipeline_started,
+        mailbox_seconds=mailbox_seconds,
+        register_started=register_started,
+    )
     register_seconds = time.time() - register_started
 
     report = _save_registration_results(
@@ -954,12 +986,12 @@ def _main_registration_pipeline(args, base_dir) -> None:
     # read it as success.  Code 3 is the documented runtime/provider failure slot
     # (docs/architecture.md) and is what `--target-at200` and `--delete-account`
     # already raise for a batch that did not fully succeed.
-    exit_code = _registration_exit_code(report)
+    exit_code = _registration_exit_code(report, target_success=target_success)
     if exit_code:
         raise SystemExit(exit_code)
 
 
-def _registration_exit_code(report) -> int:
+def _registration_exit_code(report, *, target_success: int = 0) -> int:
     """Map a finished registration batch report onto a process exit code.
 
     Returns 3 when the batch did not fully succeed, 0 otherwise.  The failure
@@ -976,6 +1008,8 @@ def _registration_exit_code(report) -> int:
     """
     _raw_data: object = report
     data: dict = _raw_data if isinstance(_raw_data, dict) else {}
+    if target_success > 0:
+        return 0 if data.get("ok") is True else 3
     if data.get("ok") is False:
         return 3
     try:
@@ -1103,6 +1137,10 @@ def _refresh_cpa_quota(args):
     return account_commands.refresh_cpa_quota(args, _account_command_context())
 
 
+def _inspect_accounts(args):
+    return account_commands.inspect_accounts(args, _account_command_context())
+
+
 def _quota_usage(args):
     return account_commands.quota_usage(args)
 
@@ -1205,14 +1243,3 @@ def _persist_one_click_sms_failure(data, json_path, email, result):
 
     _load_storage_deps()
     return persist_one_click_sms_failure(data, json_path, email, result, upsert=upsert_account)
-
-
-# ─── Omakse handlers ──────────────────────────────────────────────────────────
-
-
-def _omakse_extract(args):
-    return omakse_commands.omakse_extract(args, omakse_commands.OmakseCommandContext(runtime_config=CFG))
-
-
-def _omakse_us_pay(args):
-    return omakse_commands.omakse_us_pay(args, omakse_commands.OmakseCommandContext(runtime_config=CFG))

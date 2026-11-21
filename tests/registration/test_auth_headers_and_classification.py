@@ -1,8 +1,8 @@
 import unittest
 from unittest.mock import patch
 
-from sms_tool import auth_headers
-from sms_tool.auth_headers import (
+from sms_tool.transport import auth_headers
+from sms_tool.transport.auth_headers import (
     AUTH_IMPERSONATE,
     CHATGPT_CLIENT_VERSION,
     DEFAULT_SEC_CH_UA,
@@ -15,7 +15,7 @@ from sms_tool.auth_headers import (
     set_fingerprint_geo,
     sentinel_fingerprint,
 )
-from sms_tool.fingerprint_pool import FingerprintPool
+from sms_tool.transport.fingerprint_pool import FingerprintPool
 from sms_tool.kernel.error_classification import classify_error
 from sms_tool.registration.policy import registration_retry_decision
 
@@ -75,7 +75,7 @@ class AuthHeadersAndClassificationTests(unittest.TestCase):
             self.assertIn(f'v="{version}"', DEFAULT_SEC_CH_UA)
 
     def test_auth_request_headers_forwards_per_request_ids(self):
-        from sms_tool.auth_wire import _auth_request_headers
+        from sms_tool.transport.auth_wire import _auth_request_headers
 
         headers = _auth_request_headers(
             {"X-Base": "1"},

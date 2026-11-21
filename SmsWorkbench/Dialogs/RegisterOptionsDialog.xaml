@@ -1,0 +1,96 @@
+<Window x:Class="SmsWorkbench.Dialogs.RegisterOptionsDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:loc="clr-namespace:SmsWorkbench.Localization"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="{loc:Tr Key='一键注册'}"
+        Width="560"
+        Height="332"
+        MinWidth="480"
+        MinHeight="312"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource AppBg}">
+  <Grid Margin="14">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="*"/>
+      <RowDefinition Height="Auto"/>
+    </Grid.RowDefinitions>
+
+    <Grid VerticalAlignment="Top">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="110"/>
+        <ColumnDefinition Width="*"/>
+      </Grid.ColumnDefinitions>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+      </Grid.RowDefinitions>
+
+      <TextBlock Grid.Row="0" Grid.Column="0"
+                 Text="{loc:Tr Key='注册方式'}"
+                 VerticalAlignment="Center"
+                 Margin="0,0,10,10"
+                 Foreground="{DynamicResource TextSub}"/>
+      <ComboBox x:Name="SourceBox"
+                Grid.Row="0" Grid.Column="1"
+                SelectedIndex="0"
+                Margin="0,0,0,10"
+                SelectionChanged="SourceBox_SelectionChanged">
+        <ComboBoxItem Content="{loc:Tr Key='ReMail 邮箱'}" Tag="remail_target"/>
+        <ComboBoxItem Content="{loc:Tr Key='Smailr 邮箱'}" Tag="smailr"/>
+        <ComboBoxItem Content="{loc:Tr Key='Outlook/Hotmail/iCloud 邮箱池'}" Tag="pool"/>
+        <ComboBoxItem Content="{loc:Tr Key='CF Worker 域名邮箱'}" Tag="cfworker"/>
+        <ComboBoxItem Content="{loc:Tr Key='手机号注册'}" Tag="phone"/>
+      </ComboBox>
+
+      <TextBlock x:Name="CountLabel"
+                 Grid.Row="1" Grid.Column="0"
+                 Text="{loc:Tr Key='注册数量'}"
+                 VerticalAlignment="Center"
+                 Margin="0,0,10,10"
+                 Foreground="{DynamicResource TextSub}"/>
+      <TextBox x:Name="CountBox"
+               Grid.Row="1" Grid.Column="1"
+               Margin="0,0,0,10"/>
+
+      <TextBlock Grid.Row="2" Grid.Column="0"
+                 Text="{loc:Tr Key='并发'}"
+                 VerticalAlignment="Center"
+                 Margin="0,0,10,10"
+                 Foreground="{DynamicResource TextSub}"/>
+      <TextBox x:Name="WorkerBox"
+               Grid.Row="2" Grid.Column="1"
+               Margin="0,0,0,10"/>
+
+      <CheckBox x:Name="No2faBox"
+                Grid.Row="3" Grid.Column="1"
+                Content="{loc:Tr Key='关闭 2FA（不注册 TOTP）'}"
+                IsChecked="True"
+                Margin="0,0,0,10"
+                Foreground="{DynamicResource TextMain}"/>
+
+      <CheckBox x:Name="PromotionBox"
+                Grid.Row="4" Grid.Column="1"
+                Content="{loc:Tr Key='注册完成后查询试用优惠'}"
+                IsChecked="True"
+                Margin="0,0,0,10"
+                Foreground="{DynamicResource TextMain}"/>
+    </Grid>
+
+    <StackPanel Grid.Row="1"
+                Orientation="Horizontal"
+                HorizontalAlignment="Right"
+                Margin="0,10,0,0">
+      <Button Content="{loc:Tr Key='开始'}"
+              Width="72"
+              Style="{StaticResource PrimaryButton}"
+              Click="Ok_Click"/>
+      <Button Content="{loc:Tr Key='取消'}"
+              Width="72"
+              Click="Cancel_Click"/>
+    </StackPanel>
+  </Grid>
+</Window>

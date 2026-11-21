@@ -22,7 +22,7 @@ import re
 import unittest
 from pathlib import Path
 
-from sms_tool import sms_providers
+from sms_tool.phone import sms_providers
 
 # 抽取器直接复用驱动一致性测试的那一份：它用**括号配平**而不是正则，
 # 因为 ``Options(...)`` 的选项列表跨行，单行正则取不全、会静默少读几个选项。

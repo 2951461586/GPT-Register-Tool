@@ -4,7 +4,7 @@
 > The **number is a contract**: tests, scripts and other docs cite `Rule 4`,
 > so a renumbered rule is a broken reference, not a cosmetic change.
 
-- **Enforced by**: `grep -n "^from \.\(wallet_provider\|wallet_transport\|pay_link\|paypal\|gcash\)" sms_tool/checkout_contract.py`
+- **Enforced by**: `grep -n "^from \.\(wallet_provider\|wallet_transport\|pay_link\|paypal\|gcash\)" sms_tool/payment/checkout_contract.py`
 - **Source section**: Dependency Direction
 
 ## Rule

@@ -202,7 +202,7 @@ def test_summary_facts_are_pinned():
     helpers (``_is_existing_login_redirect``, ``_with_query_param``,
     ``_invalid_state_auth_response``, ``_auth_request_headers`` and the OTP
     subject constant) moved out of ``auth_flow/steps.py`` into the top-level
-    contract module ``sms_tool/auth_wire.py``. ``otp_strategy`` and
+    contract module ``sms_tool/transport/auth_wire.py``. ``otp_strategy`` and
     ``phone_registration`` now import them (and ``http_utils``'s
     ``_absolute_url`` / ``_json_or_raw``) directly instead of through the
     ``auth_flow`` package facade, which drops the
@@ -287,7 +287,7 @@ def test_summary_facts_are_pinned():
     """
     totals = ilr.analyze(ROOT).totals()
     # 2026-10-23: 437 -> 453. Wiring every caller to its host authority
-    # (`sms_tool/endpoints.py`) added 16 module-level edges, all into that one
+    # (`sms_tool/transport/endpoints.py`) added 16 module-level edges, all into that one
     # pure-constants leaf module. The alternative -- making each call site a
     # function-local import -- moved 41 statements into
     # `delayed_import_ratchet`, which hides the coupling instead of recording
@@ -440,7 +440,7 @@ def test_summary_facts_are_pinned():
         # the fix; making that import function-local to dodge the counter would
         # have been the workaround.
         # 2026-11-11 (protocol TLS fingerprint): 486 -> 493 (+7). One new leaf
-        # module (``sms_tool/tls_fingerprint.py``) imported by four registration
+        # module (``sms_tool/transport/tls_fingerprint.py``) imported by four registration
         # modules and by ``sentinel/client.py``, plus the sentinel self-check
         # imported by ``doctor.py``. Every edge points at a layer-5 leaf.
         #
@@ -454,7 +454,7 @@ def test_summary_facts_are_pinned():
         # the alternative (13 function-local imports) would hide the dependency
         # and put a ``sys.modules`` lookup on every identity/billing resolution.
         # 2026-11-19 (protocol transport seam): 493 -> 494 (+1 module-level edge,
-        # +7 delayed). ``sms_tool/http_backend.py`` is a new layer-5 root leaf
+        # +7 delayed). ``sms_tool/transport/http_backend.py`` is a new layer-5 root leaf
         # (accepted in docs/architecture.md §Root Module Set) and imports
         # ``kernel.error_classification`` for INTERNAL_EXCEPTION_TYPES instead of
         # re-inlining that tuple. Everything else is function-local on purpose:
@@ -473,10 +473,20 @@ def test_summary_facts_are_pinned():
         # the package that owns the dependency instead of the phone lane it was
         # borrowed through, and ``lane_coupling_ratchet`` shows the payoff:
         # payment -> registration fell from 15 edges to 7.
-        "total_module_edges": 572,
-        "ordered_pairs": 120,
-        "mutual_pairs": 24,
-        "minority_edges": 49,
+        # 2026-11-21 (Tier 1 facade retirement): 572 -> 565 edges, 120 -> 119 pairs,
+        # 24 -> 23 mutual pairs, 49 -> 48 minority. Retired the seven zero-prod-importer
+        # mailbox compatibility facades (sms_tool/mailbox/{cfworker,gmail,graph,icloud_url,
+        # remail,smailr}.py and sms_tool/outlook_imap.py), eliminating the last
+        # sms_tool -> sms_tool/providers back-edge.
+        # 2026-11-21 (Tier 2 retirement): 565 -> 556 edges, 119 -> 118 pairs,
+        # 23 -> 21 mutual pairs, 48 -> 44 minority. Retired services/mail-otp-web,
+        # K12/workspace online probing (k12_client/k12_identity/workspace_scan),
+        # Omakse (omakse_client/commands.omakse/cli_parsers.omakse), and the two
+        # root compatibility shims (payment/operation.py, gen_pp_link.py + _PlmProxy).
+        "total_module_edges": 564,
+        "ordered_pairs": 152,
+        "mutual_pairs": 19,
+        "minority_edges": 33,
         # 2026-10-21: 188 -> 190 when the provider ports seam (providers/ports.py)
         # took over the mailbox_pool_writer and desktop_ipc imports as delayed
         # ones. Before that, 190 -> 188 when store/connection.py stopped
@@ -564,7 +574,7 @@ def test_summary_facts_are_pinned():
         # 2026-11-19: 311 -> 318 (+7) for the protocol transport seam
         # (``http_backend``) plus the Sentinel SDK refresh: the selector is
         # imported locally by ``registration/preflight.py``,
-        # ``registration/protocol_helpers.py`` and ``auth_headers.py``; the
+        # ``registration/protocol_helpers.py`` and ``transport/auth_headers.py``; the
         # refresh path imports ``endpoints``, ``auth_headers``, ``kernel.paths``
         # and the transport itself. Each is reasoned in
         # ``scripts/delayed_import_reasons.json``.
@@ -583,7 +593,10 @@ def test_summary_facts_are_pinned():
         # imports the authority directly instead of borrowing the phone lane's
         # name. Same reason entry as above; the module-level counts are unchanged
         # because those two imports stay function-local on purpose.
-        "delayed_cross_dir_edges": 362,
+        # 2026-11-21 (Tier 2 retirement): 362 -> 356 (-6). Removing omakse_client,
+        # k12_identity, and moving payment/capability.py from deferred gen_pp_link
+        # imports to intra-package `from . import wire` trimmed delayed cross-dir edges.
+        "delayed_cross_dir_edges": 350,
         # Imports under `if TYPE_CHECKING:` never run, so they are not runtime
         # edges. 1 here since 2026-10-23: `payment/link_manager.py` declares its
         # `pay_link` re-exports type-only (the module is not a package, so the
@@ -597,7 +610,7 @@ def test_summary_facts_are_pinned():
         # its 45 lazy re-exports to pyright in 16 grouped ``TYPE_CHECKING`` imports.
         # Declaring them is what keeps those names typed for consumers; the cost is
         # recorded here rather than hidden by dropping the declaration.
-        "type_only_edges": 15,
+        "type_only_edges": 13,
     }
 
 

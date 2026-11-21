@@ -29,7 +29,7 @@ def test_protocol_country_policy_mismatch_remains_nonfatal_and_visible():
         lang_full="en-US,en;q=0.9",
         name="chrome",
     )
-    with patch("sms_tool.fingerprint_pool.shared_fingerprint_pool", return_value=pool):
+    with patch("sms_tool.transport.fingerprint_pool.shared_fingerprint_pool", return_value=pool):
         workflow.fingerprint_country = _apply_protocol_fingerprint(operations, config, "http://proxy.invalid:8080")
     result = workflow._abort_result("email_otp_poll_timeout")
     assert result["fingerprint_geo_audit"] == {
@@ -71,7 +71,7 @@ def test_a_fingerprint_pool_failure_is_counted_and_visible_in_the_audit():
     metadata = {"actual_country": "DE"}
     config = {"registration": {"fingerprint_pool": {"allowed_countries": ["DE"]}}}
 
-    with patch("sms_tool.fingerprint_pool.shared_fingerprint_pool", side_effect=RuntimeError("pool down")):
+    with patch("sms_tool.transport.fingerprint_pool.shared_fingerprint_pool", side_effect=RuntimeError("pool down")):
         country = _apply_protocol_fingerprint(operations, config, "http://host:8080", metadata)
 
     assert metadata["fingerprint_pool_failures"] == 1

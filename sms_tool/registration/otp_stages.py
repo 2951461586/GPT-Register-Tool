@@ -25,8 +25,8 @@ import uuid
 from collections.abc import Mapping as MappingABC
 from typing import TYPE_CHECKING, Any
 
-from ..auth_state import otp_dispatch_verdict, passwordless_arm_armed
-from ..operator_output import emit as _emit
+from ..transport.auth_state import otp_dispatch_verdict, passwordless_arm_armed
+from ..observability.operator_output import emit as _emit
 from ..kernel.sanitizer import describe_exception
 from ..kernel.failure_registry import (
     OTP_ARM_MISMATCH_MARKER,
@@ -34,7 +34,7 @@ from ..kernel.failure_registry import (
     OTP_NO_RESEND_MARKER,
 )
 from .protocol_helpers import _safe_int, registration_flag
-from ..otp_strategy import otp_resend_eligible
+from .otp_strategy import otp_resend_eligible
 
 if TYPE_CHECKING:  # pragma: no cover - import cycle guard for type checkers only
     from .state import RegistrationWorkflow

@@ -32,7 +32,6 @@
       "sms_tool/commands/email_change.py",
       "sms_tool/commands/mailbox_ops.py",
       "sms_tool/commands/one_click.py",
-      "sms_tool/commands/omakse.py",
       "sms_tool/commands/proxy_admin.py"
     ],
     "Mailbox and phone inventory": [
@@ -42,28 +41,21 @@
       "sms_tool/providers/outlook_imap_client.py",
       "sms_tool/providers/ports.py",
       "sms_tool/providers/sms_vendor_api.py",
-      "sms_tool/mail_otp.py",
-      "sms_tool/smsbower.py",
-      "sms_tool/nexsms.py",
-      "sms_tool/phone_proxy.py",
-      "sms_tool/sms_provider_adapter.py",
-      "sms_tool/sms_providers.py",
       "sms_tool/mailbox/*.py",
       "sms_tool/phone/*.py"
     ],
     "Mailbox facades and polling primitives": [
-      "sms_tool/outlook_imap.py",
       "sms_tool/mailbox/*.py"
     ],
     "Browser registration drivers": [
       "sms_tool/registration_drivers/*.py",
       "sms_tool/registration_drivers/**/*.py",
-      "sms_tool/fingerprint_pool.py",
-      "sms_tool/browser/*.py"
+      "sms_tool/browser/*.py",
+      "sms_tool/transport/*.py"
     ],
     "Registration state and policy": [
-      "sms_tool/telemetry.py",
-      "sms_tool/registration/*.py"
+      "sms_tool/registration/*.py",
+      "sms_tool/observability/*.py"
     ],
     "Registration failure and batch safety": [
       "sms_tool/failure_registry.py",
@@ -73,10 +65,9 @@
       "sms_tool/registration/*.py"
     ],
     "Registration browser support": [
-      "sms_tool/chatgpt_bootstrap.py",
-      "sms_tool/humanize.py",
-      "sms_tool/page_truth.py",
-      "sms_tool/browser/*.py"
+      "sms_tool/browser/*.py",
+      "sms_tool/transport/*.py",
+      "sms_tool/registration/*.py"
     ],
     "Sentinel issuance": [
       "sms_tool/sentinel/__init__.py",
@@ -87,8 +78,8 @@
       "sms_tool/sentinel/surface.py"
     ],
     "OAuth and auth HTTP helpers": [
-      "sms_tool/http_utils.py",
-      "sms_tool/codex/*.py"
+      "sms_tool/codex/*.py",
+      "sms_tool/transport/*.py"
     ],
     "Registration/auth": [
       "sms_tool/cross_process_gate.py",
@@ -102,39 +93,28 @@
       "sms_tool/auth_flow/login.py",
       "sms_tool/auth_flow/otp.py",
       "sms_tool/auth_flow/totp.py",
-      "sms_tool/auth_headers.py",
-      "sms_tool/auth_wire.py",
-      "sms_tool/account_creation.py",
-      "sms_tool/batch_runner.py",
-      "sms_tool/sentinel_tokens.py",
-      "sms_tool/otp_strategy.py",
-      "sms_tool/auth_state.py",
       "sms_tool/error_classification.py",
       "sms_tool/registration/*.py",
-      "sms_tool/tls_fingerprint.py",
       "sms_tool/codex/*.py",
       "sms_tool/session/*.py",
-      "sms_tool/phone/*.py"
+      "sms_tool/phone/*.py",
+      "sms_tool/transport/*.py"
     ],
     "Agent Identity / explicit import": [
-      "sms_tool/agent_identity.py",
-      "sms_tool/importers/sub2api.py"
-    ],
-    "Workspace compatibility": [
-      "sms_tool/k12_client.py",
-      "sms_tool/k12_identity.py",
-      "sms_tool/workspace_scan.py"
+      "sms_tool/importers/sub2api.py",
+      "sms_tool/importers/*.py"
     ],
     "Account liveness and recovery": [
       "sms_tool/accounts/account_liveness.py",
       "sms_tool/accounts/wham_usage.py",
       "sms_tool/accounts/account_recovery.py",
       "sms_tool/accounts/recovery_batch.py",
+      "sms_tool/accounts/account_inspection.py",
       "sms_tool/accounts/account_scan.py",
       "sms_tool/accounts/account_promotion.py",
       "sms_tool/accounts/promotion_batch.py",
       "sms_tool/accounts/account_terminal.py",
-      "sms_tool/promotion_states.py"
+      "sms_tool/payment/*.py"
     ],
     "Account cleanup": [
       "sms_tool/accounts/account_cleanup.py",
@@ -146,10 +126,6 @@
       "scripts/export_mailbox_2fa.py"
     ],
     "Payment links and capability": [
-      "sms_tool/checkout_contract.py",
-      "sms_tool/capability_browser.py",
-      "sms_tool/gen_pp_link.py",
-      "sms_tool/regional_payment_adapter.py",
       "sms_tool/paypal/*.py",
       "sms_tool/payment/*.py",
       "sms_tool/wallet/*.py"
@@ -162,7 +138,7 @@
       "sms_tool/paypal_link/__init__.py",
       "sms_tool/paypal_link/gen_link.py",
       "sms_tool/paypal_link/reconciliation.py",
-      "sms_tool/pp_link_helpers.py"
+      "sms_tool/payment/*.py"
     ],
     "UPI link and QR extraction": [
       "sms_tool/upi_link/*.py"
@@ -172,11 +148,10 @@
     ],
     "Payment execution and reconciliation": [
       "sms_tool/paypal/*.py",
-      "sms_tool/omakse_client.py",
       "sms_tool/browser/*.py"
     ],
     "Payment SMS helpers": [
-      "sms_tool/sms_utils.py"
+      "sms_tool/phone/*.py"
     ],
     "Account data/import/export": [
       "sms_tool/account_seed.py",
@@ -227,27 +202,22 @@
       "sms_tool/geo/*.py"
     ],
     "Shared utilities": [
-      "sms_tool/endpoints.py",
-      "sms_tool/http_client.py",
-      "sms_tool/http_backend.py",
-      "sms_tool/promotion_states.py",
       "sms_tool/doctor.py",
       "sms_tool/utils.py",
       "sms_tool/timeouts.py",
       "sms_tool/driver_env.py",
-      "sms_tool/operator_output.py",
-      "sms_tool/stdout_mirror.py",
       "sms_tool/proxy/*.py",
-      "sms_tool/browser/*.py"
+      "sms_tool/browser/*.py",
+      "sms_tool/transport/*.py",
+      "sms_tool/observability/*.py",
+      "sms_tool/payment/*.py"
     ],
     "Transport retry primitives": [
-      "sms_tool/backoff.py"
+      "sms_tool/transport/*.py"
     ],
     "Sensitive output and telemetry": [
       "sms_tool/sanitizer.py",
-      "sms_tool/diagnostics.py",
-      "sms_tool/logging_setup.py",
-      "sms_tool/token_telemetry.py"
+      "sms_tool/observability/*.py"
     ]
   }
 }

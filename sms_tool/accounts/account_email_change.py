@@ -24,7 +24,7 @@ from ..storage import (
     list_account_records,
     migrate_account_email,
 )
-from .. import endpoints
+from ..transport import endpoints
 
 
 CHANGE_EMAIL_ELIGIBILITY = "/backend-api/accounts/change_email/eligibility"

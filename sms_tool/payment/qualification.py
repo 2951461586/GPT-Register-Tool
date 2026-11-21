@@ -360,7 +360,7 @@ def _contract_key(method: str, country: str) -> tuple[str, str, str]:
 
 def _probe_kwargs(method: str, country: str) -> dict[str, Any]:
     """Contract fields for one method, sourced from the canonical catalogues."""
-    from ..checkout_contract import browser_profile_for_country, PAYMENT_METHOD_PROFILES
+    from .checkout_contract import browser_profile_for_country, PAYMENT_METHOD_PROFILES
 
     spec = PAYMENT_METHOD_PROFILES[method]
     browser = browser_profile_for_country(country)

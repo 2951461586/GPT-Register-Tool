@@ -15,6 +15,25 @@ def register(parser: argparse.ArgumentParser) -> None:
         help="Refresh quota status locally with saved access_token and update SQLite",
     )
     parser.add_argument(
+        "--inspect-accounts",
+        action="store_true",
+        help=(
+            "Lightweight account inspection: skip non-expired valid JWTs and permanently deactivated accounts "
+            "offline, probe/recover only accounts needing attention, and refresh promotions for recovered accounts"
+        ),
+    )
+    parser.add_argument(
+        "--inspect-skew-seconds",
+        type=int,
+        default=300,
+        help="Seconds before JWT exp to treat an access token as expiring soon during --inspect-accounts",
+    )
+    parser.add_argument(
+        "--inspect-no-promotion",
+        action="store_true",
+        help="Skip post-recovery promotion refresh during --inspect-accounts",
+    )
+    parser.add_argument(
         "--quota-usage",
         action="store_true",
         help="Fetch wham/usage 5h/7d quota for a single account and return structured JSON (no SQLite write)",

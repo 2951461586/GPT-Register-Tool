@@ -7,7 +7,7 @@ paypal_reverse, paypal_protocol to avoid fingerprint drift between modules.
 from __future__ import annotations
 
 # Canonical Chrome version used for PayPal browser flows.
-# Keep in sync with auth_headers.py AUTH_FINGERPRINT_PROFILES (chrome136 entry).
+# Keep in sync with transport/auth_headers.py AUTH_FINGERPRINT_PROFILES (chrome136 entry).
 PAYPAL_CHROME_VERSION = "136"
 PAYPAL_CHROME_FULL_VERSION = "136.0.7103.93"
 PAYPAL_USER_AGENT = (

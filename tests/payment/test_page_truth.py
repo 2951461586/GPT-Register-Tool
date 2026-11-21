@@ -24,7 +24,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from sms_tool import page_truth
+from sms_tool.transport import page_truth
 
 
 class _Page:

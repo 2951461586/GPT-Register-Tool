@@ -36,7 +36,7 @@ from typing import Any
 from urllib.parse import urlencode, urlparse
 
 from .. import config as config_module
-from .. import endpoints
+from ..transport import endpoints
 from ..auth_flow import deps, password_step, steps
 
 STATUS_REGISTERED = "registered"

@@ -1,8 +1,4 @@
-// Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
-#nullable enable
-
-namespace SmsWorkbench
+namespace SmsWorkbench.Services
 {
     /// <summary>What one finished backend run looks like on the task row.</summary>
     public sealed record BackendRunOutcome(string Status, string? Info, string CostSeconds, string DoneAt);

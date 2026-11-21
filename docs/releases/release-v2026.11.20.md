@@ -46,7 +46,7 @@ Sentinel 版本对齐 + 可选刷新、CPA 导出回导，以及一批门禁与 
   该消息后安静退出（其它 `RuntimeError` 照常抛出），待处理作业已落盘不丢。
 - **预检拦下健康的 curl_cffi 0.17.0** —— `environment_preflight.ps1` 里活着第三份
   版本区间与一个已被表淘汰的 profile 名（`^0\.(15|16)` / `chrome146`）。现在脚本
-  **向属主问**：从 `sms_tool/auth_headers.py` 读 `CURL_CFFI_MIN/MAX_MINOR` 与最新
+  **向属主问**：从 `sms_tool/transport/auth_headers.py` 读 `CURL_CFFI_MIN/MAX_MINOR` 与最新
   Chrome 档位，不再有本地副本；顺带修掉 `python --version` 经管道进
   `Select-Object -First` 在 PowerShell 5.1 下自杀、`$LASTEXITCODE` 变 -1 的问题。
 - **`ci_watch.py` 自身的三个缺陷** —— `gh run list --commit` 只认真 sha（短 sha 静默
@@ -61,7 +61,7 @@ Sentinel 版本对齐 + 可选刷新、CPA 导出回导，以及一批门禁与 
   http2shell brotli 且 certifi 未受污染的版本），profile 表 16 → 23，每个条目都对着
   已装库实测（chrome150/151/152、firefox153/155、safari260/270）；「最新 chrome 条目」
   的断言改为从库推导，依赖升级不再需要改测试，而落后的表仍会红。
-  `sms_tool/http_backend.py` 让传输成为选择
+  `sms_tool/transport/http_backend.py` 让传输成为选择
   （`email_registration.protocol_http_backend`，默认 curl_cffi；可切 wreq），
   选不动的后端**快速失败**而不是降级；逐账号 TLS 置换在后端不支持 curl options 时
   报 `backend-without-curl-options:wreq`，不再声称做过没做的轮换。

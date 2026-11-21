@@ -644,7 +644,7 @@ def _preflight(candidates: list[str]) -> dict[str, Any]:
 
 def _stripe_preflight_url() -> str:
     """Resolve the Stripe host through the endpoint authority at call time."""
-    from .. import endpoints
+    from ..transport import endpoints
 
     return endpoints.STRIPE_API_BASE + "/"
 

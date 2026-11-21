@@ -1,8 +1,4 @@
-// Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
-#nullable enable
-
-namespace SmsWorkbench
+namespace SmsWorkbench.Models
 {
     // ── Registration request models ────────────────────────────────────────
     //
@@ -31,6 +27,7 @@ namespace SmsWorkbench
     {
         public int Workers { get; set; } = 4;
         public bool AutoRelogin { get; set; }
+        public bool LightweightInspect { get; set; }
     }
 
     /// <summary>

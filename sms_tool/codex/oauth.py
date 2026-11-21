@@ -14,9 +14,9 @@ from datetime import timezone, datetime
 from curl_cffi import requests as curl_requests
 
 from ..config import CFG
-from .. import endpoints
-from ..endpoints import AUTH_BASE
-from ..operator_output import emit as _emit
+from ..transport import endpoints
+from ..transport.endpoints import AUTH_BASE
+from ..observability.operator_output import emit as _emit
 from .phone import complete_phone_verification
 from .sentinel import (
     attach_sentinel,
@@ -25,9 +25,9 @@ from .sentinel import (
     load_cached_sentinel,
     with_sentinel,
 )
-from ..auth_headers import auth_impersonate, openai_auth_headers_lower, select_auth_fingerprint
-from ..http_client import request_with_retry
-from ..http_utils import _absolute_url
+from ..transport.auth_headers import auth_impersonate, openai_auth_headers_lower, select_auth_fingerprint
+from ..transport.http_client import request_with_retry
+from ..transport.http_utils import _absolute_url
 from ..mailbox.router import MailboxAccount, MailboxTokenExpiredError, poll_email_otp, mailbox_has_inbox_credentials
 from ..providers import mailbox_gmail
 from ..kernel.sanitizer import sanitize_text
@@ -39,7 +39,7 @@ from ..storage import upsert_account
 # ``error.redirect_uri``, and ``issue_sentinel_flow`` is the only supported way
 # to mint an ``oauth_create_account`` token (the recovery lane's cached sentinel
 # is bound to a different flow).
-from ..account_creation import _create_account_continue_url, _is_user_already_exists
+from ..registration.account_creation import _create_account_continue_url, _is_user_already_exists
 from ..sentinel.client import issue_sentinel_flow
 from ..utils import atomic_write_text
 from ..utils import _random_birthdate, _random_name
@@ -328,7 +328,7 @@ def _run_protocol_login_stages(
         )
         return email_otp_result
     elif stage == "password":
-        password_result = _password_login_and_exchange(
+        return _handle_password_stage_login(
             session=session,
             oauth=oauth,
             data=data,
@@ -336,35 +336,11 @@ def _run_protocol_login_stages(
             current_url=current_url,
             proxy=proxy,
             timeout=timeout,
+            allow_takeover=allow_takeover,
             phone_pool=phone_pool,
             phone_probe_only=phone_probe_only,
             browser_headless=browser_headless,
         )
-        if password_result.get("ok"):
-            password_result.setdefault("protocol_stage", "password")
-            return password_result
-        if not allow_takeover:
-            return password_result
-        email_otp_result = _passwordless_login_and_exchange(
-            session=session,
-            oauth=oauth,
-            data=data,
-            did=did,
-            current_url=current_url,
-            proxy=proxy,
-            timeout=timeout,
-            reason="password_login_failed",
-            phone_pool=phone_pool,
-            phone_probe_only=phone_probe_only,
-            browser_headless=browser_headless,
-        )
-        if email_otp_result.get("ok"):
-            email_otp_result.setdefault("protocol_stage", "email_otp")
-            return email_otp_result
-        email_otp_result.setdefault("protocol_stage", "email_otp")
-        email_otp_result.setdefault("fallback_from", "password_login_failed")
-        email_otp_result["password_attempt"] = password_result
-        return email_otp_result
     elif stage == "add_phone":
         final = _finish_authorization(
             session, oauth, did, current_url, proxy=proxy, phone_pool=phone_pool, phone_probe_only=phone_probe_only
@@ -404,6 +380,125 @@ def _run_protocol_login_stages(
         "phone_attempt": final.get("phone_attempt"),
         "protocol_stage": stage,
     }
+
+
+def _handle_password_stage_login(
+    *,
+    session,
+    oauth,
+    data,
+    did,
+    current_url,
+    proxy,
+    timeout,
+    allow_takeover: bool,
+    phone_pool,
+    phone_probe_only,
+    browser_headless: bool | None,
+):
+    password_result = _password_login_and_exchange(
+        session=session,
+        oauth=oauth,
+        data=data,
+        did=did,
+        current_url=current_url,
+        proxy=proxy,
+        timeout=timeout,
+        phone_pool=phone_pool,
+        phone_probe_only=phone_probe_only,
+        browser_headless=browser_headless,
+    )
+    if password_result.get("ok"):
+        password_result.setdefault("protocol_stage", "password")
+        return password_result
+    if not allow_takeover:
+        return password_result
+    email_otp_result = _passwordless_login_and_exchange(
+        session=session,
+        oauth=oauth,
+        data=data,
+        did=did,
+        current_url=current_url,
+        proxy=proxy,
+        timeout=timeout,
+        reason="password_login_failed",
+        phone_pool=phone_pool,
+        phone_probe_only=phone_probe_only,
+        browser_headless=browser_headless,
+    )
+    if email_otp_result.get("ok"):
+        email_otp_result.setdefault("protocol_stage", "email_otp")
+        return email_otp_result
+    email_otp_result.setdefault("protocol_stage", "email_otp")
+    email_otp_result.setdefault("fallback_from", "password_login_failed")
+    email_otp_result["password_attempt"] = password_result
+    return email_otp_result
+
+
+def _resolve_post_otp_validate_redirect(
+    session,
+    oauth,
+    did,
+    current_url: str,
+    *,
+    reason: str,
+    proxy=None,
+    phone_pool=None,
+    phone_probe_only: bool = False,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None, str]:
+    about_attempt = None
+    if current_url.endswith("/about-you"):
+        about_attempt = _complete_about_you(session, did, current_url, proxy=proxy)
+        if about_attempt.get("ok"):
+            current_url = about_attempt.get("url") or current_url
+        elif about_attempt.get("error"):
+            return (
+                {
+                    "ok": False,
+                    "mode": "codex_oauth_pkce",
+                    "error": about_attempt.get("error") or "passwordless_about_you_required",
+                    "fallback_from": reason,
+                    "last_url": _safe_url(current_url),
+                    "about_you": about_attempt,
+                },
+                about_attempt,
+                current_url,
+            )
+    final = _finish_authorization(
+        session, oauth, did, current_url, proxy=proxy, phone_pool=phone_pool, phone_probe_only=phone_probe_only
+    )
+    if final.get("ok"):
+        final["login_method"] = "passwordless_email_otp"
+        final["fallback_from"] = reason
+        if about_attempt and about_attempt.get("ok"):
+            final["completed_about_you"] = True
+        return final, about_attempt, current_url
+    if final.get("phone_attempt"):
+        phone_error = (final.get("phone_attempt") or {}).get("error", "phone_verification_failed")
+        return (
+            {
+                "ok": False,
+                "mode": "codex_oauth_pkce",
+                "error": phone_error,
+                "fallback_from": reason,
+                "last_url": final.get("last_url") or _safe_url(current_url),
+                "phone_attempt": final.get("phone_attempt"),
+            },
+            about_attempt,
+            current_url,
+        )
+    if current_url.endswith("/about-you"):
+        failure: dict[str, Any] = {
+            "ok": False,
+            "mode": "codex_oauth_pkce",
+            "error": "passwordless_about_you_required",
+            "fallback_from": reason,
+            "last_url": _safe_url(current_url),
+        }
+        if about_attempt:
+            failure["about_you"] = about_attempt
+        return failure, about_attempt, current_url
+    return None, about_attempt, current_url
 
 
 def _passwordless_login_and_exchange(
@@ -529,65 +624,18 @@ def _passwordless_login_and_exchange(
             continue
         next_url = _next_url(validate)
         _, current_url = _follow_redirects(session, next_url, proxy=proxy)
-        # ``/about-you`` is the profile step for an account that exists but was
-        # never finished.  It used to end the attempt outright with a bare
-        # ``passwordless_about_you_required``, which made the account
-        # permanently unusable while each retry burned another OTP.  The attempt
-        # below reports *why* the page cannot be passed, and stops when the
-        # answer is the known closed loop.
-        about_attempt = None
-        if current_url.endswith("/about-you"):
-            about_attempt = _complete_about_you(session, did, current_url, proxy=proxy)
-            if about_attempt.get("ok"):
-                current_url = about_attempt.get("url") or current_url
-            elif about_attempt.get("error"):
-                # The page states *why* the account cannot be finished (an
-                # existing address the server refuses to re-create).  Report
-                # that reason and stop, instead of degrading it into a generic
-                # "about-you required" and letting the caller spend another OTP
-                # walking the same loop.  ``terminal`` is intentionally absent:
-                # the chain reserves it for deactivated accounts.
-                return {
-                    "ok": False,
-                    "mode": "codex_oauth_pkce",
-                    "error": about_attempt.get("error") or "passwordless_about_you_required",
-                    "fallback_from": reason,
-                    "last_url": _safe_url(current_url),
-                    "about_you": about_attempt,
-                }
-        final = _finish_authorization(
-            session, oauth, did, current_url, proxy=proxy, phone_pool=phone_pool, phone_probe_only=phone_probe_only
+        terminal_result, about_attempt, current_url = _resolve_post_otp_validate_redirect(
+            session,
+            oauth,
+            did,
+            current_url,
+            reason=reason,
+            proxy=proxy,
+            phone_pool=phone_pool,
+            phone_probe_only=phone_probe_only,
         )
-        if final.get("ok"):
-            final["login_method"] = "passwordless_email_otp"
-            final["fallback_from"] = reason
-            if about_attempt and about_attempt.get("ok"):
-                final["completed_about_you"] = True
-            return final
-        if final.get("phone_attempt"):
-            phone_error = (final.get("phone_attempt") or {}).get("error", "phone_verification_failed")
-            return {
-                "ok": False,
-                "mode": "codex_oauth_pkce",
-                "error": phone_error,
-                "fallback_from": reason,
-                "last_url": final.get("last_url") or _safe_url(current_url),
-                "phone_attempt": final.get("phone_attempt"),
-            }
-        if current_url.endswith("/about-you"):
-            # Reachable only when ``_complete_about_you`` reported success yet
-            # authorization still could not resume from where it landed.  The
-            # dead-end cases return earlier, from inside the attempt itself.
-            failure = {
-                "ok": False,
-                "mode": "codex_oauth_pkce",
-                "error": "passwordless_about_you_required",
-                "fallback_from": reason,
-                "last_url": _safe_url(current_url),
-            }
-            if about_attempt:
-                failure["about_you"] = about_attempt
-            return failure
+        if terminal_result is not None:
+            return terminal_result
     return {
         "ok": False,
         "mode": "codex_oauth_pkce",

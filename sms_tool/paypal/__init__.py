@@ -1,8 +1,9 @@
 """PayPal auto-payment package.
 
 Split out of the monolithic ``sms_tool/paypal/auto.py`` (1.9k lines) so each
-layer can be read, tested and changed in isolation. ``sms_tool.paypal.auto``
-remains as a thin compatibility shim re-exporting everything below.
+layer can be read, tested and changed in isolation. ``sms_tool.paypal`` is the
+single public package entrypoint (the ``sms_tool.paypal.auto`` compatibility
+shim was retired once all production and test callers migrated).
 
 Dependency direction is strictly one-way (no cycles)::
 

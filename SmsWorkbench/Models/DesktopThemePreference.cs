@@ -1,13 +1,9 @@
-// Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
-#nullable enable
-
 using System;
 using System.IO;
 using System.Text;
 using Wpf.Ui.Appearance;
 
-namespace SmsWorkbench;
+namespace SmsWorkbench.Models;
 
 /// <summary>
 /// The persisted theme choice (<c>runtime/desktop_theme.txt</c>).

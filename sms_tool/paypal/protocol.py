@@ -7,7 +7,7 @@ import logging
 import re
 import urllib.parse
 from typing import Any, Optional
-from .. import endpoints
+from ..transport import endpoints
 
 try:
     from curl_cffi.requests import Session as _CffiSession
@@ -20,8 +20,8 @@ except ImportError:
 import requests
 
 from .fingerprints import PAYPAL_USER_AGENT as USER_AGENT
-from ..pp_link_helpers import extract_ba_token as _extract_ba_token_str
-from ..pp_link_helpers import extract_paypal_approve_url
+from ..payment.pp_link_helpers import extract_ba_token as _extract_ba_token_str
+from ..payment.pp_link_helpers import extract_paypal_approve_url
 
 logger = logging.getLogger(__name__)
 

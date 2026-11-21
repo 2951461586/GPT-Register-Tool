@@ -1,6 +1,6 @@
 import unittest
 
-from sms_tool.auth_state import (
+from sms_tool.transport.auth_state import (
     TRANSACTION_ENUM_VALUES,
     auth_dump_summary,
     compact_auth_dump_text,
@@ -120,7 +120,7 @@ class SeenDumpShapeBoundTests(unittest.TestCase):
     """
 
     def setUp(self):
-        from sms_tool import auth_state
+        from sms_tool.transport import auth_state
 
         self.auth_state = auth_state
         auth_state._SEEN_DUMP_SHAPES.clear()

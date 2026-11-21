@@ -1,10 +1,6 @@
-// Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
-#nullable enable
-
 using SmsWorkbench.Localization;
 
-namespace SmsWorkbench
+namespace SmsWorkbench.Views
 {
     public partial class MainWindow
     {
@@ -24,7 +20,7 @@ namespace SmsWorkbench
             if (row == null) return;
             if (string.IsNullOrWhiteSpace(row.PayPalUrl))
             {
-                MessageBox.Show(this, Loc.T("选中账号没有可打开的支付链接。"), Loc.T("无支付链接"), MessageBoxButton.OK, MessageBoxImage.Information);
+                ShowThemedInfoDialog(Loc.T("无支付链接"), Loc.T("选中账号没有可打开的支付链接。"));
                 return;
             }
             OpenPayPalUrl(row.PayPalUrl, row.Identifier);
@@ -53,12 +49,9 @@ namespace SmsWorkbench
             // letting the dialog open and the run immediately fail.
             if (backendTasks.IsRunning)
             {
-                MessageBox.Show(
-                    this,
-                    Loc.T("已有后端任务正在运行，请先等待其完成或取消后再发起批量支付。"),
+                ShowThemedInfoDialog(
                     Loc.T("任务进行中"),
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Information);
+                    Loc.T("已有后端任务正在运行，请先等待其完成或取消后再发起批量支付。"));
                 return;
             }
 

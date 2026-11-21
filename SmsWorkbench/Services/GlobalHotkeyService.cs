@@ -1,12 +1,8 @@
-// Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
-#nullable enable
-
 using System.Runtime.InteropServices;
 using System.Windows.Input;
 using System.Windows.Interop;
 
-namespace SmsWorkbench
+namespace SmsWorkbench.Services
 {
     /// <summary>One process-wide hotkey that brings the shell forward.</summary>
     public interface IGlobalHotkeyService : IDisposable

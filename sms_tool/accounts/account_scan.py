@@ -23,10 +23,8 @@ from .account_recovery import (
     relogin_codex_account,
 )
 from .recovery_batch import refresh_local_quota_statuses
-from ..http_client import is_transient_transport_error
 from ..session.refresh import _load_seed_session
 from ..storage import upsert_account
-from ..workspace_scan import inspect_workspace, parse_workspace_fallback_ids
 from ..kernel.error_classification import classify_error
 from ..config import CFG
 from ..utils import atomic_write_text
@@ -81,10 +79,6 @@ def scan_accounts(
     workers: int = 4,
     proxy: str | None = None,
     timeout: int = 120,
-    workspace_check: bool = False,
-    switch_workspace_id: str = "",
-    fallback_workspace_ids: Iterable[str] | None = None,
-    auto_switch_workspace: bool = False,
     quota_relogin_on_401: bool = False,
     relogin_mode: str = "auto",
     deep_probe: bool = False,
@@ -103,10 +97,6 @@ def scan_accounts(
                 session_file=session_file if len(emails) == 1 else "",
                 proxy=proxy,
                 timeout=timeout,
-                workspace_check=workspace_check,
-                switch_workspace_id=switch_workspace_id,
-                fallback_workspace_ids=fallback_workspace_ids,
-                auto_switch_workspace=auto_switch_workspace,
                 quota_relogin_on_401=quota_relogin_on_401,
                 relogin_mode=relogin_mode,
                 deep_probe=deep_probe,
@@ -122,10 +112,6 @@ def scan_accounts(
                     session_file=session_file if len(emails) == 1 else "",
                     proxy=proxy,
                     timeout=timeout,
-                    workspace_check=workspace_check,
-                    switch_workspace_id=switch_workspace_id,
-                    fallback_workspace_ids=fallback_workspace_ids,
-                    auto_switch_workspace=auto_switch_workspace,
                     quota_relogin_on_401=quota_relogin_on_401,
                     relogin_mode=relogin_mode,
                     deep_probe=deep_probe,
@@ -141,18 +127,6 @@ def scan_accounts(
     deactivated_count = sum(1 for r in results if r.get("scan_status") == "account_deactivated")
     phone_required_count = sum(1 for r in results if r.get("phone_verification_required"))
     secondary_phone_count = sum(1 for r in results if r.get("secondary_phone_verification_required"))
-    workspace_deactivated_count = sum(
-        1 for r in results if ((r.get("workspace") or {}).get("status") == "workspace_deactivated")
-    )
-    workspace_switched_count = sum(
-        1 for r in results if ((r.get("workspace") or {}).get("status") == "workspace_switched")
-    )
-    workspace_free_fallback_count = sum(
-        1 for r in results if ((r.get("workspace") or {}).get("status") == "workspace_fallback_free")
-    )
-    workspace_inconclusive_count = sum(
-        1 for r in results if ((r.get("workspace") or {}).get("status") == "workspace_check_inconclusive")
-    )
     failed_count = len(results) - ok_count - deactivated_count - phone_required_count
     persist_failed = sum(
         1 for r in results if isinstance(r.get("persistence"), dict) and not r["persistence"].get("persisted")
@@ -171,10 +145,6 @@ def scan_accounts(
         "at_invalid": at_invalid_count,
         "phone_verification_required": phone_required_count,
         "secondary_phone_verification_required": secondary_phone_count,
-        "workspace_deactivated": workspace_deactivated_count,
-        "workspace_switched": workspace_switched_count,
-        "workspace_fallback_free": workspace_free_fallback_count,
-        "workspace_inconclusive": workspace_inconclusive_count,
         "failed": max(0, failed_count),
         "persist_failed": persist_failed,
         "results": [_public_scan_result(r) for r in results],
@@ -202,10 +172,6 @@ def _scan_one(
     session_file: str = "",
     proxy: str | None = None,
     timeout: int = 120,
-    workspace_check: bool = False,
-    switch_workspace_id: str = "",
-    fallback_workspace_ids: Iterable[str] | None = None,
-    auto_switch_workspace: bool = False,
     quota_relogin_on_401: bool = False,
     relogin_mode: str = "auto",
     deep_probe: bool = False,
@@ -281,16 +247,6 @@ def _scan_one(
         else:
             print(f"[!] {email} relogin failed: {_oauth_error(relogin_result)}")
 
-    workspace_result = _workspace_probe(
-        data,
-        proxy=proxy,
-        timeout=timeout,
-        enabled=workspace_check,
-        switch_workspace_id=switch_workspace_id,
-        fallback_workspace_ids=fallback_workspace_ids,
-        auto_switch_workspace=auto_switch_workspace,
-    )
-
     if relogin_result:
         oauth_result = relogin_result
     elif deep_probe:
@@ -317,7 +273,6 @@ def _scan_one(
             had_phone,
             token_probe=token_probe,
             started=started,
-            workspace_result=workspace_result,
         )
         result["subscription_type"] = _subscription_type(data)
         result["at_status"] = _at_status_label(result, {}, oauth_result)
@@ -352,7 +307,6 @@ def _scan_one(
             relogin_result=relogin_result,
             token_probe=token_probe,
             started=started,
-            workspace_result=workspace_result,
         )
         result["subscription_type"] = _subscription_type(data)
         result["at_status"] = _at_status_label(result, refresh_result, oauth_result)
@@ -375,7 +329,6 @@ def _scan_one(
             relogin_result=relogin_result,
             token_probe=token_probe,
             started=started,
-            workspace_result=workspace_result,
         )
         result["subscription_type"] = _subscription_type(data)
         result["at_status"] = _at_status_label(result, refresh_result, oauth_result)
@@ -402,7 +355,6 @@ def _scan_one(
             phone_verification_required=True,
             secondary_phone_verification_required=had_rt,
             started=started,
-            workspace_result=workspace_result,
         )
         result["subscription_type"] = _subscription_type(data)
         result["at_status"] = _at_status_label(result, refresh_result, oauth_result)
@@ -429,7 +381,6 @@ def _scan_one(
             relogin_result=relogin_result,
             token_probe=token_probe,
             started=started,
-            workspace_result=workspace_result,
         )
         result["subscription_type"] = _subscription_type(data)
         result["at_status"] = _at_status_label(result, refresh_result, oauth_result)
@@ -453,7 +404,6 @@ def _scan_one(
         relogin_result=relogin_result,
         token_probe=token_probe,
         started=started,
-        workspace_result=workspace_result,
     )
     result["subscription_type"] = _subscription_type(data)
     result["failure_class"] = failure_class
@@ -611,7 +561,6 @@ def _result(
     phone_verification_required: bool = False,
     secondary_phone_verification_required: bool = False,
     started: float = 0,
-    workspace_result: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return {
         "index": index,
@@ -626,7 +575,6 @@ def _result(
         "oauth": _public_oauth_result(oauth_result or {}),
         **({"relogin": _public_oauth_result(relogin_result or {})} if relogin_result else {}),
         **({"token_probe": _public_probe_result(token_probe or {})} if token_probe else {}),
-        "workspace": workspace_result or {},
         "elapsed_seconds": round(time.time() - started, 2) if started else 0,
     }
 
@@ -792,43 +740,6 @@ def _gmail_scan_lane_key(email):
     if domain not in {"gmail.com", "googlemail.com"}:
         return ""
     return value if local else ""
-
-
-def _workspace_probe(
-    data,
-    proxy=None,
-    timeout=120,
-    enabled=True,
-    switch_workspace_id="",
-    fallback_workspace_ids=None,
-    auto_switch_workspace=False,
-):
-    fallback_ids = fallback_workspace_ids
-    if isinstance(fallback_ids, str):
-        fallback_ids = parse_workspace_fallback_ids(fallback_ids)
-    try:
-        result = inspect_workspace(
-            data,
-            proxy=proxy,
-            timeout=min(max(int(timeout or 30), 10), 120),
-            enabled=enabled,
-            target_workspace_id=switch_workspace_id,
-            fallback_workspace_ids=fallback_ids or [],
-            auto_switch=auto_switch_workspace,
-        )
-        status = str(result.get("status") or "")
-        if status and status != "workspace_check_disabled":
-            print(
-                f"[*] Workspace scan: {status}"
-                f" current={str(result.get('actual_workspace_id') or result.get('token_workspace_id') or '')[:8]}"
-                f" target={str(result.get('target_workspace_id') or '')[:8]}"
-            )
-        return result
-    except Exception as exc:
-        error = str(exc)[:300]
-        if is_transient_transport_error(exc):
-            return {"ok": False, "status": "workspace_check_inconclusive", "error": error, "inconclusive": True}
-        return {"ok": False, "status": "workspace_check_failed", "error": error}
 
 
 def _refresh_quota_after_scan(results, workers=4, timeout=120, proxy=None, relogin_on_401=False, relogin_mode="auto"):

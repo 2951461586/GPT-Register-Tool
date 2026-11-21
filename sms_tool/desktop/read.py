@@ -17,11 +17,11 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from .. import sms_providers
+from ..phone import sms_providers
 from ..config import CFG, ConfigInput, RuntimeConfig, resolve_runtime_config
 from ..mailbox.parsers import parse_mailbox_pool_line
 from ..kernel.paths import PROJECT_ROOT, config_dir, resolve_config_file
-from ..promotion_states import promotion_marker_is_stale
+from ..payment.promotion_states import promotion_marker_is_stale
 from ..registration.retry_guard import RegistrationRetryGuard, mailbox_registration_status
 from ..kernel.sanitizer import sanitize
 from ..storage import (

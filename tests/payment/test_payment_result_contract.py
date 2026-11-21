@@ -53,7 +53,7 @@ class PaymentResultContractTests(unittest.TestCase):
         # called) rather than on PaymentOperationStore.from_config because
         # the latter is a classmethod and mock's classmethod wrapper has
         # edge cases when the class is re-imported via different paths.
-        from sms_tool.payment.operation import PaymentOperationStore as _Store
+        from sms_tool.operation_journal import PaymentOperationStore as _Store
 
         self._store_root = Path(self._tmp.name) / "payment_operations"
         self._store_patch = patch(
@@ -83,7 +83,7 @@ class PaymentResultContractTests(unittest.TestCase):
             tempfile.TemporaryDirectory() as tmp,
             patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)),
             patch(
-                "sms_tool.gen_pp_link.generate_pp_link",
+                "sms_tool.paypal_link.gen_link.generate_pp_link",
                 return_value={
                     "ok": True,
                     "url": "https://example.test/approve",
@@ -104,7 +104,7 @@ class PaymentResultContractTests(unittest.TestCase):
             tempfile.TemporaryDirectory() as tmp,
             patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)),
             patch(
-                "sms_tool.gen_pp_link.generate_pp_link",
+                "sms_tool.paypal_link.gen_link.generate_pp_link",
                 return_value={
                     "ok": False,
                     "status": "canceled",
@@ -129,7 +129,7 @@ class PaymentResultContractTests(unittest.TestCase):
             tempfile.TemporaryDirectory() as tmp,
             patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)),
             patch(
-                "sms_tool.gen_pp_link.generate_pp_link",
+                "sms_tool.paypal_link.gen_link.generate_pp_link",
                 return_value={
                     "ok": False,
                     "state": "unknown",
@@ -157,7 +157,7 @@ class PaymentResultContractTests(unittest.TestCase):
         with (
             tempfile.TemporaryDirectory() as tmp,
             patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)),
-            patch("sms_tool.gen_pp_link.generate_pp_link", side_effect=OutcomeUnknownError("response lost")),
+            patch("sms_tool.paypal_link.gen_link.generate_pp_link", side_effect=OutcomeUnknownError("response lost")),
         ):
             result = manager.generate_payment_link("token", payment_method="paypal")
 
@@ -177,7 +177,9 @@ class PaymentResultContractTests(unittest.TestCase):
         with (
             tempfile.TemporaryDirectory() as tmp,
             patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)),
-            patch("sms_tool.gen_pp_link.generate_pp_link", side_effect=StructuredUnknownError("response lost")),
+            patch(
+                "sms_tool.paypal_link.gen_link.generate_pp_link", side_effect=StructuredUnknownError("response lost")
+            ),
         ):
             result = manager.generate_payment_link("token", payment_method="paypal")
 
@@ -202,7 +204,9 @@ class PaymentResultContractTests(unittest.TestCase):
         with (
             tempfile.TemporaryDirectory() as tmp,
             patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)),
-            patch("sms_tool.gen_pp_link.generate_pp_link", side_effect=[pending_without_link, pending_with_link]),
+            patch(
+                "sms_tool.paypal_link.gen_link.generate_pp_link", side_effect=[pending_without_link, pending_with_link]
+            ),
         ):
             unknown = manager.generate_payment_link("token", payment_method="paypal")
             complete = manager.generate_payment_link("token", payment_method="paypal")
@@ -249,7 +253,7 @@ class PaymentResultContractTests(unittest.TestCase):
         with (
             tempfile.TemporaryDirectory() as tmp,
             patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)),
-            patch("sms_tool.gen_pp_link.generate_pp_link", side_effect=KeyboardInterrupt),
+            patch("sms_tool.paypal_link.gen_link.generate_pp_link", side_effect=KeyboardInterrupt),
         ):
             result = manager.generate_payment_link("token", payment_method="paypal")
 
@@ -283,7 +287,7 @@ class PaymentResultContractTests(unittest.TestCase):
         with (
             tempfile.TemporaryDirectory() as tmp,
             patch("sms_tool.pay_link.persistence._state_path", return_value=self._state_file(tmp)),
-            patch("sms_tool.gen_pp_link.generate_pp_link", return_value={}),
+            patch("sms_tool.paypal_link.gen_link.generate_pp_link", return_value={}),
         ):
             result = manager.generate_payment_link("token", payment_method="paypal")
 

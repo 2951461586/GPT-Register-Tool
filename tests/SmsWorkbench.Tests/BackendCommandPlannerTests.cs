@@ -675,4 +675,26 @@ public sealed class BackendCommandPlannerTests
         Assert.All(first.TempFiles.Concat(second.TempFiles), path =>
             Assert.Equal(fixture.Path, Path.GetDirectoryName(path)));
     }
+
+    [Fact]
+    public void CreateAccountInspection_EmitsInspectAccountsAndReloginFlags()
+    {
+        using var fixture = new TemporaryDirectory();
+
+        var plan = BackendCommandPlanner.CreateAccountInspection(
+            emails: new[] { "a@example.com", "b@example.com" },
+            sessionFile: "",
+            workers: 4,
+            proxyPool: new[] { "http://proxy:8080" },
+            refreshPromotion: false,
+            tempDirectory: fixture.Path);
+
+        Assert.Equal("轻量巡检(2)", plan.TaskName);
+        Assert.Contains("--inspect-accounts", plan.Arguments);
+        Assert.Contains("--quota-auto-relogin", plan.Arguments);
+        Assert.Contains("--inspect-no-promotion", plan.Arguments);
+        Assert.Contains("--desktop-ipc", plan.Arguments);
+        Assert.Single(plan.TempFiles);
+        Assert.Equal(BackendAccountResultKind.Liveness, plan.ResultKind);
+    }
 }

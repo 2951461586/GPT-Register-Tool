@@ -16,7 +16,7 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any, Mapping
 
-from ..operator_output import emit as _emit
+from ..observability.operator_output import emit as _emit
 from . import reference_lane as _reference_lane
 from .retry_guard import DEAD_END_SIGNUP_ROUTED_TO_LOGIN
 

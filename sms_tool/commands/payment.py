@@ -619,7 +619,7 @@ def check_payment_qualification(args: Any, context: PaymentCommandContext) -> No
     freezes which modules may import it. Success means "the probe answered"
     (including a conclusive 无可用); ``eligible`` is counted separately.
     """
-    from ..diagnostics import safe_print
+    from ..observability.diagnostics import safe_print
     from ..payment.qualification_batch import refresh_payment_qualification
     from ..storage import list_paypal_accounts
 
@@ -657,7 +657,7 @@ def _print_payment_qualification_summary(result: Mapping[str, Any]) -> None:
     A failed account shows the badge *and* the raw reason, because 检测失败 alone
     cannot tell an operator whether to rotate the exit or refresh the token.
     """
-    from ..diagnostics import safe_print
+    from ..observability.diagnostics import safe_print
 
     _raw_results: object = result.get("results")
     rows = [item for item in (_raw_results if isinstance(_raw_results, list) else []) if isinstance(item, dict)]

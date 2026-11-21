@@ -27,14 +27,15 @@ import logging
 import time
 import uuid
 from typing import TYPE_CHECKING, Any, Callable
+from urllib.parse import parse_qsl, quote, urlencode, urlparse, urlunparse
 
 from curl_cffi import requests as curl_requests
 
 from . import checkpoint as registration_checkpoint
-from ..tls_fingerprint import apply_to_session as _apply_tls_fingerprint
+from ..transport.tls_fingerprint import apply_to_session as _apply_tls_fingerprint
 from ..desktop.ipc import emit_event
 from ..kernel.failure_registry import PASSWORDLESS_SIGNUP_CODE, is_passwordless_signup_mismatch
-from ..operator_output import emit as _emit
+from ..observability.operator_output import emit as _emit
 from .cancel import RegistrationCancelled, cancellable_sleep
 from .flags import registration_flag
 from .protocol_helpers import (
@@ -45,7 +46,7 @@ from .protocol_helpers import (
 )
 from .retry_guard import RegistrationRetryGuard
 from ..kernel.sanitizer import account_reference, describe_exception
-from ..telemetry import current_run_id
+from ..observability.telemetry import current_run_id
 
 if TYPE_CHECKING:  # pragma: no cover - import cycle guard for type checkers only
     from .state import RegistrationWorkflow
@@ -334,6 +335,113 @@ def mark_partial_registration(
     )
 
 
+def _is_registration_disallowed(create_data: Any) -> bool:
+    """True when ``create_account`` failed specifically with ``registration_disallowed``."""
+    if not isinstance(create_data, dict):
+        return False
+    error = create_data.get("error")
+    if isinstance(error, dict) and str(error.get("code") or "").strip().lower() == "registration_disallowed":
+        return True
+    if isinstance(error, str) and "registration_disallowed" in error.lower():
+        return True
+    raw = create_data.get("_raw")
+    return isinstance(raw, str) and "registration_disallowed" in raw.lower()
+
+
+def _strip_prompt_query(url: str) -> str:
+    """Remove ``prompt`` query params so reauthorize reuses OTP-verified cookies."""
+    parsed = urlparse(str(url or "").strip())
+    if not parsed.scheme or not parsed.hostname:
+        return ""
+    filtered = [(k, v) for k, v in parse_qsl(parsed.query, keep_blank_values=True) if k != "prompt"]
+    return urlunparse(parsed._replace(query=urlencode(filtered)))
+
+
+def _reauthorize_after_registration_disallowed(workflow: RegistrationWorkflow) -> bool:
+    """Attempt one bounded reauthorize when ``create_account`` hit ``registration_disallowed``.
+
+    Never replays a previous OAuth code: asks NextAuth for a fresh authorize URL,
+    drops ``prompt`` so the OTP-verified auth cookies can finish callback handoff,
+    and hands the URL to ``_follow_continue_url`` (which resolves workspace/account
+    interstitials).  Returns True when a callback hop was executed.
+    """
+    r = workflow.r
+    s = workflow.runtime
+    if getattr(s, "_disallowed_reauthorize_tried", False):
+        return False
+    chat_base = str(getattr(s, "chat_base", "") or "").strip()
+    auth_base = str(getattr(s, "auth_base", "") or "").strip()
+    if not chat_base or not auth_base or not callable(getattr(r, "nextauth_headers", None)):
+        return False
+    setattr(s, "_disallowed_reauthorize_tried", True)
+    _emit(_LOGGER, "  Attempting limited reauthorize after registration_disallowed...")
+    try:
+        csrf_headers = r.nextauth_headers(
+            s.device_id,
+            session_id=getattr(s, "session_logging_id", ""),
+            referer=f"{chat_base}/",
+            origin=chat_base,
+        )
+        csrf_resp = r.request_with_retry(
+            s.session,
+            "get",
+            f"{chat_base}/api/auth/csrf",
+            label="Reauthorize csrf",
+            headers=csrf_headers,
+            impersonate=r.auth_impersonate(),
+            attempts=1,
+        )
+        csrf_payload = r._json_or_raw(csrf_resp, limit=400)
+        csrf_token = (
+            str(csrf_payload.get("csrfToken") or "").strip() if isinstance(csrf_payload, dict) else ""
+        ) or str(getattr(s, "csrf_token", "") or "").strip()
+        if not csrf_token:
+            return False
+        signin_url = f"{chat_base}/api/auth/signin/openai"
+        username = str(getattr(s, "username", "") or "").strip()
+        if username:
+            signin_url = f"{signin_url}?login_hint={quote(username, safe='')}"
+        signin_headers = {**csrf_headers, "Content-Type": "application/x-www-form-urlencoded"}
+        signin_resp = r.request_with_retry(
+            s.session,
+            "post",
+            signin_url,
+            label="Reauthorize signin",
+            data={"csrfToken": csrf_token, "callbackUrl": f"{chat_base}/", "json": "true"},
+            headers=signin_headers,
+            impersonate=r.auth_impersonate(),
+            attempts=1,
+        )
+        signin_payload = r._json_or_raw(signin_resp, limit=500)
+        raw_authorize = str(signin_payload.get("url") or "").strip() if isinstance(signin_payload, dict) else ""
+        cleaned_authorize = _strip_prompt_query(raw_authorize)
+        if not cleaned_authorize:
+            return False
+        allowed_hosts = {host.lower() for base in (auth_base, chat_base) for host in [urlparse(base).hostname] if host}
+        if (urlparse(cleaned_authorize).hostname or "").lower() not in allowed_hosts:
+            return False
+        r._follow_continue_url(
+            s.session,
+            cleaned_authorize,
+            s.base_headers,
+            referer=f"{chat_base}/",
+            label="Reauthorize after registration_disallowed",
+        )
+        return True
+    except (
+        curl_requests.errors.RequestsError,
+        OSError,
+        TimeoutError,
+        ValueError,
+        TypeError,
+        KeyError,
+        AttributeError,
+        RuntimeError,
+    ) as exc:
+        _emit(_LOGGER, "  Limited reauthorize after registration_disallowed warning: %s", describe_exception(exc))
+        return False
+
+
 def fetch_auth_session(
     workflow: RegistrationWorkflow,
     *,
@@ -344,6 +452,19 @@ def fetch_auth_session(
     s.auth_session = r._fetch_auth_session(s.session, s.chat_base, s.base_headers)
     s.auth_body = s.auth_session.get("body") or {}
     s.access_token = r._auth_session_access_token(s.auth_body)
+    if (
+        not s.access_token
+        and not s.existing_account
+        and not s.create_ok
+        and _is_registration_disallowed(s.create_data)
+        and _reauthorize_after_registration_disallowed(workflow)
+    ):
+        s.auth_session = r._fetch_auth_session(s.session, s.chat_base, s.base_headers)
+        s.auth_body = s.auth_session.get("body") or {}
+        s.access_token = r._auth_session_access_token(s.auth_body)
+        if s.access_token:
+            s.create_ok = True
+            _emit(_LOGGER, "  Recovered ChatGPT session via limited reauthorize after registration_disallowed")
     workflow._persist_checkpoint(
         "at_probe_pending" if s.access_token else registration_checkpoint.SESSION_PENDING_STATE
     )

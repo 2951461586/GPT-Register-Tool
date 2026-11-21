@@ -10,7 +10,7 @@ from sms_tool.phone import config as phone_config
 from sms_tool.phone import pool as phone_pool
 from sms_tool.phone import provider_lifecycle as phone_provider_lifecycle
 from sms_tool.phone import reuse as phone_reuse
-from sms_tool import sms_providers
+from sms_tool.phone import sms_providers
 from sms_tool.phone.reuse import (
     PhonePool,
     PhoneSlot,
@@ -21,9 +21,15 @@ from sms_tool.phone.reuse import (
     create_phone_pool,
     send_phone_otp,
 )
-from sms_tool.sms_provider_adapter import SmsProviderAdapter
-from sms_tool.nexsms import NexSmsClient
-from sms_tool.smsbower import SmsBowerActivation, SmsBowerClient, normalize_country, normalize_phone, normalize_service
+from sms_tool.phone.sms_provider_adapter import SmsProviderAdapter
+from sms_tool.phone.nexsms import NexSmsClient
+from sms_tool.phone.smsbower import (
+    SmsBowerActivation,
+    SmsBowerClient,
+    normalize_country,
+    normalize_phone,
+    normalize_service,
+)
 
 
 class SmsBowerPhoneReuseTests(unittest.TestCase):
@@ -39,7 +45,7 @@ class SmsBowerPhoneReuseTests(unittest.TestCase):
         response.raise_for_status.return_value = None
         client = SmsBowerClient(api_key="test-key")
 
-        with patch("sms_tool.smsbower._requests.get", return_value=response) as request:
+        with patch("sms_tool.phone.smsbower._requests.get", return_value=response) as request:
             activation = client.get_number(
                 service="dr",
                 country="33",
@@ -970,7 +976,7 @@ class SmsBowerCancelObservationTests(unittest.TestCase):
 
     def setUp(self):
         self.capture = _Capture()
-        logger = logging.getLogger("sms_tool.smsbower")
+        logger = logging.getLogger("sms_tool.phone.smsbower")
         logger.addHandler(self.capture)
         logger.setLevel(logging.DEBUG)
         self.addCleanup(logger.removeHandler, self.capture)
@@ -1384,7 +1390,7 @@ class RentalProviderLifecycleTests(unittest.TestCase):
         with (
             patch("sms_tool.phone.registration.current_config_data", return_value=cfg),
             patch("sms_tool.phone.registration.select_auth_fingerprint"),
-            patch("sms_tool.phone_proxy.select_phone_proxy", return_value={"ok": True, "proxy": ""}),
+            patch("sms_tool.phone.phone_proxy.select_phone_proxy", return_value={"ok": True, "proxy": ""}),
             patch("sms_tool.phone.reuse.rental_client", return_value=client) as factory,
             contextlib.redirect_stdout(io.StringIO()),
         ):

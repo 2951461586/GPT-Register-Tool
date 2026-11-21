@@ -63,6 +63,7 @@ def create_browser_session(
     }
     if driver == "playwright":
         kwargs["viewport"] = viewport
+        kwargs["data_saver_config"] = config
         profile = str(_driver_config(config, "playwright").get("user_data_dir") or "").strip()
         if profile:
             kwargs["user_data_dir"] = profile

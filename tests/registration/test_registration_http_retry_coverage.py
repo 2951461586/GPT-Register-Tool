@@ -20,7 +20,7 @@ import pathlib
 import unittest
 from unittest.mock import patch
 
-from sms_tool import http_client
+from sms_tool.transport import http_client
 from sms_tool.accounts import account_2fa
 from sms_tool.sentinel import client as sentinel_client
 from sms_tool.registration import preflight as registration_preflight

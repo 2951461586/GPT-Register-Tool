@@ -39,7 +39,7 @@ from sms_tool.browser import nodriver_paypal as nodriver_paypal
 from sms_tool.paypal import reverse as paypal_reverse
 from sms_tool.paypal import config_picker, flow_steps
 from sms_tool.paypal.errors import _PayPalStepError
-from sms_tool.sms_utils import NO_NUMBER_SOURCE, NO_NUMBER_SOURCE_MESSAGE
+from sms_tool.phone.sms_utils import NO_NUMBER_SOURCE, NO_NUMBER_SOURCE_MESSAGE
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
 SMS_TOOL = REPO_ROOT / "sms_tool"
@@ -192,10 +192,11 @@ class TestExportSurface:
 
         assert not hasattr(paypal_pkg, "_pick_phone_and_sms")
 
-    def test_the_picker_is_gone_from_the_compatibility_shell(self):
-        import sms_tool.paypal.auto as shell
+    def test_the_compatibility_shell_is_retired(self):
+        import importlib.util
 
-        assert not hasattr(shell, "_pick_phone_and_sms")
+        assert importlib.util.find_spec("sms_tool.paypal.auto") is None
+        assert importlib.util.find_spec("sms_tool.paypal.reconciliation") is None
 
     def test_the_picker_is_not_listed_in_dunder_all(self):
         import sms_tool.paypal as paypal_pkg

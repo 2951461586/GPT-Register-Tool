@@ -1,8 +1,4 @@
-// Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
-#nullable enable
-
-namespace SmsWorkbench
+namespace SmsWorkbench.Dialogs
 {
     /// <summary>
     /// Adapter preserving the task runner's existing progress-dialog API while

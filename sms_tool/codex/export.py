@@ -13,7 +13,7 @@ from ..kernel.paths import output_dir
 from ..session.refresh import _load_seed_session, _session_token, refresh_session
 from ..storage import _looks_codex_refresh_token, upsert_account
 from typing import Any
-from .. import endpoints
+from ..transport import endpoints
 
 
 def export_codex_session(

@@ -28,6 +28,9 @@
         <ResourceDictionary Source="Themes/Glyphs.xaml"/>
         <ResourceDictionary Source="Themes/Colors.Light.xaml"/>
         <ResourceDictionary Source="Themes/Controls.xaml"/>
+        <ResourceDictionary Source="Themes/Controls.Buttons.xaml"/>
+        <ResourceDictionary Source="Themes/Controls.Inputs.xaml"/>
+        <ResourceDictionary Source="Themes/Controls.DataGrid.xaml"/>
       </ResourceDictionary.MergedDictionaries>
       <loc:PoolSummaryConverter x:Key="PoolSummaryConverter"/>
     </ResourceDictionary>

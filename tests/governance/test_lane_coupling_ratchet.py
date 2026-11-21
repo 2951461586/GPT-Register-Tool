@@ -48,8 +48,8 @@ def _package(tmp_path: Path, files: dict[str, str]) -> Path:
         "payment/contracts.py": "",
         "payment/catalog.py": "",
         "proxy/entry.py": "",
-        "phone_proxy.py": "",
-        "auth_headers.py": "",
+        "phone/phone_proxy.py": "",
+        "transport/auth_headers.py": "",
         "registration/__init__.py": "",
         "registration/handlers.py": "",
         "sentinel/__init__.py": "",
@@ -168,7 +168,7 @@ def test_non_cli_root_module_importing_adapters_is_a_violation(tree):
     # The rule is about *root* modules (``source.count(".") == 1``), so the fixture
     # has to stay at the package root; ``registration_finalize.py`` moved into the
     # registration package and would no longer exercise it.
-    current = tree({"batch_runner.py": "from .commands import registration\n"})
+    current = tree({"doctor.py": "from .commands import registration\n"})
     problems = lcr.violations(current, {"root_to_adapter_layers": []})
     assert any("only sms_tool.cli may" in p for p in problems)
 

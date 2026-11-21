@@ -33,7 +33,7 @@ from unittest import mock
 
 import pytest
 
-from sms_tool import logging_setup
+from sms_tool.observability import logging_setup
 
 
 class _Capture(logging.Handler):

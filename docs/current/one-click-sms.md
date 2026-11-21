@@ -4,9 +4,9 @@
 （授权与结果保存）→ `phone/reuse.py`（租号生命周期）。命令适配层只选账号、
 调度与汇总，不写 session 文件或 SQLite。
 
-供应商名称、端点、协议族与环境变量名的真源在 `sms_tool/sms_providers.py`，
-生命周期契约在 `sms_tool/sms_provider_adapter.py`。`smsbower.py` 等
-sms-activate 客户端以 activation ID 管理租约；`nexsms.py` 使用号码作为
+供应商名称、端点、协议族与环境变量名的真源在 `sms_tool/phone/sms_providers.py`，
+生命周期契约在 `sms_tool/phone/sms_provider_adapter.py`。`phone/smsbower.py` 等
+sms-activate 客户端以 activation ID 管理租约；`phone/nexsms.py` 使用号码作为
 生命周期键，不得伪造 activation ID。桌面目录按协议族读取余额、国家、
 价格与库存。配置优先级见 [配置契约](configuration.md)，排障按
 [接码检查清单](../TROUBLESHOOTING.md) §13–16。

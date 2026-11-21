@@ -27,10 +27,10 @@ ROOT = Path(__file__).resolve().parents[2]
 
 HEAVY_PACKAGES = ("requests", "curl_cffi", "playwright", "urllib3")
 HEAVY_MODULES = (
-    "sms_tool.batch_runner",
+    "sms_tool.registration.batch_runner",
     "sms_tool.commands.payment_links",
     "sms_tool.commands.registration",
-    "sms_tool.gen_pp_link",
+    "sms_tool.paypal_link.gen_link",
     "sms_tool.proxy.routing",
     "sms_tool.upi_link",
 )

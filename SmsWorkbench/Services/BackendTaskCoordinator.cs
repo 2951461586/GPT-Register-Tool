@@ -1,12 +1,8 @@
-// Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
-#nullable enable
-
 using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace SmsWorkbench
+namespace SmsWorkbench.Services
 {
     public sealed class BackendTaskCoordinator : IBackendTaskCoordinator, IDisposable
     {

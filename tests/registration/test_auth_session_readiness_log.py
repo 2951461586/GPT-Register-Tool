@@ -44,7 +44,7 @@ import logging
 import unittest
 from unittest import mock
 
-from sms_tool import account_creation
+from sms_tool.registration import account_creation
 
 # 派生而非硬编码：logging 自己知道哪些属性是标准的，升级 Python 也不会漏。
 _STANDARD_LOG_ATTRS = frozenset(logging.LogRecord("", 0, "", 0, "", (), None).__dict__)

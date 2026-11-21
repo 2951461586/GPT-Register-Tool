@@ -300,6 +300,51 @@ namespace SmsWorkbench
                 ResultKind: BackendAccountResultKind.Liveness);
         }
 
+        public static BackendCommandPlan CreateAccountInspection(
+            IReadOnlyList<string> emails,
+            string sessionFile,
+            int workers,
+            IReadOnlyList<string> proxyPool,
+            bool refreshPromotion = true,
+            string? tempDirectory = null)
+        {
+            List<string> targets = RequireEmails(emails);
+            var args = new List<string>
+            {
+                "--inspect-accounts",
+                "--quota-workers", Count(workers),
+                "--refresh-timeout", "90",
+                "--quota-auto-relogin",
+                "--quota-relogin-timeout", "300",
+                "--quota-batch-timeout", "1680",
+                "--quota-account-timeout", "120",
+                "--desktop-ipc",
+            };
+            if (!refreshPromotion)
+            {
+                args.Add("--inspect-no-promotion");
+            }
+            var tempFiles = new List<string>();
+            if (targets.Count > 1)
+            {
+                string emailFile = WriteEmailFile(tempDirectory, "inspect_accounts_emails_", targets);
+                tempFiles.Add(emailFile);
+                args.AddRange(new[] { "--email-file", emailFile });
+            }
+            else
+            {
+                args.AddRange(new[] { "--email", targets[0] });
+                AppendSessionFile(args, sessionFile);
+            }
+            AppendProxyPool(args, proxyPool);
+            return new BackendCommandPlan(
+                "轻量巡检(" + Count(targets.Count) + ")",
+                args,
+                TemporaryFiles: tempFiles,
+                TimeoutMilliseconds: 30 * 60 * 1000,
+                ResultKind: BackendAccountResultKind.Liveness);
+        }
+
         public static BackendCommandPlan CreateChangeEmail(
             IReadOnlyList<string> emails,
             string provider,

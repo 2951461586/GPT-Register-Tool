@@ -1,0 +1,74 @@
+<Window x:Class="SmsWorkbench.Dialogs.SelectedRegisterOptionsDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:loc="clr-namespace:SmsWorkbench.Localization"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="{loc:Tr Key='选中邮箱注册'}"
+        Width="560"
+        Height="278"
+        MinWidth="480"
+        MinHeight="260"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource AppBg}">
+  <Grid Margin="14">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="*"/>
+      <RowDefinition Height="Auto"/>
+    </Grid.RowDefinitions>
+
+    <Grid VerticalAlignment="Top">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="110"/>
+        <ColumnDefinition Width="*"/>
+      </Grid.ColumnDefinitions>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+      </Grid.RowDefinitions>
+
+      <TextBlock x:Name="HintTextBlock"
+                 Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2"
+                 TextWrapping="Wrap"
+                 Margin="0,0,0,10"
+                 Foreground="{DynamicResource TextSub}"/>
+
+      <TextBlock Grid.Row="1" Grid.Column="0"
+                 Text="{loc:Tr Key='并发'}"
+                 VerticalAlignment="Center"
+                 Margin="0,0,10,10"
+                 Foreground="{DynamicResource TextSub}"/>
+      <TextBox x:Name="WorkerBox"
+               Grid.Row="1" Grid.Column="1"
+               Margin="0,0,0,10"/>
+
+      <CheckBox x:Name="No2faBox"
+                Grid.Row="2" Grid.Column="1"
+                Content="{loc:Tr Key='关闭 2FA（不注册 TOTP）'}"
+                IsChecked="True"
+                Margin="0,0,0,10"
+                Foreground="{DynamicResource TextMain}"/>
+
+      <CheckBox x:Name="PromotionBox"
+                Grid.Row="3" Grid.Column="1"
+                Content="{loc:Tr Key='注册完成后查询试用优惠'}"
+                IsChecked="True"
+                Margin="0,0,0,10"
+                Foreground="{DynamicResource TextMain}"/>
+    </Grid>
+
+    <StackPanel Grid.Row="1"
+                Orientation="Horizontal"
+                HorizontalAlignment="Right"
+                Margin="0,10,0,0">
+      <Button Content="{loc:Tr Key='开始'}"
+              Width="72"
+              Style="{StaticResource PrimaryButton}"
+              Click="Ok_Click"/>
+      <Button Content="{loc:Tr Key='取消'}"
+              Width="72"
+              Click="Cancel_Click"/>
+    </StackPanel>
+  </Grid>
+</Window>

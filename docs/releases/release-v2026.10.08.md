@@ -42,7 +42,7 @@
   （不再回落德国）。
 - **UPI**：印度出口分级 / 双 init 双 tax / 换出口重开结账单；OAICS 两步 confirm；
   被动 hCaptcha；mandate 阶段与 stage 级回放测试网。
-- **`endpoints.py` 成为 OpenAI host 的单一权威**（`auth.openai.com` / `chatgpt.com` /
+- **`transport/endpoints.py` 成为 OpenAI host 的单一权威**（`auth.openai.com` / `chatgpt.com` /
   `api.openai.com`），配 `endpoints_literal_ratchet` 冻结内联字面量。
 - **支付资格三态标记**（并入「优惠状态」列）：从未探测 / 探测到方式 / 探测但未枚举。
 

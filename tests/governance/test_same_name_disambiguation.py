@@ -51,7 +51,7 @@ EXPECTED_DEFS = {
     "sms_tool/commands/payment.py": {"parse_proxy_pool": 1},
     "sms_tool/proxy/routing.py": {"parse_lane_proxy_pool": 1, "parse_proxy_pool": 0},
     "sms_tool/paypal/proxy.py": {"rotate_proxy_session": 1},
-    "sms_tool/pp_link_helpers.py": {"rotate_proxy_session_id": 1, "rotate_proxy_session": 0},
+    "sms_tool/payment/pp_link_helpers.py": {"rotate_proxy_session_id": 1, "rotate_proxy_session": 0},
     "services/protocol-payment/direct_card/direct_card_extract.py": {
         "rotate_direct_card_proxy_session": 1,
         "rotate_proxy_session": 0,
@@ -68,16 +68,14 @@ EXPECTED_DEFS = {
 ALL_NAMES = sorted({name for names in EXPECTED_DEFS.values() for name in names})
 
 # Re-export wiring: a rename is only finished when the package surface moves
-# with it. ``gen_pp_link`` is a ``from .paypal_link import *`` facade, so it is
-# the cheapest proof that the ``__all__`` lists were updated too.
+# with it.
 EXPECTED_EXPORTS = [
     ("sms_tool.proxy.routing", "parse_lane_proxy_pool"),
     ("sms_tool.payment.routing", "parse_proxy_pool"),
     ("sms_tool.paypal.proxy", "rotate_proxy_session"),
-    ("sms_tool.pp_link_helpers", "rotate_proxy_session_id"),
+    ("sms_tool.payment.pp_link_helpers", "rotate_proxy_session_id"),
     ("sms_tool.paypal_link", "rotate_proxy_session_id"),
     ("sms_tool.paypal_link", "rotate_stage_proxy_session"),
-    ("sms_tool.gen_pp_link", "rotate_proxy_session_id"),
     ("sms_tool.pay_link", "payment_method_label"),
     ("sms_tool.commands.helpers", "cli_payment_method_label"),
 ]
@@ -153,7 +151,12 @@ def _body(relpath: str, name: str) -> ast.FunctionDef:
 
 DIVERGENT_PAIRS = [
     ("sms_tool/payment/routing.py", "parse_proxy_pool", "sms_tool/proxy/routing.py", "parse_lane_proxy_pool"),
-    ("sms_tool/paypal/proxy.py", "rotate_proxy_session", "sms_tool/pp_link_helpers.py", "rotate_proxy_session_id"),
+    (
+        "sms_tool/paypal/proxy.py",
+        "rotate_proxy_session",
+        "sms_tool/payment/pp_link_helpers.py",
+        "rotate_proxy_session_id",
+    ),
     (
         "sms_tool/paypal/proxy.py",
         "rotate_proxy_session",

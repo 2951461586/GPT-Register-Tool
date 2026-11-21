@@ -142,7 +142,7 @@ class SentinelProfileOffsetTests(unittest.TestCase):
     """The protocol path used to send ``timezoneOffsetMinutes: 0`` always."""
 
     def test_profile_carries_an_offset(self):
-        from sms_tool.auth_headers import sentinel_fingerprint
+        from sms_tool.transport.auth_headers import sentinel_fingerprint
 
         profile = sentinel_fingerprint()
         self.assertIn("timezone_offset_minutes", profile)
@@ -153,7 +153,7 @@ class SentinelProfileOffsetTests(unittest.TestCase):
 
     @unittest.skipUnless(_REAL_TZDB, "requires the IANA tz database (tzdata)")
     def test_offset_is_not_zero_for_a_real_zone(self):
-        from sms_tool import auth_headers
+        from sms_tool.transport import auth_headers
 
         auth_headers.set_fingerprint_geo("JP")
         try:

@@ -1,8 +1,4 @@
-// Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
-#nullable enable
-
-namespace SmsWorkbench
+namespace SmsWorkbench.Models
 {
     // Moved out of `SmsProviderCatalogClient.cs` (P7-B) so the wire client can be
     // deleted once the dialog reads the catalog through the Python channel: the

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from ..payment.wire import _new_session
-from ..pp_link_helpers import DEFAULT_TIMEOUT
+from ..payment.pp_link_helpers import DEFAULT_TIMEOUT
 from typing import Any
 from collections.abc import Mapping
 from urllib.parse import urljoin

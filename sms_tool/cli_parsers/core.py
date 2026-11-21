@@ -3,7 +3,7 @@
 import argparse
 
 from ..registration_drivers.base import driver_choices
-from ..sms_providers import available_provider_keys
+from ..phone.sms_providers import available_provider_keys
 
 #: Read-only desktop projections. Kept beside the parser instead of inline so
 #: the frozen function-length ratchet does not grow every time a new read op
@@ -17,6 +17,34 @@ DESKTOP_READ_CHOICES = (
     "mailbox-pool",
     "proxy-pool",
 )
+
+
+def _register_batch_target_flags(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--count", type=int, default=1)
+    parser.add_argument(
+        "--target-success",
+        type=int,
+        default=0,
+        help="Stop batch registration once N accounts succeed (works with any mailbox source; unconsumed mailboxes stay untouched)",
+    )
+    parser.add_argument(
+        "--workers", type=int, default=4, help="Concurrent workers for batch registration and account operations"
+    )
+    parser.add_argument(
+        "--target-at200",
+        type=int,
+        default=0,
+        help="Replenish ReMail registrations until this many stable HTTP-200 AT accounts are saved",
+    )
+    parser.add_argument(
+        "--max-mailbox-purchases",
+        type=int,
+        default=0,
+        help="Hard mailbox purchase cap for --target-at200 (default: target x 2)",
+    )
+    parser.add_argument(
+        "--max-remail-cost", type=float, default=0.0, help="Optional total ReMail purchase-cost cap for --target-at200"
+    )
 
 
 def register(parser: argparse.ArgumentParser) -> None:
@@ -49,25 +77,7 @@ def register(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--proxy-pool", default="", help="Ordered registration proxy fallbacks, one per line or comma separated"
     )
-    parser.add_argument("--count", type=int, default=1)
-    parser.add_argument(
-        "--workers", type=int, default=4, help="Concurrent workers for batch registration and account operations"
-    )
-    parser.add_argument(
-        "--target-at200",
-        type=int,
-        default=0,
-        help="Replenish ReMail registrations until this many stable HTTP-200 AT accounts are saved",
-    )
-    parser.add_argument(
-        "--max-mailbox-purchases",
-        type=int,
-        default=0,
-        help="Hard mailbox purchase cap for --target-at200 (default: target x 2)",
-    )
-    parser.add_argument(
-        "--max-remail-cost", type=float, default=0.0, help="Optional total ReMail purchase-cost cap for --target-at200"
-    )
+    _register_batch_target_flags(parser)
     parser.add_argument("--password", default=None, help="Use a specific password")
     parser.add_argument("--email", default=None, help="Mailbox email address")
     parser.add_argument("--email-password", default=None, help="Mailbox password")

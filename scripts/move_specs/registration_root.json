@@ -1,0 +1,12 @@
+{
+  "package": "registration",
+  "layer": 3,
+  "modules": {
+    "account_creation": "account_creation",
+    "batch_runner": "batch_runner",
+    "chatgpt_bootstrap": "chatgpt_bootstrap",
+    "humanize": "humanize",
+    "otp_strategy": "otp_strategy",
+    "sentinel_tokens": "sentinel_tokens"
+  }
+}

@@ -31,7 +31,7 @@ def _as_float(value: Any, default: float = 0.0) -> float:
 def run_proxy_command(args: Any, *, config: Any = None) -> bool:
     """Execute the selected proxy command. Returns True (handled) or raises."""
     from ..desktop.ipc import emit_result
-    from ..diagnostics import safe_print
+    from ..observability.diagnostics import safe_print
     from ..proxy import admin
 
     if config is None:

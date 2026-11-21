@@ -21,7 +21,7 @@ from ..cross_process_gate import cross_process_write_lock
 from ..kernel.sanitizer import sanitize as _sanitize, sanitize_text as _sanitize_text
 from ..kernel.sanitizer import account_reference
 from .policy import registration_retry_decision
-from ..telemetry import correlation_fields, current_run_id
+from ..observability.telemetry import correlation_fields, current_run_id
 
 
 _current: contextvars.ContextVar["RegistrationProgress | None"] = contextvars.ContextVar(

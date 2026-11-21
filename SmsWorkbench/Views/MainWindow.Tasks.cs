@@ -1,43 +1,16 @@
-// Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
-#nullable enable
-
-
 using SmsWorkbench.Localization;
 
-namespace SmsWorkbench
+namespace SmsWorkbench.Views
 {
     public partial class MainWindow
     {
-        // Backend process, task list, deletion and cancellation actions.
-        //
-        // CLI argument construction is delegated to BackendCommandPlanner;
-        // backend JSON business interpretation is delegated to
-        // BackendResultInterpreter.
-
-        private bool doctorProbeStarted;
-
-        // Built in the constructor from the shared task coordinator and this
-        // window's log sink.
         private readonly AccountDeleteService accountDelete;
+        private readonly BackendBatchCoordinator backendBatch;
 
-        // Long-running backend tasks (registration / payment batches) share one
-        // timeout budget; keep it a named constant instead of inline math.
-        private const int BackendTaskTimeoutMs = 12 * 60 * 60 * 1000;
-        private const int BackendTaskTimeoutSeconds = 12 * 60 * 60;
-        private DateTime lastHotPersistenceRefreshUtc = DateTime.MinValue;
-
-        /// <summary>
-        /// One-shot background environment probe (`python -m sms_tool --doctor --json`)
-        /// run straight through the backend client so the single-active-task
-        /// invariant is untouched. Surfaces missing interpreter/dependencies
-        /// with fix hints instead of letting them surface as per-task failures.
-        /// </summary>
         internal async Task RunStartupDoctorProbeAsync(CancellationToken ct = default)
         {
-            if (doctorProbeStarted)
+            if (!backendBatch.TryBeginDoctorProbe())
                 return;
-            doctorProbeStarted = true;
             try
             {
                 var command = BackendCommand.Create("doctor", new[] { "--doctor", "--json" }, 90 * 1000);
@@ -47,21 +20,7 @@ namespace SmsWorkbench
                     Log("[doctor] 环境自检未返回结构化结果(退出码 " + result.ExitCode + ")");
                     return;
                 }
-                var fails = new List<string>();
-                int warned = 0;
-                foreach (JsonElement check in result.Payload.Value.GetProperty("checks").EnumerateArray())
-                {
-                    // GetString() returns null for a JSON `null` value, not only
-                    // for a missing property - `?? ""` keeps that null out of
-                    // the interpolated failure line below.
-                    string status = check.TryGetProperty("status", out JsonElement statusElement) ? statusElement.GetString() ?? "" : "";
-                    string name = check.TryGetProperty("name", out JsonElement nameElement) ? nameElement.GetString() ?? "" : "";
-                    string hint = check.TryGetProperty("hint", out JsonElement hintElement) ? hintElement.GetString() ?? "" : "";
-                    if (status == "fail")
-                        fails.Add(string.IsNullOrEmpty(hint) ? name : $"{name}: {hint}");
-                    else if (status == "warn")
-                        warned++;
-                }
+                (List<string> fails, int warned) = BackendBatchCoordinator.ParseDoctorPayload(result.Payload.Value);
                 if (fails.Count == 0)
                 {
                     Log($"[doctor] 环境自检通过{(warned > 0 ? $"({warned} 项警告,详见设置与代理配置)" : "")}");
@@ -69,47 +28,27 @@ namespace SmsWorkbench
                 }
                 var detail = string.Join("\n  - ", fails);
                 Log("[doctor] 环境自检发现 " + fails.Count + " 项缺失依赖");
-                MessageBox.Show(
+                await DialogFactory.ShowInfoAsync(
                     this,
-                    Loc.F(
-                        "环境自检发现 {0} 项必需依赖缺失:\n  - {1}\n\n可先运行: python -m pip install -r requirements.txt -c constraints.txt\n或使用命令 python chatgpt_phone_reg.py --doctor 查看完整报告。",
-                        fails.Count,
-                        detail),
                     Loc.T("环境自检"),
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
+                    Loc.F("环境自检发现 {0} 项必需依赖缺失:\n  - {1}\n\n可先运行: python -m pip install -r requirements.txt -c constraints.txt\n或使用命令 python chatgpt_phone_reg.py --doctor 查看完整报告。",
+                        fails.Count,
+                        detail));
             }
             catch (Exception ex)
             {
                 Log("[doctor] 环境自检失败: " + ex.Message);
-                MessageBox.Show(
+                await DialogFactory.ShowInfoAsync(
                     this,
-                    Loc.F(
-                        "{0}\n\n桌面端依赖 Python 3.10+ 与 requirements.txt/constraints.txt 中的依赖包。\n安装后在 设置 → 数据与文件 → 运行环境 配置解释器路径,再重启本程序。",
-                        SensitiveDataSanitizer.Redact(ex.Message)),
                     Loc.T("无法启动 Python 后端"),
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
+                    Loc.F("{0}\n\n桌面端依赖 Python 3.10+ 与 requirements.txt/constraints.txt 中的依赖包。\n安装后在 设置 → 数据与文件 → 运行环境 配置解释器路径,再重启本程序。",
+                        SensitiveDataSanitizer.Redact(ex.Message)));
             }
         }
-
-        // RerunFailed_Click / RebuildSqlite_Click removed (2026-09-02, round 6):
-        // dead event handlers -- no XAML element subscribes to either. They were
-        // also the only `async void` in this file. Their builders were deleted on
-        // 2026-11-20: the CLI still accepts the flags, docs/current/cli-reference.md
-        // is generated from the parser, and the C# copies had no caller.
 
         private void RunBackend(string taskName, List<string> args)
             => RunUiTask(() => RunBackendAsync(taskName, args, ct: _lifetimeCts.Token));
 
-        /// <summary>
-        /// Plan-based entry point. It differs from the string-only overload in one
-        /// respect: it carries <see cref="BackendCommandPlan.TempFiles"/> into the
-        /// runner, so the wrapper's <c>finally</c> deletes the batch files this run
-        /// created. Without it a plan's declared temp files are never touched --
-        /// which is exactly how the selected-mailbox batch files (mailbox
-        /// credentials) used to survive in <c>%TEMP%</c>.
-        /// </summary>
         private void RunBackend(BackendCommandPlan plan)
             => RunUiTask(() => RunBackendAsync(
                 plan.TaskName,
@@ -124,15 +63,6 @@ namespace SmsWorkbench
                 plan.TaskName, plan.Arguments.ToList(), domain, total, plan.TimeoutMilliseconds,
                 resultKind: plan.ResultKind, temporaryFiles: plan.TempFiles, ct: _lifetimeCts.Token));
 
-        /// <summary>
-        /// Temp-file owning wrapper. Cleanup is delegated to
-        /// <see cref="TransientArtifactCleanup.RunWithCleanupAsync"/> because the
-        /// <c>try/finally</c> has to sit outside the whole body: callers write
-        /// their temporary files (a selected-mailbox batch file holds raw
-        /// mailbox credentials) *before* calling in, so every exit path must
-        /// delete them -- including the single-task guard below and a throw while
-        /// the progress dialog is being constructed.
-        /// </summary>
         private Task RunBackendAsync(
             string taskName,
             List<string> args,
@@ -159,11 +89,11 @@ namespace SmsWorkbench
         {
             if (backendTasks.IsRunning)
             {
-                MessageBox.Show(Loc.T("已有批次正在运行，请先取消或等待完成。"), Loc.T("运行中"), MessageBoxButton.OK, MessageBoxImage.Information);
+                ShowThemedInfoDialog(Loc.T("运行中"), Loc.T("已有批次正在运行，请先取消或等待完成。"));
                 return;
             }
 
-            string safeArgs = FormatBackendArgsForDisplay(args);
+            string safeArgs = BackendBatchCoordinator.FormatArgsForDisplay(args);
             TaskRow task = TaskList.StartBatch(taskName, safeArgs);
             ScrollTaskGridToBottom();
             DateTime started = DateTime.Now;
@@ -175,58 +105,40 @@ namespace SmsWorkbench
                 : new AccountBatchProgressDialog(this, taskName, progressTotal, () => backendTasks.Cancel());
             progressDialog?.Show();
 
-            // One run owns one service instance: the capture buffer and the log
-            // folder are per-run state, and a finished batch must not bleed into the
-            // next one.
             var backendRun = new BackendRunService();
             string commandId = Guid.NewGuid().ToString("N");
-            // The folding rules (envelope vs. operator line) live in the service; this
-            // is the window's share: counters, the throttled pool refresh, the progress
-            // dialog and the task-row detail.
+
             void HandleProgressEvent(BackendProgressEvent progressEvent)
             {
                 LogBackendProgress(taskName, progressEvent);
-                // One terminal event per finished account is the throughput sample;
-                // the strip's window arithmetic lives in MetricsViewModel.
                 Metrics.Record(progressEvent);
                 if (progressEvent.Domain == "registration"
                     && (progressEvent.Stage == "registration_status_changed"
                         || progressEvent.Stage == "mailboxes_skipped"))
                 {
-                    // The backend drops cooling/quarantined/dead-end mailboxes
-                    // before attempting them; refreshing here takes those rows out
-                    // of their stale pre-batch state instead of leaving the
-                    // operator to find the skip in the backend log.
                     RefreshPoolsThrottled(preserveView: true);
-                    }
-                    if (accountProgress != null
-                        && string.Equals(progressEvent.Domain, accountProgress.Domain, StringComparison.OrdinalIgnoreCase))
-                    {
-                        // Update only returns true for a terminal per-account event,
-                        // i.e. one account really finished and was persisted
-                        // backend-side. That is the moment its grid row goes stale.
-                        if (accountProgress.Update(progressEvent))
-                            RefreshPoolsThrottled(preserveView: true);
-                        progressDialog?.Update(
-                            accountProgress.Completed,
-                            accountProgress.Total,
-                            progressEvent.AccountRef,
-                            progressEvent.Detail);
-                    }
+                }
+                if (accountProgress != null
+                    && string.Equals(progressEvent.Domain, accountProgress.Domain, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (accountProgress.Update(progressEvent))
+                        RefreshPoolsThrottled(preserveView: true);
+                    progressDialog?.Update(
+                        accountProgress.Completed,
+                        accountProgress.Total,
+                        progressEvent.AccountRef,
+                        progressEvent.Detail);
+                }
                 task.Info = progressEvent.Detail.Length > 0
                     ? $"{progressEvent.Stage}: {progressEvent.Detail}"
                     : progressEvent.Stage;
             }
 
-            // WPF marshals to the UI thread; the service keeps the folding rules.
             var progress = new Progress<BackendOutputLine>(
                 line => backendRun.Feed(line, HandleProgressEvent, UiLog, RefreshPoolsAfterHotPersistence));
             string activeKey = string.Empty;
             try
             {
-                // Promote the navigation key parked by OnNavigate: the sidebar marks
-                // this row until the finally below clears it. Dialog-only actions
-                // never reach this funnel, so they leave no highlight behind.
                 activeKey = TakePendingNavKey();
                 if (activeKey.Length > 0) ActiveNavKey = activeKey;
                 logger?.Information("启动后端任务 task={TaskName} command_id={CommandId} args={Args}", taskName, commandId, safeArgs);
@@ -236,43 +148,23 @@ namespace SmsWorkbench
                     BackendCommand.Create(
                         taskName,
                         args,
-                        timeoutMs ?? BackendTaskTimeoutMs,
-                        new Dictionary<string, string>
-                        {
-                            ["SMSWORKBENCH_EVENTS"] = "1",
-                            ["SMS_TOOL_COMMAND_ID"] = commandId,
-                            ["SMS_TOOL_TASK_NAME"] = taskName,
-                            ["SMS_TOOL_EVENT_SOURCE"] = "wpf",
-                        }),
+                        timeoutMs ?? BackendBatchCoordinator.BackendTaskTimeoutMs,
+                        BackendBatchCoordinator.CreateTaskEnvironment(commandId, taskName)),
                     progress,
                     ct);
 
-                // Use BackendResultInterpreter to normalize the outcome
                 BackendExecutionResult interpreted = BackendResultInterpreter.Interpret(
-                    result, taskName, (timeoutMs ?? BackendTaskTimeoutMs) / 1000);
+                    result, taskName, (timeoutMs ?? BackendBatchCoordinator.BackendTaskTimeoutMs) / 1000);
 
-                // A killed Python process may not emit its terminal envelope.
-                // Recover the rows already persisted by the liveness workers so
-                // the operator still gets a useful partial result dialog.
                 if (result.TimedOut && resultKind == BackendAccountResultKind.Liveness)
                 {
-                    string snapshot = TryReadLatestLivenessSnapshot();
+                    string snapshot = BackendBatchCoordinator.TryReadLatestLivenessSnapshot(rootDir);
                     if (snapshot.Length > 0)
                         backendRun.Capture(snapshot);
                 }
 
                 string batchSummary = BackendResultInterpreter.BatchSummaryLabel(
                     interpreted.Payload,
-                    // A registration payload that lost a counter key used to read as
-                    // 0 in the task row with nothing in the log. The manifest gate
-                    // catches the rename at commit time; this catches an older
-                    // binary meeting a newer backend at run time.
-                    //
-                    // ``Serilog.Log`` fully qualified: this class has its own
-                    // ``Log(string)`` panel method, and the static sink avoids the
-                    // maybe-null capture the compiler reports for the injected field
-                    // inside a lambda (CS8600/CS8602) while the build-warning
-                    // ratchet holds a zero baseline.
                     missingKey => Serilog.Log.Warning(
                         "Registration batch summary is missing required key {Key}", missingKey));
                 BackendRunOutcome outcome = BackendRunService.Describe(interpreted, batchSummary, started, DateTime.Now);
@@ -299,7 +191,7 @@ namespace SmsWorkbench
                 task.Status = "未启动";
                 task.DoneAt = SafeTime(DateTime.Now);
                 StatusBar.Text = taskName + " 未启动";
-                MessageBox.Show(Loc.T("已有批次正在运行，请先取消或等待完成。"), Loc.T("运行中"), MessageBoxButton.OK, MessageBoxImage.Information);
+                ShowThemedInfoDialog(Loc.T("运行中"), Loc.T("已有批次正在运行，请先取消或等待完成。"));
             }
             catch (Exception ex)
             {
@@ -309,8 +201,6 @@ namespace SmsWorkbench
             finally
             {
                 ClearActiveNavKey(activeKey);
-                // Temp-file deletion lives in RunBackendAsync's wrapper: it has to
-                // cover the early returns above this try block as well.
                 progressDialog?.Close();
             }
         }
@@ -326,70 +216,8 @@ namespace SmsWorkbench
             }
         }
 
-        private string TryReadLatestLivenessSnapshot()
-        {
-            try
-            {
-                string directory = Path.Combine(rootDir, "runtime", "account_liveness_batches");
-                if (!Directory.Exists(directory)) return "";
-                // Prefer a terminal snapshot: partial snapshots are written
-                // while the batch runs (and after a hard kill) and may carry
-                // unfinished rows. A stale non-terminal snapshot (older than
-                // 10 minutes) is crash residue from a dead batch, not an
-                // answer to this task's question.
-                string? latest = Directory.GetFiles(directory, "*.json")
-                    .OrderByDescending(File.GetLastWriteTimeUtc)
-                    .FirstOrDefault();
-                if (string.IsNullOrWhiteSpace(latest)) return "";
-                using JsonDocument doc = JsonDocument.Parse(File.ReadAllText(latest));
-                JsonElement root = doc.RootElement;
-                if (!root.TryGetProperty("results", out _) || !root.TryGetProperty("total", out _))
-                    return "";
-                bool terminal = root.TryGetProperty("terminal", out JsonElement terminalEl)
-                    && terminalEl.ValueKind == JsonValueKind.True;
-                if (!terminal && File.GetLastWriteTimeUtc(latest) < DateTime.UtcNow.AddMinutes(-10))
-                    return "";
-                return root.GetRawText();
-            }
-            catch
-            {
-                return "";
-            }
-        }
-
-        private async Task<string> RunBackendWithResultAsync(string taskName, List<string> args, int timeoutMs = 120000, CancellationToken ct = default)
-        {
-            string commandId = Guid.NewGuid().ToString("N");
-            logger?.Information("启动后端任务 task={TaskName} command_id={CommandId} args={Args}", taskName, commandId, FormatBackendArgsForDisplay(args));
-            Log(BackendLogPresenter.TaskStartLine(taskName));
-            var logFolder = new BackendLogFolder();
-            var progress = new Progress<BackendOutputLine>(line =>
-            {
-                if (BackendProgressEventParser.TryParse(line.Text, out BackendProgressEvent? progressEvent))
-                {
-                    string? stageLine = BackendLogPresenter.ProgressEventLine(progressEvent);
-                    if (stageLine != null)
-                        UiLog(stageLine);
-                    return;
-                }
-                foreach (string display in logFolder.Feed(line.Text))
-                    UiLog(display);
-            });
-            return await backendTasks.RunForResultAsync(
-                BackendCommand.Create(
-                    taskName,
-                    args,
-                    timeoutMs,
-                    new Dictionary<string, string>
-                    {
-                        ["SMSWORKBENCH_EVENTS"] = "1",
-                        ["SMS_TOOL_COMMAND_ID"] = commandId,
-                        ["SMS_TOOL_TASK_NAME"] = taskName,
-                        ["SMS_TOOL_EVENT_SOURCE"] = "wpf",
-                    }),
-                progress,
-                ct);
-        }
+        private Task<string> RunBackendWithResultAsync(string taskName, List<string> args, int timeoutMs = 120000, CancellationToken ct = default)
+            => backendBatch.RunForResultAsync(backendTasks, logger, Log, UiLog, taskName, args, timeoutMs, ct);
 
         private void LogBackendProgress(string taskName, BackendProgressEvent progressEvent)
         {
@@ -404,41 +232,17 @@ namespace SmsWorkbench
                 SensitiveDataSanitizer.Redact(progressEvent.Detail));
         }
 
-        private static string FormatBackendArgsForDisplay(List<string> args)
-        {
-            return SensitiveDataSanitizer.RedactArguments(args);
-        }
-
         private void RefreshPoolsAfterHotPersistence(string line)
         {
-            if (string.IsNullOrWhiteSpace(line)
-                || !line.Contains(BackendTextMarkers.SavedSession, StringComparison.OrdinalIgnoreCase))
+            if (!BackendBatchCoordinator.LineHasSavedSessionMarker(line))
                 return;
-
-            // Registration adds rows, so jumping to page one is the useful
-            // behaviour there. Mid-batch scan refreshes must not do that.
             RefreshPoolsThrottled(preserveView: false);
         }
 
-        /// <summary>
-        /// Rate-limited pool reload shared by both hot-refresh signals: the
-        /// "Saved session:" text marker (registration) and the terminal
-        /// per-account IPC event (scan / promotion). A backend can finish
-        /// several accounts inside 750ms; one reload per burst is enough.
-        /// <para>
-        /// A reload is not free: <c>read_accounts</c> took ~1.3s to build an
-        /// 862-row response when this was measured, so the window is only a
-        /// floor. <c>RefreshPoolsAsync</c> also drops a reload that arrives
-        /// while another is still in flight, which is what actually paces a
-        /// batch that completes accounts faster than the read can keep up.
-        /// </para>
-        /// </summary>
         private void RefreshPoolsThrottled(bool preserveView)
         {
-            DateTime now = DateTime.UtcNow;
-            if ((now - lastHotPersistenceRefreshUtc).TotalMilliseconds < 750)
+            if (!backendBatch.TryClaimHotRefreshSlot(DateTime.UtcNow))
                 return;
-            lastHotPersistenceRefreshUtc = now;
             if (preserveView)
                 RefreshPoolsPreservingView();
             else
@@ -457,8 +261,6 @@ namespace SmsWorkbench
             if (!await ShowDeleteConfirmDialog(selected.Count)) return;
             try
             {
-                // The invocation, the failure count and the temp-file cleanup live in
-                // AccountDeleteService; asking, reporting and refreshing stay here.
                 AccountDeleteResult result = await accountDelete
                     .DeleteAsync(selected.Select(row => NormalizeEmailKey(row.Identifier)).ToList(), ct)
                     .ConfigureAwait(true);
@@ -481,21 +283,14 @@ namespace SmsWorkbench
             }
         }
 
-        private async Task<bool> ShowDeleteConfirmDialog(int count)
-        {
-            return await DialogFactory.ShowConfirmAsync(
+        private Task<bool> ShowDeleteConfirmDialog(int count)
+            => DialogFactory.ShowConfirmAsync(
                 this,
                 Loc.F("删除选中的 {0} 条记录？", count),
                 Loc.T("将同步清理本地邮箱池、SQLite 索引和匹配的 session 文件。此操作不可撤销。"),
                 Loc.T("删除"),
                 isDanger: true);
-        }
 
-        /// <summary>
-        /// Delete one file, logging a sanitized failure. Shared by the batch delete,
-        /// the context menu, the inbox and the temp-file cleanup, which is why it did
-        /// not move into <see cref="AccountDeleteService"/>.
-        /// </summary>
         private bool TryDeleteFile(string path)
         {
             try

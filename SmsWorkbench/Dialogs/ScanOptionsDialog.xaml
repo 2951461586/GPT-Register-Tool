@@ -1,0 +1,70 @@
+<Window x:Class="SmsWorkbench.Dialogs.ScanOptionsDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:loc="clr-namespace:SmsWorkbench.Localization"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="{loc:Tr Key='账号测活设置'}"
+        Width="740"
+        MinWidth="740"
+        SizeToContent="Height"
+        ResizeMode="CanResize"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource AppBg}">
+  <Grid Margin="18">
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="150"/>
+      <ColumnDefinition Width="*"/>
+    </Grid.ColumnDefinitions>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+    </Grid.RowDefinitions>
+
+    <TextBlock x:Name="TitleTextBlock"
+               Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2"
+               FontSize="{StaticResource Type.Subtitle.Size}"
+               TextWrapping="Wrap"
+               Foreground="{DynamicResource TextSub}"
+               Margin="0,0,0,14"/>
+
+    <TextBlock Grid.Row="1" Grid.Column="0"
+               Text="{loc:Tr Key='并发数'}"
+               VerticalAlignment="Center"
+               Margin="0,0,10,10"
+               Foreground="{DynamicResource TextSub}"/>
+    <TextBox x:Name="WorkerBox"
+             Grid.Row="1" Grid.Column="1"
+             Margin="0,0,0,10"/>
+
+    <CheckBox x:Name="AutoReloginBox"
+              Grid.Row="2" Grid.Column="1"
+              Content="{loc:Tr Key='401 自动重登（RT / Cookie / 邮箱 OTP / OAuth）'}"
+              IsChecked="False"
+              Margin="0,0,0,10"
+              Foreground="{DynamicResource TextMain}"/>
+
+    <CheckBox x:Name="LightweightInspectBox"
+              Grid.Row="3" Grid.Column="1"
+              Content="{loc:Tr Key='轻量巡检（本地跳过未过期 AT，仅恢复过期/失效账号并复检优惠）'}"
+              IsChecked="False"
+              Margin="0,0,0,10"
+              Foreground="{DynamicResource TextMain}"/>
+
+    <StackPanel Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2"
+                Orientation="Horizontal"
+                HorizontalAlignment="Right"
+                Margin="0,8,0,0">
+      <Button Content="{loc:Tr Key='取消'}"
+              Width="82"
+              Margin="0,0,10,0"
+              Style="{StaticResource SecondaryButton}"
+              Click="Cancel_Click"/>
+      <Button Content="{loc:Tr Key='开始测活'}"
+              Width="96"
+              Style="{StaticResource PrimaryButton}"
+              Click="Ok_Click"/>
+    </StackPanel>
+  </Grid>
+</Window>

@@ -8,7 +8,7 @@ profile. The check now runs on the geo-bound result in ``next()``.
 
 import dataclasses
 
-from sms_tool.fingerprint_pool import FingerprintPool
+from sms_tool.transport.fingerprint_pool import FingerprintPool
 
 
 def _pool(**fp_cfg):
@@ -57,7 +57,7 @@ def test_without_allowed_countries_single_draw_unchanged(monkeypatch):
 
 
 def test_a_multi_timezone_market_is_seeded_by_the_device():
-    from sms_tool.auth_headers import set_fingerprint_device
+    from sms_tool.transport.auth_headers import set_fingerprint_device
     from sms_tool.geo.profiles import MARKET_PROFILES
 
     pool = FingerprintPool(mode="round_robin", verify_hint=False)

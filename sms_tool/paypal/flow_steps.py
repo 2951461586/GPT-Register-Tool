@@ -12,7 +12,7 @@ import time
 from typing import Any
 
 from ..session.refresh import _poll_auth_session, _session_token
-from ..sms_utils import (
+from ..phone.sms_utils import (
     NO_NUMBER_SOURCE,
     _number_source_or_none,
     _poll_sms_code,

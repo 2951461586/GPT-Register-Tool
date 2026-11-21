@@ -1,10 +1,7 @@
-// Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
-#nullable enable
-
+using CommunityToolkit.Mvvm.ComponentModel;
 using SmsWorkbench.Localization;
 
-namespace SmsWorkbench
+namespace SmsWorkbench.ViewModels
 {
     /// <summary>
     /// Which rows an export or import acts on, and the wording shown for each
@@ -12,7 +9,7 @@ namespace SmsWorkbench
     /// are xunit-testable (placement rule 8); dialogs, file writes and backend
     /// calls stay in MainWindow.Export.cs.
     /// </summary>
-    public sealed class ExportViewModel
+    public sealed class ExportViewModel : ObservableObject
     {
         private readonly PoolViewModel pool;
 

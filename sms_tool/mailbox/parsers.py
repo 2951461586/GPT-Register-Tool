@@ -3,7 +3,7 @@ import re
 from pathlib import Path
 
 from .types import MailboxAccount
-from ..operator_output import emit
+from ..observability.operator_output import emit
 from ..providers import mailbox_icloud_url
 
 

@@ -365,7 +365,7 @@ def _proxy_cache_key(proxy: str) -> str:
     fails and the fingerprint falls back to the default US locale, defeating
     the whole geo-alignment optimization.
     """
-    from ..phone_proxy import normalize_proxy_url
+    from ..phone.phone_proxy import normalize_proxy_url
 
     return normalize_proxy_url(proxy) or str(proxy or "")
 
@@ -570,7 +570,7 @@ def validate_browser_profile(profile: Any) -> list[str]:
     """Return internal contradictions of a browser fingerprint profile.
 
     An empty list means the profile is internally consistent.  Uses the same
-    contract as :meth:`sms_tool.fingerprint_pool.Fingerprint.validate` on the
+    contract as :meth:`sms_tool.transport.fingerprint_pool.Fingerprint.validate` on the
     protocol side, so both paths can be asserted identically in tests.
     """
     if not isinstance(profile, Mapping):

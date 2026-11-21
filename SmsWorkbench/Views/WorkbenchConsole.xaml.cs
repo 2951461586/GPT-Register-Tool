@@ -1,8 +1,4 @@
-// Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
-#nullable enable
-
-namespace SmsWorkbench
+namespace SmsWorkbench.Views
 {
     /// <summary>
     /// Task list + log console.
@@ -31,6 +27,9 @@ namespace SmsWorkbench
         // analyzers (and a fresh LSP) do not see WorkbenchConsole.g.cs.
         private readonly System.Windows.Controls.DataGrid taskGrid;
         private readonly System.Windows.Controls.TextBox logTextBox;
+        private readonly StringBuilder pendingLogChunk = new();
+        private readonly DispatcherTimer logFlushTimer;
+        private bool pendingFullSync;
         private LogViewModel? _attachedLogPanel;
 
         public WorkbenchConsole()
@@ -42,6 +41,13 @@ namespace SmsWorkbench
             logTextBox = (System.Windows.Controls.TextBox)(
                 FindName("LogTextBox")
                 ?? throw new InvalidOperationException("WorkbenchConsole.xaml is missing x:Name=\"LogTextBox\""));
+            logFlushTimer = new DispatcherTimer(
+                TimeSpan.FromMilliseconds(50),
+                DispatcherPriority.Background,
+                (_, _) => FlushPendingLogs(),
+                Dispatcher);
+            logFlushTimer.Stop();
+            Unloaded += (_, _) => logFlushTimer.Stop();
         }
 
         public TaskListViewModel? TaskList
@@ -57,7 +63,9 @@ namespace SmsWorkbench
         }
 
         /// <summary>
-        /// Appends an already-redacted line straight into the TextBox.
+        /// Appends an already-redacted line into the view model immediately and
+        /// batches the TextBox visual update on a short UI-frame timer so rapid
+        /// backend bursts do not trigger per-line layout passes.
         /// Returns false while the control is not loaded/realised, so the caller
         /// keeps the old "append to the view model only" fallback.
         /// </summary>
@@ -68,17 +76,53 @@ namespace SmsWorkbench
                 return false;
             }
 
-            // Append into the control directly: whole-string reassignment of
-            // LogText re-rendered the entire buffer on every line (O(n²)).
-            logTextBox.AppendText(line);
-            // Keep the bound property consistent without re-rendering;
-            // Append caps retained history (see LogViewModel).
+            // Update the view-model buffer immediately (O(1) amortized) so
+            // synchronous readers see every line right away, while coalescing
+            // TextBox writes into a 50ms UI batch.
             if (LogPanel?.Append(line) == true)
             {
-                logTextBox.Text = LogPanel.Text;
+                pendingFullSync = true;
+                pendingLogChunk.Clear();
+            }
+            else if (!pendingFullSync)
+            {
+                pendingLogChunk.Append(line);
+            }
+
+            if (!logFlushTimer.IsEnabled)
+            {
+                logFlushTimer.Start();
             }
 
             return true;
+        }
+
+        internal void FlushPendingLogs()
+        {
+            logFlushTimer.Stop();
+            if (logTextBox is not { IsLoaded: true })
+            {
+                pendingLogChunk.Clear();
+                pendingFullSync = false;
+                return;
+            }
+
+            if (pendingFullSync)
+            {
+                pendingFullSync = false;
+                pendingLogChunk.Clear();
+                logTextBox.Text = LogPanel?.Text ?? "";
+                return;
+            }
+
+            if (pendingLogChunk.Length == 0)
+            {
+                return;
+            }
+
+            string chunk = pendingLogChunk.ToString();
+            pendingLogChunk.Clear();
+            logTextBox.AppendText(chunk);
         }
 
         /// <summary>Selects and reveals the newest task row (posted to the UI queue).</summary>
@@ -121,6 +165,12 @@ namespace SmsWorkbench
             }
         }
 
-        private void OnLogCleared(object? sender, EventArgs e) => logTextBox?.Clear();
+        private void OnLogCleared(object? sender, EventArgs e)
+        {
+            logFlushTimer.Stop();
+            pendingLogChunk.Clear();
+            pendingFullSync = false;
+            logTextBox?.Clear();
+        }
     }
 }

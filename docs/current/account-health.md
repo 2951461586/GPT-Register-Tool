@@ -147,7 +147,7 @@ verdict.
 
 When the create is `checkout_risk_blocked` (or a retryable transport failure),
 `payment_method_capability_probe` can retry once through a pluggable
-`fallback_transport`. `sms_tool/capability_browser.py` implements a real-browser
+`fallback_transport`. `sms_tool/payment/capability_browser.py` implements a real-browser
 create — it performs the `payments/checkout` POST inside the page context so the
 request carries the browser's own TLS, cookies and Cloudflare clearance — and
 delegates Stripe init / custom-checkout read / elements back to the protocol
@@ -185,7 +185,7 @@ The 优惠状态 badge has three representations:
   Display copy only.
 - `promotion_state` — the machine state (`trial_eligible`, `subscribed`,
   `free`, `auth_invalid`, `probe_failed`, `unknown`), defined in
-  `sms_tool/promotion_states.py` and pinned cross-language by
+  `sms_tool/payment/promotion_states.py` and pinned cross-language by
   `tests/fixtures/promotion_status_cases.json`. Filtering, sorting and
   branching must key off the state, never the label.
 - `promotion_display` — the string the desktop renders. It is produced on the

@@ -170,7 +170,7 @@ def _curl_cffi_bounds() -> tuple[int, int]:
     after ``curl_cffi_capabilities`` widened, so a healthy 0.17 install was
     reported as failed.  A function-level import keeps ``doctor --help`` cheap.
     """
-    from .auth_headers import CURL_CFFI_MAX_MINOR, CURL_CFFI_MIN_MINOR
+    from .transport.auth_headers import CURL_CFFI_MAX_MINOR, CURL_CFFI_MIN_MINOR
 
     return CURL_CFFI_MIN_MINOR, CURL_CFFI_MAX_MINOR
 
@@ -187,7 +187,7 @@ def _curl_cffi_version_ok(version: str) -> bool:
 
 def _newest_chrome_profile() -> str:
     """The newest Chrome entry, for the failure hint only."""
-    from .auth_headers import AUTH_FINGERPRINT_PROFILES
+    from .transport.auth_headers import AUTH_FINGERPRINT_PROFILES
 
     newest, newest_major = "chrome", -1
     for name in AUTH_FINGERPRINT_PROFILES:

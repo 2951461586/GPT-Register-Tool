@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from ...http_client import is_transient_transport_error
+from ...transport.http_client import is_transient_transport_error
 
 
 def is_navigation_retryable(error: object) -> bool:

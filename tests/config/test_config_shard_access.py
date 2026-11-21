@@ -181,15 +181,14 @@ class CanonicalConfigPathIsReal(unittest.TestCase):
 
     def test_sibling_modules_share_the_same_root(self):
         """同层/上层的兄弟模块算出来的项目根必须一致。"""
-        from sms_tool import omakse_client, upi_link
+        from sms_tool import upi_link
         from sms_tool.paypal_link import gen_link
 
         roots = {
-            Path(omakse_client.DEFAULT_CONFIG_PATH).resolve().parent,
             Path(upi_link.DEFAULT_CONFIG_PATH).resolve().parent,
             Path(gen_link.DEFAULT_CONFIG_PATH).resolve().parent,
         }
-        self.assertEqual(1, len(roots), f"三个模块算出的项目根不一致: {roots}")
+        self.assertEqual(1, len(roots), f"两个模块算出的项目根不一致: {roots}")
 
 
 class DeadConfigConstantsStayDead(unittest.TestCase):
@@ -219,7 +218,7 @@ class ShardLoaderIsWired(unittest.TestCase):
         self.assertEqual({"merged": True}, out)
 
     def test_every_module_with_a_canonical_path_routes_it_through_the_shards(self):
-        """三个 ``DEFAULT_CONFIG_PATH`` 模块都得保留哨兵分支。
+        """两个 ``DEFAULT_CONFIG_PATH`` 模块都得保留哨兵分支。
 
         根 ``config.json`` 已于 2026-09-23 归档，所以这个分支不再是「省一次
         json.load」的优化，而是**唯一**让 ``_load_json(DEFAULT_CONFIG_PATH)``
@@ -228,10 +227,10 @@ class ShardLoaderIsWired(unittest.TestCase):
         """
         from unittest.mock import patch
 
-        from sms_tool import omakse_client, upi_link
+        from sms_tool import upi_link
         from sms_tool.paypal_link import gen_link
 
-        for module in (gen_link, omakse_client, upi_link):
+        for module in (gen_link, upi_link):
             with self.subTest(module=module.__name__):
                 with patch("sms_tool.config.load_merged_config", return_value={"merged": True}) as loader:
                     out = module._load_json(module.DEFAULT_CONFIG_PATH)

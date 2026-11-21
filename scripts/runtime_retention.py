@@ -241,7 +241,7 @@ RULES: tuple[Rule, ...] = (
         note=(
             "logs/processes/<pid>/ -- one directory per backend process "
             "(sms_tool.log / sms_tool.jsonl / backend_stdout.jsonl, written by "
-            "sms_tool/logging_setup.py and stdout_mirror.py), never pruned by "
+            "sms_tool/observability/logging_setup.py and observability/stdout_mirror.py), never pruned by "
             "anything else: 501 dirs / 117 MiB on 2026-10-17, oldest from "
             "2026-09-15. A running process's log mtime is fresh, so the age "
             "floor naturally spares it. The pattern is anchored on the full "

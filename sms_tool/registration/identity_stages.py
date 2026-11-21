@@ -19,10 +19,10 @@ import time
 import uuid
 from typing import TYPE_CHECKING, Any, Mapping
 
-from .. import fingerprint_pool as _fingerprint_pool
-from ..tls_fingerprint import apply_to_session as _apply_tls_fingerprint
-from ..auth_headers import sentinel_fingerprint, set_auth_fingerprint, validate_protocol_fingerprint
-from ..operator_output import emit as _emit
+from ..transport import fingerprint_pool as _fingerprint_pool
+from ..transport.tls_fingerprint import apply_to_session as _apply_tls_fingerprint
+from ..transport.auth_headers import sentinel_fingerprint, set_auth_fingerprint, validate_protocol_fingerprint
+from ..observability.operator_output import emit as _emit
 from ..proxy import entry as _proxy_entry
 from .flags import registration_flag
 from .protocol_helpers import _new_registration_session, _safe_int
@@ -104,7 +104,7 @@ def _report_fingerprint_consistency() -> None:
     """Log any cross-layer contradiction in the account's protocol fingerprint.
 
     Diagnostic only, never fatal: a cosmetic mismatch must not cost a mailbox.
-    The checks live in :func:`sms_tool.auth_headers.validate_protocol_fingerprint`
+    The checks live in :func:`sms_tool.transport.auth_headers.validate_protocol_fingerprint`
     so the browser lane and the tests assert the same contract.
     """
     try:

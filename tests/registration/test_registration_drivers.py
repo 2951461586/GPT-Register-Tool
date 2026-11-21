@@ -10,7 +10,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlsplit
 
-from sms_tool.batch_runner import run_batch_impl
+from sms_tool.registration.batch_runner import run_batch_impl
 from sms_tool.config import ConfigError, validate_registration_driver_config
 from sms_tool.registration_drivers.base import normalize_registration_driver
 from sms_tool.registration_drivers.browser_session import _playwright_proxy
@@ -297,7 +297,7 @@ class RegistrationDriverTests(unittest.TestCase):
             return {"success": True, "email": kwargs["mailbox"].email}
 
         with patch(
-            "sms_tool.batch_runner.CFG",
+            "sms_tool.registration.batch_runner.CFG",
             {
                 "registration": {"driver": "roxy"},
                 "email_registration": {},
@@ -314,9 +314,11 @@ class RegistrationDriverTests(unittest.TestCase):
         self.assertTrue(result[0]["success"])
         self.assertEqual(calls[0]["registration_driver"], "protocol")
 
-    @patch("sms_tool.batch_runner.infer_proxy_country", side_effect=["US", "DE"])
-    @patch("sms_tool.batch_runner.refresh_proxy_sid", side_effect=lambda value: value + "-sid")
-    @patch("sms_tool.batch_runner.select_registration_proxy_pool", side_effect=lambda pool, _fallback: pool)
+    @patch("sms_tool.registration.batch_runner.infer_proxy_country", side_effect=["US", "DE"])
+    @patch("sms_tool.registration.batch_runner.refresh_proxy_sid", side_effect=lambda value: value + "-sid")
+    @patch(
+        "sms_tool.registration.batch_runner.select_registration_proxy_pool", side_effect=lambda pool, _fallback: pool
+    )
     def test_roxy_country_mismatch_keeps_pinned_proxy_on_retry(
         self,
         _select_pool,
@@ -414,7 +416,7 @@ class BrowserWorkerLimitTests(unittest.TestCase):
         mailboxes = [SimpleNamespace(email=f"user{i}@example.com") for i in range(count)]
         stdout = io.StringIO()
         with patch(
-            "sms_tool.batch_runner.CFG",
+            "sms_tool.registration.batch_runner.CFG",
             {
                 "registration": registration_cfg,
                 "email_registration": {},

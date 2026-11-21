@@ -2,7 +2,7 @@
 
 Why this exists
 ---------------
-``FingerprintPool.from_config`` (``sms_tool/fingerprint_pool.py``) has always
+``FingerprintPool.from_config`` (``sms_tool/transport/fingerprint_pool.py``) has always
 read ``registration.fingerprint_pool`` (``mode`` / ``verify_hint`` /
 ``allowed_countries``), but the key appeared in **neither** ``config.example.json``
 nor ``validate_config`` nor ``config_key_baseline.json``. An operator could not
@@ -23,7 +23,7 @@ from pathlib import Path
 import pytest
 
 from sms_tool.config import ConfigError, validate_config
-from sms_tool.fingerprint_pool import FingerprintPool
+from sms_tool.transport.fingerprint_pool import FingerprintPool
 
 ROOT = Path(__file__).resolve().parents[2]
 

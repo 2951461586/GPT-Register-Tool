@@ -1,6 +1,6 @@
 """Guards for the rotating file logger (round 6).
 
-``sms_tool/logging_setup.py`` spent its whole life with **zero callers**, and two
+``sms_tool/observability/logging_setup.py`` spent its whole life with **zero callers**, and two
 bugs hid inside it as a result:
 
 1. ``configure_logging`` was never wired into any entry point, so every
@@ -24,7 +24,8 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from unittest.mock import Mock
 
-from sms_tool import cli, logging_setup
+from sms_tool import cli
+from sms_tool.observability import logging_setup
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 

@@ -1,8 +1,4 @@
-// Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
-#nullable enable
-
-namespace SmsWorkbench
+namespace SmsWorkbench.Services
 {
     /// <summary>One export pass: the accepted items and how many rows were skipped.</summary>
     public sealed record CollectedAccountExport(IReadOnlyList<Dictionary<string, object>> Items, int Skipped);

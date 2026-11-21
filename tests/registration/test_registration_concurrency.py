@@ -4,10 +4,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from sms_tool import auth_flow, batch_runner, otp_strategy
+from sms_tool import auth_flow
+from sms_tool.registration import batch_runner
+from sms_tool.registration import otp_strategy
 from sms_tool.registration import orchestrator as registration
 
-from sms_tool import account_creation
+from sms_tool.registration import account_creation
 from sms_tool.auth_flow import _ensure_authorize_context
 from sms_tool.auth_flow import _protocol_diagnostic
 from sms_tool.mailbox.router import _parse_chatai_mailbox_file
@@ -453,8 +455,11 @@ class RegistrationConcurrencyTests(unittest.TestCase):
             return resend if url.endswith("/resend") else send
 
         with (
-            patch("sms_tool.otp_strategy.CFG", {"email_registration": {"otp_fallback_send_on_resend_failure": True}}),
-            patch("sms_tool.otp_strategy.request_with_retry", side_effect=fake_request),
+            patch(
+                "sms_tool.registration.otp_strategy.CFG",
+                {"email_registration": {"otp_fallback_send_on_resend_failure": True}},
+            ),
+            patch("sms_tool.registration.otp_strategy.request_with_retry", side_effect=fake_request),
         ):
             result = _send_registration_email_otp(
                 Mock(),
@@ -477,7 +482,7 @@ class RegistrationConcurrencyTests(unittest.TestCase):
             seen.update(kwargs)
             return response
 
-        with patch("sms_tool.otp_strategy.request_with_retry", side_effect=fake_request):
+        with patch("sms_tool.registration.otp_strategy.request_with_retry", side_effect=fake_request):
             result = _send_registration_email_otp(
                 Mock(),
                 "https://auth.openai.com",
@@ -499,7 +504,7 @@ class RegistrationConcurrencyTests(unittest.TestCase):
             seen.update(kwargs)
             return response
 
-        with patch("sms_tool.account_creation.request_with_retry", side_effect=fake_request):
+        with patch("sms_tool.registration.account_creation.request_with_retry", side_effect=fake_request):
             ok, _ = _validate_email_otp(
                 Mock(),
                 "https://auth.openai.com",
@@ -518,7 +523,7 @@ class RegistrationConcurrencyTests(unittest.TestCase):
         resend_response = Mock(status_code=200)
         with (
             patch.object(registration, "CFG", {"email_registration": {}}),
-            patch("sms_tool.otp_strategy.poll_email_otp", side_effect=[None, "654321"]) as poll,
+            patch("sms_tool.registration.otp_strategy.poll_email_otp", side_effect=[None, "654321"]) as poll,
         ):
             code = _poll_registration_email_otp(
                 mailbox,
@@ -653,7 +658,7 @@ class RegistrationConcurrencyTests(unittest.TestCase):
 
             with (
                 patch("sms_tool.registration.orchestrator.run_email", side_effect=fake_run_email),
-                patch("sms_tool.batch_runner.CFG", {"email_registration": {}}),
+                patch("sms_tool.registration.batch_runner.CFG", {"email_registration": {}}),
             ):
                 results = run_batch(count=3, proxy="socks5h://127.0.0.1:7897", mailboxes=mailboxes, workers=2)
 
@@ -691,7 +696,7 @@ class RegistrationConcurrencyTests(unittest.TestCase):
                     }
                 },
             ),
-            patch("sms_tool.sentinel_tokens._extract_sentinel", side_effect=extract),
+            patch("sms_tool.registration.sentinel_tokens._extract_sentinel", side_effect=extract),
         ):
             results = batch_runner.run_batch_impl(
                 count=3,

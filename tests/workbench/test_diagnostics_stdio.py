@@ -11,7 +11,7 @@ import io
 import re
 import threading
 
-from sms_tool.diagnostics import SanitizingTextIO
+from sms_tool.observability.diagnostics import SanitizingTextIO
 
 
 def _concurrent_lines(threads: int, per_thread: int, payload_len: int) -> list[str]:

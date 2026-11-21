@@ -7,7 +7,7 @@ Extracted from ``sms_tool.paypal.auto``. Owns every helper that *chooses* or
 (``paypal_auto.phone_numbers`` / ``phone_number`` + ``sms_api_url``). It was
 removed on 2026-09-22 with the rest of that mode: the numbers it handed out
 pointed at activations this codebase never created, so nothing completed or
-cancelled them. See :data:`sms_tool.sms_utils.NO_NUMBER_SOURCE_MESSAGE`.
+cancelled them. See :data:`sms_tool.phone.sms_utils.NO_NUMBER_SOURCE_MESSAGE`.
 """
 
 from __future__ import annotations

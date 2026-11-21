@@ -324,8 +324,8 @@ def load_targets(scope: str, *, retry_terminal: bool = False) -> list[dict]:
 def _prime(session, chat_base: str, base_headers: dict) -> str:
     """GET / then /api/auth/csrf -- the same warm-up the recovery lane uses."""
     from sms_tool.auth_flow import _json_or_raw
-    from sms_tool.auth_headers import auth_impersonate
-    from sms_tool.http_client import request_with_retry
+    from sms_tool.transport.auth_headers import auth_impersonate
+    from sms_tool.transport.http_client import request_with_retry
 
     request_with_retry(
         session,
@@ -406,13 +406,13 @@ def run_one(
     from curl_cffi import requests as curl_requests
 
     from sms_tool.accounts.account_2fa import _needs_reauth
-    from sms_tool.account_creation import (
+    from sms_tool.registration.account_creation import (
         _auth_session_access_token,
         _fetch_auth_session,
     )
     from sms_tool.accounts.account_recovery import _stored_registration_password
     from sms_tool.auth_flow import _login_existing_account_with_email_otp
-    from sms_tool.auth_headers import (
+    from sms_tool.transport.auth_headers import (
         auth_impersonate,
         openai_auth_headers,
         select_auth_fingerprint,
@@ -421,7 +421,7 @@ def run_one(
     from sms_tool.config import CFG
     from sms_tool.proxy.routing import operation_proxy_candidates
     from sms_tool.session.refresh import _auth_session_email
-    from sms_tool.sentinel_tokens import _set_oai_did_cookie
+    from sms_tool.registration.sentinel_tokens import _set_oai_did_cookie
 
     email = str(account.get("email") or "").strip().lower()
     device_id = str(account.get("device_id") or "").strip() or str(uuid.uuid4())

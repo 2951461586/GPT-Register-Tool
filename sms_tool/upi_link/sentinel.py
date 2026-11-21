@@ -1,7 +1,7 @@
 from __future__ import annotations
-from .. import endpoints
+from ..transport import endpoints
 
-from ..pp_link_helpers import CHATGPT_TIMEOUT, DEFAULT_TIMEOUT
+from ..payment.pp_link_helpers import CHATGPT_TIMEOUT, DEFAULT_TIMEOUT
 import contextlib
 from typing import Any
 from collections.abc import Mapping

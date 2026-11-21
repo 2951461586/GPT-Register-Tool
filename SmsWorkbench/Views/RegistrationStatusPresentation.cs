@@ -1,8 +1,6 @@
-#nullable enable
-
 using SmsWorkbench.Localization;
 
-namespace SmsWorkbench;
+namespace SmsWorkbench.Views;
 
 public static class RegistrationStatusPresentation
 {

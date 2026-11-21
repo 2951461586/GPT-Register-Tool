@@ -32,7 +32,7 @@
       "reason": "deferred",
       "why": "支付资格 (2026-10-26): the single-account probe is a leaf reached only by the qualification batch, the CLI command and the desktop task. Deferring its config/proxy/payment imports keeps the frozen accounts -> root and accounts -> proxy module-level counts untouched, and keeps `import sms_tool.accounts.payment_qualification` free of the payment stack."
     },
-    "sms_tool/accounts/payment_qualification.py -> sms_tool.phone_proxy": {
+    "sms_tool/accounts/payment_qualification.py -> sms_tool.phone.phone_proxy": {
       "reason": "deferred",
       "why": "支付资格 (2026-10-26): the single-account probe is a leaf reached only by the qualification batch, the CLI command and the desktop task. Deferring its config/proxy/payment imports keeps the frozen accounts -> root and accounts -> proxy module-level counts untouched, and keeps `import sms_tool.accounts.payment_qualification` free of the payment stack. phone_proxy is used for URL normalization/redaction only."
     },
@@ -60,15 +60,11 @@
       "reason": "deferred",
       "why": "支付资格 batch (2026-10-26): the persistence marker is imported at the write point rather than through the `storage` star facade, which also keeps the write path explicit."
     },
-    "sms_tool/auth_headers.py -> sms_tool.http_backend": {
-      "reason": "deferred",
-      "why": "Protocol transport seam (2026-11-19): the profile table must filter on whichever transport is active, and http_backend imports auth_headers back for the profile names. A module-level import either way closes the cycle; auth_headers is on the CLI help path and must stay transport-agnostic."
-    },
-    "sms_tool/batch_runner.py -> sms_tool.proxy.asn_registry": {
+    "sms_tool/registration/batch_runner.py -> sms_tool.proxy.asn_registry": {
       "reason": "deferred",
       "why": "P1 (2026-10-26): the batch attempt path records the ASN outcome and the pool selector applies the opt-in ASN rotation. Imported at the two call sites because scripts/import_layer_ratchet.py freezes the root -> proxy count and batch_runner already carries the health tracker's edge."
     },
-    "sms_tool/batch_runner.py -> sms_tool.proxy.dynamic": {
+    "sms_tool/registration/batch_runner.py -> sms_tool.proxy.dynamic": {
       "reason": "deferred",
       "why": "dynamic generation is opt-in and only imported after the static pool is resolved; a module-level edge would put the screening/geo stack on every batch start"
     },
@@ -88,21 +84,9 @@
       "reason": "deferred",
       "why": "Proxy-pool admin (2026-10-26): `--desktop-read proxy-pool` calls proxy.admin.list_pool. The account read path is the desktop's hot start path, so the proxy admin stack (registry/health/screening) is imported inside read_proxy_pool instead of at module scope."
     },
-    "sms_tool/doctor.py -> sms_tool.auth_headers": {
+    "sms_tool/doctor.py -> sms_tool.transport.auth_headers": {
       "reason": "deferred",
       "why": "curl_cffi capability probe (2026-11-19): the accepted version bracket now lives in auth_headers (CURL_CFFI_MIN/MINOR), so doctor reads it instead of repeating the literals that drifted. Deferred because doctor's own import surface is deliberately light."
-    },
-    "sms_tool/http_backend.py -> sms_tool.auth_headers": {
-      "reason": "deferred",
-      "why": "Protocol transport seam (2026-11-19): the backend needs the profile table and the current impersonation, and auth_headers needs this module to answer 'which profiles can the ACTIVE backend run'. Importing at module scope would close that cycle: auth_headers is imported everywhere (including the CLI's help path) and must not pull the transport selector with it."
-    },
-    "sms_tool/http_backend.py -> sms_tool.config": {
-      "reason": "deferred",
-      "why": "Protocol transport seam (2026-11-19): the selected backend is read from email_registration.protocol_http_backend at call time, so a hot-reloaded shard changes the next session instead of requiring a restart. Deferred to keep the module importable by tests and by doctor before any config exists."
-    },
-    "sms_tool/http_backend.py -> wreq": {
-      "reason": "deferred",
-      "why": "Protocol transport seam (2026-11-19): wreq is the OPTIONAL backend. It must be importable only when the operator selects it -- a module-level import would make the whole package depend on a Rust wheel for the default curl_cffi path."
     },
     "sms_tool/mailbox/reclaim.py -> sms_tool.cross_process_gate": {
       "reason": "deferred",
@@ -120,9 +104,13 @@
       "reason": "deferred",
       "why": "P2-4: the tolerant boolean parser has one owner (payment.contracts.as_bool). pay_link -> payment is already a frozen facade edge, so importing one more payment module at module scope would grow the layer ratchet for a one-line delegation; the import runs inside _as_bool instead."
     },
-    "sms_tool/pay_link/core.py -> sms_tool.capability_browser": {
+    "sms_tool/pay_link/core.py -> sms_tool.payment.capability_browser": {
       "reason": "deferred",
       "why": "Capability browser fallback (2026-11-20): the seam existed since 2026-10-21 with zero production readers. It is wired here behind PP_CAPABILITY_BROWSER_FALLBACK and imported inside the branch so a default probe neither pays for playwright nor pulls the browser driver stack into every `import sms_tool.pay_link.core`."
+    },
+    "sms_tool/pay_link/registry.py -> sms_tool.paypal_link.gen_link": {
+      "reason": "deferred",
+      "why": "Tier 2 shim retirement (2026-11-21): replaces the retired sms_tool.gen_pp_link deferred edge with the direct paypal_link.gen_link target inside paypal_runner so registry construction stays lazy and avoids pulling the PayPal link stack at import time."
     },
     "sms_tool/payment/batch.py -> sms_tool.kernel.error_classification": {
       "reason": "deferred",
@@ -136,7 +124,7 @@
       "reason": "deferred",
       "why": "P1-4: the exit lease is released inside _run_one_row's finally-equivalent point. A module-level edge would put upi_link on the payment import path, so the import runs in _release_leases for the one call that needs it."
     },
-    "sms_tool/payment/qualification.py -> sms_tool.checkout_contract": {
+    "sms_tool/payment/qualification.py -> sms_tool.payment.checkout_contract": {
       "reason": "deferred",
       "why": "支付资格 country-aware probe (2026-10-26): the probe resolves the effective country from the measured exit and builds the checkout contract from the canonical catalogues. Both lookups run inside the probe so a payment-module import does not pull the geo/proxy/contract stack in, and the frozen payment -> sms_tool and payment -> proxy pairs stay flat."
     },
@@ -152,7 +140,7 @@
       "reason": "deferred",
       "why": "the country -> currency map is imported inside _probe_kwargs; qualification already defers its payment imports so it stays a leaf for the CLI/desktop"
     },
-    "sms_tool/payment/qualification.py -> sms_tool.phone_proxy": {
+    "sms_tool/payment/qualification.py -> sms_tool.phone.phone_proxy": {
       "reason": "deferred",
       "why": "支付资格 (2026-10-26, payment lane): the qualification probe is reached only by the batch/CLI. Its config/phone_proxy/proxy.routing imports are function-local so a payment-module import does not pull the proxy transport stack in, and so the frozen import-layer pairs stay flat. phone_proxy is used for URL normalization/redaction only."
     },
@@ -176,10 +164,6 @@
       "reason": "deferred",
       "why": "支付资格 batch (2026-10-26, payment lane): mirrors promotion_batch's deferred imports (account store, persistence marker, progress sink, egress routing). Deferring them keeps a desktop read-only start from loading the account store through this module. Progress events are the only IPC use and emit_event is already env-gated."
     },
-    "sms_tool/payment/qualification_batch.py -> sms_tool.endpoints": {
-      "reason": "deferred",
-      "why": "the Stripe preflight root is resolved through endpoints.STRIPE_API_BASE at call time: the host literal is forbidden by endpoints_literal_ratchet and a module-level import would grow the frozen payment->root edge count"
-    },
     "sms_tool/payment/qualification_batch.py -> sms_tool.proxy.edge_probe": {
       "reason": "deferred",
       "why": "支付资格 batch (2026-10-26, payment lane): mirrors promotion_batch's deferred imports (account store, persistence marker, progress sink, egress routing). Deferring them keeps a desktop read-only start from loading the account store through this module. The one-shot egress preflight is the only edge-probe use."
@@ -195,6 +179,14 @@
     "sms_tool/payment/qualification_batch.py -> sms_tool.store.markers": {
       "reason": "deferred",
       "why": "支付资格 batch (2026-10-26, payment lane): mirrors promotion_batch's deferred imports (account store, persistence marker, progress sink, egress routing). Deferring them keeps a desktop read-only start from loading the account store through this module. The marker is imported at the write point rather than through the storage star facade."
+    },
+    "sms_tool/payment/qualification_batch.py -> sms_tool.transport": {
+      "reason": "deferred",
+      "why": "the Stripe preflight root is resolved through endpoints.STRIPE_API_BASE at call time: the host literal is forbidden by endpoints_literal_ratchet and a module-level import would grow the frozen payment->root edge count"
+    },
+    "sms_tool/payment/qualification_batch.py -> sms_tool.transport.endpoints": {
+      "reason": "deferred",
+      "why": "the Stripe preflight root is resolved through endpoints.STRIPE_API_BASE at call time: the host literal is forbidden by endpoints_literal_ratchet and a module-level import would grow the frozen payment->root edge count"
     },
     "sms_tool/payment/qualification_batch.py -> urllib.parse": {
       "reason": "deferred",
@@ -240,13 +232,13 @@
       "reason": "deferred",
       "why": "provider port wires lazily so provider adapters never import the IPC channel at module scope (Rule 3)"
     },
-    "sms_tool/providers/ports.py -> sms_tool.http_client": {
-      "reason": "deferred",
-      "why": "the vendor adapter receives the shared retry transport through the port so providers never import http_client at module scope; same seam as the desktop_ipc and mailbox_pool_writer entries above (Rule 3)"
-    },
     "sms_tool/providers/ports.py -> sms_tool.mailbox.pool_writer": {
       "reason": "deferred",
       "why": "provider port wires lazily so provider adapters never import pool persistence at module scope (Rule 3)"
+    },
+    "sms_tool/providers/ports.py -> sms_tool.transport.http_client": {
+      "reason": "deferred",
+      "why": "the vendor adapter receives the shared retry transport through the port so providers never import http_client at module scope; same seam as the desktop_ipc and mailbox_pool_writer entries above (Rule 3)"
     },
     "sms_tool/proxy/admin.py -> sms_tool.geo": {
       "reason": "deferred",
@@ -276,11 +268,19 @@
       "reason": "deferred",
       "why": "P0 proxy screening (2026-10-26): the dual-pass intel probe needs geo.resolver on every call, but scripts/import_layer_ratchet.py has no proxy -> geo module-level edge and the transport layer must not pull the geo probe stack in at import time. The import runs inside probe_once()/secondary_endpoints(), so only the screen command and the batch runner pay for it."
     },
-    "sms_tool/registration/preflight.py -> sms_tool.http_backend": {
+    "sms_tool/registration/preflight.py -> sms_tool.transport": {
       "reason": "deferred",
       "why": "Protocol transport seam (2026-11-19): function-local so the frozen module-level `registration -> sms_tool` pair count (import_layer_ratchet) does not grow for a selector that is consulted once per session. The preflight must probe with the SAME transport the run will use, otherwise a pass here says nothing about the account's own ClientHello."
     },
-    "sms_tool/registration/protocol_helpers.py -> sms_tool.http_backend": {
+    "sms_tool/registration/preflight.py -> sms_tool.transport.http_backend": {
+      "reason": "deferred",
+      "why": "Protocol transport seam (2026-11-19): function-local so the frozen module-level `registration -> sms_tool` pair count (import_layer_ratchet) does not grow for a selector that is consulted once per session. The preflight must probe with the SAME transport the run will use, otherwise a pass here says nothing about the account's own ClientHello."
+    },
+    "sms_tool/registration/protocol_helpers.py -> sms_tool.transport": {
+      "reason": "deferred",
+      "why": "Protocol transport seam (2026-11-19): function-local so the frozen module-level `registration -> sms_tool` pair count (import_layer_ratchet) does not grow for a selector that is consulted once per session. The preflight must probe with the SAME transport the run will use, otherwise a pass here says nothing about the account's own ClientHello."
+    },
+    "sms_tool/registration/protocol_helpers.py -> sms_tool.transport.http_backend": {
       "reason": "deferred",
       "why": "Protocol transport seam (2026-11-19): function-local so the frozen module-level `registration -> sms_tool` pair count (import_layer_ratchet) does not grow for a selector that is consulted once per session. The preflight must probe with the SAME transport the run will use, otherwise a pass here says nothing about the account's own ClientHello."
     },
@@ -292,17 +292,21 @@
       "reason": "deferred",
       "why": "Browser process-pool adapter (2026-11-20): the managed external-session driver imports BrowserProcessPool only when the configured browser pool is requested. Keeping it local prevents an ordinary external-session import from pulling the browser process/driver stack; the package move changes only the owning path."
     },
-    "sms_tool/sentinel/bundle.py -> sms_tool.auth_headers": {
-      "reason": "deferred",
-      "why": "Sentinel SDK 在线刷新 (2026-11-19): the refresh downloads sdk.js under the registration profile's own TLS identity, which lives in auth_headers. Importing it at module scope would give the hash-pinned bundle an edge into the fingerprint stack for every caller that only wants sentinel_version(), and auth_headers imports geo.profiles -- a root-module weight the sentinel package should not carry at import time."
-    },
-    "sms_tool/sentinel/bundle.py -> sms_tool.endpoints": {
-      "reason": "deferred",
-      "why": "SDK refresh headers (2026-11-19): the Referer host is owned by endpoints.py, and the endpoints-literal ratchet counts an inline auth.openai.com literal as a defeat. Deferred because only the refresh path builds that header and the pinned-bundle guard must stay importable without the endpoint table."
-    },
     "sms_tool/sentinel/bundle.py -> sms_tool.kernel.paths": {
       "reason": "deferred",
       "why": "Sentinel SDK 在线刷新 (2026-11-19): the download cache lives under the configured runtime directory, which only the refresh path needs. Deferring keeps `import sms_tool.sentinel.bundle` free of the config/kernel stack so the offline selfcheck and the pinned-hash guard stay cheap."
+    },
+    "sms_tool/sentinel/bundle.py -> sms_tool.transport": {
+      "reason": "deferred",
+      "why": "Sentinel SDK 在线刷新 (2026-11-19): the refresh downloads sdk.js under the registration profile's own TLS identity, which lives in auth_headers. Importing it at module scope would give the hash-pinned bundle an edge into the fingerprint stack for every caller that only wants sentinel_version(), and auth_headers imports geo.profiles -- a root-module weight the sentinel package should not carry at import time."
+    },
+    "sms_tool/sentinel/bundle.py -> sms_tool.transport.auth_headers": {
+      "reason": "deferred",
+      "why": "Sentinel SDK 在线刷新 (2026-11-19): the refresh downloads sdk.js under the registration profile's own TLS identity, which lives in auth_headers. Importing it at module scope would give the hash-pinned bundle an edge into the fingerprint stack for every caller that only wants sentinel_version(), and auth_headers imports geo.profiles -- a root-module weight the sentinel package should not carry at import time."
+    },
+    "sms_tool/sentinel/bundle.py -> sms_tool.transport.endpoints": {
+      "reason": "deferred",
+      "why": "SDK refresh headers (2026-11-19): the Referer host is owned by transport/endpoints.py, and the endpoints-literal ratchet counts an inline auth.openai.com literal as a defeat. Deferred because only the refresh path builds that header and the pinned-bundle guard must stay importable without the endpoint table."
     },
     "sms_tool/session/refresh.py -> base64": {
       "reason": "deferred",
@@ -316,13 +320,29 @@
       "reason": "deferred",
       "why": "the refresh/decode helpers import the stdlib helper where the token body is parsed, so account-health callers that only probe a token never pay for the decode path"
     },
-    "sms_tool/tls_fingerprint.py -> curl_cffi.const": {
+    "sms_tool/transport/auth_headers.py -> sms_tool.transport.http_backend": {
+      "reason": "deferred",
+      "why": "Protocol transport seam (2026-11-19): the profile table must filter on whichever transport is active, and http_backend imports auth_headers back for the profile names. A module-level import either way closes the cycle; auth_headers is on the CLI help path and must stay transport-agnostic."
+    },
+    "sms_tool/transport/http_backend.py -> sms_tool.config": {
+      "reason": "deferred",
+      "why": "Protocol transport seam (2026-11-19): the selected backend is read from email_registration.protocol_http_backend at call time, so a hot-reloaded shard changes the next session instead of requiring a restart. Deferred to keep the module importable by tests and by doctor before any config exists."
+    },
+    "sms_tool/transport/http_backend.py -> sms_tool.transport.auth_headers": {
+      "reason": "deferred",
+      "why": "Protocol transport seam (2026-11-19): the backend needs the profile table and the current impersonation, and auth_headers needs this module to answer 'which profiles can the ACTIVE backend run'. Importing at module scope would close that cycle: auth_headers is imported everywhere (including the CLI's help path) and must not pull the transport selector with it."
+    },
+    "sms_tool/transport/http_backend.py -> wreq": {
+      "reason": "deferred",
+      "why": "Protocol transport seam (2026-11-19): wreq is the OPTIONAL backend. It must be importable only when the operator selects it -- a module-level import would make the whole package depend on a Rust wheel for the default curl_cffi path."
+    },
+    "sms_tool/transport/tls_fingerprint.py -> curl_cffi.const": {
       "reason": "startup",
       "why": "only ``apply_to_session`` needs ``CurlOpt``; keeping it function-local lets the module be imported (and unit-tested) where the curl_cffi wheel is absent or still loading"
     },
-    "sms_tool/tls_fingerprint.py -> sms_tool.config": {
+    "sms_tool/transport/tls_fingerprint.py -> sms_tool.config": {
       "reason": "deferred",
-      "why": "``_section`` falls back to the live ``CFG`` only when a caller passes no config; importing ``sms_tool.config`` at module scope would resolve the config shards while ``sms_tool.tls_fingerprint`` is imported by the registration package itself"
+      "why": "``_section`` falls back to the live ``CFG`` only when a caller passes no config; importing ``sms_tool.config`` at module scope would resolve the config shards while ``sms_tool.transport.tls_fingerprint`` is imported by the registration package itself"
     },
     "sms_tool/upi_link/exit_lease.py -> sms_tool.kernel.paths": {
       "reason": "deferred",
@@ -335,6 +355,14 @@
     "sms_tool/upi_link/identity_store.py -> sms_tool.kernel.paths": {
       "reason": "deferred",
       "why": "the ledger path comes from kernel.paths.runtime_file; imported inside _runtime_file for the same reason as the cross_process_gate edge."
+    },
+    "sms_tool/wallet/gcash_transport.py -> sms_tool.payment": {
+      "reason": "deferred",
+      "why": "Tier 2 shim retirement (2026-11-21): replaces the retired sms_tool.gen_pp_link deferred edge with sms_tool.payment.wire directly inside _post so importing gcash_transport does not pull requests/curl_cffi or grow the frozen wallet -> payment module-level edge count."
+    },
+    "sms_tool/wallet/transport.py -> sms_tool.payment": {
+      "reason": "deferred",
+      "why": "Tier 2 shim retirement (2026-11-21): replaces the retired sms_tool.gen_pp_link deferred edge with sms_tool.payment.wire directly inside checkout/session methods so importing wallet.transport does not pull requests/curl_cffi or grow the frozen wallet -> payment module-level edge count."
     }
   }
 }

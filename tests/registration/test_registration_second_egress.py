@@ -22,7 +22,7 @@ from urllib.parse import unquote, urlsplit
 
 import pytest
 
-from sms_tool.auth_headers import _AUTH_FINGERPRINT_LOCAL, _GEO_PROFILES, set_fingerprint_geo
+from sms_tool.transport.auth_headers import _AUTH_FINGERPRINT_LOCAL, _GEO_PROFILES, set_fingerprint_geo
 from sms_tool.browser.fingerprint_pool import (
     BROWSER_LOCALE_PROFILES,
     COUNTRY_LOCALE_PROFILE_MAP,
@@ -31,7 +31,7 @@ from sms_tool.browser.fingerprint_pool import (
     build_browser_environment,
     locale_profile_key_from_geo,
 )
-from sms_tool.fingerprint_pool import FingerprintPool
+from sms_tool.transport.fingerprint_pool import FingerprintPool
 from sms_tool.geo.profiles import MARKET_PROFILES
 from sms_tool.proxy.entry import infer_region, parse_proxy, retarget_region
 

@@ -1,6 +1,6 @@
 """CLI boundary for direct payment-link commands driven by an Access Token.
 
-``gen_pp_link``/``upi_link``/``paypal_auto`` own protocol behavior; this module
+``paypal_link.gen_link``/``upi_link``/``paypal_auto`` own protocol behavior; this module
 resolves argparse values (country fallbacks, stage proxies) into those calls.
 ``PaymentLinkCommandContext`` keeps the legacy CLI's replaceable hooks explicit.
 """
@@ -13,7 +13,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from ..gen_pp_link import generate_pp_link
+from ..paypal_link.gen_link import generate_pp_link
 
 
 @dataclass(frozen=True)
@@ -199,7 +199,7 @@ def generate_upi_qr(args: Any, ctx: PaymentLinkCommandContext) -> None:
 
 def auto_pay(args: Any) -> None:
     """Run automated PayPal payment for a ChatGPT account."""
-    from ..paypal.auto import auto_pay as run_auto_pay
+    from ..paypal import auto_pay as run_auto_pay
 
     email = (args.email or "").strip()
     session_file = (args.session_file or "").strip()
@@ -242,7 +242,7 @@ def auto_pay(args: Any) -> None:
 
 def batch_auto_pay(args: Any) -> None:
     """Run automated PayPal payment for all pending accounts."""
-    from ..paypal.auto import auto_pay as run_auto_pay
+    from ..paypal import auto_pay as run_auto_pay
     from ..storage import list_paypal_accounts
 
     limit = _clamped_int(args.batch_auto_pay_limit)
@@ -324,7 +324,7 @@ def list_paypal_ba_queue(args: Any) -> None:
 def process_paypal_ba_queue(args: Any) -> None:
     from ..desktop.ipc import emit_event, emit_result
     from ..paypal.authorization_queue import process_paypal_ba_authorizations
-    from ..paypal.auto import auto_pay as run_auto_pay
+    from ..paypal import auto_pay as run_auto_pay
 
     def authorize(item: dict[str, Any]) -> dict[str, Any]:
         return run_auto_pay(

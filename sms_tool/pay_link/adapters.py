@@ -21,7 +21,7 @@ from ..payment.catalog import (
     normalize_payment_method as normalize_catalog_payment_method,
     validate_catalog_consistency,
 )
-from ..payment.operation import (
+from ..operation_journal import (
     PaymentOperationConflict,
     PaymentOperationStore,
     conflict_result as payment_operation_conflict_result,
@@ -668,11 +668,11 @@ def _run_regional_wallet_adapter(
     No production transport is selected implicitly.  These catalog methods
     remain disabled until a provider canary establishes the live wire contract.
     """
-    from ..regional_payment_adapter import RegionalPaymentAdapter, regional_profile
+    from ..payment.regional_payment_adapter import RegionalPaymentAdapter, regional_profile
 
     transport = kwargs.get("transport")
     if transport is None and bool(kwargs.get("regional_transport_enabled")):
-        from ..regional_payment_adapter import ChatGPTStripeRegionalTransport
+        from ..payment.regional_payment_adapter import ChatGPTStripeRegionalTransport
 
         transport = ChatGPTStripeRegionalTransport(
             timeout=max(5, safe_int(kwargs.get("timeout_seconds") or 45)),

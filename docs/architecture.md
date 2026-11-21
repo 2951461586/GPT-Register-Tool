@@ -56,7 +56,7 @@ The stack above is *per module*, not per directory: `sms_tool/` holds leaf
 contracts and application workflows side by side, so a directory-level reading
 made every pair look legal in both directions. `scripts/layer_manifest.json`
 assigns each module one of five layers (1 surface, 2 command adapter, 3
-workflow, 4 domain contract, 5 adapter) and
+application workflow, 4 adapter, 5 foundation & domain contract) and
 `scripts/import_layer_ratchet.py` fails on any module-scope import that points
 outward (`source layer > target layer`), including same-directory edges such as
 a package `__init__` re-exporting a higher-layer submodule. Two edges are
@@ -208,13 +208,13 @@ above.
 <!-- ratchet-numbers:begin architecture -->
 | Measure | Value |
 | --- | --- |
-| Module-level cross-directory edges | 572 |
-| Directory pairs | 120 |
-| Mutual pairs / minority-direction edges | 24 / 49 |
-| Delayed cross-directory edges | 362 |
-| Delayed imports in the package | 519 (baseline 519) |
-| Functions at or above 150 lines | 64 (frozen, `scripts/function_length_ratchet.py`) |
-| Claimed tracked `sms_tool` modules | 346 of 346 (0 unclaimed, 41 directory-map groups) |
+| Module-level cross-directory edges | 564 |
+| Directory pairs | 152 |
+| Mutual pairs / minority-direction edges | 19 / 33 |
+| Delayed cross-directory edges | 350 |
+| Delayed imports in the package | 507 (baseline 507) |
+| Functions at or above 150 lines | 58 (frozen, `scripts/function_length_ratchet.py`) |
+| Claimed tracked `sms_tool` modules | 333 of 333 (0 unclaimed, 40 directory-map groups) |
 <!-- ratchet-numbers:end architecture -->
 
 `tests/config/test_pilens_scope_config.py` pins the scope and the formatting
@@ -240,25 +240,30 @@ foreground commands.
 more file" adds no edge on day one, only a place where the next edge can be born,
 so a new root module needs a decision recorded here before the baseline grows.
 
-**2026-11-11 — `tls_fingerprint.py` accepted as a root module.** It is the peer
-of `auth_headers.py`: per-account TLS ClientHello primitives (extension-order
-permutation, `CurlOpt` installation) consumed by `registration/`, `sentinel/` and
-the preflight. It cannot live in `kernel/` — kernel is layer 4 and the module
-imports `auth_headers` (layer 5), so that move would be an upward import — and it
-is not a `proxy/` concern (no proxy-string parsing). A future `tls/` package would
-be the home if a second module joins it; until then the root set carries it
-exactly like `auth_headers.py`, `fingerprint_pool.py` and
-`browser/fingerprint_pool.py`.
+**2026-11-21 — Domain relocation to 11 root modules.** The remaining 36 domain
+modules at the `sms_tool/` root were relocated into domain subpackages
+(`sms_tool/transport/` for HTTP/TLS/auth-header/endpoint/fingerprint primitives,
+`sms_tool/observability/` for logging/diagnostics/telemetry/stdout mirroring,
+`sms_tool/phone/` for SMS provider clients and registry, `sms_tool/registration/`
+for batch runner/OTP strategy/account creation/Sentinel tokens,
+`sms_tool/payment/` for checkout contract/regional adapters/promotion states,
+`sms_tool/importers/agent_identity.py` and `sms_tool/mailbox/mail_otp.py`). Only
+11 top-level entrypoints and cross-lane shared primitives remain at the root:
+`__init__.py`, `__main__.py`, `cli.py`, `config_usage.py`, `doctor.py`,
+`account_seed.py`, `batch_circuit_breaker.py`, `storage.py`,
+`cross_process_gate.py`, `operation_journal.py`, and `utils.py`.
 
-**2026-11-19 — `http_backend.py` accepted as a root module.** It answers one
-cross-layer question — *which transport is this process using, and can it run
-this profile?* — for the same reason `auth_headers.py` and `tls_fingerprint.py`
-are root peers: `registration/preflight.py`, `registration/protocol_helpers.py`
-and `auth_headers.py` all need the answer, and each of those lives in a different
-layer. Putting it in `proxy/` would misplace it (no proxy-string parsing) and in
-`kernel/` would invert the layer (it reads `auth_headers`, layer 5). Every
-ordinary consumer edge is function-local, so the module-level `registration ->
-sms_tool` pair count does not grow; see `scripts/delayed_import_ratchet.py`.
+**2026-11-21 — Guardrails & shim retirement.** `scripts/architecture_scan.py`
+now freezes the 16 legacy `account_*.py` files inside `sms_tool/accounts/` so
+new account modules omit the redundant `account_` prefix; the retired
+`sms_tool/paypal/{auto,reconciliation}.py` compatibility shells have been
+removed; `tests/governance/test_sentinel_version_pin.py` pins
+`sms_tool.upi_link._vendor.upi_sentinel.DEFAULT_SENTINEL_VERSION` and
+`services/protocol-payment/common/timeouts.py` against their single sources of
+truth (`sms_tool.sentinel.bundle` and `sms_tool.kernel.timeouts`); and
+`tests/SmsWorkbench.Tests/NamespaceArchitectureTests.cs` pins WPF role-folder
+namespaces, cross-layer isolation, and uniform `ObservableObject` ViewModel
+inheritance.
 
 ## Boundary Rules
 
@@ -328,10 +333,10 @@ no file behind it.
 
 - **Rule 1 — resolved 2026-09-07.** Transport no longer imports registration
   policy. The shared pieces were pushed *down* instead of hidden in a lazy
-  import: pure backoff maths moved to `sms_tool/backoff.py` and terminal-error
+  import: pure backoff maths moved to `sms_tool/transport/backoff.py` and terminal-error
   classification to `sms_tool/kernel/error_classification.py`
   (`is_terminal_registration_error`; the module has since moved under
-  `kernel/`). `http_client.py` now imports from those two only. Do not
+  `kernel/`). `transport/http_client.py` now imports from those two only. Do not
   "restore" the `registration_retry_decision(...)` call — it is exactly
   equivalent and reintroduces the layering violation.
 - **Rule 6 — resolved 2026-09-12.** `sms_tool/paypal/orchestrator.py` no

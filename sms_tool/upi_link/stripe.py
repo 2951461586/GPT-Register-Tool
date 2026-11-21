@@ -1,8 +1,8 @@
 from __future__ import annotations
-from .. import endpoints
+from ..transport import endpoints
 
-from ..endpoints import CHATGPT_ORIGIN
-from ..pp_link_helpers import DEFAULT_TIMEOUT, STRIPE_VERSION
+from ..transport.endpoints import CHATGPT_ORIGIN
+from ..payment.pp_link_helpers import DEFAULT_TIMEOUT, STRIPE_VERSION
 from typing import Any
 from collections.abc import Callable
 from collections.abc import Mapping

@@ -1,8 +1,4 @@
-// Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
-#nullable enable
-
-namespace SmsWorkbench
+namespace SmsWorkbench.Models
 {
     public sealed partial class PoolRow : ObservableObject
     {
@@ -33,7 +29,7 @@ namespace SmsWorkbench
         public string PayPalAmount { get; set; } = "";
         public string PromotionStatus { get; set; } = "";
         // Machine promotion state from the desktop read payload
-        // (sms_tool/promotion_states.py); the label above is display copy.
+        // (sms_tool/payment/promotion_states.py); the label above is display copy.
         public string PromotionState { get; set; } = "";
         // 支付资格 (sms_tool/payment/qualification_states.py): the label is display
         // copy, the state is what filters/sorts key off.

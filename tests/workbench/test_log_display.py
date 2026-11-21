@@ -9,7 +9,7 @@ import json
 import logging
 import unittest
 
-from sms_tool.logging_setup import (
+from sms_tool.observability.logging_setup import (
     CorrelatedJsonFormatter,
     HumanLogFormatter,
     module_label,

@@ -8,7 +8,7 @@ from typing import Any
 from unittest.mock import patch
 
 from sms_tool import storage
-from sms_tool.batch_runner import run_batch_impl
+from sms_tool.registration.batch_runner import run_batch_impl
 from sms_tool.commands.registration import (
     RegistrationCommandContext,
     persist_registration_result,
@@ -97,7 +97,7 @@ def test_batch_callback_persists_before_other_future_finishes(tmp_path):
             callback_observed.append(not slow_finished.is_set())
             release_slow.set()
 
-    with patch("sms_tool.batch_runner.CFG", {"email_registration": {}}):
+    with patch("sms_tool.registration.batch_runner.CFG", {"email_registration": {}}):
         results = run_batch_impl(
             count=2,
             workers=2,
@@ -148,7 +148,7 @@ def test_hot_persistence_is_visible_in_sqlite_and_finalization_is_idempotent(tmp
             assert list(tmp_path.glob("session_quick@example.com_*.json"))
             release_slow.set()
 
-    with patch("sms_tool.batch_runner.CFG", {"email_registration": {}}):
+    with patch("sms_tool.registration.batch_runner.CFG", {"email_registration": {}}):
         results = run_batch_impl(
             count=2,
             workers=2,

@@ -28,7 +28,7 @@ import logging
 import signal
 import sys
 
-from sms_tool.phone_proxy import redact_proxy_url
+from sms_tool.phone.phone_proxy import redact_proxy_url
 from sms_tool.proxy.edge_probe import edge_health
 from sms_tool.proxy.health import ProxyHealthTracker
 from sms_tool.proxy.pool import Socks5Server, UPSTREAM_SCHEMES, UpstreamProxy

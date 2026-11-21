@@ -28,8 +28,8 @@ from __future__ import annotations
 
 import time
 
-from .. import sms_providers
-from ..auth_headers import openai_auth_headers_lower
+from . import sms_providers
+from ..transport.auth_headers import openai_auth_headers_lower
 from ..config import CFG  # noqa: F401 - re-exported for tests that patch phone_reuse.CFG
 from .config import (
     KEY_ORIGIN_CONFIG,  # noqa: F401
@@ -87,14 +87,14 @@ from .provider_lifecycle import (
     rental_client,  # noqa: F401
     rental_protocol,  # noqa: F401
 )
-from ..smsbower import (
+from .smsbower import (
     DEFAULT_ENDPOINT,
     GHANA_COUNTRY_CODE,
     OPENAI_SERVICE_CODE,
     normalize_phone,
     normalize_service,
 )
-from .. import endpoints
+from ..transport import endpoints
 
 #: Shared by both protocol families. Renamed off the vendor name when the second
 #: family landed: they are per-rental, not per-vendor.
@@ -156,7 +156,7 @@ def _send_phone_otp_with_retries(
             result = send_phone_otp(session, did, current_url, phone, sentinel=sentinel, proxy=proxy)
         except Exception as exc:
             try:
-                from ..phone_proxy import looks_like_proxy_error
+                from .phone_proxy import looks_like_proxy_error
             except Exception:
                 looks_like_proxy_error = lambda value: False
             if looks_like_proxy_error(exc):
@@ -408,7 +408,7 @@ def _complete_phone_verification_once_locked(
     selected_proxy = proxy
     if _is_rental_slot(phone_slot):
         try:
-            from ..phone_proxy import apply_proxy_to_session, phone_proxy_cfg, select_phone_proxy
+            from .phone_proxy import apply_proxy_to_session, phone_proxy_cfg, select_phone_proxy
 
             proxy_cfg = phone_proxy_cfg()
         except Exception:

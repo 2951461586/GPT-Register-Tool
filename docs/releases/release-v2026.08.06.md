@@ -47,4 +47,4 @@
 
 - 协议 AT-Only 10/10（ReMail 5 并发）压测通过。
 - iCloud 别名邮箱 75 → 入库 37 个 AT-200 账号；38 个无法接码已清理。
-- 全部 `py_compile` 通过；`import sms_tool.cli / sms_tool.registration.orchestrator / sms_tool.batch_runner / sms_tool.account_2fa` 无 ImportError。
+- 全部 `py_compile` 通过；`import sms_tool.cli / sms_tool.registration.orchestrator / sms_tool.registration.batch_runner / sms_tool.account_2fa` 无 ImportError。

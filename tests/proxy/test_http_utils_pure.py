@@ -1,6 +1,6 @@
-"""Behaviour tests for ``sms_tool/http_utils.py`` (2026-09-03, round 7).
+"""Behaviour tests for ``sms_tool/transport/http_utils.py`` (2026-09-03, round 7).
 
-``http_utils.py`` (153 lines) had **zero direct callers in the suite** (AST
+``transport/http_utils.py`` (153 lines) had **zero direct callers in the suite** (AST
 audit) despite being imported by six modules: ``auth_flow``,
 ``account_creation``, ``account_2fa``, ``codex_oauth``, ``session_refresh``
 and ``auth_state``. That combination -- widely depended upon, never exercised
@@ -14,9 +14,9 @@ Patch seams (all module-level bindings inside ``http_utils`` itself, so
 patching there is what the production code actually reads -- the same trap
 that caused the ``payment_link_manager`` flake):
 
-* ``sms_tool.http_utils.request_with_retry``
-* ``sms_tool.http_utils.auth_impersonate``
-* ``sms_tool.http_utils.CFG``
+* ``sms_tool.transport.http_utils.request_with_retry``
+* ``sms_tool.transport.http_utils.auth_impersonate``
+* ``sms_tool.transport.http_utils.CFG``
 
 ⚠️ Pinned, not fixed:
 
@@ -34,7 +34,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from sms_tool import http_utils
+from sms_tool.transport import http_utils
 
 
 # --------------------------------------------------------------------------- fakes
@@ -271,9 +271,9 @@ class FollowContinueUrlTests(unittest.TestCase):
     def _run(self, url, *, referer="", label="continue"):
         recorder = _RequestRecorder(_FakeResponse(200, {}, url="https://auth.test/landed"))
         with (
-            patch("sms_tool.http_utils.CFG", {"chatgpt": {"auth_base_url": "https://auth.test"}}),
-            patch("sms_tool.http_utils.auth_impersonate", lambda: "IMPERSONATE"),
-            patch("sms_tool.http_utils.request_with_retry", recorder),
+            patch("sms_tool.transport.http_utils.CFG", {"chatgpt": {"auth_base_url": "https://auth.test"}}),
+            patch("sms_tool.transport.http_utils.auth_impersonate", lambda: "IMPERSONATE"),
+            patch("sms_tool.transport.http_utils.request_with_retry", recorder),
         ):
             response = http_utils._follow_continue_url(
                 _FakeSession({}),
@@ -334,9 +334,9 @@ class FollowContinueUrlTests(unittest.TestCase):
     def test_uses_the_default_auth_base_when_config_has_none(self):
         recorder = _RequestRecorder(_FakeResponse(200, {}))
         with (
-            patch("sms_tool.http_utils.CFG", {"chatgpt": {}}),
-            patch("sms_tool.http_utils.auth_impersonate", lambda: "IMPERSONATE"),
-            patch("sms_tool.http_utils.request_with_retry", recorder),
+            patch("sms_tool.transport.http_utils.CFG", {"chatgpt": {}}),
+            patch("sms_tool.transport.http_utils.auth_impersonate", lambda: "IMPERSONATE"),
+            patch("sms_tool.transport.http_utils.request_with_retry", recorder),
         ):
             http_utils._follow_continue_url(_FakeSession({}), "/go", {})
         self.assertEqual(recorder.urls, ["https://auth.openai.com/go"])
@@ -356,10 +356,10 @@ class FollowContinueUrlTests(unittest.TestCase):
         """
         recorder = _RequestRecorder(_FakeResponse(200, {}, url="https://auth.test/landed"))
         with (
-            patch("sms_tool.http_utils.CFG", {"chatgpt": {"auth_base_url": "https://auth.test"}}),
-            patch("sms_tool.http_utils.auth_impersonate", lambda: "IMPERSONATE"),
-            patch("sms_tool.http_utils.request_with_retry", recorder),
-            self.assertLogs("sms_tool.http_utils", level="INFO") as captured,
+            patch("sms_tool.transport.http_utils.CFG", {"chatgpt": {"auth_base_url": "https://auth.test"}}),
+            patch("sms_tool.transport.http_utils.auth_impersonate", lambda: "IMPERSONATE"),
+            patch("sms_tool.transport.http_utils.request_with_retry", recorder),
+            self.assertLogs("sms_tool.transport.http_utils", level="INFO") as captured,
         ):
             http_utils._follow_continue_url(_FakeSession({}), "/go", {}, label="About you page prime")
         joined = "\n".join(captured.output)
@@ -381,8 +381,8 @@ class ValidateEmailOtpTests(unittest.TestCase):
     def _run(self, *responses, code="123456", **kwargs):
         recorder = _RequestRecorder(*responses)
         with (
-            patch("sms_tool.http_utils.auth_impersonate", lambda: "IMPERSONATE"),
-            patch("sms_tool.http_utils.request_with_retry", recorder),
+            patch("sms_tool.transport.http_utils.auth_impersonate", lambda: "IMPERSONATE"),
+            patch("sms_tool.transport.http_utils.request_with_retry", recorder),
         ):
             ok, body = http_utils._validate_email_otp(
                 _FakeSession({}), "https://auth.test", {"X-Base": "1"}, code, **kwargs

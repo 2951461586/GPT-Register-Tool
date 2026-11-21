@@ -65,7 +65,7 @@ def test_create_response_persists_partial_before_followup(tmp_path, monkeypatch,
 
 
 def test_partial_filter_survives_database_lookup_failure(tmp_path, monkeypatch):
-    from sms_tool import batch_runner
+    from sms_tool.registration import batch_runner
 
     monkeypatch.setattr(registration_retry_guard, "runtime_file", lambda cfg, name: tmp_path / name)
     monkeypatch.setattr(batch_runner, "CFG", {})

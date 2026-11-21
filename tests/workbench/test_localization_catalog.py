@@ -29,12 +29,9 @@ ROOT = Path(__file__).resolve().parents[2]
 WORKBENCH = ROOT / "SmsWorkbench"
 CATALOG = WORKBENCH / "Localization" / "StringsEn.cs"
 
-#: One window-chrome tooltip lives in a ControlTemplate where WPF's markup
-#: compiler rejects a binding on ``ToolTip`` (MC1000), so it keeps its Chinese
-#: literal.  Tracked explicitly rather than by a broad allowlist.
-KNOWN_LITERAL_TOOLTIPS = {
-    ("Themes/Controls.xaml", "关闭"),
-}
+#: Retired allowlist: the unused ``DialogWindow`` style carrying a hard-coded
+#: ``ToolTip="关闭"`` was removed, so zero literal Chinese XAML attributes remain.
+KNOWN_LITERAL_TOOLTIPS: set[tuple[str, str]] = set()
 
 _CATALOG_ENTRY = re.compile(r'\["((?:[^"\\]|\\.)*)"\]\s*=\s*"((?:[^"\\]|\\.)*)"')
 _XAML_KEY = re.compile(r"\{loc:Tr\s+(?:Key='([^']*)'|'([^']*)')\}")
@@ -147,11 +144,9 @@ def test_no_xaml_text_attribute_keeps_a_hard_coded_chinese_value():
     assert not offenders, f"hard-coded Chinese left in XAML: {offenders}"
 
 
-def test_the_only_known_literal_is_still_the_known_one():
-    """A stale allowlist entry would hide a real regression."""
-    assert KNOWN_LITERAL_TOOLTIPS == {("Themes/Controls.xaml", "关闭")}
-    controls = (WORKBENCH / "Themes" / "Controls.xaml").read_text(encoding="utf-8")
-    assert 'ToolTip="关闭"' in controls
+def test_no_known_literal_tooltips_allowlist_entries_remain():
+    """The allowlist stays empty so no hard-coded Chinese XAML tooltip creeps back."""
+    assert KNOWN_LITERAL_TOOLTIPS == set()
 
 
 def test_no_csharp_ui_property_keeps_a_hard_coded_chinese_value():

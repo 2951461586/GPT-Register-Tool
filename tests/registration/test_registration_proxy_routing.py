@@ -3,7 +3,8 @@ import sys
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from sms_tool import cli, sentinel_tokens
+from sms_tool import cli
+from sms_tool.registration import sentinel_tokens
 from sms_tool.registration import orchestrator as registration
 from sms_tool.registration import preflight as registration_preflight
 from sms_tool.config import ConfigError

@@ -16,7 +16,7 @@ import time
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import parse_qs, urljoin, urlparse
-from .. import endpoints
+from ..transport import endpoints
 
 try:
     from curl_cffi.requests import Session as CurlSession
@@ -29,7 +29,7 @@ from ..config import CFG
 from .fingerprints import PAYPAL_CHROME_FULL_VERSION as _CHROME_FULL_VERSION
 from .fingerprints import PAYPAL_CHROME_VERSION as _CHROME_VERSION
 from .fingerprints import PAYPAL_USER_AGENT as _USER_AGENT
-from ..sms_utils import (
+from ..phone.sms_utils import (
     NO_NUMBER_SOURCE_MESSAGE,
     _extract_sms_code,
     _number_source_or_none,

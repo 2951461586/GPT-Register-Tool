@@ -98,7 +98,7 @@ def test_summarize_counts_every_status():
 
 def test_clean_proxies_keeps_raw_urls_in_order():
     raw = ["http://u:p@a.example:1", "http://u:p@b.example:2", "http://u:p@c.example:3"]
-    from sms_tool.phone_proxy import redact_proxy_url
+    from sms_tool.phone.phone_proxy import redact_proxy_url
 
     verdicts = [
         _verdict(redact_proxy_url(raw[0]), CLEAN),
@@ -110,7 +110,7 @@ def test_clean_proxies_keeps_raw_urls_in_order():
 
 def test_format_report_is_credential_free_and_summarizes():
     raw = "http://user:Hunter2@a.example:1"
-    from sms_tool.phone_proxy import redact_proxy_url
+    from sms_tool.phone.phone_proxy import redact_proxy_url
 
     verdicts = [_verdict(redact_proxy_url(raw), CLEAN), _verdict("DIRECT", DEAD)]
     report = probe_mod.format_report(verdicts)

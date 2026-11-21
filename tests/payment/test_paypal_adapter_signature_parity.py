@@ -105,7 +105,7 @@ def _drive_paypal_adapter(options: dict):
 
     with (
         patch(
-            "sms_tool.gen_pp_link.generate_pp_link",
+            "sms_tool.paypal_link.gen_link.generate_pp_link",
             autospec=real_entrypoint,
             return_value={"ok": True},
         ) as entrypoint,
@@ -262,7 +262,7 @@ def test_stage_proxy_options_reach_the_extractor_constructor(option):
         },
         "proxy": {},
     }
-    with patch.object(gen_link._plm, "PPLinkExtractor", FakeExtractor):
+    with patch.object(gen_link, "PPLinkExtractor", FakeExtractor):
         gen_link.generate_pp_link(
             "at-test",
             runtime_config=cfg,

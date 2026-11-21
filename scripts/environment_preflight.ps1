@@ -63,13 +63,13 @@ $curlVersion = [string]$curlProbe[0]
 $profiles = [string]$curlProbe[1] -split ','
 
 # The accepted minor range and the required profile are NOT repeated here.
-# They live in ``sms_tool/auth_headers.py`` (``CURL_CFFI_MIN/MAX_MINOR`` and the
+# They live in ``sms_tool/transport/auth_headers.py`` (``CURL_CFFI_MIN/MAX_MINOR`` and the
 # newest entry of ``AUTH_FINGERPRINT_PROFILES``) because a local copy is what
 # let this gate reject a healthy ``curl_cffi 0.17.0`` install on 2026-11-19 --
 # the dependency bump and the two Python gates moved, the PowerShell copy did
 # not. Ask the owner instead of restating it.
 $authorityProbe = @'
-from sms_tool.auth_headers import AUTH_FINGERPRINT_PROFILES, CURL_CFFI_MAX_MINOR, CURL_CFFI_MIN_MINOR
+from sms_tool.transport.auth_headers import AUTH_FINGERPRINT_PROFILES, CURL_CFFI_MAX_MINOR, CURL_CFFI_MIN_MINOR
 chrome = [n for n in AUTH_FINGERPRINT_PROFILES if n.startswith("chrome") and n[len("chrome"):].isdigit()]
 print(CURL_CFFI_MIN_MINOR, CURL_CFFI_MAX_MINOR, max(chrome, key=lambda n: int(n[len("chrome"):])))
 '@
@@ -81,7 +81,7 @@ try {
     Pop-Location
 }
 if ($authorityExit -ne 0 -or $authority.Count -lt 1) {
-    throw "curl_cffi authority probe failed; sms_tool/auth_headers.py is unreadable: $($authority -join ' ')"
+    throw "curl_cffi authority probe failed; sms_tool/transport/auth_headers.py is unreadable: $($authority -join ' ')"
 }
 $authorityParts = ([string]$authority[0]).Trim() -split '\s+'
 if ($authorityParts.Length -lt 3) {

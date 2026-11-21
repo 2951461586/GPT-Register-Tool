@@ -124,7 +124,7 @@ def test_detector_flags_a_partial_mirror_copy():
 try:
     from ..pp_link_helpers import DEFAULT_TIMEOUT, STRIPE_VERSION
 except ImportError:
-    from pp_link_helpers import DEFAULT_TIMEOUT
+    from sms_tool.payment.pp_link_helpers import DEFAULT_TIMEOUT
 """
     found = mirror_fallbacks(ast.parse(sample))
     assert [symbols for _, symbols in found] == [{"DEFAULT_TIMEOUT"}], found

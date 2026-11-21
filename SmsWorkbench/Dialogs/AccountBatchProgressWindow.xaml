@@ -1,4 +1,4 @@
-<Window x:Class="SmsWorkbench.AccountBatchProgressWindow"
+<Window x:Class="SmsWorkbench.Dialogs.AccountBatchProgressWindow"
         x:ClassModifier="internal"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:loc="clr-namespace:SmsWorkbench.Localization"

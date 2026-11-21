@@ -1,10 +1,6 @@
 {
   "_comment": "Broad-except gate state (see scripts/broad_except_ratchet.py). 'files' is frozen debt with a hard ceiling in 'policy'; 'whitelist' is the reviewed set where a broad handler is the design. A file absent from both has an allowance of 0.",
   "files": {
-    "services/mail-otp-web/app.py": {
-      "broad": 5,
-      "silent": 0
-    },
     "services/protocol-payment/blik/blik_qr_extract.py": {
       "broad": 14,
       "silent": 0
@@ -69,10 +65,6 @@
       "broad": 16,
       "silent": 0
     },
-    "sms_tool/account_creation.py": {
-      "broad": 1,
-      "silent": 0
-    },
     "sms_tool/account_seed.py": {
       "broad": 2,
       "silent": 1
@@ -114,7 +106,7 @@
       "silent": 5
     },
     "sms_tool/accounts/account_scan.py": {
-      "broad": 5,
+      "broad": 4,
       "silent": 0
     },
     "sms_tool/accounts/promotion_batch.py": {
@@ -128,10 +120,6 @@
     "sms_tool/accounts/wham_usage.py": {
       "broad": 1,
       "silent": 0
-    },
-    "sms_tool/agent_identity.py": {
-      "broad": 16,
-      "silent": 1
     },
     "sms_tool/auth_flow/login.py": {
       "broad": 3,
@@ -153,36 +141,24 @@
       "broad": 1,
       "silent": 0
     },
-    "sms_tool/auth_headers.py": {
-      "broad": 6,
-      "silent": 2
-    },
-    "sms_tool/auth_state.py": {
-      "broad": 1,
-      "silent": 0
-    },
-    "sms_tool/batch_runner.py": {
-      "broad": 19,
-      "silent": 7
+    "sms_tool/browser/captcha_solver.py": {
+      "broad": 16,
+      "silent": 13
     },
     "sms_tool/browser/fingerprint_pool.py": {
       "broad": 2,
       "silent": 0
     },
+    "sms_tool/browser/nodriver_captcha.py": {
+      "broad": 10,
+      "silent": 1
+    },
+    "sms_tool/browser/nodriver_paypal.py": {
+      "broad": 7,
+      "silent": 0
+    },
     "sms_tool/browser/pool.py": {
       "broad": 10,
-      "silent": 0
-    },
-    "sms_tool/capability_browser.py": {
-      "broad": 5,
-      "silent": 0
-    },
-    "sms_tool/browser/captcha_solver.py": {
-      "broad": 16,
-      "silent": 13
-    },
-    "sms_tool/chatgpt_bootstrap.py": {
-      "broad": 6,
       "silent": 0
     },
     "sms_tool/cli.py": {
@@ -229,10 +205,6 @@
       "broad": 2,
       "silent": 1
     },
-    "sms_tool/importers/cpa.py": {
-      "broad": 9,
-      "silent": 1
-    },
     "sms_tool/desktop/read.py": {
       "broad": 2,
       "silent": 0
@@ -241,24 +213,8 @@
       "broad": 2,
       "silent": 1
     },
-    "sms_tool/diagnostics.py": {
-      "broad": 2,
-      "silent": 2
-    },
     "sms_tool/doctor.py": {
       "broad": 9,
-      "silent": 0
-    },
-    "sms_tool/fingerprint_pool.py": {
-      "broad": 5,
-      "silent": 0
-    },
-    "sms_tool/wallet/gcash_provider.py": {
-      "broad": 4,
-      "silent": 0
-    },
-    "sms_tool/wallet/gcash_transport.py": {
-      "broad": 6,
       "silent": 0
     },
     "sms_tool/geo/clock.py": {
@@ -269,31 +225,23 @@
       "broad": 5,
       "silent": 0
     },
-    "sms_tool/http_client.py": {
-      "broad": 11,
-      "silent": 2
+    "sms_tool/importers/agent_identity.py": {
+      "broad": 16,
+      "silent": 1
     },
-    "sms_tool/http_utils.py": {
-      "broad": 3,
-      "silent": 0
+    "sms_tool/importers/cpa.py": {
+      "broad": 9,
+      "silent": 1
     },
-    "sms_tool/k12_client.py": {
-      "broad": 2,
-      "silent": 0
-    },
-    "sms_tool/k12_identity.py": {
-      "broad": 1,
-      "silent": 0
+    "sms_tool/importers/sub2api.py": {
+      "broad": 8,
+      "silent": 1
     },
     "sms_tool/kernel/error_classification.py": {
       "broad": 1,
       "silent": 1
     },
-    "sms_tool/logging_setup.py": {
-      "broad": 5,
-      "silent": 2
-    },
-    "sms_tool/mail_otp.py": {
+    "sms_tool/mailbox/mail_otp.py": {
       "broad": 1,
       "silent": 0
     },
@@ -321,31 +269,19 @@
       "broad": 1,
       "silent": 0
     },
-    "sms_tool/nexsms.py": {
-      "broad": 3,
-      "silent": 0
+    "sms_tool/observability/diagnostics.py": {
+      "broad": 2,
+      "silent": 2
     },
-    "sms_tool/browser/nodriver_captcha.py": {
-      "broad": 10,
-      "silent": 1
-    },
-    "sms_tool/browser/nodriver_paypal.py": {
-      "broad": 7,
-      "silent": 0
-    },
-    "sms_tool/omakse_client.py": {
+    "sms_tool/observability/logging_setup.py": {
       "broad": 5,
       "silent": 2
     },
+    "sms_tool/observability/stdout_mirror.py": {
+      "broad": 2,
+      "silent": 2
+    },
     "sms_tool/operation_journal.py": {
-      "broad": 1,
-      "silent": 0
-    },
-    "sms_tool/otp_strategy.py": {
-      "broad": 1,
-      "silent": 0
-    },
-    "sms_tool/page_truth.py": {
       "broad": 1,
       "silent": 0
     },
@@ -365,8 +301,16 @@
       "broad": 13,
       "silent": 0
     },
+    "sms_tool/payment/capability_browser.py": {
+      "broad": 5,
+      "silent": 0
+    },
     "sms_tool/payment/executor.py": {
       "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/payment/pp_link_helpers.py": {
+      "broad": 4,
       "silent": 0
     },
     "sms_tool/payment/qualification.py": {
@@ -376,6 +320,10 @@
     "sms_tool/payment/qualification_batch.py": {
       "broad": 6,
       "silent": 2
+    },
+    "sms_tool/payment/regional_payment_adapter.py": {
+      "broad": 1,
+      "silent": 0
     },
     "sms_tool/payment/routing.py": {
       "broad": 1,
@@ -453,6 +401,14 @@
       "broad": 1,
       "silent": 0
     },
+    "sms_tool/phone/nexsms.py": {
+      "broad": 3,
+      "silent": 0
+    },
+    "sms_tool/phone/phone_proxy.py": {
+      "broad": 8,
+      "silent": 3
+    },
     "sms_tool/phone/pool.py": {
       "broad": 2,
       "silent": 0
@@ -460,10 +416,6 @@
     "sms_tool/phone/provider_lifecycle.py": {
       "broad": 3,
       "silent": 0
-    },
-    "sms_tool/phone_proxy.py": {
-      "broad": 8,
-      "silent": 3
     },
     "sms_tool/phone/registration.py": {
       "broad": 7,
@@ -473,8 +425,12 @@
       "broad": 6,
       "silent": 1
     },
-    "sms_tool/pp_link_helpers.py": {
-      "broad": 4,
+    "sms_tool/phone/sms_utils.py": {
+      "broad": 2,
+      "silent": 1
+    },
+    "sms_tool/phone/smsbower.py": {
+      "broad": 5,
       "silent": 0
     },
     "sms_tool/providers/cfworker_client.py": {
@@ -553,16 +509,20 @@
       "broad": 1,
       "silent": 0
     },
-    "sms_tool/regional_payment_adapter.py": {
-      "broad": 1,
-      "silent": 0
-    },
     "sms_tool/registration/account_stages.py": {
       "broad": 5,
       "silent": 0
     },
+    "sms_tool/registration/batch_runner.py": {
+      "broad": 19,
+      "silent": 7
+    },
     "sms_tool/registration/bootstrap_stages.py": {
       "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/registration/chatgpt_bootstrap.py": {
+      "broad": 6,
       "silent": 0
     },
     "sms_tool/registration/checkpoint.py": {
@@ -593,6 +553,10 @@
       "broad": 3,
       "silent": 0
     },
+    "sms_tool/registration/otp_strategy.py": {
+      "broad": 1,
+      "silent": 0
+    },
     "sms_tool/registration/preflight.py": {
       "broad": 5,
       "silent": 4
@@ -620,6 +584,10 @@
     "sms_tool/registration/sentinel_stages.py": {
       "broad": 2,
       "silent": 0
+    },
+    "sms_tool/registration/sentinel_tokens.py": {
+      "broad": 13,
+      "silent": 1
     },
     "sms_tool/registration/state.py": {
       "broad": 3,
@@ -681,28 +649,12 @@
       "broad": 1,
       "silent": 1
     },
-    "sms_tool/sentinel_tokens.py": {
-      "broad": 13,
-      "silent": 1
-    },
     "sms_tool/session/converter.py": {
       "broad": 6,
       "silent": 1
     },
     "sms_tool/session/refresh.py": {
       "broad": 6,
-      "silent": 2
-    },
-    "sms_tool/sms_utils.py": {
-      "broad": 2,
-      "silent": 1
-    },
-    "sms_tool/smsbower.py": {
-      "broad": 5,
-      "silent": 0
-    },
-    "sms_tool/stdout_mirror.py": {
-      "broad": 2,
       "silent": 2
     },
     "sms_tool/store/accounts.py": {
@@ -717,9 +669,29 @@
       "broad": 5,
       "silent": 1
     },
-    "sms_tool/importers/sub2api.py": {
-      "broad": 8,
-      "silent": 1
+    "sms_tool/transport/auth_headers.py": {
+      "broad": 6,
+      "silent": 2
+    },
+    "sms_tool/transport/auth_state.py": {
+      "broad": 1,
+      "silent": 0
+    },
+    "sms_tool/transport/fingerprint_pool.py": {
+      "broad": 5,
+      "silent": 0
+    },
+    "sms_tool/transport/http_client.py": {
+      "broad": 11,
+      "silent": 2
+    },
+    "sms_tool/transport/http_utils.py": {
+      "broad": 3,
+      "silent": 0
+    },
+    "sms_tool/transport/page_truth.py": {
+      "broad": 1,
+      "silent": 0
     },
     "sms_tool/upi_link/_extract.py": {
       "broad": 2,
@@ -773,16 +745,20 @@
       "broad": 2,
       "silent": 0
     },
+    "sms_tool/wallet/gcash_provider.py": {
+      "broad": 4,
+      "silent": 0
+    },
+    "sms_tool/wallet/gcash_transport.py": {
+      "broad": 6,
+      "silent": 0
+    },
     "sms_tool/wallet/provider.py": {
       "broad": 2,
       "silent": 0
     },
     "sms_tool/wallet/transport.py": {
       "broad": 5,
-      "silent": 0
-    },
-    "sms_tool/workspace_scan.py": {
-      "broad": 3,
       "silent": 0
     }
   },
@@ -808,12 +784,12 @@
         "reason": "The protocol lane is where a swallowed exception is indistinguishable from a protocol failure: it lands in the funnel as 'unknown' while the batch keeps spending mailboxes. Silent handlers are 0 here and the broad count may only shrink."
       }
     },
-    "max_broad": 969,
+    "max_broad": 951,
     "max_silent": 158
   },
   "totals": {
-    "broad": 969,
-    "silent": 158
+    "broad": 951,
+    "silent": 156
   },
   "whitelist": {
     "sms_tool/browser/pool.py": {
@@ -826,7 +802,7 @@
       "reason": "Request isolation in the resident desktop-read server: one malformed request must answer with an error code, not kill the process the shell depends on.",
       "silent": 1
     },
-    "sms_tool/logging_setup.py": {
+    "sms_tool/observability/logging_setup.py": {
       "broad": 5,
       "reason": "Logging configuration is best effort: a missing log directory, a locked file or an unavailable sink must not stop the run that was being logged.",
       "silent": 2
@@ -841,6 +817,16 @@
       "reason": "SOCKS5 bridge teardown: a broken client socket, a half-open upstream or a stats-write failure must never take the listener down for every other session.",
       "silent": 4
     },
+    "sms_tool/registration/batch_runner.py": {
+      "broad": 19,
+      "reason": "Batch worker isolation, environment-ledger observation channel, IPC progress sink, and browser-pool teardown: a secondary sink or worker callback failure must not abort the remaining batch.",
+      "silent": 7
+    },
+    "sms_tool/registration/chatgpt_bootstrap.py": {
+      "broad": 6,
+      "reason": "Browser warm-up probe boundary: optional anonymous/authenticated bootstrap steps degrade to diagnostic status dictionaries rather than raising out of the probe.",
+      "silent": 0
+    },
     "sms_tool/registration/finalize.py": {
       "broad": 3,
       "reason": "Checkpoint retention and pre-existing-state cleanup at the end of a run: a failed clear must not turn a finished registration into a failure.",
@@ -851,6 +837,11 @@
       "reason": "Session teardown in the workflow's finally path: closing a session that the backend already dropped is best effort by definition.",
       "silent": 1
     },
+    "sms_tool/registration/otp_strategy.py": {
+      "broad": 1,
+      "reason": "Best-effort OTP resend warning boundary between first and second polling windows: a failed resend attempt logs a warning and continues polling.",
+      "silent": 0
+    },
     "sms_tool/registration/preflight.py": {
       "broad": 5,
       "reason": "Preflight probe teardown (curl_cffi session close, trust_env toggle). A probe that cannot clean up has already produced its verdict; raising here would replace a classified preflight failure with an unclassified one.",
@@ -859,6 +850,11 @@
     "sms_tool/registration/probe.py": {
       "broad": 4,
       "reason": "AT-probe session ownership teardown: the probe's answer is already recorded, and a close failure must not rewrite it.",
+      "silent": 1
+    },
+    "sms_tool/registration/sentinel_tokens.py": {
+      "broad": 13,
+      "reason": "Sentinel token issuance and PoW fallback boundary: browser/SDK/request failures degrade to the next issuance strategy or a structured None token rather than crashing the caller.",
       "silent": 1
     }
   }

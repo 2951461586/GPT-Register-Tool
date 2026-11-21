@@ -4,7 +4,7 @@ import logging
 from dataclasses import replace
 from typing import Mapping
 
-from ..auth_headers import (
+from ..transport.auth_headers import (
     CURL_CFFI_MAX_MINOR,
     CURL_CFFI_MIN_MINOR,
     auth_fingerprint_capabilities,
@@ -14,12 +14,12 @@ from ..auth_headers import (
     openai_auth_headers,
 )
 from ..config import CFG
-from .. import endpoints
-from ..tls_fingerprint import apply_to_session as _apply_tls_fingerprint
-from ..http_client import request_with_retry
+from ..transport import endpoints
+from ..transport.tls_fingerprint import apply_to_session as _apply_tls_fingerprint
+from ..transport.http_client import request_with_retry
 from ..kernel.transport import TRANSPORT_ERRORS
 from ..accounts.account_liveness import CODEX_USAGE_URL
-from ..phone_proxy import normalize_proxy_url, redact_proxy_url, refresh_proxy_sid
+from ..phone.phone_proxy import normalize_proxy_url, redact_proxy_url, refresh_proxy_sid
 from ..proxy.edge_probe import BLOCKED, classify_edge_response
 from ..sentinel.bundle import sentinel_version
 
@@ -89,7 +89,7 @@ def _transport_session():
     frozen module-level pair count (``scripts/import_layer_ratchet.py``), and
     the preflight is the only registration module that needs the selector.
     """
-    from .. import http_backend
+    from ..transport import http_backend
 
     return http_backend.new_session()
 

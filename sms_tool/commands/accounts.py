@@ -223,6 +223,21 @@ def import_cpa(args: Any, ctx: AccountCommandContext) -> None:
         print(f"[*] CPA quota refresh after import skipped: {exc}")
 
 
+def _safe_print_fn():
+    from ..observability.diagnostics import safe_print
+
+    return safe_print
+
+
+def _load_recovery_batch():
+    from ..accounts.recovery_batch import (
+        inspect_accounts as run_account_inspection,
+        refresh_local_quota_statuses,
+    )
+
+    return refresh_local_quota_statuses, run_account_inspection
+
+
 def import_account_json(args: Any) -> None:
     """Import exported ``account-cpa-*.json`` file(s) into the local store.
 
@@ -232,7 +247,8 @@ def import_account_json(args: Any) -> None:
     """
     from ..accounts.account_import import DEFAULT_FILENAME_PATTERN, AccountImportError
     from ..accounts.account_import import import_account_json as run_import
-    from ..diagnostics import safe_print
+
+    safe_print = _safe_print_fn()
 
     paths = [str(item).strip() for item in (getattr(args, "import_account_json", None) or []) if str(item).strip()]
     if not paths:
@@ -290,7 +306,7 @@ def check_promotion(args: Any, ctx: AccountCommandContext) -> None:
 
 
 def refresh_cpa_quota(args: Any, ctx: AccountCommandContext) -> None:
-    from ..accounts.recovery_batch import refresh_local_quota_statuses
+    refresh_local_quota_statuses, _ = _load_recovery_batch()
     from ..importers.cpa import refresh_cpa_quota_statuses
 
     if bool(getattr(args, "mailbox_pool_repaired", False)):
@@ -362,6 +378,62 @@ def refresh_cpa_quota(args: Any, ctx: AccountCommandContext) -> None:
     _print_quota_summary(result)
     if not result.get("ok"):
         raise SystemExit(3)
+
+
+def inspect_accounts(args: Any, ctx: AccountCommandContext) -> None:
+    """One-click lightweight inspection: offline JWT triage + targeted recovery + promotion refresh."""
+    _, run_account_inspection = _load_recovery_batch()
+    emails = read_email_file(args.email_file)
+    if args.email:
+        emails = [(args.email or "").strip()]
+    emails = unique_emails(emails)
+    if not emails:
+        emails = [str(row.get("email") or "").strip() for row in ctx.list_paypal_accounts()]
+    relogin_on_401 = True
+    result = run_account_inspection(
+        emails=emails,
+        workers=max(1, int(args.quota_workers or args.workers or 4)),
+        proxy=args.proxy,
+        proxy_pool=getattr(args, "proxy_pool", None),
+        timeout=max(5, int(args.refresh_timeout or 30)),
+        skew_seconds=max(0, int(getattr(args, "inspect_skew_seconds", 300) or 0)),
+        relogin_on_401=relogin_on_401,
+        relogin_timeout=getattr(args, "quota_relogin_timeout", None),
+        relogin_mode=str(getattr(args, "scan_relogin_mode", "auto") or "auto"),
+        batch_timeout=getattr(args, "quota_batch_timeout", None),
+        account_timeout=getattr(args, "quota_account_timeout", None),
+        refresh_promotion=not bool(getattr(args, "inspect_no_promotion", False)),
+    )
+    _print_inspection_summary(result)
+    if bool(getattr(args, "desktop_ipc", False)):
+        emit_result(result, enabled=True)
+    else:
+        _safe_print_fn()(json.dumps(result, ensure_ascii=False, indent=2))
+    if not result.get("ok"):
+        raise SystemExit(3)
+
+
+def _print_inspection_summary(result: dict[str, Any]) -> None:
+    safe_print = _safe_print_fn()
+    total = int(result.get("total") or 0)
+    skipped_valid = int(result.get("skipped_valid") or 0)
+    skipped_deactivated = int(result.get("skipped_deactivated") or 0)
+    inspected = int(result.get("inspected") or 0)
+    recovered = int(result.get("recovered") or 0)
+    failed = int(result.get("failed") or 0)
+    safe_print(
+        f"[*] 轻量巡检完成：共 {total} 个账号，跳过有效 {skipped_valid}，跳过掉号 {skipped_deactivated}，"
+        f"实测 {inspected}（恢复 {recovered} / 失败 {failed}）"
+    )
+    logger.info(
+        "lightweight account inspection finished: total=%s skipped_valid=%s skipped_deactivated=%s inspected=%s recovered=%s failed=%s",
+        total,
+        skipped_valid,
+        skipped_deactivated,
+        inspected,
+        recovered,
+        failed,
+    )
 
 
 def _print_promotion_summary(result):

@@ -1,6 +1,6 @@
 import unittest
 
-from sms_tool.checkout_contract import (
+from sms_tool.payment.checkout_contract import (
     CheckoutContractError,
     CheckoutRequestContract,
     CheckoutSessionContract,

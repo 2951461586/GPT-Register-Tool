@@ -284,7 +284,7 @@ def _unsanitized_stream(stream):
     here are assembled from already-sanitized field data, and re-scanning one
     multi-megabyte response line costs seconds per refresh.
     """
-    from ..diagnostics import SanitizingTextIO
+    from ..observability.diagnostics import SanitizingTextIO
 
     if isinstance(stream, SanitizingTextIO):
         return getattr(stream, "_wrapped", stream)

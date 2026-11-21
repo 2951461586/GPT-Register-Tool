@@ -1,17 +1,13 @@
-// Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
-#nullable enable
-
 using System.Collections.Generic;
 using System.Linq;
 
-namespace SmsWorkbench
+namespace SmsWorkbench.Models
 {
     /// <summary>
     /// SMS provider facts the desktop needs but cannot import from Python.
     ///
     /// <para>
-    /// This is a hand-mirror of `sms_tool/sms_providers.py`, which is the single
+    /// This is a hand-mirror of `sms_tool/phone/sms_providers.py`, which is the single
     /// source of truth. Mirrors drift, so the two are pinned together by
     /// `tests/workbench/test_settings_catalog_provider_parity.py`: it extracts the table
     /// below from this file and fails on any difference in provider keys, the
@@ -27,7 +23,7 @@ namespace SmsWorkbench
     /// under `/api/` with a `{code, message, data}` envelope and a lifecycle
     /// keyed on the phone number rather than an activation id. It is listed here
     /// because the Python side now ships a client for it
-    /// (`sms_tool/nexsms.py`); before that it was a reserved name with
+    /// (`sms_tool/phone/nexsms.py`); before that it was a reserved name with
     /// `client_available = false`, and offering it would have put a
     /// selectable-but-broken choice in front of the operator.
     /// </para>
@@ -42,7 +38,7 @@ namespace SmsWorkbench
     /// and answers every `?action=` call with `403 Forbidden`. `CatalogIsSmsActivate`
     /// is what the dialog dispatches on, and
     /// `tests/workbench/test_settings_catalog_provider_parity.py` pins every row's
-    /// `Protocol` against `sms_tool/sms_providers.py` -- the same
+    /// `Protocol` against `sms_tool/phone/sms_providers.py` -- the same
     /// no-compiler-between-the-two-languages argument as the endpoint and
     /// API-key-env columns.
     /// </para>

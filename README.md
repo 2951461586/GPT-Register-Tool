@@ -37,26 +37,26 @@ GPT-Register-Tool 采用 **WPF 桌面端 + Python 业务核心**，提供邮箱 
 
 | 模块 | 能力要点 |
 | --- | --- |
-| **一键注册** | 邮箱池 / ReMail 长效邮箱 / CFWorker 域名邮箱 / iCloud 接码链接，配多供应商手机接码；单账号与并发批量；每个账号独立提取 Sentinel Token 与 `oai-did`，不跨账号复用认证事务；成功判定为 AT 探测 HTTP 200；注册只保存 AT/Session，不生成支付链接 |
+| **一键注册** | 邮箱池 / ReMail 长效邮箱 / CFWorker 域名邮箱 / iCloud 接码链接，配多供应商手机接码；单账号、并发批量与按目标成功数调度（`--target-success` + `--max-attempts`）；每个账号独立提取 Sentinel Token 与 `oai-did`，不跨账号复用认证事务；成功判定为 AT 探测 HTTP 200；注册只保存 AT/Session，不生成支付链接 |
 | **协议一致性与恢复** | 领取或购买邮箱前预检 ChatGPT / Auth / Sentinel 三段网络；账号 ↔ 代理会话绑定，只在故障时换出口；NextAuth / Auth / ChatGPT 共享稳定的 `oai-did`、UA 与 client hints，指纹语言与时区随出口 GeoIP；403/429 熔断且不做纯 HTTP PoW 降级；创建账号后先持久化断点再探活，可从断点恢复且不重复烧 OTP |
 | **邮箱与 OTP** | 统一 mailbox seam：ReMail、Smailr、CFWorker、Microsoft Graph/OAuth、Outlook/Hotmail IMAP、Gmail、iCloud 接码链接与历史邮箱池格式；OTP 按主题、发件人、精确收件人、服务端时间戳过滤并排序；ReMail 支持自适应轮询、详情正文补取与 30s 内重发 |
 | **协议支付提链** | 15 种方式：PayPal、GoPay、GCash、GrabPay、UPI、iDEAL、PIX、Kakao Pay、BLIK、TWINT、直卡 Checkout、MoMo、QRIS、Bizum、Naver Pay（后三者为 CLI canary）；Checkout 与 Approve 使用彼此独立的出口池，按支付方法改写国家与 Session；严格区分 Checkout / Promotion / PM / Confirm / Poll / Provider Redirect 阶段；统一五态终态并附 `retryable` 与 `error_stage`，`unknown` 须先对账 |
 | **批量协议支付** | JIT AT 门禁、HTTP 401 分层恢复（RT → Cookie → 隔离浏览器邮箱 OTP → Codex OAuth）、Canary 暂停、方法级并发、原子断点与显式续跑；报告分开统计 AT 200、资格、支付方式可见性、Approve 与最终链接/二维码产物 |
-| **账号与数据管理** | Session JSON + SQLite 双层索引；账号测活与 401 恢复；优惠状态徽章（只查套餐/试用，不创建 Checkout）；Codex / CPA / SUB2API 导入导出；本地数据在 `sessions/` 与 `runtime/`，均被 Git 忽略 |
-| **桌面外壳** | 主题三态（跟随系统 / 浅色 / 深色，`System` 持续跟随 OS）；关闭窗口=隐藏到托盘，托盘菜单或 `Ctrl+Alt+R` 唤回，两个开关都可关；状态条实时显示吞吐/成功率/失败分类；代理池每行内联测速；工作区一键备份/恢复（配置 shard + 账号库 + 邮箱池 + UI 偏好，恢复前自动留旧副本） |
-| **桌面端操作** | 勾选账号后走「批量协议支付」窗口（并发、重试、Canary、两个出口池、断点续跑）；注册批次每输出一次 `Saved session:` 即防抖刷新账号池；多选删除合并为一次后端批量命令 |
+| **账号与数据管理** | Session JSON + SQLite 双层索引；账号测活、离线 JWT 轻量快速盘点（`--inspect-accounts`）与 401 恢复；优惠状态徽章（只查套餐/试用，不创建 Checkout）；Codex / CPA / SUB2API 导入导出；本地数据在 `sessions/` 与 `runtime/`，均被 Git 忽略 |
+| **桌面外壳** | 角色目录命名空间隔离（`Models` / `Services` / `ViewModels` / `Views` / `Dialogs` / `Interop`）+ 独立 Coordinator 编排；主题三态（跟随系统 / 浅色 / 深色，`System` 持续跟随 OS）；关闭窗口=隐藏到托盘，托盘菜单或 `Ctrl+Alt+R` 唤回，两个开关都可关；状态条实时显示吞吐/成功率/失败分类；代理池每行内联测速；工作区一键备份/恢复（配置 shard + 账号库 + 邮箱池 + UI 偏好，恢复前自动留旧副本） |
+| **桌面端操作** | 勾选账号后走「批量协议支付」窗口（并发、重试、Canary、两个出口池、断点续跑）；注册批次每输出一次 `Saved session:` 即防抖刷新账号池；多选删除合并为一次后端批量命令；浏览器驱动支持 `--block-assets` 省流拦截静态图像/字体/媒体资源 |
 | **手机接码** | SMSBower、HeroSMS、Grizzly、NexSMS 的供应商选择与在线目录查询（可用性依供应商协议），支持发送重试、超时与轮询间隔配置；详见 [当前接码契约](docs/current/one-click-sms.md) |
 
 
 ### 架构总览
 
-项目按 **① UI → ② CLI / 命令适配 → ③ 应用工作流 → ④ 领域契约 → ⑤ Provider / 持久化适配** 五层组织，导入只指向内层，下层从不反向依赖上层。配置与运行数据落在仓库外（Git 忽略）。注册泳道分协议（内置默认）与浏览器驱动两条，二者共用同一套邮箱 OTP、Session 提取与 AT 探活边界。
+项目按 **① UI → ② CLI / 命令适配 → ③ 应用工作流 → ④ 领域契约 → ⑤ Provider / 持久化 / 传输适配** 五层组织，导入只指向内层，下层从不反向依赖上层。配置与运行数据落在仓库外（Git 忽略）。注册泳道分协议（内置默认）与浏览器驱动两条，二者共用同一套邮箱 OTP、Session 提取与 AT 探活边界。
 
 ```mermaid
 flowchart TB
     subgraph L1["① 桌面端 UI · SmsWorkbench/（WPF · .NET 10）"]
         direction LR
-        PANEL["Generic Host / DI<br/>MVVM 页面 · 设置页"]
+        PANEL["Generic Host / DI<br/>Views · Dialogs · ViewModels · Coordinators"]
         IPC["IBackendClient<br/>版本化信封"]
     end
 
@@ -69,8 +69,7 @@ flowchart TB
 
     subgraph L3["③ 应用工作流"]
         direction LR
-        REG["registration"]
-        BATCH["batch_runner"]
+        REG["registration/"]
         DRV["registration_drivers/"]
         REC["accounts/"]
     end
@@ -79,18 +78,18 @@ flowchart TB
         direction LR
         RESULT["registration/result.py"]
         WIRE["payment/wire.py"]
-        CHECKOUT["checkout_contract"]
-        DIPC["desktop_ipc"]
+        CHECKOUT["payment/checkout_contract.py"]
+        DIPC["desktop/ipc.py"]
     end
 
-    subgraph L5["⑤ Provider / 持久化适配"]
+    subgraph L5["⑤ Provider / 持久化 / 传输与可观测性适配"]
         direction LR
-        AF["auth_flow/"]
-        SEN["sentinel/"]
-        MB["mailbox_*"]
-        PAY["pay_link/ · paypal/"]
-        STO["store/"]
-        GEO["geo/"]
+        AF["auth_flow/ · transport/"]
+        SEN["sentinel/ · phone/"]
+        MB["mailbox/ · providers/"]
+        PAY["payment/ · pay_link/ · paypal/"]
+        STO["store/ · observability/"]
+        GEO["geo/ · proxy/"]
     end
 
     PANEL --> IPC
@@ -108,21 +107,21 @@ flowchart TB
 
 | 层 | 模块 | 职责 |
 | ---------------------------------------- | --- | --- |
-| ① 桌面端 UI | `SmsWorkbench/` | Generic Host / DI、MVVM 页面、设置页、批量协议支付窗口、账号池；经 `IBackendClient` 以参数列表调用后端，并管理取消 / 超时 / 进程树终止 |
+| ① 桌面端 UI | `SmsWorkbench/`（`Views` · `Dialogs` · `ViewModels` · `Services` · `Models` · `Interop`） | Generic Host / DI、MVVM 页面与 XAML 弹窗、无窗口依赖 Coordinator、设置页、批量协议支付窗口、账号池；经 `IBackendClient` 以参数列表调用后端，并管理取消 / 超时 / 进程树终止 |
 | ② CLI / 命令适配 | `cli.py`、`commands/`、`cli_parsers/` | 参数解析、任务编排、批量任务、退出码；不承载 provider 实现 |
 | ③ 应用工作流 | `registration/orchestrator.py`、`registration/handlers.py` | 注册入口（入口分派 + `RegistrationOperations` 绑定）与协议泳道：阶段顺序、Sentinel 签发、OTP、AT 探活 |
-| ③ 应用工作流 | `batch_runner.py`、`registration/pulse.py` | 并发与脉冲调度、JIT AT 门禁、原子断点与断点续跑 |
-| ③ 应用工作流 | `registration_drivers/` | 浏览器驱动（playwright · camoufox · roxy · cloak）与 `browser_flow/`、`external_sessions/` |
-| ③ 应用工作流 | `accounts/`、`codex/oauth.py` | 存量账号恢复与 Codex OAuth；不负责新注册 |
-| ④ 领域契约 | `registration/result.py`、`registration/flags.py`、`checkout_contract.py`、`payment/wire.py`、`desktop/ipc.py` | 每次调用绑定一次的不可变接缝；`RegistrationOperations` 为固定接口，不作为活模块传入工作流 |
-| ⑤ Provider / 持久化适配&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `auth_flow/` | 步骤函数：signin / authorize / continue / OTP / TOTP |
-| ⑤ Provider / 持久化适配&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `sentinel/` | Sentinel Token 签发（Node `sdk.js` runner） |
-| ⑤ Provider / 持久化适配&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `mailbox/service.py`、`mailbox/strategies.py`、`providers/` | 邮箱路由、能力解析、轮询策略与 provider 传输 |
-| ⑤ Provider / 持久化适配&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `pay_link/`、`paypal/`、`paypal_link/`、`upi_link/` | Checkout 契约、能力探测、钱包 / GCash |
-| ⑤ Provider / 持久化适配&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `store/` | SQLite + Session JSON 持久化与领域事实 |
-| ⑤ Provider / 持久化适配&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `geo/`、`proxy/routing.py`、`fingerprint_pool.py` | 出口 GeoIP 与指纹绑定 |
+| ③ 应用工作流 | `registration/batch_runner.py`、`registration/pulse.py` | 并发与脉冲调度、目标成功数（`target_success`）早停、JIT AT 门禁、原子断点与断点续跑 |
+| ③ 应用工作流 | `registration_drivers/` | 浏览器驱动（playwright · camoufox · roxy · cloak）、静态资源省流拦截（`data_saver.py`）与 `browser_flow/`、`external_sessions/` |
+| ③ 应用工作流 | `accounts/`、`codex/oauth.py`、`importers/` | 存量账号测活/恢复、离线 JWT 快速盘点（`account_inspection.py`）、Codex OAuth 与导入导出；不负责新注册 |
+| ④ 领域契约 | `registration/result.py`、`registration/flags.py`、`payment/checkout_contract.py`、`payment/wire.py`、`desktop/ipc.py` | 每次调用绑定一次的不可变接缝；`RegistrationOperations` 为固定接口，不作为活模块传入工作流 |
+| ⑤ Provider / 持久化适配&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `auth_flow/`、`transport/` | 步骤函数（signin / authorize / continue / OTP / TOTP）与 HTTP/TLS/指纹/端点传输底座 |
+| ⑤ Provider / 持久化适配&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `sentinel/`、`registration/sentinel_tokens.py` | Sentinel Token 签发（Node `sdk.js` runner + ICU 时区/语言环境隔离） |
+| ⑤ Provider / 持久化适配&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `mailbox/`、`phone/`、`providers/` | 邮箱与手机接码路由、能力解析、轮询策略与 provider 传输 |
+| ⑤ Provider / 持久化适配&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `payment/`、`pay_link/`、`paypal/`、`paypal_link/`、`upi_link/` | Checkout 契约、能力探测、钱包 / GCash 与区域支付适配 |
+| ⑤ Provider / 持久化适配&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `store/`、`observability/` | SQLite + Session JSON 持久化、领域事实、脱敏日志与遥测输出 |
+| ⑤ Provider / 持久化适配&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `geo/`、`proxy/routing.py`、`transport/fingerprint_pool.py` | 出口 GeoIP 与指纹绑定 |
 
-`services/` 为可选本地协议服务（子进程边界，含 `mail-otp-web` 与 `protocol-payment`），不属于上述五层。
+`services/` 为可选本地协议服务（子进程边界，`protocol-payment`），不属于上述五层。
 
 更详细的边界说明见 [架构说明](docs/architecture.md)，目录职责见 [目录职责](docs/directory-map.md)。
 

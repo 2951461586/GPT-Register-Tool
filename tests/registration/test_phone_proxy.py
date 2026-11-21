@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import Mock, patch
 
-from sms_tool import phone_proxy
+from sms_tool.phone import phone_proxy
 from sms_tool.phone.reuse import PhonePool, PhoneSlot, complete_phone_verification_with_reuse
 
 
@@ -161,7 +161,7 @@ class PhoneReuseProxyGateTests(unittest.TestCase):
         session = Mock()
         with (
             patch("sms_tool.phone.provider_lifecycle._acquire_smsbower_number") as acquire,
-            patch("sms_tool.phone_proxy.select_phone_proxy", return_value={"ok": False, "error": "forbidden ip"}),
+            patch("sms_tool.phone.phone_proxy.select_phone_proxy", return_value={"ok": False, "error": "forbidden ip"}),
         ):
             result = complete_phone_verification_with_reuse(
                 session, "did", "https://auth.openai.com/add-phone", pool, proxy="http://bad.proxy:8080"

@@ -1,4 +1,4 @@
-<Window x:Class="SmsWorkbench.PaymentBatchWindow"
+<Window x:Class="SmsWorkbench.Views.PaymentBatchWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:loc="clr-namespace:SmsWorkbench.Localization"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"

@@ -5,7 +5,7 @@
 在都是 ``MARKET_PROFILES`` 的渲染视图——新增市场只改规范表一处。
 """
 
-from sms_tool.auth_headers import _GEO_PROFILES
+from sms_tool.transport.auth_headers import _GEO_PROFILES
 from sms_tool.browser.fingerprint_pool import (
     BROWSER_LOCALE_PROFILES,
     COUNTRY_LOCALE_PROFILE_MAP,

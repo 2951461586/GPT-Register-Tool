@@ -17,8 +17,8 @@ import io
 import json
 import logging
 
-from sms_tool.diagnostics import SanitizingTextIO
-from sms_tool.stdout_mirror import StdoutMirror, install_stdout_mirror
+from sms_tool.observability.diagnostics import SanitizingTextIO
+from sms_tool.observability.stdout_mirror import StdoutMirror, install_stdout_mirror
 
 
 def _mirror(tmp_path):
@@ -40,7 +40,7 @@ def test_mirror_persists_complete_lines(tmp_path):
 
 
 def test_disk_mirror_correlates_without_changing_stdout(tmp_path, monkeypatch):
-    from sms_tool.telemetry import current_run_id
+    from sms_tool.observability.telemetry import current_run_id
 
     monkeypatch.setenv("SMS_TOOL_COMMAND_ID", "fixture-command")
     marker = current_run_id.set("fixture-run")
@@ -59,8 +59,8 @@ def test_disk_mirror_correlates_without_changing_stdout(tmp_path, monkeypatch):
 
 
 def test_default_logs_are_isolated_by_process(tmp_path, monkeypatch):
-    from sms_tool import logging_setup
-    from sms_tool.stdout_mirror import default_stdout_log_path
+    from sms_tool.observability import logging_setup
+    from sms_tool.observability.stdout_mirror import default_stdout_log_path
 
     monkeypatch.setattr(logging_setup, "default_log_dir", lambda: tmp_path)
     monkeypatch.setattr(logging_setup.os, "getpid", lambda: 101)

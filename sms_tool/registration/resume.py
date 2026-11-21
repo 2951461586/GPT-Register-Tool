@@ -28,8 +28,8 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from . import checkpoint as registration_checkpoint
-from ..auth_headers import current_auth_fingerprint, set_auth_fingerprint
-from ..operator_output import emit as _emit
+from ..transport.auth_headers import current_auth_fingerprint, set_auth_fingerprint
+from ..observability.operator_output import emit as _emit
 from .protocol_helpers import _new_registration_session
 from .state import RegistrationState
 from ..kernel.sanitizer import describe_exception

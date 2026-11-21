@@ -1,10 +1,6 @@
-// Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
-#nullable enable
-
 using SmsWorkbench.Localization;
 
-namespace SmsWorkbench
+namespace SmsWorkbench.Views
 {
     public partial class MainWindow
     {
@@ -51,8 +47,8 @@ namespace SmsWorkbench
             // MainWindow.NavigationState): park the key so the backend funnel can
             // light the row while its batch runs. The highlight is cleared first, so
             // a dialog-only action can never inherit the previous batch's mark.
+            Shell.ParkPendingNavKey(key);
             ActiveNavKey = string.Empty;
-            pendingNavKey = key ?? string.Empty;
             if (key != null && NavActions.TryGetValue(key, out Action? action)) action();
         }
 

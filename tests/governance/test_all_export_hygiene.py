@@ -160,10 +160,8 @@ def test_the_paypal_link_shells_still_export_their_real_surface():
 
     Removing the 20 leaked names must not have removed a real one.
     """
-    import sms_tool.gen_pp_link as gen_pp_link
     import sms_tool.paypal_link as paypal_link
 
-    for module in (paypal_link, gen_pp_link):
-        for name in ("generate_pp_link", "PPLinkExtractor", "CURRENCY_MAP", "DEFAULT_STRIPE_PK"):
-            assert name in module.__all__, f"{module.__name__} lost {name}"
-            assert hasattr(module, name)
+    for name in ("generate_pp_link", "PPLinkExtractor", "CURRENCY_MAP", "DEFAULT_STRIPE_PK"):
+        assert name in paypal_link.__all__, f"{paypal_link.__name__} lost {name}"
+        assert hasattr(paypal_link, name)

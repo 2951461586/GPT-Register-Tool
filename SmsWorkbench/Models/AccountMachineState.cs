@@ -1,10 +1,6 @@
-// Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch stays `annotations`.
-#nullable enable
-
 using SmsWorkbench.Localization;
 
-namespace SmsWorkbench
+namespace SmsWorkbench.Models
 {
     /// <summary>
     /// Row decisions (badge colour, registered / needs-registration / attention /
@@ -71,7 +67,7 @@ namespace SmsWorkbench
         public const string NoRefreshToken = "no_rt";
         public const string MissingRefreshToken = "missing";
 
-        // ── promotion_state vocabulary (sms_tool/promotion_states.py) ────────────
+        // ── promotion_state vocabulary (sms_tool/payment/promotion_states.py) ────────────
         public const string PromotionTrialEligible = "trial_eligible";
         public const string PromotionSubscribed = "subscribed";
         public const string PromotionFree = "free";

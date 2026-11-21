@@ -24,8 +24,8 @@ from __future__ import annotations
 
 import pytest
 
-from sms_tool import auth_headers as ah
-from sms_tool.fingerprint_pool import FingerprintPool
+from sms_tool.transport import auth_headers as ah
+from sms_tool.transport.fingerprint_pool import FingerprintPool
 from sms_tool.geo import ProxyGeo
 from sms_tool.geo.profiles import MARKET_PROFILES, geo_profile
 from sms_tool.sentinel.runner import _platform_for_family

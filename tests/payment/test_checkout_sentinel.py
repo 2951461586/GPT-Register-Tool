@@ -11,11 +11,11 @@ from __future__ import annotations
 from typing import Any, cast
 from unittest.mock import patch
 
-from sms_tool import capability_browser as cb
-from sms_tool import gen_pp_link
+from sms_tool.payment import capability_browser as cb
+from sms_tool.payment import wire as payment_wire
 from sms_tool.paypal import extract as paypal_extract
 from sms_tool.payment import capability as pc
-from sms_tool.checkout_contract import CheckoutRequestContract, CheckoutSessionContract
+from sms_tool.payment.checkout_contract import CheckoutRequestContract, CheckoutSessionContract
 from sms_tool.payment.capability import (
     CapabilityProbeError,
     ChatGPTStripeCapabilityTransport,
@@ -154,7 +154,7 @@ def test_capability_transport_attaches_sentinel_pair_to_create():
 # ---------------------------------------------------------------------------
 def test_read_payment_methods_signal_parses_payload():
     response = _Resp(200, {"one_click_trial_eligible": True, "payment_method_types": ["paypal", "card"]})
-    with patch.object(gen_pp_link, "_checkout_get", return_value=response) as get:
+    with patch.object(payment_wire, "_checkout_get", return_value=response) as get:
         signal = pc._read_payment_methods_signal(
             access_token="at", auth_context={"device_id": "device-1"}, proxy="http://exit.test:80", timeout=20
         )
@@ -164,9 +164,9 @@ def test_read_payment_methods_signal_parses_payload():
 
 
 def test_read_payment_methods_signal_degrades_to_empty():
-    with patch.object(gen_pp_link, "_checkout_get", side_effect=RuntimeError("blocked")):
+    with patch.object(payment_wire, "_checkout_get", side_effect=RuntimeError("blocked")):
         assert pc._read_payment_methods_signal(access_token="at", auth_context={}, proxy="", timeout=20) == {}
-    with patch.object(gen_pp_link, "_checkout_get", return_value=_Resp(403, {"detail": "blocked"})):
+    with patch.object(payment_wire, "_checkout_get", return_value=_Resp(403, {"detail": "blocked"})):
         assert pc._read_payment_methods_signal(access_token="at", auth_context={}, proxy="", timeout=20) == {}
 
 
@@ -355,7 +355,7 @@ def test_probe_payment_method_passes_the_fallback_only_when_switched_on(monkeypa
 
     monkeypatch.setenv(pay_link_core.CAPABILITY_BROWSER_FALLBACK_ENV, "1")
     sentinel = object()
-    monkeypatch.setattr("sms_tool.capability_browser.browser_fallback_transport", lambda: sentinel)
+    monkeypatch.setattr("sms_tool.payment.capability_browser.browser_fallback_transport", lambda: sentinel)
     pay_link_core.probe_payment_method("at", "upi", payment_route_plan=plan)
     assert calls[-1]["fallback_transport"] is sentinel
 

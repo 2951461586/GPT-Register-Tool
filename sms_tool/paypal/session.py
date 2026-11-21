@@ -10,7 +10,7 @@ import contextlib
 import time
 from pathlib import Path
 
-from ..page_truth import write_page_truth
+from ..transport.page_truth import write_page_truth
 
 
 def _safe_import_cookie_header(ctx, cookie_header):

@@ -57,3 +57,26 @@ def test_pin_covers_the_runtime_asset_that_is_actually_shipped() -> None:
     """``DEFAULT_SENTINEL_VERSION`` and the pinned digest describe one file."""
     assert bundle.SDK_PATH.is_file()
     assert bundle._digest(bundle.SDK_PATH) == bundle.SDK_SHA256
+
+
+def test_upi_sentinel_imports_single_source_sentinel_version() -> None:
+    """``upi_sentinel`` must not restate a second copy of ``DEFAULT_SENTINEL_VERSION``."""
+    from sms_tool.upi_link._vendor import upi_sentinel
+
+    assert upi_sentinel.DEFAULT_SENTINEL_VERSION == bundle.DEFAULT_SENTINEL_VERSION
+
+
+def test_protocol_payment_worker_timeouts_match_kernel_authority() -> None:
+    """Subprocess payment worker timeouts must match ``sms_tool.kernel.timeouts``."""
+    import ast
+    from sms_tool.kernel import timeouts as kernel_timeouts
+
+    worker_timeouts_path = ROOT / "services" / "protocol-payment" / "common" / "timeouts.py"
+    tree = ast.parse(worker_timeouts_path.read_text(encoding="utf-8"))
+    constants: dict[str, int] = {}
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+            if isinstance(node.value, ast.Constant) and isinstance(node.value.value, int):
+                constants[node.targets[0].id] = node.value.value
+    assert constants["DEFAULT_TIMEOUT"] == kernel_timeouts.DEFAULT_TIMEOUT
+    assert constants["CHATGPT_TIMEOUT"] == kernel_timeouts.CHATGPT_TIMEOUT

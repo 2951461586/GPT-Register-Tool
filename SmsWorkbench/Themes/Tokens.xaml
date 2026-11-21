@@ -24,57 +24,18 @@
        Sm=6   chips, small square buttons
        Md=8   inputs, buttons, menus
        Lg=10  sidebar rows, toolbars
-       Xl=12  cards, panels, console
-       Full   pills (pagers, status dots)
-       Derived radii are computed (outer = inner + inset), never added here. -->
-  <sys:Double x:Key="Radius.Xs">4</sys:Double>
-  <sys:Double x:Key="Radius.Sm">6</sys:Double>
-  <sys:Double x:Key="Radius.Md">8</sys:Double>
-  <sys:Double x:Key="Radius.Lg">10</sys:Double>
-  <sys:Double x:Key="Radius.Xl">12</sys:Double>
-  <sys:Double x:Key="Radius.Full">999</sys:Double>
-
+       Xl=12  cards, panels, console -->
   <CornerRadius x:Key="Corner.Xs">4</CornerRadius>
   <CornerRadius x:Key="Corner.Sm">6</CornerRadius>
   <CornerRadius x:Key="Corner.Md">8</CornerRadius>
   <CornerRadius x:Key="Corner.Lg">10</CornerRadius>
   <CornerRadius x:Key="Corner.Xl">12</CornerRadius>
-  <!-- Capsule radius, but only for shapes whose short side is at least
-       ``2 * radius``. WPF does not clamp a corner radius the way CSS does: when it
-       exceeds half the short side the corner arcs overlap and the rectangle is
-       drawn as a lens (thin at both ends, thick in the middle). Every rounded bar
-       thinner than 8px therefore uses ``Corner.Hairline``. -->
-  <CornerRadius x:Key="Corner.Full">999</CornerRadius>
   <!-- Half of a 3px mark (selection bars, splitter grip): the largest radius that
        still draws a rectangle with rounded ends instead of a lens. -->
   <CornerRadius x:Key="Corner.Hairline">1.5</CornerRadius>
-  <!-- Field wells inside a rounded card keep the card's curve minus the inset. -->
-  <CornerRadius x:Key="Corner.Inset">6</CornerRadius>
-  <!-- Top-only variant for a dialog's title strip. The strip is flush with the
-       window card (inset 0), so its radius must equal the card's Xl. It used to be a
-       literal `10,10,0,0` under a `Corner.Xl` card, which left a 2px card-coloured
-       sliver in each top corner. Outer radius = inner radius + inset, so the token
-       is derived from Xl rather than being a new step on the scale. -->
-  <CornerRadius x:Key="Corner.TopXl">12,12,0,0</CornerRadius>
 
   <!-- ═══ Spacing (4px grid) ══════════════════════════════════════════════ -->
-  <sys:Double x:Key="Space.1">4</sys:Double>
-  <sys:Double x:Key="Space.2">8</sys:Double>
-  <sys:Double x:Key="Space.3">12</sys:Double>
-  <sys:Double x:Key="Space.4">16</sys:Double>
-  <sys:Double x:Key="Space.5">24</sys:Double>
-  <sys:Double x:Key="Space.6">32</sys:Double>
-
-  <Thickness x:Key="Space.All1">4</Thickness>
-  <Thickness x:Key="Space.All2">8</Thickness>
-  <Thickness x:Key="Space.All3">12</Thickness>
-  <Thickness x:Key="Space.All4">16</Thickness>
-  <Thickness x:Key="Space.Right2">0,0,8,0</Thickness>
-  <Thickness x:Key="Space.Left2">8,0,0,0</Thickness>
   <Thickness x:Key="Space.Bottom1">0,0,0,4</Thickness>
-  <Thickness x:Key="Space.Bottom2">0,0,0,8</Thickness>
-  <Thickness x:Key="Space.Bottom3">0,0,0,12</Thickness>
-  <Thickness x:Key="Space.Row2">0,0,0,8</Thickness>
 
   <!-- ═══ Scrollbar / splitter ═══════════════════════════════════════════
        These numbers used to be literals inside the ControlTemplates, which is why
@@ -112,11 +73,4 @@
        Cascadia Mono is present on Windows 11/10 21H2+; Consolas and YaHei UI cover
        the rest. -->
   <FontFamily x:Key="Font.Mono">Cascadia Mono, Consolas, Microsoft YaHei UI</FontFamily>
-
-  <!-- ═══ Motion ══════════════════════════════════════════════════════════
-       WPF has no implicit transitions: a Setter trigger is instantaneous. These
-       durations are for the explicit Storyboards (sidebar collapse) and document
-       the intended feel for anything added later. -->
-  <Duration x:Key="Motion.Fast">0:0:0.12</Duration>
-  <Duration x:Key="Motion.Normal">0:0:0.18</Duration>
 </ResourceDictionary>

@@ -3,7 +3,7 @@ from collections.abc import Mapping
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from sms_tool.checkout_contract import CheckoutRequestContract
+from sms_tool.payment.checkout_contract import CheckoutRequestContract
 from sms_tool.wallet.provider import WalletTransportRequest
 from sms_tool.wallet.transport import ChatGPTStripeWalletTransport
 
@@ -73,7 +73,7 @@ class WalletTransportTests(unittest.TestCase):
             calls.append((url, body, access_token, cookie, proxy, extra_headers))
             return responses.pop(0)
 
-        with patch("sms_tool.gen_pp_link._checkout_post", side_effect=checkout_post):
+        with patch("sms_tool.payment.wire._checkout_post", side_effect=checkout_post):
             transport.create_checkout(request("checkout"))
             transport.approve_checkout(request("approve", payload={"checkout_session_id": "cs_fixture"}))
 
@@ -90,7 +90,7 @@ class WalletTransportTests(unittest.TestCase):
             calls.append((url, body, proxy, extra_headers))
             return FakeResponse(payload={"success": True})
 
-        with patch("sms_tool.gen_pp_link._checkout_post", side_effect=checkout_post):
+        with patch("sms_tool.payment.wire._checkout_post", side_effect=checkout_post):
             result = transport.update_checkout(
                 request(
                     "promotion",
@@ -120,7 +120,7 @@ class WalletTransportTests(unittest.TestCase):
             "http://session-two@approve.test:80",
         ]
         with (
-            patch("sms_tool.gen_pp_link._checkout_post", side_effect=checkout_post),
+            patch("sms_tool.payment.wire._checkout_post", side_effect=checkout_post),
             patch("sms_tool.paypal.proxy.rotate_proxy_session", side_effect=rotated) as rotate,
         ):
             transport.approve_checkout(request("approve", attempt=1, transport_context=context))
@@ -146,7 +146,7 @@ class WalletTransportTests(unittest.TestCase):
         ]
         with (
             patch("sms_tool.paypal.proxy.rotate_proxy_session", side_effect=rotated),
-            patch("sms_tool.gen_pp_link._new_session", side_effect=sessions) as new_session,
+            patch("sms_tool.payment.wire._new_session", side_effect=sessions) as new_session,
         ):
             transport.poll_payment(request("poll", attempt=1, transport_context=context))
             transport.poll_payment(request("poll", attempt=2, transport_context=context))
@@ -164,7 +164,7 @@ class WalletTransportTests(unittest.TestCase):
             ]
         )
         transport = ChatGPTStripeWalletTransport()
-        with patch("sms_tool.gen_pp_link._new_session", return_value=session) as new_session:
+        with patch("sms_tool.payment.wire._new_session", return_value=session) as new_session:
             transport.stripe_init(request("stripe_init"))
             transport.create_payment_method(request("payment_method"))
             transport.confirm_payment(request("confirm"))
@@ -185,7 +185,7 @@ class WalletTransportTests(unittest.TestCase):
             ]
         )
         transport = ChatGPTStripeWalletTransport()
-        with patch("sms_tool.gen_pp_link._new_session", return_value=session):
+        with patch("sms_tool.payment.wire._new_session", return_value=session):
             result = transport.follow_redirect(
                 request(
                     "follow_redirect",
@@ -203,7 +203,7 @@ class WalletTransportTests(unittest.TestCase):
             ]
         )
         transport = ChatGPTStripeWalletTransport()
-        with patch("sms_tool.gen_pp_link._new_session", return_value=session):
+        with patch("sms_tool.payment.wire._new_session", return_value=session):
             with self.assertRaisesRegex(Exception, "not allowed"):
                 transport.follow_redirect(
                     request(

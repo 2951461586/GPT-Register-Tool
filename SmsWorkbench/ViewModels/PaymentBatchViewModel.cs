@@ -1,7 +1,3 @@
-// Opted into nullable reference checking file-by-file - see the note in
-// PaymentBatchService.cs for why the project-wide switch used to stay `annotations`.
-#nullable enable
-
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using System.Collections.ObjectModel;
@@ -10,11 +6,11 @@ using System.Text.Json;
 
 using SmsWorkbench.Localization;
 
-namespace SmsWorkbench
+namespace SmsWorkbench.ViewModels
 {
     public sealed partial class PaymentBatchViewModel : ObservableObject
     {
-        private static readonly PaymentProxyCountryOption AutomaticCheckoutCountryOption =
+        private static PaymentProxyCountryOption AutomaticCheckoutCountryOption =>
             new("", Loc.T("自动（跟随账单区）"));
         private static readonly char[] ManualTokenSeparators = ['\r', '\n', ',', ';'];
 
@@ -23,10 +19,6 @@ namespace SmsWorkbench
         private readonly IPaymentCountryCatalog? _countryCatalog;
         private readonly PaymentBatchAccount[] _accounts;
         private readonly HashSet<string> _terminalProgressAccounts = new(StringComparer.OrdinalIgnoreCase);
-        // Region-bucketed view of the full mixed proxy pool.  Keys are upper-case
-        // ISO codes; the empty string key holds entries whose region cannot be
-        // inferred (always shown so they are never lost).  _checkoutRegionOrder /
-        // _approveRegionOrder preserve first-seen region order for stable display.
         private readonly Dictionary<string, List<string>> _checkoutRegionPools = new(StringComparer.OrdinalIgnoreCase);
         private readonly List<string> _checkoutRegionOrder = new();
         private readonly Dictionary<string, List<string>> _approveRegionPools = new(StringComparer.OrdinalIgnoreCase);
@@ -45,7 +37,6 @@ namespace SmsWorkbench
         [ObservableProperty] private string approveProxyPool = "";
         [ObservableProperty] private string checkoutProxyCountry = "";
         [ObservableProperty] private string approveProxyCountry = "";
-        // Region composition of the current mixed source pool (e.g. "US×30 · JP×30 · GB×30 · 未知×0").
         [ObservableProperty] private string checkoutRegionSummary = "";
         [ObservableProperty] private string approveRegionSummary = "";
         [ObservableProperty] private bool jitRefresh = true;
@@ -196,8 +187,8 @@ namespace SmsWorkbench
                     CheckoutProxyCountry,
                     ApproveProxyCountry,
                     ApproveProxyCountry,
-                    FullPool(_checkoutRegionPools, _checkoutRegionOrder),
-                    FullPool(_approveRegionPools, _approveRegionOrder)));
+                    PaymentProxyRegionPlanner.FullPool(_checkoutRegionPools, _checkoutRegionOrder),
+                    PaymentProxyRegionPlanner.FullPool(_approveRegionPools, _approveRegionOrder)));
             Status = result.Ok
                 ? Loc.F("{0} Checkout / Approve 代理配置已保存。", PaymentMethods.DisplayName(method))
                 : result.Error;
@@ -218,7 +209,7 @@ namespace SmsWorkbench
                     CheckoutProxyCountry ?? "",
                     ApproveProxyCountry ?? "",
                     cancellationToken);
-                Status = FormatProxyProbe(report);
+                Status = PaymentBatchReportParser.FormatProxyProbe(report);
             }
             catch (OperationCanceledException)
             {
@@ -236,33 +227,6 @@ namespace SmsWorkbench
             {
                 IsRunning = false;
             }
-        }
-
-        private static string FormatProxyProbe(JsonElement report)
-        {
-            bool ok = report.TryGetProperty("ok", out JsonElement okElement)
-                && okElement.ValueKind == JsonValueKind.True;
-            var parts = new List<string>();
-            if (report.TryGetProperty("stages", out JsonElement stages)
-                && stages.ValueKind == JsonValueKind.Object)
-            {
-                foreach (JsonProperty stage in stages.EnumerateObject())
-                {
-                    JsonElement value = stage.Value;
-                    bool stageOk = value.TryGetProperty("ok", out JsonElement stageOkElement)
-                        && stageOkElement.ValueKind == JsonValueKind.True;
-                    string cc = JsonString(value, "country_code");
-                    string region = JsonString(value, "region");
-                    string ip = JsonString(value, "ip");
-                    string error = JsonString(value, "error");
-                    string where = string.Join("/", new[] { cc, region }.Where(item => item.Length > 0));
-                    parts.Add(stageOk
-                        ? $"{stage.Name}✓ {where} {ip}".Trim()
-                        : $"{stage.Name}✗ {error}".Trim());
-                }
-            }
-            string prefix = ok ? Loc.T("代理探测通过：") : Loc.T("代理探测存在问题：");
-            return parts.Count > 0 ? prefix + string.Join("  |  ", parts) : prefix + Loc.T("无可探测的代理");
         }
 
         [RelayCommand(IncludeCancelCommand = true, CanExecute = nameof(CanRun))]
@@ -297,12 +261,12 @@ namespace SmsWorkbench
                 _acceptProgress = false;
                 Results.Clear();
                 PopulateResults(report);
-                ReportPath = JsonString(report, "report_path");
-                string error = JsonString(report, "error");
+                ReportPath = PaymentBatchReportParser.JsonString(report, "report_path");
+                string error = PaymentBatchReportParser.JsonString(report, "error");
                 string summary = error.Length > 0 && !report.TryGetProperty("counts", out _)
                     ? Loc.T("执行失败：") + error
-                    : FormatSummary(report);
-                int resumed = JsonInt(report, "resumed");
+                    : PaymentBatchReportParser.FormatSummary(report);
+                int resumed = PaymentBatchReportParser.JsonInt(report, "resumed");
                 Status = request.ResumeCheckpoint
                     ? Loc.F("断点恢复 · 已恢复 {0} 个账号 · {1}", resumed, summary)
                     : Loc.T("新执行 · ") + summary;
@@ -399,18 +363,15 @@ namespace SmsWorkbench
             PaymentBatchResultRow? row = Results.FirstOrDefault(item => item.AccountRef.Equals(accountRef, StringComparison.OrdinalIgnoreCase));
             if (row == null) return;
             bool accountTerminal = progress.AccountTerminal;
-            // Backend events can arrive out of order when adapter callbacks and
-            // the executor's terminal event share stdout. Never let a stale
-            // running event regress a terminal row back to "执行中".
             if (_terminalProgressAccounts.Contains(row.AccountRef)
                 && !accountTerminal)
                 return;
-            int percent = PaymentStageProgress(progress.Stage, accountTerminal, SelectedMethod?.Id);
+            int percent = PaymentBatchReportParser.PaymentStageProgress(progress.Stage, accountTerminal, SelectedMethod?.Id);
             if (percent >= row.ProgressPercent || accountTerminal)
             {
                 row.ProgressPercent = Math.Max(row.ProgressPercent, percent);
                 row.ProgressText = $"{(int)row.ProgressPercent}%";
-                row.CurrentStage = PaymentStageLabel(progress.Stage);
+                row.CurrentStage = PaymentBatchReportParser.PaymentStageLabel(progress.Stage);
             }
             if (accountTerminal)
             {
@@ -437,46 +398,10 @@ namespace SmsWorkbench
             if (string.IsNullOrWhiteSpace(accountRef)) return "";
             PaymentBatchAccount? account = EffectiveAccounts()
                 .FirstOrDefault(item => item.Email.Equals(accountRef, StringComparison.OrdinalIgnoreCase)
-                    || PaymentAccountRef(item.Email).Equals(accountRef, StringComparison.OrdinalIgnoreCase));
+                    || PaymentBatchReportParser.PaymentAccountRef(item.Email).Equals(accountRef, StringComparison.OrdinalIgnoreCase));
             return account?.Email ?? accountRef;
         }
 
-        private static string PaymentAccountRef(string value)
-        {
-            byte[] hash = System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes((value ?? "").Trim().ToLowerInvariant()));
-            return Convert.ToHexString(hash).ToLowerInvariant()[..16];
-        }
-
-        private static int PaymentStageProgress(string stage, bool terminal, string? method = null)
-        {
-            if (terminal) return 100;
-            string normalized = (stage ?? "").Trim().ToLowerInvariant();
-            IReadOnlyList<string> stages = Array.Empty<string>();
-            try { stages = PaymentMethods.Find(method).Stages ?? Array.Empty<string>(); } catch { }
-            if (stages.Count == 0) stages = new[] { "routing", "auth_gate", "checkout", "stripe_init", "provider", "confirm", "redirect", "artifact" };
-            int index = Array.FindIndex(stages.ToArray(), item => item == normalized || (normalized == "checkout_create" && item == "checkout") || (normalized == "capability_probe" && item == "stripe_init") || (normalized == "payment_method" && item == "provider"));
-            return index < 0 ? 5 : Math.Clamp((index + 1) * 95 / stages.Count, 5, 95);
-        }
-
-        private static string PaymentStageLabel(string stage) => (stage ?? "").Trim().ToLowerInvariant() switch
-        {
-            "routing" => Loc.T("路由准备"),
-            "auth_gate" => Loc.T("AT 验证"),
-            "checkout" or "checkout_create" => Loc.T("创建 Checkout"),
-            "stripe_init" or "capability_probe" => Loc.T("能力探测"),
-            "provider" or "payment_method" => Loc.T("支付方式处理"),
-            "approve" or "confirm" => Loc.T("支付确认"),
-            "redirect" or "promotion" => Loc.T("结果确认"),
-            "completed" => Loc.T("完成"),
-            _ => string.IsNullOrWhiteSpace(stage) ? Loc.T("执行中") : stage,
-        };
-
-        /// <summary>
-        /// Single neutral matrix cell: no registration-country cohort and no
-        /// per-cell stage countries, so every account follows the shared
-        /// Checkout / Approve proxy settings configured above. Only the
-        /// method-owned strategy default (e.g. MoMo custom promo) is kept.
-        /// </summary>
         private PaymentMatrixRow CreateNeutralMatrixRow()
         {
             PaymentMatrixRow row = _paymentBatchService.CreateDefaultMatrixRow(SelectedMethod?.Id ?? "paypal");
@@ -512,11 +437,6 @@ namespace SmsWorkbench
 
         private string DefaultApproveCountry => ApproveCountryOptions.Count > 0 ? ApproveCountryOptions[0].Code : "";
 
-        // The promotion/update rotation country lives in the persisted per-method
-        // stage configuration (stage_proxy_countries.promotion), not in the
-        // checkout/approve UI selection. Passing the approve country here used to
-        // overwrite the configured promotion country on the Python side, which
-        // silently switched the rotation region (e.g. GoPay: TH became JP).
         private string ResolveUpdateCountry()
         {
             if (_paymentBatchService == null) return "";
@@ -541,14 +461,9 @@ namespace SmsWorkbench
             string approveSource = !string.IsNullOrWhiteSpace(configured.ApproveProxySourcePool)
                 ? configured.ApproveProxySourcePool
                 : configured.ApproveProxyPool ?? "";
-            // Buckets must be rebuilt before the country/pool setters fire their
-            // partial handlers so the region filter has source data to read from.
-            InitializeBuckets(checkoutSource, _checkoutRegionPools, _checkoutRegionOrder);
-            InitializeBuckets(approveSource, _approveRegionPools, _approveRegionOrder);
+            PaymentProxyRegionPlanner.InitializeBuckets(checkoutSource, _checkoutRegionPools, _checkoutRegionOrder);
+            PaymentProxyRegionPlanner.InitializeBuckets(approveSource, _approveRegionPools, _approveRegionOrder);
             CheckoutProxyCountry = configured.CheckoutCountry ?? "";
-            // The configured approve country wins only when the catalog offers
-            // it for the selected method; otherwise fall back to the catalog's
-            // first approve option instead of a hardcoded JP/TR pair.
             string configuredApproveCountry = (configured.ApproveCountry ?? "").Trim().ToUpperInvariant();
             ApproveProxyCountry = ApproveCountryOptions.Any(option => option.Code == configuredApproveCountry)
                 ? configuredApproveCountry
@@ -556,281 +471,44 @@ namespace SmsWorkbench
             RefreshRegionSummaries();
         }
 
-        // ── Region-aware proxy pool handling ──────────────────────────────────
-        //
-        // The payment lane's proxy pools carry every zone mixed together (US+JP+GB
-        // for one IPWO account).  The user picks a country in the checkout /
-        // approve dropdown and the pool textbox should show only that region's
-        // entries (matched on the IPWO `custom_zone_<CC>` credential token, with
-        // Cliproxy `region-<CC>` as a secondary hint).  The full mixed pool is
-        // preserved as the source so switching back never drops a zone, and the
-        // backend still rotates each chosen entry to the selected country at
-        // runtime — the 测试出口 probe validates the resulting egress.
-
-        private static string InferProxyRegion(string proxy)
-        {
-            string text = (proxy ?? "").Trim();
-            if (text.Length == 0) return "";
-            string username = "";
-            int at = text.IndexOf('@');
-            if (at >= 0)
-            {
-                // URL form: scheme://user:pass@host:port
-                string auth = text.Substring(0, at);
-                int schemeSep = auth.IndexOf("://", StringComparison.Ordinal);
-                if (schemeSep >= 0) auth = auth.Substring(schemeSep + 3);
-                int colon = auth.IndexOf(':');
-                username = colon >= 0 ? auth.Substring(0, colon) : auth;
-            }
-            else
-            {
-                // 4-segment form: host:port:user:pass (no scheme, no @)
-                string[] parts = text.Split(':');
-                if (parts.Length >= 4) username = parts[2];
-            }
-            try { username = Uri.UnescapeDataString(username); } catch { }
-            Match match = Regex.Match(username, @"(?:^|[_-])custom[_-]zone[_-]([A-Za-z]{2})(?=$|[_-])", RegexOptions.IgnoreCase);
-            if (match.Success) return match.Groups[1].Value.ToUpperInvariant();
-            Match cliproxy = Regex.Match(username, @"region-([A-Za-z]{2})(?=$|[-_:])", RegexOptions.IgnoreCase);
-            if (cliproxy.Success) return cliproxy.Groups[1].Value.ToUpperInvariant();
-            return "";
-        }
-
-        private static readonly string[] PoolTextSeparators = { "\r\n", "\n", ",", ";" };
-
-        private static string[] SplitPoolText(string value)
-            => (value ?? "")
-                .Split(PoolTextSeparators, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-        private static void InitializeBuckets(
-            string text, Dictionary<string, List<string>> buckets, List<string> order)
-        {
-            buckets.Clear();
-            order.Clear();
-            foreach (string line in SplitPoolText(text))
-            {
-                string region = InferProxyRegion(line);
-                if (!buckets.TryGetValue(region, out List<string>? list))
-                {
-                    list = new List<string>();
-                    buckets[region] = list;
-                    order.Add(region);
-                }
-                list.Add(line);
-            }
-        }
-
-        private static void SyncDisplay(
-            string display, string country, Dictionary<string, List<string>> buckets, List<string> order)
-        {
-            if (string.IsNullOrWhiteSpace(country))
-            {
-                // Automatic / 自动: the display holds every region, so re-derive
-                // all buckets from it.
-                InitializeBuckets(display, buckets, order);
-                return;
-            }
-            // A concrete country only exposes that region plus the unknown bucket,
-            // so only those two buckets are rewritten — every other zone's
-            // entries stay intact in their own bucket.
-            if (!buckets.TryGetValue(country, out List<string>? countryList) || countryList == null)
-            {
-                countryList = new List<string>();
-                buckets[country] = countryList;
-                if (order.FindIndex(item => string.Equals(item, country, StringComparison.OrdinalIgnoreCase)) < 0)
-                    order.Add(country);
-            }
-            else
-            {
-                countryList.Clear();
-            }
-            if (!buckets.TryGetValue("", out List<string>? unknownList) || unknownList == null)
-            {
-                unknownList = new List<string>();
-                buckets[""] = unknownList;
-                if (order.FindIndex(item => item.Length == 0) < 0)
-                    order.Add("");
-            }
-            else
-            {
-                unknownList.Clear();
-            }
-            foreach (string line in SplitPoolText(display))
-            {
-                string region = InferProxyRegion(line);
-                if (string.Equals(region, country, StringComparison.OrdinalIgnoreCase))
-                    countryList.Add(line);
-                else
-                    unknownList.Add(line);
-            }
-        }
-
-        private const string PoolLineSeparator = ProxyInputNormalizer.LineSeparator;
-
-        private static string ComputeDisplay(
-            string country, Dictionary<string, List<string>> buckets, List<string> order)
-        {
-            var lines = new List<string>();
-            if (string.IsNullOrWhiteSpace(country))
-            {
-                foreach (string region in order)
-                    lines.AddRange(buckets[region]);
-            }
-            else
-            {
-                if (buckets.TryGetValue(country, out List<string>? countryList))
-                    lines.AddRange(countryList);
-                if (buckets.TryGetValue("", out List<string>? unknownList))
-                    lines.AddRange(unknownList);
-            }
-            return string.Join(PoolLineSeparator, lines);
-        }
-
-        private static string FullPool(Dictionary<string, List<string>> buckets, List<string> order)
-            => string.Join(PoolLineSeparator, order.SelectMany(region => buckets[region]));
-
-        private static string FormatRegionSummary(Dictionary<string, List<string>> buckets, List<string> order)
-        {
-            if (buckets.Count == 0) return Loc.T("（空）");
-            return string.Join(" · ", order.Select(region =>
-                (region.Length == 0 ? Loc.T("未知") : region) + "×" + buckets[region].Count));
-        }
-
         private void RefreshRegionSummaries()
         {
-            CheckoutRegionSummary = FormatRegionSummary(_checkoutRegionPools, _checkoutRegionOrder);
-            ApproveRegionSummary = FormatRegionSummary(_approveRegionPools, _approveRegionOrder);
+            CheckoutRegionSummary = PaymentProxyRegionPlanner.FormatRegionSummary(_checkoutRegionPools, _checkoutRegionOrder);
+            ApproveRegionSummary = PaymentProxyRegionPlanner.FormatRegionSummary(_approveRegionPools, _approveRegionOrder);
         }
 
         partial void OnCheckoutProxyPoolChanged(string value)
         {
-            // Mirror manual edits into the region buckets so the auto-switch
-            // never resurrects stale entries and edits survive country changes.
-            SyncDisplay(value ?? "", CheckoutProxyCountry, _checkoutRegionPools, _checkoutRegionOrder);
+            PaymentProxyRegionPlanner.SyncDisplay(value ?? "", CheckoutProxyCountry, _checkoutRegionPools, _checkoutRegionOrder);
             RefreshRegionSummaries();
         }
 
         partial void OnCheckoutProxyCountryChanged(string value)
         {
-            // Buckets already reflect the previous display (synced on every
-            // edit), so only the visible window changes; other zones are kept.
-            CheckoutProxyPool = ComputeDisplay(value ?? "", _checkoutRegionPools, _checkoutRegionOrder);
+            CheckoutProxyPool = PaymentProxyRegionPlanner.ComputeDisplay(value ?? "", _checkoutRegionPools, _checkoutRegionOrder);
             RefreshRegionSummaries();
         }
 
         partial void OnApproveProxyPoolChanged(string value)
         {
-            SyncDisplay(value ?? "", ApproveProxyCountry, _approveRegionPools, _approveRegionOrder);
+            PaymentProxyRegionPlanner.SyncDisplay(value ?? "", ApproveProxyCountry, _approveRegionPools, _approveRegionOrder);
             RefreshRegionSummaries();
         }
 
         partial void OnApproveProxyCountryChanged(string value)
         {
-            ApproveProxyPool = ComputeDisplay(value ?? "", _approveRegionPools, _approveRegionOrder);
+            ApproveProxyPool = PaymentProxyRegionPlanner.ComputeDisplay(value ?? "", _approveRegionPools, _approveRegionOrder);
             RefreshRegionSummaries();
         }
 
         private void PopulateResults(JsonElement report)
         {
-            if (!report.TryGetProperty("results", out JsonElement values) || values.ValueKind != JsonValueKind.Array) return;
-            foreach (JsonElement row in values.EnumerateArray())
+            foreach (PaymentBatchResultRow resultRow in PaymentBatchReportParser.ParseResults(report, ResolveAccountDisplay))
             {
-                string eligibility = Loc.T("未知");
-                if (row.TryGetProperty("eligible", out JsonElement eligible)
-                    && eligible.ValueKind is JsonValueKind.True or JsonValueKind.False)
-                    eligibility = eligible.GetBoolean() ? Loc.T("符合") : Loc.T("不符合");
-                string decision = JsonString(row, "decision");
-                string paymentUrl = FirstNonEmpty(JsonString(row, "url"), JsonString(row, "long_url"));
-                string qrData = JsonString(row, "qr_data");
-                string qrPath = JsonString(row, "qr_path");
-                bool paymentUrlPresent = paymentUrl.Length > 0
-                    || JsonBool(row, "url_present")
-                    || JsonBool(row, "long_url_present");
-                bool qrDataPresent = qrData.Length > 0 || JsonBool(row, "qr_data_present");
-                bool qrPathPresent = qrPath.Length > 0 || JsonBool(row, "qr_path_present");
-                string terminalState = FirstNonEmpty(
-                    JsonString(row, "terminal_state"),
-                    JsonString(row, "status"),
-                    JsonString(row, "state"));
-                if (terminalState.Equals("canceled", StringComparison.OrdinalIgnoreCase))
-                    terminalState = "cancelled";
-                string resultKind = paymentUrlPresent
-                    ? Loc.T("支付链接")
-                    : qrDataPresent
-                        ? Loc.T("二维码内容")
-                        : qrPathPresent ? Loc.T("二维码文件") : "";
-                string resultValue = FirstNonEmpty(paymentUrl, qrData, qrPath);
-                string accountDisplay = ResolveAccountDisplay(JsonString(row, "account_ref"));
-                PaymentBatchResultRow resultRow = new()
-                {
-                    AccountRef = accountDisplay,
-                    MatrixCell = JsonString(row, "matrix_cell"),
-                    AuthStatus = JsonBool(row, "authenticated") ? "200" : Loc.T("失败"),
-                    RefreshStatus = JsonBool(row, "refreshed") ? Loc.T("已刷新") : Loc.T("未刷新"),
-                    Eligibility = eligibility,
-                    Decision = decision.Length > 0 ? decision : JsonString(row, "error"),
-                    TerminalState = terminalState,
-                    ErrorStage = JsonString(row, "error_stage"),
-                    Retryable = JsonBool(row, "retryable"),
-                    ResultKind = resultKind,
-                    ResultValue = resultValue,
-                    ResultPresent = paymentUrlPresent || qrDataPresent || qrPathPresent,
-                    AuthorizationQueued = JsonBool(row, "authorization_queued"),
-                    AuthorizationStatus = JsonString(row, "authorization_status"),
-                    ProgressPercent = 100,
-                    ProgressText = "100%",
-                    CurrentStage = Loc.T("完成"),
-                    ResultStatus = JsonBool(row, "ok")
-                        || terminalState.Equals("completed", StringComparison.OrdinalIgnoreCase)
-                        || paymentUrlPresent || qrDataPresent || qrPathPresent
-                        ? Loc.T("成功")
-                        : "失败",
-                    Attempts = JsonInt(row, "attempts")
-                };
                 Results.Add(resultRow);
-                // The results frame is this account's final word, so register it
-                // with the same guard ApplyProgress uses for a terminal progress
-                // event. Adapter callbacks and the executor's terminal event share
-                // stdout, and IProgress delivery can be posted through a
-                // SynchronizationContext, so a "running" event may arrive after
-                // the results are applied; without this the row regressed from
-                // 成功 back to 执行中 (observed on CI, where the posted callback
-                // lands last, while a local run applied the progress first).
-                _terminalProgressAccounts.Add(accountDisplay);
+                _terminalProgressAccounts.Add(resultRow.AccountRef);
             }
         }
-
-        private static string FormatSummary(JsonElement report)
-        {
-            if (!report.TryGetProperty("counts", out JsonElement counts) || counts.ValueKind != JsonValueKind.Object)
-                return Loc.T("批次已结束，但未返回计数。");
-            return Loc.F("请求 {0}  ·  AT 200 {1}", JsonInt(counts, "requested"), JsonInt(counts, "authenticated"))
-                + Loc.F("  ·  JIT {0}  ·  资格 {1}", JsonInt(counts, "refreshed"), JsonInt(counts, "eligible"))
-                + Loc.F("  ·  完成 {0}  ·  链接 {1}", JsonInt(counts, "completed"), JsonInt(counts, "link_ready"))
-                + Loc.F("  ·  二维码 {0}  ·  取消 {1}", JsonInt(counts, "qr_ready"), JsonInt(counts, "cancelled"))
-                + Loc.F("  ·  未知 {0}  ·  超时 {1}", JsonInt(counts, "unknown"), JsonInt(counts, "timed_out"))
-                + Loc.F("  ·  失败 {0}  ·  可重试 {1}", JsonInt(counts, "failed"), JsonInt(counts, "retryable"))
-                + Loc.F("  ·  断点恢复 {0}", JsonInt(report, "resumed"));
-        }
-
-        private static string JsonString(JsonElement element, string name)
-        {
-            if (!element.TryGetProperty(name, out JsonElement value)) return "";
-            return value.ValueKind == JsonValueKind.String ? value.GetString() ?? "" : value.ToString();
-        }
-
-        private static int JsonInt(JsonElement element, string name)
-        {
-            if (!element.TryGetProperty(name, out JsonElement value)) return 0;
-            if (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out int number)) return number;
-            return int.TryParse(value.ToString(), out number) ? number : 0;
-        }
-
-        private static bool JsonBool(JsonElement element, string name)
-            => element.TryGetProperty(name, out JsonElement value) && value.ValueKind == JsonValueKind.True;
-
-        private static string FirstNonEmpty(params string[] values)
-            => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? "";
 
         private static string CreateBatchId(string paymentMethod)
             => PaymentMethods.Normalize(paymentMethod) + "_" + DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);

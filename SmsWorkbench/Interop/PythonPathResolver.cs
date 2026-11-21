@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 
-namespace SmsWorkbench
+namespace SmsWorkbench.Interop
 {
     /// <summary>
     /// Resolves the Python interpreter used for backend commands.

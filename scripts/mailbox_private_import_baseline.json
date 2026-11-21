@@ -2,32 +2,32 @@
   "modules": {
     "http_utils": {
       "pairs": [
-        "sms_tool/account_creation.py:http_utils._absolute_url",
-        "sms_tool/account_creation.py:http_utils._cookie_header",
-        "sms_tool/account_creation.py:http_utils._cookie_presence",
-        "sms_tool/account_creation.py:http_utils._json_or_raw",
-        "sms_tool/account_creation.py:http_utils._minimal_chatgpt_cookie_header",
         "sms_tool/auth_flow/deps.py:http_utils._absolute_url",
         "sms_tool/auth_flow/deps.py:http_utils._cookie_presence",
         "sms_tool/auth_flow/deps.py:http_utils._follow_continue_url",
         "sms_tool/auth_flow/deps.py:http_utils._json_or_raw",
-        "sms_tool/auth_state.py:http_utils._json_or_raw",
         "sms_tool/codex/oauth.py:http_utils._absolute_url",
-        "sms_tool/otp_strategy.py:http_utils._absolute_url",
-        "sms_tool/otp_strategy.py:http_utils._json_or_raw",
         "sms_tool/phone/registration.py:http_utils._json_or_raw",
+        "sms_tool/registration/account_creation.py:http_utils._absolute_url",
+        "sms_tool/registration/account_creation.py:http_utils._cookie_header",
+        "sms_tool/registration/account_creation.py:http_utils._cookie_presence",
+        "sms_tool/registration/account_creation.py:http_utils._json_or_raw",
+        "sms_tool/registration/account_creation.py:http_utils._minimal_chatgpt_cookie_header",
         "sms_tool/registration/orchestrator.py:http_utils._follow_continue_url",
-        "sms_tool/session/refresh.py:http_utils._minimal_chatgpt_cookie_header"
+        "sms_tool/registration/otp_strategy.py:http_utils._absolute_url",
+        "sms_tool/registration/otp_strategy.py:http_utils._json_or_raw",
+        "sms_tool/session/refresh.py:http_utils._minimal_chatgpt_cookie_header",
+        "sms_tool/transport/auth_state.py:http_utils._json_or_raw"
       ],
       "per_file": {
-        "sms_tool/account_creation.py": 5,
         "sms_tool/auth_flow/deps.py": 4,
-        "sms_tool/auth_state.py": 1,
         "sms_tool/codex/oauth.py": 1,
-        "sms_tool/otp_strategy.py": 2,
         "sms_tool/phone/registration.py": 1,
+        "sms_tool/registration/account_creation.py": 5,
         "sms_tool/registration/orchestrator.py": 1,
-        "sms_tool/session/refresh.py": 1
+        "sms_tool/registration/otp_strategy.py": 2,
+        "sms_tool/session/refresh.py": 1,
+        "sms_tool/transport/auth_state.py": 1
       },
       "total": 16
     },
@@ -59,10 +59,10 @@
       "pairs": [
         "scripts/batch_enable_2fa.py:sentinel_tokens._set_oai_did_cookie",
         "sms_tool/accounts/account_recovery.py:sentinel_tokens._set_oai_did_cookie",
-        "sms_tool/batch_runner.py:sentinel_tokens._extract_sentinel",
-        "sms_tool/batch_runner.py:sentinel_tokens._sentinel_max_concurrency",
         "sms_tool/phone/registration.py:sentinel_tokens._import_sentinel_cookies",
         "sms_tool/phone/registration.py:sentinel_tokens._sentinel_device_id",
+        "sms_tool/registration/batch_runner.py:sentinel_tokens._extract_sentinel",
+        "sms_tool/registration/batch_runner.py:sentinel_tokens._sentinel_max_concurrency",
         "sms_tool/registration/orchestrator.py:sentinel_tokens._cookie_jar_header",
         "sms_tool/registration/orchestrator.py:sentinel_tokens._extract_sentinel",
         "sms_tool/registration/orchestrator.py:sentinel_tokens._extract_sentinel_http",
@@ -75,8 +75,8 @@
       "per_file": {
         "scripts/batch_enable_2fa.py": 1,
         "sms_tool/accounts/account_recovery.py": 1,
-        "sms_tool/batch_runner.py": 2,
         "sms_tool/phone/registration.py": 2,
+        "sms_tool/registration/batch_runner.py": 2,
         "sms_tool/registration/orchestrator.py": 7,
         "sms_tool/sentinel/client.py": 1
       },
@@ -89,13 +89,13 @@
         "sms_tool/accounts/account_recovery.py:session_refresh._refresh_session_protocol",
         "sms_tool/accounts/account_recovery.py:session_refresh._save_refreshed",
         "sms_tool/accounts/account_scan.py:session_refresh._load_seed_session",
-        "sms_tool/agent_identity.py:session_refresh._load_seed_session",
-        "sms_tool/agent_identity.py:session_refresh._save_refreshed",
         "sms_tool/codex/export.py:session_refresh._load_seed_session",
         "sms_tool/codex/export.py:session_refresh._session_token",
         "sms_tool/commands/mailbox_ops.py:session_refresh._load_seed_session",
         "sms_tool/commands/one_click.py:session_refresh._load_seed_session",
         "sms_tool/commands/payment.py:session_refresh._load_seed_session",
+        "sms_tool/importers/agent_identity.py:session_refresh._load_seed_session",
+        "sms_tool/importers/agent_identity.py:session_refresh._save_refreshed",
         "sms_tool/importers/cpa.py:session_refresh._load_seed_session",
         "sms_tool/paypal/flow_steps.py:session_refresh._poll_auth_session",
         "sms_tool/paypal/flow_steps.py:session_refresh._session_token"
@@ -104,11 +104,11 @@
         "scripts/batch_enable_2fa.py": 1,
         "sms_tool/accounts/account_recovery.py": 3,
         "sms_tool/accounts/account_scan.py": 1,
-        "sms_tool/agent_identity.py": 2,
         "sms_tool/codex/export.py": 2,
         "sms_tool/commands/mailbox_ops.py": 1,
         "sms_tool/commands/one_click.py": 1,
         "sms_tool/commands/payment.py": 1,
+        "sms_tool/importers/agent_identity.py": 2,
         "sms_tool/importers/cpa.py": 1,
         "sms_tool/paypal/flow_steps.py": 2
       },

@@ -44,11 +44,8 @@
   <SolidColorBrush x:Key="PrimarySoft" Color="#EAF2FF"/>
   <SolidColorBrush x:Key="OnPrimary" Color="#FFFFFF"/>
   <SolidColorBrush x:Key="Danger" Color="#B42318"/>
-  <SolidColorBrush x:Key="DangerSoft" Color="#FEF0EE"/>
   <SolidColorBrush x:Key="DangerBorder" Color="#F0B8B2"/>
   <SolidColorBrush x:Key="Success" Color="#16794C"/>
-  <SolidColorBrush x:Key="SuccessSoft" Color="#EAF7F0"/>
-  <SolidColorBrush x:Key="SuccessBorder" Color="#9AD8B7"/>
 
   <!-- ═══ Legacy aliases (kept; resolve to the ladder) ════════════════════ -->
   <SolidColorBrush x:Key="AppBg" Color="#F3F3F3"/>
@@ -66,7 +63,6 @@
   <SolidColorBrush x:Key="SplitterBg" Color="#E2E6EA"/>
   <SolidColorBrush x:Key="StatusBg" Color="#F3F3F3"/>
   <SolidColorBrush x:Key="LogBg" Color="#EAEAEA"/>
-  <SolidColorBrush x:Key="LogBorder" Color="#D0D6DC"/>
   <SolidColorBrush x:Key="LogText" Color="#1F2328"/>
 
   <!-- ═══ Status badges ═══════════════════════════════════════════════════
@@ -87,14 +83,6 @@
   <SolidColorBrush x:Key="BadgeInfoBd" Color="Transparent"/>
   <SolidColorBrush x:Key="BadgeNeutralBg" Color="#F2F3F4"/>
   <SolidColorBrush x:Key="BadgeNeutralFg" Color="#5B6066"/>
-  <SolidColorBrush x:Key="BadgeNeutralBd" Color="Transparent"/>
-
-  <!-- ═══ Card accents ════════════════════════════════════════════════════ -->
-  <SolidColorBrush x:Key="AccentBlue" Color="#2563EB"/>
-  <SolidColorBrush x:Key="AccentGreen" Color="#16A34A"/>
-  <SolidColorBrush x:Key="AccentOrange" Color="#D97706"/>
-  <SolidColorBrush x:Key="AccentPurple" Color="#7C3AED"/>
-  <SolidColorBrush x:Key="AccentRed" Color="#DC2626"/>
 
   <!-- ═══ ComboBox popup keys (read by Controls.xaml's template) ══════════ -->
   <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="#FFFFFF"/>

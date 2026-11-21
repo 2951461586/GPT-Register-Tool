@@ -13,7 +13,7 @@ from ..payment.catalog import (
     normalize_payment_method as normalize_catalog_payment_method,
     validate_catalog_consistency,
 )
-from ..payment.operation import (
+from ..operation_journal import (
     PaymentOperationConflict,
     PaymentOperationStore,
     conflict_result as payment_operation_conflict_result,

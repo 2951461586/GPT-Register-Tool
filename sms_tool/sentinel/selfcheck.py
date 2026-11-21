@@ -36,8 +36,13 @@ import subprocess
 import sys
 from typing import Any
 
-from ..auth_headers import set_auth_fingerprint, set_fingerprint_device, set_fingerprint_geo, sentinel_fingerprint
-from ..endpoints import AUTH_EMAIL_VERIFICATION
+from ..transport.auth_headers import (
+    set_auth_fingerprint,
+    set_fingerprint_device,
+    set_fingerprint_geo,
+    sentinel_fingerprint,
+)
+from ..transport.endpoints import AUTH_EMAIL_VERIFICATION
 from .bundle import validate_runtime_bundle
 from .runner import SentinelRunnerError, run_sentinel_sdk
 

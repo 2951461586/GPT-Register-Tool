@@ -8,7 +8,7 @@ from ..config import ConfigError, current_config_data, validate_config
 from ..payment.contracts import PaymentRequest
 from ..payment.executor import PaymentExecutionRequest, PaymentFlowExecutor
 from ..payment.errors import annotate_error, error_stage_of
-from ..payment.operation import (
+from ..operation_journal import (
     PaymentOperationConflict,
     PaymentOperationStore,
     conflict_result as payment_operation_conflict_result,
@@ -37,7 +37,7 @@ _TRUTHY = frozenset({"1", "true", "yes", "on"})
 def _browser_fallback_transport() -> Any:
     """The opt-in browser fallback for the checkout create gate, else ``None``.
 
-    ``sms_tool/capability_browser.py`` implements a page-context fallback for
+    ``sms_tool/payment/capability_browser.py`` implements a page-context fallback for
     accounts the protocol ``payments/checkout`` create gate rejects with
     ``400 unusual activity``, but until 2026-11-20 **nothing passed it** into
     ``payment_method_capability_probe(fallback_transport=...)``: the seam was
@@ -53,7 +53,7 @@ def _browser_fallback_transport() -> Any:
     """
     if str(os.environ.get(CAPABILITY_BROWSER_FALLBACK_ENV, "")).strip().lower() not in _TRUTHY:
         return None
-    from ..capability_browser import browser_fallback_transport
+    from ..payment.capability_browser import browser_fallback_transport
 
     return browser_fallback_transport()
 

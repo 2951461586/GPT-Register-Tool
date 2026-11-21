@@ -1,4 +1,4 @@
-"""Pin the protocol transport seam (``sms_tool.http_backend``).
+"""Pin the protocol transport seam (``sms_tool.transport.http_backend``).
 
 Three promises are worth a gate here, and each of them has already been a bug
 shape elsewhere in this repository:
@@ -24,7 +24,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from sms_tool import http_backend
+from sms_tool.transport import http_backend
 
 
 class _FakeTimeout(Exception):
@@ -331,13 +331,13 @@ def test_the_registration_factory_uses_the_seam() -> None:
 
     sentinel = Mock(name="session")  # a real object: the factory still installs TLS options
     factory = Mock(return_value=sentinel)
-    with patch("sms_tool.http_backend.new_session", factory):
+    with patch("sms_tool.transport.http_backend.new_session", factory):
         assert protocol_helpers._new_registration_session(proxy="http://p:1") is sentinel
     assert factory.call_args.kwargs == {"proxy": "http://p:1"}
 
 
 def test_tls_permutation_reports_that_it_cannot_apply_to_wreq() -> None:
-    from sms_tool import tls_fingerprint
+    from sms_tool.transport import tls_fingerprint
 
     class _WreqLike:
         _sms_http_backend = "wreq"
@@ -358,7 +358,7 @@ def test_curl_backend_lists_only_installed_profiles(monkeypatch) -> None:
     monkeypatch.delenv(http_backend.BACKEND_ENV, raising=False)
     with patch.object(http_backend, "_section", lambda: {}):
         supported = http_backend.supported_impersonations()
-    from sms_tool.auth_headers import AUTH_FINGERPRINT_PROFILES
+    from sms_tool.transport.auth_headers import AUTH_FINGERPRINT_PROFILES
 
     assert supported <= set(AUTH_FINGERPRINT_PROFILES)
     assert "firefox144" in supported, "the default profile must always be usable"
