@@ -279,6 +279,17 @@ public sealed class DesktopWindowSmokeTests
             var sidebarToggle = Assert.IsType<Button>(sidebar.FindName("SidebarToggleButton"));
             sidebarToggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.True(main.SidebarCollapsed, "the toggle must route through ToggleRequested");
+            sidebar.UpdateLayout();
+            var firstNavButton = FindVisualChildren<IconNavButton>(sidebar).First();
+            var toggleGlyph = Assert.Single(FindVisualChildren<System.Windows.Shapes.Path>(sidebarToggle));
+            var firstNavGlyph = Assert.Single(FindVisualChildren<System.Windows.Shapes.Path>(firstNavButton));
+            Rect toggleGlyphBounds = BoundsRelativeTo(toggleGlyph, sidebar);
+            Rect firstNavGlyphBounds = BoundsRelativeTo(firstNavGlyph, sidebar);
+            double toggleCenterX = toggleGlyphBounds.Left + toggleGlyphBounds.Width / 2.0;
+            double navCenterX = firstNavGlyphBounds.Left + firstNavGlyphBounds.Width / 2.0;
+            Assert.True(
+                Math.Abs(toggleCenterX - navCenterX) <= 0.5,
+                $"Collapsed sidebar toggle icon (cx={toggleCenterX:F1}) is not aligned with nav icons (cx={navCenterX:F1})");
             sidebarToggle.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.False(main.SidebarCollapsed);
             var brandTitle = Assert.IsType<TextBlock>(sidebar.FindName("SidebarBrandTitle"));
@@ -313,11 +324,34 @@ public sealed class DesktopWindowSmokeTests
             var accountGridView = Assert.Single(FindVisualChildren<AccountGridView>(main));
             Assert.True(accountGridView.ActualWidth > 0, "the account grid did not get laid out");
             var accountGrid = Assert.IsType<DataGrid>(accountGridView.FindName("AccountGrid"));
-            // A4 moved the task list + log into their own control.
+            // A4 moved the task list + log into their own collapsible segmented drawer.
             var console = Assert.Single(FindVisualChildren<WorkbenchConsole>(main));
             Assert.True(console.ActualWidth > 0, "the workbench console did not get laid out");
             Assert.NotNull(console.FindName("TaskGrid"));
             Assert.NotNull(console.FindName("LogTextBox"));
+            var logPane = Assert.IsType<Border>(console.FindName("LogPane"));
+            var tasksPane = Assert.IsType<Border>(console.FindName("TasksPane"));
+            var tasksTab = Assert.IsType<RadioButton>(console.FindName("TasksTabButton"));
+            var logTab = Assert.IsType<RadioButton>(console.FindName("LogTabButton"));
+            var collapseConsoleBtn = Assert.IsType<Button>(console.FindName("CollapseToggleButton"));
+            Assert.Equal(Visibility.Visible, logPane.Visibility);
+            Assert.Equal(Visibility.Collapsed, tasksPane.Visibility);
+            tasksTab.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            Assert.Equal(Visibility.Collapsed, logPane.Visibility);
+            Assert.Equal(Visibility.Visible, tasksPane.Visibility);
+            logTab.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            Assert.Equal(Visibility.Visible, logPane.Visibility);
+            Assert.Equal(Visibility.Collapsed, tasksPane.Visibility);
+            Assert.False(console.IsCollapsed);
+            collapseConsoleBtn.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            main.UpdateLayout();
+            Assert.True(console.IsCollapsed);
+            Assert.Equal(36.0, Assert.IsType<RowDefinition>(main.FindName("ConsoleRow")).Height.Value);
+            Assert.Equal(Visibility.Collapsed, Assert.IsType<GridSplitter>(main.FindName("ConsoleSplitter")).Visibility);
+            collapseConsoleBtn.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            main.UpdateLayout();
+            Assert.False(console.IsCollapsed);
+            Assert.Equal(Visibility.Visible, Assert.IsType<GridSplitter>(main.FindName("ConsoleSplitter")).Visibility);
             Assert.DoesNotContain(
                 FindVisualChildren<TextBlock>(main),
                 textBlock => textBlock.Text == "重新生成支付链接");
@@ -365,6 +399,31 @@ public sealed class DesktopWindowSmokeTests
             main.Pool.SearchText = "";
             filterBar.UpdateLayout();
             Assert.Equal(Visibility.Collapsed, clearSearch.Visibility);
+            var trialKpiBtn = Assert.Single(
+                FindVisualChildren<Button>(filterBar),
+                button => Equals(button.Tag, "trial"));
+            var registeredKpiBtn = Assert.Single(
+                FindVisualChildren<Button>(filterBar),
+                button => Equals(button.Tag, "registered"));
+            var allKpiBtn = Assert.Single(
+                FindVisualChildren<Button>(filterBar),
+                button => Equals(button.Tag, "all"));
+            trialKpiBtn.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            Assert.Equal("trial", main.Pool.ScopeFilter);
+            registeredKpiBtn.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            Assert.Equal("registered", main.Pool.ScopeFilter);
+            allKpiBtn.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            Assert.Equal("all", main.Pool.ScopeFilter);
+            // Unhinted Atkinson Hyperlegible Next needs Ideal + ClearType (2D symmetric AA).
+            Assert.Equal(TextFormattingMode.Ideal, TextOptions.GetTextFormattingMode(main));
+            Assert.Equal(TextRenderingMode.ClearType, TextOptions.GetTextRenderingMode(main));
+            // Embedded Atkinson Hyperlegible Next + new DeepAI-inspired surface/shadow tokens.
+            var uiFont = Assert.IsType<FontFamily>(main.FindResource("Font.Ui"));
+            Assert.Contains("Atkinson Hyperlegible Next", uiFont.Source, StringComparison.Ordinal);
+            Assert.IsType<SolidColorBrush>(main.FindResource("Surface.Terminal"));
+            Assert.IsType<SolidColorBrush>(main.FindResource("WorkspaceFrameOutline"));
+            Assert.IsType<SolidColorBrush>(main.FindResource("IconMuted"));
+            Assert.IsType<Color>(main.FindResource("ShadowColor"));
             // A0 moved the window resources into a merged dictionary; a broken
             // Source or an unmerged dictionary only fails at load time.
             // The sidebar styles now live in the Sidebar control's own dictionary.

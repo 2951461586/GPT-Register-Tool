@@ -3,25 +3,15 @@
   <!--
     Glyph geometries, one key per meaning.
 
-    These used to be inline Data="M..." literals at the call site, which made
-    "what does the refresh icon look like" a search through nineteen rows and
-    left two glyphs that mean the same thing free to drift apart. A view now
-    references Glyph.<Name>; a new glyph gets a key here instead of a literal.
-
     Source: https://github.com/tabler/tabler-icons v3.50.0 (MIT), outline set,
-    `icons/outline/<name>.svg`. Every entry is the upstream `d` attributes of
-    that file concatenated verbatim (nothing is redrawn by hand), and the
-    comment above each key names the icon it came from, so a reviewer can diff
-    an entry against the library instead of eyeballing it. The set is a single
-    family on purpose: the previous registry mixed Feather-style 24x24 outlines
-    with hand-drawn small-viewBox marks, which is why some rows in the sidebar
-    read heavier than others at the same StrokeThickness.
+    `icons/outline/<name>.svg`. Every feature glyph uses the 24x24 outline grid
+    and names its upstream Tabler icon above the key, keeping stroke weight and
+    optical balance uniform across sidebar, menus, toolbars, inputs and dialogs.
 
-    Two keys are deliberately NOT from the library: Glyph.WindowMinimize and
-    Glyph.WindowMaximize. They are OS window chrome, drawn on a 0..12 grid so a
-    1px stroke lands on the pixel grid at every DPI; the Tabler equivalents
-    (minus / square) carry a 2-unit stroke that renders chunky in a 46x32 title
-    bar button. Everything that is a *feature* icon comes from the library.
+    Four keys are deliberately NOT from the library: Glyph.WindowMinimize,
+    Glyph.WindowMaximize, Glyph.WindowRestore, and Glyph.WindowClose. They are OS
+    window chrome drawn on a 0..10 coordinate grid so a 1.15px stroke lands
+    cleanly on the pixel grid at every DPI inside 46x38 caption buttons.
 
     PathGeometry (not Geometry) because Geometry has no content property:
     its mini-language is what the Figures converter accepts.
@@ -41,6 +31,12 @@
   <PathGeometry x:Key="Glyph.Export" Figures="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2 M7 9l5 -5l5 5 M12 4l0 12"/>
   <!-- tabler:download -->
   <PathGeometry x:Key="Glyph.ImportCpa" Figures="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2 M7 11l5 5l5 -5 M12 4l0 12"/>
+  <!-- tabler:database-export -->
+  <PathGeometry x:Key="Glyph.Backup" Figures="M4 6c0 1.657 3.582 3 8 3s8 -1.343 8 -3s-3.582 -3 -8 -3s-8 1.343 -8 3 M4 6v6c0 1.657 3.582 3 8 3c1.118 0 2.183 -.086 3.15 -.241 M20 12v-6 M4 12v6c0 1.657 3.582 3 8 3c.157 0 .312 -.002 .466 -.005 M16 19h6 M19 16l3 3l-3 3"/>
+  <!-- tabler:database-import -->
+  <PathGeometry x:Key="Glyph.Restore" Figures="M4 6c0 1.657 3.582 3 8 3s8 -1.343 8 -3s-3.582 -3 -8 -3s-8 1.343 -8 3 M4 6v6c0 1.657 3.582 3 8 3c.856 0 1.68 -.05 2.454 -.144m5.546 -2.856v-6 M4 12v6c0 1.657 3.582 3 8 3c.171 0 .341 -.002 .51 -.006 M19 22v-6 M22 19l-3 -3l-3 3"/>
+  <!-- tabler:copy -->
+  <PathGeometry x:Key="Glyph.Copy" Figures="M7 9.667a2.667 2.667 0 0 1 2.667 -2.667h8.666a2.667 2.667 0 0 1 2.667 2.667v8.666a2.667 2.667 0 0 1 -2.667 2.667h-8.666a2.667 2.667 0 0 1 -2.667 -2.667z M4.012 16.737a2.005 2.005 0 0 1 -1.012 -1.737v-10c0 -1.1 .9 -2 2 -2h10c.75 0 1.158 .385 1.5 1"/>
   <!-- tabler:mail-plus -->
   <PathGeometry x:Key="Glyph.ImportMail" Figures="M12 19h-7a2 2 0 0 1 -2 -2v-10a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v5.5 M16 19h6 M19 16v6 M3 7l9 6l9 -6"/>
   <!-- tabler:inbox -->
@@ -59,6 +55,8 @@
   <PathGeometry x:Key="Glyph.PaymentQualification" Figures="M3 8a3 3 0 0 1 3 -3h12a3 3 0 0 1 3 3v8a3 3 0 0 1 -3 3h-12a3 3 0 0 1 -3 -3l0 -8 M3 10l18 0 M7 15l.01 0 M11 15l2 0"/>
   <!-- tabler:heartbeat -->
   <PathGeometry x:Key="Glyph.ProbeAlive" Figures="M19.5 13.572l-7.5 7.428l-2.896 -2.868m-6.117 -8.104a5 5 0 0 1 9.013 -3.022a5 5 0 1 1 7.5 6.572 M3 13h2l2 3l2 -6l1 3h3"/>
+  <!-- tabler:radar-2 -->
+  <PathGeometry x:Key="Glyph.Inspect" Figures="M11 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0 M15.51 15.56a5 5 0 1 0 -3.51 1.44 M18.832 17.86a9 9 0 1 0 -6.832 3.14 M12 12v9"/>
   <!-- tabler:ticket -->
   <PathGeometry x:Key="Glyph.Promotion" Figures="M15 5l0 2 M15 11l0 2 M15 17l0 2 M5 5h14a2 2 0 0 1 2 2v3a2 2 0 0 0 0 4v3a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-3a2 2 0 0 0 0 -4v-3a2 2 0 0 1 2 -2"/>
   <!-- tabler:route -->
@@ -86,9 +84,6 @@
   <!-- tabler:folder -->
   <PathGeometry x:Key="Glyph.Folder" Figures="M5 4h4l3 3h7a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-11a2 2 0 0 1 2 -2"/>
   <!-- tabler:square-x -->
-  <!-- "Clear selection": a boxed cross, deliberately not the same glyph as
-       Glyph.SelectAllFiltered (checks). Both buttons sit side by side in the
-       filter bar and used to render identically. -->
   <PathGeometry x:Key="Glyph.ClearSelection" Figures="M3 5a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14 M9 9l6 6m0 -6l-6 6"/>
   <!-- tabler:x -->
   <PathGeometry x:Key="Glyph.Close" Figures="M18 6l-12 12 M6 6l12 12"/>
@@ -100,6 +95,31 @@
   <PathGeometry x:Key="Glyph.FirstPage" Figures="M11 7l-5 5l5 5 M17 7l-5 5l5 5"/>
   <!-- tabler:chevrons-right -->
   <PathGeometry x:Key="Glyph.LastPage" Figures="M7 7l5 5l-5 5 M13 7l5 5l-5 5"/>
+  <!-- tabler:chevron-down -->
+  <PathGeometry x:Key="Glyph.ChevronDown" Figures="M6 9l6 6l6 -6"/>
+  <!-- tabler:chevron-up -->
+  <PathGeometry x:Key="Glyph.ChevronUp" Figures="M6 15l6 -6l6 6"/>
+  <!-- tabler:check -->
+  <PathGeometry x:Key="Glyph.Check" Figures="M5 12l5 5l10 -10"/>
+  <!-- tabler:layout-sidebar-left-collapse -->
+  <PathGeometry x:Key="Glyph.PanelLeftClose" Figures="M4 6a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2z M9 4v16 M15 10l-2 2l2 2"/>
+  <!-- tabler:layout-sidebar-left-expand -->
+  <PathGeometry x:Key="Glyph.PanelLeftOpen" Figures="M4 6a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2z M9 4v16 M14 10l2 2l-2 2"/>
+  <!-- tabler:terminal-2 -->
+  <PathGeometry x:Key="Glyph.Terminal" Figures="M8 9l3 3l-3 3 M13 15l3 0 M3 6a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2z"/>
+  <!-- tabler:list-check -->
+  <PathGeometry x:Key="Glyph.ListTasks" Figures="M3.5 5.5l1.5 1.5l2.5 -2.5 M3.5 11.5l1.5 1.5l2.5 -2.5 M3.5 17.5l1.5 1.5l2.5 -2.5 M11 6l9 0 M11 12l9 0 M11 18l9 0"/>
+  <!-- tabler:columns-3 -->
+  <PathGeometry x:Key="Glyph.Columns" Figures="M3 4a1 1 0 0 1 1 -1h16a1 1 0 0 1 1 1v16a1 1 0 0 1 -1 1h-16a1 1 0 0 1 -1 -1z M9 3v18 M15 3v18"/>
+  <!-- tabler:database -->
+  <PathGeometry x:Key="Glyph.Database" Figures="M4 6a8 3 0 1 0 16 0a8 3 0 1 0 -16 0 M4 6v6a8 3 0 0 0 16 0v-6 M4 12v6a8 3 0 0 0 16 0v-6"/>
+  <!-- tabler:sparkles -->
+  <PathGeometry x:Key="Glyph.Sparkles" Figures="M16 18a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2z M16 6a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2z M9 18a6 6 0 0 1 6 -6a6 6 0 0 1 -6 -6a6 6 0 0 1 -6 6a6 6 0 0 1 6 6z"/>
+  <!-- tabler:user-check -->
+  <PathGeometry x:Key="Glyph.UserCheck" Figures="M8 7a4 4 0 1 0 8 0a4 4 0 0 0 -8 0 M6 21v-2a4 4 0 0 1 4 -4h4 M15 19l2 2l4 -4"/>
+  <!-- tabler:alert-triangle -->
+  <PathGeometry x:Key="Glyph.AlertTriangle" Figures="M12 9v4 M10.363 3.591l-8.106 13.534a1.914 1.914 0 0 0 1.636 2.871h16.214a1.914 1.914 0 0 0 1.636 -2.87l-8.106 -13.536a1.914 1.914 0 0 0 -3.274 0z M12 16h.01"/>
+
   <!-- Hand-drawn: OS window chrome on a 0..10 coordinate grid so minimize,
        maximize, restore and close share the exact same optical box and stroke
        weight at every DPI. -->

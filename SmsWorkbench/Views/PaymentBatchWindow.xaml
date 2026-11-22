@@ -27,7 +27,12 @@
       <TextBlock Grid.Column="1" Text="{Binding AccountSummary}" Foreground="{DynamicResource TextSub}" VerticalAlignment="Center"/>
     </Grid>
 
-    <Grid Grid.Row="1" Margin="0,0,0,14">
+    <Border Grid.Row="1"
+            Margin="0,0,0,12"
+            Padding="16,14"
+            CornerRadius="{StaticResource Corner.Xl}"
+            Background="{DynamicResource Surface.Card}">
+    <Grid>
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="*"/>
         <ColumnDefinition Width="*"/>
@@ -97,7 +102,7 @@
                   SelectedValue="{Binding ApproveProxyCountry, UpdateSourceTrigger=PropertyChanged}"/>
       </StackPanel>
 
-      <StackPanel Grid.Row="3" Grid.ColumnSpan="4" Orientation="Horizontal" Margin="0,2">
+      <StackPanel Grid.Row="3" Grid.ColumnSpan="4" Orientation="Horizontal" Margin="0,2,0,8">
         <CheckBox Content="{loc:Tr Key='401 自动恢复（RT/Cookie/邮箱OTP/OAuth）'}" IsChecked="{Binding JitRefresh}" Margin="0,0,22,0"/>
         <CheckBox Content="{loc:Tr Key='仅能力探测（Checkout + Stripe init）'}" IsChecked="{Binding ProbeOnly}" Margin="0,0,22,0"/>
         <CheckBox Content="{loc:Tr Key='要求 0 元金额'}" IsChecked="{Binding RequireZero}" IsEnabled="{Binding RequireZeroEnabled}"/>
@@ -115,23 +120,26 @@
                  VerticalScrollBarVisibility="Auto"
                  ToolTip="{loc:Tr Key='每行一个 JWT Access Token；选择了邮箱时此项不会参与任务'}"/>
       </StackPanel>
-      <StackPanel Grid.Row="5" Grid.ColumnSpan="4" Orientation="Horizontal" Margin="0,0,0,10">
+      <StackPanel Grid.Row="5" Grid.ColumnSpan="4" Orientation="Horizontal">
         <TextBlock Text="{loc:Tr Key='批次 ID'}" Style="{StaticResource FieldLabel}" VerticalAlignment="Center" Margin="0,0,10,0"/>
         <TextBox Text="{Binding BatchId, UpdateSourceTrigger=PropertyChanged}" Width="300" FontFamily="{StaticResource Font.Mono}" FontSize="{StaticResource Type.Mono.Size}"/>
         <TextBlock Text="{loc:Tr Key='仅勾选“恢复已有断点”时复用此 ID'}" Foreground="{DynamicResource TextSub}" VerticalAlignment="Center" Margin="12,0,0,0"/>
       </StackPanel>
     </Grid>
+    </Border>
 
     <!-- 账号地区 / 支付资格矩阵已移除：所有账号统一使用上方设置的代理地区。 -->
 
-    <Grid Grid.Row="2" Margin="0,0,0,12">
+    <Border Grid.Row="2"
+            Margin="0,0,0,12"
+            CornerRadius="{StaticResource Corner.Xl}"
+            Background="{DynamicResource Surface.Card}">
         <DataGrid x:Name="ResultsGrid"
                 ItemsSource="{Binding Results}"
                 IsReadOnly="True"
                 AutoGenerateColumns="False"
                 HeadersVisibility="Column"
-                GridLinesVisibility="Horizontal"
-                RowHeight="42"
+                RowHeight="40"
                 Margin="0">
         <DataGrid.Columns>
           <DataGridTextColumn Header="{loc:Tr Key='账号'}" Binding="{Binding AccountRef}" Width="135"/>
@@ -142,7 +150,7 @@
           <DataGridTemplateColumn Header="{loc:Tr Key='阶段进度'}" Width="125">
             <DataGridTemplateColumn.CellTemplate>
               <DataTemplate>
-                <ProgressBar Minimum="0" Maximum="100" Value="{Binding ProgressPercent}" Height="12" Margin="6,0" VerticalAlignment="Center"/>
+                <ProgressBar Minimum="0" Maximum="100" Value="{Binding ProgressPercent}" Height="10" Margin="6,0" VerticalAlignment="Center"/>
               </DataTemplate>
             </DataGridTemplateColumn.CellTemplate>
           </DataGridTemplateColumn>
@@ -166,15 +174,16 @@
                              TextTrimming="CharacterEllipsis"
                              VerticalAlignment="Center"/>
                   <Button Grid.Column="2"
-                          Width="30"
-                          Height="28"
+                          Style="{StaticResource GhostToolbarButton}"
+                          Width="28"
+                          Height="26"
                           Padding="0"
                           Margin="8,0,0,0"
                           Command="{Binding DataContext.CopyResultCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
                           CommandParameter="{Binding}"
                           IsEnabled="{Binding HasCopyableResult}"
                           ToolTip="{Binding CopyToolTip}">
-                    <TextBlock Text="&#xE8C8;" FontFamily="Segoe MDL2 Assets" FontSize="{StaticResource Type.Body.Size}"/>
+                    <Path Style="{StaticResource ToolbarIconPath}" Data="{StaticResource Glyph.Copy}"/>
                   </Button>
                 </Grid>
               </DataTemplate>
@@ -183,7 +192,7 @@
           <DataGridTextColumn Header="{loc:Tr Key='重试次数'}" Binding="{Binding Attempts}" Width="72"/>
         </DataGrid.Columns>
       </DataGrid>
-    </Grid>
+    </Border>
 
     <Grid Grid.Row="3">
       <Grid.ColumnDefinitions>

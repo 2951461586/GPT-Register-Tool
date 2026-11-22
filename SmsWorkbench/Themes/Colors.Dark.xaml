@@ -1,87 +1,98 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
   <!--
-    DARK colour scheme. Same key set as Colors.Light.xaml — the two files are one
-    contract; see the header there for what each layer is for.
+    DARK colour scheme (DeepAI Code Deep Obsidian Canvas + Elevated Graphite
+    Chrome, Scheme A: Violet focus accent). Exact same key set as
+    Colors.Light.xaml.
 
-    Dark only ever gets LIGHTER: a darker step inside a lighter surface reads as a
-    hole rather than a layer, so page(6) -> card(15) -> block(21) -> inset(27) all
-    climb, and the chrome sits just above the page so cards still stand off it.
+    Dark surface ladder only ever climbs: Page (#141416) -> Card (#1D1D20) ->
+    Block (#26262A) -> Inset (#2F2F34), with Chrome (#202023) sitting above
+    Page so the framed workspace canvas reads as a deep recessed sheet.
+    Surface.Terminal (#111113) provides a dedicated deep obsidian log well
+    instead of inheriting the lighter Surface.Inset rung.
   -->
-  <SolidColorBrush x:Key="Surface.Page" Color="#181818"/>
-  <SolidColorBrush x:Key="Surface.Card" Color="#232323"/>
-  <SolidColorBrush x:Key="Surface.Block" Color="#2B2B2B"/>
-  <SolidColorBrush x:Key="Surface.Inset" Color="#333333"/>
-  <SolidColorBrush x:Key="Surface.Chrome" Color="#1E1E1E"/>
 
-  <SolidColorBrush x:Key="Divider" Color="#24E6E6E6"/>
-  <SolidColorBrush x:Key="FocusRing" Color="#7E8B9B"/>
+  <!-- ═══ Surface ladder ══════════════════════════════════════════════════ -->
+  <SolidColorBrush x:Key="Surface.Page" Color="#141416"/>
+  <SolidColorBrush x:Key="Surface.Card" Color="#1D1D20"/>
+  <SolidColorBrush x:Key="Surface.Block" Color="#26262A"/>
+  <SolidColorBrush x:Key="Surface.Inset" Color="#2F2F34"/>
+  <SolidColorBrush x:Key="Surface.Chrome" Color="#202023"/>
+  <SolidColorBrush x:Key="Surface.Terminal" Color="#111113"/>
 
-  <SolidColorBrush x:Key="TextMain" Color="#E6E6E6"/>
-  <SolidColorBrush x:Key="TextSub" Color="#A8B0B8"/>
-  <SolidColorBrush x:Key="TextMuted" Color="#7D858D"/>
+  <!-- Translucent hairline strokes for crisp dark canvas definition -->
+  <SolidColorBrush x:Key="WorkspaceFrameOutline" Color="#24F2F2F4"/>
+  <SolidColorBrush x:Key="Divider" Color="#1FF2F2F4"/>
+  <SolidColorBrush x:Key="FocusRing" Color="#9D6BFF"/>
+  <Color x:Key="ShadowColor">#7A000000</Color>
 
-  <SolidColorBrush x:Key="Primary" Color="#434C59"/>
-  <SolidColorBrush x:Key="PrimaryBorder" Color="#5B6676"/>
-  <SolidColorBrush x:Key="PrimaryHover" Color="#525C6B"/>
-  <SolidColorBrush x:Key="PrimaryPressed" Color="#373F4A"/>
-  <SolidColorBrush x:Key="PrimarySoft" Color="#2B3038"/>
-  <SolidColorBrush x:Key="OnPrimary" Color="#F3F5F7"/>
-  <SolidColorBrush x:Key="AccentIndicator" Color="#94A0B0"/>
-  <SolidColorBrush x:Key="Danger" Color="#D45555"/>
-  <SolidColorBrush x:Key="DangerHover" Color="#C24646"/>
-  <SolidColorBrush x:Key="DangerPressed" Color="#A63A3A"/>
-  <SolidColorBrush x:Key="DangerSoft" Color="#2C1E1E"/>
+  <!-- ═══ Text & icon ladder (all >= 4.6:1 WCAG AA on target surfaces) ════ -->
+  <SolidColorBrush x:Key="TextMain" Color="#F2F2F4"/>
+  <SolidColorBrush x:Key="TextSub" Color="#B0B3BA"/>
+  <SolidColorBrush x:Key="TextMuted" Color="#8A8F99"/>
+  <SolidColorBrush x:Key="IconMuted" Color="#7E838E"/>
+
+  <!-- ═══ Action accent (Scheme A: DeepAI Violet focus on obsidian dark) ══ -->
+  <SolidColorBrush x:Key="Primary" Color="#7C3AED"/>
+  <SolidColorBrush x:Key="PrimaryBorder" Color="#8B5CF6"/>
+  <SolidColorBrush x:Key="PrimaryHover" Color="#8B5CF6"/>
+  <SolidColorBrush x:Key="PrimaryPressed" Color="#6D28D9"/>
+  <SolidColorBrush x:Key="PrimarySoft" Color="#281B3E"/>
+  <SolidColorBrush x:Key="OnPrimary" Color="#FFFFFF"/>
+  <SolidColorBrush x:Key="AccentIndicator" Color="#9D6BFF"/>
+  <SolidColorBrush x:Key="Danger" Color="#F05252"/>
+  <SolidColorBrush x:Key="DangerHover" Color="#DC3C3C"/>
+  <SolidColorBrush x:Key="DangerPressed" Color="#B82C2C"/>
+  <SolidColorBrush x:Key="DangerSoft" Color="#311719"/>
   <SolidColorBrush x:Key="OnDanger" Color="#FFFFFF"/>
-  <SolidColorBrush x:Key="DangerBorder" Color="#7D3232"/>
-  <SolidColorBrush x:Key="Success" Color="#52B778"/>
-  <SolidColorBrush x:Key="SidebarHover" Color="#2A2D32"/>
-  <SolidColorBrush x:Key="SidebarPressed" Color="#34383F"/>
-  <SolidColorBrush x:Key="WindowControlHover" Color="#303338"/>
-  <SolidColorBrush x:Key="WindowControlPressed" Color="#3D4148"/>
+  <SolidColorBrush x:Key="DangerBorder" Color="#7F2D32"/>
+  <SolidColorBrush x:Key="Success" Color="#4ADE80"/>
+  <SolidColorBrush x:Key="SidebarHover" Color="#2B2B30"/>
+  <SolidColorBrush x:Key="SidebarPressed" Color="#34343B"/>
+  <SolidColorBrush x:Key="WindowControlHover" Color="#2D2D33"/>
+  <SolidColorBrush x:Key="WindowControlPressed" Color="#383840"/>
 
-  <SolidColorBrush x:Key="AppBg" Color="#181818"/>
-  <SolidColorBrush x:Key="PanelBg" Color="#232323"/>
-  <SolidColorBrush x:Key="PanelBg2" Color="#2B2B2B"/>
-  <SolidColorBrush x:Key="PanelHover" Color="#2B2B2B"/>
-  <SolidColorBrush x:Key="Line" Color="#333333"/>
-  <SolidColorBrush x:Key="LineStrong" Color="#454545"/>
-  <SolidColorBrush x:Key="SidebarBg" Color="#1E1E1E"/>
+  <!-- ═══ Legacy aliases (kept for WindowThemeService & smoke contracts) ══ -->
+  <SolidColorBrush x:Key="AppBg" Color="#141416"/>
+  <SolidColorBrush x:Key="PanelBg" Color="#1D1D20"/>
+  <SolidColorBrush x:Key="PanelBg2" Color="#26262A"/>
+  <SolidColorBrush x:Key="PanelHover" Color="#26262A"/>
+  <SolidColorBrush x:Key="Line" Color="#2E2E34"/>
+  <SolidColorBrush x:Key="LineStrong" Color="#404048"/>
+  <SolidColorBrush x:Key="SidebarBg" Color="#202023"/>
   <SolidColorBrush x:Key="SidebarButtonBg" Color="Transparent"/>
-  <SolidColorBrush x:Key="GridAltBg" Color="#232323"/>
-  <SolidColorBrush x:Key="GridSelectionBg" Color="#232323"/>
-  <SolidColorBrush x:Key="SettingsSelectionBg" Color="#2B2B2B"/>
-  <SolidColorBrush x:Key="SettingsSelectionBorder" Color="#7E8B9B"/>
-  <SolidColorBrush x:Key="SplitterBg" Color="#333333"/>
-  <SolidColorBrush x:Key="StatusBg" Color="#181818"/>
-  <!-- Log well: Surface.Inset, the same rung the light theme's #EAEAEA sits on.
-       It was #2B2B2B (= Surface.Block) here, one step shallower than light, so the
-       alias pointed at a different rung per theme; tests/workbench/
-       test_theme_palette_consistency.py now fails on that class of drift. -->
-  <SolidColorBrush x:Key="LogBg" Color="#333333"/>
-  <SolidColorBrush x:Key="LogText" Color="#E6E6E6"/>
+  <SolidColorBrush x:Key="GridAltBg" Color="#1D1D20"/>
+  <SolidColorBrush x:Key="GridSelectionBg" Color="#1D1D20"/>
+  <SolidColorBrush x:Key="SettingsSelectionBg" Color="#26262A"/>
+  <SolidColorBrush x:Key="SettingsSelectionBorder" Color="#9D6BFF"/>
+  <SolidColorBrush x:Key="SplitterBg" Color="#2E2E34"/>
+  <SolidColorBrush x:Key="StatusBg" Color="#141416"/>
+  <SolidColorBrush x:Key="LogBg" Color="#111113"/>
+  <SolidColorBrush x:Key="LogText" Color="#E8EAEE"/>
 
-  <SolidColorBrush x:Key="BadgeSuccessBg" Color="#1C2B24"/>
-  <SolidColorBrush x:Key="BadgeSuccessFg" Color="#69B776"/>
+  <!-- ═══ Status badges (muted low-saturation dark washes, all >= 5.28:1) ══ -->
+  <SolidColorBrush x:Key="BadgeSuccessBg" Color="#1B2420"/>
+  <SolidColorBrush x:Key="BadgeSuccessFg" Color="#79A88E"/>
   <SolidColorBrush x:Key="BadgeSuccessBd" Color="Transparent"/>
-  <SolidColorBrush x:Key="BadgeWarnBg" Color="#2D2618"/>
-  <SolidColorBrush x:Key="BadgeWarnFg" Color="#D2AD4D"/>
+  <SolidColorBrush x:Key="BadgeWarnBg" Color="#26221A"/>
+  <SolidColorBrush x:Key="BadgeWarnFg" Color="#B8A06E"/>
   <SolidColorBrush x:Key="BadgeWarnBd" Color="Transparent"/>
-  <SolidColorBrush x:Key="BadgeDangerBg" Color="#312121"/>
-  <SolidColorBrush x:Key="BadgeDangerFg" Color="#DA7272"/>
+  <SolidColorBrush x:Key="BadgeDangerBg" Color="#291D1E"/>
+  <SolidColorBrush x:Key="BadgeDangerFg" Color="#C28282"/>
   <SolidColorBrush x:Key="BadgeDangerBd" Color="Transparent"/>
-  <SolidColorBrush x:Key="BadgeInfoBg" Color="#282E43"/>
-  <SolidColorBrush x:Key="BadgeInfoFg" Color="#7DA8DD"/>
+  <SolidColorBrush x:Key="BadgeInfoBg" Color="#1C222D"/>
+  <SolidColorBrush x:Key="BadgeInfoFg" Color="#84A0C6"/>
   <SolidColorBrush x:Key="BadgeInfoBd" Color="Transparent"/>
-  <SolidColorBrush x:Key="BadgeNeutralBg" Color="#2B2B2B"/>
-  <SolidColorBrush x:Key="BadgeNeutralFg" Color="#ABB0B5"/>
+  <SolidColorBrush x:Key="BadgeNeutralBg" Color="#242428"/>
+  <SolidColorBrush x:Key="BadgeNeutralFg" Color="#9CA0A8"/>
 
-  <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="#232323"/>
-  <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush" Color="#333333"/>
-  <SolidColorBrush x:Key="ComboBoxDropDownGlyphForeground" Color="#A8B0B8"/>
-  <SolidColorBrush x:Key="ComboBoxBorderBrushFocused" Color="#7E8B9B"/>
-  <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="#2B2B2B"/>
-  <SolidColorBrush x:Key="ComboBoxBackgroundDisabled" Color="#1E1E1E"/>
-  <SolidColorBrush x:Key="ComboBoxBorderBrushDisabled" Color="#333333"/>
-  <SolidColorBrush x:Key="ComboBoxForegroundDisabled" Color="#7D858D"/>
+  <!-- ═══ ComboBox popup keys (read by Controls.Inputs.xaml's template) ═══ -->
+  <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="#1D1D20"/>
+  <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush" Color="#36363D"/>
+  <SolidColorBrush x:Key="ComboBoxDropDownGlyphForeground" Color="#B0B3BA"/>
+  <SolidColorBrush x:Key="ComboBoxBorderBrushFocused" Color="#9D6BFF"/>
+  <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="#26262A"/>
+  <SolidColorBrush x:Key="ComboBoxBackgroundDisabled" Color="#1A1A1D"/>
+  <SolidColorBrush x:Key="ComboBoxBorderBrushDisabled" Color="#2E2E34"/>
+  <SolidColorBrush x:Key="ComboBoxForegroundDisabled" Color="#8A8F99"/>
 </ResourceDictionary>

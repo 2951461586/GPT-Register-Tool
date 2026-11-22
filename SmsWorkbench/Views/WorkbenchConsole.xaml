@@ -1,94 +1,243 @@
 <UserControl x:Class="SmsWorkbench.Views.WorkbenchConsole"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:loc="clr-namespace:SmsWorkbench.Localization">
-  <!-- Task list + log console. Bindings still walk the inherited MainWindow
-       DataContext; the two DPs exist only so the code-behind can reach the view
-       models it must drive (scroll to last row, append, clear). -->
-          <Grid Margin="0,10,0,0">
-            <Grid.RowDefinitions>
-              <RowDefinition Height="64" MinHeight="42"/>
-              <RowDefinition Height="5"/>
-              <RowDefinition Height="*" MinHeight="200"/>
-            </Grid.RowDefinitions>
-            <!-- Task table: a card on the page, separated by lightness only. The
-                 DataGrid's implicit style owns the rest of its chrome (row fills,
-                 grid lines), so this border is just the rounded card. -->
-            <Border Grid.Row="0" CornerRadius="{StaticResource Corner.Xl}" Background="{DynamicResource Surface.Card}">
-              <DataGrid x:Name="TaskGrid"
-                        ItemsSource="{Binding TaskList.Tasks}"
-                        AutoGenerateColumns="False"
-                        CanUserAddRows="False"
-                        HeadersVisibility="Column"
-                        IsReadOnly="True"
-                        Background="{DynamicResource PanelBg}"
-                        Foreground="{DynamicResource TextMain}"
-                        RowBackground="{DynamicResource PanelBg}"
-                        AlternatingRowBackground="{DynamicResource GridAltBg}"
-                        HorizontalGridLinesBrush="{DynamicResource Line}"
-                        VerticalGridLinesBrush="Transparent"
-                        RowStyle="{StaticResource {x:Type DataGridRow}}"
-                        CellStyle="{StaticResource {x:Type DataGridCell}}"
-                        ColumnHeaderStyle="{StaticResource {x:Type DataGridColumnHeader}}"
-                        RowHeight="26"
-                        FontSize="{StaticResource Type.Caption.Size}"
-                        BorderThickness="0"
-ScrollViewer.HorizontalScrollBarVisibility="Auto"
-ScrollViewer.VerticalScrollBarVisibility="Auto"
-VirtualizingPanel.IsVirtualizing="True"
-VirtualizingPanel.VirtualizationMode="Recycling"
-Loaded="TaskGrid_Loaded">
-                <DataGrid.Columns>
-                  <DataGridTextColumn Header="{loc:Tr Key='批次'}" Binding="{Binding Name}" Width="160"/>
-                  <DataGridTextColumn Header="{loc:Tr Key='任务'}" Binding="{Binding Task}" Width="160"/>
-                  <DataGridTextColumn Header="{loc:Tr Key='状态'}" Binding="{Binding Status}" Width="90"/>
-                  <DataGridTextColumn Header="{loc:Tr Key='参数'}" Binding="{Binding Info}" Width="520"/>
-                  <DataGridTextColumn Header="{loc:Tr Key='耗时(s)'}" Binding="{Binding Cost}" Width="80"/>
-                  <DataGridTextColumn Header="{loc:Tr Key='完成时间'}" Binding="{Binding DoneAt}" Width="150"/>
-                </DataGrid.Columns>
-              </DataGrid>
+             xmlns:loc="clr-namespace:SmsWorkbench.Localization"
+             xmlns:local="clr-namespace:SmsWorkbench.Views">
+  <!-- Collapsible segmented console drawer (DeepAI ThreadTerminalDrawer style):
+       Header switches between Live Log (Surface.Terminal) and Task Queue (TaskGrid),
+       plus Copy, Clear, and one-click Collapse/Expand to maximize account grid height. -->
+  <UserControl.Resources>
+    <Style x:Key="ConsoleSegmentTabStyle" TargetType="RadioButton">
+      <Setter Property="Height" Value="24"/>
+      <Setter Property="Padding" Value="9,0"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Foreground" Value="{DynamicResource TextSub}"/>
+      <Setter Property="FontSize" Value="{StaticResource Type.Caption.Size}"/>
+      <Setter Property="FontWeight" Value="Medium"/>
+      <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRingStyle}"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="RadioButton">
+            <Border x:Name="TabChrome"
+                    Background="{TemplateBinding Background}"
+                    CornerRadius="{StaticResource Corner.Xs}"
+                    Padding="{TemplateBinding Padding}">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
-            <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{DynamicResource SplitterBg}" ShowsPreview="True"/>
-            <!-- Log well: Surface.Inset, the deepest rung. No stroke: Phase 2 moved
-                 the console onto Surface.Inset and this outer border was left behind. -->
-            <Border Grid.Row="2" Background="{DynamicResource Surface.Inset}" CornerRadius="{StaticResource Corner.Xl}">
-              <Grid>
-                <Grid.RowDefinitions>
-                  <RowDefinition Height="Auto"/>
-                  <RowDefinition Height="*"/>
-                </Grid.RowDefinitions>
-                <Button Grid.Row="0" Width="74" Height="26" HorizontalAlignment="Right" VerticalAlignment="Top"
-                        Margin="0,4,8,2" Padding="8,0" Command="{Binding LogPanel.ClearCommand}">
-                  <StackPanel Orientation="Horizontal">
-                    <Path Style="{StaticResource IconPath}" Width="13" Height="13" StrokeThickness="1.7"
-                          Data="{StaticResource Glyph.ClearLog}"/>
-                    <TextBlock Text="{loc:Tr Key='清空'}" Margin="6,0,0,0" VerticalAlignment="Center"/>
-                  </StackPanel>
-                </Button>
-                <!-- Font.Mono, not "Consolas": every log line here is Chinese or
-                     mixed, and Consolas has no CJK glyphs, so WPF fell back
-                     per-character and mixed two sets of metrics inside one line.
-                     TextBox has no LineHeight (that property is TextBlock's), so the
-                     rhythm comes from FontSize + the 8px padding below. -->
-                <!-- Style, not MinHeight: MinHeight cannot cancel the implicit
-                     TextBox Height=32, it only raised it to 220 — so the box
-                     overflowed a shorter console row and its scroll bar was clipped
-                     at the bottom. MultilineTextBox restores Height=Auto. -->
-                <TextBox Grid.Row="1" x:Name="LogTextBox" Text="{Binding LogPanel.Text, Mode=OneWay}"
-                         Style="{StaticResource MultilineTextBox}"
-                         Background="{DynamicResource Surface.Inset}"
-                         Foreground="{DynamicResource LogText}"
-                         BorderThickness="0"
-                         FontFamily="{StaticResource Font.Mono}"
-                         FontSize="{StaticResource Type.Mono.Size}"
-                         TextOptions.TextFormattingMode="Display"
-                         TextOptions.TextRenderingMode="ClearType"
-                         IsReadOnly="True"
-                         VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
-                         TextWrapping="Wrap"
-                         VerticalAlignment="Stretch" HorizontalAlignment="Stretch"
-                         Padding="12,10,12,12"/>
-              </Grid>
-            </Border>
-          </Grid>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
+              </Trigger>
+              <Trigger Property="IsChecked" Value="True">
+                <Setter TargetName="TabChrome" Property="Background" Value="{DynamicResource Surface.Card}"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+  </UserControl.Resources>
+
+  <Border CornerRadius="{StaticResource Corner.Lg}"
+          Background="{DynamicResource Surface.Card}"
+          BorderBrush="{DynamicResource Divider}"
+          BorderThickness="1"
+          ClipToBounds="True">
+    <Grid>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="34"/>
+        <RowDefinition Height="*"/>
+      </Grid.RowDefinitions>
+
+      <!-- Drawer Header Bar -->
+      <Grid Grid.Row="0" Background="{DynamicResource Surface.Card}">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*"/>
+          <ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- Segmented Switcher: Live Log | Task Queue -->
+        <Border Grid.Column="0"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Center"
+                Margin="6,0,0,0"
+                Padding="2"
+                CornerRadius="{StaticResource Corner.Sm}"
+                Background="{DynamicResource Surface.Block}">
+          <StackPanel Orientation="Horizontal">
+            <RadioButton x:Name="LogTabButton"
+                         GroupName="WorkbenchConsoleTabs"
+                         Style="{StaticResource ConsoleSegmentTabStyle}"
+                         IsChecked="True"
+                         Click="LogTab_Click">
+              <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Path Style="{StaticResource CompactIconPath}"
+                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                      Data="{StaticResource Glyph.Terminal}"/>
+                <TextBlock Text="{loc:Tr Key='实时日志'}"
+                           Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                           FontSize="{StaticResource Type.Caption.Size}"
+                           FontWeight="{Binding FontWeight, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                           Margin="5,0,0,0"
+                           VerticalAlignment="Center"/>
+              </StackPanel>
+            </RadioButton>
+
+            <RadioButton x:Name="TasksTabButton"
+                         GroupName="WorkbenchConsoleTabs"
+                         Style="{StaticResource ConsoleSegmentTabStyle}"
+                         Margin="2,0,0,0"
+                         Click="TasksTab_Click">
+              <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Path Style="{StaticResource CompactIconPath}"
+                      Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                      Data="{StaticResource Glyph.ListTasks}"/>
+                <TextBlock Text="{loc:Tr Key='任务队列'}"
+                           Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                           FontSize="{StaticResource Type.Caption.Size}"
+                           FontWeight="{Binding FontWeight, RelativeSource={RelativeSource AncestorType=RadioButton}}"
+                           Margin="5,0,0,0"
+                           VerticalAlignment="Center"/>
+                <Border Margin="5,0,0,0"
+                        Padding="5,0"
+                        MinWidth="16"
+                        Height="16"
+                        CornerRadius="{StaticResource Corner.Xs}"
+                        Background="{DynamicResource PrimarySoft}"
+                        VerticalAlignment="Center">
+                  <TextBlock Text="{Binding TaskList.Tasks.Count}"
+                             Style="{StaticResource Text.Micro}"
+                             Foreground="{DynamicResource AccentIndicator}"
+                             HorizontalAlignment="Center"
+                             VerticalAlignment="Center"/>
+                </Border>
+              </StackPanel>
+            </RadioButton>
+          </StackPanel>
+        </Border>
+
+        <!-- Drawer Right Actions: Copy Log / Clear Log / Collapse-Expand -->
+        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,6,0">
+          <Button x:Name="CopyLogButton"
+                  Style="{StaticResource GhostToolbarButton}"
+                  Click="CopyLog_Click"
+                  ToolTip="{loc:Tr Key='复制日志'}">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+              <Path Style="{StaticResource CompactIconPath}" Data="{StaticResource Glyph.Copy}"/>
+              <TextBlock Text="{loc:Tr Key='复制'}" Margin="5,0,0,0" VerticalAlignment="Center" FontSize="{StaticResource Type.Caption.Size}"/>
+            </StackPanel>
+          </Button>
+          <Button x:Name="ClearLogButton"
+                  Style="{StaticResource GhostToolbarButton}"
+                  Command="{Binding LogPanel.ClearCommand}"
+                  ToolTip="{loc:Tr Key='清空'}">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+              <Path Style="{StaticResource CompactIconPath}" Data="{StaticResource Glyph.ClearLog}"/>
+              <TextBlock Text="{loc:Tr Key='清空'}" Margin="5,0,0,0" VerticalAlignment="Center" FontSize="{StaticResource Type.Caption.Size}"/>
+            </StackPanel>
+          </Button>
+          <Border Width="1" Height="14" Background="{DynamicResource Divider}" Margin="4,0" VerticalAlignment="Center"/>
+          <Button x:Name="CollapseToggleButton"
+                  Width="26"
+                  Padding="0"
+                  Click="CollapseToggle_Click">
+            <Button.Style>
+              <Style TargetType="Button" BasedOn="{StaticResource GhostToolbarButton}">
+                <Setter Property="ToolTip" Value="{loc:Tr Key='折叠控制台'}"/>
+                <Style.Triggers>
+                  <DataTrigger Binding="{Binding IsCollapsed, RelativeSource={RelativeSource AncestorType=local:WorkbenchConsole}}" Value="True">
+                    <Setter Property="ToolTip" Value="{loc:Tr Key='展开控制台'}"/>
+                  </DataTrigger>
+                </Style.Triggers>
+              </Style>
+            </Button.Style>
+            <Path HorizontalAlignment="Center" VerticalAlignment="Center">
+              <Path.Style>
+                <Style TargetType="Path" BasedOn="{StaticResource CompactIconPath}">
+                  <Setter Property="Data" Value="{StaticResource Glyph.ChevronDown}"/>
+                  <Style.Triggers>
+                    <DataTrigger Binding="{Binding IsCollapsed, RelativeSource={RelativeSource AncestorType=local:WorkbenchConsole}}" Value="True">
+                      <Setter Property="Data" Value="{StaticResource Glyph.ChevronUp}"/>
+                    </DataTrigger>
+                  </Style.Triggers>
+                </Style>
+              </Path.Style>
+            </Path>
+          </Button>
+        </StackPanel>
+      </Grid>
+
+      <!-- Drawer Body (hidden when IsCollapsed=True) -->
+      <Grid x:Name="ConsoleBody" Grid.Row="1">
+        <Grid.Style>
+          <Style TargetType="Grid">
+            <Setter Property="Visibility" Value="Visible"/>
+            <Style.Triggers>
+              <DataTrigger Binding="{Binding IsCollapsed, RelativeSource={RelativeSource AncestorType=local:WorkbenchConsole}}" Value="True">
+                <Setter Property="Visibility" Value="Collapsed"/>
+              </DataTrigger>
+            </Style.Triggers>
+          </Style>
+        </Grid.Style>
+        <Grid.RowDefinitions>
+          <RowDefinition Height="1"/>
+          <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Background="{DynamicResource Divider}"/>
+
+        <!-- Live Log Panel: deep Surface.Terminal well -->
+        <Border x:Name="LogPane" Grid.Row="1" Background="{DynamicResource Surface.Terminal}">
+          <TextBox x:Name="LogTextBox"
+                   Text="{Binding LogPanel.Text, Mode=OneWay}"
+                   Style="{StaticResource MultilineTextBox}"
+                   Background="{DynamicResource Surface.Terminal}"
+                   Foreground="{DynamicResource LogText}"
+                   BorderThickness="0"
+                   FontFamily="{StaticResource Font.Mono}"
+                   FontSize="{StaticResource Type.Mono.Size}"
+                   TextOptions.TextFormattingMode="Ideal"
+                   TextOptions.TextRenderingMode="ClearType"
+                   TextOptions.TextHintingMode="Fixed"
+                   IsReadOnly="True"
+                   VerticalScrollBarVisibility="Auto"
+                   HorizontalScrollBarVisibility="Disabled"
+                   TextWrapping="Wrap"
+                   VerticalAlignment="Stretch"
+                   HorizontalAlignment="Stretch"
+                   Padding="12,8,12,10"/>
+        </Border>
+
+        <!-- Task Queue Panel -->
+        <Border x:Name="TasksPane" Grid.Row="1" Background="{DynamicResource Surface.Card}" Visibility="Collapsed">
+          <DataGrid x:Name="TaskGrid"
+                    ItemsSource="{Binding TaskList.Tasks}"
+                    AutoGenerateColumns="False"
+                    CanUserAddRows="False"
+                    HeadersVisibility="Column"
+                    IsReadOnly="True"
+                    RowHeight="30"
+                    FontSize="{StaticResource Type.Caption.Size}"
+                    BorderThickness="0"
+                    ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                    ScrollViewer.VerticalScrollBarVisibility="Auto"
+                    VirtualizingPanel.IsVirtualizing="True"
+                    VirtualizingPanel.VirtualizationMode="Recycling"
+                    Loaded="TaskGrid_Loaded">
+            <DataGrid.Columns>
+              <DataGridTextColumn Header="{loc:Tr Key='批次'}" Binding="{Binding Name}" Width="140"/>
+              <DataGridTextColumn Header="{loc:Tr Key='任务'}" Binding="{Binding Task}" Width="160"/>
+              <DataGridTextColumn Header="{loc:Tr Key='状态'}" Binding="{Binding Status}" Width="90"/>
+              <DataGridTextColumn Header="{loc:Tr Key='参数'}" Binding="{Binding Info}" Width="*"/>
+              <DataGridTextColumn Header="{loc:Tr Key='耗时(s)'}" Binding="{Binding Cost}" Width="80"/>
+              <DataGridTextColumn Header="{loc:Tr Key='完成时间'}" Binding="{Binding DoneAt}" Width="150"/>
+            </DataGrid.Columns>
+          </DataGrid>
+        </Border>
+      </Grid>
+    </Grid>
+  </Border>
 </UserControl>

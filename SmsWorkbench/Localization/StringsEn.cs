@@ -690,6 +690,22 @@ namespace SmsWorkbench.Localization
             ["SDK 刷新周期秒"] = "SDK refresh interval (s)",
             ["巡检恢复后复检优惠"] = "Refresh trial offers after recovery",
             ["轻量巡检当前账号"] = "Lightweight inspect this account",
+
+            // ── UI shell / framed workspace / collapsible console drawer ──
+            ["批次运行中"] = "Batch running",
+            ["工具与数据"] = "Tools & data",
+            ["实时日志"] = "Live log",
+            ["任务队列"] = "Tasks",
+            ["复制"] = "Copy",
+            ["复制日志"] = "Copy log",
+            ["折叠控制台"] = "Collapse console",
+            ["展开控制台"] = "Expand console",
+            ["点击筛选全部"] = "Filter: all records",
+            ["点击筛选有试用"] = "Filter: trial eligible",
+            ["点击筛选已注册"] = "Filter: registered",
+            ["点击筛选待处理"] = "Filter: needs attention",
+            ["外壳"] = "Shell",
+            ["语言"] = "EN/CN",
         };
     }
 }

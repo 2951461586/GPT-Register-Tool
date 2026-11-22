@@ -1,6 +1,6 @@
 <ui:FluentWindow x:Class="SmsWorkbench.Views.MainWindow"
                  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:loc="clr-namespace:SmsWorkbench.Localization"
+                 xmlns:loc="clr-namespace:SmsWorkbench.Localization"
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  xmlns:local="clr-namespace:SmsWorkbench.Views"
@@ -8,52 +8,64 @@
                  Title="GPT Register Tool"
                  Width="1360" Height="860" MinWidth="1220" MinHeight="720"
                  WindowStartupLocation="CenterScreen"
-                 Background="{DynamicResource AppBg}"
+                 Background="{DynamicResource Surface.Chrome}"
                  FontFamily="{StaticResource Font.Ui}"
                  FontSize="{StaticResource Type.Body.Size}"
-                 TextOptions.TextFormattingMode="Display"
+                 TextOptions.TextFormattingMode="Ideal"
                  TextOptions.TextRenderingMode="ClearType"
+                 TextOptions.TextHintingMode="Fixed"
                  UseLayoutRounding="True"
                  SnapsToDevicePixels="True"
                  ExtendsContentIntoTitleBar="True"
                  WindowBackdropType="Mica"
                  WindowCornerPreference="Round">
-      <Grid Background="{DynamicResource AppBg}">
-        <Grid.RowDefinitions>
-          <RowDefinition Height="40"/>
-          <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
+  <!-- DeepAI Code Chrome Shell + Floating Framed Workspace Sheet:
+       Column 0 hosts the full-height sidebar directly on Surface.Chrome;
+       Column 1 hosts a compact 38px drag/caption bar above the rounded
+       framed workspace canvas (Corner.Xl + WorkspaceFrameOutline). -->
+  <Grid Background="{DynamicResource Surface.Chrome}">
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition x:Name="SidebarColumn" Width="240"/>
+      <ColumnDefinition Width="*"/>
+    </Grid.ColumnDefinitions>
+
+    <local:Sidebar Grid.Column="0"
+                   IsCollapsed="{Binding SidebarCollapsed}"
+                   ActiveKey="{Binding ActiveNavKey, RelativeSource={RelativeSource AncestorType=Window}}"
+                   ToggleRequested="OnSidebarToggleRequested"/>
+
+    <Grid Grid.Column="1">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="38"/>
+        <RowDefinition Height="*"/>
+      </Grid.RowDefinitions>
 
       <local:TitleBar Grid.Row="0"/>
 
-      <Grid Grid.Row="1">
-        <Grid.ColumnDefinitions>
-          <ColumnDefinition x:Name="SidebarColumn" Width="248"/>
-          <ColumnDefinition Width="*"/>
-        </Grid.ColumnDefinitions>
-        <!-- The chrome is its own surface and the divider against the content is
-             drawn once, here: window chrome and the title bar are the only places
-             besides inputs and the focus ring that keep a stroke. -->
-        <Grid Grid.Column="0" Background="{DynamicResource Surface.Chrome}">
-          <local:Sidebar IsCollapsed="{Binding SidebarCollapsed}"
-                         ActiveKey="{Binding ActiveNavKey, RelativeSource={RelativeSource AncestorType=Window}}"
-                         ToggleRequested="OnSidebarToggleRequested"/>
-          <Border Width="1" HorizontalAlignment="Right" Background="{DynamicResource Divider}"/>
-        </Grid>
-        <Grid Grid.Column="1" Margin="14,0,14,10">
+      <!-- Floating rounded workspace canvas sheet -->
+      <Border Grid.Row="1"
+              Margin="0,0,8,8"
+              CornerRadius="{StaticResource Corner.Xl}"
+              Background="{DynamicResource Surface.Page}"
+              BorderBrush="{DynamicResource WorkspaceFrameOutline}"
+              BorderThickness="1"
+              ClipToBounds="True">
+        <Grid>
           <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="6"/>
-            <RowDefinition Height="320" MinHeight="160" MaxHeight="560"/>
-            <RowDefinition Height="24"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition x:Name="ConsoleRow" Height="220" MinHeight="120" MaxHeight="520"/>
+            <RowDefinition Height="26"/>
           </Grid.RowDefinitions>
 
-          <local:AccountFilterBar Grid.Row="0"/>
-          <local:AccountGridView x:Name="AccountGridControl" Grid.Row="1" Pool="{Binding Pool}"/>
+          <local:AccountFilterBar Grid.Row="0" Margin="12,10,12,0"/>
+          <local:AccountGridView x:Name="AccountGridControl" Grid.Row="1" Margin="12,0,12,0" Pool="{Binding Pool}"/>
 
-          <GridSplitter Grid.Row="2"
+          <GridSplitter x:Name="ConsoleSplitter"
+                        Grid.Row="2"
                         Height="6"
+                        Margin="12,0"
                         HorizontalAlignment="Stretch"
                         VerticalAlignment="Center"
                         Background="Transparent"
@@ -63,14 +75,19 @@
                         Cursor="SizeNS"
                         ToolTip="{loc:Tr Key='拖动调整控制台高度'}"/>
 
-          <local:WorkbenchConsole x:Name="ConsoleControl" Grid.Row="3" TaskList="{Binding TaskList}" LogPanel="{Binding LogPanel}"/>
+          <local:WorkbenchConsole x:Name="ConsoleControl"
+                                  Grid.Row="3"
+                                  Margin="12,0,12,8"
+                                  TaskList="{Binding TaskList}"
+                                  LogPanel="{Binding LogPanel}"
+                                  CollapseToggled="OnConsoleCollapseToggled"/>
 
-          <!-- Status bar: the rolling throughput strip on the left, the operator
-               message on the right. The strip lives here rather than in its own row
-               because it is ambient information, not a panel: it must cost no vertical
-               space that the account grid could use. -->
-          <Border Grid.Row="4" Background="{DynamicResource StatusBg}" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0">
-            <Grid Margin="8,2">
+          <!-- Integrated ambient status strip along the canvas foot -->
+          <Border Grid.Row="4"
+                  Background="{DynamicResource Surface.Card}"
+                  BorderBrush="{DynamicResource Divider}"
+                  BorderThickness="0,1,0,0">
+            <Grid Margin="14,0">
               <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
@@ -82,23 +99,29 @@
                                  Values="{Binding Metrics.Throughput}"
                                  Stroke="{DynamicResource AccentIndicator}"/>
                 <TextBlock VerticalAlignment="Center"
-                           FontSize="{StaticResource Type.Caption.Size}"
-                           Foreground="{DynamicResource TextSub}"
+                           Style="{StaticResource Text.Caption}"
                            Text="{Binding Metrics.SummaryText}"/>
-                <!-- Failure split: hidden while nothing fails, so the strip does not
-                     permanently reserve space for an empty slot. -->
                 <TextBlock Margin="10,0,0,0"
                            VerticalAlignment="Center"
-                           FontSize="{StaticResource Type.Caption.Size}"
+                           Style="{StaticResource Text.Caption}"
                            Foreground="{DynamicResource Danger}"
                            Visibility="{Binding Metrics.FailureVisible, Converter={StaticResource BooleanToVisibilityConverter}}"
                            Text="{Binding Metrics.FailureText}"/>
               </StackPanel>
-              <TextBlock Grid.Column="2" VerticalAlignment="Center" Text="{Binding StatusBar.Text}" Foreground="{DynamicResource TextSub}"/>
+              <TextBlock Grid.Column="2"
+                         VerticalAlignment="Center"
+                         Style="{StaticResource Text.Caption}"
+                         Text="{Binding StatusBar.Text}"/>
             </Grid>
           </Border>
         </Grid>
-      </Grid>
-    <ui:SnackbarPresenter x:Name="SnackbarPresenter" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="24,24,24,48"/>
+      </Border>
     </Grid>
+
+    <ui:SnackbarPresenter x:Name="SnackbarPresenter"
+                          Grid.ColumnSpan="2"
+                          HorizontalAlignment="Right"
+                          VerticalAlignment="Bottom"
+                          Margin="24,24,24,44"/>
+  </Grid>
 </ui:FluentWindow>

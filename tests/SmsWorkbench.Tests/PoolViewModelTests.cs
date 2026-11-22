@@ -99,6 +99,19 @@ namespace SmsWorkbench.Tests
         }
 
         [Fact]
+        public void ScopeFilter_RegisteredKeepsOnlyRegisteredRows()
+        {
+            var pool = WithRows(3);
+            pool.AllRows[1].Status = "邮箱可用";
+
+            pool.ScopeFilter = "registered";
+
+            Assert.Equal(
+                new[] { "user001@example.com", "user003@example.com" },
+                pool.PagedRows.Select(r => r.Identifier));
+        }
+
+        [Fact]
         public void SortBy_OrdersTheFilteredRowsAndResetsThePage()
         {
             var pool = WithRows(15);

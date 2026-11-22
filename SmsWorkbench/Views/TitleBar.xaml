@@ -3,14 +3,11 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:SmsWorkbench.Views"
              xmlns:loc="clr-namespace:SmsWorkbench.Localization">
-  <!-- Minimal frameless title bar: full-width drag surface on the left and
-       three identically sized, identically animated window caption buttons
-       (minimize / maximize-restore / close) on the right. Version and update
-       controls live in the Sidebar bottom logo footer. -->
+  <!-- Minimal frameless chrome title bar (DeepAI Code style): sits directly on
+       Surface.Chrome above the floating framed workspace sheet. Left carries a
+       drag surface with an ambient running pill (visible only while a batch is
+       active); right carries three identical 46x38 OS caption buttons. -->
   <UserControl.Resources>
-    <!-- Explicit style (not BasedOn the app-wide Button style, which pins Height=32)
-         so all three caption buttons stretch to the exact same full bar height and
-         share identical hover/press animations. -->
     <Style x:Key="CaptionWindowButtonStyle" TargetType="Button">
       <Setter Property="Width" Value="46"/>
       <Setter Property="VerticalAlignment" Value="Stretch"/>
@@ -24,15 +21,53 @@
     </Style>
   </UserControl.Resources>
 
-  <Grid Height="40" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown" Background="Transparent">
+  <Grid Height="38" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown" Background="Transparent">
     <Grid.ColumnDefinitions>
       <ColumnDefinition Width="*"/>
       <ColumnDefinition Width="Auto"/>
     </Grid.ColumnDefinitions>
 
-    <!-- Window control buttons: unified 46x39 flush hit targets above the 1px divider,
-         uniform 10x10 optical glyphs (1.15px stroke), and identical opacity/scale motion. -->
-    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Stretch" Margin="0,0,0,1">
+    <!-- Ambient batch status pill: hidden at rest to keep the top chrome calm;
+         appears cleanly while a background batch runs. -->
+    <Border Grid.Column="0"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Center"
+            Margin="4,0,0,0"
+            Padding="10,3"
+            CornerRadius="{StaticResource Corner.Lg}"
+            Background="{DynamicResource Surface.Card}"
+            BorderBrush="{DynamicResource WorkspaceFrameOutline}"
+            BorderThickness="1"
+            IsHitTestVisible="False">
+      <Border.Style>
+        <Style TargetType="Border">
+          <Setter Property="Visibility" Value="Visible"/>
+          <Style.Triggers>
+            <DataTrigger Binding="{Binding ActiveNavKey, RelativeSource={RelativeSource AncestorType=Window}}" Value="">
+              <Setter Property="Visibility" Value="Collapsed"/>
+            </DataTrigger>
+            <DataTrigger Binding="{Binding ActiveNavKey, RelativeSource={RelativeSource AncestorType=Window}}" Value="{x:Null}">
+              <Setter Property="Visibility" Value="Collapsed"/>
+            </DataTrigger>
+          </Style.Triggers>
+        </Style>
+      </Border.Style>
+      <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+        <Ellipse Width="6"
+                 Height="6"
+                 Fill="{DynamicResource AccentIndicator}"
+                 VerticalAlignment="Center"
+                 Margin="0,0,7,0"/>
+        <TextBlock Text="{loc:Tr Key='批次运行中'}"
+                   Style="{StaticResource Text.Caption}"
+                   Foreground="{DynamicResource TextMain}"
+                   VerticalAlignment="Center"/>
+      </StackPanel>
+    </Border>
+
+    <!-- Window control buttons: unified 46x38 hit targets, uniform 10x10 optical
+         glyphs (Icon.Stroke.Chrome = 1.15), identical opacity/scale motion. -->
+    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Stretch">
       <!-- Minimize button -->
       <Button x:Name="MinimizeButton"
               Style="{StaticResource CaptionWindowButtonStyle}"
@@ -55,8 +90,8 @@
                     Stretch="None"
                     SnapsToDevicePixels="True"
                     Data="{StaticResource Glyph.WindowMinimize}"
-                    Stroke="{DynamicResource TextSub}"
-                    StrokeThickness="1.15"
+                    Stroke="{DynamicResource IconMuted}"
+                    StrokeThickness="{StaticResource Icon.Stroke.Chrome}"
                     StrokeStartLineCap="Round"
                     StrokeEndLineCap="Round"
                     HorizontalAlignment="Center"
@@ -172,8 +207,8 @@
                     Stretch="None"
                     SnapsToDevicePixels="True"
                     Data="{StaticResource Glyph.WindowMaximize}"
-                    Stroke="{DynamicResource TextSub}"
-                    StrokeThickness="1.15"
+                    Stroke="{DynamicResource IconMuted}"
+                    StrokeThickness="{StaticResource Icon.Stroke.Chrome}"
                     StrokeStartLineCap="Round"
                     StrokeEndLineCap="Round"
                     StrokeLineJoin="Round"
@@ -285,8 +320,8 @@
                     Stretch="None"
                     SnapsToDevicePixels="True"
                     Data="{StaticResource Glyph.WindowClose}"
-                    Stroke="{DynamicResource TextSub}"
-                    StrokeThickness="1.15"
+                    Stroke="{DynamicResource IconMuted}"
+                    StrokeThickness="{StaticResource Icon.Stroke.Chrome}"
                     StrokeStartLineCap="Round"
                     StrokeEndLineCap="Round"
                     HorizontalAlignment="Center"
@@ -373,11 +408,5 @@
         </Button.Template>
       </Button>
     </StackPanel>
-
-    <!-- The one stroke the chrome keeps: its edge against the content. -->
-    <Border Grid.ColumnSpan="2"
-            Height="1"
-            VerticalAlignment="Bottom"
-            Background="{DynamicResource Divider}"/>
   </Grid>
 </UserControl>

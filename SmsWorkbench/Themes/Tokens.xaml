@@ -2,37 +2,37 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:sys="clr-namespace:System;assembly=System.Runtime">
   <!--
-    Theme-independent tokens: spacing, corner radius, type ramp.
+    Theme-independent tokens: corner radius, spacing, icon optical metrics,
+    scrollbar/splitter geometry, type ramp, and font families.
 
     Nothing here carries a colour, so this dictionary is merged ONCE and is never
     swapped when the theme changes. Colour tokens live in Colors.Light.xaml /
     Colors.Dark.xaml (same key set) and are swapped as a unit.
 
-    Merge order is fixed by App.xaml: Wpf.Ui -> Tokens -> Colors.* -> Controls.
-    A StaticResource into this file therefore resolves before any control style
-    is built; reordering App.xaml would make the first parse fail loudly rather
-    than silently fall back, which is the failure mode we want.
-
-    One condition for the type ramp: WPF has no Dynamic Type, so a token is a
-    size, not a size+leading pair. Line height is left to layout (TextBlock
-    measures from FontSize); the numbers below are the sizes only.
+    Merge order is fixed by App.xaml: Wpf.Ui -> Wpf.Ui Theme -> Tokens -> Glyphs
+    -> Colors.* -> Controls*. A StaticResource into this file resolves before any
+    control style is built; reordering App.xaml fails loudly on first parse.
   -->
 
-  <!-- ═══ Corner radius ═══════════════════════════════════════════════════
-       Picked by the control's SHORTEST side, never per call site:
-       Xs=4   inset marks, badges
-       Sm=6   chips, small square buttons
-       Md=8   inputs, buttons, menus
-       Lg=10  sidebar rows, toolbars
-       Xl=12  cards, panels, console -->
+  <!-- ═══ Corner radius (concentric scale) ════════════════════════════════
+       Derived by shortest side and concentric nesting (inner = outer - inset):
+       Hairline=1.5  3px selection indicators, splitter grip
+       ThumbRest=2   4px scrollbar thumb at rest
+       ThumbHover=3  6px scrollbar thumb on hover
+       Xs=4          inset badges, ComboBox items inside Md(8) popup w/ 4px pad
+       Sm=6          chips, menu items inside Lg(10) menu w/ 4px pad, small buttons
+       Md=8          inputs, ComboBox, buttons, compact nav rows
+       Lg=10         menus, popups, toolbars, KPI strip tiles
+       Xl=12         framed workspace sheet, main cards, console container -->
+  <CornerRadius x:Key="Corner.Hairline">1.5</CornerRadius>
+  <CornerRadius x:Key="Corner.ThumbRest">2</CornerRadius>
+  <CornerRadius x:Key="Corner.ThumbHover">3</CornerRadius>
   <CornerRadius x:Key="Corner.Xs">4</CornerRadius>
   <CornerRadius x:Key="Corner.Sm">6</CornerRadius>
   <CornerRadius x:Key="Corner.Md">8</CornerRadius>
   <CornerRadius x:Key="Corner.Lg">10</CornerRadius>
   <CornerRadius x:Key="Corner.Xl">12</CornerRadius>
-  <!-- Half of a 3px mark (selection bars, splitter grip): the largest radius that
-       still draws a rectangle with rounded ends instead of a lens. -->
-  <CornerRadius x:Key="Corner.Hairline">1.5</CornerRadius>
+
   <!-- Scalar radii for shapes (e.g. FocusRingStyle Rectangle.RadiusX / RadiusY),
        kept in lockstep with Corner.Xs / Corner.Sm / Corner.Md. -->
   <sys:Double x:Key="Radius.Xs">4</sys:Double>
@@ -43,35 +43,49 @@
   <Thickness x:Key="Space.Bottom1">0,0,0,4</Thickness>
 
   <!-- ═══ Scrollbar / splitter ═══════════════════════════════════════════
-       These numbers used to be literals inside the ControlTemplates, which is why
-       the scrollbars were the last place a size could only be changed by editing a
-       template (docs/current/ui-architecture.md §7). 12/6 gives an 8px pill inside
-       a 12px track, and the thumb thickens to 10px on hover so the control reacts
-       without spending a colour. -->
-  <sys:Double x:Key="Size.ScrollBar.Track">12</sys:Double>
-  <sys:Double x:Key="Size.ScrollBar.Thumb">6</sys:Double>
-  <sys:Double x:Key="Size.ScrollBar.ThumbMinLength">18</sys:Double>
-  <sys:Double x:Key="Size.Splitter.GripLength">32</sys:Double>
+       Refined low-chrome metrics inspired by DeepAI Code Desktop: an 8px track
+       housing a 4px thumb that thickens to 6px on hover without spending colour.
+       SystemParameters.*ScrollBar*Key in Controls.xaml stays in lockstep (8px). -->
+  <sys:Double x:Key="Size.ScrollBar.Track">8</sys:Double>
+  <sys:Double x:Key="Size.ScrollBar.Thumb">4</sys:Double>
+  <sys:Double x:Key="Size.ScrollBar.ThumbMinLength">20</sys:Double>
+  <sys:Double x:Key="Size.Splitter.GripLength">36</sys:Double>
   <sys:Double x:Key="Size.Splitter.GripThickness">3</sys:Double>
 
+  <!-- ═══ Icon optical metrics ═══════════════════════════════════════════
+       All feature glyphs share Tabler's 24x24 outline grid. Converging all
+       call sites onto three stroke tokens matches DeepAI's ~1.33-1.5px optical
+       ink weight across every DPI instead of ad-hoc per-view numbers. -->
+  <sys:Double x:Key="Icon.Size.Compact">12</sys:Double>
+  <sys:Double x:Key="Icon.Size.Toolbar">13</sys:Double>
+  <sys:Double x:Key="Icon.Size.Standard">14</sys:Double>
+  <sys:Double x:Key="Icon.Size.Nav">16</sys:Double>
+  <sys:Double x:Key="Icon.Stroke.Chrome">1.15</sys:Double>
+  <sys:Double x:Key="Icon.Stroke.Nav">1.45</sys:Double>
+  <sys:Double x:Key="Icon.Stroke.Standard">1.45</sys:Double>
+  <sys:Double x:Key="Icon.Stroke.Compact">1.5</sys:Double>
+
   <!-- ═══ Type ramp ═══════════════════════════════════════════════════════
-       Display 24 / Title 17 / Subtitle 14 / Data 13 / Body 13 / Mono 12 / Caption 12.
+       Display 24 / Kpi 22 / Title 16 / Subtitle 14 / Data 13 / Body 13 /
+       Mono 12 / Caption 12 / Micro 11.
        Integer pixel sizes align cleanly with ClearType Display formatting so
        CJK and Latin glyphs stay crisp at 100%/125%/150% DPI without blurring.
        Views must not write a bare FontSize; a new size means a new token. -->
   <sys:Double x:Key="Type.Display.Size">24</sys:Double>
-  <sys:Double x:Key="Type.Title.Size">17</sys:Double>
+  <sys:Double x:Key="Type.Kpi.Size">22</sys:Double>
+  <sys:Double x:Key="Type.Title.Size">16</sys:Double>
   <sys:Double x:Key="Type.Subtitle.Size">14</sys:Double>
   <sys:Double x:Key="Type.Data.Size">13</sys:Double>
   <sys:Double x:Key="Type.Body.Size">13</sys:Double>
   <sys:Double x:Key="Type.Mono.Size">12</sys:Double>
   <sys:Double x:Key="Type.Caption.Size">12</sys:Double>
+  <sys:Double x:Key="Type.Micro.Size">11</sys:Double>
 
   <!-- ═══ Fonts ═══════════════════════════════════════════════════════════
-       Microsoft YaHei UI first keeps CJK and Latin on one consistent weight and
-       baseline in WPF ClearType Display mode (avoiding WPF's variable-font thin
-       fallback on Segoe UI Variable), with Segoe UI as fallback.
-       Monospace for logs and pasted proxy lists keeps CJK metrics aligned. -->
-  <FontFamily x:Key="Font.Ui">Microsoft YaHei UI, Segoe UI</FontFamily>
-  <FontFamily x:Key="Font.Mono">Cascadia Mono, Consolas, Microsoft YaHei UI</FontFamily>
+       Embedded Atkinson Hyperlegible Next (SIL OFL 1.1, 400/500/600) leads for
+       Latin, emails, tokens, and numerals (distinct 1/I/l and 0/O), falling back
+       seamlessly to Microsoft YaHei UI for CJK and Segoe UI for extended symbols.
+       Monospace stack keeps logs, tokens, and proxy pools optically aligned. -->
+  <FontFamily x:Key="Font.Ui">pack://application:,,,/SmsWorkbench;component/Assets/Fonts/#Atkinson Hyperlegible Next, Microsoft YaHei UI, Segoe UI</FontFamily>
+  <FontFamily x:Key="Font.Mono">Cascadia Mono, JetBrains Mono, Consolas, Microsoft YaHei UI</FontFamily>
 </ResourceDictionary>

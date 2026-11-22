@@ -22,6 +22,9 @@
   <ItemGroup>
     <Resource Include="Assets\app-icon.ico" />
     <Resource Include="Assets\black-kitten.png" />
+    <Resource Include="Assets\Fonts\atkinson-400.ttf" />
+    <Resource Include="Assets\Fonts\atkinson-500.ttf" />
+    <Resource Include="Assets\Fonts\atkinson-600.ttf" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\SmsWorkbench.Contracts\SmsWorkbench.Contracts.csproj" />

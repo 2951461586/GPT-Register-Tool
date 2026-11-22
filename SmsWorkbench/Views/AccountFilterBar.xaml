@@ -2,145 +2,273 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:SmsWorkbench.Localization">
-  <!-- Account counters + search/scope/page-size/paging bar. DataContext is the
-       MainWindow itself, inherited from the parent, so every binding keeps the
-       `Pool.*` path it had before the extraction. -->
+  <!-- Compact clickable KPI metric strip + unified search / scope / paging toolbar.
+       DataContext is inherited from MainWindow so all `Pool.*` bindings remain direct. -->
+  <UserControl.Resources>
+    <Style x:Key="KpiTileButtonStyle" TargetType="Button">
+      <Setter Property="Height" Value="48"/>
+      <Setter Property="Margin" Value="0"/>
+      <Setter Property="Padding" Value="12,0"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
+      <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRingStyle}"/>
+      <Setter Property="Background" Value="{DynamicResource Surface.Card}"/>
+      <Setter Property="BorderBrush" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="TileChrome"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="{StaticResource Corner.Lg}"
+                    Padding="{TemplateBinding Padding}">
+              <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="TileChrome" Property="Background" Value="{DynamicResource PanelHover}"/>
+              </Trigger>
+              <Trigger Property="IsPressed" Value="True">
+                <Setter TargetName="TileChrome" Property="Background" Value="{DynamicResource Surface.Inset}"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+  </UserControl.Resources>
+
   <Grid>
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto"/>
       <RowDefinition Height="Auto"/>
     </Grid.RowDefinitions>
 
-          <!-- Four stat tiles. Structure comes from the surface ladder, not a
-               stroke: Surface.Card is lighter than the page in light and darker than
-               it in dark, which is the whole separation. Phase 1 removed the
-               structural borders; these five survived it (see
-               docs/audits/plans/plan-2026-10-28-wpf-visual-system.md). -->
-          <Grid Grid.Row="0" Margin="0,0,0,10">
-            <Grid.ColumnDefinitions>
-              <ColumnDefinition Width="*"/>
-              <ColumnDefinition Width="*"/>
-              <ColumnDefinition Width="*"/>
-              <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
-            <Border Grid.Column="0" Margin="0,0,8,0" Padding="12,10" CornerRadius="{StaticResource Corner.Xl}" Background="{DynamicResource Surface.Card}">
-              <StackPanel Orientation="Horizontal">
-                <StackPanel>
-                  <TextBlock Text="{loc:Tr Key='总记录'}" FontSize="{StaticResource Type.Caption.Size}" FontWeight="Bold" Foreground="{DynamicResource TextMuted}" Margin="0,0,0,4"/>
-                  <TextBlock Text="{Binding Pool.TotalCountText}" FontSize="{StaticResource Type.Display.Size}" FontWeight="Bold"/>
-                </StackPanel>
-              </StackPanel>
-            </Border>
-            <Border Grid.Column="1" Margin="0,0,8,0" Padding="12,10" CornerRadius="{StaticResource Corner.Xl}" Background="{DynamicResource Surface.Card}">
-              <StackPanel Orientation="Horizontal">
-                <StackPanel>
-                  <TextBlock Text="{loc:Tr Key='有试用'}" FontSize="{StaticResource Type.Caption.Size}" FontWeight="Bold" Foreground="{DynamicResource TextMuted}" Margin="0,0,0,4"/>
-                  <TextBlock Text="{Binding Pool.TrialCountText}" FontSize="{StaticResource Type.Display.Size}" FontWeight="Bold"/>
-                </StackPanel>
-              </StackPanel>
-            </Border>
-            <Border Grid.Column="2" Margin="0,0,8,0" Padding="12,10" CornerRadius="{StaticResource Corner.Xl}" Background="{DynamicResource Surface.Card}">
-              <StackPanel Orientation="Horizontal">
-                <StackPanel>
-                  <TextBlock Text="{loc:Tr Key='已注册'}" FontSize="{StaticResource Type.Caption.Size}" FontWeight="Bold" Foreground="{DynamicResource TextMuted}" Margin="0,0,0,4"/>
-                  <TextBlock Text="{Binding Pool.RegisteredCountText}" FontSize="{StaticResource Type.Display.Size}" FontWeight="Bold"/>
-                </StackPanel>
-              </StackPanel>
-            </Border>
-            <Border Grid.Column="3" Padding="12,10" CornerRadius="{StaticResource Corner.Xl}" Background="{DynamicResource Surface.Card}">
-              <StackPanel Orientation="Horizontal">
-                <StackPanel>
-                  <TextBlock Text="{loc:Tr Key='异常/待处理'}" FontSize="{StaticResource Type.Caption.Size}" FontWeight="Bold" Foreground="{DynamicResource TextMuted}" Margin="0,0,0,4"/>
-                  <TextBlock Text="{Binding Pool.AttentionCountText}" FontSize="{StaticResource Type.Display.Size}" FontWeight="Bold"/>
-                </StackPanel>
-              </StackPanel>
-            </Border>
+    <!-- Row 0: Compact 48px horizontal KPI metric strip (clicking All / Trial / Attention filters the grid) -->
+    <Grid Grid.Row="0" Margin="0,0,0,8">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*"/>
+        <ColumnDefinition Width="*"/>
+        <ColumnDefinition Width="*"/>
+        <ColumnDefinition Width="*"/>
+      </Grid.ColumnDefinitions>
+
+      <!-- Total records -> filter: all -->
+      <Button Grid.Column="0"
+              Margin="0,0,8,0"
+              Tag="all"
+              Click="KpiScopeTile_Click"
+              ToolTip="{loc:Tr Key='点击筛选全部'}">
+        <Button.Style>
+          <Style TargetType="Button" BasedOn="{StaticResource KpiTileButtonStyle}">
+            <Style.Triggers>
+              <DataTrigger Binding="{Binding Pool.ScopeFilter}" Value="all">
+                <Setter Property="BorderBrush" Value="{DynamicResource AccentIndicator}"/>
+              </DataTrigger>
+            </Style.Triggers>
+          </Style>
+        </Button.Style>
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+          </Grid.ColumnDefinitions>
+          <Border Grid.Column="0" Width="26" Height="26" CornerRadius="{StaticResource Corner.Sm}" Background="{DynamicResource PrimarySoft}" VerticalAlignment="Center">
+            <Path Style="{StaticResource IconPath}" Stroke="{DynamicResource AccentIndicator}" Data="{StaticResource Glyph.Database}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Border>
+          <TextBlock Grid.Column="1" Text="{loc:Tr Key='总记录'}" Style="{StaticResource Text.Caption}" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" Margin="9,0,6,0" TextTrimming="CharacterEllipsis"/>
+          <TextBlock Grid.Column="2" Text="{Binding Pool.TotalCountText}" Style="{StaticResource Text.Kpi}" VerticalAlignment="Center"/>
+        </Grid>
+      </Button>
+
+      <!-- Trial eligible -> filter: trial -->
+      <Button Grid.Column="1"
+              Margin="0,0,8,0"
+              Tag="trial"
+              Click="KpiScopeTile_Click"
+              ToolTip="{loc:Tr Key='点击筛选有试用'}">
+        <Button.Style>
+          <Style TargetType="Button" BasedOn="{StaticResource KpiTileButtonStyle}">
+            <Style.Triggers>
+              <DataTrigger Binding="{Binding Pool.ScopeFilter}" Value="trial">
+                <Setter Property="BorderBrush" Value="{DynamicResource AccentIndicator}"/>
+              </DataTrigger>
+            </Style.Triggers>
+          </Style>
+        </Button.Style>
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+          </Grid.ColumnDefinitions>
+          <Border Grid.Column="0" Width="26" Height="26" CornerRadius="{StaticResource Corner.Sm}" Background="{DynamicResource BadgeInfoBg}" VerticalAlignment="Center">
+            <Path Style="{StaticResource IconPath}" Stroke="{DynamicResource BadgeInfoFg}" Data="{StaticResource Glyph.Sparkles}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Border>
+          <TextBlock Grid.Column="1" Text="{loc:Tr Key='有试用'}" Style="{StaticResource Text.Caption}" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" Margin="9,0,6,0" TextTrimming="CharacterEllipsis"/>
+          <TextBlock Grid.Column="2" Text="{Binding Pool.TrialCountText}" Style="{StaticResource Text.Kpi}" VerticalAlignment="Center"/>
+        </Grid>
+      </Button>
+
+      <!-- Registered accounts -> filter: registered -->
+      <Button Grid.Column="2"
+              Margin="0,0,8,0"
+              Tag="registered"
+              Click="KpiScopeTile_Click"
+              ToolTip="{loc:Tr Key='点击筛选已注册'}">
+        <Button.Style>
+          <Style TargetType="Button" BasedOn="{StaticResource KpiTileButtonStyle}">
+            <Style.Triggers>
+              <DataTrigger Binding="{Binding Pool.ScopeFilter}" Value="registered">
+                <Setter Property="BorderBrush" Value="{DynamicResource AccentIndicator}"/>
+              </DataTrigger>
+            </Style.Triggers>
+          </Style>
+        </Button.Style>
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+          </Grid.ColumnDefinitions>
+          <Border Grid.Column="0" Width="26" Height="26" CornerRadius="{StaticResource Corner.Sm}" Background="{DynamicResource BadgeSuccessBg}" VerticalAlignment="Center">
+            <Path Style="{StaticResource IconPath}" Stroke="{DynamicResource BadgeSuccessFg}" Data="{StaticResource Glyph.UserCheck}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Border>
+          <TextBlock Grid.Column="1" Text="{loc:Tr Key='已注册'}" Style="{StaticResource Text.Caption}" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" Margin="9,0,6,0" TextTrimming="CharacterEllipsis"/>
+          <TextBlock Grid.Column="2" Text="{Binding Pool.RegisteredCountText}" Style="{StaticResource Text.Kpi}" VerticalAlignment="Center"/>
+        </Grid>
+      </Button>
+
+      <!-- Attention / issues -> filter: attention -->
+      <Button Grid.Column="3"
+              Tag="attention"
+              Click="KpiScopeTile_Click"
+              ToolTip="{loc:Tr Key='点击筛选待处理'}">
+        <Button.Style>
+          <Style TargetType="Button" BasedOn="{StaticResource KpiTileButtonStyle}">
+            <Style.Triggers>
+              <DataTrigger Binding="{Binding Pool.ScopeFilter}" Value="attention">
+                <Setter Property="BorderBrush" Value="{DynamicResource AccentIndicator}"/>
+              </DataTrigger>
+            </Style.Triggers>
+          </Style>
+        </Button.Style>
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+          </Grid.ColumnDefinitions>
+          <Border Grid.Column="0" Width="26" Height="26" CornerRadius="{StaticResource Corner.Sm}" Background="{DynamicResource BadgeWarnBg}" VerticalAlignment="Center">
+            <Path Style="{StaticResource IconPath}" Stroke="{DynamicResource BadgeWarnFg}" Data="{StaticResource Glyph.AlertTriangle}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+          </Border>
+          <TextBlock Grid.Column="1" Text="{loc:Tr Key='异常/待处理'}" Style="{StaticResource Text.Caption}" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" Margin="9,0,6,0" TextTrimming="CharacterEllipsis"/>
+          <TextBlock Grid.Column="2" Text="{Binding Pool.AttentionCountText}" Style="{StaticResource Text.Kpi}" VerticalAlignment="Center"/>
+        </Grid>
+      </Button>
+    </Grid>
+
+    <!-- Row 1: Unified search, scope, page size, pagination & selection toolbar -->
+    <Border Grid.Row="1" Margin="0,0,0,8" Padding="8,6" CornerRadius="{StaticResource Corner.Lg}" Background="{DynamicResource Surface.Card}">
+      <Grid VerticalAlignment="Center">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*"/>
+          <ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
+
+        <Grid Grid.Column="0" MinWidth="450">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="260"/>
+            <ColumnDefinition Width="132"/>
+            <ColumnDefinition Width="84"/>
+            <ColumnDefinition Width="*"/>
+          </Grid.ColumnDefinitions>
+
+          <Grid Grid.Column="0">
+            <TextBox Style="{StaticResource SearchTextBox}"
+                     Text="{Binding Pool.SearchText, UpdateSourceTrigger=PropertyChanged, Delay=150}"
+                     ToolTip="{loc:Tr Key='搜索邮箱、session、token、备注'}"/>
+            <Path Style="{StaticResource IconPath}"
+                  HorizontalAlignment="Left"
+                  VerticalAlignment="Center"
+                  Margin="9,0,0,0"
+                  Data="{StaticResource Glyph.Search}"
+                  IsHitTestVisible="False"/>
+            <Button Width="22" Height="22" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,3,0"
+                    Padding="0" Background="Transparent" BorderThickness="0" ToolTip="{loc:Tr Key='清除搜索'}"
+                    Command="{Binding Pool.ClearSearchCommand}"
+                    Visibility="{Binding Pool.HasSearchText, Converter={StaticResource BooleanToVisibilityConverter}, FallbackValue=Collapsed}">
+              <Button.Template>
+                <ControlTemplate TargetType="Button">
+                  <Border x:Name="ClearBg" Background="Transparent" CornerRadius="{StaticResource Corner.Sm}">
+                    <Path Style="{StaticResource CompactIconPath}"
+                          Data="{StaticResource Glyph.Close}"
+                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                  </Border>
+                  <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                      <Setter TargetName="ClearBg" Property="Background" Value="{DynamicResource PanelHover}"/>
+                    </Trigger>
+                  </ControlTemplate.Triggers>
+                </ControlTemplate>
+              </Button.Template>
+            </Button>
           </Grid>
 
-          <Border Grid.Row="1" Margin="0,0,0,8" Padding="8" CornerRadius="{StaticResource Corner.Lg}" Background="{DynamicResource Surface.Card}">
-            <Grid VerticalAlignment="Center">
-              <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-              </Grid.ColumnDefinitions>
-              <Grid Grid.Column="0" MinWidth="460">
-                <Grid.ColumnDefinitions>
-                  <ColumnDefinition Width="260"/>
-                  <ColumnDefinition Width="140"/>
-                  <ColumnDefinition Width="96"/>
-                  <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-                <Grid Grid.Column="0">
-                  <TextBox Style="{StaticResource SearchTextBox}" Text="{Binding Pool.SearchText, UpdateSourceTrigger=PropertyChanged, Delay=150}" ToolTip="{loc:Tr Key='搜索邮箱、session、token、备注'}"/>
-                  <Path Width="14" Height="14" Stretch="Uniform" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="8,0,0,0"
-                        Data="{StaticResource Glyph.Search}"
-                        Stroke="{DynamicResource TextMuted}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"
-                        IsHitTestVisible="False"/>
-                  <Button Width="22" Height="22" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,2,0"
-                          Padding="0" Background="Transparent" BorderThickness="0" ToolTip="{loc:Tr Key='清除搜索'}"
-                          Command="{Binding Pool.ClearSearchCommand}"
-                          Visibility="{Binding Pool.HasSearchText, Converter={StaticResource BooleanToVisibilityConverter}, FallbackValue=Collapsed}">
-                    <Button.Template>
-                      <ControlTemplate TargetType="Button">
-                        <Border x:Name="ClearBg" Background="Transparent" CornerRadius="{StaticResource Corner.Sm}">
-                          <!-- Tabler `x` spans 12 of 24 units, so the box is larger
-                               than the drawn mark: 13px box -> ~6.5px X, the same optical
-                               size the old 10px full-bleed cross had. -->
-                          <Path Width="13" Height="13" Stretch="Uniform" Data="{StaticResource Glyph.Close}"
-                                Stroke="{DynamicResource TextMuted}" StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
-                                HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                          <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="ClearBg" Property="Background" Value="{DynamicResource PanelHover}"/>
-                          </Trigger>
-                        </ControlTemplate.Triggers>
-                      </ControlTemplate>
-                    </Button.Template>
-                  </Button>
-                </Grid>
-                <ComboBox Grid.Column="1" Margin="8,0,0,0"
-                          ItemsSource="{Binding Pool.ScopeOptions}"
-                          DisplayMemberPath="Label"
-                          SelectedValuePath="Key"
-                          SelectedValue="{Binding Pool.ScopeFilter, Mode=TwoWay}"
-                          ToolTip="{loc:Tr Key='筛选范围'}"/>
-                <TextBox Grid.Column="2" Margin="8,0,0,0" Text="{Binding Pool.PageSizeText, UpdateSourceTrigger=PropertyChanged, Delay=150}" ToolTip="{loc:Tr Key='每页条数'}"/>
-                <TextBlock Grid.Column="3" Margin="12,0,0,0" Text="{Binding Pool.PageStatusText}" VerticalAlignment="Center" Foreground="{DynamicResource TextSub}"/>
-              </Grid>
-              <WrapPanel Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
-                <Button Style="{StaticResource IconButton}" Margin="2,0" Command="{Binding Pool.FirstPageCommand}" ToolTip="{loc:Tr Key='首页'}">
-                  <Path Style="{StaticResource ToolbarIconPath}"
-                        Data="{StaticResource Glyph.FirstPage}"/>
-                </Button>
-                <Button Style="{StaticResource IconButton}" Margin="2,0" Command="{Binding Pool.PreviousPageCommand}" ToolTip="{loc:Tr Key='上一页'}">
-                  <Path Style="{StaticResource ToolbarIconPath}"
-                        Data="{StaticResource Glyph.PrevPage}"/>
-                </Button>
-                <Button Style="{StaticResource IconButton}" Margin="2,0" Command="{Binding Pool.ClearSelectionCommand}" ToolTip="{loc:Tr Key='清空选择'}">
-                  <StackPanel Orientation="Horizontal">
-                    <Path Style="{StaticResource ToolbarIconPath}"
-                          Data="{StaticResource Glyph.ClearSelection}"/>
-                    <TextBlock Text="{loc:Tr Key='清空'}" Margin="4,0,0,0" VerticalAlignment="Center" FontSize="{StaticResource Type.Body.Size}"/>
-                  </StackPanel>
-                </Button>
-                <Button Style="{StaticResource IconButton}" Margin="2,0" Command="{Binding Pool.NextPageCommand}" ToolTip="{loc:Tr Key='下一页'}">
-                  <Path Style="{StaticResource ToolbarIconPath}"
-                        Data="{StaticResource Glyph.NextPage}"/>
-                </Button>
-                <Button Style="{StaticResource IconButton}" Margin="2,0" Command="{Binding Pool.LastPageCommand}" ToolTip="{loc:Tr Key='末页'}">
-                  <Path Style="{StaticResource ToolbarIconPath}"
-                        Data="{StaticResource Glyph.LastPage}"/>
-                </Button>
-                <Button Style="{StaticResource IconButton}" Margin="6,0,2,0" Command="{Binding Pool.SelectAllFilteredCommand}" ToolTip="{loc:Tr Key='选中当前筛选结果'}">
-                  <StackPanel Orientation="Horizontal">
-                    <Path Style="{StaticResource ToolbarIconPath}"
-                          Data="{StaticResource Glyph.SelectAllFiltered}"/>
-                    <TextBlock Text="{loc:Tr Key='全选'}" Margin="4,0,0,0" VerticalAlignment="Center" FontSize="{StaticResource Type.Body.Size}"/>
-                  </StackPanel>
-                </Button>
-              </WrapPanel>
-            </Grid>
-          </Border>
+          <ComboBox Grid.Column="1" Margin="8,0,0,0"
+                    ItemsSource="{Binding Pool.ScopeOptions}"
+                    DisplayMemberPath="Label"
+                    SelectedValuePath="Key"
+                    SelectedValue="{Binding Pool.ScopeFilter, Mode=TwoWay}"
+                    ToolTip="{loc:Tr Key='筛选范围'}"/>
+
+          <TextBox Grid.Column="2" Margin="8,0,0,0"
+                   Typography.NumeralAlignment="Tabular"
+                   Text="{Binding Pool.PageSizeText, UpdateSourceTrigger=PropertyChanged, Delay=150}"
+                   ToolTip="{loc:Tr Key='每页条数'}"/>
+
+          <TextBlock Grid.Column="3" Margin="12,0,0,0"
+                     Style="{StaticResource Text.Caption}"
+                     Text="{Binding Pool.PageStatusText}"
+                     VerticalAlignment="Center"
+                     TextTrimming="CharacterEllipsis"/>
+        </Grid>
+
+        <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+          <Button Style="{StaticResource GhostToolbarButton}" Width="28" Padding="0" Command="{Binding Pool.FirstPageCommand}" ToolTip="{loc:Tr Key='首页'}">
+            <Path Style="{StaticResource ToolbarIconPath}" Data="{StaticResource Glyph.FirstPage}"/>
+          </Button>
+          <Button Style="{StaticResource GhostToolbarButton}" Width="28" Padding="0" Command="{Binding Pool.PreviousPageCommand}" ToolTip="{loc:Tr Key='上一页'}">
+            <Path Style="{StaticResource ToolbarIconPath}" Data="{StaticResource Glyph.PrevPage}"/>
+          </Button>
+          <Button Style="{StaticResource GhostToolbarButton}" Width="28" Padding="0" Command="{Binding Pool.NextPageCommand}" ToolTip="{loc:Tr Key='下一页'}">
+            <Path Style="{StaticResource ToolbarIconPath}" Data="{StaticResource Glyph.NextPage}"/>
+          </Button>
+          <Button Style="{StaticResource GhostToolbarButton}" Width="28" Padding="0" Command="{Binding Pool.LastPageCommand}" ToolTip="{loc:Tr Key='末页'}">
+            <Path Style="{StaticResource ToolbarIconPath}" Data="{StaticResource Glyph.LastPage}"/>
+          </Button>
+
+          <Border Width="1" Height="16" Background="{DynamicResource Divider}" Margin="6,0" VerticalAlignment="Center"/>
+
+          <Button Style="{StaticResource GhostToolbarButton}" Command="{Binding Pool.ClearSelectionCommand}" ToolTip="{loc:Tr Key='清空选择'}">
+            <StackPanel Orientation="Horizontal">
+              <Path Style="{StaticResource ToolbarIconPath}" Data="{StaticResource Glyph.ClearSelection}"/>
+              <TextBlock Text="{loc:Tr Key='清空'}" Margin="5,0,0,0" VerticalAlignment="Center" FontSize="{StaticResource Type.Caption.Size}"/>
+            </StackPanel>
+          </Button>
+          <Button Style="{StaticResource GhostToolbarButton}" Command="{Binding Pool.SelectAllFilteredCommand}" ToolTip="{loc:Tr Key='选中当前筛选结果'}">
+            <StackPanel Orientation="Horizontal">
+              <Path Style="{StaticResource ToolbarIconPath}" Data="{StaticResource Glyph.SelectAllFiltered}"/>
+              <TextBlock Text="{loc:Tr Key='全选'}" Margin="5,0,0,0" VerticalAlignment="Center" FontSize="{StaticResource Type.Caption.Size}"/>
+            </StackPanel>
+          </Button>
+        </StackPanel>
+      </Grid>
+    </Border>
   </Grid>
 </UserControl>

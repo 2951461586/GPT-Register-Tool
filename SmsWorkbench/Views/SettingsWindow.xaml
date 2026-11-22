@@ -202,27 +202,37 @@
             </ListBox.ItemTemplate>
             <ListBox.ItemContainerStyle>
               <Style TargetType="ListBoxItem">
-                <Setter Property="Height" Value="36"/>
-                <Setter Property="Padding" Value="10,0"/>
-                <Setter Property="Margin" Value="0,0,0,6"/>
+                <Setter Property="Height" Value="34"/>
+                <Setter Property="Padding" Value="12,0"/>
+                <Setter Property="Margin" Value="0,0,0,3"/>
                 <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
                 <Setter Property="VerticalContentAlignment" Value="Center"/>
                 <Setter Property="Background" Value="Transparent"/>
-                <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
-                <Setter Property="BorderThickness" Value="1"/>
-                <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                <Setter Property="BorderBrush" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRingStyle}"/>
                 <Setter Property="Template">
                   <Setter.Value>
                     <ControlTemplate TargetType="ListBoxItem">
-                      <Border x:Name="ItemChrome"
-                              Background="{TemplateBinding Background}"
-                              BorderBrush="{TemplateBinding BorderBrush}"
-                              BorderThickness="{TemplateBinding BorderThickness}"
-                              CornerRadius="{StaticResource Corner.Sm}"
-                              Padding="{TemplateBinding Padding}">
-                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
-                      </Border>
+                      <Grid>
+                        <Border x:Name="ItemChrome"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="{StaticResource Corner.Md}"
+                                Padding="{TemplateBinding Padding}">
+                          <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                            VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                        </Border>
+                        <Border x:Name="SelectedIndicator"
+                                Width="3"
+                                Margin="0,7"
+                                HorizontalAlignment="Left"
+                                CornerRadius="{StaticResource Corner.Hairline}"
+                                Background="{DynamicResource AccentIndicator}"
+                                Visibility="Collapsed"/>
+                      </Grid>
                       <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
                           <Setter TargetName="ItemChrome" Property="Background" Value="{DynamicResource PanelHover}"/>
@@ -230,6 +240,9 @@
                         <Trigger Property="IsSelected" Value="True">
                           <Setter TargetName="ItemChrome" Property="Background" Value="{DynamicResource SettingsSelectionBg}"/>
                           <Setter TargetName="ItemChrome" Property="BorderBrush" Value="{DynamicResource SettingsSelectionBorder}"/>
+                          <Setter TargetName="ItemChrome" Property="BorderThickness" Value="1"/>
+                          <Setter TargetName="SelectedIndicator" Property="Visibility" Value="Visible"/>
+                          <Setter Property="FontWeight" Value="SemiBold"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                           <Setter Property="Opacity" Value="0.45"/>

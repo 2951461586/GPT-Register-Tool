@@ -9,8 +9,9 @@
         Background="{DynamicResource AppBg}"
         FontFamily="{StaticResource Font.Ui}"
         FontSize="{StaticResource Type.Body.Size}"
-        TextOptions.TextFormattingMode="Display"
-        TextOptions.TextRenderingMode="ClearType">
+        TextOptions.TextFormattingMode="Ideal"
+        TextOptions.TextRenderingMode="ClearType"
+        TextOptions.TextHintingMode="Fixed">
   <!--
     Read-only proxy-pool diagnostics: one grid, three backends (list /
     connectivity test / residential screening).
@@ -86,64 +87,73 @@
                Text="{Binding LaneIsolationText}"
                Visibility="{Binding LaneIsolationVisible, Converter={StaticResource BoolToVisibility}}"/>
 
-    <!-- Controls: lane / target country / concurrency / quality floor -->
-    <Grid Grid.Row="2" Margin="0,0,0,10">
-      <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="*"/>
-        <ColumnDefinition Width="*"/>
-        <ColumnDefinition Width="*"/>
-        <ColumnDefinition Width="*"/>
-        <ColumnDefinition Width="Auto"/>
-      </Grid.ColumnDefinitions>
+    <!-- Controls + optional ad-hoc pool grouped in a Surface.Card -->
+    <Border Grid.Row="2"
+            Grid.RowSpan="2"
+            Margin="0,0,0,10"
+            Padding="14,12"
+            CornerRadius="{StaticResource Corner.Xl}"
+            Background="{DynamicResource Surface.Card}">
+      <StackPanel>
+        <Grid Margin="0,0,0,10">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+          </Grid.ColumnDefinitions>
 
-      <StackPanel Grid.Column="0" Margin="0,0,8,0">
-        <TextBlock Text="{loc:Tr Key='配置 lane'}" Style="{StaticResource FieldLabel}"/>        <TextBox Style="{StaticResource FieldBox}"
-                 Text="{Binding Lane, UpdateSourceTrigger=PropertyChanged}"/>
-      </StackPanel>
-      <StackPanel Grid.Column="1" Margin="0,0,8,0">
-        <TextBlock Text="{loc:Tr Key='目标国家'}" Style="{StaticResource FieldLabel}"/>
-        <TextBox Style="{StaticResource FieldBox}"
-                 Text="{Binding Country, UpdateSourceTrigger=PropertyChanged}"/>
-      </StackPanel>
-      <StackPanel Grid.Column="2" Margin="0,0,8,0">
-        <TextBlock Text="{loc:Tr Key='并发'}" Style="{StaticResource FieldLabel}"/>
-        <TextBox Style="{StaticResource FieldBox}"
-                 Text="{Binding Workers, UpdateSourceTrigger=PropertyChanged}"/>
-      </StackPanel>
-      <StackPanel Grid.Column="3" Margin="0,0,8,0">
-        <TextBlock Text="{loc:Tr Key='质量下限'}" Style="{StaticResource FieldLabel}"/>
-        <TextBox Style="{StaticResource FieldBox}"
-                 Text="{Binding QualityMin, UpdateSourceTrigger=PropertyChanged}"/>
-      </StackPanel>
+          <StackPanel Grid.Column="0" Margin="0,0,8,0">
+            <TextBlock Text="{loc:Tr Key='配置 lane'}" Style="{StaticResource FieldLabel}"/>
+            <TextBox Style="{StaticResource FieldBox}"
+                     Text="{Binding Lane, UpdateSourceTrigger=PropertyChanged}"/>
+          </StackPanel>
+          <StackPanel Grid.Column="1" Margin="0,0,8,0">
+            <TextBlock Text="{loc:Tr Key='目标国家'}" Style="{StaticResource FieldLabel}"/>
+            <TextBox Style="{StaticResource FieldBox}"
+                     Text="{Binding Country, UpdateSourceTrigger=PropertyChanged}"/>
+          </StackPanel>
+          <StackPanel Grid.Column="2" Margin="0,0,8,0">
+            <TextBlock Text="{loc:Tr Key='并发'}" Style="{StaticResource FieldLabel}"/>
+            <TextBox Style="{StaticResource FieldBox}"
+                     Text="{Binding Workers, UpdateSourceTrigger=PropertyChanged}"/>
+          </StackPanel>
+          <StackPanel Grid.Column="3" Margin="0,0,8,0">
+            <TextBlock Text="{loc:Tr Key='质量下限'}" Style="{StaticResource FieldLabel}"/>
+            <TextBox Style="{StaticResource FieldBox}"
+                     Text="{Binding QualityMin, UpdateSourceTrigger=PropertyChanged}"/>
+          </StackPanel>
 
-      <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Bottom">
-        <Button Content="{loc:Tr Key='加载配置池'}"
-                Style="{StaticResource PrimaryButton}"
-                Command="{Binding LoadCommand}"
-                Height="30" Padding="12,0" Margin="0,0,8,0"/>
-        <Button Content="{loc:Tr Key='连通性测试'}"
-                Style="{StaticResource SecondaryButton}"
-                Command="{Binding TestCommand}"
-                Height="30" Padding="12,0" Margin="0,0,8,0"/>
-        <Button Content="{loc:Tr Key='住宅筛选'}"
-                Style="{StaticResource SecondaryButton}"
-                Command="{Binding ScreenCommand}"
-                Height="30" Padding="12,0"/>
-      </StackPanel>
-    </Grid>
+          <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Bottom">
+            <Button Content="{loc:Tr Key='加载配置池'}"
+                    Style="{StaticResource PrimaryButton}"
+                    Command="{Binding LoadCommand}"
+                    Height="30" Padding="12,0" Margin="0,0,8,0"/>
+            <Button Content="{loc:Tr Key='连通性测试'}"
+                    Style="{StaticResource SecondaryButton}"
+                    Command="{Binding TestCommand}"
+                    Height="30" Padding="12,0" Margin="0,0,8,0"/>
+            <Button Content="{loc:Tr Key='住宅筛选'}"
+                    Style="{StaticResource SecondaryButton}"
+                    Command="{Binding ScreenCommand}"
+                    Height="30" Padding="12,0"/>
+          </StackPanel>
+        </Grid>
 
-    <!-- Optional ad-hoc pool (one entry per line; blank means the configured lane) -->
-    <StackPanel Grid.Row="3" Margin="0,0,0,10">
-      <TextBlock Text="{loc:Tr Key='临时代理池（可选；每行一个，留空则用配置池）'}"
-                 Style="{StaticResource FieldLabel}"/>
-      <TextBox Height="64"
-               AcceptsReturn="True"
-               TextWrapping="NoWrap"
-               VerticalScrollBarVisibility="Auto"
-               FontFamily="{StaticResource Font.Mono}"
-               FontSize="{StaticResource Type.Mono.Size}"
-               Text="{Binding PoolText, UpdateSourceTrigger=PropertyChanged}"/>
-    </StackPanel>
+        <StackPanel>
+          <TextBlock Text="{loc:Tr Key='临时代理池（可选；每行一个，留空则用配置池）'}"
+                     Style="{StaticResource FieldLabel}"/>
+          <TextBox Height="64"
+                   AcceptsReturn="True"
+                   TextWrapping="NoWrap"
+                   VerticalScrollBarVisibility="Auto"
+                   FontFamily="{StaticResource Font.Mono}"
+                   FontSize="{StaticResource Type.Mono.Size}"
+                   Text="{Binding PoolText, UpdateSourceTrigger=PropertyChanged}"/>
+        </StackPanel>
+      </StackPanel>
+    </Border>
 
     <!-- Result grid: chrome comes from the implicit DataGrid style -->
     <Border Grid.Row="4" Background="{DynamicResource Surface.Card}" CornerRadius="{StaticResource Corner.Xl}">

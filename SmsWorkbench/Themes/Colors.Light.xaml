@@ -1,108 +1,103 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
   <!--
-    LIGHT colour scheme. Colors.Dark.xaml carries THE SAME KEY SET — adding a key
-    here without adding it there makes the dark theme fall back to a WPF default
-    brush (silently), so the two files are edited together.
+    LIGHT colour scheme (DeepAI Code Chrome Shell + Framed Canvas, Scheme A:
+    Neutral Graphite surfaces with refined Violet primary/focus accent).
 
-    Two layers, both intentional:
+    Colors.Dark.xaml carries THE EXACT SAME KEY SET — adding or renaming a key
+    here without mirroring it there makes the dark theme fall back silently to
+    a WPF default brush, so both files are edited as one contract (guarded by
+    tests/workbench/test_theme_palette_consistency.py).
 
-    * Surface ladder (new). Structure is drawn with a step in lightness, never a
-      border: page -> card is lighter, card -> block is darker, block -> inset is
-      darker again. Views read Surface.* ; they must not compose their own tints.
-    * Legacy semantic aliases (PanelBg / Line / TextMain / GridSelectionBg ...).
-      Kept because WindowThemeService reads PanelBg+TextMain for the DWM caption
-      and DesktopWindowSmokeTests asserts SettingsSelection* equality. They now
-      resolve to the same values as the ladder instead of a separate palette.
-
-    Colour is reserved for state: selected, on, failing, and the one action a
-    screen is for. Nothing structural is tinted.
+    Surface ladder:
+      Chrome (#EEEEEE) sits below Page (#F5F5F6), framing the rounded workspace
+      sheet with a crisp translucent outline (WorkspaceFrameOutline). Inside the
+      sheet, light alternates paper and neutral grey: Page -> Card (#FFFFFF) ->
+      Block (#F4F4F5) -> Inset (#EBEBED), while Surface.Terminal (#FAFAFA) gives
+      the log well a crisp, low-glare reading paper.
   -->
 
-  <!-- ═══ Surface ladder ══════════════════════════════════════════════════
-       94 page / 100 card / 94 block / 92 inset — light alternates paper and
-       grey; the card is not tinted, and the chrome sits four tones off the page. -->
-  <SolidColorBrush x:Key="Surface.Page" Color="#F3F3F3"/>
+  <!-- ═══ Surface ladder ══════════════════════════════════════════════════ -->
+  <SolidColorBrush x:Key="Surface.Page" Color="#F5F5F6"/>
   <SolidColorBrush x:Key="Surface.Card" Color="#FFFFFF"/>
-  <SolidColorBrush x:Key="Surface.Block" Color="#F3F3F3"/>
-  <SolidColorBrush x:Key="Surface.Inset" Color="#EAEAEA"/>
-  <SolidColorBrush x:Key="Surface.Chrome" Color="#E9E9E9"/>
+  <SolidColorBrush x:Key="Surface.Block" Color="#F4F4F5"/>
+  <SolidColorBrush x:Key="Surface.Inset" Color="#EBEBED"/>
+  <SolidColorBrush x:Key="Surface.Chrome" Color="#EEEEEE"/>
+  <SolidColorBrush x:Key="Surface.Terminal" Color="#FAFAFA"/>
 
-  <!-- onSurface at 14%: one divider colour that keeps its contrast on the page,
-       on a card and on the chrome alike (an opaque grey reads twice as strong on
-       the dark theme as on the light one). -->
-  <SolidColorBrush x:Key="Divider" Color="#241F2328"/>
-  <SolidColorBrush x:Key="FocusRing" Color="#64748B"/>
+  <!-- Translucent hairline strokes that preserve contrast across light surfaces -->
+  <SolidColorBrush x:Key="WorkspaceFrameOutline" Color="#1F1E1F22"/>
+  <SolidColorBrush x:Key="Divider" Color="#1C1E1F22"/>
+  <SolidColorBrush x:Key="FocusRing" Color="#6A20D0"/>
+  <Color x:Key="ShadowColor">#24000000</Color>
 
-  <!-- ═══ Text ladder (three levels, three values) ════════════════════════ -->
-  <SolidColorBrush x:Key="TextMain" Color="#1F2328"/>
-  <SolidColorBrush x:Key="TextSub" Color="#57606A"/>
-  <SolidColorBrush x:Key="TextMuted" Color="#6E7781"/>
+  <!-- ═══ Text & icon ladder (all >= 4.5:1 WCAG AA on target surfaces) ════ -->
+  <SolidColorBrush x:Key="TextMain" Color="#1E1F22"/>
+  <SolidColorBrush x:Key="TextSub" Color="#52565E"/>
+  <SolidColorBrush x:Key="TextMuted" Color="#636871"/>
+  <SolidColorBrush x:Key="IconMuted" Color="#757A84"/>
 
-  <!-- ═══ Action accent (low-saturation calm slate-graphite) ══════════════ -->
-  <SolidColorBrush x:Key="Primary" Color="#3B424D"/>
-  <SolidColorBrush x:Key="PrimaryBorder" Color="#3B424D"/>
-  <SolidColorBrush x:Key="PrimaryHover" Color="#4B5462"/>
-  <SolidColorBrush x:Key="PrimaryPressed" Color="#2E343D"/>
-  <SolidColorBrush x:Key="PrimarySoft" Color="#E8EBEE"/>
+  <!-- ═══ Action accent (Scheme A: DeepAI Violet focus on neutral chrome) ═ -->
+  <SolidColorBrush x:Key="Primary" Color="#6A20D0"/>
+  <SolidColorBrush x:Key="PrimaryBorder" Color="#6A20D0"/>
+  <SolidColorBrush x:Key="PrimaryHover" Color="#7A2EE6"/>
+  <SolidColorBrush x:Key="PrimaryPressed" Color="#5818B0"/>
+  <SolidColorBrush x:Key="PrimarySoft" Color="#F2EBFC"/>
   <SolidColorBrush x:Key="OnPrimary" Color="#FFFFFF"/>
-  <SolidColorBrush x:Key="AccentIndicator" Color="#4B5563"/>
-  <SolidColorBrush x:Key="Danger" Color="#B83B35"/>
-  <SolidColorBrush x:Key="DangerHover" Color="#9E302B"/>
-  <SolidColorBrush x:Key="DangerPressed" Color="#842622"/>
-  <SolidColorBrush x:Key="DangerSoft" Color="#FBF1F1"/>
+  <SolidColorBrush x:Key="AccentIndicator" Color="#6A20D0"/>
+  <SolidColorBrush x:Key="Danger" Color="#C62828"/>
+  <SolidColorBrush x:Key="DangerHover" Color="#AD1E1E"/>
+  <SolidColorBrush x:Key="DangerPressed" Color="#8F1717"/>
+  <SolidColorBrush x:Key="DangerSoft" Color="#FDECEC"/>
   <SolidColorBrush x:Key="OnDanger" Color="#FFFFFF"/>
-  <SolidColorBrush x:Key="DangerBorder" Color="#E5B8B5"/>
-  <SolidColorBrush x:Key="Success" Color="#26734D"/>
-  <SolidColorBrush x:Key="SidebarHover" Color="#DFE2E6"/>
-  <SolidColorBrush x:Key="SidebarPressed" Color="#D2D6DC"/>
-  <SolidColorBrush x:Key="WindowControlHover" Color="#DDE0E5"/>
-  <SolidColorBrush x:Key="WindowControlPressed" Color="#CED2D8"/>
+  <SolidColorBrush x:Key="DangerBorder" Color="#F0B8B8"/>
+  <SolidColorBrush x:Key="Success" Color="#166534"/>
+  <SolidColorBrush x:Key="SidebarHover" Color="#E4E4E7"/>
+  <SolidColorBrush x:Key="SidebarPressed" Color="#DADADF"/>
+  <SolidColorBrush x:Key="WindowControlHover" Color="#E2E2E6"/>
+  <SolidColorBrush x:Key="WindowControlPressed" Color="#D5D5DB"/>
 
-  <!-- ═══ Legacy aliases (kept; resolve to the ladder) ════════════════════ -->
-  <SolidColorBrush x:Key="AppBg" Color="#F3F3F3"/>
+  <!-- ═══ Legacy aliases (kept for WindowThemeService & smoke contracts) ══ -->
+  <SolidColorBrush x:Key="AppBg" Color="#F5F5F6"/>
   <SolidColorBrush x:Key="PanelBg" Color="#FFFFFF"/>
-  <SolidColorBrush x:Key="PanelBg2" Color="#F3F3F3"/>
-  <SolidColorBrush x:Key="PanelHover" Color="#ECEEF0"/>
-  <SolidColorBrush x:Key="Line" Color="#E2E6EA"/>
-  <SolidColorBrush x:Key="LineStrong" Color="#D0D6DC"/>
-  <SolidColorBrush x:Key="SidebarBg" Color="#E9E9E9"/>
+  <SolidColorBrush x:Key="PanelBg2" Color="#F4F4F5"/>
+  <SolidColorBrush x:Key="PanelHover" Color="#EFEFF2"/>
+  <SolidColorBrush x:Key="Line" Color="#E0E2E6"/>
+  <SolidColorBrush x:Key="LineStrong" Color="#C9CDD4"/>
+  <SolidColorBrush x:Key="SidebarBg" Color="#EEEEEE"/>
   <SolidColorBrush x:Key="SidebarButtonBg" Color="Transparent"/>
   <SolidColorBrush x:Key="GridAltBg" Color="#FFFFFF"/>
   <SolidColorBrush x:Key="GridSelectionBg" Color="#FFFFFF"/>
   <SolidColorBrush x:Key="SettingsSelectionBg" Color="#FFFFFF"/>
-  <SolidColorBrush x:Key="SettingsSelectionBorder" Color="#64748B"/>
-  <SolidColorBrush x:Key="SplitterBg" Color="#E2E6EA"/>
-  <SolidColorBrush x:Key="StatusBg" Color="#F3F3F3"/>
-  <SolidColorBrush x:Key="LogBg" Color="#EAEAEA"/>
-  <SolidColorBrush x:Key="LogText" Color="#1F2328"/>
+  <SolidColorBrush x:Key="SettingsSelectionBorder" Color="#6A20D0"/>
+  <SolidColorBrush x:Key="SplitterBg" Color="#E0E2E6"/>
+  <SolidColorBrush x:Key="StatusBg" Color="#F5F5F6"/>
+  <SolidColorBrush x:Key="LogBg" Color="#FAFAFA"/>
+  <SolidColorBrush x:Key="LogText" Color="#1E1F22"/>
 
-  <!-- ═══ Status badges ═══════════════════════════════════════════════════
-       The colour lives on the TEXT (Fg); the container is a soft same-hue wash
-       and draws no border. Five containers with one grey foreground — the old
-       shape — made all five states read identically at a glance. -->
-  <SolidColorBrush x:Key="BadgeSuccessBg" Color="#EFF2F0"/>
-  <SolidColorBrush x:Key="BadgeSuccessFg" Color="#2B644A"/>
+  <!-- ═══ Status badges (muted mineral low-saturation tints, all >= 5.8:1) ══ -->
+  <SolidColorBrush x:Key="BadgeSuccessBg" Color="#EFF3F0"/>
+  <SolidColorBrush x:Key="BadgeSuccessFg" Color="#335E49"/>
   <SolidColorBrush x:Key="BadgeSuccessBd" Color="Transparent"/>
-  <SolidColorBrush x:Key="BadgeWarnBg" Color="#F4F1EB"/>
-  <SolidColorBrush x:Key="BadgeWarnFg" Color="#6D511D"/>
+  <SolidColorBrush x:Key="BadgeWarnBg" Color="#F5F2EC"/>
+  <SolidColorBrush x:Key="BadgeWarnFg" Color="#745931"/>
   <SolidColorBrush x:Key="BadgeWarnBd" Color="Transparent"/>
-  <SolidColorBrush x:Key="BadgeDangerBg" Color="#F8F4F4"/>
-  <SolidColorBrush x:Key="BadgeDangerFg" Color="#933F39"/>
+  <SolidColorBrush x:Key="BadgeDangerBg" Color="#F6F0F0"/>
+  <SolidColorBrush x:Key="BadgeDangerFg" Color="#8A4543"/>
   <SolidColorBrush x:Key="BadgeDangerBd" Color="Transparent"/>
-  <SolidColorBrush x:Key="BadgeInfoBg" Color="#F1F4F8"/>
-  <SolidColorBrush x:Key="BadgeInfoFg" Color="#4461B1"/>
+  <SolidColorBrush x:Key="BadgeInfoBg" Color="#EFF2F7"/>
+  <SolidColorBrush x:Key="BadgeInfoFg" Color="#415A87"/>
   <SolidColorBrush x:Key="BadgeInfoBd" Color="Transparent"/>
-  <SolidColorBrush x:Key="BadgeNeutralBg" Color="#F2F3F4"/>
-  <SolidColorBrush x:Key="BadgeNeutralFg" Color="#5B6066"/>
+  <SolidColorBrush x:Key="BadgeNeutralBg" Color="#F2F3F5"/>
+  <SolidColorBrush x:Key="BadgeNeutralFg" Color="#5A5E66"/>
 
-  <!-- ═══ ComboBox popup keys (read by Controls.xaml's template) ══════════ -->
+  <!-- ═══ ComboBox popup keys (read by Controls.Inputs.xaml's template) ═══ -->
   <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="#FFFFFF"/>
-  <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush" Color="#E2E6EA"/>
-  <SolidColorBrush x:Key="ComboBoxDropDownGlyphForeground" Color="#57606A"/>
-  <SolidColorBrush x:Key="ComboBoxBorderBrushFocused" Color="#64748B"/>
-  <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="#F3F3F3"/>
-  <SolidColorBrush x:Key="ComboBoxBackgroundDisabled" Color="#F3F3F3"/>
-  <SolidColorBrush x:Key="ComboBoxBorderBrushDisabled" Color="#E2E6EA"/>
-  <SolidColorBrush x:Key="ComboBoxForegroundDisabled" Color="#6E7781"/>
+  <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush" Color="#E0E2E6"/>
+  <SolidColorBrush x:Key="ComboBoxDropDownGlyphForeground" Color="#52565E"/>
+  <SolidColorBrush x:Key="ComboBoxBorderBrushFocused" Color="#6A20D0"/>
+  <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="#F4F4F5"/>
+  <SolidColorBrush x:Key="ComboBoxBackgroundDisabled" Color="#F4F4F5"/>
+  <SolidColorBrush x:Key="ComboBoxBorderBrushDisabled" Color="#E0E2E6"/>
+  <SolidColorBrush x:Key="ComboBoxForegroundDisabled" Color="#636871"/>
 </ResourceDictionary>

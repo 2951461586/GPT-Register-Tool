@@ -35,8 +35,9 @@
                 <Style TargetType="TextBlock">
                   <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
                   <Setter Property="FontFamily" Value="{StaticResource Font.Ui}"/>
-                  <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+                  <Setter Property="TextOptions.TextFormattingMode" Value="Ideal"/>
                   <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
+                  <Setter Property="TextOptions.TextHintingMode" Value="Fixed"/>
                 </Style>
               </ContentPresenter.Resources>
             </ContentPresenter>
@@ -80,8 +81,9 @@
                 <Style TargetType="TextBlock">
                   <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
                   <Setter Property="FontFamily" Value="{StaticResource Font.Ui}"/>
-                  <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+                  <Setter Property="TextOptions.TextFormattingMode" Value="Ideal"/>
                   <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
+                  <Setter Property="TextOptions.TextHintingMode" Value="Fixed"/>
                 </Style>
               </ContentPresenter.Resources>
             </ContentPresenter>
@@ -130,8 +132,9 @@
                 <Style TargetType="TextBlock">
                   <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
                   <Setter Property="FontFamily" Value="{StaticResource Font.Ui}"/>
-                  <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+                  <Setter Property="TextOptions.TextFormattingMode" Value="Ideal"/>
                   <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
+                  <Setter Property="TextOptions.TextHintingMode" Value="Fixed"/>
                 </Style>
               </ContentPresenter.Resources>
             </ContentPresenter>
@@ -165,5 +168,53 @@
     <Setter Property="Height" Value="30"/>
     <Setter Property="Padding" Value="8,0"/>
     <Setter Property="Margin" Value="2,0"/>
+  </Style>
+
+  <!-- Borderless ghost button for dense toolbar & console drawer headers (DeepAI style) -->
+  <Style x:Key="GhostToolbarButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+    <Setter Property="Height" Value="26"/>
+    <Setter Property="Padding" Value="7,0"/>
+    <Setter Property="Margin" Value="2,0"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderBrush" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextSub}"/>
+    <Setter Property="FontSize" Value="{StaticResource Type.Caption.Size}"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Border x:Name="ButtonChrome"
+                  Background="{TemplateBinding Background}"
+                  CornerRadius="{StaticResource Corner.Sm}">
+            <ContentPresenter Margin="{TemplateBinding Padding}"
+                              TextElement.Foreground="{TemplateBinding Foreground}"
+                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}">
+              <ContentPresenter.Resources>
+                <Style TargetType="TextBlock">
+                  <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+                  <Setter Property="FontFamily" Value="{StaticResource Font.Ui}"/>
+                  <Setter Property="TextOptions.TextFormattingMode" Value="Ideal"/>
+                  <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
+                  <Setter Property="TextOptions.TextHintingMode" Value="Fixed"/>
+                </Style>
+              </ContentPresenter.Resources>
+            </ContentPresenter>
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="ButtonChrome" Property="Background" Value="{DynamicResource PanelHover}"/>
+              <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+              <Setter TargetName="ButtonChrome" Property="Background" Value="{DynamicResource Surface.Inset}"/>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter Property="Opacity" Value="0.4"/>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
   </Style>
 </ResourceDictionary>

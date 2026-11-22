@@ -116,9 +116,9 @@ namespace SmsWorkbench.ViewModels
         }
 
         /// <summary>
-        /// Filter options carry a stable key (all/trial/attention) and a localized
-        /// label. The key is what <see cref="Matches"/> compares, so switching the
-        /// language can never change which rows a filter selects.
+        /// Filter options carry a stable key (all/trial/registered/attention) and a
+        /// localized label. The key is what <see cref="Matches"/> compares, so
+        /// switching the language can never change which rows a filter selects.
         /// </summary>
         public IReadOnlyList<ScopeOption> ScopeOptions
         {
@@ -132,6 +132,7 @@ namespace SmsWorkbench.ViewModels
                     {
                         new ScopeOption("all", Loc.T("全部")),
                         new ScopeOption("trial", Loc.T("有试用")),
+                        new ScopeOption("registered", Loc.T("已注册")),
                         new ScopeOption("attention", Loc.T("待处理")),
                     };
                 }
@@ -216,6 +217,7 @@ namespace SmsWorkbench.ViewModels
             string term = (SearchText ?? "").Trim().ToLowerInvariant();
 
             if (scope == "trial" && !PromotionStatusPresentation.IsTrialEligible(row.PromotionStatus, row.PromotionState)) return false;
+            if (scope == "registered" && !IsRegistered(row)) return false;
             if (scope == "attention" && !RegistrationStatusPresentation.NeedsAttention(row)) return false;
             if (term.Length == 0) return true;
 

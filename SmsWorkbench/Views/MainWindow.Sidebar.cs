@@ -2,13 +2,43 @@ namespace SmsWorkbench.Views
 {
     public partial class MainWindow
     {
-        private const double SidebarExpandedWidth = 248;
-        private const double SidebarCollapsedWidth = 90;
+        private const double SidebarExpandedWidth = 240;
+        private const double SidebarCollapsedWidth = 64;
         private const int SidebarAnimDurationMs = 100;
+        private const double ConsoleCollapsedHeight = 36;
+        private const double ConsoleMinExpandedHeight = 120;
+        private const double ConsoleMaxExpandedHeight = 520;
+        private double lastExpandedConsoleHeight = 220;
 
         private void OnSidebarToggleRequested(object sender, RoutedEventArgs e)
         {
             SidebarCollapsed = !SidebarCollapsed;
+        }
+
+        private void OnConsoleCollapseToggled(object sender, RoutedEventArgs e)
+        {
+            if (ConsoleRow is null || ConsoleSplitter is null)
+            {
+                return;
+            }
+
+            if (consoleControl.IsCollapsed)
+            {
+                if (ConsoleRow.ActualHeight >= ConsoleMinExpandedHeight)
+                {
+                    lastExpandedConsoleHeight = ConsoleRow.ActualHeight;
+                }
+                ConsoleRow.MinHeight = ConsoleCollapsedHeight;
+                ConsoleRow.MaxHeight = ConsoleCollapsedHeight;
+                ConsoleRow.Height = new GridLength(ConsoleCollapsedHeight);
+                ConsoleSplitter.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            ConsoleRow.MinHeight = ConsoleMinExpandedHeight;
+            ConsoleRow.MaxHeight = ConsoleMaxExpandedHeight;
+            ConsoleRow.Height = new GridLength(lastExpandedConsoleHeight);
+            ConsoleSplitter.Visibility = Visibility.Visible;
         }
 
         private void ApplySidebarCompact(bool compact)

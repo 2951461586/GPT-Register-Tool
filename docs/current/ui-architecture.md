@@ -35,10 +35,10 @@ Wpf.Ui.xaml -> Wpf.Ui Theme/Light.xaml -> Themes/Tokens.xaml -> Themes/Glyphs.xa
 | 文件 | 行数 | 内容 |
 | --- | ---: | --- |
 | `SmsWorkbench/App.xaml` | 35 | `ResourceDictionary.MergedDictionaries`，无内联样式 |
-| `SmsWorkbench/Themes/Tokens.xaml` | 122 | 与主题无关的刻度：`Space.*`（4px 网格）、`Radius.*`/`Corner.*`、`Type.*`、`Font.Mono`、`Size.ScrollBar.*`/`Size.Splitter.*`、`Motion.*` |
-| `SmsWorkbench/Themes/Glyphs.xaml` | 105 | 34 个 Tabler v3.50.0 字形（`Glyph.*`，MIT）+ 2 个手绘窗口 chrome 字形；同义几何复用同一个键，每个键上方注明来源图标名 |
-| `SmsWorkbench/Themes/Colors.Light.xaml` | 108 | 光色：5 级表面 `Surface.*`、3 级文字、状态徽章、`Divider`、ComboBox 弹层键 |
-| `SmsWorkbench/Themes/Colors.Dark.xaml` | 86 | 暗色，**与光色同一套键**（缺一个键就会在暗色下回落到 WPF 默认笔刷） |
+| `SmsWorkbench/Themes/Tokens.xaml` | 97 | 与主题无关的刻度：同心圆角（`Corner.*` / `Radius.*`）、间距、图标光学刻度（`Icon.Size.*` / `Icon.Stroke.*`）、字阶（`Type.Display/Kpi/Title/Subtitle/Data/Body/Mono/Caption/Micro.Size`）、`Font.Ui`（内嵌 `Atkinson Hyperlegible Next` + `Microsoft YaHei UI` 复合栈）、`Font.Mono`、`Size.ScrollBar.*`（8px 轨道 / 4px 滑块）/`Size.Splitter.*` |
+| `SmsWorkbench/Themes/Glyphs.xaml` | 131 | 50 个 Tabler v3.50.0 线框字形（`Glyph.*`，MIT）+ 4 个手绘窗口 chrome 字形；全仓清零内联路径与 `Segoe MDL2 Assets`，每个键上方注明来源图标名 |
+| `SmsWorkbench/Themes/Colors.Light.xaml` | 112 | 光色：DeepAI 壳层-悬浮画布表面阶梯（`Surface.Chrome/Page/Card/Block/Inset/Terminal` + `WorkspaceFrameOutline`）、3 级文字 + `IconMuted`、紫罗兰聚焦主色（`#6A20D0`）、状态徽章、`Divider`、`ShadowColor`、ComboBox 弹层键 |
+| `SmsWorkbench/Themes/Colors.Dark.xaml` | 106 | 暗色，**与光色同一套键**（含深曜石画布 `#141416`、抬升石墨壳层 `#202023`、独立深色日志井 `Surface.Terminal=#111113` 与 `#7C3AED`/`#9D6BFF` 聚焦色） |
 | `SmsWorkbench/Themes/Controls.xaml` | 911 | 隐式/具名控件样式、`ControlTemplate`、滚动条与分隔条重模板、`DialogWindow`、`FocusRingStyle` |
 
 三条规则，来自 WPF 的解析时机与类型而不是口味：
@@ -164,10 +164,7 @@ Wpf.Ui.xaml -> Wpf.Ui Theme/Light.xaml -> Themes/Tokens.xaml -> Themes/Glyphs.xa
 
 ## 3.1 侧栏顶部 Logo 的版本号与更新检查
 
-标题栏（`Views/TitleBar.xaml`，高 40px）只保留拖拽区与右侧三个尺寸与动效完全统一的窗口按钮
-（最小化 / 最大化还原 / 关闭，46×39、10×10 字形、1.15 描边）。版本号与更新入口收纳在左侧栏顶部
-`SidebarBrandLogoButton`：有新版本时 Logo 右上角显示小圆点，点击品牌区域弹出 `VersionPopup`，
-展示当前版本号、`检查更新` 按钮及有更新时的 `发现新版本` 下载按钮。
+标题栏（`Views/TitleBar.xaml`，高 38px）坐落于右侧悬浮画布上方，只保留拖拽区、批次运行中动态浮现的脉冲状态胶囊与右侧三个尺寸与动效完全统一的窗口按钮（最小化 / 最大化还原 / 关闭，46×38、10×10 字形、`Icon.Stroke.Chrome=1.15` 描边）。版本号与更新入口收纳在通顶左侧栏顶部 `SidebarBrandLogoButton`：有新版本时 Logo 右上角显示小圆点，点击品牌区域弹出 `VersionPopup`，展示当前版本号、`检查更新` 按钮及有更新时的 `发现新版本` 下载按钮。
 
 | 关注点 | 归属 |
 | --- | --- |
@@ -187,10 +184,10 @@ Wpf.Ui.xaml -> Wpf.Ui Theme/Light.xaml -> Themes/Tokens.xaml -> Themes/Glyphs.xa
 **绝不自动下载或替换文件**——桌面端是"exe + Python 核心"的形态，更新只能是跳转下载页，
 **已声明的限流窗口优先于任何点击**（host 已经说了什么时候才答，再问只会花掉下一个窗口的第一次请求）。
 
-图标来源：`Themes/Glyphs.xaml` 的 34 个功能图标取自
+图标来源：`Themes/Glyphs.xaml` 的 50 个功能图标取自
 [tabler-icons](https://github.com/tabler/tabler-icons) v3.50.0（MIT），逐条照抄上游
 `icons/outline/<name>.svg` 的 `d` 属性，键上方注明来源图标名，便于对库复核；
-窗口最小化/最大化两个字形仍是手绘（OS chrome，1px 描边对齐像素栅格）。
+窗口最小化 / 最大化 / 还原 / 关闭四个字形手绘于 0..10 坐标栅格（OS chrome，1.15px 描边对齐像素栅格）。
 
 ### 启动时主题的唯一来源（2026-10-28）
 
@@ -220,15 +217,13 @@ Wpf.Ui.xaml -> Wpf.Ui Theme/Light.xaml -> Themes/Tokens.xaml -> Themes/Glyphs.xa
 这三条都有 XAML 结构守卫（`tests/workbench/test_sms_workbench_layout.py`），因为编译器
 看不到任何一条。
 
-### 徽章与圆角的两条硬约束（2026-10-28）
+### 徽章与圆角的两条硬约束
 
-- **徽章底色/字色是"低饱和"的**：`Badge*Bg` 为同色相淡洗、`Badge*Fg` 为同色相中等
-  饱和，五态靠**色相**区分而不是靠鲜艳度。改动后需验证徽章内文字对比度 ≥ 4.5:1
-  （当前最差 4.84:1，暗色 Danger）。
+- **徽章底色/字色是低饱和矿物灰调**：`Badge*Bg` 为同色相柔洗、`Badge*Fg` 为低彩度矿物前景色（配 `Medium` 字重），六列状态并排时靠**色相**静默区分而不刺眼。改动后需验证徽章内文字对比度 ≥ 4.5:1（当前最差 **5.28:1**，暗色 Danger）。
 - **`CornerRadius` 不得超过短边的一半**：WPF 不像 CSS 那样夹取半径，半径超过短边一半时
   四角弧线互相重叠，矩形会被画成**透镜（两头细中间粗）**。因此 3px 细条（选中竖条、
-  分隔条手柄）用 `Corner.Hairline`(1.5)，8px 滚动条滑块用 `Corner.Xs`(4)；
-  `Corner.Full`(999) 只允许用在短边足够大的场景。
+  分隔条手柄）用 `Corner.Hairline`(1.5)，4px / 6px 滚动条滑块分别用 `Corner.ThumbRest`(2) /
+  `Corner.ThumbHover`(3)；弹层与下拉框严格遵循同心圆角（`Corner.Md=8` + `Padding=4` → `Corner.Xs=4`，`Corner.Lg=10` + `Padding=4` → `Corner.Sm=6`）。
 
 ### 徽章配色只读机器态（支付资格，2026-10-28）
 
@@ -315,17 +310,17 @@ Wpf.Ui.xaml -> Wpf.Ui Theme/Light.xaml -> Themes/Tokens.xaml -> Themes/Glyphs.xa
 约 120 行 `SetBrush("#hex")`，且必须靠 `ApplyToOpenWindows` 追着刷。
 `WindowThemeService.Attach(Window)` 在子弹窗构造期统一完成三件事：
 1. 在 `SourceInitialized`（HWND 首帧绘制前）写入 DWM 标题栏颜色，避免深色模式开窗闪白；
-2. 统一下发 `Font.Ui`（`Microsoft YaHei UI, Segoe UI`）、`Type.Body.Size` 与 `ClearType` / `Display` 清晰渲染；
+2. 统一下发 `Font.Ui`（内嵌 `Atkinson Hyperlegible Next` + `Microsoft YaHei UI` 复合栈）、`Type.Body.Size` 与 `Ideal` + `ClearType` + `Fixed` 2D 对称清晰渲染（适配无微调 TTF，避免 `Display` 模式一维网格拟合带来的英文字形毛刺）；
 3. 在 `Closing` 阶段主动激活可见的 `Owner`，避免关闭子弹窗后主窗口被 Win32 压到后台。
 `ApplicationThemeManager.Apply` 仍然要调，那是 Wpf.Ui 自有控件的主题；
 `DesktopThemePreference`（`Models/`）负责落盘。
 
-2026-11-22 起主动作与聚焦态改为低饱和中性灰炭/灰蓝体系（`Primary` / `PrimaryBorder` / `PrimaryHover` /
-`PrimaryPressed` / `OnPrimary` / `AccentIndicator` / `SidebarHover` / `SidebarPressed` / `OnDanger`），
-并在 `Controls.Buttons.xaml` 与 `Controls.Inputs.xaml` 的 `ContentPresenter.Resources` 内显式继承按钮/复选框自身
-`Foreground`，避免应用级隐式 `TextBlock` 样式把 `PrimaryButton` / `DangerButton` 文本覆写回 `TextMain`。
-`tests/workbench/test_theme_palette_consistency.py` 同时守卫双色板键对等、`DynamicResource` / `StaticResource`
-全仓解析与 `SidebarHover` 对比度。
+2026-11-22 视觉重构（参考 DeepAI Code Desktop 设计体系）：
+1. **排版**：`SmsWorkbench/Assets/Fonts/` 内嵌 SIL OFL 1.1 `Atkinson Hyperlegible Next`（400/500/600），与 `Microsoft YaHei UI` 组成 `Font.Ui` 复合字体栈；全站切换为 `Ideal` + `ClearType` + `Fixed` 2D 对称抗锯齿；KPI 指标、表格数据列与状态栏全面启用 `Typography.NumeralAlignment="Tabular"` 等宽数字。
+2. **SVG 图标**：统一 `Icon.Size.*` / `Icon.Stroke.*` 光学线宽令牌与 `IconMuted` 常态退后色，清零 `PaymentBatchWindow` 的 `Segoe MDL2 Assets` 与 5 处内联路径，新增 `Glyph.Copy/Backup/Restore/Inspect/PanelLeftClose/PanelLeftOpen/Terminal/ListTasks` 等 16 个 Tabler 字形解除语义复用。
+3. **壳层-画布配色（Scheme A）**：主窗口外框与通顶侧栏共用 `Surface.Chrome`（光 `#EEEEEE` / 暗 `#202023`），右侧工作区为带 `WorkspaceFrameOutline` 的圆角悬浮画布（光 `#F5F5F6` / 暗 `#141416`），日志井独立为 `Surface.Terminal`（光 `#FAFAFA` / 暗 `#111113`），主动作/聚焦态使用 DeepAI 紫罗兰高光（光 `#6A20D0` / 暗 `#7C3AED`），结构层保持中性，6 列状态徽章采用低饱和矿物灰调（≥ 5.28:1）；`ComboBox` / 右键菜单 / 弹层收敛为同心圆角并将阴影抽入 `ShadowColor`。
+4. **模块布局**：通顶侧栏（展开 240px / 折叠 64px，折叠态伸缩按钮与导航图标中心严格像素对齐）拆出 Sticky Footer 固定「取消批次 / 设置 / 外壳·主题·语言」；顶栏收敛至 38px 并展示运行中脉冲胶囊；4 个 KPI 卡片（总记录 / 有试用 / 已注册 / 异常待处理）压至 48px 并全部支持点击联动 `Pool.ScopeFilter`；账号表「创建时间 / 更新时间」列增宽至 176px；`WorkbenchConsole` 重构为「实时日志 / 任务队列」单栏分段切换 + 一键折叠抽屉；滚动条收细至 8px 轨道 / 4px 滑块。
+`tests/workbench/test_theme_palette_consistency.py` 守卫双色板键对等、表面阶梯、`Surface.Terminal` 方向、`DynamicResource`/`StaticResource` 全仓解析与 `SidebarHover` 对比度。
 
 配色的判定规则（结构用明度分层、颜色只给状态）与逐阶段证据见
 [`plan-2026-10-28-wpf-visual-system.md`](../audits/plans/plan-2026-10-28-wpf-visual-system.md)；
@@ -340,7 +335,7 @@ Wpf.Ui.xaml -> Wpf.Ui Theme/Light.xaml -> Themes/Tokens.xaml -> Themes/Glyphs.xa
 | `tests/workbench/test_localization_catalog.py` | 每个 `{loc:Tr}` / `Loc.T` / `Loc.F` 键都有英文；XAML 文本属性不得留中文；**`MessageBox.Show`、`Notify*`、`DialogFactory.Show*Async`、`Content`/`Text`/`Title` 等属性直接写字面中文即失败**（2026-10-25 新增，此前这类字符串静默漏了 25 条） |
 | `tests/SmsWorkbench.Tests/BackendCommandPlannerSurfaceTests.cs` | `BackendCommandPlanner` 中「无生产调用方」的 builder 集合被冻结：新增死代码、接线、删除都要显式改白名单，且每个条目必须在 doc comment 里写明。**白名单自 2026-11-20 起为空白**——最后 6 个 test-only builder 已删除（它们声称唯一记录着 CLI 契约，但 `docs/current/cli-reference.md` 由 parser 生成，已单一权威） |
 | `scripts/dotnet_warning_ratchet.py` | C# 构建告警零基线（见 [`dotnet-gates.md`](dotnet-gates.md)） |
-| `dotnet test GPTRegisterTool.slnx -c Release` | 798 个测试（CI 必跑；含 `ModuleSizeTests` / `PartialSizeTests` 的行数上限） |
+| `dotnet test GPTRegisterTool.slnx -c Release` | 839 个测试（CI 必跑；含 `DesktopWindowSmokeTests`、`ModuleSizeTests` / `PartialSizeTests`） |
 
 `SmsWorkbench.Tests` 里没有 UI 自动化：所有窗口级断言都在真实布局对象上做
 （`ActualWidth`、`Template.FindName`、`FindVisualChildren`），不做像素比较。

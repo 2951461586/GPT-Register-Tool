@@ -58,7 +58,7 @@
                   SelectionChanged="MailDataGrid_SelectionChanged"
                   PreviewKeyDown="MailDataGrid_PreviewKeyDown">
           <DataGrid.Columns>
-            <DataGridTextColumn Header="{loc:Tr Key='时间'}" Binding="{Binding ReceivedAt}" Width="165"/>
+            <DataGridTextColumn Header="{loc:Tr Key='时间'}" Binding="{Binding ReceivedAt}" Width="176"/>
             <DataGridTextColumn Header="{loc:Tr Key='发件人'}" Binding="{Binding From}" Width="220"/>
             <DataGridTextColumn Header="{loc:Tr Key='主题'}" Binding="{Binding Subject}" Width="*"/>
           </DataGrid.Columns>
@@ -112,9 +112,7 @@
                 Margin="0,0,12,0"
                 Click="BackToListButton_Click">
           <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-            <Path Style="{StaticResource IconPath}"
-                  Width="13"
-                  Height="13"
+            <Path Style="{StaticResource ToolbarIconPath}"
                   Stroke="{DynamicResource TextMain}"
                   Data="{StaticResource Glyph.PrevPage}"/>
             <TextBlock Text="{loc:Tr Key='返回收件箱'}"

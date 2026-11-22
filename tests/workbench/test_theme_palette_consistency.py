@@ -47,7 +47,7 @@ ALIAS_TO_RUNG = {
     "PanelBg": "Surface.Card",
     "PanelBg2": "Surface.Block",
     "SidebarBg": "Surface.Chrome",
-    "LogBg": "Surface.Inset",
+    "LogBg": "Surface.Terminal",
 }
 
 #: The ladder, outermost first. Light alternates and dark climbs, so only the
@@ -178,6 +178,21 @@ class SurfaceLadderTests(unittest.TestCase):
                 self.assertLess(chrome, page, "light: chrome sits below the page")
             else:
                 self.assertGreater(chrome, page, "dark: chrome sits above the page")
+
+    def test_terminal_surface_is_recessed_in_dark_and_crisp_in_light(self):
+        """Log terminal well stays deep obsidian in dark mode rather than washed-out Surface.Inset."""
+        light = _brushes(LIGHT_XAML)
+        dark = _brushes(DARK_XAML)
+        self.assertGreater(
+            _luminance(light["Surface.Terminal"]),
+            _luminance(light["Surface.Block"]),
+            "light: terminal well should stay brighter than muted blocks",
+        )
+        self.assertLess(
+            _luminance(dark["Surface.Terminal"]),
+            _luminance(dark["Surface.Card"]),
+            "dark: terminal well should stay darker than cards (deep obsidian)",
+        )
 
     def test_legacy_aliases_still_resolve_to_their_rung(self):
         """Phase 0 folded the old semantic names onto the ladder, by name.

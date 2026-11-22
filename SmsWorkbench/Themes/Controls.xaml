@@ -11,8 +11,17 @@
   <Style TargetType="TextBlock">
     <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
     <Setter Property="FontFamily" Value="{StaticResource Font.Ui}"/>
-    <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+    <Setter Property="TextOptions.TextFormattingMode" Value="Ideal"/>
     <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
+    <Setter Property="TextOptions.TextHintingMode" Value="Fixed"/>
+  </Style>
+
+  <Style x:Key="Text.Kpi" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+    <Setter Property="FontSize" Value="{StaticResource Type.Kpi.Size}"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
+    <Setter Property="Typography.NumeralAlignment" Value="Tabular"/>
+    <Setter Property="TextOptions.TextFormattingMode" Value="Ideal"/>
   </Style>
 
   <Style x:Key="Text.Subtitle" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
@@ -25,6 +34,14 @@
     <Setter Property="FontSize" Value="{StaticResource Type.Caption.Size}"/>
     <Setter Property="FontWeight" Value="Medium"/>
     <Setter Property="Foreground" Value="{DynamicResource TextSub}"/>
+    <Setter Property="Typography.NumeralAlignment" Value="Tabular"/>
+  </Style>
+
+  <Style x:Key="Text.Micro" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+    <Setter Property="FontSize" Value="{StaticResource Type.Micro.Size}"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
+    <Setter Property="Typography.NumeralAlignment" Value="Tabular"/>
   </Style>
 
   <Style x:Key="FocusRingStyle">
@@ -44,20 +61,47 @@
 
   <Style x:Key="FieldLabel" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
     <Setter Property="FontSize" Value="{StaticResource Type.Caption.Size}"/>
+    <Setter Property="FontWeight" Value="Medium"/>
     <Setter Property="Foreground" Value="{DynamicResource TextSub}"/>
     <Setter Property="Margin" Value="{StaticResource Space.Bottom1}"/>
   </Style>
 
+  <!-- ═══ Unified SVG/Path icon styles ════════════════════════════════════
+       Optical stroke weights and muted resting ink aligned with DeepAI Code. -->
   <Style x:Key="IconPath" TargetType="Path">
-    <Setter Property="Width" Value="14"/>
-    <Setter Property="Height" Value="14"/>
+    <Setter Property="Width" Value="{StaticResource Icon.Size.Standard}"/>
+    <Setter Property="Height" Value="{StaticResource Icon.Size.Standard}"/>
     <Setter Property="Stretch" Value="Uniform"/>
-    <Setter Property="Stroke" Value="{DynamicResource TextSub}"/>
-    <Setter Property="StrokeThickness" Value="1.6"/>
+    <Setter Property="Stroke" Value="{DynamicResource IconMuted}"/>
+    <Setter Property="StrokeThickness" Value="{StaticResource Icon.Stroke.Standard}"/>
     <Setter Property="StrokeStartLineCap" Value="Round"/>
     <Setter Property="StrokeEndLineCap" Value="Round"/>
     <Setter Property="StrokeLineJoin" Value="Round"/>
     <Setter Property="Fill" Value="Transparent"/>
+  </Style>
+
+  <Style x:Key="MenuIconPath" TargetType="Path" BasedOn="{StaticResource IconPath}">
+    <Setter Property="Width" Value="{StaticResource Icon.Size.Standard}"/>
+    <Setter Property="Height" Value="{StaticResource Icon.Size.Standard}"/>
+    <Setter Property="StrokeThickness" Value="{StaticResource Icon.Stroke.Standard}"/>
+  </Style>
+
+  <Style x:Key="ToolbarIconPath" TargetType="Path" BasedOn="{StaticResource IconPath}">
+    <Setter Property="Width" Value="{StaticResource Icon.Size.Toolbar}"/>
+    <Setter Property="Height" Value="{StaticResource Icon.Size.Toolbar}"/>
+    <Setter Property="StrokeThickness" Value="{StaticResource Icon.Stroke.Compact}"/>
+  </Style>
+
+  <Style x:Key="CompactIconPath" TargetType="Path" BasedOn="{StaticResource IconPath}">
+    <Setter Property="Width" Value="{StaticResource Icon.Size.Compact}"/>
+    <Setter Property="Height" Value="{StaticResource Icon.Size.Compact}"/>
+    <Setter Property="StrokeThickness" Value="{StaticResource Icon.Stroke.Compact}"/>
+  </Style>
+
+  <Style x:Key="NavIconPath" TargetType="Path" BasedOn="{StaticResource IconPath}">
+    <Setter Property="Width" Value="{StaticResource Icon.Size.Nav}"/>
+    <Setter Property="Height" Value="{StaticResource Icon.Size.Nav}"/>
+    <Setter Property="StrokeThickness" Value="{StaticResource Icon.Stroke.Nav}"/>
   </Style>
 
   <Style TargetType="TextBox">
@@ -65,9 +109,10 @@
     <Setter Property="Padding" Value="10,0"/>
     <Setter Property="FontFamily" Value="{StaticResource Font.Ui}"/>
     <Setter Property="FontSize" Value="{StaticResource Type.Body.Size}"/>
-    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Background" Value="{DynamicResource Surface.Card}"/>
     <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
-    <Setter Property="CaretBrush" Value="{DynamicResource TextMain}"/>
+    <Setter Property="CaretBrush" Value="{DynamicResource AccentIndicator}"/>
+    <Setter Property="SelectionBrush" Value="{DynamicResource Primary}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
     <Setter Property="BorderThickness" Value="1"/>
     <Setter Property="VerticalContentAlignment" Value="Center"/>
@@ -118,16 +163,21 @@
             <Border x:Name="ThumbChrome"
                     Margin="2"
                     Background="{TemplateBinding Background}"
-                    CornerRadius="{StaticResource Corner.Xs}"/>
+                    CornerRadius="{StaticResource Corner.ThumbRest}"
+                    Opacity="0.72"/>
           </Grid>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
               <Setter TargetName="ThumbChrome" Property="Background" Value="{DynamicResource TextMuted}"/>
               <Setter TargetName="ThumbChrome" Property="Margin" Value="1"/>
+              <Setter TargetName="ThumbChrome" Property="CornerRadius" Value="{StaticResource Corner.ThumbHover}"/>
+              <Setter TargetName="ThumbChrome" Property="Opacity" Value="0.92"/>
             </Trigger>
             <Trigger Property="IsDragging" Value="True">
               <Setter TargetName="ThumbChrome" Property="Background" Value="{DynamicResource TextSub}"/>
               <Setter TargetName="ThumbChrome" Property="Margin" Value="1"/>
+              <Setter TargetName="ThumbChrome" Property="CornerRadius" Value="{StaticResource Corner.ThumbHover}"/>
+              <Setter TargetName="ThumbChrome" Property="Opacity" Value="1"/>
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
@@ -232,16 +282,16 @@
     </Setter>
   </Style>
 
-  <sys:Double x:Key="{x:Static SystemParameters.VerticalScrollBarWidthKey}">12</sys:Double>
-  <sys:Double x:Key="{x:Static SystemParameters.HorizontalScrollBarHeightKey}">12</sys:Double>
+  <sys:Double x:Key="{x:Static SystemParameters.VerticalScrollBarWidthKey}">8</sys:Double>
+  <sys:Double x:Key="{x:Static SystemParameters.HorizontalScrollBarHeightKey}">8</sys:Double>
 
   <Style TargetType="ToolTip">
     <Setter Property="Background" Value="{DynamicResource Surface.Card}"/>
     <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
-    <Setter Property="BorderBrush" Value="{DynamicResource LineStrong}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource WorkspaceFrameOutline}"/>
     <Setter Property="BorderThickness" Value="1"/>
-    <Setter Property="Padding" Value="8,5"/>
-    <Setter Property="FontSize" Value="{StaticResource Type.Body.Size}"/>
+    <Setter Property="Padding" Value="9,5"/>
+    <Setter Property="FontSize" Value="{StaticResource Type.Caption.Size}"/>
     <Setter Property="FontFamily" Value="{StaticResource Font.Ui}"/>
     <Setter Property="HasDropShadow" Value="False"/>
     <Setter Property="Template">
@@ -250,34 +300,16 @@
           <Border Background="{TemplateBinding Background}"
                   BorderBrush="{TemplateBinding BorderBrush}"
                   BorderThickness="{TemplateBinding BorderThickness}"
-                  CornerRadius="{StaticResource Corner.Sm}"
+                  CornerRadius="{StaticResource Corner.Md}"
                   Padding="{TemplateBinding Padding}">
             <Border.Effect>
-              <DropShadowEffect Color="#33000000" BlurRadius="10" ShadowDepth="1" Direction="270"/>
+              <DropShadowEffect Color="{DynamicResource ShadowColor}" BlurRadius="12" ShadowDepth="2" Direction="270"/>
             </Border.Effect>
             <ContentPresenter/>
           </Border>
         </ControlTemplate>
       </Setter.Value>
     </Setter>
-  </Style>
-
-  <Style x:Key="MenuIconPath" TargetType="Path">
-    <Setter Property="Width" Value="14"/>
-    <Setter Property="Height" Value="14"/>
-    <Setter Property="Stretch" Value="Uniform"/>
-    <Setter Property="Stroke" Value="{DynamicResource TextSub}"/>
-    <Setter Property="StrokeThickness" Value="1.4"/>
-    <Setter Property="StrokeStartLineCap" Value="Round"/>
-    <Setter Property="StrokeEndLineCap" Value="Round"/>
-    <Setter Property="StrokeLineJoin" Value="Round"/>
-    <Setter Property="Fill" Value="Transparent"/>
-  </Style>
-
-  <Style x:Key="ToolbarIconPath" TargetType="Path" BasedOn="{StaticResource MenuIconPath}">
-    <Setter Property="Width" Value="13"/>
-    <Setter Property="Height" Value="13"/>
-    <Setter Property="StrokeThickness" Value="1.5"/>
   </Style>
 
   <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>

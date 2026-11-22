@@ -1,39 +1,48 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-  <!-- Input, selector, and toggle control styles for the workbench shell. -->
+  <!-- Input, selector, and toggle control styles for the workbench shell.
+       Concentric radii: ComboBox chrome & popup = Corner.Md (8px), popup padding = 4px,
+       ComboBoxItem = Corner.Xs (4px = 8 - 4). All icons pull from Glyphs.xaml. -->
   <ControlTemplate x:Key="ComboBoxToggleButton" TargetType="ToggleButton">
     <Border x:Name="ComboChrome"
-            Background="{DynamicResource PanelBg}"
+            Background="{DynamicResource Surface.Card}"
             BorderBrush="{DynamicResource Line}"
             BorderThickness="1"
-            CornerRadius="{StaticResource Corner.Xs}">
+            CornerRadius="{StaticResource Corner.Md}">
       <Grid>
         <Grid.ColumnDefinitions>
           <ColumnDefinition Width="*"/>
-          <ColumnDefinition Width="36"/>
+          <ColumnDefinition Width="32"/>
         </Grid.ColumnDefinitions>
         <Path x:Name="ArrowGlyph"
               Grid.Column="1"
               HorizontalAlignment="Center"
               VerticalAlignment="Center"
-              Width="10" Height="6"
+              Width="{StaticResource Icon.Size.Compact}"
+              Height="{StaticResource Icon.Size.Compact}"
               Stretch="Uniform"
-              Fill="{DynamicResource TextSub}"
-              Data="M0,0 L5,5 L10,0 Z"/>
+              Stroke="{DynamicResource IconMuted}"
+              StrokeThickness="{StaticResource Icon.Stroke.Compact}"
+              StrokeStartLineCap="Round"
+              StrokeEndLineCap="Round"
+              StrokeLineJoin="Round"
+              Fill="Transparent"
+              RenderTransformOrigin="0.5,0.5"
+              Data="{StaticResource Glyph.ChevronDown}"/>
       </Grid>
     </Border>
     <ControlTemplate.Triggers>
       <Trigger Property="IsMouseOver" Value="True">
         <Setter TargetName="ComboChrome" Property="Background" Value="{DynamicResource PanelHover}"/>
         <Setter TargetName="ComboChrome" Property="BorderBrush" Value="{DynamicResource LineStrong}"/>
-        <Setter TargetName="ArrowGlyph" Property="Fill" Value="{DynamicResource TextMain}"/>
+        <Setter TargetName="ArrowGlyph" Property="Stroke" Value="{DynamicResource TextMain}"/>
       </Trigger>
       <Trigger Property="IsChecked" Value="True">
-        <Setter TargetName="ComboChrome" Property="BorderBrush" Value="{DynamicResource LineStrong}"/>
-        <Setter TargetName="ArrowGlyph" Property="Fill" Value="{DynamicResource TextMain}"/>
+        <Setter TargetName="ComboChrome" Property="BorderBrush" Value="{DynamicResource FocusRing}"/>
+        <Setter TargetName="ArrowGlyph" Property="Stroke" Value="{DynamicResource TextMain}"/>
         <Setter TargetName="ArrowGlyph" Property="RenderTransform">
           <Setter.Value>
-            <RotateTransform Angle="180" CenterX="5" CenterY="3"/>
+            <RotateTransform Angle="180"/>
           </Setter.Value>
         </Setter>
       </Trigger>
@@ -47,7 +56,7 @@
     <Setter Property="Focusable" Value="False"/>
     <Setter Property="HorizontalAlignment" Value="Stretch"/>
     <Setter Property="VerticalAlignment" Value="Stretch"/>
-    <Setter Property="Background" Value="{DynamicResource PanelBg}"/>
+    <Setter Property="Background" Value="{DynamicResource Surface.Card}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
     <Setter Property="BorderThickness" Value="1"/>
     <Setter Property="Template" Value="{StaticResource ComboBoxToggleButton}"/>
@@ -56,9 +65,10 @@
   <Style TargetType="PasswordBox">
     <Setter Property="Height" Value="32"/>
     <Setter Property="Padding" Value="10,0"/>
-    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Background" Value="{DynamicResource Surface.Card}"/>
     <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
-    <Setter Property="CaretBrush" Value="{DynamicResource TextMain}"/>
+    <Setter Property="CaretBrush" Value="{DynamicResource AccentIndicator}"/>
+    <Setter Property="SelectionBrush" Value="{DynamicResource Primary}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
     <Setter Property="BorderThickness" Value="1"/>
     <Setter Property="VerticalContentAlignment" Value="Center"/>
@@ -93,8 +103,8 @@
   <Style TargetType="ComboBox">
     <Setter Property="Height" Value="32"/>
     <Setter Property="MinWidth" Value="120"/>
-    <Setter Property="Padding" Value="9,0,7,0"/>
-    <Setter Property="Background" Value="{DynamicResource PanelBg}"/>
+    <Setter Property="Padding" Value="10,0,6,0"/>
+    <Setter Property="Background" Value="{DynamicResource Surface.Card}"/>
     <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
     <Setter Property="BorderThickness" Value="1"/>
@@ -110,7 +120,7 @@
           <Grid x:Name="TemplateRoot">
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="*"/>
-              <ColumnDefinition Width="36"/>
+              <ColumnDefinition Width="32"/>
             </Grid.ColumnDefinitions>
             <ToggleButton x:Name="ToggleButton"
                           Grid.ColumnSpan="2"
@@ -150,15 +160,15 @@
                    PlacementTarget="{Binding RelativeSource={RelativeSource TemplatedParent}}"
                    PopupAnimation="None"
                    VerticalOffset="4">
-              <Border Background="{DynamicResource PanelBg}"
-                      BorderBrush="{DynamicResource LineStrong}"
+              <Border Background="{DynamicResource Surface.Card}"
+                      BorderBrush="{DynamicResource WorkspaceFrameOutline}"
                       BorderThickness="1"
-                      CornerRadius="{StaticResource Corner.Xs}"
+                      CornerRadius="{StaticResource Corner.Md}"
                       Width="{Binding ActualWidth, ElementName=TemplateRoot}"
                       MaxHeight="{TemplateBinding MaxDropDownHeight}"
-                      Padding="0,4">
+                      Padding="4">
                 <Border.Effect>
-                  <DropShadowEffect Color="#22000000" BlurRadius="14" ShadowDepth="3" Opacity="0.45" Direction="270"/>
+                  <DropShadowEffect Color="{DynamicResource ShadowColor}" BlurRadius="16" ShadowDepth="3" Opacity="0.65" Direction="270"/>
                 </Border.Effect>
                 <ScrollViewer SnapsToDevicePixels="True"
                               CanContentScroll="True"
@@ -189,7 +199,7 @@
   <Style TargetType="ComboBoxItem">
     <Setter Property="Background" Value="Transparent"/>
     <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
-    <Setter Property="Padding" Value="12,7"/>
+    <Setter Property="Padding" Value="10,6"/>
     <Setter Property="Cursor" Value="Hand"/>
     <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
     <Setter Property="Template">
@@ -198,7 +208,7 @@
           <Border x:Name="ItemBg"
                   Background="{TemplateBinding Background}"
                   CornerRadius="{StaticResource Corner.Xs}"
-                  Margin="3,1"
+                  Margin="0,1"
                   Padding="{TemplateBinding Padding}">
             <Grid>
               <Grid.ColumnDefinitions>
@@ -212,11 +222,17 @@
                                 TextBlock.FontSize="{TemplateBinding FontSize}"/>
               <Path x:Name="CheckGlyph"
                     Grid.Column="1"
-                    Width="12" Height="9"
-                    Margin="8,0,4,0"
+                    Width="{StaticResource Icon.Size.Compact}"
+                    Height="{StaticResource Icon.Size.Compact}"
+                    Margin="8,0,2,0"
                     Stretch="Uniform"
-                    Fill="{DynamicResource Success}"
-                    Data="M0,4.5 L3.5,8 L9,0.5 L8,0 L3.5,6 L1,3.5 Z"
+                    Stroke="{DynamicResource AccentIndicator}"
+                    StrokeThickness="1.8"
+                    StrokeStartLineCap="Round"
+                    StrokeEndLineCap="Round"
+                    StrokeLineJoin="Round"
+                    Fill="Transparent"
+                    Data="{StaticResource Glyph.Check}"
                     Visibility="Collapsed"/>
             </Grid>
           </Border>
@@ -264,12 +280,18 @@
                     CornerRadius="{StaticResource Corner.Xs}">
               <Grid>
                 <Path x:Name="CheckMark"
-                      Data="M 3,8.2 L 6.3,11.4 L 12.6,4.6"
+                      Width="10"
+                      Height="10"
+                      Stretch="Uniform"
+                      Data="{StaticResource Glyph.Check}"
                       Stroke="{DynamicResource OnPrimary}"
-                      StrokeThickness="1.8"
+                      StrokeThickness="2"
                       StrokeStartLineCap="Round"
                       StrokeEndLineCap="Round"
                       StrokeLineJoin="Round"
+                      Fill="Transparent"
+                      HorizontalAlignment="Center"
+                      VerticalAlignment="Center"
                       Visibility="Collapsed"/>
                 <Rectangle x:Name="IndeterminateMark"
                            Width="8"
@@ -293,8 +315,9 @@
                 <Style TargetType="TextBlock">
                   <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=CheckBox}}"/>
                   <Setter Property="FontFamily" Value="{StaticResource Font.Ui}"/>
-                  <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+                  <Setter Property="TextOptions.TextFormattingMode" Value="Ideal"/>
                   <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
+                  <Setter Property="TextOptions.TextHintingMode" Value="Fixed"/>
                 </Style>
               </ContentPresenter.Resources>
             </ContentPresenter>
@@ -304,7 +327,7 @@
               <Setter TargetName="ContentSite" Property="Visibility" Value="Collapsed"/>
             </Trigger>
             <Trigger Property="IsMouseOver" Value="True">
-              <Setter TargetName="CheckChrome" Property="BorderBrush" Value="{DynamicResource TextSub}"/>
+              <Setter TargetName="CheckChrome" Property="BorderBrush" Value="{DynamicResource AccentIndicator}"/>
             </Trigger>
             <Trigger Property="IsChecked" Value="True">
               <Setter TargetName="CheckChrome" Property="Background" Value="{DynamicResource Primary}"/>

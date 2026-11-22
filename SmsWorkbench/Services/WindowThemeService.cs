@@ -37,8 +37,9 @@ internal static class WindowThemeService
         window.SetResourceReference(Control.FontSizeProperty, "Type.Body.Size");
         window.UseLayoutRounding = true;
         window.SnapsToDevicePixels = true;
-        TextOptions.SetTextFormattingMode(window, TextFormattingMode.Display);
+        TextOptions.SetTextFormattingMode(window, TextFormattingMode.Ideal);
         TextOptions.SetTextRenderingMode(window, TextRenderingMode.ClearType);
+        TextOptions.SetTextHintingMode(window, TextHintingMode.Fixed);
     }
 
     private static void OnChildWindowClosing(object? sender, CancelEventArgs e)
