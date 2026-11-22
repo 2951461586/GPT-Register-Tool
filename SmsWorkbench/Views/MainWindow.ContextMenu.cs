@@ -94,6 +94,21 @@ namespace SmsWorkbench.Views
         private void CtxCheckAccountAlive()
             => RunUiTask(() => CtxCheckAccountAliveAsync(_lifetimeCts.Token));
 
+        private void CtxInspectAccount()
+        {
+            if (accountGridControl.SelectedRow is not PoolRow row || string.IsNullOrWhiteSpace(row.Identifier))
+            {
+                NotifyWarning(Loc.T("请先选择一个账号。"));
+                return;
+            }
+            var plan = BackendCommandPlanner.CreateAccountInspection(
+                new[] { row.Identifier.Trim() },
+                SessionFileFor(row),
+                workers: 1,
+                GetLivenessProxyPool());
+            RunAccountBatchBackend(plan, "account_scan", 1);
+        }
+
         private async Task CtxCheckAccountAliveAsync(CancellationToken ct = default)
         {
             if (accountGridControl.SelectedRow is not PoolRow row || string.IsNullOrWhiteSpace(row.Identifier))

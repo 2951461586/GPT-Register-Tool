@@ -48,6 +48,7 @@ from .base import (
     _tail,
 )
 from .base import is_false, is_true, safe_float, safe_int
+from .oaics_provider import ChatGPTOAICSTransport, run_oaics_provider
 
 #: The one terminal schema every subprocess extractor is expected to print.
 #: Named once because two places now compare against it (the adapter's dispatch
@@ -748,6 +749,60 @@ def _run_gcash_adapter(
             or method_cfg.get("custom_payment_method_type_id")
             or DEFAULT_GCASH_CUSTOM_PAYMENT_METHOD_ID
         ).strip(),
+        require_zero=bool(kwargs.get("require_zero", method_cfg.get("require_zero", True))),
+    )
+
+
+def _run_oaics_inprocess_adapter(
+    spec: PaymentMethodSpec,
+    access_token: str,
+    proxy: Any = None,
+    auth_context: dict[str, Any] | None = None,
+    **kwargs: Any,
+) -> dict[str, Any]:
+    """Run one of the six migrated regional methods in-process over OAICS."""
+    runtime_config = kwargs.pop("runtime_config", None)
+    cfg = _protocol_cfg(runtime_config)
+    _raw_methods: object = cfg.get("methods")
+    methods: Mapping = _raw_methods if isinstance(_raw_methods, Mapping) else {}
+    _raw_method_cfg: object = methods.get(spec.key)
+    method_cfg: Mapping = _raw_method_cfg if isinstance(_raw_method_cfg, Mapping) else {}
+    timeout = max(5, safe_int(kwargs.get("timeout_seconds") or method_cfg.get("timeout_seconds") or 60))
+    transport = kwargs.get("transport") or ChatGPTOAICSTransport(
+        timeout=timeout,
+        allow_html_attestation=kwargs.get("allow_html_attestation", method_cfg.get("allow_html_attestation")),
+    )
+    fallback_proxy = kwargs.get("checkout_proxy") or kwargs.get("seed_proxy") or proxy or method_cfg.get("proxy") or ""
+    transport_context: dict[str, Any] = {
+        "checkout_proxy": kwargs.get("checkout_proxy") or method_cfg.get("checkout_proxy") or fallback_proxy,
+        "promotion_proxy": kwargs.get("promotion_proxy") or method_cfg.get("promotion_proxy") or fallback_proxy,
+        "update_proxy": kwargs.get("update_proxy") or method_cfg.get("update_proxy") or fallback_proxy,
+        "provider_proxy": kwargs.get("provider_proxy") or method_cfg.get("provider_proxy") or fallback_proxy,
+        "payment_method_proxy": kwargs.get("payment_method_proxy")
+        or method_cfg.get("payment_method_proxy")
+        or fallback_proxy,
+        "confirm_proxy": kwargs.get("confirm_proxy") or method_cfg.get("confirm_proxy") or fallback_proxy,
+        "approve_proxy": kwargs.get("approve_proxy") or method_cfg.get("approve_proxy") or fallback_proxy,
+        "redirect_proxy": kwargs.get("redirect_proxy") or method_cfg.get("redirect_proxy") or fallback_proxy,
+        "default_proxy": fallback_proxy,
+        "payment_route_plan": kwargs.get("payment_route_plan"),
+        "stage_proxies": kwargs.get("stage_proxies"),
+        "web_deployment_attestation": (
+            kwargs.get("web_deployment_attestation") or method_cfg.get("web_deployment_attestation") or ""
+        ),
+    }
+    return run_oaics_provider(
+        spec.key,
+        access_token,
+        transport,
+        probe_only=bool(kwargs.get("probe_only")),
+        auth_context=auth_context if isinstance(auth_context, dict) else {},
+        transport_context=transport_context,
+        billing_country=str(kwargs.get("target_country") or kwargs.get("checkout_country") or spec.country),
+        custom_payment_method_type_id=str(
+            kwargs.get("custom_payment_method_type_id") or method_cfg.get("custom_payment_method_type_id") or ""
+        ).strip(),
+        blik_code=str(kwargs.get("blik_code") or method_cfg.get("blik_code") or "").strip(),
         require_zero=bool(kwargs.get("require_zero", method_cfg.get("require_zero", True))),
     )
 

@@ -20,6 +20,7 @@
       <RowDefinition Height="Auto"/>
       <RowDefinition Height="Auto"/>
       <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
     </Grid.RowDefinitions>
 
     <TextBlock x:Name="TitleTextBlock"
@@ -49,10 +50,18 @@
               Grid.Row="3" Grid.Column="1"
               Content="{loc:Tr Key='轻量巡检（本地跳过未过期 AT，仅恢复过期/失效账号并复检优惠）'}"
               IsChecked="False"
-              Margin="0,0,0,10"
+              Margin="0,0,0,8"
               Foreground="{DynamicResource TextMain}"/>
 
-    <StackPanel Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2"
+    <CheckBox x:Name="RefreshPromotionBox"
+              Grid.Row="4" Grid.Column="1"
+              Content="{loc:Tr Key='巡检恢复后复检优惠'}"
+              IsChecked="True"
+              IsEnabled="{Binding IsChecked, ElementName=LightweightInspectBox}"
+              Margin="22,0,0,10"
+              Foreground="{DynamicResource TextSub}"/>
+
+    <StackPanel Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="2"
                 Orientation="Horizontal"
                 HorizontalAlignment="Right"
                 Margin="0,8,0,0">

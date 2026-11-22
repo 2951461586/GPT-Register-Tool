@@ -203,6 +203,12 @@
                             Data="{StaticResource Glyph.ProbeAlive}"/>
                     </MenuItem.Icon>
                   </MenuItem>
+                  <MenuItem Header="{loc:Tr Key='轻量巡检当前账号'}" Command="{Binding PlacementTarget.DataContext.CtxInspectAccountCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Style="{StaticResource AccountContextMenuItemStyle}">
+                    <MenuItem.Icon>
+                      <Path Style="{StaticResource MenuIconPath}"
+                            Data="{StaticResource Glyph.ProbeAlive}"/>
+                    </MenuItem.Icon>
+                  </MenuItem>
                   <Separator/>
                   <MenuItem Header="{loc:Tr Key='打开 Session 源文件'}" Command="{Binding PlacementTarget.DataContext.CtxOpenSourceCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Style="{StaticResource AccountContextMenuItemStyle}">
                     <MenuItem.Icon>

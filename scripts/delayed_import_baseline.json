@@ -1,10 +1,7 @@
 {
   "edges": {
     "sms_tool/accounts/account_2fa.py -> pyotp": "deferred",
-    "sms_tool/accounts/account_2fa.py -> sms_tool.transport.auth_headers": "deferred",
-    "sms_tool/accounts/account_2fa.py -> urllib.parse": "deferred",
     "sms_tool/accounts/account_email_change.py -> argparse": "deferred",
-    "sms_tool/accounts/account_email_change.py -> curl_cffi": "startup",
     "sms_tool/accounts/account_email_change.py -> sms_tool.providers.mailbox_cfworker": "provider",
     "sms_tool/accounts/account_email_change.py -> sms_tool.providers.mailbox_remail": "provider",
     "sms_tool/accounts/account_email_change.py -> sms_tool.providers.mailbox_smailr": "provider",
@@ -271,8 +268,6 @@
     "sms_tool/proxy/asn_registry.py -> sms_tool.kernel.paths": "deferred",
     "sms_tool/proxy/asn_registry.py -> sms_tool.proxy.entry": "deferred",
     "sms_tool/proxy/asn_registry.py -> sms_tool.proxy.health": "deferred",
-    "sms_tool/proxy/bridge.py -> base64": "deferred",
-    "sms_tool/proxy/bridge.py -> sms_tool.proxy.entry": "deferred",
     "sms_tool/proxy/edge_probe.py -> curl_cffi": "startup",
     "sms_tool/proxy/edge_probe.py -> sms_tool.accounts.account_terminal": "deferred",
     "sms_tool/proxy/registry.py -> sms_tool.mailbox.router": "deferred",
@@ -393,8 +388,8 @@
     "sms_tool/wallet/transport.py -> sms_tool.paypal.proxy": "deferred"
   },
   "per_file": {
-    "sms_tool/accounts/account_2fa.py": 4,
-    "sms_tool/accounts/account_email_change.py": 5,
+    "sms_tool/accounts/account_2fa.py": 2,
+    "sms_tool/accounts/account_email_change.py": 4,
     "sms_tool/accounts/account_events.py": 1,
     "sms_tool/accounts/account_health_queue.py": 7,
     "sms_tool/accounts/account_identity.py": 2,
@@ -471,7 +466,6 @@
     "sms_tool/providers/sms_vendor_api.py": 1,
     "sms_tool/proxy/admin.py": 2,
     "sms_tool/proxy/asn_registry.py": 4,
-    "sms_tool/proxy/bridge.py": 4,
     "sms_tool/proxy/edge_probe.py": 2,
     "sms_tool/proxy/registry.py": 2,
     "sms_tool/proxy/routing.py": 1,
@@ -522,10 +516,10 @@
   },
   "reasons": {
     "cycle": 8,
-    "deferred": 232,
+    "deferred": 228,
     "provider": 37,
-    "startup": 114,
+    "startup": 113,
     "test-seam": 0
   },
-  "total": 507
+  "total": 500
 }

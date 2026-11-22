@@ -21,7 +21,7 @@ from sms_tool.registration.policy import registration_retry_decision
 
 
 class AuthHeadersAndClassificationTests(unittest.TestCase):
-    def test_auth_headers_include_device_sentinel_and_trace(self):
+    def test_auth_headers_include_sentinel_and_trace_without_chatgpt_only_ids(self):
         headers = openai_auth_headers(
             "did-1",
             referer="https://auth.openai.com/create-account",
@@ -29,11 +29,13 @@ class AuthHeadersAndClassificationTests(unittest.TestCase):
             extra={"content-type": "application/json"},
         )
 
-        self.assertEqual(headers["oai-device-id"], "did-1")
+        self.assertNotIn("oai-device-id", headers)
+        self.assertNotIn("oai-session-id", headers)
         self.assertEqual(headers["Origin"], "https://auth.openai.com")
         self.assertEqual(headers["openai-sentinel-token"], "sentinel")
         self.assertEqual(headers["openai-sentinel-so-token"], "so")
         self.assertIn("traceparent", headers)
+        self.assertEqual(headers["tracestate"], "dd=s:1;o:rum")
         self.assertIn("x-datadog-trace-id", headers)
 
     def test_auth_headers_derive_origin_from_extra_referer(self):
@@ -53,13 +55,19 @@ class AuthHeadersAndClassificationTests(unittest.TestCase):
         set_fingerprint_geo("US")
 
     def test_header_families_have_distinct_protocol_fields(self):
+        auth = openai_auth_headers("did", session_id="sid")
         nextauth = nextauth_headers("did", session_id="sid")
         chat = chatgpt_headers("did", session_id="sid")
+        self.assertNotIn("oai-device-id", auth)
+        self.assertNotIn("oai-session-id", auth)
+        self.assertNotIn("oai-device-id", nextauth)
+        self.assertNotIn("oai-session-id", nextauth)
         self.assertNotIn("traceparent", nextauth)
         # The 2026-10-23 HAR carries only ``oai-client-version``; the web
         # client no longer sends the build-number header.
         self.assertNotIn("oai-client-build-number", nextauth)
         self.assertNotIn("oai-client-build-number", chat)
+        self.assertEqual(chat["oai-device-id"], "did")
         self.assertEqual(chat["oai-client-version"], CHATGPT_CLIENT_VERSION)
         self.assertEqual(chat["oai-session-id"], "sid")
 

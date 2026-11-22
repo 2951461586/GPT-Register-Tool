@@ -30,6 +30,9 @@ namespace SmsWorkbench.Views
         private RelayCommand? ctxCheckAccountAliveCommand;
         public RelayCommand CtxCheckAccountAliveCommand => ctxCheckAccountAliveCommand ??= new RelayCommand(CtxCheckAccountAlive);
 
+        private RelayCommand? ctxInspectAccountCommand;
+        public RelayCommand CtxInspectAccountCommand => ctxInspectAccountCommand ??= new RelayCommand(CtxInspectAccount);
+
         private RelayCommand? ctxBatchProtocolPaymentCommand;
         public RelayCommand CtxBatchProtocolPaymentCommand => ctxBatchProtocolPaymentCommand ??= new RelayCommand(BatchProtocolPayment);
 

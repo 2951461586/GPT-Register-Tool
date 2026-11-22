@@ -1,20 +1,26 @@
-"""In-process local proxy bridge: one upstream proxy -> local SOCKS5 endpoint.
+"""In-process local proxy bridge: one-hop or two-hop upstream proxy -> local SOCKS5 endpoint.
 
-Given a single upstream proxy (http/https/socks5, optionally authenticated),
-:class:`LocalProxyBridge` starts a local ``socks5h://127.0.0.1:<port>`` endpoint
-that browser sessions (nodriver / Playwright / manual config) can point to
-without caring about the upstream format or credentials.
+Given an upstream proxy (http/https/socks5, optionally authenticated) — and
+optionally a first-hop relay ``hop_proxy`` (for example a local Clash/Xray
+SOCKS5/HTTP listener when the host cannot dial an overseas residential proxy
+directly) — :class:`LocalProxyBridge` starts a local
+``socks5h://127.0.0.1:<port>`` endpoint that browser sessions
+(nodriver / Playwright / Camoufox / manual config) can point to without caring
+about the upstream format, hop chaining, or credentials.
 
-It reuses the SOCKS5 protocol machinery in ``proxy_pool`` for socks-family
-upstreams, and implements an HTTP CONNECT tunnel for http/https upstreams so a
-single unified bridge covers all common cases.
+It reuses the SOCKS5 and HTTP CONNECT handshake machinery in ``proxy_pool`` so
+a single unified pure-asyncio bridge covers one-hop and two-hop chaining across
+all HTTP/SOCKS5 combinations.
 
 Usage::
 
     from sms_tool.proxy.entry import parse_proxy
     from sms_tool.proxy.bridge import LocalProxyBridge
 
-    with LocalProxyBridge(upstream=parse_proxy("host:port:user:pass")) as bridge:
+    with LocalProxyBridge(
+        upstream=parse_proxy("host:port:user:pass"),
+        hop_proxy=parse_proxy("socks5://127.0.0.1:7890"),
+    ) as bridge:
         browser_url = bridge.local_url   # "socks5h://127.0.0.1:12345"
         ...
     # bridge auto-stopped on context exit
@@ -23,14 +29,16 @@ Usage::
 from __future__ import annotations
 
 import asyncio
+import base64
 import logging
+import os
 import socket
 import struct
 import threading
 from dataclasses import dataclass, field
 from typing import Any
 
-from .entry import ProxyEntry, _SOCKS_DEFAULT_PORT, _normalize_scheme
+from .entry import ProxyEntry, _SOCKS_DEFAULT_PORT, _normalize_scheme, parse_proxy
 from .pool import (
     _ATYP_DOMAIN,
     _ATYP_IPV4,
@@ -45,15 +53,67 @@ from .pool import (
     Socks5Server,
     UpstreamProxy,
     _build_socks5_reply,
+    _http_connect_handshake,
     _read_exact,
     _read_socks5_addr,
+    _socks5_handshake,
 )
 
 logger = logging.getLogger("proxy_bridge")
 
 _HTTP_SCHEMES = {"http", "https"}
+_HTTP_DEFAULT_PORT = 8080
 #: RFC 1928 reply code: connection not allowed by ruleset.
 _REP_NOT_ALLOWED = 0x02
+_HOP_ENV_KEYS = ("GPT_PROXY_CHAIN_HOP", "PROXY_CHAIN_HOP")
+
+
+def _addr_type(host: str) -> int:
+    try:
+        socket.inet_aton(host)
+        return _ATYP_IPV4
+    except OSError:
+        pass
+    try:
+        socket.inet_pton(socket.AF_INET6, host)
+        return _ATYP_IPV6
+    except OSError:
+        return _ATYP_DOMAIN
+
+
+def _default_port_for_scheme(scheme: str) -> int:
+    return _HTTP_DEFAULT_PORT if scheme in _HTTP_SCHEMES else _SOCKS_DEFAULT_PORT
+
+
+def _as_upstream_proxy(entry: ProxyEntry) -> UpstreamProxy:
+    scheme = _normalize_scheme(entry.scheme) or "http"
+    return UpstreamProxy(
+        host=entry.host,
+        port=entry.port or _default_port_for_scheme(scheme),
+        username=entry.username,
+        password=entry.password,
+        label=entry.masked,
+        scheme=scheme,
+    )
+
+
+def _resolve_hop_proxy(hop_proxy: Any, *, allow_env: bool = False) -> ProxyEntry | None:
+    """Normalize an explicit ``hop_proxy`` or optional environment chain hop."""
+    if isinstance(hop_proxy, ProxyEntry):
+        return hop_proxy
+    raw = str(hop_proxy or "").strip() if hop_proxy is not None else ""
+    if not raw and allow_env and hop_proxy is None:
+        for key in _HOP_ENV_KEYS:
+            candidate = str(os.environ.get(key) or "").strip()
+            if candidate:
+                raw = candidate
+                break
+    if not raw:
+        return None
+    parsed = parse_proxy(raw)
+    if parsed is None:
+        raise ValueError("proxy_bridge: invalid hop_proxy")
+    return parsed
 
 
 def _normalize_blocked_hosts(hosts: Any) -> tuple[str, ...]:
@@ -122,6 +182,7 @@ class LocalProxyBridge:
     """
 
     upstream: ProxyEntry | None = None
+    hop_proxy: ProxyEntry | str | None = None
     listen_host: str = "127.0.0.1"
     listen_port: int = 0  # 0 => pick a free port
     connect_timeout: float = 10.0
@@ -139,6 +200,19 @@ class LocalProxyBridge:
     def __post_init__(self) -> None:
         self.blocked_hosts = _normalize_blocked_hosts(self.blocked_hosts)
         self.connect_retries = max(0, min(int(self.connect_retries or 0), 3))
+        if isinstance(self.upstream, str):
+            parsed_upstream = parse_proxy(self.upstream)
+            if parsed_upstream is None:
+                raise ValueError("proxy_bridge: invalid upstream proxy")
+            self.upstream = parsed_upstream
+        self.hop_proxy = _resolve_hop_proxy(self.hop_proxy, allow_env=False)
+
+    def _route_label(self) -> str:
+        upstream = self.upstream
+        upstream_label = upstream.masked if isinstance(upstream, ProxyEntry) else "<none>"
+        if isinstance(self.hop_proxy, ProxyEntry):
+            return f"hop {self.hop_proxy.masked} -> upstream {upstream_label}"
+        return f"upstream {upstream_label}"
 
     def _dest_entry(self, target: str) -> _DestinationStats:
         entry = self._dest_stats.get(target)
@@ -192,10 +266,10 @@ class LocalProxyBridge:
         socket_name = self._server.sockets[0].getsockname()
         self._port = int(socket_name[1])
         logger.info(
-            "proxy_bridge listening on %s:%s -> upstream %s (async)",
+            "proxy_bridge listening on %s:%s -> %s (async)",
             self.listen_host,
             self._port,
-            self.upstream.masked,
+            self._route_label(),
         )
         return self._port
 
@@ -238,7 +312,7 @@ class LocalProxyBridge:
             return self._port
         if self.upstream is None:
             raise RuntimeError("proxy_bridge: no upstream proxy configured")
-        upstream = self.upstream
+        route_label = self._route_label()
 
         ready = threading.Event()
         failure: list[BaseException] = []
@@ -258,10 +332,10 @@ class LocalProxyBridge:
                 self._server = server
                 self._port = int(server.sockets[0].getsockname()[1])
                 logger.info(
-                    "proxy_bridge listening on %s:%s -> upstream %s (sync)",
+                    "proxy_bridge listening on %s:%s -> %s (sync)",
                     self.listen_host,
                     self._port,
-                    upstream.masked,
+                    route_label,
                 )
                 ready.set()
                 inner.run_forever()
@@ -463,27 +537,59 @@ class LocalProxyBridge:
 
     # ── upstream connection ────────────────────────────────────────────────
 
+    async def _open_proxy_hop(
+        self,
+        entry: ProxyEntry,
+        dest_host: str,
+        dest_port: int,
+        dest_atyp: int,
+    ) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+        scheme = _normalize_scheme(entry.scheme) or "http"
+        if scheme in _HTTP_SCHEMES:
+            return await self._connect_http_upstream(entry, dest_host, dest_port)
+        # socks-family: reuse proxy_pool's authenticated SOCKS5 handshake.
+        connector = Socks5Server(connect_timeout=self.connect_timeout)
+        return await connector._connect_through_upstream(_as_upstream_proxy(entry), dest_host, dest_port, dest_atyp)
+
+    async def _tunnel_on_stream(
+        self,
+        reader: asyncio.StreamReader,
+        writer: asyncio.StreamWriter,
+        entry: ProxyEntry,
+        dest_host: str,
+        dest_port: int,
+        dest_atyp: int,
+    ) -> None:
+        scheme = _normalize_scheme(entry.scheme) or "http"
+        upstream = _as_upstream_proxy(entry)
+        if scheme in _HTTP_SCHEMES:
+            await _http_connect_handshake(reader, writer, upstream, dest_host, dest_port, self.connect_timeout)
+            return
+        await _socks5_handshake(reader, writer, upstream, dest_host, dest_port, dest_atyp, self.connect_timeout)
+
     async def _connect_upstream(
         self, dest_host: str, dest_port: int, dest_atyp: int
     ) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
         upstream = self.upstream
         if upstream is None:
             raise RuntimeError("no upstream")
-        scheme = _normalize_scheme(upstream.scheme) or "http"
-        if scheme in _HTTP_SCHEMES:
-            return await self._connect_http_upstream(upstream, dest_host, dest_port)
-        # socks-family: reuse proxy_pool's authenticated SOCKS5 handshake.
-        # _connect_through_upstream is a Socks5Server instance method that only
-        # depends on ``connect_timeout``, so a light connector instance is enough.
-        fake = UpstreamProxy(
-            host=upstream.host,
-            port=upstream.port,
-            username=upstream.username,
-            password=upstream.password,
-            label=upstream.masked,
-        )
-        connector = Socks5Server(connect_timeout=self.connect_timeout)
-        return await connector._connect_through_upstream(fake, dest_host, dest_port, dest_atyp)
+        if self.hop_proxy is None:
+            return await self._open_proxy_hop(upstream, dest_host, dest_port, dest_atyp)
+
+        hop = self.hop_proxy
+        assert isinstance(hop, ProxyEntry)
+        upstream_scheme = _normalize_scheme(upstream.scheme) or "http"
+        upstream_port = upstream.port or _default_port_for_scheme(upstream_scheme)
+        upstream_atyp = _addr_type(upstream.host)
+        reader, writer = await self._open_proxy_hop(hop, upstream.host, upstream_port, upstream_atyp)
+        try:
+            await self._tunnel_on_stream(reader, writer, upstream, dest_host, dest_port, dest_atyp)
+        except (asyncio.TimeoutError, asyncio.IncompleteReadError, ConnectionError, OSError, ValueError) as exc:
+            await _close_writer(writer)
+            raise ConnectionError(
+                f"chained upstream handshake failed via {hop.masked} -> {upstream.masked} ({exc})"
+            ) from exc
+        return reader, writer
 
     async def _connect_http_upstream(
         self, upstream: ProxyEntry, dest_host: str, dest_port: int
@@ -497,7 +603,7 @@ class LocalProxyBridge:
         coroutine -- and the client handler awaiting it -- forever, leaking one
         task and one socket per stuck request until the process was restarted.
         """
-        port = upstream.port or _SOCKS_DEFAULT_PORT
+        port = upstream.port or _HTTP_DEFAULT_PORT
         timeout = self.connect_timeout
         try:
             r, w = await asyncio.wait_for(asyncio.open_connection(upstream.host, port), timeout=timeout)
@@ -574,8 +680,6 @@ class LocalProxyBridge:
 
 
 def _basic_auth_header(username: str, password: str) -> str:
-    import base64
-
     token = base64.b64encode(f"{username}:{password}".encode("utf-8", errors="replace")).decode("ascii")
     return token
 
@@ -584,23 +688,25 @@ def _basic_auth_header(username: str, password: str) -> str:
 #
 # Browsers (Chromium / nodriver / Camoufox) cannot consume a SOCKS5 proxy with
 # embedded credentials, and they also drop the socks5h remote-DNS semantics.
-# These helpers bridge an arbitrary upstream proxy to a local
-# ``socks5h://127.0.0.1:<port>`` that any browser can use, restoring remote DNS.
+# These helpers bridge an arbitrary upstream proxy (and optional first-hop
+# chain relay) to a local ``socks5h://127.0.0.1:<port>`` that any browser can
+# use, restoring remote DNS.
 
 
-def needs_bridge(proxy: Any) -> bool:
+def needs_bridge(proxy: Any, *, hop_proxy: Any = None) -> bool:
     """True when ``proxy`` must be bridged for browser consumption.
 
-    Bridging is needed when the proxy is absent (no), carries credentials, or
-    is http(s) — all of which a browser cannot consume directly as a SOCKS proxy.
+    Bridging is needed when the proxy carries credentials, is http(s), or is
+    chained through a first-hop relay ``hop_proxy`` — none of which a browser
+    can consume directly as a SOCKS proxy.
     """
-    from .entry import parse_proxy
-
     if not str(proxy or "").strip():
         return False
     entry = parse_proxy(proxy)
     if entry is None:
         return False
+    if _resolve_hop_proxy(hop_proxy, allow_env=True) is not None:
+        return True
     if entry.username:
         return True
     return entry.scheme in {"http", "https"}
@@ -609,6 +715,7 @@ def needs_bridge(proxy: Any) -> bool:
 def open_browser_proxy_bridge(
     proxy: Any,
     *,
+    hop_proxy: Any = None,
     blocked_hosts: tuple[str, ...] | list[str] = (),
     connect_retries: int = 0,
     force_bridge: bool = False,
@@ -616,23 +723,24 @@ def open_browser_proxy_bridge(
     """Return ``(browser_proxy_url, closer, bridge)`` for synchronous callers.
 
     When ``force_bridge`` is True (for example when browser data-saver host
-    blocking or proxy-level traffic accounting is active), even credential-free
-    SOCKS5 proxies are routed through :class:`LocalProxyBridge`.
+    blocking or proxy-level traffic accounting is active), or when ``hop_proxy``
+    is configured, even credential-free SOCKS5 proxies are routed through
+    :class:`LocalProxyBridge`.
     """
-    from .entry import parse_proxy
-
     value = str(proxy or "").strip()
     if not value:
         return "", _noop, None
     entry = parse_proxy(value)
     if entry is None:
         return value, _noop, None
-    if not force_bridge and not entry.username and entry.scheme in {"socks5", "socks5h"}:
+    resolved_hop = _resolve_hop_proxy(hop_proxy, allow_env=True)
+    if not force_bridge and resolved_hop is None and not entry.username and entry.scheme in {"socks5", "socks5h"}:
         if entry.scheme == "socks5":
             return entry.url, _noop, None
         return value, _noop, None
     bridge = LocalProxyBridge(
         upstream=entry,
+        hop_proxy=resolved_hop,
         blocked_hosts=_normalize_blocked_hosts(blocked_hosts),
         connect_retries=connect_retries,
     )
@@ -644,6 +752,7 @@ def proxy_for_browser(
     proxy: Any,
     *,
     env_prefix: str = "PROXY",
+    hop_proxy: Any = None,
     blocked_hosts: tuple[str, ...] | list[str] = (),
     connect_retries: int = 0,
     force_bridge: bool = False,
@@ -656,6 +765,7 @@ def proxy_for_browser(
     del env_prefix
     url, closer, _bridge = open_browser_proxy_bridge(
         proxy,
+        hop_proxy=hop_proxy,
         blocked_hosts=blocked_hosts,
         connect_retries=connect_retries,
         force_bridge=force_bridge,
@@ -663,23 +773,30 @@ def proxy_for_browser(
     return url, closer
 
 
-async def async_proxy_for_browser(proxy: Any, *, env_prefix: str = "PROXY") -> tuple[str, Any]:
+async def async_proxy_for_browser(
+    proxy: Any,
+    *,
+    env_prefix: str = "PROXY",
+    hop_proxy: Any = None,
+) -> tuple[str, Any]:
     """Async variant of :func:`proxy_for_browser` for use inside a running loop.
 
     ``closer`` is an awaitable coroutine function that stops the bridge.
     """
-    from .entry import parse_proxy
-
+    del env_prefix
     value = str(proxy or "").strip()
     if not value:
         return "", _noop_async
     entry = parse_proxy(value)
-    if entry is None or not entry.username and entry.scheme in {"socks5", "socks5h"}:
-        if entry is not None and entry.scheme == "socks5":
+    if entry is None:
+        return value, _noop_async
+    resolved_hop = _resolve_hop_proxy(hop_proxy, allow_env=True)
+    if resolved_hop is None and not entry.username and entry.scheme in {"socks5", "socks5h"}:
+        if entry.scheme == "socks5":
             return entry.url, _noop_async
         return value, _noop_async
 
-    bridge = LocalProxyBridge(upstream=entry)
+    bridge = LocalProxyBridge(upstream=entry, hop_proxy=resolved_hop)
     await bridge.async_start()
     return bridge.local_url, bridge.async_stop
 

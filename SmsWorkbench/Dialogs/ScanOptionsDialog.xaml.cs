@@ -23,6 +23,7 @@ namespace SmsWorkbench.Dialogs
                 Workers = RegisterViewModel.ParsePositiveInt(WorkerBox.Text, 1, 8, 4),
                 AutoRelogin = AutoReloginBox.IsChecked == true,
                 LightweightInspect = LightweightInspectBox.IsChecked == true,
+                InspectRefreshPromotion = RefreshPromotionBox.IsChecked == true,
             };
             DialogResult = true;
             Close();

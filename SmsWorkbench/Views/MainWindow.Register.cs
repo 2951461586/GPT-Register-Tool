@@ -181,7 +181,8 @@ namespace SmsWorkbench.Views
             string sessionFile = rows.Count == 1 ? SessionFileFor(rows[0]) : "";
             var proxyPool = GetLivenessProxyPool();
             var plan = options.LightweightInspect
-                ? BackendCommandPlanner.CreateAccountInspection(emails, sessionFile, options.Workers, proxyPool)
+                ? BackendCommandPlanner.CreateAccountInspection(
+                    emails, sessionFile, options.Workers, proxyPool, refreshPromotion: options.InspectRefreshPromotion)
                 : BackendCommandPlanner.CreateAccountScan(emails, sessionFile, options.Workers, options.AutoRelogin, proxyPool);
             RunAccountBatchBackend(plan, "account_scan", rows.Count);
         }

@@ -280,7 +280,8 @@ def prepare_identity(workflow: RegistrationWorkflow) -> None:
         session_id=s.session_logging_id,
         flow_invocation_id=s.flow_invocation_id,
     )
-    if str(s.base_headers.get("oai-device-id") or "") != s.device_id:
+    header_did = str(s.base_headers.get("oai-device-id") or "").strip()
+    if header_did and header_did != s.device_id:
         workflow._abort("sentinel_extract_failed: auth header device id mismatch")
     workflow._prime_password_sentinel_bundle()
     s.auth_flow_started = _safe_int(time.time())

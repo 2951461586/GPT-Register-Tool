@@ -5,9 +5,32 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from sms_tool.pay_link.adapters import _run_momo, _run_protocol_script
 from sms_tool.payment import link_manager as manager
+from sms_tool.payment.adapters import FunctionPaymentAdapter
 from sms_tool.payment.catalog import PAYMENT_CATALOG
 from sms_tool.payment.routing import PaymentRoutePlan
+
+
+def _legacy_subprocess_adapter(method: str):
+    """Temporarily bind ``method`` to its legacy subprocess adapter for parser tests."""
+    if method == "momo":
+        adapter = FunctionPaymentAdapter(
+            "momo",
+            ("momo",),
+            lambda *, access_token, proxy=None, auth_context=None, **kwargs: _run_momo(
+                manager.PAYMENT_METHODS["momo"], access_token, proxy=proxy, **kwargs
+            ),
+        )
+    else:
+        adapter = FunctionPaymentAdapter(
+            "script",
+            (method,),
+            lambda *, access_token, proxy=None, auth_context=None, **kwargs: _run_protocol_script(
+                manager.PAYMENT_METHODS[str(kwargs.pop("payment_method"))], access_token, proxy=proxy, **kwargs
+            ),
+        )
+    return patch.dict(manager.PAYMENT_ADAPTERS._by_method, {method: adapter})
 
 
 class PaymentLinkManagerTests(unittest.TestCase):
@@ -72,6 +95,12 @@ class PaymentLinkManagerTests(unittest.TestCase):
         )
         self.assertTrue(methods["gcash"]["available"])
         self.assertTrue(all(methods[key]["adapter"] == "regional_wallet" for key in ("qris", "bizum", "naver_pay")))
+        self.assertTrue(
+            all(
+                methods[key]["adapter"] == "oaics_inprocess" and methods[key]["available"]
+                for key in ("ideal", "pix", "kakao", "blik", "twint", "momo")
+            )
+        )
 
     def test_aliases_are_normalized(self):
         self.assertEqual(manager.normalize_payment_method("upi_qr"), "upi")
@@ -414,12 +443,15 @@ class PaymentLinkManagerTests(unittest.TestCase):
             ),
             stderr="",
         )
-        with tempfile.TemporaryDirectory() as tmp:
-            with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
-                with patch("sms_tool.payment.link_manager.subprocess.run", return_value=completed):
-                    result = manager.generate_payment_link(
-                        "token", payment_method="blik", seed_proxy="socks5h://127.0.0.1:1080", blik_code="123456"
-                    )
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            _legacy_subprocess_adapter("blik"),
+            patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"),
+            patch("sms_tool.payment.link_manager.subprocess.run", return_value=completed),
+        ):
+            result = manager.generate_payment_link(
+                "token", payment_method="blik", seed_proxy="socks5h://127.0.0.1:1080", blik_code="123456"
+            )
         self.assertTrue(result["ok"])
         self.assertEqual(result["status"], "completed")
         self.assertEqual(result["url"], "")
@@ -441,6 +473,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
         )
         with (
             tempfile.TemporaryDirectory() as tmp,
+            _legacy_subprocess_adapter("ideal"),
             patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"),
             patch("sms_tool.payment.link_manager.subprocess.run", return_value=completed),
         ):
@@ -464,12 +497,15 @@ class PaymentLinkManagerTests(unittest.TestCase):
             ),
             stderr="",
         )
-        with tempfile.TemporaryDirectory() as tmp:
-            with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
-                with patch("sms_tool.payment.link_manager.subprocess.run", return_value=completed):
-                    result = manager.generate_payment_link(
-                        "token", payment_method="blik", seed_proxy="socks5h://127.0.0.1:1080", blik_code="123456"
-                    )
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            _legacy_subprocess_adapter("blik"),
+            patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"),
+            patch("sms_tool.payment.link_manager.subprocess.run", return_value=completed),
+        ):
+            result = manager.generate_payment_link(
+                "token", payment_method="blik", seed_proxy="socks5h://127.0.0.1:1080", blik_code="123456"
+            )
         self.assertFalse(result["ok"])
         self.assertEqual(result["manager_state"], "failed")
 
@@ -491,12 +527,13 @@ class PaymentLinkManagerTests(unittest.TestCase):
             stdout='{"long_url": "https://example.test/pay"}\n',
             stderr="fatal after output",
         )
-        with tempfile.TemporaryDirectory() as tmp:
-            with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
-                with patch("sms_tool.payment.link_manager.subprocess.run", return_value=failed):
-                    result = manager.generate_payment_link(
-                        "token", payment_method="pix", seed_proxy="socks5h://127.0.0.1:1080"
-                    )
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            _legacy_subprocess_adapter("pix"),
+            patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"),
+            patch("sms_tool.payment.link_manager.subprocess.run", return_value=failed),
+        ):
+            result = manager.generate_payment_link("token", payment_method="pix", seed_proxy="socks5h://127.0.0.1:1080")
         self.assertFalse(result["ok"])
         self.assertEqual(result["exit_code"], 7)
         self.assertEqual(result["manager_state"], "failed")
@@ -580,15 +617,18 @@ class PaymentLinkManagerTests(unittest.TestCase):
                 stderr="",
             )
 
-        with tempfile.TemporaryDirectory() as tmp:
-            with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
-                with patch("sms_tool.payment.link_manager.subprocess.run", side_effect=fake_run):
-                    result = manager.generate_payment_link(
-                        "token",
-                        payment_method="pix",
-                        seed_proxy=secret,
-                        provider_proxy=provider,
-                    )
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            _legacy_subprocess_adapter("pix"),
+            patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"),
+            patch("sms_tool.payment.link_manager.subprocess.run", side_effect=fake_run),
+        ):
+            result = manager.generate_payment_link(
+                "token",
+                payment_method="pix",
+                seed_proxy=secret,
+                provider_proxy=provider,
+            )
         self.assertTrue(result["ok"])
         self.assertNotIn(secret, captured["command"])
         self.assertNotIn("--proxy", captured["command"])
@@ -609,21 +649,24 @@ class PaymentLinkManagerTests(unittest.TestCase):
             ),
             stderr="",
         )
-        with tempfile.TemporaryDirectory() as tmp:
-            with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
-                with patch("sms_tool.payment.link_manager.subprocess.run", return_value=completed):
-                    result = manager.generate_payment_link(
-                        "token",
-                        payment_method="momo",
-                        checkout_proxy="socks5h://127.0.0.1:1080",
-                        runtime_config={
-                            "chatgpt": {},
-                            "protocol_payments": {
-                                "enabled_methods": ["momo"],
-                                "egress_check": {"enabled": False},
-                            },
-                        },
-                    )
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            _legacy_subprocess_adapter("momo"),
+            patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"),
+            patch("sms_tool.payment.link_manager.subprocess.run", return_value=completed),
+        ):
+            result = manager.generate_payment_link(
+                "token",
+                payment_method="momo",
+                checkout_proxy="socks5h://127.0.0.1:1080",
+                runtime_config={
+                    "chatgpt": {},
+                    "protocol_payments": {
+                        "enabled_methods": ["momo"],
+                        "egress_check": {"enabled": False},
+                    },
+                },
+            )
         self.assertTrue(result["ok"])
         self.assertIn("payment.momo.vn", result["url"])
         self.assertEqual(result["link_type"], "momo_protocol_qr")
@@ -641,12 +684,15 @@ class PaymentLinkManagerTests(unittest.TestCase):
             ),
             stderr="",
         )
-        with tempfile.TemporaryDirectory() as tmp:
-            with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
-                with patch("sms_tool.payment.link_manager.subprocess.run", return_value=failed):
-                    result = manager.generate_payment_link(
-                        "token", payment_method="kakao", seed_proxy="socks5h://127.0.0.1:1080"
-                    )
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            _legacy_subprocess_adapter("kakao"),
+            patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"),
+            patch("sms_tool.payment.link_manager.subprocess.run", return_value=failed),
+        ):
+            result = manager.generate_payment_link(
+                "token", payment_method="kakao", seed_proxy="socks5h://127.0.0.1:1080"
+            )
         self.assertFalse(result["ok"])
         self.assertEqual(result["decision"], "nonzero_offer")
         self.assertEqual(result["amount_due"], 29000)
@@ -691,15 +737,18 @@ class PaymentLinkManagerTests(unittest.TestCase):
             ),
             stderr="",
         )
-        with tempfile.TemporaryDirectory() as tmp:
-            with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
-                with patch.object(manager.payment_egress, "assert_egress_countries"):
-                    with patch("sms_tool.payment.link_manager.subprocess.run", return_value=completed):
-                        result = manager.generate_payment_link(
-                            "token",
-                            payment_method="ideal",
-                            checkout_proxy="socks5h://127.0.0.1:1080",
-                        )
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            _legacy_subprocess_adapter("ideal"),
+            patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"),
+            patch.object(manager.payment_egress, "assert_egress_countries"),
+            patch("sms_tool.payment.link_manager.subprocess.run", return_value=completed),
+        ):
+            result = manager.generate_payment_link(
+                "token",
+                payment_method="ideal",
+                checkout_proxy="socks5h://127.0.0.1:1080",
+            )
         self.assertFalse(result["ok"])
         self.assertEqual(result.get("error_code"), "extractor_output_missing")
         self.assertEqual(result.get("url"), "")
@@ -717,15 +766,18 @@ class PaymentLinkManagerTests(unittest.TestCase):
             ),
             stderr="",
         )
-        with tempfile.TemporaryDirectory() as tmp:
-            with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
-                with patch.object(manager.payment_egress, "assert_egress_countries"):
-                    with patch("sms_tool.payment.link_manager.subprocess.run", return_value=completed):
-                        result = manager.generate_payment_link(
-                            "token",
-                            payment_method="ideal",
-                            checkout_proxy="socks5h://127.0.0.1:1080",
-                        )
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            _legacy_subprocess_adapter("ideal"),
+            patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"),
+            patch.object(manager.payment_egress, "assert_egress_countries"),
+            patch("sms_tool.payment.link_manager.subprocess.run", return_value=completed),
+        ):
+            result = manager.generate_payment_link(
+                "token",
+                payment_method="ideal",
+                checkout_proxy="socks5h://127.0.0.1:1080",
+            )
         self.assertFalse(result["ok"])
         self.assertEqual(result.get("status"), "already_paid")
         self.assertEqual(result.get("error_code"), "account_already_paid")

@@ -110,8 +110,13 @@ def otp_resend_eligible(provider) -> bool:
 def send_registration_email_otp(session, auth_base, base_headers, current_url="", mode="passwordless"):
     referer = current_url if str(current_url or "").startswith(auth_base) else f"{auth_base}/email-verification"
     did = str((base_headers or {}).get("oai-device-id") or (base_headers or {}).get("Oai-Device-Id") or "").strip()
+    cleaned_base = {
+        k: v
+        for k, v in (base_headers or {}).items()
+        if str(k).strip().lower() not in {"oai-device-id", "oai-session-id"}
+    }
     headers = {
-        **(base_headers or {}),
+        **cleaned_base,
         **openai_auth_headers(did, referer=referer, origin=auth_base, accept="*/*"),
         "Sec-Fetch-Dest": "empty",
         "Sec-Fetch-Mode": "cors",

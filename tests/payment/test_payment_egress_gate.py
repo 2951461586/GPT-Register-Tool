@@ -247,7 +247,13 @@ class FunctionAdapterEgressTests(unittest.TestCase):
         from sms_tool.pay_link import registry
 
         source = pathlib.Path(registry.__file__).read_text(encoding="utf-8")
-        for runner in ("paypal_runner", "wallet_runner", "gcash_runner", "regional_wallet_runner"):
+        for runner in (
+            "paypal_runner",
+            "wallet_runner",
+            "gcash_runner",
+            "regional_wallet_runner",
+            "oaics_inprocess_runner",
+        ):
             body = source.split(f"def {runner}(")[1].split("\n    def ")[0]
             self.assertIn("_assert_function_adapter_egress", body, f"{runner} is not egress-gated")
 

@@ -131,3 +131,57 @@ def test_icloud_registration_reuses_mailbox_for_reauth_otp(monkeypatch):
     assert workflow.runtime.access_token == "fresh-at"
     assert polled["mailbox"].provider == "icloud_url"
     assert polled["excluded_otps"] == {"123456"}
+
+
+def test_trigger_password_reauth_targets_chatgpt_base():
+    class ReauthFakeResponse(FakeResponse):
+        def raise_for_status(self):
+            return None
+
+    posted = []
+
+    class CaptureSession:
+        def post(self, url, **kwargs):
+            posted.append((url, kwargs))
+            return ReauthFakeResponse({"url": "https://auth.openai.com/authorize?x=1"})
+
+    auth_url = account_2fa._trigger_password_reauth(
+        CaptureSession(),
+        csrf_token="csrf-1",
+        email="user@example.com",
+        did="did-1",
+        base_headers={},
+    )
+    assert auth_url == "https://auth.openai.com/authorize?x=1"
+    assert posted[0][0].startswith("https://chatgpt.com/api/auth/signin/openai?")
+
+
+def test_mfa_headers_follow_active_geo_locale_and_otp_validate_avoids_chatgpt_only_ids():
+    from sms_tool.transport.auth_headers import set_fingerprint_geo
+
+    set_fingerprint_geo("JP")
+    try:
+        headers = account_2fa._mfa_chatgpt_headers("at-1", "did-1", {}, include_content_type=True)
+        assert headers["oai-language"] == "ja-JP"
+        assert headers["oai-device-id"] == "did-1"
+        assert headers["Authorization"] == "Bearer at-1"
+    finally:
+        set_fingerprint_geo("US")
+
+    class OkResp(FakeResponse):
+        def raise_for_status(self):
+            return None
+
+    posted = []
+
+    class CaptureSession:
+        def post(self, url, **kwargs):
+            posted.append((url, kwargs))
+            return OkResp({"continue_url": "https://chatgpt.com/api/auth/callback/openai"})
+
+    cont = account_2fa._validate_email_otp(CaptureSession(), "123456", {"oai-device-id": "leaked"})
+    assert cont.startswith("https://chatgpt.com/")
+    sent_headers = {k.lower(): v for k, v in posted[0][1]["headers"].items()}
+    assert "x-access-flow-invocation-id" in sent_headers
+    assert "oai-device-id" not in sent_headers
+    assert "oai-session-id" not in sent_headers

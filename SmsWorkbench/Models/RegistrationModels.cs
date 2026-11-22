@@ -28,6 +28,7 @@ namespace SmsWorkbench.Models
         public int Workers { get; set; } = 4;
         public bool AutoRelogin { get; set; }
         public bool LightweightInspect { get; set; }
+        public bool InspectRefreshPromotion { get; set; } = true;
     }
 
     /// <summary>

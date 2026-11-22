@@ -750,4 +750,55 @@ public sealed class SettingsServiceTests
         // legacy key; the explicit, separate phone exit above is not overwritten.
         Assert.Equal("http://lane-reg:1", root["proxy"]!["registration"]!.GetValue<string>());
     }
+
+    [Fact]
+    public void CatalogExposesAndRoundTripsProtocolBackendDataSaverAndSentinelAutoUpdate()
+    {
+        using var fixture = new TemporaryDirectory();
+        var service = new SettingsService(new TestApplicationPaths(fixture.Path));
+
+        IReadOnlyList<SettingsCategoryViewModel> categories = service.Load();
+        SettingFieldViewModel httpBackend = Field(categories, "protocol_http_backend");
+        SettingFieldViewModel dataSaver = Field(categories, "browser_data_saver_enabled");
+        SettingFieldViewModel assetCache = Field(categories, "browser_data_saver_asset_cache");
+        SettingFieldViewModel cacheMaxAge = Field(categories, "browser_data_saver_cache_max_age");
+        SettingFieldViewModel proxyRetries = Field(categories, "browser_data_saver_proxy_retries");
+        SettingFieldViewModel sdkAutoUpdate = Field(categories, "sentinel_sdk_auto_update");
+        SettingFieldViewModel sdkRefresh = Field(categories, "sentinel_sdk_refresh_seconds");
+
+        Assert.Equal("curl_cffi", httpBackend.Value);
+        Assert.Equal(new[] { "curl_cffi", "wreq" }, httpBackend.Options);
+        Assert.False(dataSaver.BooleanValue);
+        Assert.True(assetCache.BooleanValue);
+        Assert.False(sdkAutoUpdate.BooleanValue);
+
+        httpBackend.Value = "wreq";
+        dataSaver.BooleanValue = true;
+        assetCache.BooleanValue = false;
+        cacheMaxAge.Value = "43200";
+        proxyRetries.Value = "2";
+        sdkAutoUpdate.BooleanValue = true;
+        sdkRefresh.Value = "3600";
+
+        SettingsSaveResult result = service.Save(categories);
+        Assert.True(result.Ok, result.Error);
+
+        JsonObject root = ConfigTestHelpers.ReadMergedConfig(fixture.Path);
+        Assert.Equal("wreq", root["email_registration"]!["protocol_http_backend"]!.GetValue<string>());
+        Assert.True(root["email_registration"]!["sentinel_sdk_auto_update"]!.GetValue<bool>());
+        Assert.Equal(3600, root["email_registration"]!["sentinel_sdk_refresh_seconds"]!.GetValue<int>());
+        Assert.True(root["registration"]!["browser_data_saver"]!["enabled"]!.GetValue<bool>());
+        Assert.False(root["registration"]!["browser_data_saver"]!["asset_cache_enabled"]!.GetValue<bool>());
+        Assert.Equal(43200, root["registration"]!["browser_data_saver"]!["asset_cache_max_age_seconds"]!.GetValue<int>());
+        Assert.Equal(2, root["registration"]!["browser_data_saver"]!["proxy_connect_retries"]!.GetValue<int>());
+
+        IReadOnlyList<SettingsCategoryViewModel> reloaded = service.Load();
+        Assert.Equal("wreq", Field(reloaded, "protocol_http_backend").Value);
+        Assert.True(Field(reloaded, "browser_data_saver_enabled").BooleanValue);
+        Assert.False(Field(reloaded, "browser_data_saver_asset_cache").BooleanValue);
+        Assert.Equal("43200", Field(reloaded, "browser_data_saver_cache_max_age").Value);
+        Assert.Equal("2", Field(reloaded, "browser_data_saver_proxy_retries").Value);
+        Assert.True(Field(reloaded, "sentinel_sdk_auto_update").BooleanValue);
+        Assert.Equal("3600", Field(reloaded, "sentinel_sdk_refresh_seconds").Value);
+    }
 }

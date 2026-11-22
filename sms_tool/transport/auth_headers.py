@@ -1221,12 +1221,20 @@ def openai_auth_headers(
     resolved_origin = str(origin or "").strip() or origin_from_referer(referer)
     if resolved_origin:
         headers["Origin"] = resolved_origin
-    did = str(did or "").strip()
-    if did:
-        headers["oai-device-id"] = did
-    stable_session_id = str(session_id or environment.get("session_id") or "").strip()
-    if stable_session_id:
-        headers["oai-session-id"] = stable_session_id
+    header_family = str(family or "auth").strip().lower()
+    if header_family == "chatgpt":
+        # Real-browser HAR captures (chatgpt.com + auth.openai.com) confirm that
+        # ``oai-device-id`` and ``oai-session-id`` are emitted ONLY on
+        # ``chatgpt.com/backend-api/*`` and ``/backend-anon/*`` requests.
+        # ``auth.openai.com/api/accounts/*`` (family="auth") and NextAuth
+        # ``/api/auth/*`` (family="nextauth") never send either header; keeping
+        # them off non-chatgpt lanes removes a trivially detectable wire leak.
+        did = str(did or "").strip()
+        if did:
+            headers["oai-device-id"] = did
+        stable_session_id = str(session_id or environment.get("session_id") or "").strip()
+        if stable_session_id:
+            headers["oai-session-id"] = stable_session_id
     invocation_id = str(flow_invocation_id or "").strip()
     if invocation_id:
         headers["x-access-flow-invocation-id"] = invocation_id
@@ -1246,7 +1254,7 @@ def openai_auth_headers(
             pass
     if extra:
         headers.update({str(k): str(v) for k, v in extra.items() if v is not None})
-    if str(family or "").strip().lower() == "nextauth":
+    if header_family == "nextauth":
         # The five high-entropy hint names are no longer emitted by the chrome
         # branch above; they stay in this strip list because ``extra`` is merged
         # before this point, so a caller that passes one through ``extra`` still
@@ -1257,6 +1265,8 @@ def openai_auth_headers(
             "sec-ch-ua-bitness",
             "sec-ch-ua-model",
             "sec-ch-ua-platform-version",
+            "oai-device-id",
+            "oai-session-id",
             "traceparent",
             "tracestate",
             "x-datadog-origin",
@@ -1267,7 +1277,7 @@ def openai_auth_headers(
             "openai-sentinel-so-token",
         ):
             headers.pop(key, None)
-    elif str(family or "").strip().lower() == "chatgpt":
+    elif header_family == "chatgpt":
         headers.update(
             {
                 # The 2026-10-23 HAR carries only `oai-client-version` on

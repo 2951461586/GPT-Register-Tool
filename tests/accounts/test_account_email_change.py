@@ -130,3 +130,60 @@ def test_cli_adapter_maps_arguments_to_request(tmp_path):
     assert captured[0][1].workers == 3
     assert emitted[0][0]["ok"] is True
     assert emitted[0][1] is True
+
+
+def test_email_change_headers_use_canonical_chatgpt_headers_not_hardcoded_chrome():
+    from sms_tool.accounts.account_email_change import _chat_headers
+    from sms_tool.transport.auth_headers import CHATGPT_CLIENT_VERSION, set_fingerprint_geo
+
+    set_fingerprint_geo("JP")
+    try:
+        headers = _chat_headers(
+            {
+                "email": "old@example.com",
+                "device_id": "did-change-1",
+                "access_token": "tok-1",
+                "cookie_header": "session=redacted",
+                "registration_country": "JP",
+            },
+            "/backend-api/accounts/change_email/eligibility",
+        )
+    finally:
+        set_fingerprint_geo("US")
+
+    lowered = {k.lower(): v for k, v in headers.items()}
+    assert lowered["user-agent"] != "Mozilla/5.0 Chrome/151.0.0.0 Safari/537.36"
+    assert lowered["oai-client-version"] == CHATGPT_CLIENT_VERSION
+    assert "oai-client-build-number" not in lowered
+    assert lowered["oai-language"] == "ja-JP"
+    assert lowered["oai-device-id"] == "did-change-1"
+    assert lowered["authorization"] == "Bearer tok-1"
+    assert lowered["cookie"] == "session=redacted"
+
+
+def test_email_change_default_transport_uses_protocol_backend_and_tls(monkeypatch):
+    from sms_tool.accounts import account_email_change
+
+    calls = []
+
+    class FakeSession:
+        def get(self, url, **kwargs):
+            calls.append(("get", url, kwargs))
+            return Response({"success": True, "eligible": True})
+
+        def close(self):
+            calls.append(("close", "", {}))
+
+    tls_applied = []
+    monkeypatch.setattr(account_email_change, "_new_protocol_session", lambda proxy="": FakeSession())
+    monkeypatch.setattr(account_email_change, "_apply_tls_fingerprint", lambda session, cfg: tls_applied.append(True))
+    monkeypatch.setattr(account_email_change, "auth_impersonate", lambda: "chrome146")
+
+    result = account_email_change.check_change_email_eligibility(
+        {"email": "old@example.com", "cookie_header": "session=ok"},
+        proxy="http://127.0.0.1:8080",
+    )
+    assert result["ok"] is True
+    assert tls_applied == [True]
+    assert calls[0][2]["impersonate"] == "chrome146"
+    assert calls[-1][0] == "close"

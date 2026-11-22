@@ -76,6 +76,14 @@ def _invalid_state_auth_response(data) -> bool:
     )  # pi-lens-ignore: no-identity-operator-on-literals
 
 
+_CHATGPT_ONLY_HEADER_KEYS = frozenset({"oai-device-id", "oai-session-id"})
+
+
+def _strip_chatgpt_only_headers(headers: dict) -> dict:
+    """Drop ``oai-device-id`` / ``oai-session-id`` inherited from legacy base headers."""
+    return {k: v for k, v in (headers or {}).items() if str(k).strip().lower() not in _CHATGPT_ONLY_HEADER_KEYS}
+
+
 def _auth_request_headers(
     base_headers,
     did="",
@@ -93,7 +101,7 @@ def _auth_request_headers(
     passwordless/send-otp, email-otp/validate and create_account.
     """
     return {
-        **(base_headers or {}),
+        **_strip_chatgpt_only_headers(base_headers or {}),
         **openai_auth_headers(
             did,
             referer=referer,

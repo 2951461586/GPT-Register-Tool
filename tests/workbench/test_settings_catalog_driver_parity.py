@@ -26,11 +26,14 @@ import unittest
 from pathlib import Path
 
 from sms_tool.registration_drivers.base import DRIVERS
+from sms_tool.transport.http_backend import BACKENDS as PROTOCOL_HTTP_BACKENDS
+from sms_tool.transport.http_backend import DEFAULT_BACKEND as DEFAULT_PROTOCOL_HTTP_BACKEND
 
 CATALOG = Path(__file__).resolve().parents[2] / "SmsWorkbench" / "Services" / "SettingsCatalog.cs"
 
 #: 驱动下拉框那一行。用 ``Options`` 而不是裸字符串，避免匹配到别处的字面量。
 ANCHOR = 'Options("registration_driver"'
+HTTP_BACKEND_ANCHOR = 'Options("protocol_http_backend"'
 
 
 def _skip_string(text, index):
@@ -106,6 +109,13 @@ class SettingsCatalogDriverParityTests(unittest.TestCase):
         options = catalog_driver_options()
         self.assertGreaterEqual(len(options), 2)
         self.assertEqual(len(options), len(set(options)), "选项有重复：%s" % options)
+
+    def test_protocol_http_backend_dropdown_matches_python_backends(self):
+        text = CATALOG.read_text(encoding="utf-8")
+        self.assertEqual(text.count(HTTP_BACKEND_ANCHOR), 1)
+        literals = re.findall(r'"((?:[^"\\]|\\.)*)"', _call_slice(text, HTTP_BACKEND_ANCHOR))
+        self.assertEqual(literals[3], DEFAULT_PROTOCOL_HTTP_BACKEND)
+        self.assertEqual(tuple(literals[4:]), PROTOCOL_HTTP_BACKENDS)
 
 
 class ExtractorTests(unittest.TestCase):

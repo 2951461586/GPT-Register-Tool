@@ -28,6 +28,7 @@ from .adapters import (
     _run_direct_card,
     _run_gcash_adapter,
     _run_momo,
+    _run_oaics_inprocess_adapter,
     _run_protocol_script,
     _run_regional_wallet_adapter,
     _run_wallet_adapter,
@@ -182,10 +183,26 @@ def build_default_payment_registry() -> PaymentAdapterRegistry:
             **kwargs,
         )
 
+    def oaics_inprocess_runner(
+        *, access_token: str, proxy: Any = None, auth_context: dict[str, Any] | None = None, **kwargs: Any
+    ) -> dict[str, Any]:
+        method = str(kwargs.pop("payment_method"))
+        failure = _assert_function_adapter_egress(method, kwargs, kwargs.get("runtime_config"))
+        if failure is not None:
+            return failure
+        return _run_oaics_inprocess_adapter(
+            PAYMENT_METHODS[method],
+            access_token,
+            proxy=proxy,
+            auth_context=auth_context,
+            **kwargs,
+        )
+
     registry.register(FunctionPaymentAdapter("native_paypal", methods_for("native_paypal"), paypal_runner))
     registry.register(FunctionPaymentAdapter("native_upi", methods_for("native_upi"), upi_runner))
     registry.register(FunctionPaymentAdapter("wallet", methods_for("wallet"), wallet_runner))
     registry.register(FunctionPaymentAdapter("gcash_custom", methods_for("gcash_custom"), gcash_runner))
+    registry.register(FunctionPaymentAdapter("oaics_inprocess", methods_for("oaics_inprocess"), oaics_inprocess_runner))
     registry.register(FunctionPaymentAdapter("script", methods_for("script"), script_runner))
     registry.register(FunctionPaymentAdapter("direct_card", methods_for("direct_card"), direct_runner))
     registry.register(FunctionPaymentAdapter("momo", methods_for("momo"), momo_runner))

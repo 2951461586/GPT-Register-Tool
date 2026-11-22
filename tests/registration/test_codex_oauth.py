@@ -197,6 +197,7 @@ class CodexOauthTests(unittest.TestCase):
 
         with (
             patch("sms_tool.codex.oauth._new_oauth_request", return_value=fresh_oauth) as new_oauth,
+            patch("sms_tool.codex.oauth.issue_sentinel_flow", side_effect=RuntimeError("offline")),
             patch("sms_tool.codex.oauth.load_cached_sentinel", return_value={}),
             patch("sms_tool.codex.oauth.attach_sentinel"),
             patch("sms_tool.codex.oauth._next_url", return_value="https://auth.openai.com/consent"),
@@ -350,6 +351,7 @@ class CodexOauthTests(unittest.TestCase):
             patch.dict(codex_oauth.CFG, {"email_registration": {"max_otp_retries": 2}}, clear=False),
             patch("sms_tool.codex.oauth.time.time", side_effect=fake_time),
             patch("sms_tool.codex.oauth.poll_email_otp", side_effect=poll),
+            patch("sms_tool.codex.oauth.issue_sentinel_flow", side_effect=RuntimeError("offline")),
             patch("sms_tool.codex.oauth.load_cached_sentinel", return_value={}),
         ):
             result = codex_oauth._passwordless_login_and_exchange(
@@ -383,6 +385,7 @@ class CodexOauthTests(unittest.TestCase):
         with (
             patch.dict(codex_oauth.CFG, {"email_registration": {"max_otp_retries": 2}}, clear=False),
             patch("sms_tool.codex.oauth.poll_email_otp", side_effect=poll),
+            patch("sms_tool.codex.oauth.issue_sentinel_flow", side_effect=RuntimeError("offline")),
             patch("sms_tool.codex.oauth.load_cached_sentinel", return_value={}),
             patch("sms_tool.codex.oauth._next_url", return_value="https://auth.openai.com/consent"),
             patch("sms_tool.codex.oauth._follow_redirects", return_value=(None, "https://auth.openai.com/consent")),
@@ -663,6 +666,7 @@ class PasswordlessAboutYouIntegrationTests(unittest.TestCase):
         with (
             patch.dict(codex_oauth.CFG, {"email_registration": {"max_otp_retries": 1}}, clear=False),
             patch("sms_tool.codex.oauth.poll_email_otp", return_value="123456"),
+            patch("sms_tool.codex.oauth.issue_sentinel_flow", side_effect=RuntimeError("offline")),
             patch("sms_tool.codex.oauth.load_cached_sentinel", return_value={}),
             patch("sms_tool.codex.oauth._next_url", return_value="https://auth.openai.com/about-you"),
             patch(
@@ -699,6 +703,7 @@ class PasswordlessAboutYouIntegrationTests(unittest.TestCase):
         with (
             patch.dict(codex_oauth.CFG, {"email_registration": {"max_otp_retries": 1}}, clear=False),
             patch("sms_tool.codex.oauth.poll_email_otp", return_value="123456"),
+            patch("sms_tool.codex.oauth.issue_sentinel_flow", side_effect=RuntimeError("offline")),
             patch("sms_tool.codex.oauth.load_cached_sentinel", return_value={}),
             patch("sms_tool.codex.oauth._next_url", return_value="https://auth.openai.com/about-you"),
             patch(
@@ -722,6 +727,7 @@ class PasswordlessAboutYouIntegrationTests(unittest.TestCase):
         with (
             patch.dict(codex_oauth.CFG, {"email_registration": {"max_otp_retries": 1}}, clear=False),
             patch("sms_tool.codex.oauth.poll_email_otp", return_value="123456"),
+            patch("sms_tool.codex.oauth.issue_sentinel_flow", side_effect=RuntimeError("offline")),
             patch("sms_tool.codex.oauth.load_cached_sentinel", return_value={}),
             patch("sms_tool.codex.oauth._next_url", return_value="https://auth.openai.com/consent"),
             patch(
@@ -960,6 +966,57 @@ class AboutYouResponseSurfaceTests(unittest.TestCase):
         result = self._about_you(self._response({f"k{i}": i for i in range(40)}))
 
         self.assertEqual(len(result["body_digest"]["keys"]), 12)
+
+
+class CodexBackendAndFreshSentinelTests(unittest.TestCase):
+    def test_stale_chrome110_user_agent_removed(self):
+        self.assertFalse(hasattr(codex_oauth, "USER_AGENT"))
+
+    def test_collect_uses_protocol_http_backend_and_tls_fingerprint(self):
+        fake_session = Mock()
+        fake_session.cookies = Mock()
+        with (
+            patch("sms_tool.codex.oauth._new_protocol_session", return_value=fake_session) as make_session,
+            patch("sms_tool.codex.oauth._apply_tls_fingerprint") as apply_tls,
+            patch("sms_tool.codex.oauth.import_cookie_header"),
+            patch("sms_tool.codex.oauth.import_cached_auth_cookies"),
+            patch(
+                "sms_tool.codex.oauth._follow_redirects",
+                return_value=(None, "http://localhost:1455/auth/callback?code=c1&state=s1"),
+            ),
+            patch(
+                "sms_tool.codex.oauth._new_oauth_request",
+                return_value={
+                    "state": "s1",
+                    "code_verifier": "v1",
+                    "redirect_uri": "http://localhost:1455/auth/callback",
+                    "auth_url": "https://auth.openai.com/oauth/authorize",
+                },
+            ),
+            patch(
+                "sms_tool.codex.oauth._exchange_callback",
+                return_value={"access_token": "at", "refresh_token": "rt"},
+            ),
+        ):
+            result = codex_oauth.collect_codex_oauth_tokens(
+                {"email": "user@example.com", "device_id": "did-wreq"},
+                proxy="socks5h://127.0.0.1:1080",
+            )
+        self.assertTrue(result["ok"])
+        make_session.assert_called_once_with(proxy="socks5h://127.0.0.1:1080")
+        apply_tls.assert_called_once_with(fake_session, codex_oauth.CFG)
+
+    def test_codex_sentinel_mints_fresh_per_flow_before_falling_back_to_cache(self):
+        issued = Mock(token="fresh-tok", so_token="fresh-so")
+        with (
+            patch("sms_tool.codex.oauth.issue_sentinel_flow", return_value=issued) as mint,
+            patch("sms_tool.codex.oauth.load_cached_sentinel") as cached,
+        ):
+            got = codex_oauth._codex_sentinel(Mock(), "did-1", flow="email_otp_validate", proxy="http://p:1")
+        self.assertEqual(got, {"sentinel_token": "fresh-tok", "sentinel_so_token": "fresh-so"})
+        mint.assert_called_once()
+        self.assertEqual(mint.call_args.kwargs["flow"], "email_otp_validate")
+        cached.assert_not_called()
 
 
 if __name__ == "__main__":

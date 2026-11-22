@@ -228,8 +228,8 @@ class PaymentResultContractTests(unittest.TestCase):
         ):
             result = manager.generate_payment_link(
                 "token",
-                payment_method="ideal",
-                seed_proxy="socks5h://127.0.0.1:1080",
+                payment_method="direct_card",
+                checkout_proxy="socks5h://127.0.0.1:1080",
             )
 
         # Diagnostic: confirm the mock was actually invoked exactly once.

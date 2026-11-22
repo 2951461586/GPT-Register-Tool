@@ -673,6 +673,18 @@ namespace SmsWorkbench.Localization
             ["测活异常：{0}"] = "Liveness check error: {0}",
             ["TXT"] = "TXT",
             ["JSON"] = "JSON",
+
+            // ── Protocol HTTP engine / browser data saver / Sentinel auto-update / inspect ──
+            ["协议 HTTP 引擎"] = "Protocol HTTP engine",
+            ["浏览器省流"] = "Browser data saver",
+            ["启用浏览器省流"] = "Enable browser data saver",
+            ["启用静态资源缓存"] = "Enable static asset cache",
+            ["缓存有效期秒"] = "Asset cache TTL (s)",
+            ["代理建连重试次数"] = "Proxy connect retries",
+            ["自动更新 Sentinel SDK"] = "Auto-update Sentinel SDK",
+            ["SDK 刷新周期秒"] = "SDK refresh interval (s)",
+            ["巡检恢复后复检优惠"] = "Refresh trial offers after recovery",
+            ["轻量巡检当前账号"] = "Lightweight inspect this account",
         };
     }
 }

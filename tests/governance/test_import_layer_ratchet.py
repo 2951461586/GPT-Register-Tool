@@ -483,8 +483,16 @@ def test_summary_facts_are_pinned():
         # K12/workspace online probing (k12_client/k12_identity/workspace_scan),
         # Omakse (omakse_client/commands.omakse/cli_parsers.omakse), and the two
         # root compatibility shims (payment/operation.py, gen_pp_link.py + _PlmProxy).
-        "total_module_edges": 564,
-        "ordered_pairs": 152,
+        # 2026-11-22 (Wave 1 transport/Sentinel alignment + Wave 2 OAICS in-process):
+        # 564 -> 580 edges, 152 -> 155 pairs (mutual_pairs=19 and minority_edges=33
+        # unchanged; delayed_cross_dir_edges 350 -> 349). Every added edge is strictly
+        # inward into Layer 4/5 leaves: account_2fa/account_email_change/codex.oauth
+        # now consume transport.{auth_headers,http_backend,tls_fingerprint} and
+        # sentinel.client instead of hardcoded UAs/sessions/cached tokens, and the new
+        # pay_link/oaics_provider.py brings ideal/pix/kakao/blik/twint/momo in-process
+        # over payment.wire.
+        "total_module_edges": 580,
+        "ordered_pairs": 155,
         "mutual_pairs": 19,
         "minority_edges": 33,
         # 2026-10-21: 188 -> 190 when the provider ports seam (providers/ports.py)
@@ -596,7 +604,9 @@ def test_summary_facts_are_pinned():
         # 2026-11-21 (Tier 2 retirement): 362 -> 356 (-6). Removing omakse_client,
         # k12_identity, and moving payment/capability.py from deferred gen_pp_link
         # imports to intra-package `from . import wire` trimmed delayed cross-dir edges.
-        "delayed_cross_dir_edges": 350,
+        # 2026-11-22: 350 -> 349 (-1) after hoisting transport.auth_headers imports
+        # in accounts/account_2fa.py and proxy.entry/base64 in proxy/bridge.py.
+        "delayed_cross_dir_edges": 349,
         # Imports under `if TYPE_CHECKING:` never run, so they are not runtime
         # edges. 1 here since 2026-10-23: `payment/link_manager.py` declares its
         # `pay_link` re-exports type-only (the module is not a package, so the

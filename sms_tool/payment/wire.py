@@ -29,6 +29,7 @@ from __future__ import annotations
 from ..transport import endpoints
 
 import json
+import os
 import re
 from typing import Any
 from urllib.parse import urlsplit
@@ -69,6 +70,7 @@ __all__ = [
     "PayPalHttpError",
     "PaymentOutcomeUnknownError",
     "_PROVIDER_STAGES",
+    "_checkout_attestation_headers",
     "_checkout_device_id",
     "_checkout_get",
     "_checkout_headers",
@@ -77,6 +79,9 @@ __all__ = [
     "_compact_diagnostic",
     "_is_checkout_create_url",
     "_new_session",
+    "env_web_deployment_attestation",
+    "extract_web_deployment_attestation",
+    "fetch_web_deployment_attestation",
 ]
 
 
@@ -313,6 +318,103 @@ def _checkout_sentinel_headers(cookie_header, extra_headers, proxy):
         return {}
 
 
+_ATTESTATION_ENV_KEYS = (
+    "OAI_WEB_DEPLOYMENT_ATTESTATION",
+    "MIN_OAICS_ATTESTATION",
+    "MIN_GCASH_ATTESTATION",
+)
+_ATTESTATION_FETCH_ENV_KEYS = ("GPT_ATTESTATION_FETCH", "TURB_ATTESTATION_FETCH")
+_ATTESTATION_JSON_RE = re.compile(r'\\?"webDeploymentAttestation\\?"\s*:\s*\\?"([^"\\]+)\\?"')
+_ATTESTATION_ALT_RE = re.compile(r"[^A-Za-z0-9]webDeploymentAttestation[=:]\s*[\"']?([A-Za-z0-9._-]+)")
+
+
+def env_web_deployment_attestation() -> str:
+    """Return an explicitly injected ``oai-web-deployment-attestation`` (~1h TTL)."""
+    for key in _ATTESTATION_ENV_KEYS:
+        value = str(os.environ.get(key) or "").strip()
+        if value and "." in value:
+            return value
+    return ""
+
+
+def extract_web_deployment_attestation(html: str) -> str:
+    """Extract ``webDeploymentAttestation`` from a ChatGPT HTML/RSC page body."""
+    text = str(html or "")
+    for pattern in (_ATTESTATION_JSON_RE, _ATTESTATION_ALT_RE):
+        match = pattern.search(text)
+        if match:
+            value = match.group(1).strip()
+            if value and "." in value:
+                return value
+    return ""
+
+
+def _html_attestation_fetch_enabled(allow_html_fetch: bool | None) -> bool:
+    if allow_html_fetch is not None:
+        return bool(allow_html_fetch)
+    for key in _ATTESTATION_FETCH_ENV_KEYS:
+        token = str(os.environ.get(key) or "").strip().lower()
+        if token in {"1", "true", "yes", "on"}:
+            return True
+    return False
+
+
+def fetch_web_deployment_attestation(
+    proxy: str = "",
+    cookie_header: str = "",
+    *,
+    allow_html_fetch: bool | None = None,
+    timeout: int = CHATGPT_TIMEOUT,
+) -> str:
+    """Resolve ``oai-web-deployment-attestation`` (env override first, opt-in HTML fetch)."""
+    direct = env_web_deployment_attestation()
+    if direct:
+        return direct
+    if not _html_attestation_fetch_enabled(allow_html_fetch):
+        return ""
+    if curl_requests is None:
+        return ""
+    headers = {
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "User-Agent": _CHECKOUT_FINGERPRINT["user_agent"],
+    }
+    if cookie_header:
+        headers["Cookie"] = str(cookie_header)
+    proxies = {"http": proxy, "https": proxy} if proxy else None
+    try:
+        response = curl_requests.get(
+            endpoints.CHATGPT_ORIGIN,
+            headers=headers,
+            proxies=proxies,  # pyright: ignore[reportArgumentType]
+            timeout=timeout,
+            impersonate=_CHECKOUT_FINGERPRINT["impersonate"],
+        )
+    except (OSError, RuntimeError, ValueError):
+        return ""
+    if int(getattr(response, "status_code", 0) or 0) != 200:
+        return ""
+    return extract_web_deployment_attestation(str(getattr(response, "text", "") or ""))
+
+
+def _checkout_attestation_headers(
+    cookie_header: str = "",
+    extra_headers: dict[str, Any] | None = None,
+    proxy: str = "",
+    *,
+    allow_html_fetch: bool | None = None,
+) -> dict[str, str]:
+    """Advisory ``oai-web-deployment-attestation`` header for OAICS checkout calls."""
+    for key, value in (extra_headers or {}).items():
+        if str(key).strip().lower() == "oai-web-deployment-attestation" and str(value or "").strip():
+            return {}
+    token = fetch_web_deployment_attestation(
+        proxy=proxy or "",
+        cookie_header=str(cookie_header or ""),
+        allow_html_fetch=allow_html_fetch,
+    )
+    return {"oai-web-deployment-attestation": token} if token else {}
+
+
 def _checkout_post(url, json_body, access_token, cookie_header="", proxy="", timeout=30, extra_headers=None):
     """Execute a ChatGPT checkout POST using the functional curl_cffi API.
 
@@ -327,6 +429,9 @@ def _checkout_post(url, json_body, access_token, cookie_header="", proxy="", tim
     headers = _checkout_headers(access_token, cookie_header, extra_headers)
     if _is_checkout_create_url(url):
         for name, value in _checkout_sentinel_headers(cookie_header, extra_headers, proxy).items():
+            headers.setdefault(name, value)
+    if _CHECKOUT_CREATE_PATH in str(url or ""):
+        for name, value in _checkout_attestation_headers(cookie_header, extra_headers, proxy).items():
             headers.setdefault(name, value)
     headers["Content-Type"] = "application/json"
     proxies = {"http": proxy, "https": proxy} if proxy else None

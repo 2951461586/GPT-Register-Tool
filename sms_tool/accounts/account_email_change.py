@@ -15,6 +15,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import Any, Callable, Iterable, Mapping
 
+from .account_identity import access_token_of, bind_account_identity
 from .account_liveness import account_chatgpt_id, probe_account_liveness
 from .account_recovery import relogin_chatgpt_email_account
 from ..config import CFG, ConfigInput
@@ -25,6 +26,9 @@ from ..storage import (
     migrate_account_email,
 )
 from ..transport import endpoints
+from ..transport.auth_headers import auth_impersonate, chatgpt_headers
+from ..transport.http_backend import new_session as _new_protocol_session
+from ..transport.tls_fingerprint import apply_to_session as _apply_tls_fingerprint
 
 
 CHANGE_EMAIL_ELIGIBILITY = "/backend-api/accounts/change_email/eligibility"
@@ -176,23 +180,28 @@ def _session_id(account: Mapping[str, Any]) -> str:
 def _chat_headers(account: Mapping[str, Any], path: str) -> dict[str, str]:
     _raw_chat_cfg: object = CFG.get("chatgpt")
     chat_cfg: dict = _raw_chat_cfg if isinstance(_raw_chat_cfg, dict) else {}
-    headers = {
-        "Accept": "*/*",
-        "Content-Type": "application/json",
-        "Origin": str(chat_cfg.get("chat_base_url") or endpoints.CHATGPT_BASE).rstrip("/"),
-        "Referer": str(chat_cfg.get("chat_base_url") or endpoints.CHATGPT_BASE).rstrip("/") + "/",
-        "User-Agent": "Mozilla/5.0 Chrome/151.0.0.0 Safari/537.36",
-        "OAI-Client-Build-Number": str(account.get("oai_client_build_number") or "9641653"),
-        "OAI-Client-Version": str(account.get("oai_client_version") or "prod"),
-        "OAI-Device-Id": str(account.get("device_id") or uuid.uuid4()),
-        "OAI-Language": "zh-CN",
-        "OAI-Session-Id": _session_id(account),
-        "X-OpenAI-Target-Path": path,
-        "X-OpenAI-Target-Route": path,
-    }
+    origin = str(chat_cfg.get("chat_base_url") or endpoints.CHATGPT_BASE).rstrip("/")
+    identity = bind_account_identity(account)
+    device_id = str(account.get("device_id") or identity.get("device_id") or uuid.uuid4()).strip()
+    headers = chatgpt_headers(
+        device_id,
+        referer=f"{origin}/",
+        origin=origin,
+        accept="*/*",
+        session_id=_session_id(account),
+        include_trace=False,
+        extra={
+            "Content-Type": "application/json",
+            "X-OpenAI-Target-Path": path,
+            "X-OpenAI-Target-Route": path,
+        },
+    )
     account_id = account_chatgpt_id(dict(account))
     if account_id:
         headers["ChatGPT-Account-Id"] = account_id
+    access_token = access_token_of(account)
+    if access_token:
+        headers["Authorization"] = f"Bearer {access_token}"
     cookie = _cookie_header(account)
     if cookie:
         headers["Cookie"] = cookie
@@ -263,22 +272,25 @@ def _change_email_request(
     if not _cookie_header(account):
         return {"ok": False, "status_code": 0, "error": "missing_session_cookie"}
     if transport is None:
-        from curl_cffi import requests as curl_requests
-
         _raw_chat_cfg: object = CFG.get("chatgpt")
         chat_cfg: dict = _raw_chat_cfg if isinstance(_raw_chat_cfg, dict) else {}
         base = str(chat_cfg.get("chat_base_url") or endpoints.CHATGPT_BASE).rstrip("/")
-        session = curl_requests.Session()
-        if proxy:
-            session.proxies = {"http": proxy, "https": proxy}
-        method = "get" if payload is None else "post"
-        response = getattr(session, method)(
-            base + path,
-            headers=_chat_headers(account, path),
-            json=payload,
-            timeout=max(5, int(timeout or 30)),
-            impersonate="chrome110",
-        )
+        request_headers = _chat_headers(account, path)
+        session = _new_protocol_session(proxy=str(proxy or ""))
+        _apply_tls_fingerprint(session, CFG)
+        try:
+            method = "get" if payload is None else "post"
+            response = getattr(session, method)(
+                base + path,
+                headers=request_headers,
+                json=payload,
+                timeout=max(5, int(timeout or 30)),
+                impersonate=auth_impersonate(),
+            )
+        finally:
+            close_fn = getattr(session, "close", None)
+            if callable(close_fn):
+                close_fn()
     else:
         response = transport(path, payload, _chat_headers(account, path), timeout, proxy)
     body = _json_response(response)

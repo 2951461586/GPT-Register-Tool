@@ -85,8 +85,13 @@ def _validate_email_otp(
     extra = {"content-type": "application/json"}
     if document_navigation_id:
         extra["x-openai-document-navigation-id"] = str(document_navigation_id)
+    cleaned_base = {
+        k: v
+        for k, v in (base_headers or {}).items()
+        if str(k).strip().lower() not in {"oai-device-id", "oai-session-id"}
+    }
     validate_headers = {
-        **(base_headers or {}),
+        **cleaned_base,
         **openai_auth_headers(
             did,
             referer=f"{auth_base}/email-verification",
