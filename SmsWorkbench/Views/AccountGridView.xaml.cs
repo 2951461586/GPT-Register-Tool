@@ -86,18 +86,17 @@ namespace SmsWorkbench.Views
 
         /// <summary>
         /// B-tier columns hidden by the 精简列 switch: the two timestamps, the
-        /// registration country and the two payment-state columns. A-tier
-        /// (email / type / status / AT / RT / 2FA) always stays visible, which is
-        /// what makes the table readable at the 1220 px minimum window width.
-        /// Hiding beats removing: sorting, the ViewModel and the context menu are
-        /// untouched, so nothing downstream can observe the switch.
+        /// registration country and payment qualification. A-tier
+        /// (email / type / status / promotion / AT / RT / 2FA) always stays visible,
+        /// keeping the table readable at the 1220 px minimum window width while
+        /// retaining promotion status. Hiding beats removing: sorting, the ViewModel
+        /// and the context menu are untouched, so nothing downstream can observe the switch.
         /// </summary>
         private static readonly string[] CompactColumnKeys =
         {
             "CreatedAt",
             "CompletedAt",
             "RegistrationCountry",
-            "PromotionStatus",
             "PaymentQualification",
         };
 

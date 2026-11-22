@@ -22,6 +22,7 @@ namespace SmsWorkbench.Dialogs
         public ExportFormatDialog()
         {
             InitializeComponent();
+            WindowThemeService.Attach(this);
         }
 
         private void Export_Click(object sender, RoutedEventArgs e)

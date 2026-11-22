@@ -239,7 +239,98 @@
 
   <Style TargetType="CheckBox">
     <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
+    <Setter Property="FontFamily" Value="{StaticResource Font.Ui}"/>
+    <Setter Property="FontSize" Value="{StaticResource Type.Body.Size}"/>
+    <Setter Property="Background" Value="{DynamicResource Surface.Card}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource LineStrong}"/>
     <Setter Property="VerticalContentAlignment" Value="Center"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRingStyle}"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="CheckBox">
+          <Grid Background="Transparent" SnapsToDevicePixels="True">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto"/>
+              <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Border x:Name="CheckChrome"
+                    Width="16"
+                    Height="16"
+                    VerticalAlignment="Center"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="{StaticResource Corner.Xs}">
+              <Grid>
+                <Path x:Name="CheckMark"
+                      Data="M 3,8.2 L 6.3,11.4 L 12.6,4.6"
+                      Stroke="{DynamicResource OnPrimary}"
+                      StrokeThickness="1.8"
+                      StrokeStartLineCap="Round"
+                      StrokeEndLineCap="Round"
+                      StrokeLineJoin="Round"
+                      Visibility="Collapsed"/>
+                <Rectangle x:Name="IndeterminateMark"
+                           Width="8"
+                           Height="2"
+                           RadiusX="1"
+                           RadiusY="1"
+                           Fill="{DynamicResource OnPrimary}"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           Visibility="Collapsed"/>
+              </Grid>
+            </Border>
+            <ContentPresenter x:Name="ContentSite"
+                              Grid.Column="1"
+                              Margin="8,0,0,0"
+                              TextElement.Foreground="{TemplateBinding Foreground}"
+                              RecognizesAccessKey="True"
+                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}">
+              <ContentPresenter.Resources>
+                <Style TargetType="TextBlock">
+                  <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=CheckBox}}"/>
+                  <Setter Property="FontFamily" Value="{StaticResource Font.Ui}"/>
+                  <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+                  <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
+                </Style>
+              </ContentPresenter.Resources>
+            </ContentPresenter>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="HasContent" Value="False">
+              <Setter TargetName="ContentSite" Property="Visibility" Value="Collapsed"/>
+            </Trigger>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="CheckChrome" Property="BorderBrush" Value="{DynamicResource TextSub}"/>
+            </Trigger>
+            <Trigger Property="IsChecked" Value="True">
+              <Setter TargetName="CheckChrome" Property="Background" Value="{DynamicResource Primary}"/>
+              <Setter TargetName="CheckChrome" Property="BorderBrush" Value="{DynamicResource PrimaryBorder}"/>
+              <Setter TargetName="CheckMark" Property="Visibility" Value="Visible"/>
+            </Trigger>
+            <MultiTrigger>
+              <MultiTrigger.Conditions>
+                <Condition Property="IsChecked" Value="True"/>
+                <Condition Property="IsMouseOver" Value="True"/>
+              </MultiTrigger.Conditions>
+              <Setter TargetName="CheckChrome" Property="Background" Value="{DynamicResource PrimaryHover}"/>
+              <Setter TargetName="CheckChrome" Property="BorderBrush" Value="{DynamicResource PrimaryHover}"/>
+            </MultiTrigger>
+            <Trigger Property="IsChecked" Value="{x:Null}">
+              <Setter TargetName="CheckChrome" Property="Background" Value="{DynamicResource Primary}"/>
+              <Setter TargetName="CheckChrome" Property="BorderBrush" Value="{DynamicResource PrimaryBorder}"/>
+              <Setter TargetName="IndeterminateMark" Property="Visibility" Value="Visible"/>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter Property="Opacity" Value="0.45"/>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
   </Style>
 
   <Style x:Key="SearchTextBox" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">

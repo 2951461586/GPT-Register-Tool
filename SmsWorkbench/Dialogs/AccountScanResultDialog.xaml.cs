@@ -15,6 +15,7 @@ namespace SmsWorkbench.Dialogs
             List<Dictionary<string, object>> rtRows)
         {
             InitializeComponent();
+            WindowThemeService.Attach(this);
             Owner = owner;
             Title = Loc.F("{0}结果", title);
             HeaderTitleTextBlock.Text = Loc.F("{0}完成", title);

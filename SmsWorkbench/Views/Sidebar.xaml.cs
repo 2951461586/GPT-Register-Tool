@@ -60,5 +60,10 @@ namespace SmsWorkbench.Views
 
         private void Toggle_Click(object sender, RoutedEventArgs e)
             => RaiseEvent(new RoutedEventArgs(ToggleRequestedEvent, this));
+
+        private void BrandLogoButton_Click(object sender, RoutedEventArgs e)
+        {
+            VersionPopup.IsOpen = true;
+        }
     }
 }

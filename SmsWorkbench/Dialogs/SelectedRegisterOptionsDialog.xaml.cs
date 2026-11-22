@@ -20,6 +20,7 @@ namespace SmsWorkbench.Dialogs
             this.accept = accept;
 
             InitializeComponent();
+            WindowThemeService.Attach(this);
             Owner = owner;
 
             int usable = Math.Max(1, selectedCount);

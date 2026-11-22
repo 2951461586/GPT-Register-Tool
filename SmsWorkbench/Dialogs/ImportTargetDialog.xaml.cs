@@ -7,6 +7,7 @@ namespace SmsWorkbench.Dialogs
         public ImportTargetDialog(Window owner, string title)
         {
             InitializeComponent();
+            WindowThemeService.Attach(this);
             Owner = owner;
             Title = title;
         }

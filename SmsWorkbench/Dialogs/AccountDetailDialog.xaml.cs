@@ -26,6 +26,7 @@ namespace SmsWorkbench.Dialogs
             this.actions = actions;
 
             InitializeComponent();
+            WindowThemeService.Attach(this);
             Owner = owner;
             DataContext = view;
             Title = Loc.F("账号详情 - {0}", view.Identifier);

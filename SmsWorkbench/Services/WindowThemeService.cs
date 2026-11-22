@@ -10,6 +10,50 @@ internal static class WindowThemeService
     private const int DwmwaCaptionColor = 35;
     private const int DwmwaTextColor = 36;
 
+    public static void Attach(Window window)
+    {
+        if (window == null) return;
+        ApplyTypography(window);
+        window.Closing += OnChildWindowClosing;
+
+        if (new WindowInteropHelper(window).Handle != IntPtr.Zero)
+        {
+            Apply(window);
+            return;
+        }
+
+        void OnSourceInitialized(object? sender, EventArgs e)
+        {
+            window.SourceInitialized -= OnSourceInitialized;
+            Apply(window);
+        }
+
+        window.SourceInitialized += OnSourceInitialized;
+    }
+
+    private static void ApplyTypography(Window window)
+    {
+        window.SetResourceReference(Control.FontFamilyProperty, "Font.Ui");
+        window.SetResourceReference(Control.FontSizeProperty, "Type.Body.Size");
+        window.UseLayoutRounding = true;
+        window.SnapsToDevicePixels = true;
+        TextOptions.SetTextFormattingMode(window, TextFormattingMode.Display);
+        TextOptions.SetTextRenderingMode(window, TextRenderingMode.ClearType);
+    }
+
+    private static void OnChildWindowClosing(object? sender, CancelEventArgs e)
+    {
+        // Win32 destroys an owned child window before WPF hands activation back,
+        // which can push the owner behind other desktop windows (most noticeably
+        // on non-modal .Show() windows like InboxDialogWindow). Re-activating the
+        // owner during Closing keeps it in the foreground cleanly.
+        if (e.Cancel || sender is not Window window) return;
+        if (window.Owner is { IsVisible: true } owner && owner.WindowState != WindowState.Minimized)
+        {
+            owner.Activate();
+        }
+    }
+
     public static void Apply(Window window)
     {
         if (window == null) return;

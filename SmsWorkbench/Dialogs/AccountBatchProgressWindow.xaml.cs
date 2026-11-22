@@ -25,6 +25,7 @@ namespace SmsWorkbench.Dialogs
         public AccountBatchProgressWindow(Window owner, string title, int total, Action cancel)
         {
             InitializeComponent();
+            WindowThemeService.Attach(this);
             Owner = owner;
             Title = title;
             this.cancel = cancel;

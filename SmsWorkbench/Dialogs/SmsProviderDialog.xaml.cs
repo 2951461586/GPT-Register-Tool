@@ -14,6 +14,7 @@ namespace SmsWorkbench.Dialogs
         public SmsProviderDialog(Window owner, SmsProviderDialogViewModel viewModel)
         {
             InitializeComponent();
+            WindowThemeService.Attach(this);
             Owner = owner;
             DataContext = viewModel;
             Width = Math.Min(620, SystemParameters.WorkArea.Width - 60);

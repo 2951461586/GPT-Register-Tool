@@ -7,9 +7,10 @@
         WindowStartupLocation="CenterOwner"
         ResizeMode="CanResize"
         Background="{DynamicResource AppBg}"
-        FontFamily="Segoe UI, Microsoft YaHei UI"
+        FontFamily="{StaticResource Font.Ui}"
         FontSize="{StaticResource Type.Body.Size}"
-        TextOptions.TextFormattingMode="Display">
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="ClearType">
   <!--
     Read-only proxy-pool diagnostics: one grid, three backends (list /
     connectivity test / residential screening).
@@ -140,7 +141,7 @@
                TextWrapping="NoWrap"
                VerticalScrollBarVisibility="Auto"
                FontFamily="{StaticResource Font.Mono}"
-               FontSize="{StaticResource Type.Body.Size}"
+               FontSize="{StaticResource Type.Mono.Size}"
                Text="{Binding PoolText, UpdateSourceTrigger=PropertyChanged}"/>
     </StackPanel>
 

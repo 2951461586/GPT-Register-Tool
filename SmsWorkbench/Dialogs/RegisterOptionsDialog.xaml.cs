@@ -20,6 +20,7 @@ namespace SmsWorkbench.Dialogs
             this.onCountChosen = onCountChosen;
 
             InitializeComponent();
+            WindowThemeService.Attach(this);
             Owner = owner;
             CountBox.Text = Math.Max(1, initialCount).ToString();
             WorkerBox.Text = Math.Max(1, defaultWorkers).ToString();

@@ -46,7 +46,7 @@
       <CheckBox x:Name="No2faBox"
                 Grid.Row="2" Grid.Column="1"
                 Content="{loc:Tr Key='关闭 2FA（不注册 TOTP）'}"
-                IsChecked="True"
+                IsChecked="False"
                 Margin="0,0,0,10"
                 Foreground="{DynamicResource TextMain}"/>
 
@@ -62,13 +62,16 @@
                 Orientation="Horizontal"
                 HorizontalAlignment="Right"
                 Margin="0,10,0,0">
+      <Button Content="{loc:Tr Key='取消'}"
+              Width="76"
+              Margin="0,0,8,0"
+              IsCancel="True"
+              Click="Cancel_Click"/>
       <Button Content="{loc:Tr Key='开始'}"
-              Width="72"
+              Width="76"
+              IsDefault="True"
               Style="{StaticResource PrimaryButton}"
               Click="Ok_Click"/>
-      <Button Content="{loc:Tr Key='取消'}"
-              Width="72"
-              Click="Cancel_Click"/>
     </StackPanel>
   </Grid>
 </Window>

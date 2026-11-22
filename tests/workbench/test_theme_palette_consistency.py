@@ -57,6 +57,7 @@ LADDER = ("Surface.Page", "Surface.Card", "Surface.Block", "Surface.Inset")
 XAML_BRUSH = re.compile(r'<SolidColorBrush\s+x:Key="(?P<key>[^"]+)"\s+Color="(?P<color>#[0-9A-Fa-f]{6,8})"')
 XAML_KEY = re.compile(r'x:Key="([^"]+)"')
 DYNAMIC_RESOURCE = re.compile(r"\{DynamicResource\s+([A-Za-z0-9_.]+)\}")
+STATIC_RESOURCE = re.compile(r"\{StaticResource\s+([A-Za-z0-9_.]+)\}")
 
 
 def _normalise(value):
@@ -209,6 +210,20 @@ class SurfaceLadderTests(unittest.TestCase):
             values = [brushes["TextMain"], brushes["TextSub"], brushes["TextMuted"]]
             self.assertEqual(len(set(values)), 3, "%s collapsed a text level" % _relative(path))
 
+    def test_sidebar_hover_is_distinct_from_chrome_and_page(self):
+        """Light sidebar rows used to paint Surface.Block (#F3F3F3) onto AppBg (#F3F3F3)."""
+        for path in (LIGHT_XAML, DARK_XAML):
+            brushes = _brushes(path)
+            hover = brushes["SidebarHover"]
+            self.assertNotEqual(hover, brushes["Surface.Chrome"], "%s: SidebarHover equals chrome" % _relative(path))
+            self.assertNotEqual(hover, brushes["Surface.Page"], "%s: SidebarHover equals page" % _relative(path))
+            self.assertNotEqual(
+                brushes["Primary"], brushes["OnPrimary"], "%s: Primary equals OnPrimary" % _relative(path)
+            )
+            self.assertNotEqual(
+                brushes["PrimaryHover"], brushes["OnPrimary"], "%s: PrimaryHover equals OnPrimary" % _relative(path)
+            )
+
 
 class DynamicResourceResolutionTests(unittest.TestCase):
     """Every ``{DynamicResource X}`` a view asks for must be declared somewhere."""
@@ -226,6 +241,30 @@ class DynamicResourceResolutionTests(unittest.TestCase):
             missing,
             {},
             "DynamicResource targets that no dictionary declares (renders with a WPF default brush, silently)",
+        )
+
+
+class StaticResourceResolutionTests(unittest.TestCase):
+    """Every ``{StaticResource X}`` must resolve to a declared key.
+
+    A missing StaticResource is worse than a missing DynamicResource: WPF throws
+    ``XamlParseException`` at runtime when the template instantiates (e.g.
+    ``FocusRingStyle`` referencing ``Radius.Sm`` crashed SettingsWindow on ESC).
+    """
+
+    def test_every_static_resource_target_is_declared(self):
+        declared = set()
+        for path in _xaml_files():
+            declared.update(_declared_keys(path))
+        missing = {}
+        for path in _xaml_files():
+            for key in STATIC_RESOURCE.findall(path.read_text(encoding="utf-8-sig")):
+                if key not in declared:
+                    missing.setdefault(key, set()).add(_relative(path))
+        self.assertEqual(
+            missing,
+            {},
+            "StaticResource targets that no dictionary declares (throws XamlParseException at runtime)",
         )
 
 

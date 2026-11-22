@@ -5,6 +5,7 @@ namespace SmsWorkbench.Views
         public PaymentBatchWindow(PaymentBatchViewModel viewModel)
         {
             InitializeComponent();
+            WindowThemeService.Attach(this);
             DataContext = viewModel;
             viewModel.PropertyChanged += (_, args) =>
             {

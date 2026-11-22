@@ -47,14 +47,16 @@
     </Border>
 
     <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
-      <Button Content="{loc:Tr Key='打开目录'}"
-              Width="92"
-              Style="{StaticResource PrimaryButton}"
-              Click="OpenDir_Click"/>
       <Button Content="{loc:Tr Key='关闭'}"
               Width="76"
-              Margin="8,0,0,0"
+              Margin="0,0,8,0"
+              IsCancel="True"
               Click="Close_Click"/>
+      <Button Content="{loc:Tr Key='打开目录'}"
+              Width="92"
+              IsDefault="True"
+              Style="{StaticResource PrimaryButton}"
+              Click="OpenDir_Click"/>
     </StackPanel>
   </Grid>
 </Window>

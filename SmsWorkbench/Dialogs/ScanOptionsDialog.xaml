@@ -67,11 +67,13 @@
                 Margin="0,8,0,0">
       <Button Content="{loc:Tr Key='取消'}"
               Width="82"
-              Margin="0,0,10,0"
+              Margin="0,0,8,0"
+              IsCancel="True"
               Style="{StaticResource SecondaryButton}"
               Click="Cancel_Click"/>
       <Button Content="{loc:Tr Key='开始测活'}"
               Width="96"
+              IsDefault="True"
               Style="{StaticResource PrimaryButton}"
               Click="Ok_Click"/>
     </StackPanel>

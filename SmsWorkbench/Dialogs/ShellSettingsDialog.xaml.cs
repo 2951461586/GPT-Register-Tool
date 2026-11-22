@@ -9,6 +9,7 @@ namespace SmsWorkbench.Dialogs
         public ShellSettingsDialog(Window owner, DesktopShellPreferences current, string hotkeyLabel)
         {
             InitializeComponent();
+            WindowThemeService.Attach(this);
             Owner = owner;
             TrayCheckBox.IsChecked = current.Tray;
             HotkeyCheckBox.IsChecked = current.Hotkey;

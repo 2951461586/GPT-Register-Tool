@@ -10,7 +10,9 @@
 
   <Style TargetType="TextBlock">
     <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
+    <Setter Property="FontFamily" Value="{StaticResource Font.Ui}"/>
     <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+    <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
   </Style>
 
   <Style x:Key="Text.Subtitle" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
@@ -61,6 +63,8 @@
   <Style TargetType="TextBox">
     <Setter Property="Height" Value="32"/>
     <Setter Property="Padding" Value="10,0"/>
+    <Setter Property="FontFamily" Value="{StaticResource Font.Ui}"/>
+    <Setter Property="FontSize" Value="{StaticResource Type.Body.Size}"/>
     <Setter Property="Background" Value="Transparent"/>
     <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
     <Setter Property="CaretBrush" Value="{DynamicResource TextMain}"/>
@@ -220,7 +224,7 @@
             </Trigger>
             <Trigger Property="IsDragging" Value="True">
               <Setter TargetName="Grip" Property="Opacity" Value="1"/>
-              <Setter TargetName="Grip" Property="Background" Value="{DynamicResource Primary}"/>
+              <Setter TargetName="Grip" Property="Background" Value="{DynamicResource AccentIndicator}"/>
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
@@ -238,7 +242,7 @@
     <Setter Property="BorderThickness" Value="1"/>
     <Setter Property="Padding" Value="8,5"/>
     <Setter Property="FontSize" Value="{StaticResource Type.Body.Size}"/>
-    <Setter Property="FontFamily" Value="Segoe UI, Microsoft YaHei UI"/>
+    <Setter Property="FontFamily" Value="{StaticResource Font.Ui}"/>
     <Setter Property="HasDropShadow" Value="False"/>
     <Setter Property="Template">
       <Setter.Value>

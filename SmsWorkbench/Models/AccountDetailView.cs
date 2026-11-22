@@ -19,9 +19,18 @@ namespace SmsWorkbench.Models
         public string Status { get; init; } = "";
         public bool HasStatus => !string.IsNullOrWhiteSpace(Status);
         public IReadOnlyList<AccountDetailSummaryItem> SummaryItems { get; init; } = Array.Empty<AccountDetailSummaryItem>();
+        public string EgressEndpoint { get; init; } = "";
+        public string EgressCountry { get; init; } = "";
+        public string FingerprintProfile { get; init; } = "";
+        public bool HasNetworkInfo =>
+            !string.IsNullOrWhiteSpace(EgressEndpoint)
+            || !string.IsNullOrWhiteSpace(EgressCountry)
+            || !string.IsNullOrWhiteSpace(FingerprintProfile);
+        public string EgressEndpointDisplay => string.IsNullOrWhiteSpace(EgressEndpoint) ? "—" : EgressEndpoint;
+        public string EgressCountryDisplay => string.IsNullOrWhiteSpace(EgressCountry) ? "—" : EgressCountry;
+        public string FingerprintProfileDisplay => string.IsNullOrWhiteSpace(FingerprintProfile) ? "—" : FingerprintProfile;
         public string PayPalUrl { get; init; } = "";
         public bool HasPayPalUrl => !string.IsNullOrWhiteSpace(PayPalUrl);
-        public string DetailText { get; init; } = "";
         public string AccessToken { get; init; } = "";
         public bool HasAccessToken => !string.IsNullOrWhiteSpace(AccessToken);
     }

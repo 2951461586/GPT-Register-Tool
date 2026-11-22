@@ -9,8 +9,10 @@
                  Width="1360" Height="860" MinWidth="1220" MinHeight="720"
                  WindowStartupLocation="CenterScreen"
                  Background="{DynamicResource AppBg}"
-                 FontFamily="Segoe UI, Microsoft YaHei UI"
+                 FontFamily="{StaticResource Font.Ui}"
                  FontSize="{StaticResource Type.Body.Size}"
+                 TextOptions.TextFormattingMode="Display"
+                 TextOptions.TextRenderingMode="ClearType"
                  UseLayoutRounding="True"
                  SnapsToDevicePixels="True"
                  ExtendsContentIntoTitleBar="True"
@@ -18,7 +20,7 @@
                  WindowCornerPreference="Round">
       <Grid Background="{DynamicResource AppBg}">
         <Grid.RowDefinitions>
-          <RowDefinition Height="48"/>
+          <RowDefinition Height="40"/>
           <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
@@ -32,7 +34,7 @@
         <!-- The chrome is its own surface and the divider against the content is
              drawn once, here: window chrome and the title bar are the only places
              besides inputs and the focus ring that keep a stroke. -->
-        <Grid Grid.Column="0">
+        <Grid Grid.Column="0" Background="{DynamicResource Surface.Chrome}">
           <local:Sidebar IsCollapsed="{Binding SidebarCollapsed}"
                          ActiveKey="{Binding ActiveNavKey, RelativeSource={RelativeSource AncestorType=Window}}"
                          ToggleRequested="OnSidebarToggleRequested"/>
@@ -78,7 +80,7 @@
                 <local:Sparkline Width="72" Height="12" Margin="0,0,8,0"
                                  VerticalAlignment="Center"
                                  Values="{Binding Metrics.Throughput}"
-                                 Stroke="{DynamicResource Primary}"/>
+                                 Stroke="{DynamicResource AccentIndicator}"/>
                 <TextBlock VerticalAlignment="Center"
                            FontSize="{StaticResource Type.Caption.Size}"
                            Foreground="{DynamicResource TextSub}"

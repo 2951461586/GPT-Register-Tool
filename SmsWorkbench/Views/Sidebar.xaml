@@ -90,17 +90,31 @@
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="local:IconNavButton">
-            <Border x:Name="Chrome"
-                    Background="{TemplateBinding Background}"
-                    BorderThickness="0"
-                    CornerRadius="{StaticResource Corner.Lg}">
+            <Grid x:Name="RowRoot" RenderTransformOrigin="0.5,0.5">
+              <Grid.RenderTransform>
+                <ScaleTransform ScaleX="1" ScaleY="1"/>
+              </Grid.RenderTransform>
+              <Border x:Name="Chrome"
+                      Background="{TemplateBinding Background}"
+                      BorderThickness="0"
+                      CornerRadius="{StaticResource Corner.Lg}"/>
+              <Border x:Name="HoverFill"
+                      Background="{DynamicResource SidebarHover}"
+                      CornerRadius="{StaticResource Corner.Lg}"
+                      Opacity="0"
+                      IsHitTestVisible="False"/>
+              <Border x:Name="PressedFill"
+                      Background="{DynamicResource SidebarPressed}"
+                      CornerRadius="{StaticResource Corner.Lg}"
+                      Opacity="0"
+                      IsHitTestVisible="False"/>
               <Grid>
                 <Border x:Name="SelectionBar"
                         Width="3"
                         Margin="0,8"
                         HorizontalAlignment="Left"
                         CornerRadius="{StaticResource Corner.Hairline}"
-                        Background="{DynamicResource Primary}"
+                        Background="{DynamicResource AccentIndicator}"
                         Visibility="Collapsed"/>
                 <Grid Margin="{TemplateBinding Padding}">
                   <Grid.ColumnDefinitions>
@@ -109,7 +123,7 @@
                   </Grid.ColumnDefinitions>
                   <Path x:Name="Glyph"
                         Grid.Column="0"
-                        Width="17" Height="17"
+                        Width="16" Height="16"
                         Stretch="Uniform"
                         Stroke="{DynamicResource TextSub}"
                         StrokeThickness="1.4"
@@ -121,23 +135,86 @@
                              Grid.Column="1"
                              Text="{TemplateBinding Text}"
                              Style="{DynamicResource SidebarLabelStyle}"
-                             FontSize="{StaticResource Type.Subtitle.Size}"
+                             FontSize="{StaticResource Type.Body.Size}"
                              Foreground="{DynamicResource TextMain}"
                              VerticalAlignment="Center"/>
                 </Grid>
               </Grid>
-            </Border>
+            </Grid>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource Surface.Block}"/>
+                <Setter TargetName="Glyph" Property="Stroke" Value="{DynamicResource TextMain}"/>
+                <Trigger.EnterActions>
+                  <BeginStoryboard>
+                    <Storyboard>
+                      <DoubleAnimation Storyboard.TargetName="HoverFill"
+                                       Storyboard.TargetProperty="Opacity"
+                                       To="1"
+                                       Duration="0:0:0.10">
+                        <DoubleAnimation.EasingFunction>
+                          <CubicEase EasingMode="EaseOut"/>
+                        </DoubleAnimation.EasingFunction>
+                      </DoubleAnimation>
+                    </Storyboard>
+                  </BeginStoryboard>
+                </Trigger.EnterActions>
+                <Trigger.ExitActions>
+                  <BeginStoryboard>
+                    <Storyboard>
+                      <DoubleAnimation Storyboard.TargetName="HoverFill"
+                                       Storyboard.TargetProperty="Opacity"
+                                       To="0"
+                                       Duration="0:0:0.15">
+                        <DoubleAnimation.EasingFunction>
+                          <CubicEase EasingMode="EaseOut"/>
+                        </DoubleAnimation.EasingFunction>
+                      </DoubleAnimation>
+                    </Storyboard>
+                  </BeginStoryboard>
+                </Trigger.ExitActions>
               </Trigger>
               <Trigger Property="IsPressed" Value="True">
-                <Setter TargetName="Chrome" Property="Opacity" Value="0.9"/>
+                <Trigger.EnterActions>
+                  <BeginStoryboard>
+                    <Storyboard>
+                      <DoubleAnimation Storyboard.TargetName="PressedFill"
+                                       Storyboard.TargetProperty="Opacity"
+                                       To="1"
+                                       Duration="0:0:0.06"/>
+                      <DoubleAnimation Storyboard.TargetName="RowRoot"
+                                       Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                       To="0.985"
+                                       Duration="0:0:0.06"/>
+                      <DoubleAnimation Storyboard.TargetName="RowRoot"
+                                       Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                       To="0.985"
+                                       Duration="0:0:0.06"/>
+                    </Storyboard>
+                  </BeginStoryboard>
+                </Trigger.EnterActions>
+                <Trigger.ExitActions>
+                  <BeginStoryboard>
+                    <Storyboard>
+                      <DoubleAnimation Storyboard.TargetName="PressedFill"
+                                       Storyboard.TargetProperty="Opacity"
+                                       To="0"
+                                       Duration="0:0:0.12"/>
+                      <DoubleAnimation Storyboard.TargetName="RowRoot"
+                                       Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                       To="1"
+                                       Duration="0:0:0.10"/>
+                      <DoubleAnimation Storyboard.TargetName="RowRoot"
+                                       Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                       To="1"
+                                       Duration="0:0:0.10"/>
+                    </Storyboard>
+                  </BeginStoryboard>
+                </Trigger.ExitActions>
               </Trigger>
               <Trigger Property="IsActive" Value="True">
                 <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource Surface.Card}"/>
                 <Setter TargetName="SelectionBar" Property="Visibility" Value="Visible"/>
-                <Setter TargetName="Glyph" Property="Stroke" Value="{DynamicResource Primary}"/>
+                <Setter TargetName="Glyph" Property="Stroke" Value="{DynamicResource AccentIndicator}"/>
                 <Setter TargetName="Label" Property="Foreground" Value="{DynamicResource TextMain}"/>
                 <Setter TargetName="Label" Property="FontWeight" Value="SemiBold"/>
               </Trigger>
@@ -149,7 +226,7 @@
                 <Setter TargetName="Label" Property="FontWeight" Value="SemiBold"/>
               </Trigger>
               <Trigger Property="IsEnabled" Value="False">
-                <Setter TargetName="Chrome" Property="Opacity" Value="0.45"/>
+                <Setter TargetName="RowRoot" Property="Opacity" Value="0.45"/>
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -165,8 +242,8 @@
       <Setter Property="Padding" Value="8"/>
     </Style>
     <Style x:Key="SidebarBrandLogoStyle" TargetType="Border">
-      <Setter Property="Width" Value="40"/>
-      <Setter Property="Height" Value="40"/>
+      <Setter Property="Width" Value="34"/>
+      <Setter Property="Height" Value="34"/>
       <Setter Property="CornerRadius" Value="4"/>
       <Setter Property="Background" Value="{DynamicResource SidebarBg}"/>
       <Setter Property="BorderBrush" Value="Transparent"/>
@@ -191,7 +268,7 @@
       <Setter Property="Width" Value="34"/>
       <Setter Property="Height" Value="34"/>
       <Setter Property="Padding" Value="0"/>
-      <Setter Property="Margin" Value="10,0,0,0"/>
+      <Setter Property="Margin" Value="4,0,0,0"/>
       <Setter Property="HorizontalAlignment" Value="Right"/>
       <Setter Property="HorizontalContentAlignment" Value="Center"/>
       <Setter Property="BorderBrush" Value="Transparent"/>
@@ -199,21 +276,70 @@
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="Button">
-            <Border x:Name="Chrome"
-                    Background="{TemplateBinding Background}"
-                    BorderBrush="Transparent"
-                    BorderThickness="0"
-                    CornerRadius="{StaticResource Corner.Md}">
+            <Grid>
+              <Border x:Name="Chrome"
+                      Background="{TemplateBinding Background}"
+                      BorderBrush="Transparent"
+                      BorderThickness="0"
+                      CornerRadius="{StaticResource Corner.Md}"/>
+              <Border x:Name="HoverFill"
+                      Background="{DynamicResource SidebarHover}"
+                      CornerRadius="{StaticResource Corner.Md}"
+                      Opacity="0"
+                      IsHitTestVisible="False"/>
+              <Border x:Name="PressedFill"
+                      Background="{DynamicResource SidebarPressed}"
+                      CornerRadius="{StaticResource Corner.Md}"
+                      Opacity="0"
+                      IsHitTestVisible="False"/>
               <ContentPresenter Margin="{TemplateBinding Padding}"
                                 HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                 VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
-            </Border>
+            </Grid>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource PanelHover}"/>
+                <Trigger.EnterActions>
+                  <BeginStoryboard>
+                    <Storyboard>
+                      <DoubleAnimation Storyboard.TargetName="HoverFill"
+                                       Storyboard.TargetProperty="Opacity"
+                                       To="1"
+                                       Duration="0:0:0.10"/>
+                    </Storyboard>
+                  </BeginStoryboard>
+                </Trigger.EnterActions>
+                <Trigger.ExitActions>
+                  <BeginStoryboard>
+                    <Storyboard>
+                      <DoubleAnimation Storyboard.TargetName="HoverFill"
+                                       Storyboard.TargetProperty="Opacity"
+                                       To="0"
+                                       Duration="0:0:0.14"/>
+                    </Storyboard>
+                  </BeginStoryboard>
+                </Trigger.ExitActions>
               </Trigger>
               <Trigger Property="IsPressed" Value="True">
-                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource PanelHover}"/>
+                <Trigger.EnterActions>
+                  <BeginStoryboard>
+                    <Storyboard>
+                      <DoubleAnimation Storyboard.TargetName="PressedFill"
+                                       Storyboard.TargetProperty="Opacity"
+                                       To="1"
+                                       Duration="0:0:0.06"/>
+                    </Storyboard>
+                  </BeginStoryboard>
+                </Trigger.EnterActions>
+                <Trigger.ExitActions>
+                  <BeginStoryboard>
+                    <Storyboard>
+                      <DoubleAnimation Storyboard.TargetName="PressedFill"
+                                       Storyboard.TargetProperty="Opacity"
+                                       To="0"
+                                       Duration="0:0:0.12"/>
+                    </Storyboard>
+                  </BeginStoryboard>
+                </Trigger.ExitActions>
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -243,17 +369,26 @@
     </Style>
     <Style x:Key="SidebarSectionHeaderStyle" TargetType="TextBlock">
       <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
-      <Setter Property="FontSize" Value="11"/>
-      <Setter Property="FontWeight" Value="SemiBold"/>
-      <Setter Property="Height" Value="13"/>
-      <Setter Property="Margin" Value="4,12,0,5"/>
+      <Setter Property="FontSize" Value="{StaticResource Type.Caption.Size}"/>
+      <Setter Property="FontWeight" Value="Medium"/>
+      <Setter Property="Opacity" Value="0.88"/>
+      <Setter Property="Margin" Value="14,2,8,5"/>
       <Setter Property="TextWrapping" Value="NoWrap"/>
       <Setter Property="TextAlignment" Value="Left"/>
       <Style.Triggers>
         <DataTrigger Binding="{Binding IsCollapsed, RelativeSource={RelativeSource AncestorType=local:Sidebar}, FallbackValue=False}" Value="True">
-          <Setter Property="Margin" Value="4,12,4,5"/>
-          <Setter Property="HorizontalAlignment" Value="Stretch"/>
-          <Setter Property="TextAlignment" Value="Left"/>
+          <Setter Property="Visibility" Value="Collapsed"/>
+        </DataTrigger>
+      </Style.Triggers>
+    </Style>
+    <Style x:Key="SidebarGroupDividerStyle" TargetType="Border">
+      <Setter Property="Height" Value="1"/>
+      <Setter Property="Background" Value="{DynamicResource Divider}"/>
+      <Setter Property="Margin" Value="12,10,12,8"/>
+      <Setter Property="SnapsToDevicePixels" Value="True"/>
+      <Style.Triggers>
+        <DataTrigger Binding="{Binding IsCollapsed, RelativeSource={RelativeSource AncestorType=local:Sidebar}, FallbackValue=False}" Value="True">
+          <Setter Property="Margin" Value="8,8,8,8"/>
         </DataTrigger>
       </Style.Triggers>
     </Style>
@@ -264,65 +399,262 @@
             <RowDefinition Height="*"/>
           </Grid.RowDefinitions>
 
-          <Border Height="58"
-                  Margin="0,0,0,10"
-                  Style="{StaticResource SidebarPaneBorderStyle}">
-            <Grid>
-              <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-              </Grid.ColumnDefinitions>
-              <Border Style="{StaticResource SidebarBrandLogoStyle}">
-                <!-- The PNG (1024x1024) instead of app-icon.ico: an ICO's frame
-                     choice is unrelated to the 22px being drawn, and the default
-                     bilinear downscale of a 46x reduction is why this mark looked
-                     soft. HighQuality (Fant) plus an even 24px inside the 40px tile
-                     keeps the strokes crisp. -->
-                <Image Source="/Assets/black-kitten.png"
-                       Width="24" Height="24"
-                       Stretch="Uniform"
-                       RenderOptions.BitmapScalingMode="HighQuality"
-                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
-              </Border>
-              <StackPanel Grid.Column="1" Style="{StaticResource SidebarBrandTextPanelStyle}" Margin="10,0,8,0">
-                <TextBlock x:Name="SidebarBrandTitle"
-                           Text="GPT Register Tool"
-                           FontSize="{StaticResource Type.Body.Size}"
-                           FontWeight="SemiBold"
-                           TextTrimming="CharacterEllipsis"/>
-              </StackPanel>
-              <Button x:Name="SidebarToggleButton" Grid.Column="2" Click="Toggle_Click">
-                <Button.Style>
-                  <Style TargetType="Button" BasedOn="{StaticResource SidebarToggleButtonStyle}">
-                    <Setter Property="ToolTip" Value="{loc:Tr Key='收起侧边栏'}"/>
-                    <Style.Triggers>
-                      <DataTrigger Binding="{Binding IsCollapsed, RelativeSource={RelativeSource AncestorType=local:Sidebar}}" Value="True">
-                        <Setter Property="ToolTip" Value="{loc:Tr Key='展开侧边栏'}"/>
-                      </DataTrigger>
-                    </Style.Triggers>
-                  </Style>
-                </Button.Style>
-                <Path Width="16" Height="16" Stretch="Uniform"
-                      Stroke="{DynamicResource TextSub}" StrokeThickness="1.25"
-                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
-                      Fill="Transparent" HorizontalAlignment="Center" VerticalAlignment="Center">
-                  <Path.Style>
-                    <Style TargetType="Path">
-                      <Setter Property="Data" Value="M5 4H19A1 1 0 0 1 20 5V19A1 1 0 0 1 19 20H5A1 1 0 0 1 4 19V5A1 1 0 0 1 5 4Z M10 4V20"/>
+          <!-- Top brand header: click the Logo / brand block to reveal current version & update check -->
+          <StackPanel Grid.Row="0" Margin="0,2,0,4">
+            <Border Height="50"
+                    Padding="4,6"
+                    Style="{StaticResource SidebarPaneBorderStyle}">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*"/>
+                  <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <Button x:Name="SidebarBrandLogoButton"
+                        Grid.Column="0"
+                        Click="BrandLogoButton_Click"
+                        ToolTip="{Binding VersionTooltip}"
+                        AutomationProperties.Name="{Binding VersionText}">
+                  <Button.Style>
+                    <Style TargetType="Button">
+                      <Setter Property="Height" Value="38"/>
+                      <Setter Property="Padding" Value="4,0"/>
+                      <Setter Property="Margin" Value="0"/>
+                      <Setter Property="HorizontalAlignment" Value="Stretch"/>
+                      <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                      <Setter Property="Background" Value="Transparent"/>
+                      <Setter Property="BorderThickness" Value="0"/>
+                      <Setter Property="Cursor" Value="Hand"/>
+                      <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRingStyle}"/>
+                      <Setter Property="Template">
+                        <Setter.Value>
+                          <ControlTemplate TargetType="Button">
+                            <Grid>
+                              <Border x:Name="HoverFill"
+                                      Background="{DynamicResource SidebarHover}"
+                                      CornerRadius="{StaticResource Corner.Lg}"
+                                      Opacity="0"
+                                      IsHitTestVisible="False"/>
+                              <Border x:Name="PressedFill"
+                                      Background="{DynamicResource SidebarPressed}"
+                                      CornerRadius="{StaticResource Corner.Lg}"
+                                      Opacity="0"
+                                      IsHitTestVisible="False"/>
+                              <ContentPresenter Margin="{TemplateBinding Padding}"
+                                                HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                VerticalAlignment="Center"/>
+                            </Grid>
+                            <ControlTemplate.Triggers>
+                              <Trigger Property="IsMouseOver" Value="True">
+                                <Trigger.EnterActions>
+                                  <BeginStoryboard>
+                                    <Storyboard>
+                                      <DoubleAnimation Storyboard.TargetName="HoverFill"
+                                                       Storyboard.TargetProperty="Opacity"
+                                                       To="1"
+                                                       Duration="0:0:0.10">
+                                        <DoubleAnimation.EasingFunction>
+                                          <CubicEase EasingMode="EaseOut"/>
+                                        </DoubleAnimation.EasingFunction>
+                                      </DoubleAnimation>
+                                    </Storyboard>
+                                  </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                  <BeginStoryboard>
+                                    <Storyboard>
+                                      <DoubleAnimation Storyboard.TargetName="HoverFill"
+                                                       Storyboard.TargetProperty="Opacity"
+                                                       To="0"
+                                                       Duration="0:0:0.15">
+                                        <DoubleAnimation.EasingFunction>
+                                          <CubicEase EasingMode="EaseOut"/>
+                                        </DoubleAnimation.EasingFunction>
+                                      </DoubleAnimation>
+                                    </Storyboard>
+                                  </BeginStoryboard>
+                                </Trigger.ExitActions>
+                              </Trigger>
+                              <Trigger Property="IsPressed" Value="True">
+                                <Trigger.EnterActions>
+                                  <BeginStoryboard>
+                                    <Storyboard>
+                                      <DoubleAnimation Storyboard.TargetName="PressedFill"
+                                                       Storyboard.TargetProperty="Opacity"
+                                                       To="1"
+                                                       Duration="0:0:0.06"/>
+                                    </Storyboard>
+                                  </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                  <BeginStoryboard>
+                                    <Storyboard>
+                                      <DoubleAnimation Storyboard.TargetName="PressedFill"
+                                                       Storyboard.TargetProperty="Opacity"
+                                                       To="0"
+                                                       Duration="0:0:0.12"/>
+                                    </Storyboard>
+                                  </BeginStoryboard>
+                                </Trigger.ExitActions>
+                              </Trigger>
+                            </ControlTemplate.Triggers>
+                          </ControlTemplate>
+                        </Setter.Value>
+                      </Setter>
                       <Style.Triggers>
-                        <DataTrigger Binding="{Binding IsCollapsed, RelativeSource={RelativeSource AncestorType=local:Sidebar}}" Value="True">
-                          <Setter Property="Data" Value="M5 4H19A1 1 0 0 1 20 5V19A1 1 0 0 1 19 20H5A1 1 0 0 1 4 19V5A1 1 0 0 1 5 4Z M14 4V20"/>
+                        <DataTrigger Binding="{Binding IsOpen, ElementName=VersionPopup}" Value="True">
+                          <Setter Property="IsHitTestVisible" Value="False"/>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding IsCollapsed, RelativeSource={RelativeSource AncestorType=local:Sidebar}, FallbackValue=False}" Value="True">
+                          <Setter Property="Visibility" Value="Collapsed"/>
                         </DataTrigger>
                       </Style.Triggers>
                     </Style>
-                  </Path.Style>
-                </Path>
-              </Button>
-            </Grid>
-          </Border>
+                  </Button.Style>
+                  <Grid>
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="Auto"/>
+                      <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid Width="30" Height="30" VerticalAlignment="Center">
+                      <!-- The PNG (1024x1024) instead of app-icon.ico: HighQuality (Fant)
+                           plus an even 24px keeps the strokes crisp at every DPI. -->
+                      <Image Source="/Assets/black-kitten.png"
+                             Width="24" Height="24"
+                             Stretch="Uniform"
+                             RenderOptions.BitmapScalingMode="HighQuality"
+                             HorizontalAlignment="Center"
+                             VerticalAlignment="Center"/>
+                      <Ellipse Width="7" Height="7"
+                               Fill="{DynamicResource AccentIndicator}"
+                               Stroke="{DynamicResource Surface.Chrome}"
+                               StrokeThickness="1.2"
+                               HorizontalAlignment="Right"
+                               VerticalAlignment="Top"
+                               Visibility="{Binding UpdateAvailable, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                    </Grid>
+                    <TextBlock x:Name="SidebarBrandTitle"
+                               Grid.Column="1"
+                               Text="GPT Register Tool"
+                               Margin="8,0,4,0"
+                               FontSize="{StaticResource Type.Body.Size}"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextMain}"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis"/>
+                  </Grid>
+                </Button>
+
+                <Popup x:Name="VersionPopup"
+                       PlacementTarget="{Binding ElementName=SidebarBrandLogoButton}"
+                       Placement="Bottom"
+                       VerticalOffset="4"
+                       AllowsTransparency="True"
+                       PopupAnimation="Fade"
+                       StaysOpen="False">
+                  <Border Margin="8"
+                          MinWidth="220"
+                          Padding="12"
+                          Background="{DynamicResource Surface.Card}"
+                          BorderBrush="{DynamicResource LineStrong}"
+                          BorderThickness="1"
+                          CornerRadius="{StaticResource Corner.Lg}">
+                    <Border.Effect>
+                      <DropShadowEffect Color="#33000000" BlurRadius="14" ShadowDepth="2" Direction="270"/>
+                    </Border.Effect>
+                    <StackPanel>
+                      <DockPanel Margin="0,0,0,10">
+                        <TextBlock Text="{loc:Tr Key='当前版本'}"
+                                   FontSize="{StaticResource Type.Caption.Size}"
+                                   Foreground="{DynamicResource TextMuted}"
+                                   VerticalAlignment="Center"/>
+                        <TextBlock Text="{Binding VersionText}"
+                                   DockPanel.Dock="Right"
+                                   HorizontalAlignment="Right"
+                                   FontFamily="{StaticResource Font.Mono}"
+                                   FontSize="{StaticResource Type.Caption.Size}"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextMain}"
+                                   VerticalAlignment="Center"/>
+                      </DockPanel>
+
+                      <Button x:Name="VersionButton"
+                              Command="{Binding CheckUpdatesCommand}"
+                              ToolTip="{Binding VersionTooltip}"
+                              Height="32"
+                              Margin="0"
+                              HorizontalAlignment="Stretch"
+                              AutomationProperties.Name="{Binding VersionText}">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                          <Path Style="{StaticResource IconPath}"
+                                Width="13" Height="13"
+                                Stroke="{DynamicResource TextMain}"
+                                Data="{StaticResource Glyph.Refresh}"/>
+                          <TextBlock Text="{loc:Tr Key='检查更新'}"
+                                     Margin="6,0,0,0"
+                                     VerticalAlignment="Center"/>
+                        </StackPanel>
+                      </Button>
+
+                      <Button x:Name="UpdateButton"
+                              Style="{StaticResource PrimaryButton}"
+                              Command="{Binding OpenReleaseCommand}"
+                              ToolTip="{Binding UpdateTooltip}"
+                              Visibility="{Binding UpdateAvailable, Converter={StaticResource BooleanToVisibilityConverter}}"
+                              Height="32"
+                              Margin="0,8,0,0"
+                              HorizontalAlignment="Stretch">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                          <Path Width="12" Height="12" Stretch="Uniform"
+                                Data="{StaticResource Glyph.OpenExternal}"
+                                Stroke="{DynamicResource OnPrimary}"
+                                StrokeThickness="1.6"
+                                StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                VerticalAlignment="Center"/>
+                          <TextBlock Text="{Binding UpdateText}"
+                                     Foreground="{DynamicResource OnPrimary}"
+                                     Margin="6,0,0,0"
+                                     VerticalAlignment="Center"/>
+                        </StackPanel>
+                      </Button>
+                    </StackPanel>
+                  </Border>
+                </Popup>
+
+                <Button x:Name="SidebarToggleButton" Grid.Column="1" Click="Toggle_Click">
+                  <Button.Style>
+                    <Style TargetType="Button" BasedOn="{StaticResource SidebarToggleButtonStyle}">
+                      <Setter Property="ToolTip" Value="{loc:Tr Key='收起侧边栏'}"/>
+                      <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsCollapsed, RelativeSource={RelativeSource AncestorType=local:Sidebar}}" Value="True">
+                          <Setter Property="ToolTip" Value="{loc:Tr Key='展开侧边栏'}"/>
+                        </DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </Button.Style>
+                  <Path Width="16" Height="16" Stretch="Uniform"
+                        Stroke="{DynamicResource TextSub}" StrokeThickness="1.25"
+                        StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                        Fill="Transparent" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Path.Style>
+                      <Style TargetType="Path">
+                        <Setter Property="Data" Value="M5 4H19A1 1 0 0 1 20 5V19A1 1 0 0 1 19 20H5A1 1 0 0 1 4 19V5A1 1 0 0 1 5 4Z M10 4V20"/>
+                        <Style.Triggers>
+                          <DataTrigger Binding="{Binding IsCollapsed, RelativeSource={RelativeSource AncestorType=local:Sidebar}}" Value="True">
+                            <Setter Property="Data" Value="M5 4H19A1 1 0 0 1 20 5V19A1 1 0 0 1 19 20H5A1 1 0 0 1 4 19V5A1 1 0 0 1 5 4Z M14 4V20"/>
+                          </DataTrigger>
+                        </Style.Triggers>
+                      </Style>
+                    </Path.Style>
+                  </Path>
+                </Button>
+              </Grid>
+            </Border>
+            <Border Height="1" Background="{DynamicResource Divider}" Margin="10,2,10,0" SnapsToDevicePixels="True"/>
+          </StackPanel>
 
           <Border Grid.Row="1"
+                  Padding="4,6"
                   Style="{StaticResource SidebarPaneBorderStyle}">
             <ScrollViewer VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled"
@@ -331,27 +663,32 @@
                 <Style TargetType="{x:Type ScrollBar}" BasedOn="{StaticResource SidebarScrollBarStyle}"/>
               </ScrollViewer.Resources>
               <StackPanel>
-                <TextBlock Text="{loc:Tr Key='一键操作'}" Style="{StaticResource SidebarSectionHeaderStyle}"/>
+                <TextBlock Text="{loc:Tr Key='快捷操作'}" Style="{StaticResource SidebarSectionHeaderStyle}"/>
                 <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="{StaticResource Glyph.Register}" Text="{loc:Tr Key='一键注册'}" Command="{Binding NavCommand}" CommandParameter="register"/>
                 <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="{StaticResource Glyph.Sms}" Text="{loc:Tr Key='一键接码'}" Command="{Binding NavCommand}" CommandParameter="sms"/>
                 <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="{StaticResource Glyph.Scan}" Text="{loc:Tr Key='账号测活'}" Command="{Binding NavCommand}" CommandParameter="scan"/>
                 <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="{StaticResource Glyph.Promotion}" Text="{loc:Tr Key='查优惠'}" Command="{Binding NavCommand}" CommandParameter="promotion"/>
                 <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="{StaticResource Glyph.PaymentQualification}" Text="{loc:Tr Key='查支付资格'}" Command="{Binding NavCommand}" CommandParameter="paymentqualification"/>
 
+                <Border Style="{StaticResource SidebarGroupDividerStyle}"/>
                 <TextBlock Text="{loc:Tr Key='支付管理'}" Style="{StaticResource SidebarSectionHeaderStyle}"/>
                 <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="{StaticResource Glyph.PayLink}" Text="{loc:Tr Key='打开支付链接'}" Command="{Binding NavCommand}" CommandParameter="paylink"/>
                 <local:IconNavButton AutomationProperties.Name="{loc:Tr Key='批量协议支付'}" Style="{StaticResource IconNavButtonStyle}" IconGeometry="{StaticResource Glyph.BatchPay}" Text="{loc:Tr Key='批量协议支付'}" Command="{Binding NavCommand}" CommandParameter="batchpay"/>
+
+                <Border Style="{StaticResource SidebarGroupDividerStyle}"/>
                 <TextBlock Text="{loc:Tr Key='邮箱管理'}" Style="{StaticResource SidebarSectionHeaderStyle}"/>
                 <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="{StaticResource Glyph.ImportMail}" Text="{loc:Tr Key='导入邮箱'}" Command="{Binding NavCommand}" CommandParameter="importmail"/>
                 <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="{StaticResource Glyph.Inbox}" Text="{loc:Tr Key='查看收件箱'}" Command="{Binding NavCommand}" CommandParameter="inbox"/>
                 <local:IconNavButton AutomationProperties.Name="{loc:Tr Key='邮箱换绑'}" Style="{StaticResource IconNavButtonStyle}" IconGeometry="{StaticResource Glyph.ChangeEmail}" Text="{loc:Tr Key='邮箱换绑'}" Command="{Binding NavCommand}" CommandParameter="changeemail"/>
 
+                <Border Style="{StaticResource SidebarGroupDividerStyle}"/>
                 <TextBlock Text="{loc:Tr Key='账号管理'}" Style="{StaticResource SidebarSectionHeaderStyle}"/>
                 <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="{StaticResource Glyph.ImportCpa}" Text="{loc:Tr Key='一键导入'}" Command="{Binding NavCommand}" CommandParameter="importcpa"/>
                 <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="{StaticResource Glyph.Export}" Text="{loc:Tr Key='导出账号'}" Command="{Binding NavCommand}" CommandParameter="export"/>
                 <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="{StaticResource Glyph.Delete}" Text="{loc:Tr Key='删除选中'}" Command="{Binding NavCommand}" CommandParameter="delete"/>
 
-                <TextBlock Text="{loc:Tr Key='项目设置'}" Style="{StaticResource SidebarSectionHeaderStyle}"/>
+                <Border Style="{StaticResource SidebarGroupDividerStyle}"/>
+                <TextBlock Text="{loc:Tr Key='系统设置'}" Style="{StaticResource SidebarSectionHeaderStyle}"/>
                 <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="{StaticResource Glyph.ProxyPool}" Text="{loc:Tr Key='代理池管理'}" Command="{Binding NavCommand}" CommandParameter="proxypool"/>
                 <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="{StaticResource Glyph.Refresh}" Text="{loc:Tr Key='刷新'}" Command="{Binding NavCommand}" CommandParameter="refresh"/>
                 <local:IconNavButton AutomationProperties.Name="{loc:Tr Key='设置'}" Style="{StaticResource IconNavButtonStyle}" IconGeometry="{StaticResource Glyph.Settings}" Text="{loc:Tr Key='设置'}" Command="{Binding NavCommand}" CommandParameter="settings"/>

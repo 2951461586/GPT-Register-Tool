@@ -48,7 +48,6 @@ namespace SmsWorkbench.Tests
             "AccountScanResultDialog",
             "ImportTargetDialog",
             "InboxDialogWindow",
-            "MailDetailDialogWindow",
             "ChangeEmailDialog",
             "ShellSettingsDialog",
             "AccountBatchProgressWindow",

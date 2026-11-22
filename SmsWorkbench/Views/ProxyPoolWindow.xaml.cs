@@ -22,6 +22,7 @@ namespace SmsWorkbench.Views
         {
             DataContext = viewModel;
             InitializeComponent();
+            WindowThemeService.Attach(this);
         }
     }
 }

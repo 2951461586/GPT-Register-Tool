@@ -33,6 +33,11 @@
   <!-- Half of a 3px mark (selection bars, splitter grip): the largest radius that
        still draws a rectangle with rounded ends instead of a lens. -->
   <CornerRadius x:Key="Corner.Hairline">1.5</CornerRadius>
+  <!-- Scalar radii for shapes (e.g. FocusRingStyle Rectangle.RadiusX / RadiusY),
+       kept in lockstep with Corner.Xs / Corner.Sm / Corner.Md. -->
+  <sys:Double x:Key="Radius.Xs">4</sys:Double>
+  <sys:Double x:Key="Radius.Sm">6</sys:Double>
+  <sys:Double x:Key="Radius.Md">8</sys:Double>
 
   <!-- ═══ Spacing (4px grid) ══════════════════════════════════════════════ -->
   <Thickness x:Key="Space.Bottom1">0,0,0,4</Thickness>
@@ -50,27 +55,23 @@
   <sys:Double x:Key="Size.Splitter.GripThickness">3</sys:Double>
 
   <!-- ═══ Type ramp ═══════════════════════════════════════════════════════
-       Display 28 / Title 20 / Subtitle 15 / Data 14 / Body 13 / Caption 11.
-       Views must not write a bare FontSize; a new size means a new token (and a
-       reason), not a literal at the call site.
-
-       Data is the one step added after the first sweep: the account grid is a
-       dense read-across table, and at the 1220px minimum window width Body (13)
-       read small in every column while Subtitle (15) would have cost rows. 14 is
-       the size the grid renders at; the context menu that acts on those rows uses
-       it too, so a row and its menu agree. -->
-  <sys:Double x:Key="Type.Display.Size">28</sys:Double>
-  <sys:Double x:Key="Type.Title.Size">20</sys:Double>
-  <sys:Double x:Key="Type.Subtitle.Size">15</sys:Double>
-  <sys:Double x:Key="Type.Data.Size">14</sys:Double>
+       Display 24 / Title 17 / Subtitle 14 / Data 13 / Body 13 / Mono 12 / Caption 12.
+       Integer pixel sizes align cleanly with ClearType Display formatting so
+       CJK and Latin glyphs stay crisp at 100%/125%/150% DPI without blurring.
+       Views must not write a bare FontSize; a new size means a new token. -->
+  <sys:Double x:Key="Type.Display.Size">24</sys:Double>
+  <sys:Double x:Key="Type.Title.Size">17</sys:Double>
+  <sys:Double x:Key="Type.Subtitle.Size">14</sys:Double>
+  <sys:Double x:Key="Type.Data.Size">13</sys:Double>
   <sys:Double x:Key="Type.Body.Size">13</sys:Double>
-  <sys:Double x:Key="Type.Caption.Size">11</sys:Double>
+  <sys:Double x:Key="Type.Mono.Size">12</sys:Double>
+  <sys:Double x:Key="Type.Caption.Size">12</sys:Double>
 
   <!-- ═══ Fonts ═══════════════════════════════════════════════════════════
-       Monospace for logs and pasted proxy lists. The CJK fallback is load-bearing:
-       Consolas has no Chinese glyphs, so every log line WPF drew in it fell back
-       per-character to another family and mixed two sets of metrics mid-line.
-       Cascadia Mono is present on Windows 11/10 21H2+; Consolas and YaHei UI cover
-       the rest. -->
+       Microsoft YaHei UI first keeps CJK and Latin on one consistent weight and
+       baseline in WPF ClearType Display mode (avoiding WPF's variable-font thin
+       fallback on Segoe UI Variable), with Segoe UI as fallback.
+       Monospace for logs and pasted proxy lists keeps CJK metrics aligned. -->
+  <FontFamily x:Key="Font.Ui">Microsoft YaHei UI, Segoe UI</FontFamily>
   <FontFamily x:Key="Font.Mono">Cascadia Mono, Consolas, Microsoft YaHei UI</FontFamily>
 </ResourceDictionary>

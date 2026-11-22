@@ -119,7 +119,8 @@
                TextWrapping="NoWrap"
                VerticalScrollBarVisibility="Auto"
                HorizontalScrollBarVisibility="Auto"
-               FontFamily="Consolas"
+               FontFamily="{StaticResource Font.Mono}"
+               FontSize="{StaticResource Type.Mono.Size}"
                Style="{StaticResource SettingsMultilineEditorStyle}">
         <TextBox.Resources>
           <Style TargetType="{x:Type ScrollViewer}" BasedOn="{StaticResource SettingsScrollViewerStyle}"/>
@@ -277,8 +278,8 @@
       <TextBlock Text="{Binding Status}" Foreground="{DynamicResource Danger}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,12,0"/>
       <StackPanel Grid.Column="1" Orientation="Horizontal">
         <Button Content="{loc:Tr Key='打开配置文件'}" Command="{Binding OpenConfigCommand}" MinWidth="120" Margin="0,0,8,0"/>
-        <Button Content="{loc:Tr Key='保存'}" Command="{Binding SaveCommand}" Style="{StaticResource PrimaryButton}" MinWidth="72" Margin="0,0,8,0"/>
-        <Button Content="{loc:Tr Key='取消'}" IsCancel="True" MinWidth="72"/>
+        <Button Content="{loc:Tr Key='取消'}" IsCancel="True" MinWidth="72" Margin="0,0,8,0"/>
+        <Button Content="{loc:Tr Key='保存'}" Command="{Binding SaveCommand}" Style="{StaticResource PrimaryButton}" MinWidth="72"/>
       </StackPanel>
     </Grid>
   </Grid>

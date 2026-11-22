@@ -1,3 +1,5 @@
+using System.Windows.Input;
+
 using SmsWorkbench.Localization;
 
 namespace SmsWorkbench.Dialogs
@@ -15,10 +17,12 @@ namespace SmsWorkbench.Dialogs
             bool isDanger = false)
         {
             InitializeComponent();
+            WindowThemeService.Attach(this);
             Owner = owner;
             Title = title;
             TitleTextBlock.Text = title;
             MessageTextBlock.Text = message;
+            PreviewKeyDown += OnPreviewKeyDown;
 
             if (showCancel)
             {
@@ -37,6 +41,16 @@ namespace SmsWorkbench.Dialogs
             else
             {
                 ConfirmButton.Content = confirmText ?? Loc.T("知道了");
+            }
+        }
+
+        private void OnPreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Escape && CancelButton.Visibility != Visibility.Visible)
+            {
+                e.Handled = true;
+                Confirmed = false;
+                Close();
             }
         }
 

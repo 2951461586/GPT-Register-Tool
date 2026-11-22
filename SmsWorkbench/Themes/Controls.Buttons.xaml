@@ -1,6 +1,9 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-  <!-- Button and action control styles for the workbench shell. -->
+  <!-- Button and action control styles for the workbench shell.
+       Each template overrides the app-level implicit TextBlock style so string
+       Content always renders in the button's own Foreground (OnPrimary, Danger,
+       TextSub, ...) instead of being forced back to TextMain. -->
   <Style TargetType="Button">
     <Setter Property="Height" Value="32"/>
     <Setter Property="Padding" Value="12,0"/>
@@ -11,6 +14,8 @@
     <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
     <Setter Property="BorderThickness" Value="1"/>
     <Setter Property="Foreground" Value="{DynamicResource TextMain}"/>
+    <Setter Property="FontFamily" Value="{StaticResource Font.Ui}"/>
+    <Setter Property="FontSize" Value="{StaticResource Type.Body.Size}"/>
     <Setter Property="FontWeight" Value="Medium"/>
     <Setter Property="HorizontalContentAlignment" Value="Center"/>
     <Setter Property="VerticalContentAlignment" Value="Center"/>
@@ -23,15 +28,27 @@
                   BorderThickness="{TemplateBinding BorderThickness}"
                   CornerRadius="{StaticResource Corner.Md}">
             <ContentPresenter Margin="{TemplateBinding Padding}"
+                              TextElement.Foreground="{TemplateBinding Foreground}"
                               HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}">
+              <ContentPresenter.Resources>
+                <Style TargetType="TextBlock">
+                  <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+                  <Setter Property="FontFamily" Value="{StaticResource Font.Ui}"/>
+                  <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+                  <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
+                </Style>
+              </ContentPresenter.Resources>
+            </ContentPresenter>
           </Border>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-              <Setter TargetName="ButtonChrome" Property="Background" Value="{DynamicResource Surface.Block}"/>
+              <Setter TargetName="ButtonChrome" Property="Background" Value="{DynamicResource PanelHover}"/>
+              <Setter TargetName="ButtonChrome" Property="BorderBrush" Value="{DynamicResource LineStrong}"/>
             </Trigger>
             <Trigger Property="IsPressed" Value="True">
-              <Setter TargetName="ButtonChrome" Property="Opacity" Value="0.9"/>
+              <Setter TargetName="ButtonChrome" Property="Background" Value="{DynamicResource Surface.Inset}"/>
+              <Setter TargetName="ButtonChrome" Property="Opacity" Value="0.92"/>
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
               <Setter Property="Opacity" Value="0.45"/>
@@ -44,9 +61,47 @@
 
   <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
     <Setter Property="Background" Value="{DynamicResource Primary}"/>
-    <Setter Property="BorderBrush" Value="{DynamicResource Primary}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource PrimaryBorder}"/>
     <Setter Property="Foreground" Value="{DynamicResource OnPrimary}"/>
     <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Border x:Name="ButtonChrome"
+                  Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  CornerRadius="{StaticResource Corner.Md}">
+            <ContentPresenter Margin="{TemplateBinding Padding}"
+                              TextElement.Foreground="{TemplateBinding Foreground}"
+                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}">
+              <ContentPresenter.Resources>
+                <Style TargetType="TextBlock">
+                  <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+                  <Setter Property="FontFamily" Value="{StaticResource Font.Ui}"/>
+                  <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+                  <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
+                </Style>
+              </ContentPresenter.Resources>
+            </ContentPresenter>
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="ButtonChrome" Property="Background" Value="{DynamicResource PrimaryHover}"/>
+              <Setter TargetName="ButtonChrome" Property="BorderBrush" Value="{DynamicResource PrimaryHover}"/>
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+              <Setter TargetName="ButtonChrome" Property="Background" Value="{DynamicResource PrimaryPressed}"/>
+              <Setter TargetName="ButtonChrome" Property="BorderBrush" Value="{DynamicResource PrimaryPressed}"/>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter Property="Opacity" Value="0.45"/>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
   </Style>
 
   <Style x:Key="SecondaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
@@ -59,6 +114,44 @@
     <Setter Property="Background" Value="Transparent"/>
     <Setter Property="BorderBrush" Value="{DynamicResource DangerBorder}"/>
     <Setter Property="Foreground" Value="{DynamicResource Danger}"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Border x:Name="ButtonChrome"
+                  Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}"
+                  CornerRadius="{StaticResource Corner.Md}">
+            <ContentPresenter Margin="{TemplateBinding Padding}"
+                              TextElement.Foreground="{TemplateBinding Foreground}"
+                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}">
+              <ContentPresenter.Resources>
+                <Style TargetType="TextBlock">
+                  <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+                  <Setter Property="FontFamily" Value="{StaticResource Font.Ui}"/>
+                  <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+                  <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
+                </Style>
+              </ContentPresenter.Resources>
+            </ContentPresenter>
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="ButtonChrome" Property="Background" Value="{DynamicResource DangerSoft}"/>
+              <Setter TargetName="ButtonChrome" Property="BorderBrush" Value="{DynamicResource Danger}"/>
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+              <Setter TargetName="ButtonChrome" Property="Background" Value="{DynamicResource DangerSoft}"/>
+              <Setter TargetName="ButtonChrome" Property="Opacity" Value="0.86"/>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter Property="Opacity" Value="0.45"/>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
   </Style>
 
   <Style x:Key="SidebarButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">

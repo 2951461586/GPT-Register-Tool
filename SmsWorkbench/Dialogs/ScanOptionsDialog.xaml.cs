@@ -9,6 +9,7 @@ namespace SmsWorkbench.Dialogs
         public ScanOptionsDialog(Window owner, int accountCount)
         {
             InitializeComponent();
+            WindowThemeService.Attach(this);
             Owner = owner;
             TitleTextBlock.Text = Loc.F(
                 "测活 {0} 个账号。HTTP 200 表示 AT 有效，HTTP 401 表示 AT 已失效；可勾选 401 自动重登。",

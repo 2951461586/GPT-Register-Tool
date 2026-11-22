@@ -206,7 +206,7 @@ namespace SmsWorkbench.Views
 
             if (relation > 0)
             {
-                NotifyInfo(Loc.F("发现新版本 {0}，点击顶部版本号旁的提示打开下载页", latestTag));
+                NotifyInfo(Loc.F("发现新版本 {0}，点击左上角 Logo 处的新版本提示打开下载页", latestTag));
             }
             else if (relation == 0)
             {

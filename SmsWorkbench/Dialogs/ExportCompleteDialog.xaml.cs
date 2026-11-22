@@ -23,6 +23,7 @@ namespace SmsWorkbench.Dialogs
             this.runtimeDirectory = runtimeDirectory;
 
             InitializeComponent();
+            WindowThemeService.Attach(this);
             Owner = owner;
             DescriptionTextBlock.Text = Loc.F("已生成账号 {0} 文件：{1}", formatLabel, formatDescription);
             CountsTextBlock.Text = Loc.F("数量：{0}    跳过：{1}", exportedCount, skippedCount);

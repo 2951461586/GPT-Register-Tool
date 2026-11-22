@@ -15,18 +15,30 @@
   <SolidColorBrush x:Key="Surface.Chrome" Color="#1E1E1E"/>
 
   <SolidColorBrush x:Key="Divider" Color="#24E6E6E6"/>
-  <SolidColorBrush x:Key="FocusRing" Color="#60A5FA"/>
+  <SolidColorBrush x:Key="FocusRing" Color="#7E8B9B"/>
 
   <SolidColorBrush x:Key="TextMain" Color="#E6E6E6"/>
   <SolidColorBrush x:Key="TextSub" Color="#A8B0B8"/>
   <SolidColorBrush x:Key="TextMuted" Color="#7D858D"/>
 
-  <SolidColorBrush x:Key="Primary" Color="#3B82F6"/>
-  <SolidColorBrush x:Key="PrimarySoft" Color="#172554"/>
-  <SolidColorBrush x:Key="OnPrimary" Color="#FFFFFF"/>
-  <SolidColorBrush x:Key="Danger" Color="#FA5252"/>
-  <SolidColorBrush x:Key="DangerBorder" Color="#8C2A2A"/>
-  <SolidColorBrush x:Key="Success" Color="#51CF66"/>
+  <SolidColorBrush x:Key="Primary" Color="#434C59"/>
+  <SolidColorBrush x:Key="PrimaryBorder" Color="#5B6676"/>
+  <SolidColorBrush x:Key="PrimaryHover" Color="#525C6B"/>
+  <SolidColorBrush x:Key="PrimaryPressed" Color="#373F4A"/>
+  <SolidColorBrush x:Key="PrimarySoft" Color="#2B3038"/>
+  <SolidColorBrush x:Key="OnPrimary" Color="#F3F5F7"/>
+  <SolidColorBrush x:Key="AccentIndicator" Color="#94A0B0"/>
+  <SolidColorBrush x:Key="Danger" Color="#D45555"/>
+  <SolidColorBrush x:Key="DangerHover" Color="#C24646"/>
+  <SolidColorBrush x:Key="DangerPressed" Color="#A63A3A"/>
+  <SolidColorBrush x:Key="DangerSoft" Color="#2C1E1E"/>
+  <SolidColorBrush x:Key="OnDanger" Color="#FFFFFF"/>
+  <SolidColorBrush x:Key="DangerBorder" Color="#7D3232"/>
+  <SolidColorBrush x:Key="Success" Color="#52B778"/>
+  <SolidColorBrush x:Key="SidebarHover" Color="#2A2D32"/>
+  <SolidColorBrush x:Key="SidebarPressed" Color="#34383F"/>
+  <SolidColorBrush x:Key="WindowControlHover" Color="#303338"/>
+  <SolidColorBrush x:Key="WindowControlPressed" Color="#3D4148"/>
 
   <SolidColorBrush x:Key="AppBg" Color="#181818"/>
   <SolidColorBrush x:Key="PanelBg" Color="#232323"/>
@@ -39,7 +51,7 @@
   <SolidColorBrush x:Key="GridAltBg" Color="#232323"/>
   <SolidColorBrush x:Key="GridSelectionBg" Color="#232323"/>
   <SolidColorBrush x:Key="SettingsSelectionBg" Color="#2B2B2B"/>
-  <SolidColorBrush x:Key="SettingsSelectionBorder" Color="#3B82F6"/>
+  <SolidColorBrush x:Key="SettingsSelectionBorder" Color="#7E8B9B"/>
   <SolidColorBrush x:Key="SplitterBg" Color="#333333"/>
   <SolidColorBrush x:Key="StatusBg" Color="#181818"/>
   <!-- Log well: Surface.Inset, the same rung the light theme's #EAEAEA sits on.
@@ -67,7 +79,7 @@
   <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="#232323"/>
   <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush" Color="#333333"/>
   <SolidColorBrush x:Key="ComboBoxDropDownGlyphForeground" Color="#A8B0B8"/>
-  <SolidColorBrush x:Key="ComboBoxBorderBrushFocused" Color="#60A5FA"/>
+  <SolidColorBrush x:Key="ComboBoxBorderBrushFocused" Color="#7E8B9B"/>
   <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="#2B2B2B"/>
   <SolidColorBrush x:Key="ComboBoxBackgroundDisabled" Color="#1E1E1E"/>
   <SolidColorBrush x:Key="ComboBoxBorderBrushDisabled" Color="#333333"/>

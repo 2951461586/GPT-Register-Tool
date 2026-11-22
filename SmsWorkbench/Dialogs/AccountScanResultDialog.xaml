@@ -38,6 +38,8 @@
                 Margin="0,16,0,0">
       <Button Content="{loc:Tr Key='关闭'}"
               Width="82"
+              IsDefault="True"
+              IsCancel="True"
               Style="{StaticResource PrimaryButton}"
               Click="Close_Click"/>
     </StackPanel>

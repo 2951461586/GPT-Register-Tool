@@ -22,6 +22,7 @@ namespace SmsWorkbench.Dialogs
             this.cfworkerDomain = cfworkerDomain ?? string.Empty;
 
             InitializeComponent();
+            WindowThemeService.Attach(this);
             Owner = owner;
             ProviderLabelTextBlock.Text = Loc.F("目标邮箱 provider（{0} 个账号）", count);
             WorkerTextBox.Text = initialWorkers.ToString(CultureInfo.InvariantCulture);

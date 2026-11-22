@@ -69,7 +69,6 @@ public sealed class PartialSizeTests
         "SmsWorkbench/Dialogs/AccountScanResultDialog.xaml.cs",
         "SmsWorkbench/Dialogs/ImportTargetDialog.xaml.cs",
         "SmsWorkbench/Dialogs/InboxDialogWindow.xaml.cs",
-        "SmsWorkbench/Dialogs/MailDetailDialogWindow.xaml.cs",
         "SmsWorkbench/Dialogs/ChangeEmailDialog.xaml.cs",
         "SmsWorkbench/Dialogs/ShellSettingsDialog.xaml.cs",
     };

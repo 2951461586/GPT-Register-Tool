@@ -32,26 +32,38 @@
        on a card and on the chrome alike (an opaque grey reads twice as strong on
        the dark theme as on the light one). -->
   <SolidColorBrush x:Key="Divider" Color="#241F2328"/>
-  <SolidColorBrush x:Key="FocusRing" Color="#2563EB"/>
+  <SolidColorBrush x:Key="FocusRing" Color="#64748B"/>
 
   <!-- ═══ Text ladder (three levels, three values) ════════════════════════ -->
   <SolidColorBrush x:Key="TextMain" Color="#1F2328"/>
   <SolidColorBrush x:Key="TextSub" Color="#57606A"/>
   <SolidColorBrush x:Key="TextMuted" Color="#6E7781"/>
 
-  <!-- ═══ Action accent ═══════════════════════════════════════════════════ -->
-  <SolidColorBrush x:Key="Primary" Color="#2563EB"/>
-  <SolidColorBrush x:Key="PrimarySoft" Color="#EAF2FF"/>
+  <!-- ═══ Action accent (low-saturation calm slate-graphite) ══════════════ -->
+  <SolidColorBrush x:Key="Primary" Color="#3B424D"/>
+  <SolidColorBrush x:Key="PrimaryBorder" Color="#3B424D"/>
+  <SolidColorBrush x:Key="PrimaryHover" Color="#4B5462"/>
+  <SolidColorBrush x:Key="PrimaryPressed" Color="#2E343D"/>
+  <SolidColorBrush x:Key="PrimarySoft" Color="#E8EBEE"/>
   <SolidColorBrush x:Key="OnPrimary" Color="#FFFFFF"/>
-  <SolidColorBrush x:Key="Danger" Color="#B42318"/>
-  <SolidColorBrush x:Key="DangerBorder" Color="#F0B8B2"/>
-  <SolidColorBrush x:Key="Success" Color="#16794C"/>
+  <SolidColorBrush x:Key="AccentIndicator" Color="#4B5563"/>
+  <SolidColorBrush x:Key="Danger" Color="#B83B35"/>
+  <SolidColorBrush x:Key="DangerHover" Color="#9E302B"/>
+  <SolidColorBrush x:Key="DangerPressed" Color="#842622"/>
+  <SolidColorBrush x:Key="DangerSoft" Color="#FBF1F1"/>
+  <SolidColorBrush x:Key="OnDanger" Color="#FFFFFF"/>
+  <SolidColorBrush x:Key="DangerBorder" Color="#E5B8B5"/>
+  <SolidColorBrush x:Key="Success" Color="#26734D"/>
+  <SolidColorBrush x:Key="SidebarHover" Color="#DFE2E6"/>
+  <SolidColorBrush x:Key="SidebarPressed" Color="#D2D6DC"/>
+  <SolidColorBrush x:Key="WindowControlHover" Color="#DDE0E5"/>
+  <SolidColorBrush x:Key="WindowControlPressed" Color="#CED2D8"/>
 
   <!-- ═══ Legacy aliases (kept; resolve to the ladder) ════════════════════ -->
   <SolidColorBrush x:Key="AppBg" Color="#F3F3F3"/>
   <SolidColorBrush x:Key="PanelBg" Color="#FFFFFF"/>
   <SolidColorBrush x:Key="PanelBg2" Color="#F3F3F3"/>
-  <SolidColorBrush x:Key="PanelHover" Color="#F3F3F3"/>
+  <SolidColorBrush x:Key="PanelHover" Color="#ECEEF0"/>
   <SolidColorBrush x:Key="Line" Color="#E2E6EA"/>
   <SolidColorBrush x:Key="LineStrong" Color="#D0D6DC"/>
   <SolidColorBrush x:Key="SidebarBg" Color="#E9E9E9"/>
@@ -59,7 +71,7 @@
   <SolidColorBrush x:Key="GridAltBg" Color="#FFFFFF"/>
   <SolidColorBrush x:Key="GridSelectionBg" Color="#FFFFFF"/>
   <SolidColorBrush x:Key="SettingsSelectionBg" Color="#FFFFFF"/>
-  <SolidColorBrush x:Key="SettingsSelectionBorder" Color="#2563EB"/>
+  <SolidColorBrush x:Key="SettingsSelectionBorder" Color="#64748B"/>
   <SolidColorBrush x:Key="SplitterBg" Color="#E2E6EA"/>
   <SolidColorBrush x:Key="StatusBg" Color="#F3F3F3"/>
   <SolidColorBrush x:Key="LogBg" Color="#EAEAEA"/>
@@ -88,7 +100,7 @@
   <SolidColorBrush x:Key="ComboBoxDropDownBackground" Color="#FFFFFF"/>
   <SolidColorBrush x:Key="ComboBoxDropDownBorderBrush" Color="#E2E6EA"/>
   <SolidColorBrush x:Key="ComboBoxDropDownGlyphForeground" Color="#57606A"/>
-  <SolidColorBrush x:Key="ComboBoxBorderBrushFocused" Color="#2563EB"/>
+  <SolidColorBrush x:Key="ComboBoxBorderBrushFocused" Color="#64748B"/>
   <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="#F3F3F3"/>
   <SolidColorBrush x:Key="ComboBoxBackgroundDisabled" Color="#F3F3F3"/>
   <SolidColorBrush x:Key="ComboBoxBorderBrushDisabled" Color="#E2E6EA"/>

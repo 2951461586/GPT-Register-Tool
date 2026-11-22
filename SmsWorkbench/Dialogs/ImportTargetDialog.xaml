@@ -29,14 +29,16 @@
     </ComboBox>
 
     <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
-      <Button Content="{loc:Tr Key='确定'}"
-              Width="76"
-              Style="{StaticResource PrimaryButton}"
-              Click="Ok_Click"/>
       <Button Content="{loc:Tr Key='取消'}"
               Width="76"
-              Margin="8,0,0,0"
+              Margin="0,0,8,0"
+              IsCancel="True"
               Click="Cancel_Click"/>
+      <Button Content="{loc:Tr Key='确定'}"
+              Width="76"
+              IsDefault="True"
+              Style="{StaticResource PrimaryButton}"
+              Click="Ok_Click"/>
     </StackPanel>
   </Grid>
 </Window>

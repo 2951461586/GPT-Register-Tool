@@ -162,11 +162,12 @@ Wpf.Ui.xaml -> Wpf.Ui Theme/Light.xaml -> Themes/Tokens.xaml -> Themes/Glyphs.xa
   `sensitive_policy.json` 的 `sensitive_options`，所以任务日志里的参数展示也是脱敏的。
   详见 `PROXY_GUIDE.md` 的 *Desktop transport*。
 
-## 3.1 标题栏的版本号与更新检查
+## 3.1 侧栏顶部 Logo 的版本号与更新检查
 
-标题栏左侧是一个簇：`GRT` 标记 → 版本号（可点，等于「立即检查」）→
-有更新时出现的胶囊（点开下载页）。版本号是**唯一**说明当前构建的地方，
-所以它同时是触发检查的入口。
+标题栏（`Views/TitleBar.xaml`，高 40px）只保留拖拽区与右侧三个尺寸与动效完全统一的窗口按钮
+（最小化 / 最大化还原 / 关闭，46×39、10×10 字形、1.15 描边）。版本号与更新入口收纳在左侧栏顶部
+`SidebarBrandLogoButton`：有新版本时 Logo 右上角显示小圆点，点击品牌区域弹出 `VersionPopup`，
+展示当前版本号、`检查更新` 按钮及有更新时的 `发现新版本` 下载按钮。
 
 | 关注点 | 归属 |
 | --- | --- |
@@ -312,9 +313,19 @@ Wpf.Ui.xaml -> Wpf.Ui Theme/Light.xaml -> Themes/Tokens.xaml -> Themes/Glyphs.xa
 色板条目 —— 相对 URI 在 `dotnet test` 宿主里会「找不到资源」，2026-10-28 实际踩过。
 所有 `DynamicResource` 随之重解析，**已打开的窗口不必逐个刷**；换成字典之前这里有
 约 120 行 `SetBrush("#hex")`，且必须靠 `ApplyToOpenWindows` 追着刷。
-`WindowThemeService` 现在只剩 DWM 标题栏属性（读 `PanelBg`/`TextMain`），切换后调一次。
+`WindowThemeService.Attach(Window)` 在子弹窗构造期统一完成三件事：
+1. 在 `SourceInitialized`（HWND 首帧绘制前）写入 DWM 标题栏颜色，避免深色模式开窗闪白；
+2. 统一下发 `Font.Ui`（`Microsoft YaHei UI, Segoe UI`）、`Type.Body.Size` 与 `ClearType` / `Display` 清晰渲染；
+3. 在 `Closing` 阶段主动激活可见的 `Owner`，避免关闭子弹窗后主窗口被 Win32 压到后台。
 `ApplicationThemeManager.Apply` 仍然要调，那是 Wpf.Ui 自有控件的主题；
 `DesktopThemePreference`（`Models/`）负责落盘。
+
+2026-11-22 起主动作与聚焦态改为低饱和中性灰炭/灰蓝体系（`Primary` / `PrimaryBorder` / `PrimaryHover` /
+`PrimaryPressed` / `OnPrimary` / `AccentIndicator` / `SidebarHover` / `SidebarPressed` / `OnDanger`），
+并在 `Controls.Buttons.xaml` 与 `Controls.Inputs.xaml` 的 `ContentPresenter.Resources` 内显式继承按钮/复选框自身
+`Foreground`，避免应用级隐式 `TextBlock` 样式把 `PrimaryButton` / `DangerButton` 文本覆写回 `TextMain`。
+`tests/workbench/test_theme_palette_consistency.py` 同时守卫双色板键对等、`DynamicResource` / `StaticResource`
+全仓解析与 `SidebarHover` 对比度。
 
 配色的判定规则（结构用明度分层、颜色只给状态）与逐阶段证据见
 [`plan-2026-10-28-wpf-visual-system.md`](../audits/plans/plan-2026-10-28-wpf-visual-system.md)；

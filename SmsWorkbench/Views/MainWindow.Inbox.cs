@@ -4,17 +4,16 @@ namespace SmsWorkbench.Views
 {
     public partial class MainWindow
     {
-        // Inbox view and mail detail dialog
+        // Inbox view and inline mail detail (modal so closing never drops MainWindow behind other windows)
         private void ShowInboxDialog(PoolRow row)
-            => RunUiTask(() => ShowInboxDialogAsync(row, _lifetimeCts.Token));
-
-        private async Task ShowInboxDialogAsync(PoolRow row, CancellationToken ct = default)
         {
+            if (row == null) return;
+            using var dialogCts = CancellationTokenSource.CreateLinkedTokenSource(_lifetimeCts.Token);
             InboxDialogWindow? dialog = null;
 
             async Task LoadEmails(CancellationToken token = default)
             {
-                if (dialog == null) return;
+                if (dialog == null || token.IsCancellationRequested) return;
                 if (IsCfWorkerRow(row) || IsReMailRow(row) || IsSmailrRow(row))
                 {
                     dialog.SetHeaderText(IsReMailRow(row) ? Loc.T("正在获取 ReMail 邮件...") : IsSmailrRow(row) ? Loc.T("正在获取 Smailr 邮件...") : Loc.T("正在获取 CFWorker 邮件..."));
@@ -23,9 +22,14 @@ namespace SmsWorkbench.Views
                         dialog.MailItems.Clear();
                         foreach (MailItem item in await FetchBackendInbox(row, 25, token))
                         {
+                            if (token.IsCancellationRequested) return;
                             dialog.MailItems.Add(item);
                         }
                         dialog.SetHeaderText(Loc.F("{0} - 最近 {1} 封邮件", row.Identifier, dialog.MailItems.Count));
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        // Dialog closed while inbox request was still in flight.
                     }
                     catch (Exception ex)
                     {
@@ -41,9 +45,14 @@ namespace SmsWorkbench.Views
                     dialog.MailItems.Clear();
                     foreach (MailItem item in await FetchBackendInbox(row, 20, token))
                     {
+                        if (token.IsCancellationRequested) return;
                         dialog.MailItems.Add(item);
                     }
                     dialog.SetHeaderText(Loc.F("{0} - 最近 {1} 封邮件", row.Identifier, dialog.MailItems.Count));
+                }
+                catch (OperationCanceledException)
+                {
+                    // Dialog closed while inbox request was still in flight.
                 }
                 catch (Exception ex)
                 {
@@ -55,10 +64,11 @@ namespace SmsWorkbench.Views
             dialog = new InboxDialogWindow(
                 this,
                 row.Identifier,
-                () => RunUiTask(() => LoadEmails(ct)),
-                ShowMailDetailDialog);
-            dialog.Show();
-            await LoadEmails(ct);
+                () => RunUiTask(() => LoadEmails(dialogCts.Token)),
+                Log);
+            dialog.Loaded += (_, _) => RunUiTask(() => LoadEmails(dialogCts.Token));
+            dialog.Closed += (_, _) => dialogCts.Cancel();
+            dialog.ShowDialog();
         }
 
         private async Task<List<MailItem>> FetchBackendInbox(PoolRow row, int limit, CancellationToken ct = default)
@@ -134,16 +144,5 @@ namespace SmsWorkbench.Views
         private bool IsReMailRow(PoolRow row) => MailboxRowClassifier.IsReMail(row);
 
         private bool IsSmailrRow(PoolRow row) => MailboxRowClassifier.IsSmailr(row);
-
-        private void ShowMailDetailDialog(MailItem item)
-        {
-            if (item == null) return;
-            string content = MailBodyFormatter.ToDisplayText(item.Body, item.BodyPreview);
-            if (content.Length == 0) content = Loc.T("（邮件正文为空）");
-            string code = item.VerificationCode.Length > 0 ? item.VerificationCode : InboxReader.ExtractCode(content);
-            var dialog = new MailDetailDialogWindow(this, item, content, code, Log);
-            dialog.ShowDialog();
-        }
-
     }
 }

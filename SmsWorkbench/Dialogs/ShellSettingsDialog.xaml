@@ -33,10 +33,12 @@
     <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right">
       <Button Content="{loc:Tr Key='取消'}"
               Width="76"
+              Margin="0,0,8,0"
+              IsCancel="True"
               Click="CancelButton_Click"/>
       <Button Content="{loc:Tr Key='保存'}"
               Width="88"
-              Margin="8,0,0,0"
+              IsDefault="True"
               Style="{StaticResource PrimaryButton}"
               Click="SaveButton_Click"/>
     </StackPanel>

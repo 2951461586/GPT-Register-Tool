@@ -375,9 +375,26 @@ public sealed class DesktopWindowSmokeTests
             // in the control's namescope, not the window's.
             var titleBar = Assert.Single(FindVisualChildren<TitleBar>(main));
             Assert.True(titleBar.ActualWidth > 0, "the title bar did not get laid out");
-            Assert.NotNull(titleBar.FindName("MinimizeButton"));
-            Assert.NotNull(titleBar.FindName("MaximizeButton"));
-            Assert.NotNull(titleBar.FindName("CloseButton"));
+            var minBtn = Assert.IsType<Button>(titleBar.FindName("MinimizeButton"));
+            var maxBtn = Assert.IsType<Button>(titleBar.FindName("MaximizeButton"));
+            var closeBtn = Assert.IsType<Button>(titleBar.FindName("CloseButton"));
+            Assert.Equal(46.0, minBtn.ActualWidth);
+            Assert.Equal(46.0, maxBtn.ActualWidth);
+            Assert.Equal(46.0, closeBtn.ActualWidth);
+            Assert.Equal(maxBtn.ActualHeight, minBtn.ActualHeight);
+            Assert.Equal(maxBtn.ActualHeight, closeBtn.ActualHeight);
+            Assert.DoesNotContain(FindVisualChildren<TextBlock>(titleBar), tb => tb.Text == "GRT");
+            Assert.Null(titleBar.FindName("VersionButton"));
+            Assert.Null(titleBar.FindName("UpdateButton"));
+
+            var brandLogoButton = Assert.IsType<Button>(sidebar.FindName("SidebarBrandLogoButton"));
+            var versionPopup = Assert.IsType<System.Windows.Controls.Primitives.Popup>(sidebar.FindName("VersionPopup"));
+            Assert.NotNull(sidebar.FindName("VersionButton"));
+            Assert.NotNull(sidebar.FindName("UpdateButton"));
+            Assert.False(versionPopup.IsOpen);
+            brandLogoButton.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            Assert.True(versionPopup.IsOpen);
+            versionPopup.IsOpen = false;
             var headerLeftEdges = new List<double>();
             foreach (MenuItem menuItem in menuItems)
             {
@@ -524,8 +541,10 @@ public sealed class DesktopWindowSmokeTests
                 new AccountDetailSummaryItem("邮箱", row.Identifier),
                 new AccountDetailSummaryItem("类型", "—"),
             },
+            EgressEndpoint = "us-edge:2000",
+            EgressCountry = "US",
+            FingerprintProfile = "win11-chrome134",
             PayPalUrl = row.PayPalUrl,
-            DetailText = "line-1" + Environment.NewLine + "line-2",
             AccessToken = "token-value",
         };
 
@@ -563,10 +582,12 @@ public sealed class DesktopWindowSmokeTests
         Assert.Same(view, dialog.DataContext);
         var summary = FindVisualChildren<ItemsControl>(dialog).First();
         Assert.Equal(2, summary.Items.Count);
-        var detailBox = FindVisualChildren<TextBox>(dialog)
-            .Single(box => box.AcceptsReturn);
-        Assert.Equal("line-1" + Environment.NewLine + "line-2", detailBox.Text);
-        Assert.False(detailBox.IsReadOnly == false, "the detail blob must stay read-only");
+        Assert.DoesNotContain(FindVisualChildren<TextBox>(dialog), box => box.AcceptsReturn);
+        var networkCard = Assert.IsType<Border>(dialog.FindName("NetworkInfoCard"));
+        Assert.Equal(Visibility.Visible, networkCard.Visibility);
+        Assert.Equal("us-edge:2000", Assert.IsType<TextBlock>(dialog.FindName("EgressEndpointText")).Text);
+        Assert.Equal("US", Assert.IsType<TextBlock>(dialog.FindName("EgressCountryText")).Text);
+        Assert.Equal("win11-chrome134", Assert.IsType<TextBlock>(dialog.FindName("FingerprintProfileText")).Text);
 
         Button ButtonWith(string key) => FindVisualChildren<Button>(dialog)
             .Single(button => Equals(button.Content, Localization.Loc.T(key)));
@@ -596,17 +617,71 @@ public sealed class DesktopWindowSmokeTests
         Assert.Equal(new[] { "check-alive" }, actions.Calls);
         Assert.False(targets.IsVisible, "the probe opens its own UI; the panel must be gone");
 
-        stage("account detail dialog: no AT disables the copy button");
+        stage("account detail dialog: no AT disables copy and collapses network card");
         var withoutToken = new AccountDetailDialog(
             null!,
             row,
-            new AccountDetailView { Identifier = row.Identifier, DetailText = "" },
+            new AccountDetailView { Identifier = row.Identifier },
             new RecordingAccountDetailActions());
         withoutToken.Show();
         withoutToken.UpdateLayout();
         Assert.False(FindVisualChildren<Button>(withoutToken).Single(b => Equals(b.Content, Localization.Loc.T("一键复制AT"))).IsEnabled);
         Assert.False(FindVisualChildren<Button>(withoutToken).Single(b => Equals(b.Content, Localization.Loc.T("打开支付链接"))).IsEnabled);
+        Assert.Equal(Visibility.Collapsed, Assert.IsType<Border>(withoutToken.FindName("NetworkInfoCard")).Visibility);
         withoutToken.Close();
+    }
+
+    private static void VerifyInboxDialog(Action<string> stage)
+    {
+        stage("inbox dialog: single-window list and detail navigation");
+        int refreshes = 0;
+        var logs = new List<string>();
+        var owner = new Window { AllowsTransparency = true, WindowStyle = WindowStyle.None };
+        owner.Show();
+        try
+        {
+            var dialog = new InboxDialogWindow(owner, "inbox@example.com", () => refreshes++, logs.Add);
+            var message = new MailItem
+            {
+                ReceivedAt = "2026-11-22 14:00:00",
+                From = "noreply@openai.com",
+                Subject = "Your ChatGPT code is 482913",
+                Body = "Use verification code 482913 to finish signing in.",
+                VerificationCode = "482913",
+            };
+            dialog.MailItems.Add(message);
+            dialog.Show();
+            dialog.UpdateLayout();
+
+            Assert.Equal(dialog.FindResource("Font.Ui"), dialog.FontFamily);
+            Assert.Equal(dialog.FindResource("Type.Body.Size"), dialog.FontSize);
+            var openDetailBtn = Assert.IsType<Button>(dialog.FindName("OpenDetailButton"));
+            var openDetailText = FindVisualChildren<TextBlock>(openDetailBtn).First();
+            Assert.Equal(dialog.FindResource("OnPrimary"), openDetailText.Foreground);
+
+            Assert.False(dialog.IsShowingDetail);
+            dialog.ShowDetail(message);
+            dialog.UpdateLayout();
+            Assert.True(dialog.IsShowingDetail);
+            Assert.Equal(message.Subject, Assert.IsType<TextBlock>(dialog.FindName("DetailSubjectTextBlock")).Text);
+            Assert.Contains("482913", Assert.IsType<TextBox>(dialog.FindName("DetailBodyTextBox")).Text);
+            var copyCodeBtn = Assert.IsType<Button>(dialog.FindName("CopyCodeButton"));
+            Assert.True(copyCodeBtn.IsEnabled);
+            Assert.Equal(dialog.FindResource("OnPrimary"), FindVisualChildren<TextBlock>(copyCodeBtn).First().Foreground);
+
+            Assert.IsType<Button>(dialog.FindName("BackToListButton"))
+                .RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            dialog.UpdateLayout();
+            Assert.False(dialog.IsShowingDetail);
+            Assert.True(dialog.IsVisible);
+            Assert.Equal(0, refreshes);
+            dialog.Close();
+            Assert.True(owner.IsVisible, "closing InboxDialogWindow must never hide its owner");
+        }
+        finally
+        {
+            owner.Close();
+        }
     }
 
     /// <summary>Records which detail-panel command ran, in order.</summary>
@@ -830,8 +905,16 @@ public sealed class DesktopWindowSmokeTests
             VerifyExportFormatDialog(stage);
             stage("verify account detail dialog");
             VerifyAccountDetailDialog(stage);
+            stage("verify inbox dialog");
+            VerifyInboxDialog(stage);
             stage("verify batch progress dialog");
             VerifyBatchProgressDialog(stage);
+            stage("verify focus ring static resources");
+            var focusRingStyle = Assert.IsType<Style>(application.FindResource("FocusRingStyle"));
+            var focusTemplate = Assert.IsType<ControlTemplate>(
+                focusRingStyle.Setters.OfType<Setter>().Single(setter => setter.Property == Control.TemplateProperty).Value);
+            Assert.NotNull(focusTemplate.LoadContent());
+            Assert.IsType<double>(application.FindResource("Radius.Sm"));
 
             stage("show settings window");
             var settingsViewModel = new SettingsViewModel(
@@ -866,6 +949,11 @@ public sealed class DesktopWindowSmokeTests
             var selectedChrome = Assert.IsType<Border>(selectedCategory.Template.FindName("ItemChrome", selectedCategory));
             Assert.Equal(settings.FindResource("SettingsSelectionBg"), selectedChrome.Background);
             Assert.Equal(settings.FindResource("SettingsSelectionBorder"), selectedChrome.BorderBrush);
+            Assert.Equal(settings.FindResource("Font.Ui"), settings.FontFamily);
+            Assert.Equal(settings.FindResource("Type.Body.Size"), settings.FontSize);
+            var saveButton = FindVisualChildren<Button>(settings)
+                .Single(button => Equals(button.Content, Localization.Loc.T("保存")));
+            Assert.Equal(settings.FindResource("OnPrimary"), FindVisualChildren<TextBlock>(saveButton).First().Foreground);
             stage("verify settings layout");
             VerifySettingsLayout(settings, settingsViewModel);
             settings.Close();

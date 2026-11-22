@@ -30,11 +30,13 @@
               Content="{loc:Tr Key='取消'}"
               Width="76"
               Margin="0,0,8,0"
+              IsCancel="True"
               Visibility="Collapsed"
               Click="CancelButton_Click"/>
       <Button x:Name="ConfirmButton"
               Content="{loc:Tr Key='知道了'}"
               MinWidth="88"
+              IsDefault="True"
               Style="{StaticResource PrimaryButton}"
               Click="ConfirmButton_Click"/>
     </StackPanel>

@@ -31,6 +31,7 @@
                         CellStyle="{StaticResource {x:Type DataGridCell}}"
                         ColumnHeaderStyle="{StaticResource {x:Type DataGridColumnHeader}}"
                         RowHeight="26"
+                        FontSize="{StaticResource Type.Caption.Size}"
                         BorderThickness="0"
 ScrollViewer.HorizontalScrollBarVisibility="Auto"
 ScrollViewer.VerticalScrollBarVisibility="Auto"
@@ -79,14 +80,14 @@ Loaded="TaskGrid_Loaded">
                          Foreground="{DynamicResource LogText}"
                          BorderThickness="0"
                          FontFamily="{StaticResource Font.Mono}"
-                         FontSize="{StaticResource Type.Body.Size}"
+                         FontSize="{StaticResource Type.Mono.Size}"
                          TextOptions.TextFormattingMode="Display"
                          TextOptions.TextRenderingMode="ClearType"
                          IsReadOnly="True"
                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                          TextWrapping="Wrap"
                          VerticalAlignment="Stretch" HorizontalAlignment="Stretch"
-                         Padding="8,8,8,12"/>
+                         Padding="12,10,12,12"/>
               </Grid>
             </Border>
           </Grid>

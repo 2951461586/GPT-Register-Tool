@@ -2,29 +2,29 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:loc="clr-namespace:SmsWorkbench.Localization"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Width="960"
-        Height="740"
-        MinWidth="780"
-        MinHeight="580"
+        Width="780"
+        MinWidth="700"
+        SizeToContent="Height"
+        ResizeMode="CanResize"
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource AppBg}">
-  <!-- Converted from the hand-built Grid in `MainWindow.ShowAccountDetailAsync`
-       on 2026-11-20. Row 2 (the PayPal URL panel) is always present and collapses
-       when the row has no link, so the row indices stay fixed. -->
+  <!-- Compact account detail dialog: 3x2 summary cards, a single merged
+       egress/country/fingerprint provenance module, optional PayPal URL card,
+       and action bar. The legacy raw JSON scroll box was removed. -->
   <Window.Resources>
     <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
   </Window.Resources>
 
-  <Grid Margin="16">
+  <Grid Margin="18">
     <Grid.RowDefinitions>
       <RowDefinition Height="Auto"/>
       <RowDefinition Height="Auto"/>
       <RowDefinition Height="Auto"/>
-      <RowDefinition Height="*"/>
+      <RowDefinition Height="Auto"/>
       <RowDefinition Height="Auto"/>
     </Grid.RowDefinitions>
 
-    <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,14">
       <TextBlock Text="{Binding Identifier}"
                  FontSize="{StaticResource Type.Title.Size}"
                  FontWeight="SemiBold"
@@ -42,7 +42,7 @@
       </Border>
     </StackPanel>
 
-    <ItemsControl Grid.Row="1" ItemsSource="{Binding SummaryItems}" Margin="0,0,0,12">
+    <ItemsControl Grid.Row="1" ItemsSource="{Binding SummaryItems}" Margin="0,0,-8,4">
       <ItemsControl.ItemsPanel>
         <ItemsPanelTemplate>
           <UniformGrid Columns="2"/>
@@ -52,8 +52,8 @@
         <DataTemplate>
           <Border Background="{DynamicResource Surface.Card}"
                   CornerRadius="{StaticResource Corner.Xl}"
-                  Padding="12,8"
-                  Margin="0,0,6,6">
+                  Padding="12,9"
+                  Margin="0,0,8,8">
             <StackPanel>
               <TextBlock Text="{Binding Label}"
                          FontSize="{StaticResource Type.Caption.Size}"
@@ -63,17 +63,83 @@
                          FontSize="{StaticResource Type.Body.Size}"
                          FontWeight="Medium"
                          Foreground="{DynamicResource TextMain}"
-                         TextTrimming="CharacterEllipsis"/>
+                         TextTrimming="CharacterEllipsis"
+                         ToolTip="{Binding Value}"/>
             </StackPanel>
           </Border>
         </DataTemplate>
       </ItemsControl.ItemTemplate>
     </ItemsControl>
 
-    <Border Grid.Row="2"
+    <!-- Merged egress / exit-country / fingerprint module -->
+    <Border x:Name="NetworkInfoCard"
+            Grid.Row="2"
             Background="{DynamicResource Surface.Card}"
             CornerRadius="{StaticResource Corner.Xl}"
-            Padding="12,6"
+            Padding="12,10"
+            Margin="0,0,0,10"
+            Visibility="{Binding HasNetworkInfo, Converter={StaticResource BoolToVisibility}}">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="1.2*"/>
+          <ColumnDefinition Width="Auto"/>
+          <ColumnDefinition Width="0.7*"/>
+          <ColumnDefinition Width="Auto"/>
+          <ColumnDefinition Width="1.1*"/>
+        </Grid.ColumnDefinitions>
+
+        <StackPanel Grid.Column="0">
+          <TextBlock Text="{loc:Tr Key='出口'}"
+                     FontSize="{StaticResource Type.Caption.Size}"
+                     Foreground="{DynamicResource TextMuted}"
+                     Margin="0,0,0,4"/>
+          <TextBlock x:Name="EgressEndpointText"
+                     Text="{Binding EgressEndpointDisplay}"
+                     FontSize="{StaticResource Type.Body.Size}"
+                     FontWeight="Medium"
+                     Foreground="{DynamicResource TextMain}"
+                     TextTrimming="CharacterEllipsis"
+                     ToolTip="{Binding EgressEndpointDisplay}"/>
+        </StackPanel>
+
+        <Border Grid.Column="1" Width="1" Background="{DynamicResource Divider}" Margin="12,2"/>
+
+        <StackPanel Grid.Column="2">
+          <TextBlock Text="{loc:Tr Key='出口国家'}"
+                     FontSize="{StaticResource Type.Caption.Size}"
+                     Foreground="{DynamicResource TextMuted}"
+                     Margin="0,0,0,4"/>
+          <TextBlock x:Name="EgressCountryText"
+                     Text="{Binding EgressCountryDisplay}"
+                     FontSize="{StaticResource Type.Body.Size}"
+                     FontWeight="Medium"
+                     Foreground="{DynamicResource TextMain}"
+                     TextTrimming="CharacterEllipsis"
+                     ToolTip="{Binding EgressCountryDisplay}"/>
+        </StackPanel>
+
+        <Border Grid.Column="3" Width="1" Background="{DynamicResource Divider}" Margin="12,2"/>
+
+        <StackPanel Grid.Column="4">
+          <TextBlock Text="{loc:Tr Key='指纹'}"
+                     FontSize="{StaticResource Type.Caption.Size}"
+                     Foreground="{DynamicResource TextMuted}"
+                     Margin="0,0,0,4"/>
+          <TextBlock x:Name="FingerprintProfileText"
+                     Text="{Binding FingerprintProfileDisplay}"
+                     FontSize="{StaticResource Type.Body.Size}"
+                     FontWeight="Medium"
+                     Foreground="{DynamicResource TextMain}"
+                     TextTrimming="CharacterEllipsis"
+                     ToolTip="{Binding FingerprintProfileDisplay}"/>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <Border Grid.Row="3"
+            Background="{DynamicResource Surface.Card}"
+            CornerRadius="{StaticResource Corner.Xl}"
+            Padding="12,8"
             Margin="0,0,0,10"
             Visibility="{Binding HasPayPalUrl, Converter={StaticResource BoolToVisibility}}">
       <StackPanel>
@@ -92,54 +158,35 @@
       </StackPanel>
     </Border>
 
-    <Border Grid.Row="3"
-            Background="{DynamicResource Surface.Inset}"
-            CornerRadius="{StaticResource Corner.Xl}"
-            Margin="0,0,0,10">
-      <TextBox Text="{Binding DetailText}"
-               IsReadOnly="True"
-               AcceptsReturn="True"
-               TextWrapping="NoWrap"
-               FontFamily="Consolas"
-               FontSize="{StaticResource Type.Body.Size}"
-               Foreground="{DynamicResource TextMain}"
-               VerticalScrollBarVisibility="Auto"
-               HorizontalScrollBarVisibility="Auto"
-               MinHeight="200"
-               Background="Transparent"
-               BorderThickness="0"
-               Padding="10,8,10,8"/>
-    </Border>
-
-    <Grid Grid.Row="4" Margin="0,4,0,0">
+    <Grid Grid.Row="4" Margin="0,6,0,0">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="*"/>
         <ColumnDefinition Width="Auto"/>
       </Grid.ColumnDefinitions>
 
       <StackPanel Orientation="Horizontal">
-        <Button Content="{loc:Tr Key='打开源文件'}" MinWidth="100" Margin="0,0,8,0" Click="OpenSourceFile_Click"/>
+        <Button Content="{loc:Tr Key='打开源文件'}" MinWidth="96" Margin="0,0,8,0" Click="OpenSourceFile_Click"/>
         <Button x:Name="CopyAccessTokenButton"
                 Content="{loc:Tr Key='一键复制AT'}"
-                MinWidth="100"
+                MinWidth="96"
                 Margin="0,0,8,0"
                 IsEnabled="{Binding HasAccessToken}"
                 Click="CopyAccessToken_Click"/>
-        <Button Content="{loc:Tr Key='账号测活'}" MinWidth="100" Margin="0,0,8,0" Click="CheckAlive_Click"/>
+        <Button Content="{loc:Tr Key='账号测活'}" MinWidth="92" Margin="0,0,8,0" Click="CheckAlive_Click"/>
       </StackPanel>
 
       <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
         <Button Content="{loc:Tr Key='打开支付链接'}"
-                MinWidth="120"
+                MinWidth="112"
                 Margin="0,0,8,0"
                 IsEnabled="{Binding HasPayPalUrl}"
                 Click="OpenPayPal_Click"/>
         <Button Content="{loc:Tr Key='复制支付链接'}"
-                MinWidth="120"
+                MinWidth="112"
                 Margin="0,0,8,0"
                 IsEnabled="{Binding HasPayPalUrl}"
                 Click="CopyPayPal_Click"/>
-        <Button Content="{loc:Tr Key='关闭'}" MinWidth="80" Click="Close_Click"/>
+        <Button Content="{loc:Tr Key='关闭'}" MinWidth="76" IsCancel="True" Click="Close_Click"/>
       </StackPanel>
     </Grid>
   </Grid>

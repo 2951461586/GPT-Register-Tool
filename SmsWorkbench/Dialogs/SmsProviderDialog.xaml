@@ -106,6 +106,7 @@
               MinWidth="104"
               Height="36"
               IsDefault="True"
+              Style="{StaticResource PrimaryButton}"
               IsEnabled="{Binding CanStart}"
               Click="Start_Click"/>
     </StackPanel>

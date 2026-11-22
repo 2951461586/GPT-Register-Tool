@@ -3,59 +3,182 @@
         xmlns:loc="clr-namespace:SmsWorkbench.Localization"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Width="860"
-        Height="640"
+        Height="620"
         MinWidth="700"
-        MinHeight="500"
+        MinHeight="480"
         WindowStartupLocation="CenterOwner"
         Background="{DynamicResource AppBg}">
-  <Grid Margin="10">
-    <Grid.RowDefinitions>
-      <RowDefinition Height="Auto"/>
-      <RowDefinition Height="*"/>
-      <RowDefinition Height="Auto"/>
-    </Grid.RowDefinitions>
+  <!-- Single-window master-detail inbox: ListPanel shows messages in the unified
+       borderless DataGrid style; opening a message switches inline to DetailPanel
+       with a back button and Esc/Alt+Left/MouseBack return navigation. -->
+  <Grid Margin="16">
+    <!-- List View -->
+    <Grid x:Name="ListPanel">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="*"/>
+        <RowDefinition Height="Auto"/>
+      </Grid.RowDefinitions>
 
-    <StackPanel Grid.Row="0" Margin="0,0,0,8">
-      <TextBlock x:Name="HeaderTextBlock"
-                 Text="{loc:Tr Key='正在加载收件箱...'}"
-                 FontSize="{StaticResource Type.Subtitle.Size}"
-                 FontWeight="SemiBold"
-                 Foreground="{DynamicResource TextMain}"/>
-    </StackPanel>
+      <Grid Grid.Row="0" Margin="0,0,0,10">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*"/>
+          <ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
+        <TextBlock x:Name="HeaderTextBlock"
+                   Text="{loc:Tr Key='正在加载收件箱...'}"
+                   FontSize="{StaticResource Type.Subtitle.Size}"
+                   FontWeight="SemiBold"
+                   Foreground="{DynamicResource TextMain}"
+                   TextTrimming="CharacterEllipsis"
+                   VerticalAlignment="Center"/>
+        <TextBlock Grid.Column="1"
+                   Text="{loc:Tr Key='双击邮件查看详情'}"
+                   FontSize="{StaticResource Type.Caption.Size}"
+                   Foreground="{DynamicResource TextMuted}"
+                   VerticalAlignment="Center"
+                   Margin="12,0,0,0"/>
+      </Grid>
 
-    <DataGrid x:Name="MailDataGrid"
-              Grid.Row="1"
-              AutoGenerateColumns="False"
-              CanUserAddRows="False"
-              HeadersVisibility="Column"
-              IsReadOnly="True"
-              RowHeight="28"
-              EnableRowVirtualization="True"
-              VirtualizingPanel.IsVirtualizing="True"
-              VirtualizingPanel.VirtualizationMode="Recycling"
-              GridLinesVisibility="Horizontal"
-              AlternatingRowBackground="{DynamicResource GridAltBg}"
-              Background="{DynamicResource PanelBg}"
-              Foreground="{DynamicResource TextMain}"
-              BorderThickness="0"
-              MouseDoubleClick="MailDataGrid_MouseDoubleClick">
-      <DataGrid.Columns>
-        <DataGridTextColumn Header="{loc:Tr Key='时间'}" Binding="{Binding ReceivedAt}" Width="150"/>
-        <DataGridTextColumn Header="{loc:Tr Key='发件人'}" Binding="{Binding From}" Width="200"/>
-        <DataGridTextColumn Header="{loc:Tr Key='主题'}" Binding="{Binding Subject}" Width="*"/>
-      </DataGrid.Columns>
-    </DataGrid>
+      <Border Grid.Row="1"
+              Background="{DynamicResource Surface.Card}"
+              CornerRadius="{StaticResource Corner.Xl}">
+        <DataGrid x:Name="MailDataGrid"
+                  AutoGenerateColumns="False"
+                  CanUserAddRows="False"
+                  HeadersVisibility="Column"
+                  IsReadOnly="True"
+                  SelectionMode="Single"
+                  SelectionUnit="FullRow"
+                  EnableRowVirtualization="True"
+                  VirtualizingPanel.IsVirtualizing="True"
+                  VirtualizingPanel.VirtualizationMode="Recycling"
+                  BorderThickness="0"
+                  MouseDoubleClick="MailDataGrid_MouseDoubleClick"
+                  SelectionChanged="MailDataGrid_SelectionChanged"
+                  PreviewKeyDown="MailDataGrid_PreviewKeyDown">
+          <DataGrid.Columns>
+            <DataGridTextColumn Header="{loc:Tr Key='时间'}" Binding="{Binding ReceivedAt}" Width="165"/>
+            <DataGridTextColumn Header="{loc:Tr Key='发件人'}" Binding="{Binding From}" Width="220"/>
+            <DataGridTextColumn Header="{loc:Tr Key='主题'}" Binding="{Binding Subject}" Width="*"/>
+          </DataGrid.Columns>
+        </DataGrid>
+      </Border>
 
-    <StackPanel Grid.Row="2"
-                Orientation="Horizontal"
-                HorizontalAlignment="Right"
-                Margin="0,8,0,0">
-      <Button Content="{loc:Tr Key='刷新'}"
-              Width="72"
-              Click="RefreshButton_Click"/>
-      <Button Content="{loc:Tr Key='关闭'}"
-              Width="72"
-              Click="CloseButton_Click"/>
-    </StackPanel>
+      <Grid Grid.Row="2" Margin="0,12,0,0">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*"/>
+          <ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
+
+        <StackPanel Orientation="Horizontal">
+          <Button Content="{loc:Tr Key='刷新'}"
+                  MinWidth="80"
+                  Click="RefreshButton_Click"/>
+        </StackPanel>
+
+        <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+          <Button Content="{loc:Tr Key='关闭'}"
+                  Width="76"
+                  Margin="0,0,8,0"
+                  Click="CloseButton_Click"/>
+          <Button x:Name="OpenDetailButton"
+                  Content="{loc:Tr Key='查看详情'}"
+                  MinWidth="88"
+                  Style="{StaticResource PrimaryButton}"
+                  IsEnabled="False"
+                  Click="OpenDetailButton_Click"/>
+        </StackPanel>
+      </Grid>
+    </Grid>
+
+    <!-- Detail View -->
+    <Grid x:Name="DetailPanel" Visibility="Collapsed">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="*"/>
+        <RowDefinition Height="Auto"/>
+      </Grid.RowDefinitions>
+
+      <Grid Grid.Row="0" Margin="0,0,0,12">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto"/>
+          <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+        <Button x:Name="BackToListButton"
+                MinWidth="104"
+                Padding="10,0"
+                Margin="0,0,12,0"
+                Click="BackToListButton_Click">
+          <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+            <Path Style="{StaticResource IconPath}"
+                  Width="13"
+                  Height="13"
+                  Stroke="{DynamicResource TextMain}"
+                  Data="{StaticResource Glyph.PrevPage}"/>
+            <TextBlock Text="{loc:Tr Key='返回收件箱'}"
+                       Margin="6,0,0,0"
+                       VerticalAlignment="Center"/>
+          </StackPanel>
+        </Button>
+        <TextBlock x:Name="DetailSubjectTextBlock"
+                   Grid.Column="1"
+                   FontSize="{StaticResource Type.Subtitle.Size}"
+                   FontWeight="SemiBold"
+                   TextWrapping="Wrap"
+                   VerticalAlignment="Center"
+                   Foreground="{DynamicResource TextMain}"/>
+      </Grid>
+
+      <TextBlock x:Name="DetailMetaTextBlock"
+                 Grid.Row="1"
+                 Margin="0,0,0,10"
+                 FontSize="{StaticResource Type.Caption.Size}"
+                 Foreground="{DynamicResource TextSub}"/>
+
+      <Border Grid.Row="2"
+              Background="{DynamicResource Surface.Card}"
+              CornerRadius="{StaticResource Corner.Xl}"
+              Padding="12,10">
+        <TextBox x:Name="DetailBodyTextBox"
+                 Style="{StaticResource MultilineTextBox}"
+                 IsReadOnly="True"
+                 TextWrapping="Wrap"
+                 FontFamily="{StaticResource Font.Ui}"
+                 FontSize="{StaticResource Type.Body.Size}"
+                 VerticalScrollBarVisibility="Auto"
+                 HorizontalScrollBarVisibility="Disabled"
+                 Background="Transparent"
+                 Foreground="{DynamicResource TextMain}"
+                 BorderThickness="0"
+                 Padding="4,2"/>
+      </Border>
+
+      <Grid Grid.Row="3" Margin="0,12,0,0">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*"/>
+          <ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
+
+        <StackPanel Orientation="Horizontal">
+          <Button x:Name="CopyBodyButton"
+                  Content="{loc:Tr Key='复制正文'}"
+                  MinWidth="88"
+                  Click="CopyBodyButton_Click"/>
+        </StackPanel>
+
+        <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+          <Button Content="{loc:Tr Key='关闭'}"
+                  Width="76"
+                  Margin="0,0,8,0"
+                  Click="CloseButton_Click"/>
+          <Button x:Name="CopyCodeButton"
+                  MinWidth="128"
+                  Style="{StaticResource PrimaryButton}"
+                  Click="CopyCodeButton_Click"/>
+        </StackPanel>
+      </Grid>
+    </Grid>
   </Grid>
 </Window>
