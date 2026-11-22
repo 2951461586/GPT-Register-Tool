@@ -48,82 +48,91 @@ GPT-Register-Tool 采用 **WPF 桌面端 + Python 业务核心**，提供邮箱 
 | **手机接码** | SMSBower、HeroSMS、Grizzly、NexSMS 的供应商选择与在线目录查询（可用性依供应商协议），支持发送重试、超时与轮询间隔配置；详见 [当前接码契约](docs/current/one-click-sms.md) |
 
 
-### 架构总览
+## 架构总览
 
-项目按 **① UI → ② CLI / 命令适配 → ③ 应用工作流 → ④ 领域契约 → ⑤ Provider / 持久化 / 传输适配** 五层组织，导入只指向内层，下层从不反向依赖上层。配置与运行数据落在仓库外（Git 忽略）。注册泳道分协议（内置默认）与浏览器驱动两条，二者共用同一套邮箱 OTP、Session 提取与 AT 探活边界。
+项目按 **① 表面层 → ② CLI / 命令适配 → ③ 应用工作流 → ④ Provider / 驱动 / 持久化适配 → ⑤ 基础内核与领域契约** 五层组织（模块归属以 `scripts/layer_manifest.json` 为单一权威）：模块级导入严格向内（`source layer ≤ target layer`），下层绝不反向依赖上层，最内层 `sms_tool/kernel/` 仅允许依赖 Python 标准库。
+
+桌面端（WPF · .NET 10）与 Python 核心之间采用**读写双通道**隔离，并通过仓库根目录的跨语言契约清单（`config_schema.json`、`ipc_schema.json`、`result_schema.json`、`sensitive_policy.json`、`payment_methods.json`）保持双向校验：
+
+- **写路径（任务执行）**：`PythonBackendClient` 启动 `python -m sms_tool` 子进程执行注册、测活、换绑与批量支付；代理凭据经环境变量透传（不进入命令行 `argv`），stdout 经 `sms_tool/desktop/ipc.py` 输出版本化 `@@SMSWORKBENCH_V2@@` 进度/结果信封。
+- **读路径（只读快照）**：`DesktopReadClient` 与 `sms_tool/desktop/serve.py` / `sms_tool/desktop/read.py` 维持常驻 JSONL 请求-响应通道（含一次性回退），用于账号池、邮箱池与短信目录的只读加载，不产生写副作用。
+
+注册泳道分为**协议注册**（默认）与**浏览器驱动**两条，二者共用同一套邮箱 OTP、Session 提取与 AT HTTP 200 探活边界；配置分片与运行数据默认保存在仓库外（Git 忽略）。
 
 ```mermaid
 flowchart TB
-    subgraph L1["① 桌面端 UI · SmsWorkbench/（WPF · .NET 10）"]
+    subgraph L1["① 表面层 · 桌面端与跨进程入口"]
         direction LR
-        PANEL["Generic Host / DI<br/>Views · Dialogs · ViewModels · Coordinators"]
-        IPC["IBackendClient<br/>版本化信封"]
+        WPF["SmsWorkbench/（WPF · .NET 10）<br/>Views · Dialogs · ViewModels · Services<br/>Models · Interop · Themes · Assets/Fonts"]
+        CONTRACTS["SmsWorkbench.Contracts/<br/>CommandPlanner · PaymentMethods<br/>Sanitizer · Read/IPC 契约"]
+        DREAD["sms_tool/desktop/<br/>serve.py · read.py<br/>常驻 JSONL 只读表面"]
     end
 
-    subgraph L2["② CLI / 命令适配"]
+    subgraph L2["② CLI / 命令适配层"]
         direction LR
-        CLI["cli.py"]
-        CMDS["commands/"]
-        PARSERS["cli_parsers/"]
+        CLI["sms_tool/cli.py（惰性分发）"]
+        CMDS["commands/ · cli_parsers/"]
+        DIAG["doctor.py · config_usage.py"]
     end
 
-    subgraph L3["③ 应用工作流"]
+    subgraph L3["③ 应用工作流层"]
         direction LR
-        REG["registration/"]
-        DRV["registration_drivers/"]
-        REC["accounts/"]
+        REG["registration/ · auth_flow/<br/>协议注册 · 批处理 · 脉冲调度"]
+        BFLOW["registration_drivers/browser_flow/<br/>浏览器注册页面流"]
+        MBFLOW["mailbox/<br/>路由 · 策略 · 轮询"]
+        ACC["accounts/ · codex/ · importers/<br/>测活 · 恢复 · 巡检 · 换绑 · 导出"]
+        PAYFLOW["payment/（batch · auth · qualification_batch）<br/>paypal/（orchestrator · reverse）"]
     end
 
-    subgraph L4["④ 领域契约（不可变接缝）"]
+    subgraph L4["④ Provider / 驱动 / 持久化适配层"]
         direction LR
-        RESULT["registration/result.py"]
-        WIRE["payment/wire.py"]
-        CHECKOUT["payment/checkout_contract.py"]
-        DIPC["desktop/ipc.py"]
+        PROV["providers/ · phone/<br/>邮箱与手机接码适配"]
+        DRV["registration_drivers/ · browser/<br/>playwright · camoufox · roxy · cloak"]
+        SEN["sentinel/<br/>Node sdk.js · ICU 隔离"]
+        PAYAD["pay_link/（oaics_provider）· wallet/<br/>paypal/ · paypal_link/ · upi_link/"]
+        STO["store/ · session/<br/>SQLite + Session JSON"]
     end
 
-    subgraph L5["⑤ Provider / 持久化 / 传输与可观测性适配"]
+    subgraph L5["⑤ 基础内核与领域契约层（最内层 · 零外向依赖）"]
         direction LR
-        AF["auth_flow/ · transport/"]
-        SEN["sentinel/ · phone/"]
-        MB["mailbox/ · providers/"]
-        PAY["payment/ · pay_link/ · paypal/"]
-        STO["store/ · observability/"]
-        GEO["geo/ · proxy/"]
+        KERN["kernel/（仅标准库）<br/>paths · sanitizer · timeouts · flags"]
+        INFRA["config/ · transport/ · proxy/ · geo/<br/>observability/"]
+        SEAMS["不可变领域契约与跨泳道原语<br/>account_models · payment/wire & checkout_contract<br/>desktop/ipc · operation_journal · cross_process_gate"]
     end
 
-    PANEL --> IPC
-    CLI --> CMDS
-    CLI --> PARSERS
-    REG -. 驱动注册表 .-> DRV
-    L1 --> L2
+    EXT["services/protocol-payment/<br/>独立子进程提取器（零导入耦合）"]
+    DATA[("本地配置与运行数据（Git 忽略）<br/>%LOCALAPPDATA%\\GPTRegisterTool\\config · sessions/ · runtime/")]
+
+    WPF --> CONTRACTS
+    WPF -. "DesktopReadClient · JSONL 只读" .-> DREAD
+    L1 -- "PythonBackendClient · CLI + V2 信封" --> L2
     L2 --> L3
     L3 --> L4
     L4 --> L5
-    L5 --> DATA[("本地配置与运行数据<br/>sessions/ · runtime/ · %LOCALAPPDATA% —— Git 忽略")]
+    PAYAD -. "子进程边界" .-> EXT
+    L4 --> DATA
+    L5 --> DATA
 ```
 
 每层的模块归属与职责边界：
 
 | 层 | 模块 | 职责 |
-| ---------------------------------------- | --- | --- |
-| ① 桌面端 UI | `SmsWorkbench/`（`Views` · `Dialogs` · `ViewModels` · `Services` · `Models` · `Interop`） | Generic Host / DI、MVVM 页面与 XAML 弹窗、无窗口依赖 Coordinator、设置页、批量协议支付窗口、账号池；经 `IBackendClient` 以参数列表调用后端，并管理取消 / 超时 / 进程树终止 |
-| ② CLI / 命令适配 | `cli.py`、`commands/`、`cli_parsers/` | 参数解析、任务编排、批量任务、退出码；不承载 provider 实现 |
-| ③ 应用工作流 | `registration/orchestrator.py`、`registration/handlers.py` | 注册入口（入口分派 + `RegistrationOperations` 绑定）与协议泳道：阶段顺序、Sentinel 签发、OTP、AT 探活 |
-| ③ 应用工作流 | `registration/batch_runner.py`、`registration/pulse.py` | 并发与脉冲调度、目标成功数（`target_success`）早停、JIT AT 门禁、原子断点与断点续跑 |
-| ③ 应用工作流 | `registration_drivers/` | 浏览器驱动（playwright · camoufox · roxy · cloak）、静态资源省流拦截（`data_saver.py`）与 `browser_flow/`、`external_sessions/` |
-| ③ 应用工作流 | `accounts/`、`codex/oauth.py`、`importers/` | 存量账号测活/恢复、离线 JWT 快速盘点（`account_inspection.py`）、Codex OAuth 与导入导出；不负责新注册 |
-| ④ 领域契约 | `registration/result.py`、`registration/flags.py`、`payment/checkout_contract.py`、`payment/wire.py`、`desktop/ipc.py` | 每次调用绑定一次的不可变接缝；`RegistrationOperations` 为固定接口，不作为活模块传入工作流 |
-| ⑤ Provider / 持久化适配&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `auth_flow/`、`transport/` | 步骤函数（signin / authorize / continue / OTP / TOTP）与 HTTP/TLS/指纹/端点传输底座 |
-| ⑤ Provider / 持久化适配&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `sentinel/`、`registration/sentinel_tokens.py` | Sentinel Token 签发（Node `sdk.js` runner + ICU 时区/语言环境隔离） |
-| ⑤ Provider / 持久化适配&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `mailbox/`、`phone/`、`providers/` | 邮箱与手机接码路由、能力解析、轮询策略与 provider 传输 |
-| ⑤ Provider / 持久化适配&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `payment/`、`pay_link/`、`paypal/`、`paypal_link/`、`upi_link/` | Checkout 契约、能力探测、钱包 / GCash 与区域支付适配 |
-| ⑤ Provider / 持久化适配&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `store/`、`observability/` | SQLite + Session JSON 持久化、领域事实、脱敏日志与遥测输出 |
-| ⑤ Provider / 持久化适配&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | `geo/`、`proxy/routing.py`、`transport/fingerprint_pool.py` | 出口 GeoIP 与指纹绑定 |
+| --- | --- | --- |
+| ① 表面层（桌面端 UI） | `SmsWorkbench/`（`Views` · `Dialogs` · `ViewModels` · `Services` · `Models` · `Interop` · `Localization` · `Themes` · `Assets/Fonts/`） | Generic Host / DI、角色目录命名空间隔离、MVVM 主窗与全 XAML 弹窗、无窗口依赖 Coordinator、DeepAI 壳层-悬浮画布双主题（光/暗）与内嵌 `Atkinson Hyperlegible Next` 字体、可折叠日志/队列底栏、托盘与全局热键、工作区备份恢复 |
+| ① 表面层（桌面契约与读通道） | `SmsWorkbench.Contracts/`、`sms_tool/desktop/serve.py`、`sms_tool/desktop/read.py` | 窗口无关的 CLI 命令规划（`BackendCommandPlanner`）、支付方式目录、敏感词脱敏、常驻 JSONL 只读快照服务与 `DesktopReadClient` 协议契约 |
+| ② CLI / 命令适配 | `sms_tool/cli.py`、`sms_tool/commands/`、`sms_tool/cli_parsers/`、`sms_tool/doctor.py`、`sms_tool/config_usage.py` | 惰性命令分发、纯参数声明组、退出码映射与环境诊断；不承载 provider 协议实现或直接写库 |
+| ③ 应用工作流（注册与认证） | `sms_tool/registration/`（`orchestrator.py` · `handlers.py` · `batch_runner.py` · `pulse.py`）、`sms_tool/auth_flow/`、`sms_tool/registration_drivers/browser_flow/` | 注册入口分派与 `RegistrationOperations` 不可变绑定、协议分阶段执行、目标成功数与脉冲调度、断点续跑、浏览器页面状态机；协议与浏览器两条泳道共用 OTP / Session / AT 200 边界 |
+| ③ 应用工作流（邮箱 · 账号 · 支付编排） | `sms_tool/mailbox/`、`sms_tool/accounts/`、`sms_tool/codex/`、`sms_tool/importers/`、`sms_tool/payment/batch.py`、`sms_tool/payment/qualification_batch.py` | 邮箱路由/策略/轮询、存量账号测活/401 分层恢复/离线 JWT 巡检（`sms_tool/accounts/account_inspection.py`）/优惠与健康批处理/换绑/终端清理、Codex OAuth 与 CPA / SUB2API 导入导出、批量协议支付与支付资格编排 |
+| ④ Provider / 驱动适配 | `sms_tool/providers/`、`sms_tool/phone/`、`sms_tool/registration_drivers/`、`sms_tool/browser/`、`sms_tool/sentinel/`、`sms_tool/registration/sentinel_tokens.py` | 邮箱与手机接码供应商客户端与号池复用；浏览器驱动（playwright · camoufox · roxy · cloak）、静态资源省流拦截（`sms_tool/registration_drivers/data_saver.py`）与进程/指纹池；Sentinel Node `sdk.js` 签发与 ICU 时区/语言隔离 |
+| ④ 支付泳道与持久化适配 | `sms_tool/pay_link/`、`sms_tool/wallet/`、`sms_tool/paypal/`、`sms_tool/paypal_link/`、`sms_tool/upi_link/`、`sms_tool/store/`、`sms_tool/session/` | 多方式支付注册表与进程内 OAICS 自定义 Checkout 提供器（`sms_tool/pay_link/oaics_provider.py`，覆盖 iDEAL / PIX / Kakao Pay / BLIK / TWINT / MoMo）、GoPay / GrabPay / GCash 钱包适配、冻结传统 PayPal / UPI 泳道；SQLite + Session JSON 双层索引与断点持久化（`sms_tool/storage.py` 为兼容壳）、标准会话构建与刷新 |
+| ⑤ 基础内核 | `sms_tool/kernel/` | 零应用层依赖的纯标准库底座：路径、脱敏、超时常量、冻结配置布尔开关、失败分类词表与共享传输原语 |
+| ⑤ 基础设施底座 | `sms_tool/config/`、`sms_tool/transport/`、`sms_tool/proxy/`、`sms_tool/geo/`、`sms_tool/observability/` | 分片配置加载与只读冻结；`curl_cffi` / `wreq` 双传输后端、端点单一权威（`sms_tool/transport/endpoints.py`）与指纹池；代理串单一权威（`sms_tool/proxy/entry.py`）、通道路由、健康度与二级跳板本地桥（`sms_tool/proxy/bridge.py`）；出口 GeoIP / 时区单一权威与脱敏遥测 |
+| ⑤ 领域契约与共享原语 | `sms_tool/accounts/account_models.py`、`sms_tool/payment/wire.py`、`sms_tool/payment/checkout_contract.py`、`sms_tool/payment/catalog.py`、`sms_tool/desktop/ipc.py`、`sms_tool/operation_journal.py`、`sms_tool/cross_process_gate.py` | 跨泳道不可变契约（账号模型、Checkout 与支付线缆核、方法目录、优惠/支付资格状态机、唯一 `@@SMSWORKBENCH_V2@@` IPC 写入器、幂等恢复日志与跨进程文件锁） |
 
-`services/` 为可选本地协议服务（子进程边界，`protocol-payment`），不属于上述五层。
+- **进程外边界**：`services/protocol-payment/` 为可选/传统本地协议支付子进程提取器（统一 `protocol_payment.v1` 终态回报），与 `sms_tool/` 保持零导入耦合；区域方式（iDEAL / PIX / Kakao Pay / BLIK / TWINT / MoMo）已主迁至进程内 `sms_tool/pay_link/oaics_provider.py`。
+- **自动化架构门禁**：五层依赖方向与命名空间隔离由 CI 和预提交钩子强制守卫，包括 `scripts/import_layer_ratchet.py`、`scripts/kernel_boundary_ratchet.py`、`scripts/root_module_ratchet.py`、`scripts/architecture_scan.py` 以及 `tests/SmsWorkbench.Tests/NamespaceArchitectureTests.cs`。
 
-更详细的边界说明见 [架构说明](docs/architecture.md)，目录职责见 [目录职责](docs/directory-map.md)。
+更详细的边界规则见 [架构与边界说明](docs/architecture.md)，WPF 前端架构见 [桌面端 UI 架构](docs/current/ui-architecture.md)，物理文件归属见 [目录职责](docs/directory-map.md)。
 
 
 ## 常见问题
