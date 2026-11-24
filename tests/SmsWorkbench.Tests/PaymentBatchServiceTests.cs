@@ -435,6 +435,75 @@ public sealed class PaymentBatchServiceTests
             value => value.Contains("payment-", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void ExtractServerConfigurationRoundTripsInPaymentShard()
+    {
+        using var fixture = new TemporaryDirectory();
+        File.WriteAllText(Path.Combine(fixture.Path, "config.json"), "{}", new UTF8Encoding(false));
+        var service = new PaymentBatchService(new TestApplicationPaths(fixture.Path), new BackendTaskCoordinator(new StubBackendClient()));
+
+        SettingsSaveResult invalid = service.SaveExtractServerConfiguration(
+            new ExtractLinkServerConfiguration("https://pay.example.com", "cdk-123", "/api/v1/extract", 2));
+        Assert.False(invalid.Ok);
+
+        SettingsSaveResult saved = service.SaveExtractServerConfiguration(
+            new ExtractLinkServerConfiguration("https://pay.example.com/", "cdk-secret-value", "api/v2/extract", 45, false, false));
+        Assert.True(saved.Ok, saved.Error);
+
+        ExtractLinkServerConfiguration loaded = service.LoadExtractServerConfiguration();
+        Assert.Equal("https://pay.example.com", loaded.ApiBase);
+        Assert.Equal("cdk-secret-value", loaded.Cdk);
+        Assert.Equal("/api/v2/extract", loaded.Endpoint);
+        Assert.Equal(45, loaded.TimeoutSeconds);
+        Assert.False(loaded.PassProxy);
+        Assert.False(loaded.VerifyTls);
+
+        JsonObject root = ConfigTestHelpers.ReadMergedConfig(fixture.Path);
+        JsonObject server = root["protocol_payments"]!["extract_link_server"]!.AsObject();
+        Assert.Equal("only", server["mode"]!.GetValue<string>());
+        Assert.True(server["enabled"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task RunAsyncPassesExtractServerCredentialsViaEnvironmentNeverArguments()
+    {
+        using var fixture = new TemporaryDirectory();
+        File.WriteAllText(Path.Combine(fixture.Path, "config.json"), "{}", new UTF8Encoding(false));
+        const string secretCdk = "cdk-live-never-in-argv-98765";
+        var backend = new StubBackendClient
+        {
+            Handler = _ => new BackendCommandResult(0, "", "", JsonElementOf("{\"ok\":true}"), false)
+        };
+        var service = new PaymentBatchService(new TestApplicationPaths(fixture.Path), new BackendTaskCoordinator(backend));
+        var request = new PaymentBatchRequest(
+            new[] { new PaymentBatchAccount("first@example.com", true) },
+            "paypal", 2, 1, 0, "extract-server-batch", "", "", "", "US", "US",
+            true, false, true,
+            new[] { service.CreateDefaultMatrixRow("paypal") })
+        {
+            ExtractServer = new ExtractLinkServerConfiguration(
+                "https://pay.example.com",
+                secretCdk,
+                "/api/v1/extract",
+                75,
+                true,
+                false)
+        };
+
+        await service.RunAsync(request, CancellationToken.None);
+
+        Assert.NotNull(backend.LastCommand);
+        Assert.Equal(Localization.Loc.T("支付链接提取"), backend.LastCommand!.Name);
+        Assert.DoesNotContain(backend.LastCommand.Arguments, arg => arg.Contains(secretCdk, StringComparison.Ordinal));
+        Assert.Equal("only", backend.LastCommand.EnvironmentVariables["EXTRACT_LINK_MODE"]);
+        Assert.Equal("https://pay.example.com", backend.LastCommand.EnvironmentVariables["EXTRACT_LINK_API_BASE"]);
+        Assert.Equal(secretCdk, backend.LastCommand.EnvironmentVariables["EXTRACT_LINK_CDK"]);
+        Assert.Equal("/api/v1/extract", backend.LastCommand.EnvironmentVariables["EXTRACT_LINK_ENDPOINT"]);
+        Assert.Equal("75", backend.LastCommand.EnvironmentVariables["EXTRACT_LINK_TIMEOUT"]);
+        Assert.Equal("1", backend.LastCommand.EnvironmentVariables["EXTRACT_LINK_PASS_PROXY"]);
+        Assert.Equal("0", backend.LastCommand.EnvironmentVariables["EXTRACT_LINK_VERIFY_TLS"]);
+    }
+
     private static string ArgumentAfter(IReadOnlyList<string> arguments, string option)
     {
         int index = arguments.ToList().IndexOf(option);

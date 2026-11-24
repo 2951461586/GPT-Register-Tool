@@ -52,11 +52,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BASELINE = Path(__file__).resolve().parent / "endpoints_literal_baseline.json"
 
-#: Both process boundaries. Each has its own ``endpoints.py`` authority.
-SCAN_DIRS: tuple[Path, ...] = (
-    Path("services") / "protocol-payment",
-    Path("sms_tool"),
-)
+#: Process boundary scanned by this ratchet (``services/protocol-payment/`` retired).
+SCAN_DIRS: tuple[Path, ...] = (Path("sms_tool"),)
 EXCLUDED_FILES = {"endpoints.py"}
 EXCLUDED_DIRS = {"__pycache__", "_vendor"}
 

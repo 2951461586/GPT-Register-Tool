@@ -226,12 +226,13 @@ def resolve_payment_qualification(config: Mapping[str, Any] | None) -> list[str]
     back to the promotion lane and, because such exits are typically
     ChatGPT-only, aborts with ``stripe_unreachable`` before creating a Checkout.
     """
+    canonical = canonical_lane_pool(config, QUALIFICATION)
+    if canonical:
+        return canonical
     section = config.get("payment_qualification") if isinstance(config, Mapping) else None
     if isinstance(section, Mapping):
-        dedicated = parse_lane_proxy_pool(section.get("proxy_pool"))
-        if dedicated:
-            return dedicated
-    return canonical_lane_pool(config, QUALIFICATION) or []
+        return parse_lane_proxy_pool(section.get("proxy_pool"))
+    return []
 
 
 def _method_local_pools(cfg: Mapping[str, Any], method: str) -> dict[str, list[str]]:
@@ -367,10 +368,15 @@ def census(config: Mapping[str, Any] | None, *, methods: Sequence[str] = ("paypa
             payment_pools.append(list(pool))
         payment["methods"][method] = method_view
     union.update(payment["endpoints"])
+    primary_payment = resolve_payment(config, method=methods[0]) if methods else {}
+    sanitized_regions = {
+        name: {"count": len(pool), "endpoints": endpoints_of(pool)}
+        for name, pool in (primary_payment.get("regions") or {}).items()
+    }
     report[PAYMENT] = {
-        "regions": (resolve_payment(config, method=methods[0]).get("regions", {}) if methods else {}),
+        "regions": sanitized_regions,
         "endpoints": sorted(payment["endpoints"]),
-        "source": resolve_payment(config, method=methods[0])["regions_source"] if methods else "n/a",
+        "source": primary_payment.get("regions_source", "n/a") if methods else "n/a",
         "methods": payment["methods"],
     }
     report["union_endpoints"] = sorted(union)

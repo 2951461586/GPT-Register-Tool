@@ -8,18 +8,47 @@ paypal_auto.  Both modules now import from this neutral shared module.
 
 from __future__ import annotations
 
+import importlib
+import os
 import re
+import sys
 import time
+from pathlib import Path
+from typing import Any
 
 import requests as _requests
 
 from ..desktop.ipc import progress_dots_enabled
+
+
+def _load_native_sms_code() -> Any | None:
+    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
+    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_SMS_CODE") or "").strip().lower()
+    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
+        return None
+    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "sms-code-rs" / "python"
+    if pkg_dir.is_dir():
+        pkg_str = str(pkg_dir)
+        if pkg_str not in sys.path:
+            sys.path.insert(0, pkg_str)
+    try:
+        return importlib.import_module("sms_code_rs")
+    except (ImportError, OSError):
+        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
+            raise
+        return None
+
+
+_NATIVE_SMS_CODE = _load_native_sms_code()
+_NATIVE_EXTRACT_SMS_CODE = getattr(_NATIVE_SMS_CODE, "_extract_sms_code", None)
 
 # ─── SMS code extraction ──────────────────────────────────────────────────────
 
 
 def _extract_sms_code(text: str | None) -> str | None:
     """Extract verification code from SMS text, avoiding false positives."""
+    if _NATIVE_EXTRACT_SMS_CODE is not None and (text is None or isinstance(text, str)):
+        return _NATIVE_EXTRACT_SMS_CODE(text)
     if not text:
         return None
 

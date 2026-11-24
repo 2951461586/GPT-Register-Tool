@@ -30,7 +30,6 @@
   "sms_tool/paypal/orchestrator.py": 16,
   "sms_tool/paypal/reverse.py": 38,
   "sms_tool/paypal/session.py": 2,
-  "sms_tool/paypal_link/gen_link.py": 11,
   "sms_tool/phone/registration.py": 18,
   "sms_tool/phone/reuse.py": 21,
   "sms_tool/phone/sms_utils.py": 6,
@@ -53,6 +52,5 @@
   "sms_tool/transport/auth_state.py": 3,
   "sms_tool/transport/http_client.py": 1,
   "sms_tool/transport/http_utils.py": 2,
-  "sms_tool/upi_link/env.py": 1,
   "sms_tool/utils.py": 8
 }

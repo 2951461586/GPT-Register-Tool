@@ -28,26 +28,24 @@ import logging
 import signal
 import sys
 
-from sms_tool.phone.phone_proxy import redact_proxy_url
 from sms_tool.proxy.edge_probe import edge_health
+from sms_tool.proxy.entry import redact_proxy_url
 from sms_tool.proxy.health import ProxyHealthTracker
 from sms_tool.proxy.pool import Socks5Server, UPSTREAM_SCHEMES, UpstreamProxy
+from sms_tool.proxy.registry import resolve_registration
 
 logger = logging.getLogger("proxy_pool")
 
 
 def _upstreams_from_proxy_cfg(cfg: dict) -> list[UpstreamProxy]:
-    """Build upstreams from the merged proxy shard (``proxy.pool``).
-
-    Pool entries are the same strings/dicts the registration path consumes.
-    Entries whose scheme the pool cannot dial are skipped with a warning instead
-    of being silently coerced into SOCKS5 upstreams that fail at connect time;
-    entries without a usable URL are skipped loudly too.
-    """
+    """Build upstreams from canonical ``proxy.lanes`` or legacy ``proxy.pool``."""
+    canonical = resolve_registration(cfg)
     proxy_cfg = cfg.get("proxy")
     if not isinstance(proxy_cfg, dict):
         proxy_cfg = {}
-    raw_list = proxy_cfg.get("pool") or []
+    lanes = proxy_cfg.get("lanes")
+    has_canonical_lane = isinstance(lanes, dict) and bool(lanes.get("protocol_registration"))
+    raw_list: list = list(canonical) if (has_canonical_lane and canonical) else list(proxy_cfg.get("pool") or [])
     upstreams: list[UpstreamProxy] = []
     for entry in raw_list:
         if isinstance(entry, str):
@@ -185,7 +183,7 @@ def main() -> None:
 
     host = args.host or "127.0.0.1"
     port = args.port or 18080
-    stats_port = args.stats_port or 18081
+    stats_port = 18081 if args.stats_port is None else args.stats_port
     stats_host = args.stats_host or "127.0.0.1"
     health_interval = args.health_interval or 30.0
     health_timeout = args.health_timeout or (15.0 if args.health_edge_probe else 5.0)

@@ -9,6 +9,7 @@ cache short-lived probe results.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -311,17 +312,17 @@ def _probe_timeout_seconds() -> int:
 
 
 def _probe_proxy_live(proxy: str, expected_country: str = "") -> dict:
-    session = requests.Session()
-    session.trust_env = False
-    session.proxies = {"http": proxy, "https": proxy}
     timeout = _probe_timeout_seconds()
-    response = session.get(
-        "http://ip-api.com/json?fields=status,message,country,countryCode,query",
-        timeout=timeout,
-        headers={"User-Agent": "Mozilla/5.0 CodexPhoneProxyProbe/1.0"},
-    )
-    response.raise_for_status()
-    data = response.json()
+    with requests.Session() as session:
+        session.trust_env = False
+        session.proxies = {"http": proxy, "https": proxy}
+        response = session.get(
+            "http://ip-api.com/json?fields=status,message,country,countryCode,query",
+            timeout=timeout,
+            headers={"User-Agent": "Mozilla/5.0 CodexPhoneProxyProbe/1.0"},
+        )
+        response.raise_for_status()
+        data = response.json()
     if data.get("status") and data.get("status") != "success":
         raise RuntimeError(str(data.get("message") or data))
     country_code = str(data.get("countryCode") or "").upper()
@@ -330,11 +331,17 @@ def _probe_proxy_live(proxy: str, expected_country: str = "") -> dict:
     return {"ok": True, "ip": data.get("query", ""), "country_code": country_code, "country": data.get("country", "")}
 
 
+def _probe_cache_key(proxy: str, expected_country: str) -> str:
+    raw = json.dumps({"proxy": proxy, "expected": str(expected_country or "").upper()}, sort_keys=True)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
 def probe_proxy(proxy: str, expected_country: str = "", *, use_cache: bool = True) -> dict:
     proxy = normalize_proxy_url(proxy)
     if not proxy:
         return {"ok": True, "proxy": "", "scheme": "direct", "cache": False}
-    key = json.dumps({"proxy": proxy, "expected": str(expected_country or "").upper()}, sort_keys=True)
+    key = _probe_cache_key(proxy, expected_country)
+    redacted = redact_proxy_url(proxy)
     now = time.time()
     ttl = _cache_ttl_seconds()
     if use_cache and ttl > 0:
@@ -342,22 +349,26 @@ def probe_proxy(proxy: str, expected_country: str = "", *, use_cache: bool = Tru
         cached = cache.get(key)
         if isinstance(cached, dict) and now - float(cached.get("ts") or 0) <= ttl:
             result = dict(cached.get("result") or {})
+            result["proxy"] = proxy
             result["cache"] = True
             return result
     try:
         live = _probe_proxy_live(proxy, expected_country)
         result = {**live, "proxy": proxy, "scheme": urlsplit(proxy).scheme, "cache": False}
     except Exception as exc:
+        safe_error = redact_proxy_text(f"{type(exc).__name__}: {str(exc)[:240]}")
         result = {
             "ok": False,
             "proxy": proxy,
             "scheme": urlsplit(proxy).scheme,
-            "error": f"{type(exc).__name__}: {str(exc)[:240]}",
+            "error": safe_error,
             "cache": False,
         }
     if ttl > 0:
+        persisted = dict(result)
+        persisted["proxy"] = redacted
         with _CACHE_LOCK:
-            _TRANSIENT_CACHE[key] = {"ts": now, "result": result}
+            _TRANSIENT_CACHE[key] = {"ts": now, "result": persisted}
             _save_probe_cache()
     return result
 

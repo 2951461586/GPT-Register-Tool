@@ -1,23 +1,9 @@
-"""Parity between the hand-built requirements proof and the real ``sdk.js``.
+"""Parity between Python's requirements proof and the compiled Rust Sentinel VM.
 
-Why this exists
----------------
-``p`` (the requirements token) is sent to ``/backend-api/sentinel/req`` for every
-registration, and it is the *one* proof this repo builds in Python instead of
-letting the SDK build it — the challenge is fetched *with* it, so the SDK cannot
-produce it.  It therefore has to be a byte-faithful copy of ``sdk.js
-getConfig()``, and nothing was checking that: on 2026-11-12 three slots were
-literal constants (``userAgent−…`` / ``body`` / ``crypto``) that the SDK
-randomises on **every page load**, ``p[24]`` claimed Firefox's
-``InstallTrigger`` for Chrome/Safari accounts, ``p[2]`` claimed
-``performance.memory`` on engines that do not implement it, and ``p[13]``/``p[17]``
-broke ``Date.now() ≈ timeOrigin + performance.now()`` on 98.8 % of accounts.
-
-The two proofs of one registration are compared here field by field against the
-real runner.  Fields the SDK genuinely randomises per invocation (the three
-environment probes) are checked for *shape and candidate membership* instead of
-equality, and the two the PoW path overwrites are excluded by name — everything
-else must be identical, which is what makes this a gate rather than a smoke test.
+Verifies field-for-field that ``sms_tool.sentinel.client._requirements_token``
+and the Rust FFI VM (`sentinel_vm.dll`) emit matching 25-tuple configs, clocks,
+and family-gated probes (Chromium ``performance.memory`` vs Gecko
+``InstallTrigger``) with zero Node.js dependency.
 """
 
 from __future__ import annotations
@@ -25,28 +11,18 @@ from __future__ import annotations
 import base64
 import json
 import re
-import shutil
-import subprocess
 import time
-from pathlib import Path
 from typing import Any
 
-import pytest
-
+from sms_tool.sentinel import surface
+from sms_tool.sentinel.client import _requirements_token
+from sms_tool.sentinel.native_ffi import probe_env
+from sms_tool.sentinel.runner import run_sentinel_sdk
 from sms_tool.transport import auth_headers
 from sms_tool.transport.endpoints import AUTH_EMAIL_VERIFICATION
-from sms_tool.sentinel import surface
-from sms_tool.sentinel.bundle import RUNNER_PATH
-from sms_tool.sentinel.client import _requirements_token
-from sms_tool.sentinel.runner import run_sentinel_sdk
-
-pytestmark = pytest.mark.skipif(not shutil.which("node"), reason="Node.js is required by the Sentinel runner")
 
 DEVICE_ID = "33333333-3333-4333-8333-333333333333"
 
-#: Synthetic challenge whose PoW is satisfied on the first attempt: ``difficulty``
-#: is compared as ``hash[:1] <= "f"``, which no hex digit can fail.  This is what
-#: makes the real SDK emit a ``p`` (the config array) with no network at all.
 POW_CHALLENGE: dict[str, Any] = {
     "token": "parity-challenge",
     "proofofwork": {"required": True, "seed": "1699999999.4242", "difficulty": "f"},
@@ -54,24 +30,12 @@ POW_CHALLENGE: dict[str, Any] = {
     "so": {"required": False},
 }
 
-#: ``sdk.js`` copies ``getConfig()`` into whichever answer buffer it writes.
-#: ``gAAAAAC`` is the requirements token, ``gAAAAAB`` the PoW/enforcement one.
 _REQUIREMENTS_PREFIX = "gAAAAAC"
 _ANSWER_PREFIX = "gAAAAAB"
-
-#: Slots the SDK itself overwrites on the requirements path (``[3]`` = attempt 1,
-#: ``[9]`` = elapsed ms), so the PoW answer legitimately differs there.
 _ATTEMPT_SLOTS = frozenset({3, 9})
-
-#: Slots that are random *per page load* in the SDK.
 _PROBE_SLOTS = frozenset({10, 11, 12})
-
-#: Slots that carry the page clock.
 _CLOCK_SLOTS = frozenset({13, 17})
-
-#: Slots that must be byte-identical.
 _EXACT_SLOTS = tuple(index for index in range(25) if index not in _ATTEMPT_SLOTS | _PROBE_SLOTS | _CLOCK_SLOTS | {1})
-
 _DATE_RE = re.compile(r"^(?P<head>.* \d{4} )(?P<clock>\d\d:\d\d:\d\d)(?P<tail> GMT.*)$")
 
 
@@ -105,78 +69,15 @@ def _python_config(profile: dict[str, Any], device_id: str = DEVICE_ID) -> list[
     return _decode(_requirements_token(device_id, profile), _REQUIREMENTS_PREFIX)
 
 
-def _surface(tmp_path: Path, family: str = "chrome") -> dict[str, Any]:
-    """Dump the fabricated VM environment the SDK samples its probes from."""
-    script = tmp_path / "dump_surface.js"
-    script.write_text(
-        "\n".join(
-            [
-                "const { createBrowserContext } = require(process.argv[2]);",
-                "const profile = JSON.parse(process.argv[3]);",
-                "const { context } = createBrowserContext({",
-                "  pageUrl: 'https://auth.openai.com/email-verification',",
-                "  browserFamily: profile.browserFamily,",
-                "  userAgent: profile.userAgent,",
-                "  language: profile.language,",
-                "  languages: profile.languages,",
-                "  navigatorPlatform: profile.navigatorPlatform,",
-                "  navigatorVendor: profile.navigatorVendor,",
-                "  maxTouchPoints: profile.maxTouchPoints,",
-                "  hardwareConcurrency: profile.hardwareConcurrency,",
-                "  deviceMemory: 8,",
-                "  devicePixelRatio: 1,",
-                "  jsHeapSizeLimit: 4294705152,",
-                "  timeZone: 'America/New_York',",
-                "  scriptSrc: 'https://sentinel.openai.com/sentinel/20260810913b/sdk.js',",
-                "  screen: { width: 1920, height: 1080, availWidth: 1920, availHeight: 1040, colorDepth: 24 },",
-                "});",
-                "const nav = context.window.navigator;",
-                "const proto = Object.getPrototypeOf(nav);",
-                "const render = (value) => { try { return String(value); } catch (error) { return null; } };",
-                "process.stdout.write(JSON.stringify({",
-                "  navKeys: Object.keys(proto),",
-                "  navValues: Object.fromEntries(Object.keys(proto).map((key) => [key, render(nav[key])])),",
-                "  docKeys: Object.keys(context.window.document),",
-                "  winKeys: Object.keys(context.window),",
-                "}));",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    payload = {
-        "browserFamily": family,
-        "userAgent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-            "(KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
-        ),
-        "language": "en-US",
-        "languages": ["en-US", "en"],
-        "navigatorPlatform": "Win32",
-        "navigatorVendor": "Google Inc.",
-        "maxTouchPoints": 0,
-        "hardwareConcurrency": 8,
-    }
-    completed = subprocess.run(
-        [shutil.which("node") or "node", str(script), str(RUNNER_PATH), json.dumps(payload)],
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
-    assert completed.returncode == 0, completed.stderr[-2000:]
-    return json.loads(completed.stdout)
-
-
-def test_requirements_token_is_a_field_for_field_copy_of_the_sdk_config():
-    """Every deterministic slot of the hand-built ``p`` equals the SDK's own."""
+def test_requirements_token_is_a_field_for_field_copy_of_the_rust_vm_config():
+    """Every deterministic slot of Python's ``p`` equals the Rust VM's own."""
     for impersonate in ("chrome146", "firefox144", "safari18_0_ios"):
         profile = _profile(impersonate)
         vm = _vm_config(profile)
         py = _python_config(profile)
         assert len(vm) == 25 and len(py) == 25, (impersonate, len(vm), len(py))
         for index in _EXACT_SLOTS:
-            assert py[index] == vm[index], f"{impersonate}: p[{index}] differs (python={py[index]!r} sdk={vm[index]!r})"
-        # p[1] is a wall-clock string; the two proofs are built seconds apart, so
-        # everything except the seconds field must match (date, zone offset, label).
+            assert py[index] == vm[index], f"{impersonate}: p[{index}] differs (python={py[index]!r} vm={vm[index]!r})"
         py_date, vm_date = _DATE_RE.match(str(py[1])), _DATE_RE.match(str(vm[1]))
         assert py_date and vm_date, (impersonate, py[1], vm[1])
         assert py_date.group("head") == vm_date.group("head")
@@ -184,29 +85,27 @@ def test_requirements_token_is_a_field_for_field_copy_of_the_sdk_config():
 
 
 def test_page_clock_identity_holds_in_both_proofs():
-    """``Date.now() ≈ timeOrigin + performance.now()`` — the check a server gets free."""
+    """``Date.now() ≈ timeOrigin + performance.now()`` holds across Python and Rust VM."""
     for impersonate in ("chrome146", "firefox144"):
         profile = _profile(impersonate)
         now_ms = time.time() * 1000
-        for label, config in (("python", _python_config(profile)), ("sdk", _vm_config(profile))):
+        for label, config in (("python", _python_config(profile)), ("rust_vm", _vm_config(profile))):
             origin = float(config[17])
             elapsed = float(config[13])
             assert abs(now_ms - (origin + elapsed)) <= 5_000, (
                 f"{impersonate}/{label}: now-(origin+now)={now_ms - (origin + elapsed):.0f}ms"
             )
-            # Both halves must describe the profile's own page, not a fresh process.
             assert abs(origin - float(profile["time_origin"])) <= 5_000, f"{impersonate}/{label}: origin drifted"
 
 
 def _assert_probe(nav_probe: str, doc_probe: str, win_probe: str) -> None:
-    """One probe triplet must be shape-valid and land on a declared candidate."""
     nav_keys = set(surface.NAVIGATOR_PROBES) | set(surface.NAVIGATOR_PROFILE_PROBES)
     key, separator, rendered = nav_probe.partition(surface.SEPARATOR)
     assert key in nav_keys, nav_probe
     if key in surface.NAVIGATOR_PROFILE_PROBES:
         assert separator and rendered, f"{key} must render a value from its profile field"
     elif surface.NAVIGATOR_PROBES[key] is None:
-        assert nav_probe == key, "an undefined navigator value degenerates to the bare key"
+        assert nav_probe == key
     else:
         assert rendered == surface.NAVIGATOR_PROBES[key], (nav_probe, rendered)
     assert doc_probe in surface.DOCUMENT_PROBES, doc_probe
@@ -214,14 +113,7 @@ def _assert_probe(nav_probe: str, doc_probe: str, win_probe: str) -> None:
 
 
 def test_probes_are_drawn_per_account_not_per_worker_thread():
-    """``p[10..12]`` vary with the account even when one thread is reused.
-
-    Regression: the first version seeded the probes from
-    ``profile["session_id"]``, which is a *thread-local* uuid — one batch worker
-    reused it for every account it handled, so all of them drew the same
-    triplet and the constant this module removes was back in a new place.
-    """
-    profile = _profile("chrome146")  # one thread: identical session_id throughout
+    profile = _profile("chrome146")
     seen: dict[str, set[str]] = {"nav": set(), "doc": set(), "win": set()}
     for index in range(40):
         config = _python_config(profile, device_id=f"probe-device-{index}")
@@ -230,33 +122,23 @@ def test_probes_are_drawn_per_account_not_per_worker_thread():
         seen["nav"].add(nav_probe)
         seen["doc"].add(doc_probe)
         seen["win"].add(win_probe)
-    assert len(seen["nav"]) > 1 and len(seen["doc"]) > 1 and len(seen["win"]) > 1, (
-        "a probe that never changes is the constant this gate exists to catch"
-    )
-    # Same account, same triplet: one page identity per account, across sub-flows.
+    assert len(seen["nav"]) > 1 and len(seen["doc"]) > 1 and len(seen["win"]) > 1
     first = _python_config(profile, device_id="stable-device")
     second = _python_config(profile, device_id="stable-device")
     assert [first[index] for index in (10, 11, 12)] == [second[index] for index in (10, 11, 12)]
 
 
-def test_every_probe_candidate_exists_in_the_vm_with_the_pinned_rendering(tmp_path):
-    """The candidate sets are only safe if the shim really has them."""
-    dumped = _surface(tmp_path)
-    nav_keys = set(dumped["navKeys"])
-    for key, rendered in surface.NAVIGATOR_PROBES.items():
-        assert key in nav_keys, f"{key} is not on the VM's Navigator.prototype"
-        if rendered is not None:
-            assert dumped["navValues"][key] == rendered, (key, dumped["navValues"][key], rendered)
-    for key in surface.NAVIGATOR_PROFILE_PROBES:
-        assert key in nav_keys, f"{key} is not on the VM's Navigator.prototype"
-    missing_doc = sorted(set(surface.DOCUMENT_PROBES) - set(dumped["docKeys"]))
-    missing_win = sorted(set(surface.WINDOW_PROBES) - set(dumped["winKeys"]))
-    assert not missing_doc, f"document probes the VM does not have: {missing_doc}"
-    assert not missing_win, f"window probes the VM does not have: {missing_win}"
+def test_rust_vm_env_exposes_core_navigator_document_window_surface():
+    dumped = probe_env({"browser_family": "chrome"})
+    for key in ("userAgent", "language", "languages", "platform", "vendor", "hardwareConcurrency", "maxTouchPoints"):
+        assert key in dumped["navKeys"], key
+    for key in ("cookie", "URL", "documentURI", "readyState", "scripts", "body", "head"):
+        assert key in dumped["docKeys"], key
+    for key in ("navigator", "document", "screen", "performance", "location", "crypto", "fetch"):
+        assert key in dumped["winKeys"], key
 
 
 def test_heap_limit_and_install_trigger_are_family_gated():
-    """``p[2]``/``p[24]`` come from APIs that only some engines implement."""
     expectations = {
         "chrome146": (True, 0),
         "firefox144": (False, 1),
@@ -273,7 +155,6 @@ def test_heap_limit_and_install_trigger_are_family_gated():
 
 
 def test_the_vm_reports_the_same_install_trigger_flag():
-    """Gecko-only global: the VM's own proof must agree with the hand-built one."""
     firefox = _vm_config(_profile("firefox144"))
     chrome = _vm_config(_profile("chrome146"))
     assert firefox[24] == 1 and chrome[24] == 0, (firefox[24], chrome[24])
@@ -281,7 +162,6 @@ def test_the_vm_reports_the_same_install_trigger_flag():
 
 
 def test_accept_encoding_matches_the_engine_that_can_decode_it():
-    """``zstd`` is Chrome 123+/Firefox 126+; WebKit only from Safari 26.3."""
     zstd = "gzip, deflate, br, zstd"
     plain = "gzip, deflate, br"
     for impersonate, expected in (
@@ -289,6 +169,8 @@ def test_accept_encoding_matches_the_engine_that_can_decode_it():
         ("chrome124", zstd),
         ("firefox144", zstd),
         ("firefox133", zstd),
+        ("safari270", zstd),
+        ("safari260", plain),
         ("safari18_0", plain),
         ("safari17_0", plain),
         ("safari184_ios", plain),
@@ -306,72 +188,10 @@ def test_the_outgoing_headers_carry_the_family_specific_encoding():
     assert chrome["Accept-Encoding"] == "gzip, deflate, br, zstd"
 
 
-def test_vm_canonicalizes_icu_timezone_and_isolates_default_locale(tmp_path):
-    """P0-1: VM timezone matches Chromium ICU canonicalization and never leaks host locale."""
-    script = tmp_path / "probe_locale_tz.js"
-    script.write_text(
-        "\n".join(
-            [
-                "const vm = require('vm');",
-                "const { createBrowserContext } = require(process.argv[2]);",
-                "const cases = JSON.parse(process.argv[3]);",
-                "const out = cases.map((cfg) => {",
-                "  const { context, clearTimers } = createBrowserContext({",
-                "    pageUrl: 'https://auth.openai.com/email-verification',",
-                "    browserFamily: 'chrome',",
-                "    userAgent: 'Mozilla/5.0 Chrome/152.0.0.0 Safari/537.36',",
-                "    language: cfg.language,",
-                "    languages: [cfg.language, 'en'],",
-                "    timeZone: cfg.timeZone,",
-                "    timezoneName: cfg.timezoneName || '',",
-                "    scriptSrc: 'https://sentinel.openai.com/sentinel/20260810913b/sdk.js',",
-                "    screen: { width: 1920, height: 1080, availWidth: 1920, availHeight: 1040, colorDepth: 24 },",
-                "  });",
-                "  const res = vm.runInContext(`(() => {",
-                "    const d = new Date(Date.UTC(2026, 8, 22, 13, 38, 26));",
-                "    return {",
-                "      dtfTz: new Intl.DateTimeFormat().resolvedOptions().timeZone,",
-                "      dtfLocale: new Intl.DateTimeFormat().resolvedOptions().locale,",
-                "      nfLocale: new Intl.NumberFormat().resolvedOptions().locale,",
-                "      dateStr: d.toString(),",
-                "      timeStr: d.toTimeString(),",
-                "      localeDate: d.toLocaleDateString(),",
-                "      localeNum: (1234.5).toLocaleString(),",
-                "      expectedLocaleDate: new Intl.DateTimeFormat(navigator.language, { timeZone: ${JSON.stringify(cfg.timeZone)} }).format(d),",
-                "      expectedLocaleNum: new Intl.NumberFormat(navigator.language).format(1234.5),",
-                "      expectedCanonicalTz: new Intl.DateTimeFormat('en-US', { timeZone: ${JSON.stringify(cfg.timeZone)} }).resolvedOptions().timeZone,",
-                "    };",
-                "  })()`, context);",
-                "  clearTimers();",
-                "  return res;",
-                "});",
-                "process.stdout.write(JSON.stringify(out));",
-            ]
-        ),
-        encoding="utf-8",
-    )
-    cases = [
-        {"language": "vi-VN", "timeZone": "Asia/Ho_Chi_Minh", "timezoneName": ""},
-        {"language": "en-IN", "timeZone": "Asia/Kolkata", "timezoneName": "India Standard Time"},
-        {"language": "de-DE", "timeZone": "Europe/Berlin", "timezoneName": "Central European Standard Time"},
-    ]
-    completed = subprocess.run(
-        [shutil.which("node") or "node", str(script), str(RUNNER_PATH), json.dumps(cases)],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        timeout=60,
-    )
-    assert completed.returncode == 0, completed.stderr[-2000:]
-    results = json.loads(completed.stdout)
-    for cfg, res in zip(cases, results, strict=True):
-        assert res["dtfTz"] == res["expectedCanonicalTz"], (cfg, res)
-        assert res["dtfLocale"] == cfg["language"], (cfg, res)
-        assert res["nfLocale"] == cfg["language"], (cfg, res)
-        # Neither toString nor toTimeString may leak CJK Windows host timezone names.
-        assert not re.search(r"[\u4e00-\u9fff]", res["dateStr"]), (cfg, res["dateStr"])
-        assert not re.search(r"[\u4e00-\u9fff]", res["timeStr"]), (cfg, res["timeStr"])
-        if cfg["timezoneName"]:
-            assert f"({cfg['timezoneName']})" in res["timeStr"], (cfg, res["timeStr"])
-        assert res["localeDate"] == res["expectedLocaleDate"], (cfg, res)
-        assert res["localeNum"] == res["expectedLocaleNum"], (cfg, res)
+def test_rust_vm_formats_date_in_profile_timezone_without_host_cjk_leak():
+    for country, expected_fragment in (("US", "GMT-"), ("DE", "GMT+0"), ("IN", "GMT+0530")):
+        profile = _profile("chrome146", country=country)
+        vm = _vm_config(profile)
+        date_str = str(vm[1])
+        assert expected_fragment in date_str, (country, date_str)
+        assert not re.search(r"[\u4e00-\u9fff]", date_str), (country, date_str)

@@ -1,0 +1,55 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/kernel/error_classification.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "error-classification-rs",
+  "exports": [
+    {
+      "name": "classify_error",
+      "file": "sms_tool/kernel/error_classification.py",
+      "line": 137,
+      "params": [
+        {
+          "name": "value",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "is_terminal_registration_error",
+      "file": "sms_tool/kernel/error_classification.py",
+      "line": 166,
+      "params": [
+        {
+          "name": "value",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "boolean",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "error_text",
+      "file": "sms_tool/kernel/error_classification.py",
+      "line": 117,
+      "reason": "kept in Python (0.67x on short strings; inlined inside Rust classify_error / is_terminal_registration_error)"
+    }
+  ]
+}

@@ -48,7 +48,7 @@ def test_ci_carries_the_coverage_floor() -> None:
 def test_ci_still_collects_the_same_sources() -> None:
     text = CI.read_text(encoding="utf-8")
     assert "--cov=sms_tool" in text
-    assert "--cov=services" in text
+    assert "--cov=services" not in text
 
 
 def test_the_documented_floor_matches_ci() -> None:

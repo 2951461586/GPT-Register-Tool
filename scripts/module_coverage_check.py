@@ -64,12 +64,22 @@ _HEADER_CELLS = {"Group", "Files", "Boundary", "Check (recompute)"}
 
 
 def tracked_paths(*pathspecs: str) -> set[str]:
-    """Tracked paths matching ``pathspecs``, POSIX-relative to the repo root."""
+    """Tracked paths matching ``pathspecs``, POSIX-relative to the repo root.
+
+    Excludes working-tree deletions (``git ls-files --deleted``) so deleted
+    modules removed before ``git rm`` / staging are not reported as live
+    unclaimed modules.
+    """
     raw = subprocess.check_output(
         ["git", "ls-files", "-z", "--", *pathspecs],
         cwd=str(ROOT),
     )
-    return {path.decode() for path in raw.split(b"\0") if path}
+    deleted_raw = subprocess.check_output(
+        ["git", "ls-files", "-z", "--deleted", "--", *pathspecs],
+        cwd=str(ROOT),
+    )
+    deleted = {path.decode() for path in deleted_raw.split(b"\0") if path}
+    return {path.decode() for path in raw.split(b"\0") if path} - deleted
 
 
 def load_groups(path: Path | None = None) -> dict[str, list[str]]:

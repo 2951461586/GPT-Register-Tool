@@ -16,14 +16,20 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
-def build_playwright_stealth(*, label: str = "browser", provider_prefix: str = "playwright") -> Any | None:
-    """Build the reference project's conservative ``playwright-stealth`` profile.
+_SKIPPED_PROVIDERS = frozenset({"camoufox"})
 
-    P2-8: *provider_prefix* is accepted but unused — it was intended for
-    per-provider stealth tweaks, but all providers use the same conservative
-    profile.  Kept in the signature to avoid breaking call sites that already
-    pass it; remove it here when those call sites are cleaned up too.
+
+def build_playwright_stealth(*, label: str = "browser", provider_prefix: str = "playwright") -> Any | None:
+    """Build the conservative ``playwright-stealth`` profile for Chromium drivers.
+
+    Firefox-based anti-detect engines (``camoufox``) are intentionally skipped:
+    ``playwright-stealth`` injects Chrome-only globals (``window.chrome``,
+    ``navigator.vendor = 'Google Inc.'``) that contradict Firefox's C++ patches.
+    ``navigator_languages`` and ``navigator_hardware_concurrency`` stay disabled
+    so GeoIP-aligned locale and driver hardware settings are never overwritten.
     """
+    if str(provider_prefix or "").strip().lower() in _SKIPPED_PROVIDERS:
+        return None
     try:
         from playwright_stealth import Stealth
     except ImportError:
@@ -34,13 +40,16 @@ def build_playwright_stealth(*, label: str = "browser", provider_prefix: str = "
     # validates them. Left unannotated, the inferred value type collapses to
     # ``bool`` and every override below reads as a type error.
     kwargs: dict[str, Any] = dict(
-        # Keep the provider's native UA, client hints, platform, and WebGL.
+        # Keep the provider's native UA, client hints, platform, WebGL, locale,
+        # and hardware concurrency so GeoIP alignment is never clobbered.
         navigator_user_agent=False,
         navigator_user_agent_data=False,
         navigator_platform=False,
+        navigator_languages=False,
+        navigator_hardware_concurrency=False,
         sec_ch_ua=False,
         webgl_vendor=False,
-        # Patch browser automation signals only.
+        # Patch Chromium browser automation signals only.
         chrome_runtime=True,
         chrome_app=True,
         chrome_csi=True,
@@ -48,8 +57,6 @@ def build_playwright_stealth(*, label: str = "browser", provider_prefix: str = "
         hairline=True,
         iframe_content_window=True,
         media_codecs=True,
-        navigator_hardware_concurrency=True,
-        navigator_languages=True,
         navigator_permissions=True,
         navigator_plugins=True,
         navigator_vendor=True,
@@ -57,21 +64,23 @@ def build_playwright_stealth(*, label: str = "browser", provider_prefix: str = "
         error_prototype=True,
         init_scripts_only=True,
     )
-    # playwright-stealth warns when navigator_platform is disabled while its
-    # default override remains populated.  Explicitly clear that override when
-    # supported by the installed version; retain compatibility with older
-    # releases that do not expose the keyword.
+    # playwright-stealth warns when disabled features still have populated
+    # default overrides. Explicitly clear them when supported by the installed
+    # version; retain compatibility with older releases without those kwargs.
     try:
         import inspect
 
-        if "navigator_platform_override" in inspect.signature(Stealth).parameters:
-            kwargs["navigator_platform_override"] = None
+        params = inspect.signature(Stealth).parameters
+        for override_key in ("navigator_platform_override", "navigator_languages_override"):
+            if override_key in params:
+                kwargs[override_key] = None
     except Exception:
         pass
     try:
         return Stealth(**kwargs)
     except TypeError:
         kwargs.pop("navigator_platform_override", None)
+        kwargs.pop("navigator_languages_override", None)
         try:
             return Stealth(**kwargs)
         except Exception as exc:
@@ -96,6 +105,9 @@ def apply_playwright_stealth(
     that actually matters to the caller.
     """
     result: dict[str, Any] = {"playwright_stealth": False}
+    if str(provider_prefix or "").strip().lower() in _SKIPPED_PROVIDERS:
+        result["reason"] = "skipped_for_provider"
+        return result
     stealth = build_playwright_stealth(label=label, provider_prefix=provider_prefix)
     if stealth is None:
         result["reason"] = "dependency_missing_or_unavailable"

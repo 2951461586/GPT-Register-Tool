@@ -312,7 +312,7 @@ CI 上**看不见**这个问题。
 1. `SmsWorkbench/Views/MainWindow.SmsProvider.cs:235/238` 会往**当前供应商**的 section 里写
    `service_name` 与 `country_name_zh`（纯展示用，两语言下都没有读取方）。
 2. `sms_tool/config_usage.py` 的判定是「**leaf 名是否作为独立字符串字面量**出现在
-   `sms_tool/` + `services/`」——`service_name` / `country_name_zh` 两个 leaf 都不出现，
+   `sms_tool/`」——`service_name` / `country_name_zh` 两个 leaf 都不出现，
    所以被判为死键；而 `country_name` / `service` / `endpoint` 是活叶子，可以随便写。
 3. `config_usage.SHARD_NAMES` **包含 `proxy.json`**，而 `phone_reuse.*` 正是落在
    `proxy.json` 里 ⇒ 桌面端写进去的键会被扫描器看到。

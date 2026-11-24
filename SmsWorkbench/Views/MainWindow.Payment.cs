@@ -51,7 +51,7 @@ namespace SmsWorkbench.Views
             {
                 ShowThemedInfoDialog(
                     Loc.T("任务进行中"),
-                    Loc.T("已有后端任务正在运行，请先等待其完成或取消后再发起批量支付。"));
+                    Loc.T("已有后端任务正在运行，请先等待其完成或取消后再发起支付链接提取。"));
                 return;
             }
 

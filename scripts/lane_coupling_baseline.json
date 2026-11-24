@@ -3,28 +3,12 @@
   "registration_to_payment": [],
   "payment_to_registration": [
     [
-      "sms_tool.pay_link.adapters",
-      "sms_tool.sentinel"
-    ],
-    [
       "sms_tool.payment.wire",
       "sms_tool.sentinel"
     ],
     [
       "sms_tool.paypal.extract",
       "sms_tool.sentinel"
-    ],
-    [
-      "sms_tool.upi_link.sentinel",
-      "sms_tool.sentinel"
-    ],
-    [
-      "sms_tool.upi_link.session",
-      "sms_tool.sentinel"
-    ],
-    [
-      "sms_tool.upi_link.session",
-      "sms_tool.sentinel.client"
     ]
   ],
   "payment_importers_outside_lane": [
@@ -41,12 +25,7 @@
     "sms_tool.operation_journal",
     "sms_tool.proxy.registry",
     "sms_tool.store.markers",
-    "sms_tool.store.normalize",
-    "sms_tool.transport.fingerprint_pool",
-    "sms_tool.wallet.gcash_provider",
-    "sms_tool.wallet.gcash_transport",
-    "sms_tool.wallet.provider",
-    "sms_tool.wallet.transport"
+    "sms_tool.store.normalize"
   ],
   "root_to_adapter_layers": [
     [

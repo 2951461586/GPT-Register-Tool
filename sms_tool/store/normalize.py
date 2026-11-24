@@ -4,11 +4,39 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
+import importlib
 import json
+import os
 import sqlite3
+import sys
 
 from .constants import EMAIL_RE
 from .constants import KNOWN_EMAIL_DOMAINS
+
+
+def _load_native_store_normalize() -> Any | None:
+    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
+    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_STORE_NORMALIZE") or "").strip().lower()
+    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
+        return None
+    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "store-normalize-rs" / "python"
+    if pkg_dir.is_dir():
+        pkg_str = str(pkg_dir)
+        if pkg_str not in sys.path:
+            sys.path.insert(0, pkg_str)
+    try:
+        return importlib.import_module("store_normalize_rs")
+    except (ImportError, OSError):
+        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
+            raise
+        return None
+
+
+_NATIVE_STORE_NORMALIZE = _load_native_store_normalize()
+_NATIVE_NORMALIZE_EMAIL = getattr(_NATIVE_STORE_NORMALIZE, "_normalize_account_email", None)
+_NATIVE_LOOKS_CODEX_RT = getattr(_NATIVE_STORE_NORMALIZE, "_looks_codex_refresh_token", None)
+_NATIVE_JWT_ACCOUNT_TYPE = getattr(_NATIVE_STORE_NORMALIZE, "_jwt_account_type", None)
+_NATIVE_SCALAR_TYPES = (str, type(None), bool, int, float)
 
 
 def _as_bool(value):
@@ -56,6 +84,8 @@ def _nested_field(data, *keys):
 
 
 def _normalize_account_email(email):
+    if _NATIVE_NORMALIZE_EMAIL is not None and isinstance(email, _NATIVE_SCALAR_TYPES):
+        return _NATIVE_NORMALIZE_EMAIL(email)
     value = str(email or "").strip().lstrip("\ufeff")
     if "@+" in value:
         local, suffix = value.split("@+", 1)
@@ -175,6 +205,8 @@ def _oauth_refresh_token(data, auth_session):
 
 
 def _looks_codex_refresh_token(token):
+    if _NATIVE_LOOKS_CODEX_RT is not None and isinstance(token, _NATIVE_SCALAR_TYPES):
+        return _NATIVE_LOOKS_CODEX_RT(token)
     value = str(token or "").strip()
     if not value or value == "[REDACTED]":
         return False
@@ -207,6 +239,8 @@ def _normalize_account_type(value):
 
 
 def _jwt_account_type(access_token):
+    if _NATIVE_JWT_ACCOUNT_TYPE is not None and isinstance(access_token, _NATIVE_SCALAR_TYPES):
+        return _NATIVE_JWT_ACCOUNT_TYPE(access_token)
     try:
         parts = str(access_token or "").split(".")
         if len(parts) >= 2:

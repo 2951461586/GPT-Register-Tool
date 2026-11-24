@@ -51,7 +51,7 @@ def test_scope_covers_every_python_tree_this_repo_owns():
         "sms_tool/cli.py",
         "sms_tool/transport/auth_state.py",
         "sms_tool/registration_drivers/base.py",
-        "services/protocol-payment/common/redaction.py",
+        "sms_tool/pay_link/extract_server.py",
         "scripts/format_guard.py",
         "tests/governance/test_format_guard.py",
     ):

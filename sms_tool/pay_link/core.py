@@ -1,26 +1,25 @@
-"""core submodule of the former payment/link_manager.py (mechanical split, bodies unchanged)."""
+"""Core state machine for payment-link extraction and capability probing."""
 
 from __future__ import annotations
+
 import os
 import uuid
 from typing import Any, Callable, Mapping
-from ..config import ConfigError, current_config_data, validate_config
-from ..payment.contracts import PaymentRequest
-from ..payment.executor import PaymentExecutionRequest, PaymentFlowExecutor
-from ..payment.errors import annotate_error, error_stage_of
+
+from ..config import ConfigError, validate_config
 from ..operation_journal import (
     PaymentOperationConflict,
     PaymentOperationStore,
     conflict_result as payment_operation_conflict_result,
 )
+from ..payment.contracts import PaymentRequest
+from ..payment.errors import annotate_error, error_stage_of
+from ..payment.executor import PaymentExecutionRequest, PaymentFlowExecutor
 from ..payment.routing import PaymentRoutePlan, PaymentRoutePlanner
-
-from .adapters import _run_regional_wallet_adapter, _run_wallet_adapter
 from .base import PAYMENT_METHODS, _LOGGER, _config_data, _offline_refusal, _redact_sensitive_text
 from .normalize import _classify_exception, _normalize_result
 from .persistence import _safe_persist_run
 from .registry import PAYMENT_ADAPTERS, _enabled_methods, normalize_payment_method
-
 
 #: Failures the validation / route-planning preamble normalises instead of
 #: letting escape. Both public entry points share this tuple so a pool outage
@@ -35,22 +34,7 @@ _TRUTHY = frozenset({"1", "true", "yes", "on"})
 
 
 def _browser_fallback_transport() -> Any:
-    """The opt-in browser fallback for the checkout create gate, else ``None``.
-
-    ``sms_tool/payment/capability_browser.py`` implements a page-context fallback for
-    accounts the protocol ``payments/checkout`` create gate rejects with
-    ``400 unusual activity``, but until 2026-11-20 **nothing passed it** into
-    ``payment_method_capability_probe(fallback_transport=...)``: the seam was
-    documented in ``docs/current/account-health.md`` and unreachable from any
-    production path (``docs/audits/scans/scan-2026-11-02-unused-module-inventory.md``
-    measured 0 production readers).
-
-    It stays **off by default**: a real browser session is a behaviour change
-    plus a network probe, so the operator opts in with
-    ``PP_CAPABILITY_BROWSER_FALLBACK=1``. The import is lazy for the same
-    reason — a default probe must not pay for playwright, and
-    ``delayed_import_ratchet`` records the edge with that reason.
-    """
+    """The opt-in browser fallback for the checkout create gate, else ``None``."""
     if str(os.environ.get(CAPABILITY_BROWSER_FALLBACK_ENV, "")).strip().lower() not in _TRUTHY:
         return None
     from ..payment.capability_browser import browser_fallback_transport
@@ -59,19 +43,34 @@ def _browser_fallback_transport() -> Any:
 
 
 def _annotate_planning_failure(exc: Exception) -> Exception:
-    """Attach the preamble stage the raise site did not name.
-
-    ``ValueError``/``ConfigError`` are validation failures (unsupported method,
-    disabled method, offline method, plan/method mismatch); everything else in
-    ``_PLANNING_FAILURES`` comes from resolving proxies, so it is
-    ``proxy_setup``.
-    """
+    """Attach the preamble stage the raise site did not name."""
     if not error_stage_of(exc):
         annotate_error(
             exc,
             error_stage=("validation" if isinstance(exc, (ValueError, ConfigError)) else "proxy_setup"),
         )
     return exc
+
+
+def _dispatch_payment_request(request: PaymentExecutionRequest) -> Mapping[str, Any]:
+    if bool(request.options.get("probe_only")):
+        return probe_payment_method(
+            access_token=request.access_token,
+            payment_method=request.payment_method,
+            auth_context=dict(request.auth_context),
+            proxy=request.route_plan.checkout_proxy,
+            runtime_config=request.runtime_config,
+            **dict(request.options),
+        )
+    adapter_request = PaymentRequest.create(
+        payment_method=request.payment_method,
+        access_token=request.access_token,
+        proxy=request.route_plan.checkout_proxy,
+        auth_context=request.auth_context,
+        runtime_config=request.runtime_config,
+        options=request.options,
+    )
+    return PAYMENT_ADAPTERS.execute_mapping(adapter_request)
 
 
 def generate_payment_link(
@@ -84,7 +83,7 @@ def generate_payment_link(
     runtime_config: Mapping[str, Any] | None = None,
     **kwargs: Any,
 ) -> dict[str, Any]:
-    """Execute one protocol-payment flow through the common router and state machine."""
+    """Execute one payment-link extraction or capability probe through the common state machine."""
     source = _config_data(runtime_config)
     method = normalize_payment_method(payment_method)
     method_name = method or str(payment_method or "").strip().lower()
@@ -175,24 +174,7 @@ def generate_payment_link(
             raise planning_error
         if spec is None:
             raise ValueError(f"unsupported payment method: {payment_method}")
-        if bool(request.options.get("probe_only")):
-            return probe_payment_method(
-                access_token=request.access_token,
-                payment_method=request.payment_method,
-                auth_context=dict(request.auth_context),
-                proxy=request.route_plan.checkout_proxy,
-                runtime_config=request.runtime_config,
-                **dict(request.options),
-            )
-        adapter_request = PaymentRequest.create(
-            payment_method=request.payment_method,
-            access_token=request.access_token,
-            proxy=request.route_plan.checkout_proxy,
-            auth_context=request.auth_context,
-            runtime_config=request.runtime_config,
-            options=request.options,
-        )
-        return PAYMENT_ADAPTERS.execute_mapping(adapter_request)
+        return _dispatch_payment_request(request)
 
     executor = PaymentFlowExecutor(
         run_adapter,
@@ -217,16 +199,6 @@ def generate_payment_link(
         )
         payment_operation.finish(result)
     except Exception:
-        # A plain ``Exception`` here means the executor or the journal write
-        # failed after the operation began.  Mark it unknown so the durable
-        # record is not replayed (``payment_operation._replay_allowed``).
-        # ``BaseException`` is deliberately *not* caught: the executor already
-        # turns ``KeyboardInterrupt``/``CancelledError`` into a ``cancelled``
-        # result, and a ``SystemExit``/``GeneratorExit`` means the process is
-        # being torn down -- conversion would swallow the caller's exit signal.
-        # The replay guard is not weakened by this: ``transactional_progress``
-        # checkpoints ``side_effect_started=True`` before the adapter runs, so a
-        # record still at ``running`` here has had no side effect.
         payment_operation.fail_unknown("executor", "payment_executor_aborted")
         raise
     _safe_persist_run(result)
@@ -242,18 +214,7 @@ def probe_payment_method(
     runtime_config: Mapping[str, Any] | None = None,
     **kwargs: Any,
 ) -> dict[str, Any]:
-    """Run the shared Checkout observation without any link-execution adapter.
-
-    ``payment_capability`` owns the cs_/oaics_ evidence contract. This route
-    never starts payment-method creation, confirmation, approval or polling.
-
-    A validation/route-planning failure is returned as the probe result
-    contract, not raised: :func:`generate_payment_link` already normalises the
-    same failures into a result, and two public entry points that disagree on
-    "pool unavailable" force every caller to handle both shapes. Everything
-    after planning still propagates, because the executor (not this function)
-    owns the failure contract for a probe that actually ran.
-    """
+    """Run the shared Checkout observation without any link-execution adapter."""
     method = normalize_payment_method(payment_method)
     source = _config_data(runtime_config)
     options = dict(kwargs)
@@ -277,30 +238,6 @@ def probe_payment_method(
     assert isinstance(plan, PaymentRoutePlan)
     options.update(plan.to_adapter_options())
     options.pop("probe_only", None)
-
-    if method == "gopay":
-        if "timeout_seconds" not in options and options.get("timeout") is not None:
-            options["timeout_seconds"] = options["timeout"]
-        return _run_wallet_adapter(
-            PAYMENT_METHODS[method],
-            access_token,
-            proxy=plan.checkout_proxy,
-            auth_context=auth_context,
-            runtime_config=source,
-            probe_only=True,
-            **options,
-        )
-
-    if method in {"qris", "bizum", "naver_pay"}:
-        return _run_regional_wallet_adapter(
-            PAYMENT_METHODS[method],
-            access_token,
-            proxy=plan.checkout_proxy,
-            auth_context=auth_context,
-            runtime_config=source,
-            probe_only=True,
-            **options,
-        )
 
     from ..payment.capability import payment_method_capability_probe
 

@@ -33,8 +33,10 @@ import base64
 import logging
 import os
 import socket
+import ssl
 import struct
 import threading
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -50,7 +52,6 @@ from .pool import (
     _REP_CONN_REFUSED,
     _REP_SUCCEEDED,
     _SOCKS5_VER,
-    Socks5Server,
     UpstreamProxy,
     _build_socks5_reply,
     _http_connect_handshake,
@@ -66,6 +67,15 @@ _HTTP_DEFAULT_PORT = 8080
 #: RFC 1928 reply code: connection not allowed by ruleset.
 _REP_NOT_ALLOWED = 0x02
 _HOP_ENV_KEYS = ("GPT_PROXY_CHAIN_HOP", "PROXY_CHAIN_HOP")
+_MAX_DEST_STATS = 512
+_DEAD_IP_TTL_SECONDS = 60.0
+
+
+def _format_host_port(host: str, port: int) -> str:
+    clean = str(host or "").strip()
+    if ":" in clean and not clean.startswith("["):
+        return f"[{clean}]:{port}"
+    return f"{clean}:{port}"
 
 
 def _addr_type(host: str) -> int:
@@ -196,6 +206,8 @@ class LocalProxyBridge:
     _thread: threading.Thread | None = field(default=None, init=False, repr=False)
     _stats_lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
     _dest_stats: dict[str, _DestinationStats] = field(default_factory=dict, init=False, repr=False)
+    _active_tasks: dict[int, asyncio.Task[Any]] = field(default_factory=dict, init=False, repr=False)
+    _dead_ips: dict[tuple[str, int, str], float] = field(default_factory=dict, init=False, repr=False)
 
     def __post_init__(self) -> None:
         self.blocked_hosts = _normalize_blocked_hosts(self.blocked_hosts)
@@ -217,6 +229,9 @@ class LocalProxyBridge:
     def _dest_entry(self, target: str) -> _DestinationStats:
         entry = self._dest_stats.get(target)
         if entry is None:
+            if len(self._dest_stats) >= _MAX_DEST_STATS:
+                oldest_key = next(iter(self._dest_stats))
+                self._dest_stats.pop(oldest_key, None)
             entry = _DestinationStats()
             self._dest_stats[target] = entry
         return entry
@@ -274,13 +289,19 @@ class LocalProxyBridge:
         return self._port
 
     async def async_stop(self) -> None:
-        """Stop the local server (keeps the caller's loop intact)."""
+        """Stop the local server and cancel active relays (keeps the caller's loop intact)."""
         if self._server is not None:
             try:
                 self._server.close()
                 await self._server.wait_closed()
             except Exception as exc:  # pragma: no cover - defensive
                 logger.debug("proxy_bridge async_stop error: %s", exc)
+        pending = [task for task in list(self._active_tasks.values()) if not task.done()]
+        for task in pending:
+            task.cancel()
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+        self._active_tasks.clear()
         self._server = None
         self._loop = None
         self._port = 0
@@ -360,7 +381,7 @@ class LocalProxyBridge:
         """``socks5h://127.0.0.1:<port>`` for the browser to point to."""
         if not self._port:
             raise RuntimeError("proxy_bridge: not started")
-        return f"socks5h://{self.listen_host}:{self._port}"
+        return f"socks5h://{_format_host_port(self.listen_host, self._port)}"
 
     def stop(self) -> None:
         """Stop the local server and its background thread/loop."""
@@ -427,6 +448,9 @@ class LocalProxyBridge:
     # ── client handler ─────────────────────────────────────────────────────
 
     async def _on_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        current = asyncio.current_task()
+        if current is not None:
+            self._active_tasks[id(current)] = current
         try:
             await self._handle_client(reader, writer)
         except asyncio.CancelledError:
@@ -434,6 +458,8 @@ class LocalProxyBridge:
         except Exception as exc:
             logger.debug("proxy_bridge client error: %s", exc)
         finally:
+            if current is not None:
+                self._active_tasks.pop(id(current), None)
             try:
                 writer.close()
                 await writer.wait_closed()
@@ -449,7 +475,10 @@ class LocalProxyBridge:
         ver, nmethods = hdr[0], hdr[1]
         if ver != _SOCKS5_VER:
             return
-        await _read_exact(reader, nmethods)
+        try:
+            await asyncio.wait_for(_read_exact(reader, nmethods), timeout=10)
+        except (asyncio.TimeoutError, ConnectionError, asyncio.IncompleteReadError):
+            return
         writer.write(bytes([_SOCKS5_VER, _NO_AUTH]))  # local: no auth needed
         await writer.drain()
 
@@ -466,8 +495,8 @@ class LocalProxyBridge:
             await writer.drain()
             return
         try:
-            dest_host, dest_port = await _read_socks5_addr(reader, atyp)
-        except (ValueError, asyncio.IncompleteReadError):
+            dest_host, dest_port = await asyncio.wait_for(_read_socks5_addr(reader, atyp), timeout=10)
+        except (asyncio.TimeoutError, ValueError, ConnectionError, asyncio.IncompleteReadError):
             writer.write(_build_socks5_reply(_REP_ADDR_NOT_SUPPORTED))
             await writer.drain()
             return
@@ -537,6 +566,63 @@ class LocalProxyBridge:
 
     # ── upstream connection ────────────────────────────────────────────────
 
+    async def _open_tcp_with_failover(
+        self,
+        host: str,
+        port: int,
+        *,
+        use_tls: bool = False,
+    ) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+        """Dial ``host:port`` with multi-A-record dead-IP failover and optional TLS."""
+        timeout = self.connect_timeout
+        ssl_ctx = ssl.create_default_context() if use_tls else None
+        loop = asyncio.get_running_loop()
+        addrs: list[str] = []
+        if _addr_type(host) == _ATYP_DOMAIN:
+            try:
+                infos = await asyncio.wait_for(
+                    loop.getaddrinfo(host, port, type=socket.SOCK_STREAM),
+                    timeout=min(timeout, 5.0),
+                )
+                for info in infos:
+                    ip = str(info[4][0])
+                    if ip not in addrs:
+                        addrs.append(ip)
+            except (OSError, asyncio.TimeoutError):
+                addrs = []
+        if len(addrs) <= 1:
+            return await asyncio.wait_for(
+                asyncio.open_connection(
+                    host,
+                    port,
+                    ssl=ssl_ctx,
+                    server_hostname=host if use_tls else None,
+                ),
+                timeout=timeout,
+            )
+        now = time.monotonic()
+        healthy = [ip for ip in addrs if self._dead_ips.get((host, port, ip), 0.0) <= now]
+        ordered = healthy + [ip for ip in addrs if ip not in healthy]
+        per_ip_timeout = max(2.0, min(timeout, timeout / min(len(ordered), 2)))
+        last_exc: Exception | None = None
+        for ip in ordered[:4]:
+            try:
+                conn = await asyncio.wait_for(
+                    asyncio.open_connection(
+                        ip,
+                        port,
+                        ssl=ssl_ctx,
+                        server_hostname=host if use_tls else None,
+                    ),
+                    timeout=per_ip_timeout,
+                )
+                self._dead_ips.pop((host, port, ip), None)
+                return conn
+            except (asyncio.TimeoutError, OSError) as exc:
+                self._dead_ips[(host, port, ip)] = time.monotonic() + _DEAD_IP_TTL_SECONDS
+                last_exc = exc
+        raise ConnectionError(f"all resolved gateway IPs failed for {host}:{port}: {last_exc}") from last_exc
+
     async def _open_proxy_hop(
         self,
         entry: ProxyEntry,
@@ -547,9 +633,28 @@ class LocalProxyBridge:
         scheme = _normalize_scheme(entry.scheme) or "http"
         if scheme in _HTTP_SCHEMES:
             return await self._connect_http_upstream(entry, dest_host, dest_port)
-        # socks-family: reuse proxy_pool's authenticated SOCKS5 handshake.
-        connector = Socks5Server(connect_timeout=self.connect_timeout)
-        return await connector._connect_through_upstream(_as_upstream_proxy(entry), dest_host, dest_port, dest_atyp)
+        port = entry.port or _SOCKS_DEFAULT_PORT
+        try:
+            r, w = await self._open_tcp_with_failover(entry.host, port, use_tls=False)
+        except (asyncio.TimeoutError, OSError) as exc:
+            raise ConnectionError(
+                f"SOCKS5 upstream connect failed within {self.connect_timeout}s: {entry.masked}"
+            ) from exc
+        try:
+            await _socks5_handshake(
+                r, w, _as_upstream_proxy(entry), dest_host, dest_port, dest_atyp, self.connect_timeout
+            )
+        except (
+            asyncio.CancelledError,
+            asyncio.TimeoutError,
+            asyncio.IncompleteReadError,
+            ConnectionError,
+            OSError,
+            ValueError,
+        ):
+            await _close_writer(w)
+            raise
+        return r, w
 
     async def _tunnel_on_stream(
         self,
@@ -562,6 +667,15 @@ class LocalProxyBridge:
     ) -> None:
         scheme = _normalize_scheme(entry.scheme) or "http"
         upstream = _as_upstream_proxy(entry)
+        if scheme == "https":
+            loop = asyncio.get_running_loop()
+            ssl_ctx = ssl.create_default_context()
+            protocol = getattr(writer, "_protocol")
+            transport = await asyncio.wait_for(
+                loop.start_tls(writer.transport, protocol, ssl_ctx, server_hostname=entry.host),
+                timeout=self.connect_timeout,
+            )
+            setattr(writer, "_transport", transport)
         if scheme in _HTTP_SCHEMES:
             await _http_connect_handshake(reader, writer, upstream, dest_host, dest_port, self.connect_timeout)
             return
@@ -589,28 +703,24 @@ class LocalProxyBridge:
             raise ConnectionError(
                 f"chained upstream handshake failed via {hop.masked} -> {upstream.masked} ({exc})"
             ) from exc
+        except asyncio.CancelledError:
+            await _close_writer(writer)
+            raise
         return reader, writer
 
     async def _connect_http_upstream(
         self, upstream: ProxyEntry, dest_host: str, dest_port: int
     ) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
-        """HTTP CONNECT tunnel to the destination through an http(s) upstream.
-
-        P1-4: every await below is bounded by ``connect_timeout``.  The socks
-        branch always delegated to ``Socks5Server``, which honours it; this one
-        used raw ``open_connection`` / ``readline``, so an upstream that
-        accepted the TCP socket but never answered the CONNECT parked this
-        coroutine -- and the client handler awaiting it -- forever, leaking one
-        task and one socket per stuck request until the process was restarted.
-        """
-        port = upstream.port or _HTTP_DEFAULT_PORT
+        """HTTP CONNECT tunnel to the destination through an http(s) upstream."""
+        scheme = _normalize_scheme(upstream.scheme) or "http"
+        port = upstream.port or (443 if scheme == "https" else _HTTP_DEFAULT_PORT)
         timeout = self.connect_timeout
         try:
-            r, w = await asyncio.wait_for(asyncio.open_connection(upstream.host, port), timeout=timeout)
+            r, w = await self._open_tcp_with_failover(upstream.host, port, use_tls=(scheme == "https"))
         except (asyncio.TimeoutError, OSError) as exc:
             raise ConnectionError(f"HTTP upstream connect failed within {timeout}s: {upstream.masked}") from exc
         try:
-            authority = f"{dest_host}:{dest_port}"
+            authority = _format_host_port(dest_host, dest_port)
             lines = [f"CONNECT {authority} HTTP/1.1", f"Host: {authority}"]
             if upstream.username:
                 token = _basic_auth_header(upstream.username, upstream.password)
@@ -630,6 +740,9 @@ class LocalProxyBridge:
         except (asyncio.TimeoutError, ValueError, ConnectionError, OSError) as exc:
             await _close_writer(w)
             raise ConnectionError(f"HTTP CONNECT failed within {timeout}s: {upstream.masked} ({exc})") from exc
+        except asyncio.CancelledError:
+            await _close_writer(w)
+            raise
         if not (200 <= code < 300):
             await _close_writer(w)
             raise ConnectionError(f"HTTP CONNECT failed: {status_text.strip()}")

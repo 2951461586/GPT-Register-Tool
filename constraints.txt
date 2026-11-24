@@ -38,7 +38,6 @@ browserforge==1.2.4
 cloakbrowser==0.5.9
 playwright==1.60.0
 playwright-stealth==2.0.3
-qrcode==8.2
 nodriver==0.50.99
 pytest==9.2.0
 pytest-cov==7.1.0

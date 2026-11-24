@@ -7,9 +7,12 @@ Sensitive values are replaced in full; no token or secret prefix is retained.
 
 from __future__ import annotations
 
-import json
 import hashlib
+import importlib
+import json
+import os
 import re
+import sys
 from collections.abc import Mapping
 from functools import lru_cache
 from pathlib import Path
@@ -72,7 +75,40 @@ _LOG_TEXT_PATTERNS = tuple(
 )
 
 
+def _load_native_sanitizer() -> Any:
+    """Load the Rust `sanitize_text_rs` acceleration module when available.
+
+    Controlled by ``RUST_ANYTHING_MODE`` (``old`` disables, ``new`` requires) and
+    ``RUST_ANYTHING_UNIT_SANITIZE_TEXT=original``. Falls back cleanly to pure
+    Python when the compiled extension is absent (e.g. fresh checkout / CI).
+    """
+    mode = os.environ.get("RUST_ANYTHING_MODE")
+    if mode == "old" or os.environ.get("RUST_ANYTHING_UNIT_SANITIZE_TEXT") == "original":
+        return None
+    native_root = str(Path(__file__).resolve().parent.parent.parent / "rust" / "sanitize-text-rs" / "python")
+    if not os.path.isdir(native_root):
+        if mode == "new":
+            raise ImportError(f"sanitize_text_rs not found at {native_root}")
+        return None
+    sys.path.insert(0, native_root)
+    try:
+        return importlib.import_module("sanitize_text_rs")
+    except ImportError:
+        if mode == "new":
+            raise
+        return None
+    finally:
+        if native_root in sys.path:
+            sys.path.remove(native_root)
+
+
+_NATIVE_SANITIZER = _load_native_sanitizer()
+
+
 def sanitize_text(value: Any) -> str:
+    if _NATIVE_SANITIZER is not None:
+        text = value if isinstance(value, str) else str(value or "")
+        return _NATIVE_SANITIZER.sanitize_text(text)
     text = str(value or "")
     for pattern, replacement in _TEXT_PATTERNS:
         text = pattern.sub(replacement, text)
@@ -81,6 +117,9 @@ def sanitize_text(value: Any) -> str:
 
 def sanitize_log_text(value: Any) -> str:
     """Sanitize credentials and mask account emails in persisted log text."""
+    if _NATIVE_SANITIZER is not None:
+        text = value if isinstance(value, str) else str(value or "")
+        return _NATIVE_SANITIZER.sanitize_log_text(text)
     text = sanitize_text(value)
     if _LOG_TEXT_PATTERNS:
         for pattern, replacement in _LOG_TEXT_PATTERNS:
@@ -151,6 +190,11 @@ def sanitize(value: Any, *, key: str = "", path: str = "") -> Any:
     `safe_key_paths` entry can exempt a specific nested field without giving up
     redaction for that key name everywhere else.
     """
+    if _NATIVE_SANITIZER is not None:
+        try:
+            return _NATIVE_SANITIZER.sanitize(value, key=key, path=path)
+        except TypeError:
+            pass
     lowered = key.lower()
     current_path = f"{path}.{lowered}" if path else lowered
     path_is_exempt = bool(

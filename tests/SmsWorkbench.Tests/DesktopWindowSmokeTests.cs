@@ -1027,6 +1027,7 @@ public sealed class DesktopWindowSmokeTests
             payment.UpdateLayout();
             Assert.True(payment.ActualWidth >= payment.MinWidth);
             Assert.True(payment.ActualHeight >= payment.MinHeight);
+            Assert.Equal(Localization.Loc.T("支付链接提取"), payment.Title);
             Assert.DoesNotContain(
                 paymentViewModel.PaymentMethodOptions,
                 option => option.Id == "blik");

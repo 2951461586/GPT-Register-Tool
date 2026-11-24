@@ -1,0 +1,79 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/transport/http_utils.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "http-utils-rs",
+  "exports": [
+    {
+      "name": "_is_allowed_callback_url",
+      "file": "sms_tool/transport/http_utils.py",
+      "line": 63,
+      "params": [
+        {
+          "name": "url",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "auth_base",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "chat_base",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "boolean",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "_minimal_chatgpt_cookie_header",
+      "file": "sms_tool/transport/http_utils.py",
+      "line": 322,
+      "params": [
+        {
+          "name": "cookie_header",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "_follow_continue_url",
+      "file": "sms_tool/transport/http_utils.py",
+      "line": 285,
+      "reason": "HTTP session orchestration stays in Python"
+    },
+    {
+      "name": "_resolve_auth_callback_stops",
+      "file": "sms_tool/transport/http_utils.py",
+      "line": 234,
+      "reason": "HTTP session orchestration stays in Python"
+    },
+    {
+      "name": "_extract_workspace_id",
+      "file": "sms_tool/transport/http_utils.py",
+      "line": 112,
+      "reason": "accepts curl_cffi Session object"
+    }
+  ]
+}

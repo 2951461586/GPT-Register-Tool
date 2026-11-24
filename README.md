@@ -1,23 +1,31 @@
 <div align="center">
   <img src="./SmsWorkbench/Assets/black-kitten.png" width="140" alt="GPT-Register-Tool logo" />
   <h1>GPT-Register-Tool</h1>
-  <p><strong>面向 Windows 的 ChatGPT 账号注册、邮箱 OTP、账号管理与支付工作台</strong><br>
-  <em>A Windows desktop workbench for ChatGPT account registration, email OTP, account management, and payment workflows.</em></p>
+  <p><strong>面向 Windows 的 ChatGPT 账号注册、邮箱 OTP、账号管理与支付链接提取工作台</strong><br>
+  <em>A Windows desktop workbench for ChatGPT account registration, email OTP, account management, and payment-link extraction.</em></p>
   <p>
     <a href="./README.md">简体中文</a> · <a href="./README_EN.md">English</a>
+  </p>
+  <p>
+    <a href="https://github.com/2951461586/GPT-Register-Tool/actions/workflows/ci.yml"><img src="https://github.com/2951461586/GPT-Register-Tool/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+    <a href="https://github.com/2951461586/GPT-Register-Tool/releases"><img src="https://img.shields.io/github/v/release/2951461586/GPT-Register-Tool?logo=github&color=6A20D0" alt="Latest Release" /></a>
+    <a href="./LICENSE"><img src="https://img.shields.io/github/license/2951461586/GPT-Register-Tool?color=22C55E" alt="License: MIT" /></a>
+    <a href="https://github.com/2951461586/GPT-Register-Tool/stargazers"><img src="https://img.shields.io/github/stars/2951461586/GPT-Register-Tool?logo=github" alt="GitHub Stars" /></a>
+    <a href="https://github.com/2951461586/GPT-Register-Tool/releases"><img src="https://img.shields.io/github/downloads/2951461586/GPT-Register-Tool/total?logo=github&color=0EA5E9" alt="GitHub Downloads" /></a>
   </p>
   <p>
     <img src="https://img.shields.io/badge/Windows-10%2F11-0078D4?logo=windows&logoColor=white" alt="Windows 10/11" />
     <img src="https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white" alt=".NET 10" />
     <img src="https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white" alt="Python 3.12+" />
+    <img src="https://img.shields.io/badge/Rust-Native%20FFI%20%26%20PyO3-CE422B?logo=rust&logoColor=white" alt="Rust Native FFI & PyO3" />
   </p>
 </div>
 
 ## 简介
 
-GPT-Register-Tool 采用 **WPF 桌面端 + Python 业务核心**，提供邮箱 OTP 注册、账号与 Session 管理、代理配置、协议支付链接提取和账号导出能力。运行数据默认保存在本机，不写入 Git。
+GPT-Register-Tool 采用 **WPF (.NET 10) 桌面端 + Python 3.12+ 业务核心 + 原生 Rust 加速层**（内置 `native/sentinel_vm/` 进程内 Rust Sentinel VM，彻底移除 Node.js 依赖；并集成 14 个 `rust-anything` PyO3 热点扩展，覆盖脱敏、OTP/SMS 解析、代理归一化、HTML 清洗、静态资源过滤、HTTP 回调/Cookie 处理、错误分类、CPA 分类与会话转换），提供邮箱 OTP 注册、账号与 Session 管理、代理池治理、统一提链服务器对接和账号导出能力。运行数据默认保存在本机，不写入 Git。
 
-当前发布说明：[release-v2026.11.22.md](docs/releases/release-v2026.11.22.md)。
+当前发布说明：[release-v2026.11.24.md](docs/releases/release-v2026.11.24.md)。
 
 
 ## 赞助商
@@ -40,11 +48,11 @@ GPT-Register-Tool 采用 **WPF 桌面端 + Python 业务核心**，提供邮箱 
 | **一键注册** | 邮箱池 / ReMail 长效邮箱 / CFWorker 域名邮箱 / iCloud 接码链接，配多供应商手机接码；单账号、并发批量与按目标成功数调度（`--target-success` + `--max-attempts`）；每个账号独立提取 Sentinel Token 与 `oai-did`，不跨账号复用认证事务；成功判定为 AT 探测 HTTP 200；注册只保存 AT/Session，不生成支付链接 |
 | **协议一致性与恢复** | 领取或购买邮箱前预检 ChatGPT / Auth / Sentinel 三段网络；账号 ↔ 代理会话绑定，只在故障时换出口；NextAuth / Auth / ChatGPT 共享稳定的 `oai-did`、UA 与 client hints，指纹语言与时区随出口 GeoIP；403/429 熔断且不做纯 HTTP PoW 降级；创建账号后先持久化断点再探活，可从断点恢复且不重复烧 OTP |
 | **邮箱与 OTP** | 统一 mailbox seam：ReMail、Smailr、CFWorker、Microsoft Graph/OAuth、Outlook/Hotmail IMAP、Gmail、iCloud 接码链接与历史邮箱池格式；OTP 按主题、发件人、精确收件人、服务端时间戳过滤并排序；ReMail 支持自适应轮询、详情正文补取与 30s 内重发 |
-| **协议支付提链** | 15 种方式：PayPal、GoPay、GCash、GrabPay、UPI、iDEAL、PIX、Kakao Pay、BLIK、TWINT、直卡 Checkout、MoMo、QRIS、Bizum、Naver Pay（后三者为 CLI canary）；Checkout 与 Approve 使用彼此独立的出口池，按支付方法改写国家与 Session；严格区分 Checkout / Promotion / PM / Confirm / Poll / Provider Redirect 阶段；统一五态终态并附 `retryable` 与 `error_stage`，`unknown` 须先对账 |
-| **批量协议支付** | JIT AT 门禁、HTTP 401 分层恢复（RT → Cookie → 隔离浏览器邮箱 OTP → Codex OAuth）、Canary 暂停、方法级并发、原子断点与显式续跑；报告分开统计 AT 200、资格、支付方式可见性、Approve 与最终链接/二维码产物 |
+| **支付链接提取** | 全部 15 种目录方式（PayPal、GoPay、GCash、GrabPay、UPI、iDEAL、PIX、Kakao Pay、BLIK、TWINT、直卡 Checkout、MoMo、QRIS、Bizum、Naver Pay）统一经 `sms_tool/pay_link/extract_server.py` 对接外部提链服务器（旧版内置源提取器已彻底退役）；支持服务器地址、掩码 CDK、路径、超时、代理透传与 TLS 校验配置，CDK 仅通过环境变量传递；保留进程内只读能力探测与支付资格检查，统一五态终态与原子断点续跑 |
+| **原生 Rust 加速** | `native/sentinel_vm/` 编译为进程内 `sentinel_vm.dll` FFI，零 Node.js 运行时依赖；14 个 `rust-anything` PyO3 扩展加速热点路径（脱敏 8.3×、OTP 提取 6.9×/单函数最高 63×、错误分类 6.2×、代理串解析 4.3×、CFWorker/iCloud/Gmail HTML 清洗 4.0×/3.5×/3.0×、SMS 码提取 2.4×、浏览器静态资源过滤 2.3× 等），零 `unsafe`、零 MinGW 运行时 DLL 依赖，详见 [Rust 原生加速架构](docs/current/rust-acceleration.md) |
 | **账号与数据管理** | Session JSON + SQLite 双层索引；账号测活、离线 JWT 轻量快速盘点（`--inspect-accounts`）与 401 恢复；优惠状态徽章（只查套餐/试用，不创建 Checkout）；Codex / CPA / SUB2API 导入导出；本地数据在 `sessions/` 与 `runtime/`，均被 Git 忽略 |
 | **桌面外壳** | 角色目录命名空间隔离（`Models` / `Services` / `ViewModels` / `Views` / `Dialogs` / `Interop`）+ 独立 Coordinator 编排；主题三态（跟随系统 / 浅色 / 深色，`System` 持续跟随 OS）；关闭窗口=隐藏到托盘，托盘菜单或 `Ctrl+Alt+R` 唤回，两个开关都可关；状态条实时显示吞吐/成功率/失败分类；代理池每行内联测速；工作区一键备份/恢复（配置 shard + 账号库 + 邮箱池 + UI 偏好，恢复前自动留旧副本） |
-| **桌面端操作** | 勾选账号后走「批量协议支付」窗口（并发、重试、Canary、两个出口池、断点续跑）；注册批次每输出一次 `Saved session:` 即防抖刷新账号池；多选删除合并为一次后端批量命令；浏览器驱动支持 `--block-assets` 省流拦截静态图像/字体/媒体资源 |
+| **桌面端操作** | 勾选账号后走「支付链接提取」窗口（内置提链服务器配置、并发、重试、Canary、可折叠可选代理池、断点续跑）；注册批次每输出一次 `Saved session:` 即防抖刷新账号池；多选删除合并为一次后端批量命令；浏览器驱动支持 `--block-assets` 省流拦截静态图像/字体/媒体资源 |
 | **手机接码** | SMSBower、HeroSMS、Grizzly、NexSMS 的供应商选择与在线目录查询（可用性依供应商协议），支持发送重试、超时与轮询间隔配置；详见 [当前接码契约](docs/current/one-click-sms.md) |
 
 
@@ -88,8 +96,8 @@ flowchart TB
         direction LR
         PROV["providers/ · phone/<br/>邮箱与手机接码适配"]
         DRV["registration_drivers/ · browser/<br/>playwright · camoufox · roxy · cloak"]
-        SEN["sentinel/<br/>Node sdk.js · ICU 隔离"]
-        PAYAD["pay_link/（oaics_provider）· wallet/<br/>paypal/ · paypal_link/ · upi_link/"]
+        SEN["sentinel/<br/>native/sentinel_vm Rust FFI<br/>零 Node.js 依赖"]
+        PAYAD["pay_link/（extract_server）<br/>paypal/（自动授权）"]
         STO["store/ · session/<br/>SQLite + Session JSON"]
     end
 
@@ -98,9 +106,10 @@ flowchart TB
         KERN["kernel/（仅标准库）<br/>paths · sanitizer · timeouts · flags"]
         INFRA["config/ · transport/ · proxy/ · geo/<br/>observability/"]
         SEAMS["不可变领域契约与跨泳道原语<br/>account_models · payment/wire & checkout_contract<br/>desktop/ipc · operation_journal · cross_process_gate"]
+        RUST["rust/（14 个 PyO3 热点扩展）<br/>sanitizer · mail_otp · proxy · html · sms · data_saver · http · session · store · cpa"]
     end
 
-    EXT["services/protocol-payment/<br/>独立子进程提取器（零导入耦合）"]
+    EXT["外部提链服务器（HTTP API）<br/>EXTRACT_LINK_* 环境变量鉴权"]
     DATA[("本地配置与运行数据（Git 忽略）<br/>%LOCALAPPDATA%\\GPTRegisterTool\\config · sessions/ · runtime/")]
 
     WPF --> CONTRACTS
@@ -109,7 +118,7 @@ flowchart TB
     L2 --> L3
     L3 --> L4
     L4 --> L5
-    PAYAD -. "子进程边界" .-> EXT
+    PAYAD -. "HTTPS / 提链服务器" .-> EXT
     L4 --> DATA
     L5 --> DATA
 ```
@@ -123,16 +132,17 @@ flowchart TB
 | ② CLI / 命令适配 | `sms_tool/cli.py`、`sms_tool/commands/`、`sms_tool/cli_parsers/`、`sms_tool/doctor.py`、`sms_tool/config_usage.py` | 惰性命令分发、纯参数声明组、退出码映射与环境诊断；不承载 provider 协议实现或直接写库 |
 | ③ 应用工作流（注册与认证） | `sms_tool/registration/`（`orchestrator.py` · `handlers.py` · `batch_runner.py` · `pulse.py`）、`sms_tool/auth_flow/`、`sms_tool/registration_drivers/browser_flow/` | 注册入口分派与 `RegistrationOperations` 不可变绑定、协议分阶段执行、目标成功数与脉冲调度、断点续跑、浏览器页面状态机；协议与浏览器两条泳道共用 OTP / Session / AT 200 边界 |
 | ③ 应用工作流（邮箱 · 账号 · 支付编排） | `sms_tool/mailbox/`、`sms_tool/accounts/`、`sms_tool/codex/`、`sms_tool/importers/`、`sms_tool/payment/batch.py`、`sms_tool/payment/qualification_batch.py` | 邮箱路由/策略/轮询、存量账号测活/401 分层恢复/离线 JWT 巡检（`sms_tool/accounts/account_inspection.py`）/优惠与健康批处理/换绑/终端清理、Codex OAuth 与 CPA / SUB2API 导入导出、批量协议支付与支付资格编排 |
-| ④ Provider / 驱动适配 | `sms_tool/providers/`、`sms_tool/phone/`、`sms_tool/registration_drivers/`、`sms_tool/browser/`、`sms_tool/sentinel/`、`sms_tool/registration/sentinel_tokens.py` | 邮箱与手机接码供应商客户端与号池复用；浏览器驱动（playwright · camoufox · roxy · cloak）、静态资源省流拦截（`sms_tool/registration_drivers/data_saver.py`）与进程/指纹池；Sentinel Node `sdk.js` 签发与 ICU 时区/语言隔离 |
-| ④ 支付泳道与持久化适配 | `sms_tool/pay_link/`、`sms_tool/wallet/`、`sms_tool/paypal/`、`sms_tool/paypal_link/`、`sms_tool/upi_link/`、`sms_tool/store/`、`sms_tool/session/` | 多方式支付注册表与进程内 OAICS 自定义 Checkout 提供器（`sms_tool/pay_link/oaics_provider.py`，覆盖 iDEAL / PIX / Kakao Pay / BLIK / TWINT / MoMo）、GoPay / GrabPay / GCash 钱包适配、冻结传统 PayPal / UPI 泳道；SQLite + Session JSON 双层索引与断点持久化（`sms_tool/storage.py` 为兼容壳）、标准会话构建与刷新 |
+| ④ Provider / 驱动适配 | `sms_tool/providers/`、`sms_tool/phone/`、`sms_tool/registration_drivers/`、`sms_tool/browser/`、`sms_tool/sentinel/`、`sms_tool/registration/sentinel_tokens.py` | 邮箱与手机接码供应商客户端与号池复用；浏览器驱动（playwright · camoufox · roxy · cloak）、静态资源省流拦截（`sms_tool/registration_drivers/data_saver.py`）与进程/指纹池；Sentinel 进程内原生 Rust FFI（`sms_tool/sentinel/native_ffi.py`）签发 |
+| ④ 支付泳道与持久化适配 | `sms_tool/pay_link/`、`sms_tool/paypal/`、`sms_tool/store/`、`sms_tool/session/` | 多方式支付注册表与统一提链服务器 HTTP 适配（`sms_tool/pay_link/extract_server.py`，覆盖全部 15 种目录支付方式）、PayPal 自动授权执行；SQLite + Session JSON 双层索引与断点持久化（`sms_tool/storage.py` 为兼容壳）、标准会话构建与刷新 |
 | ⑤ 基础内核 | `sms_tool/kernel/` | 零应用层依赖的纯标准库底座：路径、脱敏、超时常量、冻结配置布尔开关、失败分类词表与共享传输原语 |
 | ⑤ 基础设施底座 | `sms_tool/config/`、`sms_tool/transport/`、`sms_tool/proxy/`、`sms_tool/geo/`、`sms_tool/observability/` | 分片配置加载与只读冻结；`curl_cffi` / `wreq` 双传输后端、端点单一权威（`sms_tool/transport/endpoints.py`）与指纹池；代理串单一权威（`sms_tool/proxy/entry.py`）、通道路由、健康度与二级跳板本地桥（`sms_tool/proxy/bridge.py`）；出口 GeoIP / 时区单一权威与脱敏遥测 |
 | ⑤ 领域契约与共享原语 | `sms_tool/accounts/account_models.py`、`sms_tool/payment/wire.py`、`sms_tool/payment/checkout_contract.py`、`sms_tool/payment/catalog.py`、`sms_tool/desktop/ipc.py`、`sms_tool/operation_journal.py`、`sms_tool/cross_process_gate.py` | 跨泳道不可变契约（账号模型、Checkout 与支付线缆核、方法目录、优惠/支付资格状态机、唯一 `@@SMSWORKBENCH_V2@@` IPC 写入器、幂等恢复日志与跨进程文件锁） |
 
-- **进程外边界**：`services/protocol-payment/` 为可选/传统本地协议支付子进程提取器（统一 `protocol_payment.v1` 终态回报），与 `sms_tool/` 保持零导入耦合；区域方式（iDEAL / PIX / Kakao Pay / BLIK / TWINT / MoMo）已主迁至进程内 `sms_tool/pay_link/oaics_provider.py`。
+- **提链外部服务边界**：旧版内置协议支付源提取器已彻底退役，全部 15 种支付方式统一经 `sms_tool/pay_link/extract_server.py` 对接外部提链服务器（`protocol_payments.extract_link_server` / `EXTRACT_LINK_*` 环境变量）。
+- **Rust 原生加速与零 Node.js 依赖**：`native/sentinel_vm/` 提供进程内 Sentinel VM FFI；`rust/` 下 14 个由 `rust-anything` 管理的 PyO3 扩展加速热点路径（4,824 条录制用例 100% 一致，0 `unsafe`，完整基准见 [Rust 原生加速架构](docs/current/rust-acceleration.md)）。
 - **自动化架构门禁**：五层依赖方向与命名空间隔离由 CI 和预提交钩子强制守卫，包括 `scripts/import_layer_ratchet.py`、`scripts/kernel_boundary_ratchet.py`、`scripts/root_module_ratchet.py`、`scripts/architecture_scan.py` 以及 `tests/SmsWorkbench.Tests/NamespaceArchitectureTests.cs`。
 
-更详细的边界规则见 [架构与边界说明](docs/architecture.md)，WPF 前端架构见 [桌面端 UI 架构](docs/current/ui-architecture.md)，物理文件归属见 [目录职责](docs/directory-map.md)。
+更详细的边界规则见 [架构与边界说明](docs/architecture.md)，WPF 前端架构见 [桌面端 UI 架构](docs/current/ui-architecture.md)，Rust 原生加速见 [Rust 加速架构](docs/current/rust-acceleration.md)，物理文件归属见 [目录职责](docs/directory-map.md)。
 
 
 ## 常见问题
@@ -153,12 +163,12 @@ flowchart TB
 - `curl_cffi==0.17.0`。注册预检会校验安装版本（0.15–0.17）和 `chrome152` profile；旧版本不会进入邮箱采购或注册阶段。
 - 可选第二传输后端 `wreq>=0.13.0,<0.14`（`PROTOCOL_HTTP_CLIENT=wreq` / `email_registration.protocol_http_backend`，默认 `curl_cffi`）；未安装或无法运行所选指纹时**直接失败**，不静默回退。
 - .NET 10 Desktop Runtime；从源码编译时需要 .NET 10 SDK。
-- **Node.js 18+**（`node` 需在 PATH）：Sentinel Token 的 quickjs 提取器用 `node` 运行 OpenAI 真实 `sdk.js`，缺失会导致注册阶段 OTP 静默丢失。
-- **Playwright Chromium**：MoMo/直卡等协议支付的 Stripe init 走 Chromium 网络栈完成 TLS，需执行 `python -m playwright install chromium`。
-- 可正常访问目标邮箱、ChatGPT 和支付服务的网络环境。
-- 注册代理、浏览器注册代理、邮箱收件代理、支付资格专用代理和协议支付代理彼此独立；代理字段留空时不注入本机默认值，由 `proxy.lanes` / 旧键 / 预检决定。
+- **无需 Node.js**：Sentinel PoW / Turnstile / SO 签发已迁入内置原生 Rust FFI（`sms_tool/sentinel/runtime/sentinel_vm.dll`）；仅当你需要从源码重新编译 `native/sentinel_vm/` 或 `rust/*-rs/` 时才需要 Rust 工具链。
+- **Playwright Chromium**（可选）：浏览器驱动注册及 PayPal 浏览器授权/验证码流程需要，执行 `python -m playwright install chromium`。
+- 可正常访问目标邮箱、ChatGPT 和提链服务器的网络环境。
+- 注册代理、浏览器注册代理、邮箱收件代理、支付资格专用代理和提链代理彼此独立；代理字段留空时不注入本机默认值，由 `proxy.lanes` / 旧键 / 预检决定。
 
-安装依赖后，可运行环境预检确认 Node.js、Playwright Chromium 和关键 Python 包就绪：
+安装依赖后，可运行环境预检确认原生 Sentinel FFI、Playwright Chromium 和关键 Python 包就绪：
 
 ```powershell
 python scripts/preflight_env.py
@@ -222,7 +232,7 @@ powershell -ExecutionPolicy Bypass -File .\SmsWorkbench\build_dotnet.ps1
 
 打开桌面端的 **设置** 页面，至少完成以下配置：
 
-1. 在 **网络与支付 → 基础网络** 中配置注册代理、浏览器注册代理、邮箱收件代理和支付资格专用代理；非空保存会写入对应的 `proxy.lanes.<lane>` 并同步旧键，留空不改动 lane。协议支付的 Checkout / Approve 两个代理池仍在“批量协议支付”窗口中按支付方式保存。
+1. 在 **网络与支付 → 基础网络** 中配置注册代理、浏览器注册代理、邮箱收件代理和支付资格专用代理；非空保存会写入对应的 `proxy.lanes.<lane>` 并同步旧键，留空不改动 lane。提链服务器地址、CDK 与可选代理池可在 **设置 → 提链服务器** 或「支付链接提取」窗口中保存。
 2. 在 **邮箱与收信** 中配置 ReMail、CFWorker 或其他邮箱源。
 3. 按需配置 SMSBower、CPA、SUB2API 和各协议支付参数。
 4. 保存后重新打开对应功能即可使用新配置。

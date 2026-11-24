@@ -33,6 +33,12 @@ namespace SmsWorkbench.ViewModels
         [ObservableProperty] private string canaryText = "0";
         [ObservableProperty] private string batchId = "";
         [ObservableProperty] private bool resumeCheckpoint;
+        [ObservableProperty] private string extractServerApiBase = "";
+        [ObservableProperty] private string extractServerCdk = "";
+        [ObservableProperty] private string extractServerEndpoint = "/api/v1/extract";
+        [ObservableProperty] private string extractServerTimeoutText = "60";
+        [ObservableProperty] private bool extractServerPassProxy = true;
+        [ObservableProperty] private bool extractServerVerifyTls = true;
         [ObservableProperty] private string checkoutProxyPool = "";
         [ObservableProperty] private string approveProxyPool = "";
         [ObservableProperty] private string checkoutProxyCountry = "";
@@ -79,6 +85,7 @@ namespace SmsWorkbench.ViewModels
             batchId = _automaticBatchId;
             ReloadCountryOptions();
             ReloadProxyConfiguration();
+            ReloadExtractServerConfiguration();
         }
 
         public IReadOnlyList<PaymentMethodOption> PaymentMethodOptions { get; }
@@ -151,6 +158,7 @@ namespace SmsWorkbench.ViewModels
         {
             RunCommand.NotifyCanExecuteChanged();
             SaveProxyConfigurationCommand.NotifyCanExecuteChanged();
+            SaveExtractServerConfigurationCommand.NotifyCanExecuteChanged();
             TestProxiesCommand.NotifyCanExecuteChanged();
             OpenReportCommand.NotifyCanExecuteChanged();
         }
@@ -171,6 +179,19 @@ namespace SmsWorkbench.ViewModels
             {
                 Status = Loc.T("复制失败：") + exception.Message;
             }
+        }
+
+        private bool CanSaveExtractServerConfiguration() => !IsRunning;
+
+        [RelayCommand(CanExecute = nameof(CanSaveExtractServerConfiguration))]
+        private void SaveExtractServerConfiguration()
+        {
+            if (!TryBuildExtractServerConfiguration(out ExtractLinkServerConfiguration? config))
+                return;
+            SettingsSaveResult result = _paymentBatchService.SaveExtractServerConfiguration(config);
+            Status = result.Ok
+                ? Loc.T("提链服务器配置已保存。")
+                : result.Error;
         }
 
         private bool CanSaveProxyConfiguration() => !IsRunning && SelectedMethod != null;
@@ -249,7 +270,7 @@ namespace SmsWorkbench.ViewModels
             ReportPath = "";
             Status = ProbeOnly
                 ? Loc.T("正在执行 Checkout 与 Stripe init 支付能力探测...")
-                : Loc.T("正在执行 JIT 探测与协议支付批次...");
+                : Loc.T("正在执行提链服务器批量提取...");
             IsRunning = true;
             try
             {
@@ -294,6 +315,41 @@ namespace SmsWorkbench.ViewModels
             }
         }
 
+        private bool TryBuildExtractServerConfiguration([NotNullWhen(true)] out ExtractLinkServerConfiguration? configuration)
+        {
+            configuration = null;
+            string rawTimeout = (ExtractServerTimeoutText ?? "").Trim();
+            int timeoutSeconds = 60;
+            if (rawTimeout.Length > 0 && (!int.TryParse(rawTimeout, out timeoutSeconds) || timeoutSeconds <= 0))
+            {
+                Status = Loc.T("提链超时秒数必须是正整数。");
+                return false;
+            }
+            string endpoint = (ExtractServerEndpoint ?? "").Trim();
+            if (endpoint.Length == 0)
+                endpoint = "/api/v1/extract";
+            configuration = new ExtractLinkServerConfiguration(
+                (ExtractServerApiBase ?? "").Trim(),
+                (ExtractServerCdk ?? "").Trim(),
+                endpoint,
+                timeoutSeconds,
+                ExtractServerPassProxy,
+                ExtractServerVerifyTls);
+            return true;
+        }
+
+        private void ReloadExtractServerConfiguration()
+        {
+            if (_paymentBatchService == null) return;
+            ExtractLinkServerConfiguration configured = _paymentBatchService.LoadExtractServerConfiguration();
+            ExtractServerApiBase = configured.ApiBase ?? "";
+            ExtractServerCdk = configured.Cdk ?? "";
+            ExtractServerEndpoint = string.IsNullOrWhiteSpace(configured.Endpoint) ? "/api/v1/extract" : configured.Endpoint;
+            ExtractServerTimeoutText = (configured.TimeoutSeconds > 0 ? configured.TimeoutSeconds : 60).ToString(CultureInfo.InvariantCulture);
+            ExtractServerPassProxy = configured.PassProxy;
+            ExtractServerVerifyTls = configured.VerifyTls;
+        }
+
         private bool TryCreateRequest([NotNullWhen(true)] out PaymentBatchRequest? request)
         {
             request = null;
@@ -302,6 +358,8 @@ namespace SmsWorkbench.ViewModels
                 Status = Loc.T("Canary 数量必须是非负整数。");
                 return false;
             }
+            if (!TryBuildExtractServerConfiguration(out ExtractLinkServerConfiguration? extractServer))
+                return false;
             string normalizedBatchId = ResumeCheckpoint
                 ? Regex.Replace((BatchId ?? "").Trim(), @"[^A-Za-z0-9_.-]+", "_")
                 : CreateBatchId(SelectedMethod?.Id ?? "paypal");
@@ -332,6 +390,7 @@ namespace SmsWorkbench.ViewModels
                 new[] { CreateNeutralMatrixRow() })
             {
                 ResumeCheckpoint = ResumeCheckpoint,
+                ExtractServer = extractServer,
             };
             return true;
         }

@@ -14,7 +14,7 @@ from curl_cffi import requests as curl_requests
 from ..codex.export import build_codex_json
 from ..config import CFG
 from ..kernel.paths import output_dir
-from ..phone.phone_proxy import normalize_proxy_url
+from ..proxy.entry import normalize_proxy_url
 from ..transport import endpoints
 
 

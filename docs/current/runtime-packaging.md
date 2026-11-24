@@ -64,10 +64,12 @@ exists for local packages, not for published assets.
 
 ## Still external
 
-- **Node.js 20+** for the Sentinel runner. It is a separately versioned runtime
-  with its own SDK bundle; `--doctor` reports it.
 - **Browser binaries** for Playwright/Camoufox drivers, obtained by the driver
   itself when that path is used.
+
+(Sentinel PoW / Turnstile / SO challenges now run in-process through the bundled
+native Rust `sms_tool/sentinel/runtime/sentinel_vm.dll`; Node.js is no longer an
+external runtime dependency.)
 
 ## Updating the pin
 

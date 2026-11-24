@@ -253,3 +253,18 @@ def test_acknowledged_lane_names_are_validated_and_normalised():
         {pr.PAYMENT}
     )
     assert pr.acknowledged_lane_overlaps({"proxy": {"allow_lane_overlap": 7}}) == frozenset()
+
+
+def test_census_never_exposes_raw_payment_credentials():
+    import json
+
+    config = {
+        "proxy": {"pool": ["http://reguser:REGSECRET@reg.example:1"]},
+        "protocol_payments": {"proxy_pools": {"US": ["http://payuser:PAYSECRET@pay.example:2"]}},
+    }
+    report = pr.census(config, methods=("paypal",))
+    dumped = json.dumps(report)
+    assert "REGSECRET" not in dumped
+    assert "PAYSECRET" not in dumped
+    assert "payuser" not in dumped
+    assert report[pr.PAYMENT]["regions"]["US"] == {"count": 1, "endpoints": ["pay.example:2"]}

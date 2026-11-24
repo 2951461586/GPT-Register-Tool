@@ -706,6 +706,28 @@ namespace SmsWorkbench.Localization
             ["点击筛选待处理"] = "Filter: needs attention",
             ["外壳"] = "Shell",
             ["语言"] = "EN/CN",
+
+            // ── Paylink extraction server / renamed module ───────────────────
+            ["支付链接提取"] = "Payment link extraction",
+            ["提链服务器"] = "Paylink extraction server",
+            ["启用提链服务器"] = "Enable paylink extraction server",
+            ["服务器地址"] = "Server URL",
+            ["提链 CDK"] = "Extraction CDK",
+            ["提链路径"] = "Extraction endpoint",
+            ["提链超时秒"] = "Extraction timeout (s)",
+            ["透传代理到提链服务器"] = "Forward proxy to extraction server",
+            ["校验证书 (TLS)"] = "Verify TLS certificate",
+            ["提链服务器完整地址（含协议前缀）"] = "Extraction server base URL (include scheme)",
+            ["CDK 密钥（通过环境变量安全传递）"] = "CDK key (passed safely via environment variable)",
+            ["保存提链配置"] = "Save server config",
+            ["提链服务器配置已保存。"] = "Extraction server configuration saved.",
+            ["提链超时秒数必须在 5 到 600 之间。"] = "Extraction timeout must be between 5 and 600 seconds.",
+            ["提链超时秒数必须是正整数。"] = "Extraction timeout must be a positive integer.",
+            ["提链配置保存失败："] = "Failed to save extraction server config: ",
+            ["可选代理池配置（透传代理 / 能力探测用）"] = "Optional proxy pools (for proxy forwarding / capability probe)",
+            ["正在执行提链服务器批量提取..."] = "Running batch payment link extraction via server...",
+            ["已有后端任务正在运行，请先等待其完成或取消后再发起支付链接提取。"]
+                = "A backend task is already running. Wait for it to finish or cancel it before starting payment link extraction.",
         };
     }
 }

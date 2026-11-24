@@ -8,9 +8,38 @@
 
 from __future__ import annotations
 
+import importlib
 import json
+import os
+import sys
+from pathlib import Path
+from typing import Any
 
 from .failure_registry import FAILURE_CLASSES, TERMINAL_ERROR_MARKERS as _TERMINAL_MARKERS
+
+
+def _load_native_error_classification() -> Any | None:
+    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
+    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_ERROR_CLASSIFICATION") or "").strip().lower()
+    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
+        return None
+    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "error-classification-rs" / "python"
+    if pkg_dir.is_dir():
+        pkg_str = str(pkg_dir)
+        if pkg_str not in sys.path:
+            sys.path.insert(0, pkg_str)
+    try:
+        return importlib.import_module("error_classification_rs")
+    except (ImportError, OSError):
+        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
+            raise
+        return None
+
+
+_NATIVE_ERROR_CLASSIFICATION = _load_native_error_classification()
+_NATIVE_CLASSIFY_ERROR = getattr(_NATIVE_ERROR_CLASSIFICATION, "classify_error", None)
+_NATIVE_IS_TERMINAL = getattr(_NATIVE_ERROR_CLASSIFICATION, "is_terminal_registration_error", None)
+_NATIVE_INPUT_TYPES = (str, dict, type(None), bool, int, float, list)
 
 # 注册表顺序即匹配优先序（cancelled 最先）。以下公共元组名被多个模块与测试
 # 直接引用，作为兼容视图保留。
@@ -135,6 +164,11 @@ def error_text(value) -> str:
 
 
 def classify_error(value) -> str:
+    if _NATIVE_CLASSIFY_ERROR is not None and isinstance(value, _NATIVE_INPUT_TYPES):
+        try:
+            return _NATIVE_CLASSIFY_ERROR(value)
+        except TypeError:
+            pass
     text = error_text(value)
     # See CURL_TRANSPORT_MARKERS: a wrapped transport failure is still a
     # transport failure, but only a curl code is allowed to prove it.
@@ -170,4 +204,9 @@ def is_terminal_registration_error(value) -> bool:
     That is what lets the transport layer (``http_client``) consult it without
     a top-level import back edge into the policy layer.
     """
+    if _NATIVE_IS_TERMINAL is not None and isinstance(value, _NATIVE_INPUT_TYPES):
+        try:
+            return _NATIVE_IS_TERMINAL(value)
+        except TypeError:
+            pass
     return any(marker in error_text(value) for marker in TERMINAL_ERROR_MARKERS)

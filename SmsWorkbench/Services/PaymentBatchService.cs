@@ -11,6 +11,8 @@ namespace SmsWorkbench.Services
         PaymentMatrixRow CreateDefaultMatrixRow(string paymentMethod);
         PaymentBatchProxyConfiguration LoadProxyConfiguration(string paymentMethod);
         SettingsSaveResult SaveProxyConfiguration(string paymentMethod, PaymentBatchProxyConfiguration configuration);
+        ExtractLinkServerConfiguration LoadExtractServerConfiguration() => new();
+        SettingsSaveResult SaveExtractServerConfiguration(ExtractLinkServerConfiguration configuration) => new(true);
         Task<JsonElement> RunAsync(PaymentBatchRequest request, CancellationToken cancellationToken);
         Task<JsonElement> ProbeProxiesAsync(
             string paymentMethod,
@@ -234,6 +236,66 @@ namespace SmsWorkbench.Services
             }
         }
 
+        public ExtractLinkServerConfiguration LoadExtractServerConfiguration()
+        {
+            try
+            {
+                JsonNode root = ConfigStore.ReadMerged(_paths) ?? new JsonObject();
+                JsonObject? server = root?["protocol_payments"]?["extract_link_server"] as JsonObject;
+                if (server == null)
+                    return new ExtractLinkServerConfiguration();
+
+                string apiBase = Text(server, "api_base").Trim();
+                string cdk = Text(server, "cdk").Trim();
+                string endpoint = First(Text(server, "endpoint"), "/api/v1/extract");
+                int timeoutSeconds = int.TryParse(Text(server, "timeout_seconds"), out int parsed) && parsed > 0
+                    ? Math.Clamp(parsed, 5, 600)
+                    : 60;
+                bool passProxy = BoolValue(server, "pass_proxy", true);
+                bool verifyTls = BoolValue(server, "verify_tls", true);
+                return new ExtractLinkServerConfiguration(apiBase, cdk, endpoint, timeoutSeconds, passProxy, verifyTls);
+            }
+            catch
+            {
+                return new ExtractLinkServerConfiguration();
+            }
+        }
+
+        public SettingsSaveResult SaveExtractServerConfiguration(ExtractLinkServerConfiguration configuration)
+        {
+            int timeoutSeconds = configuration?.TimeoutSeconds ?? 60;
+            if (timeoutSeconds < 5 || timeoutSeconds > 600)
+                return new SettingsSaveResult(false, Loc.T("提链超时秒数必须在 5 到 600 之间。"));
+
+            string apiBase = (configuration?.ApiBase ?? "").Trim().TrimEnd('/');
+            string cdk = (configuration?.Cdk ?? "").Trim();
+            string endpoint = (configuration?.Endpoint ?? "").Trim();
+            if (endpoint.Length == 0)
+                endpoint = "/api/v1/extract";
+            else if (!endpoint.StartsWith("/", StringComparison.Ordinal))
+                endpoint = "/" + endpoint;
+
+            try
+            {
+                JsonObject root = ReadConfigRoot();
+                JsonObject server = EnsureObject(root, "protocol_payments", "extract_link_server");
+                server["enabled"] = true;
+                server["mode"] = "only";
+                server["api_base"] = apiBase;
+                server["cdk"] = cdk;
+                server["endpoint"] = endpoint;
+                server["timeout_seconds"] = timeoutSeconds;
+                server["pass_proxy"] = configuration?.PassProxy ?? true;
+                server["verify_tls"] = configuration?.VerifyTls ?? true;
+                WriteConfigRoot(root);
+                return new SettingsSaveResult(true);
+            }
+            catch (Exception exception)
+            {
+                return new SettingsSaveResult(false, Loc.T("提链配置保存失败：") + exception.Message);
+            }
+        }
+
         public PaymentMatrixRow CreateDefaultMatrixRow(string paymentMethod)
         {
             string normalized = PaymentMethods.Normalize(paymentMethod);
@@ -314,12 +376,29 @@ namespace SmsWorkbench.Services
                 int waves = Math.Max(1, (int)Math.Ceiling(waveSize / (double)Math.Max(1, request.Workers)));
                 long timeout = Math.Max(120000L, (long)GetMethodTimeoutMilliseconds(request.PaymentMethod) * waves);
                 timeout = Math.Min(12L * 60 * 60 * 1000, timeout);
+                ExtractLinkServerConfiguration server = request.ExtractServer ?? LoadExtractServerConfiguration();
+                var environment = new Dictionary<string, string>
+                {
+                    ["SMSWORKBENCH_EVENTS"] = "1",
+                    ["EXTRACT_LINK_MODE"] = "only",
+                    ["EXTRACT_LINK_PASS_PROXY"] = server.PassProxy ? "1" : "0",
+                    ["EXTRACT_LINK_VERIFY_TLS"] = server.VerifyTls ? "1" : "0",
+                };
+                if (!string.IsNullOrWhiteSpace(server.ApiBase))
+                    environment["EXTRACT_LINK_API_BASE"] = server.ApiBase.Trim();
+                if (!string.IsNullOrWhiteSpace(server.Cdk))
+                    environment["EXTRACT_LINK_CDK"] = server.Cdk.Trim();
+                if (!string.IsNullOrWhiteSpace(server.Endpoint))
+                    environment["EXTRACT_LINK_ENDPOINT"] = server.Endpoint.Trim();
+                if (server.TimeoutSeconds > 0)
+                    environment["EXTRACT_LINK_TIMEOUT"] = server.TimeoutSeconds.ToString(CultureInfo.InvariantCulture);
+
                 BackendCommandResult result = await _backendTasks.RunAsync(
                     BackendCommand.Create(
-                        Loc.T("批量协议支付"),
+                        Loc.T("支付链接提取"),
                         arguments,
                         (int)timeout,
-                        new Dictionary<string, string> { ["SMSWORKBENCH_EVENTS"] = "1" }),
+                        environment),
                     progress,
                     cancellationToken: cancellationToken);
 
@@ -429,6 +508,20 @@ namespace SmsWorkbench.Services
         }
 
         private static string Text(JsonObject? value, string name) => value?[name]?.ToString() ?? "";
+
+        private static bool BoolValue(JsonObject? value, string name, bool fallback)
+        {
+            JsonNode? node = value?[name];
+            if (node == null) return fallback;
+            if (node is JsonValue jsonValue && jsonValue.TryGetValue<bool>(out bool direct))
+                return direct;
+            string raw = node.ToString().Trim();
+            if (bool.TryParse(raw, out bool parsed))
+                return parsed;
+            if (raw is "1" or "yes" or "on") return true;
+            if (raw is "0" or "no" or "off") return false;
+            return fallback;
+        }
 
         private static string First(string value, string fallback) => string.IsNullOrWhiteSpace(value) ? fallback : value;
 

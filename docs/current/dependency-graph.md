@@ -17,13 +17,13 @@ the *gate* (per-pair, only-down); this file is the *view*.
 
 | Measure | Value |
 | --- | ---: |
-| Modules | 331 |
-| Module-level import edges | 1076 |
-| Delayed (function-local) edges | 340 |
-| Type-only (`if TYPE_CHECKING`) edges | 71 |
+| Modules | 297 |
+| Module-level import edges | 919 |
+| Delayed (function-local) edges | 309 |
+| Type-only (`if TYPE_CHECKING`) edges | 59 |
 | Strongly connected components (size > 1) | 0 |
 | Modules inside a cycle | 0 |
-| Mutually dependent directory pairs | 19 |
+| Mutually dependent directory pairs | 17 |
 
 ## Cycles
 
@@ -47,9 +47,7 @@ None.
 | `sms_tool/desktop` ↔ `sms_tool/registration` |
 | `sms_tool/mailbox` ↔ `sms_tool/providers` |
 | `sms_tool/payment` ↔ `sms_tool/paypal` |
-| `sms_tool/payment` ↔ `sms_tool/wallet` |
 | `sms_tool/phone` ↔ `sms_tool/registration` |
-| `sms_tool/phone` ↔ `sms_tool/sentinel` |
 | `sms_tool/proxy` ↔ `sms_tool/transport` |
 | `sms_tool/registration` ↔ `sms_tool/registration_drivers` |
 
@@ -57,18 +55,18 @@ None.
 
 | Module | Importers |
 | --- | ---: |
-| `sms_tool.config` | 62 |
-| `sms_tool.transport` | 44 |
-| `sms_tool.transport.endpoints` | 44 |
-| `sms_tool.kernel.sanitizer` | 36 |
-| `sms_tool.kernel.paths` | 31 |
-| `sms_tool.transport.auth_headers` | 27 |
-| `sms_tool.proxy.entry` | 21 |
+| `sms_tool.config` | 60 |
+| `sms_tool.transport` | 33 |
+| `sms_tool.transport.endpoints` | 33 |
+| `sms_tool.kernel.sanitizer` | 31 |
+| `sms_tool.kernel.paths` | 30 |
+| `sms_tool.proxy.entry` | 27 |
+| `sms_tool.transport.auth_headers` | 26 |
 | `sms_tool.observability.operator_output` | 18 |
-| `sms_tool.phone.phone_proxy` | 16 |
 | `sms_tool.transport.http_client` | 15 |
 | `sms_tool.storage` | 14 |
-| `sms_tool.payment.checkout_contract` | 13 |
 | `sms_tool.registration_drivers.base` | 13 |
-| `sms_tool.payment.catalog` | 12 |
 | `sms_tool.registration.state` | 12 |
+| `sms_tool.payment.catalog` | 11 |
+| `sms_tool.cross_process_gate` | 10 |
+| `sms_tool.kernel.error_classification` | 10 |

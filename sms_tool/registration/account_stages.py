@@ -32,7 +32,6 @@ from urllib.parse import parse_qsl, quote, urlencode, urlparse, urlunparse
 from curl_cffi import requests as curl_requests
 
 from . import checkpoint as registration_checkpoint
-from ..transport.tls_fingerprint import apply_to_session as _apply_tls_fingerprint
 from ..desktop.ipc import emit_event
 from ..kernel.failure_registry import PASSWORDLESS_SIGNUP_CODE, is_passwordless_signup_mismatch
 from ..observability.operator_output import emit as _emit
@@ -42,6 +41,7 @@ from .protocol_helpers import (
     _create_account_response_line,
     _is_existing_login_dead_end_error,
     _login_probe_password,
+    _new_registration_session,
     _safe_int,
 )
 from .retry_guard import RegistrationRetryGuard
@@ -474,10 +474,7 @@ def fetch_auth_session(
         _LOGGER,
         "  Existing account has no ChatGPT session yet; probing the login method before spending an email code...",
     )
-    s.login_session = curl_requests.Session()
-    if s.proxy:
-        s.login_session.proxies = {"http": s.proxy, "https": s.proxy}
-    _apply_tls_fingerprint(s.login_session)
+    s.login_session = _new_registration_session(proxy=s.proxy or "")
     workflow._install_edge_challenge_hook(s.login_session)
     r._set_oai_did_cookie(s.login_session, s.device_id)
     try:

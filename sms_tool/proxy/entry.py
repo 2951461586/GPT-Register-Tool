@@ -20,12 +20,15 @@ It is dependency-free beyond the standard library and reuses the existing
 
 from __future__ import annotations
 
+import importlib
 import os
 import random
 import re
 import secrets
 import string
+import sys
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Iterable, Mapping
 from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
@@ -49,29 +52,44 @@ _SOCKS_SCHEMES = {"socks4", "socks4a", "socks5", "socks5h"}
 def _mask_credentials(value: str) -> str:
     """Log-safe raw value with any inline credentials replaced by ``***``.
 
-    The URL-form rule is greedy up to the **last** ``@`` that is still inside
-    the authority (``[^/\\s]*`` cannot cross a path or whitespace). A password
-    containing ``@`` -- accepted by every ``urlsplit``-based parser here, which
-    splits at the last ``@`` -- therefore masks completely instead of leaving
-    its tail visible: ``http://alice:p@ss@host:1`` used to render as
-    ``http://***:***@ss@host:1``.
+    Single authority across proxy parsing, screening, admin and probe logs.
+    Covers every accepted proxy paste format:
+    - ``scheme://user:pass@host[:port]`` (greedy to the last ``@`` in authority
+      so passwords containing ``@`` never leak their suffix)
+    - ``scheme://host:port:user:pass`` (including bracketed IPv6 hosts)
+    - schemeless ``user:pass@host:port`` (only when ``:port`` follows, so email
+      addresses stay untouched)
+    - bare ``host:port:user:pass`` (including bracketed IPv6 hosts)
+    - bare ``user:pass:host:port``
     """
     text = str(value or "")
-    # scheme://user:pass@host -> scheme://***:***@host
+    # 1) scheme://user:pass@host -> scheme://***:***@host (greedy to last @ in authority)
     text = re.sub(
-        r"(?i)\b((?:https?|socks5h?|socks4a?)://)[^/\s]*@",
+        r"(?i)([a-z][a-z0-9+.-]*://)[^/\s]+@",
         r"\1***:***@",
         text,
     )
-    # bare host:port:user:pass (4 fields) -> host:port:***:***
+    # 2) scheme://host:port:user:pass -> scheme://host:port:***:***
     text = re.sub(
-        r"(?i)\b([a-z0-9.\-\[\]]+:\d+):[^\s'\"]+:[^\s'\"]+",
+        r"(?i)([a-z][a-z0-9+.-]*://(?:\[[^\]]+\]|[^\s:@/]+):\d{1,5}):[^\s@/\'\"]+:[^\s/\'\"]+",
         r"\1:***:***",
         text,
     )
-    # bare user:pass:host:port (the other provider paste order) -> ***:***:host:port
+    # 3) schemeless user:pass@host:port -> ***:***@host:port (excludes emails without :port)
     text = re.sub(
-        r"(?i)(?<![\w.:/-])([^\s:@/]+):([^\s:@/]+):([^\s:@/]+:\d{1,5})",
+        r"(?<![\w:/@.*-])[^\s:@/\\]+:[^\s@/\\]+@(?=(?:\[[^\]]+\]|[^\s@/\\]+):\d{1,5})",
+        "***:***@",
+        text,
+    )
+    # 4) bare host:port:user:pass -> host:port:***:***
+    text = re.sub(
+        r"(?i)(?<![\w.:/-])((?:\[[^\]]+\]|[^\s:@/]+):\d{1,5}):[^\s:@/\'\"]+:[^\s/\'\"]+",
+        r"\1:***:***",
+        text,
+    )
+    # 5) bare user:pass:host:port -> ***:***:host:port
+    text = re.sub(
+        r"(?i)(?<![\w.:/-])([^\s:@/\\]+):([^\s:@/\\]+):((?:\[[^\]]+\]|[^\s:@/\\]+):\d{1,5})",
         r"***:***:\3",
         text,
     )
@@ -347,8 +365,11 @@ def proxy_to_url(entry: ProxyEntry) -> str:
 #     rotation and retargeting silently no-op on it.
 
 _REGION_TAG = r"(?P<tag>region|geo|country)"
-_USER_REGION_RE = re.compile(rf"(^|-){_REGION_TAG}-[A-Za-z]{{2}}(?=-|$)")
-_USER_SID_RE = re.compile(r"(?:(?<=-sid-)|(?<=_sid_))[A-Za-z0-9]+(?=[_-]|$)")
+_USER_REGION_RE = re.compile(rf"(^|[-_]){_REGION_TAG}(?P<sep>[-_])[A-Za-z]{{2}}(?=[-_]|$)")
+_USER_SID_RE = re.compile(
+    r"(?:(?<=-sid-)|(?<=_sid_)|(?<=-sessid-)|(?<=_sessid_)|(?<=-session-)|(?<=_session_))[A-Za-z0-9]+(?=[_-]|$)",
+    re.IGNORECASE,
+)
 # rola puts its sticky session id between the final ``_`` and the region tag
 # (``SYNTHACCT7tbr_1-country-vn``).  Probed 2026-09-12 against the live gateway:
 # the provider accepts an *arbitrary* token there -- a random 4-char id
@@ -357,6 +378,13 @@ _USER_SID_RE = re.compile(r"(?:(?<=-sid-)|(?<=_sid_))[A-Za-z0-9]+(?=[_-]|$)")
 # rotating it is safe.  Do not "fix" this into a bounded 1..N counter.
 _ROLA_SID_RE = re.compile(rf"(?<=_)[A-Za-z0-9]+(?=-{_REGION_TAG}-[A-Za-z]{{2}}(?=[_:]|$))")
 _KOOKEEY_PW_RE = re.compile(r"^(?P<base>.+?)-(?P<cc>[A-Za-z]{2})-(?P<sid>[A-Za-z0-9]+)-(?P<ttl>\d+[smhd])$")
+_PW_REGION_RE = re.compile(
+    r"(?P<prefix>(?:^|[-_])(?:country|region|geo)[-_])(?P<cc>[A-Za-z]{2})(?=[-_]|$)", re.IGNORECASE
+)
+_PW_SID_RE = re.compile(
+    r"(?:(?<=-sid-)|(?<=_sid_)|(?<=-sessid-)|(?<=_sessid_)|(?<=-session-)|(?<=_session_)|(?<=_session-))[A-Za-z0-9]+(?=[_-]|$)",
+    re.IGNORECASE,
+)
 # NOTE: the tag group must stay *non-capturing* here — ``infer_region`` reads
 # ``match.group(1)`` as the country code, so a capturing tag group would make it
 # return ``"GEO"`` instead of ``"VN"``.
@@ -380,7 +408,38 @@ _IPWO_CUSTOM_ZONE_RE = re.compile(
 # Rule 13 therefore covers six helpers, not five.
 
 
+def _load_native_proxy_entry() -> Any:
+    """Load the Rust `normalize_proxy_url_rs` acceleration module when available."""
+    mode = os.environ.get("RUST_ANYTHING_MODE")
+    if mode == "old" or os.environ.get("RUST_ANYTHING_UNIT_NORMALIZE_PROXY_URL") == "original":
+        return None
+    native_root = str(Path(__file__).resolve().parent.parent.parent / "rust" / "normalize-proxy-url-rs" / "python")
+    if not os.path.isdir(native_root):
+        if mode == "new":
+            raise ImportError(f"normalize_proxy_url_rs not found at {native_root}")
+        return None
+    sys.path.insert(0, native_root)
+    try:
+        return importlib.import_module("normalize_proxy_url_rs")
+    except ImportError:
+        if mode == "new":
+            raise
+        return None
+    finally:
+        if native_root in sys.path:
+            sys.path.remove(native_root)
+
+
+_NATIVE_PROXY_ENTRY = _load_native_proxy_entry()
+
+
 def normalize_proxy_url(proxy: str | None, default_scheme: str = "http") -> str:
+    if (
+        _NATIVE_PROXY_ENTRY is not None
+        and (proxy is None or isinstance(proxy, str))
+        and isinstance(default_scheme, str)
+    ):
+        return _NATIVE_PROXY_ENTRY.normalize_proxy_url(proxy, default_scheme)
     # ``None`` is accepted because every caller passes an optional configured
     # value and the body already normalises it through ``str(proxy or "")``.
     value = str(proxy or "").strip()
@@ -413,6 +472,12 @@ def redact_proxy_url(proxy: str | None, empty_placeholder: str = "DIRECT") -> st
     ``empty_placeholder`` lets callers signal a missing proxy (``"DIRECT"`` for
     paypal-proxy paths, ``""`` for phone-registration paths).
     """
+    if (
+        _NATIVE_PROXY_ENTRY is not None
+        and (proxy is None or isinstance(proxy, str))
+        and isinstance(empty_placeholder, str)
+    ):
+        return _NATIVE_PROXY_ENTRY.redact_proxy_url(proxy, empty_placeholder)
     value = normalize_proxy_url(proxy or "")
     if not value:
         return empty_placeholder
@@ -517,9 +582,9 @@ def rebuild_proxy_credentials(parsed: Any, username: str, password: str) -> str:
 def retarget_region(proxy: str, iso_code: str) -> str:
     """Change only the exit region/country, preserving the sticky session id.
 
-    Handles Cliproxy ``region-XX``, IPWO ``custom_zone_XX`` usernames, and the
-    Kookeey ``BASE-CC-SESSION-TTL`` password shape. Returns the input unchanged
-    when no known template matches.
+    Handles Cliproxy/9http/Rola/ProxyLane ``region/geo/country-XX``, IPWO
+    ``custom_zone_XX`` usernames, and Kookeey/IPRoyal password templates.
+    Returns the input unchanged when no known template matches.
     """
     value = str(proxy or "")
     iso = str(iso_code or "").strip().upper()
@@ -527,14 +592,16 @@ def retarget_region(proxy: str, iso_code: str) -> str:
         return value
     try:
         parsed = urlsplit(value)
-    except Exception:
+    except ValueError:
         return value
     username = unquote(parsed.username or "")
     password = unquote(parsed.password or "")
     if not username and not password:
         return value
     changed = False
-    new_user, count = _USER_REGION_RE.subn(lambda m: f"{m.group(1)}{m.group('tag')}-{iso}", username, count=1)
+    new_user, count = _USER_REGION_RE.subn(
+        lambda m: f"{m.group(1)}{m.group('tag')}{m.group('sep')}{iso}", username, count=1
+    )
     if count:
         username = new_user
         changed = True
@@ -546,6 +613,15 @@ def retarget_region(proxy: str, iso_code: str) -> str:
     if match:
         password = f"{match.group('base')}-{iso}-{match.group('sid')}-{match.group('ttl')}"
         changed = True
+    else:
+        new_pw, count = _PW_REGION_RE.subn(
+            lambda m: f"{m.group('prefix')}{iso.lower() if m.group('cc').islower() else iso}",
+            password,
+            count=1,
+        )
+        if count:
+            password = new_pw
+            changed = True
     return rebuild_proxy_credentials(parsed, username, password) if changed else value
 
 
@@ -553,8 +629,8 @@ def rotate_session(proxy: str, iso_code: str = "") -> str:
     """Refresh the sticky session id, optionally retargeting the exit region.
 
     With an empty ``iso_code`` only the session id changes (region preserved);
-    with a country the region is retargeted in the same pass.  Numeric-only
-    Kookeey session ids stay numeric and keep their original length.
+    with a country the region is retargeted in the same pass. Covers 9http,
+    Cliproxy, Novproxy, Rola, Kookeey, IPWO, IPRoyal, ProxyLane, and Decodo.
     """
     value = str(proxy or "")
     if not value:
@@ -562,7 +638,7 @@ def rotate_session(proxy: str, iso_code: str = "") -> str:
     iso = str(iso_code or "").strip().upper()
     try:
         parsed = urlsplit(value)
-    except Exception:
+    except ValueError:
         return value
     username = unquote(parsed.username or "")
     password = unquote(parsed.password or "")
@@ -570,12 +646,9 @@ def rotate_session(proxy: str, iso_code: str = "") -> str:
         return value
     changed = False
     if iso:
-        # Write the *original* tag back, exactly like ``retarget_region`` does.
-        # 9http expects ``geo-`` and rola expects ``country-``; emitting a
-        # hardcoded ``region-`` makes both providers reject the credential.
-        # This is reachable: ``paypal_proxy.rotate_proxy_session`` calls
-        # ``rotate_session(proxy, country)`` with a real country code.
-        new_user, count = _USER_REGION_RE.subn(lambda m: f"{m.group(1)}{m.group('tag')}-{iso}", username, count=1)
+        new_user, count = _USER_REGION_RE.subn(
+            lambda m: f"{m.group(1)}{m.group('tag')}{m.group('sep')}{iso}", username, count=1
+        )
         if count:
             username = new_user
             changed = True
@@ -584,7 +657,9 @@ def rotate_session(proxy: str, iso_code: str = "") -> str:
             username = new_user
             changed = True
     new_user, count = _USER_SID_RE.subn(
-        lambda m: _random_session_id(len(m.group(0)), avoid=m.group(0)), username, count=1
+        lambda m: _random_session_id(len(m.group(0)), digits_only=m.group(0).isdigit(), avoid=m.group(0)),
+        username,
+        count=1,
     )
     if count:
         username = new_user
@@ -607,7 +682,54 @@ def rotate_session(proxy: str, iso_code: str = "") -> str:
         )
         password = f"{match.group('base')}-{country}-{sid}-{match.group('ttl')}"
         changed = True
+    else:
+        if iso:
+            new_pw, count = _PW_REGION_RE.subn(
+                lambda m: f"{m.group('prefix')}{iso.lower() if m.group('cc').islower() else iso}",
+                password,
+                count=1,
+            )
+            if count:
+                password = new_pw
+                changed = True
+        new_pw, count = _PW_SID_RE.subn(
+            lambda m: _random_session_id(len(m.group(0)), digits_only=m.group(0).isdigit(), avoid=m.group(0)),
+            password,
+            count=1,
+        )
+        if count:
+            password = new_pw
+            changed = True
     return rebuild_proxy_credentials(parsed, username, password) if changed else value
+
+
+def strip_session_id(proxy: str) -> str:
+    """Replace any dynamic sticky-session token with ``SESSION`` for stable keying.
+
+    Single authority shared by ``ProxyHealthTracker`` and payment proxy state so
+    per-attempt rotated sessions collapse onto their template key instead of
+    growing health files unboundedly.
+    """
+    if _NATIVE_PROXY_ENTRY is not None and isinstance(proxy, str):
+        return _NATIVE_PROXY_ENTRY.strip_session_id(proxy)
+    value = normalize_proxy_url(proxy)
+    if not value:
+        return ""
+    try:
+        parsed = urlsplit(value)
+    except ValueError:
+        return value
+    username = unquote(parsed.username or "")
+    password = unquote(parsed.password or "")
+    if not username and not password:
+        return value
+    username = _USER_SID_RE.sub("SESSION", username, count=1)
+    username = _ROLA_SID_RE.sub("SESSION", username, count=1)
+    if _KOOKEEY_PW_RE.match(password):
+        password = _KOOKEEY_PW_RE.sub(r"\g<base>-\g<cc>-SESSION-\g<ttl>", password, count=1)
+    else:
+        password = _PW_SID_RE.sub("SESSION", password, count=1)
+    return rebuild_proxy_credentials(parsed, username, password)
 
 
 def infer_region(proxy: str) -> str:
@@ -649,6 +771,8 @@ def infer_proxy_country(proxy: str) -> str:
     wrapper over it (Boundary Rule 13), so the registration lane can learn its
     exit country without importing a PayPal-named module.
     """
+    if _NATIVE_PROXY_ENTRY is not None and isinstance(proxy, str):
+        return _NATIVE_PROXY_ENTRY.infer_proxy_country(proxy)
     value = str(proxy or "").strip()
     if not value:
         return ""

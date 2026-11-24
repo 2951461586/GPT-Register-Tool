@@ -252,11 +252,37 @@ class ExternalRegistrationDriverTests(unittest.TestCase):
         context = Target()
         page = Target()
         with patch.dict(sys.modules, {"playwright_stealth": fake_module}):
-            result = apply_playwright_stealth(context, page, label="test", provider_prefix="camoufox")
+            result = apply_playwright_stealth(context, page, label="test", provider_prefix="playwright")
 
         self.assertTrue(result["playwright_stealth"])
         self.assertEqual(context.scripts, ["stealth"])
         self.assertEqual(page.scripts, ["stealth"])
+
+    def test_camoufox_skips_chrome_playwright_stealth(self):
+        class FailIfCalledStealth:
+            def __init__(self, **_kwargs):
+                raise AssertionError("Camoufox must not load Chrome playwright-stealth")
+
+        with patch.dict(sys.modules, {"playwright_stealth": SimpleNamespace(Stealth=FailIfCalledStealth)}):
+            result = apply_playwright_stealth(
+                SimpleNamespace(), SimpleNamespace(), label="camoufox", provider_prefix="camoufox"
+            )
+        self.assertFalse(result["playwright_stealth"])
+        self.assertEqual(result["reason"], "skipped_for_provider")
+
+    def test_playwright_stealth_preserves_geoip_languages_and_concurrency(self):
+        captured = {}
+
+        class CapturingStealth:
+            def __init__(self, **kwargs):
+                captured.update(kwargs)
+
+        from sms_tool.registration_drivers.stealth import build_playwright_stealth
+
+        with patch.dict(sys.modules, {"playwright_stealth": SimpleNamespace(Stealth=CapturingStealth)}):
+            build_playwright_stealth(label="cloak", provider_prefix="cloak")
+        self.assertFalse(captured["navigator_languages"])
+        self.assertFalse(captured["navigator_hardware_concurrency"])
 
     def test_missing_playwright_stealth_is_non_terminal(self):
         with patch.dict(sys.modules, {"playwright_stealth": None}):

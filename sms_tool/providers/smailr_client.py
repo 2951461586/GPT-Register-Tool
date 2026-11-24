@@ -41,7 +41,7 @@ from typing import Any
 
 from curl_cffi import requests as curl_requests
 
-from ..phone.phone_proxy import normalize_proxy_url, redact_proxy_text as _redact_proxy_text
+from ..proxy.entry import normalize_proxy_url, redact_proxy_text as _redact_proxy_text
 from ..kernel.timeouts import DEFAULT_TIMEOUT
 
 

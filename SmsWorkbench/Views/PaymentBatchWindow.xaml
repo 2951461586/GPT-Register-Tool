@@ -2,7 +2,8 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:loc="clr-namespace:SmsWorkbench.Localization"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="{loc:Tr Key='批量协议支付提取'}"
+        xmlns:local="clr-namespace:SmsWorkbench.Views"
+        Title="{loc:Tr Key='支付链接提取'}"
         Width="1120"
         Height="900"
         MinWidth="920"
@@ -23,7 +24,7 @@
         <ColumnDefinition Width="*"/>
         <ColumnDefinition Width="Auto"/>
       </Grid.ColumnDefinitions>
-        <TextBlock Text="{loc:Tr Key='批量协议支付提取'}" FontSize="{StaticResource Type.Title.Size}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+      <TextBlock Text="{loc:Tr Key='支付链接提取'}" FontSize="{StaticResource Type.Title.Size}" FontWeight="SemiBold" VerticalAlignment="Center"/>
       <TextBlock Grid.Column="1" Text="{Binding AccountSummary}" Foreground="{DynamicResource TextSub}" VerticalAlignment="Center"/>
     </Grid>
 
@@ -48,59 +49,127 @@
         <RowDefinition Height="Auto"/>
       </Grid.RowDefinitions>
 
-      <StackPanel Margin="0,0,7,10">
+      <!-- 提链服务器配置（统一对接外部提链服务器；CDK 仅通过环境变量安全传递） -->
+      <Border Grid.Row="0" Grid.ColumnSpan="4"
+              Margin="0,0,0,10"
+              Padding="12,10"
+              CornerRadius="{StaticResource Corner.Lg}"
+              Background="{DynamicResource Surface.Block}">
+        <Grid>
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="2*"/>
+            <ColumnDefinition Width="1.4*"/>
+            <ColumnDefinition Width="1.2*"/>
+            <ColumnDefinition Width="0.7*"/>
+            <ColumnDefinition Width="Auto"/>
+          </Grid.ColumnDefinitions>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+          </Grid.RowDefinitions>
+          <StackPanel Grid.Column="0" Margin="0,0,8,6">
+            <TextBlock Text="{loc:Tr Key='服务器地址'}" Style="{StaticResource FieldLabel}"/>
+            <TextBox Text="{Binding ExtractServerApiBase, UpdateSourceTrigger=PropertyChanged}"
+                     FontFamily="{StaticResource Font.Mono}" FontSize="{StaticResource Type.Mono.Size}"
+                     ToolTip="{loc:Tr Key='提链服务器完整地址（含协议前缀）'}"/>
+          </StackPanel>
+          <StackPanel Grid.Column="1" Margin="0,0,8,6">
+            <TextBlock Text="{loc:Tr Key='提链 CDK'}" Style="{StaticResource FieldLabel}"/>
+            <PasswordBox local:PasswordBoxBinding.BoundPassword="{Binding ExtractServerCdk, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                         ToolTip="{loc:Tr Key='CDK 密钥（通过环境变量安全传递）'}"/>
+          </StackPanel>
+          <StackPanel Grid.Column="2" Margin="0,0,8,6">
+            <TextBlock Text="{loc:Tr Key='提链路径'}" Style="{StaticResource FieldLabel}"/>
+            <TextBox Text="{Binding ExtractServerEndpoint, UpdateSourceTrigger=PropertyChanged}"
+                     FontFamily="{StaticResource Font.Mono}" FontSize="{StaticResource Type.Mono.Size}"/>
+          </StackPanel>
+          <StackPanel Grid.Column="3" Margin="0,0,8,6">
+            <TextBlock Text="{loc:Tr Key='提链超时秒'}" Style="{StaticResource FieldLabel}"/>
+            <TextBox Text="{Binding ExtractServerTimeoutText, UpdateSourceTrigger=PropertyChanged}"/>
+          </StackPanel>
+          <Button Grid.Column="4"
+                  Content="{loc:Tr Key='保存提链配置'}"
+                  Command="{Binding SaveExtractServerConfigurationCommand}"
+                  VerticalAlignment="Bottom"
+                  Margin="0,0,0,6"
+                  MinWidth="96"/>
+          <StackPanel Grid.Row="1" Grid.ColumnSpan="5" Orientation="Horizontal">
+            <CheckBox Content="{loc:Tr Key='透传代理到提链服务器'}" IsChecked="{Binding ExtractServerPassProxy}" Margin="0,0,22,0"/>
+            <CheckBox Content="{loc:Tr Key='校验证书 (TLS)'}" IsChecked="{Binding ExtractServerVerifyTls}"/>
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <StackPanel Grid.Row="1" Margin="0,0,7,10">
         <TextBlock Text="{loc:Tr Key='支付方式'}" Style="{StaticResource FieldLabel}"/>
         <ComboBox ItemsSource="{Binding PaymentMethodOptions}" DisplayMemberPath="DisplayName" SelectedItem="{Binding SelectedMethod}"/>
       </StackPanel>
-      <StackPanel Grid.Column="1" Margin="7,0,7,10">
+      <StackPanel Grid.Row="1" Grid.Column="1" Margin="7,0,7,10">
         <TextBlock Text="{loc:Tr Key='并发'}" Style="{StaticResource FieldLabel}"/>
         <ComboBox ItemsSource="{Binding WorkerOptions}" SelectedItem="{Binding Workers}"/>
       </StackPanel>
-      <StackPanel Grid.Column="2" Margin="7,0,7,10">
+      <StackPanel Grid.Row="1" Grid.Column="2" Margin="7,0,7,10">
         <TextBlock Text="{loc:Tr Key='瞬态重试'}" Style="{StaticResource FieldLabel}"/>
         <ComboBox ItemsSource="{Binding RetryOptions}" SelectedItem="{Binding Retries}"/>
       </StackPanel>
-      <StackPanel Grid.Column="3" Margin="7,0,0,10">
+      <StackPanel Grid.Row="1" Grid.Column="3" Margin="7,0,0,10">
         <TextBlock Text="{loc:Tr Key='Canary 数量（0=全部）'}" Style="{StaticResource FieldLabel}"/>
         <TextBox Text="{Binding CanaryText, UpdateSourceTrigger=PropertyChanged}"/>
       </StackPanel>
 
-      <!-- 批次默认新建；勾选断点恢复后可复用下方输入的 ID。 -->
-      <StackPanel Grid.Row="1" Grid.ColumnSpan="2" Margin="0,0,7,10">
-        <TextBlock Text="{loc:Tr Key='Checkout 代理池（host:port:user:password；支持 http/https/socks5/socks5h）'}" Style="{StaticResource FieldLabel}" TextWrapping="Wrap"/>
-        <TextBox Text="{Binding CheckoutProxyPool, UpdateSourceTrigger=PropertyChanged}"
-                 FontFamily="{StaticResource Font.Mono}" FontSize="{StaticResource Type.Mono.Size}"
-                 AcceptsReturn="True"
-                 TextWrapping="NoWrap"
-                 Height="62"
-                 VerticalScrollBarVisibility="Auto"/>
-        <TextBlock Text="{Binding CheckoutRegionSummary, Converter={StaticResource PoolSummaryConverter}}" Foreground="{DynamicResource TextSub}" FontSize="{StaticResource Type.Caption.Size}" Margin="0,3,0,0"/>
-      </StackPanel>
-      <StackPanel Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" Margin="7,0,0,10">
-        <TextBlock Text="{loc:Tr Key='Approve / Update 代理池（host:port:user:password；支持 http/https/socks5/socks5h）'}" Style="{StaticResource FieldLabel}" TextWrapping="Wrap"/>
-        <TextBox Text="{Binding ApproveProxyPool, UpdateSourceTrigger=PropertyChanged}"
-                 FontFamily="{StaticResource Font.Mono}" FontSize="{StaticResource Type.Mono.Size}"
-                 AcceptsReturn="True"
-                 TextWrapping="NoWrap"
-                 Height="62"
-                 VerticalScrollBarVisibility="Auto"/>
-        <TextBlock Text="{Binding ApproveRegionSummary, Converter={StaticResource PoolSummaryConverter}}" Foreground="{DynamicResource TextSub}" FontSize="{StaticResource Type.Caption.Size}" Margin="0,3,0,0"/>
-      </StackPanel>
+      <!-- 可选代理池：用于透传代理给提链服务器或执行仅能力探测 -->
+      <Expander Grid.Row="2" Grid.ColumnSpan="4"
+                Header="{loc:Tr Key='可选代理池配置（透传代理 / 能力探测用）'}"
+                IsExpanded="False"
+                Margin="0,0,0,10">
+        <Grid Margin="0,8,0,0">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="*"/>
+          </Grid.ColumnDefinitions>
+          <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+          </Grid.RowDefinitions>
+          <StackPanel Grid.Row="0" Grid.ColumnSpan="2" Margin="0,0,7,10">
+            <TextBlock Text="{loc:Tr Key='Checkout 代理池（host:port:user:password；支持 http/https/socks5/socks5h）'}" Style="{StaticResource FieldLabel}" TextWrapping="Wrap"/>
+            <TextBox Text="{Binding CheckoutProxyPool, UpdateSourceTrigger=PropertyChanged}"
+                     FontFamily="{StaticResource Font.Mono}" FontSize="{StaticResource Type.Mono.Size}"
+                     AcceptsReturn="True"
+                     TextWrapping="NoWrap"
+                     Height="62"
+                     VerticalScrollBarVisibility="Auto"/>
+            <TextBlock Text="{Binding CheckoutRegionSummary, Converter={StaticResource PoolSummaryConverter}}" Foreground="{DynamicResource TextSub}" FontSize="{StaticResource Type.Caption.Size}" Margin="0,3,0,0"/>
+          </StackPanel>
+          <StackPanel Grid.Row="0" Grid.Column="2" Grid.ColumnSpan="2" Margin="7,0,0,10">
+            <TextBlock Text="{loc:Tr Key='Approve / Update 代理池（host:port:user:password；支持 http/https/socks5/socks5h）'}" Style="{StaticResource FieldLabel}" TextWrapping="Wrap"/>
+            <TextBox Text="{Binding ApproveProxyPool, UpdateSourceTrigger=PropertyChanged}"
+                     FontFamily="{StaticResource Font.Mono}" FontSize="{StaticResource Type.Mono.Size}"
+                     AcceptsReturn="True"
+                     TextWrapping="NoWrap"
+                     Height="62"
+                     VerticalScrollBarVisibility="Auto"/>
+            <TextBlock Text="{Binding ApproveRegionSummary, Converter={StaticResource PoolSummaryConverter}}" Foreground="{DynamicResource TextSub}" FontSize="{StaticResource Type.Caption.Size}" Margin="0,3,0,0"/>
+          </StackPanel>
 
-      <StackPanel Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,0,7,10">
-        <TextBlock Text="{loc:Tr Key='Checkout 出口国家（默认跟随账单区）'}" Style="{StaticResource FieldLabel}"/>
-        <ComboBox ItemsSource="{Binding CheckoutCountryOptions}"
-                  DisplayMemberPath="DisplayName"
-                  SelectedValuePath="Code"
-                  SelectedValue="{Binding CheckoutProxyCountry, UpdateSourceTrigger=PropertyChanged}"/>
-      </StackPanel>
-      <StackPanel Grid.Row="2" Grid.Column="2" Grid.ColumnSpan="2" Margin="7,0,0,10">
-        <TextBlock Text="{loc:Tr Key='Approve / Update 出口国家'}" Style="{StaticResource FieldLabel}"/>
-        <ComboBox ItemsSource="{Binding ApproveCountryOptions}"
-                  DisplayMemberPath="DisplayName"
-                  SelectedValuePath="Code"
-                  SelectedValue="{Binding ApproveProxyCountry, UpdateSourceTrigger=PropertyChanged}"/>
-      </StackPanel>
+          <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,0,7,4">
+            <TextBlock Text="{loc:Tr Key='Checkout 出口国家（默认跟随账单区）'}" Style="{StaticResource FieldLabel}"/>
+            <ComboBox ItemsSource="{Binding CheckoutCountryOptions}"
+                      DisplayMemberPath="DisplayName"
+                      SelectedValuePath="Code"
+                      SelectedValue="{Binding CheckoutProxyCountry, UpdateSourceTrigger=PropertyChanged}"/>
+          </StackPanel>
+          <StackPanel Grid.Row="1" Grid.Column="2" Grid.ColumnSpan="2" Margin="7,0,0,4">
+            <TextBlock Text="{loc:Tr Key='Approve / Update 出口国家'}" Style="{StaticResource FieldLabel}"/>
+            <ComboBox ItemsSource="{Binding ApproveCountryOptions}"
+                      DisplayMemberPath="DisplayName"
+                      SelectedValuePath="Code"
+                      SelectedValue="{Binding ApproveProxyCountry, UpdateSourceTrigger=PropertyChanged}"/>
+          </StackPanel>
+        </Grid>
+      </Expander>
 
       <StackPanel Grid.Row="3" Grid.ColumnSpan="4" Orientation="Horizontal" Margin="0,2,0,8">
         <CheckBox Content="{loc:Tr Key='401 自动恢复（RT/Cookie/邮箱OTP/OAuth）'}" IsChecked="{Binding JitRefresh}" Margin="0,0,22,0"/>

@@ -1,26 +1,23 @@
 import json
-import shutil
-import subprocess
-import textwrap
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 from sms_tool.sentinel import client
 from sms_tool.sentinel.bundle import (
-    RUNNER_PATH,
-    RUNNER_SHA256,
-    SDK_PATH,
-    SDK_SHA256,
+    NATIVE_LIB_PATH,
+    NATIVE_LIB_SHA256,
     SentinelBundleError,
+    _binary_digest,
     _digest,
     validate_runtime_bundle,
 )
+from sms_tool.sentinel.native_ffi import SentinelNativeError, probe_env
 from sms_tool.sentinel.runner import (
     SentinelRunnerError,
     _platform_for_family,
     check_node_runner_readiness,
+    check_sentinel_runner_readiness,
     run_sentinel_sdk,
 )
 
@@ -78,26 +75,13 @@ class _Session:
 
 
 def test_vendored_runtime_bundle_matches_pinned_hashes():
-    # Assert the digests themselves, not just the filenames.  A name-only check
-    # passes even when the pinned constant and the shipped asset disagree --
-    # which is precisely how the 2026-09-17 line-ending incident reached
-    # production (126/126 accounts failed, 42 of them on
-    # `sentinel_legacy_incomplete:oauth_create_account`).
-    assert _digest(SDK_PATH) == SDK_SHA256
-    assert _digest(RUNNER_PATH) == RUNNER_SHA256
-    sdk, runner = validate_runtime_bundle()
-    assert sdk.name == "sdk.js"
-    assert runner.name == "sentinel-runner.js"
+    assert _binary_digest(NATIVE_LIB_PATH) == NATIVE_LIB_SHA256
+    lib_path = validate_runtime_bundle()
+    assert lib_path.name == NATIVE_LIB_PATH.name
 
 
 def test_digest_ignores_line_ending_flavour(tmp_path):
-    """A CRLF checkout and an LF checkout of the same asset must hash alike.
-
-    ``core.autocrlf`` / ``.gitattributes`` rewrite working-tree line endings at
-    checkout while leaving the index (and therefore ``git status``) unchanged,
-    so a byte-sensitive digest silently breaks whenever the checkout flavour
-    changes.  Guard the normalisation itself.
-    """
+    """A CRLF checkout and an LF checkout of a text asset hash alike."""
     crlf = tmp_path / "crlf.js"
     lf = tmp_path / "lf.js"
     crlf.write_bytes(b"a\r\nb\r\nc\r\n")
@@ -106,34 +90,34 @@ def test_digest_ignores_line_ending_flavour(tmp_path):
 
 
 def test_runtime_bundle_rejects_altered_asset(tmp_path):
-    """Normalisation must not weaken the check: a real content edit still fails."""
-    tampered = tmp_path / "tampered.js"
-    tampered.write_bytes(b"a\nb\nc\n// injected\n")
-    assert _digest(tampered) != _digest(RUNNER_PATH)
+    """Binary digest detects any single-byte alteration in the native library."""
+    tampered = tmp_path / "tampered.dll"
+    tampered.write_bytes(b"MZ\x00\x01// injected\n")
+    assert _binary_digest(tampered) != _binary_digest(NATIVE_LIB_PATH)
 
 
-def test_readiness_checks_pinned_bundle_and_executable_without_running_node():
+def test_readiness_checks_pinned_bundle_and_native_version():
     with (
         patch("sms_tool.sentinel.runner.validate_runtime_bundle") as bundle,
-        patch("sms_tool.sentinel.runner.shutil.which", return_value="/fake/node") as which,
-        patch("sms_tool.sentinel.runner.subprocess.run") as run,
+        patch("sms_tool.sentinel.runner.native_version", return_value="0.2.0") as ver,
     ):
+        check_sentinel_runner_readiness()
         check_node_runner_readiness()
-    bundle.assert_called_once_with()
-    which.assert_called_once()
-    run.assert_not_called()
+    assert bundle.call_count == 2
+    assert ver.call_count == 2
 
 
-def test_readiness_reports_missing_node_without_configured_path(monkeypatch):
-    secret_path = "/private/session-secret/node"
-    monkeypatch.setenv("OPENAI_SENTINEL_NODE_PATH", secret_path)
+def test_readiness_reports_native_load_failure_without_sensitive_path():
+    secret_path = "/private/session-secret/sentinel_vm.dll"
     with (
         patch("sms_tool.sentinel.runner.validate_runtime_bundle"),
-        patch("sms_tool.sentinel.runner.shutil.which", return_value=None) as which,
+        patch(
+            "sms_tool.sentinel.runner.native_version",
+            side_effect=SentinelNativeError(f"failed to load {secret_path}"),
+        ),
     ):
-        with pytest.raises(SentinelRunnerError, match="^sentinel_runner_node_missing$") as caught:
-            check_node_runner_readiness()
-    which.assert_called_once_with(secret_path)
+        with pytest.raises(SentinelRunnerError, match="^sentinel_native_load_failed$") as caught:
+            check_sentinel_runner_readiness()
     assert secret_path not in str(caught.value)
 
 
@@ -141,18 +125,17 @@ def test_readiness_reports_invalid_bundle_without_sensitive_details():
     with (
         patch(
             "sms_tool.sentinel.runner.validate_runtime_bundle",
-            side_effect=SentinelBundleError("sentinel_runtime_hash_mismatch:private-secret.js"),
+            side_effect=SentinelBundleError("sentinel_runtime_hash_mismatch:private-secret.dll"),
         ),
-        patch("sms_tool.sentinel.runner.shutil.which") as which,
+        patch("sms_tool.sentinel.runner.native_version") as ver,
     ):
         with pytest.raises(SentinelRunnerError, match="^sentinel_runtime_hash_mismatch$") as caught:
-            check_node_runner_readiness()
-    which.assert_not_called()
+            check_sentinel_runner_readiness()
+    ver.assert_not_called()
     assert "private-secret" not in str(caught.value)
 
 
-@pytest.mark.skipif(not shutil.which("node"), reason="Node.js is required by the Sentinel runner")
-def test_node_runner_executes_vendored_sdk_offline():
+def test_native_rust_runner_executes_offline_without_node():
     token = run_sentinel_sdk(
         _Response.json(),
         flow="authorize_continue",
@@ -225,16 +208,17 @@ def test_client_splits_runner_so_out_of_main_token():
     assert empty.so_token == ""
 
 
-def test_runner_keeps_cookie_out_of_process_arguments():
-    class _Completed:
-        returncode = 0
-        stderr = ""
-        stdout = json.dumps(
+def test_runner_passes_cookie_in_memory_not_via_subprocess():
+    captured = {}
+
+    def _fake_solve(challenge, opts, *, verify_hash=True):
+        captured["opts"] = dict(opts)
+        return json.dumps(
             {"p": "proof", "t": "turnstile", "c": "challenge", "id": DEVICE_ID, "flow": "authorize_continue"}
         )
 
     secret_cookie = f"oai-did={DEVICE_ID}; session=secret-value"
-    with patch("sms_tool.sentinel.runner.subprocess.run", return_value=_Completed()) as invoked:
+    with patch("sms_tool.sentinel.runner.solve_challenge", side_effect=_fake_solve):
         run_sentinel_sdk(
             _Response.json(),
             flow="authorize_continue",
@@ -244,29 +228,20 @@ def test_runner_keeps_cookie_out_of_process_arguments():
             page_url="https://auth.openai.com/email-verification",
         )
 
-    command = invoked.call_args.args[0]
-    assert all("secret-value" not in str(part) for part in command)
+    assert captured["opts"]["cookie"] == secret_cookie
 
 
 def test_runner_forwards_the_challenge_proof_when_given():
-    """``challenge_proof`` 贯通到 ``--challenge-proof``；空串则不出现在命令里。
+    """``challenge_proof`` flows directly into native FFI opts as the XOR key."""
+    captured = []
 
-    🔴 turnstile.dx 与**取 challenge 的那份 p** 绑定。真实浏览器里两个是同一
-    份（SDK 采样 p → 用它取题 → dx 就是这份 p 加密的）。本 runner 的 challenge
-    文件由 Python 用自己的 proof 取回，若不带 ``--challenge-proof``，VM 内
-    SDK 拿它重新采样的另一份 p 当 cachedProof，dx 解码密钥与服务器加密密钥
-    不一致 —— turb 在同构 runner 上实测过这一坑（其 ``--challenge-proof``
-    传的就是取题 proof，本参数名与语义对齐）。
-    """
-
-    class _Completed:
-        returncode = 0
-        stderr = ""
-        stdout = json.dumps(
+    def _fake_solve(challenge, opts, *, verify_hash=True):
+        captured.append(dict(opts))
+        return json.dumps(
             {"p": "proof", "t": "turnstile", "c": "challenge", "id": DEVICE_ID, "flow": "authorize_continue"}
         )
 
-    with patch("sms_tool.sentinel.runner.subprocess.run", return_value=_Completed()) as invoked:
+    with patch("sms_tool.sentinel.runner.solve_challenge", side_effect=_fake_solve):
         run_sentinel_sdk(
             _Response.json(),
             flow="authorize_continue",
@@ -276,14 +251,6 @@ def test_runner_forwards_the_challenge_proof_when_given():
             page_url="https://auth.openai.com/email-verification",
             challenge_proof="gAAAAACthe-fetching-proof",
         )
-    command = invoked.call_args.args[0]
-    index = command.index("--challenge-proof")
-    assert command[index + 1] == "gAAAAACthe-fetching-proof"
-
-    # Without one, the flag must stay absent: the runner then falls back to the
-    # SDK's own sampling, which is the exact behaviour the offline test above
-    # (challenge-url / no-proof mode) exercises.
-    with patch("sms_tool.sentinel.runner.subprocess.run", return_value=_Completed()) as invoked_no_proof:
         run_sentinel_sdk(
             _Response.json(),
             flow="authorize_continue",
@@ -292,7 +259,9 @@ def test_runner_forwards_the_challenge_proof_when_given():
             cookie=f"oai-did={DEVICE_ID}",
             page_url="https://auth.openai.com/email-verification",
         )
-    assert "--challenge-proof" not in invoked_no_proof.call_args.args[0]
+
+    assert captured[0]["challenge_proof"] == "gAAAAACthe-fetching-proof"
+    assert captured[1]["challenge_proof"] == ""
 
 
 def test_client_passes_the_fetching_proof_to_the_runner():
@@ -517,22 +486,16 @@ _IOS_PROFILE = {
 
 
 def _capture_runner_config(profile: dict) -> dict:
-    """Run the adapter with a stubbed node process, returning the config it wrote."""
+    """Run the adapter with a stubbed Rust FFI solver, returning the opts dict."""
     captured: dict = {}
 
-    class _Completed:
-        returncode = 0
-        stderr = ""
-        stdout = json.dumps(
+    def _fake_solve(_challenge, opts, *, verify_hash=True):
+        captured.update(opts)
+        return json.dumps(
             {"p": "proof", "t": "turnstile", "c": "challenge", "id": DEVICE_ID, "flow": "authorize_continue"}
         )
 
-    def _fake_run(command, **_kwargs):
-        config_path = Path(command[command.index("--config") + 1])
-        captured.update(json.loads(config_path.read_text(encoding="utf-8")))
-        return _Completed()
-
-    with patch("sms_tool.sentinel.runner.subprocess.run", side_effect=_fake_run):
+    with patch("sms_tool.sentinel.runner.solve_challenge", side_effect=_fake_solve):
         run_sentinel_sdk(
             _Response.json(),
             flow="authorize_continue",
@@ -546,23 +509,19 @@ def _capture_runner_config(profile: dict) -> dict:
 
 def test_runner_derives_platform_from_the_profile_not_a_windows_default():
     config = _capture_runner_config(_SAFARI_PROFILE)
-    assert config["browserFamily"] == "safari"
-    assert config["navigatorPlatform"] == "MacIntel"
-    assert config["secChUaPlatform"] == "macOS"
-    assert config["userAgentDataPlatform"] == "macOS"
+    assert config["browser_family"] == "safari"
+    assert config["navigator_platform"] == "MacIntel"
+    assert config["sec_ch_ua_platform"] == "macOS"
 
 
 def test_runner_keeps_firefox_vendor_empty_and_forwards_touch_points():
     firefox = _capture_runner_config(_FIREFOX_PROFILE)
-    assert firefox["browserFamily"] == "firefox"
-    # An empty vendor is Firefox's real value; ``||`` in the JS would coerce it
-    # back to "Google Inc.", so the runner must pass it through verbatim.
-    assert firefox["navigatorVendor"] == ""
+    assert firefox["browser_family"] == "firefox"
+    assert firefox["navigator_vendor"] == ""
 
     ios = _capture_runner_config(_IOS_PROFILE)
-    assert ios["secChUaPlatform"] == "iOS"
-    assert ios["userAgentDataPlatform"] == "iOS"
-    assert ios["maxTouchPoints"] == 5
+    assert ios["sec_ch_ua_platform"] == "iOS"
+    assert ios["max_touch_points"] == 5
 
 
 def test_platform_helper_falls_back_when_profile_omits_the_field():
@@ -585,136 +544,58 @@ def test_runner_coerces_malformed_numeric_profile_fields_to_defaults():
         "timezone_offset_minutes": "?",
     }
     config = _capture_runner_config(garbage)
-    assert config["hardwareConcurrency"] == 8
-    assert config["deviceMemory"] == 8
-    assert config["devicePixelRatio"] == 1.0
-    assert config["maxTouchPoints"] == 0
-    assert config["timezoneOffsetMinutes"] == 0
-    assert config["width"] == 1920
-    assert config["height"] == 1080
+    assert config["hardware_concurrency"] == 8
+    assert config["device_memory"] == 8
+    assert config["device_pixel_ratio"] == 1.0
+    assert config["max_touch_points"] == 0
+    assert config["timezone_offset_minutes"] == 0
+    assert config["screen_width"] == 1920
+    assert config["screen_height"] == 1080
 
 
-_CTX_BASE_OPTIONS = {
-    "flow": "authorize_continue",
-    "sentinelSid": "sid",
-    "pageUrl": "https://auth.openai.com/email-verification",
-    "scriptSrc": "https://sentinel.openai.com/sentinel/20260219f9f6/sdk.js",
-    "buildId": "",
-    "reactListeningKey": "",
-    "reactContainerKey": "",
-    "reactResourcesKey": "",
-    "cookie": "oai-did=ctx",
-    "contentType": "",
-    "requestIdleCallback": True,
-    "language": "en-US",
-    "languages": ["en-US"],
-    "timeZone": "America/New_York",
-    "timezoneName": "Eastern Standard Time",
-    "timezoneOffsetMinutes": -300,
-    "hardwareConcurrency": 8,
-    "jsHeapSizeLimit": 4395630592,
-    "deviceMemory": 8,
-    "devicePixelRatio": 1,
-    "chromeMajor": "146",
-    "chromeFullVersion": "146.0.0.0",
-    "secChUa": "",
-    "secChUaFullVersionList": "",
-    "secChUaPlatformVersion": "10.0.0",
-    "secChUaArch": "x86",
-    "secChUaBitness": "64",
-    "secChUaModel": "",
-    "cfEdgeMsec": 38,
-    "cfOriginTtfbMsec": 74,
-    "cfTcpRttMsec": 22,
-    "cfQuicRttMsec": 0,
-    "screen": {
-        "width": 1920,
-        "height": 1080,
-        "availWidth": 1920,
-        "availHeight": 1042,
-        "colorDepth": 30,
-        "pixelDepth": 30,
-        "orientation": {"type": "landscape-primary", "angle": 0},
-    },
-}
-
-
-@pytest.mark.skipif(not shutil.which("node"), reason="Node.js is required by the Sentinel runner")
-def test_fabricated_navigator_is_family_consistent(tmp_path):
-    """Firefox must not be handed Chromium-only navigator members.
-
-    ``createBrowserContext`` is the single place the fake JS environment is
-    built; probing it directly is the only way to assert what the SDK will see,
-    because the runner's stdout is the opaque Sentinel token.
-    """
-    script = tmp_path / "probe_ctx.js"
-    script.write_text(
-        textwrap.dedent(
-            """
-            const runner = require(__RUNNER__);
-            const base = __BASE__;
-            function probe(family, ua, platform, touch, secChUaPlatform, vendor) {
-              const { context } = runner.createBrowserContext({
-                ...base, browserFamily: family, userAgent: ua, navigatorPlatform: platform,
-                maxTouchPoints: touch, secChUaPlatform, navigatorVendor: vendor,
-              });
-              const n = context.navigator;
-              return {
-                hasUserAgentData: "userAgentData" in n,
-                hasDeviceMemory: "deviceMemory" in n,
-                hasGpu: "gpu" in n,
-                hasLogin: "login" in n,
-                hasChrome: typeof context.window.chrome !== "undefined",
-                vendor: n.vendor,
-                maxTouchPoints: n.maxTouchPoints,
-              };
-            }
-            console.log(JSON.stringify({
-              firefox: probe("firefox",
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:144.0) Gecko/20100101 Firefox/144.0",
-                "Win32", 0, "Windows", ""),
-              chrome: probe("chrome",
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
-                "Win32", 0, "Windows", "Google Inc."),
-              ios: probe("safari",
-                "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1",
-                "iPhone", 5, "iOS", "Apple Computer, Inc."),
-            }));
-            """
-        )
-        .replace("__RUNNER__", json.dumps(str(RUNNER_PATH)))
-        .replace("__BASE__", json.dumps(_CTX_BASE_OPTIONS)),
-        encoding="utf-8",
+def test_fabricated_navigator_is_family_consistent():
+    """Firefox and Safari must not receive Chromium-only navigator/window members."""
+    firefox = probe_env(
+        {
+            "browser_family": "firefox",
+            "user_agent": _FIREFOX_PROFILE["user_agent"],
+            "navigator_platform": "Win32",
+            "navigator_vendor": "",
+            "max_touch_points": 0,
+        }
     )
-    node_binary = shutil.which("node")
-    if not node_binary:  # pragma: no cover - guarded by the skipif above
-        pytest.skip("Node.js is required by the Sentinel runner")
-    completed = subprocess.run(
-        [node_binary, str(script)],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        check=False,
-    )
-    assert completed.returncode == 0, completed.stderr
-    data = json.loads(completed.stdout)
-
-    firefox = data["firefox"]
     assert firefox["hasUserAgentData"] is False
     assert firefox["hasDeviceMemory"] is False
     assert firefox["hasGpu"] is False
     assert firefox["hasLogin"] is False
     assert firefox["hasChrome"] is False
+    assert firefox["hasInstallTrigger"] is True
     assert firefox["vendor"] == ""
 
-    chrome = data["chrome"]
+    chrome = probe_env(
+        {
+            "browser_family": "chrome",
+            "user_agent": PROFILE["user_agent"],
+            "navigator_platform": "Win32",
+            "navigator_vendor": "Google Inc.",
+            "max_touch_points": 0,
+        }
+    )
     assert chrome["hasUserAgentData"] is True
     assert chrome["hasDeviceMemory"] is True
     assert chrome["hasGpu"] is True
     assert chrome["hasChrome"] is True
     assert chrome["vendor"] == "Google Inc."
 
-    ios = data["ios"]
+    ios = probe_env(
+        {
+            "browser_family": "safari",
+            "user_agent": _IOS_PROFILE["user_agent"],
+            "navigator_platform": "iPhone",
+            "navigator_vendor": "Apple Computer, Inc.",
+            "max_touch_points": 5,
+        }
+    )
     assert ios["hasUserAgentData"] is False
     assert ios["hasDeviceMemory"] is False
     assert ios["hasChrome"] is False

@@ -33,7 +33,7 @@ from typing import Any, TYPE_CHECKING
 # ``entry`` is stdlib-only and imports nothing from this package, so the
 # single-authority parser/masker can be imported eagerly: a function-level
 # import here would be one more edge for the delayed-import ratchet to carry.
-from .entry import _mask_credentials, parse_proxy
+from .entry import ProxyEntry, _mask_credentials, parse_proxy, proxy_to_url
 
 if TYPE_CHECKING:
     from .health import ProxyHealthTracker
@@ -144,21 +144,16 @@ class UpstreamProxy:
 
     @property
     def proxy_url(self) -> str:
-        """Reconstruct a ``scheme://[user:pass@]host:port`` URL for this upstream.
-
-        P1-2: this is the string fed into ``ProxyHealthTracker`` so the SOCKS5
-        pool's health (which lives only in this process's memory) becomes visible to
-        the registration/remail paths that consume the same egress proxies via the
-        shared on-disk tracker. ``ProxyHealthTracker.key()`` derives the same
-        ``host:port#sid-hash`` it would from a raw proxy URL, so the scheme has to
-        be the entry's own -- reporting an ``http://`` upstream as ``socks5://``
-        would still key correctly but would lie to anything that reads the URL.
-        """
-        auth = ""
-        if self.username:
-            pwd = f":{self.password}" if self.password else ""
-            auth = f"{self.username}{pwd}@"
-        return f"{self.scheme}://{auth}{self.host}:{self.port}"
+        """Reconstruct a properly encoded, IPv6-safe ``scheme://[user:pass@]host:port`` URL."""
+        return proxy_to_url(
+            ProxyEntry(
+                host=self.host,
+                port=self.port,
+                username=self.username,
+                password=self.password,
+                scheme=self.scheme or "socks5",
+            )
+        )
 
     @classmethod
     def from_url(cls, url: str, label: str = "", priority: int = 0) -> UpstreamProxy:
@@ -693,6 +688,7 @@ class Socks5Server:
 
         upstream.success_count += 1
         upstream.total_connections += 1
+        await self._apply_health_async(upstream, True)
         self._stats.total_connections += 1
         self._stats.active_connections += 1
 
@@ -879,9 +875,19 @@ class Socks5Server:
 
         try:
             await self._handshake(r, w, upstream, dest_host, dest_port, dest_atyp, self._connect_timeout)
-        except Exception:
+        except (
+            asyncio.CancelledError,
+            asyncio.TimeoutError,
+            asyncio.IncompleteReadError,
+            ConnectionError,
+            OSError,
+            ValueError,
+        ):
             w.close()
-            await w.wait_closed()
+            try:
+                await w.wait_closed()
+            except OSError:
+                pass
             raise
 
         return r, w
@@ -982,28 +988,30 @@ class Socks5Server:
             # careful to never kill an upstream on one blip; it should not have to
             # compensate for a first round that never ran either.
             try:
-                for upstream in self._upstreams:
-                    was_healthy = upstream.healthy
-                    success, probe_error = await self._check_upstream(upstream, test_host, test_port)
+                semaphore = asyncio.Semaphore(16)
 
-                    # P1-2: a shared tracker (if configured) sees the same event.
-                    await self._apply_health_async(
-                        upstream,
-                        success,
-                        error=probe_error if not success else "",
-                    )
-
-                    if upstream.healthy != was_healthy:
-                        level = logging.INFO if upstream.healthy else logging.WARNING
-                        logger.log(
-                            level,
-                            "upstream %s [%s]: %s → %s (fail_count=%d)",
-                            upstream.label,
-                            upstream.addr,
-                            "healthy" if was_healthy else "unhealthy",
-                            "healthy" if upstream.healthy else "unhealthy",
-                            upstream.fail_count,
+                async def _probe_one(upstream: UpstreamProxy) -> None:
+                    async with semaphore:
+                        was_healthy = upstream.healthy
+                        success, probe_error = await self._check_upstream(upstream, test_host, test_port)
+                        await self._apply_health_async(
+                            upstream,
+                            success,
+                            error=probe_error if not success else "",
                         )
+                        if upstream.healthy != was_healthy:
+                            level = logging.INFO if upstream.healthy else logging.WARNING
+                            logger.log(
+                                level,
+                                "upstream %s [%s]: %s → %s (fail_count=%d)",
+                                upstream.label,
+                                upstream.addr,
+                                "healthy" if was_healthy else "unhealthy",
+                                "healthy" if upstream.healthy else "unhealthy",
+                                upstream.fail_count,
+                            )
+
+                await asyncio.gather(*(_probe_one(u) for u in self._upstreams))
             except asyncio.CancelledError:
                 break
             except Exception as exc:

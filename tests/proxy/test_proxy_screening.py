@@ -338,3 +338,37 @@ def test_report_masks_every_credential():
     report = screening.format_report([sample])
     assert "user" not in report and "pw@" not in report
     assert "AS9299" in report
+
+
+def test_screen_proxy_quality_min_80_accepts_clean_residential_and_matches_score():
+    sample = screen_proxy(
+        "http://user:pw@ph.example:8080",
+        country="PH",
+        quality_min=80,
+        probe=lambda *a, **k: RESIDENTIAL,
+    )
+    assert sample.eligible is True
+    assert sample.quality_score >= 80
+    assert sample.first.intel_sources == 2 and sample.second.intel_sources == 2
+
+
+def test_evaluate_sample_rejects_datacenter_on_first_pass():
+    datacenter_first = ScreeningPass.from_geo(
+        ProxyGeo(ip=RESIDENTIAL.ip, country="PH", org="DigitalOcean, LLC", asn="AS9299", timezone="Asia/Manila")
+    )
+    eligible, code, _ = evaluate_sample(datacenter_first, _pass(), "PH")
+    assert (eligible, code) == (False, REASON_DATACENTER)
+
+
+def test_aggregate_by_asn_reports_zero_country_match_rate_on_mismatch():
+    mismatched = screen_proxy("http://ph:1", country="US", probe=lambda *a, **k: RESIDENTIAL)
+    rows = aggregate_by_asn([mismatched])
+    assert len(rows) == 1
+    assert rows[0]["country_match_rate"] == 0.0
+
+
+def test_redactors_handle_scheme_host_first_at_in_password_and_ipv6():
+    assert sanitize_proxy_text("http://1.2.3.4:8080:myuser:SUPERSECRET") == "http://1.2.3.4:8080:***:***"
+    assert mask_proxy("http://1.2.3.4:8080:myuser:SUPERSECRET") == "http://1.2.3.4:8080:***:***"
+    assert sanitize_proxy_text("http://user:p@ssword@1.2.3.4:8080") == "http://***:***@1.2.3.4:8080"
+    assert mask_proxy("http://user:pw@[::1]:8080") == "http://***:***@[::1]:8080"

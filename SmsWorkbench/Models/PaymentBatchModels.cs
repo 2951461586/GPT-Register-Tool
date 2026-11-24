@@ -87,6 +87,18 @@ namespace SmsWorkbench.Models
         public int Attempts { get; init; }
     }
 
+    /// <summary>
+    /// Configuration for the external Paylink Extraction Server used by the
+    /// unified ``extract_server`` adapter (``protocol_payments.extract_link_server``).
+    /// </summary>
+    public sealed record ExtractLinkServerConfiguration(
+        string ApiBase = "",
+        string Cdk = "",
+        string Endpoint = "/api/v1/extract",
+        int TimeoutSeconds = 60,
+        bool PassProxy = true,
+        bool VerifyTls = true);
+
     public sealed record PaymentBatchRequest(
         IReadOnlyList<PaymentBatchAccount> Accounts,
         string PaymentMethod,
@@ -105,5 +117,6 @@ namespace SmsWorkbench.Models
         IReadOnlyList<PaymentMatrixRow> MatrixRows)
     {
         public bool ResumeCheckpoint { get; init; }
+        public ExtractLinkServerConfiguration? ExtractServer { get; init; }
     }
 }

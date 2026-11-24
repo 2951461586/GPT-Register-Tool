@@ -12,7 +12,6 @@
 .claude/
 .codex/
 sms_tool/config.json
-services/mail-otp-web/config.json
 dist/
 sessions/
 /runtime/
@@ -43,9 +42,6 @@ _*.py
 # 已跟踪的合法模块，不能被上面的规则吃掉（否则对它的修改会静默停止入库）
 !/sms_tool/__main__.py
 !/sms_tool/registration_drivers/_platform_patches.py
-# upi_link/__init__.py imports this pure extractor; without the exception the
-# package would commit without it and fail at import time.
-!/sms_tool/upi_link/_extract.py
 # The config split (2026-10-21) put module-level state in ``config/_state.py``;
 # the rule above silently dropped it from that commit, so the committed tree
 # could not import ``sms_tool.config`` at all. Caught 2026-10-22 by diffing the
@@ -153,3 +149,15 @@ local/*
 # 迁移进 sms_tool/paypal/ 后，PROJECT_ROOT 少一层时默认的 runtime/ 状态文件
 # 会落到这里。它既不是 runtime/ 那份活状态，也不该被提交。
 /sms_tool/runtime/
+
+# Rust Sentinel VM build artefacts (source + shipped DLL live outside target/)
+native/sentinel_vm/target/
+
+# rust-anything generated crate build artefacts, scratch caches & compiled extensions
+rust/*/target/
+rust/*/.rust-anything/
+rust/*/test-inputs.jsonl
+rust/*/python/**/__pycache__/
+rust/*/python/**/*.pyd
+rust/*/python/**/*.so
+rust/*/python/**/*.dylib

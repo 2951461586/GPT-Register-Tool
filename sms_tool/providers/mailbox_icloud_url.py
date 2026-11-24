@@ -2,18 +2,44 @@
 
 from __future__ import annotations
 
-import hashlib
 import base64
-import json
-import re
+import hashlib
 import html
+import importlib
+import json
+import os
+import re
+import sys
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from html.parser import HTMLParser
+from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qsl, unquote_to_bytes, urlencode, urljoin, urlsplit, urlunsplit
 
 from curl_cffi import requests as curl_requests
+
+
+def _load_native_icloud_html() -> Any | None:
+    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
+    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_ICLOUD_HTML") or "").strip().lower()
+    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
+        return None
+    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "icloud-html-rs" / "python"
+    if pkg_dir.is_dir():
+        pkg_str = str(pkg_dir)
+        if pkg_str not in sys.path:
+            sys.path.insert(0, pkg_str)
+    try:
+        return importlib.import_module("icloud_html_rs")
+    except (ImportError, OSError):
+        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
+            raise
+        return None
+
+
+_NATIVE_ICLOUD_HTML = _load_native_icloud_html()
+_NATIVE_STRIP_HTML_TO_VISIBLE_TEXT = getattr(_NATIVE_ICLOUD_HTML, "_strip_html_to_visible_text", None)
 
 from ..mailbox.mail_otp import _extract_otp_from_text, _message_received_ts
 from ..mailbox.errors import MailboxEndpointUnavailableError
@@ -892,6 +918,11 @@ def _fetch_spa_pickup_messages(
 
 
 def _strip_html_to_visible_text(raw_html: str) -> str:
+    if _NATIVE_STRIP_HTML_TO_VISIBLE_TEXT is not None:
+        try:
+            return _NATIVE_STRIP_HTML_TO_VISIBLE_TEXT(raw_html)
+        except (TypeError, ValueError):
+            pass
     text = _HTML_COMMENT_RE.sub(" ", str(raw_html or ""))
     text = _HTML_NOISE_BLOCK_RE.sub(" ", text)
     text = _HTML_BLOCK_BREAK_RE.sub("\n", text)

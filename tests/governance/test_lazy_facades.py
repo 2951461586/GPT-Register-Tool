@@ -31,7 +31,6 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 FACADES = (
     "sms_tool.auth_flow",
-    "sms_tool.upi_link",
     # 2026-10-23: the registration and payment-link facades joined the same
     # pattern. ``registration`` used ``from .orchestrator import *`` (691 ms /
     # 431 modules for a leaf submodule import, 378 ms of it curl_cffi) and

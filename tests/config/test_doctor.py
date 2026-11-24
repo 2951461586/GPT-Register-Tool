@@ -19,7 +19,7 @@ class DoctorUnitTests(unittest.TestCase):
             name: _ok(name)
             for name in (
                 "python",
-                "node",
+                "sentinel_runtime",
                 "playwright",
                 "curl_cffi",
                 "requests",
@@ -49,7 +49,7 @@ class DoctorUnitTests(unittest.TestCase):
             name: _ok(name)
             for name in (
                 "python",
-                "node",
+                "sentinel_runtime",
                 "playwright",
                 "curl_cffi",
                 "requests",
@@ -59,7 +59,9 @@ class DoctorUnitTests(unittest.TestCase):
                 "config_unread_keys",
             )
         }
-        probes["node"] = lambda: doctor._check("node", "fail", "not found", "install node")
+        probes["sentinel_runtime"] = lambda: doctor._check(
+            "sentinel_runtime", "fail", "bundle=failed", "rebuild sentinel_vm"
+        )
         report = doctor.run_doctor({}, "", probes=probes)
         self.assertFalse(report["ok"])
         self.assertEqual(report["failed"], 1)
@@ -69,7 +71,7 @@ class DoctorUnitTests(unittest.TestCase):
             name: _ok(name)
             for name in (
                 "python",
-                "node",
+                "sentinel_runtime",
                 "playwright",
                 "curl_cffi",
                 "requests",
@@ -90,7 +92,7 @@ class DoctorUnitTests(unittest.TestCase):
             name: _ok(name)
             for name in (
                 "python",
-                "node",
+                "sentinel_runtime",
                 "playwright",
                 "curl_cffi",
                 "requests",
@@ -182,7 +184,7 @@ class PhoneProviderCheckTests(unittest.TestCase):
             name: _ok(name)
             for name in (
                 "python",
-                "node",
+                "sentinel_runtime",
                 "playwright",
                 "curl_cffi",
                 "requests",

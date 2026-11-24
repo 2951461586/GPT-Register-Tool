@@ -146,10 +146,10 @@ def configured_qualification_country(config: Any = None) -> str:
 def configured_qualification_proxy_pool(config: Any = None) -> list[str]:
     """Dedicated egress for the qualification probe (empty = promotion fallback).
 
-    Accepted keys, in order:
+    Accepted keys, in order (matching ``SettingsService.cs`` and ``proxy.registry``):
 
-    * ``payment_qualification.proxy_pool``
     * ``proxy.lanes.payment_qualification``
+    * ``payment_qualification.proxy_pool``
 
     An explicitly configured pool wins over the desktop's registration-pool
     argument because a ChatGPT-only exit can reach ``chatgpt.com`` but still
@@ -159,10 +159,10 @@ def configured_qualification_proxy_pool(config: Any = None) -> list[str]:
     from ..proxy.routing import canonical_lane_pool, parse_lane_proxy_pool
 
     source = config if isinstance(config, Mapping) else CFG
-    dedicated = parse_lane_proxy_pool(_config_section(source).get("proxy_pool"))
-    if dedicated:
-        return dedicated
-    return canonical_lane_pool(source, "payment_qualification") or []
+    canonical = canonical_lane_pool(source, "payment_qualification")
+    if canonical:
+        return canonical
+    return parse_lane_proxy_pool(_config_section(source).get("proxy_pool"))
 
 
 def configured_max_proxy_attempts(config: Any = None) -> int:

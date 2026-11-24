@@ -43,7 +43,6 @@ cloakbrowser>=0.5.3,<0.6
 # CAPTCHA solving (Playwright-based)
 playwright>=1.40.0
 playwright-stealth>=2.0.3
-qrcode[pil]>=7.4.2
 
 # Undetected-Chrome fallback for PayPal: nodriver_captcha.solve_captcha_with_nodriver
 # (called from paypal_reverse.py) and paypal/nodriver_paypal.run_nodriver_pay

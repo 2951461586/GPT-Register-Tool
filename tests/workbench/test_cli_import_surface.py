@@ -30,9 +30,8 @@ HEAVY_MODULES = (
     "sms_tool.registration.batch_runner",
     "sms_tool.commands.payment_links",
     "sms_tool.commands.registration",
-    "sms_tool.paypal_link.gen_link",
+    "sms_tool.pay_link.extract_server",
     "sms_tool.proxy.routing",
-    "sms_tool.upi_link",
 )
 
 _PROBE = f"""

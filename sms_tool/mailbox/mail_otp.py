@@ -1,5 +1,10 @@
+import importlib
+import os
 import re
+import sys
 from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 OTP_RE = re.compile(r"(^|[^0-9])([0-9]{6})([^0-9]|$)")
 _HTML_NOISE_STRIP_RE = re.compile(
@@ -43,7 +48,34 @@ FAKE_OTP_CONTEXT_MARKERS = (
 )
 
 
+def _load_native_mail_otp() -> Any:
+    """Load the Rust `mail_otp_rs` acceleration module when available."""
+    mode = os.environ.get("RUST_ANYTHING_MODE")
+    if mode == "old" or os.environ.get("RUST_ANYTHING_UNIT_MAIL_OTP") == "original":
+        return None
+    native_root = str(Path(__file__).resolve().parent.parent.parent / "rust" / "mail-otp-rs" / "python")
+    if not os.path.isdir(native_root):
+        if mode == "new":
+            raise ImportError(f"mail_otp_rs not found at {native_root}")
+        return None
+    sys.path.insert(0, native_root)
+    try:
+        return importlib.import_module("mail_otp_rs")
+    except ImportError:
+        if mode == "new":
+            raise
+        return None
+    finally:
+        if native_root in sys.path:
+            sys.path.remove(native_root)
+
+
+_NATIVE_MAIL_OTP = _load_native_mail_otp()
+
+
 def _extract_otp_from_text(text):
+    if _NATIVE_MAIL_OTP is not None and (text is None or isinstance(text, str)):
+        return _NATIVE_MAIL_OTP._extract_otp_from_text(text)
     text = text or ""
     if "<" in text:
         text = _HTML_NOISE_STRIP_RE.sub(" ", text)
@@ -193,6 +225,8 @@ def _bad_otp_sender(sender_text):
 
 
 def _looks_fake_otp_context(lowered_text):
+    if _NATIVE_MAIL_OTP is not None and (lowered_text is None or isinstance(lowered_text, str)):
+        return _NATIVE_MAIL_OTP._looks_fake_otp_context(lowered_text)
     lowered = str(lowered_text or "").lower()
     if any(marker in lowered for marker in OTP_CONTEXT_MARKERS):
         return False
@@ -200,6 +234,8 @@ def _looks_fake_otp_context(lowered_text):
 
 
 def _message_looks_fake_otp_noise(text):
+    if _NATIVE_MAIL_OTP is not None and (text is None or isinstance(text, str)):
+        return _NATIVE_MAIL_OTP._message_looks_fake_otp_noise(text)
     return _looks_fake_otp_context(str(text or "").lower())
 
 

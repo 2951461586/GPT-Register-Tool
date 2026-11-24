@@ -20,53 +20,9 @@
       "reason": "deferred",
       "why": "CPA 导出导入器 (2026-11-19): the importer is a leaf reached only from `--import-account-json`, and `accounts -> sms_tool` is a frozen module-level pair count (scripts/import_layer_ratchet.py). Importing upsert_account inside the function keeps that count intact and keeps `import sms_tool.accounts.account_import` free of the session/converter/storage stack."
     },
-    "sms_tool/accounts/payment_qualification.py -> sms_tool.config": {
+    "sms_tool/browser/fingerprint_pool.py -> sms_tool.proxy.entry": {
       "reason": "deferred",
-      "why": "支付资格 (2026-10-26): the single-account probe is a leaf reached only by the qualification batch, the CLI command and the desktop task. Deferring its config/proxy/payment imports keeps the frozen accounts -> root and accounts -> proxy module-level counts untouched, and keeps `import sms_tool.accounts.payment_qualification` free of the payment stack."
-    },
-    "sms_tool/accounts/payment_qualification.py -> sms_tool.payment.capability": {
-      "reason": "deferred",
-      "why": "支付资格 (2026-10-26): the single-account probe is a leaf reached only by the qualification batch, the CLI command and the desktop task. Deferring its config/proxy/payment imports keeps the frozen accounts -> root and accounts -> proxy module-level counts untouched, and keeps `import sms_tool.accounts.payment_qualification` free of the payment stack. The capability module is only needed when a probe actually runs."
-    },
-    "sms_tool/accounts/payment_qualification.py -> sms_tool.payment_qualification_states": {
-      "reason": "deferred",
-      "why": "支付资格 (2026-10-26): the single-account probe is a leaf reached only by the qualification batch, the CLI command and the desktop task. Deferring its config/proxy/payment imports keeps the frozen accounts -> root and accounts -> proxy module-level counts untouched, and keeps `import sms_tool.accounts.payment_qualification` free of the payment stack."
-    },
-    "sms_tool/accounts/payment_qualification.py -> sms_tool.phone.phone_proxy": {
-      "reason": "deferred",
-      "why": "支付资格 (2026-10-26): the single-account probe is a leaf reached only by the qualification batch, the CLI command and the desktop task. Deferring its config/proxy/payment imports keeps the frozen accounts -> root and accounts -> proxy module-level counts untouched, and keeps `import sms_tool.accounts.payment_qualification` free of the payment stack. phone_proxy is used for URL normalization/redaction only."
-    },
-    "sms_tool/accounts/payment_qualification.py -> sms_tool.proxy.routing": {
-      "reason": "deferred",
-      "why": "支付资格 (2026-10-26): the single-account probe is a leaf reached only by the qualification batch, the CLI command and the desktop task. Deferring its config/proxy/payment imports keeps the frozen accounts -> root and accounts -> proxy module-level counts untouched, and keeps `import sms_tool.accounts.payment_qualification` free of the payment stack. The egress candidate order is resolved per account inside the probe."
-    },
-    "sms_tool/accounts/payment_qualification_batch.py -> sms_tool.desktop.ipc": {
-      "reason": "deferred",
-      "why": "支付资格 batch (2026-10-26): progress events are the only IPC use and must stay inert for plain CLI runs (emit_event is already env-gated); importing the channel at module scope would grow accounts -> root for an optional sink."
-    },
-    "sms_tool/accounts/payment_qualification_batch.py -> sms_tool.proxy.edge_probe": {
-      "reason": "deferred",
-      "why": "支付资格 batch (2026-10-26): the one-shot egress preflight is the only edge-probe use. A module-level accounts -> proxy edge would grow the frozen pair; promotion_batch carries the same dependency locally for the same reason."
-    },
-    "sms_tool/accounts/payment_qualification_batch.py -> sms_tool.proxy.routing": {
-      "reason": "deferred",
-      "why": "支付资格 batch (2026-10-26): the operation egress order is resolved inside the per-account runner and the preflight, not at import time."
-    },
-    "sms_tool/accounts/payment_qualification_batch.py -> sms_tool.storage": {
-      "reason": "deferred",
-      "why": "支付资格 batch (2026-10-26): account loading is deferred so a desktop read-only start never pulls the account store through this module; same pattern as promotion_batch."
-    },
-    "sms_tool/accounts/payment_qualification_batch.py -> sms_tool.store.markers": {
-      "reason": "deferred",
-      "why": "支付资格 batch (2026-10-26): the persistence marker is imported at the write point rather than through the `storage` star facade, which also keeps the write path explicit."
-    },
-    "sms_tool/registration/batch_runner.py -> sms_tool.proxy.asn_registry": {
-      "reason": "deferred",
-      "why": "P1 (2026-10-26): the batch attempt path records the ASN outcome and the pool selector applies the opt-in ASN rotation. Imported at the two call sites because scripts/import_layer_ratchet.py freezes the root -> proxy count and batch_runner already carries the health tracker's edge."
-    },
-    "sms_tool/registration/batch_runner.py -> sms_tool.proxy.dynamic": {
-      "reason": "deferred",
-      "why": "dynamic generation is opt-in and only imported after the static pool is resolved; a module-level edge would put the screening/geo stack on every batch start"
+      "why": "Proxy authority consolidation (2026-11-24): replaces the retired phone_proxy delayed import with proxy.entry.infer_proxy_country inside the helper so importing browser.fingerprint_pool does not grow browser -> proxy at module scope."
     },
     "sms_tool/config/schema.py -> sms_tool.payment.catalog": {
       "reason": "deferred",
@@ -108,31 +64,19 @@
       "reason": "deferred",
       "why": "Capability browser fallback (2026-11-20): the seam existed since 2026-10-21 with zero production readers. It is wired here behind PP_CAPABILITY_BROWSER_FALLBACK and imported inside the branch so a default probe neither pays for playwright nor pulls the browser driver stack into every `import sms_tool.pay_link.core`."
     },
-    "sms_tool/pay_link/registry.py -> sms_tool.paypal_link.gen_link": {
-      "reason": "deferred",
-      "why": "Tier 2 shim retirement (2026-11-21): replaces the retired sms_tool.gen_pp_link deferred edge with the direct paypal_link.gen_link target inside paypal_runner so registry construction stays lazy and avoids pulling the PayPal link stack at import time."
-    },
     "sms_tool/payment/batch.py -> sms_tool.kernel.error_classification": {
       "reason": "deferred",
       "why": "P2-3: the shared failure classifier is a leaf utility with one call site in this module (_worker_exception_row). A module-level edge would grow the layer ratchet for one use, so the import runs inside the per-row fallback."
-    },
-    "sms_tool/payment/batch.py -> sms_tool.payment.upi_exit_lease": {
-      "reason": "deferred",
-      "why": "the exit-lease module is imported inside the batch helper because it reaches back into the payment lane's routing/contracts; a module-scope import would close the batch <-> lease cycle"
-    },
-    "sms_tool/payment/batch.py -> sms_tool.upi_link": {
-      "reason": "deferred",
-      "why": "P1-4: the exit lease is released inside _run_one_row's finally-equivalent point. A module-level edge would put upi_link on the payment import path, so the import runs in _release_leases for the one call that needs it."
-    },
-    "sms_tool/payment/qualification.py -> sms_tool.payment.checkout_contract": {
-      "reason": "deferred",
-      "why": "支付资格 country-aware probe (2026-10-26): the probe resolves the effective country from the measured exit and builds the checkout contract from the canonical catalogues. Both lookups run inside the probe so a payment-module import does not pull the geo/proxy/contract stack in, and the frozen payment -> sms_tool and payment -> proxy pairs stay flat."
     },
     "sms_tool/payment/qualification.py -> sms_tool.config": {
       "reason": "deferred",
       "why": "支付资格 (2026-10-26, payment lane): the qualification probe is reached only by the batch/CLI. Its config/phone_proxy/proxy.routing imports are function-local so a payment-module import does not pull the proxy transport stack in, and so the frozen import-layer pairs stay flat."
     },
     "sms_tool/payment/qualification.py -> sms_tool.geo": {
+      "reason": "deferred",
+      "why": "支付资格 country-aware probe (2026-10-26): the probe resolves the effective country from the measured exit and builds the checkout contract from the canonical catalogues. Both lookups run inside the probe so a payment-module import does not pull the geo/proxy/contract stack in, and the frozen payment -> sms_tool and payment -> proxy pairs stay flat."
+    },
+    "sms_tool/payment/qualification.py -> sms_tool.payment.checkout_contract": {
       "reason": "deferred",
       "why": "支付资格 country-aware probe (2026-10-26): the probe resolves the effective country from the measured exit and builds the checkout contract from the canonical catalogues. Both lookups run inside the probe so a payment-module import does not pull the geo/proxy/contract stack in, and the frozen payment -> sms_tool and payment -> proxy pairs stay flat."
     },
@@ -192,29 +136,17 @@
       "reason": "deferred",
       "why": "proxy fingerprint attribution imports urlsplit/unquote inside the helper so the batch module keeps its existing startup edge count"
     },
-    "sms_tool/payment/routing.py -> sms_tool.payment.upi_exit_lease": {
+    "sms_tool/payment/routing.py -> sms_tool.proxy.entry": {
       "reason": "deferred",
-      "why": "same cycle as payment/batch.py: the planner resolves a lease at call time, so the lease module cannot be imported at module scope"
+      "why": "Proxy authority consolidation (2026-11-24): redact_proxy_url is imported from proxy.entry inside the helper so payment.routing stays free of a new module-level payment -> proxy edge and breaks the payment <-> paypal cycle."
     },
     "sms_tool/payment/routing.py -> sms_tool.proxy.routing": {
       "reason": "deferred",
       "why": "P1 (2026-10-23): proxy.routing imports phone_proxy at module scope, which imports requests; a module-level import here made every payment.routing consumer pay ~300 ms for a helper used by one branch (_named_pools). The planner is pure data shaping and must not pull a transport stack in."
     },
-    "sms_tool/payment/routing.py -> sms_tool.upi_link": {
+    "sms_tool/paypal/proxy.py -> sms_tool.payment.method_config": {
       "reason": "deferred",
-      "why": "P1-4: _select_proxy asks the lease module which candidates are already taken. Resolved through the _exit_lease() helper so the payment kernel does not import the UPI lane at module scope (and a missing module simply disables the feature)."
-    },
-    "sms_tool/payment/upi_exit_lease.py -> sms_tool.kernel.paths": {
-      "reason": "deferred",
-      "why": "``_runtime_file`` resolves ``kernel.paths.runtime_file`` at call time so the lease module can be imported by config-light callers without pulling the kernel/config stack"
-    },
-    "sms_tool/payment/upi_identity_store.py -> sms_tool.cross_process_gate": {
-      "reason": "deferred",
-      "why": "the identity store's write lock is taken through ``cross_process_gate`` imported at call time, keeping the store importable from the extractor process without the gate"
-    },
-    "sms_tool/payment/upi_identity_store.py -> sms_tool.kernel.paths": {
-      "reason": "deferred",
-      "why": "``_runtime_file`` resolves ``kernel.paths.runtime_file`` at call time (same reason as upi_exit_lease)"
+      "why": "Cycle B break (2026-11-24): paypal.proxy now reads payment_proxy_pools from the pure leaf payment.method_config instead of payment.routing, kept function-local to avoid growing module-level paypal -> payment edges."
     },
     "sms_tool/providers/mailbox_cfworker.py -> sms_tool.mailbox.poll": {
       "reason": "deferred",
@@ -268,6 +200,14 @@
       "reason": "deferred",
       "why": "P0 proxy screening (2026-10-26): the dual-pass intel probe needs geo.resolver on every call, but scripts/import_layer_ratchet.py has no proxy -> geo module-level edge and the transport layer must not pull the geo probe stack in at import time. The import runs inside probe_once()/secondary_endpoints(), so only the screen command and the batch runner pay for it."
     },
+    "sms_tool/registration/batch_runner.py -> sms_tool.proxy.asn_registry": {
+      "reason": "deferred",
+      "why": "P1 (2026-10-26): the batch attempt path records the ASN outcome and the pool selector applies the opt-in ASN rotation. Imported at the two call sites because scripts/import_layer_ratchet.py freezes the root -> proxy count and batch_runner already carries the health tracker's edge."
+    },
+    "sms_tool/registration/batch_runner.py -> sms_tool.proxy.dynamic": {
+      "reason": "deferred",
+      "why": "dynamic generation is opt-in and only imported after the static pool is resolved; a module-level edge would put the screening/geo stack on every batch start"
+    },
     "sms_tool/registration/preflight.py -> sms_tool.transport": {
       "reason": "deferred",
       "why": "Protocol transport seam (2026-11-19): function-local so the frozen module-level `registration -> sms_tool` pair count (import_layer_ratchet) does not grow for a selector that is consulted once per session. The preflight must probe with the SAME transport the run will use, otherwise a pass here says nothing about the account's own ClientHello."
@@ -275,6 +215,10 @@
     "sms_tool/registration/preflight.py -> sms_tool.transport.http_backend": {
       "reason": "deferred",
       "why": "Protocol transport seam (2026-11-19): function-local so the frozen module-level `registration -> sms_tool` pair count (import_layer_ratchet) does not grow for a selector that is consulted once per session. The preflight must probe with the SAME transport the run will use, otherwise a pass here says nothing about the account's own ClientHello."
+    },
+    "sms_tool/registration/protocol_helpers.py -> sms_tool.proxy.bridge": {
+      "reason": "deferred",
+      "why": "Two-hop proxy chaining (2026-11-24): the local asyncio SOCKS5 bridge is imported only when GPT_PROXY_CHAIN_HOP / PROXY_CHAIN_HOP is explicitly configured, keeping normal registration runs free of the bridge stack."
     },
     "sms_tool/registration/protocol_helpers.py -> sms_tool.transport": {
       "reason": "deferred",
@@ -287,6 +231,10 @@
     "sms_tool/registration/result.py -> sms_tool.mailbox.reclaim": {
       "reason": "deferred",
       "why": "Result assembly records a failed run's purchased mailbox on demand. A module-level registration->mailbox edge would widen the frozen import-layer count for a failure-only path."
+    },
+    "sms_tool/registration_drivers/browser_session.py -> sms_tool.proxy.bridge": {
+      "reason": "deferred",
+      "why": "Two-hop proxy chaining (2026-11-24): open_browser_proxy_bridge is imported only when a browser session is configured with a hop proxy, keeping standard browser startup free of the asyncio bridge module."
     },
     "sms_tool/registration_drivers/external_sessions/managed.py -> sms_tool.browser": {
       "reason": "deferred",
@@ -324,6 +272,10 @@
       "reason": "deferred",
       "why": "Protocol transport seam (2026-11-19): the profile table must filter on whichever transport is active, and http_backend imports auth_headers back for the profile names. A module-level import either way closes the cycle; auth_headers is on the CLI help path and must stay transport-agnostic."
     },
+    "sms_tool/transport/fingerprint_pool.py -> sms_tool.proxy.entry": {
+      "reason": "deferred",
+      "why": "Cycle A break (2026-11-24): infer_proxy_country moved from phone_proxy (Layer 4) to proxy.entry (Layer 3), kept function-local so transport.fingerprint_pool stays transport-only at import time."
+    },
     "sms_tool/transport/http_backend.py -> sms_tool.config": {
       "reason": "deferred",
       "why": "Protocol transport seam (2026-11-19): the selected backend is read from email_registration.protocol_http_backend at call time, so a hot-reloaded shard changes the next session instead of requiring a restart. Deferred to keep the module importable by tests and by doctor before any config exists."
@@ -343,26 +295,6 @@
     "sms_tool/transport/tls_fingerprint.py -> sms_tool.config": {
       "reason": "deferred",
       "why": "``_section`` falls back to the live ``CFG`` only when a caller passes no config; importing ``sms_tool.config`` at module scope would resolve the config shards while ``sms_tool.transport.tls_fingerprint`` is imported by the registration package itself"
-    },
-    "sms_tool/upi_link/exit_lease.py -> sms_tool.kernel.paths": {
-      "reason": "deferred",
-      "why": "the lease directory comes from kernel.paths.runtime_file; the import sits in _runtime_file so the new module adds no module-level upi_link -> kernel edge."
-    },
-    "sms_tool/upi_link/identity_store.py -> sms_tool.cross_process_gate": {
-      "reason": "deferred",
-      "why": "the ledger write lock reuses cross_process_write_lock; the import sits inside ledger_transaction so a module that every identity lookup imports stays free of the gate module at import time."
-    },
-    "sms_tool/upi_link/identity_store.py -> sms_tool.kernel.paths": {
-      "reason": "deferred",
-      "why": "the ledger path comes from kernel.paths.runtime_file; imported inside _runtime_file for the same reason as the cross_process_gate edge."
-    },
-    "sms_tool/wallet/gcash_transport.py -> sms_tool.payment": {
-      "reason": "deferred",
-      "why": "Tier 2 shim retirement (2026-11-21): replaces the retired sms_tool.gen_pp_link deferred edge with sms_tool.payment.wire directly inside _post so importing gcash_transport does not pull requests/curl_cffi or grow the frozen wallet -> payment module-level edge count."
-    },
-    "sms_tool/wallet/transport.py -> sms_tool.payment": {
-      "reason": "deferred",
-      "why": "Tier 2 shim retirement (2026-11-21): replaces the retired sms_tool.gen_pp_link deferred edge with sms_tool.payment.wire directly inside checkout/session methods so importing wallet.transport does not pull requests/curl_cffi or grow the frozen wallet -> payment module-level edge count."
     }
   }
 }

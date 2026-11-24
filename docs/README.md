@@ -22,9 +22,8 @@ Directory layout (since 2026-09-06):
 ## Core documents
 
 - [Architecture and Boundaries](architecture.md) - module ownership, command
-  seams, state flow, Checkout/capability and wallet contracts, PayPal return
-  reconciliation, Agent Identity/SUB2API boundaries, and forbidden cross-module
-  dependencies.
+  seams, state flow, Checkout/capability and extraction-server contracts,
+  Agent Identity/SUB2API boundaries, and forbidden cross-module dependencies.
 - [Directory Map](directory-map.md) - physical repository classification and
   where new code should be placed.
 - [Boundary Rules](rules/) - one file per numbered rule (`rule-NN-*.md`): the
@@ -52,6 +51,8 @@ Directory layout (since 2026-09-06):
 - [Troubleshooting](TROUBLESHOOTING.md) - 故障 → 编号检查清单（先跑
   `python -m sms_tool --doctor`）。每条清单按顺序可执行，并指向负责该行为的
   `file.py:line`。排错时**先读这个**，再去读契约文档。
+- [Rust Acceleration](current/rust-acceleration.md) - `native/sentinel_vm/` 进程内
+  Rust Sentinel FFI（零 Node.js 依赖）与 14 个 `rust-anything` PyO3 热点扩展的覆盖范围、实测加速比与开关约定。
 - [Type Checking](current/typing.md) - pyright 逐文件 ratchet：为什么是 ratchet、
   如何安装与运行、修一条类型错误的首选写法。
 - [C# Gates](current/dotnet-gates.md) - C# 构建告警门禁：零基线、为什么解析控制台
@@ -63,6 +64,9 @@ Directory layout (since 2026-09-06):
 
 ## Release notes（docs/releases/，一个发布标签一份，不回写）
 
+- [v2026.11.24 发布说明](releases/release-v2026.11.24.md) - 纯 Rust 进程内 Sentinel VM（零 Node.js 依赖）、
+  14 个 `rust-anything` PyO3 热点扩展（4,824/4,824 用例一致）、15 种支付方式统一对接外部提链服务器并彻底退役旧版内置提取器、
+  WPF「支付链接提取」升级，以及代理池/指纹/协议注册加固与冗余清理。
 - [v2026.11.22 发布说明](releases/release-v2026.11.22.md) - 协议支付区域方式进程内化与认证头对齐、
   二级代理链与离线巡检/省流开关、Python/WPF 架构收拢，以及桌面端低饱和双主题、单窗收件箱、
   紧凑账号详情、顶部 Logo 版本弹层、统一字阶与 `Esc` 焦点环崩溃修复。

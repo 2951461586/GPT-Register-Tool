@@ -1,0 +1,43 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/phone/sms_utils.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "sms-code-rs",
+  "exports": [
+    {
+      "name": "_extract_sms_code",
+      "file": "sms_tool/phone/sms_utils.py",
+      "line": 21,
+      "params": [
+        {
+          "name": "text",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string | null",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "_sms_baseline",
+      "file": "sms_tool/phone/sms_utils.py",
+      "line": 84,
+      "reason": "HTTP polling stays in Python"
+    },
+    {
+      "name": "_poll_sms_code",
+      "file": "sms_tool/phone/sms_utils.py",
+      "line": 97,
+      "reason": "HTTP polling loop stays in Python"
+    }
+  ]
+}

@@ -29,6 +29,12 @@ class LegacyConfigView(MutableMapping[str, Any]):
             return self._overrides[key]
         return _thaw(current_config_data()[key])
 
+    def raw_get(self, key: str, default: Any = None) -> Any:
+        """Read-only section lookup without deep-thawing frozen config trees."""
+        if key in self._overrides:
+            return self._overrides[key]
+        return current_config_data().get(key, default)
+
     def __setitem__(self, key: str, value: Any) -> None:
         self._overrides[str(key)] = value
 

@@ -13,12 +13,13 @@ from ..codex.sentinel import import_cookie_header
 from ..transport.auth_headers import auth_impersonate, auth_user_agent
 from ..config import CFG
 from ..kernel.paths import runtime_file
-from ..phone.phone_proxy import (
+from ..proxy.entry import (
     normalize_proxy_url,
     redact_proxy_text as _phone_redact_proxy_text,
     redact_proxy_url as _phone_redact_proxy_url,
 )
 from ..observability.operator_output import emit as _emit
+from ..sentinel import client as _sentinel_client
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -264,14 +265,6 @@ def _extract_sentinel_http(proxy=None, persist=True, device_id=None):
     worker is relying on.
     """
     did = str(device_id or uuid.uuid4())
-    # Function-local on purpose: ``sentinel.client`` imports back into this
-    # module's ``_extract_sentinel`` on its legacy fallback path, so a
-    # module-level import here would close the cycle those local imports exist to
-    # avoid (same convention as ``client.issue_sentinel_flow``).
-    # Bound to a local name so the optional flow reads as data below, not as a
-    # free variable that appears to be defined somewhere else.
-    from ..sentinel import client as _sentinel_client
-
     email_flow_name = _sentinel_client.EMAIL_OTP_VALIDATE_FLOW
 
     session = curl_requests.Session()
@@ -794,3 +787,8 @@ def _collect_sentinel_tokens(page, ctx, persist=True):
     if persist:
         _save_sentinel_cache(result)
     return result
+
+
+# Wire one-way legacy fallback hook into sentinel.client without creating a
+# reverse import edge from Layer 4 (`sentinel`) to Layer 5 (`registration`).
+_sentinel_client.register_legacy_extractor(lambda **kwargs: _extract_sentinel(**kwargs))

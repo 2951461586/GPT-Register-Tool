@@ -1,0 +1,55 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/registration_drivers/data_saver.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "data-saver-rs",
+  "exports": [
+    {
+      "name": "is_cacheable_static_asset",
+      "file": "sms_tool/registration_drivers/data_saver.py",
+      "line": 274,
+      "params": [
+        {
+          "name": "url",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "resource_type",
+          "ts_type": "unknown",
+          "optional": true,
+          "rest": false
+        },
+        {
+          "name": "method",
+          "ts_type": "unknown",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "boolean",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "is_protected_url",
+      "file": "sms_tool/registration_drivers/data_saver.py",
+      "line": 250,
+      "reason": "sub-microsecond 7-keyword substring scan below PyO3 FFI threshold"
+    },
+    {
+      "name": "should_abort_request",
+      "file": "sms_tool/registration_drivers/data_saver.py",
+      "line": 255,
+      "reason": "accepts BrowserDataSaverConfig Python dataclass instance"
+    }
+  ]
+}

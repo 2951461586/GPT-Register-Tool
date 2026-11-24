@@ -70,12 +70,7 @@
       "sms_tool/registration/*.py"
     ],
     "Sentinel issuance": [
-      "sms_tool/sentinel/__init__.py",
-      "sms_tool/sentinel/bundle.py",
-      "sms_tool/sentinel/client.py",
-      "sms_tool/sentinel/runner.py",
-      "sms_tool/sentinel/selfcheck.py",
-      "sms_tool/sentinel/surface.py"
+      "sms_tool/sentinel/*.py"
     ],
     "OAuth and auth HTTP helpers": [
       "sms_tool/codex/*.py",
@@ -127,21 +122,11 @@
     ],
     "Payment links and capability": [
       "sms_tool/paypal/*.py",
-      "sms_tool/payment/*.py",
-      "sms_tool/wallet/*.py"
+      "sms_tool/payment/*.py"
     ],
     "Payment-link state machine": [
       "sms_tool/pay_link/*.py",
       "sms_tool/payment/*.py"
-    ],
-    "PayPal-only link generation": [
-      "sms_tool/paypal_link/__init__.py",
-      "sms_tool/paypal_link/gen_link.py",
-      "sms_tool/paypal_link/reconciliation.py",
-      "sms_tool/payment/*.py"
-    ],
-    "UPI link and QR extraction": [
-      "sms_tool/upi_link/*.py"
     ],
     "Payment batch execution": [
       "sms_tool/payment/*.py"

@@ -148,49 +148,6 @@ class NoDirectConfigJsonReads(unittest.TestCase):
             self.assertEqual([], find_direct_config_reads(root))
 
 
-class CanonicalConfigPathIsReal(unittest.TestCase):
-    """``DEFAULT_CONFIG_PATH`` 必须指向**项目根**的 config.json。
-
-    ``paypal_link/gen_link.py`` 位于 ``sms_tool/paypal_link/``，项目根要上
-    **两层**。曾经只上了一层，指向 ``sms_tool/config.json`` —— 一个被
-    .gitignore 排除的遗留影子文件。因为生产调用都传这个常量本身（哨兵
-    比较恒真），错误的取值一直没暴露。
-
-    这个常量现在是**哨兵令牌**，不再是必须真实存在的一份文件：根
-    ``config.json`` 已于 2026-09-23 归档（386 叶子 / 0 独有，备份在
-    ``runtime/config-backups/``），三个模块的 ``_load_json`` 靠 ``abspath``
-    比较把 canonical 路径转给 ``load_merged_config()``。因此这里只钉**取值**；
-    原先那条「哨兵指向的文件必须存在」已删除 —— 它想守的行为由
-    ``ShardLoaderIsWired`` 覆盖，而它的前提在分片布局下已不成立。
-    """
-
-    def test_gen_link_canonical_path_points_at_the_project_root(self):
-        from sms_tool.paypal_link import gen_link
-
-        path = Path(gen_link.DEFAULT_CONFIG_PATH)
-        self.assertEqual(
-            "config.json",
-            path.name,
-            f"DEFAULT_CONFIG_PATH 文件名不对: {path}",
-        )
-        self.assertEqual(
-            PROJECT_ROOT / "config.json",
-            path.resolve(),
-            f"DEFAULT_CONFIG_PATH 应指向项目根: {path}",
-        )
-
-    def test_sibling_modules_share_the_same_root(self):
-        """同层/上层的兄弟模块算出来的项目根必须一致。"""
-        from sms_tool import upi_link
-        from sms_tool.paypal_link import gen_link
-
-        roots = {
-            Path(upi_link.DEFAULT_CONFIG_PATH).resolve().parent,
-            Path(gen_link.DEFAULT_CONFIG_PATH).resolve().parent,
-        }
-        self.assertEqual(1, len(roots), f"两个模块算出的项目根不一致: {roots}")
-
-
 class DeadConfigConstantsStayDead(unittest.TestCase):
     """``paypal_protocol.DEFAULT_CONFIG_PATH`` 是零引用死常量，删了不许复活。"""
 
@@ -202,40 +159,6 @@ class DeadConfigConstantsStayDead(unittest.TestCase):
             names & {"DEFAULT_CONFIG_PATH", "SCRIPT_DIR", "PROJECT_ROOT"},
             "paypal_protocol 走 .config.load_merged_config，不需要自己的路径常量",
         )
-
-
-class ShardLoaderIsWired(unittest.TestCase):
-    """canonical 路径必须经分片加载器，不能退化成裸 json.load。"""
-
-    def test_load_json_routes_the_canonical_path_through_the_shards(self):
-        from unittest.mock import patch
-
-        from sms_tool.paypal_link import gen_link
-
-        with patch("sms_tool.config.load_merged_config", return_value={"merged": True}) as loader:
-            out = gen_link._load_json(gen_link.DEFAULT_CONFIG_PATH)
-        loader.assert_called_once_with()
-        self.assertEqual({"merged": True}, out)
-
-    def test_every_module_with_a_canonical_path_routes_it_through_the_shards(self):
-        """两个 ``DEFAULT_CONFIG_PATH`` 模块都得保留哨兵分支。
-
-        根 ``config.json`` 已于 2026-09-23 归档，所以这个分支不再是「省一次
-        json.load」的优化，而是**唯一**让 ``_load_json(DEFAULT_CONFIG_PATH)``
-        不返回 ``{}`` 的东西。少一个模块，就多一条「配置静默变空」的路径 ——
-        而哨兵比较恒真，坏掉时不会有任何报错。
-        """
-        from unittest.mock import patch
-
-        from sms_tool import upi_link
-        from sms_tool.paypal_link import gen_link
-
-        for module in (gen_link, upi_link):
-            with self.subTest(module=module.__name__):
-                with patch("sms_tool.config.load_merged_config", return_value={"merged": True}) as loader:
-                    out = module._load_json(module.DEFAULT_CONFIG_PATH)
-                loader.assert_called_once_with()
-                self.assertEqual({"merged": True}, out)
 
 
 if __name__ == "__main__":  # pragma: no cover

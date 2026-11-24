@@ -1,0 +1,851 @@
+{"fn": "classify_error", "args": [{"a": {"b": "c"}}], "ok": "unknown"}
+{"fn": "classify_error", "args": [{}], "ok": "unknown"}
+{"fn": "classify_error", "args": [0], "ok": "unknown"}
+{"fn": "classify_error", "args": [["a", 1]], "ok": "unknown"}
+{"fn": "classify_error", "args": [null], "ok": "unknown"}
+{"fn": "classify_error", "args": ["x"], "ok": "unknown"}
+{"fn": "classify_error", "args": [true], "ok": "unknown"}
+{"fn": "classify_error", "args": [[]], "ok": "unknown"}
+{"fn": "classify_error", "args": [{"a": "b"}], "ok": "unknown"}
+{"fn": "classify_error", "args": [{"zebra": 1, "apple": 2, "10": 3, "2": 4, "é": 5, "Apple": 6}], "ok": "unknown"}
+{"fn": "classify_error", "args": [{"n": 9007199254740993, "f": 1e+21, "t": 0.1, "neg": -7}], "ok": "unknown"}
+{"fn": "classify_error", "args": [[3, 1, 2]], "ok": "unknown"}
+{"fn": "is_terminal_registration_error", "args": [[]], "ok": false}
+{"fn": "is_terminal_registration_error", "args": [{"a": {"b": "c"}}], "ok": false}
+{"fn": "is_terminal_registration_error", "args": [null], "ok": false}
+{"fn": "is_terminal_registration_error", "args": [{}], "ok": false}
+{"fn": "is_terminal_registration_error", "args": [["a", 1]], "ok": false}
+{"fn": "is_terminal_registration_error", "args": [0], "ok": false}
+{"fn": "is_terminal_registration_error", "args": ["x"], "ok": false}
+{"fn": "is_terminal_registration_error", "args": [{"a": "b"}], "ok": false}
+{"fn": "is_terminal_registration_error", "args": [true], "ok": false}
+{"fn": "is_terminal_registration_error", "args": [{"zebra": 1, "apple": 2, "10": 3, "2": 4, "é": 5, "Apple": 6}], "ok": false}
+{"fn": "is_terminal_registration_error", "args": [{"n": 9007199254740993, "f": 1e+21, "t": 0.1, "neg": -7}], "ok": false}
+{"fn": "is_terminal_registration_error", "args": [[3, 1, 2]], "ok": false}
+{"fn": "classify_error", "args": [""], "ok": "unknown"}
+{"fn": "is_terminal_registration_error", "args": [""], "ok": false}
+{"fn": "classify_error", "args": [null], "ok": "unknown"}
+{"fn": "is_terminal_registration_error", "args": [null], "ok": false}
+{"fn": "classify_error", "args": [0], "ok": "unknown"}
+{"fn": "is_terminal_registration_error", "args": [0], "ok": false}
+{"fn": "classify_error", "args": [false], "ok": "unknown"}
+{"fn": "is_terminal_registration_error", "args": [false], "ok": false}
+{"fn": "classify_error", "args": [true], "ok": "unknown"}
+{"fn": "is_terminal_registration_error", "args": [true], "ok": false}
+{"fn": "classify_error", "args": [42], "ok": "unknown"}
+{"fn": "is_terminal_registration_error", "args": [42], "ok": false}
+{"fn": "classify_error", "args": [[]], "ok": "unknown"}
+{"fn": "is_terminal_registration_error", "args": [[]], "ok": false}
+{"fn": "classify_error", "args": [{}], "ok": "unknown"}
+{"fn": "is_terminal_registration_error", "args": [{}], "ok": false}
+{"fn": "classify_error", "args": [{"unknown_key": "value", "nested": [1, "two", true, null]}], "ok": "unknown"}
+{"fn": "is_terminal_registration_error", "args": [{"unknown_key": "value", "nested": [1, "two", true, null]}], "ok": false}
+{"fn": "classify_error", "args": [{"error": "TLS handshake failed", "status": "failed"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error": "TLS handshake failed", "status": "failed"}], "ok": false}
+{"fn": "classify_error", "args": [{"error": "", "message": "HTTP_429 Too Many Requests"}], "ok": "rate_limit"}
+{"fn": "is_terminal_registration_error", "args": [{"error": "", "message": "HTTP_429 Too Many Requests"}], "ok": true}
+{"fn": "classify_error", "args": [{"error": "ok", "refresh": {"error": "invalid_grant"}, "oauth": {"message": "token_invalidated"}}], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": [{"error": "ok", "refresh": {"error": "invalid_grant"}, "oauth": {"message": "token_invalidated"}}], "ok": true}
+{"fn": "classify_error", "args": [{"refresh": {}, "oauth": {"body": "timeout"}}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"refresh": {}, "oauth": {"body": "timeout"}}], "ok": false}
+{"fn": "classify_error", "args": [{"error": "registration_internal_error:RuntimeError:curl: (56) Proxy CONNECT aborted"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error": "registration_internal_error:RuntimeError:curl: (56) Proxy CONNECT aborted"}], "ok": false}
+{"fn": "classify_error", "args": [{"error": "registration_internal_error:RuntimeError:Failed to perform, curl: (35) SSL connect error"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error": "registration_internal_error:RuntimeError:Failed to perform, curl: (35) SSL connect error"}], "ok": false}
+{"fn": "classify_error", "args": [{"error": "registration_internal_error:NameError: name 'connection_pool' is not defined"}], "ok": "internal"}
+{"fn": "is_terminal_registration_error", "args": [{"error": "registration_internal_error:NameError: name 'connection_pool' is not defined"}], "ok": false}
+{"fn": "classify_error", "args": [{"error": "TypeError: timeout must be int"}], "ok": "internal"}
+{"fn": "is_terminal_registration_error", "args": [{"error": "TypeError: timeout must be int"}], "ok": false}
+{"fn": "classify_error", "args": [{"error": "browser_profile_submit_timeout"}], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": [{"error": "browser_profile_submit_timeout"}], "ok": false}
+{"fn": "classify_error", "args": [{"error": "upi_redirect_timeout"}], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": [{"error": "upi_redirect_timeout"}], "ok": false}
+{"fn": "classify_error", "args": [{"error": "email_otp_poll_timeout"}], "ok": "mailbox"}
+{"fn": "is_terminal_registration_error", "args": [{"error": "email_otp_poll_timeout"}], "ok": false}
+{"fn": "classify_error", "args": [{"error": "plain timeout occurred"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error": "plain timeout occurred"}], "ok": false}
+{"fn": "classify_error", "args": [{"error": "connection reset while talking to proxy"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error": "connection reset while talking to proxy"}], "ok": false}
+{"fn": "classify_error", "args": [{"error": "just a bare proxy error"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error": "just a bare proxy error"}], "ok": false}
+{"fn": "classify_error", "args": [{"error": "STRIPE 风控拒绝 during approval"}], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": [{"error": "STRIPE 风控拒绝 during approval"}], "ok": false}
+{"fn": "classify_error", "args": [{"error": "registration_cancelled + account_deactivated + http_429"}], "ok": "cancelled"}
+{"fn": "is_terminal_registration_error", "args": [{"error": "registration_cancelled + account_deactivated + http_429"}], "ok": true}
+{"fn": "classify_error", "args": [{"error": "user_already_exists and curl: (28)"}], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": [{"error": "user_already_exists and curl: (28)"}], "ok": false}
+{"fn": "classify_error", "args": [{"error": "email_otp_send_stuck:arm_mismatch"}], "ok": "mailbox"}
+{"fn": "is_terminal_registration_error", "args": [{"error": "email_otp_send_stuck:arm_mismatch"}], "ok": false}
+{"fn": "classify_error", "args": [{"error": "password_step_unconfirmed:invalid_auth_step"}], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": [{"error": "password_step_unconfirmed:invalid_auth_step"}], "ok": false}
+{"fn": "classify_error", "args": [{"error": "sentinel_fallback_incomplete:oauth:SentinelBundleError"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error": "sentinel_fallback_incomplete:oauth:SentinelBundleError"}], "ok": false}
+{"fn": "classify_error", "args": [{"error": "completely benign unknown error 12345"}], "ok": "unknown"}
+{"fn": "is_terminal_registration_error", "args": [{"error": "completely benign unknown error 12345"}], "ok": false}
+{"fn": "classify_error", "args": [{"quota_status": "exceeded", "scan_status": "active", "token_probe": {"error_code": "session_circuit_open"}}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"quota_status": "exceeded", "scan_status": "active", "token_probe": {"error_code": "session_circuit_open"}}], "ok": true}
+{"fn": "classify_error", "args": [{"relogin": {"error": "relogin_mailbox_transport_failed", "status": "err"}}], "ok": "mailbox"}
+{"fn": "is_terminal_registration_error", "args": [{"relogin": {"error": "relogin_mailbox_transport_failed", "status": "err"}}], "ok": false}
+{"fn": "classify_error", "args": [{"huge": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}], "ok": "unknown"}
+{"fn": "is_terminal_registration_error", "args": [{"huge": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}], "ok": false}
+{"fn": "classify_error", "args": ["registration_cancelled"], "ok": "cancelled"}
+{"fn": "is_terminal_registration_error", "args": ["registration_cancelled"], "ok": true}
+{"fn": "classify_error", "args": ["PREFIX:REGISTRATION_CANCELLED:SUFFIX"], "ok": "cancelled"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:REGISTRATION_CANCELLED:SUFFIX"], "ok": true}
+{"fn": "classify_error", "args": [{"error_code": "registration_cancelled"}], "ok": "cancelled"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "registration_cancelled"}], "ok": true}
+{"fn": "classify_error", "args": ["cancelled_by_user"], "ok": "cancelled"}
+{"fn": "is_terminal_registration_error", "args": ["cancelled_by_user"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:CANCELLED_BY_USER:SUFFIX"], "ok": "cancelled"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:CANCELLED_BY_USER:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "cancelled_by_user"}], "ok": "cancelled"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "cancelled_by_user"}], "ok": false}
+{"fn": "classify_error", "args": ["registration_internal_error"], "ok": "internal"}
+{"fn": "is_terminal_registration_error", "args": ["registration_internal_error"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:REGISTRATION_INTERNAL_ERROR:SUFFIX"], "ok": "internal"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:REGISTRATION_INTERNAL_ERROR:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "registration_internal_error"}], "ok": "internal"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "registration_internal_error"}], "ok": false}
+{"fn": "classify_error", "args": ["nameerror"], "ok": "internal"}
+{"fn": "is_terminal_registration_error", "args": ["nameerror"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:NAMEERROR:SUFFIX"], "ok": "internal"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:NAMEERROR:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "nameerror"}], "ok": "internal"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "nameerror"}], "ok": false}
+{"fn": "classify_error", "args": ["attributeerror"], "ok": "internal"}
+{"fn": "is_terminal_registration_error", "args": ["attributeerror"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:ATTRIBUTEERROR:SUFFIX"], "ok": "internal"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:ATTRIBUTEERROR:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "attributeerror"}], "ok": "internal"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "attributeerror"}], "ok": false}
+{"fn": "classify_error", "args": ["typeerror"], "ok": "internal"}
+{"fn": "is_terminal_registration_error", "args": ["typeerror"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:TYPEERROR:SUFFIX"], "ok": "internal"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:TYPEERROR:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "typeerror"}], "ok": "internal"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "typeerror"}], "ok": false}
+{"fn": "classify_error", "args": ["keyerror"], "ok": "internal"}
+{"fn": "is_terminal_registration_error", "args": ["keyerror"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:KEYERROR:SUFFIX"], "ok": "internal"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:KEYERROR:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "keyerror"}], "ok": "internal"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "keyerror"}], "ok": false}
+{"fn": "classify_error", "args": ["importerror"], "ok": "internal"}
+{"fn": "is_terminal_registration_error", "args": ["importerror"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:IMPORTERROR:SUFFIX"], "ok": "internal"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:IMPORTERROR:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "importerror"}], "ok": "internal"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "importerror"}], "ok": false}
+{"fn": "classify_error", "args": ["indexerror"], "ok": "internal"}
+{"fn": "is_terminal_registration_error", "args": ["indexerror"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:INDEXERROR:SUFFIX"], "ok": "internal"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:INDEXERROR:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "indexerror"}], "ok": "internal"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "indexerror"}], "ok": false}
+{"fn": "classify_error", "args": ["unboundlocalerror"], "ok": "internal"}
+{"fn": "is_terminal_registration_error", "args": ["unboundlocalerror"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:UNBOUNDLOCALERROR:SUFFIX"], "ok": "internal"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:UNBOUNDLOCALERROR:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "unboundlocalerror"}], "ok": "internal"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "unboundlocalerror"}], "ok": false}
+{"fn": "classify_error", "args": ["notimplementederror"], "ok": "internal"}
+{"fn": "is_terminal_registration_error", "args": ["notimplementederror"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:NOTIMPLEMENTEDERROR:SUFFIX"], "ok": "internal"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:NOTIMPLEMENTEDERROR:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "notimplementederror"}], "ok": "internal"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "notimplementederror"}], "ok": false}
+{"fn": "classify_error", "args": ["recursionerror"], "ok": "internal"}
+{"fn": "is_terminal_registration_error", "args": ["recursionerror"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:RECURSIONERROR:SUFFIX"], "ok": "internal"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:RECURSIONERROR:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "recursionerror"}], "ok": "internal"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "recursionerror"}], "ok": false}
+{"fn": "classify_error", "args": [" is not defined"], "ok": "internal"}
+{"fn": "is_terminal_registration_error", "args": [" is not defined"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX: IS NOT DEFINED:SUFFIX"], "ok": "internal"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX: IS NOT DEFINED:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": " is not defined"}], "ok": "internal"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": " is not defined"}], "ok": false}
+{"fn": "classify_error", "args": ["unsupported_registration_driver"], "ok": "configuration"}
+{"fn": "is_terminal_registration_error", "args": ["unsupported_registration_driver"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:UNSUPPORTED_REGISTRATION_DRIVER:SUFFIX"], "ok": "configuration"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:UNSUPPORTED_REGISTRATION_DRIVER:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "unsupported_registration_driver"}], "ok": "configuration"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "unsupported_registration_driver"}], "ok": false}
+{"fn": "classify_error", "args": ["missing_dependency"], "ok": "configuration"}
+{"fn": "is_terminal_registration_error", "args": ["missing_dependency"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:MISSING_DEPENDENCY:SUFFIX"], "ok": "configuration"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:MISSING_DEPENDENCY:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "missing_dependency"}], "ok": "configuration"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "missing_dependency"}], "ok": false}
+{"fn": "classify_error", "args": ["invalid_configuration"], "ok": "configuration"}
+{"fn": "is_terminal_registration_error", "args": ["invalid_configuration"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:INVALID_CONFIGURATION:SUFFIX"], "ok": "configuration"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:INVALID_CONFIGURATION:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "invalid_configuration"}], "ok": "configuration"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "invalid_configuration"}], "ok": false}
+{"fn": "classify_error", "args": ["configuration_error"], "ok": "configuration"}
+{"fn": "is_terminal_registration_error", "args": ["configuration_error"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:CONFIGURATION_ERROR:SUFFIX"], "ok": "configuration"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:CONFIGURATION_ERROR:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "configuration_error"}], "ok": "configuration"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "configuration_error"}], "ok": false}
+{"fn": "classify_error", "args": ["account_deactivated"], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": ["account_deactivated"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:ACCOUNT_DEACTIVATED:SUFFIX"], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:ACCOUNT_DEACTIVATED:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "account_deactivated"}], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "account_deactivated"}], "ok": false}
+{"fn": "classify_error", "args": ["account deactivated"], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": ["account deactivated"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:ACCOUNT DEACTIVATED:SUFFIX"], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:ACCOUNT DEACTIVATED:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "account deactivated"}], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "account deactivated"}], "ok": false}
+{"fn": "classify_error", "args": ["account has been deactivated"], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": ["account has been deactivated"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:ACCOUNT HAS BEEN DEACTIVATED:SUFFIX"], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:ACCOUNT HAS BEEN DEACTIVATED:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "account has been deactivated"}], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "account has been deactivated"}], "ok": false}
+{"fn": "classify_error", "args": ["deleted or deactivated"], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": ["deleted or deactivated"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:DELETED OR DEACTIVATED:SUFFIX"], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:DELETED OR DEACTIVATED:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "deleted or deactivated"}], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "deleted or deactivated"}], "ok": false}
+{"fn": "classify_error", "args": ["registration_disallowed"], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": ["registration_disallowed"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:REGISTRATION_DISALLOWED:SUFFIX"], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:REGISTRATION_DISALLOWED:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "registration_disallowed"}], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "registration_disallowed"}], "ok": false}
+{"fn": "classify_error", "args": ["invalid_grant"], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": ["invalid_grant"], "ok": true}
+{"fn": "classify_error", "args": ["PREFIX:INVALID_GRANT:SUFFIX"], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:INVALID_GRANT:SUFFIX"], "ok": true}
+{"fn": "classify_error", "args": [{"error_code": "invalid_grant"}], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "invalid_grant"}], "ok": true}
+{"fn": "classify_error", "args": ["authenticationfailed"], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": ["authenticationfailed"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:AUTHENTICATIONFAILED:SUFFIX"], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:AUTHENTICATIONFAILED:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "authenticationfailed"}], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "authenticationfailed"}], "ok": false}
+{"fn": "classify_error", "args": ["invalid credentials"], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": ["invalid credentials"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:INVALID CREDENTIALS:SUFFIX"], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:INVALID CREDENTIALS:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "invalid credentials"}], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "invalid credentials"}], "ok": false}
+{"fn": "classify_error", "args": ["wrong_email_otp_code"], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": ["wrong_email_otp_code"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:WRONG_EMAIL_OTP_CODE:SUFFIX"], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:WRONG_EMAIL_OTP_CODE:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "wrong_email_otp_code"}], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "wrong_email_otp_code"}], "ok": false}
+{"fn": "classify_error", "args": ["password_verify_failed"], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": ["password_verify_failed"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:PASSWORD_VERIFY_FAILED:SUFFIX"], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:PASSWORD_VERIFY_FAILED:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "password_verify_failed"}], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "password_verify_failed"}], "ok": false}
+{"fn": "classify_error", "args": ["phone_recently_used"], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": ["phone_recently_used"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:PHONE_RECENTLY_USED:SUFFIX"], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:PHONE_RECENTLY_USED:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "phone_recently_used"}], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "phone_recently_used"}], "ok": false}
+{"fn": "classify_error", "args": ["unsupported_phone_number"], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": ["unsupported_phone_number"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:UNSUPPORTED_PHONE_NUMBER:SUFFIX"], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:UNSUPPORTED_PHONE_NUMBER:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "unsupported_phone_number"}], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "unsupported_phone_number"}], "ok": false}
+{"fn": "classify_error", "args": ["fraud_guard"], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": ["fraud_guard"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:FRAUD_GUARD:SUFFIX"], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:FRAUD_GUARD:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "fraud_guard"}], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "fraud_guard"}], "ok": false}
+{"fn": "classify_error", "args": ["token_invalidated"], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": ["token_invalidated"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:TOKEN_INVALIDATED:SUFFIX"], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:TOKEN_INVALIDATED:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "token_invalidated"}], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "token_invalidated"}], "ok": false}
+{"fn": "classify_error", "args": ["user_already_exists"], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": ["user_already_exists"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:USER_ALREADY_EXISTS:SUFFIX"], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:USER_ALREADY_EXISTS:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "user_already_exists"}], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "user_already_exists"}], "ok": false}
+{"fn": "classify_error", "args": ["signup_routed_to_login"], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": ["signup_routed_to_login"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:SIGNUP_ROUTED_TO_LOGIN:SUFFIX"], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:SIGNUP_ROUTED_TO_LOGIN:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "signup_routed_to_login"}], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "signup_routed_to_login"}], "ok": false}
+{"fn": "classify_error", "args": ["mailbox_auth_invalid"], "ok": "mailbox"}
+{"fn": "is_terminal_registration_error", "args": ["mailbox_auth_invalid"], "ok": true}
+{"fn": "classify_error", "args": ["PREFIX:MAILBOX_AUTH_INVALID:SUFFIX"], "ok": "mailbox"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:MAILBOX_AUTH_INVALID:SUFFIX"], "ok": true}
+{"fn": "classify_error", "args": [{"error_code": "mailbox_auth_invalid"}], "ok": "mailbox"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "mailbox_auth_invalid"}], "ok": true}
+{"fn": "classify_error", "args": ["mailbox_endpoint_unavailable"], "ok": "mailbox"}
+{"fn": "is_terminal_registration_error", "args": ["mailbox_endpoint_unavailable"], "ok": true}
+{"fn": "classify_error", "args": ["PREFIX:MAILBOX_ENDPOINT_UNAVAILABLE:SUFFIX"], "ok": "mailbox"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:MAILBOX_ENDPOINT_UNAVAILABLE:SUFFIX"], "ok": true}
+{"fn": "classify_error", "args": [{"error_code": "mailbox_endpoint_unavailable"}], "ok": "mailbox"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "mailbox_endpoint_unavailable"}], "ok": true}
+{"fn": "classify_error", "args": ["remail_api_auth_invalid"], "ok": "mailbox"}
+{"fn": "is_terminal_registration_error", "args": ["remail_api_auth_invalid"], "ok": true}
+{"fn": "classify_error", "args": ["PREFIX:REMAIL_API_AUTH_INVALID:SUFFIX"], "ok": "mailbox"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:REMAIL_API_AUTH_INVALID:SUFFIX"], "ok": true}
+{"fn": "classify_error", "args": [{"error_code": "remail_api_auth_invalid"}], "ok": "mailbox"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "remail_api_auth_invalid"}], "ok": true}
+{"fn": "classify_error", "args": ["outlook otp timeout"], "ok": "mailbox"}
+{"fn": "is_terminal_registration_error", "args": ["outlook otp timeout"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:OUTLOOK OTP TIMEOUT:SUFFIX"], "ok": "mailbox"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:OUTLOOK OTP TIMEOUT:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "outlook otp timeout"}], "ok": "mailbox"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "outlook otp timeout"}], "ok": false}
+{"fn": "classify_error", "args": ["email_otp_poll_timeout"], "ok": "mailbox"}
+{"fn": "is_terminal_registration_error", "args": ["email_otp_poll_timeout"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:EMAIL_OTP_POLL_TIMEOUT:SUFFIX"], "ok": "mailbox"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:EMAIL_OTP_POLL_TIMEOUT:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "email_otp_poll_timeout"}], "ok": "mailbox"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "email_otp_poll_timeout"}], "ok": false}
+{"fn": "classify_error", "args": ["email_otp_send_stuck"], "ok": "mailbox"}
+{"fn": "is_terminal_registration_error", "args": ["email_otp_send_stuck"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:EMAIL_OTP_SEND_STUCK:SUFFIX"], "ok": "mailbox"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:EMAIL_OTP_SEND_STUCK:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "email_otp_send_stuck"}], "ok": "mailbox"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "email_otp_send_stuck"}], "ok": false}
+{"fn": "classify_error", "args": ["mailbox otp timeout"], "ok": "mailbox"}
+{"fn": "is_terminal_registration_error", "args": ["mailbox otp timeout"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:MAILBOX OTP TIMEOUT:SUFFIX"], "ok": "mailbox"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:MAILBOX OTP TIMEOUT:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "mailbox otp timeout"}], "ok": "mailbox"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "mailbox otp timeout"}], "ok": false}
+{"fn": "classify_error", "args": ["mailbox_transport_unavailable"], "ok": "mailbox"}
+{"fn": "is_terminal_registration_error", "args": ["mailbox_transport_unavailable"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:MAILBOX_TRANSPORT_UNAVAILABLE:SUFFIX"], "ok": "mailbox"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:MAILBOX_TRANSPORT_UNAVAILABLE:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "mailbox_transport_unavailable"}], "ok": "mailbox"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "mailbox_transport_unavailable"}], "ok": false}
+{"fn": "classify_error", "args": ["relogin_mailbox_transport_failed"], "ok": "mailbox"}
+{"fn": "is_terminal_registration_error", "args": ["relogin_mailbox_transport_failed"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:RELOGIN_MAILBOX_TRANSPORT_FAILED:SUFFIX"], "ok": "mailbox"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:RELOGIN_MAILBOX_TRANSPORT_FAILED:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "relogin_mailbox_transport_failed"}], "ok": "mailbox"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "relogin_mailbox_transport_failed"}], "ok": false}
+{"fn": "classify_error", "args": ["remail poll transport"], "ok": "mailbox"}
+{"fn": "is_terminal_registration_error", "args": ["remail poll transport"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:REMAIL POLL TRANSPORT:SUFFIX"], "ok": "mailbox"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:REMAIL POLL TRANSPORT:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "remail poll transport"}], "ok": "mailbox"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "remail poll transport"}], "ok": false}
+{"fn": "classify_error", "args": ["rate_limit_exceeded"], "ok": "rate_limit"}
+{"fn": "is_terminal_registration_error", "args": ["rate_limit_exceeded"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:RATE_LIMIT_EXCEEDED:SUFFIX"], "ok": "rate_limit"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:RATE_LIMIT_EXCEEDED:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "rate_limit_exceeded"}], "ok": "rate_limit"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "rate_limit_exceeded"}], "ok": false}
+{"fn": "classify_error", "args": ["registration_rate_limited"], "ok": "rate_limit"}
+{"fn": "is_terminal_registration_error", "args": ["registration_rate_limited"], "ok": true}
+{"fn": "classify_error", "args": ["PREFIX:REGISTRATION_RATE_LIMITED:SUFFIX"], "ok": "rate_limit"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:REGISTRATION_RATE_LIMITED:SUFFIX"], "ok": true}
+{"fn": "classify_error", "args": [{"error_code": "registration_rate_limited"}], "ok": "rate_limit"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "registration_rate_limited"}], "ok": true}
+{"fn": "classify_error", "args": ["registration_rate_limit_circuit_open"], "ok": "rate_limit"}
+{"fn": "is_terminal_registration_error", "args": ["registration_rate_limit_circuit_open"], "ok": true}
+{"fn": "classify_error", "args": ["PREFIX:REGISTRATION_RATE_LIMIT_CIRCUIT_OPEN:SUFFIX"], "ok": "rate_limit"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:REGISTRATION_RATE_LIMIT_CIRCUIT_OPEN:SUFFIX"], "ok": true}
+{"fn": "classify_error", "args": [{"error_code": "registration_rate_limit_circuit_open"}], "ok": "rate_limit"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "registration_rate_limit_circuit_open"}], "ok": true}
+{"fn": "classify_error", "args": ["too many requests"], "ok": "rate_limit"}
+{"fn": "is_terminal_registration_error", "args": ["too many requests"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:TOO MANY REQUESTS:SUFFIX"], "ok": "rate_limit"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:TOO MANY REQUESTS:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "too many requests"}], "ok": "rate_limit"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "too many requests"}], "ok": false}
+{"fn": "classify_error", "args": ["http_429"], "ok": "rate_limit"}
+{"fn": "is_terminal_registration_error", "args": ["http_429"], "ok": true}
+{"fn": "classify_error", "args": ["PREFIX:HTTP_429:SUFFIX"], "ok": "rate_limit"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:HTTP_429:SUFFIX"], "ok": true}
+{"fn": "classify_error", "args": [{"error_code": "http_429"}], "ok": "rate_limit"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "http_429"}], "ok": true}
+{"fn": "classify_error", "args": ["tls"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["tls"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:TLS:SUFFIX"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:TLS:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "tls"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "tls"}], "ok": false}
+{"fn": "classify_error", "args": ["ssl"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["ssl"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:SSL:SUFFIX"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:SSL:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "ssl"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "ssl"}], "ok": false}
+{"fn": "classify_error", "args": ["sslerror"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["sslerror"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:SSLERROR:SUFFIX"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:SSLERROR:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "sslerror"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "sslerror"}], "ok": false}
+{"fn": "classify_error", "args": ["eof occurred"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["eof occurred"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:EOF OCCURRED:SUFFIX"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:EOF OCCURRED:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "eof occurred"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "eof occurred"}], "ok": false}
+{"fn": "classify_error", "args": ["connection"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["connection"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:CONNECTION:SUFFIX"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:CONNECTION:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "connection"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "connection"}], "ok": false}
+{"fn": "classify_error", "args": ["connect error"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["connect error"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:CONNECT ERROR:SUFFIX"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:CONNECT ERROR:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "connect error"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "connect error"}], "ok": false}
+{"fn": "classify_error", "args": ["timeout"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["timeout"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:TIMEOUT:SUFFIX"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:TIMEOUT:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "timeout"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "timeout"}], "ok": false}
+{"fn": "classify_error", "args": ["timed out"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["timed out"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:TIMED OUT:SUFFIX"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:TIMED OUT:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "timed out"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "timed out"}], "ok": false}
+{"fn": "classify_error", "args": ["proxy"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["proxy"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:PROXY:SUFFIX"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:PROXY:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "proxy"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "proxy"}], "ok": false}
+{"fn": "classify_error", "args": ["socks"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["socks"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:SOCKS:SUFFIX"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:SOCKS:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "socks"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "socks"}], "ok": false}
+{"fn": "classify_error", "args": ["dns"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["dns"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:DNS:SUFFIX"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:DNS:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "dns"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "dns"}], "ok": false}
+{"fn": "classify_error", "args": ["name resolution"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["name resolution"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:NAME RESOLUTION:SUFFIX"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:NAME RESOLUTION:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "name resolution"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "name resolution"}], "ok": false}
+{"fn": "classify_error", "args": ["winerror 10060"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["winerror 10060"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:WINERROR 10060:SUFFIX"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:WINERROR 10060:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "winerror 10060"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "winerror 10060"}], "ok": false}
+{"fn": "classify_error", "args": ["curl: (35)"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["curl: (35)"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:CURL: (35):SUFFIX"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:CURL: (35):SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "curl: (35)"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "curl: (35)"}], "ok": false}
+{"fn": "classify_error", "args": ["curl: (28)"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["curl: (28)"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:CURL: (28):SUFFIX"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:CURL: (28):SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "curl: (28)"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "curl: (28)"}], "ok": false}
+{"fn": "classify_error", "args": ["curl: (6)"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["curl: (6)"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:CURL: (6):SUFFIX"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:CURL: (6):SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "curl: (6)"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "curl: (6)"}], "ok": false}
+{"fn": "classify_error", "args": ["curl: (7)"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["curl: (7)"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:CURL: (7):SUFFIX"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:CURL: (7):SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "curl: (7)"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "curl: (7)"}], "ok": false}
+{"fn": "classify_error", "args": ["curl: (52)"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["curl: (52)"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:CURL: (52):SUFFIX"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:CURL: (52):SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "curl: (52)"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "curl: (52)"}], "ok": false}
+{"fn": "classify_error", "args": ["curl: (56)"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["curl: (56)"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:CURL: (56):SUFFIX"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:CURL: (56):SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "curl: (56)"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "curl: (56)"}], "ok": false}
+{"fn": "classify_error", "args": ["curl: (18)"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["curl: (18)"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:CURL: (18):SUFFIX"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:CURL: (18):SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "curl: (18)"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "curl: (18)"}], "ok": false}
+{"fn": "classify_error", "args": ["remote disconnected"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["remote disconnected"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:REMOTE DISCONNECTED:SUFFIX"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:REMOTE DISCONNECTED:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "remote disconnected"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "remote disconnected"}], "ok": false}
+{"fn": "classify_error", "args": ["connection reset"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["connection reset"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:CONNECTION RESET:SUFFIX"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:CONNECTION RESET:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "connection reset"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "connection reset"}], "ok": false}
+{"fn": "classify_error", "args": ["connection aborted"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["connection aborted"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:CONNECTION ABORTED:SUFFIX"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:CONNECTION ABORTED:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "connection aborted"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "connection aborted"}], "ok": false}
+{"fn": "classify_error", "args": ["session_circuit_open"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["session_circuit_open"], "ok": true}
+{"fn": "classify_error", "args": ["PREFIX:SESSION_CIRCUIT_OPEN:SUFFIX"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:SESSION_CIRCUIT_OPEN:SUFFIX"], "ok": true}
+{"fn": "classify_error", "args": [{"error_code": "session_circuit_open"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "session_circuit_open"}], "ok": true}
+{"fn": "classify_error", "args": ["max retries exceeded"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["max retries exceeded"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:MAX RETRIES EXCEEDED:SUFFIX"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:MAX RETRIES EXCEEDED:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "max retries exceeded"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "max retries exceeded"}], "ok": false}
+{"fn": "classify_error", "args": ["/sentinel/req"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["/sentinel/req"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:/SENTINEL/REQ:SUFFIX"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:/SENTINEL/REQ:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "/sentinel/req"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "/sentinel/req"}], "ok": false}
+{"fn": "classify_error", "args": ["sentinel quickjs"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["sentinel quickjs"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:SENTINEL QUICKJS:SUFFIX"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:SENTINEL QUICKJS:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "sentinel quickjs"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "sentinel quickjs"}], "ok": false}
+{"fn": "classify_error", "args": ["sentinel_extract_failed"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["sentinel_extract_failed"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:SENTINEL_EXTRACT_FAILED:SUFFIX"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:SENTINEL_EXTRACT_FAILED:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "sentinel_extract_failed"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "sentinel_extract_failed"}], "ok": false}
+{"fn": "classify_error", "args": ["sentinel_legacy_incomplete"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["sentinel_legacy_incomplete"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:SENTINEL_LEGACY_INCOMPLETE:SUFFIX"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:SENTINEL_LEGACY_INCOMPLETE:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "sentinel_legacy_incomplete"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "sentinel_legacy_incomplete"}], "ok": false}
+{"fn": "classify_error", "args": ["sentinel_issue_failed"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["sentinel_issue_failed"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:SENTINEL_ISSUE_FAILED:SUFFIX"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:SENTINEL_ISSUE_FAILED:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "sentinel_issue_failed"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "sentinel_issue_failed"}], "ok": false}
+{"fn": "classify_error", "args": ["sentinel_fallback_incomplete"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["sentinel_fallback_incomplete"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:SENTINEL_FALLBACK_INCOMPLETE:SUFFIX"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:SENTINEL_FALLBACK_INCOMPLETE:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "sentinel_fallback_incomplete"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "sentinel_fallback_incomplete"}], "ok": false}
+{"fn": "classify_error", "args": ["cloudflare"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["cloudflare"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:CLOUDFLARE:SUFFIX"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:CLOUDFLARE:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "cloudflare"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "cloudflare"}], "ok": false}
+{"fn": "classify_error", "args": ["just a moment"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["just a moment"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:JUST A MOMENT:SUFFIX"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:JUST A MOMENT:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "just a moment"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "just a moment"}], "ok": false}
+{"fn": "classify_error", "args": ["browser_email_field_not_editable"], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": ["browser_email_field_not_editable"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:BROWSER_EMAIL_FIELD_NOT_EDITABLE:SUFFIX"], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:BROWSER_EMAIL_FIELD_NOT_EDITABLE:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "browser_email_field_not_editable"}], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "browser_email_field_not_editable"}], "ok": false}
+{"fn": "classify_error", "args": ["invalid_auth_step"], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": ["invalid_auth_step"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:INVALID_AUTH_STEP:SUFFIX"], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:INVALID_AUTH_STEP:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "invalid_auth_step"}], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "invalid_auth_step"}], "ok": false}
+{"fn": "classify_error", "args": ["invalid_state"], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": ["invalid_state"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:INVALID_STATE:SUFFIX"], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:INVALID_STATE:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "invalid_state"}], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "invalid_state"}], "ok": false}
+{"fn": "classify_error", "args": ["sign-in session is no longer valid"], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": ["sign-in session is no longer valid"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:SIGN-IN SESSION IS NO LONGER VALID:SUFFIX"], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:SIGN-IN SESSION IS NO LONGER VALID:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "sign-in session is no longer valid"}], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "sign-in session is no longer valid"}], "ok": false}
+{"fn": "classify_error", "args": ["signup_auth_state"], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": ["signup_auth_state"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:SIGNUP_AUTH_STATE:SUFFIX"], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:SIGNUP_AUTH_STATE:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "signup_auth_state"}], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "signup_auth_state"}], "ok": false}
+{"fn": "classify_error", "args": ["browser_registration_state_unknown"], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": ["browser_registration_state_unknown"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:BROWSER_REGISTRATION_STATE_UNKNOWN:SUFFIX"], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:BROWSER_REGISTRATION_STATE_UNKNOWN:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "browser_registration_state_unknown"}], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "browser_registration_state_unknown"}], "ok": false}
+{"fn": "classify_error", "args": ["browser_email_verification_stuck"], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": ["browser_email_verification_stuck"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:BROWSER_EMAIL_VERIFICATION_STUCK:SUFFIX"], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:BROWSER_EMAIL_VERIFICATION_STUCK:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "browser_email_verification_stuck"}], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "browser_email_verification_stuck"}], "ok": false}
+{"fn": "classify_error", "args": ["browser_auth_state"], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": ["browser_auth_state"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:BROWSER_AUTH_STATE:SUFFIX"], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:BROWSER_AUTH_STATE:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "browser_auth_state"}], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "browser_auth_state"}], "ok": false}
+{"fn": "classify_error", "args": ["missing_auth_session_access_token"], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": ["missing_auth_session_access_token"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:MISSING_AUTH_SESSION_ACCESS_TOKEN:SUFFIX"], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:MISSING_AUTH_SESSION_ACCESS_TOKEN:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "missing_auth_session_access_token"}], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "missing_auth_session_access_token"}], "ok": false}
+{"fn": "classify_error", "args": ["auth_session_recovery_"], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": ["auth_session_recovery_"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:AUTH_SESSION_RECOVERY_:SUFFIX"], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:AUTH_SESSION_RECOVERY_:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "auth_session_recovery_"}], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "auth_session_recovery_"}], "ok": false}
+{"fn": "classify_error", "args": ["browser_passwordless_otp_state_unknown"], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": ["browser_passwordless_otp_state_unknown"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:BROWSER_PASSWORDLESS_OTP_STATE_UNKNOWN:SUFFIX"], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:BROWSER_PASSWORDLESS_OTP_STATE_UNKNOWN:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "browser_passwordless_otp_state_unknown"}], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "browser_passwordless_otp_state_unknown"}], "ok": false}
+{"fn": "classify_error", "args": ["browser_email_value_mismatch"], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": ["browser_email_value_mismatch"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:BROWSER_EMAIL_VALUE_MISMATCH:SUFFIX"], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:BROWSER_EMAIL_VALUE_MISMATCH:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "browser_email_value_mismatch"}], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "browser_email_value_mismatch"}], "ok": false}
+{"fn": "classify_error", "args": ["browser_profile_submit_timeout"], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": ["browser_profile_submit_timeout"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:BROWSER_PROFILE_SUBMIT_TIMEOUT:SUFFIX"], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:BROWSER_PROFILE_SUBMIT_TIMEOUT:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "browser_profile_submit_timeout"}], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "browser_profile_submit_timeout"}], "ok": false}
+{"fn": "classify_error", "args": ["password_step_unconfirmed"], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": ["password_step_unconfirmed"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:PASSWORD_STEP_UNCONFIRMED:SUFFIX"], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:PASSWORD_STEP_UNCONFIRMED:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "password_step_unconfirmed"}], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "password_step_unconfirmed"}], "ok": false}
+{"fn": "classify_error", "args": ["generic_decline"], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": ["generic_decline"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:GENERIC_DECLINE:SUFFIX"], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:GENERIC_DECLINE:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "generic_decline"}], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "generic_decline"}], "ok": false}
+{"fn": "classify_error", "args": ["approve blocked"], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": ["approve blocked"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:APPROVE BLOCKED:SUFFIX"], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:APPROVE BLOCKED:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "approve blocked"}], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "approve blocked"}], "ok": false}
+{"fn": "classify_error", "args": ["attempts blocked"], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": ["attempts blocked"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:ATTEMPTS BLOCKED:SUFFIX"], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:ATTEMPTS BLOCKED:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "attempts blocked"}], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "attempts blocked"}], "ok": false}
+{"fn": "classify_error", "args": ["upi_provider_declined"], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": ["upi_provider_declined"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:UPI_PROVIDER_DECLINED:SUFFIX"], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:UPI_PROVIDER_DECLINED:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "upi_provider_declined"}], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "upi_provider_declined"}], "ok": false}
+{"fn": "classify_error", "args": ["checkout_not_active_session"], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": ["checkout_not_active_session"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:CHECKOUT_NOT_ACTIVE_SESSION:SUFFIX"], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:CHECKOUT_NOT_ACTIVE_SESSION:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "checkout_not_active_session"}], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "checkout_not_active_session"}], "ok": false}
+{"fn": "classify_error", "args": ["upi_checkout_not_active"], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": ["upi_checkout_not_active"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:UPI_CHECKOUT_NOT_ACTIVE:SUFFIX"], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:UPI_CHECKOUT_NOT_ACTIVE:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "upi_checkout_not_active"}], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "upi_checkout_not_active"}], "ok": false}
+{"fn": "classify_error", "args": ["submission_attempt_failed"], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": ["submission_attempt_failed"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:SUBMISSION_ATTEMPT_FAILED:SUFFIX"], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:SUBMISSION_ATTEMPT_FAILED:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "submission_attempt_failed"}], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "submission_attempt_failed"}], "ok": false}
+{"fn": "classify_error", "args": ["stripe submission failed"], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": ["stripe submission failed"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:STRIPE SUBMISSION FAILED:SUFFIX"], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:STRIPE SUBMISSION FAILED:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "stripe submission failed"}], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "stripe submission failed"}], "ok": false}
+{"fn": "classify_error", "args": ["checkout_approval_payment_failure"], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": ["checkout_approval_payment_failure"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:CHECKOUT_APPROVAL_PAYMENT_FAILURE:SUFFIX"], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:CHECKOUT_APPROVAL_PAYMENT_FAILURE:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "checkout_approval_payment_failure"}], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "checkout_approval_payment_failure"}], "ok": false}
+{"fn": "classify_error", "args": ["stripe 风控拒绝"], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": ["stripe 风控拒绝"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:STRIPE 风控拒绝:SUFFIX"], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:STRIPE 风控拒绝:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "stripe 风控拒绝"}], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "stripe 风控拒绝"}], "ok": false}
+{"fn": "classify_error", "args": ["upi_redirect_timeout"], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": ["upi_redirect_timeout"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:UPI_REDIRECT_TIMEOUT:SUFFIX"], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:UPI_REDIRECT_TIMEOUT:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "upi_redirect_timeout"}], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "upi_redirect_timeout"}], "ok": false}
+{"fn": "classify_error", "args": ["upi_qr_failed"], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": ["upi_qr_failed"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:UPI_QR_FAILED:SUFFIX"], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:UPI_QR_FAILED:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "upi_qr_failed"}], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "upi_qr_failed"}], "ok": false}
+{"fn": "classify_error", "args": ["upi_checkout_unauthorized"], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": ["upi_checkout_unauthorized"], "ok": false}
+{"fn": "classify_error", "args": ["PREFIX:UPI_CHECKOUT_UNAUTHORIZED:SUFFIX"], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": ["PREFIX:UPI_CHECKOUT_UNAUTHORIZED:SUFFIX"], "ok": false}
+{"fn": "classify_error", "args": [{"error_code": "upi_checkout_unauthorized"}], "ok": "upi_payment"}
+{"fn": "is_terminal_registration_error", "args": [{"error_code": "upi_checkout_unauthorized"}], "ok": false}
+{"fn": "classify_error", "args": ["manual_challenge_required"], "ok": "unknown"}
+{"fn": "is_terminal_registration_error", "args": ["manual_challenge_required"], "ok": true}
+{"fn": "classify_error", "args": [{"error": "fatal:MANUAL_CHALLENGE_REQUIRED"}], "ok": "unknown"}
+{"fn": "is_terminal_registration_error", "args": [{"error": "fatal:MANUAL_CHALLENGE_REQUIRED"}], "ok": true}
+{"fn": "classify_error", "args": ["browser_proxy_blocked"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["browser_proxy_blocked"], "ok": true}
+{"fn": "classify_error", "args": [{"error": "fatal:BROWSER_PROXY_BLOCKED"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error": "fatal:BROWSER_PROXY_BLOCKED"}], "ok": true}
+{"fn": "classify_error", "args": ["mailbox_auth_invalid"], "ok": "mailbox"}
+{"fn": "is_terminal_registration_error", "args": ["mailbox_auth_invalid"], "ok": true}
+{"fn": "classify_error", "args": [{"error": "fatal:MAILBOX_AUTH_INVALID"}], "ok": "mailbox"}
+{"fn": "is_terminal_registration_error", "args": [{"error": "fatal:MAILBOX_AUTH_INVALID"}], "ok": true}
+{"fn": "classify_error", "args": ["mailbox_endpoint_unavailable"], "ok": "mailbox"}
+{"fn": "is_terminal_registration_error", "args": ["mailbox_endpoint_unavailable"], "ok": true}
+{"fn": "classify_error", "args": [{"error": "fatal:MAILBOX_ENDPOINT_UNAVAILABLE"}], "ok": "mailbox"}
+{"fn": "is_terminal_registration_error", "args": [{"error": "fatal:MAILBOX_ENDPOINT_UNAVAILABLE"}], "ok": true}
+{"fn": "classify_error", "args": ["remail_api_auth_invalid"], "ok": "mailbox"}
+{"fn": "is_terminal_registration_error", "args": ["remail_api_auth_invalid"], "ok": true}
+{"fn": "classify_error", "args": [{"error": "fatal:REMAIL_API_AUTH_INVALID"}], "ok": "mailbox"}
+{"fn": "is_terminal_registration_error", "args": [{"error": "fatal:REMAIL_API_AUTH_INVALID"}], "ok": true}
+{"fn": "classify_error", "args": ["invalid_grant"], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": ["invalid_grant"], "ok": true}
+{"fn": "classify_error", "args": [{"error": "fatal:INVALID_GRANT"}], "ok": "account"}
+{"fn": "is_terminal_registration_error", "args": [{"error": "fatal:INVALID_GRANT"}], "ok": true}
+{"fn": "classify_error", "args": ["registration_cancelled"], "ok": "cancelled"}
+{"fn": "is_terminal_registration_error", "args": ["registration_cancelled"], "ok": true}
+{"fn": "classify_error", "args": [{"error": "fatal:REGISTRATION_CANCELLED"}], "ok": "cancelled"}
+{"fn": "is_terminal_registration_error", "args": [{"error": "fatal:REGISTRATION_CANCELLED"}], "ok": true}
+{"fn": "classify_error", "args": ["session_circuit_open"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["session_circuit_open"], "ok": true}
+{"fn": "classify_error", "args": [{"error": "fatal:SESSION_CIRCUIT_OPEN"}], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": [{"error": "fatal:SESSION_CIRCUIT_OPEN"}], "ok": true}
+{"fn": "classify_error", "args": ["registration_rate_limit"], "ok": "unknown"}
+{"fn": "is_terminal_registration_error", "args": ["registration_rate_limit"], "ok": true}
+{"fn": "classify_error", "args": [{"error": "fatal:REGISTRATION_RATE_LIMIT"}], "ok": "unknown"}
+{"fn": "is_terminal_registration_error", "args": [{"error": "fatal:REGISTRATION_RATE_LIMIT"}], "ok": true}
+{"fn": "classify_error", "args": ["http_429"], "ok": "rate_limit"}
+{"fn": "is_terminal_registration_error", "args": ["http_429"], "ok": true}
+{"fn": "classify_error", "args": [{"error": "fatal:HTTP_429"}], "ok": "rate_limit"}
+{"fn": "is_terminal_registration_error", "args": [{"error": "fatal:HTTP_429"}], "ok": true}
+{"fn": "classify_error", "args": ["stage_budget_exceeded"], "ok": "unknown"}
+{"fn": "is_terminal_registration_error", "args": ["stage_budget_exceeded"], "ok": true}
+{"fn": "classify_error", "args": [{"error": "fatal:STAGE_BUDGET_EXCEEDED"}], "ok": "unknown"}
+{"fn": "is_terminal_registration_error", "args": [{"error": "fatal:STAGE_BUDGET_EXCEEDED"}], "ok": true}
+{"fn": "classify_error", "args": ["auth_session_recovery_exhausted"], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": ["auth_session_recovery_exhausted"], "ok": true}
+{"fn": "classify_error", "args": [{"error": "fatal:AUTH_SESSION_RECOVERY_EXHAUSTED"}], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": [{"error": "fatal:AUTH_SESSION_RECOVERY_EXHAUSTED"}], "ok": true}
+{"fn": "classify_error", "args": ["auth_session_recovery_expired"], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": ["auth_session_recovery_expired"], "ok": true}
+{"fn": "classify_error", "args": [{"error": "fatal:AUTH_SESSION_RECOVERY_EXPIRED"}], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": [{"error": "fatal:AUTH_SESSION_RECOVERY_EXPIRED"}], "ok": true}
+{"fn": "classify_error", "args": ["auth_session_recovery_context_missing"], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": ["auth_session_recovery_context_missing"], "ok": true}
+{"fn": "classify_error", "args": [{"error": "fatal:AUTH_SESSION_RECOVERY_CONTEXT_MISSING"}], "ok": "auth_state"}
+{"fn": "is_terminal_registration_error", "args": [{"error": "fatal:AUTH_SESSION_RECOVERY_CONTEXT_MISSING"}], "ok": true}
+{"fn": "classify_error", "args": ["registration_cancelled by NameError: x"], "ok": "cancelled"}
+{"fn": "classify_error", "args": ["registration_internal_error:KeyError: 'x'"], "ok": "internal"}
+{"fn": "classify_error", "args": ["invalid_configuration"], "ok": "configuration"}
+{"fn": "classify_error", "args": ["account has been deactivated"], "ok": "account"}
+{"fn": "classify_error", "args": ["mailbox_auth_invalid"], "ok": "mailbox"}
+{"fn": "classify_error", "args": ["HTTP 429 too many requests"], "ok": "rate_limit"}
+{"fn": "classify_error", "args": ["connection reset by peer"], "ok": "network"}
+{"fn": "classify_error", "args": ["browser_email_verification_stuck"], "ok": "auth_state"}
+{"fn": "classify_error", "args": ["nothing recognizable here"], "ok": "unknown"}
+{"fn": "classify_error", "args": ["generic_decline"], "ok": "upi_payment"}
+{"fn": "classify_error", "args": ["all 5 attempts blocked (provider risk control)"], "ok": "upi_payment"}
+{"fn": "classify_error", "args": ["submission_attempt_failed"], "ok": "upi_payment"}
+{"fn": "classify_error", "args": ["checkout_not_active_session"], "ok": "upi_payment"}
+{"fn": "classify_error", "args": ["upi_redirect_timeout"], "ok": "upi_payment"}
+{"fn": "classify_error", "args": ["curl: (35) ssl connect error"], "ok": "network"}
+{"fn": "classify_error", "args": ["registration_internal_error:RuntimeError:Failed to perform, curl: (35) ..."], "ok": "network"}
+{"fn": "classify_error", "args": ["registration_internal_error:NameError: name 'connection_pool' is not defined"], "ok": "internal"}
+{"fn": "classify_error", "args": ["registration_internal_error:RuntimeError:Failed to perform, curl: (35) See https://curl.se/libcurl/c/libcurl-errors.html"], "ok": "network"}
+{"fn": "classify_error", "args": ["registration_internal_error:RuntimeError:Failed to perform, curl: (28) See https://curl.se/libcurl/c/libcurl-errors.html"], "ok": "network"}
+{"fn": "classify_error", "args": ["registration_internal_error:RuntimeError:Failed to perform, curl: (6) See https://curl.se/libcurl/c/libcurl-errors.html"], "ok": "network"}
+{"fn": "classify_error", "args": ["registration_internal_error:RuntimeError:Failed to perform, curl: (7) See https://curl.se/libcurl/c/libcurl-errors.html"], "ok": "network"}
+{"fn": "classify_error", "args": ["registration_internal_error:RuntimeError:Failed to perform, curl: (52) See https://curl.se/libcurl/c/libcurl-errors.html"], "ok": "network"}
+{"fn": "classify_error", "args": ["registration_internal_error:RuntimeError:Failed to perform, curl: (56) See https://curl.se/libcurl/c/libcurl-errors.html"], "ok": "network"}
+{"fn": "classify_error", "args": ["registration_internal_error:RuntimeError:Failed to perform, curl: (18) See https://curl.se/libcurl/c/libcurl-errors.html"], "ok": "network"}
+{"fn": "classify_error", "args": ["proxy"], "ok": "network"}
+{"fn": "classify_error", "args": ["missing_auth_session_access_token"], "ok": "auth_state"}
+{"fn": "classify_error", "args": ["browser_passwordless_otp_state_unknown"], "ok": "auth_state"}
+{"fn": "classify_error", "args": ["browser_email_value_mismatch"], "ok": "auth_state"}
+{"fn": "classify_error", "args": ["browser_profile_submit_timeout"], "ok": "auth_state"}
+{"fn": "classify_error", "args": ["sentinel_legacy_incomplete:oauth_create_account"], "ok": "network"}
+{"fn": "classify_error", "args": ["sentinel_legacy_incomplete:username_password_create"], "ok": "network"}
+{"fn": "classify_error", "args": ["sentinel_issue_failed:SentinelBundleError"], "ok": "network"}
+{"fn": "classify_error", "args": ["sentinel_fallback_incomplete:oauth_create_account:RuntimeError"], "ok": "network"}
+{"fn": "classify_error", "args": ["create_account_transport:sentinel_fallback_incomplete:oauth_create_account:SentinelBundleError(sentinel_runtime_hash_mismatch:sentinel-runner.js)"], "ok": "network"}
+{"fn": "classify_error", "args": ["timeout"], "ok": "network"}
+{"fn": "classify_error", "args": ["connection"], "ok": "network"}
+{"fn": "classify_error", "args": ["ReadTimeout: HTTPSConnectionPool(host='auth.openai.com', port=443): Read timed out. (read timeout=10)"], "ok": "network"}
+{"fn": "classify_error", "args": ["signup_auth_state: 403 Just a moment..."], "ok": "network"}
+{"fn": "classify_error", "args": ["outlook otp timeout"], "ok": "mailbox"}
+{"fn": "classify_error", "args": ["[WinError 10060] connection timeout via proxy"], "ok": "network"}
+{"fn": "classify_error", "args": [{"error": "account_deactivated", "body": "timeout"}], "ok": "account"}
+{"fn": "classify_error", "args": ["registration_internal_error:NameError: missing dependency"], "ok": "internal"}
+{"fn": "classify_error", "args": ["identity_ready_transport:name 'get_device_context' is not defined"], "ok": "internal"}
+{"fn": "classify_error", "args": ["unsupported_registration_driver:protocol"], "ok": "configuration"}
+{"fn": "classify_error", "args": ["create_account_failed:invalid_auth_step"], "ok": "auth_state"}
+{"fn": "classify_error", "args": ["email_otp_poll_timeout"], "ok": "mailbox"}
+{"fn": "classify_error", "args": ["signup_auth_state: status 429 rate_limit_exceeded Too many requests"], "ok": "rate_limit"}
+{"fn": "classify_error", "args": ["sentinel_extract_failed"], "ok": "network"}
+{"fn": "classify_error", "args": ["Failed to perform, curl: (35) broken"], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["registration_internal_error:NameError: name 'connection_pool' is not defined"], "ok": false}
+{"fn": "classify_error", "args": ["registration_internal_error:TypeError: proxy() got an unexpected keyword argument"], "ok": "internal"}
+{"fn": "classify_error", "args": ["registration_internal_error:AttributeError: 'X' object has no attribute 'timeout'"], "ok": "internal"}
+{"fn": "classify_error", "args": ["registration_internal_error:TypeError: boom"], "ok": "internal"}
+{"fn": "classify_error", "args": ["registration_internal_error:RuntimeError:Failed to perform, curl: (35) BoringSSL SSL_connect: Connection closed abruptly (SSL_ERROR_SYSCALL; error queue empty) in connection to chatgpt.com:443."], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["registration_internal_error:RuntimeError:Failed to perform, curl: (35) BoringSSL SSL_connect: Connection closed abruptly (SSL_ERROR_SYSCALL; error queue empty) in connection to chatgpt.com:443."], "ok": false}
+{"fn": "classify_error", "args": ["registration_internal_error:RuntimeError:Failed to perform, curl: (28) Operation timed out after 20003 milliseconds with 58036 bytes received."], "ok": "network"}
+{"fn": "is_terminal_registration_error", "args": ["registration_internal_error:RuntimeError:Failed to perform, curl: (28) Operation timed out after 20003 milliseconds with 58036 bytes received."], "ok": false}

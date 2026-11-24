@@ -1,0 +1,173 @@
+{
+  "classes": [
+    {
+      "code": "cancelled",
+      "markers": [
+        "registration_cancelled",
+        "cancelled_by_user"
+      ]
+    },
+    {
+      "code": "internal",
+      "markers": [
+        "registration_internal_error",
+        "nameerror",
+        "attributeerror",
+        "typeerror",
+        "keyerror",
+        "importerror",
+        "indexerror",
+        "unboundlocalerror",
+        "notimplementederror",
+        "recursionerror",
+        " is not defined"
+      ]
+    },
+    {
+      "code": "configuration",
+      "markers": [
+        "unsupported_registration_driver",
+        "missing_dependency",
+        "invalid_configuration",
+        "configuration_error"
+      ]
+    },
+    {
+      "code": "account",
+      "markers": [
+        "account_deactivated",
+        "account deactivated",
+        "account has been deactivated",
+        "deleted or deactivated",
+        "registration_disallowed",
+        "invalid_grant",
+        "authenticationfailed",
+        "invalid credentials",
+        "wrong_email_otp_code",
+        "password_verify_failed",
+        "phone_recently_used",
+        "unsupported_phone_number",
+        "fraud_guard",
+        "token_invalidated",
+        "user_already_exists",
+        "signup_routed_to_login"
+      ]
+    },
+    {
+      "code": "mailbox",
+      "markers": [
+        "mailbox_auth_invalid",
+        "mailbox_endpoint_unavailable",
+        "remail_api_auth_invalid",
+        "outlook otp timeout",
+        "email_otp_poll_timeout",
+        "email_otp_send_stuck",
+        "mailbox otp timeout",
+        "mailbox_transport_unavailable",
+        "relogin_mailbox_transport_failed",
+        "remail poll transport"
+      ]
+    },
+    {
+      "code": "rate_limit",
+      "markers": [
+        "rate_limit_exceeded",
+        "registration_rate_limited",
+        "registration_rate_limit_circuit_open",
+        "too many requests",
+        "http_429"
+      ]
+    },
+    {
+      "code": "network",
+      "markers": [
+        "tls",
+        "ssl",
+        "sslerror",
+        "eof occurred",
+        "connection",
+        "connect error",
+        "timeout",
+        "timed out",
+        "proxy",
+        "socks",
+        "dns",
+        "name resolution",
+        "winerror 10060",
+        "curl: (35)",
+        "curl: (28)",
+        "curl: (6)",
+        "curl: (7)",
+        "curl: (52)",
+        "curl: (56)",
+        "curl: (18)",
+        "remote disconnected",
+        "connection reset",
+        "connection aborted",
+        "session_circuit_open",
+        "max retries exceeded",
+        "/sentinel/req",
+        "sentinel quickjs",
+        "sentinel_extract_failed",
+        "sentinel_legacy_incomplete",
+        "sentinel_issue_failed",
+        "sentinel_fallback_incomplete",
+        "cloudflare",
+        "just a moment"
+      ]
+    },
+    {
+      "code": "auth_state",
+      "markers": [
+        "browser_email_field_not_editable",
+        "invalid_auth_step",
+        "invalid_state",
+        "sign-in session is no longer valid",
+        "signup_auth_state",
+        "browser_registration_state_unknown",
+        "browser_email_verification_stuck",
+        "browser_auth_state",
+        "missing_auth_session_access_token",
+        "auth_session_recovery_",
+        "browser_passwordless_otp_state_unknown",
+        "browser_email_value_mismatch",
+        "browser_profile_submit_timeout",
+        "password_step_unconfirmed"
+      ]
+    },
+    {
+      "code": "upi_payment",
+      "markers": [
+        "generic_decline",
+        "approve blocked",
+        "attempts blocked",
+        "upi_provider_declined",
+        "checkout_not_active_session",
+        "upi_checkout_not_active",
+        "submission_attempt_failed",
+        "stripe submission failed",
+        "checkout_approval_payment_failure",
+        "stripe 风控拒绝",
+        "upi_redirect_timeout",
+        "upi_qr_failed",
+        "upi_checkout_unauthorized"
+      ]
+    }
+  ],
+  "terminal_markers": [
+    "manual_challenge_required",
+    "browser_proxy_blocked",
+    "mailbox_auth_invalid",
+    "mailbox_endpoint_unavailable",
+    "remail_api_auth_invalid",
+    "invalid_grant",
+    "registration_cancelled",
+    "session_circuit_open",
+    "registration_rate_limit",
+    "http_429",
+    "stage_budget_exceeded",
+    "auth_session_recovery_exhausted",
+    "auth_session_recovery_expired",
+    "auth_session_recovery_context_missing"
+  ]
+}

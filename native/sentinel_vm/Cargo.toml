@@ -1,0 +1,23 @@
+[package]
+name = "sentinel-vm"
+version = "0.2.0"
+edition = "2021"
+description = "Pure-Rust OpenAI Sentinel VM & PoW/Turnstile/SO FFI cdylib (derived from sentinel-rs)"
+
+[lib]
+name = "sentinel_vm"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+base64 = "0.22"
+rand = "0.8"
+serde_json = "1"
+uuid = { version = "1", features = ["v4"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+# Keep unwind so FFI catch_unwind prevents panics from aborting the host Python process.
+panic = "unwind"

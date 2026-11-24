@@ -110,13 +110,28 @@ def summarize(verdicts: list[EdgeVerdict]) -> dict[str, int]:
 
 
 def clean_proxies(verdicts: list[EdgeVerdict], pool: list[str]) -> list[str]:
-    """Raw (credential-bearing) URLs whose verdict is ``clean``, in input order."""
-    by_redacted = {v.proxy: v.status for v in verdicts}
-    out: list[str] = []
-    from sms_tool.phone.phone_proxy import redact_proxy_url
+    """Raw (credential-bearing) URLs whose verdict is ``clean``, in input order.
 
+    ``probe_pool`` returns verdicts in 1-to-1 positional order with ``pool``, so
+    matching positionally avoids collapsing distinct sticky sessions that share
+    the same redacted ``host:port``. When lengths differ (partial slices),
+    fall back to FIFO queues keyed by redacted URL instead of overwriting.
+    """
+    from collections import deque
+
+    from sms_tool.proxy.screening import mask_proxy
+
+    if len(verdicts) == len(pool):
+        return [proxy for proxy, verdict in zip(pool, verdicts) if verdict.status == CLEAN]
+
+    queues: dict[str, deque[str]] = {}
+    for verdict in verdicts:
+        queues.setdefault(verdict.proxy, deque()).append(verdict.status)
+    out: list[str] = []
     for proxy in pool:
-        if by_redacted.get(redact_proxy_url(proxy)) == CLEAN:
+        key = mask_proxy(proxy)
+        bucket = queues.get(key)
+        if bucket and bucket.popleft() == CLEAN:
             out.append(proxy)
     return out
 

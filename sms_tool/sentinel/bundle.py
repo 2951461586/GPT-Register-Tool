@@ -1,4 +1,4 @@
-"""Paths and integrity checks for the vendored Sentinel runtime."""
+"""Paths and integrity checks for the compiled Rust Sentinel VM runtime."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import hashlib
 import json
 import logging
 import os
+import sys
 import tempfile
 import time
 from collections.abc import Mapping
@@ -16,44 +17,25 @@ _LOGGER = logging.getLogger(__name__)
 
 
 RUNTIME_DIR = Path(__file__).resolve().parent / "runtime"
-SDK_PATH = RUNTIME_DIR / "sdk.js"
-RUNNER_PATH = RUNTIME_DIR / "sentinel-runner.js"
-# Digests are computed over newline-normalised bytes (see ``_digest``), so the
-# pinned values below are stable regardless of the working tree's line endings.
-SDK_SHA256 = "49d0284bf3eea8a59ebcad0e6b5dd8a53edd4c72606f15bbf51ebe5610a88efd"
-RUNNER_SHA256 = "37c674e72e15de02c13fb55b709996de8fc684f633400978f487e4442e64af49"
-# ``sentinel-runner.js`` carries four local patches (2026-11-11
-# ``performance.memory`` gating; 2026-11-12 the missing navigator identity
-# properties + Gecko ``window.InstallTrigger``, and the page clock behind
-# ``performance.timeOrigin``; 2026-11-21 ICU timezone canonicalization and
-# VM-realm default locale isolation for Date/Intl/Number toLocale*).  See
-# THIRD_PARTY_NOTICES.md.  The digest below is the patched file, so an upstream
-# re-vendor must re-apply the patches *and* update this constant; the
-# ``sentinel_runtime_hash_mismatch`` guard is what turns a silent drift into a
-# loud failure.
-#
-# Must name the build ``runtime/sdk.js`` was copied from: the version feeds the
-# frame URL, the ``Referer`` and ``p[5]``, and the browser derives all three from
-# the same script.  2026-10-12: bumped from 20260219f9f6 to the build the user's
-# HAR and the reference project both show (20260810913b); both are still served.
+NATIVE_LIB_ENV = "OPENAI_SENTINEL_NATIVE_LIB"
+NATIVE_LIB_NAME = (
+    "sentinel_vm.dll"
+    if os.name == "nt"
+    else ("libsentinel_vm.dylib" if sys.platform == "darwin" else "libsentinel_vm.so")
+)
+NATIVE_LIB_PATH = RUNTIME_DIR / NATIVE_LIB_NAME
+# Raw binary SHA256 of the shipped Windows x64 cdylib built from `native/sentinel_vm/`
+# via `scripts/build_sentinel_vm.ps1`. Rebuilding the crate must update this pin so
+# `sentinel_asset_guard.py` and `validate_runtime_bundle()` stay in lockstep.
+NATIVE_LIB_SHA256 = "ab970d5fdba670b1e24098fb34ddcda059fb55e2f165692f177721de516c592a"
+
+# Must name the Sentinel web SDK version the protocol claims in `frame.html?sv=`,
+# `Referer`, and `p[5]`. Pinned by `tests/governance/test_sentinel_version_pin.py`
+# against `config.example.json`.
 DEFAULT_SENTINEL_VERSION = "20260810913b"
 
-# ───────────── optional live refresh of the SDK ─────────────
-#
-# The vendored ``runtime/sdk.js`` is the *authority*: it is hash-pinned and the
-# only build whose behaviour this repository has measured.  OpenAI rotates the
-# file under a new version path, and the version string it names is not
-# cosmetic -- it feeds the ``frame.html?sv=`` URL, the ``Referer`` and ``p[5]``,
-# so claiming a version whose bytes we are not running is a self-contradicting
-# proof.  The reference project simply re-downloads the configured version every
-# day (``SENTINEL_SDK_AUTO_UPDATE``); this module keeps the pin as the default
-# and makes the download an explicit, cached, verified opt-in:
-#
-#   email_registration.sentinel_sdk_auto_update = true   (or env below)
-#
-# Downloading is never silently load-bearing: a failed refresh falls back to the
-# last verified cache entry, then to the vendored file (when the configured
-# version *is* the vendored version) and otherwise fails with a stable token.
+# Optional remote SDK download helpers (retained for config-schema compatibility
+# and explicit operator probes; default off).
 SDK_URL_TEMPLATE = "https://sentinel.openai.com/sentinel/{version}/sdk.js"
 CACHE_ENV = "SENTINEL_SDK_CACHE_DIR"
 AUTO_UPDATE_ENV = "OPENAI_SENTINEL_SDK_AUTO_UPDATE"
@@ -61,61 +43,42 @@ REFRESH_ENV = "OPENAI_SENTINEL_SDK_REFRESH_SECONDS"
 AUTO_UPDATE_KEY = "sentinel_sdk_auto_update"
 REFRESH_KEY = "sentinel_sdk_refresh_seconds"
 DEFAULT_REFRESH_SECONDS = 86400
-#: A Sentinel SDK build is ~33 KiB; 5 MiB is the reference project's ceiling and
-#: exists to stop a captive-portal or error page from being cached as a script.
 MAX_SDK_BYTES = 5 * 1024 * 1024
-#: Every real build embeds this token; an HTML error page does not.
 SDK_MARKER = b"SentinelSDK"
 
 
 class SentinelBundleError(RuntimeError):
-    """Raised when a required runtime asset is missing or changed unexpectedly."""
+    """Raised when a required Sentinel runtime asset is missing or changed unexpectedly."""
+
+
+def _binary_digest(path: Path) -> str:
+    """Raw SHA256 over binary bytes (used for compiled native libraries)."""
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def _digest(path: Path) -> str:
-    """Hash the asset's content with line endings normalised to LF.
-
-    Pinning a raw byte digest here is a trap: ``core.autocrlf`` and
-    ``.gitattributes`` (``*.js text eol=lf``) rewrite the working tree's line
-    endings at checkout while leaving the index -- and therefore ``git status``
-    -- unchanged.  On 2026-09-17 that turned ``sentinel-runner.js`` from CRLF
-    into LF (57592 -> 56154 bytes; byte-identical once normalised), which
-    silently broke this check, fell back to the legacy issuer, and killed every
-    account that reached ``create_account``.  Normalising here makes the digest
-    describe the *content*, not the checkout's line-ending flavour.
-    """
+    """SHA256 over text content with line endings normalised to LF."""
     data = path.read_bytes().replace(b"\r\n", b"\n")
     return hashlib.sha256(data).hexdigest()
 
 
-def validate_runtime_bundle(*, verify_hash: bool = True) -> tuple[Path, Path]:
-    for path in (SDK_PATH, RUNNER_PATH):
-        if not path.is_file() or path.stat().st_size <= 0:
-            raise SentinelBundleError(f"sentinel_runtime_missing:{path.name}")
-    if verify_hash:
-        expected = {SDK_PATH: SDK_SHA256, RUNNER_PATH: RUNNER_SHA256}
-        for path, digest in expected.items():
-            if _digest(path) != digest:
-                raise SentinelBundleError(f"sentinel_runtime_hash_mismatch:{path.name}")
-    return SDK_PATH, RUNNER_PATH
+def validate_runtime_bundle(*, verify_hash: bool = True) -> Path:
+    """Verify the compiled Rust Sentinel VM library exists and matches its SHA256 pin."""
+    if not NATIVE_LIB_PATH.is_file() or NATIVE_LIB_PATH.stat().st_size <= 0:
+        raise SentinelBundleError(f"sentinel_runtime_missing:{NATIVE_LIB_PATH.name}")
+    if verify_hash and NATIVE_LIB_NAME == "sentinel_vm.dll":
+        if _binary_digest(NATIVE_LIB_PATH) != NATIVE_LIB_SHA256:
+            raise SentinelBundleError(f"sentinel_runtime_hash_mismatch:{NATIVE_LIB_PATH.name}")
+    return NATIVE_LIB_PATH
 
 
 def email_registration_section() -> Mapping:
-    """The frozen ``email_registration`` config section, or an empty mapping.
-
-    ``Mapping``, not ``dict``: ``current_config_data()`` freezes every section
-    into a ``mappingproxy`` (``config._freeze``), so a ``dict`` check discarded
-    ``email_registration.sentinel_version`` in production while plain-dict tests
-    kept it green (2026-10-07 P1-D class).
-    """
+    """The frozen ``email_registration`` config section, or an empty mapping."""
     try:
         from ..config import current_config_data
 
         config = current_config_data()
     except (ImportError, OSError, KeyError, TypeError, ValueError):
-        # Not configured (or a shard is unreadable): the built-in defaults are
-        # the correct answer, and a caller of ``sentinel_version()`` has no way
-        # to act on a config error.  ``ConfigError`` subclasses ``ValueError``.
         return {}
     _raw_email: object = config.get("email_registration")
     email = _raw_email if isinstance(_raw_email, Mapping) else {}
@@ -123,12 +86,6 @@ def email_registration_section() -> Mapping:
 
 
 def _fallback_top_level(config: Mapping) -> Mapping:
-    """Keep the legacy top-level ``sentinel_version`` readable.
-
-    Older configs carried the version at the root; the section read above wiped
-    it out. Returning a one-key mapping preserves that path without teaching
-    every caller two shapes.
-    """
     top_level = str(config.get("sentinel_version") or "").strip()
     return {"sentinel_version": top_level} if top_level else {}
 
@@ -150,13 +107,7 @@ def _env_flag(name: str) -> bool | None:
 
 
 def sdk_auto_update() -> bool:
-    """Whether to fetch the configured SDK version from sentinel.openai.com.
-
-    Default **off**: the vendored build is the only one this repo measured, and
-    a registration that silently swaps its own SDK is not a change that should
-    arrive through a config default.  Env wins over config so an operator can
-    turn it on for one batch without editing a shard.
-    """
+    """Whether to fetch the configured SDK version from sentinel.openai.com (default off)."""
     env = _env_flag(AUTO_UPDATE_ENV)
     if env is not None:
         return env
@@ -178,12 +129,7 @@ def sdk_refresh_seconds() -> int:
 
 
 def cache_root() -> Path:
-    """Where downloaded SDK builds live (``SENTINEL_SDK_CACHE_DIR`` overrides).
-
-    Under the resolved runtime directory rather than the package tree: the
-    package is replaced on upgrade, and a downloaded build must not look like a
-    vendored one.
-    """
+    """Where downloaded SDK builds live (``SENTINEL_SDK_CACHE_DIR`` overrides)."""
     override = str(os.environ.get(CACHE_ENV) or "").strip()
     if override:
         return Path(override).expanduser()
@@ -193,8 +139,6 @@ def cache_root() -> Path:
 
         return runtime_dir(current_config_data()) / "sentinel-sdk"
     except (ImportError, OSError, KeyError, TypeError, ValueError):
-        # Same reasoning as ``email_registration_section``: an unreadable config
-        # degrades to the default location, never to "no cache".
         return RUNTIME_DIR.parents[1] / "runtime" / "sentinel-sdk"
 
 
@@ -212,7 +156,6 @@ def _atomic_write(path: Path, data: bytes) -> None:
 
 
 def _cached_sdk(version: str, *, require_fresh: bool = True) -> Path | None:
-    """A previously downloaded build whose bytes still hash to its manifest."""
     directory = cache_root() / version
     try:
         meta = json.loads((directory / "current.json").read_text(encoding="utf-8"))
@@ -235,7 +178,6 @@ def _cached_sdk(version: str, *, require_fresh: bool = True) -> Path | None:
 
 
 def _sdk_request_headers() -> dict[str, str]:
-    """Headers a browser sends for the ``sdk.js`` script tag."""
     from ..transport import endpoints
     from ..transport.auth_headers import auth_user_agent
 
@@ -250,7 +192,6 @@ def _sdk_request_headers() -> dict[str, str]:
 
 
 def _verified_sdk_content(response: Any) -> bytes:
-    """Reject everything that is not an SDK build (status, size, marker, HTML)."""
     content = getattr(response, "content", b"") or b""
     status = int(getattr(response, "status_code", 0) or 0)
     if status != 200 or not isinstance(content, bytes) or not content:
@@ -261,32 +202,35 @@ def _verified_sdk_content(response: Any) -> bytes:
 
 
 def fetch_sdk(version: str, *, session: Any = None, timeout: float = 30.0) -> bytes:
-    """GET ``/sentinel/<version>/sdk.js`` under the profile's own TLS identity.
-
-    The fetch uses the *same* impersonation as the registration it serves: a
-    download from a different ClientHello than the one that will mint the token
-    is a second identity on the same edge node.
-    """
     if not version or not all(char.isalnum() or char in {"-", "_"} for char in version):
         raise SentinelBundleError(f"sentinel_sdk_invalid_version:{version}")
     url = SDK_URL_TEMPLATE.format(version=version)
     if session is not None:
         return _verified_sdk_content(_get(session, url, {}, timeout))
-    from curl_cffi import requests as curl_requests
-
+    from ..transport import http_backend
     from ..transport.auth_headers import auth_impersonate
 
-    own = curl_requests.Session(impersonate=auth_impersonate())
+    own = http_backend.new_session()
     try:
-        response = _get(own, url, _sdk_request_headers(), timeout)
+        response = _get(own, url, _sdk_request_headers(), timeout, impersonate=auth_impersonate())
     finally:
         own.close()
     return _verified_sdk_content(response)
 
 
-def _get(session: Any, url: str, headers: dict[str, str], timeout: float) -> Any:
+def _get(
+    session: Any,
+    url: str,
+    headers: dict[str, str],
+    timeout: float,
+    *,
+    impersonate: str = "",
+) -> Any:
     try:
-        return session.get(url, headers=headers, timeout=timeout)
+        kwargs: dict[str, Any] = {"headers": headers, "timeout": timeout}
+        if impersonate:
+            kwargs["impersonate"] = impersonate
+        return session.get(url, **kwargs)
     except SentinelBundleError:
         raise
     except Exception as exc:  # broad-except: transport errors all mean "no SDK today"
@@ -308,56 +252,37 @@ def _download_sdk(version: str, *, session: Any = None) -> Path:
 
 
 def resolve_sdk_path(*, session: Any = None, verify_vendored: bool = True) -> Path:
-    """The ``sdk.js`` this process must execute, and which its proof may claim.
-
-    Order: a fresh verified cache entry, then a download, then the last verified
-    cache entry even if stale, then the vendored build -- the vendored file only
-    when it *is* the configured version, because running 0810 bytes while
-    claiming 0219 is exactly the drift this function exists to stop.
-    """
+    """Resolve the active Sentinel runtime asset or optional cached SDK probe."""
     version = sentinel_version()
     pinned = version == DEFAULT_SENTINEL_VERSION
     if not sdk_auto_update():
         if not pinned:
             _warn_version_drift(version)
-        validate_runtime_bundle(verify_hash=verify_vendored)
-        return SDK_PATH
+        return validate_runtime_bundle(verify_hash=verify_vendored)
     cached = _cached_sdk(version)
     if cached is not None:
         return cached
     try:
         return _download_sdk(version, session=session)
     except (SentinelBundleError, OSError, ValueError) as exc:
-        # ``fetch_sdk``/``_get`` already fold transport errors into
-        # ``SentinelBundleError``; the rest is the cache write (``OSError``) or a
-        # malformed manifest (``ValueError``).  Anything else is a real bug and
-        # must surface as one.
         stale = _cached_sdk(version, require_fresh=False)
         if stale is not None:
             _LOGGER.warning("[Sentinel] SDK refresh failed (%s); using cached build %s", exc, version)
             return stale
         if pinned:
-            _LOGGER.warning("[Sentinel] SDK refresh failed (%s); using vendored build %s", exc, version)
-            validate_runtime_bundle(verify_hash=verify_vendored)
-            return SDK_PATH
+            _LOGGER.warning("[Sentinel] SDK refresh failed (%s); using native runtime %s", exc, version)
+            return validate_runtime_bundle(verify_hash=verify_vendored)
         raise SentinelBundleError(f"sentinel_sdk_unavailable:{version}") from exc
 
 
 def _warn_version_drift(version: str) -> None:
-    """Say once per process that the claim and the bytes disagree.
-
-    Not fatal on purpose: every account already registered under this
-    combination worked, so failing closed would turn a callable warning into an
-    outage.  The drift is loud here, and ``tests/governance`` keeps the shipped
-    example from handing it out in the first place.
-    """
     key = (version, DEFAULT_SENTINEL_VERSION)
     if key in _WARNED_DRIFT:
         return
     _WARNED_DRIFT.add(key)
     _LOGGER.warning(
-        "[Sentinel] configured sdk version %s != vendored build %s; the proof will claim a version "
-        "whose bytes are not being executed (%s=true downloads it instead)",
+        "[Sentinel] configured sdk version %s != pinned build %s; update DEFAULT_SENTINEL_VERSION "
+        "or enable %s=true if probing a newer CDN build",
         version,
         DEFAULT_SENTINEL_VERSION,
         AUTO_UPDATE_KEY,
@@ -374,12 +299,14 @@ __all__ = [
     "DEFAULT_REFRESH_SECONDS",
     "DEFAULT_SENTINEL_VERSION",
     "MAX_SDK_BYTES",
+    "NATIVE_LIB_ENV",
+    "NATIVE_LIB_NAME",
+    "NATIVE_LIB_PATH",
+    "NATIVE_LIB_SHA256",
     "REFRESH_ENV",
     "REFRESH_KEY",
     "RUNTIME_DIR",
-    "RUNNER_PATH",
     "SDK_MARKER",
-    "SDK_PATH",
     "SDK_URL_TEMPLATE",
     "SentinelBundleError",
     "cache_root",

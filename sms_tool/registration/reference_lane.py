@@ -49,11 +49,10 @@ _LOGGER = logging.getLogger(__name__)
 LANE_KEY = "reference_lane"
 
 #: ``registration.<key>`` toggles the lane forces on.
-#: Each one is documented where it is read (``auth_flow.steps`` and the
-#: ``registration_*_stages`` modules); together they are the reference's request shapes.
+#: Note: ``signin_screen_hint_login_or_signup`` and ``signin_prompt_login`` were
+#: rejected in the 2026-10-08 experiment ledger (HTTP 400 Invalid screen_hint)
+#: and are intentionally excluded from the preset.
 LANE_FLAGS = (
-    "signin_screen_hint_login_or_signup",
-    "signin_prompt_login",
     "turb_signin_authorize_context",
     "prime_create_account_password",
     "prime_navigation_headers",

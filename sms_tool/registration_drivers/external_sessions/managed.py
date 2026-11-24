@@ -4,17 +4,19 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import os
 import random
 import shutil
 import time
 import warnings
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 from urllib.parse import unquote, urlencode, urljoin, urlsplit
 
 from curl_cffi import requests as curl_requests
 
 from ...kernel.driver_env import driver_config as _driver_config
-from ...phone.phone_proxy import normalize_proxy_url
+from ...proxy.bridge import open_browser_proxy_bridge
+from ...proxy.entry import normalize_proxy_url
 from ..base import BrowserRegistrationError
 from ..browser_flow.decisions import DEFAULT_VIEWPORT_HEIGHT, DEFAULT_VIEWPORT_WIDTH
 from ..browser_session import PlaywrightBrowserSession
@@ -150,13 +152,18 @@ class CloakBrowserSession(ConnectedPlaywrightSession):
         super().__init__(data_saver_config=config, **kwargs)
         self.driver_config = _driver_config(config, "cloak")
         self._persistent = False
+        self._proxy_closer: Callable[[], None] | None = None
 
     def __enter__(self):
         try:
             from cloakbrowser import launch, launch_persistent_context
         except ImportError as exc:
             raise BrowserRegistrationError("browser_dependency_missing", "cloakbrowser") from exc
-        proxy = normalize_proxy_url(self.proxy) if bool(self.driver_config.get("use_proxy", True)) else ""
+        raw_proxy = normalize_proxy_url(self.proxy) if bool(self.driver_config.get("use_proxy", True)) else ""
+        hop_proxy = str(self.driver_config.get("hop_proxy") or "").strip() or None
+        proxy = raw_proxy
+        if raw_proxy and (hop_proxy or os.environ.get("GPT_PROXY_CHAIN_HOP") or os.environ.get("PROXY_CHAIN_HOP")):
+            proxy, self._proxy_closer, _bridge = open_browser_proxy_bridge(raw_proxy, hop_proxy=hop_proxy)
         geoip = bool(self.driver_config.get("geoip", True))
         options: dict[str, Any] = {
             "headless": self.headless,
@@ -410,12 +417,11 @@ class CamoufoxBrowserSession(ConnectedPlaywrightSession):
             set_default_timeout = getattr(self.context, "set_default_timeout", None)
             if callable(set_default_timeout):
                 set_default_timeout(self.timeout_ms)
-            self.stealth_status = apply_playwright_stealth(
-                self.context,
-                self.page,
-                label="camoufox",
-                provider_prefix="camoufox",
-            )
+            # Camoufox is a C++-level anti-detect Firefox build: applying
+            # Chrome-targeted playwright-stealth init scripts injects
+            # ``window.chrome`` and ``navigator.vendor='Google Inc.'``, which
+            # creates an immediate Firefox/Chrome contradiction.
+            self.stealth_status = {"playwright_stealth": False, "reason": "skipped_for_camoufox"}
             self._attach_data_saver(bridge=proxy_bridge)
             self._launch_succeeded = True
             return self

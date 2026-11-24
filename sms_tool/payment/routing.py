@@ -98,42 +98,7 @@ def parse_proxy_pool(value: Any) -> list[str]:
     return list(dict.fromkeys(entry.url for entry in parse_proxy_list(values)))
 
 
-def method_payment_config(config: Mapping[str, Any], payment_method: Any) -> dict[str, Any]:
-    method = normalize_payment_method(payment_method, default_for_blank=False)
-    _raw_legacy: object = config.get(method)
-    legacy: Mapping = _raw_legacy if isinstance(_raw_legacy, Mapping) else {}
-    _raw_protocol: object = config.get("protocol_payments")
-    protocol: Mapping = _raw_protocol if isinstance(_raw_protocol, Mapping) else {}
-    _raw_methods: object = protocol.get("methods")
-    methods: Mapping = _raw_methods if isinstance(_raw_methods, Mapping) else {}
-    _raw_canonical: object = methods.get(method)
-    canonical: Mapping = _raw_canonical if isinstance(_raw_canonical, Mapping) else {}
-    merged = {**dict(legacy), **dict(canonical)}
-    routing_keys = ("stage_proxies", "stage_proxy_pools", "stage_routes", "stage_proxy_countries")
-    canonical_owns_routing = any(isinstance(canonical.get(key), Mapping) for key in routing_keys)
-    for key in ("stage_proxies", "stage_proxy_pools", "stage_routes"):
-        _raw_old: object = legacy.get(key)
-        old: Mapping = _raw_old if isinstance(_raw_old, Mapping) else {}
-        _raw_new: object = canonical.get(key)
-        new: Mapping = _raw_new if isinstance(_raw_new, Mapping) else {}
-        if canonical_owns_routing:
-            # The canonical method section owns routing maps.  Keeping old
-            # entries here can silently select a proxy for a stage that the
-            # canonical route intentionally leaves to its named pool.
-            merged[key] = dict(new)
-        elif old:
-            merged[key] = dict(old)
-    # Country expectations are an executable routing contract.  Once the
-    # canonical protocol section declares them, do not resurrect stale values
-    # from the legacy top-level section for stages it intentionally omits: the
-    # planner will derive those stages from target/checkout country instead.
-    legacy_countries = legacy.get("stage_proxy_countries")
-    canonical_countries = canonical.get("stage_proxy_countries")
-    if canonical_owns_routing:
-        merged["stage_proxy_countries"] = dict(canonical_countries) if isinstance(canonical_countries, Mapping) else {}
-    elif isinstance(legacy_countries, Mapping):
-        merged["stage_proxy_countries"] = dict(legacy_countries)
-    return merged
+from .method_config import method_payment_config
 
 
 @dataclass(frozen=True)
@@ -209,7 +174,7 @@ class PaymentRoutePlan:
         return options
 
     def public_dict(self) -> dict[str, Any]:
-        from ..paypal.proxy import redact_proxy_url
+        from ..proxy.entry import redact_proxy_url
 
         return {
             "payment_method": self.payment_method,
@@ -229,21 +194,6 @@ class PaymentRoutePlan:
         }
 
 
-def _exit_lease():
-    """Lazily resolve the UPI exit-lease module (``None`` when unavailable).
-
-    Kept function-local: this module is imported by the payment kernel long
-    before ``upi_link``, and a module-level edge would put a UPI module on the
-    payment import path. A missing module simply disables the feature.
-    """
-    try:
-        from . import upi_exit_lease
-
-        return upi_exit_lease
-    except Exception:
-        return None
-
-
 class PaymentRoutePlanner:
     def __init__(
         self,
@@ -255,9 +205,6 @@ class PaymentRoutePlanner:
         lease_owner: Any = "",
     ) -> None:
         self.config = config
-        # P1-4: identity used to take an exclusive per-exit lease (batch cell id).
-        # Empty means "this process/thread"; only consulted when the lease switch
-        # is on (``payment.proxy_lease.enabled`` / ``UPI_PROXY_LEASE``).
         self.lease_owner = str(lease_owner or "").strip()
         _protocol_raw: object = config.get("protocol_payments")
         self.protocol: Mapping[str, Any] = _protocol_raw if isinstance(_protocol_raw, Mapping) else {}
@@ -275,27 +222,12 @@ class PaymentRoutePlanner:
         self._rotator = rotator
 
     def _select_proxy(self, pool: list[str], expected: str, stage: str) -> tuple[str, list[dict[str, Any]]]:
-        # ``pool_offset`` rotates the pool by cell index, so two lanes (and two
-        # processes) can land on the same credential. Take an exclusive lease
-        # when the operator enables it: a collision is worse than a busy pool,
-        # but a busy pool must still run -- ``filter_available`` is fail-open.
         candidates = list(pool)
-        lease = _exit_lease()
-        # An owner id is what makes a lease meaningful: it is the per-cell
-        # identity the planner was constructed with. Without one this is a
-        # single-shot run that has nothing to collide with.
-        leases_on = lease is not None and bool(self.lease_owner) and lease.enabled(self.config)
-        if leases_on and lease is not None:
-            candidates = lease.filter_available(candidates, owner=self.lease_owner, cfg=self.config)
         if self._selector is not None:
-            chosen, attempts = self._selector(candidates, expected, stage)
-        else:
-            from ..paypal.proxy import select_proxy_from_pool
+            return self._selector(candidates, expected, stage)
+        from ..paypal.proxy import select_proxy_from_pool
 
-            chosen, attempts = select_proxy_from_pool(candidates, expected, stage, state=self.proxy_state)
-        if leases_on and lease is not None and chosen:
-            lease.acquire(chosen, owner=self.lease_owner, cfg=self.config)
-        return chosen, attempts
+        return select_proxy_from_pool(candidates, expected, stage, state=self.proxy_state)
 
     def _rotate_proxy(self, proxy: str, expected: str) -> str:
         if self._rotator is not None:

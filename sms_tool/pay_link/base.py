@@ -1,14 +1,11 @@
 """base submodule of the former payment/link_manager.py (mechanical split, bodies unchanged)."""
 
 from __future__ import annotations
-import inspect
-import json
 import logging
-import re
 import threading
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Mapping
+from pathlib import Path
 from ..config import current_config_data, resolve_runtime_config
 from ..kernel.paths import project_path, runtime_file
 from ..payment.catalog import (
@@ -106,46 +103,10 @@ def _select_kwargs(values: dict[str, Any], allowed: set[str]) -> dict[str, Any]:
     return {key: value for key, value in values.items() if key in allowed and value is not None}
 
 
-def _forwardable_kwargs(
-    function: Any, values: Mapping[str, Any], *, skip: frozenset[str] | set[str] = frozenset()
-) -> dict[str, Any]:
-    """Keyword arguments ``function`` actually declares, dropping ``None`` values.
-
-    The PayPal adapter used to keep its own literal copy of the callee's option
-    names. A hand-maintained copy drifts both ways -- it forwarded
-    ``max_stage_retries`` to a function that never accepted it (TypeError on the
-    first caller who set the option) and it would silently drop a newly added
-    parameter. Asking the callable's signature makes drift impossible: an
-    unknown name is dropped, a declared one is forwarded, and neither list needs
-    maintenance.
-
-    ``skip`` names are passed positionally/by their own keyword by the runner and
-    must not be repeated (a duplicate keyword is a ``TypeError``, the exact
-    failure this replaces).
-    """
-    parameters = inspect.signature(function).parameters
-    # A callee that declares ``**kwargs`` accepts every name, so nothing is
-    # "unknown" to it. This also keeps test doubles working: a ``Mock`` has the
-    # signature ``(*args, **kwargs)``, and filtering it down to zero keywords
-    # would make every adapter test silently assert on an empty call.
-    takes_anything = any(parameter.kind is inspect.Parameter.VAR_KEYWORD for parameter in parameters.values())
-    accepted = None if takes_anything else set(parameters)
-    return {
-        key: value
-        for key, value in values.items()
-        if key not in skip and value is not None and (accepted is None or key in accepted)
-    }
-
-
 def _protocol_cfg(runtime_config: Mapping[str, Any] | None = None) -> Mapping[str, Any]:
     source = _config_data(runtime_config)
     value = source.get("protocol_payments")
     return value if isinstance(value, Mapping) else {}
-
-
-def _reference_root(runtime_config: Mapping[str, Any] | None = None) -> Path:
-    configured = _protocol_cfg(runtime_config).get("reference_root") or "services/protocol-payment"
-    return project_path(configured)
 
 
 def _state_path() -> Path:
@@ -153,43 +114,9 @@ def _state_path() -> Path:
     return project_path(configured) if configured else runtime_file(_config_data(), "payment_link_runs.jsonl")
 
 
-def _last_json_object(text: str) -> dict[str, Any]:
-    decoder = json.JSONDecoder()
-    for index in reversed([i for i, char in enumerate(text) if char == "{"]):
-        try:
-            value, end = decoder.raw_decode(text[index:])
-        except (json.JSONDecodeError, TypeError, ValueError):
-            continue
-        if isinstance(value, dict) and not text[index + end :].strip():
-            return value
-    return {}
-
-
 def _tail(text: str, limit: int = 1200) -> str:
     value = str(text or "").strip()
     return value[-limit:]
-
-
-def _blik_completion(stdout: str) -> dict[str, Any]:
-    """Parse the BLIK auto-submit completion sentinel from stdout.
-
-    BLIK 自动提交模式完成支付后没有可分享 URL，成功信号是 ``print_result_url`` 打印的
-    ``BLIK_RESULT:{...}`` 结构化行（status=completed）。返回最后一个完成哨兵，否则空 dict。
-    """
-    for raw in reversed(_BLIK_RESULT_RE.findall(stdout or "")):
-        try:
-            value = json.loads(raw)
-        except (json.JSONDecodeError, TypeError, ValueError):
-            continue
-        if (
-            isinstance(value, dict)
-            and is_true(value.get("ok"))
-            and str(value.get("payment_method") or "").lower() == "blik"
-            and str(value.get("status") or "").lower() == "completed"
-            and value.get("link_type") == "blik_protocol_completed"
-        ):
-            return value
-    return {}
 
 
 def _mask_ba_token(token: str) -> str:
@@ -223,7 +150,7 @@ PAYMENT_METHODS = {
         definition.label,
         definition.country,
         definition.currency,
-        {"native_paypal": "native", "native_upi": "native"}.get(definition.adapter, definition.adapter),
+        definition.adapter,
         definition.script,
         definition.artifact_validator,
     )
@@ -232,29 +159,3 @@ PAYMENT_METHODS = {
 
 
 _STATE_LOCK = threading.Lock()
-
-
-_BLIK_RESULT_RE = re.compile(r"BLIK_RESULT:(\{.*\})")
-
-
-_DIRECT_CARD_CURRENCY = {
-    "PH": "PHP",
-    "US": "USD",
-    "GB": "GBP",
-    "JP": "JPY",
-    "DE": "EUR",
-    "FR": "EUR",
-    "IE": "EUR",
-    "NL": "EUR",
-    "AU": "AUD",
-    "CA": "CAD",
-    "SG": "SGD",
-    "IN": "INR",
-    "TR": "TRY",
-    "BR": "BRL",
-    "KR": "KRW",
-    "PL": "PLN",
-    "CH": "CHF",
-    "VN": "VND",
-    "NZ": "NZD",
-}

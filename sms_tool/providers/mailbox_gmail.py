@@ -5,10 +5,14 @@ from __future__ import annotations
 import base64
 import html
 import imaplib
+import importlib
+import os
 import re
 import socket
 import smtplib
 import ssl
+import sys
+from pathlib import Path
 from urllib.parse import unquote, urlparse
 from email.message import EmailMessage
 from email.utils import formataddr
@@ -18,6 +22,29 @@ from curl_cffi import requests as curl_requests
 from .outlook_imap_client import discover_imap_folders, imap_message_to_graph_shape
 from . import ports
 from typing import Any
+
+
+def _load_native_gmail_html() -> Any | None:
+    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
+    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_GMAIL_HTML") or "").strip().lower()
+    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
+        return None
+    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "gmail-html-rs" / "python"
+    if pkg_dir.is_dir():
+        pkg_str = str(pkg_dir)
+        if pkg_str not in sys.path:
+            sys.path.insert(0, pkg_str)
+    try:
+        return importlib.import_module("gmail_html_rs")
+    except (ImportError, OSError):
+        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
+            raise
+        return None
+
+
+_NATIVE_GMAIL_HTML = _load_native_gmail_html()
+_NATIVE_HTML_TO_TEXT = getattr(_NATIVE_GMAIL_HTML, "_html_to_text", None)
+_NATIVE_SCALAR_TYPES = (str, type(None), bool, int, float)
 
 
 GMAIL_DOMAINS = {"gmail.com", "googlemail.com"}
@@ -523,6 +550,8 @@ def _normalize_recipients(value):
 
 
 def _html_to_text(value):
+    if _NATIVE_HTML_TO_TEXT is not None and isinstance(value, _NATIVE_SCALAR_TYPES):
+        return str(_NATIVE_HTML_TO_TEXT(value))
     text = re.sub(r"(?is)<(script|style).*?</\1>", " ", str(value or ""))
     text = re.sub(r"(?s)<[^>]+>", " ", text)
     text = re.sub(r"\s+", " ", html.unescape(text))

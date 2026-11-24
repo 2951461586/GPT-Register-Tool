@@ -22,7 +22,7 @@ public sealed class PaymentMethodsTests
     {
         Assert.Equal(15, PaymentMethods.All.Count);
         Assert.Equal("USD", PaymentMethods.Find("paypal").Currency);
-        Assert.Equal("wallet", PaymentMethods.Find("gopay").Adapter);
+        Assert.All(PaymentMethods.All, method => Assert.Equal("extract_server", method.Adapter));
         Assert.Equal(3, PaymentMethods.All.Count(method => method.Id is "gopay" or "gcash" or "grabpay"));
         Assert.Contains(PaymentMethods.All, method => method.Id == "blik" && !method.BatchEnabled);
         Assert.Contains(PaymentMethods.All, method => method.Id == "direct_card");
@@ -33,7 +33,7 @@ public sealed class PaymentMethodsTests
             Assert.Contains(
                 PaymentMethods.All,
                 method => method.Id == id
-                    && method.Adapter == "oaics_inprocess"
+                    && method.Adapter == "extract_server"
                     && method.BatchEnabled == expectAutomated
                     && method.RegistrationEnabled == expectAutomated);
             if (expectAutomated)
@@ -55,7 +55,7 @@ public sealed class PaymentMethodsTests
             Assert.DoesNotContain(PaymentMethods.RegistrationOptions, method => method.Id == id);
         });
         Assert.All(new[] { "qris", "bizum", "naver_pay" }, id =>
-            Assert.Contains(PaymentMethods.All, method => method.Id == id && method.Adapter == "regional_wallet"));
+            Assert.Contains(PaymentMethods.All, method => method.Id == id && method.Adapter == "extract_server"));
         Assert.All(WalletIds, id =>
         {
             Assert.Contains(PaymentMethods.BatchOptions, method => method.Id == id);

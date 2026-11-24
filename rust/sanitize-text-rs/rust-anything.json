@@ -1,0 +1,121 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/kernel/sanitizer.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "sanitize-text-rs",
+  "exports": [
+    {
+      "name": "sanitize_text",
+      "file": "sms_tool/kernel/sanitizer.py",
+      "line": 75,
+      "params": [
+        {
+          "name": "value",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "sanitize_log_text",
+      "file": "sms_tool/kernel/sanitizer.py",
+      "line": 82,
+      "params": [
+        {
+          "name": "value",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "sanitize",
+      "file": "sms_tool/kernel/sanitizer.py",
+      "line": 147,
+      "params": [
+        {
+          "name": "value",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "key",
+          "ts_type": "string",
+          "optional": true,
+          "rest": false
+        },
+        {
+          "name": "path",
+          "ts_type": "string",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "load_sensitive_policy",
+      "file": "sms_tool/kernel/sanitizer.py",
+      "line": 22,
+      "reason": "policy loader stays in Python"
+    },
+    {
+      "name": "describe_exception",
+      "file": "sms_tool/kernel/sanitizer.py",
+      "line": 95,
+      "reason": "takes BaseException instances; delegates to sanitize_text"
+    },
+    {
+      "name": "mask_otp",
+      "file": "sms_tool/kernel/sanitizer.py",
+      "line": 113,
+      "reason": "not hot in the profiled run"
+    },
+    {
+      "name": "account_reference",
+      "file": "sms_tool/kernel/sanitizer.py",
+      "line": 129,
+      "reason": "not hot in the profiled run"
+    },
+    {
+      "name": "mask_account",
+      "file": "sms_tool/kernel/sanitizer.py",
+      "line": 137,
+      "reason": "not hot in the profiled run"
+    },
+    {
+      "name": "drop_sensitive_fields",
+      "file": "sms_tool/kernel/sanitizer.py",
+      "line": 178,
+      "reason": "not hot in the profiled run"
+    },
+    {
+      "name": "sanitize_command_args",
+      "file": "sms_tool/kernel/sanitizer.py",
+      "line": 205,
+      "reason": "not hot in the profiled run"
+    }
+  ]
+}

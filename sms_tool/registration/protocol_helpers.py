@@ -14,6 +14,7 @@ keep resolving.
 from __future__ import annotations
 
 import json
+import os
 import time
 from typing import Any, Callable
 from urllib.parse import urlsplit
@@ -172,7 +173,24 @@ def _new_registration_session(proxy: str = "") -> Any:
         http_backend,
     )  # function-local: registration -> root is a frozen pair count
 
-    session = http_backend.new_session(proxy=proxy)
+    effective_proxy = proxy
+    bridge_closer = None
+    if proxy and (os.environ.get("GPT_PROXY_CHAIN_HOP") or os.environ.get("PROXY_CHAIN_HOP")):
+        from ..proxy.bridge import open_browser_proxy_bridge
+
+        effective_proxy, bridge_closer, _bridge = open_browser_proxy_bridge(proxy)
+    session = http_backend.new_session(proxy=effective_proxy)
+    if bridge_closer is not None:
+        original_close = getattr(session, "close", None)
+
+        def _close_with_bridge() -> None:
+            try:
+                if callable(original_close):
+                    original_close()
+            finally:
+                bridge_closer()
+
+        session.close = _close_with_bridge
     _apply_tls_fingerprint(session)
     return session
 

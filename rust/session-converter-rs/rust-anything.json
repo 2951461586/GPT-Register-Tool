@@ -1,0 +1,85 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/session/converter.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "session-converter-rs",
+  "exports": [
+    {
+      "name": "parse_jwt_payload",
+      "file": "sms_tool/session/converter.py",
+      "line": 56,
+      "params": [
+        {
+          "name": "token",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "collect_session_like_objects",
+      "file": "sms_tool/session/converter.py",
+      "line": 169,
+      "params": [
+        {
+          "name": "value",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "source_name",
+          "ts_type": "unknown",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "strip_unavailable",
+      "file": "sms_tool/session/converter.py",
+      "line": 44,
+      "reason": "kept in Python (0.31x due to small-dict PyO3 conversion overhead)"
+    },
+    {
+      "name": "first_non_empty",
+      "file": "sms_tool/session/converter.py",
+      "line": 24,
+      "reason": "variadic *values helper (inlined in Rust)"
+    },
+    {
+      "name": "nested",
+      "file": "sms_tool/session/converter.py",
+      "line": 35,
+      "reason": "variadic *path helper (inlined in Rust)"
+    },
+    {
+      "name": "convert_session",
+      "file": "sms_tool/session/converter.py",
+      "line": 229,
+      "reason": "uses wall-clock datetime.now/time.time when now or id_token is omitted"
+    },
+    {
+      "name": "convert_json_file",
+      "file": "sms_tool/session/converter.py",
+      "line": 565,
+      "reason": "performs filesystem I/O"
+    }
+  ]
+}

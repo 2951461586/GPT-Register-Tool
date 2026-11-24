@@ -108,6 +108,15 @@ def test_clean_proxies_keeps_raw_urls_in_order():
     assert probe_mod.clean_proxies(verdicts, raw) == [raw[0], raw[2]]
 
 
+def test_clean_proxies_distinguishes_sticky_sessions_on_same_gateway():
+    raw = ["http://u-sid-1:p@gw.example:8000", "http://u-sid-2:p@gw.example:8000", "http://u-sid-3:p@gw.example:8000"]
+    from sms_tool.phone.phone_proxy import redact_proxy_url
+
+    redacted = redact_proxy_url(raw[0])
+    verdicts = [_verdict(redacted, CLEAN), _verdict(redacted, BLOCKED), _verdict(redacted, CLEAN)]
+    assert probe_mod.clean_proxies(verdicts, raw) == [raw[0], raw[2]]
+
+
 def test_format_report_is_credential_free_and_summarizes():
     raw = "http://user:Hunter2@a.example:1"
     from sms_tool.phone.phone_proxy import redact_proxy_url

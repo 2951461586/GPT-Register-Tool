@@ -85,13 +85,11 @@ class ProtocolEnvironmentProfile:
 
 def _build_profiles() -> list[ProtocolEnvironmentProfile]:
     """Build validated profiles from the auth_headers profile tables."""
-    from .auth_headers import AUTH_FINGERPRINT_PROFILES
+    from .auth_headers import AUTH_FINGERPRINT_PROFILES, supported_profile_names
 
     profiles: list[ProtocolEnvironmentProfile] = []
     try:
-        from curl_cffi.requests.impersonate import BrowserType
-
-        supported = {item.value for item in BrowserType}
+        supported = supported_profile_names() or set(AUTH_FINGERPRINT_PROFILES)
     except Exception:
         supported = set(AUTH_FINGERPRINT_PROFILES)
     # The canonical profile key must stay separate from geo.  Geo is bound at
@@ -207,7 +205,7 @@ class FingerprintPool:
         if not proxy:
             return profile
         try:
-            from ..paypal.proxy import infer_proxy_country
+            from ..proxy.entry import infer_proxy_country
         except Exception:
             return profile
         hint = ""

@@ -1,0 +1,76 @@
+{"fn": "_is_allowed_callback_url", "args": [[], "x", ["a", 1]], "ok": false}
+{"fn": "_is_allowed_callback_url", "args": ["x", "x", null], "ok": false}
+{"fn": "_is_allowed_callback_url", "args": [0, "x", []], "ok": false}
+{"fn": "_is_allowed_callback_url", "args": [{}, {"a": {"b": "c"}}, 0], "ok": false}
+{"fn": "_is_allowed_callback_url", "args": [["a", 1], "x", {}], "ok": false}
+{"fn": "_is_allowed_callback_url", "args": [{}, ["a", 1], ["a", 1]], "ok": false}
+{"fn": "_is_allowed_callback_url", "args": [{}, 0, "x"], "ok": false}
+{"fn": "_is_allowed_callback_url", "args": [["a", 1], {"a": {"b": "c"}}, {"a": "b"}], "error": "AttributeError: 'dict' object has no attribute 'decode'"}
+{"fn": "_is_allowed_callback_url", "args": [true, true, {}], "error": "AttributeError: 'bool' object has no attribute 'decode'"}
+{"fn": "_is_allowed_callback_url", "args": ["x", {}, []], "ok": false}
+{"fn": "_is_allowed_callback_url", "args": [["a", 1], {"a": {"b": "c"}}, {"a": {"b": "c"}}], "error": "AttributeError: 'dict' object has no attribute 'decode'"}
+{"fn": "_is_allowed_callback_url", "args": [{}, {"a": "b"}, "x"], "ok": false}
+{"fn": "_is_allowed_callback_url", "args": [null, "x", {"a": {"b": "c"}}], "ok": false}
+{"fn": "_is_allowed_callback_url", "args": [{"a": "b"}, 0, true], "error": "AttributeError: 'bool' object has no attribute 'decode'"}
+{"fn": "_is_allowed_callback_url", "args": ["x", [], {"a": "b"}], "error": "AttributeError: 'dict' object has no attribute 'decode'"}
+{"fn": "_is_allowed_callback_url", "args": ["x", {"a": {"b": "c"}}, {"a": {"b": "c"}}], "error": "AttributeError: 'dict' object has no attribute 'decode'"}
+{"fn": "_is_allowed_callback_url", "args": [[], [], {"a": {"b": "c"}}], "ok": false}
+{"fn": "_is_allowed_callback_url", "args": [true, 0, {"a": {"b": "c"}}], "error": "AttributeError: 'dict' object has no attribute 'decode'"}
+{"fn": "_is_allowed_callback_url", "args": [0, "x", "x"], "ok": false}
+{"fn": "_is_allowed_callback_url", "args": [[], "x", 0], "ok": false}
+{"fn": "_is_allowed_callback_url", "args": [{"zebra": 1, "apple": 2, "10": 3, "2": 4, "é": 5, "Apple": 6}, "x", ["a", 1]], "error": "AttributeError: 'list' object has no attribute 'decode'"}
+{"fn": "_is_allowed_callback_url", "args": [{"n": 9007199254740993, "f": 1e+21, "t": 0.1, "neg": -7}, "x", ["a", 1]], "error": "AttributeError: 'list' object has no attribute 'decode'"}
+{"fn": "_is_allowed_callback_url", "args": [[3, 1, 2], "x", ["a", 1]], "error": "AttributeError: 'list' object has no attribute 'decode'"}
+{"fn": "_is_allowed_callback_url", "args": [{}, "x", ["a", 1]], "ok": false}
+{"fn": "_is_allowed_callback_url", "args": [[], {"zebra": 1, "apple": 2, "10": 3, "2": 4, "é": 5, "Apple": 6}, ["a", 1]], "ok": false}
+{"fn": "_is_allowed_callback_url", "args": [[], {"n": 9007199254740993, "f": 1e+21, "t": 0.1, "neg": -7}, ["a", 1]], "ok": false}
+{"fn": "_is_allowed_callback_url", "args": [[], [3, 1, 2], ["a", 1]], "ok": false}
+{"fn": "_is_allowed_callback_url", "args": [[], {}, ["a", 1]], "ok": false}
+{"fn": "_is_allowed_callback_url", "args": [[], "x", {"zebra": 1, "apple": 2, "10": 3, "2": 4, "é": 5, "Apple": 6}], "ok": false}
+{"fn": "_is_allowed_callback_url", "args": [[], "x", {"n": 9007199254740993, "f": 1e+21, "t": 0.1, "neg": -7}], "ok": false}
+{"fn": "_is_allowed_callback_url", "args": [[], "x", [3, 1, 2]], "ok": false}
+{"fn": "_is_allowed_callback_url", "args": [[], "x", {}], "ok": false}
+{"fn": "_minimal_chatgpt_cookie_header", "args": [null], "ok": ""}
+{"fn": "_minimal_chatgpt_cookie_header", "args": [{"a": "b"}], "ok": ""}
+{"fn": "_minimal_chatgpt_cookie_header", "args": [[]], "ok": ""}
+{"fn": "_minimal_chatgpt_cookie_header", "args": [true], "ok": ""}
+{"fn": "_minimal_chatgpt_cookie_header", "args": ["x"], "ok": ""}
+{"fn": "_minimal_chatgpt_cookie_header", "args": [{"a": {"b": "c"}}], "ok": ""}
+{"fn": "_minimal_chatgpt_cookie_header", "args": [{}], "ok": ""}
+{"fn": "_minimal_chatgpt_cookie_header", "args": [0], "ok": ""}
+{"fn": "_minimal_chatgpt_cookie_header", "args": [["a", 1]], "ok": ""}
+{"fn": "_minimal_chatgpt_cookie_header", "args": [{"zebra": 1, "apple": 2, "10": 3, "2": 4, "é": 5, "Apple": 6}], "ok": ""}
+{"fn": "_minimal_chatgpt_cookie_header", "args": [{"n": 9007199254740993, "f": 1e+21, "t": 0.1, "neg": -7}], "ok": ""}
+{"fn": "_minimal_chatgpt_cookie_header", "args": [[3, 1, 2]], "ok": ""}
+{"fn": "_minimal_chatgpt_cookie_header", "args": ["cookie_0=value_0_padding; cookie_1=value_1_padding; cookie_2=value_2_padding; cookie_3=value_3_padding; cookie_4=value_4_padding; cookie_5=value_5_padding; cookie_6=value_6_padding; cookie_7=value_7_padding; cookie_8=value_8_padding; cookie_9=value_9_padding; cookie_10=value_10_padding; cookie_11=value_11_padding; cookie_12=value_12_padding; cookie_13=value_13_padding; cookie_14=value_14_padding; cookie_15=value_15_padding; cookie_16=value_16_padding; cookie_17=value_17_padding; cookie_18=value_18_padding; cookie_19=value_19_padding; cookie_20=value_20_padding; cookie_21=value_21_padding; cookie_22=value_22_padding; cookie_23=value_23_padding; cookie_24=value_24_padding; __Host-next-auth.csrf-token=tok_csrf_123456; __Secure-next-auth.callback-url=https%3A%2F%2Fchatgpt.com; __Secure-next-auth.session-token.0=eyJhbGciOiJSUzI1NiJ9.part0; __Secure-next-auth.session-token.1=part1_payload_xyz; empty_key=; malformed_no_equals"], "ok": "__Host-next-auth.csrf-token=tok_csrf_123456; __Secure-next-auth.callback-url=https%3A%2F%2Fchatgpt.com; __Secure-next-auth.session-token.0=eyJhbGciOiJSUzI1NiJ9.part0; __Secure-next-auth.session-token.1=part1_payload_xyz"}
+{"fn": "_minimal_chatgpt_cookie_header", "args": ["a=1; b=2; __Secure-next-auth.session-token=xyz; c=3"], "ok": "__Secure-next-auth.session-token=xyz"}
+{"fn": "_minimal_chatgpt_cookie_header", "args": ["__Host-next-auth.csrf-token= ; other=val"], "ok": ""}
+{"fn": "_minimal_chatgpt_cookie_header", "args": [null], "ok": ""}
+{"fn": "_minimal_chatgpt_cookie_header", "args": [""], "ok": ""}
+{"fn": "_is_allowed_callback_url", "args": ["https://chatgpt.com/api/auth/callback/openai?code=abc", "https://auth.openai.com", "https://chatgpt.com"], "ok": true}
+{"fn": "_is_allowed_callback_url", "args": ["https://auth.openai.com:443/authorize?state=1", "https://auth.openai.com", "https://chatgpt.com"], "ok": true}
+{"fn": "_is_allowed_callback_url", "args": ["http://chatgpt.com:80/callback", "https://auth.openai.com", "https://chatgpt.com"], "ok": true}
+{"fn": "_is_allowed_callback_url", "args": ["https://chatgpt.com:8443/callback", "https://auth.openai.com", "https://chatgpt.com"], "ok": false}
+{"fn": "_is_allowed_callback_url", "args": ["https://user:pass@chatgpt.com/callback", "https://auth.openai.com", "https://chatgpt.com"], "ok": false}
+{"fn": "_is_allowed_callback_url", "args": ["https://evil.example.com/callback", "https://auth.openai.com", "https://chatgpt.com"], "ok": false}
+{"fn": "_is_allowed_callback_url", "args": ["https://chatgpt.com/cb\r\nX-Injected: 1", "https://auth.openai.com", "https://chatgpt.com"], "ok": false}
+{"fn": "_is_allowed_callback_url", "args": ["javascript:alert(1)", "https://auth.openai.com", "https://chatgpt.com"], "ok": false}
+{"fn": "_is_allowed_callback_url", "args": ["https://chatgpt.com\\@evil.com/", "https://auth.openai.com", "https://chatgpt.com"], "ok": false}
+{"fn": "_is_allowed_callback_url", "args": ["https://@chatgpt.com/ok", "https://auth.openai.com", "https://chatgpt.com"], "ok": true}
+{"fn": "_minimal_chatgpt_cookie_header", "args": ["__Secure-next-auth.session-token.0=aaa; __Secure-next-auth.session-token.1=bbb; __Host-next-auth.csrf-token.0=cc; tracker=z"], "ok": "__Secure-next-auth.session-token.0=aaa; __Secure-next-auth.session-token.1=bbb; __Host-next-auth.csrf-token.0=cc"}
+{"fn": "_minimal_chatgpt_cookie_header", "args": ["__HOST-NEXT-AUTH.CSRF-TOKEN=x"], "ok": ""}
+{"fn": "_minimal_chatgpt_cookie_header", "args": ["__Host-next-auth.csrf-token=first; __Host-next-auth.csrf-token=second"], "ok": "__Host-next-auth.csrf-token=first; __Host-next-auth.csrf-token=second"}
+{"fn": "_minimal_chatgpt_cookie_header", "args": ["__Host-next-auth.csrf-token="], "ok": ""}
+{"fn": "_minimal_chatgpt_cookie_header", "args": ["__Host-next-auth.csrf-token=ab==cd"], "ok": "__Host-next-auth.csrf-token=ab==cd"}
+{"fn": "_minimal_chatgpt_cookie_header", "args": ["garbage; __Host-next-auth.csrf-token=x"], "ok": "__Host-next-auth.csrf-token=x"}
+{"fn": "_minimal_chatgpt_cookie_header", "args": ["tracker=1; __Host-next-auth.csrf-token=abc; __Secure-next-auth.callback-url=def; __Secure-next-auth.session-token=ghi; other=z"], "ok": "__Host-next-auth.csrf-token=abc; __Secure-next-auth.callback-url=def; __Secure-next-auth.session-token=ghi"}
+{"fn": "_minimal_chatgpt_cookie_header", "args": [null], "ok": ""}
+{"fn": "_minimal_chatgpt_cookie_header", "args": [""], "ok": ""}
+{"fn": "_minimal_chatgpt_cookie_header", "args": ["__Secure-next-auth.session-token.0=aaa; unrelated.0=zzz"], "ok": "__Secure-next-auth.session-token.0=aaa"}
+{"fn": "_minimal_chatgpt_cookie_header", "args": ["  __Host-next-auth.csrf-token =  abc  "], "ok": "__Host-next-auth.csrf-token=abc"}
+{"fn": "_minimal_chatgpt_cookie_header", "args": ["__Host-next-auth.csrf-token=a; __Secure-next-auth.callback-url=b; __Secure-next-auth.session-token=c"], "ok": "__Host-next-auth.csrf-token=a; __Secure-next-auth.callback-url=b; __Secure-next-auth.session-token=c"}
+{"fn": "_minimal_chatgpt_cookie_header", "args": ["__Host-next-auth.csrf-token=abc; tracker=z"], "ok": "__Host-next-auth.csrf-token=abc"}
+{"fn": "_is_allowed_callback_url", "args": ["https://chat.test/api/auth/callback/openai?code=abc", "https://auth.test", "https://chat.test"], "ok": true}
+{"fn": "_is_allowed_callback_url", "args": ["https://chat.test/api/auth/callback/openai?code=ok", "https://auth.test", "https://chat.test"], "ok": true}
+{"fn": "_is_allowed_callback_url", "args": ["https://chat.test/api/auth/callback/openai?code=w", "https://auth.test", "https://chat.test"], "ok": true}
+{"fn": "_is_allowed_callback_url", "args": ["https://evil.example/steal", "https://auth.test", "https://chat.test"], "ok": false}

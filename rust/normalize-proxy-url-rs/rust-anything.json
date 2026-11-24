@@ -1,0 +1,177 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/proxy/entry.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "normalize-proxy-url-rs",
+  "exports": [
+    {
+      "name": "normalize_proxy_url",
+      "file": "sms_tool/proxy/entry.py",
+      "line": 408,
+      "params": [
+        {
+          "name": "proxy",
+          "ts_type": "string | undefined",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "default_scheme",
+          "ts_type": "string",
+          "optional": true,
+          "rest": false,
+          "default": "\"http\""
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "redact_proxy_url",
+      "file": "sms_tool/proxy/entry.py",
+      "line": 435,
+      "params": [
+        {
+          "name": "proxy",
+          "ts_type": "string | undefined",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "empty_placeholder",
+          "ts_type": "string",
+          "optional": true,
+          "rest": false,
+          "default": "\"DIRECT\""
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "strip_session_id",
+      "file": "sms_tool/proxy/entry.py",
+      "line": 666,
+      "params": [
+        {
+          "name": "proxy",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "infer_proxy_country",
+      "file": "sms_tool/proxy/entry.py",
+      "line": 717,
+      "params": [
+        {
+          "name": "proxy",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "parse_proxy",
+      "file": "sms_tool/proxy/entry.py",
+      "line": 158,
+      "reason": "returns ProxyEntry dataclass; kept in Python"
+    },
+    {
+      "name": "proxy_to_url",
+      "file": "sms_tool/proxy/entry.py",
+      "line": 328,
+      "reason": "takes ProxyEntry dataclass; kept in Python"
+    },
+    {
+      "name": "redact_proxy_text",
+      "file": "sms_tool/proxy/entry.py",
+      "line": 459,
+      "reason": "kept in Python"
+    },
+    {
+      "name": "rebuild_proxy_credentials",
+      "file": "sms_tool/proxy/entry.py",
+      "line": 521,
+      "reason": "takes urllib SplitResult; kept in Python"
+    },
+    {
+      "name": "retarget_region",
+      "file": "sms_tool/proxy/entry.py",
+      "line": 542,
+      "reason": "kept in Python"
+    },
+    {
+      "name": "rotate_session",
+      "file": "sms_tool/proxy/entry.py",
+      "line": 588,
+      "reason": "uses CSPRNG secrets; kept in Python"
+    },
+    {
+      "name": "infer_region",
+      "file": "sms_tool/proxy/entry.py",
+      "line": 693,
+      "reason": "covered by infer_proxy_country"
+    },
+    {
+      "name": "load_proxy_pool",
+      "file": "sms_tool/proxy/entry.py",
+      "line": 739,
+      "reason": "reads os.environ and config mappings"
+    },
+    {
+      "name": "choose_proxy_entry",
+      "file": "sms_tool/proxy/entry.py",
+      "line": 805,
+      "reason": "uses random.choice on ProxyEntry iterable"
+    },
+    {
+      "name": "resolve_proxy_value",
+      "file": "sms_tool/proxy/entry.py",
+      "line": 819,
+      "reason": "thin wrapper over parse_proxy"
+    },
+    {
+      "name": "parse_proxy_list",
+      "file": "sms_tool/proxy/entry.py",
+      "line": 852,
+      "reason": "returns list[ProxyEntry]"
+    },
+    {
+      "name": "build_proxy_config",
+      "file": "sms_tool/proxy/entry.py",
+      "line": 868,
+      "reason": "reads os.environ"
+    },
+    {
+      "name": "ProxyEntry",
+      "file": "sms_tool/proxy/entry.py",
+      "line": 97,
+      "reason": "dataclass kept in Python"
+    }
+  ]
+}

@@ -50,7 +50,6 @@ DOCS_ROOT = ROOT
 #: doc (root-relative) -> block id. One block per document today.
 BLOCKS: dict[str, str] = {
     "docs/architecture.md": "architecture",
-    "docs/current/protocol-payment-enhancement.md": "payment",
 }
 
 
@@ -99,29 +98,8 @@ def render_architecture() -> list[str]:
     ]
 
 
-def render_payment() -> list[str]:
-    """Extractor parity per pair plus the provider-decoupling buckets."""
-    parity = _tool("extractor_parity_report")
-    counts, _reports = parity.collect(ROOT)
-
-    decoupling = _tool("provider_decoupling_ratchet")
-    summary = decoupling.analyze(ROOT).summary()
-
-    lines = ["| Extractor pair | AST-identical functions |", "| --- | ---: |"]
-    for key in sorted(counts):
-        label = f"`{key}`" + (" (negative control)" if key == "momo:kakao" else "")
-        lines.append(f"| {label} | {counts[key]} |")
-    lines.append("")
-    lines.append(
-        f"Same-named definitions against `common/`: **{summary['delegating']} delegating**, "
-        f"**{summary['identical']} verbatim copies**, **{summary['divergent']} deliberate forks**."
-    )
-    return lines
-
-
 RENDERERS = {
     "architecture": render_architecture,
-    "payment": render_payment,
 }
 
 

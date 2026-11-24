@@ -179,7 +179,7 @@
                 <Path Style="{StaticResource MenuIconPath}" Data="{StaticResource Glyph.OpenExternal}"/>
               </MenuItem.Icon>
             </MenuItem>
-            <MenuItem Header="{loc:Tr Key='批量协议支付'}" Command="{Binding PlacementTarget.DataContext.CtxBatchProtocolPaymentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Style="{StaticResource AccountContextMenuItemStyle}">
+            <MenuItem Header="{loc:Tr Key='支付链接提取'}" Command="{Binding PlacementTarget.DataContext.CtxBatchProtocolPaymentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Style="{StaticResource AccountContextMenuItemStyle}">
               <MenuItem.Icon>
                 <Path Style="{StaticResource MenuIconPath}" Data="{StaticResource Glyph.BatchPay}"/>
               </MenuItem.Icon>

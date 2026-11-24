@@ -451,27 +451,6 @@ def payment_method_capability_probe(
             stage_proxy_countries=stage_proxy_countries,
             timeout=timeout,
         )
-    if method == "gcash" and transport is None:
-        from ..wallet.gcash_provider import DEFAULT_GCASH_CUSTOM_PAYMENT_METHOD_ID, run_gcash_provider
-        from ..wallet.gcash_transport import ChatGPTGCashTransport
-
-        return run_gcash_provider(
-            str(access_token).strip(),
-            ChatGPTGCashTransport(timeout=timeout),
-            probe_only=True,
-            auth_context=auth_context if isinstance(auth_context, dict) else {},
-            transport_context={
-                "default_proxy": _proxy_text(proxy),
-                "checkout_proxy": _proxy_text(checkout_proxy or proxy),
-                "provider_proxy": _proxy_text(checkout_proxy or provider_proxy or stripe_init_proxy or proxy),
-                "promotion_proxy": _proxy_text(promotion_proxy or provider_proxy or proxy),
-                "confirm_proxy": _proxy_text(confirm_proxy or checkout_proxy or provider_proxy or proxy),
-            },
-            custom_payment_method_type_id=(
-                str(custom_payment_method_type_id or "").strip() or DEFAULT_GCASH_CUSTOM_PAYMENT_METHOD_ID
-            ),
-            require_zero=require_zero,
-        )
     signal: dict[str, Any] = {}
     fallback_used = False
     checkout_proxy_text = _proxy_text(checkout_proxy or proxy)

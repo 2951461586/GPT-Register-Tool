@@ -42,20 +42,7 @@ def _load_authority(rel_path: str, module_name: str):
     return module
 
 
-ENDPOINTS = _load_authority("services/protocol-payment/common/endpoints.py", "ratchet_endpoints_probe")
 SMS_ENDPOINTS = _load_authority("sms_tool/transport/endpoints.py", "ratchet_sms_endpoints_probe")
-
-WIRED = (
-    "services/protocol-payment/ideal/ideal_qr_extract.py",
-    "services/protocol-payment/twint/twint_extract.py",
-    "services/protocol-payment/blik/blik_qr_extract.py",
-    "services/protocol-payment/kakao/kakao_extract.py",
-    "services/protocol-payment/pix/pix_core.py",
-    "services/protocol-payment/pix/pix_extract.py",
-    "services/protocol-payment/momo/momo_qr_extract.py",
-    "services/protocol-payment/momo/ac_paylink_core.py",
-    "services/protocol-payment/direct_card/direct_card_extract.py",
-)
 
 #: sms_tool call sites wired to the sms_tool authority.
 WIRED_SMS_TOOL = (
@@ -67,7 +54,6 @@ WIRED_SMS_TOOL = (
     "sms_tool/registration_drivers/browser_flow/context.py",
     "sms_tool/registration_drivers/browser_session.py",
     "sms_tool/paypal/extract.py",
-    "sms_tool/paypal_link/gen_link.py",
 )
 
 
@@ -137,23 +123,12 @@ def test_cli_fails_loudly_when_the_predicate_is_gutted(monkeypatch):
 
 
 def test_managed_hosts_match_the_authority_constants():
-    """MANAGED_HOSTS must cover every host the two authorities declare.
-
-    A new host constant in either authority that the ratchet does not watch
-    would let a caller inline it unmeasured.
-    """
-    from_services = {
-        ENDPOINTS.CHATGPT_HOST,
-        ENDPOINTS.STRIPE_API_BASE.removeprefix("https://"),
-        ENDPOINTS.STRIPE_CHECKOUT_BASE.removeprefix("https://"),
-        ENDPOINTS.OPENAI_PAY_BASE.removeprefix("https://"),
-    }
-    from_sms = {
+    """MANAGED_HOSTS must cover every host the sms_tool authority declares."""
+    declared = {
         SMS_ENDPOINTS.AUTH_BASE.removeprefix("https://"),
         SMS_ENDPOINTS.CHATGPT_BASE.removeprefix("https://"),
         SMS_ENDPOINTS.API_BASE.removeprefix("https://"),
     }
-    declared = from_services | from_sms
     assert declared <= set(eps.MANAGED_HOSTS), (
         f"ratchet misses authority hosts: {sorted(declared - set(eps.MANAGED_HOSTS))}"
     )
@@ -187,32 +162,13 @@ def test_vendor_tree_is_excluded():
     )
 
 
-def test_both_process_boundaries_are_scanned(tmp_path):
-    assert {p.as_posix() for p in eps.SCAN_DIRS} == {"services/protocol-payment", "sms_tool"}
-    counts = eps.collect()
-    assert not any(path.startswith("services/protocol-payment/") for path in counts), (
-        "services/protocol-payment/ is completely wired to common/endpoints.py and must stay at zero"
-    )
-    # sms_tool/ is at zero too since 2026-10-23, so "is it scanned?" can no
-    # longer be answered from the real tree -- the synthetic tree below answers
-    # it instead, and is the stronger check anyway.
-    # Prove services/protocol-payment is still actively scanned if a literal is introduced.
-    fake_pp = tmp_path / "services" / "protocol-payment" / "ideal"
+def test_sms_tool_boundary_is_scanned(tmp_path):
+    assert {p.as_posix() for p in eps.SCAN_DIRS} == {"sms_tool"}
     fake_sms = tmp_path / "sms_tool"
-    fake_pp.mkdir(parents=True)
     fake_sms.mkdir(parents=True)
-    (fake_pp / "probe.py").write_text('URL = "https://chatgpt.com/a"\n', encoding="utf-8")
     (fake_sms / "probe.py").write_text('URL = "https://api.stripe.com/v1/a"\n', encoding="utf-8")
     synthetic_counts = eps.collect(tmp_path)
-    assert synthetic_counts.get("services/protocol-payment/ideal/probe.py") == 1
     assert synthetic_counts.get("sms_tool/probe.py") == 1
-
-
-def test_wired_extractors_have_zero_inline_literals():
-    """The 2026-09-28 wiring of ideal / twint / blik must stay wired."""
-    counts = eps.collect()
-    residual = {path: counts.get(path, 0) for path in WIRED if counts.get(path, 0)}
-    assert not residual, f"a wired extractor re-inlined a managed host instead of importing endpoints: {residual}"
 
 
 def test_ratchet_holds_for_the_current_tree():
@@ -242,7 +198,7 @@ def test_ratchet_can_decrease_and_that_is_the_point(tmp_path):
 def test_baseline_is_present_and_shaped():
     data = json.loads(eps.BASELINE.read_text(encoding="utf-8"))
     assert "files" in data and isinstance(data["files"], dict)
-    assert data["files"], "baseline must record the not-yet-wired files"
+    assert data["files"] == {}, "all sms_tool callers are wired to sms_tool/transport/endpoints.py (zero inline debt)"
 
 
 def test_cli_exit_zero_on_the_current_tree():
@@ -292,7 +248,7 @@ def test_baseline_is_written_with_lf_endings(tmp_path, monkeypatch):
     assert raw.endswith(b"\n")
 
 
-@pytest.mark.parametrize("path", WIRED + WIRED_SMS_TOOL)
+@pytest.mark.parametrize("path", WIRED_SMS_TOOL)
 def test_wired_files_are_pure_lf(path):
     raw = (ROOT / path).read_bytes()
     assert b"\r\n" not in raw

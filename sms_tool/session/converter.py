@@ -9,12 +9,38 @@ then exports import-ready CPA/sub2api/Cockpit/9router/Codex/AxonHub formats.
 from __future__ import annotations
 
 import base64
+import importlib
 import json
+import os
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 from ..transport import endpoints
+
+
+def _load_native_session_converter() -> Any | None:
+    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
+    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_SESSION_CONVERTER") or "").strip().lower()
+    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
+        return None
+    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "session-converter-rs" / "python"
+    if pkg_dir.is_dir():
+        pkg_str = str(pkg_dir)
+        if pkg_str not in sys.path:
+            sys.path.insert(0, pkg_str)
+    try:
+        return importlib.import_module("session_converter_rs")
+    except (ImportError, OSError):
+        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
+            raise
+        return None
+
+
+_NATIVE_SESSION_CONVERTER = _load_native_session_converter()
+_NATIVE_PARSE_JWT_PAYLOAD = getattr(_NATIVE_SESSION_CONVERTER, "parse_jwt_payload", None)
+_NATIVE_COLLECT_SESSIONS = getattr(_NATIVE_SESSION_CONVERTER, "collect_session_like_objects", None)
 
 
 FORMATS = {"cpa", "sub2api", "cockpit", "9router", "codex", "axonhub", "codexmanager"}
@@ -54,6 +80,11 @@ def strip_unavailable(value: Any) -> Any:
 
 
 def parse_jwt_payload(token: str | None) -> dict[str, Any]:
+    if _NATIVE_PARSE_JWT_PAYLOAD is not None and (token is None or isinstance(token, str)):
+        try:
+            return _NATIVE_PARSE_JWT_PAYLOAD(token)
+        except TypeError:
+            pass
     try:
         parts = str(token or "").split(".")
         if len(parts) < 2:
@@ -167,6 +198,11 @@ def build_synthetic_codex_id_token(
 
 
 def collect_session_like_objects(value: Any, source_name: str = "pasted-json") -> list[dict[str, Any]]:
+    if _NATIVE_COLLECT_SESSIONS is not None and isinstance(value, (dict, list)):
+        try:
+            return _NATIVE_COLLECT_SESSIONS(value, source_name)
+        except (TypeError, RecursionError):
+            pass
     found: list[dict[str, Any]] = []
     seen: set[int] = set()
 

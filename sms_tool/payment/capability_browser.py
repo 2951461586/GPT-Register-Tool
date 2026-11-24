@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 from typing import Any, Mapping, cast
+from urllib.parse import unquote, urlsplit
 
 from ..transport import endpoints
 from .checkout_contract import (
@@ -68,6 +69,29 @@ def _cookies_from_header(cookie_header: str, device_id: str) -> list[dict[str, s
     return cookies
 
 
+def _playwright_proxy(proxy: Any) -> dict[str, str] | None:
+    """Convert a proxy URL to Playwright's launch proxy dict."""
+    value = str(proxy or "").strip()
+    if not value:
+        return None
+    try:
+        parsed = urlsplit(value)
+    except ValueError:
+        return None
+    if not parsed.scheme or not parsed.hostname:
+        return None
+    scheme = "socks5" if parsed.scheme == "socks5h" else parsed.scheme
+    server = f"{scheme}://{parsed.hostname}"
+    if parsed.port:
+        server += f":{parsed.port}"
+    result: dict[str, str] = {"server": server}
+    if parsed.username:
+        result["username"] = unquote(parsed.username)
+    if parsed.password:
+        result["password"] = unquote(parsed.password)
+    return result
+
+
 class BrowserCapabilityTransport:
     """Open the Checkout in a real browser session; delegate the rest.
 
@@ -117,8 +141,6 @@ class BrowserCapabilityTransport:
                 status="unknown",
             ) from exc
 
-        from ..upi_link.browser import _upi_browser_proxy
-
         _raw_context: object = auth_context
         context: dict = _raw_context if isinstance(_raw_context, dict) else {}
         cookie_header = str(context.get("cookie_header") or "")
@@ -137,7 +159,7 @@ class BrowserCapabilityTransport:
                     "timeout": self.timeout_ms,
                     "args": ["--disable-blink-features=AutomationControlled", "--disable-dev-shm-usage"],
                 }
-                pw_proxy = _upi_browser_proxy(proxy)
+                pw_proxy = _playwright_proxy(proxy)
                 if pw_proxy:
                     launch["proxy"] = pw_proxy
                 browser = playwright.chromium.launch(**launch)

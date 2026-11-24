@@ -1,0 +1,2717 @@
+{
+ "$o": [
+  [
+   "Reflect",
+   {
+    "$k": "p",
+    "$o": [
+     [
+      "get",
+      {
+       "$fn": "Reflect.get",
+       "$b": "ReflectStub.get"
+      }
+     ],
+     [
+      "set",
+      {
+       "$fn": "Reflect.set",
+       "$b": "ReflectStub.set"
+      }
+     ],
+     [
+      "has",
+      {
+       "$fn": "Reflect.has",
+       "$b": "ReflectStub.has"
+      }
+     ],
+     [
+      "deleteProperty",
+      {
+       "$fn": "Reflect.deleteProperty",
+       "$b": "ReflectStub.deleteProperty"
+      }
+     ],
+     [
+      "ownKeys",
+      {
+       "$fn": "Reflect.ownKeys",
+       "$b": "ReflectStub.ownKeys"
+      }
+     ],
+     [
+      "apply",
+      {
+       "$fn": "Reflect.apply",
+       "$b": "ReflectStub.apply"
+      }
+     ],
+     [
+      "construct",
+      {
+       "$fn": "Reflect.construct",
+       "$b": "ReflectStub.construct"
+      }
+     ],
+     [
+      "getPrototypeOf",
+      {
+       "$fn": "Reflect.getPrototypeOf",
+       "$b": "ReflectStub.getPrototypeOf"
+      }
+     ]
+    ]
+   }
+  ],
+  [
+   "Math",
+   {
+    "$k": "p",
+    "$o": [
+     [
+      "random",
+      {
+       "$fn": "Math.random",
+       "$b": "MathStub.random"
+      }
+     ],
+     [
+      "floor",
+      {
+       "$fn": "Math.floor",
+       "$b": "MathStub.floor"
+      }
+     ],
+     [
+      "ceil",
+      {
+       "$fn": "Math.ceil",
+       "$b": "MathStub.ceil"
+      }
+     ],
+     [
+      "round",
+      {
+       "$fn": "Math.round",
+       "$b": "MathStub.round"
+      }
+     ],
+     [
+      "abs",
+      {
+       "$fn": "Math.abs",
+       "$b": "MathStub.abs"
+      }
+     ],
+     [
+      "max",
+      {
+       "$fn": "Math.max",
+       "$b": "MathStub.max"
+      }
+     ],
+     [
+      "min",
+      {
+       "$fn": "Math.min",
+       "$b": "MathStub.min"
+      }
+     ],
+     [
+      "imul",
+      {
+       "$fn": "Math.imul",
+       "$b": "MathStub.imul"
+      }
+     ],
+     [
+      "pow",
+      {
+       "$fn": "Math.pow",
+       "$b": "MathStub.pow"
+      }
+     ],
+     [
+      "sqrt",
+      {
+       "$fn": "Math.sqrt",
+       "$b": "MathStub.sqrt"
+      }
+     ],
+     [
+      "cbrt",
+      {
+       "$fn": "Math.cbrt",
+       "$b": "MathStub.cbrt"
+      }
+     ],
+     [
+      "hypot",
+      {
+       "$fn": "Math.hypot",
+       "$b": "MathStub.hypot"
+      }
+     ],
+     [
+      "trunc",
+      {
+       "$fn": "Math.trunc",
+       "$b": "MathStub.trunc"
+      }
+     ],
+     [
+      "sign",
+      {
+       "$fn": "Math.sign",
+       "$b": "MathStub.sign"
+      }
+     ],
+     [
+      "log",
+      {
+       "$fn": "Math.log",
+       "$b": "MathStub.log"
+      }
+     ],
+     [
+      "exp",
+      {
+       "$fn": "Math.exp",
+       "$b": "MathStub.exp"
+      }
+     ],
+     [
+      "isSafeInteger",
+      {
+       "$fn": "Math.isSafeInteger",
+       "$b": "MathStub.isSafeInteger"
+      }
+     ],
+     [
+      "expm1",
+      {
+       "$fn": "Math.expm1",
+       "$b": "MathStub.expm1"
+      }
+     ]
+    ]
+   }
+  ],
+  [
+   "JSON",
+   {
+    "$o": [
+     [
+      "dumps",
+      {
+       "$fn": "JSON.dumps",
+       "$b": "JSON.dumps"
+      }
+     ],
+     [
+      "loads",
+      {
+       "$fn": "JSON.loads",
+       "$b": "JSON.loads"
+      }
+     ]
+    ]
+   }
+  ],
+  [
+   "Object",
+   {
+    "$k": "p",
+    "$o": [
+     [
+      "_STORAGE_KEYS",
+      [
+       "length",
+       "clear",
+       "getItem",
+       "setItem",
+       "removeItem",
+       "key"
+      ]
+     ],
+     [
+      "create",
+      {
+       "$fn": "Object.create",
+       "$b": "ObjectStub.create"
+      }
+     ],
+     [
+      "keys",
+      {
+       "$fn": "Object.keys",
+       "$b": "ObjectStub.keys"
+      }
+     ],
+     [
+      "values",
+      {
+       "$fn": "Object.values",
+       "$b": "ObjectStub.values"
+      }
+     ],
+     [
+      "assign",
+      {
+       "$fn": "Object.assign",
+       "$b": "ObjectStub.assign"
+      }
+     ],
+     [
+      "getPrototypeOf",
+      {
+       "$fn": "Object.getPrototypeOf",
+       "$b": "ObjectStub.getPrototypeOf"
+      }
+     ],
+     [
+      "defineProperty",
+      {
+       "$fn": "Object.defineProperty",
+       "$b": "ObjectStub.defineProperty"
+      }
+     ],
+     [
+      "freeze",
+      {
+       "$fn": "Object.freeze",
+       "$b": "ObjectStub.freeze"
+      }
+     ],
+     [
+      "entries",
+      {
+       "$fn": "Object.entries",
+       "$b": "ObjectStub.entries"
+      }
+     ]
+    ]
+   }
+  ],
+  [
+   "Array",
+   {
+    "$k": "p",
+    "$o": [
+     [
+      "isArray",
+      {
+       "$fn": "Array.isArray",
+       "$b": "ArrayStub.isArray"
+      }
+     ],
+     [
+      "from_",
+      {
+       "$fn": "Array.from_",
+       "$b": "ArrayStub.from_"
+      }
+     ],
+     [
+      "of",
+      {
+       "$fn": "Array.of",
+       "$b": "ArrayStub.of"
+      }
+     ]
+    ]
+   }
+  ],
+  [
+   "Number",
+   {
+    "$k": "p",
+    "$o": [
+     [
+      "MAX_SAFE_INTEGER",
+      9007199254740991
+     ],
+     [
+      "MAX_VALUE",
+      1.7976931348623157e+308
+     ],
+     [
+      "MIN_VALUE",
+      5e-324
+     ],
+     [
+      "NaN",
+      {
+       "$num": "NaN"
+      }
+     ],
+     [
+      "POSITIVE_INFINITY",
+      {
+       "$num": "Infinity"
+      }
+     ],
+     [
+      "NEGATIVE_INFINITY",
+      {
+       "$num": "-Infinity"
+      }
+     ],
+     [
+      "EPSILON",
+      2.220446049250313e-16
+     ],
+     [
+      "isSafeInteger",
+      {
+       "$fn": "Number.isSafeInteger",
+       "$b": "NumberStub.isSafeInteger"
+      }
+     ],
+     [
+      "isInteger",
+      {
+       "$fn": "Number.isInteger",
+       "$b": "NumberStub.isInteger"
+      }
+     ],
+     [
+      "isFinite",
+      {
+       "$fn": "Number.isFinite",
+       "$b": "NumberStub.isFinite"
+      }
+     ],
+     [
+      "isNaN",
+      {
+       "$fn": "Number.isNaN",
+       "$b": "NumberStub.isNaN"
+      }
+     ],
+     [
+      "parseInt",
+      {
+       "$fn": "Number.parseInt",
+       "$b": "NumberStub.parseInt"
+      }
+     ],
+     [
+      "parseFloat",
+      {
+       "$fn": "Number.parseFloat",
+       "$b": "NumberStub.parseFloat"
+      }
+     ]
+    ],
+    "$fn": "Number",
+    "$b": "Number"
+   }
+  ],
+  [
+   "String",
+   {
+    "$fn": "String",
+    "$b": "String"
+   }
+  ],
+  [
+   "Boolean",
+   {
+    "$fn": "Boolean",
+    "$b": "Boolean"
+   }
+  ],
+  [
+   "Date",
+   {
+    "$k": "p",
+    "$o": [
+     [
+      "now",
+      {
+       "$fn": "Date.now",
+       "$b": "Date.now"
+      }
+     ],
+     [
+      "parse",
+      {
+       "$fn": "Date.parse",
+       "$b": "Date.parse"
+      }
+     ],
+     [
+      "UTC",
+      {
+       "$fn": "Date.UTC",
+       "$b": "Date.UTC"
+      }
+     ]
+    ]
+   }
+  ],
+  [
+   "performance",
+   {
+    "$k": "p",
+    "$o": [
+     [
+      "memory",
+      {
+       "$k": "d",
+       "$o": [
+        [
+         "jsHeapSizeLimit",
+         4294967296
+        ]
+       ]
+      }
+     ],
+     [
+      "t0",
+      0.0
+     ],
+     [
+      "now",
+      {
+       "$fn": "performance.now",
+       "$b": "performance.now"
+      }
+     ],
+     [
+      "timeOrigin",
+      1699999999984
+     ],
+     [
+      "getEntriesByType",
+      {
+       "$fn": "performance.getEntriesByType",
+       "$b": "PerfStub.getEntriesByType"
+      }
+     ],
+     [
+      "getEntriesByName",
+      {
+       "$fn": "performance.getEntriesByName",
+       "$b": "PerfStub.getEntriesByName"
+      }
+     ],
+     [
+      "mark",
+      {
+       "$fn": "performance.mark",
+       "$b": "PerfStub.mark"
+      }
+     ],
+     [
+      "measure",
+      {
+       "$fn": "performance.measure",
+       "$b": "PerfStub.measure"
+      }
+     ]
+    ]
+   }
+  ],
+  [
+   "navigator",
+   {
+    "$k": "p",
+    "$o": [
+     [
+      "userAgent",
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36"
+     ],
+     [
+      "appName",
+      "Netscape"
+     ],
+     [
+      "appVersion",
+      "5.0"
+     ],
+     [
+      "appCodeName",
+      "Mozilla"
+     ],
+     [
+      "product",
+      "Gecko"
+     ],
+     [
+      "productSub",
+      "20030107"
+     ],
+     [
+      "language",
+      "en-US"
+     ],
+     [
+      "languages",
+      [
+       "en-US",
+       "en"
+      ]
+     ],
+     [
+      "platform",
+      "Win32"
+     ],
+     [
+      "vendor",
+      "Google Inc."
+     ],
+     [
+      "vendorSub",
+      ""
+     ],
+     [
+      "hardwareConcurrency",
+      8
+     ],
+     [
+      "deviceMemory",
+      8
+     ],
+     [
+      "maxTouchPoints",
+      0
+     ],
+     [
+      "webdriver",
+      false
+     ],
+     [
+      "doNotTrack",
+      null
+     ],
+     [
+      "cookieEnabled",
+      true
+     ],
+     [
+      "onLine",
+      true
+     ],
+     [
+      "plugins",
+      []
+     ],
+     [
+      "mimeTypes",
+      []
+     ],
+     [
+      "pdfViewerEnabled",
+      true
+     ],
+     [
+      "userAgentData",
+      {
+       "$k": "p",
+       "$o": [
+        [
+         "brands",
+         [
+          {
+           "$k": "d",
+           "$o": [
+            [
+             "brand",
+             "Chromium"
+            ],
+            [
+             "version",
+             "152"
+            ]
+           ]
+          },
+          {
+           "$k": "d",
+           "$o": [
+            [
+             "brand",
+             "Not?A_Brand"
+            ],
+            [
+             "version",
+             "24"
+            ]
+           ]
+          },
+          {
+           "$k": "d",
+           "$o": [
+            [
+             "brand",
+             "Google Chrome"
+            ],
+            [
+             "version",
+             "152"
+            ]
+           ]
+          }
+         ]
+        ],
+        [
+         "mobile",
+         false
+        ],
+        [
+         "platform",
+         "Windows"
+        ],
+        [
+         "architecture",
+         "x86"
+        ],
+        [
+         "bitness",
+         "64"
+        ],
+        [
+         "model",
+         ""
+        ],
+        [
+         "platformVersion",
+         "15.0.0"
+        ],
+        [
+         "fullVersionList",
+         [
+          {
+           "$k": "d",
+           "$o": [
+            [
+             "brand",
+             "Chromium"
+            ],
+            [
+             "version",
+             "152"
+            ]
+           ]
+          },
+          {
+           "$k": "d",
+           "$o": [
+            [
+             "brand",
+             "Not?A_Brand"
+            ],
+            [
+             "version",
+             "24"
+            ]
+           ]
+          },
+          {
+           "$k": "d",
+           "$o": [
+            [
+             "brand",
+             "Google Chrome"
+            ],
+            [
+             "version",
+             "152"
+            ]
+           ]
+          }
+         ]
+        ],
+        [
+         "getHighEntropyValues",
+         {
+          "$fn": "navigator.userAgentData.getHighEntropyValues",
+          "$b": "UserAgentDataStub.getHighEntropyValues"
+         }
+        ],
+        [
+         "toJSON",
+         {
+          "$fn": "navigator.userAgentData.toJSON",
+          "$b": "UserAgentDataStub.toJSON"
+         }
+        ]
+       ]
+      }
+     ],
+     [
+      "connection",
+      {
+       "$k": "d",
+       "$o": [
+        [
+         "effectiveType",
+         "4g"
+        ],
+        [
+         "rtt",
+         50
+        ],
+        [
+         "downlink",
+         10
+        ],
+        [
+         "saveData",
+         false
+        ]
+       ]
+      }
+     ]
+    ]
+   }
+  ],
+  [
+   "document",
+   {
+    "$k": "p",
+    "$o": [
+     [
+      "scripts",
+      [
+       {
+        "$k": "p",
+        "$o": [
+         [
+          "tagName",
+          "SCRIPT"
+         ],
+         [
+          "style",
+          {
+           "$k": "d",
+           "$o": []
+          }
+         ],
+         [
+          "children",
+          []
+         ],
+         [
+          "parentNode",
+          null
+         ],
+         [
+          "value",
+          ""
+         ],
+         [
+          "checked",
+          false
+         ],
+         [
+          "disabled",
+          false
+         ],
+         [
+          "oninput",
+          null
+         ],
+         [
+          "onchange",
+          null
+         ],
+         [
+          "onclick",
+          null
+         ],
+         [
+          "onkeydown",
+          null
+         ],
+         [
+          "onkeyup",
+          null
+         ],
+         [
+          "onpaste",
+          null
+         ],
+         [
+          "onfocus",
+          null
+         ],
+         [
+          "onblur",
+          null
+         ],
+         [
+          "onsubmit",
+          null
+         ],
+         [
+          "onmousemove",
+          null
+         ],
+         [
+          "onmouseover",
+          null
+         ],
+         [
+          "onscroll",
+          null
+         ],
+         [
+          "src",
+          "https://sentinel.openai.com/sentinel/sdk.js"
+         ],
+         [
+          "appendChild",
+          {
+           "$fn": "document.scripts[0].appendChild",
+           "$b": "ElementStub.appendChild"
+          }
+         ],
+         [
+          "removeChild",
+          {
+           "$fn": "document.scripts[0].removeChild",
+           "$b": "ElementStub.removeChild"
+          }
+         ],
+         [
+          "insertBefore",
+          {
+           "$fn": "document.scripts[0].insertBefore",
+           "$b": "ElementStub.insertBefore"
+          }
+         ],
+         [
+          "getAttribute",
+          {
+           "$fn": "document.scripts[0].getAttribute",
+           "$b": "ElementStub.getAttribute"
+          }
+         ],
+         [
+          "setAttribute",
+          {
+           "$fn": "document.scripts[0].setAttribute",
+           "$b": "ElementStub.setAttribute"
+          }
+         ],
+         [
+          "getContext",
+          {
+           "$fn": "document.scripts[0].getContext",
+           "$b": "ElementStub.getContext"
+          }
+         ],
+         [
+          "toDataURL",
+          {
+           "$fn": "document.scripts[0].toDataURL",
+           "$b": "ElementStub.toDataURL"
+          }
+         ],
+         [
+          "toBlob",
+          {
+           "$fn": "document.scripts[0].toBlob",
+           "$b": "ElementStub.toBlob"
+          }
+         ],
+         [
+          "getBoundingClientRect",
+          {
+           "$fn": "document.scripts[0].getBoundingClientRect",
+           "$b": "ElementStub.getBoundingClientRect"
+          }
+         ],
+         [
+          "getClientRects",
+          {
+           "$fn": "document.scripts[0].getClientRects",
+           "$b": "ElementStub.getClientRects"
+          }
+         ],
+         [
+          "addEventListener",
+          {
+           "$fn": "document.scripts[0].addEventListener",
+           "$b": "ElementStub.addEventListener"
+          }
+         ],
+         [
+          "removeEventListener",
+          {
+           "$fn": "document.scripts[0].removeEventListener",
+           "$b": "ElementStub.removeEventListener"
+          }
+         ],
+         [
+          "querySelector",
+          {
+           "$fn": "document.scripts[0].querySelector",
+           "$b": "ElementStub.querySelector"
+          }
+         ],
+         [
+          "querySelectorAll",
+          {
+           "$fn": "document.scripts[0].querySelectorAll",
+           "$b": "ElementStub.querySelectorAll"
+          }
+         ]
+        ]
+       }
+      ]
+     ],
+     [
+      "cookie",
+      "oai-did=x"
+     ],
+     [
+      "readyState",
+      "complete"
+     ],
+     [
+      "hidden",
+      false
+     ],
+     [
+      "visibilityState",
+      "visible"
+     ],
+     [
+      "URL",
+      "https://auth.openai.com/"
+     ],
+     [
+      "documentURI",
+      "https://auth.openai.com/"
+     ],
+     [
+      "referrer",
+      "https://auth.openai.com/"
+     ],
+     [
+      "title",
+      ""
+     ],
+     [
+      "characterSet",
+      "UTF-8"
+     ],
+     [
+      "contentType",
+      "text/html"
+     ],
+     [
+      "location",
+      {
+       "$k": "d",
+       "$o": [
+        [
+         "href",
+         "https://auth.openai.com/"
+        ],
+        [
+         "origin",
+         "https://auth.openai.com"
+        ],
+        [
+         "pathname",
+         "/"
+        ],
+        [
+         "search",
+         ""
+        ],
+        [
+         "hash",
+         ""
+        ]
+       ]
+      }
+     ],
+     [
+      "currentScript",
+      {
+       "$k": "p",
+       "$o": [
+        [
+         "tagName",
+         "SCRIPT"
+        ],
+        [
+         "style",
+         {
+          "$k": "d",
+          "$o": []
+         }
+        ],
+        [
+         "children",
+         []
+        ],
+        [
+         "parentNode",
+         null
+        ],
+        [
+         "value",
+         ""
+        ],
+        [
+         "checked",
+         false
+        ],
+        [
+         "disabled",
+         false
+        ],
+        [
+         "oninput",
+         null
+        ],
+        [
+         "onchange",
+         null
+        ],
+        [
+         "onclick",
+         null
+        ],
+        [
+         "onkeydown",
+         null
+        ],
+        [
+         "onkeyup",
+         null
+        ],
+        [
+         "onpaste",
+         null
+        ],
+        [
+         "onfocus",
+         null
+        ],
+        [
+         "onblur",
+         null
+        ],
+        [
+         "onsubmit",
+         null
+        ],
+        [
+         "onmousemove",
+         null
+        ],
+        [
+         "onmouseover",
+         null
+        ],
+        [
+         "onscroll",
+         null
+        ],
+        [
+         "src",
+         "https://sentinel.openai.com/sentinel/sdk.js"
+        ],
+        [
+         "getAttribute",
+         {
+          "$fn": "document.currentScript.getAttribute",
+          "$b": "document.currentScript.getAttribute"
+         }
+        ],
+        [
+         "appendChild",
+         {
+          "$fn": "document.currentScript.appendChild",
+          "$b": "ElementStub.appendChild"
+         }
+        ],
+        [
+         "removeChild",
+         {
+          "$fn": "document.currentScript.removeChild",
+          "$b": "ElementStub.removeChild"
+         }
+        ],
+        [
+         "insertBefore",
+         {
+          "$fn": "document.currentScript.insertBefore",
+          "$b": "ElementStub.insertBefore"
+         }
+        ],
+        [
+         "setAttribute",
+         {
+          "$fn": "document.currentScript.setAttribute",
+          "$b": "ElementStub.setAttribute"
+         }
+        ],
+        [
+         "getContext",
+         {
+          "$fn": "document.currentScript.getContext",
+          "$b": "ElementStub.getContext"
+         }
+        ],
+        [
+         "toDataURL",
+         {
+          "$fn": "document.currentScript.toDataURL",
+          "$b": "ElementStub.toDataURL"
+         }
+        ],
+        [
+         "toBlob",
+         {
+          "$fn": "document.currentScript.toBlob",
+          "$b": "ElementStub.toBlob"
+         }
+        ],
+        [
+         "getBoundingClientRect",
+         {
+          "$fn": "document.currentScript.getBoundingClientRect",
+          "$b": "ElementStub.getBoundingClientRect"
+         }
+        ],
+        [
+         "getClientRects",
+         {
+          "$fn": "document.currentScript.getClientRects",
+          "$b": "ElementStub.getClientRects"
+         }
+        ],
+        [
+         "addEventListener",
+         {
+          "$fn": "document.currentScript.addEventListener",
+          "$b": "ElementStub.addEventListener"
+         }
+        ],
+        [
+         "removeEventListener",
+         {
+          "$fn": "document.currentScript.removeEventListener",
+          "$b": "ElementStub.removeEventListener"
+         }
+        ],
+        [
+         "querySelector",
+         {
+          "$fn": "document.currentScript.querySelector",
+          "$b": "ElementStub.querySelector"
+         }
+        ],
+        [
+         "querySelectorAll",
+         {
+          "$fn": "document.currentScript.querySelectorAll",
+          "$b": "ElementStub.querySelectorAll"
+         }
+        ]
+       ]
+      }
+     ],
+     [
+      "oninput",
+      null
+     ],
+     [
+      "clientBootstrap",
+      {
+       "$k": "d",
+       "$o": []
+      }
+     ],
+     [
+      "documentElement",
+      {
+       "$k": "p",
+       "$o": [
+        [
+         "tagName",
+         "HTML"
+        ],
+        [
+         "style",
+         {
+          "$k": "d",
+          "$o": []
+         }
+        ],
+        [
+         "children",
+         []
+        ],
+        [
+         "parentNode",
+         null
+        ],
+        [
+         "value",
+         ""
+        ],
+        [
+         "checked",
+         false
+        ],
+        [
+         "disabled",
+         false
+        ],
+        [
+         "oninput",
+         null
+        ],
+        [
+         "onchange",
+         null
+        ],
+        [
+         "onclick",
+         null
+        ],
+        [
+         "onkeydown",
+         null
+        ],
+        [
+         "onkeyup",
+         null
+        ],
+        [
+         "onpaste",
+         null
+        ],
+        [
+         "onfocus",
+         null
+        ],
+        [
+         "onblur",
+         null
+        ],
+        [
+         "onsubmit",
+         null
+        ],
+        [
+         "onmousemove",
+         null
+        ],
+        [
+         "onmouseover",
+         null
+        ],
+        [
+         "onscroll",
+         null
+        ],
+        [
+         "clientWidth",
+         1920
+        ],
+        [
+         "clientHeight",
+         1080
+        ],
+        [
+         "appendChild",
+         {
+          "$fn": "document.documentElement.appendChild",
+          "$b": "ElementStub.appendChild"
+         }
+        ],
+        [
+         "removeChild",
+         {
+          "$fn": "document.documentElement.removeChild",
+          "$b": "ElementStub.removeChild"
+         }
+        ],
+        [
+         "insertBefore",
+         {
+          "$fn": "document.documentElement.insertBefore",
+          "$b": "ElementStub.insertBefore"
+         }
+        ],
+        [
+         "getAttribute",
+         {
+          "$fn": "document.documentElement.getAttribute",
+          "$b": "ElementStub.getAttribute"
+         }
+        ],
+        [
+         "setAttribute",
+         {
+          "$fn": "document.documentElement.setAttribute",
+          "$b": "ElementStub.setAttribute"
+         }
+        ],
+        [
+         "getContext",
+         {
+          "$fn": "document.documentElement.getContext",
+          "$b": "ElementStub.getContext"
+         }
+        ],
+        [
+         "toDataURL",
+         {
+          "$fn": "document.documentElement.toDataURL",
+          "$b": "ElementStub.toDataURL"
+         }
+        ],
+        [
+         "toBlob",
+         {
+          "$fn": "document.documentElement.toBlob",
+          "$b": "ElementStub.toBlob"
+         }
+        ],
+        [
+         "getBoundingClientRect",
+         {
+          "$fn": "document.documentElement.getBoundingClientRect",
+          "$b": "ElementStub.getBoundingClientRect"
+         }
+        ],
+        [
+         "getClientRects",
+         {
+          "$fn": "document.documentElement.getClientRects",
+          "$b": "ElementStub.getClientRects"
+         }
+        ],
+        [
+         "addEventListener",
+         {
+          "$fn": "document.documentElement.addEventListener",
+          "$b": "ElementStub.addEventListener"
+         }
+        ],
+        [
+         "removeEventListener",
+         {
+          "$fn": "document.documentElement.removeEventListener",
+          "$b": "ElementStub.removeEventListener"
+         }
+        ],
+        [
+         "querySelector",
+         {
+          "$fn": "document.documentElement.querySelector",
+          "$b": "ElementStub.querySelector"
+         }
+        ],
+        [
+         "querySelectorAll",
+         {
+          "$fn": "document.documentElement.querySelectorAll",
+          "$b": "ElementStub.querySelectorAll"
+         }
+        ]
+       ]
+      }
+     ],
+     [
+      "body",
+      {
+       "$k": "p",
+       "$o": [
+        [
+         "tagName",
+         "BODY"
+        ],
+        [
+         "style",
+         {
+          "$k": "d",
+          "$o": []
+         }
+        ],
+        [
+         "children",
+         []
+        ],
+        [
+         "parentNode",
+         null
+        ],
+        [
+         "value",
+         ""
+        ],
+        [
+         "checked",
+         false
+        ],
+        [
+         "disabled",
+         false
+        ],
+        [
+         "oninput",
+         null
+        ],
+        [
+         "onchange",
+         null
+        ],
+        [
+         "onclick",
+         null
+        ],
+        [
+         "onkeydown",
+         null
+        ],
+        [
+         "onkeyup",
+         null
+        ],
+        [
+         "onpaste",
+         null
+        ],
+        [
+         "onfocus",
+         null
+        ],
+        [
+         "onblur",
+         null
+        ],
+        [
+         "onsubmit",
+         null
+        ],
+        [
+         "onmousemove",
+         null
+        ],
+        [
+         "onmouseover",
+         null
+        ],
+        [
+         "onscroll",
+         null
+        ],
+        [
+         "appendChild",
+         {
+          "$fn": "document.body.appendChild",
+          "$b": "ElementStub.appendChild"
+         }
+        ],
+        [
+         "removeChild",
+         {
+          "$fn": "document.body.removeChild",
+          "$b": "ElementStub.removeChild"
+         }
+        ],
+        [
+         "insertBefore",
+         {
+          "$fn": "document.body.insertBefore",
+          "$b": "ElementStub.insertBefore"
+         }
+        ],
+        [
+         "getAttribute",
+         {
+          "$fn": "document.body.getAttribute",
+          "$b": "ElementStub.getAttribute"
+         }
+        ],
+        [
+         "setAttribute",
+         {
+          "$fn": "document.body.setAttribute",
+          "$b": "ElementStub.setAttribute"
+         }
+        ],
+        [
+         "getContext",
+         {
+          "$fn": "document.body.getContext",
+          "$b": "ElementStub.getContext"
+         }
+        ],
+        [
+         "toDataURL",
+         {
+          "$fn": "document.body.toDataURL",
+          "$b": "ElementStub.toDataURL"
+         }
+        ],
+        [
+         "toBlob",
+         {
+          "$fn": "document.body.toBlob",
+          "$b": "ElementStub.toBlob"
+         }
+        ],
+        [
+         "getBoundingClientRect",
+         {
+          "$fn": "document.body.getBoundingClientRect",
+          "$b": "ElementStub.getBoundingClientRect"
+         }
+        ],
+        [
+         "getClientRects",
+         {
+          "$fn": "document.body.getClientRects",
+          "$b": "ElementStub.getClientRects"
+         }
+        ],
+        [
+         "addEventListener",
+         {
+          "$fn": "document.body.addEventListener",
+          "$b": "ElementStub.addEventListener"
+         }
+        ],
+        [
+         "removeEventListener",
+         {
+          "$fn": "document.body.removeEventListener",
+          "$b": "ElementStub.removeEventListener"
+         }
+        ],
+        [
+         "querySelector",
+         {
+          "$fn": "document.body.querySelector",
+          "$b": "ElementStub.querySelector"
+         }
+        ],
+        [
+         "querySelectorAll",
+         {
+          "$fn": "document.body.querySelectorAll",
+          "$b": "ElementStub.querySelectorAll"
+         }
+        ]
+       ]
+      }
+     ],
+     [
+      "head",
+      {
+       "$k": "p",
+       "$o": [
+        [
+         "tagName",
+         "HEAD"
+        ],
+        [
+         "style",
+         {
+          "$k": "d",
+          "$o": []
+         }
+        ],
+        [
+         "children",
+         []
+        ],
+        [
+         "parentNode",
+         null
+        ],
+        [
+         "value",
+         ""
+        ],
+        [
+         "checked",
+         false
+        ],
+        [
+         "disabled",
+         false
+        ],
+        [
+         "oninput",
+         null
+        ],
+        [
+         "onchange",
+         null
+        ],
+        [
+         "onclick",
+         null
+        ],
+        [
+         "onkeydown",
+         null
+        ],
+        [
+         "onkeyup",
+         null
+        ],
+        [
+         "onpaste",
+         null
+        ],
+        [
+         "onfocus",
+         null
+        ],
+        [
+         "onblur",
+         null
+        ],
+        [
+         "onsubmit",
+         null
+        ],
+        [
+         "onmousemove",
+         null
+        ],
+        [
+         "onmouseover",
+         null
+        ],
+        [
+         "onscroll",
+         null
+        ],
+        [
+         "appendChild",
+         {
+          "$fn": "document.head.appendChild",
+          "$b": "ElementStub.appendChild"
+         }
+        ],
+        [
+         "removeChild",
+         {
+          "$fn": "document.head.removeChild",
+          "$b": "ElementStub.removeChild"
+         }
+        ],
+        [
+         "insertBefore",
+         {
+          "$fn": "document.head.insertBefore",
+          "$b": "ElementStub.insertBefore"
+         }
+        ],
+        [
+         "getAttribute",
+         {
+          "$fn": "document.head.getAttribute",
+          "$b": "ElementStub.getAttribute"
+         }
+        ],
+        [
+         "setAttribute",
+         {
+          "$fn": "document.head.setAttribute",
+          "$b": "ElementStub.setAttribute"
+         }
+        ],
+        [
+         "getContext",
+         {
+          "$fn": "document.head.getContext",
+          "$b": "ElementStub.getContext"
+         }
+        ],
+        [
+         "toDataURL",
+         {
+          "$fn": "document.head.toDataURL",
+          "$b": "ElementStub.toDataURL"
+         }
+        ],
+        [
+         "toBlob",
+         {
+          "$fn": "document.head.toBlob",
+          "$b": "ElementStub.toBlob"
+         }
+        ],
+        [
+         "getBoundingClientRect",
+         {
+          "$fn": "document.head.getBoundingClientRect",
+          "$b": "ElementStub.getBoundingClientRect"
+         }
+        ],
+        [
+         "getClientRects",
+         {
+          "$fn": "document.head.getClientRects",
+          "$b": "ElementStub.getClientRects"
+         }
+        ],
+        [
+         "addEventListener",
+         {
+          "$fn": "document.head.addEventListener",
+          "$b": "ElementStub.addEventListener"
+         }
+        ],
+        [
+         "removeEventListener",
+         {
+          "$fn": "document.head.removeEventListener",
+          "$b": "ElementStub.removeEventListener"
+         }
+        ],
+        [
+         "querySelector",
+         {
+          "$fn": "document.head.querySelector",
+          "$b": "ElementStub.querySelector"
+         }
+        ],
+        [
+         "querySelectorAll",
+         {
+          "$fn": "document.head.querySelectorAll",
+          "$b": "ElementStub.querySelectorAll"
+         }
+        ]
+       ]
+      }
+     ],
+     [
+      "createElement",
+      {
+       "$fn": "document.createElement",
+       "$b": "DocStub.createElement"
+      }
+     ],
+     [
+      "createElementNS",
+      {
+       "$fn": "document.createElementNS",
+       "$b": "DocStub.createElementNS"
+      }
+     ],
+     [
+      "createDocumentFragment",
+      {
+       "$fn": "document.createDocumentFragment",
+       "$b": "DocStub.createDocumentFragment"
+      }
+     ],
+     [
+      "createTextNode",
+      {
+       "$fn": "document.createTextNode",
+       "$b": "DocStub.createTextNode"
+      }
+     ],
+     [
+      "querySelector",
+      {
+       "$fn": "document.querySelector",
+       "$b": "DocStub.querySelector"
+      }
+     ],
+     [
+      "querySelectorAll",
+      {
+       "$fn": "document.querySelectorAll",
+       "$b": "DocStub.querySelectorAll"
+      }
+     ],
+     [
+      "getElementById",
+      {
+       "$fn": "document.getElementById",
+       "$b": "DocStub.getElementById"
+      }
+     ],
+     [
+      "getElementsByTagName",
+      {
+       "$fn": "document.getElementsByTagName",
+       "$b": "DocStub.getElementsByTagName"
+      }
+     ],
+     [
+      "getElementsByClassName",
+      {
+       "$fn": "document.getElementsByClassName",
+       "$b": "DocStub.getElementsByClassName"
+      }
+     ],
+     [
+      "addEventListener",
+      {
+       "$fn": "document.addEventListener",
+       "$b": "DocStub.addEventListener"
+      }
+     ],
+     [
+      "removeEventListener",
+      {
+       "$fn": "document.removeEventListener",
+       "$b": "DocStub.removeEventListener"
+      }
+     ]
+    ]
+   }
+  ],
+  [
+   "location",
+   {
+    "$k": "d",
+    "$o": [
+     [
+      "href",
+      "https://auth.openai.com/"
+     ],
+     [
+      "origin",
+      "https://auth.openai.com"
+     ],
+     [
+      "protocol",
+      "https:"
+     ],
+     [
+      "host",
+      "auth.openai.com"
+     ],
+     [
+      "hostname",
+      "auth.openai.com"
+     ],
+     [
+      "pathname",
+      "/"
+     ],
+     [
+      "search",
+      ""
+     ],
+     [
+      "hash",
+      ""
+     ],
+     [
+      "assign",
+      {
+       "$fn": "location.assign",
+       "$b": "location.assign"
+      }
+     ],
+     [
+      "replace",
+      {
+       "$fn": "location.replace",
+       "$b": "location.replace"
+      }
+     ],
+     [
+      "reload",
+      {
+       "$fn": "location.reload",
+       "$b": "location.reload"
+      }
+     ]
+    ]
+   }
+  ],
+  [
+   "screen",
+   {
+    "$k": "d",
+    "$o": [
+     [
+      "width",
+      1920
+     ],
+     [
+      "height",
+      1080
+     ],
+     [
+      "availWidth",
+      1920
+     ],
+     [
+      "availHeight",
+      1080
+     ],
+     [
+      "colorDepth",
+      24
+     ],
+     [
+      "pixelDepth",
+      24
+     ],
+     [
+      "orientation",
+      {
+       "$k": "d",
+       "$o": [
+        [
+         "type",
+         "landscape-primary"
+        ],
+        [
+         "angle",
+         0
+        ]
+       ]
+      }
+     ]
+    ]
+   }
+  ],
+  [
+   "Set",
+   {
+    "$fn": "Set",
+    "$b": "SetStub"
+   }
+  ],
+  [
+   "WeakSet",
+   {
+    "$fn": "WeakSet",
+    "$b": "WeakSetStub"
+   }
+  ],
+  [
+   "Map",
+   {
+    "$fn": "Map",
+    "$b": "MapStub"
+   }
+  ],
+  [
+   "WeakMap",
+   {
+    "$fn": "WeakMap",
+    "$b": "WeakMapStub"
+   }
+  ],
+  [
+   "__oai_so_m",
+   9
+  ],
+  [
+   "__oai_so_ht",
+   200
+  ],
+  [
+   "__oai_so_hc",
+   2
+  ],
+  [
+   "__oai_so_bc",
+   1
+  ],
+  [
+   "__oai_so_bm",
+   0
+  ],
+  [
+   "__oai_so_ss",
+   0
+  ],
+  [
+   "__oai_so_ss2",
+   0
+  ],
+  [
+   "__oai_so_sn",
+   0
+  ],
+  [
+   "__oai_so_cs",
+   0
+  ],
+  [
+   "__oai_so_cs2",
+   0
+  ],
+  [
+   "__oai_so_cn",
+   1
+  ],
+  [
+   "__oai_so_st",
+   0
+  ],
+  [
+   "__oai_so_sw",
+   60
+  ],
+  [
+   "__oai_so_sp",
+   0
+  ],
+  [
+   "__oai_so_spt",
+   1
+  ],
+  [
+   "__oai_so_sx0",
+   480
+  ],
+  [
+   "__oai_so_sy0",
+   270
+  ],
+  [
+   "__oai_so_lx",
+   640
+  ],
+  [
+   "__oai_so_ly",
+   360
+  ],
+  [
+   "__oai_so_h",
+   0
+  ],
+  [
+   "__oai_so_hi",
+   0
+  ],
+  [
+   "__oai_so_hp",
+   0
+  ],
+  [
+   "__oai_so_hpm",
+   0
+  ],
+  [
+   "__oai_so_hw",
+   0
+  ],
+  [
+   "localStorage",
+   {
+    "$k": "p",
+    "$o": [
+     [
+      "_d",
+      {
+       "$k": "d",
+       "$o": []
+      }
+     ],
+     [
+      "getItem",
+      {
+       "$fn": "localStorage.getItem",
+       "$b": "StorageStub.getItem"
+      }
+     ],
+     [
+      "setItem",
+      {
+       "$fn": "localStorage.setItem",
+       "$b": "StorageStub.setItem"
+      }
+     ],
+     [
+      "removeItem",
+      {
+       "$fn": "localStorage.removeItem",
+       "$b": "StorageStub.removeItem"
+      }
+     ],
+     [
+      "clear",
+      {
+       "$fn": "localStorage.clear",
+       "$b": "StorageStub.clear"
+      }
+     ],
+     [
+      "key",
+      {
+       "$fn": "localStorage.key",
+       "$b": "StorageStub.key"
+      }
+     ],
+     [
+      "length",
+      0
+     ]
+    ]
+   }
+  ],
+  [
+   "sessionStorage",
+   {
+    "$k": "p",
+    "$o": [
+     [
+      "_d",
+      {
+       "$k": "d",
+       "$o": []
+      }
+     ],
+     [
+      "getItem",
+      {
+       "$fn": "sessionStorage.getItem",
+       "$b": "StorageStub.getItem"
+      }
+     ],
+     [
+      "setItem",
+      {
+       "$fn": "sessionStorage.setItem",
+       "$b": "StorageStub.setItem"
+      }
+     ],
+     [
+      "removeItem",
+      {
+       "$fn": "sessionStorage.removeItem",
+       "$b": "StorageStub.removeItem"
+      }
+     ],
+     [
+      "clear",
+      {
+       "$fn": "sessionStorage.clear",
+       "$b": "StorageStub.clear"
+      }
+     ],
+     [
+      "key",
+      {
+       "$fn": "sessionStorage.key",
+       "$b": "StorageStub.key"
+      }
+     ],
+     [
+      "length",
+      0
+     ]
+    ]
+   }
+  ],
+  [
+   "history",
+   {
+    "$k": "d",
+    "$o": [
+     [
+      "length",
+      1
+     ],
+     [
+      "state",
+      null
+     ],
+     [
+      "back",
+      {
+       "$fn": "history.back",
+       "$b": "history.back"
+      }
+     ],
+     [
+      "forward",
+      {
+       "$fn": "history.forward",
+       "$b": "history.forward"
+      }
+     ],
+     [
+      "go",
+      {
+       "$fn": "history.go",
+       "$b": "history.go"
+      }
+     ],
+     [
+      "pushState",
+      {
+       "$fn": "history.pushState",
+       "$b": "history.pushState"
+      }
+     ],
+     [
+      "replaceState",
+      {
+       "$fn": "history.replaceState",
+       "$b": "history.replaceState"
+      }
+     ]
+    ]
+   }
+  ],
+  [
+   "crypto",
+   {
+    "$k": "p",
+    "$o": [
+     [
+      "_os",
+      {
+       "$o": []
+      }
+     ],
+     [
+      "getRandomValues",
+      {
+       "$fn": "crypto.getRandomValues",
+       "$b": "CryptoStub.getRandomValues"
+      }
+     ],
+     [
+      "randomUUID",
+      {
+       "$fn": "crypto.randomUUID",
+       "$b": "CryptoStub.randomUUID"
+      }
+     ]
+    ]
+   }
+  ],
+  [
+   "Intl",
+   {
+    "$k": "d",
+    "$o": [
+     [
+      "DateTimeFormat",
+      null
+     ],
+     [
+      "NumberFormat",
+      null
+     ]
+    ]
+   }
+  ],
+  [
+   "URL",
+   {
+    "$fn": "URL",
+    "$b": "URLStub"
+   }
+  ],
+  [
+   "URLSearchParams",
+   {
+    "$fn": "URLSearchParams",
+    "$b": "URLSearchParamsStub"
+   }
+  ],
+  [
+   "TextEncoder",
+   {
+    "$fn": "TextEncoder",
+    "$b": "TextEncoderStub"
+   }
+  ],
+  [
+   "TextDecoder",
+   {
+    "$fn": "TextDecoder",
+    "$b": "TextDecoderStub"
+   }
+  ],
+  [
+   "btoa",
+   {
+    "$fn": "btoa",
+    "$b": "b64e"
+   }
+  ],
+  [
+   "atob",
+   {
+    "$fn": "atob",
+    "$b": "b64d"
+   }
+  ],
+  [
+   "parseInt",
+   {
+    "$fn": "parseInt",
+    "$b": "parseInt"
+   }
+  ],
+  [
+   "parseFloat",
+   {
+    "$fn": "parseFloat",
+    "$b": "parseFloat"
+   }
+  ],
+  [
+   "isNaN",
+   {
+    "$fn": "isNaN",
+    "$b": "isNaN"
+   }
+  ],
+  [
+   "isFinite",
+   {
+    "$fn": "isFinite",
+    "$b": "isFinite"
+   }
+  ],
+  [
+   "encodeURIComponent",
+   {
+    "$fn": "encodeURIComponent",
+    "$b": "quote"
+   }
+  ],
+  [
+   "decodeURIComponent",
+   {
+    "$fn": "decodeURIComponent",
+    "$b": "unquote"
+   }
+  ],
+  [
+   "encodeURI",
+   {
+    "$fn": "encodeURIComponent",
+    "$b": "quote"
+   }
+  ],
+  [
+   "decodeURI",
+   {
+    "$fn": "decodeURIComponent",
+    "$b": "unquote"
+   }
+  ],
+  [
+   "unescape",
+   {
+    "$fn": "unescape",
+    "$b": "unescape"
+   }
+  ],
+  [
+   "setTimeout",
+   {
+    "$fn": "setTimeout",
+    "$b": "setTimeout"
+   }
+  ],
+  [
+   "clearTimeout",
+   {
+    "$fn": "clearTimeout",
+    "$b": "clearTimeout"
+   }
+  ],
+  [
+   "setInterval",
+   {
+    "$fn": "setInterval",
+    "$b": "setInterval"
+   }
+  ],
+  [
+   "clearInterval",
+   {
+    "$fn": "clearInterval",
+    "$b": "clearInterval"
+   }
+  ],
+  [
+   "queueMicrotask",
+   {
+    "$fn": "queueMicrotask",
+    "$b": "queueMicrotask"
+   }
+  ],
+  [
+   "requestAnimationFrame",
+   {
+    "$fn": "requestAnimationFrame",
+    "$b": "requestAnimationFrame"
+   }
+  ],
+  [
+   "cancelAnimationFrame",
+   {
+    "$fn": "cancelAnimationFrame",
+    "$b": "cancelAnimationFrame"
+   }
+  ],
+  [
+   "requestIdleCallback",
+   {
+    "$fn": "requestIdleCallback",
+    "$b": "requestIdleCallback"
+   }
+  ],
+  [
+   "cancelIdleCallback",
+   {
+    "$fn": "cancelIdleCallback",
+    "$b": "cancelIdleCallback"
+   }
+  ],
+  [
+   "getComputedStyle",
+   {
+    "$fn": "getComputedStyle",
+    "$b": "getComputedStyle"
+   }
+  ],
+  [
+   "matchMedia",
+   {
+    "$fn": "matchMedia",
+    "$b": "matchMedia"
+   }
+  ],
+  [
+   "Event",
+   {
+    "$fn": "Event",
+    "$b": "Event"
+   }
+  ],
+  [
+   "CustomEvent",
+   {
+    "$fn": "Event",
+    "$b": "Event"
+   }
+  ],
+  [
+   "MessageChannel",
+   {
+    "$fn": "MessageChannel",
+    "$b": "MessageChannel"
+   }
+  ],
+  [
+   "chrome",
+   {
+    "$k": "d",
+    "$o": [
+     [
+      "runtime",
+      {
+       "$k": "d",
+       "$o": []
+      }
+     ],
+     [
+      "app",
+      {
+       "$k": "d",
+       "$o": []
+      }
+     ],
+     [
+      "csi",
+      {
+       "$fn": "chrome.csi",
+       "$b": "chrome.csi"
+      }
+     ],
+     [
+      "loadTimes",
+      {
+       "$fn": "chrome.loadTimes",
+       "$b": "chrome.loadTimes"
+      }
+     ]
+    ]
+   }
+  ],
+  [
+   "CSS",
+   {
+    "$k": "d",
+    "$o": [
+     [
+      "supports",
+      {
+       "$fn": "CSS.supports",
+       "$b": "CSS.supports"
+      }
+     ]
+    ]
+   }
+  ],
+  [
+   "indexedDB",
+   {
+    "$k": "d",
+    "$o": [
+     [
+      "open",
+      {
+       "$fn": "indexedDB.open",
+       "$b": "indexedDB.open"
+      }
+     ]
+    ]
+   }
+  ],
+  [
+   "fetch",
+   {
+    "$fn": "fetch",
+    "$b": "fetch"
+   }
+  ],
+  [
+   "postMessage",
+   {
+    "$fn": "postMessage",
+    "$b": "postMessage"
+   }
+  ],
+  [
+   "innerWidth",
+   1920
+  ],
+  [
+   "innerHeight",
+   1080
+  ],
+  [
+   "outerWidth",
+   1920
+  ],
+  [
+   "outerHeight",
+   1160
+  ],
+  [
+   "devicePixelRatio",
+   1.0
+  ],
+  [
+   "scrollX",
+   0
+  ],
+  [
+   "scrollY",
+   0
+  ],
+  [
+   "pageXOffset",
+   0
+  ],
+  [
+   "pageYOffset",
+   0
+  ],
+  [
+   "screenX",
+   0
+  ],
+  [
+   "screenY",
+   0
+  ],
+  [
+   "name",
+   ""
+  ],
+  [
+   "closed",
+   false
+  ],
+  [
+   "opener",
+   null
+  ],
+  [
+   "origin",
+   "https://auth.openai.com"
+  ],
+  [
+   "isSecureContext",
+   true
+  ],
+  [
+   "crossOriginIsolated",
+   false
+  ],
+  [
+   "window",
+   {
+    "$self": true
+   }
+  ],
+  [
+   "self",
+   {
+    "$self": true
+   }
+  ],
+  [
+   "top",
+   {
+    "$self": true
+   }
+  ],
+  [
+   "parent",
+   {
+    "$self": true
+   }
+  ],
+  [
+   "globalThis",
+   {
+    "$self": true
+   }
+  ],
+  [
+   "addEventListener",
+   {
+    "$fn": "addEventListener",
+    "$b": "EventTargetStub.addEventListener"
+   }
+  ],
+  [
+   "removeEventListener",
+   {
+    "$fn": "removeEventListener",
+    "$b": "EventTargetStub.removeEventListener"
+   }
+  ],
+  [
+   "dispatchEvent",
+   {
+    "$fn": "dispatchEvent",
+    "$b": "EventTargetStub.dispatchEvent"
+   }
+  ]
+ ]
+}

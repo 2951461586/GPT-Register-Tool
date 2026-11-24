@@ -6,7 +6,6 @@ from unittest.mock import patch
 
 import pytest
 
-from sms_tool.paypal_link import gen_link as gen_pp_link
 from sms_tool.paypal import proxy as paypal_proxy
 
 
@@ -206,94 +205,6 @@ class PayPalProxyTests(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertEqual(result.country_code, "GB")
         self.assertIn("country_mismatch", result.error)
-
-    def test_config_keeps_confirm_and_provider_stages_distinct(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            cfg = {
-                "paypal": {
-                    "stage_proxies": {
-                        "checkout": "http://checkout",
-                        "provider": "http://provider",
-                        "stripe_init": "http://init",
-                        "payment_method": "http://pm",
-                        "confirm": "http://confirm",
-                        "approve": "http://approve",
-                    },
-                    "proxy_health": {"state_file": str(Path(temp_dir) / "state.json")},
-                }
-            }
-            gen_pp_link._PAYPAL_PROXY_STATE_CACHE.clear()
-
-            stages = gen_pp_link._proxies_from_config(cfg, checkout_country="US", target_country="GB")
-
-        self.assertEqual(stages["provider"], "http://provider")
-        self.assertEqual(stages["stripe_init"], "http://init")
-        self.assertEqual(stages["payment_method"], "http://pm")
-        self.assertEqual(stages["confirm"], "http://confirm")
-        self.assertEqual(stages["approve"], "http://approve")
-
-    def test_generate_passes_each_segment_to_extractor(self):
-        seen = {}
-
-        class FakeExtractor:
-            def __init__(self, **kwargs):
-                seen.update(kwargs)
-
-            def extract(self):
-                return {
-                    "ok": True,
-                    "url": "https://www.paypal.com/agreements/approve?ba_token=BA-test",
-                    "ba_token": "BA-test",
-                    "link_type": "paypal_ba_approve",
-                }
-
-        cfg = {
-            "paypal": {
-                "link_generation_type": "paypal_direct_zero_due",
-                "stage_proxies": {
-                    "checkout": "http://checkout",
-                    "provider": "http://provider",
-                    "stripe_init": "http://init",
-                    "payment_method": "http://pm",
-                    "confirm": "http://confirm",
-                    "approve": "http://approve",
-                },
-                "preflight_proxy_check": False,
-            }
-        }
-        with patch.object(gen_pp_link, "_load_json", return_value=cfg):
-            with patch.object(gen_pp_link, "PPLinkExtractor", FakeExtractor):
-                result = gen_pp_link.generate_pp_link("at", target_country="US", checkout_country="US")
-
-        self.assertTrue(result["ok"])
-        self.assertEqual(seen["checkout_proxy"], "http://checkout")
-        self.assertEqual(seen["provider_proxy"], "http://provider")
-        self.assertEqual(seen["stripe_init_proxy"], "http://init")
-        self.assertEqual(seen["payment_method_proxy"], "http://pm")
-        self.assertEqual(seen["confirm_proxy"], "http://confirm")
-        self.assertEqual(seen["approve_proxy"], "http://approve")
-
-    def test_confirm_diagnostics_extracts_stripe_fields(self):
-        class FakeResponse:
-            status_code = 402
-            text = "declined"
-
-            def json(self):
-                return {
-                    "error": {"type": "card_error", "code": "checkout_confirm_error", "message": "blocked"},
-                    "submission_attempt": {"state": "failed", "reason": "provider_declined"},
-                }
-
-        diagnostics = gen_pp_link.stripe_confirm_error_diagnostics(
-            FakeResponse(),
-            "cs_test",
-            "pm_test",
-            {"init_checksum": "checksum", "total_summary": {"due": 0}},
-        )
-
-        self.assertIn("error_code=checkout_confirm_error", diagnostics)
-        self.assertIn("submission_state=failed", diagnostics)
-        self.assertIn("submission_reason=provider_declined", diagnostics)
 
 
 if __name__ == "__main__":

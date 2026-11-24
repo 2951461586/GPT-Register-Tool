@@ -200,3 +200,34 @@ def test_screen_report_records_residential_samples_in_the_asn_ledger(monkeypatch
     assert recorded
     assert recorded[0]["proxy"] == "http://user:secret@good:1"
     assert recorded[0]["asn"] == "AS9299"
+
+
+def test_list_pool_never_exposes_proxy_raw_for_host_first_credentials():
+    cfg = {
+        "proxy": {
+            "lanes": {
+                "protocol_registration": {
+                    "pool": ["1.2.3.4:8080:myuser:HOSTFIRSTSECRET", "http://1.2.3.4:8080:myuser:SCHEMEHOSTSECRET"]
+                }
+            }
+        }
+    }
+    payload = admin.list_pool(cfg)
+    assert "HOSTFIRSTSECRET" not in str(payload)
+    assert "SCHEMEHOSTSECRET" not in str(payload)
+    for row in payload["proxies"]:
+        assert row["has_auth"] is True
+        assert "proxy_raw" not in row
+
+
+def test_test_pool_redacts_credentials_from_edge_error():
+    def edge_probe(proxy, *, timeout):
+        raise RuntimeError(f"failed dialing {proxy}")
+
+    payload = admin.test_pool(
+        ["http://alice:TOPSECRET@gw.example:8080"],
+        edge_probe=edge_probe,
+        geo_probe=lambda *a, **k: ProxyGeo(),
+    )
+    assert "TOPSECRET" not in str(payload)
+    assert "http://***:***@gw.example:8080" in payload["results"][0]["edge_error"]

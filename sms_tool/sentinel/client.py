@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import threading
@@ -10,13 +11,17 @@ import uuid
 from dataclasses import dataclass
 from typing import Any, Mapping
 
-from curl_cffi import requests as curl_requests
-
-from ..transport import endpoints
+from ..transport import endpoints, http_backend
 from ..transport.tls_fingerprint import apply_to_session as _apply_tls_fingerprint
-from ..transport.auth_headers import auth_impersonate, auth_user_agent, browser_family, sentinel_fingerprint
+from ..transport.auth_headers import (
+    accept_encoding_for,
+    auth_impersonate,
+    auth_user_agent,
+    browser_family,
+    sentinel_fingerprint,
+)
 from ..transport.http_client import request_with_retry
-from ..phone.phone_proxy import normalize_proxy_url, redact_proxy_text
+from ..proxy.entry import normalize_proxy_url, redact_proxy_text
 from .bundle import sentinel_version
 from .runner import SentinelRunnerError, run_sentinel_sdk
 from .surface import random_probes
@@ -69,6 +74,8 @@ FLOW_PAGE_URLS = {
     EMAIL_OTP_VALIDATE_FLOW: endpoints.AUTH_EMAIL_VERIFICATION,
     "oauth_create_account": endpoints.AUTH_ABOUT_YOU,
     "checkout_session_approval": endpoints.CHATGPT_ORIGIN,
+    "checkout_approve": endpoints.CHATGPT_ORIGIN,
+    "checkout_pay": endpoints.CHATGPT_ORIGIN,
     CHECKOUT_SENTINEL_FLOW: endpoints.CHATGPT_ORIGIN,
 }
 
@@ -107,14 +114,26 @@ def sentinel_backend(config: Mapping[str, Any] | None = None) -> str:
             os.getenv("OPENAI_SENTINEL_BACKEND")
             or email.get("sentinel_backend")
             or root.get("sentinel_backend")
-            or "node_runner"
+            or "native_ffi"
         )
         .strip()
         .lower()
     )
     if value in {"legacy", "quickjs", "browser", "old"}:
         return "legacy"
-    return "node_runner"
+    return "native_ffi"
+
+
+#: Optional legacy extractor registered by ``registration.sentinel_tokens`` so
+#: ``sentinel.client`` stays strictly one-way (Layer 4) with zero import edge
+#: back into ``registration``.
+_LEGACY_EXTRACTOR: Any = None
+
+
+def register_legacy_extractor(extractor: Any) -> None:
+    """Register the opt-in legacy fallback extractor (one-way DI from registration)."""
+    global _LEGACY_EXTRACTOR
+    _LEGACY_EXTRACTOR = extractor
 
 
 def _legacy_fallback_enabled(config: Mapping[str, Any] | None) -> bool:
@@ -374,6 +393,47 @@ def _cookie_header(session: Any, device_id: str) -> str:
     return "; ".join(dict.fromkeys(pairs))
 
 
+def _sentinel_wire_headers(
+    profile: Mapping[str, Any],
+    *,
+    referer: str,
+    accept: str,
+    dest: str,
+    mode: str,
+    site: str,
+    priority: str,
+    origin: str = "",
+    content_type: str = "",
+    extra: Mapping[str, str] | None = None,
+) -> dict[str, str]:
+    """Build family-aligned browser headers for Sentinel HTTP requests."""
+    impersonate = str(profile.get("impersonate") or auth_impersonate() or "")
+    headers: dict[str, str] = {
+        "Accept": accept,
+        "Accept-Language": str(profile.get("lang_full") or "en-US,en;q=0.9"),
+        "Accept-Encoding": accept_encoding_for(impersonate),
+        "Referer": referer,
+        "Sec-Fetch-Dest": dest,
+        "Sec-Fetch-Mode": mode,
+        "Sec-Fetch-Site": site,
+        "Priority": priority,
+        "User-Agent": str(profile.get("user_agent") or auth_user_agent()),
+    }
+    if content_type:
+        headers["Content-Type"] = content_type
+    if origin:
+        headers["Origin"] = origin
+    if browser_family(impersonate) == "chrome":
+        sec_ch_ua = str(profile.get("sec_ch_ua") or "")
+        if sec_ch_ua:
+            headers["sec-ch-ua"] = sec_ch_ua
+            headers["sec-ch-ua-mobile"] = str(profile.get("sec_ch_ua_mobile") or "?0")
+            headers["sec-ch-ua-platform"] = str(profile.get("sec_ch_ua_platform") or '"Windows"')
+    if extra:
+        headers.update(extra)
+    return headers
+
+
 def _challenge(
     session: Any,
     *,
@@ -393,13 +453,17 @@ def _challenge(
         SENTINEL_REQ_URL,
         label="sentinel challenge",
         data=json.dumps({"p": proof, "id": device_id, "flow": flow}, separators=(",", ":")),
-        headers={
-            "Content-Type": "text/plain;charset=UTF-8",
-            "Accept": "*/*",
-            "Origin": "https://sentinel.openai.com",
-            "Referer": (f"https://sentinel.openai.com/backend-api/sentinel/frame.html?sv={sentinel_version()}"),
-            "User-Agent": str(profile.get("user_agent") or auth_user_agent()),
-        },
+        headers=_sentinel_wire_headers(
+            profile,
+            referer=f"https://sentinel.openai.com/backend-api/sentinel/frame.html?sv={sentinel_version()}",
+            origin="https://sentinel.openai.com",
+            accept="*/*",
+            content_type="text/plain;charset=UTF-8",
+            dest="empty",
+            mode="cors",
+            site="same-origin",
+            priority="u=1, i",
+        ),
         timeout=max(10, min(int(timeout_seconds or 60), 120)),
         impersonate=auth_impersonate(),
     )
@@ -442,14 +506,12 @@ def issue_sentinel_token(
     if flow not in FLOW_PAGE_URLS:
         raise SentinelIssueError(f"sentinel_flow_unsupported:{flow}")
     owned_session = session is None
-    active_session = session or curl_requests.Session()
+    normalized_proxy = normalize_proxy_url(proxy or "")
+    active_session = session or http_backend.new_session(proxy=normalized_proxy)
     if owned_session:
         # The challenge request must present the same ClientHello as the auth
         # calls it will mint a token for; a shared session already carries it.
         _apply_tls_fingerprint(active_session)
-    normalized_proxy = normalize_proxy_url(proxy or "")
-    if normalized_proxy and owned_session:
-        active_session.proxies = {"http": normalized_proxy, "https": normalized_proxy}
     try:
         active_session.cookies.set("oai-did", device_id, domain=".openai.com", path="/")
     except Exception:
@@ -553,16 +615,16 @@ def issue_password_page_bundle(
         "get",
         f"https://sentinel.openai.com/backend-api/sentinel/frame.html?sv={version}",
         label="sentinel frame",
-        headers={
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Referer": f"{endpoints.AUTH_BASE}/",
-            "Sec-Fetch-Site": "same-site",
-            "Sec-Fetch-Mode": "navigate",
-            "Sec-Fetch-Dest": "iframe",
-            "Sec-Fetch-User": "?1",
-            "Upgrade-Insecure-Requests": "1",
-            "User-Agent": user_agent,
-        },
+        headers=_sentinel_wire_headers(
+            active_profile,
+            referer=f"{endpoints.AUTH_BASE}/",
+            accept="text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            dest="iframe",
+            mode="navigate",
+            site="same-site",
+            priority="u=0, i",
+            extra={"Sec-Fetch-User": "?1", "Upgrade-Insecure-Requests": "1"},
+        ),
         timeout=max(10, min(int(timeout_seconds or 60), 120)),
         impersonate=auth_impersonate(),
         allow_redirects=True,
@@ -615,7 +677,7 @@ def issue_sentinel_flow(
         return supplied
     backend = sentinel_backend(config)
     fallback_error: BaseException | None = None
-    if backend == "node_runner":
+    if backend != "legacy":
         try:
             return issue_sentinel_token(
                 flow=flow,
@@ -631,18 +693,22 @@ def issue_sentinel_flow(
                 raise
             fallback_error = runner_error
             print(
-                "  [Sentinel] Node runner failed; using configured legacy fallback "
+                "  [Sentinel] Native runner failed; using configured legacy fallback "
                 f"for {flow}: {_root_reason(runner_error, proxy)}"
             )
 
-    from ..registration.sentinel_tokens import _extract_sentinel
-
-    data = _extract_sentinel(
-        proxy=proxy,
-        force_fresh=True,
-        persist=False,
-        device_id=device_id,
+    extractor = _LEGACY_EXTRACTOR
+    raw_data: object = (
+        extractor(
+            proxy=proxy,
+            force_fresh=True,
+            persist=False,
+            device_id=device_id,
+        )
+        if callable(extractor)
+        else None
     )
+    data = raw_data if isinstance(raw_data, Mapping) else None
     legacy = _token_from_bundle(data, flow=flow, device_id=device_id)
     if legacy is None:
         if fallback_error is not None:
@@ -690,6 +756,12 @@ _CHECKOUT_MINT_CACHE: dict[tuple[str, ...], tuple[float, SentinelToken]] = {}
 _CHECKOUT_MINT_CACHE_LOCK = threading.Lock()
 #: Conservative TTL, under the server-side ~9 min token validity.
 CHECKOUT_SENTINEL_CACHE_TTL_SECONDS = 480.0
+CHECKOUT_SENTINEL_CACHE_MAX_ENTRIES = 256
+
+
+def _secret_digest(value: str) -> str:
+    text = str(value or "")
+    return hashlib.sha256(text.encode("utf-8")).hexdigest() if text else ""
 
 
 def _checkout_mint_cache_key(
@@ -699,12 +771,23 @@ def _checkout_mint_cache_key(
     fp: Mapping = _raw_fp if isinstance(_raw_fp, Mapping) else {}
     return (
         str(device_id or ""),
-        str(proxy or ""),
-        str(cookie_header or ""),
+        _secret_digest(str(proxy or "")),
+        _secret_digest(str(cookie_header or "")),
         str(fp.get("user_agent") or ""),
         str(fp.get("timezone") or ""),
         str(fp.get("lang") or fp.get("language") or fp.get("locale") or ""),
     )
+
+
+def _prune_checkout_mint_cache(now: float) -> None:
+    expired = [k for k, (ts, _) in _CHECKOUT_MINT_CACHE.items() if now - ts >= CHECKOUT_SENTINEL_CACHE_TTL_SECONDS]
+    for k in expired:
+        _CHECKOUT_MINT_CACHE.pop(k, None)
+    overflow = len(_CHECKOUT_MINT_CACHE) - CHECKOUT_SENTINEL_CACHE_MAX_ENTRIES
+    if overflow > 0:
+        oldest = sorted(_CHECKOUT_MINT_CACHE.items(), key=lambda item: item[1][0])[:overflow]
+        for k, _ in oldest:
+            _CHECKOUT_MINT_CACHE.pop(k, None)
 
 
 def issue_checkout_sentinel(
@@ -739,6 +822,7 @@ def issue_checkout_sentinel(
     if issued.token:
         with _CHECKOUT_MINT_CACHE_LOCK:
             _CHECKOUT_MINT_CACHE[key] = (now, issued)
+            _prune_checkout_mint_cache(now)
     return issued
 
 
@@ -795,12 +879,10 @@ def issue_sentinel_bundle(
     """
     did = str(device_id or "").strip() or str(uuid.uuid4())
     owned_session = session is None
-    active_session = session or curl_requests.Session()
+    normalized_proxy = normalize_proxy_url(proxy or "")
+    active_session = session or http_backend.new_session(proxy=normalized_proxy)
     if owned_session:
         _apply_tls_fingerprint(active_session)
-    normalized_proxy = normalize_proxy_url(proxy or "")
-    if normalized_proxy and owned_session:
-        active_session.proxies = {"http": normalized_proxy, "https": normalized_proxy}
     active_profile = dict(profile or sentinel_fingerprint())
     active_profile.setdefault("session_id", str(uuid.uuid4()))
     issued: dict[str, SentinelToken] = {}
@@ -834,7 +916,7 @@ def issue_sentinel_bundle(
         "sentinel_so_token": oauth.so_token if oauth else "",
         "cookie_str": cookie_str or f"oai-did={did}",
         "oai_did": did,
-        "sentinel_source": "node_sdk_runner",
+        "sentinel_source": "rust_ffi_vm",
     }
 
 
@@ -851,5 +933,6 @@ __all__ = [
     "issue_sentinel_bundle",
     "issue_sentinel_flow",
     "issue_sentinel_token",
+    "register_legacy_extractor",
     "sentinel_backend",
 ]

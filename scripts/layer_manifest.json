@@ -14,8 +14,6 @@
     "store": 4,
     "pay_link": 4,
     "paypal": 4,
-    "paypal_link": 4,
-    "upi_link": 4,
     "sentinel": 4,
     "registration_drivers": 4,
     "auth_flow": 3,
@@ -27,7 +25,6 @@
     "mailbox": 3,
     "payment": 5,
     "registration": 3,
-    "wallet": 4,
     "importers": 3,
     "codex": 3,
     "session": 4,
@@ -76,7 +73,6 @@
     "registration/humanize": 5,
     "registration/sentinel_tokens": 4,
     "payment/capability_browser": 4,
-    "payment/regional_payment_adapter": 4,
     "mailbox/mail_otp": 5
   },
   "root_modules": {

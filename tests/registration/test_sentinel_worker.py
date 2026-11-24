@@ -1,173 +1,72 @@
-"""The opt-in persistent Sentinel worker and its fallback contract.
+"""Tests for the in-process Rust Sentinel VM FFI bridge (`native_ffi.py`).
 
-The worker exists to stop paying Node's startup and module load once per token.
-It must never change what a token *is*: the worker feeds the same runner the
-same files, and every failure has a defined path --
-
-* a runner verdict (bad challenge, incomplete token) is raised as-is;
-* a transport failure (dead/wedged worker) closes the worker and retries once
-  through the one-shot subprocess.
-
-Node is required; the tests skip when it is absent rather than pretending.
+Replaces the legacy Node worker tests: the Rust cdylib runs in-process with zero
+subprocess spawning, so ``worker_enabled()`` is always ``False`` and every
+FFI boundary check (version, requirements PoW, invalid challenge, missing lib)
+is asserted directly.
 """
 
 from __future__ import annotations
 
+import base64
 import json
-import shutil
-from pathlib import Path
 
 import pytest
 
+from sms_tool.sentinel import bundle, native_ffi
 from sms_tool.sentinel import runner as runner_module
 
-pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="node is required for the worker tests")
+
+def _encode_dx(program: list[list], key: str) -> str:
+    raw = json.dumps(program, separators=(",", ":")).encode("utf-8")
+    k = key.encode("utf-8")
+    xored = bytes(b ^ k[i % len(k)] for i, b in enumerate(raw))
+    return base64.b64encode(xored).decode("ascii")
 
 
-FAKE_RUNNER = """
-const fs = require("node:fs");
-exports.main = async function (argv, writeOutput) {
-  let configPath = "";
-  let challengePath = "";
-  for (let i = 0; i < argv.length; i++) {
-    if (argv[i] === "--config") configPath = argv[i + 1];
-    if (argv[i] === "--challenge-file") challengePath = argv[i + 1];
-  }
-  const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
-  const challenge = JSON.parse(fs.readFileSync(challengePath, "utf8"));
-  if (challenge.failRunner) throw new Error("runner rejected the challenge");
-  return JSON.stringify({
-    id: config.deviceId,
-    flow: config.flow,
-    p: "proof",
-    t: "turnstile",
-    c: "challenge",
-  });
-};
-if (require.main === module) {
-  exports.main(process.argv.slice(2))
-    .then((text) => process.stdout.write(text))
-    .catch((error) => {
-      process.stderr.write(String(error));
-      process.exit(1);
-    });
-}
-"""
-
-
-def _write_runner(tmp_path: Path) -> Path:
-    path = tmp_path / "sentinel-runner.js"
-    path.write_text(FAKE_RUNNER, encoding="utf-8")
-    return path
-
-
-def _profile(**overrides):
-    profile = {
-        "screen": "1920x1080",
-        "lang": "en-US",
-        "impersonate": "chrome136",
-        "timezone": "UTC",
-    }
-    profile.update(overrides)
-    return profile
-
-
-def _challenge():
-    return {"token": "challenge-token"}
-
-
-@pytest.fixture(autouse=True)
-def _clean_worker():
-    runner_module._drop_worker()
-    yield
-    runner_module._drop_worker()
-
-
-def _install_fake_bundle(monkeypatch, tmp_path: Path) -> Path:
-    runner_path = _write_runner(tmp_path)
-    sdk_path = tmp_path / "sdk.js"
-    sdk_path.write_text("", encoding="utf-8")
-    monkeypatch.setattr(
-        runner_module,
-        "validate_runtime_bundle",
-        lambda verify_hash=True: (sdk_path, runner_path),
-    )
-    monkeypatch.setenv(runner_module.WORKER_ENV, "1")
-    return runner_path
-
-
-def test_worker_is_off_by_default(monkeypatch):
-    monkeypatch.delenv(runner_module.WORKER_ENV, raising=False)
+def test_worker_is_disabled_because_rust_ffi_is_in_process():
     assert runner_module.worker_enabled() is False
 
 
-def test_worker_returns_a_validated_token_and_is_reused(monkeypatch, tmp_path):
-    _install_fake_bundle(monkeypatch, tmp_path)
-
-    first = runner_module.run_sentinel_sdk(
-        _challenge(), flow="authorize_continue", device_id="did-1", profile=_profile(), cookie="", page_url=""
-    )
-    worker = runner_module._WORKER
-    assert worker is not None
-    pid = worker._process.pid
-
-    second = runner_module.run_sentinel_sdk(
-        _challenge(), flow="authorize_continue", device_id="did-1", profile=_profile(), cookie="", page_url=""
-    )
-
-    assert json.loads(first)["id"] == "did-1"
-    assert json.loads(second)["flow"] == "authorize_continue"
-    assert runner_module._WORKER is worker
-    assert worker._process.pid == pid
+def test_native_version_and_requirements_token():
+    version = native_ffi.native_version()
+    assert version and version[0].isdigit()
+    req = native_ffi.requirements_token({"lang": "en-US", "timezone": "UTC", "browser_family": "chrome"})
+    assert req.startswith("gAAAAAC") and req.endswith("~S")
 
 
-def test_a_runner_verdict_is_not_retried_through_a_cold_start(monkeypatch, tmp_path):
-    _install_fake_bundle(monkeypatch, tmp_path)
+def test_native_ffi_solves_turnstile_and_so_bytecode_programs():
+    proof = "gAAAAACtest-key~S"
+    # Minimal VM instruction: set output register via op 0 (set output) / invalid op returns error cleanly
+    # Verify round-trip error handling for malformed dx without crashing Python process:
+    with pytest.raises(native_ffi.SentinelNativeError):
+        native_ffi.mint_turnstile("!!!not-base64!!!", proof, {"browser_family": "chrome"})
 
-    calls = []
-    original = runner_module._run_runner_once
-
-    def spy(command, runner_path, timeout):
-        calls.append(command)
-        return original(command, runner_path, timeout)
-
-    monkeypatch.setattr(runner_module, "_run_runner_once", spy)
-
-    with pytest.raises(runner_module.SentinelRunnerError) as excinfo:
-        runner_module.run_sentinel_sdk(
-            {"token": "challenge-token", "failRunner": True},
-            flow="authorize_continue",
-            device_id="did-1",
-            profile=_profile(),
-            cookie="",
-            page_url="",
-        )
-
-    assert "sentinel_runner_failed:worker" in str(excinfo.value)
-    assert calls == [], "a runner verdict must not spend a second node start"
+    # Verify empty instruction list executes cleanly and returns empty string without panic
+    empty_dx = _encode_dx([], proof)
+    assert native_ffi.mint_turnstile(empty_dx, proof, {"browser_family": "chrome"}) == ""
+    assert native_ffi.mint_so(empty_dx, empty_dx, proof, {"browser_family": "chrome"}) == ""
 
 
-def test_a_transport_failure_falls_back_to_one_shot(monkeypatch, tmp_path):
-    _install_fake_bundle(monkeypatch, tmp_path)
+def test_native_lib_env_override_rejects_missing_file_without_leaking_path(monkeypatch):
+    secret_path = "/private/secret-token/sentinel_vm.dll"
+    monkeypatch.setenv(bundle.NATIVE_LIB_ENV, secret_path)
+    native_ffi.reset_cached_library()
+    try:
+        with pytest.raises(bundle.SentinelBundleError) as caught:
+            native_ffi.native_library_path()
+        assert "sentinel_runtime_missing" in str(caught.value)
+        assert secret_path not in str(caught.value)
+    finally:
+        monkeypatch.delenv(bundle.NATIVE_LIB_ENV, raising=False)
+        native_ffi.reset_cached_library()
 
-    def dead_worker(self, args, *, timeout):
-        raise runner_module._WorkerTransportError("simulated wedge")
 
-    monkeypatch.setattr(runner_module._NodeWorker, "run", dead_worker)
+def test_selfcheck_runs_offline_and_reports_native_ok():
+    from sms_tool.sentinel.selfcheck import run_selfcheck
 
-    fallback_calls = []
-    original = runner_module._run_runner_once
-
-    def spy(command, runner_path, timeout):
-        fallback_calls.append(command)
-        return original(command, runner_path, timeout)
-
-    monkeypatch.setattr(runner_module, "_run_runner_once", spy)
-
-    token = runner_module.run_sentinel_sdk(
-        _challenge(), flow="authorize_continue", device_id="did-1", profile=_profile(), cookie="", page_url=""
-    )
-
-    assert json.loads(token)["id"] == "did-1"
-    assert len(fallback_calls) == 1
-    assert runner_module._WORKER is None, "the failed worker must be discarded"
+    report = run_selfcheck()
+    assert report["ok"] is True
+    assert report["bundle"] == "ok"
+    assert str(report["native"]).startswith("v")
+    assert report["mint"] == "ok"

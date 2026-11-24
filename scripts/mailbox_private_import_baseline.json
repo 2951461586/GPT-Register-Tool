@@ -69,18 +69,16 @@
         "sms_tool/registration/orchestrator.py:sentinel_tokens._import_sentinel_cookies",
         "sms_tool/registration/orchestrator.py:sentinel_tokens._sentinel_device_id",
         "sms_tool/registration/orchestrator.py:sentinel_tokens._sentinel_frame_version",
-        "sms_tool/registration/orchestrator.py:sentinel_tokens._set_oai_did_cookie",
-        "sms_tool/sentinel/client.py:sentinel_tokens._extract_sentinel"
+        "sms_tool/registration/orchestrator.py:sentinel_tokens._set_oai_did_cookie"
       ],
       "per_file": {
         "scripts/batch_enable_2fa.py": 1,
         "sms_tool/accounts/account_recovery.py": 1,
         "sms_tool/phone/registration.py": 2,
         "sms_tool/registration/batch_runner.py": 2,
-        "sms_tool/registration/orchestrator.py": 7,
-        "sms_tool/sentinel/client.py": 1
+        "sms_tool/registration/orchestrator.py": 7
       },
-      "total": 14
+      "total": 13
     },
     "session_refresh": {
       "pairs": [

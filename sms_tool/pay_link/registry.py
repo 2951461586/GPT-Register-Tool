@@ -1,20 +1,15 @@
-"""registry submodule of the former payment/link_manager.py (mechanical split, bodies unchanged)."""
+"""Payment adapter registry backed by the external Paylink Extraction Server."""
 
 from __future__ import annotations
+
 import re
-import subprocess
 from typing import Any, Mapping
-from ..config import current_config_data
+
+from ..payment.adapters import FunctionPaymentAdapter, PaymentAdapterRegistry
 from ..payment.catalog import (
     PAYMENT_METHODS as CATALOG_METHODS,
     normalize_payment_method as normalize_catalog_payment_method,
     validate_catalog_consistency,
-)
-from ..payment.adapters import FunctionPaymentAdapter, PaymentAdapterRegistry
-from ..operation_journal import (
-    PaymentOperationConflict,
-    PaymentOperationStore,
-    conflict_result as payment_operation_conflict_result,
 )
 from ..payment.routing import (
     PaymentRoutePlan,
@@ -22,191 +17,79 @@ from ..payment.routing import (
     parse_proxy_pool,
     payment_proxy_pools as canonical_payment_proxy_pools,
 )
-from ..payment import egress as payment_egress
-
-from .adapters import (
-    _run_direct_card,
-    _run_gcash_adapter,
-    _run_momo,
-    _run_oaics_inprocess_adapter,
-    _run_protocol_script,
-    _run_regional_wallet_adapter,
-    _run_wallet_adapter,
-)
 from .base import (
     GOPAY_DEFAULT_APPROVE_COUNTRIES,
-    _protocol_cfg,
     PAYMENT_METHODS,
     _LOGGER,
     _config_data,
-    _forwardable_kwargs,
-    _reference_root,
-    _select_kwargs,
+    _protocol_cfg,
 )
-
-
-def _assert_function_adapter_egress(
-    method: str,
-    options: Mapping[str, Any],
-    runtime_config: Mapping[str, Any] | None,
-) -> dict[str, Any] | None:
-    """Run the shared payment egress gate for an in-process adapter runner.
-
-    The **subprocess** adapters gate themselves in
-    ``adapters._prepare_extractor``, and ``native_upi`` gates after its own region
-    retarget (``upi_link.pipeline._upi_assert_egress_contract``).  Every other
-    function adapter went straight from route plan to a real Checkout/Stripe
-    request with whatever exit the pool handed it -- the same hole the UPI fix
-    closed, for the PayPal, wallet, GCash and regional-wallet lanes.
-
-    Deliberately *not* applied to ``native_upi``: gating here would probe the
-    pre-retarget credential, and the retarget is exactly what makes a
-    region-tagged pool correct.  UPI's gate runs inside the pipeline instead.
-
-    Returns the canonical failure result when a stage egresses from the wrong
-    country (or its probe fails), ``None`` when the gate passes or is disabled.
-    """
-    try:
-        payment_egress.assert_egress_countries(options, runtime_config)
-    except payment_egress.EgressCheckError as exc:
-        return exc.to_result(method)
-    return None
+from .extract_server import extract_link_via_server, resolve_extract_server_config
 
 
 def build_default_payment_registry() -> PaymentAdapterRegistry:
-    """Build and validate the complete adapter composition for the catalog."""
+    """Build and validate the complete adapter composition for the catalog.
+
+    All local source payment extractors have been retired; every payment method
+    now dispatches through the external Paylink Extraction Server adapter.
+    """
     registry = PaymentAdapterRegistry()
 
-    def methods_for(adapter_key: str) -> tuple[str, ...]:
-        return tuple(key for key, definition in CATALOG_METHODS.items() if definition.adapter == adapter_key)
-
-    def paypal_runner(
-        *, access_token: str, proxy: Any = None, auth_context: dict[str, Any] | None = None, **kwargs: Any
+    def extract_server_runner(
+        *,
+        access_token: str,
+        proxy: Any = None,
+        auth_context: dict[str, Any] | None = None,
+        **kwargs: Any,
     ) -> dict[str, Any]:
-        from ..paypal_link.gen_link import generate_pp_link
-
-        failure = _assert_function_adapter_egress(
-            str(kwargs.get("payment_method") or "paypal"), kwargs, kwargs.get("runtime_config")
-        )
-        if failure is not None:
-            return failure
+        method = str(kwargs.pop("payment_method", "") or "").strip().lower()
         runtime_config = kwargs.pop("runtime_config", None)
-        kwargs.pop("payment_method", None)
-        return generate_pp_link(
-            access_token=access_token,
-            proxy=proxy,
+        if method == "blik":
+            blik_code = str(kwargs.get("blik_code") or "").strip()
+            if not re.fullmatch(r"\d{6}", blik_code):
+                return {
+                    "ok": False,
+                    "status": "failed",
+                    "payment_method": "blik",
+                    "error": "BLIK requires an explicit 6-digit code for this run",
+                    "error_code": "blik_code_required",
+                    "error_stage": "validation",
+                    "retryable": False,
+                }
+        server_cfg = resolve_extract_server_config(runtime_config, options=kwargs)
+        if server_cfg.mode == "off":
+            return {
+                "ok": False,
+                "status": "failed",
+                "payment_method": method,
+                "source": "extract_link_server",
+                "error": "extract link server is disabled (set EXTRACT_LINK_API_BASE and EXTRACT_LINK_CDK)",
+                "error_code": "extract_server_disabled",
+                "error_stage": "extract_server_config",
+                "retryable": False,
+            }
+        if not server_cfg.applies_to(method):
+            return {
+                "ok": False,
+                "status": "failed",
+                "payment_method": method,
+                "source": "extract_link_server",
+                "error": f"payment method {method!r} is not enabled on extract_link_server.methods",
+                "error_code": "extract_server_method_not_allowed",
+                "error_stage": "extract_server_config",
+                "retryable": False,
+            }
+        return extract_link_via_server(
+            method,
+            access_token,
+            proxy=str(proxy or "").strip(),
             auth_context=auth_context,
             runtime_config=runtime_config,
-            # No hand-maintained option list: the entrypoint's own signature is
-            # the contract (see ``_forwardable_kwargs``). The 14-name whitelist
-            # that lived here had already grown a parameter the callee did not
-            # accept, which turned that option into a TypeError.
-            **_forwardable_kwargs(
-                generate_pp_link,
-                kwargs,
-                skip={"access_token", "proxy", "auth_context", "runtime_config"},
-            ),
+            options=kwargs,
+            config=server_cfg,
         )
 
-    def upi_runner(
-        *, access_token: str, proxy: Any = None, auth_context: dict[str, Any] | None = None, **kwargs: Any
-    ) -> dict[str, Any]:
-        from ..upi_link import UPI_CALL_OPTIONS, generate_upi_qr_link, upi_invocation
-
-        runtime_config = kwargs.pop("runtime_config", None)
-        kwargs.pop("payment_method", None)
-        return generate_upi_qr_link(
-            **upi_invocation(
-                access_token,
-                runtime_config,
-                proxy=proxy,
-                auth_context=auth_context,
-                **_select_kwargs(kwargs, set(UPI_CALL_OPTIONS)),
-            )
-        )
-
-    def wallet_runner(
-        *, access_token: str, proxy: Any = None, auth_context: dict[str, Any] | None = None, **kwargs: Any
-    ) -> dict[str, Any]:
-        method = str(kwargs.pop("payment_method"))
-        failure = _assert_function_adapter_egress(method, kwargs, kwargs.get("runtime_config"))
-        if failure is not None:
-            return failure
-        return _run_wallet_adapter(
-            PAYMENT_METHODS[method],
-            access_token,
-            proxy=proxy,
-            auth_context=auth_context,
-            **kwargs,
-        )
-
-    def gcash_runner(
-        *, access_token: str, proxy: Any = None, auth_context: dict[str, Any] | None = None, **kwargs: Any
-    ) -> dict[str, Any]:
-        method = str(kwargs.get("payment_method") or "gcash")
-        failure = _assert_function_adapter_egress(method, kwargs, kwargs.get("runtime_config"))
-        if failure is not None:
-            return failure
-        kwargs.pop("payment_method", None)
-        return _run_gcash_adapter(
-            PAYMENT_METHODS["gcash"], access_token, proxy=proxy, auth_context=auth_context, **kwargs
-        )
-
-    def script_runner(
-        *, access_token: str, proxy: Any = None, auth_context: dict[str, Any] | None = None, **kwargs: Any
-    ) -> dict[str, Any]:
-        spec = PAYMENT_METHODS[str(kwargs.pop("payment_method"))]
-        return _run_protocol_script(spec, access_token, proxy=proxy, **kwargs)
-
-    def direct_runner(
-        *, access_token: str, proxy: Any = None, auth_context: dict[str, Any] | None = None, **kwargs: Any
-    ) -> dict[str, Any]:
-        return _run_direct_card(PAYMENT_METHODS["direct_card"], access_token, proxy=proxy, **kwargs)
-
-    def momo_runner(
-        *, access_token: str, proxy: Any = None, auth_context: dict[str, Any] | None = None, **kwargs: Any
-    ) -> dict[str, Any]:
-        return _run_momo(PAYMENT_METHODS["momo"], access_token, proxy=proxy, **kwargs)
-
-    def regional_wallet_runner(
-        *, access_token: str, proxy: Any = None, auth_context: dict[str, Any] | None = None, **kwargs: Any
-    ) -> dict[str, Any]:
-        method = str(kwargs.pop("payment_method"))
-        failure = _assert_function_adapter_egress(method, kwargs, kwargs.get("runtime_config"))
-        if failure is not None:
-            return failure
-        return _run_regional_wallet_adapter(
-            PAYMENT_METHODS[method],
-            access_token,
-            proxy=proxy,
-            auth_context=auth_context,
-            **kwargs,
-        )
-
-    def oaics_inprocess_runner(
-        *, access_token: str, proxy: Any = None, auth_context: dict[str, Any] | None = None, **kwargs: Any
-    ) -> dict[str, Any]:
-        method = str(kwargs.pop("payment_method"))
-        failure = _assert_function_adapter_egress(method, kwargs, kwargs.get("runtime_config"))
-        if failure is not None:
-            return failure
-        return _run_oaics_inprocess_adapter(
-            PAYMENT_METHODS[method],
-            access_token,
-            proxy=proxy,
-            auth_context=auth_context,
-            **kwargs,
-        )
-
-    registry.register(FunctionPaymentAdapter("native_paypal", methods_for("native_paypal"), paypal_runner))
-    registry.register(FunctionPaymentAdapter("native_upi", methods_for("native_upi"), upi_runner))
-    registry.register(FunctionPaymentAdapter("wallet", methods_for("wallet"), wallet_runner))
-    registry.register(FunctionPaymentAdapter("gcash_custom", methods_for("gcash_custom"), gcash_runner))
-    registry.register(FunctionPaymentAdapter("oaics_inprocess", methods_for("oaics_inprocess"), oaics_inprocess_runner))
-    registry.register(FunctionPaymentAdapter("script", methods_for("script"), script_runner))
-    registry.register(FunctionPaymentAdapter("direct_card", methods_for("direct_card"), direct_runner))
-    registry.register(FunctionPaymentAdapter("momo", methods_for("momo"), momo_runner))
-    registry.register(FunctionPaymentAdapter("regional_wallet", methods_for("regional_wallet"), regional_wallet_runner))
+    registry.register(FunctionPaymentAdapter("extract_server", tuple(CATALOG_METHODS), extract_server_runner))
     registry.validate_methods(set(PAYMENT_METHODS))
     validate_catalog_consistency(adapter_methods=set(registry.methods()))
     return registry
@@ -231,22 +114,18 @@ def payment_method_label(value: Any) -> str:
 
 
 def supported_payment_methods() -> list[dict[str, Any]]:
-    root = _reference_root()
     registered = set(PAYMENT_ADAPTERS.methods())
-    output = []
-    for spec in PAYMENT_METHODS.values():
-        available = spec.key in registered and (not spec.script or (root / spec.script).is_file())
-        output.append(
-            {
-                "key": spec.key,
-                "label": spec.label,
-                "country": spec.country,
-                "currency": spec.currency,
-                "adapter": spec.adapter,
-                "available": available,
-            }
-        )
-    return output
+    return [
+        {
+            "key": spec.key,
+            "label": spec.label,
+            "country": spec.country,
+            "currency": spec.currency,
+            "adapter": spec.adapter,
+            "available": spec.key in registered,
+        }
+        for spec in PAYMENT_METHODS.values()
+    ]
 
 
 def register_payment_adapter(adapter: Any) -> Any:
@@ -256,11 +135,7 @@ def register_payment_adapter(adapter: Any) -> Any:
 
 
 def allowed_approve_countries(payment_method: Any) -> tuple[str, ...]:
-    """Return the approve-country allowlist for a method (empty = unconstrained).
-
-    The catalog ``approve_countries`` value wins; GoPay falls back to the
-    historical JP/TR default when the catalog does not constrain it.
-    """
+    """Return the approve-country allowlist for a method (empty = unconstrained)."""
     method = normalize_payment_method(payment_method)
     definition = CATALOG_METHODS.get(method)
     if definition is not None and definition.approve_countries:
@@ -271,14 +146,7 @@ def allowed_approve_countries(payment_method: Any) -> tuple[str, ...]:
 
 
 def coerce_approve_country(payment_method: Any, country: Any) -> tuple[str, bool]:
-    """Enforce the GoPay approve-country protocol rule.
-
-    Returns ``(effective_country, coerced)``.  Only GoPay is constrained: an
-    explicit approve country outside the allowlist (catalog
-    ``approve_countries``, falling back to JP/TR) is forced to JP, or to the
-    first allowed entry when JP itself is not allowed.  Other methods and
-    blank values pass through unchanged so their existing defaults apply.
-    """
+    """Enforce the GoPay approve-country protocol rule."""
     method = normalize_payment_method(payment_method)
     value = str(country or "").strip().upper()
     if method != "gopay" or not value:
@@ -380,3 +248,16 @@ def _enabled_methods(runtime_config: Mapping[str, Any] | None = None) -> set[str
 
 
 PAYMENT_ADAPTERS = build_default_payment_registry()
+
+__all__ = [
+    "PAYMENT_ADAPTERS",
+    "allowed_approve_countries",
+    "build_default_payment_registry",
+    "coerce_approve_country",
+    "normalize_payment_method",
+    "parse_proxy_pool",
+    "payment_method_label",
+    "payment_proxy_pools",
+    "register_payment_adapter",
+    "supported_payment_methods",
+]

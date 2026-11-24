@@ -32,7 +32,7 @@ export remain separate workflows.
 | `store/` | Persistence and domain facts | Provider side effects |
 | `accounts/account_recovery.py`, `codex/oauth.py` | Existing-account recovery and OAuth | Automatic new signup |
 | `payment_*`, `pay_link/`, `paypal/` | Payment planning and explicit execution | Mailbox purchasing or account signup |
-| `pay_link/` vs `paypal_link/` + `upi_link/` | `pay_link/` is the **registry** and the shared extraction state machine: a new payment method goes there, and `scripts/payment_legacy_manifest.py` fails the build if a file is added under either legacy lane. `paypal_link/` and `upi_link/` are frozen legacy lanes that still take bug fixes. A method that lives in a legacy lane bypasses the registry, `payment_catalog` and the desktop method picker -- the exact drift the manifest gate exists to stop. | A new method implemented in a legacy lane |
+| `pay_link/` | The **registry** (`registry.py`) and shared extraction state machine (`core.py`, `extract_server.py`). All 15 catalog payment methods route through the unified `extract_server` adapter; legacy in-repo source extractors were retired. | Per-method in-repo source extractors or bypassing `payment_catalog` |
 
 ## Dependency Direction
 
@@ -141,7 +141,7 @@ audits make under `runtime/tmp/refrepos/`), and it grows without bound.
 
 | In scope (the product) | Excluded (tooling, generated, state, vendored) |
 | --- | --- |
-| `sms_tool/`, `services/protocol-payment/`, `SmsWorkbench/`, `SmsWorkbench.Contracts/` | `scripts/`, `dist/`, `runtime/`, `sessions/`, `.dotnet/`, `.workbuddy*/`, .NET `bin/`+`obj/`, `sms_tool/upi_link/_vendor/` |
+| `sms_tool/`, `SmsWorkbench/`, `SmsWorkbench.Contracts/` | `scripts/`, `dist/`, `runtime/`, `sessions/`, `.dotnet/`, `.workbuddy*/`, .NET `bin/`+`obj/`, `native/` |
 
 `scripts/` is excluded **on purpose**, and the trade-off is stated so it is not
 re-litigated. The review graph is an architecture view of the *product*, and the
@@ -188,8 +188,8 @@ convenience. The two decisions are pinned together by
 Pyright finding needs the tool-native, *same-line* form
 (``x = f(y)  # pyright: ignore[reportArgumentType]``); an ``# pi-lens-ignore:
 <rule>`` comment on the line above does **not** suppress it.  ``# pi-lens-ignore``
-is what works for the ``ast-grep`` rules, and it is what the existing markers in
-``services/protocol-payment/`` use.  Measured 2026-10-10 on ``payment/wire.py``
+is what works for the ``ast-grep`` rules (as previously used in the retired
+protocol-payment subprocess tree).  Measured 2026-10-10 on ``payment/wire.py``
 and ``momo/ac_paylink_core.py``: the same-line ``# pyright: ignore[...]`` cleared
 both Pyright findings on the first try, while the preceding-line
 ``# pi-lens-ignore`` and a stored ``false-positive`` disposition left them
@@ -208,13 +208,13 @@ above.
 <!-- ratchet-numbers:begin architecture -->
 | Measure | Value |
 | --- | --- |
-| Module-level cross-directory edges | 580 |
-| Directory pairs | 155 |
-| Mutual pairs / minority-direction edges | 19 / 33 |
-| Delayed cross-directory edges | 349 |
-| Delayed imports in the package | 500 (baseline 500) |
-| Functions at or above 150 lines | 58 (frozen, `scripts/function_length_ratchet.py`) |
-| Claimed tracked `sms_tool` modules | 334 of 334 (0 unclaimed, 40 directory-map groups) |
+| Module-level cross-directory edges | 497 |
+| Directory pairs | 135 |
+| Mutual pairs / minority-direction edges | 17 / 30 |
+| Delayed cross-directory edges | 321 |
+| Delayed imports in the package | 461 (baseline 461) |
+| Functions at or above 150 lines | 32 (frozen, `scripts/function_length_ratchet.py`) |
+| Claimed tracked `sms_tool` modules | 297 of 297 (0 unclaimed, 38 directory-map groups) |
 <!-- ratchet-numbers:end architecture -->
 
 `tests/config/test_pilens_scope_config.py` pins the scope and the formatting
@@ -257,10 +257,11 @@ for batch runner/OTP strategy/account creation/Sentinel tokens,
 now freezes the 16 legacy `account_*.py` files inside `sms_tool/accounts/` so
 new account modules omit the redundant `account_` prefix; the retired
 `sms_tool/paypal/{auto,reconciliation}.py` compatibility shells have been
-removed; `tests/governance/test_sentinel_version_pin.py` pins
-`sms_tool.upi_link._vendor.upi_sentinel.DEFAULT_SENTINEL_VERSION` and
-`services/protocol-payment/common/timeouts.py` against their single sources of
-truth (`sms_tool.sentinel.bundle` and `sms_tool.kernel.timeouts`); and
+removed; `tests/governance/test_sentinel_version_pin.py` pins the Sentinel
+native runtime asset (`sms_tool/sentinel/bundle.py` / `sms_tool/sentinel/native_ffi.py`)
+after retiring the Node.js runtime, the vendored UPI Sentinel bridge, and the legacy
+in-repo source payment extractors (all 15 catalog methods now route through
+`sms_tool/pay_link/extract_server.py`); and
 `tests/SmsWorkbench.Tests/NamespaceArchitectureTests.cs` pins WPF role-folder
 namespaces, cross-layer isolation, and uniform `ObservableObject` ViewModel
 inheritance.
@@ -311,7 +312,7 @@ no file behind it.
 | 7 | One liveness owner | [`rule-07-liveness-owner.md`](rules/rule-07-liveness-owner.md) |
 | 8 | Agent Identity is explicit-import only; the registration pipeline must not reach it | [`rule-08-agent-identity-explicit-import.md`](rules/rule-08-agent-identity-explicit-import.md) |
 | 9 | One IPC writer: `sms_tool/desktop/ipc.py` is the sole writer of the `@@SMSWORKBENCH_V2@@` envelope | [`rule-09-ipc-writer-sms-tool.md`](rules/rule-09-ipc-writer-sms-tool.md) |
-| 10 | `services/protocol-payment/` is a process boundary with zero import-level coupling to `sms_tool`; the only permitted reference is the documented lazy import in `kakao/kakao_extract.py` | [`rule-10-services-protocol-payment-process.md`](rules/rule-10-services-protocol-payment-process.md) |
+| 10 | External protocol-payment subprocess trees (historical services boundary, now retired in favor of `sms_tool/pay_link/extract_server.py`) must remain a strict process boundary with zero import-level coupling to `sms_tool` | [`rule-10-services-protocol-payment-process.md`](rules/rule-10-services-protocol-payment-process.md) |
 | 11 | Progress and concurrency are separate | [`rule-11-progress-concurrency-separate.md`](rules/rule-11-progress-concurrency-separate.md) |
 | 12 | Command adapters call public workflow functions; they must not import private provider helpers or write SQLite/session files | [`rule-12-command-adapters-call-public.md`](rules/rule-12-command-adapters-call-public.md) |
 | 13 | Proxy string authority is single | [`rule-13-proxy-string-authority-single.md`](rules/rule-13-proxy-string-authority-single.md) |

@@ -135,26 +135,26 @@ ceils it at 150 MB.
 
 ## Sentinel runtime self-check
 
-`check_node_runner_readiness()` (called by `batch_runner` before a batch) answers
-two questions: is there a `node` binary, and do the vendored `sdk.js` /
-`sentinel-runner.js` still hash to their pinned digests. That catches a corrupt
-checkout — the 2026-09-17 incident — but not a runner that loads and then fails to
-mint, and not a Node release that broke something the runner relies on. Both of
-those land at `create_account`, after the mailbox and its OTP are spent.
+`check_sentinel_runner_readiness()` (aliased as `check_node_runner_readiness()`
+for compatibility, called by `batch_runner` before a batch) answers two
+questions: does the bundled native Rust library (`sms_tool/sentinel/runtime/sentinel_vm.dll`)
+match its pinned SHA-256 digest (`NATIVE_LIB_SHA256`), and can `native_ffi.py`
+load it and read its version cleanly. That catches a corrupt checkout — like the
+historical 2026-09-17 incident — before any mailbox or OTP is spent.
 
-`sms_tool/sentinel/selfcheck.py` adds the missing third check, offline:
+`sms_tool/sentinel/selfcheck.py` adds the missing offline end-to-end check:
 
 | Check | Failure token |
 | --- | --- |
-| pinned bundle digests | `failed:<ExceptionType>` |
-| `node` present and `>= 18` | `sentinel_selfcheck_node_missing` / `_too_old:<major>` |
-| one real mint against a synthetic challenge | `sentinel_selfcheck_mint:<reason>` |
+| pinned native library digest & load | `failed:<ExceptionType>` / `sentinel_native_load_failed` |
+| one real in-process mint against a synthetic challenge | `sentinel_selfcheck_mint:<reason>` |
 
 Run it directly (`python -m sms_tool.sentinel.selfcheck [--json] [--no-mint]`) or
-through `--doctor`, which reports it as the `sentinel_runtime` probe next to
-`node`. The mint is local: `OFFLINE_CHALLENGE` declares no PoW / Turnstile / SO
-work, so the token's `p` and `t` are legitimately `null` — presence of the keys,
-not their truthiness, is what proves the runner assembled a token.
+through `--doctor`, which reports it as the `sentinel_runtime` probe. The mint is
+local and requires no Node.js binary: `OFFLINE_CHALLENGE` declares no PoW /
+Turnstile / SO work, so the token's `p` and `t` are legitimately `null` —
+presence of the keys, not their truthiness, is what proves the native VM
+assembled a token.
 
 ## Read-only inventory
 

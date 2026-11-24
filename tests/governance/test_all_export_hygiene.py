@@ -153,15 +153,3 @@ def test_no_module_exports_a_stdlib_name():
         "exported only because the module imported it, and it shadows the "
         f"caller's own binding under ``import *``: {offenders}"
     )
-
-
-def test_the_paypal_link_shells_still_export_their_real_surface():
-    """Guard against the fix overshooting and emptying the surface.
-
-    Removing the 20 leaked names must not have removed a real one.
-    """
-    import sms_tool.paypal_link as paypal_link
-
-    for name in ("generate_pp_link", "PPLinkExtractor", "CURRENCY_MAP", "DEFAULT_STRIPE_PK"):
-        assert name in paypal_link.__all__, f"{paypal_link.__name__} lost {name}"
-        assert hasattr(paypal_link, name)

@@ -76,7 +76,7 @@ jobs:
         run: Copy-Item config.example.json config.json
       - shell: powershell
         run: .\scripts\environment_preflight.ps1
-      - run: python -m compileall -q sms_tool services
+      - run: python -m compileall -q sms_tool
       # Narrow lint gate: syntax errors + ambiguous names + undefined names.
       # Installed separately from requirements.txt: it is a tool, not a
       # runtime dependency, and test_dependency_guard enforces that split.
@@ -85,7 +85,7 @@ jobs:
       # Wider rule sets (F401 unused imports etc.) would flag the documented
       # facade re-exports (ADR-0009) and are deliberately not enabled yet.
       - run: python -m pip install -q ruff -c constraints-tools.txt
-      - run: python -m ruff check sms_tool services scripts
+      - run: python -m ruff check sms_tool scripts
       # The whole Python tree has to stay `ruff format` clean. `ruff check`
       # cannot see layout, so a syntactically valid but mangled expression
       # (auth_flow/otp.py, 2026-10-08) passed every gate.
@@ -102,7 +102,7 @@ jobs:
       # and keep `docs/current/testing.md` equal to this number (pinned by
       # tests/governance/test_coverage_gate.py).
       - run: >-
-          python -m pytest -q -n 4 --dist loadfile --cov=sms_tool --cov=services
+          python -m pytest -q -n 4 --dist loadfile --cov=sms_tool
           --cov-report=term-missing --cov-fail-under=70
       # Order-dependence guard. This shard order reproduced a real defect on
       # 2026-10-18: `cli._heavy_deps_loaded` was a one-shot latch set while a
@@ -122,9 +122,9 @@ jobs:
       - run: python scripts/dotnet_warning_ratchet.py
       - run: python -c "import sms_tool.cli"
       - run: >-
-          python -m pytest -q tests/payment/test_protocol_payment_common.py
-          tests/payment/test_wallet_provider.py
-          tests/payment/test_wallet_manager_integration.py
+          python -m pytest -q tests/payment/test_extract_server.py
+          tests/payment/test_payment_link_manager.py
+          tests/payment/test_payment_batch.py
       # Secret gates — precommit_guard is the hard gate (non-zero on
       # tracked-file violation); the other two are informational scanners
       # that print findings.
@@ -151,14 +151,7 @@ jobs:
       # have no CI or test coverage; this step removes `sentinel_asset_guard`
       # from that list, so the two must move together.
       - run: python scripts/sentinel_asset_guard.py
-      - run: python scripts/extractor_parity_report.py
-      # ``services/protocol-payment`` is not a package (the hyphen makes it
-      # unimportable), so extractors put the directory on ``sys.path`` and
-      # import ``common.*`` as a top-level package. Static analysers that do
-      # not know that extra root report every ``common/*`` module as dead
-      # code; the 2026-09-22 and 2026-10-04 scans both had to refute that by
-      # hand. This gate resolves the imports with the runtime's own rule.
-      - run: python scripts/services_import_resolution.py
+      - run: cargo test --manifest-path native/sentinel_vm/Cargo.toml --release
       # The dependency view is *generated*: this step fails when the committed
       # `docs/current/dependency-graph.md` and the source disagree, so the
       # cycle/mutual-pair numbers cannot go stale the way a hand-built review
@@ -180,11 +173,6 @@ jobs:
       - run: python scripts/module_coverage_check.py
       # new modules must land in a domain subpackage, not the package root
       - run: python scripts/root_module_ratchet.py
-      # Legacy payment lanes are closed to new implementation: the file set of
-      # `paypal_link/` and `upi_link/` is frozen, so a new method has to land in
-      # `pay_link/` where the registry, the catalog and the desktop picker can
-      # see it. Contents are not frozen -- bug fixes still go in.
-      - run: python scripts/payment_legacy_manifest.py
       # Kernel boundary: a kernel module must not import application code.
       - run: python scripts/kernel_boundary_ratchet.py
       - shell: powershell

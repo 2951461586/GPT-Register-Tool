@@ -478,6 +478,13 @@ def test_dedicated_qualification_pool_reads_config_and_lane():
     assert pq.configured_qualification_proxy_pool(
         {"proxy": {"lanes": {"payment_qualification": ["http://u:p@h:2"]}}}
     ) == ["http://u:p@h:2"]
+    # Canonical ``proxy.lanes.payment_qualification`` wins over legacy key (aligned with SettingsService.cs).
+    assert pq.configured_qualification_proxy_pool(
+        {
+            "payment_qualification": {"proxy_pool": ["http://u:p@legacy:1"]},
+            "proxy": {"lanes": {"payment_qualification": ["http://u:p@canonical:2"]}},
+        }
+    ) == ["http://u:p@canonical:2"]
 
 
 def test_max_proxy_attempts_is_clamped():

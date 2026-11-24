@@ -50,7 +50,10 @@ CONFIG = ROOT / ".pi-lens.json"
 #: `dist/**` is also in pi-lens's built-in list, but the declaration is kept so
 #: the repo does not depend on that list's contents.
 REQUIRED_IGNORES = {
-    "sms_tool/upi_link/_vendor/**",
+    "sms_tool/sentinel/runtime/**",
+    "native/*/target/**",
+    "rust/*/target/**",
+    "rust/*/.rust-anything/**",
     "scripts/**",
     "dist/**",
     "runtime/**",
@@ -71,8 +74,8 @@ REQUIRED_IGNORES = {
 IN_SCOPE = (
     "sms_tool/registration/handlers.py",
     "sms_tool/auth_flow/steps.py",
-    "sms_tool/upi_link/stages.py",
-    "services/protocol-payment/common/protocol_core.py",
+    "sms_tool/pay_link/extract_server.py",
+    "sms_tool/payment/batch.py",
     "SmsWorkbench/App.xaml.cs",
     "SmsWorkbench.Contracts/BackendCommandPlanner.cs",
     # `tests/` is in scope on purpose: the review graph drops test files by role,
@@ -127,8 +130,8 @@ def test_every_required_exclusion_is_declared():
 
 
 def test_the_vendored_tree_stays_ignored():
-    """The one entry that predates this test; deleting it would graph the vendor."""
-    assert "sms_tool/upi_link/_vendor/**" in _config()["ignore"]
+    """Compiled native runtime binaries stay excluded from the review graph."""
+    assert "sms_tool/sentinel/runtime/**" in _config()["ignore"]
 
 
 @pytest.mark.parametrize("path", IN_SCOPE)

@@ -74,7 +74,7 @@ BASELINE = Path(__file__).resolve().parent / "pyright_baseline.json"
 
 #: Paths handed to pyright. ``pyrightconfig.json`` narrows this further; passing
 #: them explicitly keeps the ratchet honest when the config changes.
-TARGETS: tuple[str, ...] = ("sms_tool", "services", "scripts", "tests")
+TARGETS: tuple[str, ...] = ("sms_tool", "scripts", "tests")
 
 
 def _relpath(raw: str) -> str:

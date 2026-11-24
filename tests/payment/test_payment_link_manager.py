@@ -1,43 +1,29 @@
 import ast
-import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from sms_tool.pay_link.adapters import _run_momo, _run_protocol_script
 from sms_tool.payment import link_manager as manager
-from sms_tool.payment.adapters import FunctionPaymentAdapter
 from sms_tool.payment.catalog import PAYMENT_CATALOG
 from sms_tool.payment.routing import PaymentRoutePlan
-
-
-def _legacy_subprocess_adapter(method: str):
-    """Temporarily bind ``method`` to its legacy subprocess adapter for parser tests."""
-    if method == "momo":
-        adapter = FunctionPaymentAdapter(
-            "momo",
-            ("momo",),
-            lambda *, access_token, proxy=None, auth_context=None, **kwargs: _run_momo(
-                manager.PAYMENT_METHODS["momo"], access_token, proxy=proxy, **kwargs
-            ),
-        )
-    else:
-        adapter = FunctionPaymentAdapter(
-            "script",
-            (method,),
-            lambda *, access_token, proxy=None, auth_context=None, **kwargs: _run_protocol_script(
-                manager.PAYMENT_METHODS[str(kwargs.pop("payment_method"))], access_token, proxy=proxy, **kwargs
-            ),
-        )
-    return patch.dict(manager.PAYMENT_ADAPTERS._by_method, {method: adapter})
 
 
 class PaymentLinkManagerTests(unittest.TestCase):
     def setUp(self):
         self._config_patch = patch(
             "sms_tool.pay_link.base.current_config_data",
-            return_value={"chatgpt": {}, "protocol_payments": {}},
+            return_value={
+                "chatgpt": {},
+                "protocol_payments": {
+                    "extract_link_server": {
+                        "enabled": True,
+                        "mode": "only",
+                        "api_base": "https://paylink.example.test",
+                        "cdk": "cdk-test",
+                    }
+                },
+            },
         )
         self._config_patch.start()
         self.addCleanup(self._config_patch.stop)
@@ -70,7 +56,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
         probe.assert_called_once()
         executor.assert_not_called()
 
-    def test_supported_methods_include_reference_adapters(self):
+    def test_supported_methods_use_extract_server_adapter(self):
         methods = {item["key"]: item for item in manager.supported_payment_methods()}
         keys = set(methods)
         self.assertEqual(
@@ -93,14 +79,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
                 "naver_pay",
             },
         )
-        self.assertTrue(methods["gcash"]["available"])
-        self.assertTrue(all(methods[key]["adapter"] == "regional_wallet" for key in ("qris", "bizum", "naver_pay")))
-        self.assertTrue(
-            all(
-                methods[key]["adapter"] == "oaics_inprocess" and methods[key]["available"]
-                for key in ("ideal", "pix", "kakao", "blik", "twint", "momo")
-            )
-        )
+        self.assertTrue(all(item["adapter"] == "extract_server" and item["available"] for item in methods.values()))
 
     def test_aliases_are_normalized(self):
         self.assertEqual(manager.normalize_payment_method("upi_qr"), "upi")
@@ -111,11 +90,11 @@ class PaymentLinkManagerTests(unittest.TestCase):
     def test_unknown_method_is_rejected(self):
         self.assertEqual(manager.normalize_payment_method("unsupported_wallet"), "")
 
-    def test_native_result_has_completed_state_history(self):
+    def test_extract_server_result_has_completed_state_history(self):
         with tempfile.TemporaryDirectory() as tmp:
             with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
                 with patch(
-                    "sms_tool.paypal_link.gen_link.generate_pp_link",
+                    "sms_tool.pay_link.registry.extract_link_via_server",
                     return_value={"ok": True, "url": "https://example.test/pay"},
                 ):
                     result = manager.generate_payment_link("token", payment_method="paypal")
@@ -135,14 +114,22 @@ class PaymentLinkManagerTests(unittest.TestCase):
 
         captured = {}
 
-        def fake_generate(**kwargs):
-            captured.update(kwargs)
+        def fake_extract(method, access_token, **kwargs):
+            captured["method"] = method
+            captured["proxy"] = kwargs.get("proxy")
+            captured.update(kwargs.get("options") or {})
             return {"ok": True, "url": "https://example.test/pay"}
 
         config = {
             "chatgpt": {},
             "protocol_payments": {
                 "enabled_methods": ["paypal"],
+                "extract_link_server": {
+                    "enabled": True,
+                    "mode": "only",
+                    "api_base": "https://paylink.example.test",
+                    "cdk": "cdk-test",
+                },
                 "methods": {
                     "paypal": {
                         "checkout_proxy": "http://legacy-checkout:8080",
@@ -158,7 +145,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
             tempfile.TemporaryDirectory() as tmp,
             patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"),
             patch("sms_tool.paypal.proxy.select_proxy_from_pool", side_effect=choose),
-            patch("sms_tool.paypal_link.gen_link.generate_pp_link", side_effect=fake_generate),
+            patch("sms_tool.pay_link.registry.extract_link_via_server", side_effect=fake_extract),
         ):
             result = manager.generate_payment_link(
                 "token",
@@ -247,7 +234,6 @@ class PaymentLinkManagerTests(unittest.TestCase):
                     self._gopay_pool_config(),
                 )
         self.assertEqual([item[1] for item in seen], ["ID", "JP"])
-        # The enforced country is written back so wallet stage rotation uses it.
         self.assertEqual(values["stage_proxy_countries"]["approve"], "JP")
         self.assertTrue(any("US" in message and "JP" in message for message in logs.output))
 
@@ -288,8 +274,6 @@ class PaymentLinkManagerTests(unittest.TestCase):
             self.assertEqual(values["stage_proxy_countries"]["approve"], approve)
         self.assertEqual([item[1] for item in seen], ["ID", "JP", "ID", "TR"])
 
-        # Blank approve country keeps the existing JP default without a
-        # coercion write-back adding new keys to the kwargs.
         with patch("sms_tool.paypal.proxy.select_proxy_from_pool", side_effect=choose):
             _proxy, values = manager._resolve_proxy_pool_routes(
                 "gopay",
@@ -309,7 +293,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
             registration_label="GoPay",
             country="ID",
             currency="IDR",
-            adapter="wallet",
+            adapter="extract_server",
             approve_countries=("TR",),
         )
         seen = []
@@ -327,8 +311,6 @@ class PaymentLinkManagerTests(unittest.TestCase):
                         {"target_country": "ID", "stage_proxy_countries": {"approve": "US"}},
                         self._gopay_pool_config(),
                     )
-        # JP is not in the catalog override allowlist, so the first allowed
-        # entry becomes the coercion target.
         self.assertEqual([item[1] for item in seen], ["ID", "TR"])
         self.assertEqual(values["stage_proxy_countries"]["approve"], "TR")
 
@@ -366,13 +348,23 @@ class PaymentLinkManagerTests(unittest.TestCase):
             "status": "completed",
             "operation": "extract_link",
             "url": "https://app.midtrans.com/snap/v4/redirection/fixture",
-            "link_type": "gopay_protocol",
+            "link_type": "gopay_extract_server",
         }
-        config = {"chatgpt": {}, "protocol_payments": {}}
+        config = {
+            "chatgpt": {},
+            "protocol_payments": {
+                "extract_link_server": {
+                    "enabled": True,
+                    "mode": "only",
+                    "api_base": "https://paylink.example.test",
+                    "cdk": "cdk-test",
+                }
+            },
+        }
         with (
             tempfile.TemporaryDirectory() as tmp,
             patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"),
-            patch("sms_tool.wallet.provider.run_wallet_provider", return_value=adapter_result),
+            patch("sms_tool.pay_link.registry.extract_link_via_server", return_value=adapter_result),
         ):
             with self.assertLogs("sms_tool.payment.link_manager", level="WARNING"):
                 result = manager.generate_payment_link(
@@ -392,13 +384,23 @@ class PaymentLinkManagerTests(unittest.TestCase):
             "status": "completed",
             "operation": "extract_link",
             "url": "https://app.midtrans.com/snap/v4/redirection/fixture",
-            "link_type": "gopay_protocol",
+            "link_type": "gopay_extract_server",
         }
-        config = {"chatgpt": {}, "protocol_payments": {}}
+        config = {
+            "chatgpt": {},
+            "protocol_payments": {
+                "extract_link_server": {
+                    "enabled": True,
+                    "mode": "only",
+                    "api_base": "https://paylink.example.test",
+                    "cdk": "cdk-test",
+                }
+            },
+        }
         with (
             tempfile.TemporaryDirectory() as tmp,
             patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"),
-            patch("sms_tool.wallet.provider.run_wallet_provider", return_value=adapter_result),
+            patch("sms_tool.pay_link.registry.extract_link_via_server", return_value=adapter_result),
         ):
             result = manager.generate_payment_link(
                 "token",
@@ -417,11 +419,11 @@ class PaymentLinkManagerTests(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertEqual(result["manager_state"], "failed")
 
-    def test_native_failure_preserves_adapter_error_code(self):
+    def test_server_failure_preserves_adapter_error_code(self):
         with tempfile.TemporaryDirectory() as tmp:
             with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
                 with patch(
-                    "sms_tool.upi_link.generate_upi_qr_link",
+                    "sms_tool.pay_link.registry.extract_link_via_server",
                     return_value={
                         "ok": False,
                         "error": "UPI unavailable",
@@ -432,287 +434,27 @@ class PaymentLinkManagerTests(unittest.TestCase):
         self.assertEqual(result["error_code"], "upi_not_available")
         self.assertEqual(result["manager_state"], "failed")
 
-    def test_blik_completion_marker_counts_as_success(self):
-        completed = subprocess.CompletedProcess(
-            args=[],
-            returncode=0,
-            stdout=(
-                "BLIK 自动提交完成\n"
-                'BLIK_RESULT:{"ok": true, "payment_method": "blik", "status": "completed", '
-                '"link_type": "blik_protocol_completed", "message": "BLIK 自动提交完成"}\n'
-            ),
-            stderr="",
-        )
-        with (
-            tempfile.TemporaryDirectory() as tmp,
-            _legacy_subprocess_adapter("blik"),
-            patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"),
-            patch("sms_tool.payment.link_manager.subprocess.run", return_value=completed),
-        ):
-            result = manager.generate_payment_link(
-                "token", payment_method="blik", seed_proxy="socks5h://127.0.0.1:1080", blik_code="123456"
-            )
-        self.assertTrue(result["ok"])
-        self.assertEqual(result["status"], "completed")
-        self.assertEqual(result["url"], "")
-        self.assertEqual(result["link_type"], "blik_protocol_completed")
-        self.assertEqual(result["operation"], "execute_payment")
-        self.assertEqual(result["manager_state"], "completed")
-
-    def test_protocol_v1_result_is_preferred_over_log_url_scraping(self):
-        completed = subprocess.CompletedProcess(
-            args=[],
-            returncode=0,
-            stdout=(
-                "diagnostic https://docs.example.test/not-the-result\n"
-                '{"payment_method":"ideal","ok":true,"status":"completed",'
-                '"operation":"extract_link","url":"https://bank.example.test/authorize",'
-                '"link_type":"ideal_protocol","schema":"protocol_payment.v1"}\n'
-            ),
-            stderr="",
-        )
-        with (
-            tempfile.TemporaryDirectory() as tmp,
-            _legacy_subprocess_adapter("ideal"),
-            patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"),
-            patch("sms_tool.payment.link_manager.subprocess.run", return_value=completed),
-        ):
-            result = manager.generate_payment_link(
-                "token",
-                payment_method="ideal",
-                seed_proxy="socks5h://127.0.0.1:1080",
-            )
-
-        self.assertTrue(result["ok"])
-        self.assertEqual(result["url"], "https://bank.example.test/authorize")
-        self.assertEqual(result["schema"], "protocol_payment.v1")
-
-    def test_blik_completion_marker_requires_explicit_success_contract(self):
-        completed = subprocess.CompletedProcess(
-            args=[],
-            returncode=0,
-            stdout=(
-                'BLIK_RESULT:{"ok": false, "payment_method": "blik", "status": "completed", '
-                '"link_type": "blik_protocol_completed"}\n'
-            ),
-            stderr="",
-        )
-        with (
-            tempfile.TemporaryDirectory() as tmp,
-            _legacy_subprocess_adapter("blik"),
-            patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"),
-            patch("sms_tool.payment.link_manager.subprocess.run", return_value=completed),
-        ):
-            result = manager.generate_payment_link(
-                "token", payment_method="blik", seed_proxy="socks5h://127.0.0.1:1080", blik_code="123456"
-            )
-        self.assertFalse(result["ok"])
-        self.assertEqual(result["manager_state"], "failed")
-
-    def test_blik_requires_explicit_six_digit_code_before_starting_subprocess(self):
+    def test_blik_requires_explicit_six_digit_code_before_calling_server(self):
         with tempfile.TemporaryDirectory() as tmp:
             with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
-                with patch("sms_tool.payment.link_manager.subprocess.run") as run:
-                    result = manager.generate_payment_link(
-                        "token", payment_method="blik", seed_proxy="socks5h://127.0.0.1:1080"
-                    )
+                with patch("sms_tool.pay_link.registry.extract_link_via_server") as remote:
+                    result = manager.generate_payment_link("token", payment_method="blik")
         self.assertFalse(result["ok"])
         self.assertIn("explicit 6-digit code", result["error"])
-        run.assert_not_called()
-
-    def test_pix_nonzero_exit_cannot_become_success_from_stdout_json(self):
-        failed = subprocess.CompletedProcess(
-            args=[],
-            returncode=7,
-            stdout='{"long_url": "https://example.test/pay"}\n',
-            stderr="fatal after output",
-        )
-        with (
-            tempfile.TemporaryDirectory() as tmp,
-            _legacy_subprocess_adapter("pix"),
-            patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"),
-            patch("sms_tool.payment.link_manager.subprocess.run", return_value=failed),
-        ):
-            result = manager.generate_payment_link("token", payment_method="pix", seed_proxy="socks5h://127.0.0.1:1080")
-        self.assertFalse(result["ok"])
-        self.assertEqual(result["exit_code"], 7)
-        self.assertEqual(result["manager_state"], "failed")
-
-    def test_direct_card_parses_checkout_long_url(self):
-        completed = subprocess.CompletedProcess(
-            args=[],
-            returncode=0,
-            stdout=(
-                '{"ok": true, "long_url": "https://chatgpt.com/checkout/openai_llc/oaics_test", '
-                '"cs_id": "oaics_test", "amount_minor": 0, "amount_currency": "PHP", '
-                '"amount_verification": "verified_zero"}\n'
-            ),
-            stderr="",
-        )
-        with tempfile.TemporaryDirectory() as tmp:
-            with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
-                with patch.object(manager.payment_egress, "assert_egress_countries"):
-                    with patch("sms_tool.payment.link_manager.subprocess.run", return_value=completed):
-                        result = manager.generate_payment_link(
-                            "token", payment_method="direct_card", checkout_proxy="socks5h://127.0.0.1:1080"
-                        )
-        self.assertTrue(result["ok"])
-        self.assertEqual(result["url"], "https://chatgpt.com/checkout/openai_llc/oaics_test")
-        self.assertEqual(result["link_type"], "direct_card_protocol")
-        self.assertEqual(result["manager_state"], "completed")
-
-    def test_direct_card_requires_checkout_proxy_before_subprocess(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
-                with patch("sms_tool.payment.link_manager.subprocess.run") as run:
-                    result = manager.generate_payment_link("token", payment_method="direct_card")
-        self.assertFalse(result["ok"])
-        self.assertIn("proxy", result["error"].lower())
-        run.assert_not_called()
-
-    def test_direct_card_proxy_credentials_travel_via_env_not_argv(self):
-        secret = "socks5h://user:sekret@127.0.0.1:1080"
-        captured = {}
-
-        def fake_run(command, *args, **kwargs):
-            captured["command"] = list(command)
-            captured["env"] = dict(kwargs.get("env") or {})
-            return subprocess.CompletedProcess(
-                args=command,
-                returncode=0,
-                stdout='{"ok": true, "long_url": "https://chatgpt.com/checkout/openai_llc/oaics_x", "cs_id": "oaics_x", "amount_minor": 0}\n',
-                stderr="",
-            )
-
-        with tempfile.TemporaryDirectory() as tmp:
-            with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
-                with patch.object(manager.payment_egress, "assert_egress_countries"):
-                    with patch("sms_tool.payment.link_manager.subprocess.run", side_effect=fake_run):
-                        result = manager.generate_payment_link(
-                            "token", payment_method="direct_card", checkout_proxy=secret
-                        )
-        self.assertTrue(result["ok"])
-        self.assertNotIn(secret, captured["command"])
-        self.assertNotIn("--checkout-proxy", captured["command"])
-        self.assertNotIn("--update-proxy", captured["command"])
-        self.assertEqual(captured["env"]["DIRECT_CARD_CHECKOUT_PROXY"], secret)
-        self.assertEqual(captured["env"]["DIRECT_CARD_UPDATE_PROXY"], secret)
-
-    def test_pix_proxy_credentials_travel_via_env_not_argv(self):
-        secret = "socks5h://user:sekret@127.0.0.1:1080"
-        provider = "http://prov:pw@10.0.0.2:9000"
-        captured = {}
-
-        def fake_run(command, *args, **kwargs):
-            captured["command"] = list(command)
-            captured["env"] = dict(kwargs.get("env") or {})
-            return subprocess.CompletedProcess(
-                args=command,
-                returncode=0,
-                stdout=(
-                    '{"schema":"protocol_payment.v1","payment_method":"pix","ok":true,'
-                    '"url":"https://example.test/pix","link_type":"pix_protocol",'
-                    '"pix_qr_code":"000201","qr_data":"000201"}\n'
-                ),
-                stderr="",
-            )
-
-        with (
-            tempfile.TemporaryDirectory() as tmp,
-            _legacy_subprocess_adapter("pix"),
-            patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"),
-            patch("sms_tool.payment.link_manager.subprocess.run", side_effect=fake_run),
-        ):
-            result = manager.generate_payment_link(
-                "token",
-                payment_method="pix",
-                seed_proxy=secret,
-                provider_proxy=provider,
-            )
-        self.assertTrue(result["ok"])
-        self.assertNotIn(secret, captured["command"])
-        self.assertNotIn("--proxy", captured["command"])
-        self.assertNotIn("--br-proxy", captured["command"])
-        self.assertEqual(captured["env"]["PIX_PROXY"], secret)
-        self.assertEqual(captured["env"]["PIX_BR_PROXY"], provider)
-        self.assertNotIn(secret, " ".join(captured["command"]))
-
-    def test_momo_passes_through_runner_qr_json(self):
-        gateway = "https://payment.momo.vn/v2/gateway/pay?t=1&s=2"
-        completed = subprocess.CompletedProcess(
-            args=[],
-            returncode=0,
-            stdout=(
-                '{"ok": true, "payment_method": "momo", "url": "' + gateway + '", '
-                '"qr_data": "' + gateway + '", "qr_path": "", "has_qr": true, '
-                '"decision": "ready_with_qr", "link_type": "momo_protocol_qr"}\n'
-            ),
-            stderr="",
-        )
-        with (
-            tempfile.TemporaryDirectory() as tmp,
-            _legacy_subprocess_adapter("momo"),
-            patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"),
-            patch("sms_tool.payment.link_manager.subprocess.run", return_value=completed),
-        ):
-            result = manager.generate_payment_link(
-                "token",
-                payment_method="momo",
-                checkout_proxy="socks5h://127.0.0.1:1080",
-                runtime_config={
-                    "chatgpt": {},
-                    "protocol_payments": {
-                        "enabled_methods": ["momo"],
-                        "egress_check": {"enabled": False},
-                    },
-                },
-            )
-        self.assertTrue(result["ok"])
-        self.assertIn("payment.momo.vn", result["url"])
-        self.assertEqual(result["link_type"], "momo_protocol_qr")
-        self.assertEqual(result["manager_state"], "completed")
-
-    def test_kakao_nonzero_json_contract_survives_nonzero_exit(self):
-        failed = subprocess.CompletedProcess(
-            args=[],
-            returncode=3,
-            stdout=(
-                '{"schema":"protocol_payment.v1","ok":false,"payment_method":"kakao",'
-                '"decision":"nonzero_offer","stage":"stripe_init","amount_due":29000,'
-                '"currency":"KRW","has_kakao":true,"url":"","link_type":"kakao_protocol",'
-                '"attempts":1,"error":"nonzero"}\n'
-            ),
-            stderr="",
-        )
-        with (
-            tempfile.TemporaryDirectory() as tmp,
-            _legacy_subprocess_adapter("kakao"),
-            patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"),
-            patch("sms_tool.payment.link_manager.subprocess.run", return_value=failed),
-        ):
-            result = manager.generate_payment_link(
-                "token", payment_method="kakao", seed_proxy="socks5h://127.0.0.1:1080"
-            )
-        self.assertFalse(result["ok"])
-        self.assertEqual(result["decision"], "nonzero_offer")
-        self.assertEqual(result["amount_due"], 29000)
-        self.assertEqual(result["manager_state"], "failed")
+        remote.assert_not_called()
 
     def test_completed_status_does_not_bypass_artifact_validation_for_other_methods(self):
         with tempfile.TemporaryDirectory() as tmp:
             with patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"):
                 with patch(
-                    "sms_tool.paypal_link.gen_link.generate_pp_link", return_value={"ok": True, "status": "completed"}
+                    "sms_tool.pay_link.registry.extract_link_via_server",
+                    return_value={"ok": True, "status": "completed"},
                 ):
                     result = manager.generate_payment_link("token", payment_method="paypal")
         self.assertFalse(result["ok"])
         self.assertIn("no link or QR data", result["error"])
 
     def test_explicit_empty_enabled_methods_disables_every_method(self):
-        # Config is injected at `pay_link.base.current_config_data`, the same
-        # seam setUp uses. It used to go through `manager.CFG`, a module-level
-        # dict no production code read - it existed only as a patch target, and
-        # it was the one reason `_config_data()` still had a CFG branch.
         with tempfile.TemporaryDirectory() as tmp:
             with patch(
                 "sms_tool.pay_link.base.current_config_data",
@@ -723,88 +465,27 @@ class PaymentLinkManagerTests(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertIn("disabled", result["error"])
 
-    def test_labeled_log_lines_are_no_longer_scraped_for_urls(self):
-        # Extractors must emit a trailing structured JSON; labeled log lines
-        # (historically scraped via _RESULT_URL_RE) are deliberately ignored so
-        # a diagnostic URL can never be reported as a payment link.
-        completed = subprocess.CompletedProcess(
-            args=[],
-            returncode=0,
-            stdout=(
-                "iDEAL 最终扫码/授权 URL:\n"
-                "https://bank.example.test/authorize\n"
-                "cleanup docs: https://docs.example.test/troubleshooting\n"
-            ),
-            stderr="",
-        )
-        with (
-            tempfile.TemporaryDirectory() as tmp,
-            _legacy_subprocess_adapter("ideal"),
-            patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"),
-            patch.object(manager.payment_egress, "assert_egress_countries"),
-            patch("sms_tool.payment.link_manager.subprocess.run", return_value=completed),
-        ):
-            result = manager.generate_payment_link(
-                "token",
-                payment_method="ideal",
-                checkout_proxy="socks5h://127.0.0.1:1080",
-            )
-        self.assertFalse(result["ok"])
-        self.assertEqual(result.get("error_code"), "extractor_output_missing")
-        self.assertEqual(result.get("url"), "")
-
-    def test_already_paid_v1_failure_contract_survives_zero_exit(self):
-        completed = subprocess.CompletedProcess(
-            args=[],
-            returncode=0,
-            stdout=(
-                "检测到 User is already paid：用户已支付，任务正常结束\n"
-                '{"payment_method": "ideal", "ok": false, "status": "already_paid", '
-                '"url": "", "link_type": "ideal_protocol", "error": "User is already paid", '
-                '"error_code": "account_already_paid", "retryable": false, '
-                '"schema": "protocol_payment.v1"}\n'
-            ),
-            stderr="",
-        )
-        with (
-            tempfile.TemporaryDirectory() as tmp,
-            _legacy_subprocess_adapter("ideal"),
-            patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"),
-            patch.object(manager.payment_egress, "assert_egress_countries"),
-            patch("sms_tool.payment.link_manager.subprocess.run", return_value=completed),
-        ):
-            result = manager.generate_payment_link(
-                "token",
-                payment_method="ideal",
-                checkout_proxy="socks5h://127.0.0.1:1080",
-            )
-        self.assertFalse(result["ok"])
-        self.assertEqual(result.get("status"), "already_paid")
-        self.assertEqual(result.get("error_code"), "account_already_paid")
-
     def test_persist_run_stores_url_presence_without_the_payment_link(self):
         approve_url = "https://www.paypal.com/agreements/approve?ba_token=BA-1AB23456CD789012E"
         with tempfile.TemporaryDirectory() as tmp:
             runs = Path(tmp) / "runs.jsonl"
             with patch("sms_tool.pay_link.persistence._state_path", return_value=runs):
                 with patch(
-                    "sms_tool.paypal_link.gen_link.generate_pp_link",
+                    "sms_tool.pay_link.registry.extract_link_via_server",
                     return_value={
                         "ok": True,
                         "url": approve_url,
                         "ba_token": "BA-1AB23456CD789012E",
-                        "link_type": "paypal_ba_approve",
+                        "link_type": "paypal_extract_server",
                     },
                 ):
                     result = manager.generate_payment_link("token", payment_method="paypal")
             persisted = runs.read_text(encoding="utf-8")
-        # Run history keeps artifact presence only; the provider link never lands on disk.
         self.assertNotIn(approve_url, persisted)
         self.assertNotIn("https://", persisted)
         self.assertNotIn("BA-1AB23456CD789012E", persisted)
         self.assertNotIn("BA-1AB", persisted)
         self.assertIn('"url_present": true', persisted)
-        # 返回给调用方/UI 的结果仍是完整链接（脱敏只作用于持久化）
         self.assertEqual(result["url"], approve_url)
 
     def test_persist_run_replaces_nested_provider_and_qr_artifacts_with_presence(self):
@@ -853,7 +534,7 @@ class PaymentLinkManagerTests(unittest.TestCase):
 
     def test_persistence_failure_is_reported_without_raising(self):
         with patch(
-            "sms_tool.paypal_link.gen_link.generate_pp_link",
+            "sms_tool.pay_link.registry.extract_link_via_server",
             return_value={"ok": True, "url": "https://example.test/pay"},
         ):
             with patch("sms_tool.pay_link.persistence._persist_run", side_effect=OSError("disk blocked")):
@@ -863,7 +544,6 @@ class PaymentLinkManagerTests(unittest.TestCase):
         self.assertIn("OSError", result["persistence_warning"])
 
     def _run_with_journal_finish(self, finish_error: BaseException) -> list[tuple[str, str]]:
-        """Drive one gopay run whose journal ``finish`` raises ``finish_error``."""
         calls: list[tuple[str, str]] = []
 
         class _FakeOperation:
@@ -892,92 +572,44 @@ class PaymentLinkManagerTests(unittest.TestCase):
             "status": "completed",
             "operation": "extract_link",
             "url": "https://app.midtrans.com/snap/v4/redirection/fixture",
-            "link_type": "gopay_protocol",
+            "link_type": "gopay_extract_server",
         }
         with (
             tempfile.TemporaryDirectory() as tmp,
             patch("sms_tool.pay_link.core.PaymentOperationStore", _FakeStore),
             patch("sms_tool.pay_link.persistence._state_path", return_value=Path(tmp) / "runs.jsonl"),
-            patch("sms_tool.wallet.provider.run_wallet_provider", return_value=adapter_result),
+            patch("sms_tool.pay_link.registry.extract_link_via_server", return_value=adapter_result),
         ):
             try:
                 manager.generate_payment_link(
                     "token",
                     payment_method="gopay",
-                    runtime_config={"chatgpt": {}, "protocol_payments": {}},
+                    runtime_config={
+                        "chatgpt": {},
+                        "protocol_payments": {
+                            "extract_link_server": {
+                                "enabled": True,
+                                "mode": "only",
+                                "api_base": "https://paylink.example.test",
+                                "cdk": "cdk-test",
+                            }
+                        },
+                    },
                 )
             except finish_error.__class__:
                 pass
         return calls
 
     def test_journal_failure_marks_the_durable_operation_unknown(self):
-        """An ``Exception`` from the journal write is recorded as unknown."""
         calls = self._run_with_journal_finish(OSError("journal write failed"))
         self.assertEqual(calls, [("executor", "payment_executor_aborted")])
 
     def test_system_exit_is_not_converted_into_a_journal_failure(self):
-        """``SystemExit`` must propagate untouched (the narrowing is deliberate).
-
-        Catching ``BaseException`` here would run ``fail_unknown`` and then
-        re-raise, so the narrowing is pinned: a tear-down signal is not a
-        payment failure.
-        """
         calls = self._run_with_journal_finish(SystemExit(3))
         self.assertEqual(calls, [])
 
 
-class AdapterV1ContractTests(unittest.TestCase):
-    """The three subprocess adapters must carry the same v1 pair on success.
-
-    ``_normalize_result`` sets ``payment_method`` / ``link_type`` downstream, but
-    the adapters are also entry points in their own right
-    (``registry.script_runner``, ``test_payment_egress_gate``), so a direct
-    success must carry the pair its failure shape already gets from
-    ``EgressCheckError.to_result``.
-    """
-
-    def _spec(self, key):
-        from sms_tool.pay_link.base import PAYMENT_METHODS
-
-        return PAYMENT_METHODS[key]
-
-    def test_v1_result_fills_the_pair_when_absent(self):
-        from sms_tool.pay_link import adapters
-
-        out = adapters._v1_result({"ok": True}, self._spec("momo"))
-        self.assertEqual(out["payment_method"], "momo")
-        self.assertEqual(out["link_type"], "momo_protocol")
-
-    def test_v1_result_never_overwrites_an_explicit_value(self):
-        from sms_tool.pay_link import adapters
-
-        out = adapters._v1_result({"payment_method": "explicit", "link_type": "momo_protocol_qr"}, self._spec("momo"))
-        self.assertEqual(out["payment_method"], "explicit")
-        self.assertEqual(out["link_type"], "momo_protocol_qr")
-
-    def test_direct_card_success_link_type_is_the_spec_default(self):
-        """``direct_card`` used to hardcode ``direct_card_protocol``; the helper
-        must still produce exactly that."""
-        from sms_tool.pay_link import adapters
-
-        out = adapters._v1_result({"ok": True}, self._spec("direct_card"))
-        self.assertEqual(out["link_type"], "direct_card_protocol")
-
-
 class FacadeSurfaceTests(unittest.TestCase):
-    """The compatibility shell's public surface must be declared, not accidental.
-
-    ``payment/link_manager.py`` re-exports ``pay_link`` with ``import *`` and
-    then keeps a block of explicit pre-split imports.  A name consumed through
-    the shell but absent from ``__all__`` is exported only by accident -- and
-    the unused-import ratchet reports that explicit import as removable debt, so
-    a routine F401 cleanup would silently break the consumer.
-    ``parse_proxy_pool`` was exactly that case until 2026-10-10: it was the one
-    name imported from the facade by ``payment_batch`` / ``payment_batch_setup``
-    that ``pay_link.__all__`` omitted, so it survived only on the explicit
-    import that F401 flagged as unused.
-    """
-
     def test_every_consumed_facade_name_is_declared_in_all(self):
         root = Path(__file__).resolve().parents[2]
         declared = set(manager.__all__)
@@ -995,16 +627,9 @@ class FacadeSurfaceTests(unittest.TestCase):
                     if alias.name != "*":
                         consumed.setdefault(alias.name, set()).add(str(path.relative_to(root)))
         undeclared = {name: sorted(srcs) for name, srcs in consumed.items() if name not in declared}
-        self.assertEqual(
-            undeclared,
-            {},
-            "name(s) consumed through the payment_link_manager facade but missing from its __all__; "
-            "declare them in sms_tool/pay_link/__init__.py or migrate the consumer: "
-            f"{undeclared}",
-        )
+        self.assertEqual(undeclared, {})
 
     def test_parse_proxy_pool_is_declared_and_reachable(self):
-        """Regression pin for the 2026-10-10 accidental-export fix."""
         from sms_tool import pay_link
 
         self.assertIn("parse_proxy_pool", pay_link.__all__)

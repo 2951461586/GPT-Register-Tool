@@ -1,0 +1,43 @@
+{"fn": "is_cacheable_static_asset", "args": [{"a": "b"}, {"$undefined": true}], "ok": false}
+{"fn": "is_cacheable_static_asset", "args": [[], {"$undefined": true}, null], "error": "TypeError: is_cacheable_static_asset() takes from 1 to 2 positional arguments but 3 were given"}
+{"fn": "is_cacheable_static_asset", "args": [[], 0, []], "error": "TypeError: is_cacheable_static_asset() takes from 1 to 2 positional arguments but 3 were given"}
+{"fn": "is_cacheable_static_asset", "args": [true, true, {"a": "b"}], "error": "TypeError: is_cacheable_static_asset() takes from 1 to 2 positional arguments but 3 were given"}
+{"fn": "is_cacheable_static_asset", "args": [0, {"a": "b"}, {"a": {"b": "c"}}], "error": "TypeError: is_cacheable_static_asset() takes from 1 to 2 positional arguments but 3 were given"}
+{"fn": "is_cacheable_static_asset", "args": [true, null, true], "error": "TypeError: is_cacheable_static_asset() takes from 1 to 2 positional arguments but 3 were given"}
+{"fn": "is_cacheable_static_asset", "args": [true, ["a", 1]], "ok": false}
+{"fn": "is_cacheable_static_asset", "args": ["x", {"a": {"b": "c"}}, 0], "error": "TypeError: is_cacheable_static_asset() takes from 1 to 2 positional arguments but 3 were given"}
+{"fn": "is_cacheable_static_asset", "args": [true, [], ["a", 1]], "error": "TypeError: is_cacheable_static_asset() takes from 1 to 2 positional arguments but 3 were given"}
+{"fn": "is_cacheable_static_asset", "args": [0, {"$undefined": true}, []], "error": "TypeError: is_cacheable_static_asset() takes from 1 to 2 positional arguments but 3 were given"}
+{"fn": "is_cacheable_static_asset", "args": [true, {"a": {"b": "c"}}], "ok": false}
+{"fn": "is_cacheable_static_asset", "args": [{"a": "b"}, {"$undefined": true}, null], "error": "TypeError: is_cacheable_static_asset() takes from 1 to 2 positional arguments but 3 were given"}
+{"fn": "is_cacheable_static_asset", "args": [["a", 1], {"$undefined": true}, {"$undefined": true}], "ok": false}
+{"fn": "is_cacheable_static_asset", "args": [{"a": "b"}, null, 0], "error": "TypeError: is_cacheable_static_asset() takes from 1 to 2 positional arguments but 3 were given"}
+{"fn": "is_cacheable_static_asset", "args": [{}, ["a", 1], []], "error": "TypeError: is_cacheable_static_asset() takes from 1 to 2 positional arguments but 3 were given"}
+{"fn": "is_cacheable_static_asset", "args": [{}, 0], "ok": false}
+{"fn": "is_cacheable_static_asset", "args": [true, ["a", 1], true], "error": "TypeError: is_cacheable_static_asset() takes from 1 to 2 positional arguments but 3 were given"}
+{"fn": "is_cacheable_static_asset", "args": [{}, 0, {"$undefined": true}], "ok": false}
+{"fn": "is_cacheable_static_asset", "args": [null, [], "x"], "error": "TypeError: is_cacheable_static_asset() takes from 1 to 2 positional arguments but 3 were given"}
+{"fn": "is_cacheable_static_asset", "args": [0, "x", {"a": "b"}], "error": "TypeError: is_cacheable_static_asset() takes from 1 to 2 positional arguments but 3 were given"}
+{"fn": "is_cacheable_static_asset", "args": ["https://cdn.oaistatic.com/assets/app-9a8b7c.js?v=2", "script"], "kwargs": {"method": "GET"}, "ok": true}
+{"fn": "is_cacheable_static_asset", "args": ["https://cdn.oaistatic.com/assets/main-styles.css", "stylesheet"], "kwargs": {"method": "GET"}, "ok": true}
+{"fn": "is_cacheable_static_asset", "args": ["https://cdn.oaistatic.com/assets/inter-latin.woff2", "font"], "kwargs": {"method": "GET"}, "ok": true}
+{"fn": "is_cacheable_static_asset", "args": ["https://chatgpt.com/_next/static/chunks/framework-abc123.js", "script"], "kwargs": {"method": "GET"}, "ok": true}
+{"fn": "is_cacheable_static_asset", "args": ["https://cdn.openai.com/images/logo.webp", "image"], "kwargs": {"method": "GET"}, "ok": true}
+{"fn": "is_cacheable_static_asset", "args": ["https://auth.openai.com/api/accounts/email-otp/validate", "fetch"], "kwargs": {"method": "POST"}, "ok": false}
+{"fn": "is_cacheable_static_asset", "args": ["https://chatgpt.com/backend-api/sentinel/chat-requirements", "xhr"], "kwargs": {"method": "GET"}, "ok": false}
+{"fn": "is_cacheable_static_asset", "args": ["https://challenges.cloudflare.com/turnstile/v0/api.js", "script"], "kwargs": {"method": "GET"}, "ok": false}
+{"fn": "is_cacheable_static_asset", "args": ["https://cdn.oaistatic.com/assets/app.js", "script"], "kwargs": {"method": "POST"}, "ok": false}
+{"fn": "is_cacheable_static_asset", "args": ["https://cdn.oaistatic.com/.js", "script"], "kwargs": {"method": "GET"}, "ok": false}
+{"fn": "is_cacheable_static_asset", "args": ["https://cdn.oaistatic.com/a.js/", "script"], "kwargs": {"method": "GET"}, "ok": true}
+{"fn": "is_cacheable_static_asset", "args": ["https://evil-oaistatic.com/assets/app.js", "script"], "kwargs": {"method": "GET"}, "ok": false}
+{"fn": "is_cacheable_static_asset", "args": ["https://auth.openai.com/login/bundle.js", "script"], "kwargs": {"method": "GET"}, "ok": false}
+{"fn": "is_cacheable_static_asset", "args": ["https://cdn.oaistatic.com./assets/bundle.mjs", ""], "kwargs": {"method": ""}, "ok": true}
+{"fn": "is_cacheable_static_asset", "args": ["", "script"], "kwargs": {"method": "GET"}, "ok": false}
+{"fn": "is_cacheable_static_asset", "args": ["https://cdn.oaistatic.com/assets/chunk-1.js", "script"], "ok": true}
+{"fn": "is_cacheable_static_asset", "args": ["https://chatgpt.com/_next/static/chunks/main.js", "script"], "ok": true}
+{"fn": "is_cacheable_static_asset", "args": ["https://chatgpt.com/backend-api/sentinel/req", "fetch"], "ok": false}
+{"fn": "is_cacheable_static_asset", "args": ["https://auth.openai.com/api/accounts/user/register", "script"], "ok": false}
+{"fn": "is_cacheable_static_asset", "args": ["https://cdn.oaistatic.com/assets/chunk-1.js", "script"], "kwargs": {"method": "POST"}, "ok": false}
+{"fn": "is_cacheable_static_asset", "args": ["https://evil.example/assets/chunk-1.js", "script"], "ok": false}
+{"fn": "is_cacheable_static_asset", "args": ["https://cdn.oaistatic.com/assets/app-abc.js", "script"], "kwargs": {"method": "GET"}, "ok": true}
+{"fn": "is_cacheable_static_asset", "args": ["https://chatgpt.com/api/auth/session", ""], "kwargs": {"method": "GET"}, "ok": false}

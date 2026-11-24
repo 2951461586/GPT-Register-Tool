@@ -15,9 +15,15 @@ account_creation, account_2fa, codex_oauth, session_refresh, and auth_state:
 from __future__ import annotations
 
 import base64
+import importlib
 import json
 import logging
+import os
 import re
+import sys
+from collections.abc import Mapping
+from pathlib import Path
+from typing import Any
 from urllib.parse import parse_qs, urlencode, urljoin, urlparse
 
 from ..config import CFG
@@ -27,6 +33,30 @@ from ..observability.operator_output import emit
 from . import endpoints
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _load_native_http_utils() -> Any | None:
+    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
+    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_HTTP_UTILS") or "").strip().lower()
+    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
+        return None
+    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "http-utils-rs" / "python"
+    if pkg_dir.is_dir():
+        pkg_str = str(pkg_dir)
+        if pkg_str not in sys.path:
+            sys.path.insert(0, pkg_str)
+    try:
+        return importlib.import_module("http_utils_rs")
+    except (ImportError, OSError):
+        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
+            raise
+        return None
+
+
+_NATIVE_HTTP_UTILS = _load_native_http_utils()
+_NATIVE_IS_ALLOWED_CALLBACK_URL = getattr(_NATIVE_HTTP_UTILS, "_is_allowed_callback_url", None)
+_NATIVE_MINIMAL_CHATGPT_COOKIE_HEADER = getattr(_NATIVE_HTTP_UTILS, "_minimal_chatgpt_cookie_header", None)
+_NATIVE_SCALAR_TYPES = (str, type(None), bool, int, float)
 _SESSION_ID_RE = re.compile(r"\bus_[A-Za-z0-9]{16,}\b")
 _WORKSPACE_FIELD_RE = re.compile(r'"(?:workspace_id|workspaceId)"\s*:\s*"([^"\s]+)"')
 _WORKSPACES_FIRST_RE = re.compile(r'"workspaces"\s*:\s*\[\s*\{\s*"id"\s*:\s*"([^"\s]+)"')
@@ -61,6 +91,13 @@ def _absolute_url(base_url: str, url: str) -> str:
 
 def _is_allowed_callback_url(url: str, auth_base: str, chat_base: str) -> bool:
     """Allow callback hops only to the configured auth/chat hosts without CRLF or userinfo."""
+    if (
+        _NATIVE_IS_ALLOWED_CALLBACK_URL is not None
+        and isinstance(url, _NATIVE_SCALAR_TYPES)
+        and isinstance(auth_base, str)
+        and isinstance(chat_base, str)
+    ):
+        return bool(_NATIVE_IS_ALLOWED_CALLBACK_URL(url, auth_base, chat_base))
     text = str(url or "").strip()
     if not text or any(ch in text for ch in ("\r", "\n", "\\")):
         return False
@@ -285,7 +322,7 @@ def _follow_continue_url(session, url, base_headers, referer="", label="continue
     """GET a continue URL (resolved against auth_base) with impersonation."""
     if not url:
         return None
-    chat_cfg = CFG.get("chatgpt") if isinstance(CFG, dict) else {}
+    chat_cfg = CFG.get("chatgpt") if isinstance(CFG, Mapping) else {}
     auth_base = (chat_cfg or {}).get("auth_base_url", endpoints.AUTH_BASE)
     chat_base = (chat_cfg or {}).get("chat_base_url", endpoints.CHATGPT_BASE)
     full_url = _absolute_url(auth_base, url)
@@ -320,6 +357,8 @@ def _follow_continue_url(session, url, base_headers, referer="", label="continue
 
 def _minimal_chatgpt_cookie_header(cookie_header) -> str:
     """Return a minimal cookie header with only essential ChatGPT cookies."""
+    if _NATIVE_MINIMAL_CHATGPT_COOKIE_HEADER is not None and isinstance(cookie_header, _NATIVE_SCALAR_TYPES):
+        return str(_NATIVE_MINIMAL_CHATGPT_COOKIE_HEADER(cookie_header))
     keep = {
         "__Host-next-auth.csrf-token",
         "__Secure-next-auth.callback-url",

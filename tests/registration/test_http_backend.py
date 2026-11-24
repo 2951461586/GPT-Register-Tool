@@ -209,9 +209,12 @@ def test_wreq_rejects_a_profile_it_cannot_run(monkeypatch) -> None:
 
 
 def test_safari_tokens_expand_to_wreq_spellings() -> None:
-    assert http_backend._safari_candidates("18_0") == ("safari18",)
-    assert http_backend._safari_candidates("184") == ("safari18_4", "safari18")
-    assert http_backend._safari_candidates("260") == ("safari26",)
+    assert http_backend._safari_candidates("17_0") == ("safari17_0", "safari17")
+    assert http_backend._safari_candidates("17_2_ios") == ("safariios17_2",)
+    assert http_backend._safari_candidates("18_0") == ("safari18_0", "safari18")
+    assert http_backend._safari_candidates("18_0_ios") == ("safariios18_0", "safariios18")
+    assert http_backend._safari_candidates("184") == ("safari18_4",)
+    assert http_backend._safari_candidates("260") == ("safari26_0", "safari26")
 
 
 def test_chrome_tokens_are_exact_only() -> None:
@@ -255,6 +258,32 @@ def test_an_unsupported_kwarg_raises_instead_of_being_dropped(monkeypatch) -> No
     session, _module = _session(monkeypatch)
     with pytest.raises(TypeError, match="verify"):
         session.get("https://auth.openai.com/", verify=False)
+
+
+def test_matching_impersonate_kwarg_is_accepted_and_none_headers_dropped(monkeypatch) -> None:
+    session, _module = _session(monkeypatch, impersonate="chrome152")
+    session.post(
+        "https://auth.openai.com/api/accounts/passwordless/send-otp",
+        headers={"Accept": "*/*", "Content-Type": None},
+        impersonate="chrome152",
+    )
+    _method, _url, options = session._client.calls[-1]
+    assert options["headers"] == {"Accept": "*/*"}
+    with pytest.raises(http_backend.ProtocolBackendError, match="impersonate_mismatch"):
+        session.get("https://auth.openai.com/", impersonate="firefox144")
+
+
+def test_real_wreq_safari_does_not_alias_ios_or_minor_versions(monkeypatch) -> None:
+    pytest.importorskip("wreq")
+    assert http_backend.wreq_profile("safari17_0") is not None
+    assert http_backend.wreq_profile("safari17_2_ios") is not None
+    assert http_backend.wreq_profile("safari18_0_ios") is None
+    assert http_backend.wreq_profile("safari184") is None
+    monkeypatch.setenv(http_backend.BACKEND_ENV, "wreq")
+    from sms_tool.transport.fingerprint_pool import FingerprintPool
+
+    pool = FingerprintPool()
+    assert all(http_backend.wreq_profile(p.impersonate) is not None for p in pool._profiles)
 
 
 def test_response_maps_onto_the_requests_shape(monkeypatch) -> None:

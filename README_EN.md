@@ -1,22 +1,30 @@
 <div align="center">
   <img src="./SmsWorkbench/Assets/black-kitten.png" width="140" alt="GPT-Register-Tool logo" />
   <h1>GPT-Register-Tool</h1>
-  <p><strong>A Windows desktop workbench for ChatGPT account registration, email OTP, account management, and payment workflows</strong></p>
+  <p><strong>A Windows desktop workbench for ChatGPT account registration, email OTP, account management, and payment-link extraction</strong></p>
   <p>
     <a href="./README.md">简体中文</a> · <a href="./README_EN.md">English</a>
+  </p>
+  <p>
+    <a href="https://github.com/2951461586/GPT-Register-Tool/actions/workflows/ci.yml"><img src="https://github.com/2951461586/GPT-Register-Tool/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+    <a href="https://github.com/2951461586/GPT-Register-Tool/releases"><img src="https://img.shields.io/github/v/release/2951461586/GPT-Register-Tool?logo=github&color=6A20D0" alt="Latest Release" /></a>
+    <a href="./LICENSE"><img src="https://img.shields.io/github/license/2951461586/GPT-Register-Tool?color=22C55E" alt="License: MIT" /></a>
+    <a href="https://github.com/2951461586/GPT-Register-Tool/stargazers"><img src="https://img.shields.io/github/stars/2951461586/GPT-Register-Tool?logo=github" alt="GitHub Stars" /></a>
+    <a href="https://github.com/2951461586/GPT-Register-Tool/releases"><img src="https://img.shields.io/github/downloads/2951461586/GPT-Register-Tool/total?logo=github&color=0EA5E9" alt="GitHub Downloads" /></a>
   </p>
   <p>
     <img src="https://img.shields.io/badge/Windows-10%2F11-0078D4?logo=windows&logoColor=white" alt="Windows 10/11" />
     <img src="https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white" alt=".NET 10" />
     <img src="https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white" alt="Python 3.12+" />
+    <img src="https://img.shields.io/badge/Rust-Native%20FFI%20%26%20PyO3-CE422B?logo=rust&logoColor=white" alt="Rust Native FFI & PyO3" />
   </p>
 </div>
 
 ## Introduction
 
-GPT-Register-Tool combines a **WPF desktop client with a Python core** for email OTP registration, account and Session management, proxy configuration, payment-link extraction, and account export. Runtime data is stored locally by default and is not committed to Git.
+GPT-Register-Tool combines a **WPF (.NET 10) desktop client, a Python 3.12+ core, and a native Rust acceleration layer** (`native/sentinel_vm/` in-process Rust Sentinel VM with **zero Node.js dependency**, plus 14 `rust-anything` PyO3 hot-path extensions covering redaction, OTP/SMS extraction, proxy normalization, HTML stripping, browser static-asset filtering, HTTP callback/cookie helpers, error & CPA classification, and session conversion) for email OTP registration, account and Session management, proxy governance, external paylink extraction server integration, and account export. Runtime data is stored locally by default and is not committed to Git.
 
-Current release notes: [v2026.11.22](./docs/releases/release-v2026.11.22.md).
+Current release notes: [v2026.11.24](./docs/releases/release-v2026.11.24.md).
 
 
 ## Sponsor
@@ -41,10 +49,10 @@ Chinese interface, USDT payments supported, and 30% off your first purchase with
 | **Registration** | Mailbox pools / ReMail long-lived mailboxes / CFWorker domains / iCloud relay links plus multi-vendor SMS; single, concurrent, and target-success (`--target-success` + `--max-attempts`) batches; each account mints its own Sentinel token and `oai-did`; success means the AT probe answered HTTP 200; registration only stores the AT/Session and never builds payment links |
 | **Protocol consistency and recovery** | Preflight of the ChatGPT / Auth / Sentinel hops before a mailbox is spent; one proxy session per account, rotated only on failure; NextAuth / Auth / ChatGPT share a stable `oai-did`, UA and client hints with GeoIP-derived locale and timezone; 403/429 opens a circuit with no plain-HTTP PoW fallback; the checkpoint is persisted before the AT probe so a resume never re-spends an OTP |
 | **Mailbox and OTP** | One mailbox seam: ReMail, Smailr, CFWorker, Microsoft Graph/OAuth, Outlook/Hotmail IMAP, Gmail, iCloud relay links and legacy pool formats; OTP parsing filters by subject, sender, exact recipient and server timestamp, then ranks candidates; ReMail adds adaptive polling, detail-body fetch and a 30s resend |
-| **Protocol payment links** | 15 methods: PayPal, GoPay, GCash, GrabPay, UPI, iDEAL, PIX, Kakao Pay, BLIK, TWINT, direct card Checkout, MoMo, QRIS, Bizum, Naver Pay (the last three are CLI canaries); Checkout and Approve use separate exit pools and rewrite country and Session per method; Checkout / Promotion / PM / Confirm / Poll / Provider Redirect stay distinct stages; five terminal states with `retryable` and `error_stage`, and `unknown` must be reconciled first |
-| **Batch payment** | JIT AT gate, layered HTTP 401 recovery (RT -> Cookie -> isolated browser mailbox OTP -> Codex OAuth), eligibility matrix, Canary pause, per-method concurrency, atomic checkpoints and explicit resume; the report separates AT 200, eligibility, visible payment methods, approve and final link/QR artifacts |
+| **Payment link extraction** | All 15 catalog methods (PayPal, GoPay, GCash, GrabPay, UPI, iDEAL, PIX, Kakao Pay, BLIK, TWINT, direct card Checkout, MoMo, QRIS, Bizum, Naver Pay) route through `sms_tool/pay_link/extract_server.py` to an external Paylink Extraction Server (legacy in-repo extractors retired); server URL, masked CDK, endpoint, timeout, proxy forwarding and TLS verification are configurable and CDK passes strictly via environment variables; read-only capability & payment qualification probes remain in-tree with atomic checkpoint resume |
+| **Native Rust acceleration** | `native/sentinel_vm/` compiles to an in-process `sentinel_vm.dll` FFI with **zero Node.js dependency**; 14 `rust-anything` PyO3 extensions accelerate hot CPU paths (sanitizer 8.3×, OTP extraction 6.9× / up to 63×, error classification 6.2×, proxy normalization 4.3×, CFWorker/iCloud/Gmail HTML stripping 4.0×/3.5×/3.0×, SMS code extraction 2.4×, browser static-asset cache check 2.3×, HTTP helpers 1.8×, CPA classifier 1.7×), with 0 `unsafe` and 0 MinGW runtime DLLs; see [Rust acceleration](docs/current/rust-acceleration.md) |
 | **Accounts and data** | Session JSON plus SQLite dual index; liveness probe, offline JWT lightweight inspection (`--inspect-accounts`) and 401 recovery; the promotion badge (plan/trial only; no Checkout is created); Codex / CPA / SUB2API import-export; local data lives in `sessions/` and `runtime/`, both Git-ignored |
-| **Desktop operations** | Role-folder namespace isolation (`Models` / `Services` / `ViewModels` / `Views` / `Dialogs` / `Interop`) + window-independent Coordinators; selected accounts drive the "batch protocol payment" window (concurrency, retries, Canary, two exit pools, checkpoint resume); each `Saved session:` debounces an account-pool refresh; multi-select delete is one backend batch command; browser drivers support `--block-assets` traffic saving |
+| **Desktop operations** | Role-folder namespace isolation (`Models` / `Services` / `ViewModels` / `Views` / `Dialogs` / `Interop`) + window-independent Coordinators; selected accounts drive the "Payment link extraction" window (extraction server config, masked CDK, concurrency, retries, Canary, collapsible proxy pools, checkpoint resume); each `Saved session:` debounces an account-pool refresh; multi-select delete is one backend batch command; browser drivers support `--block-assets` traffic saving |
 | **SMS** | SMSBower, HeroSMS, Grizzly and NexSMS provider selection with online catalog lookup (availability depends on each vendor), plus send retry, timeout and poll-interval settings; see the [one-click SMS contract](docs/current/one-click-sms.md) |
 
 
@@ -88,8 +96,8 @@ flowchart TB
         direction LR
         PROV["providers/ · phone/<br/>Mailbox & SMS Adapters"]
         DRV["registration_drivers/ · browser/<br/>playwright · camoufox · roxy · cloak"]
-        SEN["sentinel/<br/>Node sdk.js · ICU Isolation"]
-        PAYAD["pay_link/ (oaics_provider) · wallet/<br/>paypal/ · paypal_link/ · upi_link/"]
+        SEN["sentinel/<br/>native/sentinel_vm Rust FFI<br/>Zero Node.js Dependency"]
+        PAYAD["pay_link/ (extract_server)<br/>paypal/ (auto authorization)"]
         STO["store/ · session/<br/>SQLite + Session JSON"]
     end
 
@@ -98,9 +106,10 @@ flowchart TB
         KERN["kernel/ (stdlib-only)<br/>paths · sanitizer · timeouts · flags"]
         INFRA["config/ · transport/ · proxy/ · geo/<br/>observability/"]
         SEAMS["Immutable Contracts & Cross-Lane Primitives<br/>account_models · payment/wire & checkout_contract<br/>desktop/ipc · operation_journal · cross_process_gate"]
+        RUST["rust/ (14 PyO3 Hot-Path Crates)<br/>sanitizer · mail_otp · proxy · html · sms · data_saver · http · session · store · cpa"]
     end
 
-    EXT["services/protocol-payment/<br/>Isolated Subprocess Extractors (zero import coupling)"]
+    EXT["External Paylink Extraction Server<br/>HTTP API · EXTRACT_LINK_* env auth"]
     DATA[("Local Config & Runtime Data (Git-ignored)<br/>%LOCALAPPDATA%\\GPTRegisterTool\\config · sessions/ · runtime/")]
 
     WPF --> CONTRACTS
@@ -109,7 +118,7 @@ flowchart TB
     L2 --> L3
     L3 --> L4
     L4 --> L5
-    PAYAD -. "subprocess boundary" .-> EXT
+    PAYAD -. "HTTPS / extraction server" .-> EXT
     L4 --> DATA
     L5 --> DATA
 ```
@@ -123,16 +132,17 @@ Module ownership and responsibility per layer:
 | ② CLI / Command Adapters | `sms_tool/cli.py`, `sms_tool/commands/`, `sms_tool/cli_parsers/`, `sms_tool/doctor.py`, `sms_tool/config_usage.py` | Lazy command dispatch, declaration-only parser groups, exit-code translation and environment diagnostics; owns no provider wire logic or direct DB writes |
 | ③ Application Workflows (Registration & Auth) | `sms_tool/registration/` (`orchestrator.py` · `handlers.py` · `batch_runner.py` · `pulse.py`), `sms_tool/auth_flow/`, `sms_tool/registration_drivers/browser_flow/` | Entry dispatch with immutable `RegistrationOperations` binding, protocol stage ordering, target-success & pulse scheduling, resumable checkpoints, browser page state machine; protocol and browser lanes share one OTP / Session / AT 200 boundary |
 | ③ Application Workflows (Mailbox · Accounts · Payment) | `sms_tool/mailbox/`, `sms_tool/accounts/`, `sms_tool/codex/`, `sms_tool/importers/`, `sms_tool/payment/batch.py`, `sms_tool/payment/qualification_batch.py` | Mailbox routing/strategies/polling, existing-account liveness / layered 401 recovery / offline JWT inspection (`sms_tool/accounts/account_inspection.py`) / promotion & health batches / email change / terminal cleanup, Codex OAuth & CPA/SUB2API import-export, batch payment & qualification orchestration |
-| ④ Provider & Driver Adapters | `sms_tool/providers/`, `sms_tool/phone/`, `sms_tool/registration_drivers/`, `sms_tool/browser/`, `sms_tool/sentinel/`, `sms_tool/registration/sentinel_tokens.py` | Mailbox & SMS vendor clients and phone-slot reuse; browser drivers (playwright · camoufox · roxy · cloak), static-asset blocking (`sms_tool/registration_drivers/data_saver.py`), process/fingerprint pools; Sentinel Node `sdk.js` issuance with ICU timezone/locale isolation |
-| ④ Payment Lanes & Persistence | `sms_tool/pay_link/`, `sms_tool/wallet/`, `sms_tool/paypal/`, `sms_tool/paypal_link/`, `sms_tool/upi_link/`, `sms_tool/store/`, `sms_tool/session/` | Multi-method registry & in-process OAICS custom-checkout provider (`sms_tool/pay_link/oaics_provider.py` for iDEAL / PIX / Kakao Pay / BLIK / TWINT / MoMo), GoPay / GrabPay / GCash wallets, frozen legacy PayPal / UPI lanes; SQLite + Session JSON dual-index persistence (`sms_tool/storage.py` back-compat shell) and canonical session building/refresh |
+| ④ Provider & Driver Adapters | `sms_tool/providers/`, `sms_tool/phone/`, `sms_tool/registration_drivers/`, `sms_tool/browser/`, `sms_tool/sentinel/`, `sms_tool/registration/sentinel_tokens.py` | Mailbox & SMS vendor clients and phone-slot reuse; browser drivers (playwright · camoufox · roxy · cloak), static-asset blocking (`sms_tool/registration_drivers/data_saver.py`), process/fingerprint pools; in-process native Rust Sentinel FFI (`sms_tool/sentinel/native_ffi.py`) issuance |
+| ④ Payment Lanes & Persistence | `sms_tool/pay_link/`, `sms_tool/paypal/`, `sms_tool/store/`, `sms_tool/session/` | Multi-method registry & unified external Paylink Extraction Server HTTP adapter (`sms_tool/pay_link/extract_server.py`, serving all 15 catalog methods), PayPal authorization execution; SQLite + Session JSON dual-index persistence (`sms_tool/storage.py` back-compat shell) and canonical session building/refresh |
 | ⑤ Foundation Kernel | `sms_tool/kernel/` | Zero-application-dependency stdlib-only core: paths, sanitizer, timeout constants, frozen-config boolean flags, failure vocabulary, error classification and shared transport helpers |
 | ⑤ Infrastructure Primitives | `sms_tool/config/`, `sms_tool/transport/`, `sms_tool/proxy/`, `sms_tool/geo/`, `sms_tool/observability/` | Sharded config loading & read-only freezing; `curl_cffi` / `wreq` dual transport backends, single endpoint authority (`sms_tool/transport/endpoints.py`) and fingerprint pool; single proxy parser authority (`sms_tool/proxy/entry.py`), lane routing, health and two-hop local bridge (`sms_tool/proxy/bridge.py`); single exit GeoIP/timezone authority and sanitized telemetry |
 | ⑤ Domain Contracts & Shared Seams | `sms_tool/accounts/account_models.py`, `sms_tool/payment/wire.py`, `sms_tool/payment/checkout_contract.py`, `sms_tool/payment/catalog.py`, `sms_tool/desktop/ipc.py`, `sms_tool/operation_journal.py`, `sms_tool/cross_process_gate.py` | Immutable cross-lane seams: typed account models, Checkout & payment wire kernel, method catalog, promotion/qualification states, sole `@@SMSWORKBENCH_V2@@` IPC writer, durable idempotency journal and cross-process file locks |
 
-- **Subprocess boundary**: `services/protocol-payment/` holds optional/legacy local protocol-payment extractors behind a subprocess boundary (`protocol_payment.v1` terminal reporter) with zero import coupling to `sms_tool/`; regional methods (iDEAL / PIX / Kakao Pay / BLIK / TWINT / MoMo) now run in-process via `sms_tool/pay_link/oaics_provider.py`.
+- **External extraction server boundary**: Legacy in-repo protocol-payment extractors have been retired; all 15 catalog payment methods route through `sms_tool/pay_link/extract_server.py` (`protocol_payments.extract_link_server` / `EXTRACT_LINK_*` env vars).
+- **Native Rust acceleration & zero Node.js**: `native/sentinel_vm/` provides the in-process Sentinel VM FFI; 14 `rust-anything`-managed PyO3 crates under `rust/` accelerate hot paths (4,824 recorded cases 100% matched, 0 `unsafe`; see [Rust acceleration](docs/current/rust-acceleration.md)).
 - **Enforced architecture gates**: Layer direction and namespace isolation are checked automatically in CI and pre-commit by `scripts/import_layer_ratchet.py`, `scripts/kernel_boundary_ratchet.py`, `scripts/root_module_ratchet.py`, `scripts/architecture_scan.py`, and `tests/SmsWorkbench.Tests/NamespaceArchitectureTests.cs`.
 
-See [architecture and boundaries](docs/architecture.md), [desktop UI architecture](docs/current/ui-architecture.md), and [directory map](docs/directory-map.md).
+See [architecture and boundaries](docs/architecture.md), [desktop UI architecture](docs/current/ui-architecture.md), [Rust acceleration](docs/current/rust-acceleration.md), and [directory map](docs/directory-map.md).
 
 
 ## Installation
@@ -142,8 +152,8 @@ See [architecture and boundaries](docs/architecture.md), [desktop UI architectur
 - Windows 10/11 x64.
 - Python 3.12 or later (matches the interpreter pinned in `scripts/runtime_manifest.json`; 3.10/3.11 were never verified by any gate).
 - .NET 10 Desktop Runtime; the .NET 10 SDK is required when building from source.
-- Node.js 18 or later available on `PATH`.
-- Playwright Chromium for browser-assisted payment workflows and browser registration.
+- **No Node.js required**: Sentinel runs in-process via the bundled Rust FFI library (`sms_tool/sentinel/runtime/sentinel_vm.dll`). A Rust toolchain is only needed if you rebuild `native/sentinel_vm/` or `rust/*-rs/` from source.
+- Playwright Chromium (optional) for browser-assisted PayPal workflows and browser registration.
 
 ### Installation
 

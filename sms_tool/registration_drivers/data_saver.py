@@ -24,9 +24,11 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import importlib
 import json
 import logging
 import os
+import sys
 import tempfile
 import threading
 import time
@@ -39,6 +41,29 @@ from typing import Any
 from urllib.parse import urlsplit
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _load_native_data_saver() -> Any | None:
+    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
+    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_DATA_SAVER") or "").strip().lower()
+    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
+        return None
+    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "data-saver-rs" / "python"
+    if pkg_dir.is_dir():
+        pkg_str = str(pkg_dir)
+        if pkg_str not in sys.path:
+            sys.path.insert(0, pkg_str)
+    try:
+        return importlib.import_module("data_saver_rs")
+    except (ImportError, OSError):
+        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
+            raise
+        return None
+
+
+_NATIVE_DATA_SAVER = _load_native_data_saver()
+_NATIVE_IS_CACHEABLE_STATIC_ASSET = getattr(_NATIVE_DATA_SAVER, "is_cacheable_static_asset", None)
+_NATIVE_SCALAR_TYPES = (str, type(None), bool, int, float)
 
 _CACHE_STORE_LOCK = threading.Lock()
 
@@ -273,6 +298,13 @@ def should_abort_request(url: str, resource_type: str, config: BrowserDataSaverC
 
 def is_cacheable_static_asset(url: str, resource_type: str = "", *, method: str = "GET") -> bool:
     """True only for exact GET immutable static assets on allowlisted hosts."""
+    if (
+        _NATIVE_IS_CACHEABLE_STATIC_ASSET is not None
+        and isinstance(url, _NATIVE_SCALAR_TYPES)
+        and isinstance(resource_type, _NATIVE_SCALAR_TYPES)
+        and isinstance(method, _NATIVE_SCALAR_TYPES)
+    ):
+        return bool(_NATIVE_IS_CACHEABLE_STATIC_ASSET(url, resource_type, method=method))
     if str(method or "GET").upper() != "GET":
         return False
     raw_url = str(url or "").strip()

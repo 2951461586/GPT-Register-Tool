@@ -1,0 +1,27 @@
+[package]
+name = "cfworker-html-rs"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+publish = false
+description = "Rust port of HTML/CSS email text extraction and address extraction in `sms_tool/providers/cfworker_client.py`, managed by rust-anything"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+html-escape = "0.2"
+pyo3 = { version = "0.30", features = ["extension-module", "abi3-py39"] }
+regex = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order", "float_roundtrip", "unbounded_depth"] }
+
+[profile.release]
+lto = true
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+
+[lints.rust]
+unused_lifetimes = "warn"
+trivial_numeric_casts = "warn"

@@ -89,8 +89,14 @@ def offset_minutes_for_timezone(tz_name: str | None, default: int = 0, *, at: da
         _warn_once()
         return int(default)
     try:
-        moment = (at or datetime.now()).replace(tzinfo=None)
-        offset = moment.replace(tzinfo=ZoneInfo(name)).utcoffset()
+        tz = ZoneInfo(name)
+        if at is None:
+            moment = datetime.now(tz)
+        elif at.tzinfo is not None:
+            moment = at.astimezone(tz)
+        else:
+            moment = at.replace(tzinfo=tz)
+        offset = moment.utcoffset()
     except Exception:
         _warn_once()
         return int(default)

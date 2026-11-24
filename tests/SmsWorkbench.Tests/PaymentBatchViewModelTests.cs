@@ -105,6 +105,49 @@ public sealed class PaymentBatchViewModelTests
     }
 
     [Fact]
+    public async Task ExtractServerSettingsLoadSaveAndFlowIntoRequest()
+    {
+        var service = new StubPaymentBatchService
+        {
+            ExtractServerConfiguration = new ExtractLinkServerConfiguration(
+                "https://loaded.example.com",
+                "cdk-loaded",
+                "/api/v1/extract",
+                45,
+                true,
+                true)
+        };
+        var viewModel = new PaymentBatchViewModel(
+            service,
+            new StubFileLauncher(),
+            new[] { new PaymentBatchAccount("user@example.com", true) });
+
+        Assert.Equal("https://loaded.example.com", viewModel.ExtractServerApiBase);
+        Assert.Equal("cdk-loaded", viewModel.ExtractServerCdk);
+        Assert.Equal("45", viewModel.ExtractServerTimeoutText);
+
+        viewModel.ExtractServerApiBase = "https://saved.example.com";
+        viewModel.ExtractServerCdk = "cdk-saved";
+        viewModel.ExtractServerEndpoint = "/api/v2/extract";
+        viewModel.ExtractServerTimeoutText = "90";
+        viewModel.ExtractServerPassProxy = false;
+        viewModel.ExtractServerVerifyTls = false;
+
+        viewModel.SaveExtractServerConfigurationCommand.Execute(null);
+        Assert.NotNull(service.LastSavedExtractServer);
+        Assert.Equal("https://saved.example.com", service.LastSavedExtractServer!.ApiBase);
+        Assert.Equal("cdk-saved", service.LastSavedExtractServer.Cdk);
+        Assert.Equal(90, service.LastSavedExtractServer.TimeoutSeconds);
+        Assert.False(service.LastSavedExtractServer.PassProxy);
+        Assert.False(service.LastSavedExtractServer.VerifyTls);
+
+        await viewModel.RunCommand.ExecuteAsync(null);
+        Assert.NotNull(service.LastRequest?.ExtractServer);
+        Assert.Equal("https://saved.example.com", service.LastRequest!.ExtractServer!.ApiBase);
+        Assert.Equal("cdk-saved", service.LastRequest.ExtractServer.Cdk);
+    }
+
+    [Fact]
     public async Task ResumedPresenceOnlyPaymentResultIsVisibleButNotCopyable()
     {
         var service = new StubPaymentBatchService("""
@@ -409,6 +452,8 @@ public sealed class PaymentBatchViewModelTests
             new("", "", "", "JP");
 
         public PaymentBatchProxyConfiguration? LastSaved { get; private set; }
+        public ExtractLinkServerConfiguration ExtractServerConfiguration { get; set; } = new();
+        public ExtractLinkServerConfiguration? LastSavedExtractServer { get; private set; }
 
         public StubPaymentBatchService(string? report = null)
         {
@@ -429,6 +474,15 @@ public sealed class PaymentBatchViewModelTests
             PaymentBatchProxyConfiguration configuration)
         {
             LastSaved = configuration;
+            return new(true);
+        }
+
+        public ExtractLinkServerConfiguration LoadExtractServerConfiguration()
+            => ExtractServerConfiguration;
+
+        public SettingsSaveResult SaveExtractServerConfiguration(ExtractLinkServerConfiguration configuration)
+        {
+            LastSavedExtractServer = configuration;
             return new(true);
         }
 

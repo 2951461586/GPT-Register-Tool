@@ -16,8 +16,6 @@ from __future__ import annotations
 import importlib.metadata
 import importlib.util
 import os
-import shutil
-import subprocess
 import sys
 from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor
@@ -40,46 +38,19 @@ def _probe_python() -> dict[str, str]:
     return _check("python", "ok", detail)
 
 
-def _probe_node() -> dict[str, str]:
-    binary = os.environ.get("OPENAI_SENTINEL_NODE_PATH") or shutil.which("node")
-    if not binary:
-        return _check(
-            "node",
-            "fail",
-            "not found on PATH",
-            "install Node.js LTS (Sentinel token extraction shells out to node)",
-        )
-    try:
-        proc = subprocess.run([binary, "--version"], capture_output=True, text=True, timeout=15)
-        version = (proc.stdout or "").strip() or (proc.stderr or "").strip()
-    except Exception as exc:  # noqa: BLE001 - any launch failure is the finding
-        return _check("node", "fail", binary, f"node exists but failed to run: {type(exc).__name__}")
-    if proc.returncode != 0:
-        return _check("node", "fail", binary, f"node --version exited {proc.returncode}")
-    return _check("node", "ok", f"{version} ({binary})")
-
-
 def _probe_sentinel_runtime() -> dict[str, str]:
-    """Node + vendored bundle + one offline mint (``sentinel.selfcheck``).
-
-    ``_probe_node`` answers "is there a node binary"; this answers "can it mint a
-    token".  The two failures that cost real accounts — a corrupted vendored
-    asset and a runner that loads but cannot produce ``p``/``t`` — are invisible
-    to a version string and only surface at ``create_account``, after the mailbox
-    and its OTP are spent.  The mint is offline (synthetic challenge), so this
-    stays a no-network probe.
-    """
+    """Compiled Rust Sentinel VM + SHA256 pin + one offline mint (``sentinel.selfcheck``)."""
     from .sentinel.selfcheck import run_selfcheck
 
     report = run_selfcheck()
-    detail = "bundle=%s node=%s mint=%s" % (report["bundle"], report["node"], report["mint"])
+    detail = "bundle=%s native=%s mint=%s" % (report["bundle"], report["native"], report["mint"])
     if report["ok"]:
         return _check("sentinel_runtime", "ok", detail)
     return _check(
         "sentinel_runtime",
         "fail",
         detail,
-        "re-vendor sms_tool/sentinel/runtime (hash mismatch) or install Node.js >= 18; "
+        "rebuild sms_tool/sentinel/runtime/sentinel_vm.dll via scripts/build_sentinel_vm.ps1; "
         "run `python -m sms_tool.sentinel.selfcheck` for the full reason",
     )
 
@@ -475,9 +446,6 @@ def run_doctor(
     """Run all checks and return the report dict (offline; no network calls)."""
     default_probes: list[tuple[str, Callable[[], dict[str, str]]]] = [
         ("python", _probe_python),
-        ("node", _probe_node),
-        # Kept next to "node" because the two answer different questions, and the
-        # difference only shows up at create_account (see the probe's docstring).
         ("sentinel_runtime", _probe_sentinel_runtime),
         ("playwright", _probe_playwright),
         ("curl_cffi", _probe_curl_cffi),

@@ -1,5 +1,8 @@
+import importlib
 import json
+import os
 import re
+import sys
 import time
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -20,6 +23,28 @@ from ..kernel.paths import output_dir
 from ..session.refresh import _load_seed_session
 from ..storage import get_account_record, list_paypal_accounts, mark_quota_status, upsert_account
 from typing import Any
+
+
+def _load_native_cpa_classify() -> Any | None:
+    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
+    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_CPA_CLASSIFY") or "").strip().lower()
+    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
+        return None
+    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "cpa-classify-rs" / "python"
+    if pkg_dir.is_dir():
+        pkg_str = str(pkg_dir)
+        if pkg_str not in sys.path:
+            sys.path.insert(0, pkg_str)
+    try:
+        return importlib.import_module("cpa_classify_rs")
+    except (ImportError, OSError):
+        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
+            raise
+        return None
+
+
+_NATIVE_CPA_CLASSIFY = _load_native_cpa_classify()
+_NATIVE_CLASSIFY_CPA_AUTH_FILE = getattr(_NATIVE_CPA_CLASSIFY, "classify_cpa_auth_file", None)
 
 
 def import_cpa_session(
@@ -324,6 +349,11 @@ def refresh_cpa_quota_statuses(emails=None, workers=4, api_url="", api_token="",
 
 
 def classify_cpa_auth_file(item):
+    if _NATIVE_CLASSIFY_CPA_AUTH_FILE is not None and (item is None or isinstance(item, dict)):
+        try:
+            return str(_NATIVE_CLASSIFY_CPA_AUTH_FILE(item))
+        except (TypeError, ValueError):
+            pass
     status = str((item or {}).get("status") or "").strip().lower()
     text = " ".join(
         [

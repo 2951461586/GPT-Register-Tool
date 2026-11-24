@@ -42,14 +42,41 @@ proxy because its probe crashed.
 
 from __future__ import annotations
 
-import re
+import importlib
+import os
+import sys
 import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
+from pathlib import Path
 from statistics import median
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
+
+from .entry import _mask_credentials
+
+
+def _load_native_proxy_screening() -> Any | None:
+    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
+    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_PROXY_SCREENING") or "").strip().lower()
+    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
+        return None
+    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "proxy-screening-rs" / "python"
+    if pkg_dir.is_dir():
+        pkg_str = str(pkg_dir)
+        if pkg_str not in sys.path:
+            sys.path.insert(0, pkg_str)
+    try:
+        return importlib.import_module("proxy_screening_rs")
+    except (ImportError, OSError):
+        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
+            raise
+        return None
+
+
+_NATIVE_PROXY_SCREENING = _load_native_proxy_screening()
+_NATIVE_CLASSIFY_NETWORK_TYPE = getattr(_NATIVE_PROXY_SCREENING, "classify_network_type", None)
 
 if TYPE_CHECKING:  # annotation-only: see the delayed-import note below
     from ..geo.resolver import ProxyGeo
@@ -140,70 +167,29 @@ MOBILE_KEYWORDS: tuple[str, ...] = (
     "smart communications",
 )
 
-#: ``scheme://user:pass@host`` and bare ``user:pass:host:port`` both appear in
-#: provider paste boxes and in probe error strings. Redaction runs before any
-#: text reaches a log line or a UI table.
-_URL_CREDENTIALS_RE = re.compile(r"(?P<scheme>[a-z][a-z0-9+.-]*://)(?P<userinfo>[^/@\s]+)@", re.IGNORECASE)
-#: ``user:pass@host:port`` with **no scheme**, i.e. the curl/SOCKS paste form.
-#: ``normalize_proxy_url`` accepts it (it becomes ``http://user:pass@host:port``),
-#: so it is a real configured value -- but ``_URL_CREDENTIALS_RE`` above requires
-#: the ``scheme://`` prefix, so the userinfo passed both redactors untouched.
-#: Measured 2026-10-27: ``mask_proxy("user:secret@h.example:8080")`` echoed the
-#: password into the screening table and into support-bundle text. The lookbehind
-#: excludes ``/`` and the mask characters (``*``) so the already-masked
-#: ``scheme://***:***@host`` output of the previous rule cannot be re-matched
-#: (without ``*`` it ate one star and produced ``****:***@``), and the port
-#: lookahead keeps ``user:pass@host`` (a mailbox, not a proxy) out of scope.
-_SCHEMELESS_CREDENTIALS_RE = re.compile(
-    r"(?<![\w:/@.*-])(?P<user>[^\s:@/\\]+):(?P<password>[^\s:@/\\]+)@(?=[^\s@/\\]+:\d{1,5})"
-)
-_BARE_CREDENTIALS_RE = re.compile(
-    r"(?<![\w.:/-])(?P<user>[^\s:@/\\]+):(?P<password>[^\s:@/\\]+):(?P<host>[^\s:@/\\]+:\d{1,5})"
-)
-#: The provider UI's other paste form: ``host:port:user:pass``. The regex above
-#: only knows ``user:pass:host:port``, so a bare host-first value used to pass
-#: through ``mask_proxy`` unchanged (measured: ``host:8080:user:pass`` printed
-#: the password). Both forms are accepted by ``proxy.entry.parse_proxy``, so
-#: both must be masked before a probe error or a report line can reach a sink.
-_HOST_FIRST_CREDENTIALS_RE = re.compile(
-    r"(?<![\w.:/-])(?P<host>[^\s:@/]+:\d{1,5}):(?P<user>[^\s:@/]+):(?P<password>[^\s:@/]+)"
-)
-
 
 def sanitize_proxy_text(text: Any) -> str:
     """Mask credentials in free-form text (probe errors, report lines)."""
-
-    def _mask_url(match: re.Match[str]) -> str:
-        return f"{match.group('scheme')}***:***@"
-
-    def _mask_bare(match: re.Match[str]) -> str:
-        return f"***:***:{match.group('host')}"
-
-    def _mask_host_first(match: re.Match[str]) -> str:
-        return f"{match.group('host')}:***:***"
-
-    def _mask_schemeless(match: re.Match[str]) -> str:
-        return "***:***@"
-
-    value = str(text or "")
-    value = _URL_CREDENTIALS_RE.sub(_mask_url, value)
-    value = _SCHEMELESS_CREDENTIALS_RE.sub(_mask_schemeless, value)
-    value = _HOST_FIRST_CREDENTIALS_RE.sub(_mask_host_first, value)
-    return _BARE_CREDENTIALS_RE.sub(_mask_bare, value)
+    return _mask_credentials(str(text or ""))
 
 
 def mask_proxy(proxy: str) -> str:
     """Return the scheme/host/port of a proxy with credentials replaced."""
     value = str(proxy or "")
+    if "://" not in value:
+        return sanitize_proxy_text(value)
     try:
         parsed = urlsplit(value)
+        hostname = parsed.hostname
+        raw_port = parsed.port
     except ValueError:
         return sanitize_proxy_text(value)
-    if not parsed.hostname:
+    if not hostname:
         return sanitize_proxy_text(value)
     credentials = "***:***@" if (parsed.username or parsed.password) else ""
-    port = f":{parsed.port}" if parsed.port else ""
-    return f"{parsed.scheme or 'http'}://{credentials}{parsed.hostname}{port}"
+    host_display = f"[{hostname}]" if ":" in hostname else hostname
+    port = f":{raw_port}" if raw_port else ""
+    return f"{parsed.scheme or 'http'}://{credentials}{host_display}{port}"
 
 
 # ── classification ────────────────────────────────────────────────────────────
@@ -238,6 +224,28 @@ def classify_network_type(intel: Any | None) -> str:
     """
     if intel is None:
         return NETWORK_UNKNOWN
+    if _NATIVE_CLASSIFY_NETWORK_TYPE is not None:
+        if type(intel) is dict:
+            try:
+                return _NATIVE_CLASSIFY_NETWORK_TYPE(intel)
+            except TypeError:
+                pass
+        elif not isinstance(intel, Mapping):
+            try:
+                return _NATIVE_CLASSIFY_NETWORK_TYPE(
+                    {
+                        "org": getattr(intel, "org", "") or "",
+                        "isp": getattr(intel, "isp", "") or "",
+                        "asn": getattr(intel, "asn", "") or "",
+                        "reverse_dns": getattr(intel, "reverse_dns", "") or "",
+                        "country": getattr(intel, "country", "") or "",
+                        "hosting": getattr(intel, "is_hosting", False) is True,
+                        "proxy": getattr(intel, "is_proxy", False) is True,
+                        "vpn": getattr(intel, "is_vpn", False) is True,
+                    }
+                )
+            except TypeError:
+                pass
     text = _intel_text(intel)
     if any(_privacy_flag(intel, name) for name in ("hosting", "proxy", "vpn")):
         return NETWORK_DATACENTER
@@ -457,7 +465,7 @@ def evaluate_sample(
     )
     if flagged:
         return False, REASON_PROXY_DETECTED, "出口被标记为代理、VPN 或托管网络"
-    if second.network_type == NETWORK_DATACENTER:
+    if first.network_type == NETWORK_DATACENTER or second.network_type == NETWORK_DATACENTER:
         return False, REASON_DATACENTER, "识别为托管/机房网络"
     if second.network_type == NETWORK_UNKNOWN:
         return False, REASON_INTEL_UNKNOWN, "网络类型证据不足"
@@ -490,6 +498,7 @@ class ScreeningSample:
     country: str = ""
     latency_ms: int | None = None
     quality_score: int = 0
+    target_country: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -532,12 +541,20 @@ def screen_proxy(
         endpoints=secondary or secondary_endpoints(),
         probe=probe,
     )
-    eligible, reason_code, reason = evaluate_sample(first, second, country, quality_min=quality_min)
-    if first.ok and second.ok and not second.intel_conflict:
-        # Two independent documents answered the same exit: that is what the
-        # quality score rewards. ``ScreeningPass`` is frozen, so replace rather
-        # than mutate — a shared/derived pass must never change under a caller.
+    if (
+        first.ok
+        and second.ok
+        and first.ip
+        and first.ip == second.ip
+        and not first.intel_conflict
+        and not second.intel_conflict
+    ):
+        # Two independent documents answered the same exit: bump corroboration
+        # count BEFORE evaluating ``quality_min`` so ``evaluate_sample`` and
+        # ``ScreeningSample.quality_score`` read the same evidence.
+        first = replace(first, intel_sources=max(2, first.intel_sources))
         second = replace(second, intel_sources=max(2, second.intel_sources))
+    eligible, reason_code, reason = evaluate_sample(first, second, country, quality_min=quality_min)
     return ScreeningSample(
         index=index,
         proxy=proxy,
@@ -553,6 +570,7 @@ def screen_proxy(
         country=second.country or first.country,
         latency_ms=_median_latency(first, second),
         quality_score=score_probe_quality(first, second),
+        target_country=str(country or "").strip().upper(),
     )
 
 
@@ -637,13 +655,11 @@ def aggregate_by_asn(samples: Sequence[ScreeningSample]) -> list[dict[str, Any]]
 
 
 def _target_of(sample: ScreeningSample) -> str:
-    """The country this sample was judged against, recovered from its passes.
-
-    ``aggregate_by_asn`` only sees samples, not the screening request. Two
-    agreeing passes mean "the country it matched"; a mismatch sample keeps the
-    target in ``first.country``/``second.country`` disagreement, so the rate
-    falls back to comparing the two passes with each other.
-    """
+    """The country this sample was judged against."""
+    if sample.target_country:
+        return sample.target_country
+    if sample.reason_code == REASON_COUNTRY_MISMATCH:
+        return ""
     if sample.first.country and sample.first.country == sample.second.country:
         return sample.first.country
     return sample.country or sample.first.country or sample.second.country

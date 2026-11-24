@@ -1,0 +1,73 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/mailbox/mail_otp.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "mail-otp-rs",
+  "exports": [
+    {
+      "name": "_extract_otp_from_text",
+      "file": "sms_tool/mailbox/mail_otp.py",
+      "line": 46,
+      "params": [
+        {
+          "name": "text",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "_looks_fake_otp_context",
+      "file": "sms_tool/mailbox/mail_otp.py",
+      "line": 195,
+      "params": [
+        {
+          "name": "lowered_text",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "boolean",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "_message_looks_fake_otp_noise",
+      "file": "sms_tool/mailbox/mail_otp.py",
+      "line": 202,
+      "params": [
+        {
+          "name": "text",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "boolean",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "candidate_is_newer",
+      "file": "sms_tool/mailbox/mail_otp.py",
+      "line": 153,
+      "reason": "lightweight comparison kept in Python"
+    }
+  ]
+}

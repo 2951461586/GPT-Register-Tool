@@ -36,10 +36,10 @@ def _patch_method_offline(method: str):
 
 
 @pytest.mark.parametrize("method", OAICS_MIGRATED)
-def test_catalog_migrated_methods_run_inprocess_over_oaics(method):
+def test_catalog_migrated_methods_route_through_extract_server(method):
     definition = PAYMENT_METHODS[method]
     assert definition.release_tier == "production"
-    assert definition.adapter == "oaics_inprocess"
+    assert definition.adapter == "extract_server"
     assert definition.batch_enabled is (method != "blik")
     assert definition.registration_enabled is (method != "blik")
 
@@ -81,7 +81,6 @@ def test_generate_refuses_offline_method_before_any_checkout_or_subprocess(metho
             return_value={"chatgpt": {}, "protocol_payments": {}},
         ),
         patch("sms_tool.pay_link.core.PAYMENT_ADAPTERS.execute_mapping") as adapter,
-        patch("sms_tool.payment.link_manager.subprocess.run") as run,
     ):
         result = manager.generate_payment_link("token", payment_method=method)
 
@@ -90,7 +89,6 @@ def test_generate_refuses_offline_method_before_any_checkout_or_subprocess(metho
     assert result["error_code"] == OFFLINE_ERROR_CODE
     assert result.get("retryable") in (False, None)
     adapter.assert_not_called()
-    run.assert_not_called()
 
 
 def test_generate_probe_only_is_not_refused_as_offline():

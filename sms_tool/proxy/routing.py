@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit
 
-from ..phone.phone_proxy import normalize_proxy_url
+from .entry import normalize_proxy_url
 
 
 def parse_lane_proxy_pool(value: Any) -> list[str]:
@@ -26,9 +26,11 @@ def parse_lane_proxy_pool(value: Any) -> list[str]:
     else:
         values = []
     result: list[str] = []
+    seen: set[str] = set()
     for item in values:
         proxy = normalize_proxy_url(str(item or "").strip())
-        if proxy and proxy not in result:
+        if proxy and proxy not in seen:
+            seen.add(proxy)
             result.append(proxy)
     return result
 

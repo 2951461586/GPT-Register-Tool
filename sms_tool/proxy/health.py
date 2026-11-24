@@ -13,6 +13,7 @@ from urllib.parse import urlsplit
 
 from ..cross_process_gate import cross_process_write_lock
 from ..kernel.paths import runtime_file
+from .entry import strip_session_id
 
 
 _FILE_LOCK = threading.Lock()
@@ -20,6 +21,9 @@ _FILE_LOCK = threading.Lock()
 # Additive-smoothing prior for the success rate used by ``ProxyHealthTracker.rank``.
 # 1 == Laplace. See the ``rank`` docstring for why the raw ratio is not enough.
 _SMOOTHING_PRIOR = 1.0
+#: Idle rows older than 24h decay so ancient failures do not permanently poison
+#: a recovered residential gateway.
+_DECAY_WINDOW_SECONDS = 86_400.0
 
 
 class ProxyHealthTracker:
@@ -40,15 +44,23 @@ class ProxyHealthTracker:
 
     @classmethod
     def key(cls, proxy: str) -> str:
+        """Exact per-session opaque key (used by ``AsnRegistry`` where distinct
+        sticky sessions on one gateway can exit through different ASNs)."""
         parsed = urlsplit(str(proxy or ""))
         base = cls._endpoint_key(proxy)
-        # Rotating providers expose many sticky sessions through one endpoint.
-        # Keep per-session health separate while never persisting credentials.
         username = str(parsed.username or "").strip()
-        if username:
-            sid_hash = hashlib.sha256(username.encode("utf-8")).hexdigest()[:10]
+        password = str(parsed.password or "").strip()
+        if username or password:
+            cred_identity = f"{username}:{password}" if password else username
+            sid_hash = hashlib.sha256(cred_identity.encode("utf-8")).hexdigest()[:10]
             return f"{base}#sid-{sid_hash}"
         return base
+
+    @classmethod
+    def template_key(cls, proxy: str) -> str:
+        """Session-stripped template key for bounded health tracking and ranking."""
+        canonical = strip_session_id(str(proxy or "")) or str(proxy or "")
+        return cls.key(canonical)
 
     def _read(self) -> dict[str, dict[str, Any]]:
         try:
@@ -64,7 +76,7 @@ class ProxyHealthTracker:
         temp.replace(self._path)
 
     def record(self, proxy: str, *, ok: bool, error: str = "") -> None:
-        key = self.key(proxy)
+        key = self.template_key(proxy)
         if key == ":0":
             return
         lock_path = self._path.with_suffix(self._path.suffix + ".lock")
@@ -74,16 +86,25 @@ class ProxyHealthTracker:
             endpoint = self._endpoint_key(proxy)
             if endpoint not in keys:
                 keys.append(endpoint)
+            now = time.time()
             for item_key in keys:
-                row = data.setdefault(item_key, {"success": 0, "failure": 0, "cooldown_until": 0, "last_error": ""})
+                row = data.setdefault(
+                    item_key,
+                    {"success": 0, "failure": 0, "cooldown_until": 0, "last_error": "", "updated_at": now},
+                )
+                last_ts = float(row.get("updated_at") or 0)
+                if last_ts > 0 and (now - last_ts) >= _DECAY_WINDOW_SECONDS:
+                    row["success"] = int(row.get("success", 0) or 0) // 2
+                    row["failure"] = int(row.get("failure", 0) or 0) // 2
                 row["success" if ok else "failure"] = int(row.get("success" if ok else "failure", 0) or 0) + 1
                 row["last_error"] = "" if ok else str(error or "")[:120]
+                row["updated_at"] = now
                 if (
                     not ok
                     and int(row.get("failure", 0)) >= 3
                     and int(row.get("failure", 0)) > int(row.get("success", 0))
                 ):
-                    row["cooldown_until"] = time.time() + 120
+                    row["cooldown_until"] = now + 120
                 if ok:
                     row["cooldown_until"] = 0
             self._write(data)
@@ -108,17 +129,25 @@ class ProxyHealthTracker:
         to the top. Ties (including all-fresh pools) still fall back to config
         order, because :func:`sorted` is stable.
         """
-        with self._lock:
+        with _FILE_LOCK, self._lock:
             data = self._read()
         now = time.time()
 
         def score(proxy: str) -> tuple[int, float, int]:
-            row = data.get(self.key(proxy)) or data.get(self._endpoint_key(proxy), {})
+            row = (
+                data.get(self.template_key(proxy))
+                or data.get(self.key(proxy))
+                or data.get(self._endpoint_key(proxy), {})
+            )
             cooldown = float(row.get("cooldown_until", 0) or 0)
             if cooldown > now:
                 return (1, cooldown, 0)
             success = int(row.get("success", 0) or 0)
             failure = int(row.get("failure", 0) or 0)
+            last_ts = float(row.get("updated_at") or 0)
+            if last_ts > 0 and (now - last_ts) >= _DECAY_WINDOW_SECONDS:
+                success //= 2
+                failure //= 2
             rate = (success + _SMOOTHING_PRIOR) / (success + failure + 2 * _SMOOTHING_PRIOR)
             return (0, -rate, failure)
 

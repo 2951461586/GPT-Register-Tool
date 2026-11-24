@@ -1,4 +1,4 @@
-"""Sentinel SDK token issuance through the vendored Node runner."""
+"""Sentinel token issuance through the compiled Rust VM (`sentinel_vm` FFI cdylib)."""
 
 from .client import (
     CHECKOUT_SENTINEL_FLOW,

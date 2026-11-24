@@ -1,0 +1,43 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/importers/cpa.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "cpa-classify-rs",
+  "exports": [
+    {
+      "name": "classify_cpa_auth_file",
+      "file": "sms_tool/importers/cpa.py",
+      "line": 326,
+      "params": [
+        {
+          "name": "item",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "import_cpa_session",
+      "file": "sms_tool/importers/cpa.py",
+      "line": 25,
+      "reason": "HTTP upload and file I/O stay in Python"
+    },
+    {
+      "name": "extract_cpa_auth_email",
+      "file": "sms_tool/importers/cpa.py",
+      "line": 376,
+      "reason": "sub-2us field lookup below PyO3 FFI threshold"
+    }
+  ]
+}

@@ -31,6 +31,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from .edge_probe import probe_openai_edge
+from .entry import parse_proxy
 from .health import ProxyHealthTracker
 from .registry import lane_isolation, resolve_registration
 from .routing import parse_lane_proxy_pool
@@ -40,6 +41,7 @@ from .screening import (
     aggregate_by_asn,
     mask_proxy,
     probe_once,
+    sanitize_proxy_text,
     screen_pool,
     summarize,
 )
@@ -100,7 +102,22 @@ def _health_rank(config: Mapping[str, Any] | None) -> dict[str, int]:
 
 
 def _row(proxy: str, *, rank: int | None = None) -> dict[str, Any]:
-    parsed = urlsplit(proxy)
+    entry = parse_proxy(proxy)
+    masked = mask_proxy(proxy)
+    if entry is not None:
+        host = entry.host
+        port = entry.port
+        scheme = entry.scheme
+        has_auth = bool(entry.username or entry.password)
+    else:
+        try:
+            parsed = urlsplit(proxy)
+            host = str(parsed.hostname or "")
+            port = _as_int(parsed.port, 0)
+            scheme = str(parsed.scheme or "http").lower()
+            has_auth = bool(parsed.username or parsed.password)
+        except ValueError:
+            host, port, scheme, has_auth = "", 0, "http", masked != proxy
     geo = _cached_geo(proxy)
     # A hint-only cache entry (credential template said ``region-VN``) carries a
     # country but no IP/ASN/timezone. Reporting it as "measured" made the list
@@ -109,11 +126,11 @@ def _row(proxy: str, *, rank: int | None = None) -> dict[str, Any]:
     geo_source = str(geo.get("source") or "")
     measured = bool(geo) and geo_source != "hint"
     row = {
-        "proxy": mask_proxy(proxy),
-        "host": str(parsed.hostname or ""),
-        "port": _as_int(parsed.port, 0),
-        "scheme": str(parsed.scheme or "http").lower(),
-        "has_auth": bool(parsed.username or parsed.password),
+        "proxy": masked,
+        "host": host,
+        "port": port,
+        "scheme": scheme,
+        "has_auth": has_auth,
         "country": str(geo.get("country") or ""),
         "asn": str(geo.get("asn") or ""),
         "isp": str(geo.get("isp") or ""),
@@ -125,7 +142,7 @@ def _row(proxy: str, *, rank: int | None = None) -> dict[str, Any]:
     # The raw URL is included only when it is credential-free, so the desktop can
     # offer "copy" for entries that have no secret in them. A masked value is
     # never a copyable proxy, so it must not masquerade as one.
-    if "-***" not in row["proxy"] and "***:***@" not in row["proxy"]:
+    if not has_auth and masked == proxy and "***" not in masked:
         row["proxy_raw"] = proxy
     return row
 
@@ -214,9 +231,9 @@ def test_pool(
             verdict = edge_probe(proxy, timeout=timeout)
             edge_status = str(getattr(verdict, "status", "") or "unknown")
             http_status = _as_int(getattr(verdict, "http_status", 0), 0)
-            edge_error = str(getattr(verdict, "error", "") or "")
+            edge_error = sanitize_proxy_text(str(getattr(verdict, "error", "") or ""))
         except Exception as exc:
-            edge_status, http_status, edge_error = "dead", 0, f"{type(exc).__name__}: {exc}"
+            edge_status, http_status, edge_error = "dead", 0, sanitize_proxy_text(f"{type(exc).__name__}: {exc}")
         geo = probe_once(proxy, timeout=timeout, probe=geo_probe)
         target = str(country or "").strip().upper()
         return {

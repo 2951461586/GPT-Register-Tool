@@ -17,10 +17,10 @@
 - **Payment batch**: a resumable cohort execution with per-account terminal results.
 - **Payment capability probe**: a side-effect-limited Checkout and Stripe-init
   observation that lists offered methods without creating or confirming one.
-- **Extractor runtime**: provider-neutral helpers shared by the protocol-payment
-  QR extractors — pre-proxy normalization and the sticky proxy-chain key. Owned
-  by `services/protocol-payment/common/extractor_runtime.py`; anything that reads
-  a provider env var, locale, or constant stays in its extractor (Rule 19).
+- **Paylink extraction server**: external HTTP service adapter owned by
+  `sms_tool/pay_link/extract_server.py` (dispatched via
+  `sms_tool/pay_link/registry.py`) that handles link extraction for all 15
+  catalog payment methods after retiring the legacy in-repo source extractors.
 
 ## Ownership Rules
 

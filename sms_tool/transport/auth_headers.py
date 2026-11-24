@@ -24,6 +24,38 @@ DEFAULT_SEC_CH_UA = ""
 #: `chatgpt.com/auth/login`, read live 2026-10-12).  The previous pair
 #: (8370486 / prod-fb4a8a2a...) was months stale; the reference project tracks the page the same way.
 CHATGPT_CLIENT_VERSION = "26.1022.91109"
+_OBSERVED_CHATGPT_CLIENT_VERSION = ""
+_OBSERVED_CLIENT_VERSION_LOCK = threading.Lock()
+_CHATGPT_DOC_VERSION_PATTERNS = (
+    re.compile(r'data-seq=["\']([0-9]+\.[0-9]+\.[0-9]+)["\']', re.IGNORECASE),
+    re.compile(r'"clientVersion"\s*:\s*"([0-9]+\.[0-9]+\.[0-9]+)"', re.IGNORECASE),
+    re.compile(r'data-build=["\']([A-Za-z0-9._-]{6,64})["\']', re.IGNORECASE),
+)
+
+
+def observe_chatgpt_document(html: str | None) -> str:
+    """Passively observe ChatGPT's current web client version from login HTML."""
+    text = str(html or "")
+    if not text:
+        return ""
+    for pattern in _CHATGPT_DOC_VERSION_PATTERNS:
+        match = pattern.search(text)
+        if match:
+            version = match.group(1).strip()
+            if version:
+                with _OBSERVED_CLIENT_VERSION_LOCK:
+                    global _OBSERVED_CHATGPT_CLIENT_VERSION
+                    _OBSERVED_CHATGPT_CLIENT_VERSION = version
+                return version
+    return ""
+
+
+def chatgpt_client_version() -> str:
+    """Return the dynamically observed ChatGPT client version, or the pinned fallback."""
+    with _OBSERVED_CLIENT_VERSION_LOCK:
+        observed = _OBSERVED_CHATGPT_CLIENT_VERSION
+    return observed or CHATGPT_CLIENT_VERSION
+
 
 # Firefox (first) is the primary impersonation. At ChatGPT's edge, Cloudflare
 # challenges Chrome TLS/HTTP2 with HTTP 403 while Firefox passes, so the protocol
@@ -120,6 +152,7 @@ AUTH_FINGERPRINT_PROFILES = {
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36"
         ),
+        "full_version": "152.0.7977.83",
         "sec_ch_ua": '"Chromium";v="152", "Not?A_Brand";v="24", "Google Chrome";v="152"',
         "sec_ch_ua_mobile": "?0",
         "sec_ch_ua_platform": '"Windows"',
@@ -131,6 +164,7 @@ AUTH_FINGERPRINT_PROFILES = {
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36"
         ),
+        "full_version": "151.0.7900.123",
         "sec_ch_ua": '"Not=A?Brand";v="99", "Google Chrome";v="151", "Chromium";v="151"',
         "sec_ch_ua_mobile": "?0",
         "sec_ch_ua_platform": '"Windows"',
@@ -142,6 +176,7 @@ AUTH_FINGERPRINT_PROFILES = {
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
         ),
+        "full_version": "146.0.7680.178",
         "sec_ch_ua": '"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"',
         "sec_ch_ua_mobile": "?0",
         "sec_ch_ua_platform": '"Windows"',
@@ -153,6 +188,7 @@ AUTH_FINGERPRINT_PROFILES = {
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
         ),
+        "full_version": "145.0.7632.160",
         "sec_ch_ua": '"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"',
         "sec_ch_ua_mobile": "?0",
         "sec_ch_ua_platform": '"Windows"',
@@ -164,6 +200,7 @@ AUTH_FINGERPRINT_PROFILES = {
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
         ),
+        "full_version": "142.0.7444.176",
         "sec_ch_ua": '"Chromium";v="142", "Google Chrome";v="142", "Not_A Brand";v="99"',
         "sec_ch_ua_mobile": "?0",
         "sec_ch_ua_platform": '"Windows"',
@@ -175,6 +212,7 @@ AUTH_FINGERPRINT_PROFILES = {
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
         ),
+        "full_version": "136.0.7103.93",
         "sec_ch_ua": '"Chromium";v="136", "Google Chrome";v="136", "Not.A/Brand";v="99"',
         "sec_ch_ua_mobile": "?0",
         "sec_ch_ua_platform": '"Windows"',
@@ -186,6 +224,7 @@ AUTH_FINGERPRINT_PROFILES = {
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
         ),
+        "full_version": "131.0.6778.205",
         "sec_ch_ua": '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
         "sec_ch_ua_mobile": "?0",
         "sec_ch_ua_platform": '"Windows"',
@@ -197,6 +236,7 @@ AUTH_FINGERPRINT_PROFILES = {
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         ),
+        "full_version": "124.0.6367.207",
         "sec_ch_ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
         "sec_ch_ua_mobile": "?0",
         "sec_ch_ua_platform": '"Windows"',
@@ -213,6 +253,7 @@ AUTH_FINGERPRINT_PROFILES = {
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
         ),
+        "full_version": "150.0.7830.90",
         "sec_ch_ua": '"Not;A=Brand";v="8", "Chromium";v="150", "Google Chrome";v="150"',
         "sec_ch_ua_mobile": "?0",
         "sec_ch_ua_platform": '"macOS"',
@@ -651,10 +692,12 @@ def _auth_fingerprint_config():
     try:
         from ..config import CFG
 
-        _raw_email_cfg: object = CFG.get("email_registration")
-        email_cfg: dict = _raw_email_cfg if isinstance(_raw_email_cfg, dict) else {}
-        value = email_cfg.get("auth_fingerprint") or CFG.get("auth_fingerprint") or {}
-        return value if isinstance(value, dict) else {"profile": value}
+        raw_get = getattr(CFG, "raw_get", None)
+        _raw_email_cfg: object = raw_get("email_registration") if callable(raw_get) else CFG.get("email_registration")
+        email_cfg: Mapping = _raw_email_cfg if isinstance(_raw_email_cfg, Mapping) else {}
+        fallback_raw: object = raw_get("auth_fingerprint") if callable(raw_get) else CFG.get("auth_fingerprint")
+        value = email_cfg.get("auth_fingerprint") or fallback_raw or {}
+        return value if isinstance(value, Mapping) else {"profile": value}
     except Exception:
         return {}
 
@@ -708,6 +751,11 @@ def supported_profile_names() -> set[str]:
         return {AUTH_IMPERSONATE}
 
 
+#: Legacy Chrome releases kept in ``AUTH_FINGERPRINT_PROFILES`` for explicit
+#: config/test compatibility but excluded from automatic default rotation.
+_LEGACY_DEFAULT_ROTATION_EXCLUDED = frozenset({"chrome124", "chrome131", "chrome136"})
+
+
 def _configured_auth_profiles():
     cfg = _auth_fingerprint_config()
     configured = cfg.get("profiles")
@@ -718,7 +766,13 @@ def _configured_auth_profiles():
     names = [str(item or "").strip().lower() for item in configured]
     supported = supported_profile_names()
     names = [name for name in names if name in AUTH_FINGERPRINT_PROFILES and name in supported]
-    defaults = [name for name in AUTH_FINGERPRINT_PROFILES if name in supported]
+    defaults = [
+        name
+        for name in AUTH_FINGERPRINT_PROFILES
+        if name in supported and name not in _LEGACY_DEFAULT_ROTATION_EXCLUDED
+    ]
+    if not defaults:
+        defaults = [name for name in AUTH_FINGERPRINT_PROFILES if name in supported]
     return names or defaults or [AUTH_IMPERSONATE]
 
 
@@ -882,24 +936,17 @@ def _timezone_offset_minutes(tz_name: str) -> int:
         return 0
 
 
-def _full_version_list(sec_ch_ua: str) -> str:
-    """Expand a ``Sec-CH-UA`` brand list into the ``Sec-CH-UA-Full-Version-List`` form.
+def _full_version_list(sec_ch_ua: str, full_version: str = "") -> str:
+    """Expand a ``Sec-CH-UA`` brand list into ``Sec-CH-UA-Full-Version-List``.
 
-    Chrome emits both hints from the same GREASE seed: identical brand names, the
-    same order, the same grease version, and only the version *widened* to four
-    components (``"Chromium";v="146"`` -> ``"Chromium";v="146.0.0.0"``).
-    Synthesising this list from a constant instead (the pre-2026-10-31
-    ``"Google Chrome";v=.., "Chromium";v=.., "Not(A:Brand";v="24.0.0.0"``)
-    made the JS-side ``navigator.userAgentData`` disagree with the ``sec-ch-ua``
-    header the same account sent -- a contradiction the SDK reports and a real
-    Chrome never has. Deriving it keeps the two halves in lockstep for every
-    profile.
-
-    Returns ``""`` for an empty input (Firefox/Safari emit no client hints).
+    Real Chrome keeps the exact GREASE brand name/order from ``sec-ch-ua`` while
+    filling ``Google Chrome`` / ``Chromium`` with the real 4-component build
+    number (e.g. ``146.0.7680.178``) and the GREASE brand with ``<v>.0.0.0``.
     """
     text = str(sec_ch_ua or "").strip()
     if not text:
         return ""
+    real_build = str(full_version or "").strip()
     parts = []
     for chunk in text.split(","):
         brand, _, version = chunk.partition(";v=")
@@ -907,7 +954,13 @@ def _full_version_list(sec_ch_ua: str) -> str:
         major = version.strip().strip('"')
         if not brand or not major:
             continue
-        full = major if major.count(".") == 3 else f"{major}.0.0.0"
+        brand_name = brand.strip('"').lower()
+        if major.count(".") == 3:
+            full = major
+        elif real_build and brand_name in {"chromium", "google chrome"} and real_build.startswith(f"{major}."):
+            full = real_build
+        else:
+            full = f"{major}.0.0.0"
         parts.append(f'{brand};v="{full}"')
     return ", ".join(parts)
 
@@ -976,40 +1029,65 @@ def sentinel_fingerprint() -> dict[str, object]:
         "performance_now": device["performance_now"],
         # Sec-CH-UA-* client hints are Chromium-only; Firefox emits none of them.
         "sec_ch_ua_full_version_list": (
-            _full_version_list(str(fingerprint.get("sec_ch_ua") or "")) if is_chrome else ""
+            _full_version_list(
+                str(fingerprint.get("sec_ch_ua") or ""),
+                str(fingerprint.get("full_version") or ""),
+            )
+            if is_chrome
+            else ""
         ),
         "sec_ch_ua_arch": "x86" if is_chrome else "",
         "sec_ch_ua_bitness": "64" if is_chrome else "",
-        "sec_ch_ua_model": "" if is_chrome else "",
+        "sec_ch_ua_model": "",
         "sec_ch_ua_platform_version": hw["sec_ch_ua_platform_version"],
     }
 
 
-#: First major version of each engine that advertises ``zstd`` in
-#: ``Accept-Encoding``.  Chrome/Edge 123 (2024-03), Firefox 126 (2024-05);
-#: WebKit only from **Safari 26.3** (2026-02), so every Safari profile this repo
-#: ships (17.0 / 18.0 / 18.4) must not advertise it.  Sending one shared list to
-#: every family made 19.2 % of the fingerprint pool (all six Safari profiles, 3
-#: macOS + 3 iOS) claim a coding their engine cannot decode.
-_ZSTD_SINCE = {"chrome": 123, "edge": 123, "firefox": 126}
+#: First ``(major, minor)`` version of each engine that advertises ``zstd`` in
+#: ``Accept-Encoding``.  Chrome/Edge 123 (2024-03), Firefox 126 (2024-05), and
+#: Safari 26.3+ / 27.0 (2026-02).
+_ZSTD_SINCE: dict[str, tuple[int, int]] = {
+    "chrome": (123, 0),
+    "edge": (123, 0),
+    "firefox": (126, 0),
+    "safari": (26, 3),
+}
 _ACCEPT_ENCODING_ZSTD = "gzip, deflate, br, zstd"
 _ACCEPT_ENCODING_NO_ZSTD = "gzip, deflate, br"
+
+
+def _safari_version_tuple(impersonate: str) -> tuple[int, int] | None:
+    token = str(impersonate or "").strip().lower().removeprefix("safari").removesuffix("_ios")
+    if not token:
+        return None
+    if "_" in token:
+        major_s, _, minor_s = token.partition("_")
+    elif len(token) > 2:
+        major_s, minor_s = token[:2], token[2:]
+    else:
+        major_s, minor_s = token, "0"
+    try:
+        return (int(major_s), int(minor_s or 0))
+    except (TypeError, ValueError):
+        return None
 
 
 def accept_encoding_for(impersonate: str) -> str:
     """``Accept-Encoding`` matching the impersonated engine, not the newest one.
 
-    An unknown version token keeps ``zstd`` for the browsers that have had it
-    for two years (every profile in the table is above its floor) and drops it
-    for WebKit, whose support landed in Safari 26.3.
+    Chrome 123+, Edge 123+, Firefox 126+, and Safari 26.3+ (including Safari 27)
+    advertise ``zstd``; older Safari builds (17.0 / 18.0 / 18.4 / 26.0) omit it.
     """
     family = _browser_family(impersonate)
     floor = _ZSTD_SINCE.get(family)
     if floor is None:
         return _ACCEPT_ENCODING_NO_ZSTD
+    if family == "safari":
+        ver = _safari_version_tuple(impersonate)
+        return _ACCEPT_ENCODING_ZSTD if (ver is not None and ver >= floor) else _ACCEPT_ENCODING_NO_ZSTD
     major = _browser_version(impersonate)
     try:
-        supported = int(major) >= floor
+        supported = (int(major), 0) >= floor
     except (TypeError, ValueError):
         supported = True
     return _ACCEPT_ENCODING_ZSTD if supported else _ACCEPT_ENCODING_NO_ZSTD
@@ -1283,7 +1361,7 @@ def openai_auth_headers(
                 # The 2026-10-23 HAR carries only `oai-client-version` on
                 # chatgpt.com backend requests; the old build-number header is
                 # no longer sent by the web client.
-                "oai-client-version": CHATGPT_CLIENT_VERSION,
+                "oai-client-version": chatgpt_client_version(),
             }
         )
         # The 2026-10-28 HAR sends `oai-language` on every chatgpt.com

@@ -208,7 +208,7 @@ if ($LASTEXITCODE -ne 0) {
 
 foreach ($relative in $trackedFiles) {
     $normalized = $relative -replace '/', '\'
-    if ($normalized -match '^(.agents|.claude|tests|SmsWorkbench\\bin|SmsWorkbench\\obj|scripts\\installer)(\\|$)') {
+    if ($normalized -match '^(.agents|.claude|.codex|native|rust|tests|SmsWorkbench\\bin|SmsWorkbench\\obj|scripts\\installer)(\\|$)') {
         continue
     }
     if ($normalized -match '^dist(\\|$)') {
@@ -263,8 +263,8 @@ Start the desktop UI with:
 First-run setup:
   1. The package ships a pinned CPython under runtime\python and uses it
      automatically; Python does not need to be installed system-wide.
-     Node.js 20+ is still required for the Sentinel runner and is reported by
-     the built-in self-check.
+     Sentinel runs in-process via the bundled native Rust library
+     (sms_tool\sentinel\runtime\sentinel_vm.dll); Node.js is not required.
   2. config.json is created from config.example.json on install; edit it with
      local mailbox, proxy, SMS, and payment settings (the desktop Settings
      window can edit most of them).

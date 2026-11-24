@@ -542,7 +542,7 @@ def ensure_batch_sentinel_readiness(config, registration_driver: str) -> str:
     from ..sentinel import sentinel_backend
 
     backend = sentinel_backend({"email_registration": email_cfg})
-    if registration_driver != "protocol" or backend != "node_runner":
+    if registration_driver != "protocol" or backend == "legacy":
         return backend
     from ..sentinel.client import _legacy_fallback_enabled
 

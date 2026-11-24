@@ -130,18 +130,11 @@ the pinned runner bundle before a batch starts; see
 
 ### Runner transport
 
-The default path spawns the pinned runner once per token. `SMS_SENTINEL_WORKER=1`
-switches to a persistent Node process
-(`sms_tool/sentinel/runtime/sentinel-worker.js`) that loads the runner module
-once and serves one JSON request per stdin line, so a batch no longer pays Node
-startup and module load per token.
-
-The worker changes transport only: it receives the same config/challenge files
-and its output goes through the same token validation. A runner verdict (bad
-challenge, incomplete token) is raised as-is; only a transport failure (dead,
-wedged or timed-out worker) closes the worker and retries once through the
-one-shot path. The switch is off by default because Sentinel is a risk-control
-path: enable it for a controlled live comparison before making it the default.
+Sentinel PoW, Turnstile `dx`, and Session Observer `so` challenges execute
+in-process via the compiled pure-Rust cdylib (`native/sentinel_vm/`, shipped as
+`sms_tool/sentinel/runtime/sentinel_vm.dll`) through `sms_tool/sentinel/native_ffi.py`.
+No Node.js runtime or background worker process is required (`worker_enabled()`
+returns `False`).
 
 ### Checkout lanes share this vocabulary but do not share the create flow
 
@@ -171,8 +164,8 @@ Registration flows registered there are `username_password_create`
 Registered there are both checkout flows, and they are
 **not** interchangeable:
 
-- **Checkout create** mints `chatgpt_checkout` — `CHECKOUT_SENTINEL_FLOW` at `sms_tool/sentinel/client.py:46`, issued by `issue_checkout_sentinel` at `sms_tool/sentinel/client.py:710`.
-- **Checkout approve** mints `checkout_session_approval` — its own constant `UPI_SENTINEL_APPROVAL_FLOW` at `sms_tool/upi_link/constants.py:43`. Two rails request it explicitly: the UPI approve stage passes `sentinel_flow=UPI_SENTINEL_APPROVAL_FLOW` at `sms_tool/upi_link/stages.py:712`, and `PPLinkExtractor._fresh_approval_sentinel` mints it at `sms_tool/paypal/extract.py:245`.
+- **Checkout create** mints `chatgpt_checkout` — `CHECKOUT_SENTINEL_FLOW` at `sms_tool/sentinel/client.py:51`, issued by `issue_checkout_sentinel` at `sms_tool/sentinel/client.py:793`.
+- **Checkout approve** mints `checkout_session_approval` — `PPLinkExtractor._fresh_approval_sentinel` mints it at `sms_tool/paypal/extract.py:245` (the retired UPI approve lane previously used the same flow).
 
   🔴 **How to write a guardable pointer here** — two rules, both learned the hard
   way by watching this pair drift by 13 lines when an unrelated `paypal/extract.py`
@@ -195,22 +188,27 @@ flows and the server reads them differently.
 **Token and SO need not come from the same flow.** The approve gate reads a main
 token minted under `checkout_session_approval`, but the SO it accepts carries an
 internal `flow: chatgpt_checkout` — the checkout-phase SO is *reused*, not
-re-minted. `sms_tool/upi_link/sentinel.py:443` records this as HAR #228 and
-re-consults the checkout mint for the SO even when the approval mint returned
-one. A flat one-flow-per-endpoint table is therefore *less* accurate than this
+re-minted (recorded as HAR #228 in the retired UPI Sentinel bridge, which
+re-consulted the checkout mint for the SO even when the approval mint returned
+one). A flat one-flow-per-endpoint table is therefore *less* accurate than this
 code, not more.
 
-### The subprocess extractors now receive the Sentinel pair
+### Historical note: subprocess extractors and the Sentinel pair
 
-Until 2026-10-06 the seven extractors under `services/protocol-payment/` sent
-**no** Sentinel pair anywhere. `sms_tool/pay_link/adapters.py` passed no
+> All legacy subprocess payment extractors have since been retired in favor of
+> `sms_tool/pay_link/extract_server.py`. The A/B evidence below is preserved
+> because it documents the server-side `openai-sentinel-token` requirement on
+> Checkout create/approve.
+
+Until 2026-10-06 the seven legacy subprocess extractors sent
+**no** Sentinel pair anywhere. The former adapter layer passed no
 `SENTINEL*` value into their environment, none of them set the header by hand,
 and their approve was authenticated only by the account's own cookie jar
 (`oai-did` + `__Secure-next-auth.session-token`) plus the
 `x-openai-target-path` / `x-openai-target-route` markers and a per-endpoint
 `Referer`. Four of them (blik / ideal / twint / pix) also POST
 `backend-api/sentinel/ping` before approve — with **no token either**; that is a
-connectivity warm-up, and the in-process counterpart `_upi_sentinel_ping` sends
+connectivity warm-up, and the in-process counterpart `_upi_sentinel_ping` sent
 the identical token-less header set.
 
 That silence was a **real gap, not a different gate**. A controlled A/B on the
@@ -222,13 +220,12 @@ only the headers — settled it:
 | none | `400` "Our systems have detected unusual activity" |
 | `openai-sentinel-token` alone | `200` `custom_checkout_session` |
 
-The pair now travels by **environment**, because Rule 10 forbids `services/` from
-importing `sms_tool`: `services/protocol-payment/common/protocol_core.py` owns the
-contract (`OPENAI_SENTINEL_TOKEN` / `_SO_TOKEN` / `_DEVICE_ID`,
-`sentinel_device_id()`, `openai_sentinel_headers()`) and
-`sms_tool/pay_link/adapters.py` (`_sentinel_env`) mints and injects it. The
-adapter chooses the device id **first** and hands it down, because a token binds
-to the `oai-did` that requested the challenge.
+The pair was subsequently passed by **environment** (Rule 10): the shared
+protocol-core module owned the contract (`OPENAI_SENTINEL_TOKEN` / `_SO_TOKEN` /
+`_DEVICE_ID`, `sentinel_device_id()`, `openai_sentinel_headers()`) and the
+former adapter layer (`_sentinel_env`) minted and injected it, choosing the
+device id **first** because a token binds to the `oai-did` that requested the
+challenge.
 
 🔴 **How the earlier review was boxed in (kept for the method, not the
 verdict).** An earlier revision of this section claimed "that is a different
@@ -237,7 +234,7 @@ that from the retained data, and the reason is worth keeping:
 
 | Source | Result |
 | --- | --- |
-| Source code | Conclusive for the **fact**: 6 of 7 call approve with no Sentinel (`direct_card` never calls approve). UPI and PayPal do mint `checkout_session_approval` (`sms_tool/upi_link/stages.py`, `sms_tool/paypal/extract.py:537`) |
+| Source code | Conclusive for the **fact**: 6 of 7 call approve with no Sentinel (`direct_card` never calls approve). UPI and PayPal do mint `checkout_session_approval` (`sms_tool/paypal/extract.py:537`) |
 | 391 retained `runtime/logs/processes/*/backend_stdout.jsonl` | The extractor approve **failure path never fired**: `approve 未通过`, `approve_http_`, `approve 失败`, `approve_result_blocked` = **0 occurrences**. Says nothing about whether a token would have been needed, because success is not logged |
 | Same logs, in-process side | The mint is exercised and healthy: **65** `checkout_session_approval Sentinel ready (bridge …)` lines and **0** `Sentinel unavailable` — but all 125 `Sentinel ready` lines are UPI's bridge form, so this is **UPI-only** evidence; PayPal's `_fresh_approval_sentinel` success line appears **0** times, so that rail did not reach approve in the window |
 | Extractor `dumps/` (`ideal/dumps`, `twint/dumps`) | **Empty** — the `approve` dump is written with `force=True`, so it existed, but it was purged |
@@ -253,7 +250,7 @@ wrong lever when the real cause is a missing gate token, exactly as the
 `blocked_count` retries had previously been measured as wasted time.
 
 ⇒ **Observability, not a header — landed 2026-10-05.** `_log_extractor_terminal` in
-`sms_tool/pay_link/adapters.py` emits exactly one INFO line per subprocess-extractor
+the former subprocess adapter emitted exactly one INFO line per subprocess-extractor
 run recording `payment_method` / `ok` / `error_code` plus `contract=` and
 `exit_code=`, and **never** the contract's `error` text, `url` or `artifacts`.
 It is called from the single funnel every extractor passes through
@@ -804,10 +801,9 @@ Config: `registration.tls_fingerprint` (`enabled`, `rotate_extensions`,
 
 ### 4. `performance.memory` is Chromium-only
 
-The vendored runner exposed `performance.memory` on every profile. It is now
-built only for Chromium, matching Gecko/WebKit. This is the one local patch to
-`runtime/sentinel-runner.js`; `bundle.py:RUNNER_SHA256` pins the patched bytes and
-`THIRD_PARTY_NOTICES.md` records the patch.
+The Sentinel VM exposes `performance.memory` only for Chromium profiles,
+matching Gecko/WebKit (enforced in `native/sentinel_vm/` and verified by
+`cargo test`; `sms_tool/sentinel/bundle.py` pins `NATIVE_LIB_SHA256`).
 
 ## Requirements-token parity (2026-11-12)
 

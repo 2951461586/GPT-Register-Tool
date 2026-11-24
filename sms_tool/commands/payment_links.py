@@ -1,8 +1,7 @@
 """CLI boundary for direct payment-link commands driven by an Access Token.
 
-``paypal_link.gen_link``/``upi_link``/``paypal_auto`` own protocol behavior; this module
-resolves argparse values (country fallbacks, stage proxies) into those calls.
-``PaymentLinkCommandContext`` keeps the legacy CLI's replaceable hooks explicit.
+All payment-link generation routes through ``sms_tool.payment.link_manager``
+(backed by the external Paylink Extraction Server).
 """
 
 from __future__ import annotations
@@ -13,7 +12,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from ..paypal_link.gen_link import generate_pp_link
+from ..payment.link_manager import generate_payment_link
 
 
 @dataclass(frozen=True)
@@ -35,24 +34,19 @@ def _clamped_int(value: Any) -> int:
 
 
 def _reverse_pay_adapter() -> Callable[..., dict[str, Any]]:
-    """Resolve the reverse-pay adapter lazily, at call time.
-
-    Two rules meet here. Rule 15 keeps optional command dependencies out of
-    ``import sms_tool.cli``, so this import cannot be module-level. Boundary
-    Rule 21 keeps the PayPal browser lane from importing the protocol lane, so
-    ``paypal/orchestrator.py`` never reaches ``paypal_reverse`` and this adapter
-    is injected into it instead. A module-level import would also add a
-    ``sms_tool/commands -> sms_tool`` edge that ``import_layer_ratchet`` freezes;
-    the function-local form is the remedy that ratchet names.
-    """
+    """Resolve the reverse-pay adapter lazily, at call time."""
     from ..paypal.reverse import try_reverse_pay
 
     return try_reverse_pay
 
 
-def generate_ba_link(args: Any, ctx: PaymentLinkCommandContext) -> None:
-    """Generate PayPal BA link from Access Token."""
+def _paypal_link_factory(access_token: str, proxy: Any = None, **kwargs: Any) -> dict[str, Any]:
+    """Adapter factory for ``paypal.auto_pay`` backed by the unified link manager."""
+    return generate_payment_link(access_token, proxy=proxy, payment_method="paypal", **kwargs)
 
+
+def generate_ba_link(args: Any, ctx: PaymentLinkCommandContext) -> None:
+    """Generate PayPal payment link from Access Token via the unified extraction server."""
     at = (getattr(args, "at", None) or "").strip()
     if not at:
         print(json.dumps({"ok": False, "error": "missing --at (Access Token)"}))
@@ -62,54 +56,29 @@ def generate_ba_link(args: Any, ctx: PaymentLinkCommandContext) -> None:
     paypal_cfg: dict[str, Any] = _paypal_raw if isinstance(_paypal_raw, dict) else {}
     _paypal_regions = paypal_cfg.get("billing_regions")
     regions: list[Any] = _paypal_regions if isinstance(_paypal_regions, list) else []
-    generation_type = (
-        (getattr(args, "paypal_generation_type", None) or paypal_cfg.get("link_generation_type") or "")
+    target_country = (getattr(args, "target_country", None) or paypal_cfg.get("target_country") or "US").strip().upper()
+    checkout_country = (
+        (
+            getattr(args, "checkout_country", None)
+            or (regions[0] if regions else None)
+            or paypal_cfg.get("checkout_country")
+            or paypal_cfg.get("billing_country")
+            or target_country
+            or "US"
+        )
         .strip()
-        .lower()
-        .replace("-", "_")
+        .upper()
     )
-    hosted_types = {
-        "long",
-        "long_link",
-        "hosted",
-        "hosted_long",
-        "hosted_long_url",
-        "stripe_hosted",
-        "chatgpt_checkout",
-        "chatgpt_checkout_link",
-        "checkout_link",
-        "short_checkout",
-        "chatgpt_short_link",
-    }
-    checkout_country = None
-    if generation_type in hosted_types:
-        target_country = (
-            (getattr(args, "target_country", None) or paypal_cfg.get("target_country") or "US").strip().upper()
-        )
-        checkout_country = (
-            (
-                getattr(args, "checkout_country", None)
-                or (regions[0] if regions else None)
-                or paypal_cfg.get("checkout_country")
-                or paypal_cfg.get("billing_country")
-                or target_country
-                or "US"
-            )
-            .strip()
-            .upper()
-        )
-    else:
-        target_country = (
-            (getattr(args, "target_country", None) or paypal_cfg.get("target_country") or "GB").strip().upper()
-        )
     proxy, checkout_proxy, provider_proxy, approve_proxy = ctx.payment_stage_args(args, "paypal")
     promotion_proxy = ctx.promotion_proxy_arg(args, "paypal")
     require_zero = not getattr(args, "no_require_zero", False)
     require_ba_token = bool(getattr(args, "require_ba_token", False))
 
-    result = generate_pp_link(
+    result = generate_payment_link(
         access_token=at,
         proxy=proxy,
+        payment_method="paypal",
+        runtime_config=ctx.runtime_config,
         checkout_proxy=checkout_proxy,
         provider_proxy=provider_proxy,
         approve_proxy=approve_proxy,
@@ -128,9 +97,7 @@ def generate_ba_link(args: Any, ctx: PaymentLinkCommandContext) -> None:
 
 
 def generate_upi_qr(args: Any, ctx: PaymentLinkCommandContext) -> None:
-    """Generate UPI hosted payment link and QR code from Access Token."""
-    from ..upi_link import generate_upi_qr_link, upi_invocation
-
+    """Generate UPI payment link / QR from Access Token via the unified extraction server."""
     at = (getattr(args, "at", None) or "").strip()
     if not at:
         print(json.dumps({"ok": False, "error": "missing --at (Access Token)"}))
@@ -158,7 +125,7 @@ def generate_upi_qr(args: Any, ctx: PaymentLinkCommandContext) -> None:
         (
             getattr(args, "payment_country", None)
             or upi_cfg.get("payment_country")
-            or upi_cfg.get("payment_method_country")
+            or upi_cfg.get("payment_billing_country")
             or "IN"
         )
         .strip()
@@ -166,30 +133,18 @@ def generate_upi_qr(args: Any, ctx: PaymentLinkCommandContext) -> None:
     )
     proxy, checkout_proxy, provider_proxy, approve_proxy = ctx.payment_stage_args(args, "upi")
     require_zero = not getattr(args, "no_require_zero", False)
-    # 账号身份：``--session-token`` / ``--device-id`` 可选，但一旦给了就必须进流程。
-    # 历史上 CLI 只传 ``--at``，于是 UPI 每次都用 ``uuid4()`` 当设备 ID，并用
-    # 合成的 ``Cookie: oai-did=<uuid>`` 覆盖账号会话 Cookie（见 identity.py）。
-    session_token = str(getattr(args, "session_token", None) or "").strip()
-    device_id = str(getattr(args, "device_id", None) or "").strip()
-    result = generate_upi_qr_link(
-        **upi_invocation(
-            at,
-            ctx.runtime_config,
-            proxy=proxy,
-            checkout_proxy=checkout_proxy,
-            provider_proxy=provider_proxy,
-            approve_proxy=approve_proxy,
-            target_country=checkout_country,
-            checkout_country=checkout_country,
-            payment_country=payment_country,
-            require_zero=require_zero,
-            qr_path=getattr(args, "qr_path", None),
-            device_id=device_id or None,
-            session_token=session_token or None,
-            wait_paid=bool(getattr(args, "wait_paid", False)),
-            paid_timeout=getattr(args, "paid_timeout", 900.0) or 900.0,
-            require_server_upi_mandate=bool(getattr(args, "require_server_upi_mandate", False)),
-        )
+    result = generate_payment_link(
+        access_token=at,
+        proxy=proxy,
+        payment_method="upi",
+        runtime_config=ctx.runtime_config,
+        checkout_proxy=checkout_proxy,
+        provider_proxy=provider_proxy,
+        approve_proxy=approve_proxy,
+        target_country=checkout_country,
+        checkout_country=checkout_country,
+        payment_country=payment_country,
+        require_zero=require_zero,
     )
 
     print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -210,8 +165,6 @@ def auto_pay(args: Any) -> None:
     reverse_only = getattr(args, "auto_pay_reverse_only", False)
     mode = "reverse-only" if reverse_only else "reverse+browser"
     print(f"[*] Starting auto-pay ({mode}) for: {email or session_file}")
-    # Rule 6: the execution layer consumes links; generation stays in the
-    # adapter and is injected as a factory so it only runs when no URL exists.
     result = run_auto_pay(
         email=email,
         session_file=session_file,
@@ -219,14 +172,12 @@ def auto_pay(args: Any) -> None:
         headless=args.auto_pay_headless,
         timeout=args.auto_pay_timeout,
         reverse_only=reverse_only,
-        link_factory=generate_pp_link,
-        # Boundary Rule 21: the browser lane must not import the protocol lane,
-        # so the adapter injects the reverse-pay strategy here.
+        link_factory=_paypal_link_factory,
         reverse_pay=_reverse_pay_adapter(),
     )
 
     if result.get("ok"):
-        print(f"\n[*] Auto-pay completed successfully!")
+        print("\n[*] Auto-pay completed successfully!")
         print(f"    Email: {result.get('email', '')}")
         print(f"    Alias: {result.get('alias_email', '')}")
         print("    Card: [REDACTED]")
@@ -247,7 +198,6 @@ def batch_auto_pay(args: Any) -> None:
 
     limit = _clamped_int(args.batch_auto_pay_limit)
 
-    # Get accounts with pending PayPal status
     all_accounts = list_paypal_accounts()
     pending = [
         row
@@ -277,7 +227,7 @@ def batch_auto_pay(args: Any) -> None:
             proxy=args.proxy,
             headless=args.auto_pay_headless,
             timeout=args.auto_pay_timeout,
-            link_factory=generate_pp_link,
+            link_factory=_paypal_link_factory,
             reverse_pay=_reverse_pay_adapter(),
         )
         results.append(result)
@@ -287,13 +237,10 @@ def batch_auto_pay(args: Any) -> None:
         else:
             print(f"[FAIL] {email} - {result.get('error', 'unknown')}")
 
-        # Small delay between accounts
         if i < total:
             time.sleep(5)
 
-    # Summary
     print("" + "=" * 60)
-
     print("Batch Auto-Pay Summary:")
     print("=" * 60)
     ok_count = sum(1 for r in results if r.get("ok"))
@@ -304,7 +251,6 @@ def batch_auto_pay(args: Any) -> None:
 
     if fail_count > 0:
         print("Failed accounts:")
-
         for r in results:
             if not r.get("ok"):
                 print(f"  - {r.get('email', 'unknown')}: {r.get('error', 'unknown')}")
@@ -323,8 +269,8 @@ def list_paypal_ba_queue(args: Any) -> None:
 
 def process_paypal_ba_queue(args: Any) -> None:
     from ..desktop.ipc import emit_event, emit_result
-    from ..paypal.authorization_queue import process_paypal_ba_authorizations
     from ..paypal import auto_pay as run_auto_pay
+    from ..paypal.authorization_queue import process_paypal_ba_authorizations
 
     def authorize(item: dict[str, Any]) -> dict[str, Any]:
         return run_auto_pay(

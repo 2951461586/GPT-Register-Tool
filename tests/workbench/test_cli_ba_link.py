@@ -206,7 +206,7 @@ class GenerateBaLinkCliProxyTests(unittest.TestCase):
         ]
         with patch.object(cli, "CFG", cfg):
             with patch("sys.argv", argv):
-                with patch("sms_tool.commands.payment_links.generate_pp_link", side_effect=fake_generate_pp_link):
+                with patch("sms_tool.commands.payment_links.generate_payment_link", side_effect=fake_generate_pp_link):
                     cli.main()
 
         self.assertIsNone(seen["proxy"])
@@ -242,7 +242,7 @@ class GenerateBaLinkCliProxyTests(unittest.TestCase):
         ]
         with patch.object(cli, "CFG", cfg):
             with patch("sys.argv", argv):
-                with patch("sms_tool.commands.payment_links.generate_pp_link", side_effect=fake_generate_pp_link):
+                with patch("sms_tool.commands.payment_links.generate_payment_link", side_effect=fake_generate_pp_link):
                     cli.main()
 
         self.assertEqual(seen["proxy"], "http://explicit-proxy:8080")
@@ -272,7 +272,7 @@ class GenerateBaLinkCliProxyTests(unittest.TestCase):
         ]
         with patch.object(cli, "CFG", cfg):
             with patch("sys.argv", argv):
-                with patch("sms_tool.commands.payment_links.generate_pp_link", side_effect=fake_generate_pp_link):
+                with patch("sms_tool.commands.payment_links.generate_payment_link", side_effect=fake_generate_pp_link):
                     cli.main()
 
         self.assertEqual(seen["paypal_generation_type"], "chatgpt_checkout_link")
@@ -319,7 +319,7 @@ class GenerateBaLinkCliProxyTests(unittest.TestCase):
         ]
         with patch.object(cli, "CFG", cfg):
             with patch("sys.argv", argv):
-                with patch("sms_tool.commands.payment_links.generate_pp_link", side_effect=fake_generate_pp_link):
+                with patch("sms_tool.commands.payment_links.generate_payment_link", side_effect=fake_generate_pp_link):
                     cli.main()
 
         self.assertEqual(seen["proxy"], "socks5h://127.0.0.1:7897")
@@ -360,7 +360,9 @@ class GenerateBaLinkCliProxyTests(unittest.TestCase):
         argv = ["chatgpt_phone_reg.py", "--generate-upi-qr", "--at", "at-test"]
         with patch.object(cli, "CFG", cfg):
             with patch("sys.argv", argv):
-                with patch("sms_tool.upi_link.generate_upi_qr_link", side_effect=fake_generate_upi_qr_link):
+                with patch(
+                    "sms_tool.commands.payment_links.generate_payment_link", side_effect=fake_generate_upi_qr_link
+                ):
                     cli.main()
 
         self.assertIsNone(seen["proxy"])
@@ -387,7 +389,9 @@ class GenerateBaLinkCliProxyTests(unittest.TestCase):
         argv = ["chatgpt_phone_reg.py", "--generate-upi-qr", "--at", "at-test"]
         with patch.object(cli, "CFG", cfg):
             with patch("sys.argv", argv):
-                with patch("sms_tool.upi_link.generate_upi_qr_link", side_effect=fake_generate_upi_qr_link):
+                with patch(
+                    "sms_tool.commands.payment_links.generate_payment_link", side_effect=fake_generate_upi_qr_link
+                ):
                     cli.main()
 
         self.assertIsNone(seen["proxy"])
@@ -415,7 +419,9 @@ class GenerateBaLinkCliProxyTests(unittest.TestCase):
         ]
         with patch.object(cli, "CFG", cfg):
             with patch("sys.argv", argv):
-                with patch("sms_tool.upi_link.generate_upi_qr_link", side_effect=fake_generate_upi_qr_link):
+                with patch(
+                    "sms_tool.commands.payment_links.generate_payment_link", side_effect=fake_generate_upi_qr_link
+                ):
                     cli.main()
 
         self.assertEqual(seen["target_country"], "JP")

@@ -365,7 +365,7 @@ def _proxy_cache_key(proxy: str) -> str:
     fails and the fingerprint falls back to the default US locale, defeating
     the whole geo-alignment optimization.
     """
-    from ..phone.phone_proxy import normalize_proxy_url
+    from ..proxy.entry import normalize_proxy_url
 
     return normalize_proxy_url(proxy) or str(proxy or "")
 

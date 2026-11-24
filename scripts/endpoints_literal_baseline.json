@@ -1,35 +1,3 @@
 {
-  "files": {
-    "sms_tool/accounts/account_2fa.py": 16,
-    "sms_tool/accounts/account_email_change.py": 3,
-    "sms_tool/accounts/account_liveness.py": 3,
-    "sms_tool/accounts/account_promotion.py": 2,
-    "sms_tool/accounts/account_recovery.py": 4,
-    "sms_tool/importers/agent_identity.py": 3,
-    "sms_tool/auth_flow/otp.py": 1,
-    "sms_tool/payment/checkout_contract.py": 2,
-    "sms_tool/codex/export.py": 3,
-    "sms_tool/codex/oauth.py": 20,
-    "sms_tool/wallet/gcash_transport.py": 4,
-    "sms_tool/transport/http_utils.py": 1,
-    "sms_tool/payment/capability.py": 2,
-    "sms_tool/payment/wire.py": 1,
-    "sms_tool/paypal/protocol.py": 1,
-    "sms_tool/paypal/reverse.py": 1,
-    "sms_tool/phone/registration.py": 2,
-    "sms_tool/phone/reuse.py": 3,
-    "sms_tool/proxy/edge_probe.py": 1,
-    "sms_tool/registration_drivers/browser_flow/form_steps.py": 1,
-    "sms_tool/session/converter.py": 2,
-    "sms_tool/session/refresh.py": 2,
-    "sms_tool/upi_link/browser.py": 8,
-    "sms_tool/upi_link/constants.py": 15,
-    "sms_tool/upi_link/flows.py": 4,
-    "sms_tool/upi_link/sentinel.py": 3,
-    "sms_tool/upi_link/session.py": 4,
-    "sms_tool/upi_link/stages.py": 6,
-    "sms_tool/upi_link/stripe.py": 5,
-    "sms_tool/wallet/provider.py": 6,
-    "sms_tool/wallet/transport.py": 9
-  }
+  "files": {}
 }

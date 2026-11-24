@@ -4,14 +4,13 @@ import contextlib
 import hashlib
 import json
 import os
-import re
 import threading
 import time
 from collections.abc import Iterator, Mapping
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Iterable
-from urllib.parse import unquote, urlsplit
+from urllib.parse import urlsplit
 
 import requests
 
@@ -361,21 +360,11 @@ def select_proxy_from_pool(
 
 
 def proxy_key(proxy: str) -> str:
-    value = normalize_proxy_url(proxy)
+    from ..proxy.entry import strip_session_id
+
+    value = strip_session_id(proxy)
     if not value:
         return "direct"
-    with contextlib.suppress(Exception):
-        parsed = urlsplit(value)
-        username = unquote(parsed.username or "")
-        password = unquote(parsed.password or "")
-        username = re.sub(r"(?<=-sid-)[A-Za-z0-9]+(?=-t-)", "SESSION", username, count=1)
-        password = re.sub(
-            r"^(?P<base>.+?)-(?P<country>[A-Za-z]{2})-[A-Za-z0-9]+-(?P<ttl>\d+[smhd])$",
-            r"\g<base>-\g<country>-SESSION-\g<ttl>",
-            password,
-            count=1,
-        )
-        value = _rebuild_proxy_url(parsed, username, password)
     return hashlib.sha256(value.encode("utf-8", errors="ignore")).hexdigest()[:24]
 
 
@@ -812,7 +801,7 @@ def _proxies_from_config(cfg: dict, checkout_country: str = "", target_country: 
     # imports ``proxy.entry``.  ``_proxies_from_config`` is called once per link,
     # so the lazy edge costs nothing.  No ``except ImportError`` fallback: it was
     # unreachable and merely hid the import's real failures.
-    from ..payment.routing import method_payment_config
+    from ..payment.method_config import method_payment_config
 
     paypal_cfg = method_payment_config(cfg, "paypal")
     stage_proxies = paypal_cfg.get("stage_proxies") or {}

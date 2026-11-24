@@ -1,54 +1,34 @@
-"""Offline self-check for the Sentinel runtime (node + vendored bundle + one mint).
+"""Offline self-check for the Rust Sentinel VM FFI runtime (bundle + native + mint).
 
-Why this exists
----------------
-``check_node_runner_readiness()`` verifies that ``node`` exists and that the
-vendored ``sdk.js`` / ``sentinel-runner.js`` still hash to their pinned digests.
-That catches a corrupt checkout, which is what the 2026-09-17 incident was — but
-it does not catch a runner that loads and then fails to mint, and it cannot
-notice a Node release that broke a syntax the runner relies on.  Both failures
-land at ``create_account``, i.e. after a mailbox and its OTP have been spent, so
-the cheapest possible defence is one **offline** mint before the batch starts.
-
-This module performs three checks, in the order that makes a failure
-attributable:
-
-1. **bundle** — the pinned SHA256 of the vendored assets (line-ending normalised).
-2. **node** — the binary exists and reports a supported major version.
-3. **mint** — a real ``sentinel-runner.js`` execution against a synthetic
-   challenge, asserted to produce ``{id, flow, c, p, t}``.  No network: the
-   challenge is fabricated locally, exactly like the offline unit test.
+Performs three offline checks without Node.js or network access:
+1. **bundle** — verifies the pinned SHA256 of ``sms_tool/sentinel/runtime/sentinel_vm.dll``.
+2. **native** — loads the cdylib via ``ctypes`` and queries ``srs_version()``.
+3. **mint** — runs ``run_sentinel_sdk()`` against a synthetic offline challenge
+   and asserts ``{id, flow, c, p, t}``.
 
 Usage::
 
     python -m sms_tool.sentinel.selfcheck          # human-readable
     python -m sms_tool.sentinel.selfcheck --json   # machine-readable
-
-It is also wired into ``sms_tool.doctor`` as the ``sentinel_runtime`` probe, so
-``--doctor`` covers it (the startup surface the desktop app already calls).
 """
 
 from __future__ import annotations
 
 import json
-import shutil
-import subprocess
 import sys
 from typing import Any
 
 from ..transport.auth_headers import (
+    sentinel_fingerprint,
     set_auth_fingerprint,
     set_fingerprint_device,
     set_fingerprint_geo,
-    sentinel_fingerprint,
 )
 from ..transport.endpoints import AUTH_EMAIL_VERIFICATION
 from .bundle import validate_runtime_bundle
+from .native_ffi import SentinelNativeError, native_version
 from .runner import SentinelRunnerError, run_sentinel_sdk
 
-#: Synthetic challenge: no PoW, no Turnstile, no SO requirement.  The runner
-#: only needs ``token`` to bind the proof, so this exercises the real code path
-#: (SDK load, VM execution, JSON assembly) without a server round-trip.
 OFFLINE_CHALLENGE: dict[str, Any] = {
     "token": "selfcheck-challenge",
     "proofofwork": {"required": False},
@@ -58,11 +38,6 @@ OFFLINE_CHALLENGE: dict[str, Any] = {
 
 OFFLINE_FLOW = "authorize_continue"
 OFFLINE_DEVICE_ID = "00000000-0000-4000-8000-000000000000"
-
-#: The oldest LTS line the vendored runner is exercised against.  Node 18 is
-#: end-of-life upstream; the runner uses ``node:vm``, ``crypto.randomUUID`` and
-#: optional chaining, all present since 16, so 18 is a safe floor.
-MIN_NODE_MAJOR = 18
 
 
 class SentinelSelfCheckError(RuntimeError):
@@ -76,39 +51,20 @@ def _offline_profile() -> dict[str, Any]:
     return dict(sentinel_fingerprint())
 
 
-def node_version(binary: str = "") -> str:
-    """``node --version`` output, or raise :class:`SentinelSelfCheckError`."""
-    executable = binary or shutil.which("node") or ""
-    if not executable:
-        raise SentinelSelfCheckError("sentinel_selfcheck_node_missing")
+def native_runtime_version() -> str:
+    """Return ``v<crate-version>`` from the compiled Rust Sentinel VM library."""
     try:
-        completed = subprocess.run([executable, "--version"], capture_output=True, text=True, timeout=20)
-    except (OSError, subprocess.SubprocessError) as exc:
-        raise SentinelSelfCheckError(f"sentinel_selfcheck_node_launch:{type(exc).__name__}") from exc
-    version = (completed.stdout or completed.stderr or "").strip()
-    if completed.returncode != 0 or not version:
-        raise SentinelSelfCheckError(f"sentinel_selfcheck_node_version:{completed.returncode}")
-    return version
-
-
-def check_node_major(version: str) -> int:
-    """Parse ``v22.20.0`` -> ``22`` and reject an unsupported major."""
-    digits = version.lstrip("v").split(".")[0]
-    try:
-        major = int(digits)
-    except ValueError as exc:
-        raise SentinelSelfCheckError(f"sentinel_selfcheck_node_unparsable:{version[:16]}") from exc
-    if major < MIN_NODE_MAJOR:
-        raise SentinelSelfCheckError(f"sentinel_selfcheck_node_too_old:{major}")
-    return major
+        version = native_version(verify_hash=False)
+    except (SentinelNativeError, OSError, RuntimeError) as exc:
+        raise SentinelSelfCheckError(f"sentinel_selfcheck_native:{type(exc).__name__}") from exc
+    cleaned = str(version or "").strip()
+    if not cleaned:
+        raise SentinelSelfCheckError("sentinel_selfcheck_native_empty")
+    return cleaned if cleaned.startswith("v") else f"v{cleaned}"
 
 
 def mint_offline(*, timeout: int = 60, profile: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Run the real runner once against :data:`OFFLINE_CHALLENGE`.
-
-    Returns the decoded token.  Raises :class:`SentinelSelfCheckError` with a
-    bounded, secret-free reason on any failure.
-    """
+    """Run the native Rust VM runner once against :data:`OFFLINE_CHALLENGE`."""
     active_profile = profile or _offline_profile()
     try:
         token = run_sentinel_sdk(
@@ -128,9 +84,6 @@ def mint_offline(*, timeout: int = 60, profile: dict[str, Any] | None = None) ->
         raise SentinelSelfCheckError("sentinel_selfcheck_mint:not_json") from exc
     if not isinstance(parsed, dict):
         raise SentinelSelfCheckError("sentinel_selfcheck_mint:not_an_object")
-    # ``p`` / ``t`` are legitimately ``null`` when the challenge says the work is
-    # not required (this offline challenge does), so presence — not truthiness —
-    # is what proves the runner assembled the token instead of short-circuiting.
     missing = [key for key in ("id", "flow", "c", "p", "t") if key not in parsed]
     if missing:
         raise SentinelSelfCheckError("sentinel_selfcheck_mint:missing_" + ",".join(missing))
@@ -143,32 +96,26 @@ def mint_offline(*, timeout: int = 60, profile: dict[str, Any] | None = None) ->
 
 
 def run_selfcheck(*, mint: bool = True, timeout: int = 60) -> dict[str, Any]:
-    """Run every check; return a report instead of raising.
-
-    ``{"ok": bool, "bundle": str, "node": str, "mint": str}`` — each value is
-    ``"ok"`` or a stable reason token.  ``mint=False`` keeps the check cheap for
-    callers that only want the local integrity half.
-    """
-    report: dict[str, Any] = {"ok": True, "bundle": "", "node": "", "mint": ""}
+    """Run every check; return ``{"ok": bool, "bundle": str, "native": str, "mint": str}``."""
+    report: dict[str, Any] = {"ok": True, "bundle": "", "native": "", "mint": ""}
     try:
         validate_runtime_bundle()
         report["bundle"] = "ok"
     except (ImportError, OSError, RuntimeError, ValueError) as exc:
         report["bundle"] = f"failed:{type(exc).__name__}"
         report["ok"] = False
-    try:
-        version = node_version()
-        check_node_major(version)
-        report["node"] = version
-    except SentinelSelfCheckError as exc:
-        report["node"] = str(exc)
-        report["ok"] = False
+    if report["bundle"] == "ok":
+        try:
+            report["native"] = native_runtime_version()
+        except SentinelSelfCheckError as exc:
+            report["native"] = str(exc)
+            report["ok"] = False
+    else:
+        report["native"] = "skipped"
     if not mint:
         report["mint"] = "skipped"
         return report
-    if report["bundle"] != "ok" or not str(report["node"]).startswith("v"):
-        # A mint without a trustworthy bundle proves nothing; say so instead of
-        # reporting a second, less specific failure.
+    if report["bundle"] != "ok" or not str(report["native"]).startswith("v"):
         report["mint"] = "skipped"
         return report
     try:
@@ -189,19 +136,17 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print("sentinel runtime self-check")
         print(f"  bundle : {report['bundle']}")
-        print(f"  node   : {report['node']}")
+        print(f"  native : {report['native']}")
         print(f"  mint   : {report['mint']}")
         print(f"  result : {'ok' if report['ok'] else 'FAILED'}")
     return 0 if report["ok"] else 1
 
 
 __all__ = [
-    "MIN_NODE_MAJOR",
     "OFFLINE_CHALLENGE",
     "SentinelSelfCheckError",
-    "check_node_major",
     "mint_offline",
-    "node_version",
+    "native_runtime_version",
     "run_selfcheck",
 ]
 

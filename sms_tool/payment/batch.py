@@ -828,22 +828,13 @@ def _matrix_summary(results: list[dict[str, Any]], cells: list[dict[str, Any]]) 
 
 
 def _lease_owner_for(method: str, account_ref: str) -> str:
-    """Owner id for the exit lease; empty for methods that do not take one."""
-    if str(method or "").strip().lower() != "upi":
-        return ""
-    return f"upi-batch:{account_ref}"
+    """Owner id for per-exit lease (unused after retiring local UPI extractors)."""
+    return ""
 
 
 def _release_leases(owner: str) -> None:
-    """Best-effort release of this cell's exit lease (never raises)."""
-    if not owner:
-        return
-    try:
-        from . import upi_exit_lease
-
-        upi_exit_lease.release_all(owner=owner, cfg=CFG)
-    except Exception:
-        return
+    """No-op after retiring local UPI exit leases."""
+    return None
 
 
 def _cell_payment_kwargs(

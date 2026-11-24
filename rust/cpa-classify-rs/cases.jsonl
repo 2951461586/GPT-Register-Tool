@@ -1,0 +1,23 @@
+{"fn": "classify_cpa_auth_file", "args": [{"a": {"b": "c"}}], "ok": "unknown"}
+{"fn": "classify_cpa_auth_file", "args": [{}], "ok": "unknown"}
+{"fn": "classify_cpa_auth_file", "args": [["a", 1]], "error": "AttributeError: 'list' object has no attribute 'get'"}
+{"fn": "classify_cpa_auth_file", "args": [null], "ok": "unknown"}
+{"fn": "classify_cpa_auth_file", "args": ["x"], "error": "AttributeError: 'str' object has no attribute 'get'"}
+{"fn": "classify_cpa_auth_file", "args": [0], "ok": "unknown"}
+{"fn": "classify_cpa_auth_file", "args": [{"a": "b"}], "ok": "unknown"}
+{"fn": "classify_cpa_auth_file", "args": [[]], "ok": "unknown"}
+{"fn": "classify_cpa_auth_file", "args": [true], "error": "AttributeError: 'bool' object has no attribute 'get'"}
+{"fn": "classify_cpa_auth_file", "args": [{"zebra": 1, "apple": 2, "10": 3, "2": 4, "é": 5, "Apple": 6}], "ok": "unknown"}
+{"fn": "classify_cpa_auth_file", "args": [{"n": 9007199254740993, "f": 1e+21, "t": 0.1, "neg": -7}], "ok": "unknown"}
+{"fn": "classify_cpa_auth_file", "args": [[3, 1, 2]], "error": "AttributeError: 'list' object has no attribute 'get'"}
+{"fn": "classify_cpa_auth_file", "args": [{"status": "active", "status_message": "ok", "probe": {"status_code": 200}}], "ok": "active"}
+{"fn": "classify_cpa_auth_file", "args": [{"status": "error", "status_message": "authentication token has been invalidated", "probe": {"status_code": 401, "error": "unauthorized"}}], "ok": "token_invalid"}
+{"fn": "classify_cpa_auth_file", "args": [{"status": "error", "message": "request context canceled due to upstream timeout", "probe": {"status_code": 504}}], "ok": "transient"}
+{"fn": "classify_cpa_auth_file", "args": [{"status": "unknown", "error": "Account suspended for abuse", "probe": {"status_code": 403}}], "ok": "token_invalid"}
+{"fn": "classify_cpa_auth_file", "args": [{"status": "ok", "disabled": true}], "ok": "token_invalid"}
+{"fn": "classify_cpa_auth_file", "args": [{"status": "pending", "message": "账号已封禁"}], "ok": "token_invalid"}
+{"fn": "classify_cpa_auth_file", "args": [{"status": "custom_state", "message": "waiting", "probe": {}}], "ok": "custom_state"}
+{"fn": "classify_cpa_auth_file", "args": [null], "ok": "unknown"}
+{"fn": "classify_cpa_auth_file", "args": [{}], "ok": "unknown"}
+{"fn": "classify_cpa_auth_file", "args": [{"probe": {"status_code": 401}, "email": "a@liziai.cloud"}], "ok": "token_invalid"}
+{"fn": "classify_cpa_auth_file", "args": [{"status": "active", "email": "a@liziai.cloud"}], "ok": "active"}

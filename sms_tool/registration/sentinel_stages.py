@@ -68,7 +68,7 @@ def prime_password_sentinel_bundle(workflow: RegistrationWorkflow, *, reference_
         return
     from ..sentinel import issue_password_page_bundle, issue_sentinel_bundle, sentinel_backend
 
-    if sentinel_backend(workflow.config) != "node_runner":
+    if sentinel_backend(workflow.config) == "legacy":
         return
     if lane:
         try:

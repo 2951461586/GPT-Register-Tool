@@ -813,7 +813,7 @@
       "silent": 3
     },
     "sms_tool/proxy/pool.py": {
-      "broad": 10,
+      "broad": 9,
       "reason": "SOCKS5 bridge teardown: a broken client socket, a half-open upstream or a stats-write failure must never take the listener down for every other session.",
       "silent": 4
     },

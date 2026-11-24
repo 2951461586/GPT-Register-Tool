@@ -106,4 +106,6 @@ def test_detail_mode_lists_per_file_counts(capsys, monkeypatch):
     monkeypatch.setattr(ratchet, "BASELINE", ratchet.BASELINE)
     assert ratchet.main(["--detail"]) == 0
     out = capsys.readouterr().out
-    assert "sms_tool/paypal_link/gen_link.py" in out, "detail output should name the worst file"
+    per_file = _payload()["per_file"]
+    worst = max(per_file, key=lambda p: per_file[p])
+    assert worst in out, "detail output should name the worst file"

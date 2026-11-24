@@ -1,0 +1,58 @@
+{"fn": "_extract_sms_code", "args": [{"a": "b"}], "error": "TypeError: expected string or bytes-like object, got 'dict'"}
+{"fn": "_extract_sms_code", "args": [true], "error": "TypeError: expected string or bytes-like object, got 'bool'"}
+{"fn": "_extract_sms_code", "args": [{"a": {"b": "c"}}], "error": "TypeError: expected string or bytes-like object, got 'dict'"}
+{"fn": "_extract_sms_code", "args": [[]], "ok": null}
+{"fn": "_extract_sms_code", "args": [0], "ok": null}
+{"fn": "_extract_sms_code", "args": ["x"], "ok": null}
+{"fn": "_extract_sms_code", "args": [null], "ok": null}
+{"fn": "_extract_sms_code", "args": [{}], "ok": null}
+{"fn": "_extract_sms_code", "args": [["a", 1]], "error": "TypeError: expected string or bytes-like object, got 'list'"}
+{"fn": "_extract_sms_code", "args": [{"zebra": 1, "apple": 2, "10": 3, "2": 4, "é": 5, "Apple": 6}], "error": "TypeError: expected string or bytes-like object, got 'dict'"}
+{"fn": "_extract_sms_code", "args": [{"n": 9007199254740993, "f": 1e+21, "t": 0.1, "neg": -7}], "error": "TypeError: expected string or bytes-like object, got 'dict'"}
+{"fn": "_extract_sms_code", "args": [[3, 1, 2]], "error": "TypeError: expected string or bytes-like object, got 'list'"}
+{"fn": "_extract_sms_code", "args": ["Your OpenAI verification code is: 482910. Do not share it."], "ok": "482910"}
+{"fn": "_extract_sms_code", "args": ["Your OTP: 938472 for login"], "ok": "938472"}
+{"fn": "_extract_sms_code", "args": ["Your code is 619204\n"], "ok": "619204"}
+{"fn": "_extract_sms_code", "args": ["Security alert on 2026-11-24: ref 774128 ready"], "ok": "774128"}
+{"fn": "_extract_sms_code", "args": ["Copyright 2026 OpenAI Inc. No code here."], "ok": null}
+{"fn": "_extract_sms_code", "args": ["Order ID 1234567890 shipped today."], "ok": null}
+{"fn": "_extract_sms_code", "args": ["Welcome to ChatGPT! No numeric token in this marketing message at all."], "ok": null}
+{"fn": "_extract_sms_code", "args": ["【OpenAI】您的验证码为 884120，10分钟内有效。"], "ok": "884120"}
+{"fn": "_extract_sms_code", "args": ["Verify 5519 to continue"], "ok": "5519"}
+{"fn": "_extract_sms_code", "args": [null], "ok": null}
+{"fn": "_extract_sms_code", "args": [""], "ok": null}
+{"fn": "_extract_sms_code", "args": ["CODE 1111 is 2222"], "ok": "1111"}
+{"fn": "_extract_sms_code", "args": ["order 1234-5678"], "ok": null}
+{"fn": "_extract_sms_code", "args": [""], "ok": null}
+{"fn": "_extract_sms_code", "args": [null], "ok": null}
+{"fn": "_extract_sms_code", "args": ["code 1111 ... is 2222"], "ok": "1111"}
+{"fn": "_extract_sms_code", "args": ["balance 2000"], "ok": null}
+{"fn": "_extract_sms_code", "args": ["balance 2024"], "ok": null}
+{"fn": "_extract_sms_code", "args": ["balance 2099"], "ok": null}
+{"fn": "_extract_sms_code", "args": ["balance 1999"], "ok": "1999"}
+{"fn": "_extract_sms_code", "args": ["balance 2100"], "ok": "2100"}
+{"fn": "_extract_sms_code", "args": ["balance 4321"], "ok": "4321"}
+{"fn": "_extract_sms_code", "args": ["abc 123456 def"], "ok": "123456"}
+{"fn": "_extract_sms_code", "args": ["Your verification code is 493021."], "ok": "493021"}
+{"fn": "_extract_sms_code", "args": ["login: 4455 for PayPal"], "ok": "4455"}
+{"fn": "_extract_sms_code", "args": ["your pin 1234 is 5678"], "ok": "5678"}
+{"fn": "_extract_sms_code", "args": ["CODE 1234"], "ok": "1234"}
+{"fn": "_extract_sms_code", "args": ["Your Otp Is 123456"], "ok": "123456"}
+{"fn": "_extract_sms_code", "args": ["Your code is 123456"], "ok": "123456"}
+{"fn": "_extract_sms_code", "args": ["OTP: 1234"], "ok": "1234"}
+{"fn": "_extract_sms_code", "args": ["verification 12345"], "ok": "12345"}
+{"fn": "_extract_sms_code", "args": ["verify: 123456"], "ok": "123456"}
+{"fn": "_extract_sms_code", "args": ["code 987654"], "ok": "987654"}
+{"fn": "_extract_sms_code", "args": ["code123456"], "ok": "123456"}
+{"fn": "_extract_sms_code", "args": ["order is 12345678"], "ok": null}
+{"fn": "_extract_sms_code", "args": ["reference is 1234567"], "ok": null}
+{"fn": "_extract_sms_code", "args": ["total: 12345678"], "ok": null}
+{"fn": "_extract_sms_code", "args": ["ref 1234567 end"], "ok": null}
+{"fn": "_extract_sms_code", "args": ["code 201234"], "ok": "201234"}
+{"fn": "_extract_sms_code", "args": ["no keywords here 654321"], "ok": "654321"}
+{"fn": "_extract_sms_code", "args": ["no code in this message"], "ok": null}
+{"fn": "_extract_sms_code", "args": ["pin 123"], "ok": null}
+{"fn": "_extract_sms_code", "args": ["welcome"], "ok": null}
+{"fn": "_extract_sms_code", "args": ["code 5678"], "ok": "5678"}
+{"fn": "_extract_sms_code", "args": ["code 1234"], "ok": "1234"}
+{"fn": "_extract_sms_code", "args": ["nothing here"], "ok": null}

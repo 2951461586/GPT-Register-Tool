@@ -20,7 +20,7 @@ import pytest
 from sms_tool import config as config_module
 from sms_tool.sentinel import bundle
 
-REAL_SDK = bundle.SDK_PATH.read_bytes()
+REAL_SDK = b"/* SentinelSDK synthetic test fixture */\nwindow.SentinelSDK = {};\n"
 OTHER_VERSION = "20990101913b"
 
 
@@ -69,20 +69,16 @@ def _with_config(config: dict):
 
 def test_pinned_version_returns_the_vendored_file(cache) -> None:
     with _with_config(_config(sentinel_version=bundle.DEFAULT_SENTINEL_VERSION)):
-        assert bundle.resolve_sdk_path(verify_vendored=False) == bundle.SDK_PATH
+        assert bundle.resolve_sdk_path(verify_vendored=False) == bundle.NATIVE_LIB_PATH
 
 
 def test_drift_without_auto_update_still_runs_the_vendored_build(cache, caplog) -> None:
-    """A claim/bytes mismatch is loud but not fatal.
-
-    Accounts already registered under this combination worked, so failing closed
-    would turn a warning into an outage.  The warning is the product.
-    """
+    """A claim/bytes mismatch is loud but not fatal."""
     with _with_config(_config(sentinel_version=OTHER_VERSION)):
         with caplog.at_level("WARNING"):
             path = bundle.resolve_sdk_path(verify_vendored=False)
-    assert path == bundle.SDK_PATH
-    assert any("!= vendored build" in record.message for record in caplog.records)
+    assert path == bundle.NATIVE_LIB_PATH
+    assert any("!= pinned build" in record.message for record in caplog.records)
 
 
 def test_auto_update_downloads_verifies_and_caches(cache) -> None:
@@ -154,7 +150,7 @@ def test_a_failed_refresh_falls_back_to_the_stale_cache_entry(cache) -> None:
 def test_a_failed_refresh_on_the_pinned_version_uses_the_vendored_file(cache) -> None:
     broken = _Session(ConnectionError("proxy down"))
     with _with_config(_config(sentinel_sdk_auto_update=True, sentinel_version=bundle.DEFAULT_SENTINEL_VERSION)):
-        assert bundle.resolve_sdk_path(session=broken, verify_vendored=False) == bundle.SDK_PATH
+        assert bundle.resolve_sdk_path(session=broken, verify_vendored=False) == bundle.NATIVE_LIB_PATH
 
 
 def test_a_tampered_cache_entry_is_not_served(cache) -> None:

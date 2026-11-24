@@ -61,7 +61,8 @@ def _section() -> Mapping:
     try:
         from ..config import CFG
 
-        raw: object = CFG.get("email_registration")
+        raw_get = getattr(CFG, "raw_get", None)
+        raw: object = raw_get("email_registration") if callable(raw_get) else CFG.get("email_registration")
     except (ImportError, OSError, KeyError, TypeError, ValueError):
         return {}
     return raw if isinstance(raw, Mapping) else {}
@@ -113,34 +114,55 @@ def wreq_client_class() -> Any:
     return getattr(blocking, "Client", None)
 
 
+_WREQ_PROFILE_MAP_CACHE: tuple[Any, dict[str, str]] = (None, {})
+_CURL_BROWSER_TYPE_CACHE: tuple[Any, frozenset[str]] = (None, frozenset())
+
+
 def wreq_profile_map() -> dict[str, str]:
     """``{lowercased profile name: attribute name}`` for the installed ``wreq``."""
+    global _WREQ_PROFILE_MAP_CACHE
     module = wreq_module()
     if module is None:
         return {}
-    try:
-        names = [name for name in dir(module.Profile) if not name.startswith("_")]
-    except AttributeError:
+    profile_cls = getattr(module, "Profile", None)
+    if profile_cls is None:
         return {}
-    return {name.lower(): name for name in names}
+    cached_cls, cached_map = _WREQ_PROFILE_MAP_CACHE
+    if cached_cls is profile_cls:
+        return dict(cached_map)
+    names = [name for name in dir(profile_cls) if not name.startswith("_")]
+    mapping = {name.lower(): name for name in names}
+    _WREQ_PROFILE_MAP_CACHE = (profile_cls, mapping)
+    return dict(mapping)
 
 
 def _safari_candidates(token: str) -> tuple[str, ...]:
-    """Our ``safari`` tokens (``18_0`` / ``184`` / ``260``) -> wreq names.
+    """Map our ``safari`` tokens (``17_0``, ``17_2_ios``, ``184``, ``260``) to exact ``wreq`` names.
 
-    ``curl_cffi`` writes the minor without a dot in some presets (``safari184``)
-    and ``wreq`` writes it with one (``Safari18_4``); the trailing ``.0`` is
-    dropped by upstream both ways, so ``safari18_0`` means plain ``Safari18``.
+    No version or platform aliasing:
+    - ``*_ios`` maps only to ``safariios*`` (never desktop ``safari*``).
+    - A non-zero minor (e.g. ``184`` -> ``18_4``) matches only ``safari18_4``
+      (never falls back to ``safari18``).
+    - A zero minor (``17_0``, ``18_0``, ``260``) checks both ``{prefix}{major}_0``
+      and ``{prefix}{major}`` because ``wreq`` spells 17.0 as ``Safari17_0``
+      and 18.0/26.0 as ``Safari18``/``Safari26``.
     """
-    names: list[str] = []
-    if "_" in token:
-        major, _, minor = token.partition("_")
+    is_ios = token.endswith("_ios")
+    core = token.removesuffix("_ios") if is_ios else token
+    prefix = "safariios" if is_ios else "safari"
+    if "_" in core:
+        major, _, minor = core.partition("_")
+    elif len(core) > 2:
+        major, minor = core[:2], core[2:]
     else:
-        major, minor = token[:2], token[2:]
+        major, minor = core, ""
+    if not major:
+        return ()
     if minor and minor != "0":
-        names.append(f"safari{major}_{minor}")
-    names.append(f"safari{major}")
-    return tuple(names)
+        return (f"{prefix}{major}_{minor}",)
+    if minor == "0":
+        return (f"{prefix}{major}_0", f"{prefix}{major}")
+    return (f"{prefix}{major}",)
 
 
 def _profile_candidates(impersonate: str) -> tuple[str, ...]:
@@ -192,7 +214,13 @@ def supported_impersonations() -> set[str]:
     try:
         from curl_cffi.requests.impersonate import BrowserType
 
-        installed = {item.value for item in BrowserType}
+        global _CURL_BROWSER_TYPE_CACHE
+        cached_enum, cached_values = _CURL_BROWSER_TYPE_CACHE
+        if cached_enum is BrowserType:
+            installed = cached_values
+        else:
+            installed = frozenset(item.value for item in BrowserType)
+            _CURL_BROWSER_TYPE_CACHE = (BrowserType, installed)
     except INTERNAL_EXCEPTION_TYPES:
         return names
     return {name for name in names if name in installed}
@@ -399,7 +427,23 @@ class WreqSession:
     def _options(self, method: str, url: str, kwargs: dict[str, Any]) -> tuple[dict[str, Any], float]:
         module = self._module
         options: dict[str, Any] = {}
-        for key in ("headers", "json", "cookies"):
+        if "impersonate" in kwargs:
+            requested = str(kwargs.pop("impersonate") or "").strip().lower()
+            if requested and requested != self.impersonate.lower():
+                raise ProtocolBackendError(
+                    f"protocol_http_backend_impersonate_mismatch:{requested}!={self.impersonate}"
+                )
+        if "headers" in kwargs:
+            raw_headers = kwargs.pop("headers")
+            if isinstance(raw_headers, Mapping):
+                # curl_cffi uses ``headers["Content-Type"] = None`` to suppress libcurl's
+                # default header on body-less POST; wreq sends no default headers so
+                # dropping None-valued entries preserves the exact wire intent without
+                # tripping wreq's strict string typing.
+                options["headers"] = {str(k): str(v) for k, v in raw_headers.items() if v is not None}
+            elif raw_headers is not None:
+                options["headers"] = raw_headers
+        for key in ("json", "cookies"):
             if key in kwargs:
                 options[key] = kwargs.pop(key)
         if "params" in kwargs:

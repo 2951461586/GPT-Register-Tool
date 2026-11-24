@@ -27,7 +27,7 @@ from ...mailbox import router as mailbox_pkg
 from ...proxy import entry as proxy_entry
 from ...accounts import account_identity
 from ...mailbox.service import MailboxService
-from ...phone.phone_proxy import redact_proxy_text
+from ...proxy.entry import redact_proxy_text
 from ...registration.state import RegistrationState, RegistrationStateMachine
 from ...utils import _generate_password, _random_birthdate, _random_name
 from .. import external_sessions

@@ -596,7 +596,7 @@
         <Border Style="{StaticResource SidebarGroupDividerStyle}"/>
         <TextBlock Text="{loc:Tr Key='支付管理'}" Style="{StaticResource SidebarSectionHeaderStyle}"/>
         <local:IconNavButton Style="{StaticResource IconNavButtonStyle}" IconGeometry="{StaticResource Glyph.PayLink}" Text="{loc:Tr Key='打开支付链接'}" Command="{Binding NavCommand}" CommandParameter="paylink"/>
-        <local:IconNavButton AutomationProperties.Name="{loc:Tr Key='批量协议支付'}" Style="{StaticResource IconNavButtonStyle}" IconGeometry="{StaticResource Glyph.BatchPay}" Text="{loc:Tr Key='批量协议支付'}" Command="{Binding NavCommand}" CommandParameter="batchpay"/>
+        <local:IconNavButton AutomationProperties.Name="{loc:Tr Key='支付链接提取'}" Style="{StaticResource IconNavButtonStyle}" IconGeometry="{StaticResource Glyph.BatchPay}" Text="{loc:Tr Key='支付链接提取'}" Command="{Binding NavCommand}" CommandParameter="batchpay"/>
 
         <Border Style="{StaticResource SidebarGroupDividerStyle}"/>
         <TextBlock Text="{loc:Tr Key='邮箱管理'}" Style="{StaticResource SidebarSectionHeaderStyle}"/>

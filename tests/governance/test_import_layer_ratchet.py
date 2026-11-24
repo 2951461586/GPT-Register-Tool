@@ -491,10 +491,24 @@ def test_summary_facts_are_pinned():
         # sentinel.client instead of hardcoded UAs/sessions/cached tokens, and the new
         # pay_link/oaics_provider.py brings ideal/pix/kakao/blik/twint/momo in-process
         # over payment.wire.
-        "total_module_edges": 580,
-        "ordered_pairs": 155,
-        "mutual_pairs": 19,
-        "minority_edges": 33,
+        # 2026-11-24 (Batch 3A/3B cycle decoupling & native Rust Sentinel FFI):
+        # 580 -> 579 edges, 155 -> 153 ordered pairs, 19 -> 18 mutual pairs,
+        # 33 -> 32 minority edges, 349 -> 352 delayed cross-dir edges.
+        # Broke transport/proxy, paypal/payment, and sentinel/registration cycles
+        # (sentinel/client now uses one-way DI registration from
+        # registration/sentinel_tokens), migrated phone_proxy callers to
+        # proxy.entry, and replaced the Node.js Sentinel runner + upi_link/_vendor
+        # with the in-process Rust cdylib FFI (`sentinel/native_ffi.py`).
+        # 2026-11-24 (Legacy payment extractor retirement):
+        # 579 -> 497 edges, 153 -> 135 ordered pairs, 18 -> 17 mutual pairs,
+        # 32 -> 30 minority edges, 352 -> 321 delayed cross-dir edges.
+        # Retired sms_tool/{upi_link,paypal_link,wallet}/, pay_link/{adapters,oaics_provider}.py,
+        # payment/{regional_payment_adapter,upi_*}.py, and services/protocol-payment/,
+        # routing all 15 catalog methods through pay_link/extract_server.py.
+        "total_module_edges": 497,
+        "ordered_pairs": 135,
+        "mutual_pairs": 17,
+        "minority_edges": 30,
         # 2026-10-21: 188 -> 190 when the provider ports seam (providers/ports.py)
         # took over the mailbox_pool_writer and desktop_ipc imports as delayed
         # ones. Before that, 190 -> 188 when store/connection.py stopped
@@ -606,7 +620,11 @@ def test_summary_facts_are_pinned():
         # imports to intra-package `from . import wire` trimmed delayed cross-dir edges.
         # 2026-11-22: 350 -> 349 (-1) after hoisting transport.auth_headers imports
         # in accounts/account_2fa.py and proxy.entry/base64 in proxy/bridge.py.
-        "delayed_cross_dir_edges": 349,
+        # 2026-11-24 (Batch 3A/3B): 349 -> 352 (+3) for sanctioned lazy
+        # cycle-break / DI edges (all recorded in delayed_import_reasons.json).
+        # 2026-11-24 (Legacy payment extractor retirement): 352 -> 321 (-31)
+        # after removing legacy UPI/PayPal-link/wallet packages and regional adapters.
+        "delayed_cross_dir_edges": 321,
         # Imports under `if TYPE_CHECKING:` never run, so they are not runtime
         # edges. 1 here since 2026-10-23: `payment/link_manager.py` declares its
         # `pay_link` re-exports type-only (the module is not a package, so the

@@ -47,7 +47,7 @@ except (AttributeError, OSError, ValueError):
 # （F:\epsoft），于是 SCAN_DIRS 全部 isdir 失败被静默跳过，只剩 '.' 去扫同级无关目录。
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-SCAN_DIRS = ["sms_tool", "scripts", "services", "tests", "SmsWorkbench", "SmsWorkbench.Contracts"]
+SCAN_DIRS = ["sms_tool", "scripts", "tests", "SmsWorkbench", "SmsWorkbench.Contracts"]
 SKIP_DIRS = {
     ".git",
     ".venv",

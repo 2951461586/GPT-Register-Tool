@@ -107,7 +107,7 @@ Wpf.Ui.xaml -> Wpf.Ui Theme/Light.xaml -> Themes/Tokens.xaml -> Themes/Glyphs.xa
 | `MainWindow.Inbox.cs` | 301 | 收件箱与邮件详情对话框（供应商判别在 `MailboxRowClassifier`） |
 | `MainWindow.Language.cs` | 37 | EN/CN 切换：`Loc` 切换、偏好落盘、刷新缓存的展示串 |
 | `MainWindow.Navigation.cs` | 114 | 分页游标、筛选导航与选中行回退 |
-| `MainWindow.Payment.cs` | 68 | 批量支付窗口入场 |
+| `MainWindow.Payment.cs` | 68 | 支付链接提取窗口入场 |
 | `MainWindow.Pools.cs` | 385 | 池文件加载/切池/合并与增量应用（行映射在 `AccountRowFactory`） |
 | `MainWindow.Register.cs` | 403 | 注册/接码/测活动作的接线：CLI 参数交给 `BackendCommandPlanner`，批次邮箱文件交给 `RegistrationRequestBuilder`，三个选项对话框交给 `RegisterDialogService`（2026-11-01 拆分前 721 行） |
 | `Services/RegistrationRequestBuilder.cs` | 115 | 选中行 → 临时邮箱批次文件；不引用任何 WPF 类型（`ModuleSizeTests` 钉住） |

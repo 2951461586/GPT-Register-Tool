@@ -6,22 +6,22 @@
   "rules": {
     "python-hardcoded-secrets": {
       "ignorePaths": [
-        "services/protocol-payment/**",
         "sms_tool/**",
         "tests/**"
       ]
     },
     "python-unsafe-regex": {
       "ignorePaths": [
-        "services/protocol-payment/**",
         "sms_tool/**",
         "tests/**"
       ]
     }
   },
   "ignore": [
-    "sms_tool/upi_link/_vendor/**",
     "sms_tool/sentinel/runtime/**",
+    "native/*/target/**",
+    "rust/*/target/**",
+    "rust/*/.rust-anything/**",
     "scripts/**",
     "dist/**",
     "runtime/**",

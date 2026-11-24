@@ -1,0 +1,45 @@
+{"fn": "classify_network_type", "args": [{"a": {"b": "c"}}], "ok": "unknown"}
+{"fn": "classify_network_type", "args": [null], "ok": "unknown"}
+{"fn": "classify_network_type", "args": [[]], "ok": "unknown"}
+{"fn": "classify_network_type", "args": [0], "ok": "unknown"}
+{"fn": "classify_network_type", "args": [{"a": "b"}], "ok": "unknown"}
+{"fn": "classify_network_type", "args": [{}], "ok": "unknown"}
+{"fn": "classify_network_type", "args": [["a", 1]], "ok": "unknown"}
+{"fn": "classify_network_type", "args": [true], "ok": "unknown"}
+{"fn": "classify_network_type", "args": ["x"], "ok": "unknown"}
+{"fn": "classify_network_type", "args": [{"zebra": 1, "apple": 2, "10": 3, "2": 4, "é": 5, "Apple": 6}], "ok": "unknown"}
+{"fn": "classify_network_type", "args": [{"n": 9007199254740993, "f": 1e+21, "t": 0.1, "neg": -7}], "ok": "unknown"}
+{"fn": "classify_network_type", "args": [[3, 1, 2]], "ok": "unknown"}
+{"fn": "classify_network_type", "args": [null], "ok": "unknown"}
+{"fn": "classify_network_type", "args": [{}], "ok": "unknown"}
+{"fn": "classify_network_type", "args": [{"country": "US", "org": "Comcast Cable Communications", "isp": "Comcast", "asn": "AS7922"}], "ok": "residential"}
+{"fn": "classify_network_type", "args": [{"country": "US", "org": "Comcast Cable", "privacy": {"hosting": true}}], "ok": "datacenter"}
+{"fn": "classify_network_type", "args": [{"country": "US", "org": "Comcast Cable", "security": {"vpn": true}}], "ok": "datacenter"}
+{"fn": "classify_network_type", "args": [{"country": "US", "org": "Comcast Cable", "proxy": true}], "ok": "datacenter"}
+{"fn": "classify_network_type", "args": [{"country": "US", "org": "Comcast Cable", "privacy": {"hosting": false, "vpn": "true"}}], "ok": "residential"}
+{"fn": "classify_network_type", "args": [{"country": "US", "org": "AS16509 Amazon.com, Inc.", "isp": "Amazon Data Services"}], "ok": "datacenter"}
+{"fn": "classify_network_type", "args": [{"country": "DE", "org": "Hetzner Online GmbH", "asn": "AS24940"}], "ok": "datacenter"}
+{"fn": "classify_network_type", "args": [{"country": "SG", "org": "DigitalOcean, LLC", "hostname": "droplet.digitalocean.com"}], "ok": "datacenter"}
+{"fn": "classify_network_type", "args": [{"country": "JP", "org": "Alibaba Cloud", "reverse_dns": "ecs.aliyun.com"}], "ok": "datacenter"}
+{"fn": "classify_network_type", "args": [{"country": "US", "org": "Oracle Corporation", "type": "isp"}], "ok": "datacenter"}
+{"fn": "classify_network_type", "args": [{"country": "ID", "org": "PT Telekomunikasi Selular (Telkomsel)", "isp": "Telkomsel"}], "ok": "mobile"}
+{"fn": "classify_network_type", "args": [{"country": "US", "org": "T-Mobile USA, Inc.", "isp": "T-Mobile Wireless"}], "ok": "mobile"}
+{"fn": "classify_network_type", "args": [{"country": "IN", "org": "Reliance Jio Infocomm Limited", "isp": "Jio 5G"}], "ok": "mobile"}
+{"fn": "classify_network_type", "args": [{"country": "PH", "org": "Globe Telecom", "isp": "Globe Mobile"}], "ok": "mobile"}
+{"fn": "classify_network_type", "args": [{"country": "GB", "org": "British Telecommunications PLC", "isp": "BT Broadband", "asn": "AS2856", "reverse_dns": "host86-130-1-1.range86-130.btcentralplus.com"}], "ok": "residential"}
+{"fn": "classify_network_type", "args": [{"country": "JP", "org": "NTT Communications", "isp": "OCN", "asn": "AS4713", "hostname": "p1234.tokyo.ocn.ne.jp"}], "ok": "residential"}
+{"fn": "classify_network_type", "args": [{"country": "US", "org": "   "}], "ok": "unknown"}
+{"fn": "classify_network_type", "args": [{"country": "", "org": "Comcast Cable"}], "ok": "unknown"}
+{"fn": "classify_network_type", "args": [{"country": "DE", "org": "Deutsche Telekom AG", "type": "isp", "reverse_dns": "p5b123.dip0.t-ipconnect.de"}], "ok": "residential"}
+{"fn": "classify_network_type", "args": [{"country": "ID", "org": "Telkomsel Cloud Hosting"}], "ok": "datacenter"}
+{"fn": "classify_network_type", "args": [{"country": "CN", "org": "中国电信宽带", "isp": "China Telecom"}], "ok": "residential"}
+{"fn": "classify_network_type", "args": [{"country": "PH", "org": "PLDT"}], "ok": "residential"}
+{"fn": "classify_network_type", "args": [{"country": "PH", "org": "DigitalOcean LLC"}], "ok": "datacenter"}
+{"fn": "classify_network_type", "args": [{"country": "ID", "org": "Telkomsel cellular"}], "ok": "mobile"}
+{"fn": "classify_network_type", "args": [{"country": "PH"}], "ok": "unknown"}
+{"fn": "classify_network_type", "args": [null], "ok": "unknown"}
+{"fn": "classify_network_type", "args": [{"country": "PH", "org": "PLDT", "privacy": {"hosting": true}}], "ok": "datacenter"}
+{"fn": "classify_network_type", "args": [{"$object": "ProxyGeo", "attrs": {"ip": "49.144.165.95", "country": "PH", "region": "", "city": "", "timezone": "Asia/Manila", "org": "AS9299 Philippine Long Distance Telephone Co.", "source": "none", "asn": "AS9299", "isp": "Philippine Long Distance Telephone Co.", "reverse_dns": "", "network_type": "unknown", "is_proxy": false, "is_vpn": false, "is_hosting": false, "intel_sources": 1, "intel_conflict": false}}], "ok": "unknown"}
+{"fn": "classify_network_type", "args": [{"$object": "ProxyGeo", "attrs": {"ip": "49.144.165.95", "country": "PH", "region": "", "city": "", "timezone": "Asia/Manila", "org": "AS9299 Philippine Long Distance Telephone Co.", "source": "none", "asn": "AS9299", "isp": "Philippine Long Distance Telephone Co.", "reverse_dns": "", "network_type": "unknown", "is_proxy": false, "is_vpn": false, "is_hosting": false, "intel_sources": 2, "intel_conflict": false}}], "ok": "unknown"}
+{"fn": "classify_network_type", "args": [{"$object": "ProxyGeo", "attrs": {"ip": "203.0.113.9", "country": "PH", "region": "", "city": "", "timezone": "Asia/Manila", "org": "AS13335 Cloudflare, Inc.", "source": "none", "asn": "AS13335", "isp": "", "reverse_dns": "", "network_type": "unknown", "is_proxy": false, "is_vpn": false, "is_hosting": false, "intel_sources": 1, "intel_conflict": false}}], "ok": "unknown"}
+{"fn": "classify_network_type", "args": [{"$object": "ProxyGeo", "attrs": {"ip": "49.144.165.95", "country": "PH", "region": "", "city": "", "timezone": "Asia/Manila", "org": "DigitalOcean, LLC", "source": "none", "asn": "AS9299", "isp": "", "reverse_dns": "", "network_type": "unknown", "is_proxy": false, "is_vpn": false, "is_hosting": false, "intel_sources": 1, "intel_conflict": false}}], "ok": "unknown"}
