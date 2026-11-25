@@ -46,7 +46,6 @@
     "tests/mailbox/test_mailbox_remail_idempotency.py": 1,
     "tests/mailbox/test_smailr_provider.py": 1,
     "tests/payment/test_payment_proxy_health.py": 1,
-    "tests/payment/test_paypal_authorization.py": 1,
     "tests/payment/test_paypal_dom_fields.py": 1,
     "tests/payment/test_paypal_proxy.py": 1,
     "tests/registration/test_external_registration_drivers.py": 3,
@@ -56,5 +55,5 @@
     "tests/workbench/test_cli_registration_driver.py": 1,
     "tests/workbench/test_operator_output.py": 1
   },
-  "total": 94
+  "total": 93
 }

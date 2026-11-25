@@ -91,7 +91,7 @@ sms_tool.config.schema.ConfigError: chatgpt must be an object
 
 ## 覆盖率下限（2026-11-20 起的门禁）
 
-CI 的并行分片跑 `--cov=sms_tool --cov=services`，并且带 `--cov-fail-under=70`。
+CI 的并行分片跑 `--cov=sms_tool`，并且带 `--cov-fail-under=70`。
 
 **为什么要加**：在 2026-11-20 之前覆盖率只被**测量**、从不被**比较**——72% 和 41%
 都是绿色，`term-missing` 那段输出没有人读。这与进程内的其余门禁（棘轮、契约测试）
@@ -110,7 +110,7 @@ CI 的并行分片跑 `--cov=sms_tool --cov=services`，并且带 `--cov-fail-un
 **本地怎么复现**：
 
 ```bash
-python -m pytest -q -n 4 --dist loadfile --cov=sms_tool --cov=services --cov-report=term-missing --cov-fail-under=70
+python -m pytest -q -n 4 --dist loadfile --cov=sms_tool --cov-report=term-missing --cov-fail-under=70
 ```
 
 ## 静默异常：为什么冻结而不清零（2026-11-20 复核）

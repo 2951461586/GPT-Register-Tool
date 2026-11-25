@@ -1,0 +1,117 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/transport/auth_headers.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "auth-headers-rs",
+  "exports": [
+    {
+      "name": "_full_version_list",
+      "file": "sms_tool/transport/auth_headers.py",
+      "line": 939,
+      "params": [
+        {
+          "name": "sec_ch_ua",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "full_version",
+          "ts_type": "string",
+          "optional": true,
+          "rest": false,
+          "default": "\"\""
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "accept_encoding_for",
+      "file": "sms_tool/transport/auth_headers.py",
+      "line": 1075,
+      "params": [
+        {
+          "name": "impersonate",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "origin_from_referer",
+      "file": "sms_tool/transport/auth_headers.py",
+      "line": 1114,
+      "params": [
+        {
+          "name": "referer",
+          "ts_type": "string",
+          "optional": true,
+          "rest": false,
+          "default": "\"\""
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "_browser_version",
+      "file": "sms_tool/transport/auth_headers.py",
+      "line": 380,
+      "params": [
+        {
+          "name": "impersonate",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "observe_chatgpt_document",
+      "file": "sms_tool/transport/auth_headers.py",
+      "line": 36,
+      "reason": "mutates module-global observed client version under lock"
+    },
+    {
+      "name": "sentinel_fingerprint",
+      "file": "sms_tool/transport/auth_headers.py",
+      "line": 984,
+      "reason": "reads thread-local fingerprint/geo state and clock"
+    },
+    {
+      "name": "openai_auth_headers",
+      "file": "sms_tool/transport/auth_headers.py",
+      "line": 1234,
+      "reason": "reads thread-local state, CSPRNG trace ids, and builds Python dict"
+    },
+    {
+      "name": "validate_protocol_fingerprint",
+      "file": "sms_tool/transport/auth_headers.py",
+      "line": 1211,
+      "reason": "small mapping validation; dict PyO3 crossing exceeds body cost"
+    }
+  ]
+}

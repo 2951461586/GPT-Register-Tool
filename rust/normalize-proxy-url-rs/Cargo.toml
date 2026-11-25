@@ -10,6 +10,7 @@ description = "Rust port of hot proxy parsing/redaction/session functions in `sm
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+fancy-regex = "0.14"
 pyo3 = { version = "0.30", features = ["extension-module", "abi3-py39"] }
 regex = "1"
 

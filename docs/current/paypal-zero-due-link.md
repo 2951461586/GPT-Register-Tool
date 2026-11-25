@@ -70,7 +70,7 @@ python -m sms_tool --generate-payment-link --payment-method paypal --at <ACCESS_
 
 ## 返回结果
 
-`generate_pp_link` / `PPLinkExtractor.extract` 结果新增 `promotion_proxy` 字段；矩阵模式返回附带 `matrix`（每个 `paypal_region × promotion_region` 组合的 `amount`/`link_type`/`status`）。
+`PPLinkExtractor.extract` 结果新增 `promotion_proxy` 字段；矩阵模式返回附带 `matrix`（每个 `paypal_region × promotion_region` 组合的 `amount`/`link_type`/`status`）。
 
 ## 注意事项
 

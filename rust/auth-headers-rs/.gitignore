@@ -1,0 +1,7 @@
+/target
+/.rust-anything
+*.pyd
+*.so
+*.dylib
+__pycache__/
+*.pyc

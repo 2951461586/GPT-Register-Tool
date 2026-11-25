@@ -54,7 +54,6 @@
     "payment/flow": 4,
     "payment/link_manager": 3,
     "payment/routing": 4,
-    "paypal/authorization": 3,
     "paypal/authorization_queue": 3,
     "paypal/orchestrator": 3,
     "paypal/proxy": 5,

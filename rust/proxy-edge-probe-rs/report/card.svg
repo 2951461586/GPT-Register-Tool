@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="600" viewBox="0 0 1200 600" role="img" aria-label="proxy-edge-probe-rs: 92 of 92 recorded cases match, 1.3x faster">
+<rect width="1200" height="600" fill="#ffffff"/>
+<g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+<svg x="64" y="52" width="60" height="60" viewBox="0 0 200 200"><rect width="200" height="200" rx="44" fill="#15181d"/>
+<defs><linearGradient id="shell" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff8f45"/><stop offset="1" stop-color="#e04d0d"/></linearGradient></defs><g transform="translate(0,-8)"><path d="M52,124 L34,130 L26,146" stroke="#d24a0c" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M58,132 L44,142 L40,158" stroke="#d24a0c" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M68,138 L58,152 L58,168" stroke="#d24a0c" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M148,124 L166,130 L174,146" stroke="#d24a0c" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M142,132 L156,142 L160,158" stroke="#d24a0c" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M132,138 L142,152 L142,168" stroke="#d24a0c" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M48,112 C38,104 34,92 37,80" stroke="#e85d14" stroke-width="9" stroke-linecap="round" fill="none"/><path d="M152,112 C162,104 166,92 163,80" stroke="#e85d14" stroke-width="9" stroke-linecap="round" fill="none"/><g transform="translate(42,82) scale(1.3,1.3)"><path d="M0,0 C-15,-3 -22,-18 -15,-31 L-4,-20 L-1,-35 C12,-31 16,-14 7,-3 Z" fill="url(#shell)"/></g><g transform="translate(158,82) scale(-1.3,1.3)"><path d="M0,0 C-15,-3 -22,-18 -15,-31 L-4,-20 L-1,-35 C12,-31 16,-14 7,-3 Z" fill="url(#shell)"/></g><path d="M38.0,120.4 L38.0,105.0 Q50.4,81.4 62.8,91.6 Q75.2,71.4 87.6,84.8 Q100.0,68.0 112.4,84.8 Q124.8,71.4 137.2,91.6 Q149.6,81.4 162.0,105.0 L162.0,120.4 C164.0,159.6 36.0,159.6 38.0,120.4 Z" fill="url(#shell)"/><circle cx="83" cy="99" r="11" fill="#fff"/><circle cx="117" cy="99" r="11" fill="#fff"/><circle cx="85" cy="100" r="6" fill="#111"/><circle cx="115" cy="100" r="6" fill="#111"/><g stroke="#3a1606" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M86,121 L77,129 L86,137"/><path d="M104,118 L96,140"/><path d="M114,121 L123,129 L114,137"/></g></g></svg>
+<text x="140" y="94" font-size="34" font-weight="700" fill="#1a1a1a">rust-anything</text>
+<text x="380" y="94" font-size="34" font-weight="700" fill="#1a1a1a">proxy-edge-probe-rs, ported to <tspan fill="#e8561a">Rust</tspan></text>
+<text x="64" y="140" font-size="18" fill="#666666">sms_tool/proxy/edge_probe.py (Python) · classify_edge_response</text>
+<rect x="64" y="172" width="520" height="230" rx="20" fill="#ffffff" stroke="#e5e5e5" stroke-width="3"/>
+<text x="96" y="218" font-size="26" font-weight="700" fill="#1a1a1a">Original</text>
+<text x="552" y="218" font-size="17" fill="#666666" text-anchor="end">per call</text>
+<text x="96" y="318" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="64" font-weight="700" fill="#1a1a1a">4.4 µs</text>
+<rect x="96" y="360" width="470" height="14" rx="7" fill="#9e9e9e"/>
+<rect x="616" y="172" width="520" height="230" rx="20" fill="#fdf4ef" stroke="#f2b89a" stroke-width="3"/>
+<text x="648" y="218" font-size="26" font-weight="700" fill="#1a1a1a">Rust port</text>
+<text x="1104" y="218" font-size="17" fill="#666666" text-anchor="end">switched off</text>
+<text x="648" y="318" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="64" font-weight="700" fill="#e8561a">3.4 µs</text>
+<rect x="648" y="360" width="362" height="14" rx="7" fill="#e8561a"/>
+<text x="600" y="460" font-size="28" fill="#1a1a1a" text-anchor="middle">Same result as the original on all 92 recorded cases: <tspan font-weight="700" fill="#e8561a">1.3x faster</tspan></text>
+<text x="600" y="500" font-size="18" fill="#777777" text-anchor="middle">Fallback to the original: 0.0% of cases · call included · x86_64, 12 cores, Windows</text>
+<text x="600" y="556" font-size="17" fill="#888888" text-anchor="middle">github.com/erkamyaman/rust-anything</text>
+</g>
+</svg>

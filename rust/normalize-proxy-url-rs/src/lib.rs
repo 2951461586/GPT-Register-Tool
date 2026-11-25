@@ -113,6 +113,54 @@ fn infer_proxy_country(proxy: String) -> PyResult<String> {
     infer_proxy_country_inner(proxy).map_err(error)
 }
 
+fn _mask_credentials_inner(value: String) -> Result<String, String> {
+    let out = port::_mask_credentials(value)?;
+    Ok(out)
+}
+
+/// `_mask_credentials`.
+#[pyfunction]
+#[pyo3(name = "_mask_credentials", signature = (value))]
+fn _mask_credentials(value: String) -> PyResult<String> {
+    _mask_credentials_inner(value).map_err(error)
+}
+
+fn redact_proxy_text_inner(value: Option<String>, proxy: Option<String>) -> Result<String, String> {
+    let out = port::redact_proxy_text(value, proxy)?;
+    Ok(out)
+}
+
+/// `redact_proxy_text`.
+#[pyfunction]
+#[pyo3(name = "redact_proxy_text", signature = (value, proxy=None))]
+fn redact_proxy_text(value: Option<String>, proxy: Option<String>) -> PyResult<String> {
+    redact_proxy_text_inner(value, proxy).map_err(error)
+}
+
+fn retarget_region_inner(proxy: String, iso_code: String) -> Result<String, String> {
+    let out = port::retarget_region(proxy, iso_code)?;
+    Ok(out)
+}
+
+/// `retarget_region`.
+#[pyfunction]
+#[pyo3(name = "retarget_region", signature = (proxy, iso_code))]
+fn retarget_region(proxy: String, iso_code: String) -> PyResult<String> {
+    retarget_region_inner(proxy, iso_code).map_err(error)
+}
+
+fn infer_region_inner(proxy: String) -> Result<String, String> {
+    let out = port::infer_region(proxy)?;
+    Ok(out)
+}
+
+/// `infer_region`.
+#[pyfunction]
+#[pyo3(name = "infer_region", signature = (proxy))]
+fn infer_region(proxy: String) -> PyResult<String> {
+    infer_region_inner(proxy).map_err(error)
+}
+
 #[pymodule]
 #[pyo3(name = "_native")]
 fn native_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -120,5 +168,9 @@ fn native_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(redact_proxy_url, m)?)?;
     m.add_function(wrap_pyfunction!(strip_session_id, m)?)?;
     m.add_function(wrap_pyfunction!(infer_proxy_country, m)?)?;
+    m.add_function(wrap_pyfunction!(_mask_credentials, m)?)?;
+    m.add_function(wrap_pyfunction!(redact_proxy_text, m)?)?;
+    m.add_function(wrap_pyfunction!(retarget_region, m)?)?;
+    m.add_function(wrap_pyfunction!(infer_region, m)?)?;
     Ok(())
 }

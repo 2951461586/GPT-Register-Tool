@@ -1,0 +1,98 @@
+{"fn": "_solve_pow", "args": ["a😀b😀c", "😀ab"], "ok": ""}
+{"fn": "_solve_pow", "args": ["a{name} has {count} items", "key_name-1"], "ok": ""}
+{"fn": "_solve_pow", "args": ["hello", "日本語のテキスト"], "ok": ""}
+{"fn": "_solve_pow", "args": ["./x/**/*.json", "  padded  "], "ok": ""}
+{"fn": "_solve_pow", "args": [":", "HELLOa..b"], "ok": ""}
+{"fn": "_solve_pow", "args": ["a😀b😀c", "a😀b😀c"], "ok": ""}
+{"fn": "_solve_pow", "args": ["a:b:c", ":"], "ok": ""}
+{"fn": "_solve_pow", "args": ["hello worlda.b.c", "abc"], "ok": "AAAAAAAAAEs="}
+{"fn": "_solve_pow", "args": ["a😀b😀c", "src/a/b.ts"], "ok": ""}
+{"fn": "_solve_pow", "args": ["HELLO", "hello"], "ok": ""}
+{"fn": "_solve_pow", "args": ["helloline1\nline2", "ab"], "ok": "AAAAAAAAAAA="}
+{"fn": "_solve_pow", "args": ["ΣΊΣΥΦΟΣ", "hello"], "ok": ""}
+{"fn": "_solve_pow", "args": ["hello world", "world"], "ok": ""}
+{"fn": "_solve_pow", "args": ["  padded  ", "ΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "_solve_pow", "args": ["src/a/b.ts", "HELLO"], "ok": ""}
+{"fn": "_solve_pow", "args": ["./x/**/*.json﻿bom", "key_name-1"], "ok": ""}
+{"fn": "_solve_pow", "args": ["./x/**/*.json", "a.b.c"], "ok": ""}
+{"fn": "_solve_pow", "args": ["", "ΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "_solve_pow", "args": ["ünïcödé", "日本語のテキスト"], "ok": ""}
+{"fn": "_solve_pow", "args": ["a", "hello world"], "ok": ""}
+{"fn": "_solve_pow", "args": ["é", "́"], "ok": ""}
+{"fn": "_solve_pow", "args": ["a", "a..bstraße"], "ok": ""}
+{"fn": "_solve_pow", "args": ["😀", "😀"], "ok": ""}
+{"fn": "_solve_pow", "args": ["ns:key.path", "é{name} has {count} items"], "ok": ""}
+{"fn": "_solve_pow", "args": ["a😀b😀c", "a..b"], "ok": ""}
+{"fn": "_solve_pow", "args": ["héllo wörld", "😀ab"], "ok": ""}
+{"fn": "_solve_pow", "args": ["👍🏽 thumbs", "😀ab"], "ok": ""}
+{"fn": "_solve_pow", "args": ["日本語", "😀ab"], "ok": ""}
+{"fn": "_solve_pow", "args": ["", "😀ab"], "ok": ""}
+{"fn": "_solve_pow", "args": ["é", "😀ab"], "ok": ""}
+{"fn": "_solve_pow", "args": ["İstanbul", "😀ab"], "ok": ""}
+{"fn": "_solve_pow", "args": ["straße", "😀ab"], "ok": ""}
+{"fn": "_solve_pow", "args": ["ılık ırmak", "😀ab"], "ok": ""}
+{"fn": "_solve_pow", "args": ["👨‍👩‍👧 family", "😀ab"], "ok": ""}
+{"fn": "_solve_pow", "args": ["a b", "😀ab"], "ok": ""}
+{"fn": "_solve_pow", "args": ["ΣΊΣΥΦΟΣ", "😀ab"], "ok": ""}
+{"fn": "_solve_pow", "args": ["a😀b", "😀ab"], "ok": ""}
+{"fn": "_solve_pow", "args": ["﻿bom", "😀ab"], "ok": ""}
+{"fn": "_solve_pow", "args": ["a²b x½ y①", "😀ab"], "ok": ""}
+{"fn": "_solve_pow", "args": ["aⅠb Ⅻ", "😀ab"], "ok": ""}
+{"fn": "_solve_pow", "args": ["a𐐀b 𝐀bc", "😀ab"], "ok": ""}
+{"fn": "_solve_pow", "args": ["कि ٣٤", "😀ab"], "ok": ""}
+{"fn": "_solve_pow", "args": ["Iı İi", "😀ab"], "ok": ""}
+{"fn": "_solve_pow", "args": ["K K k", "😀ab"], "ok": ""}
+{"fn": "_solve_pow", "args": ["ſ s S", "😀ab"], "ok": ""}
+{"fn": "_solve_pow", "args": ["x‍y 👨‍👩‍👧", "😀ab"], "ok": ""}
+{"fn": "_solve_pow", "args": ["a b c　d", "😀ab"], "ok": ""}
+{"fn": "_solve_pow", "args": ["١٢٣ ٤٥", "😀ab"], "ok": ""}
+{"fn": "_solve_pow", "args": ["𝟘𝟙 ²³", "😀ab"], "ok": ""}
+{"fn": "_solve_pow", "args": ["snake_case foo-bar o'neil", "😀ab"], "ok": ""}
+{"fn": "_solve_pow", "args": ["ǅungla Ǆ", "😀ab"], "ok": ""}
+{"fn": "_solve_pow", "args": ["one\r\ntwo threefour", "😀ab"], "ok": ""}
+{"fn": "_solve_pow", "args": ["café café", "😀ab"], "ok": ""}
+{"fn": "_solve_pow", "args": ["ΣΑΣ σας ς", "😀ab"], "ok": ""}
+{"fn": "_solve_pow", "args": ["a😀b😀c", "héllo wörld"], "ok": ""}
+{"fn": "_solve_pow", "args": ["a😀b😀c", "👍🏽 thumbs"], "ok": ""}
+{"fn": "_solve_pow", "args": ["a😀b😀c", "日本語"], "ok": ""}
+{"fn": "_solve_pow", "args": ["a😀b😀c", ""], "ok": ""}
+{"fn": "_solve_pow", "args": ["a😀b😀c", "é"], "ok": ""}
+{"fn": "_solve_pow", "args": ["a😀b😀c", "İstanbul"], "ok": ""}
+{"fn": "_solve_pow", "args": ["a😀b😀c", "straße"], "ok": ""}
+{"fn": "_solve_pow", "args": ["a😀b😀c", "ılık ırmak"], "ok": ""}
+{"fn": "_solve_pow", "args": ["a😀b😀c", "👨‍👩‍👧 family"], "ok": ""}
+{"fn": "_solve_pow", "args": ["a😀b😀c", "a b"], "ok": ""}
+{"fn": "_solve_pow", "args": ["a😀b😀c", "ΣΊΣΥΦΟΣ"], "ok": ""}
+{"fn": "_solve_pow", "args": ["a😀b😀c", "a😀b"], "ok": ""}
+{"fn": "_solve_pow", "args": ["a😀b😀c", "﻿bom"], "ok": ""}
+{"fn": "_solve_pow", "args": ["a😀b😀c", "a²b x½ y①"], "ok": ""}
+{"fn": "_solve_pow", "args": ["a😀b😀c", "aⅠb Ⅻ"], "ok": ""}
+{"fn": "_solve_pow", "args": ["a😀b😀c", "a𐐀b 𝐀bc"], "ok": ""}
+{"fn": "_solve_pow", "args": ["a😀b😀c", "कि ٣٤"], "ok": ""}
+{"fn": "_solve_pow", "args": ["a😀b😀c", "Iı İi"], "ok": ""}
+{"fn": "_solve_pow", "args": ["a😀b😀c", "K K k"], "ok": ""}
+{"fn": "_solve_pow", "args": ["a😀b😀c", "ſ s S"], "ok": ""}
+{"fn": "_solve_pow", "args": ["a😀b😀c", "x‍y 👨‍👩‍👧"], "ok": ""}
+{"fn": "_solve_pow", "args": ["a😀b😀c", "a b c　d"], "ok": ""}
+{"fn": "_solve_pow", "args": ["a😀b😀c", "١٢٣ ٤٥"], "ok": ""}
+{"fn": "_solve_pow", "args": ["a😀b😀c", "𝟘𝟙 ²³"], "ok": ""}
+{"fn": "_solve_pow", "args": ["a😀b😀c", "snake_case foo-bar o'neil"], "ok": ""}
+{"fn": "_solve_pow", "args": ["a😀b😀c", "ǅungla Ǆ"], "ok": ""}
+{"fn": "_solve_pow", "args": ["a😀b😀c", "one\r\ntwo threefour"], "ok": ""}
+{"fn": "_solve_pow", "args": ["a😀b😀c", "café café"], "ok": ""}
+{"fn": "_solve_pow", "args": ["a😀b😀c", "ΣΑΣ σας ς"], "ok": ""}
+{"fn": "_solve_pow", "args": ["seed-alpha", "0ffff"], "ok": "AAAAAAAAAaY="}
+{"fn": "_solve_pow", "args": ["seed-beta", "00fff"], "ok": "AAAAAAAABnA="}
+{"fn": "_solve_pow", "args": ["0.918273645", "000fff"], "ok": "AAAAAAAADIY="}
+{"fn": "_solve_pow", "args": ["sentinel-req-1", "ffff"], "ok": "AAAAAAAAAAA="}
+{"fn": "_solve_pow", "args": ["sentinel-req-2", "00ff"], "ok": "AAAAAAAAARQ="}
+{"fn": "_solve_pow", "args": ["sentinel-req-3", "001ff"], "ok": "AAAAAAAA/s4="}
+{"fn": "_solve_pow", "args": ["sentinel-req-4", "0x00fff"], "ok": "AAAAAAAAOCU="}
+{"fn": "_solve_pow", "args": ["sentinel-req-5", " 00_ff "], "ok": ""}
+{"fn": "_solve_pow", "args": ["sentinel-req-6", ""], "ok": ""}
+{"fn": "_solve_pow", "args": ["sentinel-req-7", "not-hex"], "ok": ""}
+{"fn": "_solve_pow", "args": ["sentinel-req-8", "-0fff"], "ok": ""}
+{"fn": "_solve_pow", "args": ["", "0fff"], "ok": "AAAAAAAAAAo="}
+{"fn": "_solve_pow", "args": ["中文seed", "00fff"], "ok": "AAAAAAAADGg="}
+{"fn": "_solve_pow", "args": ["seed-zero-diff", "00"], "ok": "AAAAAAAAANQ="}
+{"fn": "_solve_pow", "args": ["seed-high-prefix", "0100"], "ok": "AAAAAAAAAFM="}

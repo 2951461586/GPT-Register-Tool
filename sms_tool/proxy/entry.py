@@ -62,6 +62,8 @@ def _mask_credentials(value: str) -> str:
     - bare ``host:port:user:pass`` (including bracketed IPv6 hosts)
     - bare ``user:pass:host:port``
     """
+    if _NATIVE_MASK_CREDENTIALS is not None and isinstance(value, str):
+        return _NATIVE_MASK_CREDENTIALS(value)
     text = str(value or "")
     # 1) scheme://user:pass@host -> scheme://***:***@host (greedy to last @ in authority)
     text = re.sub(
@@ -410,19 +412,20 @@ _IPWO_CUSTOM_ZONE_RE = re.compile(
 
 def _load_native_proxy_entry() -> Any:
     """Load the Rust `normalize_proxy_url_rs` acceleration module when available."""
-    mode = os.environ.get("RUST_ANYTHING_MODE")
-    if mode == "old" or os.environ.get("RUST_ANYTHING_UNIT_NORMALIZE_PROXY_URL") == "original":
+    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
+    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_NORMALIZE_PROXY_URL") or "").strip().lower()
+    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
         return None
     native_root = str(Path(__file__).resolve().parent.parent.parent / "rust" / "normalize-proxy-url-rs" / "python")
     if not os.path.isdir(native_root):
-        if mode == "new":
+        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
             raise ImportError(f"normalize_proxy_url_rs not found at {native_root}")
         return None
     sys.path.insert(0, native_root)
     try:
         return importlib.import_module("normalize_proxy_url_rs")
-    except ImportError:
-        if mode == "new":
+    except (ImportError, OSError):
+        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
             raise
         return None
     finally:
@@ -431,6 +434,10 @@ def _load_native_proxy_entry() -> Any:
 
 
 _NATIVE_PROXY_ENTRY = _load_native_proxy_entry()
+_NATIVE_MASK_CREDENTIALS = getattr(_NATIVE_PROXY_ENTRY, "_mask_credentials", None)
+_NATIVE_REDACT_PROXY_TEXT = getattr(_NATIVE_PROXY_ENTRY, "redact_proxy_text", None)
+_NATIVE_RETARGET_REGION = getattr(_NATIVE_PROXY_ENTRY, "retarget_region", None)
+_NATIVE_INFER_REGION = getattr(_NATIVE_PROXY_ENTRY, "infer_region", None)
 
 
 def normalize_proxy_url(proxy: str | None, default_scheme: str = "http") -> str:
@@ -498,6 +505,12 @@ def redact_proxy_url(proxy: str | None, empty_placeholder: str = "DIRECT") -> st
 
 def redact_proxy_text(value: Any, proxy: str | None = None) -> str:
     """Redact proxy-credential substrings from an arbitrary text."""
+    if (
+        _NATIVE_REDACT_PROXY_TEXT is not None
+        and (value is None or isinstance(value, str))
+        and (proxy is None or isinstance(proxy, str))
+    ):
+        return _NATIVE_REDACT_PROXY_TEXT(value, proxy)
     text = str(value or "")
     raw = str(proxy or "").strip()
     normalized = normalize_proxy_url(proxy or "")
@@ -586,6 +599,8 @@ def retarget_region(proxy: str, iso_code: str) -> str:
     ``custom_zone_XX`` usernames, and Kookeey/IPRoyal password templates.
     Returns the input unchanged when no known template matches.
     """
+    if _NATIVE_RETARGET_REGION is not None and isinstance(proxy, str) and isinstance(iso_code, str):
+        return _NATIVE_RETARGET_REGION(proxy, iso_code)
     value = str(proxy or "")
     iso = str(iso_code or "").strip().upper()
     if not value or not iso:
@@ -734,6 +749,8 @@ def strip_session_id(proxy: str) -> str:
 
 def infer_region(proxy: str) -> str:
     """Best-effort exit-country inference from a proxy's credential template."""
+    if _NATIVE_INFER_REGION is not None and isinstance(proxy, str):
+        return _NATIVE_INFER_REGION(proxy)
     value = str(proxy or "")
     if not value:
         return ""

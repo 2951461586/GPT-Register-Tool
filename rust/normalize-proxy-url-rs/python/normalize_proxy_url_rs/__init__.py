@@ -91,5 +91,9 @@ normalize_proxy_url = _native.normalize_proxy_url
 redact_proxy_url = _native.redact_proxy_url
 strip_session_id = _native.strip_session_id
 infer_proxy_country = _native.infer_proxy_country
+_mask_credentials = _native._mask_credentials
+redact_proxy_text = _native.redact_proxy_text
+retarget_region = _native.retarget_region
+infer_region = _native.infer_region
 
-__all__ = ['normalize_proxy_url', 'redact_proxy_url', 'strip_session_id', 'infer_proxy_country']
+__all__ = ['normalize_proxy_url', 'redact_proxy_url', 'strip_session_id', 'infer_proxy_country', '_mask_credentials', 'redact_proxy_text', 'retarget_region', 'infer_region']

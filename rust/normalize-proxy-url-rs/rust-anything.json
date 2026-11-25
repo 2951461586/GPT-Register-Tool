@@ -91,6 +91,91 @@
       "is_generator": false,
       "type_params": [],
       "uses_instanceof": false
+    },
+    {
+      "name": "_mask_credentials",
+      "file": "sms_tool/proxy/entry.py",
+      "line": 52,
+      "params": [
+        {
+          "name": "value",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "redact_proxy_text",
+      "file": "sms_tool/proxy/entry.py",
+      "line": 499,
+      "params": [
+        {
+          "name": "value",
+          "ts_type": "string | undefined",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "proxy",
+          "ts_type": "string | undefined",
+          "optional": true,
+          "rest": false,
+          "default": "None"
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "retarget_region",
+      "file": "sms_tool/proxy/entry.py",
+      "line": 582,
+      "params": [
+        {
+          "name": "proxy",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "iso_code",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "infer_region",
+      "file": "sms_tool/proxy/entry.py",
+      "line": 735,
+      "params": [
+        {
+          "name": "proxy",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
     }
   ],
   "classes": [],
@@ -98,44 +183,26 @@
     {
       "name": "parse_proxy",
       "file": "sms_tool/proxy/entry.py",
-      "line": 158,
+      "line": 161,
       "reason": "returns ProxyEntry dataclass; kept in Python"
     },
     {
       "name": "proxy_to_url",
       "file": "sms_tool/proxy/entry.py",
-      "line": 328,
+      "line": 331,
       "reason": "takes ProxyEntry dataclass; kept in Python"
-    },
-    {
-      "name": "redact_proxy_text",
-      "file": "sms_tool/proxy/entry.py",
-      "line": 459,
-      "reason": "kept in Python"
     },
     {
       "name": "rebuild_proxy_credentials",
       "file": "sms_tool/proxy/entry.py",
-      "line": 521,
+      "line": 561,
       "reason": "takes urllib SplitResult; kept in Python"
-    },
-    {
-      "name": "retarget_region",
-      "file": "sms_tool/proxy/entry.py",
-      "line": 542,
-      "reason": "kept in Python"
     },
     {
       "name": "rotate_session",
       "file": "sms_tool/proxy/entry.py",
-      "line": 588,
+      "line": 628,
       "reason": "uses CSPRNG secrets; kept in Python"
-    },
-    {
-      "name": "infer_region",
-      "file": "sms_tool/proxy/entry.py",
-      "line": 693,
-      "reason": "covered by infer_proxy_country"
     },
     {
       "name": "load_proxy_pool",

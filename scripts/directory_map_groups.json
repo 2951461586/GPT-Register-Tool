@@ -9,7 +9,6 @@
       "sms_tool/__main__.py",
       "sms_tool/cli.py",
       "sms_tool/config/*.py",
-      "sms_tool/paths.py",
       "sms_tool/commands/helpers.py"
     ],
     "Package entrypoints": [
@@ -18,7 +17,6 @@
       "sms_tool/providers/__init__.py"
     ],
     "Configuration and environment inspection": [
-      "sms_tool/env_loader.py",
       "sms_tool/config_usage.py"
     ],
     "CLI argument groups": [
@@ -58,7 +56,6 @@
       "sms_tool/observability/*.py"
     ],
     "Registration failure and batch safety": [
-      "sms_tool/failure_registry.py",
       "sms_tool/batch_circuit_breaker.py"
     ],
     "Registration checkpoints, helpers and completion": [
@@ -88,7 +85,6 @@
       "sms_tool/auth_flow/login.py",
       "sms_tool/auth_flow/otp.py",
       "sms_tool/auth_flow/totp.py",
-      "sms_tool/error_classification.py",
       "sms_tool/registration/*.py",
       "sms_tool/codex/*.py",
       "sms_tool/session/*.py",
@@ -189,8 +185,6 @@
     "Shared utilities": [
       "sms_tool/doctor.py",
       "sms_tool/utils.py",
-      "sms_tool/timeouts.py",
-      "sms_tool/driver_env.py",
       "sms_tool/proxy/*.py",
       "sms_tool/browser/*.py",
       "sms_tool/transport/*.py",
@@ -201,7 +195,6 @@
       "sms_tool/transport/*.py"
     ],
     "Sensitive output and telemetry": [
-      "sms_tool/sanitizer.py",
       "sms_tool/observability/*.py"
     ]
   }

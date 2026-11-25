@@ -150,8 +150,9 @@ redacted argument log masks them instead of printing them.
 The plan stays pure and the flags keep working (the CLI, scripts and every
 existing caller are unchanged); only the process boundary changed. Precedence is
 **flag over environment**, and the backend pops each variable after reading it so
-it is not inherited by the child processes it starts (the Sentinel node runner,
-browser drivers). The names are pinned on both sides by
+it is not inherited by the child processes it starts (browser drivers and other
+child processes; Sentinel now runs in-process via native Rust FFI). The names
+are pinned on both sides by
 `tests/fixtures/proxy_env_transport.json`, and `ProxyArgumentTransport.Routes`
 (C#) / `cli._PROXY_TRANSPORT_ROUTES` (Python) are the single lists a new
 credential-bearing flag must join.

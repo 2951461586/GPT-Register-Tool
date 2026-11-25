@@ -1,0 +1,73 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/proxy/edge_probe.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "proxy-edge-probe-rs",
+  "exports": [
+    {
+      "name": "classify_edge_response",
+      "file": "sms_tool/proxy/edge_probe.py",
+      "line": 135,
+      "params": [
+        {
+          "name": "status_code",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "body",
+          "ts_type": "string | undefined",
+          "optional": true,
+          "rest": false
+        },
+        {
+          "name": "headers",
+          "ts_type": "unknown",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "EdgeVerdict",
+      "file": "sms_tool/proxy/edge_probe.py",
+      "line": 83,
+      "reason": "dataclass kept in Python"
+    },
+    {
+      "name": "edge_challenge_verdict",
+      "file": "sms_tool/proxy/edge_probe.py",
+      "line": 214,
+      "reason": "inspects Python HTTP response object and delegates to classify_edge_response"
+    },
+    {
+      "name": "probe_edge",
+      "file": "sms_tool/proxy/edge_probe.py",
+      "line": 265,
+      "reason": "performs curl_cffi HTTP GET"
+    },
+    {
+      "name": "probe_pool",
+      "file": "sms_tool/proxy/edge_probe.py",
+      "line": 321,
+      "reason": "concurrent HTTP probe orchestration"
+    },
+    {
+      "name": "edge_health",
+      "file": "sms_tool/proxy/edge_probe.py",
+      "line": 348,
+      "reason": "aggregates EdgeVerdict objects"
+    }
+  ]
+}

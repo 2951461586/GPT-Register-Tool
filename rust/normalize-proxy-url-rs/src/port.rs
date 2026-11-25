@@ -5,6 +5,7 @@
 
 use std::sync::OnceLock;
 
+use fancy_regex::Regex as FancyRegex;
 use regex::Regex;
 
 const HEX: &[u8; 16] = b"0123456789ABCDEF";
@@ -52,6 +53,16 @@ struct CompiledRegexes {
     ipwo_custom_zone: Regex,
     infer_kookeey_pw: Regex,
     infer_user_tail: Regex,
+    user_region_retarget: Regex,
+    ipwo_retarget: Regex,
+    pw_region_retarget: Regex,
+    redact_url_auth: Regex,
+    redact_host_port_auth: Regex,
+    mask_1: Regex,
+    mask_2: Regex,
+    mask_3: FancyRegex,
+    mask_4: FancyRegex,
+    mask_5: FancyRegex,
 }
 
 fn regexes() -> Result<&'static CompiledRegexes, String> {
@@ -60,19 +71,55 @@ fn regexes() -> Result<&'static CompiledRegexes, String> {
         .get_or_init(|| {
             Ok(CompiledRegexes {
                 kookeey_pw: Regex::new(
-                    r"^(?P<base>.+?)-(?P<cc>[A-Za-z]{2})-(?P<sid>[A-Za-z0-9]+)-(?P<ttl>\d+[smhd])$",
+                    r"\A(?P<base>.+?)-(?P<cc>[A-Za-z]{2})-(?P<sid>[A-Za-z0-9]+)-(?P<ttl>\d+[smhd])\n?\z",
                 )
                 .map_err(|e| format!("ValueError: {e}"))?,
-                infer_user_region: Regex::new(r"(?:region|geo|country)-([A-Za-z]{2})(?:$|[-_:])")
+                infer_user_region: Regex::new(r"(?:region|geo|country)-([A-Za-z]{2})(?:[-_:]|\n?\z)")
                     .map_err(|e| format!("ValueError: {e}"))?,
                 ipwo_custom_zone: Regex::new(
-                    r"(?i)(?:^|[_-])custom[_-]zone[_-]([A-Za-z]{2})(?:$|[_-])",
+                    r"(?i)(?:^|[_-])custom[_-]zone[_-]([A-Za-z]{2})(?:[_-]|\n?\z)",
                 )
                 .map_err(|e| format!("ValueError: {e}"))?,
-                infer_kookeey_pw: Regex::new(r"^.+?-([A-Za-z]{2})-[A-Za-z0-9]+-\d+[smhd]$")
+                infer_kookeey_pw: Regex::new(r"\A.+?-([A-Za-z]{2})-[A-Za-z0-9]+-\d+[smhd]\n?\z")
                     .map_err(|e| format!("ValueError: {e}"))?,
-                infer_user_tail: Regex::new(r"-([A-Za-z]{2})(?:-[A-Za-z0-9]+)?$")
+                infer_user_tail: Regex::new(r"-([A-Za-z]{2})(?:-[A-Za-z0-9]+)?\n?\z")
                     .map_err(|e| format!("ValueError: {e}"))?,
+                user_region_retarget: Regex::new(
+                    r"(?P<lead>\A|[-_])(?P<tag>region|geo|country)(?P<sep>[-_])[A-Za-z]{2}(?P<tail>[-_]|\n?\z)",
+                )
+                .map_err(|e| format!("ValueError: {e}"))?,
+                ipwo_retarget: Regex::new(
+                    r"(?i)(?P<prefix>(?:\A|[_-])custom[_-]zone[_-])(?P<cc>[A-Za-z]{2})(?P<tail>[_-]|\n?\z)",
+                )
+                .map_err(|e| format!("ValueError: {e}"))?,
+                pw_region_retarget: Regex::new(
+                    r"(?i)(?P<prefix>(?:\A|[-_])(?:country|region|geo)[-_])(?P<cc>[A-Za-z]{2})(?P<tail>[-_]|\n?\z)",
+                )
+                .map_err(|e| format!("ValueError: {e}"))?,
+                redact_url_auth: Regex::new(r"(?i)\b((?:https?|socks5h?)://)[^/\s\x1c-\x1f]*@")
+                    .map_err(|e| format!("ValueError: {e}"))?,
+                redact_host_port_auth: Regex::new(
+                    r#"(?i)\b([a-z0-9.\-]+:\d+):[^\s\x1c-\x1f'"]+:[^\s\x1c-\x1f'"]+"#,
+                )
+                .map_err(|e| format!("ValueError: {e}"))?,
+                mask_1: Regex::new(r"(?i)([a-z][a-z0-9+.-]*://)[^/\s\x1c-\x1f]+@")
+                    .map_err(|e| format!("ValueError: {e}"))?,
+                mask_2: Regex::new(
+                    r#"(?i)([a-z][a-z0-9+.-]*://(?:\[[^\]]+\]|[^\s\x1c-\x1f:@/]+):\d{1,5}):[^\s\x1c-\x1f@/'"]+:[^\s\x1c-\x1f/'"]+"#,
+                )
+                .map_err(|e| format!("ValueError: {e}"))?,
+                mask_3: FancyRegex::new(
+                    r"(?<![\w:/@.*-])[^\s\x1c-\x1f:@/\\]+:[^\s\x1c-\x1f@/\\]+@(?=(?:\[[^\]]+\]|[^\s\x1c-\x1f@/\\]+):\d{1,5})",
+                )
+                .map_err(|e| format!("ValueError: {e}"))?,
+                mask_4: FancyRegex::new(
+                    r#"(?i)(?<![\w.:/-])((?:\[[^\]]+\]|[^\s\x1c-\x1f:@/]+):\d{1,5}):[^\s\x1c-\x1f:@/'"]+:[^\s\x1c-\x1f/'"]+"#,
+                )
+                .map_err(|e| format!("ValueError: {e}"))?,
+                mask_5: FancyRegex::new(
+                    r"(?i)(?<![\w.:/-])([^\s\x1c-\x1f:@/\\]+):([^\s\x1c-\x1f:@/\\]+):((?:\[[^\]]+\]|[^\s\x1c-\x1f:@/\\]+):\d{1,5})",
+                )
+                .map_err(|e| format!("ValueError: {e}"))?,
             })
         })
         .as_ref()
@@ -585,43 +632,9 @@ pub fn redact_proxy_url(
     proxy: Option<String>,
     empty_placeholder: String,
 ) -> Result<String, String> {
-    let value = normalize_str(proxy.as_deref().unwrap_or(""), "http");
-    if value.is_empty() {
-        return Ok(empty_placeholder);
-    }
-    let Some(parsed) = py_urlsplit(&value) else {
-        return Ok("***".to_string());
-    };
-    if parsed.hostname.is_empty() {
-        return Ok("***".to_string());
-    }
-    let mut host = if parsed.hostname.contains(':') && !parsed.hostname.starts_with('[') {
-        format!("[{}]", parsed.hostname)
-    } else {
-        parsed.hostname
-    };
-    if let Some(p) = parsed.port
-        && p != 0
-    {
-        host.push(':');
-        host.push_str(&p.to_string());
-    }
-    let netloc = if parsed.has_auth {
-        format!("***:***@{host}")
-    } else {
-        host
-    };
-    let scheme = if parsed.scheme.is_empty() {
-        "http"
-    } else {
-        &parsed.scheme
-    };
-    Ok(unsplit_url(
-        scheme,
-        &netloc,
-        &parsed.path,
-        &parsed.query,
-        &parsed.fragment,
+    Ok(redact_url_internal(
+        proxy.as_deref().unwrap_or(""),
+        &empty_placeholder,
     ))
 }
 
@@ -696,6 +709,228 @@ pub fn infer_proxy_country(proxy: String) -> Result<String, String> {
     Ok(String::new())
 }
 
+fn py_islower(s: &str) -> bool {
+    let mut has_cased = false;
+    for ch in s.chars() {
+        if ch.is_uppercase() {
+            return false;
+        }
+        if ch.is_lowercase() {
+            has_cased = true;
+        }
+    }
+    has_cased
+}
+
+fn redact_url_internal(proxy: &str, empty_placeholder: &str) -> String {
+    let value = normalize_str(proxy, "http");
+    if value.is_empty() {
+        return empty_placeholder.to_string();
+    }
+    let Some(parsed) = py_urlsplit(&value) else {
+        return "***".to_string();
+    };
+    if parsed.hostname.is_empty() {
+        return "***".to_string();
+    }
+    let mut host = if parsed.hostname.contains(':') && !parsed.hostname.starts_with('[') {
+        format!("[{}]", parsed.hostname)
+    } else {
+        parsed.hostname
+    };
+    if let Some(p) = parsed.port
+        && p != 0
+    {
+        host.push(':');
+        host.push_str(&p.to_string());
+    }
+    let netloc = if parsed.has_auth {
+        format!("***:***@{host}")
+    } else {
+        host
+    };
+    let scheme = if parsed.scheme.is_empty() {
+        "http"
+    } else {
+        &parsed.scheme
+    };
+    unsplit_url(
+        scheme,
+        &netloc,
+        &parsed.path,
+        &parsed.query,
+        &parsed.fragment,
+    )
+}
+
+/// Port of `_mask_credentials` (`sms_tool/proxy/entry.py:52`).
+pub fn _mask_credentials(value: String) -> Result<String, String> {
+    if !value.contains(':') {
+        return Ok(value);
+    }
+    let rx = regexes()?;
+    let mut text = value;
+    if text.contains("://") {
+        if text.contains('@') {
+            text = rx.mask_1.replace_all(&text, "${1}***:***@").into_owned();
+        }
+        if text.bytes().filter(|&b| b == b':').count() >= 3 {
+            text = rx.mask_2.replace_all(&text, "${1}:***:***").into_owned();
+        }
+    }
+    if text.contains('@') && text.contains(':') {
+        text = rx.mask_3.replace_all(&text, "***:***@").into_owned();
+    }
+    if text.bytes().filter(|&b| b == b':').count() >= 3 {
+        text = rx.mask_4.replace_all(&text, "${1}:***:***").into_owned();
+        if text.bytes().filter(|&b| b == b':').count() >= 3 {
+            text = rx.mask_5.replace_all(&text, "***:***:${3}").into_owned();
+        }
+    }
+    Ok(text)
+}
+
+/// Port of `redact_proxy_text` (`sms_tool/proxy/entry.py:499`).
+pub fn redact_proxy_text(value: Option<String>, proxy: Option<String>) -> Result<String, String> {
+    let mut text = value.unwrap_or_default();
+    let proxy_s = proxy.unwrap_or_default();
+    let raw = py_trim(&proxy_s);
+    let normalized = normalize_str(&proxy_s, "http");
+    if !normalized.is_empty() {
+        let redacted_canonical = redact_url_internal(&normalized, "");
+        if !raw.is_empty() {
+            text = text.replace(raw, &redacted_canonical);
+        }
+        text = text.replace(&normalized, &redacted_canonical);
+        if let Some(without_slash) = normalized.strip_suffix('/') {
+            text = text.replace(without_slash, &redacted_canonical);
+        }
+    }
+    let rx = regexes()?;
+    if text.contains("://") && text.contains('@') {
+        text = rx
+            .redact_url_auth
+            .replace_all(&text, "${1}***:***@")
+            .into_owned();
+    }
+    if text.bytes().filter(|&b| b == b':').count() >= 3 {
+        text = rx
+            .redact_host_port_auth
+            .replace_all(&text, "${1}:***:***")
+            .into_owned();
+    }
+    Ok(text)
+}
+
+/// Port of `retarget_region` (`sms_tool/proxy/entry.py:582`).
+pub fn retarget_region(proxy: String, iso_code: String) -> Result<String, String> {
+    let iso = py_trim(&iso_code).to_uppercase();
+    if proxy.is_empty() || iso.is_empty() {
+        return Ok(proxy);
+    }
+    let Some(parsed) = py_urlsplit(&proxy) else {
+        return Ok(proxy);
+    };
+    let mut username = percent_decode(&parsed.username);
+    let mut password = percent_decode(&parsed.password);
+    if username.is_empty() && password.is_empty() {
+        return Ok(proxy);
+    }
+    let rx = regexes()?;
+    let mut changed = false;
+    if let Some(caps) = rx.user_region_retarget.captures(&username) {
+        let m = caps.get(0).map(|m| (m.start(), m.end()));
+        if let Some((start, end)) = m {
+            let replacement = format!(
+                "{}{}{}{}{}",
+                &caps["lead"], &caps["tag"], &caps["sep"], iso, &caps["tail"]
+            );
+            username.replace_range(start..end, &replacement);
+            changed = true;
+        }
+    }
+    if let Some(caps) = rx.ipwo_retarget.captures(&username) {
+        let m = caps.get(0).map(|m| (m.start(), m.end()));
+        if let Some((start, end)) = m {
+            let replacement = format!("{}{}{}", &caps["prefix"], iso, &caps["tail"]);
+            username.replace_range(start..end, &replacement);
+            changed = true;
+        }
+    }
+    if let Some(caps) = rx.kookeey_pw.captures(&password) {
+        password = format!(
+            "{}-{}-{}-{}",
+            &caps["base"], iso, &caps["sid"], &caps["ttl"]
+        );
+        changed = true;
+    } else if let Some(caps) = rx.pw_region_retarget.captures(&password) {
+        let m = caps.get(0).map(|m| (m.start(), m.end()));
+        if let Some((start, end)) = m {
+            let cc_out = if py_islower(&caps["cc"]) {
+                iso.to_lowercase()
+            } else {
+                iso.clone()
+            };
+            let replacement = format!("{}{}{}", &caps["prefix"], cc_out, &caps["tail"]);
+            password.replace_range(start..end, &replacement);
+            changed = true;
+        }
+    }
+    if !changed {
+        return Ok(proxy);
+    }
+    if parsed.hostname.is_empty() {
+        let cleaned: String = proxy
+            .chars()
+            .filter(|c| !matches!(c, '\t' | '\r' | '\n'))
+            .collect();
+        return Ok(cleaned);
+    }
+    Ok(rebuild_credentials(&parsed, &username, &password, &proxy))
+}
+
+/// Port of `infer_region` (`sms_tool/proxy/entry.py:735`).
+pub fn infer_region(proxy: String) -> Result<String, String> {
+    if proxy.is_empty() {
+        return Ok(String::new());
+    }
+    let Some(parsed) = py_urlsplit(&proxy) else {
+        return Ok(String::new());
+    };
+    let username = percent_decode(&parsed.username);
+    let password = percent_decode(&parsed.password);
+    let rx = regexes()?;
+    if let Some(m) = rx
+        .infer_user_region
+        .captures(&username)
+        .and_then(|c| c.get(1))
+    {
+        return Ok(m.as_str().to_uppercase());
+    }
+    if let Some(m) = rx
+        .ipwo_custom_zone
+        .captures(&username)
+        .and_then(|c| c.get(1))
+    {
+        return Ok(m.as_str().to_uppercase());
+    }
+    if let Some(m) = rx
+        .infer_kookeey_pw
+        .captures(&password)
+        .and_then(|c| c.get(1))
+    {
+        return Ok(m.as_str().to_uppercase());
+    }
+    if let Some(m) = rx
+        .infer_user_tail
+        .captures(&username)
+        .and_then(|c| c.get(1))
+    {
+        return Ok(m.as_str().to_uppercase());
+    }
+    Ok(String::new())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -720,6 +955,31 @@ mod tests {
             infer_proxy_country("http://user-country-jp-session-9988:pw@gate.example:7000".into())
                 .expect("cc"),
             "JP"
+        );
+        assert_eq!(
+            _mask_credentials("http://alice:p@ss@gw.example:8080".into()).expect("mask"),
+            "http://***:***@gw.example:8080"
+        );
+        assert_eq!(
+            redact_proxy_text(
+                Some("err via http://u1:s1@gw.example:8080/".into()),
+                Some("http://u1:s1@gw.example:8080/".into()),
+            )
+            .expect("redact_text"),
+            "err via http://***:***@gw.example:8080/"
+        );
+        assert_eq!(
+            retarget_region(
+                "http://user-region-US-sid-abc123:pw@gw.example:8080".into(),
+                "jp".into(),
+            )
+            .expect("retarget"),
+            "http://user-region-JP-sid-abc123:pw@gw.example:8080"
+        );
+        assert_eq!(
+            infer_region("http://acct_custom_zone_DE_s1:pw@ipwo.example:9000".into())
+                .expect("region"),
+            "DE"
         );
     }
 }

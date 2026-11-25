@@ -87,9 +87,9 @@ documented pairs above), `startup` (the CLI/command seam, or a heavy optional
 stack such as `playwright` / `curl_cffi` / `camoufox`), `provider` (a
 provider/browser subsystem), `test-seam` (a path that exists only so tests can
 redirect the store — currently none) and `deferred` (a sibling imported late to
-keep the module graph acyclic or the import light). Current baseline: 420
-delayed statements over 319 distinct edges — 8 `cycle`, 95 `startup`, 34
-`provider`, 182 `deferred`.
+keep the module graph acyclic or the import light). Authoritative live counts
+are maintained in `scripts/delayed_import_baseline.json` and mirrored into the
+auto-generated ratchet table below (never copied by hand).
 
 A **new `deferred` edge cannot be adopted without a written reason**: it needs an
 entry in `scripts/delayed_import_reasons.json` (`reason` + `why`), and
@@ -214,7 +214,7 @@ above.
 | Delayed cross-directory edges | 321 |
 | Delayed imports in the package | 461 (baseline 461) |
 | Functions at or above 150 lines | 32 (frozen, `scripts/function_length_ratchet.py`) |
-| Claimed tracked `sms_tool` modules | 295 of 295 (0 unclaimed, 38 directory-map groups) |
+| Claimed tracked `sms_tool` modules | 294 of 294 (0 unclaimed, 38 directory-map groups) |
 <!-- ratchet-numbers:end architecture -->
 
 `tests/config/test_pilens_scope_config.py` pins the scope and the formatting
@@ -343,10 +343,11 @@ no file behind it.
 - **Rule 6 — resolved 2026-09-12.** `sms_tool/paypal/orchestrator.py` no
   longer imports `gen_pp_link`. The execution layer consumes the URL the
   caller owns; when none exists the command adapter
-  (`sms_tool/commands/payment_links.py`) injects `link_factory=generate_pp_link`
-  so lazy generation stays adapter-owned, and without a factory a missing URL
-  is an explicit `paypal_link_missing` failure instead of a silent second
-  order. Enforced by the same grep as the rule row.
+  (`sms_tool/commands/payment_links.py`) injects a `link_factory` backed by
+  `sms_tool/pay_link/` (`generate_payment_link`, replacing the retired
+  `generate_pp_link`) so lazy generation stays adapter-owned, and without a
+  factory a missing URL is an explicit `paypal_link_missing` failure instead of
+  a silent second order. Enforced by the same grep as the rule row.
 - **Rule 14 — restated 2026-09-12 (decision).** The pre-hardening snapshot
   assigned *result persistence* to `paypal.config_picker` in its module table
   and forbade "SQLite business rules" in the same breath; those two statements

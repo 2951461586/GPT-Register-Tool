@@ -1,0 +1,55 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/registration/sentinel_tokens.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "sentinel-tokens-rs",
+  "exports": [
+    {
+      "name": "_solve_pow",
+      "file": "sms_tool/registration/sentinel_tokens.py",
+      "line": 208,
+      "params": [
+        {
+          "name": "seed",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "difficulty_hex",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "assert_sentinel_device_id",
+      "file": "sms_tool/registration/sentinel_tokens.py",
+      "line": 149,
+      "reason": "nested dict + JSON payload validation; kept in Python"
+    },
+    {
+      "name": "_build_sentinel_pow_token",
+      "file": "sms_tool/registration/sentinel_tokens.py",
+      "line": 235,
+      "reason": "prints operator logs and delegates heavy PoW hashing to _solve_pow"
+    },
+    {
+      "name": "_extract_sentinel_http",
+      "file": "sms_tool/registration/sentinel_tokens.py",
+      "line": 256,
+      "reason": "performs curl_cffi HTTP requests"
+    }
+  ]
+}

@@ -1,10 +1,14 @@
+import importlib
 import json
 import logging
 import os
 import re
+import sys
 import threading
 import time
 import uuid
+from pathlib import Path
+from typing import Any
 
 from curl_cffi import requests as curl_requests
 
@@ -22,6 +26,28 @@ from ..observability.operator_output import emit as _emit
 from ..sentinel import client as _sentinel_client
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _load_native_sentinel_tokens() -> Any | None:
+    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
+    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_SENTINEL_TOKENS") or "").strip().lower()
+    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
+        return None
+    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "sentinel-tokens-rs" / "python"
+    if pkg_dir.is_dir():
+        pkg_str = str(pkg_dir)
+        if pkg_str not in sys.path:
+            sys.path.insert(0, pkg_str)
+    try:
+        return importlib.import_module("sentinel_tokens_rs")
+    except (ImportError, OSError):
+        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
+            raise
+        return None
+
+
+_NATIVE_SENTINEL_TOKENS = _load_native_sentinel_tokens()
+_NATIVE_SOLVE_POW = getattr(_NATIVE_SENTINEL_TOKENS, "_solve_pow", None)
 
 SENTINEL_CACHE_FILE = runtime_file(CFG, "sentinel_cache.json")
 
@@ -207,6 +233,8 @@ def _import_sentinel_cookies(session, sentinel_data, did):
 
 def _solve_pow(seed, difficulty_hex):
     """Solve sentinel proof-of-work (SHA3-512). Mirrors standalone-phone-protocol."""
+    if _NATIVE_SOLVE_POW is not None and isinstance(seed, str) and isinstance(difficulty_hex, str):
+        return _NATIVE_SOLVE_POW(seed, difficulty_hex)
     import base64
     import hashlib
     import struct
