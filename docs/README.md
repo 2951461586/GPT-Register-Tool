@@ -52,7 +52,7 @@ Directory layout (since 2026-09-06):
   `python -m sms_tool --doctor`）。每条清单按顺序可执行，并指向负责该行为的
   `file.py:line`。排错时**先读这个**，再去读契约文档。
 - [Rust Acceleration](current/rust-acceleration.md) - `native/sentinel_vm/` 进程内
-  Rust Sentinel FFI（零 Node.js 依赖）与 14 个 `rust-anything` PyO3 热点扩展的覆盖范围、实测加速比与开关约定。
+  Rust Sentinel FFI（零 Node.js 依赖）与 22 个 `rust-anything` PyO3 热点扩展的覆盖范围、实测加速比与开关约定。
 - [Type Checking](current/typing.md) - pyright 逐文件 ratchet：为什么是 ratchet、
   如何安装与运行、修一条类型错误的首选写法。
 - [C# Gates](current/dotnet-gates.md) - C# 构建告警门禁：零基线、为什么解析控制台
@@ -64,6 +64,9 @@ Directory layout (since 2026-09-06):
 
 ## Release notes（docs/releases/，一个发布标签一份，不回写）
 
+- [v2026.11.25 发布说明](releases/release-v2026.11.25.md) - GPT Team 5 席位试用优惠检测与原生进程内托管提链（`team_trial`，无需外部 CDK）、
+  AT 401 重登恢复链路升级（独立 `relogin` 代理泳道、OTP 前换出口、旧号无密码回退与探活闪断重试）、
+  新增 Wave-3/Wave-4 共 8 个 `rust-anything` PyO3 扩展（全仓 22 个 crate · 42 函数 · 5,609/5,609 用例一致），以及退役驱动壳与未用导入清理。
 - [v2026.11.24 发布说明](releases/release-v2026.11.24.md) - 纯 Rust 进程内 Sentinel VM（零 Node.js 依赖）、
   14 个 `rust-anything` PyO3 热点扩展（4,824/4,824 用例一致）、15 种支付方式统一对接外部提链服务器并彻底退役旧版内置提取器、
   WPF「支付链接提取」升级，以及代理池/指纹/协议注册加固与冗余清理。

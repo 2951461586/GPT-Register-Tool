@@ -1,0 +1,121 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/payment/wire.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "payment-wire-rs",
+  "exports": [
+    {
+      "name": "extract_web_deployment_attestation",
+      "file": "sms_tool/payment/wire.py",
+      "line": 367,
+      "params": [
+        {
+          "name": "html",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "_compact_diagnostic",
+      "file": "sms_tool/payment/wire.py",
+      "line": 500,
+      "params": [
+        {
+          "name": "value",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "limit",
+          "ts_type": "number",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "_new_session",
+      "file": "sms_tool/payment/wire.py",
+      "line": 260,
+      "reason": "constructs requests.Session with proxies"
+    },
+    {
+      "name": "_checkout_headers",
+      "file": "sms_tool/payment/wire.py",
+      "line": 278,
+      "reason": "small header dict assembly; kept in Python"
+    },
+    {
+      "name": "_checkout_device_id",
+      "file": "sms_tool/payment/wire.py",
+      "line": 299,
+      "reason": "small header dict lookup; kept in Python"
+    },
+    {
+      "name": "_is_checkout_create_url",
+      "file": "sms_tool/payment/wire.py",
+      "line": 320,
+      "reason": "trivial suffix check; kept in Python"
+    },
+    {
+      "name": "_checkout_sentinel_headers",
+      "file": "sms_tool/payment/wire.py",
+      "line": 324,
+      "reason": "calls sentinel token generator over network"
+    },
+    {
+      "name": "env_web_deployment_attestation",
+      "file": "sms_tool/payment/wire.py",
+      "line": 358,
+      "reason": "reads os.environ"
+    },
+    {
+      "name": "_html_attestation_fetch_enabled",
+      "file": "sms_tool/payment/wire.py",
+      "line": 381,
+      "reason": "reads os.environ"
+    },
+    {
+      "name": "fetch_web_deployment_attestation",
+      "file": "sms_tool/payment/wire.py",
+      "line": 391,
+      "reason": "performs curl_cffi HTTP GET"
+    },
+    {
+      "name": "_checkout_attestation_headers",
+      "file": "sms_tool/payment/wire.py",
+      "line": 428,
+      "reason": "calls fetch_web_deployment_attestation"
+    },
+    {
+      "name": "_checkout_post",
+      "file": "sms_tool/payment/wire.py",
+      "line": 447,
+      "reason": "performs curl_cffi HTTP POST"
+    },
+    {
+      "name": "_checkout_get",
+      "file": "sms_tool/payment/wire.py",
+      "line": 481,
+      "reason": "performs curl_cffi HTTP GET"
+    }
+  ]
+}

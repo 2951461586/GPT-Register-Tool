@@ -1,0 +1,19 @@
+{"fn": "proxy_egress_key", "args": [true], "ok": "http://true:0"}
+{"fn": "proxy_egress_key", "args": [["a", 1]], "error": "ValueError: \"'a', 1\" does not appear to be an IPv4 or IPv6 address"}
+{"fn": "proxy_egress_key", "args": [null], "ok": ""}
+{"fn": "proxy_egress_key", "args": [0], "ok": ""}
+{"fn": "proxy_egress_key", "args": [[]], "ok": ""}
+{"fn": "proxy_egress_key", "args": [{"a": {"b": "c"}}], "error": "ValueError: Port could not be cast to integer value as \" {'b': 'c'}}\""}
+{"fn": "proxy_egress_key", "args": [{}], "ok": ""}
+{"fn": "proxy_egress_key", "args": [{"a": "b"}], "error": "ValueError: Port could not be cast to integer value as \" 'b'}\""}
+{"fn": "proxy_egress_key", "args": ["x"], "ok": "http://x:0"}
+{"fn": "proxy_egress_key", "args": [{"zebra": 1, "apple": 2, "10": 3, "2": 4, "é": 5, "Apple": 6}], "error": "ValueError: Port could not be cast to integer value as \" 1, 'apple': 2, '10': 3, '2': 4, 'é': 5, 'Apple': 6}\""}
+{"fn": "proxy_egress_key", "args": [{"n": 9007199254740993, "f": 1e+21, "t": 0.1, "neg": -7}], "error": "ValueError: Port could not be cast to integer value as \" 9007199254740993, 'f': 1e+21, 't': 0.1, 'neg': -7}\""}
+{"fn": "proxy_egress_key", "args": [[3, 1, 2]], "error": "ValueError: '3, 1, 2' does not appear to be an IPv4 or IPv6 address"}
+{"fn": "proxy_egress_key", "args": [""], "ok": ""}
+{"fn": "proxy_egress_key", "args": [null], "ok": ""}
+{"fn": "proxy_egress_key", "args": ["http://user-region-US-sid-sess1001-t-5:pw1@gw.example:8080"], "ok": "http://gw.example:8080|sid=sess1001"}
+{"fn": "proxy_egress_key", "args": ["socks5h://u1:base-DE-sess2002-15m@kookeey.example:1080"], "ok": "socks5h://kookeey.example:1080|sid=sess2002"}
+{"fn": "proxy_egress_key", "args": ["proxy.example:9000:user-sid-sess3003:pw2"], "ok": "http://proxy.example:9000|sid=sess3003"}
+{"fn": "proxy_egress_key", "args": ["http://127.0.0.1:7890"], "ok": "http://127.0.0.1:7890"}
+{"fn": "proxy_egress_key", "args": ["http://[::1]:10808"], "ok": "http://::1:10808"}

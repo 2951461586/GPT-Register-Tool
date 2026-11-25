@@ -286,6 +286,7 @@ namespace SmsWorkbench.Views
             return value
                 .Replace("检测失败", Loc.T("检测失败"))
                 .Replace("可试用Plus", Loc.T("可试用Plus"))
+                .Replace("可试用Team(5席)", Loc.T("可试用Team(5席)"))
                 .Replace("已订阅", Loc.T("已订阅"))
                 .Replace("无优惠", Loc.T("无优惠"));
         }

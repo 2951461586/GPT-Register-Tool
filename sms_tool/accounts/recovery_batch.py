@@ -68,6 +68,14 @@ def _probe_is_fresh_definitive(probe: dict[str, Any] | None) -> TypeGuard[dict[s
     return str(probe.get("status") or "").strip().lower() in _FRESH_PROBE_DEFINITIVE_STATUSES
 
 
+def _relogin_proxy_for_account(
+    account: dict[str, Any], *, proxy: str | None, relogin_pool: list[str], index: int
+) -> str | None:
+    if proxy or len(relogin_pool) <= 1 or (account.get("identity_context") or {}).get("proxy_affinity"):
+        return proxy
+    return relogin_pool[index % len(relogin_pool)]
+
+
 def _heavy_lane_slots(max_workers: int) -> int:
     """Capacity of a heavy lane (browser fallback / 401 relogin).
 
@@ -127,6 +135,7 @@ def refresh_local_quota_statuses(
         mailbox_relogin_allowed,
         mark_quota_status,
         probe_account_liveness,
+        proxy_pool_for,
         relogin_codex_account,
         runtime_file,
     )
@@ -134,14 +143,9 @@ def refresh_local_quota_statuses(
     if relogin_on_401:
         _refresh_mailbox_quarantine_state()
     accounts = _local_quota_accounts(emails)
+    relogin_pool = proxy_pool_for(CFG, "relogin") if (relogin_on_401 and not proxy) else []
     run_id = uuid.uuid4().hex
-    _emit_account_batch_event(
-        run_id,
-        "batch_started",
-        "running",
-        total=len(accounts),
-        detail="账号测活开始",
-    )
+    _emit_account_batch_event(run_id, "batch_started", "running", total=len(accounts), detail="账号测活开始")
     # Liveness probe is a light GET; heavy 401 relogins and browser fallbacks use narrower semaphores.
     max_workers = max(1, min(int(workers or 1), 16, len(accounts) or 1))
     heavy_lane_slots = _heavy_lane_slots(max_workers)
@@ -176,6 +180,7 @@ def refresh_local_quota_statuses(
                 account_identity=account_identity,
                 browser_fetch_for_account=browser_fetch_for_account,
                 probe_account_liveness=probe_account_liveness,
+                pool_offset=index,
             )
             initial_status = str(probe.get("quota_status") or probe.get("status") or "unknown")
             liveness_401 = _probe_is_token_invalid(probe)
@@ -187,7 +192,7 @@ def refresh_local_quota_statuses(
                 email=email,
                 probe=probe,
                 relogin_eligible=relogin_eligible,
-                proxy=proxy,
+                proxy=_relogin_proxy_for_account(account, proxy=proxy, relogin_pool=relogin_pool, index=index),
                 relogin_mode=relogin_mode,
                 account_deadline=account_deadline,
                 batch_deadline=batch_deadline,
@@ -301,6 +306,7 @@ def _probe_account_with_browser_fallback(
     account_identity: Any,
     browser_fetch_for_account: Any,
     probe_account_liveness: Any,
+    pool_offset: int = 0,
 ) -> dict[str, Any]:
     if is_permanently_deactivated(account):
         return {
@@ -324,7 +330,9 @@ def _probe_account_with_browser_fallback(
     if _probe_is_fresh_definitive(fresh):
         probe = {**fresh, "probe_source": "scan_reuse"}
     else:
-        probe = _probe_liveness_with_retries(account, proxy=proxy, timeout=probe_timeout, browser_fetch=None)
+        probe = _probe_liveness_with_retries(
+            account, proxy=proxy, timeout=probe_timeout, browser_fetch=None, pool_offset=pool_offset
+        )
     if not isinstance(probe, dict):
         probe = {
             "ok": False,
@@ -613,6 +621,7 @@ def _probe_liveness_with_retries(
     proxy: str | None,
     timeout: int,
     browser_fetch: Any = None,
+    pool_offset: int = 0,
 ) -> dict[str, Any]:
     """Retry transport-only failures against the configured liveness pool."""
     from .account_recovery import (
@@ -633,8 +642,13 @@ def _probe_liveness_with_retries(
         candidates = [None]
         source = "registration_affinity"
     else:
-        candidates = configured[:3] if configured else [None]
-        source = "operation_pool" if configured else "default"
+        if len(configured) > 1 and pool_offset:
+            start = int(pool_offset) % len(configured)
+            rotated = configured[start:] + configured[:start]
+        else:
+            rotated = configured
+        candidates = rotated[:3] if rotated else [None]
+        source = "operation_pool" if rotated else "default"
     last: dict[str, Any] = {}
     for candidate in candidates:
         effective_proxy = candidate

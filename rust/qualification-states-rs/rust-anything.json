@@ -1,0 +1,85 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/payment/qualification_states.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "qualification-states-rs",
+  "exports": [
+    {
+      "name": "qualification_state",
+      "file": "sms_tool/payment/qualification_states.py",
+      "line": 166,
+      "params": [
+        {
+          "name": "result",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "qualification_label",
+      "file": "sms_tool/payment/qualification_states.py",
+      "line": 203,
+      "params": [
+        {
+          "name": "result",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "method",
+          "ts_type": "unknown",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "method_label",
+      "file": "sms_tool/payment/qualification_states.py",
+      "line": 157,
+      "reason": "0.59x on rust-anything bench (trivial dict lookup); kept in Python"
+    },
+    {
+      "name": "qualification_state_group",
+      "file": "sms_tool/payment/qualification_states.py",
+      "line": 247,
+      "reason": "0.52x on rust-anything bench (trivial 3-way string check); kept in Python"
+    },
+    {
+      "name": "is_country_mismatch",
+      "file": "sms_tool/payment/qualification_states.py",
+      "line": 104,
+      "reason": "variadic *texts helper; logic inlined into qualification_state/label"
+    },
+    {
+      "name": "is_risk_blocked",
+      "file": "sms_tool/payment/qualification_states.py",
+      "line": 117,
+      "reason": "variadic *texts helper; logic inlined into qualification_label"
+    },
+    {
+      "name": "_text",
+      "file": "sms_tool/payment/qualification_states.py",
+      "line": 162,
+      "reason": "internal string normalization helper"
+    }
+  ]
+}

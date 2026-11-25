@@ -24,6 +24,7 @@ def test_adapter_registry_routes_methods_and_rejects_duplicates():
 def test_default_registry_covers_catalog_exactly_once():
     assert set(PAYMENT_ADAPTERS.methods()) == set(PAYMENT_METHODS)
     for method, definition in PAYMENT_METHODS.items():
-        assert definition.adapter == "extract_server"
+        expected_adapter = "team_trial_direct" if method == "team_trial" else "extract_server"
+        assert definition.adapter == expected_adapter
         assert definition.script == ""
-        assert PAYMENT_ADAPTERS.get(method).key == "extract_server"
+        assert PAYMENT_ADAPTERS.get(method).key == expected_adapter

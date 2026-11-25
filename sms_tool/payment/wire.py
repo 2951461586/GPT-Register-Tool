@@ -28,9 +28,12 @@ r"""中性支付内核 —— Checkout 原语、会话工厂与共享失败词�
 from __future__ import annotations
 from ..transport import endpoints
 
+import importlib
 import json
 import os
 import re
+import sys
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -45,6 +48,30 @@ try:
     from curl_cffi import requests as curl_requests
 except ImportError:
     curl_requests = None
+
+
+def _load_native_payment_wire() -> Any | None:
+    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
+    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_PAYMENT_WIRE") or "").strip().lower()
+    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
+        return None
+    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "payment-wire-rs" / "python"
+    if pkg_dir.is_dir():
+        pkg_str = str(pkg_dir)
+        if pkg_str not in sys.path:
+            sys.path.insert(0, pkg_str)
+    try:
+        return importlib.import_module("payment_wire_rs")
+    except (ImportError, OSError):
+        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
+            raise
+        return None
+
+
+_NATIVE_PAYMENT_WIRE = _load_native_payment_wire()
+_NATIVE_EXTRACT_WEB_DEPLOYMENT_ATTESTATION = getattr(_NATIVE_PAYMENT_WIRE, "extract_web_deployment_attestation", None)
+_NATIVE_COMPACT_DIAGNOSTIC = getattr(_NATIVE_PAYMENT_WIRE, "_compact_diagnostic", None)
+_NATIVE_SCALAR_TYPES = (str, type(None), bool, int, float)
 
 
 # The cross-lane kernel's surface, and it is exactly the ownership list
@@ -339,6 +366,8 @@ def env_web_deployment_attestation() -> str:
 
 def extract_web_deployment_attestation(html: str) -> str:
     """Extract ``webDeploymentAttestation`` from a ChatGPT HTML/RSC page body."""
+    if _NATIVE_EXTRACT_WEB_DEPLOYMENT_ATTESTATION is not None and isinstance(html, _NATIVE_SCALAR_TYPES):
+        return str(_NATIVE_EXTRACT_WEB_DEPLOYMENT_ATTESTATION(html))
     text = str(html or "")
     for pattern in (_ATTESTATION_JSON_RE, _ATTESTATION_ALT_RE):
         match = pattern.search(text)
@@ -469,5 +498,11 @@ def _checkout_get(url, access_token, cookie_header="", proxy="", timeout=30, ext
 
 
 def _compact_diagnostic(value: Any, limit: int = 180) -> str:
+    if (
+        _NATIVE_COMPACT_DIAGNOSTIC is not None
+        and isinstance(value, _NATIVE_SCALAR_TYPES)
+        and isinstance(limit, (int, float))
+    ):
+        return str(_NATIVE_COMPACT_DIAGNOSTIC(value, limit))
     text = re.sub(r"\s+", " ", str(value or "")).strip()
     return text if len(text) <= limit else text[: limit - 3] + "..."

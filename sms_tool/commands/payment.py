@@ -691,6 +691,14 @@ def _print_payment_qualification_summary(result: Mapping[str, Any]) -> None:
         safe_print(f"[!] {item.get('email') or ''}: {badge}{detail}")
 
 
+def _apply_team_trial_options(args: Any, method: str, target: dict[str, Any]) -> None:
+    if method != "team_trial":
+        return
+    target["workspace_name"] = str(getattr(args, "team_workspace_name", None) or "MyTeam").strip()
+    target["seat_quantity"] = _safe_int(getattr(args, "team_seat_quantity", 5), 5)
+    target["verify_eligibility"] = not bool(getattr(args, "skip_team_eligibility_check", False))
+
+
 def extract_payment_link(args: Any, context: PaymentCommandContext) -> None:
     """Extract a supported protocol payment link from an AT or saved account."""
     from ..desktop.ipc import emit_event, emit_result
@@ -727,12 +735,8 @@ def extract_payment_link(args: Any, context: PaymentCommandContext) -> None:
     email_file = str(getattr(args, "email_file", None) or "").strip()
     if email_file:
         if method == "blik" and not getattr(args, "payment_probe_only", False):
-            output(
-                {
-                    "ok": False,
-                    "error": "BLIK is single-account only; use --email or --session-file with --blik-code",
-                }
-            )
+            err = "BLIK is single-account only; use --email or --session-file with --blik-code"
+            output({"ok": False, "error": err})
             raise SystemExit(2)
 
         from ..payment.batch import run_payment_batch
@@ -770,6 +774,7 @@ def extract_payment_link(args: Any, context: PaymentCommandContext) -> None:
             "checkout_country": route["checkout_country"],
             "require_zero": not getattr(args, "no_require_zero", False),
         }
+        _apply_team_trial_options(args, method, payment_kwargs)
         try:
             report = run_payment_batch(
                 emails,
@@ -872,6 +877,7 @@ def extract_payment_link(args: Any, context: PaymentCommandContext) -> None:
         kwargs["qr_path"] = getattr(args, "qr_path", None)
     if method == "blik":
         kwargs["blik_code"] = getattr(args, "blik_code", None)
+    _apply_team_trial_options(args, method, kwargs)
 
     result = generate_payment_link(
         access_token=at,

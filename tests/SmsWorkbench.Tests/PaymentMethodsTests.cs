@@ -14,15 +14,22 @@ public sealed class PaymentMethodsTests
     [InlineData("momo_qr", "momo")]
     [InlineData("go-pay", "gopay")]
     [InlineData("grab pay", "grabpay")]
+    [InlineData("team", "team_trial")]
+    [InlineData("team-trial", "team_trial")]
     public void NormalizeKeepsAliasesInsideTheCatalog(string value, string expected)
         => Assert.Equal(expected, PaymentMethods.Normalize(value));
 
     [Fact]
     public void SingleAccountAndBatchSurfacesUseOneCatalog()
     {
-        Assert.Equal(15, PaymentMethods.All.Count);
+        Assert.Equal(16, PaymentMethods.All.Count);
         Assert.Equal("USD", PaymentMethods.Find("paypal").Currency);
-        Assert.All(PaymentMethods.All, method => Assert.Equal("extract_server", method.Adapter));
+        Assert.All(
+            PaymentMethods.All,
+            method => Assert.Equal(method.Id == "team_trial" ? "team_trial_direct" : "extract_server", method.Adapter));
+        Assert.Contains(PaymentMethods.All, method => method.Id == "team_trial" && method.BatchEnabled && !method.RegistrationEnabled);
+        Assert.Contains(PaymentMethods.BatchOptions, method => method.Id == "team_trial");
+        Assert.DoesNotContain(PaymentMethods.RegistrationOptions, method => method.Id == "team_trial");
         Assert.Equal(3, PaymentMethods.All.Count(method => method.Id is "gopay" or "gcash" or "grabpay"));
         Assert.Contains(PaymentMethods.All, method => method.Id == "blik" && !method.BatchEnabled);
         Assert.Contains(PaymentMethods.All, method => method.Id == "direct_card");

@@ -447,8 +447,17 @@ def _print_promotion_summary(result):
     results: list = _raw_results if isinstance(_raw_results, list) else []
     rows = [item for item in results if isinstance(item, dict)]
     ok = sum(1 for item in rows if item.get("ok"))
-    print(f"[*] 优惠检测完成：共 {len(rows)} 个账号，检测成功 {ok}，失败 {len(rows) - ok}")
-    logger.info("promotion check finished: ok=%s/%s", ok, len(rows))
+    team_eligible = int(result.get("team_trial_eligible") or 0)
+    if not team_eligible:
+        team_eligible = sum(
+            1
+            for item in rows
+            if bool(item.get("team_trial_eligible"))
+            or (isinstance(item.get("probe"), dict) and bool(item["probe"].get("team_trial_eligible")))
+        )
+    team_suffix = f"，Team 5席试用 {team_eligible}" if team_eligible else ""
+    print(f"[*] 优惠检测完成：共 {len(rows)} 个账号，检测成功 {ok}，失败 {len(rows) - ok}{team_suffix}")
+    logger.info("promotion check finished: ok=%s/%s team_trial_eligible=%s", ok, len(rows), team_eligible)
     for item in rows:
         if item.get("ok"):
             continue

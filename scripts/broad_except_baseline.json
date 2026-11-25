@@ -1,76 +1,12 @@
 {
   "_comment": "Broad-except gate state (see scripts/broad_except_ratchet.py). 'files' is frozen debt with a hard ceiling in 'policy'; 'whitelist' is the reviewed set where a broad handler is the design. A file absent from both has an allowance of 0.",
   "files": {
-    "services/protocol-payment/blik/blik_qr_extract.py": {
-      "broad": 14,
-      "silent": 0
-    },
-    "services/protocol-payment/common/checkout_session.py": {
-      "broad": 1,
-      "silent": 0
-    },
-    "services/protocol-payment/common/geo.py": {
-      "broad": 3,
-      "silent": 0
-    },
-    "services/protocol-payment/common/payload_helpers.py": {
-      "broad": 1,
-      "silent": 0
-    },
-    "services/protocol-payment/common/protocol_core.py": {
-      "broad": 2,
-      "silent": 0
-    },
-    "services/protocol-payment/common/proxy_state.py": {
-      "broad": 1,
-      "silent": 0
-    },
-    "services/protocol-payment/common/stripe_flow.py": {
-      "broad": 2,
-      "silent": 0
-    },
-    "services/protocol-payment/direct_card/direct_card_extract.py": {
-      "broad": 5,
-      "silent": 0
-    },
-    "services/protocol-payment/ideal/ideal_qr_extract.py": {
-      "broad": 16,
-      "silent": 0
-    },
-    "services/protocol-payment/kakao/kakao_extract.py": {
-      "broad": 6,
-      "silent": 0
-    },
-    "services/protocol-payment/momo/ac_paylink_core.py": {
-      "broad": 7,
-      "silent": 0
-    },
-    "services/protocol-payment/momo/momo_qr_extract.py": {
-      "broad": 12,
-      "silent": 0
-    },
-    "services/protocol-payment/momo/run_momo.py": {
-      "broad": 2,
-      "silent": 0
-    },
-    "services/protocol-payment/pix/pix_core.py": {
-      "broad": 9,
-      "silent": 0
-    },
-    "services/protocol-payment/pix/pix_extract.py": {
-      "broad": 9,
-      "silent": 0
-    },
-    "services/protocol-payment/twint/twint_extract.py": {
-      "broad": 16,
-      "silent": 0
-    },
     "sms_tool/account_seed.py": {
       "broad": 2,
       "silent": 1
     },
     "sms_tool/accounts/account_2fa.py": {
-      "broad": 5,
+      "broad": 4,
       "silent": 0
     },
     "sms_tool/accounts/account_email_change.py": {
@@ -214,7 +150,7 @@
       "silent": 1
     },
     "sms_tool/doctor.py": {
-      "broad": 9,
+      "broad": 8,
       "silent": 0
     },
     "sms_tool/geo/clock.py": {
@@ -285,16 +221,12 @@
       "broad": 1,
       "silent": 0
     },
-    "sms_tool/pay_link/adapters.py": {
-      "broad": 1,
-      "silent": 0
-    },
     "sms_tool/pay_link/core.py": {
       "broad": 1,
       "silent": 0
     },
     "sms_tool/payment/batch.py": {
-      "broad": 4,
+      "broad": 3,
       "silent": 0
     },
     "sms_tool/payment/capability.py": {
@@ -320,26 +252,6 @@
     "sms_tool/payment/qualification_batch.py": {
       "broad": 6,
       "silent": 2
-    },
-    "sms_tool/payment/regional_payment_adapter.py": {
-      "broad": 1,
-      "silent": 0
-    },
-    "sms_tool/payment/routing.py": {
-      "broad": 1,
-      "silent": 0
-    },
-    "sms_tool/payment/upi_billing.py": {
-      "broad": 1,
-      "silent": 0
-    },
-    "sms_tool/payment/upi_exit_health.py": {
-      "broad": 4,
-      "silent": 0
-    },
-    "sms_tool/payment/upi_fingerprint.py": {
-      "broad": 4,
-      "silent": 0
     },
     "sms_tool/payment/wire.py": {
       "broad": 2,
@@ -387,14 +299,6 @@
     },
     "sms_tool/paypal/session.py": {
       "broad": 4,
-      "silent": 0
-    },
-    "sms_tool/paypal_link/gen_link.py": {
-      "broad": 6,
-      "silent": 0
-    },
-    "sms_tool/paypal_link/reconciliation.py": {
-      "broad": 3,
       "silent": 0
     },
     "sms_tool/phone/config.py": {
@@ -490,11 +394,11 @@
       "silent": 1
     },
     "sms_tool/proxy/entry.py": {
-      "broad": 4,
+      "broad": 2,
       "silent": 0
     },
     "sms_tool/proxy/pool.py": {
-      "broad": 10,
+      "broad": 9,
       "silent": 4
     },
     "sms_tool/proxy/registry.py": {
@@ -610,7 +514,7 @@
       "silent": 3
     },
     "sms_tool/registration_drivers/browser_flow/orchestrator.py": {
-      "broad": 10,
+      "broad": 9,
       "silent": 2
     },
     "sms_tool/registration_drivers/browser_flow/page_state.py": {
@@ -644,10 +548,6 @@
     "sms_tool/sentinel/client.py": {
       "broad": 9,
       "silent": 4
-    },
-    "sms_tool/sentinel/runner.py": {
-      "broad": 1,
-      "silent": 1
     },
     "sms_tool/session/converter.py": {
       "broad": 6,
@@ -692,74 +592,6 @@
     "sms_tool/transport/page_truth.py": {
       "broad": 1,
       "silent": 0
-    },
-    "sms_tool/upi_link/_extract.py": {
-      "broad": 2,
-      "silent": 0
-    },
-    "sms_tool/upi_link/_vendor/upi_sentinel.py": {
-      "broad": 1,
-      "silent": 0
-    },
-    "sms_tool/upi_link/browser.py": {
-      "broad": 11,
-      "silent": 0
-    },
-    "sms_tool/upi_link/config.py": {
-      "broad": 2,
-      "silent": 0
-    },
-    "sms_tool/upi_link/dump.py": {
-      "broad": 3,
-      "silent": 0
-    },
-    "sms_tool/upi_link/extract.py": {
-      "broad": 2,
-      "silent": 0
-    },
-    "sms_tool/upi_link/flows.py": {
-      "broad": 2,
-      "silent": 0
-    },
-    "sms_tool/upi_link/india_exit.py": {
-      "broad": 2,
-      "silent": 0
-    },
-    "sms_tool/upi_link/sentinel.py": {
-      "broad": 7,
-      "silent": 0
-    },
-    "sms_tool/upi_link/session.py": {
-      "broad": 5,
-      "silent": 0
-    },
-    "sms_tool/upi_link/stages.py": {
-      "broad": 12,
-      "silent": 0
-    },
-    "sms_tool/upi_link/stripe.py": {
-      "broad": 9,
-      "silent": 0
-    },
-    "sms_tool/upi_link/verify.py": {
-      "broad": 2,
-      "silent": 0
-    },
-    "sms_tool/wallet/gcash_provider.py": {
-      "broad": 4,
-      "silent": 0
-    },
-    "sms_tool/wallet/gcash_transport.py": {
-      "broad": 6,
-      "silent": 0
-    },
-    "sms_tool/wallet/provider.py": {
-      "broad": 2,
-      "silent": 0
-    },
-    "sms_tool/wallet/transport.py": {
-      "broad": 5,
-      "silent": 0
     }
   },
   "policy": {
@@ -784,12 +616,12 @@
         "reason": "The protocol lane is where a swallowed exception is indistinguishable from a protocol failure: it lands in the funnel as 'unknown' while the batch keeps spending mailboxes. Silent handlers are 0 here and the broad count may only shrink."
       }
     },
-    "max_broad": 951,
+    "max_broad": 739,
     "max_silent": 158
   },
   "totals": {
-    "broad": 951,
-    "silent": 156
+    "broad": 739,
+    "silent": 155
   },
   "whitelist": {
     "sms_tool/browser/pool.py": {

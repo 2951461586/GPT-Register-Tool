@@ -387,7 +387,8 @@
       "blik",
       "twint",
       "direct_card",
-      "momo"
+      "momo",
+      "team_trial"
     ],
     "state_file": "runtime/payment_link_runs.jsonl",
     "timeout_seconds": 900,

@@ -1,0 +1,176 @@
+{"fn": "qualification_state", "args": ["x"], "ok": "unknown"}
+{"fn": "qualification_state", "args": [[]], "ok": "unknown"}
+{"fn": "qualification_state", "args": [true], "ok": "unknown"}
+{"fn": "qualification_state", "args": [0], "ok": "unknown"}
+{"fn": "qualification_state", "args": [{"a": "b"}], "ok": "unknown"}
+{"fn": "qualification_state", "args": [{"a": {"b": "c"}}], "ok": "unknown"}
+{"fn": "qualification_state", "args": [{}], "ok": "unknown"}
+{"fn": "qualification_state", "args": [["a", 1]], "ok": "unknown"}
+{"fn": "qualification_state", "args": [null], "ok": "unknown"}
+{"fn": "qualification_state", "args": [{"zebra": 1, "apple": 2, "10": 3, "2": 4, "é": 5, "Apple": 6}], "ok": "unknown"}
+{"fn": "qualification_state", "args": [{"n": 9007199254740993, "f": 1e+21, "t": 0.1, "neg": -7}], "ok": "unknown"}
+{"fn": "qualification_state", "args": [[3, 1, 2]], "ok": "unknown"}
+{"fn": "qualification_label", "args": [{"a": "b"}, {"a": "b"}], "ok": "未确定"}
+{"fn": "qualification_label", "args": [{"a": "b"}, {}], "ok": "未确定"}
+{"fn": "qualification_label", "args": [true, {"a": "b"}], "ok": "未确定"}
+{"fn": "qualification_label", "args": [{"a": "b"}, []], "ok": "未确定"}
+{"fn": "qualification_label", "args": [true, 0], "ok": "未确定"}
+{"fn": "qualification_label", "args": [{}, {"a": "b"}], "ok": "未确定"}
+{"fn": "qualification_label", "args": [[], []], "ok": "未确定"}
+{"fn": "qualification_label", "args": [true, ["a", 1]], "ok": "未确定"}
+{"fn": "qualification_label", "args": [{}, null], "ok": "未确定"}
+{"fn": "qualification_label", "args": [["a", 1], null], "ok": "未确定"}
+{"fn": "qualification_label", "args": [{}, {}], "ok": "未确定"}
+{"fn": "qualification_label", "args": [0, {"a": "b"}], "ok": "未确定"}
+{"fn": "qualification_label", "args": [0, {"a": {"b": "c"}}], "ok": "未确定"}
+{"fn": "qualification_label", "args": [{}, []], "ok": "未确定"}
+{"fn": "qualification_label", "args": ["x", "x"], "ok": "未确定"}
+{"fn": "qualification_label", "args": [["a", 1], 0], "ok": "未确定"}
+{"fn": "qualification_label", "args": [0, {"$undefined": true}], "ok": "未确定"}
+{"fn": "qualification_label", "args": [{"a": {"b": "c"}}, "x"], "ok": "未确定"}
+{"fn": "qualification_label", "args": [{}, true], "ok": "未确定"}
+{"fn": "qualification_label", "args": [true, true], "ok": "未确定"}
+{"fn": "qualification_label", "args": ["x", {"$undefined": true}], "ok": "未确定"}
+{"fn": "qualification_label", "args": [0, null], "ok": "未确定"}
+{"fn": "qualification_label", "args": ["x", null], "ok": "未确定"}
+{"fn": "qualification_label", "args": [["a", 1], "x"], "ok": "未确定"}
+{"fn": "qualification_label", "args": [{"a": "b"}, "x"], "ok": "未确定"}
+{"fn": "qualification_label", "args": [true], "ok": "未确定"}
+{"fn": "qualification_label", "args": [{"a": {"b": "c"}}, {}], "ok": "未确定"}
+{"fn": "qualification_label", "args": [{"a": {"b": "c"}}, ["a", 1]], "ok": "未确定"}
+{"fn": "qualification_label", "args": [null, {}], "ok": "未确定"}
+{"fn": "qualification_label", "args": [{"a": {"b": "c"}}, {"a": {"b": "c"}}], "ok": "未确定"}
+{"fn": "qualification_label", "args": [[], 0], "ok": "未确定"}
+{"fn": "qualification_label", "args": [{"a": {"b": "c"}}, true], "ok": "未确定"}
+{"fn": "qualification_label", "args": ["x", ["a", 1]], "ok": "未确定"}
+{"fn": "qualification_label", "args": [[], {}], "ok": "未确定"}
+{"fn": "qualification_label", "args": [[], {"$undefined": true}], "ok": "未确定"}
+{"fn": "qualification_label", "args": [[], true], "ok": "未确定"}
+{"fn": "qualification_label", "args": ["x", true], "ok": "未确定"}
+{"fn": "qualification_label", "args": [null], "ok": "未确定"}
+{"fn": "qualification_label", "args": [["a", 1], []], "ok": "未确定"}
+{"fn": "qualification_label", "args": [["a", 1], {"a": {"b": "c"}}], "ok": "未确定"}
+{"fn": "qualification_label", "args": ["x", {"a": "b"}], "ok": "未确定"}
+{"fn": "qualification_label", "args": [[], {"a": "b"}], "ok": "未确定"}
+{"fn": "qualification_label", "args": [{"a": {"b": "c"}}, 0], "ok": "未确定"}
+{"fn": "qualification_label", "args": [{"a": {"b": "c"}}, {"a": "b"}], "ok": "未确定"}
+{"fn": "qualification_label", "args": [["a", 1], {}], "ok": "未确定"}
+{"fn": "qualification_label", "args": [{}, "x"], "ok": "未确定"}
+{"fn": "qualification_label", "args": [[], null], "ok": "未确定"}
+{"fn": "qualification_label", "args": [null, true], "ok": "未确定"}
+{"fn": "qualification_label", "args": [{}, ["a", 1]], "ok": "未确定"}
+{"fn": "qualification_label", "args": [{"a": "b"}, 0], "ok": "未确定"}
+{"fn": "qualification_label", "args": [{"a": {"b": "c"}}, []], "ok": "未确定"}
+{"fn": "qualification_label", "args": [0, []], "ok": "未确定"}
+{"fn": "qualification_label", "args": [0, true], "ok": "未确定"}
+{"fn": "qualification_label", "args": [{"a": {"b": "c"}}, {"$undefined": true}], "ok": "未确定"}
+{"fn": "qualification_label", "args": [{"a": {"b": "c"}}], "ok": "未确定"}
+{"fn": "qualification_label", "args": [{"a": {"b": "c"}}, null], "ok": "未确定"}
+{"fn": "qualification_label", "args": [null, null], "ok": "未确定"}
+{"fn": "qualification_label", "args": [0, 0], "ok": "未确定"}
+{"fn": "qualification_label", "args": [{"a": "b"}, null], "ok": "未确定"}
+{"fn": "qualification_label", "args": [null, {"a": "b"}], "ok": "未确定"}
+{"fn": "qualification_label", "args": [true, {"$undefined": true}], "ok": "未确定"}
+{"fn": "qualification_label", "args": [[], ["a", 1]], "ok": "未确定"}
+{"fn": "qualification_label", "args": [{"a": "b"}], "ok": "未确定"}
+{"fn": "qualification_label", "args": [true, {"a": {"b": "c"}}], "ok": "未确定"}
+{"fn": "qualification_label", "args": [{}, {"a": {"b": "c"}}], "ok": "未确定"}
+{"fn": "qualification_label", "args": [null, {"a": {"b": "c"}}], "ok": "未确定"}
+{"fn": "qualification_label", "args": [{"a": "b"}, true], "ok": "未确定"}
+{"fn": "qualification_label", "args": [["a", 1], ["a", 1]], "ok": "未确定"}
+{"fn": "qualification_label", "args": ["x", {}], "ok": "未确定"}
+{"fn": "qualification_label", "args": [[], {"a": {"b": "c"}}], "ok": "未确定"}
+{"fn": "qualification_label", "args": [{}], "ok": "未确定"}
+{"fn": "qualification_label", "args": [null, ["a", 1]], "ok": "未确定"}
+{"fn": "qualification_label", "args": [[], "x"], "ok": "未确定"}
+{"fn": "qualification_label", "args": [{"a": "b"}, ["a", 1]], "ok": "未确定"}
+{"fn": "qualification_label", "args": [true, null], "ok": "未确定"}
+{"fn": "qualification_label", "args": [{"a": "b"}, {"$undefined": true}], "ok": "未确定"}
+{"fn": "qualification_label", "args": [null, {"$undefined": true}], "ok": "未确定"}
+{"fn": "qualification_label", "args": [{}, 0], "ok": "未确定"}
+{"fn": "qualification_label", "args": [["a", 1], {"$undefined": true}], "ok": "未确定"}
+{"fn": "qualification_label", "args": [{"a": "b"}, {"a": {"b": "c"}}], "ok": "未确定"}
+{"fn": "qualification_label", "args": [0], "ok": "未确定"}
+{"fn": "qualification_label", "args": [true, "x"], "ok": "未确定"}
+{"fn": "qualification_label", "args": ["x"], "ok": "未确定"}
+{"fn": "qualification_label", "args": [null, []], "ok": "未确定"}
+{"fn": "qualification_label", "args": [0, {}], "ok": "未确定"}
+{"fn": "qualification_label", "args": [["a", 1], true], "ok": "未确定"}
+{"fn": "qualification_label", "args": [["a", 1], {"a": "b"}], "ok": "未确定"}
+{"fn": "qualification_label", "args": ["x", {"a": {"b": "c"}}], "ok": "未确定"}
+{"fn": "qualification_label", "args": [{}, {"$undefined": true}], "ok": "未确定"}
+{"fn": "qualification_label", "args": ["x", []], "ok": "未确定"}
+{"fn": "qualification_label", "args": [0, "x"], "ok": "未确定"}
+{"fn": "qualification_label", "args": [true, {}], "ok": "未确定"}
+{"fn": "qualification_label", "args": ["x", 0], "ok": "未确定"}
+{"fn": "qualification_label", "args": [0, ["a", 1]], "ok": "未确定"}
+{"fn": "qualification_label", "args": [[]], "ok": "未确定"}
+{"fn": "qualification_label", "args": [null, "x"], "ok": "未确定"}
+{"fn": "qualification_label", "args": [null, 0], "ok": "未确定"}
+{"fn": "qualification_label", "args": [true, []], "ok": "未确定"}
+{"fn": "qualification_label", "args": [["a", 1]], "ok": "未确定"}
+{"fn": "qualification_label", "args": ["x", "X"], "ok": "未确定"}
+{"fn": "qualification_label", "args": ["X", "x"], "ok": "未确定"}
+{"fn": "qualification_label", "args": [{"zebra": 1, "apple": 2, "10": 3, "2": 4, "é": 5, "Apple": 6}, {"a": "b"}], "ok": "未确定"}
+{"fn": "qualification_label", "args": [{"n": 9007199254740993, "f": 1e+21, "t": 0.1, "neg": -7}, {"a": "b"}], "ok": "未确定"}
+{"fn": "qualification_label", "args": [[3, 1, 2], {"a": "b"}], "ok": "未确定"}
+{"fn": "qualification_state", "args": [null], "ok": "unknown"}
+{"fn": "qualification_label", "args": [null, ""], "ok": "未确定"}
+{"fn": "qualification_label", "args": [null, "paypal"], "ok": "未确定"}
+{"fn": "qualification_state", "args": [{}], "ok": "unknown"}
+{"fn": "qualification_label", "args": [{}, ""], "ok": "未确定"}
+{"fn": "qualification_label", "args": [{}, "paypal"], "ok": "未确定"}
+{"fn": "qualification_state", "args": [{"eligible": true, "conclusive": true, "payment_method": "paypal", "checkout_kind": "stripe"}], "ok": "eligible"}
+{"fn": "qualification_label", "args": [{"eligible": true, "conclusive": true, "payment_method": "paypal", "checkout_kind": "stripe"}, ""], "ok": "可用·PayPal（Stripe）"}
+{"fn": "qualification_label", "args": [{"eligible": true, "conclusive": true, "payment_method": "paypal", "checkout_kind": "stripe"}, "paypal"], "ok": "可用·PayPal（Stripe）"}
+{"fn": "qualification_state", "args": [{"eligible": true, "conclusive": true, "payment_method": "momo", "checkout_kind": "oaics"}], "ok": "eligible"}
+{"fn": "qualification_label", "args": [{"eligible": true, "conclusive": true, "payment_method": "momo", "checkout_kind": "oaics"}, ""], "ok": "可用·MoMo（自定义）"}
+{"fn": "qualification_label", "args": [{"eligible": true, "conclusive": true, "payment_method": "momo", "checkout_kind": "oaics"}, "paypal"], "ok": "可用·PayPal（自定义）"}
+{"fn": "qualification_state", "args": [{"eligible": true, "conclusive": true, "payment_method": "gcash"}], "ok": "eligible"}
+{"fn": "qualification_label", "args": [{"eligible": true, "conclusive": true, "payment_method": "gcash"}, ""], "ok": "可用·GCash"}
+{"fn": "qualification_label", "args": [{"eligible": true, "conclusive": true, "payment_method": "gcash"}, "paypal"], "ok": "可用·PayPal"}
+{"fn": "qualification_state", "args": [{"eligible": false, "conclusive": true, "decision": "nonzero_offer"}], "ok": "ineligible"}
+{"fn": "qualification_label", "args": [{"eligible": false, "conclusive": true, "decision": "nonzero_offer"}, ""], "ok": "无0元优惠"}
+{"fn": "qualification_label", "args": [{"eligible": false, "conclusive": true, "decision": "nonzero_offer"}, "paypal"], "ok": "无0元优惠"}
+{"fn": "qualification_state", "args": [{"eligible": false, "conclusive": true, "decision": "checkout_currency_mismatch"}], "ok": "ineligible"}
+{"fn": "qualification_label", "args": [{"eligible": false, "conclusive": true, "decision": "checkout_currency_mismatch"}, ""], "ok": "币种不符"}
+{"fn": "qualification_label", "args": [{"eligible": false, "conclusive": true, "decision": "checkout_currency_mismatch"}, "paypal"], "ok": "币种不符"}
+{"fn": "qualification_state", "args": [{"eligible": false, "conclusive": true, "decision": "method_country_mismatch"}], "ok": "ineligible"}
+{"fn": "qualification_label", "args": [{"eligible": false, "conclusive": true, "decision": "method_country_mismatch"}, ""], "ok": "无可用方式·地区不符"}
+{"fn": "qualification_label", "args": [{"eligible": false, "conclusive": true, "decision": "method_country_mismatch"}, "paypal"], "ok": "无可用方式·地区不符"}
+{"fn": "qualification_state", "args": [{"eligible": false, "conclusive": true, "error": "400 Billing country must match request country"}], "ok": "ineligible"}
+{"fn": "qualification_label", "args": [{"eligible": false, "conclusive": true, "error": "400 Billing country must match request country"}, ""], "ok": "无可用方式·地区不符"}
+{"fn": "qualification_label", "args": [{"eligible": false, "conclusive": true, "error": "400 Billing country must match request country"}, "paypal"], "ok": "无可用方式·地区不符"}
+{"fn": "qualification_state", "args": [{"eligible": false, "conclusive": true, "decision": "card_only"}], "ok": "ineligible"}
+{"fn": "qualification_label", "args": [{"eligible": false, "conclusive": true, "decision": "card_only"}, ""], "ok": "无可用方式"}
+{"fn": "qualification_label", "args": [{"eligible": false, "conclusive": true, "decision": "card_only"}, "paypal"], "ok": "无可用方式"}
+{"fn": "qualification_state", "args": [{"decision": "method_country_mismatch"}], "ok": "ineligible"}
+{"fn": "qualification_label", "args": [{"decision": "method_country_mismatch"}, ""], "ok": "无可用方式·地区不符"}
+{"fn": "qualification_label", "args": [{"decision": "method_country_mismatch"}, "paypal"], "ok": "无可用方式·地区不符"}
+{"fn": "qualification_state", "args": [{"error": "Country must match request country"}], "ok": "ineligible"}
+{"fn": "qualification_label", "args": [{"error": "Country must match request country"}, ""], "ok": "无可用方式·地区不符"}
+{"fn": "qualification_label", "args": [{"error": "Country must match request country"}, "paypal"], "ok": "无可用方式·地区不符"}
+{"fn": "qualification_state", "args": [{"error": "checkout HTTP 401 unauthorized", "error_code": "checkout_unauthorized"}], "ok": "auth_invalid"}
+{"fn": "qualification_label", "args": [{"error": "checkout HTTP 401 unauthorized", "error_code": "checkout_unauthorized"}, ""], "ok": "AT失效"}
+{"fn": "qualification_label", "args": [{"error": "checkout HTTP 401 unauthorized", "error_code": "checkout_unauthorized"}, "paypal"], "ok": "AT失效"}
+{"fn": "qualification_state", "args": [{"error": "Tunnel connection failed: 503 Target host denied"}], "ok": "egress_denied"}
+{"fn": "qualification_label", "args": [{"error": "Tunnel connection failed: 503 Target host denied"}, ""], "ok": "出口被拒"}
+{"fn": "qualification_label", "args": [{"error": "Tunnel connection failed: 503 Target host denied"}, "paypal"], "ok": "出口被拒"}
+{"fn": "qualification_state", "args": [{"error": "unable to connect to proxy"}], "ok": "egress_denied"}
+{"fn": "qualification_label", "args": [{"error": "unable to connect to proxy"}, ""], "ok": "出口被拒"}
+{"fn": "qualification_label", "args": [{"error": "unable to connect to proxy"}, "paypal"], "ok": "出口被拒"}
+{"fn": "qualification_state", "args": [{"error": "checkout HTTP 400 Our systems have detected unusual activity", "status": "failed"}], "ok": "probe_failed"}
+{"fn": "qualification_label", "args": [{"error": "checkout HTTP 400 Our systems have detected unusual activity", "status": "failed"}, ""], "ok": "风控拦截"}
+{"fn": "qualification_label", "args": [{"error": "checkout HTTP 400 Our systems have detected unusual activity", "status": "failed"}, "paypal"], "ok": "风控拦截"}
+{"fn": "qualification_state", "args": [{"error": "curl: (28) Operation timed out"}], "ok": "probe_failed"}
+{"fn": "qualification_label", "args": [{"error": "curl: (28) Operation timed out"}, ""], "ok": "检测失败"}
+{"fn": "qualification_label", "args": [{"error": "curl: (28) Operation timed out"}, "paypal"], "ok": "检测失败"}
+{"fn": "qualification_state", "args": [{"status": "failed", "error": "mystery"}], "ok": "probe_failed"}
+{"fn": "qualification_label", "args": [{"status": "failed", "error": "mystery"}, ""], "ok": "检测失败"}
+{"fn": "qualification_label", "args": [{"status": "failed", "error": "mystery"}, "paypal"], "ok": "检测失败"}
+{"fn": "qualification_state", "args": [{"eligible": true, "conclusive": false}], "ok": "unknown"}
+{"fn": "qualification_label", "args": [{"eligible": true, "conclusive": false}, ""], "ok": "未确定"}
+{"fn": "qualification_label", "args": [{"eligible": true, "conclusive": false}, "paypal"], "ok": "未确定"}
+{"fn": "qualification_state", "args": [{"ok": true}], "ok": "unknown"}
+{"fn": "qualification_label", "args": [{"ok": true}, ""], "ok": "未确定"}
+{"fn": "qualification_label", "args": [{"ok": true}, "paypal"], "ok": "未确定"}

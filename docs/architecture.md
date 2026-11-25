@@ -208,13 +208,13 @@ above.
 <!-- ratchet-numbers:begin architecture -->
 | Measure | Value |
 | --- | --- |
-| Module-level cross-directory edges | 497 |
+| Module-level cross-directory edges | 491 |
 | Directory pairs | 135 |
 | Mutual pairs / minority-direction edges | 17 / 30 |
 | Delayed cross-directory edges | 321 |
 | Delayed imports in the package | 461 (baseline 461) |
 | Functions at or above 150 lines | 32 (frozen, `scripts/function_length_ratchet.py`) |
-| Claimed tracked `sms_tool` modules | 297 of 297 (0 unclaimed, 38 directory-map groups) |
+| Claimed tracked `sms_tool` modules | 294 of 294 (0 unclaimed, 38 directory-map groups) |
 <!-- ratchet-numbers:end architecture -->
 
 `tests/config/test_pilens_scope_config.py` pins the scope and the formatting

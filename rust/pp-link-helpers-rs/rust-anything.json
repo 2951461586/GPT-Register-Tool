@@ -1,0 +1,91 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/payment/pp_link_helpers.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "pp-link-helpers-rs",
+  "exports": [
+    {
+      "name": "normalize_proxy_template",
+      "file": "sms_tool/payment/pp_link_helpers.py",
+      "line": 707,
+      "params": [
+        {
+          "name": "template",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "proxy_for_country_template",
+      "file": "sms_tool/payment/pp_link_helpers.py",
+      "line": 734,
+      "params": [
+        {
+          "name": "template",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "country",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "is_paypal_ba_approve_url",
+      "file": "sms_tool/payment/pp_link_helpers.py",
+      "line": 790,
+      "params": [
+        {
+          "name": "url",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "boolean",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "reserve_billing_variant",
+      "file": "sms_tool/payment/pp_link_helpers.py",
+      "line": 653,
+      "reason": "cross-process file lock and runtime JSON cursor I/O stay in Python"
+    },
+    {
+      "name": "extract_paypal_approve_url",
+      "file": "sms_tool/payment/pp_link_helpers.py",
+      "line": 820,
+      "reason": "1.05x tie on rust-anything bench; Python str.replace + re.search kept"
+    },
+    {
+      "name": "resolve_external_redirect",
+      "file": "sms_tool/payment/pp_link_helpers.py",
+      "line": 884,
+      "reason": "HTTP redirect following stays in Python"
+    }
+  ]
+}

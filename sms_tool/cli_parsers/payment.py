@@ -135,3 +135,19 @@ def register(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--blik-code", default=None, help="Six-digit BLIK code; supplying it explicitly executes the BLIK payment"
     )
+    parser.add_argument(
+        "--team-workspace-name",
+        default="MyTeam",
+        help="Workspace name for --payment-method team_trial hosted checkout (default: MyTeam)",
+    )
+    parser.add_argument(
+        "--team-seat-quantity",
+        type=int,
+        default=5,
+        help="Seat count for --payment-method team_trial (2..5, default: 5)",
+    )
+    parser.add_argument(
+        "--skip-team-eligibility-check",
+        action="store_true",
+        help="Skip read-only team-1-month-free coupon pre-check before creating Team checkout link",
+    )

@@ -1,0 +1,25 @@
+[package]
+name = "qualification-states-rs"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97"
+publish = false
+description = "Rust port of payment qualification state and badge classification in `sms_tool/payment/qualification_states.py`, managed by rust-anything"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+pyo3 = { version = "0.30", features = ["extension-module", "abi3-py39"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order", "float_roundtrip", "unbounded_depth"] }
+
+[profile.release]
+lto = true
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+
+[lints.rust]
+unused_lifetimes = "warn"
+trivial_numeric_casts = "warn"

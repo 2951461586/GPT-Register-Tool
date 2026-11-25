@@ -103,6 +103,7 @@ def proxy_pool_for(config: Mapping[str, Any] | None, lane: str) -> list[str]:
         "browser_registration": ("browser_pool", "browser_registration_pool"),
         "protocol_registration": ("protocol_pool", "protocol_registration_pool"),
         "liveness": ("liveness_pool", "quota_pool", "liveness"),
+        "relogin": ("relogin_pool", "relogin", "liveness_pool", "liveness"),
         "promotion": ("promotion_pool", "promotion"),
         "health_browser": ("browser_pool", "browser", "browser_verification_pool"),
     }
@@ -123,7 +124,7 @@ def proxy_pool_for(config: Mapping[str, Any] | None, lane: str) -> list[str]:
         values = parse_lane_proxy_pool(proxy.get("protocol")) or parse_lane_proxy_pool(proxy.get("registration"))
         values.extend(item for item in parse_lane_proxy_pool(proxy.get("pool")) if item not in values)
         return values or parse_lane_proxy_pool(proxy.get("default"))
-    if lane in {"liveness", "promotion", "health_browser"}:
+    if lane in {"liveness", "relogin", "promotion", "health_browser"}:
         values = parse_lane_proxy_pool(health.get("proxy_pool"))
         if values:
             return values

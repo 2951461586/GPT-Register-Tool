@@ -222,6 +222,14 @@ def _record_payload(record: dict[str, Any], *, include_session: bool = True) -> 
                 result["promotion_state"] = promotion_state
             if promotion_status:
                 result["promotion_display"] = promotion_status
+            _raw_promo_obj: object = session.get("promotion")
+            _promo_last = _raw_promo_obj.get("last_result") if isinstance(_raw_promo_obj, dict) else None
+            if isinstance(_promo_last, dict) and (
+                "team_trial_eligible" in _promo_last or _promo_last.get("team_trial_state")
+            ):
+                result["team_trial_eligible"] = bool(_promo_last.get("team_trial_eligible"))
+                if _promo_last.get("team_trial_state"):
+                    result["team_trial_state"] = str(_promo_last.get("team_trial_state") or "")
             qualification, qualification_state = _payment_qualification_presentation(session)
             if qualification:
                 result["payment_qualification_display"] = qualification

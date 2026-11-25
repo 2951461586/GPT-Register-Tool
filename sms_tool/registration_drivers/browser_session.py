@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import importlib
 import logging
 import os
+import sys
 import time
+from pathlib import Path
 from typing import Any, Callable, Mapping
 from urllib.parse import unquote, urlsplit
 
@@ -18,7 +21,32 @@ from .stealth import apply_playwright_stealth
 _LOGGER = logging.getLogger(__name__)
 
 
+def _load_native_playwright_proxy() -> Any | None:
+    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
+    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_PLAYWRIGHT_PROXY") or "").strip().lower()
+    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
+        return None
+    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "playwright-proxy-rs" / "python"
+    if pkg_dir.is_dir():
+        pkg_str = str(pkg_dir)
+        if pkg_str not in sys.path:
+            sys.path.insert(0, pkg_str)
+    try:
+        return importlib.import_module("playwright_proxy_rs")
+    except (ImportError, OSError):
+        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
+            raise
+        return None
+
+
+_NATIVE_PLAYWRIGHT_PROXY_MOD = _load_native_playwright_proxy()
+_NATIVE_PLAYWRIGHT_PROXY = getattr(_NATIVE_PLAYWRIGHT_PROXY_MOD, "_playwright_proxy", None)
+_NATIVE_SCALAR_TYPES = (str, type(None), bool, int, float)
+
+
 def _playwright_proxy(proxy: str | None) -> dict[str, str] | None:
+    if _NATIVE_PLAYWRIGHT_PROXY is not None and isinstance(proxy, _NATIVE_SCALAR_TYPES):
+        return _NATIVE_PLAYWRIGHT_PROXY(proxy)
     value = normalize_proxy_url(proxy)
     if not value:
         return None

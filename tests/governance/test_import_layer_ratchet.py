@@ -505,7 +505,10 @@ def test_summary_facts_are_pinned():
         # Retired sms_tool/{upi_link,paypal_link,wallet}/, pay_link/{adapters,oaics_provider}.py,
         # payment/{regional_payment_adapter,upi_*}.py, and services/protocol-payment/,
         # routing all 15 catalog methods through pay_link/extract_server.py.
-        "total_module_edges": 497,
+        # 2026-11-25 (Team 5-seat trial direct extractor + dead pay_link import cleanup):
+        # 497 -> 491 edges (-6) after pruning dead split-era imports from
+        # pay_link/{base,normalize,persistence}.py and adding pay_link/team_trial.py.
+        "total_module_edges": 491,
         "ordered_pairs": 135,
         "mutual_pairs": 17,
         "minority_edges": 30,

@@ -40,6 +40,48 @@
       "sort_rank": 0
     },
     {
+      "name": "team_trial_only",
+      "result": {
+        "ok": true,
+        "current_plan_type": "free",
+        "plus_trial_eligible": false,
+        "team_trial_eligible": true
+      },
+      "label": "可试用Team(5席)",
+      "state": "trial_eligible",
+      "legacy_fallback": true,
+      "sort_rank": 0
+    },
+    {
+      "name": "plus_and_team_trial",
+      "result": {
+        "ok": true,
+        "current_plan_type": "free",
+        "plus_trial_eligible": true,
+        "plus_trial_discount_percentage": 100,
+        "plus_trial_duration_num_periods": 1,
+        "plus_trial_duration_period": "month",
+        "team_trial_eligible": true
+      },
+      "label": "可试用Plus·-100%·×1month·可试用Team(5席)",
+      "state": "trial_eligible",
+      "legacy_fallback": true,
+      "sort_rank": 0
+    },
+    {
+      "name": "subscribed_plus_with_team_trial",
+      "result": {
+        "ok": true,
+        "current_plan_type": "chatgptplusplan",
+        "has_active_subscription": true,
+        "team_trial_eligible": true
+      },
+      "label": "已订阅·Plus·可试用Team(5席)",
+      "state": "trial_eligible",
+      "legacy_fallback": true,
+      "sort_rank": 0
+    },
+    {
       "name": "subscribed_plus",
       "result": {
         "ok": true,

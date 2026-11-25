@@ -1,0 +1,84 @@
+{"fn": "_normalized_contract_value", "args": [["a", 1]], "ok": ""}
+{"fn": "_normalized_contract_value", "args": [{"a": "b"}], "ok": ""}
+{"fn": "_normalized_contract_value", "args": [null], "ok": ""}
+{"fn": "_normalized_contract_value", "args": [{"a": {"b": "c"}}], "ok": ""}
+{"fn": "_normalized_contract_value", "args": [true], "ok": ""}
+{"fn": "_normalized_contract_value", "args": [{}], "ok": ""}
+{"fn": "_normalized_contract_value", "args": [0], "ok": ""}
+{"fn": "_normalized_contract_value", "args": [[]], "ok": ""}
+{"fn": "_normalized_contract_value", "args": ["x"], "ok": "x"}
+{"fn": "_normalized_contract_value", "args": [{"zebra": 1, "apple": 2, "10": 3, "2": 4, "é": 5, "Apple": 6}], "ok": ""}
+{"fn": "_normalized_contract_value", "args": [{"n": 9007199254740993, "f": 1e+21, "t": 0.1, "neg": -7}], "ok": ""}
+{"fn": "_normalized_contract_value", "args": [[3, 1, 2]], "ok": ""}
+{"fn": "_canonical_terminal_state", "args": [[]], "ok": ""}
+{"fn": "_canonical_terminal_state", "args": [{"a": {"b": "c"}}], "ok": ""}
+{"fn": "_canonical_terminal_state", "args": [0], "ok": ""}
+{"fn": "_canonical_terminal_state", "args": [true], "ok": ""}
+{"fn": "_canonical_terminal_state", "args": [{"a": "b"}], "ok": ""}
+{"fn": "_canonical_terminal_state", "args": ["x"], "ok": ""}
+{"fn": "_canonical_terminal_state", "args": [{}], "ok": ""}
+{"fn": "_canonical_terminal_state", "args": [["a", 1]], "ok": ""}
+{"fn": "_canonical_terminal_state", "args": [null], "ok": ""}
+{"fn": "_canonical_terminal_state", "args": [{"zebra": 1, "apple": 2, "10": 3, "2": 4, "é": 5, "Apple": 6}], "ok": ""}
+{"fn": "_canonical_terminal_state", "args": [{"n": 9007199254740993, "f": 1e+21, "t": 0.1, "neg": -7}], "ok": ""}
+{"fn": "_canonical_terminal_state", "args": [[3, 1, 2]], "ok": ""}
+{"fn": "_normalized_contract_value", "args": [null], "ok": ""}
+{"fn": "_canonical_terminal_state", "args": [null], "ok": ""}
+{"fn": "_normalized_contract_value", "args": [""], "ok": ""}
+{"fn": "_canonical_terminal_state", "args": [""], "ok": ""}
+{"fn": "_normalized_contract_value", "args": ["   "], "ok": ""}
+{"fn": "_canonical_terminal_state", "args": ["   "], "ok": ""}
+{"fn": "_normalized_contract_value", "args": [123], "ok": ""}
+{"fn": "_canonical_terminal_state", "args": [123], "ok": ""}
+{"fn": "_normalized_contract_value", "args": ["cancelled"], "ok": "cancelled"}
+{"fn": "_canonical_terminal_state", "args": ["cancelled"], "ok": "cancelled"}
+{"fn": "_normalized_contract_value", "args": ["CANCELED"], "ok": "canceled"}
+{"fn": "_canonical_terminal_state", "args": ["CANCELED"], "ok": "cancelled"}
+{"fn": "_normalized_contract_value", "args": ["Cancelled-By-User"], "ok": "cancelled_by_user"}
+{"fn": "_canonical_terminal_state", "args": ["Cancelled-By-User"], "ok": "cancelled"}
+{"fn": "_normalized_contract_value", "args": ["  keyboard_interrupt  "], "ok": "keyboard_interrupt"}
+{"fn": "_canonical_terminal_state", "args": ["  keyboard_interrupt  "], "ok": "cancelled"}
+{"fn": "_normalized_contract_value", "args": ["payment_link_cancelled"], "ok": "payment_link_cancelled"}
+{"fn": "_canonical_terminal_state", "args": ["payment_link_cancelled"], "ok": "cancelled"}
+{"fn": "_normalized_contract_value", "args": ["user_canceled"], "ok": "user_canceled"}
+{"fn": "_canonical_terminal_state", "args": ["user_canceled"], "ok": "cancelled"}
+{"fn": "_normalized_contract_value", "args": ["timed_out"], "ok": "timed_out"}
+{"fn": "_canonical_terminal_state", "args": ["timed_out"], "ok": "timed_out"}
+{"fn": "_normalized_contract_value", "args": ["TIMED-OUT"], "ok": "timed_out"}
+{"fn": "_canonical_terminal_state", "args": ["TIMED-OUT"], "ok": "timed_out"}
+{"fn": "_normalized_contract_value", "args": ["timeout"], "ok": "timeout"}
+{"fn": "_canonical_terminal_state", "args": ["timeout"], "ok": "timed_out"}
+{"fn": "_normalized_contract_value", "args": ["timeout_expired"], "ok": "timeout_expired"}
+{"fn": "_canonical_terminal_state", "args": ["timeout_expired"], "ok": "timed_out"}
+{"fn": "_normalized_contract_value", "args": ["extractor_timeout"], "ok": "extractor_timeout"}
+{"fn": "_canonical_terminal_state", "args": ["extractor_timeout"], "ok": "timed_out"}
+{"fn": "_normalized_contract_value", "args": ["http_read_timeout"], "ok": "http_read_timeout"}
+{"fn": "_canonical_terminal_state", "args": ["http_read_timeout"], "ok": "timed_out"}
+{"fn": "_normalized_contract_value", "args": ["stage_timed_out"], "ok": "stage_timed_out"}
+{"fn": "_canonical_terminal_state", "args": ["stage_timed_out"], "ok": "timed_out"}
+{"fn": "_normalized_contract_value", "args": ["unknown"], "ok": "unknown"}
+{"fn": "_canonical_terminal_state", "args": ["unknown"], "ok": "unknown"}
+{"fn": "_normalized_contract_value", "args": ["outcome_unknown"], "ok": "outcome_unknown"}
+{"fn": "_canonical_terminal_state", "args": ["outcome_unknown"], "ok": "unknown"}
+{"fn": "_normalized_contract_value", "args": ["payment_outcome_unknown"], "ok": "payment_outcome_unknown"}
+{"fn": "_canonical_terminal_state", "args": ["payment_outcome_unknown"], "ok": "unknown"}
+{"fn": "_normalized_contract_value", "args": ["indeterminate"], "ok": "indeterminate"}
+{"fn": "_canonical_terminal_state", "args": ["indeterminate"], "ok": "unknown"}
+{"fn": "_normalized_contract_value", "args": ["INCONCLUSIVE"], "ok": "inconclusive"}
+{"fn": "_canonical_terminal_state", "args": ["INCONCLUSIVE"], "ok": "unknown"}
+{"fn": "_normalized_contract_value", "args": ["confirm_outcome_unknown"], "ok": "confirm_outcome_unknown"}
+{"fn": "_canonical_terminal_state", "args": ["confirm_outcome_unknown"], "ok": "unknown"}
+{"fn": "_normalized_contract_value", "args": ["completed"], "ok": "completed"}
+{"fn": "_canonical_terminal_state", "args": ["completed"], "ok": ""}
+{"fn": "_normalized_contract_value", "args": ["failed"], "ok": "failed"}
+{"fn": "_canonical_terminal_state", "args": ["failed"], "ok": ""}
+{"fn": "_normalized_contract_value", "args": ["pending"], "ok": "pending"}
+{"fn": "_canonical_terminal_state", "args": ["pending"], "ok": ""}
+{"fn": "_normalized_contract_value", "args": ["HTTP 503 Service Unavailable!!!"], "ok": "http_503_service_unavailable"}
+{"fn": "_canonical_terminal_state", "args": ["HTTP 503 Service Unavailable!!!"], "ok": ""}
+{"fn": "_normalized_contract_value", "args": ["___weird---chars@@@123___"], "ok": "weird_chars_123"}
+{"fn": "_canonical_terminal_state", "args": ["___weird---chars@@@123___"], "ok": ""}
+{"fn": "_normalized_contract_value", "args": ["Connection-Error / Retryable"], "ok": "connection_error_retryable"}
+{"fn": "_canonical_terminal_state", "args": ["Connection-Error / Retryable"], "ok": ""}
+{"fn": "_normalized_contract_value", "args": ["rate_limited"], "ok": "rate_limited"}
+{"fn": "_canonical_terminal_state", "args": ["rate_limited"], "ok": ""}

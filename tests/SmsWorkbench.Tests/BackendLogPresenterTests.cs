@@ -285,6 +285,7 @@ public class BackendLogPresenterTests
                      "  \"success\": 2,",
                      "  \"failed\": 1,",
                      "  \"trial_eligible\": 1,",
+                     "  \"team_trial_eligible\": 1,",
                      "  \"results\": [",
                      "    {\"email\": \"a@x.com\", \"ok\": true, \"probe\": {\"status\": \"active\"}},",
                      "    {\"email\": \"b@x.com\", \"ok\": false, \"probe\": {\"status\": \"account_deactivated\"}},",
@@ -300,6 +301,7 @@ public class BackendLogPresenterTests
         Assert.Contains("成功 1/3", lines[0]);
         Assert.Contains("注销 1", lines[0]);
         Assert.Contains("可试优惠 1", lines[0]);
+        Assert.Contains("Team 5席试用 1", lines[0]);
         // No raw JSON text may leak into the panel.
         Assert.DoesNotContain("\"", lines[0]);
     }

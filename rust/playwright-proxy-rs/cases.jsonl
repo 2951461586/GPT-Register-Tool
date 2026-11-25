@@ -1,0 +1,22 @@
+{"fn": "_playwright_proxy", "args": [{"a": {"b": "c"}}], "error": "ValueError: Port could not be cast to integer value as \" {'b': 'c'}}\""}
+{"fn": "_playwright_proxy", "args": ["x"], "ok": {"server": "http://x"}}
+{"fn": "_playwright_proxy", "args": [{"a": "b"}], "error": "ValueError: Port could not be cast to integer value as \" 'b'}\""}
+{"fn": "_playwright_proxy", "args": [[]], "ok": null}
+{"fn": "_playwright_proxy", "args": [{}], "ok": null}
+{"fn": "_playwright_proxy", "args": [0], "ok": null}
+{"fn": "_playwright_proxy", "args": [null], "ok": null}
+{"fn": "_playwright_proxy", "args": [["a", 1]], "error": "ValueError: \"'a', 1\" does not appear to be an IPv4 or IPv6 address"}
+{"fn": "_playwright_proxy", "args": [true], "ok": {"server": "http://true"}}
+{"fn": "_playwright_proxy", "args": [{"zebra": 1, "apple": 2, "10": 3, "2": 4, "é": 5, "Apple": 6}], "error": "ValueError: Port could not be cast to integer value as \" 1, 'apple': 2, '10': 3, '2': 4, 'é': 5, 'Apple': 6}\""}
+{"fn": "_playwright_proxy", "args": [{"n": 9007199254740993, "f": 1e+21, "t": 0.1, "neg": -7}], "error": "ValueError: Port could not be cast to integer value as \" 9007199254740993, 'f': 1e+21, 't': 0.1, 'neg': -7}\""}
+{"fn": "_playwright_proxy", "args": [[3, 1, 2]], "error": "ValueError: '3, 1, 2' does not appear to be an IPv4 or IPv6 address"}
+{"fn": "_playwright_proxy", "args": [null], "ok": null}
+{"fn": "_playwright_proxy", "args": [""], "ok": null}
+{"fn": "_playwright_proxy", "args": ["   "], "ok": null}
+{"fn": "_playwright_proxy", "args": ["socks5h://127.0.0.1:10808"], "ok": {"server": "socks5://127.0.0.1:10808"}}
+{"fn": "_playwright_proxy", "args": ["socks5h://u%40test:p%3Atest@127.0.0.1:10808"], "ok": {"server": "socks5://127.0.0.1:10808", "username": "u@test", "password": "p:test"}}
+{"fn": "_playwright_proxy", "args": ["http://user1:pass1@proxy.example:8080"], "ok": {"server": "http://proxy.example:8080", "username": "user1", "password": "pass1"}}
+{"fn": "_playwright_proxy", "args": ["proxy.example:8888:user2:pass2"], "ok": {"server": "http://proxy.example:8888", "username": "user2", "password": "pass2"}}
+{"fn": "_playwright_proxy", "args": ["socks5://[::1]:1080"], "ok": {"server": "socks5://::1:1080"}}
+{"fn": "_playwright_proxy", "args": ["198.51.100.10:3128"], "ok": {"server": "http://198.51.100.10:3128"}}
+{"fn": "_playwright_proxy", "args": ["http://user:pass@example.test:8080"], "ok": {"server": "http://example.test:8080", "username": "user", "password": "pass"}}

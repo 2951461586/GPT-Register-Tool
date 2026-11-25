@@ -1,28 +1,40 @@
 """normalize submodule of the former payment/link_manager.py (mechanical split, bodies unchanged)."""
 
 from __future__ import annotations
+
+import importlib
+import os
 import re
 import subprocess
+import sys
+from pathlib import Path
 from typing import Any
-from ..config import current_config_data
-from ..payment.catalog import (
-    PAYMENT_METHODS as CATALOG_METHODS,
-    normalize_payment_method as normalize_catalog_payment_method,
-    validate_catalog_consistency,
-)
-from ..operation_journal import (
-    PaymentOperationConflict,
-    PaymentOperationStore,
-    conflict_result as payment_operation_conflict_result,
-)
-from ..payment.routing import (
-    PaymentRoutePlan,
-    PaymentRoutePlanner,
-    parse_proxy_pool,
-    payment_proxy_pools as canonical_payment_proxy_pools,
-)
+from ..config import current_config_data  # noqa: F401 - patch seam
 
 from .base import PaymentMethodSpec, _as_bool
+
+
+def _load_native_pay_link_normalize() -> Any | None:
+    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
+    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_PAY_LINK_NORMALIZE") or "").strip().lower()
+    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
+        return None
+    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "pay-link-normalize-rs" / "python"
+    if pkg_dir.is_dir():
+        pkg_str = str(pkg_dir)
+        if pkg_str not in sys.path:
+            sys.path.insert(0, pkg_str)
+    try:
+        return importlib.import_module("pay_link_normalize_rs")
+    except (ImportError, OSError):
+        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
+            raise
+        return None
+
+
+_NATIVE_PAY_LINK_NORMALIZE = _load_native_pay_link_normalize()
+_NATIVE_NORMALIZED_CONTRACT_VALUE = getattr(_NATIVE_PAY_LINK_NORMALIZE, "_normalized_contract_value", None)
+_NATIVE_CANONICAL_TERMINAL_STATE = getattr(_NATIVE_PAY_LINK_NORMALIZE, "_canonical_terminal_state", None)
 
 
 def _normalize_result(spec: PaymentMethodSpec, result: Any) -> dict[str, Any]:
@@ -159,6 +171,8 @@ def _explicit_terminal_state(data: dict[str, Any]) -> str:
 
 
 def _canonical_terminal_state(value: Any) -> str:
+    if _NATIVE_CANONICAL_TERMINAL_STATE is not None and isinstance(value, str):
+        return str(_NATIVE_CANONICAL_TERMINAL_STATE(value))
     normalized = _normalized_contract_value(value)
     if (
         normalized
@@ -189,6 +203,8 @@ def _canonical_terminal_state(value: Any) -> str:
 def _normalized_contract_value(value: Any) -> str:
     if not isinstance(value, str):
         return ""
+    if _NATIVE_NORMALIZED_CONTRACT_VALUE is not None:
+        return str(_NATIVE_NORMALIZED_CONTRACT_VALUE(value))
     return re.sub(r"[^a-z0-9]+", "_", value.strip().lower()).strip("_")
 
 

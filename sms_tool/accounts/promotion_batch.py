@@ -127,23 +127,10 @@ def refresh_promotion_statuses(
         try:
             with browser_fetch_for_account(account, proxy=proxy, timeout=timeout) as browser_fetch:
                 browser_identity = account_identity(account).get("browser_identity") or {}
-                # A browser-registered account *prefers* the browser context that
-                # registered it, but an unavailable context is a degradation, not a
-                # verdict. Failing closed here turned a missing Playwright/Camoufox
-                # install into a per-account "检测失败" that is indistinguishable from
-                # a broken account -- and it blocked every browser-registered account
-                # from being checked at all. The protocol transport still presents the
-                # same AT with the same saved fingerprint (``bind_account_identity``),
-                # and the liveness batch already degrades exactly this way, so the
-                # outcome is now a recorded ``browser_fallback`` marker instead of a
-                # refusal to probe.
-                browser_fallback = ""
-                if browser_identity:
-                    browser_fallback = "browser" if browser_fetch is not None else "unavailable"
-                # Stateless/imported accounts have no persisted identity
-                # affinity. Rotate through the supplied health pool when a
-                # proxy-only timeout occurs so one dead exit does not make
-                # the same account fail on every run.
+                # Prefer saved browser context; fall back to protocol transport cleanly.
+                browser_fallback = (
+                    ("browser" if browser_fetch is not None else "unavailable") if browser_identity else ""
+                )
                 candidates = _promotion_proxy_candidates(account, proxy, proxy_pool)
                 probe = None
                 for index, candidate in enumerate(candidates):
@@ -161,16 +148,11 @@ def refresh_promotion_statuses(
                         timeout=timeout,
                         browser_fetch=browser_fetch,
                         coupon_probe=True,
+                        team_coupon_probe=True,
                     )
                     used_proxy = candidate
                     if probe.get("ok"):
                         break
-                    # A 429 is per-exit *and* short-lived: sleep first, then
-                    # rotate to a fresh IP when the pool has one left, and
-                    # fall back to one delayed retry on the same exit once
-                    # the pool is exhausted. Total attempts are therefore
-                    # bounded at len(candidates) + 1, so a sustained 429
-                    # cannot multiply the batch duration.
                     backoff = _promotion_throttle_backoff(probe)
                     if backoff is not None:
                         time.sleep(backoff)
@@ -181,6 +163,7 @@ def refresh_promotion_statuses(
                                 timeout=timeout,
                                 browser_fetch=browser_fetch,
                                 coupon_probe=True,
+                                team_coupon_probe=True,
                             )
                             break
                         continue
@@ -202,13 +185,12 @@ def refresh_promotion_statuses(
                 "ok": bool(probe.get("ok")),
                 "promotion_status": label,
                 "promotion_state": str(probe.get("promotion_state") or ""),
+                "team_trial_eligible": bool(probe.get("team_trial_eligible")),
+                "team_trial_state": str(probe.get("team_trial_state") or ""),
                 "persisted": bool(persisted),
                 "probe": probe,
+                "promotion_display": label,
             }
-            # Pre-composed so every consumer (desktop grid, detail panel, task
-            # result list) renders the same string instead of each re-deriving
-            # the separator rule.
-            result["promotion_display"] = label
         except Exception as exc:
             result = {
                 "email": email,
@@ -241,11 +223,14 @@ def refresh_promotion_statuses(
     unauthorized = sum(1 for item in results if _promotion_status_code(item) == 401)
     transport_failed = sum(1 for item in results if _promotion_failure_class(item) == "transport")
     persist_failed = sum(1 for item in results if not item.get("persisted") and not item.get("skipped"))
-    # Owned here, not recounted by each caller. commands/registration.py used to
-    # derive this itself, which left the CLI promotion path with no such key at
-    # all -- two entry points, two different report shapes.
     trial_eligible = sum(
-        1 for item in results if isinstance(item.get("probe"), dict) and bool(item["probe"].get("plus_trial_eligible"))
+        1
+        for item in results
+        if isinstance(item.get("probe"), dict)
+        and (bool(item["probe"].get("plus_trial_eligible")) or bool(item["probe"].get("team_trial_eligible")))
+    )
+    team_trial_eligible = sum(
+        1 for item in results if isinstance(item.get("probe"), dict) and bool(item["probe"].get("team_trial_eligible"))
     )
     _emit_account_batch_event(
         run_id,
@@ -255,6 +240,7 @@ def refresh_promotion_statuses(
         detail=(
             f"完成 {len(results)} 个账号，成功 {success}，401 {unauthorized}，"
             f"传输失败 {transport_failed}，保存失败 {persist_failed}"
+            + (f"，Team 5席试用 {team_trial_eligible}" if team_trial_eligible else "")
             + (f"；连续环境失败触发熔断（{breaker.tripped_class}），剩余账号已跳过" if breaker.tripped else "")
         ),
     )
@@ -268,6 +254,7 @@ def refresh_promotion_statuses(
         "transport_failed": transport_failed,
         "persist_failed": persist_failed,
         "trial_eligible": trial_eligible,
+        "team_trial_eligible": team_trial_eligible,
         "results": results,
     }
 
@@ -416,6 +403,7 @@ def _preflight_failure_result(requested: int, preflight: dict[str, Any]) -> dict
         "transport_failed": requested,
         "persist_failed": 0,
         "trial_eligible": 0,
+        "team_trial_eligible": 0,
         "results": [],
         "error": "出口池预检失败：候选代理全部无响应，已中止以免整批空转",
         "error_code": "egress_pool_unavailable",

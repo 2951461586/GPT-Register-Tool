@@ -11,9 +11,11 @@ three-stage proxy-routing logic.  These utilities cover:
 
 from __future__ import annotations
 
+import importlib
 import json
 import os
 import re
+import sys
 import uuid
 from pathlib import Path
 from typing import Any
@@ -40,6 +42,33 @@ try:
     from curl_cffi import requests as curl_requests
 except ImportError:
     curl_requests = None
+
+# ─── 原生 Rust 加速加载 ──────────────────────────────────────────────────────
+
+
+def _load_native_pp_link_helpers() -> Any | None:
+    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
+    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_PP_LINK_HELPERS") or "").strip().lower()
+    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
+        return None
+    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "pp-link-helpers-rs" / "python"
+    if pkg_dir.is_dir():
+        pkg_str = str(pkg_dir)
+        if pkg_str not in sys.path:
+            sys.path.insert(0, pkg_str)
+    try:
+        return importlib.import_module("pp_link_helpers_rs")
+    except (ImportError, OSError):
+        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
+            raise
+        return None
+
+
+_NATIVE_PP_LINK_HELPERS = _load_native_pp_link_helpers()
+_NATIVE_NORMALIZE_PROXY_TEMPLATE = getattr(_NATIVE_PP_LINK_HELPERS, "normalize_proxy_template", None)
+_NATIVE_PROXY_FOR_COUNTRY_TEMPLATE = getattr(_NATIVE_PP_LINK_HELPERS, "proxy_for_country_template", None)
+_NATIVE_IS_PAYPAL_BA_APPROVE_URL = getattr(_NATIVE_PP_LINK_HELPERS, "is_paypal_ba_approve_url", None)
+_NATIVE_SCALAR_TYPES = (str, type(None), bool, int, float)
 
 # ─── 常量 ────────────────────────────────────────────────────────────────────
 
@@ -710,6 +739,8 @@ def normalize_proxy_template(template: str) -> str:
     - 反转: host:port@user:pass
     - 冒号分隔: host:port:user:pass
     """
+    if _NATIVE_NORMALIZE_PROXY_TEMPLATE is not None and isinstance(template, _NATIVE_SCALAR_TYPES):
+        return str(_NATIVE_NORMALIZE_PROXY_TEMPLATE(template))
     proxy = str(template or "").strip()
     if not proxy:
         return proxy
@@ -751,6 +782,12 @@ def proxy_for_country_template(template: str, country: str) -> str:
     * the password-less ``user-XX`` fallback, reachable only when the
       credential carries no recognisable region token at all.
     """
+    if (
+        _NATIVE_PROXY_FOR_COUNTRY_TEMPLATE is not None
+        and isinstance(template, _NATIVE_SCALAR_TYPES)
+        and isinstance(country, _NATIVE_SCALAR_TYPES)
+    ):
+        return str(_NATIVE_PROXY_FOR_COUNTRY_TEMPLATE(template, country))
     proxy = normalize_proxy_template(template)
     country = str(country or "").strip().upper()
     if not proxy or not country:
@@ -788,6 +825,8 @@ def rotate_proxy_session_id(proxy: str) -> str:
 
 
 def is_paypal_ba_approve_url(url: str) -> bool:
+    if _NATIVE_IS_PAYPAL_BA_APPROVE_URL is not None and isinstance(url, _NATIVE_SCALAR_TYPES):
+        return bool(_NATIVE_IS_PAYPAL_BA_APPROVE_URL(url))
     try:
         parsed = urlsplit(url)
     except Exception:

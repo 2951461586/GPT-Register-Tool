@@ -25,13 +25,20 @@ from .base import (
     _protocol_cfg,
 )
 from .extract_server import extract_link_via_server, resolve_extract_server_config
+from . import team_trial as _team_trial
+
+
+def probe_team_trial_eligibility(*args: Any, **kwargs: Any) -> dict[str, Any]:
+    """Dispatch to ``team_trial.probe_team_trial_eligibility`` via the module seam."""
+    return _team_trial.probe_team_trial_eligibility(*args, **kwargs)
 
 
 def build_default_payment_registry() -> PaymentAdapterRegistry:
     """Build and validate the complete adapter composition for the catalog.
 
-    All local source payment extractors have been retired; every payment method
-    now dispatches through the external Paylink Extraction Server adapter.
+    Regional wallet / PayPal methods route through the external Paylink
+    Extraction Server adapter, while ``team_trial`` executes natively in-process
+    against ChatGPT's hosted Team Checkout endpoint.
     """
     registry = PaymentAdapterRegistry()
 
@@ -89,7 +96,34 @@ def build_default_payment_registry() -> PaymentAdapterRegistry:
             config=server_cfg,
         )
 
-    registry.register(FunctionPaymentAdapter("extract_server", tuple(CATALOG_METHODS), extract_server_runner))
+    def team_trial_runner(
+        *,
+        access_token: str,
+        proxy: Any = None,
+        auth_context: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        kwargs.pop("payment_method", None)
+        kwargs.pop("runtime_config", None)
+        return _team_trial.extract_team_trial_link(
+            access_token,
+            proxy=str(proxy or "").strip(),
+            auth_context=auth_context,
+            timeout=kwargs.get("timeout", 30),
+            workspace_name=str(kwargs.get("workspace_name") or _team_trial.TEAM_TRIAL_DEFAULT_WORKSPACE_NAME),
+            seat_quantity=kwargs.get("seat_quantity", _team_trial.TEAM_TRIAL_DEFAULT_SEATS),
+            target_country=str(kwargs.get("target_country") or ""),
+            checkout_country=str(kwargs.get("checkout_country") or ""),
+            currency=str(kwargs.get("currency") or ""),
+            verify_eligibility=bool(kwargs.get("verify_eligibility", True)),
+            checkout_ui_mode=str(kwargs.get("checkout_ui_mode") or "hosted"),
+        )
+
+    extract_server_methods = tuple(key for key, defn in CATALOG_METHODS.items() if defn.adapter == "extract_server")
+    team_trial_methods = tuple(key for key, defn in CATALOG_METHODS.items() if defn.adapter == "team_trial_direct")
+    registry.register(FunctionPaymentAdapter("extract_server", extract_server_methods, extract_server_runner))
+    if team_trial_methods:
+        registry.register(FunctionPaymentAdapter("team_trial_direct", team_trial_methods, team_trial_runner))
     registry.validate_methods(set(PAYMENT_METHODS))
     validate_catalog_consistency(adapter_methods=set(registry.methods()))
     return registry

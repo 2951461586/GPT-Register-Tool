@@ -293,7 +293,15 @@ def check_registered_promotions(emails, workers=4, proxy=None, timeout=20, proxy
 
     targets = unique_emails(emails)
     if not targets:
-        report = {"ok": True, "total": 0, "success": 0, "failed": 0, "trial_eligible": 0, "results": []}
+        report = {
+            "ok": True,
+            "total": 0,
+            "success": 0,
+            "failed": 0,
+            "trial_eligible": 0,
+            "team_trial_eligible": 0,
+            "results": [],
+        }
         safe_print("[*] Promotion check: no saved successful account to probe.")
         logger.info("promotion check: no saved successful account to probe")
         return report
@@ -315,6 +323,7 @@ def check_registered_promotions(emails, workers=4, proxy=None, timeout=20, proxy
             "success": 0,
             "failed": len(targets),
             "trial_eligible": 0,
+            "team_trial_eligible": 0,
             "results": [],
             "error": str(sanitize(exc)),
         }
@@ -324,24 +333,21 @@ def check_registered_promotions(emails, workers=4, proxy=None, timeout=20, proxy
 
     _raw_results: object = report.get("results")
     results: list = _raw_results if isinstance(_raw_results, list) else []
-    # refresh_promotion_statuses owns this count now. It used to be recounted
-    # here, which left the other CLI entry point with no such key at all.
-    # Report values come from a promotion batch that may be partially failed and
-    # from journal records replayed across processes, so they are not trusted to be
-    # numeric. ``protocol_helpers._safe_int`` is the canonical tolerant cast (the
-    # same one the registration stages use) instead of a bare ``int()`` here.
     trial_eligible = _safe_int(report.get("trial_eligible"), 0)
+    team_trial_eligible = _safe_int(report.get("team_trial_eligible"), 0)
     report["trial_eligible"] = trial_eligible
+    report["team_trial_eligible"] = team_trial_eligible
     safe_print(
         "[*] Promotion check: "
         f"success={_safe_int(report.get('success'), 0)}/{_safe_int(report.get('total'), 0)} "
-        f"trial_eligible={trial_eligible}"
+        f"trial_eligible={trial_eligible} team_trial_eligible={team_trial_eligible}"
     )
     logger.info(
-        "promotion check finished: success=%s/%s trial_eligible=%s",
+        "promotion check finished: success=%s/%s trial_eligible=%s team_trial_eligible=%s",
         _safe_int(report.get("success"), 0),
         _safe_int(report.get("total"), 0),
         trial_eligible,
+        team_trial_eligible,
     )
     for item in results:
         if not isinstance(item, dict):
@@ -360,6 +366,7 @@ _PROMOTION_SUM_KEYS = (
     "transport_failed",
     "persist_failed",
     "trial_eligible",
+    "team_trial_eligible",
 )
 
 

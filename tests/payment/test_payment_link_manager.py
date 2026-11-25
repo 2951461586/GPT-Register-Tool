@@ -77,9 +77,16 @@ class PaymentLinkManagerTests(unittest.TestCase):
                 "qris",
                 "bizum",
                 "naver_pay",
+                "team_trial",
             },
         )
-        self.assertTrue(all(item["adapter"] == "extract_server" and item["available"] for item in methods.values()))
+        self.assertTrue(
+            all(
+                item["adapter"] == ("team_trial_direct" if key == "team_trial" else "extract_server")
+                and item["available"]
+                for key, item in methods.items()
+            )
+        )
 
     def test_aliases_are_normalized(self):
         self.assertEqual(manager.normalize_payment_method("upi_qr"), "upi")

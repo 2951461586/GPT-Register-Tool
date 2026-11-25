@@ -2207,3 +2207,162 @@ def test_the_repeat_window_switch_is_read_through_the_real_config_path():
         assert account_recovery._relogin_repeat_cooldown_seconds() == 60
     with runtime_config_scope({"chatgpt": {}, "account_health": {}}):
         assert account_recovery._relogin_repeat_cooldown_seconds() == 21600
+
+
+def test_relogin_falls_back_to_passwordless_otp_when_stored_password_bounces():
+    """Legacy accounts without registration_mode bounce 401 on password verify;
+    retrying directly with password_unknown=True recovers via email OTP."""
+    seen: list[tuple[bool, object]] = []
+
+    def fake_email_relogin(account, proxy=None, timeout=None):
+        seen.append((bool(account.get("password_unknown")), proxy))
+        if not account.get("password_unknown"):
+            return {"ok": False, "mode": "chatgpt_email_otp", "error": "existing_login_password_verify_failed:401"}
+        return {"ok": True, "mode": "chatgpt_email_otp", "persisted": True}
+
+    with (
+        patch.object(account_recovery, "CFG", {"proxy": {}}),
+        patch.object(account_recovery, "_recovery_allow_direct", return_value=False),
+        patch.object(account_recovery, "resolve_account_proxy", return_value="http://affinity:1"),
+        patch.object(account_recovery, "_select_recovery_proxy", return_value=("http://selected:2", [])),
+        patch.object(
+            account_recovery,
+            "relogin_refresh_token_account",
+            return_value={"ok": False, "error": "missing_refresh_token"},
+        ),
+        patch.object(
+            account_recovery,
+            "relogin_web_session_account",
+            return_value={"ok": False, "error": "auth_session_missing_access_token", "last_status": "200"},
+        ),
+        patch.object(account_recovery, "relogin_chatgpt_email_account", side_effect=fake_email_relogin),
+        patch.object(account_recovery, "relogin_local_codex_account") as codex,
+    ):
+        result = account_recovery.relogin_codex_account({"email": "legacy@outlook.com"}, mode="auto")
+
+    assert result["ok"] is True
+    assert seen == [(False, "http://selected:2"), (True, "http://affinity:1")]
+    codex.assert_not_called()
+
+
+def test_relogin_rotates_exit_only_for_pre_otp_errors():
+    """Pre-OTP 429/403/CSRF errors spend zero email codes and rotate cleanly."""
+    seen: list[object] = []
+
+    def fake_email_relogin(account, proxy=None, timeout=None):
+        seen.append(proxy)
+        if len(seen) == 1:
+            return {"ok": False, "mode": "chatgpt_email_otp", "error": "session_circuit_open:http_429:retry_after=300s"}
+        return {"ok": True, "mode": "chatgpt_email_otp", "persisted": True}
+
+    with (
+        patch.object(account_recovery, "CFG", {"proxy": {}}),
+        patch.object(account_recovery, "_recovery_allow_direct", return_value=False),
+        patch.object(account_recovery, "resolve_account_proxy", return_value="http://affinity:1"),
+        patch.object(account_recovery, "_select_recovery_proxy", return_value=("http://selected:2", [])),
+        patch.object(account_recovery, "relogin_chatgpt_email_account", side_effect=fake_email_relogin),
+    ):
+        result = account_recovery.relogin_codex_account(
+            {"email": "pwless@outlook.com", "registration_mode": "passwordless"},
+            mode="chatgpt_email_otp",
+        )
+
+    assert result["ok"] is True
+    assert seen == ["http://selected:2", "http://affinity:1"]
+
+
+def test_verify_candidate_retries_liveness_probe_on_transport_zero_status():
+    """A freshly acquired AT survives a status_code=0 drop on the first exit."""
+    calls: list[object] = []
+
+    def fake_probe(account, proxy=None, timeout=30):
+        calls.append(proxy)
+        if len(calls) == 1:
+            return {"ok": False, "status_code": 0, "error": "curl: (52) empty reply"}
+        return {"ok": True, "status": "active", "status_code": 200, "quota_status": "可用"}
+
+    with (
+        patch.object(
+            account_recovery,
+            "CFG",
+            {"proxy": {"pool": ["http://exit-1:8080", "http://exit-2:8080"]}},
+        ),
+        patch.object(account_recovery, "probe_account_liveness", side_effect=fake_probe),
+        patch("sms_tool.session.refresh._save_refreshed", return_value="session.json"),
+    ):
+        result = account_recovery._verify_and_persist_candidate(
+            {"email": "ok@outlook.com"},
+            {"email": "ok@outlook.com", "access_token": "fresh_at"},
+            mode="chatgpt_email_otp",
+            proxy="http://exit-1:8080",
+            timeout=30,
+        )
+
+    assert result["ok"] is True
+    assert calls == ["http://exit-1:8080", "http://exit-2:8080"]
+
+
+def test_proxy_pool_for_relogin_uses_health_pool_and_batch_spreads_workers():
+    from sms_tool.proxy.routing import proxy_pool_for
+
+    cfg = {"proxy": {"pool": ["http://p1:8080", "http://p2:8080", "http://p3:8080"]}}
+    assert proxy_pool_for(cfg, "relogin") == ["http://p1:8080", "http://p2:8080", "http://p3:8080"]
+
+    seen_proxies: dict[str, object] = {}
+
+    def fake_relogin(account, proxy=None, timeout=30, mode="auto"):
+        seen_proxies[account["email"]] = proxy
+        return {"ok": True, "probe": {"ok": True, "status": "active", "status_code": 200, "quota_status": "可用"}}
+
+    with (
+        patch.object(account_recovery, "CFG", cfg),
+        patch.object(
+            account_recovery,
+            "get_account_record",
+            side_effect=lambda em: {"email": em, "access_token": "old_at"},
+        ),
+        patch.object(
+            account_recovery,
+            "probe_account_liveness",
+            return_value={"ok": False, "status": "token_invalid", "status_code": 401, "quota_status": "401失效"},
+        ),
+        patch.object(account_recovery, "relogin_codex_account", side_effect=fake_relogin),
+        patch.object(account_recovery, "mark_quota_status", return_value=True),
+        patch.object(account_recovery, "clear_stale_promotion_at_marker", return_value=True),
+        patch.object(account_recovery, "mailbox_relogin_allowed", return_value=True),
+    ):
+        summary = recovery_batch.refresh_local_quota_statuses(
+            ["a@outlook.com", "b@outlook.com", "c@outlook.com"],
+            workers=1,
+            relogin_on_401=True,
+        )
+
+    assert summary["relogin_success"] == 3
+    assert set(seen_proxies.values()) == {"http://p1:8080", "http://p2:8080", "http://p3:8080"}
+
+
+def test_mark_promotion_status_persists_machine_trial_flags(tmp_path):
+    import json as json_mod
+    from sms_tool.store.accounts import get_account_record, upsert_account
+    from sms_tool.store.markers import mark_promotion_status
+
+    cfg = {"chatgpt": {}, "storage": {"sqlite_file": str(tmp_path / "accounts.sqlite3")}}
+    upsert_account({"email": "team@outlook.com", "access_token": "at_1"}, runtime_config=cfg)
+    assert mark_promotion_status(
+        "team@outlook.com",
+        "可试用Plus·-100%·×1month·可试用Team(5席)",
+        promotion_result={
+            "ok": True,
+            "promotion_state": "trial_eligible",
+            "plus_trial_eligible": True,
+            "team_trial_eligible": True,
+            "team_trial_state": "eligible",
+        },
+        runtime_config=cfg,
+    )
+    record = get_account_record("team@outlook.com", runtime_config=cfg)
+    raw = json_mod.loads(record["raw_json"])
+    assert raw["team_trial_eligible"] is True
+    assert raw["promotion"]["team_trial_eligible"] is True
+    assert raw["promotion"]["plus_trial_eligible"] is True
+    assert raw["promotion"]["team_trial_state"] == "eligible"

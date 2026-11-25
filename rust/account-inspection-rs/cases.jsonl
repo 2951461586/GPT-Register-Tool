@@ -1,0 +1,37 @@
+{"fn": "decode_jwt_exp", "args": [{}], "ok": null}
+{"fn": "decode_jwt_exp", "args": [[]], "ok": null}
+{"fn": "decode_jwt_exp", "args": ["x"], "ok": null}
+{"fn": "decode_jwt_exp", "args": [0], "ok": null}
+{"fn": "decode_jwt_exp", "args": [null], "ok": null}
+{"fn": "decode_jwt_exp", "args": [true], "ok": null}
+{"fn": "decode_jwt_exp", "args": [{"a": {"b": "c"}}], "ok": null}
+{"fn": "decode_jwt_exp", "args": [{"a": "b"}], "ok": null}
+{"fn": "decode_jwt_exp", "args": [["a", 1]], "ok": null}
+{"fn": "decode_jwt_exp", "args": [{"zebra": 1, "apple": 2, "10": 3, "2": 4, "é": 5, "Apple": 6}], "ok": null}
+{"fn": "decode_jwt_exp", "args": [{"n": 9007199254740993, "f": 1e+21, "t": 0.1, "neg": -7}], "ok": null}
+{"fn": "decode_jwt_exp", "args": [[3, 1, 2]], "ok": null}
+{"fn": "decode_jwt_exp", "args": [null], "ok": null}
+{"fn": "decode_jwt_exp", "args": [""], "ok": null}
+{"fn": "decode_jwt_exp", "args": ["   "], "ok": null}
+{"fn": "decode_jwt_exp", "args": ["not-a-jwt"], "ok": null}
+{"fn": "decode_jwt_exp", "args": ["a.b"], "ok": null}
+{"fn": "decode_jwt_exp", "args": ["a.b.c.d"], "ok": null}
+{"fn": "decode_jwt_exp", "args": ["a..c"], "ok": null}
+{"fn": "decode_jwt_exp", "args": ["a.!!!.c"], "ok": null}
+{"fn": "decode_jwt_exp", "args": ["eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiAidTEiLCAiZXhwIjogMTg5MzQ1NjAwMH0.signature_placeholder_xyz"], "ok": {"$float": "1893456000.0"}}
+{"fn": "decode_jwt_exp", "args": ["Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiAidTIiLCAiZXhwIjogMTc2MDAwMDEyMy41LCAiaHR0cHM6Ly9hcGkub3BlbmFpLmNvbS9hdXRoIjogeyJjaGF0Z3B0X2FjY291bnRfaWQiOiAiYWNjXzEifX0.signature_placeholder_xyz"], "ok": 1760000123.5}
+{"fn": "decode_jwt_exp", "args": ["  bearer   eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOiAwfQ.signature_placeholder_xyz  "], "ok": {"$float": "0.0"}}
+{"fn": "decode_jwt_exp", "args": ["eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiAibm9fZXhwIn0.signature_placeholder_xyz"], "ok": null}
+{"fn": "decode_jwt_exp", "args": ["eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOiB0cnVlfQ.signature_placeholder_xyz"], "ok": null}
+{"fn": "decode_jwt_exp", "args": ["eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOiAiMTg5MzQ1NjAwMCJ9.signature_placeholder_xyz"], "ok": null}
+{"fn": "decode_jwt_exp", "args": ["eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.WzEsIDIsIDNd.signature_placeholder_xyz"], "ok": null}
+{"fn": "decode_jwt_exp", "args": ["eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOiAxNzAwMDAzNjAwfQ.sig"], "ok": {"$float": "1700003600.0"}}
+{"fn": "decode_jwt_exp", "args": ["Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOiAxNzAwMDAzNjAwfQ.sig"], "ok": {"$float": "1700003600.0"}}
+{"fn": "decode_jwt_exp", "args": ["eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOiB0cnVlfQ.sig"], "ok": null}
+{"fn": "decode_jwt_exp", "args": ["not-a-jwt"], "ok": null}
+{"fn": "decode_jwt_exp", "args": ["eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiAidXNlci0xIn0.sig"], "ok": null}
+{"fn": "decode_jwt_exp", "args": ["eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOiAxNjk5OTk5OTQwfQ.sig"], "ok": {"$float": "1699999940.0"}}
+{"fn": "decode_jwt_exp", "args": ["eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOiAxNzAwMDAwMTIwfQ.sig"], "ok": {"$float": "1700000120.0"}}
+{"fn": "decode_jwt_exp", "args": ["eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOiAxNzAwMDA3MjAwfQ.sig"], "ok": {"$float": "1700007200.0"}}
+{"fn": "decode_jwt_exp", "args": ["eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOiAxNjk5OTk5OTkwfQ.sig"], "ok": {"$float": "1699999990.0"}}
+{"fn": "decode_jwt_exp", "args": ["eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOiAxNjk5OTk5OTk1fQ.sig"], "ok": {"$float": "1699999995.0"}}

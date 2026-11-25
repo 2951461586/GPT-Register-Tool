@@ -7,6 +7,10 @@ public sealed class AccountGridPresentationTests
     [Theory]
     [InlineData("可试用Plus·-100%·×1month")]
     [InlineData("可试用 plus")]
+    [InlineData("可试用Team(5席)")]
+    [InlineData("可试用Plus·-100%·×1month·可试用Team(5席)")]
+    [InlineData("已订阅·Plus·可试用Team(5席)")]
+    [InlineData("Team (5 seats) trial")]
     public void TrialEligiblePromotionIsRecognized(string status)
     {
         Assert.True(PromotionStatusPresentation.IsTrialEligible(status));

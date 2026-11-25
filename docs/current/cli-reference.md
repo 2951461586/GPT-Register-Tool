@@ -87,13 +87,12 @@ are omitted.
 | `--one-click-scan` | — | Batch OAuth scan accounts for account_deactivated and add-phone/secondary phone verification |
 | `--one-click-sms` | — | Run Codex OAuth login for selected account(s), complete phone SMS verification, and store RT |
 | `--open-paypal-link` | — | Open saved PayPal payment link for --email |
-| `--paid-timeout` | value | Seconds to wait for UPI payment when --wait-paid is set (default 900) |
 | `--password` | value | Use a specific password |
 | `--payment-batch-id` | value | Batch ID; reused only together with --payment-resume-checkpoint |
 | `--payment-canary` | value | Limit a payment batch to the first N unique accounts |
 | `--payment-country` | value | UPI local payment-method country, e.g. IN |
 | `--payment-matrix` | value | Payment eligibility matrix as JSON text/path; defaults to protocol_payments.matrix |
-| `--payment-method`, `--payment-link-method` | choices: `paypal`, `gopay`, `go_pay`, `go-pay`, `gcash`, `grabpay`, `grab_pay`, `grab-pay`, `upi`, `upiqr`, `upi_qr`, `upi-qr`, `ideal`, `pix`, `kakao`, `kakao_pay`, `kakao-pay`, `blik`, `twint`, `direct_card`, `direct-card`, `directcard`, `direct`, `zhika`, `card`, `checkout`, `momo`, `momo_qr`, `momo-qr`, `momoqr`, `qris`, `qris_id`, `bizum`, `bizum_es`, `naver_pay`, `naverpay`, `naver-pay` | Protocol payment-link method |
+| `--payment-method`, `--payment-link-method` | choices: `paypal`, `gopay`, `go_pay`, `go-pay`, `gcash`, `grabpay`, `grab_pay`, `grab-pay`, `upi`, `upiqr`, `upi_qr`, `upi-qr`, `ideal`, `pix`, `kakao`, `kakao_pay`, `kakao-pay`, `blik`, `twint`, `direct_card`, `direct-card`, `directcard`, `direct`, `zhika`, `card`, `checkout`, `momo`, `momo_qr`, `momo-qr`, `momoqr`, `qris`, `qris_id`, `bizum`, `bizum_es`, `naver_pay`, `naverpay`, `naver-pay`, `team_trial`, `team`, `team_5`, `team-trial`, `team5`, `chatgpt_team` | Protocol payment-link method |
 | `--payment-method-proxy` | value | Explicit payment-method creation proxy |
 | `--payment-probe-only` | — | Create Checkout and run Stripe capability detection without creating a payment method |
 | `--payment-qualification-all-methods` | — | Probe every candidate method instead of stopping at the first eligible one. Each candidate is its own Checkout create, so this is a diagnostic mode. |
@@ -146,11 +145,11 @@ are omitted.
 | `--remail-supply` | choices: `private_first`, `public_only` | ReMail inventory policy |
 | `--remail-token` | value | ReMail service token; requires --email |
 | `--require-ba-token` | — | Require a PayPal BA approve URL/token; fail instead of returning hosted fallback |
-| `--require-server-upi-mandate` | — | Verify the server returned the expected UPI mandate_options before continuing |
 | `--scan-deep-probe` | — | Allow --one-click-scan to run OAuth/email-OTP deep probing; default is AT probe-only |
 | `--scan-relogin-mode` | choices: `auto`, `web_session`, `codex_oauth` | Relogin mode for --one-click-scan --quota-auto-relogin; auto tries RT, web session, protocol email-OTP, then Codex OAuth |
 | `--session-file` | value | Session JSON path for account and payment operations |
 | `--session-token` | value | ChatGPT __Secure-next-auth.session-token for the UPI lane. The Checkout is a same-site action: without the session cookies the access token was issued with it answers 400 unusual activity |
+| `--skip-team-eligibility-check` | — | Skip read-only team-1-month-free coupon pre-check before creating Team checkout link |
 | `--smailr-domain` | value | Smailr mailbox domain, default smailr.default_domain in config.json |
 | `--smsbower-country` | value | SMSBower country ID for phone registration (default: from config) |
 | `--stripe-init-proxy` | value | Explicit Stripe init proxy (falls back to provider proxy) |
@@ -169,8 +168,9 @@ are omitted.
 | `--target-at200` | value | Replenish ReMail registrations until this many stable HTTP-200 AT accounts are saved |
 | `--target-country` | value | Target/order country for PayPal generation; legacy checkout-country alias for UPI |
 | `--target-success` | value | Stop batch registration once N accounts succeed (works with any mailbox source; unconsumed mailboxes stay untouched) |
+| `--team-seat-quantity` | value | Seat count for --payment-method team_trial (2..5, default: 5) |
+| `--team-workspace-name` | value | Workspace name for --payment-method team_trial hosted checkout (default: MyTeam) |
 | `--test-payment-proxies` | — | Probe checkout/approve/update proxy exits and print JSON |
 | `--view-inbox` | — | Fetch recent mailbox messages for --email/--session-file and print JSON |
-| `--wait-paid` | — | Keep the UPI checkout session open and poll until the QR is paid or timed out |
 | `--workers` | value | Concurrent workers for batch registration and account operations |
 | `-h`, `--help` | — | show this help message and exit |

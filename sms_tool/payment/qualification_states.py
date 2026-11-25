@@ -12,7 +12,35 @@ contract tests import it alongside the batch module.
 
 from __future__ import annotations
 
+import importlib
+import os
+import sys
+from pathlib import Path
 from typing import Any
+
+
+def _load_native_qualification_states() -> Any | None:
+    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
+    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_QUALIFICATION_STATES") or "").strip().lower()
+    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
+        return None
+    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "qualification-states-rs" / "python"
+    if pkg_dir.is_dir():
+        pkg_str = str(pkg_dir)
+        if pkg_str not in sys.path:
+            sys.path.insert(0, pkg_str)
+    try:
+        return importlib.import_module("qualification_states_rs")
+    except (ImportError, OSError):
+        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
+            raise
+        return None
+
+
+_NATIVE_QUALIFICATION_STATES = _load_native_qualification_states()
+_NATIVE_QUALIFICATION_STATE = getattr(_NATIVE_QUALIFICATION_STATES, "qualification_state", None)
+_NATIVE_QUALIFICATION_LABEL = getattr(_NATIVE_QUALIFICATION_STATES, "qualification_label", None)
+_NATIVE_SCALAR_TYPES = (str, type(None), bool, int, float)
 
 QUALIFICATION_ELIGIBLE = "eligible"
 QUALIFICATION_INELIGIBLE = "ineligible"
@@ -139,6 +167,11 @@ def qualification_state(result: Any) -> str:
     """Map one capability-probe result onto the stable qualification state."""
     if not isinstance(result, dict) or not result:
         return QUALIFICATION_UNKNOWN
+    if _NATIVE_QUALIFICATION_STATE is not None:
+        try:
+            return str(_NATIVE_QUALIFICATION_STATE(result))
+        except TypeError:
+            pass
     error_text = f"{_text(result.get('error'))} {_text(result.get('error_code'))} {_text(result.get('error_stage'))}"
     eligible = result.get("eligible")
     conclusive = bool(result.get("conclusive"))
@@ -169,6 +202,15 @@ def qualification_state(result: Any) -> str:
 
 def qualification_label(result: Any, method: str = "") -> str:
     """Compose the 支付资格 badge text from the same result as the state."""
+    if (
+        _NATIVE_QUALIFICATION_LABEL is not None
+        and (result is None or isinstance(result, dict))
+        and isinstance(method, _NATIVE_SCALAR_TYPES)
+    ):
+        try:
+            return str(_NATIVE_QUALIFICATION_LABEL(result, method))
+        except TypeError:
+            pass
     state = qualification_state(result)
     source = result if isinstance(result, dict) else {}
     name = method_label(method or source.get("payment_method") or "")

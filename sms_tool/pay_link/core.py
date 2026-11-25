@@ -19,7 +19,12 @@ from ..payment.routing import PaymentRoutePlan, PaymentRoutePlanner
 from .base import PAYMENT_METHODS, _LOGGER, _config_data, _offline_refusal, _redact_sensitive_text
 from .normalize import _classify_exception, _normalize_result
 from .persistence import _safe_persist_run
-from .registry import PAYMENT_ADAPTERS, _enabled_methods, normalize_payment_method
+from .registry import (
+    PAYMENT_ADAPTERS,
+    _enabled_methods,
+    normalize_payment_method,
+    probe_team_trial_eligibility,
+)
 
 #: Failures the validation / route-planning preamble normalises instead of
 #: letting escape. Both public entry points share this tuple so a pool outage
@@ -238,6 +243,14 @@ def probe_payment_method(
     assert isinstance(plan, PaymentRoutePlan)
     options.update(plan.to_adapter_options())
     options.pop("probe_only", None)
+
+    if method == "team_trial":
+        return probe_team_trial_eligibility(
+            access_token=access_token,
+            proxy=str(plan.checkout_proxy or "").strip(),
+            auth_context=auth_context,
+            timeout=options.get("timeout", 30),
+        )
 
     from ..payment.capability import payment_method_capability_probe
 

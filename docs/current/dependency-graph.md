@@ -17,10 +17,10 @@ the *gate* (per-pair, only-down); this file is the *view*.
 
 | Measure | Value |
 | --- | ---: |
-| Modules | 297 |
-| Module-level import edges | 919 |
+| Modules | 295 |
+| Module-level import edges | 914 |
 | Delayed (function-local) edges | 309 |
-| Type-only (`if TYPE_CHECKING`) edges | 59 |
+| Type-only (`if TYPE_CHECKING`) edges | 60 |
 | Strongly connected components (size > 1) | 0 |
 | Modules inside a cycle | 0 |
 | Mutually dependent directory pairs | 17 |
@@ -67,6 +67,6 @@ None.
 | `sms_tool.storage` | 14 |
 | `sms_tool.registration_drivers.base` | 13 |
 | `sms_tool.registration.state` | 12 |
-| `sms_tool.payment.catalog` | 11 |
 | `sms_tool.cross_process_gate` | 10 |
 | `sms_tool.kernel.error_classification` | 10 |
+| `sms_tool.accounts.account_liveness` | 9 |

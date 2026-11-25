@@ -10,20 +10,7 @@ from ..config import current_config_data, resolve_runtime_config
 from ..kernel.paths import project_path, runtime_file
 from ..payment.catalog import (
     PAYMENT_METHODS as CATALOG_METHODS,
-    normalize_payment_method as normalize_catalog_payment_method,
     offline_method_error,
-    validate_catalog_consistency,
-)
-from ..operation_journal import (
-    PaymentOperationConflict,
-    PaymentOperationStore,
-    conflict_result as payment_operation_conflict_result,
-)
-from ..payment.routing import (
-    PaymentRoutePlan,
-    PaymentRoutePlanner,
-    parse_proxy_pool,
-    payment_proxy_pools as canonical_payment_proxy_pools,
 )
 from ..kernel.sanitizer import sanitize as _canonical_sanitize, sanitize_text as _canonical_sanitize_text
 

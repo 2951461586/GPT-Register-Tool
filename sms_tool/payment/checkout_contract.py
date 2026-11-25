@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Any, Iterable
 
 from .catalog import PAYMENT_METHODS as CATALOG_PAYMENT_METHODS
+from .promotion_states import TEAM_TRIAL_CAMPAIGN_ID as TEAM_TRIAL_CAMPAIGN_ID
 from ..transport import endpoints
 
 

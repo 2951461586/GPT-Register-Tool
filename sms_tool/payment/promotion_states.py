@@ -23,6 +23,11 @@ PROMOTION_STATE_UNKNOWN = "unknown"
 # fallback for records written before ``promotion_state`` existed.
 AUTH_INVALID_LABEL = "AT失效"
 
+# Canonical ChatGPT Team 5-seat 1-month-free promo campaign id. Single owner:
+# shared across account_promotion (read-only coupon probe), checkout_contract,
+# and pay_link/team_trial (hosted checkout link extraction).
+TEAM_TRIAL_CAMPAIGN_ID = "team-1-month-free"
+
 
 def promotion_marker_is_stale(
     promotion_status: str = "",
@@ -55,5 +60,6 @@ __all__ = [
     "PROMOTION_STATE_PROBE_FAILED",
     "PROMOTION_STATE_UNKNOWN",
     "AUTH_INVALID_LABEL",
+    "TEAM_TRIAL_CAMPAIGN_ID",
     "promotion_marker_is_stale",
 ]

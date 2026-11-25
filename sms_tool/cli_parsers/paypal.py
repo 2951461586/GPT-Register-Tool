@@ -20,22 +20,6 @@ def register(parser: argparse.ArgumentParser) -> None:
         help="Generate India UPI hosted payment link and QR directly from Access Token",
     )
     parser.add_argument(
-        "--wait-paid",
-        action="store_true",
-        help="Keep the UPI checkout session open and poll until the QR is paid or timed out",
-    )
-    parser.add_argument(
-        "--paid-timeout",
-        type=float,
-        default=900.0,
-        help="Seconds to wait for UPI payment when --wait-paid is set (default 900)",
-    )
-    parser.add_argument(
-        "--require-server-upi-mandate",
-        action="store_true",
-        help="Verify the server returned the expected UPI mandate_options before continuing",
-    )
-    parser.add_argument(
         "--auto-pay", action="store_true", help="Automate PayPal payment (reverse protocol first, browser fallback)"
     )
     parser.add_argument(

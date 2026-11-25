@@ -1,0 +1,53 @@
+{"fn": "_redact_recovery_error", "args": [["a", 1]], "ok": "['a', 1]"}
+{"fn": "_redact_recovery_error", "args": [{"a": "b"}], "ok": "{'a': 'b'}"}
+{"fn": "_redact_recovery_error", "args": [null], "ok": ""}
+{"fn": "_redact_recovery_error", "args": [true], "ok": "True"}
+{"fn": "_redact_recovery_error", "args": [{}], "ok": ""}
+{"fn": "_redact_recovery_error", "args": [{"a": {"b": "c"}}], "ok": "{'a': {'b': 'c'}}"}
+{"fn": "_redact_recovery_error", "args": [[]], "ok": ""}
+{"fn": "_redact_recovery_error", "args": [0], "ok": ""}
+{"fn": "_redact_recovery_error", "args": ["x"], "ok": "x"}
+{"fn": "_redact_recovery_error", "args": [{"zebra": 1, "apple": 2, "10": 3, "2": 4, "é": 5, "Apple": 6}], "ok": "{'zebra': 1, 'apple': 2, '10': 3, '2': 4, 'é': 5, 'Apple': 6}"}
+{"fn": "_redact_recovery_error", "args": [{"n": 9007199254740993, "f": 1e+21, "t": 0.1, "neg": -7}], "ok": "{'n': 9007199254740993, 'f': 1e+21, 't': 0.1, 'neg': -7}"}
+{"fn": "_redact_recovery_error", "args": [[3, 1, 2]], "ok": "[3, 1, 2]"}
+{"fn": "_relogin_failure_quota_status", "args": [0], "ok": "relogin_failed"}
+{"fn": "_relogin_failure_quota_status", "args": [["a", 1]], "ok": "relogin_failed"}
+{"fn": "_relogin_failure_quota_status", "args": ["x"], "ok": "relogin_failed"}
+{"fn": "_relogin_failure_quota_status", "args": [{"a": "b"}], "ok": "relogin_failed"}
+{"fn": "_relogin_failure_quota_status", "args": [{}], "ok": "relogin_failed"}
+{"fn": "_relogin_failure_quota_status", "args": [[]], "ok": "relogin_failed"}
+{"fn": "_relogin_failure_quota_status", "args": [null], "ok": "relogin_failed"}
+{"fn": "_relogin_failure_quota_status", "args": [true], "ok": "relogin_failed"}
+{"fn": "_relogin_failure_quota_status", "args": [{"a": {"b": "c"}}], "ok": "relogin_failed"}
+{"fn": "_relogin_failure_quota_status", "args": [{"zebra": 1, "apple": 2, "10": 3, "2": 4, "é": 5, "Apple": 6}], "ok": "relogin_failed"}
+{"fn": "_relogin_failure_quota_status", "args": [{"n": 9007199254740993, "f": 1e+21, "t": 0.1, "neg": -7}], "ok": "relogin_failed"}
+{"fn": "_relogin_failure_quota_status", "args": [[3, 1, 2]], "ok": "relogin_failed"}
+{"fn": "_relogin_failure_quota_status", "args": [{"ok": false, "mode": "chatgpt_email_otp", "error": "existing_login_otp_poll_timeout"}], "ok": "relogin_otp_failed"}
+{"fn": "_relogin_failure_quota_status", "args": [{"ok": false, "mode": "auto", "error": "all_relogin_methods_failed", "attempts": [{"ok": false, "mode": "oauth_refresh_token", "error": "missing_refresh_token", "skipped": true}, {"ok": false, "mode": "web_session", "error": "web_session_access_token_probe_failed:401"}, {"ok": false, "mode": "chatgpt_email_otp", "error": "existing_login_password_verify_failed:401"}, {"ok": false, "mode": "codex_oauth_pkce", "error": "session_circuit_open:http_403:retry_after=899s:edge_challenge"}, {"ok": false, "mode": "browser_session", "error": "page_state"}]}], "ok": "relogin_failed"}
+{"fn": "_relogin_failure_quota_status", "args": [{"ok": false, "mode": "auto", "error": "all_relogin_methods_failed", "attempts": [{"ok": false, "mode": "oauth_refresh_token", "error": "missing_refresh_token", "skipped": true}, {"ok": false, "mode": "web_session", "error": "auth_session_missing_access_token", "last_status": "403"}, {"ok": false, "mode": "web_session", "error": "web_session_access_token_probe_failed:401", "proxy_index": 1}, {"ok": false, "mode": "chatgpt_email_otp", "error": "existing_login_otp_validate:{\"endpoint\": \"/api/accounts/email-otp/validate\", \"status\": 409, \"body\": {\"error\": {\"message\": \"Your sign-in session is no longer valid. Please start over to continue.\", \"type\": \"invalid_request_error\", \"code\": \"invalid_state\"}}"}, {"ok": false, "mode": "codex_oauth_pkce", "error": "passwordless_email_otp_poll_timeout"}, {"ok": false, "mode": "browser_session", "error": "page_state"}]}], "ok": "relogin_otp_failed"}
+{"fn": "_relogin_failure_quota_status", "args": [{"ok": false, "mode": "auto", "error": "all_relogin_methods_failed", "attempts": [{"ok": false, "mode": "codex_oauth_pkce", "error": "passwordless_email_otp_poll_timeout"}, {"ok": false, "mode": "browser_session", "error": "page_state"}]}], "ok": "relogin_otp_failed"}
+{"fn": "_relogin_failure_quota_status", "args": [{"ok": false, "mode": "disabled", "error": "mailbox_pool_repair_required"}], "ok": "relogin_otp_failed"}
+{"fn": "_redact_recovery_error", "args": ["missing_refresh_token"], "ok": "missing_refresh_token"}
+{"fn": "_redact_recovery_error", "args": ["web_session_access_token_probe_failed:401"], "ok": "web_session_access_token_probe_failed:401"}
+{"fn": "_redact_recovery_error", "args": ["existing_login_otp_poll_timeout"], "ok": "existing_login_otp_poll_timeout"}
+{"fn": "_redact_recovery_error", "args": ["browser_session_access_token_missing"], "ok": "browser_session_access_token_missing"}
+{"fn": "_redact_recovery_error", "args": ["mailbox_transport_unavailable"], "ok": "mailbox_transport_unavailable"}
+{"fn": "_redact_recovery_error", "args": ["passwordless_email_otp_poll_timeout"], "ok": "passwordless_email_otp_poll_timeout"}
+{"fn": "_relogin_failure_quota_status", "args": [{"ok": false, "mode": "cooldown", "error": "relogin_cooldown"}], "ok": "relogin_cooldown"}
+{"fn": "_relogin_failure_quota_status", "args": [{"ok": false, "mode": "chatgpt_email_otp", "error": "account_deactivated", "terminal": true}], "ok": "account_deactivated"}
+{"fn": "_redact_recovery_error", "args": ["invalid_grant"], "ok": "invalid_grant"}
+{"fn": "_redact_recovery_error", "args": ["missing_session_cookie"], "ok": "missing_session_cookie"}
+{"fn": "_redact_recovery_error", "args": ["email_login_failed"], "ok": "email_login_failed"}
+{"fn": "_redact_recovery_error", "args": ["account_deactivated"], "ok": "account_deactivated"}
+{"fn": "_redact_recovery_error", "args": ["oauth_persistence_failed"], "ok": "oauth_persistence_failed"}
+{"fn": "_redact_recovery_error", "args": ["auth_session_missing_access_token"], "ok": "auth_session_missing_access_token"}
+{"fn": "_redact_recovery_error", "args": ["otp_failed"], "ok": "otp_failed"}
+{"fn": "_redact_recovery_error", "args": ["codex_failed"], "ok": "codex_failed"}
+{"fn": "_redact_recovery_error", "args": ["browser_failed"], "ok": "browser_failed"}
+{"fn": "_redact_recovery_error", "args": ["web_session_probe_failed:401"], "ok": "web_session_probe_failed:401"}
+{"fn": "_redact_recovery_error", "args": ["existing_login_otp_validate"], "ok": "existing_login_otp_validate"}
+{"fn": "_redact_recovery_error", "args": ["otp"], "ok": "otp"}
+{"fn": "_redact_recovery_error", "args": ["codex"], "ok": "codex"}
+{"fn": "_redact_recovery_error", "args": ["browser"], "ok": "browser"}
+{"fn": "_redact_recovery_error", "args": ["existing_login_password_verify_failed:401"], "ok": "existing_login_password_verify_failed:401"}
+{"fn": "_redact_recovery_error", "args": ["session_circuit_open:http_429:retry_after=300s"], "ok": "session_circuit_open:http_429:retry_after=300s"}

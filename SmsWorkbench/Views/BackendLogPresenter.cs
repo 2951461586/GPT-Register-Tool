@@ -416,6 +416,11 @@ namespace SmsWorkbench.Views
                     && trial.TryGetInt32(out int trialCount)
                     && trialCount > 0)
                     summary.Append(CultureInfo.InvariantCulture, $" · 可试优惠 {trialCount}");
+                if (root.TryGetProperty("team_trial_eligible", out JsonElement teamTrial)
+                    && teamTrial.ValueKind == JsonValueKind.Number
+                    && teamTrial.TryGetInt32(out int teamTrialCount)
+                    && teamTrialCount > 0)
+                    summary.Append(CultureInfo.InvariantCulture, $" · Team 5席试用 {teamTrialCount}");
                 summary.Append(CultureInfo.InvariantCulture, $"（{failures.Count} 项失败明细已折叠）");
                 return summary.ToString();
             }

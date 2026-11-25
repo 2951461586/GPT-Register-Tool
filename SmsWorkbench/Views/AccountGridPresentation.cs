@@ -186,8 +186,11 @@ namespace SmsWorkbench.Views
             string value = (status ?? "").Trim();
             if (value.Length == 0) return false;
             return (value.Contains("可试用", StringComparison.OrdinalIgnoreCase)
-                    || value.Contains("plus trial", StringComparison.OrdinalIgnoreCase))
-                && value.Contains("plus", StringComparison.OrdinalIgnoreCase);
+                    && (value.Contains("plus", StringComparison.OrdinalIgnoreCase)
+                        || value.Contains("team", StringComparison.OrdinalIgnoreCase)))
+                || value.Contains("plus trial", StringComparison.OrdinalIgnoreCase)
+                || value.Contains("team trial", StringComparison.OrdinalIgnoreCase)
+                || value.Contains("team (5 seats) trial", StringComparison.OrdinalIgnoreCase);
         }
 
         public static int SortRank(string status, string? state = null)

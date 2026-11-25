@@ -20,7 +20,15 @@ accepts those side effects.
 
 `--quota-auto-relogin` is a separate recovery option for a 401 result. Recovery
 may use refresh tokens, browser sessions, or email authentication according to
-`--scan-relogin-mode` and is not part of a normal liveness probe.
+`--scan-relogin-mode` and is not part of a normal liveness probe. Recovery
+egress routes through the dedicated `relogin` proxy lane (`relogin_pool` →
+`liveness_pool` → health fallback) with round-robin spread across concurrent
+workers, rotates exits strictly on pre-OTP transport/429/403/CSRF failures
+(never re-sending an email OTP once requested), automatically falls back to
+passwordless ChatGPT email-OTP login when legacy accounts with unknown passwords
+or 2FA redirects fail password verification, and retries post-relogin liveness
+verification across alternative exits on `status_code == 0` transport drops so a
+newly issued AT is not discarded by a transient proxy glitch.
 
 **Transport follows the registration method, but never to the point of refusing
 to probe.** An account registered by a browser driver carries
@@ -81,10 +89,23 @@ account.
   and refuses any row whose derived verdict would change — the cleanup may not
   move a single badge.
 
-Promotion checks (`--check-promotion`) inspect the account plan and trial offer
-only. They never create Checkout and never enumerate payment methods; the
-desktop has no separate payment-eligibility entry point either. Normal
-liveness scans do not enter the payment path.
+Promotion checks (`--check-promotion`) inspect the account plan and trial offers
+only — including the read-only Plus trial coupon probe
+(`/backend-api/promo_campaign/check_coupon?coupon=<plus_campaign>&is_coupon_from_query_param=true`)
+and the read-only **GPT Team 5-seat trial** probe
+(`coupon=team-1-month-free&is_coupon_from_query_param=true`, sent with the
+resolved personal account's `ChatGPT-Account-ID` from `accounts/check` where
+`structure == "personal"`, strictly validating `response.coupon == "team-1-month-free"`).
+Eligible accounts render `可试用Team(5席)` (combined with Plus trial or active
+subscription labels when both apply), set `promotion_state = "trial_eligible"`,
+and persist machine-readable `plus_trial_eligible` / `team_trial_eligible` /
+`team_trial_state` flags into SQLite `raw_json` (as well as
+`team_trial_ineligibility_reason` in probe results and batch summaries). They
+never create Checkout and never enumerate payment methods; when an operator
+explicitly requests a Team trial checkout URL, the separate `team_trial` method
+(`sms_tool/pay_link/team_trial.py`, `--extract-payment-link --payment-method
+team_trial`) creates a hosted `chatgptteamplan` checkout link directly in-process.
+Normal liveness scans do not enter the payment path.
 
 Ruled out by experiment, each measured on a fresh account: the promo campaign id
 (explicitly emptied, payload verified clean), the `impersonate` target

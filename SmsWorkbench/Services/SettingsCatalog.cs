@@ -187,7 +187,7 @@ namespace SmsWorkbench.Services
                     Multiline("browser_registration_proxy_pool", Loc.T("浏览器注册代理池（留空跟随注册池）"), ""),
                     Multiline("payment_qualification_proxy_pool", Loc.T("支付资格专用代理池（Stripe 可达）"), "")),
                 Section(Loc.T("协议管理"),
-                    Text("protocol_enabled_methods", Loc.T("启用方式"), "", "paypal,gopay,gcash,grabpay,upi,ideal,pix,kakao,blik,twint,direct_card,momo"),
+                    Text("protocol_enabled_methods", Loc.T("启用方式"), "", "paypal,gopay,gcash,grabpay,upi,ideal,pix,kakao,blik,twint,direct_card,momo,team_trial"),
                     Text("protocol_state_file", Loc.T("状态文件"), "protocol_payments.state_file", "runtime/payment_link_runs.jsonl"),
                     Integer("protocol_timeout_seconds", Loc.T("协议超时秒"), "protocol_payments.timeout_seconds", "900")),
                 Section(Loc.T("提链服务器"),

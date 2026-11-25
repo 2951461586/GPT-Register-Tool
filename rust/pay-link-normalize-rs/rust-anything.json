@@ -1,0 +1,85 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/pay_link/normalize.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "pay-link-normalize-rs",
+  "exports": [
+    {
+      "name": "_normalized_contract_value",
+      "file": "sms_tool/pay_link/normalize.py",
+      "line": 203,
+      "params": [
+        {
+          "name": "value",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "_canonical_terminal_state",
+      "file": "sms_tool/pay_link/normalize.py",
+      "line": 173,
+      "params": [
+        {
+          "name": "value",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "_normalize_result",
+      "file": "sms_tool/pay_link/normalize.py",
+      "line": 40,
+      "reason": "mutates adapter result dict and reads PaymentMethodSpec dataclass"
+    },
+    {
+      "name": "_explicit_terminal_state",
+      "file": "sms_tool/pay_link/normalize.py",
+      "line": 131,
+      "reason": "inspects adapter result dict; kept in Python"
+    },
+    {
+      "name": "_normalize_error_contract",
+      "file": "sms_tool/pay_link/normalize.py",
+      "line": 211,
+      "reason": "mutates adapter result dict in place"
+    },
+    {
+      "name": "_is_retryable_failure",
+      "file": "sms_tool/pay_link/normalize.py",
+      "line": 240,
+      "reason": "inspects adapter result dict; kept in Python"
+    },
+    {
+      "name": "_result_terminal_state",
+      "file": "sms_tool/pay_link/normalize.py",
+      "line": 261,
+      "reason": "thin wrapper around _explicit_terminal_state"
+    },
+    {
+      "name": "_classify_exception",
+      "file": "sms_tool/pay_link/normalize.py",
+      "line": 265,
+      "reason": "inspects Python exception attributes and MRO"
+    }
+  ]
+}

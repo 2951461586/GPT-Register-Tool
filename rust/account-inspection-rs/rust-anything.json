@@ -1,0 +1,37 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/accounts/account_inspection.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "account-inspection-rs",
+  "exports": [
+    {
+      "name": "decode_jwt_exp",
+      "file": "sms_tool/accounts/account_inspection.py",
+      "line": 81,
+      "params": [
+        {
+          "name": "token",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "unknown",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "access_token_needs_refresh",
+      "file": "sms_tool/accounts/account_inspection.py",
+      "line": 108,
+      "reason": "uses wall-clock time.time() and delegates JWT parsing to decode_jwt_exp"
+    }
+  ]
+}

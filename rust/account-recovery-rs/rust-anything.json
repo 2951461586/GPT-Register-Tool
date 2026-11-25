@@ -1,0 +1,55 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/accounts/account_recovery.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "account-recovery-rs",
+  "exports": [
+    {
+      "name": "_redact_recovery_error",
+      "file": "sms_tool/accounts/account_recovery.py",
+      "line": 1196,
+      "params": [
+        {
+          "name": "value",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "_relogin_failure_quota_status",
+      "file": "sms_tool/accounts/account_recovery.py",
+      "line": 1563,
+      "params": [
+        {
+          "name": "relogin",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "_relogin_failure_shape",
+      "file": "sms_tool/accounts/account_recovery.py",
+      "line": 1358,
+      "reason": "0.25x on rust-anything bench due to nested dict PyO3 conversion overhead; kept in Python"
+    }
+  ]
+}

@@ -31,6 +31,10 @@ if TYPE_CHECKING:
         extract_link_via_server,
         resolve_extract_server_config,
     )
+    from .team_trial import (  # noqa: F401
+        extract_team_trial_link,
+        probe_team_trial_eligibility,
+    )
     from .normalize import (  # noqa: F401
         _canonical_terminal_state,
         _classify_exception,
@@ -83,6 +87,9 @@ _LAZY: dict[str, str] = {
     "ExtractLinkServerConfig": "extract_server",
     "extract_link_via_server": "extract_server",
     "resolve_extract_server_config": "extract_server",
+    # team_trial
+    "extract_team_trial_link": "team_trial",
+    "probe_team_trial_eligibility": "team_trial",
     # normalize
     "_canonical_terminal_state": "normalize",
     "_classify_exception": "normalize",
@@ -115,6 +122,7 @@ __all__ = [
     "PaymentMethodSpec",
     "build_default_payment_registry",
     "extract_link_via_server",
+    "extract_team_trial_link",
     "normalize_payment_method",
     "payment_proxy_pools",
     "payment_method_label",
@@ -126,6 +134,7 @@ __all__ = [
     "parse_proxy_pool",
     "generate_payment_link",
     "probe_payment_method",
+    "probe_team_trial_eligibility",
     "GOPAY_DEFAULT_APPROVE_COUNTRIES",
     "PAYMENT_ADAPTERS",
     "PAYMENT_METHODS",

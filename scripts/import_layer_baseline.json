@@ -70,9 +70,9 @@
     "sms_tool/mailbox -> sms_tool/observability": 1,
     "sms_tool/mailbox -> sms_tool/providers": 10,
     "sms_tool/observability -> sms_tool/kernel": 1,
-    "sms_tool/pay_link -> sms_tool": 8,
+    "sms_tool/pay_link -> sms_tool": 5,
     "sms_tool/pay_link -> sms_tool/kernel": 2,
-    "sms_tool/pay_link -> sms_tool/payment": 14,
+    "sms_tool/pay_link -> sms_tool/payment": 11,
     "sms_tool/payment -> sms_tool": 6,
     "sms_tool/payment -> sms_tool/kernel": 5,
     "sms_tool/payment -> sms_tool/observability": 1,
@@ -140,6 +140,6 @@
     "sms_tool/transport -> sms_tool/observability": 1,
     "sms_tool/transport -> sms_tool/proxy": 1
   },
-  "total_module_edges": 497,
+  "total_module_edges": 491,
   "type_only_edges": 13
 }

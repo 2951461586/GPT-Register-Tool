@@ -1,0 +1,55 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "F:\\epsoft\\GPT-Register-Tool",
+  "unit": "sms_tool/accounts/account_identity.py",
+  "language": "python",
+  "kind": "pyo3",
+  "crate_name": "account-identity-rs",
+  "exports": [
+    {
+      "name": "proxy_egress_key",
+      "file": "sms_tool/accounts/account_identity.py",
+      "line": 139,
+      "params": [
+        {
+          "name": "proxy",
+          "ts_type": "unknown",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": [
+    {
+      "name": "create_registration_identity",
+      "file": "sms_tool/accounts/account_identity.py",
+      "line": 27,
+      "reason": "delegates to shared_fingerprint_pool state"
+    },
+    {
+      "name": "bind_account_identity",
+      "file": "sms_tool/accounts/account_identity.py",
+      "line": 99,
+      "reason": "mutates thread-local auth_headers fingerprint state"
+    },
+    {
+      "name": "_restore_session",
+      "file": "sms_tool/accounts/account_identity.py",
+      "line": 237,
+      "reason": "0.75x on rust-anything bench due to affinity dict PyO3 conversion overhead; kept in Python"
+    },
+    {
+      "name": "chatgpt_account_id_from_token",
+      "file": "sms_tool/accounts/account_identity.py",
+      "line": 290,
+      "reason": "1.75us JWT claim lookup kept in Python"
+    }
+  ]
+}

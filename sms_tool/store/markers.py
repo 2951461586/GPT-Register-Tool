@@ -283,6 +283,16 @@ def mark_promotion_status(
         promotion_state = str(promotion_state or (promotion_result or {}).get("promotion_state") or "").strip()
         promotion["state"] = promotion_state
         data["promotion_state"] = promotion_state
+        if isinstance(promotion_result, dict):
+            if "plus_trial_eligible" in promotion_result:
+                promotion["plus_trial_eligible"] = bool(promotion_result.get("plus_trial_eligible"))
+            if "team_trial_eligible" in promotion_result:
+                team_eligible = bool(promotion_result.get("team_trial_eligible"))
+                promotion["team_trial_eligible"] = team_eligible
+                data["team_trial_eligible"] = team_eligible
+            team_state = str(promotion_result.get("team_trial_state") or "").strip()
+            if team_state:
+                promotion["team_trial_state"] = team_state
         # Promotion and liveness are separate contracts. A promotion 401 is
         # retained under promotion.last_result and must not downgrade the
         # shared account/AT status.

@@ -8,9 +8,12 @@ ChatGPT cookie session, protocol email-OTP login, then Codex OAuth PKCE).
 
 from __future__ import annotations
 
+import importlib
 import json
 import logging
+import os
 import re
+import sys
 import threading
 import time
 import uuid
@@ -44,6 +47,30 @@ from ..utils import atomic_write_text
 from ..transport import endpoints
 
 logger = logging.getLogger(__name__)
+
+
+def _load_native_account_recovery() -> Any | None:
+    mode = str(os.environ.get("RUST_ANYTHING_MODE") or "").strip().lower()
+    unit_mode = str(os.environ.get("RUST_ANYTHING_UNIT_ACCOUNT_RECOVERY") or "").strip().lower()
+    if mode in {"old", "original"} or unit_mode in {"old", "original"}:
+        return None
+    pkg_dir = Path(__file__).resolve().parents[2] / "rust" / "account-recovery-rs" / "python"
+    if pkg_dir.is_dir():
+        pkg_str = str(pkg_dir)
+        if pkg_str not in sys.path:
+            sys.path.insert(0, pkg_str)
+    try:
+        return importlib.import_module("account_recovery_rs")
+    except (ImportError, OSError):
+        if mode in {"new", "rust"} or unit_mode in {"new", "rust"}:
+            raise
+        return None
+
+
+_NATIVE_ACCOUNT_RECOVERY = _load_native_account_recovery()
+_NATIVE_REDACT_RECOVERY_ERROR = getattr(_NATIVE_ACCOUNT_RECOVERY, "_redact_recovery_error", None)
+_NATIVE_RELOGIN_FAILURE_QUOTA_STATUS = getattr(_NATIVE_ACCOUNT_RECOVERY, "_relogin_failure_quota_status", None)
+_NATIVE_SCALAR_TYPES = (str, type(None), bool, int, float)
 
 
 def relogin_web_session_account(
@@ -297,6 +324,104 @@ def relogin_chatgpt_email_account(
         }
 
 
+_PRE_OTP_RETRY_MARKERS = (
+    "session_circuit_open",
+    "missing_csrf_token",
+    "existing_login_continue_failed:429",
+    "existing_login_continue_failed:403",
+    "existing_login_continue_failed:502",
+    "existing_login_continue_failed:503",
+    "existing_login_continue_failed:504",
+    "edge_challenge",
+    "connect tunnel failed",
+)
+
+
+def _is_pre_otp_proxy_retryable(result: Any) -> bool:
+    """True when ``chatgpt_email_otp`` failed before spending an email code."""
+    if not isinstance(result, dict) or result.get("ok"):
+        return False
+    if result.get("terminal") or _looks_account_deactivated(result):
+        return False
+    if str(result.get("error") or "") == "mailbox_auth_invalid":
+        return False
+    if _relogin_spent_email_code(result):
+        return False
+    error = str(result.get("error") or "").lower()
+    if any(marker in error for marker in _PRE_OTP_RETRY_MARKERS):
+        return True
+    return is_transient_transport_error(error)
+
+
+def _needs_passwordless_email_fallback(account: dict[str, Any], result: Any) -> bool:
+    """True when a stored-password attempt bounced and direct email OTP should run."""
+    if not isinstance(result, dict) or result.get("ok") or _passwordless_registration(account):
+        return False
+    if result.get("terminal") or _looks_account_deactivated(result):
+        return False
+    error = str(result.get("error") or "").lower()
+    return "existing_login_password_verify_failed" in error or error == "auth_session_missing_access_token"
+
+
+def _run_chatgpt_email_recovery(
+    account: dict[str, Any],
+    *,
+    candidates: list[str | None],
+    timeout: int,
+) -> tuple[dict[str, Any], list[dict[str, Any]], int]:
+    """Run ``chatgpt_email_otp`` with pre-OTP exit rotation and passwordless fallback.
+
+    Field measurements (2026-11-25, 286-account recovery):
+    - Legacy accounts without ``registration_mode`` (139/286) bounce 401 on
+      ``/password/verify``, and password+2FA accounts redirect to
+      ``/email-verification`` without a session; retrying directly with
+      ``password_unknown=True`` recovered 175/189 Outlook accounts (92.6%).
+    - Pre-OTP 429/403/502/CSRF errors spent zero email codes, so rotating to a
+      different exit avoids cascading into ``codex_oauth_pkce`` on the same bad exit.
+    """
+    attempts: list[dict[str, Any]] = []
+    pool = list(candidates) or [None]
+    for extra in proxy_pool_for(CFG, "relogin"):
+        if extra and extra not in pool and len(pool) < 3:
+            pool.append(extra)
+    cursor = 0
+    result: dict[str, Any] = {}
+    while cursor < len(pool):
+        candidate = pool[cursor]
+        result = dict(relogin_chatgpt_email_account(account, proxy=candidate, timeout=timeout) or {})
+        if result.get("ok"):
+            return result, attempts, cursor
+        if _needs_passwordless_email_fallback(account, result):
+            attempt = _safe_relogin_result(result)
+            attempt.setdefault("mode", "chatgpt_email_otp")
+            if cursor:
+                attempt["proxy_index"] = cursor
+            attempts.append(attempt)
+            next_index = (cursor + 1) % len(pool) if len(pool) > 1 else cursor
+            fallback_account = {**account, "password_unknown": True}
+            result = dict(
+                relogin_chatgpt_email_account(fallback_account, proxy=pool[next_index], timeout=timeout) or {}
+            )
+            if result.get("ok"):
+                return result, attempts, next_index
+            attempt2 = _safe_relogin_result(result)
+            attempt2.setdefault("mode", "chatgpt_email_otp")
+            attempt2["fallback"] = "passwordless_email_otp"
+            if next_index:
+                attempt2["proxy_index"] = next_index
+            attempts.append(attempt2)
+            return result, attempts, next_index
+        attempt = _safe_relogin_result(result)
+        attempt.setdefault("mode", "chatgpt_email_otp")
+        if cursor:
+            attempt["proxy_index"] = cursor
+        attempts.append(attempt)
+        if not _is_pre_otp_proxy_retryable(result):
+            return result, attempts, cursor
+        cursor += 1
+    return result, attempts, max(0, cursor - 1)
+
+
 def relogin_codex_account(
     account: dict[str, Any],
     proxy: str | None = None,
@@ -318,7 +443,15 @@ def relogin_codex_account(
         return relogin_web_session_account(account, proxy=resolved_proxy, timeout=timeout)
     if normalized_mode == "chatgpt_email_otp":
         recovery_proxy, _ = _select_recovery_proxy(account, resolved_proxy)
-        result = relogin_chatgpt_email_account(account, proxy=recovery_proxy, timeout=timeout)
+        candidates = _recovery_proxy_candidates(resolved_proxy, recovery_proxy)
+        result, attempts, proxy_index = _run_chatgpt_email_recovery(account, candidates=candidates, timeout=timeout)
+        if result.get("ok"):
+            success = _safe_relogin_result(result)
+            if attempts:
+                success["attempts"] = attempts
+            if proxy_index:
+                success["proxy_index"] = proxy_index
+            return success
         if _looks_account_deactivated(result):
             _persist_permanent_deactivation(account, result)
             result = {**result, "terminal": True, "error": "account_deactivated"}
@@ -332,28 +465,13 @@ def relogin_codex_account(
     attempts: list[dict[str, Any]] = []
     strategies = (
         ("oauth_refresh_token", relogin_refresh_token_account, timeout),
-        # ``web_session`` is the only strategy with production successes on this
-        # fleet: every registered account has an empty refresh_token, so the
-        # first strategy can never win, and no OTP-mode success has ever been
-        # recorded.  It replays a session cookie and costs nothing, so it must
-        # not be starved -- the previous hard cap of 30s was shorter than a
-        # single blocked-exit retry window, and the chain answered that timeout
-        # by sending a real OTP.
-        #
-        # It stays bounded on purpose: the observed 403s are per-exit (one exit
-        # bursts 403s while another answers 200 immediately), so the fix for a
-        # blocked exit is to switch exits, not to wait longer.  A generous
-        # budget would only make a dead exit more expensive -- measured 124s
-        # before the chain moved on when this was briefly raised to 120s.
+        # ``web_session`` replays a session cookie and costs nothing, so it keeps
+        # a bounded window (45..60s) and rotates across exits on 403/429.
         ("web_session", relogin_web_session_account, min(max(45, int(timeout or 180)), 60)),
         ("chatgpt_email_otp", relogin_chatgpt_email_account, timeout),
         ("codex_oauth_pkce", relogin_local_codex_account, timeout),
         ("browser_session", relogin_browser_session_account, timeout),
     )
-    # A blocked or rate-limited exit fails every strategy that goes through it.
-    # That is how a transient 403 turned into an OTP send, so the free
-    # strategies get retried across exits.  OTP strategies are deliberately
-    # excluded: retrying one would mail the same mailbox a second time.
     proxy_candidates = _recovery_proxy_candidates(resolved_proxy, recovery_proxy)
     retry_across_proxies = {"oauth_refresh_token", "web_session"}
     skip_strategies: set[str] = set()
@@ -368,10 +486,12 @@ def relogin_codex_account(
                 }
             )
             continue
-        candidates = proxy_candidates if strategy in retry_across_proxies else [recovery_proxy]
         result: dict[str, Any] = {}
-        for proxy_index, candidate in enumerate(candidates):
-            result = dict(handler(account, proxy=candidate, timeout=strategy_timeout) or {})
+        if strategy == "chatgpt_email_otp":
+            result, strategy_attempts, proxy_index = _run_chatgpt_email_recovery(
+                account, candidates=proxy_candidates, timeout=strategy_timeout
+            )
+            attempts.extend(strategy_attempts)
             if result.get("ok"):
                 success = _safe_relogin_result(result)
                 success["attempts"] = attempts
@@ -380,23 +500,28 @@ def relogin_codex_account(
                 if proxy_index:
                     success["proxy_index"] = proxy_index
                 return success
-            attempt = _safe_relogin_result(result)
-            attempt.setdefault("mode", strategy)
-            if proxy_index:
-                attempt["proxy_index"] = proxy_index
-            attempts.append(attempt)
-            # OAuth completed remotely but its new tokens were not saved.
-            # Another OTP/browser strategy would spend resources without
-            # repairing the local write failure.
-            if result.get("remote_ok") and result.get("persisted") is False:
-                return {**attempt, "attempts": attempts}
-            if not _recoverable_on_other_proxy(result):
-                break
+        else:
+            candidates = proxy_candidates if strategy in retry_across_proxies else [recovery_proxy]
+            for proxy_index, candidate in enumerate(candidates):
+                result = dict(handler(account, proxy=candidate, timeout=strategy_timeout) or {})
+                if result.get("ok"):
+                    success = _safe_relogin_result(result)
+                    success["attempts"] = attempts
+                    if proxy_attempts:
+                        success["proxy_attempts"] = proxy_attempts
+                    if proxy_index:
+                        success["proxy_index"] = proxy_index
+                    return success
+                attempt = _safe_relogin_result(result)
+                attempt.setdefault("mode", strategy)
+                if proxy_index:
+                    attempt["proxy_index"] = proxy_index
+                attempts.append(attempt)
+                if result.get("remote_ok") and result.get("persisted") is False:
+                    return {**attempt, "attempts": attempts}
+                if not _recoverable_on_other_proxy(result):
+                    break
         if strategy == "chatgpt_email_otp" and "otp_poll_timeout" in str(result.get("error") or ""):
-            # Both OTP strategies poll the same mailbox. When no mail arrived
-            # for the first within its full window, the second 180s poll
-            # cannot succeed either — skip it instead of doubling the ~6-8
-            # minute per-account cascade that starves the batch budget.
             skip_strategies.add("codex_oauth_pkce")
         if str(result.get("error") or "") == "mailbox_auth_invalid":
             return {
@@ -620,6 +745,32 @@ def relogin_browser_session_account(
         }
 
 
+def _probe_candidate_with_transport_retry(
+    verified: dict[str, Any],
+    *,
+    proxy: str | None,
+    timeout: int,
+) -> dict[str, Any]:
+    """Verify a newly-acquired AT, retrying only on status_code=0 transport drops.
+
+    Measured 2026-11-25: two accounts completed email-OTP login and received valid
+    ATs, only to fail verification with ``probe_failed:unknown`` when the same
+    exit dropped the immediate follow-up GET. Rotating exits on status_code == 0
+    saves the already-acquired AT without spending another OTP; any HTTP answer
+    (401/403/etc.) returns immediately.
+    """
+    probe_timeout = min(max(10, int(timeout or 30)), 60)
+    probe = probe_account_liveness(verified, proxy=proxy, timeout=probe_timeout)
+    if int(probe.get("status_code") or 0) != 0:
+        return probe
+    extras = [candidate for candidate in proxy_pool_for(CFG, "liveness") if candidate and candidate != proxy][:2]
+    for fallback_proxy in extras:
+        probe = probe_account_liveness(verified, proxy=fallback_proxy, timeout=probe_timeout)
+        if int(probe.get("status_code") or 0) != 0:
+            return probe
+    return probe
+
+
 def _verify_and_persist_candidate(
     account: dict[str, Any],
     candidate: dict[str, Any],
@@ -647,11 +798,7 @@ def _verify_and_persist_candidate(
             return {"ok": False, "mode": mode, "error": "auth_session_missing_email", "persisted": False}
         if authenticated_email != email:
             return {"ok": False, "mode": mode, "error": "auth_session_email_mismatch", "persisted": False}
-    probe = probe_account_liveness(
-        verified,
-        proxy=proxy,
-        timeout=min(max(10, int(timeout or 30)), 60),
-    )
+    probe = _probe_candidate_with_transport_retry(verified, proxy=proxy, timeout=timeout)
     if int(probe.get("status_code") or 0) != 200:
         return {
             "ok": False,
@@ -1047,6 +1194,8 @@ def _safe_relogin_result(result: dict[str, Any] | None) -> dict[str, Any]:
 
 
 def _redact_recovery_error(value: Any) -> str:
+    if _NATIVE_REDACT_RECOVERY_ERROR is not None and isinstance(value, _NATIVE_SCALAR_TYPES):
+        return str(_NATIVE_REDACT_RECOVERY_ERROR(value))
     text = str(value or "")
     text = re.sub(r"((?:https?|socks5h?)://)[^@\s/]+@", r"\1[REDACTED]@", text, flags=re.I)
     text = re.sub(r"\brt_[A-Za-z0-9._~-]+", "rt_[REDACTED]", text)
@@ -1412,6 +1561,11 @@ def _normalize_relogin_mode(value: Any) -> str:
 
 
 def _relogin_failure_quota_status(relogin: dict[str, Any]) -> str:
+    if _NATIVE_RELOGIN_FAILURE_QUOTA_STATUS is not None and isinstance(relogin, (dict, type(None))):
+        try:
+            return str(_NATIVE_RELOGIN_FAILURE_QUOTA_STATUS(relogin))
+        except (TypeError, ValueError):
+            pass
     text = json.dumps(relogin or {}, ensure_ascii=False).lower()
     if "account_deactivated" in text or "deleted or deactivated" in text:
         return "account_deactivated"

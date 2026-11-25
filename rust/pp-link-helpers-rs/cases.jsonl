@@ -1,0 +1,160 @@
+{"fn": "normalize_proxy_template", "args": ["x"], "ok": "http://x"}
+{"fn": "normalize_proxy_template", "args": [["a", 1]], "ok": "http://['a', 1]"}
+{"fn": "normalize_proxy_template", "args": [[]], "ok": ""}
+{"fn": "normalize_proxy_template", "args": [0], "ok": ""}
+{"fn": "normalize_proxy_template", "args": [{"a": "b"}], "ok": "http://{'a': 'b'}"}
+{"fn": "normalize_proxy_template", "args": [{"a": {"b": "c"}}], "ok": "http://{'a': {'b': 'c'}}"}
+{"fn": "normalize_proxy_template", "args": [{}], "ok": ""}
+{"fn": "normalize_proxy_template", "args": [true], "ok": "http://True"}
+{"fn": "normalize_proxy_template", "args": [null], "ok": ""}
+{"fn": "normalize_proxy_template", "args": [{"zebra": 1, "apple": 2, "10": 3, "2": 4, "é": 5, "Apple": 6}], "ok": "http://{'zebra': 1, 'apple': 2, '10': 3, '2': 4, 'é': 5, 'Apple': 6}"}
+{"fn": "normalize_proxy_template", "args": [{"n": 9007199254740993, "f": 1e+21, "t": 0.1, "neg": -7}], "ok": "http://{'n': 9007199254740993, 'f': 1e+21, 't': 0.1, 'neg': -7}"}
+{"fn": "normalize_proxy_template", "args": [[3, 1, 2]], "ok": "http://[3, 1, 2]"}
+{"fn": "proxy_for_country_template", "args": [{"a": {"b": "c"}}, 0], "ok": "http://{'a': {'b': 'c'}}"}
+{"fn": "proxy_for_country_template", "args": [null, {"a": {"b": "c"}}], "ok": ""}
+{"fn": "proxy_for_country_template", "args": [0, "x"], "ok": ""}
+{"fn": "proxy_for_country_template", "args": [null, "x"], "ok": ""}
+{"fn": "proxy_for_country_template", "args": ["x", []], "ok": "http://x"}
+{"fn": "proxy_for_country_template", "args": [{"a": {"b": "c"}}, []], "ok": "http://{'a': {'b': 'c'}}"}
+{"fn": "proxy_for_country_template", "args": [0, {}], "ok": ""}
+{"fn": "proxy_for_country_template", "args": [0, null], "ok": ""}
+{"fn": "proxy_for_country_template", "args": [{"a": {"b": "c"}}, true], "ok": "http://{'a': {'b': 'c'}}"}
+{"fn": "proxy_for_country_template", "args": [[], {"a": "b"}], "ok": ""}
+{"fn": "proxy_for_country_template", "args": [{"a": "b"}, true], "ok": "http://{'a': 'b'}"}
+{"fn": "proxy_for_country_template", "args": [[], true], "ok": ""}
+{"fn": "proxy_for_country_template", "args": [["a", 1], "x"], "ok": "http://['a', 1]"}
+{"fn": "proxy_for_country_template", "args": [{"a": {"b": "c"}}, ["a", 1]], "ok": "http://{'a': {'b': 'c'}}"}
+{"fn": "proxy_for_country_template", "args": [true, {"a": {"b": "c"}}], "ok": "http://True"}
+{"fn": "proxy_for_country_template", "args": [[], {}], "ok": ""}
+{"fn": "proxy_for_country_template", "args": [{"a": {"b": "c"}}, "x"], "ok": "http://{'a': {'b': 'c'}}"}
+{"fn": "proxy_for_country_template", "args": [{"a": {"b": "c"}}, null], "ok": "http://{'a': {'b': 'c'}}"}
+{"fn": "proxy_for_country_template", "args": [{}, {"a": "b"}], "ok": ""}
+{"fn": "proxy_for_country_template", "args": ["x", 0], "ok": "http://x"}
+{"fn": "proxy_for_country_template", "args": [{"zebra": 1, "apple": 2, "10": 3, "2": 4, "é": 5, "Apple": 6}, 0], "ok": "http://{'zebra': 1, 'apple': 2, '10': 3, '2': 4, 'é': 5, 'Apple': 6}"}
+{"fn": "proxy_for_country_template", "args": [{"n": 9007199254740993, "f": 1e+21, "t": 0.1, "neg": -7}, 0], "ok": "http://{'n': 9007199254740993, 'f': 1e+21, 't': 0.1, 'neg': -7}"}
+{"fn": "proxy_for_country_template", "args": [[3, 1, 2], 0], "ok": "http://[3, 1, 2]"}
+{"fn": "proxy_for_country_template", "args": [{}, 0], "ok": ""}
+{"fn": "proxy_for_country_template", "args": [{"a": {"b": "c"}}, {"zebra": 1, "apple": 2, "10": 3, "2": 4, "é": 5, "Apple": 6}], "ok": "http://{'a': {'b': 'c'}}"}
+{"fn": "proxy_for_country_template", "args": [{"a": {"b": "c"}}, {"n": 9007199254740993, "f": 1e+21, "t": 0.1, "neg": -7}], "ok": "http://{'a': {'b': 'c'}}"}
+{"fn": "proxy_for_country_template", "args": [{"a": {"b": "c"}}, [3, 1, 2]], "ok": "http://{'a': {'b': 'c'}}"}
+{"fn": "proxy_for_country_template", "args": [{"a": {"b": "c"}}, {}], "ok": "http://{'a': {'b': 'c'}}"}
+{"fn": "is_paypal_ba_approve_url", "args": [null], "ok": false}
+{"fn": "is_paypal_ba_approve_url", "args": [{"a": "b"}], "ok": false}
+{"fn": "is_paypal_ba_approve_url", "args": [{"a": {"b": "c"}}], "ok": false}
+{"fn": "is_paypal_ba_approve_url", "args": [0], "ok": false}
+{"fn": "is_paypal_ba_approve_url", "args": [["a", 1]], "ok": false}
+{"fn": "is_paypal_ba_approve_url", "args": [{}], "ok": false}
+{"fn": "is_paypal_ba_approve_url", "args": [true], "ok": false}
+{"fn": "is_paypal_ba_approve_url", "args": [[]], "ok": false}
+{"fn": "is_paypal_ba_approve_url", "args": ["x"], "ok": false}
+{"fn": "is_paypal_ba_approve_url", "args": [{"zebra": 1, "apple": 2, "10": 3, "2": 4, "é": 5, "Apple": 6}], "ok": false}
+{"fn": "is_paypal_ba_approve_url", "args": [{"n": 9007199254740993, "f": 1e+21, "t": 0.1, "neg": -7}], "ok": false}
+{"fn": "is_paypal_ba_approve_url", "args": [[3, 1, 2]], "ok": false}
+{"fn": "normalize_proxy_template", "args": [""], "ok": ""}
+{"fn": "proxy_for_country_template", "args": ["", "DE"], "ok": ""}
+{"fn": "proxy_for_country_template", "args": ["", "jp"], "ok": ""}
+{"fn": "proxy_for_country_template", "args": ["", "US"], "ok": ""}
+{"fn": "proxy_for_country_template", "args": ["", "sg"], "ok": ""}
+{"fn": "proxy_for_country_template", "args": ["", ""], "ok": ""}
+{"fn": "normalize_proxy_template", "args": [null], "ok": ""}
+{"fn": "proxy_for_country_template", "args": [null, "DE"], "ok": ""}
+{"fn": "proxy_for_country_template", "args": [null, "jp"], "ok": ""}
+{"fn": "proxy_for_country_template", "args": [null, "US"], "ok": ""}
+{"fn": "proxy_for_country_template", "args": [null, "sg"], "ok": ""}
+{"fn": "proxy_for_country_template", "args": [null, ""], "ok": ""}
+{"fn": "normalize_proxy_template", "args": ["proxy.example:8080:user-region-US-sid-a1b2c3:pass1"], "ok": "http://user-region-US-sid-a1b2c3:pass1@proxy.example:8080"}
+{"fn": "proxy_for_country_template", "args": ["proxy.example:8080:user-region-US-sid-a1b2c3:pass1", "DE"], "ok": "http://user-region-DE-sid-a1b2c3:pass1@proxy.example:8080"}
+{"fn": "proxy_for_country_template", "args": ["proxy.example:8080:user-region-US-sid-a1b2c3:pass1", "jp"], "ok": "http://user-region-JP-sid-a1b2c3:pass1@proxy.example:8080"}
+{"fn": "proxy_for_country_template", "args": ["proxy.example:8080:user-region-US-sid-a1b2c3:pass1", "US"], "ok": "http://user-region-US-sid-a1b2c3:pass1@proxy.example:8080"}
+{"fn": "proxy_for_country_template", "args": ["proxy.example:8080:user-region-US-sid-a1b2c3:pass1", "sg"], "ok": "http://user-region-SG-sid-a1b2c3:pass1@proxy.example:8080"}
+{"fn": "proxy_for_country_template", "args": ["proxy.example:8080:user-region-US-sid-a1b2c3:pass1", ""], "ok": "http://user-region-US-sid-a1b2c3:pass1@proxy.example:8080"}
+{"fn": "normalize_proxy_template", "args": ["proxy.example:8080@user-region-JP-st-tokyo-city-minato-sid-xyz99:pass2"], "ok": "http://user-region-JP-st-tokyo-city-minato-sid-xyz99:pass2@proxy.example:8080"}
+{"fn": "proxy_for_country_template", "args": ["proxy.example:8080@user-region-JP-st-tokyo-city-minato-sid-xyz99:pass2", "DE"], "ok": "http://user-region-DE-sid-xyz99:pass2@proxy.example:8080"}
+{"fn": "proxy_for_country_template", "args": ["proxy.example:8080@user-region-JP-st-tokyo-city-minato-sid-xyz99:pass2", "jp"], "ok": "http://user-region-JP-st-tokyo-city-minato-sid-xyz99:pass2@proxy.example:8080"}
+{"fn": "proxy_for_country_template", "args": ["proxy.example:8080@user-region-JP-st-tokyo-city-minato-sid-xyz99:pass2", "US"], "ok": "http://user-region-US-sid-xyz99:pass2@proxy.example:8080"}
+{"fn": "proxy_for_country_template", "args": ["proxy.example:8080@user-region-JP-st-tokyo-city-minato-sid-xyz99:pass2", "sg"], "ok": "http://user-region-SG-sid-xyz99:pass2@proxy.example:8080"}
+{"fn": "proxy_for_country_template", "args": ["proxy.example:8080@user-region-JP-st-tokyo-city-minato-sid-xyz99:pass2", ""], "ok": "http://user-region-JP-st-tokyo-city-minato-sid-xyz99:pass2@proxy.example:8080"}
+{"fn": "normalize_proxy_template", "args": ["http://acct_custom_zone_US_s1:secret@ipwo.example:9000"], "ok": "http://acct_custom_zone_US_s1:secret@ipwo.example:9000"}
+{"fn": "proxy_for_country_template", "args": ["http://acct_custom_zone_US_s1:secret@ipwo.example:9000", "DE"], "ok": "http://acct_custom_zone_DE_s1:secret@ipwo.example:9000"}
+{"fn": "proxy_for_country_template", "args": ["http://acct_custom_zone_US_s1:secret@ipwo.example:9000", "jp"], "ok": "http://acct_custom_zone_JP_s1:secret@ipwo.example:9000"}
+{"fn": "proxy_for_country_template", "args": ["http://acct_custom_zone_US_s1:secret@ipwo.example:9000", "US"], "ok": "http://acct_custom_zone_US_s1:secret@ipwo.example:9000"}
+{"fn": "proxy_for_country_template", "args": ["http://acct_custom_zone_US_s1:secret@ipwo.example:9000", "sg"], "ok": "http://acct_custom_zone_SG_s1:secret@ipwo.example:9000"}
+{"fn": "proxy_for_country_template", "args": ["http://acct_custom_zone_US_s1:secret@ipwo.example:9000", ""], "ok": "http://acct_custom_zone_US_s1:secret@ipwo.example:9000"}
+{"fn": "normalize_proxy_template", "args": ["socks5h://u1:basepw-GB-sess77-30m@kookeey.example:1080"], "ok": "socks5h://u1:basepw-GB-sess77-30m@kookeey.example:1080"}
+{"fn": "proxy_for_country_template", "args": ["socks5h://u1:basepw-GB-sess77-30m@kookeey.example:1080", "DE"], "ok": "socks5h://u1:basepw-DE-sess77-30m@kookeey.example:1080"}
+{"fn": "proxy_for_country_template", "args": ["socks5h://u1:basepw-GB-sess77-30m@kookeey.example:1080", "jp"], "ok": "socks5h://u1:basepw-JP-sess77-30m@kookeey.example:1080"}
+{"fn": "proxy_for_country_template", "args": ["socks5h://u1:basepw-GB-sess77-30m@kookeey.example:1080", "US"], "ok": "socks5h://u1:basepw-US-sess77-30m@kookeey.example:1080"}
+{"fn": "proxy_for_country_template", "args": ["socks5h://u1:basepw-GB-sess77-30m@kookeey.example:1080", "sg"], "ok": "socks5h://u1:basepw-SG-sess77-30m@kookeey.example:1080"}
+{"fn": "proxy_for_country_template", "args": ["socks5h://u1:basepw-GB-sess77-30m@kookeey.example:1080", ""], "ok": "socks5h://u1:basepw-GB-sess77-30m@kookeey.example:1080"}
+{"fn": "normalize_proxy_template", "args": ["http://u1:pw_country-fr_ttl-10m@vendor.example:8888"], "ok": "http://u1:pw_country-fr_ttl-10m@vendor.example:8888"}
+{"fn": "proxy_for_country_template", "args": ["http://u1:pw_country-fr_ttl-10m@vendor.example:8888", "DE"], "ok": "http://u1:pw_country-de_ttl-10m@vendor.example:8888"}
+{"fn": "proxy_for_country_template", "args": ["http://u1:pw_country-fr_ttl-10m@vendor.example:8888", "jp"], "ok": "http://u1:pw_country-jp_ttl-10m@vendor.example:8888"}
+{"fn": "proxy_for_country_template", "args": ["http://u1:pw_country-fr_ttl-10m@vendor.example:8888", "US"], "ok": "http://u1:pw_country-us_ttl-10m@vendor.example:8888"}
+{"fn": "proxy_for_country_template", "args": ["http://u1:pw_country-fr_ttl-10m@vendor.example:8888", "sg"], "ok": "http://u1:pw_country-sg_ttl-10m@vendor.example:8888"}
+{"fn": "proxy_for_country_template", "args": ["http://u1:pw_country-fr_ttl-10m@vendor.example:8888", ""], "ok": "http://u1:pw_country-fr_ttl-10m@vendor.example:8888"}
+{"fn": "normalize_proxy_template", "args": ["http://plainuser-us:plainpass@edge.example:3128"], "ok": "http://plainuser-us:plainpass@edge.example:3128"}
+{"fn": "proxy_for_country_template", "args": ["http://plainuser-us:plainpass@edge.example:3128", "DE"], "ok": "http://plainuser-us:plainpass@edge.example:3128"}
+{"fn": "proxy_for_country_template", "args": ["http://plainuser-us:plainpass@edge.example:3128", "jp"], "ok": "http://plainuser-us:plainpass@edge.example:3128"}
+{"fn": "proxy_for_country_template", "args": ["http://plainuser-us:plainpass@edge.example:3128", "US"], "ok": "http://plainuser-us:plainpass@edge.example:3128"}
+{"fn": "proxy_for_country_template", "args": ["http://plainuser-us:plainpass@edge.example:3128", "sg"], "ok": "http://plainuser-us:plainpass@edge.example:3128"}
+{"fn": "proxy_for_country_template", "args": ["http://plainuser-us:plainpass@edge.example:3128", ""], "ok": "http://plainuser-us:plainpass@edge.example:3128"}
+{"fn": "normalize_proxy_template", "args": ["http://127.0.0.1:7890"], "ok": "http://127.0.0.1:7890"}
+{"fn": "proxy_for_country_template", "args": ["http://127.0.0.1:7890", "DE"], "ok": "http://127.0.0.1:7890"}
+{"fn": "proxy_for_country_template", "args": ["http://127.0.0.1:7890", "jp"], "ok": "http://127.0.0.1:7890"}
+{"fn": "proxy_for_country_template", "args": ["http://127.0.0.1:7890", "US"], "ok": "http://127.0.0.1:7890"}
+{"fn": "proxy_for_country_template", "args": ["http://127.0.0.1:7890", "sg"], "ok": "http://127.0.0.1:7890"}
+{"fn": "proxy_for_country_template", "args": ["http://127.0.0.1:7890", ""], "ok": "http://127.0.0.1:7890"}
+{"fn": "is_paypal_ba_approve_url", "args": [""], "ok": false}
+{"fn": "is_paypal_ba_approve_url", "args": [null], "ok": false}
+{"fn": "is_paypal_ba_approve_url", "args": [123], "ok": false}
+{"fn": "is_paypal_ba_approve_url", "args": ["https://www.paypal.com/agreements/approve?ba_token=BA-123456789ABCDEF&useraction=commit"], "ok": true}
+{"fn": "is_paypal_ba_approve_url", "args": ["https://paypal.com/agreements/approve/?nolegacy=1&ba_token=BA-XYZ987654321"], "ok": true}
+{"fn": "is_paypal_ba_approve_url", "args": ["https://www.paypal.com/agreements/approve?ba_token="], "ok": false}
+{"fn": "is_paypal_ba_approve_url", "args": ["https://evil-paypal.com.example/agreements/approve?ba_token=BA-111"], "ok": false}
+{"fn": "is_paypal_ba_approve_url", "args": ["https://www.paypal.com/checkoutnow?token=EC-111"], "ok": false}
+{"fn": "normalize_proxy_template", "args": ["user:pass@1.2.3.4:8080"], "ok": "http://user:pass@1.2.3.4:8080"}
+{"fn": "normalize_proxy_template", "args": ["1.2.3.4:8080:user:pass"], "ok": "http://user:pass@1.2.3.4:8080"}
+{"fn": "normalize_proxy_template", "args": ["1.2.3.4:8080@user:pass"], "ok": "http://user:pass@1.2.3.4:8080"}
+{"fn": "normalize_proxy_template", "args": ["socks5h://u:p@h:1080"], "ok": "socks5h://u:p@h:1080"}
+{"fn": "normalize_proxy_template", "args": ["  user:pass@1.2.3.4:8080  "], "ok": "http://user:pass@1.2.3.4:8080"}
+{"fn": "normalize_proxy_template", "args": [""], "ok": ""}
+{"fn": "normalize_proxy_template", "args": ["   "], "ok": ""}
+{"fn": "normalize_proxy_template", "args": [null], "ok": ""}
+{"fn": "normalize_proxy_template", "args": ["http://user:pass@1.2.3.4:8080"], "ok": "http://user:pass@1.2.3.4:8080"}
+{"fn": "proxy_for_country_template", "args": ["user-region-us:pass@1.2.3.4:8080", "DE"], "ok": "http://user-region-DE:pass@1.2.3.4:8080"}
+{"fn": "normalize_proxy_template", "args": ["user-region-us:pass@1.2.3.4:8080"], "ok": "http://user-region-us:pass@1.2.3.4:8080"}
+{"fn": "proxy_for_country_template", "args": ["user-region-us:pass@1.2.3.4:8080", "de"], "ok": "http://user-region-DE:pass@1.2.3.4:8080"}
+{"fn": "proxy_for_country_template", "args": ["user-region-jp-st-tokyo-city-tokyo-sid-9:pass@1.2.3.4:8080", "JP"], "ok": "http://user-region-JP-st-tokyo-city-tokyo-sid-9:pass@1.2.3.4:8080"}
+{"fn": "normalize_proxy_template", "args": ["user-region-jp-st-tokyo-city-tokyo-sid-9:pass@1.2.3.4:8080"], "ok": "http://user-region-jp-st-tokyo-city-tokyo-sid-9:pass@1.2.3.4:8080"}
+{"fn": "proxy_for_country_template", "args": ["user-region-jp-st-tokyo-city-tokyo-sid-9:pass@1.2.3.4:8080", "US"], "ok": "http://user-region-US-sid-9:pass@1.2.3.4:8080"}
+{"fn": "proxy_for_country_template", "args": ["user-xx:pass@1.2.3.4:8080", "US"], "ok": "http://user-xx:pass@1.2.3.4:8080"}
+{"fn": "normalize_proxy_template", "args": ["user-xx:pass@1.2.3.4:8080"], "ok": "http://user-xx:pass@1.2.3.4:8080"}
+{"fn": "proxy_for_country_template", "args": ["user-xx@1.2.3.4:8080", "US"], "ok": "http://user-US@1.2.3.4:8080"}
+{"fn": "normalize_proxy_template", "args": ["user-xx@1.2.3.4:8080"], "ok": "http://user-xx@1.2.3.4:8080"}
+{"fn": "proxy_for_country_template", "args": ["user-region-us:pass@1.2.3.4:8080", ""], "ok": "http://user-region-us:pass@1.2.3.4:8080"}
+{"fn": "proxy_for_country_template", "args": ["user-region-us:pass@1.2.3.4:8080", "   "], "ok": "http://user-region-us:pass@1.2.3.4:8080"}
+{"fn": "proxy_for_country_template", "args": ["user-region-us:pass@1.2.3.4:8080", null], "ok": "http://user-region-us:pass@1.2.3.4:8080"}
+{"fn": "proxy_for_country_template", "args": ["", "US"], "ok": ""}
+{"fn": "proxy_for_country_template", "args": ["http://user-region-DE:pass@1.2.3.4:8080", "DE"], "ok": "http://user-region-DE:pass@1.2.3.4:8080"}
+{"fn": "normalize_proxy_template", "args": ["http://user-region-DE:pass@1.2.3.4:8080"], "ok": "http://user-region-DE:pass@1.2.3.4:8080"}
+{"fn": "proxy_for_country_template", "args": ["SYNTHACCT10-geo-VN-sid-mwT3-ttl-5:secret@global.9http.com:9091", "US"], "ok": "http://SYNTHACCT10-geo-US-sid-mwT3-ttl-5:secret@global.9http.com:9091"}
+{"fn": "normalize_proxy_template", "args": ["SYNTHACCT10-geo-VN-sid-mwT3-ttl-5:secret@global.9http.com:9091"], "ok": "http://SYNTHACCT10-geo-VN-sid-mwT3-ttl-5:secret@global.9http.com:9091"}
+{"fn": "proxy_for_country_template", "args": ["acct_custom_zone_US_sid_1_time_5:secret@us.ipwo.net:7878", "JP"], "ok": "http://acct_custom_zone_JP_sid_1_time_5:secret@us.ipwo.net:7878"}
+{"fn": "normalize_proxy_template", "args": ["acct_custom_zone_US_sid_1_time_5:secret@us.ipwo.net:7878"], "ok": "http://acct_custom_zone_US_sid_1_time_5:secret@us.ipwo.net:7878"}
+{"fn": "proxy_for_country_template", "args": ["gate.kookeey.info:1000:user:pass-JP-abc123-5m", "GB"], "ok": "http://user:pass-GB-abc123-5m@gate.kookeey.info:1000"}
+{"fn": "normalize_proxy_template", "args": ["gate.kookeey.info:1000:user:pass-JP-abc123-5m"], "ok": "http://user:pass-JP-abc123-5m@gate.kookeey.info:1000"}
+{"fn": "is_paypal_ba_approve_url", "args": ["https://www.paypal.com/agreements/approve?ba_token=BA-FIXTURE-1"], "ok": true}
+{"fn": "is_paypal_ba_approve_url", "args": ["https://www.paypal.com/agreements/approve?ba_token="], "ok": false}
+{"fn": "is_paypal_ba_approve_url", "args": ["https://www.paypal.com/agreements/approve"], "ok": false}
+{"fn": "is_paypal_ba_approve_url", "args": ["https://www.paypal.com.evil.com/agreements/approve?ba_token=1"], "ok": false}
+{"fn": "is_paypal_ba_approve_url", "args": ["https://evil.com/agreements/approve?ba_token=1"], "ok": false}
+{"fn": "is_paypal_ba_approve_url", "args": ["https://sandbox.paypal.com/agreements/approve?ba_token=1"], "ok": true}
+{"fn": "is_paypal_ba_approve_url", "args": ["https://WWW.PayPal.com/agreements/approve?ba_token=1"], "ok": true}
+{"fn": "is_paypal_ba_approve_url", "args": ["not a url"], "ok": false}
+{"fn": "is_paypal_ba_approve_url", "args": [null], "ok": false}
+{"fn": "is_paypal_ba_approve_url", "args": ["https://start.example/x"], "ok": false}
+{"fn": "is_paypal_ba_approve_url", "args": ["https://start.example/next"], "ok": false}
+{"fn": "is_paypal_ba_approve_url", "args": ["https://h/0"], "ok": false}
+{"fn": "is_paypal_ba_approve_url", "args": ["https://h/1"], "ok": false}
+{"fn": "is_paypal_ba_approve_url", "args": ["https://h/2"], "ok": false}
+{"fn": "is_paypal_ba_approve_url", "args": ["https://s/1"], "ok": false}

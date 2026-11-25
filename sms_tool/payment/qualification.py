@@ -213,7 +213,12 @@ def methods_for_country(country: str) -> list[str]:
     target = str(country or "").strip().upper()
     if not target:
         return []
-    local = [key for key, spec in PAYMENT_METHODS.items() if str(getattr(spec, "country", "")).upper() == target]
+    local = [
+        key
+        for key, spec in PAYMENT_METHODS.items()
+        if str(getattr(spec, "country", "")).upper() == target
+        and str(getattr(spec, "adapter", "") or "") != "team_trial_direct"
+    ]
     for method in COUNTRY_AGNOSTIC_METHODS:
         if method in PAYMENT_METHODS and method not in local:
             local.append(method)

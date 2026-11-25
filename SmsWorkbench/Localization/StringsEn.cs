@@ -568,6 +568,7 @@ namespace SmsWorkbench.Localization
             ["风控拦截"] = "Risk blocked",
             ["检测失败"] = "Check failed",
             ["可试用Plus"] = "Plus trial",
+            ["可试用Team(5席)"] = "Team (5 seats) trial",
             ["已订阅"] = "Subscribed",
             ["无优惠"] = "No offer",
 

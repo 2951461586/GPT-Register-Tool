@@ -259,3 +259,218 @@ def test_coupon_probe_uses_dynamic_campaign_id_from_accounts_check(monkeypatch):
     assert set(result["eligible_promo_campaigns"]) == {"plus", "go"}
     assert any("coupon=plus-2-months-50-pct-off" in url for url in seen_urls)
     assert "可试用Plus·-50%·×2month" == result["promotion_status"]
+
+
+def _accounts_body_with_personal_and_workspace(*, plan="free", active=False, plus_campaign=None):
+    personal = {
+        "account": {
+            "account_id": "11111111-1111-1111-1111-111111111111",
+            "structure": "personal",
+            "plan_type": plan,
+        },
+        "entitlement": {"has_active_subscription": active},
+    }
+    if plus_campaign is not None:
+        personal["eligible_promo_campaigns"] = {"plus": plus_campaign}
+    workspace = {
+        "account": {
+            "account_id": "22222222-2222-2222-2222-222222222222",
+            "structure": "workspace",
+            "plan_type": "team",
+        },
+        "entitlement": {"has_active_subscription": True},
+    }
+    return {
+        "accounts": {
+            "22222222-2222-2222-2222-222222222222": workspace,
+            "11111111-1111-1111-1111-111111111111": personal,
+            "default": personal,
+        }
+    }
+
+
+def test_team_coupon_probe_detects_5_seat_trial_with_personal_account_id(monkeypatch):
+    """Probes team-1-month-free using the personal account's ChatGPT-Account-ID."""
+    seen: list[tuple[str, dict]] = []
+
+    def fake_get(url, **kwargs):
+        seen.append((url, dict(kwargs.get("headers") or {})))
+        if "coupon=team-1-month-free" in url:
+            return SimpleNamespace(
+                status_code=200,
+                json=lambda: {
+                    "coupon": "team-1-month-free",
+                    "state": "eligible",
+                    "redemption": {"redeemed": False},
+                },
+            )
+        if "check_coupon" in url:
+            return SimpleNamespace(status_code=200, json=lambda: {"state": "not_eligible"})
+        return SimpleNamespace(status_code=200, json=lambda: _accounts_body_with_personal_and_workspace())
+
+    monkeypatch.setattr(account_promotion, "CFG", {})
+    with patch.object(account_promotion.curl_requests, "get", side_effect=fake_get):
+        result = account_promotion.check_account_promotion(
+            {"access_token": "at"},
+            proxy="http://exit.example:8080",
+            coupon_probe=True,
+            team_coupon_probe=True,
+        )
+
+    assert result["ok"] is True
+    assert result["personal_account_id"] == "11111111-1111-1111-1111-111111111111"
+    assert result["plus_trial_eligible"] is False
+    assert result["team_trial_eligible"] is True
+    assert result["team_trial_state"] == "eligible"
+    assert result["team_trial_campaign_id"] == "team-1-month-free"
+    assert result["promotion_status"] == "可试用Team(5席)"
+    assert result["promotion_state"] == "trial_eligible"
+    team_calls = [(u, h) for u, h in seen if "coupon=team-1-month-free" in u]
+    assert len(team_calls) == 1
+    assert "is_coupon_from_query_param=true" in team_calls[0][0]
+    assert team_calls[0][1]["Chatgpt-Account-Id"] == "11111111-1111-1111-1111-111111111111"
+
+
+def test_team_coupon_probe_combines_with_plus_trial_and_subscribed_plan(monkeypatch):
+    def fake_get(url, **_kwargs):
+        if "coupon=team-1-month-free" in url:
+            return SimpleNamespace(
+                status_code=200,
+                json=lambda: {"coupon": "team-1-month-free", "state": "eligible", "redemption": {"redeemed": False}},
+            )
+        if "check_coupon" in url:
+            return SimpleNamespace(status_code=200, json=lambda: {"state": "eligible"})
+        return SimpleNamespace(
+            status_code=200,
+            json=lambda: _accounts_body_with_personal_and_workspace(
+                plus_campaign={
+                    "id": "plus-1-month-free",
+                    "metadata": {
+                        "discount": {"percentage": 100},
+                        "duration": {"num_periods": 1, "period": "month"},
+                    },
+                }
+            ),
+        )
+
+    monkeypatch.setattr(account_promotion, "CFG", {})
+    with patch.object(account_promotion.curl_requests, "get", side_effect=fake_get):
+        both = account_promotion.check_account_promotion(
+            _account(), proxy="http://exit.example:8080", coupon_probe=True, team_coupon_probe=True
+        )
+    assert both["plus_trial_eligible"] is True
+    assert both["team_trial_eligible"] is True
+    assert both["promotion_status"] == "可试用Plus·-100%·×1month·可试用Team(5席)"
+    assert both["promotion_state"] == "trial_eligible"
+
+    def fake_get_subscribed(url, **_kwargs):
+        if "coupon=team-1-month-free" in url:
+            return SimpleNamespace(
+                status_code=200,
+                json=lambda: {"coupon": "team-1-month-free", "state": "eligible", "redemption": {"redeemed": False}},
+            )
+        return SimpleNamespace(
+            status_code=200,
+            json=lambda: _accounts_body_with_personal_and_workspace(plan="plus", active=True),
+        )
+
+    with patch.object(account_promotion.curl_requests, "get", side_effect=fake_get_subscribed):
+        sub = account_promotion.check_account_promotion(
+            _account(), proxy="http://exit.example:8080", coupon_probe=True, team_coupon_probe=True
+        )
+    assert sub["team_trial_eligible"] is True
+    assert sub["promotion_status"] == "已订阅·Plus·可试用Team(5席)"
+    assert sub["promotion_state"] == "trial_eligible"
+
+
+def test_team_coupon_probe_handles_not_eligible_mismatch_and_missing_personal(monkeypatch):
+    def fake_not_eligible(url, **_kwargs):
+        if "coupon=team-1-month-free" in url:
+            return SimpleNamespace(
+                status_code=200,
+                json=lambda: {
+                    "coupon": "team-1-month-free",
+                    "state": "not_eligible",
+                    "ineligibility_reason": "prior_introductory_offer_redeemed",
+                    "redemption": {"redeemed": True},
+                },
+            )
+        return SimpleNamespace(status_code=200, json=lambda: _accounts_body_with_personal_and_workspace())
+
+    monkeypatch.setattr(account_promotion, "CFG", {})
+    with patch.object(account_promotion.curl_requests, "get", side_effect=fake_not_eligible):
+        res = account_promotion.check_account_promotion(
+            _account(), proxy="http://exit.example:8080", team_coupon_probe=True
+        )
+    assert res["team_trial_eligible"] is False
+    assert res["team_trial_state"] == "not_eligible"
+    assert res["team_trial_redeemed"] is True
+    assert res["team_trial_ineligibility_reason"] == "prior_introductory_offer_redeemed"
+    assert res["team_trial_ineligibility_reason_label"] == "此前已兑换过入门优惠"
+    assert res["promotion_status"] == "Free·无优惠"
+
+    def fake_mismatch(url, **_kwargs):
+        if "coupon=team-1-month-free" in url:
+            return SimpleNamespace(status_code=200, json=lambda: {"coupon": "other-campaign", "state": "eligible"})
+        return SimpleNamespace(status_code=200, json=lambda: _accounts_body_with_personal_and_workspace())
+
+    with patch.object(account_promotion.curl_requests, "get", side_effect=fake_mismatch):
+        mismatch = account_promotion.check_account_promotion(
+            _account(), proxy="http://exit.example:8080", team_coupon_probe=True
+        )
+    assert mismatch["team_trial_eligible"] is False
+    assert mismatch["team_coupon"]["error"] == "team_coupon_campaign_mismatch"
+
+    workspace_only = {
+        "data": {
+            "accounts": {
+                "22222222-2222-2222-2222-222222222222": {
+                    "account": {"structure": "workspace", "plan_type": "team"},
+                    "entitlement": {"has_active_subscription": True},
+                }
+            }
+        }
+    }
+    with patch.object(
+        account_promotion.curl_requests,
+        "get",
+        return_value=SimpleNamespace(status_code=200, json=lambda: workspace_only),
+    ) as get_mock:
+        no_personal = account_promotion.check_account_promotion(
+            _account(), proxy="http://exit.example:8080", team_coupon_probe=True
+        )
+    assert get_mock.call_count == 1
+    assert no_personal["personal_account_id"] == ""
+    assert no_personal["team_trial_eligible"] is False
+    assert no_personal["team_coupon"]["error"] == "personal_account_not_found"
+
+
+def test_promotion_batch_enables_team_coupon_probe_and_counts_team_trials(monkeypatch):
+    from sms_tool.accounts import promotion_batch
+
+    seen_kwargs: list[dict] = []
+
+    def fake_check(account, **kwargs):
+        seen_kwargs.append(dict(kwargs))
+        return {
+            "ok": True,
+            "current_plan_type": "free",
+            "plus_trial_eligible": False,
+            "team_trial_eligible": True,
+            "team_trial_state": "eligible",
+            "promotion_status": "可试用Team(5席)",
+            "promotion_state": "trial_eligible",
+        }
+
+    monkeypatch.setattr("sms_tool.storage.get_account_record", lambda email: {"email": email, "access_token": "at"})
+    monkeypatch.setattr("sms_tool.storage.mark_promotion_status", lambda *args, **kwargs: True)
+    monkeypatch.setattr(promotion_batch, "check_account_promotion", fake_check)
+
+    report = promotion_batch.refresh_promotion_statuses(["team@example.com"], workers=1)
+
+    assert seen_kwargs and seen_kwargs[0].get("coupon_probe") is True
+    assert seen_kwargs[0].get("team_coupon_probe") is True
+    assert report["trial_eligible"] == 1
+    assert report["team_trial_eligible"] == 1
+    assert report["results"][0]["team_trial_eligible"] is True
+    assert report["results"][0]["promotion_status"] == "可试用Team(5席)"
